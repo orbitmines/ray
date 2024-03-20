@@ -5,7 +5,7 @@ One ray to rule them all, one ray to find them, One ray to bring them all, and i
 
 ## What is this?, What is OrbitMines?, What are Rays?
 
-A simple way of phrasing this, is that the concept of a (hyper-/)'Vertex', (hyper-/)'Edge', (hyper-/)'Graph', (hyper-/)'Rule', (hyper-/)'Tactic', (hyper-/)..., (hyper-/)'Rewrite' are merged into one thing: a [Ray](./environments/javascript/@orbitmines/rays/src/Ray.ts). It handles surrounding context, ignorances, equivalences, ..., differentiation (And if it cannot, then it offers a way of implementing it for all of the above). 
+A simple way of phrasing this, is that the concept of a (hyper-/)'Vertex', (hyper-/)'Edge', (hyper-/)'Graph', (hyper-/)'Rule', (hyper-/)'Tactic', (hyper-/)..., (hyper-/)'Rewrite' are merged into one thing: a [Ray](./rays/ray.py). It handles surrounding context, ignorances, equivalences, ..., differentiation (And if it cannot, then it offers a way of implementing it for all of the above). 
 
 Most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a different category of (programming) interfaces.
 

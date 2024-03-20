@@ -1,5 +1,5 @@
 # ray
-One ray to rule them all, one ray to find them, One ray to bring them all, and in the darkness bind them.
+One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.
 
 ![header](./header.png)
 

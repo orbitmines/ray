@@ -586,3 +586,6 @@ print('----------------')
 # Ray.__sub__ = -Ray.__add__
 
 Arbitrary = Union[int, Ray]
+
+# if __name__ == "__main__":
+#   pass

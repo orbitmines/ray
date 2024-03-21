@@ -5,7 +5,7 @@ One Ray to rule them all, One Ray to find them, One Ray to bring them all, and i
 
 ## What is this?, What is OrbitMines?, What are Rays?
 
-A simple way of phrasing this, is that the concept of a (hyper-/)'Vertex', (hyper-/)'Edge', (hyper-/)'Graph', (hyper-/)'Rule', (hyper-/)'Tactic', (hyper-/)..., (hyper-/)'Rewrite' are merged into one thing: a [Ray](./rays/ray.py). It handles surrounding context, ignorances, equivalences, ..., differentiation (And if it cannot, then it offers a way of implementing it for all of the above). 
+A simple way of phrasing this, is that the concept of a (hyper-/)'Vertex', (hyper-/)'Edge', (hyper-/)'Graph', (hyper-/)'Rule', (hyper-/)'Tactic', (hyper-/)..., (hyper-/)'Rewrite' are merged into one thing: a [Ray](ar.ray/ray.py/orbitmines/ray.py). It handles surrounding context, ignorances, equivalences, ..., differentiation (And if it cannot, then it offers a way of implementing it for all of the above). 
 
 Most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a different category of (programming) interfaces.
 
@@ -15,7 +15,7 @@ Most importantly, it is here as infrastructure. Infrastructure for the design an
 - If you prefer **audio-visual mumblings**, see [2024-01-04. What is OrbitMines?, Implementing Aleks Kissinger's Chyp and maybe looking at Tinygrad](https://www.youtube.com/watch?v=O6v_gzlI1kY), or more generally my streams can be found here: [youtube.com/@FadiShawki/streams](https://www.youtube.com/@FadiShawki/streams).
 
 
-- If you prefer **archaic symbolics: i.e. code**, see [ray.py](./rays/ray.py), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
+- If you prefer **archaic symbolics: i.e. code**, see [ray.py](ar.ray/ray.py/orbitmines/ray.py), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
 
 
 - If you prefer discussions on **Discord**: [discord.orbitmines.com](https://discord.orbitmines.com).
@@ -64,7 +64,7 @@ TODO
 Let's take logic gates as an example? - and maybe logic with different equiv func? - Like switching between true/false on each check?
 
 ```ts
-import Ray from '@orbitmines/rays';
+import Ray from '@orbitmines/ar.ray';
 
 const initial = Ray.boolean().orbit().size(2);
 const terminal = Ray.boolean().orbit().size(2);

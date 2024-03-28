@@ -9,10 +9,17 @@ from typing import Iterator, AsyncIterator, Union, Callable, Any, Iterable, Asyn
 #
 #
 
-# TODO: Better python solution than just @ray everywhere (for typechecker)
+# TODO: Better python solution than just @ray everywhere (for typechecker) - gen for typechecker?
 
 # TODO: match, switch, enum (like key=value), dict, keyvalue, pair, ....
 # TODO: zip, tensor (are these the same as match/switch?)
+
+# TODO: .any .all as pointer ? (TODO: This is basically close to a .traverse or .traverse & skip the first one. Traverse including the current pointer, excluding the current pointer...)
+
+# TODO: .equivalent vs .is_equivalent ? (Could do: .equivalent. somethimg??) Basically the connection between .equivalent & .is_orbit
+# TODO: That's basically the same connection of .next/.has_next/.last, .end/.boundary/.is_boundary/...
+
+# TODO: Runtime with its read/writeonly, basically (non-/)availability of write operations. Where read operations are already also write operations from another perspective, just not the one accessible here.
 
 def ray(func: Callable[[Any, ...], Any]) -> Ray:
     pass
@@ -90,7 +97,11 @@ class Ray:
   @ray
   def terminal(self, *args, **kwargs) -> Ray:
     print(f'{self.name}.__call__ {args} {kwargs}')
-    return (-self).initial
+    return (
+      (-self).initial
+      # or (self.initial.is_boundary and self.self.is_boundary) -> Best place for this? Steps to initial=self.self & self=self.self.terminal . But then a nice variant of this generalzied to each step type.
+      # TODO: If nothing works, probably like any function, that means .none: "Cannot determine what to do without context of where we are.", the thing that calls .terminal is the thing that needs to make sense of that?, Then it makes sense that a .reference calls into its .self, since it cannot find anything in its direction, it assumes it's at a boundary, and then starts traversing .self ; Needs generalization
+    )
   next = __call__ = __next__ = __anext__ = forward = step = apply = run = successor \
     = map = render = compile = realize = generate \
     = terminal
@@ -239,7 +250,7 @@ class Ray:
     a.first().compose(b.last())
 
     return a # TODO ?
-  circle = repeats = infinitely \
+  circle = repeats = period = infinitely \
     = orbit
 
   # "Applying the same thing in a different context"
@@ -539,6 +550,7 @@ class Ray:
   @staticmethod
   # - TODO: readonly setup, where only traversal ops are allowed. Of course these are writing in some sense, but those writings aren't directly accessible from this perspective
   def readonly() -> Ray: raise NotImplementedError
+  # TODO, writeonly would be?
 
   # Any arbitrary direction, where reversing the direction relies on some arbitrary memory mechanism
   @ray

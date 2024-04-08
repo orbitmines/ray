@@ -1,4 +1,4 @@
-# Ray: A Universal Language
+# A Universal Language
 *One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.*
 
 *Explore a technical deep dive into Rays. Accompanied by a simple implementation of [Aleks Kissinger's Chyp (Cospans of HYPergraphs)](https://github.com/akissinger/chyp).*

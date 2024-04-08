@@ -10,7 +10,7 @@
 
 ## What is this?, What is OrbitMines?, What are Rays?
 
-This thing is, in essence, a language to understand inconsistencies. A conceptual framework to make sense of ambiguity: A story of how destructively confusing languages can be. Though to me, most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a [different category of (programming) interfaces](https://orbitmines.com/papers/on-orbits-equivalence-and-inconsistencies).
+This thing is, in essence, a language to understand inconsistencies. A conceptual framework to make sense of ambiguity: A story of how destructively confusing languages can be. Though to me, most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a [different category of (programming) interfaces](https://orbitmines.com/archive/2024-02-orbitmines-as-a-game-project).
 
 A simple way of phrasing this, is that the concept of a **_(hyper-/)_'Vertex', _(hyper-/)_'Edge', _(hyper-/)_'Graph', _(hyper-/)_'Rule', _(hyper-/)_'Tactic', _(hyper-/)_..., _(hyper-/)_'Rewrite'** are merged into one thing: a [Ray](ar.ray/ray.py/ray.py). It handles surrounding context, ignorances, equivalences, ..., differentiation (And if it cannot, then it offers a way of implementing it for all of the above). 
 

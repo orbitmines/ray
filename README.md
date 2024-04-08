@@ -1,13 +1,24 @@
-# ray
-One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.
+# Ray: A Universal Language
+*One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.*
+
+*Explore a technical deep dive into Rays. Accompanied by a simple implementation of [Aleks Kissinger's Chyp (Cospans of HYPergraphs)](https://github.com/akissinger/chyp).*
+
+> [!NOTE]
+> This is still a work in progress. See [2024. A Universal Language](https://github.com/orbitmines/orbitmines.com/pull/28) for progress on this write-up.
 
 ![header](./header.png)
 
 ## What is this?, What is OrbitMines?, What are Rays?
 
-A simple way of phrasing this, is that the concept of a (hyper-/)'Vertex', (hyper-/)'Edge', (hyper-/)'Graph', (hyper-/)'Rule', (hyper-/)'Tactic', (hyper-/)..., (hyper-/)'Rewrite' are merged into one thing: a [Ray](ar.ray/ray.py/ray.py). It handles surrounding context, ignorances, equivalences, ..., differentiation (And if it cannot, then it offers a way of implementing it for all of the above). 
+This thing is, in essence, a language to understand inconsistencies. A conceptual framework to make sense of ambiguity: A story of how destructively confusing languages can be. Though to me, most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a [different category of (programming) interfaces](https://orbitmines.com/papers/on-orbits-equivalence-and-inconsistencies).
 
-Most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a different category of (programming) interfaces.
+A simple way of phrasing this, is that the concept of a **_(hyper-/)_'Vertex', _(hyper-/)_'Edge', _(hyper-/)_'Graph', _(hyper-/)_'Rule', _(hyper-/)_'Tactic', _(hyper-/)_..., _(hyper-/)_'Rewrite'** are merged into one thing: a [Ray](ar.ray/ray.py/ray.py). It handles surrounding context, ignorances, equivalences, ..., differentiation (And if it cannot, then it offers a way of implementing it for all of the above). 
+
+Though quite importantly, even if those previous words are complete nonsense to you: Either this, or projects following from this, will aid in your understanding. This is the start of a story which will provide infrastructure for communication between all *sciences, (programming) languages, compilers, interfaces, ..., videogames*.
+
+...[working on it here](https://2024-a-universal-language.orbitmines-com.pages.dev/papers/a-universal-language)
+
+---
 
 - If you prefer **text**, see [2023-12-31. On Orbits, Equivalence and Inconsistencies](https://orbitmines.com/papers/on-orbits-equivalence-and-inconsistencies), or more generally my/OrbitMines writing can be found here: [orbitmines.com/profiles/fadi-shawki](https://orbitmines.com/profiles/fadi-shawki).
 
@@ -37,7 +48,7 @@ Check out everything I've made public regarding this here: [GitHub Issues](https
 > Anything in this directory should be considered as deprecated. It is merely used as the initial (crude) bootstrap for OrbitMines. And will surely be replaced at some point - it is not (yet) meant as a formal spec.
 
 > [!WARNING]
-> No proper security audit has yet been done on its current iteration.
+> No proper security infrastructure has yet been put in place
 
 > [!WARNING]
 > No proper performance optimizations have been done on its current iteration.

@@ -7,7 +7,7 @@ authors:
 - name: "OrbitMines"
 title: "A Universal Language"
 abstract: "One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them: An implementation of Rays: A Universal Language."
-version: 1.0.0
+version: 4.2.0
 date-released: 2024-05-31
 url: "https://orbitmines.com/papers/a-universal-language"
 repository-code: "https://github.com/orbitmines/ray"

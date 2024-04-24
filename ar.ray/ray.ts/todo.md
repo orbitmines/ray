@@ -1,5 +1,7 @@
 deferred to js
 
+    "@orbitmines/rays": "file:../environments/javascript/@orbitmines/rays",
+
 ```ts
 
   export type Any =

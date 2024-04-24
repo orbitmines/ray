@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "Citation magic will become obsolete."
 authors:
-- family-names: "Shawki"
-  given-names: "Fadi"
+- family-names: "Fadi"
+  given-names: "Shawki"
   orcid: "https://orcid.org/0009-0009-9288-992X"
 - name: "OrbitMines"
 title: "A Universal Language"

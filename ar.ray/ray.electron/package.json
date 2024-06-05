@@ -1,0 +1,22 @@
+{
+  "name": "@orbitmines/ray.electron",
+  "version": "4.2.0",
+  "description": "A Universal Language: One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "repository": "https://github.com/electron/electron-quick-start",
+  "keywords": [
+    "Electron",
+    "quick",
+    "start",
+    "tutorial",
+    "demo"
+  ],
+  "author": "GitHub",
+  "license": "CC0-1.0",
+  "devDependencies": {
+    "electron": "^30.0.9"
+  }
+}

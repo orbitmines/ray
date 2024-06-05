@@ -4,13 +4,17 @@
 *Let's try for < [[2024-06-30]]*
 
 ---
+<div align="center">
 
 # A Universal Language
 *One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.*
 
 ![header](./docs/header.png)
 
----
+[![OrbitMines Discord](https://img.shields.io/discord/1055502602365845534.svg?label=Discord&logo=Discord&colorB=7289da&style=for-the-badge)](https://discord.orbitmines.com)
+
+</div>
+
 
 > [!WARNING]
 > No proper security infrastructure has yet been put in place

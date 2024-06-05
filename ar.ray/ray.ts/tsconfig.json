@@ -20,6 +20,6 @@
     "experimentalDecorators": true
   },
   "include": [
-    "ray.ts"
+    "src"
   ]
 }

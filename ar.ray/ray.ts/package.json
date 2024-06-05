@@ -3,9 +3,12 @@
   "version": "4.2.0",
   "private": false,
   "repository": "https://github.com/orbitmines/ray",
-  "dependencies": {},
+  "dependencies": {
+    "lodash": "4.17.21"
+  },
   "devDependencies": {
     "@types/jest": "^29.5.11",
+    "@types/lodash": "^4.17.4",
     "@types/node": "^20.1.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.1",

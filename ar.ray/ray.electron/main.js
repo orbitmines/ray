@@ -11,14 +11,13 @@ function createWindow () {
       preload: path.join(__dirname, 'preload.js')
     },
     // darkTheme: true,
-    // titleBarOverlay: false,
+    // alwaysOnTop: true,
+    // frame: false,
 
-    alwaysOnTop: true,
     autoHideMenuBar: true, // 'Alt' shows it
     backgroundColor: '#1c2127',
     center: true,
     enableLargerThanScreen: true,
-    // frame: false,
     fullscreen: false,
     hasShadow: true,
     opacity: 0.0,

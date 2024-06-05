@@ -27,16 +27,19 @@ const __ray__ = (): Ray => {
       super(proxy);
     }
 
+    static initial = () => throw new NotImplementedError()
+    static self = () => throw new NotImplementedError()
+    static terminal = () => throw new NotImplementedError()
+
+    static none = () => throw new NotImplementedError()
   }
 
   const PROXY_HANDLER: ProxyHandler<Ray> = JS.Class.Handler<Ray>({
-    /** ray.property */
-    get: (self: Ray, property: string | symbol): any => {
-      if (['prototype'].includes(String(property)))
-        return Ray.prototype
+    /** ray.property */ get: (self: Ray, property: string | symbol): any => {
+      if (String(property) === 'prototype') { return Ray.prototype }
 
       /** Use any field on {Ray.Instance}, which we want to delegate to, first. */
-      if (['___instance'].includes(String(property))) { return (self.proxy as any)[property]; }
+      // if (['___instance'].includes(String(property))) { return (self.proxy as any)[property]; }
 
       /** Otherwise, switch to functions defined on {Ray.Functions}  */
       // const func = Ray.Function.Get(property as any);
@@ -49,34 +52,27 @@ const __ray__ = (): Ray => {
       /** Not implemented. */
       throw new NotImplementedError(`Ray: Called property '${String(property)}' on Ray, which has not been implemented.`);
     },
-
-    /** ray.property = something; */
-    set: (self: Ray, property: string | symbol, value: any): boolean => {
+    /** ray.property = something; */ set: (self: Ray, property: string | symbol, value: any): boolean => {
       throw new NotImplementedError(`Ray: Could not set '${String(property)}'`);
     },
 
-    /** delete ray.property; */
-    deleteProperty: (self: Ray, property: string | symbol): boolean => {
-      throw new NotImplementedError();
-    },
-
-    /** ray() is called. */
-    apply: (self: Ray, args: any[]): any => {
+    /** ray() is called. */ apply: (self: Ray, args: any[]): any => {
       throw new NotImplementedError(`Ray: Could not apply .terminal`);
     },
-
-    /** new ray() */
-    construct: (self: Ray, args: any[]): Ray => {
+    /** new ray() */ construct: (self: Ray, args: any[]): Ray => {
       const copy = new Ray(PROXY_HANDLER);
 
       // TODO: Should be copy
       return copy.proxy;
     },
 
-    /** property in ray; */
-    has: (self: Ray, property: string | symbol): boolean => {
+    /** property in ray; */ has: (self: Ray, property: string | symbol): boolean => {
       throw new NotImplementedError(`Ray: Has ${String(property)}`);
     },
+    /** delete ray.property; */ deleteProperty: (self: Ray, property: string | symbol): boolean => {
+      throw new NotImplementedError();
+    },
+
   });
 
   return new Ray(PROXY_HANDLER).proxy;

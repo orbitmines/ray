@@ -6,6 +6,7 @@ describe("ray", () => {
     console.log(ray)
     console.log(ray())
 
+
     // const events: any[] = [];
     // const ray = Ray.array([]);
     //
@@ -18,5 +19,8 @@ describe("ray", () => {
     // ray.initial = ray.terminal();
     // ray.initial = (self): Ray.Any => {}
     // ray.initial = Ray.Function.Self.Impl((self) => {})
+
+    if ('all' in ray)
+      delete ray.all
   });
 })

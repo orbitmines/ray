@@ -8,7 +8,7 @@
 # A Universal Language
 *One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.*
 
-![header](./header.png)
+![header](./docs/header.png)
 
 ---
 
@@ -26,7 +26,7 @@ A simple way of phrasing this, is that the concept of a **_(hyper-/)_'Vertex', _
 
 Though quite importantly, even if those previous words are complete nonsense to you: Either this, or projects following from this, will aid in your understanding. This is the start of a story which will provide infrastructure for communication between all *sciences, (programming) languages, compilers, interfaces, ..., videogames*.
 
-*... read more @ [orbitmines.com](https://2024-a-universal-language.orbitmines-com.pages.dev/papers/a-universal-language), [.pdf](a-universal-language.pdf), [.jpeg](a-universal-language.jpeg)*
+*... read more @ [orbitmines.com](https://2024-a-universal-language.orbitmines-com.pages.dev/papers/a-universal-language), [.pdf](docs/a-universal-language.pdf), [.jpeg](docs/a-universal-language.jpeg)*
 
 ---
 

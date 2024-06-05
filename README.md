@@ -5,18 +5,18 @@
 
 ---
 
+# A Universal Language
+*One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.*
+
+![header](./header.png)
+
+---
+
 > [!WARNING]
 > No proper security infrastructure has yet been put in place
 
 > [!WARNING]
 > No proper performance optimizations have been done on its current iteration.
-
----
-
-# A Universal Language
-*One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.*
-
-![header](./header.png)
 
 ## What is this?, What is OrbitMines?, What are Rays?
 

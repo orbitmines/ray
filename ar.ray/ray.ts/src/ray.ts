@@ -23,15 +23,19 @@ export type Ray = {
 
 const __ray__ = (): Ray => {
   class Ray extends JS.Class.Instance<Ray> {
+    initial?: Ray
+    self?: Ray
+    terminal?: Ray
+
     constructor(proxy: ProxyHandler<Ray>) {
       super(proxy);
     }
 
-    static initial = () => throw new NotImplementedError()
-    static self = () => throw new NotImplementedError()
-    static terminal = () => throw new NotImplementedError()
+    static initial = () => Ray.none
+    static self = () => Ray.none
+    static terminal = () => Ray.none
 
-    static none = () => throw new NotImplementedError()
+    static none = () => { throw new NotImplementedError() }
   }
 
   const PROXY_HANDLER: ProxyHandler<Ray> = JS.Class.Handler<Ray>({
@@ -49,14 +53,25 @@ const __ray__ = (): Ray => {
       //   return (hint: string) => { return 100; }; // TODO: Can be used to setup label generation through javascript objects if we want to ? + allow search on this
       // throw new NotImplementedError(``);
 
+      // Property call should always return "pointer/function/ray" which only applied when it is called/.terminal/()'d
+      if (property === 'terminal') { // TODO: This pattern generalized, for static, one, ..., n-perspective
+        if (self.terminal) { return self.terminal }
+        const terminal = new Ray(PROXY_HANDLER).proxy;
+        return terminal
+      }
+
       /** Not implemented. */
       throw new NotImplementedError(`Ray: Called property '${String(property)}' on Ray, which has not been implemented.`);
     },
     /** ray.property = something; */ set: (self: Ray, property: string | symbol, value: any): boolean => {
+      // .o func: Generalization of set, accepts also an object { [key: string | symbol]: any }, sets each property to that object
+      // .initial.o( etc..., chain arbitrary funcs like this
+
       throw new NotImplementedError(`Ray: Could not set '${String(property)}'`);
     },
 
     /** ray() is called. */ apply: (self: Ray, args: any[]): any => {
+      console.log('4', self.terminal)
       throw new NotImplementedError(`Ray: Could not apply .terminal`);
     },
     /** new ray() */ construct: (self: Ray, args: any[]): Ray => {

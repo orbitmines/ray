@@ -3,8 +3,9 @@ import Ray from "./ray";
 describe("ray", () => {
   test(".traverse", () => {
     let ray = new Ray(1, 2, 3);
-    console.log(ray)
-    console.log(ray())
+    console.log('1', ray)
+    console.log('3', ray.terminal)
+    console.log('2', ray())
 
 
     // const events: any[] = [];

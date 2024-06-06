@@ -10,6 +10,8 @@ namespace JS {
   // export type ParameterlessConstructor<T> = new () => T;
   // export type Constructor<T> = new (...args: any[]) => T;
   // export type FunctionImpl<T> = (ref: T) => T;
+  export type Function<T = any> = (...args: any[]) => T;
+  export type Constructor<T = any> = new (...args: any[]) => T;
   export type Recursive<T> = (T | Recursive<T | T[]>)[];
 
   /**

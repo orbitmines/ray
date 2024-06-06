@@ -2,87 +2,56 @@ import JS from "./JS";
 
 export class NotImplementedError extends Error {}
 
-export type Ray = {
-    /** Ray is a constructor - TODO: Copy? */
-    new (...other: JS.Recursive<Ray>): Ray,
+type Any = {
+    /** Ray is a constructor */
+    new (...other: JS.Recursive<Any>): Any,
   }
   /** JavaScript runtime conversions. */
   & Symbol
   & any
 
-//   /** Preconfigured functions defined for Rays. */
-//     & {
-//   -readonly [TKey in keyof typeof Ray.Function.All]: typeof Ray.Function.All[TKey] extends Ray.Any
-//       ? Ray.Any
-//       : never;
-// }
+const __ray__ = () => {
+  class Ray extends JS.Class.Instance<Any> {
 
-// /** Storage/Movement operations which need to be implemented. */
-// & { [TKey in keyof Ray.Op.Impl<Ray.Any>]: Ray.Any }
-
-
-const __ray__ = (): Ray => {
-  class Ray extends JS.Class.Instance<Ray> {
-    initial?: Ray
-    self?: Ray
-    terminal?: Ray
+    properties: { [key: string | symbol]: Ray } = {}
 
     constructor(proxy: ProxyHandler<Ray>) {
       super(proxy);
     }
 
-    static initial = () => Ray.none
-    static self = () => Ray.none
-    static terminal = () => Ray.none
+    static none = () => new Ray(PROXY_HANDLER).proxy
 
-    static none = () => { throw new NotImplementedError() }
   }
 
-  const PROXY_HANDLER: ProxyHandler<Ray> = JS.Class.Handler<Ray>({
+  const PROXY_HANDLER: ProxyHandler<Ray> = JS.Class.Handler<Any>({
     /** ray.property */ get: (self: Ray, property: string | symbol): any => {
-      if (String(property) === 'prototype') { return Ray.prototype }
+      if (String(property) === 'prototype') return Ray.prototype
+      if (String(property) === 'none') return Ray.none
 
-      /** Use any field on {Ray.Instance}, which we want to delegate to, first. */
-      // if (['___instance'].includes(String(property))) { return (self.proxy as any)[property]; }
+      if (property in self.properties) return self.properties[property]
 
-      /** Otherwise, switch to functions defined on {Ray.Functions}  */
-      // const func = Ray.Function.Get(property as any);
-      // if (func) { return func.as_method({ self, property }); }
-
-      // if (property === Symbol.toPrimitive)
-      //   return (hint: string) => { return 100; }; // TODO: Can be used to setup label generation through javascript objects if we want to ? + allow search on this
-      // throw new NotImplementedError(``);
-
-      // Property call should always return "pointer/function/ray" which only applied when it is called/.terminal/()'d
-      if (property === 'terminal') { // TODO: This pattern generalized, for static, one, ..., n-perspective
-        if (self.terminal) { return self.terminal }
-        const terminal = new Ray(PROXY_HANDLER).proxy;
-        return terminal
-      }
-
-      /** Not implemented. */
-      throw new NotImplementedError(`Ray: Called property '${String(property)}' on Ray, which has not been implemented.`);
+      self.proxy[property] = Ray.none()
+      return self.properties[property]
     },
     /** ray.property = something; */ set: (self: Ray, property: string | symbol, value: any): boolean => {
-      // .o func: Generalization of set, accepts also an object { [key: string | symbol]: any }, sets each property to that object
+      // TODO .o func: Generalization of set, accepts also an object { [key: string | symbol]: any }, sets each property to that object
       // .initial.o( etc..., chain arbitrary funcs like this
 
-      throw new NotImplementedError(`Ray: Could not set '${String(property)}'`);
+      self.properties[property] = value
+      return true
     },
 
     /** ray() is called. */ apply: (self: Ray, args: any[]): any => {
-      console.log('4', self.terminal)
-      throw new NotImplementedError(`Ray: Could not apply .terminal`);
+      // TODO: Determine traversal if nothing in .terminal could go at .self.
+      return self.proxy.terminal
     },
     /** new ray() */ construct: (self: Ray, args: any[]): Ray => {
-      const copy = new Ray(PROXY_HANDLER);
-
       // TODO: Should be copy
-      return copy.proxy;
+      return Ray.none();
     },
 
     /** property in ray; */ has: (self: Ray, property: string | symbol): boolean => {
-      throw new NotImplementedError(`Ray: Has ${String(property)}`);
+      return property in self.properties
     },
     /** delete ray.property; */ deleteProperty: (self: Ray, property: string | symbol): boolean => {
       throw new NotImplementedError();
@@ -90,7 +59,31 @@ const __ray__ = (): Ray => {
 
   });
 
-  return new Ray(PROXY_HANDLER).proxy;
+  return Ray.none();
 }
 
-export default __ray__()
+const Ray = __ray__()
+
+Ray.initial = Ray.none; Ray.self = Ray.none; Ray.terminal = Ray.none
+
+// This {1 -> self/self.self , & 2 -> a, b} could be generalized
+Ray.is_none = (self: Any) => self.is_orbit(self.self)
+Ray.is_orbit = (self: Any, other: Any) => self === other
+
+Ray.is_initial = (self: Any) => self.initial.is_none
+/* */ Ray.as_initial = (self: Any) => Ray.initial({ self })
+Ray.is_terminal = (self: Any) => self.terminal.is_none
+/* */ Ray.as_terminal = (self: Any) => Ray.terminal({ self })
+Ray.is_vertex = (self: Any) => self.is_initial.nor(self.is_terminal)
+/* */ Ray.as_vertex = (self: Any) => Ray.vertex({ self })
+Ray.is_reference = (self: Any) => self.is_initial.and(self.is_terminal)
+/* */ Ray.as_reference = (self: Any) => Ray.reference({ self })
+Ray.is_boundary = (self: Any) => self.is_initial.xor(self.is_terminal)
+Ray.is_extreme = (self: Any) => self.self.is_none.and(self.is_boundary)
+Ray.is_wall = (self: Any) => self.self.is_none.and(self.initial.is_some).and(self.terminal.is_some)
+Ray.reverse = (self: Any) => new self({ initial: self.terminal, self, terminal: self.initial })
+
+// Ray.initial.reverse = Ray.terminal
+// Ray.none.reverse = Ray.some
+
+export default Ray

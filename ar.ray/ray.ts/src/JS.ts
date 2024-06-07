@@ -1,11 +1,37 @@
 import _ from 'lodash';
 
+
+/**
+ * Can't overload things like '-=', unless we use a number as an intermediate step. Could do that as a label to get that functionality in? Or just ignore it.
+ */
+export type Self = {
+    new(...other: JS.Recursive<Self>): Self,
+  }
+  /** JavaScript runtime conversions. */
+  & Symbol
+  & any
+
+export const __ray__ = (): Self => {
+  class Ray extends JS.Class.Instance<Ray> {
+    __new__ = (args: any[]): Ray => new Ray();
+    // instance.self = self.proxy.any(args)
+    __call__ = (args: any[]): Ray => {
+      throw new JS.NotImplementedError()
+    }
+  }
+
+  return new Ray().proxy;
+}
+
 /**
  * NOTE:
  * - Not to be considered as a perfect mapping of JavaScript functionality - merely a practical one.
  * - Important to remember that this is just one particular mapping, there are probably 'many, ..., infinitely' others.
  */
 namespace JS {
+  export class NotImplementedError extends Error {
+  }
+
   // export type ParameterlessFunction<T = any> = () => T;
   // export type ParameterlessConstructor<T> = new () => T;
   // export type Constructor<T> = new (...args: any[]) => T;
@@ -18,52 +44,80 @@ namespace JS {
    * Slightly more beautiful abstraction on top of JavaScript's proxy.
    */
   export namespace Class {
-    export type Handler<T extends Instance<T>> = {
-      apply?(self: T, args: any[]): any;
-      construct?(self: T, args: any[]): object;
-      // defineProperty?(self: T, property: string | symbol, attributes: PropertyDescriptor): boolean;
-      deleteProperty?(self: T, property: string | symbol): boolean;
-      get?(self: T, property: string | symbol): any;
+
+    export const Handler = <T extends Instance<T>>(): ProxyHandler<T> => ({
+      get: (__proxy_function__: any, property: string | symbol, self: T): any =>
+        __proxy_function__.__instance__.__get__(property),
+      apply: (__proxy_function__: any, thisArg: T, argArray: any[]): any =>
+        __proxy_function__.__instance__.__call__(argArray),
+      /** thisArg can be undefined. TODO: What's the use-case of us actually using it? */
+      set: (__proxy_function__: any, property: string | symbol, newValue: any, self: T): boolean =>
+        __proxy_function__.__instance__.__set__(property, newValue),
+      deleteProperty: (__proxy_function__: any, property: string | symbol): boolean =>
+        __proxy_function__.__instance__.__delete__(property),
+      has(__proxy_function__: any, property: string | symbol): boolean {
+        return __proxy_function__.__instance__.__has__(property)
+      },
+      construct(__proxy_function__: any, argArray: any[], self: Function): object {
+        return __proxy_function__.__instance__.__new__(argArray)
+      },
+    })
+
+    export abstract class Instance<T extends Instance<T>> {
+
+     // defineProperty?(self: T, property: string | symbol, attributes: PropertyDescriptor): boolean;
       // getOwnPropertyDescriptor?(self: T, property: string | symbol): PropertyDescriptor | undefined;
       // getPrototypeOf?(self: T): object | null;
-      has?(self: T, property: string | symbol): boolean;
       // isExtensible?(self: T): boolean;
       // ownKeys?(self: T): ArrayLike<string | symbol>;
       // preventExtensions?(self: T): boolean;
-      set?(self: T, property: string | symbol, value: any): boolean;
       // setPrototypeOf?(self: T, v: object | null): boolean;
-    }
 
-    export const Handler = <T extends Instance<T>>(handler: JS.Class.Handler<T>): ProxyHandler<T> => ({
-      get: (___proxy_function: any, property: string | symbol, self: T): any =>
-        handler.get(___proxy_function.___instance, property),
-      apply: (___proxy_function: any, thisArg: T, argArray: any[]): any =>
-        handler.apply(___proxy_function.___instance, argArray), /** thisArg can be undefined. TODO: What's the use-case of us actually using it? */
-      set: (___proxy_function: any, property: string | symbol, newValue: any, self: T): boolean =>
-        handler.set(___proxy_function.___instance, property, newValue),
-      deleteProperty: (___proxy_function: any, property: string | symbol): boolean =>
-        handler.deleteProperty(___proxy_function.___instance, property),
-      has(___proxy_function: any, property: string | symbol): boolean
-      { return handler.has(___proxy_function.___instance, property); },
-      construct(___proxy_function: any, argArray: any[], self: Function): object
-      { return handler.construct(___proxy_function.___instance, argArray); },
-    })
+      private readonly __proxy__: T;
+      private readonly __properties__: { [key: string | symbol]: T } = {}
 
-    export abstract class Instance<T extends object> {
+      get proxy(): T {
+        return this.__proxy__;
+      }
 
-      protected readonly _proxy: T;
-
-      get proxy(): T { return this._proxy; }
-
-      protected constructor(proxy: ProxyHandler<T>) {
+      constructor() {
         /**
          * Need a function here to tell the JavaScript runtime we can use it as a function & constructor.
          * Doesn't really matter, since we're just catching everything in the proxy anyway.
          */
-        function ___proxy_function() { }
-        ___proxy_function.___instance = this;
+        function __proxy_function__() {
+        }
 
-        this._proxy = new Proxy<T>(___proxy_function as any, proxy);
+        __proxy_function__.__instance__ = this;
+
+        this.__proxy__ = new Proxy<T>(__proxy_function__ as any, Handler());
+      }
+
+      /** new ray() */ abstract __new__(args: any[]): T;
+
+      /** ray() is called. */ abstract __call__(args: any[]): T;
+
+      /** ray.property */ __get__ = (property: string | symbol): any => {
+        // if (String(property) === 'prototype') return Instance.prototype
+        //
+        // if (property in self.__properties__) return self.__properties__[property]
+        //
+        // self.__properties__[property] = this.__new__()
+        // return self.__properties__[property]
+      }
+      /** ray.property = something; */ __set__ = (property: string | symbol, value: any): boolean => {
+        // if () // TODO: Replaced with value.is_none()
+        //   value = self.proxy.any(value) // TODO: This is not pretty through something else?
+
+        // self.__properties__[property] = value
+        return true
+      }
+
+      /** property in ray; */ __has__ = (property: string | symbol): boolean => {
+        return property in this.__properties__
+      }
+      /** delete ray.property; */ __delete__ = (property: string | symbol): boolean => {
+        return delete this.__properties__[property]
       }
     }
   }

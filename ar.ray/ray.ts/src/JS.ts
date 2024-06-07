@@ -15,7 +15,7 @@ export const __ray__ = (): Self => {
   class Ray extends JS.Class.Instance<Ray> {
     __new__ = (args: any[] = []): Ray => {
       console.log('__new__', args)
-      return new Ray();
+      return new Ray().proxy;
     } // TODO Copy __properties__ and wrap each in a new function
     // instance.self = self.proxy.any(args)
     __call__ = (args: any[] = []): Ray => {

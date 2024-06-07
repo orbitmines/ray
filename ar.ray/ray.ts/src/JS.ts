@@ -77,12 +77,14 @@ namespace JS {
       // preventExtensions?(self: T): boolean;
       // setPrototypeOf?(self: T, v: object | null): boolean;
 
-      private readonly __proxy__: T;
-      private readonly __properties__: { [key: string | symbol]: T } = {}
+      protected readonly __proxy__: T;
+      protected readonly __properties__: { [key: string | symbol]: T } = {}
 
       get proxy(): T {
         return this.__proxy__;
       }
+
+
 
       constructor() {
         /**

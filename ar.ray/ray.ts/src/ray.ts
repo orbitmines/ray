@@ -7,10 +7,6 @@ import JS, {__ray__, Self} from "./JS";
 
 
 const Ray = __ray__()
-
-// TODO: What is the minimal setup to compose/equivalence ONLY
-
-Ray.none = new Ray()
 Ray.initial = Ray.none; Ray.self = Ray.none; Ray.terminal = Ray.none;
 
 

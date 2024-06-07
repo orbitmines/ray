@@ -1,5 +1,6 @@
 import _ from 'lodash';
 
+const DEBUG = true;
 
 /**
  * Can't overload things like '-=', unless we use a number as an intermediate step. Could do that as a label to get that functionality in? Or just ignore it.
@@ -12,19 +13,34 @@ export type Self = {
   & any
 
 export const __ray__ = (): Self => {
-  class Ray extends JS.Class.Instance<Ray> {
-    __new__ = (args: any[] = []): Ray => {
-      console.log('__new__', args)
-      return new Ray().proxy;
-    } // TODO Copy __properties__ and wrap each in a new function
+  class __ray__ extends JS.Class.Instance<__ray__> {
+
+    __new__ = (args: any[] = []): __ray__ => {
+      if (DEBUG) console.log('__new__', args)
+
+      const copy = new __ray__();
+      copy.GLOBAL_CONTEXT = this.GLOBAL_CONTEXT ?? this; // TODO: This is naive for now
+      return copy.proxy;
+    }
     // instance.self = self.proxy.any(args)
-    __call__ = (args: any[] = []): Ray => {
-      // throw new JS.NotImplementedError()
-      return this
+    __call__ = (args: any[] = []): __ray__ => {
+      if (DEBUG) console.log('__call__', args)
+
+      if (args.length === 0) {
+        console.log(this.proxy.terminal)
+        console.log(this.proxy.none)
+        throw new JS.NotImplementedError()
+        // return this.proxy.terminal()
+      } else {
+        throw new JS.NotImplementedError()
+      }
     }
   }
 
-  return new Ray().proxy;
+  const Ray = new __ray__().proxy
+  Ray.none = new Ray()
+
+  return Ray;
 }
 
 /**
@@ -77,14 +93,18 @@ namespace JS {
       // preventExtensions?(self: T): boolean;
       // setPrototypeOf?(self: T, v: object | null): boolean;
 
+      protected GLOBAL_CONTEXT: T | undefined; // Consistency/coherence assumptions of surrounding context. - TODO: Can be better. enter/exit functionality (dynamic) etc..
       protected readonly __proxy__: T;
       protected readonly __properties__: { [key: string | symbol]: T } = {}
 
-      get proxy(): T {
+      protected asymmetricMatch: any // TODO: Used by jest for toEqual.
+
+      get proxy(): any {
         return this.__proxy__;
       }
-
-
+      get properties(): any {
+        return { ...(this.GLOBAL_CONTEXT?.properties ?? {}), ...this.__properties__ }
+      }
 
       constructor() {
         /**
@@ -104,14 +124,20 @@ namespace JS {
       /** ray() is called. */ abstract __call__(args?: any[]): T;
 
       /** ray.property */ __get__ = (property: string | symbol): any => {
+        if (String(property) === 'asymmetricMatch') return this.asymmetricMatch
+        if (DEBUG) console.log('__get__', property)
+
         if (String(property) === 'prototype') return Instance.prototype
 
-        if (property in this.__properties__) return this.__properties__[property]
+        if (property in this.proxy) return this.properties[property]
 
-        // this.__properties__[property] = this.__new__
-        return this.__properties__[property]
+        this.__set__(property, this.properties.none)
+        return this.__get__(property)
       }
       /** ray.property = something; */ __set__ = (property: string | symbol, value: any): boolean => {
+        if (String(property) === 'asymmetricMatch') { this.asymmetricMatch = value; return true; }
+        if (DEBUG) console.log('__set__', property)
+
         if (value instanceof Instance) {
           value = value.__new__()
         } else if (value.prototype === Instance.prototype) {
@@ -124,10 +150,11 @@ namespace JS {
       }
 
       /** property in ray; */ __has__ = (property: string | symbol): boolean => {
-        return property in this.__properties__
+        if (DEBUG) console.log('__has__', property, property in this.properties)
+        return property in this.properties
       }
       /** delete ray.property; */ __delete__ = (property: string | symbol): boolean => {
-        return delete this.__properties__[property]
+        return delete this.properties[property]
       }
     }
   }

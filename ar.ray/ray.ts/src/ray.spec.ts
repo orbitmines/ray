@@ -2,6 +2,24 @@ import Ray from "./ray";
 
 describe("ray", () => {
   test(".traverse", () => {
+    // We cannot see the difference between any definition of `.none`.
+    expect(Ray.none).toBe(Ray.none)
+    expect(Ray.none).toEqual(Ray.none)
+    // We cannot see the difference between any instantiation of `.none`.
+    expect(Ray.none()).toBe(Ray.none())
+    // We CAN see the difference between a definition & instantiation of `.none`. - "They'd be different types"
+    expect(Ray.none).not.toBe(Ray.none())
+
+    // We have access to say that each function is different.
+    expect(Ray.none).not.toBe(Ray.initial)
+    expect(Ray.none).not.toBe(Ray.self)
+    expect(Ray.none).not.toBe(Ray.terminal)
+
+    // We have access to differences between each instantiation of a function
+    expect(Ray.initial()).not.toBe(Ray.initial())
+    expect(Ray.self()).not.toBe(Ray.self())
+    expect(Ray.terminal()).not.toBe(Ray.terminal())
+
     let ray = new Ray([1, 2, 3, 4, 5]);
 
     expect(ray).not.toBe(Ray.none)

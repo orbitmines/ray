@@ -10,8 +10,8 @@ const Ray = __ray__()
 
 // TODO: What is the minimal setup to compose/equivalence ONLY
 
-Ray.none = () => new Ray()
-Ray.initial = Ray.none; Ray.self = Ray.none; Ray.terminal = Ray.none
+Ray.none = new Ray()
+Ray.initial = Ray.none; Ray.self = Ray.none; Ray.terminal = Ray.none;
 
 // This {1 -> self/self.self , & 2 -> a, b} could be generalized (is_none, is_orbit, ..)
 Ray.is_none = (self: Self) => self.is_orbit(self.self)

@@ -13,10 +13,14 @@ export type Self = {
 
 export const __ray__ = (): Self => {
   class Ray extends JS.Class.Instance<Ray> {
-    __new__ = (args: any[]): Ray => new Ray();
+    __new__ = (args: any[] = []): Ray => {
+      console.log('__new__', args)
+      return new Ray();
+    } // TODO Copy __properties__ and wrap each in a new function
     // instance.self = self.proxy.any(args)
-    __call__ = (args: any[]): Ray => {
-      throw new JS.NotImplementedError()
+    __call__ = (args: any[] = []): Ray => {
+      // throw new JS.NotImplementedError()
+      return this
     }
   }
 
@@ -65,7 +69,7 @@ namespace JS {
 
     export abstract class Instance<T extends Instance<T>> {
 
-     // defineProperty?(self: T, property: string | symbol, attributes: PropertyDescriptor): boolean;
+      // defineProperty?(self: T, property: string | symbol, attributes: PropertyDescriptor): boolean;
       // getOwnPropertyDescriptor?(self: T, property: string | symbol): PropertyDescriptor | undefined;
       // getPrototypeOf?(self: T): object | null;
       // isExtensible?(self: T): boolean;
@@ -93,23 +97,27 @@ namespace JS {
         this.__proxy__ = new Proxy<T>(__proxy_function__ as any, Handler());
       }
 
-      /** new ray() */ abstract __new__(args: any[]): T;
+      /** new ray() */ abstract __new__(args?: any[]): T;
 
-      /** ray() is called. */ abstract __call__(args: any[]): T;
+      /** ray() is called. */ abstract __call__(args?: any[]): T;
 
       /** ray.property */ __get__ = (property: string | symbol): any => {
-        // if (String(property) === 'prototype') return Instance.prototype
-        //
-        // if (property in self.__properties__) return self.__properties__[property]
-        //
-        // self.__properties__[property] = this.__new__()
-        // return self.__properties__[property]
+        if (String(property) === 'prototype') return Instance.prototype
+
+        if (property in this.__properties__) return this.__properties__[property]
+
+        // this.__properties__[property] = this.__new__
+        return this.__properties__[property]
       }
       /** ray.property = something; */ __set__ = (property: string | symbol, value: any): boolean => {
-        // if () // TODO: Replaced with value.is_none()
+        if (value instanceof Instance) {
+          value = value.__new__().proxy
+        } else if (value.prototype === Instance.prototype) {
+          value = new value()
+        }
         //   value = self.proxy.any(value) // TODO: This is not pretty through something else?
 
-        // self.__properties__[property] = value
+        this.__properties__[property] = value
         return true
       }
 

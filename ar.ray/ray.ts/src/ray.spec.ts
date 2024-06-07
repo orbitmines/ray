@@ -2,7 +2,7 @@ import {__ray__} from "./JS";
 import Ray from "./ray";
 
 describe("ray", () => {
-  test(".traverse", () => {
+  test("Minimal setup", () => {
     const Ray = __ray__()
 
     expect(Ray.none).not.toBe(undefined)

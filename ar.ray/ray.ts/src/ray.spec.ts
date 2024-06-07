@@ -20,6 +20,12 @@ describe("ray", () => {
     expect(Ray.none).not.toBe(Ray.self)
     expect(Ray.none).not.toBe(Ray.terminal)
 
+
+    let A = new Ray(false)
+    let B = new Ray(true)
+
+    expect(A.is_none()).toBe(Ray.boolean(false))
+
     let ray = new Ray([1, 2, 3, 4, 5]);
 
     expect(ray).not.toBe(Ray.none)

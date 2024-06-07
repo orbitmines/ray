@@ -111,7 +111,7 @@ namespace JS {
       }
       /** ray.property = something; */ __set__ = (property: string | symbol, value: any): boolean => {
         if (value instanceof Instance) {
-          value = value.__new__().proxy
+          value = value.__new__()
         } else if (value.prototype === Instance.prototype) {
           value = new value()
         }

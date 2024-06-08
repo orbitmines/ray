@@ -26,37 +26,60 @@
 
 import {__ray__} from "./ray";
 
+const __DEBUG__ = (__RAY__ = __ray__()) => {
+  const __new__ = __RAY__.__class__.__new__;
+
+  __RAY__.__class__.__new__ = (args: any[] = []): any => {
+    console.log('__new__', args)
+
+    return __DEBUG__(__new__(args)).proxy
+  }
+
+  const __has__ = __RAY__.__has__;
+  const __delete__ = __RAY__.__delete__;
+  const __set__ = __RAY__.__set__;
+  const __get__ = __RAY__.__get__;
+  const __call__ = __RAY__.__call__;
+
+  __RAY__.__has__ = (property: string | symbol): boolean => {
+    console.log('__has__', property)
+    return __has__(property)
+  }
+  __RAY__.__delete__ = (property: string | symbol): boolean => {
+    console.log('__delete__', property)
+    return __delete__(property)
+  }
+  __RAY__.__get__ = (property: string | symbol): any => {
+    console.log('__get__', property)
+
+    // if (String(property) === '$$typeof') return 'Ray';
+    // if (String(property) === 'constructor') return this;
+    // if (String(property) === '@@__IMMUTABLE_ITERABLE__@@') return Ray.prototype
+
+    return __get__(property);
+  }
+  __RAY__.__set__ = (property: string | symbol, value: any): boolean => {
+    console.log('__set__', property, value)
+    return __set__(property, value);
+  }
+  __RAY__.__call__ = (args: any[] = []): any => {
+    console.log('__call__', args)
+    return __call__(args);
+  }
+
+  return __RAY__;
+}
+
+const Ray = __DEBUG__().proxy;
+
+
 describe("ray", () => {
   test("Minimal setup", () => {
-    const __RAY__ = __ray__()
-
-    const __set__ = __RAY__.__set__;
-    const __get__ = __RAY__.__get__;
-
-    __RAY__.__get__ = (property: string | symbol): any => {
-      console.log('__get__', property)
-
-      // if (String(property) === '$$typeof') return 'Ray';
-      // if (String(property) === 'constructor') return this;
-      // if (String(property) === '@@__IMMUTABLE_ITERABLE__@@') return Ray.prototype
-
-      return __get__(property);
-    }
-    __RAY__.__set__ = (property: string | symbol, value: any): boolean => {
-      console.log('__set__', property, value)
-
-      return __set__(property, value);
-    }
-
-    const Ray = __RAY__.proxy;
-    console.log(__RAY__)
-    console.log(Ray)
-
     // expect(Ray.none.is_none()).toBe(undefined)
 
     // // We cannot see the difference between any definition of `.none`.
-    // expect(Ray.none).toBe(Ray.none)
-    // expect(Ray.none).toEqual(Ray.none)
+    expect(Ray.none).toBe(Ray.none)
+    expect(Ray.none).toEqual(Ray.none)
     // // We can see the difference between each function definition.
     // expect(Ray.none).not.toBe(Ray.initial)
     // expect(Ray.none).not.toBe(Ray.self)

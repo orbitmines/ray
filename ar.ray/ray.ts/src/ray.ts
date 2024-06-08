@@ -47,7 +47,7 @@ export const __ray__ = (
         set: (__proxy_function__: any, property: string | symbol, newValue: any, self: Ray): boolean => __proxy_function__.__instance__.__set__(property, newValue),
         deleteProperty: (__proxy_function__: any, property: string | symbol): boolean => __proxy_function__.__instance__.__delete__(property),
         has: (__proxy_function__: any, property: string | symbol): boolean => __proxy_function__.__instance__.__has__(property),
-        construct: (__proxy_function__: any, argArray: any[], self: Function): object => Ray.__new__(argArray),
+        construct: (__proxy_function__: any, argArray: any[], self: Function): object => __proxy_function__.__instance__.__class__.__new__(argArray),
         // TODO
         // defineProperty?(self: T, property: string | symbol, attributes: PropertyDescriptor): boolean;
         // getOwnPropertyDescriptor?(self: T, property: string | symbol): PropertyDescriptor | undefined;
@@ -59,12 +59,15 @@ export const __ray__ = (
       });
     }
 
+    get __class__() { return Ray; } // TODO: What is the python equiv for this? rename to that
+
     __enter__ = () => { throw new Error() }
     __exit__ = () => { throw new Error() }
 
     static __new__ = (args: any[] = []): any => {
       const ray = __ray__(GLOBAL_CONTEXT ?? this);
       ray.__object__ = args;
+
 
       // TODO: Instantiate .args at .self
 
@@ -87,26 +90,26 @@ export const __ray__ = (
 
     // instance.self = self.proxy.any(args)
     __call__ = (args: any[] = []): any => {
-      // /** ray() is called. */
-      // if (args.length === 0) { return this.proxy.terminal }
-      // /** ray(a, b, ...) is called. */
-      // if (args.length !== 1) { throw new Error() }
-      //
-      // /** ray(a) is called. */
-      // const arg = args[0]
-      //
-      // if (is_function(arg)) {
-      //   if (arg.length === 0) {
-      //     return arg()
-      //   } else if (arg.length === 1) {
-      //     // Ray.something = (self: Self) => {}
-      //     // return arg(this);
-      //     console.log(arg(arg))
-      //     throw new Error()
-      //   } else {
-      //     throw new Error()
-      //   }
-      // }
+      /** ray() is called. */
+      if (args.length === 0) { return this.proxy.terminal }
+      /** ray(a, b, ...) is called. */
+      if (args.length !== 1) { throw new Error() }
+
+      /** ray(a) is called. */
+      const arg = args[0]
+
+      if (is_function(arg)) {
+        if (arg.length === 0) {
+          return arg()
+        } else if (arg.length === 1) {
+          // Ray.something = (self: Self) => {}
+          // return arg(this);
+          console.log(arg(arg))
+          throw new Error()
+        } else {
+          throw new Error()
+        }
+      }
       // const __call__ = this.__new__(args)
       // __call__.initial = this.proxy.self;
       // __call__.self = this.proxy.terminal;
@@ -120,7 +123,7 @@ export const __ray__ = (
       if (ray === undefined) return Ray.undefined;
       if (ray === null) return Ray.null;
       if (ray instanceof Ray || ray.prototype === Ray.prototype) return ray;
-      // if (is_function(ray)) return Ray.function(ray)
+      if (is_function(ray)) return Ray.function(ray)
       // if (_.isBoolean(ray)) return Ray.boolean(ray);
       //
       //     // if (JS.is_number(ray)) return Ray.number(ray);
@@ -141,19 +144,20 @@ export const __ray__ = (
     static undefined = Ray.none; static null = Ray.none;
 
      // /** Define `Ray.function` first, then immediately, it gets called with itself - to define itself in terms of a Ray. */
-    // static function = (fn: Fn) => {
-    //   if (!is_function(fn)) return Ray.none
-    //
-    //   const ray = Ray.__new__();
-    //   ray.terminal = () => {
-    //     // const input = ray.terminal.terminal;
-    //     // const output = fn(input)
-    //     // input.terminal = output;
-    //     // return output;
-    //     throw new Error()
-    //   };
-    //   return ray
-    // }
+    static function = (fn: Fn) => {
+      if (!is_function(fn)) return Ray.none
+
+      // const ray = Ray.__new__();
+      // ray.terminal = () => {
+      //   // const input = ray.terminal.terminal;
+      //   // const output = fn(input)
+      //   // input.terminal = output;
+      //   // return output;
+      //   throw new Error()
+      // };
+      // return ray
+      return Ray.none
+    }
 
     // static boolean = (ray: boolean) => Ray.none; static true = Ray.none; static false = Ray.none;
     // Ray.object = (ray: object) => Ray.none

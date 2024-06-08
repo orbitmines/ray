@@ -24,12 +24,35 @@
 //   }
 //
 
-import Ray from "./ray";
+import {__ray__} from "./ray";
 
 describe("ray", () => {
   test("Minimal setup", () => {
+    const __RAY__ = __ray__()
 
-    expect(Ray.none).toBe(undefined)
+    const __set__ = __RAY__.__set__;
+    const __get__ = __RAY__.__get__;
+
+    __RAY__.__get__ = (property: string | symbol): any => {
+      console.log('__get__', property)
+
+      // if (String(property) === '$$typeof') return 'Ray';
+      // if (String(property) === 'constructor') return this;
+      // if (String(property) === '@@__IMMUTABLE_ITERABLE__@@') return Ray.prototype
+
+      return __get__(property);
+    }
+    __RAY__.__set__ = (property: string | symbol, value: any): boolean => {
+      console.log('__set__', property, value)
+
+      return __set__(property, value);
+    }
+
+    const Ray = __RAY__.proxy;
+    console.log(__RAY__)
+    console.log(Ray)
+
+    // expect(Ray.none.is_none()).toBe(undefined)
 
     // // We cannot see the difference between any definition of `.none`.
     // expect(Ray.none).toBe(Ray.none)

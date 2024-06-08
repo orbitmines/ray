@@ -4,11 +4,28 @@ export type Fn<T = any> = (...args: any[]) => T;
 export type Constructor<T = any> = new (...args: any[]) => T;
 export type Recursive<T> = (T | Recursive<T | T[]>)[];
 
+// TODO Copy from lodash - remove as a dependency.
+export const is_boolean = (_object: any): _object is boolean => _.isBoolean(_object);
+export const is_number = (_object: any): _object is number => _.isNumber(_object);
+export const is_object = (_object: any): _object is object => _.isObject(_object);
+export const is_iterable = <T = any>(_object: any): _object is Iterable<T> => Symbol.iterator in Object(_object) && is_function(_object[Symbol.iterator]);
+export const is_async_iterable = <T = any>(_object: any): _object is AsyncIterable<T> => Symbol.asyncIterator in Object(_object) && is_function(_object[Symbol.asyncIterator]);
+export const is_array = <T = any>(_object: any): _object is T[] => _.isArray(_object);
+export const is_async = (_object: any) => _.has(_object, 'then') && is_function(_.get(_object, 'then')); // TODO, Just an ugly check
+export const is_error = (_object: any): _object is Error => _.isError(_object);
+export const is_function = (_object: any): _object is ((...args: any[]) => any) => _.isFunction(_object);
+
+/**
+ *
+ *
+ */
 export const __ray__ = (
   // Consistency/coherence assumptions of surrounding context. - TODO: Can be better. enter/exit functionality (dynamic) etc..
   GLOBAL_CONTEXT: any = undefined
 ) => {
   class Ray {
+
+    protected __object__: any;
 
     protected readonly __proxy__: any;
     get proxy() { return this.__proxy__ }
@@ -21,7 +38,6 @@ export const __ray__ = (
     constructor() {
       // Need a function here to tell the JavaScript runtime we can use it as a function & constructor. Doesn't really matter, since we're just catching everything in the proxy anyway.
       function __proxy_function__() { throw new Error("Should never be called") }
-
       __proxy_function__.__instance__ = this;
 
       // Wrap the confusing JavaScript proxy into a more useful one.
@@ -47,7 +63,12 @@ export const __ray__ = (
     __exit__ = () => { throw new Error() }
 
     static __new__ = (args: any[] = []): any => {
-      return __ray__(GLOBAL_CONTEXT ?? this);
+      const ray = __ray__(GLOBAL_CONTEXT ?? this);
+      ray.__object__ = args;
+
+      // TODO: Instantiate .args at .self
+
+      return ray.proxy;
     }
 
     __has__ = (property: string | symbol): boolean => property in this.properties
@@ -66,31 +87,31 @@ export const __ray__ = (
 
     // instance.self = self.proxy.any(args)
     __call__ = (args: any[] = []): any => {
-      // /** ray() is called. */
-      // if (args.length === 0) { return this.proxy.terminal }
-      // /** ray(a, b, ...) is called. */
-      // if (args.length !== 1) { throw new NotImplementedError() }
-      //
-      // /** ray(a) is called. */
-      // const arg = args[0]
-      //
-      // if (JS.is_function(arg)) {
-      //   if (arg.length === 0) {
-      //     return arg()
-      //   } else if (arg.length === 1) {
-      //     // Ray.something = (self: Self) => {}
-      //     // return arg(this);
-      //     console.log(arg(arg))
-      //     throw new JS.NotImplementedError();
-      //   } else {
-      //     throw new JS.NotImplementedError();
-      //   }
-      // }
-      // // const __call__ = this.__new__(args)
-      // // __call__.initial = this.proxy.self;
-      // // __call__.self = this.proxy.terminal;
-      // // __call__.terminal =
-      //
+      /** ray() is called. */
+      if (args.length === 0) { return this.proxy.terminal }
+      /** ray(a, b, ...) is called. */
+      if (args.length !== 1) { throw new Error() }
+
+      /** ray(a) is called. */
+      const arg = args[0]
+
+      if (is_function(arg)) {
+        if (arg.length === 0) {
+          return arg()
+        } else if (arg.length === 1) {
+          // Ray.something = (self: Self) => {}
+          // return arg(this);
+          console.log(arg(arg))
+          throw new Error()
+        } else {
+          throw new Error()
+        }
+      }
+      // const __call__ = this.__new__(args)
+      // __call__.initial = this.proxy.self;
+      // __call__.self = this.proxy.terminal;
+      // __call__.terminal =
+
       throw new Error()
     }
 
@@ -98,8 +119,8 @@ export const __ray__ = (
     static any = (ray: any): any => {
       if (ray === undefined) return Ray.undefined;
       if (ray === null) return Ray.null;
-      if (ray instanceof Ray || ray.prototype === Ray.prototype) return new ray(); // TODO: Copy or just return ray?
-      if (_.isFunction(ray)) { throw new Error(); }
+      if (ray instanceof Ray || ray.prototype === Ray.prototype) return Ray.__new__(); // TODO: Copy or just return ray?
+      if (is_function(ray)) return Ray.function(ray)
       // if (_.isBoolean(ray)) return Ray.boolean(ray);
       //
       //     // if (JS.is_number(ray)) return Ray.number(ray);
@@ -108,10 +129,11 @@ export const __ray__ = (
       //     if (JS.is_object(ray)) return Ray.object(ray);
       //
 
+      console.log(ray)
       throw new Error();
     }
 
-    is_none = (self = this.proxy) => self.self === undefined
+    // is_none = (self = this.proxy) => self.self === undefined
 
     static none = new Ray()
     static initial = Ray.none; static self = Ray.none; static terminal = Ray.none;
@@ -120,18 +142,17 @@ export const __ray__ = (
 
      // /** Define `Ray.function` first, then immediately, it gets called with itself - to define itself in terms of a Ray. */
     static function = (fn: Fn) => {
-      // if (!JS.is_function(fn)) return Ray.none
-      //
-      // const ray = new Ray();
-      // ray.terminal = () => {
-      //   // const input = ray.terminal.terminal;
-      //   // const output = fn(input)
-      //   // input.terminal = output;
-      //   // return output;
-      //   throw new JS.NotImplementedError()
-      // };
-      // return ray
-      throw new Error()
+      if (!is_function(fn)) return Ray.none
+
+      const ray = Ray.__new__();
+      ray.terminal = () => {
+        // const input = ray.terminal.terminal;
+        // const output = fn(input)
+        // input.terminal = output;
+        // return output;
+        throw new Error()
+      };
+      return ray
     }
 
     // static boolean = (ray: boolean) => Ray.none; static true = Ray.none; static false = Ray.none;
@@ -147,18 +168,20 @@ export const __ray__ = (
   const ray = new Ray();
 
   // Set all the methods defined on `Ray` through `__set__`. As if we used `Ray.something = something`
+
   [...Object.keys(Ray), ...Object.keys(ray)]
     .filter(name => !name.startsWith('__'))
     .forEach(name => {
       // @ts-ignore
       ray.__set__(name, Ray[name] ?? ray[name])
-    })
+    });
 
-  return ray.proxy;
+  return ray;
 }
 
-const Ray = __ray__();
+const Ray = __ray__().proxy;
 export default Ray;
+
 
 // This {1 -> self/self.self , & 2 -> a, b} could be generalized (is_none, is_orbit, ..)
 // Ray.is_none = (self: Self) => self.is_orbit(self.self)

@@ -27,13 +27,8 @@
 import {__ray__} from "./ray";
 
 const __DEBUG__ = (__RAY__ = __ray__()) => {
-  const __new__ = __RAY__.__class__.__new__;
 
-  __RAY__.__class__.__new__ = (args: any[] = []): any => {
-    console.log('__new__', args)
 
-    return __DEBUG__(__new__(args)).proxy
-  }
 
   const __has__ = __RAY__.__has__;
   const __delete__ = __RAY__.__delete__;
@@ -70,7 +65,12 @@ const __DEBUG__ = (__RAY__ = __ray__()) => {
   return __RAY__;
 }
 
-const Ray = __DEBUG__().proxy;
+const Ray = __ray__().__debug__(
+  (name, method, args) => {
+    console.log(name, args)
+    return method;
+  }
+).proxy;
 
 
 describe("ray", () => {

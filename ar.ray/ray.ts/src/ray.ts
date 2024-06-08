@@ -67,19 +67,18 @@ export const __ray__ = (
     get __class_methods__() { return Object.keys(this) } // TODO: Confusing name? something else?
     __method__ = (name: string) => (this.__class__ as any)[name] ?? (this as any)[name];
 
-    __debug__ = (on: (name: string, method: Fn, args: any[]) => Fn) => {
+    __debug__ = (on: (name: string, method: Fn) => Fn) => {
       this.__static_methods__.forEach(name => {
         const method = this.__method__(name);
 
-        this.__class__[name] = (args: any[] = []): any => {
-          // console.log('__new__', args)
-          //
-          // return __DEBUG__(__new__(args)).proxy
-        }
+        // @ts-ignore
+        this.__class__[name] = on(name, method);
       });
       this.__class_methods__.forEach(name => {
         const method = this.__method__(name);
 
+        // @ts-ignore
+        this[name] = on(name, method);
       })
 
       return this;
@@ -194,11 +193,6 @@ export const __ray__ = (
   }
 
   const ray = new Ray();
-
-  // Set all the methods defined on `Ray` through `__set__`. As if we used `Ray.something = something`
-  ray.__methods__
-    .filter(name => !name.startsWith('__'))
-    .forEach(method => ray.__set__(method, ray.__method__(method)));
 
   return ray;
 }

@@ -16,6 +16,7 @@ export const __ray__ = (
 
     protected readonly __properties__: { [key: string | symbol]: Ray } = {}
     get properties(): any { return {...(GLOBAL_CONTEXT?.properties ?? {}), ...this.__properties__ }}
+    // get properties(): any { return {...this.__properties__} }
 
     constructor() {
       // Need a function here to tell the JavaScript runtime we can use it as a function & constructor. Doesn't really matter, since we're just catching everything in the proxy anyway.
@@ -143,7 +144,17 @@ export const __ray__ = (
     // Ray.constructor = (ray: JS.Constructor) => Ray.none
   }
 
-  return new Ray().proxy;
+  const ray = new Ray();
+
+  // Set all the methods defined on `Ray` through `__set__`. As if we used `Ray.something = something`
+  [...Object.keys(Ray), ...Object.keys(ray)]
+    .filter(name => !name.startsWith('__'))
+    .forEach(name => {
+      // @ts-ignore
+      ray.__set__(name, Ray[name] ?? ray[name])
+    })
+
+  return ray.proxy;
 }
 
 const Ray = __ray__();

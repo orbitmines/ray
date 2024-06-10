@@ -24,25 +24,9 @@
 //   }
 //
 
-import {__ray__, is_function} from "./ray";
+import {__ray__} from "./ray";
 
-const __DEBUG__ = __ray__().__debug__(
-  (name, method) => {
-    if (name.startsWith('__')) return method
-
-    return (...args: any) => {
-      console.log(name, method, args)
-      return is_function(method) ? method(...args) : (method as any).proxy[name]
-    };
-  }
-);
-
-// Set all the methods defined on `Ray` through `__set__`. As if we used `Ray.something = something`
-__DEBUG__.__methods__
-  .filter(name => !name.startsWith('__'))
-  .forEach(method => __DEBUG__.__set__(method, __DEBUG__.__method__(method)));
-
-const Ray = __DEBUG__.proxy
+const Ray = __ray__({ DEBUG: true })
 
 describe("ray", () => {
   test("Minimal setup", () => {

@@ -19,10 +19,11 @@ export const is_function = (_object: any): _object is ((...args: any[]) => any) 
  *
  *
  */
-export const __ray__ = (
+export const __ray__ = ({
+  DEBUG = true,
   // Consistency/coherence assumptions of surrounding context. - TODO: Can be better. enter/exit functionality (dynamic) etc..
-  GLOBAL_CONTEXT: any = undefined
-) => {
+  GLOBAL_CONTEXT = undefined
+} = {}) => {
   class Ray {
 
     protected __object__: any;
@@ -67,30 +68,15 @@ export const __ray__ = (
     get __class_methods__() { return Object.keys(this) } // TODO: Confusing name? something else?
     __method__ = (name: string) => (this.__class__ as any)[name] ?? (this as any)[name];
 
-    __debug__ = (on: (name: string, method: Fn) => Fn) => {
-      this.__static_methods__.forEach(name => {
-        const method = this.__method__(name);
-
-        // @ts-ignore
-        this.__class__[name] = on(name, method);
-      });
-      this.__class_methods__.forEach(name => {
-        const method = this.__method__(name);
-
-        // @ts-ignore
-        this[name] = on(name, method);
-      })
-
-      return this;
-    }
-
     __enter__ = () => { throw new Error() }
     __exit__ = () => { throw new Error() }
 
     static __new__ = (args: any[] = []): any => {
-      const ray = __ray__(GLOBAL_CONTEXT ?? this);
+      const ray = __ray__({
+        DEBUG: DEBUG,
+        GLOBAL_CONTEXT: GLOBAL_CONTEXT ?? this
+      });
       ray.__object__ = args;
-
 
       // TODO: Instantiate .args at .self
 
@@ -161,7 +147,7 @@ export const __ray__ = (
 
     is_none = (self = this.proxy) => self.self === undefined
 
-    static none = new Ray()
+    static none = new Ray().proxy
     static initial = Ray.none; static self = Ray.none; static terminal = Ray.none;
 
     static undefined = Ray.none; static null = Ray.none;
@@ -194,7 +180,35 @@ export const __ray__ = (
 
   const ray = new Ray();
 
-  return ray;
+  if (DEBUG) {
+    const __debug__ = (name: string, method: Fn) => {
+      if (name.startsWith('__')) return method
+
+      return (...args: any) => {
+        console.log(name, args)
+        return method(...args)
+      };
+    }
+
+    if (GLOBAL_CONTEXT === undefined) {
+      ray.__static_methods__.forEach(name => {
+        // @ts-ignore
+        ray.__class__[name] = __debug__(name, ray.__method__(name));
+      });
+    }
+
+    ray.__class_methods__.forEach(name => {
+      // @ts-ignore
+      ray[name] = __debug__(name, ray.__method__(name));
+    })
+  }
+
+  // Set all the methods defined on `Ray` through `__set__`. As if we used `Ray.something = something`
+  ray.__methods__
+    .filter(name => !name.startsWith('__'))
+    .forEach(method => ray.__set__(method, ray.__method__(method)));
+
+  return ray.proxy;
 }
 
 

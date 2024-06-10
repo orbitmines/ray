@@ -79,23 +79,22 @@ class Ray {
       initial = Ray.none, self = Ray.none, terminal = Ray.none
     } = kwargs;
 
-    console.log(args, kwargs)
-
     // Map different __object__ values.
-    if (__object__ === undefined)
-      __object__ = Ray.undefined;
-    else if (__object__ === null)
-      __object__ = Ray.null;
-    else if (__object__ instanceof Ray || __object__.prototype === Ray.prototype)
-      __object__ = new __object__() // This is a copy
-    // if (is_function(__object__)) __object__ = Ray.function(__object__)
+    const as_ray = () => {
+      if (__object__ === undefined) return Ray.undefined;
+      else if (__object__ === null) return  Ray.null;
+      else if (__object__ instanceof Ray || __object__.prototype === Ray.prototype) return new __object__() // This is a copy
+      else if (is_function(__object__)) return Ray.function(__object__)
+      else throw new Error("Not implemented")
+    }
+    __object__ = as_ray()
 
     // If we've already got a Ray, just return that.
     if (__object__ instanceof Ray || __object__.prototype === Ray.prototype)
       return __object__
 
     const __ray__ = new Ray({ __GLOBAL_CONTEXT__ });
-    __ray__.__object__ = __object__
+    __ray__.__object__ = kwargs.__object__
 
     const ray = __ray__.proxy
     // ray.initial = initial
@@ -110,7 +109,6 @@ class Ray {
   // static any = (ray: any): any => {
   //
   // TODO: Copy from lodash - remove as a dependency.
-    // if (is_function(ray)) return Ray.function(ray)
     // if (_.isBoolean(ray)) return Ray.boolean(ray);
         // if (JS.is_number(ray)) return Ray.number(ray);
         // if (JS.is_iterable(ray)) return Ray.iterable(ray);

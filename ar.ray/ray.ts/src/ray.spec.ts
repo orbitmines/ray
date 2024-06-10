@@ -39,11 +39,11 @@ describe("ray", () => {
     expect(Ray.none).toEqual(Ray.none)
     // We cannot see the difference between any instantiation of `.none`.
     expect(Ray.none()).toBe(Ray.none())
-    // expect(Ray.initial()).toBe(Ray.initial())
-    // expect(Ray.self()).toBe(Ray.self())
-    // expect(Ray.terminal()).toBe(Ray.terminal())
+    expect(Ray.initial()).toBe(Ray.initial())
+    expect(Ray.self()).toBe(Ray.self())
+    expect(Ray.terminal()).toBe(Ray.terminal())
     // We CAN see the difference between a definition & instantiation of `.none`. - "They'd be different types"
-    // expect(Ray.none).not.toBe(Ray.none())
+    expect(Ray.none).not.toBe(Ray.none())
     // expect(Ray.initial).not.toBe(Ray.initial())
     // expect(Ray.self).not.toBe(Ray.self())
     // expect(Ray.terminal).not.toBe(Ray.terminal()) TODO

@@ -3,6 +3,7 @@ import _ from "lodash";
 export type Fn<T = any> = (...args: any[]) => T;
 export type Constructor<T = any> = new (...args: any[]) => T;
 export type Recursive<T> = (T | Recursive<T | T[]>)[];
+export type Dictionary<T = any> = { [key: string | symbol]: T }
 
 // TODO Copy from lodash - remove as a dependency.
 export const is_boolean = (_object: any): _object is boolean => _.isBoolean(_object);
@@ -19,194 +20,219 @@ export const is_function = (_object: any): _object is ((...args: any[]) => any) 
  *
  *
  */
-export const __ray__ = ({
-  DEBUG = true,
-  // Consistency/coherence assumptions of surrounding context. - TODO: Can be better. enter/exit functionality (dynamic) etc..
-  GLOBAL_CONTEXT = undefined
-} = {}) => {
-  class Ray {
+class Ray {
+  // The JavaScript object we're wrapping.
+  protected __object__: any;
 
-    protected __object__: any;
+  protected readonly __proxy__: any;
+  get proxy() { return this.__proxy__ }
 
-    protected readonly __proxy__: any;
-    get proxy() { return this.__proxy__ }
+  // Consistency/coherence assumptions of surrounding context. - TODO: Can be better. enter/exit functionality (dynamic) etc..=
+  protected __GLOBAL_CONTEXT__?: Ray = undefined
 
+  protected readonly __properties__: Dictionary<Ray> = {}
+  get properties(): any { return {...(this.__GLOBAL_CONTEXT__?.properties ?? {}), ...this.__properties__ }}
+  // get properties(): any { return {...this.__properties__} }
 
-    protected readonly __properties__: { [key: string | symbol]: Ray } = {}
-    get properties(): any { return {...(GLOBAL_CONTEXT?.properties ?? {}), ...this.__properties__ }}
-    // get properties(): any { return {...this.__properties__} }
+  private constructor({ __GLOBAL_CONTEXT__ = undefined }: { __GLOBAL_CONTEXT__?: any } = {}) {
+    this.__GLOBAL_CONTEXT__ = __GLOBAL_CONTEXT__
 
-    constructor() {
-      // Need a function here to tell the JavaScript runtime we can use it as a function & constructor. Doesn't really matter, since we're just catching everything in the proxy anyway.
-      function __proxy_function__() { throw new Error("Should never be called") }
-      __proxy_function__.__instance__ = this;
+    // Need a function here to tell the JavaScript runtime we can use it as a function & constructor. Doesn't really matter, since we're just catching everything in the proxy anyway.
+    function __proxy_function__() { throw new Error("Should never be called") }
+    __proxy_function__.__instance__ = this;
 
-      // Wrap the confusing JavaScript proxy into a more useful one.
-      this.__proxy__ = new Proxy<Ray>(__proxy_function__ as any, {
-        get: (__proxy_function__: any, property: string | symbol, self: Ray): any => __proxy_function__.__instance__.__get__(property),
-        apply: (__proxy_function__: any, thisArg: Ray, argArray: any[]): any => __proxy_function__.__instance__.__call__(argArray),
-        set: (__proxy_function__: any, property: string | symbol, newValue: any, self: Ray): boolean => __proxy_function__.__instance__.__set__(property, newValue),
-        deleteProperty: (__proxy_function__: any, property: string | symbol): boolean => __proxy_function__.__instance__.__delete__(property),
-        has: (__proxy_function__: any, property: string | symbol): boolean => __proxy_function__.__instance__.__has__(property),
-        construct: (__proxy_function__: any, argArray: any[], self: Function): object => __proxy_function__.__instance__.__class__.__new__(argArray),
-        // TODO
-        // defineProperty?(self: T, property: string | symbol, attributes: PropertyDescriptor): boolean;
-        // getOwnPropertyDescriptor?(self: T, property: string | symbol): PropertyDescriptor | undefined;
-        // getPrototypeOf?(self: T): object | null;
-        // isExtensible?(self: T): boolean;
-        // ownKeys?(self: T): ArrayLike<string | symbol>;
-        // preventExtensions?(self: T): boolean;
-        // setPrototypeOf?(self: T, v: object | null): boolean;
-      });
-    }
+    // Wrap the confusing JavaScript proxy into a more useful one.
+    this.__proxy__ = new Proxy<Ray>(__proxy_function__ as any, {
+      get: (__proxy_function__: any, property: string | symbol, self: Ray): any => __proxy_function__.__instance__.__get__(property),
+      apply: (__proxy_function__: any, thisArg: Ray, argArray: any[]): any => __proxy_function__.__instance__.__call__(argArray),
+      set: (__proxy_function__: any, property: string | symbol, newValue: any, self: Ray): boolean => __proxy_function__.__instance__.__set__(property, newValue),
+      deleteProperty: (__proxy_function__: any, property: string | symbol): boolean => __proxy_function__.__instance__.__delete__(property),
+      has: (__proxy_function__: any, property: string | symbol): boolean => __proxy_function__.__instance__.__has__(property),
+      construct: (__proxy_function__: any, argArray: any[], self: Function): object => __proxy_function__.__instance__.__class__.__new__(
+        { __GLOBAL_CONTEXT__: __proxy_function__.__instance__, __object__: argArray }
+      ),
+      // TODO
+      // defineProperty?(self: T, property: string | symbol, attributes: PropertyDescriptor): boolean;
+      // getOwnPropertyDescriptor?(self: T, property: string | symbol): PropertyDescriptor | undefined;
+      // getPrototypeOf?(self: T): object | null;
+      // isExtensible?(self: T): boolean;
+      // ownKeys?(self: T): ArrayLike<string | symbol>;
+      // preventExtensions?(self: T): boolean;
+      // setPrototypeOf?(self: T, v: object | null): boolean;
+    });
+  }
 
-    get __class__() { return Ray; } // TODO: What is the python equiv for this? rename to that
-    get __methods__() {
-      return [...this.__static_methods__, ...this.__class_methods__];
-    }
-    get __static_methods__() { return Object.keys(this.__class__) }
-    get __class_methods__() { return Object.keys(this) } // TODO: Confusing name? something else?
-    __method__ = (name: string) => (this.__class__ as any)[name] ?? (this as any)[name];
+  get __class__() { return Ray; } // TODO: What is the python equiv for this? rename to that
+  get __methods__() {
+    return [...this.__static_methods__, ...this.__class_methods__];
+  }
+  get __static_methods__() { return Object.keys(this.__class__) }
+  get __class_methods__() { return Object.keys(this) } // TODO: Confusing name? something else?
+  __method__ = (name: string) => (this.__class__ as any)[name] ?? (this as any)[name];
 
-    __enter__ = () => { throw new Error() }
-    __exit__ = () => { throw new Error() }
+  __enter__ = () => { throw new Error() }
+  __exit__ = () => { throw new Error() }
 
-    static __new__ = (args: any[] = []): any => {
-      const ray = __ray__({
-        DEBUG: DEBUG,
-        GLOBAL_CONTEXT: GLOBAL_CONTEXT ?? this
-      });
-      ray.__object__ = args;
+  static __new__ = (args: any[] = [], kwargs: Dictionary = {}): any => {
+    let {
+      __GLOBAL_CONTEXT__ = undefined, __object__ = undefined,
+      initial = Ray.none, self = Ray.none, terminal = Ray.none
+    } = kwargs;
 
-      // TODO: Instantiate .args at .self
+    console.log(args, kwargs)
 
-      return ray.proxy;
-    }
+    // Map different __object__ values.
+    if (__object__ === undefined)
+      __object__ = Ray.undefined;
+    else if (__object__ === null)
+      __object__ = Ray.null;
+    else if (__object__ instanceof Ray || __object__.prototype === Ray.prototype)
+      __object__ = new __object__() // This is a copy
+    // if (is_function(__object__)) __object__ = Ray.function(__object__)
 
-    __has__ = (property: string | symbol): boolean => property in this.properties
-    __delete__ = (property: string | symbol): boolean => delete this.properties[property]
-    __set__ = (property: string | symbol, value: any): boolean => {
-      this.__properties__[property] = Ray.any(value)
-      return true
-    }
-    __get__ = (property: string | symbol): any => {
-      if (String(property) === 'prototype') return Ray.prototype
-      if (property in this.proxy) return this.properties[property]
+    // If we've already got a Ray, just return that.
+    if (__object__ instanceof Ray || __object__.prototype === Ray.prototype)
+      return __object__
 
-      this.__set__(property, this.properties.none)
-      return this.__get__(property)
-    }
+    const __ray__ = new Ray({ __GLOBAL_CONTEXT__ });
+    __ray__.__object__ = __object__
 
-    // instance.self = self.proxy.any(args)
-    __call__ = (args: any[] = []): any => {
-      /** ray() is called. */
-      if (args.length === 0) { return this.proxy.terminal }
-      /** ray(a, b, ...) is called. */
-      if (args.length !== 1) { throw new Error() }
+    const ray = __ray__.proxy
+    // ray.initial = initial
+    // ray.self = self
+    // ray.terminal = terminal
 
-      /** ray(a) is called. */
+    // TODO: Instantiate .args at .self
+
+    return ray;
+  }
+
+  // static any = (ray: any): any => {
+  //
+  // TODO: Copy from lodash - remove as a dependency.
+    // if (is_function(ray)) return Ray.function(ray)
+    // if (_.isBoolean(ray)) return Ray.boolean(ray);
+        // if (JS.is_number(ray)) return Ray.number(ray);
+        // if (JS.is_iterable(ray)) return Ray.iterable(ray);
+        // if (JS.is_function(ray)) return Ray.function(ray);
+        // if (JS.is_object(ray)) return Ray.object(ray);
+    //
+    // return Ray.none
+    // throw new Error(`Unsupported type ${typeof ray}`)
+    // console.log('Unsupported type', ray)
+    // return Ray.none;
+  // }
+
+  __has__ = (property: string | symbol): boolean => property in this.properties
+  __delete__ = (property: string | symbol): boolean => delete this.properties[property]
+  __set__ = (property: string | symbol, value: any): boolean => {
+    this.__properties__[property] = Ray.__new__([], { __object__: value })
+    return true
+  }
+  __get__ = (property: string | symbol): any => {
+    if (String(property) === 'prototype') return Ray.prototype
+    if (property in this.proxy) return this.properties[property]
+
+    this.__set__(property, this.__class__.none)
+    return this.__get__(property)
+  }
+
+  __call__ = (args: any[] = []): any => {
+    /** ray() is called. */
+    if (args.length === 0) return this.proxy.terminal
+    /** ray(a, b, ...) is called. */
+    if (args.length !== 1) { throw new Error() }
+
+    /** ray(a) is called. */
+    if (is_function(args[0])) {
       const arg = args[0]
 
-      if (is_function(arg)) {
-        if (arg.length === 0) {
-          return arg()
-        } else if (arg.length === 1) {
-          // Ray.something = (self: Self) => {}
-          // return arg(this);
-          console.log(arg(arg))
-          throw new Error()
-        } else {
-          throw new Error()
-        }
+      if (arg.length === 0) {
+        return arg()
+      } else if (arg.length === 1) {
+        // Ray.something = (self: Self) => {}
+        // return arg(this);
+        console.log(arg(arg))
+        throw new Error()
+      } else {
+        throw new Error()
       }
-      // const __call__ = this.__new__(args)
-      // __call__.initial = this.proxy.self;
-      // __call__.self = this.proxy.terminal;
-      // __call__.terminal =
-
-      throw new Error()
     }
+    // const __call__ = this.__new__(args)
+    // __call__.initial = this.proxy.self;
+    // __call__.self = this.proxy.terminal;
+    // __call__.terminal =
 
-    // TODO: Copy from lodash - remove as a dependency.
-    static any = (ray: any): any => {
-      if (ray === undefined) return Ray.undefined;
-      if (ray === null) return Ray.null;
-      if (ray instanceof Ray || ray.prototype === Ray.prototype) return ray;
-      if (is_function(ray)) return Ray.function(ray)
-      // if (_.isBoolean(ray)) return Ray.boolean(ray);
-      //
-      //     // if (JS.is_number(ray)) return Ray.number(ray);
-      //     if (JS.is_iterable(ray)) return Ray.iterable(ray);
-      //     if (JS.is_function(ray)) return Ray.function(ray);
-      //     if (JS.is_object(ray)) return Ray.object(ray);
-      //
-
-      console.log('Unsupported type', ray)
-      return Ray.none;
-    }
-
-    is_none = (self = this.proxy) => self.self === undefined
-
-    static none = new Ray().proxy
-    static initial = Ray.none; static self = Ray.none; static terminal = Ray.none;
-
-    static undefined = Ray.none; static null = Ray.none;
-
-     // /** Define `Ray.function` first, then immediately, it gets called with itself - to define itself in terms of a Ray. */
-    static function = (fn: Fn) => {
-      if (!is_function(fn)) return Ray.none
-
-      // const ray = Ray.__new__();
-      // ray.terminal = () => {
-      //   // const input = ray.terminal.terminal;
-      //   // const output = fn(input)
-      //   // input.terminal = output;
-      //   // return output;
-      //   throw new Error()
-      // };
-      // return ray
-      return Ray.none
-    }
-
-    // static boolean = (ray: boolean) => Ray.none; static true = Ray.none; static false = Ray.none;
-    // Ray.object = (ray: object) => Ray.none
-    // Ray.iterable = <T>(ray: Iterable<T>) => Ray.none
-    // // Ray.iterator = <T>(ray: Iterator<T>) => Ray.none
-    // // Ray.async_iterable = <T>(ray: AsyncIterable<T>) => Ray.none
-    // // Ray.async_iterator = <T>(ray: AsyncIterator<T>) => Ray.none
-    // // Ray.number = (ray: number) => Ray.none
-    // Ray.constructor = (ray: JS.Constructor) => Ray.none
+    throw new Error()
   }
 
-  const ray = new Ray();
+  is_none = (self = this.proxy) => self.self === undefined
 
-  if (DEBUG) {
-    const __debug__ = (name: string, method: Fn) => {
-      if (name.startsWith('__')) return method
+  static __NONE__ = new Ray()
+  static none = Ray.__NONE__.proxy
+  static initial = Ray.none; static self = Ray.none; static terminal = Ray.none;
 
-      return (...args: any) => {
-        console.log(name, args)
-        return method(...args)
-      };
-    }
+  static undefined = Ray.none; static null = Ray.none;
 
-    if (GLOBAL_CONTEXT === undefined) {
-      ray.__static_methods__.forEach(name => {
-        // @ts-ignore
-        ray.__class__[name] = __debug__(name, ray.__method__(name));
-      });
-    }
+   // /** Define `Ray.function` first, then immediately, it gets called with itself - to define itself in terms of a Ray. */
+  static function = (fn: Fn) => {
+    if (!is_function(fn)) return Ray.none
 
-    ray.__class_methods__.forEach(name => {
-      // @ts-ignore
-      ray[name] = __debug__(name, ray.__method__(name));
-    })
+    // const ray = Ray.__new__();
+    // ray.terminal = () => {
+    //   // const input = ray.terminal.terminal;
+    //   // const output = fn(input)
+    //   // input.terminal = output;
+    //   // return output;
+    //   throw new Error()
+    // };
+    // return ray
+    return Ray.none
   }
+
+  // static boolean = (ray: boolean) => Ray.none; static true = Ray.none; static false = Ray.none;
+  // Ray.object = (ray: object) => Ray.none
+  // Ray.iterable = <T>(ray: Iterable<T>) => Ray.none
+  // // Ray.iterator = <T>(ray: Iterator<T>) => Ray.none
+  // // Ray.async_iterable = <T>(ray: AsyncIterable<T>) => Ray.none
+  // // Ray.async_iterator = <T>(ray: AsyncIterator<T>) => Ray.none
+  // // Ray.number = (ray: number) => Ray.none
+  // Ray.constructor = (ray: JS.Constructor) => Ray.none
+}
+
+export const __ray__ = ({
+  DEBUG = true,
+} = {}) => {
+  const ray = Ray.__NONE__
+  //
+  // if (DEBUG) {
+  //   const __debug__ = (name: string, method: Fn) => {
+  //     if (!name.startsWith('__')) return method
+  //
+  //     return (...args: any) => {
+  //       console.log(name, args)
+  //       return method(...args)
+  //     };
+  //     // return method
+  //   }
+  //   ray.__static_methods__.forEach(name => {
+  //     // @ts-ignore
+  //     ray.__class__[name] = __debug__(name, ray.__method__(name));
+  //   });
+  //   ray.__class_methods__.forEach(name => {
+  //     // @ts-ignore
+  //     ray[name] = __debug__(name, ray.__method__(name));
+  //   })
+  // }
 
   // Set all the methods defined on `Ray` through `__set__`. As if we used `Ray.something = something`
   ray.__methods__
     .filter(name => !name.startsWith('__'))
-    .forEach(method => ray.__set__(method, ray.__method__(method)));
+    .forEach(method => {
+      const is_static = ray.__static_methods__.includes(method)
+      // Pass all methods through __set__, turning all functions into a Ray.
+      ray.__set__(method, ray.__method__(method))
+    });
 
   return ray.proxy;
 }

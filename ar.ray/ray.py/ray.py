@@ -4,33 +4,20 @@ import inspect
 from typing import Iterator, AsyncIterator, Union, Callable, Any, Iterable, AsyncIterable, Tuple
 
 
-def __ray__(*GLOBAL_ARGS, **GLOBAL_KWARGS):
-  class Ray:
-    @staticmethod
-    def __new__(cls, *args, **kwargs):
-      return super().__new__(cls)
+class Ray:
+  @staticmethod
+  def __new__(cls, *args, **kwargs):
+    return super().__new__(cls)
 
-    def __init__(self, *args, **kwargs) -> Ray:
-      pass
-
-    # def initial(self) -> Ray: raise NotImplementedError
-    # def self(self) -> Ray: raise NotImplementedError
-    # def terminal(self) -> Ray: raise NotImplementedError
-
-    @staticmethod
-    def none() -> Ray: raise NotImplementedError
-    @staticmethod
-    def boolean() -> Ray: return (Ray.none * 2).orbit
-
-    @staticmethod
-    def function(func: Callable[[Any, ...], Any]):
-      return Ray()
-
+  def __init__(self, *args, **kwargs) -> Ray:
     pass
 
-  for name, fn in inspect.getmembers(Ray, inspect.isfunction):
-    if name == '__new__' or name == '__init__' or name == 'function': continue
+  def __call__(self, *args, **kwargs):
+    pass
 
-  return Ray
+  def __iter__(self): return self
+  def __next__(self):
+    pass
 
-Ray = __ray__()
+  def reverse(self): 
+    return Ray(initial=self.terminal, self=self.self, terminal=self.initial) 

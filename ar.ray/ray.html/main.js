@@ -17,104 +17,90 @@ const renderer = new THREE.WebGLRenderer({
     // fixes: https://github.com/niklasvh/html2canvas/issues/1311
     preserveDrawingBuffer: true
 });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+renderer.setPixelRatio(window.devicePixelRatio);
 
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(0, 0, 1000);
 camera.lookAt(0, 0, 0);
 
-
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1c2127)
 
-// const geometry = new THREE.BoxGeometry(1, 1, 1);
-// const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
-// const cube = new THREE.Mesh(geometry, material);
-// scene.add(cube);
-//
-// camera.position.z = 5;
+const clock = new THREE.Clock();
 
-// const material = new THREE.LineBasicMaterial( { color: 0x0000ff } );
-// const points = [];
-// points.push( new THREE.Vector3( - 10, 0, 0 ) );
-// points.push( new THREE.Vector3( 0, 10, 0 ) );
-// points.push( new THREE.Vector3( 10, 0, 0 ) );
-//
-// const geometry = new THREE.BufferGeometry().setFromPoints( points );
-// const line = new THREE.Line( geometry, material );
-// scene.add( line );
-
-const curve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(3-20, 0, 0),
-    new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(37-20, 0, 0)
-]);
-
-const points = curve.getPoints(50);
-const geometry = new THREE.BufferGeometry().setFromPoints(points);
-
-const material = new THREE.LineBasicMaterial({color: "#FFAA00", linewidth: 4});
-
-
-// Create the final object to add to the scene
-const curveObject = new THREE.Line(geometry, material);
-
-const group = new THREE.Group();
-group.add(curveObject)
-
-const Vertex = () => {
-    const obj = new THREE.Mesh(
-        new THREE.CircleGeometry(3, 32),
-        new THREE.MeshBasicMaterial({color: "#FFAA00"})
-    );
-    obj.position.set(0, 0, 0)
-    return obj;
-}
-const Continuation = ({position}) => {
-    const obj = new THREE.Mesh(
-        new THREE.TorusGeometry(3, 1, 200, 200),
-        new THREE.MeshBasicMaterial({color: "#FFAA00"})
-    );
-    obj.position.set(position[0], position[1], position[2])
-    return obj;
+const uniforms = {
+    u_time: { type: "f", value: 1.0 },
+    u_resolution: { type: "v2", value: new THREE.Vector2() },
+    u_mouse: { type: "v2", value: new THREE.Vector2() }
 };
-group.add(Vertex())
-group.add(Continuation({position: [0-20, 0, 0]}))
-group.add(Continuation({position: [40-20, 0, 0]}))
 
-group.scale.set(2.5, 2.5, 2.5)
-scene.add(group)
+const BASE_URL = 'http://localhost:5173'
+const get = async (file) => await (await fetch(`${BASE_URL}/${file}`)).text()
 
+const container = document.getElementById('container');
 
-if (WebGL.isWebGL2Available()) {
-    // Initiate function or other initializations here
-    renderer.setAnimationLoop(() => {
-        // group.rotation.x += 0.01;
-        // group.rotation.z += 0.01;
+const init = async () => {
+    if (!WebGL.isWebGL2Available()) {
+        const warning = WebGL.getWebGL2ErrorMessage();
+        container.appendChild(warning);
+        return;
+    }
+    
+    container.appendChild(renderer.domElement);
 
-        renderer.render(scene, camera);
-    });
-} else {
+    scene.add(new THREE.Mesh(
+        new THREE.PlaneGeometry( 2, 2 ),
+        new THREE.ShaderMaterial( {
+            uniforms: uniforms,
+            vertexShader: await get('main.vert')        ,
+            fragmentShader: await get('main.frag')
+        })
+    ))
+}
 
-    const warning = WebGL.getWebGL2ErrorMessage();
-    document.getElementById('container').appendChild(warning);
+// // Initiate function or other initializations here
+// renderer.setAnimationLoop(() => {
+//     // group.rotation.x += 0.01;
+//     // group.rotation.z += 0.01;
 
+//     renderer.render(scene, camera);
+// });
+
+const animate = () => {
+    requestAnimationFrame(animate);
+    render();
+}
+
+const render = () => {
+    uniforms.u_time.value += clock.getDelta();
+    renderer.render(scene, camera);
 }
 
 let tanFOV = Math.tan(((Math.PI / 180) * camera.fov / 2));
-let windowHeight = window.innerHeight;
-
-window.addEventListener('resize', (event) => {
+let initialWindowHight = window.innerHeight;
+const onWindowResize = (event) => {
     camera.aspect = window.innerWidth / window.innerHeight;
 
     // adjust the FOV
-    camera.fov = (360 / Math.PI) * Math.atan(tanFOV * (window.innerHeight / windowHeight));
+    camera.fov = (360 / Math.PI) * Math.atan(tanFOV * (window.innerHeight / initialWindowHight));
 
     camera.updateProjectionMatrix();
     camera.lookAt(scene.position);
 
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.render(scene, camera);
+    uniforms.u_resolution.value.x = renderer.domElement.width;
+    uniforms.u_resolution.value.y = renderer.domElement.height;
 
-}, false);
+    renderer.render(scene, camera);
+}
+
+onWindowResize()
+window.addEventListener('resize', onWindowResize, false);
+
+document.onmousemove = (event) => {
+    uniforms.u_mouse.value.x = event.pageX;
+    uniforms.u_mouse.value.y = event.pageY;
+}
+
+await init();
+animate();

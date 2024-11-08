@@ -1,8 +1,6 @@
 > [!NOTE]
 > This is still a work in progress. See [2024. A Universal Language](https://github.com/orbitmines/orbitmines.com/pull/28) for progress on this write-up.
 
-*Let's try for < [[2024-06-30]]*
-
 ---
 <div align="center">
 

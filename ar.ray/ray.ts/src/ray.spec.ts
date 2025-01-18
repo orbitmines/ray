@@ -1,26 +1,53 @@
-import Ray from "./ray";
+import Ray, {Pointer} from "./ray";
+
 
 describe("ray", () => {
-  test("temp", async () => {
-    const A = new Ray({
+  test("", async () => {
 
-    }, 'A', 'B', 'C')
-    const B = new Ray({}, [
-      [1, 2, 3],
-      [4, 5, 6],
-      [7, 8, 9],
-    ]);
+    expect(Ray.initial().is_initial()).toBe(true)
+    expect(Ray.vertex().is_vertex()).toBe(true)
+    expect(Ray.terminal().is_terminal()).toBe(true)
 
-    console.log(A.is_some().__object__)
+    const ray = Ray.iterable([1, 2, 3])
+    expect(ray.length).toBe(3);
+  });
 
-    expect([...A]).toEqual([])
+  // test("", async () => {
+  //   const _: Pointer = null!;
+  //
+  //   const last = _.last
+  //   const any = (any: any): Pointer => null!;
+  //
+  //   // const fn = (A: Pointer) => {
+  //   //   (A.last = A).B();
+  //   //   any(fn)(A.last = A);
+  //   // }
+  //
+  //   const fn = (A: Pointer) {
+  //     A[1][2] = A[4]
+  //   }
+  // })
 
-    const res = []; for await (let el of A) { res.push(el); }
-    expect(res).toEqual([])
-
-
-    expect(A).toEqual(new Ray())
-  })
+  // test("temp", async () => {
+  //   const A = new Ray({
+  //
+  //   }, 'A', 'B', 'C')
+  //   const B = new Ray({}, [
+  //     [1, 2, 3],
+  //     [4, 5, 6],
+  //     [7, 8, 9],
+  //   ]);
+  //
+  //   console.log(A.is_some().__object__)
+  //
+  //   expect([...A]).toEqual([])
+  //
+  //   const res = []; for await (let el of A) { res.push(el); }
+  //   expect(res).toEqual([])
+  //
+  //
+  //   expect(A).toEqual(new Ray())
+  // })
   // test("Minimal setup", () => {
   //   expect(Ray.unknown.is_equivalent(Ray.unknown)).toBe(true)
   // });

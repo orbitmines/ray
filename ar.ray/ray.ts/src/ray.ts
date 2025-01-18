@@ -1,195 +1,291 @@
+import RayTs from "../index";
 
-// () => Ray[]
+export type Pointer = {
+  [key: string | symbol]: Pointer
+}
 
-export type Ray = {
-  [TProperty in keyof Instance]: Ray;
-} & {
-  __object__: any;
-  __instance__: Instance;
-  readonly [n: number]: any;
-  (...args: any[]): any;
-  new (...args: any[]): any;
-} & Iterable<Ray> & AsyncIterable<Ray>
+abstract class Node {
+  abstract get self(): any
+  abstract is_none(): boolean
+  is_some = (): boolean => !this.is_none()
+}
 
-class Instance implements Iterable<Ray>, AsyncIterable<Ray> {
+class Ray implements Iterable<Ray> {
+  private __initial__: () => Ray = () => Ray.none(); get initial(): Ray { return this.__initial__() }; set initial(x: Ray | Ray[] | (() => Ray)) { this.__initial__ = () => x instanceof Array ? Ray.iterable(x) : Ray.ref(x instanceof Ray ? x : x()); }
+  private __self__: () => Ray = () => Ray.none(); get self(): Ray { return this.__self__() }; set self(x: Ray | Ray[] | (() => Ray)) { this.__self__ = () => x instanceof Array ? Ray.iterable(x) : Ray.ref(x instanceof Ray ? x : x()); }
+  private __terminal__: () => Ray = () => Ray.none(); get terminal(): Ray { return this.__terminal__() }; set terminal(x: Ray | Ray[] | (() => Ray)) { this.__terminal__ = () => x instanceof Array ? Ray.iterable(x) : Ray.ref(x instanceof Ray ? x : x()); }
 
-  // Usually inaccessible, yet additional structure
-  __object__: any
-  // Each Ray with a separate causal history
-  // Can have a history, but no current value
-  // TODO: Memorization through causal history
-  history: Ray
-  // Superposed type??
-  type: Ray
-  //
-  equivalences: Ray
-  // Unrealized functions which could be applied to this Ray
-  // How is this different from additional structure on .self? This as unrealized, .self as realized?
-  // TODO: Should this contain .initial & .terminal as functions? Or should this be
-  // TODO: Separated into another class
-  functions: Ray
-  // Iterate over possible representations: Matching is_equivalent/is_isomorphic
-  representations: Ray
-
-  get initial(): Ray { return this.__get__('initial') }
-  // self: Ray
-  get terminal(): Ray { return this.__get__('terminal') }
-
-  constructor(...args: any[]) {
-    if (args.length === 0) return;
-
-    // TODO: args.slice(1) is instantiated from this position
-    const object = { ...args[0] }
-    Object.keys(object).forEach(key => this.__set__(key, object[key]));
+  constructor(object: any = {}) {
+    Object.keys(object).forEach(key => (this as any)[key] = object[key]);
   }
-
-  static __new__ = (...args: any[]): Ray => new Instance(...args).__proxy__
-
-  __call__ = (...args: any[]): any => {
-    if (is_function(this.__object__)) return this.__object__(...args)
-  }
-
-  // A copy traverses the entire structure
-  // TODO: Send left/right copy simultaneously, and cancel each-other out
-  __copy__ = (...args: any[]): any => {
-    return Instance.__new__(...args)
-  }
-
-  __set__ = (property: string | symbol, value: any): boolean => {
-    if (property in this)
-      return (this as any)[property] = value;
-
-    return true;
-  }
-  __get__ = (property: string | symbol): any => {
-    if (property === "__instance__") return this;
-    if (property === Symbol.iterator || property === Symbol.asyncIterator || property === "__object__") return (this as any)[property]
-    if (is_string(property) && !Number.isNaN(Number.parseInt(property))) return this.at(Number.parseInt(property))
-    if (property === 'initial' || property === 'terminal') return Instance.__new__()
-
-    return Instance.__new__({ __object__: (this as any)[property] });
-  }
-  __has__ = (property: string | symbol): boolean => {
-    return false;
-  }
-  __delete__ = (property: string | symbol): any => {
-    return false;
-  }
-
-  *[Symbol.iterator](): Iterator<Ray> {
-  }
-  async *[Symbol.asyncIterator](): AsyncIterator<Ray> {
-  }
-
-  // Capturing: What is the essence of a difference?
-  // TODO: Any function, needs a traversal strategy:
-  //  How do I search through the space of equivalences:
-  //  Not just that something is the same, but how? why?
-  // TODO: New variant of  - When there exists a connection between the two .self?
-  is_equivalent = (b: Ray): boolean => {
-    if (this === b.__instance__) return true;
-
-
-
-    return false;
-  }
-  // TODO: What's the difference between is_equivalent and is_isomorphic
-  is_isomorphic = (b: Ray): boolean => { return false; }
-  is_composed = (b: Ray) => this.all().contains(b)
-  // "Draw a line between anything and say 'what if they're the same'"
-  // TODO: Better interpretation of "Add to compose with .self"
-  equivalent = (b: Ray): Ray => { return undefined; }
-  compose = (b: Ray): Ray => this.terminal.equivalent(b.initial)
-
-  contains = (b: Ray): Ray => { return undefined; }
-
-  // Collapse entire ray to a point
-  all = (): Ray => { return undefined; }
-
-  previous = (): Ray => { return undefined; }
-  next = (): Ray => { return undefined; }
-
-  has_previous = (): boolean => this.initial().is_some()
-  has_next = (): Ray => this.terminal().is_some()
-
-  has_boundary = (): boolean => { return false; }
-
-  orbit = () => this.last().compose(this.first())
-  push_front = (b: Ray): Ray => b.compose(this.first())
-  push_back = (b: Ray): Ray => this.last().compose(b)
-
-  is_none = (): Ray => { return this.boolean(false) }
-  is_some = (): Ray => this.is_none().not()
-
-  and = (b: Ray): Ray => { return undefined; }
-  or = (b: Ray): Ray => { return undefined; }
-  not = (): Ray => { return undefined; }
-  xor = (b: Ray): Ray => this.and(b.not()).or(this.not().and(b))
-  nor = (b: Ray): Ray => (this.or(b)).not()
 
   is_initial = () => this.initial.is_none()
   is_terminal = () => this.terminal.is_none()
-  is_reference = () => this.is_initial().and(this.is_terminal())
-  is_boundary = () => this.is_initial().xor(this.is_terminal())
-  is_vertex = () => this.is_initial().nor(this.is_terminal())
-  is_extreme = () => this.is_none().and(this.is_boundary())
-  is_wall = () => this.is_none().and(this.is_initial().not()).and(this.is_terminal().not())
+  is_reference = () => this.is_initial() && this.is_terminal()
+  is_boundary = () => xor(this.is_initial(), this.is_terminal())
+  is_vertex = () => !this.is_initial() && !this.is_terminal()
+  is_extreme = () => this.is_none() && this.is_boundary()
+  is_wall = () => this.is_none() && !this.is_initial() && !this.is_terminal()
 
+  private __none__?: boolean // TODO Better solutions for this
+  is_none = (): boolean => this.__none__ || this.length === 0;
+  is_some = () => !this.is_none()
 
-  at = (steps: number): Ray => {
-    console.log(steps)
-    return undefined;
+  get length(): number {
+    if (!this.is_boundary()) return 1;
+
+    return [...this].length // TODO: Handle cycles differently?
   }
-  first = (): Ray => { return undefined; }
-  last = (): Ray => { return undefined; }
-  boundary = (): Ray => { return undefined; }
 
-  // static unknown: Ray = new Ray(Symbol("unknown"))
-  // static none: Ray = new Ray(Symbol("none"))
+  *[Symbol.iterator](): Iterator<Ray> {
+    // if (!this.is_boundary()) return this;
 
-  boolean = (x: boolean) => this.any(x)
-  string = (x: string) => this.iterable(x)
-  iterable = <T>(x: Iterable<T>) => this.iterator(x[Symbol.iterator]());
-  iterator = <T>(x: Iterator<T>) => {
-    return Instance.__new__()
+    // TODO: Abstract away to use Rays instead
+    // TODO: Cycle detection & merger
+    const queue: Ray[] = [this]
+    while (queue.length !== 0) {
+      const selected = queue.shift()
+
+      if (selected.is_reference()) {
+        yield selected.self;
+      } else if (selected.is_initial()) {
+        // console.log('INITIAL', [...selected.terminal].length)
+        for (let next of selected.terminal) {
+          // console.log('VALUE', next.is_reference())
+          if (next.is_reference()) {
+
+          } else if (next.is_initial()) {
+            // TODO: Could be self-loop
+            queue.push(next)
+          } else if (next.is_terminal()) {
+            queue.push(next)
+          } else if (next.is_vertex()) {
+            // console.log('VERTEX')
+            yield next
+
+            // TODO Better way for __terminal__; differentiate between setting Ray.ref & not
+            queue.push(Ray.initial({ __terminal__: () => next.terminal }))
+          }
+        }
+      } else if (selected.is_terminal()) {
+        for (let terminal of selected.self) {
+          if (terminal.is_reference()) {
+
+          } else if (terminal.is_initial()) {
+            queue.push(terminal)
+          } else if (terminal.is_terminal()) {
+            queue.push(terminal) // TODO: Could be a self-loop
+          } else if (terminal.is_vertex()) {
+            // TODO Collapse branch
+          }
+        }
+      } else if (selected.is_vertex()) {
+        yield selected.self
+      }
+
+    }
+
   }
-  function = (x: (...args: any[]) => any) => {
 
+  static none = () => new Ray({ __none__: true })
+
+  static ref = (x: Ray | Ray[] | (() => Ray)): Ray => new Ray({ __self__: () => x instanceof Array ? Ray.iterable(x) : x instanceof Ray ? x : x() })
+  static initial = (object: any = {}) => new Ray({ self: new Ray(), terminal: new Ray(), ...object })
+  static vertex = (object: any = {}) => new Ray({ initial: new Ray(), self: new Ray(), terminal: new Ray(), ...object })
+  static terminal = (object: any = {}) => new Ray({ initial: new Ray(), self: new Ray(), ...object })
+
+  static iterable = <T>(x: Iterable<T>) => this.iterator(x[Symbol.iterator]());
+  static iterator = <T>(x: Iterator<T>) => {
+    const next = (previous?: Ray): Ray => {
+      const { done, value } = x.next();
+
+      const current = done ? Ray.terminal() : Ray.vertex();
+      previous.terminal = current
+
+      if (done) return current
+
+      current.terminal = () => next(current)
+
+      return current
+    }
+
+    const iterator = Ray.initial({ terminal: () => next(iterator) });
+
+    return iterator;
   }
-  reversible_function = (initial: (...args: any[]) => any, terminal: (...args: any[]) => any) => {
-
-  }
-  variable = () => {
-    // TODO: Implement simple getter/setter structure
-  }
-  object = (x: object) => {}
-  any = (x: any) => Instance.__new__({ __object__: x })
-
-  // toString = (): string => {
-  //   return "";
-  // }
-
-  get __proxy__(): Ray { return new Proxy(class {}, {
-    apply: (_: any, thisArg: any, argArray: any[]): any => this.__call__(...argArray),
-    set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => this.__set__(property, newValue),
-    get: (_: any, property: string | symbol, receiver: any): any => this.__get__(property),
-    has: (_: any, property: string | symbol): boolean => this.__has__(property),
-    construct: (_: any, argArray: any[], newTarget: Function): object => this.__copy__(...argArray),
-    deleteProperty: (_: any, property: string | symbol): boolean => this.__delete__(property)
-  }) }
 }
+export default Ray;
 
-// TODO Copy from lodash - remove as a dependency.
-import _ from "lodash";
-export const is_string = (_object: any): _object is string => _.isString(_object)
-export const is_boolean = (_object: any): _object is boolean => _.isBoolean(_object);
-export const is_number = (_object: any): _object is number => _.isNumber(_object);
-export const is_object = (_object: any): _object is object => _.isObject(_object);
-export const is_iterable = <T = any>(_object: any): _object is Iterable<T> => Symbol.iterator in Object(_object) && is_function(_object[Symbol.iterator]);
-export const is_async_iterable = <T = any>(_object: any): _object is AsyncIterable<T> => Symbol.asyncIterator in Object(_object) && is_function(_object[Symbol.asyncIterator]);
-export const is_array = <T = any>(_object: any): _object is T[] => _.isArray(_object);
-export const is_async = (_object: any) => _.has(_object, 'then') && is_function(_.get(_object, 'then')); // TODO, Just an ugly check
-export const is_error = (_object: any): _object is Error => _.isError(_object);
-export const is_function = (_object: any): _object is ((...args: any[]) => any) => _.isFunction(_object);
+// class TempImpl<T> implements Array<T> {
+//   [n: number]: T;
+//
+//   readonly [Symbol.unscopables]: { [K in keyof any[]]?: boolean };
+//   length: number;
+//
+//   [Symbol.iterator](): IterableIterator<T> {
+//     return undefined;
+//   }
+//
+//   at(index: number): T | undefined;
+//   at(index: number): T | undefined;
+//   at(index: number): T | undefined {
+//     return undefined;
+//   }
+//
+//   concat(...items: ConcatArray<T>[]): T[];
+//   concat(...items: (ConcatArray<T> | T)[]): T[];
+//   concat(...items: (ConcatArray<T> | T)[]): T[] {
+//     return [];
+//   }
+//
+//   copyWithin(target: number, start: number, end?: number): this {
+//     return undefined;
+//   }
+//
+//   entries(): IterableIterator<[number, T]> {
+//     return undefined;
+//   }
+//
+//   every<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): this is S[];
+//   every(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): boolean;
+//   every(predicate, thisArg?: any): any {
+//   }
+//
+//   fill(value: T, start?: number, end?: number): this {
+//     return undefined;
+//   }
+//
+//   filter<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): S[];
+//   filter(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): T[];
+//   filter(predicate, thisArg?: any): any {
+//   }
+//
+//   find<S extends T>(predicate: (value: T, index: number, obj: T[]) => value is S, thisArg?: any): S | undefined;
+//   find(predicate: (value: T, index: number, obj: T[]) => unknown, thisArg?: any): T | undefined;
+//   find(predicate, thisArg?: any): any {
+//   }
+//
+//   findIndex(predicate: (value: T, index: number, obj: T[]) => unknown, thisArg?: any): number {
+//     return 0;
+//   }
+//
+//   findLast<S extends T>(predicate: (value: T, index: number, array: T[]) => value is S, thisArg?: any): S | undefined;
+//   findLast(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): T | undefined;
+//   findLast(predicate, thisArg?: any): any {
+//   }
+//
+//   findLastIndex(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): number {
+//     return 0;
+//   }
+//
+//   flat<A, D = 1 extends number>(depth?: D): FlatArray<A, D>[] {
+//     return [];
+//   }
+//
+//   flatMap<U, This = undefined>(callback: (this: This, value: T, index: number, array: T[]) => (ReadonlyArray<U> | U), thisArg?: This): U[] {
+//     return [];
+//   }
+//
+//   forEach(callbackfn: (value: T, index: number, array: T[]) => void, thisArg?: any): void {
+//   }
+//
+//   includes(searchElement: T, fromIndex?: number): boolean {
+//     return false;
+//   }
+//
+//   indexOf(searchElement: T, fromIndex?: number): number {
+//     return 0;
+//   }
+//
+//   join(separator?: string): string {
+//     return "";
+//   }
+//
+//   keys(): IterableIterator<number> {
+//     return undefined;
+//   }
+//
+//   lastIndexOf(searchElement: T, fromIndex?: number): number {
+//     return 0;
+//   }
+//
+//   map<U>(callbackfn: (value: T, index: number, array: T[]) => U, thisArg?: any): U[] {
+//     return [];
+//   }
+//
+//   pop(): T | undefined {
+//     return undefined;
+//   }
+//
+//   push(...items: T[]): number {
+//     return 0;
+//   }
+//
+//   reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T): T;
+//   reduce(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue: T): T;
+//   reduce<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
+//   reduce(callbackfn, initialValue?): any {
+//   }
+//
+//   reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T): T;
+//   reduceRight(callbackfn: (previousValue: T, currentValue: T, currentIndex: number, array: T[]) => T, initialValue: T): T;
+//   reduceRight<U>(callbackfn: (previousValue: U, currentValue: T, currentIndex: number, array: T[]) => U, initialValue: U): U;
+//   reduceRight(callbackfn, initialValue?): any {
+//   }
+//
+//   reverse(): T[] {
+//     return [];
+//   }
+//
+//   shift(): T | undefined {
+//     return undefined;
+//   }
+//
+//   slice(start?: number, end?: number): T[] {
+//     return [];
+//   }
+//
+//   some(predicate: (value: T, index: number, array: T[]) => unknown, thisArg?: any): boolean {
+//     return false;
+//   }
+//
+//   sort(compareFn?: (a: T, b: T) => number): this {
+//     return undefined;
+//   }
+//
+//   splice(start: number, deleteCount?: number): T[];
+//   splice(start: number, deleteCount: number, ...items: T[]): T[];
+//   splice(start: number, deleteCount?: number, ...items: T[]): T[] {
+//     return [];
+//   }
+//
+//   toReversed(): T[] {
+//     return [];
+//   }
+//
+//   toSorted(compareFn?: (a: T, b: T) => number): T[] {
+//     return [];
+//   }
+//
+//   toSpliced(start: number, deleteCount: number, ...items: T[]): T[];
+//   toSpliced(start: number, deleteCount?: number): T[];
+//   toSpliced(start: number, deleteCount?: number, ...items: T[]): T[] {
+//     return [];
+//   }
+//
+//   unshift(...items: T[]): number {
+//     return 0;
+//   }
+//
+//   values(): IterableIterator<T> {
+//     return undefined;
+//   }
+//
+//   with(index: number, value: T): T[] {
+//     return [];
+//   }
+// }
 
-export default Instance.__new__();
+// Separate function builder and functionality
+
+const xor = (a: boolean, b: boolean) => (a && !b) || (!a && b)

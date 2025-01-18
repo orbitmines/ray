@@ -10,7 +10,20 @@ abstract class Node {
   is_some = (): boolean => !this.is_none()
 }
 
+export enum Type {
+  REFERENCE, //TODO: Reference could be vertex?
+  VERTEX,
+  INITIAL,
+  TERMINAL,
+  // INITIAL_EXTREME,
+  // TERMINAL_EXTREME,
+  // WALL // TODO: Could be renamed empty?
+}
+
 class Ray implements Iterable<Ray> {
+
+  public __object__?: any
+
   private __initial__: () => Ray = () => Ray.none(); get initial(): Ray { return this.__initial__() }; set initial(x: Ray | Ray[] | (() => Ray)) { this.__initial__ = () => x instanceof Array ? Ray.iterable(x) : Ray.ref(x instanceof Ray ? x : x()); }
   private __self__: () => Ray = () => Ray.none(); get self(): Ray { return this.__self__() }; set self(x: Ray | Ray[] | (() => Ray)) { this.__self__ = () => x instanceof Array ? Ray.iterable(x) : Ray.ref(x instanceof Ray ? x : x()); }
   private __terminal__: () => Ray = () => Ray.none(); get terminal(): Ray { return this.__terminal__() }; set terminal(x: Ray | Ray[] | (() => Ray)) { this.__terminal__ = () => x instanceof Array ? Ray.iterable(x) : Ray.ref(x instanceof Ray ? x : x()); }
@@ -31,56 +44,127 @@ class Ray implements Iterable<Ray> {
   is_none = (): boolean => this.__none__ || this.length === 0;
   is_some = () => !this.is_none()
 
+  get type(): Type {
+    if (this.is_reference()) return Type.REFERENCE;
+    if (this.is_initial()) return Type.INITIAL;
+    if (this.is_terminal()) return Type.TERMINAL;
+    if (this.is_vertex()) return Type.VERTEX;
+    // if (this.is_wall()) return Type.WALL;
+    throw new Error('Should not happen')
+  }
+
   get length(): number {
     if (!this.is_boundary()) return 1;
 
     return [...this].length // TODO: Handle cycles differently?
   }
 
+  at = (index: number): Ray | undefined => {
+    // TODO: Iterator results which turn ref/or initial/terminal for multiple results
+    // TODO: Support negative index
+    // TODO: Not ref, but reposition index to that one; so initial/terminal need to be set on what gets returned
+    let i = 0;
+    for (let current of this) {
+      if (i === index) return Ray.ref(current);
+      i++;
+    }
+  }
+
+  get next(): Ray { return this.at(1); }
+  get current(): Ray { return this.at(0); }
+  get previous(): Ray { return this.at(-1); }
+
+  // TODO first/last support when in a cycle: Should return ???
+  get first(): Ray { throw new Error('Reverse direction not yet implemented') }
+  get last(): Ray { return this.at(this.length - 1); }
+  get boundary(): Ray { return Ray.ref([this.first, this.last]); }
+
+  push_front = (b: Ray): Ray => b.compose(this.first)
+  push_back = (b: Ray): Ray => this.last.compose(b)
+
+  compose = (b: Ray) => {
+    switch (this.type) {
+      case Type.REFERENCE:
+        break;
+      case Type.VERTEX:
+        break;
+      case Type.INITIAL:
+        break;
+      case Type.TERMINAL:
+        break;
+    }
+    throw new Error('Not Implemented')
+  }
+
   *[Symbol.iterator](): Iterator<Ray> {
     // if (!this.is_boundary()) return this;
 
+    // TODO: Reverse direction support
+
     // TODO: Abstract away to use Rays instead
     // TODO: Cycle detection & merger
+
+    // TODO: Might switch to index=0 being on VERTEX and adding left/right to iterable
     const queue: Ray[] = [this]
     while (queue.length !== 0) {
       const selected = queue.shift()
 
-      if (selected.is_reference()) {
-        yield selected.self;
-      } else if (selected.is_initial()) {
-        // console.log('INITIAL', [...selected.terminal].length)
-        for (let next of selected.terminal) {
-          // console.log('VALUE', next.is_reference())
-          if (next.is_reference()) {
-
-          } else if (next.is_initial()) {
-            // TODO: Could be self-loop
-            queue.push(next)
-          } else if (next.is_terminal()) {
-            queue.push(next)
-          } else if (next.is_vertex()) {
-            // console.log('VERTEX')
-            yield next
-
-            // TODO Better way for __terminal__; differentiate between setting Ray.ref & not
-            queue.push(Ray.initial({ __terminal__: () => next.terminal }))
-          }
+      switch (selected.type) {
+        case Type.REFERENCE: {
+          yield selected.self;
+          break;
         }
-      } else if (selected.is_terminal()) {
-        for (let terminal of selected.self) {
-          if (terminal.is_reference()) {
-
-          } else if (terminal.is_initial()) {
-            queue.push(terminal)
-          } else if (terminal.is_terminal()) {
-            queue.push(terminal) // TODO: Could be a self-loop
-          } else if (terminal.is_vertex()) {
-            // TODO Collapse branch
-          }
+        case Type.VERTEX: {
+          yield selected.self
+          break;
         }
-      } else if (selected.is_vertex()) {
-        yield selected.self
+        case Type.INITIAL: {
+          // console.log('INITIAL', [...selected.terminal].length)
+          for (let next of selected.terminal) {
+            // console.log('VALUE', next.is_reference())
+
+            switch (next.type) {
+              case Type.REFERENCE:
+                break;
+              case Type.VERTEX:
+                // console.log('VERTEX')
+                yield next
+
+                // TODO Better way for __terminal__; differentiate between setting Ray.ref & not
+                queue.push(Ray.initial({ __terminal__: () => next.terminal }))
+                break;
+              case Type.INITIAL:
+                // TODO: Could be self-loop
+                queue.push(next)
+                break;
+              case Type.TERMINAL:
+                queue.push(next)
+                break;
+
+            }
+          }
+
+          break;
+        }
+        case Type.TERMINAL: {
+          for (let terminal of selected.self) {
+            switch (terminal.type) {
+              case Type.REFERENCE:
+                break;
+              case Type.VERTEX:
+                // TODO Collapse branch
+                break;
+              case Type.INITIAL:
+                queue.push(terminal)
+                break;
+              case Type.TERMINAL:
+                queue.push(terminal) // TODO: Could be a self-loop
+                break;
+
+            }
+          }
+          break;
+        }
       }
 
     }
@@ -99,7 +183,7 @@ class Ray implements Iterable<Ray> {
     const next = (previous?: Ray): Ray => {
       const { done, value } = x.next();
 
-      const current = done ? Ray.terminal() : Ray.vertex();
+      const current = done ? Ray.terminal() : Ray.vertex({ __object__: value });
       previous.terminal = current
 
       if (done) return current
@@ -126,11 +210,6 @@ export default Ray;
 //     return undefined;
 //   }
 //
-//   at(index: number): T | undefined;
-//   at(index: number): T | undefined;
-//   at(index: number): T | undefined {
-//     return undefined;
-//   }
 //
 //   concat(...items: ConcatArray<T>[]): T[];
 //   concat(...items: (ConcatArray<T> | T)[]): T[];

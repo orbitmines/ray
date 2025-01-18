@@ -1,4 +1,4 @@
-import Ray, {Pointer} from "./ray";
+import Ray, {Pointer, Type} from "./ray";
 
 
 describe("ray", () => {
@@ -8,8 +8,14 @@ describe("ray", () => {
     expect(Ray.vertex().is_vertex()).toBe(true)
     expect(Ray.terminal().is_terminal()).toBe(true)
 
-    const ray = Ray.iterable([1, 2, 3])
+    const ray = Ray.iterable(['A', 'B', 'C'])
     expect(ray.length).toBe(3);
+    expect(ray.at(2).self.__object__).toBe('C')
+    expect(ray.last.self.__object__).toBe('C')
+    expect(ray.current.self.__object__).toBe('A')
+    expect(ray.next.self.__object__).toBe('B')
+    // expect(ray.next.next.next.self.__object__).toBe('C')
+    expect(ray.type).toBe(Type.INITIAL)
   });
 
   // test("", async () => {

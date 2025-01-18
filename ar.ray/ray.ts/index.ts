@@ -1,3 +1,3 @@
-import IRay from './src/ray';
+import Ray from './src/ray';
 
-export default IRay;
+export default Ray;

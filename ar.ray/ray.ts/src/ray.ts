@@ -1,18 +1,24 @@
 
 
 export enum Type {
-  REFERENCE, //TODO: Reference could be vertex?
-  VERTEX,
-  INITIAL,
-  TERMINAL,
+  REFERENCE = "REFERENCE", //TODO: Reference could be vertex?
+  VERTEX = "VERTEX",
+  INITIAL = "INITIAL",
+  TERMINAL = "TERMINAL",
   // INITIAL_EXTREME,
   // TERMINAL_EXTREME,
   // WALL // TODO: Could be renamed empty?
 }
 
+// Separate class?
+// class Reference extends Ray {
+//   private __reverse__: boolean = false
+// }
+
 class Ray implements Iterable<Ray> {
 
   public __object__?: any
+  
 
   private __initial__: () => Ray = () => Ray.none(); get initial(): Ray { return this.__initial__() }; set initial(x: Ray | Ray[] | (() => Ray)) { this.__initial__ = () => x instanceof Array ? Ray.iterable(x) : Ray.ref(x instanceof Ray ? x : x()); }
   private __self__: () => Ray = () => Ray.none(); get self(): Ray { return this.__self__() }; set self(x: Ray | Ray[] | (() => Ray)) { this.__self__ = () => x instanceof Array ? Ray.iterable(x) : Ray.ref(x instanceof Ray ? x : x()); }
@@ -31,7 +37,7 @@ class Ray implements Iterable<Ray> {
   is_wall = () => this.is_none() && !this.is_initial() && !this.is_terminal()
 
   private __none__?: boolean // TODO Better solutions for this
-  is_none = (): boolean => this.__none__ || this.length.max === 0;
+  is_none = (): boolean => this.__none__ || this.length === 0;
   is_some = () => !this.is_none()
 
   get type(): Type {
@@ -43,38 +49,9 @@ class Ray implements Iterable<Ray> {
     throw new Error('Should not happen')
   }
 
-  get reverse(): Ray {
+  get length(): number { if (!this.is_boundary()) return 1;
 
-  }
-
-  get length(): Ray { return this.distance(this.last) }
-  get max(): number {}
-  get min(): number {}
-
-  * all(): Generator<Ray> {
-    // const initial = this.reverse[Symbol.iterator]();
-    // const terminal = this.next[Symbol.iterator]();
-    //
-    // while (true) {
-    //   const a = initial.next()
-    //   const b = terminal.next()
-    //
-    //   if (!a.done) yield a.value;
-    //   if (!b.done) yield b.value;
-    //
-    //   if (a.done && b.done) break;
-    // }
-    yield *this.reverse.next; yield *this
-  }
-
-  // TODO: Detect and exclude cycles
-  get first(): Ray { return this.reverse.last }
-  get last(): Ray {
-    // TODO: Returns terminal boundaries
-  }
-  get boundary(): Ray {
-    // TODO : Merge first & last
-  }
+    return [...this].length }
 
   get next(): Ray { return this.at(1); }
   get current(): Ray { return this.at(0); }
@@ -84,41 +61,70 @@ class Ray implements Iterable<Ray> {
   has_previous = (): boolean => this.previous.is_none()
 
   at = (index: number): Ray => {
-    // if (index === Number.NEGATIVE_INFINITY) return this.first;
-    // if (index === Number.POSITIVE_INFINITY) return this.last;
-  }
-
-  distance = (b: Ray): Ray => {
-    // TODO Should this return distance in the direction the ray is pointing in? yes?
-    // let distance = 0;
-    // for (const a of this) {
-    //   if (a.equals(b)) return distance;
-    //   distance++;
-    // }
-
-  }
-
-  isomorphic = (b: Ray): boolean => {
-
-  }
-  equals = (b: Ray): boolean => {
-    // for (let A of this.self.all()) {
-    //   for (let B of b.self.all()) {
-    //     if (!A.isomorphic(B)) return false;
-    //   }
-    // }
-    // return true;
+    let i = 0;
+    for (let current of this) {
+      if (i === index) return current;
+      i++;
+    }
   }
 
   * [Symbol.iterator](): Generator<Ray> {
 
+    // console.log(this.type)
+    // TODO: Forloops bundled
+    switch (this.type) {
+      case Type.REFERENCE:
+        yield this.self;
+        break;
+      case Type.VERTEX:
+        yield this;
+        for (let terminal of this.terminal) { yield *terminal; }
+
+        break;
+      case Type.INITIAL:
+        for (let terminal of this.terminal) { yield *terminal; }
+
+        break;
+      case Type.TERMINAL:
+        for (let self of this.self) {
+          switch (self.type) {
+            case Type.REFERENCE:
+              break;
+            case Type.VERTEX:
+              // TODO, could also just be ignored?
+              break;
+            case Type.INITIAL:
+            case Type.TERMINAL:
+              // if (this === self) break; TODO & terminal
+              yield *self;
+              break;
+
+          }
+        }
+
+        break;
+    }
   }
 
-  push_front = (b: Ray): Ray => b.compose(this.first)
-  push_back = (b: Ray): Ray => this.last.compose(b)
-
   compose = (b: Ray): Ray => {
+    // TODO Could abstract this product (to proxy?)
+    if (this.is_boundary()) {
+      for (let vertex of this) { vertex.compose(b) }
+      return this;
+    }
+    if (b.is_boundary()) {
+      for (let vertex of b) { this.compose(vertex) }
+      return this;
+    }
 
+    if (this.type === Type.REFERENCE || b.type === Type.REFERENCE) {
+      throw new Error('What to do in case of references?');
+    }
+    console.log(this.type, this.__object__, b.type, b.__object__);
+
+    // this.terminal.compose(b.initial)
+
+    return this;
   }
 
   static none = () => new Ray({ __none__: true })
@@ -128,16 +134,15 @@ class Ray implements Iterable<Ray> {
   static vertex = (object: any = {}) => new Ray({ initial: new Ray(), self: new Ray(), terminal: new Ray(), ...object })
   static terminal = (object: any = {}) => new Ray({ initial: new Ray(), self: new Ray(), ...object })
 
-  static number = (number: number, options = { base: 10 }) => {
-
-  }
-  static boolean = (boolean: boolean) => Ray.number(boolean ? 1 : 0, { base: 2 })
+  // TODO: .iterable conversion should be automatic, and additional functionality of string & other objects
+  // TODO: Could be added automatically.
+  static string = (string: string) => Ray.iterable(string)
   static iterable = <T>(x: Iterable<T>) => this.iterator(x[Symbol.iterator]());
   static iterator = <T>(x: Iterator<T>) => {
     const next = (previous?: Ray): Ray => {
       const { done, value } = x.next();
 
-      const current = done ? Ray.terminal() : Ray.vertex({ __object__: value });
+      const current = done ? Ray.terminal({ initial: previous }) : Ray.vertex({ __object__: value, initial: previous });
       previous.terminal = current
 
       if (done) return current

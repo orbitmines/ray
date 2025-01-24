@@ -1,22 +1,26 @@
-import Ray, {Pointer, Type} from "./ray";
-
+import Ray, {Type} from "./ray";
 
 describe("ray", () => {
-  // test("", async () => {
-  //
-  //   expect(Ray.initial().is_initial()).toBe(true)
-  //   expect(Ray.vertex().is_vertex()).toBe(true)
-  //   expect(Ray.terminal().is_terminal()).toBe(true)
-  //
-  //   const ray = Ray.iterable(['A', 'B', 'C'])
-  //   expect(ray.length).toBe(3);
-  //   expect(ray.at(2).self.__object__).toBe('C')
-  //   expect(ray.last.self.__object__).toBe('C')
-  //   expect(ray.current.self.__object__).toBe('A')
-  //   expect(ray.next.self.__object__).toBe('B')
-  //   // expect(ray.next.next.next.self.__object__).toBe('C')
-  //   expect(ray.type).toBe(Type.INITIAL)
-  // });
+  test("", async () => {
+
+    expect(Ray.initial().is_initial()).toBe(true)
+    expect(Ray.vertex().is_vertex()).toBe(true)
+    expect(Ray.terminal().is_terminal()).toBe(true)
+
+    const ray = Ray.iterable(['A', 'B', 'C'])
+
+    expect(ray.length).toBe(3);
+    expect(ray.current.__object__).toBe('A')
+    expect(ray.at(2).__object__).toBe('C')
+    // expect(ray.last.self.__object__).toBe('C')
+    expect(ray.next.__object__).toBe('B')
+    // expect(ray.next.next.next.self.__object__).toBe('C')
+    expect(ray.type).toBe(Type.INITIAL)
+
+    ray.at(2).compose(Ray.vertex({ __object__: 'D' }))
+
+    expect(ray.at(3).__object__).toBe('D')
+  });
 
   // test("", async () => {
   //   const _: Pointer = null!;

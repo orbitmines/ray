@@ -9,6 +9,7 @@ describe("ray", () => {
 
     const ray = Ray.iterable(['A', 'B', 'C'])
 
+    console.log([...ray].length) // TODO FIX
     expect(ray.length).toBe(3);
     expect(ray.current.__object__).toBe('A')
     expect(ray.at(2).__object__).toBe('C')

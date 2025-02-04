@@ -19,6 +19,7 @@ class Ray implements Iterable<Ray> {
 
   public __object__?: any
 
+  // TODO public visitors: Ray
 
   private __initial__: () => Ray = () => Ray.none(); get initial(): Ray { return this.__initial__() }; set initial(x: Ray | Ray[] | (() => Ray)) {this.__initial__ = this.__getter__(x); }
   private __self__: () => Ray = () => Ray.none(); get self(): Ray { return this.__self__() }; set self(x: Ray | Ray[] | (() => Ray)) { this.__self__ = this.__getter__(x); }
@@ -72,10 +73,16 @@ class Ray implements Iterable<Ray> {
     }
   }
 
+  * collapse(): Generator<Ray> {
+    yield *this;
+    // TODO yield entire (backwards and forwards, or backwards&forwards on each step)?
+  }
+
   * [Symbol.iterator](): Generator<Ray> {
 
     // console.log(this.type)
     // TODO: Forloops bundled
+    // TODO: On boundary, you'd want to loop simultaneously through all
     switch (this.type) {
       case Type.REFERENCE:
         yield this.self;
@@ -90,7 +97,7 @@ class Ray implements Iterable<Ray> {
 
         break;
       case Type.TERMINAL:
-        for (let self of this.self) {
+        for (let self of this.self.collapse()) {
           switch (self.type) {
             case Type.REFERENCE:
               break;
@@ -143,6 +150,7 @@ class Ray implements Iterable<Ray> {
 
             break;
           case Type.VERTEX:
+            this.terminal.as_vertex().compose(b.initial.first)
             break;
           case Type.INITIAL:
             break;
@@ -153,11 +161,46 @@ class Ray implements Iterable<Ray> {
 
         break;
       case Type.VERTEX:
+        switch (b.initial.type) {
+          case Type.REFERENCE:
+            this.terminal.last.compose(b.initial.as_vertex())
+            break;
+          case Type.VERTEX:
+            this.terminal.last.compose(b.initial.first)
+            break;
+          case Type.INITIAL:
+            break;
+          case Type.TERMINAL:
+            break;
+        }
+
         break;
       case Type.INITIAL:
+        switch (b.initial.type) {
+          case Type.REFERENCE:
+            break;
+          case Type.VERTEX:
+            break;
+          case Type.INITIAL:
+            break;
+          case Type.TERMINAL:
+            break;
+        }
+
         // this.terminal.next.compose();
         break;
       case Type.TERMINAL:
+        switch (b.initial.type) {
+          case Type.REFERENCE:
+            break;
+          case Type.VERTEX:
+            break;
+          case Type.INITIAL:
+            break;
+          case Type.TERMINAL:
+            break;
+        }
+
         // this.terminal.previous.compose();
         break;
 
@@ -167,9 +210,10 @@ class Ray implements Iterable<Ray> {
     return this;
   }
 
-  as_vertex = () => {
+  as_vertex = (): Ray => {
     if (this.is_initial()) this.initial = new Ray();
     if (this.is_terminal()) this.terminal = new Ray();
+    return this;
   }
 
   static none = () => new Ray({ __none__: true })

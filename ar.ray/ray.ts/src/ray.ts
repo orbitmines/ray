@@ -21,7 +21,7 @@ class Ray implements Iterable<Ray> {
 
   // TODO public visitors: Ray
 
-  private __initial__: () => Ray = () => Ray.none(); get initial(): Ray { return this.__initial__() }; set initial(x: Ray | Ray[] | (() => Ray)) {this.__initial__ = this.__getter__(x); }
+  private __initial__: () => Ray = () => Ray.none(); get initial(): Ray { return this.__initial__() }; set initial(x: Ray | Ray[] | (() => Ray)) { this.__initial__ = this.__getter__(x); }
   private __self__: () => Ray = () => Ray.none(); get self(): Ray { return this.__self__() }; set self(x: Ray | Ray[] | (() => Ray)) { this.__self__ = this.__getter__(x); }
   private __terminal__: () => Ray = () => Ray.none(); get terminal(): Ray { return this.__terminal__() }; set terminal(x: Ray | Ray[] | (() => Ray)) { this.__terminal__ = this.__getter__(x); }
 
@@ -38,6 +38,7 @@ class Ray implements Iterable<Ray> {
   is_initial = () => this.initial.is_none()
   is_terminal = () => this.terminal.is_none()
   is_reference = () => this.is_initial() && this.is_terminal()
+  is_empty_reference = () => this.is_reference() && this.self.is_none()
   is_boundary = () => xor(this.is_initial(), this.is_terminal())
   is_vertex = () => !this.is_initial() && !this.is_terminal()
   is_extreme = () => this.is_none() && this.is_boundary()
@@ -78,6 +79,15 @@ class Ray implements Iterable<Ray> {
     // TODO yield entire (backwards and forwards, or backwards&forwards on each step)?
   }
 
+  traverse = ({
+    traverser
+              }: { collapsed?: boolean, traverser?: Ray } = {}) => {
+    // Traverser: Ray where .self is bound to the .last value of another ray which is the traversal history.
+    if (traverser.includes(this))
+      return;
+    // TODO collapsed, one step in each direction, generalized to different step func?
+  }
+
   * [Symbol.iterator](): Generator<Ray> {
 
     // console.log(this.type)
@@ -85,15 +95,34 @@ class Ray implements Iterable<Ray> {
     // TODO: On boundary, you'd want to loop simultaneously through all
     switch (this.type) {
       case Type.REFERENCE:
-        yield this.self;
+        yield Ray.ref(this.self);
         break;
       case Type.VERTEX:
-        yield this;
-        for (let terminal of this.terminal) { yield *terminal; }
+        // TODO __filter__
+        // TODO __map__
+        yield Ray.ref(this);
+
+        let generators = [...this.terminal.collapse()].map(x => x[Symbol.iterator]());
+
+        while (generators.length !== 0) {
+          let next: Ray = undefined;
+
+          generators = generators.filter(generator => {
+            const { value, done } = generator.next();
+
+            next = next === undefined ? value : next.add(value)
+
+            return !done;
+          })
+
+          if (next) yield next;
+        }
+
+        // for (let terminal of this.terminal.collapse()) { yield *terminal; }
 
         break;
       case Type.INITIAL:
-        for (let terminal of this.terminal) { yield *terminal; }
+        for (let terminal of this.terminal.collapse()) { yield *terminal; }
 
         break;
       case Type.TERMINAL:
@@ -117,6 +146,23 @@ class Ray implements Iterable<Ray> {
     }
   }
 
+  add = (b: Ray): Ray => {
+    // if (this.is_reference()) this.as_vertex();
+    //
+    // switch (b.type) {
+    //   case Type.REFERENCE:
+    //   case Type.VERTEX:
+    //     b.as_vertex();
+    //     this.compose(b);
+    //     return b;
+    //   case Type.INITIAL:
+    //   case Type.TERMINAL:
+    //
+    //     break;
+    //
+    // }
+  }
+
   compose = (b: Ray): Ray => {
     // TODO Could abstract this product (to proxy?)
     if (this.is_boundary()) {
@@ -131,81 +177,22 @@ class Ray implements Iterable<Ray> {
     if (this.type === Type.REFERENCE || b.type === Type.REFERENCE) {
       throw new Error('What to do in case of references?');
     }
-    switch (this.terminal.type) {
-      case Type.REFERENCE:
-        // this.terminal.as_vertex()
 
-        switch (b.initial.type) {
-          case Type.REFERENCE:
-            // b.initial.as_vertex()
+    if (this.terminal.is_empty_reference()) {
+      this.terminal = b;
+    } else {
+      if (this.terminal.is_reference()) this.terminal.as_vertex();
 
-            // this.terminal.terminal = b.initial;
-            // b.initial.initial = this.terminal;
-
-            this.terminal = b;
-            b.initial = this;
-
-            // console.log(this.terminal.is_boundary(), b.initial.is_boundary())
-            // console.log(this.terminal.length, b.initial.length)
-
-            break;
-          case Type.VERTEX:
-            this.terminal.as_vertex().compose(b.initial.first)
-            break;
-          case Type.INITIAL:
-            break;
-          case Type.TERMINAL:
-            break;
-
-        }
-
-        break;
-      case Type.VERTEX:
-        switch (b.initial.type) {
-          case Type.REFERENCE:
-            this.terminal.last.compose(b.initial.as_vertex())
-            break;
-          case Type.VERTEX:
-            this.terminal.last.compose(b.initial.first)
-            break;
-          case Type.INITIAL:
-            break;
-          case Type.TERMINAL:
-            break;
-        }
-
-        break;
-      case Type.INITIAL:
-        switch (b.initial.type) {
-          case Type.REFERENCE:
-            break;
-          case Type.VERTEX:
-            break;
-          case Type.INITIAL:
-            break;
-          case Type.TERMINAL:
-            break;
-        }
-
-        // this.terminal.next.compose();
-        break;
-      case Type.TERMINAL:
-        switch (b.initial.type) {
-          case Type.REFERENCE:
-            break;
-          case Type.VERTEX:
-            break;
-          case Type.INITIAL:
-            break;
-          case Type.TERMINAL:
-            break;
-        }
-
-        // this.terminal.previous.compose();
-        break;
-
+      // this.terminal.last.compose(Ray.vertex({ self: b }))
     }
-    // this.terminal.compose(b.initial)
+
+    if (b.initial.is_empty_reference()) {
+      b.initial = this;
+    } else {
+      if (b.initial.is_reference()) b.initial.as_vertex();
+
+      // Ray.vertex({ self: this }).compose(b.initial.first)
+    }
 
     return this;
   }
@@ -219,9 +206,13 @@ class Ray implements Iterable<Ray> {
   static none = () => new Ray({ __none__: true })
 
   static ref = (x: Ray | Ray[] | (() => Ray)): Ray => new Ray({ __self__: () => x instanceof Array ? Ray.iterable(x) : x instanceof Ray ? x : x() })
-  static initial = (object: any = {}) => new Ray({ self: new Ray(), terminal: new Ray(), ...object })
-  static vertex = (object: any = {}) => new Ray({ initial: new Ray(), self: new Ray(), terminal: new Ray(), ...object })
-  static terminal = (object: any = {}) => new Ray({ initial: new Ray(), self: new Ray(), ...object })
+  static initial = (object: any = {}) => new Ray({ self: Ray.none(), terminal: Ray.none(), ...object })
+  static vertex = (object: any = {}) => new Ray({ initial: Ray.none(), self: Ray.none(), terminal: Ray.none(), ...object })
+  static terminal = (object: any = {}) => new Ray({ initial: Ray.none(), self: Ray.none(), ...object })
+
+  static last = (x: Ray) => {
+    return new Ray({ self: () => x.last })
+  }
 
   // TODO: .iterable conversion should be automatic, and additional functionality of string & other objects
   // TODO: Could be added automatically.

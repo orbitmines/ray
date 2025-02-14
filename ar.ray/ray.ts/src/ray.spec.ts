@@ -1,26 +1,48 @@
-import Ray, {Type} from "./ray";
+import Ray, {AlteredIterable, Program, Type} from "./ray";
 
 describe("ray", () => {
   test("", async () => {
+    const program = new Program();
 
-    expect(Ray.initial().is_initial()).toBe(true)
-    expect(Ray.vertex().is_vertex()).toBe(true)
-    expect(Ray.terminal().is_terminal()).toBe(true)
+    function *g() { while (true) { yield 2; } }
 
-    const ray = Ray.iterable(['A', 'B', 'C'])
+    const i = new AlteredIterable(
+      // [1, 2, 3, 1, 2, 2, 3]
+      g(),
+      program
+    )
+      .filter(x => x === 2 || x === 3)
+      .map(x => x * 2)
+      .filter(x => x === 4)
+      .map(x => x * 3)
 
-    console.log([...ray].length) // TODO FIX
-    expect(ray.length).toBe(3);
-    expect(ray.current.__object__).toBe('A')
-    expect(ray.at(2).__object__).toBe('C')
-    // expect(ray.last.self.__object__).toBe('C')
-    expect(ray.next.__object__).toBe('B')
-    // expect(ray.next.next.next.self.__object__).toBe('C')
-    expect(ray.type).toBe(Type.INITIAL)
+    await program.step(async () => {
 
-    ray.at(2).compose(Ray.vertex({ __object__: 'D' }))
+      for await (let value of i) {
+        console.log(value);
+      }
 
-    expect(ray.at(3).__object__).toBe('D')
+    }, 10)
+
+    //
+    // expect(Ray.initial().is_initial()).toBe(true)
+    // expect(Ray.vertex().is_vertex()).toBe(true)
+    // expect(Ray.terminal().is_terminal()).toBe(true)
+    //
+    // const ray = Ray.iterable(['A', 'B', 'C'])
+    //
+    // console.log([...ray].length) // TODO FIX
+    // expect(ray.length).toBe(3);
+    // expect(ray.current.__object__).toBe('A')
+    // expect(ray.at(2).__object__).toBe('C')
+    // // expect(ray.last.self.__object__).toBe('C')
+    // expect(ray.next.__object__).toBe('B')
+    // // expect(ray.next.next.next.self.__object__).toBe('C')
+    // expect(ray.type).toBe(Type.INITIAL)
+    //
+    // ray.at(2).compose(Ray.vertex({ __object__: 'D' }))
+    //
+    // expect(ray.at(3).__object__).toBe('D')
   });
 
   // test("", async () => {

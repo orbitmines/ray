@@ -13,19 +13,106 @@ export enum Type {
 export type AnyOf<T> = T | T[] | (() => T | T[])
 export type Any = undefined | AnyOf<Ray> | AnyOf<State>
 
+export class Program {
+
+  tasks: ((value?: unknown) => void)[] = []
+
+  constructor() {
+  }
+
+  next = () => {
+    if (this.i >= this.max || this.tasks.length === 0) {
+      this.done()
+      return;
+    }
+
+    this.tasks.pop()()
+
+    this.i++;
+  }
+  done: (value?: unknown) => void;
+
+  i: number = 0;
+  max: number = 0;
+  step = async (entrypoint: () => Promise<any>, i: number) => {
+    this.i = 0; this.max = i;
+
+    const done = new Promise(resolve => this.done = resolve);
+
+    entrypoint()
+    this.next()
+
+    await done;
+  }
+
+  wait = (object?: {
+
+  }) => {
+    const task = new Promise((resolve, reject) => {
+      this.tasks.push(resolve)
+    })
+
+    this.next()
+
+    // await this.exec(async () => {})
+    return task;
+  }
+
+}
+
+export class AlteredIterable<T, R = T> implements AsyncIterable<R> {
+
+  public x: AsyncIterable<T>
+  constructor(x: Iterable<T> | AsyncIterable<T>, public program: Program = new Program()) {
+    async function * to_async_iterable<T>(iterable: Iterable<T>): AsyncGenerator<T> {
+        for (let x of iterable) { yield x }
+    }
+    this.x = is_async_iterable(x) ? x : to_async_iterable(x)
+  }
+
+  private __map__?: (x: T) => R
+  map = <R2>(map: (x: R) => R2): AlteredIterable<R, R2> => {
+    const iterable = new AlteredIterable<R, R2>(this[Symbol.asyncIterator](), this.program);
+    iterable.__map__ = map;
+    return iterable;
+  }
+
+  private __filter__?: (x: R) => boolean
+  filter = (predicate: (x: R) => boolean): AlteredIterable<R> => {
+    const iterable = new AlteredIterable<R>(this[Symbol.asyncIterator](), this.program);
+    iterable.__filter__ = predicate;
+    return iterable;
+  }
+
+  async * [Symbol.asyncIterator](): AsyncGenerator<R> {
+    const iterator = this.x[Symbol.asyncIterator]();
+
+    while (true) {
+      await this.program.wait()
+
+      let { done, value } = await iterator.next();
+      if (done) break;
+      if (this.__filter__ && !this.__filter__(value)) continue;
+
+      yield this.__map__ ? this.__map__(value) : value;
+    }
+  }
+
+}
+
 class Ray implements Iterable<Ray> {
 
   public __state__: () => State; get state(): State { return this.__state__() }; set state(x: Any) {
-    this.__state__ = ((x: Any): (() => State) => {
-      if (x === undefined) return State.none;
-      if (is_function(x)) return () => {
-        let value = x();
-        if (value instanceof Array) return // TODO
-        return value instanceof State ? value : value.state
-      };
-      let value = x instanceof Array ? State.iterable(x) : State.ref(x);
-      return () => value;
-    })(x)
+    // this.__state__ = ((x: Any): (() => State) => {
+    //   if (x === undefined) return State.none;
+    //   if (is_function(x)) return () => {
+    //     let value = x();
+    //     if (value instanceof Array) return // TODO
+    //     return value instanceof State ? value : value.state
+    //   };
+    //   let value = x instanceof Array ? Ray.iterable(x) : Ray.ref(x);
+    //   return () => value;
+    // })(x)
   }
   
   constructor(x: Any = undefined, object: any = {}) {
@@ -53,9 +140,9 @@ class Ray implements Iterable<Ray> {
   public __reverse__: boolean = false
   get reverse(): Ray { return this.clone({ __reverse__: !this.__reverse__ })}
   
-  get initial(): Ray { return this.state.initial }; set initial(x: Any) { this.state.initial = x; }
+  get initial(): Ray { return this.__reverse__ ? this.state.terminal : this.state.initial }; set initial(x: Any) { this.__reverse__ ? this.state.terminal = x : this.state.initial = x; }
   get self(): Ray { return this.state.self }; set self(x: Any) { this.state.self = x; }
-  get terminal(): Ray { return this.state.terminal }; set terminal(x: Any) { this.state.terminal = x; }
+  get terminal(): Ray { return this.__reverse__ ? this.state.initial : this.state.terminal }; set terminal(x: Any) { this.__reverse__ ? this.state.initial = x : this.state.terminal = x; }
 
   get type(): Type {
     if (this.is_reference()) return Type.REFERENCE;
@@ -82,8 +169,17 @@ class Ray implements Iterable<Ray> {
   // TODO: What about traversing and mapping the entire structure including terminal/initial structure?
   * traverse({
     strategy,
-    traverser
-  }: { strategy?: (x: Ray) => Iterable<Ray | Ray[]>, traverser?: Ray } = {}) {
+    history,
+  }: { strategy?: (x: Ray) => Iterable<Ray | Ray[]>, history?: Ray } = {}) {
+    const { __filter__, __map__ } = this;
+
+    function * found(unfiltered: Iterable<Ray>) {
+      let x = new AlteredIterable(unfiltered)
+      // TODO: This doesnt work, filter.map.filter is different
+      __filter__.forEach(filter => x = x.filter(filter))
+      __map__.forEach(map => x = x.map(map))
+
+    }
     throw new Error('Not implemented')
 
     // TODO: Map maps .self values of each vertex.
@@ -94,6 +190,17 @@ class Ray implements Iterable<Ray> {
   compose = (b: Ray): Ray => {
     // if (this.is_boundary()) return this.map(x => x.compose(b))
     // if (b.is_boundary()) return b.map(x => this.compose(x)) //TODO should return x.
+    throw new Error('Not implemented')
+  }
+
+  contains = async (b: Ray): Promise<boolean> => this.some(x => x.equals(b))
+  
+  // TODO: Partial answer of "how far have I checked"
+  some = async (predicate: (x: Ray) => boolean): Promise<boolean> => {
+    throw new Error('Not implemented')
+  }
+
+  equals = (b: Ray): boolean => {
     throw new Error('Not implemented')
   }
 
@@ -136,7 +243,9 @@ class Ray implements Iterable<Ray> {
   get first(): Ray { return this.reverse.last }
 
   get terminal_boundary(): Ray {
-    return this.last.map(x => { throw new Error('Not implemented') })
+    throw new Error('Not implemented')
+
+    return this.last.map(x => {  })
   }
   get initial_boundary(): Ray { return this.reverse.terminal_boundary }
 
@@ -150,10 +259,34 @@ class Ray implements Iterable<Ray> {
   // TODO: FIX FOR; Doesn't account for infinitely generating terminals, same problem as the halting problem
   get max_length(): number { return this.in_orbit() ? Number.POSITIVE_INFINITY : [...this].length }
 
+  static ref = (self: Any): Ray => new Ray(new State({ self }))
+
   static initial = (object: any = {}) => new Ray(new State({ self: State.none(), terminal: State.none(), ...object }))
   static vertex = (object: any = {}) => new Ray(new State({ initial: State.none(), self: State.none(), terminal: State.none(), ...object }))
   static terminal = (object: any = {}) => new Ray(new State({ initial: State.none(), self: State.none(), ...object }))
+  
+  // TODO: .iterable conversion should be automatic, and additional functionality of string & other objects
+  // TODO: Could be added automatically.
+  static string = (string: string) => Ray.iterable(string)
+  static iterable = <T>(x: Iterable<T>) => this.iterator(x[Symbol.iterator]());
+  static iterator = <T>(x: Iterator<T>) => {
+    const next = (previous?: Ray): Ray => {
+      const { done, value } = x.next();
 
+      const current = done ? Ray.terminal({ initial: previous }) : Ray.vertex({ __object__: value, initial: previous });
+      previous.terminal = current
+
+      if (done) return current
+
+      current.terminal = () => next(current)
+
+      return current
+    }
+
+    const iterator = Ray.initial({ terminal: () => next(iterator) });
+
+    return iterator;
+  }
 }
 
 class State {
@@ -175,30 +308,6 @@ class State {
 
   static none = () => new State({ __none__: true })
 
-  static ref = (x: State | State[] | (() => State)): State => new State({ __self__: () => x instanceof Array ? State.iterable(x) : x instanceof State ? x : x() })
-
-  // TODO: .iterable conversion should be automatic, and additional functionality of string & other objects
-  // TODO: Could be added automatically.
-  static string = (string: string) => State.iterable(string)
-  static iterable = <T>(x: Iterable<T>) => this.iterator(x[Symbol.iterator]());
-  static iterator = <T>(x: Iterator<T>) => {
-    const next = (previous?: State): State => {
-      const { done, value } = x.next();
-
-      const current = done ? State.terminal({ initial: previous }) : State.vertex({ __object__: value, initial: previous });
-      previous.terminal = current
-
-      if (done) return current
-
-      current.terminal = () => next(current)
-
-      return current
-    }
-
-    const iterator = State.initial({ terminal: () => next(iterator) });
-
-    return iterator;
-  }
 }
 export default State;
 

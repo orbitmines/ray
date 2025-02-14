@@ -30,7 +30,7 @@ export class Program {
 
     this.i++;
   }
-  done: (value?: unknown) => void;
+  done: (value?: unknown) => void; // TODO: Could reject pending promises on done, is that necessary or can we just leave them be? Or is there some other way in javascript to dispense of them
 
   i: number = 0;
   max: number = 0;

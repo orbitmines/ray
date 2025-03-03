@@ -13,6 +13,56 @@ export enum Type {
 export type AnyOf<T> = T | T[] | (() => T | T[])
 export type Any = undefined | AnyOf<Ray> | AnyOf<State>
 
+export interface IRange {
+  or: (b: IRange) => IRange
+  // and: (b: IRange) => IRange
+  all: () => boolean
+  contains: (x: number) => boolean
+  more: (current: number, positive?: boolean) => boolean
+}
+export type Bound = { at: number, inclusive: boolean }
+export class Range implements IRange {
+  constructor(
+    public lower: Bound,
+    public upper: Bound,
+  ) {
+    if (lower.at > upper.at)
+      throw new Error('Lower bound is greater than upper bound');
+  }
+
+  all = () => this.lower.at === -Infinity && this.upper.at === Infinity
+
+  contains = (x: number): boolean => {
+   return (this.lower === undefined || (this.lower.inclusive ? x >= this.lower.at : x > this.lower.at))
+       && (this.upper === undefined || (this.upper.inclusive ? x <= this.upper.at : x < this.upper.at));
+  }
+
+  more = (current: number, positive: boolean = true) =>
+    positive ? this.upper.at > current : this.lower.at < current
+
+  or = (b: IRange): IRange => new MultiRange([this, b])
+
+  public static Eq = (x: number) => new Range({ at: x, inclusive: true }, { at: x, inclusive: true })
+  public static Gt = (x: number) => new Range({ at: x, inclusive: false }, { at: Infinity, inclusive: false })
+  public static Gte = (x: number) => new Range({ at: x, inclusive: true }, { at: Infinity, inclusive: false })
+  public static Lt = (x: number) => new Range({ at: -Infinity, inclusive: false }, { at: x, inclusive: false })
+  public static Lte = (x: number) => new Range({ at: -Infinity, inclusive: false }, { at: x, inclusive: true })
+
+}
+export class MultiRange implements IRange {
+  constructor(public ranges: IRange[] = []) {
+  }
+
+  all = (): boolean =>
+    this.ranges.some(range => range.all());
+  contains = (x: number): boolean =>
+    this.ranges.some(range => range.contains(x));
+  more = (current: number, positive: boolean = true): boolean =>
+    this.ranges.some(range => range.more(current, positive));
+  or = (b: IRange): IRange => new MultiRange([...this.ranges, ...(b instanceof MultiRange ? (b as MultiRange).ranges : [b])])
+
+}
+
 export class Program {
 
   tasks: ((value?: unknown) => void)[] = []
@@ -92,15 +142,18 @@ export class AlteredIterable<T, R = T> implements AsyncIterable<R> {
 
       let { done, value } = await iterator.next();
       if (done) break;
+
+      value = this.__map__ ? this.__map__(value) : value
+
       if (this.__filter__ && !this.__filter__(value)) continue;
 
-      yield this.__map__ ? this.__map__(value) : value;
+      yield value;
     }
   }
 
 }
 
-class Ray implements Iterable<Ray> {
+class Ray implements AsyncIterable<Ray> {
 
   public __state__: () => State; get state(): State { return this.__state__() }; set state(x: Any) {
     // this.__state__ = ((x: Any): (() => State) => {
@@ -130,6 +183,7 @@ class Ray implements Iterable<Ray> {
   }
 
   // TODO: map where each change in sequence effects the next one, vs map where we expect the initial structure to be the same
+  // TODO: How does .map effect .self/.terminal/.initial
   public __map__: ((x: Ray) => any)[] = []
   map = <T>(predicate: (x: Ray) => T): Ray => this.clone({ __map__: [...this.__map__, predicate] })
 
@@ -139,41 +193,58 @@ class Ray implements Iterable<Ray> {
 
   public __reverse__: boolean = false
   get reverse(): Ray { return this.clone({ __reverse__: !this.__reverse__ })}
-  
-  get initial(): Ray { return this.__reverse__ ? this.state.terminal : this.state.initial }; set initial(x: Any) { this.__reverse__ ? this.state.terminal = x : this.state.initial = x; }
-  get self(): Ray { return this.state.self }; set self(x: Any) { this.state.self = x; }
-  get terminal(): Ray { return this.__reverse__ ? this.state.initial : this.state.terminal }; set terminal(x: Any) { this.__reverse__ ? this.state.initial = x : this.state.terminal = x; }
 
-  get type(): Type {
-    if (this.is_reference()) return Type.REFERENCE;
-    if (this.is_initial()) return Type.INITIAL;
-    if (this.is_terminal()) return Type.TERMINAL;
-    if (this.is_vertex()) return Type.VERTEX;
-    // if (this.is_wall()) return Type.WALL;
-    throw new Error('Should not happen')
+  public __at__?: IRange
+  at = (index: number | IRange): Ray => {
+    if (is_number(index)) {
+      if (index === Infinity) return this.terminal_boundary;
+      if (index < 0) return this.reverse.at(index * -1);
+
+      index = Range.Eq(index)
+    }
+
+    if (this.__at__ === undefined) { return this.clone({ __at__: index })}
+
+    // this.__at__ = this.__at__.or(index)
+    throw new Error(`Not sure yet whether to allow multi-chaining .at or what else to do with it`);
+    return this;
   }
 
-  is_initial = () => this.initial.is_none()
-  is_terminal = () => this.terminal.is_none()
-  is_reference = () => this.is_initial() && this.is_terminal()
-  is_empty_reference = () => this.is_reference() && this.self.is_none()
-  is_boundary = () => xor(this.is_initial(), this.is_terminal())
-  is_vertex = () => !this.is_initial() && !this.is_terminal()
-  is_extreme = () => this.is_none() && this.is_boundary()
-  is_wall = () => this.is_none() && !this.is_initial() && !this.is_terminal()
+  // get initial(): Ray { return this.__reverse__ ? this.state.terminal : this.state.initial }; set initial(x: Any) { this.__reverse__ ? this.state.terminal = x : this.state.initial = x; }
+  // get self(): Ray { return this.state.self }; set self(x: Any) { this.state.self = x; }
+  // get terminal(): Ray { return this.__reverse__ ? this.state.initial : this.state.terminal }; set terminal(x: Any) { this.__reverse__ ? this.state.initial = x : this.state.terminal = x; }
 
-  is_none = (): boolean => this.state.__none__ || this.max_length === 0;
-  is_some = () => !this.is_none();
+  // is_initial = async () => this.initial.is_none()
+  // is_terminal = async () => this.terminal.is_none()
+  // is_reference = async () => await this.is_initial() && await this.is_terminal()
+  // is_empty_reference = async () => await this.is_reference() && await this.self.is_none()
+  // is_boundary = async () => xor(await this.is_initial(), await this.is_terminal())
+  // is_vertex = async () => !await this.is_initial() && !await this.is_terminal()
+  // is_extreme = async () => await this.is_none() && await this.is_boundary()
+  // is_wall = async () => await this.is_none() && !await this.is_initial() && !await this.is_terminal()
+  //
+  // is_none = async () => this.state.__none__ || this.max_length === 0;
+  // is_some = async () => !await this.is_none();
+
+  // type = async (): Promise<Type> => {
+  //   if (await this.is_reference()) return Type.REFERENCE;
+  //   if (await this.is_initial()) return Type.INITIAL;
+  //   if (await this.is_terminal()) return Type.TERMINAL;
+  //   if (await this.is_vertex()) return Type.VERTEX;
+  //   // if (this.is_wall()) return Type.WALL;
+  //   throw new Error('Should not happen')
+  // }
 
   // TODO: At each step, the intermediate iterator result which gets returned, might be expanded on later, when deemed it has changed, when would you want to know about that change mid-iteration?
   // TODO: What about traversing and mapping the entire structure including terminal/initial structure?
-  * traverse({
+  async * traverse({
     strategy,
     history,
   }: { strategy?: (x: Ray) => Iterable<Ray | Ray[]>, history?: Ray } = {}) {
     const { __filter__, __map__ } = this;
 
     function * found(unfiltered: Iterable<Ray>) {
+
       let x = new AlteredIterable(unfiltered)
       // TODO: This doesnt work, filter.map.filter is different
       __filter__.forEach(filter => x = x.filter(filter))
@@ -181,6 +252,10 @@ class Ray implements Iterable<Ray> {
 
     }
     throw new Error('Not implemented')
+
+    // TODO Instantly yield intermediate results by returning an iterable of which the next values are still pending.
+    // TODO: Returned iterable result can also be infinitely generating
+
 
     // TODO: Map maps .self values of each vertex.
 
@@ -193,60 +268,34 @@ class Ray implements Iterable<Ray> {
     throw new Error('Not implemented')
   }
 
-  contains = async (b: Ray): Promise<boolean> => this.some(x => x.equals(b))
-  
-  // TODO: Partial answer of "how far have I checked"
-  some = async (predicate: (x: Ray) => boolean): Promise<boolean> => {
-    throw new Error('Not implemented')
-  }
+  contains = async (b: Ray) => this.filter(x => x.equals(b)).has_next()
 
   equals = (b: Ray): boolean => {
     throw new Error('Not implemented')
   }
 
-  * [Symbol.iterator](): Generator<Ray> {
+  async * [Symbol.asyncIterator](): AsyncGenerator<Ray> {
     function * strategy(x: Ray) { yield x.terminal; }
     yield * this.traverse({ strategy })
   }
-  * collapse(): Generator<Ray> {
+  async * collapse(): AsyncGenerator<Ray> {
     function * strategy(x: Ray) { yield [x.initial, x.terminal]; }
     yield * this.traverse({ strategy })
-  }
-  
-  at = (index: number): Ray => {
-    if (index === Number.POSITIVE_INFINITY) return this.terminal_boundary;
-    if (index < 0) return this.reverse.at(index * -1);
-    
-    let i = 0;
-    for (let current of this) {
-      if (i === index) return current;
-      i++;
-    }
-    
-    return new Ray()
   }
 
   get next(): Ray { return this.at(1); }
   get current(): Ray { return this.at(0); }
   get previous(): Ray { return this.at(-1); }
 
-  has_next = (): boolean => this.next.is_none()
-  has_previous = (): boolean => this.previous.is_none()
+  has_next = async () => this.next.is_none()
+  has_previous = async () => this.previous.is_none()
 
   // TODO: When would you use a variant of first/last which includes terminal/initial cycle states?
-  get last(): Ray {
-    throw new Error('Not implemented')
-
-    return new Ray()
-      .filter(x => !x.has_next())
-  }
+  get last(): Ray { return this.filter(x => !x.has_next()) }
   get first(): Ray { return this.reverse.last }
 
-  get terminal_boundary(): Ray {
-    throw new Error('Not implemented')
-
-    return this.last.map(x => {  })
-  }
+  // TODO" Ray.terminal should automatically be linked to the provided 'initial' (should respect reverse)
+  get terminal_boundary(): Ray { return this.last.map(x => Ray.terminal({ initial: x })) }
   get initial_boundary(): Ray { return this.reverse.terminal_boundary }
 
   push_front = (b: Ray): Ray => b.compose(this.first)
@@ -257,7 +306,7 @@ class Ray implements Iterable<Ray> {
   }
 
   // TODO: FIX FOR; Doesn't account for infinitely generating terminals, same problem as the halting problem
-  get max_length(): number { return this.in_orbit() ? Number.POSITIVE_INFINITY : [...this].length }
+  get max_length(): number { return this.in_orbit() ? Infinity : [...this].length }
 
   static ref = (self: Any): Ray => new Ray(new State({ self }))
 

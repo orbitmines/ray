@@ -12,6 +12,7 @@ export enum Type {
 
 export type AnyOf<T> = T | T[] | (() => T | T[])
 export type Any = undefined | AnyOf<Ray> | AnyOf<State>
+export type MaybeAsync<T> = T | Promise<T>
 
 export interface IRange {
   or: (b: IRange) => IRange
@@ -63,6 +64,7 @@ export class MultiRange implements IRange {
 
 }
 
+// TODO: Could be merged back into Ray
 export class Program {
 
   tasks: ((value?: unknown) => void)[] = []
@@ -188,8 +190,8 @@ class Ray implements AsyncIterable<Ray> {
   map = <T>(predicate: (x: Ray) => T): Ray => this.clone({ __map__: [...this.__map__, predicate] })
 
   // If the starting Ray is a vertex, which is excluded, it acts like an initial.
-  public __filter__: ((x: Ray) => boolean)[] = []
-  filter = (predicate: (x: Ray) => boolean): Ray => this.clone({ __filter__: [...this.__filter__, predicate] })
+  public __filter__: ((x: Ray) => MaybeAsync<boolean>)[] = []
+  filter = (predicate: (x: Ray) => MaybeAsync<boolean>): Ray => this.clone({ __filter__: [...this.__filter__, predicate] })
 
   public __reverse__: boolean = false
   get reverse(): Ray { return this.clone({ __reverse__: !this.__reverse__ })}
@@ -209,6 +211,11 @@ class Ray implements AsyncIterable<Ray> {
     throw new Error(`Not sure yet whether to allow multi-chaining .at or what else to do with it`);
     return this;
   }
+
+  // TODO: Functions that alter structure like .flatten/.flat_map, what else?
+
+  // TODO Distance/Index mapping
+  // TODO: join/pop/shift/sort/max/min or similar alterations
 
   // get initial(): Ray { return this.__reverse__ ? this.state.terminal : this.state.initial }; set initial(x: Any) { this.__reverse__ ? this.state.terminal = x : this.state.initial = x; }
   // get self(): Ray { return this.state.self }; set self(x: Any) { this.state.self = x; }
@@ -244,43 +251,78 @@ class Ray implements AsyncIterable<Ray> {
     const { __filter__, __map__ } = this;
 
     function * found(unfiltered: Iterable<Ray>) {
+      // TODO history.contains() ; Only needs a 'have I been here flag'
 
       let x = new AlteredIterable(unfiltered)
       // TODO: This doesnt work, filter.map.filter is different
       __filter__.forEach(filter => x = x.filter(filter))
       __map__.forEach(map => x = x.map(map))
 
+
     }
     throw new Error('Not implemented')
+
+    // TODO: History in case of .bidirectional after a .filter is?
+
+    // TODO: Traversal should support yielding initial/terminals as well
+
+    // TODO: Program.step here with metadata
 
     // TODO Instantly yield intermediate results by returning an iterable of which the next values are still pending.
     // TODO: Returned iterable result can also be infinitely generating
 
 
     // TODO: Map maps .self values of each vertex.
+    // TODO: Map replaces either original structure or within the altered (filtered/mapped) structure?
 
     // TODO: Allow for additional operations on .traverse/.last like .push_back, where we have pending for non-found values of .last yet
   }
 
+  // TODO: Rename to push? And composing for function initials?
   compose = (b: Ray): Ray => {
+    // TODO: Alterations on original structure or on altered or on copy ..
+
+
     // if (this.is_boundary()) return this.map(x => x.compose(b))
     // if (b.is_boundary()) return b.map(x => this.compose(x)) //TODO should return x.
     throw new Error('Not implemented')
   }
 
-  contains = async (b: Ray) => this.filter(x => x.equals(b)).has_next()
+  some = (predicate: (x: Ray) => boolean) => this.filter(predicate).has_next()
+  every = (predicate: (x: Ray) => boolean) => !this.map(x => predicate(x)).filter(x => x.equals(false)).has_next()
 
-  equals = (b: Ray): boolean => {
+  for_each = async (callback: (x: Ray) => unknown) => {
+    for await (let x of this) { callback(x) }
+  }
+
+  // TODO: Index of/Distance function can be circular ; multiple/generating indexes as an answer
+  // TODO: Indexes relative to what? The original structure probably, or the applied filter? Or which filter?
+  // TODO: Might never give a result because of filter and infinitely generating terminal.
+  // TODO: Depending on how the program steps, this might not be in ascending order.
+  // TODO: Distance is possibly a sequence of index steps, as [-5, +3] != [-2] (not in every case) - take .bidirectional for example. (Or can be thought of as a list of binary values for left/right)
+  distance = (): Ray => { throw new Error('Not implemented') }
+  index_of = (b: any) => this.filter(x => x.equals(b)).distance()
+  get length() { return this.filter(x => x.is_last()).distance() }
+
+  contains = async (b: any) => this.some(x => x.equals(b))
+
+  equals = (b: any): boolean => {
     throw new Error('Not implemented')
+
+    if (b instanceof Ray) {}
   }
 
   async * [Symbol.asyncIterator](): AsyncGenerator<Ray> {
     function * strategy(x: Ray) { yield x.terminal; }
     yield * this.traverse({ strategy })
   }
-  async * collapse(): AsyncGenerator<Ray> {
-    function * strategy(x: Ray) { yield [x.initial, x.terminal]; }
-    yield * this.traverse({ strategy })
+
+  // TODO: Change strategy as a result of this function being applied.
+  // TODO: Bidirectional opens up the problem that something can be -5, then + 3 steps ahead, yet not show up as the initial -2. How should this be handled?
+  get bidirectional(): Ray {
+
+    // function * strategy(x: Ray) { yield [x.initial, x.terminal]; }
+    // yield * this.traverse({ strategy })
   }
 
   get next(): Ray { return this.at(1); }
@@ -291,22 +333,29 @@ class Ray implements AsyncIterable<Ray> {
   has_previous = async () => this.previous.is_none()
 
   // TODO: When would you use a variant of first/last which includes terminal/initial cycle states?
-  get last(): Ray { return this.filter(x => !x.has_next()) }
+  is_last = async () => !await this.has_next()
+  is_first = async () => !await this.has_previous()
+  get last(): Ray { return this.filter(x => x.is_last()) }
   get first(): Ray { return this.reverse.last }
+
+  // is_on_boundary = async () => await this.is_first() || await this.is_last()
+  // get boundary(): Ray {
+  //   return this.bidirectional
+  //     .filter(x => x.is_on_boundary())
+  //     .map(x => x.is_first() ? Ray.initial({ terminal: x }) : Ray.terminal({ initial: x }))
+  // }
 
   // TODO" Ray.terminal should automatically be linked to the provided 'initial' (should respect reverse)
   get terminal_boundary(): Ray { return this.last.map(x => Ray.terminal({ initial: x })) }
   get initial_boundary(): Ray { return this.reverse.terminal_boundary }
 
+  // TODO: Push-back list of possibilities vs list to follow after
   push_front = (b: Ray): Ray => b.compose(this.first)
   push_back = (b: Ray): Ray => this.last.compose(b)
 
   in_orbit = (): boolean => {
     throw new Error('Not implemented')
   }
-
-  // TODO: FIX FOR; Doesn't account for infinitely generating terminals, same problem as the halting problem
-  get max_length(): number { return this.in_orbit() ? Infinity : [...this].length }
 
   static ref = (self: Any): Ray => new Ray(new State({ self }))
 

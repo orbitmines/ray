@@ -1,28 +1,63 @@
-import Ray, {AlteredIterable, Program, Type} from "./ray";
+import Ray from "./ray";
 
 describe("ray", () => {
   test("", async () => {
-    const program = new Program();
+    // const ray = new Ray()
+    //   .bidirectional()
+    //   .filter(x => true)
+    //   .map(x => x)
+    //   .at(Range.Gt(5))
+    //   .reverse()
+    //
+    // new Ray().at(1).at(1)
+    // new Ray().at(2)
+    // new Ray().next.next
+    //
+    // new Ray()
+    //   .bidirectional()
+    //   .at(2)
+    //   // -2, 2
+    //   .bidirectional() // TODO: Should this be necessary, or does it take the bottom defined one until disabled
+    //   .at(1)
+    //   // -3, 1, 3, 1
+    //
+    // new Ray()
+    //   .bidirectional()
+    //   .at(2)
+    //   // -2, 2
+    //   .at(1)
+    //   // -1, 3
+    //
+    // new Ray()
+    //   .bidirectional()
+    //   .at(Range.Gt(5))
+    //   // > 5, < -5
+    //   .at(1)
+    //   // > 6, < -4
+    //
+    // console.log(ray.reverse.value)
 
-    function *g() { while (true) { yield 2; } }
-
-    const i = new AlteredIterable(
-      // [1, 2, 3, 1, 2, 2, 3]
-      g(),
-      program
-    )
-      .filter(x => x === 2 || x === 3)
-      .map(x => x * 2)
-      .filter(x => x === 4)
-      .map(x => x * 3)
-
-    await program.step(async () => {
-
-      for await (let value of i) {
-        console.log(value);
-      }
-
-    }, 10)
+    // const program = new Program();
+    //
+    // function *g() { while (true) { yield 2; } }
+    //
+    // const i = new AlteredIterable(
+    //   // [1, 2, 3, 1, 2, 2, 3]
+    //   g(),
+    //   program
+    // )
+    //   .filter(x => x === 2 || x === 3)
+    //   .map(x => x * 2)
+    //   .filter(x => x === 4)
+    //   .map(x => x * 3)
+    //
+    // await program.step(async () => {
+    //
+    //   for await (let value of i) {
+    //     console.log(value);
+    //   }
+    //
+    // }, 10)
 
     //
     // expect(Ray.initial().is_initial()).toBe(true)

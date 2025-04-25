@@ -39,6 +39,10 @@ export interface IRay<TNode extends Node, TCursor extends IRay<TNode, TCursor>> 
    */
   at: (index: number | IRange) => TCursor
   /**
+   * Mapping which only contains the specified index/range.
+   */
+  slice: (index: number | IRange) => TCursor
+  /**
    * Reverse direction starting from the selection
    */
   reverse: () => TCursor
@@ -46,12 +50,6 @@ export interface IRay<TNode extends Node, TCursor extends IRay<TNode, TCursor>> 
    * A ray going both forward and backward.
    */
   bidirectional: () => TCursor
-  /**
-   * Deem initial and terminal cycles as part of the boundary:
-   * - Each entry within a cycle is deemed a possible boundary value.
-   */
-  cycles_are_boundaries: () => TCursor
-
 
   is_none: () => MaybeAsync<boolean>
   is_some: () => MaybeAsync<boolean>
@@ -74,10 +72,11 @@ export interface IRay<TNode extends Node, TCursor extends IRay<TNode, TCursor>> 
 
 }
 
-export class Ray implements Node, IRay<Ray, Ray> {
+export class FunctionBuilder {
 
-  __parents__: Ray[] = []
-  with = (parent: Ray): Ray => { this.__parents__.push(parent); return this; }
+}
+
+export class Ray implements Node, IRay<Ray, Ray> {
 
   constructor(object: any = {}) {
     Object.keys(object).forEach(key => (this as any)[key] = object[key]);
@@ -103,28 +102,20 @@ export class Ray implements Node, IRay<Ray, Ray> {
   distance = Property.boolean(this, 'distance')
   get all(): Ray { return new Ray({ selection: this }) }
   at = Property.property(this, 'at', (index: number | IRange): IRange | Ray => is_number(index) ? Range.Eq(index) : index)
+  slice = Property.property(this, 'slice', (index: number | IRange): IRange | Ray => is_number(index) ? Range.Eq(index) : index)
   reverse = Property.boolean(this, 'reverse')
   bidirectional = Property.boolean(this, 'bidirectional')
-  cycles_are_boundaries = Property.boolean(this, 'cycles_are_boundaries')
 
   is_none = (): MaybeAsync<boolean> => { throw new Error('Not implemented'); }
   is_some = async (): Promise<boolean> => !await this.is_none()
-
-  equals = (x: any): MaybeAsync<boolean> => {
-    throw new Error('Not implemented');
-  }
 
   push = (x: any): Ray => { throw new Error("Method not implemented.") }
   push_front = (x: Ray): Ray => x.push(this.first)
   push_back = (x: Ray): Ray => this.last.push(x)
 
-  get next(): Ray {
-    throw new Error("Method not implemented.")
-  }
+  get next(): Ray { return this.at(1) }
   has_next = (): MaybeAsync<boolean> => this.next.is_some()
-  get previous(): Ray {
-    throw new Error("Method not implemented.")
-  }
+  get previous(): Ray { return this.at(-1) }
   has_previous = (): MaybeAsync<boolean> => this.previous.is_some()
 
   get last(): Ray { return this.filter(x => x.is_last()) }
@@ -138,29 +129,64 @@ export class Ray implements Node, IRay<Ray, Ray> {
 
   }
 
+  equals = (x: any): MaybeAsync<boolean> => {
+    throw new Error('Not implemented');
+  }
+
+  /**
+   *
+   */
+
+  __parent__?: Ray
+  with = (parent: Ray): Ray => { this.__parent__ = parent; return this; }
+
 }
 
 export default Ray;
 
 export namespace Property {
   export type Type<TInput, TOutput> = {
+    __self__: Ray,
+    __name__: keyof Properties,
     (value: TInput): Ray
     value?: TOutput
   }
   export type Properties = {
     [P in keyof Ray]: P extends Property.Type<infer TInput, infer TOutput> ? Ray[P] : never;
   }
-  export const property = <TInput = void, TOutput = TInput>(self: Ray, key: keyof Properties, setter: (value: TInput) => TOutput | Ray = (x) => x as any): Property.Type<TInput, TOutput> => {
-    return (input: TInput) => {
+  export const property = <TInput = void, TOutput = TInput>(self: Ray, name: keyof Properties, setter: (value: TInput) => TOutput | Ray = (x) => x as any): Property.Type<TInput, TOutput> => {
+    const property = (input: TInput) => {
       const output = setter(input);
       if (output instanceof Ray) return output;
 
       const ray = new Ray().with(self);
-      (ray[key] as Property.Type<TInput, TOutput>).value = output
+      (ray[name] as Property.Type<TInput, TOutput>).value = output
       return ray;
     }
+    property.__self__ = self;
+    property.__name__ = name;
+    return property;
   }
   export const boolean = (self: Ray, key: keyof Properties) => property(self, key, () => true)
+
+  export const is = (property: Property.Type<any, any>): boolean => !!value(property)
+  export const modular_is = (property: Property.Type<any, any>): any => {
+    let value = false;
+    while (property !== undefined) {
+      if (property.value) value = !value;
+
+      property = property.__self__.__parent__[property.__name__] as Property.Type<any, any>
+    }
+    return value;
+  }
+  export const value = (property: Property.Type<any, any>): any => {
+    while (property !== undefined) {
+      if (property.value) return property.value;
+
+      property = property.__self__.__parent__[property.__name__] as Property.Type<any, any>
+    }
+    return undefined;
+  }
 
 }
 

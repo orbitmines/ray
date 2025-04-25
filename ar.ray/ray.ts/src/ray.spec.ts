@@ -2,6 +2,8 @@ import Ray from "./ray";
 
 describe("ray", () => {
   test("", async () => {
+
+
     // const ray = new Ray()
     //   .bidirectional()
     //   .filter(x => true)

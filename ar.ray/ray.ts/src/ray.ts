@@ -1,74 +1,116 @@
+import rayTs from "../index";
+
 export type MaybeAsync<T> = T | Promise<T>
 
 export interface Node {
   equals: (x: any) => MaybeAsync<boolean>
 }
 
-export interface IRay<TNode extends Node, TCursor extends IRay<TNode, TCursor>> extends AsyncIterable<TNode> {
-  /**
-   * A list of locations our Ray is at.
-   */
-  selection: TCursor
+export interface IRay<TNode> extends AsyncIterable<TNode> {
 
-  for_each: (callback: (x: TNode) => MaybeAsync<unknown>) => MaybeAsync<void>
-
+  for_each: (callback: (x: TNode) => MaybeAsync<unknown>) => MaybeAsync<unknown>
   every: (predicate: (x: TNode) => MaybeAsync<boolean>) => MaybeAsync<boolean>
   some: (predicate: (x: TNode) => MaybeAsync<boolean>) => MaybeAsync<boolean>
+  contains: (value: any) => MaybeAsync<boolean>
+  /**
+   * Set all nodes within this ray to a given value.
+   */
+  fill: (value: any) => IRay<TNode>
+  join: (value: any) => IRay<TNode>
+  unshift: (...values: any[]) => IRay<TNode>
+  /**
+   * Mapping which only contains the specified index/range.
+   */
+  slice: (index: number | IRange) => IRay<TNode>
+  pop_back: () => IRay<TNode>
+  pop_front: () => IRay<TNode>
+  /**
+   * @alias pop_front
+   */
+  shift: () => IRay<TNode>
+  index_of: (value: any) => IRay<TNode>
+  
+  get length(): IRay<TNode>
 
-  contains: (x: any) => MaybeAsync<boolean>
-
-  filter: (predicate: (x: TNode) => MaybeAsync<boolean>) => TCursor
-  map: <R>(predicate: (x: TNode) => R) => TCursor
-
+  filter: (predicate: (x: TNode) => MaybeAsync<boolean>) => IRay<TNode>
+  /**
+   * Opposite of filter.
+   */
+  exclude: (predicate: (x: TNode) => MaybeAsync<boolean>) => IRay<TNode>
+  map: <R>(predicate: (x: TNode) => R) => IRay<TNode>
   /**
    * Ignores duplicates after visiting the first one.
    */
-  unique: () => TCursor
+  unique: () => IRay<TNode>
   /**
    * Maps the original structure to one where you find the distances at the Nodes.
    *
    * Note: This can include infinitely generating index options.
    */
-  distance: () => TCursor
+  distance: () => IRay<TNode>
   /**
    * Select all nodes in this structure.
    */
-  get all(): TCursor
+  all: () => IRay<TNode>
   /**
    * Select all nodes at a specific index/range.
    */
-  at: (index: number | IRange) => TCursor
-  /**
-   * Mapping which only contains the specified index/range.
-   */
-  slice: (index: number | IRange) => TCursor
+  at: (index: number | IRange) => IRay<TNode>
   /**
    * Reverse direction starting from the selection
    */
-  reverse: () => TCursor
+  reverse: () => IRay<TNode>
   /**
    * A ray going both forward and backward.
    */
-  bidirectional: () => TCursor
+  bidirectional: () => IRay<TNode>
+  /**
+   * Change the values of all selected nodes.
+   */
+  set: (value: any) => IRay<TNode>
 
   is_none: () => MaybeAsync<boolean>
   is_some: () => MaybeAsync<boolean>
 
-  push: (x: any) => TCursor
-  push_front: (x: TNode) => TCursor
-  push_back: (x: TNode) => TCursor
+  /**
+   * Remove the selection from the underlying ray. (This preserves the surrounding structure)
+   * The original structure only severs the connections to removed structure. (The removed part retains in structure)
+   * Returns the removed structure.
+   */
+  remove: () => IRay<TNode>
 
-  get next(): TCursor
+  /**
+   * Push a value as a possible continuation. (Ignores the next node)
+   */
+  push: (x: any) => IRay<TNode>
+  /**
+   * Push a value between the current and next node.
+   * TODO: Better name?
+   */
+  push_after: (x: any) => IRay<TNode>
+  push_front: (x: TNode) => IRay<TNode>
+  push_back: (x: TNode) => IRay<TNode>
+
+  /**
+   *
+   * Note: If there are multiple things selected, the ones without a 'next' node are discarded. With a terminal loop,
+   * one can keep terminal boundaries in the selection.
+   */
+  get next(): IRay<TNode>
   has_next: () => MaybeAsync<boolean>
-  get previous(): TCursor
+  get previous(): IRay<TNode>
   has_previous: () => MaybeAsync<boolean>
 
-  get last(): TCursor
+  get last(): IRay<TNode>
   is_last: () => MaybeAsync<boolean>
-  get first(): TCursor
+  get first(): IRay<TNode>
   is_first: () => MaybeAsync<boolean>
-  get boundary(): TCursor
+  get boundary(): IRay<TNode>
   on_boundary: () => MaybeAsync<boolean>
+
+  isomorphic: (x: IRay<TNode>) => MaybeAsync<boolean>
+
+  to_number: () => MaybeAsync<number>
 
 }
 
@@ -76,18 +118,26 @@ export class FunctionBuilder {
 
 }
 
-export class Ray implements Node, IRay<Ray, Ray> {
+export class State {
 
-  constructor(object: any = {}) {
-    Object.keys(object).forEach(key => (this as any)[key] = object[key]);
-  }
+}
 
-  private __selection__: Ray; get selection(): Ray { return this.__selection__ ??= new Ray() }; set selection(value: Ray) { this.__selection__ = value }
+export class Traverser {
 
-  for_each = async (callback: (x: Ray) => MaybeAsync<unknown>) => {
-    for await (let x of this) { await callback(x) }
-  }
+}
 
+export class Graph {
+
+}
+
+export class Cursor {
+  selection: Ray[] = []
+}
+
+export class Ray implements Node, IRay<Ray> {
+
+  for_each = async (callback: (x: Ray) => MaybeAsync<unknown>) =>
+    await callback(this.all())
   // TODO: What about an infinitely generating structure which we through some other finite method proof holds for this predicate?
   every = (predicate: (x: Ray) => MaybeAsync<boolean>) =>
     this.map(x => predicate(x)).filter(x => x.equals(false)).is_none()
@@ -95,21 +145,52 @@ export class Ray implements Node, IRay<Ray, Ray> {
     this.filter(predicate).is_some()
   contains = (value: any) =>
     this.some(x => x.equals(value))
+  fill = (value: any) =>
+    this.all().set(value)
+  // TODO: Make sure this works for branching possibilities (no duplicate inserted values)
+  // TODO: Make sure this works for different levels of description say ABCDEF/[ABC][DEF] then push between C-D.
+  join = (value: any) =>
+    this.all().exclude(x => x.is_last()).push_after(value)
+  unshift = (...xs: any[]) => {
+    xs.reverse().forEach(x => this.push_front(x));
+    return this;
+  }
+  slice = (index: number | IRange) => {
+    this.at((is_number(index) ? Range.Eq(index) : index).invert()).remove()
+    return this;
+  }
+  pop_front = () =>
+    this.first.remove()
+  pop_back = () =>
+    this.last.remove()
+  shift = this.pop_front
+  // TODO: Could merge the lengths into branches. so [-5, +3] | [-5, -2] to [-5, -3 | -2]
+  index_of = (value: any) =>
+    this.filter(x => x.equals(value)).distance().all().unique()
+
+  // TODO: Needs a +1 and sum over distances, abs for the negative steps.
+  get length() { return this.distance().filter(x => x.is_last()).map(async x => await x.to_number() + 1).all().unique() }
 
   filter = Property.property<(x: Ray) => MaybeAsync<boolean>>(this, 'filter')
+  exclude = Property.property<(x: Ray) => MaybeAsync<boolean>>(this, 'exclude')
   map = Property.property<(x: Ray) => MaybeAsync<any>>(this, 'map')
   unique = Property.boolean(this, 'unique')
   distance = Property.boolean(this, 'distance')
-  get all(): Ray { return new Ray({ selection: this }) }
+  // TODO for each with multiple cursors filters with .unique (as looping through must not include the same one twice)
+  all = Property.boolean(this, 'all')
   at = Property.property(this, 'at', (index: number | IRange): IRange | Ray => is_number(index) ? Range.Eq(index) : index)
-  slice = Property.property(this, 'slice', (index: number | IRange): IRange | Ray => is_number(index) ? Range.Eq(index) : index)
   reverse = Property.boolean(this, 'reverse')
   bidirectional = Property.boolean(this, 'bidirectional')
+  set = Property.property<any>(this, 'set')
 
   is_none = (): MaybeAsync<boolean> => { throw new Error('Not implemented'); }
   is_some = async (): Promise<boolean> => !await this.is_none()
 
+  // TODO, Should only sever connections which are NOT in the selection.
+  remove = (): Ray => { throw new Error("Method not implemented.") }
+
   push = (x: any): Ray => { throw new Error("Method not implemented.") }
+  push_after = (x: any): Ray => { throw new Error("Method not implemented.") }
   push_front = (x: Ray): Ray => x.push(this.first)
   push_back = (x: Ray): Ray => this.last.push(x)
 
@@ -129,7 +210,17 @@ export class Ray implements Node, IRay<Ray, Ray> {
 
   }
 
+  // TODO: Equals in multicursor means any one of the cursors are equal.
   equals = (x: any): MaybeAsync<boolean> => {
+    throw new Error('Not implemented');
+  }
+  isomorphic = (x: any): MaybeAsync<boolean> => {
+    // TODO: Equals ignores the structure, and goes directly into self. Isomorphic doesnt
+    throw new Error('Not implemented');
+  }
+
+  // TODO: Throw if not number
+  to_number = (): MaybeAsync<number> => {
     throw new Error('Not implemented');
   }
 
@@ -140,6 +231,12 @@ export class Ray implements Node, IRay<Ray, Ray> {
   __parent__?: Ray
   with = (parent: Ray): Ray => { this.__parent__ = parent; return this; }
 
+  /**
+   *
+   */
+  static any = (x: any): Ray => {
+
+  }
 }
 
 export default Ray;
@@ -199,6 +296,7 @@ export interface IRange {
   all: () => boolean
   contains: (x: number) => boolean
   more: (current: number, positive?: boolean) => boolean
+  invert: () => IRange
 }
 export type Bound = { at: number, inclusive: boolean }
 export class Range implements IRange {
@@ -222,12 +320,23 @@ export class Range implements IRange {
 
   or = (b: IRange): IRange => new MultiRange([this, b])
 
+  invert = (): IRange => {
+    if (this.all()) return new Range({ at: Infinity, inclusive: false }, { at: Infinity, inclusive: false });
+
+    const ranges = []
+    if (this.lower.at === -Infinity) ranges.push(new Range({ at: this.upper.at, inclusive: !this.upper.inclusive }, { at: Infinity, inclusive: true }));
+    if (this.upper.at === Infinity) ranges.push(new Range({ at: -Infinity, inclusive: true }, { at: this.lower.at, inclusive: !this.lower.inclusive }));
+
+    return ranges.length === 1 ? ranges[0] : new MultiRange(ranges)
+  }
+
   public static Eq = (x: number) => new Range({ at: x, inclusive: true }, { at: x, inclusive: true })
   public static Gt = (x: number) => new Range({ at: x, inclusive: false }, { at: Infinity, inclusive: false })
   public static Gte = (x: number) => new Range({ at: x, inclusive: true }, { at: Infinity, inclusive: false })
   public static Lt = (x: number) => new Range({ at: -Infinity, inclusive: false }, { at: x, inclusive: false })
   public static Lte = (x: number) => new Range({ at: -Infinity, inclusive: false }, { at: x, inclusive: true })
 
+  public static Between = (lower: number, upper: number) => new Range({ at: lower, inclusive: true }, { at: upper, inclusive: true })
 }
 export class MultiRange implements IRange {
   constructor(public ranges: IRange[] = []) {}
@@ -239,6 +348,8 @@ export class MultiRange implements IRange {
   more = (current: number, positive: boolean = true): boolean =>
     this.ranges.some(range => range.more(current, positive));
   or = (b: IRange): IRange => new MultiRange([...this.ranges, ...(b instanceof MultiRange ? (b as MultiRange).ranges : [b])])
+
+  invert = (): IRange => { throw new Error('Not implemented') }
 
 }
 

@@ -2,7 +2,7 @@ import Ray from "./ray";
 
 describe("ray", () => {
   test("", async () => {
-
+    const ray = new Ray().collect(x => x.to_number()).map(x => x * 2)
 
     // const ray = new Ray()
     //   .bidirectional()

@@ -1,8 +1,39 @@
-import Ray from "./ray";
+import Ray, {PushStrategy, RemoveStrategy} from "./ray";
 
 describe("ray", () => {
   test("", async () => {
-    const ray = new Ray().collect(x => x.to_number()).map(x => x * 2)
+    const A = new Ray()
+
+    const removed = await new Ray()
+      .map(async x => await x.to_number() * 2)
+      .filter(async x => await x.to_number() % 2 === 0)
+      .remove()
+
+    A.apply(
+      A.push_back('A'),
+      A.push_back('B')
+    )
+    // is the same as
+    const applies = A.push_back('A').push_back('B')
+    // is the same as
+    A.apply(applies)
+
+    A
+      .push_back('A')
+      .push_back('B')
+      .push_back('C')
+      .apply(
+        A.filter(x => x.equals('B')).remove(),
+        A.filter(async x => await x.to_string() === 'C').remove(),
+        A.pop_back(),
+        A.pop_back(),
+        A.push('D'),
+      )
+
+    A.push_front('A')
+
+    console.log(removed.remove.value)
+
 
     // const ray = new Ray()
     //   .bidirectional()

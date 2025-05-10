@@ -1,4 +1,6 @@
 import rayTs from "../index";
+import {type} from "node:os";
+import Properties = Property.Properties;
 
 export type MaybeAsync<T> = T | Promise<T>
 
@@ -6,119 +8,15 @@ export interface Node {
   equals: (x: any) => MaybeAsync<boolean>
 }
 
-export interface IRay<TNode> extends AsyncIterable<TNode> {
-
-  for_each: (callback: (x: TNode) => MaybeAsync<unknown>) => MaybeAsync<unknown>
-  every: (predicate: (x: TNode) => MaybeAsync<boolean>) => MaybeAsync<boolean>
-  some: (predicate: (x: TNode) => MaybeAsync<boolean>) => MaybeAsync<boolean>
-  contains: (value: any) => MaybeAsync<boolean>
-  /**
-   * Set all nodes within this ray to a given value.
-   */
-  fill: (value: any) => IRay<TNode>
-  join: (value: any) => IRay<TNode>
-  unshift: (...values: any[]) => IRay<TNode>
-  /**
-   * Mapping which only contains the specified index/range.
-   */
-  slice: (index: number | IRange) => IRay<TNode>
-  pop_back: () => IRay<TNode>
-  pop_front: () => IRay<TNode>
-  /**
-   * @alias pop_front
-   */
-  shift: () => IRay<TNode>
-  index_of: (value: any) => IRay<TNode>
-  
-  get length(): IRay<TNode>
-
-  filter: (predicate: (x: TNode) => MaybeAsync<boolean>) => IRay<TNode>
-  /**
-   * Opposite of filter.
-   */
-  exclude: (predicate: (x: TNode) => MaybeAsync<boolean>) => IRay<TNode>
-  map: <R>(predicate: (x: TNode) => R) => IRay<TNode>
-  /**
-   * Ignores duplicates after visiting the first one.
-   */
-  unique: () => IRay<TNode>
-  /**
-   * Maps the original structure to one where you find the distances at the Nodes.
-   *
-   * Note: This can include infinitely generating index options.
-   */
-  distance: () => IRay<TNode>
-  /**
-   * Select all nodes in this structure.
-   */
-  all: () => IRay<TNode>
-  /**
-   * Select all nodes at a specific index/range.
-   */
-  at: (index: number | IRange) => IRay<TNode>
-  /**
-   * Reverse direction starting from the selection
-   */
-  reverse: () => IRay<TNode>
-  /**
-   * A ray going both forward and backward.
-   */
-  bidirectional: () => IRay<TNode>
-  /**
-   * Change the values of all selected nodes.
-   */
-  set: (value: any) => IRay<TNode>
-
-  is_none: () => MaybeAsync<boolean>
-  is_some: () => MaybeAsync<boolean>
-
-  /**
-   * Remove the selection from the underlying ray. (This preserves the surrounding structure)
-   * The original structure only severs the connections to removed structure. (The removed part retains in structure)
-   * Returns the removed structure.
-   */
-  remove: () => IRay<TNode>
-
-  /**
-   * Push a value as a possible continuation. (Ignores the next node)
-   */
-  push: (x: any) => IRay<TNode>
-  /**
-   * Push a value between the current and next node.
-   * TODO: Better name?
-   */
-  push_after: (x: any) => IRay<TNode>
-  push_front: (x: TNode) => IRay<TNode>
-  push_back: (x: TNode) => IRay<TNode>
-
-  /**
-   *
-   * Note: If there are multiple things selected, the ones without a 'next' node are discarded. With a terminal loop,
-   * one can keep terminal boundaries in the selection.
-   */
-  get next(): IRay<TNode>
-  has_next: () => MaybeAsync<boolean>
-  get previous(): IRay<TNode>
-  has_previous: () => MaybeAsync<boolean>
-
-  get last(): IRay<TNode>
-  is_last: () => MaybeAsync<boolean>
-  get first(): IRay<TNode>
-  is_first: () => MaybeAsync<boolean>
-  get boundary(): IRay<TNode>
-  on_boundary: () => MaybeAsync<boolean>
-
-  isomorphic: (x: IRay<TNode>) => MaybeAsync<boolean>
-
-  to_number: () => MaybeAsync<number>
-
+export class State {
+  // value: any
+  initial: Ray
+  self: Ray
+  terminal: Ray
 }
+
 
 export class FunctionBuilder {
-
-}
-
-export class State {
 
 }
 
@@ -126,18 +24,82 @@ export class Traverser {
 
 }
 
-export class Graph {
-
-}
-
 export class Cursor {
   selection: Ray[] = []
 }
 
-export class Ray implements Node, IRay<Ray> {
+export class Function {
+
+}
+
+export class Graph {
+
+  // TODO: PRESERVING ALL STRUCTURES AND HISTORIES
+  //       How? Preserving both the original structure, and the rewritten graph.
+  //       -> Ambiguous rewrites etc..
+  //       -> Partial, without necessarily checking the entire graph.
+  //            (what happens when a second rewrite is given, which a pending first rewrite might still cancel):
+  //            (possible) Additional ambiguity of order of rewrite. What if invariant and doesn't matter?
+  //
+  // TODO: Split the graph at the differences?. Add/remove
+  //       OR better: Give the ray from which we want to access this, which contains the remove/non-removed history.
+  //
+  // TODO: Requires knowledge of what operation can effect what.
+
+
+
+  // TODO: Rewrite with checking structure at nodes, or ignored. (Basically only looking at between structure)
+  // rewrite: (lhs: Graph, rhs: Graph)
+  // dpo, spo, cartesion product, tensor product, union, disjoint union etc...
+
+  // TODO: History of rewrites as ray
+
+  // TODO: You want to be able to select X number of sub-graphs of a larger graph. Those subgraphs being selected how? Like: all the matches.
+  // TODO: Already the case?: -> Select needs to be more intelligent: both initials/terminals as vertex selected. "Entire subgraphs"
+}
+
+export enum RemoveStrategy {
+  /**
+   * Preserves structure around the removed selection.
+   * This is akin to removing elements from an array.
+   */
+  PRESERVE_STRUCTURE = "PRESERVE_STRUCTURE",
+  /**
+   * Removes all connectivity around the selection.
+   * This is akin to removing a vertex and all incoming/outgoing edges.
+   *
+   *   // TODO, Should only sever connections which are NOT in the selection. ?
+   */
+  SEVER_CONNECTIVITY = "SEVER_CONNECTIVITY"
+}
+
+export enum PushStrategy {
+  /**
+   * Push a value as a possible continuation. (Ignores the next node)
+   */
+  POSSIBLE_CONTINUATION = "POSSIBLE_CONTINUATION",
+  /**
+   * Push a value between the current and next node.
+   */
+  AFTER_CURRENT = "AFTER_CURRENT",
+}
+
+// TODO: What would be graph rewriting functions, include those
+export class Ray implements Node {
+
+  constructor(...args: any[]) {
+    if (args.length !== 0) this.__parent__ = new Ray().push(...args);
+  }
+
+  // TODO: Nothing selected but underlying structure. .first snaps to first (looped initial possible).
+  // TODO: Can include disconnected pieces. Also should include a disconnected piece without an initial. and so no qualifier to .first.
+
+  // TODO: Cache results in between for some runtime library.
+
+  states: AsyncIterable<State>
 
   for_each = async (callback: (x: Ray) => MaybeAsync<unknown>) =>
-    await callback(this.all())
+    await callback(this.all()) // TODO; Might not be it
   // TODO: What about an infinitely generating structure which we through some other finite method proof holds for this predicate?
   every = (predicate: (x: Ray) => MaybeAsync<boolean>) =>
     this.map(x => predicate(x)).filter(x => x.equals(false)).is_none()
@@ -145,6 +107,9 @@ export class Ray implements Node, IRay<Ray> {
     this.filter(predicate).is_some()
   contains = (value: any) =>
     this.some(x => x.equals(value))
+  /**
+   * Set all nodes within this ray to a given value.
+   */
   fill = (value: any) =>
     this.all().set(value)
   // TODO: Make sure this works for branching possibilities (no duplicate inserted values)
@@ -152,9 +117,12 @@ export class Ray implements Node, IRay<Ray> {
   join = (value: any) =>
     this.all().exclude(x => x.is_last()).push_after(value)
   unshift = (...xs: any[]) => {
-    xs.reverse().forEach(x => this.push_front(x));
-    return this;
+    // xs.reverse().forEach(x => this.push_front(x));
+    return this.push_front(...xs);
   }
+  /**
+   * Mapping which only contains the specified index/range.
+   */
   slice = (index: number | IRange) => {
     this.at((is_number(index) ? Range.Eq(index) : index).invert()).remove()
     return this;
@@ -163,37 +131,99 @@ export class Ray implements Node, IRay<Ray> {
     this.first.remove()
   pop_back = () =>
     this.last.remove()
+  /**
+   * @alias pop_front
+   */
   shift = this.pop_front
   // TODO: Could merge the lengths into branches. so [-5, +3] | [-5, -2] to [-5, -3 | -2]
+  // TODO: Now doesnt look for negative indexes.
   index_of = (value: any) =>
     this.filter(x => x.equals(value)).distance().all().unique()
 
   // TODO: Needs a +1 and sum over distances, abs for the negative steps.
   get length() { return this.distance().filter(x => x.is_last()).map(async x => await x.to_number() + 1).all().unique() }
 
+  /**
+   * Applies successive transformation and returns the result.
+   *
+   * TODO: Could figure out what can be done in parallel and what can't.
+   */
+  apply = Property.property<Ray[]>(this, 'apply')
+
   filter = Property.property<(x: Ray) => MaybeAsync<boolean>>(this, 'filter')
+  /**
+   * Opposite of filter.
+   */
   exclude = Property.property<(x: Ray) => MaybeAsync<boolean>>(this, 'exclude')
   map = Property.property<(x: Ray) => MaybeAsync<any>>(this, 'map')
+  /**
+   * Ignores duplicates after visiting the first one.
+   */
   unique = Property.boolean(this, 'unique')
+  /**
+   * Maps the original structure to one where you find the distances at the Nodes.
+   *
+   * Note: This can include infinitely generating index options.
+   */
   distance = Property.boolean(this, 'distance')
   // TODO for each with multiple cursors filters with .unique (as looping through must not include the same one twice)
+  /**
+   * Select all nodes in this structure.
+   */
   all = Property.boolean(this, 'all')
+  /**
+   * Select all nodes at a specific index/range.
+   */
   at = Property.property(this, 'at', (index: number | IRange): IRange | Ray => is_number(index) ? Range.Eq(index) : index)
+  /**
+   * Reverse direction starting from the selection
+   */
   reverse = Property.boolean(this, 'reverse')
+  /**
+   * A ray going both forward and backward.
+   */
   bidirectional = Property.boolean(this, 'bidirectional')
+  /**
+   * Change the values of all selected nodes.
+   */
   set = Property.property<any>(this, 'set')
 
-  is_none = (): MaybeAsync<boolean> => { throw new Error('Not implemented'); }
-  is_some = async (): Promise<boolean> => !await this.is_none()
+  /**
+   * Remove the selection from the underlying ray.
+   */
+  remove = Property.property(this, 'remove', (strategy?: void | RemoveStrategy) => strategy ?? RemoveStrategy.PRESERVE_STRUCTURE)
 
-  // TODO, Should only sever connections which are NOT in the selection.
-  remove = (): Ray => { throw new Error("Method not implemented.") }
+  __push__ = Property.property<[any[], PushStrategy]>(this, '__push__')
+  /**
+   * Push a value after the selection.
+   * Note: In the case of an array, this will push "the structure of an array" after the selection. NOT a list of possibilities.
+   */
+  push = (...x: any[]) => this.__push__(x, PushStrategy.POSSIBLE_CONTINUATION)
 
-  push = (x: any): Ray => { throw new Error("Method not implemented.") }
-  push_after = (x: any): Ray => { throw new Error("Method not implemented.") }
-  push_front = (x: Ray): Ray => x.push(this.first)
-  push_back = (x: Ray): Ray => this.last.push(x)
+  /**
+   * Push a value between the current and next node.
+   */
+  push_after = (...x: any[]): Ray => this.__push__(x, PushStrategy.AFTER_CURRENT)
+  /**
+   * Push a value between the previous and current node.
+   */
+  push_before = (...x: any[]): Ray => this.reverse().push_after(...x)
 
+  /**
+   * Push a value to the end of the ray.
+   */
+  push_back = (...x: any[]): Ray => this.last.push(...x)
+  /**
+   * Push a value to the beginning of the ray.
+   * TODO: In the case of an array, push_front(A, B, C) will push [A, B, C] in front of [D, E, F] making [A, B, C, D, E, F].
+   */
+  push_front = (...x: any[]): Ray => new Ray(...x).push_back(this.first)
+
+  /**
+   *
+   * Note: If there are multiple things selected, the ones without a 'next' node are discarded. With a terminal loop,
+   * one can keep terminal boundaries in the selection.
+   */
   get next(): Ray { return this.at(1) }
   has_next = (): MaybeAsync<boolean> => this.next.is_some()
   get previous(): Ray { return this.at(-1) }
@@ -206,12 +236,17 @@ export class Ray implements Node, IRay<Ray> {
   get boundary(): Ray { return this.bidirectional().filter(x => x.on_boundary()) }
   on_boundary = async (): Promise<boolean> => await this.is_first() || await this.is_last()
 
+
+  is_none = (): MaybeAsync<boolean> => { throw new Error('Not implemented'); }
+  is_some = async (): Promise<boolean> => !await this.is_none()
+
   async * [Symbol.asyncIterator](): AsyncGenerator<Ray> {
 
   }
 
   // TODO: Equals in multicursor means any one of the cursors are equal.
   equals = (x: any): MaybeAsync<boolean> => {
+    x = new Ray(x)
     throw new Error('Not implemented');
   }
   isomorphic = (x: any): MaybeAsync<boolean> => {
@@ -223,20 +258,53 @@ export class Ray implements Node, IRay<Ray> {
   to_number = (): MaybeAsync<number> => {
     throw new Error('Not implemented');
   }
+  to_array = <R>(predicate: (x: Ray) => MaybeAsync<R>): MaybeAsync<R[]> => {
+    throw new Error('Not implemented');
+  }
+  // to_function = (): MaybeAsync<(...args: unknown[]) => unknown> => {
+  //   throw new Error('Not implemented');
+  // }
+  to_object = (): MaybeAsync<object> => {
+    throw new Error('Not implemented');
+  }
+  cast = <T>(constructor: new () => T): MaybeAsync<T> => {
+    throw new Error('Not implemented');
+  }
+  to_string = (): MaybeAsync<string> => {
+    throw new Error('Not implemented');
+  }
+
+  /**
+   * Converts any JavaScript value to a ray.
+   */
+  static converter: (x: any) => Ray = x => {
+    if (x instanceof Array) {
+      if (x.length === 0) return new Ray()
+      if (x.length === 1) x = x[0]
+    }
+
+    if (x instanceof Ray) return x;
+
+    throw new Error('Not implemented')
+  }
 
   /**
    *
    */
 
   __parent__?: Ray
-  with = (parent: Ray): Ray => { this.__parent__ = parent; return this; }
+  __property__?: keyof Properties
 
-  /**
-   *
-   */
-  static any = (x: any): Ray => {
-
-  }
+  // static array = <T>(x: T[]): Ray => {
+  //   throw new Error('Not implemented');
+  // }
+  // static object = (x: object): Ray => {
+  //   throw new Error('Not implemented');
+  // }
+  // // static function = (x: (...args: unknown[]) => unknown): Ray => {}
+  // static map = <K, V>(x: Map<K, V>): Ray => {
+  //   throw new Error('Not implemented');
+  // }
 }
 
 export default Ray;
@@ -245,19 +313,26 @@ export namespace Property {
   export type Type<TInput, TOutput> = {
     __self__: Ray,
     __name__: keyof Properties,
-    (value: TInput): Ray
+    (...value: TInput extends any[] ? [...TInput] : [TInput]): Ray
     value?: TOutput
   }
   export type Properties = {
     [P in keyof Ray]: P extends Property.Type<infer TInput, infer TOutput> ? Ray[P] : never;
   }
-  export const property = <TInput = void, TOutput = TInput>(self: Ray, name: keyof Properties, setter: (value: TInput) => TOutput | Ray = (x) => x as any): Property.Type<TInput, TOutput> => {
-    const property = (input: TInput) => {
-      const output = setter(input);
+  export const property = <TInput = void, TOutput = TInput>(
+    self: Ray,
+    name: keyof Properties,
+    setter: (...input: TInput extends any[] ? TInput : [TInput]) => TOutput | Ray = (...x) => x as any
+  ): Property.Type<TInput, TOutput> => {
+    const property = (...input: TInput extends any[] ? TInput : [TInput]) => {
+      const output = setter(...input);
       if (output instanceof Ray) return output;
 
-      const ray = new Ray().with(self);
+      const ray = new Ray();
+      ray.__parent__ = self;
+      ray.__property__ = name;
       (ray[name] as Property.Type<TInput, TOutput>).value = output
+
       return ray;
     }
     property.__self__ = self;
@@ -272,7 +347,7 @@ export namespace Property {
     while (property !== undefined) {
       if (property.value) value = !value;
 
-      property = property.__self__.__parent__[property.__name__] as Property.Type<any, any>
+      property = (property.__self__.__parent__ as any).value[property.__name__] as Property.Type<any, any>
     }
     return value;
   }
@@ -280,7 +355,7 @@ export namespace Property {
     while (property !== undefined) {
       if (property.value) return property.value;
 
-      property = property.__self__.__parent__[property.__name__] as Property.Type<any, any>
+      property = (property.__self__.__parent__ as any).value[property.__name__] as Property.Type<any, any>
     }
     return undefined;
   }

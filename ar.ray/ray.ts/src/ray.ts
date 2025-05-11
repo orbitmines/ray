@@ -278,7 +278,7 @@ export class Ray {
   has_previous = (): Ray => this.previous.is_some()
 
   get last(): Ray { return this.filter(x => x.is_last()) }
-  is_last = (): Ray => this.has_next().not()
+  is_last = (): Ray => this.has_next().not() // TODO: Any of selected has_next.not or if results in a terminal.
   get first(): Ray { return this.reverse().last }
   is_first = (): Ray => this.has_previous().not()
   get boundary(): Ray { return this.bidirectional().filter(x => x.on_boundary()) }

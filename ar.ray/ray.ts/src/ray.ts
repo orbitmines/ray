@@ -1,15 +1,18 @@
-import rayTs from "../index";
-import {type} from "node:os";
 import Properties = Property.Properties;
-import boolean = Property.boolean;
 
 export type MaybeAsync<T> = T | Promise<T>
 
 export class State {
   // value: any
-  initial: Ray
-  self: Ray
-  terminal: Ray
+  // initial: Ray
+  // TODO: Certain structures like history/types/.. which are ignored from certain selections, but included elsewhere?: Separated space vs "additional structure directions":
+  // self: Ray
+  // terminal: Ray
+
+  // export type AnyOf<T> = T | T[] | (() => T | T[])
+  // export type Any = undefined | AnyOf<Ray> | AnyOf<State>
+
+  // TODO: What does self-reference mean here.
 }
 
 
@@ -17,6 +20,14 @@ export class FunctionBuilder {
 
 }
 
+
+// TODO: TRAVERSAL
+//      - Program strategy: which branches to take first.
+//        + Program stepping.
+//      - Cycle detection & merger
+//      - Intermediate results while others are still pending.
+//      - Support yielding initial/terminals as well. (intermediates which are still looking)
+//      -
 export class Traverser {
 
 }
@@ -85,6 +96,8 @@ export enum PushStrategy {
 export class ConversionError extends Error {}
 
 // TODO: What would be graph rewriting functions, include those
+// TODO: What about loops which are only repeated an x number of times. (which are quite common), are there some other variants of this? (.slice/.splice would for example make use of a single .orbit use in selecting a range/start index)
+// TODO: .map which maps both structure and values
 export class Ray {
 
   constructor(...args: any[]) {
@@ -96,7 +109,9 @@ export class Ray {
 
   // TODO: Cache results in between for some runtime library.
 
+  // TODO: What to do if there are non-uniques in here, or is it always .unique ?
   // states: AsyncIterable<State>
+  // TODO: Remember that we're at a terminal? Not that .next again returns the first element
   states: Ray
 
   for_each = async (callback: (x: Ray) => MaybeAsync<unknown>) =>
@@ -117,17 +132,8 @@ export class Ray {
   // TODO: Make sure this works for different levels of description say ABCDEF/[ABC][DEF] then push between C-D.
   join = (value: any) =>
     this.all().exclude(x => x.is_last()).push_after(value)
-  unshift = (...xs: any[]) => {
-    // xs.reverse().forEach(x => this.push_front(x));
-    return this.push_front(...xs);
-  }
-  /**
-   * Mapping which only contains the specified index/range.
-   */
-  slice = (index: number | IRange) => {
-    this.at((is_number(index) ? Range.Eq(index) : index).invert()).remove()
-    return this;
-  }
+  unshift = (...xs: any[]) => this.push_front(...xs);
+
   pop_front = () =>
     this.first.remove()
   pop_back = () =>
@@ -136,6 +142,7 @@ export class Ray {
    * @alias pop_front
    */
   shift = this.pop_front
+  // TODO index_of vs steps used to get there. -1, 1, 1, -1 etc..
   // TODO: Could merge the lengths into branches. so [-5, +3] | [-5, -2] to [-5, -3 | -2]
   // TODO: Now doesnt look for negative indexes.
   index_of = (value: any) =>
@@ -205,7 +212,7 @@ export class Ray {
   /**
    * Deselect all nodes. (Akin to having reference to an array/set/...).
    */
-  none = Property.boolean(this, 'none')
+  deselect = Property.boolean(this, 'deselect')
   /**
    * Select all nodes in this structure.
    */
@@ -263,6 +270,7 @@ export class Ray {
    *
    * Note: If there are multiple things selected, the ones without a 'next' node are discarded. With a terminal loop,
    * one can keep terminal boundaries in the selection.
+   * TODO: .next/.previous like this doesn't work if they're a possible initial/terminal with a continuation as well.
    */
   get next(): Ray { return this.at(1) }
   has_next = (): Ray => this.next.is_some()
@@ -276,15 +284,15 @@ export class Ray {
   get boundary(): Ray { return this.bidirectional().filter(x => x.on_boundary()) }
   on_boundary = (): Ray => this.is_first().or(this.is_last())
 
+  /**
+   * Connect the front and back of the structure.
+   * TODO: Should preserve the .first and .last. (POSSIBLE_CONTINUATION should)
+   */
+  orbit = () => this.push_back(this.first)
 
-
-
-  async * [Symbol.asyncIterator](): AsyncGenerator<Ray> {
-
-  }
-
-  // TODO: Equals in multicursor means any one of the cursors are equal.
+  // TODO: Equals in multicursor means any one of the cursors are equal. ?? What else to do with it
   // TODO: If nothing is selected. .equals is the same as .identical. Because [1, 2, 3] = [1, 2, 3]
+  // TODO: Intermediate partial equality how?
   /**
    * Equal in value (ignores structure).
    */
@@ -324,6 +332,10 @@ export class Ray {
   xor = (x: boolean | Ray) => { x = new Ray(x); return (this.and(x.not())).or(this.not().and(x)) }
   nor = (x: boolean | Ray) => this.or(x).not()
   nand = (x: boolean | Ray) => this.and(x).not()
+
+  async * [Symbol.asyncIterator](): AsyncGenerator<Ray> {
+
+  }
 
   // TODO: Throw if not number
   to_number = (): MaybeAsync<undefined | number> => {
@@ -374,10 +386,9 @@ export class Ray {
    * Sometimes it's necessary to do an async call to construct a Ray. By using this you can hide the promise.
    */
   from = (getter: () => MaybeAsync<Ray>): Ray => {
-    const ray = new Ray();
-    ray.__parent__ = this;
-    (ray.from as any).value = getter
-    return ray;
+    if (this.__parent__ !== undefined) throw new Error('Can only use .from on an uninitialized ray.');
+    (this.from as any).value = getter
+    return this;
   }
 
   // static array = <T>(x: T[]): Ray => {

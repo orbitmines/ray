@@ -34,6 +34,16 @@ describe("ray", () => {
 
     console.log(removed.remove.value)
 
+    // new Ray(1, 2, 3).equals(new Ray(1, 2, 3)) === true
+    // new Ray(1, 2, 3).next.equals(1) === true
+    // new Ray(1, 2, 3).next.next.equals(2) === true
+    // new Ray(A, B: new Ray(1, 2, 3), C).next.next.equals(new Ray(1, 2, 3)) === true
+
+    // new Ray(1, 2, 3).isomorphic(new Ray(A, B, C)) === true
+    // new Ray(1, 2, 3).next.isomorphic(new Ray(A, B, C).next) === true
+    // new Ray(1, 2, 3).next.isomorphic(new Ray(A, B, C).next.next) === false TODO Does the cursor play a role in the structure yes ???
+
+
 
     // const ray = new Ray()
     //   .bidirectional()

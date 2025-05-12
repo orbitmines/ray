@@ -2,17 +2,27 @@ import Properties = Property.Properties;
 
 export type MaybeAsync<T> = T | Promise<T>
 
+export interface IState {
+  is_initial: () => Ray
+  is_terminal: () => Ray
+  is_reference: () => Ray
+  is_boundary: () => Ray
+  is_vertex: () => Ray
+  is_extreme: () => Ray
+}
+
 export class State {
   // value: any
-  // initial: Ray
+  initial: Ray
   // TODO: Certain structures like history/types/.. which are ignored from certain selections, but included elsewhere?: Separated space vs "additional structure directions":
-  // self: Ray
-  // terminal: Ray
+  self: Ray
+  terminal: Ray
 
   // export type AnyOf<T> = T | T[] | (() => T | T[])
   // export type Any = undefined | AnyOf<Ray> | AnyOf<State>
 
   // TODO: What does self-reference mean here.
+  is_terminal = () => this.terminal.is_empty()
 }
 
 
@@ -95,6 +105,17 @@ export enum PushStrategy {
 
 export class ConversionError extends Error {}
 
+
+// TODO: Nothing selected but underlying structure. .first snaps to first (looped initial possible).
+// TODO: Can include disconnected pieces. Also should include a disconnected piece without an initial. and so no qualifier to .first.
+
+// TODO: What to do if there are non-uniques in here, or is it always .unique ?
+// states: AsyncIterable<State>
+// TODO: Remember that we're at a terminal? Not that .next again returns the first element
+// TODO: Filter should be applied to state.
+// state: Ray
+
+
 // TODO: What would be graph rewriting functions, include those
 // TODO: What about loops which are only repeated an x number of times. (which are quite common), are there some other variants of this? (.slice/.splice would for example make use of a single .orbit use in selecting a range/start index)
 // TODO: .map which maps both structure and values
@@ -104,15 +125,8 @@ export class Ray {
     if (args.length !== 0) this.__parent__ = new Ray().from(() => Ray.converter(args));
   }
 
-  // TODO: Nothing selected but underlying structure. .first snaps to first (looped initial possible).
-  // TODO: Can include disconnected pieces. Also should include a disconnected piece without an initial. and so no qualifier to .first.
-
   // TODO: Cache results in between for some runtime library.
 
-  // TODO: What to do if there are non-uniques in here, or is it always .unique ?
-  // states: AsyncIterable<State>
-  // TODO: Remember that we're at a terminal? Not that .next again returns the first element
-  states: Ray
 
   for_each = async (callback: (x: Ray) => MaybeAsync<unknown>) =>
     await callback(this.all()) // TODO; Might not be it
@@ -131,7 +145,7 @@ export class Ray {
   // TODO: Make sure this works for branching possibilities (no duplicate inserted values)
   // TODO: Make sure this works for different levels of description say ABCDEF/[ABC][DEF] then push between C-D.
   join = (value: any) =>
-    this.all().exclude(x => x.is_last()).push_after(value)
+    this.all().exclude(x => x.is_last()).push_after(value) // TODO: is_last here should only check the one state which goes to a terminal. But should push to the others.
   unshift = (...xs: any[]) => this.push_front(...xs);
 
   pop_front = () =>
@@ -161,12 +175,6 @@ export class Ray {
 
   is_nonempty = (): Ray => this.is_empty().not()
   is_empty = (): Ray => this.reduce(async (acc, current, cancel) => { cancel(); return false; }, true)
-
-  /**
-   * Whether anything is selected
-   */
-  is_some = (): Ray => this.is_none().not()
-  is_none = (): Ray => this.states.is_empty()
 
   max = (): Ray => this.reduce(async (acc, current, cancel) => {
     if (acc.equals(Infinity)) return cancel(); // Stop reducing if already reached infinity.
@@ -266,6 +274,13 @@ export class Ray {
    */
   push_front = (...x: any[]): Ray => new Ray(...x).push_back(this.first)
 
+
+  /**
+   * Whether anything is selected
+   */
+  // is_some = (): Ray => this.is_none().not()
+  // is_none = (): Ray => this.states.is_empty()
+
   /**
    *
    * Note: If there are multiple things selected, the ones without a 'next' node are discarded. With a terminal loop,
@@ -273,22 +288,17 @@ export class Ray {
    * TODO: .next/.previous like this doesn't work if they're a possible initial/terminal with a continuation as well.
    */
   get next(): Ray { return this.at(1) }
-  has_next = (): Ray => this.next.is_some()
+  // has_next = (): Ray => this.next.is_some()
   get previous(): Ray { return this.at(-1) }
-  has_previous = (): Ray => this.previous.is_some()
+  // has_previous = (): Ray => this.previous.is_some()
 
   get last(): Ray { return this.filter(x => x.is_last()) }
-  is_last = (): Ray => this.has_next().not() // TODO: Any of selected has_next.not or if results in a terminal.
+  // is_last = (): Ray => this.has_next().not() // TODO: Any of selected has_next.not or if results in a terminal.
   get first(): Ray { return this.reverse().last }
-  is_first = (): Ray => this.has_previous().not()
-  get boundary(): Ray { return this.bidirectional().filter(x => x.on_boundary()) }
+  // is_first = (): Ray => this.has_previous().not()
+  get boundary(): Ray { return this.all().filter(x => x.on_boundary()) }
   on_boundary = (): Ray => this.is_first().or(this.is_last())
 
-  /**
-   * Connect the front and back of the structure.
-   * TODO: Should preserve the .first and .last. (POSSIBLE_CONTINUATION should)
-   */
-  orbit = () => this.push_back(this.first)
 
   // TODO: Equals in multicursor means any one of the cursors are equal. ?? What else to do with it
   // TODO: If nothing is selected. .equals is the same as .identical. Because [1, 2, 3] = [1, 2, 3]

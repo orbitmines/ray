@@ -1,38 +1,47 @@
-import Ray, {PushStrategy, RemoveStrategy} from "./ray";
+import Ray, {Cursor, Node, PushStrategy, QueryProperty, RemoveStrategy, Selection} from "./ray";
+import MappedArgument = QueryProperty.MappedArgument;
 
 describe("ray", () => {
   test("", async () => {
-    const A = new Ray()
+    const x = new Selection<Cursor>()
+      .filter(async a => true)
+      .filter(async a => new Node())
+      .filter(a => true)
+      .filter(a => new Node())
+      .nodes()
+      .filter(b => true)
 
-    const removed = await new Ray()
-      .map(async x => await x.to_number() * 2)
-      .filter(async x => await x.to_number() % 2 === 0)
-      .remove()
+    // const A = new Ray()
+    //
+    // const removed = await new Ray()
+    //   .map(async x => await x.to_number() * 2)
+    //   .filter(async x => await x.to_number() % 2 === 0)
+    //   .remove()
+    //
+    // A.apply(
+    //   A.push_back('A'),
+    //   A.push_back('B')
+    // )
+    // // is the same as
+    // const applies = A.push_back('A').push_back('B')
+    // // is the same as
+    // A.apply(applies)
+    //
+    // A
+    //   .push_back('A')
+    //   .push_back('B')
+    //   .push_back('C')
+    //   .apply(
+    //     A.filter(x => x.equals('B')).remove(),
+    //     A.filter(async x => await x.to_string() === 'C').remove(),
+    //     A.pop_back(),
+    //     A.pop_back(),
+    //     A.push('D'),
+    //   )
+    //
+    // A.push_front('A')
 
-    A.apply(
-      A.push_back('A'),
-      A.push_back('B')
-    )
-    // is the same as
-    const applies = A.push_back('A').push_back('B')
-    // is the same as
-    A.apply(applies)
-
-    A
-      .push_back('A')
-      .push_back('B')
-      .push_back('C')
-      .apply(
-        A.filter(x => x.equals('B')).remove(),
-        A.filter(async x => await x.to_string() === 'C').remove(),
-        A.pop_back(),
-        A.pop_back(),
-        A.push('D'),
-      )
-
-    A.push_front('A')
-
-    console.log(removed.remove.value)
+    // console.log(removed.remove.value)
 
     // new Ray(1, 2, 3).equals(new Ray(1, 2, 3)) === true
     // new Ray(1, 2, 3).next.equals(1) === true

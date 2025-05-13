@@ -1,27 +1,27 @@
-import Ray, {Cursor, Node, PushStrategy, QueryProperty, RemoveStrategy, Selection} from "./ray";
-import MappedArgument = QueryProperty.MappedArgument;
+import Ray, {Node, PushStrategy, QueryProperty, RemoveStrategy, Selection} from "./ray";
 
 describe("ray", () => {
   test("", async () => {
-    const x = new Selection<Cursor>()
+    const x = new Ray()
       .filter(async a => true)
       .filter(async a => new Node())
       .filter(a => true)
       .filter(a => new Node())
       .nodes()
       .filter(b => true)
+      .filter(b => b.equals(2))
 
-    // const A = new Ray()
-    //
-    // const removed = await new Ray()
-    //   .map(async x => await x.to_number() * 2)
-    //   .filter(async x => await x.to_number() % 2 === 0)
-    //   .remove()
-    //
-    // A.apply(
-    //   A.push_back('A'),
-    //   A.push_back('B')
-    // )
+    const A = new Ray()
+
+    const removed = new Ray()
+      .map(async x => await x.to_number() * 2)
+      .filter(async x => await x.to_number() % 2 === 0)
+      .remove()
+
+    A.apply(
+      A.push_back('A'),
+      A.push_back('B')
+    )
     // // is the same as
     // const applies = A.push_back('A').push_back('B')
     // // is the same as

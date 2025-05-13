@@ -1,3 +1,5 @@
+import MappedResult = QueryProperty.MappedResult;
+import MappedFunction = QueryProperty.MappedFunction;
 
 export type MaybeAsync<T> = T | Promise<T>
 
@@ -97,10 +99,14 @@ export class ConversionError extends Error {}
 
 export namespace QueryProperty {
 
-  export type MappedValue<T> = T | Node
+  export type MappedValue<T> = T extends void ? void : T | Node
   export type MappedFunction<T extends (...args: any[]) => any> = T extends (...args: infer Args) => infer Result ? (...args: { [Arg in keyof Args]: Args[Arg] }) => MaybeAsync<MappedValue<Result>> : never;
   export type MappedArgument<T> = T extends (...args: any[]) => any ? MappedFunction<T> : MappedValue<T>
-  export type MappedArguments<T> = T extends any[] ? { [K in keyof T]: MappedArgument<T[K]> } : [MappedArgument<T>]
+  export type MappedArguments<T> =
+    0 extends (1 & T) /* T = any? */ ? [MappedArgument<T>] :
+      T extends void ? [] :
+        T extends any[] ? { [K in keyof T]: MappedArgument<T[K]> } :
+          [MappedArgument<T>]
 
   export type Type<TValue = any, TSelf = any, TNextQuery = any> = {
     __self__: TSelf,
@@ -109,6 +115,7 @@ export namespace QueryProperty {
     // (...value: TValue extends any[] ? [...TValue | Node[]] : [TValue | Node]): TNextQuery
     (...value: MappedArguments<TValue>): TNextQuery
     value?: MappedArguments<TValue>
+    cast: <TQuery extends IQuery>(constructor: new () => TQuery) => Type<TValue, TSelf, TQuery>
   }
   export type Of<TSelf> = {
     [P in keyof TSelf]: P extends QueryProperty.Type<infer TValue, infer TOutput, infer TNextQuery> ? TSelf[P] : never;
@@ -116,20 +123,23 @@ export namespace QueryProperty {
 
 }
 
-export abstract class Query<TSelf extends Query<TSelf>> {
+// TODO: This class can be cleaned up a bit
+export interface IQuery {
+  __parent__?: IQuery
+}
+export abstract class Query<TSelf extends Query<TSelf>> implements IQuery {
 
   /**
    *
    */
-  __parent__?: Query<any>
+  __parent__?: IQuery
   __select__?: string
   __property__?: keyof QueryProperty.Of<TSelf>
 
-  protected property = <TValue = void, TOutput = TValue>(
+  protected property = <TValue = void>(
     self: TSelf,
     name: keyof QueryProperty.Of<TSelf>
   ): QueryProperty.Type<TValue, TSelf, TSelf> => {
-
     const property = (...input: QueryProperty.MappedArguments<TValue>): TSelf => {
       const x: TSelf = new (Object.getPrototypeOf(this).constructor)();
       x.__parent__ = self;
@@ -140,6 +150,19 @@ export abstract class Query<TSelf extends Query<TSelf>> {
     }
     property.__self__ = self;
     property.__name__ = name;
+    property.cast = <TQuery extends IQuery>(constructor: new () => TQuery): QueryProperty.Type<TValue, TSelf, TQuery> => {
+      const cast_property = (...input: QueryProperty.MappedArguments<TValue>): TQuery => {
+        const x: TSelf = property(...input);
+        const casted = new constructor();
+        casted.__parent__ = x;
+
+        return casted;
+      }
+      cast_property.__self__ = self;
+      cast_property.__name__ = name;
+      cast_property.cast = <TQuery>(constructor: new () => TQuery): QueryProperty.Type<TValue, TSelf, TQuery> => { throw new Error('Cannot recast') }
+      return cast_property;
+    }
     return property;
   }
 
@@ -157,33 +180,176 @@ export abstract class Query<TSelf extends Query<TSelf>> {
     }
     property.__self__ = self;
     property.__name__ = name;
+    property.cast = <TQuery>(constructor: new () => TQuery): QueryProperty.Type<void, TSelf, TQuery> => { throw new Error('No point in casting a select') }
     return property;
   }
 
 }
 
-// TODO: Every method for Ray is also for Node? or: Ray/Cursor
-// Nonoverlapping: is_last, equals/identical
-// Different: join
-// "Filter" not for Node?
+// TODO:
+export abstract class Selection<TNode extends Selection<TNode>> extends Query<TNode> {
 
-export interface INode {}
+  this = () => this as any as TNode
 
-export class Node extends Query<Node> implements INode {
+  // TODO: What about an infinitely generating structure which we through some other finite method proof holds for this predicate?
+  // TODO: .every on a node's location. Should it start traversing from there, yes?
+  every = (predicate: MappedFunction<(x: Node) => boolean>) =>
+    this.map(x => predicate(x)).filter(x => x.equals(false)).is_empty()
+  some = (predicate: MappedFunction<(x: Node) => boolean>) =>
+    this.filter(predicate).is_nonempty()
+  contains = (value: any) =>
+    this.some(x => x.equals(value))
+  map = this.property<(x: Node) => any>(this.this(), 'map')
+  filter = this.property<(x: Node) => boolean>(this.this(), 'filter').cast(Ray)
+
+  nodes = this.select<Node>(this.this(), 'nodes', Node)
+
+
+  /**
+   * Set all nodes within this ray to a given value.
+   */
+  fill = (value: any) =>
+    this.all().set(value)
+
+  unshift = (...xs: any[]) => this.push_front(...xs);
+  pop_front = () =>
+    this.first.remove()
+  pop_back = () =>
+    this.last.remove()
+  /**
+   * @alias pop_front
+   */
+  shift = this.pop_front
+  // TODO index_of vs steps used to get there. -1, 1, 1, -1 etc..
+  // TODO: Could merge the lengths into branches. so [-5, +3] | [-5, -2] to [-5, -3 | -2]
+  // TODO: Now doesnt look for negative indexes.
+  index_of = (value: any) =>
+    this.filter(x => x.equals(value)).distance().all().unique()
+  // TODO: Needs a +1 and sum over distances, abs for the negative steps.
+  /**
+   * Note: that since variable lengths are possible, .length will return a number of possibilities.
+   */
+  get length() { return this.distance().filter(x => x.is_last()).map(async x => await x.to_number() + 1).all().unique() }
+  /**
+   * Counts the number of nodes.
+   * Note: that since a ray's structure allows for branching, it could be that .length.max() != .count.
+   */
+  count = () => new Node().from(async () =>
+    await this.length.max().equals(Infinity).to_boolean() ? new Node(Infinity) : this.reduce(async (acc) => await acc.to_number() + 1, 0))
+
+  is_nonempty = () => this.is_empty().not()
+  is_empty = () => this.reduce(async (acc, current, cancel) => { cancel(); return false; }, true)
+  max = () => this.reduce(async (acc, current, cancel) => {
+    if (acc.equals(Infinity)) return cancel(); // Stop reducing if already reached infinity.
+    return await acc.gt(current).to_boolean() ? acc : current;
+  }, undefined)
+  min = () => this.reduce(async (acc, current, cancel) => {
+    if (acc.equals(-Infinity)) return cancel(); // Stop reducing if already reached -infinity.
+    return await acc.lt(current).to_boolean() ? acc : current; // TODO: Move these conditionals into a property?
+  }, undefined)
+
+  // TODO: Way to get index from the ray. With a default .distance function applied somewhere?
+  // TODO: Allow for intermediate result. -> Halting problem
+  // TODO: Checks for uniqueness, only once per location: TODO: What would a reduce look like that doesn't do this (could be useful for intermediate results)
+  // TODO: The order in which things appear can vary based on what strategy is used in the traverser. Can be influenceced by using things like .all
+  reduce = this.property<[(accumulator: Node, current: Node, cancel: () => void) => void | any, initial_value: any]>(this.this(), 'reduce').cast(Node)
+  reduce_right = (callback: (accumulator: Node, current: Node, cancel: () => void) => void | any, initial_value: any) => this.reverse().reduce(callback, initial_value)
+
+  /**
+   * Applies successive transformation and returns the result.
+   *
+   * TODO: Could figure out what can be done in parallel and what can't.
+   */
+  apply = this.property<Query<any>[]>(this.this(), 'apply')
+  /**
+   * Reverse direction starting from the selection
+   */
+  reverse = this.property<void>(this.this(), 'reverse')
+  /**
+   * Select all nodes at a specific index/range.
+   * TODO Make sure negative index works
+   * TODO (index: number | IRange): IRange | Ray => is_number(index) ? Range.Eq(index) : index
+   */
+  at = this.property<number | IRange>(this.this(), 'at').cast(Ray)
+
+  /**
+   * Change the values of all selected nodes.
+   */
+  set = this.property<any>(this.this(), 'set')
+  /**
+   * Remove the selection from the underlying ray.
+   * TODO: Default RemoveStrategy.PRESERVE_STRUCTURE
+   */
+  remove = this.property<void | RemoveStrategy>(this.this(), 'remove')
+
+  __push__ = this.property<[any[], PushStrategy]>(this.this(), '__push__')
+  /**
+   * Push a value after the selection.
+   * Note: In the case of an array, this will push "the structure of an array" after the selection. NOT a list of possibilities.
+   */
+  push = (...x: any[]) => this.__push__(x, PushStrategy.POSSIBLE_CONTINUATION)
+
+  /**
+   * Push a value between the current and next node.
+   */
+  push_after = (...x: any[]) => this.__push__(x, PushStrategy.AFTER_CURRENT)
+  /**
+   * Push a value between the previous and current node
+   */
+  push_before = (...x: any[]) => this.reverse().push_after(...x)
+
+  /**
+   * Push a value to the end of the ray.
+   */
+  push_back = (...x: any[]) => this.last.push(...x)
+  /**
+   * Push a value to the beginning of the ray.
+   * TODO: In the case of an array, push_front(A, B, C) will push [A, B, C] in front of [D, E, F] making [A, B, C, D, E, F].
+   */
+  push_front = (...x: any[]) => new Node(...x).push_back(this.first)
+
+
+  /**
+   * Select all nodes in this structure
+   */
+  all = this.property<void>(this.this(), 'all').cast(Ray)
+
+
+  // TODO: Should return Ray?. Many possibilities here.
+  get next() { return this.at(1) }
+  get previous() { return this.at(-1) }
+
+  /**
+   * The terminal boundaries reachable from this selection.
+   * Note: if you want ALL terminals, you should use .all().last
+   * TODO: This doesnt work, and should you want terminals reachable from this selection??
+   */
+  get last() { return this.filter(x => x.is_last()) }
+  get first() { return this.reverse().last }
+
+}
+
+export class Node extends Selection<Node> {
+
+  constructor(...args: any[]) {
+    super()
+    if (args.length !== 0) this.__parent__ = new Node().from(() => Node.converter(args));
+  }
 
   // TODO: There exists a Node which is "nothing selected of some structure": If nothing is selected. .equals is the same as .identical. Because [1, 2, 3] = [1, 2, 3]
   // TODO: Intermediate partial equality how?
   /**
    * Equal in value (ignores structure).
    */
-  equals = this.property(this, 'equals')
+  equals = this.property<any>(this, 'equals')
   /**
    * Structurally equal (ignores value).
    */
-  isomorphic = this.property(this, 'isomorphic')
+  isomorphic = this.property<any>(this, 'isomorphic')
   /**
    * Two rays are identical if there's no possible distinction between the "values and structure".
    *
+   * TODO: Slight rephrasing of this
    * Note: two different instantiations of the same array, say: new Ray(1, 2, 3) and new Ray(1, 2, 3) are in fact
    *       identical. From the perspective of JavaScript, you would say: No, they are two different entities, so they
    *       cannot be identical. But we're not considering JavaScripts perspective here. We're assuming only knowledge
@@ -205,24 +371,63 @@ export class Node extends Query<Node> implements INode {
   nor = this.property<boolean>(this, 'nor')
   nand = this.property<boolean>(this, 'nand')
 
-}
-export class Cursor extends Query<Cursor> implements INode {
-  b = () => {}
-}
+  has_next = () => this.next.is_some()
+  has_previous = () => this.previous.is_some()
 
-export class Selection<TNode extends INode> extends Query<Selection<TNode>> {
+  // Todo: any terminals
+  is_last = () => this.has_next().not()
+  is_first = () => this.has_previous().not()
 
-  // TODO .some goes to a node.
-  
-  filter = this.property<(x: TNode) => boolean>(this, 'filter')
-
-  nodes = this.select(this, 'nodes', Selection<Node>)
-
-}
-
-export class Ray {
-  constructor(...args: any[]) {
+  // TODO: Throw if not number
+  to_number = (): MaybeAsync<undefined | number> => {
+    throw new Error('Not implemented');
+    // throw new ConversionError('Not a number')
   }
+  to_boolean = (): MaybeAsync<undefined | boolean> => {
+    throw new Error('Not implemented');
+  }
+  to_array = <R>(predicate: (x: Ray) => MaybeAsync<R>): MaybeAsync<R[]> => {
+    throw new Error('Not implemented');
+  }
+  // to_function = (): MaybeAsync<(...args: unknown[]) => unknown> => {
+  //   throw new Error('Not implemented');  // }
+  to_object = (): MaybeAsync<object> => {
+    throw new Error('Not implemented');
+  }
+  cast = <T>(constructor: new () => T): MaybeAsync<T> => {
+    throw new Error('Not implemented');
+  }
+  to_string = (): MaybeAsync<string> => {
+    throw new Error('Not implemented');
+  }
+
+  /**
+   * Sometimes it's necessary to do an async call to construct a Node. By using this you can hide the promise.
+   */
+  from = (getter: () => MaybeAsync<Node>): this => {
+    if (this.__parent__ !== undefined) throw new Error('Can only use .from on an uninitialized Node.');
+    (this.from as any).value = getter
+    return this;
+  }
+
+  /**
+   * Converts any JavaScript value to a ray.
+   */
+  static converter: (x: any) => Node = x => {
+    // if (x instanceof Array) {
+    //   if (x.length === 0) return new Ray()
+    //   if (x.length === 1) x = x[0]
+    // }
+    //
+    // if (x instanceof Ray) return x;
+
+    throw new Error('Not implemented')
+  }
+}
+export class Ray extends Selection<Ray> {
+
+  // selection = this.select<Ray>(this.this(), 'selection', Ray)
+
 }
 
 export default Ray;

@@ -22,7 +22,8 @@ export namespace Query {
   export type Type<T> = {
     [P in keyof T]: T[P] extends (...args: infer Args) => infer Query ? Property.Type<Args, Query> : never
   } & {
-    new (): Instance
+    new (...args: any[]): Query.Type<Node>
+    (): Instance
   }
 
   export const instance = <T>(): Type<T> => new Instance().__proxy__ as Type<T>
@@ -44,14 +45,26 @@ export namespace Query {
         }
     }
 
-    __construct__ = (...args: any[]): any => this;
-    // __call__ = (...args: any[]): any => { }
+    __call__ = (...args: any[]): any => this;
+    __construct__ = (...args: any[]): any => {
+      const x = new Instance();
+      x.__value__ = args;
+
+      // TODO: Non-hacky way of checking for Node.
+      try {
+        if (args.length === 1 && args[0].prototype !== undefined) {}
+      } catch  {
+        return args[0] as Query.Type<Node>;
+      }
+
+      return x.__proxy__ as Query.Type<Node>;
+    }
     // __set__ = (property: string | symbol, value: any): boolean => {  }
     // __has__ = (property: string | symbol): boolean => {  }
     // __delete__ = (property: string | symbol): any => {  }
 
     get __proxy__(): any { return new Proxy(class {}, {
-      // apply: (_: any, thisArg: any, argArray: any[]): any => this.__call__(...argArray),
+      apply: (_: any, thisArg: any, argArray: any[]): any => this.__call__(...argArray),
       // set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => this.__set__(property, newValue),
       get: (_: any, property: string | symbol, receiver: any): any => this.__get__(property),
       // has: (_: any, property: string | symbol): boolean => this.__has__(property),
@@ -61,9 +74,11 @@ export namespace Query {
 
   }
 
+  // TODO: Could figure out what can be done in parallel and what can't.
   export class Executor<T> {
 
     // TODO: Rewrite to many targets used in which situation?
+    // TODO: Cross-rewrite with an implementation choosing which one (nand vs . vs .)
     rewrite = (implementations: {
       [P in keyof Query.Type<T>]?: Query.Type<T>[P] extends (...args: infer Args) => infer TNextQuery ? (self: Query.Type<T>, ...args: Args) => TNextQuery : never
     }): Executor<T> => {
@@ -91,6 +106,11 @@ export enum RemoveStrategy {
 }
 
 export interface Pointer<TSelf extends Pointer<TSelf>> {
+  /**
+   * Applies successive transformation and returns the result.
+   */
+  apply: (...queries: any[]) => TSelf
+
   every: (predicate: (x: Node) => boolean) => Node
   some: (predicate: (x: Node) => boolean) => Node
   contains: (value: any) => Node
@@ -101,6 +121,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * Note: If a node is currently selected and falls outside the filter, the node will be deselected.
    */
   filter: (predicate: (x: Node) => boolean) => TSelf
+  // TODO: If returns a non-query result, cancel() and set to that value?
   reduce: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
   reduce_right: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
 
@@ -191,7 +212,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   pop_front: () => TSelf
   pop_back: () => TSelf
   /**
-   * Push a value after the selection.
+   * Push a value as a possible continuation. (Ignores the next node)
    * Note: In the case of an array, this will push "the structure of an array" after the selection. NOT a list of possibilities.
    */
   push: (...x: any[]) => TSelf
@@ -215,6 +236,10 @@ export interface Node extends Pointer<Node> {
   equals: (value: any) => Node
   /**
    * Structurally equal (ignores value).
+   * TODO: What about the additional structures defined at that node\?
+   *  Is that always considered part of value or not?: No it's not. Consider for example some "times function" on top of the plus structure. We only want to consider the values.
+   *
+   * TODO: So, difference between isomorphic and isomorphic in all those structures?
    */
   isomorphic: (value: any) => Node
   /**
@@ -226,7 +251,7 @@ export interface Node extends Pointer<Node> {
   //       If-else is simply an if branch in the _false value.
   // TODO: If-branch has a .next depending on the value, if value is a type, it's to both, if not. It goes to either the true/false branch.
   // TODO: Dynamic values here should be allowed
-  if: <True, False>(_true: True, _false?: False) => (True extends Pointer<infer T> ? True : Node) | (False extends Pointer<infer T> ? False : Node)
+  if: <True, False>(_true: True, _false?: False) => (True extends Pointer<infer _> ? True : Node) | (False extends Pointer<infer T> ? False : Node)
 
   /**
    * Greater than: does "value" come before this node.
@@ -238,13 +263,24 @@ export interface Node extends Pointer<Node> {
   lte: (value: any) => Node
 
   not: () => Node
-  or: (value: boolean) => Node
-  and: (value: boolean) => Node
-  xor: (value: boolean) => Node
-  nor: (value: boolean) => Node
-  nand: (value: boolean) => Node
+  or: (b: boolean) => Node
+  and: (b: boolean) => Node
+  xor: (b: boolean) => Node
+  nor: (b: boolean) => Node
+  nand: (b: boolean) => Node
 }
-export interface Many extends Pointer<Many> {}
+
+/**
+ * All methods on Node can also be applied to many Nodes in parallel.
+ * TODO: Is this useful, when or just confusing?
+ */
+export type ParallelNodeMethods = {
+  [P in Exclude<keyof Node, keyof Pointer<Node>>]: Node[P] extends (...args: infer Args) => infer TNextQuery
+    ? (...args: Args) => Many : never
+}
+export interface Many extends Pointer<Many>, ParallelNodeMethods {
+
+}
 
 
 

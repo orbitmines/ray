@@ -3,12 +3,17 @@ import {Many, Node, Pointer, Query} from "./ray";
 describe("ray", () => {
   test("", async () => {
 
-    const A = Query.instance<Many>()
-      .filter(x => x)
-      .filter(x => x)
-
     const a = <TPointer extends Pointer<TPointer>>() => {
       const exec = new Query.Executor<TPointer>() as Query.Executor<Many>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
+
+      (exec as any as Query.Executor<Node>).rewrite({
+        xor: (self, b) =>
+          self.and(new self(b).not()).or(self.not().and(b)),
+        nor: (self, b) =>
+          self.or(b).not(),
+        nand: (self, b) =>
+          self.and(b).not(),
+      })
 
       exec.rewrite({
         every: (self, predicate) =>
@@ -32,25 +37,25 @@ describe("ray", () => {
         // length: (self) =>
         //   this.distance().filter(x => x.is_last()).map(async x => await x.to_number() + 1).all().unique()
         count: (self) =>
-          self.length().max().equals(Infinity).if(
+          self.length().max().equals(Infinity).if( // TODO: Or some other smart infinity checker (which looks inside the reduce)
             Infinity,
             self.reduce((acc) => acc.plus(1), 0)
           ),
         max: (self) => self.reduce((acc, current, cancel) =>
-          acc.equals(Infinity).if(
-            cancel, // Stop reducing if already reached infinity.
+          acc.equals(Infinity).if( // TODO: Or some other smart infinity checker
+            cancel,
             acc.gt(current).if(acc, current))
         , undefined),
         min: (self) => self.reduce((acc, current, cancel) =>
           acc.equals(Infinity).if(
-            cancel, // Stop reducing if already reached infinity.
+            cancel,
             acc.lt(current).if(acc, current))
         , undefined),
 
         is_nonempty: (self) =>
           self.is_empty().not(),
         is_empty: (self) =>
-          self.reduce((acc, current, cancel) => { cancel(); return false; }, true),
+          self.reduce((acc, current, cancel) => { return false; }, true),
 
         next: (self) =>
           self.at(1),
@@ -69,11 +74,16 @@ describe("ray", () => {
         has_previous: (self) =>
           self.previous().is_nonempty(),
 
+        pop_front: (self) =>
+          self.first().remove(),
+        pop_back: (self) =>
+          self.last().remove(),
         push_before: (self, ...x: any[]) =>
           self.reverse().push_after(...x),
         push_back: (self, ...x: any[]) =>
           self.last().push(...x),
-
+        push_front: (self, ...x: any[]) =>
+          new self(...x).push_back(self),
       })
 
 
@@ -81,51 +91,43 @@ describe("ray", () => {
     }
     a<Many>()
 
-    // TODO: Number returns a type of number which is a cursor on a graph. (The graph being the numberline) For example .next on a decimal number is an infinitesimal node after the current one. But we can still use operations like >/</..
 
-    const B = Query.instance<Many>().
-      length().max().gt(5)
+    const x = Query.instance<Many>()
+      .filter(async a => true)
+      .filter(a => true)
+      .filter(a => new a())
+      .filter(b => true)
+      .filter(b => b.equals(2))
 
-    console.log(new A().__property__)
+    const A = Query.instance<Many>()
 
-    // const x = new Ray()
-    //   .filter(async a => true)
-    //   .filter(async a => new Node())
-    //   .filter(a => true)
-    //   .filter(a => new Node())
-    //   .nodes()
-    //   .filter(b => true)
-    //   .filter(b => b.equals(2))
-    //
-    // const A = new Ray()
-    //
-    // const removed = new Ray()
-    //   .map(async x => await x.to_number() * 2)
-    //   .filter(async x => await x.to_number() % 2 === 0)
-    //   .remove()
-    //
-    // A.apply(
-    //   A.push_back('A'),
-    //   A.push_back('B')
-    // )
-    // // is the same as
-    // const applies = A.push_back('A').push_back('B')
-    // // is the same as
-    // A.apply(applies)
-    //
-    // A
-    //   .push_back('A')
-    //   .push_back('B')
-    //   .push_back('C')
-    //   .apply(
-    //     A.filter(x => x.equals('B')).remove(),
-    //     A.filter(async x => await x.to_string() === 'C').remove(),
-    //     A.pop_back(),
-    //     A.pop_back(),
-    //     A.push('D'),
-    //   )
-    //
-    // A.push_front('A')
+    const removed = Query.instance<Many>()
+      // .map(async x => await x.to_number() * 2)
+      // .filter(async x => await x.to_number() % 2 === 0)
+      .remove()
+
+    A.apply(
+      A.push_back('A'),
+      A.push_back('B')
+    )
+    // is the same as
+    const applies = A.push_back('A').push_back('B')
+    // is the same as
+    A.apply(applies)
+
+    A
+      .push_back('A')
+      .push_back('B')
+      .push_back('C')
+      .apply(
+        A.filter(x => x.equals('B')).remove(),
+        // A.filter(async x => await x.to_string() === 'C').remove(),
+        A.pop_back(),
+        A.pop_back(),
+        A.push('D'),
+      )
+
+    A.push_front('A')
 
     // console.log(removed.remove.value)
 

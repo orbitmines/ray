@@ -1,27 +1,113 @@
-import Ray, {Node, PushStrategy, QueryProperty, RemoveStrategy, Selection} from "./ray";
+import {Many, Node, Pointer, Query} from "./ray";
 
 describe("ray", () => {
   test("", async () => {
-    const x = new Ray()
-      .filter(async a => true)
-      .filter(async a => new Node())
-      .filter(a => true)
-      .filter(a => new Node())
-      .nodes()
-      .filter(b => true)
-      .filter(b => b.equals(2))
 
-    const A = new Ray()
+    const A = Query.instance<Many>()
+      .filter(x => x)
+      .filter(x => x)
 
-    const removed = new Ray()
-      .map(async x => await x.to_number() * 2)
-      .filter(async x => await x.to_number() % 2 === 0)
-      .remove()
+    const a = <TPointer extends Pointer<TPointer>>() => {
+      const exec = new Query.Executor<TPointer>() as Query.Executor<Many>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
 
-    A.apply(
-      A.push_back('A'),
-      A.push_back('B')
-    )
+      exec.rewrite({
+        every: (self, predicate) =>
+          self.map(x => predicate(x)).filter(x => x.equals(false)).is_empty(),
+        some: (self, predicate) =>
+          self.filter(x => predicate(x)).is_nonempty(),
+        contains: (self, value) =>
+          self.some(x => x.equals(value)),
+        reduce_right: (self, callback, initial_value) =>
+          self.reverse().reduce(callback, initial_value),
+
+        shift: (self) =>
+          self.pop_front(),
+        unshift: (self, ...x: any[]) =>
+          self.push_front(...x),
+        fill: (self, value) =>
+          self.all().set(value),
+        // TODO: Now doesnt look for negative indexes.
+        // index_of = (value: any) =>
+        //   this.filter(x => x.equals(value)).distance().all().unique()
+        // length: (self) =>
+        //   this.distance().filter(x => x.is_last()).map(async x => await x.to_number() + 1).all().unique()
+        count: (self) =>
+          self.length().max().equals(Infinity).if(
+            Infinity,
+            self.reduce((acc) => acc.plus(1), 0)
+          ),
+        max: (self) => self.reduce((acc, current, cancel) =>
+          acc.equals(Infinity).if(
+            cancel, // Stop reducing if already reached infinity.
+            acc.gt(current).if(acc, current))
+        , undefined),
+        min: (self) => self.reduce((acc, current, cancel) =>
+          acc.equals(Infinity).if(
+            cancel, // Stop reducing if already reached infinity.
+            acc.lt(current).if(acc, current))
+        , undefined),
+
+        is_nonempty: (self) =>
+          self.is_empty().not(),
+        is_empty: (self) =>
+          self.reduce((acc, current, cancel) => { cancel(); return false; }, true),
+
+        next: (self) =>
+          self.at(1),
+        previous: (self) =>
+          self.at(-1),
+        first: (self) =>
+          self.reverse().last(),
+        plus: (self, index) =>
+          self.at(index),
+        minus: (self, index) =>
+          self.reverse().at(index),
+
+
+        has_next: (self) =>
+          self.next().is_nonempty(),
+        has_previous: (self) =>
+          self.previous().is_nonempty(),
+
+        push_before: (self, ...x: any[]) =>
+          self.reverse().push_after(...x),
+        push_back: (self, ...x: any[]) =>
+          self.last().push(...x),
+
+      })
+
+
+
+    }
+    a<Many>()
+
+    // TODO: Number returns a type of number which is a cursor on a graph. (The graph being the numberline) For example .next on a decimal number is an infinitesimal node after the current one. But we can still use operations like >/</..
+
+    const B = Query.instance<Many>().
+      length().max().gt(5)
+
+    console.log(new A().__property__)
+
+    // const x = new Ray()
+    //   .filter(async a => true)
+    //   .filter(async a => new Node())
+    //   .filter(a => true)
+    //   .filter(a => new Node())
+    //   .nodes()
+    //   .filter(b => true)
+    //   .filter(b => b.equals(2))
+    //
+    // const A = new Ray()
+    //
+    // const removed = new Ray()
+    //   .map(async x => await x.to_number() * 2)
+    //   .filter(async x => await x.to_number() % 2 === 0)
+    //   .remove()
+    //
+    // A.apply(
+    //   A.push_back('A'),
+    //   A.push_back('B')
+    // )
     // // is the same as
     // const applies = A.push_back('A').push_back('B')
     // // is the same as

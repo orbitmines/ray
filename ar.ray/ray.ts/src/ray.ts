@@ -137,11 +137,11 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * Set all nodes to a given value.
    */
   fill: (value: any) => TSelf
-  index_of: (value: any) => Many
+  index_of: (value: any) => Many<Node>
   /**
    * Note: that since variable lengths are possible, .length will return a number of possibilities.
    */
-  length: () => Many
+  length: () => Many<Node>
   /**
    * Counts the number of nodes.
    * Note: that since graph's structure allows for branching, it could be that .length.max() != .count.
@@ -162,7 +162,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * TODO Make sure negative index works
    * TODO (index: number | IRange): IRange | Ray => is_number(index) ? Range.Eq(index) : index
    */
-  at: (index: number | IRange) => Many
+  at: (index: number | IRange) => Many<Node>
   /**
    * Maps the original structure to one where you find the distances at the Nodes.
    *
@@ -178,21 +178,21 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   /**
    * Select all nodes in this structure
    */
-  all: () => Many
+  all: () => Many<Node>
 
-  next: () => Many
-  previous: () => Many
+  next: () => Many<Node>
+  previous: () => Many<Node>
   /**
    * The terminal boundaries reachable from this selection.
    * Note: if you want ALL terminals, you should use .all().last
    */
-  last: () => Many
-  first: () => Many
+  last: () => Many<Node>
+  first: () => Many<Node>
   /**
    * Note: Plus and minus are simply moving the pointer along the graph a number of steps.
    */
-  plus: (value: number | IRange) => Many
-  minus: (value: number | IRange) => Many
+  plus: (value: number | IRange) => Many<Node>
+  minus: (value: number | IRange) => Many<Node>
 
   /**
    * Note: Having a possible next value doesn't mean that the current value isn't also terminal: It can be both.
@@ -229,6 +229,11 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 
 
 }
+
+/**
+ *
+ * TODO: A node is a selection of rays from a larger collection of rays at that node.?
+ */
 export interface Node extends Pointer<Node> {
   /**
    * Equal in value (ignores structure).
@@ -240,6 +245,13 @@ export interface Node extends Pointer<Node> {
    *  Is that always considered part of value or not?: No it's not. Consider for example some "times function" on top of the plus structure. We only want to consider the values.
    *
    * TODO: So, difference between isomorphic and isomorphic in all those structures?
+   * TODO: Also, isomorphic of selected structures (for each dimension) vs as a combined dimension.
+   *
+   *
+   * ROTATION/REFRAME?;
+   * TODO: Calling it a rotation, what does a normal rotation look like in this setting?
+   * TODO: Also some way to change the .value checked at .equals.
+   * TODO: Need some way to join/select/merge structures
    */
   isomorphic: (value: any) => Node
   /**
@@ -276,11 +288,11 @@ export interface Node extends Pointer<Node> {
  */
 export type ParallelNodeMethods = {
   [P in Exclude<keyof Node, keyof Pointer<Node>>]: Node[P] extends (...args: infer Args) => infer TNextQuery
-    ? (...args: Args) => Many : never
+    ? (...args: Args) => Many<Node> : never
 }
-export interface Many extends Pointer<Many>, ParallelNodeMethods {
+export type Many<T> = Pointer<Many<T>>
+  & (T extends Node ? ParallelNodeMethods : {})
 
-}
 
 
 

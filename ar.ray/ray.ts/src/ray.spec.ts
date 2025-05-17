@@ -4,7 +4,7 @@ describe("ray", () => {
   test("", async () => {
 
     const a = <TPointer extends Pointer<TPointer>>() => {
-      const exec = new Query.Executor<TPointer>() as Query.Executor<Many>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
+      const exec = new Query.Executor<TPointer>() as Query.Executor<Many<Node>>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
 
       (exec as any as Query.Executor<Node>).rewrite({
         xor: (self, b) =>
@@ -89,19 +89,19 @@ describe("ray", () => {
 
 
     }
-    a<Many>()
+    a<Many<Node>>()
 
 
-    const x = Query.instance<Many>()
+    const x = Query.instance<Many<Node>>()
       .filter(async a => true)
       .filter(a => true)
       .filter(a => new a())
       .filter(b => true)
       .filter(b => b.equals(2))
 
-    const A = Query.instance<Many>()
+    const A = Query.instance<Many<Node>>()
 
-    const removed = Query.instance<Many>()
+    const removed = Query.instance<Many<Node>>()
       // .map(async x => await x.to_number() * 2)
       // .filter(async x => await x.to_number() % 2 === 0)
       .remove()

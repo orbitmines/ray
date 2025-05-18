@@ -75,6 +75,7 @@ export namespace Query {
   }
 
   // TODO: Could figure out what can be done in parallel and what can't.
+  // TODO: Say I used push_back somewhere and I question .last right after. It becomes: .last before is no longer relevant. "If there is a terminal, so push_back has a target, then it is that value there.)
   export class Executor<T> {
 
     // TODO: Rewrite to many targets used in which situation?
@@ -282,6 +283,12 @@ export interface Node extends Pointer<Node> {
   nand: (b: boolean) => Node
 }
 
+// TODO: When traversing, how to differentiate where in the structure you are, say .next results into two terminals, and a vertex.
+//       That could recursively be the case at defining the terminals, how to keep track of which are the ones we're interested in
+//       for the .next result.
+export interface Ray extends Node {}
+
+
 /**
  * All methods on Node can also be applied to many Nodes in parallel.
  * TODO: Is this useful, when or just confusing?
@@ -300,7 +307,6 @@ export class Graph {
 
 }
 
-class Ray {}
 
 export default Ray;
 

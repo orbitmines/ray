@@ -232,12 +232,28 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 }
 
 /**
+ * TODO: What does control-flow look like?
+ *
  *
  * TODO: A node is a selection of rays from a larger collection of rays at that node.?
  */
 export interface Node extends Pointer<Node> {
+
+  /**
+   * TODO: Move the "selected structure" to ".self"
+   */
+  // context: () => Node
+  // self: () => Many<Node>
+
+  /**
+   *
+   * TODO: What does the type of an array look like? Is it a simple loop with an initial/terminal. But that also matches a branched structure, how to dismiss the branched structure?
+   */
+  instance_of: (type: any) => Node
+
   /**
    * Equal in value (ignores structure).
+   * TODO: Value might be Many<Node>, so value could be a (math) Set.?
    */
   equals: (value: any) => Node
   /**
@@ -264,6 +280,7 @@ export interface Node extends Pointer<Node> {
   //       If-else is simply an if branch in the _false value.
   // TODO: If-branch has a .next depending on the value, if value is a type, it's to both, if not. It goes to either the true/false branch.
   // TODO: Dynamic values here should be allowed
+  // TODO: if in a control-flow would have a difference between the "if function as a node" and the "next step" as a result in this case.
   if: <True, False>(_true: True, _false?: False) => (True extends Pointer<infer _> ? True : Node) | (False extends Pointer<infer T> ? False : Node)
 
   /**

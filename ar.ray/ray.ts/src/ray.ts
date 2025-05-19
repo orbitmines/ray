@@ -402,6 +402,7 @@ export type Many<T> = Pointer<Many<T>>
  * TODO FUNCTIONS
  *      - What does a function structurally look like, is there a nice visual translation possible?
  *      -
+ *      - Always comes with: .next value is reapplying function to the same result. (Applying a single rewrite rule for example is a single path, which could branch in many different places it could be applied)
  *      -
  *      - Matched to some Type/Node predicate (parameters): "Could apply this function to this selected value".
  *        Generalized to: Like ANY match: Many<Node> whose "result of predicate = true"

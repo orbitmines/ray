@@ -122,6 +122,10 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * Note: If a node is currently selected and falls outside the filter, the node will be deselected.
    */
   filter: (predicate: (x: Node) => boolean) => TSelf
+  /**
+   * Opposite of 'filter'.
+   */
+  exclude: (predicate: (x: Node) => boolean) => TSelf
   // TODO: If returns a non-query result, cancel() and set to that value?
   reduce: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
   reduce_right: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
@@ -162,6 +166,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * Select all nodes at a specific index/range.
    * TODO Make sure negative index works
    * TODO (index: number | IRange): IRange | Ray => is_number(index) ? Range.Eq(index) : index
+   *
    */
   at: (index: number | IRange) => Many<Node>
   /**
@@ -235,7 +240,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
  * TODO: Unselected structure: Ignored structure?
  *
  *
- * TODO Merging different references of the same value.
+ * TODO Merging different references of the same value. (Deduplication)
  *      Different instantiations on the same . equals value, with unselected structure, switching to other unselected structure might be "all other references to this value" which we could have pending, without needing it to be instantiated when accessing the existing structure.
  * TODO
  *
@@ -244,6 +249,16 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
  * TODO: A node is a selection of rays from a larger collection of rays at that node.?
  */
 export interface Node extends Pointer<Node> {
+
+  /**
+   * TODO: "Equivalence frames" are deemed .equal
+   * TODO: .equal/.isomorphic/.identical for which would you need to implement this?
+   *
+   * TODO: (Canonicalization) OR: Are all node references merged like this? Then what is the .self value? What happens with duplicated structure? etc..
+   *       Might still want to remember the different representations/original nodes and access them.
+   *       .identical, or different representations, works similarly here (with respect to merging different references (deduplication)).
+   */
+  // equivalence: (is_equivalent: (a, b) => boolean)) => TSelf
 
   /**
    * TODO: Move the "selected structure" to ".self"
@@ -269,6 +284,7 @@ export interface Node extends Pointer<Node> {
    * TODO example: 2D-Grid How to make sure that there's a difference between "X goes to X" "Y goes to Y" vs just two dimensions at each point?
    *      Need a difference between "selected structure" and "referenced structure". I reference a point with two dimensions, but I only select one of the dimensions in that reference, which is our X/Y dimension.
    *      OR: Don't allow vertex -> vertex and go based of the initial/terminal referencing a particular ray/rays.
+   *      + (difference between Infinite 2D grid vs finite 2D grid which have initial/terminals)
    *
    * TODO: Include type information like ().length.max().lt(2 ^ 32) (javascript Array) "result at this variable location"
    *
@@ -353,7 +369,13 @@ export interface Node extends Pointer<Node> {
 // TODO: When traversing, how to differentiate where in the structure you are, say .next results into two terminals, and a vertex.
 //       That could recursively be the case at defining the terminals, how to keep track of which are the ones we're interested in
 //       for the .next result.
-export interface Ray extends Node {}
+export interface Ray extends Node {
+  is_initial: () => Node
+  is_terminal: () => Node
+  is_reference: () => Node
+  is_vertex: () => Node
+  is_boundary: () => Node
+}
 
 
 /**
@@ -369,8 +391,85 @@ export type Many<T> = Pointer<Many<T>>
 
 
 
+// TODO: Number returns a type of number which is a cursor on a graph. (The graph being the numberline) For example .next on a decimal number is an infinitesimal node after the current one. But we can still use operations like >/</..
 
+// TODO: We might expect these functions to execute on the node instead of the ray ?
+//
+
+// TODO index_of vs path used to get there. -1, 1, 1, -1 etc.. (or more general version of path)
+
+// TODO: .every on a node's location. Should it start traversing from there, yes?
+
+// Theorem proving.
+// TODO: What about an infinitely generating structure which we through some other finite method proof holds for this predicate?
+
+// TODO: Map on terminals/initials and structure in general
+
+
+// TODO: Way to get index from the ray. With a default .distance function applied somewhere?
+// TODO: Allow for intermediate result. for .count/.reduce and nodes -> Halting problem
+// TODO: Checks for uniqueness, only once per location: TODO: What would a reduce look like that doesn't do this (could be useful for intermediate results) - is this useful?
+
+// TODO: There exists a Node which is "nothing selected of some structure": If nothing is selected. .equals is the same as .identical. Because [1, 2, 3] = [1, 2, 3]
+// TODO: Intermediate partial equality how?
+
+
+/**
+ * TODO: Traverser as additional structure on Node.
+ * TODO: Things like: can only be traversed once in a particular traversal. (used for .slice/.splice, which has an .orbit, but only once for the range/start index).
+ *       Is this common enough to add? What would this be generalized to?
+ */
+
+// TODO: TRAVERSAL
+//      - Program strategy: which branches to take first.
+//        + Program stepping.
+//      - Cycle detection & merger
+//      - Intermediate results while others are still pending.
+//      - Support yielding initial/terminals as well. (intermediates which are still looking)
+//      -
+export class Traverser {
+
+  // TODO: Nothing selected but underlying structure. .first snaps to first (looped initial possible).
+  // TODO: Can include disconnected pieces. Also should include a disconnected piece without an initial. and so no qualifier to .first.
+
+  // TODO: What does .all().is_last() mean?
+  // TODO: Separate Ray and "Ray Part"? .next in Ray vs .next in "Ray Part"
+
+  // TODO: .next should be for each possible entry of terminal values. filter(x => x.is_last()) should also be for each possible selection, not the selection as a whole
+  // TODO: What to do if there are non-uniques in here, or is it always .unique ?
+  // states: AsyncIterable<State>
+  // TODO: Remember that we're at a terminal? Not that .next again returns the first element
+  // TODO: Filter should be applied to state.
+  // state: Ray
+
+}
+
+// TODO Difference between "nothing selected at Node" and "selecting the entire Graph where .first enters the graph.
 export class Graph {
+
+  // TODO: PRESERVING ALL STRUCTURES AND HISTORIES
+  //       How? Preserving both the original structure, and the rewritten graph.
+  //       -> Ambiguous rewrites etc..
+  //       -> Partial, without necessarily checking the entire graph.
+  //            (what happens when a second rewrite is given, which a pending first rewrite might still cancel):
+  //            (possible) Additional ambiguity of order of rewrite. What if invariant and doesn't matter?
+  //
+  // TODO: Split the graph at the differences?. Add/remove
+  //       OR better: Give the ray from which we want to access this, which contains the remove/non-removed history.
+  //
+  // TODO: Requires knowledge of what operation can effect what.
+
+
+
+  // TODO: Rewrite with checking structure at nodes, or ignored. (Basically only looking at between structure)
+  // rewrite: (lhs: Graph, rhs: Graph)
+  // dpo, spo, cartesion product, tensor product, union, disjoint union etc...
+  // compose matching domain/codomain
+
+  // TODO: History of rewrites as ray
+
+  // TODO: You want to be able to select X number of sub-graphs of a larger graph. Those subgraphs being selected how? Like: all the matches.
+  // TODO: Already the case?: -> Select needs to be more intelligent: both initials/terminals as vertex selected. "Entire subgraphs"
 
 }
 

@@ -1,10 +1,18 @@
-import {Many, Node, Pointer, Query} from "./ray";
+import {Many, Node, Pointer, Query, Ray} from "./ray";
 
 describe("ray", () => {
   test("", async () => {
 
     const a = <TPointer extends Pointer<TPointer>>() => {
       const exec = new Query.Executor<TPointer>() as Query.Executor<Many<Node>>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
+
+      (exec as any as Query.Executor<Ray>).rewrite({
+        is_initial: (self) => self.previous().is_empty(),
+        is_terminal: (self) => self.next().is_empty(),
+        is_reference: (self) => self.is_initial().and(self.is_terminal()),
+        is_vertex: (self) => self.is_initial().not().and(self.is_terminal().not()),
+        is_boundary: (self) => self.is_initial().xor(self.is_terminal())
+      });
 
       (exec as any as Query.Executor<Node>).rewrite({
         xor: (self, b) =>
@@ -22,6 +30,8 @@ describe("ray", () => {
           self.filter(x => predicate(x)).is_nonempty(),
         contains: (self, value) =>
           self.some(x => x.equals(value)),
+        exclude: (self, predicate) =>
+          self.filter(x => new self(predicate(x)).not()),
         reduce_right: (self, callback, initial_value) =>
           self.reverse().reduce(callback, initial_value),
 

@@ -74,6 +74,7 @@ export namespace Query {
 
   }
 
+  // TODO: Requires knowledge of what operation can effect what.
   // TODO: Could figure out what can be done in parallel and what can't.
   // TODO: Say I used push_back somewhere and I question .last right after. It becomes: .last before is no longer relevant. "If there is a terminal, so push_back has a target, then it is that value there.)
   export class Executor<T> {
@@ -86,7 +87,11 @@ export namespace Query {
       return this;
     }
 
+    // TODO THEOREM PROVING (All these things can be rewritten to all these other things -> because I can reach them, or because that is the conclusion )
     // TODO: Rewrite specific values (theorem proving)
+    //        What about an infinitely generating structure which we through some other finite method proof holds for this predicate?
+    //        Proven that there's no terminal, .last returns empty, more elaborate theorem proving system
+
 
   }
 }
@@ -127,6 +132,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    */
   exclude: (predicate: (x: Node) => boolean) => TSelf
   // TODO: If returns a non-query result, cancel() and set to that value?
+  // TODO: Checks for uniqueness, only once per location: TODO: What would a reduce look like that doesn't do this (could be useful for intermediate results) - is this useful?
   reduce: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
   reduce_right: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
 
@@ -298,6 +304,7 @@ export interface Node extends Pointer<Node> {
    *
    *
    * TODO: Subgraph isomorphism vs subgraph isomorphism + .equals on all the nodes.
+   *       Subgraphs including/excluding initials/terminals.
    *
    * TODO: Requires: "On another level of description", like "this group"/"this subgraph".
    *
@@ -390,29 +397,28 @@ export type Many<T> = Pointer<Many<T>>
   & (T extends Node ? ParallelNodeMethods : {})
 
 
+/**
+ *
+ * TODO FUNCTIONS
+ *      - What does a function structurally look like, is there a nice visual translation possible?
+ *      -
+ *      -
+ *      - Matched to some Type/Node predicate (parameters): "Could apply this function to this selected value".
+ *        Generalized to: Like ANY match: Many<Node> whose "result of predicate = true"
+ *      - "Many usages" -> as unselected structure
+ *      - Function.equals(Function)
+ *      - Function.equals(Function) = true (set as equivalent, rewrite function as another function)
+ *          "Graph of equivalences reached through theorem prover, how"
+ *          Possible rewrites as (what are the equivalences)
+ *          Allow for self-reference of operators (but requires implementation).
+ *      - Function.compose(Function) = Function (If functions are control-flow graphs, then function composition is linked to graph composition)
+ *      - Control-flow & debugging
+ *          Where in the control-flow is the program? (Many<Node> ref)
+ *          Intermediate values of variables (like the .reduce accumulated value which may be non-halting)
+ */
+export interface Function {
 
-// TODO: Number returns a type of number which is a cursor on a graph. (The graph being the numberline) For example .next on a decimal number is an infinitesimal node after the current one. But we can still use operations like >/</..
-
-// TODO: We might expect these functions to execute on the node instead of the ray ?
-//
-
-// TODO index_of vs path used to get there. -1, 1, 1, -1 etc.. (or more general version of path)
-
-// TODO: .every on a node's location. Should it start traversing from there, yes?
-
-// Theorem proving.
-// TODO: What about an infinitely generating structure which we through some other finite method proof holds for this predicate?
-
-// TODO: Map on terminals/initials and structure in general
-
-
-// TODO: Way to get index from the ray. With a default .distance function applied somewhere?
-// TODO: Allow for intermediate result. for .count/.reduce and nodes -> Halting problem
-// TODO: Checks for uniqueness, only once per location: TODO: What would a reduce look like that doesn't do this (could be useful for intermediate results) - is this useful?
-
-// TODO: There exists a Node which is "nothing selected of some structure": If nothing is selected. .equals is the same as .identical. Because [1, 2, 3] = [1, 2, 3]
-// TODO: Intermediate partial equality how?
-
+}
 
 /**
  * TODO: Traverser as additional structure on Node.
@@ -427,25 +433,19 @@ export type Many<T> = Pointer<Many<T>>
 //      - Intermediate results while others are still pending.
 //      - Support yielding initial/terminals as well. (intermediates which are still looking)
 //      -
+//      - Ideas of paths (subgraphs) (example: index_of vs path used to get there. -1, 1, 1, -1 etc.. REPLACE index_of with path_to(x), and then index with .distance and walk the path)
 export class Traverser {
 
-  // TODO: Nothing selected but underlying structure. .first snaps to first (looped initial possible).
-  // TODO: Can include disconnected pieces. Also should include a disconnected piece without an initial. and so no qualifier to .first.
-
-  // TODO: What does .all().is_last() mean?
-  // TODO: Separate Ray and "Ray Part"? .next in Ray vs .next in "Ray Part"
-
-  // TODO: .next should be for each possible entry of terminal values. filter(x => x.is_last()) should also be for each possible selection, not the selection as a whole
-  // TODO: What to do if there are non-uniques in here, or is it always .unique ?
-  // states: AsyncIterable<State>
-  // TODO: Remember that we're at a terminal? Not that .next again returns the first element
-  // TODO: Filter should be applied to state.
-  // state: Ray
 
 }
 
-// TODO Difference between "nothing selected at Node" and "selecting the entire Graph where .first enters the graph.
-export class Graph {
+/**
+ *
+ *  TODO: Difference between "nothing selected at Node" and "selecting the entire Graph where .first enters the graph.
+ *         Remember that we're at a terminal? Not that .next again returns the first element (empty != graph)
+ */
+export interface Graph extends Pointer<Graph> {
+  // TODO: Can include disconnected pieces. Also should include a disconnected piece without an initial. and so no qualifier to .first.
 
   // TODO: PRESERVING ALL STRUCTURES AND HISTORIES
   //       How? Preserving both the original structure, and the rewritten graph.
@@ -457,7 +457,6 @@ export class Graph {
   // TODO: Split the graph at the differences?. Add/remove
   //       OR better: Give the ray from which we want to access this, which contains the remove/non-removed history.
   //
-  // TODO: Requires knowledge of what operation can effect what.
 
 
 
@@ -465,11 +464,6 @@ export class Graph {
   // rewrite: (lhs: Graph, rhs: Graph)
   // dpo, spo, cartesion product, tensor product, union, disjoint union etc...
   // compose matching domain/codomain
-
-  // TODO: History of rewrites as ray
-
-  // TODO: You want to be able to select X number of sub-graphs of a larger graph. Those subgraphs being selected how? Like: all the matches.
-  // TODO: Already the case?: -> Select needs to be more intelligent: both initials/terminals as vertex selected. "Entire subgraphs"
 
 }
 

@@ -232,7 +232,13 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 }
 
 /**
- * TODO: What does control-flow look like?
+ * TODO: Unselected structure: Ignored structure?
+ *
+ *
+ * TODO Merging different references of the same value.
+ *      Different instantiations on the same . equals value, with unselected structure, switching to other unselected structure might be "all other references to this value" which we could have pending, without needing it to be instantiated when accessing the existing structure.
+ * TODO
+ *
  *
  *
  * TODO: A node is a selection of rays from a larger collection of rays at that node.?
@@ -246,10 +252,54 @@ export interface Node extends Pointer<Node> {
   // self: () => Many<Node>
 
   /**
+   * TODO: The existence of a loop VS an instantiation matching that loop.
+   * TODO: Empty node vs ANY match. Something like "the result of .equals" is always true?
+   *        similarly .or, result of .equals is A | B. Or .equals = false for A,B,C. So exclusion as well.
+   *
+   * TODO: Type here should also be something like a programming language specification.
+   *       More generally; does this pattern match onto this Node/structure.
+   *        Take some language spec like WASM (or Backus-Naur Form) and make that.
+   *        Or regex as an example.
+   *
+   * TODO: Type matching like look ahead/look behind in regex. Generalized to ?
+   *        In front .equals/.not some other structure, but result excludes this
+   *        Atomic group something like .if(option A, .if(option B.))
+   *        Generalization of this "program on x results to".
+   *
+   * TODO example: 2D-Grid How to make sure that there's a difference between "X goes to X" "Y goes to Y" vs just two dimensions at each point?
+   *      Need a difference between "selected structure" and "referenced structure". I reference a point with two dimensions, but I only select one of the dimensions in that reference, which is our X/Y dimension.
+   *      OR: Don't allow vertex -> vertex and go based of the initial/terminal referencing a particular ray/rays.
+   *
+   * TODO: Include type information like ().length.max().lt(2 ^ 32) (javascript Array) "result at this variable location"
+   *
+   * TODO for regex youd have something like {min,max} ().length().max() -> .lte(max), .gte(min) "Have some way to branch multiple queries unto one thing" is probably a repeating pattern we're going to use.
+   *
+   *
+   * TODO: Difference between whole match, and a match where "at least the type" is in this object (matching subgraphs for instance).
+   *        Subgraphs important: some looped variable say "A", matched .length().max() = 5 times, the length, should only count for that subgraph. Not additional things that might be defined further along the .next/.previous sides.
+   *        Again this need for, "selected structure" being the underlying structure. Say the beginning and end of AAAA. And another being
+   *        the reference to the loop around "A".
+   *
+   *
+   * TODO: Subgraph isomorphism vs subgraph isomorphism + .equals on all the nodes.
+   *
+   * TODO: Requires: "On another level of description", like "this group"/"this subgraph".
    *
    * TODO: What does the type of an array look like? Is it a simple loop with an initial/terminal. But that also matches a branched structure, how to dismiss the branched structure?
+   *
+   * TODO: .or (set union), .and
+   *
+   *
+   * TODO: Matched groups and referencing them, Mapping and using matched groups for some other purpose. For example mapping a string expressing regex to a similar pattern what the regex means.
+   *      Mapping a grammar of a language and then compiling the language as an example. So some program follows here.
+   *
+   *
+   * TODO: Mapped as some other function so it's a program.
    */
-  instance_of: (type: any) => Node
+  instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
+  //TODO Similar to .remove, this matches to a structure and returns that structure.
+  //TODO This should also be possible to select a subgraph. So a Node, when not selecting anything, might not be the entire graph but a subgraph.
+  match: (pattern: any) => Many<Node>
 
   /**
    * Equal in value (ignores structure).

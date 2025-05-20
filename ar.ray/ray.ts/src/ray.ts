@@ -243,12 +243,17 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 }
 
 /**
+ * TODO: How to do a filter by index % 5 == 0 for instance, but without mapping to the index.
+ *
  * TODO: Unselected structure: Ignored structure?
  *
  *
  * TODO Merging different references of the same value. (Deduplication)
  *      Different instantiations on the same . equals value, with unselected structure, switching to other unselected structure might be "all other references to this value" which we could have pending, without needing it to be instantiated when accessing the existing structure.
  * TODO
+ *
+ *
+ * TODO: More general way of having selections of different structures, say some that influence .next, some for .isomorphic, some for X. ..
  *
  *
  *
@@ -302,6 +307,7 @@ export interface Node extends Pointer<Node> {
    *        Again this need for, "selected structure" being the underlying structure. Say the beginning and end of AAAA. And another being
    *        the reference to the loop around "A".
    *
+   * TODO: Is a subgraph just Many<Node>
    *
    * TODO: Subgraph isomorphism vs subgraph isomorphism + .equals on all the nodes.
    *       Subgraphs including/excluding initials/terminals.
@@ -376,6 +382,7 @@ export interface Node extends Pointer<Node> {
 // TODO: When traversing, how to differentiate where in the structure you are, say .next results into two terminals, and a vertex.
 //       That could recursively be the case at defining the terminals, how to keep track of which are the ones we're interested in
 //       for the .next result.
+// TODO: Select substructure of the structure on the edges as a path.
 export interface Ray extends Node {
   is_initial: () => Node
   is_terminal: () => Node
@@ -403,6 +410,7 @@ export type Many<T> = Pointer<Many<T>>
  *      - What does a function structurally look like, is there a nice visual translation possible?
  *      -
  *      - Always comes with: .next value is reapplying function to the same result. (Applying a single rewrite rule for example is a single path, which could branch in many different places it could be applied)
+ *      - f' or the reverse starts at the terminal behind the result. One relies on caching or a reversible function to go back. (Or a non-reversible function where going back iterates a number of possibilities)
  *      -
  *      - Matched to some Type/Node predicate (parameters): "Could apply this function to this selected value".
  *        Generalized to: Like ANY match: Many<Node> whose "result of predicate = true"
@@ -416,6 +424,7 @@ export type Many<T> = Pointer<Many<T>>
  *      - Control-flow & debugging
  *          Where in the control-flow is the program? (Many<Node> ref)
  *          Intermediate values of variables (like the .reduce accumulated value which may be non-halting)
+ *          Normal programs have a control flow and location as opposed to a graph rewrite applying everywhere. Some generalization of these sorts of options
  */
 export interface Function {
 
@@ -441,9 +450,20 @@ export class Traverser {
 }
 
 /**
+ * TODO: Normal graphs, hypergraphs like Chyp, hypergraphs like Wolfram Physics (overlapping structures, which make the .next go to any place on the edge not where it came from)(
+ *
  *
  *  TODO: Difference between "nothing selected at Node" and "selecting the entire Graph where .first enters the graph.
  *         Remember that we're at a terminal? Not that .next again returns the first element (empty != graph)
+ *
+ *
+ *
+ * TODO Causal Graph,
+ *    Causal graph is the what effected what
+ *      Causal graph of the causal graph ...
+ *    - Causal graph needs a notion of what structure changed, could be that it didn't touch the graph but only the value. Do you want to have it still be a causal link created there if the graph for example isn't effected
+ *
+ *
  */
 export interface Graph extends Pointer<Graph> {
   // TODO: Can include disconnected pieces. Also should include a disconnected piece without an initial. and so no qualifier to .first.

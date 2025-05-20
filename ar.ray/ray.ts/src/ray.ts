@@ -77,6 +77,14 @@ export namespace Query {
   // TODO: Requires knowledge of what operation can effect what.
   // TODO: Could figure out what can be done in parallel and what can't.
   // TODO: Say I used push_back somewhere and I question .last right after. It becomes: .last before is no longer relevant. "If there is a terminal, so push_back has a target, then it is that value there.)
+
+  // TODO: CACHE / STATE
+  //       Cache results in between for some runtime library.
+  // 		    - Invalidate before some query, caching on some other base layer
+
+  // TODO
+  // TODO Merging different references of the same value. (Deduplication)
+  //      Different instantiations on the same . equals value, with unselected structure, switching to other unselected structure might be "all other references to this value" which we could have pending, without needing it to be instantiated when accessing the existing structure.
   export class Executor<T> {
 
     // TODO: Rewrite to many targets used in which situation?
@@ -131,7 +139,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * Opposite of 'filter'.
    */
   exclude: (predicate: (x: Node) => boolean) => TSelf
-  // TODO: If returns a non-query result, cancel() and set to that value?
+  // TODO: If returns a non-query result, cancel() and set to that value? "assume static value, not a program"
   // TODO: Checks for uniqueness, only once per location: TODO: What would a reduce look like that doesn't do this (could be useful for intermediate results) - is this useful?
   reduce: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
   reduce_right: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
@@ -158,6 +166,12 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * Note: that since graph's structure allows for branching, it could be that .length.max() != .count.
    */
   count: () => Node
+  /**
+   * Returns the largest value according to some "number line" (; or rather, some ordering).
+   * TODO: How to select which numberline. Which currently doesnt work for .max/.min.
+   *
+   * TODO: Should be possibly Many<Node> because of loops "1" and "2" can both be greater than each other.
+   */
   max: () => Node // TODO: This number returns a node within the "number line". In a way that .gt works on it. Similarly, .first returns -Infinity.
   min: () => Node
 
@@ -245,19 +259,18 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 /**
  * TODO: How to do a filter by index % 5 == 0 for instance, but without mapping to the index.
  *
+ *
  * TODO: Unselected structure: Ignored structure?
- *
- *
- * TODO Merging different references of the same value. (Deduplication)
- *      Different instantiations on the same . equals value, with unselected structure, switching to other unselected structure might be "all other references to this value" which we could have pending, without needing it to be instantiated when accessing the existing structure.
- * TODO
- *
  *
  * TODO: More general way of having selections of different structures, say some that influence .next, some for .isomorphic, some for X. ..
  *
+ * TODO
+ *      - Referencing a subgraph (Is there something better than just selecting all the nodes)
+ *      - Named subgraph
+ *        (or: a node with name x, gets replaced with graph y)
+ *        Patterned rewrite vec(A) ::= A^n
  *
  *
- * TODO: A node is a selection of rays from a larger collection of rays at that node.?
  */
 export interface Node extends Pointer<Node> {
 
@@ -278,9 +291,13 @@ export interface Node extends Pointer<Node> {
   // self: () => Many<Node>
 
   /**
+   * TODO: Equivalence of types used for ?
+   *
    * TODO: The existence of a loop VS an instantiation matching that loop.
    * TODO: Empty node vs ANY match. Something like "the result of .equals" is always true?
    *        similarly .or, result of .equals is A | B. Or .equals = false for A,B,C. So exclusion as well.
+   *
+   *        Similarly: "the result of this vision system = 'A'"
    *
    * TODO: Type here should also be something like a programming language specification.
    *       More generally; does this pattern match onto this Node/structure.

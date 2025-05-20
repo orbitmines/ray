@@ -16,6 +16,7 @@ export namespace Query {
 
     export type Type<TValue, TNextQuery> = {
       (...value: MappedArguments<TValue>): Query.Type<TNextQuery>
+      __name__: string | symbol
     }
   }
 
@@ -36,13 +37,15 @@ export namespace Query {
     __value__?: any
 
     __get__ = (property: string | symbol): any => {
-        return <TValue, TNextQuery>(...value: Property.MappedArguments<TValue>): TNextQuery => {
+        const __property__ = <TValue, TNextQuery>(...value: Property.MappedArguments<TValue>): TNextQuery => {
           const x = new Instance();
           x.__parent__ = this;
           x.__property__ = property;
           x.__value__ = value;
           return x.__proxy__ as TNextQuery;
         }
+        __property__.__name__ = property;
+        return __property__;
     }
 
     __call__ = (...args: any[]): any => this;
@@ -294,10 +297,6 @@ export interface Node extends Pointer<Node> {
    * TODO: Equivalence of types used for ?
    *
    * TODO: The existence of a loop VS an instantiation matching that loop.
-   * TODO: Empty node vs ANY match. Something like "the result of .equals" is always true?
-   *        similarly .or, result of .equals is A | B. Or .equals = false for A,B,C. So exclusion as well.
-   *
-   *        Similarly: "the result of this vision system = 'A'"
    *
    * TODO: Type here should also be something like a programming language specification.
    *       More generally; does this pattern match onto this Node/structure.
@@ -420,6 +419,9 @@ export type ParallelNodeMethods = {
 export type Many<T> = Pointer<Many<T>>
   & (T extends Node ? ParallelNodeMethods : {})
 
+export interface Type extends Omit<Node, 'map'> {
+
+}
 
 /**
  *
@@ -442,6 +444,7 @@ export type Many<T> = Pointer<Many<T>>
  *          Where in the control-flow is the program? (Many<Node> ref)
  *          Intermediate values of variables (like the .reduce accumulated value which may be non-halting)
  *          Normal programs have a control flow and location as opposed to a graph rewrite applying everywhere. Some generalization of these sorts of options
+ *          What would the "branch from here" look like in the IDE? More generally what would it look like?
  */
 export interface Function {
 

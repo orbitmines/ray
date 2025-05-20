@@ -1,4 +1,4 @@
-import {Many, Node, Pointer, Query, Ray} from "./ray";
+import {Many, Node, Pointer, Query, Ray, Type} from "./ray";
 
 describe("ray", () => {
   test("", async () => {
@@ -102,6 +102,20 @@ describe("ray", () => {
     }
     a<Many<Node>>()
 
+    const Any = Query.instance<Type>()
+      .filter(x => true)
+    const A_or_B = Query.instance<Type>()
+      .filter(x => x.equals(A).or(x.equals(B)))
+
+    const JavaScript = {
+      Array: Query.instance<Type>()
+        // TODO
+        // .loop
+        // .add(initial)
+        // .add(terminal)
+        // .filter(x => x.none_selected() Basically graph and x.length().max().lt(2 ^ 32))
+
+    }
 
     const x = Query.instance<Many<Node>>()
       .filter(async a => true)
@@ -111,6 +125,7 @@ describe("ray", () => {
       .filter(b => b.equals(2))
 
     const A = Query.instance<Many<Node>>()
+    const B = Query.instance<Many<Node>>()
 
     const removed = Query.instance<Many<Node>>()
       // .map(async x => await x.to_number() * 2)

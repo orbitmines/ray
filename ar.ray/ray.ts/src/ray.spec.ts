@@ -51,6 +51,7 @@ describe("ray", () => {
             Infinity,
             self.reduce((acc) => acc.plus(1), 0)
           ),
+        // TODO: min/max generalized outside of numbers: Have .Infinity be something which is past x.gt(.last()) = true
         max: (self) => self.reduce((acc, current, cancel) =>
           acc.equals(Infinity).if( // TODO: Or some other smart infinity checker
             cancel,

@@ -1,4 +1,4 @@
-import {Many, Node, Pointer, Query, Ray, Type} from "./ray";
+import {Graph, Many, Node, Pointer, Query, Type, TypeA} from "./ray";
 
 describe("ray", () => {
   test("", async () => {
@@ -6,13 +6,6 @@ describe("ray", () => {
     const a = <TPointer extends Pointer<TPointer>>() => {
       const exec = new Query.Executor<TPointer>() as Query.Executor<Many<Node>>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
 
-      (exec as any as Query.Executor<Ray>).rewrite({
-        is_initial: (self) => self.previous().is_empty(),
-        is_terminal: (self) => self.next().is_empty(),
-        is_reference: (self) => self.is_initial().and(self.is_terminal()),
-        is_vertex: (self) => self.is_initial().not().and(self.is_terminal().not()),
-        is_boundary: (self) => self.is_initial().xor(self.is_terminal())
-      });
 
       (exec as any as Query.Executor<Node>).rewrite({
         xor: (self, b) =>
@@ -21,6 +14,7 @@ describe("ray", () => {
           self.or(b).not(),
         nand: (self, b) =>
           self.and(b).not(),
+
       })
 
       exec.rewrite({
@@ -35,6 +29,8 @@ describe("ray", () => {
         reduce_right: (self, callback, initial_value) =>
           self.reverse().reduce(callback, initial_value),
 
+        step_by: (self, step) =>
+          self.filter((x, index) => index.mod(step).equals(0)),
         shift: (self) =>
           self.pop_front(),
         unshift: (self, ...x: any[]) =>
@@ -102,18 +98,31 @@ describe("ray", () => {
     }
     a<Many<Node>>()
 
-    const Any = Query.instance<Type>()
-      .filter(x => true)
-    const A_or_B = Query.instance<Type>()
-      .filter(x => x.equals(A).or(x.equals(B)))
+
+    // 'A'.equals('B') Easy, just replace the local .equals('B') = true
+    // 'B'.equals('A') Expects us to have some way of finding B.
+    // TODO: So we'd .equivalence an entire direction, but used when?
+    // Equivalence frame A = B
+    // const ANY = Query.instance<Node>()
+    //   .rewrite(self => self.equals, true)
+    // const a_ = Query.instance<Node>()
+    //   .rewrite(self => self.equals('B'), true)
+
+
+    const Any = Query.instance<Type<Node>>()
+      .matches(x => true)
+    const A_or_B = Query.instance<Type<Node>>()
+      .matches(x => x.equals(A).or(x.equals(B)))
+
 
     const JavaScript = {
-      Array: Query.instance<Type>()
+      Array: Query.instance<Type<Graph>>()
         // TODO
         // .loop
         // .add(initial)
         // .add(terminal)
-        // .filter(x => x.none_selected() Basically graph and x.length().max().lt(2 ^ 32))
+        // TODO Apply to loop only, not the initial/terminal dangling edge
+        .matches(x => x.length().max().lt(2 ^ 32))
 
     }
 
@@ -126,6 +135,15 @@ describe("ray", () => {
 
     const A = Query.instance<Many<Node>>()
     const B = Query.instance<Many<Node>>()
+
+    const C = A
+      .push_back('A')
+      .push_back('B')
+
+    // TODO : Even though .filter changes the nodes, they should still be removeable like this
+    // TODO .all() here or not: Is it the selection we remove or the entire structure?
+    C.apply(C.filter(x => x.equals('B')).remove())
+    C.apply(C.filter(x => x.equals('B')).all().remove())
 
     const removed = Query.instance<Many<Node>>()
       // .map(async x => await x.to_number() * 2)

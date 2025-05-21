@@ -6,7 +6,7 @@ export type MaybeAsync<T> = T | Promise<T>
 export namespace Query {
   export namespace Property {
     export type MappedValue<T> = T extends void ? void : T | Query.Type<Node>
-    export type MappedFunction<T extends (...args: any[]) => any> = T extends (...args: infer Args) => infer Result ? (...args: { [Arg in keyof Args]: Args[Arg] extends Node ? Query.Type<Args[Arg]> : Args[Arg] }) => MaybeAsync<MappedValue<Result>> : never;
+    export type MappedFunction<T extends (...args: any[]) => any> = T extends (...args: infer Args) => infer Result ? (...args: { [Arg in keyof Args]: Args[Arg] extends Pointer<infer _> ? Query.Type<Args[Arg]> : Args[Arg] }) => MaybeAsync<MappedValue<Result>> : never;
     export type MappedArgument<T> = T extends (...args: any[]) => any ? MappedFunction<T> : MappedValue<T>
     export type MappedArguments<T> =
       0 extends (1 & T) /* T = any? */ ? [MappedArgument<T>] :
@@ -27,7 +27,7 @@ export namespace Query {
     (): Instance
   }
 
-  export const instance = <T>(): Type<T> => new Instance().__proxy__ as Type<T>
+  export const instance = <T>(): Type<T> => new Instance().__proxy__ as Query.Type<T>
 
   export class Instance {
 
@@ -77,7 +77,24 @@ export namespace Query {
 
   }
 
-  // TODO: Requires knowledge of what operation can effect what.
+  /**
+   * TODO Some function on Query effecting all downstream children VS having a pointer to the original structure.
+   *    Or when would you use some more complicated "these kinds of changes but not others".
+   *    Access the chain similarly graph.last. But that means it can branch so which to pick? Or are all changes in some required sequence ... (Either both) In case a JavaScript object it's in some required sequence.
+   *      OR we could execute whatever we do on a node to all possible futures.
+   *      Which means a pointer is a selection and a possible number of future possibilities. How does that effect things; to_x might change.
+   */
+
+
+  /**
+   * TODO
+   *  - Named subgraph
+   *        (or: a node with name x, gets replaced with graph y)
+   *        TODO: Patterned rewrite vec(A) ::= A^n
+   */
+
+
+    // TODO: Requires knowledge of what operation can effect what.
   // TODO: Could figure out what can be done in parallel and what can't.
   // TODO: Say I used push_back somewhere and I question .last right after. It becomes: .last before is no longer relevant. "If there is a terminal, so push_back has a target, then it is that value there.)
 
@@ -86,8 +103,8 @@ export namespace Query {
   // 		    - Invalidate before some query, caching on some other base layer
 
   // TODO
-  // TODO Merging different references of the same value. (Deduplication)
-  //      Different instantiations on the same . equals value, with unselected structure, switching to other unselected structure might be "all other references to this value" which we could have pending, without needing it to be instantiated when accessing the existing structure.
+  // TODO Merging different references of the same value. (Deduplication)\
+  //      Have pending possible switches to (un)selected structure. Many refs to the same value
   export class Executor<T> {
 
     // TODO: Rewrite to many targets used in which situation?
@@ -137,7 +154,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    *
    * Note: If a node is currently selected and falls outside the filter, the node will be deselected.
    */
-  filter: (predicate: (x: Node) => boolean) => TSelf
+  filter: (predicate: (x: Node, index: Node) => boolean) => TSelf
   /**
    * Opposite of 'filter'.
    */
@@ -147,6 +164,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   reduce: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
   reduce_right: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
 
+  step_by: (value: number) => TSelf
   /**
    * @alias pop_front
    */
@@ -259,33 +277,19 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 
 }
 
-/**
- * TODO: How to do a filter by index % 5 == 0 for instance, but without mapping to the index.
- *
- *
- * TODO: Unselected structure: Ignored structure?
- *
- * TODO: More general way of having selections of different structures, say some that influence .next, some for .isomorphic, some for X. ..
- *
- * TODO
- *      - Referencing a subgraph (Is there something better than just selecting all the nodes)
- *      - Named subgraph
- *        (or: a node with name x, gets replaced with graph y)
- *        Patterned rewrite vec(A) ::= A^n
- *
- *
- */
 export interface Node extends Pointer<Node> {
 
   /**
    * TODO: "Equivalence frames" are deemed .equal
    * TODO: .equal/.isomorphic/.identical for which would you need to implement this?
    *
-   * TODO: (Canonicalization) OR: Are all node references merged like this? Then what is the .self value? What happens with duplicated structure? etc..
+   *
+   * TODO: (Canonicalization) What happens after an equivalence frame? OR: Are all node references merged like this? Then what is the .self value? What happens with duplicated structure? etc..
    *       Might still want to remember the different representations/original nodes and access them.
    *       .identical, or different representations, works similarly here (with respect to merging different references (deduplication)).
    */
   // equivalence: (is_equivalent: (a, b) => boolean)) => TSelf
+  // rewrite: <TProperty>(property: (self: Node) => TProperty, value: any) => Node
 
   /**
    * TODO: Move the "selected structure" to ".self"
@@ -295,6 +299,7 @@ export interface Node extends Pointer<Node> {
 
   /**
    * TODO: Equivalence of types used for ?
+   *
    *
    * TODO: The existence of a loop VS an instantiation matching that loop.
    *
@@ -315,22 +320,15 @@ export interface Node extends Pointer<Node> {
    *
    * TODO: Include type information like ().length.max().lt(2 ^ 32) (javascript Array) "result at this variable location"
    *
-   * TODO for regex youd have something like {min,max} ().length().max() -> .lte(max), .gte(min) "Have some way to branch multiple queries unto one thing" is probably a repeating pattern we're going to use.
    *
    *
-   * TODO: Difference between whole match, and a match where "at least the type" is in this object (matching subgraphs for instance).
-   *        Subgraphs important: some looped variable say "A", matched .length().max() = 5 times, the length, should only count for that subgraph. Not additional things that might be defined further along the .next/.previous sides.
+   * TODO: Difference between whole match, and a match where "at least the type" is in this object (matching subgraphs for instance)
    *        Again this need for, "selected structure" being the underlying structure. Say the beginning and end of AAAA. And another being
    *        the reference to the loop around "A".
    *
-   * TODO: Is a subgraph just Many<Node>
+   * TODO: Is a subgraph just Many<Node>.remove()
    *
-   * TODO: Subgraph isomorphism vs subgraph isomorphism + .equals on all the nodes.
-   *       Subgraphs including/excluding initials/terminals.
-   *
-   * TODO: Requires: "On another level of description", like "this group"/"this subgraph".
-   *
-   * TODO: What does the type of an array look like? Is it a simple loop with an initial/terminal. But that also matches a branched structure, how to dismiss the branched structure?
+   * TODO: How to match Many<Edges> of a certain structure?
    *
    * TODO: .or (set union), .and
    *
@@ -339,7 +337,6 @@ export interface Node extends Pointer<Node> {
    *      Mapping a grammar of a language and then compiling the language as an example. So some program follows here.
    *
    *
-   * TODO: Mapped as some other function so it's a program.
    */
   instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
   //TODO Similar to .remove, this matches to a structure and returns that structure.
@@ -354,22 +351,18 @@ export interface Node extends Pointer<Node> {
   /**
    * Structurally equal (ignores value).
    * TODO: What about the additional structures defined at that node\?
-   *  Is that always considered part of value or not?: No it's not. Consider for example some "times function" on top of the plus structure. We only want to consider the values.
    *
    * TODO: So, difference between isomorphic and isomorphic in all those structures?
    * TODO: Also, isomorphic of selected structures (for each dimension) vs as a combined dimension.
-   *
-   *
-   * ROTATION/REFRAME?;
-   * TODO: Calling it a rotation, what does a normal rotation look like in this setting?
-   * TODO: Also some way to change the .value checked at .equals.
-   * TODO: Need some way to join/select/merge structures
    */
   isomorphic: (value: any) => Node
   /**
    * Structure, and all values within that structure, are equal.
    */
   identical: (value: any) => Node
+
+  // TODO: Or is rotation a good name?
+  // reframe: (x: (context: Context) => Context) => Node
 
   // TODO: If-else and other language primitives
   //       If-else is simply an if branch in the _false value.
@@ -387,6 +380,8 @@ export interface Node extends Pointer<Node> {
   lt: (value: any) => Node
   lte: (value: any) => Node
 
+  mod: (value: number) => Node
+
   not: () => Node
   or: (b: boolean) => Node
   and: (b: boolean) => Node
@@ -395,17 +390,50 @@ export interface Node extends Pointer<Node> {
   nand: (b: boolean) => Node
 }
 
+/**
+ * Edge reference (which is at least a terminal/initial if not dangling?
+ */
+export interface Edge {
+  // initial_side: () => Ray
+  // terminal_side: () => Ray
+}
+
+// TODO: Could be infinite context here
+/**
+ * TODO Change: Ignored Structure:    Ignored Context (does this need to have structure like .functions, .traversers, .referenced_by .? )
+ *              Selected Structure:   Context,  .isomorphic
+ *              Referenced Structure: Referenced Context (subset of selected structure),   .next
+ *              Value.
+ */
+export interface Context {
+
+}
+export interface Reference {
+
+}
+
 // TODO: When traversing, how to differentiate where in the structure you are, say .next results into two terminals, and a vertex.
 //       That could recursively be the case at defining the terminals, how to keep track of which are the ones we're interested in
 //       for the .next result.
 // TODO: Select substructure of the structure on the edges as a path.
-export interface Ray extends Node {
-  is_initial: () => Node
-  is_terminal: () => Node
-  is_reference: () => Node
-  is_vertex: () => Node
-  is_boundary: () => Node
-}
+// TODO: Ray + Ray => Ray
+// (exec as any as Query.Executor<Ray>).rewrite({
+//   is_initial: (self) => self.initial().is_empty(),
+//   is_terminal: (self) => self.terminal().is_empty(),
+//   is_reference: (self) => self.is_initial().and(self.is_terminal()),
+//   is_vertex: (self) => self.is_initial().not().and(self.is_terminal().not()),
+//   is_boundary: (self) => self.is_initial().xor(self.is_terminal())
+// });
+// export interface Ray {
+//   initial: () => Many<Node>
+//   terminal: () => Many<Node>
+//
+//   is_initial: () => Node
+//   is_terminal: () => Node
+//   is_reference: () => Node
+//   is_vertex: () => Node
+//   is_boundary: () => Node
+// }
 
 
 /**
@@ -416,17 +444,21 @@ export type ParallelNodeMethods = {
   [P in Exclude<keyof Node, keyof Pointer<Node>>]: Node[P] extends (...args: infer Args) => infer TNextQuery
     ? (...args: Args) => Many<Node> : never
 }
+// TODO: Selection includes Edges.
 export type Many<T> = Pointer<Many<T>>
   & (T extends Node ? ParallelNodeMethods : {})
 
-export interface Type extends Omit<Node, 'map'> {
 
-}
+export type Type<T> = T & {
+  matches: (predicate: (x: T) => boolean) => Type<T>
+};
 
 /**
  *
  * TODO FUNCTIONS
  *      - What does a function structurally look like, is there a nice visual translation possible?
+ *      -
+ *      - Are basically .match(type) -> do/have these things
  *      -
  *      - Always comes with: .next value is reapplying function to the same result. (Applying a single rewrite rule for example is a single path, which could branch in many different places it could be applied)
  *      - f' or the reverse starts at the terminal behind the result. One relies on caching or a reversible function to go back. (Or a non-reversible function where going back iterates a number of possibilities)
@@ -507,9 +539,6 @@ export interface Graph extends Pointer<Graph> {
   // compose matching domain/codomain
 
 }
-
-
-export default Ray;
 
 /**
  * Range

@@ -6,7 +6,8 @@ export type MaybeAsync<T> = T | Promise<T>
 export namespace Query {
   export namespace Property {
     export type MappedValue<T> = T extends void ? void : T | Query.Type<Node>
-    export type MappedFunction<T extends (...args: any[]) => any> = T extends (...args: infer Args) => infer Result ? (...args: { [Arg in keyof Args]: Args[Arg] extends Pointer<infer _> ? Query.Type<Args[Arg]> : Args[Arg] }) => MaybeAsync<MappedValue<Result>> : never;
+    export type MappedParameterArguments<T> = { [Arg in keyof T]: T[Arg] extends Pointer<infer _> ? Query.Type<T[Arg]> : T[Arg] }
+    export type MappedFunction<T extends (...args: any[]) => any> = T extends (...args: infer Args) => infer R ? (...args: MappedParameterArguments<Args>) => MaybeAsync<MappedValue<R>> : never;
     export type MappedArgument<T> = T extends (...args: any[]) => any ? MappedFunction<T> : MappedValue<T>
     export type MappedArguments<T> =
       0 extends (1 & T) /* T = any? */ ? [MappedArgument<T>] :
@@ -20,12 +21,26 @@ export namespace Query {
     }
   }
 
+  export namespace Convertable {
+    export type MappedValue<T> = MaybeAsync<undefined | T>
+
+    export type Type = {
+      to_number: () => MappedValue<number>
+      to_boolean: () => MappedValue<boolean>
+      to_array: <R>(map: (x: Query.Type<Node>) => MappedValue<R>) => MappedValue<R[]>
+      to_function: () => MappedValue<(...args: any[]) => any>
+      to_object: <T = object>(constructor?: new () => T) => MappedValue<T>
+      to_string: () => MappedValue<string>
+      to_map: <K, V>(key: (x: Query.Type<Node>) => MappedValue<K>, value: (x: Query.Type<Node>) => MappedValue<V>) => MappedValue<Map<K, V>>
+    }
+  }
+
   export type Type<T> = {
     [P in keyof T]: T[P] extends (...args: infer Args) => infer Query ? Property.Type<Args, Query> : never
   } & {
     new (...args: any[]): Query.Type<Node>
     (): Instance
-  }
+  } & (T extends Node ? AsyncIterable<Query.Type<Many<T>>> & Convertable.Type : {})
 
   export const instance = <T>(): Type<T> => new Instance().__proxy__ as Query.Type<T>
 
@@ -153,6 +168,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   /**
    *
    * Note: If a node is currently selected and falls outside the filter, the node will be deselected.
+   * TODO: Other things than index here as related to the traverser? Or just put the traverser there
    */
   filter: (predicate: (x: Node, index: Node) => boolean) => TSelf
   /**
@@ -292,7 +308,7 @@ export interface Node extends Pointer<Node> {
   // rewrite: <TProperty>(property: (self: Node) => TProperty, value: any) => Node
 
   /**
-   * TODO: Move the "selected structure" to ".self"
+   * TODO: Move the "selected structure" to ".self", what gets moved to .context? This .self? Or nothing?
    */
   // context: () => Node
   // self: () => Many<Node>
@@ -391,7 +407,7 @@ export interface Node extends Pointer<Node> {
 }
 
 /**
- * Edge reference (which is at least a terminal/initial if not dangling?
+ * Edge reference (which is at least a terminal/initial if not dangling?)
  */
 export interface Edge {
   // initial_side: () => Ray
@@ -404,6 +420,10 @@ export interface Edge {
  *              Selected Structure:   Context,  .isomorphic
  *              Referenced Structure: Referenced Context (subset of selected structure),   .next
  *              Value.
+ *
+ *
+ * TODO History
+ *      Context changes need to be in the history.
  */
 export interface Context {
 
@@ -458,6 +478,7 @@ export type Type<T> = T & {
  * TODO FUNCTIONS
  *      - What does a function structurally look like, is there a nice visual translation possible?
  *      -
+ *      -
  *      - Are basically .match(type) -> do/have these things
  *      -
  *      - Always comes with: .next value is reapplying function to the same result. (Applying a single rewrite rule for example is a single path, which could branch in many different places it could be applied)
@@ -473,6 +494,7 @@ export type Type<T> = T & {
  *          Allow for self-reference of operators (but requires implementation).
  *      - Function.compose(Function) = Function (If functions are control-flow graphs, then function composition is linked to graph composition)
  *      - Control-flow & debugging
+ *          Variable is .history().last() ?
  *          Where in the control-flow is the program? (Many<Node> ref)
  *          Intermediate values of variables (like the .reduce accumulated value which may be non-halting)
  *          Normal programs have a control flow and location as opposed to a graph rewrite applying everywhere. Some generalization of these sorts of options

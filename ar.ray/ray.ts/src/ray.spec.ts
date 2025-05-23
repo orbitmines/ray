@@ -1,10 +1,27 @@
-import {Graph, Many, Node, Pointer, Query, Type, TypeA} from "./ray";
+import {Graph, Many, Node, Pointer, Query, Type} from "./ray";
 
 describe("ray", () => {
+  // test("Query.Convertable", async () => {
+  //   expect(await new (Query.instance<Node>())(5).to_number()).toBe(5)
+  //   expect(await new (Query.instance<Node>())(true).to_boolean()).toBe(true)
+  //   expect(await new (Query.instance<Node>())(true, false, true).to_array(x => x.to_boolean())).toEqual([true, false, true])
+  //   expect((await new (Query.instance<Node>())(() => 5).to_function())()).toBe(5)
+  //   expect(await new (Query.instance<Node>())({ a: 'b' }).to_object()).toEqual({ a: 'b' })
+  //   class Clazz { constructor(public a?: string) {} }
+  //   expect((await new (Query.instance<Node>())(new Clazz('b')).to_object(Clazz)).a).toEqual('b')
+  //   expect(await new (Query.instance<Node>())('a').to_number()).toBe('a')
+  //   const map = new Map<string, number>();
+  //   map.set('a', 1);
+  //   expect((await new (Query.instance<Node>())(map).to_map(key => key.to_string(), value => value.to_number())).get('a')).toBe(1)
+  //
+  //   for await (let next of Query.instance<Node>()) {
+  //
+  //   }
+  // })
   test("", async () => {
 
     const a = <TPointer extends Pointer<TPointer>>() => {
-      const exec = new Query.Executor<TPointer>() as Query.Executor<Many<Node>>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
+      const exec = new Query.Executor<TPointer>() as any as Query.Executor<Many<Node>>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
 
 
       (exec as any as Query.Executor<Node>).rewrite({
@@ -81,6 +98,9 @@ describe("ray", () => {
         has_previous: (self) =>
           self.previous().is_nonempty(),
 
+        // TODO
+        // set: (self, value) =>
+        //   self.history().push_back(value),
         pop_front: (self) =>
           self.first().remove(),
         pop_back: (self) =>
@@ -113,7 +133,6 @@ describe("ray", () => {
       .matches(x => true)
     const A_or_B = Query.instance<Type<Node>>()
       .matches(x => x.equals(A).or(x.equals(B)))
-
 
     const JavaScript = {
       Array: Query.instance<Type<Graph>>()
@@ -172,148 +191,5 @@ describe("ray", () => {
       )
 
     A.push_front('A')
-
-    // console.log(removed.remove.value)
-
-    // new Ray(1, 2, 3).equals(new Ray(1, 2, 3)) === true
-    // new Ray(1, 2, 3).next.equals(1) === true
-    // new Ray(1, 2, 3).next.next.equals(2) === true
-    // new Ray(A, B: new Ray(1, 2, 3), C).next.next.equals(new Ray(1, 2, 3)) === true
-
-    // new Ray(1, 2, 3).isomorphic(new Ray(A, B, C)) === true
-    // new Ray(1, 2, 3).next.isomorphic(new Ray(A, B, C).next) === true
-    // new Ray(1, 2, 3).next.isomorphic(new Ray(A, B, C).next.next) === false TODO Does the cursor play a role in the structure yes ???
-
-
-
-    // const ray = new Ray()
-    //   .bidirectional()
-    //   .filter(x => true)
-    //   .map(x => x)
-    //   .at(Range.Gt(5))
-    //   .reverse()
-    //
-    // new Ray().at(1).at(1)
-    // new Ray().at(2)
-    // new Ray().next.next
-    //
-    // new Ray()
-    //   .bidirectional()
-    //   .at(2)
-    //   // -2, 2
-    //   .bidirectional() // TODO: Should this be necessary, or does it take the bottom defined one until disabled
-    //   .at(1)
-    //   // -3, 1, 3, 1
-    //
-    // new Ray()
-    //   .bidirectional()
-    //   .at(2)
-    //   // -2, 2
-    //   .at(1)
-    //   // -1, 3
-    //
-    // new Ray()
-    //   .bidirectional()
-    //   .at(Range.Gt(5))
-    //   // > 5, < -5
-    //   .at(1)
-    //   // > 6, < -4
-    //
-    // console.log(ray.reverse.value)
-
-    // const program = new Program();
-    //
-    // function *g() { while (true) { yield 2; } }
-    //
-    // const i = new AlteredIterable(
-    //   // [1, 2, 3, 1, 2, 2, 3]
-    //   g(),
-    //   program
-    // )
-    //   .filter(x => x === 2 || x === 3)
-    //   .map(x => x * 2)
-    //   .filter(x => x === 4)
-    //   .map(x => x * 3)
-    //
-    // await program.step(async () => {
-    //
-    //   for await (let value of i) {
-    //     console.log(value);
-    //   }
-    //
-    // }, 10)
-
-    //
-    // expect(Ray.initial().is_initial()).toBe(true)
-    // expect(Ray.vertex().is_vertex()).toBe(true)
-    // expect(Ray.terminal().is_terminal()).toBe(true)
-    //
-    // const ray = Ray.iterable(['A', 'B', 'C'])
-    //
-    // console.log([...ray].length) // TODO FIX
-    // expect(ray.length).toBe(3);
-    // expect(ray.current.__object__).toBe('A')
-    // expect(ray.at(2).__object__).toBe('C')
-    // // expect(ray.last.self.__object__).toBe('C')
-    // expect(ray.next.__object__).toBe('B')
-    // // expect(ray.next.next.next.self.__object__).toBe('C')
-    // expect(ray.type).toBe(Type.INITIAL)
-    //
-    // ray.at(2).compose(Ray.vertex({ __object__: 'D' }))
-    //
-    // expect(ray.at(3).__object__).toBe('D')
   });
-
-  // test("", async () => {
-  //   const _: Pointer = null!;
-  //
-  //   const last = _.last
-  //   const any = (any: any): Pointer => null!;
-  //
-  //   // const fn = (A: Pointer) => {
-  //   //   (A.last = A).B();
-  //   //   any(fn)(A.last = A);
-  //   // }
-  //
-  //   const fn = (A: Pointer) {
-  //     A[1][2] = A[4]
-  //   }
-  // })
-
-  // test("temp", async () => {
-  //   const A = new Ray({
-  //
-  //   }, 'A', 'B', 'C')
-  //   const B = new Ray({}, [
-  //     [1, 2, 3],
-  //     [4, 5, 6],
-  //     [7, 8, 9],
-  //   ]);
-  //
-  //   console.log(A.is_some().__object__)
-  //
-  //   expect([...A]).toEqual([])
-  //
-  //   const res = []; for await (let el of A) { res.push(el); }
-  //   expect(res).toEqual([])
-  //
-  //
-  //   expect(A).toEqual(new Ray())
-  // })
-  // test("Minimal setup", () => {
-  //   expect(Ray.unknown.is_equivalent(Ray.unknown)).toBe(true)
-  // });
-  // test(".initial = .terminal", () => {
-  //   const A = new Ray();
-  //   A.initial.equivalent(A.terminal)
-  //   A.initial = A.terminal
-  //   A.compose(A)
-  //
-  // })
-  // test(".copy", () => {
-  //   const A = new Ray();
-  //   const B = A.copy();
-  //
-  //   expect(B.is_isomorphic(A)).toBe(true)
-  // })
 })

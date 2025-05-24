@@ -2,7 +2,7 @@ import {exec} from "node:child_process";
 
 export type MaybeAsync<T> = T | Promise<T>
 
-
+// TODO: Name Query or Program?
 export namespace Query {
   export namespace Property {
     export type MappedValue<T> = T extends void ? void : T | Query.Type<Node>
@@ -318,6 +318,9 @@ export interface Node extends Pointer<Node> {
    *
    *
    * TODO: The existence of a loop VS an instantiation matching that loop.
+   *       How to: a particular complicated loop max X times.
+   *       - Select subgraph which is the loop, then: ???
+   *       - Have a named reference to that complicated loop, and have a simple loop, then .length().max() on that simple loop.
    *
    * TODO: Type here should also be something like a programming language specification.
    *       More generally; does this pattern match onto this Node/structure.
@@ -416,7 +419,7 @@ export interface Edge {
 
 // TODO: Could be infinite context here
 /**
- * TODO Change: Ignored Structure:    Ignored Context (does this need to have structure like .functions, .traversers, .referenced_by .? )
+ * TODO Change: Ignored Structure:    Ignored Context (does this need to have structure like .history, .functions, .traversers, .referenced_by .? )
  *              Selected Structure:   Context,  .isomorphic
  *              Referenced Structure: Referenced Context (subset of selected structure),   .next
  *              Value.
@@ -480,6 +483,7 @@ export type Type<T> = T & {
  *      -
  *      -
  *      - Are basically .match(type) -> do/have these things
+ *        But possibly only the matches within this graph X. (scopes)
  *      -
  *      - Always comes with: .next value is reapplying function to the same result. (Applying a single rewrite rule for example is a single path, which could branch in many different places it could be applied)
  *      - f' or the reverse starts at the terminal behind the result. One relies on caching or a reversible function to go back. (Or a non-reversible function where going back iterates a number of possibilities)
@@ -488,6 +492,14 @@ export type Type<T> = T & {
  *        Generalized to: Like ANY match: Many<Node> whose "result of predicate = true"
  *      - "Many usages" -> as unselected structure
  *      - Function.equals(Function)
+ *        Equality in input -> output (Extensional Equality)
+ *        Equality in source code (Intensional Equality)
+ *          More elaborate intensional equality would be?
+ *            Definition
+ *            Separate compilation layers it goes through
+ *            (and some possible unknown compilation layers (ex. physics))
+ *            "(perceived) Actual execution layer"
+ *          VS control-flow at each layer
  *      - Function.equals(Function) = true (set as equivalent, rewrite function as another function)
  *          "Graph of equivalences reached through theorem prover, how"
  *          Possible rewrites as (what are the equivalences)

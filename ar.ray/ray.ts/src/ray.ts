@@ -8,7 +8,10 @@ export namespace Query {
     export type MappedValue<T> = T extends void ? void : T | Query.Type<Node>
     export type MappedParameterArguments<T> = { [Arg in keyof T]: T[Arg] extends Pointer<infer _> ? Query.Type<T[Arg]> : T[Arg] }
     export type MappedFunction<T extends (...args: any[]) => any> = T extends (...args: infer Args) => infer R ? (...args: MappedParameterArguments<Args>) => MaybeAsync<MappedValue<R>> : never;
-    export type MappedArgument<T> = T extends (...args: any[]) => any ? MappedFunction<T> : MappedValue<T>
+    export type MappedArgument<T> = T extends (...args: any[]) =>
+      any ? MappedFunction<T> :
+        T extends Pointer<infer _> ? Query.Type<T> :
+          MappedValue<T>
     export type MappedArguments<T> =
       0 extends (1 & T) /* T = any? */ ? [MappedArgument<T>] :
         T extends void ? [] :
@@ -225,7 +228,12 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * TODO (index: number | IRange): IRange | Ray => is_number(index) ? Range.Eq(index) : index
    *
    */
-  at: (index: number | IRange) => Many<Node>
+  at: (...index: (number | IRange)[]) => Many<Node>
+  /**
+   * Move the current VALUE to other nodes in the graph.
+   * TODO: What to do if there are multiple values at a Node? Just overlay them? Or would you want additional structure deciding with pairs of rays at .self belong to eachother?
+   */
+  move: (...index: (number | IRange | Path)[]) => Many<Node>
   /**
    * Maps the original structure to one where you find the distances at the Nodes.
    *
@@ -243,6 +251,22 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    */
   all: () => Many<Node>
 
+  // TODO: Might wants operations like .neg / .subtract etc.. on the selected nodes.
+  //       So differentiation between .neg on the VALUE vs selected nodes.
+  //       Same with .every, or .filter which only applies to the selection.
+  selection: () => Graph
+  /**
+   * TODO: How to think about the same node, but different selected contexts/values on that node. Assuming they're different instances and both part of the union?
+   */
+  // OR
+  union: (...x: Many<Node>[]) => Many<Node>
+  // AND
+  intersection: (...x: Many<Node>[]) => Many<Node>
+  // A and NOT B
+  // difference: (...x: Many<Node>[]) => Many<Node>
+  // XOR
+  // symmetric_difference: (...x: Many<Node>[]) => Many<Node>
+
   next: () => Many<Node>
   previous: () => Many<Node>
   /**
@@ -254,8 +278,9 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   /**
    * Note: Plus and minus are simply moving the pointer along the graph a number of steps.
    */
-  plus: (value: number | IRange) => Many<Node>
-  minus: (value: number | IRange) => Many<Node>
+  plus: (...value: (number | IRange)[]) => Many<Node>
+  minus: (...value: (number | IRange)[]) => Many<Node>
+  plus_minus: (...value: (number | IRange)[]) => Many<Node>
 
   /**
    * Note: Having a possible next value doesn't mean that the current value isn't also terminal: It can be both.
@@ -571,6 +596,9 @@ export interface Graph extends Pointer<Graph> {
   // rewrite: (lhs: Graph, rhs: Graph)
   // dpo, spo, cartesion product, tensor product, union, disjoint union etc...
   // compose matching domain/codomain
+
+}
+export interface Path extends Graph {
 
 }
 

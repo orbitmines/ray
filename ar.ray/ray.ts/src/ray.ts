@@ -538,7 +538,12 @@ export type Type<T> = T & {
  *          What would the "branch from here" look like in the IDE? More generally what would it look like?
  */
 export interface Function {
-
+  // TODO Some way to at runtime access variables.
+  //      What about delegated functions, how to point to the right function easily?
+  variables: () => FunctionVariables
+}
+export type FunctionVariables = {
+  [K in keyof any]: () => Node
 }
 
 /**

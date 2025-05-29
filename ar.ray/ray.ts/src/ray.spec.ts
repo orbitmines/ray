@@ -87,11 +87,12 @@ describe("ray", () => {
           self.at(-1),
         first: (self) =>
           self.reverse().last(),
-        plus: (self, index) =>
-          self.at(index),
-        minus: (self, index) =>
-          self.reverse().at(index),
-
+        plus: (self, ...index) =>
+          self.at(...index),
+        minus: (self, ...index) =>
+          self.reverse().at(...index),
+        plus_minus: (self, ...index) =>
+          self.plus(...index).union(self.minus(...index)),
 
         has_next: (self) =>
           self.next().is_nonempty(),

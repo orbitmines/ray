@@ -32,6 +32,22 @@ describe("ray", () => {
         nand: (self, b) =>
           self.and(b).not(),
 
+        // TODO: For number you'd want to overwrite these rewrites with some operator call
+        // TODO: self.instance_of(JavaScript.Number) && [number-line context selected] => self. [executes with] (>= operator)
+        // TODO: Needs to distinguish between some custom number-line, and the default one.
+        gte: (self, value) => self.reduce_right((acc, current, cancel) =>
+          acc.if(cancel, current.equals(value))
+        , undefined),
+        gt: (self, value) => self.reduce_right((acc, current, cancel) =>
+          acc.if(cancel, acc.equals(undefined) /* TODO: More generally, a: "is this the first check" */.if(false, current.equals(value)))
+        , undefined),
+        lte: (self, value) => self.reduce((acc, current, cancel) =>
+          acc.if(cancel, current.equals(value))
+        , undefined),
+        lt: (self, value) => self.reduce((acc, current, cancel) =>
+          acc.if(cancel, acc.equals(undefined).if(false, current.equals(value)))
+        , undefined)
+
       })
 
       exec.rewrite({
@@ -92,7 +108,7 @@ describe("ray", () => {
         minus: (self, ...index) =>
           self.reverse().at(...index),
         plus_minus: (self, ...index) =>
-          self.plus(...index).union(self.minus(...index)),
+          self.plus(...index).union(self.minus(...index)), // TODO: union on selection not the underlying graph.
 
         has_next: (self) =>
           self.next().is_nonempty(),

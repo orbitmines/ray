@@ -121,7 +121,7 @@ export namespace Query {
   // TODO
   // TODO Merging different references of the same value. (Deduplication)\
   //      Have pending possible switches to (un)selected structure. Many refs to the same value
-  export class Executor<T> { //TODO: Rename to Compiler?
+  export class Executor<T> { //TODO: Rename to Runtime/Compiler?
 
     // TODO: Rewrite to many targets used in which situation?
     // TODO: Cross-rewrite with an implementation choosing which one (nand vs . vs .)
@@ -320,15 +320,28 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 export interface Node extends Pointer<Node> {
 
   /**
-   * TODO: "Equivalence frames" are deemed .equal
-   * TODO: .equal/.isomorphic/.identical for which would you need to implement this?
+   * TODO: "Equivalence frames" are deemed .equal (.equal/.isomorphic/.identical)
    *
+   * TODO: All nodes in some program are added to some larger Graph, that graph has operations on it like .map
+   *          OR altered .equals (.rewrite?).
+   * TODO: - All nodes: All different selected contexts of a particular Node.
+   * TODO: - (.filter) All VALUEs in some subgraph are deemed equivalent.
+   * TODO: - Are deemed equivalent in some context. (Which selected context of that node instance)
+   *       - How to access representation before canonicalization? (When?)
    *
-   * TODO: (Canonicalization) What happens after an equivalence frame? OR: Are all node references merged like this? Then what is the .self value? What happens with duplicated structure? etc..
-   *       Might still want to remember the different representations/original nodes and access them.
-   *       .identical, or different representations, works similarly here (with respect to merging different references (deduplication)).
+   * TODO
+   *    - .equivalence which merges all SELECTED CONTEXT.
+   *    -
+   *
+   * Equivalence through a canonicalization function:
+   * .apply(graph.filter(x => temperature(x) > 10).map(x => canonicalize(x)))
+   * Forced equivalence through ignorance:
+   * .apply(graph.filter(x => temperature(x) > 10).equivalent())
+   *
+   * TODO: HOW TO
+   * rewrite(self => self.equals(any of [self.GRAPH]), true)
    */
-  // equivalence: (is_equivalent: (a, b) => boolean)) => TSelf
+  equivalent: () => Operation
   // rewrite: <TProperty>(property: (self: Node) => TProperty, value: any) => Node
 
   /**
@@ -441,11 +454,12 @@ export interface Edge {
   // terminal_side: () => Ray
 }
 
+// TODO: Needs rethinking
 // TODO: Could be infinite context here
 /**
  * TODO Change: Ignored Structure:    Ignored Context (does this need to have structure like .history, .functions, .traversers, .referenced_by .? )
- *              Selected Structure:   Context,  .isomorphic
- *              Referenced Structure: Referenced Context (subset of selected structure),   .next
+ *              Selected Structure:   Context,  (used for types and referencing structure other than Referenced Structure: .equivalent in this structure not referenced)
+ *              Referenced Structure: Referenced Context,   .isomorphic / .next
  *              Value.
  *
  *
@@ -456,6 +470,9 @@ export interface Context {
 
 }
 export interface Reference {
+
+}
+export interface Operation {
 
 }
 
@@ -517,9 +534,10 @@ export type Type<T> = T & {
  *      - "Many usages" -> as unselected structure
  *      - Function.equals(Function)
  *        Equality in input -> output (Extensional Equality)
+ *          Partial equality OR Temporal equality of all "usages" so far.
  *        Equality in source code (Intensional Equality)
  *          More elaborate intensional equality would be?
- *            Definition
+ *            Definition (+ Different contexts in which the definition finds itself)
  *            Separate compilation layers it goes through
  *            (and some possible unknown compilation layers (ex. physics))
  *            "(perceived) Actual execution layer"
@@ -541,6 +559,7 @@ export interface Function {
   //      What about delegated functions, how to point to the right function easily?
   variables: () => FunctionVariables
 }
+// TODO: Do these need to be explicitly exposed, and same with delegated ones, re-expose those in a function?
 export type FunctionVariables = {
   [K in keyof any]: () => Node
 }

@@ -1,5 +1,3 @@
-import {exec} from "node:child_process";
-
 export type MaybeAsync<T> = T | Promise<T>
 
 // TODO: Name Query or Program?
@@ -89,7 +87,7 @@ export namespace Query {
       // set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => this.__set__(property, newValue),
       get: (_: any, property: string | symbol, receiver: any): any => this.__get__(property),
       // has: (_: any, property: string | symbol): boolean => this.__has__(property),
-      construct: (_: any, argArray: any[], newTarget: Function): object => this.__construct__(...argArray),
+      construct: (_: any, argArray: any[], newTarget: any): object => this.__construct__(...argArray),
       // deleteProperty: (_: any, property: string | symbol): boolean => this.__delete__(property)
     }) }
 
@@ -123,7 +121,7 @@ export namespace Query {
   // TODO
   // TODO Merging different references of the same value. (Deduplication)\
   //      Have pending possible switches to (un)selected structure. Many refs to the same value
-  export class Executor<T> {
+  export class Executor<T> { //TODO: Rename to Compiler?
 
     // TODO: Rewrite to many targets used in which situation?
     // TODO: Cross-rewrite with an implementation choosing which one (nand vs . vs .)
@@ -239,7 +237,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    *
    * Note: This can include infinitely generating index options.
    */
-  // TODO Map_reduce here.
+  // TODO Map_reduce (but then for each path) here.
   distance: () => TSelf
   /**
    * Ignores duplicates after visiting the first one.
@@ -318,6 +316,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 
 }
 
+// TODO: Changing ordering of evaluation, like parenthesis
 export interface Node extends Pointer<Node> {
 
   /**
@@ -546,6 +545,10 @@ export type FunctionVariables = {
   [K in keyof any]: () => Node
 }
 
+// TODO: surjective, injective, etc...
+//       Same for function.
+export interface Mapping {}
+
 /**
  * TODO: Traverser as additional structure on Node.
  * TODO: Things like: can only be traversed once in a particular traversal. (used for .slice/.splice, which has an .orbit, but only once for the range/start index).
@@ -598,6 +601,7 @@ export interface Graph extends Pointer<Graph> {
 
 
   // TODO: Rewrite with checking structure at nodes, or ignored. (Basically only looking at between structure)
+  // TODO: Equivalences between nodes in lhs/rhs here how? So you have things like variable rewrites (v, w) -> (w, z)
   // rewrite: (lhs: Graph, rhs: Graph)
   // dpo, spo, cartesion product, tensor product, union, disjoint union etc...
   // compose matching domain/codomain

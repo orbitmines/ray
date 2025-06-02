@@ -87,7 +87,7 @@ describe("ray", () => {
           acc.if(cancel, acc.equals(undefined).if(false, current.equals(value)))
         , undefined)
 
-      })
+      });
 
       exec.rewrite({
         every: (self, predicate) =>

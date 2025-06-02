@@ -359,6 +359,7 @@ export interface Node extends Pointer<Node> {
   /**
    * TODO: Equivalence of types used for ?
    *
+   * TODO: For things like parameters: Allow the tagging of names to arbitrary parts of the type.
    *
    * TODO: The existence of a loop VS an instantiation matching that loop.
    *       How to: a particular complicated loop max X times.
@@ -475,6 +476,7 @@ export interface Edge {
  *              Referenced Structure: Referenced Context,   .isomorphic / .next
  *              Value.
  *
+ * TODO: Should selection change too? Yes? + Edges on selection
  *
  * TODO History
  *      Context changes need to be in the history.
@@ -531,10 +533,34 @@ export type Type<T> = T & {
 };
 
 /**
+ * TODO: Editor
+ *       Should be a text-only variant which still is decently usable? But how?
  *
  * TODO FUNCTIONS
  *      - What does a function structurally look like, is there a nice visual translation possible?
+ *        (Substructure of a larger graph?, layered in a particular way) + Control-flow/Code graph
  *      -
+ *      - Structured input/outputs is basically: Reset everything to a single parameter, but allow one to tag names to arbitrary parts
+ *                                               of its structure.
+ *      - Structured inputs ; not a single parameter which is a 2d grid, but something novel like a 2Dgrid of parameters
+ *          Can do things like varargs: a, b, ...c Or other things like ...a, b, c. Or: first, ...middle, last.
+ *          Or 2dgrid:
+ *            A0 A1 A2                       A0, ...A, AN               A0
+ *            B0 B1 B2    OR things like     B0, ...B, BN        OR     B0 - subgraph: SUBGRAPH (single name matching a graph)
+ *            C0 C1 C2                       C0, ...C, CN               C0
+ *                                                                            SUBGRAPH: B1, B2, ...B, BN
+ *      - Similarly structured outputs
+ *            first, ...middle, .last = func_call()
+ *          Or 2d grid:
+ *            A0, ...A, AN
+ *            B0, ...B, BN     = func_call()
+ *            C0, ...C, CN
+ *      -
+ *      - What would be native things loops would be used for?
+ *      - What about function/property names which are arbitrary structure.
+ *          A.B
+ *          [Structure A] . [Structure B]
+ *          The way this works is tightly connected to how Contexts & selecting them will eventually work. As .B is just selecting a different context.
  *      -
  *      - Are basically .match(type) -> do/have these things
  *        But possibly only the matches within this graph X. (scopes)
@@ -561,6 +587,7 @@ export type Type<T> = T & {
  *          Allow for self-reference of operators (but requires implementation).
  *      - Function.compose(Function) = Function (If functions are control-flow graphs, then function composition is linked to graph composition)
  *      - Control-flow & debugging
+ *          Branching control-flow in editor & merge results into a single structure, what does that structure look like?.
  *          Variable is .history().last() ?
  *          Where in the control-flow is the program? (Many<Node> ref)
  *          Intermediate values of variables (like the .reduce accumulated value which may be non-halting)
@@ -609,8 +636,6 @@ export type Mapping = Function; // TODO Difference between func and mapping or n
 export type FunctionVariables = {
   [K in keyof any]: () => Node
 }
-
-// TODO: surjective, injective, etc...
 
 /**
  * TODO: Traverser as additional structure on Node.

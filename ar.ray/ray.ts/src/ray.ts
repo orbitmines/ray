@@ -541,7 +541,7 @@ export type Type<T> = T & {
  *        (Substructure of a larger graph?, layered in a particular way) + Control-flow/Code graph
  *      -
  *      - Structured input/outputs is basically: Reset everything to a single parameter, but allow one to tag names to arbitrary parts
- *                                               of its structure.
+ *                                               of its structure. "What is the actual problem parameters are trying to solve: attaching names to structure"
  *      - Structured inputs ; not a single parameter which is a 2d grid, but something novel like a 2Dgrid of parameters
  *          Can do things like varargs: a, b, ...c Or other things like ...a, b, c. Or: first, ...middle, last.
  *          Or 2dgrid:
@@ -588,6 +588,8 @@ export type Type<T> = T & {
  *      - Function.compose(Function) = Function (If functions are control-flow graphs, then function composition is linked to graph composition)
  *      - Control-flow & debugging
  *          Branching control-flow in editor & merge results into a single structure, what does that structure look like?.
+ *            Or have things that start branches, but which are not used for results, so the function can terminate while having spawned a "thread" of sorts.
+ *            -> Each branch has the option to [JOIN RESULT] as a return. Or the reverse, explicitly to [SEVER FROM RESULT] (This on branch, or on return?, return is more general probably.)
  *          Variable is .history().last() ?
  *          Where in the control-flow is the program? (Many<Node> ref)
  *          Intermediate values of variables (like the .reduce accumulated value which may be non-halting)

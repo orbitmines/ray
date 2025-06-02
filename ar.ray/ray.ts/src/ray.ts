@@ -327,6 +327,7 @@ export interface Node extends Pointer<Node> {
 
   /**
    * TODO: "Equivalence frames" are deemed .equal (.equal/.isomorphic/.identical)
+   *       What would it mean to equivalence over a time period to a certain structure?
    *
    * TODO: All nodes in some program are added to some larger Graph, that graph has operations on it like .map
    *          OR altered .equals (.rewrite?).
@@ -660,7 +661,7 @@ export class Traverser {
 
 /**
  * TODO: Normal graphs, hypergraphs like Chyp, hypergraphs like Wolfram Physics (overlapping structures, which make the .next go to any place on the edge not where it came from)(
- *
+ *       Or: System where .previous and .next are not the same as in a usual undirected hypergraph: A dynamic undirected hypergraph
  *
  *  TODO: Difference between "nothing selected at Node" and "selecting the entire Graph where .first enters the graph.
  *         Remember that we're at a terminal? Not that .next again returns the first element (empty != graph)

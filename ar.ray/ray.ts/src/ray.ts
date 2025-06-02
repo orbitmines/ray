@@ -137,6 +137,10 @@ export namespace Query {
     //        Proven that there's no terminal, .last returns empty, more elaborate theorem proving system
 
 
+    // TODO: Translate high-level "Query language" to a bunch of .next operations (function application) and context switching (function selection)
+    //       Context-switching needs some generalized way to speak about 'possible functions to apply' -> Something more general than just unique function names
+
+    // TODO: If to_[boolean] is called and awaited throw if program isn't used.
   }
 }
 
@@ -160,6 +164,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * Applies successive transformation and returns the result.
    */
   apply: (...queries: any[]) => TSelf
+  group: (x: (self: TSelf) => any) => TSelf
 
   every: (predicate: (x: Node) => boolean) => Node
   some: (predicate: (x: Node) => boolean) => Node
@@ -241,6 +246,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   distance: () => TSelf
   /**
    * Ignores duplicates after visiting the first one.
+   * TODO: Does uniqueness check for SELECTED STRUCTURE or not? In the case of is_unique for is_injective you'd think so
    */
   unique: () => TSelf
 
@@ -248,6 +254,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * Select all nodes in this structure
    */
   all: () => Many<Node>
+
 
   // TODO: Might wants operations like .neg / .subtract etc.. on the selected nodes.
   //       So differentiation between .neg on the VALUE vs selected nodes.
@@ -316,7 +323,6 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 
 }
 
-// TODO: Changing ordering of evaluation, like parenthesis
 export interface Node extends Pointer<Node> {
 
   /**
@@ -416,6 +422,13 @@ export interface Node extends Pointer<Node> {
    * Structure, and all values within that structure, are equal.
    */
   identical: (value: any) => Node
+
+  /**
+   * Whether this is the only occurrence its VALUE
+   * TODO: Include looped-on values? VS ignore looped-on values
+   * TODO: Not to be confused with mathematical uniqueness: x.selection().length().equals(1)
+   */
+  is_unique: () => boolean
 
   // TODO: Or is rotation a good name?
   // reframe: (x: (context: Context) => Context) => Node
@@ -553,20 +566,51 @@ export type Type<T> = T & {
  *          Intermediate values of variables (like the .reduce accumulated value which may be non-halting)
  *          Normal programs have a control flow and location as opposed to a graph rewrite applying everywhere. Some generalization of these sorts of options
  *          What would the "branch from here" look like in the IDE? More generally what would it look like?
+ *      - is_injective:
+ *          (x) => func(x)
+ *                  |--> [ALL].[SELECTION].has_unique_elements() .every(x => x.is_unique())
+ *                  (Some way to select the entire codomain)
+ *                      Function.image subset of Function.codomain
+ *                      Function.image = Function.domain.next (Doesnt work because codomain is a constraint, not the actual output)
+ *                      Function.domain = (Many<Node> with ref on function application)
+ *          for_each (x) => func(x)
+ *                            |-- .length == 1
+ *                            (Some way to say that it only maps to a distinct element)
  */
 export interface Function {
   // TODO Some way to at runtime access variables.
   //      What about delegated functions, how to point to the right function easily?
   variables: () => FunctionVariables
+
+  /**
+   * Returns a (partial) "sub-function" of the more general function. Where domain/codomain/.../is_injective is based
+   * off of remembered usages of this function.
+   * TODO: Better name than usages?
+   */
+  usages: () => Function
+
+  domain: () => Many<Node>
+  image: () => Many<Node>
+  codomain: () => Many<Node>
+
+  is_injective: () => Node
+  is_surjective: () => Node
+  is_bijective: () => Node
+
+  is_homomorphism: () => Node
+  is_isomorphism: () => Node
+  is_endomorphism: () => Node
+  is_automorphism: () => Node
+  is_monomorphism: () => Node
 }
+export type Mapping = Function; // TODO Difference between func and mapping or not?
+
 // TODO: Do these need to be explicitly exposed, and same with delegated ones, re-expose those in a function?
 export type FunctionVariables = {
   [K in keyof any]: () => Node
 }
 
 // TODO: surjective, injective, etc...
-//       Same for function.
-export interface Mapping {}
 
 /**
  * TODO: Traverser as additional structure on Node.

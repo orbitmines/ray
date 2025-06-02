@@ -1,4 +1,4 @@
-import {Graph, Many, Node, Pointer, Query, Type} from "./ray";
+import {Graph, Many, Node, Pointer, Function, Query, Type} from "./ray";
 
 describe("ray", () => {
   // test("Query.Convertable", async () => {
@@ -23,10 +23,49 @@ describe("ray", () => {
     const a = <TPointer extends Pointer<TPointer>>() => {
       const exec = new Query.Executor<TPointer>() as any as Query.Executor<Many<Node>>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
 
+      (exec as any as Query.Executor<Function>).rewrite({
+        image: (self) =>
+          self.domain().next(),
+
+        // TODO: Is_injective/is_surjective should use some EVERY_IN_SELECTION function. Which is different from .selection().every since that changes the refs to check within the selection. And x.next() would be within the selection.
+        // TODO: OR have some way to switch the .next/.previous inside the .every to the one we select for the function.
+
+        is_injective: (self) =>
+          self.domain().every(x => x.next().selection().length().max().equals(1))
+            // TODO: Assumes I can do .previous, either memorized or some reversible function
+            // TODO: Allow for construction which is: Match x.previous to [SOMETHING].next() which yields x
+            .and(self.image().every(x => x.previous().selection().length().max().equals(1)))
+            // TODO: Different references of the same value might exist
+            .and(self.image().selection().every(x => x.is_unique())),
+          //   .and(self.domain().selection().length().max().equals(self.image().selection().length().max()))
+        is_surjective: (self) =>
+          self.codomain().every(x => x.previous().selection().length().max().equals(1)),
+        is_bijective: (self) =>
+          self.is_injective().and(self.is_injective()),
+
+        // TODO: A homomorphism is a map between two algebraic structures of the same type (e.g. two groups, two fields, two vector spaces), that preserves the operations of the structures.
+        // TODO: How to construct this weaker type check.
+        // is_homomorphism: (self) =>
+        //   each element in self.domain() [SAME TYPE OF STRUCTURE] self.codomain(),
+        // TODO iso, endo, auto are all homomorphisms
+        is_isomorphism: (self) =>
+          self.is_homomorphism().and(self.is_bijective()),
+        // is_endomorphism: (self) =>
+        //   self.domain() = self.codomain(), (without the references to .next)
+        is_automorphism: (self) =>
+          // self.is_endomorphism().and(self.is_isomorphism()),
+          self.is_endomorphism().and(self.is_bijective()),
+
+        is_monomorphism: (self) =>
+          self.is_injective().and(self.is_homomorphism()),
+      });
 
       (exec as any as Query.Executor<Node>).rewrite({
         xor: (self, b) =>
-          self.and(new self(b).not()).or(self.not().and(b)),
+          // a && !b || (!a && b)
+          // self.and(new self(b).not()).or(self.not().and(b)),
+          // (a && !b) || (!a && b)
+          self.group(self => self.and(new self(b).not())).or(self.not().and(b)),
         nor: (self, b) =>
           self.or(b).not(),
         nand: (self, b) =>

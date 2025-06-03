@@ -272,6 +272,9 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    *       Union of the underlying graph is in Graph?
    */
   /**
+   * TODO: Two .nots might not be invertible. If you define it as "go to everything not here", "then come back", the second step might fail or have additional results.
+   *        -> With how this setup looks, we might be able to detect whether they change in between .not's. And depending on that cross them out or not.
+   *
    * Also: complement (Where the universal set is the entire graph, in the case of selection. TODO: In the case of types, it could mean anything)
    */
   not: () => TSelf // TODO: Node -> Many<Node> if we're not evaluating
@@ -341,6 +344,8 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 
 }
 
+// TODO: Might want to separate what functions apply as additional structure on nodes, vs the methods here on Node
+//       -> Something like plus/minus might have less general definitions than moving some number of steps
 export interface Node extends Pointer<Node> {
 
   /**

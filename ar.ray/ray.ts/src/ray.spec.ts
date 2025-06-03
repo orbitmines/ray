@@ -147,7 +147,7 @@ describe("ray", () => {
         minus: (self, ...index) =>
           self.reverse().at(...index),
         plus_minus: (self, ...index) =>
-          self.plus(...index).union(self.minus(...index)), // TODO: union on selection not the underlying graph.
+          self.plus(...index).or(self.minus(...index)),
 
         has_next: (self) =>
           self.next().is_nonempty(),

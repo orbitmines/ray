@@ -274,7 +274,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   /**
    * Also: complement (Where the universal set is the entire graph, in the case of selection. TODO: In the case of types, it could mean anything)
    */
-  not: () => Node
+  not: () => TSelf
   /**
    * Also: union
    */

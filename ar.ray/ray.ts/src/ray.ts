@@ -429,6 +429,7 @@ export interface Node extends Pointer<Node> {
   instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
   //TODO Similar to .remove, this matches to a structure and returns that structure.
   //TODO This should also be possible to select a subgraph. So a Node, when not selecting anything, might not be the entire graph but a subgraph.
+  // TODO How is a subgraph match done?
   match: (pattern: any) => Many<Node>
 
   /**
@@ -481,6 +482,11 @@ export interface Node extends Pointer<Node> {
 
 /**
  * Edge reference (which is at least a terminal/initial if not dangling?)
+ *
+ * TODO:
+ *    - Different types of edges (from some enumeration?)
+ *    - Structure on edges like values, weights, probabilities etc..
+ *        -> How do these effect .next, or shouldn't they? And are we missing some fundamental concept here? (As in not everything is reducible to context switching and .next's)
  */
 export interface Edge {
   // initial_side: () => Ray
@@ -499,6 +505,31 @@ export interface Edge {
  *
  * TODO History
  *      Context changes need to be in the history.
+ *
+ *
+ *
+ * TODO Rethinking
+ *      Current:
+ *      - Every entry is on an equivalency ray. "All these are deemed equivalent'
+ *        -> The graph that defines them is the Node.
+ *            -> What happens to all the selected context/ignored structure/referenced structure on each of the nodes? It is all included? But ignored by default?
+ *                -> What determines what is selected/ignored/referenced etc..?
+ *        -> Each selection of contexts similarly is deemed a different Node "sub-Nodes" of some "original Node".
+ *      Requirements:
+ *      - Conceptualization of Time/Dynamics:
+ *        What does a program look like in traversal terms?
+ *          - Control-flow + a cursor with variables
+ *          - Rewrite rule match
+ *          - Some general way to convert control-flow-like to a rewrite rule? Gives you some calculus
+ *        Generalized we rephrase all of the above as:
+ *          - Some cursor in some graph
+ *          - ?? (Some way to traverse and search the graph / Some way to read instructions on what to do at location)
+ *                |-> Context switching & .next (MOVE instructions),  |-> ALTER instructions would be????
+ *                    (What about complicated edges????)
+ *          -
+ *      New:
+ *      -
+ *
  */
 export interface Context {
 

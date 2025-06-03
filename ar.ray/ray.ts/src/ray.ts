@@ -474,7 +474,7 @@ export interface Edge {
 /**
  * TODO Change: Ignored Structure:    Ignored Context (does this need to have structure like .history, .functions, .traversers, .referenced_by .? )
  *              Selected Structure:   Context,  (used for types and referencing structure other than Referenced Structure: .equivalent in this structure not referenced)
- *              Referenced Structure: Referenced Context,   .isomorphic / .next
+ *              Referenced Structure: Space / Referenced Context,   .isomorphic / .next
  *              Value.
  *
  * TODO: Should selection change too? Yes? + Edges on selection
@@ -536,6 +536,7 @@ export type Type<T> = T & {
 /**
  * TODO: Editor
  *       Should be a text-only variant which still is decently usable? But how?
+ *       possible option: Using named references when structures are too complicated to display?
  *
  * TODO FUNCTIONS
  *      - What does a function structurally look like, is there a nice visual translation possible?
@@ -553,9 +554,11 @@ export type Type<T> = T & {
  *      - Similarly structured outputs
  *            first, ...middle, .last = func_call()
  *          Or 2d grid:
- *            A0, ...A, AN
- *            B0, ...B, BN     = func_call()
- *            C0, ...C, CN
+ *            A0, ...A, AN                      A0, ...A, AN                                                      fA()
+ *            B0, ...B, BN     = func_call()    B0, ...B, BN  = f0(), f1(), f2(), f3(), fn()     (OR vertical): = fB()    (OR other structures)
+ *            C0, ...C, CN                      C0, ...C, CN                                                      fC()
+ *      -
+ *      - Inputs/Outputs like "possible numbers" 3, 5, 7: or something like prime numbers.
  *      -
  *      - What would be native things loops would be used for?
  *      - What about function/property names which are arbitrary structure.
@@ -572,10 +575,13 @@ export type Type<T> = T & {
  *      - Matched to some Type/Node predicate (parameters): "Could apply this function to this selected value".
  *        Generalized to: Like ANY match: Many<Node> whose "result of predicate = true"
  *      - "Many usages" -> as unselected structure
+ *        Usages, gives a notion of time. In the sense of certain applications being in front of others, if they share some graph.
+ *          -> Either have some global graph to keep track of this, or be set with partial notions of time
  *      - Function.equals(Function)
  *        Equality in input -> output (Extensional Equality)
  *          Partial equality OR Temporal equality of all "usages" so far.
  *        Equality in source code (Intensional Equality)
+ *          When there are multiple implementations, what happens?
  *          More elaborate intensional equality would be?
  *            Definition (+ Different contexts in which the definition finds itself)
  *            Separate compilation layers it goes through
@@ -591,6 +597,8 @@ export type Type<T> = T & {
  *          Branching control-flow in editor & merge results into a single structure, what does that structure look like?.
  *            Or have things that start branches, but which are not used for results, so the function can terminate while having spawned a "thread" of sorts.
  *            -> Each branch has the option to [JOIN RESULT] as a return. Or the reverse, explicitly to [SEVER FROM RESULT] (This on branch, or on return?, return is more general probably.)
+ *            -> Or just joinable to wait for both threads, without combining result.
+ *            Is the result always a list of possibilities? Or would there be a case for joining the results into some other structure? Or: "If one finishes but not the other do this other thing"
  *          Variable is .history().last() ?
  *          Where in the control-flow is the program? (Many<Node> ref)
  *          Intermediate values of variables (like the .reduce accumulated value which may be non-halting)

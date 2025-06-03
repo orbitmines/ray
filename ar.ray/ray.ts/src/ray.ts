@@ -514,6 +514,7 @@ export interface Edge {
  *        -> The graph that defines them is the Node.
  *            -> What happens to all the selected context/ignored structure/referenced structure on each of the nodes? It is all included? But ignored by default?
  *                -> What determines what is selected/ignored/referenced etc..?
+ *                    Different cursors within that structure?
  *        -> Each selection of contexts similarly is deemed a different Node "sub-Nodes" of some "original Node".
  *      Requirements:
  *      - Conceptualization of Time/Dynamics:
@@ -525,7 +526,9 @@ export interface Edge {
  *          - Some cursor in some graph
  *          - ?? (Some way to traverse and search the graph / Some way to read instructions on what to do at location)
  *                |-> Context switching & .next (MOVE instructions),  |-> ALTER instructions would be????
- *                    (What about complicated edges????)
+ *                    - (What about complicated edges????)
+ *                    - Context switching is just a MOVE inside the context equivalency ray. But how?
+ *                |-> Many cursors, each with separate list of instructions?
  *          -
  *      New:
  *      -

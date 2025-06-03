@@ -260,17 +260,35 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   //       So differentiation between .neg on the VALUE vs selected nodes.
   //       Same with .every, or .filter which only applies to the selection.
   selection: () => Graph
+
   /**
    * TODO: How to think about the same node, but different selected contexts/values on that node. Assuming they're different instances and both part of the union?
+   *       In the case of union, are the entries duplicated if they exist in both? By default yes, and then a .unique to remove it.
+   *
+   * TODO: How to combine .or/.union .and/.intersection, while still having .or evaluate for booleans, and being able to use .or to create a boolean type.
+   *       -> [evaluate] check if 'true' is in the type?
+   *
+   * TODO: If something is selected (or nothing), we union on that, not the underlying graph.
+   *       Union of the underlying graph is in Graph?
    */
-  // OR
-  union: (...x: Many<Node>[]) => Many<Node>
-  // AND
-  intersection: (...x: Many<Node>[]) => Many<Node>
-  // A and NOT B
-  // difference: (...x: Many<Node>[]) => Many<Node>
-  // XOR
-  // symmetric_difference: (...x: Many<Node>[]) => Many<Node>
+  /**
+   * Also: complement (Where the universal set is the entire graph, in the case of selection. TODO: In the case of types, it could mean anything)
+   */
+  not: () => Node
+  /**
+   * Also: union
+   */
+  or: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf // TODO: This is not right: .or on two nodes, might produce Many<Node> if we assume the union option.
+  /**
+   * Also: intersection
+   */
+  and: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
+  /**
+   * Also: symmetric_difference
+   */
+  xor: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
+  nor: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
+  nand: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
 
   next: () => Many<Node>
   previous: () => Many<Node>
@@ -400,7 +418,8 @@ export interface Node extends Pointer<Node> {
    * TODO: Matched groups and referencing them, Mapping and using matched groups for some other purpose. For example mapping a string expressing regex to a similar pattern what the regex means.
    *      Mapping a grammar of a language and then compiling the language as an example. So some program follows here.
    *
-   *
+   * TODO: How does the boolean type in "On Orbits" come into play to this? Was that a mistake and is it some other interesting structure,
+   *       or is that indeed part of the type system, and how do you account for/generalize that.
    */
   instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
   //TODO Similar to .remove, this matches to a structure and returns that structure.
@@ -453,12 +472,6 @@ export interface Node extends Pointer<Node> {
 
   mod: (value: number) => Node
 
-  not: () => Node
-  or: (b: boolean) => Node
-  and: (b: boolean) => Node
-  xor: (b: boolean) => Node
-  nor: (b: boolean) => Node
-  nand: (b: boolean) => Node
 }
 
 /**
@@ -558,7 +571,7 @@ export type Type<T> = T & {
  *            B0, ...B, BN     = func_call()    B0, ...B, BN  = f0(), f1(), f2(), f3(), fn()     (OR vertical): = fB()    (OR other structures)
  *            C0, ...C, CN                      C0, ...C, CN                                                      fC()
  *      -
- *      - Inputs/Outputs like "possible numbers" 3, 5, 7: or something like prime numbers.
+ *      - Inputs/Outputs like "possible numbers" 3, 5, 7: or something like prime numbers. [see Types]
  *      -
  *      - What would be native things loops would be used for?
  *      - What about function/property names which are arbitrary structure.

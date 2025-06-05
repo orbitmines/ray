@@ -530,6 +530,8 @@ export interface Edge {
  *                    - Context switching is just a MOVE inside the context equivalency ray. But how?
  *                |-> Many cursors, each with separate list of instructions?
  *          -
+ *      - Cursor might carry structure with it.
+ *      - when you push_back(node) for instance, what should be connected to that node? A new ray which becomes the referenced ray, or should it attach itself to the referenced ray?
  *      New:
  *      -
  *
@@ -610,6 +612,8 @@ export type Type<T> = T & {
  *            B0, ...B, BN     = func_call()    B0, ...B, BN  = f0(), f1(), f2(), f3(), fn()     (OR vertical): = fB()    (OR other structures)
  *            C0, ...C, CN                      C0, ...C, CN                                                      fC()
  *      -
+ *      - What if we have ambiguity in the matched pattern: a, ...b, ...c, d, or something where the last element is either something or nothing (Nothing needs to be supported).
+ *          -> Branch all different combinations, or within the function have access to the different instantiations, how would one filter for a particular one?
  *      - Inputs/Outputs like "possible numbers" 3, 5, 7: or something like prime numbers. [see Types]
  *      -
  *      - What would be native things loops would be used for?
@@ -734,6 +738,7 @@ export class Traverser {
  *    - Causal graph needs a notion of what structure changed, could be that it didn't touch the graph but only the value. Do you want to have it still be a causal link created there if the graph for example isn't effected
  *
  *
+ * TODO: Find subgraph with two disconnected pieces should be supported.
  */
 export interface Graph extends Pointer<Graph> {
   // TODO: Can include disconnected pieces. Also should include a disconnected piece without an initial. and so no qualifier to .first.

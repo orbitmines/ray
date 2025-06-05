@@ -611,7 +611,7 @@ export type Type<T> = T & {
  *            A0, ...A, AN                      A0, ...A, AN                                                      fA()
  *            B0, ...B, BN     = func_call()    B0, ...B, BN  = f0(), f1(), f2(), f3(), fn()     (OR vertical): = fB()    (OR other structures)
  *            C0, ...C, CN                      C0, ...C, CN                                                      fC()
- *      -
+ *      -                                                          |-> commas here are .push_back?
  *      - What if we have ambiguity in the matched pattern: a, ...b, ...c, d, or something where the last element is either something or nothing (Nothing needs to be supported).
  *          -> Branch all different combinations, or within the function have access to the different instantiations, how would one filter for a particular one?
  *      - Inputs/Outputs like "possible numbers" 3, 5, 7: or something like prime numbers. [see Types]

@@ -390,6 +390,9 @@ export interface Node extends Pointer<Node> {
    *       - Select subgraph which is the loop, then: ???
    *       - Have a named reference to that complicated loop, and have a simple loop, then .length().max() on that simple loop.
    *
+   * TODO: In the example of varargs, it's a match to zero-length: So a terminal, or the loop with entries. So a type difference is a match to any
+   *       subpath available in the structure vs having all subpaths.
+   *
    * TODO: Type here should also be something like a programming language specification.
    *       More generally; does this pattern match onto this Node/structure.
    *        Take some language spec like WASM (or Backus-Naur Form) and make that.

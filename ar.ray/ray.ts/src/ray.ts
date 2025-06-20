@@ -30,6 +30,7 @@ export namespace Query {
       to_boolean: () => MappedValue<boolean>
       to_array: <R>(map: (x: Query.Type<Node>) => MappedValue<R>) => MappedValue<R[]>
       to_function: () => MappedValue<(...args: any[]) => any>
+      // TODO: Object is mostly a list of named structures, named being: additional structure on those structures.
       to_object: <T = object>(constructor?: new () => T) => MappedValue<T>
       to_string: () => MappedValue<string>
       to_map: <K, V>(key: (x: Query.Type<Node>) => MappedValue<K>, value: (x: Query.Type<Node>) => MappedValue<V>) => MappedValue<Map<K, V>>
@@ -663,6 +664,7 @@ export type Type<T> = T & {
  *          Intermediate values of variables (like the .reduce accumulated value which may be non-halting)
  *          Normal programs have a control flow and location as opposed to a graph rewrite applying everywhere. Some generalization of these sorts of options
  *          What would the "branch from here" look like in the IDE? More generally what would it look like?
+ *          - Be able to combine different types of control-flow/program evaluation paradigms; and specify what kind; Functional/imperative/rewrite rule/etc..
  *      - is_injective:
  *          (x) => func(x)
  *                  |--> [ALL].[SELECTION].has_unique_elements() .every(x => x.is_unique())
@@ -703,6 +705,7 @@ export interface Function {
 export type Mapping = Function; // TODO Difference between func and mapping or not?
 
 // TODO: Do these need to be explicitly exposed, and same with delegated ones, re-expose those in a function?
+// TODO: Exposed variables at different compilation/execution layers (When used, would place additional dependency for that particular function, not only executable, but executable "in this particular way"; or at least with those additional constraints)
 export type FunctionVariables = {
   [K in keyof any]: () => Node
 }
@@ -728,6 +731,7 @@ export class Traverser {
 
 /**
  * TODO: Normal graphs, hypergraphs like Chyp, hypergraphs like Wolfram Physics (overlapping structures, which make the .next go to any place on the edge not where it came from)(
+ *                                                                |-> Hypergraph definition mapped to the structure it's talking about.
  *       Or: System where .previous and .next are not the same as in a usual undirected hypergraph: A dynamic undirected hypergraph
  *
  *  TODO: Difference between "nothing selected at Node" and "selecting the entire Graph where .first enters the graph.
@@ -755,13 +759,16 @@ export interface Graph extends Pointer<Graph> {
   //
   // TODO: Split the graph at the differences?. Add/remove
   //       OR better: Give the ray from which we want to access this, which contains the remove/non-removed history.
+  //          |-> Can include something like: remember what/how much references this. If nothing does, discard it possibly/dont separately store it.
   //
 
 
 
   // TODO: Rewrite with checking structure at nodes, or ignored. (Basically only looking at between structure)
   // TODO: Equivalences between nodes in lhs/rhs here how? So you have things like variable rewrites (v, w) -> (w, z)
-  // rewrite: (lhs: Graph, rhs: Graph)
+  // rewrite: (lhs: Graph, rhs: Graph) -> Returns many possible rewritten graphs: Many<Graph>
+  //          ; Or if we have some specific updating order/traversing strategy; Graph
+  //          ; More elaborate things than just a "rewrite", generalized to how functions normally operate. Where traversal/control-flow take part in what is decided to be updated.
   // dpo, spo, cartesion product, tensor product, union, disjoint union etc...
   // compose matching domain/codomain
 

@@ -31,6 +31,8 @@ describe("ray", () => {
         // TODO: OR have some way to switch the .next/.previous inside the .every to the one we select for the function.
 
         is_injective: (self) =>
+          // TODO: Differentiate between domain with .next information vs domain without .next information
+
           self.domain().every(x => x.next().selection().length().max().equals(1))
             // TODO: Assumes I can do .previous, either memorized or some reversible function
             // TODO: Allow for construction which is: Match x.previous to [SOMETHING].next() which yields x
@@ -41,7 +43,7 @@ describe("ray", () => {
         is_surjective: (self) =>
           self.codomain().every(x => x.previous().selection().length().max().equals(1)),
         is_bijective: (self) =>
-          self.is_injective().and(self.is_injective()),
+          self.is_injective().and(self.is_surjective()),
 
         // TODO: A homomorphism is a map between two algebraic structures of the same type (e.g. two groups, two fields, two vector spaces), that preserves the operations of the structures.
         // TODO: How to construct this weaker type check.

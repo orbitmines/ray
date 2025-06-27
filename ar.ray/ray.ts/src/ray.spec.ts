@@ -192,7 +192,12 @@ describe("ray", () => {
     const A_or_B = Query.instance<Type<Node>>()
       .matches(x => x.equals(A).or(x.equals(B)))
 
+    // TODO: Within some context we define as a .ts/.js section (albeit file or substructure deemed as such)
+    //        -> "Array" or [] type references are referencing this type.
+    //        -> Outside that context we could have things like JavaScript.Array or Array, or "imported as Array" which is superposed between other programming languages (ambiguity)
     const JavaScript = {
+      // TODO: JavaScript.Array(Number) -> number[], place Number type on top of a particular named node: "element".
+      // TODO:
       Array: Query.instance<Type<Graph>>()
         // TODO
         // .loop
@@ -201,6 +206,11 @@ describe("ray", () => {
         // TODO Apply to loop only, not the initial/terminal dangling edge
         .matches(x => x.length().max().lt(2 ^ 32))
 
+      // TODO What about number, which has enumerable values like Infinity and -Infinity, and then the rest of the structure in between.
+      // TODO Number, requires functions defined on it as well, it is not just the structure.
+      // TODO -> But those functions might not be used in any particular instance, so the type changes based on that.
+
+      // TODO Even something like Javascript "any" is a restricted type. It only contains Array.or(Number).or(...)
     }
 
     const x = Query.instance<Many<Node>>()

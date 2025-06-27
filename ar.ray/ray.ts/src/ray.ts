@@ -393,6 +393,12 @@ export interface Node extends Pointer<Node> {
    *
    * TODO: In the example of varargs, it's a match to zero-length: So a terminal, or the loop with entries. So a type difference is a match to any
    *       subpath available in the structure vs having all subpaths.
+   *          - Alternate between matched subpaths and required additional structure.
+   *            : Things like .or / .and / .xor / extended xor like "one of many" / ... on terminals/initials (continuations)
+   *          - Similarly, .or / .xor etc.. on additional context like value (for things like number[] / any[])
+   *       subgraph would be: (pattern match like any type)
+   *          - ANY additional matches on any Node/continuation. (in the usual graph sense only continuations, on nodes would be additional overlapping graphs)
+   *       - any[] would be, ANY additional matches on the structure (or in javascript case the type any) that's the node.
    *
    * TODO: Type here should also be something like a programming language specification.
    *       More generally; does this pattern match onto this Node/structure.
@@ -421,8 +427,7 @@ export interface Node extends Pointer<Node> {
    *
    * TODO: How to match Many<Edges> of a certain structure?
    *
-   * TODO: .or (set union), .and
-   *
+   * TODO: For things like functions, "accepts type X" but only really uses subtype "Y". So either allow subtype Y, or force that entire X type.
    *
    * TODO: Matched groups and referencing them, Mapping and using matched groups for some other purpose. For example mapping a string expressing regex to a similar pattern what the regex means.
    *      Mapping a grammar of a language and then compiling the language as an example. So some program follows here.
@@ -597,6 +602,8 @@ export type Type<T> = T & {
  *       possible option: Using named references when structures are too complicated to display?
  *
  * TODO FUNCTIONS
+ *      - Does there exist a better abstraction than functions?
+ *      -
  *      - What does a function structurally look like, is there a nice visual translation possible?
  *        (Substructure of a larger graph?, layered in a particular way) + Control-flow/Code graph
  *      -
@@ -634,6 +641,7 @@ export type Type<T> = T & {
  *      -
  *      - Matched to some Type/Node predicate (parameters): "Could apply this function to this selected value".
  *        Generalized to: Like ANY match: Many<Node> whose "result of predicate = true"
+ *            - Could be: "at least this structure (subgraph)" or other type checks.
  *      - "Many usages" -> as unselected structure
  *        Usages, gives a notion of time. In the sense of certain applications being in front of others, if they share some graph.
  *          -> Either have some global graph to keep track of this, or be set with partial notions of time

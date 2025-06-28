@@ -382,6 +382,8 @@ export interface Node extends Pointer<Node> {
   // self: () => Many<Node>
 
   /**
+   * TODO: How to visualize a type properly/intuitively?
+   *
    * TODO: Equivalence of types used for ?
    *
    * TODO: For things like parameters: Allow the tagging of names to arbitrary parts of the type.
@@ -434,6 +436,7 @@ export interface Node extends Pointer<Node> {
    *
    * TODO: How does the boolean type in "On Orbits" come into play to this? Was that a mistake and is it some other interesting structure,
    *       or is that indeed part of the type system, and how do you account for/generalize that.
+   *          -> "XOR / one of" on the additional structure that's the type.
    */
   instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
   //TODO Similar to .remove, this matches to a structure and returns that structure.
@@ -541,6 +544,8 @@ export interface Edge {
  *          -
  *      - Cursor might carry structure with it.
  *      - when you push_back(node) for instance, what should be connected to that node? A new ray which becomes the referenced ray, or should it attach itself to the referenced ray?
+ *      - For things like types (what else?) conditional structures.
+ *        -> Generalized to function applied to a number of/all substructures.
  *      New:
  *      -
  *

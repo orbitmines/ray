@@ -32,6 +32,7 @@ describe("ray", () => {
 
         is_injective: (self) =>
           // TODO: Differentiate between domain with .next information vs domain without .next information
+          //        -> Generalized to switching contexts.
 
           self.domain().every(x => x.next().selection().length().max().equals(1))
             // TODO: Assumes I can do .previous, either memorized or some reversible function

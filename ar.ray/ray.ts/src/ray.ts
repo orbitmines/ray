@@ -396,7 +396,8 @@ export interface Node extends Pointer<Node> {
    * TODO: In the example of varargs, it's a match to zero-length: So a terminal, or the loop with entries. So a type difference is a match to any
    *       subpath available in the structure vs having all subpaths.
    *          - Alternate between matched subpaths and required additional structure.
-   *            : Things like .or / .and / .xor / extended xor like "one of many" / ... on terminals/initials (continuations)
+   *            : Things like .or / .and / .xor / extended xor like "one of many" / .not (lookahead/behind which excludes) / ... on terminals/initials (continuations)
+   *                |-> .not lookbehind, "not any path in front with X"
    *          - Similarly, .or / .xor etc.. on additional context like value (for things like number[] / any[])
    *       subgraph would be: (pattern match like any type)
    *          - ANY additional matches on any Node/continuation. (in the usual graph sense only continuations, on nodes would be additional overlapping graphs)
@@ -437,6 +438,9 @@ export interface Node extends Pointer<Node> {
    * TODO: How does the boolean type in "On Orbits" come into play to this? Was that a mistake and is it some other interesting structure,
    *       or is that indeed part of the type system, and how do you account for/generalize that.
    *          -> "XOR / one of" on the additional structure that's the type.
+   *
+   * TODO: Transformations like .map/.filter/... can still apply to types.
+   *        |-> What happens to .next on conditionals? Probably just all possible next paths.
    */
   instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
   //TODO Similar to .remove, this matches to a structure and returns that structure.
@@ -606,6 +610,9 @@ export type Type<T> = T & {
  *       Should be a text-only variant which still is decently usable? But how?
  *       possible option: Using named references when structures are too complicated to display?
  *
+ * TODO  - It should be definable what counts as possible function/property continuations. Different programming languages do things differently
+ *       Take for instance a function that's applicable to all of a certain type. Or only within the scope or some object.
+ *
  * TODO FUNCTIONS
  *      - Does there exist a better abstraction than functions?
  *      -
@@ -630,6 +637,7 @@ export type Type<T> = T & {
  *      -                                                          |-> commas here are .push_back?
  *      - What if we have ambiguity in the matched pattern: a, ...b, ...c, d, or something where the last element is either something or nothing (Nothing needs to be supported).
  *          -> Branch all different combinations, or within the function have access to the different instantiations, how would one filter for a particular one?
+ *             -> The distinct possibility combinations should be linkable (somehow recover the one from the other).
  *      - Inputs/Outputs like "possible numbers" 3, 5, 7: or something like prime numbers. [see Types]
  *      -
  *      - What would be native things loops would be used for?

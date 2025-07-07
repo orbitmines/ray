@@ -399,6 +399,8 @@ export interface Node extends Pointer<Node> {
    *            : Things like .or / .and / .xor / extended xor like "one of many" / .not (lookahead/behind which excludes) / ... on terminals/initials (continuations)
    *                |-> .not lookbehind, "not any path in front with X"
    *          - Similarly, .or / .xor etc.. on additional context like value (for things like number[] / any[])
+   *          - Default is .and
+   *          - Not only on continuations, but on .self as well. (the equivalence ray)
    *       subgraph would be: (pattern match like any type)
    *          - ANY additional matches on any Node/continuation. (in the usual graph sense only continuations, on nodes would be additional overlapping graphs)
    *       - any[] would be, ANY additional matches on the structure (or in javascript case the type any) that's the node.
@@ -420,7 +422,7 @@ export interface Node extends Pointer<Node> {
    *
    * TODO: Include type information like ().length.max().lt(2 ^ 32) (javascript Array) "result at this variable location"
    *
-   *
+   * TODO: Object as a type is a list of KV pairs, so type is a loop of KV pairs, where that loop is on the context equivalency ray.
    *
    * TODO: Difference between whole match, and a match where "at least the type" is in this object (matching subgraphs for instance)
    *        Again this need for, "selected structure" being the underlying structure. Say the beginning and end of AAAA. And another being
@@ -438,6 +440,8 @@ export interface Node extends Pointer<Node> {
    * TODO: How does the boolean type in "On Orbits" come into play to this? Was that a mistake and is it some other interesting structure,
    *       or is that indeed part of the type system, and how do you account for/generalize that.
    *          -> "XOR / one of" on the additional structure that's the type.
+   *
+   * TODO: For things like parameters, match to relative groups of them. Say some looped variable declaration and func call, get the func call with the associated variable declarations.
    *
    * TODO: Transformations like .map/.filter/... can still apply to types.
    *        |-> What happens to .next on conditionals? Probably just all possible next paths.
@@ -696,6 +700,11 @@ export type Type<T> = T & {
  *          for_each (x) => func(x)
  *                            |-- .length == 1
  *                            (Some way to say that it only maps to a distinct element)
+ *
+ *
+ * TODO: Implemented functions, bound to some keybinding?
+ *      - Pattern like a loop with a length constraint, expand till constraints are no longer satisfied
+ *          |-> Applied as a function, to some keybind "per step" or "all the way / pending infinity"
  */
 export interface Function {
   // TODO Some way to at runtime access variables.
@@ -758,7 +767,7 @@ export class Traverser {
  *  TODO: Difference between "nothing selected at Node" and "selecting the entire Graph where .first enters the graph.
  *         Remember that we're at a terminal? Not that .next again returns the first element (empty != graph)
  *
- *
+ * TODO: On another level of description, find it's way to equivalence the lower level representation, which would be disconnected if pending something like +/-1 binary
  *
  * TODO Causal Graph,
  *    Causal graph is the what effected what
@@ -797,6 +806,10 @@ export interface Graph extends Pointer<Graph> {
 export interface Path extends Graph {
 
 }
+
+/**
+ * TODO: .ray <head> <version> (id, ...)[]
+ */
 
 /**
  * Range

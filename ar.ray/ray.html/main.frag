@@ -47,8 +47,8 @@ void main(){
 
     float t = 0.; // total distance travelled
 
-    int i; // Raymarching
-    for (i = 0; i < 80; i++) {
+    // Raymarching
+    for (int i = 0; i < 80; i++) {
         vec3 p = ro + rd * t; // position along the ray
         
         p.xy *= rot2D(t*.15 * m.x);     // rotate ray around z-axis
@@ -59,11 +59,13 @@ void main(){
 
         t += d;               // "march" the ray
 
-        if (d < .001 || t > 100.) break; // early stop
+        if (d < .001 || t > 100.) {
+            // Coloring
+            color = palette(t*.04 + float(i)*.005);
+
+            gl_FragColor = vec4(color, 1);
+
+            break; // early stop
+        }
     }
-
-    // Coloring
-    color = palette(t*.04 + float(i)*.005);
-
-    gl_FragColor = vec4(color, 1);
 }

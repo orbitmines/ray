@@ -3,9 +3,9 @@
     "start": "npx vite"
   },
   "dependencies": {
-    "three": "^0.167.1"
+    "three": "^0.178.0"
   },
   "devDependencies": {
-    "vite": "^5.3.5"
+    "vite": "^7.0.2"
   }
 }

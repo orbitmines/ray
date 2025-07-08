@@ -84,9 +84,9 @@ export class Glyph {
     return points;
   }
 
-  toTriangles = ({ scale = 1, xOffset = 0, yOffset = 0, segmentsPerCurve = 100 }) => {
+  toTriangles = ({ xScale = 1, yScale = 1, xOffset = 0, yOffset = 0, segmentsPerCurve = 100 }) => {
     const triangles: number[] = []
-    this.shapes.forEach(shape => triangles.push(...shape.toTriangles({ scale, xOffset, yOffset, segmentsPerCurve })))
+    this.shapes.forEach(shape => triangles.push(...shape.toTriangles({ xScale, yScale, xOffset, yOffset, segmentsPerCurve })))
     return triangles;
   }
 
@@ -104,7 +104,7 @@ export class Shape {
     return points;
   }
 
-  toTriangles = ({ scale = 1, xOffset = 0, yOffset = 0, segmentsPerCurve = 100 }) => {
+  toTriangles = ({ xScale = 1, yScale = 1, xOffset = 0, yOffset = 0, segmentsPerCurve = 100 }) => {
     const points: Vec2[] = []
     const holeIndices: number[] = []
 
@@ -117,7 +117,7 @@ export class Shape {
 
     const triangleVertices = earcut(points.map(point => [point.x, point.y]).flat(), holeIndices) // returns triplets of vertex numbers
 
-    const scaledPoints = points.map(point => [point.x * scale + xOffset, point.y * scale + yOffset])
+    const scaledPoints = points.map(point => [point.x * xScale + xOffset, point.y * yScale + yOffset])
     return triangleVertices.map(vertex => [scaledPoints[vertex][0], scaledPoints[vertex][1]]).flat()
   }
 }

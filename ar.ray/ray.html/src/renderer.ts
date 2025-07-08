@@ -56,6 +56,13 @@ class Renderer {
     }
   }
 
+  isWebGL2Available = () => {
+    try {
+      return !!(window.WebGL2RenderingContext && this.gl)
+    } catch (e) {
+      return false;
+    }
+  }
 
   createVertexShader = (source: string) => this.createShader(this.gl.VERTEX_SHADER, source);
   createFragmentShader = (source: string) => this.createShader(this.gl.FRAGMENT_SHADER, source);

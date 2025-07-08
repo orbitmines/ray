@@ -6,7 +6,6 @@
  * to expose Node.js functionality from the main process.
  */
 import * as THREE from 'three';
-import WebGL from 'three/addons/capabilities/WebGL.js';
 import Renderer from "./src/renderer";
 import {font, Glyph} from "./src/font/font";
 
@@ -42,30 +41,61 @@ const get = async (file: string) => await (await fetch(`${BASE_URL}/${file}`)).t
 const container = document.getElementById('container');
 
 const init = async () => {
-  if (!WebGL.isWebGL2Available()) {
-    const warning = WebGL.getWebGL2ErrorMessage();
-    container.appendChild(warning);
+  if (!renderer.isWebGL2Available()) {
+    const element = document.createElement( 'div' );
+    element.id = 'webglmessage';
+    element.style.fontFamily = 'monospace';
+    element.style.fontSize = '13px';
+    element.style.fontWeight = 'normal';
+    element.style.textAlign = 'center';
+    element.style.background = '#fff';
+    element.style.color = '#000';
+    element.style.padding = '1.5em';
+    element.style.width = '400px';
+    element.style.margin = '5em auto 0';
+    element.innerHTML = 'Your graphics card/browser does not seem to support <a href="http://khronos.org/webgl/wiki/Getting_a_WebGL_Implementation" style="color:#000">WebGL 2</a>';
+
+    container.appendChild(element);
     return;
   }
 
   container.appendChild(renderer.domElement);
+}
 
-  let program = renderer.createProgram(
-    renderer.createVertexShader(await get('test.vert')),
-    renderer.createFragmentShader(await get('test.frag'))
-  )
+// // Initiate function or other initializations here
+// renderer.setAnimationLoop(() => {
+//     // group.rotation.x += 0.01;
+//     // group.rotation.z += 0.01;
 
-  const f = font(await get('lib/fonts/JetBrainsMono/json/JetBrains Mono_Regular.json'))
-  console.log(f)
+//     renderer.render(scene, camera);
+// });
 
+const animate = () => {
+  requestAnimationFrame(animate);
+  render();
+}
 
-// --- Main renderer ---
-  function renderTextPoints(text: string, xStart = -0.9, yBase = 0, size = 0.02) {
-    let scale = size / f.resolution;
+let program = renderer.createProgram(
+  renderer.createVertexShader(await get('test.vert')),
+  renderer.createFragmentShader(await get('test.frag'))
+)
+
+const f = font(await get('lib/fonts/JetBrainsMono/json/JetBrains Mono_Regular.json'))
+console.log(f)
+
+const render = () => {
+  uniforms.u_time.value += clock.getDelta();
+
+  // renderer.render(scene, camera);
+
+  function renderTextPoints(text: string, xStart = -0.9, yBase = 0, size = 20) {
     let triangles: any[] = [];
     let xCursor = xStart;
 
-    const lineHeight = (f.boundingBox.yMax - f.boundingBox.yMin + f.underlineThickness) * scale;
+    const xScale = (1 / renderer.width) * size * (1 / f.resolution)
+    const yScale = (1 / renderer.height) * size * (1 / f.resolution)
+
+    const lineHeight = (f.boundingBox.yMax - f.boundingBox.yMin + f.underlineThickness) * yScale;
 
     for (const char of text) {
       if (char === '\n') {
@@ -78,18 +108,10 @@ const init = async () => {
       if (!glyph) { glyph = f.glyphs['?']; if (!glyph) {continue} }
 
       // points.push(...scaledPoints)
-      triangles.push(...Glyph.parse(glyph.o).toTriangles({ scale, xOffset: xCursor, yOffset: yBase, segmentsPerCurve: 100 }))
+      triangles.push(...Glyph.parse(glyph.o).toTriangles({ xScale, yScale, xOffset: xCursor, yOffset: yBase, segmentsPerCurve: 100 }))
 
-      xCursor += glyph.ha * scale; // + spacing
+      xCursor += glyph.ha * xScale; // + spacing
     }
-
-
-    // const trianglePoints: any[] = earcut(allPoints)
-    // console.log(allPoints)
-    // console.log(trianglePoints)
-    // console.log(trianglePoints.map(x => x / Math.max(...trianglePoints)))
-
-    // const vertices = new Float32Array(allPoints);
 
     const positionBuffer = renderer.gl.createBuffer();
     renderer.gl.bindBuffer(renderer.gl.ARRAY_BUFFER, positionBuffer);
@@ -112,119 +134,7 @@ const init = async () => {
     // renderer.gl.drawArrays(renderer.gl.POINTS, 0, points.length);
   }
 
-// --- Execute ---
   renderTextPoints("Qe8P?i6o90d&;\n$*%#@AaRg");
-
-  //
-  // // look up where the vertex data needs to go.
-  // var positionAttributeLocation = renderer.gl.getAttribLocation(program, "a_position");
-  //
-  // // look up uniform locations
-  // var resolutionUniformLocation = renderer.gl.getUniformLocation(program, "u_resolution");
-  // var colorUniformLocation = renderer.gl.getUniformLocation(program, "u_color");
-  //
-  // // Create a buffer to put three 2d clip space points in
-  // var positionBuffer = renderer.gl.createBuffer();
-  //
-  // // Bind it to ARRAY_BUFFER (think of it as ARRAY_BUFFER = positionBuffer)
-  // renderer.gl.bindBuffer(renderer.gl.ARRAY_BUFFER, positionBuffer);
-  //
-  // // webrenderer.glUtils.resizeCanvasToDisplaySize(renderer.gl.canvas);
-  //
-  // // Tell Webrenderer.gl how to convert from clip space to pixels
-  // renderer.gl.viewport(0, 0, renderer.gl.canvas.width, renderer.gl.canvas.height);
-  //
-  // // Clear the canvas
-  // renderer.gl.clearColor(0, 0, 0, 0);
-  // renderer.gl.clear(renderer.gl.COLOR_BUFFER_BIT);
-  //
-  // // Tell it to use our program (pair of shaders)
-  // renderer.gl.useProgram(program);
-  //
-  // // Turn on the attribute
-  // renderer.gl.enableVertexAttribArray(positionAttributeLocation);
-  //
-  // // Bind the position buffer.
-  // renderer.gl.bindBuffer(renderer.gl.ARRAY_BUFFER, positionBuffer);
-  //
-  // // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
-  // var size = 2;          // 2 components per iteration
-  // var type = renderer.gl.FLOAT;   // the data is 32bit floats
-  // var normalize = false; // don't normalize the data
-  // var stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
-  // var offset = 0;        // start at the beginning of the buffer
-  // renderer.gl.vertexAttribPointer(
-  //   positionAttributeLocation, size, type, normalize, stride, offset);
-  //
-  // // set the resolution
-  // renderer.gl.uniform2f(resolutionUniformLocation, renderer.gl.canvas.width, renderer.gl.canvas.height);
-  //
-  // // draw 50 random rectanrenderer.gles in random colors
-  // for (var ii = 0; ii < 50; ++ii) {
-  //   // Setup a random rectanrenderer.gle
-  //   // This will write to positionBuffer because
-  //   // its the last thing we bound on the ARRAY_BUFFER
-  //   // bind point
-  //   setRectangle(randomInt(300), randomInt(300), randomInt(300), randomInt(300));
-  //
-  //   // Set a random color.
-  //   renderer.gl.uniform4f(colorUniformLocation, Math.random(), Math.random(), Math.random(), 1);
-  //
-  //   // Draw the rectanrenderer.gle.
-  //   var primitiveType = renderer.gl.TRIANGLES;
-  //   var offset = 0;
-  //   var count = 6;
-  //   renderer.gl.drawArrays(primitiveType, offset, count);
-  // }
-  //
-  // // Returns a random integer from 0 to range - 1.
-  // function randomInt(range: number) {
-  //   return Math.floor(Math.random() * range);
-  // }
-  //
-  // // Fill the buffer with the values that define a rectanrenderer.gle.
-  // function setRectangle(x: number, y: number, width: number, height: number) {
-  //   var x1 = x;
-  //   var x2 = x + width;
-  //   var y1 = y;
-  //   var y2 = y + height;
-  //   renderer.gl.bufferData(renderer.gl.ARRAY_BUFFER, new Float32Array([
-  //     x1, y1,
-  //     x2, y1,
-  //     x1, y2,
-  //     x1, y2,
-  //     x2, y1,
-  //     x2, y2,
-  //   ]), renderer.gl.STATIC_DRAW);
-  // }
-
-  // scene.add(new THREE.Mesh(
-  //   new THREE.PlaneGeometry(2, 2),
-  //   new THREE.ShaderMaterial({
-  //     uniforms: uniforms,
-  //     vertexShader: await get('main.vert'),
-  //     fragmentShader: await get('main.frag')
-  //   })
-  // ))
-}
-
-
-// // Initiate function or other initializations here
-// renderer.setAnimationLoop(() => {
-//     // group.rotation.x += 0.01;
-//     // group.rotation.z += 0.01;
-
-//     renderer.render(scene, camera);
-// });
-
-const animate = () => {
-  requestAnimationFrame(animate);
-  render();
-}
-
-const render = () => {
-  uniforms.u_time.value += clock.getDelta();
-  // renderer.render(scene, camera);
 }
 
 // let tanFOV = Math.tan(((Math.PI / 180) * camera.fov / 2));
@@ -242,7 +152,7 @@ const onWindowResize = (event?: UIEvent) => {
   uniforms.u_resolution.value.x = renderer.domElement.width;
   uniforms.u_resolution.value.y = renderer.domElement.height;
 
-  // renderer.render(scene, camera);
+  render()
 }
 
 onWindowResize()

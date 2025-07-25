@@ -55,23 +55,35 @@ export class Glyph {
   private shapes: Shape[] = []
 
   constructor(polygons: Path[]) {
-    const shapes: Map<Path, Path[]> = new Map();
-    for (let polygon of polygons) {
-      const holes = polygons.filter(inside => inside !== polygon && inside.toPoints().some(point => point.isInsidePolygon(polygon)))
-      shapes.set(polygon, holes)
-    }
+    // const shapes: Map<Path, Path[]> = new Map();
+    // for (let polygon of polygons) {
+    //   // TODO: This only works for very simple shapes
+    //   // const holes = polygons.filter(inside => inside !== polygon && inside.toPoints().some(point => point.isInsidePolygon(polygon)))
+    //   shapes.set(polygon, [])
+    // }
+    //
+    // const isHole = (path: Path) => {
+    //   let numberOfOutsidePolygons = shapes.entries().filter(([_, holes]) => holes.includes(path)).toArray().length;
+    //
+    //   // Polygons can be completely inside other polygons and still need to be filled. (So they're not a hole)
+    //   return numberOfOutsidePolygons % 2 == 1;
+    // }
 
-    const isHole = (path: Path) => {
-      let numberOfOutsidePolygons = shapes.entries().filter(([_, holes]) => holes.includes(path)).toArray().length;
-
-      // Polygons can be completely inside other polygons and still need to be filled. (So they're not a hole)
-      return numberOfOutsidePolygons % 2 == 1;
-    }
-
-    for (let [path, holes] of shapes) {
-      if (isHole(path)) continue;
-
-      this.shapes.push(new Shape(path, holes.filter(hole => isHole(hole))));
+    // for (let [path, holes] of shapes) {
+    //   if (isHole(path)) continue;
+    //
+    //   this.shapes.push(new Shape(path, holes.filter(hole => isHole(hole))));
+    // }
+    const holes = polygons.filter(polygon => !polygon.isClockWise())
+    const outer = polygons.filter(polygon => polygon.isClockWise())
+    for (let path of outer) {
+      // TODO: Holes need to be assigned to the correct shape, otherwise earcut bugs out. Earcut should be able to handle holes outside of
+      //       the area.
+      this.shapes.push(new Shape(path,
+        holes
+        // this.shapes.length === 0 && holes.length > 0 ? [holes[0]] : [] // TODO: As an example this works for 499
+        // holes.filter(inside => inside.toPoints().some(point => point.isInsidePolygon(path)))
+      ))
     }
   }
 
@@ -127,6 +139,20 @@ export class Path {
     this.parent = parent; this.operator = operator; this.args = args;
   }
 
+  area = () => {
+    const contour = this.toPoints()
+    const n = contour.length;
+    let a = 0.0;
+
+    for ( let p = n - 1, q = 0; q < n; p = q ++ ) {
+      a += contour[ p ].x * contour[ q ].y - contour[ q ].x * contour[ p ].y;
+    }
+
+    return a * 0.5;
+  }
+
+  isClockWise = () => this.area() < 0;
+
   moveTo = (to: Vec2) => new Path(this, 'moveTo', [to])
   lineTo = (to: Vec2) => new Path(this, 'lineTo', [to])
   quadraticBezierTo = (end: Vec2, controlPoint: Vec2) => new Path(this, 'quadraticBezierTo', [end, controlPoint])
@@ -166,7 +192,8 @@ export class Path {
           break;
         }
         case 'quadraticBezierTo': {
-          const [end, controlPoint] = operation.args;
+          const [controlPoint, end] = operation.args;
+          // TODO: For opentype.js vs jetbrains these are swapped, why? Which one is incorrect?
 
           const quadraticBezier = (t: number) => new Vec2(
             (1 - t)**2 * current.x + 2 * (1 - t) * t * controlPoint.x + t**2 * end.x,
@@ -219,7 +246,7 @@ export class Path {
   }
 
   static parse = (string: string): Path[] => {
-    let path: Path = new Path();
+    let path: Path = undefined
     let polygons: Path[] = []
 
     const args = string.trim().split(/\s+/)
@@ -231,7 +258,7 @@ export class Path {
 
       switch (operator) {
         case 'm':
-          if (path.operator !== undefined) polygons.push(path);
+          if (path?.operator !== undefined) polygons.push(path);
 
           path = new Path().moveTo(next())
           break;
@@ -246,9 +273,13 @@ export class Path {
           break;
         case 'z':
           polygons.push(path);
+          path = undefined;
           break;
       }
     }
+
+    if (path !== undefined)
+      polygons.push(path);
 
     return polygons;
   }

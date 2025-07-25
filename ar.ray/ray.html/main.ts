@@ -9,6 +9,8 @@ import * as THREE from 'three';
 import Renderer from "./src/renderer";
 import {font, Glyph} from "./src/font/font";
 
+import {parse} from "./src/font/opentype.js/opentype.mjs"
+
 const renderer = new Renderer({
   antialias: true,
   // Controls the default clear alpha value. When set to true, the value is 0 Otherwise it's 1.
@@ -83,6 +85,11 @@ let program = renderer.createProgram(
 const f = font(await get('lib/fonts/JetBrainsMono/json/JetBrains Mono_Regular.json'))
 console.log(f)
 
+const f2 = parse(await fetch('http://localhost:5173/lib/fonts/NotoEmoji/ttf/NotoEmoji-Regular.ttf').then(res => res.arrayBuffer()))
+// const f2 = parse(await fetch('http://localhost:5173/lib/fonts/NotoSansArabic/ttf/NotoSansArabic-Regular.ttf').then(res => res.arrayBuffer()))
+console.log(f2)
+// console.log(f2.glyphs.glyphs[402].toPathData().toLowerCase().replaceAll('m', ' m ').replaceAll('l', ' l ').replaceAll("q", ' q ').replaceAll("b", ' b ').replaceAll("z", ' z ').replaceAll("  ", " ").replace(/^\s/, "").replaceAll("-", " "))
+
 const render = () => {
   uniforms.u_time.value += clock.getDelta();
 
@@ -92,27 +99,62 @@ const render = () => {
     let triangles: any[] = [];
     let xCursor = xStart;
 
-    const xScale = (1 / renderer.width) * size * (1 / f.resolution)
-    const yScale = (1 / renderer.height) * size * (1 / f.resolution)
+    {
+      const xScale = (1 / renderer.width) * size * (1 / f.resolution)
+      const yScale = (1 / renderer.height) * size * (1 / f.resolution)
 
-    // TODO Allow customization like for arabic (horizontal) or chinese (vertical)
-    const lineHeight = (f.boundingBox.yMax - f.boundingBox.yMin + f.underlineThickness) * yScale;
+      // TODO Allow customization like for arabic (horizontal) or chinese (vertical)
+      const lineHeight = (f.boundingBox.yMax - f.boundingBox.yMin + f.underlineThickness) * yScale;
 
-    for (const char of text) {
-      if (char === '\n') {
-        xCursor = xStart;
-        yBase -= lineHeight;
-        continue;
+      for (const char of text) {
+        if (char === '\n') {
+          xCursor = xStart;
+          yBase -= lineHeight;
+          continue;
+        }
+
+        let glyph = f.glyphs[char];
+        if (!glyph) {
+          glyph = f.glyphs['?'];
+          if (!glyph) {
+            continue
+          }
+        }
+
+        // points.push(...scaledPoints)
+        triangles.push(...Glyph.parse(glyph.o).toTriangles({
+          xScale,
+          yScale,
+          xOffset: xCursor,
+          yOffset: yBase,
+          segmentsPerCurve: 100
+        }))
+
+        xCursor += glyph.ha * xScale; // + spacing
       }
-
-      let glyph = f.glyphs[char];
-      if (!glyph) { glyph = f.glyphs['?']; if (!glyph) {continue} }
-
-      // points.push(...scaledPoints)
-      triangles.push(...Glyph.parse(glyph.o).toTriangles({ xScale, yScale, xOffset: xCursor, yOffset: yBase, segmentsPerCurve: 100 }))
-
-      xCursor += glyph.ha * xScale; // + spacing
     }
+
+    const xScale = 1 / 4000
+    const yScale = 1 / 4000
+
+    // 106, 99, 105, 500, 450
+    // arabic 50
+    const n = 499;
+    const glyph = f2.glyphs.glyphs[n];
+
+    const o = glyph.toPathData({flipY: false}).toLowerCase().replaceAll('m', ' m ').replaceAll('l', ' l ').replaceAll("q", ' q ').replaceAll("b", ' b ').replaceAll("z", ' z ').replaceAll("-", " -").replaceAll("  ", " ").replace(/^\s/, "");
+    // console.log(o)
+    // triangles.push(...)
+    for (let tri of Glyph.parse(o).toTriangles({
+      xScale,
+      yScale,
+      xOffset: xCursor,
+      yOffset: yBase,
+      segmentsPerCurve: 100
+    })) {
+      triangles.push(tri) // TODO .push(...()) has a maximum stack size limit, dont use it.
+    }
+    console.log(glyph)
 
     const positionBuffer = renderer.gl.createBuffer();
     renderer.gl.bindBuffer(renderer.gl.ARRAY_BUFFER, positionBuffer);

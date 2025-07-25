@@ -95,6 +95,7 @@ const render = () => {
     const xScale = (1 / renderer.width) * size * (1 / f.resolution)
     const yScale = (1 / renderer.height) * size * (1 / f.resolution)
 
+    // TODO Allow customization like for arabic (horizontal) or chinese (vertical)
     const lineHeight = (f.boundingBox.yMax - f.boundingBox.yMin + f.underlineThickness) * yScale;
 
     for (const char of text) {

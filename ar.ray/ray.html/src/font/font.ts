@@ -62,10 +62,7 @@ export class Glyph {
     }
 
     const isHole = (path: Path) => {
-      let numberOfOutsidePolygons = 0;
-      for (let [_, holes] of shapes) {
-        if (holes.includes(path)) numberOfOutsidePolygons += 1;
-      }
+      let numberOfOutsidePolygons = shapes.entries().filter(([_, holes]) => holes.includes(path)).toArray().length;
 
       // Polygons can be completely inside other polygons and still need to be filled. (So they're not a hole)
       return numberOfOutsidePolygons % 2 == 1;

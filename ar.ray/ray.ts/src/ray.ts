@@ -187,6 +187,9 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   reduce: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
   reduce_right: (callback: (accumulator: Node, current: Node, cancel: Node) => any, initial_value: any) => Node
 
+  // TODO Combine arbitrary iterators like map, reduce, or "with/by_index" and other things like it.
+  // map_reduce
+
   step_by: (value: number) => TSelf
   /**
    * @alias pop_front
@@ -250,6 +253,10 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    * TODO: Does uniqueness check for SELECTED STRUCTURE or not? In the case of is_unique for is_injective you'd think so
    */
   unique: () => TSelf
+  /**
+   * TODO: map reduce first, first.at(0, index).excludes
+   */
+  unordered: () => TSelf
 
   /**
    * Select all nodes in this structure
@@ -445,6 +452,9 @@ export interface Node extends Pointer<Node> {
    *
    * TODO: Transformations like .map/.filter/... can still apply to types.
    *        |-> What happens to .next on conditionals? Probably just all possible next paths.
+   *
+   * TODO: Check for type equivalence, do two types match the same "area"?
+   * TODO: Enumeration of instances of some type, though often there wouldn't be an implementation, and how is the ordering/traversal of options done properly? When is this useful?
    */
   instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
   //TODO Similar to .remove, this matches to a structure and returns that structure.
@@ -554,6 +564,8 @@ export interface Edge {
  *      - when you push_back(node) for instance, what should be connected to that node? A new ray which becomes the referenced ray, or should it attach itself to the referenced ray?
  *      - For things like types (what else?) conditional structures.
  *        -> Generalized to function applied to a number of/all substructures.
+ *      - "If condition is met" - add functionality; aka context. In what order? Do we recheck after? (Allow for infinite regress?)
+ *      - Names for different types of selection: Reference node (only .self) and ray (direction) separately, ray if some direction is selected. What about other selections, single selection (single ray) etc..
  *      New:
  *      -
  *
@@ -614,6 +626,8 @@ export type Type<T> = T & {
  *       Should be a text-only variant which still is decently usable? But how?
  *       possible option: Using named references when structures are too complicated to display?
  *
+ * TODO: Drawing graphs, drawing numbers/letters/symbols in the ide, embedded in the 2d grid then subgraphs of glyphs being linked together in another layer.
+ *
  * TODO  - It should be definable what counts as possible function/property continuations. Different programming languages do things differently
  *       Take for instance a function that's applicable to all of a certain type. Or only within the scope or some object.
  *
@@ -639,9 +653,12 @@ export type Type<T> = T & {
  *            B0, ...B, BN     = func_call()    B0, ...B, BN  = f0(), f1(), f2(), f3(), fn()     (OR vertical): = fB()    (OR other structures)
  *            C0, ...C, CN                      C0, ...C, CN                                                      fC()
  *      -                                                          |-> commas here are .push_back?
+ *      - And allow .equals with some structure matched to arbitrary ordering of names.
  *      - What if we have ambiguity in the matched pattern: a, ...b, ...c, d, or something where the last element is either something or nothing (Nothing needs to be supported).
  *          -> Branch all different combinations, or within the function have access to the different instantiations, how would one filter for a particular one?
  *             -> The distinct possibility combinations should be linkable (somehow recover the one from the other).
+ *      - Similar to ambiguity in matched pattern, ambiguity in naming: Type match a particular name to two different parts of the structure. From there you can deduce from
+ *        surroundings which one it is, but allow for that overlap.
  *      - Inputs/Outputs like "possible numbers" 3, 5, 7: or something like prime numbers. [see Types]
  *      -
  *      - What would be native things loops would be used for?
@@ -700,7 +717,9 @@ export type Type<T> = T & {
  *          for_each (x) => func(x)
  *                            |-- .length == 1
  *                            (Some way to say that it only maps to a distinct element)
- *
+ *      - "What is effected" notion for functions. So not necessarily arbitrary returns etc.. So that there's a conceptual difference between a function which
+ *        returns something arbitrary, and one which only changes the input.
+ *          - In the case of a subgraph, with matching ANY placeholders around for the graph it's in. You'd want the ability to say: "We only touch the subgraph" or "only this thing".
  *
  * TODO: Implemented functions, bound to some keybinding?
  *      - Pattern like a loop with a length constraint, expand till constraints are no longer satisfied

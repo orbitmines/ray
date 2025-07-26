@@ -1,4 +1,5 @@
 import earcut from "./earcut";
+import Earcut from "./earcut2";
 
 export type Font = {
   glyphs: {
@@ -125,6 +126,8 @@ export class Shape {
     })
 
     const triangleVertices = earcut(points.map(point => [point.x, point.y]).flat(), holeIndices) // returns triplets of vertex numbers
+
+    // return new Earcut(this.path.toPoints(segmentsPerCurve), ...this.holes.map(hole => hole.toPoints(segmentsPerCurve))).triangles
 
     const scaledPoints = points.map(point => [point.x * xScale + xOffset, point.y * yScale + yOffset])
     return triangleVertices.map(vertex => [scaledPoints[vertex][0], scaledPoints[vertex][1]]).flat()
@@ -284,8 +287,51 @@ export class Path {
     return polygons;
   }
 }
+export class Triangle {
+  constructor(public a: Vec2, public b: Vec2, public c: Vec2) {
+  }
+
+  // signed area
+  area = () => {
+    return (this.b.y - this.a.y) * (this.c.x - this.b.x) - (this.b.x - this.a.x) * (this.c.y - this.b.y);
+  }
+
+  offset_x = (offset: number) => {
+    this.a.x += offset;
+    this.b.x += offset;
+    this.c.x += offset;
+    return this;
+  }
+  offset_y = (offset: number) => {
+    this.a.y += offset;
+    this.b.y += offset;
+    this.c.y += offset;
+    return this;
+  }
+  scale_x = (scale: number) => {
+    this.a.x *= scale;
+    this.b.x *= scale;
+    this.c.x *= scale;
+    return this;
+  }
+  scale_y = (scale: number) => {
+    this.a.y *= scale;
+    this.b.y *= scale;
+    this.c.y *= scale;
+    return this;
+  }
+}
 export class Vec2 {
-  constructor(public x: number, public y: number) {}
+  constructor(public x: number, public y: number) {
+  }
+
+  equals = (b: Vec2): boolean => this.x === b.x && this.y === b.y;
+
+  isInsideTriangle = (triangle: Triangle) => {
+    return (triangle.c.x - this.x) * (triangle.a.y - this.y) >= (triangle.a.x - this.x) * (triangle.c.y - this.y) &&
+      (triangle.a.x - this.x) * (triangle.b.y - this.y) >= (triangle.b.x - this.x) * (triangle.a.y - this.y) &&
+      (triangle.b.x - this.x) * (triangle.c.y - this.y) >= (triangle.c.x - this.x) * (triangle.b.y - this.y);
+  }
 
   // from three.js
   isInsidePolygon = (polygon: Path) => {
@@ -298,54 +344,56 @@ export class Vec2 {
     //  with the horizontal line through inPt, left of inPt
     //  not counting lowerY endpoints of edges and whole edges on that line
     let inside = false;
-    for ( let p = polyLen - 1, q = 0; q < polyLen; p = q ++ ) {
+    for (let p = polyLen - 1, q = 0; q < polyLen; p = q++) {
 
-      let edgeLowPt = inPolygon[ p ];
-      let edgeHighPt = inPolygon[ q ];
+      let edgeLowPt = inPolygon[p];
+      let edgeHighPt = inPolygon[q];
 
       let edgeDx = edgeHighPt.x - edgeLowPt.x;
       let edgeDy = edgeHighPt.y - edgeLowPt.y;
 
-      if ( Math.abs( edgeDy ) > Number.EPSILON ) {
+      if (Math.abs(edgeDy) > Number.EPSILON) {
 
         // not parallel
-        if ( edgeDy < 0 ) {
+        if (edgeDy < 0) {
 
-          edgeLowPt = inPolygon[ q ]; edgeDx = - edgeDx;
-          edgeHighPt = inPolygon[ p ]; edgeDy = - edgeDy;
+          edgeLowPt = inPolygon[q];
+          edgeDx = -edgeDx;
+          edgeHighPt = inPolygon[p];
+          edgeDy = -edgeDy;
 
         }
 
-        if ( ( this.y < edgeLowPt.y ) || ( this.y > edgeHighPt.y ) ) 		continue;
+        if ((this.y < edgeLowPt.y) || (this.y > edgeHighPt.y)) continue;
 
-        if ( this.y === edgeLowPt.y ) {
+        if (this.y === edgeLowPt.y) {
 
-          if ( this.x === edgeLowPt.x )		return	true;		// this is on contour ?
+          if (this.x === edgeLowPt.x) return true;		// this is on contour ?
           // continue;				// no intersection or edgeLowPt => doesn't count !!!
 
         } else {
 
-          const perpEdge = edgeDy * ( this.x - edgeLowPt.x ) - edgeDx * ( this.y - edgeLowPt.y );
-          if ( perpEdge === 0 )				return	true;		// this is on contour ?
-          if ( perpEdge < 0 ) 				continue;
-          inside = ! inside;		// true intersection left of this
+          const perpEdge = edgeDy * (this.x - edgeLowPt.x) - edgeDx * (this.y - edgeLowPt.y);
+          if (perpEdge === 0) return true;		// this is on contour ?
+          if (perpEdge < 0) continue;
+          inside = !inside;		// true intersection left of this
 
         }
 
       } else {
 
         // parallel or collinear
-        if ( this.y !== edgeLowPt.y ) 		continue;			// parallel
+        if (this.y !== edgeLowPt.y) continue;			// parallel
         // edge lies on the same horizontal line as this
-        if ( ( ( edgeHighPt.x <= this.x ) && ( this.x <= edgeLowPt.x ) ) ||
-          ( ( edgeLowPt.x <= this.x ) && ( this.x <= edgeHighPt.x ) ) )		return	true;	// this: Point on contour !
+        if (((edgeHighPt.x <= this.x) && (this.x <= edgeLowPt.x)) ||
+          ((edgeLowPt.x <= this.x) && (this.x <= edgeHighPt.x))) return true;	// this: Point on contour !
         // continue;
 
       }
 
     }
 
-    return	inside;
+    return inside;
 
   }
 }

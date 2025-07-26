@@ -1,4 +1,4 @@
-// From https://github.com/mapbox/earcut/blob/main/src/earcut.js
+import {Vec2} from "./font";
 
 export default function earcut(data, holeIndices, dim = 2) {
 
@@ -42,6 +42,12 @@ export default function earcut(data, holeIndices, dim = 2) {
 // create a circular doubly linked list from polygon points in the specified winding order
 function linkedList(data, start, end, dim, clockwise) {
     let last;
+
+    // const points = [];
+    // for (let i = start; i < end; i += dim) {
+    //     points.push({ x: data[i], y: data[i + 1] });
+    // }
+    // console.log(signedArea(data, start, end, dim) === a(points));
 
     if (clockwise === (signedArea(data, start, end, dim) > 0)) {
         for (let i = start; i < end; i += dim) last = insertNode(i / dim | 0, data[i], data[i + 1], last);
@@ -150,7 +156,7 @@ function isEar(ear) {
     let p = c.next;
     while (p !== a) {
         if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 &&
-            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p.x, p.y) &&
+            !equals({ x: ax, y: ay }, p) && pointInTriangle(ax, ay, bx, by, cx, cy, p.x, p.y) &&
             area(p.prev, p, p.next) >= 0) return false;
         p = p.next;
     }
@@ -183,25 +189,25 @@ function isEarHashed(ear, minX, minY, invSize) {
     // look for points inside the triangle in both directions
     while (p && p.z >= minZ && n && n.z <= maxZ) {
         if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 && p !== a && p !== c &&
-            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p.x, p.y) && area(p.prev, p, p.next) >= 0) return false;
+            !equals({ x: ax, y: ay }, p) && pointInTriangle(ax, ay, bx, by, cx, cy, p.x, p.y) && area(p.prev, p, p.next) >= 0) return false;
         p = p.prevZ;
 
         if (n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1 && n !== a && n !== c &&
-            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, n.x, n.y) && area(n.prev, n, n.next) >= 0) return false;
+            !equals({ x: ax, y: ay }, n) && pointInTriangle(ax, ay, bx, by, cx, cy, n.x, n.y) && area(n.prev, n, n.next) >= 0) return false;
         n = n.nextZ;
     }
 
     // look for remaining points in decreasing z-order
     while (p && p.z >= minZ) {
         if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 && p !== a && p !== c &&
-            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p.x, p.y) && area(p.prev, p, p.next) >= 0) return false;
+            !equals({ x: ax, y: ay }, p) && pointInTriangle(ax, ay, bx, by, cx, cy, p.x, p.y) && area(p.prev, p, p.next) >= 0) return false;
         p = p.prevZ;
     }
 
     // look for remaining points in increasing z-order
     while (n && n.z <= maxZ) {
         if (n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1 && n !== a && n !== c &&
-            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, n.x, n.y) && area(n.prev, n, n.next) >= 0) return false;
+            !equals({ x: ax, y: ay }, n) && pointInTriangle(ax, ay, bx, by, cx, cy, n.x, n.y) && area(n.prev, n, n.next) >= 0) return false;
         n = n.nextZ;
     }
 
@@ -606,8 +612,8 @@ function removeNode(p) {
     p.next.prev = p.prev;
     p.prev.next = p.next;
 
-    if (p.prevZ) p.prevZ.nextZ = p.nextZ;
     if (p.nextZ) p.nextZ.prevZ = p.prevZ;
+    if (p.prevZ) p.prevZ.nextZ = p.nextZ;
 }
 
 function createNode(i, x, y) {
@@ -661,23 +667,3 @@ function signedArea(data, start, end, dim) {
     return sum;
 }
 
-// turn a polygon in a multi-dimensional array form (e.g. as in GeoJSON) into a form Earcut accepts
-export function flatten(data) {
-    const vertices = [];
-    const holes = [];
-    const dimensions = data[0][0].length;
-    let holeIndex = 0;
-    let prevLen = 0;
-
-    for (const ring of data) {
-        for (const p of ring) {
-            for (let d = 0; d < dimensions; d++) vertices.push(p[d]);
-        }
-        if (prevLen) {
-            holeIndex += prevLen;
-            holes.push(holeIndex);
-        }
-        prevLen = ring.length;
-    }
-    return {vertices, holes, dimensions};
-}

@@ -6,7 +6,7 @@
  * to expose Node.js functionality from the main process.
  */
 import Renderer from "./src/renderer";
-import {font, Glyph} from "./src/font/font";
+import {Glyph} from "./src/font/font";
 
 import {parse} from "./src/font/opentype.js/opentype.mjs"
 
@@ -81,8 +81,16 @@ let program = renderer.createProgram(
   renderer.createFragmentShader(await get('test.frag'))
 )
 
-const f = font(await get('lib/fonts/JetBrainsMono/json/JetBrains Mono_Regular.json'))
-console.log(f)
+// TODO: Refactor opentype.js to automatically fill "make" with data.
+// TODO: Add CBDT/CBLC (EBDT/EBLC) support for emojis
+// TODO: Strike-through, + differentiate bold/semibold/italic etc..
+// TODO: Test variable fonts from google noto
+// TODO: Fonts should be editable within the interface: Save to the .ttf file and perform version control over
+//       the structure of the ttf file. Chances from the OS should be labelled as branches from the original and
+//       if no conflicts from the edited variant as well.
+
+const f3 = parse(await fetch('http://localhost:5173/lib/fonts/JetBrainsMono/ttf/JetBrainsMono-Regular.ttf').then(res => res.arrayBuffer()))
+console.log(f3)
 
 // const f2 = parse(await fetch('http://localhost:5173/lib/fonts/NotoColorEmoji/ttf/NotoColorEmoji.ttf').then(res => res.arrayBuffer()))
 const f2 = parse(await fetch('http://localhost:5173/lib/fonts/NotoEmoji/ttf/NotoEmoji-Regular.ttf').then(res => res.arrayBuffer()))
@@ -96,16 +104,16 @@ const render = () => {
 
   // renderer.render(scene, camera);
 
-  function renderTextPoints(text: string, xStart = -0.9, yBase = 0, size = 20) {
+  function renderTextPoints(text: string, xStart = -0.9, yBase = 0, size = 28) {
     let triangles: any[] = [];
     let xCursor = xStart;
 
     {
-      const xScale = (1 / renderer.width) * size * (1 / f.resolution)
-      const yScale = (1 / renderer.height) * size * (1 / f.resolution)
+      const xScale = (1 / renderer.width) * size * (1 / f3.tables.head.unitsPerEm)
+      const yScale = (1 / renderer.height) * size * (1 / f3.tables.head.unitsPerEm)
 
       // TODO Allow customization like for arabic (horizontal) or chinese (vertical)
-      const lineHeight = (f.boundingBox.yMax - f.boundingBox.yMin + f.underlineThickness) * yScale;
+      const lineHeight = (f3.tables.head.yMax - f3.tables.head.yMin + f3.tables.post.underlineThickness) * yScale;
 
       for (const char of text) {
         if (char === '\n') {
@@ -114,27 +122,30 @@ const render = () => {
           continue;
         }
 
-        let glyph = f.glyphs[char];
-        if (!glyph) {
-          glyph = f.glyphs['?'];
-          if (!glyph) {
-            continue
-          }
-        }
+        const glyph = f3.charToGlyph(char);
+        const o = glyph.toPathData().toLowerCase().replaceAll('m', ' m ').replaceAll('l', ' l ').replaceAll("q", ' q ').replaceAll("b", ' b ').replaceAll("z", ' z ').replaceAll("-", " -").replaceAll("  ", " ").replace(/^\s/, "");
+
+        // let glyph = f.glyphs[char];
+        // if (!glyph) {
+        //   glyph = f.glyphs['?'];
+        //   if (!glyph) {
+        //     continue
+        //   }
+        // }
 
         // points.push(...scaledPoints)
-        triangles.push(...Glyph.parse(glyph.o).toTriangles({
+        triangles.push(...Glyph.parse(o).toTriangles({
           xScale,
           yScale,
           xOffset: xCursor,
           yOffset: yBase,
-          segmentsPerCurve: 20
+          segmentsPerCurve: 30
         }))
         // }).map(triangle => triangle.scale_x(xScale).offset_x(xCursor).scale_y(yScale).offset_y(yBase))
         //   .map(triangle => [triangle.a.x, triangle.a.y, triangle.b.x, triangle.b.y, triangle.c.x, triangle.c.y])
         //   .flat())
 
-        xCursor += glyph.ha * xScale; // + spacing
+        xCursor += glyph.advanceWidth * xScale; // + spacing
       }
     }
 
@@ -147,8 +158,9 @@ const render = () => {
     const glyph = f2.glyphs.glyphs[n];
     console.log(f2.charToGlyph('🏎'))
     console.log('🏎')
+    // TODO: glyph.advanceWidth for emojis we need to instantiate Glyphs before parseHmtxTableAll
 
-    const o = glyph.toPathData({flipY: false}).toLowerCase().replaceAll('m', ' m ').replaceAll('l', ' l ').replaceAll("q", ' q ').replaceAll("b", ' b ').replaceAll("z", ' z ').replaceAll("-", " -").replaceAll("  ", " ").replace(/^\s/, "");
+    const o = glyph.toPathData().toLowerCase().replaceAll('m', ' m ').replaceAll('l', ' l ').replaceAll("q", ' q ').replaceAll("b", ' b ').replaceAll("z", ' z ').replaceAll("-", " -").replaceAll("  ", " ").replace(/^\s/, "");
     // console.log(o)
     // triangles.push(...)
     for (let tri of Glyph.parse(o).toTriangles({

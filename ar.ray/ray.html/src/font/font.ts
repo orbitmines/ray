@@ -44,13 +44,6 @@ export type Font = {
   cssFontStyle: string,
 }
 
-export const font = (json: string): Font => {
-  const data: Font = JSON.parse(json);
-  // data.scale = (size: number) => size / data.resolution;
-  // data.line_height = (size: number) => (data.boundingBox.yMax - data.boundingBox.yMin + data.underlineThickness) * data.scale(size);
-  return data;
-}
-
 export class Glyph {
   private shapes: Shape[] = []
 
@@ -184,7 +177,7 @@ export class Path {
         }
         case 'quadraticBezierTo': {
           const [controlPoint, end] = operation.args;
-          // TODO: For opentype.js vs jetbrains these are swapped, why? Which one is incorrect?
+          // TODO: For opentype.js vs jetbrains json these are swapped, why? Which one is incorrect?
 
           const quadraticBezier = (t: number) => new Vec2(
             (1 - t)**2 * current.x + 2 * (1 - t) * t * controlPoint.x + t**2 * end.x,

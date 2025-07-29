@@ -64,11 +64,15 @@ class Earcut {
     let outerNode = this.linkedList(this.points, { clockwise: true })
     if (!outerNode || outerNode.next === outerNode.prev) return;
 
+    // Note that these checks for holes require that the points are in some order in which you would draw the shape
+    // This check allows holes to be passed to Earcut which aren't actually in this shape.
+    this.holes = this.holes.filter(hole => isPolygonAInsidePolygonB(hole, this.points))
+    // Holes could be within other holes, only take the "most outer ones"
+    this.holes = this.holes.filter(hole => !this.holes.some(outside => isPolygonAInsidePolygonB(hole, outside)))
+
     if (holes.length > 0) outerNode = outerNode.eliminateHoles()
 
-    // outerNode.earcut_linked()
     outerNode.earcutLinked();
-
   }
 
   private _bounding_box: { min: Vec2; max: Vec2 };
@@ -686,4 +690,89 @@ const signed_area = (points: Vec2[]) => {
     previous = current;
   }
   return sum;
+}
+
+
+function polygonToSegments(polygon: Point[]): Segment[] {
+  const segments: Segment[] = [];
+  const n = polygon.length;
+
+  for (let i = 0; i < n; i++) {
+    const p1 = polygon[i];
+    const p2 = polygon[(i + 1) % n]; // wrap around to the first point
+    segments.push({ p1, p2 });
+  }
+
+  return segments;
+}
+
+type Point = { x: number; y: number };
+type Segment = { p1: Point; p2: Point };
+
+enum EventType {
+  START,
+  END,
+  INTERSECTION,
+}
+
+type Event = {
+  point: Point;
+  type: EventType;
+  seg1: Segment;
+  seg2?: Segment; // only used in INTERSECTION
+};
+
+// Helper: compare two points lexicographically (x then y)
+function comparePoints(a: Point, b: Point): number {
+  return a.x !== b.x ? a.x - b.x : a.y - b.y;
+}
+
+// Check if two line segments intersect, return intersection point if so
+function getIntersection(s1: Segment, s2: Segment): Point | null {
+  const { p1: a, p2: b } = s1;
+  const { p1: c, p2: d } = s2;
+
+  const det = (b.x - a.x) * (d.y - c.y) - (d.x - c.x) * (b.y - a.y);
+  if (det === 0) return null; // parallel
+
+  const t = ((c.x - a.x) * (d.y - c.y) - (c.y - a.y) * (d.x - c.x)) / det;
+  const u = ((c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)) / det;
+
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null; // no intersection
+
+  return {
+    x: a.x + t * (b.x - a.x),
+    y: a.y + t * (b.y - a.y),
+  };
+}
+
+function isPolygonAInsidePolygonB(polygonA: Point[], polygonB: Point[]): boolean {
+  const segmentsA = polygonToSegments(polygonA);
+  const segmentsB = polygonToSegments(polygonB);
+
+  // Only check for intersections between segmentsA and segmentsB
+  for (const sa of segmentsA) {
+    for (const sb of segmentsB) {
+      const intersection = getIntersection(sa, sb);
+      if (intersection) {
+        return false; // intersection found → A is not completely inside B
+      }
+    }
+  }
+
+  // If no intersections, check if a point of A is inside B
+  return isPointInPolygon(polygonA[0], polygonB);
+}
+
+function isPointInPolygon(point: Point, polygon: Point[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+
+    const intersect = ((yi > point.y) !== (yj > point.y)) &&
+      (point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }

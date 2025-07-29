@@ -143,7 +143,7 @@ const render = () => {
 
     // 106, 99, 105, 500, 450
     // arabic 50
-    const n = 499;
+    const n = 450;
     const glyph = f2.glyphs.glyphs[n];
 
     const o = glyph.toPathData({flipY: false}).toLowerCase().replaceAll('m', ' m ').replaceAll('l', ' l ').replaceAll("q", ' q ').replaceAll("b", ' b ').replaceAll("z", ' z ').replaceAll("-", " -").replaceAll("  ", " ").replace(/^\s/, "");
@@ -161,7 +161,7 @@ const render = () => {
     //   .flat()) {
       triangles.push(tri) // TODO .push(...()) has a maximum stack size limit, dont use it.
     }
-    // console.log(glyph)
+    console.log(glyph)
 
     const positionBuffer = renderer.gl.createBuffer();
     renderer.gl.bindBuffer(renderer.gl.ARRAY_BUFFER, positionBuffer);

@@ -123,7 +123,7 @@ function parseCmapTableFormat14(cmap, p) {
                 ranges: function() {
                     return p.parseRecordList32({
                         startUnicodeValue: p.parseUInt24,
-                        additionalCount: p.parseByte
+                        additionalCount: p.u8
                     });
                 }
             });

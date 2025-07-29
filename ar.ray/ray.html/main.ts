@@ -5,7 +5,6 @@
  * `contextIsolation` is turned on. Use the contextBridge API in `preload.js`
  * to expose Node.js functionality from the main process.
  */
-import * as THREE from 'three';
 import Renderer from "./src/renderer";
 import {font, Glyph} from "./src/font/font";
 
@@ -29,13 +28,13 @@ renderer.pixelRatio = window.devicePixelRatio;
 // const scene = new THREE.Scene();
 // scene.background = new THREE.Color(0x1c2127)
 
-const clock = new THREE.Clock();
+// const clock = new THREE.Clock();
 
-const uniforms = {
-  u_time: {type: "f", value: 1.0},
-  u_resolution: {type: "v2", value: new THREE.Vector2()},
-  u_mouse: {type: "v2", value: new THREE.Vector2()}
-};
+// const uniforms = {
+//   u_time: {type: "f", value: 1.0},
+//   u_resolution: {type: "v2", value: new THREE.Vector2()},
+//   u_mouse: {type: "v2", value: new THREE.Vector2()}
+// };
 
 const BASE_URL = 'http://localhost:5173'
 const get = async (file: string) => await (await fetch(`${BASE_URL}/${file}`)).text()
@@ -85,13 +84,14 @@ let program = renderer.createProgram(
 const f = font(await get('lib/fonts/JetBrainsMono/json/JetBrains Mono_Regular.json'))
 console.log(f)
 
+// const f2 = parse(await fetch('http://localhost:5173/lib/fonts/NotoColorEmoji/ttf/NotoColorEmoji.ttf').then(res => res.arrayBuffer()))
 const f2 = parse(await fetch('http://localhost:5173/lib/fonts/NotoEmoji/ttf/NotoEmoji-Regular.ttf').then(res => res.arrayBuffer()))
 // const f2 = parse(await fetch('http://localhost:5173/lib/fonts/NotoSansArabic/ttf/NotoSansArabic-Regular.ttf').then(res => res.arrayBuffer()))
 console.log(f2)
 // console.log(f2.glyphs.glyphs[402].toPathData().toLowerCase().replaceAll('m', ' m ').replaceAll('l', ' l ').replaceAll("q", ' q ').replaceAll("b", ' b ').replaceAll("z", ' z ').replaceAll("  ", " ").replace(/^\s/, "").replaceAll("-", " "))
 
 const render = () => {
-  uniforms.u_time.value += clock.getDelta();
+  // uniforms.u_time.value += clock.getDelta();
   // console.log(uniforms.u_time.value)
 
   // renderer.render(scene, camera);
@@ -145,6 +145,8 @@ const render = () => {
     // arabic 50
     const n = 450;
     const glyph = f2.glyphs.glyphs[n];
+    console.log(f2.charToGlyph('🏎'))
+    console.log('🏎')
 
     const o = glyph.toPathData({flipY: false}).toLowerCase().replaceAll('m', ' m ').replaceAll('l', ' l ').replaceAll("q", ' q ').replaceAll("b", ' b ').replaceAll("z", ' z ').replaceAll("-", " -").replaceAll("  ", " ").replace(/^\s/, "");
     // console.log(o)
@@ -161,7 +163,7 @@ const render = () => {
     //   .flat()) {
       triangles.push(tri) // TODO .push(...()) has a maximum stack size limit, dont use it.
     }
-    console.log(glyph)
+    // console.log(glyph)
 
     const positionBuffer = renderer.gl.createBuffer();
     renderer.gl.bindBuffer(renderer.gl.ARRAY_BUFFER, positionBuffer);
@@ -199,8 +201,8 @@ const onWindowResize = (event?: UIEvent) => {
   // camera.lookAt(scene.position);
 
   renderer.setSize(window.innerWidth, window.innerHeight);
-  uniforms.u_resolution.value.x = renderer.domElement.width;
-  uniforms.u_resolution.value.y = renderer.domElement.height;
+  // uniforms.u_resolution.value.x = renderer.domElement.width;
+  // uniforms.u_resolution.value.y = renderer.domElement.height;
 
   render()
 }
@@ -209,8 +211,8 @@ onWindowResize()
 window.addEventListener('resize', onWindowResize, false);
 
 document.onmousemove = (event) => {
-  uniforms.u_mouse.value.x = event.pageX;
-  uniforms.u_mouse.value.y = event.pageY;
+  // uniforms.u_mouse.value.x = event.pageX;
+  // uniforms.u_mouse.value.y = event.pageY;
 }
 
 await init();

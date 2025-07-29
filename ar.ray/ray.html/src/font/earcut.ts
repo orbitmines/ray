@@ -5,7 +5,7 @@ export default function earcut(points: Vec2[], ...holes: Vec2[][]): Triangle[] {
   return earcut.triangles;
 }
 
-function compareXYSlope(a, b) {
+function compareXYSlope(a: Node, b: Node) {
   let result = a.x - b.x;
   // when the left-most point of 2 holes meet at a vertex, sort the holes counterclockwise so that when we find
   // the bridge to the outer shell is always the point that they meet at.
@@ -22,12 +22,12 @@ function compareXYSlope(a, b) {
 
 
 // signed area of a triangle
-function area(p, q, r) {
+function area(p: Node, q: Node, r: Node) {
   return (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
 }
 
 // check if two segments intersect
-function intersects(p1, q1, p2, q2) {
+function intersects(p1: Node, q1: Node, p2: Node, q2: Node) {
   const o1 = sign(area(p1, q1, p2));
   const o2 = sign(area(p1, q1, q2));
   const o3 = sign(area(p2, q2, p1));
@@ -44,11 +44,11 @@ function intersects(p1, q1, p2, q2) {
 }
 
 // for collinear points p, q, r, check if point q lies on segment pr
-function onSegment(p, q, r) {
+function onSegment(p: Node, q: Node, r: Node) {
   return q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) && q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y);
 }
 
-function sign(num) {
+function sign(num: number) {
   return num > 0 ? 1 : num < 0 ? -1 : 0;
 }
 
@@ -214,7 +214,7 @@ class Node {
   }
 
   // check if a diagonal between two polygon nodes is valid (lies in polygon interior)
-  isValidDiagonal = (b) => {
+  isValidDiagonal = (b: Node) => {
     const a = this;
 
     return !a.next.equals(b) && !a.prev.equals(b) && !a.intersectsPolygon(b) && // doesn't intersect other edges
@@ -252,7 +252,7 @@ class Node {
   }
 
   // whether sector in vertex m contains sector in vertex p in the same coordinates
-  containsSector = (p) => {
+  containsSector = (p: Node) => {
     const m = this;
     return area(m.prev, m, p.prev) < 0 && area(p.next, m, m.next) < 0;
   }

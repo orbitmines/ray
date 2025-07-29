@@ -8,7 +8,6 @@ import Font from './font.mjs';
 import Glyph from './glyph.mjs';
 import { CmapEncoding, GlyphNames, addGlyphNames } from './encoding.mjs';
 import parse from './parse.mjs';
-import BoundingBox from './bbox.mjs';
 import Path from './path.mjs';
 import cpal from './tables/cpal.mjs';
 import colr from './tables/colr.mjs';
@@ -469,7 +468,6 @@ export {
     Font,
     Glyph,
     Path,
-    BoundingBox,
     parse as _parse,
     parseBuffer as parse,
     load,

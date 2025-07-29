@@ -1,7 +1,6 @@
 // The Glyph object
 
 import check from './check.mjs';
-import draw from './draw.mjs';
 import Path from './path.mjs';
 import { getPaletteColor, formatColor } from './tables/cpal.mjs';
 // import glyf from './tables/glyf' Can't be imported here, because it's a circular dependency
@@ -122,14 +121,6 @@ Glyph.prototype.addUnicode = function(unicode) {
     }
 
     this.unicodes.push(unicode);
-};
-
-/**
- * Calculate the minimum bounding box for this glyph.
- * @return {opentype.BoundingBox}
- */
-Glyph.prototype.getBoundingBox = function() {
-    return this.path.getBoundingBox();
 };
 
 /**
@@ -348,21 +339,6 @@ Glyph.prototype.getMetrics = function() {
 };
 
 /**
- * Draw the glyph on the given context.
- * @param  {CanvasRenderingContext2D} ctx - A 2D drawing context, like Canvas.
- * @param  {number} [x=0] - Horizontal position of the beginning of the text.
- * @param  {number} [y=0] - Vertical position of the *baseline* of the text.
- * @param  {number} [fontSize=72] - Font size in pixels. We scale the glyph units by `1 / unitsPerEm * fontSize`.
- * @param  {Object=} options - xScale, yScale to stretch the glyph.
- * @param  {opentype.Font} font - if hinting is to be used, or CPAL/COLR / variation needs to be rendered, the font
- */
-Glyph.prototype.draw = function(ctx, x, y, fontSize, options, font) {
-    options = Object.assign({}, font.defaultRenderOptions, options);
-    const path = this.getPath(x, y, fontSize, options, font);
-    path.draw(ctx);
-};
-
-/**
  * Draw the points of the glyph.
  * On-curve points will be drawn in blue, off-curve points will be drawn in red.
  * @param  {CanvasRenderingContext2D} ctx - A 2D drawing context, like Canvas.
@@ -429,49 +405,6 @@ Glyph.prototype.drawPoints = function(ctx, x, y, fontSize, options, font) {
     drawCircles(blueCircles, x, y, scale);
     ctx.fillStyle = 'red';
     drawCircles(redCircles, x, y, scale);
-};
-
-/**
- * Draw lines indicating important font measurements.
- * Black lines indicate the origin of the coordinate system (point 0,0).
- * Blue lines indicate the glyph bounding box.
- * Green line indicates the advance width of the glyph.
- * @param  {CanvasRenderingContext2D} ctx - A 2D drawing context, like Canvas.
- * @param  {number} [x=0] - Horizontal position of the beginning of the text.
- * @param  {number} [y=0] - Vertical position of the *baseline* of the text.
- * @param  {number} [fontSize=72] - Font size in pixels. We scale the glyph units by `1 / unitsPerEm * fontSize`.
- */
-Glyph.prototype.drawMetrics = function(ctx, x, y, fontSize) {
-    let scale;
-    x = x !== undefined ? x : 0;
-    y = y !== undefined ? y : 0;
-    fontSize = fontSize !== undefined ? fontSize : 24;
-    scale = 1 / this.path.unitsPerEm * fontSize;
-    ctx.lineWidth = 1;
-
-    // Draw the origin
-    ctx.strokeStyle = 'black';
-    draw.line(ctx, x, -10000, x, 10000);
-    draw.line(ctx, -10000, y, 10000, y);
-
-    // This code is here due to memory optimization: by not using
-    // defaults in the constructor, we save a notable amount of memory.
-    const xMin = this.xMin || 0;
-    let yMin = this.yMin || 0;
-    const xMax = this.xMax || 0;
-    let yMax = this.yMax || 0;
-    const advanceWidth = this.advanceWidth || 0;
-
-    // Draw the glyph box
-    ctx.strokeStyle = 'blue';
-    draw.line(ctx, x + (xMin * scale), -10000, x + (xMin * scale), 10000);
-    draw.line(ctx, x + (xMax * scale), -10000, x + (xMax * scale), 10000);
-    draw.line(ctx, -10000, y + (-yMin * scale), 10000, y + (-yMin * scale));
-    draw.line(ctx, -10000, y + (-yMax * scale), 10000, y + (-yMax * scale));
-
-    // Draw the advance width
-    ctx.strokeStyle = 'green';
-    draw.line(ctx, x + (advanceWidth * scale), -10000, x + (advanceWidth * scale), 10000);
 };
 
 /**

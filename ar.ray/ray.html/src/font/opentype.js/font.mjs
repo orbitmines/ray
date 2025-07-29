@@ -488,20 +488,6 @@ Font.prototype.getAdvanceWidth = function(text, fontSize, options) {
 };
 
 /**
- * Draw the text on the given drawing context.
- * @param  {CanvasRenderingContext2D} ctx - A 2D drawing context, like Canvas.
- * @param  {string} text - The text to create.
- * @param  {number} [x=0] - Horizontal position of the beginning of the text.
- * @param  {number} [y=0] - Vertical position of the *baseline* of the text.
- * @param  {number} [fontSize=72] - Font size in pixels. We scale the glyph units by `1 / unitsPerEm * fontSize`.
- * @param  {GlyphRenderOptions=} options
- */
-Font.prototype.draw = function(ctx, text, x, y, fontSize, options) {
-    const path = this.getPath(text, x, y, fontSize, options);
-    path.draw(ctx);
-};
-
-/**
  * Draw the points of all glyphs in the text.
  * On-curve points will be drawn in blue, off-curve points will be drawn in red.
  * @param {CanvasRenderingContext2D} ctx - A 2D drawing context, like Canvas.

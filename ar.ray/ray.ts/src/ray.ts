@@ -455,6 +455,8 @@ export interface Node extends Pointer<Node> {
    *
    * TODO: Check for type equivalence, do two types match the same "area"?
    * TODO: Enumeration of instances of some type, though often there wouldn't be an implementation, and how is the ordering/traversal of options done properly? When is this useful?
+   *
+   * TODO: Some substructure matched to a single name, say ABCDE, match BCD to variable "middle" used for say a binary reader
    */
   instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
   //TODO Similar to .remove, this matches to a structure and returns that structure.

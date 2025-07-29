@@ -1,5 +1,4 @@
 import earcut from "./earcut";
-import Earcut from "./earcut2";
 
 export type Font = {
   glyphs: {
@@ -115,22 +114,11 @@ export class Shape {
   }
 
   toTriangles = ({ xScale = 1, yScale = 1, xOffset = 0, yOffset = 0, segmentsPerCurve = 100 }) => {
-    const points: Vec2[] = []
-    const holeIndices: number[] = []
+    const triangles = earcut(this.path.toPoints(segmentsPerCurve), ...this.holes.map(hole => hole.toPoints(segmentsPerCurve))) // returns triplets of vertex numbers
 
-    points.push(...this.path.toPoints(segmentsPerCurve))
-    this.holes.forEach(hole => {
-      holeIndices.push(points.length)
-
-      points.push(...hole.toPoints(segmentsPerCurve))
-    })
-
-    const triangleVertices = earcut(points.map(point => [point.x, point.y]).flat(), holeIndices) // returns triplets of vertex numbers
-
-    // return new Earcut(this.path.toPoints(segmentsPerCurve), ...this.holes.map(hole => hole.toPoints(segmentsPerCurve))).triangles
-
-    const scaledPoints = points.map(point => [point.x * xScale + xOffset, point.y * yScale + yOffset])
-    return triangleVertices.map(vertex => [scaledPoints[vertex][0], scaledPoints[vertex][1]]).flat()
+    return triangles.map(triangle => triangle.scale_x(xScale).offset_x(xOffset).scale_y(yScale).offset_y(yOffset))
+      .map(triangle => [triangle.a.x, triangle.a.y, triangle.b.x, triangle.b.y, triangle.c.x, triangle.c.y])
+      .flat()
   }
 }
 export class Path {
@@ -297,33 +285,42 @@ export class Triangle {
   }
 
   offset_x = (offset: number) => {
-    this.a.x += offset;
-    this.b.x += offset;
-    this.c.x += offset;
-    return this;
+    const r = this.clone();
+    r.a.x += offset;
+    r.b.x += offset;
+    r.c.x += offset;
+    return r;
   }
   offset_y = (offset: number) => {
-    this.a.y += offset;
-    this.b.y += offset;
-    this.c.y += offset;
-    return this;
+    const r = this.clone();
+    r.a.y += offset;
+    r.b.y += offset;
+    r.c.y += offset;
+    return r;
   }
   scale_x = (scale: number) => {
-    this.a.x *= scale;
-    this.b.x *= scale;
-    this.c.x *= scale;
-    return this;
+    const r = this.clone();
+    r.a.x *= scale;
+    r.b.x *= scale;
+    r.c.x *= scale;
+    return r;
   }
   scale_y = (scale: number) => {
-    this.a.y *= scale;
-    this.b.y *= scale;
-    this.c.y *= scale;
-    return this;
+    const r = this.clone();
+    r.a.y *= scale;
+    r.b.y *= scale;
+    r.c.y *= scale;
+    return r;
+  }
+  clone = () => {
+    return new Triangle(this.a.clone(), this.b.clone(), this.c.clone())
   }
 }
 export class Vec2 {
   constructor(public x: number, public y: number) {
   }
+
+  clone = () => new Vec2(this.x, this.y);
 
   equals = (b: Vec2): boolean => this.x === b.x && this.y === b.y;
 

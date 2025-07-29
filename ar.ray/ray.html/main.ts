@@ -92,6 +92,7 @@ console.log(f2)
 
 const render = () => {
   uniforms.u_time.value += clock.getDelta();
+  // console.log(uniforms.u_time.value)
 
   // renderer.render(scene, camera);
 
@@ -127,7 +128,7 @@ const render = () => {
           yScale,
           xOffset: xCursor,
           yOffset: yBase,
-          segmentsPerCurve: 100
+          segmentsPerCurve: 20
         }))
         // }).map(triangle => triangle.scale_x(xScale).offset_x(xCursor).scale_y(yScale).offset_y(yBase))
         //   .map(triangle => [triangle.a.x, triangle.a.y, triangle.b.x, triangle.b.y, triangle.c.x, triangle.c.y])
@@ -153,14 +154,14 @@ const render = () => {
       yScale,
       xOffset: xCursor,
       yOffset: yBase,
-      segmentsPerCurve: 100
+      segmentsPerCurve: 20
     })) {
     // }).map(triangle => triangle.scale_x(xScale).offset_x(xCursor).scale_y(yScale).offset_y(yBase))
     //   .map(triangle => [triangle.a.x, triangle.a.y, triangle.b.x, triangle.b.y, triangle.c.x, triangle.c.y])
     //   .flat()) {
       triangles.push(tri) // TODO .push(...()) has a maximum stack size limit, dont use it.
     }
-    console.log(glyph)
+    // console.log(glyph)
 
     const positionBuffer = renderer.gl.createBuffer();
     renderer.gl.bindBuffer(renderer.gl.ARRAY_BUFFER, positionBuffer);

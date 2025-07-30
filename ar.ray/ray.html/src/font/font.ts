@@ -1,82 +1,135 @@
 import earcut from "./earcut";
+import Font from "./opentype.js/font.mjs";
 
-export type Font = {
-  glyphs: {
-    [char: string]: {
-      ha: number,
-      x_min: number,
-      x_max: number,
-      o: string
-    };
-  },
-  familyName: string,
-  ascender: number,
-  descender: number,
-  underlinePosition: number,
-  underlineThickness: number,
-  boundingBox: {
-    yMin: number,
-    xMin: number,
-    yMax: number,
-    xMax: number
-  },
-  resolution: number,
-  original_font_information: {
-    format: number,
-    copyright: string,
-    fontFamily: string,
-    fontSubfamily: string,
-    uniqueID: string,
-    fullName: string,
-    version: string,
-    postScriptName: string,
-    trademark: string,
-    manufacturer: string,
-    designer: string,
-    manufacturerURL: string,
-    designerURL: string,
-    license: string,
-    licenseURL: string,
-    preferredFamily: string,
-    preferredSubfamily: string,
-  },
-  cssFontWeight: string,
-  cssFontStyle: string,
+import {parse} from "./opentype.js/opentype.mjs"
+
+// export type Font = {
+//   glyphs: {
+//     [char: string]: {
+//       ha: number,
+//       x_min: number,
+//       x_max: number,
+//       o: string
+//     };
+//   },
+//   familyName: string,
+//   ascender: number,
+//   descender: number,
+//   underlinePosition: number,
+//   underlineThickness: number,
+//   boundingBox: {
+//     yMin: number,
+//     xMin: number,
+//     yMax: number,
+//     xMax: number
+//   },
+//   resolution: number,
+//   original_font_information: {
+//     format: number,
+//     copyright: string,
+//     fontFamily: string,
+//     fontSubfamily: string,
+//     uniqueID: string,
+//     fullName: string,
+//     version: string,
+//     postScriptName: string,
+//     trademark: string,
+//     manufacturer: string,
+//     designer: string,
+//     manufacturerURL: string,
+//     designerURL: string,
+//     license: string,
+//     licenseURL: string,
+//     preferredFamily: string,
+//     preferredSubfamily: string,
+//   },
+//   cssFontWeight: string,
+//   cssFontStyle: string,
+// }
+
+export class FontStore {
+
+  fonts: Font[] = [];
+
+  // TODO: Remember how to retrieve the font for loading.
+  index = () => {
+    throw new Error('not yet implemented');
+  }
+
+  load = (buffer: ArrayBuffer) => {
+    this.fonts.push(parse(buffer))
+  }
+  // unload = (font: Font) => {
+  //   this.fonts = this.fonts.filter(f => f !== font)
+  //   // TODO: Remove cached glyphs
+  // }
+
+  glyph = (char: string, options?: { font: Font }): Glyph => {
+    for (let font of options?.font ? [options.font, ...this.fonts] : this.fonts) {
+      const glyph = font.charToGlyph(char);
+      if (glyph.index === 0)
+        continue;
+
+      (font as any).__cached_glyphs ??= {};
+
+      if ((font as any).__cached_glyphs[char])
+        return (font as any).__cached_glyphs[char]
+
+      // TODO Merge opentype.Glyph and this glyph.
+      const o = glyph.toPathData().toLowerCase().replaceAll('m', ' m ').replaceAll('l', ' l ').replaceAll("q", ' q ').replaceAll("b", ' b ').replaceAll("z", ' z ').replaceAll("-", " -").replaceAll("  ", " ").replace(/^\s/, "");
+
+      (font as any).__cached_glyphs[char] = Glyph.parse(o);
+      (font as any).__cached_glyphs[char].font = font;
+      (font as any).__cached_glyphs[char].advanceWidth = glyph.advanceWidth;
+      return (font as any).__cached_glyphs[char]
+    }
+
+    if (this.fonts.length === 0)
+      throw new Error('No fonts loaded')
+
+    // TODO: Return a glyph not this glyph
+    throw new Error('not yet implemented')
+    return this.fonts[0].glyphs.get(0) // .notdef
+  }
+}
+
+function cache(
+  target: any,
+  propertyKey: string,
+  descriptor: PropertyDescriptor
+) {
+  const originalMethod = descriptor.value;
+  const cacheKey = Symbol(`__cache_${propertyKey}`);
+
+  descriptor.value = function (...args: any[]) {
+    if (!(this as any)[cacheKey]) {
+      (this as any)[cacheKey] = new Map<string, any>();
+    }
+
+    const key = JSON.stringify(args);
+    if ((this as any)[cacheKey].has(key)) {
+      return (this as any)[cacheKey].get(key);
+    }
+
+    const result = originalMethod.apply(this, args);
+    (this as any)[cacheKey].set(key, result);
+    return result;
+  };
+
+  return descriptor;
 }
 
 export class Glyph {
   private shapes: Shape[] = []
+  public font: Font
+  public advanceWidth: number
 
   constructor(polygons: Path[]) {
-    // const shapes: Map<Path, Path[]> = new Map();
-    // for (let polygon of polygons) {
-    //   // TODO: This only works for very simple shapes
-    //   // const holes = polygons.filter(inside => inside !== polygon && inside.toPoints().some(point => point.isInsidePolygon(polygon)))
-    //   shapes.set(polygon, [])
-    // }
-    //
-    // const isHole = (path: Path) => {
-    //   let numberOfOutsidePolygons = shapes.entries().filter(([_, holes]) => holes.includes(path)).toArray().length;
-    //
-    //   // Polygons can be completely inside other polygons and still need to be filled. (So they're not a hole)
-    //   return numberOfOutsidePolygons % 2 == 1;
-    // }
-
-    // for (let [path, holes] of shapes) {
-    //   if (isHole(path)) continue;
-    //
-    //   this.shapes.push(new Shape(path, holes.filter(hole => isHole(hole))));
-    // }
     const holes = polygons.filter(polygon => !polygon.isClockWise())
     const outer = polygons.filter(polygon => polygon.isClockWise())
+
     for (let path of outer) {
-      // TODO: Holes need to be assigned to the correct shape, otherwise earcut bugs out. Earcut should be able to handle holes outside of
-      //       the area.
-      this.shapes.push(new Shape(path,
-        holes
-        // this.shapes.length === 0 && holes.length > 0 ? [holes[0]] : [] // TODO: As an example this works for 499
-        // holes.filter(inside => inside.toPoints().some(point => point.isInsidePolygon(path)))
-      ))
+      this.shapes.push(new Shape(path, holes))
     }
   }
 
@@ -86,9 +139,10 @@ export class Glyph {
     return points;
   }
 
-  toTriangles = ({ xScale = 1, yScale = 1, xOffset = 0, yOffset = 0, segmentsPerCurve = 100 }) => {
-    const triangles: number[] = []
-    this.shapes.forEach(shape => triangles.push(...shape.toTriangles({ xScale, yScale, xOffset, yOffset, segmentsPerCurve })))
+  @cache
+  toTriangles({ segmentsPerCurve = 100 }) {
+    const triangles: Triangle[] = []
+    this.shapes.forEach(shape => triangles.push(...shape.toTriangles({ segmentsPerCurve })))
     return triangles;
   }
 
@@ -106,12 +160,8 @@ export class Shape {
     return points;
   }
 
-  toTriangles = ({ xScale = 1, yScale = 1, xOffset = 0, yOffset = 0, segmentsPerCurve = 100 }) => {
-    const triangles = earcut(this.path.toPoints(segmentsPerCurve), ...this.holes.map(hole => hole.toPoints(segmentsPerCurve))) // returns triplets of vertex numbers
-
-    return triangles.map(triangle => triangle.scale_x(xScale).offset_x(xOffset).scale_y(yScale).offset_y(yOffset))
-      .map(triangle => [triangle.a.x, triangle.a.y, triangle.b.x, triangle.b.y, triangle.c.x, triangle.c.y])
-      .flat()
+  toTriangles = ({ segmentsPerCurve = 100 }) => {
+    return earcut(this.path.toPoints(segmentsPerCurve), ...this.holes.map(hole => hole.toPoints(segmentsPerCurve)))
   }
 }
 export class Path {
@@ -321,69 +371,5 @@ export class Vec2 {
     return (triangle.c.x - this.x) * (triangle.a.y - this.y) >= (triangle.a.x - this.x) * (triangle.c.y - this.y) &&
       (triangle.a.x - this.x) * (triangle.b.y - this.y) >= (triangle.b.x - this.x) * (triangle.a.y - this.y) &&
       (triangle.b.x - this.x) * (triangle.c.y - this.y) >= (triangle.c.x - this.x) * (triangle.b.y - this.y);
-  }
-
-  // from three.js
-  isInsidePolygon = (polygon: Path) => {
-    const inPolygon = polygon.toPoints()
-
-    const polyLen = inPolygon.length;
-
-    // inPt on polygon contour => immediate success    or
-    // toggling of inside/outside at every single! intersection point of an edge
-    //  with the horizontal line through inPt, left of inPt
-    //  not counting lowerY endpoints of edges and whole edges on that line
-    let inside = false;
-    for (let p = polyLen - 1, q = 0; q < polyLen; p = q++) {
-
-      let edgeLowPt = inPolygon[p];
-      let edgeHighPt = inPolygon[q];
-
-      let edgeDx = edgeHighPt.x - edgeLowPt.x;
-      let edgeDy = edgeHighPt.y - edgeLowPt.y;
-
-      if (Math.abs(edgeDy) > Number.EPSILON) {
-
-        // not parallel
-        if (edgeDy < 0) {
-
-          edgeLowPt = inPolygon[q];
-          edgeDx = -edgeDx;
-          edgeHighPt = inPolygon[p];
-          edgeDy = -edgeDy;
-
-        }
-
-        if ((this.y < edgeLowPt.y) || (this.y > edgeHighPt.y)) continue;
-
-        if (this.y === edgeLowPt.y) {
-
-          if (this.x === edgeLowPt.x) return true;		// this is on contour ?
-          // continue;				// no intersection or edgeLowPt => doesn't count !!!
-
-        } else {
-
-          const perpEdge = edgeDy * (this.x - edgeLowPt.x) - edgeDx * (this.y - edgeLowPt.y);
-          if (perpEdge === 0) return true;		// this is on contour ?
-          if (perpEdge < 0) continue;
-          inside = !inside;		// true intersection left of this
-
-        }
-
-      } else {
-
-        // parallel or collinear
-        if (this.y !== edgeLowPt.y) continue;			// parallel
-        // edge lies on the same horizontal line as this
-        if (((edgeHighPt.x <= this.x) && (this.x <= edgeLowPt.x)) ||
-          ((edgeLowPt.x <= this.x) && (this.x <= edgeHighPt.x))) return true;	// this: Point on contour !
-        // continue;
-
-      }
-
-    }
-
-    return inside;
-
   }
 }

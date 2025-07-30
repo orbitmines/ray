@@ -625,7 +625,9 @@ export type Type<T> = T & {
 
 /**
  * TODO: Editor
- *       Should be a text-only variant which still is decently usable? But how?
+ *       How to differentiate between domain names and function calls/variable references !orbitmines.com? Not @, use that for players. # for chat rooms
+ *
+ * TODO  Should be a text-only variant which still is decently usable? But how?
  *       possible option: Using named references when structures are too complicated to display?
  *
  * TODO: Drawing graphs, drawing numbers/letters/symbols in the ide, embedded in the 2d grid then subgraphs of glyphs being linked together in another layer.

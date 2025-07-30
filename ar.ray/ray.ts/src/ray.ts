@@ -255,19 +255,11 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   unique: () => TSelf
   /**
    * TODO: map reduce first, first.at(0, index).excludes
+   * Graph -> Set: graph.equip(graph => graph.unordered.unique).
    */
   unordered: () => TSelf
 
-  /**
-   * Select all nodes in this structure
-   */
-  all: () => Many<Node>
 
-
-  // TODO: Might wants operations like .neg / .subtract etc.. on the selected nodes.
-  //       So differentiation between .neg on the VALUE vs selected nodes.
-  //       Same with .every, or .filter which only applies to the selection.
-  selection: () => Graph
 
   /**
    * TODO: How to think about the same node, but different selected contexts/values on that node. Assuming they're different instances and both part of the union?
@@ -467,6 +459,7 @@ export interface Node extends Pointer<Node> {
   /**
    * Equal in value (ignores structure).
    * TODO: Value might be Many<Node>, so value could be a (math) Set.?
+   * TODO: Value might be a function like XOR applied to two binary values.
    */
   equals: (value: any) => Node
   /**
@@ -563,13 +556,23 @@ export interface Edge {
  *                |-> Many cursors, each with separate list of instructions?
  *          -
  *      - Cursor might carry structure with it.
- *      - when you push_back(node) for instance, what should be connected to that node? A new ray which becomes the referenced ray, or should it attach itself to the referenced ray?
  *      - For things like types (what else?) conditional structures.
  *        -> Generalized to function applied to a number of/all substructures.
  *      - "If condition is met" - add functionality; aka context. In what order? Do we recheck after? (Allow for infinite regress?)
- *      - Names for different types of selection: Reference node (only .self) and ray (direction) separately, ray if some direction is selected. What about other selections, single selection (single ray) etc..
- *      New:
+ *      - Names for different types of selection: Reference node (only .self) and ray (direction) separately, ray if some direction is selected. What about other selections, single selection (single ray: Context?) etc..
+ *        - Node: no context selected, Ray: context selected.
  *      -
+ *      - Intersection is with arbitrary structure, not just a point. From the perspective of "what is intersected
+ *        with", so a point or some structure. Additional context will be what it intersects with. So in the point case
+ *        this is just back and forward reference to the other point. In an arbitrary structure, any part of that structure
+ *        including edges has additional context which is what it intersects with. Intuitively, say I have some structure
+ *        which represent a world. (An entire complicated graph); and I have some property of that graph, that property is
+ *        accessible from anywhere in that world. And from the property I can get the world.
+ *      -
+ *      - Graph.equals compared the whole structure as if moving context to .self like A-B-C taking -B-.context, moves A-B-C to .self at -B-, then -B-.context.equals(A-B-C) is what you expect. -B-.equals(B) -B-.context.equals(A-B-C)
+ *      New:
+ *      - If .self is often called because we dont care about the directionality. We could have default behavior be .self, and
+ *        a special character be, retain information of the graph you were just in. Like array[0] is .self, array[0]~ is the ray [0-]1-2
  *
  */
 export interface Context {

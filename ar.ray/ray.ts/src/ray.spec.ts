@@ -127,7 +127,7 @@ describe("ray", () => {
           acc.equals(Infinity).if( // TODO: Or some other smart infinity checker
             cancel,
             acc.gt(current).if(acc, current))
-        , undefined),
+          , undefined),
         min: (self) => self.reduce((acc, current, cancel) =>
           acc.equals(Infinity).if(
             cancel,

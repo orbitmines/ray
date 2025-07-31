@@ -262,9 +262,6 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 
 
   /**
-   * TODO: How to think about the same node, but different selected contexts/values on that node. Assuming they're different instances and both part of the union?
-   *       In the case of union, are the entries duplicated if they exist in both? By default yes, and then a .unique to remove it.
-   *
    * TODO: How to combine .or/.union .and/.intersection, while still having .or evaluate for booleans, and being able to use .or to create a boolean type.
    *       -> [evaluate] check if 'true' is in the type?
    *
@@ -293,14 +290,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   nor: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
   nand: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
 
-  next: () => Many<Node>
-  previous: () => Many<Node>
-  /**
-   * The terminal boundaries reachable from this selection.
-   * Note: if you want ALL terminals, you should use .all().last
-   */
-  last: () => Many<Node>
-  first: () => Many<Node>
+
   /**
    * Note: Plus and minus are simply moving the pointer along the graph a number of steps.
    */
@@ -344,8 +334,6 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 
 }
 
-// TODO: Might want to separate what functions apply as additional structure on nodes, vs the methods here on Node
-//       -> Something like plus/minus might have less general definitions than moving some number of steps
 export interface Node extends Pointer<Node> {
 
   /**
@@ -373,12 +361,6 @@ export interface Node extends Pointer<Node> {
    */
   equivalent: () => Operation
   // rewrite: <TProperty>(property: (self: Node) => TProperty, value: any) => Node
-
-  /**
-   * TODO: Move the "selected structure" to ".self", what gets moved to .context? This .self? Or nothing?
-   */
-  // context: () => Node
-  // self: () => Many<Node>
 
   /**
    * TODO: How to visualize a type properly/intuitively?
@@ -429,7 +411,6 @@ export interface Node extends Pointer<Node> {
    *
    * TODO: Is a subgraph just Many<Node>.remove()
    *
-   * TODO: How to match Many<Edges> of a certain structure?
    *
    * TODO: For things like functions, "accepts type X" but only really uses subtype "Y". So either allow subtype Y, or force that entire X type.
    *
@@ -457,25 +438,6 @@ export interface Node extends Pointer<Node> {
   match: (pattern: any) => Many<Node>
 
   /**
-   * Equal in value (ignores structure).
-   * TODO: Value might be Many<Node>, so value could be a (math) Set.?
-   * TODO: Value might be a function like XOR applied to two binary values.
-   */
-  equals: (value: any) => Node
-  /**
-   * Structurally equal (ignores value).
-   * TODO: What about the additional structures defined at that node\?
-   *
-   * TODO: So, difference between isomorphic and isomorphic in all those structures?
-   * TODO: Also, isomorphic of selected structures (for each dimension) vs as a combined dimension.
-   */
-  isomorphic: (value: any) => Node
-  /**
-   * Structure, and all values within that structure, are equal.
-   */
-  identical: (value: any) => Node
-
-  /**
    * Whether this is the only occurrence its VALUE
    * TODO: Include looped-on values? VS ignore looped-on values
    * TODO: Not to be confused with mathematical uniqueness: x.selection().length().equals(1)
@@ -492,14 +454,6 @@ export interface Node extends Pointer<Node> {
   // TODO: if in a control-flow would have a difference between the "if function as a node" and the "next step" as a result in this case.
   if: <True, False>(_true: True, _false?: False) => (True extends Pointer<infer _> ? True : Node) | (False extends Pointer<infer T> ? False : Node)
 
-  /**
-   * Greater than: does "value" come before this node.
-   * TODO: What do to with the ambiguity of starting traversing from this, or value. It's probably an either on those two.
-   */
-  gt: (value: any) => Node
-  gte: (value: any) => Node
-  lt: (value: any) => Node
-  lte: (value: any) => Node
 
   mod: (value: number) => Node
 
@@ -570,6 +524,16 @@ export interface Edge {
  *        accessible from anywhere in that world. And from the property I can get the world.
  *      -
  *      - Graph.equals compared the whole structure as if moving context to .self like A-B-C taking -B-.context, moves A-B-C to .self at -B-, then -B-.context.equals(A-B-C) is what you expect. -B-.equals(B) -B-.context.equals(A-B-C)
+ *      -
+ *      - Ray is many selected contexts, isomorphism checks that the set/list of the selected contexts are equal
+ *          Example: 2D-grid, one of the rays goes to another points, at which both the x/y coordinate is selected. So .next would go to either x/y coordinate, if undirected to -x/x/-y/y
+ *          So what's the benefit between having multiple selected contexts vs always merged into one?
+ *      - Does selected context also need functions like XOR? Yes.
+ *      - Selected context might each have separate values, how do those stack to .value?
+ *        Say A-S-D intersected with H-J-K-L at -S- & -J-, each row has separate value: -S- and -J-.
+ *          -> If we XOR(-S-, -J-), then the resulting value is also XOR(S, J)
+ *          -> Are there additional values on both of them? Yes. Say an additional binary 0/1 on both.
+ *      - How to choose what context to select?/deselect?
  *      New:
  *      - If .self is often called because we dont care about the directionality. We could have default behavior be .self, and
  *        a special character be, retain information of the graph you were just in. Like array[0] is .self, array[0]~ is the ray [0-]1-2
@@ -608,15 +572,6 @@ export interface Operation {
 //   is_boundary: () => Node
 // }
 
-
-/**
- * All methods on Node can also be applied to many Nodes in parallel.
- * TODO: Is this useful, when or just confusing?
- */
-export type ParallelNodeMethods = {
-  [P in Exclude<keyof Node, keyof Pointer<Node>>]: Node[P] extends (...args: infer Args) => infer TNextQuery
-    ? (...args: Args) => Many<Node> : never
-}
 // TODO: Selection includes Edges.
 export type Many<T> = Pointer<Many<T>>
   & (T extends Node ? ParallelNodeMethods : {})
@@ -790,10 +745,6 @@ export class Traverser {
  *                                                                |-> Hypergraph definition mapped to the structure it's talking about.
  *       Or: System where .previous and .next are not the same as in a usual undirected hypergraph: A dynamic undirected hypergraph
  *
- *  TODO: Difference between "nothing selected at Node" and "selecting the entire Graph where .first enters the graph.
- *         Remember that we're at a terminal? Not that .next again returns the first element (empty != graph)
- *
- * TODO: On another level of description, find it's way to equivalence the lower level representation, which would be disconnected if pending something like +/-1 binary
  *
  * TODO Causal Graph,
  *    Causal graph is the what effected what

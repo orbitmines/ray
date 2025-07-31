@@ -1,20 +1,47 @@
 
 /**
- * A node is a structureless point. "Structureless" in the sense that no structure is selected as context, and there's
- * no notion of a value we can traverse. (But we can interact with it, minimally)
+ * A node is a structureless point. "Structureless" in the sense that no structure is selected as context, and we can't
+ * traverse its value, even though it has one. (But we can interact with it, minimally)
  */
 interface Node {
   // TODO: All methods called here are on the value, so .neg is different compared to abstract directionality .neg.
 
   //TODO What about type XOR, probably still fine, put the XOR somewhere else than on node.
+  //TODO    + Types
   //TODO THEN: Edges and edge selection how does it work?
+  //TODO    - Isomorphism should check edge types.
+  //TODO THEN: Forced equivalence
+
+  /**
+   * Node: Equal in value (there is no structure).
+   * Ray/Graph: Structure, and all values within that structure, are equal.
+   * TODO: Value might be Many<Node>, so value could be a (math) Set.?
+   * TODO: Value might be a function like XOR applied to two binary values.
+   */
+  equals: (value: any) => Node
+
+
 }
 
-interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf>> {
+interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf, TNode>, TNode = TSelf> {
+  /**
+   * Structurally equal (ignores value).
+   */
+  isomorphic: (value: any) => Node
+
   /**
    * Select all nodes in this structure
    */
-  all: () => Many<Node>
+  all: () => Many<TNode>
+
+  next: () => Many<TNode>
+  previous: () => Many<TNode>
+  /**
+   * Graph: The terminal boundary.
+   * Ray: The terminal boundaries reachable from this selection.
+   */
+  last: () => Many<TNode>
+  first: () => Many<TNode>
 }
 
 /**
@@ -22,7 +49,7 @@ interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf>> {
  *
  * Any Node within this graph, is by default a Ray equipped with this graph as its "selected directionality".
  */
-interface Graph<TNode = Ray> extends Node, AbstractDirectionality<Graph<TNode>> {
+interface Graph<TNode = Ray> extends Node, AbstractDirectionality<Graph<TNode>, TNode> {
 
 }
 export type Many<T> = Graph<T>;
@@ -39,6 +66,10 @@ interface Ray extends Node, AbstractDirectionality<Ray> {
    */
   self: () => Node
   /**
+   * A ray might be constructed from multiple contexts, you can split off each context separately using this.
+   */
+  parts: () => Many<Ray>
+  /**
    * Returns the equipped abstract directionality as a graph.
    */
   context: () => Graph
@@ -47,4 +78,19 @@ interface Ray extends Node, AbstractDirectionality<Ray> {
    * Example: In A-B-C, -B-.relative_context.equals(A-B-C) if A-B-C has -B- selected.
    */
   relative_context: () => Node
+
+  /**
+   * Greater than: does "value" occur before this Ray.
+   *
+   * - If "value" is a Node/Graph, any Ray holding that value is matched.
+   * - If "value" is a Ray, a particular location in the graph is selected. Say two rays have value "5", but with it is
+   *   attached an abstract directionality indicating its location, that location too must be equal.
+   *
+   * TODO: For a number, calling .gt on a Node, defaults to selecting the numberline to call .gt on.
+   * TODO: Allow the traverser to decide whether one starts traversing from this, or from value if its a Ray.
+   */
+  gt: (value: any) => Node
+  gte: (value: any) => Node
+  lt: (value: any) => Node
+  lte: (value: any) => Node
 }

@@ -366,6 +366,9 @@ export interface Node extends Pointer<Node> {
    * TODO: How to visualize a type properly/intuitively?
    *
    * TODO: Equivalence of types used for ?
+   *        -> Every .next from first to last is equivalent. so things like -B-B- and -B-|-B- are equivalent (-B- OR -B-), -B-
+   *                                                                                  -B-| (<-- structure is .OR on boundary)
+   *                                                                                  (In this case one needs to look ahead to check for merges instead of directly comparing each .next)
    *
    * TODO: For things like parameters: Allow the tagging of names to arbitrary parts of the type.
    *
@@ -379,57 +382,38 @@ export interface Node extends Pointer<Node> {
    *          - Alternate between matched subpaths and required additional structure.
    *            : Things like .or / .and / .xor / extended xor like "one of many" / .not (lookahead/behind which excludes) / ... on terminals/initials (continuations)
    *                |-> .not lookbehind, "not any path in front with X"
+   *                |-> .not is on some other structure say A-B-C-D and having NOT -C-E- (or some substructure) after -B-, would be A-B-(NOT -C-E)-C-D
+   *                    |-> Or it's not branching with some value.
    *          - Similarly, .or / .xor etc.. on additional context like value (for things like number[] / any[])
    *          - Default is .and
    *          - Not only on continuations, but on .self as well. (the equivalence ray)
+   *             |-> Object as a type is a list of KV pairs, so type is a loop of KV pairs, where that loop is on the context equivalency ray.
    *       subgraph would be: (pattern match like any type)
    *          - ANY additional matches on any Node/continuation. (in the usual graph sense only continuations, on nodes would be additional overlapping graphs)
+   *          - Tag outer/subgraph with a name?.
    *       - any[] would be, ANY additional matches on the structure (or in javascript case the type any) that's the node.
-   *
-   * TODO: Type here should also be something like a programming language specification.
-   *       More generally; does this pattern match onto this Node/structure.
-   *        Take some language spec like WASM (or Backus-Naur Form) and make that.
-   *        Or regex as an example.
    *
    * TODO: Type matching like look ahead/look behind in regex. Generalized to ?
    *        In front .equals/.not some other structure, but result excludes this
    *        Atomic group something like .if(option A, .if(option B.))
    *        Generalization of this "program on x results to".
    *
+   *
    * TODO example: 2D-Grid How to make sure that there's a difference between "X goes to X" "Y goes to Y" vs just two dimensions at each point?
    *      Need a difference between "selected structure" and "referenced structure". I reference a point with two dimensions, but I only select one of the dimensions in that reference, which is our X/Y dimension.
    *      OR: Don't allow vertex -> vertex and go based of the initial/terminal referencing a particular ray/rays.
    *      + (difference between Infinite 2D grid vs finite 2D grid which have initial/terminals)
+   *        |-> Requires rethinking, what decides which context gets selected on travelling there.
    *
    * TODO: Include type information like ().length.max().lt(2 ^ 32) (javascript Array) "result at this variable location"
-   *
-   * TODO: Object as a type is a list of KV pairs, so type is a loop of KV pairs, where that loop is on the context equivalency ray.
-   *
-   * TODO: Difference between whole match, and a match where "at least the type" is in this object (matching subgraphs for instance)
-   *        Again this need for, "selected structure" being the underlying structure. Say the beginning and end of AAAA. And another being
-   *        the reference to the loop around "A".
-   *
-   * TODO: Is a subgraph just Many<Node>.remove()
-   *
    *
    * TODO: For things like functions, "accepts type X" but only really uses subtype "Y". So either allow subtype Y, or force that entire X type.
    *
    * TODO: Matched groups and referencing them, Mapping and using matched groups for some other purpose. For example mapping a string expressing regex to a similar pattern what the regex means.
    *      Mapping a grammar of a language and then compiling the language as an example. So some program follows here.
    *
-   * TODO: How does the boolean type in "On Orbits" come into play to this? Was that a mistake and is it some other interesting structure,
-   *       or is that indeed part of the type system, and how do you account for/generalize that.
-   *          -> "XOR / one of" on the additional structure that's the type.
    *
-   * TODO: For things like parameters, match to relative groups of them. Say some looped variable declaration and func call, get the func call with the associated variable declarations.
-   *
-   * TODO: Transformations like .map/.filter/... can still apply to types.
-   *        |-> What happens to .next on conditionals? Probably just all possible next paths.
-   *
-   * TODO: Check for type equivalence, do two types match the same "area"?
    * TODO: Enumeration of instances of some type, though often there wouldn't be an implementation, and how is the ordering/traversal of options done properly? When is this useful?
-   *
-   * TODO: Some substructure matched to a single name, say ABCDE, match BCD to variable "middle" used for say a binary reader
    */
   instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
   //TODO Similar to .remove, this matches to a structure and returns that structure.
@@ -472,7 +456,6 @@ export interface Edge {
   // terminal_side: () => Ray
 }
 
-// TODO: Needs rethinking
 // TODO: Could be infinite context here
 /**
  * TODO Change: Ignored Structure:    Ignored Context (does this need to have structure like .history, .functions, .traversers, .referenced_by .? )
@@ -510,33 +493,27 @@ export interface Edge {
  *                |-> Many cursors, each with separate list of instructions?
  *          -
  *      - Cursor might carry structure with it.
- *      - For things like types (what else?) conditional structures.
- *        -> Generalized to function applied to a number of/all substructures.
  *      - "If condition is met" - add functionality; aka context. In what order? Do we recheck after? (Allow for infinite regress?)
  *      - Names for different types of selection: Reference node (only .self) and ray (direction) separately, ray if some direction is selected. What about other selections, single selection (single ray: Context?) etc..
  *        - Node: no context selected, Ray: context selected.
  *      -
- *      - Intersection is with arbitrary structure, not just a point. From the perspective of "what is intersected
- *        with", so a point or some structure. Additional context will be what it intersects with. So in the point case
- *        this is just back and forward reference to the other point. In an arbitrary structure, any part of that structure
- *        including edges has additional context which is what it intersects with. Intuitively, say I have some structure
- *        which represent a world. (An entire complicated graph); and I have some property of that graph, that property is
- *        accessible from anywhere in that world. And from the property I can get the world.
  *      -
  *      - Graph.equals compared the whole structure as if moving context to .self like A-B-C taking -B-.context, moves A-B-C to .self at -B-, then -B-.context.equals(A-B-C) is what you expect. -B-.equals(B) -B-.context.equals(A-B-C)
  *      -
  *      - Ray is many selected contexts, isomorphism checks that the set/list of the selected contexts are equal
  *          Example: 2D-grid, one of the rays goes to another points, at which both the x/y coordinate is selected. So .next would go to either x/y coordinate, if undirected to -x/x/-y/y
  *          So what's the benefit between having multiple selected contexts vs always merged into one?
- *      - Does selected context also need functions like XOR? Yes.
  *      - Selected context might each have separate values, how do those stack to .value?
  *        Say A-S-D intersected with H-J-K-L at -S- & -J-, each row has separate value: -S- and -J-.
  *          -> If we XOR(-S-, -J-), then the resulting value is also XOR(S, J)
  *          -> Are there additional values on both of them? Yes. Say an additional binary 0/1 on both.
  *      - How to choose what context to select?/deselect?
+ *      - Maybe have one of the selected contexts be highlighted in the sense of "came from here".
+ *      - .next because of conditional structures should return things like XOR(A, B)
  *      New:
  *      - If .self is often called because we dont care about the directionality. We could have default behavior be .self, and
  *        a special character be, retain information of the graph you were just in. Like array[0] is .self, array[0]~ is the ray [0-]1-2
+ *      -
  *
  */
 export interface Context {

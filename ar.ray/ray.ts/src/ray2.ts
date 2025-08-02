@@ -6,7 +6,7 @@
 interface Node {
   // TODO: All methods called here are on the value, so .neg is different compared to abstract directionality .neg.
 
-  //TODO What about type XOR, probably still fine, put the XOR somewhere else than on node.
+  //TODO Conditional Structures: What about type XOR, probably still fine, put the XOR somewhere else than on node.
   //TODO    + Types
   //TODO THEN: Edges and edge selection how does it work?
   //TODO    - Isomorphism should check edge types.
@@ -50,6 +50,19 @@ interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf, TNo
  * Any Node within this graph, is by default a Ray equipped with this graph as its "selected directionality".
  */
 interface Graph<TNode = Ray> extends Node, AbstractDirectionality<Graph<TNode>, TNode> {
+
+  /**
+   * Tag any arbitrary part of this structure with a "name".
+   * This is for example how function parameters get their names.
+   *
+   * To tag anything matching some type use .tag(tag, graph.match(type))
+   * TODO: This is just additional context on this structure.
+   * TODO: Also add to Node: substructures of certain contexts have certain names. Say x/y axis.
+   * TODO: How to get relative tags to the one taken.
+   * TODO: If substructure changes, keep the name there? How to signal to the editor that certain new things are included/excluded here?
+   */
+  set: (tag: any, substructure: any) => void
+  get: (tag: any) => Many<Node> //TODO: .ONE_OF if multiple.
 
 }
 export type Many<T> = Graph<T>;

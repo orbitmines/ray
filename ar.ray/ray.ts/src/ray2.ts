@@ -14,6 +14,9 @@ interface INode {
 
   //TODO Want NOTHING.OR(-B-) so that things like a conditional graph, can have values like first() -> which are (A1|B1, A2|B2, NOTHING|B3)\
 
+  // TODO !!
+  // TODO: Many<> should allow for conditional on entries of the graph.
+
   //TODO    + Types
   //TODO THEN: Edges and edge selection how does it work?
   //TODO    - Isomorphism should check edge types/structure.

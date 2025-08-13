@@ -259,37 +259,15 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    */
   unordered: () => TSelf
 
-
-
-  /**
-   * TODO: How to combine .or/.union .and/.intersection, while still having .or evaluate for booleans, and being able to use .or to create a boolean type.
-   *       -> [evaluate] check if 'true' is in the type?
-   *
-   * TODO: If something is selected (or nothing), we union on that, not the underlying graph.
-   *       Union of the underlying graph is in Graph?
-   */
   /**
    * TODO: Two .nots might not be invertible. If you define it as "go to everything not here", "then come back", the second step might fail or have additional results.
-   *        -> With how this setup looks, we might be able to detect whether they change in between .not's. And depending on that cross them out or not.
-   *
-   * Also: complement (Where the universal set is the entire graph, in the case of selection. TODO: In the case of types, it could mean anything)
    */
-  not: () => TSelf // TODO: Node -> Many<Node> if we're not evaluating
-  /**
-   * Also: union
-   */
-  or: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf // TODO: This is not right: .or on two nodes, might produce Many<Node> if we assume the union option.
-  /**
-   * Also: intersection
-   */
-  and: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
-  /**
-   * Also: symmetric_difference
-   */
-  xor: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
-  nor: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
-  nand: <T extends boolean | any>(...x: T[]) => TSelf extends Node ? (T extends boolean | Node ? Node : TSelf) : TSelf
+  // not: complement of a graph where the universal set is the entire graph.
+  // or: union
+  // and: intersection
+  // xor: symmetric_difference
 
+  not: () => TSelf // TODO: Node -> Many<Node> if we're not evaluating
 
   /**
    * Note: Plus and minus are simply moving the pointer along the graph a number of steps.
@@ -297,12 +275,6 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   plus: (...value: (number | IRange)[]) => Many<Node>
   minus: (...value: (number | IRange)[]) => Many<Node>
   plus_minus: (...value: (number | IRange)[]) => Many<Node>
-
-  /**
-   * Note: Having a possible next value doesn't mean that the current value isn't also terminal: It can be both.
-   */
-  has_next: () => Node
-  has_previous: () => Node
 
   /**
    * Change the values of all selected nodes.
@@ -370,34 +342,24 @@ export interface Node extends Pointer<Node> {
    *                                                                                  -B-| (<-- structure is .OR on boundary)
    *                                                                                  (In this case one needs to look ahead to check for merges instead of directly comparing each .next)
    *
-   * TODO: For things like parameters: Allow the tagging of names to arbitrary parts of the type.
-   *
    * TODO: The existence of a loop VS an instantiation matching that loop.
    *       How to: a particular complicated loop max X times.
    *       - Select subgraph which is the loop, then: ???
    *       - Have a named reference to that complicated loop, and have a simple loop, then .length().max() on that simple loop.
+   *       - [unrolled].length.max() <= .length().max() of subgraph * X
+   *            - if (loop exists) .unrolled() on any place within that loop.
+   *
+   * TODO:  |-> Object as a type is a list of KV pairs, so type is a loop of KV pairs, where that loop is on the context equivalency ray.
    *
    * TODO: In the example of varargs, it's a match to zero-length: So a terminal, or the loop with entries. So a type difference is a match to any
    *       subpath available in the structure vs having all subpaths.
-   *          - Alternate between matched subpaths and required additional structure.
-   *            : Things like .or / .and / .xor / extended xor like "one of many" / .not (lookahead/behind which excludes) / ... on terminals/initials (continuations)
-   *                |-> .not lookbehind, "not any path in front with X"
-   *                |-> .not is on some other structure say A-B-C-D and having NOT -C-E- (or some substructure) after -B-, would be A-B-(NOT -C-E)-C-D
-   *                    |-> Or it's not branching with some value.
-   *          - Similarly, .or / .xor etc.. on additional context like value (for things like number[] / any[])
-   *          - Default is .and
-   *          - Not only on continuations, but on .self as well. (the equivalence ray)
-   *             |-> Object as a type is a list of KV pairs, so type is a loop of KV pairs, where that loop is on the context equivalency ray.
-   *       subgraph would be: (pattern match like any type)
+   *
+   * TODO subgraph would be: (pattern match like any type)
    *          - ANY additional matches on any Node/continuation. (in the usual graph sense only continuations, on nodes would be additional overlapping graphs)
    *          - Tag outer/subgraph with a name?.
    *       - any[] would be, ANY additional matches on the structure (or in javascript case the type any) that's the node.
    *
-   * TODO: Type matching like look ahead/look behind in regex. Generalized to ?
-   *        In front .equals/.not some other structure, but result excludes this
-   *        Atomic group something like .if(option A, .if(option B.))
-   *        Generalization of this "program on x results to".
-   *
+   * TODO: Type matching like look ahead/look behind in regex. Generalized to ? (Subgraph .look - not matching the result)
    *
    * TODO example: 2D-Grid How to make sure that there's a difference between "X goes to X" "Y goes to Y" vs just two dimensions at each point?
    *      Need a difference between "selected structure" and "referenced structure". I reference a point with two dimensions, but I only select one of the dimensions in that reference, which is our X/Y dimension.
@@ -407,7 +369,6 @@ export interface Node extends Pointer<Node> {
    *
    * TODO: Include type information like ().length.max().lt(2 ^ 32) (javascript Array) "result at this variable location"
    *
-   * TODO: For things like functions, "accepts type X" but only really uses subtype "Y". So either allow subtype Y, or force that entire X type.
    *
    * TODO: Matched groups and referencing them, Mapping and using matched groups for some other purpose. For example mapping a string expressing regex to a similar pattern what the regex means.
    *      Mapping a grammar of a language and then compiling the language as an example. So some program follows here.
@@ -431,14 +392,6 @@ export interface Node extends Pointer<Node> {
   // TODO: Or is rotation a good name?
   // reframe: (x: (context: Context) => Context) => Node
 
-  // TODO: If-else and other language primitives
-  //       If-else is simply an if branch in the _false value.
-  // TODO: If-branch has a .next depending on the value, if value is a type, it's to both, if not. It goes to either the true/false branch.
-  // TODO: Dynamic values here should be allowed
-  // TODO: if in a control-flow would have a difference between the "if function as a node" and the "next step" as a result in this case.
-  if: <True, False>(_true: True, _false?: False) => (True extends Pointer<infer _> ? True : Node) | (False extends Pointer<infer T> ? False : Node)
-
-
   mod: (value: number) => Node
 
 }
@@ -447,14 +400,13 @@ export interface Node extends Pointer<Node> {
  * Edge reference (which is at least a terminal/initial if not dangling?)
  *
  * TODO:
+ *    - The combination of "initial" and "terminal" -> "make an edge", then select is as a Node, then put a direction on that subgraph which is the edge. to describe the relation.
+ *    -
  *    - Different types of edges (from some enumeration?)
  *    - Structure on edges like values, weights, probabilities etc..
  *        -> How do these effect .next, or shouldn't they? And are we missing some fundamental concept here? (As in not everything is reducible to context switching and .next's)
  */
-export interface Edge {
-  // initial_side: () => Ray
-  // terminal_side: () => Ray
-}
+export interface Edge {}
 
 // TODO: Could be infinite context here
 /**
@@ -549,10 +501,6 @@ export interface Operation {
 //   is_boundary: () => Node
 // }
 
-// TODO: Selection includes Edges.
-export type Many<T> = Pointer<Many<T>>
-  & (T extends Node ? ParallelNodeMethods : {})
-
 
 export type Type<T> = T & {
   matches: (predicate: (x: T) => boolean) => Type<T>
@@ -575,6 +523,8 @@ export type Type<T> = T & {
  *      -
  *      - What does a function structurally look like, is there a nice visual translation possible?
  *        (Substructure of a larger graph?, layered in a particular way) + Control-flow/Code graph
+ *      -
+ *      - For things like functions, "accepts type X" but only really uses subtype "Y". So either allow subtype Y, or force that entire X type.
  *      -
  *      - Structured input/outputs is basically: Reset everything to a single parameter, but allow one to tag names to arbitrary parts
  *                                               of its structure. "What is the actual problem parameters are trying to solve: attaching names to structure"

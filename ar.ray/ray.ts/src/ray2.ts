@@ -51,16 +51,21 @@ interface INode {
 
   //TODO    + Types
   //           - Do types only match to ungrouped variants (so .expand()ed rays) Or how would we specify?
+  //                                                           .expand_all()
   //TODO THEN: Edges and edge selection how does it work?
   //TODO    - Isomorphism should check edge types/structure.
   //TODO    - .next() on edge should return next edge?
   //TODO THEN: Forced equivalence
+  //TODO Execution layer: Simplifications of graph expectations leading to different algorithms. For example .first() in a graph, not having to traverse the whole graph first to check all possible initials.
 
   /**
    * Node: Equal in value (there is no structure).
    * Ray/Graph: Structure, and all values within that structure, are equal.
    */
   equals: (value: any) => Node
+
+  instance_of: (type: any) => Node
+  match: <T>(pattern: T) => T extends INode ? Many<T> : Node
 
 }
 
@@ -76,6 +81,12 @@ interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf, TNo
    * Select all nodes in this structure
    */
   all: () => Many<TNode>
+  /**
+   * Select all nodes, except for the ones in the selection.
+   * "Complement, where the entire graph is the universal set"
+   * TODO: Not on graph, but on Many
+   */
+  complement: () => Many<TNode>
 
   next: () => Many<TNode>
   previous: () => Many<TNode>
@@ -95,15 +106,18 @@ interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf, TNo
   has_previous: () => Node
   is_last: () => Node
   is_first: () => Node
+
+  /**
+   * Convert to a subgraph type.
+   *   TODO - ANY additional matches on any Node/continuation. (in the usual graph sense only continuations, on nodes would be additional overlapping graphs)
+   *        - Tag outer/subgraph with a name?.
+   */
+  as_subgraph: () => TSelf
 }
 
 interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>> {
-  // TODO: .NOT (LOOKAHEAD/BEHIND) (+ SUBSTRUCTURE) (.not on edges)
-  not: () =>
-    // TODO: Complement separately?
-    /* If a ray, .not is the complement, where the entire graph is the universal set. */
-    TSelf extends Ray ? Many<Ray>
-    : TSelf
+  // TODO: .NOT (LOOKAHEAD/BEHIND) (+ SUBSTRUCTURE - is achieved by collapsing/expanding) (.not on edges)
+  not: () => TSelf
 
   or: <B>(b: B) => B extends TSelf ? TSelf : Node
   and: <B>(b: B) => B extends TSelf ? TSelf : Node
@@ -115,7 +129,15 @@ interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>> {
   if: <True, False>(_true: True, _false?: False) => True extends False ? False extends True ? True : Node : Node
 
   // TODO, Conditionally add structure, is there some other way of doing this better?
-  conditionally: <B>(_if: () => Node, _true: (self: TSelf) => B, _false: (self: TSelf) => B) => B extends TSelf ? TSelf : Node
+  // TODO: Include type information like ().length.max().lt(2 ^ 32)
+  conditionally: <B>(_if: (self: TSelf) => Node, _true?: (self: TSelf) => B, _false?: (self: TSelf) => B) => B extends TSelf ? TSelf : Node
+
+  // /**
+  //  * Enumerate instances of some type. TODO When would this be used?
+  //  * Could be that there's no implementation or the default one is not as intelligent.
+  //  * TODO Allow overriding this
+  //  */
+  // enumerate: () => Many<TSelf>
 }
 
 /**
@@ -130,7 +152,7 @@ interface Graph<TNode = Ray> extends INode, Collapsable, ConditionalStructure<Gr
    * This is for example how function parameters get their names.
    *
    * To tag anything matching some type use .tag(tag, graph.match(type))
-   * TODO: This is just additional context on this structure.
+   * TODO: This is just additional context on this structure. (applicable to Node - same as equivalence ray)
    * TODO: Also add to Node: substructures of certain contexts have certain names. Say x/y axis.
    * TODO: How to get relative tags to the one taken.
    * TODO: If substructure changes, keep the name there? How to signal to the editor that certain new things are included/excluded here?
@@ -146,11 +168,41 @@ interface Collapsable {
    * Graph; Collapse the entire graph to a single Ray, where .first() is initial, and .last() is terminal.
    * Many<Ray>; Collapse the subgraph to a single Node within the larger graph.
    * TODO: Should only be applicable to a collapsable subgraph (Could also allow arbitrary collapses: But that would require many rays to be instantiated, and some knowledge of what connects to what. Many intersections with this new collapsed node.)
+   * TODO: Example where we collapse a complicated loop into a simple one?
    */
   collapse: () => Ray
 }
 
-export type Many<T> = Graph<T> & T extends Ray ? Collapsable : {};
+// TODO Dynamically assign to loops
+interface Loop extends Many<Ray> {
+  /**
+   * A type pointer to the result of an unrolled loop.
+   */
+  unrolled: () => Many<Ray>
+  /**
+   * Modular unroll: after unrolling a loop still exists between the first and last instantiation.
+   */
+  unrolled_mod: () => Many<Ray>
+  /**
+   * TODO: This doesn't work if repeats allow infinite structure:
+   *       .unrolled().length.max() <= .without_upper_loop().length().max() * MAX
+   *       .
+   *       So we need a .repeats() <= MAX
+   */
+  repeats: () => Node
+  /**
+   * Pointer to the instantiations of this loop.
+   */
+  instances: () => Many<Many<Ray>>
+}
+
+export type Many<T> = T extends Node ? Node : Graph<T> & T extends Ray ? Collapsable : {};
+
+// TODO Combine two Rays into one
+// /**
+//  * A ray might be constructed from multiple contexts, you can split off each context separately using this.
+//  */
+// parts: () => Many<Ray>
 
 /**
  * A ray, like a graph, has abstract directionality, but it goes through some point - Node within a larger Graph.
@@ -163,10 +215,6 @@ interface Ray extends INode, ConditionalStructure<Ray>, AbstractDirectionality<R
    * Deselect this abstract directionality by demoting to a Node.
    */
   self: () => Node
-  /**
-   * A ray might be constructed from multiple contexts, you can split off each context separately using this.
-   */
-  parts: () => Many<Ray>
   /**
    * Returns the equipped abstract directionality as a graph.
    * TODO: Disconnected parts of the graph should still be shown here?

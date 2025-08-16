@@ -14,10 +14,43 @@ interface INode {
 
   //TODO Want NOTHING.OR(-B-) so that things like a conditional graph, can have values like first() -> which are (A1|B1, A2|B2, NOTHING|B3)\
 
+  // TODO: Many<> is infinitely generating, so we'd like to use the ray structure for it.
+  //       So we'd like to encode things like .OR() .AND() on the edges?
+  //       - But we'd have intersecting programs, not just one world-line. Things Like
+  //            -A-|
+  //               |-C-         (-A-.OR(-B-)).AND(-C-) - if the same edge is used to connect all 3.
+  //            -B-|            We could also have things like -A-.AND(-C-) & -B-.AND(-C-)
+  //                            -> We use OR in that case? ( -A-.AND(-C-) ).OR( -B-.AND(-C-) )
+  //       - How is grouping done?: -A-(-B-C-)-D-   (-A-.OR(-B-.AND(-C-)).OR(-D-))
+  //          Naively, use tagging for substructures.
+  //          How to do it natively? Allow grouping by default. How?
+  //          - Could say that a single node -C-, encodes a separate group -D-(-E-.OR(-F-)
+  //             -A-|   |-E-
+  //                |-D-|
+  //             -B-|   |-F-
+  //            Allow terminals which don't match to the -C-'s terminal, like this:
+  //             -A-|   |-E-  (|
+  //                |-D-|     (|-H-)
+  //             -B-|   |-F-  (|
+  //                    |
+  //                    |-G-| (<-- Terminal at G, so it wouldn't connect to a hypothetical -H-)
+
+  //
+
   // TODO !!
   // TODO: Many<> should allow for conditional on entries of the graph.
+  // TODO:   - Many<> acts just like a Node, but we remember it's many. So both Node and Many<> hold a program like A.OR(B)
+  //
+  // TODO It does like this: .next(): [A.AND(B), [C], D.OR(E)] -> A, B, C, D.OR(E)
+  // TODO   -> That should'nt flatten .value; [-E-.AND(-F-), -G-]; would .next(): [ -E-.AND(-F-).AND(-G-), H, I ]
+  //           So not -E-, -F-, -G-, H, I.
+  // TODO   -> What should .parts return in -A-.OR(-B-) ; -A- & -B- ?
+  // TODO   .all() -> -A-.OR(-B-).OR(-C-) -> Use this as a Many<> cursor.
+  // TODO    Want to allow things like -A-.OR(MANY<-B-, Node<-C-, -D->>).OR(-E-) -> -A-.OR(-B-.OR([-C-, -D-])).OR(-E-)
+  //          -> Node shouldnt be collapsed like Many would be. (or never nested)
 
   //TODO    + Types
+  //           - Do types only match to ungrouped variants (so .expand()ed rays) Or how would we specify?
   //TODO THEN: Edges and edge selection how does it work?
   //TODO    - Isomorphism should check edge types/structure.
   //TODO    - .next() on edge should return next edge?
@@ -90,7 +123,7 @@ interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>> {
  *
  * Any Node within this graph, is by default a Ray equipped with this graph as its "selected directionality".
  */
-interface Graph<TNode = Ray> extends INode, ConditionalStructure<Graph<TNode>>, AbstractDirectionality<Graph<TNode>, TNode> {
+interface Graph<TNode = Ray> extends INode, Collapsable, ConditionalStructure<Graph<TNode>>, AbstractDirectionality<Graph<TNode>, TNode> {
 
   /**
    * Tag any arbitrary part of this structure with a "name".
@@ -107,7 +140,17 @@ interface Graph<TNode = Ray> extends INode, ConditionalStructure<Graph<TNode>>, 
   get: (tag: any) => Many<Node> //TODO: .ONE_OF if multiple.
 
 }
-export type Many<T> = Graph<T>;
+
+interface Collapsable {
+  /**
+   * Graph; Collapse the entire graph to a single Ray, where .first() is initial, and .last() is terminal.
+   * Many<Ray>; Collapse the subgraph to a single Node within the larger graph.
+   * TODO: Should only be applicable to a collapsable subgraph (Could also allow arbitrary collapses: But that would require many rays to be instantiated, and some knowledge of what connects to what. Many intersections with this new collapsed node.)
+   */
+  collapse: () => Ray
+}
+
+export type Many<T> = Graph<T> & T extends Ray ? Collapsable : {};
 
 /**
  * A ray, like a graph, has abstract directionality, but it goes through some point - Node within a larger Graph.
@@ -149,4 +192,10 @@ interface Ray extends INode, ConditionalStructure<Ray>, AbstractDirectionality<R
   gte: (value: any) => Node
   lt: (value: any) => Node
   lte: (value: any) => Node
+
+  /**
+   * Expand the Ray's subgraph in its place.
+   * TODO: Should only be applicable to an expandable graph.
+   */
+  expand: () => Many<Ray>
 }

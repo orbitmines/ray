@@ -120,7 +120,7 @@ export namespace Query {
   // 		    - Invalidate before some query, caching on some other base layer
 
   // TODO
-  // TODO Merging different references of the same value. (Deduplication)\
+  // TODO Merging different references of the same value. (Deduplication)\ Split off if value changes.
   //      Have pending possible switches to (un)selected structure. Many refs to the same value
   export class Executor<T> { //TODO: Rename to Runtime/Compiler?
 
@@ -271,6 +271,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
 
   /**
    * Note: Plus and minus are simply moving the pointer along the graph a number of steps.
+   * TODO: Plus 3 | 5 - 3.OR(5)
    */
   plus: (...value: (number | IRange)[]) => Many<Node>
   minus: (...value: (number | IRange)[]) => Many<Node>

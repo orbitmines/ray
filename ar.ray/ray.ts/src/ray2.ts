@@ -81,12 +81,12 @@ interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf, TNo
    * Select all nodes in this structure
    */
   all: () => Many<TNode>
-  /**
-   * Select all nodes, except for the ones in the selection.
-   * "Complement, where the entire graph is the universal set"
-   * TODO: Not on graph, but on Many
-   */
-  complement: () => Many<TNode>
+  // /**
+  //  * Select all nodes, except for the ones in the selection.
+  //  * "Complement, where the entire graph is the universal set"
+  //  * TODO: Not on graph, but on Many
+  //  */
+  // complement: () => Many<TNode>
 
   next: () => Many<TNode>
   previous: () => Many<TNode>

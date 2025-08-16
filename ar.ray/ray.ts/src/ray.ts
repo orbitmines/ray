@@ -259,6 +259,9 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    */
   unordered: () => TSelf
 
+  // TODO: Requires some .reduce which groups each step OR check the distance, or check uniqueness of visited nodes.
+  dimensionality: () => Node
+
   /**
    * TODO: Two .nots might not be invertible. If you define it as "go to everything not here", "then come back", the second step might fail or have additional results.
    */
@@ -266,8 +269,6 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   // or: union
   // and: intersection
   // xor: symmetric_difference
-
-  not: () => TSelf // TODO: Node -> Many<Node> if we're not evaluating
 
   /**
    * Note: Plus and minus are simply moving the pointer along the graph a number of steps.
@@ -342,46 +343,7 @@ export interface Node extends Pointer<Node> {
    *        -> Every .next from first to last is equivalent. so things like -B-B- and -B-|-B- are equivalent (-B- OR -B-), -B-
    *                                                                                  -B-| (<-- structure is .OR on boundary)
    *                                                                                  (In this case one needs to look ahead to check for merges instead of directly comparing each .next)
-   *
-   * TODO: The existence of a loop VS an instantiation matching that loop.
-   *       How to: a particular complicated loop max X times.
-   *       - Select subgraph which is the loop, then: ???
-   *       - Have a named reference to that complicated loop, and have a simple loop, then .length().max() on that simple loop.
-   *       - [unrolled].length.max() <= .length().max() of subgraph * X
-   *            - if (loop exists) .unrolled() on any place within that loop.
-   *
-   * TODO:  |-> Object as a type is a list of KV pairs, so type is a loop of KV pairs, where that loop is on the context equivalency ray.
-   *
-   * TODO: In the example of varargs, it's a match to zero-length: So a terminal, or the loop with entries. So a type difference is a match to any
-   *       subpath available in the structure vs having all subpaths.
-   *
-   * TODO subgraph would be: (pattern match like any type)
-   *          - ANY additional matches on any Node/continuation. (in the usual graph sense only continuations, on nodes would be additional overlapping graphs)
-   *          - Tag outer/subgraph with a name?.
-   *       - any[] would be, ANY additional matches on the structure (or in javascript case the type any) that's the node.
-   *
-   * TODO: Type matching like look ahead/look behind in regex. Generalized to ? (Subgraph .look - not matching the result)
-   *
-   * TODO example: 2D-Grid How to make sure that there's a difference between "X goes to X" "Y goes to Y" vs just two dimensions at each point?
-   *      Need a difference between "selected structure" and "referenced structure". I reference a point with two dimensions, but I only select one of the dimensions in that reference, which is our X/Y dimension.
-   *      OR: Don't allow vertex -> vertex and go based of the initial/terminal referencing a particular ray/rays.
-   *      + (difference between Infinite 2D grid vs finite 2D grid which have initial/terminals)
-   *        |-> Requires rethinking, what decides which context gets selected on travelling there.
-   *
-   * TODO: Include type information like ().length.max().lt(2 ^ 32) (javascript Array) "result at this variable location"
-   *
-   *
-   * TODO: Matched groups and referencing them, Mapping and using matched groups for some other purpose. For example mapping a string expressing regex to a similar pattern what the regex means.
-   *      Mapping a grammar of a language and then compiling the language as an example. So some program follows here.
-   *
-   *
-   * TODO: Enumeration of instances of some type, though often there wouldn't be an implementation, and how is the ordering/traversal of options done properly? When is this useful?
    */
-  instance_of: (type: any) => Node // instance_of: (self) => self.match(type).is_nonempty()
-  //TODO Similar to .remove, this matches to a structure and returns that structure.
-  //TODO This should also be possible to select a subgraph. So a Node, when not selecting anything, might not be the entire graph but a subgraph.
-  // TODO How is a subgraph match done?
-  match: (pattern: any) => Many<Node>
 
   /**
    * Whether this is the only occurrence its VALUE

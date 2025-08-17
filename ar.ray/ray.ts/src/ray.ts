@@ -110,10 +110,9 @@ export namespace Query {
    *        TODO: Patterned rewrite vec(A) ::= A^n
    */
 
-
-    // TODO: Requires knowledge of what operation can effect what.
+  // TODO: Requires knowledge of what operation can effect what.
   // TODO: Could figure out what can be done in parallel and what can't.
-  // TODO: Say I used push_back somewhere and I question .last right after. It becomes: .last before is no longer relevant. "If there is a terminal, so push_back has a target, then it is that value there.)
+  // TODO:    Say I used push_back somewhere and I question .last right after. It becomes: .last before is no longer relevant. "If there is a terminal, so push_back has a target, then it is that value there.)
 
   // TODO: CACHE / STATE
   //       Cache results in between for some runtime library.
@@ -122,7 +121,7 @@ export namespace Query {
   // TODO
   // TODO Merging different references of the same value. (Deduplication)\ Split off if value changes.
   //      Have pending possible switches to (un)selected structure. Many refs to the same value
-  export class Executor<T> { //TODO: Rename to Runtime/Compiler?
+  export class Executor<T> {
 
     // TODO: Rewrite to many targets used in which situation?
     // TODO: Cross-rewrite with an implementation choosing which one (nand vs . vs .)
@@ -136,10 +135,6 @@ export namespace Query {
     // TODO: Rewrite specific values (theorem proving)
     //        What about an infinitely generating structure which we through some other finite method proof holds for this predicate?
     //        Proven that there's no terminal, .last returns empty, more elaborate theorem proving system
-
-
-    // TODO: Translate high-level "Query language" to a bunch of .next operations (function application) and context switching (function selection)
-    //       Context-switching needs some generalized way to speak about 'possible functions to apply' -> Something more general than just unique function names
 
     // TODO: If to_[boolean] is called and awaited throw if program isn't used.
   }
@@ -168,6 +163,10 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   every: (predicate: (x: Node) => boolean) => Node
   some: (predicate: (x: Node) => boolean) => Node
   contains: (value: any) => Node
+
+  // TODO: For loop query could be infinitely generating; anything in the box should be applied in some .for condition
+  // TODO: All Queries changed within the forloop should be somehow hooked into the forloop
+  // for: (predicate: (x: Node) => any) =>
 
   map: (predicate: (x: Node) => any) => TSelf
   /**
@@ -317,6 +316,14 @@ export interface Node extends Pointer<Node> {
    * TODO: - Are deemed equivalent in some context. (Which selected context of that node instance)
    *       - How to access representation before canonicalization? (When?)
    *
+   * TODO Equivalence functions from Type A to Type B. (Either through conversion function or a specified comparer.)
+   *       - ex: equivalence between 16/32bit numbers with bunch of 0s for 16 to 32 bit conversion
+   *
+   *
+   * TODO: Equivalence of types used for ?
+   *        -> Every .next from first to last is equivalent. so things like -B-B- and -B-|-B- are equivalent (-B- OR -B-), -B-
+   *                                                                                  -B-| (<-- structure is .OR on boundary)
+   *                                                                                  (In this case one needs to look ahead to check for merges instead of directly comparing each .next)
    *
    * Equivalence through a canonicalization function:
    * .apply(graph.filter(x => temperature(x) > 10).map(x => canonicalize(x)))
@@ -331,11 +338,6 @@ export interface Node extends Pointer<Node> {
 
   /**
    * TODO: How to visualize a type properly/intuitively?
-   *
-   * TODO: Equivalence of types used for ?
-   *        -> Every .next from first to last is equivalent. so things like -B-B- and -B-|-B- are equivalent (-B- OR -B-), -B-
-   *                                                                                  -B-| (<-- structure is .OR on boundary)
-   *                                                                                  (In this case one needs to look ahead to check for merges instead of directly comparing each .next)
    */
 
   /**
@@ -370,40 +372,9 @@ export interface Node extends Pointer<Node> {
  *          - Context changes need to be in the history of the cursor.
  *          - Many cursors, with a separate list of instructions. (context switching is a move inside the context equiv ray)
  *      - Pointer to the last version of some Node. Say I'm starting out defining a 2d grid, first one dimension, then the second. the first needs to point to the ray which includes the second without change.
+ *        Maybe on the node is all references which point to this last version, then update them. (or just some predicate)
  *
  */
-export interface Context {
-
-}
-export interface Reference {
-
-}
-export interface Operation {
-
-}
-
-// TODO: When traversing, how to differentiate where in the structure you are, say .next results into two terminals, and a vertex.
-//       That could recursively be the case at defining the terminals, how to keep track of which are the ones we're interested in
-//       for the .next result.
-// TODO: Select substructure of the structure on the edges as a path.
-// TODO: Ray + Ray => Ray
-// (exec as any as Query.Executor<Ray>).rewrite({
-//   is_initial: (self) => self.initial().is_empty(),
-//   is_terminal: (self) => self.terminal().is_empty(),
-//   is_reference: (self) => self.is_initial().and(self.is_terminal()),
-//   is_vertex: (self) => self.is_initial().not().and(self.is_terminal().not()),
-//   is_boundary: (self) => self.is_initial().xor(self.is_terminal())
-// });
-// export interface Ray {
-//   initial: () => Many<Node>
-//   terminal: () => Many<Node>
-//
-//   is_initial: () => Node
-//   is_terminal: () => Node
-//   is_reference: () => Node
-//   is_vertex: () => Node
-//   is_boundary: () => Node
-// }
 
 
 export type Type<T> = T & {
@@ -566,6 +537,10 @@ export type FunctionVariables = {
 //      - Support yielding initial/terminals as well. (intermediates which are still looking) - list all still searching.
 //      -
 //      - Ideas of paths (subgraphs) (example: index_of vs path used to get there. -1, 1, 1, -1 etc.. REPLACE index_of with path_to(x), and then index with .distance and walk the path)
+//
+// TODO: When traversing, how to differentiate where in the structure you are, say .next results into two terminals, and a vertex.
+//       That could recursively be the case at defining the terminals, how to keep track of which are the ones we're interested in
+//       for the .next result.
 export class Traverser {
 
 

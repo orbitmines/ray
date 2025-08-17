@@ -20,6 +20,24 @@ describe("ray", () => {
   // })
   test("", async () => {
 
+    // (exec as any as Query.Executor<Ray>).rewrite({
+    //   is_initial: (self) => self.initial().is_empty(),
+    //   is_terminal: (self) => self.terminal().is_empty(),
+    //   is_reference: (self) => self.is_initial().and(self.is_terminal()),
+    //   is_vertex: (self) => self.is_initial().not().and(self.is_terminal().not()),
+    //   is_boundary: (self) => self.is_initial().xor(self.is_terminal())
+    // });
+    // export interface Ray {
+    //   initial: () => Many<Node>
+    //   terminal: () => Many<Node>
+    //
+    //   is_initial: () => Node
+    //   is_terminal: () => Node
+    //   is_reference: () => Node
+    //   is_vertex: () => Node
+    //   is_boundary: () => Node
+    // }
+
     const a = <TPointer extends Pointer<TPointer>>() => {
       const exec = new Query.Executor<TPointer>() as any as Query.Executor<Many<Node>>; // TODO Is this an IntelliJ bug? Doesn't throw TS error, but intellij intellisense doesn't capture this.
 

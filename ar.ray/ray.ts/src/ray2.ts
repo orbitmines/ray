@@ -53,11 +53,13 @@ export interface INode {
   //           - Do types only match to ungrouped variants (so .expand()ed rays) Or how would we specify?
   //                                                           .expand_all() -> Might be self-referential, but we can still point to it.
   //           - Type information on equivalence ray. .loop continuations for Tree/Graph. .loop on KV pairs for Object.
+  //           - .select/.deselect contexts. ; binary number.select(numberline).equals(x)
   //TODO THEN: Edges and edge selection how does it work?
   //TODO    - Isomorphism should check edge types/structure.
   //TODO    - .next() on edge should return next edge?
   //TODO THEN: Forced equivalence
   //TODO Execution layer: Simplifications of graph expectations leading to different algorithms. For example .first() in a graph, not having to traverse the whole graph first to check all possible initials.
+  //TODO, Something like for all prime numbers do this. Loop over infinities.
 
   /**
    * Node: Equal in value (there is no structure).
@@ -67,6 +69,21 @@ export interface INode {
 
   instance_of: (type: any) => Node
   match: <T>(pattern: T) => T extends INode ? Many<T> : Node
+
+
+  /**
+   * Tag any arbitrary part of this structure with a "name".
+   * This is for example how function parameters get their names.
+   *
+   * To tag anything matching some type use .tag(tag, graph.match(type))
+   * TODO: This is just additional context on this structure. (applicable to Node - same as equivalence ray)
+   * TODO: Also add to Node: substructures of certain contexts have certain names. Say x/y axis.
+   * TODO: How to get relative tags to the one taken.
+   * TODO: If substructure changes, keep the name there? How to signal to the editor that certain new things are included/excluded here?
+   * TODO: History of tags
+   */
+  set: (tag: any, substructure: any) => void // TODO Graph & { [tag]: substructure }
+  get: (tag: any) => Many<Node> //TODO: .ONE_OF if multiple.
 
 }
 
@@ -162,19 +179,6 @@ export interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>>
  */
 export interface Graph<TNode = Ray> extends INode, Collapsable, ConditionalStructure<Graph<TNode>>, AbstractDirectionality<Graph<TNode>, TNode> {
 
-  /**
-   * Tag any arbitrary part of this structure with a "name".
-   * This is for example how function parameters get their names.
-   *
-   * To tag anything matching some type use .tag(tag, graph.match(type))
-   * TODO: This is just additional context on this structure. (applicable to Node - same as equivalence ray)
-   * TODO: Also add to Node: substructures of certain contexts have certain names. Say x/y axis.
-   * TODO: How to get relative tags to the one taken.
-   * TODO: If substructure changes, keep the name there? How to signal to the editor that certain new things are included/excluded here?
-   * TODO: History of tags
-   */
-  set: (tag: any, substructure: any) => void // TODO Graph & { [tag]: substructure }
-  get: (tag: any) => Many<Node> //TODO: .ONE_OF if multiple.
 
 }
 

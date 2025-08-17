@@ -3,7 +3,7 @@
  * A node is a structureless point. "Structureless" in the sense that no structure is selected as context, and we can't
  * traverse its value, even though it has one. (But we can interact with it, minimally)
  */
-interface INode {
+export interface INode {
   // TODO: All methods called here are on the value, so .neg is different compared to abstract directionality .neg.
 
   // TODO: Cast down to node without anything selected, vs ray which we ignore as Node (usual way interfaces work)
@@ -51,7 +51,8 @@ interface INode {
 
   //TODO    + Types
   //           - Do types only match to ungrouped variants (so .expand()ed rays) Or how would we specify?
-  //                                                           .expand_all()
+  //                                                           .expand_all() -> Might be self-referential, but we can still point to it.
+  //           - Type information on equivalence ray. .loop continuations for Tree/Graph. .loop on KV pairs for Object.
   //TODO THEN: Edges and edge selection how does it work?
   //TODO    - Isomorphism should check edge types/structure.
   //TODO    - .next() on edge should return next edge?
@@ -69,9 +70,9 @@ interface INode {
 
 }
 
-interface Node extends INode, ConditionalStructure<Node> {}
+export interface Node extends INode, ConditionalStructure<Node> {}
 
-interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf, TNode>, TNode = TSelf> {
+export interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf, TNode>, TNode = TSelf> {
   /**
    * Structurally equal (ignores value).
    */
@@ -113,9 +114,21 @@ interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSelf, TNo
    *        - Tag outer/subgraph with a name?.
    */
   as_subgraph: () => TSelf
+
+  /**
+   * Returns a subgraph with all possible paths to X.
+   * TODO: In something like a dynamical space, the previous locations might have changed or no longer exist: So it needs
+   *       references to past structure. So each step in the path might be inside a different graph.
+   *       This requires a new primitive. ; The original structure might change while this is still being performed.
+   *                                            |-> Could choose to allow access to the original structure before changes.
+   *                                            |-> Or allow changes.
+   *       -> .next() or .previous() deviates from the graph because of temporal events.
+   *       -> Still want a reference to both the existing graph from that perspective, as the path through time to get there.
+   */
+  path_to: (x: any) => Graph
 }
 
-interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>> {
+export interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>> {
   // TODO: .NOT (LOOKAHEAD/BEHIND) (+ SUBSTRUCTURE - is achieved by collapsing/expanding) (.not on edges)
   not: () => TSelf
 
@@ -130,6 +143,8 @@ interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>> {
 
   // TODO, Conditionally add structure, is there some other way of doing this better?
   // TODO: Include type information like ().length.max().lt(2 ^ 32)
+  // TODO: Sequential order, or parallel by default if there's no dependence.
+  // TODO:  In the interface one could collapse the conditionals down to a single line with some string as summary. (If it's multiline)
   conditionally: <B>(_if: (self: TSelf) => Node, _true?: (self: TSelf) => B, _false?: (self: TSelf) => B) => B extends TSelf ? TSelf : Node
 
   // /**
@@ -145,7 +160,7 @@ interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>> {
  *
  * Any Node within this graph, is by default a Ray equipped with this graph as its "selected directionality".
  */
-interface Graph<TNode = Ray> extends INode, Collapsable, ConditionalStructure<Graph<TNode>>, AbstractDirectionality<Graph<TNode>, TNode> {
+export interface Graph<TNode = Ray> extends INode, Collapsable, ConditionalStructure<Graph<TNode>>, AbstractDirectionality<Graph<TNode>, TNode> {
 
   /**
    * Tag any arbitrary part of this structure with a "name".
@@ -163,7 +178,7 @@ interface Graph<TNode = Ray> extends INode, Collapsable, ConditionalStructure<Gr
 
 }
 
-interface Collapsable {
+export interface Collapsable {
   /**
    * Graph; Collapse the entire graph to a single Ray, where .first() is initial, and .last() is terminal.
    * Many<Ray>; Collapse the subgraph to a single Node within the larger graph.
@@ -174,7 +189,7 @@ interface Collapsable {
 }
 
 // TODO Dynamically assign to loops
-interface Loop extends Many<Ray> {
+export interface Loop extends Many<Ray> {
   /**
    * A type pointer to the result of an unrolled loop.
    */
@@ -198,16 +213,16 @@ interface Loop extends Many<Ray> {
 
 export type Many<T> = T extends Node ? Node : Graph<T> & T extends Ray ? Collapsable : {};
 
-// TODO Combine two Rays into one
-// /**
-//  * A ray might be constructed from multiple contexts, you can split off each context separately using this.
-//  */
-// parts: () => Many<Ray>
+export interface Edge {
+  // TODO Since an edge is just a subgraph, we can similarly put a direction on this entire subgraph. (values, weight, etc..)
+  // TODO: Allow things like a probability on an edge, which affects .next as a programmatic superposition. (probability X).OR(probability Y)
+  //        Needs some general way of implementing this type of thing.
+}
 
 /**
  * A ray, like a graph, has abstract directionality, but it goes through some point - Node within a larger Graph.
  */
-interface Ray extends INode, ConditionalStructure<Ray>, AbstractDirectionality<Ray> {
+export interface Ray extends INode, ConditionalStructure<Ray>, AbstractDirectionality<Ray> {
 
   value: () => Many<Node>
 
@@ -215,6 +230,10 @@ interface Ray extends INode, ConditionalStructure<Ray>, AbstractDirectionality<R
    * Deselect this abstract directionality by demoting to a Node.
    */
   self: () => Node
+  /**
+   * A ray might be constructed from multiple contexts, you can split off each context separately using this.
+   */
+  parts: () => Many<Ray>
   /**
    * Returns the equipped abstract directionality as a graph.
    * TODO: Disconnected parts of the graph should still be shown here?
@@ -225,6 +244,11 @@ interface Ray extends INode, ConditionalStructure<Ray>, AbstractDirectionality<R
    * Example: In A-B-C, -B-.relative_context.equals(A-B-C) if A-B-C has -B- selected.
    */
   relative_context: () => Node
+  /**
+   * One of the .parts(), which is referenced.
+   * TODO: Should not show up for a single ray.
+   */
+  referenced: () => Ray
 
   /**
    * Greater than: does "value" occur before this Ray.
@@ -243,7 +267,7 @@ interface Ray extends INode, ConditionalStructure<Ray>, AbstractDirectionality<R
 
   /**
    * Expand the Ray's subgraph in its place.
-   * TODO: Should only be applicable to an expandable graph.
+   * TODO: Should only be applicable to an expandable graph. (An entire graph could be collapse to a terminal with everthing ignored.)
    */
   expand: () => Many<Ray>
 }

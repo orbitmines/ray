@@ -154,8 +154,6 @@ export enum RemoveStrategy {
   /**
    * Removes all connectivity around the selection.
    * This is akin to removing a vertex and all incoming/outgoing edges.
-   *
-   *   // TODO, Should only sever connections which are NOT in the selection. ?
    */
   SEVER_CONNECTIVITY = "SEVER_CONNECTIVITY"
 }
@@ -314,16 +312,11 @@ export interface Node extends Pointer<Node> {
    * TODO: "Equivalence frames" are deemed .equal (.equal/.isomorphic/.identical)
    *       What would it mean to equivalence over a time period to a certain structure?
    *
-   * TODO: All nodes in some program are added to some larger Graph, that graph has operations on it like .map
+   * TODO: All nodes (All different selected contexts of a particular Node) in some program are added to some larger Graph, that graph has operations on it like .map
    *          OR altered .equals (.rewrite?).
-   * TODO: - All nodes: All different selected contexts of a particular Node.
-   * TODO: - (.filter) All VALUEs in some subgraph are deemed equivalent.
    * TODO: - Are deemed equivalent in some context. (Which selected context of that node instance)
    *       - How to access representation before canonicalization? (When?)
    *
-   * TODO
-   *    - .equivalence which merges all SELECTED CONTEXT.
-   *    -
    *
    * Equivalence through a canonicalization function:
    * .apply(graph.filter(x => temperature(x) > 10).map(x => canonicalize(x)))
@@ -360,31 +353,6 @@ export interface Node extends Pointer<Node> {
 }
 
 /**
- * Edge reference (which is at least a terminal/initial if not dangling?)
- *
- * TODO:
- *    - The combination of "initial" and "terminal" -> "make an edge", then select is as a Node, then put a direction on that subgraph which is the edge. to describe the relation.
- *    -
- *    - Different types of edges (from some enumeration?)
- *    - Structure on edges like values, weights, probabilities etc..
- *        -> How do these effect .next, or shouldn't they? And are we missing some fundamental concept here? (As in not everything is reducible to context switching and .next's)
- */
-export interface Edge {}
-
-// TODO: Could be infinite context here
-/**
- * TODO Change: Ignored Structure:    Ignored Context (does this need to have structure like .history, .functions, .traversers, .referenced_by .? )
- *              Selected Structure:   Context,  (used for types and referencing structure other than Referenced Structure: .equivalent in this structure not referenced)
- *              Referenced Structure: Space / Referenced Context,   .isomorphic / .next
- *              Value.
- *
- * TODO: Should selection change too? Yes? + Edges on selection
- *
- * TODO History
- *      Context changes need to be in the history.
- *
- *
- *
  * TODO Rethinking
  *      Current:
  *      - Every entry is on an equivalency ray. "All these are deemed equivalent'
@@ -394,41 +362,14 @@ export interface Edge {}
  *                    Different cursors within that structure?
  *        -> Each selection of contexts similarly is deemed a different Node "sub-Nodes" of some "original Node".
  *      Requirements:
- *      - Conceptualization of Time/Dynamics:
- *        What does a program look like in traversal terms?
- *          - Control-flow + a cursor with variables
- *          - Rewrite rule match
- *          - Some general way to convert control-flow-like to a rewrite rule? Gives you some calculus
- *        Generalized we rephrase all of the above as:
- *          - Some cursor in some graph
- *          - ?? (Some way to traverse and search the graph / Some way to read instructions on what to do at location)
- *                |-> Context switching & .next (MOVE instructions),  |-> ALTER instructions would be????
- *                    - (What about complicated edges????)
- *                    - Context switching is just a MOVE inside the context equivalency ray. But how?
- *                |-> Many cursors, each with separate list of instructions?
- *          -
- *      - Cursor might carry structure with it.
- *      - "If condition is met" - add functionality; aka context. In what order? Do we recheck after? (Allow for infinite regress?)
- *      - Names for different types of selection: Reference node (only .self) and ray (direction) separately, ray if some direction is selected. What about other selections, single selection (single ray: Context?) etc..
- *        - Node: no context selected, Ray: context selected.
- *      -
- *      -
- *      - Graph.equals compared the whole structure as if moving context to .self like A-B-C taking -B-.context, moves A-B-C to .self at -B-, then -B-.context.equals(A-B-C) is what you expect. -B-.equals(B) -B-.context.equals(A-B-C)
- *      -
- *      - Ray is many selected contexts, isomorphism checks that the set/list of the selected contexts are equal
- *          Example: 2D-grid, one of the rays goes to another points, at which both the x/y coordinate is selected. So .next would go to either x/y coordinate, if undirected to -x/x/-y/y
- *          So what's the benefit between having multiple selected contexts vs always merged into one?
- *      - Selected context might each have separate values, how do those stack to .value?
- *        Say A-S-D intersected with H-J-K-L at -S- & -J-, each row has separate value: -S- and -J-.
- *          -> If we XOR(-S-, -J-), then the resulting value is also XOR(S, J)
- *          -> Are there additional values on both of them? Yes. Say an additional binary 0/1 on both.
  *      - How to choose what context to select?/deselect?
- *      - Maybe have one of the selected contexts be highlighted in the sense of "came from here".
- *      - .next because of conditional structures should return things like XOR(A, B)
  *      New:
  *      - If .self is often called because we dont care about the directionality. We could have default behavior be .self, and
  *        a special character be, retain information of the graph you were just in. Like array[0] is .self, array[0]~ is the ray [0-]1-2
- *      -
+ *      - Cursor as additional context on Node.
+ *          - Context changes need to be in the history of the cursor.
+ *          - Many cursors, with a separate list of instructions. (context switching is a move inside the context equiv ray)
+ *      - Pointer to the last version of some Node. Say I'm starting out defining a 2d grid, first one dimension, then the second. the first needs to point to the ray which includes the second without change.
  *
  */
 export interface Context {
@@ -622,7 +563,7 @@ export type FunctionVariables = {
 //        + Program stepping.
 //      - Cycle detection & merger
 //      - Intermediate results while others are still pending.
-//      - Support yielding initial/terminals as well. (intermediates which are still looking)
+//      - Support yielding initial/terminals as well. (intermediates which are still looking) - list all still searching.
 //      -
 //      - Ideas of paths (subgraphs) (example: index_of vs path used to get there. -1, 1, 1, -1 etc.. REPLACE index_of with path_to(x), and then index with .distance and walk the path)
 export class Traverser {
@@ -631,16 +572,16 @@ export class Traverser {
 }
 
 /**
+ * TODO: Executor needs some way of defining these types of differences for graph, for a general case:
  * TODO: Normal graphs, hypergraphs like Chyp, hypergraphs like Wolfram Physics (overlapping structures, which make the .next go to any place on the edge not where it came from)(
  *                                                                |-> Hypergraph definition mapped to the structure it's talking about.
  *       Or: System where .previous and .next are not the same as in a usual undirected hypergraph: A dynamic undirected hypergraph
  *
+ * TODO: Executor needs to be aware of whether something is changing dynamically and how; this might decide how something
+ *        get executed and whether to store histories or not. In certain cases we might want to store histories anyway to
+ *        access them later.
  *
- * TODO Causal Graph,
- *    Causal graph is the what effected what
- *      Causal graph of the causal graph ...
- *    - Causal graph needs a notion of what structure changed, could be that it didn't touch the graph but only the value. Do you want to have it still be a causal link created there if the graph for example isn't effected
- *
+ * TODO History includes causal information, what caused the change?
  *
  * TODO: Find subgraph with two disconnected pieces should be supported.
  */
@@ -670,9 +611,7 @@ export interface Graph extends Pointer<Graph> {
   // compose matching domain/codomain
 
 }
-export interface Path extends Graph {
 
-}
 
 /**
  * TODO: .ray <head> <version> (id, ...)[]

@@ -50,6 +50,7 @@ export interface INode {
   //          -> Node shouldnt be collapsed like Many would be. (or never nested)
 
   //TODO    + Types
+  //           - Any program as a type. not just conditionally.
   //           - Do types only match to ungrouped variants (so .expand()ed rays) Or how would we specify?
   //                                                           .expand_all() -> Might be self-referential, but we can still point to it.
   //           - Type information on equivalence ray. .loop continuations for Tree/Graph. .loop on KV pairs for Object.
@@ -221,6 +222,7 @@ export interface Edge {
   // TODO Since an edge is just a subgraph, we can similarly put a direction on this entire subgraph. (values, weight, etc..)
   // TODO: Allow things like a probability on an edge, which affects .next as a programmatic superposition. (probability X).OR(probability Y)
   //        Needs some general way of implementing this type of thing.
+  //        - In the case of probabilities split from some pool in the case of a division event. So that a subgraph of the probabilities still adds up to 1.
 }
 
 /**

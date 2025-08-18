@@ -11,6 +11,7 @@ namespace Runtime {
    *      Multiple contexts selected. ; Parent, or two different projects with the same variables.
    *      Loaded context: Open/selected files in a project, how is this accessed?
    *        Or is it just a variable
+   *      Namespaces and scopes; contexts within contexts
    */
   export class Context {
     __get__ = (variable: any): any => {
@@ -21,5 +22,17 @@ namespace Runtime {
     }
   }
 
+  export class Program {}
+
+  export class Instance {
+
+    constructor(public ctx: Context) {
+    }
+
+    run = (program: Program): Program => {
+
+    }
+
+  }
 }
 export default Runtime;

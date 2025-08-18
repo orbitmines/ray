@@ -319,6 +319,9 @@ export interface Node extends Pointer<Node> {
    * TODO Equivalence functions from Type A to Type B. (Either through conversion function or a specified comparer.)
    *       - ex: equivalence between 16/32bit numbers with bunch of 0s for 16 to 32 bit conversion
    *
+   * TODO: Equivalence in rewrites of a function. ; function definitions.
+   *
+   * TODO: Are variable declarations merely equivalences of some structure to another resolved structure.
    *
    * TODO: Equivalence of types used for ?
    *        -> Every .next from first to last is equivalent. so things like -B-B- and -B-|-B- are equivalent (-B- OR -B-), -B-
@@ -384,6 +387,8 @@ export type Type<T> = T & {
 /**
  * TODO: Editor
  *       How to differentiate between domain names and function calls/variable references !orbitmines.com? Not @, use that for players. # for chat rooms
+ *       Code -> Move to a context with a single symbol ~, then something like ~.ts for typescript context.
+ *
  *
  * TODO  Should be a text-only variant which still is decently usable? But how?
  *       possible option: Using named references when structures are too complicated to display?
@@ -488,6 +493,35 @@ export type Type<T> = T & {
  * TODO: Implemented functions, bound to some keybinding?
  *      - Pattern like a loop with a length constraint, expand till constraints are no longer satisfied
  *          |-> Applied as a function, to some keybind "per step" or "all the way / pending infinity"
+ *          '
+ *
+ * TODO: Control-flow
+ *  - You want to be able to loop back to something like _B1_ while carrying any additional changes
+ *    to B1 down the line? What would it mean for not choosing to do so?
+ *    Compare with and without the additional push_back(C):
+ *  -
+ *  - What if both branches have a shared state?
+ *     - Resolve with possible configuration states of sequence of events.
+ *         - Some way of picking which one?
+ *  - What if we want to wait till all branches are completed.
+ *  - What if the program does not have an initial?
+ *     - Could either instantiate on any part of an intial loop.
+ *         - COuld do that and evolve the program state in both directions.
+ *  - Many threads/cores/cursors, dynamically instantiate.
+ *  - Anything parallel can be done in sequence.
+ *  - Javascript example: await/async, try/catch control-flow
+ *  - If a single control-flow is a function, then the return value could be any of the branches, the combined branches, OR?
+ *  - Functions/control-flows are within a context with variables?
+ *
+ * TODO: Def of control-flow options
+ *  - Graph of instructions, an instruction is a Context variable: Structure, and an instruction, an arbitrary structure
+ *    - Program: [Program: Function, Context Variable: Parameters]
+ *      The nested program is just the single step program, expanded to a different level of description.
+ *      - A program which defines how to get the context variable?
+ *  - A query is some chain/control-flow on a single variable.
+ *
+ * TODO: History and functions like that is something you equip a program with?
+ *        How to select what parts of the program?
  */
 export interface Function {
   // TODO Some way to at runtime access variables.

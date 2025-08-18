@@ -512,13 +512,22 @@ export type Type<T> = T & {
  *  - Javascript example: await/async, try/catch control-flow
  *  - If a single control-flow is a function, then the return value could be any of the branches, the combined branches, OR?
  *  - Functions/control-flows are within a context with variables?
+ *  -
+ *  - Conditionally going into branches.
  *
  * TODO: Def of control-flow options
  *  - Graph of instructions, an instruction is a Context variable: Structure, and an instruction, an arbitrary structure
- *    - Program: [Program: Function, Context Variable: Parameters]
+ *    - Program: [Program: Function (from context), Context Variable: Parameters]
  *      The nested program is just the single step program, expanded to a different level of description.
  *      - A program which defines how to get the context variable?
  *  - A query is some chain/control-flow on a single variable.
+ *  - A single Node which is the context. "Applying a function in some world"
+ *    "Context" is passing through the control-flow graph.
+ *      -> Like binary graphs, one bit which can be duplicated for each line, and then merging through operations.
+ *        -> Like the Query, the edges would be the operations. But parameters is incoming vertices.
+ *  - Vertices are Context Variables, Edges are functions.
+ *     - No context var defined, use result of the previous one?
+ *     - Context Variable is a program expandable to get the var from context.
  *
  * TODO: History and functions like that is something you equip a program with?
  *        How to select what parts of the program?

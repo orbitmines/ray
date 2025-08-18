@@ -195,6 +195,7 @@ export interface Collapsable {
 
 // TODO Dynamically assign to loops
 export interface Loop extends Many<Ray> {
+  disallow_loops: () => Many<Ray> //TODO Some implementation using conditionally
   /**
    * A type pointer to the result of an unrolled loop.
    */

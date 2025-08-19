@@ -54,6 +54,8 @@ export interface INode {
   //          -> Node shouldnt be collapsed like Many would be. (or never nested)
 
   //TODO    + Types
+  //           - Create types for string chars ints etc..
+  //           - Create type which defines all possible structures.
   //           - Editor needs an intuitive, keyboard-friendly way of creating these structures.
   //           - You want in the editor: Take this structure, then remove/add something. ; Take some type and change it.
   //              - For Array.non_empty():

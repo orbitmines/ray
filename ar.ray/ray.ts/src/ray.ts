@@ -327,6 +327,7 @@ export interface Node extends Pointer<Node> {
    *        -> Every .next from first to last is equivalent. so things like -B-B- and -B-|-B- are equivalent (-B- OR -B-), -B-
    *                                                                                  -B-| (<-- structure is .OR on boundary)
    *                                                                                  (In this case one needs to look ahead to check for merges instead of directly comparing each .next)
+   * TODO: Equivalences the compiler uses for optimizations
    *
    * Equivalence through a canonicalization function:
    * .apply(graph.filter(x => temperature(x) > 10).map(x => canonicalize(x)))
@@ -606,6 +607,7 @@ export class Traverser {
  * TODO: Executor needs some way of defining these types of differences for graph, for a general case:
  * TODO: Normal graphs, hypergraphs like Chyp, hypergraphs like Wolfram Physics (overlapping structures, which make the .next go to any place on the edge not where it came from)(
  *                                                                |-> Hypergraph definition mapped to the structure it's talking about.
+ *                                                                |-> A hypergraph, might not have .previous defined.
  *       Or: System where .previous and .next are not the same as in a usual undirected hypergraph: A dynamic undirected hypergraph
  *
  * TODO: Executor needs to be aware of whether something is changing dynamically and how; this might decide how something

@@ -60,6 +60,17 @@ export interface INode {
   //           - Type information on equivalence ray. .loop continuations for Tree/Graph. .loop on KV pairs for Object.
   //           - .select/.deselect contexts. ; binary number.select(numberline).equals(x)
   //           -
+  //           - Current type matching doesn't know whether .next().previous() gives the same result.
+  //               .consistent() = .has_next() && .next().previous().[includes / equals](self)
+  // 		                           .has_previous() && .previous().next().[includes / equals](self)
+  //                                  |-> .equals if there's only one possibility.
+  //                                  |-> Don't check if there's no .next() or .previous() -> That's the .has_ checks.
+  //           - In the case of Tree Type .reverse().length().max() < Infinity ; could be without max(), there's only one possibly value.
+  //           - Want some form of Type.match_subgraph(subgraph) So we can check whether things like .OR are equal.
+  //                -> This is different from .match in a type sense.
+  //                -> Would want to use this for things like rendering the visual representations of a graph. "If contains this OR structure"
+  //                -> Probably best: Could implement this as a .literally() on .OR. so it works for instance_of (which doesn't expand the .OR)
+  //           -
   //           - Matching !=, ==, <=, >=, =, !, <, >
   //              [!, =].OR([!]) <-- This OR in sequence so can be rewritten as. [!, =].OR([!, =.not()]) when OR is not in sequence.
   //                  -> How to determine in sequence of a program vs parallel.

@@ -533,6 +533,9 @@ export type Type<T> = T & {
  * TODO: History and functions like that is something you equip a program with?
  *        How to select what parts of the program?
  *
+ * TODO: Is? Program = Graph[Program | Query] Where query is a control-flow on a single variable.
+ *          -> It's inline (same graph) but expanded, so each Vertex possibly select a different variable?
+ *
  *
  * TODO: Some compiler-related concepts
  *    Syntax: Type

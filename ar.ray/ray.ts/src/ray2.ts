@@ -54,6 +54,11 @@ export interface INode {
   //          -> Node shouldnt be collapsed like Many would be. (or never nested)
 
   //TODO    + Types
+  //           - Editor needs an intuitive, keyboard-friendly way of creating these structures.
+  //           - You want in the editor: Take this structure, then remove/add something. ; Take some type and change it.
+  //              - For Array.non_empty():
+  //                Two options: Compiler should remove the empty Initial-Terminal from the type
+  //                Or: the function application is a "Take this structure and change/add this".
   //           - Any program as a type. not just conditionally.
   //           - Do types only match to ungrouped variants (so .expand()ed rays) Or how would we specify?
   //                                                           .expand_all() -> Might be self-referential, but we can still point to it.

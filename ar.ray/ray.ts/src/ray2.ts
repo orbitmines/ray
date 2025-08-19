@@ -4,6 +4,10 @@
  * traverse its value, even though it has one. (But we can interact with it, minimally)
  */
 export interface INode {
+  // TODO: Context selected, like an object, but none of them referenced, so not a Ray.
+  //       How is it known that a larger structure (like an edge or subgraph) has some context selected on it.
+  //          -> Pointers of ray must know about it to ref it?
+
   // TODO: All methods called here are on the value, so .neg is different compared to abstract directionality .neg.
 
   // TODO: Cast down to node without anything selected, vs ray which we ignore as Node (usual way interfaces work)
@@ -55,6 +59,40 @@ export interface INode {
   //                                                           .expand_all() -> Might be self-referential, but we can still point to it.
   //           - Type information on equivalence ray. .loop continuations for Tree/Graph. .loop on KV pairs for Object.
   //           - .select/.deselect contexts. ; binary number.select(numberline).equals(x)
+  //           -
+  //           - Matching !=, ==, <=, >=, =, !, <, >
+  //              [!, =].OR([!]) <-- This OR in sequence so can be rewritten as. [!, =].OR([!, =.not()]) when OR is not in sequence.
+  //                  -> How to determine in sequence of a program vs parallel.
+  //                  -> Control-flow/ordering is different.
+  //              - Can also be:
+  //                [!, ([=].OR(=.not()))] Which in sequence is, [!, ([=].OR( ELSE )]
+  //           - Matching ANY until the first '\n' for example:
+  //              - So not just [ANY looped, \n] because that would allow ANY Looped to contain \n.
+  //              - But something like ANY.AND(\n.not()); Basically ANY except.
+  //           - One-way loop reference vs a two-way loop reference (which needs another initial if it's coming from a terminal)
+  //           - How do IDE's not 'whiten out' when syntax is incorrect, are they more loosely adapting the grammar somehow?
+  //              I can imagine some form of locally checking if it makes sense, even after some previous error occurred.
+  //                -> Use cached results as well? In case of an error.
+  //           -
+  //           - For grammars you'd want to reference collapsed groups. So I have some graph definition in which I've
+  //             defined some named context variables. (Or where would these be defined? Just disconnected parts of the
+  //             graph which we've named with a tag. -> So graph.tag would put a direction through the graph and give us
+  //             that subgraph.), And within the structure I reference them and possibly expand them.
+  //               -> Maybe not part of the graph (since we want .first etc. to work), but a property of it.
+  //           -
+  //           - Want to make sure that when designing this, that generated grammar rules on the fly based on what is in
+  //                the structure, with (forward/backward) passes is still supported. So we can have something like
+  //                dynamically representing an English sentence based on some AI model.
+  //           -
+  //           - You want things like access to the partially matched syntax, to display where it went wrong.
+  //           -
+  //           - How would defining some dynamically generated JavaScript for example work? What does that graph/syntax
+  //              look like. Interleaved with JavaScript are some grouped structures, which one puts there with some
+  //              single keystroke. This group is "outside" the syntax, but should be part of the type somehow?
+  //               - It's a separate graph, so it's "properties" on the graph at specific locations in it. But the result
+  //                  must match the type graph of the grammar. Some "inside" of some generating expression.
+  //               - And part of this would be generating many different contexts: Directories and Files.
+  //
   //TODO THEN: Edges and edge selection how does it work?
   //TODO    - Isomorphism should check edge types/structure.
   //TODO    - .next() on edge should return next edge?

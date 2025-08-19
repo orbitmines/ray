@@ -531,6 +531,19 @@ export type Type<T> = T & {
  *
  * TODO: History and functions like that is something you equip a program with?
  *        How to select what parts of the program?
+ *
+ *
+ * TODO: Some compiler-related concepts
+ *    Syntax: Type
+ *    Parsing/Grammar: Which order
+ *    Three-address code: Which order
+ *    Static single-assignment form: Versioned variables (Would in the graph sense already be the case)
+ *      - Choose variable from branches .OR based on which branch was followed. What is this primitive called?
+ *    Constant folding: Equivalence ; code execution ; at compiletime
+ *    .
+ *    Some generalized way of defining equivalences for the compiler (uses the theorem proving system, with the additional
+ *     parameter being performance and other metrics like program size), and some way of comparing which one is better.
+ *    -> Things like:  “common subexpression elimination”, “loop invariant code motion”, “global value numbering”, “strength reduction”, “scalar replacement of aggregates”, “dead code elimination”, and “loop unrolling”.
  */
 export interface Function {
   // TODO Some way to at runtime access variables.

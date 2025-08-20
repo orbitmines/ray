@@ -20,12 +20,83 @@ def Generics T
    end
 end
 
+// TODO Pattern matched function names? Called instance_of
+// TODO Is this used for anything other than numbers? You can at least dynamically get the name.
+// TODO This is probably quite useful for meta programming, so instead of defining a loop and calling def in the loop, we
+// TODO    have a single instantiation. -> Or the compiler needs to be aware of that there's a dynamic method def, and don't loop through it all.
+// TODO                                 -> Probably want that anyway.
+def 0-9.repeating
+    return Number([method name]) // TODO: How to get method name; this.name? Or is name to often used by the user this.constructor
+end
+def "(0..9).repeating"."(0..9).repeating" // TODO: What's a nice syntax for this
+end
+// 0..9.repeating = 0..(9.repeating)
+// x+y x+y.func you want it to be (x+y).func
+// TODO So you want to be able to use variables within a function's name.
+def NUMBER.repeating // TODO How to differentiate between NUMBER.repeating (arbitrary name) and the function.
+end
+def NUMBER // TODO differentiate between NUMBER and variable NUMBER; aka is it an overwrite of the variable or the thing itself
+end
+def Generics // The pattern "generics"
+end
+
 a.5
 a[5]
 a<5>
 a(5)
 // Are all these somehow the same?
+a.5 a[5] are
+a<5> a(5) are
+// Are these two subgroups the same? (I believe I asked this question before in the Ruby writer project back in 2017)
+a(5) is saying getting property 5 has some result.
+// Complicated structures like a(3, 5) is simply a[arbitrary structure]
+// TODO But what if we have static things defined on the function, or fields on the function
+// a.property = 1
+// a(5)
+// you dont want a("property") to be 1.
 
+// Partially filling in arguments of a function.
+def a arg1 arg2
+end
+const c = a(arg2: b)
+c(d) // <-- uses arg1
+def a 1 2 3 4 5
+  // TODO How to allow variables the names of numbers, while still declaring numbers normally?
+  //        -> It's just a different context, so something like global.5 is a number object.
+end
+a(3: c)(1 2 4 5)
+a(3: c, 5: e)(1 2 4)
+// TODO: What if another argument is added, then all the functions normally called, do as if they need to be called again.
+//          -> Is this a problem, or should we use something special for partially filling a function. That's probably a better option.
+a|3: c, 5: e|
+
+
+// Something like a def for def. Which is just .property =
+// TODO someway to say: This function is automatically added to every context. Some default object or something.
+//      -> Same with =, static, this etc..
+// TODO This circularly defines itself, how to support that?
+def def name ...args
+    [].name = args
+end
+// You want something like undefined, if = is called on .undefined, it defines the property. That way we can have:
+def = args
+end
+// a.property is now undefined
+a.property = args
+end
+// a.property called undefined.=(args)
+// which is the same as doing.
+a.def property args
+end
+
+// TODO You want if without a .if to always reflect the upper-level if. Not a this.if? Generalized to?
+// You want if similarly to be a function TODO Do you?
+def if
+end
+// TODO So how does else work?
+if a
+else
+end
 
 def Generics (T = Default) args
    // Normal stuff here is like a static {} block
@@ -38,6 +109,8 @@ def Generics (T = Default) args
    variable = args.5
 
    // define subclasses
+   static.Subclass <T>
+   end
    static.def Subclass <T> // <-- generic overrides the context of Generics
    end
    // Allow Generics<T>.Subclass
@@ -51,6 +124,28 @@ def Generics (T = Default) args
    for a in b
      args. // uses .args so included
    end
+   b.for a
+     args.
+   end
+   // TODO Not the for(int i) stuff like other languages but stuff like.
+   // 0.add(+1) gives you a ray which has a +1 direction selected.
+   // Something like a 0.next(x => x + 1), or some other way of doing this easily.
+   // 0.fn(+1), 0.ray(+1): "Equip 0 with a +1 ray"
+   // .ray(+1) equips .previous() with !+1 which is -1
+   // TODO Allow unary functions like +1, for closures which acts as a binary with the same name x+y -> How to do that
+   // TODO .if acts as a .filter
+   0.ray(+1).if(x => x < 10).for i
+
+   end
+   // Which could be shortened to
+   0.ray(+1).if(< 10).for i
+   end
+   // also allow
+   0.ray(+1).if(10 >=).for i
+   end
+   // TODO How to differentiate < 10 from .<10 function, or how to do these arbitrary names properly
+
+
    // There is the ambiguity of whether this should be saved as static or not.
    test = 6
    // Could give one the ability to reference "Generics" through a keyword "static".
@@ -183,4 +278,4 @@ end
 // How to differentiate return value of a function, vs returning the Instance as a Function definition.
 //      -> Default return is returning "this" -> For normal functions either "this" meaning the class, skipping the local context. Or not, and use normal return semantics.
 // Variables accessible at runtime how? What decides we can access it.
-
+// Closures

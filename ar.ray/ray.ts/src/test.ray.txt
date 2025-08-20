@@ -1,7 +1,7 @@
 // Maybe allow one to define syntax dynamically. (Would be awful for language versioning though, if I introduce something which clashes with other syntax)
 
-def Nothing
-end
+//def Nothing
+//end
 
 def AMethod
   variable = 5
@@ -20,6 +20,13 @@ def Generics T
    end
 end
 
+// Single-line function
+def Maybe a = Just a | Nothing
+def Maybe(a) = Just a | Nothing
+def Maybe(a)
+  return Just a | Nothing
+end
+
 // TODO Pattern matched function names? Called instance_of
 // TODO Is this used for anything other than numbers? You can at least dynamically get the name.
 // TODO This is probably quite useful for meta programming, so instead of defining a loop and calling def in the loop, we
@@ -29,6 +36,7 @@ def 0-9.repeating
     return Number([method name]) // TODO: How to get method name; this.name? Or is name to often used by the user this.constructor
 end
 def "(0..9).repeating"."(0..9).repeating" // TODO: What's a nice syntax for this
+  // TODO: Or define decimal as a function on number.c
 end
 // 0..9.repeating = 0..(9.repeating)
 // x+y x+y.func you want it to be (x+y).func
@@ -37,7 +45,19 @@ def NUMBER.repeating // TODO How to differentiate between NUMBER.repeating (arbi
 end
 def NUMBER // TODO differentiate between NUMBER and variable NUMBER; aka is it an overwrite of the variable or the thing itself
 end
-def Generics // The pattern "generics"
+def Generics // The pattern "generics" TODO What does this mean
+end
+
+// Allow binary operators defined outside the classes?
+def x: Number .. y: Number
+end
+Number.def ..(y)
+end
+Number.def .. y
+end
+def Number
+  def .. y
+  end
 end
 
 a.5
@@ -54,6 +74,7 @@ a(5) is saying getting property 5 has some result.
 // a.property = 1
 // a(5)
 // you dont want a("property") to be 1.
+// TODO
 
 // Partially filling in arguments of a function.
 def a arg1 arg2
@@ -77,8 +98,9 @@ a|3: c, 5: e|
 // TODO This circularly defines itself, how to support that?
 def def name ...args
     [].name = args
-end
+end // TODO Maybe dont allow def like this. Complicates things like shifting around the order of func/variable definitions.
 // You want something like undefined, if = is called on .undefined, it defines the property. That way we can have:
+// No dont define it on undefined, just have it as default behavior
 def = args
 end
 // a.property is now undefined
@@ -271,6 +293,29 @@ end
 def Generics <T> args < Interface<T> // First argument already filled, so dynamically we want to allow for checking what we can define in the function without certain args.
 end
 
+// TODO This needs to be better, how does it fit nicely in the normal syntax of defining a class/function.
+// Enums when .OR is used.
+Maybe(5).switch
+  Just a 1
+  Nothing: 2
+  [type]:
+  [type like Just a if a > 10]:
+  [type like Object] Object
+     x = 5
+     y = 10
+  end
+  Object(x: 5 y: 10)
+  Object(x: 5 y) if y > 10
+  Just 5
+  Just a == 5: // Automatically bind a
+  Just 5..10 =>
+end
+if maybe == Just a = 5..10 // a =, is a name attached to the type, == defaults to using instance_of if a type? TODO what if type == type?
+end
+//if Just 5..10 = maybe
+//end
+
+// What about infinite loops.
 // What are function decorators?
 // What about graph-like control-flow
 // What about monkey-patching, vs overriding the whole variable. Monkey patch could be without args, even if the original function has them.
@@ -279,3 +324,6 @@ end
 //      -> Default return is returning "this" -> For normal functions either "this" meaning the class, skipping the local context. Or not, and use normal return semantics.
 // Variables accessible at runtime how? What decides we can access it.
 // Closures
+// Defining a bidirectional ray on a class/function. Methods and properties are one-way.
+// Defining boolean and other structures
+// For Type definitions like data Maybe a = Just a | Nothing, what decides that Just exists, what decides that I dont need to evaluate it? Just that it doesn't exist?

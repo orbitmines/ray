@@ -53,7 +53,19 @@ export interface INode {
   // TODO    Want to allow things like -A-.OR(MANY<-B-, Node<-C-, -D->>).OR(-E-) -> -A-.OR(-B-.OR([-C-, -D-])).OR(-E-)
   //          -> Node shouldnt be collapsed like Many would be. (or never nested)
 
+  // TODO: Maybe the .txt variant of the language is just a bunch of def's, both for functions and objects.
+  //        |-> Generics are simply Object(T)(constructor arguments),
+  //            -> How do we make sure Object(constructor arguments) works.
+  //            -> Object could point to both Object and Object(T)
+  //            -> Or generics are part of the function parameters.
+  //        |-> Variables and methods defined on the context level are properties of the object.
+  //              |-> You'd probably want to define code blocks which aren't defining the object, so { }
+
   //TODO    + Types
+  //           - Patterned rewrites like a functional programming language. ; Or a grammar like BNF.
+  //              "data Maybe a = Just a | Nothing"
+  //                |-> Just a function, Just a also a function. But functions don't automatically call?
+  //                |-> Generics are similarly also just a function, No difference in (x, y) = [x, y] and <T, U> = [T, U]
   //           - Create types for string chars ints etc..
   //           - Create type which defines all possible structures.
   //           - Editor needs an intuitive, keyboard-friendly way of creating these structures.
@@ -66,6 +78,9 @@ export interface INode {
   //                                                           .expand_all() -> Might be self-referential, but we can still point to it.
   //           - Type information on equivalence ray. .loop continuations for Tree/Graph. .loop on KV pairs for Object.
   //           - .select/.deselect contexts. ; binary number.select(numberline).equals(x)
+  //           -
+  //           - Disconnected vs connected graph, Tree needs to be connected. Connected by default?
+  //           - .consistent doesn't check whether the same edge is consistent
   //           -
   //           - Current type matching doesn't know whether .next().previous() gives the same result.
   //               .consistent() = .has_next() && .next().previous().[includes / equals](self)

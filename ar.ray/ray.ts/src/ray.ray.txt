@@ -1,0 +1,186 @@
+// Maybe allow one to define syntax dynamically. (Would be awful for language versioning though, if I introduce something which clashes with other syntax)
+
+def Nothing
+end
+
+def AMethod
+  variable = 5
+
+  def method
+  end
+end
+
+// Options for generics
+def Generics (T) (args)
+  variable = args.5
+end
+def Generics T
+   def constructor args
+      variable = args.5
+   end
+end
+
+a.5
+a[5]
+a<5>
+a(5)
+// Are all these somehow the same?
+
+
+def Generics (T = Default) args
+   // Normal stuff here is like a static {} block
+   // This is not true if args is on top like this. Need some way to allow for both.
+   //   -> No not necessary, if it doesn't use args it's static.
+   //   -> Similarly, .args if used anywhere in the "class", it's stored as the variable .args
+   //      -> This way you also dont have these useless constructors which are only this.var = var
+   //   -> Similarly, generics like .T are stored in a variable. Can it be changed? Yes?
+   //   -> a<5> if a has more parameters, returns a function with one parameter filled in.
+   variable = args.5
+
+   // define subclasses
+   static.def Subclass <T> // <-- generic overrides the context of Generics
+   end
+   // Allow Generics<T>.Subclass
+   // What if we dont know T? Allow Generics.Subclass
+   // What if T has a default and we want to match any. Use something like?? Generics<Unknown>.Subclass
+   //  -> So we allow to access variables of a function without the function being fully initialized.
+   //  -> How to determine what can be accessed? Statically accessible variables, but also when not depended on args.
+   //  -> But we also want access to variables if we can access them at runtime. TODO
+
+   // So stuff like this
+   for a in b
+     args. // uses .args so included
+   end
+   // There is the ambiguity of whether this should be saved as static or not.
+   test = 6
+   // Could give one the ability to reference "Generics" through a keyword "static".
+   // so .static is the class.
+   // Analyses would yield no dependence on previous instructions (or it will) and then we can take it out of the constructor.
+   static.test = 6
+   // How to get defined methods on the class if we don't know args.
+   // Because you want to allow things like
+   args.for a
+     // What if I want to call a out of order -> Now it wouldn't work, but for a class you'd want to be able to.
+     // Not in this case, but calling out of order, means the order of functions being defined must be done first.\
+     // If the variable is already defined, it uses the order.
+     // There might not be an order which allows you to call it? Or can we always put the method up first.
+     // -> We might have a situation like
+
+
+     // -> Many defs of a function, take the last one. Have some console warning for the dead code if it isn't used in between.
+     a()
+
+     // TODO: How to put this in the other context. Why isnt 'this' reassigned?
+     this.def a // TODO How to use the variable here for def. -> Allow, but it overwrites the variable a in the context.
+       b()
+     end
+     this.a =
+       b()
+     end
+     this.a = <T> args
+       b()
+     end
+     this.a = b
+
+     // This .for, and = accept blocks like "end", how does this work exactly in function parameters?
+     // Ruby uses &block.
+     // Difference between a block accepting with a function parameter, vs an argument of that block.
+     // Block is just a callable function, so it's simply the last parameter.
+     args.for args a
+     end
+     args.for(args) a
+     end
+     args.for -> a
+     end
+     args.for do a
+     end
+
+     // If .for has no other arguments we allow
+     args.for a
+     end
+     args.for a b = 5 // TODO How is this default separated from a variable declaration, might need something like "do"
+     end
+     // Differentiate a b = 5 from variable declaration, as in b = 5, not a, b = 5
+
+     def for f: Function
+     end
+     def block arg f: Function
+     end
+
+   end
+
+   def a
+   end
+   a =
+     b()
+   end
+
+   // can keep doing generic stuff.
+   def <TT> arg2
+   end
+
+   // __call__
+   def (args)
+   end
+   // or like this
+   def () args
+   end
+   def () <T> args
+   end
+   // ambiguous with .() (x y z)
+   // vs.            (x, y, z)
+   def a(args)
+   end
+
+   // Like haskell?
+   def x + y
+   end
+   // or normal
+   def + y
+     this + y
+   end
+   // Allow unary construction with arbitrary special characters.
+   def +
+   end
+   def @
+   end
+   // What if a thing like parenthesis is used?
+   def ( x y z
+   end
+   result = ( x y z
+   result = ((x y z)
+   result = ((x, y, z)
+
+   // g.(()
+   // ambigious with
+   def (()
+   end
+   // Arbitrary names are allowed so spaces should be possible too. This arbitrary-ness will not work well with the parser in text.
+   def " "
+   end
+   // g. ()
+
+   // How to decide where the "this" cutoff is, is it the whole program, is it one-level up or??
+   // "this" is just a variable but where is it defined?
+   this.variable
+end
+def Generics T args
+end
+// Allow <> () wherever, [] too?
+def Generics <T> args
+end
+def Generics <T> args < Inheritance // What does function inheritance mean, just get the context, sure, but what about additional logic in there?
+    super <- is it the "this" of the inherited structure, or is the return value for a function?
+
+end
+def Generics <T> args < Interface<T> // First argument already filled, so dynamically we want to allow for checking what we can define in the function without certain args.
+end
+
+// What are function decorators?
+// What about graph-like control-flow
+// What about monkey-patching, vs overriding the whole variable. Monkey patch could be without args, even if the original function has them.
+//      -> What is monkey-patching a function?
+// How to differentiate return value of a function, vs returning the Instance as a Function definition.
+//      -> Default return is returning "this" -> For normal functions either "this" meaning the class, skipping the local context. Or not, and use normal return semantics.
+// Variables accessible at runtime how? What decides we can access it.
+

@@ -20,6 +20,7 @@ def Generics T
    end
 end
 
+// TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
 // Single-line function
 def Maybe a = Just a | Nothing
 def Maybe(a) = Just a | Nothing
@@ -75,6 +76,31 @@ a(5) is saying getting property 5 has some result.
 // a(5)
 // you dont want a("property") to be 1.
 // TODO
+// a[5] is a on the vertex, and 5 being the property going through it. -> name
+// a(5) is 5 on the vertex, and a being the property going through it. ->
+// a(5) = 5[a] (= 5.a if a is a variable)
+// a[5] = 5(a)
+def Number
+  def plus y
+  end
+end
+
+x.plus(y) = y[x.plus]
+x.rotate(y, z) = (y, z)[x.rotate]
+
+def !
+end
+!x = !(x) = x[!]
+
+y + 1 = y.+(1) = 1[y.+]
++y = plus(y) = y[plus] = y[+]
+
+x = 1
+this.x = 1
+this["x"] = 1
+"x"(this) = 1 // "Get the variable called x at (arg)" -> So "x" would be "All places where the variable x is defined"
+// TODO Would you ever need to access this, or is it just an interesting semantic connection?
+
 
 // Partially filling in arguments of a function.
 def a arg1 arg2
@@ -292,6 +318,7 @@ def Generics <T> args < Inheritance // What does function inheritance mean, just
 end
 def Generics <T> args < Interface<T> // First argument already filled, so dynamically we want to allow for checking what we can define in the function without certain args.
 end
+// TODO Generics <T = Default> args, how to know when the first argument is the generic type?
 
 // TODO This needs to be better, how does it fit nicely in the normal syntax of defining a class/function.
 // Enums when .OR is used.
@@ -307,7 +334,7 @@ Maybe(5).switch
   Object(x: 5 y: 10)
   Object(x: 5 y) if y > 10
   Just 5
-  Just a == 5: // Automatically bind a
+  Just a = 5: // Automatically bind a
   Just 5..10 =>
 end
 if maybe == Just a = 5..10 // a =, is a name attached to the type, == defaults to using instance_of if a type? TODO what if type == type?
@@ -315,15 +342,35 @@ end
 //if Just 5..10 = maybe
 //end
 
+do
+end.while()
+
+while()
+
+while maybe == Just a = 5..10
+
+end
+
 // What about infinite loops.
 // What are function decorators?
 // What about graph-like control-flow
 // What about monkey-patching, vs overriding the whole variable. Monkey patch could be without args, even if the original function has them.
 //      -> What is monkey-patching a function?
+//      -> "patch instead of def?"
 // How to differentiate return value of a function, vs returning the Instance as a Function definition.
 //      -> Default return is returning "this" -> For normal functions either "this" meaning the class, skipping the local context. Or not, and use normal return semantics.
 // Variables accessible at runtime how? What decides we can access it.
-// Closures
+// Closures & inline-functions (similarly methods are closures with environment of the class)
 // Defining a bidirectional ray on a class/function. Methods and properties are one-way.
 // Defining boolean and other structures
 // For Type definitions like data Maybe a = Just a | Nothing, what decides that Just exists, what decides that I dont need to evaluate it? Just that it doesn't exist?
+// Assigning to a variable in a new block; a = 5; { a = 6 } ; Is it a new variable or assignment to the other one?
+//      -> In most languages in a def block you'd be able to access it not change it. You need a thing like "this", but for 'it's already defined in an arbitrary different context'
+//      -> But in something like an if block, you'd want it outside the block by default?
+//      -> Or explicit local value? Would be overused for functions, so it might depend on where the def is? Might get confusing.
+// <> For partial assignment of a function. Partial assignment how does that work with arbitrarily structured. Or does it only work on Array inputs.
+// variable do end, like static do end, or def static like monkey-patching to get a block where "something like this" is linked to static.
+// static variables are also accessible as a parent context, not just static.
+// which block "returns"/"break"
+// Arbitrary structure named variable assignment. (& function parameter)
+// instance_of in inherited structures, how does that play into the usual instance_of

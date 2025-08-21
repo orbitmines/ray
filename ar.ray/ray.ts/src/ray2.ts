@@ -62,6 +62,23 @@ export interface INode {
   //              |-> You'd probably want to define code blocks which aren't defining the object, so { }
 
   //TODO    + Types
+  //           - A vertex and a terminal can't both point to the "latest" version of the other: It's a circular dependency. So something needs to say "point to the last variant".
+  //              |-> Some way of first creating new references, then assigning changes without creating new references.
+  //              |-> What does it mean to have both a specific ref, and one to the latest?
+  //                |-> Needs an unambiguous way of preserving all histories while not duplicating everything for every connection there is.
+  //                    |-> One way is to navigate with some global "up till here" counter, but this isnt a good solution
+  //           - terminal.value points to a specific piece of a program, so it can ignore the value it entered on? So we can have a single program ref for all the edge references.
+  //           - Defining a terminal: You want a "latest" variant of the variable to be the ref. So that you dont have to update it for every reference to the variable.
+  //           - Maybe equivalent .initials, should match to the same .initial. and any continuation defined on .value of the terminal is deemed as a right one.
+  //                |-> Removes the difference between hypergraph and this setup.
+  //                |-> Also removes with terminal -> initial things.
+  //                |-> Does make it so that when I have two terminals and I want to equiv them, I need to add together the .initial side. and join them together instead of allowing you to keep both references.
+  //                      |-> More general way of merging two terminals.
+  //                |-> Does make empty not work |- -|, or we disallow a |- -> |- (initial to initial), and it's always initial to terminal.
+  //                |-> Does mean that when you have a terminal selected, you don't know which direction it's in. (Don't know if you're at a terminal or initial boundary)
+  //                |-> Makes reversing direction easier.
+  //                |-> To equiv them, add them together to a new reference. And replace both refs to that.
+  //           - Two-way many, from a vertex to an initial, and an initial to a vertex. Or do we limit every initial to a single vertex?
   //           - Patterned rewrites like a functional programming language. ; Or a grammar like BNF.
   //              "data Maybe a = Just a | Nothing"
   //                |-> Just a function, Just a also a function. But functions don't automatically call?

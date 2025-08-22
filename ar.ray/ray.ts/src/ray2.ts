@@ -62,6 +62,8 @@ export interface INode {
   //              |-> You'd probably want to define code blocks which aren't defining the object, so { }
 
   //TODO    + Types
+  //           - .last is implementable as a subgraph type match. (Not sure I will do that though)
+  //           - methods: overwrite if the same type overload if not.
   //           - A vertex and a terminal can't both point to the "latest" version of the other: It's a circular dependency. So something needs to say "point to the last variant".
   //              |-> Some way of first creating new references, then assigning changes without creating new references.
   //              |-> What does it mean to have both a specific ref, and one to the latest?

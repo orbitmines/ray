@@ -193,6 +193,8 @@ def Generics (T = Default) args
    end
    // TODO How to differentiate < 10 from .<10 function, or how to do these arbitrary names properly
 
+   // TODO Some other syntax for .ray ?
+   0+1
 
    // There is the ambiguity of whether this should be saved as static or not.
    test = 6
@@ -351,12 +353,110 @@ while maybe == Just a = 5..10
 
 end
 
+// Custom getter/setter
+def Class
+   _property = 5
+
+   def property
+      return _property
+   end
+   def property = value
+     _property = value
+   end
+end
+
+// for nested code, use something like | at the beginning of the line instead of some block, and then always till the newline
+//TODO How to pattern match the syntax if it's interleaved like that. Two separate graphs.
+// TODO, How does this work for non-text contexts?
+def javascript
+  |.ts
+  |  export namespace Query {
+  |    export class Instance {
+  0.ray(+1).if(< 5).for i
+  |      method = () => {}         //TODO How to use variables.
+  end
+  |    }
+  |  }
+end
+
+def Array <T>
+  -o | .
+   o-
+  ---
+  -o
+   o- | .
+
+  -o o- --- -o o- (ls l v r rs)
+  l.value = ls | .
+  l.end = v
+  l2.end = v
+  v.initial = l
+  v.terminal = r
+
+  // Two-way connections should have some single way of assignment
+
+  -o ]o- ]-[ -o[ o-
+
+  o- --- -o (l v l)
+  l.value = . | l
+  l.end = v
+  v.initial = v.terminal = l
+  // How to address loops
+  [l.end, v.initial | v.terminal].unrolled()
+
+  // Symmetric to both sides
+  o- --- -o
+  // but
+  % -T- -o =(self | .)
+
+  def Graph
+    % -T-[ -o[ =(. | ]l)
+  end
+
+  // How to do this without looking so alien
+
+  // Symmetric if the two variables are the same?
+  o-  : end
+  -T- : vertex
+   -o : end
+
+  end = Nothing | end
+
+  def Graph
+    o<  : end
+    >T< : vertex
+     >o : end
+
+    end = Nothing | Many end
+  end
+
+  // Very messy this
+  def Tree
+    o- | o-  : parent | initial
+    -T- : vertex
+     -o | < -o : terminal | leaves
+
+    initial = Nothing
+    leaves = parent
+    (parent = leaves)
+  end
+
+  // How to empty.
+  // How to allow disconnected.
+  // How to consistency check.
+  // How to do one-way connections
+  // Where to put the loop things for .unrolled and such
+
+
+end
+
 // What about infinite loops.
 // What are function decorators?
 // What about graph-like control-flow
 // What about monkey-patching, vs overriding the whole variable. Monkey patch could be without args, even if the original function has them.
 //      -> What is monkey-patching a function?
 //      -> "patch instead of def?"
+//      -> access something like super.
 // How to differentiate return value of a function, vs returning the Instance as a Function definition.
 //      -> Default return is returning "this" -> For normal functions either "this" meaning the class, skipping the local context. Or not, and use normal return semantics.
 // Variables accessible at runtime how? What decides we can access it.
@@ -374,3 +474,5 @@ end
 // which block "returns"/"break"
 // Arbitrary structure named variable assignment. (& function parameter)
 // instance_of in inherited structures, how does that play into the usual instance_of
+// Classes/Functions with the same name, how to resolve if we cant have the unique pointers.
+// What does an initial loop mean in .txt form?

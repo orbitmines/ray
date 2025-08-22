@@ -168,6 +168,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   // TODO: All Queries changed within the forloop should be somehow hooked into the forloop
   // for: (predicate: (x: Node) => any) =>
 
+  // TODO How to map the entire structure and relations properly?
   map: (predicate: (x: Node) => any) => TSelf
   /**
    *
@@ -630,6 +631,7 @@ export interface Graph extends Pointer<Graph> {
   //       -> Partial, without necessarily checking the entire graph.
   //            (what happens when a second rewrite is given, which a pending first rewrite might still cancel):
   //            (possible) Additional ambiguity of order of rewrite. What if invariant and doesn't matter?
+  //       - Move back in time for a particular node, possibly moves the whole graph back
   //
   // TODO: Split the graph at the differences?. Add/remove
   //       OR better: Give the ray from which we want to access this, which contains the remove/non-removed history.

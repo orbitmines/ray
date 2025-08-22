@@ -468,6 +468,8 @@ end
 //      -> In most languages in a def block you'd be able to access it not change it. You need a thing like "this", but for 'it's already defined in an arbitrary different context'
 //      -> But in something like an if block, you'd want it outside the block by default?
 //      -> Or explicit local value? Would be overused for functions, so it might depend on where the def is? Might get confusing.
+// Functions without args are properties. But for the case of a class, you'd want the () to be called to indicate a new instance, not ref the class: Class.a vs Class().a
+//   static.def () the constructor? Or leave it out.
 // <> For partial assignment of a function. Partial assignment how does that work with arbitrarily structured. Or does it only work on Array inputs.
 // variable do end, like static do end, or def static like monkey-patching to get a block where "something like this" is linked to static.
 // static variables are also accessible as a parent context, not just static.
@@ -476,3 +478,4 @@ end
 // instance_of in inherited structures, how does that play into the usual instance_of
 // Classes/Functions with the same name, how to resolve if we cant have the unique pointers.
 // What does an initial loop mean in .txt form?
+// Accessing variables while function in running.

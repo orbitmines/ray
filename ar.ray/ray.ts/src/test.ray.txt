@@ -28,6 +28,18 @@ def Maybe(a)
   return Just a | Nothing
 end
 
+def Two = Array<length: 2>
+// TODO If args contains length and another method defines length, how to differentiate?
+// TODO No differentiation necessary, allow any method to be partially filled like this as a type.0
+// TODO Things like Array<length.max() = 2> should be allowed, or Array<length.max() >= 5> or default the .max() if a comparison happens, how? Array<length > 5>, Also want to allow use of multiple variables like Array<length > var2>
+def Two = _, _ // Generic way of in-sequence def
+def false = Two[0]
+def true = Two[1]
+def Bit = Boolean = false | true
+def Boolean = Bit = false | true // TODO Allow
+def BinaryString = Array<Boolean>
+
+
 // TODO Pattern matched function names? Called instance_of
 // TODO Is this used for anything other than numbers? You can at least dynamically get the name.
 // TODO This is probably quite useful for meta programming, so instead of defining a loop and calling def in the loop, we
@@ -379,6 +391,8 @@ def javascript
   |  }
 end
 
+// Default structure is to create a Node with many rays through it.
+// Need better way of connecting in sequence or branching.
 def Array <T>
   -o | .
    o-
@@ -430,8 +444,14 @@ def Array <T>
     end = Nothing | Many end
   end
 
+  def Tree <T> () // End the constructor with () or do or = for assignment, or => for inline function
+  end
+  // Is there a difference between = / =>, or shouldnt there be?
+  def Tree <T> => func(T)
+  def Tree <T> = Maybe a | Nothing
+
   // Very messy this
-  def Tree
+  def Tree <T> do
     o- | o-  : parent | initial
     -T- : vertex
      -o | < -o : terminal | leaves
@@ -441,14 +461,232 @@ def Array <T>
     (parent = leaves)
   end
 
+  // Block/Program should be instanceof Graph (control-flow graph)? Use program instead of block?
   // How to empty.
   // How to allow disconnected.
   // How to consistency check.
   // How to do one-way connections
   // Where to put the loop things for .unrolled and such
-
+  // How to make Any Array subgraph of Graph, and use the same methods. Different from inheritance, like a "limiting inheritance."
 
 end
+
+// TODO Tagging arbitrary parts of structure.
+// For arrays it's simple, we just use what other languages do too.
+a, b, c = 1, 2, 3
+first, ..middle, last =
+
+def Object
+  def field
+  end
+  def field2
+  end
+  def field3 = [1, 2, 3]
+  def field4 = Just a | Nothing
+end
+
+// Doing it with assignment
+def method a: Object, b = a.field, c = a.field2
+end
+//
+def method a: Object [ field, field2 [ nested ] ]
+def method a: Object { field: Function, field2: reassigned_field { nested } } // TODO Difference between reassignment to a field vs type
+  { field, field2 { nested }, field3 [a1, ..a2, a3],
+    field4 = Just field4a // What if it's Nothing here, don't bind?
+    // Variable binding of a nested method in a type definition.
+  } = a
+end
+// (Tagging of name inside a comparison)
+maybe == Just a = 5..10
+// TODO What about complicated structures/graphs?
+
+
+// TODO What about a ray definition, which is two-directional. Which is just defining what !+1 is
+def bidirectional
+  +1
+reverse
+  -1
+end
+
+bidirectional!
++!(5) = -5
++5! = -5 // What does this call, it should know the function +(5)
+
+def + a
+reverse
+  -a
+end
+
+// TODO What about initial loops?
+def Branching
+  def test
+    // Intermediate variable declarations for blocks. branch1 = ..
+    branch1 = branch
+      return 1
+    branch2 = branch
+      return 2 // TODO Allow to operate on intermediate results, while all returns are pending.
+    end
+
+    dead_code
+  end
+
+  def test2
+    (branch1 = branch
+      return 1
+    branch2 = branch
+      // no return
+    branch3 = branch
+      // no return
+    branch4 = branch
+      goto branch2 // Need some way of doing gotos, in order to represent loops. Reversing direction of something like this is relevant for what?
+    end).
+
+    after_branch_2_and_3
+  end
+
+  def test3
+    this.i == 00
+    i = 0
+
+    branch
+      this.i = 11
+      i = 1
+    branch
+      this.i == 22
+      i = 2
+    branch
+      // What is i here?
+      // Either: Each branch has a separate i, or it could be any of 0, 1, 2, depending on the order.
+      // What about the "this" context. this.i is?
+    end
+  end
+end
+
+def Function
+  def compose f2
+    (args) => f2(this(args))
+  end
+end
+
+// TODO How to implement if with branching, or is it a primitive.
+
+
+// TODO Implement while/do while with gotos.
+def while conditional block
+
+end
+def Comparison // TODO Not just comparison, operations like += in while as well
+  def while block
+    check:
+    if (this) goto end
+
+    block()
+    goto check:
+
+    end:
+    return
+    //TODO How to call the block
+  end
+end
+def Block
+  def while comparison // Implemented on Block, it becomes a do-while loop.
+    return do
+      exec:
+      block(break = goto break) // TODO: How is break implemented: Pass break as a variable
+      check:
+      if (comparison) goto exec
+      break:
+    end
+  end
+  // TODO do end.while() should return another block? That way it can be passed with that control-flow to something else
+
+  def do
+    // Build sequential blocks (default call for sequences of statements)
+  end
+  do = global.do
+
+  // TODO For meta-programming things like line-number and things of blocks being defined. That way a debugger can be made very easily.
+end
+
+// TODO; How to implement try/catch with similar passing of variables for control-flow like break.
+
+// Executing a piece of code in between each statement becomes:
+// TODO: How to stop this from recursively calling itself: "Any redefinition of 'do' will use its previous implementation of 'do' within it, to prevent recursive stacks"
+// TODO Before evaluating the programs, do we first look for a definition of do in anything called from top-level? Prefer as little execution as necessary to get that.
+// TODO: Could use a specific keyword for this patch
+Block.do = def do block
+  clock = some_clock_func()
+  ret = super()
+  time_elapsed = clock.time_elapsed()
+  return ret
+end
+
+Block.do = def do
+
+end
+
+do
+  a
+  b
+  c
+end // is the same as:
+do
+  do
+   a
+  end.do
+   b
+  end.do
+   c
+  end
+end
+
+do
+  break (= goto break)
+end.while(a)
+
+// do end Doesn't have break defined, but do end.while(a) does.
+
+// do end.while(a).while(b) = do end.while(a | b)
+do {
+  do {
+    "c"
+    b++
+    a--
+  } while (a)
+while (b)
+
+do
+  exec:
+  block()
+  if (comparison2) goto exec
+  if (comparison) goto exec
+end
+
+// .while on a function
+
+// TODO: Need to allow an if condition bound to a variable like this?
+if(a > 5).while
+  a += 1
+end
+0.ray(+1).if(a > 5).for
+end
+
+// TODO: Similar to binding a variable, bind comparison as a function
+(maybe == Just a = 5..10).while
+    maybe = Just 5
+end
+
+// top-level while
+while maybe == Just a = 5..10
+end
+
+// .while on a block
+do
+
+end.while()
+do
+
+while () // = Calling on .end is the same as this
 
 // What about infinite loops.
 // What are function decorators?
@@ -471,7 +709,7 @@ end
 // Functions without args are properties. But for the case of a class, you'd want the () to be called to indicate a new instance, not ref the class: Class.a vs Class().a
 //   static.def () the constructor? Or leave it out.
 // <> For partial assignment of a function. Partial assignment how does that work with arbitrarily structured. Or does it only work on Array inputs.
-// variable do end, like static do end, or def static like monkey-patching to get a block where "something like this" is linked to static.
+// variable do end, like static do end, or def static like monkey-patching to get a block where "something like this" is linked to static. ; def static must be patch static? which are executed in sequence?
 // static variables are also accessible as a parent context, not just static.
 // which block "returns"/"break"
 // Arbitrary structure named variable assignment. (& function parameter)
@@ -479,3 +717,5 @@ end
 // Classes/Functions with the same name, how to resolve if we cant have the unique pointers.
 // What does an initial loop mean in .txt form?
 // Accessing variables while function in running.
+// How to know whether a.b is the .b method, or the result of a parameterless method .b?
+

@@ -1,2 +1,5 @@
-def def => *
-def do => *
+def = external[~]
+def do = external[~]
+def goto = external[~]
+
+def class

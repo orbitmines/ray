@@ -61,6 +61,8 @@ end
 def Generics // The pattern "generics" TODO What does this mean
 end
 
+"0..9.repeating" = 2 // Set all variables of that name to 2.
+
 // Allow binary operators defined outside the classes?
 def x: Number .. y: Number
 end
@@ -184,7 +186,7 @@ def Generics (T = Default) args
    for a in b
      args. // uses .args so included
    end
-   b.for a
+   b.for a do
      args.
    end
    // TODO Not the for(int i) stuff like other languages but stuff like.
@@ -375,6 +377,77 @@ def Class
    def property = value
      _property = value
    end
+end
+
+METHOD_NAME =
+// as a getter TODO, You want it to precede other implementations, how to do that? So access to the actual implementation.
+def "METHOD_NAME"
+end
+// and setter
+def "METHOD_NAME"=
+end
+
+// TODO Maybe allow for shortening of <...targs> to just ...args,
+def class name <...targs> (...args) &program
+end
+def class name <...targs> (...args, &program) //TODO Program with args?
+  // TODO: Name is not wrapped in quotes but is assumed to be a a-zA-Z0-9_.repeating
+  // It's in front of <>, so it's like that.
+  // What if:
+  def class name, name2 <...targs> (...args, &program)
+  end
+  // TODO; Is there any reason to allow more than 1 argument there?
+  -> class Name Name2 <2>(args)
+
+
+  // TODO: Name is a program/type, tied to a specific context. The "name" here is tied to this context.
+  // TODO: How to differentiate this from a string "". Use ``.
+  // TODO: class.methods / needs to be the same as program.methods
+  def `name` <...targs> (...args) do
+    this = ~ // Something different than *, you want *5 to be functions. Or differentiate it from *.5 but probably not
+    // ~ is used to enter a programming context window, do I want to use it for this too? Would that cause problems?
+    // Makes sense somewhere: ~ is enter existing programming context, and it represents the current context.
+
+    // TODO Inline block =>? vs a var -declaration: a = t => t
+
+    //TODO Allow to access any future instantiation of method. -> This is also how we differentiate it from changing a variable like 5. It's not 5, but 5() that'll be accessed.
+    //TODO So we want to basically say method = method<this> ; So partially filling allows non-declared ones. This would lead to problems if someone renames a variable and all instances should be renamed, but dont throw errors because they're instantiated instead. So something different.
+    program.methods.for method => method.[].this = this
+    // How does this block look if for had arguments: Would like to avoid the ruby ||. for a block
+    program.methods.for a b c ; method =>
+    program.methods.for a b c do |method| end
+    // what if we nest =>, or disallow this, too confusing syntax if it was used.
+    program.methods.for a b c => method => a => b => c
+    program.methods.for => method do
+    end
+
+    // These are the preferred ones right now:
+    program.methods.for a b c => method => a
+    // You'd want to allow for this without a parameter
+    program.methods.for a b c => a
+    program.methods.for(a, b, c) method =>
+    program.methods.for method do // If for doesn't have parameters allow this.
+    end
+    program.methods.for method =>
+
+    program~() // Should run the program within this context?
+    return this;
+  end
+
+  // 'program' gets a 'static' variable
+  // Every method defined in 'program' gets assigned a 'this' variable
+  // Return is an instance (instance = program)
+  // TODO How to differentiate between methods and declared variables.
+  def A
+    property = 5
+
+    def property_getter
+    end
+    def method // TODO; How to differentiate this from a property
+    end
+    def clearly_a_method (a)
+    end
+  end
 end
 
 // for nested code, use something like | at the beginning of the line instead of some block, and then always till the newline

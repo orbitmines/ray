@@ -64,14 +64,28 @@ def boolean = false = Two.first | true = Two.last // TODO also def false & def t
 def Two = Array<length = 2>
 // TODO: Does this assigning to false | true also change Two.first to ref on .value to the Node.
 def boolean = false = Two.first | true = Two.last do
-
+  def !
+  end
+  def & b
+  end
+  def | b // TODO: Want this top-level defined.
+  end
 end
 
 def Maybe a = Just a | Nothing
 def Maybe2 a = Just a | Nothing
 def Maybe2 a = Just a, a | Just a | Nothing | Nothing2
 // TODO Difference between the two Just's and Nothing's or not? If defined in same context, same, otherwise not?
+// TODO What about enums like rust
+def Enum =
+  A a b
+  | B c
 
+// TODO def `METHOD_NAME`= ; Difference between method names, and possible method names like @#$. Want to allow things like @name, @`a-zA-Z0-9_.repeating`
+
+// TODO What if you override the parameter 'local' but want to override the block's parameter local using program(local: this)
+// TODO Disallow use of local in func params? would be weird, let every variable call go to local, also weird. Partially fill it by default? also weird
+// TODO What's a good solution here?
 
 // TODO Pattern matched function names? Called instance_of
 // TODO Is this used for anything other than numbers? You can at least dynamically get the name.
@@ -81,7 +95,7 @@ def Maybe2 a = Just a, a | Just a | Nothing | Nothing2
 def 0-9.repeating
     return Number([method name]) // TODO: How to get method name; this.name? Or is name to often used by the user this.constructor
 end
-def "(0..9).repeating"."(0..9).repeating" // TODO: What's a nice syntax for this
+def `(0..9).repeating`."(0..9).repeating" // TODO: What's a nice syntax for this
   // TODO: Or define decimal as a function on number.c
 end
 // 0..9.repeating = 0..(9.repeating)
@@ -164,6 +178,7 @@ a<3: c, 5: e>(1 2 4)
 //          -> Use <> ; Is this a problem, or should we use something special for partially filling a function. That's probably a better option.
 a|3: c, 5: e|
 
+// TODO LIke TypeScript, allow an arbitrary getter/setter to return a specific type, which we define without defining method bodies
 
 // Something like a def for def. Which is just .property =
 // TODO someway to say: This function is automatically added to every context. Some default object or something.
@@ -799,6 +814,7 @@ do
    c
   end
 end
+//TODO This isnt the case with contexts like local, and defining vars
 
 do
   break (= goto break)

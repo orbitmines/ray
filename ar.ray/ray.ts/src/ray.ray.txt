@@ -1,5 +1,23 @@
-def = external[~]
-def do = external[~]
-def goto = external[~]
+// Defined by context:
+//  external = { def, do, goto }
+//  local
+//  caller (= local) TODO Or is it nil
+//  constructor (= local) = { name = "<text file name or nil>", definer (= local) } TODO Or is is nil?
+//  definer (= local) TODO Or is it nil
 
-def class
+def = external[constructor.name]
+def do(&program) = external[constructor.name]
+def goto = external[constructor.name]
+
+global = local
+
+def class name <...targs> (...args, &program)
+  def `name` <...targs> (...args)
+    static = local.constructor
+    this = local
+
+    program(local: this)
+
+    return this
+  end
+end

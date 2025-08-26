@@ -28,9 +28,7 @@ def Maybe(a)
   return Just a | Nothing
 end
 
-def Two = Array<length: 2>
-// TODO If args contains length and another method defines length, how to differentiate?
-// TODO No differentiation necessary, allow any method to be partially filled like this as a type.0
+def Two = Array<length = 2>
 // TODO Things like Array<length.max() = 2> should be allowed, or Array<length.max() >= 5> or default the .max() if a comparison happens, how? Array<length > 5>, Also want to allow use of multiple variables like Array<length > var2>
 def Two = _, _ // Generic way of in-sequence def
 def false = Two[0]
@@ -38,6 +36,41 @@ def true = Two[1]
 def Bit = Boolean = false | true
 def Boolean = Bit = false | true // TODO Allow
 def BinaryString = Array<Boolean>
+
+def boolean = false | true do
+  // Allow definitions like false | true, as the program on the vertex.value.
+  // Additionally define methods vertex.[]
+end
+
+def boolean = false | true
+def boolean
+  return false | true
+end
+def boolean = false | true do
+  // Return of this is ignored. and set to false | true. local.value = false | true
+end
+def boolean
+  value = false | true
+  // other methods
+  return value
+end
+def boolean = false = Two.first | true = Two.last // TODO also def false & def true
+
+// TODO No, it's not methods defined on the class boolean with value = false | true, we want any instantiation of the type boolean
+// TODO "On any instantiation" and "on the type" and on "subgraphs of the type: 1 | 2 | 3, but only 1 | 2"
+
+// TODO Def array, ray
+
+def Two = Array<length = 2>
+// TODO: Does this assigning to false | true also change Two.first to ref on .value to the Node.
+def boolean = false = Two.first | true = Two.last do
+
+end
+
+def Maybe a = Just a | Nothing
+def Maybe2 a = Just a | Nothing
+def Maybe2 a = Just a, a | Just a | Nothing | Nothing2
+// TODO Difference between the two Just's and Nothing's or not? If defined in same context, same, otherwise not?
 
 
 // TODO Pattern matched function names? Called instance_of
@@ -125,10 +158,10 @@ def a 1 2 3 4 5
   // TODO How to allow variables the names of numbers, while still declaring numbers normally?
   //        -> It's just a different context, so something like global.5 is a number object.
 end
-a(3: c)(1 2 4 5)
-a(3: c, 5: e)(1 2 4)
+a<3: c>(1 2 4 5)
+a<3: c, 5: e>(1 2 4)
 // TODO: What if another argument is added, then all the functions normally called, do as if they need to be called again.
-//          -> Is this a problem, or should we use something special for partially filling a function. That's probably a better option.
+//          -> Use <> ; Is this a problem, or should we use something special for partially filling a function. That's probably a better option.
 a|3: c, 5: e|
 
 
@@ -390,6 +423,8 @@ end
 // TODO Maybe allow for shortening of <...targs> to just ...args,
 def class name <...targs> (...args) &program
 end
+// TODO: If a named constructor, it's order is ignored. So it's not deemed to be a func call like normal.
+
 def class name <...targs> (...args, &program) //TODO Program with args?
   // TODO: Name is not wrapped in quotes but is assumed to be a a-zA-Z0-9_.repeating
   // It's in front of <>, so it's like that.
@@ -399,12 +434,63 @@ def class name <...targs> (...args, &program) //TODO Program with args?
   // TODO; Is there any reason to allow more than 1 argument there?
   -> class Name Name2 <2>(args)
 
+  def data name (&program)
 
-  // TODO: Name is a program/type, tied to a specific context. The "name" here is tied to this context.
+  end
+  data Name = first | last
+  data Name do
+   first | last
+  end
+
+  def data name
+  data "Name"
+
+  def data name ()
+  data Name
+
+  // Context switching
+  a = local
+  do
+    e = local
+    // a != e
+  end
+  def func
+    b = local  (= local.b = local)
+
+    // b != a
+    // b.constructor = func
+    // b.definer = a
+    // b.constructor.definer = a
+  end
+
+  func() // b.caller = a
+  def func2
+    c = local
+    func() // b.caller = c
+  end
+
+  def func3 => func2() // b.caller = d
+  def func4 = func2() // b.caller = d
+  func4 = func2() // b.caller = a
+  // The difference between def or not def in front of func4 is whether a new context is created for the one-line func.
+
+
+  // TODO: Name is a program/type, tied to a specific context. The "name" here is tied to this conte
+  // TODO: Name is the constructor's name.
   // TODO: How to differentiate this from a string "". Use ``.
   // TODO: class.methods / needs to be the same as program.methods
+
+  // <...targs> implicit in ...args?
+  def `name` (...args)
+  end
+
   def `name` <...targs> (...args) do
-    this = ~ // Something different than *, you want *5 to be functions. Or differentiate it from *.5 but probably not
+    // TODO ~.[parent context]
+
+    // TODO local is a Ray? That would mean first/last etc. are top-level as well?
+
+    static = local.constructor
+    this = local // Something different than *, you want *5 to be functions. Or differentiate it from *.5 but probably not
     // ~ is used to enter a programming context window, do I want to use it for this too? Would that cause problems?
     // Makes sense somewhere: ~ is enter existing programming context, and it represents the current context.
 
@@ -431,6 +517,7 @@ def class name <...targs> (...args, &program) //TODO Program with args?
     program.methods.for method =>
 
     program~() // Should run the program within this context?
+    program(local: this) //TODO: If compiler sees it can be inlined because local: is set to local. Possibly inline it.
     return this;
   end
 

@@ -55,6 +55,10 @@ def boolean
   return value
 end
 def boolean = false = Two.first | true = Two.last // TODO also def false & def true
+// TODO false =, is within the local context, not in the current one. So reexport is necessary.
+// Difference between false: boolean (false is type boolean), and other types you might give it.
+// Like rust enum & lean inductive type, allow parameters ; Is this again definable as structure on a def. => On static.
+//   -> Parameter is just an expected variable
 
 // TODO No, it's not methods defined on the class boolean with value = false | true, we want any instantiation of the type boolean
 // TODO "On any instantiation" and "on the type" and on "subgraphs of the type: 1 | 2 | 3, but only 1 | 2"
@@ -864,6 +868,21 @@ do
 
 while () // = Calling on .end is the same as this
 
+// In lean the return type given here:
+// def posOrNegThree (s : Sign) :
+       match s with | Sign.pos => Nat | Sign.neg => Int :=
+     match s with
+     | Sign.pos => (3 : Nat)
+     | Sign.neg => (-3 : Int)
+// Is automatically deduced from the body, no need to specify it. TODO But we would still need to be able to define types like that.
+
+// Allow Array<length = 2><T>
+
+def test<T>(array: Array<T>)
+// also in-place
+def test(array: Array<T>, array2: Array<T>, array2: Array<T2 extends number>)
+//TODO Things like generic types extending other types.
+
 // What about infinite loops.
 // What are function decorators?
 // What about graph-like control-flow
@@ -894,4 +913,14 @@ while () // = Calling on .end is the same as this
 // What does an initial loop mean in .txt form?
 // Accessing variables while function in running.
 // How to know whether a.b is the .b method, or the result of a parameterless method .b?
+// "Ray" within some structure: Graph, which might not have .next to Many><> like an Array.
+// Nested contexts accessible when a function is still executing (if those contexts define things which dont end up in the main context window)
+// Return value in closure/inline-func/func
+// Monkey-patch a new method, and then the library implements that method itself, in the graph variant there's a disambiguation between the two, and a possible choice of which implementation you use. But what is the text variant going to do?
+// Allow a wide variety of things in the string of defs, like α/β/.. other languages. Lean allows a ' at the end of variables, to mirror math.
+// Like leans open Namespace in, flatten context to 'local' local += Namespace { ...local, ...namespace }
+
+// Types:
+// "this function has different return types, depending on the value of its argument" ; match
+// "this sorting function returns a permutation of its input"
 

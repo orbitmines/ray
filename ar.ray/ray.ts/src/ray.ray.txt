@@ -16,7 +16,7 @@ def class name <...targs> (...args, &program)
     static = local.constructor
     this = local
 
-    program(local: this)
+    program(local: this) // TODO Or program<local: this>()
 
     return this
   end

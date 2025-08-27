@@ -876,12 +876,25 @@ while () // = Calling on .end is the same as this
      | Sign.neg => (-3 : Int)
 // Is automatically deduced from the body, no need to specify it. TODO But we would still need to be able to define types like that.
 
+// TODO Allow some sort of Sign but not Sign.pos, like Nat, but not Nat.zero, only Nat.succ (Nat.zero) at a minimum Nat<[self] != 0>
+
 // Allow Array<length = 2><T>
 
 def test<T>(array: Array<T>)
 // also in-place
 def test(array: Array<T>, array2: Array<T>, array2: Array<T2 extends number>)
 //TODO Things like generic types extending other types.
+
+Array.length =
+
+end
+def Array.length
+end
+//Same as monkeypatching like this
+def Array
+  def length
+  end
+end
 
 // What about infinite loops.
 // What are function decorators?
@@ -919,6 +932,15 @@ def test(array: Array<T>, array2: Array<T>, array2: Array<T2 extends number>)
 // Monkey-patch a new method, and then the library implements that method itself, in the graph variant there's a disambiguation between the two, and a possible choice of which implementation you use. But what is the text variant going to do?
 // Allow a wide variety of things in the string of defs, like α/β/.. other languages. Lean allows a ' at the end of variables, to mirror math.
 // Like leans open Namespace in, flatten context to 'local' local += Namespace { ...local, ...namespace }
+// 1 + 1 = 2 as a type: just structure.
+// match groups inside arbitrary method name
+// Overloaded methods result in some joined type with .and? on methods. def method(a: A) def method(a: B) => .method = [_, _]
+// a: Type = 5 ; If there are multiple meanings of what 5 is; to different type constructors, it should implicitly know which one. "Type classes" in the lean case.
+//   -> Is this ever relevant for .ray.txt? Or it'll always be CustomNumberType.5 or 5u/5u16 (it having defined method for numbers). Impl some "rust-like" interface on the number 3. -> Number 3 refs a function which returns that 3, so changes to it must persist somehow. 3 < Interface
+// Point<T>{ x: T, y: T } ; Implement interface "+" on any generic type which also has a "+" def Point<T < +> def + b { x: x + b.x, y: y + b.y }  end
+// TODO How is Point<T < +> different from Array<length < 3>
+// equivalences: Implicit casts (lean: coercions), chained together Pos -> Nat -> Int "if there is a path to Int from Pos" - allow loops. Allow cast to a function
+// single line for: remove all trailing '0' from a string; .repeat_while(o => o.pop_last(), o => o.last() == '0') // But better
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match

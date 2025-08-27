@@ -1,0 +1,10 @@
+name = "ray"
+version = "0.1.0"
+defaultTargets = ["ray"]
+
+[[lean_lib]]
+name = "Ray"
+
+[[lean_exe]]
+name = "ray"
+root = "ray"

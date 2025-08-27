@@ -5,6 +5,7 @@
 //  constructor (= local) = { name = "<text file name or nil>", definer (= local) } TODO Or is is nil?
 //  definer (= local) TODO Or is it nil
 
+//TODO Somehow define METHOD_NAME= without def.
 def = external[constructor.name]
 def do(&program) = external[constructor.name]
 def goto = external[constructor.name]
@@ -16,7 +17,7 @@ def class name <...targs> (...args, &program)
     static = local.constructor
     this = local
 
-    program(local: this) // TODO Or program<local: this>()
+    program(local: this)
 
     return this
   end

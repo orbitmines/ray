@@ -8,7 +8,7 @@
 //TODO Somehow define METHOD_NAME= without def.
 def = external[constructor.name]
 def do(&program) = external[constructor.name]
-def goto = external[constructor.name]
+def goto(location) = external[constructor.name]
 
 global = local
 
@@ -22,3 +22,4 @@ def class name <...targs> (...args, &program)
     return this
   end
 end
+

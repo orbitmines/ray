@@ -945,6 +945,29 @@ def if predicate &program
 
   // Conditional goto the best we can do?
 
+  // program.elsif.elsif.else
+end
+
+
+
+// conditionally add at structure
+if predicate
+  def this.conditionally
+  end
+end
+// TODO want to conditionally and dynamically have some method. Needs to possible reverse the definition/overwritten method if condition is no longer met
+
+def Array
+  if length > 2
+    def this.atleast2
+    end
+  end
+end
+// Monkeypatching using partial properties
+// This is automatically dynamic, as opposed to the if statement
+def Array<length > 2>
+  def atleast2
+  end
 end
 
 // How do compilers search for possible implementations of a function?
@@ -998,6 +1021,15 @@ end
 // pass continuation variables to functions, so break, continues in another function throw error too. In the throw case it need to work nested, even to funcs called/defined outside the context
 // If a namespace loads all variables into the current context, what happens with a name clash? Overwrite? Or monkeypatch - certainly not.
 // Array<length = 2> is not assign length to 2? If length is not within the func parameter names. What if it is and it's redefined later
+// Strip contrxt of everything but certain variables, and use that context to boot another context, like the default terminal environment
+// "run at compile time" ; constexpr ; when can this be inferred?
+//Todo define def in the language with monkeypatching included?
+//in def def define return to change control flow how?
+// def `name` checks it as a type. so that regex like hour(s)? would work
+// def static if it's currently drfined as a context should load everything in that to the context, or make it accept a block
+// map in the same direction +1 on all
+// matching a string of characters looped until some other string comes across, not the last match to that string, and everything in between is captured, the do block after a method, do should not match to other vars
+
 
 
 

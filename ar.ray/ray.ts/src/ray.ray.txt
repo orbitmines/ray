@@ -13,7 +13,7 @@ def goto(location) = external[constructor.name]
 global = local
 
 def class name <...targs> (...args, &program)
-  def `name` <...targs> (...args)
+  return def `name` <...targs> (...args)
     static = local.constructor
     this = local
 

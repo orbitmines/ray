@@ -232,12 +232,30 @@ def def name ()
   return local
 end
 
-class Constructor
-  name
+// TODO What is Array<length > 3><length < 5> --> is it AND, yes it is. Array<3 < length < 5>, Array<length > 3, length < 5>
+// TODO Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>
+
+class Constructor name targs: Program = []
   def <...targs>: Constructor
-  def <...targs> (...args, &program)
+    return Constructor(name, this.targs & targs)
+  end
+  def (...args, &program)
+    return program(...(this.targs + args)) //TODO This is not it: targs could be conditions on this.
   end
 end
+def Block
+  def (...args)
+    // TODO; How is the block called, where in the variable &program is the actual program stored? Or this just another primitive
+
+  end
+end
+
+def class name
+  def
+end
+
+// TODO: "Defining a constructor"
+// TODO: Using a name <...targs> (...args) uses .def under the hood for that .name
 
 def Generics (T = Default) args
    // Normal stuff here is like a static {} block

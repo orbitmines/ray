@@ -803,7 +803,7 @@ end
 Block.do = def do
 
 end
-
+end
 do
   a
   b
@@ -895,6 +895,56 @@ end
 def Array
   def length
   end
+end
+
+
+// Arbitrary structured names
+def structure = Array<length = 2> // some arbitrary structure
+def `structure`
+  5
+  def method
+  end
+end
+// How to "get" the `structure`.
+`structure` = 6 // `structure`= is not as unambiguous as a string, it could be connected to arbitrary terminals? Or is it simply a collapsed arbitrary structure connected to the = token.
+`structure`.method
+//TODO Parameters which are a specific structure
+def class `name_var` <T, `T`>(a, `a`, &`program`)
+end
+// Accept any input, need some variable set to any: `*` but shouldnt interfere with * methods
+
+// If we expect the runtime to take the if block it would be something like:
+// TODO: Any block/program which is the return value on a statement gets executed. But how?
+// TODO: How is if evaluated here?
+def if predicate &program
+  def elsif predicate &program
+    local.else = else
+    local.elsif = elsif
+
+    return local
+  end
+  def else &program
+
+    return local
+  end
+
+  return local
+
+  // block which is the type of If, which allows .elsif on it
+end
+if a
+elsif
+elsif
+else
+end
+
+// TODO &program should have a sequence of blocks, or more generally a graph. How is a graph translated to .ray.txt?
+def if predicate &program
+  // Would need to have access to the successive blocks from &program
+  // TODO What defines what type of successive blocks are here?
+
+  // Conditional goto the best we can do?
+
 end
 
 // How do compilers search for possible implementations of a function?

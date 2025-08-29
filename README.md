@@ -1,10 +1,10 @@
 > [!NOTE]
-> This is still a work in progress. See [2024. A Universal Language](https://github.com/orbitmines/orbitmines.com/pull/28) for progress on this write-up.
+> This is still a work in progress. Relevant progress is documented in this repo and [here](https://github.com/orbitmines/archive/blob/main/projects/Writing%20-%202025.%20A%20Universal%20Language.md)
 
 ---
 <div align="center">
 
-# A Universal Language
+# Rays: A Universal Language
 *One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.*
 
 ![header](./docs/header.png)
@@ -13,38 +13,27 @@
 
 </div>
 
-
-> [!WARNING]
-> No proper security infrastructure has yet been put in place
-
-> [!WARNING]
-> No proper performance optimizations have been done on its current iteration.
-
 ## What is this?, What is OrbitMines?, What are Rays?
 
-This thing is, in essence, a language to understand inconsistencies. A conceptual framework to make sense of ambiguity: A story of how destructively confusing languages can be. Though to me, most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a [different category of (programming) interfaces](https://orbitmines.com/archive/2024-02-orbitmines-as-a-game-project).
+This thing is, in essence, a programming language, an IDE or a conceptual framework to think about programs. Though to me, most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a [different category of (programming) interfaces](https://orbitmines.com/archive/2024-02-orbitmines-as-a-game-project).
 
-A simple way of phrasing this, is that the concept of a **_(hyper-/)_'Vertex', _(hyper-/)_'Edge', _(hyper-/)_'Graph', _(hyper-/)_'Rule', _(hyper-/)_'Tactic', _(hyper-/)_..., _(hyper-/)_'Rewrite'** are merged into one thing: a [Ray](ar.ray/ray.ts/src/ray.ts). It handles surrounding context, ignorances, equivalences, ..., differentiation (And if it cannot, then it offers a way of implementing it for all of the above). 
-
-Though quite importantly, even if those previous words are complete nonsense to you: Either this, or projects following from this, will aid in your understanding. This is the start of a story which will provide infrastructure for communication between all *sciences, (programming) languages, compilers, interfaces, ..., videogames*.
-
-*... read more @ [orbitmines.com](https://2024-a-universal-language.orbitmines-com.pages.dev/papers/a-universal-language), [.pdf](docs/a-universal-language.pdf), [.jpeg](docs/a-universal-language.jpeg)*
+A simple way of phrasing this, is that the concept of a **_(hyper-/)_'Vertex', _(hyper-/)_'Edge', _(hyper-/)_'Graph', _(hyper-/)_'Rule', _(hyper-/)_'Tactic', _(hyper-/)_..., _(hyper-/)_'Rewrite' and similar concepts** are merged into one thing: a [Ray](ar.ray/ray.ray.txt/ray.ray.txt). It handles surrounding context, structure and pattern-matching, defines control-flow and dynamics and acts as a language, theorem prover and rendering engine. 
 
 ---
 
-- If you prefer **text**, see [2023-12-31. On Orbits, Equivalence and Inconsistencies](https://orbitmines.com/papers/on-orbits-equivalence-and-inconsistencies), or more generally my/OrbitMines writing can be found here: [orbitmines.com/profiles/fadi-shawki](https://orbitmines.com/profiles/fadi-shawki).
+- If you prefer **text**, see [<TODO; refer to a new post on the language](), or more generally my/OrbitMines writing can be found here: [orbitmines.com/profiles/fadi-shawki](https://orbitmines.com/profiles/fadi-shawki).
 
 
-- If you prefer **audio-visual mumblings**, see [2024-01-04. What is OrbitMines?, Implementing Aleks Kissinger's Chyp and maybe looking at Tinygrad](https://www.youtube.com/watch?v=O6v_gzlI1kY), or more generally my streams can be found here: [youtube.com/@FadiShawki/streams](https://www.youtube.com/@FadiShawki/streams).
+- If you prefer **audio-visual mumblings**, see [<TODO; Make a stream to explain the project better](), or more generally my streams can be found here: [youtube.com/@FadiShawki/streams](https://www.youtube.com/@FadiShawki/streams).
 
 
-- If you prefer **archaic symbolics: i.e. code**, see [ray.py](ar.ray/ray.py/ray.py), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
+- If you prefer **archaic symbolics: i.e. code**, see [ray.ray.txt](ar.ray/ray.ray.txt/ray.ray.txt), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
 
 
 - If you prefer discussions on **Discord**: [discord.orbitmines.com](https://discord.orbitmines.com).
 
 
-- Or go to the [online playground](https://2024-a-universal-language.orbitmines-com.pages.dev/papers/a-universal-language) (TODO) 
+- Or go to the [online playground]() (TODO) 
 
 ---
 
@@ -54,14 +43,21 @@ Check out everything I've made public regarding this here: [GitHub Issues](https
 
 ---
 
-### Local setup
-TODO
+## Local setup
+There are several ways of using this programming language.
+- Either grab your favorite text editor and get started with [The .ray.txt Programming Language](). Install language support for [IntelliJ] [VS Code] (TODO)
+- Download our IDE: [Ether]() (TODO)
+- Or go to the [online playground]() (TODO)
 
 ---
 
-## Latest Writing
-https://orbitmines.com/papers/a-universal-language/
-![2023.on-orbits-equivalence-and-inconsistencies-thumbnail.jpeg](./orbitmines.com/public/papers/on-orbits-equivalence-and-inconsistencies/images/thumbnail/3840x2160.jpeg)
+## The [`.ray.txt`](ar.ray/ray.ray.txt) Programming language
+Though this project will step away from the limitations of a text file, all programming infrastructure relies on it. A move away from it, will require additional infrastructure (like the IDE and version control). Even if all that is in place, it would still be good if we're able to use existing infrastructure. So ideally we'd like a way to translate the language into a text-based format. Which is where `.ray.txt` comes in.
+
+TODO
+```ray.txt
+
+```
 
 ---
 

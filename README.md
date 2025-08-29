@@ -4,7 +4,7 @@
 ---
 <div align="center">
 
-# Rays: A Universal Language
+# Ray: A Universal Language
 *One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.*
 
 ![header](./docs/header.png)

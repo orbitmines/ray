@@ -1,7 +1,7 @@
 // Defined by context:
 //  external = { do, goto }
 //  `arbitrary structure`=
-//  def
+//  def def(): Constructor
 //  local
 //  caller (= local) TODO Or is it nil
 //  constructor (= local) = { name = "<text file name or nil>", definer (= local) } TODO Or is is nil?
@@ -12,15 +12,11 @@ def goto(location) = external[constructor.name]
 
 global = local
 
-// TODO Not right, constructor isnt called so targs and args arent filled, need to have a separate way of
-// TODO constructing a named constructor.
 def class name <...targs> (...args, &program)
-  return caller.def `name` <...targs> (...args)
-    static = local.constructor
-    this = local
+  static = local.constructor
+  this = local
 
-    program(local: this)
+  program(local: this)
 
-    return this
-  end
+  return this
 end

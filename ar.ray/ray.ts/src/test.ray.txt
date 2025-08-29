@@ -819,6 +819,7 @@ do
   end
 end
 //TODO This isnt the case with contexts like local, and defining vars
+do(local: this) end.do()
 
 do
   break (= goto break)
@@ -896,6 +897,7 @@ def Array
   end
 end
 
+// How do compilers search for possible implementations of a function?
 // What about infinite loops.
 // What are function decorators?
 // What about graph-like control-flow
@@ -941,6 +943,13 @@ end
 // TODO How is Point<T < +> different from Array<length < 3>
 // equivalences: Implicit casts (lean: coercions), chained together Pos -> Nat -> Int "if there is a path to Int from Pos" - allow loops. Allow cast to a function
 // single line for: remove all trailing '0' from a string; .repeat_while(o => o.pop_last(), o => o.last() == '0') // But better
+// try/catch implemented how?
+// private/public/protected
+// pass continuation variables to functions, so break, continues in another function throw error too. In the throw case it need to work nested, even to funcs called/defined outside the context
+// If a namespace loads all variables into the current context, what happens with a name clash? Overwrite? Or monkeypatch - certainly not.
+// Array<length = 2> is not assign length to 2? If length is not within the func parameter names. What if it is and it's redefined later
+
+
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match

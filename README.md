@@ -45,13 +45,13 @@ Check out everything I've made public regarding this here: [GitHub Issues](https
 
 ## Local setup
 There are several ways of using this programming language.
-- Either grab your favorite text editor and get started with [The .ray.txt Programming Language](). Install language support for [IntelliJ] [VS Code] (TODO)
+- Either grab your favorite text editor and get started with [The .ray.txt Programming Language](#the-raytxt-programming-language). Install language support for [IntelliJ] [VS Code] (TODO)
 - Download our IDE: [Ether]() (TODO)
 - Or go to the [online playground]() (TODO)
 
 ---
 
-## The [`.ray.txt`](ar.ray/ray.ray.txt) Programming language
+## The [`.ray.txt`](ar.ray/ray.ray.txt) Programming Language
 Though this project will step away from the limitations of a text file, all programming infrastructure relies on it. A move away from it, will require additional infrastructure (like the IDE and version control). Even if all that is in place, it would still be good if we're able to use existing infrastructure. So ideally we'd like a way to translate the language into a text-based format. Which is where `.ray.txt` comes in.
 
 TODO

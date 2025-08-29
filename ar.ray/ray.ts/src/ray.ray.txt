@@ -1,19 +1,21 @@
 // Defined by context:
-//  external = { def, do, goto }
+//  external = { do, goto }
+//  `arbitrary structure`=
+//  def
 //  local
 //  caller (= local) TODO Or is it nil
 //  constructor (= local) = { name = "<text file name or nil>", definer (= local) } TODO Or is is nil?
 //  definer (= local) TODO Or is it nil
 
-//TODO Somehow define METHOD_NAME= without def.
-def = external[constructor.name]
 def do(&program) = external[constructor.name]
 def goto(location) = external[constructor.name]
 
 global = local
 
+// TODO Not right, constructor isnt called so targs and args arent filled, need to have a separate way of
+// TODO constructing a named constructor.
 def class name <...targs> (...args, &program)
-  return def `name` <...targs> (...args)
+  return caller.def `name` <...targs> (...args)
     static = local.constructor
     this = local
 
@@ -22,4 +24,3 @@ def class name <...targs> (...args, &program)
     return this
   end
 end
-

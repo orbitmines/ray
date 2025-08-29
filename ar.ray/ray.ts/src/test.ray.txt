@@ -20,6 +20,9 @@ def Generics T
    end
 end
 
+Generics = <T> (args)
+end
+
 // TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
 // Single-line function
 def Maybe a = Just a | Nothing
@@ -210,6 +213,23 @@ end
 // TODO So how does else work?
 if a
 else
+end
+
+// Different: .name is any of the generated names fitting in the type: 'name'.
+// TODO Definitely have this defined outside the language.
+def def name ()
+  caller[name] = local
+  local.name = name
+
+  def <...targs>
+   // TODO Method to partially fill arguments
+  end
+  def <...targs> (...args, &program)
+    // TODO __call__ method
+    program<...targs>(...args)
+  end
+
+  return local
 end
 
 def Generics (T = Default) args
@@ -445,13 +465,6 @@ end
 // TODO: If a named constructor, it's order is ignored. So it's not deemed to be a func call like normal.
 
 def class name <...targs> (...args, &program) //TODO Program with args?
-  // TODO: Name is not wrapped in quotes but is assumed to be a a-zA-Z0-9_.repeating
-  // It's in front of <>, so it's like that.
-  // What if:
-  def class name, name2 <...targs> (...args, &program)
-  end
-  // TODO; Is there any reason to allow more than 1 argument there?
-  -> class Name Name2 <2>(args)
 
   def data name (&program)
 

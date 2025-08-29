@@ -232,6 +232,13 @@ def def name ()
   return local
 end
 
+class Constructor
+  name
+  def <...targs>: Constructor
+  def <...targs> (...args, &program)
+  end
+end
+
 def Generics (T = Default) args
    // Normal stuff here is like a static {} block
    // This is not true if args is on top like this. Need some way to allow for both.

@@ -105,7 +105,7 @@ end
 def `(0..9).repeating`."(0..9).repeating" // TODO: What's a nice syntax for this
   // TODO: Or define decimal as a function on number.c
 end
-// 0..9.repeating = 0..(9.repeating)
+// 0..9.repeating = 0..(9.repeating) // TODO Not this for range operator
 // x+y x+y.func you want it to be (x+y).func
 // TODO So you want to be able to use variables within a function's name.
 def NUMBER.repeating // TODO How to differentiate between NUMBER.repeating (arbitrary name) and the function.
@@ -116,6 +116,15 @@ def Generics // The pattern "generics" TODO What does this mean
 end
 
 "0..9.repeating" = 2 // Set all variables of that name to 2.
+
+0..10.for i
+end
+(0..10).for i
+end
+0..(9 + 1).for i
+end
+// what about 0..10..20
+
 
 // Allow binary operators defined outside the classes?
 def x: Number .. y: Number
@@ -217,6 +226,16 @@ end
 
 // Different: .name is any of the generated names fitting in the type: 'name'.
 // TODO Definitely have this defined outside the language.
+// This method is defined, and then called by itself?
+// TODO: Need to define that every object and context has this property.
+def Context
+end
+// def Program always has def Context?
+
+def namespace name ()
+  // TODO: Unlike method definitions, you want this to be executed directly.
+end
+
 def def name ()
   caller[name] = local
   local.name = name
@@ -224,13 +243,162 @@ def def name ()
   def <...targs>
    // TODO Method to partially fill arguments
   end
-  def <...targs> (...args, &program)
+  def (...args, &program) // Separate <> and () complete
+    //TODO Typecheck args vs args2, targs vs targs2
+    //TODO: args might contain a &program block too, typecheck that to &program2
+    //TODO -> Typechecking a code block -> Specific kind of control-flow/program. So you could say: Only code blocks which aren't turing complete. This is actually a really important feature.
+
+    caller[name] = <...targs>(...args2, &program2)
+      program(args2, &program2)
+    end
     // TODO __call__ method
-    program<...targs>(...args)
+
+    // TODO: Only when the body and such is given, is caller[name] set?
+    // It's not directly executed, but stored as a Definition: return program<...targs>(...args)
   end
 
   return local
 end
+// A constructor is this + local.constructor is set to `method`.
+def def
+  def `method`
+     ...
+  end
+end
+
+//TODO Defining the = method
+//TODO Circularity in caller[name] = local and this one.
+def `any`= <...targs>(...args, &program)
+  caller.def `local.constructor.name` <...targs>(...args, &program)
+  // TODO Does caller.def change the 'caller' in def? Saying that . is a shortcut for def caller def `..` which it is.
+end
+abc = '' // caller = local
+abc.eee = '' // caller = "abc"
+// Might want to differentiate between caller of the method and this "called on"
+def abc
+  eee = '' // In this case it would be "caller = abc"
+end
+
+// What about
+def `any`= <...targs>
+  caller.def `local.constructor.name`
+end
+
+
+def abc <...targs> (...args, &program) // Program B
+  // Program A
+end
+def def name
+  def <...targs> (...args, &program) // Program A
+  end
+end
+
+def AnotherObject
+  def <...targs> (...args, &program)
+  end
+end
+
+instance = AnotherObject()
+instance<targs>(args)
+
+end
+
+// Creating a method
+def method <...targs> (...args, &program)
+// Is actually
+def('method')<...targs>(...args, &program)
+
+// Creating a constructor
+def class name <...targs> (...args, &program)
+// Is actually
+
+def class
+  def `method`
+    def <...targs>
+    end
+    def <...targs>(...args, &program)
+
+    end
+
+    return local
+  end
+end
+class()[name]<...targs>(...args, &program)
+
+// So def is
+def def name ()
+end
+// Which is
+def def
+  def `method`
+    ...
+  end
+end
+def()[name]<...targs>(...args, &program)
+
+class AnotherObject
+  def `method`
+  end
+end
+
+AnotherObject()[method]
+AnotherObject method <T> (5) do
+end
+
+def method
+end
+
+AnotherObject method nestedConstructor <T>(5)
+AnotherObject method <T>(5) anotherNestedConstructor <5>()
+end
+
+myCustomConstructor = AnotherObject method <T>(5)
+myCustomConstructor a <5>(method)
+end
+
+AnotherObject method
+// is short for
+AnotherObject().method
+
+def method
+def().method
+
+def AnotherObject
+  def `method`
+    def <...targs>
+    end
+    def (...args)
+      def `method`
+        def <...targs>
+        end
+      end
+
+      return local
+    end
+  end
+end
+
+' Like this we can construct valid syntax as a simple sentence without punctuation and such
+Like().this().we().can().construct().valid().syntax().as().a().simple().sentence().without().punctuation().and().such()
+
+def Point
+  def x = 0
+  def y = 0
+end
+
+Point x
+(Point x) == 0
+Point(1, 2) x  = Point(1, 2)().x
+
+def Constructor
+
+end
+
+(def method). <T> // Defines on the constructor.
+def Array.method // Defines on Array
+end
+// def (Array).method // Defines on Array
+//
 
 // TODO What is Array<length > 3><length < 5> --> is it AND, yes it is. Array<3 < length < 5>, Array<length > 3, length < 5>
 // TODO Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>
@@ -1067,7 +1235,7 @@ end
 // def static if it's currently drfined as a context should load everything in that to the context, or make it accept a block
 // map in the same direction +1 on all
 // matching a string of characters looped until some other string comes across, not the last match to that string, and everything in between is captured, the do block after a method, do should not match to other vars
-
+// All statements are always brought in parallel, but only once evaluation is necessary does it get the order and filtered statements which need to be executed.
 
 
 

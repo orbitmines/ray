@@ -7,6 +7,9 @@
 //  constructor (= local) = { name = "<text file name or nil>", definer (= local) } TODO Or is is nil?
 //  definer (= local) TODO Or is it nil
 
+def def name ()
+end
+
 def do(&program) = external[constructor.name]
 def goto(location) = external[constructor.name]
 

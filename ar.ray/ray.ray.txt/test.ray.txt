@@ -246,7 +246,8 @@ def def name ()
   def (...args, &program) // Separate <> and () complete
     //TODO Typecheck args vs args2, targs vs targs2
     //TODO: args might contain a &program block too, typecheck that to &program2
-    //TODO -> Typechecking a code block -> Specific kind of control-flow/program. So you could say: Only code blocks which aren't turing complete. This is actually a really important feature.
+    //TODO -> Typechecking a code block -> Specific kind of control-flow/program. So you could say: Only code blocks which aren't turing complete.
+    //        This is actually a really important feature.
 
     caller[name] = <...targs>(...args2, &program2)
       program(args2, &program2)

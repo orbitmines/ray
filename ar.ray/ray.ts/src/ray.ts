@@ -330,6 +330,8 @@ export interface Node extends Pointer<Node> {
    *                                                                                  (In this case one needs to look ahead to check for merges instead of directly comparing each .next)
    * TODO: Equivalences the compiler uses for optimizations
    *
+   * TODO: Equivalence of Nat and Nat2 (Unary integer structures to binary structures) then use that to change certain functions from one to the other. Or convert one into the other and use the function. Not all functions will work, for instance functions that use .length of the unary integer.
+   *
    * Equivalence through a canonicalization function:
    * .apply(graph.filter(x => temperature(x) > 10).map(x => canonicalize(x)))
    * Forced equivalence through ignorance:

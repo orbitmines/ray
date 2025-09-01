@@ -866,7 +866,7 @@ def Array <T>
   // How to consistency check.
   // How to do one-way connections
   // Where to put the loop things for .unrolled and such
-  // How to make Any Array subgraph of Graph, and use the same methods. Different from inheritance, like a "limiting inheritance."
+  // How to make Any Array subgraph of Graph and use the same methods. Different from inheritance, like a "limiting inheritance."; .next returns a different type namely not Many<>
 
 end
 
@@ -1290,6 +1290,9 @@ Object<list1.some(>5)>
 // allow 5 < x < 10
 // Nat refers to 0..Infinity, Nat instanceof Ray. Nat instanceof Array but an instance of Nat is a number "There exists ; is just some" def even(n: ) => Nat.some(half => n == double(half)). ; TODO How does this evaluate on the infinite .some ; Nat<every> is different from Array<length> one is referring to an instance the other to the static type Nat. Or dont use Nat<every>
 //   -> You'd want things like Nat{<5}; or types like def method(n: < 5) and def method(n: % 2 == 0) (nested operator still looking for a left value) and def method(n: .even) so you do want to call it on static too. What decides whether it's on instance or static
+//   -> 0..Infinity{<5} = 0..Infinity.if(<5) = 0..4 = (0..Infinity(4) = 4) ; A range is an Array with a constructor ()
+//   -> Have something like Array.some without parameters return a type | between each entry. def method(a: [1,2,3].some{<=2}) = def method(a: [1,2,3].if(<=2).some) = def method(a: 1 | 2)
+//      -> [1,2,3].some = (1 | 2 | 3) has a constructor which accepts any of the entries like the enums. (1 | 2 | 3)(2) = 2
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match

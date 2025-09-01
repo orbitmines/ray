@@ -232,21 +232,21 @@ def Context
 end
 // def Program always has def Context?
 
-def namespace name (&program)
+def namespace(name, &program)
+  caller[name] = local
   // TODO: Unlike method definitions, you want this to be executed directly. How is that indicated?
 
   def <...targs>
     // TODO Dynamic namespaces, if there exists a dependency on the args execute again for the type namespace vs the untyped one.
   end
 
-  def constructor
-    program(local: local)
-  end
+  program(local: local)
 
-  return constructor
+  return local
 end
 
 def def name ()
+  // TODO Define def on Context.
   caller[name] = local
   local.name = name
 
@@ -279,6 +279,83 @@ def def
   end
 end
 
+def method(arg, arg, &program)
+end
+// is actually a program which accepts arg, arg, &program as params
+
+// out of order block def
+def if(predicate, &program)
+def some_other_method(&program)
+
+def a
+  return abc if true
+  return eee some_other_method
+  // TODO Differentiate between eee('some_other_method')
+end
+
+// not this
+def class name <...targs> (...args, &program)
+  static = local.constructor
+  this = local
+
+  program(local: this)
+
+  return this
+end
+
+
+def class name <...targs> (...args, &program)
+// is actually
+def class (name, &program)
+// which accepts <...targs> (...args)
+def class(name?, &definition)
+  caller[name] = local if name //TODO Out of order if generalized to out-of-order block definition
+  static = local
+
+  def <...targs>
+    // TODO copy(targs = targs)
+  end
+  def (...args, &program)
+    this = local
+
+    // TODO Typechecking definition.targs with targs etc.. needs to be defined for 'def' as well.
+    definition<...targs>(local: this, ...args, &program)
+
+    return this
+  end
+
+  return static
+end
+
+def method(arg1, arg2, &program)
+end
+method(arg1, arg2) <T>(arg3)
+end
+
+// TODO There's an ambiguity between method(arg1)<T> defining a block, or calling the <..t> method.
+// Resolve this ambiguity by saying if () are used at the start it call the <> method. So:
+class(arg1)<T>() // calls <T>, arg1 is a variable reference
+class arg1<T>() // defines Block, arg1 is a name
+end
+class arg1 // TODO Ambiguity whether its a variable reference or a name.
+class()
+
+for i
+end
+// =
+for() <>(i)
+end
+
+def method(arg1, &program)
+end
+method arg1 <T>(arg2)
+end
+class arg1<T>(arg2)
+end
+// Constructors can have multiple arguments
+class arg1, arg2 <T>(arg3)
+end
+
 //TODO Defining the = method
 //TODO Circularity in caller[name] = local and this one.
 def `any`= <...targs>(...args, &program)
@@ -286,7 +363,7 @@ def `any`= <...targs>(...args, &program)
   // TODO Does caller.def change the 'caller' in def? Saying that . is a shortcut for def caller def `..` which it is.
 end
 abc = '' // caller = local
-abc.eee = '' // caller = "abc"
+abc.eee = '' // caller = local
 // Might want to differentiate between caller of the method and this "called on"
 def abc
   eee = '' // In this case it would be "caller = abc"

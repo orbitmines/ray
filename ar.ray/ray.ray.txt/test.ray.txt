@@ -232,14 +232,25 @@ def Context
 end
 // def Program always has def Context?
 
-def namespace name ()
-  // TODO: Unlike method definitions, you want this to be executed directly.
+def namespace name (&program)
+  // TODO: Unlike method definitions, you want this to be executed directly. How is that indicated?
+
+  def <...targs>
+    // TODO Dynamic namespaces, if there exists a dependency on the args execute again for the type namespace vs the untyped one.
+  end
+
+  def constructor
+    program(local: local)
+  end
+
+  return constructor
 end
 
 def def name ()
   caller[name] = local
   local.name = name
 
+  // TODO: Uses def again before it's defined
   def <...targs>
    // TODO Method to partially fill arguments
   end
@@ -249,6 +260,7 @@ def def name ()
     //TODO -> Typechecking a code block -> Specific kind of control-flow/program. So you could say: Only code blocks which aren't turing complete.
     //        This is actually a really important feature.
 
+    // TODO If already exists monkeypatching.
     caller[name] = <...targs>(...args2, &program2)
       program(args2, &program2)
     end
@@ -396,8 +408,9 @@ def Constructor
 end
 
 (def method). <T> // Defines on the constructor.
-def Array.method // Defines on Array
+def Array.method // Defines on Array (on static)
 end
+// TODO How to define on an Array instance which isn't def Array def method
 // def (Array).method // Defines on Array
 //
 
@@ -1177,6 +1190,21 @@ def Array<length > 2>
   end
 end
 
+def Object
+  list1: Array
+  list2: Array
+end
+// Allow something like this
+Object<list1.disjoint(list2)>
+// TODO How to define it directly on Object
+def Object //TODO What is Object has <T> ; Object<list1.some(>5)> should not set T to that. So change it to {} or something?
+  list1: Array
+  list2: Array
+  assert list1.disjoint(list2)
+end
+Object<list1.some(>5)>
+// TODO How to also do this for enums
+
 // How do compilers search for possible implementations of a function?
 // What about infinite loops.
 // What are function decorators?
@@ -1224,7 +1252,7 @@ end
 // equivalences: Implicit casts (lean: coercions), chained together Pos -> Nat -> Int "if there is a path to Int from Pos" - allow loops. Allow cast to a function
 // single line for: remove all trailing '0' from a string; .repeat_while(o => o.pop_last(), o => o.last() == '0') // But better
 // try/catch implemented how?
-// private/public/protected
+// private/public/protected ; local/this is private/protected
 // pass continuation variables to functions, so break, continues in another function throw error too. In the throw case it need to work nested, even to funcs called/defined outside the context
 // If a namespace loads all variables into the current context, what happens with a name clash? Overwrite? Or monkeypatch - certainly not.
 // Array<length = 2> is not assign length to 2? If length is not within the func parameter names. What if it is and it's redefined later
@@ -1237,8 +1265,31 @@ end
 // map in the same direction +1 on all
 // matching a string of characters looped until some other string comes across, not the last match to that string, and everything in between is captured, the do block after a method, do should not match to other vars
 // All statements are always brought in parallel, but only once evaluation is necessary does it get the order and filtered statements which need to be executed.
-
-
+// Overriding something like def to check all methods being defined what if when using that, dependencies on something like class exist, throw an error? or just define class before calling the method, and then redifining it? or just not pass that to def?
+// instance_of fails list of error of what isn't satisfied, this needs to be customizable. Returns something like UnmatchedType<T> with the same functionality as T but not the same restrictions
+// Types of blocks are deduced based on what is in the block.
+//   -> Certain things like static blocks aren't executed by the block itself, or the compiler moves things out of the block, how to account for that?
+// How to grammar: Array<length > 2> and (Array<length>) 2>; Array{length > 2}<T>(args); Array[length > 2]<T>(args); Do you ever need to use array_instance[length > 2] or not? If we'd use []. Yes you could say after the fact you'd want to enforce a different type: Basically change the type signature. When is that useful?
+// Like if(> 2), allow map(.property), if(.property > 2)
+// Conditional Types are called dependent types in literature.
+// Type equivalence is called definitional equality
+// TODO Equality of objects like class require an additional field for checking the uniqueness of the object, because one otherwise doesn't have access to that. -> So some form of definitional equality is the default say Array(1, 2, 3) / Array(1, 2, 3), I cant tell the difference between the two without some object ID/memory ID.
+// For the theorem prover, you might want to store a specific proof instead of only saving the tactic by which it is solved, needs some effective way of storing and referencing this; probably in a directory outside the current file
+//   -> In the background run some (in)equivalence of functions algorithm to check equivalences automatically if possible.
+//   -> Define things like Array<length > 2> on a variable to change the type.
+// TODO Extends as a method which accesses the caller context? Can then be written on the same line as the definition
+// TODO Changing a functions type parameters to allow another type. method<parameter: Type>, is that useful for anything or just 'dangerous'
+// Program type of Terminating, what else?
+// Define 'return' as a goto?
+// def split(ar: Array<length: 5>): // Array<length < ar.length> TODO: Need to allow use of variables from parameters. What if both the property and variable are named the same?
+//    -> Things like Array<ar.length === 0 ? length = 0 : length < ar.length> ; want to allow arbitrary code blocks for things like if/elseif/ what else?
+// How is something like the proof that after a .push_back(A), .last = A, unless another push_back is used. How do you represent that, and how is it used by the compiler?
+// Char is lean is uint32 paired with a proof that it's a valid code point, allow that too.
+// def array(n: ): Array<length = n>
+// Every entry is > 5 : Array<every(>5), every(<10)> = Array<every(x => 5 < x < 10)>
+// allow 5 < x < 10
+// Nat refers to 0..Infinity, Nat instanceof Ray. Nat instanceof Array but an instance of Nat is a number "There exists ; is just some" def even(n: ) => Nat.some(half => n == double(half)). ; TODO How does this evaluate on the infinite .some ; Nat<every> is different from Array<length> one is referring to an instance the other to the static type Nat. Or dont use Nat<every>
+//   -> You'd want things like Nat{<5}; or types like def method(n: < 5) and def method(n: % 2 == 0) (nested operator still looking for a left value) and def method(n: .even) so you do want to call it on static too. What decides whether it's on instance or static
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match

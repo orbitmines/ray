@@ -303,12 +303,39 @@ def class name <...targs> (...args, &program)
   return this
 end
 
+def Hypergraph
+end
+def Graph
+  extends Hypergraph<Ray<edges.next.every(.value.length <= 1)>> // This needs to be applied to every entry, not on graph
+  // TODO Not Many on edges
+
+  // Somehow extends Hypergraph and also
+  // TODO The change of type to the .next change should be reflected in the effect type of: One of the many's should be dropped.
+  // This type definition is somehow different? All other type definitions change the overlapping graphs defined on .vertex.
+  = Vertex<
+    initial = Many< End < Many<End> = vertex > >
+    vertex
+    terminal = initial
+  >
+end
+def Array
+  extends Graph<Ray<next.length <= 1, previous.length <= 1>> // This needs to be applied to every entry, not on graph
+  // TODO Not Many on terminal
+end
+
+def query(name?, &definition)
+
+end
+
+query Ray
+
+end
 
 def class name <...targs> (...args, &program)
 // is actually
 def class (name, &program)
 // which accepts <...targs> (...args)
-def class(name?, &definition)
+def class(name?, &definition) // : Terminating, is a limiting inheritance on Program.
   caller[name] = local if name //TODO Out of order if generalized to out-of-order block definition
   static = local
 
@@ -714,14 +741,6 @@ end
 //if Just 5..10 = maybe
 //end
 
-do
-end.while()
-
-while()
-
-while maybe == Just a = 5..10
-
-end
 
 // Custom getter/setter
 def Class
@@ -1044,79 +1063,61 @@ def Function
   end
 end
 
+statement if expression
+statement.if(expression)
+
+
+if expression then a else b
+// Ambiguity between the function if(expression, then, a, else, b) and if(expression) then
+
+if(expression).then(a).else(b)
+expression ? a : b
+expression.?(a).:(b)
+def Expression
+  def ?
+    a
+  :
+    b
+  end
+end
+
+def Statement
+  // Defined on statement means it can be used like "statement if ..."
+  def if expression: Expression
+  end
+end
+
+def if
+  def then
+  def elsif
+
+  def else
+end
+
 // TODO How to implement if with branching, or is it a primitive.
 
 
 // TODO Implement while/do while with gotos.
-def while conditional block
+
+//TODO Is i++ < 10 not also a program? Because that would make Expression/Program .while ambiguous, unless you define Expression as "more top-level" than Program, how would you do that?
+true.while
 
 end
-def Comparison // TODO Not just comparison, operations like += in while as well
-  def while block
-    check:
-    if (this) goto end
-
-    block()
-    goto check:
-
-    end:
-    return
-    //TODO How to call the block
-  end
+(i < 10).while
 end
-def Block
-  def while comparison // Implemented on Block, it becomes a do-while loop.
-    return do
-      exec:
-      block(break = goto break) // TODO: How is break implemented: Pass break as a variable
-      check:
-      if (comparison) goto exec
-      break:
-    end
-  end
-  // TODO do end.while() should return another block? That way it can be passed with that control-flow to something else
-
-  def do
-    // Build sequential blocks (default call for sequences of statements)
-  end
-  do = global.do
-
-  // TODO For meta-programming things like line-number and things of blocks being defined. That way a debugger can be made very easily.
+(i++ < 10).while // TODO: Should be accessible as the original expression, and the resulting value.
+end
+variable.while
 end
 
-// TODO; How to implement try/catch with similar passing of variables for control-flow like break.
-
-// Executing a piece of code in between each statement becomes:
-// TODO: How to stop this from recursively calling itself: "Any redefinition of 'do' will use its previous implementation of 'do' within it, to prevent recursive stacks"
-// TODO Before evaluating the programs, do we first look for a definition of do in anything called from top-level? Prefer as little execution as necessary to get that.
-// TODO: Could use a specific keyword for this patch
-Block.do = def do block
-  clock = some_clock_func()
-  ret = super()
-  time_elapsed = clock.time_elapsed()
-  return ret
-end
-
-Block.do = def do
-
-end
-end
 do
-  a
-  b
-  c
-end // is the same as:
-do
-  do
-   a
-  end.do
-   b
-  end.do
-   c
-  end
+end.while()
+
+while()
+
+while maybe == Just a = 5..10
+
 end
-//TODO This isnt the case with contexts like local, and defining vars
-do(local: this) end.do()
 
 do
   break (= goto break)
@@ -1165,6 +1166,59 @@ end.while()
 do
 
 while () // = Calling on .end is the same as this
+
+while (a)
+
+end.while(b)
+do {
+  while(a)
+} while(b)
+
+do a, b, c
+end.while(c) // doesnt automatically get called, and while should return the same program parameters as a,b,c
+
+def Block
+  def do
+    // Build sequential blocks (default call for sequences of statements)
+  end
+  do = global.do
+
+  // TODO For meta-programming things like line-number and things of blocks being defined. That way a debugger can be made very easily.
+end
+
+// TODO; How to implement try/catch with similar passing of variables for control-flow like break.
+
+// Executing a piece of code in between each statement becomes:
+// TODO: How to stop this from recursively calling itself: "Any redefinition of 'do' will use its previous implementation of 'do' within it, to prevent recursive stacks"
+// TODO Before evaluating the programs, do we first look for a definition of do in anything called from top-level? Prefer as little execution as necessary to get that.
+// TODO: Could use a specific keyword for this patch
+Block.do = def do block
+  clock = some_clock_func()
+  ret = super()
+  time_elapsed = clock.time_elapsed()
+  return ret
+end
+
+Block.do = def do
+
+end
+end
+do
+  a
+  b
+  c
+end // is the same as:
+do
+  do
+   a
+  end.do
+   b
+  end.do
+   c
+  end
+end
+//TODO This isnt the case with contexts like local, and defining vars
+do(local: this) end.do()
 
 // In lean the return type given here:
 // def posOrNegThree (s : Sign) :
@@ -1370,6 +1424,17 @@ Object<list1.some(>5)>
 //   -> 0..Infinity{<5} = 0..Infinity.if(<5) = 0..4 = (0..Infinity(4) = 4) ; A range is an Array with a constructor ()
 //   -> Have something like Array.some without parameters return a type | between each entry. def method(a: [1,2,3].some{<=2}) = def method(a: [1,2,3].if(<=2).some) = def method(a: 1 | 2)
 //      -> [1,2,3].some = (1 | 2 | 3) has a constructor which accepts any of the entries like the enums. (1 | 2 | 3)(2) = 2
+// Type of block/program given to the file that's being executed. ; required to terminate for example ; or specify at the top of the file.
+// Terminating program which also has a type signature like () => void
+// TODO ...args listens to both Object & Array, arg1, arg2 = args, and { arg1, arg2 } = args what about do arg1 arg2 end = args
+// Type loop
+// goto labels are also defined out of order.
+// TODO What if one thing refers to something as class and another as def?
+// goto label in an IDE should bring the label back one space.
+// THe moment a "program" hits the "statement" it gets executed, so "return do end" or "a = do end" doesnt execute the block
+//    -> So a function like () => abc gets executed, one with parameters does not.
+// def on Program which doesnt have any parameters. Program<() => void>, Program<(String, optionalLabel: String) => String>
+//   -> More generally you can change the types of methods Program<another_method => String> / Program<method(String) => String>
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match

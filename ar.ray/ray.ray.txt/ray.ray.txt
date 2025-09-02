@@ -4,14 +4,56 @@
 //  def def(): Constructor
 //  local
 //  caller (= local) TODO Or is it nil
+//  TODO Should be the constructor that calls into the program:
 //  constructor (= local) = { name = "<text file name or nil>", definer (= local) } TODO Or is is nil?
 //  definer (= local) TODO Or is it nil
 
 def def name ()
 end
 
-def do(&program) = external[constructor.name]
-def goto(location) = external[constructor.name]
+def Context
+
+end
+
+def do(&program): Program = external
+def goto(location: Label) = external
 
 global = local
 
+//TODO class
+//TODO if
+//TODO Label (has a name & program)
+
+//
+
+def void end
+
+def while expression: Expression &program: () => void
+  return do
+   check:
+    goto done if expression
+
+    program(break = goto done)
+    goto check
+   done:
+    return
+  end
+end
+
+class Expression
+  def while &program = global.while(this, &program)
+end
+
+class Program
+  //TODO def (...args, &program)
+
+  // do end.while() is a do-while loop.
+  def while expression: Expression
+    return do ...args
+     exec:
+      this(break = goto done, ...args)
+
+      goto exec if expression
+    end
+  end
+end

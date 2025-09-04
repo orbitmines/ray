@@ -1448,7 +1448,9 @@ Object<list1.some(>5)>
 // Generic types can extend like this Function<(Args = *) => Return = *> so that Function<(*) => *> can be used. Args and Return are then defined for monkeypatching, even if not defined as such.?
 // A Node has a definition (which is possibly in sequence) => which is the program that generated it. And successive methods called on it for it to become what it did.
 // TODO How do tests and asserts fit into theorem proving?
-// Variables are pointers to .history().last() ; when a normal Node reference doesn't change. A reference to the last Node is done like that.
+// Is this a new primitive operator?: "defines what 'this' is" "dependent object just like type" Variables are pointers to .history().last() ; when a normal Node reference doesn't change. A reference to the last Node is done like that.
+//     -> variable = node; def actual_variable variable.history.last end; def actual_variable=(value) variable.history.push_back(value) end
+//     -> What if Node defines a .history, where is the .history actually being called?
 // Something implementing `*`= and `*`, goes for 'the most specified option' or does `*`(`*`=) return `*`=.
 
 // Types:

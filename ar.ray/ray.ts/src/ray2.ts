@@ -62,6 +62,8 @@ export interface INode {
   //              |-> You'd probably want to define code blocks which aren't defining the object, so { }
 
   //TODO    + Types
+  //           - The .OR relationship may be across multiple Nodes. Say two disconnected branches, which either continue in A or continue in B, not both. And things like if it continues in A, then B continues like this other continuation.
+  //              -> This is for example necessary for two concurrent programs (possibly with shared state) and assuming all possible orders in which the two could be executed.
   //           - .last is implementable as a subgraph type match. (Not sure I will do that though)
   //           - methods: overwrite if the same type overload if not.
   //           - A vertex and a terminal can't both point to the "latest" version of the other: It's a circular dependency. So something needs to say "point to the last variant".

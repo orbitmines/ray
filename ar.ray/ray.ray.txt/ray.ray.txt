@@ -1,5 +1,5 @@
 // Defined by context:
-//  external = { do, goto }
+//  external = { do, goto, *, Node { `*`, `*`= } } // TODO: External should nestedly check local.definer
 //  `arbitrary structure`=
 //  def def(): Constructor
 //  local
@@ -8,27 +8,30 @@
 //  constructor (= local) = { name = "<text file name or nil>", definer (= local) } TODO Or is is nil?
 //  definer (= local) TODO Or is it nil
 
-def def name ()
-end
-
-def Context
-
-end
-
-def do(&program): Program = external
-def goto(location: Label) = external
+def * = external // TODO any type Might not need to be externally defined.
+// TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
+def do<T < Program>(program: T): T = external
+def goto(location: Label) = external //TODO, Hijacks control-flow, which needs to be an option for functions, yielding control to a parameterless 'program' -> or one where the parameters are already filled instead of goto the way of doing it.
 
 global = local
 
 //TODO class
 //TODO if
+//TODO def
 //TODO Label (has a name & program)
 
 //
 
 def void end
 
-def while expression: Expression &program: () => void
+def Node
+  def `*`=(value) = external
+  def `*` = external
+end
+
+//
+
+def while expression: Expression program: () => void
   return do
    check:
     goto done if expression
@@ -41,13 +44,13 @@ def while expression: Expression &program: () => void
 end
 
 class Expression
-  def while &program = global.while(this, &program)
+  def while program = global.while(this, program)
 end
 
-class Program
-  //TODO def (...args, &program)
+class Program // TODO: Program is like Ray, it's a function equipped with an AbstractDirectionality which is the control-flow graph
+  def (*): * = external // TODO: Because Program extends (*) => *, it automatically extends Function.
 
-  // do end.while() is a do-while loop.
+  // do end.while() is a do-while loop. TODO Could also only define it on '() => void'
   def while expression: Expression
     return do ...args
      exec:
@@ -56,4 +59,8 @@ class Program
       goto exec if expression
     end
   end
+end
+
+// A function is a Node for which '(*) => *' is defined.
+def Function<(Args = *) => Return = *> = Node<(Args) => Return>
 end

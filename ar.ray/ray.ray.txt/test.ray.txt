@@ -1452,6 +1452,11 @@ Object<list1.some(>5)>
 //     -> variable = node; def actual_variable variable.history.last end; def actual_variable=(value) variable.history.push_back(value) end
 //     -> What if Node defines a .history, where is the .history actually being called?
 // Something implementing `*`= and `*`, goes for 'the most specified option' or does `*`(`*`=) return `*`=.
+// A function is just a Node with `*` properties defined where `*` is the variable called into the same program. (*) => * or generally (), is just a single property which returns that Node. Node.() => Node[Args]. Functions have (possibly) infinite context
+// Enums are inductive types
+// Higher-inductive types seem really relevant to what I'm trying to do with additional structure on Node, and the defining of a type like Graph.
+// How do you define a Sphere? 2d grid (2d overlapping graphs vs 2-dimensional until the other side of the sphere is reached) with modular unroll?
+// Which is better: Defining .property= functions, vs defining a property with the = func defined. Which means the type nil? Would have a pointer to where it was supposed to be defined, and a .= method callable on it.
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match

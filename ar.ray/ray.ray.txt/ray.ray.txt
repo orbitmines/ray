@@ -11,18 +11,54 @@
 def * = external // TODO any type Might not need to be externally defined.
 // TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
 def do<T < Program>(program: T): T = external
-def goto(location: Label) = external //TODO, Hijacks control-flow, which needs to be an option for functions, yielding control to a parameterless 'program' -> or one where the parameters are already filled instead of goto the way of doing it.
+def goto(location: Program, predicate?: Expression) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless 'program' -> or one where the parameters are already filled instead of goto the way of doing it.
 
 global = local
 
 //TODO class
 //TODO if
 //TODO def
-//TODO Label (has a name & program)
 
 //
 
 def void end
+
+class if expression: Expression, yes?: () => *
+  def (else?: () => *): *
+    goto exec, expression
+
+    return else?()
+   exec:
+    return yes?()
+  end
+
+  // 'then' is defined, so we can have an inline block like: 'if expression then yes else no'
+  def then yes: () => *
+    this.yes = yes
+    return this
+  end
+
+  def elsif expression: Expression, elsif: () => *
+    def (else?: () => *): * = this.else
+      if expression
+        return elsif()
+      else
+        return else?()
+      end
+    end
+
+    def elsif = this.elsif<this = local>
+    def else = this.else<this = local>
+
+    return local
+  end
+
+  def else else: () => *
+    return this<else = else>
+  end
+
+  return this
+end
 
 def Node
   def `*`=(value) = external
@@ -31,7 +67,7 @@ end
 
 //
 
-def while expression: Expression program: () => void
+def while expression: Expression, program: () => void
   return do
    check:
     goto done if expression
@@ -47,6 +83,7 @@ class Expression
   def while program = global.while(this, program)
 end
 
+// TODO Any Function should be a program
 class Program // TODO: Program is like Ray, it's a function equipped with an AbstractDirectionality which is the control-flow graph
   def (*): * = external // TODO: Because Program extends (*) => *, it automatically extends Function.
 

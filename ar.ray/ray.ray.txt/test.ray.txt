@@ -1152,6 +1152,9 @@ def patch_it
   end
 end
 
+// Multiple implementation
+Array.method |= (arg1)
+end
 
 def Array
   if length > 2
@@ -1325,7 +1328,7 @@ Object<list1.some(>5)>
 // Simplest reduce case: (0..9.reduce(|)) is just placing the | decorator on each of the edges. -> Probably an efficiency thing/
 // Theorem proving: assert that all logic operations are available when only nand or nor is provided, or when not, and and or are provided. etc.. and all possible permutations
 //  -> Are these all the minimals: nand, (not, and), nor, (not, or), (and, xnor), (or, xnor), (or, xor), (and, xor)
-
+// Any method (like boolean arithmetic) can be overridden by external.
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match

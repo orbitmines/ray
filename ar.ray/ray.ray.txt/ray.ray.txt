@@ -106,39 +106,46 @@ def Two = Array<length == 2>
 class boolean = false = Two.first | true = Two.last do
   // TODO Verify that these are correct work for all cases.
 
-  not = def ! = external
-  or this !& this
-  or this !| this
-  or this x| true
-  or this x!| false
-  end
+  not =
+    def ! = external
+    or this !& this
+    or this !| this
+    or this x| true
+    or this x!| false
+    end
 
-  and = def & b: boolean = external
-  or !(this !& b)
-  or !(!this | !b)
-  end
+  and =
+    def & b: boolean = external
+    or !(this !& b)
+    or !(!this | !b)
+    end
 
-  or = def | b: boolean = external
-  or !(this !| b)
-  or !(!this & !b)
-  end
+  or =
+    def | b: boolean = external
+    or !(this !| b)
+    or !(!this & !b)
+    end
 
-  nand = def !& b: boolean = external
-  or !(this & b)
-  end
+  nand =
+    def !& b: boolean = external
+    or !(this & b)
+    end
 
-  nor = def !| b: boolean = external
-  or !(this | b)
-  end
+  nor =
+    def !| b: boolean = external
+    or !(this | b)
+    end
 
-  xor = def x| b: boolean = external
-  or !(this x!| b)
-  or (this & !b) | (!this & b)
-  end
+  xor =
+    def x| b: boolean = external
+    or !(this x!| b)
+    or (this & !b) | (!this & b)
+    end
 
-  xnor = def x!| b: boolean = external
-  or !(this x| b)
-  end
+  xnor =
+    def x!| b: boolean = external
+    or !(this x| b)
+    end
 end
 
 def Binary = Array<boolean>

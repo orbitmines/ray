@@ -19,6 +19,7 @@ global = local
 //TODO def
 //TODO Array
 //TODO 0..9.reduce(|)
+//TODO Decimal -> Binary / Binary -> Decimal
 
 //
 

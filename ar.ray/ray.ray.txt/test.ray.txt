@@ -1315,6 +1315,7 @@ Object<list1.some(>5)>
 // Dynamic space as a type how?
 // When using multiple implementations of methods, you want enumerations of possible requirements, so for boolean this could be NAND, NOR, NOT & OR, NOT & AND. etc..
 // TODO Theorem proving that multiple implementations are the same, after a theorem is found -> possibly add to possible implementations
+// TODO Multiple implementations but prefer the one over the other for speed, is that done automatically? deduce which one is faster for which case?
 // Last value is the return value?
 // Should external be allowed to implement any method? Yes.
 // If a method defines =external, and offers other implementations, external is optional.
@@ -1324,6 +1325,7 @@ Object<list1.some(>5)>
 // Simplest reduce case: (0..9.reduce(|)) is just placing the | decorator on each of the edges. -> Probably an efficiency thing/
 // Theorem proving: assert that all logic operations are available when only nand or nor is provided, or when not, and and or are provided. etc.. and all possible permutations
 //  -> Are these all the minimals: nand, (not, and), nor, (not, or), (and, xnor), (or, xnor), (or, xor), (and, xor)
+
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match

@@ -53,9 +53,9 @@ def boolean = false | true do
   // Return of this is ignored. and set to false | true. local.value = false | true
 end
 def boolean
-  value = false | true
+  local = false | true
   // other methods
-  return value
+  return local
 end
 def boolean = false = Two.first | true = Two.last // TODO also def false & def true
 // TODO false =, is within the local context, not in the current one. So reexport is necessary.
@@ -68,16 +68,27 @@ def boolean = false = Two.first | true = Two.last // TODO also def false & def t
 
 // TODO Def array, ray
 
-def Two = Array<length = 2>
-// TODO: Does this assigning to false | true also change Two.first to ref on .value to the Node.
-def boolean = false = Two.first | true = Two.last do
-  def !
-  end
-  def & b
-  end
-  def | b // TODO: Want this top-level defined.
-  end
+// Or like this:
+this.!.or
+return this.nand(this)
 end
+
+
+// TODO: Does this assigning to false | true also change Two.first to ref on .value to the Node.
+// TODO false = Two.first sets false = boolean() and then extends Two.first. A superposition is then just boolean() which already defines all the methods
+//    TODO Partial evaluation can take place even if superpositions are there. For an OR only one true needs to be present for example so everything else can be discarded.
+// TODO    -> Enums with constructors too so Option<T> = Some(T) | None -> Some(T) = Option<T>()
+
+  def () // TODO Generically define this for types like boolean and others, so basically, when evaluated as a program, only then reduce query defs like (true | false) otherwise retain program structure. Probably recursively keep doing that. so call (), then result call () again etc.. until impossible.
+  end
+  // So what if you have a tree like
+  // '(((true | false) | true | true) | false) | false'() => '((true | false) | true | true) | false)' and 'false'
+  // Basically "lazy evaluation", but allow things like 'false | false | true' evaluates to a boolean, but no order is chosen. (Then things like order doesnt matter proof somehow coming into play associative/commutative)
+
+
+
+def Option<T> = Some(T) | None
+Option.Some(5)
 
 def Maybe a = Just a | Nothing
 def Maybe2 a = Just a | Nothing
@@ -87,20 +98,10 @@ def Maybe2 a = Just a, a | Just a | Nothing | Nothing2
 def Enum =
   A a b
   | B c
+// Enum has static properties defined at those names, which find possible constructors which are of that enum type. Since it's a OR | chain of those properties.
 
-// TODO def `METHOD_NAME`= ; Difference between method names, and possible method names like @#$. Want to allow things like @name, @`a-zA-Z0-9_.repeating`
-
-// TODO What if you override the parameter 'local' but want to override the block's parameter local using program(local: this)
-// TODO Disallow use of local in func params? would be weird, let every variable call go to local, also weird. Partially fill it by default? also weird
-// TODO What's a good solution here?
-
-// TODO Pattern matched function names? Called instance_of
-// TODO Is this used for anything other than numbers? You can at least dynamically get the name.
-// TODO This is probably quite useful for meta programming, so instead of defining a loop and calling def in the loop, we
-// TODO    have a single instantiation. -> Or the compiler needs to be aware of that there's a dynamic method def, and don't loop through it all.
-// TODO                                 -> Probably want that anyway.
 def 0-9.repeating
-    return Number([method name]) // TODO: How to get method name; this.name? Or is name to often used by the user this.constructor
+    return Number(constructor.name)
 end
 def `(0..9).repeating`."(0..9).repeating" // TODO: What's a nice syntax for this
   // TODO: Or define decimal as a function on number.c
@@ -114,6 +115,9 @@ def NUMBER // TODO differentiate between NUMBER and variable NUMBER; aka is it a
 end
 def Generics // The pattern "generics" TODO What does this mean
 end
+
+// 0..9 -> some way of saying, successive applications of some other func called |. 0..9.reduce(|) -> TODO How does it work to pass a binary operator to a reduce which has accumulator and current as the two arguments
+// 0..9.repeating = 0..9.reduce(|).repeating
 
 "0..9.repeating" = 2 // Set all variables of that name to 2.
 
@@ -215,14 +219,6 @@ end
 a.def property args
 end
 
-// Different: .name is any of the generated names fitting in the type: 'name'.
-// TODO Definitely have this defined outside the language.
-// This method is defined, and then called by itself?
-// TODO: Need to define that every object and context has this property.
-def Context
-end
-// def Program always has def Context?
-
 def namespace(name, &program)
   caller[name] = local
   // TODO: Unlike method definitions, you want this to be executed directly. How is that indicated?
@@ -236,6 +232,7 @@ def namespace(name, &program)
   return local
 end
 
+// .name on the .constructor
 def def name ()
   // TODO Define def on Context.
   caller[name] = local
@@ -263,25 +260,8 @@ def def name ()
 
   return local
 end
-// A constructor is this + local.constructor is set to `method`.
-def def
-  def `method`
-     ...
-  end
-end
 
-def method(arg, arg, &program)
-end
-// is actually a program which accepts arg, arg, &program as params
 
-// out of order block def
-def some_other_method(&program)
-
-def a
-  return abc if true
-  return eee some_other_method
-  // TODO Differentiate between eee('some_other_method')
-end
 
 // not this
 def class name <...targs> (...args, &program)
@@ -504,9 +484,6 @@ end
 (def method). <T> // Defines on the constructor.
 def Array.method // Defines on Array (on static)
 end
-// TODO How to define on an Array instance which isn't def Array def method
-// def (Array).method // Defines on Array
-//
 
 // TODO What is Array<length > 3><length < 5> --> is it AND, yes it is. Array<3 < length < 5>, Array<length > 3, length < 5>
 // TODO Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>
@@ -517,12 +494,6 @@ class Constructor name targs: Program = []
   end
   def (...args, &program)
     return program(...(this.targs + args)) //TODO This is not it: targs could be conditions on this.
-  end
-end
-def Block
-  def (...args)
-    // TODO; How is the block called, where in the variable &program is the actual program stored? Or this just another primitive
-
   end
 end
 
@@ -739,18 +710,11 @@ def Class
    def property
       return _property
    end
-   def property = value
+   def property= value
      _property = value
    end
 end
 
-METHOD_NAME =
-// as a getter TODO, You want it to precede other implementations, how to do that? So access to the actual implementation.
-def "METHOD_NAME"
-end
-// and setter
-def "METHOD_NAME"=
-end
 
 // TODO Maybe allow for shortening of <...targs> to just ...args,
 def class name <...targs> (...args) &program
@@ -1072,12 +1036,6 @@ def Expression
 end
 
 
-
-// TODO How to implement if with branching, or is it a primitive.
-
-
-// TODO Implement while/do while with gotos.
-
 //TODO Is i++ < 10 not also a program? Because that would make Expression/Program .while ambiguous, unless you define Expression as "more top-level" than Program, how would you do that?
 true.while
 
@@ -1089,36 +1047,9 @@ end
 variable.while
 end
 
-do
-end.while()
+// Expression:
+maybe == Just a = 5..10
 
-while()
-
-while maybe == Just a = 5..10
-
-end
-
-do
-  break (= goto break)
-end.while(a)
-
-// do end Doesn't have break defined, but do end.while(a) does.
-
-// do end.while(a).while(b) = do end.while(a | b)
-do {
-  do {
-    "c"
-    b++
-    a--
-  } while (a)
-while (b)
-
-do
-  exec:
-  block()
-  if (comparison2) goto exec
-  if (comparison) goto exec
-end
 
 // .while on a function
 
@@ -1133,28 +1064,6 @@ end
 (maybe == Just a = 5..10).while
     maybe = Just 5
 end
-
-// top-level while
-while maybe == Just a = 5..10
-end
-
-// .while on a block
-do
-
-end.while()
-do
-
-while () // = Calling on .end is the same as this
-
-while (a)
-
-end.while(b)
-do {
-  while(a)
-} while(b)
-
-do a, b, c
-end.while(c) // doesnt automatically get called, and while should return the same program parameters as a,b,c
 
 def Block
   def do
@@ -1177,27 +1086,6 @@ Block.do = def do block
   time_elapsed = clock.time_elapsed()
   return ret
 end
-
-Block.do = def do
-
-end
-end
-do
-  a
-  b
-  c
-end // is the same as:
-do
-  do
-   a
-  end.do
-   b
-  end.do
-   c
-  end
-end
-//TODO This isnt the case with contexts like local, and defining vars
-do(local: this) end.do()
 
 // In lean the return type given here:
 // def posOrNegThree (s : Sign) :
@@ -1249,6 +1137,21 @@ if predicate
   end
 end
 // TODO want to conditionally and dynamically have some method. Needs to possible reverse the definition/overwritten method if condition is no longer met
+// What happens with this variable dynamically
+def Array<length > 2>
+  var = ++some_other_var // TODO: What is the value of some_other_value after the increment, like this it's after the constructor.
+  if predicate
+
+  end
+end
+// TODO Parallel constructors? or do we have dependence on things defined in 'super'()
+// TODO What if I dynamically patch Array<length > 2>
+def patch_it
+  def global.Array<length > 2>
+    // TODO Anything in the constructor here is called for every instance which currently doesnt have it?
+  end
+end
+
 
 def Array
   if length > 2
@@ -1273,7 +1176,7 @@ Object<list1.disjoint(list2)>
 def Object //TODO What is Object has <T> ; Object<list1.some(>5)> should not set T to that. So change it to {} or something?
   list1: Array
   list2: Array
-  assert list1.disjoint(list2)
+  assert list1.disjoint(list2) // TODO Assert is simply a condition on the type; Assert is part of the type. = Object<list1.disjoint(list2)>
 end
 Object<list1.some(>5)>
 // TODO How to also do this for enums
@@ -1326,6 +1229,7 @@ Object<list1.some(>5)>
 // single line for: remove all trailing '0' from a string; .repeat_while(o => o.pop_last(), o => o.last() == '0') // But better
 // try/catch implemented how?
 // private/public/protected ; local/this is private/protected (public setting of a private field shouldnt overwrite the private one? or how does that work in other languages)
+//   -> Just a flag set on the edge that encodes the name of the property.
 // pass continuation variables to functions, so break, continues in another function throw error too. In the throw case it need to work nested, even to funcs called/defined outside the context
 // If a namespace loads all variables into the current context, what happens with a name clash? Overwrite? Or monkeypatch - certainly not.
 // Array<length = 2> is not assign length to 2? If length is not within the func parameter names. What if it is and it's redefined later
@@ -1372,7 +1276,7 @@ Object<list1.some(>5)>
 // Type loop
 // goto labels are also defined out of order.
 // TODO What if one thing refers to something as class and another as def?
-// goto label in an IDE should bring the label back one space.
+// goto label in an IDE should bring the label back one space. ; if then a type defined instead add it back.
 // THe moment a "program" hits the "statement" it gets executed, so "return do end" or "a = do end" doesnt execute the block
 //    -> So a function like () => abc gets executed, one with parameters does not.
 // def on Program which doesnt have any parameters. Program<() => void>, Program<(String, optionalLabel: String) => String>
@@ -1403,13 +1307,30 @@ Object<list1.some(>5)>
 // Do labels go to the initial before a node, or are they on that node.
 // get method information of parameterless method some other way
 // Setting the current value '= expression' local = ? Uesful when
+// How to translate injecting code in inaccessible functions, like creating an alias for elsif called elseif, you need to inject code inside the elsif function.
+// extends sets the caller.super to that, what if there are multiple extends and there's ambiguity in a method to which parent
+// Array<length > 2 if other_property = 1>
+// Is it useful to define things like Array<length > 2> on the object itself, and how?
+// method names check with instance_of so method name is a type.
+// Dynamic space as a type how?
+// When using multiple implementations of methods, you want enumerations of possible requirements, so for boolean this could be NAND, NOR, NOT & OR, NOT & AND. etc..
+// TODO Theorem proving that multiple implementations are the same, after a theorem is found -> possibly add to possible implementations
+// Last value is the return value?
+// Should external be allowed to implement any method? Yes.
+// If a method defines =external, and offers other implementations, external is optional.
+// TODO Define all boolean operators on any type for Falsity/Truthy values. TODO: How to differentiate | in a type with the | for boolean evaluation
+//   -> When a boolean is evaluation and has a binary operator with a non-boolean value, you would use some implicit cast to boolean.
+// TODO Use theorem-prover to automatically generate all the possible boolean implementations. How?
+// Simplest reduce case: (0..9.reduce(|)) is just placing the | decorator on each of the edges. -> Probably an efficiency thing/
+// Theorem proving: assert that all logic operations are available when only nand or nor is provided, or when not, and and or are provided. etc.. and all possible permutations
+//  -> Are these all the minimals: nand, (not, and), nor, (not, or), (and, xnor), (or, xnor), (or, xor), (and, xor)
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match
 // "this sorting function returns a permutation of its input"
 
 
-// Defined on statement means it can be used like "statement if ..." TODO
+// Defined on statement means it can be used like "statement if ..." TODO (how to generally define this)
 def Statement
   def if expression: Expression
     return global.if expression

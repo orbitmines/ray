@@ -16,12 +16,16 @@ def goto(location: Program, predicate?: Expression) = external //TODO, Hijacks c
 global = local
 
 //TODO class
-//TODO if
 //TODO def
 
 //
 
 def void end
+
+def Node
+  def `*`=(value) = external
+  def `*` = external
+end
 
 class if expression: Expression, yes?: () => *
   def (else?: () => *): *
@@ -59,13 +63,6 @@ class if expression: Expression, yes?: () => *
 
   return this
 end
-
-def Node
-  def `*`=(value) = external
-  def `*` = external
-end
-
-//
 
 def while expression: Expression, program: () => void
   return do

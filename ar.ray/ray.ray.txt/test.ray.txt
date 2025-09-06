@@ -215,15 +215,6 @@ end
 a.def property args
 end
 
-// TODO You want if without a .if to always reflect the upper-level if. Not a this.if? Generalized to?
-// You want if similarly to be a function TODO Do you?
-def if
-end
-// TODO So how does else work?
-if a
-else
-end
-
 // Different: .name is any of the generated names fitting in the type: 'name'.
 // TODO Definitely have this defined outside the language.
 // This method is defined, and then called by itself?
@@ -284,7 +275,6 @@ end
 // is actually a program which accepts arg, arg, &program as params
 
 // out of order block def
-def if(predicate, &program)
 def some_other_method(&program)
 
 def a
@@ -1081,11 +1071,6 @@ def Expression
   end
 end
 
-def Statement
-  // Defined on statement means it can be used like "statement if ..."
-  def if expression: Expression
-  end
-end
 
 
 // TODO How to implement if with branching, or is it a primitive.
@@ -1258,43 +1243,6 @@ def class `name_var` <T, `T`>(a, `a`, &`program`)
 end
 // Accept any input, need some variable set to any: `*` but shouldnt interfere with * methods
 
-// If we expect the runtime to take the if block it would be something like:
-// TODO: Any block/program which is the return value on a statement gets executed. But how?
-// TODO: How is if evaluated here?
-def if predicate &program
-  def elsif predicate &program
-    local.else = else
-    local.elsif = elsif
-
-    return local
-  end
-  def else &program
-
-    return local
-  end
-
-  return local
-
-  // block which is the type of If, which allows .elsif on it
-end
-if a
-elsif
-elsif
-else
-end
-
-// TODO &program should have a sequence of blocks, or more generally a graph. How is a graph translated to .ray.txt?
-def if predicate &program
-  // Would need to have access to the successive blocks from &program
-  // TODO What defines what type of successive blocks are here?
-
-  // Conditional goto the best we can do?
-
-  // program.elsif.elsif.else
-end
-
-
-
 // conditionally add at structure
 if predicate
   def this.conditionally
@@ -1460,3 +1408,12 @@ Object<list1.some(>5)>
 // "this function has different return types, depending on the value of its argument" ; match
 // "this sorting function returns a permutation of its input"
 
+
+// Defined on statement means it can be used like "statement if ..." TODO
+def Statement
+  def if expression: Expression
+    return global.if expression
+      return this()
+    end
+  end
+end

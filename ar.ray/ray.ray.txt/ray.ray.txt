@@ -131,6 +131,7 @@ class boolean = false = Two.first | true = Two.last do
   end
 
   xor = def x| b: boolean = external
+  or !(this x!| b)
   or (this & !b) | (!this & b)
   end
 

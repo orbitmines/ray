@@ -1340,3 +1340,7 @@ def Statement
     end
   end
 end
+
+
+def Integer<number> = //TODO Set value to Array<length>, but how is an instance of integer 'instanceof Integer' Integer
+def `number = Decimal` = Integer(number)

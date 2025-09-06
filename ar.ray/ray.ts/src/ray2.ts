@@ -238,6 +238,8 @@ export interface AbstractDirectionality<TSelf extends AbstractDirectionality<TSe
   path_to: (x: any) => Graph
 }
 
+// Parallel by default if possible, like variables declared on a NOde.
+
 export interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>> {
   // TODO: .NOT (LOOKAHEAD/BEHIND) (+ SUBSTRUCTURE - is achieved by collapsing/expanding) (.not on edges)
   not: () => TSelf
@@ -250,12 +252,6 @@ export interface ConditionalStructure<TSelf extends ConditionalStructure<TSelf>>
 
   // TODO: A-B-C, D-E-F, (bool).if(-B-, -E-).next() = (bool).if(-C-, -F-) -> -C-.OR(-F-)
   if: <True, False>(_true: True, _false?: False) => True extends False ? False extends True ? True : Node : Node
-
-  // TODO, Conditionally add structure, is there some other way of doing this better?
-  // TODO: Include type information like ().length.max().lt(2 ^ 32)
-  // TODO: Sequential order, or parallel by default if there's no dependence.
-  // TODO:  In the interface one could collapse the conditionals down to a single line with some string as summary. (If it's multiline)
-  conditionally: <B>(_if: (self: TSelf) => Node, _true?: (self: TSelf) => B, _false?: (self: TSelf) => B) => B extends TSelf ? TSelf : Node
 
   // /**
   //  * Enumerate instances of some type. TODO When would this be used?

@@ -18,8 +18,8 @@ global = local
 //TODO class
 //TODO def
 //TODO Array
-//TODO 0..9.reduce(|)
-//TODO Decimal -> Binary / Binary -> Decimal
+//TODO 0..9.reduce(|) / '0'..'9'.reduce(|)
+//TODO Decimal -> Binary / Binary -> Decimal & Decimal.String -> Binary
 
 //
 
@@ -103,7 +103,7 @@ def Function<(Args = *) => Return = *> = Node<(Args) => Return>
 end
 
 def Two = Array<length == 2>
-class boolean = false = Two.first | true = Two.last do
+class boolean = false = Two.first~ | true = Two.last~ do
   // TODO Verify that these are correct work for all cases.
 
   not =
@@ -159,10 +159,13 @@ end
 
 def Binary = Array<boolean>
 def Decimal = Array<0..9.reduce(|)>
+  static def String = Array<'0'..'9'.reduce(|)>
+end
 
-def u`_length = Decimal` = Binary<length == _length>
+
+def u`_length = Decimal.String` = Binary<length == _length>
   // TODO Number arithmetic
 end
-def i`_length = Decimal` = Binary<length == _length>
+def i`_length = Decimal.String` = Binary<length == _length>
   // TODO Number arithmetic
 end

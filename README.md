@@ -24,10 +24,10 @@ A simple way of phrasing this, is that the concept of a **_(hyper-/)_'Vertex', _
 - If you prefer **text**, see [<TODO; refer to a new post on the language](), or more generally my/OrbitMines writing can be found here: [orbitmines.com/profiles/fadi-shawki](https://orbitmines.com/profiles/fadi-shawki).
 
 
-- If you prefer **audio-visual mumblings**, see [<TODO; Make a stream to explain the project better](), or more generally my streams can be found here: [youtube.com/@FadiShawki/streams](https://www.youtube.com/@FadiShawki/streams).
+- If you prefer **video**, see [<TODO; Make a stream to explain the project better](), or more generally my streams can be found here: [youtube.com/@FadiShawki/streams](https://www.youtube.com/@FadiShawki/streams).
 
 
-- If you prefer **archaic symbolics: i.e. code**, see [ray.ray.txt](ar.ray/ray.ray.txt/ray.ray.txt), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
+- If you prefer **code**, see [ray.ray.txt](ar.ray/ray.ray.txt/ray.ray.txt), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
 
 
 - If you prefer discussions on **Discord**: [discord.orbitmines.com](https://discord.orbitmines.com).

@@ -232,6 +232,13 @@ def namespace(name, &program)
   return local
 end
 
+def def
+  `*` // then syntax allows for def name being def.name
+def def
+  def `name = *`
+  end
+end
+
 // .name on the .constructor
 def def name ()
   // TODO Define def on Context.
@@ -1329,6 +1336,13 @@ Object<list1.some(>5)>
 // Theorem proving: assert that all logic operations are available when only nand or nor is provided, or when not, and and or are provided. etc.. and all possible permutations
 //  -> Are these all the minimals: nand, (not, and), nor, (not, or), (and, xnor), (or, xnor), (or, xor), (and, xor)
 // Any method (like boolean arithmetic) can be overridden by external.
+// The only difference between a class and a normal def is that static and this are defined.
+// boolean = Two.first needs to put it on the value: .relative_context(); use operator ~ for relative context?
+// spaces only work for same line, static space also works, private works also like this
+// Point(x=1) x=1 shouldn't be overridden by x=0 in the constructor
+// instantiations of a type using something like WaveFunctionCollapse
+// Graph Type need to allow loops at every step, and then an easy way to type for not having loops
+// inverse-1 notation used to go to the reverse direction of a method
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match
@@ -1343,6 +1357,8 @@ def Statement
     end
   end
 end
+// goto .. if as defining if on goto context which has (expression?) as external. So 'end' is optional here since no block is given. This 'if' overwrites the if defined on statement, but how? -> what decides presedence
+// & How to Maybe Hijack depended on the argument expression
 
 
 def Integer<number> = //TODO Set value to Array<length>, but how is an instance of integer 'instanceof Integer' Integer

@@ -174,8 +174,10 @@ class boolean = false = Two.first ~ | true = Two.last~ do
     end
 end
 
-def Binary = Array<boolean>
-def Decimal = Array<0..9.reduce(|)>
+class Binary = Array<boolean>
+  static def String = Array<'0' | '1'>
+end
+class Decimal = Array<0..9.reduce(|)>
   static def String = Array<'0'..'9'.reduce(|)>
 end
 

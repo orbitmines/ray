@@ -15,7 +15,6 @@ def goto(location: Program, predicate?: Expression) = external //TODO, Hijacks c
 
 global = local
 
-//TODO class
 //TODO def
 //TODO Array
 //TODO 0..9.reduce(|) / '0'..'9'.reduce(|)
@@ -25,13 +24,31 @@ global = local
 
 def void end
 
+def class
+  def `name = *`(definition: (Args = *) => *)
+    definer[name] = definition
+    definition.name = name
+
+    def (...args: Args)
+      static = definition
+      this = local
+
+      definition(local: this, ...args)
+
+      return this
+    end
+
+    return definition
+  end
+end
+
 def Node
-  def `*`=(value) = external
+  def `*`=(value) = external //TODO These dont need to be external
   def `*` = external
 end
 
 class if expression: Expression, yes?: () => *
-  def (else?: () => *): *
+  def (else?: () => *)
     goto exec, expression
 
     return else?()
@@ -46,7 +63,7 @@ class if expression: Expression, yes?: () => *
   end
 
   def elsif expression: Expression, elsif: () => *
-    def (else?: () => *): * = this.else
+    def (else?: () => *) = this.else
       if expression
         return elsif()
       else
@@ -103,7 +120,7 @@ def Function<(Args = *) => Return = *> = Node<(Args) => Return>
 end
 
 def Two = Array<length == 2>
-class boolean = false = Two.first~ | true = Two.last~ do
+class boolean = false = Two.first ~ | true = Two.last~ do
   // TODO Verify that these are correct work for all cases.
 
   not =

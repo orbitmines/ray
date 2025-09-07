@@ -198,15 +198,7 @@ a<3: c, 5: e>(1 2 4)
 //          -> Use <> ; Is this a problem, or should we use something special for partially filling a function. That's probably a better option.
 a|3: c, 5: e|
 
-// TODO LIke TypeScript, allow an arbitrary getter/setter to return a specific type, which we define without defining method bodies
 
-// Something like a def for def. Which is just .property =
-// TODO someway to say: This function is automatically added to every context. Some default object or something.
-//      -> Same with =, static, this etc..
-// TODO This circularly defines itself, how to support that?
-def def name ...args
-    [].name = args
-end // TODO Maybe dont allow def like this. Complicates things like shifting around the order of func/variable definitions.
 // You want something like undefined, if = is called on .undefined, it defines the property. That way we can have:
 // No dont define it on undefined, just have it as default behavior
 def = args
@@ -233,52 +225,10 @@ def namespace(name, &program)
 end
 
 def def
-  `*` // then syntax allows for def name being def.name
-def def
-  def `name = *`
-  end
-end
-
-// .name on the .constructor
-def def name ()
-  // TODO Define def on Context.
-  caller[name] = local
-  local.name = name
-
-  // TODO: Uses def again before it's defined
-  def <...targs>
-   // TODO Method to partially fill arguments
-  end
-  def (...args, &program) // Separate <> and () complete
-    //TODO Typecheck args vs args2, targs vs targs2
-    //TODO: args might contain a &program block too, typecheck that to &program2
-    //TODO -> Typechecking a code block -> Specific kind of control-flow/program. So you could say: Only code blocks which aren't turing complete.
-    //        This is actually a really important feature.
-
-    // TODO If already exists monkeypatching.
-    caller[name] = <...targs>(...args2, &program2)
-      program(args2, &program2)
-    end
-    // TODO __call__ method
-
-    // TODO: Only when the body and such is given, is caller[name] set?
-    // It's not directly executed, but stored as a Definition: return program<...targs>(...args)
-  end
-
-  return local
+  def `*`(definition: (*) => *) = external
 end
 
 
-
-// not this
-def class name <...targs> (...args, &program)
-  static = local.constructor
-  this = local
-
-  program(local: this)
-
-  return this
-end
 
 def Hypergraph
 end
@@ -308,41 +258,6 @@ query Ray
 
 end
 
-def class name <...targs> (...args, &program)
-// is actually
-def class (name, &program)
-// which accepts <...targs> (...args)
-def class(name?, &definition) // : Terminating, is a limiting inheritance on Program.
-  caller[name] = local if name //TODO Out of order if generalized to out-of-order block definition
-  static = local
-
-  def <...targs>
-    // TODO copy(targs = targs)
-  end
-  def (...args, &program)
-    this = local
-
-    // TODO Typechecking definition.targs with targs etc.. needs to be defined for 'def' as well.
-    definition<...targs>(local: this, ...args, &program)
-
-    return this
-  end
-
-  return static
-end
-
-def method(arg1, arg2, &program)
-end
-method(arg1, arg2) <T>(arg3)
-end
-
-// TODO There's an ambiguity between method(arg1)<T> defining a block, or calling the <..t> method.
-// Resolve this ambiguity by saying if () are used at the start it call the <> method. So:
-class(arg1)<T>() // calls <T>, arg1 is a variable reference
-class arg1<T>() // defines Block, arg1 is a name
-end
-class arg1 // TODO Ambiguity whether its a variable reference or a name.
-class()
 
 for i
 end
@@ -379,101 +294,7 @@ def `any`= <...targs>
 end
 
 
-def abc <...targs> (...args, &program) // Program B
-  // Program A
-end
-def def name
-  def <...targs> (...args, &program) // Program A
-  end
-end
-
-def AnotherObject
-  def <...targs> (...args, &program)
-  end
-end
-
-instance = AnotherObject()
-instance<targs>(args)
-
-end
-
-// Creating a method
-def method <...targs> (...args, &program)
-// Is actually
-def('method')<...targs>(...args, &program)
-
-// Creating a constructor
-def class name <...targs> (...args, &program)
-// Is actually
-
-def class
-  def `method`
-    def <...targs>
-    end
-    def <...targs>(...args, &program)
-
-    end
-
-    return local
-  end
-end
-class()[name]<...targs>(...args, &program)
-
-// So def is
-def def name ()
-end
-// Which is
-def def
-  def `method`
-    ...
-  end
-end
-def()[name]<...targs>(...args, &program)
-
-class AnotherObject
-  def `method`
-  end
-end
-
-AnotherObject()[method]
-AnotherObject method <T> (5) do
-end
-
-def method
-end
-
-AnotherObject method nestedConstructor <T>(5)
-AnotherObject method <T>(5) anotherNestedConstructor <5>()
-end
-
-myCustomConstructor = AnotherObject method <T>(5)
-myCustomConstructor a <5>(method)
-end
-
-AnotherObject method
-// is short for
-AnotherObject().method
-
-def method
-def().method
-
-def AnotherObject
-  def `method`
-    def <...targs>
-    end
-    def (...args)
-      def `method`
-        def <...targs>
-        end
-      end
-
-      return local
-    end
-  end
-end
-
 ' Like this we can construct valid syntax as a simple sentence without punctuation and such
-Like().this().we().can().construct().valid().syntax().as().a().simple().sentence().without().punctuation().and().such()
 
 def Point
   def x = 0
@@ -504,9 +325,6 @@ class Constructor name targs: Program = []
   end
 end
 
-def class name
-  def
-end
 
 // TODO: "Defining a constructor"
 // TODO: Using a name <...targs> (...args) uses .def under the hood for that .name
@@ -723,12 +541,6 @@ def Class
 end
 
 
-// TODO Maybe allow for shortening of <...targs> to just ...args,
-def class name <...targs> (...args) &program
-end
-// TODO: If a named constructor, it's order is ignored. So it's not deemed to be a func call like normal.
-
-def class name <...targs> (...args, &program) //TODO Program with args?
 
   def data name (&program)
 
@@ -771,24 +583,8 @@ def class name <...targs> (...args, &program) //TODO Program with args?
   // The difference between def or not def in front of func4 is whether a new context is created for the one-line func.
 
 
-  // TODO: Name is a program/type, tied to a specific context. The "name" here is tied to this conte
-  // TODO: Name is the constructor's name.
-  // TODO: How to differentiate this from a string "". Use ``.
   // TODO: class.methods / needs to be the same as program.methods
 
-  // <...targs> implicit in ...args?
-  def `name` (...args)
-  end
-
-  def `name` <...targs> (...args) do
-    // TODO ~.[parent context]
-
-    // TODO local is a Ray? That would mean first/last etc. are top-level as well?
-
-    static = local.constructor
-    this = local // Something different than *, you want *5 to be functions. Or differentiate it from *.5 but probably not
-    // ~ is used to enter a programming context window, do I want to use it for this too? Would that cause problems?
-    // Makes sense somewhere: ~ is enter existing programming context, and it represents the current context.
 
     // TODO Inline block =>? vs a var -declaration: a = t => t
 
@@ -812,10 +608,6 @@ def class name <...targs> (...args, &program) //TODO Program with args?
     end
     program.methods.for method =>
 
-    program~() // Should run the program within this context?
-    program(local: this) //TODO: If compiler sees it can be inlined because local: is set to local. Possibly inline it.
-    return this;
-  end
 
   // 'program' gets a 'static' variable
   // Every method defined in 'program' gets assigned a 'this' variable
@@ -1123,16 +915,7 @@ def Array
 end
 
 
-// Arbitrary structured names
-def structure = Array<length = 2> // some arbitrary structure
-def `structure`
-  5
-  def method
-  end
-end
-// How to "get" the `structure`.
-`structure` = 6 // `structure`= is not as unambiguous as a string, it could be connected to arbitrary terminals? Or is it simply a collapsed arbitrary structure connected to the = token.
-`structure`.method
+
 //TODO Parameters which are a specific structure
 def class `name_var` <T, `T`>(a, `a`, &`program`)
 end
@@ -1343,6 +1126,9 @@ Object<list1.some(>5)>
 // instantiations of a type using something like WaveFunctionCollapse
 // Graph Type need to allow loops at every step, and then an easy way to type for not having loops
 // inverse-1 notation used to go to the reverse direction of a method
+// The statement of terminating is basically saying: all loops are eventually escaped from.
+// Taking the 'if' definition as an example, the type that gets returned needs to be a dependent type based on 'expression', then either 'yes => Return' or 'else => Return' needs to be implied.
+// TODO: Patch separate, so you dont have to call class/def separately
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match
@@ -1363,3 +1149,7 @@ end
 
 def Integer<number> = //TODO Set value to Array<length>, but how is an instance of integer 'instanceof Integer' Integer
 def `number = Decimal` = Integer(number)
+
+// Array<Array>, Array<Array>
+// args = [], []
+// definition(args) | definition(arg1 arg2)

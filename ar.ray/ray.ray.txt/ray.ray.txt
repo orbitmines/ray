@@ -10,8 +10,9 @@
 
 def * = external // TODO any type Might not need to be externally defined. self-referential hypergraph-like structure
 // TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
-def do<T < Program>(program: T): T = external
+def do<T < Program>(program: T) => T = external
 def goto(location: Program, predicate?: Expression) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless 'program' -> or one where the parameters are already filled instead of goto the way of doing it.
+def [args: Array<T>] => Array<T> = external
 
 global = local
 
@@ -42,9 +43,11 @@ def class
   end
 end
 
-def Node
+class Node
   def `*`=(value) = external //TODO These dont need to be external
   def `*` = external
+
+  def [] = Array<this>
 end
 
 class if expression: Expression, yes?: () => *
@@ -119,8 +122,11 @@ end
 def Function<(Args = *) => Return = *> = Node<(Args) => Return>
 end
 
+def Option<T> = Some(T) | None
+{ Some, None } = Option
+
 def Two = Array<length == 2>
-class boolean = false = Two.first ~ | true = Two.last~ do
+class boolean = false = Two.first~ | true = Two.last~ do
   // TODO Verify that these are correct work for all cases.
 
   not =
@@ -173,18 +179,37 @@ class boolean = false = Two.first ~ | true = Two.last~ do
     or !(this x| b)
     end
 end
+{ false, true } = boolean
 
-class Binary = Array<boolean>
+
+class Binary = boolean[]
   static def String = Array<'0' | '1'>
 end
-class Decimal = Array<0..9.reduce(|)>
-  static def String = Array<'0'..'9'.reduce(|)>
+class Decimal = sign = '-'?, integer = Decimal.Positive
+  static class Positive = Array<0..9.reduce(|)>
+    static def String = Array<'0'..'9'.reduce(|)>
+
+    def `fraction = Decimal.Positive.String` => Decimal.Real.Positive = sign, integer, '.', fraction
+  end
+
+  static class Real = sign = '-'?, Decimal.Real.Positive // TODO: should be possible to define out of order, and access integer/fraction methods ; It should be seen as a partial 'extends'
+    static class Positive = integer = Decimal.Positive, '.', fraction = Decimal.Positive
+    end
+  end
 end
 
+def `digits = Decimal.Positive.String` => Decimal
+  // TODO: First wait on a definite way of defining the graphs.
 
-def u`_length = Decimal.String` = Binary<length == _length>
+  def mapping
+    0 = |,_,_,_,_,_,_,_,_
+    1 = -,|,-,-,-,-,-,-,-
+    // TODO Define the graph of a number, without having access to a number to construct it.
+  end
+end
+def u`length = Decimal.Positive.String` = Binary<.length == length>
   // TODO Number arithmetic
 end
-def i`_length = Decimal.String` = Binary<length == _length>
+def i`length = Decimal.Positive.String` = Binary<.length == length>
   // TODO Number arithmetic
 end

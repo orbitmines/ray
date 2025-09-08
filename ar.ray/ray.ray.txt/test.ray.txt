@@ -1,112 +1,41 @@
-// Maybe allow one to define syntax dynamically. (Would be awful for language versioning though, if I introduce something which clashes with other syntax)
+// How to populate Arrays/graphs by default
 
-//def Nothing
-//end
+// What's the graph interpretation of an inductive type like 'def Option<T> = Some(T) | None'
 
-def AMethod
-  variable = 5
+// Convert Binary.String -> Binary, youd want an implicit cast, but also already have all Binary methods on Binary.String ; Like "a coerced inheritance"
+// Calling a method which accepts a boolean, with the boolean type: Abstract interpretation natively supported.
+//   -> The result should be refinable, "now I know it's true, so what's the result".
+//   -> Partial evaluation, leads to external values being abstractly interpreted as well.
+//     -> I should be able to later say, similarly, that the result is now refined to 'true', any effects caused should be reset back.
 
-  def method
-  end
-end
+// Partially evaluating the boolean OR operation even when superpositions are present, should be possible if there's a single 'true' amongst them.
+//   -> How do we know/use a proof that a single true is enough, to discard the superpositions.
 
-// Options for generics
-def Generics (T) (args)
-  variable = args.5
-end
-def Generics T
-   def constructor args
-      variable = args.5
-   end
-end
+// Does every type like 'boolean' automatically include all the methods defined on it. So boolean.nor is the superposed method, which can later be called with a new 'this' value, how is that intuitively done?
 
-Generics = <T> (args)
-end
+// How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local'
+
+// TODO - Notes on Runtime
+// Take the example of Decimal.String which should be defined first, then `Decimal.String`, then Decimal. can be defined.
+// Lazy evaluation, keep structures like 'false | true | true' around without deciding execution order. ; Associativity proof is somehow relevent here, how does the runtime know about it?
 
 // TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
 // Single-line function
 def Maybe a = Just a | Nothing
-def Maybe(a) = Just a | Nothing
+ef Maybe(a) = Just a | Nothing
 def Maybe(a)
   return Just a | Nothing
 end
 
-def Two = Array<length = 2>
-// TODO Things like Array<length.max() = 2> should be allowed, or Array<length.max() >= 5> or default the .max() if a comparison happens, how? Array<length > 5>, Also want to allow use of multiple variables like Array<length > var2>
-def Two = _, _ // Generic way of in-sequence def
-def false = Two[0]
-def true = Two[1]
-def Bit = Boolean = false | true
-def Boolean = Bit = false | true // TODO Allow
-def BinaryString = Array<Boolean>
+//TODO Is None instanceof void?
 
-def boolean = false | true do
-  // Allow definitions like false | true, as the program on the vertex.value.
-  // Additionally define methods vertex.[]
-end
-
-def boolean = false | true
-def boolean
-  return false | true
-end
-def boolean = false | true do
-  // Return of this is ignored. and set to false | true. local.value = false | true
-end
-def boolean
-  local = false | true
-  // other methods
-  return local
-end
-def boolean = false = Two.first | true = Two.last // TODO also def false & def true
-// TODO false =, is within the local context, not in the current one. So reexport is necessary.
-// Difference between false: boolean (false is type boolean), and other types you might give it.
-// Like rust enum & lean inductive type, allow parameters ; Is this again definable as structure on a def. => On static.
-//   -> Parameter is just an expected variable
-
-// TODO No, it's not methods defined on the class boolean with value = false | true, we want any instantiation of the type boolean
-// TODO "On any instantiation" and "on the type" and on "subgraphs of the type: 1 | 2 | 3, but only 1 | 2"
-
-// TODO Def array, ray
-
-// Or like this:
-this.!.or
-return this.nand(this)
-end
-
+// Array<length.max() >= 5> or default the .max() if a comparison happens, how?
 
 // TODO: Does this assigning to false | true also change Two.first to ref on .value to the Node.
-// TODO false = Two.first sets false = boolean() and then extends Two.first. A superposition is then just boolean() which already defines all the methods
-//    TODO Partial evaluation can take place even if superpositions are there. For an OR only one true needs to be present for example so everything else can be discarded.
-// TODO    -> Enums with constructors too so Option<T> = Some(T) | None -> Some(T) = Option<T>()
 
   def () // TODO Generically define this for types like boolean and others, so basically, when evaluated as a program, only then reduce query defs like (true | false) otherwise retain program structure. Probably recursively keep doing that. so call (), then result call () again etc.. until impossible.
   end
-  // So what if you have a tree like
-  // '(((true | false) | true | true) | false) | false'() => '((true | false) | true | true) | false)' and 'false'
-  // Basically "lazy evaluation", but allow things like 'false | false | true' evaluates to a boolean, but no order is chosen. (Then things like order doesnt matter proof somehow coming into play associative/commutative)
 
-
-
-def Option<T> = Some(T) | None
-Option.Some(5)
-
-def Maybe a = Just a | Nothing
-def Maybe2 a = Just a | Nothing
-def Maybe2 a = Just a, a | Just a | Nothing | Nothing2
-// TODO Difference between the two Just's and Nothing's or not? If defined in same context, same, otherwise not?
-// TODO What about enums like rust
-def Enum =
-  A a b
-  | B c
-// Enum has static properties defined at those names, which find possible constructors which are of that enum type. Since it's a OR | chain of those properties.
-
-def 0-9.repeating
-    return Number(constructor.name)
-end
-def `(0..9).repeating`."(0..9).repeating" // TODO: What's a nice syntax for this
-  // TODO: Or define decimal as a function on number.c
-end
-// 0..9.repeating = 0..(9.repeating) // TODO Not this for range operator
 // x+y x+y.func you want it to be (x+y).func
 // TODO So you want to be able to use variables within a function's name.
 def NUMBER.repeating // TODO How to differentiate between NUMBER.repeating (arbitrary name) and the function.

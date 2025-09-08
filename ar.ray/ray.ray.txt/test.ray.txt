@@ -7,6 +7,7 @@
 //   -> The result should be refinable, "now I know it's true, so what's the result".
 //   -> Partial evaluation, leads to external values being abstractly interpreted as well.
 //     -> I should be able to later say, similarly, that the result is now refined to 'true', any effects caused should be reset back.
+//   -> So .OR possibilities need to carry with it information of why and how to possibly change them
 
 // Partially evaluating the boolean OR operation even when superpositions are present, should be possible if there's a single 'true' amongst them.
 //   -> How do we know/use a proof that a single true is enough, to discard the superpositions.
@@ -15,9 +16,44 @@
 
 // How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local'
 
+// .reduce(|) TODO How does it work to pass a binary operator to a reduce which has accumulator and current as the two arguments
+
+// node > itself or node < itself, we're in a loop (or repeated value which we're forced to see as the same, or we're not comparing using the difference we have access to - this 'number'line)
+
+// TODO - Ambiguities
+// var? vs var ? true : false ; how to know if we need to convert var to a boolean or pass it to option.
+// .extends vs a check if it does extend
+  // TODO Ambiguity if we use '<', because if I check 5 < 3, it's not 5 extends 3. Is there ever any time you'd need to use extends over <?. Yes a Type Ray which extends some other Ray, so it would be Ray < Ray,
+  // What even does Ray extends Ray mean, what happens to all the structure?
+
+
+// TODO - Notes for Examples
+// Partially extending like Decimal/Decimal.Positive, Every Decimal.Positive is a Decimal, since sign is Option
+
+def a 1 2 3 4 5
+a<3: c>(1 2 4 5)
+a<3: c, 5: e>(1 2 4)
+
+(def method). <T> // Defines on the constructor.
+def Array.method // Defines on Array (on static)
+end
+
+// TODO - Examples + Allowances
+// Allow chaining of binary operators like Array<3 < length < 5>
+// Allow chaining of conditionals with .AND -> Array<length > 3><length < 5>
+// Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>
+
+
+// TODO - Notes on Grammar
+// x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
+
 // TODO - Notes on Runtime
 // Take the example of Decimal.String which should be defined first, then `Decimal.String`, then Decimal. can be defined.
 // Lazy evaluation, keep structures like 'false | true | true' around without deciding execution order. ; Associativity proof is somehow relevent here, how does the runtime know about it?
+
+
+
+
 
 // TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
 // Single-line function
@@ -36,122 +72,50 @@ end
   def () // TODO Generically define this for types like boolean and others, so basically, when evaluated as a program, only then reduce query defs like (true | false) otherwise retain program structure. Probably recursively keep doing that. so call (), then result call () again etc.. until impossible.
   end
 
-// x+y x+y.func you want it to be (x+y).func
-// TODO So you want to be able to use variables within a function's name.
-def NUMBER.repeating // TODO How to differentiate between NUMBER.repeating (arbitrary name) and the function.
-end
-def NUMBER // TODO differentiate between NUMBER and variable NUMBER; aka is it an overwrite of the variable or the thing itself
-end
-def Generics // The pattern "generics" TODO What does this mean
-end
+class Program // TODO: Program is like Ray, it's a function equipped with an AbstractDirectionality which is the control-flow graph
+// .previous is undo the last operation, .next is program execution.
+// If not used, replace 'Program' with function.
 
-// 0..9 -> some way of saying, successive applications of some other func called |. 0..9.reduce(|) -> TODO How does it work to pass a binary operator to a reduce which has accumulator and current as the two arguments
-// 0..9.repeating = 0..9.reduce(|).repeating
 
-"0..9.repeating" = 2 // Set all variables of that name to 2.
+(0, 1) != [0, 1] //TODO (0, 1) is .push_back, which is relevant for types.
 
+// what about 0..10..20 // Goes to 20 through 10, relevant for graph
+
+
+
+
+// Any ray has the range operator.
 0..10.for i
 end
 (0..10).for i
 end
 0..(9 + 1).for i
 end
-// what about 0..10..20
+0..10.for a b
+  // TODO If two arguments are passed, we step with 2 and fill both?
+end
 
+// Range operator is always binary, because we can have '0..' and '..10', and thus always same type to same type? -> That doesn't need to be the case though. Allow 'this' as a type. So this | <custom type>, not including 'this' disregards that as an option?; it's actually b = this if a = undefined.
+def x: Option<this> .. y: x == None ? this : <custom, type>
+end
 
 // Allow binary operators defined outside the classes?
 def x: Number .. y: Number
 end
-Number.def ..(y)
-end
-Number.def .. y
-end
-def Number
-  def .. y
-  end
-end
 
-a.5
-a[5]
-a<5>
-a(5)
-// Are all these somehow the same?
-a.5 a[5] are
-a<5> a(5) are
-// Are these two subgroups the same? (I believe I asked this question before in the Ruby writer project back in 2017)
-a(5) is saying getting property 5 has some result.
 // Complicated structures like a(3, 5) is simply a[arbitrary structure]
 // TODO But what if we have static things defined on the function, or fields on the function
-// a.property = 1
-// a(5)
-// you dont want a("property") to be 1.
-// TODO
-// a[5] is a on the vertex, and 5 being the property going through it. -> name
-// a(5) is 5 on the vertex, and a being the property going through it. ->
 // a(5) = 5[a] (= 5.a if a is a variable)
 // a[5] = 5(a)
-def Number
-  def plus y
-  end
-end
-
-x.plus(y) = y[x.plus]
-x.rotate(y, z) = (y, z)[x.rotate]
-
-def !
-end
-!x = !(x) = x[!]
-
-y + 1 = y.+(1) = 1[y.+]
-+y = plus(y) = y[plus] = y[+]
-
-x = 1
-this.x = 1
-this["x"] = 1
 "x"(this) = 1 // "Get the variable called x at (arg)" -> So "x" would be "All places where the variable x is defined"
 // TODO Would you ever need to access this, or is it just an interesting semantic connection?
 
 
-// Partially filling in arguments of a function.
-def a arg1 arg2
-end
-const c = a(arg2: b)
-c(d) // <-- uses arg1
-def a 1 2 3 4 5
-  // TODO How to allow variables the names of numbers, while still declaring numbers normally?
-  //        -> It's just a different context, so something like global.5 is a number object.
-end
-a<3: c>(1 2 4 5)
-a<3: c, 5: e>(1 2 4)
-// TODO: What if another argument is added, then all the functions normally called, do as if they need to be called again.
-//          -> Use <> ; Is this a problem, or should we use something special for partially filling a function. That's probably a better option.
-a|3: c, 5: e|
-
-
-// You want something like undefined, if = is called on .undefined, it defines the property. That way we can have:
-// No dont define it on undefined, just have it as default behavior
-def = args
-end
-// a.property is now undefined
-a.property = args
-end
-// a.property called undefined.=(args)
-// which is the same as doing.
-a.def property args
-end
-
-def namespace(name, &program)
-  caller[name] = local
-  // TODO: Unlike method definitions, you want this to be executed directly. How is that indicated?
 
   def <...targs>
     // TODO Dynamic namespaces, if there exists a dependency on the args execute again for the type namespace vs the untyped one.
   end
 
-  program(local: local)
-
-  return local
-end
 
 def def
   def `*`(definition: (*) => *) = external
@@ -179,121 +143,26 @@ def Array
   // TODO Not Many on terminal
 end
 
-def query(name?, &definition)
-
-end
-
-query Ray
-
-end
-
-
-for i
-end
-// =
-for() <>(i)
-end
-
-def method(arg1, &program)
-end
-method arg1 <T>(arg2)
-end
-class arg1<T>(arg2)
-end
-// Constructors can have multiple arguments
-class arg1, arg2 <T>(arg3)
-end
-
-//TODO Defining the = method
-//TODO Circularity in caller[name] = local and this one.
-def `any`= <...targs>(...args, &program)
-  caller.def `local.constructor.name` <...targs>(...args, &program)
-  // TODO Does caller.def change the 'caller' in def? Saying that . is a shortcut for def caller def `..` which it is.
-end
-abc = '' // caller = local
-abc.eee = '' // caller = local
-// Might want to differentiate between caller of the method and this "called on"
-def abc
-  eee = '' // In this case it would be "caller = abc"
-end
-
-// What about
-def `any`= <...targs>
-  caller.def `local.constructor.name`
-end
-
+// Query by default
 
 ' Like this we can construct valid syntax as a simple sentence without punctuation and such
 
-def Point
-  def x = 0
-  def y = 0
-end
 
-Point x
-(Point x) == 0
-Point(1, 2) x  = Point(1, 2)().x
+// & for every object; this.targs & targs
 
-def Constructor
+// When to allow {}
 
-end
+// TODO Variables which are not allowed to change? Often used for generics too?
 
-(def method). <T> // Defines on the constructor.
-def Array.method // Defines on Array (on static)
-end
+// Something like Nat defines +1 func, then on type static type calling Nat.+1 => Should again return Nat, because nothing changed even if superposed
 
-// TODO What is Array<length > 3><length < 5> --> is it AND, yes it is. Array<3 < length < 5>, Array<length > 3, length < 5>
-// TODO Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>
-
-class Constructor name targs: Program = []
-  def <...targs>: Constructor
-    return Constructor(name, this.targs & targs)
-  end
-  def (...args, &program)
-    return program(...(this.targs + args)) //TODO This is not it: targs could be conditions on this.
-  end
-end
-
-
-// TODO: "Defining a constructor"
-// TODO: Using a name <...targs> (...args) uses .def under the hood for that .name
-
-def Generics (T = Default) args
-   // Normal stuff here is like a static {} block
-   // This is not true if args is on top like this. Need some way to allow for both.
-   //   -> No not necessary, if it doesn't use args it's static.
-   //   -> Similarly, .args if used anywhere in the "class", it's stored as the variable .args
-   //      -> This way you also dont have these useless constructors which are only this.var = var
-   //   -> Similarly, generics like .T are stored in a variable. Can it be changed? Yes?
-   //   -> a<5> if a has more parameters, returns a function with one parameter filled in.
-   variable = args.5
-
-   // define subclasses
-   static.Subclass <T>
-   end
-   static.def Subclass <T> // <-- generic overrides the context of Generics
-   end
-   // Allow Generics<T>.Subclass
-   // What if we dont know T? Allow Generics.Subclass
-   // What if T has a default and we want to match any. Use something like?? Generics<Unknown>.Subclass
+// What if we dont know T? Allow Generics.Subclass (How to fill it afterwards then?) Should this be?
    //  -> So we allow to access variables of a function without the function being fully initialized.
    //  -> How to determine what can be accessed? Statically accessible variables, but also when not depended on args.
    //  -> But we also want access to variables if we can access them at runtime. TODO
 
-   // So stuff like this
-   for a in b
-     args. // uses .args so included
-   end
-   b.for a do
-     args.
-   end
-   // TODO Not the for(int i) stuff like other languages but stuff like.
-   // 0.add(+1) gives you a ray which has a +1 direction selected.
-   // Something like a 0.next(x => x + 1), or some other way of doing this easily.
    // 0.fn(+1), 0.ray(+1): "Equip 0 with a +1 ray"
    // .ray(+1) equips .previous() with !+1 which is -1
-   // TODO Allow unary functions like +1, for closures which acts as a binary with the same name x+y -> How to do that
-   // TODO .if acts as a .filter
    0.ray(+1).if(x => x < 10).for i
 
    end

@@ -11,19 +11,30 @@
 def * = external // TODO any type Might not need to be externally defined. self-referential hypergraph-like structure
 // TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
 def do<T < Program>(program: T) => T = external
-def goto(location: Program, predicate?: Expression) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless 'program' -> or one where the parameters are already filled instead of goto the way of doing it.
+def goto(location: Program, predicate?: Expression) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless "program" -> or one where the parameters are already filled instead of goto the way of doing it.
 def [args: Array<T>] => Array<T> = external
 
 global = local
 
 //TODO def
 //TODO Array
-//TODO 0..9.reduce(|) / '0'..'9'.reduce(|)
+//TODO 0..9.reduce(|) / "0".."9".reduce(|)
 //TODO Decimal -> Binary / Binary -> Decimal & Decimal.String -> Binary
 
 //
 
 def void end
+
+def namespace
+  def `name = *`(definition: () => *)
+    definer[name] = local
+    name
+
+    definition(local = local)
+
+    return local
+  end
+end
 
 def class
   def `name = *`(definition: (Args = *) => *)
@@ -34,7 +45,7 @@ def class
       static = definition
       this = local
 
-      definition(local: this, ...args)
+      definition(local = this, ...args)
 
       return this
     end
@@ -48,6 +59,15 @@ class Node
   def `*` = external
 
   def [] = Array<this>
+  def ? = Some(this) // TODO Perhaps None if None, or void or ?
+end
+
+def Iterable
+  for callback: (Args = *) => *
+    //TODO
+  end
+end
+def AbstractDirectionality < Iterable
 end
 
 class if expression: Expression, yes?: () => *
@@ -59,7 +79,7 @@ class if expression: Expression, yes?: () => *
     return yes?()
   end
 
-  // 'then' is defined, so we can have an inline block like: 'if expression then yes else no'
+  // "then" is defined, so we can have an inline block like: "if expression then yes else no"
   def then yes: () => *
     this.yes = yes
     return this
@@ -103,11 +123,10 @@ class Expression
   def while program = global.while(this, program)
 end
 
-// TODO Any Function should be a program
-class Program // TODO: Program is like Ray, it's a function equipped with an AbstractDirectionality which is the control-flow graph
-  def (*): * = external // TODO: Because Program extends (*) => *, it automatically extends Function.
+// A function is a Node for which "(*) => *" is defined.
+def Function<(Args = *) => Return = *> = Node<(Args) => Return>
 
-  // do end.while() is a do-while loop. TODO Could also only define it on '() => void'
+  // do end.while() is a do-while loop. TODO Could also only define it on "() => void"
   def while expression: Expression
     return do ...args
      exec:
@@ -116,10 +135,6 @@ class Program // TODO: Program is like Ray, it's a function equipped with an Abs
       goto exec if expression
     end
   end
-end
-
-// A function is a Node for which '(*) => *' is defined.
-def Function<(Args = *) => Return = *> = Node<(Args) => Return>
 end
 
 def Option<T> = Some(T) | None
@@ -153,7 +168,7 @@ class boolean = false = Two.first~ | true = Two.last~ do
     def !& b: boolean
     or !(this & b)
 
-    // An implementation using goto's so that a conditional goto is the only (necessary) primitive.
+    // An implementation using goto"s so that a conditional goto is the only (necessary) primitive.
     or
       goto 2nd_check, a
       goto 1
@@ -183,17 +198,17 @@ end
 
 
 class Binary = boolean[]
-  static def String = Array<'0' | '1'>
+  static def String = Array<"0" | "1">
 end
-class Decimal = sign = '-'?, integer = Decimal.Positive
+class Decimal = sign = "-"?, integer = Decimal.Positive
   static class Positive = Array<0..9.reduce(|)>
-    static def String = Array<'0'..'9'.reduce(|)>
+    static def String = Array<"0".."9".reduce(|)>
 
-    def `fraction = Decimal.Positive.String` => Decimal.Real.Positive = sign, integer, '.', fraction
+    def `fraction = Decimal.Positive.String` => Decimal.Real.Positive = sign, integer, ".", fraction
   end
 
-  static class Real = sign = '-'?, Decimal.Real.Positive // TODO: should be possible to define out of order, and access integer/fraction methods ; It should be seen as a partial 'extends'
-    static class Positive = integer = Decimal.Positive, '.', fraction = Decimal.Positive
+  static class Real = sign = "-"?, Decimal.Real.Positive // TODO: should be possible to define out of order, and access integer/fraction methods ; It should be seen as a partial "extends"
+    static class Positive = integer = Decimal.Positive, ".", fraction = Decimal.Positive
     end
   end
 end
@@ -212,4 +227,22 @@ def u`length = Decimal.Positive.String` = Binary<.length == length>
 end
 def i`length = Decimal.Positive.String` = Binary<.length == length>
   // TODO Number arithmetic
+end
+
+def number
+  // TODO Generic number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
+  // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
+  // TODO: external defines that number > number is done by some other operator, not looking through successors/predecessors.
+end
+
+def string
+  // TODO How do other languages implement String?
+end
+def char
+  // TODO Proof it"s a valid codepoint like Lean? How"s that implemented
+end
+
+def Range
+  // TODO Range should be bounds which are Rays (already have the graph equipped)
+  // TODO Infinity, is just the terminal reference (which doesn"t exist on the line) How to differentiate initial/terminal infinity.
 end

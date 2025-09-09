@@ -64,7 +64,7 @@ end
 
 def Iterable
   for callback: (Args = *) => *
-    //TODO
+    //TODO + continue
   end
 end
 def AbstractDirectionality < Iterable
@@ -100,12 +100,34 @@ class if expression: Expression, yes?: () => *
     return local
   end
 
-  def else else: () => *
-    return this<else = else>
-  end
+  def else(else) = this<else = else>
 
   return this
 end
+
+class try program: () => *
+  def <Args>(catch?: (args: Args) => *)
+    error?: Option<Args>
+
+    def throw args: Args
+      error = args
+      goto capture
+    end
+
+    program(throw = throw)
+    return
+   capture:
+    catch(error) // TODO: Type-checker should know that it must be set in order to get here.
+  end
+
+  def catch(catch) = this<catch = catch>
+end
+// Dynamic asserts, are simply part of the type definition.
+def dynamically
+  def assert(expression: Expression) = external
+end
+def assert(expression: Expression) = throw '' if expression // TODO
+
 
 def while expression: Expression, program: () => void
   return do
@@ -201,8 +223,13 @@ class Binary = boolean[]
   static def String = Array<"0" | "1">
 end
 class Decimal = sign = "-"?, integer = Decimal.Positive
+  // TODO: The static Decimal, should be read as a Type which is an array, but it implements an AbstractDirectionality too: the default +1/-1 numberline: that way you can do Decimal.if(<10); Or Decimal.Positive which has base case 0 selected.
+
+  // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
+
   static class Positive = Array<0..9.reduce(|)>
     static def String = Array<"0".."9".reduce(|)>
+    // TODO Map to and from string, using some mapping (which is defined both ways, once: 0 = '0' ..)
 
     def `fraction = Decimal.Positive.String` => Decimal.Real.Positive = sign, integer, ".", fraction
   end
@@ -213,7 +240,7 @@ class Decimal = sign = "-"?, integer = Decimal.Positive
   end
 end
 
-def `digits = Decimal.Positive.String` => Decimal
+def `digits = Decimal.Positive.String` => Decimal.Positive
   // TODO: First wait on a definite way of defining the graphs.
 
   def mapping
@@ -222,10 +249,10 @@ def `digits = Decimal.Positive.String` => Decimal
     // TODO Define the graph of a number, without having access to a number to construct it.
   end
 end
-def u`length = Decimal.Positive.String` = Binary<.length == length>
+def u`length = Decimal.Positive.String` = Binary{.length == length}
   // TODO Number arithmetic
 end
-def i`length = Decimal.Positive.String` = Binary<.length == length>
+def i`length = Decimal.Positive.String` = Binary{.length == length}
   // TODO Number arithmetic
 end
 
@@ -235,7 +262,7 @@ def number
   // TODO: external defines that number > number is done by some other operator, not looking through successors/predecessors.
 end
 
-def string
+def string = char[]
   // TODO How do other languages implement String?
 end
 def char
@@ -245,4 +272,6 @@ end
 def Range
   // TODO Range should be bounds which are Rays (already have the graph equipped)
   // TODO Infinity, is just the terminal reference (which doesn"t exist on the line) How to differentiate initial/terminal infinity.
+
+  // TODO Implemented as things like .if() ?
 end

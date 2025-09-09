@@ -1,7 +1,7 @@
 // Defined by context:
 //  external = { do, goto, *, Node { `*`, `*`= } } // TODO: External should nestedly check local.definer
 //  `arbitrary structure`=
-//  def def(): Constructor
+//  def def(): Constructor - def defines 'return'
 //  local
 //  caller (= local) TODO Or is it nil
 //  TODO Should be the constructor that calls into the program:

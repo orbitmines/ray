@@ -85,6 +85,7 @@ end
 // Allow def (array: Array), to automatically accept varargs.
 // Multi-methods should work for things like throw, if top-level defined doesnt accept the error, perhaps the top-level one does.
 // If variable with type Option is set, it should automatically implicitly cast it to Some()
+// Certain variables like 'throw' need to be accessible even in nested function which aren't defined with that variable in scope. How to type-check and generalize this concept? Is it with some keyword for a variable?
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
@@ -101,9 +102,13 @@ end
          match s with
          | Sign.pos => (3 : Nat)
          | Sign.neg => (-3 : Int)
+// Warning in class, if return is used: because it's not used in the 'class definition'
 
 // TODO - Notes on Version Control
 // Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
+
+// TODO - Features
+// Observables which check if a variable is changed, dynamically assert would make use of that.
 
 
 
@@ -510,8 +515,7 @@ Array.method |= (arg1) ; name = method(name) | implementation
 
 
 
-
-
+// dynamic asserts can carry type information of multiple objects, like A.disjoint(B). How to account for that? It's type information living in some graph above the object?
 // How do compilers search for possible implementations of a function?
 // What about infinite loops.
 // What are function decorators?
@@ -520,6 +524,8 @@ Array.method |= (arg1) ; name = method(name) | implementation
 //      -> What is monkey-patching a function?
 //      -> "patch instead of def?"
 //      -> access something like super.
+//      -> monkey patch delete the method instead of multimethod.
+
 // How to differentiate return value of a function, vs returning the Instance as a Function definition.
 //      -> Default return is returning "this" -> For normal functions either "this" meaning the class, skipping the local context. Or not, and use normal return semantics.
 // Variables accessible at runtime how? What decides we can access it.

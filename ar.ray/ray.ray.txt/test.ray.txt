@@ -12,7 +12,7 @@
 // Partially evaluating the boolean OR operation even when superpositions are present, should be possible if there's a single 'true' amongst them.
 //   -> How do we know/use a proof that a single true is enough, to discard the superpositions.
 
-// Does every type like 'boolean' automatically include all the methods defined on it. So boolean.nor is the superposed method, which can later be called with a new 'this' value, how is that intuitively done?
+// Does every type like 'boolean' automatically include all the methods defined on it. So boolean.nor is the superposed method, which can later be called with a new 'this' value, how is that intuitively done?  (How does on static fill generics which might be required to call methods)
 
 // How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local'
 
@@ -22,9 +22,12 @@
 
 // TODO - Ambiguities
 // var? vs var ? true : false ; how to know if we need to convert var to a boolean or pass it to option.
+//   -> Also var ? true : false , is it var.? true : false, or var.?.true.:.false
 // .extends vs a check if it does extend
   // TODO Ambiguity if we use '<', because if I check 5 < 3, it's not 5 extends 3. Is there ever any time you'd need to use extends over <?. Yes a Type Ray which extends some other Ray, so it would be Ray < Ray,
   // What even does Ray extends Ray mean, what happens to all the structure?
+// args.for(args) a could mean args.for(args).a, instead of defining a block. Or something like args.for a b = 5, with the default '= 5'
+// statement if expression != statement.if.expression, similarly if expression then a else b
 
 
 // TODO - Notes for Examples
@@ -38,11 +41,50 @@ a<3: c, 5: e>(1 2 4)
 def Array.method // Defines on Array (on static)
 end
 
+."method!@$8" // .`"a"`, method calls.
+
+// Executing a piece of code in between each statement becomes:
+// TODO: How to stop this from recursively calling itself: "Any redefinition of 'do' will use its previous implementation of 'do' within it, to prevent recursive stacks"
+//   -> Different way of monkey-patching
+do = def do block
+  clock = some_clock_func()
+  ret = super()
+  time_elapsed = clock.time_elapsed()
+  return ret
+end
+
+// def method(a, `a`) ; method("b", b = 5)
+
+def Object
+  list1: Array
+  list2: Array
+end
+// Allow something like this
+def Object{ list1.disjoint(list2) }
+end
+def Object
+  list1: Array
+  list2: Array
+  dynamically assert list1.disjoint(list2)
+end
+def Object<T> args { list1.disjoint(list2) }
+  list1: Array
+  list2: Array
+end
+def Object<T> args
+  list1: Array
+  list2: Array
+  { list1.disjoint(list2) } // TODO If a { } is evaluated, it is evaluated as a 'dynamically assert', if the definer is = this, it gets applied to that object, as opposed to Binary{.length == length}
+end
+
 // TODO - Examples + Allowances
 // Allow chaining of binary operators like Array<3 < length < 5>
 // Allow chaining of conditionals with .AND -> Array<length > 3><length < 5>
 // Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>
-
+// Like this == n ? TypeA : TypeB, allow 'match' to be a type definition.
+// Allow def (array: Array), to automatically accept varargs.
+// Multi-methods should work for things like throw, if top-level defined doesnt accept the error, perhaps the top-level one does.
+// If variable with type Option is set, it should automatically implicitly cast it to Some()
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
@@ -50,8 +92,18 @@ end
 // TODO - Notes on Runtime
 // Take the example of Decimal.String which should be defined first, then `Decimal.String`, then Decimal. can be defined.
 // Lazy evaluation, keep structures like 'false | true | true' around without deciding execution order. ; Associativity proof is somehow relevent here, how does the runtime know about it?
+// Pull static out of constructor if possible.
+// Dead code like a = b, a = c, 'a = b' is never used. (Unless something like history is accessed somewhere)
+// Any statement is executed in a .do block, so that one can implement a debugging .do overwrite.
+// This type return should automatically be deduced.
+    // def posOrNegThree (s : Sign) :
+           match s with | Sign.pos => Nat | Sign.neg => Int :=
+         match s with
+         | Sign.pos => (3 : Nat)
+         | Sign.neg => (-3 : Int)
 
-
+// TODO - Notes on Version Control
+// Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
 
 
 
@@ -164,147 +216,19 @@ end
    // 0.fn(+1), 0.ray(+1): "Equip 0 with a +1 ray"
    // .ray(+1) equips .previous() with !+1 which is -1
    0.ray(+1).if(x => x < 10).for i
-
-   end
-   // Which could be shortened to
    0.ray(+1).if(< 10).for i
-   end
-   // also allow
    0.ray(+1).if(10 >=).for i
-   end
-   // TODO How to differentiate < 10 from .<10 function, or how to do these arbitrary names properly
 
    // TODO Some other syntax for .ray ?
-   0+1
-
-   // There is the ambiguity of whether this should be saved as static or not.
-   test = 6
-   // Could give one the ability to reference "Generics" through a keyword "static".
-   // so .static is the class.
-   // Analyses would yield no dependence on previous instructions (or it will) and then we can take it out of the constructor.
-   static.test = 6
-   // How to get defined methods on the class if we don't know args.
-   // Because you want to allow things like
-   args.for a
-     // What if I want to call a out of order -> Now it wouldn't work, but for a class you'd want to be able to.
-     // Not in this case, but calling out of order, means the order of functions being defined must be done first.\
-     // If the variable is already defined, it uses the order.
-     // There might not be an order which allows you to call it? Or can we always put the method up first.
-     // -> We might have a situation like
+   0 -> +1
+   -1 <- 0 -> +1
+   -1 | -2 <- 0 -> +1 | +2
+   0 -> +1 -> +2 // What does chaining this mean?
 
 
-     // -> Many defs of a function, take the last one. Have some console warning for the dead code if it isn't used in between.
-     a()
+// What does function inheritance mean, but what about additional logic in there? - called with super()?, what if multiple inheritance?
 
-     // TODO: How to put this in the other context. Why isnt 'this' reassigned?
-     this.def a // TODO How to use the variable here for def. -> Allow, but it overwrites the variable a in the context.
-       b()
-     end
-     this.a =
-       b()
-     end
-     this.a = <T> args
-       b()
-     end
-     this.a = b
 
-     // This .for, and = accept blocks like "end", how does this work exactly in function parameters?
-     // Ruby uses &block.
-     // Difference between a block accepting with a function parameter, vs an argument of that block.
-     // Block is just a callable function, so it's simply the last parameter.
-     args.for args a
-     end
-     args.for(args) a
-     end
-     args.for -> a
-     end
-     args.for do a
-     end
-
-     // If .for has no other arguments we allow
-     args.for a
-     end
-     args.for a b = 5 // TODO How is this default separated from a variable declaration, might need something like "do"
-     end
-     // Differentiate a b = 5 from variable declaration, as in b = 5, not a, b = 5
-
-     def for f: Function
-     end
-     def block arg f: Function
-     end
-
-   end
-
-   def a
-   end
-   a =
-     b()
-   end
-
-   // can keep doing generic stuff.
-   def <TT> arg2
-   end
-
-   // __call__
-   def (args)
-   end
-   // or like this
-   def () args
-   end
-   def () <T> args
-   end
-   // ambiguous with .() (x y z)
-   // vs.            (x, y, z)
-   def a(args)
-   end
-
-   // Like haskell?
-   def x + y
-   end
-   // or normal
-   def + y
-     this + y
-   end
-   // Allow unary construction with arbitrary special characters.
-   def +
-   end
-   def @
-   end
-   // What if a thing like parenthesis is used?
-   def ( x y z
-   end
-   result = ( x y z
-   result = ((x y z)
-   result = ((x, y, z)
-
-   // g.(()
-   // ambigious with
-   def (()
-   end
-   // Arbitrary names are allowed so spaces should be possible too. This arbitrary-ness will not work well with the parser in text.
-   def " "
-   end
-   // g. ()
-
-   // How to decide where the "this" cutoff is, is it the whole program, is it one-level up or??
-   // "this" is just a variable but where is it defined?
-   this.variable
-end
-def Generics T args
-end
-// Allow <> () wherever, [] too?
-def Generics <T> args
-end
-def Generics <T> args < Inheritance // What does function inheritance mean, just get the context, sure, but what about additional logic in there?
-    super <- is it the "this" of the inherited structure, or is the return value for a function?
-
-end
-def Generics <T> args < Interface<T> // First argument already filled, so dynamically we want to allow for checking what we can define in the function without certain args.
-end
-// TODO Generics <T = Default> args, how to know when the first argument is the generic type?
-
-// TODO This needs to be better, how does it fit nicely in the normal syntax of defining a class/function.
-// Enums when .OR is used.
 Maybe(5).switch
   Just a 1
   Nothing: 2
@@ -322,106 +246,19 @@ Maybe(5).switch
 end
 if maybe == Just a = 5..10 // a =, is a name attached to the type, == defaults to using instance_of if a type? TODO what if type == type?
 end
-//if Just 5..10 = maybe
-//end
-
-
-// Custom getter/setter
-def Class
-   _property = 5
-
-   def property
-      return _property
-   end
-   def property= value
-     _property = value
-   end
+//if Just 5..10 == maybe
+// TODO: Similar to binding a variable, bind comparison as a function
+(maybe == Just a = 5..10).while
+   maybe = Just 5
 end
 
+// Reflection lke .methods, both on static and def.
+
+// Inline function var = () (=> Return) = ''; var = () = '' ambiguity with a = b = c
 
 
-  def data name (&program)
-
-  end
-  data Name = first | last
-  data Name do
-   first | last
-  end
-
-  def data name
-  data "Name"
-
-  def data name ()
-  data Name
-
-  // Context switching
-  a = local
-  do
-    e = local
-    // a != e
-  end
-  def func
-    b = local  (= local.b = local)
-
-    // b != a
-    // b.constructor = func
-    // b.definer = a
-    // b.constructor.definer = a
-  end
-
-  func() // b.caller = a
-  def func2
-    c = local
-    func() // b.caller = c
-  end
-
-  def func3 => func2() // b.caller = d
-  def func4 = func2() // b.caller = d
-  func4 = func2() // b.caller = a
-  // The difference between def or not def in front of func4 is whether a new context is created for the one-line func.
 
 
-  // TODO: class.methods / needs to be the same as program.methods
-
-
-    // TODO Inline block =>? vs a var -declaration: a = t => t
-
-    //TODO Allow to access any future instantiation of method. -> This is also how we differentiate it from changing a variable like 5. It's not 5, but 5() that'll be accessed.
-    //TODO So we want to basically say method = method<this> ; So partially filling allows non-declared ones. This would lead to problems if someone renames a variable and all instances should be renamed, but dont throw errors because they're instantiated instead. So something different.
-    program.methods.for method => method.[].this = this
-    // How does this block look if for had arguments: Would like to avoid the ruby ||. for a block
-    program.methods.for a b c ; method =>
-    program.methods.for a b c do |method| end
-    // what if we nest =>, or disallow this, too confusing syntax if it was used.
-    program.methods.for a b c => method => a => b => c
-    program.methods.for => method do
-    end
-
-    // These are the preferred ones right now:
-    program.methods.for a b c => method => a
-    // You'd want to allow for this without a parameter
-    program.methods.for a b c => a
-    program.methods.for(a, b, c) method =>
-    program.methods.for method do // If for doesn't have parameters allow this.
-    end
-    program.methods.for method =>
-
-
-  // 'program' gets a 'static' variable
-  // Every method defined in 'program' gets assigned a 'this' variable
-  // Return is an instance (instance = program)
-  // TODO How to differentiate between methods and declared variables.
-  def A
-    property = 5
-
-    def property_getter
-    end
-    def method // TODO; How to differentiate this from a property
-    end
-    def clearly_a_method (a)
-    end
-  end
-end
 
 // for nested code, use something like | at the beginning of the line instead of some block, and then always till the newline
 //TODO How to pattern match the syntax if it's interleaved like that. Two separate graphs.
@@ -563,6 +400,7 @@ reverse
   -a
 end
 
+
 // TODO What about initial loops?
 def Branching
   def test
@@ -614,23 +452,11 @@ def Function
   end
 end
 
-statement if expression
-statement.if(expression)
-
-
-if expression then a else b
-// Ambiguity between the function if(expression, then, a, else, b) and if(expression) then
-
-if(expression).then(a).else(b)
-expression ? a : b
-expression.?(a).:(b)
-def Expression
   def ?
     a
   :
     b
   end
-end
 
 
 //TODO Is i++ < 10 not also a program? Because that would make Expression/Program .while ambiguous, unless you define Expression as "more top-level" than Program, how would you do that?
@@ -644,139 +470,53 @@ end
 variable.while
 end
 
-// Expression:
-maybe == Just a = 5..10
 
 
-// .while on a function
 
-// TODO: Need to allow an if condition bound to a variable like this?
-if(a > 5).while
-  a += 1
-end
-0.ray(+1).if(a > 5).for
-end
 
-// TODO: Similar to binding a variable, bind comparison as a function
-(maybe == Just a = 5..10).while
-    maybe = Just 5
-end
 
 def Block
-  def do
-    // Build sequential blocks (default call for sequences of statements)
-  end
-  do = global.do
-
   // TODO For meta-programming things like line-number and things of blocks being defined. That way a debugger can be made very easily.
 end
 
+
 // TODO; How to implement try/catch with similar passing of variables for control-flow like break.
 
-// Executing a piece of code in between each statement becomes:
-// TODO: How to stop this from recursively calling itself: "Any redefinition of 'do' will use its previous implementation of 'do' within it, to prevent recursive stacks"
-// TODO Before evaluating the programs, do we first look for a definition of do in anything called from top-level? Prefer as little execution as necessary to get that.
-// TODO: Could use a specific keyword for this patch
-Block.do = def do block
-  clock = some_clock_func()
-  ret = super()
-  time_elapsed = clock.time_elapsed()
-  return ret
-end
-
-// In lean the return type given here:
-// def posOrNegThree (s : Sign) :
-       match s with | Sign.pos => Nat | Sign.neg => Int :=
-     match s with
-     | Sign.pos => (3 : Nat)
-     | Sign.neg => (-3 : Int)
-// Is automatically deduced from the body, no need to specify it. TODO But we would still need to be able to define types like that.
-
-// TODO Allow some sort of Sign but not Sign.pos, like Nat, but not Nat.zero, only Nat.succ (Nat.zero) at a minimum Nat<[self] != 0>
-
-// Allow Array<length = 2><T>
-
-def test<T>(array: Array<T>)
-// also in-place
-def test(array: Array<T>, array2: Array<T>, array2: Array<T2 extends number>)
-//TODO Things like generic types extending other types.
-
-Array.length =
-
-end
-def Array.length
-end
-//Same as monkeypatching like this
-def Array
-  def length
-  end
-end
 
 
 
-//TODO Parameters which are a specific structure
-def class `name_var` <T, `T`>(a, `a`, &`program`)
-end
-// Accept any input, need some variable set to any: `*` but shouldnt interfere with * methods
 
-// conditionally add at structure
-if predicate
-  def this.conditionally
-  end
-end
-// TODO want to conditionally and dynamically have some method. Needs to possible reverse the definition/overwritten method if condition is no longer met
-// What happens with this variable dynamically
+// Non-zero decimal: Decimal.Positive<!= 0>
+
+// Might want a construction like Object, which is context which allows stuff to be set to it, but all properties like `*`=, and local etc.. aren't in there so you can still set fields like local without it effecting behavior.
+
+
+
+
 def Array<length > 2>
-  var = ++some_other_var // TODO: What is the value of some_other_value after the increment, like this it's after the constructor.
+  var = ++some_other_var // TODO: What if length changes? Is it reverted? Is there a use-case where you want it reverted?, or is it only part of the constructor
   if predicate
 
   end
 end
-// TODO Parallel constructors? or do we have dependence on things defined in 'super'()
-// TODO What if I dynamically patch Array<length > 2>
 def patch_it
   def global.Array<length > 2>
-    // TODO Anything in the constructor here is called for every instance which currently doesnt have it?
+    // TODO Anything in the constructor here is called for every instance which currently doesnt have it? Is there are use-case where you would want it to be?
   end
 end
 
 // Multiple implementation
-Array.method |= (arg1)
-end
+Array.method |= (arg1) ; name = method(name) | implementation
 
-def Array
-  if length > 2
-    def this.atleast2
-    end
-  end
-end
-// Monkeypatching using partial properties
-// This is automatically dynamic, as opposed to the if statement
-def Array<length > 2>
-  def atleast2
-  end
-end
 
-def Object
-  list1: Array
-  list2: Array
-end
-// Allow something like this
-Object<list1.disjoint(list2)>
-// TODO How to define it directly on Object
-def Object //TODO What is Object has <T> ; Object<list1.some(>5)> should not set T to that. So change it to {} or something?
-  list1: Array
-  list2: Array
-  assert list1.disjoint(list2) // TODO Assert is simply a condition on the type; Assert is part of the type. = Object<list1.disjoint(list2)>
-end
-Object<list1.some(>5)>
-// TODO How to also do this for enums
+
+
 
 // How do compilers search for possible implementations of a function?
 // What about infinite loops.
 // What are function decorators?
 // What about graph-like control-flow
-// What about monkey-patching, vs overriding the whole variable. Monkey patch could be without args, even if the original function has them.
+// What about monkey-patchi vs overriding the whole variable. Monkey patch could be without args, even if the original function has them.
 //      -> What is monkey-patching a function?
 //      -> "patch instead of def?"
 //      -> access something like super.
@@ -803,7 +543,7 @@ Object<list1.some(>5)>
 // What does an initial loop mean in .txt form?
 // Accessing variables while function in running.
 // How to know whether a.b is the .b method, or the result of a parameterless method .b?
-// "Ray" within some structure: Graph, which might not have .next to Many><> like an Array.
+// "Ray" within some structure: Grng,aph, which might not have .next to Many><> like an Array.
 // Nested contexts accessible when a function is still executing (if those contexts define things which dont end up in the main context window)
 // Return value in closure/inline-func/func
 // Monkey-patch a new method, and then the library implements that method itself, in the graph variant there's a disambiguation between the two, and a possible choice of which implementation you use. But what is the text variant going to do?
@@ -818,7 +558,7 @@ Object<list1.some(>5)>
 // TODO How is Point<T < +> different from Array<length < 3>
 // equivalences: Implicit casts (lean: coercions), chained together Pos -> Nat -> Int "if there is a path to Int from Pos" - allow loops. Allow cast to a function
 // single line for: remove all trailing '0' from a string; .repeat_while(o => o.pop_last(), o => o.last() == '0') // But better
-// try/catch implemented how?
+
 // private/public/protected ; local/this is private/protected (public setting of a private field shouldnt overwrite the private one? or how does that work in other languages)
 //   -> Just a flag set on the edge that encodes the name of the property.
 // pass continuation variables to functions, so break, continues in another function throw error too. In the throw case it need to work nested, even to funcs called/defined outside the context

@@ -7,6 +7,7 @@
 //  TODO Should be the constructor that calls into the program:
 //  constructor (= local) = { name = "<text file name or nil>", definer (= local) } TODO Or is is nil?
 //  definer (= local) TODO Or is it nil
+//  return
 
 def * = external // TODO any type Might not need to be externally defined. self-referential hypergraph-like structure
 // TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
@@ -30,7 +31,7 @@ def namespace
     definer[name] = local
     name
 
-    definition(local = local)
+    definition(local: local)
 
     return local
   end
@@ -45,7 +46,7 @@ def class
       static = definition
       this = local
 
-      definition(local = this, ...args)
+      definition(local: this, ...args)
 
       return this
     end
@@ -65,6 +66,7 @@ end
 def Iterable
   for callback: (Args = *) => *
     //TODO + continue
+    //TODO + return = caller.return
   end
 end
 def AbstractDirectionality < Iterable
@@ -74,9 +76,9 @@ class if expression: Expression, yes?: () => *
   def (else?: () => *)
     goto exec, expression
 
-    return else?()
+    return else?(return: caller.return)
    exec:
-    return yes?()
+    return yes?(return: caller.return)
   end
 
   // "then" is defined, so we can have an inline block like: "if expression then yes else no"
@@ -88,19 +90,19 @@ class if expression: Expression, yes?: () => *
   def elsif expression: Expression, elsif: () => *
     def (else?: () => *) = this.else
       if expression
-        return elsif()
+        return elsif(return: caller.return)
       else
-        return else?()
+        return else?(return: caller.return)
       end
     end
 
-    def elsif = this.elsif<this = local>
-    def else = this.else<this = local>
+    def elsif = this.elsif<this: local>
+    def else = this.else<this: local>
 
     return local
   end
 
-  def else(else) = this<else = else>
+  def else(else) = this<else: else>
 
   return this
 end
@@ -109,20 +111,15 @@ class try program: () => *
   def <Args>(catch?: (args: Args) => *)
     error?: Option<Args>
 
-    def throw args: Args
-      error = args
-      goto capture
-    end
-
-    program(throw = throw)
+    program(throw: (args: Args) => error = args; goto capture)
     return
    capture:
     catch(error) // TODO: Type-checker should know that it must be set in order to get here.
   end
 
-  def catch(catch) = this<catch = catch>
+  def catch(catch) = this<catch: catch>
 end
-// Dynamic asserts, are simply part of the type definition.
+// Asserts & dynamic asserts, are simply part of the type definition.
 def dynamically
   def assert(expression: Expression) = external
 end
@@ -134,7 +131,7 @@ def while expression: Expression, program: () => void
    check:
     goto done if expression
 
-    program(break = goto done)
+    program(break: () => goto done, return: caller.return)
     goto check
    done:
     return
@@ -152,7 +149,7 @@ def Function<(Args = *) => Return = *> = Node<(Args) => Return>
   def while expression: Expression
     return do ...args
      exec:
-      this(break = goto done, ...args)
+      this(break: () => goto done, ...args)
 
       goto exec if expression
     end
@@ -257,6 +254,8 @@ def i`length = Decimal.Positive.String` = Binary{.length == length}
 end
 
 def number
+  //TODO A number.positive
+
   // TODO Generic number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
   // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
   // TODO: external defines that number > number is done by some other operator, not looking through successors/predecessors.

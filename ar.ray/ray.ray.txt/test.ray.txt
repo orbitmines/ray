@@ -13,6 +13,8 @@
 //   -> How do we know/use a proof that a single true is enough, to discard the superpositions.
 
 // Does every type like 'boolean' automatically include all the methods defined on it. So boolean.nor is the superposed method, which can later be called with a new 'this' value, how is that intuitively done?  (How does on static fill generics which might be required to call methods)
+// If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
+
 
 // How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local'
 
@@ -28,7 +30,7 @@
   // What even does Ray extends Ray mean, what happens to all the structure?
 // args.for(args) a could mean args.for(args).a, instead of defining a block. Or something like args.for a b = 5, with the default '= 5'
 // statement if expression != statement.if.expression, similarly if expression then a else b
-
+// what if I do something like () => boolean, which returns a boolean, the return type is not false | true, as in 'a boolean', but it's 'the type boolean'.
 
 // TODO - Notes for Examples
 // Partially extending like Decimal/Decimal.Positive, Every Decimal.Positive is a Decimal, since sign is Option
@@ -77,6 +79,21 @@ def Object<T> args
   { list1.disjoint(list2) } // TODO If a { } is evaluated, it is evaluated as a 'dynamically assert', if the definer is = this, it gets applied to that object, as opposed to Binary{.length == length}
 end
 
+program(throw: (args: Args) => void
+  error = args;
+  goto capture
+end)
+program(throw: (args: Args) => void = {
+  error = args;
+  goto capture
+})
+program(throw: (args: Args) => {
+  error = args;
+  goto capture
+})
+program(throw: (args: Args) => void = error = args; goto capture)
+program(throw: (args: Args) => error = args; goto capture)
+
 // TODO - Examples + Allowances
 // Allow chaining of binary operators like Array<3 < length < 5>
 // Allow chaining of conditionals with .AND -> Array<length > 3><length < 5>
@@ -86,6 +103,11 @@ end
 // Multi-methods should work for things like throw, if top-level defined doesnt accept the error, perhaps the top-level one does.
 // If variable with type Option is set, it should automatically implicitly cast it to Some()
 // Certain variables like 'throw' need to be accessible even in nested function which aren't defined with that variable in scope. How to type-check and generalize this concept? Is it with some keyword for a variable?
+// Allow 'var = () = inline', 'var = () = { multiline }', 'var = () .. end' - Need to only capture the defined variables accessible from that context.
+// Allow a wide variety of things in the string of defs, like α/β/.. other languages. Lean allows a ' at the end of variables, to mirror math.
+// Type-cast like this: a: Decimal = 5, or a: Binary = 5
+// defined inline inheritance: def Point<T < { def +(b) }>
+// Allow single-line blocks: while o.last() == '0' => o.pop_last()
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
@@ -106,11 +128,16 @@ end
 
 // TODO - Notes on Version Control
 // Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
+// A monkey-patched function added, is suddenly also used by the library. Notify the user it's now overriding functionality that wasnt, there before.
 
 // TODO - Features
 // Observables which check if a variable is changed, dynamically assert would make use of that.
-
-
+// Decimal % mod 2, should go both in .prev/.next directions and start at the base case 0. What decides this?
+// Like leans open Namespace in, flatten context to 'local' local += Namespace, + being defined on object
+//      Should overwrite any variables already defined, but not things like local etc.., so only the things used in the "bare object fields"
+// equivalences: Implicit casts (lean: coercions), chained together Pos -> Nat -> Int "if there is a path to Int from Pos" - allow loops.
+//     -> Get a graph of possible coercions
+// Boot into a context, which doesn't allow access upper-level properties. Something like program(`*`: () => None). Shouldn't overwrite local etc..
 
 // TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
 // Single-line function
@@ -279,6 +306,7 @@ def javascript
   |  }
 end
 
+// TODO: match groups inside arbitrary structure method name
 // Default structure is to create a Node with many rays through it.
 // Need better way of connecting in sequence or branching.
 def Array <T>
@@ -516,64 +544,92 @@ Array.method |= (arg1) ; name = method(name) | implementation
 
 
 // dynamic asserts can carry type information of multiple objects, like A.disjoint(B). How to account for that? It's type information living in some graph above the object?
+//   -> It affects both A and B as types, in the A.disjoint(B) case. Dependent on some other variable.
+
 // How do compilers search for possible implementations of a function?
+// Define a bunch of rewrites for the compiler like this. And then it needs to do analysis on what is better
+// These rewrites should be defined maybe for specific targets
++def Binary
+  // TODO: This needs to be like an optional: Or. so not overwrite this specific case. Indicated by "|=" not "="
+  def *(b: Decimal % mod 2 = 0) |= this << (b / 2) // Shift left by some amount.
+  // TODO: Default equality should be two-way? So this << (b / 2) with b being % mod 2, should rewrite this * b
+  def << b = this.push_back(0[]{length = b})
+end
+// TODO: Need to have some way of saying: we're going into these directions: Only implemented with *, we don't want <<. for example.
+// TODO: How to match to a specific program type: Like some way a part of a method is formed, and rewrite that into another pattern.
+// It's just subgraph matching: Automatically put .to_subgraph() (is that true for all branches?, or is it a limited subgraph)
+{
+  return *
+  dead_code: * // TODO: Need to match that there's no label used for goto here. How is that checked?
+} -> {
+  // TODO: Somehow need to encode "it's the only branch that leads to this"
+  return *
+}
+// TODO: Is it possible to say you dont have to set the 'return *' to a type, but that it automatically sees the overlap?
+
+
+// What about graph-like control-flow
+// TODO Access control-flow of a function through a variable, and decide which compiler options to pass to it.
+//      -> What about other languages, similarly just a control-flow graph yes?
+// Then checking intensionality is just comparing those graphs. (TODO (Equality; is only a reflexive equivalence graph) vs equivalence; Need to be able to check 'does it exist on the equivalency graph' of equivalent rewritten programs)
+// TODO Control-flow graph types for other languages.
+// TODO Control-flow vs syntax/grammar graphs/types. Access those too.
+// TODO: The compiler might completely replace/delete functions and so just checking the inner workings of a function,
+// TODO:   might not be the actual resulting execution. How to account for that? It might need requirement definitions as well. Something like + in javascript might also just be a function definition, so there's no direct control-flow, but only a definition with control-flow.
+
+
 // What about infinite loops.
 // What are function decorators?
-// What about graph-like control-flow
-// What about monkey-patchi vs overriding the whole variable. Monkey patch could be without args, even if the original function has them.
+
+
+// Monkey-patch, but only for code within some namespace or your project's context.
 //      -> What is monkey-patching a function?
-//      -> "patch instead of def?"
+//      -> +def
 //      -> access something like super.
 //      -> monkey patch delete the method instead of multimethod.
 
-// How to differentiate return value of a function, vs returning the Instance as a Function definition.
-//      -> Default return is returning "this" -> For normal functions either "this" meaning the class, skipping the local context. Or not, and use normal return semantics.
+// Why doesn't a do end block, change the 'return' value? or for i end,
+
+// Defining a bidirectional ray on a class/function. This is different from just defining .next/.prev functions. It's a new wrapped object, which has that as its value.
+//   How? We have things like 0 -> +1
 // Variables accessible at runtime how? What decides we can access it.
-// Closures & inline-functions (similarly methods are closures with environment of the class)
-// Defining a bidirectional ray on a class/function. Methods and properties are one-way.
-// Defining boolean and other structures
-// For Type definitions like data Maybe a = Just a | Nothing, what decides that Just exists, what decides that I dont need to evaluate it? Just that it doesn't exist?
-// Assigning to a variable in a new block; a = 5; { a = 6 } ; Is it a new variable or assignment to the other one?
-//      -> In most languages in a def block you'd be able to access it not change it. You need a thing like "this", but for 'it's already defined in an arbitrary different context'
-//      -> But in something like an if block, you'd want it outside the block by default?
-//      -> Or explicit local value? Would be overused for functions, so it might depend on where the def is? Might get confusing.
-// Functions without args are properties. But for the case of a class, you'd want the () to be called to indicate a new instance, not ref the class: Class.a vs Class().a
-//   static.def () the constructor? Or leave it out.
-// <> For partial assignment of a function. Partial assignment how does that work with arbitrarily structured. Or does it only work on Array inputs.
-// variable do end, like static do end, or def static like monkey-patching to get a block where "something like this" is linked to static. ; def static must be patch static? which are executed in sequence?
+
+// Partial assignment for an arbitrary object sets that variable to optional in the function. But it is unclear how that deforms the object.
+
+
 // static variables are also accessible as a parent context, not just static.
-// which block "returns"/"break"
-// Arbitrary structure named variable assignment. (& function parameter)
-// instance_of in inherited structures, how does that play into the usual instance_of
-// Classes/Functions with the same name, how to resolve if we cant have the unique pointers.
-// What does an initial loop mean in .txt form?
+
+// ".environment:" "Any Node is part of some path of context" - it's a Ray, and all .prev change what 'this' is like, namely: Allow any context to access .<var>, which will access it from that context. But they are not part of the definition.
+//     -> What kind of effect has a looped context? Doesn't really effect .this, but it allows .previous contexts to access child variables. So basically: this means a global variable unless something after me defines it too.
+
+
+// difference between instance_of ; perfect match, and some instance_of which allows things like checking inheritance so. Things like at_least vs subgraph: checking just functions etc. vs structural subgraph as well. And another is refinement. So 4 different instance_of methods?0
+
+// What does an initial loop mean in .txt form? Don't know where it starts?
+// Might also have initials, but they;re not interpreted as a control-flowe graph, but rather as the inputs, like Chyp
+// Controlflow graph is Hypergraph/Graph<T{.reverse.length < Infinity}> // TODO .reverse needs to be applied to the single node, which is different than calling it on the graph, what is the syntax for that? THe T{} is not right, because T is only the Value, not the Ray defined in the graph.
+
 // Accessing variables while function in running.
-// How to know whether a.b is the .b method, or the result of a parameterless method .b?
-// "Ray" within some structure: Grng,aph, which might not have .next to Many><> like an Array.
-// Nested contexts accessible when a function is still executing (if those contexts define things which dont end up in the main context window)
-// Return value in closure/inline-func/func
-// Monkey-patch a new method, and then the library implements that method itself, in the graph variant there's a disambiguation between the two, and a possible choice of which implementation you use. But what is the text variant going to do?
-// Allow a wide variety of things in the string of defs, like α/β/.. other languages. Lean allows a ' at the end of variables, to mirror math.
-// Like leans open Namespace in, flatten context to 'local' local += Namespace { ...local, ...namespace }
+// func = branch () => while true = { var++ }
+// func.var (while running).
+// TODO How to access contexts and functions called by this function (nested analysis)
+
+// Array, also refines Ray type to single .next.
+
+
 // 1 + 1 = 2 as a type: just structure.
-// match groups inside arbitrary method name
-// Overloaded methods result in some joined type with .and? on methods. def method(a: A) def method(a: B) => .method = [_, _]
-// a: Type = 5 ; If there are multiple meanings of what 5 is; to different type constructors, it should implicitly know which one. "Type classes" in the lean case.
-//   -> Is this ever relevant for .ray.txt? Or it'll always be CustomNumberType.5 or 5u/5u16 (it having defined method for numbers). Impl some "rust-like" interface on the number 3. -> Number 3 refs a function which returns that 3, so changes to it must persist somehow. 3 < Interface
-// Point<T>{ x: T, y: T } ; Implement interface "+" on any generic type which also has a "+" def Point<T < +> def + b { x: x + b.x, y: y + b.y }  end
-// TODO How is Point<T < +> different from Array<length < 3>
-// equivalences: Implicit casts (lean: coercions), chained together Pos -> Nat -> Int "if there is a path to Int from Pos" - allow loops. Allow cast to a function
-// single line for: remove all trailing '0' from a string; .repeat_while(o => o.pop_last(), o => o.last() == '0') // But better
+
+// Multi-methods are defined as 'method & method & method'
 
 // private/public/protected ; local/this is private/protected (public setting of a private field shouldnt overwrite the private one? or how does that work in other languages)
 //   -> Just a flag set on the edge that encodes the name of the property.
-// pass continuation variables to functions, so break, continues in another function throw error too. In the throw case it need to work nested, even to funcs called/defined outside the context
-// If a namespace loads all variables into the current context, what happens with a name clash? Overwrite? Or monkeypatch - certainly not.
-// Array<length = 2> is not assign length to 2? If length is not within the func parameter names. What if it is and it's redefined later
-// Strip contrxt of everything but certain variables, and use that context to boot another context, like the default terminal environment
+
+Array<length > 2><length == 2> => 'void'/None/some type.
+
+// How is return defined? It goes to a program which could have a chain of other operations defined on it. a.b.c.d, a is hit a return? then .b
+
 // "run at compile time" ; constexpr ; when can this be inferred?
-//Todo define def in the language with monkeypatching included?
-//in def def define return to change control flow how?
+
 // def `name` checks it as a type. so that regex like hour(s)? would work
 // def static if it's currently drfined as a context should load everything in that to the context, or make it accept a block
 // map in the same direction +1 on all

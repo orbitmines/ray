@@ -12,8 +12,22 @@
 def * = external // TODO any type Might not need to be externally defined. self-referential hypergraph-like structure
 // TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
 def do<T < Program>(program: T) => T = external
-def goto(location: Program, predicate?: Expression) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless "program" -> or one where the parameters are already filled instead of goto the way of doing it.
-def [args: Array<T>] => Array<T> = external
+class goto
+  def (location: Program, predicate?: Expression) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless "program" -> or one where the parameters are already filled instead of goto the way of doing it.
+
+  def if predicate: Expression = this<predicate: predicate>
+end
+def [args: Array] => args
+
+def < constructor: (*) => *
+  caller.super = constructor<local: caller>
+  caller.super[constructor.name] = constructor<local: caller> if constructor.name
+  // TODO: How does type extension work?
+end
+
+def +def
+  //TODO Define super in nested 'defs'
+end
 
 global = local
 
@@ -21,6 +35,8 @@ global = local
 //TODO Array
 //TODO 0..9.reduce(|) / "0".."9".reduce(|)
 //TODO Decimal -> Binary / Binary -> Decimal & Decimal.String -> Binary
+//TODO .map, .map on single value, effecting all .OR?; No that's the same as calling on the static def, the method meant for the instance. (Allow both variants)
+//TODO "as string" should also accept "as Digit[]"
 
 //
 
@@ -74,7 +90,7 @@ end
 
 class if expression: Expression, yes?: () => *
   def (else?: () => *)
-    goto exec, expression
+    goto exec if expression // 'if' can be used here, since goto defines a special if-block. It's not self-referential here.
 
     return else?(return: caller.return)
    exec:
@@ -189,10 +205,10 @@ class boolean = false = Two.first~ | true = Two.last~ do
 
     // An implementation using goto"s so that a conditional goto is the only (necessary) primitive.
     or
-      goto 2nd_check, a
+      goto 2nd_check if a
       goto 1
      2nd_check:
-      goto 0, b
+      goto 0 if b
    1: return true
    0: return false
     end
@@ -216,40 +232,64 @@ end
 { false, true } = boolean
 
 
-class Binary = boolean[]
-  static def String = Array<"0" | "1">
+def Integer = sign = "-"?, integer = Positive
+  static def Positive = Array{length == n}().last~
 end
-class Decimal = sign = "-"?, integer = Decimal.Positive
-  // TODO: The static Decimal, should be read as a Type which is an array, but it implements an AbstractDirectionality too: the default +1/-1 numberline: that way you can do Decimal.if(<10); Or Decimal.Positive which has base case 0 selected.
 
-  // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
-
-  static class Positive = Array<0..9.reduce(|)>
-    static def String = Array<"0".."9".reduce(|)>
-    // TODO Map to and from string, using some mapping (which is defined both ways, once: 0 = '0' ..)
-
-    def `fraction = Decimal.Positive.String` => Decimal.Real.Positive = sign, integer, ".", fraction
+private def Digit = ("0".."9", ("a" | "A")..("f" | "F")).reduce(|)
+  def value
+    // TODO: First wait on a definite way of defining the graphs.
+    "0" = |,_,_,_,_,_,_,_,_
+    "1" = -,|,-,-,-,-,-,-,-
+    ("a" | "A") =
+    // TODO Define the graph of a number, without having access to a number to construct it.
   end
+end
 
-  static class Real = sign = "-"?, Decimal.Real.Positive // TODO: should be possible to define out of order, and access integer/fraction methods ; It should be seen as a partial "extends"
-    static class Positive = integer = Decimal.Positive, ".", fraction = Decimal.Positive
+{
+  Binary: Digit = "0" | "1"
+  Ternary: Digit = "0".."2".reduce(|)
+  Quaternary: Digit = "0".."3".reduce(|)
+  Quinary: Digit = "0".."4".reduce(|)
+  Senary: Digit = "0".."5".reduce(|)
+  Septenary: Digit = "0".."6".reduce(|)
+  Octal: Digit = "0".."7".reduce(|)
+  Nonary: Digit = "0".."8".reduce(|)
+  Decimal: Digit = "0".."9".reduce(|)
+  Undecimal: Digit = ("0".."9", "A").reduce(|)
+  Duodecimal: Digit = ("0".."9", "A".."B").reduce(|)
+  Tridecimal: Digit = ("0".."9", "A".."C").reduce(|)
+  Tetradecimal: Digit = ("0".."9", "A".."D").reduce(|)
+  Pentadecimal: Digit = ("0".."9", "A".."E").reduce(|)
+  Hexadecimal: Digit = ("0".."9", "A".."F").reduce(|)
+}.for Base, digit
+  class `Base` = sign = "-"?, integer = Positive
+    static def Digit = digit
+    // TODO: The static Decimal, should be read as a Type which is an array, but it implements an AbstractDirectionality too: the default +1/-1 numberline: that way you can do Decimal.if(<10); Or Decimal.Positive which has base case 0 selected.
+
+    // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
+
+    static class Positive = Array<digit.value>
+      static def String = Array<digit as string>
+      // TODO Map to and from string, using some mapping (which is defined both ways, once: 0 = '0' ..)
+
+      def `fraction = Positive.String` => Real.Positive = sign, integer, ".", fraction
+    end
+
+    static class Real = sign = "-"?, Real.Positive // TODO: should be possible to define out of order, and access integer/fraction methods ; It should be seen as a partial "extends"
+      static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive
+      end
     end
   end
 end
 
-def `digits = Decimal.Positive.String` => Decimal.Positive
-  // TODO: First wait on a definite way of defining the graphs.
+def `digits = Decimal.Positive.String` => Decimal.Positive => (digits as Digit[]).map(.value)
+def 0`"x" | "X"``digits = Hexadecimal.Positive.String` => Hexadecimal.Positive = (digits as Digit[]).map(.value)
 
-  def mapping
-    0 = |,_,_,_,_,_,_,_,_
-    1 = -,|,-,-,-,-,-,-,-
-    // TODO Define the graph of a number, without having access to a number to construct it.
-  end
-end
-def u`length = Decimal.Positive.String` = Binary{.length == length}
+def u`length = Decimal.Positive.String` = Binary.Positive{.length == length}
   // TODO Number arithmetic
 end
-def i`length = Decimal.Positive.String` = Binary{.length == length}
+def i`length = Decimal.Positive.String` = Binary.Positive{.length == length} // TODO, Use Binary vs Binary.Positive
   // TODO Number arithmetic
 end
 
@@ -264,8 +304,8 @@ end
 def string = char[]
   // TODO How do other languages implement String?
 end
-def char
-  // TODO Proof it"s a valid codepoint like Lean? How"s that implemented
+class char = u32
+  dynamically assert this < 0x110000 & !(0xD800 <= this <= 0xDFFF)
 end
 
 def Range

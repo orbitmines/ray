@@ -20,6 +20,8 @@
 
 // .reduce(|) TODO How does it work to pass a binary operator to a reduce which has accumulator and current as the two arguments
 
+// 0..9.reduce(|) = (Decimal.Digit) 0.value.context.reduce(|) ; .superpose an array, namely the digit defining 0. -> Then could also have the digit values link back to the superposed object or not?
+
 // node > itself or node < itself, we're in a loop (or repeated value which we're forced to see as the same, or we're not comparing using the difference we have access to - this 'number'line)
 
 // TODO - Ambiguities
@@ -31,6 +33,9 @@
 // args.for(args) a could mean args.for(args).a, instead of defining a block. Or something like args.for a b = 5, with the default '= 5'
 // statement if expression != statement.if.expression, similarly if expression then a else b
 // what if I do something like () => boolean, which returns a boolean, the return type is not false | true, as in 'a boolean', but it's 'the type boolean'.
+// Referencing a parameterless constructor, can be both the Object() or Object, since it could be interpreted as a property.
+// Should changing local, also change 'caller'/'definer'?
+// [1, 2, 3] should call global level [], not local level def [property].
 
 // TODO - Notes for Examples
 // Partially extending like Decimal/Decimal.Positive, Every Decimal.Positive is a Decimal, since sign is Option
@@ -47,7 +52,7 @@ end
 
 // Executing a piece of code in between each statement becomes:
 // TODO: How to stop this from recursively calling itself: "Any redefinition of 'do' will use its previous implementation of 'do' within it, to prevent recursive stacks"
-//   -> Different way of monkey-patching
+//   -> Different way of monkey-patching, monkey-patching 'def' would also do that. Some way of saying, recursively do = super()
 do = def do block
   clock = some_clock_func()
   ret = super()
@@ -108,6 +113,8 @@ program(throw: (args: Args) => error = args; goto capture)
 // Type-cast like this: a: Decimal = 5, or a: Binary = 5
 // defined inline inheritance: def Point<T < { def +(b) }>
 // Allow single-line blocks: while o.last() == '0' => o.pop_last()
+// Allow .map(.property), .if(.property > 2)
+// Allow Array<ar.length === 0 ? length = 0 : length < ar.length>
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
@@ -125,10 +132,21 @@ program(throw: (args: Args) => error = args; goto capture)
          | Sign.pos => (3 : Nat)
          | Sign.neg => (-3 : Int)
 // Warning in class, if return is used: because it's not used in the 'class definition'
+// How is something like the proof that after a .push_back(A), .last = A, unless another push_back is used. How do you represent that, and how is it used by the compiler?
 
 // TODO - Notes on Version Control
 // Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
 // A monkey-patched function added, is suddenly also used by the library. Notify the user it's now overriding functionality that wasnt, there before.
+
+// TODO - Notes on Type Checking
+// If blocks like if array.length > 2 ... end, change the type of array within that block.
+// Functions should relax their arguments to 'actually used this from the type'. (So type refinements)
+// Any 'Program' object, carries with in what is accessible from that context, that way after each line, we can check whether a variable is present
+
+// TODO - Notes on Theorem proving
+// For the theorem prover, you might want to store a specific proof instead of only saving the tactic by which it is solved, needs some effective way of storing and referencing this; probably in a directory outside the current file
+//   -> In the background run some (in)equivalence of functions algorithm to check equivalences automatically if possible.
+
 
 // TODO - Features
 // Observables which check if a variable is changed, dynamically assert would make use of that.
@@ -138,6 +156,8 @@ program(throw: (args: Args) => error = args; goto capture)
 // equivalences: Implicit casts (lean: coercions), chained together Pos -> Nat -> Int "if there is a path to Int from Pos" - allow loops.
 //     -> Get a graph of possible coercions
 // Boot into a context, which doesn't allow access upper-level properties. Something like program(`*`: () => None). Shouldn't overwrite local etc..
+// Methods like hour`"s"?`, from rails. Define it as an 'undefined method', which doesn't resolve to a type. But how does it then reduce to an actual value (like ms?)
+// Type: 'Terminating', TODO How to give function body types? -> Program{.expanded().length < Infinity} - expanded because otherwise groups count as length = 1, or is length automatically going inside?
 
 // TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
 // Single-line function
@@ -567,6 +587,8 @@ end
 }
 // TODO: Is it possible to say you dont have to set the 'return *' to a type, but that it automatically sees the overlap?
 
+// static parts of the constructor are filtered out using the same rewriting strategies used for compiler optimizations. and then the type of the block changes.
+
 
 // What about graph-like control-flow
 // TODO Access control-flow of a function through a variable, and decide which compiler options to pass to it.
@@ -604,6 +626,8 @@ end
 
 
 // difference between instance_of ; perfect match, and some instance_of which allows things like checking inheritance so. Things like at_least vs subgraph: checking just functions etc. vs structural subgraph as well. And another is refinement. So 4 different instance_of methods?0
+// Another instance_of which requires an instantiation, so that the type boolean is not a match, but require an instance of boolean ; or is that always supported?
+// Type equivalence is called definitional equality
 
 // What does an initial loop mean in .txt form? Don't know where it starts?
 // Might also have initials, but they;re not interpreted as a control-flowe graph, but rather as the inputs, like Chyp
@@ -630,30 +654,18 @@ Array<length > 2><length == 2> => 'void'/None/some type.
 
 // "run at compile time" ; constexpr ; when can this be inferred?
 
-// def `name` checks it as a type. so that regex like hour(s)? would work
-// def static if it's currently drfined as a context should load everything in that to the context, or make it accept a block
-// map in the same direction +1 on all
-// matching a string of characters looped until some other string comes across, not the last match to that string, and everything in between is captured, the do block after a method, do should not match to other vars
-// All statements are always brought in parallel, but only once evaluation is necessary does it get the order and filtered statements which need to be executed.
-// Overriding something like def to check all methods being defined what if when using that, dependencies on something like class exist, throw an error? or just define class before calling the method, and then redifining it? or just not pass that to def?
-// instance_of fails list of error of what isn't satisfied, this needs to be customizable. Returns something like UnmatchedType<T> with the same functionality as T but not the same restrictions
-// Types of blocks are deduced based on what is in the block.
-//   -> Certain things like static blocks aren't executed by the block itself, or the compiler moves things out of the block, how to account for that?
-// How to grammar: Array<length > 2> and (Array<length>) 2>; Array{length > 2}<T>(args); Array[length > 2]<T>(args); Do you ever need to use array_instance[length > 2] or not? If we'd use []. Yes you could say after the fact you'd want to enforce a different type: Basically change the type signature. When is that useful?
-// Like if(> 2), allow map(.property), if(.property > 2)
-// Conditional Types are called dependent types in literature.
-// Type equivalence is called definitional equality
-// TODO Equality of objects like class require an additional field for checking the uniqueness of the object, because one otherwise doesn't have access to that. -> So some form of definitional equality is the default say Array(1, 2, 3) / Array(1, 2, 3), I cant tell the difference between the two without some object ID/memory ID.
-// For the theorem prover, you might want to store a specific proof instead of only saving the tactic by which it is solved, needs some effective way of storing and referencing this; probably in a directory outside the current file
-//   -> In the background run some (in)equivalence of functions algorithm to check equivalences automatically if possible.
-//   -> Define things like Array<length > 2> on a variable to change the type.
-// TODO Extends as a method which accesses the caller context? Can then be written on the same line as the definition
-// TODO Changing a functions type parameters to allow another type. method<parameter: Type>, is that useful for anything or just 'dangerous'
-// Program type of Terminating, what else?
+// Matching a looped string until some lookahead function is matched -> It's just that the order of the .OR is first checking the lookahead, then the loop.
+
+// An evaluator, which can be possibly infinite function length, which doesn't define methods out-of-order.
+
+// instance_of needs to somehow give access to a partially matched type. And things like dynamically assert shouldn't throw directly, but check all conditions and report them all together.
+
+// Some generic way of populating all objects with an object id, so that equality then has to check that, but dont do this by default.
+
+// TODO What is inheritance if two array types are extended say. 'Decimal.Positive' / 'Binary', is it an AND, or OR?
+
 // Define 'return' as a goto?
-// def split(ar: Array<length: 5>): // Array<length < ar.length> TODO: Need to allow use of variables from parameters. What if both the property and variable are named the same?
-//    -> Things like Array<ar.length === 0 ? length = 0 : length < ar.length> ; want to allow arbitrary code blocks for things like if/elseif/ what else?
-// How is something like the proof that after a .push_back(A), .last = A, unless another push_back is used. How do you represent that, and how is it used by the compiler?
+
 // Char is lean is uint32 paired with a proof that it's a valid code point, allow that too.
 // def array(n: ): Array<length = n>
 // Every entry is > 5 : Array<every(>5), every(<10)> = Array<every(x => 5 < x < 10)>

@@ -36,9 +36,11 @@
 // Referencing a parameterless constructor, can be both the Object() or Object, since it could be interpreted as a property.
 // Should changing local, also change 'caller'/'definer'?
 // [1, 2, 3] should call global level [], not local level def [property].
+// Variable * for any shouldnt interfere with * 2 things. *2 variable or * _, reduce(*) (* is called on the acc and current)
 
 // TODO - Notes for Examples
 // Partially extending like Decimal/Decimal.Positive, Every Decimal.Positive is a Decimal, since sign is Option
+// "A program/function with parameters which gets evaluated gets called"
 
 def a 1 2 3 4 5
 a<3: c>(1 2 4 5)
@@ -99,6 +101,8 @@ program(throw: (args: Args) => {
 program(throw: (args: Args) => void = error = args; goto capture)
 program(throw: (args: Args) => error = args; goto capture)
 
+// Binary{length == 1} should be not castable, but should be boolean. or Binary.Positive[] = boolean[]
+
 // TODO - Examples + Allowances
 // Allow chaining of binary operators like Array<3 < length < 5>
 // Allow chaining of conditionals with .AND -> Array<length > 3><length < 5>
@@ -115,6 +119,9 @@ program(throw: (args: Args) => error = args; goto capture)
 // Allow single-line blocks: while o.last() == '0' => o.pop_last()
 // Allow .map(.property), .if(.property > 2)
 // Allow Array<ar.length === 0 ? length = 0 : length < ar.length>
+// Allow a < b < c
+// Allow def method(n: % 2 == 0)
+// Allow def (...args) unused to be def (*)
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
@@ -133,6 +140,7 @@ program(throw: (args: Args) => error = args; goto capture)
          | Sign.neg => (-3 : Int)
 // Warning in class, if return is used: because it's not used in the 'class definition'
 // How is something like the proof that after a .push_back(A), .last = A, unless another push_back is used. How do you represent that, and how is it used by the compiler?
+// Native support for running parallel on other machines
 
 // TODO - Notes on Version Control
 // Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
@@ -147,6 +155,8 @@ program(throw: (args: Args) => error = args; goto capture)
 // For the theorem prover, you might want to store a specific proof instead of only saving the tactic by which it is solved, needs some effective way of storing and referencing this; probably in a directory outside the current file
 //   -> In the background run some (in)equivalence of functions algorithm to check equivalences automatically if possible.
 
+// TODO - Editor
+// goto label in an IDE should bring the label back one space. ; if then a type defined instead add it back.
 
 // TODO - Features
 // Observables which check if a variable is changed, dynamically assert would make use of that.
@@ -158,6 +168,10 @@ program(throw: (args: Args) => error = args; goto capture)
 // Boot into a context, which doesn't allow access upper-level properties. Something like program(`*`: () => None). Shouldn't overwrite local etc..
 // Methods like hour`"s"?`, from rails. Define it as an 'undefined method', which doesn't resolve to a type. But how does it then reduce to an actual value (like ms?)
 // Type: 'Terminating', TODO How to give function body types? -> Program{.expanded().length < Infinity} - expanded because otherwise groups count as length = 1, or is length automatically going inside?
+//      Top of the file: assert local instanceof Terminating (or something like that)
+// Evaluating infinities: "There exists ; is just some" def even(n: ) => Nat.some(half => n == double(half)). ; TODO How does this evaluate on the infinite .some ; Nat<every> is different from Array<length> one is referring to an instance the other to the static type Nat. Or dont use Nat<every>
+// Native support for eventual consistency
+// sum/product sum icons, being .reduce(*)/.reduce(+)
 
 // TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
 // Single-line function
@@ -666,34 +680,19 @@ Array<length > 2><length == 2> => 'void'/None/some type.
 
 // Define 'return' as a goto?
 
-// Char is lean is uint32 paired with a proof that it's a valid code point, allow that too.
-// def array(n: ): Array<length = n>
-// Every entry is > 5 : Array<every(>5), every(<10)> = Array<every(x => 5 < x < 10)>
-// allow 5 < x < 10
-// Nat refers to 0..Infinity, Nat instanceof Ray. Nat instanceof Array but an instance of Nat is a number "There exists ; is just some" def even(n: ) => Nat.some(half => n == double(half)). ; TODO How does this evaluate on the infinite .some ; Nat<every> is different from Array<length> one is referring to an instance the other to the static type Nat. Or dont use Nat<every>
-//   -> You'd want things like Nat{<5}; or types like def method(n: < 5) and def method(n: % 2 == 0) (nested operator still looking for a left value) and def method(n: .even) so you do want to call it on static too. What decides whether it's on instance or static
-//   -> 0..Infinity{<5} = 0..Infinity.if(<5) = 0..4 = (0..Infinity(4) = 4) ; A range is an Array with a constructor ()
-//   -> Have something like Array.some without parameters return a type | between each entry. def method(a: [1,2,3].some{<=2}) = def method(a: [1,2,3].if(<=2).some) = def method(a: 1 | 2)
-//      -> [1,2,3].some = (1 | 2 | 3) has a constructor which accepts any of the entries like the enums. (1 | 2 | 3)(2) = 2
-// Type of block/program given to the file that's being executed. ; required to terminate for example ; or specify at the top of the file.
-// Terminating program which also has a type signature like () => void
-// TODO ...args listens to both Object & Array, arg1, arg2 = args, and { arg1, arg2 } = args what about do arg1 arg2 end = args
+// Object{} is like Object.filter()
+
+// Array.some parameterless = is it non-empty?
+
 // Type loop
-// goto labels are also defined out of order.
-// TODO What if one thing refers to something as class and another as def?
-// goto label in an IDE should bring the label back one space. ; if then a type defined instead add it back.
-// THe moment a "program" hits the "statement" it gets executed, so "return do end" or "a = do end" doesnt execute the block
-//    -> So a function like () => abc gets executed, one with parameters does not.
-// def on Program which doesnt have any parameters. Program<() => void>, Program<(String, optionalLabel: String) => String>
-//   -> More generally you can change the types of methods Program<another_method => String> / Program<method(String) => String>
-// Nat{>5} and those conditional typing is also called refinement
-// Running arbitrary parts of the program on different machines, have some native way of supporting that. And things like eventual consistency. For adding/subtracting what else?
-// Generalized range for arbitrary graphs
-// def (...args) unused could be def (...)
-// What about implement for any type for which some predicate holds. Say def Function being defined on any type that implements def (...)  --> def Context<(*) => *>
-// Tag an arbitrary parameter to the block using &. But it's not required. (Useful when later we have arbitrary structures)
-// Variable * for any shouldnt interfere with * 2 things. *2 variable or * _
-// Defining a new name Function and assigning it to another type def Function = Context<(*) => *> ; as if saying def Context<(*) => *>
+
+// Refinement changes the type of a method, so that should be allowed, how?
+
+
+// Lean: On a 32-bit architecture, USize is equivalent to UInt32. On a 64-bit machine, it is equivalent to UInt64.
+//   -> How to conditionally get the architecture for this definition.
+
+
 // (*) => * means (...args: *) => *, what if another argument is used (Array) => *, it means (..args: Array) => *, or (arg: Array) => *
 //    -> Any method which accepts a single variable of type array, which is passed multiple, is allowed to be passed (a, b, c). So (Array) => * means both (...args) and (arg: Array)
 // Generic types can extend like this Function<(Args = *) => Return = *> so that Function<(*) => *> can be used. Args and Return are then defined for monkeypatching, even if not defined as such.?

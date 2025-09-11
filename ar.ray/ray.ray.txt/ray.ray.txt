@@ -37,6 +37,7 @@ global = local
 //TODO Decimal -> Binary / Binary -> Decimal & Decimal.String -> Binary
 //TODO .map, .map on single value, effecting all .OR?; No that's the same as calling on the static def, the method meant for the instance. (Allow both variants)
 //TODO "as string" should also accept "as Digit[]"
+//TODO private
 
 //
 
@@ -175,7 +176,80 @@ end
 def Option<T> = Some(T) | None
 { Some, None } = Option
 
-def Two = Array<length == 2>
+def Integer<n> = sign = "-"?, integer = Positive
+  static def Positive = Array{length == n}().last~
+end
+
+private def Digit = ("0".."9", ("a" | "A")..("f" | "F")).reduce(|)
+  //TODO This doesnt work, digit needs to be aware of the base its in.
+
+  def value
+    // TODO: First wait on a definite way of defining the graphs.
+    "0" = |,_,_,_,_,_,_,_,_
+    "1" = -,|,-,-,-,-,-,-,-
+    ("a" | "A") =
+    // TODO Define the graph of a number, without having access to a number to construct it.
+  end
+end
+
+{
+  Binary: Digit = "0" | "1"
+  Ternary: Digit = "0".."2".reduce(|)
+  Quaternary: Digit = "0".."3".reduce(|)
+  Quinary: Digit = "0".."4".reduce(|)
+  Senary: Digit = "0".."5".reduce(|)
+  Septenary: Digit = "0".."6".reduce(|)
+  Octal: Digit = "0".."7".reduce(|)
+  Nonary: Digit = "0".."8".reduce(|)
+  Decimal: Digit = "0".."9".reduce(|)
+  Undecimal: Digit = ("0".."9", "A").reduce(|)
+  Duodecimal: Digit = ("0".."9", "A".."B").reduce(|)
+  Tridecimal: Digit = ("0".."9", "A".."C").reduce(|)
+  Tetradecimal: Digit = ("0".."9", "A".."D").reduce(|)
+  Pentadecimal: Digit = ("0".."9", "A".."E").reduce(|)
+  Hexadecimal: Digit = ("0".."9", "A".."F").reduce(|)
+}.for Base, digit
+  class `Base` = sign = "-"?, integer = Positive
+    static def Digit = digit
+    // TODO: The static Decimal, should be read as a Type which is an array, but it implements an AbstractDirectionality too: the default +1/-1 numberline: that way you can do Decimal.if(<10); Or Decimal.Positive which has base case 0 selected.
+
+    // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
+
+    // We use 'Positive' here, since a 0, in this construction can be signed. (Even though for most operations that difference won't matter)
+    static class Positive = Array<digit.value>
+      static def String = Array<digit as string>
+      // TODO Map to and from string, using some mapping (which is defined both ways, once: 0 = '0' ..)
+
+      def `fraction = Positive.String` => Real.Positive = sign, integer, ".", fraction
+    end
+
+    static class Real = sign = "-"?, Real.Positive // TODO: should be possible to define out of order, and access integer/fraction methods ; It should be seen as a partial "extends"
+      static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive
+      end
+    end
+  end
+end
+
+def `digits = Decimal.Positive.String` => Decimal.Positive => (digits as Digit[]).map(.value)
+def 0`"x" | "X"``digits = Hexadecimal.Positive.String` => Hexadecimal.Positive = (digits as Digit[]).map(.value)
+
+def u`length = Decimal.Positive.String` = Binary.Positive{.length == length}
+  // TODO Number arithmetic
+end
+def i`length = Decimal.Positive.String` = Binary.Positive{.length == length} // TODO, Use Binary vs Binary.Positive
+  // TODO Number arithmetic
+end
+
+def number
+  //TODO A number.positive
+
+  // TODO Generic number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
+  // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
+  // TODO: external defines that number > number is done by some other operator, not looking through successors/predecessors.
+end
+
+
+private def Two = Array<length == 2>
 class boolean = false = Two.first~ | true = Two.last~ do
   // TODO Verify that these are correct work for all cases.
 
@@ -231,76 +305,6 @@ class boolean = false = Two.first~ | true = Two.last~ do
 end
 { false, true } = boolean
 
-
-def Integer = sign = "-"?, integer = Positive
-  static def Positive = Array{length == n}().last~
-end
-
-private def Digit = ("0".."9", ("a" | "A")..("f" | "F")).reduce(|)
-  def value
-    // TODO: First wait on a definite way of defining the graphs.
-    "0" = |,_,_,_,_,_,_,_,_
-    "1" = -,|,-,-,-,-,-,-,-
-    ("a" | "A") =
-    // TODO Define the graph of a number, without having access to a number to construct it.
-  end
-end
-
-{
-  Binary: Digit = "0" | "1"
-  Ternary: Digit = "0".."2".reduce(|)
-  Quaternary: Digit = "0".."3".reduce(|)
-  Quinary: Digit = "0".."4".reduce(|)
-  Senary: Digit = "0".."5".reduce(|)
-  Septenary: Digit = "0".."6".reduce(|)
-  Octal: Digit = "0".."7".reduce(|)
-  Nonary: Digit = "0".."8".reduce(|)
-  Decimal: Digit = "0".."9".reduce(|)
-  Undecimal: Digit = ("0".."9", "A").reduce(|)
-  Duodecimal: Digit = ("0".."9", "A".."B").reduce(|)
-  Tridecimal: Digit = ("0".."9", "A".."C").reduce(|)
-  Tetradecimal: Digit = ("0".."9", "A".."D").reduce(|)
-  Pentadecimal: Digit = ("0".."9", "A".."E").reduce(|)
-  Hexadecimal: Digit = ("0".."9", "A".."F").reduce(|)
-}.for Base, digit
-  class `Base` = sign = "-"?, integer = Positive
-    static def Digit = digit
-    // TODO: The static Decimal, should be read as a Type which is an array, but it implements an AbstractDirectionality too: the default +1/-1 numberline: that way you can do Decimal.if(<10); Or Decimal.Positive which has base case 0 selected.
-
-    // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
-
-    static class Positive = Array<digit.value>
-      static def String = Array<digit as string>
-      // TODO Map to and from string, using some mapping (which is defined both ways, once: 0 = '0' ..)
-
-      def `fraction = Positive.String` => Real.Positive = sign, integer, ".", fraction
-    end
-
-    static class Real = sign = "-"?, Real.Positive // TODO: should be possible to define out of order, and access integer/fraction methods ; It should be seen as a partial "extends"
-      static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive
-      end
-    end
-  end
-end
-
-def `digits = Decimal.Positive.String` => Decimal.Positive => (digits as Digit[]).map(.value)
-def 0`"x" | "X"``digits = Hexadecimal.Positive.String` => Hexadecimal.Positive = (digits as Digit[]).map(.value)
-
-def u`length = Decimal.Positive.String` = Binary.Positive{.length == length}
-  // TODO Number arithmetic
-end
-def i`length = Decimal.Positive.String` = Binary.Positive{.length == length} // TODO, Use Binary vs Binary.Positive
-  // TODO Number arithmetic
-end
-
-def number
-  //TODO A number.positive
-
-  // TODO Generic number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
-  // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
-  // TODO: external defines that number > number is done by some other operator, not looking through successors/predecessors.
-end
-
 def string = char[]
   // TODO How do other languages implement String?
 end
@@ -309,6 +313,8 @@ class char = u32
 end
 
 def Range
+  // TODO Depending on the 'default space selected', range is either the refined Array, or a graph. (Graph because looped paths can exist)
+
   // TODO Range should be bounds which are Rays (already have the graph equipped)
   // TODO Infinity, is just the terminal reference (which doesn"t exist on the line) How to differentiate initial/terminal infinity.
 

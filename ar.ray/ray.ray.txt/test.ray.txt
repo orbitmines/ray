@@ -711,6 +711,7 @@ end
 -b <- x -> +b
 
 //TODO How does inverting with a memory of what was done work? (Even if there was information loss on the Node)
+//TODO Similarly, bidirectional Programs, which go backwards, either through all possibilities where it came from, or memorized which paths were taken, how?
 
 // (*) => * means (...args: *) => *, what if another argument is used (Array) => *, it means (..args: Array) => *, or (arg: Array) => *
 //    -> Any method which accepts a single variable of type array, which is passed multiple, is allowed to be passed (a, b, c). So (Array) => * means both (...args) and (arg: Array)

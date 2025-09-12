@@ -692,6 +692,25 @@ Array<length > 2><length == 2> => 'void'/None/some type.
 // Lean: On a 32-bit architecture, USize is equivalent to UInt32. On a 64-bit machine, it is equivalent to UInt64.
 //   -> How to conditionally get the architecture for this definition.
 
+// Defining invertible bijective functions.
+def map(mapping)
+
+reverse(this)
+  this.map(mapping.invert) // TODO Need to have access to the parameters?
+end
+
+def + b
+reverse
+  this - b
+end
+def - b
+reverse
+  this + b
+end
+// TODO This should somehow be simplified
+-b <- x -> +b
+
+//TODO How does inverting with a memory of what was done work? (Even if there was information loss on the Node)
 
 // (*) => * means (...args: *) => *, what if another argument is used (Array) => *, it means (..args: Array) => *, or (arg: Array) => *
 //    -> Any method which accepts a single variable of type array, which is passed multiple, is allowed to be passed (a, b, c). So (Array) => * means both (...args) and (arg: Array)

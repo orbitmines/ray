@@ -37,6 +37,11 @@
 // Should changing local, also change 'caller'/'definer'?
 // [1, 2, 3] should call global level [], not local level def [property].
 // Variable * for any shouldnt interfere with * 2 things. *2 variable or * _, reduce(*) (* is called on the acc and current)
+// Somehow the constructor another method thing so that everything can be passed on to static, but then that would have the same problem.
+// The boolean definition false, true = needs to be on static. Which is done because the .false/.true values never change based on the type definition.
+// If a method doesn't exist on the variable, but it is castable to something which does define that method, say boolean and &/|. Converting it to that value and calling that method should be possible.
+//   |-> Version control: if that method is then implemented by a library, a user should be notified the functionality changed (probably unexpectedly)
+//   |-> Ambiguity if there are multiple casts to which that method may be applied.
 
 // TODO - Notes for Examples
 // Partially extending like Decimal/Decimal.Positive, Every Decimal.Positive is a Decimal, since sign is Option
@@ -103,10 +108,14 @@ program(throw: (args: Args) => error = args; goto capture)
 
 // Binary{length == 1} should be not castable, but should be boolean. or Binary.Positive[] = boolean[]
 
+// Automatic isomorphism example in Number as String definition. + example of how repeated strings map to an array.
+// Show that generic type parameters are accessible in monkeypatch, even if not defined in monkeypatch
+// The only difference between a class and a normal def is that static and this are defined.
+
 // TODO - Examples + Allowances
 // Allow chaining of binary operators like Array<3 < length < 5>
 // Allow chaining of conditionals with .AND -> Array<length > 3><length < 5>
-// Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>
+// Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>, Array{length > 2 if property}
 // Like this == n ? TypeA : TypeB, allow 'match' to be a type definition.
 // Allow def (array: Array), to automatically accept varargs.
 // Multi-methods should work for things like throw, if top-level defined doesnt accept the error, perhaps the top-level one does.
@@ -122,6 +131,11 @@ program(throw: (args: Args) => error = args; goto capture)
 // Allow a < b < c
 // Allow def method(n: % 2 == 0)
 // Allow def (...args) unused to be def (*)
+// Allow false, true = boolean (Because boolean is a FALSE.OR(TRUE) Node, and nothing else could match to this spread operator). TODO How to go into the reverse direction? Say cursor is on TRUE there. (if it's not referencing a graph).
+//    -> Should this also define Iterable: .for, for Nodes which don't have any ray selected? Or Actually implement Ray, if the .OR definition is a ray not an Array/graph
+// Generalized: Repeated entries in an array like string, single instance mapping 'as X'. Allows for 'repeated X' to 'string'. And then automatic isomorphism might take care of 'string as X' and 'string as X[]'
+// spaces for method calls only work for same line, except for body calls
+// Point(x=1) x=1 shouldn't be overridden by x=0 in the constructor
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
@@ -141,6 +155,8 @@ program(throw: (args: Args) => error = args; goto capture)
 // Warning in class, if return is used: because it's not used in the 'class definition'
 // How is something like the proof that after a .push_back(A), .last = A, unless another push_back is used. How do you represent that, and how is it used by the compiler?
 // Native support for running parallel on other machines
+// When using multiple implementations of methods, you want enumerations of possible requirements, so for boolean this could be NAND, NOR, NOT & OR, NOT & AND. etc..
+// 'external' is allowed to overwrite any method.
 
 // TODO - Notes on Version Control
 // Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
@@ -150,13 +166,25 @@ program(throw: (args: Args) => error = args; goto capture)
 // If blocks like if array.length > 2 ... end, change the type of array within that block.
 // Functions should relax their arguments to 'actually used this from the type'. (So type refinements)
 // Any 'Program' object, carries with in what is accessible from that context, that way after each line, we can check whether a variable is present
+// Taking the 'if' definition as an example, the type that gets returned needs to be a dependent type based on 'expression', then either 'yes => Return' or 'else => Return' needs to be implied.
 
 // TODO - Notes on Theorem proving
 // For the theorem prover, you might want to store a specific proof instead of only saving the tactic by which it is solved, needs some effective way of storing and referencing this; probably in a directory outside the current file
 //   -> In the background run some (in)equivalence of functions algorithm to check equivalences automatically if possible.
+// Tests is the same as theorem proving, but instead of whole types and proving them, we work with specific values of the types.
+//   -> Combine both approaches
+// Theorem proving that multiple implementations are the same, after a theorem is found -> possibly add to possible implementations
+// runtime; Multiple implementations but prefer the one over the other for speed, is that done automatically? deduce which one is faster for which case?
+// example; As an example usage: Use theorem-prover to automatically generate all the possible boolean implementations. How?
+//    assert that all logic operations are available when only nand or nor is provided, or when not, and and or are provided. etc.. and all possible permutations
+//    -> Are these all the minimals: nand, (not, and), nor, (not, or), (and, xnor), (or, xnor), (or, xor), (and, xor)
 
 // TODO - Editor
 // goto label in an IDE should bring the label back one space. ; if then a type defined instead add it back.
+// If an automatic isomorphism is found, and the user is trying to implement it, notify the user it's not necessary.
+
+// TODO - Implementing languages.
+Translate everything like ifblocks etc. to other languages, which are implemented in .ray.txt with primitives to the implementation . How to say that something like the if/else construction shouldn't be rewritten to the goto's but instead are the primitives. How to use the rewrite-blocks of code syntax to rewrite to a javascript-like syntax.
 
 // TODO - Features
 // Observables which check if a variable is changed, dynamically assert would make use of that.
@@ -169,9 +197,15 @@ program(throw: (args: Args) => error = args; goto capture)
 // Methods like hour`"s"?`, from rails. Define it as an 'undefined method', which doesn't resolve to a type. But how does it then reduce to an actual value (like ms?)
 // Type: 'Terminating', TODO How to give function body types? -> Program{.expanded().length < Infinity} - expanded because otherwise groups count as length = 1, or is length automatically going inside?
 //      Top of the file: assert local instanceof Terminating (or something like that)
+//      The statement of terminating is basically saying: all loops are eventually escaped from. And length is finite.
 // Evaluating infinities: "There exists ; is just some" def even(n: ) => Nat.some(half => n == double(half)). ; TODO How does this evaluate on the infinite .some ; Nat<every> is different from Array<length> one is referring to an instance the other to the static type Nat. Or dont use Nat<every>
 // Native support for eventual consistency
-// sum/product sum icons, being .reduce(*)/.reduce(+)
+// Math
+//   sum/product sum icons, being .reduce(*)/.reduce(+)
+//   Something like an integral implemented as an dx = infitesimal step, is that just .next and in a discrete system that means a single step minimally?
+// Might want to catch the runtime error of a type somewhere, for instance arbitrary user input which needs to match some type.
+// .flatten = .reduce(push_back)
+// Automatic isomorphism
 
 // TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
 // Single-line function
@@ -243,6 +277,7 @@ end
 
 def Hypergraph
 end
+// Graph Type need to allow loops at every step, and then an easy way to type for not having loops
 def Graph
   extends Hypergraph<Ray<edges.next.every(.value.length <= 1)>> // This needs to be applied to every entry, not on graph
   // TODO Not Many on edges
@@ -260,6 +295,9 @@ def Array
   extends Graph<Ray<next.length <= 1, previous.length <= 1>> // This needs to be applied to every entry, not on graph
   // TODO Not Many on terminal
 end
+//TODO Are higher-inductive types simply the structured types?
+// How do you define a Sphere?, Torus etc? 2d grid (2d overlapping graphs vs 2-dimensional until the other side of the sphere is reached) with modular unroll?
+
 
 // Query by default
 
@@ -713,53 +751,45 @@ end
 //TODO How does inverting with a memory of what was done work? (Even if there was information loss on the Node)
 //TODO Similarly, bidirectional Programs, which go backwards, either through all possibilities where it came from, or memorized which paths were taken, how?
 
-// (*) => * means (...args: *) => *, what if another argument is used (Array) => *, it means (..args: Array) => *, or (arg: Array) => *
-//    -> Any method which accepts a single variable of type array, which is passed multiple, is allowed to be passed (a, b, c). So (Array) => * means both (...args) and (arg: Array)
-// Generic types can extend like this Function<(Args = *) => Return = *> so that Function<(*) => *> can be used. Args and Return are then defined for monkeypatching, even if not defined as such.?
+
 // A Node has a definition (which is possibly in sequence) => which is the program that generated it. And successive methods called on it for it to become what it did.
-// TODO How do tests and asserts fit into theorem proving?
-// Is this a new primitive operator?: "defines what 'this' is" "dependent object just like type" Variables are pointers to .history().last() ; when a normal Node reference doesn't change. A reference to the last Node is done like that.
-//     -> variable = node; def actual_variable variable.history.last end; def actual_variable=(value) variable.history.push_back(value) end
-//     -> What if Node defines a .history, where is the .history actually being called?
-// Something implementing `*`= and `*`, goes for 'the most specified option' or does `*`(`*`=) return `*`=.
-// A function is just a Node with `*` properties defined where `*` is the variable called into the same program. (*) => * or generally (), is just a single property which returns that Node. Node.() => Node[Args]. Functions have (possibly) infinite context
-// Enums are inductive types
-// Higher-inductive types (equiv ray?) seem really relevant to what I'm trying to do with additional structure on Node, and the defining of a type like Graph.
-// How do you define a Sphere?, Torus etc? 2d grid (2d overlapping graphs vs 2-dimensional until the other side of the sphere is reached) with modular unroll?
-// Which is better: Defining .property= functions, vs defining a property with the = func defined. Which means the type nil? Would have a pointer to where it was supposed to be defined, and a .= method callable on it.
-// What about the Array type, but then put on the value, so it's an integer. Make that type.
-// Do labels go to the initial before a node, or are they on that node.
-// get method information of parameterless method some other way
-// Setting the current value '= expression' local = ? Uesful when
+//    -> Node definition and history coincide: You want all the updates up to some place, and access that as a Node.
+
+
+// As a rewrite rule on program: -> variable = node; def actual_variable variable.history.last end; def actual_variable=(value) variable.history.push_back(value) end
+
+// Should None define '=' with memory of where it came from, instead of doing `*`=. This way you say Obj.Subclass = '', calls Subclass.=, which sets definer[name] = ''
+// Setting the current value '= expression'
+// `*`(`*`=) returns `*`=.
+
+//TODO How to get `*`, to still be able to use methods on the object, without recursively calling itself.
+
+// (args: ...) = var.()[args] // var.() to distinguish it from var(). So when () is called, .() is called on `*`.
+
+// Program selects an initial as a starting point. So labels reference the thing before a statement.
+
+// Reflection: get method information of parameterless method some other way
+
 // How to translate injecting code in inaccessible functions, like creating an alias for elsif called elseif, you need to inject code inside the elsif function.
-// extends sets the caller.super to that, what if there are multiple extends and there's ambiguity in a method to which parent
-// Array<length > 2 if other_property = 1>
-// Is it useful to define things like Array<length > 2> on the object itself, and how?
-// method names check with instance_of so method name is a type.
+
+// method names check with instance_of so method name is a type. But which instance_of?
+
 // Dynamic space as a type how?
-// When using multiple implementations of methods, you want enumerations of possible requirements, so for boolean this could be NAND, NOR, NOT & OR, NOT & AND. etc..
-// TODO Theorem proving that multiple implementations are the same, after a theorem is found -> possibly add to possible implementations
-// TODO Multiple implementations but prefer the one over the other for speed, is that done automatically? deduce which one is faster for which case?
-// Last value is the return value?
-// Should external be allowed to implement any method? Yes.
-// If a method defines =external, and offers other implementations, external is optional.
-// TODO Define all boolean operators on any type for Falsity/Truthy values. TODO: How to differentiate | in a type with the | for boolean evaluation
-//   -> When a boolean is evaluation and has a binary operator with a non-boolean value, you would use some implicit cast to boolean.
-// TODO Use theorem-prover to automatically generate all the possible boolean implementations. How?
+
+// Last value is the return value? What if it's a code block like if?
+
+// No function body -> Not an implementation. See boolean for example, only uses or. And nothing in the 'def' block
+
+& on object
+| on function, object
+
 // Simplest reduce case: (0..9.reduce(|)) is just placing the | decorator on each of the edges. -> Probably an efficiency thing/
-// Theorem proving: assert that all logic operations are available when only nand or nor is provided, or when not, and and or are provided. etc.. and all possible permutations
-//  -> Are these all the minimals: nand, (not, and), nor, (not, or), (and, xnor), (or, xnor), (or, xor), (and, xor)
-// Any method (like boolean arithmetic) can be overridden by external.
-// The only difference between a class and a normal def is that static and this are defined.
-// boolean = Two.first needs to put it on the value: .relative_context(); use operator ~ for relative context?
-// spaces only work for same line, static space also works, private works also like this
-// Point(x=1) x=1 shouldn't be overridden by x=0 in the constructor
+
 // instantiations of a type using something like WaveFunctionCollapse
-// Graph Type need to allow loops at every step, and then an easy way to type for not having loops
+
+
 // inverse-1 notation used to go to the reverse direction of a method
-// The statement of terminating is basically saying: all loops are eventually escaped from.
-// Taking the 'if' definition as an example, the type that gets returned needs to be a dependent type based on 'expression', then either 'yes => Return' or 'else => Return' needs to be implied.
-// TODO: Patch separate, so you dont have to call class/def separately
+
 
 // Types:
 // "this function has different return types, depending on the value of its argument" ; match
@@ -778,9 +808,4 @@ end
 // & How to Maybe Hijack depended on the argument expression
 
 
-def Integer<number> = //TODO Set value to Array<length>, but how is an instance of integer 'instanceof Integer' Integer
-def `number = Decimal` = Integer(number)
 
-// Array<Array>, Array<Array>
-// args = [], []
-// definition(args) | definition(arg1 arg2)

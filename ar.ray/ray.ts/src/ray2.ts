@@ -338,7 +338,7 @@ export interface Ray extends INode, ConditionalStructure<Ray>, AbstractDirection
    * Move this Ray to .self.
    * Example: In A-B-C, -B-.relative_context.equals(A-B-C) if A-B-C has -B- selected.
    */
-  relative_context: () => Node
+  relative_context: () => Node //TODO Is the ~ operator
   /**
    * One of the .parts(), which is referenced.
    * TODO: Should not show up for a single ray.

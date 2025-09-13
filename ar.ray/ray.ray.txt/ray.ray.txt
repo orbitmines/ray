@@ -20,7 +20,7 @@ end
 def [args: Array] => args
 
 def < constructor: (*) => *
-  caller.super = constructor<local: caller>
+  caller.super |= constructor<local: caller> //TODO, Superposes super, so many definitions which clash, go to multiple implementations
   caller.super[constructor.name] = constructor<local: caller> if constructor.name
   // TODO: How does type extension work?
 end
@@ -78,6 +78,8 @@ class Node
 
   def [] = Array<this>
   def ? = Some(this) // TODO Perhaps None if None, or void or ?
+
+  def as : boolean = true //TODO: How to 'as the type boolean not an instance'
 end
 
 def Iterable
@@ -175,6 +177,9 @@ end
 
 def Option<T> = Some(T) | None
 { Some, None } = Option
+def None
+  def as : boolean = false
+end
 
 def Integer<n> = sign = "-"?, integer = Positive
   static def Positive = Array{length == n}().last~
@@ -187,6 +192,10 @@ private class Digit = string[].reduce(|)
       `d` =
     end
     return local[digit]
+
+    //TODO Number should be like this.
+    //private def Two = Array<length == 2>
+    //false = Two.first~ | true = Two.last~
 
     // TODO: First wait on a definite way of defining the graphs.
     "0" = |,_,_,_,_,_,_,_,_
@@ -214,19 +223,32 @@ end
   Pentadecimal: Digit = ("0".."9", ("a" | "A")..("e" | "E")).reduce(|)
   Hexadecimal: Digit = ("0".."9", ("a" | "A")..("f" | "F")).reduce(|)
 }.for Base, digit
+
+  //TODO Because string has digit as string defined, any Array of digit strings should automatically be defined, to as string too. with .map
+  +def string = `Base`.Digit
+    def as : `Base`.Digit.value = `Base`.Digit.value(this)
+  end
+  //TODO string as Binary.Positive = "0101010" = Digit.value[] = Positive
+  // TODO: Binary.Positive as string; Automatic isomorphism
+
   class `Base` = sign = "-"?, integer = Positive
-    static def Digit = digit
+
+    //TODO Because sign is a string, Positive is castable to a string, `Base` is castable to a string
+    static String = static as string
+
+    static Digit = digit
+    //TODO This should not be in the constructor, but taken outside of it.
+
+
     // TODO: The static Decimal, should be read as a Type which is an array, but it implements an AbstractDirectionality too: the default +1/-1 numberline: that way you can do Decimal.if(<10); Or Decimal.Positive which has base case 0 selected.
 
     // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
 
+
     // We use 'Positive' here, since a 0, in this construction can be signed. (Even though for most operations that difference won't matter)
-    static class Positive = Array<digit.value>
+    static class Positive = Array<Digit.value>
       static def String = Array<digit as string> //TODO as string, should mean 'drop all the extra stuff on Digit', not actually set to type string, but that's an ambiguity here.
-        def as Positive.String //TODO Implicit operator like this?, Is there a way to unambiguously use the type without a variable declaration
-      end
-      // TODO: This from_string should be an implicit operator. Should be two-way: digits.map(..) should be automatically invertible for Positive => Positive.String: This is actually a very important feature. ; Automatic isomorphism
-      static def from_string digits: Positive.String => Positive = digits.map(x => digit.value(x))
+
 
       // TODO Map to and from string, using some mapping (which is defined both ways, once: 0 = '0' ..)
 
@@ -234,10 +256,24 @@ end
     end
 
     static class Real = sign = "-"?, Real.Positive // TODO: should be possible to define out of order, and access integer/fraction methods ; It should be seen as a partial "extends"
+      static String = static as string
+
       static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive
+        static String = static as string
       end
     end
   end
+end
+
++def Binary.Positive
+  def ! = this.map(!)
+  def & = this.map(&&) //TODO SSimilarly ambiguity with object.merge &
+  def | = this.map(||) //TODO Now ambiguity with number | number type
+  nand = def !& = this.map(!&)
+  nor = def !| = this.map(!|)
+  xor = def x| = this.map(x|)
+  xnor = def x!| = this.map(x!|)
+
 end
 
 def `digits = Decimal.Positive.String` => Decimal.Positive = digits
@@ -258,30 +294,25 @@ def number
   // TODO: external defines that number > number is done by some other operator, not looking through successors/predecessors.
 end
 
-
-private def Two = Array<length == 2>
-class boolean = false = Two.first~ | true = Two.last~ do
+class boolean = false, true = Binary.Digit.value // TODO This should automatically implement "0" | "1" as boolean, through Binary.Positive. : Generalized to: Anything that is implementing Array<T>, like Positive, should also apply to just a T.
   // TODO Verify that these are correct work for all cases.
 
-  not =
-    def !
-    or this !& this
-    or this !| this
-    or this x| true
-    or this x!| false
-    end
+  def !
+  or this !& this
+  or this !| this
+  or this x| true
+  or this x!| false
+  end
 
-  and =
-    def & b: boolean
-    or !(this !& b)
-    or !(!this | !b)
-    end
+  def && b: boolean
+  or !(this !& b)
+  or !(!this || !b)
+  end
 
-  or =
-    def | b: boolean
-    or !(this !| b)
-    or !(!this & !b)
-    end
+  def || b: boolean
+  or !(this !| b)
+  or !(!this && !b)
+  end
 
   nand =
     def !& b: boolean
@@ -299,13 +330,13 @@ class boolean = false = Two.first~ | true = Two.last~ do
 
   nor =
     def !| b: boolean
-    or !(this | b)
+    or !(this || b)
     end
 
   xor =
     def x| b: boolean
     or !(this x!| b)
-    or (this & !b) | (!this & b)
+    or (this & !b) || (!this & b)
     end
 
   xnor =
@@ -313,9 +344,12 @@ class boolean = false = Two.first~ | true = Two.last~ do
     or !(this x| b)
     end
 end
-{ false, true } = boolean
+{ false, true } = boolean // Could also be 'false, true = boolean' in this case.
 
-def string = char[]
+class string = char[]
+  //TODO: Any Array definition is an expandable object, which at one level of description has that new Node, on the other the array of things.
+  //TODO: Want to allow things like string.push_back(u32), but it should encapsulate the u32 into an expandable single node.
+
   // TODO How do other languages implement String?
 end
 class char = u32

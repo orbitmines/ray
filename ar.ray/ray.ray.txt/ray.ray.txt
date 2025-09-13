@@ -269,7 +269,7 @@ end
   def ! = this.map(!)
   def & = this.map(&&) //TODO SSimilarly ambiguity with object.merge &
   def | = this.map(||) //TODO Now ambiguity with number | number type
-  nand = def !& = this.map(!&)
+  nand = def !& = this.map(!&) // TODO, Do type definitions every use nand, nor, xor, xnor?
   nor = def !| = this.map(!|)
   xor = def x| = this.map(x|)
   xnor = def x!| = this.map(x!|)

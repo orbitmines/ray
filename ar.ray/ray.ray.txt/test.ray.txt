@@ -1,28 +1,42 @@
+
+// TODO: This needs to be resolved before anything else does:
+
+// TODO; Every value type T, is automatically decorated with Many. How is it indicated that it's a single result, and never many?
+// TODO; But how do you iterate possibilities.
+// TODO: It's an arbitrary graph, so how are we delegating resources on every property access etc.
+//          -> How do you write a generating function which acceptsthis. It's .that_function.reduce(|), and .that_function is possibly non-halting.
+// TODO: Ambiguity: .reduce(|) on an Array value, what does the .for go to? Now I'm using .for to iterate the possibilities of string[].reduce(|), not string. Because string[].reduce(|) is type 'string': Take Digit for example.
+
+
+
 // How to populate Arrays/graphs by default
 
 // What's the graph interpretation of an inductive type like 'def Option<T> = Some(T) | None'
 
-// Convert Binary.String -> Binary, youd want an implicit cast, but also already have all Binary methods on Binary.String ; Like "a coerced inheritance"
 // Calling a method which accepts a boolean, with the boolean type: Abstract interpretation natively supported.
 //   -> The result should be refinable, "now I know it's true, so what's the result".
 //   -> Partial evaluation, leads to external values being abstractly interpreted as well.
 //     -> I should be able to later say, similarly, that the result is now refined to 'true', any effects caused should be reset back.
 //   -> So .OR possibilities need to carry with it information of why and how to possibly change them
 
-// Partially evaluating the boolean OR operation even when superpositions are present, should be possible if there's a single 'true' amongst them.
-//   -> How do we know/use a proof that a single true is enough, to discard the superpositions.
+// .OR: How do we know/use a proof that a single true is enough, to discard the superpositions.
 
 // Does every type like 'boolean' automatically include all the methods defined on it. So boolean.nor is the superposed method, which can later be called with a new 'this' value, how is that intuitively done?  (How does on static fill generics which might be required to call methods)
 // If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
 
 
-// How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local'
+// How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local': Things like local are private - so pri. Private doesn't prevent it from being overwritten though.
 
 // .reduce(|) TODO How does it work to pass a binary operator to a reduce which has accumulator and current as the two arguments
+//   -> If default is not set for accumulator, the initial value is the first in the array.
+//   TODO But how would you?: For .reduce, require a default value for accumulator, how to indicate that?
+
 
 // 0..9.reduce(|) = (Decimal.Digit) 0.value.context.reduce(|) ; .superpose an array, namely the digit defining 0. -> Then could also have the digit values link back to the superposed object or not?
 
-// node > itself or node < itself, we're in a loop (or repeated value which we're forced to see as the same, or we're not comparing using the difference we have access to - this 'number'line)
+// <=; node > itself or node < itself, we're in a loop (or repeated value which we're forced to see as the same, or we're not comparing using the difference we have access to - this 'number'line)
+
+// == allows coercions/casts/equivalences, we want one that's also exactly equal without those?
 
 // TODO - Ambiguities
 // var? vs var ? true : false ; how to know if we need to convert var to a boolean or pass it to option.
@@ -42,8 +56,12 @@
 // If a method doesn't exist on the variable, but it is castable to something which does define that method, say boolean and &/|. Converting it to that value and calling that method should be possible.
 //   |-> Version control: if that method is then implemented by a library, a user should be notified the functionality changed (probably unexpectedly)
 //   |-> Ambiguity if there are multiple casts to which that method may be applied.
+// classes without parameters are now called their constructors instead of requiring a ().
 
 // TODO - Notes for Examples
+// Partial extends like Number.
+// .Real.Positive should be castable to .Real
+// "01101010" ~|| "10101000", or something like "0" || "1" is defined, because, there's a cast from Binary.Positive.String -> Binary.Positive, which defines those methods. And they're not defined on string. (And "0" || "1", works because string as Digit.value, which automatically finds an isomorphism the other way, which is then castable to boolean)
 // Partially extending like Decimal/Decimal.Positive, Every Decimal.Positive is a Decimal, since sign is Option
 // "A program/function with parameters which gets evaluated gets called"
 
@@ -215,9 +233,8 @@ def Maybe(a)
   return Just a | Nothing
 end
 
-//TODO Is None instanceof void?
 
-// Array<length.max() >= 5> or default the .max() if a comparison happens, how?
+// .max/.min on Array<number>
 
 // TODO: Does this assigning to false | true also change Two.first to ref on .value to the Node.
 
@@ -381,6 +398,7 @@ end
 // TODO: match groups inside arbitrary structure method name
 // Default structure is to create a Node with many rays through it.
 // Need better way of connecting in sequence or branching.
+// Array refines .length to take a single value.
 def Array <T>
   -o | .
    o-
@@ -464,15 +482,6 @@ end
 a, b, c = 1, 2, 3
 first, ..middle, last =
 
-def Object
-  def field
-  end
-  def field2
-  end
-  def field3 = [1, 2, 3]
-  def field4 = Just a | Nothing
-end
-
 // Doing it with assignment
 def method a: Object, b = a.field, c = a.field2
 end
@@ -551,11 +560,6 @@ def Branching
   end
 end
 
-def Function
-  def compose f2
-    (args) => f2(this(args))
-  end
-end
 
   def ?
     a
@@ -604,16 +608,10 @@ def Array<length > 2>
 
   end
 end
-def patch_it
-  def global.Array<length > 2>
-    // TODO Anything in the constructor here is called for every instance which currently doesnt have it? Is there are use-case where you would want it to be?
-  end
-end
 
 // Multiple implementation
 Array.method |= (arg1) ; name = method(name) | implementation
-
-
+// | is one of the implementations, &, is call all.
 
 // dynamic asserts can carry type information of multiple objects, like A.disjoint(B). How to account for that? It's type information living in some graph above the object?
 //   -> It affects both A and B as types, in the A.disjoint(B) case. Dependent on some other variable.
@@ -804,7 +802,7 @@ def Statement
     end
   end
 end
-// goto .. if as defining if on goto context which has (expression?) as external. So 'end' is optional here since no block is given. This 'if' overwrites the if defined on statement, but how? -> what decides presedence
+// what decides presedence in the goto if overwrite on statement. Because goto < statement?
 // & How to Maybe Hijack depended on the argument expression
 
 

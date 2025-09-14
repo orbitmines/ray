@@ -19,9 +19,10 @@ class goto
 end
 def [args: Array] => args
 
-def < constructor: (*) => *
-  caller.super |= constructor<local: caller> //TODO, Superposes super, so many definitions which clash, go to multiple implementations
-  caller.super[constructor.name] = constructor<local: caller> if constructor.name
+def < constructors: Array<(*) => *> => constructors.for constructor
+  caller.private super &= constructor<local: caller>
+  caller.private super[constructor.name] = constructor<local: caller> if constructor.name
+  //TODO Ensure the caller implements all undefined methods (unless abstract) abstract if any methods aren't defined. Is there ever a case where you want to extend abstract but only pass along the methods, yes?
   // TODO: How does type extension work?
 end
 
@@ -38,6 +39,9 @@ global = local
 //TODO .map, .map on single value, effecting all .OR?; No that's the same as calling on the static def, the method meant for the instance. (Allow both variants)
 //TODO "as string" should also accept "as Digit[]"
 //TODO private
+//TODO .zip/.zip_longest (ziplongest returns with _length to the max) for parameterless, and parameters [this, b].zip
+//TODO push_back(void) should only create the array one longer.
+//TODO .for on object, but it gets overwritten if type of Array. What is used then to get the object instead. Use .properties.for
 
 //
 
@@ -77,18 +81,33 @@ class Node
   def `*` = external
 
   def [] = Array<this>
-  def ? = Some(this) // TODO Perhaps None if None, or void or ?
+  def ?? default = this as boolean ? this : default
 
   def as : boolean = true //TODO: How to 'as the type boolean not an instance'
+
+  def == b //TODO
+  end
+
+  // TODO WHat about the primitive .not
+  or = def | //TODO
+  and = def & //TODO
 end
 
-def Iterable
-  for callback: (Args = *) => *
+def Iterable<T = *>
+  for callback: (*[]) => *
+    //TODO: callback.parameter s = Array & Object, named at Object, .length etc. at Array; 'parameters' interprets as an array.
     //TODO + continue
     //TODO + return = caller.return
   end
 end
-def AbstractDirectionality < Iterable
+def AbstractDirectionality < Iterable, Order
+end
+
+class Order<T = *>
+  def <= b: T = this == b || this < b
+  def < b: T
+  def >= b: T = this == b || this > b
+  def > b: T
 end
 
 class if expression: Expression, yes?: () => *
@@ -162,7 +181,7 @@ class Expression
 end
 
 // A function is a Node for which "(*) => *" is defined.
-def Function<(Args = *) => Return = *> = Node<(Args) => Return>
+Function = +def Node{(Args: *) => Return: *}
 
   // do end.while() is a do-while loop. TODO Could also only define it on "() => void"
   def while expression: Expression
@@ -173,12 +192,25 @@ def Function<(Args = *) => Return = *> = Node<(Args) => Return>
       goto exec if expression
     end
   end
+
+  //TODO: Evaluate right-to-left f compose g compose h = f.compose(g compose h)
+  ∘ = def compose(g: (: g_Args) => Args) = (args: g_Args) => Return = this(g(args))
 end
 
-def Option<T> = Some(T) | None
+// Anything called on Option is automatically equivalent to 'variable?.'
+def Option<T> = Some(value: T) | None
 { Some, None } = Option
-def None
++def Some
+  def `* = property`
+    ret = value[property]
+    return ret == Some(*) ? ret : Some(ret)
+  end
+end
++def None
   def as : boolean = false
+
+  // TODO as boolean, and maybe other things defined on Node should still work, but how?
+  def `*` = this
 end
 
 def Integer<n> = sign = "-"?, integer = Positive
@@ -188,20 +220,13 @@ end
 private class Digit = string[].reduce(|)
 
   def value(digit: this = this)
+    array = this.reduce(array = [] => array.push_back(void))
+
     this.for d
-      `d` =
+      `d` = this{<= d}.reduce(cursor = array => cursor.next)~
     end
+
     return local[digit]
-
-    //TODO Number should be like this.
-    //private def Two = Array<length == 2>
-    //false = Two.first~ | true = Two.last~
-
-    // TODO: First wait on a definite way of defining the graphs.
-    "0" = |,_,_,_,_,_,_,_,_
-    "1" = -,|,-,-,-,-,-,-,-
-    ("a" | "A") =
-    // TODO Define the graph of a number, without having access to a number to construct it.
   end
 end
 
@@ -231,7 +256,9 @@ end
   //TODO string as Binary.Positive = "0101010" = Digit.value[] = Positive
   // TODO: Binary.Positive as string; Automatic isomorphism
 
-  class `Base` = sign = "-"?, integer = Positive
+  class `Base` < number = sign = "-"?, integer = Positive
+
+    //TODO Equip a default directionality. (Line: One with forward/backward from a specific point, but it isn't necessarily selected there.)
 
     //TODO Because sign is a string, Positive is castable to a string, `Base` is castable to a string
     static String = static as string
@@ -240,22 +267,17 @@ end
     //TODO This should not be in the constructor, but taken outside of it.
 
 
-    // TODO: The static Decimal, should be read as a Type which is an array, but it implements an AbstractDirectionality too: the default +1/-1 numberline: that way you can do Decimal.if(<10); Or Decimal.Positive which has base case 0 selected.
-
     // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
 
 
     // We use 'Positive' here, since a 0, in this construction can be signed. (Even though for most operations that difference won't matter)
-    static class Positive = Array<Digit.value>
-      static def String = Array<digit as string> //TODO as string, should mean 'drop all the extra stuff on Digit', not actually set to type string, but that's an ambiguity here.
+    static class Positive = integer = Array<Digit.value>
+      static def String = Array<Digit as string>
 
-
-      // TODO Map to and from string, using some mapping (which is defined both ways, once: 0 = '0' ..)
-
-      def `fraction = Positive.String` => Real.Positive = sign, integer, ".", fraction
+      def `fraction = Positive.String` => Real.Positive = integer, ".", fraction
     end
 
-    static class Real = sign = "-"?, Real.Positive // TODO: should be possible to define out of order, and access integer/fraction methods ; It should be seen as a partial "extends"
+    static class Real = sign = "-"?, Real.Positive
       static String = static as string
 
       static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive
@@ -266,28 +288,29 @@ end
 end
 
 +def Binary.Positive
-  def ! = this.map(!)
-  def & = this.map(&&) //TODO SSimilarly ambiguity with object.merge &
-  def | = this.map(||) //TODO Now ambiguity with number | number type
-  nand = def !& = this.map(!&) // TODO, Do type definitions every use nand, nor, xor, xnor?
-  nor = def !| = this.map(!|)
-  xor = def x| = this.map(x|)
-  xnor = def x!| = this.map(x!|)
 
+  def ~! = this.map(!)
+  def ~`operator = boolean.Operator.Binary` b: Binary.Positive = this.reverse.zip_longest(b.reverse).map(l, r => (l ?? false)[operator](r ?? false)).reverse
+  def ~`operator = boolean.Operator.Binary` b: Binary.Positive{.length == length} = this.zip(b).map(operator) //TODO: Or can the compiler deduce the reversing stuff is not necessary?
 end
 
 def `digits = Decimal.Positive.String` => Decimal.Positive = digits
 def 0`"x" | "X"``digits = Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
 
+//TODO: Possibly move these primitives to specific languages, and only work with arbitrary-length in the default case.
+//TODO: -b: Something uX might only implement b: uX, casts lose information and likely need to overflow
 def u`length = Decimal.Positive.String` = Binary.Positive{.length == length}
   // TODO Number arithmetic
+  // - overflow, what to do? mod, or>?
 end
 def i`length = Decimal.Positive.String` = Binary.Positive{.length == length} // TODO, Use Binary vs Binary.Positive
   // TODO Number arithmetic
 end
 
-def number
-  //TODO A number.positive
+def number < Order<number>
+  def - => number
+  def - b: number => number
+
 
   // TODO Generic number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
   // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
@@ -296,6 +319,11 @@ end
 
 class boolean = false, true = Binary.Digit.value // TODO This should automatically implement "0" | "1" as boolean, through Binary.Positive. : Generalized to: Anything that is implementing Array<T>, like Positive, should also apply to just a T.
   // TODO Verify that these are correct work for all cases.
+
+  static class Operator = Unary | Binary
+    static Unary = "!"
+    static Binary = "&&" | "||" | ("nand" | "!&") | ("nor" | "!|") | ("xor" | "x|") | ("xnor" | "x!|")
+  end
 
   def !
   or this !& this

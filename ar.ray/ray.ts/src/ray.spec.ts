@@ -82,15 +82,6 @@ describe("ray", () => {
       });
 
       (exec as any as Query.Executor<Node>).rewrite({
-        xor: (self, b) =>
-          // a && !b || (!a && b)
-          // self.and(new self(b).not()).or(self.not().and(b)),
-          // (a && !b) || (!a && b)
-          self.group(self => self.and(new self(b).not())).or(self.not().and(b)),
-        nor: (self, b) =>
-          self.or(b).not(),
-        nand: (self, b) =>
-          self.and(b).not(),
 
         // TODO: For number you'd want to overwrite these rewrites with some operator call
         // TODO: self.instance_of(JavaScript.Number) && [number-line context selected] => self. [executes with] (>= operator)

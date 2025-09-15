@@ -154,15 +154,7 @@ export interface INode {
   //TODO Execution layer: Simplifications of graph expectations leading to different algorithms. For example .first() in a graph, not having to traverse the whole graph first to check all possible initials.
   //TODO, Something like for all prime numbers do this. Loop over infinities.
 
-  /**
-   * Node: Equal in value (there is no structure).
-   * Ray/Graph: Structure, and all values within that structure, are equal.
-   */
-  equals: (value: any) => Node
-
-  instance_of: (type: any) => Node
   match: <T>(pattern: T) => T extends INode ? Many<T> : Node
-
 
   /**
    * Tag any arbitrary part of this structure with a "name".

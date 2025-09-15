@@ -452,22 +452,6 @@ export type Type<T> = T & {
  *      - "Many usages" -> as unselected structure
  *        Usages, gives a notion of time. In the sense of certain applications being in front of others, if they share some graph.
  *          -> Either have some global graph to keep track of this, or be set with partial notions of time
- *      - Function.equals(Function)
- *        Equality in input -> output (Extensional Equality)
- *          Partial equality OR Temporal equality of all "usages" so far.
- *        Equality in source code (Intensional Equality)
- *          When there are multiple implementations, what happens?
- *          More elaborate intensional equality would be?
- *            Definition (+ Different contexts in which the definition finds itself)
- *            Separate compilation layers it goes through
- *            (and some possible unknown compilation layers (ex. physics))
- *            "(perceived) Actual execution layer"
- *          VS control-flow at each layer
- *      - Function.equals(Function) = true (set as equivalent, rewrite function as another function)
- *          "Graph of equivalences reached through theorem prover, how"
- *          Possible rewrites as (what are the equivalences)
- *          Allow for self-reference of operators (but requires implementation).
- *      - Function.compose(Function) = Function (If functions are control-flow graphs, then function composition is linked to graph composition)
  *      - Control-flow & debugging
  *          Branching control-flow in editor & merge results into a single structure, what does that structure look like?.
  *            Or have things that start branches, but which are not used for results, so the function can terminate while having spawned a "thread" of sorts.

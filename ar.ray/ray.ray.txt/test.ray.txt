@@ -6,6 +6,47 @@
 // TODO: It's an arbitrary graph, so how are we delegating resources on every property access etc.
 //          -> How do you write a generating function which acceptsthis. It's .that_function.reduce(|), and .that_function is possibly non-halting.
 // TODO: Ambiguity: .reduce(|) on an Array value, what does the .for go to? Now I'm using .for to iterate the possibilities of string[].reduce(|), not string. Because string[].reduce(|) is type 'string': Take Digit for example.
+// .value, but then what about rays. And things like probabilities. In the case of multi-methods it's determined by the args.
+
+
+//TODO Partial equality .match how?
+//TODO Equivalence graph
+//     - Forced equivalence how?
+
+== = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
+==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
+==.in(equivalence_graph) = equivalence_graph.find(this).path_to(x) //TODO Or this & x can both be rewritten to the same thing in that equivalence graph.
+    // (A->) is A.reduce(|) (includes A)
+    |-> (A->)* .intersection (B->)* .some (* are refs to value)
+        //TODO .intersection should take the type of equality to check for
+==.subgraph_of = x.as_subgraph ==.instance_of
+==.instance_of (All properties of B are defined on A: A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
+    //TODO |-> These properties should be the ray which defines the properties somehow. .both the property descriptor and the result should be the same (instance of)
+    //TODO |-> What function equality is used?
+==.value (Equal in value, ignores structure) For graphs/array this is the same as a normal ==, but for Ray's the equipped ray is ignored. (So only implement it for ray)
+==.isomorphic (Equal in structure, ignores values)
++def Function
+  ==.historical //TODO Either explicitly state function should be recorded, or when history is accessed that means it gets recorded.
+                // -> Historically, this function seems to have done the same thing. What if never used? Return false.
+  ==.extensional //TODO Where is the body defined? Is it the same as a variable? (on the .expand)
+  ==.intensional
+  // TODO          When there are multiple implementations, what happens?
+                   More elaborate intensional equality would be?
+                     Definition (+ Different contexts in which the definition finds itself)
+                     Separate compilation layers it goes through
+                     (and some possible unknown compilation layers (ex. physics))
+                     "(perceived) Actual execution layer"
+                   VS control-flow at each layer
+end
+
+//TODO What about equivalence graphs which are infinitely generating, we simply ask is instanceof that type (say number), if it is we assume it's on the line. so yes reachable.
+
+//TODO What about the history of the object -> that's deemed to be part of the syntax
+at_least
+refinement
+instance_of which forces non-superposition; This is probably not supported: Always allow types.
+Type equivalence = Every value of A is also covered by B.
+
 
 
 
@@ -674,10 +715,6 @@ end
 // ".environment:" "Any Node is part of some path of context" - it's a Ray, and all .prev change what 'this' is like, namely: Allow any context to access .<var>, which will access it from that context. But they are not part of the definition.
 //     -> What kind of effect has a looped context? Doesn't really effect .this, but it allows .previous contexts to access child variables. So basically: this means a global variable unless something after me defines it too.
 
-
-// difference between instance_of ; perfect match, and some instance_of which allows things like checking inheritance so. Things like at_least vs subgraph: checking just functions etc. vs structural subgraph as well. And another is refinement. So 4 different instance_of methods?0
-// Another instance_of which requires an instantiation, so that the type boolean is not a match, but require an instance of boolean ; or is that always supported?
-// Type equivalence is called definitional equality
 
 // What does an initial loop mean in .txt form? Don't know where it starts?
 // Might also have initials, but they;re not interpreted as a control-flowe graph, but rather as the inputs, like Chyp

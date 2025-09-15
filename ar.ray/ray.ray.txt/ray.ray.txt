@@ -83,14 +83,23 @@ class Node
   def [] = Array<this>
   def ?? default = this as boolean ? this : default
 
-  def as : boolean = true //TODO: How to 'as the type boolean not an instance'
+  def as : == boolean = true //TODO: How to 'as the type boolean not an instance'
 
-  def == b //TODO
-  end
-
-  // TODO WHat about the primitive .not
+  // TODO Not is prefix?
+  not = def ¬ = Node{!= this} //TODO .not should be not instanceof ?, not boolean for instance.
   or = def | //TODO
   and = def & //TODO
+end
+
+//TODO Does Node < Expression or Expression < Node, either way we want both methods on both. And a Node, needs access to definitional structure
+//   |-> .expand should expand the single node into the whole expression (or one layer down)
+
+class Expression
+  def == b //TODO
+  end
+  def != b = !(this == b)
+
+  def while program = global.while(this, program)
 end
 
 def Iterable<T = *>
@@ -176,10 +185,6 @@ def while expression: Expression, program: () => void
   end
 end
 
-class Expression
-  def while program = global.while(this, program)
-end
-
 // A function is a Node for which "(*) => *" is defined.
 Function = +def Node{(Args: *) => Return: *}
 
@@ -207,7 +212,7 @@ def Option<T> = Some(value: T) | None
   end
 end
 +def None
-  def as : boolean = false
+  def as : == boolean = false
 
   // TODO as boolean, and maybe other things defined on Node should still work, but how?
   def `*` = this
@@ -251,7 +256,7 @@ end
 
   //TODO Because string has digit as string defined, any Array of digit strings should automatically be defined, to as string too. with .map
   +def string = `Base`.Digit
-    def as : `Base`.Digit.value = `Base`.Digit.value(this)
+    def as : == `Base`.Digit.value = `Base`.Digit.value(this)
   end
   //TODO string as Binary.Positive = "0101010" = Digit.value[] = Positive
   // TODO: Binary.Positive as string; Automatic isomorphism

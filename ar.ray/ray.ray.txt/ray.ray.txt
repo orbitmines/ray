@@ -42,7 +42,7 @@ global = local
 //TODO .zip/.zip_longest (ziplongest returns with _length to the max) for parameterless, and parameters [this, b].zip
 //TODO push_back(void) should only create the array one longer.
 //TODO .for on object, but it gets overwritten if type of Array. What is used then to get the object instead. Use .properties.for
-
+//TODO 'def primary => location', should not implement primary. since location is a variable too.
 //
 
 def void end

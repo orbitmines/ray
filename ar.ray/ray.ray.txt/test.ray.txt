@@ -196,6 +196,11 @@ program(throw: (args: Args) => error = args; goto capture)
 // spaces for method calls only work for same line, except for body calls
 // Point(x=1) x=1 shouldn't be overridden by x=0 in the constructor
 
+  def location = Location
+  +def location //TODO Allow this syntax. => Should be dynamically there.
+    primary: location
+  end
+
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
 

@@ -1,0 +1,112 @@
+// Everything is either an Entity or an Item. (or both)
+
+def Item
+  // TODO history could include When it's used, how it's made, how it's discovered, how it's constructed.
+
+  // Items require Quests ; In order to find items you need quests.
+  obtained_by: Quest
+
+  def as : Shape TODO: Shape is just a type of graph implemented on .ray, nD-object, render function. Including a 2D-icon
+
+  def visibility: Entity // = Entity{==.instanceof Player} // TODO A program of possibly entities that are allowed to see this. Things like private servers which are allowed to see it. (Or the local server) - Can also include things like 'within renderdistance'.
+
+  // Items are Quests ; Your items might be quests to find for others.
+  def as :== Quest = this ==.instanceof Quest ? this : TODO
+
+  // Items are Minimaps ; We can look at items from the outside to get a perspective, ..., overview of what it is.
+  def as :== Map
+    // TODO Perspective switch to a 'high-level overview'
+  end
+
+  def as :== World = this ==.instanceof World ? this : TODO
+    //TODO: How does 'World' differ from structure the item is made of.
+    //TODO: World might not necessarily be accessible (Say the hidden dynamics of some function of some language)
+    // TODO Internal structure of an item.
+  end
+end
+
+def World < Item
+  // Known servers which this world runs on (TODO Others might be discovered later, so .servers might be non-halting)
+  hosts: Entity
+  entities: Entity
+
+  // Internal dynamics -> Want a primitive in .ray to be a dynamic space.
+
+  // Split into two groups: Spaces with arbitrary propagation vs limitations:
+        How do you make spatial propagation hard/limit it in a distributed sense when usually one can just skip ahead programmatically?
+        -> Similarly how we make item copying expensive/impossible. Scarcity of the items.
+
+  //TODO Might want to tie a quest to a location too.
+  quests: Quest // TODO Not Quest[], because we're not interested in the structure 'Array' here. Quest automatically implements Many<Quest> through &. Which are arbitrarily generated.
+  //TODO: .quests{active | completed} TODO: Requires .filter etc. to be defined on Quest, which it should by default? Because Many<>
+
+  // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
+
+  //TODO What about behavior dictated by the world/server: These things are automatically shown, these things not.
+end
+
+def Location < Item //TODO = Ray of World
+  world: World //TODO: How to indicate it's a single one? == .context?
+
+  //TODO Location too has a visibility, to whom am I broadcasting that I'm here.
+end
+
+def Quest < Item
+  // Quests require Items ; Cannot see, ..., complete a quest, ..., puzzle without certain items.
+  revealed_by: Item
+
+  // TODO Do we know the reward (Item) of this quest -> And if so how does knowing this reward prevent us from already having it, and do we know the Effect-> of completing it?
+
+  def completed
+  def active = !completed
+end
+
+def Map
+end
+
+// TODO Items arranged in a particular way make another item. Something like = Hypergraph<Item> or it's a primitive item.
++def Hypergraph<Item> //TODO Hypergraph here? -> Item as Hypergraph<Item> implemented.
+  def as :== Item
+  end
+end
+
+def Entity
+  def quests => Quest = inventory{==.instanceof Quest} // A NPC or Server is also trying to achieve quests
+  inventory: Item
+
+  name: Name //TODO Can have many registered names at many different issuers. You'd then set your username, to issued by Yourself & some central Ether server if it's not already taken. (Servers can also give a specific name to any number of players, say as 'titles')
+
+  def world = location.world
+  location: Location // TODO This again is Many<> so it's a superposition of locations, and visibility because Location = Item
+  +def location //TODO Allow this syntax.
+    primary: boolean //TODO Whether this is the location we're actually currently rendering on screen.
+  end
+
+
+  // A world might live on many entities/servers
+  //TODO A player, or any entity can (co-)host worlds
+  //TODO : From the perspective of this entity,
+  hosting: World //TODO These worlds should come from an Item in the server's inventory = is just (inventory as World){visibility = ??}
+
+end
+
+def NPC < Entity, Item
+  //TODO Defines dynamics in a World
+end
+
+def Player < Entity
+  //TODO: You want to be able to host a server as an item to a world, with some visibility.
+end
+
+def Server < NPC
+
+end
+
+def Name = string
+  certificate: Certificate
+end
+def Certificate
+  //TODO pub/secret
+  issued_by: Entity
+  issued_on: Date//TODO
+end

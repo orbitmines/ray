@@ -8,7 +8,11 @@ def Item
 
   def as : Shape TODO: Shape is just a type of graph implemented on .ray, nD-object, render function. Including a 2D-icon
 
-  def visibility: Entity // = Entity{==.instanceof Player} // TODO A program of possibly entities that are allowed to see this. Things like private servers which are allowed to see it. (Or the local server) - Can also include things like 'within renderdistance'.
+  def visibility: Entity // = Entity{==.instanceof Player}
+  // TODO A program of possibly entities that are allowed to see this. Things like private servers which are allowed to see it. (Or the local server) - Can also include things like 'within renderdistance'.
+  // TODO, Want to add things like : has been at this location in this world before for instance.
+        //TODO -> So you want certificates to be given for having been at certain places. (Then on those places give them out as an item): So has this type of item, then it's visible.
+
 
   // Items are Quests ; Your items might be quests to find for others.
   def as :== Quest = this ==.instanceof Quest ? this : TODO
@@ -72,14 +76,16 @@ end
 
 def Entity
   def quests => Quest = inventory{==.instanceof Quest} // A NPC or Server is also trying to achieve quests
+  //TODO You want certain things from items to similarly be issued by certain entities
   inventory: Item
 
   name: Name //TODO Can have many registered names at many different issuers. You'd then set your username, to issued by Yourself & some central Ether server if it's not already taken. (Servers can also give a specific name to any number of players, say as 'titles')
 
   def world = location.world
+  //TODO What if you only want to broadcast a particular part of your location, say the world it's in or?
   location: Location // TODO This again is Many<> so it's a superposition of locations, and visibility because Location = Item
   +def location //TODO Allow this syntax.
-    primary: boolean //TODO Whether this is the location we're actually currently rendering on screen.
+    primary?: boolean //TODO Whether this is the location we're actually currently rendering on screen.
   end
 
 

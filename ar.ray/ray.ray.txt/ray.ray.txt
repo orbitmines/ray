@@ -380,6 +380,8 @@ end
 { false, true } = boolean // Could also be 'false, true = boolean' in this case.
 
 class string = char[]
+  ()
+  (block) //TODO Accept "string" \n property='b' end
   //TODO: Any Array definition is an expandable object, which at one level of description has that new Node, on the other the array of things.
   //TODO: Want to allow things like string.push_back(u32), but it should encapsulate the u32 into an expandable single node.
 

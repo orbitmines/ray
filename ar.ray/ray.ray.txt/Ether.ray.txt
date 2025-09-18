@@ -29,10 +29,10 @@ def Item
   end
 end
 
+// TODO You want to say, have a world in your inventory, which is your desktop. Which contains items. Those items are not directly in your inventory? But they can be put there.
 def World < Item
   // Known servers which this world runs on (TODO Others might be discovered later, so .servers might be non-halting)
   hosts: Entity
-  entities: Entity
 
   // Internal dynamics -> Want a primitive in .ray to be a dynamic space.
 
@@ -40,8 +40,12 @@ def World < Item
         How do you make spatial propagation hard/limit it in a distributed sense when usually one can just skip ahead programmatically?
         -> Similarly how we make item copying expensive/impossible. Scarcity of the items.
 
+
+  // TODO, An entity should be a graph within the graph, both of those shouldn't interfere with each other. (As in effecting .next)
+
+  entities: Entity
   //TODO Might want to tie a quest to a location too.
-  quests: Quest // TODO Not Quest[], because we're not interested in the structure 'Array' here. Quest automatically implements Many<Quest> through &. Which are arbitrarily generated.
+  quests: Quest
   //TODO: .quests{active | completed} TODO: Requires .filter etc. to be defined on Quest, which it should by default? Because Many<>
 
   // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
@@ -49,8 +53,19 @@ def World < Item
   //TODO What about behavior dictated by the world/server: These things are automatically shown, these things not.
 end
 
-def Location < Item //TODO = Ray of World
-  world: World //TODO: How to indicate it's a single one? == .context?
+// Spatial Propagation
+// - Separate graphs for moving pieces?
+// - One way of doing 'air you can move through' Split the graph one is moving into, and knit it back together on the opposite end of the structure that's moving.
+   // Does disallow overlapping structures within the same space.
+// - Or something more inspired by physics, based on the structure that's there in the graph, allow/disallow.
+    // More spatial structure around matter
+    // If something like an arm is attached, the further from the attachment the faster it has to move
+// - World only has update events, you want those to be massively parallel, so what can influence what? -> What would actual execution on a GPU look like, how much does having it in a graph impact performance?
+//
+
+// TODO How does a location work if it's a dynamic space?
+def Location < Item //TODO = Ray of World OR: You want Location to be more abstractly, a subregion: subgraph - which could be a specific location, of a World. It could also be a description of surroundings, which is not yet certain where exactly in the world that is.
+  world: World //TODO Could be many: it's in one of these worlds.
 
   //TODO Location too has a visibility, to whom am I broadcasting that I'm here.
 end

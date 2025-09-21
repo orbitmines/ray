@@ -109,10 +109,10 @@ def Iterable<T = *>
     //TODO + return = caller.return
   end
 end
-def AbstractDirectionality < Iterable, Order
+def AbstractDirectionality < Iterable, Ordered
 end
 
-class Order<T = *>
+class Ordered<T = *>
   def <= b: T = this == b || this < b
   def < b: T
   def >= b: T = this == b || this > b
@@ -161,7 +161,7 @@ class try program: () => *
     program(throw: (args: Args) => error = args; goto capture)
     return
    capture:
-    catch(error) // TODO: Type-checker should know that it must be set in order to get here.
+    catch(error) // TODO: Type-checker should know that it must be set in Ordered to get here.
   end
 
   def catch(catch) = this<catch: catch>
@@ -312,7 +312,7 @@ def i`length = Decimal.Positive.String` = Binary.Positive{.length == length} // 
   // TODO Number arithmetic
 end
 
-def number < Order<number>
+def number < Ordered<number>
   def - => number
   def - b: number => number
 

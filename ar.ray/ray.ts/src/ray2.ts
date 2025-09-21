@@ -320,7 +320,7 @@ export interface Ray extends INode, ConditionalStructure<Ray>, AbstractDirection
   /**
    * A ray might be constructed from multiple contexts, you can split off each context separately using this.
    */
-  parts: () => Many<Ray>
+  parts: () => Many<Ray> //TODO It's not parts, because whenever you refer to a Ray, it's Many<Ray>
   /**
    * Returns the equipped abstract directionality as a graph.
    * TODO: Disconnected parts of the graph should still be shown here?

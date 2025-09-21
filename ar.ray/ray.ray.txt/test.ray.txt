@@ -23,8 +23,10 @@
 ==.instance_of (All properties of B are defined on A: A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
     //TODO |-> These properties should be the ray which defines the properties somehow. .both the property descriptor and the result should be the same (instance of)
     //TODO |-> What function equality is used?
+    // Refinement: Array ==.instanceof Hypergraph
 ==.value (Equal in value, ignores structure) For graphs/array this is the same as a normal ==, but for Ray's the equipped ray is ignored. (So only implement it for ray)
 ==.isomorphic (Equal in structure, ignores values)
+==.type (Type equivalent, both A and B have the same coverage of values)
 +def Function
   ==.historical //TODO Either explicitly state function should be recorded, or when history is accessed that means it gets recorded.
                 // -> Historically, this function seems to have done the same thing. What if never used? Return false.
@@ -42,10 +44,7 @@ end
 //TODO What about equivalence graphs which are infinitely generating, we simply ask is instanceof that type (say number), if it is we assume it's on the line. so yes reachable.
 
 //TODO What about the history of the object -> that's deemed to be part of the syntax
-at_least
-refinement
 instance_of which forces non-superposition; This is probably not supported: Always allow types.
-Type equivalence = Every value of A is also covered by B.
 
 
 
@@ -172,6 +171,7 @@ program(throw: (args: Args) => error = args; goto capture)
 // The only difference between a class and a normal def is that static and this are defined.
 
 // TODO - Examples + Allowances
+// Allow 'def Ray<T = Ray<T>>', Meaning, T is unknown, but it is a Ray.
 // Allow chaining of binary operators like Array<3 < length < 5>
 // Allow chaining of conditionals with .AND -> Array<length > 3><length < 5>
 // Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>, Array{length > 2 if property}
@@ -200,6 +200,14 @@ program(throw: (args: Args) => error = args; goto capture)
   +def location //TODO Allow this syntax. => Should be dynamically there.
     primary: location
   end
+
+class char = u32
+dynamically assert this < 0x110000 & !(0xD800 <= this <= 0xDFFF)
+end
+class char = u32{< 0x110000 && !(0xD800 <= this <= 0xDFFF)}
+end
+
+// Allow static to be accessible in defining parameters, say 'class Hypergraph<T>{every(==.instanceof Vertex)}; static Vertex'
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
@@ -336,11 +344,34 @@ def def
   def `*`(definition: (*) => *) = external
 end
 
+var: Type // TODO Is Single/Many but not None.
+var?: Type // TODO Is None/Single/Many because it's Option<Type>
 
 
-def Hypergraph
+def Boundary<T>
+  value?: Boundary<T>
+  end: Ray<T>
 end
+def Ray<T = Ray<T>>
+  initial: Boundary<T>
+  value?: T
+  terminal: Boundary<T>
+end
+
+//TODO Hypergraph has Many of edge.value, and on edge.initial
+class Hypergraph<T>{every(==.instanceof Vertex)}
+  static Vertex = Ray<T>{
+    initial = terminal, // Hypergraph is symmetric
+    terminal = Boundary{ end = Vertex, value = Option<Boundary{ value = Vertex.terminal, end = Vertex }> } }
+  }
+  // TODO .unrolled() -> Allows loops by default
+  // TODO .consistent() -> Every Boundary refers back to itself, every vertex and boundary refer to each-other.
+  //   Array has .consistent
+end
+// Graph type does not have an indication of selection at a point. But its definition is centered around a point: For all Nodes, this holds.
+// def connected end; How to disallow disconnected pieces? In a graph where each connection is forced to be two-way, each Node is reachable from each other Node. (Going both forward and backward)
 // Graph Type need to allow loops at every step, and then an easy way to type for not having loops
+// How to define graph structure with different edges/hyperedges
 def Graph
   extends Hypergraph<Ray<edges.next.every(.value.length <= 1)>> // This needs to be applied to every entry, not on graph
   // TODO Not Many on edges

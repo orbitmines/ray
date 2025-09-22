@@ -43,9 +43,13 @@ global = local
 //TODO push_back(void) should only create the array one longer.
 //TODO .for on object, but it gets overwritten if type of Array. What is used then to get the object instead. Use .properties.for
 //TODO 'def primary => location', should not implement primary. since location is a variable too.
-//
+//TODO Infinity
 
 def void end
+
+// The default functionality is that every variable is already Many.
+// This however, allows for: `(predicate ? Many : 1) Object`.
+def Many x = x
 
 def namespace
   def `name = *`(definition: () => *)
@@ -109,7 +113,7 @@ def Iterable<T = *>
     //TODO + return = caller.return
   end
 end
-def AbstractDirectionality < Iterable, Ordered
+def AbstractDirectionality<TVertex> < Iterable
 end
 
 class Ordered<T = *>
@@ -117,6 +121,48 @@ class Ordered<T = *>
   def < b: T
   def >= b: T = this == b || this > b
   def > b: T
+end
+
+def Boundary<T>
+  value?: Boundary<T> //TODO T could be on value, Or you want a specific type on Boundary
+  end: Ray<T>
+end
+def Ray<T = Ray<T>> < AbstractDirectionality<Ray<T>>
+  initial: Boundary<T>
+  value?: T
+  terminal: Boundary<T>
+end
+
+private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false>{every(==.instanceof Vertex)} < AbstractDirectionality<Vertex>
+  static Vertex = Ray<T>{
+    initial = (HyperContinuations ? Many : 1) Boundary{
+      end = (HyperEdges ? Many : 1) Vertex,
+      value = Option<(HyperEdges ? Many : 1) Boundary{
+        end = (HyperEdges ? Many : 1) Vertex,
+        value = (HyperEdges ? Many : 1) Vertex.initial
+      }>
+    },
+    terminal = initial // By default a structure is symmetric
+  } //TODO .unrolled
+  static Finite = static{count < Infinity}
+end
+def Hypergraph<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = true>
+end
+def Graph<T = Ray> < Structure<T><HyperContinuations = true>
+end
+def Array<T = Ray> < Structure<T><HyperContinuations = false>
+  //TODO: Disallow loops, .connected, .consistent
+end
+def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false>
+  //TODO: Disallow loops, .connected, .consistent
+  // Tree has a single 'parent' on each vertex.
+  +def Vertex = super{initial = 1 Boundary{
+    end = 1 Vertex,
+    value = Option<Boundary{
+      end = 1 Vertex,
+      value = Vertex.initial
+    }>
+  }} //TODO The Vertex.initial here should refer to the new value, not the old.
 end
 
 class if expression: Expression, yes?: () => *
@@ -312,10 +358,12 @@ def i`length = Decimal.Positive.String` = Binary.Positive{.length == length} // 
   // TODO Number arithmetic
 end
 
-def number < Ordered<number>
+class number < Ordered<number>
   def - => number
   def - b: number => number
 
+  // Allows for the syntax 1 Object
+  def `node: not string` = node{@.count == this}
 
   // TODO Generic number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
   // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?

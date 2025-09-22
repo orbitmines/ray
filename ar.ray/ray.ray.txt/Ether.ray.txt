@@ -6,6 +6,10 @@ def Item
   // Items require Quests ; In order to find items you need quests.
   obtained_by: Quest
 
+  //
+  issued_by: World
+  certificate: Certificate
+
   def as : Shape TODO: Shape is just a type of graph implemented on .ray, nD-object, render function. Including a 2D-icon
 
   def visibility: Entity // = Entity{==.instanceof Player}
@@ -119,6 +123,7 @@ def Player < Entity
   //TODO: You want to be able to host a server as an item to a world, with some visibility.
 end
 
+//TODO Some server, which holds the 'first discovered by X' status, and issues certificates for that./
 def Server < NPC
 
 end

@@ -1,5 +1,6 @@
 
 // TODO: This needs to be resolved before anything else does:
+//TODO Something like is_boundary checks whether any of the entries (Many<>) are at a boundary, but that changes behavior of a superposed abstract interpretation when it shouldn't. (It should individually check is_boundary, and superpose the results)
 
 // TODO; Every value type T, is automatically decorated with Many. How is it indicated that it's a single result, and never many?
 // TODO; But how do you iterate possibilities.
@@ -17,7 +18,7 @@
 ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
 ==.in(equivalence_graph) = equivalence_graph.find(this).path_to(x) //TODO Or this & x can both be rewritten to the same thing in that equivalence graph.
     // (A->) is A.reduce(|) (includes A)
-    |-> (A->)* .intersection (B->)* .some (* are refs to value)
+    |-> (A->)@ .intersection (B->)@ .some (* are refs to value)
         //TODO .intersection should take the type of equality to check for
 ==.subgraph_of = x.as_subgraph ==.instance_of
 ==.instance_of (All properties of B are defined on A: A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
@@ -169,6 +170,7 @@ program(throw: (args: Args) => error = args; goto capture)
 // Automatic isomorphism example in Number as String definition. + example of how repeated strings map to an array.
 // Show that generic type parameters are accessible in monkeypatch, even if not defined in monkeypatch
 // The only difference between a class and a normal def is that static and this are defined.
+// When using '1 Object', you still allow the compiler to use many objects there for abstract interpretation, it's just that for type checking you expect there to be just one.
 
 // TODO - Examples + Allowances
 // Allow 'def Ray<T = Ray<T>>', Meaning, T is unknown, but it is a Ray.
@@ -208,6 +210,7 @@ class char = u32{< 0x110000 && !(0xD800 <= this <= 0xDFFF)}
 end
 
 // Allow static to be accessible in defining parameters, say 'class Hypergraph<T>{every(==.instanceof Vertex)}; static Vertex'
+// Allow static to go to inherited objects.
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
@@ -344,51 +347,46 @@ def def
   def `*`(definition: (*) => *) = external
 end
 
+//TODO: Type like Terminating, which only says that we're looking for specific data-like structures to construct something like JSON, which doesn't have any additional logic in there
+//Type like { `number`: Option<number> } -> var: [number]: Option<number> = {} -> var: Map<number, number>
+
+//TODO Something like 'using' would just be setting/getting from some global variable (which is accessible across many programs). so '= external'. And sets things to something like paths.
+
+// TODO Transactions
+//    - Rollback if anything fails
+// TODO Coroutines
+//    - sync: Run concurrently, return when all are done, race: First one to finish, the rest is cancelled. rush: same as race, but they're allowed to finish, the ones that didnt finish first., defer: Run after current context finishes (no matter how it exists)
+// TODO Await for an event to trigger, and then do things like race, with many awaits, and then continue in the code
+
+//TODO Remove the need for end, using indentation as the syntax. Optional?
+
 var: Type // TODO Is Single/Many but not None.
 var?: Type // TODO Is None/Single/Many because it's Option<Type>
 
+Boundary{ end = Vertex{@.length == 1} } // = Boundary{ end = Vertex{&{length = 1}} }
+//TODO Generalize that *. or [property]. goes to the unary operators, not binary+ ones. But binary is a unary operator itself, it just takes the .property as an argument. But ."string" does not exist on * binary operator, so this works. If it would, then what? Then it's a superposition of
+//TODO Ambiguity with number{*length == 1} -> Where you want the result of *length to be 1.
 
-def Boundary<T>
-  value?: Boundary<T>
-  end: Ray<T>
-end
-def Ray<T = Ray<T>>
-  initial: Boundary<T>
-  value?: T
-  terminal: Boundary<T>
-end
 
-//TODO Hypergraph has Many of edge.value, and on edge.initial
-class Hypergraph<T>{every(==.instanceof Vertex)}
-  static Vertex = Ray<T>{
-    initial = terminal, // Hypergraph is symmetric
-    terminal = Boundary{ end = Vertex, value = Option<Boundary{ value = Vertex.terminal, end = Vertex }> } }
-  }
+//TODO Many<> is by default a hypergraph of possibilities so it's not .length, but .count, in array they're the same.
+
+  // TODO .connected
   // TODO .unrolled() -> Allows loops by default
   // TODO .consistent() -> Every Boundary refers back to itself, every vertex and boundary refer to each-other.
   //   Array has .consistent
-end
+
+// Tree ==.instance_of Graph ==.instance_of Hypergraph
+// Array ==.instance_of Graph ==.instance_of Hypergraph
+var: Graph = 1, 2, 3
+
+//TODO .max/.min are defined on number itself, and also on number array? Or generally: Everything defined on Array which isn't on T, is defined on T.
+
 // Graph type does not have an indication of selection at a point. But its definition is centered around a point: For all Nodes, this holds.
 // def connected end; How to disallow disconnected pieces? In a graph where each connection is forced to be two-way, each Node is reachable from each other Node. (Going both forward and backward)
 // Graph Type need to allow loops at every step, and then an easy way to type for not having loops
 // How to define graph structure with different edges/hyperedges
-def Graph
-  extends Hypergraph<Ray<edges.next.every(.value.length <= 1)>> // This needs to be applied to every entry, not on graph
-  // TODO Not Many on edges
 
-  // Somehow extends Hypergraph and also
-  // TODO The change of type to the .next change should be reflected in the effect type of: One of the many's should be dropped.
-  // This type definition is somehow different? All other type definitions change the overlapping graphs defined on .vertex.
-  = Vertex<
-    initial = Many< End < Many<End> = vertex > >
-    vertex
-    terminal = initial
-  >
-end
-def Array
-  extends Graph<Ray<next.length <= 1, previous.length <= 1>> // This needs to be applied to every entry, not on graph
-  // TODO Not Many on terminal
-end
+
 //TODO Are higher-inductive types simply the structured types?
 // How do you define a Sphere?, Torus etc? 2d grid (2d overlapping graphs vs 2-dimensional until the other side of the sphere is reached) with modular unroll?
 
@@ -476,83 +474,12 @@ end
 // Default structure is to create a Node with many rays through it.
 // Need better way of connecting in sequence or branching.
 // Array refines .length to take a single value.
-def Array <T>
-  -o | .
-   o-
-  ---
-  -o
-   o- | .
 
-  -o o- --- -o o- (ls l v r rs)
-  l.value = ls | .
-  l.end = v
-  l2.end = v
-  v.initial = l
-  v.terminal = r
-
-  // Two-way connections should have some single way of assignment
-
-  -o ]o- ]-[ -o[ o-
-
-  o- --- -o (l v l)
-  l.value = . | l
-  l.end = v
-  v.initial = v.terminal = l
-  // How to address loops
-  [l.end, v.initial | v.terminal].unrolled()
-
-  // Symmetric to both sides
-  o- --- -o
-  // but
-  % -T- -o =(self | .)
-
-  def Graph
-    % -T-[ -o[ =(. | ]l)
-  end
-
-  // How to do this without looking so alien
-
-  // Symmetric if the two variables are the same?
-  o-  : end
-  -T- : vertex
-   -o : end
-
-  end = Nothing | end
-
-  def Graph
-    o<  : end
-    >T< : vertex
-     >o : end
-
-    end = Nothing | Many end
-  end
-
-  def Tree <T> () // End the constructor with () or do or = for assignment, or => for inline function
-  end
-  // Is there a difference between = / =>, or shouldnt there be?
-  def Tree <T> => func(T)
-  def Tree <T> = Maybe a | Nothing
-
-  // Very messy this
-  def Tree <T> do
-    o- | o-  : parent | initial
-    -T- : vertex
-     -o | < -o : terminal | leaves
-
-    initial = Nothing
-    leaves = parent
-    (parent = leaves)
-  end
-
-  // Block/Program should be instanceof Graph (control-flow graph)? Use program instead of block?
-  // How to empty.
-  // How to allow disconnected.
-  // How to consistency check.
-  // How to do one-way connections
-  // Where to put the loop things for .unrolled and such
-  // How to make Any Array subgraph of Graph and use the same methods. Different from inheritance, like a "limiting inheritance."; .next returns a different type namely not Many<>
-
-end
+// Block/Program should be instanceof Graph (control-flow graph)? Use program instead of block?
+// How to empty.
+// How to allow disconnected.
+// How to consistency check.
+// Where to put the loop things for .unrolled and such
 
 // TODO Tagging arbitrary parts of structure.
 // For arrays it's simple, we just use what other languages do too.

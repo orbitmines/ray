@@ -209,6 +209,7 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
   /**
    * Counts the number of nodes.
    * Note: that since graph's structure allows for branching, it could be that .length.max() != .count.
+   * In the case of an Array though, length == count (proof for this?) -> to equivalence the two.
    */
   count: () => Node
   /**

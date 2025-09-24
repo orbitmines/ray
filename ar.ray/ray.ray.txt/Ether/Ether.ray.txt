@@ -205,6 +205,7 @@ def Certificate
   issued_on: Date//TODO
 end
 
+//TODO; Require domain names registers on @"orbitmines.com" to be verified
 // TODO; Allow circular using.
 //TODO Uploadable public packages to .@name
 // using .@"ether.orbitmines.com".UI, <TODO Version>

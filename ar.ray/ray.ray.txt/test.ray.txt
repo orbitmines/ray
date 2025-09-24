@@ -213,6 +213,7 @@ end
 
 // Allow static to be accessible in defining parameters, say 'class Hypergraph<T>{every(==.instanceof Vertex)}; static Vertex'
 // Allow static to go to inherited objects.
+// Allow out-of-order defined defaults at?:, path:
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func

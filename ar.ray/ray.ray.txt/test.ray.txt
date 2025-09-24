@@ -2,11 +2,13 @@
 // TODO: This needs to be resolved before anything else does:
 //TODO Something like is_boundary checks whether any of the entries (Many<>) are at a boundary, but that changes behavior of a superposed abstract interpretation when it shouldn't. (It should individually check is_boundary, and superpose the results)
 
+//TODO After a filter, the object changes into a possible Option<> for certain cases, like Name.
+
 // TODO; Every value type T, is automatically decorated with Many. How is it indicated that it's a single result, and never many?
 // TODO; But how do you iterate possibilities.
 // TODO: It's an arbitrary graph, so how are we delegating resources on every property access etc.
 //          -> How do you write a generating function which acceptsthis. It's .that_function.reduce(|), and .that_function is possibly non-halting.
-// TODO: Ambiguity: .reduce(|) on an Array value, what does the .for go to? Now I'm using .for to iterate the possibilities of string[].reduce(|), not string. Because string[].reduce(|) is type 'string': Take Digit for example.
+// TODO: Ambiguity: .reduce(|) on an Array value, what does the .for go to? Now I'm using .for to iterate the possibilities of String[].reduce(|), not String. Because String[].reduce(|) is type 'String': Take Digit for example.
 // .value, but then what about rays. And things like probabilities. In the case of multi-methods it's determined by the args.
 
 
@@ -47,7 +49,7 @@ end
 //TODO What about the history of the object -> that's deemed to be part of the syntax
 instance_of which forces non-superposition; This is probably not supported: Always allow types.
 
-
+//TODO .random on Array/Graph/..
 
 
 // How to populate Arrays/graphs by default
@@ -102,7 +104,7 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 // TODO - Notes for Examples
 // Partial extends like Number.
 // .Real.Positive should be castable to .Real
-// "01101010" ~|| "10101000", or something like "0" || "1" is defined, because, there's a cast from Binary.Positive.String -> Binary.Positive, which defines those methods. And they're not defined on string. (And "0" || "1", works because string as Digit.value, which automatically finds an isomorphism the other way, which is then castable to boolean)
+// "01101010" ~|| "10101000", or something like "0" || "1" is defined, because, there's a cast from Binary.Positive.String -> Binary.Positive, which defines those methods. And they're not defined on String. (And "0" || "1", works because String as Digit.value, which automatically finds an isomorphism the other way, which is then castable to boolean)
 // Partially extending like Decimal/Decimal.Positive, Every Decimal.Positive is a Decimal, since sign is Option
 // "A program/function with parameters which gets evaluated gets called"
 
@@ -167,7 +169,7 @@ program(throw: (args: Args) => error = args; goto capture)
 
 // Binary{length == 1} should be not castable, but should be boolean. or Binary.Positive[] = boolean[]
 
-// Automatic isomorphism example in Number as String definition. + example of how repeated strings map to an array.
+// Automatic isomorphism example in Number as String definition. + example of how repeated Strings map to an array.
 // Show that generic type parameters are accessible in monkeypatch, even if not defined in monkeypatch
 // The only difference between a class and a normal def is that static and this are defined.
 // When using '1 Object', you still allow the compiler to use many objects there for abstract interpretation, it's just that for type checking you expect there to be just one.
@@ -183,7 +185,7 @@ program(throw: (args: Args) => error = args; goto capture)
 // If variable with type Option is set, it should automatically implicitly cast it to Some()
 // Certain variables like 'throw' need to be accessible even in nested function which aren't defined with that variable in scope. How to type-check and generalize this concept? Is it with some keyword for a variable?
 // Allow 'var = () = inline', 'var = () = { multiline }', 'var = () .. end' - Need to only capture the defined variables accessible from that context.
-// Allow a wide variety of things in the string of defs, like α/β/.. other languages. Lean allows a ' at the end of variables, to mirror math.
+// Allow a wide variety of things in the String of defs, like α/β/.. other languages. Lean allows a ' at the end of variables, to mirror math.
 // Type-cast like this: a: Decimal = 5, or a: Binary = 5
 // defined inline inheritance: def Point<T < { def +(b) }>
 // Allow single-line blocks: while o.last() == '0' => o.pop_last()
@@ -194,7 +196,7 @@ program(throw: (args: Args) => error = args; goto capture)
 // Allow def (...args) unused to be def (*)
 // Allow false, true = boolean (Because boolean is a FALSE.OR(TRUE) Node, and nothing else could match to this spread operator). TODO How to go into the reverse direction? Say cursor is on TRUE there. (if it's not referencing a graph).
 //    -> Should this also define Iterable: .for, for Nodes which don't have any ray selected? Or Actually implement Ray, if the .OR definition is a ray not an Array/graph
-// Generalized: Repeated entries in an array like string, single instance mapping 'as X'. Allows for 'repeated X' to 'string'. And then automatic isomorphism might take care of 'string as X' and 'string as X[]'
+// Generalized: Repeated entries in an array like String, single instance mapping 'as X'. Allows for 'repeated X' to 'String'. And then automatic isomorphism might take care of 'String as X' and 'String as X[]'
 // spaces for method calls only work for same line, except for body calls
 // Point(x=1) x=1 shouldn't be overridden by x=0 in the constructor
 
@@ -364,7 +366,7 @@ var: Type // TODO Is Single/Many but not None.
 var?: Type // TODO Is None/Single/Many because it's Option<Type>
 
 Boundary{ end = Vertex{@.length == 1} } // = Boundary{ end = Vertex{&{length = 1}} }
-//TODO Generalize that *. or [property]. goes to the unary operators, not binary+ ones. But binary is a unary operator itself, it just takes the .property as an argument. But ."string" does not exist on * binary operator, so this works. If it would, then what? Then it's a superposition of
+//TODO Generalize that *. or [property]. goes to the unary operators, not binary+ ones. But binary is a unary operator itself, it just takes the .property as an argument. But ."String" does not exist on * binary operator, so this works. If it would, then what? Then it's a superposition of
 //TODO Ambiguity with number{*length == 1} -> Where you want the result of *length to be 1.
 
 
@@ -704,7 +706,7 @@ Array<length > 2><length == 2> => 'void'/None/some type.
 
 // "run at compile time" ; constexpr ; when can this be inferred?
 
-// Matching a looped string until some lookahead function is matched -> It's just that the order of the .OR is first checking the lookahead, then the loop.
+// Matching a looped String until some lookahead function is matched -> It's just that the order of the .OR is first checking the lookahead, then the loop.
 
 // An evaluator, which can be possibly infinite function length, which doesn't define methods out-of-order.
 

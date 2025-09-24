@@ -20,6 +20,7 @@ end
 def [args: Array] => args
 
 def < constructors: Array<(*) => *> => constructors.for constructor
+  //TODO; By default call super if it's not called at the beginning/end of the block? & if parameterless
   caller.private super &= constructor<local: caller>
   caller.private super[constructor.name] = constructor<local: caller> if constructor.name
   //TODO Ensure the caller implements all undefined methods (unless abstract) abstract if any methods aren't defined. Is there ever a case where you want to extend abstract but only pass along the methods, yes?
@@ -37,7 +38,7 @@ global = local
 //TODO 0..9.reduce(|) / "0".."9".reduce(|)
 //TODO Decimal -> Binary / Binary -> Decimal & Decimal.String -> Binary
 //TODO .map, .map on single value, effecting all .OR?; No that's the same as calling on the static def, the method meant for the instance. (Allow both variants)
-//TODO "as string" should also accept "as Digit[]"
+//TODO "as String" should also accept "as Digit[]"
 //TODO private
 //TODO .zip/.zip_longest (ziplongest returns with _length to the max) for parameterless, and parameters [this, b].zip
 //TODO push_back(void) should only create the array one longer.
@@ -77,6 +78,13 @@ def class
     end
 
     return definition
+  end
+end
+
+def singleton
+  def `name = *`(definition: (Args = *) => *)
+    static = definer.class name, definition
+    return static()
   end
 end
 
@@ -268,7 +276,7 @@ def Integer<n> = sign = "-"?, integer = Positive
   static def Positive = Array{length == n}().last~
 end
 
-private class Digit = string[].reduce(|)
+private class Digit = String[].reduce(|)
 
   def value(digit: this = this)
     array = this.reduce(array = [] => array.push_back(void))
@@ -300,19 +308,19 @@ end
   Hexadecimal: Digit = ("0".."9", ("a" | "A")..("f" | "F")).reduce(|)
 }.for Base, digit
 
-  //TODO Because string has digit as string defined, any Array of digit strings should automatically be defined, to as string too. with .map
-  +def string = `Base`.Digit
+  //TODO Because String has digit as String defined, any Array of digit Strings should automatically be defined, to as String too. with .map
+  +def String = `Base`.Digit
     def as : == `Base`.Digit.value = `Base`.Digit.value(this)
   end
-  //TODO string as Binary.Positive = "0101010" = Digit.value[] = Positive
-  // TODO: Binary.Positive as string; Automatic isomorphism
+  //TODO String as Binary.Positive = "0101010" = Digit.value[] = Positive
+  // TODO: Binary.Positive as String; Automatic isomorphism
 
   class `Base` < number = sign = "-"?, integer = Positive
 
     //TODO Equip a default directionality. (Line: One with forward/backward from a specific point, but it isn't necessarily selected there.)
 
-    //TODO Because sign is a string, Positive is castable to a string, `Base` is castable to a string
-    static String = static as string
+    //TODO Because sign is a String, Positive is castable to a String, `Base` is castable to a String
+    static String = static as String
 
     static Digit = digit
     //TODO This should not be in the constructor, but taken outside of it.
@@ -323,16 +331,16 @@ end
 
     // We use 'Positive' here, since a 0, in this construction can be signed. (Even though for most operations that difference won't matter)
     static class Positive = integer = Array<Digit.value>
-      static def String = Array<Digit as string>
+      static def String = Array<Digit as String>
 
       def `fraction = Positive.String` => Real.Positive = integer, ".", fraction
     end
 
     static class Real = sign = "-"?, Real.Positive
-      static String = static as string
+      static String = static as String
 
       static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive
-        static String = static as string
+        static String = static as String
       end
     end
   end
@@ -363,7 +371,7 @@ class number < Ordered<number>
   def - b: number => number
 
   // Allows for the syntax 1 Object
-  def `node: not string` = node{@.count == this}
+  def `node: not String` = node{@.count == this}
 
   // TODO Generic number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
   // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
@@ -427,11 +435,14 @@ class boolean = false, true = Binary.Digit.value // TODO This should automatical
 end
 { false, true } = boolean // Could also be 'false, true = boolean' in this case.
 
-class string = char[]
+//TODO Maybe an instantiation of String/char, which doesn't say how exactly it's implemented (u32/UTF), to signal it's not important that that system retains its place. 'Name' would be where this could be used.
+class String = char[]
+  static Finite = static{length < Infinity}
+
   ()
-  (block) //TODO Accept "string" \n property='b' end
+  (block) //TODO Accept "String" \n property='b' end
   //TODO: Any Array definition is an expandable object, which at one level of description has that new Node, on the other the array of things.
-  //TODO: Want to allow things like string.push_back(u32), but it should encapsulate the u32 into an expandable single node.
+  //TODO: Want to allow things like String.push_back(u32), but it should encapsulate the u32 into an expandable single node.
 
   // TODO How do other languages implement String?
 end

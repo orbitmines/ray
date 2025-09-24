@@ -1,0 +1,15 @@
+using .@Ether.UI, <TODO Version>
+
+new_player = !player
+
+player ??= Player(
+  name = 'Player One'
+    issued_by: desktop,
+    certificate: //TODO Generate certificate
+    visibility: "public"
+  end,
+  location = desktop.spawn_location@.random
+) //TODO Setting player should externally save it.
+player.desktop = desktop
+
+new_player ? UI.Welcome : UI.World

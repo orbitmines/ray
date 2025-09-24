@@ -1,0 +1,9 @@
+//TODO What would a good library for UI look like? Things like selecting an Entity Filter, should go into libraries and render that in a specific way if there's a equivalence for it to Entity code.
+singleton UI
+  singleton Welcome
+    form
+      global.player.name: String.Finite
+  end
+  singleton World
+  end
+end

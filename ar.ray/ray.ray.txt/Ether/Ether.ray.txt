@@ -1,5 +1,14 @@
-// Everything is either an Entity or an Item. (or both)
+global.player?: Player = external
+global.desktop: Desktop = external
+global.Ether: Server = external // TODO ether.orbitmines.com
 
+// Everything is an Item, and possibly an Entity.
+
+def Visibility = InheritFromInventory | Entity
+
+//TODO You can have anything with really long values, which don't need to be loaded directly, but can be loaded partially.
+//TODO This partial loading should also support encodings which can be decoded partially too.
+//TODO Or partial downloads of arbitrary parts of a file. (Allow access the parts out-of-order if present)
 def Item
   // TODO history could include When it's used, how it's made, how it's discovered, how it's constructed.
 
@@ -12,7 +21,7 @@ def Item
 
   def as : Shape TODO: Shape is just a type of graph implemented on .ray, nD-object, render function. Including a 2D-icon
 
-  def visibility: Entity // = Entity{==.instanceof Player}
+  visibility: Visibility = Visibility.InheritFromInventory // = Entity{==.instanceof Player}
   // TODO A program of possibly entities that are allowed to see this. Things like private servers which are allowed to see it. (Or the local server) - Can also include things like 'within renderdistance'.
   // TODO, Want to add things like : has been at this location in this world before for instance.
         //TODO -> So you want certificates to be given for having been at certain places. (Then on those places give them out as an item): So has this type of item, then it's visible.
@@ -33,6 +42,10 @@ def Item
   end
 end
 
++def String{== "public"}
+  def as :== Visibility = Entity{true}
+end
+
 // TODO You want to say, have a world in your inventory, which is your desktop. Which contains items. Those items are not directly in your inventory? But they can be put there.
 def World < Item
   // Known servers which this world runs on (TODO Others might be discovered later, so .servers might be non-halting)
@@ -44,12 +57,13 @@ def World < Item
         How do you make spatial propagation hard/limit it in a distributed sense when usually one can just skip ahead programmatically?
         -> Similarly how we make item copying expensive/impossible. Scarcity of the items.
 
+  spawn_location: Location
 
   // TODO, An entity should be a graph within the graph, both of those shouldn't interfere with each other. (As in effecting .next)
 
   entities: Entity
   //TODO Might want to tie a quest to a location too.
-  quests: Quest
+  quests: Quest //TODO Shouldn't conflict with fields of other things.
   //TODO: .quests{active | completed} TODO: Requires .filter etc. to be defined on Quest, which it should by default? Because Many<>
 
   // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
@@ -76,11 +90,35 @@ end
 
 def Quest < Item
   // Quests require Items ; Cannot see, ..., complete a quest, ..., puzzle without certain items.
-  revealed_by: Item
+  revealed_by: Item // TODO Might be an item owned by another Entity
+
+  //TODO Which classes of quests can be made?
+
+  // Quest rating
+  // - Difficulty rating -> Needs some idea of relative difficulty for the Entity
+  // - Effectiveness rating -> In the case of effecting other items.
+
+  // Rewards
+  // - When is a quest completed?
+  //    - Entity checks completion.
+  //    - Self checks completion
+  // - What is rewarded?
+  //   - Nothing, only a certificate on the quest.
+  //   - Item(s) issued by an Entity.
+  //   - 'Found item' might itself reveal more Quests -> This is infinitely generating.
+  //   - 'Found item' might affect other items. -> Predicted, vs actual effect.
+  //     - What items are effected?
+  //     - How are they effected?
+  // - How is quest completion checked?
+  //   - An Entity checks whether a function holds for another Entity (based on their knowledge for that entity).
+  //        -> (For instance: Whether some item is in their inventory, which is exposed to the Entity, which is a key)
 
   // TODO Do we know the reward (Item) of this quest -> And if so how does knowing this reward prevent us from already having it, and do we know the Effect-> of completing it?
 
-  def completed
+  def completed => boolean = completed?.certificate
+    //TODO Certificate might only be temporary, so time information on it. (Might have to repeatedly complete a quest, say a login) Or certificate might no longer be valid.
+    certificate?: Certificate
+  end
   def active = !completed
 end
 
@@ -93,16 +131,36 @@ end
   end
 end
 
-def Entity
-  def quests => Quest = inventory{==.instanceof Quest} // A NPC or Server is also trying to achieve quests
-  //TODO You want certain things from items to similarly be issued by certain entities
-  inventory: Item
+def Inventory < Item
+  path: Item[]
+  // TODO: Visibility should inherit from top-level parent Directory/Inventory if not set.
+  def () => Item{visibility: Entity}
+    item = sub() //TODO Support sub(), indicating that the method still needs to be implemented.
+    item.visibility = path.map(.visibility){!= Visibility.InheritFromInventory}.last
+    //TODO: Might have settings of certain servers to backup the player information to.
+    item
+  end
+  access: Entity //TODO Configure access for each item/dir.
+  def `dir: Item` => Inventory = Inventory(path = (path, dir))
+end
 
-  name: Name //TODO Can have many registered names at many different issuers. You'd then set your username, to issued by Yourself & some central Ether server if it's not already taken. (Servers can also give a specific name to any number of players, say as 'titles')
+class Entity < Item
+  inventory: Inventory
+  def quests => Quest = inventory{==.instanceof Quest}
+
+  def delegate type
+    def `field: *`
+      this.def `field` => type = inventory[field]()
+      this.def `field`= value: type = inventory[field] = value //TODO Should automatically implement &=, |= as well.
+    end
+  end
+
+  delegate name Name
+  delegate desktop Desktop
 
   def world = location.world
   //TODO What if you only want to broadcast a particular part of your location, say the world it's in or?
-  location: Location // TODO This again is Many<> so it's a superposition of locations, and visibility because Location = Item
+  delegate location Location // TODO This again is Many<> so it's a superposition of locations, and visibility because Location = Item
   +def location //TODO Allow this syntax.
     primary?: boolean //TODO Whether this is the location we're actually currently rendering on screen.
   end
@@ -113,26 +171,59 @@ def Entity
   //TODO : From the perspective of this entity,
   hosting: World //TODO These worlds should come from an Item in the server's inventory = is just (inventory as World){visibility = ??}
 
+  //TODO Specific parameter types can be enforced using Entity instanceof SomeOtherEntityWithConstraints
+  def `world: World` => Entity{name?: Name, location?: Location}
+    return this +.overwrite { // TODO Support +.overwrite as opposed to adding the results of the two to each-other. Type-checking should recognize the +.overwrite is defining at least the thing before the +.
+      inventory = this.inventory[world],
+      name = this.name{issued_by == world}
+      location = this.location{.world == world}
+    }
+  end
 end
 
-def NPC < Entity, Item
+def NPC < Entity
   //TODO Defines dynamics in a World
 end
 
 def Player < Entity
   //TODO: You want to be able to host a server as an item to a world, with some visibility.
+
 end
 
 //TODO Some server, which holds the 'first discovered by X' status, and issues certificates for that./
 def Server < NPC
+  //TODO Server might be behind some nameserver, delegating to many other servers.
+end
+def Desktop < NPC, World
 
 end
 
-def Name = string
-  certificate: Certificate
-end
+def Name = String.Finite < Item
 def Certificate
   //TODO pub/secret
   issued_by: Entity
   issued_on: Date//TODO
+end
+
+// TODO; Allow circular using.
+//TODO Uploadable public packages to .@name
+// using .@"ether.orbitmines.com".UI, <TODO Version>
+//TODO: If working in some folder, automatically change versioning numbers to the new ones, if the file is changed.
+//TODO Should work with the versioning system somehow? another parameter here the version, which the IDE supports for automatically getting
+def using at?: Entity = global.Ether, path: (inventory: Inventory) => Inventory
+  environment = caller
+
+  def eval inventory: Inventory
+    item: Item = path(inventory)()
+    //TODO eval item
+    //TODO Only allow certain things to be imported/changed by certain imports.
+  end
+
+  //TODO; If defined in player.inventory, define super() to call the original functionality.
+
+  //TODO; Check if version exists on desktop if configured for remote, if it does use it.
+
+  eval at.inventory if at // Load
+  eval desktop.inventory // Load default settings
+  eval player.inventory // Load player overwrites
 end

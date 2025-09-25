@@ -31,6 +31,7 @@ class Item
         //TODO -> So you want certificates to be given for having been at certain places. (Then on those places give them out as an item): So has this type of item, then it's visible.
 
   inventory: Inventory?
+  
 
   def move inventory: Inventory
   //TODO Transaction
@@ -74,10 +75,6 @@ end
 end
 +def String{== "public"}
   def as :== Visibility = Entity{true}
-end
-
-def Peer
-
 end
 
 // TODO You want to say, have a world in your inventory, which is your desktop. Which contains items. Those items are not directly in your inventory? But they can be put there.
@@ -190,9 +187,43 @@ end
   end
 end
 
-class Inventory ..self: Item
-  // TODO: Visibility should inherit from top-level parent Directory/Inventory if not set.
-  def () => Item{visibility: Entity, inventory: Inventory}? // TODO These refined types should be implied.
+
+//TODO Since the inventory is possibly managed by another Entity (server), that means that it has access, and it can give others access.
+
+// Managed inventories have some visibility/access, and thisw is one value for the manager (world), and another for the player, how to make that differentiation?
+//TODO: How to indicate it is managed by the world, and synced to the player.
+// Managed inventories at this location for a particular Entity.
+def `entity: Entity` => 1 Inventory
+// Managed inventories at this location by a particular World.
+def `world: World` => 1 Inventory
+
+// Inventories differ slightly from traditional file systems:
+//   - There can be many items (files) defined at a single location. These could have additional operators defined on
+//     them like AND/OR, and they could also be abstractly defined; They work just like any Type in `ray.txt`.
+//   - Inventory works like directory: It defines a path. But at any path items (file) might be defined. Additionally,
+//     it might host additional inventories and items like a directory. So any path is always a directory and a file.
+// 
+// When inventory is used as an Item, it is just "the path to that inventory".
+class Inventory < Item
+  owner: Entity
+  path: *[] = []
+  def [path: *[]] => Inventory = this +.overwrite { .path = path }
+  
+  recursive = {
+    def items => Item = (this -> ==.instance_of Inventory ? .items : .)[1..].reduce(&)
+    def inventories => Inventory = (this -> .inventories)[1..].reduce(&)
+  }
+  
+  // Get children of this inventory.
+  def items => Item
+  def inventories => Inventory = items{==.instanceof Inventory}
+  
+  // Get the items defined at this inventory.
+  def get => Item{visibility: Entity, inventory: Inventory}? // TODO These refined types should be implied.
+    //TODO Load item as a .ray.txt file, with restrictions.
+
+    //TODO Get a specific type
+  
     // Many items might be stored at this location.
     item = sub() //TODO Support sub(), indicating that the method still needs to be implemented.
     item.visibility = path.map(.visibility){!= Visibility.InheritFromInventory}.last
@@ -201,28 +232,6 @@ class Inventory ..self: Item
     //TODO: Might have settings of certain servers to backup the player information to.
     item
   end
-
-  `` = {
-    owner: Entity
-    def items => Item = this[(Item & not "") & Entity & World]()
-    def path => Item[] = (.inventory <- self).compact  //TODO How do you proof not Array.Unbounded?
-    //TODO Since the inventory is possibly managed by another Entity (server), that means that it has access, and it can give others access.
-    def `property: *` = item[property] //TODO Need some shortcut for not defined
-  }
-
-  def `dir: Item & not "" & not Entity` => 1 Inventory
-    return this if dir ==<String> "."
-    return this.inventory ?? this if dir ==<String> ".."
-    return Inventory(owner = this.owner, self = dir)
-  end
-
-  //TODO: How to indicate it is managed by the world, and synced to the player.
-  // Managed inventories at this location for a particular Entity.
-  def `entity: Entity` => 1 Inventory
-  // Managed inventories at this location by a particular World.
-  def `world: World` => 1 Inventory
-
-  def as :== Item = ..item
 end
 
 class Entity < Item
@@ -298,6 +307,7 @@ def Certificate
   issued_on: Date//TODO
 end
 
+
 //TODO #World.#ChildWorld.@UserName where #ChildWorld.name.issued_by = #World
 //TODO Equivalent .UI = .#Ether.UI
 //TODO Equivalent: .#Ether.@UserName = .@UserName
@@ -308,11 +318,46 @@ end
 // using .@"ether.orbitmines.com".UI, <TODO Version>
 //TODO: If working in some folder, automatically change versioning numbers to the new ones, if the file is changed.
 //TODO Should work with the versioning system somehow? another parameter here the version, which the IDE supports for automatically getting
-def using at: Entity? = global.Ether, path: (inventory: Inventory) => Inventory
+
+private class Module
+  static Constructor = (root: Module = Module()) => Module //TODO Constructor is parameterless, so you shouldnt need to call it with (), so just naming a variable this should work. BUt what if you would want to pass it a parameter, there's an ambiguity here.
+  
+  def (node: *) = ..path.reduce(acc = node, current => acc[current])
+
+  `` = {
+    def parent: Module?
+
+    def property: *?
+    def world: World?
+    def player: Player?
+
+    def path => *[] = (..parent <- this).map(.world ?? .player ?? .property).compact //TODO This, because it's private shouldn't be overwritten? How does that work?
+  }
+
+  def `property: * & not ""` => Module
+    return this if property ==<String> "."
+    return this.parent ?? this if property ==<String> ".."
+    return Module(..parent = this, ..property = property)
+  end
+
+  if !parent || parent..world
+    def #`world: String.NonEmpty` = Module(
+      ..parent = this,
+      world = (parent..world ? parent..world : global.Ether).#`world`
+    ) //TODO Check if not None
+
+    def @`player: String.NonEmpty` = Module(
+      ..parent = this,
+      player = (parent..world ? parent..world : global.Ether).@`player`
+    ) //TODO Check if not None
+  end
+end
+
+def using at: Entity? = global.Ether, path: Module.Constructor
   environment = caller
 
   def eval inventory: Inventory
-    item: Item = path(inventory)()
+    item: Item = path(inventory)
     //TODO eval item
     //TODO Only allow certain things to be imported/changed by certain imports.
   end

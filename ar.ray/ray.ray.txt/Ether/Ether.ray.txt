@@ -1,6 +1,6 @@
 global.player?: Player = external
-global.desktop: Desktop = external
-global.Ether: Server = external // TODO ether.orbitmines.com
+global.desktop: Server.Ether = external
+global.Ether: Server.Ether = external // TODO ether.orbitmines.com
 
 // Everything is an Item, and possibly an Entity.
 
@@ -9,7 +9,7 @@ def Visibility = InheritFromInventory | Entity
 //TODO You can have anything with really long values, which don't need to be loaded directly, but can be loaded partially.
 //TODO This partial loading should also support encodings which can be decoded partially too.
 //TODO Or partial downloads of arbitrary parts of a file. (Allow access the parts out-of-order if present)
-def Item
+class Item
   // TODO history could include When it's used, how it's made, how it's discovered, how it's constructed.
 
   // Items require Quests ; In order to find items you need quests.
@@ -19,13 +19,30 @@ def Item
   issued_by: World
   certificate: Certificate
 
-  def as : Shape TODO: Shape is just a type of graph implemented on .ray, nD-object, render function. Including a 2D-icon
-
+  // Read-access
   visibility: Visibility = Visibility.InheritFromInventory // = Entity{==.instanceof Player}
+  // Write-access (defines allowable values one can write to each field)
+  access: Query<static> //TODO Another item which defines superpositions on each field for possible values allowed to set.
+
   // TODO A program of possibly entities that are allowed to see this. Things like private servers which are allowed to see it. (Or the local server) - Can also include things like 'within renderdistance'.
   // TODO, Want to add things like : has been at this location in this world before for instance.
         //TODO -> So you want certificates to be given for having been at certain places. (Then on those places give them out as an item): So has this type of item, then it's visible.
 
+  inventory?: Inventory
+
+  def move inventory: Inventory
+
+  end
+  // TODO On change, if has access, save. Otherwise, save local copy.
+  def save
+  // TODO If inventory has changed, we don't remove, -> keep track of all changes on item
+    //TODO Write to inventories
+  end
+  def delete
+
+  end
+
+  def as : Shape TODO: Shape is just a type of graph implemented on .ray, nD-object, render function. Including a 2D-icon
 
   // Items are Quests ; Your items might be quests to find for others.
   def as :== Quest = this ==.instanceof Quest ? this : TODO
@@ -42,6 +59,17 @@ def Item
   end
 end
 
++def Node
+  def as :== Item = Item(
+    //TODO obtained_by
+    issued_by: global.desktop,
+    certificate //TODO,M
+  )
+end
+
++def String{== "private"}
+  def as :== Visibility = Entity{== global.player} //TODO This check needs to be secure, so noone can spoof it.
+end
 +def String{== "public"}
   def as :== Visibility = Entity{true}
 end
@@ -69,6 +97,8 @@ def World < Item
   // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
 
   //TODO What about behavior dictated by the world/server: These things are automatically shown, these things not.
+
+  def online => boolean //TODO
 end
 
 // Spatial Propagation
@@ -83,7 +113,7 @@ end
 
 // TODO How does a location work if it's a dynamic space?
 def Location < Item //TODO = Ray of World OR: You want Location to be more abstractly, a subregion: subgraph - which could be a specific location, of a World. It could also be a description of surroundings, which is not yet certain where exactly in the world that is.
-  world: World //TODO Could be many: it's in one of these worlds.
+  world?: World //TODO Could be many: it's in one of these worlds.
 
   //TODO Location too has a visibility, to whom am I broadcasting that I'm here.
 end
@@ -131,39 +161,57 @@ end
   end
 end
 
-def Inventory < Item
-  path: Item[]
+class Inventory ..self: Item
   // TODO: Visibility should inherit from top-level parent Directory/Inventory if not set.
   def () => Item{visibility: Entity}
     item = sub() //TODO Support sub(), indicating that the method still needs to be implemented.
     item.visibility = path.map(.visibility){!= Visibility.InheritFromInventory}.last
+    item.access//TODO Set access
+    item.inventory &= this
     //TODO: Might have settings of certain servers to backup the player information to.
     item
   end
-  access: Entity //TODO Configure access for each item/dir.
-  def `dir: Item` => Inventory = Inventory(path = (path, dir))
+
+  // We wrap any functionality in this, so that it's still an Item
+  `` = {
+    owner: Entity
+    def path => Item[] = (.inventory <- self).compact  //TODO How do you proof not Array.Unbounded?
+    //TODO Since the inventory is possibly managed by another Entity (server), that means that it has access, and it can give others access.
+    def `property: *` = item[property] //TODO Need some shortcut for not defined
+  }
+
+  def `dir: Item & not ""` => Inventory
+    return this if dir ==<String> "."
+    return this.inventory ?? this if dir ==<String> ".."
+    return Inventory(owner = this.owner, self = dir)
+  end
+
+  def as :== Item = ..item
+end
+def FileSystem server: Server < Inventory
+  is_local = server == global.desktop
 end
 
 class Entity < Item
   inventory: Inventory
   def quests => Quest = inventory{==.instanceof Quest}
 
-  def delegate type
+  def store type
     def `field: *`
       this.def `field` => type = inventory[field]()
       this.def `field`= value: type = inventory[field] = value //TODO Should automatically implement &=, |= as well.
     end
   end
 
-  delegate name Name
-  delegate desktop Desktop
+  store name Name
+  store desktop Server.Ether //TODO Should be multiple here, and only change the one with this identifier, (can use MAC-address, but we need additional identifier stored for dual-boot)
 
-  def world = location.world
-  //TODO What if you only want to broadcast a particular part of your location, say the world it's in or?
-  delegate location Location // TODO This again is Many<> so it's a superposition of locations, and visibility because Location = Item
+  store location Location
   +def location //TODO Allow this syntax.
     primary?: boolean //TODO Whether this is the location we're actually currently rendering on screen.
   end
+  def world = location.world
+  //TODO What if you only want to broadcast a particular part of your location, say the world it's in or?
 
 
   // A world might live on many entities/servers
@@ -193,20 +241,44 @@ def Organization < Entity
 end
 
 //TODO Some server, which holds the 'first discovered by X' status, and issues certificates for that./
-def Server < NPC
+class Server < NPC, World
+  +def inventory
+    fs = FileSystem(server = this)
+  end
+
   //TODO Server might be behind some nameserver, delegating to many other servers.
+  static Ether < Server
+    def @`player: String.NonEmpty` => Player
+      //TODO
+    end
+    def #`channel: String.NonEmpty` => Channel
+      //TODO
+    end
+  end
 end
-def Desktop < NPC, World
 
+def @`player: String.NonEmpty` => Player = Ether.@`player`
+def #`channel: String.NonEmpty` => Channel = Ether.#`channel`
+
+def Channel < Item
+  world: World
+  name: Name
+
+  def @`player: String.NonEmpty` => Player
+    //TODO
+  end
 end
 
-def Name = String.Finite < Item
+def Name = String.NonEmpty < Item
+  channel?: Channel
+end
 def Certificate
   //TODO pub/secret
   issued_by: Entity
   issued_on: Date//TODO
 end
 
+//TODO .#channel.@UserName.
 //TODO; Require domain names registers on @"orbitmines.com" to be verified
 // TODO; Allow circular using.
 //TODO Uploadable public packages to .@name, default to using player names for this. register other organization names for this too.

@@ -16,6 +16,7 @@
 //TODO Equivalence graph
 //     - Forced equivalence how?
 
+==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
 == = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
 ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
 ==.in(equivalence_graph) = equivalence_graph.find(this).path_to(x) //TODO Or this & x can both be rewritten to the same thing in that equivalence graph.
@@ -214,6 +215,7 @@ end
 // Allow static to be accessible in defining parameters, say 'class Hypergraph<T>{every(==.instanceof Vertex)}; static Vertex'
 // Allow static to go to inherited objects.
 // Allow out-of-order defined defaults at?:, path:
+// Allow named parameters to access nested fields: def method(parameter.field: Object), and it's then set as 'field'
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func

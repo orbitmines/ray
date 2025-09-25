@@ -331,7 +331,7 @@ private class Module
     def world: World?
     def player: Player?
 
-    def path => *[] = (..parent <- this).map(.world ?? .player ?? .property).compact //TODO This, because it's private shouldn't be overwritten? How does that work?
+    def path => *[] = (..parent <- this).compact.map(.world ?? .player ?? .property) //TODO This, because it's private shouldn't be overwritten? How does that work?
   }
 
   def `property: * & not ""` => Module

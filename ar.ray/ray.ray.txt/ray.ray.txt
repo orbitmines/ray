@@ -13,7 +13,7 @@ def * = external // TODO any type Might not need to be externally defined. self-
 // TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
 def do<T < Program>(program: T) => T = external
 class goto
-  def (location: Program, predicate?: Expression) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless "program" -> or one where the parameters are already filled instead of goto the way of doing it.
+  def (location: Program, predicate: Expression?) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless "program" -> or one where the parameters are already filled instead of goto the way of doing it.
 
   def if predicate: Expression = this<predicate: predicate>
 end
@@ -97,6 +97,9 @@ class Node
 
   def [] = Array<this>
   def ?? default = this as boolean ? this : default
+  def ?
+    //TODO Without parameter should return Option<>, with parameter :, boolean expression eval.
+  end
 
   def as : == boolean = true //TODO: How to 'as the type boolean not an instance'
 
@@ -137,12 +140,12 @@ class Ordered<T = *>
 end
 
 def Boundary<T>
-  value?: Boundary<T> //TODO T could be on value, Or you want a specific type on Boundary
+  value: Boundary<T>? //TODO T could be on value, Or you want a specific type on Boundary
   end: Ray<T>
 end
 def Ray<T = Ray<T>> < AbstractDirectionality<Ray<T>>
   initial: Boundary<T>
-  value?: T
+  value: T?
   terminal: Boundary<T>
 end
 
@@ -150,10 +153,10 @@ private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolea
   static Vertex = Ray<T>{
     initial = (HyperContinuations ? Many : 1) Boundary{
       end = (HyperEdges ? Many : 1) Vertex,
-      value = Option<(HyperEdges ? Many : 1) Boundary{
+      value = (HyperEdges ? Many : 1) Boundary{
         end = (HyperEdges ? Many : 1) Vertex,
         value = (HyperEdges ? Many : 1) Vertex.initial
-      }>
+      }?
     },
     terminal = initial // By default a structure is symmetric
   } //TODO .unrolled
@@ -173,10 +176,10 @@ def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false>
   // Tree has a single 'parent' on each vertex.
   +def Vertex = super{initial = 1 Boundary{
     end = 1 Vertex,
-    value = Option<Boundary{
+    value = Boundary{
       end = 1 Vertex,
       value = Vertex.initial
-    }>
+    }?
   }} //TODO The Vertex.initial here should refer to the new value, not the old.
 end
 
@@ -217,7 +220,7 @@ end
 
 class try program: () => *
   def <Args>(catch?: (args: Args) => *)
-    error?: Option<Args>
+    error: Args?
 
     program(throw: (args: Args) => error = args; goto capture)
     return
@@ -462,6 +465,8 @@ class String = Unbounded{length < Infinity}
     //TODO: Want to allow things like String.push_back(u32), but it should encapsulate the u32 into an expandable single node.
 
     // TODO How do other languages implement String?
+
+    def ignore_case //TODO Return superposition with ignored case
   end
 end
 class char = u32

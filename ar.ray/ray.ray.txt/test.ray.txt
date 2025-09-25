@@ -51,7 +51,7 @@ end
 instance_of which forces non-superposition; This is probably not supported: Always allow types.
 
 //TODO .random on Array/Graph/..
-
+//TODO Optional method like Entity.move on tick.
 
 // How to populate Arrays/graphs by default
 
@@ -75,6 +75,7 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 //   -> If default is not set for accumulator, the initial value is the first in the array.
 //   TODO But how would you?: For .reduce, require a default value for accumulator, how to indicate that?
 
+//TODO If big instanceof iterables are used, like worlds: World = entities{==.instanceof World}, store it separately, don't always filter through all those entities
 
 // 0..9.reduce(|) = (Decimal.Digit) 0.value.context.reduce(|) ; .superpose an array, namely the digit defining 0. -> Then could also have the digit values link back to the superposed object or not?
 
@@ -216,6 +217,8 @@ end
 // Allow static to go to inherited objects.
 // Allow out-of-order defined defaults at?:, path:
 // Allow named parameters to access nested fields: def method(parameter.field: Object), and it's then set as 'field'
+// Allow var?: type and var: type?
+// Allow the . after operator in shortcut of defining x => x & x. : this.#`String.NonEmpty` -> & .#`String.NonEmpty`
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func

@@ -1,4 +1,4 @@
-using .@Ether.UI, <TODO Version>
+using .UI, <TODO Version>
 
 new_player = !player
 

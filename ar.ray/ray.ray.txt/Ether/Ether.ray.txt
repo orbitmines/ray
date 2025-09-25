@@ -84,12 +84,14 @@ end
 class World < Entity
   //TODO What are quests and location of a world?
 
+  // TODO What if I define my own alias for this world, it doesn't get stored in the global World config, but I want it in my own
+  //   -> Allow overriding of default config: inventories by the user.
   // A server can still host a world where parent != that server.
-  parent: World?
-  name: Name
+  def parent => World? = this.name.issued_by != this ? this.name.issued_by : None
 
+  // TODO Serverlist maintained by the world, but others could be running it too.
   // Known servers which this world runs on (TODO Others might be discovered later, so .hosts might be non-halting)
-  hosts: Server
+  store hosts Server
 
   // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
 
@@ -112,6 +114,7 @@ class World < Entity
 
   // Child worlds, where this world is acting as a parent category
   store #`world: this != global.Ether ? String.NonEmpty : String.NonEmpty & not global.Ether.name.ignore_case` World?
+
   if this == global.Ether
     def #`global.Ether.name.ignore_case` => World = global.Ether
   end
@@ -189,7 +192,8 @@ end
 
 class Inventory ..self: Item
   // TODO: Visibility should inherit from top-level parent Directory/Inventory if not set.
-  def () => Item{visibility: Entity}
+  def () => Item{visibility: Entity, inventory: Inventory}? // TODO These refined types should be implied.
+    // Many items might be stored at this location.
     item = sub() //TODO Support sub(), indicating that the method still needs to be implemented.
     item.visibility = path.map(.visibility){!= Visibility.InheritFromInventory}.last
     item.access//TODO Set access
@@ -198,29 +202,31 @@ class Inventory ..self: Item
     item
   end
 
-  // We wrap any functionality in this, so that it's still an Item
   `` = {
     owner: Entity
+    def items => Item = this[(Item & not "") & Entity & World]()
     def path => Item[] = (.inventory <- self).compact  //TODO How do you proof not Array.Unbounded?
     //TODO Since the inventory is possibly managed by another Entity (server), that means that it has access, and it can give others access.
     def `property: *` = item[property] //TODO Need some shortcut for not defined
   }
 
-  def `dir: Item & not "" & not Entity` => Inventory
+  def `dir: Item & not "" & not Entity` => 1 Inventory
     return this if dir ==<String> "."
     return this.inventory ?? this if dir ==<String> ".."
     return Inventory(owner = this.owner, self = dir)
   end
 
   //TODO: How to indicate it is managed by the world, and synced to the player.
-  def `entity: Entity` =>
-  def `world: World` =>
+  // Managed inventories at this location for a particular Entity.
+  def `entity: Entity` => 1 Inventory
+  // Managed inventories at this location by a particular World.
+  def `world: World` => 1 Inventory
 
   def as :== Item = ..item
 end
 
 class Entity < Item
-  inventory: Inventory
+  inventory: 1 Inventory
   def quests => Quest = inventory{==.instanceof Quest}
 
   def store type

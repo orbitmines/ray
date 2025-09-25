@@ -1,6 +1,8 @@
-global.player?: Player = external
-global.desktop: Server.Ether = external
-global.Ether: Server.Ether = external // TODO ether.orbitmines.com
+global.player: Player? = external
+global.desktop: Server = external // TODO inventory.fs defined by external.
+global.Ether: Server = external // TODO ether.orbitmines.com
+
+//TODO All networking is abstracted away behind players/servers/inventories.
 
 // Everything is an Item, and possibly an Entity.
 
@@ -22,16 +24,16 @@ class Item
   // Read-access
   visibility: Visibility = Visibility.InheritFromInventory // = Entity{==.instanceof Player}
   // Write-access (defines allowable values one can write to each field)
-  access: Query<static> //TODO Another item which defines superpositions on each field for possible values allowed to set.
+  access: Query<static>
 
   // TODO A program of possibly entities that are allowed to see this. Things like private servers which are allowed to see it. (Or the local server) - Can also include things like 'within renderdistance'.
   // TODO, Want to add things like : has been at this location in this world before for instance.
         //TODO -> So you want certificates to be given for having been at certain places. (Then on those places give them out as an item): So has this type of item, then it's visible.
 
-  inventory?: Inventory
+  inventory: Inventory?
 
   def move inventory: Inventory
-
+  //TODO Transaction
   end
   // TODO On change, if has access, save. Otherwise, save local copy.
   def save
@@ -68,16 +70,31 @@ end
 end
 
 +def String{== "private"}
-  def as :== Visibility = Entity{== global.player} //TODO This check needs to be secure, so noone can spoof it.
+  def as :== Visibility = Entity{== global.player ?? global.desktop} //TODO This check needs to be secure, so noone can spoof it.
 end
 +def String{== "public"}
   def as :== Visibility = Entity{true}
 end
 
+def Peer
+
+end
+
 // TODO You want to say, have a world in your inventory, which is your desktop. Which contains items. Those items are not directly in your inventory? But they can be put there.
-def World < Item
-  // Known servers which this world runs on (TODO Others might be discovered later, so .servers might be non-halting)
-  hosts: Entity
+class World < Entity
+  //TODO What are quests and location of a world?
+
+  // A server can still host a world where parent != that server.
+  parent: World?
+  name: Name
+
+  // Known servers which this world runs on (TODO Others might be discovered later, so .hosts might be non-halting)
+  hosts: Server
+
+  // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
+
+  //TODO What about behavior dictated by the world/server: These things are automatically shown, these things not.
+    //TODO Might want to tie a quest to a location too.
 
   // Internal dynamics -> Want a primitive in .ray to be a dynamic space.
 
@@ -89,17 +106,26 @@ def World < Item
 
   // TODO, An entity should be a graph within the graph, both of those shouldn't interfere with each other. (As in effecting .next)
 
-  entities: Entity
-  //TODO Might want to tie a quest to a location too.
-  quests: Quest //TODO Shouldn't conflict with fields of other things.
-  //TODO: .quests{active | completed} TODO: Requires .filter etc. to be defined on Quest, which it should by default? Because Many<>
+  def entities = worlds & players & npcs
+  store players Player
+  store npcs NPC
 
-  // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
+  // Child worlds, where this world is acting as a parent category
+  store #`world: this != global.Ether ? String.NonEmpty : String.NonEmpty & not global.Ether.name.ignore_case` World?
+  if this == global.Ether
+    def #`global.Ether.name.ignore_case` => World = global.Ether
+  end
 
-  //TODO What about behavior dictated by the world/server: These things are automatically shown, these things not.
+  def worlds = (this.#`String.NonEmpty` -> .#`String.NonEmpty`).compact.reduce(&) //TODO Should overlay Both cases of "Ether".ignore_case and not.
+  //TODO: Should know that, because of using reduce(&), that intermediate results are possible for .last (Don't need to compute all children to get some values out of this). That should also work for '(this.#`String.NonEmpty` -> & .#`String.NonEmpty`).compact.last'
+  //TODO worlds{parent == None} should know that  it doesn't need to go into the children.
 
-  def online => boolean //TODO
+  // Players can be registered under a certain world, similar to how certain games/apps have UserName#Tag, where the
+  // #Tag is the world.
+  store @`player: String.NonEmpty` Player?
 end
+
+
 
 // Spatial Propagation
 // - Separate graphs for moving pieces?
@@ -113,7 +139,7 @@ end
 
 // TODO How does a location work if it's a dynamic space?
 def Location < Item //TODO = Ray of World OR: You want Location to be more abstractly, a subregion: subgraph - which could be a specific location, of a World. It could also be a description of surroundings, which is not yet certain where exactly in the world that is.
-  world?: World //TODO Could be many: it's in one of these worlds.
+  world: World? //TODO Could be many: it's in one of these worlds.
 
   //TODO Location too has a visibility, to whom am I broadcasting that I'm here.
 end
@@ -147,7 +173,7 @@ def Quest < Item
 
   def completed => boolean = completed?.certificate
     //TODO Certificate might only be temporary, so time information on it. (Might have to repeatedly complete a quest, say a login) Or certificate might no longer be valid.
-    certificate?: Certificate
+    certificate: Certificate?
   end
   def active = !completed
 end
@@ -180,16 +206,17 @@ class Inventory ..self: Item
     def `property: *` = item[property] //TODO Need some shortcut for not defined
   }
 
-  def `dir: Item & not ""` => Inventory
+  def `dir: Item & not "" & not Entity` => Inventory
     return this if dir ==<String> "."
     return this.inventory ?? this if dir ==<String> ".."
     return Inventory(owner = this.owner, self = dir)
   end
 
+  //TODO: How to indicate it is managed by the world, and synced to the player.
+  def `entity: Entity` =>
+  def `world: World` =>
+
   def as :== Item = ..item
-end
-def FileSystem server: Server < Inventory
-  is_local = server == global.desktop
 end
 
 class Entity < Item
@@ -199,20 +226,25 @@ class Entity < Item
   def store type
     def `field: *`
       this.def `field` => type = inventory[field]()
-      this.def `field`= value: type = inventory[field] = value //TODO Should automatically implement &=, |= as well.
+      //TODO: What if inventory doesn't have that type stored.
+      this.def `field`= value: type
+        //TODO Use .save/.delete the previous entries.
+        //inventory[field] = value //TODO Should automatically implement &=, |= as well.
+      end
     end
   end
 
   store name Name
-  store desktop Server.Ether //TODO Should be multiple here, and only change the one with this identifier, (can use MAC-address, but we need additional identifier stored for dual-boot)
 
   store location Location
   +def location //TODO Allow this syntax.
-    primary?: boolean //TODO Whether this is the location we're actually currently rendering on screen.
+    primary: boolean? //TODO Whether this is the location we're actually currently rendering on screen.
   end
   def world = location.world
   //TODO What if you only want to broadcast a particular part of your location, say the world it's in or?
 
+  // On top of 'visibility', an entity can be set offline server-side: Indicating only offline communication.
+  def online => boolean //TODO for a server: set this value, for client: poll for data.
 
   // A world might live on many entities/servers
   //TODO A player, or any entity can (co-)host worlds
@@ -220,7 +252,7 @@ class Entity < Item
   hosting: World //TODO These worlds should come from an Item in the server's inventory = is just (inventory as World){visibility = ??}
 
   //TODO Specific parameter types can be enforced using Entity instanceof SomeOtherEntityWithConstraints
-  def `world: World` => Entity{name?: Name, location?: Location}
+  def `world: World` => Entity{name: Name?, location: Location?}
     return this +.overwrite { // TODO Support +.overwrite as opposed to adding the results of the two to each-other. Type-checking should recognize the +.overwrite is defining at least the thing before the +.
       inventory = this.inventory[world],
       name = this.name{issued_by == world}
@@ -235,57 +267,42 @@ end
 
 def Player < Entity
   //TODO: You want to be able to host a server as an item to a world, with some visibility.
+  store desktop Server //TODO Should be multiple here, and only change the one with this identifier, (can use MAC-address, but we need additional identifier stored for dual-boot)
+
 
 end
-def Organization < Entity
+def Organization < Player
+  //TODO Reserve namespace with dots to domain names.
 end
 
 //TODO Some server, which holds the 'first discovered by X' status, and issues certificates for that./
 class Server < NPC, World
-  +def inventory
-    fs = FileSystem(server = this)
-  end
 
   //TODO Server might be behind some nameserver, delegating to many other servers.
-  static Ether < Server
-    def @`player: String.NonEmpty` => Player
-      //TODO
-    end
-    def #`channel: String.NonEmpty` => Channel
-      //TODO
-    end
-  end
+
 end
 
 def @`player: String.NonEmpty` => Player = Ether.@`player`
-def #`channel: String.NonEmpty` => Channel = Ether.#`channel`
-
-def Channel < Item
-  world: World
-  name: Name
-
-  def @`player: String.NonEmpty` => Player
-    //TODO
-  end
-end
+def #`world: String.NonEmpty` => World = Ether.#`world`
 
 def Name = String.NonEmpty < Item
-  channel?: Channel
-end
 def Certificate
   //TODO pub/secret
   issued_by: Entity
   issued_on: Date//TODO
 end
 
-//TODO .#channel.@UserName.
+//TODO #World.#ChildWorld.@UserName where #ChildWorld.name.issued_by = #World
+//TODO Equivalent .UI = .#Ether.UI
+//TODO Equivalent: .#Ether.@UserName = .@UserName
+//TODO .#world.@UserName.
 //TODO; Require domain names registers on @"orbitmines.com" to be verified
 // TODO; Allow circular using.
 //TODO Uploadable public packages to .@name, default to using player names for this. register other organization names for this too.
 // using .@"ether.orbitmines.com".UI, <TODO Version>
 //TODO: If working in some folder, automatically change versioning numbers to the new ones, if the file is changed.
 //TODO Should work with the versioning system somehow? another parameter here the version, which the IDE supports for automatically getting
-def using at?: Entity = global.Ether, path: (inventory: Inventory) => Inventory
+def using at: Entity? = global.Ether, path: (inventory: Inventory) => Inventory
   environment = caller
 
   def eval inventory: Inventory

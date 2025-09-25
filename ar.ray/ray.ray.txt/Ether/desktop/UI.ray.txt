@@ -3,6 +3,7 @@ single UI
   single Welcome
     form
       global.player.name: String
+
   end
   single World
   end

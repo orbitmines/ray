@@ -45,6 +45,9 @@ global = local
 //TODO .for on object, but it gets overwritten if type of Array. What is used then to get the object instead. Use .properties.for
 //TODO 'def primary => location', should not implement primary. since location is a variable too.
 //TODO Infinity
+//TODO {} is a 'single'
+//TODO Calling "()" should not call the () implementation, it's some special non-string token.
+//TODO Disallow cast of None to item, because every method is overwritten with different return types. It's cast to an Item{} with all fields set to : None
 
 def void end
 
@@ -81,7 +84,7 @@ def class
   end
 end
 
-def singleton
+def single
   def `name = *`(definition: (Args = *) => *)
     static = definer.class name, definition
     return static()
@@ -114,12 +117,14 @@ class Expression
   def while program = global.while(this, program)
 end
 
-def Iterable<T = *>
+class Iterable<T = *>
   for callback: (*[]) => *
     //TODO: callback.parameter s = Array & Object, named at Object, .length etc. at Array; 'parameters' interprets as an array.
     //TODO + continue
     //TODO + return = caller.return
   end
+
+  def compact = this{!= None} //TODO For abstract directionality both ways?.
 end
 def AbstractDirectionality<TVertex> < Iterable
 end
@@ -141,7 +146,7 @@ def Ray<T = Ray<T>> < AbstractDirectionality<Ray<T>>
   terminal: Boundary<T>
 end
 
-private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false>{every(==.instanceof Vertex)} < AbstractDirectionality<Vertex>
+private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
   static Vertex = Ray<T>{
     initial = (HyperContinuations ? Many : 1) Boundary{
       end = (HyperEdges ? Many : 1) Vertex,
@@ -152,7 +157,9 @@ private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolea
     },
     terminal = initial // By default a structure is symmetric
   } //TODO .unrolled
-  static Finite = static{count < Infinity}
+
+  static Unbounded{every(==.instanceof Vertex)} < AbstractDirectionality<Vertex>
+  end
 end
 def Hypergraph<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = true>
 end
@@ -270,6 +277,16 @@ end
 
   // TODO as boolean, and maybe other things defined on Node should still work, but how?
   def `*` = this
+end
+
+def Optional<T>
+  def `*: TODO Defined on T` => Option<TODO T[property] type>
+end
+def Required<T>
+  //TODO Strip option from T.
+end
+def Query<T>
+  //TODO Set each property to the base class without defaults defined on T.
 end
 
 def Integer<n> = sign = "-"?, integer = Positive
@@ -436,15 +453,16 @@ end
 { false, true } = boolean // Could also be 'false, true = boolean' in this case.
 
 //TODO Maybe an instantiation of String/char, which doesn't say how exactly it's implemented (u32/UTF), to signal it's not important that that system retains its place. 'Name' would be where this could be used.
-class String = char[]
-  static Finite = static{length < Infinity}
+class String = Unbounded{length < Infinity}
+  static NonEmpty = String{length > 0}
+  static Unbounded = char[]
+    ()
+    (block) //TODO Accept "String" \n property='b' end
+    //TODO: Any Array definition is an expandable object, which at one level of description has that new Node, on the other the array of things.
+    //TODO: Want to allow things like String.push_back(u32), but it should encapsulate the u32 into an expandable single node.
 
-  ()
-  (block) //TODO Accept "String" \n property='b' end
-  //TODO: Any Array definition is an expandable object, which at one level of description has that new Node, on the other the array of things.
-  //TODO: Want to allow things like String.push_back(u32), but it should encapsulate the u32 into an expandable single node.
-
-  // TODO How do other languages implement String?
+    // TODO How do other languages implement String?
+  end
 end
 class char = u32
   dynamically assert this < 0x110000 & !(0xD800 <= this <= 0xDFFF)
@@ -457,4 +475,6 @@ def Range
   // TODO Infinity, is just the terminal reference (which doesn"t exist on the line) How to differentiate initial/terminal infinity.
 
   // TODO Implemented as things like .if() ?
+
+  //TODO Implement range as method on empty string ."".
 end

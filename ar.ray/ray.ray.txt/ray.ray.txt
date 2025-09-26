@@ -48,6 +48,7 @@ global = local
 //TODO {} is a 'single'
 //TODO Calling "()" should not call the () implementation, it's some special non-string token.
 //TODO Disallow cast of None to item, because every method is overwritten with different return types. It's cast to an Item{} with all fields set to : None
+//TODO .keys
 
 def void end
 
@@ -356,35 +357,115 @@ end
       static def String = Array<Digit as String>
 
       def `fraction = Positive.String` => Real.Positive = integer, ".", fraction
+
+      static class Multiple<exponent: Positive> = Positive
+        def as :== Positive = integer << exponent //TODO This is a decimal shift, when working with binary values you want to access them as binary if you want that shift.
+      end
     end
 
-    static class Real = sign = "-"?, Real.Positive
+    static class Real = sign = "-"?, real = Real.Positive
       static String = static as String
 
       static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive
         static String = static as String
+
+        //TODO Support non-integer multiple exponents for reals.
+        static class Multiple<exponent: `Base`> = Positive
+          def as :== Positive
+            if exponent == 0
+              this
+            elsif exponent > 0
+              integer, fraction.0 ?? 0, ".", fraction[1..]
+            else
+              integer[..-1], ".", integer[-1] ?? 0, fraction
+            end
+          end
+        end
+      end
+
+      static class Multiple<exponent: `Base`> = Real
+        def as :== Real = sign, real as Positive.Multiple<exponent>
+      end
+    end
+
+    static class Multiple<exponent: Positive> = `Base`
+      def as :== `Base` = sign, integer as Positive.Multiple<exponent>
+    end
+
+    if Base == "Decimal"
+      private multiples = {
+        qm = -30 // quectometer
+        rm = -27 // rontometer
+        ym = -24 // yoctometer
+        zm = -21 // zeptometer
+        am = -18 // attometer
+        fm = -15 // femtometer
+        pm = -12 // picometer
+        nm = -9 // nanometer
+        µm = -6 // micrometer
+        mm = -3 // millimeter
+        cm = -2 // centimeter
+        dm = -1 // decimeter
+        m = 0 // meter
+        dam = 1 // dekameter
+        hm = 2 // hectometer
+        km = 3 // kilometer
+        Mm = 6 // megameter
+        Gm = 9 // gigameter
+        Tm = 12 // terameter
+        Pm = 15 // petameter
+        Em = 18 // exameter
+        Zm = 21 // zettameter
+        Ym = 24 // yottameter
+        Rm = 27 // ronnameter
+        Qm = 30 // quettameter
+      }
+      private SI = multiples.keys.reduce(|)
+
+      // Allows syntax 1m
+      global.def `digits: Decimal.Positive.String, si: SI` => Distance = digits, si
+      // Allows syntax 1.0m
+      +def Decimal.Positive
+        def `fraction: Decimal.Positive.String, si: SI` => Distance.Real = integer, ".", fraction, si
+
+        //TODO Should overwrite number.def`node: not String` since it's more specific
+        // Allows syntax 1 m
+        def `si = SI` => Distance = this, si
+      end
+      // Allows syntax 1.0 m
+      +def Decimal.Real
+        def `si = SI` => Distance.Real = this, si
+      end
+
+      static class Distance = (si >= 0 ? Positive.Multiple : Multiple)<exponent = multiples[si]>, si = SI
+        static class Real = (si >= 0 ? Real.Positive.Multiple : Real.Multiple)<exponent = multiples[si]>, si = SI
       end
     end
   end
 end
+Distance = Decimal.Distance // re-export as Distance
 
 +def Binary.Positive
 
   def ~! = this.map(!)
-  def ~`operator = boolean.Operator.Binary` b: Binary.Positive = this.reverse.zip_longest(b.reverse).map(l, r => (l ?? false)[operator](r ?? false)).reverse
-  def ~`operator = boolean.Operator.Binary` b: Binary.Positive{.length == length} = this.zip(b).map(operator) //TODO: Or can the compiler deduce the reversing stuff is not necessary?
+  def ~`operator: boolean.Operator.Binary` b: Binary.Positive = this.reverse.zip_longest(b.reverse).map(l, r => (l ?? false)[operator](r ?? false)).reverse
+  def ~`operator: boolean.Operator.Binary` b: Binary.Positive{.length == length} = this.zip(b).map(operator) //TODO: Or can the compiler deduce the reversing stuff is not necessary?
 end
 
-def `digits = Decimal.Positive.String` => Decimal.Positive = digits
-def 0`"x" | "X"``digits = Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+def `digits: Decimal.Positive.String` => Decimal.Positive = digits
++def Decimal.Positive
+  def `fraction: Decimal.Positive.String` => Decimal.Real = integer, ".", fraction
+end
+
+def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
 
 //TODO: Possibly move these primitives to specific languages, and only work with arbitrary-length in the default case.
 //TODO: -b: Something uX might only implement b: uX, casts lose information and likely need to overflow
-def u`length = Decimal.Positive.String` = Binary.Positive{.length == length}
+def u`length: Decimal.Positive.String` = Binary.Positive{.length == length}
   // TODO Number arithmetic
   // - overflow, what to do? mod, or>?
 end
-def i`length = Decimal.Positive.String` = Binary.Positive{.length == length} // TODO, Use Binary vs Binary.Positive
+def i`length: Decimal.Positive.String` = Binary.Positive{.length == length} // TODO, Use Binary vs Binary.Positive
   // TODO Number arithmetic
 end
 

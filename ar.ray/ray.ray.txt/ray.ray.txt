@@ -183,9 +183,9 @@ def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false>
   }} //TODO The Vertex.initial here should refer to the new value, not the old.
 end
 
-class if expression: Expression, yes?: () => *
+class if predicate: Expression, yes?: () => *
   def (else?: () => *)
-    goto exec if expression // 'if' can be used here, since goto defines a special if-block. It's not self-referential here.
+    goto exec if predicate // 'if' can be used here, since goto defines a special if-block. It's not self-referential here.
 
     return else?(return: caller.return)
    exec:
@@ -233,6 +233,8 @@ end
 // Asserts & dynamic asserts, are simply part of the type definition.
 def dynamically
   def assert(expression: Expression) = external
+
+  def if(predicate: Expression, yes?: () => *) = external //TODO
 end
 def assert(expression: Expression) = throw '' if expression // TODO
 

@@ -9,7 +9,9 @@ global.Ether: Server = external // TODO ether.orbitmines.com
 def Visibility = InheritFromInventory | Entity
 
 //TODO You can have anything with really long values, which don't need to be loaded directly, but can be loaded partially.
+//     -> Networking code for doing this partially.
 //TODO This partial loading should also support encodings which can be decoded partially too.
+//     -> If it cannot be decoded partially, it should have the value stored on another level of description how?
 //TODO Or partial downloads of arbitrary parts of a file. (Allow access the parts out-of-order if present)
 class Item
   // TODO history could include When it's used, how it's made, how it's discovered, how it's constructed.
@@ -18,9 +20,10 @@ class Item
   obtained_by: Quest
 
   //
-  issued_by: World
+  issued_by: World = global.desktop
   certificate: Certificate
 
+  //TODO Visibility is also how private/public is implemented? But that would mean that other items are entities?
   // Read-access
   visibility: Visibility = Visibility.InheritFromInventory // = Entity{==.instanceof Player}
   // Write-access (defines allowable values one can write to each field)
@@ -30,19 +33,25 @@ class Item
   // TODO, Want to add things like : has been at this location in this world before for instance.
         //TODO -> So you want certificates to be given for having been at certain places. (Then on those places give them out as an item): So has this type of item, then it's visible.
 
-  inventory: Inventory?
-  
+  //TODO If every item is an inventory, then this is not used, but where it came from, is.
+  inventory: Inventory? //TODO If every item is an inventory, we want to know whether that inventory can persistently store information.
+  //TODO If a single item is in multiple inventories, how is persistence done? Is it stored in one, refs, in another, stored in both, want to allow for all of these options, how to deduplicate if it's known it's in two inventories: merger, or what?
 
+  //TODO We have copy as well, but we could also copy by ref, or have both set refs to a single one.
+  //  -> All object setting/getting becomes moving between inventories.
   def move inventory: Inventory
   //TODO Transaction
   end
-  // TODO On change, if has access, save. Otherwise, save local copy.
-  def save
-  // TODO If inventory has changed, we don't remove, -> keep track of all changes on item
-    //TODO Write to inventories
-  end
-  def delete
 
+  dynamically if inventory
+    // TODO On change, if has access, save. Otherwise, save local copy.
+    def save
+      // TODO If inventory has changed, we don't remove, -> keep track of all changes on item
+      //TODO Write to inventories
+    end
+    def delete
+
+    end
   end
 
   def as : Shape TODO: Shape is just a type of graph implemented on .ray, nD-object, render function. Including a 2D-icon
@@ -62,12 +71,11 @@ class Item
   end
 end
 
-+def Node
-  def as :== Item = Item(
-    //TODO obtained_by
++def Node < Item //TODO There's a circularity here, but it should be supported.
+
+  //TODO obtained_by
     issued_by: global.desktop,
     certificate //TODO,M
-  )
 end
 
 +def String{== "private"}
@@ -88,7 +96,7 @@ class World < Entity
 
   // TODO Serverlist maintained by the world, but others could be running it too.
   // Known servers which this world runs on (TODO Others might be discovered later, so .hosts might be non-halting)
-  store hosts Server
+  hosts: Server = Server{hosting == this}
 
   // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
 
@@ -105,12 +113,14 @@ class World < Entity
 
   // TODO, An entity should be a graph within the graph, both of those shouldn't interfere with each other. (As in effecting .next)
 
+  // All information on what's in a world could be partial client-side. It might not have all the information of the world.
   def entities = worlds & players & npcs
-  store players Player
-  store npcs NPC
+  players: Player
+  npcs: NPC
+  //TODO You should have a way of saying, this is my location (so also pitch etc.) based on that what information is available about which entities (could be partial)
 
   // Child worlds, where this world is acting as a parent category
-  store #`world: this != global.Ether ? String.NonEmpty : String.NonEmpty & not global.Ether.name.ignore_case` World?
+  def #`world: this != global.Ether ? String.NonEmpty : String.NonEmpty & not global.Ether.name.ignore_case` => World?
 
   if this == global.Ether
     def #`global.Ether.name.ignore_case` => World = global.Ether
@@ -122,7 +132,7 @@ class World < Entity
 
   // Players can be registered under a certain world, similar to how certain games/apps have UserName#Tag, where the
   // #Tag is the world.
-  store @`player: String.NonEmpty` Player?
+  def @`player: String.NonEmpty` => Player?
 end
 
 
@@ -202,10 +212,14 @@ def `world: World` => 1 Inventory
 //     them like AND/OR, and they could also be abstractly defined; They work just like any Type in `ray.txt`.
 //   - Inventory works like directory: It defines a path. But at any path items (file) might be defined. Additionally,
 //     it might host additional inventories and items like a directory. So any path is always a directory and a file.
-// 
+//
+// Technically every Object/Node, is *in* an Inventory.
+//   - A value holds an arbitrary definition of that Type.
+//   - Within it is recursively defines paths to other items (and thus inventories).
+//
 // When inventory is used as an Item, it is just "the path to that inventory".
 class Inventory < Item
-  owner: Entity
+  owner: Entity //TODO If everything is in an inventory, then inventory.inventory would be the entity.
   path: *[] = []
   def [path: *[]] => Inventory = this +.overwrite { .path = path }
   
@@ -215,6 +229,7 @@ class Inventory < Item
   }
   
   // Get children of this inventory.
+  //TODO .items might as well be .nodes for a World
   def items => Item
   def inventories => Inventory = items{==.instanceof Inventory}
   
@@ -235,39 +250,44 @@ class Inventory < Item
 end
 
 class Entity < Item
-  inventory: 1 Inventory
+  inventory: 1 Inventory // TODO *in* an inventory vs *has* an inventory.
   def quests => Quest = inventory{==.instanceof Quest}
 
-  def store type
-    def `field: *`
-      this.def `field` => type = inventory[field]()
+  //TODO NOt this, but how to overwrite all properties which are not defined, recursively. How to get the type, and default value?
+  +def def
+    //TODO Adjusting def within a context should only monkeypatch it in that and children context.
+    //TODO Property definition under the hood are def too?
+    def `field: * => Type: * = default: *` //TODO How to differentiate default from a function body with the implementation
+      //TODO Recursively how?
+      super `field` => Type = inventory[field]()
       //TODO: What if inventory doesn't have that type stored.
-      this.def `field`= value: type
+      super `field`= value: Type
         //TODO Use .save/.delete the previous entries.
         //inventory[field] = value //TODO Should automatically implement &=, |= as well.
       end
     end
   end
 
-  store name Name
+  name: Name
 
-  store location Location
-  +def location //TODO Allow this syntax.
-    primary: boolean? //TODO Whether this is the location we're actually currently rendering on screen.
+
+  //TODO We have a world which is the memory system which is a child work of desktop, then if everything is an entity, the location is a place in that world.
+  //TODO World = Inventory, Location = child Inventory, child World = child Inventory
+  location: Location
+    primary: boolean?
   end
   def world = location.world
   //TODO What if you only want to broadcast a particular part of your location, say the world it's in or?
+  //   -> Actual location is one thing, the one broadcasted is another. Implemented as "at two locations", and one of them is chosen to be visible.
+  //   -> How to indicate those two locations are supposed to represent the equivalent thing?
 
+  //TODO Actually what you want for online, is a filter over possible worlds to interact with, and 'online' is equated to allow over internet. (what about other bluetooth things and such - included in online)
   // On top of 'visibility', an entity can be set offline server-side: Indicating only offline communication.
   def online => boolean //TODO for a server: set this value, for client: poll for data.
 
-  // A world might live on many entities/servers
-  //TODO A player, or any entity can (co-)host worlds
-  //TODO : From the perspective of this entity,
-  hosting: World //TODO These worlds should come from an Item in the server's inventory = is just (inventory as World){visibility = ??}
-
   //TODO Specific parameter types can be enforced using Entity instanceof SomeOtherEntityWithConstraints
-  def `world: World` => Entity{name: Name?, location: Location?}
+  def `world: World`
+    //TODO How to indicate that that entity ==.(some equiv graph) this.
     return this +.overwrite { // TODO Support +.overwrite as opposed to adding the results of the two to each-other. Type-checking should recognize the +.overwrite is defining at least the thing before the +.
       inventory = this.inventory[world],
       name = this.name{issued_by == world}
@@ -282,7 +302,7 @@ end
 
 def Player < Entity
   //TODO: You want to be able to host a server as an item to a world, with some visibility.
-  store desktop Server //TODO Should be multiple here, and only change the one with this identifier, (can use MAC-address, but we need additional identifier stored for dual-boot)
+  desktop: Server //TODO Should be multiple here, and only change the one with this identifier, (can use MAC-address, but we need additional identifier stored for dual-boot)
 
 
 end
@@ -295,6 +315,14 @@ class Server < NPC, World
 
   //TODO Server might be behind some nameserver, delegating to many other servers.
 
+  // A world might live on many entities/servers
+  //TODO A player, or any entity can (co-)host worlds
+  //TODO : From the perspective of this entity,
+  hosting: World //TODO These worlds should come from an Item in the server's inventory = is just (inventory as World){visibility = ??}
+
+  //TODO How to represent that hosting and hosts in World are linked? 'hosts: Server = Server{hosting == this}' How is this, FOR ALL query constructed?
+  //TODO How does the storage module know whether to store a reference or the whole object. It checks if the Object is stored separately and will use a reference then.
+  //     -> Is there ever a time where that's not desired, say when the visibility or something is set differently for each reference of the object.
 end
 
 def @`player: String.NonEmpty` => Player = Ether.@`player`
@@ -302,6 +330,12 @@ def #`world: String.NonEmpty` => World = Ether.#`world`
 
 def Name = String.NonEmpty < Item
 def Certificate
+  //TODO Want to set the visibility differently for another field in the object. How to still allow an overwrite though?
+  //TODO Every field has as Item on it by default?
+  //TODO Are fields stored under [World].field, or are they part of [World], and .field in world is something else. Or is it both?
+  secret: Something
+    visibility = //TODO Should only be default, can be overwritten
+  end
   //TODO pub/secret
   issued_by: Entity
   issued_on: Date//TODO

@@ -185,6 +185,13 @@ def Location //TODO = Ray of World OR: You want Location to be more abstractly, 
   //TODO How many steps is 1m?
   //TODO Edges are decorated with length.
   //TODO Then depending on the discreetness per 1m, we have values like 0.00001m, which could highlight a superposition of position nodes.
+  //TODO Want to also have things like .by_road.[1 km] which is another overlay on the main graph with effective gravity relative to free-roam
+  //TODO    What if that is the same graph, but filtered which direction you can go.
+
+  //TODO By default the elementary_length is not defined so any Distance is further away than a step. Want to also have some definition of: .next to the first thing that matches. (which would match with things distance is used for)
+  //TODO After calling .elementary_length(1nm) on Ray decorate all rays and graphs connected to that with functionality that supports distances.
+  //      -> Unless otherwise specified by the edge, defaults to that per step.
+  //TODO So things like length > 1m should partially be defined as well.
 
   //TODO Location too has a visibility, to whom am I broadcasting that I'm here.
 end

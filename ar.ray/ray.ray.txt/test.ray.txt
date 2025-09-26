@@ -19,6 +19,19 @@
 //TODO Equivalence graph
 //     - Forced equivalence how?
 
+//
+Some better way of defining this cursor on Ray/Boundary/Edge without making these links
+
+def Boundary<T, E>
+  end: Vertex
+  value: <E Boundary>
+  continuation: 1 Edge<T, E>
+end
+def Edge<T, E> = Boundary
+  value: E
+  list: Boundary<T, E>
+end
+
 ==.@ //TODO All cases are covered by both sides.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
 == = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
@@ -27,6 +40,7 @@
     // (A->) is A.reduce(|) (includes A)
     |-> (A->)@ .intersection (B->)@ .some (* are refs to value)
         //TODO .intersection should take the type of equality to check for
+        //TODO Should be both ways (<-A->)
 ==.subgraph_of = x.as_subgraph ==.instance_of
 ==.instance_of (All properties of B are defined on A: A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
     //TODO |-> These properties should be the ray which defines the properties somehow. .both the property descriptor and the result should be the same (instance of)
@@ -50,6 +64,8 @@
 end
 
 //TODO What about equivalence graphs which are infinitely generating, we simply ask is instanceof that type (say number), if it is we assume it's on the line. so yes reachable.
+
+//TODO .map by default yields the .value, other things yield the ray it's on.
 
 //TODO What about the history of the object -> that's deemed to be part of the syntax
 instance_of which forces non-superposition; This is probably not supported: Always allow types.
@@ -315,6 +331,9 @@ def Maybe(a)
 end
 
 
+// observer on a variable defined on an outside location, basically pubsub system (needs to poll for data somehow, or get pushed an update)
+
+
 // .max/.min on Array<number>
 
 // TODO: Does this assigning to false | true also change Two.first to ref on .value to the Node.
@@ -425,6 +444,8 @@ var: Graph = 1, 2, 3
 // When to allow {}
 
 // TODO Variables which are not allowed to change? Often used for generics too?
+
+//TODO How to compiler rewrite entire function blocks in some other way with complicated pattern
 
 // Something like Nat defines +1 func, then on type static type calling Nat.+1 => Should again return Nat, because nothing changed even if superposed
 

@@ -2,6 +2,8 @@
 // TODO: This needs to be resolved before anything else does:
 //TODO Something like is_boundary checks whether any of the entries (Many<>) are at a boundary, but that changes behavior of a superposed abstract interpretation when it shouldn't. (It should individually check is_boundary, and superpose the results)
 
+//TODO Say I have defined Entity{==.instanceof Player}, how do I check it against an entity? ==.some
+
 //TODO After a filter, the object changes into a possible Option<> for certain cases, like Name.
 
 // TODO; Every value type T, is automatically decorated with Many. How is it indicated that it's a single result, and never many?
@@ -11,11 +13,13 @@
 // TODO: Ambiguity: .reduce(|) on an Array value, what does the .for go to? Now I'm using .for to iterate the possibilities of String[].reduce(|), not String. Because String[].reduce(|) is type 'String': Take Digit for example.
 // .value, but then what about rays. And things like probabilities. In the case of multi-methods it's determined by the args.
 
+//TODO Default of an object is only loaded if accessed, so we can have circularly defined defaults.
 
 //TODO Partial equality .match how?
 //TODO Equivalence graph
 //     - Forced equivalence how?
 
+==.@ //TODO All cases are covered by both sides.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
 == = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
 ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
@@ -53,6 +57,7 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 //TODO .random on Array/Graph/..
 //TODO Optional method like Entity.move on tick.
 
+
 // How to populate Arrays/graphs by default
 
 // What's the graph interpretation of an inductive type like 'def Option<T> = Some(T) | None'
@@ -78,6 +83,8 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 //TODO If big instanceof iterables are used, like worlds: World = entities{==.instanceof World}, store it separately, don't always filter through all those entities
 
 // 0..9.reduce(|) = (Decimal.Digit) 0.value.context.reduce(|) ; .superpose an array, namely the digit defining 0. -> Then could also have the digit values link back to the superposed object or not?
+
+//TODO iterable.0 supported = iterable[0]
 
 // <=; node > itself or node < itself, we're in a loop (or repeated value which we're forced to see as the same, or we're not comparing using the difference we have access to - this 'number'line)
 

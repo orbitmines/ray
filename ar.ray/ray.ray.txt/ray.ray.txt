@@ -423,22 +423,25 @@ end
       private SI = multiples.keys.reduce(|)
 
       // Allows syntax 1m
-      global.def `digits: Decimal.Positive.String, si: SI` => Distance = digits, si
+      global.def `digits: Decimal.Positive.String, si: SI` => Distance.Positive = digits, si
       // Allows syntax 1.0m
       +def Decimal.Positive
-        def `fraction: Decimal.Positive.String, si: SI` => Distance.Real = integer, ".", fraction, si
+        def `fraction: Decimal.Positive.String, si: SI` => Distance.Real.Positive = integer, ".", fraction, si
 
         //TODO Should overwrite number.def`node: not String` since it's more specific
         // Allows syntax 1 m
-        def `si = SI` => Distance = this, si
+        def `si = SI` => Distance.Positive = this, si
       end
       // Allows syntax 1.0 m
       +def Decimal.Real
-        def `si = SI` => Distance.Real = this, si
+        def `si = SI` => Distance.Real.Positive = this, si
       end
 
-      static class Distance = (si >= 0 ? Positive.Multiple : Multiple)<exponent = multiples[si]>, si = SI
-        static class Real = (si >= 0 ? Real.Positive.Multiple : Real.Multiple)<exponent = multiples[si]>, si = SI
+      static class Distance = `Base`.Multiple<exponent = multiples[si]>, si = SI
+        static class Positive = `Base`.Positive.Multiple<exponent = multiples[si]>, si = SI
+        static class Real = `Base`.Real.Multiple<exponent = multiples[si]>, si = SI
+          static class Positive = `Base`.Real.Positive.Multiple<exponent = multiples[si]>, si = SI
+        end
       end
     end
   end

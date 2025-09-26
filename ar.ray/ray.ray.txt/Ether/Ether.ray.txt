@@ -1,13 +1,33 @@
-+def Node < World, Entity, Item
++def Node < Entity
+end
+
+class Item
+  // The known locations this item is referenced. This could be properties of an object, or a location in a World.
+  location: Location
+end
+class Entity < Item
+
 end
 
 class World
 end
-class Entity
 
+def Instance
 end
-class Item
+
+def Player
+  // The known instances currently running this player.
+  instance: Instance
+
+  +def location
+    // When filled, this indicates that the provided instance is rendering this location.
+    primary: instance?
+    dynamically assert @{.primary == primary}.count == 1 if primary // Only one primary location per instance.
+  end
 end
-def Location
-  at: Ray{} //TODO Arbitrary space between two points of a ray.
+
+class Location
+  // The location's location would be defined as: Places where this location is referenced.
+
+ // at: Ray{} //TODO Arbitrary space between two points of a ray.
 end

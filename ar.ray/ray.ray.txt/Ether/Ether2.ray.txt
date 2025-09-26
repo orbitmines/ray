@@ -1,8 +1,8 @@
 global.player: Player? = external
-global.desktop: Server = external // TODO inventory.fs defined by external.
-global.Ether: Server = external // TODO ether.orbitmines.com
+global.desktop: Instance = external // TODO inventory.fs defined by external.
+global.Ether: Instance = external // TODO ether.orbitmines.com
 
-//TODO All networking is abstracted away behind players/servers/inventories.
+//TODO All networking is abstracted away behind players/instances/inventories.
 
 // Everything is an Item, and possibly an Entity.
 
@@ -16,27 +16,41 @@ def Visibility = InheritFromInventory | Entity
 class Item
   // TODO history could include When it's used, how it's made, how it's discovered, how it's constructed.
 
+  //TODO ANY ITEM MIGHT be managed by another instance
+
   // Items require Quests ; In order to find items you need quests.
   obtained_by: Quest
 
-  //
+  // TODO Is issued_by here some top-level world
   issued_by: World = global.desktop
   certificate: Certificate
 
   //TODO Visibility is also how private/public is implemented? But that would mean that other items are entities?
   //TODO The programming environment, or perspective from some context = i.e. class/def, is an entity.
+  //TODO Can't really implement visibility s public/private/protected, since you have 'The memory object Player', and 'The actual player to expose it too', or are they the same thing? They should probably be the same thing.
   // Read-access
-  visibility: Visibility = inventory. Visibility.InheritFromInventory // = Entity{==.instanceof Player}
+  //TODO Want a dynamic default, until it is set.
+
+  // TODO what if that location is say referenced in two places, one authorized by me which says private, and another unauthorized which says public, it shouldn't switch mine to public.
+  def visibility => Entity =
+    location
+      // The location.location recursively goes in a loop, and should be ignored for the result.
+      {location != this}
+      // Only get parent Locations/'Directories'
+      { ==.instanceof Location if this ==.instanceof Location}
+      .visibility
+
   // Write-access (defines allowable values one can write to each field)
   access: Query<static> //TODO access is Visibility for each field.
 
-  // TODO A program of possibly entities that are allowed to see this. Things like private servers which are allowed to see it. (Or the local server) - Can also include things like 'within renderdistance'.
+  // TODO A program of possibly entities that are allowed to see this. Things like private instances which are allowed to see it. (Or the local instance) - Can also include things like 'within renderdistance'.
   // TODO, Want to add things like : has been at this location in this world before for instance.
         //TODO -> So you want certificates to be given for having been at certain places. (Then on those places give them out as an item): So has this type of item, then it's visible.
 
   //TODO If every item is an inventory, then this is not used, but where it came from, is.
   //TODO This inventory = Location *in* an Inventory/
-  inventory: Inventory? //TODO If every item is an inventory, we want to know whether that inventory can persistently store information.
+  inventory: Inventory?
+  //TODO If every item is an inventory, we want to know whether that inventory can persistently store information.
   //TODO If a single item is in multiple inventories, how is persistence done? Is it stored in one, refs, in another, stored in both, want to allow for all of these options, how to deduplicate if it's known it's in two inventories: merger, or what?
 
   //TODO We have copy as well, but we could also copy by ref, or have both set refs to a single one.
@@ -93,17 +107,17 @@ class World < Entity
 
   // TODO What if I define my own alias for this world, it doesn't get stored in the global World config, but I want it in my own
   //   -> Allow overriding of default config: inventories by the user.
-  // A server can still host a world where parent != that server.
+  // A instance can still host a world where parent != that instance.
   //TODO .parent would be .indexed_by, and another .parent would be, how did you get to this world? (So a path)
   def parent => World? = this.name.issued_by != this ? this.name.issued_by : None
 
-  // TODO Serverlist maintained by the world, but others could be running it too.
-  // Known servers which this world runs on (TODO Others might be discovered later, so .hosts might be non-halting)
-  hosts: Server = Server{hosting == this}
+  // TODO Instancelist maintained by the world, but others could be running it too.
+  // Known instances which this world runs on (TODO Others might be discovered later, so .hosts might be non-halting)
+  hosts: Instance = Instance{hosting == this}
 
   // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
 
-  //TODO What about behavior dictated by the world/server: These things are automatically shown, these things not.
+  //TODO What about behavior dictated by the world/instance: These things are automatically shown, these things not.
     //TODO Might want to tie a quest to a location too.
 
   // Internal dynamics -> Want a primitive in .ray to be a dynamic space.
@@ -161,15 +175,17 @@ end
 //       -> I might not necessarily host all these worlds top-level (visibility) or on some indexed #property. (Indexed just means I've saved that location in my inventory somewhere)
 //       -> But when I'm there, I might find those worlds and then gain access to them (if only temporarily)
 //       -> So parent worlds, are just the path defined to get there.
-//       -> The host, is merely the top-level server on which we're exploring. (But that might change at each step)
-//          -> Hosting, just means I got this step of information from this server. (Each step might be deferred to another host)
+//       -> The host, is merely the top-level instance on which we're exploring. (But that might change at each step)
+//          -> Hosting, just means I got this step of information from this instance. (Each step might be deferred to another host)
 //          -> So each node of information has with it: it came from here.
-//          -> In the case of providing information from disk from server to client: The server nodes are decorated with host locations of the disk for instance or memory, and the player is from the server.
-//          -> What if I wanted to know the history of where it came from? So from disk to server (to memory) to server ... , until it came to me. -> So the server can choose whether to provide that information.
+//          -> In the case of providing information from disk from instance to client: The instance nodes are decorated with host locations of the disk for instance or memory, and the player is from the instance.
+//          -> What if I wanted to know the history of where it came from? So from disk to instance (to memory) to instance ... , until it came to me. -> So the instance can choose whether to provide that information.
 //       -> A location also needs information like : A path to get here. (Which is just additional structure, but those in turn can be vague locations)
 //          -> Path information crosses multiple hypergraphs.
 //       -> World has something like dependent/optional inheritance on Abstract Directionality.
 //       -> Interface with which you walk through a world is itself a graph. Say a 2d-visual-field.
+//       -> Highly parallel rewritable structure in world.
+//       -> Location should also specify what interface is used like yaw/pitch/screen size etc..
 // TODO How does a location work if it's a dynamic space?
 // TODO Abstractly, we never know (without looking) if another location also matches this description.
 
@@ -240,7 +256,7 @@ end
 end
 
 
-//TODO Since the inventory is possibly managed by another Entity (server), that means that it has access, and it can give others access.
+//TODO Since the inventory is possibly managed by another Entity (instance), that means that it has access, and it can give others access.
 
 // Managed inventories have some visibility/access, and thisw is one value for the manager (world), and another for the player, how to make that differentiation?
 //TODO: How to indicate it is managed by the world, and synced to the player.
@@ -290,7 +306,7 @@ class Inventory
     item.visibility = path.map(.visibility){!= Visibility.InheritFromInventory}.last
     item.access//TODO Set access
     item.inventory &= this
-    //TODO: Might have settings of certain servers to backup the player information to.
+    //TODO: Might have settings of certain instances to backup the player information to.
     item
   end
 end
@@ -316,21 +332,18 @@ class Entity
 
   name: String.NonEmpty
 
-
   //TODO We have a world which is the memory system which is a child work of desktop, then if everything is an entity, the location is a place in that world.
-  //TODO World = Inventory, Location = child Inventory / subgraph/abstract description of World, child World = child Inventory
+  //TODO World = Inventory = Location, Location = child Inventory / subgraph/abstract description of World, child World = child Inventory
   //TODO Inventory is a refinement of World/Location. It's more strict.
-  location: Location
-    primary: boolean?
-  end
+
   def world = location.world
   //TODO What if you only want to broadcast a particular part of your location, say the world it's in or?
   //   -> Actual location is one thing, the one broadcasted is another. Implemented as "at two locations", and one of them is chosen to be visible.
   //   -> How to indicate those two locations are supposed to represent the equivalent thing?
 
   //TODO Actually what you want for online, is a filter over possible worlds to interact with, and 'online' is equated to allow over internet. (what about other bluetooth things and such - included in online)
-  // On top of 'visibility', an entity can be set offline server-side: Indicating only offline communication.
-  def online => boolean //TODO for a server: set this value, for client: poll for data.
+  // On top of 'visibility', an entity can be set offline instance-side: Indicating only offline communication.
+  def online => boolean //TODO for a instance: set this value, for client: poll for data.
 
   //TODO Specific parameter types can be enforced using Entity instanceof SomeOtherEntityWithConstraints
   def `world: World`
@@ -347,27 +360,37 @@ def NPC < Entity
   //TODO Defines dynamics in a World
 end
 
-def Player < Entity
-  //TODO: You want to be able to host a server as an item to a world, with some visibility.
-  desktop: Server //TODO Should be multiple here, and only change the one with this identifier, (can use MAC-address, but we need additional identifier stored for dual-boot)
+  //TODO: You want to be able to host a instance as an item to a world, with some visibility.
 
-
-end
 def Organization < Player
   //TODO Reserve namespace with dots to domain names.
 end
 
-//TODO Some server, which holds the 'first discovered by X' status, and issues certificates for that./
-class Server < NPC, World
+//TODO So if a player has made their location known, another player can run an instance of that player in that location.
+//      He might not be able to set input for that player, but it's still an instance running that player.
+//      But you might want to run an instance, not the player (a specific location)
+//      So streaming too, becomes running an instance.
+// For strreaming, a player has a particular location which is the streaming location , that is being broadcast.
+// TODO So watching a stream is simply following that location.
+// So a streamer has a primary location. That location's location might be in a separate world which is the 'streaming window'.
+// People watching the stream, would set their primary location, to that location.
 
-  //TODO Server might be behind some nameserver, delegating to many other servers.
+//TODO Some instance, which holds the 'first discovered by X' status, and issues certificates for that./
+class Instance < World
+  //TODO A instance is an instance, you can boot up other instances within the current instance.
+  //TODO -> Child instances.
+  //TODO A instance has many player instances running. (I.e. screens / separate windows)
 
-  // A world might live on many entities/servers
+  //TODO Instance needs a unique identifier more general than MAC, one of the names.
+
+  //TODO Instance might be behind some nameinstance, delegating to many other instances.
+
+  // A world might live on many entities/instances
   //TODO A player, or any entity can (co-)host worlds
   //TODO : From the perspective of this entity,
-  hosting: World //TODO These worlds should come from an Item in the server's inventory = is just (inventory as World){visibility = ??}
+  hosting: World //TODO These worlds should come from an Item in the instance's inventory = is just (inventory as World){visibility = ??}
 
-  //TODO How to represent that hosting and hosts in World are linked? 'hosts: Server = Server{hosting == this}' How is this, FOR ALL query constructed?
+  //TODO How to represent that hosting and hosts in World are linked? 'hosts: Instance = Instance{hosting == this}' How is this, FOR ALL query constructed?
   //TODO How does the storage module know whether to store a reference or the whole object. It checks if the Object is stored separately and will use a reference then.
   //     -> Is there ever a time where that's not desired, say when the visibility or something is set differently for each reference of the object.
 end

@@ -234,6 +234,7 @@ end
 // Asserts & dynamic asserts, are simply part of the type definition.
 def dynamically
   def assert(expression: Expression) = external
+  //TODO dynamically assert expression if
 
   def if(predicate: Expression, yes?: () => *) = external //TODO
 end

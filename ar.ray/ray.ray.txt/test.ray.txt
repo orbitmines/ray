@@ -220,6 +220,15 @@ end
 // Allow var?: type and var: type?
 // Allow the . after operator in shortcut of defining x => x & x. : this.#`String.NonEmpty` -> & .#`String.NonEmpty`
 
+  location: Location
+  +def location //TODO Allow this syntax.
+    primary: boolean?
+  end
+  //OR
+  location: Location
+    primary: boolean?
+  end
+
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
 
@@ -804,8 +813,8 @@ end
 
 // Defined on statement means it can be used like "statement if ..." TODO (how to generally define this)
 def Statement
-  def if expression: Expression
-    return global.if expression
+  def if predicate: Expression
+    return global.if predicate
       return this()
     end
   end

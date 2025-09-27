@@ -1,8 +1,12 @@
-global.player: Player? = external
-global.desktop: Instance = external // TODO inventory.fs defined by external.
-global.Ether: Instance = external // TODO ether.orbitmines.com
+
+// TODO .desktop inventory.fs defined by external.
+// TODO ether.orbitmines.com
+
+//TODO Allow storage to set visibility = private, if there's an equivalence. (Generally allow this)
 
 //TODO All networking is abstracted away behind players/instances/inventories.
+
+//TODO A separate ether world which gives out unique user ids.
 
 // Everything is an Item, and possibly an Entity.
 
@@ -25,21 +29,14 @@ class Item
   issued_by: World = global.desktop
   certificate: Certificate
 
-  //TODO Visibility is also how private/public is implemented? But that would mean that other items are entities?
-  //TODO The programming environment, or perspective from some context = i.e. class/def, is an entity.
   //TODO Can't really implement visibility s public/private/protected, since you have 'The memory object Player', and 'The actual player to expose it too', or are they the same thing? They should probably be the same thing.
   // Read-access
   //TODO Want a dynamic default, until it is set.
 
+  //TODO Read-access with a specific encryption key
+
   // TODO what if that location is say referenced in two places, one authorized by me which says private, and another unauthorized which says public, it shouldn't switch mine to public.
-  def visibility => Entity =
-    location
-      // The location.location refers to the property 'Item.location'. location.location.previous to 'Item'. It
-      // recursively goes in a loop, and should be ignored for the result.
-      {location.previous.value != this}
-      // Only get parent Locations/'Directories'
-      { ==.instanceof Location if this ==.instanceof Location}
-      .visibility
+location.previous?.value.visibility
 
   // Write-access (defines allowable values one can write to each field)
   access: Query<static> //TODO access is Visibility for each field.

@@ -1,19 +1,30 @@
+global.player: Player? = external
+global.instance: Instance = external
+global.Ether: Instance = external
+
 +def Node < Entity
 end
 
 class Item
   // The known locations this item is referenced. This could be properties of an object, or a location in a World.
-  location: Ray = Ray(this)
+  location: Ray = inventory
+
+  // Every item has an inventory defined on it: '<-' is parent directories, '->' are child directories. Loops allowed.
+  inventory: Ray = Ray(this)
   dynamically
     sub = this[`property: *`]
 
-    loc = Ray(sub)
-    location.copy().push<edge: .value = property>(loc)
-
-    // Speculatively merge a detected loop in the location, if not found, we recursively describe it: A.B.A.B.A.B...
-    speculative if<assume: true> !(<-location){== sub}.push_front(loc)
-      sub.location &= loc
+    // Speculatively merge a detected loop in the inventory, if not found, we recursively describe it: A.B.A.B.A.B...
+    speculative if<assume: false> current = (<-inventory){== sub}
+      inventory.push<edge: .value = property>(current)
+    else
+      current = Ray(sub)
+      inventory.push<edge: .value = property>(current)
+      sub.inventory &= current
+    end
   end
+
+  def visibility => Entity = location.previous?.value.visibility ?? "local"
 end
 class Entity < Item
 
@@ -35,3 +46,4 @@ def Player
     dynamically assert @{.primary == primary}.count == 1 if primary // Only one primary location per instance.
   end
 end
+

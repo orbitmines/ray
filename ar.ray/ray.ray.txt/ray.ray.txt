@@ -150,6 +150,9 @@ end
 def Ray<T = Ray<T>> value: T? < AbstractDirectionality<Ray<T>>
   initial: Boundary<T> = Boundary<T>(end: this)
   terminal: Boundary<T> = Boundary<T>(end: this)
+
+  static Unbounded //TODO
+  end
 end
 
 private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}

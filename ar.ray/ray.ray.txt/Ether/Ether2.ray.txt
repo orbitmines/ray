@@ -34,9 +34,9 @@ class Item
   //TODO Want a dynamic default, until it is set.
 
   //TODO Read-access with a specific encryption key
-
+  //TODO Locally set to a different value than what the managed inventory says?> ever used?
   // TODO what if that location is say referenced in two places, one authorized by me which says private, and another unauthorized which says public, it shouldn't switch mine to public.
-location.previous?.value.visibility
+
 
   // Write-access (defines allowable values one can write to each field)
   access: Query<static> //TODO access is Visibility for each field.
@@ -92,12 +92,6 @@ end
     certificate //TODO,M
 end
 
-+def String{== "private"}
-  def as :== Visibility = Entity{== global.player ?? global.desktop} //TODO This check needs to be secure, so noone can spoof it.
-end
-+def String{== "public"}
-  def as :== Visibility = Entity{true}
-end
 
 // TODO You want to say, have a world in your inventory, which is your desktop. Which contains items. Those items are not directly in your inventory? But they can be put there.
 class World < Entity

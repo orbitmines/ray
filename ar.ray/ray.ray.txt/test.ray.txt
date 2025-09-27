@@ -109,6 +109,8 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 // Does every type like 'boolean' automatically include all the methods defined on it. So boolean.nor is the superposed method, which can later be called with a new 'this' value, how is that intuitively done?  (How does on static fill generics which might be required to call methods)
 // If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
 
+//TODO def visibility: Entity = inventory.previous?.value.visibility ?? "local"
+// This loop should automatically yield to None.
 
 // How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local': Things like local are private - so pri. Private doesn't prevent it from being overwritten though.
 

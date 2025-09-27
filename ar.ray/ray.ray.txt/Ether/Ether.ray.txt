@@ -24,7 +24,7 @@ class Item
     end
   end
 
-  visibility => Entity = "local"
+  def visibility: Entity = inventory.previous?.value.visibility ?? "local"
 end
 class Entity < Item
 
@@ -55,4 +55,7 @@ end
 // that property. Backup servers are configured using //TODO
 +def String{== "private"}
   def as :== Entity = Entity{== global.player || == global.instance}
+end
++def String{== "public"}
+  def as :== Entity = Entity{true}
 end

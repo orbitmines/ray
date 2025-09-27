@@ -240,6 +240,9 @@ def dynamically
   //TODO speculative.if: If the runtime doesn't yet know the value of the expression it can choose to just run the if-branch.
   //TODO Define <speculative.if> for the block/expression. speculative.if<assume: true>
   //TODO You could specutively, say it's either that operation or the other. and have the types depends with dynamically assert, xor'ed with the other value.
+  //TODO Basically turn possibly infinite tasks into a branch of execution until we know.
+  //TODO Parameterless functions are automatically dynamic.
+  //TODO Infinite loops should be dismissed as possible values. If a loop is detected, stop committing resources there (until there's a change, then recheck)
 
   def assert(expression: Expression) = external
   //TODO dynamically assert expression if

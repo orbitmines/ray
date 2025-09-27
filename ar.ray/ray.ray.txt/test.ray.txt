@@ -2,9 +2,15 @@
 // TODO: This needs to be resolved before anything else does:
 //TODO Something like is_boundary checks whether any of the entries (Many<>) are at a boundary, but that changes behavior of a superposed abstract interpretation when it shouldn't. (It should individually check is_boundary, and superpose the results)
 
+//TODO Properties are different that just rays on value, they can be rays on another ray too.
+//TODO .copy implemented, as not being bound to the .history .last version. But a new branched version.
+//TODO How to remove from &/|. Just -, but what if we have number | number, and we want to - one.
+
 //TODO Say I have defined Entity{==.instanceof Player}, how do I check it against an entity? ==.some
 
 //TODO After a filter, the object changes into a possible Option<> for certain cases, like Name.
+
+// TODO (<-ray) is yielding .value's, what if we want the rays instead?
 
 // TODO; Every value type T, is automatically decorated with Many. How is it indicated that it's a single result, and never many?
 // TODO; But how do you iterate possibilities.
@@ -18,6 +24,19 @@
 //TODO Partial equality .match how?
 //TODO Equivalence graph
 //     - Forced equivalence how?
+
+//TODO This will be difficult to implement, but it's very powerful:
+//TODO Requires all functions like &= to be rollbackable (through history probably) or -= in this case if possible. -> Compiler uses history if necessary for these features.
+//TODO The -= needs to check possibly changed locations here. but starting with that location
+//TODO If there even then are some that cannot be rolled back, it's just not accessible in dynamically.
+//TODO So if any variable (implemented with observers again) changes so sub or location, we run/rollback.
+//TODO Or if dynamically the speculative if branch change, if resources are dedicated to that if branch.
+    sub.location &= dynamically location.copy().push_back<edge: .value = property>(sub).last
+    //TODO Could also automatically rollback previous changes of &=
+    dynamically sub.location &= location.copy().push_back<edge: .value = property>(sub).last
+    // equivalent to
+    dynamically sub.location &= dynamically location.copy().push_back<edge: .value = property>(sub).last
+
 
 //
 Some better way of defining this cursor on Ray/Boundary/Edge without making these links
@@ -46,6 +65,7 @@ end
     //TODO |-> These properties should be the ray which defines the properties somehow. .both the property descriptor and the result should be the same (instance of)
     //TODO |-> What function equality is used?
     // Refinement: Array ==.instanceof Hypergraph
+//Is just .value ==
 ==.value (Equal in value, ignores structure) For graphs/array this is the same as a normal ==, but for Ray's the equipped ray is ignored. (So only implement it for ray)
 ==.isomorphic (Equal in structure, ignores values)
 ==.type (Type equivalent, both A and B have the same coverage of values)

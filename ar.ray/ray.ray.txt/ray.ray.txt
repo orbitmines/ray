@@ -128,6 +128,9 @@ class Iterable<T = *>
     //TODO + return = caller.return
   end
 
+  def find<ordered: boolean = false> //TODO
+  // TODO .find.last
+
   def compact = this{!= None} //TODO For abstract directionality both ways?.
 end
 def AbstractDirectionality<TVertex> < Iterable
@@ -144,10 +147,9 @@ def Boundary<T>
   value: Boundary<T>? //TODO T could be on value, Or you want a specific type on Boundary
   end: Ray<T>
 end
-def Ray<T = Ray<T>> < AbstractDirectionality<Ray<T>>
-  initial: Boundary<T>
-  value: T?
-  terminal: Boundary<T>
+def Ray<T = Ray<T>> value: T? < AbstractDirectionality<Ray<T>>
+  initial: Boundary<T> = Boundary<T>(end: this)
+  terminal: Boundary<T> = Boundary<T>(end: this)
 end
 
 private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
@@ -233,6 +235,12 @@ class try program: () => *
 end
 // Asserts & dynamic asserts, are simply part of the type definition.
 def dynamically
+  (expression: Expression) //TODO Dynamically the value is equal to the expression.
+  (block: () => *)
+  //TODO speculative.if: If the runtime doesn't yet know the value of the expression it can choose to just run the if-branch.
+  //TODO Define <speculative.if> for the block/expression. speculative.if<assume: true>
+  //TODO You could specutively, say it's either that operation or the other. and have the types depends with dynamically assert, xor'ed with the other value.
+
   def assert(expression: Expression) = external
   //TODO dynamically assert expression if
 

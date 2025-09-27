@@ -34,8 +34,9 @@ class Item
   // TODO what if that location is say referenced in two places, one authorized by me which says private, and another unauthorized which says public, it shouldn't switch mine to public.
   def visibility => Entity =
     location
-      // The location.location recursively goes in a loop, and should be ignored for the result.
-      {location != this}
+      // The location.location refers to the property 'Item.location'. location.location.previous to 'Item'. It
+      // recursively goes in a loop, and should be ignored for the result.
+      {location.previous.value != this}
       // Only get parent Locations/'Directories'
       { ==.instanceof Location if this ==.instanceof Location}
       .visibility
@@ -222,6 +223,9 @@ def Quest
   // - Difficulty rating -> Needs some idea of relative difficulty for the Entity
   // - Effectiveness rating -> In the case of effecting other items.
 
+  //TODO Quests are also, places to spend resources on infinitely generating/speculative execution places
+  //     -> If the result would be found, would that result into efficiency, or what else?
+
   // Rewards
   // - When is a quest completed?
   //    - Entity checks completion.
@@ -374,6 +378,8 @@ end
 // TODO So watching a stream is simply following that location.
 // So a streamer has a primary location. That location's location might be in a separate world which is the 'streaming window'.
 // People watching the stream, would set their primary location, to that location.
+
+// ==.instance_of .location Location is a type.
 
 //TODO Some instance, which holds the 'first discovered by X' status, and issues certificates for that./
 class Instance < World

@@ -3,7 +3,17 @@ end
 
 class Item
   // The known locations this item is referenced. This could be properties of an object, or a location in a World.
-  location: Location
+  location: Ray = Ray(this)
+  dynamically
+    sub = this[`property: *`]
+
+    loc = Ray(sub)
+    location.copy().push<edge: .value = property>(loc)
+
+    // Speculatively merge a detected loop in the location, if not found, we recursively describe it: A.B.A.B.A.B...
+    speculative if<assume: true> !(<-location){== sub}.push_front(loc)
+      sub.location &= loc
+  end
 end
 class Entity < Item
 
@@ -24,10 +34,4 @@ def Player
     primary: instance?
     dynamically assert @{.primary == primary}.count == 1 if primary // Only one primary location per instance.
   end
-end
-
-class Location
-  // The location's location would be defined as: Places where this location is referenced.
-
- // at: Ray{} //TODO Arbitrary space between two points of a ray.
 end

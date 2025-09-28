@@ -38,6 +38,11 @@ end
 //TODO Individual history per field, but a branch takes nestedly the history with it?
 //TODO Needs to be at least git functionality
 //TODO Changed signatures/types/functionality
+//TODO Transaction system also makes use of this?
+//TODO Every change is a commit, but a group of changes can be bundled into another commit (to mimic git)
+//TODO  |-> That bundling is just an index to certain changes for a git, and parent/child commits are the next place that index is specified.
+//TODO Branches/tags are indexed commits, branch is a moving index to some latest change.
+//TODO .index maps to an object which as a type returns any properties with any subgraph/part of the object. (or another index)
 
 class Entity < Item
 

@@ -1,0 +1,3 @@
+[submodule "ar.ray/ray.ray.txt/Ether/instance/library"]
+	path = ar.ray/ray.ray.txt/Ether/instance/library
+	url = git@github.com:orbitmines/library.git

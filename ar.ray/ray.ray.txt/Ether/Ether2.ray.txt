@@ -10,9 +10,13 @@ class Item
   // Every item has an inventory defined on it: '<-' is parent directories, '->' are child directories. Loops allowed.
   inventory: Ray = Ray(this)
   //TODO fields shoultn necessarily count as child directories, since we might have a structure on some location (arbitrary), but it's children are not the same as its fields. Take directories for example.
+  // TODO They do, but the default .files/.directories in fs is a field, not the top-level properties.
+  //TODO But even then, there might be overlap in the two, what to do in that case? (Say the item defines something at .directories)
 
   //TODO We would also want to know how version control works, and how something lioke git is supported, since those visibility and sharing them is relevant
   //TODO Also, when visible, when is it synced to the instance.
+
+  /./TODO Setting the visibility etc. of a filesystem, should go to some specific db.
   dynamically
     sub = this[`property: *`]
 
@@ -28,6 +32,13 @@ class Item
 
   def visibility: Entity = inventory.previous?.value.visibility ?? "local"
 end
+
+//TODO Version control
+//TODO %/.history, for inventory, should turn the whole inventory nested, back in time.
+//TODO Individual history per field, but a branch takes nestedly the history with it?
+//TODO Needs to be at least git functionality
+//TODO Changed signatures/types/functionality
+
 class Entity < Item
 
 end

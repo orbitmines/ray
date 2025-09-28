@@ -1,4 +1,69 @@
 
+
++def Node < Entity
+end
+
+class Item
+  // The known locations this item is referenced. This could be properties of an object, or a location in a World.
+  location: Ray = inventory
+
+  // Every item has an inventory defined on it: '<-' is parent directories, '->' are child directories. Loops allowed.
+  inventory: Ray = Ray(this)
+  //TODO fields shoultn necessarily count as child directories, since we might have a structure on some location (arbitrary), but it's children are not the same as its fields. Take directories for example.
+
+  //TODO We would also want to know how version control works, and how something lioke git is supported, since those visibility and sharing them is relevant
+  //TODO Also, when visible, when is it synced to the instance.
+  dynamically
+    sub = this[`property: *`]
+
+    // Speculatively merge a detected loop in the inventory, if not found, we recursively describe it: A.B.A.B.A.B...
+    speculative if<assume: false> current = (<-inventory){== sub}
+      inventory.push<edge: .value = property>(current)
+    else
+      current = Ray(sub)
+      inventory.push<edge: .value = property>(current)
+      sub.inventory &= current
+    end
+  end
+
+  def visibility: Entity = inventory.previous?.value.visibility ?? "local"
+end
+class Entity < Item
+
+end
+
+class World
+end
+
+def Instance
+end
+
+def Player
+  // The known instances currently running this player.
+  instance: Instance
+
+  +def location
+    // When filled, this indicates that the provided instance is rendering this location.
+    primary: instance?
+    dynamically assert @{.primary == primary}.count == 1 if primary // Only one primary location per instance.
+  end
+end
+
+// "local" means only on the local instance. (Not even local child instances)
++def String{== "local"}
+  def as :== Entity = Entity{== global.instance}
+end
+// "private" means any instance running this player. Note that any backup server, like the central Ether server, has
+// that property. Backup servers are configured using //TODO
++def String{== "private"}
+  def as :== Entity = Entity{== global.player || == global.instance}
+end
++def String{== "public"}
+  def as :== Entity = Entity{true}
+end
+
+
+
 // TODO .desktop inventory.fs defined by external.
 // TODO ether.orbitmines.com
 

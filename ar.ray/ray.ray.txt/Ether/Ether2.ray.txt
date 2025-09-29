@@ -43,6 +43,7 @@ end
 //TODO Global timeline means what? (Option when reverting locally to revert everything around it to that too)
 //      |-> Up to some parent?
 //      |-> reverse of .expand (.collapse but then just a higher-level of description)
+//      |-> This also includes setting already made changes into a new group which then becomes the 'git commit'
 //TODO Needs a history conversion to something like git to support it, both ways.
 //TODO Is .history an acyclic Tree.Vertex?
 //TODO What if I set a variable with a history and I want to retain that history (and not the history of the variable it's set to)

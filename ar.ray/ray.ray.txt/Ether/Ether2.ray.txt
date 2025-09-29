@@ -4,9 +4,6 @@
 end
 
 class Item
-  // The known locations this item is referenced. This could be properties of an object, or a location in a World.
-  location: Ray = inventory
-
   // Every item has an inventory defined on it: '<-' is parent directories, '->' are child directories. Loops allowed.
   inventory: Ray = Ray(this)
   //TODO fields shoultn necessarily count as child directories, since we might have a structure on some location (arbitrary), but it's children are not the same as its fields. Take directories for example.
@@ -43,9 +40,21 @@ end
 //TODO  |-> That bundling is just an index to certain changes for a git, and parent/child commits are the next place that index is specified.
 //TODO Branches/tags are indexed commits, branch is a moving index to some latest change.
 //TODO .index maps to an object which as a type returns any properties with any subgraph/part of the object. (or another index)
+//TODO Global timeline means what? (Option when reverting locally to revert everything around it to that too)
+//      |-> Up to some parent?
+//      |-> reverse of .expand (.collapse but then just a higher-level of description)
+//TODO Needs a history conversion to something like git to support it, both ways.
+//TODO Is .history an acyclic Tree.Vertex?
+//TODO What if I set a variable with a history and I want to retain that history (and not the history of the variable it's set to)
+   //TODO Or retain both?
+   //TODO The .=(value) in history (encoded on the edge) carries with it the information of where it came from, with that history attached.
+//TODO; Is syncing just another object with a different location, probably yes. So .save syncs an object. (What if they hasve similar histories, use that to check which changes need to be applied) - What if they don't overlap at all, you still want then to use = on all the fields.
+//  |-> Many sync locations ; mirrors. Managed inventories are mirrors.
+//TODO Is syncing just setting that 'old object = new object', and then figuring out how the histories overlap (which is default behavior for =.)
 
 class Entity < Item
-
+  // The known locations this item is referenced. This could be properties of an object, or a location in a World.
+  location: Ray = inventory //TODO Maybe inventory = location, and with a filter on .inventory = boolean
 end
 
 class World

@@ -156,8 +156,11 @@ def Ray<T = Ray<T>> value: T? < AbstractDirectionality<Ray<T>>
 end
 
 private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
+  //TODO What's the value encoded on Edge?, and what's the value encoded on the boundaries? (Or do we always use edge)
+  static Edge =
+  k
   static Vertex = Ray<T>{
-    initial = (HyperContinuations ? Many : 1) Boundary{
+    initial = (HyperContinuations ? Many : 1) Boundary{ //TODO These =, need to be ==.instance_of?
       end = (HyperEdges ? Many : 1) Vertex,
       value = (HyperEdges ? Many : 1) Boundary{
         end = (HyperEdges ? Many : 1) Vertex,
@@ -168,17 +171,21 @@ private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolea
   } //TODO .unrolled
 
   static Unbounded{every(==.instanceof Vertex)} < AbstractDirectionality<Vertex>
+    //TODO These set Vertex to a different value
+    def acyclic //TODO Disallow loops
+    def connected
+    def consistent
   end
 end
 def Hypergraph<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = true>
+
 end
 def Graph<T = Ray> < Structure<T><HyperContinuations = true>
 end
-def Array<T = Ray> < Structure<T><HyperContinuations = false>
-  //TODO: Disallow loops, .connected, .consistent
+def Array<T = Ray> < Structure<T><HyperContinuations = false> = .acyclic.connected.consistent
+
 end
-def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false>
-  //TODO: Disallow loops, .connected, .consistent
+def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false> = .acyclic.connected.consistent
   // Tree has a single 'parent' on each vertex.
   +def Vertex = super{initial = 1 Boundary{
     end = 1 Vertex,

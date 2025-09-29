@@ -6,11 +6,37 @@
 //TODO .copy implemented, as not being bound to the .history .last version. But a new branched version.
 //TODO How to remove from &/|. Just -, but what if we have number | number, and we want to - one.
 
+//TODO = on variable, main object being a variable at a location
+Only added to graphs to histories
+
+You want = to be called on object, changing the type possibly. Since it's on a variable - variable is some object. So that would mean that = without effecting the current value, would first have to copy it over to another place. (And the object is tied to a location - which is kind of nice)or you can change its location to move it
+
+You want .bound_type on object then, but the object itself is a more specific type.
+
+None implements location and =
+What if an object is instantiated and used within a function/constrctor only, whats it location like, none for instance
+|-> Object.method.() with [context] accessible as the last location.
+//TODO What happens to returned variables? They have a location inside the function, then while their location isn't changed in another function, that function still lives through the variable?
+.inventory = .caller
+
+//Parameterless property = , sets that variable to an expression. It's realized when another property on it is accessed? (or it's set to some other property
+// |-> It's not the same as dynamic, dynamic changes if the dependant parameters of it changes. Or is it?
+
+what if .inventory is changed, history is kept track off in the new location and old, that the location changed and thus the value is gone/new
+what if the lvariable is used at two location, two .,inventory, but one variable.
+
+.history, .history is simply up to some entry in the path
+
 //TODO Say I have defined Entity{==.instanceof Player}, how do I check it against an entity? ==.some
 
 //TODO After a filter, the object changes into a possible Option<> for certain cases, like Name.
 
 // TODO (<-ray) is yielding .value's, what if we want the rays instead?
+
+// TODO .ray folder to be the downloads
+None != instanceof Item
+
+//TODO Needs like an example of 2D/3D world with yaw/pitch on location, stored as arcs in a continuous space then discretized by some things like elementary lengths and other things.
 
 // TODO; Every value type T, is automatically decorated with Many. How is it indicated that it's a single result, and never many?
 // TODO; But how do you iterate possibilities.
@@ -273,6 +299,8 @@ end
   location: Location
     primary: boolean?
   end
+
+// Allow +=  equiv to '= .+ b', so allow '= .method.method2'
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func

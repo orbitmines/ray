@@ -5,7 +5,6 @@
 <div align="center">
 
 # Ray: A Universal Language
-*One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them.*
 
 ![header](./docs/header.png)
 
@@ -13,11 +12,11 @@
 
 </div>
 
-## What is this?, What is OrbitMines?, What are Rays?
+## What is this?
 
-This thing is, in essence, a programming language, an IDE or a conceptual framework to think about programs. Though to me, most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a [different category of (programming) interfaces](https://orbitmines.com/archive/2024-02-orbitmines-as-a-game-project).
+This thing is, in essence, a programming language (Ray), an IDE (Ether) and a conceptual framework to think about programs. Though to me, most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a [different category of (programming) interfaces](https://orbitmines.com/archive/2024-02-orbitmines-as-a-game-project).
 
-A simple way of phrasing this, is that the concept of a **_(hyper-/)_'Vertex', _(hyper-/)_'Edge', _(hyper-/)_'Graph', _(hyper-/)_'Rule', _(hyper-/)_'Tactic', _(hyper-/)_..., _(hyper-/)_'Rewrite' and similar concepts** are merged into one thing: a [Ray](ar.ray/ray.ray.txt/ray.ray.txt). It handles surrounding context, structure and pattern-matching, defines control-flow and dynamics and acts as a language, theorem prover and rendering engine. 
+*It handles surrounding context, structure and pattern-matching, defines control-flow and dynamics and acts as a programming language, theorem prover, version control system, database and rendering engine.*
 
 ---
 
@@ -27,19 +26,13 @@ A simple way of phrasing this, is that the concept of a **_(hyper-/)_'Vertex', _
 - If you prefer **video**, see [<TODO; Make a stream to explain the project better](), or more generally my streams can be found here: [youtube.com/@FadiShawki/streams](https://www.youtube.com/@FadiShawki/streams).
 
 
-- If you prefer **code**, see [ray.ray.txt](ar.ray/ray.ray.txt/ray.ray.txt), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
+- If you prefer **code**, see [ray.ray.txt](ar.ray/ray.ray.txt), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
 
 
 - If you prefer discussions on **Discord**: [discord.orbitmines.com](https://discord.orbitmines.com).
 
 
 - Or go to the [online playground]() (TODO) 
-
----
-
-## Where is OrbitMines going with this? - i.e. Future inquiries
-
-Check out everything I've made public regarding this here: [GitHub Issues](https://github.com/orbitmines/orbitmines.com/issues) or equivalently, check the Discord channels grouped under the name: [Fractals of the Galaxy](https://discord.com/channels/1055502602365845534/1114584997702156388).
 
 ---
 

@@ -26,6 +26,8 @@ class Item
       sub.inventory &= current
     end
   end
+  //TODO What if speculative graphs are returned to something, and it changes the result of a function, that should in turn
+  //TODO (this can escalate quickly) change the effects of functions caused by it recursively, and roll them back potentially.
 
   def visibility: Entity = inventory.previous?.value.visibility ?? "local"
 end
@@ -304,6 +306,9 @@ def Quest
   // Quest rating
   // - Difficulty rating -> Needs some idea of relative difficulty for the Entity
   // - Effectiveness rating -> In the case of effecting other items.
+
+  // Quest selection by NPCs
+  // - Difficulty rating vs reward.
 
   //TODO Quests are also, places to spend resources on infinitely generating/speculative execution places
   //     -> If the result would be found, would that result into efficiency, or what else?

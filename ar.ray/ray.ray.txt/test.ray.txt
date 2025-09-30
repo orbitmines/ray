@@ -77,6 +77,13 @@ def Edge<T, E> = Boundary
   list: Boundary<T, E>
 end
 
+== usually ignores location, what if we dont want it to. Because 5 == 5, === if we dont want to ignore location.
+5 == 5 // true
+5 === 5 // false //TODO So the locations of these two are different, how>
+var = 5; var === var // true
+//TODO Which other operations would need location on it?
+
+//TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
 ==.@ //TODO All cases are covered by both sides.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
 == = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
@@ -140,9 +147,13 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 
 // How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local': Things like local are private - so pri. Private doesn't prevent it from being overwritten though.
 
+//TODO {} filter is both ways. so if .reverse is called it is filtered.
+
 // .reduce(|) TODO How does it work to pass a binary operator to a reduce which has accumulator and current as the two arguments
 //   -> If default is not set for accumulator, the initial value is the first in the array.
 //   TODO But how would you?: For .reduce, require a default value for accumulator, how to indicate that?
+
+//TODO You want something like ray[500..999] = 500-length array, instead of setting all those values to the 500-length array. How to differentiate
 
 //TODO If big instanceof iterables are used, like worlds: World = entities{==.instanceof World}, store it separately, don't always filter through all those entities
 

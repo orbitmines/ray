@@ -122,21 +122,33 @@ class Expression
 end
 
 class Iterable<T = *>
-  for callback: (*[]) => *
+  for callback: (Args: *[]?) => *
+    // Allow no Args, which is just iterating without using the variable
     //TODO: callback.parameter s = Array & Object, named at Object, .length etc. at Array; 'parameters' interprets as an array.
     //TODO + continue
     //TODO + return = caller.return
   end
 
+  // Instead of all functions like .every/.map iterating over every 'Ray.value', we instead return the Ray itself.
+  //TODO But things like .compact should still be on .value.
+  //TODO Or you want a method on this like .location to access the location in the ray. (But then that would have to be filled) (And how to differentiate between others,  and not just this one)
+  def framed?$
+
+  def any => this.reduce(|) = this.unordered.first
+  def unordered =>
+   this{$.every(.)}
+    = //TODO Should be first available but how (if this is partial)
+
+  // .find is just {filter}.first or {filter}.next .last, or .any = @.reduce(|)
   def find<ordered: boolean = false> //TODO
   // TODO .find.last
 
-  def compact = this{!= None} //TODO For abstract directionality both ways?.
+  def compact = this{!= None}
 end
 def AbstractDirectionality<TVertex> < Iterable
 end
 
-class Ordered<T = *>
+class Ordered<T = *> //Todo set T to caller's constructor
   def <= b: T = this == b || this < b
   def < b: T
   def >= b: T = this == b || this > b
@@ -379,6 +391,11 @@ end
       static def String = Array<Digit as String>
 
       def `fraction = Positive.String` => Real.Positive = integer, ".", fraction
+
+      def times callback: () => *
+        //TODO Support index?
+        Array{length == this}().for => callback()
+      end
 
       static class Multiple<exponent: Positive> = Positive
         def as :== Positive = integer << exponent //TODO This is a decimal shift, when working with binary values you want to access them as binary if you want that shift.

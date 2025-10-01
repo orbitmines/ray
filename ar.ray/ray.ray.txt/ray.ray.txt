@@ -132,7 +132,7 @@ class Iterable<T = *>
   // Instead of all functions like .every/.map iterating over every 'Ray.value', we instead return the Ray itself.
   //TODO But things like .compact should still be on .value.
   //TODO Or you want a method on this like .location to access the location in the ray. (But then that would have to be filled) (And how to differentiate between others,  and not just this one)
-  def framed?$
+  def $
 
   def any => this.reduce(|) = this.unordered.first
   def unordered =>
@@ -199,11 +199,11 @@ def Array<T = Ray> < Structure<T><HyperContinuations = false> = .acyclic.connect
 end
 def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false> = .acyclic.connected.consistent
   // Tree has a single 'parent' on each vertex.
-  +def Vertex = super{initial = 1 Boundary{
-    end = 1 Vertex,
-    value = Boundary{
-      end = 1 Vertex,
-      value = Vertex.initial
+  static +def Vertex = super{initial: 1 Boundary{
+    end: 1 Vertex,
+    value: Boundary{
+      end: 1 Vertex,
+      value: Vertex.initial
     }?
   }} //TODO The Vertex.initial here should refer to the new value, not the old.
 end
@@ -469,11 +469,11 @@ end
 
         //TODO Should overwrite number.def`node: not String` since it's more specific
         // Allows syntax 1 m
-        def `si = SI` => Distance.Positive = this, si
+        def `si: SI` => Distance.Positive = this, si
       end
       // Allows syntax 1.0 m
       +def Decimal.Real
-        def `si = SI` => Distance.Real.Positive = this, si
+        def `si: SI` => Distance.Real.Positive = this, si
       end
 
       static class Distance = `Base`.Multiple<exponent = multiples[si]>, si = SI

@@ -29,7 +29,7 @@ class Item
   //TODO What if speculative graphs are returned to something, and it changes the result of a function, that should in turn
   //TODO (this can escalate quickly) change the effects of functions caused by it recursively, and roll them back potentially.
 
-  def visibility: Entity = inventory.previous?.value.visibility ?? "local"
+  def visibility: Entity = inventory.previous?.value.visibility ?? "local" ;//TODO global.player.is_private_default_visibility = "private"
 end
 
 //TODO Version control
@@ -52,8 +52,83 @@ end
    //TODO Or retain both?
    //TODO The .=(value) in history (encoded on the edge) carries with it the information of where it came from, with that history attached.
 //TODO; Is syncing just another object with a different location, probably yes. So .save syncs an object. (What if they hasve similar histories, use that to check which changes need to be applied) - What if they don't overlap at all, you still want then to use = on all the fields.
-//  |-> Many sync locations ; mirrors. Managed inventories are mirrors.
+//  |-> Many sync locations ; mirrors. Managed inventories are mirrors. .save = .push
 //TODO Is syncing just setting that 'old object = new object', and then figuring out how the histories overlap (which is default behavior for =.)
+//TODO The timestamp is just Ordered. Can only merge two repositories (and reorder the events) if ordered is the same type = or an equivalence exists between the two types.
+//TODO -> That's just an overlapping graph, which is filled by looking up in the history graph. .previous. < this < .next. ; require two simultaneous events to be on two branches, which are then immediately merged. ; what if there';s a merge conflict between these two. There won't be because it's two different repositories.
+//TODO -> What if I have a repository with a global order, and one which is a child repository, and I want to merge them, then there's a possible merge conflicts with two simultaneous events. -> Or are all the fields just .OR/.AND'ed.
+//TODO What happens to the two merged branches. If no conflicts, keeping them parallel in the history is fine.
+//TODO   |-> And what happens when there's a conflict.
+//TODO Uncommitted files, and staged changes, like those added with git add, are simply visibility set to local/private.
+//TODO    |-> Remove files from repository by changing visibility.
+//TODO  -> Doesnt work with the following: v -- But what if: "local"/"private" & not -active-branch-
+//TODO We have a "local" branch with changes keystrokes and all. Then the action of committing is, setting to another "local" branch the collective changes (or all individual keystrokes).
+//TODO -> Then pushing is just remote = local commited branch.
+//TODO Allow changes to history, you'd use that for 'another "local" branch the collective changes', not the one with keystroke information.
+//TODO History is aware of other places the same inventory is kept. -> So the .location of the inventory.
+//TODO  |-> It's different than location in some way, since we don't continuously update is necessarily.
+//TODO Cherry-pick is a chain of commits apply to current branch
+//TODO Managed inventory is mirror, but what if it's distributed like a 'remote repository', where both can write. You'd want it to be to the same object with different locations.
+//TODO   |-> Same object with different locations, vs different but synced objects
+//TODO   |-> If any locations are remote, behind the scenes, we implement it as a local repository and sync with different location
+//TODO     |-> Location needs to be aware of which instance it's pointing to?
+//TODO     |-> Functions might be remote functions like http API calls -> Abstract network away
+//TODO   |-> Local might not know the value of access, only that it itself is included? ; How to support that?
+//TODO   |-> Every object has one with location for local instance memory, and remote locations.
+//TODO Keep track of where which remote is, or include that in some update. Only send required updates.
+//TODO Last updated, things like that?
+//TODO Define mirrors which aren't defined on the other locations, so only define it for locally (visibility = "local"?)
+
+//TODO So caller could be at a location with a different instance too.
+//TODO Different values for fields based on who is looking at them. So access 'caller ==.instance_of global.player' for instance.
+//TODO  -> Dynamic variable? -> No. change it to a parameterless method
+
+//TODO Or is it visibility for anyone with the encryption key? How's that defined.
+//TODO Can have many encryption keys to access the history of the chat.
+repository defines encryption? (Not necessarily individual items?), No not necessarily. Can be child values doing their own thing.
+//TODO Can have visibility to the encrypted value, but not the actual value, how's that difference known
+
+//TODO Encryption is just some equivalent (with key) but differently structured value.
+//TODO What are some other things that follow that pattern?: It's Setting a variable like visibility to something that can cast down to Entity like the string "private".
+
+//TODO How to locally store the unencrypted in cache, so you don't have to constantly decrypt. When do you want to not do that and force decryption on every access?
+//TODO So we have an encrypted object which casts down to some type? If the key is provided, where is the key stored?
+def Encrypted<T, Key = *, Encrypted = *> encrypted: Encrypted
+
+  // TODO This method is provided by the encrypted data (or not, if it's unknown) And it's not a ref to a local method, it's a general reference to a method implemented on the host. What if it's not supported (i.e. imported by this instance), then disallow, or say you need to include a package (unsafe potentially)
+  //TODO So methods need a way to say it's from this package (location). Which by default is the Ether. location, so those are supported by default. And if it references an unsupported method, it needs to be installed on the local side.
+  //TODO How is it checked that for instance a method on Player, is already supported by me, so you don't have to sent it over.
+  //TODO => Can do some quick checks like are the method signatures equal etc.. If there's a change, I want to support that change.
+  def decrypt key: Key => T
+  //TODO The result can be an encrypted value again, so it would have to be decrypted nestedly.
+
+  //TODO This .crypt value would not be accessible/visible to imported code (in the form of the decrypt func)
+  def as :== T => (global.player ?? global.instance).crypt[location] //todo something like this,
+   //How to differentiate between the many things on the same location
+   //TODO Or fill the items on the location automatically with the decrypt key/
+end
+//TODO Rename Encrypted to Encoded, with a function, and Encrypted is a constructor which takes encryption schemes.
+
+def History =
+  static def Repository
+    //Top-level inventory
+
+
+  end
+  static def Branch // The Edge
+  end
+  static def Commit // The vertex.
+  end
+end
+
+//TODO Encrypted chats between players, World = groups of players,
+//TODO Have an option to have any file encrypted as part of "visibility = 'private'", but make clear that if access to the devices is lost
+//TODO so is the file.
+//TODO Chat which is an array to which pushes might happen out of order. have some way of saying that locally that out-of-order isn't
+//TODO a problem, or simply reorder as a merge.
+//TODO Optionally: Lock the encryption key with the password, or key dongle. (Want this to remain optional, but you also want people to be able to login if they don't have access to their own pc; so everything is 'private' by default, Make that default an option.)
+//TODO You'd have libraries or 'apps' like Discord be able to say 'a discord server/channel' instead of this sort of channel.
+//TODO Slowpoke would be access checking whether you have sent in the previous x time. : But about this you want the entity to know about it so visibility.visibility = "public"
 
 class Entity < Item
   // The known locations this item is referenced. This could be properties of an object, or a location in a World.
@@ -455,6 +530,8 @@ end
 
 def Organization < Player
   //TODO Reserve namespace with dots to domain names.
+  //TODO Organization has many 'names' which are domain names?
+  //TODO Domains are the only duplicate names allowed by the central ether server, and they can be revoked.
 end
 
 //TODO So if a player has made their location known, another player can run an instance of that player in that location.

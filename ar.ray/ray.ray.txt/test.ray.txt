@@ -13,6 +13,9 @@ You want = to be called on object, changing the type possibly. Since it's on a v
 
 You want .bound_type on object then, but the object itself is a more specific type.
 
+ETHER
+37839 //port
+
 None implements location and =
 What if an object is instantiated and used within a function/constrctor only, whats it location like, none for instance
 |-> Object.method.() with [context] accessible as the last location.

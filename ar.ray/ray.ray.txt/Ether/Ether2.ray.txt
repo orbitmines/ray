@@ -100,11 +100,19 @@ repository defines encryption? (Not necessarily individual items?), No not neces
 //TODO Encryption is just some equivalent (with key) but differently structured value.
 //TODO What are some other things that follow that pattern?: It's Setting a variable like visibility to something that can cast down to Entity like the string "private".
 
+//TODO Private commits can be done, even if the access is not set to you.
+
 //TODO What if history is too expensive to keep, for instance all the +1 likes per item. How does it work for the distributed case?
 //TODO BVut then what do you do with location information? It's stored on player, not at the location? Or you have a history of stareting locations, with changes applied to them, Instead of a player variable at every change. So location would have to compute the player history. So you have to have access to a specific version of the world in this case.
+//TODO Location history is an overlapping graph.
+//TODO How to store distributed approximations of some value, like a blooming filter for likes. How do I indicate I don't mind an approximate value.
+
+//TODO Cached .length for instance, so its history is deduced from going to different history values (since it's a function), but it can have cached history. (HOw to differentiate between the two)
 
 //TODO Instead of having different variables for the different locations, commits might be private, different visibility (so branches might be private) and if there's a clash like both remote and me create the same branch, a merge needs to happen.
 //TODO -> Want to support both.
+
+//TODO Just like conflictin histories in chats still working, you have unordered arrays, which allow any order and should still work together.
 
 //TODO Broadcast which partial information you have on your node. (This is what sharding does)
 

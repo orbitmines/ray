@@ -83,6 +83,8 @@ end
 var = 5; var === var // true
 //TODO Which other operations would need location on it?
 
+//TODO Need some way to extract only the specific type from a larger type. Of remove information if bound_type is more than that type.
+
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
 ==.@ //TODO All cases are covered by both sides.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
@@ -358,6 +360,8 @@ end
 // TODO - Editor
 // goto label in an IDE should bring the label back one space. ; if then a type defined instead add it back.
 // If an automatic isomorphism is found, and the user is trying to implement it, notify the user it's not necessary.
+// Function in the editor where you select, press a key, then allow the perform operation on that selection like select capped text, .tolowercase it. done.
+//   -> Similarly, in natural language describe the thing you want to do to that selection. Same with object.[describe] for where the cursor is.
 
 // TODO - Implementing languages.
 Translate everything like ifblocks etc. to other languages, which are implemented in .ray.txt with primitives to the implementation . How to say that something like the if/else construction shouldn't be rewritten to the goto's but instead are the primitives. How to use the rewrite-blocks of code syntax to rewrite to a javascript-like syntax.
@@ -390,6 +394,69 @@ ef Maybe(a) = Just a | Nothing
 def Maybe(a)
   return Just a | Nothing
 end
+
+
+
+
+.caller is using .inventory?
+
+.random on graph/array to fill with random possible values, you want a .length or .count to be there. or .edgecount to limit it somehow. Or infinitely randomly generating for array for instance. Or some parameter probability on the length of the thing. But in the graph case there'd need to be that parameter of probability of how big it'd be, otherwise each edgecount would be infonitely generating.
+So some way of saying .random with a 50% change at each bit to stop generating larger ones. Or (20% etc.) What's the math on average/usual length based on thay probability
+
+Have some func like secure be the thing that nestedlty changes the .random function so
+= secure array.random
+= secure array.shuffle
+secure acceps expression or block //TODO secure, like the definition of throw, recursively adds a variable in context.
+or something like
+seed seed (randomizer?: )
+  array.shuffle
+end
+
+probabilistic // typed that it needs to be added to 100 how? or <= 1
+case 0.3 // = 1.0 or 0.<>
+case 0.3
+case 0.4
+// support thing like
+case PI
+case 1-PI
+end
+r 0.3() | 0.3() | 0.4() -- @.random
+ 0.3(), 0.3(), 0.4() -- random
+Support nested probabilities like
+0.5() | 0.5( 0.3() | 0.7() ) //TODO The nested here fills .expand?
+array.random should return a probability 1/length for each entry or if they're fecorated with probabilities the type = the array
+as T is forcing a collapse of the probability.
+How do you get multiple values from this OR/AND'ed ; you can do 0.3(A | B) | 0.7(A & B), but do you ever need to combine probabilities like 0.3 | 0.7 & 0.2 | 0.8 - but then how'd you het OR
+Use -- as parentheses around the whole block
+r@.random
+
+What if the value is random, but you want the stuff synced to be a particular value
+
+define .finite .infinite
+is_irrational = .length {finite}
+what's it called when the integer might be infinitely large
+real is integer{finite}
+Fraction is [].unbounded
+
+2^8 -1 max username length?
+
+communicate .length value for partially filled array like file size, but then for any value
+
+username needs to be string without all the special \n chars etc.
+
+how to move a claimed username to another player, then no name is selected and a new name needs to be selected.
+
+Continue without username is setting username to uuid, reserve uuids within main world. so give out one name within uuid range and another outside. server chooses the uuid
+
+.sort is {every . previous<=this<=.next
+
+if boundtype is < infinite, .infinte should return false
+
+distance is a transfinite number relative to normal integers if no elementary length is defined
+
+protected this
+
+
 
 
 // observer on a variable defined on an outside location, basically pubsub system (needs to poll for data somehow, or get pushed an update)

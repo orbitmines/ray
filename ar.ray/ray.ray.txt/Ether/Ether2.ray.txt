@@ -89,8 +89,26 @@ repository defines encryption? (Not necessarily individual items?), No not neces
 //TODO Can have visibility to the encrypted value, but not the actual value, how's that difference known
 //Different visibility for different entity (callers) //TODO Different value for different entities.
 
+//TODO Access is public, but only certain types of operations are allowed, like only +1, and only one per account, and only an account itself can set it, how to verify that?.
+//      -> This would be distributed db for likes.
+// TODO: Say a public copy a that 'likes' record is hosted by the player, copied by the Ether server, and then another player
+// TODO Is allowed to have a 'private' commit to that record. So only the player can access it, but it acts as if it was on top of that. So commit.visibility is possible.
+// TODO -> What is it was a blockchain, that wouldn't work because the previous commit hash or the next one wouldn't have the information.
+// TODO   -> How to handle that? Always appended after the current history? But what if there's anotherr later overwrite of that value you'd want to overwrite your change. How to differentiate between wanting that change vs not, or in the +1 like case it doesnt matter, when does it matter?
+//TODO    Y9ou could have something like a distributed chat, and you'd want something like if it was received late, insetad of putting it back inserted at that place in the commit chain, put it last and notify the channel with 'was sent 3 hours ago' then a context window from the perspective of that chat, where it is inserted in between. (And in message history insert it there as a, 'was received later but wass inserted at this time'
+//TODO -> SO YOU WANT TO ALLOW DIFFERENT STATES IN REPOSITORIES, BUT STILL ALLOW THEM TO WORK TOGETER. (mY LOCAL HISTORY IS DIFFERE4NT THAN YOURS, BUT STILL NBEEW UPDATES ARE PUSHED TO BOTH.),M SAY FOR WHEN I KNOW I SENT MY MESSAGE BEFORE/AFTER SOME OTHER MESSAGE, BUT YOURS WAS SENT AROUND THE SAME TIME. WE MIGHT NOT AGREE ON THE ORDER.
 //TODO Encryption is just some equivalent (with key) but differently structured value.
 //TODO What are some other things that follow that pattern?: It's Setting a variable like visibility to something that can cast down to Entity like the string "private".
+
+//TODO What if history is too expensive to keep, for instance all the +1 likes per item. How does it work for the distributed case?
+//TODO BVut then what do you do with location information? It's stored on player, not at the location? Or you have a history of stareting locations, with changes applied to them, Instead of a player variable at every change. So location would have to compute the player history. So you have to have access to a specific version of the world in this case.
+
+//TODO Instead of having different variables for the different locations, commits might be private, different visibility (so branches might be private) and if there's a clash like both remote and me create the same branch, a merge needs to happen.
+//TODO -> Want to support both.
+
+//TODO Broadcast which partial information you have on your node. (This is what sharding does)
+
+//TODO A quest which is like peer.share_information unless already has that information, where peer. is 'generating', or peers change dynamically and we want to dynamically share it with peers if we have that information
 
 //TODO How to locally store the unencrypted in cache, so you don't have to constantly decrypt. When do you want to not do that and force decryption on every access?
 //TODO So we have an encrypted object which casts down to some type? If the key is provided, where is the key stored?

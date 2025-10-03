@@ -387,7 +387,7 @@ end
 
 
     // We use 'Positive' here, since a 0, in this construction can be signed. (Even though for most operations that difference won't matter)
-    static class Positive = integer = Array<Digit.value>
+    static class Positive = integer = Digit.value[]
       static def String = Array<Digit as String>
 
       def `fraction = Positive.String` => Real.Positive = integer, ".", fraction
@@ -405,7 +405,7 @@ end
     static class Real = sign = "-"?, real = Real.Positive
       static String = static as String
 
-      static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive
+      static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive.Unbounded
         static String = static as String
 
         //TODO Support non-integer multiple exponents for reals.

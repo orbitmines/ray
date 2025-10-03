@@ -37,9 +37,9 @@ namespace Network
       static Segment = Decimal.Positive{< 2^8}
     end
 
-    static class v6 = (left: Segment[]).join(":")?, defined_segments.empty ? "::" : "::"?, (right: Segment[]).join(":")? < IP
+    static class v6 = (left: Segment[]).join(":")?, zero_compression: defined_segments.empty ? "::" : "::"?, (right: Segment[]).join(":")? < IP
       def defined_segments = left, right
-      dynamically assert defined_segments.length <= NUMBER_OF_SEGMENTS
+      dynamically assert defined_segments.length (zero_compression ? < NUMBER_OF_SEGMENTS : == NUMBER_OF_SEGMENTS)
 
       static NUMBER_OF_SEGMENTS = 8
       static SEGMENT_LENGTH = 16

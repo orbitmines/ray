@@ -306,6 +306,7 @@ end
 // Allow named parameters to access nested fields: def method(parameter.field: Object), and it's then set as 'field'
 // Allow var?: type and var: type?
 // Allow the . after operator in shortcut of defining x => x & x. : this.#`String.NonEmpty` -> & .#`String.NonEmpty`
+// Allow 'defined_segments.length (zero_compression ? <= NUMBER_OF_SEGMENTS : == NUMBER_OF_SEGMENTS)'
 
   location: Location
   +def location //TODO Allow this syntax.

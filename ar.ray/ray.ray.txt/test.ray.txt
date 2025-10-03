@@ -13,9 +13,6 @@ You want = to be called on object, changing the type possibly. Since it's on a v
 
 You want .bound_type on object then, but the object itself is a more specific type.
 
-ETHER
-37839 //port
-
 None implements location and =
 What if an object is instantiated and used within a function/constrctor only, whats it location like, none for instance
 |-> Object.method.() with [context] accessible as the last location.
@@ -288,6 +285,9 @@ program(throw: (args: Args) => error = args; goto capture)
 // Generalized: Repeated entries in an array like String, single instance mapping 'as X'. Allows for 'repeated X' to 'String'. And then automatic isomorphism might take care of 'String as X' and 'String as X[]'
 // spaces for method calls only work for same line, except for body calls
 // Point(x=1) x=1 shouldn't be overridden by x=0 in the constructor
+// Decimal.Positive{< 2^8} as String should work if Decimal.Positive as String works.
+// octets as Binary.Positive{length == 8}[] as Binary.Positive{length == 32} The length == 32 here should be implicit.
+// Superpositions in the conversion between Decimal <-> Binary, should be respected.
 
   def location = Location
   +def location //TODO Allow this syntax. => Should be dynamically there.

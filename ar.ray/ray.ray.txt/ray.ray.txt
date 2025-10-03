@@ -49,6 +49,8 @@ global = local
 //TODO Calling "()" should not call the () implementation, it's some special non-string token.
 //TODO Disallow cast of None to item, because every method is overwritten with different return types. It's cast to an Item{} with all fields set to : None
 //TODO .keys
+//TODO .join works for arbitrary values
+//TODO .empty = .length == 0
 
 def void end
 
@@ -329,7 +331,7 @@ def Query<T>
   //TODO Set each property to the base class without defaults defined on T.
 end
 
-def Integer<n> = sign = "-"?, integer = Positive
+def Integer<n> = sign: "-"?, integer: Positive
   static def Positive = Array{length == n}().last~
 end
 
@@ -346,7 +348,7 @@ private class Digit = String[].reduce(|)
   end
 end
 
-// TODO: Strings as a definition depend on number, circularity here.
+// TODO: Strings as a definition depend on Number, circularity here.
 {
   Binary: Digit = "0" | "1"
   Ternary: Digit = "0".."2".reduce(|)
@@ -372,7 +374,7 @@ end
   //TODO String as Binary.Positive = "0101010" = Digit.value[] = Positive
   // TODO: Binary.Positive as String; Automatic isomorphism
 
-  class `Base` < number = sign = "-"?, integer = Positive
+  class `Base` < Number = sign: "-"?, integer: Positive
 
     //TODO Equip a default directionality. (Line: One with forward/backward from a specific point, but it isn't necessarily selected there.)
 
@@ -387,7 +389,9 @@ end
 
 
     // We use 'Positive' here, since a 0, in this construction can be signed. (Even though for most operations that difference won't matter)
-    static class Positive = integer = Digit.value[]
+    static class Positive = integer = Digit.value[]{length > 0}
+
+      //TODO If extends Digit.value[], allow to cast `Base`.Positive[] to `Base`.Positive. But Decimal as Binary is different than Decimal[] as Decimal as Binary
       static def String = Array<Digit as String>
 
       def `fraction = Positive.String` => Real.Positive = integer, ".", fraction
@@ -405,7 +409,7 @@ end
     static class Real = sign = "-"?, real = Real.Positive
       static String = static as String
 
-      static class Positive = integer = `Base`.Positive, ".", fraction = `Base`.Positive.Unbounded
+      static class Positive = integer: `Base`.Positive, ".", fraction: `Base`.Positive.Unbounded
         static String = static as String
 
         //TODO Support non-integer multiple exponents for reals.
@@ -467,7 +471,7 @@ end
       +def Decimal.Positive
         def `fraction: Decimal.Positive.String, si: SI` => Distance.Real.Positive = integer, ".", fraction, si
 
-        //TODO Should overwrite number.def`node: not String` since it's more specific
+        //TODO Should overwrite Number.def`node: not String` since it's more specific
         // Allows syntax 1 m
         def `si: SI` => Distance.Positive = this, si
       end
@@ -511,16 +515,16 @@ def i`length: Decimal.Positive.String` = Binary.Positive{.length == length} // T
   // TODO Number arithmetic
 end
 
-class number < Ordered<number>
-  def - => number
-  def - b: number => number
+class Number < Ordered<Number>
+  def - => Number
+  def - b: Number => Number
 
   // Allows for the syntax 1 Object
   def `node: not String` = node{@.count == this}
 
-  // TODO Generic number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
+  // TODO Generic Number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
   // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
-  // TODO: external defines that number > number is done by some other operator, not looking through successors/predecessors.
+  // TODO: external defines that Number > Number is done by some other operator, not looking through successors/predecessors.
 end
 
 class boolean = false, true = Binary.Digit.value // TODO This should automatically implement "0" | "1" as boolean, through Binary.Positive. : Generalized to: Anything that is implementing Array<T>, like Positive, should also apply to just a T.

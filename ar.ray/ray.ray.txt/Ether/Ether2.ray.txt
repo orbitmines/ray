@@ -139,6 +139,31 @@ Constant is just that the history ref doesn't move, I could use .push_back for i
 
 Locally I can ignore the requirements of specific "only these operations allowed" requirements. Which could be put on some variable to say 'no monkeypatching allowed'. If I do, that variable loses some properties (locally), but anything communicated outside would revert back or ignore those changes. What if thise changes caused the object to be unrecoverably different, no that's not the case because the object has history too, before and after the different allowed accesses was done.
 
+//TODO How to single nothing may get added to @. in the refined type
+
+//TODO Want to switch locations of the variable. But is .location part of the history of a local variable, yes? But those changes might/might not be published (depending on which)
+// How to say: I want to keep track of any changes I get access to; locally.
+// variable @ location -- @.for
+// variable @ "ip.adress, ipv6 address, domain name, localhost" or https://, allow saying in that subnet? still a location, just more vague
+//TODO Ipaddresses are variables/domain names with a possibly locally changed value: IP tables.
+//TODO instance is a location?
+//TODO What if we're in a function what is variable at another instance in that function?
+say I do 'remote = variable @ "ip"'
+remote.location = local instance but it's pointing to remote? No its location is remote then. We ignore the fact that we need to store it in memory.
+class DomainName{
+  length <= 2^8 -1 // Length of a domain name includes the "."
+} = "."
+end
+//TODO But it cannot necessarily set it: This needs to be explicitly given permission, but in essence anything it has gets written to that.
+//TODO Remote has full access, by default to `variable @ remote`? So you can have String @ remote @ itself = ..
+
+//TODO So you can do things like 'String @ remote -- = object'
+//TODO Or allow +def `String @ remote`
+So you can do things like 'variable @ servers -- = value' where servers is Many servers.
+//TODO Then a quest would be fulfilling this asynchronously as servers get online.
+//TODO How to indicate that it needs to (A) do it to new servers added to 'servers', and to do it (B) async as a quest
+
+
 //TODO How to locally store the unencrypted in cache, so you don't have to constantly decrypt. When do you want to not do that and force decryption on every access?
 //TODO So we have an encrypted object which casts down to some type? If the key is provided, where is the key stored?
 def Encrypted<Encrypted = *, T> = Encoded<T>

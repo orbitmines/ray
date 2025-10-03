@@ -118,6 +118,27 @@ repository defines encryption? (Not necessarily individual items?), No not neces
 
 //TODO A quest which is like peer.share_information unless already has that information, where peer. is 'generating', or peers change dynamically and we want to dynamically share it with peers if we have that information
 
+A +def with a different visibility, monkey patch dependent
+
+Quest: Resolve merge conflict like a uuid granted to teo different players concurrently, resolve by reallocating one of them, could use information on whether their uuid is used anywhere, how to differentiate between places where it's used etc..
+We allow even unique entries to be duplicated, and require to resolve them asynchronously
+
+Require things like "I've communicated with these replica servers before making this calculating -> when strong consistency is required." -What if they're not online, like offline players storage etc.. (For certain things like calculating player statistics which are kept local only, it would be "make sure your instance checks in with out server before X time", and we'll consider your changes) - So these are quests to complete for the replica servers
+
+Want distinguishabiluty between .inventory on the current system vs where it came from (location) so . inventory{instance==global.instance}
+
+Constrained in the type of operations performed might for certain operations not require the latest value if only +1 is done, and we're at 10 we don't need to know the latest value only that the decimal infinitely generates and isn't a modular number.
+What if there's a change in the types of allowed operations. What if the types of allowed operations are different for different entities. What if I have access to change it differently, but I only use that on very rare occasions (might something still assume it's not necessary to check it; yes, because it might not know about my access or when it is used).
+The type of operation allowed needs to be some function pointer to some implementation, so a changed function wouldn't work.
+
+Allow constant is set that variable's access to noone has write access. (after the first change)? How to indicate that
+Constant is just that the history ref doesn't move, I could use .push_back for instance and the result is a new variable which isn't a constant
+
+
+"only these operations allowed is a refined type" - But we need a refined type which is dependent on the entity - different functionalities for different entities
+
+Locally I can ignore the requirements of specific "only these operations allowed" requirements. Which could be put on some variable to say 'no monkeypatching allowed'. If I do, that variable loses some properties (locally), but anything communicated outside would revert back or ignore those changes. What if thise changes caused the object to be unrecoverably different, no that's not the case because the object has history too, before and after the different allowed accesses was done.
+
 //TODO How to locally store the unencrypted in cache, so you don't have to constantly decrypt. When do you want to not do that and force decryption on every access?
 //TODO So we have an encrypted object which casts down to some type? If the key is provided, where is the key stored?
 def Encrypted<Encrypted = *, T> = Encoded<T>

@@ -18,6 +18,7 @@ namespace Network
 
     def binary_form => Binary.Positive = segments as Segment.Binary[]
 
+    // CIDR notation
     def / prefix_length: Number{0 <= . <= NUMBER_OF_BITS} => static
       return this if prefix_length == NUMBER_OF_BITS
 
@@ -49,6 +50,8 @@ namespace Network
       def segments => Segment[] = left, 0[]{length == NUMBER_OF_SEGMENTS - defined_segments.length}(), right
     end
   end
+  IPv4 = IP.v4
+  IPv6 = IP.v6
 
   Port = Decimal.Positive{< 2^16}
 
@@ -61,10 +64,8 @@ namespace Network
 end
 
 += Network
-IPv4 = IP.v4
-IPv6 = IP.v6
 
-// Allow CIDR notation
+// Allow string CIDR notation
 [IPv4, IPv6].for IP
   def String{==.instance_of (ip: IP.String) + "/" + (prefix_length: Decimal.Positive{<= IP.NUMBER_OF_BITS}.String)}
     def as :== IP = ip as IP / prefix_length

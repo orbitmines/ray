@@ -31,7 +31,6 @@ namespace Network
     - = .. // Allow '-' as a range operator.
     //TODO Range operator.
 
-    192.168.0.1
     static class v4 = segments.join(".") < IP
       static NUMBER_OF_SEGMENTS = 4
       static SEGMENT_LENGTH = 8
@@ -39,7 +38,6 @@ namespace Network
       static Segment = Decimal.Positive{< 2^8}
     end
 
-    aff17:17a::1
     static class v6 = (left: Segment[]).join(":")?, zero_compression: defined_segments.empty ? "::" : "::"?, (right: Segment[]).join(":")? < IP
       def defined_segments = left, right
       dynamically assert defined_segments.length (zero_compression ? < NUMBER_OF_SEGMENTS : == NUMBER_OF_SEGMENTS)

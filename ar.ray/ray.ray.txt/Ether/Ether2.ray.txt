@@ -115,6 +115,69 @@ repository defines encryption? (Not necessarily individual items?), No not neces
 
 //TODO A quest which is like peer.share_information unless already has that information, where peer. is 'generating', or peers change dynamically and we want to dynamically share it with peers if we have that information
 
+// What if I have a history on aq top-level parent and I want
+   to inject it an another top-level parent object.
+   Just all changes in a single step (.expand?)
+   (Basically +'ing repositories) -> Each change might have additional timing information, so we
+   could shuffle that order around.
+// What if I want a subdirectory to be it's top-level directory.
+   WHat happens to the history of its top-level parent?
+   (Like how the git history vs a top-level directory works now)
+   Then the whole history subgraph is in a single .expand and
+   applied as a single step on the top-level directory.
+   Still a particular branch is selected in the top-level directory
+   about the sub-directory. So it has a history of selecting a branch
+   then selecting another branch. (And being tied to the latest value
+   of that branch). So instead of every change being tracked, only the
+   branch changes are tracked.
+   What would be the use-case for the top-level not deciding on a
+   branch and .OR'ing possibilities
+
+// Or define it as, the top-level parent has an order
+   any substructure is just a subgraph of that
+   graph. That's probably better.
+   {.location == ''}, inventory might not be filled. It might just be
+   somewhere in a world at location without inventory.
+// what if the object directory is mentioned elsewhere
+   as a reference. The the location would be set, but that doesn't
+   count as inventory?. What if it does?
+
+// You want to be able to start a new top-level repository with or without the subgraph of all the previous changes
+   to that directory.
+// Branch is a pointer to an edge on where to continue it, the current value being on .value.
+   Because we can have different branches started from that same vertex. Which could
+   continue on their own. The current branch keeps being at that vertex ( not continuing in those
+   new branches).
+// Variables are not top-level, but the context is. (So the context has a global order
+   of variable changes within it) What about variable changes outside it? Those should
+   also be recorded in its order? (so we can undo it) -> It just references other commits
+   in external 'repositories'.
+// Visibility, might only want parts of a history to be visibile to certain entities.
+   Like: A branch and it's sucessive updates. ("private branch")
+// You want the option to merge many in-sequence commits into a single one. Like we have
+   history on every keystroke of a string, but we just want to set it to the information of the new string.
+
+// But what if the world still wants a global order.
+   Then parent inventory is set to the world. So changes are tracked there, not locally.
+
+// Big one: what if the change, changes the location? Like graph spatial rewrite.
+   -> History on Edges?
+
+   Then: What if access to a location's history is lost.
+
+// .% tracks across many values?
+   because a parent tracks its children
+   How to differentiate location between children
+   for things like the subgraph of the top-level history
+   graph.
+
+// Merge conflicts.
+// want certain merge conflicts to be resolvable through some other means. Say both writing to a counter, you'd stack the +1 changes.
+   (this would be taking the common ancesstor, then applying all changes from both branches in any order)
+   (This isn't really pratical thouogh because of large numbers, so instead you would do what?)
+   (In this case you';d have to be able to differentiate between two different +1 on the same number. How are those events differentiated, time, caused by etc..)
+   (caused by is stored on player, so need somne way to get Player.All{} check it there)
+
 A +def with a different visibility, monkey patch dependent
 
 Quest: Resolve merge conflict like a uuid granted to teo different players concurrently, resolve by reallocating one of them, could use information on whether their uuid is used anywhere, how to differentiate between places where it's used etc..
@@ -247,6 +310,8 @@ end
 +def String{== "private"}
   def as :== Entity = Entity{== global.player || == global.instance}
 end
+
++def String = "public" // Allow this
 +def String{== "public"}
   def as :== Entity = Entity{true}
 end

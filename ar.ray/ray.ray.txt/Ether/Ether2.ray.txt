@@ -1,8 +1,5 @@
 
 
-+def Node < Entity
-end
-
 class Item
   // Every item has an inventory defined on it: '<-' is parent directories, '->' are child directories. Loops allowed.
   inventory: Ray = Ray(this)

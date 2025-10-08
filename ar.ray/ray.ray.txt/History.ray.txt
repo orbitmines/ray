@@ -1,0 +1,20 @@
++def Node
+  history: History = History(this)
+  def % = history
+end
+
+class History = Ray
+  tag: { `*`: Commit } = {}
+  branch: { `*`: Branch } = {}
+
+  static Commit = static +def Vertex
+    //TODO .expand Graph<Commit>.acyclic
+  end
+  static Branch = static +def Edge
+  end
+
+  // A repository is simply a global order of local commits.
+  static class Repository
+
+  end
+end

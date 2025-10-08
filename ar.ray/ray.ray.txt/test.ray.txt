@@ -87,6 +87,7 @@ var = 5; var === var // true
 
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
 ==.@ //TODO All cases are covered by both sides.
+==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
 == = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
 ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
@@ -117,6 +118,9 @@ var = 5; var === var // true
                      "(perceived) Actual execution layer"
                    VS control-flow at each layer
 end
+
+//TODO 'dynamically assert @{.primary == primary}.count == 1', should check whether any of the @ values, yields true for any of the primary values. --> So you dont need to primary@.every(x => .primary@.some(x))
+// TODO So default behavior of == is, A has any of B, replicated for every B.
 
 //TODO What about equivalence graphs which are infinitely generating, we simply ask is instanceof that type (say number), if it is we assume it's on the line. so yes reachable.
 
@@ -369,6 +373,7 @@ end
 // If an automatic isomorphism is found, and the user is trying to implement it, notify the user it's not necessary.
 // Function in the editor where you select, press a key, then allow the perform operation on that selection like select capped text, .tolowercase it. done.
 //   -> Similarly, in natural language describe the thing you want to do to that selection. Same with object.[describe] for where the cursor is.
+// Eye-tracking should switch primary/secondary location, if the windows are side to side, if overlayed, the top one takes priority.
 
 // TODO - Implementing languages.
 Translate everything like ifblocks etc. to other languages, which are implemented in .ray.txt with primitives to the implementation . How to say that something like the if/else construction shouldn't be rewritten to the goto's but instead are the primitives. How to use the rewrite-blocks of code syntax to rewrite to a javascript-like syntax.
@@ -393,6 +398,7 @@ Translate everything like ifblocks etc. to other languages, which are implemente
 // Might want to catch the runtime error of a type somewhere, for instance arbitrary user input which needs to match some type.
 // .flatten = .reduce(push_back)
 // Automatic isomorphism
+// Property decorators like: 'rendered secondary: instance?'
 
 // TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
 // Single-line function

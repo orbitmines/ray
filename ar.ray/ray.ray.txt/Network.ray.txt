@@ -3,6 +3,7 @@ namespace Network
               // ETHER
   DEFAULT_PORT = 37839
 
+  //TODO Equip IP with abstract directionality with .next/.previous being +1
   class IP
     static NUMBER_OF_SEGMENTS => Decimal.Positive
     static SEGMENT_LENGTH => Decimal.Positive

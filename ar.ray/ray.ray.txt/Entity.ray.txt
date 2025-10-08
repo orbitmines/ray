@@ -1,0 +1,21 @@
+def Entity
+  // The known instances currently running this entity.
+  def instance => Instance = location{==.instance_of Instance}
+
+  +def location
+    // Indicates that the provided instance has its focus on this location.
+    primary: instance?
+  end
+end
+
+def Player < Entity
+
+end
+
+def NPC < Entity
+  //TODO Defines dynamics in a World
+end
+
+def Organization < Player
+
+end

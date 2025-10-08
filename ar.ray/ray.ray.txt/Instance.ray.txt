@@ -1,0 +1,21 @@
++def Node
+  //TODO Location .inventory is just a location with string or other structures defined on the edge?
+  location: Location =
+
+  def @ location: Location = global[location]
+end
+
+class Instance < Location
+
+  def `location: Location`
+    // If location is remote, go to Node.Remote
+  end
+end
+class Location = Ray //TODO Perhaps location = ray
+  host: Instance = global
+  //TODO A <.hierarchy B means A is being rendered inside B.
+  // .hierarchy for .inventory, and rendering hierarchy //TODO What if has both
+  //TODO Would be rendering a cursor for an IDE, which would be the location, but the top-level rendering location would be the IDE
+end
+
+// TODO .hierarchy instead of .inventory

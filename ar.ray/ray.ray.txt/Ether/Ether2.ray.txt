@@ -164,6 +164,10 @@ repository defines encryption? (Not necessarily individual items?), No not neces
    -> History on Edges?
 
    Then: What if access to a location's history is lost.
+// TODO Something like .push_back is set on the array, but the change effects an Edge?
+// TODO Is basically two levels of description: One is push_back which is equivalent to .last.terminal.value =. which is equivalent to a change at .last to .terminal.value =.
+
+// What about making a new repository out of a child directory which has it's oiwn history. Could do "from this point" it's a new repository. Or we could take the subgraph order from the parent. and then continue with that.
 
 // .% tracks across many values?
    because a parent tracks its children
@@ -258,17 +262,7 @@ end
 //TODO How does version control with with things like A-B- testing of functions and things like that, need to thinka bout that too.
 
 
-def History =
-  static def Repository
-    //Top-level inventory
-
-
-  end
-  static def Branch // The Edge
-  end
-  static def Commit // The vertex.
-  end
-end
+//TODO Caller as .location
 
 //TODO Encrypted chats between players, World = groups of players,
 //TODO Have an option to have any file encrypted as part of "visibility = 'private'", but make clear that if access to the devices is lost
@@ -280,26 +274,13 @@ end
 //TODO Slowpoke would be access checking whether you have sent in the previous x time. : But about this you want the entity to know about it so visibility.visibility = "public"
 
 class Entity < Item
-  // The known locations this item is referenced. This could be properties of an object, or a location in a World.
   location: Ray = inventory //TODO Maybe inventory = location, and with a filter on .inventory = boolean
 end
 
 class World
 end
 
-def Instance
-end
 
-def Player
-  // The known instances currently running this player.
-  instance: Instance
-
-  +def location
-    // When filled, this indicates that the provided instance is rendering this location.
-    primary: instance?
-    dynamically assert @{.primary == primary}.count == 1 if primary // Only one primary location per instance.
-  end
-end
 
 // "local" means only on the local instance. (Not even local child instances)
 +def String{== "local"}
@@ -673,17 +654,12 @@ class Entity
   end
 end
 
-def NPC < Entity
-  //TODO Defines dynamics in a World
-end
+using .library@.Git //TODO
+
 
   //TODO: You want to be able to host a instance as an item to a world, with some visibility.
 
-def Organization < Player
-  //TODO Reserve namespace with dots to domain names.
-  //TODO Organization has many 'names' which are domain names?
-  //TODO Domains are the only duplicate names allowed by the central ether server, and they can be revoked.
-end
+
 
 //TODO So if a player has made their location known, another player can run an instance of that player in that location.
 //      He might not be able to set input for that player, but it's still an instance running that player.

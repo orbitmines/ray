@@ -1,3 +1,6 @@
+< Instance //TODO Expect fields to be filled by external
+instance = global = local
+
 // Defined by context:
 //  external = { do, goto, *, Node { `*`, `*`= } } // TODO: External should nestedly check local.definer
 //  `arbitrary structure`=
@@ -22,9 +25,6 @@ end
 def +def
   //TODO Define super in nested 'defs'
 end
-
-instance = global = local
-assert global ==.instance_of Instance
 
 //TODO def
 //TODO Array
@@ -83,20 +83,18 @@ end
 
 def single
   def `name = *`(definition: (Args = *) => *)
-    static = definer.class name, definition
-    return static()
+    static = class name, definition
+    instance = static()
+
+    definer[name] = instance
+    instance
   end
 end
 
-Entity = Item = class Node
-  //TODO Location .inventory is just a location with string or other structures defined on the edge?
-  location: Location = 
-
-  def @ location: Location = global[location]
-
+Item = class Node
   def `*` = external
 
-  private def < constructors: Array<(*) => *> => constructors.for constructor
+  extends = private def < constructors: Array<(*) => *> => constructors.for constructor
     //TODO; By default call super if it's not called at the beginning/end of the block? & if parameterless
     this.private super &= constructor<local: caller>
     this.private super[constructor.name] = constructor<local: caller> if constructor.name
@@ -118,13 +116,8 @@ Entity = Item = class Node
   and = def & //TODO
 end
 
-class Instance < Location
-  def `location: Location`
-    // If location is remote, go to Node.Remote
-  end
-end
-class Location = Ray //TODO Perhaps location = ray
-end
+// Allow syntax 'not Node'
+def not node: * = node.not
 
 //TODO Does Node < Expression or Expression < Node, either way we want both methods on both. And a Node, needs access to definitional structure
 //   |-> .expand should expand the single node into the whole expression (or one layer down)
@@ -186,7 +179,7 @@ end
 private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
   //TODO What's the value encoded on Edge?, and what's the value encoded on the boundaries? (Or do we always use edge)
   static Edge =
-  k
+
   static Vertex = Ray<T>{
     initial = (HyperContinuations ? Many : 1) Boundary{ //TODO These =, need to be ==.instance_of?
       end = (HyperEdges ? Many : 1) Vertex,

@@ -9,6 +9,8 @@
 //TODO = on variable, main object being a variable at a location
 Only added to graphs to histories
 
+//TODO What to do with functionality like [index: 0] on IP, when it extends both a string, and a -1 <- . -> +1. Basically it has two structures defined on it.
+
 You want = to be called on object, changing the type possibly. Since it's on a variable - variable is some object. So that would mean that = without effecting the current value, would first have to copy it over to another place. (And the object is tied to a location - which is kind of nice)or you can change its location to move it
 
 You want .bound_type on object then, but the object itself is a more specific type.
@@ -67,12 +69,12 @@ None != instanceof Item
 //
 Some better way of defining this cursor on Ray/Boundary/Edge without making these links
 
-def Boundary<T, E>
+def Boundary<T, E> //TODO Boundary = Ray, where next/previous is the next/previous boundary.
   end: Vertex
   value: <E Boundary>
   continuation: 1 Edge<T, E>
 end
-def Edge<T, E> = Boundary
+def Edge<T, E> = Boundary //TODO Edge = Ray, where next/previous steps is next edges.
   value: E
   list: Boundary<T, E>
 end
@@ -83,6 +85,9 @@ end
 var = 5; var === var // true
 //TODO Which other operations would need location on it?
 
+//TODO Array * number, repeat x times.
+//TODO Array.fill with value
+
 //TODO Need some way to extract only the specific type from a larger type. Of remove information if bound_type is more than that type.
 
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
@@ -91,6 +96,7 @@ var = 5; var === var // true
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
 == = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
 ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
+==.castable_to <type>, TODO Or make {as IP} to automatically only include castable variants.
 ==.in(equivalence_graph) = equivalence_graph.find(this).path_to(x) //TODO Or this & x can both be rewritten to the same thing in that equivalence graph.
     // (A->) is A.reduce(|) (includes A)
     |-> (A->)@ .intersection (B->)@ .some (* are refs to value)
@@ -292,6 +298,8 @@ program(throw: (args: Args) => error = args; goto capture)
 // Decimal.Positive{< 2^8} as String should work if Decimal.Positive as String works.
 // octets as Binary.Positive{length == 8}[] as Binary.Positive{length == 32} The length == 32 here should be implicit.
 // Superpositions in the conversion between Decimal <-> Binary, should be respected.
+// IP = -1 <- . -> +1, should automatically check the boundary conditions of whether +1/-1 is supported. And end it there so you don't need to "+1 if 1 <= ~!(as Binary.Positive)" TODO What happens to a subnet where this operation can't be done?
+// 'def as :== Binary.Positive = segments as Segment.Binary[]' should be automatically assigning length too because segments have length defined
 
   def location = Location
   +def location //TODO Allow this syntax. => Should be dynamically there.
@@ -311,6 +319,7 @@ end
 // Allow var?: type and var: type?
 // Allow the . after operator in shortcut of defining x => x & x. : this.#`String.NonEmpty` -> & .#`String.NonEmpty`
 // Allow 'defined_segments.length (zero_compression ? <= NUMBER_OF_SEGMENTS : == NUMBER_OF_SEGMENTS)
+// Allow abstract class .string to go to all implementations of that class <.
 
 +def String = "public" // Allow this
 +def String{== "public"}

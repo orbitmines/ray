@@ -3,8 +3,7 @@ namespace Network
               // ETHER
   DEFAULT_PORT = 37839
 
-  //TODO Equip IP with abstract directionality with .next/.previous being +1
-  class IP
+  class IP < Location = -1 <- . -> +1
     static NUMBER_OF_SEGMENTS => Decimal.Positive
     static SEGMENT_LENGTH => Decimal.Positive
     static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
@@ -17,19 +16,25 @@ namespace Network
 
     def segments => Segment[]{length == NUMBER_OF_SEGMENTS}
 
-    def binary_form => Binary.Positive = segments as Segment.Binary[]
+    def as :== Binary.Positive = segments as Segment.Binary[]
 
     // CIDR notation
     def / prefix_length: Number{0 <= . <= NUMBER_OF_BITS} => static
       return this if prefix_length == NUMBER_OF_BITS
 
-      binary_form = this.binary_form
+      binary_form = as Binary.Positive
       binary_form[prefix_length..] = 0 | 1
 
-      binary_form as Segment[]
+      binary_form
     end
 
-    - = .. // Allow '-' as a range operator.
+    def + offset: Number{-(as Binary.Positive) <= . <= ~!(as Binary.Positive)} => static
+      as Binary.Positive + offset
+    end
+    def - offset: Number{- ~!(as Binary.Positive) <= . <= as Binary.Positive} => static
+      as Binary.Positive - offset
+    end
+
     //TODO Range operator.
 
     static class v4 = segments.join(".") < IP

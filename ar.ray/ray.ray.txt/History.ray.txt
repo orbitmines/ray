@@ -4,8 +4,6 @@
 end
 
 class History = Ray
-  tag: { `*`: Commit } = {}
-  branch: { `*`: Branch } = {}
 
   static Commit = static +def Vertex
     //TODO .expand Graph<Commit>.acyclic
@@ -14,7 +12,9 @@ class History = Ray
   end
 
   // A repository is simply a global order of local commits.
-  static class Repository
+  static class Repository = History
+    tag: { `*`: Commit } = {}
+    branch: { `*`: Branch } = {} //TODO Filter over edges in structure with name == name, where we ignore default object names. Or search for names with issued_by = this repository.
 
   end
 end

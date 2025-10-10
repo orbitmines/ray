@@ -6,6 +6,9 @@
 end
 
 class Instance < Location
+  //TODO A name of instance is ipv4/ipv6
+
+  def ip => IP = location{==.instance_of IP}
 
   def `location: Location`
     // If location is remote, go to Node.Remote

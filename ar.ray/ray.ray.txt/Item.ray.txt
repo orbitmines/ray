@@ -1,0 +1,12 @@
+Item = +def Node
+  name: String.NonEmpty = //TODO Default name service of objects
+
+  issued: Certificate
+end
+
+class Certificate
+  by: * = global //TODO Or caller
+  on: Date? // TODO Can be a date range for validity period
+
+  //TODO Needs to cover bopth the distrubuted as central db case.
+end

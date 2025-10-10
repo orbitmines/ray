@@ -388,8 +388,6 @@ end
 +def Node < Item //TODO There's a circularity here, but it should be supported.
 
   //TODO obtained_by
-    issued_by: global.desktop,
-    certificate //TODO,M
 end
 
 
@@ -628,8 +626,6 @@ class Entity
     end
   end
 
-  name: String.NonEmpty
-
   //TODO We have a world which is the memory system which is a child work of desktop, then if everything is an entity, the location is a place in that world.
   //TODO World = Inventory = Location, Location = child Inventory / subgraph/abstract description of World, child World = child Inventory
   //TODO Inventory is a refinement of World/Location. It's more strict.
@@ -696,9 +692,6 @@ def @`player: String.NonEmpty` => Player = Ether.@`player`
 def #`world: String.NonEmpty` => World = Ether.#`world`
 
 def Certificate
-  //TODO Want to set the visibility differently for another field in the object. How to still allow an overwrite though?
-  //TODO Every field has as Item on it by default?
-  //TODO Are fields stored under [World].field, or are they part of [World], and .field in world is something else. Or is it both?
   secret: Something
     visibility = //TODO Should only be default, can be overwritten
   end

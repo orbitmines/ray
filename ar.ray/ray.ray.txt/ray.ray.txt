@@ -91,7 +91,7 @@ def single
   end
 end
 
-Item = class Node
+class Node
   def `*` = external
 
   extends = private def < constructors: Array<(*) => *> => constructors.for constructor

@@ -318,7 +318,7 @@ def Visibility = InheritFromInventory | Entity
 //     -> If it cannot be decoded partially, it should have the value stored on another level of description how?
 //TODO Or partial downloads of arbitrary parts of a file. (Allow access the parts out-of-order if present)
 class Item
-  // TODO history could include When it's used, how it's made, how it's discovered, how it's constructed.
+  // TODO history couldn iclude When it's used, how it's made, how it's discovered, how it's constructed.
 
   //TODO ANY ITEM MIGHT be managed by another instance
 

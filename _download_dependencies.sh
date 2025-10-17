@@ -60,6 +60,12 @@ cp -r ".orbitmines/external/github.com/googlefonts/noto-emoji/fonts/NotoColorEmo
 # cd build
 # cmake -DLLVM_ENABLE_PROJECTS=clang -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" ../llvm
 # make
+# or bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+
+# Wasm compiling requirement (https://emscripten.org/docs/getting_started/downloads.html)
+# git clone https://github.com/emscripten-core/emsdk.git
+# ./emsdk install latest
+# ./emsdk activate latest
 
 # WebGPU runtime
 # sudo curl -L https://github.com/wpmed92/pydawn/releases/download/v0.3.0/libwebgpu_dawn_x86_64.so -o /usr/lib/libdawn.so

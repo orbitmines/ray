@@ -21,6 +21,9 @@ What if an object is instantiated and used within a function/constrctor only, wh
 //TODO What happens to returned variables? They have a location inside the function, then while their location isn't changed in another function, that function still lives through the variable?
 .inventory = .caller
 
+
+# todo functions which calling them requires the top-level context which is calling has certain variables defined as a way to pass the variables?
+
 //Parameterless property = , sets that variable to an expression. It's realized when another property on it is accessed? (or it's set to some other property
 // |-> It's not the same as dynamic, dynamic changes if the dependant parameters of it changes. Or is it?
 

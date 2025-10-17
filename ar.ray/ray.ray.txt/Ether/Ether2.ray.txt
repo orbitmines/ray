@@ -29,7 +29,40 @@ class Item
   def visibility: Entity = inventory.previous?.value.visibility ?? "local" ;//TODO global.player.is_private_default_visibility = "private"
 end
 
+Saving program pointer id what youd do to save a game
+
+.index on ray (Should compile to smarter things than just retreversing the graph to find the index, if a simple enumerating forloop does the job)
+
+
+
+local @= location to change the location the code gets executed
+
+Create environments which don't have access to public/private methods
+
+Operations like get from temote, but only one level deep (like the current level of directories) and them maybe in the background load more
+
+Difference in acyclic to the same value, vs acyclic in there's an actual circular path
+
+Two merged branches with a decided order (so non-parallel) is creating a new branch with values of .expand on the old changes = in their respective branches
+
+you want a .expand across version control histories. So my local keystroke history collapses to a single 'commited' history which the same on .expand but then for that particular repository so we need .expand(location) or something
+|-> would be across branches, since local keystroke history is just a branch on top of the current branch, then a commit would all those changes since tha last commit and switch that branch to it.
+
+Commit changes is rewriting the deltas from keystrokes to whole strings. So need rewrite logic defined for that somewhere
+
+
+location is moving pointer, you also want something like tutorial to define a future history of locations with timed steps and clndinional programattic steps like has entered this area
+control flow of location so any function is a location so tutorial is a defined function
+qhat of changes mid version define what to do with those, relocate to x
+interleaved functions like movement of a npc tied with your own location
+
+
+indentation newline after// prevent it from being repeated
+
+Variable reference is to a particular place in the history?
 //TODO Version control
+//TODO Additional fields like timestamp are in some global order (some repository which keeps track of that)
+//TODO Want things like only commit to history if it's a significant change, like the NW instead of joystick position
 //TODO %/.history, for inventory, should turn the whole inventory nested, back in time.
 //TODO Individual history per field, but a branch takes nestedly the history with it?
 //TODO Needs to be at least git functionality

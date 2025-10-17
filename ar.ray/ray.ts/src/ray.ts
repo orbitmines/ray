@@ -241,12 +241,12 @@ export interface Pointer<TSelf extends Pointer<TSelf>> {
    */
   move: (...index: (number | IRange | Path)[]) => Many<Node>
   /**
-   * Maps the original structure to one where you find the distances at the Nodes.
-   *
-   * Note: This can include infinitely generating index options.
-   */
-  // TODO Map_reduce (but then for each path) here.
-  distance: () => TSelf
+   * Maps the originthen for each path) here.
+  distance: () => TSelfal structure to one where you find the distances at the Nodes.
+  *
+  * Note: This can include infinitely generating index options.
+  */
+  // TODO Map_reduce (but
   /**
    * Ignores duplicates after visiting the first one.
    * TODO: Does uniqueness check for SELECTED STRUCTURE or not? In the case of is_unique for is_injective you'd think so

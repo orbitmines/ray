@@ -52,6 +52,9 @@ None != instanceof Item
 
 //TODO Default of an object is only loaded if accessed, so we can have circularly defined defaults.
 
+.: sets bound type
+parse json to an object by setting fs.directory.file equal to some type which serializes and sets to json automatically restricting possible values
+
 //TODO Partial equality .match how?
 //TODO Equivalence graph
 //     - Forced equivalence how?

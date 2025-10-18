@@ -55,6 +55,8 @@ None != instanceof Item
 .: sets bound type
 parse json to an object by setting fs.directory.file equal to some type which serializes and sets to json automatically restricting possible values
 
+Evaluation order like +/-//* different for each type? how configured?
+
 //TODO Partial equality .match how?
 //TODO Equivalence graph
 //     - Forced equivalence how?
@@ -96,7 +98,11 @@ var = 5; var === var // true
 
 //TODO Need some way to extract only the specific type from a larger type. Of remove information if bound_type is more than that type.
 
+TODO uppercase, lowercase, swapcase
+
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
+~= is match, as in Partial equals
+
 ==.@ //TODO All cases are covered by both sides.
 ==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
@@ -326,6 +332,7 @@ end
 // Allow the . after operator in shortcut of defining x => x & x. : this.#`String.NonEmpty` -> & .#`String.NonEmpty`
 // Allow 'defined_segments.length (zero_compression ? <= NUMBER_OF_SEGMENTS : == NUMBER_OF_SEGMENTS)
 // Allow abstract class .string to go to all implementations of that class <.
+// 'zero_compression ? super() : compress_zeros.super()', define super for all variable instances of the same type (only in that context) : What is repeat the function, not super?
 
 +def String = "public" // Allow this
 +def String{== "public"}

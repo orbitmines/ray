@@ -28,13 +28,6 @@ namespace Network
       binary_form
     end
 
-    def + offset: Number{-(as Binary.Positive) <= . <= ~!(as Binary.Positive)} => static
-      as Binary.Positive + offset
-    end
-    def - offset: Number{- ~!(as Binary.Positive) <= . <= as Binary.Positive} => static
-      as Binary.Positive - offset
-    end
-
     def as :== String
       // Use CIDR notation if superposed values are filled in @.
       prefix_length = NUMBER_OF_BITS - (@ as Binary.Positive ~= (0 | 1)[]$ -- .length)
@@ -45,6 +38,13 @@ namespace Network
       end
 
       sub
+    end
+
+    def + offset: Number{-(as Binary.Positive) <= . <= ~!(as Binary.Positive)} => static
+      as Binary.Positive + offset
+    end
+    def - offset: Number{- ~!(as Binary.Positive) <= . <= as Binary.Positive} => static
+      as Binary.Positive - offset
     end
 
     //TODO Range operator.

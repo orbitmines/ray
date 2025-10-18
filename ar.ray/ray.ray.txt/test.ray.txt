@@ -106,6 +106,12 @@ for partial match ~= use regex ^/$ for end beginnging.
 
 '-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
 '--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
+Allow multiline '--'
+Allow returning out of a -- statement.
+
+.recur is repeat the same method but for another instance.
+
+If @ is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
 
 ==.@ //TODO All cases are covered by both sides.
 ==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.

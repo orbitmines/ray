@@ -35,6 +35,18 @@ namespace Network
       as Binary.Positive - offset
     end
 
+    def as :== String
+      // Use CIDR notation if superposed values are filled in @.
+      prefix_length = NUMBER_OF_BITS - (@ as Binary.Positive ~= (0 | 1)[]$ -- .length)
+      if prefix_length != 0
+        binary_form = @ as Binary.Positive
+        binary_form[prefix_length..] = 0
+        return binary_form as static -- .recur, "/", prefix_length
+      end
+
+      sub
+    end
+
     //TODO Range operator.
 
     static class v4 = segments.join(".") < IP
@@ -67,25 +79,28 @@ namespace Network
       def compress_zeros => v6
         return this if zero_compression
 
-        zeros = defined_segments ~= 0[] -- @{length == min() & leftmost} # TODO How to iterate over @ like min. and leftmost
-        return (<- zeros) "::" (zeros ->)
+        zeros = left, right ~= 0[] -- @{length == min() & leftmost} # TODO How to iterate over @ like min. and leftmost
+        return (<- zeros) "::" (zeros ->), embedded_ipv4
       end
       def embed_ipv4 => v6
         return this if embedded_ipv4
 
-        return segments[..-3], segments[-2..] as Binary.Positive as IPv4 -- .compress_zeros
+        segments[..-3], segments[-2..] as Binary.Positive as IPv4
+          // Prefer compressed zeros representation when possible (at least for the leading hexadecimal part) - (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
+          -- .compress_zeros
       end
 
-      def as :== String =>
-        // mixed notation is RECOMMENDED if the following condition is met: the address can be distinguished as having IPv4 addresses embedded in the lower 32 bits solely from the address field through the use of a well-known prefix (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
-        -- .embed_ipv4 if this ~= ^"::ffff" // TODO Do we need to this.compress_zeros here?, or should this be picked up automatically. How to distinguish between seeing if it actually starts with the string vs the converted value.
-        // Prefer mixed notation for NAT64 (https://datatracker.ietf.org/doc/html/rfc6052#section-2.1)
-        -- .embed_ipv4 if this ==.instance_of "64:ff9b::/96"
-        -- .compress_zeros
-        .super()
-        // The characters "a", "b", "c", "d", "e", and "f" in an IPv6 address MUST be represented in lowercase. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)
-        .lowercase
-
+      def as :== String
+        this
+          // mixed notation is RECOMMENDED if the following condition is met: the address can be distinguished as having IPv4 addresses embedded in the lower 32 bits solely from the address field through the use of a well-known prefix (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
+          -- .embed_ipv4 if this ~= ^"::ffff" // TODO Do we need to this.compress_zeros here?, or should this be picked up automatically. How to distinguish between seeing if it actually starts with the string vs the converted value.
+          // Prefer mixed notation for NAT64 (https://datatracker.ietf.org/doc/html/rfc6052#section-2.1)
+          -- .embed_ipv4 if this ==.instance_of "64:ff9b::/96"
+          -- .compress_zeros
+          .super
+          // The characters "a", "b", "c", "d", "e", and "f" in an IPv6 address MUST be represented in lowercase. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)
+          .lowercase
+      end
     end
   end
   IPv4 = IP.v4

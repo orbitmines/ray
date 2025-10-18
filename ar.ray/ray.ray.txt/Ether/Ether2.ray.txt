@@ -32,7 +32,7 @@ end
 Saving program pointer id what youd do to save a game
 
 .index on ray (Should compile to smarter things than just retreversing the graph to find the index, if a simple enumerating forloop does the job)
-
+Want to also hafve things like .index from some other location x
 
 
 local @= location to change the location the code gets executed
@@ -543,10 +543,13 @@ def Quest
 
   // Quest rating
   // - Difficulty rating -> Needs some idea of relative difficulty for the Entity
+  //   - Difficulty also has time information in certain cases; how long does it take.
   // - Effectiveness rating -> In the case of effecting other items.
 
   // Quest selection by NPCs
   // - Difficulty rating vs reward.
+
+  // Creating quests for one-self, or others.
 
   //TODO Quests are also, places to spend resources on infinitely generating/speculative execution places
   //     -> If the result would be found, would that result into efficiency, or what else?

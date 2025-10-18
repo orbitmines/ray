@@ -100,6 +100,8 @@ var = 5; var === var // true
 
 TODO uppercase, lowercase, swapcase
 
+Because a variable is linked to a location, that location defined additional type information like dytnamically asserts which are part of that type. (By keeping track of location we have access to this)
+
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
 ~= is match, as in Partial equals
 for partial match ~= use regex ^/$ for end beginnging. Are functions which create initial/terminals at the beginning of some structure./

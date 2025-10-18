@@ -44,8 +44,8 @@ namespace Network
       static Segment = Decimal.Positive{< 2^8}
     end
 
-    static class v6 = (left: Segment[]).join(":")?, zero_compression: defined_segments.empty ? "::" : "::"?, (right: Segment[]).join(":")? < IP
-      def defined_segments = left, right
+    static class v6 = (left: Segment[]).join(":")?, zero_compression: defined_segments.empty ? "::" : "::"?, (right: Segment[]).join(":")?, (":", embedded_ipv4: IPv4)? < IP
+      def defined_segments = left, right, embedded_ipv4 as Binary.Positive
 
       dynamically assert defined_segments.length (zero_compression
         ? < NUMBER_OF_SEGMENTS - 1 // '-1' Because: The symbol "::" MUST NOT be used to shorten just one 16-bit 0 field. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.2)
@@ -61,7 +61,7 @@ namespace Network
 
       static Segment = Hexadecimal.Positive{length <= 4}
 
-      def segments = left, 0[]{length == number_of_compressed_segments}(), right
+      def segments = left, 0[]{length == number_of_compressed_segments}(), right, embedded_ipv4 as Binary.Positive
 
       def number_of_compressed_segments = NUMBER_OF_SEGMENTS - defined_segments.length
       def compress_zeros => v6
@@ -70,11 +70,20 @@ namespace Network
         zeros = defined_segments ~= 0[] -- @{length == min() & leftmost} # TODO How to iterate over @ like min. and leftmost
         return (<- zeros) "::" (zeros ->)
       end
+      def embed_ipv4 => v6
+        return this if embedded_ipv4
+
+        return segments[..-3], segments[-2..] as Binary.Positive as IPv4 -- .compress_zeros
+      end
 
       def as :== String =>
-        zero_compression ? super() : compress_zeros.super()
+        // mixed notation is RECOMMENDED if the following condition is met: the address can be distinguished as having IPv4 addresses embedded in the lower 32 bits solely from the address field through the use of a well-known prefix (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
+        -- .embed_ipv4 if this ~= ^"::ffff" // TODO Do we need to this.compress_zeros here?, or should this be picked up automatically. How to distinguish between seeing if it actually starts with the string vs the converted value.
+        -- .compress_zeros
+        .super()
         // The characters "a", "b", "c", "d", "e", and "f" in an IPv6 address MUST be represented in lowercase. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)
-        -- .lowercase
+        .lowercase
+
     end
   end
   IPv4 = IP.v4

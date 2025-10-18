@@ -102,6 +102,10 @@ TODO uppercase, lowercase, swapcase
 
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
 ~= is match, as in Partial equals
+for partial match ~= use regex ^/$ for end beginnging.
+
+'-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
+'--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
 
 ==.@ //TODO All cases are covered by both sides.
 ==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.

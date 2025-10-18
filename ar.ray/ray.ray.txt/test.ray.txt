@@ -102,7 +102,7 @@ TODO uppercase, lowercase, swapcase
 
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
 ~= is match, as in Partial equals
-for partial match ~= use regex ^/$ for end beginnging.
+for partial match ~= use regex ^/$ for end beginnging. Are functions which create initial/terminals at the beginning of some structure./
 
 '-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
 '--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'

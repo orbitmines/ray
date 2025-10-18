@@ -79,6 +79,8 @@ namespace Network
       def as :== String =>
         // mixed notation is RECOMMENDED if the following condition is met: the address can be distinguished as having IPv4 addresses embedded in the lower 32 bits solely from the address field through the use of a well-known prefix (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
         -- .embed_ipv4 if this ~= ^"::ffff" // TODO Do we need to this.compress_zeros here?, or should this be picked up automatically. How to distinguish between seeing if it actually starts with the string vs the converted value.
+        // Prefer mixed notation for NAT64 (https://datatracker.ietf.org/doc/html/rfc6052#section-2.1)
+        -- .embed_ipv4 if this ==.instance_of "64:ff9b::/96"
         -- .compress_zeros
         .super()
         // The characters "a", "b", "c", "d", "e", and "f" in an IPv6 address MUST be represented in lowercase. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)

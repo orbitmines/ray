@@ -478,6 +478,11 @@ class World < Entity
   def @`player: String.NonEmpty` => Player?
 end
 
+Number
+static = +1 <- 0 -> -1
+
+public key Player{public_key & challenge that they have the private key, like a timed message, or a specifically tailored message by this instance}
+
 
 
 // Spatial Propagation

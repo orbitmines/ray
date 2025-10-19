@@ -100,6 +100,8 @@ var = 5; var === var // true
 
 TODO uppercase, lowercase, swapcase
 
+If multiple directionalities on a class we might prefer only to use the first one defined? if they're not &'ed. So that's the case for extends in the case of IP. So use &= to do it, default is only first defined.
+
 Because a variable is linked to a location, that location defined additional type information like dytnamically asserts which are part of that type. (By keeping track of location we have access to this)
 
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them

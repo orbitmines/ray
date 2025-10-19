@@ -1,3 +1,5 @@
+//TODO Make sure that specific entries in a @ or array similarly have their visibility respected.
+
 single Access
   READ = "read"
   WRITE = "write"
@@ -7,6 +9,7 @@ single Access
   EXECUTE = "execute"
 end
 
+//TODO This should be on instance, merge instance/player/entity?
 +def Entity
   // Default Privacy Policy:
   // "private" is at least used for two cases:
@@ -32,6 +35,7 @@ end
   end
 end
 
+
 // Confidential, means we don't want it to be public, but we defer to "default_privacy_policy" whether this should be "localhost" or "private".
 modifier confidential
   def as :== Node{}
@@ -54,6 +58,10 @@ end
 // "private" means any instance running this entity/player. Note that any backup server, like the central Ether server, has that property.
 modifier private
   def as :== Node{} = Node{== global.entity} | "localhost" // TODO How to fill this with the entity/instance (localhost too), of where it came from, because if I download this item, it's not me who has this access
+end
+// Only include non-public instances running this entity. (So basically private servers running your player instance)
+modifier managed
+  def as :== Node{} = Node{== global.entity.instance{access.read < "public"}}
 end
 // Note that public, means literally anyone with a connection to this location is allowed to access it.
 // This is for instance used for distributed databases.

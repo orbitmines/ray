@@ -445,6 +445,8 @@ class World < Entity
 
   // Internal dynamics -> Want a primitive in .ray to be a dynamic space.
 
+//TODO SDame name/location property but different visibility, then also allow one to prefer the one which is least permissive, but how?
+
   // Split into two groups: Spaces with arbitrary propagation vs limitations:
         How do you make spatial propagation hard/limit it in a distributed sense when usually one can just skip ahead programmatically?
         -> Similarly how we make item copying expensive/impossible. Scarcity of the items.

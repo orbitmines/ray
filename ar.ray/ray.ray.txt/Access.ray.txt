@@ -60,7 +60,7 @@ modifier private
   def as :== Node{} = Node{== global.entity} | "localhost" // TODO How to fill this with the entity/instance (localhost too), of where it came from, because if I download this item, it's not me who has this access
 end
 // Only include non-public instances running this entity. (So basically private servers running your player instance)
-// TODO What if I don't want the central ether server to know about my managed instance?
+// TODO What if I don't want the central ether server to know about my managed instance? -> I set access.read on instance to managed.
 modifier managed
   def as :== Node{} = Node{== global.entity.instance{access.read < "public"}}
 end

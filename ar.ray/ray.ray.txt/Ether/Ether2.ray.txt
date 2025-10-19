@@ -26,7 +26,7 @@ class Item
   //TODO What if speculative graphs are returned to something, and it changes the result of a function, that should in turn
   //TODO (this can escalate quickly) change the effects of functions caused by it recursively, and roll them back potentially.
 
-  def visibility: Entity = inventory.previous?.value.visibility ?? "local" ;//TODO global.player.is_private_default_visibility = "private"
+  def visibility: Entity = inventory.previous?.value.visibility ?? "local" ;//TODO global.entity.is_private_default_visibility = "private"
 end
 
 Saving program pointer id what youd do to save a game
@@ -61,6 +61,7 @@ indentation newline after// prevent it from being repeated
 
 Variable reference is to a particular place in the history?
 //TODO Version control
+//TODO Things like, we enact changes on functions/etc.. which are in turn saved somewhere to the current version, then we need a way to say : update these functions on those locations. By saying 'local.keys except x' @ 'All remotes' = 'new version'
 //TODO Additional fields like timestamp are in some global order (some repository which keeps track of that)
 //TODO Want things like only commit to history if it's a significant change, like the NW instead of joystick position
 //TODO %/.history, for inventory, should turn the whole inventory nested, back in time.
@@ -110,7 +111,7 @@ Variable reference is to a particular place in the history?
 //TODO Define mirrors which aren't defined on the other locations, so only define it for locally (visibility = "local"?)
 
 //TODO So caller could be at a location with a different instance too.
-//TODO Different values for fields based on who is looking at them. So access 'caller ==.instance_of global.player' for instance.
+//TODO Different values for fields based on who is looking at them. So access 'caller ==.instance_of global.entity' for instance.
 //TODO  -> Dynamic variable? -> No. change it to a parameterless method
 
 //TODO Or is it visibility for anyone with the encryption key? How's that defined.
@@ -270,7 +271,7 @@ def Encrypted<Encrypted = *, T> = Encoded<T>
   //TODO So methods need a way to say it's from this package (location). Which by default is the Ether. location, so those are supported by default. And if it references an unsupported method, it needs to be installed on the local side.
   //TODO How is it checked that for instance a method on Player, is already supported by me, so you don't have to sent it over.
   //TODO => Can do some quick checks like are the method signatures equal etc.. If there's a change, I want to support that change.
-  def decode key: * = (global.player ?? global.instance).crypt[location] => T //TODO location might inherit the key from a parent group
+  def decode key: * = (global.entity ?? global.instance).crypt[location] => T //TODO location might inherit the key from a parent group
   //TODO The result can be an encrypted value again, so it would have to be decrypted nestedly.
 
   //TODO This .crypt value would not be accessible/visible to imported code (in the form of the decrypt func)
@@ -315,22 +316,9 @@ end
 
 
 
-// "local" means only on the local instance. (Not even local child instances)
-+def String{== "local"}
-  def as :== Entity = Entity{== global.instance}
-end
-// "private" means any instance running this player. Note that any backup server, like the central Ether server, has
-// that property. Backup servers are configured using //TODO
-+def String{== "private"}
-  def as :== Entity = Entity{== global.player || == global.instance}
-end
 
 +def String = "public" // Allow this
 +def String{== "public"}
-  def as :== Entity = Entity{true}
-end
-
-
 
 // TODO .desktop inventory.fs defined by external.
 // TODO ether.orbitmines.com
@@ -342,8 +330,6 @@ end
 //TODO A separate ether world which gives out unique user ids.
 
 // Everything is an Item, and possibly an Entity.
-
-def Visibility = InheritFromInventory | Entity
 
 //TODO You can have anything with really long values, which don't need to be loaded directly, but can be loaded partially.
 //     -> Networking code for doing this partially.

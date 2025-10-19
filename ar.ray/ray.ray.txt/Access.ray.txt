@@ -1,0 +1,89 @@
+single Access
+  READ = "read"
+  WRITE = "write"
+
+  // Whether Node{} is allowed to execute on local instance.
+  // If it has read access, it can read the function and execute it locally for them.
+  EXECUTE = "execute"
+end
+
++def Entity
+  // Default Privacy Policy:
+  // "private" is at least used for two cases:
+  //   - People who don't have access to their own local machine.
+  //   - People who want a backup of ALL their data.
+  //     - For backups, you can use "private" & "encrypted" if you prefer to lock backed-up data behind an encryption scheme
+  //       (this of course means it cannot be recovered by a central server in case of a loss of encryption keys)
+  // Note that there are exceptions to the "public" policy:
+  //   - Reading/Writing to locations which are explicitly set to something other than "public" like "default_privacy_policy" -> It's set as confidential.write.
+  //   - Reading/Writing to Player.instance.private (Whether an instance is considered a privately-hosted one)
+  //   - Reading "local"/"private" private encryption keys.
+  //   - Writing to existing "local"/"private" private&public encryption keys. (You can write to new ones though)
+  // Otherwise you can use/create policies like "private" & "managed" to indicate you only want to allow access to
+  // your own managed servers which have access to the player. Or more creative things like being close to a player in a world.
+  confidential.write default_privacy_policy
+    Access.for ACCESS = `ACCESS`: Node{} = "local"
+  end
+end
+
++def Node
+  confidential.write access
+    Access.for ACCESS = `ACCESS`: Node{} = location.parent?.access[ACCESS] ?? global.entity.default_privacy_policy[ACCESS]
+  end
+end
+
+// Confidential, means we don't want it to be public, but we defer to "default_privacy_policy" whether this should be "localhost" or "private".
+modifier confidential
+  def as :== Node{}
+    default_policy = global.entity.default_privacy_policy[this.access_fields]
+
+    // If default_policy is set to something like public, we instead do the most permissive, but private policy instead.
+    return default_policy >= "private" & "managed" ? "private" & "managed" : default_policy
+  end
+end
+// "localhost" means only on the local instance. (Not even local child instances)
+modifier localhost
+  def as :== Node{} = Node{== global.instance}
+end
+// Allow any instance defined as a parent of this instance to access the location. Usually that would the host machine,
+// but in principle this could be any instance in some hierarchy.
+modifier host
+  def as :== Node{} = Node{== (<- global.instance.hierarchy).reduce(|)}
+end
+
+// "private" means any instance running this entity/player. Note that any backup server, like the central Ether server, has that property.
+modifier private
+  def as :== Node{} = Node{== global.entity} | "localhost" // TODO How to fill this with the entity/instance (localhost too), of where it came from, because if I download this item, it's not me who has this access
+end
+// Note that public, means literally anyone with a connection to this location is allowed to access it.
+// This is for instance used for distributed databases.
+modifier public
+  def as :== Node{} = Node{true}
+end
+
+// Acts as the usual programming language private/protected keyword; It is only accessible within the defined class.
+modifier protected
+  def as :== Node{} = Node{location.parent ==.instance_of class, ==.instance_of location.parent.static}
+end
+
+class Modifier name: *
+  modifier = this
+  +def String{== name}
+    def as :== Node{} = modifier
+  end
+
+  def ()
+    // TODO
+  end
+
+  access_fields = Access.values
+
+  Access.for ACCESS = def `ACCESS` = access_fields = ACCESS
+
+  def as :== Node{}
+end
+
+def modifier
+  def `*: name` = Modifier(name)
+end
+

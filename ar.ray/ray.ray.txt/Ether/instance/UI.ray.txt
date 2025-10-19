@@ -2,7 +2,7 @@
 single UI
   single Welcome
     form
-      global.player.name: String
+      global.entity.name: String
 
   end
   single World

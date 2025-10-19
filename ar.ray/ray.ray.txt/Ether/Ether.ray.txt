@@ -1,4 +1,4 @@
-global.player: Player? = external
+global.entity: Player? = external
 global.Ether: Instance = external
 
 using .entrypoint

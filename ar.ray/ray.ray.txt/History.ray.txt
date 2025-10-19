@@ -4,6 +4,7 @@
 end
 
 class History = Ray
+  //TODO diff
 
   static Commit = static +def Vertex
     //TODO .expand Graph<Commit>.acyclic

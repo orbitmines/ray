@@ -1,11 +1,9 @@
 //TODO Define == on Entity/Instance as checking the public key associated with that entity. (What do you do at scale if this is compromised, how do you redistribute these - redistribute based on a version log of who had access before the breach or something?)
+//TODO Additionally, you dont want things like private servers being comprimised just because player's can now imitate that they should have access to 'private'. How do you account for that.
 
 def Entity
   // The known instances currently running this entity.
   def instance => Instance = location{==.instance_of Instance}
-    // Whether the instance is considered a privately-hosted one.
-    managed: boolean = false
-  end
 
   +def location
     // Indicates that the provided instance has its focus on this location.

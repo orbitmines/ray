@@ -7,6 +7,7 @@ end
 
 class Instance < Location
   //TODO A name of instance is ipv4/ipv6
+  //TODO parent (location) is 'host machine' or 'child machines'
 
   def ip => IP = location{==.instance_of IP}
 
@@ -15,6 +16,9 @@ class Instance < Location
   end
 end
 class Location = Ray //TODO Perhaps location = ray
+  // Equip .parent/.children with a directionality .hierarchy
+  parent: Node
+
   host: Instance = global
   //TODO A <.hierarchy B means A is being rendered inside B.
   // .hierarchy for .inventory, and rendering hierarchy //TODO What if has both

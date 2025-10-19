@@ -117,6 +117,7 @@ Allow returning out of a -- statement.
 
 If @ is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
 
+==.at_least (Covers at least the provided  -> >=
 ==.@ //TODO All cases are covered by both sides.
 ==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
@@ -386,6 +387,7 @@ end
 // TODO - Notes on Version Control
 // Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
 // A monkey-patched function added, is suddenly also used by the library. Notify the user it's now overriding functionality that wasnt, there before.
+// Use something l;ike Model @ remote as the thing which takes the type used for API. but still run instances locally? How? And then on a change in the API jnotify user.
 
 // TODO - Notes on Type Checking
 // If blocks like if array.length > 2 ... end, change the type of array within that block.

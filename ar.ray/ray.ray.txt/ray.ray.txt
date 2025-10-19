@@ -41,7 +41,8 @@ end
 //TODO {} is a 'single'
 //TODO Calling "()" should not call the () implementation, it's some special non-string token.
 //TODO Disallow cast of None to item, because every method is overwritten with different return types. It's cast to an Item{} with all fields set to : None
-//TODO .keys
+//TODO .keys and .keys.enumerate to enumerate possible values of possible superpositions.
+//TODO .values
 //TODO .join works for arbitrary values
 //TODO .empty = .length == 0
 //TODO [] global is special, because local children would call it if defined locally, and global.[] does not refer to the array instantiation either, because we want global[property] to be accessible.
@@ -64,6 +65,8 @@ def namespace
 end
 
 def class
+  //TODO Allow ==.instance_of class.
+
   def `name = *`(definition: (Args = *) => *)
     definer[name] = definition
     definition.name = name

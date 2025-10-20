@@ -1,5 +1,0 @@
-
-
-//TODO Reserve namespace with dots to domain names.
-//TODO Domains are the only duplicate names allowed by the central ether server, and they can be revoked.
-

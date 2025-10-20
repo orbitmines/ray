@@ -23,6 +23,12 @@ def Entity
     // Indicates that the provided instance has its focus on this location.
     primary: instance?
   end
+
+  def spawn(args: ==.instance_of ENTITY.static) = external
+
+  //TODO An entity can hoist other entities,
+  //TODO Local co-op many players (or many users on a single pc where that pc is the main entity), server running many players,
+  //TODO For local coop, the 2nd player would need to set certain things to .host to let the host know about things.
 end
 
 class Instance < Location, IP | Socket.Address //TODO | DomainName add DomainName:Port string

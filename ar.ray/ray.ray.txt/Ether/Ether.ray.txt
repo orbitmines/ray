@@ -1,5 +1,15 @@
 < Entity
 
+localhost none.write ENTITY = global
+
+// In order to only edit settings, you'd do (which would take effect on the next restart):
+//   entity @ SETTINGS -- .OFFLINE = true.
+// Or to edit both the settings and the current entity at the same time:
+//   entity & entity @ SETTINGS -- .OFFLINE = true
+localhost none.write SETTINGS = /."root.settings" //TODO Path type
+using SETTINGS
+location &= SETTINGS
+
 localhost ETHER: Entity | Instance = "ether.orbitmines.com:37839"
 ETHER = Entity(instance: ETHER) if ETHER ==.instance_of Instance
 
@@ -16,5 +26,5 @@ location &= (BROADCAST_INSTANCE ? public.read : private.read) SOCKET
 localhost OFFLINE: boolean = false
 dynamically location &= public.read ETHER.instance if !OFFLINE
 
-localhost ENTRYPOINT: String.NonEmpty = "entrypoint"
-using .[ENTRYPOINT]
+localhost none.write ENTRYPOINT = /."root.entrypoint" //TODO Path type, cast from string allowed
+using ENTRYPOINT

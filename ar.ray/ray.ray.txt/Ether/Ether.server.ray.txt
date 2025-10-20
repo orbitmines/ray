@@ -1,3 +1,0 @@
-global.Ether: Instance = external
-
-using ."entrypoint.server"

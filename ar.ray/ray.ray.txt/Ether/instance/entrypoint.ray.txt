@@ -1,3 +1,5 @@
+< Player
+
 using .UI, <TODO Version>
 
 new_player = !player

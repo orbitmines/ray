@@ -9,6 +9,10 @@
 //TODO = on variable, main object being a variable at a location
 Only added to graphs to histories
 
+// TODO If we have something like class Location = Ray, we want to also be able to say, a single location = Multiple Rays, and the variable itself holds Many of those locations @
+// TODO -> So @ maps to loop over all those rays. @@ or something should map to that specific instance's multiple rays.
+// TODO -> For most things this difference wont matter, but for things that extend Ray, this does matter.
+
 //TODO What to do with functionality like [index: 0] on IP, when it extends both a string, and a -1 <- . -> +1. Basically it has two structures defined on it.
 
 You want = to be called on object, changing the type possibly. Since it's on a variable - variable is some object. So that would mean that = without effecting the current value, would first have to copy it over to another place. (And the object is tied to a location - which is kind of nice)or you can change its location to move it
@@ -31,6 +35,12 @@ what if .inventory is changed, history is kept track off in the new location and
 what if the lvariable is used at two location, two .,inventory, but one variable.
 
 .history, .history is simply up to some entry in the path
+
+//TODO Reverse .keys and .values
+
+//TODO dynamically could see through history if something was added/removed and not need to run the whole thing again
+
+//TODO external fills things like Network.Host when spawning a child instance.
 
 //TODO Say I have defined Entity{==.instanceof Player}, how do I check it against an entity? ==.some
 
@@ -327,6 +337,8 @@ program(throw: (args: Args) => error = args; goto capture)
 // Superpositions in the conversion between Decimal <-> Binary, should be respected.
 // IP = -1 <- . -> +1, should automatically check the boundary conditions of whether +1/-1 is supported. And end it there so you don't need to "+1 if 1 <= ~!(as Binary.Positive)" TODO What happens to a subnet where this operation can't be done?
 // 'def as :== Binary.Positive = segments as Segment.Binary[]' should be automatically assigning length too because segments have length defined
+// '{==.instance_of IP}' Automatically casts to IP.
+// When N <- . -> N is evaluated in a class with properties, it equips 'parent: Node <- .hierarchy -> children: Node' as .next/.previous (soi  when it's only a type definition)
 
   def location = Location
   +def location //TODO Allow this syntax. => Should be dynamically there.

@@ -1,15 +1,58 @@
+< Entity //TODO Expect fields to be filled by external
+
 //TODO Define == on Entity/Instance as checking the public key associated with that entity. (What do you do at scale if this is compromised, how do you redistribute these - redistribute based on a version log of who had access before the breach or something?)
 //TODO Additionally, you dont want things like private servers being comprimised just because player's can now imitate that they should have access to 'private'. How do you account for that.
+//TODO Is it possible to have a different auth-key for each instance somehow?
+
++def Node
+  //TODO Location .inventory is just a location with string or other structures defined on the edge?
+  location: Location =
+
+  def @ location: Location = global[location]
+end
 
 def Entity
   // The known instances currently running this entity.
   def instance => Instance = location{==.instance_of Instance}
+
+  def `location: Location`
+    // If location is remote, go to Node.Remote
+  end
 
   +def location
     // Indicates that the provided instance has its focus on this location.
     primary: instance?
   end
 end
+
+class Instance < Location, IP | Socket.Address //TODO | DomainName add DomainName:Port string
+  //TODO this value is different depending on your location -> It's localhost, locally, but set to a different ip in the network.
+  //TODO Set this to the received IP dynamically.
+
+  //TODO public.read pub_key
+
+end
+
+class Location = Ray
+
+  // A location can be part of a hierarchy.
+  // - In the case of an instance, this could be 'parent': host machine, 'children': child instances run by localhost. (or can be defined as some other network hierarchy)
+  // - In the case of files, this could be parent and child directories.
+  // - In the case of rendering languages, whether HTML or your screen recorder, this could be child/parent windows/blocks/...
+  // - In the case of a world, if there exist (sub-)regions which act as 'more abstract' parent/'less abstract' child locations. //TODO This is the same as .expand sometimes?
+  parent: static <- .hierarchy -> children: static //TODO I want rays here on .next not nodes, how to define.
+
+  // What instance is hosting this variable
+  host: Instance = global.instance
+
+  //TODO A <.hierarchy B means A is being rendered inside B.
+  // .hierarchy for .inventory, and rendering hierarchy //TODO What if has both
+  // TODO If you do .hierarchy, its .hierarchy maps to itself (that way you can have location being .hierarchy by default
+  // .hierarchy should still be location, but just another directionality equipped.
+  //TODO Would be rendering a cursor for an IDE, which would be the location, but the top-level rendering location would be the IDE
+end
+
+// TODO .hierarchy instead of .inventory
 
 def Player < Entity
 

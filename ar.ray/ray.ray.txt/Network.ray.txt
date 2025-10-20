@@ -1,7 +1,7 @@
 namespace Network
 
-              // ETHER
-  DEFAULT_PORT = 37839
+                    // ETHER
+  DEFAULT_PORT: Port = 37839
 
   class IP < Location = -1 <- . -> +1
     static NUMBER_OF_SEGMENTS => Decimal.Positive
@@ -116,6 +116,19 @@ namespace Network
     end
   end
 
+  // Acts as a /etc/hosts
+  Hosts: { `String.NonEmpty`: IP } = {
+    confidential.write "localhost": "127.0.0.1" | "::1"
+    //TODO external could fill these from /etc/hosts
+  }
+  dynamically
+    Hosts.for host, ip
+      +def String{== host}
+        def as :== ip.static = ip
+      end
+    end
+  end
+
 end
 
 += Network
@@ -125,6 +138,10 @@ end
   def String{==.instance_of (ip: IP.String) + "/" + (prefix_length: Decimal.Positive{<= IP.NUMBER_OF_BITS}.String)}
     def as :== IP = ip as IP / prefix_length
   end
+end
+
++def String{== "localhost"}
+  def as :== IPv4 =
 end
 
 +def Node

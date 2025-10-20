@@ -26,7 +26,6 @@ class Item
   //TODO What if speculative graphs are returned to something, and it changes the result of a function, that should in turn
   //TODO (this can escalate quickly) change the effects of functions caused by it recursively, and roll them back potentially.
 
-  def visibility: Entity = inventory.previous?.value.visibility ?? "local" ;//TODO global.entity.is_private_default_visibility = "private"
 end
 
 Saving program pointer id what youd do to save a game
@@ -775,7 +774,18 @@ private class Module
   end
 end
 
-def using at: Entity? = ETHER, path: Module.Constructor
+//TODO Reserve namespace with dots to domain names.
+
+def /
+ //TODO Define a path
+end
+
+//TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@
+//TODO Using, should respect type information on fields defined after it, defaults loaded after this should not overwrite the settings, it can overwrite things like localhost if it wants to, but defaults to localhost
+//TODO Using returns a file location,
+//TODO If evaluated, it loads the file into current
+//TODO FIles should support Many
+def using at: Entity? = ETHER, path: Module.Constructor //TODO Path should be type of location.
   environment = caller
 
   def eval inventory: Inventory

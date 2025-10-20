@@ -1,4 +1,6 @@
 
+//TODO Something like .move to a field is what 'using' uses
+
 // TODO: This needs to be resolved before anything else does:
 //TODO Something like is_boundary checks whether any of the entries (Many<>) are at a boundary, but that changes behavior of a superposed abstract interpretation when it shouldn't. (It should individually check is_boundary, and superpose the results)
 

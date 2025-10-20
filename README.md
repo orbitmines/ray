@@ -38,9 +38,24 @@ This thing is, in essence, a programming language (Ray), an IDE (Ether) and a co
 
 ## Local setup
 There are several ways of using this programming language.
-- Either grab your favorite text editor and get started with [The .ray.txt Programming Language](#the-raytxt-programming-language). Install language support for [IntelliJ] [VS Code] (TODO)
 - Download our IDE: [Ether]() (TODO)
-- Or go to the [online playground]() (TODO)
+- Go to the [online playground](https://ether.orbitmines.com) (TODO)
+
+- Or download manually
+  ```shell
+  git clone git@github.com:orbitmines/ray.git
+  ```
+
+  ```shell
+  cd ray && ./install.sh
+  ```
+  
+  ```shell
+  ether
+  ```
+  
+- Using other IDEs
+    - Grab your favorite text editor and get started with [The .ray.txt Programming Language](#the-raytxt-programming-language). Install language support for [IntelliJ] [VS Code] (TODO)
 
 ---
 

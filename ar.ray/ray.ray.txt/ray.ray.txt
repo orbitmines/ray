@@ -1,5 +1,4 @@
-< Instance //TODO Expect fields to be filled by external
-instance = global = local
+global = local
 
 // Defined by context:
 //  external = { do, goto, *, Node { `*`, `*`= } } // TODO: External should nestedly check local.definer

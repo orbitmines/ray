@@ -451,10 +451,10 @@ class World < Entity
   //TODO You should have a way of saying, this is my location (so also pitch etc.) based on that what information is available about which entities (could be partial)
 
   // Child worlds, where this world is acting as a parent category
-  def #`world: this != global.Ether ? String.NonEmpty : String.NonEmpty & not global.Ether.name.ignore_case` => World?
+  def #`world: this != ETHER ? String.NonEmpty : String.NonEmpty & not ETHER.name.ignore_case` => World?
 
-  if this == global.Ether
-    def #`global.Ether.name.ignore_case` => World = global.Ether
+  if this == ETHER
+    def #`ETHER.name.ignore_case` => World = ETHER
   end
 
   def worlds = (this.#`String.NonEmpty` -> .#`String.NonEmpty`).compact.reduce(&) //TODO Should overlay Both cases of "Ether".ignore_case and not.
@@ -765,17 +765,17 @@ private class Module
   if !parent || parent..world
     def #`world: String.NonEmpty` = Module(
       ..parent = this,
-      world = (parent..world ? parent..world : global.Ether).#`world`
+      world = (parent..world ? parent..world : ETHER).#`world`
     ) //TODO Check if not None
 
     def @`player: String.NonEmpty` = Module(
       ..parent = this,
-      player = (parent..world ? parent..world : global.Ether).@`player`
+      player = (parent..world ? parent..world : ETHER).@`player`
     ) //TODO Check if not None
   end
 end
 
-def using at: Entity? = global.Ether, path: Module.Constructor
+def using at: Entity? = ETHER, path: Module.Constructor
   environment = caller
 
   def eval inventory: Inventory

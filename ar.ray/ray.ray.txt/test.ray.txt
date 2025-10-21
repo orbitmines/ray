@@ -11,6 +11,13 @@
 //TODO = on variable, main object being a variable at a location
 Only added to graphs to histories
 
+// ~~, like --, skips the () around, and applies some change but returns the original object.
+// So you dont have to write
+a = Value
+a.change
+return a
+but just a ~~ a.change ~~ a.change
+
 // TODO If we have something like class Location = Ray, we want to also be able to say, a single location = Multiple Rays, and the variable itself holds Many of those locations @
 // TODO -> So @ maps to loop over all those rays. @@ or something should map to that specific instance's multiple rays.
 // TODO -> For most things this difference wont matter, but for things that extend Ray, this does matter.
@@ -21,12 +28,19 @@ You want = to be called on object, changing the type possibly. Since it's on a v
 
 You want .bound_type on object then, but the object itself is a more specific type.
 
+//Allow type def conditionally like this
+ variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}
+
+     variant:
+            switch //TODO Allow switch to be used like this in a type definition
+
 None implements location and =
 What if an object is instantiated and used within a function/constrctor only, whats it location like, none for instance
 |-> Object.method.() with [context] accessible as the last location.
 //TODO What happens to returned variables? They have a location inside the function, then while their location isn't changed in another function, that function still lives through the variable?
 .inventory = .caller
 
+// Allow [7 | 11 | 15 | 19]  -> [7 | +4 | +4 | +4]
 
 # todo functions which calling them requires the top-level context which is calling has certain variables defined as a way to pass the variables?
 
@@ -235,6 +249,7 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 //   |-> Version control: if that method is then implemented by a library, a user should be notified the functionality changed (probably unexpectedly)
 //   |-> Ambiguity if there are multiple casts to which that method may be applied.
 // classes without parameters are now called their constructors instead of requiring a ().
+// ~= ^1,1 ambiguity with ^3 as a number or other numbers, it should prefer ^ starts_with because of ~=. There's no ambiguity if we use ^[1,1] -> It's not a numbe.r
 
 // TODO - Notes for Examples
 // Partial extends like Number.

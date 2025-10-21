@@ -21,11 +21,11 @@ class UUID = Hexadecimal.Positive{length == 32} ~~ [7 | +4 | +4 | +4].push_after
         ) = time_high_and_version: Hexadecimal.Positive{length == 4}
       ) | (
         // The timestamp is a 60-bit value (or Hexadecimal.Positive{length == 15}) (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.4)
-        // For UUID version 1, this is represented by Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals since 00:00:00.00, 15 October 1582 (the date ofGregorian reform to the Christian calendar).
         (time_high, time_mid, time_low) = time: Binary.Positive{length == 60} = (
+          // For UUID version 1, this is represented by Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals since 00:00:00.00, 15 October 1582 (the date ofGregorian reform to the Christian calendar).
           timestamp = TODO-NANOSECONDS + (TODO-NANOSECONDS "1970-01-01 00:00:00" - "1582-10-15 00:00:00") / 100 -- .floor
           // Make sure each call yields a unique value.
-          timestamp += 1 if timestamp@global && timestamp < timestamp@global
+          timestamp = timestamp@global + 1 if timestamp@global && timestamp <= timestamp@global
           timestamp@global = timestamp
         ), //TODO Compiler should be able to reverse time, if the other 3 are provided.
         version

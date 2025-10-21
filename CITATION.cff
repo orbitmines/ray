@@ -1,14 +1,14 @@
 cff-version: 1.2.0
-message: "Citation magic will become obsolete."
+message: ""
 authors:
-- family-names: "Fadi"
-  given-names: "Shawki"
+- family-names: "Shawki"
+  given-names: "Fadi"
   orcid: "https://orcid.org/0009-0009-9288-992X"
 - name: "OrbitMines"
-title: "A Universal Language"
-abstract: "One Ray to rule them all, One Ray to find them, One Ray to bring them all, and in the darkness bind them: An implementation of Rays: A Universal Language."
-version: 4.2.0
-date-released: 2024-05-31
-url: "https://orbitmines.com/papers/a-universal-language"
+title: "Ray: A Universal Language"
+abstract: "A programming language, theorem prover, version control system, database and rendering engine. And its respective IDE: The Ether."
+version: 1.0.0
+date-released: 2025-12-31
+url: "https://ether.orbitmines.com"
 repository-code: "https://github.com/orbitmines/ray"
 license: MIT

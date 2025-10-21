@@ -1,0 +1,72 @@
+//TODO If OS allows custom UUID1 generation, overwrite with external
+// A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
+class UUID = Hexadecimal.Positive{length == 32} ~~ [7 | +4 | +4 | +4].push_after("-")
+  def version = this[12] //TODO Should automatically implement version =
+
+  // Dynamically associate a UUID to a version's class
+  dynamically
+    < v1 if version == 1
+    < v3 if version == 3
+    < v4 if version == 4
+    < v5 if version == 5
+  end
+
+  static class v1 < UUID
+    = (
+        time_low: Hexadecimal.Positive{length == 8},
+        time_mid: Hexadecimal.Positive{length == 4},
+        (
+          version: Hexadecimal.Positive{length == 1},
+          time_high: Hexadecimal.Positive{length == 3}
+        ) = time_high_and_version: Hexadecimal.Positive{length == 4}
+      ) | (
+        // The timestamp is a 60-bit value (or Hexadecimal.Positive{length == 15}) (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.4)
+        // For UUID version 1, this is represented by Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals since 00:00:00.00, 15 October 1582 (the date ofGregorian reform to the Christian calendar).
+        (time_high, time_mid, time_low) = time: Binary.Positive{length == 60} = (
+          timestamp = TODO-NANOSECONDS + (TODO-NANOSECONDS "1970-01-01 00:00:00" - "1582-10-15 00:00:00") / 100 -- .floor
+          // Make sure each call yields a unique value.
+          timestamp += 1 if timestamp@global && timestamp < timestamp@global
+          timestamp@global = timestamp
+        ), //TODO Compiler should be able to reverse time, if the other 3 are provided.
+        version
+      ), //TODO How to say this is not the one used for converting from string, like a 'secondary' implementation -> Since now there's ambiguity
+      (
+        (
+          variant: ~= ^[1,1] ? Binary.Positive{length == 3} : Binary.Positive{length == 2} = [1,0],
+          clock_seq_high: Binary.Positive{length == 8 - variant.length}
+        ) = clock_seq_high_and_reserved: Hexadecimal.Positive{length == 2},
+        clock_seq_low: Hexadecimal.Positive{length == 2},
+      ) | (
+        variant,
+        (clock_seq_high, clock_seq_low) = clock_seq: Binary.Positive{length == 16 - variant.length} = Binary.Positive{length == 16 - variant.length}.random
+      ),
+      node: Hexadecimal.Positive{length == 12} = INSTANCE.mac_address
+
+    static Variant = RESERVED_NCS | RFC_4122 | RESERVED_MICROSOFT | RESERVED_FUTURE
+    +def variant
+      def as :== Variant = match
+        ^0 => Variant.RESERVED_NCS
+        1,0 => Variant.RFC_4122
+        1,1,0 => Variant.RESERVED_MICROSOFT
+        1,1,1 => Variant.RESERVED_FUTURE
+    end
+
+    dynamically assert version == 1
+  end
+  static class v3 < UUID = namespace: UUID, name: String
+    dynamically assert version == 3
+  end
+  static class v4 < UUID = secure Hexadecimal.Positive{length == 32}.random ~~ version = 4
+    dynamically assert version == 4
+  end
+  static class v5 < UUID = namespace: UUID, name: String
+    dynamically assert version == 5
+  end
+
+  static Namespace
+    DNS = UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+    URL = UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
+    OID = UUID("6ba7b812-9dad-11d1-80b4-00c04fd430c8")
+    X500 = UUID("6ba7b814-9dad-11d1-80b4-00c04fd430c8")
+  end
+end

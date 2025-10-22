@@ -78,6 +78,7 @@ modifier protected
   def as :== Node{} = Node{location.parent ==.instance_of class, ==.instance_of location.parent.static}
 end
 
+//TODO Rename to access modifier. {from some context/file window modifier}
 class Modifier name: *
   modifier = this
   +def String{== name}

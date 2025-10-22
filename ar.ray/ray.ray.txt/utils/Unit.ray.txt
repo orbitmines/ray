@@ -1,6 +1,37 @@
+//TODO Move to a geometry file?
+SI Distance "m"
+
+dynamically Bases.for Base
+
+   // Units scaled by an order of Magnitude
+   // TODO This could be rewritten into a compiler optimization when we have a Multiple in a specific base.
+
+  `Base`.Positive.static class Magnitude<exponent: Positive> = Positive
+    def as :== Positive = integer << exponent //TODO This is a decimal (`Base`) shift, when working with binary values you want to access them as binary if you want that shift.
+  end
+  `Base`.static class Magnitude<exponent: Positive> = `Base`
+     def as :== `Base` = sign, integer as Positive.Magnitude<exponent>
+  end
+   //TODO Support non-integer magnitude exponents for reals.
+  `Base`.Real.Positive.static class Magnitude<exponent: `Base`> = Positive
+    def as :== Positive
+      if exponent == 0
+        this
+      elsif exponent > 0
+        integer, fraction.0 ?? 0, ".", fraction[1..]
+      else
+        integer[..-1], ".", integer[-1] ?? 0, fraction
+      end
+    end
+  end
+  `Base`.Real.static class Magnitude<exponent: `Base`> = Real
+    def as :== Real = sign, real as Positive.Magnitude<exponent>
+  end
+end
+
 def SI
   def `Class: *` symbol, Base = Decimal
-    private multiples = {
+    private magnitudes = {
       q`symbol` = -30 // quecto-
       r`symbol` = -27 // ronto-
       y`symbol` = -24 // yocto-
@@ -27,7 +58,7 @@ def SI
       R`symbol` = 27  // ronna-
       Q`symbol` = 30  // quetta-
     }
-    private SI = multiples.keys.reduce(|)
+    private SI = magnitudes.keys.reduce(|)
 
     // Allow syntax ns/ns.Positive/ns.Real/ns.Real.Positive as a type.
     global.def `si: SI` => `Class`{.si == si}
@@ -47,10 +78,10 @@ def SI
       def `si: SI` => `Class`.Real.Positive = this, si
     end
 
-    `Class` = caller.static class `Class` = `Base`.Multiple<exponent = multiples[si]>, si = SI
-      static class Positive = `Base`.Positive.Multiple<exponent = multiples[si]>, si = SI
-      static class Real = `Base`.Real.Multiple<exponent = multiples[si]>, si = SI
-        static class Positive = `Base`.Real.Positive.Multiple<exponent = multiples[si]>, si = SI
+    `Class` = `Base`.`Class` = caller.static class `Class` = `Base`.Magnitude<exponent = magnitudes[si]>, si = SI
+      static class Positive = `Base`.Positive.Magnitude<exponent = magnitudes[si]>, si = SI
+      static class Real = `Base`.Real.Magnitude<exponent = magnitudes[si]>, si = SI
+        static class Positive = `Base`.Real.Positive.Magnitude<exponent = magnitudes[si]>, si = SI
       end
     end
   end

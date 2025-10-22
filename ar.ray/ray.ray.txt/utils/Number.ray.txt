@@ -16,7 +16,7 @@ private class Digit = String[].reduce(|)
 end
 
 // TODO: Strings as a definition depend on Number, circularity here.
-{
+Bases = {
   Binary: Digit = "0" | "1"
   Ternary: Digit = "0".."2".reduce(|)
   Quaternary: Digit = "0".."3".reduce(|)
@@ -32,7 +32,9 @@ end
   Tetradecimal: Digit = ("0".."9", ("a" | "A")..("d" | "D")).reduce(|)
   Pentadecimal: Digit = ("0".."9", ("a" | "A")..("e" | "E")).reduce(|)
   Hexadecimal: Digit = ("0".."9", ("a" | "A")..("f" | "F")).reduce(|)
-}.for Base, digit
+}
+
+dynamically Bases.for Base, digit
 
   //TODO Because String has digit as String defined, any Array of digit Strings should automatically be defined, to as String too. with .map
   +def String = `Base`.Digit
@@ -67,10 +69,6 @@ end
         //TODO Support index?
         Array{length == this}().for => callback()
       end
-
-      static class Multiple<exponent: Positive> = Positive
-        def as :== Positive = integer << exponent //TODO This is a decimal shift, when working with binary values you want to access them as binary if you want that shift.
-      end
     end
 
     static class Real = sign = "-"?, real = Real.Positive
@@ -78,34 +76,11 @@ end
 
       static class Positive = integer: `Base`.Positive, ".", fraction: `Base`.Positive.Unbounded
         static String = static as String
-
-        //TODO Support non-integer multiple exponents for reals.
-        static class Multiple<exponent: `Base`> = Positive
-          def as :== Positive
-            if exponent == 0
-              this
-            elsif exponent > 0
-              integer, fraction.0 ?? 0, ".", fraction[1..]
-            else
-              integer[..-1], ".", integer[-1] ?? 0, fraction
-            end
-          end
-        end
-      end
-
-      static class Multiple<exponent: `Base`> = Real
-        def as :== Real = sign, real as Positive.Multiple<exponent>
       end
     end
 
-    static class Multiple<exponent: Positive> = `Base`
-      def as :== `Base` = sign, integer as Positive.Multiple<exponent>
-    end
-
-    SI Distance "m" if Base == "Decimal"
   end
 end
-Distance = Decimal.Distance // re-export as Distance
 
 +def Binary.Positive
 

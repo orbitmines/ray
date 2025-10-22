@@ -1,0 +1,12 @@
+// TODO Variable years/months/date
+// TODO Variable epoch
+// TODO Variable string representation
+// TODO Variable multiple in which time sec is stored.
+// TODO What different calendars are used here?
+// TODO Variable relativistic trajectory
+
+// TODO "h" "days" "years" "months" (and some others for other time coordinate systems)
+SI Duration "s"
+
+class Time < Ordered
+end

@@ -1,0 +1,57 @@
+def SI
+  def `Class: *` symbol, Base = Decimal
+    private multiples = {
+      q`symbol` = -30 // quecto-
+      r`symbol` = -27 // ronto-
+      y`symbol` = -24 // yocto-
+      z`symbol` = -21 // zepto-
+      a`symbol` = -18 // atto-
+      f`symbol` = -15 // femto-
+      p`symbol` = -12 // pico-
+      n`symbol` = -9  // nano-
+      µ`symbol` = -6  // micro-
+      m`symbol` = -3  // milli-
+      c`symbol` = -2  // centi-
+      d`symbol` = -1  // deci-
+      `symbol` = 0    // -
+      da`symbol` = 1  // deka-
+      h`symbol` = 2   // hecto-
+      k`symbol` = 3   // kilo-
+      M`symbol` = 6   // mega-
+      G`symbol` = 9   // giga-
+      T`symbol` = 12  // tera-
+      P`symbol` = 15  // peta-
+      E`symbol` = 18  // exa-
+      Z`symbol` = 21  // zetta-
+      Y`symbol` = 24  // yotta-
+      R`symbol` = 27  // ronna-
+      Q`symbol` = 30  // quetta-
+    }
+    private SI = multiples.keys.reduce(|)
+
+    // Allow syntax ns/ns.Positive/ns.Real/ns.Real.Positive as a type.
+    global.def `si: SI` => `Class`{.si == si}
+
+    // Allows syntax 1`symbol` (1m)
+    global.def `digits: Base.Positive.String, si: SI` => `Class`.Positive = digits, si
+    // Allows syntax 1.0`symbol` (1.0m)
+    +def `Base`.Positive
+      def `fraction: Base.Positive.String, si: SI` => `Class`.Real.Positive = integer, ".", fraction, si
+
+      //TODO Should overwrite Number.def`node: not String` since it's more specific
+      // Allows syntax 1 `symbol` (1 m)
+      def `si: SI` => `Class`.Positive = this, si
+    end
+    // Allows syntax 1.0 `symbol` (1.0 m)
+    +def `Base`.Real
+      def `si: SI` => `Class`.Real.Positive = this, si
+    end
+
+    `Class` = caller.static class `Class` = `Base`.Multiple<exponent = multiples[si]>, si = SI
+      static class Positive = `Base`.Positive.Multiple<exponent = multiples[si]>, si = SI
+      static class Real = `Base`.Real.Multiple<exponent = multiples[si]>, si = SI
+        static class Positive = `Base`.Real.Positive.Multiple<exponent = multiples[si]>, si = SI
+      end
+    end
+  end
+end

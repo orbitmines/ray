@@ -1,0 +1,144 @@
+def Integer<n> = sign: "-"?, integer: Positive
+  static def Positive = Array{length == n}().last~
+end
+
+private class Digit = String[].reduce(|)
+
+  def value(digit: this = this)
+    array = this.reduce(array = [] => array.push_back(void))
+
+    this.for d
+      `d` = this{<= d}.reduce(cursor = array => cursor.next)~
+    end
+
+    return local[digit]
+  end
+end
+
+// TODO: Strings as a definition depend on Number, circularity here.
+{
+  Binary: Digit = "0" | "1"
+  Ternary: Digit = "0".."2".reduce(|)
+  Quaternary: Digit = "0".."3".reduce(|)
+  Quinary: Digit = "0".."4".reduce(|)
+  Senary: Digit = "0".."5".reduce(|)
+  Septenary: Digit = "0".."6".reduce(|)
+  Octal: Digit = "0".."7".reduce(|)
+  Nonary: Digit = "0".."8".reduce(|)
+  Decimal: Digit = "0".."9".reduce(|)
+  Undecimal: Digit = ("0".."9", ("a" | "A")).reduce(|)
+  Duodecimal: Digit = ("0".."9", ("a" | "A")..("b" | "B")).reduce(|)
+  Tridecimal: Digit = ("0".."9", ("a" | "A")..("c" | "C")).reduce(|)
+  Tetradecimal: Digit = ("0".."9", ("a" | "A")..("d" | "D")).reduce(|)
+  Pentadecimal: Digit = ("0".."9", ("a" | "A")..("e" | "E")).reduce(|)
+  Hexadecimal: Digit = ("0".."9", ("a" | "A")..("f" | "F")).reduce(|)
+}.for Base, digit
+
+  //TODO Because String has digit as String defined, any Array of digit Strings should automatically be defined, to as String too. with .map
+  +def String = `Base`.Digit
+    def as : == `Base`.Digit.value = `Base`.Digit.value(this)
+  end
+  //TODO String as Binary.Positive = "0101010" = Digit.value[] = Positive
+  // TODO: Binary.Positive as String; Automatic isomorphism
+
+  class `Base` < Number = sign: "-"?, integer: Positive
+
+    //TODO Equip a default directionality. (Line: One with forward/backward from a specific point, but it isn't necessarily selected there.)
+
+    //TODO Because sign is a String, Positive is castable to a String, `Base` is castable to a String
+    static String = static as String
+
+    static Digit = digit
+    //TODO This should not be in the constructor, but taken outside of it.
+
+
+    // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
+
+
+    // We use 'Positive' here, since a 0, in this construction can be signed. (Even though for most operations that difference won't matter)
+    static class Positive = integer = Digit.value[]{length > 0}
+
+      //TODO If extends Digit.value[], allow to cast `Base`.Positive[] to `Base`.Positive. But Decimal as Binary is different than Decimal[] as Decimal as Binary
+      static def String = Array<Digit as String>
+
+      def `fraction = Positive.String` => Real.Positive = integer, ".", fraction
+
+      def times callback: () => *
+        //TODO Support index?
+        Array{length == this}().for => callback()
+      end
+
+      static class Multiple<exponent: Positive> = Positive
+        def as :== Positive = integer << exponent //TODO This is a decimal shift, when working with binary values you want to access them as binary if you want that shift.
+      end
+    end
+
+    static class Real = sign = "-"?, real = Real.Positive
+      static String = static as String
+
+      static class Positive = integer: `Base`.Positive, ".", fraction: `Base`.Positive.Unbounded
+        static String = static as String
+
+        //TODO Support non-integer multiple exponents for reals.
+        static class Multiple<exponent: `Base`> = Positive
+          def as :== Positive
+            if exponent == 0
+              this
+            elsif exponent > 0
+              integer, fraction.0 ?? 0, ".", fraction[1..]
+            else
+              integer[..-1], ".", integer[-1] ?? 0, fraction
+            end
+          end
+        end
+      end
+
+      static class Multiple<exponent: `Base`> = Real
+        def as :== Real = sign, real as Positive.Multiple<exponent>
+      end
+    end
+
+    static class Multiple<exponent: Positive> = `Base`
+      def as :== `Base` = sign, integer as Positive.Multiple<exponent>
+    end
+
+    SI Distance "m" if Base == "Decimal"
+  end
+end
+Distance = Decimal.Distance // re-export as Distance
+
++def Binary.Positive
+
+  def ~! = this.map(!)
+  def ~`operator: boolean.Operator.Binary` b: Binary.Positive = this.reverse.zip_longest(b.reverse).map(l, r => (l ?? false)[operator](r ?? false)).reverse
+  def ~`operator: boolean.Operator.Binary` b: Binary.Positive{.length == length} = this.zip(b).map(operator) //TODO: Or can the compiler deduce the reversing stuff is not necessary?
+end
+
+def `digits: Decimal.Positive.String` => Decimal.Positive = digits
++def Decimal.Positive
+  def `fraction: Decimal.Positive.String` => Decimal.Real = integer, ".", fraction
+end
+
+def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+
+//TODO: Possibly move these primitives to specific languages, and only work with arbitrary-length in the default case.
+//TODO: -b: Something uX might only implement b: uX, casts lose information and likely need to overflow
+def u`length: Decimal.Positive.String` = Binary.Positive{.length == length}
+  // TODO Number arithmetic
+  // - overflow, what to do? mod, or>?
+end
+def i`length: Decimal.Positive.String` = Binary.Positive{.length == length} // TODO, Use Binary vs Binary.Positive
+  // TODO Number arithmetic
+end
+
+class Number < Ordered
+  def - => Number
+  def - b: Number => Number
+
+  // Allows for the syntax 1 Object
+  def `node: not String` = node{@.count == this}
+
+  // TODO Generic Number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
+  // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
+  // TODO: external defines that Number > Number is done by some other operator, not looking through successors/predecessors.
+end

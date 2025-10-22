@@ -1,0 +1,56 @@
+class boolean = false, true = Binary.Digit.value // TODO This should automatically implement "0" | "1" as boolean, through Binary.Positive. : Generalized to: Anything that is implementing Array<T>, like Positive, should also apply to just a T.
+  // TODO Verify that these are correct work for all cases.
+
+  static class Operator = Unary | Binary
+    static Unary = "!"
+    static Binary = "&&" | "||" | ("nand" | "!&") | ("nor" | "!|") | ("xor" | "x|") | ("xnor" | "x!|")
+  end
+
+  def !
+  or this !& this
+  or this !| this
+  or this x| true
+  or this x!| false
+  end
+
+  def && b: boolean
+  or !(this !& b)
+  or !(!this || !b)
+  end
+
+  def || b: boolean
+  or !(this !| b)
+  or !(!this && !b)
+  end
+
+  nand =
+    def !& b: boolean
+    or !(this & b)
+
+    // An implementation using goto"s so that a conditional goto is the only (necessary) primitive.
+    or
+      goto 2nd_check if a
+      goto 1
+     2nd_check:
+      goto 0 if b
+   1: return true
+   0: return false
+    end
+
+  nor =
+    def !| b: boolean
+    or !(this || b)
+    end
+
+  xor =
+    def x| b: boolean
+    or !(this x!| b)
+    or (this & !b) || (!this & b)
+    end
+
+  xnor =
+    def x!| b: boolean
+    or !(this x| b)
+    end
+end
+{ false, true } = boolean // Could also be 'false, true = boolean' in this case.

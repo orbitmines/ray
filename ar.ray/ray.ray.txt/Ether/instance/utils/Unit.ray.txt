@@ -1,91 +1,133 @@
 //TODO Move to a geometry file?
-SI Distance "m"
 
-class Unit
+SI_Unit m "meter"
+
+Unit "h" | "hour" "s"?
+Unit "minute" "s"?
+SI_Unit s "second"
+
+Unit ~ hour -> *60 minutes -> *60 seconds
+
+
+
+class Quantity<Base = Number> = Base, unit: Unit = Unit.None
 end
 
-dynamically Bases.for Base
+class Unit name
+  // Allow for syntax `name`
+  // Allow for 'var: Decimal.Positive, ns = 10 ns' syntax.
+  caller[name] = this if name
 
-   // Units scaled by an order of Magnitude
-   // TODO This could be rewritten into a compiler optimization when we have a Multiple in a specific base.
+  def reexport
+    caller[name] = this
+  end
 
-  `Base`.Positive.static class Magnitude<exponent: Positive> = Positive
-    def as :== Positive = integer << exponent //TODO This is a decimal (`Base`) shift, when working with binary values you want to access them as binary if you want that shift.
+  static None = Unit(global.None)
+
+  static ~ ray: Tree
+    //TODO
   end
-  `Base`.static class Magnitude<exponent: Positive> = `Base`
-     def as :== `Base` = sign, integer as Positive.Magnitude<exponent>
+
+  def `unit: Unit`
+    //TODO String units like 3h 20s
   end
-   //TODO Support non-integer magnitude exponents for reals.
-  `Base`.Real.Positive.static class Magnitude<exponent: `Base`> = Positive
-    def as :== Positive
+
+  // Allow for syntax `year as ns`
+  def as :== Quantity = 1, this
+  def as other: ==.instance_of Unit = this as Quantity as other
+
+  protected unit = this
+  // Allows syntax 1`name` (1m)
+  global.def `digits: Decimal.Positive.String, name: unit.name` => Quantity = digits, unit
+  // Allows syntax 1.0`name` (1.0m)
+  +def Decimal.Positive
+    def `fraction: Decimal.Positive.String, name: unit.name` => Quantity = integer, ".", fraction, unit
+
+    //TODO Should overwrite Number.def`node: not String` since it's more specific
+    // Allows syntax 1 `name` (1 m)
+    // Allows syntax 1.`name` (1.m)
+    def `unit | unit.name` => Quantity = this, unit
+  end
+  // Allows syntax 1.0 `name` (1.0 m)
+  // Allows syntax 1.0.`name` (1.0.m)
+  +def Decimal.Real
+    def `unit | unit.name` => Quantity = this, unit
+  end
+  
+  def convert convert: (From < Number) => To < Number, ToUnit: Unit
+    global.+def Quantity<From>{.unit == this}
+      def as :== ToUnit => Quantity<To>{unit == to} = convert(this)
+    end
+  end
+
+  def offset offset: Number, ToUnit: Unit
+    convert x: Number = x + offset, ToUnit
+  end
+
+  def multiple multiple: Number, ToUnit: Unit
+    convert x: Number = x * multiple, ToUnit
+  end
+
+  def magnitude exponent: Number, ToUnit: Unit, Base: Decimal
+    //TODO Support non-integer magnitude exponents for reals.
+
+    //TODO These should automatically implement for Decimal, and Decimal.Real
+    convert x: Decimal.Positive => Decimal.Positive, ToUnit
+      dynamically assert
+        // Positive exponents we can always shift within Decimal.Positive
+        exponent >= 0
+        // Otherwise check if we can divide by that exponent
+        | x % 10^-exponent == 0 // TODO Should only implement method if this assert passes
+
+      x << exponent //TODO This is a decimal (`Base`) shift, when working with binary values you want to access them as binary if you want that shift.
+    end
+    convert x: Decimal.Real.Positive => Decimal.Real.Positive, ToUnit
       if exponent == 0
-        this
+        x
       elsif exponent > 0
-        integer, fraction.0 ?? 0, ".", fraction[1..]
+        x.integer, x.fraction.0 ?? 0, ".", x.fraction[1..]
       else
-        integer[..-1], ".", integer[-1] ?? 0, fraction
+        x.integer[..-1], ".", x.integer[-1] ?? 0, x.fraction
       end
     end
-  end
-  `Base`.Real.static class Magnitude<exponent: `Base`> = Real
-    def as :== Real = sign, real as Positive.Magnitude<exponent>
   end
 end
+ 
 
-def SI
-  def `Class: *` symbol, Base = Decimal
-    private magnitudes = {
-      q`symbol` = -30 // quecto-
-      r`symbol` = -27 // ronto-
-      y`symbol` = -24 // yocto-
-      z`symbol` = -21 // zepto-
-      a`symbol` = -18 // atto-
-      f`symbol` = -15 // femto-
-      p`symbol` = -12 // pico-
-      n`symbol` = -9  // nano-
-      µ`symbol` = -6  // micro-
-      m`symbol` = -3  // milli-
-      c`symbol` = -2  // centi-
-      d`symbol` = -1  // deci-
-      `symbol` = 0    // -
-      da`symbol` = 1  // deka-
-      h`symbol` = 2   // hecto-
-      k`symbol` = 3   // kilo-
-      M`symbol` = 6   // mega-
-      G`symbol` = 9   // giga-
-      T`symbol` = 12  // tera-
-      P`symbol` = 15  // peta-
-      E`symbol` = 18  // exa-
-      Z`symbol` = 21  // zetta-
-      Y`symbol` = 24  // yotta-
-      R`symbol` = 27  // ronna-
-      Q`symbol` = 30  // quetta-
+def SI_Unit
+  def `symbol: *` name: *
+    private SI = {
+      -30: q`symbol` | "quecto`name`" "s"?
+      -27: r`symbol` | "ronto`name`" "s"?
+      -24: y`symbol` | "yocto`name`" "s"?
+      -21: z`symbol` | "zepto`name`" "s"?
+      -18: a`symbol` | "atto`name`" "s"?
+      -15: f`symbol` | "femto`name`" "s"?
+      -12: p`symbol` | "pico`name`" "s"?
+      -9: n`symbol` | "nano`name`" "s"?
+      -6: µ`symbol` | "micro`name`" "s"?
+      -3: m`symbol` | "milli`name`" "s"?
+      -2: c`symbol` | "centi`name`" "s"?
+      -1: d`symbol` | "deci`name`" "s"?
+      0: `symbol` | name "s"?
+      1: da`symbol` | "deka`name`" "s"?
+      2: h`symbol` | "hecto`name`" "s"?
+      3: k`symbol` | "kilo`name`" "s"?
+      6: M`symbol` | "mega`name`" "s"?
+      9: G`symbol` | "giga`name`" "s"?
+      12: T`symbol` | "tera`name`" "s"?
+      15: P`symbol` | "peta`name`" "s"?
+      18: E`symbol` | "exa`name`" "s"?
+      21: Z`symbol` | "zetta`name`" "s"?
+      24: Y`symbol` | "yotta`name`" "s"?
+      27: R`symbol` | "ronna`name`" "s"?
+      30: Q`symbol` | "quetta`name`" "s"?
     }
-    private SI = magnitudes.keys.reduce(|)
+      .map(magnitude, name => Unit(name: magnitude: magnitude))
+      .reduce(|)
 
-    // Allow syntax ns/ns.Positive/ns.Real/ns.Real.Positive as a type.
-    global.def `si: SI` => `Class`{.si == si}
 
-    // Allows syntax 1`symbol` (1m)
-    global.def `digits: Base.Positive.String, si: SI` => `Class`.Positive = digits, si
-    // Allows syntax 1.0`symbol` (1.0m)
-    +def `Base`.Positive
-      def `fraction: Base.Positive.String, si: SI` => `Class`.Real.Positive = integer, ".", fraction, si
+    SI@.for FromUnit = FromUnit.magnitude SI.magnitude - FromUnit.magnitude, SI
 
-      //TODO Should overwrite Number.def`node: not String` since it's more specific
-      // Allows syntax 1 `symbol` (1 m)
-      def `si: SI` => `Class`.Positive = this, si
-    end
-    // Allows syntax 1.0 `symbol` (1.0 m)
-    +def `Base`.Real
-      def `si: SI` => `Class`.Real.Positive = this, si
-    end
-
-    `Class` = `Base`.`Class` = caller.static class `Class` = `Base`.Magnitude<exponent = magnitudes[si]>, si = SI
-      static class Positive = `Base`.Positive.Magnitude<exponent = magnitudes[si]>, si = SI
-      static class Real = `Base`.Real.Magnitude<exponent = magnitudes[si]>, si = SI
-        static class Positive = `Base`.Real.Positive.Magnitude<exponent = magnitudes[si]>, si = SI
-      end
-    end
   end
 end

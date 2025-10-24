@@ -1,0 +1,22 @@
+// TODO Calculate days based on spin, and years based on orbit
+
+single Earth
+  Unit "year" "s"?
+  Unit "day" "s"?
+
+  //TODO How to say every 4th year is leap
+  // TODO How to say, possible a minute is 61 seconds if we have a discontinuous leap second
+  Unit ~ year -> *365 days -> *24 hours
+end
+Earth.years.reexport
+Earth.days.reexport
+
+single Mars
+  Unit years.name
+  Unit "sol" "s"?
+  `days.name` = sol
+
+  Unit ~ year -> *668.5991 sols
+  Unit ~ sol -> 1 Earth.day 39 minutes 35 seconds
+end
+Mars.sol.reexport

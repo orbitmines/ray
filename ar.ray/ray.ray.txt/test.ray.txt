@@ -377,6 +377,7 @@ end
 // Allow 'defined_segments.length (zero_compression ? <= NUMBER_OF_SEGMENTS : == NUMBER_OF_SEGMENTS)
 // Allow abstract class .string to go to all implementations of that class <.
 // 'zero_compression ? super() : compress_zeros.super()', define super for all variable instances of the same type (only in that context) : What is repeat the function, not super?
+// Allow ' + name: "quecto`name`", "s"?' as a + { name: "" }
 
 +def String = "public" // Allow this
 +def String{== "public"}

@@ -24,7 +24,9 @@ def Entity
     primary: instance?
   end
 
-  def spawn(args: ==.instance_of ENTITY.static) = external
+
+  //
+  def spawn(args: Entity) = external
 
   //TODO An entity can hoist other entities,
   //TODO Local co-op many players (or many users on a single pc where that pc is the main entity), server running many players,

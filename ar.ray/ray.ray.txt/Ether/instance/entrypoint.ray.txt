@@ -1,3 +1,10 @@
+// Set up the /instance folder.
+// By default 'root', uses the same settings as any instance spawned by it.
+// The two configurations can be split, by writing to /instance and / separately.
+IO.shadow /instance = /
+IO.shadow /instance/entrypoint = /player.entrypoint //TODO .shadow = should be overwriting by default, not &=
+IO.shadow /instance/player.entrypoint = None
+
 // Holds history of which player logged in
 localhost player: Player?
 
@@ -16,8 +23,11 @@ end
 
 uuid = UUID.v1()
 
-IO /@`uuid`/entrypoint = /player.entrypoint
+//TODO Default behavior of shadow, is if it's written to by another thing than INSTANCE, A new file is created for INSTANCE instead.
+//TODO Shadow should use the versioned file of /, and if a change is commited that should be placed there, it's also applied on the shadowed item.
+IO.shadow /.ether/@`uuid` = /instance // TODO Shadow all the files in /instance
 spawn(
   name: confidential.read write.none uuid
   IO./: host /@`uuid`
+  Entity.spawn = login //TODO
 )

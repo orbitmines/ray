@@ -6,7 +6,6 @@
 // TODO Variable relativistic trajectory
 
 // TODO "h"/"hour" "week" "days"/"day/sol X - set epoch to 0 start of that" "years" "months" "Earth.years"/"Mars.years" (and some others for other time coordinate systems)
-SI Duration "s"
 
 class Time < Ordered
 end

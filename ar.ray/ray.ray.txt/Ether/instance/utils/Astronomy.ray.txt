@@ -17,7 +17,7 @@ single Mars
   Unit "sol" "s"?
   `days.name` = sol
 
-  Unit ~ year -> *668.5991 sols
+  Unit ~ year -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step
   Unit ~ sol -> 1 Earth.day 39 minutes 35.244 seconds
 end
 Mars.sol.reexport

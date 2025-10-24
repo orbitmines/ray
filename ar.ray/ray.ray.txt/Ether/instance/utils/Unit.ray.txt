@@ -1,6 +1,9 @@
 //TODO Move to a geometry file?
 SI Distance "m"
 
+class Unit
+end
+
 dynamically Bases.for Base
 
    // Units scaled by an order of Magnitude

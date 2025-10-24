@@ -1,4 +1,5 @@
 // TODO Calculate days based on spin, and years based on orbit
+// Also https://en.wikipedia.org/wiki/Sidereal_time
 
 single Earth
   Unit "year" "s"?
@@ -17,6 +18,6 @@ single Mars
   `days.name` = sol
 
   Unit ~ year -> *668.5991 sols
-  Unit ~ sol -> 1 Earth.day 39 minutes 35 seconds
+  Unit ~ sol -> 1 Earth.day 39 minutes 35.244 seconds
 end
 Mars.sol.reexport

@@ -10,7 +10,7 @@ Unit ~ hour -> *60 minutes -> *60 seconds
 
 
 
-class Quantity<Base = Number> = quantities: (Base, unit: Unit = Unit.None)[]{length > 0}
+class Quantity<Base = Number> = quantities: (quantity: Base, unit: Unit = Unit.None)[]{length > 0}
   //TODO Implement number
 
   // Ensure that every part of a quantity like '1d 10h 10ms' is part of an equivalence class.
@@ -23,6 +23,8 @@ class Quantity<Base = Number> = quantities: (Base, unit: Unit = Unit.None)[]{len
 
   // Allow for syntax `10000000s ~~ normalizer = days hours minutes seconds`
   def as(:== Normalizer) = Unit.Normalizers.modulus(this)
+  // Allow for syntax `10000000s as days hours minutes seconds`
+  def as(normalizer :==.instance_of Quantity{quantities.every(.quantity == 1)}} = this ~~ .normalizer = normalizer
 end
 
 class Unit = name
@@ -49,6 +51,7 @@ class Unit = name
 
   def reexport
     caller[name] = this
+    defined_globally = true if caller == global
   end
 
   static None = Unit(global.None)
@@ -65,28 +68,29 @@ class Unit = name
   def as :== Quantity = 1, this
   def as other: ==.instance_of Unit = this as Quantity as other
 
-  //TODO How to prefer Martian as string for disambiguation
-  //If not define globally ignore the string names for that.
+  protected defined_globally = caller == global
+  // There must be at least one unambiguous name defined
+  dynamically assert this as String? != None
+  def as :== String? = name
+    // Stringify as an unambiguous name if not defined globally.
+    -- @.remove(Unit@{!= this}.name) if defined_globally
 
   protected unit = this
-  protected define_globally = caller == global
   // Allows syntax 1`name` (1m)
-  if define_globally
-    global.def `digits: Decimal.Positive.String, name: unit.name` => Quantity = digits, unit
+  global.def `digits: Decimal.Positive.String, name: unit as String` => Quantity = digits, unit
   // Allows syntax 1.0`name` (1.0m)
   +def Decimal.Positive
-    if define_globally
-      def `fraction: Decimal.Positive.String, name: unit.name` => Quantity = integer, ".", fraction, unit
+    def `fraction: Decimal.Positive.String, name: unit as String` => Quantity = integer, ".", fraction, unit
 
     //TODO Should overwrite Number.def`node: not String` since it's more specific
     // Allows syntax 1 `name` (1 m)
     // Allows syntax 1.`name` (1.m)
-    def `unit (define_globally ? | unit.name)` => Quantity = this, unit
+    def `unit | unit as String` => Quantity = this, unit
   end
   // Allows syntax 1.0 `name` (1.0 m)
   // Allows syntax 1.0.`name` (1.0.m)
   +def Decimal.Real
-    def `unit (define_globally ? | unit.name)` => Quantity = this, unit
+    def `unit | unit as String` => Quantity = this, unit
   end
 
   def convert convert: (From < Number) => To < Number, ToUnit: Unit

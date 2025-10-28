@@ -1,20 +1,59 @@
 // TODO Calculate days based on spin, and years based on orbit
 // Also https://en.wikipedia.org/wiki/Sidereal_time
 
-single Earth
-  Unit "year" "s"?
-  Unit "day" "s"?
+namespace Earth
+  Calendar.Gregorian.years.reexport
+  Calendar.Gregorian.months.reexport
+  Calendar.Gregorian.weeks.reexport
+  Calendar.Gregorian.days.reexport
 
-  //TODO How to say every 4th year is leap
-  // TODO How to say, possible a minute is 61 seconds if we have a discontinuous leap second
-  Unit ~ year -> *365 days -> *24 hours
+  namespace Calendar
+    namespace Gregorian
+      Unit "y" | "year" "s"?
+      Unit "M" | "month" "s"?
+      Unit "w" | "week" "s"?
+      Unit "d" | "day" "s"?
+
+      single Month @=
+        January = 31 days,
+        February = is_leap_year(YEAR: ?) ? 29 : 28 -- days,
+        March = 31 days,
+        April = 30 days,
+        May = 31 days,
+        June = 30 days,
+        July = 31 days,
+        August = 31 days,
+        September = 30 days,
+        October = 31 days,
+        November = 30 days,
+        December = 31 days
+        //TODO How to equip .next for all of these
+        //TODO .orbit by default
+         //TODO .orbit should change YEAR +1/-1
+
+      end
+
+      def is_leap_year YEAR: Decimal = YEAR % 4 == 0 && (YEAR % 100 != 0 || YEAR % 400 == 0)
+
+      Unit ~ week -> *7 days -> *24 hours
+      Unit ~ month -> x => x == 0 ? 0 days : x.sign (MONTH: Month = ?)[x > 0 ? 0..(x - 1) : x..-1].sum //TODO
+      Unit ~ year -> *12 months
+
+        //TODO How to say every 4th year is leap
+        // TODO How to say, possible a minute is 61 seconds if we have a discontinuous leap second
+
+    end
+  end
+
 end
 Earth.years.reexport
+Earth.months.reexport
+Earth.weeks.reexport
 Earth.days.reexport
 
-single Mars
+namespace Mars
   Unit years.name | "Martian `years.name`"
-  Unit days.name | "sol" "s"?
+  Unit days.name | "Martian `days.name``" | "sol" "s"?
 
   Unit ~ year -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step
   Unit ~ sol -> 1 Earth.day 39 minutes 35.244 seconds

@@ -199,6 +199,9 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 //TODO .random on Array/Graph/..
 //TODO Optional method like Entity.move on tick.
 
+// .sum = .reduce(+)
+
+// ? = CLASS@
 
 // How to populate Arrays/graphs by default
 
@@ -217,6 +220,8 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 
 //TODO def visibility: Entity = inventory.previous?.value.visibility ?? "local"
 // This loop should automatically yield to None.
+
+//TODO ? is unknown so it superposes by default.
 
 // How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local': Things like local are private - so pri. Private doesn't prevent it from being overwritten though.
 

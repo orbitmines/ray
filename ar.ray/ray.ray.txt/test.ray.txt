@@ -143,13 +143,21 @@ Allow returning out of a -- statement.
 
 If @ is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
 
+// (Base, unit: Unit = Unit.None)[] != [Base, unit: Unit = Unit.None][], one is (A, B, A, B), the other ([A, B], [A, B])
+
 ==.at_least (Covers at least the provided  -> >=
 ==.@ //TODO All cases are covered by both sides.
 ==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
 == = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
 ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
+  -> is .in(equiv_graph) where the equiv_graph is just the same structure.
+  -> Better name than syntactic?
 ==.castable_to <type>, TODO Or make {as IP} to automatically only include castable variants.
+  -> Equivalence graph, convertable to.
+==.castable_to.in(equiv_graph)
+==.equivalent = ==.castable (but default ==. is already .equivalent)
+default ==.in(x.as@ TODO Somehow expand to all possible .as@ )
 ==.in(equivalence_graph) = equivalence_graph.find(this).path_to(x) //TODO Or this & x can both be rewritten to the same thing in that equivalence graph.
     // (A->) is A.reduce(|) (includes A)
     |-> (A->)@ .intersection (B->)@ .some (* are refs to value)
@@ -214,6 +222,11 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 
 //TODO {} filter is both ways. so if .reverse is called it is filtered.
 
+//TODO dynamically should either be a quest or be lazy, with completable when resources are available.
+
+//TODO Require a binary function like x.b(y), where x and y are given like [].function (parameters)
+// ? both allowed as a?: b as a: b?, because certain types would have to be wrapped in () otherwise
+
 // .reduce(|) TODO How does it work to pass a binary operator to a reduce which has accumulator and current as the two arguments
 //   -> If default is not set for accumulator, the initial value is the first in the array.
 //   TODO But how would you?: For .reduce, require a default value for accumulator, how to indicate that?
@@ -228,9 +241,14 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 
 // <=; node > itself or node < itself, we're in a loop (or repeated value which we're forced to see as the same, or we're not comparing using the difference we have access to - this 'number'line)
 
+//TODO Yield ray methods in context of for so you can to is_last for example?
+
+//TODO Variable call by reference/value per class, and also manually possible?
+
 // == allows coercions/casts/equivalences, we want one that's also exactly equal without those?
 
 // TODO - Ambiguities
+// def a = a vs def (a = a) = a, default clashes with singleline func, same with => for function
 // var? vs var ? true : false ; how to know if we need to convert var to a boolean or pass it to option.
 //   -> Also var ? true : false , is it var.? true : false, or var.?.true.:.false
 // .extends vs a check if it does extend
@@ -319,6 +337,8 @@ program(throw: (args: Args) => error = args; goto capture)
 
 // Binary{length == 1} should be not castable, but should be boolean. or Binary.Positive[] = boolean[]
 
+// Take the comment above or besides an assert as the error message.
+
 // Automatic isomorphism example in Number as String definition. + example of how repeated Strings map to an array.
 // Show that generic type parameters are accessible in monkeypatch, even if not defined in monkeypatch
 // The only difference between a class and a normal def is that static and this are defined.
@@ -356,6 +376,13 @@ program(throw: (args: Args) => error = args; goto capture)
 // 'def as :== Binary.Positive = segments as Segment.Binary[]' should be automatically assigning length too because segments have length defined
 // '{==.instance_of IP}' Automatically casts to IP.
 // When N <- . -> N is evaluated in a class with properties, it equips 'parent: Node <- .hierarchy -> children: Node' as .next/.previous (soi  when it's only a type definition)
+// Allow 'unit (define_globally ? | unit.name)' without a :
+// 1d 10h 10ms, Should see that 1d does not define .10h so it should check them individually and check if 1d implements 10h
+// quantities ,= a, is push_back(a)
+// (Base, unit: Unit = Unit.None)[], Should implement x[0].unit, because it binds the variable to it.
+// SHould also implement x.unit, to map over x.map(A, B => B)
+// If there's a superposition of possible values, but only one fits, we dont superpose the other non-fitting ones, but just use the one that fits.
+// TODO Assert should be the same as dynamically assert in that it effects the type of a variable up to that statement.
 
   def location = Location
   +def location //TODO Allow this syntax. => Should be dynamically there.

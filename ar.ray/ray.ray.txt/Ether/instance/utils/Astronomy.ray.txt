@@ -13,7 +13,7 @@ Earth.years.reexport
 Earth.days.reexport
 
 single Mars
-  Unit years.name
+  Unit years.name | "Martian `years.name`"
   Unit days.name | "sol" "s"?
 
   Unit ~ year -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step

@@ -45,6 +45,7 @@ end
 //TODO .join works for arbitrary values
 //TODO .empty = .length == 0
 //TODO [] global is special, because local children would call it if defined locally, and global.[] does not refer to the array instantiation either, because we want global[property] to be accessible.
+//TODO .sorted, given some order.
 
 def void end
 
@@ -94,6 +95,8 @@ def single
 end
 
 class Node
+  //TODO this/static shouldnt be defined for things like functions, so Node shouldn't be class?
+
   def `*` = external
 
   extends = private def < constructors: Array<(*) => *> => constructors.for constructor
@@ -116,7 +119,21 @@ class Node
   not = def ¬ = Node{!= this} //TODO .not should be not instanceof ?, not boolean for instance.
   or = def | //TODO
   and = def & //TODO
+
+  // Attach a normalizer
+  static Normalizer = (x: static) => static
+  normalizer: Normalizer?
+  dynamically if normalizer
+    +def =(x) = super(normalizer(x))
+  dynamically on(normalizer) = this = this
 end
+
+
+  // TODO Dynamically on.
+    +def =(x)
+      super() // Trigger normalizer when it's changed.
+    end
+  end
 
 // Allow syntax 'not Node'
 def not node: * = node.not

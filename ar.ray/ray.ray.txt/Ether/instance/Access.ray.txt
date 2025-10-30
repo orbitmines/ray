@@ -66,10 +66,10 @@ end
 // Note that public, means literally anyone with a connection to this location is allowed to access it.
 // This is for instance used for distributed databases.
 modifier public
-  def as :== Node{} = Node{true}
+  def as :== Node{} = true
 end
 modifier none
-  def as :== Node{} = Node{false}
+  def as :== Node{} = false
 end
 //const = none.write //TODO Might be confusing what in its children is considered const, so perhaps slightly change this.(If child has different permission it's not really const recursively)
 

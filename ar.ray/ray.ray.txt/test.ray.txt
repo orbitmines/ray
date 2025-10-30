@@ -201,7 +201,30 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 
 // .sum = .reduce(+)
 
-// ? = CLASS@
+//TODO Use @= for enums, should castable each entry to type of static
+//It's special in that any field starts as a variable declaration if it's in the same class.
+// @= uses .OR by default
+
+// .* being object access, map of keys/values, .for being default defined on it to access *
+// KV pair with everything delegated to value, so you can do ==. (separate class like TransparentKV)
+
+//TODO The comment on the side only counts if there's a newline after the comment.
+
+// ? = CLASS@ (use bound type)
+
+// .equip_structure (as </extends on top of value, or with .value of ray as that value)
+equip_structure = ~ //TODO Or it's always defined on that object. And .value is simply the rays associated with value.
+ //TODO ray equip should overwrite the one from number on Unit. &= ~ to apply it on top or something.
+context = &
+relative_context = &&
+//TODO &VAR get var from context. (Would still work for call by ref in parameters)
+//Default of &VAR is ?
+
+// Ambiguity (-> &YEAR += 1) to mean x & YEAR, default to &YEAR and .& YEAR be a & call. No: If it's attached to &var it's context if it's separate & var, it's a call.
+
+// .orbit(YEAR -= 1 <- -> YEAR += 1) Accept a ray of what to do on the boundaries
+// TODO How to type <- -> , nothing in the middle, but XOR or both left and right var: (left: A <-)? (-> right: B)? How to XOR: assert left || right
+//TODO .orbit but keep the first/last. - this is default behavior (boundaries: Node{} = true)
 
 // How to populate Arrays/graphs by default
 

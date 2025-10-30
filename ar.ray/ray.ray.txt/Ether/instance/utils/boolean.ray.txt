@@ -52,5 +52,8 @@ class boolean = false, true = Binary.Digit.value // TODO This should automatical
     def x!| b: boolean
     or !(this x| b)
     end
+
+  // Allow casts to filters
+  def as<T>(:== T{}) = T{this}
 end
 { false, true } = boolean // Could also be 'false, true = boolean' in this case.

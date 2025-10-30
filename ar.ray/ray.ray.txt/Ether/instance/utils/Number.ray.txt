@@ -1,5 +1,5 @@
 def Integer<n> = sign: "-"?, integer: Positive
-  static def Positive = Array{length == n}().last~
+  static def Positive = Array{length == n}().last&&
 end
 
 //TODO Define .sign on all numbers, so that you can do x.sign ().sum, empty string is + so nothing gets applied since it's empty string.

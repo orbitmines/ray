@@ -1,22 +1,43 @@
 // TODO Calculate days based on spin, and years based on orbit
 // Also https://en.wikipedia.org/wiki/Sidereal_time
 
-namespace Earth
-  Calendar.Gregorian.years.reexport
-  Calendar.Gregorian.months.reexport
-  Calendar.Gregorian.weeks.reexport
-  Calendar.Gregorian.days.reexport
+class Planet
+  `years.name`: Unit
+  `days.name`: Unit
+end
 
-  namespace Calendar
-    namespace Gregorian
-      Unit "y" | "year" "s"?
-      Unit "M" | "month" "s"?
-      Unit "w" | "week" "s"?
-      Unit "d" | "day" "s"?
+namespace Earth < Planet
+  Calendars.Gregorian.years.reexport
+  Calendars.Gregorian.months.reexport
+  Calendars.Gregorian.weeks.reexport
+  Calendars.Gregorian.days.reexport
 
-      single Month @=
+  namespace Calendars
+    namespace Gregorian < Calendar
+
+      Day = Calendar.Segment ~ "d" | "day" "s"? -> *24 hours
+      Unit ~ "w" | "week" "s"? -> Weekday@.count days
+      Unit ~ "M" | "month" "s"? -> x => x == 0 ? 0 days : x.sign (&Time.MONTH: Month)[x > 0 ? 0..(x - 1) : x..-1].sum
+      Year = Calendar.Segment ~ "y" | "year" "s"? -> Month@.count months
+        static EPOCH = 1
+      end
+
+      class Weekday < Calendar.Segment @=
+        Monday,
+        Tuesday,
+        Wednesday,
+        Thursday,
+        Friday,
+        Saturday,
+        Sunday
+        -- .map(= 1 day)~.orbit
+
+        static EPOCH = Monday
+      end
+
+      class Month < Calendar.Segment @=
         January = 31 days,
-        February = is_leap_year(YEAR: ?) ? 29 : 28 -- days,
+        February = is_leap_year(&Time.YEAR: year) ? 29 : 28 -- days,
         March = 31 days,
         April = 30 days,
         May = 31 days,
@@ -27,19 +48,15 @@ namespace Earth
         October = 31 days,
         November = 30 days,
         December = 31 days
-        //TODO How to equip .next for all of these
-        //TODO .orbit by default
-         //TODO .orbit should change YEAR +1/-1
+        -- ~.orbit(&Time.YEAR -= 1 <- -> &Time.YEAR += 1)
 
+        static EPOCH = January
       end
 
       def is_leap_year YEAR: Decimal = YEAR % 4 == 0 && (YEAR % 100 != 0 || YEAR % 400 == 0)
 
-      Unit ~ week -> *7 days -> *24 hours
-      Unit ~ month -> x => x == 0 ? 0 days : x.sign (MONTH: Month = ?)[x > 0 ? 0..(x - 1) : x..-1].sum //TODO
-      Unit ~ year -> *12 months
+      //TODO Compiler should be smart enough to not actually go through each iteration, but count the years which are leap years etc. to shortcut it.
 
-        //TODO How to say every 4th year is leap
         // TODO How to say, possible a minute is 61 seconds if we have a discontinuous leap second
 
     end
@@ -50,11 +67,9 @@ Earth.years.reexport
 Earth.months.reexport
 Earth.weeks.reexport
 Earth.days.reexport
+{ Weekday, Month } = Earth.Calendars.Gregorian
 
-namespace Mars
-  Unit years.name | "Martian `years.name`"
-  Unit days.name | "Martian `days.name``" | "sol" "s"?
-
-  Unit ~ year -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step
-  Unit ~ sol -> 1 Earth.day 39 minutes 35.244 seconds
+namespace Mars < Planet
+  Unit ~ years.name | "Martian `years.name`" -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step
+  Unit ~ days.name | "Martian `days.name``" | "sol" "s"? -> 1 Earth.day 39 minutes 35.244 seconds
 end

@@ -1,12 +1,5 @@
 //TODO Move to a geometry file?
-
 SI_Unit m "meter"
-
-Unit "h" | "hour" "s"?
-Unit "minute" "s"?
-SI_Unit s "second"
-
-Unit ~ hour -> *60 minutes -> *60 seconds
 
 
 
@@ -57,6 +50,7 @@ class Unit = name
   static None = Unit(global.None)
 
   static ~ ray: Tree
+    //TODO If base is string, initialize unit.
     //TODO
   end
 

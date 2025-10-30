@@ -7,5 +7,36 @@
 
 // TODO "h"/"hour" "week" "days"/"day/sol X - set epoch to 0 start of that" "years" "months" "Earth.years"/"Mars.years" (and some others for other time coordinate systems)
 
-class Time < Ordered
+Unit ~ "h" | "hour" "s"? -> *60 minutes
+Unit ~ "minute" "s"? -> *60 seconds
+SI_Unit s "second"
+
++def Quantity
+  static Temporal = Quantity{unit == seconds}
 end
+
+class Calendar
+  static class Segment
+    static def ~(convert: base ... -> last) => Calendar.Segment
+      caller.global.Unit ~ convert //TODO Is this the right way to change caller?
+      return base.orbit
+    end
+
+    static EPOCH: (@, elapsed: Node{0 <= . < @}?)? | Number
+
+    def is_recurring = this ==.instance_of Ray && this.length@.some(== Infinity)
+
+    dynamically assert @.every(==.instance_of Quantity.Temporal)
+    //SUBSEGMENTS AS MONTHS/WEEKS
+  end
+
+  static SEGMENTS = static*{==.instance_of Segment}
+end
+
+class Time < Quantity.Temporal (calendar: Calendar) =
+  epoch: Time = 0
+
+  static def NOW: Time = //TODO
+  dynamically { YEAR = year, MONTH = month } = NOW
+end
+{ NOW } = Time

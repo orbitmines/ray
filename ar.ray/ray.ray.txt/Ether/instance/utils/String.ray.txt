@@ -10,6 +10,7 @@ class String = Unbounded{length < Infinity}
     // TODO How do other languages implement String?
 
     def ignore_case //TODO Return superposition with ignored case
+    //TODO snake_case, camelCase etc.. PascalCase
   end
 end
 class char = u32

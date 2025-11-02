@@ -7,8 +7,10 @@
 
 // TODO "h"/"hour" "week" "days"/"day/sol X - set epoch to 0 start of that" "years" "months" "Earth.years"/"Mars.years" (and some others for other time coordinate systems)
 
-Unit ~ "h" | "hour" "s"? -> *60 minutes
-Unit ~ "minute" "s"? -> *60 seconds
+Unit ~ "h" + symbol: true | "hour" ("s" + plural: true)?
+  -> *60 minutes
+Unit ~ ("m" | "min") + symbol: true | "minute" ("s" + plural: true)?
+  -> *60 seconds
 SI_Unit s "second"
 
 +def Quantity
@@ -18,8 +20,8 @@ end
 class Calendar
   static class Segment
     static def ~(convert: base ... -> last) => Calendar.Segment
-      caller.global.Unit ~ convert //TODO Is this the right way to change caller?
-      return base.orbit
+      unit = caller.global.Unit ~ convert //TODO Is this the right way to change caller?
+      return unit.orbit
     end
 
     static EPOCH: (@, elapsed: Node{0 <= . < @}?)? | Number
@@ -30,13 +32,27 @@ class Calendar
     //SUBSEGMENTS AS MONTHS/WEEKS
   end
 
-  static SEGMENTS = static*{==.instance_of Segment}
+  static segments = static*{==.instance_of Segment}
 end
 
-class Time < Quantity.Temporal (calendar: Calendar) =
-  epoch: Time = 0
+class Time < Quantity.Temporal (calendar: Calendar = Earth.Calendars.Gregorian) =
+  epoch: Time{.calendar == calendar} = 0 // Only equivalent calendars can be compared
+
+  def since_calendar_epoch => Time = (this -> .epoch if .epoch != 0).sum //TODO Summing with different epochs, should start with the first, calculate properly. Can be negatives too here.
+
+  // &Time.YEAR = .year since epoch=0, &Time.MONTH = .month since epoch=0 -> Effect + 1 month within this context
+  calendar.segments.for segment = dynamically &Time.`segment.name.snake_case.upper_case` = since_calendar_epoch.`segment.name.snake_case`
+
+  calendar.segments.for segment
+    def `segment.name.snake_case`
+
+    end
+  end
 
   static def NOW: Time = //TODO
-  dynamically { YEAR = year, MONTH = month } = NOW
+  dynamically {
+    // YEAR = year, MONTH = month
+    .calendar.segments.for segment = `segment.name.snake_case.upper_case` = `segment.name.snake_case`
+  } = NOW
 end
 { NOW } = Time

@@ -20,7 +20,7 @@ class Quantity<Base = Number> = quantities: (quantity: Base, unit: Unit = Unit.N
   def as(normalizer :==.instance_of Quantity{quantities.every(.quantity == 1)}} = this ~~ .normalizer = normalizer
 end
 
-class Unit = name
+class Unit = name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural
   static namespace Normalizers
     def modulus order: Quantity => Quantity.Normalizer = (x) => {
       result: Quantity?
@@ -41,6 +41,7 @@ class Unit = name
   // Allow for syntax `name`
   // Allow for 'var: Decimal.Positive, ns = 10 ns' syntax.
   caller[name] = this if name
+  //TODO Allow for duplicate names like 8m meaning meter and minute
 
   def reexport
     caller[name] = this
@@ -137,32 +138,33 @@ end
 
 def SI_Unit
   def `symbol: *` name: *
+    def si_name(symbol_prefix, prefix) = symbol_prefix symbol + symbol: true | prefix name ("s" + plural: true)? 
     private SI = {
-      -30: q`symbol` | "quecto`name`" "s"?
-      -27: r`symbol` | "ronto`name`" "s"?
-      -24: y`symbol` | "yocto`name`" "s"?
-      -21: z`symbol` | "zepto`name`" "s"?
-      -18: a`symbol` | "atto`name`" "s"?
-      -15: f`symbol` | "femto`name`" "s"?
-      -12: p`symbol` | "pico`name`" "s"?
-      -9: n`symbol` | "nano`name`" "s"?
-      -6: µ`symbol` | "micro`name`" "s"?
-      -3: m`symbol` | "milli`name`" "s"?
-      -2: c`symbol` | "centi`name`" "s"?
-      -1: d`symbol` | "deci`name`" "s"?
-      0: `symbol` | name "s"?
-      1: da`symbol` | "deka`name`" "s"?
-      2: h`symbol` | "hecto`name`" "s"?
-      3: k`symbol` | "kilo`name`" "s"?
-      6: M`symbol` | "mega`name`" "s"?
-      9: G`symbol` | "giga`name`" "s"?
-      12: T`symbol` | "tera`name`" "s"?
-      15: P`symbol` | "peta`name`" "s"?
-      18: E`symbol` | "exa`name`" "s"?
-      21: Z`symbol` | "zetta`name`" "s"?
-      24: Y`symbol` | "yotta`name`" "s"?
-      27: R`symbol` | "ronna`name`" "s"?
-      30: Q`symbol` | "quetta`name`" "s"?
+      -30: si_name "q", "quecto"
+      -27: si_name "r", "ronto"
+      -24: si_name "y", "yocto"
+      -21: si_name "z", "zepto"
+      -18: si_name "a", "atto"
+      -15: si_name "f", "femto"
+      -12: si_name "p", "pico"
+      -9: si_name "n", "nano"
+      -6: si_name "µ" "micro"
+      -3: si_name "m", "milli"
+      -2: si_name "c", "centi"
+      -1: si_name "d", "deci"
+      0: si_name "" ""
+      1: dsi_name "a", "deka"
+      2: si_name "h", "hecto"
+      3: si_name "k", "kilo"
+      6: si_name "M", "mega"
+      9: si_name "G", "giga"
+      12: si_name "T", "tera"
+      15: si_name "P", "peta"
+      18: si_name "E", "exa"
+      21: si_name "Z", "zetta"
+      24: si_name "Y", "yotta"
+      27: si_name "R", "ronna"
+      30: si_name "Q", "quetta"
     }
       .map(magnitude, name => Unit(name: magnitude: magnitude))
       .reduce(|)

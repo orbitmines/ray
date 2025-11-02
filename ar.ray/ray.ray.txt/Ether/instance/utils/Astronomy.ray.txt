@@ -15,10 +15,18 @@ namespace Earth < Planet
   namespace Calendars
     namespace Gregorian < Calendar
 
-      Day = Calendar.Segment ~ "d" | "day" "s"? -> *24 hours
-      Unit ~ "w" | "week" "s"? -> Weekday@.count days
-      Unit ~ "M" | "month" "s"? -> x => x == 0 ? 0 days : x.sign (&Time.MONTH: Month)[x > 0 ? 0..(x - 1) : x..-1].sum
-      Year = Calendar.Segment ~ "y" | "year" "s"? -> Month@.count months
+      Day = Calendar.Segment ~ "d" + symbol: true | "day" ("s" + plural: true)?
+        -> *24 hours
+
+        static EPOCH = 1
+      end
+      Unit ~ "w" + symbol: true | "week" ("s" + plural: true)?
+        -> *Weekday@.count days
+      Unit ~ "M" + symbol: true | "month" ("s" + plural: true)?
+        -> x => x == 0 ? 0 days : x.sign (&Time.MONTH: Month)[x > 0 ? 0..(x - 1) : x..-1].sum
+      Year = Calendar.Segment ~ "y" + symbol: true | "year" ("s" + plural: true)?
+        -> *Month@.count months
+
         static EPOCH = 1
       end
 

@@ -185,6 +185,10 @@ default ==.in(x.as@ TODO Somehow expand to all possible .as@ )
                      "(perceived) Actual execution layer"
                    VS control-flow at each layer
 end
+      //TODO How to overwrite minutes. In the editor you'd allow to overwrite some selected codeblock entirely.
+
+// TODO Namespace by default initialized the variable UTC but should allow () to call to reinitializing it 'namespace UTC Base: Calendar = Calendars.Gregorian < Base'
+//TODO Namespace should define static/this
 
 //TODO 'dynamically assert @{.primary == primary}.count == 1', should check whether any of the @ values, yields true for any of the primary values. --> So you dont need to primary@.every(x => .primary@.some(x))
 // TODO So default behavior of == is, A has any of B, replicated for every B.
@@ -204,6 +208,11 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 //TODO Use @= for enums, should castable each entry to type of static
 //It's special in that any field starts as a variable declaration if it's in the same class.
 // @= uses .OR by default
+
+//TODO If multiple edits makes it type compliant allow as if a single transaction
+
+// TODO this.quantities~{.unit operator unit} is different from this.quantities{.unit operator unit}~, one applies the structure before/after the filter.
+// Allow things like  (converted_to, if inclusive) converted_to -> : <- converted_to (, converted_to if inclusive)
 
 // .* being object access, map of keys/values, .for being default defined on it to access *
 // KV pair with everything delegated to value, so you can do ==. (separate class like TransparentKV)

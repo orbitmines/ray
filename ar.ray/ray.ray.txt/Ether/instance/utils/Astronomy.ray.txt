@@ -13,8 +13,26 @@ namespace Earth < Planet
   Calendars.Gregorian.days.reexport
 
   namespace Calendars
-    namespace Gregorian < Calendar
+    namespace UTC Base: Calendar = Calendars.Gregorian < Base
+      offset: Quantity.Temporal{-12:00 <= . <= 14:00} = 00:00
 
+      def + offset: Quantity.Temporal{00:00 <= . <= 14:00 - this.offset} = UTC(Base, offset: this.offset + offset)
+      def - offset: Quantity.Temporal{00:00 <= . <= 12:00 + this.offset} = UTC(Base, offset: this.offset - offset)
+
+      //TODO Not this, what's the best way of comparing the timezones
+      def as(to: static) => Quantity.Temporal = -(this.offset - to.offset)
+    end
+    namespace Gregorian < Julian
+      +def is_leap_year YEAR: Decimal = super() && (YEAR % 100 != 0 || YEAR % 400 == 0)
+    end
+    namespace Julian < Calendar
+
+      //TODO Units should not rerun for Gregorian/UTC .
+
+      Unit ~ ("m" | "min") + symbol: true | "minute" ("s" + plural: true)?
+        -> *60 seconds
+      Unit ~ "h" + symbol: true | "hour" ("s" + plural: true)?
+        -> *60 minutes
       Day = Calendar.Segment ~ "d" + symbol: true | "day" ("s" + plural: true)?
         -> *24 hours
 
@@ -61,7 +79,7 @@ namespace Earth < Planet
         static EPOCH = January
       end
 
-      def is_leap_year YEAR: Decimal = YEAR % 4 == 0 && (YEAR % 100 != 0 || YEAR % 400 == 0)
+      def is_leap_year YEAR: Decimal = YEAR % 4 == 0
 
       //TODO Compiler should be smart enough to not actually go through each iteration, but count the years which are leap years etc. to shortcut it.
 
@@ -75,7 +93,10 @@ Earth.years.reexport
 Earth.months.reexport
 Earth.weeks.reexport
 Earth.days.reexport
+Earth.Calendars.Gregorian.hours.reexport
+Earth.Calendars.Gregorian.minutes.reexport
 { Weekday, Month } = Earth.Calendars.Gregorian
+{ UTC } = Earth.Calendars
 
 namespace Mars < Planet
   Unit ~ years.name | "Martian `years.name`" -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step

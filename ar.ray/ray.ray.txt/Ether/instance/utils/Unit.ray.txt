@@ -2,7 +2,6 @@
 SI_Unit m "meter"
 
 
-
 class Quantity<Base = Number> = quantities: (quantity: Base, unit: Unit = Unit.None)[]{length > 0}
   //TODO Implement number
 
@@ -17,7 +16,15 @@ class Quantity<Base = Number> = quantities: (quantity: Base, unit: Unit = Unit.N
   // Allow for syntax `10000000s ~~ normalizer = days hours minutes seconds`
   def as(:== Normalizer) = Unit.Normalizers.modulus(this)
   // Allow for syntax `10000000s as days hours minutes seconds`
-  def as(normalizer :==.instance_of Quantity{quantities.every(.quantity == 1)}} = this ~~ .normalizer = normalizer
+  def as(normalizer : Quantity{quantities.every(.quantity == 1)}} = this ~~ .normalizer = normalizer
+
+  def as(: (operator: (greater_than: > | >=) | < | <=) unit: Unit) => static
+    quantities = this.quantities~{.unit operator unit}
+    converted_to = quantities.(greater_than ? last : first).unit
+    converted_quantities: Quantity = greater_than ? converted_to -> : <- converted_to
+
+    quantities ~~ .(greater_than ? last : first) += converted_quantities as converted_to
+  end
 end
 
 class Unit = name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural
@@ -138,7 +145,7 @@ end
 
 def SI_Unit
   def `symbol: *` name: *
-    def si_name(symbol_prefix, prefix) = symbol_prefix symbol + symbol: true | prefix name ("s" + plural: true)? 
+    def si_name(symbol_prefix, prefix) = symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
     private SI = {
       -30: si_name "q", "quecto"
       -27: si_name "r", "ronto"

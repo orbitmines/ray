@@ -7,14 +7,23 @@
 
 // TODO "h"/"hour" "week" "days"/"day/sol X - set epoch to 0 start of that" "years" "months" "Earth.years"/"Mars.years" (and some others for other time coordinate systems)
 
-Unit ~ "h" + symbol: true | "hour" ("s" + plural: true)?
-  -> *60 minutes
-Unit ~ ("m" | "min") + symbol: true | "minute" ("s" + plural: true)?
-  -> *60 seconds
 SI_Unit s "second"
 
++def Unit
+  static Temporal = seconds
+end
 +def Quantity
-  static Temporal = Quantity{unit == seconds}
+  static Temporal = Quantity{unit == Unit.Temporal}
+end
+
++def Decimal.Positive
+  //TODO Should overwrite for this case. How to indicate?
+  // Allow '12:00' syntax.
+  def : mm: Decimal.Positive = this hours mm minutes
+end
++def `(* hours)? * minutes`
+  // Allow '12:00:00' syntax.
+  def : ss: Decimal.Positive = this ss seconds
 end
 
 class Calendar
@@ -24,7 +33,7 @@ class Calendar
       return unit.orbit
     end
 
-    static EPOCH: (@, elapsed: Node{0 <= . < @}?)? | Number
+    static EPOCH: (period: @, elapsed: Node{0 <= . < period}?)? | Number = 0
 
     def is_recurring = this ==.instance_of Ray && this.length@.some(== Infinity)
 
@@ -35,10 +44,12 @@ class Calendar
   static segments = static*{==.instance_of Segment}
 end
 
-class Time < Quantity.Temporal (calendar: Calendar = Earth.Calendars.Gregorian) =
+class Time < Quantity.Temporal (calendar: Calendar = UTC) =
   epoch: Time{.calendar == calendar} = 0 // Only equivalent calendars can be compared
 
   def since_calendar_epoch => Time = (this -> .epoch if .epoch != 0).sum //TODO Summing with different epochs, should start with the first, calculate properly. Can be negatives too here.
+
+  def as(calendar: Calendar) => Time(calendar, epoch: epoch as calendar if epoch != 0) = this as <= Unit.Temporal
 
   // &Time.YEAR = .year since epoch=0, &Time.MONTH = .month since epoch=0 -> Effect + 1 month within this context
   calendar.segments.for segment = dynamically &Time.`segment.name.snake_case.upper_case` = since_calendar_epoch.`segment.name.snake_case`

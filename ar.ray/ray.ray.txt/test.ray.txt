@@ -154,7 +154,7 @@ for partial match ~= use regex ^/$ for end beginnging. Are functions which creat
 Allow multiline '--'
 Allow returning out of a -- statement.
 
-.recur is repeat the same method but for another instance.
+recur(instance) is repeat the same method but for another instance.
 
 If @ is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
 

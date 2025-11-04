@@ -34,7 +34,7 @@ namespace Network
       if prefix_length != NUMBER_OF_BITS
         binary_form = @ as Binary.Positive
         binary_form[prefix_length..] = 0
-        return binary_form as static -- .recur, "/", prefix_length
+        return recur(binary_form as static), "/", prefix_length
       end
 
       sub

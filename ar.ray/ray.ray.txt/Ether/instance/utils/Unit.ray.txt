@@ -1,4 +1,5 @@
 //TODO Move to a geometry file?
+//TODO support other scientific units
 SI_Unit m "meter"
 
 

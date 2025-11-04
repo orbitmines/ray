@@ -91,6 +91,8 @@ end
 { NOW } = Time
 
 //TODO Make sure superpositions are working for weeks and times
+//TODO Different format orders like YYYY- etc.. Www
+//TODO Extend ISO_8601 With additional things like name of timezone etc... what other extensions?
 class ISO_8601 < Time{calendar ==.instance_of UTC.static}
   = (
     date: (

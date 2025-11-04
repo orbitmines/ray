@@ -19,11 +19,15 @@ namespace Earth < Planet
       def + offset: Quantity.Temporal{00:00 <= . <= 14:00 - this.offset} = UTC(Base, offset: this.offset + offset)
       def - offset: Quantity.Temporal{00:00 <= . <= 12:00 + this.offset} = UTC(Base, offset: this.offset - offset)
 
-      //TODO Not this, what's the best way of comparing the timezones
-      def as(to: static) => Quantity.Temporal = -(this.offset - to.offset)
+      //static.@ = UTC(Base, offset: offset.type) //TODO This should be the default.
+
+      //TODO Make sure this conversion works for leapseconds
+      equivalence Time(static.@) -> - (.offset - (x: Time(static.@)).offset) ~~ .calendar = x.calendar
     end
     namespace Gregorian < Julian
       +def is_leap_year YEAR: Decimal = super() && (YEAR % 100 != 0 || YEAR % 400 == 0)
+
+      equivalence Time(Julian) = "1582-10-05" -> Time(Gregorian) = "1582-10-15"
     end
     namespace Julian < Calendar
 
@@ -96,7 +100,7 @@ Earth.days.reexport
 Earth.Calendars.Gregorian.hours.reexport
 Earth.Calendars.Gregorian.minutes.reexport
 { Weekday, Month } = Earth.Calendars.Gregorian
-{ UTC } = Earth.Calendars
++= Earth.Calendars
 
 namespace Mars < Planet
   Unit ~ years.name | "Martian `years.name`" -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step

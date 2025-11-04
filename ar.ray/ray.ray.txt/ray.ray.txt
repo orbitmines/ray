@@ -129,6 +129,11 @@ class Node
   dynamically on(normalizer) = this = this
 end
 
+def equivalence (from: * < class) -> (to: *)
+  +def from.static{== from} //TODO Support many to*s //What if from is type (how to distinguish?) then we'd want ==.instance_of, is_constructor defined on class/namespace with parameters?
+    def as(:== to.type) = to //TODO .type needs to be there
+  end
+end
 
   // TODO Dynamically on.
     +def =(x)

@@ -121,13 +121,7 @@ namespace Network
     confidential.write "localhost": "127.0.0.1" | "::1"
     //TODO external could fill these from /etc/hosts
   }
-  dynamically
-    Hosts.for host, ip
-      +def String{== host}
-        def as :== ip.static = ip
-      end
-    end
-  end
+  dynamically Hosts.for host, ip => equivalence host -> ip
 
 end
 
@@ -138,10 +132,6 @@ end
   def String{==.instance_of (ip: IP.String) + "/" + (prefix_length: Decimal.Positive{<= IP.NUMBER_OF_BITS}.String)}
     def as :== IP = ip as IP / prefix_length
   end
-end
-
-+def String{== "localhost"}
-  def as :== IPv4 =
 end
 
 +def Node

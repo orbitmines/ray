@@ -42,14 +42,36 @@ class Calendar
   end
 
   static segments = static*{==.instance_of Segment}
+  protected static TimeDefinition = Time{(-> .epoch).every(.calendar == calendar)}
+  static def equivalence (from: TimeDefinition) -> (to: TimeDefinition{calendar == this})
+    within_same_calendar_system = from.calendar.static == to.calendar.static // This allows things like UTC which are only offset differences.
+
+    +def Time{calendar == from.calendar} //TODO How do you automatically reverse this?
+      def as(:== to.calendar)
+        if epoch != 0
+          // Keep epoch-structure. So '25 Gregorian years' from '2001-01-01 Gregorian' is translated into 'X Julian years' from 'X Julian'.
+          Time(to.calendar, epoch: epoch as to.calendar) = this (as <= Unit.Temporal if !within_same_calendar_system)
+        else
+          Time(to.calendar) = to + (this - from) (as <= Unit.Temporal if !within_same_calendar_system)
+        end
+      end
+    end
+  end
 end
 
 class Time < Quantity.Temporal (calendar: Calendar = UTC) =
-  epoch: Time{.calendar == calendar} = 0 // Only equivalent calendars can be compared
+  epoch: Time{== calendar} = 0 // Only equivalent calendars can be compared
+    // :Time = "2025-01-01", epoch: "2000-01-01" -> = 25.years
+    +def = x
+      this -= x
+      super(x)
+    end
+  end
+  dynamically assert (this -> .epoch).length != Infinite //TODO Could put this in a keyword finite-self-ref or something
 
-  def since_calendar_epoch => Time = (this -> .epoch if .epoch != 0).sum //TODO Summing with different epochs, should start with the first, calculate properly. Can be negatives too here.
+  def since_calendar_epoch => Time = (this -> .epoch as calendar if .epoch != 0).sum //TODO Summing with different epochs, should start with the first, calculate properly. Can be negatives too here.
 
-  def as(calendar: Calendar) => Time(calendar, epoch: epoch as calendar if epoch != 0) = this as <= Unit.Temporal
+  def as(:== calendar) => this
 
   // &Time.YEAR = .year since epoch=0, &Time.MONTH = .month since epoch=0 -> Effect + 1 month within this context
   calendar.segments.for segment = dynamically &Time.`segment.name.snake_case.upper_case` = since_calendar_epoch.`segment.name.snake_case`

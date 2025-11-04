@@ -1,5 +1,11 @@
+//TODO Support more precise measurements of time.
 // TODO Calculate days based on spin, and years based on orbit
-// Also https://en.wikipedia.org/wiki/Sidereal_time
+// https://en.wikipedia.org/wiki/Sidereal_time
+// https://en.wikipedia.org/wiki/Universal_Time#Versions
+// https://en.wikipedia.org/wiki/Barycentric_Coordinate_Time / https://en.wikipedia.org/wiki/Barycentric_Dynamical_Time
+// https://en.wikipedia.org/wiki/Geocentric_Coordinate_Time
+// https://en.wikipedia.org/wiki/Terrestrial_Time
+// https://en.wikipedia.org/wiki/International_Atomic_Time
 
 class Planet
   `years.name`: Unit
@@ -13,7 +19,16 @@ namespace Earth < Planet
   Calendars.Gregorian.days.reexport
 
   namespace Calendars
-    namespace UTC Base: Calendar = Calendars.Gregorian < Base
+    //TODO Add other calendars:
+    // https://en.wikipedia.org/wiki/Islamic_calendar
+    // https://en.wikipedia.org/wiki/Hebrew_calendar
+    // https://en.wikipedia.org/wiki/Coptic_calendar
+    // https://en.wikipedia.org/wiki/Solar_Hijri_calendar
+    // https://en.wikipedia.org/wiki/Bengali_calendar
+    // What else?
+    //TODO Are there any martian calendars yet?
+
+    namespace UTC Base: Calendar = Calendars.Gregorian, leap_seconds: boolean = false < Base
       offset: Quantity.Temporal{-12:00 <= . <= 14:00} = 00:00
 
       def + offset: Quantity.Temporal{00:00 <= . <= 14:00 - this.offset} = UTC(Base, offset: this.offset + offset)
@@ -21,9 +36,13 @@ namespace Earth < Planet
 
       //static.@ = UTC(Base, offset: offset.type) //TODO This should be the default.
 
+      //TODO Support leap_seconds = true from tzdata
+
       //TODO Make sure this conversion works for leapseconds
       equivalence Time(static.@) -> - (.offset - (x: Time(static.@)).offset) ~~ .calendar = x.calendar
     end
+    GMT = UTC{leap_seconds == false}
+
     namespace Gregorian < Julian
       +def is_leap_year YEAR: Decimal = super() && (YEAR % 100 != 0 || YEAR % 400 == 0)
 
@@ -34,11 +53,11 @@ namespace Earth < Planet
       //TODO Units should not rerun for Gregorian/UTC .
 
       Unit ~ ("m" | "min") + symbol: true | "minute" ("s" + plural: true)?
-        -> *60 seconds
+        -> *(SECONDS_IN_MINUTE: 60) seconds //TODO UTC leapseconds should overwrite this
       Unit ~ "h" + symbol: true | "hour" ("s" + plural: true)?
-        -> *60 minutes
+        -> *(MINUTES_IN_HOUR: 60) minutes
       Day = Calendar.Segment ~ "d" + symbol: true | "day" ("s" + plural: true)?
-        -> *24 hours
+        -> *(HOURS_IN_DAY: 24) hours
 
         static EPOCH = 1
       end

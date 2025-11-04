@@ -1,5 +1,18 @@
 pwd=$PWD
 
+# TODO Use the basis for the OM script, or wait till we write this in .ray.txt
+
+set -e
+
+DEPENDENCIES_DIR="./ar.ray/ray.ray.txt/Ether/instance/dependencies"
+
+TZDATA_TAR=".orbitmines/external/data.iana.org/time-zones/tzdata-latest.tar.gz"
+TZDATA_DIR="$DEPENDENCIES_DIR/tzdata"
+mkdir -p "$(dirname "$TZDATA_TAR")"
+mkdir -p $TZDATA_DIR
+curl -L https://data.iana.org/time-zones/tzdata-latest.tar.gz -o $TZDATA_TAR
+tar -xzf $TZDATA_TAR -C $TZDATA_DIR
+
 function clone() {
   if [ -d "$2" ]; then
     cd $2 && git pull
@@ -41,6 +54,11 @@ cp -r ".orbitmines/external/github.com/googlefonts/noto-emoji/fonts/NotoColorEmo
 # TODO: Where's the emoji monochrome? Can manually download from here but there's no link/github repo. https://fonts.google.com/noto/specimen/Noto+Emoji
 #mkdir -p "$FONT_DIR/NotoEmoji/"
 
+
+
+# Add all in-repository files
+git add "$DEPENDENCIES_DIR/"
+git add "$FONT_DIR/"
 
 
 # TODO Models

@@ -134,6 +134,21 @@ Because a variable is linked to a location, that location defined additional typ
 ~= is match, as in Partial equals
 for partial match ~= use regex ^/$ for end beginnging. Are functions which create initial/terminals at the beginning of some structure./
 
+// the < should indicate we're copying the since, so the return should be the same as epoch.
+  def since < epoch
+    +def = x
+      epoch = x
+      this -= x
+    end
+  end
+
+// Ambiguity the - here could be saying result is -result, or we need to '. - result', again like & space here means the second, without the space its -result
+      equivalence Time(static.@) -> -(.offset - static.@.offset)
+
+//Todo < should effect static so that A < C, A < D are not the same static.
+
+// STATIC IN INHERITANCE OF A NAMESPACE IS THAT namespace?
+
 '-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
 '--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
 Allow multiline '--'
@@ -150,7 +165,8 @@ If @ is used in something like as:== string, it should overwrite default behavio
 ==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
 == = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
-==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
+
+==.exactly ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
   -> is .in(equiv_graph) where the equiv_graph is just the same structure.
   -> Better name than syntactic?
 ==.castable_to <type>, TODO Or make {as IP} to automatically only include castable variants.

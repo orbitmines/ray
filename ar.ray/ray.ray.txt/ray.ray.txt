@@ -47,6 +47,7 @@ end
 //TODO [] global is special, because local children would call it if defined locally, and global.[] does not refer to the array instantiation either, because we want global[property] to be accessible.
 //TODO .sorted, given some order.
 //TODO Is there even a difference between single and namespace?
+//TODO IO =.shadow = IO %=
 
 def void end
 

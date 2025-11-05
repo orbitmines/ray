@@ -1,0 +1,2 @@
+// Reserved for future use
+return if OS.name != "Ether"

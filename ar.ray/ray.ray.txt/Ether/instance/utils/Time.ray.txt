@@ -82,6 +82,8 @@ class Time < Quantity.Temporal (calendar: Calendar = UTC) //TODO ? / Calendar@ s
     def `segment.name.snake_case` = segment.is_recurring ? recur(epoch) : //TODO
   end
 
+  //TODO Time syncing with servers
+  //TODO Support ns if desired, so now as ns might call some different routine than just getting the date today.
   static def NOW: Time = //TODO
   dynamically {
     // YEAR = year, MONTH = month

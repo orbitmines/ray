@@ -2,7 +2,7 @@
 def UPDATE
   // TODO How to signal possible Merge conflicts
   //TODO THe setting =, should use 'this is where I am now', to only download the changes it needs.
-  IO /`path` = ETHER@ETHER/instance/`path: *`
+  IO / = ETHER@ETHER/instance
 
   // TODO How to reload files. Reload everything in memory if possible (needs to use new versions), what if there's a breaking change?
   // TODO -> Objects need a way to handle the on change of the object itself. Apply diffs like a field is renamed, but should keep same functionality etc.

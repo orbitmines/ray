@@ -52,7 +52,10 @@ end
 // Allow any instance defined as a parent of this instance to access the location. Usually that would the host machine,
 // but in principle this could be any instance in some hierarchy.
 modifier host
-  def as :== Node{} = Node{== (<- ENTITY.instance{== "localhost"}.hierarchy).reduce(|)}
+  def as :== Node{} = Node{== (<- INSTANCE.hierarchy).reduce(|)}
+end
+modifier children
+  def as :== Node{} = Node{== (INSTANCE.hierarchy ->).reduce(|)}
 end
 
 // "private" means any instance running this entity/player. Note that any backup server, like the central Ether server, has that property.

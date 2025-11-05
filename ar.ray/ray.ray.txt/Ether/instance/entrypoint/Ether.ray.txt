@@ -6,8 +6,7 @@ localhost none.write ENTITY = global
 //   entity @ SETTINGS -- .OFFLINE = true.
 // Or to edit both the settings and the current entity at the same time:
 //   entity & entity @ SETTINGS -- .OFFLINE = true
-localhost none.write SETTINGS = /settings //TODO Path type
-IO.eval SETTINGS
+localhost none.write SETTINGS = IO /settings //TODO Path type
 location &= SETTINGS
 
 localhost ETHER: Entity | Instance = "ether.orbitmines.com:37839"
@@ -26,5 +25,5 @@ location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
 localhost OFFLINE: boolean = false
 dynamically location &= public.read ETHER.instance if !OFFLINE
 
-localhost none.write ENTRYPOINT = /entrypoint //TODO Path type, cast from string allowed
+localhost none.write ENTRYPOINT = /entrypoint/entrypoint //TODO Path type, cast from string allowed
 IO.eval ENTRYPOINT

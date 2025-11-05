@@ -1,0 +1,6 @@
+OperatingSystem = namespace OS
+  = Location // OS has structured information on host/child OS's
+
+  name = external // Expect OS.name to be filled
+
+end

@@ -23,7 +23,7 @@ class UUID = Hexadecimal.Positive{length == 32} ~~ [7 | +4 | +4 | +4].push_after
         // The timestamp is a 60-bit value (or Hexadecimal.Positive{length == 15}) (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.4)
         (time_high, time_mid, time_low) = time: Binary.Positive{length == 60} = (
           // For UUID version 1, this is represented by Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals since 00:00:00.00, 15 October 1582 (the date of Gregorian reform to the Christian calendar).
-          timestamp = TODO-NANOSECONDS + (TODO-NANOSECONDS "1970-01-01 00:00:00" ns - "1582-10-15 00:00:00" ns) / 100 -- .floor
+          timestamp = Time.NOW(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor
           // Make sure each call yields a unique value.
           timestamp = timestamp@global + 1 if timestamp <= timestamp@global
           timestamp@global = timestamp
@@ -53,13 +53,13 @@ class UUID = Hexadecimal.Positive{length == 32} ~~ [7 | +4 | +4 | +4].push_after
 
     dynamically assert version == 1
   end
-  static class v3 < UUID = namespace: UUID, name: String
+  static class v3 < UUID = namespace: UUID, name: String //TODO
     dynamically assert version == 3
   end
-  static class v4 < UUID = secure Hexadecimal.Positive{length == 32}.random ~~ version = 4
+  static class v4 < UUID = secure Hexadecimal.Positive{length == 32}.random ~~ version = 4 //TODO Compiler should know it only needs to generate length == 31 here
     dynamically assert version == 4
   end
-  static class v5 < UUID = namespace: UUID, name: String
+  static class v5 < UUID = namespace: UUID, name: String //TODO
     dynamically assert version == 5
   end
 

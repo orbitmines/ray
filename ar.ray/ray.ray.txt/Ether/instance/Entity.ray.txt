@@ -25,7 +25,13 @@ def Entity
   end
 
 
-  //
+  //TODO If the return value is used, it waits (as a quest) on a response.
+  //TODO With a logout delete_all, also schedule a notification that 'next x days' will delete your account from the central server. with an option to cancel (extra check somewhere to secure against suddenly changing time)
+  //TODO == OR >=, or rather ~= (any part says delete_all) FUNC EQUIV ON DELETE_ALL.
+  //TODO Immediately discard private keys, keep the rest of the data as a quest to delete.
+  def logout(logout_instruction: () => *)
+  end
+
   def spawn(args: Entity) = external
 
   //TODO An entity can hoist other entities,

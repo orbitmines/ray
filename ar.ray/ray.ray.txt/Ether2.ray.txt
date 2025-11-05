@@ -533,6 +533,8 @@ def Quest
 
   //TODO Which classes of quests can be made?
 
+  // TODO Conditions which need to be met before the quest can be completed.
+
   // Quest rating
   // - Difficulty rating -> Needs some idea of relative difficulty for the Entity
   //   - Difficulty also has time information in certain cases; how long does it take.

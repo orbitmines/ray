@@ -9,6 +9,8 @@ IO /instance/entrypoint/entrypoint.`*` %= None
 //TODO Also allow many simultaneous servers running besides the player.
 //TODO Allow players who initially spawned the NPC to configure who has access.
 
+//TODO Get /instance configuration from the player who is spawning the entity.
+
 // Holds history of which entities logged in
 localhost npcs: NPC?
 localhost player: Player?

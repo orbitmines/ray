@@ -81,12 +81,12 @@ dynamically Bases.for Base, digit
       static class Positive = integer: `Base`.Positive, ".", fraction: `Base`.Positive.Unbounded
         static String = static as String
 
-        static Rational = Positive{
+        static Rational = Positive{fraction ==.instance_of (
           // Finite
-          fraction ==.instance_of `Base`.Positive
+          `Base`.Positive
           // Or repeating
-          || fraction ==.instance_of `Base`.Positive[]{length == Infinite}
-        }
+          | `Base`.Positive[]{length == Infinite}
+        )}
         static Irrational = not Rational //TODO Allow this syntax
       end
     end
@@ -128,4 +128,18 @@ class Number < Ordered
   // TODO Generic Number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
   // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
   // TODO: external defines that Number > Number is done by some other operator, not looking through successors/predecessors.
+end
+
+{
+  (Σ | ∑): sum -> +,
+  ∏: product -> *
+}.for symbol, method -> operation
+  Applicable = Iterable<T: {`operation`(:T) => T}> //TODO A variable like this shouldn't be loaded into local, loop-specific var Howto?
+  +def Applicable
+    def `method` = reduce(operation)
+  end
+  namespace `symbol`
+    // Allow syntax ∑ [1, 2, 3]
+    def `iterable: Applicable` = iterable.`method`
+  end
 end

@@ -339,7 +339,7 @@ Function = +def Node{(Args: *) => Return: *}
 end
 
 // Anything called on Option is automatically equivalent to 'variable?.'
-def Option<T> = Some(value: T) | None
+Option<T> = Some(value: T) | None
 { Some, None } = Option
 +def Some
   def `* = property`
@@ -354,12 +354,8 @@ end
   def `*` = this
 end
 
-def Optional<T>
-  def `*: TODO Defined on T` => Option<TODO T[property] type>
-end
-def Required<T>
-  //TODO Strip option from T.
-end
+def Optional<T> = { T*.for `key`: value? }
+def Required<T> = { T*.for `key`: value ==.instance_of Option<V> ? V : value }
 def Query<T>
   //TODO Set each property to the base class without defaults defined on T.
 end

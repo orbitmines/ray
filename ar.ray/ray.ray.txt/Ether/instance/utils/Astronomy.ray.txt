@@ -71,7 +71,7 @@ namespace Earth < Planet
         static EPOCH = 1
       end
 
-      class Weekday < Calendar.Segment @=
+      class Weekday < Calendar.Segment =
         Monday,
         Tuesday,
         Wednesday,
@@ -80,11 +80,12 @@ namespace Earth < Planet
         Saturday,
         Sunday
         -- .map(= 1 day)~.orbit
+        -- .reduce(|)
 
         static EPOCH = Monday
       end
 
-      class Month < Calendar.Segment @=
+      class Month < Calendar.Segment =
         January = 31 days,
         February = is_leap_year(&Time.YEAR: year) ? 29 : 28 -- days,
         March = 31 days,
@@ -98,6 +99,7 @@ namespace Earth < Planet
         November = 30 days,
         December = 31 days
         -- ~.orbit(&Time.YEAR -= 1 <- -> &Time.YEAR += 1)
+        -- .reduce(|)
 
         static EPOCH = January
       end

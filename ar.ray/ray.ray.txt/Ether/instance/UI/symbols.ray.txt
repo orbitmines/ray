@@ -1,0 +1,5 @@
+//TODO Support latex-like support, more extensive than vscode but where does it define its setup?
+// TODO VS-Default is?
+// https://github.com/mathjax/MathJax-src/blob/master/ts/input/tex/base/BaseMappings.ts
+// https://gist.github.com/jaantollander/b49132a36b035cdfe05345dd0c7edf0f
+// https://github.com/YellPika/vscode-latex-input/blob/master/default-mappings.json

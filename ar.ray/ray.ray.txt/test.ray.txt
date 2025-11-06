@@ -165,8 +165,12 @@ If @ is used in something like as:== string, it should overwrite default behavio
 ==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
 == = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
+==.in(equiv_graph).instance_of
+//TODO Also allow to fill equiv_graphs in context variables?
 
-==.exactly ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
+//TODO Difference between with location vs without location ==, ===, and?
+===.instance_of different than ==.instance_of;
+ ==.exactly ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
   -> is .in(equiv_graph) where the equiv_graph is just the same structure.
   -> Better name than syntactic?
 ==.castable_to <type>, TODO Or make {as IP} to automatically only include castable variants.
@@ -219,7 +223,7 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 //TODO .random on Array/Graph/..
 //TODO Optional method like Entity.move on tick.
 
-// .sum = .reduce(+)
+Node + +(var) => R //Add method to it
 
 //TODO Use @= for enums, should castable each entry to type of static
 //It's special in that any field starts as a variable declaration if it's in the same class.
@@ -229,6 +233,8 @@ instance_of which forces non-superposition; This is probably not supported: Alwa
 
 // TODO this.quantities~{.unit operator unit} is different from this.quantities{.unit operator unit}~, one applies the structure before/after the filter.
 // Allow things like  (converted_to, if inclusive) converted_to -> : <- converted_to (, converted_to if inclusive)
+
+// Allow 'Option<T> = ' so variables can have the <> defined too.
 
 // .* being object access, map of keys/values, .for being default defined on it to access *
 // KV pair with everything delegated to value, so you can do ==. (separate class like TransparentKV)

@@ -87,7 +87,7 @@ dynamically Bases.for Base, digit
           // Or repeating
           || fraction ==.instance_of `Base`.Positive[]{length == Infinite}
         }
-        static Irrational = Positive{!Rational} //TODO Allow this syntax
+        static Irrational = not Rational //TODO Allow this syntax
       end
     end
 

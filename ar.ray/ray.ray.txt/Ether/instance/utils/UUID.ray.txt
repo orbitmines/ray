@@ -26,7 +26,7 @@ class UUID = Hexadecimal.Positive{length == 32} ~~ [7 | +4 | +4 | +4].push_after
           timestamp = Time.NOW(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor
           // Make sure each call yields a unique value.
           timestamp = timestamp@global + 1 if timestamp <= timestamp@global
-          timestamp@global = timestamp
+          timestamp@global = timestamp //TODO What to do if it's larger than a 60-bit integer
         ), //TODO Compiler should be able to reverse time, if the other 3 are provided.
         version
       ), //TODO How to say this is not the one used for converting from string, like a 'secondary' implementation -> Since now there's ambiguity

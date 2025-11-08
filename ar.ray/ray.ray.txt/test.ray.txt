@@ -1,3 +1,6 @@
+//TODO goto labels something other than :, needs to be unique so we can have it inline as well.
+ label\
+  x = y
 
 //TODO Something like .move to a field is what 'using' uses
 

@@ -21,6 +21,14 @@ but just a ~~ a.change ~~ a.change
 // TODO If we have something like class Location = Ray, we want to also be able to say, a single location = Multiple Rays, and the variable itself holds Many of those locations @
 // TODO -> So @ maps to loop over all those rays. @@ or something should map to that specific instance's multiple rays.
 // TODO -> For most things this difference wont matter, but for things that extend Ray, this does matter.
+//TODO Instead of this, we do, if a named variable is bound to the =, then we have two different ways of initialization location:
+: Location = Ray & Ray
+: Location = @@: Ray & Ray //TODO Calling .next then superposes the two rays.
+: Location @@= Ray & Ray // Allow
+: Location = (@@: Ray & Ray) | (@@: Ray & Ray)
+If there's no name assigned to value set at '= Ray'
+then the default @@: is used.
+Same with </extends. The values called on their methods are set with @@.
 
 //TODO What to do with functionality like [index: 0] on IP, when it extends both a string, and a -1 <- . -> +1. Basically it has two structures defined on it.
 
@@ -266,6 +274,26 @@ relative_context = &&
 //   -> Partial evaluation, leads to external values being abstractly interpreted as well.
 //     -> I should be able to later say, similarly, that the result is now refined to 'true', any effects caused should be reset back.
 //   -> So .OR possibilities need to carry with it information of why and how to possibly change them
+def example(x: boolean) = x ? "Y" : "N"
+example(false) // "N"
+example(boolean) // "Y" | "N"
+example(false & false & true) // "N" & "N" & "Y"
+//TODO different @ structure like a grid, maintain that structure.
+
+example(boolean) // "Y" when /example/x == true, "N" when /example/x == false //TODO Link these two /example/x which are different instantiation than another func call.
+// Like this:
+X:
+ example(boolean)
+Y:
+ example(boolean)
+// "Y" when /example/x@{id == X} == true, "N" when /example/x@{id == X} == false
+// "Y" when /example/x@{id == Y} == true, "N" when /example/x@{id == Y} == false
+
+//TODO This too? Or not?, probably not
+example(boolean, boolean) // ("Y" | "N"), ("Y" | "N")
+
+x@ = boolean = false | true
+def example(x: boolean) = x ? "Y" : "N" // x@ = false & true
 
 // .OR: How do we know/use a proof that a single true is enough, to discard the superpositions.
 
@@ -732,6 +760,8 @@ var: Graph = 1, 2, 3
 //to<
 
 //TODO Iterable.any : .reduce(|)
+
+//TODO If a variable is any, anything called on it will become a requirement , a function with an assigned type return; a requirement.
 
 //TODO Are higher-inductive types simply the structured types?
 // How do you define a Sphere?, Torus etc? 2d grid (2d overlapping graphs vs 2-dimensional until the other side of the sphere is reached) with modular unroll?

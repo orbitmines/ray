@@ -134,6 +134,8 @@ end
   end
 end
 
+//TODO Store history of DNS resolves, and then allow to use it if DNS doesnt resolve by checking whether the instance running match the public-key stored there.
+
 +def Node
   static class Remote
     //TODO All object access go over network, and backup it in a local copy, what if that local copy is already defined somewhere?

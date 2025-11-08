@@ -719,15 +719,24 @@ var: Graph = 1, 2, 3
 
 //TODO .max/.min are defined on number itself, and also on number array? Or generally: Everything defined on Array which isn't on T, is defined on T.
 
+//TODO .min/.max on paths, min/max length, respecting that 1m > Infinity, discarding branched paths only selecting the min/max path. overridden by Array<number>
+//TODO .length should be impacted by units of length like 1m
+
 // Graph type does not have an indication of selection at a point. But its definition is centered around a point: For all Nodes, this holds.
 // def connected end; How to disallow disconnected pieces? In a graph where each connection is forced to be two-way, each Node is reachable from each other Node. (Going both forward and backward)
 // Graph Type need to allow loops at every step, and then an easy way to type for not having loops
 // How to define graph structure with different edges/hyperedges
 
+//TODO path_to = to = (to> | to<)
+//to>
+//to<
+
+//TODO Iterable.any : .reduce(|)
 
 //TODO Are higher-inductive types simply the structured types?
 // How do you define a Sphere?, Torus etc? 2d grid (2d overlapping graphs vs 2-dimensional until the other side of the sphere is reached) with modular unroll?
 
+// Allow def aliases like this 'class Path | Curve | Line'
 
 // Query by default
 

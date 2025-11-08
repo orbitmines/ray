@@ -29,6 +29,7 @@ def Entity
   //TODO With a logout delete_all, also schedule a notification that 'next x days' will delete your account from the central server. with an option to cancel (extra check somewhere to secure against suddenly changing time)
   //TODO == OR >=, or rather ~= (any part says delete_all) FUNC EQUIV ON DELETE_ALL.
   //TODO Immediately discard private keys, keep the rest of the data as a quest to delete.
+  //TODO Default behavior when destroying history
   def logout(logout_instruction: () => *)
   end
 
@@ -53,6 +54,8 @@ class Instance < Location, IP | Socket.Address //TODO | DomainName add DomainNam
     // "This bit is the unicast/multicast bit, which will never be set in IEEE 802 addresses obtained from network cards." (https://datatracker.ietf.org/doc/html/rfc4122#section-4.5)
     secure Binary.Positive{length == 47}.random ~~ [6].push_after(1)
 end
+
+//TODO Hierarchy.Path
 
 class Location = Ray
 

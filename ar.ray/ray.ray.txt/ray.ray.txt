@@ -196,7 +196,8 @@ def Boundary<T>
 end
 def Ray<T = Ray<T>> value: T? < AbstractDirectionality<Ray<T>>
   initial: Boundary<T> = Boundary<T>(end: this)
-  terminal: Boundary<T> = Boundary<T>(end: this)
+  terminal: Bounda
+  ry<T> = Boundary<T>(end: this)
 
   static Unbounded //TODO
   end
@@ -208,7 +209,7 @@ private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolea
 
   static Vertex = Ray<T>{
     initial = (HyperContinuations ? Many : 1) Boundary{ //TODO These =, need to be ==.instance_of?
-      end = (HyperEdges ? Many : 1) Vertex,
+      end = (HyperEdges ? Many : 1) Vertex,  //TODO (1 if !HyperEdges) or (!HyperEdges ? 1) Vertex allow this syntax
       value = (HyperEdges ? Many : 1) Boundary{
         end = (HyperEdges ? Many : 1) Vertex,
         value = (HyperEdges ? Many : 1) Vertex.initial
@@ -219,7 +220,7 @@ private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolea
 
   static Unbounded{every(==.instanceof Vertex)} < AbstractDirectionality<Vertex>
     //TODO These set Vertex to a different value
-    def acyclic //TODO Disallow loops
+    def acyclic //TODO Disallow loops, want these things: Graph.acyclic = Graph{acyclic}, if graph.acyclic,
     def connected
     def consistent
   end
@@ -242,6 +243,8 @@ def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false> 
     }?
   }} //TODO The Vertex.initial here should refer to the new value, not the old.
 end
+
+Loop = Array.Unbounded.orbit
 
 class if predicate: Expression, yes?: () => *
   def (else?: () => *)

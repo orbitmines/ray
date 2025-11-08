@@ -81,6 +81,7 @@ dynamically Bases.for Base, digit
       static class Positive = integer: `Base`.Positive, ".", fraction: `Base`.Positive.Unbounded
         static String = static as String
 
+        //TODO How to simultaneously implement .rational/.irrational as boolean checks.
         static Rational = Positive{fraction ==.instance_of (
           // Finite
           `Base`.Positive

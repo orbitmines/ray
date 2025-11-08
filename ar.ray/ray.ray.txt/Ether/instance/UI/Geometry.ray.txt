@@ -1,0 +1,34 @@
+//TODO Translations to GLSL - Can those be inferred from the structure defined on the types? (Like https://iquilezles.org/articles/distfunctions/) Exact vs approximation equivalances how?
+
+Point = Ray
+
+class Path | Curve | Line = Array.Unbounded
+  static Straight = //"No curvature" is a bit ambiguous //TODO Makes assumption about local space
+end
+
+class Circle = Loop{every(to centre -- @.min).reduce(==)}
+  //TODO Things like approximate circles or discrete circles where not every.reduce(==)
+  //TODO Circle with surface selected.
+
+  def centre => Point
+  def radius = any to centre -- @.min.length
+  def diameter = radius * 2 //TODO Should make radius require * 2, should automatically implement radius = diameter / 2
+  //etc..
+end
+//TODO Things like volume, for the arbitrary space discrete vs infinite (needs to be evenly spaced out too when not having discrete effects)
+
+Square //TODO Makes assumption about the local space.
+Plane // Square with no boundaries.
+
+Grid // TODO `x`D Grid, X x X Grid, (Allow Expression syntax to extent a whole statement like Number x/* Number)
+//TODO Euclidian space being a grid with infinite divisibility.
+//TODO Effective dimension vs actual dimension at each point.
+
+//TODO Use Grid in torus/cylinder definition
+Cylinder
+Torus
+
+
+Sphere //TODO How to say 2D Loop
+Cube
+COne

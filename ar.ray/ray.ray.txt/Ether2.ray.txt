@@ -34,6 +34,8 @@ Saving program pointer id what youd do to save a game
 Want to also hafve things like .index from some other location x
 
 
+//TODO Bidirectional function like ray but only single step: l <= (x) => r
+
 local @= location to change the location the code gets executed
 
 Create environments which don't have access to public/private methods
@@ -55,11 +57,15 @@ control flow of location so any function is a location so tutorial is a defined 
 qhat of changes mid version define what to do with those, relocate to x
 interleaved functions like movement of a npc tied with your own location
 
+//TODO The UI has a project as parallel 'files' or in sequence grouped 'files', then sending a single file is 'that grouped node in isolation -> remove structure'
 
 indentation newline after// prevent it from being repeated
 
+//TODO How to access all instances/references of a particular type (whether on disk, or in memory)
+
 Variable reference is to a particular place in the history?
 //TODO Version control
+// TODO Casaul ordering of functions, or somehow having a particular instantiation of a function and then checking whether another instantiation is before it. Whether concurrent and the like.
 //TODO Things like, we enact changes on functions/etc.. which are in turn saved somewhere to the current version, then we need a way to say : update these functions on those locations. By saying 'local.keys except x' @ 'All remotes' = 'new version'
 //TODO Additional fields like timestamp are in some global order (some repository which keeps track of that)
 //TODO Want things like only commit to history if it's a significant change, like the NW instead of joystick position
@@ -547,6 +553,8 @@ def Quest
 
   //TODO Quests are also, places to spend resources on infinitely generating/speculative execution places
   //     -> If the result would be found, would that result into efficiency, or what else?
+
+  //TODO async/await kind of functionality -> or just waiting on another part (like function calls over network) of the control-flow implemented as quests
 
   // Rewards
   // - When is a quest completed?

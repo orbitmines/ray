@@ -332,8 +332,8 @@ def example(x: boolean) = x ? "Y" : "N" // x@ = false & true
 //TODO Yield ray methods in context of for so you can to is_last for example?
 
 //TODO Variable call by reference/value per class, and also manually possible?
+//TODO Since = is on Node, it's always by reference
 
-// == allows coercions/casts/equivalences, we want one that's also exactly equal without those?
 
 // TODO - Ambiguities
 // def a = a vs def (a = a) = a, default clashes with singleline func, same with => for function
@@ -616,7 +616,7 @@ case 0.4
 case PI
 case 1-PI
 end
-r 0.3() | 0.3() | 0.4() -- @.random
+r 0.3() | 0.3() | 0.4() -- #.random
  0.3(), 0.3(), 0.4() -- random
 Support nested probabilities like
 0.5() | 0.5( 0.3() | 0.7() ) //TODO The nested here fills .expand?
@@ -789,22 +789,24 @@ var: Graph = 1, 2, 3
    //  -> How to determine what can be accessed? Statically accessible variables, but also when not depended on args.
    //  -> But we also want access to variables if we can access them at runtime. TODO
 
-   // 0.fn(+1), 0.ray(+1): "Equip 0 with a +1 ray"
-   // .ray(+1) equips .previous() with !+1 which is -1
-   0.ray(+1).if(x => x < 10).for i
-   0.ray(+1).if(< 10).for i
-   0.ray(+1).if(10 >=).for i
+
+   (0 -> +1){< 10}.for i
+   0{< 10}.for i // Since numbers are by default equipped with the numberline, and 0 is not real, but the Decimal.Positive.
+
 
    // TODO Some other syntax for .ray ?
    0 -> +1
    -1 <- 0 -> +1
    -1 | -2 <- 0 -> +1 | +2
-   0 -> +1 -> +2 // What does chaining this mean?
+   0 -> +1 -> +2 // What does chaining this mean? (Maybe: steps and then the last step repeated)
 
 
 // What does function inheritance mean, but what about additional logic in there? - called with super()?, what if multiple inheritance?
 
+// => higher precedence than --
 
+//TODO For match, allow newlines to mean a ,
+//match cases: ((type) => R)[] => R
 Maybe(5).switch
   Just a 1
   Nothing: 2
@@ -818,8 +820,11 @@ Maybe(5).switch
   Object(x: 5 y) if y > 10
   Just 5
   Just a = 5: // Automatically bind a
-  Just 5..10 =>
+  Just a: 5..10.reduce(|) =>
 end
+Easier way of writing 5..10.reduce(|)
+Somehow 5..10 when used as a type is 5..10.reduce(|) by default?
+
 if maybe == Just a = 5..10 // a =, is a name attached to the type, == defaults to using instance_of if a type? TODO what if type == type?
 end
 //if Just 5..10 == maybe

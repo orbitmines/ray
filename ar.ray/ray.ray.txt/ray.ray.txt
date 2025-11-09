@@ -86,7 +86,7 @@ def class
 end
 
 class Node
-  //TODO this/static shouldnt be defined for things like functions, so Node shouldn't be class?
+  //TODO this/static shouldnt be defined for things like functions, so Node shouldn't be class? Things like @/% shouldnt be defined by local either -> you want them to access the class
 
   def `*` = external
 

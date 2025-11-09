@@ -93,6 +93,7 @@ class Time < Quantity.Temporal (calendar: Calendar = UTC) //TODO ? / Calendar# s
 end
 { NOW } = Time
 
+//TODO How to indicate the value is possibly up for correction (and how would you apply it?)
 //TODO Make sure superpositions are working for weeks and times
 //TODO Different format orders like YYYY- etc.. Www
 //TODO Extend ISO_8601 With additional things like name of timezone etc... what other extensions?

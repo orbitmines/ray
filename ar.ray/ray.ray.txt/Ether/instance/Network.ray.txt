@@ -80,7 +80,8 @@ namespace Network
         return this if zero_compression
 
         zeros = left, right ~= 0[] -- #{length == min() & leftmost} # TODO How to iterate over @ like min. and leftmost
-        return this if zeros.remove.count <= 1
+        return this if zeros.remove.count <= 1 //TODO Or just .count, default functionality of ~= is removed from surrounding context unless X?
+        //TODO What if the result of ~= is another iterable #. ("A" | "B") | ("C" | "D"), how to know that a group doesnt belong to the iterable. Probably .expand.
 
         return (<- zeros) "::" (zeros ->), embedded_ipv4
       end

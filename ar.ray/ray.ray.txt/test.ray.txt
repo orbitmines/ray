@@ -1,6 +1,9 @@
 //TODO goto labels something other than :, needs to be unique so we can have it inline as well.
+ label\ x = label2\ y
+ label\ x = // Ambiguous, since it could refer to x, or the whole statement.
  label\
-  x = y
+  x = //Newline isn't ambiguous
+Labels change the location of an expression, or add hierarchy to it.
 
 //TODO Something like .move to a field is what 'using' uses
 
@@ -20,24 +23,24 @@ a = Value
 a.change
 return a
 but just a ~~ a.change ~~ a.change
+//TODO By implementing ~~/-- on expression you indicate it grabs the whole thing.
 
-// TODO If we have something like class Location = Ray, we want to also be able to say, a single location = Multiple Rays, and the variable itself holds Many of those locations @
-// TODO -> So @ maps to loop over all those rays. @@ or something should map to that specific instance's multiple rays.
+// TODO If we have something like class Location = Ray, we want to also be able to say, a single location = Multiple Rays, and the variable itself holds Many of those locations #
+// TODO -> So # maps to loop over all those rays. ## or something should map to that specific instance's multiple rays.
 // TODO -> For most things this difference wont matter, but for things that extend Ray, this does matter.
 //TODO Instead of this, we do, if a named variable is bound to the =, then we have two different ways of initialization location:
 : Location = Ray & Ray
-: Location = @@: Ray & Ray //TODO Calling .next then superposes the two rays.
-: Location @@= Ray & Ray // Allow
-: Location = (@@: Ray & Ray) | (@@: Ray & Ray)
+: Location = ##: Ray & Ray //TODO Calling .next then superposes the two rays.
+: Location ##= Ray & Ray // Allow
+: Location = (##: Ray & Ray) | (##: Ray & Ray)
 If there's no name assigned to value set at '= Ray'
-then the default @@: is used.
-Same with </extends. The values called on their methods are set with @@.
+then the default ##: is used.
+Same with </extends. The values called on their methods are set with ##.
+//TODO Or use .expand somehow
 
 //TODO What to do with functionality like [index: 0] on IP, when it extends both a string, and a -1 <- . -> +1. Basically it has two structures defined on it.
 
 You want = to be called on object, changing the type possibly. Since it's on a variable - variable is some object. So that would mean that = without effecting the current value, would first have to copy it over to another place. (And the object is tied to a location - which is kind of nice)or you can change its location to move it
-
-You want .bound_type on object then, but the object itself is a more specific type.
 
 //Allow type def conditionally like this
  variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}
@@ -80,16 +83,12 @@ None != instanceof Item
 
 //TODO Needs like an example of 2D/3D world with yaw/pitch on location, stored as arcs in a continuous space then discretized by some things like elementary lengths and other things.
 
-// TODO; Every value type T, is automatically decorated with Many. How is it indicated that it's a single result, and never many?
-// TODO; But how do you iterate possibilities.
-// TODO: It's an arbitrary graph, so how are we delegating resources on every property access etc.
-//          -> How do you write a generating function which acceptsthis. It's .that_function.reduce(|), and .that_function is possibly non-halting.
+// It's .that_function.reduce(|), and .that_function is possibly non-halting.
 // TODO: Ambiguity: .reduce(|) on an Array value, what does the .for go to? Now I'm using .for to iterate the possibilities of String[].reduce(|), not String. Because String[].reduce(|) is type 'String': Take Digit for example.
 // .value, but then what about rays. And things like probabilities. In the case of multi-methods it's determined by the args.
 
 //TODO Default of an object is only loaded if accessed, so we can have circularly defined defaults.
 
-.: sets bound type
 parse json to an object by setting fs.directory.file equal to some type which serializes and sets to json automatically restricting possible values
 
 Evaluation order like +/-//* different for each type? how configured?
@@ -315,7 +314,6 @@ def example(x: boolean) = x ? "Y" : "N" // x@ = false & true
 //TODO dynamically should either be a quest or be lazy, with completable when resources are available.
 
 //TODO Require a binary function like x.b(y), where x and y are given like [].function (parameters)
-// ? both allowed as a?: b as a: b?, because certain types would have to be wrapped in () otherwise
 
 // .reduce(|) TODO How does it work to pass a binary operator to a reduce which has accumulator and current as the two arguments
 //   -> If default is not set for accumulator, the initial value is the first in the array.

@@ -52,17 +52,16 @@ end
 def void end
 
 // The default functionality is that every variable is already Many.
-// This however, allows for: `(predicate ? Many : 1) Object`.
+// This however, allows for: `(predicate ? Many : 1) Object`. //TODO But prefer '(1 if !predicate) Object', Is there another use-case for Many?
 def Many x = x
 
 def namespace
   def `name = *`(definition: () => *)
-    definer[name] = local
-    name
+    class `name`(definition)
+    namespace = `name`()
+    definer[name] = namespace
 
-    definition(local: local)
-
-    return local
+    return namespace
   end
 end
 
@@ -86,25 +85,22 @@ def class
   end
 end
 
-def single
-  def `name = *`(definition: (Args = *) => *)
-    static = class name, definition
-    instance = static()
-
-    definer[name] = instance
-    instance
-  end
-end
-
 class Node
   //TODO this/static shouldnt be defined for things like functions, so Node shouldn't be class?
 
   def `*` = external
 
-  extends = private def < constructors: Array<(*) => *> => constructors.for constructor
+  // Even though 'this' is already a type, we allow the binding of a less restrictive type. That way it can be reassigned to.
+  type: *
+  def :(type) = this ~~ .type = type
+  // Allow 'var?: type' syntax, because certain types would have to be wrapped in parentheses otherwise.
+  def ?:(type) = : type?
+  dynamically assert this ==.instance_of type
+
+  protected def extends | < constructors: Array<(*) => *> => constructors.for constructor
     //TODO; By default call super if it's not called at the beginning/end of the block? & if parameterless
-    this.private super &= constructor<local: caller>
-    this.private super[constructor.name] = constructor<local: caller> if constructor.name
+    this.protected super &= constructor<local: caller>
+    this.protected super[constructor.name] = constructor<local: caller> if constructor.name
     //TODO Ensure the caller implements all undefined methods (unless abstract) abstract if any methods aren't defined. Is there ever a case where you want to extend abstract but only pass along the methods, yes?
     // TODO: How does type extension work?
   end
@@ -118,9 +114,9 @@ class Node
   def as : == boolean = true //TODO: How to 'as the type boolean not an instance'
 
   // TODO Not is prefix?
-  not = def ¬ = Node{!= this} //TODO .not should be not instanceof ?, not boolean for instance.
+  def not | ¬ = Node{!= this} //TODO .not should be not instanceof ?, not boolean for instance.
   or = def | //TODO
-  and = def & //TODO
+  def and | & //TODO
 
   // Attach a normalizer
   static Normalizer = (x: static) => static
@@ -174,10 +170,6 @@ class Iterable<T = *>
    this{$.every(.)}
     = //TODO Should be first available but how (if this is partial)
 
-  // .find is just {filter}.first or {filter}.next .last, or .any = @.reduce(|)
-  def find<ordered: boolean = false> //TODO
-  // TODO .find.last
-
   def compact = this{!= None}
 end
 def AbstractDirectionality<TVertex> < Iterable
@@ -195,9 +187,9 @@ def Boundary<T>
   end: Ray<T>
 end
 def Ray<T = Ray<T>> value: T? < AbstractDirectionality<Ray<T>>
+  //TODO .value could be 'this' but stripped (is that necessary) of Ray functionality. So anything that extends Ray has its content moved and deferred to .value
   initial: Boundary<T> = Boundary<T>(end: this)
-  terminal: Bounda
-  ry<T> = Boundary<T>(end: this)
+  terminal: Boundary<T> = Boundary<T>(end: this)
 
   static Unbounded //TODO
   end
@@ -206,6 +198,8 @@ end
 private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
   //TODO What's the value encoded on Edge?, and what's the value encoded on the boundaries? (Or do we always use edge)
   static Edge =
+
+  //TODO .[index] shouldnt overwrite the '1' without a .1 (needs a special rule)
 
   static Vertex = Ray<T>{
     initial = (HyperContinuations ? Many : 1) Boundary{ //TODO These =, need to be ==.instance_of?

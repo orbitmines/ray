@@ -6,7 +6,7 @@
 
 +def Node
   //TODO Location .inventory is just a location with string or other structures defined on the edge?
-  location: Location =
+  @ | location: Location =
 
   def @ location: Location = global[location]
 end

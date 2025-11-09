@@ -10,7 +10,7 @@ player ??= Player(
     certificate: //TODO Generate certificate
     visibility: "public"
   end,
-  location = desktop.spawn_location@.random
+  location = desktop.spawn_location#.random
 ) //TODO Setting player should externally save it.
 player.instance = global.instance
 

@@ -1,4 +1,4 @@
-//TODO Make sure that specific entries in a @ or array similarly have their visibility respected.
+//TODO Make sure that specific entries in a # or array similarly have their visibility respected.
 
 single Access
   READ = "read"

@@ -124,7 +124,7 @@ class Number < Ordered
   def - b: Number => Number
 
   // Allows for the syntax 1 Object
-  def `node: not String` = node{@.count == this}
+  def `node: not String` = node{#.count == this}
 
   // TODO Generic Number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
   // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?

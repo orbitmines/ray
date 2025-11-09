@@ -29,10 +29,10 @@ namespace Network
     end
 
     def as :== String
-      // Use CIDR notation if superposed values are filled in @.
-      prefix_length = NUMBER_OF_BITS - (@ as Binary.Positive ~= (0 | 1)[]$ -- .length)
+      // Use CIDR notation if superposed values are filled in #.
+      prefix_length = NUMBER_OF_BITS - (# as Binary.Positive ~= (0 | 1)[]$ -- .length)
       if prefix_length != NUMBER_OF_BITS
-        binary_form = @ as Binary.Positive
+        binary_form = # as Binary.Positive
         binary_form[prefix_length..] = 0
         return recur(binary_form as static), "/", prefix_length
       end
@@ -79,7 +79,7 @@ namespace Network
       def compress_zeros => v6
         return this if zero_compression
 
-        zeros = left, right ~= 0[] -- @{length == min() & leftmost} # TODO How to iterate over @ like min. and leftmost
+        zeros = left, right ~= 0[] -- #{length == min() & leftmost} # TODO How to iterate over @ like min. and leftmost
         return this if zeros.remove.count <= 1
 
         return (<- zeros) "::" (zeros ->), embedded_ipv4

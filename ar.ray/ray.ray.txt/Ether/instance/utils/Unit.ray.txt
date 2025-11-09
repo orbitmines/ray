@@ -44,7 +44,7 @@ class Unit = name + symbol: boolean? + plural: boolean? + singular: !symbol && !
     }
   end
 
-  static.@.push this
+  (static.# ??= []).push this
 
   // Allow for syntax `name`
   // Allow for 'var: Decimal.Positive, ns = 10 ns' syntax.
@@ -76,7 +76,7 @@ class Unit = name + symbol: boolean? + plural: boolean? + singular: !symbol && !
   dynamically assert this as String? != None
   def as :== String? = name
     // Stringify as an unambiguous name if not defined globally.
-    -- @.remove(Unit@{!= this}.name) if defined_globally
+    -- #.remove(Unit#{!= this}.name) if defined_globally
 
   protected unit = this
   // Allows syntax 1`name` (1m)
@@ -178,7 +178,7 @@ def SI_Unit
       .reduce(|)
 
 
-    SI@.for FromUnit = FromUnit.magnitude SI.magnitude - FromUnit.magnitude, SI
+    SI#.for FromUnit = FromUnit.magnitude SI.magnitude - FromUnit.magnitude, SI
 
   end
 end

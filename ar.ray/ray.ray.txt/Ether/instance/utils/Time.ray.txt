@@ -33,11 +33,11 @@ class Calendar
       return unit
     end
 
-    static EPOCH: (period: @, elapsed: Node{0 <= . < period}?)? | Number = 0
+    static EPOCH: (period: #, elapsed: Node{0 <= . < period}?)? | Number = 0
 
-    def is_recurring = this ==.instance_of Ray && this.length@.some(== Infinity)
+    def is_recurring = this ==.instance_of Ray && this.length#.some(== Infinity)
 
-    dynamically assert @.every(==.instance_of Quantity.Temporal)
+    dynamically assert #.every(==.instance_of Quantity.Temporal)
     //SUBSEGMENTS AS MONTHS/WEEKS
   end
 
@@ -62,7 +62,7 @@ end
 //TODO Allow : Time = 12:00 which defaults to setting day/year/month unknown, and stringify ignores it then and just returns 12:00 back
 //TODO .round(seconds)
 //TODO Allow calendar to be none? So it's just a Quantity.Temporal
-class Time < Quantity.Temporal (calendar: Calendar = UTC) //TODO ? / Calendar@ should default to all instances of Calendar
+class Time < Quantity.Temporal (calendar: Calendar = UTC) //TODO ? / Calendar# should default to all instances of Calendar
   epoch: Time{== calendar} = 0 // Only equivalent calendars can be compared
     // :Time = "2025-01-01", epoch: "2000-01-01" -> = 25.years
     +def = x
@@ -103,7 +103,7 @@ class ISO_8601 < Time{calendar ==.instance_of UTC.static}
       year: Decimal,
       semicolons: "-"?,
       (
-        month = Month@[1 - month_of_year: Decimal.Positive{length == 2}{1 <= . <= Month@.count}],
+        month = Month#[1 - month_of_year: Decimal.Positive{length == 2}{1 <= . <= Month#.count}],
         semicolons: "-"?,
         day_of_month: Decimal.Positive{length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month}
       ) | (
@@ -113,7 +113,7 @@ class ISO_8601 < Time{calendar ==.instance_of UTC.static}
         week_of_year: Decimal.Positive{1 <= . <= (year as weeks ~= (weeks_in_year: *) weeks).weeks_in_year}, //TODO This numbering might need to be implemented slightly differently.
         (
           "-"
-          weekday: Weekday@[1 - day_of_week: Decimal.Positive{1 <= . <= Weekday@.count}]
+          weekday: Weekday#[1 - day_of_week: Decimal.Positive{1 <= . <= Weekday#.count}]
         )?
       )
     ),

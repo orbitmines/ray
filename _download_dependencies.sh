@@ -94,3 +94,24 @@ git add "$FONT_DIR/"
 # python3 -m venv .venv
 # source .venv/bin/activate
 # python3 -m pip install -e .
+
+# MacOS development on linux
+# https://github.com/kholia/OSX-KVM
+# sudo apt-get install qemu-system uml-utilities virt-manager git \
+  #    wget libguestfs-tools p7zip-full make dmg2img tesseract-ocr \
+  #    tesseract-ocr-eng genisoimage vim net-tools screen -y
+
+# Clone in .orbitmines/github.com/kholia
+# git clone --depth 1 --recursive https://github.com/kholia/OSX-KVM.git
+  #
+  #cd OSX-KVM
+
+# sudo usermod -aG kvm $(whoami)
+  #sudo usermod -aG libvirt $(whoami)
+  #sudo usermod -aG input $(whoami)
+
+# dmg2img -i BaseSystem.dmg BaseSystem.img
+# qemu-img create -f qcow2 mac_hdd_ng.img 256G
+
+# Format the unidentified disk
+# Reinstall

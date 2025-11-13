@@ -1,3 +1,7 @@
+//TODO Variable is equal to some expression, in its history you can see its evaluation
+//TODO Perhaps a separate evaluation history. -> Or a way to separate it from the other changes.
+// -> With every change, there's an evaluation structure for that change.
+
 //TODO goto labels something other than :, needs to be unique so we can have it inline as well.
  label\ x = label2\ y
  label\ x = // Ambiguous, since it could refer to x, or the whole statement.
@@ -13,6 +17,8 @@ Labels change the location of an expression, or add hierarchy to it.
 //TODO Properties are different that just rays on value, they can be rays on another ray too.
 //TODO .copy implemented, as not being bound to the .history .last version. But a new branched version.
 //TODO How to remove from &/|. Just -, but what if we have number | number, and we want to - one.
+
+//TODO Default of methods is &, multimethod, how to say or |.
 
 //TODO = on variable, main object being a variable at a location
 Only added to graphs to histories

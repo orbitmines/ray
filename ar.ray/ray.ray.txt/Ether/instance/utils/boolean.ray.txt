@@ -7,51 +7,47 @@ class boolean = false, true = Binary.Digit.value // TODO This should automatical
   end
 
   def !
-  or this !& this
-  or this !| this
-  or this x| true
-  or this x!| false
+  or this !&& this
+  or this !|| this
+  or this x|| true
+  or this x!|| false
   end
 
   def && b: boolean
-  or !(this !& b)
+  or !(this !&& b)
   or !(!this || !b)
   end
 
   def || b: boolean
-  or !(this !| b)
+  or !(this !|| b)
   or !(!this && !b)
   end
 
-  nand =
-    def !& b: boolean
-    or !(this & b)
+  def nand | !&&(b: boolean)
+  or !(this && b)
 
-    // An implementation using goto"s so that a conditional goto is the only (necessary) primitive.
-    or
-      goto 2nd_check if a
-      goto 1
-     2nd_check:
-      goto 0 if b
-   1\ return true
-   0\ return false
-    end
+  // An implementation using goto"s so that a conditional goto is the only (necessary) primitive.
+  or
+    goto 2nd_check if a
+    goto 1
+   2nd_check:
+    goto 0 if b
+ 1\ return true
+ 0\ return false
+  end
 
-  nor =
-    def !| b: boolean
-    or !(this || b)
-    end
+  def nor | !||(b: boolean)
+  or !(this || b)
+  end
 
-  xor =
-    def x| b: boolean
-    or !(this x!| b)
-    or (this & !b) || (!this & b)
-    end
+  def xor | x||(b: boolean)
+  or !(this x!|| b)
+  or (this && !b) || (!this && b)
+  end
 
-  xnor =
-    def x!| b: boolean
-    or !(this x| b)
-    end
+  def xnor | x!||(b: boolean)
+  or !(this x|| b)
+  end
 
   // Allow casts to filters
   def as<T>(:== T{}) = T{this}

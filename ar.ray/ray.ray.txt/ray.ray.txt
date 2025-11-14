@@ -13,7 +13,7 @@ global = local
 
 def * = external // TODO any type Might not need to be externally defined. self-referential hypergraph-like structure
 // TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
-def do<T < Program>(program: T) => T = external
+def do<T: Program>(program: T) => T = external
 class goto
   def (location: Program, predicate: Expression?) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless "program" -> or one where the parameters are already filled instead of goto the way of doing it.
 
@@ -85,6 +85,7 @@ def class
   end
 end
 
+//* is just Node?
 class Node
   //TODO this/static shouldnt be defined for things like functions, so Node shouldn't be class? Things like @/% shouldnt be defined by local either -> you want them to access the class
 
@@ -97,6 +98,7 @@ class Node
   def ?:(type) = : type?
   dynamically assert this ==.instance_of type
 
+  //TODO constructors automatically accepts Array, by setting it to a single one. then iterate over all of them #.
   protected def extends | < constructors: Array<(*) => *> => constructors.for constructor
     //TODO; By default call super if it's not called at the beginning/end of the block? & if parameterless
     this.protected super &= constructor<local: caller>
@@ -163,7 +165,7 @@ class Iterable<T = *>
   // Instead of all functions like .every/.map iterating over every 'Ray.value', we instead return the Ray itself.
   //TODO But things like .compact should still be on .value.
   //TODO Or you want a method on this like .location to access the location in the ray. (But then that would have to be filled) (And how to differentiate between others,  and not just this one)
-  def $
+  def $ = this !~= ^* //Then add any match at the beginning.
 
   def any => this.reduce(|) = this.unordered.first
   def unordered =>
@@ -236,6 +238,9 @@ def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false> 
       value: Vertex.initial
     }?
   }} //TODO The Vertex.initial here should refer to the new value, not the old.
+end
+class Set < Structure
+  normalizer = .unordered.unique
 end
 
 Loop = Array.Unbounded.orbit

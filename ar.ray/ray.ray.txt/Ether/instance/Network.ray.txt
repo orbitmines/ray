@@ -145,6 +145,6 @@ end
     //TODO What if the value is stored at a location, but we're looking for something which is at an unknown instance? But with particular structure?
 
     // If we want the local reference to a particular value, we don't consult remote.
-    def @ instance: global.instance = instance[location]
+    def @ instance: INSTANCE = instance[location]
   end
 end

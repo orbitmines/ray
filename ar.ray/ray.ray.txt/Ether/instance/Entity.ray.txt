@@ -67,7 +67,7 @@ class Location = Ray
   parent: static <- .hierarchy -> children: static //TODO I want rays here on .next not nodes, how to define.
 
   // What instance is hosting this variable
-  host: Instance = global.instance
+  host: Instance = INSTANCE
 
   //TODO A <.hierarchy B means A is being rendered inside B.
   // .hierarchy for .inventory, and rendering hierarchy //TODO What if has both

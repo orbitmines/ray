@@ -1,0 +1,15 @@
+
+class Expression = String // Any string is legal syntax
+  protected def generate_ast
+    delimiter = "/" | "." | \s | \n
+
+
+  end
+
+  ast = generate_ast
+  &= ast
+
+  def eval => *
+
+  end
+end

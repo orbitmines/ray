@@ -1,12 +1,17 @@
 class boolean = false, true = Binary.Digit.value // TODO This should automatically implement "0" | "1" as boolean, through Binary.Positive. : Generalized to: Anything that is implementing Array<T>, like Positive, should also apply to just a T.
   // TODO Verify that these are correct work for all cases.
 
+  //TODO Can extract operator out of boolean, as a default metaprogramming class
   static class Operator = Unary | Binary
-    static Unary = "!"
-    static Binary = "&&" | "||" | ("nand" | "!&") | ("nor" | "!|") | ("xor" | "x|") | ("xnor" | "x!|")
+    static Unary = *{parameters#.empty}
+    static Binary = *{parameters#{length == 1}}
+    //TODO These with the metaprogramming setup instead.
+    //TODO Allow ternary operators defined as:
+    // def * {b} * {c}; which match to a * b * c
+    // Which is almost the same structure as def *(b, c), but assumes structure on the edges
   end
 
-  def !
+  def !{.}
   or this !&& this
   or this !|| this
   or this x|| true

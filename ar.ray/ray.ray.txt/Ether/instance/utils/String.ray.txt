@@ -17,3 +17,10 @@ class char = u32
   dynamically assert this < 0x110000 & !(0xD800 <= this <= 0xDFFF)
 end
 //TODO String{length == 1} ; range operator for char.
+
+\t = "\t"
+\n = "\n"
+
+\s = " " | \t
+
+//TODO Regex

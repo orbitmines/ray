@@ -1,3 +1,72 @@
+//TODO Create an example Proxy for ETHER@ETHER, mapping packages etc..
+
+class Context < Location (.hierarchy = this)
+// Like Entity/Instance, it's used for saying Node{==} whether access is allowed.
+// When we have some package, editing the functionality of String for instance,
+// TODO We want to indicate that that edit, is only for a specific context (and its children)
+// TODO, Unless we give that context privileges to edit the global String up the .parent chain.
+// TODO So access.write is always within some context.
+//TODO How to differentiate between the two String contexts? (global -> parent).last
++def global.parent.String // Changes it for other contexts.
+end
+//TODO The contexts folder is filled with packages outside of the standard library
+//TODO Entrypoint needs to be able to access the contexts.
+//TODO Other contexts access eachother by loading from libraries like 'using @orbitmines.com/'
+//TODO Context.name = UUIDv1 for the local machine, then package name, etc..
+//TODO How to change that context/package for all other packages.
++def @orbitmines/package/package Object
+end
+//TODO To change it just for your context (and things that depend on your context)
+< @https://orbitmines.com/ //TODO Import from https or other protocols, domain names with *orbitmines.com are reserved
+//TODO // Is interpreted as: continue the string, don't use as /, because @String matches it
+//TODO Only newline/first character/whitespace before // makes it a comment
+< @orbitmines.com/package
+or
+{ Object } = @orbitmines.com/package //TODO When this is used, issue quest to download the whole package in cache.
+//TODO Packages generate separate files for specific objects, in case they are downloaded separately?
++def Object
+end
+
+< Node{} Location //TODO Filtered extension
+
+//TODO How does Lazy Evaluation work with Time.NOW, force evaluation there somehow?
+
+//TODO How to def, string definition
+Expression{< {def as(:== String) => String}}
+Expression{< def as(:== String) => String}
+Expression{== String}
+//TODO But we want the result of the expression to == string, not the expression itself, how to?
+Expression{eval ==.instance_of String}
+
+def "{(String?, ("{", expression: Expression{eval ==.instance_of String}, "}")?).orbit}" //TODO Allow this self-referential def
+
+
+//TODO Easy way to create a filtered access, different values for different Nodes.
+Node{== this} def
+*{== this} def
+protected def // Allow this
+// This is not saying on Node{} define it, def uses 'definer', not 'caller'
+
+// Ambiguity in {*} meaning the object iterator, or Node.
+// TODO Basically we say * overrides the local context def if called in context, unless we call this*
+
+//TODO Is a nested `` ever necessary, if so, we need to switch to {}
+def {myClass: T}
+//TODO How to differentiate between the {} func, if we want to allow to override that
+def {expression: Expression}
+//TODO Yes in a string
+"{
+  def `local_method`
+  end
+  local_method
+}"
+
+//TODO Ambiguity between return ENTITY if, meaning ENTITY or returning ENTITY.if, the space prefers Expression if
+//TODO Ambiguity if we say boolean, and have a class call bo, with operator ole, on an (another class). we can't just split the tokens.
+// -> Resolve this ambiguity by preferring the attached version (since it's longer)
+
+//TODO Store whether a silent generic type was used for a particular function, then version control, alert there's then a new variable with that name, but keep using it as a generic type as long we have that information.
+
 //TODO Variable is equal to some expression, in its history you can see its evaluation
 //TODO Perhaps a separate evaluation history. -> Or a way to separate it from the other changes.
 // -> With every change, there's an evaluation structure for that change.
@@ -8,6 +77,8 @@
  label\
   x = //Newline isn't ambiguous
 Labels change the location of an expression, or add hierarchy to it.
+
+// Allow \ to be used in a variable at the start \s
 
 //TODO Something like .move to a field is what 'using' uses
 

@@ -1,3 +1,48 @@
+//Return type
+&& (b: boolean) : boolean => func
+&& (b: boolean) : boolean //without func def
+//TODO Every variable has (...) defined creating a function, accessing : on it changes the return type, then => is defined on it
+//TODO Then how to define the assumptions of newline meaning => etc..
+
+// Allow top-level | OR and & AND, which are ignored so we can do things like how the booleans are defined.
+
+// Allow newlines after a |, so we can do things like
+func
+  | line1
+    line1-2
+
+  | line2
+    line2-1
+
+  |
+
+&& = b: boolean
+end
+&& = (b: boolean) =>
+&& = (b: boolean) =>
+end
+&& = (b: boolean) =>
+  next_line
+!{.} => this !&& this
+!{.} = this !&& this // Only
+&&(b: boolean) =>
+&&(b: boolean)
+end
+&&(b: boolean)
+  next_line
+&& (b: boolean)
+&& b: boolean =>
+!{.}
+end
+
+//TODO Allow arbitrary parts of a function to define a parameter, by simple saying UNINITIALIZED_VAR: a, required if no default is provided.
+
+//TODO Newline counts as a = or => when appropriate so (=> preferred over =)
+class Time < Quantity.Temporal (calendar: Calendar = UTC)
+//is
+class Time < Quantity.Temporal (calendar: Calendar = UTC) =>
+//TODO Allow out-of-order things like <, which are inside the () => {}
+
 //TODO Create an example Proxy for ETHER@ETHER, mapping packages etc..
 
 class Context < Location (.hierarchy = this)
@@ -22,7 +67,7 @@ end
 //TODO Only newline/first character/whitespace before // makes it a comment
 < @orbitmines.com/package
 or
-{ Object } = @orbitmines.com/package //TODO When this is used, issue quest to download the whole package in cache.
+{ Object } *= @orbitmines.com/package //TODO When this is used, issue quest to download the whole package in cache.
 //TODO Packages generate separate files for specific objects, in case they are downloaded separately?
 +def Object
 end

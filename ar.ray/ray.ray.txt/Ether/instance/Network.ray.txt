@@ -4,8 +4,8 @@ namespace Network
   DEFAULT_PORT: Port = 37839
 
   class IP < Location = -1 <- . -> +1
-    static NUMBER_OF_SEGMENTS => Decimal.Positive
-    static SEGMENT_LENGTH => Decimal.Positive
+    static NUMBER_OF_SEGMENTS: Decimal.Positive
+    static SEGMENT_LENGTH: Decimal.Positive
     static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
 
     static +def Segment

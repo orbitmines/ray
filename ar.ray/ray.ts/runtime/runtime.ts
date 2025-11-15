@@ -2,28 +2,23 @@
 class Def {
   key: string | string[] | ((key: Obj) => boolean)
 }
-class Defs {
-  protected by_key: { [key: string]: Def }
+class Obj {
+  value: any
+
+  protected by_key: { [key: string]: Def[] }
   protected by_match: Def[]
-  get = (key: Obj): Def | undefined => {
+  get = (key: Obj): Def[] => {
     if (is_string(key.value)) return this.by_key[key.value]
-    for (let def of this.by_match) {
-      if (is_function(def.key) && def.key(key)) return def
-    }
-    return undefined
+    return this.by_match.filter(def => is_function(def.key) && def.key(key))
   }
   set = (def: Def) => {
     if (is_string(def.key))
-      this.by_key[def.key] = def
+      (this.by_key[def.key] ??= []).push(def)
     else if (is_array(def.key))
-      for (let key of def.key) { this.by_key[key] = def }
+      for (let key of def.key) { (this.by_key[key] ??= []).push(def) }
     else
       this.by_match.push(def)
   }
-}
-class Obj {
-  value: any
-  defs = new Defs()
 }
 
 const DEFAULT_CONTEXT: Context = {}

@@ -1,3 +1,5 @@
+//TODO On Node, define what it means to access from a particular location, access .applied_filter, and filter values in # based on caller.
+
 //Return type
 && (b: boolean) : boolean => func
 && (b: boolean) : boolean //without func def

@@ -22,19 +22,28 @@ end
 // (
      &caller = OBJECT_ID
      A + B
-   ) + (
+   ) (
      &caller = OBJECT_ID2
-     C
-   )
+     + C
+   ) //TODO In this case + C needs the context of A+B, not the parent local context above A+B
 // Quests should be spawned to resolve lazy expressions/programs
 // The program is similar to history and should probably be the same thing.
 //   -> History needs to be aware of caller as well (and the version at that particular time).
 // These object references are to a particular version of that object. (Don't want to get the recent version here unless dynamically variable?, probably still not)
 //TODO OR require eval before committing to expression string with object_id
+//TODO Conditional edge
+// History = Program
 class Program = Ray<Vertex>
   static Vertex = {}
   static Edge = {
-    // Context in which subexpression is called
-    caller: *
   }
+  //TODO Vertex only used for cached evaluation results,
+  //TODO : AND importantly intermediate results, -> So function continuations should define what to do with intermediate results.
+  //TODO Where are the intermediate variables of the function execution stored?
+
+  //TODO Edge encodes another program applying things like &caller = OBJECT_ID2, + C
+  //TODO The initial of the edge program is the VERTEX result before the edge definition.
+  //TODO What is a terminal/initial program mean?
+  //       -> The starting vertex, terminal is the terminal vertex. (Like a finally this, effecting the return)
+  //TODO Everything to do with a particular variable is all grouped in a single .expand, so that each successive top-level vertex is a new access into the program context.
 end

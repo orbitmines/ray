@@ -13,3 +13,28 @@ class Expression = String // Any string is legal syntax
 
   end
 end
+
+// Program is control-flow, with associated contexts
+// Want to be able to convert program back into a string expression, but it needs to decorate the contexts somehow (which is necessary for Access)
+// &caller = {ref to object} or something to stringify the expression would require object refs accessible too.
+// Then it would be things like
+// A + B + C from different context be
+// (
+     &caller = OBJECT_ID
+     A + B
+   ) + (
+     &caller = OBJECT_ID2
+     C
+   )
+// Quests should be spawned to resolve lazy expressions/programs
+// The program is similar to history and should probably be the same thing.
+//   -> History needs to be aware of caller as well (and the version at that particular time).
+// These object references are to a particular version of that object. (Don't want to get the recent version here unless dynamically variable?, probably still not)
+//TODO OR require eval before committing to expression string with object_id
+class Program = Ray<Vertex>
+  static Vertex = {}
+  static Edge = {
+    // Context in which subexpression is called
+    caller: *
+  }
+end

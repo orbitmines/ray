@@ -14,6 +14,11 @@ const EXTERNAL = {
   definer: ""
 }
 
+type EvalContext = {
+  caller: Var,
+  definer: Var,
+}
+
 type Var = NODE & ({(...args: any[]): Var}) & any
 
 abstract class NODE implements Iterable<Var> {
@@ -33,7 +38,7 @@ abstract class NODE implements Iterable<Var> {
   }
 
   get __proxy__(): any { return new Proxy(class {}, {
-    apply: (_: any, thisArg: any, argArray: any[]): any => this.expr('()', ...argArray),
+    apply: (_: any, thisArg: any, argArray: any[]): any => this.expr('(', ...argArray, ')'),
     set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
       if (property in this) (this as any)[property] = newValue;
       return false
@@ -47,16 +52,32 @@ abstract class NODE implements Iterable<Var> {
   All = (list: Var): Var => new ITERABLE(this.__proxy__, list).__proxy__
   Many = (...list: Var[]): Var => new Many(this.__proxy__, list).__proxy__
   Generator = (list: Generator<Var>): Var => new Many(this.__proxy__, list).__proxy__
+  String = (string: string): Var => {
 
-  expr = (expr: any, ...args: any[]): Var => {
+  }
 
+  expr = (...args: any[]): Var => {
+    if (args.length === 1) {
+      if (is_string(args[0])) {
+
+      } else {
+        // is var
+      }
+    } else if (args[0] === '('){
+      // args = args.slice(1, args.length - 2);
+    } else {
+      throw new Error()
+    }
   }//TODO this.context is the caller
 
   _eval?: Var
   eval = (options: { caller: Var }): Var => {
     if (this._eval) return this._eval;
 
+    //TODO Expression is a bunch of sub-expressions with .expand to another expression, each with an associated .context with them. Is that on the .ray which expands?
+    //TODO So how do you define what the Ray .expands into? It's always another ray, which in turn must have the same Node's defined as the parent Ray.
 
+    //TODO Bunch of node-refs possibly expanded to group, with the edges decorated with arbitrary structure like ( node-ref, node-ref )
   }
 
   tag?: any
@@ -86,7 +107,7 @@ class Many extends NODE {
     return this.value[Symbol.iterator]();
   }
 }
-class ITERABLE extends Many{
+class ITERABLE extends Many {
   constructor(context: Var, public variable: Var) { super(context) }
 
   * [Symbol.iterator](): Generator<Var> {
@@ -112,22 +133,22 @@ class OBJECT extends NODE {
 }
 
 
-const DEFAULT_context: context = {}
-
-class Expression {
-  ast: any
-
-  constructor(public string: string, public context: context = DEFAULT_context) {
-    this.ast = this.generate_ast()
-  }
-
-  protected generate_ast = () => {
-    const s = [" ", "\t"]
-    const delimiter = ["/", ".", ...s, "\n"]
-
-  }
-
-}
+// const DEFAULT_context: context = {}
+//
+// class Expression {
+//   ast: any
+//
+//   constructor(public string: string, public context: context = DEFAULT_context) {
+//     this.ast = this.generate_ast()
+//   }
+//
+//   protected generate_ast = () => {
+//     const s = [" ", "\t"]
+//     const delimiter = ["/", ".", ...s, "\n"]
+//
+//   }
+//
+// }
 
 /**
  * Copied from https://github.com/lodash/lodash/blob/main/dist/lodash.js

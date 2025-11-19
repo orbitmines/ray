@@ -1,0 +1,34 @@
+class
+  {name: *} (def: (Args: *): *)
+    local.name = name
+    &definer[name] = local
+
+    static = local
+
+    (args: Args)
+      (protected if name == "*") .static = static
+      protected this = local
+
+      def(local: this, ...args)
+      return this
+
+    //TODO Call constructor for static
+    local
+  end
+
+  local
+end
+
+class * | Node
+  local = .
+
+  external =
+  external {*} | [name: *]
+  external #
+
+  | | or (x: #.type) => #, (| x)
+  & | and (x: #.type) => #, (& x)
+
+  |= (x: #.type) => # = | x
+  &= (x: #.type) => # = & x
+end

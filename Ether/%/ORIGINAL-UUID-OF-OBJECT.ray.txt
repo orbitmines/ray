@@ -1,0 +1,47 @@
+//TODO Basically how do we get this version control working as best as possible in text-form. (Where we can't rely on just assigning UUIDs through the interface)
+// TODO Though later setup does not require this, initially we need an index file for the names of files to go to specific UUIDs
+
+//TODO Project uses Player/Organization public for generating the UUIDs for the project.
+
+//TODO Load history file (ignoring version control preferences of safety - like saying it implements another version etc..
+
+//TODO Important that we can just write to the file without having to re-read it.
+//TODO All UUIDs in the original UUID are served
+//TODO What about specific versions of an operator
+//TODO Timestamp which exceeds UUIDv1 possible. &Time.NOW =
+//TODO What do these large arbitrary graphs look like, and how expensive to store?
+//TODO What about global order, how to attach that.
+//TODO What if we store a whole script applied to the variable as one thing. Like: i = 0; 0..100.for i += 1 (what if I want to point to intermediate results there)
+//TODO -> This in the middle would make not all UUIDs at the start of the file which is unfortunate.
+//TODO -> Instead we use \ as the seeking delimiter for the UUIDs, what about goto labels used by the programs themselves, rename so they don't match uuids
+//         -> What if strings contain \. or escape them with a char to make sure we dont use them instead.
+//TODO Want to store in-between caches.
+//TODO What about distributed edits
+//TODO Need to allow to access the current var as a variable, for programs -> this?
+//TODO Since the UUID labels refer to a program which still needs to be executed, they do work until the next label.
+//TODO Mirror the directory of /%/UUID, more efficiently using DB storing techniques
+//TODO How to split
+//TODO A method might be a global order, like a class, but it might make sense to make sub-expressions parts also assign UUIDs
+
+//TODO You want like subdirectories, so the player history is separate from the STD history. @ global
+//TODO -> You want a global order of STD + Player changes, and separate STD, and Player Changes global orders.
+//TODO Compile STD changes from files into a list of UUID-variants of the objects. Anything on the namespace like Ether/Network pointing to the latest version as a string.
+global = global%[UUID-VERSION-OF-STD] //TODO Use like a Node ID fff37839 or something.
+//TODO Bug fixes in STD should have things like, when this version is mentioned, use this version instead.
+//TODO  -> But that might be a breaking change and the histories might not align (perhaps the history did make use of that bug!)
+//TODO  -> Instead flag the method to say, generate caches using the bugged version, and dont call again?
+//
+//TODO  Basically: how do you prevent someone from, after a fix, inserting a history file using an old version which we dont want them to, while keeping the history in tact?
+
+
+//TODO STD Tag arbitrary parts like 0..100 with 0..(tag\ 100). Then say tag\ = 99 instead of saying
+
+ORIGINAL-UUID-OF-OBJECT\ (&caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; 0)
+//TODO This change .expands into many individual history changes, which are not stored, how's that flagged?, Except for specific ones, like conditionally the index.
+//TODO This .expand is always based on the function expansions.
+6ba7b810-9dad-11d1-80b4-00c04fd430c8\ &caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; 0..100.for (6ba7b810-9dad-11d1-80b4-00c04fd430c8\ if i == 50) this += 1 // Inside each iteration, the caller is changed maybe.
+
+
+ORIGINAL-UUID-OF-OBJECT\ (&caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; "A")
+6ba7b810-9dad-11d1-80b4-00c04fd430c8\ (&caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; + "B")
+NEXT-UUID-OF-OBJECT\ (&caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; + "C")

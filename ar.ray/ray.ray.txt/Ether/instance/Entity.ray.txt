@@ -78,6 +78,7 @@ end
 
 // TODO .hierarchy instead of .inventory
 
+//TODO Player UUID is Node: the player's pub key gen, then Timestamp, when joined.
 def Player < Entity
 
 end

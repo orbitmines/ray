@@ -47,3 +47,6 @@ class Program = Ray<Vertex>
   //       -> The starting vertex, terminal is the terminal vertex. (Like a finally this, effecting the return)
   //TODO Everything to do with a particular variable is all grouped in a single .expand, so that each successive top-level vertex is a new access into the program context.
 end
+//TODO UUID-s built up in a history version file are Node: Mac address that we generate for an instance based on the pub-key?, timestamp is the last edited time of that object.
+//TODO ; does not change the selected context to + on.
+//TODO Newlines () () should apply to each-other. or pending operations should too.

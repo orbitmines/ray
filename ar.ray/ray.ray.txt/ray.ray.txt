@@ -65,31 +65,12 @@ def namespace
   end
 end
 
-def class
-  //TODO Allow ==.instance_of class.
-
-  def `name = *`(definition: (Args = *) => *)
-    definer[name] = definition
-    definition.name = name
-
-    def (...args: Args)
-      static = definition
-      this = local
-
-      definition(local: this, ...args)
-
-      return this
-    end
-
-    return definition
-  end
-end
+//TODO Allow ==.instance_of class.
 
 //* is just Node?
 class Node
-  //TODO this/static shouldnt be defined for things like functions, so Node shouldn't be class? Things like @/% shouldnt be defined by local either -> you want them to access the class
+  //TODO How to define the + label: *
 
-  def `*` = external
 
   // Even though 'this' is already a type, we allow the binding of a less restrictive type. That way it can be reassigned to.
   type: *
@@ -117,8 +98,6 @@ class Node
 
   // TODO Not is prefix?
   def not | ¬ = Node{!= this} //TODO .not should be not instanceof ?, not boolean for instance.
-  or = def | //TODO
-  def and | & //TODO
 
   // Attach a normalizer
   static Normalizer = (x: static) => static

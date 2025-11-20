@@ -1,5 +1,7 @@
 //TODO On Node, define what it means to access from a particular location, access .applied_filter, and filter values in # based on caller.
 
+// * operator a,llows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
+
 //Return type
 && (b: boolean) : boolean => func
 && (b: boolean) : boolean //without func def
@@ -7,6 +9,14 @@
 //TODO Then how to define the assumptions of newline meaning => etc..
 
 // Allow top-level | OR and & AND, which are ignored so we can do things like how the booleans are defined.
+
+// OFFLINE
+// Offline vs private managed vs offline but allow internet access which doesn't identify the instance.
+   Make it a visibility filter, and internet access how
+
+dynamically load/shard into memory disk across many computers at the boundaries especially, automatically from higherlevel scripts, decentralized.
+How do you get the 3d environment ad a massive 3d space and effectively store it - and have that abstraction hidden from the programmer
+Things like a euclidian space defined, and then say it's discretized in this particular way, how do functions in that space change
 
 // Allow newlines after a |, so we can do things like
 func
@@ -681,6 +691,7 @@ end
 // Function in the editor where you select, press a key, then allow the perform operation on that selection like select capped text, .tolowercase it. done.
 //   -> Similarly, in natural language describe the thing you want to do to that selection. Same with object.[describe] for where the cursor is.
 // Eye-tracking should switch primary/secondary location, if the windows are side to side, if overlayed, the top one takes priority.
+// version control selectors at functions in classes in the editor
 
 // TODO - Implementing languages.
 Translate everything like ifblocks etc. to other languages, which are implemented in .ray.txt with primitives to the implementation . How to say that something like the if/else construction shouldn't be rewritten to the goto's but instead are the primitives. How to use the rewrite-blocks of code syntax to rewrite to a javascript-like syntax.

@@ -1,0 +1,5 @@
+class Expression = string: String
+  external comment
+
+  , (b: Expression)
+end

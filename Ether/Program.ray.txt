@@ -1,5 +1,44 @@
 class Expression = string: String
-  external comment
+  external comment: String
 
   , (b: Expression)
+
+  {" "}: (type) => //TODO Wrap whole expression in : type
+end
+
+//TODO What does local.# do? iterate over all simultaneous threads of the execution?
+
+//TODO WHat's the difference between Function and Program
+//TODO Function and #.
+//TODO Chain in # means function chain. So &/|, need to be in parallel by default
+//TODO What about other evaluation orders, they're shuffled in the right order in this control-flow. What if I still want them stored out of order?
+class Function | Program = Boundary<>
+  //TODO as (language: Language, compiler_options: {} = {})
+  //TODO Things in history where we store a copy of the cached program, and then execute from cache
+  //TODO Only translate subexpressions to certain languages. Superpose languages by superposing different implementations and then something like a corotine to which one finishes first.
+  //TODO Then it's run as separate executable vs run according to their control-flow implementation.
+  expression: Expression
+  //TODO .expand into subexpressions
+  parameters: *
+  intermediate_return_type: *
+  return_type: #.last.intermediate_return_type
+  //TODO return_type also implements setting return_type=, by saying dynamically #.last... = return_type. Dynamically because the property is also dynamic (func)
+  dynamically assert // every .next parameters == intermediate_return_type
+
+  external (parameters: this.parameters): return_type
+
+  <{filled_parameters: Expression}> => //TODO .copy, which is just another history branch
+
+  => (def: (x?): *) => defs.push_back(def)
+    //TODO When parameterless => is an override by default
+
+  {" "}({parameters: Expression}): Function
+    //TODO Default &=, default override all the locations (just override the var), so when override =, it's also assign
+
+  //TODO Define super() for any =
+
+end
+
+class Function | Program = Boundary<>
+  return_type: #.last
 end

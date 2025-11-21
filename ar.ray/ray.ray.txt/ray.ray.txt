@@ -157,6 +157,9 @@ class Ordered<T = static> //Todo set T to caller's constructor
   def > b: T
 end
 
+//TODO Setting .value on Many boundary in the case of Edge.
+
+//TODO Edge.list has Boundary more than once, self-loop
 def Boundary<T>
   value: Boundary<T>? //TODO T could be on value, Or you want a specific type on Boundary
   end: Ray<T>
@@ -313,22 +316,6 @@ Function = +def Node{(Args: *) => Return: *}
 
   //TODO: Evaluate right-to-left f compose g compose h = f.compose(g compose h)
   ∘ = def compose(g: (: g_Args) => Args) = (args: g_Args) => Return = this(g(args))
-end
-
-// Anything called on Option is automatically equivalent to 'variable?.'
-Option<T> = Some(value: T) | None
-{ Some, None } = Option
-+def Some
-  def `* = property`
-    ret = value[property]
-    return ret == Some(*) ? ret : Some(ret)
-  end
-end
-+def None
-  def as : == boolean = false
-
-  // TODO as boolean, and maybe other things defined on Node should still work, but how?
-  def `*` = this
 end
 
 def Optional<T> = { T*.for `key`: value? }

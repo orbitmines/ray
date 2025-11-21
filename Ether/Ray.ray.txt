@@ -1,0 +1,31 @@
+//TODO What is a .expand on a boundary/edge
+// X⊣⊙⊢∙⊣⊙⊢
+// ⊢∙⊣⊙⊢X
+// ⊢∙⊣⊢X
+// X⊣⊙
+// X⊣⊢∙⊣
+
+class Boundary = Ray<static>
+  end | vertex | ∙ : Ray<Vertex>
+  edge | ⊙ : Edge
+  ⊢: Boundary => ⊙⊢#{!= this}
+end
+class Edge = Ray<static> & (⊣ | ⊢ | ⊢{.} | list): Boundary
+end
+class Ray<T = Ray<T>> (value: T?) < AbstractDirectionality
+  //TODO If T == static, value = this
+
+  initial | ⊢ | ⊢{.} : Boundary = Boundary<Vertex: T>(∙: this)
+  terminal | ⊣ : Boundary = Boundary<Vertex: T>(∙: this)
+
+  {path: (((path?, "∙")?, "⊣")?, "⊙"?)?, "⊢"}{.}
+    x = this
+    path.reverse.for method => x = x[method]
+    x
+end
+
+class AbstractDirectionality<T> < Iterable<T>
+end
+class Iterable<T>
+  as (:== T) => T() = this.reduce(|) //TODO if T is class.
+end

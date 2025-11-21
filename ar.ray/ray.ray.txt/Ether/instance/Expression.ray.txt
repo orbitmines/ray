@@ -42,6 +42,8 @@ end
 // History = Program
 Result = Waiting | Intermediate(function: *, result: *) | Final(result: *)
 //TODO Get the program to arrive at a particular var: var.func**, how to get intermediate results after executing. (Calling gets you a program which you can move forward with intermediate access to variables)
+
+//TODO What if other things apart from the vertex are changed? Keep track of that. What if other vars are relevant, need to keep track and store those in history too? (Like a random seed), want each thread to be deterministic, but allow option sto say: run again without those set parameters.
 class Program = Ray<Vertex>
   //TODO We might have a program pointer which .expands into other programs like function calls, we want to context of "we're handling this .expand" + "we're here in the .expand". So many pointers to program at ##.
 

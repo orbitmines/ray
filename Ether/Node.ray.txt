@@ -9,8 +9,11 @@ class
       (protected if name == "*") .static = static
       protected this = local
 
-      def(local: this, ...args)
+      def(local: this, ...args) //TODO Call-by-ref here would be the default, so that if a parameter is changed, the successive patches get that same variable.
       return this
+
+    // Monkey-patch a constructor
+    += | patch = (patch: (): *) => def &= patch
 
     //TODO Call constructor for static
     local
@@ -20,11 +23,14 @@ class
 end
 
 class * | Node
-  local = .
+  external local
 
-  external =
-  external {*} | [{name: *}]
-  external #
+  external = | assign (x): x //TODO Might have to set # equal to x
+  external {*} | [{property: *}] //TODO How to say infer the property.
+  external # | all : static
+  external * | methods : { {key: *}: value: Program? }
+  external ** | program : Program
+  external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
 
   | | or (x: type) => #, (| x)
   & | and (x: type) => #, (& x)
@@ -32,8 +38,8 @@ class * | Node
   |= (x: type) => # = | x
   &= (x: type) => # = & x
 
-  // Monkey-patch
-  += | patch (def: (): *) => def(local: this)
+  // Monkey-patch an instance
+  += | patch (patch: (): *) => patch(local: this)
 
   // Even though 'this' is already a type, we allow the binding of a less restrictive type. That way it can be reassigned to.
   type: * = *
@@ -41,34 +47,17 @@ class * | Node
   // Allow 'var?: type' syntax, because certain types would have to be wrapped in parentheses otherwise.
   ?: (type) => : type?
   dynamically assert this ==.instance_of type
+
+  as (:== boolean) => true
 end
 
-//TODO WHat's the difference between Function and Program
-//TODO Function and #.
-//TODO Chain in # means function chain. So &/|, need to be in parallel by default
-class Function
-  parameters: *
-  intermediate_return_type: *
-  return_type: #.last.intermediate_return_type
-  dynamically assert // every .next parameters == intermediate_return_type
-
-  external (parameters: this.parameters): return_type
-
-  => (def: (x?): *) => defs.push_back(def)
-
-end
-
-class Option = Some(value: T) | None
-{ Some, None } *= Option
-Some +=
-  {property: *}
-    ret = value[property]
-    return ret ==.instance_of Some(*) ? ret : Some(ret)
-end
+class Option<T> = T | None
+{ None } *= Option
 None +=
   {" "}({parameters: Expression}): Function
     < Function
 
     local
 
+  as (:== boolean) => false
 end

@@ -1,5 +1,11 @@
 //TODO On Node, define what it means to access from a particular location, access .applied_filter, and filter values in # based on caller.
 
+// Anything called on Option is automatically equivalent to 'variable?.'
+
+//TODO as (: type) is automatically implemented so that as boolean is always calling => this
+
+// Allow type annotations with : == boolean, meaning : *{== boolean}
+
 // * operator a,llows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
 
 //Return type
@@ -246,6 +252,8 @@ Evaluation order like +/-//* different for each type? how configured?
 
 //
 Some better way of defining this cursor on Ray/Boundary/Edge without making these links
+
+//TODO Extend UTF-8 with custom symbols, as a new String type. with way of converting to a string in case UTF later supports them
 
 def Boundary<T, E> //TODO Boundary = Ray, where next/previous is the next/previous boundary.
   end: Vertex

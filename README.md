@@ -4,7 +4,7 @@
 ---
 <div align="center">
 
-# Ray: A Universal Language
+# The Ray Language & The Ether
 
 ![header](./docs/header.png)
 

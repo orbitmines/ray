@@ -1,19 +1,26 @@
 //TODO What is a .expand on a boundary/edge
+//TODO Ray whose <T> isn't recursively the same type: i.e. some array like [String, Number]
 // X⊣⊙⊢∙⊣⊙⊢
 // ⊢∙⊣⊙⊢X
 // ⊢∙⊣⊢X
 // X⊣⊙
 // X⊣⊢∙⊣
 
-class Boundary < Ray<static>
+class Boundary<T> < Ray
+  x: static = this
+
   end | vertex | ∙ : Ray<Vertex>
   edge | ⊙ : Edge
-  continuation | ⊢ : Boundary => ⊙⊢#{!= this}
+  continuation | ⊢ : static => ⊙⊢#{!= this}
+
+  ?⊢ : is_initial => ∙⊢ == this
+  ⊣? : is_terminal => ∙⊣ == this
 end
-class Edge < Ray<static> & (⊣ | ⊢ | ⊢{.} | list): Boundary
+class Edge < Ray & (⊣ | ⊢ | ⊢{.} | list): Boundary
+  x: static = this
+  //TODO .value is defined on the Ray which defines the boundaries on list? Or ignore that.
 end
-class Ray<T = Ray<T>> (value: T?) < AbstractDirectionality
-  //TODO If T == static, value = this
+class Ray (x | value) < AbstractDirectionality
 
   initial | ⊢ | ⊢{.} : Boundary = Boundary<Vertex: T>(∙: this)
   terminal | ⊣ : Boundary = Boundary<Vertex: T>(∙: this)
@@ -23,6 +30,7 @@ class Ray<T = Ray<T>> (value: T?) < AbstractDirectionality
     x = this
     path.reverse.for method => x = x[method]
     x
+
 end
 
 class AbstractDirectionality<T> < Iterable<T>

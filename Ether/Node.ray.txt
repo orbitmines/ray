@@ -23,7 +23,7 @@ class
 end
 
 class * | Node
-  external local
+  external local //TODO How to say infer
 
   external = | assign (x): x //TODO Might have to set # equal to x
   external {*} | [{property: *}] //TODO How to say infer the property.

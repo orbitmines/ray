@@ -80,6 +80,7 @@ class Node
     this.protected super[constructor.name] = constructor<local: caller> if constructor.name
     //TODO Ensure the caller implements all undefined methods (unless abstract) abstract if any methods aren't defined. Is there ever a case where you want to extend abstract but only pass along the methods, yes?
     // TODO: How does type extension work?
+    //TODO Change type parameter.
   end
 
   def [] = Array<this>

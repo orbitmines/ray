@@ -6,7 +6,14 @@ class Expression = string: String
   {" "}: (type) => //TODO Wrap whole expression in : type
 end
 
+//TODO List of methods which shouldnt be called on local, but on this if possible:
+// #, * (on global, not local)
+
 //TODO What does local.# do? iterate over all simultaneous threads of the execution?
+//TODO local**# => Iterate threads
+//TODO How to get the current thread, Does local** have a way of getting that current value have it be a ray, but iterate over all, not just next.
+//Coroutines like race say start quest which says function.stop
+//TODO Function/Program is a quest => set active means, if parameters arent filled use enumerable superpositions => Every function is of type (): *
 
 //TODO WHat's the difference between Function and Program
 //TODO Function and #.
@@ -19,9 +26,7 @@ class Function | Program = Boundary<>
   //TODO Then it's run as separate executable vs run according to their control-flow implementation.
   expression: Expression
   //TODO .expand into subexpressions
-  parameters: *
-  intermediate_return_type: *
-  return_type: #.last.intermediate_return_type
+
   //TODO return_type also implements setting return_type=, by saying dynamically #.last... = return_type. Dynamically because the property is also dynamic (func)
   dynamically assert // every .next parameters == intermediate_return_type
 
@@ -39,6 +44,12 @@ class Function | Program = Boundary<>
 
 end
 
-class Function | Program = Boundary<>
-  return_type: #.last
+class Function | Program = Boundary
+  ∙.x: State
+  static State
+  end
+
+  in | parameters => x
+  out | intermediate_return_type => ∙⊣.x
+  return_type => last.out
 end

@@ -6,6 +6,8 @@
 
 // Allow type annotations with : == boolean, meaning : *{== boolean}
 
+//TODO Super + subscript means what in UI.
+
 // * operator a,llows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
 
 //Return type
@@ -649,6 +651,7 @@ end
   end
 
 // Allow +=  equiv to '= .+ b', so allow '= .method.method2'
+// Allow  Ray<T = Ray<T>>
 
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
@@ -675,6 +678,7 @@ end
 // Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
 // A monkey-patched function added, is suddenly also used by the library. Notify the user it's now overriding functionality that wasnt, there before.
 // Use something l;ike Model @ remote as the thing which takes the type used for API. but still run instances locally? How? And then on a change in the API jnotify user.
+// For .ray.txt editor we can inject labels before functions and hide them with some IDE plugins for non-Ether editors. So still support version control in-line
 
 // TODO - Notes on Type Checking
 // If blocks like if array.length > 2 ... end, change the type of array within that block.

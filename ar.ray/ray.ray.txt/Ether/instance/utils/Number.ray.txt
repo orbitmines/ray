@@ -144,3 +144,5 @@ end
     def `iterable: Applicable` = iterable.`method`
   end
 end
+
+//TODO Infinity / ∞

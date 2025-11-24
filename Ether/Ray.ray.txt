@@ -15,6 +15,11 @@ class Boundary<T> < Ray
 
   ?⊢ : is_initial => ∙⊢ == this
   ⊣? : is_terminal => ∙⊣ == this
+
+  {path: (((path?, "⊙"?)?, "⊢")?, "∙")?, "⊣"}{.}
+    x = this
+    path.reverse.for method => x = x[method == "⊣" ? "⊢" : method]
+    x
 end
 class Edge < Ray & (⊣ | ⊢ | ⊢{.} | list): Boundary
   x: static = this
@@ -31,6 +36,8 @@ class Ray (x | value) < AbstractDirectionality
     path.reverse.for method => x = x[method]
     x
 
+  //TODO .expand only the boundaries, or everything
+  //TODO .paths possible paths to take.
 end
 
 class AbstractDirectionality<T> < Iterable<T>

@@ -54,3 +54,16 @@ Then it would be:
 B
 .+ C  //No ambiguity if we require . usage.
 A + . //TODO Ambiguity that "A" is not defined on B+C
+
+//TODO Original function which caused the change is var.
+0..100.for
+  A += 1
+  B += 2
+
+// A
+6ba7b810-9dad-11d1-80b4-00c04fd430c8\ &caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; 0..100.for this += 1
+// B
+6ba7b810-9dad-11d1-80b4-00c04fd430c8\ &caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; 0..100.for this += 2
+// TODO With tagged original functions? -> is &caller, &caller is a method inside a class, the class is what we care about for access (that needs to change), but &caller holds the place in the function exec.
+// TODO Want caller to be the version of the function, then another for the actual instantiation of the function
+// TODO  --> Usages of a function

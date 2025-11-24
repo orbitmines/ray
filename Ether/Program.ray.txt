@@ -42,14 +42,42 @@ class Function | Program = Boundary<>
 
   //TODO Define super() for any =
 
+  //TODO Conditional edges/gotos
+  //TODO .expand on an unknown function makes the length possibly infinite, optionally assume it terminates
+
+  //TODO Coroutine where it's a race, and one is finite which always terminates the others are not, the whole function still always terminates.
+
+  // return_type** => The function which generates the value. Which is a subfunction of the actual function which generated it.
+  // TODO: Want to allow to access the whole function which generated the change you see in the sequence of functions called on the variable.
 end
 
 class Function | Program = Boundary
-  ∙.x: State
-  static State
+  ∙.x: {
+    context: *
+
+    //TODO Result is the last line/var of function, so it's the previous step?
+    //TODO So 'in' is previous state.
+    //TODO But in: should actually be the entire function context.
+    result: out
+  }
+
+  external (parameters: in): return_type
+
+  if !?⊢
+    step (
+      override: boolean = true // Setting override to false, spawns a new path of execution which can be stepped independently.
+    )
   end
+
+  arguments => ∙⊣first //TODO .state
+  //TODO arguments = , When vertex is set to None, should set recursively the boundaries etc. as well. And extend the initial boundaries with Function.
 
   in | parameters => x
   out | intermediate_return_type => ∙⊣.x
   return_type => last.out
+
+
+
+  // With the assumption that each non-expandable step terminates.
+  total | decidable | always_terminates | always_halts => expanded.length#.every(!= ∞)
 end

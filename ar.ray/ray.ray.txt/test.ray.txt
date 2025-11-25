@@ -8,6 +8,8 @@
 
 //TODO Super + subscript means what in UI.
 
+//TODO If multiple sets =, make the object adhere to the type, allow it temporarily to not adhere to it: as long as it's not used. Deem as a single transaction.
+
 // * operator a,llows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
 
 //Return type

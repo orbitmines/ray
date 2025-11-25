@@ -1,2 +1,13 @@
 left-associative
 right-associative //TODO
+
+namespace RayLanguage // This namespace will be used for: < Language
+  namespace Txt < Language
+    equivalence ".ray.txt" => this
+
+    static Expression < String
+      external comment: String
+    end
+
+  end
+end

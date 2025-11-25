@@ -1,36 +1,22 @@
-class Expression = string: String
-  external comment: String
 
-  , (b: Expression)
-
-  {" "}: (type) => //TODO Wrap whole expression in : type
-end
 
 //TODO List of methods which shouldnt be called on local, but on this if possible:
 // #, * (on global, not local)
 
-//TODO What does local.# do? iterate over all simultaneous threads of the execution?
 //TODO local**# => Iterate threads
 //TODO How to get the current thread, Does local** have a way of getting that current value have it be a ray, but iterate over all, not just next.
-//Coroutines like race say start quest which says function.stop
-//TODO Function/Program is a quest => set active means, if parameters arent filled use enumerable superpositions => Every function is of type (): *
 
-//TODO WHat's the difference between Function and Program
-//TODO Function and #.
-//TODO Chain in # means function chain. So &/|, need to be in parallel by default
-//TODO What about other evaluation orders, they're shuffled in the right order in this control-flow. What if I still want them stored out of order?
-class Function | Program = Boundary<>
+//Coroutines like race say start quest which says function.stop
+
+//TODO What about other evaluation orders, they're shuffled in the right order in this control-flow.
+//TODO What if I still want them stored out of order? -> Top-level expression is out-of-order.
+
+class Function | Program = Boundary
   //TODO as (language: Language, compiler_options: {} = {})
   //TODO Things in history where we store a copy of the cached program, and then execute from cache
   //TODO Only translate subexpressions to certain languages. Superpose languages by superposing different implementations and then something like a corotine to which one finishes first.
   //TODO Then it's run as separate executable vs run according to their control-flow implementation.
   expression: Expression
-  //TODO .expand into subexpressions
-
-  //TODO return_type also implements setting return_type=, by saying dynamically #.last... = return_type. Dynamically because the property is also dynamic (func)
-  dynamically assert // every .next parameters == intermediate_return_type
-
-  external (parameters: this.parameters): return_type
 
   <{filled_parameters: Expression}> => //TODO .copy, which is just another history branch
 
@@ -51,9 +37,41 @@ class Function | Program = Boundary<>
   // TODO: Want to allow to access the whole function which generated the change you see in the sequence of functions called on the variable.
 end
 
-class Function | Program = Boundary
+external {label: String}\: Program
+
+namespace goto
+  (program: Program, predicate: Expression?)
+    caller.push_back(program, ⊙: // TODO load condition on edge )
+  end
+
+  if (predicate: Expression) => this<predicate: predicate>
+end
+
+class Expression < language.Expression
+  language: Language = ".ray.txt"
+
+  , (b: Expression)
+
+  {" "}: (type) => //TODO Wrap whole expression in : type
+end
+
+class Language
+  // The datastructure the language is encoded in.
+  static Expression
+end
+
+class Function | Program < Boundary, Location, expression: Expression
+  //TODO How to select .next to be only for Boundary. Because expression has been given separate name?
+  //TODO .hierarchy in function is, parent contexts, child contexts.
+
+  //TODO Use expression to .expand function.
+
+  // Program State
+  // - A looped control-flow, has the values of each iteration stored in the state's history.
+  //   - Different instantiated branches are also different branches in the state's history.
   ∙.x: {
     context: *
+    //TODO Things like &caller are in context
 
     //TODO Result is the last line/var of function, so it's the previous step?
     //TODO So 'in' is previous state.
@@ -61,7 +79,7 @@ class Function | Program = Boundary
     result: out
   }
 
-  external (parameters: in): return_type
+  external (args: in): return_type
 
   if !?⊢
     step (
@@ -69,14 +87,16 @@ class Function | Program = Boundary
     )
   end
 
-  arguments => ∙⊣first //TODO .state
-  //TODO arguments = , When vertex is set to None, should set recursively the boundaries etc. as well. And extend the initial boundaries with Function.
+  args | arguments => first.in == None ? first∙ : ∙⊣first -- .x
 
   in | parameters => x
   out | intermediate_return_type => ∙⊣.x
+  dynamically assert in == ?⊢ ? None : previous.out
+
   return_type => last.out
 
-
+  //TODO schedule, spawn entity if necessary, if already an NPC, use that NPC quests.
+  //TODO < Quest, implement .stop
 
   // With the assumption that each non-expandable step terminates.
   total | decidable | always_terminates | always_halts => expanded.length#.every(!= ∞)

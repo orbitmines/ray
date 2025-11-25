@@ -34,34 +34,18 @@ end
 //TODO caller is the method in a class, since caller is a location, it has .parent on it defined on it which is the class.
 //TODO caller -> .parent == Some player except for the last one which doesn't have a .parent
 
-// The program is similar to history and should probably be the same thing.
-//   -> History needs to be aware of caller as well (and the version at that particular time).
-// These object references are to a particular version of that object. (Don't want to get the recent version here unless dynamically variable?, probably still not)
+// These object references are to a particular version of that object. ; dynamically is ref to most recent version, encoded how? UUID.last?
 //TODO OR require eval before committing to expression string with object_id
 //TODO Conditional edge
-// History = Program
+
 Result = Waiting | Intermediate(function: *, result: *) | Final(result: *)
 
 //TODO What if other things apart from the vertex are changed? Keep track of that. What if other vars are relevant, need to keep track and store those in history too? (Like a random seed), want each thread to be deterministic, but allow option sto say: run again without those set parameters.
 class Program = Ray<Vertex>
   //TODO We might have a program pointer which .expands into other programs like function calls, we want to context of "we're handling this .expand" + "we're here in the .expand". So many pointers to program at ##.
 
-  //TODO This is for a program instance, Program object vs program instance pointer. (Both are of type program?), you can spawn new instances of the same program with the same program state etc..
-  context: * //TODO Variables accessible in program, context.parent etc.. is checked when accessing variable.
+  //TODO What if the program mid-execution updates to a new version, how to handle that?: Update all instances of current quests running that function
 
-  //TODO What if the program mid-execution updates to a new version, how to handle that?
-
-  static Vertex = {}
-  static Edge = {
-  }
-  //TODO Vertex only used for cached evaluation results,
-  //TODO : AND importantly intermediate results, -> So function continuations should define what to do with intermediate results.
-  //TODO Where are the intermediate variables of the function execution stored?
-
-  //TODO Edge encodes another program applying things like &caller = OBJECT_ID2, + C
-  //TODO The initial of the edge program is the VERTEX result before the edge definition.
-  //TODO What is a terminal/initial program mean?
-  //       -> The starting vertex, terminal is the terminal vertex. (Like a finally this, effecting the return)
   //TODO Everything to do with a particular variable is all grouped in a single .expand, so that each successive top-level vertex is a new access into the program context.
 end
 //TODO UUID-s built up in a history version file are Node: Mac address that we generate for an instance based on the pub-key?, timestamp is the last edited time of that object.

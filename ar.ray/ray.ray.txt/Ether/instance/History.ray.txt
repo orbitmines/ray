@@ -4,11 +4,13 @@
 end
 
 class History = Ray
+  //TODO = Program
   //TODO diff
 
   static Commit = static +def Vertex
     //TODO .expand Graph<Commit>.acyclic
   end
+  Vertex.name |= "Commit"
   static Branch = static +def Edge
   end
 

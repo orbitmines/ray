@@ -6,10 +6,10 @@
 // X⊣⊙
 // X⊣⊢∙⊣
 
-class Boundary<T> < Ray
+class Boundary < Ray
   x: static = this
 
-  end | vertex | ∙ : Ray<Vertex>
+  end | vertex | ∙ : Ray
   edge | ⊙ : Edge
   continuation | ⊢ : static => ⊙⊢#{!= this}
 
@@ -27,8 +27,8 @@ class Edge < Ray & (⊣ | ⊢ | ⊢{.} | list): Boundary
 end
 class Ray (x | value) < AbstractDirectionality
 
-  initial | ⊢ | ⊢{.} : Boundary = Boundary<Vertex: T>(∙: this)
-  terminal | ⊣ : Boundary = Boundary<Vertex: T>(∙: this)
+  initial | ⊢ | ⊢{.} : Boundary = Boundary(∙: this)
+  terminal | ⊣ : Boundary = Boundary(∙: this)
 
   // Allow syntax for traversing the initial side: '⊢∙⊣⊙⊢var'
   {path: (((path?, "∙")?, "⊣")?, "⊙"?)?, "⊢"}{.}

@@ -14,16 +14,6 @@ global = local
 def * = external // TODO any type Might not need to be externally defined. self-referential hypergraph-like structure
 // TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
 def do<T: Program>(program: T) => T = external
-class goto
-  def (location: Program, predicate: Expression?) = external //TODO, Hijacks control-flow (Maybe if predicate is provided), which needs to be an option for functions, yielding control to a parameterless "program" -> or one where the parameters are already filled instead of goto the way of doing it.
-
-  def if predicate: Expression = this<predicate: predicate>
-end
-
-
-def +def
-  //TODO Define super in nested 'defs'
-end
 
 //TODO def
 //TODO Array

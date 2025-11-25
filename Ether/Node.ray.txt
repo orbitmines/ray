@@ -1,7 +1,8 @@
 class
   {name: *} (def: (Args: *): *)
+    // Allow Class.name |= "Class2" to add aliases
+    dynamically &definer[local.name] = local if local.name
     local.name = name
-    &definer[name] = local
 
     static = local
 
@@ -58,6 +59,8 @@ None +=
     < Function
 
     local
+
+ //TODO Ray. arguments = , When vertex is set to None, should set recursively the boundaries etc. as well. And extend the initial boundaries with Function.
 
   as (:== boolean) => false
 end

@@ -1,3 +1,12 @@
+//TODO Space counts as --
+Instance can be part of many Many's
+
+//TODO get aliases too of the things provided? If not defined on parent obj. Editor: get the same comment.
+delegate in | out => object
+
+different type/fields depending on what location we're at,
+Access list of instructions from ** iterable object
+
 //TODO On Node, define what it means to access from a particular location, access .applied_filter, and filter values in # based on caller.
 
 // Anything called on Option is automatically equivalent to 'variable?.'

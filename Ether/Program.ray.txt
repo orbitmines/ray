@@ -37,11 +37,14 @@ class Function | Program = Boundary
   // TODO: Want to allow to access the whole function which generated the change you see in the sequence of functions called on the variable.
 end
 
+left-associative
+right-associative //TODO
+
 external {label: String}\: Program
 
 namespace goto
   (program: Program, predicate: Expression?)
-    caller.push_back(program, ⊙: // TODO load condition on edge )
+    caller.push(program, ⊙: // TODO load condition on edge, or rather load it on the function boundary?)
   end
 
   if (predicate: Expression) => this<predicate: predicate>
@@ -50,9 +53,11 @@ end
 class Expression < language.Expression
   language: Language = ".ray.txt"
 
-  , (b: Expression)
+  dynamically
+    protected fn = as Program
+    delegate (: fn.in.type) => fn
 
-  {" "}: (type) => //TODO Wrap whole expression in : type
+  as (:== Program) => //TODO
 end
 
 class Language
@@ -65,6 +70,8 @@ class Function | Program < Boundary, Location, expression: Expression
   //TODO .hierarchy in function is, parent contexts, child contexts.
 
   //TODO Use expression to .expand function.
+
+  //TODO Is intermediate state the whole context? Or what do we do with sequence of operations on some variable? How to intuitively make that sequence only about that variable? and things it depends on
 
   // Program State
   // - A looped control-flow, has the values of each iteration stored in the state's history.
@@ -79,7 +86,7 @@ class Function | Program < Boundary, Location, expression: Expression
     result: out
   }
 
-  external (args: in): return_type
+  external (args: in.type): return_type
 
   if !?⊢
     step (
@@ -87,17 +94,34 @@ class Function | Program < Boundary, Location, expression: Expression
     )
   end
 
-  args | arguments => first.in == None ? first∙ : ∙⊣first -- .x
+  args | arguments => first.out
 
-  in | parameters => x
-  out | intermediate_return_type => ∙⊣.x
-  dynamically assert in == ?⊢ ? None : previous.out
+  in | parameters => ∙⊣this .x
+  out => ∙.x
 
-  return_type => last.out
+  return_type => last.out.type
 
   //TODO schedule, spawn entity if necessary, if already an NPC, use that NPC quests.
   //TODO < Quest, implement .stop
 
   // With the assumption that each non-expandable step terminates.
   total | decidable | always_terminates | always_halts => expanded.length#.every(!= ∞)
+end
+
+namespace RayLanguage // This namespace will be used for: < Language
+  namespace Txt < Language
+    equivalence ".ray.txt" => this
+
+    static class Expression < String
+      //TODO Expression comes from some file or more generally a context, have that information available here.
+
+      external comment: String
+
+      , (b: Expression)
+      -- (b: Expression)
+
+      {" "}: (type) => //TODO Wrap whole expression in : type
+    end
+
+  end
 end

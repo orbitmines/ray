@@ -26,6 +26,7 @@ class Edge < Ray & (⊣ | ⊢ | ⊢{.} | list): Boundary
   //TODO .value is defined on the Ray which defines the boundaries on list? Or ignore that.
 end
 class Ray (x | value) < AbstractDirectionality
+  //TODO .value is everything on x except the Rays defined at #. And we need distinction between methods on Ray/x
 
   initial | ⊢ | ⊢{.} : Boundary = Boundary(∙: this)
   terminal | ⊣ : Boundary = Boundary(∙: this)

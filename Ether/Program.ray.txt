@@ -21,12 +21,13 @@ class Function | Program = Boundary
   <{filled_parameters: Expression}> => //TODO .copy, which is just another history branch
 
   => (def: (x?): *) => defs.push_back(def)
-    //TODO When parameterless => is an override by default
+    //TODO When parameterless => is an override by default, on Expression?
 
   {" "}({parameters: Expression}): Function
     //TODO Default &=, default override all the locations (just override the var), so when override =, it's also assign
 
   //TODO Define super() for any =
+  //TODO Or refer to other branches which are labelled, so labels cross branches.
 
   //TODO Conditional edges/gotos
   //TODO .expand on an unknown function makes the length possibly infinite, optionally assume it terminates
@@ -40,7 +41,7 @@ end
 left-associative
 right-associative //TODO
 
-external {label: String}\: Program
+external {label: String}\: Program //TODO Push to program.name
 
 namespace goto
   (program: Program, predicate: Expression?)

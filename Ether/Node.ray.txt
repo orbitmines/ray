@@ -1,5 +1,5 @@
 class
-  {name: *} (def: (Args: *): *)
+  {name: *} (def: (Args: *): *) //TODO Allow out-of-order
     // Allow Class.name |= "Class2" to add aliases
     dynamically &definer[local.name] = local if local.name
     local.name = name

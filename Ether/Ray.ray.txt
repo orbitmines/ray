@@ -28,6 +28,8 @@ end
 class Ray (x | value) < AbstractDirectionality
   //TODO .value is everything on x except the Rays defined at #. And we need distinction between methods on Ray/x
 
+  //TODO is .expand implemented for looped types, which assume .expand unrolls the loop?
+
   initial | ⊢ | ⊢{.} : Boundary = Boundary(∙: this)
   terminal | ⊣ : Boundary = Boundary(∙: this)
 

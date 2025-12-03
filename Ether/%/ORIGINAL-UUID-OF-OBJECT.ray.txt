@@ -39,7 +39,7 @@ global = global%[UUID-VERSION-OF-STD] //TODO Use like a Node ID fff37839 or some
 ORIGINAL-UUID-OF-OBJECT\ (&caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; 0)
 //TODO This change .expands into many individual history changes, which are not stored, how's that flagged?, Except for specific ones, like conditionally the index.
 //TODO This .expand is always based on the function expansions.
-6ba7b810-9dad-11d1-80b4-00c04fd430c8\ &caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; 0..100.for (6ba7b810-9dad-11d1-80b4-00c04fd430c8\ if i == 50) this += 1 // Inside each iteration, the caller is changed maybe.
+6ba7b810-9dad-11d1-80b4-00c04fd430c8\ (<&caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8>; 0..100.for (6ba7b810-9dad-11d1-80b4-00c04fd430c8\ if i == 50) this += 1) // Inside each iteration, the caller is changed maybe.
 
 
 ORIGINAL-UUID-OF-OBJECT\ (&caller = 6ba7b810-9dad-11d1-80b4-00c04fd430c8; "A")

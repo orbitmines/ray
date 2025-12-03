@@ -18,6 +18,7 @@ class Function | Program = Boundary
   //TODO Then it's run as separate executable vs run according to their control-flow implementation.
   expression: Expression
 
+  //TODO Should be placeable on any Expression, and should change the call to that, even parameterless.
   <{filled_parameters: Expression}> => //TODO .copy, which is just another history branch
 
   => (def: (x?): *) => defs.push_back(def)
@@ -41,11 +42,36 @@ end
 left-associative
 right-associative //TODO
 
-external {label: String}\: Program //TODO Push to program.name
+//TODO Certain things like the global <> prefer over calling the locally defined one, how to flag?
+//TODO The obvious successors to this would be after, or in between each recursive function call (x levels deep). Benchmarking would use that. (Done by just implementing a function which does that and call that instead, finally and X)
+// Execute expression on each successive function call in its context. So if called within (), it only works within that context.
+external <{expression: Expression}>: void
+// Label the current cursor within a program with a name.
+external {label: *}\: Program //TODO Push to program.name
+// Get the currently running function
+external &: Program
+// Get a contextual variable defined on the currently running function.
+external &{method: *}: //TODO Infer
+
+return (expression: Expression) //TODO Allow out-or-order execution.
+  // Ignore the values set by manually setting &caller, and only return to the original function.
+  // For instance, history sets &caller to preserve history, but we want to continue the history function, not where it originally called from.
+  caller = &caller%.first∙
+
+  caller.next.out = expression
+  caller.parent.push
+  caller.next = .push //TODO Push so that it's after the instruction.
+
+finally (expression: Expression)
+  &caller.push_back(expression) //TODO Do we want it to effect out-of-order, but specifically executed at the start.?
+  //TODO This assumes that the returns are push_backable, instead of the returns continuing to the prev func. How to fix?
+  //TODO Return: what if we say the .terminal expands into the continuation, but it's still terminal this way. But then the push_back would have to be before the expansion, not after it.
+
+// TODO before_each/after_each recursively: filter, or filter on program to set it for nested expressions yes/no etc.. (expression: Expression)
 
 namespace goto
   (program: Program, predicate: Expression?)
-    caller.push(program, ⊙: // TODO load condition on edge, or rather load it on the function boundary?)
+    &caller.push(program, ⊙: // TODO load condition on edge, or rather load it on the function boundary?)
   end
 
   if (predicate: Expression) => this<predicate: predicate>
@@ -58,6 +84,7 @@ class Expression < language.Expression
     protected fn = as Program
     delegate (: fn.in.type) => fn
 
+  as (: Language): Expression => //TODO
   as (:== Program) => //TODO
 end
 
@@ -66,6 +93,8 @@ class Language
   static Expression
 end
 
+//TODO Shaders are like parallel iterators; there's an unrollable loop in the Many iterator for threads.
+//      -> This existence of a forloop, means the program assumes Many definitions are in turn also programs. -> Of course
 class Function | Program < Boundary, Location, expression: Expression
   //TODO How to select .next to be only for Boundary. Because expression has been given separate name?
   //TODO .hierarchy in function is, parent contexts, child contexts.
@@ -74,18 +103,24 @@ class Function | Program < Boundary, Location, expression: Expression
 
   //TODO Is intermediate state the whole context? Or what do we do with sequence of operations on some variable? How to intuitively make that sequence only about that variable? and things it depends on
 
+
+  ∙: State
   // Program State
   // - A looped control-flow, has the values of each iteration stored in the state's history.
   //   - Different instantiated branches are also different branches in the state's history.
-  ∙.x: {
-    context: *
-    //TODO Things like &caller are in context
+  static class State < Ray
+    ⊢: Program
 
-    //TODO Result is the last line/var of function, so it's the previous step?
-    //TODO So 'in' is previous state.
-    //TODO But in: should actually be the entire function context.
-    result: out
-  }
+    x: {
+      context: *
+      //TODO Things like &caller are in context
+
+      //TODO Result is the last line/var of function, so it's the previous step?
+      //TODO So 'in' is previous state.
+      //TODO But in: should actually be the entire function context.
+      result: out
+    }
+  end
 
   external (args: in.type): return_type
 
@@ -96,11 +131,12 @@ class Function | Program < Boundary, Location, expression: Expression
   end
 
   args | arguments => first.out
+  return_type => last.out.type
+  parent | caller : Program => first.x
+  //TODO .children
 
   in | parameters => ∙⊣this .x
-  out => ∙.x
-
-  return_type => last.out.type
+  out | local => ∙.x
 
   //TODO schedule, spawn entity if necessary, if already an NPC, use that NPC quests.
   //TODO < Quest, implement .stop

@@ -170,6 +170,8 @@ Labels change the location of an expression, or add hierarchy to it.
 //TODO = on variable, main object being a variable at a location
 Only added to graphs to histories
 
+//TODO .push which does vs doesnt override a possible terminal defined there.
+
 // ~~, like --, skips the () around, and applies some change but returns the original object.
 // So you dont have to write
 a = Value
@@ -200,6 +202,7 @@ You want = to be called on object, changing the type possibly. Since it's on a v
 
      variant:
             switch //TODO Allow switch to be used like this in a type definition
+// Allow 'caller: Program => first.x', setting first.x's type.
 
 None implements location and =
 What if an object is instantiated and used within a function/constrctor only, whats it location like, none for instance

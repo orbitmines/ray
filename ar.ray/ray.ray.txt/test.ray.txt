@@ -1,3 +1,10 @@
+//String newline, respect spaces after the first one, which we trim completely
+
+/Directory & Directory.ray.txt go together.
+
+//TODO: Set actual directory vs the one we map to. Map both @player-name and @uuid, but actualize in @U/U/I/D
+< @Ether/.ts
+
 //TODO Space counts as --
 Instance can be part of many Many's
 

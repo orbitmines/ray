@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": false,
   "repository": "https://github.com/orbitmines/ray",
+  "type": "module",
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
@@ -13,7 +14,7 @@
   },
   "scripts": {
     "test": "npx jest",
-    "v0": "ts-node src/runtime/v0.ts"
+    "v0": "ts-node --esm src/runtime/v0.ts"
   },
   "jest": {
     "preset": "ts-jest",

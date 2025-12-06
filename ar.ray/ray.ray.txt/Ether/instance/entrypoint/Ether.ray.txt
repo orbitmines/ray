@@ -9,6 +9,8 @@ localhost none.write ENTITY = global
 localhost none.write SETTINGS = IO /settings //TODO Path type
 location &= SETTINGS
 
+//TODO Skip settings, use version control to set the variables directly here.
+
 localhost ETHER: Entity | Instance = "ether.orbitmines.com:37839"
 ETHER = Entity(instance: ETHER) if ETHER ==.instance_of Instance
 
@@ -18,7 +20,7 @@ localhost BROADCAST_INSTANCE: boolean = false
 // Note that child instances are allowed to run on the same port as the host machine, but it's simply that it's using the
 // hosts' socket, and anything meant for the entity running on this Instance is delegated to it.
 localhost INSTANCE: Instance = "localhost:${DEFAULT_PORT}" //TODO If host fill external parents
-location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
+dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
 //TODO Socket connections should check where the request came from, if it's not in location, it's ignored since we're OFFLINE to them then.
 
 // Whether to connect to the central Ether server or not.

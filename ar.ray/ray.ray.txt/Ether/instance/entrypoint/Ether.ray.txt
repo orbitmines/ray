@@ -1,31 +1,22 @@
 < Entity
 
-localhost none.write ENTITY = global
 
-// In order to only edit settings, you'd do (which would take effect on the next restart):
-//   entity @ SETTINGS -- .OFFLINE = true.
-// Or to edit both the settings and the current entity at the same time:
-//   entity & entity @ SETTINGS -- .OFFLINE = true
-localhost none.write SETTINGS = IO /settings //TODO Path type
-location &= SETTINGS
 
-//TODO Skip settings, use version control to set the variables directly here.
-
-localhost ETHER: Entity | Instance = "ether.orbitmines.com:37839"
+protected ETHER: Entity | Instance = "ether.orbitmines.com:37839"
 ETHER = Entity(instance: ETHER) if ETHER ==.instance_of Instance
 
 // Whether to broadcast your IP to peers, default behavior is NOT doing so, and only exposing your IP to the central Ether server.
-localhost BROADCAST_INSTANCE: boolean = false
+protected BROADCAST_INSTANCE: boolean = false
 
 // Note that child instances are allowed to run on the same port as the host machine, but it's simply that it's using the
 // hosts' socket, and anything meant for the entity running on this Instance is delegated to it.
-localhost INSTANCE: Instance = "localhost:${DEFAULT_PORT}" //TODO If host fill external parents
+protected INSTANCE: Instance = "protected:${DEFAULT_PORT}" //TODO If host fill external parents
 dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
 //TODO Socket connections should check where the request came from, if it's not in location, it's ignored since we're OFFLINE to them then.
 
 // Whether to connect to the central Ether server or not.
-localhost OFFLINE: boolean = false
+protected OFFLINE: boolean = false
 dynamically location &= public.read ETHER.instance if !OFFLINE
 
-localhost none.write ENTRYPOINT = /entrypoint/entrypoint //TODO Path type, cast from string allowed
+protected none.write ENTRYPOINT = /entrypoint/entrypoint //TODO Path type, cast from string allowed
 IO.eval ENTRYPOINT

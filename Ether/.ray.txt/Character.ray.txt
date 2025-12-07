@@ -1,0 +1,5 @@
+//TODO selected
+//TODO selected on another instance (primary)
+//TODO the variant of selected on X, for my Y (mirror)
+
+  : static => #[0].x

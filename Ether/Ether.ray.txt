@@ -1,0 +1,4 @@
+< Character
+
+protected none.write CHARACTER = global
+

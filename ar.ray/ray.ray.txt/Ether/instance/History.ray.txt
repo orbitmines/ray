@@ -1,13 +1,15 @@
 +def Node
   history: History = History(this)
   def % = history
+
+  as (== Version) => %.
 end
 
 class History = Ray
   //TODO = Program
   //TODO diff
 
-  static Commit = static +def Vertex
+  static Version | Commit = static +def Vertex
     //TODO .expand Graph<Commit>.acyclic
   end
   Vertex.name |= "Commit"

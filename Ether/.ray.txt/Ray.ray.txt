@@ -25,6 +25,7 @@ class Edge < Ray & (⊣ | ⊢ | ⊢{.} | list): Boundary
   x: static = this
   //TODO .value is defined on the Ray which defines the boundaries on list? Or ignore that.
 end
+//TODO .every on ray iterates both ways., explicit filter for excluding. (ray -> .next).for
 class Ray (x | value) < AbstractDirectionality
   //TODO .value is everything on x except the Rays defined at #. And we need distinction between methods on Ray/x
 

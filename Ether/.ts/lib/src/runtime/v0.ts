@@ -102,6 +102,7 @@ class Instance {
 
     delete args['@']
 
+    //TODO Always load ETHER executable with ENTRYPOINT = Context.file
     if (stat.isFile())
       return new Instance(`${Instance.DIR}/.ray.txt`).eval(args, Context.file(path))
     else if (stat.isDirectory())

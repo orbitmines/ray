@@ -1,5 +1,6 @@
 //TODO Make sure that specific entries in a # or array similarly have their visibility respected.
 
+//TODO           Note that the write permission is just a wrapper for execute, namely:
 single Access
   READ = "read"
   WRITE = "write"
@@ -46,9 +47,10 @@ modifier confidential
   end
 end
 // "localhost" means only on the local instance. (Not even local child instances)
-modifier localhost
-  def as :== Node{} = Node{== ENTITY}
+modifier protected
+  def as :== Node{} = Node{== CHARACTER}
 end
+//TODO localhost is any character on this machine
 // Allow any instance defined as a parent of this instance to access the location. Usually that would the host machine,
 // but in principle this could be any instance in some hierarchy.
 modifier host
@@ -60,7 +62,7 @@ end
 
 // "private" means any instance running this entity/player. Note that any backup server, like the central Ether server, has that property.
 modifier private
-  def as :== Node{} = Node{== ENTITY @ ENTITY.instance} | "localhost"
+  def as :== Node{} = Node{== CHARACTER @ CHARACTER.instance} | "localhost"
 end
 // Only include non-public instances running this entity. (So basically private servers running your player instance)
 modifier managed
@@ -77,7 +79,7 @@ end
 //const = none.write //TODO Might be confusing what in its children is considered const, so perhaps slightly change this.(If child has different permission it's not really const recursively)
 
 // Acts as the usual programming language private/protected keyword; It is only accessible within the defined class.
-modifier protected
+modifier internal
   def as :== Node{} = Node{location.parent ==.instance_of class}{==.instance_of location.just parent.static}
   //TODO You want this to work for local contexts too, so cant rely just on class.
 end

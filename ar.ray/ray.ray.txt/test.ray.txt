@@ -1,3 +1,7 @@
+//TODO The -> iterator stops when hitting None.
+
+//TODO Skip settings, use version control to set the variables directly here.
+
 //String newline, respect spaces after the first one, which we trim completely
 
 /Directory & Directory.ray.txt go together.
@@ -110,6 +114,8 @@ or
 +def Object
 end
 
+/// 0001 = 1 equivalence.
+
 < Node{} Location //TODO Filtered extension
 
 //TODO How does Lazy Evaluation work with Time.NOW, force evaluation there somehow?
@@ -144,7 +150,7 @@ def {expression: Expression}
   local_method
 }"
 
-//TODO Ambiguity between return ENTITY if, meaning ENTITY or returning ENTITY.if, the space prefers Expression if
+//TODO Ambiguity between return CHARACTER if, meaning CHARACTER or returning CHARACTER.if, the space prefers Expression if
 //TODO Ambiguity if we say boolean, and have a class call bo, with operator ole, on an (another class). we can't just split the tokens.
 // -> Resolve this ambiguity by preferring the attached version (since it's longer)
 

@@ -53,6 +53,8 @@ external &: Program
 // Get a contextual variable defined on the currently running function.
 external &{method: *}: //TODO Infer
 
+//TODO coroutines like race here.
+
 return (expression: Expression) //TODO Allow out-or-order execution.
   // Ignore the values set by manually setting &caller, and only return to the original function.
   // For instance, history sets &caller to preserve history, but we want to continue the history function, not where it originally called from.
@@ -63,7 +65,7 @@ return (expression: Expression) //TODO Allow out-or-order execution.
   caller.next = .push //TODO Push so that it's after the instruction.
 
 finally (expression: Expression)
-  &caller.push_back(expression) //TODO Do we want it to effect out-of-order, but specifically executed at the start.?
+  (&caller -> .collapse).last.push_back(expression) //TODO Do we want it to effect out-of-order, but specifically executed at the start.?
   //TODO This assumes that the returns are push_backable, instead of the returns continuing to the prev func. How to fix?
   //TODO Return: what if we say the .terminal expands into the continuation, but it's still terminal this way. But then the push_back would have to be before the expansion, not after it.
 
@@ -72,6 +74,7 @@ finally (expression: Expression)
 namespace goto
   (program: Program, predicate: Expression?)
     &caller.push(program, ⊙: // TODO load condition on edge, or rather load it on the function boundary?)
+    //TODO: Remove the goto from the program.
   end
 
   if (predicate: Expression) => this<predicate: predicate>
@@ -111,6 +114,7 @@ class Function | Program < Boundary, Location, expression: Expression
   static class State < Ray
     ⊢: Program
 
+    //TODO State is a history? Then calling the .x is the version at that history.
     x: {
       context: *
       //TODO Things like &caller are in context
@@ -132,8 +136,15 @@ class Function | Program < Boundary, Location, expression: Expression
 
   args | arguments => first.out
   return_type => last.out.type
-  parent | caller : Program => first.x
-  //TODO .children
+
+  // The function which called this function
+  // This is empty when asking the &caller of the top-level context; the character.
+  parent | caller : Program? => first.x //TODO Instead it's a collapsed initial?
+  // The latest known character associated with this chain of function calls (set this variable to change it)
+  character: Character (parent ? => parent.character : = ∙.x.last) //TODO What if the character is branched?
+  dynamically assert character !== None
+
+  //TODO .children TODO collapsed terminal.
 
   in | parameters => ∙⊣this .x
   out | local => ∙.x

@@ -1,4 +1,3 @@
-< Entity //TODO Expect fields to be filled by external
 
 //TODO Define == on Entity/Instance as checking the public key associated with that entity. (What do you do at scale if this is compromised, how do you redistribute these - redistribute based on a version log of who had access before the breach or something?)
 //TODO Additionally, you dont want things like private servers being comprimised just because player's can now imitate that they should have access to 'private'. How do you account for that.
@@ -6,6 +5,7 @@
 
 +def Node
   //TODO Location .inventory is just a location with string or other structures defined on the edge?
+  //TODO Need the currently selected location for Many location
   @ | location: Location =
 
   def @ location: Location = global[location]

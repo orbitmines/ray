@@ -28,7 +28,7 @@ class * | Node
 
   external = | assign (x): x //TODO Might have to set # equal to x
   external {*} | [{property: *}] //TODO How to say infer the property.
-  external # | all : static
+  external # | all : Iterable<static>
   external * | methods : { {key: *}: value: Program? }
   external ** | program : Program
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?

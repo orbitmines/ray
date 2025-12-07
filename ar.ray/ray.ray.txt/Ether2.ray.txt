@@ -346,6 +346,8 @@ class Item
 
   //TODO ANY ITEM MIGHT be managed by another instance
 
+  // Keeping history of certain variables of functions.
+
   // Items require Quests ; In order to find items you need quests.
   obtained_by: Quest
 

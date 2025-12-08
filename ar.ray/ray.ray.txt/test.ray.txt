@@ -1,8 +1,31 @@
+//TODO Which < is the ray, the first one?
+
+//TODO .max of any order so Status.max
+
+//TODO If there is a single field going to some class like Instance/or its extensions IP/Socket.Address, automatically add an equivalence (as IP) to that class. Is there ever a case where you don't want this equivalence?
+  as (== Instance) => .instance
+//TODO The inverse of this, calling the constructor on something which has a single extends, like Instance as Character. Only allow if it's a valid type then, so no fields missing.
+  as (== Character) => Character(instance: this)
+//TODO What about having some field of which subtypes could be Instance < Location, automatically allow Instance to filter for {==.instance_of Instance}
+//TODO Does introduce a possible ambiguity ina ==, of which side to put on the quiv graph, it's just that if either one works the == goes through.
+
+//TODO When location is set to some remote location, push updates to it - or how to configure communication.
+//TODO When location is set some localhost var, open port.
+//TODO Or when set to IP we have an instance running on, open port on remote server.
+//TODO --> Exchange information such that the remote instance is allowed to host you.
+//TODO --> What if signature changed, might not want to allow, or when to invalidate signature,
+
 //TODO The -> iterator stops when hitting None.
+
+//dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
+//todo should change the variable INSTANCE to a new var with different permissions.
 
 //TODO Skip settings, use version control to set the variables directly here.
 
 //String newline, respect spaces after the first one, which we trim completely
+
+//TODO Allow (<- INSTANCE) = (.host <- this)
+//TODO then casts all the characters to instances.
 
 /Directory & Directory.ray.txt go together.
 
@@ -150,7 +173,7 @@ def {expression: Expression}
   local_method
 }"
 
-//TODO Ambiguity between return CHARACTER if, meaning CHARACTER or returning CHARACTER.if, the space prefers Expression if
+//TODO Ambiguity between return ME if, meaning ME or returning ME.if, the space prefers Expression if
 //TODO Ambiguity if we say boolean, and have a class call bo, with operator ole, on an (another class). we can't just split the tokens.
 // -> Resolve this ambiguity by preferring the attached version (since it's longer)
 

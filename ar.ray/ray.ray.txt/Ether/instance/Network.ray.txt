@@ -124,6 +124,7 @@ namespace Network
   }
   dynamically Hosts.for host, ip => equivalence host -> ip
 
+  //TODO Domainname:port castable to IP using nameservers.
 end
 
 += Network

@@ -45,6 +45,8 @@ class Instance < Location, IP | Socket.Address //TODO | DomainName add DomainNam
   //TODO this value is different depending on your location -> It's localhost, locally, but set to a different ip in the network.
   //TODO Set this to the received IP dynamically.
 
+  //TODO Hierarchy = this
+
   //TODO public.read pub_key
 
   //TODO Overwrite in OS.
@@ -66,6 +68,8 @@ class Location = Ray
   // - In the case of rendering languages, whether HTML or your screen recorder, this could be child/parent windows/blocks/...
   // - In the case of a world, if there exist (sub-)regions which act as 'more abstract' parent/'less abstract' child locations. //TODO This is the same as .expand sometimes?
   parent: static <- .hierarchy -> children: static //TODO I want rays here on .next not nodes, how to define.
+
+  //TODO the host: of the variable is the IP address, which should replace localhost. depending on how mirroring variables works.
 
   // What instance is hosting this variable
   host: Instance = INSTANCE

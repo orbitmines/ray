@@ -1,4 +1,6 @@
 < Character
 
-protected none.write CHARACTER = global
+protected ME: Character = global
+protected ETHER: Character = "ether.orbitmines.com:37839"
 
+guests.read HOST: Character?

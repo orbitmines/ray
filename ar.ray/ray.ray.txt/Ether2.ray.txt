@@ -28,7 +28,7 @@ class Item
 
 end
 
-Saving program pointer id what youd do to save a game
+Saving program pointer id what youd do to save/pausing a game, how to account for version changes then
 
 .index on ray (Should compile to smarter things than just retreversing the graph to find the index, if a simple enumerating forloop does the job)
 Want to also hafve things like .index from some other location x

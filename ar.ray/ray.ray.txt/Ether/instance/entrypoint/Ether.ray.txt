@@ -2,21 +2,20 @@
 
 
 
-protected ETHER: Entity | Instance = "ether.orbitmines.com:37839"
-ETHER = Entity(instance: ETHER) if ETHER ==.instance_of Instance
 
-// Whether to broadcast your IP to peers, default behavior is NOT doing so, and only exposing your IP to the central Ether server.
-protected BROADCAST_INSTANCE: boolean = false
 
 // Note that child instances are allowed to run on the same port as the host machine, but it's simply that it's using the
 // hosts' socket, and anything meant for the entity running on this Instance is delegated to it.
-protected INSTANCE: Instance = "protected:${DEFAULT_PORT}" //TODO If host fill external parents
-dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
+protected INSTANCE: Instance = "localhost:${DEFAULT_PORT}"
+(<- INSTANCE) = (.HOST <- this).map(.CURRENT_INSTANCE) //TODO Should only be the CURRENT instances
+// Whether to broadcast your IP to peers, by default your IP is only exposed to the central Ether server.
+protected BROADCAST_INSTANCE: boolean = false
+dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE if !OFFLINE
 //TODO Socket connections should check where the request came from, if it's not in location, it's ignored since we're OFFLINE to them then.
 
 // Whether to connect to the central Ether server or not.
 protected OFFLINE: boolean = false
-dynamically location &= public.read ETHER.instance if !OFFLINE
+dynamically location &= public.read ETHER if !OFFLINE
 
 protected none.write ENTRYPOINT = /entrypoint/entrypoint //TODO Path type, cast from string allowed
 IO.eval ENTRYPOINT

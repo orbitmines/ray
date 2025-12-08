@@ -1,3 +1,6 @@
+//TODO Default public.read doesn't allow access to **, but what would?
+
+
 //TODO Make sure that specific entries in a # or array similarly have their visibility respected.
 
 //TODO           Note that the write permission is just a wrapper for execute, namely:
@@ -48,7 +51,7 @@ modifier confidential
 end
 // "localhost" means only on the local instance. (Not even local child instances)
 modifier protected
-  def as :== Node{} = Node{== CHARACTER}
+  def as :== Node{} = Node{== ME}
 end
 //TODO localhost is any character on this machine
 // Allow any instance defined as a parent of this instance to access the location. Usually that would the host machine,
@@ -56,13 +59,13 @@ end
 modifier host
   def as :== Node{} = Node{== (<- INSTANCE.hierarchy).reduce(|)}
 end
-modifier children
+modifier guests
   def as :== Node{} = Node{== (INSTANCE.hierarchy ->).reduce(|)}
 end
 
 // "private" means any instance running this entity/player. Note that any backup server, like the central Ether server, has that property.
 modifier private
-  def as :== Node{} = Node{== CHARACTER @ CHARACTER.instance} | "localhost"
+  def as :== Node{} = Node{== ME @ ME.instance} | "localhost"
 end
 // Only include non-public instances running this entity. (So basically private servers running your player instance)
 modifier managed

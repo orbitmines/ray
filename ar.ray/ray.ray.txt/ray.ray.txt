@@ -65,6 +65,7 @@ class Node
 
   //TODO constructors automatically accepts Array, by setting it to a single one. then iterate over all of them #.
   protected def extends | < constructors: Array<(*) => *> => constructors.for constructor
+    //TODO Dont accept an array, accept a single superposable object. Because arrays are actual structures.
     //TODO; By default call super if it's not called at the beginning/end of the block? & if parameterless
     this.protected super &= constructor<local: caller>
     this.protected super[constructor.name] = constructor<local: caller> if constructor.name

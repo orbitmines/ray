@@ -2,4 +2,30 @@
 //TODO selected on another instance (primary)
 //TODO the variant of selected on X, for my Y (mirror)
 
+//TODO .instance selected instance again
+
   : static => #[0].x
+
+class Instance < Location & (IP | Socket.Address)
+  status: Status = Status.Network.O
+end
+
+class Status < Status.Network
+  static class Network <
+    | Offline
+    | Online
+  end
+end
+//TODO Invisible, is just offline read
+Invisible =>
+  return Online if &who.CURRENT_INSTANCE == ME.CURRENT_INSTANCE //TODO How to differentiate between the &who who set this variable vs, the one who gets it. -> how to say load the expression, not the value.
+  Offline
+//TODO Idle, DoNotDisturb, Busy etc.. for NPCs with more data, and players in general, extended status. status & extended
+
+//TODO Have a sharded character, if the ether central server doesnt allow storage beyond X, allow remote storage to be configured.
+
+class Character < Entity
+  instance: Instance => location{==.instance_of Instance}
+
+  status => instance.status#.max
+end

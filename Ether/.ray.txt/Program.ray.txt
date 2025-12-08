@@ -141,7 +141,7 @@ class Function | Program < Boundary, Location, expression: Expression
   // This is empty when asking the &caller of the top-level context; the character.
   parent | caller : Program? => first.x //TODO Instead it's a collapsed initial?
   // The latest known character associated with this chain of function calls (set this variable to change it)
-  character: Character (parent ? => parent.character : = ∙.x.last) //TODO What if the character is branched?
+  who | character : Character (parent ? => parent.character : = ∙.x.last) //TODO What if the character is branched?
   dynamically assert character !== None
 
   //TODO .children TODO collapsed terminal.

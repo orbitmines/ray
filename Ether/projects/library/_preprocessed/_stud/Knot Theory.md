@@ -1,0 +1,2 @@
+- [ ] http://katlas.org/wiki/Main_Page
+- [ ] Jones knot polynomial theorem similar /close to a binary superposition?

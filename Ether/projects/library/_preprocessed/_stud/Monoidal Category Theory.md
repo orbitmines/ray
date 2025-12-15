@@ -1,0 +1,5 @@
+---
+Related:
+  - "[[Monoidal Cafe]]"
+disc:
+---

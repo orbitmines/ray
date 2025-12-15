@@ -1,0 +1,3 @@
+
+
+![[Symmetric_closure.pdf]]

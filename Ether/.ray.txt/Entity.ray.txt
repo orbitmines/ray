@@ -1,2 +1,6 @@
 class Entity
 end
+
+class Nameable<T = *>
+  name: T
+end

@@ -1,5 +1,7 @@
 global = local
 
+//TODO ==.instance_of with vs without equiv graph
+
 // Defined by context:
 //  external = { do, goto, *, Node { `*`, `*`= } } // TODO: External should nestedly check local.definer
 //  `arbitrary structure`=

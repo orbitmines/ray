@@ -9,6 +9,9 @@
 - `/%` *Represents any version history kept which is not Character/World-specific*
 
 
+- `/projects` *Internal project files not yet assigned a package directory*
+
+
 - `/entrypoint(.*)?.ray.txt` *Different character entrypoints, the default `/entrypoint.ray.txt` is for this character.*
 
 

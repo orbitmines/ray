@@ -53,6 +53,9 @@ external &: Program
 // Get a contextual variable defined on the currently running function.
 external &{method: *}: //TODO Infer
 
+/{path: *}: Program OR (x): //TODO INFER
+  //TODO Program which is callable with single parameter (recursively ensure path is available on x)
+
 //TODO coroutines like race here.
 
 return (expression: Expression) //TODO Allow out-or-order execution.

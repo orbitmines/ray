@@ -121,6 +121,7 @@ namespace Network
   Hosts: { `String.NonEmpty`: IP } = {
     confidential.write "localhost": "127.0.0.1" | "::1"
     //TODO external could fill these from /etc/hosts
+    //TODO What about "ether".ignore_case => "ether.orbitmines.com"
   }
   dynamically Hosts.for host, ip => equivalence host -> ip
 

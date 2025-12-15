@@ -64,3 +64,8 @@ None +=
 
   as (:== boolean) => false
 end
+
+unique
+  //TODO either same object or assert
+  //TODO unique{} accepts an expression which it maps to before checking uniqueness
+  dynamically assert #.

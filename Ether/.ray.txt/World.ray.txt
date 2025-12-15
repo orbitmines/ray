@@ -1,0 +1,15 @@
+
+class World < Nameable
+  internal WORLD = this
+
+  worlds: World => // TODO Iterable through entire worldgrah, hierarchy
+    unique{.ignore_case if name ==.instance_of String} name{issuer == WORLD}
+
+  characters: Character => //TODO Iterable through entire worldgraph, hierarchy and itself.
+    unique{.ignore_case if name ==.instance_of String} name{issuer == WORLD}
+  npcs: NPC => characters{==.instance_of NPC}
+  players: Player => characters{==.instance_of Player}
+
+  #{name} => worlds{.name == name}
+  @{name} => characters{.name == name}
+end

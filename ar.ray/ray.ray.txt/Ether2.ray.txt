@@ -260,6 +260,10 @@ end
 //TODO But it cannot necessarily set it: This needs to be explicitly given permission, but in essence anything it has gets written to that.
 //TODO Remote has full access, by default to `variable @ remote`? So you can have String @ remote @ itself = ..
 
+//TODO .not is {!=.instance_of}
+//TODO .not in  not Network.Hosts*.keys.reduce(|) //TODO What's the proper syntax for this, very verbose
+
+
 //TODO So you can do things like 'String @ remote -- = object'
 //TODO Or allow +def `String @ remote`
 So you can do things like 'variable @ servers -- = value' where servers is Many servers.
@@ -276,7 +280,7 @@ def Encrypted<Encrypted = *, T> = Encoded<T>
   //TODO So methods need a way to say it's from this package (location). Which by default is the Ether. location, so those are supported by default. And if it references an unsupported method, it needs to be installed on the local side.
   //TODO How is it checked that for instance a method on Player, is already supported by me, so you don't have to sent it over.
   //TODO => Can do some quick checks like are the method signatures equal etc.. If there's a change, I want to support that change.
-  def decode key: * = (global.entity ?? global.instance).crypt[location] => T //TODO location might inherit the key from a parent group
+  def decode key: * = (global.entity ?? global.instance).crypt[location (CURRENT)] => T //TODO location might inherit the key from a parent group
   //TODO The result can be an encrypted value again, so it would have to be decrypted nestedly.
 
   //TODO This .crypt value would not be accessible/visible to imported code (in the form of the decrypt func)
@@ -647,6 +651,8 @@ class Inventory
   end
 end
 
+//TODO : is default dynamically so that any change to the variable still adheres to that :? What if we change the : later, that doesn't work.
+
 class Entity
   inventory: 1 Inventory // TODO *in* an inventory vs *has* an inventory.
   def quests => Quest = inventory{==.instanceof Quest}
@@ -752,6 +758,8 @@ end
 //TODO: If working in some folder, automatically change versioning numbers to the new ones, if the file is changed.
 //TODO Should work with the versioning system somehow? another parameter here the version, which the IDE supports for automatically getting
 
+//TODO Version control, after change the filter would include/exclude new entries, like a new maxlength of username, add merge clause on how to deal with it. Basically database changes are merge conflict resolves
+
 private class Module
   static Constructor = (root: Module = Module()) => Module //TODO Constructor is parameterless, so you shouldnt need to call it with (), so just naming a variable this should work. BUt what if you would want to pass it a parameter, there's an ambiguity here.
   
@@ -788,9 +796,9 @@ end
 
 //TODO Reserve namespace with dots to domain names.
 
-def /
- //TODO Define a path
-end
+
+//TODO filter ==instance_of casts to that type.
+
 
 //TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@
 //TODO Using, should respect type information on fields defined after it, defaults loaded after this should not overwrite the settings, it can overwrite things like localhost if it wants to, but defaults to localhost
@@ -798,21 +806,7 @@ end
 //TODO If evaluated, it loads the file into current
 //TODO FIles should support Many
 
-//TODO CHeck which files in /instance export which objects, and load them in if needed automatically.
-def using at: Entity? = ETHER, path: Module.Constructor //TODO Path should be type of location.
-  environment = caller
+// @orbitmines/package
+// Support < @PLAYER_2 or < "host.orbitmines.com"/@PLAYER (second one, is loaded in a world associated with the host)
+// Load into a mirror var and/or cache/archive, then load that one alongside it
 
-  def eval inventory: Inventory
-    item: Item = path(inventory)
-    //TODO eval item
-    //TODO Only allow certain things to be imported/changed by certain imports.
-  end
-
-  //TODO; If defined in player.inventory, define super() to call the original functionality.
-
-  //TODO; Check if version exists on desktop if configured for remote, if it does use it.
-
-  eval at.inventory if at // Load
-  eval desktop.inventory // Load default settings
-  eval player.inventory // Load player overwrites
-end

@@ -157,6 +157,10 @@ class Function | Program < Boundary, Location, expression: Expression
 
   // With the assumption that each non-expandable step terminates.
   total | decidable | always_terminates | always_halts => expanded.length#.every(!= ∞)
+
+  as (== String) =>
+    //TODO Store program with any state etc.. which would be used to pause certain quests/functions. For instance save/pausing a game.
+    //TODO Use the program's expression if no state has changed. -> super()
 end
 
 namespace RayLanguage // This namespace will be used for: < Language

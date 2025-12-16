@@ -1178,29 +1178,12 @@ end
 // TODO; How to implement try/catch with similar passing of variables for control-flow like break.
 
 
-
-
-
-// Non-zero decimal: Decimal.Positive<!= 0>
-
 // Might want a construction like Object, which is context which allows stuff to be set to it, but all properties like `*`=, and local etc.. aren't in there so you can still set fields like local without it effecting behavior.
 
 
 
 
-def Array<length > 2>
-  var = ++some_other_var // TODO: What if length changes? Is it reverted? Is there a use-case where you want it reverted?, or is it only part of the constructor
-  if predicate
-
-  end
-end
-
-// Multiple implementation
-Array.method |= (arg1) ; name = method(name) | implementation
-// | is one of the implementations, &, is call all.
-
-// dynamic asserts can carry type information of multiple objects, like A.disjoint(B). How to account for that? It's type information living in some graph above the object?
-//   -> It affects both A and B as types, in the A.disjoint(B) case. Dependent on some other variable.
+A.disjoint(B) added to A & B, how? You can have a program pointer to the place the variable is at
 
 // How do compilers search for possible implementations of a function?
 // Define a bunch of rewrites for the compiler like this. And then it needs to do analysis on what is better

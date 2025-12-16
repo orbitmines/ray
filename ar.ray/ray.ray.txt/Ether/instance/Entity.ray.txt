@@ -74,6 +74,8 @@ class Location = Ray
   // What instance is hosting this variable
   host: Instance = INSTANCE
 
+  [{field: *}] //TODO A child which is decorated with this field
+
   //TODO A <.hierarchy B means A is being rendered inside B.
   // .hierarchy for .inventory, and rendering hierarchy //TODO What if has both
   // TODO If you do .hierarchy, its .hierarchy maps to itself (that way you can have location being .hierarchy by default

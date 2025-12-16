@@ -1,6 +1,22 @@
 //TODO selected
 //TODO selected on another instance (primary)
 //TODO the variant of selected on X, for my Y (mirror)
+//TODO Quests: When is the mirror synced to the client, when to download, how many levels deep etc..
+//TODO Location = IO /path
+  //TODO How to access all instances/references of a particular type (whether on disk, or in memory)
+  //TODO Location is in memory, and on disk, how to sync them
+//TODO Locally set to a different value than what the managed inventory says?> ever used?
+  --> That's like setting a alias .name for a world, for your usage only. Store that name separately, if I want it to persist.
+  --> Like a commit always appended to the most recent version. (my own branch)
+//location might be non-halting, not yet discovered locations which run this world/X.
+// Change access permissions of your mirror.
+
+// Remote execution
+//TODO Default to program<&who = CHARACTER>() if passed by the character.
+//TODO   What about read access to the libraries and new variables it makes; Need some way to say, it's running locally, and it doesn't need to be this character; that's the default privacy policy? So different than protected?
+//TODO The default REMOVE HISTORY AFTER X DAYS (30?) allows the character to do it, if it has been logged previously, so the execution script can be run as their character.
+// Run code as an unauthorized character -> by creating a new character and eval'ing code then
+
 
 //TODO .instance selected instance again
 

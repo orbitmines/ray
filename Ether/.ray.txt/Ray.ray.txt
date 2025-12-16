@@ -43,6 +43,7 @@ class Ray<T?> (x | value) < AbstractDirectionality
 
   //TODO .expand only the boundaries, or everything
   //TODO .paths possible paths to take.
+
 end
 
 class AbstractDirectionality<T> < Iterable<T>

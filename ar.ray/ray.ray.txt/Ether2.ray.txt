@@ -1,70 +1,17 @@
+index | distance (start = first) =>
 
 
-class Item
-  // Every item has an inventory defined on it: '<-' is parent directories, '->' are child directories. Loops allowed.
-  inventory: Ray = Ray(this)
-  //TODO fields shoultn necessarily count as child directories, since we might have a structure on some location (arbitrary), but it's children are not the same as its fields. Take directories for example.
-  // TODO They do, but the default .files/.directories in fs is a field, not the top-level properties.
-  //TODO But even then, there might be overlap in the two, what to do in that case? (Say the item defines something at .directories)
-
-  //TODO We would also want to know how version control works, and how something lioke git is supported, since those visibility and sharing them is relevant
-  //TODO Also, when visible, when is it synced to the instance.
-
-  /./TODO Setting the visibility etc. of a filesystem, should go to some specific db.
-  dynamically
-    sub = this[`property: *`]
-
-    // Speculatively merge a detected loop in the inventory, if not found, we recursively describe it: A.B.A.B.A.B...
-    speculative if<assume: false> current = (<-inventory){== sub}
-      inventory.push<edge: .value = property>(current)
-    else
-      current = Ray(sub)
-      inventory.push<edge: .value = property>(current)
-      sub.inventory &= current
-    end
-  end
-  //TODO What if speculative graphs are returned to something, and it changes the result of a function, that should in turn
-  //TODO (this can escalate quickly) change the effects of functions caused by it recursively, and roll them back potentially.
-
-end
-
-Saving program pointer id what youd do to save/pausing a game, how to account for version changes then
-
-.index on ray (Should compile to smarter things than just retreversing the graph to find the index, if a simple enumerating forloop does the job)
-Want to also hafve things like .index from some other location x
-
-
-//TODO Bidirectional function like ray but only single step: l <= (x) => r
+//TODO Bidirectional function like ray but only single step: l <= (x) => r, ambiguity with <=
 
 local @= location to change the location the code gets executed
 
-Create environments which don't have access to public/private methods
 
-Operations like get from temote, but only one level deep (like the current level of directories) and them maybe in the background load more
 
-Difference in acyclic to the same value, vs acyclic in there's an actual circular path
-
+//TODO Version control
 Two merged branches with a decided order (so non-parallel) is creating a new branch with values of .expand on the old changes = in their respective branches
-
 you want a .expand across version control histories. So my local keystroke history collapses to a single 'commited' history which the same on .expand but then for that particular repository so we need .expand(location) or something
 |-> would be across branches, since local keystroke history is just a branch on top of the current branch, then a commit would all those changes since tha last commit and switch that branch to it.
-
 Commit changes is rewriting the deltas from keystrokes to whole strings. So need rewrite logic defined for that somewhere
-
-
-location is moving pointer, you also want something like tutorial to define a future history of locations with timed steps and clndinional programattic steps like has entered this area
-control flow of location so any function is a location so tutorial is a defined function
-qhat of changes mid version define what to do with those, relocate to x
-interleaved functions like movement of a npc tied with your own location
-
-//TODO The UI has a project as parallel 'files' or in sequence grouped 'files', then sending a single file is 'that grouped node in isolation -> remove structure'
-
-indentation newline after// prevent it from being repeated
-
-//TODO How to access all instances/references of a particular type (whether on disk, or in memory)
-
-Variable reference is to a particular place in the history?
-//TODO Version control
 // TODO Casaul ordering of functions, or somehow having a particular instantiation of a function and then checking whether another instantiation is before it. Whether concurrent and the like.
 //TODO Things like, we enact changes on functions/etc.. which are in turn saved somewhere to the current version, then we need a way to say : update these functions on those locations. By saying 'local.keys except x' @ 'All remotes' = 'new version'
 //TODO Additional fields like timestamp are in some global order (some repository which keeps track of that)
@@ -222,6 +169,7 @@ repository defines encryption? (Not necessarily individual items?), No not neces
    (caused by is stored on player, so need somne way to get Player.All{} check it there)
 
 A +def with a different visibility, monkey patch dependent
+--> Grouped methods under a parent which has a particular visibility instead of setting all their visibilities to something. (So parent/child is not necessarily a next recursive object)
 
 Quest: Resolve merge conflict like a uuid granted to teo different players concurrently, resolve by reallocating one of them, could use information on whether their uuid is used anywhere, how to differentiate between places where it's used etc..
 We allow even unique entries to be duplicated, and require to resolve them asynchronously
@@ -291,21 +239,18 @@ def Encoded<Encoded = *, T> = Encoded
   def decode() => T //TODO Use (), to indicate you want () to be called on it. Not a parameterless property.
   def as :== T => T = decode()
 end
+//TODO This partial loading should also support encodings which can be decoded partially too.
+//     -> If it cannot be decoded partially, it should have the value stored on another level of description how?
 
-// TODO Should we include this?
-// Every mapping acts as an encoding function?
+
 +def Node<T>{def as :== T => T} //TODO Want to allow this syntax of a type.
-  def as :== Encoded<T> => Encoded<T>(
-    def decode() => T = this
-  )
-end
+
+
 //TODO It needs to be a quest that you have the encoded value, but not the decode function, find it is the quest.
 //TODO Rename Encrypted to Encoded, with a function, and Encrypted is a constructor which takes encryption schemes.
 
 //TODO How does version control with with things like A-B- testing of functions and things like that, need to thinka bout that too.
 
-
-//TODO Caller as .location
 
 //TODO Encrypted chats between players, World = groups of players,
 //TODO Have an option to have any file encrypted as part of "visibility = 'private'", but make clear that if access to the devices is lost
@@ -316,70 +261,22 @@ end
 //TODO You'd have libraries or 'apps' like Discord be able to say 'a discord server/channel' instead of this sort of channel.
 //TODO Slowpoke would be access checking whether you have sent in the previous x time. : But about this you want the entity to know about it so visibility.visibility = "public"
 
-class Entity < Item
-  location: Ray = inventory //TODO Maybe inventory = location, and with a filter on .inventory = boolean
-end
-
-class World
-end
 
 
 
-
-+def String = "public" // Allow this
-+def String{== "public"}
-
-// TODO .desktop inventory.fs defined by external.
-// TODO ether.orbitmines.com
-
-//TODO Allow storage to set visibility = private, if there's an equivalence. (Generally allow this)
-
-//TODO All networking is abstracted away behind players/instances/inventories.
-
-//TODO A separate ether world which gives out unique user ids.
-
-// Everything is an Item, and possibly an Entity.
-
-//TODO You can have anything with really long values, which don't need to be loaded directly, but can be loaded partially.
-//     -> Networking code for doing this partially.
-//TODO This partial loading should also support encodings which can be decoded partially too.
-//     -> If it cannot be decoded partially, it should have the value stored on another level of description how?
-//TODO Or partial downloads of arbitrary parts of a file. (Allow access the parts out-of-order if present)
 class Item
-  // TODO history couldn iclude When it's used, how it's made, how it's discovered, how it's constructed.
-
-  //TODO ANY ITEM MIGHT be managed by another instance
-
-  // Keeping history of certain variables of functions.
+  // how it's made, how it's discovered, how it's constructed.
+  //  -> The non-evaluated function so **%
+  //TODO What does discovered by a player look like?
 
   // Items require Quests ; In order to find items you need quests.
   obtained_by: Quest
 
-  // TODO Is issued_by here some top-level world
-  issued_by: World = global.desktop
+  issuer: World = global.desktop
   certificate: Certificate
 
-  //TODO Can't really implement visibility s public/private/protected, since you have 'The memory object Player', and 'The actual player to expose it too', or are they the same thing? They should probably be the same thing.
-  // Read-access
-  //TODO Want a dynamic default, until it is set.
-
-  //TODO Read-access with a specific encryption key
-  //TODO Locally set to a different value than what the managed inventory says?> ever used?
-  // TODO what if that location is say referenced in two places, one authorized by me which says private, and another unauthorized which says public, it shouldn't switch mine to public.
-
-
-  // Write-access (defines allowable values one can write to each field)
-  access: Query<static> //TODO access is Visibility for each field.
-
-  // TODO A program of possibly entities that are allowed to see this. Things like private instances which are allowed to see it. (Or the local instance) - Can also include things like 'within renderdistance'.
-  // TODO, Want to add things like : has been at this location in this world before for instance.
-        //TODO -> So you want certificates to be given for having been at certain places. (Then on those places give them out as an item): So has this type of item, then it's visible.
-
-  //TODO If every item is an inventory, then this is not used, but where it came from, is.
-  //TODO This inventory = Location *in* an Inventory/
-  inventory: Inventory?
-  //TODO If every item is an inventory, we want to know whether that inventory can persistently store information.
-  //TODO If a single item is in multiple inventories, how is persistence done? Is it stored in one, refs, in another, stored in both, want to allow for all of these options, how to deduplicate if it's known it's in two inventories: merger, or what?
+  //TODO -> So you want certificates to be given for having been at certain places. (Then on those places give them out as an item), Or only that managed inventory has access, so acts as a certificate
+  //TODO A specific directory for "Managed by other's"
 
   //TODO We have copy as well, but we could also copy by ref, or have both set refs to a single one.
   //  -> All object setting/getting becomes moving between inventories.
@@ -387,6 +284,7 @@ class Item
   //TODO Transaction
   end
 
+  //TODO If has mirrors, schedule quests (can free memory; resource after quest is completed, can be a quest goal)
   dynamically if inventory
     // TODO On change, if has access, save. Otherwise, save local copy.
     def save
@@ -404,81 +302,29 @@ class Item
   def as :== Quest = this ==.instanceof Quest ? this : TODO
 
   // Items are Minimaps ; We can look at items from the outside to get a perspective, ..., overview of what it is.
-  def as :== Map
     // TODO Perspective switch to a 'high-level overview'
-  end
-
-  def as :== World = this ==.instanceof World ? this : TODO
-    //TODO: How does 'World' differ from structure the item is made of.
-    //TODO: World might not necessarily be accessible (Say the hidden dynamics of some function of some language)
-    // TODO Internal structure of an item.
-  end
 end
 
-+def Node < Item //TODO There's a circularity here, but it should be supported.
-
-  //TODO obtained_by
-end
-
-
-// TODO You want to say, have a world in your inventory, which is your desktop. Which contains items. Those items are not directly in your inventory? But they can be put there.
 class World < Entity
   //TODO What are quests and location of a world?
 
-  // TODO What if I define my own alias for this world, it doesn't get stored in the global World config, but I want it in my own
-  //   -> Allow overriding of default config: inventories by the user.
+
   // A instance can still host a world where parent != that instance.
   //TODO .parent would be .indexed_by, and another .parent would be, how did you get to this world? (So a path)
   def parent => World? = this.name.issued_by != this ? this.name.issued_by : None
 
-  // TODO Instancelist maintained by the world, but others could be running it too.
-  // Known instances which this world runs on (TODO Others might be discovered later, so .hosts might be non-halting)
-  hosts: Instance = Instance{hosting == this}
-
   // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
-
-  //TODO What about behavior dictated by the world/instance: These things are automatically shown, these things not.
-    //TODO Might want to tie a quest to a location too.
 
   // Internal dynamics -> Want a primitive in .ray to be a dynamic space.
 
 //TODO SDame name/location property but different visibility, then also allow one to prefer the one which is least permissive, but how?
 
-  // Split into two groups: Spaces with arbitrary propagation vs limitations:
-        How do you make spatial propagation hard/limit it in a distributed sense when usually one can just skip ahead programmatically?
-        -> Similarly how we make item copying expensive/impossible. Scarcity of the items.
 
   //TODO Spawn-location defaults to something like .first. (If accessible) What if it's not, then demand it's provided.
-
   spawn_location: Location
 
-  // TODO, An entity should be a graph within the graph, both of those shouldn't interfere with each other. (As in effecting .next)
-
-  // All information on what's in a world could be partial client-side. It might not have all the information of the world.
-  def entities = worlds & players & npcs
-  //TODO These are basically indexes of things moving through this world.
-  players: Player
-  npcs: NPC
-  //TODO You should have a way of saying, this is my location (so also pitch etc.) based on that what information is available about which entities (could be partial)
-
-  // Child worlds, where this world is acting as a parent category
-  def #`world: this != ETHER ? String.NonEmpty : String.NonEmpty & not ETHER.name.ignore_case` => World?
-
-  if this == ETHER
-    def #`ETHER.name.ignore_case` => World = ETHER
-  end
-
-  def worlds = (this.#`String.NonEmpty` -> .#`String.NonEmpty`).compact.reduce(&) //TODO Should overlay Both cases of "Ether".ignore_case and not.
-  //TODO: Should know that, because of using reduce(&), that intermediate results are possible for .last (Don't need to compute all children to get some values out of this). That should also work for '(this.#`String.NonEmpty` -> & .#`String.NonEmpty`).compact.last'
-  //TODO worlds{parent == None} should know that  it doesn't need to go into the children.
-
-  // Players can be registered under a certain world, similar to how certain games/apps have UserName#Tag, where the
-  // #Tag is the world.
-  def @`player: String.NonEmpty` => Player?
 end
 
-Number
-static = +1 <- 0 -> -1
 
 public key Player{public_key & challenge that they have the private key, like a timed message, or a specifically tailored message by this instance}
 
@@ -492,7 +338,10 @@ public key Player{public_key & challenge that they have the private key, like a 
     // More spatial structure around matter
     // If something like an arm is attached, the further from the attachment the faster it has to move
 // - World only has update events, you want those to be massively parallel, so what can influence what? -> What would actual execution on a GPU look like, how much does having it in a graph impact performance?
-//
+  // Split into two groups: Spaces with arbitrary propagation vs limitations:
+        How do you make spatial propagation hard/limit it in a distributed sense when usually one can just skip ahead programmatically?
+        -> Similarly how we make item copying expensive/impossible. Scarcity of the items.
+
 
 //TODO You might have some way to navigate the structure of a world, but that doesn't mean it's just accessible. In a way
 //TODO in which you can, for instance, just loop over all the nodes. You might have to explore some other way.
@@ -540,6 +389,25 @@ def Location //TODO = Ray of World OR: You want Location to be more abstractly, 
 end
 
 def Quest
+  // schedule quests (can free memory; resource after quest is completed, can be a quest goal)
+  // Version control needs a way to access and what to do with paused functions
+
+  dynamically
+    sub = this[`property: *`]
+
+    // Speculatively merge a detected loop in the inventory, if not found, we recursively describe it: A.B.A.B.A.B...
+    speculative if<assume: false> current = (<-inventory){== sub}
+      inventory.push<edge: .value = property>(current)
+    else
+      current = Ray(sub)
+      inventory.push<edge: .value = property>(current)
+      sub.inventory &= current
+    end
+  end
+  //TODO Speculative //= Quests
+  //TODO Speculative programs which return something in turn possibly reevaluate all effects caused by its result being changed.
+
+
   // Quests require Items ; Cannot see, ..., complete a quest, ..., puzzle without certain items.
   revealed_by: Item // TODO Might be an item owned by another Entity
 
@@ -586,39 +454,12 @@ def Quest
   def active = !completed
 end
 
-def Map
-end
+class Map
 
-// TODO Items arranged in a particular way make another item. Something like = Hypergraph<Item> or it's a primitive item.
-+def Hypergraph<Item> //TODO Hypergraph here? -> Item as Hypergraph<Item> implemented.
-  def as :== Item
-  end
-end
-
-
-//TODO Since the inventory is possibly managed by another Entity (instance), that means that it has access, and it can give others access.
-
-// Managed inventories have some visibility/access, and thisw is one value for the manager (world), and another for the player, how to make that differentiation?
 //TODO: How to indicate it is managed by the world, and synced to the player.
-// Managed inventories at this location for a particular Entity.
-def `entity: Entity` => 1 Inventory
-// Managed inventories at this location by a particular World.
-def `world: World` => 1 Inventory
 
-// Inventories differ slightly from traditional file systems:
-//   - There can be many items (files) defined at a single location. These could have additional operators defined on
-//     them like AND/OR, and they could also be abstractly defined; They work just like any Type in `ray.txt`.
-//   - Inventory works like directory: It defines a path. But at any path items (file) might be defined. Additionally,
-//     it might host additional inventories and items like a directory. So any path is always a directory and a file.
-//
-// Technically every Object/Node, is *in* an Inventory.
-//   - A value holds an arbitrary definition of that Type.
-//   - Within it is recursively defines paths to other items (and thus inventories).
-//
-// When inventory is used as an Item, it is just "the path to that inventory".
-//TODO Hosting you inventory is just hosting a world, which in it has locations at which the items are situated.
 class Inventory
-  //TODO owner = Location top-level,
+
   owner: Entity //TODO If everything is in an inventory, then inventory.inventory would be the entity. == path which is an entity
   //TODO Want owner to be a persistent Entity, since everything is an entity.
   //TODO path = structure on Location
@@ -760,40 +601,6 @@ end
 
 //TODO Version control, after change the filter would include/exclude new entries, like a new maxlength of username, add merge clause on how to deal with it. Basically database changes are merge conflict resolves
 
-private class Module
-  static Constructor = (root: Module = Module()) => Module //TODO Constructor is parameterless, so you shouldnt need to call it with (), so just naming a variable this should work. BUt what if you would want to pass it a parameter, there's an ambiguity here.
-  
-  def (node: *) = ..path.reduce(acc = node, current => acc[current])
-
-  `` = {
-    def parent: Module?
-
-    def property: *?
-    def world: World?
-    def player: Player?
-
-    def path => *[] = (..parent <- this).compact.map(.world ?? .player ?? .property) //TODO This, because it's private shouldn't be overwritten? How does that work?
-  }
-
-  def `property: * & not ""` => Module
-    return this if property ==<String> "."
-    return this.parent ?? this if property ==<String> ".."
-    return Module(..parent = this, ..property = property)
-  end
-
-  if !parent || parent..world
-    def #`world: String.NonEmpty` = Module(
-      ..parent = this,
-      world = (parent..world ? parent..world : ETHER).#`world`
-    ) //TODO Check if not None
-
-    def @`player: String.NonEmpty` = Module(
-      ..parent = this,
-      player = (parent..world ? parent..world : ETHER).@`player`
-    ) //TODO Check if not None
-  end
-end
-
 //TODO Reserve namespace with dots to domain names.
 
 
@@ -810,3 +617,4 @@ end
 // Support < @PLAYER_2 or < "host.orbitmines.com"/@PLAYER (second one, is loaded in a world associated with the host)
 // Load into a mirror var and/or cache/archive, then load that one alongside it
 
+qhat of changes mid version define what to do with those, relocate to x

@@ -3,6 +3,8 @@
 
 //TODO Make sure that specific entries in a # or array similarly have their visibility respected.
 
+//TODO protected
+
 //TODO           Note that the write permission is just a wrapper for execute, namely:
 single Access
   READ = "read"

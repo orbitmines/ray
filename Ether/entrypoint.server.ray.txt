@@ -1,7 +1,7 @@
 < World
 
 characters | worlds .name{issuer == ME}:
-  String{length < 2^8}
+  String.NonEmpty{length < 2^8}
   // This name is reserved for the network
   not in Network.Hosts
   // IPv4 names are reserved for the network

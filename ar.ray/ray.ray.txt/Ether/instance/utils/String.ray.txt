@@ -1,6 +1,6 @@
 //TODO Maybe an instantiation of String/char, which doesn't say how exactly it's implemented (u32/UTF), to signal it's not important that that system retains its place. 'Name' would be where this could be used.
 class String = Unbounded{length < Infinity}
-  static NonEmpty = String{length > 0}
+  static NonEmpty = static{length > 0}
   static Unbounded = char[]
     ()
     (block) //TODO Accept "String" \n property='b' end

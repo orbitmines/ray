@@ -1,0 +1,12 @@
+confidential namespace IO
+  // Get a file relative to the Ether instance directory
+  //   - You're unable to leave by doing ".." on the top-level directory (only symlinks allow you to leave the default directory structure)
+  {path: (x): //TODO Infer} TODO Default /path to object getters?
+    //TODO Load a lazy program of the file, but if only = is used, we dont compile the actual read.
+    //TODO Then things like IO /path as String, or as Expression
+
+  // If exposed by the host, the OS' file system
+  //   - You can overwrite the default access by saying "confidential IO.os /some/path"
+  protected external os: IO.static
+
+end

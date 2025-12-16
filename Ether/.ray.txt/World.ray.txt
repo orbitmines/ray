@@ -1,6 +1,6 @@
 
-class World < Nameable
-  internal WORLD = this
+class World < Nameable //TODO Is it < Location, if we mark every location as World; or put that functionality on Location, which are part of a world.
+  internal WORLD = this //TODO If we mark every location as world, this doesn't work. We'd need a separate identifier for this world World Registry entry or something
 
   worlds: World => // TODO Iterable through entire worldgrah, hierarchy
     unique{.ignore_case if name ==.instance_of String} name{issuer == WORLD}
@@ -10,6 +10,8 @@ class World < Nameable
   npcs: NPC => characters{==.instance_of NPC}
   players: Player => characters{==.instance_of Player}
 
-  #{name} => worlds{.name == name}
-  @{name} => characters{.name == name}
+  #{name} => worlds{.name{issuer == WORLD} == name}
+  @{name} => characters{.name{issuer == WORLD} == name}
+
+  //TODO < World at many places in some structure, have the things like .worlds/.characters be iterating over that structure to anything that's in it.
 end

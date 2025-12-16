@@ -1,1 +1,12 @@
-// Importing external libraries/packages
+// Location
+- Locations differ slightly from traditional file systems:
+  - There can be many items (files) defined at a single location.
+  - Any location is both a directory and a file; it defines both values and a (hierarchical) structure.
+
+// Networking
+- All networking is abstracted away
+- Importing external libraries/packages
+- Quests: Loading partially (in/out-of-order) + reading from disk
+- Managed items by another instance (mirrors)
+
+//

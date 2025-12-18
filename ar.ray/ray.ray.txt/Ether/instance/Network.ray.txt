@@ -59,7 +59,7 @@ namespace Network
       static Segment = Decimal.Positive{< 2^8}
     end
 
-    static class v6 = (left: Segment[]).join(":")?, zero_compression: defined_segments.empty ? "::" : "::"?, (right: Segment[]).join(":")?, (":", embedded_ipv4: IPv4)? < IP
+    static class v6 = (left: Segment[]).join(":")?, zero_compression: "::" (? if !defined_segments.empty), (right: Segment[]).join(":")?, (":", embedded_ipv4: IPv4)? < IP
       def defined_segments => Segment[] = left, right, embedded_ipv4 as Binary.Positive
 
       dynamically assert defined_segments.length (zero_compression

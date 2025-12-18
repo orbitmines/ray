@@ -1005,23 +1005,7 @@ def Branching
 end
 
 
-  def ?
-    a
-  :
-    b
-  end
-
-
-//TODO Is i++ < 10 not also a program? Because that would make Expression/Program .while ambiguous, unless you define Expression as "more top-level" than Program, how would you do that?
-true.while
-
-end
-(i < 10).while
-end
-(i++ < 10).while // TODO: Should be accessible as the original expression, and the resulting value.
-end
-variable.while
-end
+Expression.while
 
 
 
@@ -1113,8 +1097,6 @@ end
 
 // Array, also refines Ray type to single .next.
 
-
-// 1 + 1 = 2 as a type: just structure.
 
 // Multi-methods are defined as 'method & method & method'
 

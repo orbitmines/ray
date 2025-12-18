@@ -1,0 +1,4 @@
+//TODO Store whether a silent generic type was used for a particular function, then version control, alert there's then a new variable with that name, but keep using it as a generic type as long we have that information.
+
+//TODO Evaluation history is a .expand on a singular change/commit
+

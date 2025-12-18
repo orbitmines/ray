@@ -1,4 +1,4 @@
-//TODO Which < is the ray, the first one?
+//TODO Which </extends is the ray, the first one?
 
 //TODO .max of any order so Status.max
 
@@ -27,7 +27,6 @@
 //TODO Allow (<- INSTANCE) = (.host <- this)
 //TODO then casts all the characters to instances.
 
-/Directory & Directory.ray.txt go together.
 
 //TODO: Set actual directory vs the one we map to. Map both @player-name and @uuid, but actualize in @U/U/I/D
 < @Ether/.ts
@@ -100,6 +99,8 @@ end
 !{.}
 end
 
+//TODO Out-of-order property access, in the constructor
+
 //TODO Allow arbitrary parts of a function to define a parameter, by simple saying UNINITIALIZED_VAR: a, required if no default is provided.
 
 //TODO Newline counts as a = or => when appropriate so (=> preferred over =)
@@ -110,128 +111,39 @@ class Time < Quantity.Temporal (calendar: Calendar = UTC) =>
 
 //TODO Create an example Proxy for ETHER@ETHER, mapping packages etc..
 
-class Context < Location (.hierarchy = this)
-// Like Entity/Instance, it's used for saying Node{==} whether access is allowed.
-// When we have some package, editing the functionality of String for instance,
-// TODO We want to indicate that that edit, is only for a specific context (and its children)
-// TODO, Unless we give that context privileges to edit the global String up the .parent chain.
-// TODO So access.write is always within some context.
-//TODO How to differentiate between the two String contexts? (global -> parent).last
-+def global.parent.String // Changes it for other contexts.
-end
-//TODO The contexts folder is filled with packages outside of the standard library
-//TODO Entrypoint needs to be able to access the contexts.
-//TODO Other contexts access eachother by loading from libraries like 'using @orbitmines.com/'
-//TODO Context.name = UUIDv1 for the local machine, then package name, etc..
-//TODO How to change that context/package for all other packages.
-+def @orbitmines/package/package Object
-end
-//TODO To change it just for your context (and things that depend on your context)
-< @https://orbitmines.com/ //TODO Import from https or other protocols, domain names with *orbitmines.com are reserved
-//TODO // Is interpreted as: continue the string, don't use as /, because @String matches it
-//TODO Only newline/first character/whitespace before // makes it a comment
+//TODO Automatically support func calls like @"Sir Tiltalot"
+
 < @orbitmines.com/package
-or
-{ Object } *= @orbitmines.com/package //TODO When this is used, issue quest to download the whole package in cache.
-//TODO Packages generate separate files for specific objects, in case they are downloaded separately?
-+def Object
-end
+{ Object } *= @orbitmines.com/package
+//TODO When this is used, issue quest to download the whole package in cache.
 
-/// 0001 = 1 equivalence.
+Object{as (== String): String}
 
-< Node{} Location //TODO Filtered extension
-
-//TODO How does Lazy Evaluation work with Time.NOW, force evaluation there somehow?
-
-//TODO How to def, string definition
-Expression{< {def as(:== String) => String}}
-Expression{< def as(:== String) => String}
-Expression{== String}
-//TODO But we want the result of the expression to == string, not the expression itself, how to?
-Expression{eval ==.instance_of String}
-
-def "{(String?, ("{", expression: Expression{eval ==.instance_of String}, "}")?).orbit}" //TODO Allow this self-referential def
-
-
-//TODO Easy way to create a filtered access, different values for different Nodes.
-Node{== this} def
-*{== this} def
-protected def // Allow this
-// This is not saying on Node{} define it, def uses 'definer', not 'caller'
 
 // Ambiguity in {*} meaning the object iterator, or Node.
 // TODO Basically we say * overrides the local context def if called in context, unless we call this*
 
-//TODO Is a nested `` ever necessary, if so, we need to switch to {}
-def {myClass: T}
-//TODO How to differentiate between the {} func, if we want to allow to override that
-def {expression: Expression}
-//TODO Yes in a string
 "{
   def `local_method`
   end
   local_method
 }"
 
-//TODO Ambiguity between return ME if, meaning ME or returning ME.if, the space prefers Expression if
-//TODO Ambiguity if we say boolean, and have a class call bo, with operator ole, on an (another class). we can't just split the tokens.
-// -> Resolve this ambiguity by preferring the attached version (since it's longer)
-
-//TODO Store whether a silent generic type was used for a particular function, then version control, alert there's then a new variable with that name, but keep using it as a generic type as long we have that information.
-
-//TODO Variable is equal to some expression, in its history you can see its evaluation
-//TODO Perhaps a separate evaluation history. -> Or a way to separate it from the other changes.
-// -> With every change, there's an evaluation structure for that change.
-
-//TODO goto labels something other than :, needs to be unique so we can have it inline as well.
- label\ x = label2\ y
- label\ x = // Ambiguous, since it could refer to x, or the whole statement.
- label\
-  x = //Newline isn't ambiguous
-Labels change the location of an expression, or add hierarchy to it.
 
 // Allow \ to be used in a variable at the start \s
 
-//TODO Something like .move to a field is what 'using' uses
 
-// TODO: This needs to be resolved before anything else does:
-//TODO Something like is_boundary checks whether any of the entries (Many<>) are at a boundary, but that changes behavior of a superposed abstract interpretation when it shouldn't. (It should individually check is_boundary, and superpose the results)
-
-//TODO Properties are different that just rays on value, they can be rays on another ray too.
 //TODO .copy implemented, as not being bound to the .history .last version. But a new branched version.
-//TODO How to remove from &/|. Just -, but what if we have number | number, and we want to - one.
 
-//TODO Default of methods is &, multimethod, how to say or |.
 
-//TODO = on variable, main object being a variable at a location
-Only added to graphs to histories
-
-//TODO .push which does vs doesnt override a possible terminal defined there.
-
-// ~~, like --, skips the () around, and applies some change but returns the original object.
-// So you dont have to write
-a = Value
-a.change
-return a
-but just a ~~ a.change ~~ a.change
-//TODO By implementing ~~/-- on expression you indicate it grabs the whole thing.
-
-// TODO If we have something like class Location = Ray, we want to also be able to say, a single location = Multiple Rays, and the variable itself holds Many of those locations #
-// TODO -> So # maps to loop over all those rays. ## or something should map to that specific instance's multiple rays.
-// TODO -> For most things this difference wont matter, but for things that extend Ray, this does matter.
-//TODO Instead of this, we do, if a named variable is bound to the =, then we have two different ways of initialization location:
-: Location = Ray & Ray
-: Location = ##: Ray & Ray //TODO Calling .next then superposes the two rays.
-: Location ##= Ray & Ray // Allow
 : Location = (##: Ray & Ray) | (##: Ray & Ray)
-If there's no name assigned to value set at '= Ray'
-then the default ##: is used.
-Same with </extends. The values called on their methods are set with ##.
-//TODO Or use .expand somehow
+the default ##: is used if no name
+//TODO Or use .expand somehow, NO? it's used for something else?
 
 //TODO What to do with functionality like [index: 0] on IP, when it extends both a string, and a -1 <- . -> +1. Basically it has two structures defined on it.
+//TODO Prefer the methods in order of definition, explicitly overlap for all methods/vs specific methods, what's the syntax for this?
 
-You want = to be called on object, changing the type possibly. Since it's on a variable - variable is some object. So that would mean that = without effecting the current value, would first have to copy it over to another place. (And the object is tied to a location - which is kind of nice)or you can change its location to move it
+//TODO Pair a : with a =, since previous : might not be matched -> or basically say if not accessed before the =, allow.
 
 //Allow type def conditionally like this
  variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}
@@ -241,10 +153,8 @@ You want = to be called on object, changing the type possibly. Since it's on a v
 // Allow 'caller: Program => first.x', setting first.x's type.
 
 None implements location and =
-What if an object is instantiated and used within a function/constrctor only, whats it location like, none for instance
-|-> Object.method.() with [context] accessible as the last location.
+if is instantiated and used within a function/constrctor only, location is a program pointer
 //TODO What happens to returned variables? They have a location inside the function, then while their location isn't changed in another function, that function still lives through the variable?
-.inventory = .caller
 
 // Allow [7 | 11 | 15 | 19]  -> [7 | +4 | +4 | +4]
 
@@ -259,25 +169,12 @@ what if the lvariable is used at two location, two .,inventory, but one variable
 .history, .history is simply up to some entry in the path
 
 //TODO Reverse .keys and .values
+//TODO Things like .map on variable*, needs to be thought through, what is actually on *
 
 //TODO dynamically could see through history if something was added/removed and not need to run the whole thing again
 
-//TODO external fills things like Network.Host when spawning a child instance.
-
-//TODO Say I have defined Entity{==.instanceof Player}, how do I check it against an entity? ==.some
-
-//TODO After a filter, the object changes into a possible Option<> for certain cases, like Name.
-
-// TODO (<-ray) is yielding .value's, what if we want the rays instead?
-
-// TODO .ray folder to be the downloads
-None != instanceof Item
-
 //TODO Needs like an example of 2D/3D world with yaw/pitch on location, stored as arcs in a continuous space then discretized by some things like elementary lengths and other things.
-
-// It's .that_function.reduce(|), and .that_function is possibly non-halting.
-// TODO: Ambiguity: .reduce(|) on an Array value, what does the .for go to? Now I'm using .for to iterate the possibilities of String[].reduce(|), not String. Because String[].reduce(|) is type 'String': Take Digit for example.
-// .value, but then what about rays. And things like probabilities. In the case of multi-methods it's determined by the args.
+//TODO What if that's derived from the space, if space is non-euclidean it's different than a simple coordinate system
 
 //TODO Default of an object is only loaded if accessed, so we can have circularly defined defaults.
 
@@ -285,9 +182,7 @@ parse json to an object by setting fs.directory.file equal to some type which se
 
 Evaluation order like +/-//* different for each type? how configured?
 
-//TODO Partial equality .match how?
-//TODO Equivalence graph
-//     - Forced equivalence how?
+// - Forced equivalence how?
 
 //TODO This will be difficult to implement, but it's very powerful:
 //TODO Requires all functions like &= to be rollbackable (through history probably) or -= in this case if possible. -> Compiler uses history if necessary for these features.
@@ -302,29 +197,7 @@ Evaluation order like +/-//* different for each type? how configured?
     dynamically sub.location &= dynamically location.copy().push_back<edge: .value = property>(sub).last
 
 
-//
-Some better way of defining this cursor on Ray/Boundary/Edge without making these links
-
 //TODO Extend UTF-8 with custom symbols, as a new String type. with way of converting to a string in case UTF later supports them
-
-def Boundary<T, E> //TODO Boundary = Ray, where next/previous is the next/previous boundary.
-  end: Vertex
-  value: <E Boundary>
-  continuation: 1 Edge<T, E>
-end
-def Edge<T, E> = Boundary //TODO Edge = Ray, where next/previous steps is next edges.
-  value: E
-  list: Boundary<T, E>
-end
-
-== usually ignores location, what if we dont want it to. Because 5 == 5, === if we dont want to ignore location.
-5 == 5 // true
-5 === 5 // false //TODO So the locations of these two are different, how>
-var = 5; var === var // true
-//TODO Which other operations would need location on it?
-
-//TODO Array * number, repeat x times.
-//TODO Array.fill with value
 
 //TODO Need some way to extract only the specific type from a larger type. Of remove information if bound_type is more than that type.
 
@@ -364,7 +237,7 @@ If @ is used in something like as:== string, it should overwrite default behavio
 
 // (Base, unit: Unit = Unit.None)[] != [Base, unit: Unit = Unit.None][], one is (A, B, A, B), the other ([A, B], [A, B])
 
-==.at_least (Covers at least the provided  -> >=
+==.at_least (Covers at least the provided  -> >=, isnt this just always ==.instance_of?
 ==.@ //TODO All cases are covered by both sides.
 ==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.
 ==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
@@ -907,10 +780,6 @@ end
   end
 
 
-def def
-  def `*`(definition: (*) => *) = external
-end
-
 //TODO: Type like Terminating, which only says that we're looking for specific data-like structures to construct something like JSON, which doesn't have any additional logic in there
 //Type like { `number`: Option<number> } -> var: [number]: Option<number> = {} -> var: Map<number, number>
 
@@ -1038,19 +907,8 @@ end
 
 
 
-// for nested code, use something like | at the beginning of the line instead of some block, and then always till the newline
-//TODO How to pattern match the syntax if it's interleaved like that. Two separate graphs.
-// TODO, How does this work for non-text contexts?
-def javascript
-  |.ts
-  |  export namespace Query {
-  |    export class Instance {
-  0.ray(+1).if(< 5).for i
-  |      method = () => {}         //TODO How to use variables.
-  end
-  |    }
-  |  }
-end
+//TODO as String needs context of where it is being placed, if it's in a .ts that's different from another language.
+
 
 // TODO: match groups inside arbitrary structure method name
 // Default structure is to create a Node with many rays through it.

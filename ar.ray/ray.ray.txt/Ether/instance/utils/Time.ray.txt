@@ -59,6 +59,8 @@ class Calendar
   end
 end
 
+//TODO How does Lazy Evaluation work with Time.NOW, force evaluation there somehow?
+
 //TODO Allow : Time = 12:00 which defaults to setting day/year/month unknown, and stringify ignores it then and just returns 12:00 back
 //TODO .round(seconds)
 //TODO Allow calendar to be none? So it's just a Quantity.Temporal

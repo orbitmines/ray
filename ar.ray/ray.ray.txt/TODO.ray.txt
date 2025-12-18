@@ -8,5 +8,26 @@
 - Importing external libraries/packages
 - Quests: Loading partially (in/out-of-order) + reading from disk
 - Managed items by another instance (mirrors)
+- Domainnames + protocols, IPv4/6 reserved, UUIDs (Version = any hexadecimal) preserved
+- {: String}orbitmines.com reserved
+- Editing context for another character (local or remote) String @ character
+    or executing remotely
+    @character/package //TODO Is local mirror of remote object
+      String +=
+    vs:
+    @character @ ETHER/package
+      String +=
+- Use another protocol like HTTP @https://orbitmines.com
 
-//
+// Equality/Equivalence
+- == usually ignores location, what if we dont want it to. Do we use ===? OR something more intuitive?
+
+// Language features
+- --
+- ~~
+Like '--', the operator '~~', wraps around an entire
+array = [1, 2, 3]
+array ~~ .[1] = 'B' // returns [1, 'B', C]
+
+confidential.read none.write mac_address: Binary.Positive{length == 48} =
+  secure Binary.Positive{length == 47}.random ~~ .[6].push_after(1)

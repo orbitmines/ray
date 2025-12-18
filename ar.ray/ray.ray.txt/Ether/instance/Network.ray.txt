@@ -1,3 +1,6 @@
+//TODO external fills things like Network.Host when spawning a child instance.
+
+
 namespace Network
 
                     // ETHER

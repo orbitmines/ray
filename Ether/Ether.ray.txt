@@ -1,6 +1,9 @@
 < Character
 
 protected ME: Character = global
-protected ETHER: Character = "ether.orbitmines.com:37839"
+
+protected ETHER: Character & World = "ether.orbitmines.com:37839"
+delegate @{name} => ETHER
+delegate #{name} => ETHER
 
 guests.read HOST: Character?

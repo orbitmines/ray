@@ -1,4 +1,13 @@
 
+// Parsing
+//TODO Ambiguity between return ME if, meaning ME or returning ME.if, the space prefers Expression if
+
+//TODO Ambiguity if we say boolean, and have a class call bo, with operator ole, on an (another class). we can't just split the tokens.
+// -> Resolve this ambiguity by preferring the attached version (since it's longer)
+
+
+
+
 
 //TODO List of methods which shouldnt be called on local, but on this if possible:
 // #, * (on global, not local)
@@ -163,6 +172,10 @@ class Function | Program < Boundary, Location, expression: Expression
     //TODO Use the program's expression if no state has changed. -> super()
 end
 
+
+// Language templating
+⸨⸩{language: Language} (expression: language.Expression)
+
 namespace RayLanguage // This namespace will be used for: < Language
   namespace Txt < Language
     equivalence ".ray.txt" => this
@@ -174,6 +187,8 @@ namespace RayLanguage // This namespace will be used for: < Language
 
       , (b: Expression)
       -- (b: Expression)
+      // Like '--', but applies some expression and returns the variable it was applied to.
+      ~~ (b: Expression)
 
       {" "}: (type) => //TODO Wrap whole expression in : type
     end

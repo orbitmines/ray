@@ -18,6 +18,9 @@ class char = u32
 end
 //TODO String{length == 1} ; range operator for char.
 
+def "{(String?, ("{", expression: Expression{eval ==.instance_of String}, "}")?).orbit}" //TODO Allow this self-referential def
+def `{: String}`
+
 \t = "\t"
 \n = "\n"
 

@@ -1,3 +1,6 @@
+//TODO Something like is_boundary checks whether any of the entries (Many<>) are at a boundary, but that changes behavior of a superposed abstract interpretation when it shouldn't. (It should individually check is_boundary, and superpose the results)
+
+
 //TODO What is a .expand on a boundary/edge
 //TODO Ray whose <T> isn't recursively the same type: i.e. some array like [String, Number]
 // X⊣⊙⊢∙⊣⊙⊢
@@ -44,10 +47,19 @@ class Ray<T?> (x | value) < AbstractDirectionality
   //TODO .expand only the boundaries, or everything
   //TODO .paths possible paths to take.
 
+  //after/before/...
+  //TODO .push which does vs doesnt override a possible terminal defined there.
+  push
 end
 
 class AbstractDirectionality<T> < Iterable<T>
+
 end
 class Iterable<T>
-  as (:== T) => T() = this.reduce(|) //TODO if T is class.
+  // Repeat this structure x times: Composing the structure x times
+  * (x: Number) //TODO
+
+  fill (value) => for x => x = value //TODO Whenever a value is accessed, lazily add this = on top. (Any for would do this)
+
+  as (:== T) => T() = this.reduce(|) //TODO if T is class. Or should this use &?
 end

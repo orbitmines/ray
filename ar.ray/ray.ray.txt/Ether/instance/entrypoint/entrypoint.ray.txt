@@ -35,7 +35,7 @@ uuid = UUID.v1()
 //TODO Shadow should use the versioned file of /, and if a change is commited that should be placed there, it's also applied on the shadowed item.
 IO /.ether/@`uuid` %= /instance // TODO Shadow all the files in /instance
 spawn(
-  name: confidential.read write.none uuid
+  name: confidential.read none.write uuid
   IO./: host /@`uuid`
   //TODO You could make a case for saying an entity could spawn with a different OS after virtual machines are supported. With a default Ether instance installed if the OS is not Ether.
   //TODO For now, let root decide whether child instances have access to the host's OS. Defaulting to it having access.

@@ -5,6 +5,9 @@ confidential namespace IO
     //TODO Load a lazy program of the file, but if only = is used, we dont compile the actual read.
     //TODO Then things like IO /path as String, or as Expression
 
+    //TODO How to say match to ... -> .[field] $, and then say:
+    // TODO Trying first, {field}.ray.txt, then add 'field' directory if there, and if the .ray.txt isn't there fallback to 'field' as a file.
+
   // If exposed by the host, the OS' file system
   //   - You can overwrite the default access by saying "confidential IO.os /some/path"
   protected external os: IO.static

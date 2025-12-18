@@ -1,3 +1,6 @@
+//TODO Perhaps switch .Positive and Base, what do you call one with a sign though?
+//TODO Rename to .Signed
+
 def Integer<n> = sign: "-"?, integer: Positive
   static def Positive = Array{length == n}().last&&
 end

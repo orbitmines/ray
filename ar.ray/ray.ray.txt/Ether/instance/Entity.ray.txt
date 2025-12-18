@@ -52,10 +52,10 @@ class Instance < Location, IP | Socket.Address //TODO | DomainName add DomainNam
   //TODO Overwrite in OS.
   //TODO In python uuid.py there's some OS specific implementations.
   // IEEE 802 MAC address
-  confidential.read write.none mac_address: Binary.Positive{length == 48} =
+  confidential.read none.write mac_address: Binary.Positive{length == 48} =
     // If an external doesn't overwrite, use RFC 4122's approach, generate a random mac_address with the 'first bit in the first octet' set to 1, which would never be used.
     // "This bit is the unicast/multicast bit, which will never be set in IEEE 802 addresses obtained from network cards." (https://datatracker.ietf.org/doc/html/rfc4122#section-4.5)
-    secure Binary.Positive{length == 47}.random ~~ [6].push_after(1)
+    secure Binary.Positive{length == 47}.random ~~ .[6].push_after(1)
 end
 
 //TODO Hierarchy.Path

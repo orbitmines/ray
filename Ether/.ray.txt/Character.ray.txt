@@ -40,8 +40,10 @@ Invisible =>
 
 //TODO Have a sharded character, if the ether central server doesnt allow storage beyond X, allow remote storage to be configured.
 
-class Character < Entity & World & Nameable
+class Character < Entity & Accessor & World & Nameable
   instance: Instance => location{==.instance_of Instance}
 
   status => instance.status#.max
+
+  {" "}{string: String} //TODO Access permission filter
 end

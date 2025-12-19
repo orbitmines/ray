@@ -588,13 +588,6 @@ def Certificate
 end
 
 
-//TODO #World.#ChildWorld.@UserName where #ChildWorld.name.issued_by = #World
-//TODO Equivalent .UI = .#Ether.UI
-//TODO Equivalent: .#Ether.@UserName = .@UserName
-//TODO .#world.@UserName.
-//TODO; Require domain names registers on @"orbitmines.com" to be verified
-// TODO; Allow circular using.
-//TODO Uploadable public packages to .@name, default to using player names for this. register other organization names for this too.
 // using .@"ether.orbitmines.com".UI, <TODO Version>
 //TODO: If working in some folder, automatically change versioning numbers to the new ones, if the file is changed.
 //TODO Should work with the versioning system somehow? another parameter here the version, which the IDE supports for automatically getting

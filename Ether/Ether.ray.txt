@@ -1,9 +1,14 @@
 < Character
 
-protected ME: Character = global
+reserve @ether => "ether.orbitmines.com:37839"
 
-protected ETHER: Character & World = "ether.orbitmines.com:37839"
-delegate @{name} => ETHER
-delegate #{name} => ETHER
+reserve @me | @private => global
+reserve @local => @me.//TODO CURRENT .instance
+reserve @localhost => //TODO localhost
+reserve @everyone | @public => @ether.characters//TODO This now would be only registered with the central ether server, by default we want to allow any, how would we say, registered with the central ether server;
+reserve @here => characters//TODO Online
+reserve @{instance: Instance} => instance.canonical
+
+names: String.NonEmpty{length < 2^8}
 
 guests.read HOST: Character?

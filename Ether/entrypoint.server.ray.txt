@@ -1,13 +1,6 @@
-< World
+shadowing = None
 
-characters | worlds .name{issuer == ME}:
-  String.NonEmpty{length < 2^8}
-  // This name is reserved for the network
-  not in Network.Hosts
-  // IPv4 names are reserved for the network
-  not IPv4
-  // IPv6 names are reserved for the network
-  not IPv6
-//TODO domain-names need special authorization to write to how to implement that? Valid domains also something like "Mr. Tiltalot"? Or are those excluded?
+reserve @ether => @me
 
- //TODO How to say unique but ignore_case
+
+

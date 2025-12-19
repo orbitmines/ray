@@ -75,7 +75,7 @@ modifier managed
 end
 // Note that public, means literally anyone with a connection to this location is allowed to access it.
 // This is for instance used for distributed databases.
-modifier public
+modifier public | everyone
   def as :== Node{} = true
 end
 modifier none

@@ -11,6 +11,11 @@ class String = Unbounded{length < Infinity}
 
     def ignore_case //TODO Return superposition with ignored case
     //TODO snake_case, camelCase etc.. PascalCase
+    v | lower_case //TODO Allow v, and other methods to directly follow string def without a .
+    ^ | upper_case
+
+    plural
+    singular
   end
 end
 class char = u32

@@ -40,7 +40,7 @@ Invisible =>
 
 //TODO Have a sharded character, if the ether central server doesnt allow storage beyond X, allow remote storage to be configured.
 
-class Character < Entity & Nameable
+class Character < Entity & World & Nameable
   instance: Instance => location{==.instance_of Instance}
 
   status => instance.status#.max

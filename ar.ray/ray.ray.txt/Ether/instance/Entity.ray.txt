@@ -41,7 +41,7 @@ def Entity
 end
 
 //TODO If location is set to an instance, open a port there, and that is localhost.
-class Instance < Location, IP | Socket.Address //TODO | DomainName add DomainName:Port string
+class Instance < Location, URL | DomainName | IP | Socket.Address //TODO | DomainName add DomainName:Port string
   //TODO this value is different depending on your location -> It's localhost, locally, but set to a different ip in the network.
   //TODO Set this to the received IP dynamically.
 

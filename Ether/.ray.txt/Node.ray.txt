@@ -1,4 +1,6 @@
 class
+  //TODO class{==.instance_of Nameable}, instance_of class
+
   {name: *} (def: (Args: *): *) //TODO Allow out-of-order
     // Allow Class.name |= "Class2" to add aliases
     dynamically &definer[local.name] = local if local.name
@@ -28,7 +30,7 @@ class * | Node
 
   external = | assign (x): x //TODO Might have to set # equal to x
   external {*} | [{property: *}] //TODO How to say infer the property.
-  external # | all : Iterable<static>
+  external # | all : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
   external * | methods : { {key: *}: value: Program? }
   external ** | program : Program
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
@@ -64,6 +66,8 @@ None +=
 
   as (:== boolean) => false
 end
+
+//TODO .canonical as the thing which resolves equivalent forms of the same Instance for example.
 
 unique
   //TODO either same object or assert

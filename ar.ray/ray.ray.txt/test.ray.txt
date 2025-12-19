@@ -237,6 +237,7 @@ If @ is used in something like as:== string, it should overwrite default behavio
 
 // (Base, unit: Unit = Unit.None)[] != [Base, unit: Unit = Unit.None][], one is (A, B, A, B), the other ([A, B], [A, B])
 
+//TODO But do allow >/< a type.
 ==.at_least (Covers at least the provided  -> >=, isnt this just always ==.instance_of?
 ==.@ //TODO All cases are covered by both sides.
 ==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.

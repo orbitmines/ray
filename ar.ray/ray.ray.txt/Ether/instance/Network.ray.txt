@@ -120,12 +120,17 @@ namespace Network
     end
   end
 
+  //TODO World names are instead used for /etc/hosts like behavior
   // Acts as a /etc/hosts
-  Hosts: { `String.NonEmpty`: IP } = {
+  Hosts: { {: Instance}: Instance } = {
+    //TODO Or it's Character => Character instead (so we can also map @ether to @me)
+    //TODO equivalence A => B
+    //TODO A hostname without a space aren't by default reserved, but can be overwritten.
     confidential.write "localhost": "127.0.0.1" | "::1"
     //TODO external could fill these from /etc/hosts
     //TODO What about "ether".ignore_case => "ether.orbitmines.com"
   }
+
   dynamically Hosts.for host, ip => equivalence host -> ip
 
   //TODO Domainname:port castable to IP using nameservers.

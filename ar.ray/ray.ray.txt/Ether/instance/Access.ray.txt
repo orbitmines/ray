@@ -41,7 +41,6 @@ end
   end
 end
 
-
 // Confidential, means we don't want it to be public, but we defer to "default_privacy_policy" whether this should be "localhost" or "private".
 modifier confidential
   def as :== Node{}
@@ -51,33 +50,7 @@ modifier confidential
     return default_policy > "private" ? "private" & "managed" : default_policy
   end
 end
-// "localhost" means only on the local instance. (Not even local child instances)
-modifier protected
-  def as :== Node{} = Node{== ME}
-end
-//TODO localhost is any character on this machine
-// Allow any instance defined as a parent of this instance to access the location. Usually that would the host machine,
-// but in principle this could be any instance in some hierarchy.
-modifier host
-  def as :== Node{} = Node{== (<- INSTANCE.hierarchy).reduce(|)}
-end
-modifier guests
-  def as :== Node{} = Node{== (INSTANCE.hierarchy ->).reduce(|)}
-end
 
-// "private" means any instance running this entity/player. Note that any backup server, like the central Ether server, has that property.
-modifier private
-  def as :== Node{} = Node{== ME @ ME.instance} | "localhost"
-end
-// Only include non-public instances running this entity. (So basically private servers running your player instance)
-modifier managed
-  def as :== Node{} = Node{== .instance{access.read < "public"}}
-end
-// Note that public, means literally anyone with a connection to this location is allowed to access it.
-// This is for instance used for distributed databases.
-modifier public | everyone
-  def as :== Node{} = true
-end
 modifier none
   def as :== Node{} = false
 end

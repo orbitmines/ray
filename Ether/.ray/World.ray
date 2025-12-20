@@ -22,7 +22,7 @@ class World < Nameable //TODO Is it < Location, if we mark every location as Wor
     class{>.instance_of Nameable}#.for class
       //TODO Set name for that character
       //TODO
-      {class.PREFIX}{name} (getter?: (): class) => WORLD[class.name.plural] &= getter ? dynamically getter() : class(name: name)
+      @private.confidential {class.PREFIX}{name} (getter?: (): class) => WORLD[class.name.plural] &= getter ? dynamically getter() : class(name: name)
 
   //TODO < World at many places in some structure, have the things like .worlds/.characters be iterating over that structure to anything that's in it.
 end

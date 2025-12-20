@@ -15,6 +15,7 @@
 //TODO --> Exchange information such that the remote instance is allowed to host you.
 //TODO --> What if signature changed, might not want to allow, or when to invalidate signature,
 
+
 //TODO The -> iterator stops when hitting None.
 
 //dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
@@ -47,6 +48,8 @@ Access list of instructions from ** iterable object
 //TODO as (: type) is automatically implemented so that as boolean is always calling => this
 
 // Allow type annotations with : == boolean, meaning : *{== boolean}
+
+
 
 //TODO Super + subscript means what in UI.
 

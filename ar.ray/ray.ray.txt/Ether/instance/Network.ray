@@ -71,6 +71,12 @@ namespace Network
       // When the length of the consecutive 16-bit 0 fields are equal, the first sequence of zero bits MUST be shortened. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
       dynamically assert left ~= 0[] -- .length != number_of_compressed_segments if zero_compression
 
+       // When there is an alternative choice in the placement of a "::", the longest run of consecutive 16-bit 0 fields MUST be shortened (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
+      dynamically assert left & right ~= 0[] -- .length <= number_of_compressed_segments if zero_compression
+      // When the length of the consecutive 16-bit 0 fields are equal, the first sequence of zero bits MUST be shortened. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
+      dynamically assert left ~= 0[] -- .length != number_of_compressed_segments if zero_compression
+
+
       static NUMBER_OF_SEGMENTS = 8
       static SEGMENT_LENGTH = 16
 

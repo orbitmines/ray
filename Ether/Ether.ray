@@ -24,6 +24,6 @@ reserve @{instance: Instance} => instance.canonical //Should also reserve CIDR n
 
 reserve (@ | #){: UUID}
 
-reservable_names: String.NonEmpty{length < 2^8}
+reservable_names: String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 
 @guests.read HOST: Character?

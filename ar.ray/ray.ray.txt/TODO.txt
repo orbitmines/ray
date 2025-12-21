@@ -2,6 +2,9 @@
 - Locations differ slightly from traditional file systems:
   - There can be many items (files) defined at a single location.
   - Any location is both a directory and a file; it defines both values and a (hierarchical) structure.
+- Alternate values to mirrors than what's currently there:
+ - Randomizer: mirror to collapse to a particular value not the probability.
+
 
 // Networking
 - All networking is abstracted away
@@ -15,15 +18,16 @@
     @character/package //TODO Is local mirror of remote object
       String +=
     vs:
-    @character @ ETHER/package
+    @character @ @ether/package
       String +=
 - Use another protocol like HTTP @https://orbitmines.com
 
 // Equality/Equivalence
 - == usually ignores location, what if we dont want it to. Do we use ===? OR something more intuitive?
 
+
 // Language features
-- --
+- -- / space false, true .map(!)
 - ~~
 Like '--', the operator '~~', wraps around an entire
 array = [1, 2, 3]

@@ -1,0 +1,8 @@
+
+Node +=
+  random =>
+Iterable +=
+  random =>
+Base.Real.Positive +=
+  () => //TODO Where is the probability stored
+  // => is also valid syntax

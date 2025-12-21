@@ -17,7 +17,6 @@ def * = external // TODO any type Might not need to be externally defined. self-
 // TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
 def do<T: Program>(program: T) => T = external
 
-//TODO def
 //TODO Array
 //TODO 0..9.reduce(|) / "0".."9".reduce(|)
 //TODO Decimal -> Binary / Binary -> Decimal & Decimal.String -> Binary
@@ -47,6 +46,7 @@ def void end
 // This however, allows for: `(predicate ? Many : 1) Object`. //TODO But prefer '(1 if !predicate) Object', Is there another use-case for Many?
 def Many x = x
 
+// TODO Namespace by default initialized the variable UTC but should allow () to call to reinitializing it 'namespace UTC Base: Calendar = Calendars.Gregorian < Base'
 def namespace
   def `name = *`(definition: () => *)
     class `name`(definition)
@@ -273,6 +273,7 @@ def dynamically
   //TODO Parameterless functions are automatically dynamic.
   //TODO Infinite loops should be dismissed as possible values. If a loop is detected, stop committing resources there (until there's a change, then recheck)
 
+  // Take the comment above or besides an assert as the error message.
   def assert(expression: Expression) = external
   //TODO dynamically assert expression if
 

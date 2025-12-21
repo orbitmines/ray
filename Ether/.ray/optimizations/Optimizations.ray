@@ -3,3 +3,8 @@
 //TODO optimize ignore_case check to both sides lower_case/upper_case
 //TODO Ray.index compiles to a for-loop with i+1
 //TODO If a single item is in multiple inventories, how is persistence done? Is it stored in one, refs, in another, stored in both, want to allow for all of these options, how to deduplicate if it's known it's in two inventories: merger, or what?
+
+// Optimize boolean checks by saying unordered # the first thing that returns true collapses it
+var = var#{== true}.first
+
+//if boundtype is < infinite, .infinite should return false

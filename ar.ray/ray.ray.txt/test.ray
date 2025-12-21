@@ -83,24 +83,6 @@ func
 
   |
 
-&& = b: boolean
-end
-&& = (b: boolean) =>
-&& = (b: boolean) =>
-end
-&& = (b: boolean) =>
-  next_line
-!{.} => this !&& this
-!{.} = this !&& this // Only
-&&(b: boolean) =>
-&&(b: boolean)
-end
-&&(b: boolean)
-  next_line
-&& (b: boolean)
-&& b: boolean =>
-!{.}
-end
 
 //TODO Out-of-order property access, in the constructor
 
@@ -288,8 +270,6 @@ default ==.in(x.as@ TODO Somehow expand to all possible .as@ )
 end
       //TODO How to overwrite minutes. In the editor you'd allow to overwrite some selected codeblock entirely.
 
-// TODO Namespace by default initialized the variable UTC but should allow () to call to reinitializing it 'namespace UTC Base: Calendar = Calendars.Gregorian < Base'
-//TODO Namespace should define static/this
 
 //TODO 'dynamically assert @{.primary == primary}.count == 1', should check whether any of the @ values, yields true for any of the primary values. --> So you dont need to primary@.every(x => .primary@.some(x))
 // TODO So default behavior of == is, A has any of B, replicated for every B.
@@ -342,49 +322,18 @@ relative_context = &&
 
 // What's the graph interpretation of an inductive type like 'def Option<T> = Some(T) | None'
 
-// Calling a method which accepts a boolean, with the boolean type: Abstract interpretation natively supported.
 //   -> The result should be refinable, "now I know it's true, so what's the result".
-//   -> Partial evaluation, leads to external values being abstractly interpreted as well.
-//     -> I should be able to later say, similarly, that the result is now refined to 'true', any effects caused should be reset back.
-//   -> So .OR possibilities need to carry with it information of why and how to possibly change them
-def example(x: boolean) = x ? "Y" : "N"
-example(false) // "N"
-example(boolean) // "Y" | "N"
-example(false & false & true) // "N" & "N" & "Y"
-//TODO different @ structure like a grid, maintain that structure.
+// refined to 'true', any effects caused should be reset back. -> Need some way to register for nonrollbackable events; a new value has arrived, -> a new version
+//TODO With a label?
+// Carry program pointer of which value/state effected it, how to access this variable if it's not defined?
 
-example(boolean) // "Y" when /example/x == true, "N" when /example/x == false //TODO Link these two /example/x which are different instantiation than another func call.
-// Like this:
-X:
- example(boolean)
-Y:
- example(boolean)
-// "Y" when /example/x@{id == X} == true, "N" when /example/x@{id == X} == false
-// "Y" when /example/x@{id == Y} == true, "N" when /example/x@{id == Y} == false
 
-//TODO This too? Or not?, probably not
-example(boolean, boolean) // ("Y" | "N"), ("Y" | "N")
+// Ambiguity: If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
 
-x@ = boolean = false | true
-def example(x: boolean) = x ? "Y" : "N" // x@ = false & true
+//TODO Infinite loops like location.parent, circular, map to None if detected.
 
-// .OR: How do we know/use a proof that a single true is enough, to discard the superpositions.
 
-// Does every type like 'boolean' automatically include all the methods defined on it. So boolean.nor is the superposed method, which can later be called with a new 'this' value, how is that intuitively done?  (How does on static fill generics which might be required to call methods)
-// If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
-
-//TODO def visibility: Entity = inventory.previous?.value.visibility ?? "local"
-// This loop should automatically yield to None.
-
-//TODO ? is unknown so it superposes by default.
-
-// How to map over every key in an object, default map-like things defined on every context? -> How to do this while ignoring things like 'local': Things like local are private - so pri. Private doesn't prevent it from being overwritten though.
-
-//TODO {} filter is both ways. so if .reverse is called it is filtered.
-
-//TODO dynamically should either be a quest or be lazy, with completable when resources are available.
-
-//TODO Require a binary function like x.b(y), where x and y are given like [].function (parameters)
+//TODO Require other structure than the typical x.method(y), but higher-arity for instance; Also a structure where x&y aren't filled, instead of just a (x) => x.call(ALREADY_FILLED_VALUE)
 
 // .reduce(|) TODO How does it work to pass a binary operator to a reduce which has accumulator and current as the two arguments
 //   -> If default is not set for accumulator, the initial value is the first in the array.
@@ -428,83 +377,13 @@ def example(x: boolean) = x ? "Y" : "N" // x@ = false & true
 // classes without parameters are now called their constructors instead of requiring a ().
 // ~= ^1,1 ambiguity with ^3 as a number or other numbers, it should prefer ^ starts_with because of ~=. There's no ambiguity if we use ^[1,1] -> It's not a numbe.r
 
-// TODO - Notes for Examples
-// Partial extends like Number.
-// .Real.Positive should be castable to .Real
-// "01101010" ~|| "10101000", or something like "0" || "1" is defined, because, there's a cast from Binary.Positive.String -> Binary.Positive, which defines those methods. And they're not defined on String. (And "0" || "1", works because String as Digit.value, which automatically finds an isomorphism the other way, which is then castable to boolean)
-// Partially extending like Decimal/Decimal.Positive, Every Decimal.Positive is a Decimal, since sign is Option
-// "A program/function with parameters which gets evaluated gets called"
 
-def a 1 2 3 4 5
-a<3: c>(1 2 4 5)
-a<3: c, 5: e>(1 2 4)
 
-(def method). <T> // Defines on the constructor.
-def Array.method // Defines on Array (on static)
-end
 
-."method!@$8" // .`"a"`, method calls.
 
-// Executing a piece of code in between each statement becomes:
-// TODO: How to stop this from recursively calling itself: "Any redefinition of 'do' will use its previous implementation of 'do' within it, to prevent recursive stacks"
-//   -> Different way of monkey-patching, monkey-patching 'def' would also do that. Some way of saying, recursively do = super()
-do = def do block
-  clock = some_clock_func()
-  ret = super()
-  time_elapsed = clock.time_elapsed()
-  return ret
-end
-
-// def method(a, `a`) ; method("b", b = 5)
-
-def Object
-  list1: Array
-  list2: Array
-end
-// Allow something like this
-def Object{ list1.disjoint(list2) }
-end
-def Object
-  list1: Array
-  list2: Array
-  dynamically assert list1.disjoint(list2)
-end
-def Object<T> args { list1.disjoint(list2) }
-  list1: Array
-  list2: Array
-end
-def Object<T> args
-  list1: Array
-  list2: Array
-  { list1.disjoint(list2) } // TODO If a { } is evaluated, it is evaluated as a 'dynamically assert', if the definer is = this, it gets applied to that object, as opposed to Binary{.length == length}
-end
-
-program(throw: (args: Args) => void
-  error = args;
-  goto capture
-end)
-program(throw: (args: Args) => void = {
-  error = args;
-  goto capture
-})
-program(throw: (args: Args) => {
-  error = args;
-  goto capture
-})
-program(throw: (args: Args) => void = error = args; goto capture)
-program(throw: (args: Args) => error = args; goto capture)
-
-// Binary{length == 1} should be not castable, but should be boolean. or Binary.Positive[] = boolean[]
-
-// Take the comment above or besides an assert as the error message.
-
-// Automatic isomorphism example in Number as String definition. + example of how repeated Strings map to an array.
-// Show that generic type parameters are accessible in monkeypatch, even if not defined in monkeypatch
-// The only difference between a class and a normal def is that static and this are defined.
-// When using '1 Object', you still allow the compiler to use many objects there for abstract interpretation, it's just that for type checking you expect there to be just one.
 
 // TODO - Examples + Allowances
-// Allow 'def Ray<T = Ray<T>>', Meaning, T is unknown, but it is a Ray.
+// Allow 'def Ray<T = Ray>', Meaning, T is unknown, but it is a Ray.
 // Allow chaining of binary operators like Array<3 < length < 5>
 // Allow chaining of conditionals with .AND -> Array<length > 3><length < 5>
 // Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>, Array{length > 2 if property}
@@ -657,82 +536,9 @@ Translate everything like ifblocks etc. to other languages, which are implemente
 // Automatic isomorphism
 // Property decorators like: 'rendered secondary: instance?'
 
-// TODO What if a library defines Nothing, different from the one here. How to decide what is used, A newly instantiated variable or that?
-// Single-line function
-def Maybe a = Just a | Nothing
-ef Maybe(a) = Just a | Nothing
-def Maybe(a)
-  return Just a | Nothing
-end
 
 
 
-
-.caller is using .inventory?
-
-.random on graph/array to fill with random possible values, you want a .length or .count to be there. or .edgecount to limit it somehow. Or infinitely randomly generating for array for instance. Or some parameter probability on the length of the thing. But in the graph case there'd need to be that parameter of probability of how big it'd be, otherwise each edgecount would be infonitely generating.
-So some way of saying .random with a 50% change at each bit to stop generating larger ones. Or (20% etc.) What's the math on average/usual length based on thay probability
-
-Have some func like secure be the thing that nestedlty changes the .random function so
-= secure array.random
-= secure array.shuffle
-secure acceps expression or block //TODO secure, like the definition of throw, recursively adds a variable in context.
-or something like
-seed seed (randomizer?: )
-  array.shuffle
-end
-
-probabilistic // typed that it needs to be added to 100 how? or <= 1
-case 0.3 // = 1.0 or 0.<>
-case 0.3
-case 0.4
-// support thing like
-case PI
-case 1-PI
-end
-r 0.3() | 0.3() | 0.4() -- #.random
- 0.3(), 0.3(), 0.4() -- random
-Support nested probabilities like
-0.5() | 0.5( 0.3() | 0.7() ) //TODO The nested here fills .expand?
-array.random should return a probability 1/length for each entry or if they're fecorated with probabilities the type = the array
-as T is forcing a collapse of the probability.
-How do you get multiple values from this OR/AND'ed ; you can do 0.3(A | B) | 0.7(A & B), but do you ever need to combine probabilities like 0.3 | 0.7 & 0.2 | 0.8 - but then how'd you het OR
-Use -- as parentheses around the whole block
-r@.random
-
-What if the value is random, but you want the stuff synced to be a particular value
-
-define .finite .infinite
-is_irrational = .length {finite}
-what's it called when the integer might be infinitely large
-real is integer{finite}
-Fraction is [].unbounded
-
-2^8 -1 max username length?
-
-communicate .length value for partially filled array like file size, but then for any value
-
-username needs to be string without all the special \n chars etc.
-
-how to move a claimed username to another player, then no name is selected and a new name needs to be selected.
-
-Continue without username is setting username to uuid, reserve uuids within main world. so give out one name within uuid range and another outside. server chooses the uuid
-
-.sort is {every . previous<=this<=.next
-
-if boundtype is < infinite, .infinte should return false
-
-distance is a transfinite number relative to normal integers if no elementary length is defined
-
-protected this
-
-
-
-
-// observer on a variable defined on an outside location, basically pubsub system (needs to poll for data somehow, or get pushed an update)
-
-
-// .max/.min on Array<number>
 
 // TODO: Does this assigning to false | true also change Two.first to ref on .value to the Node.
 

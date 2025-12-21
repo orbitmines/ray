@@ -41,6 +41,7 @@ end
   end
 end
 
+//TODO Only provide this method when accessed through location @private? *{location == @private} What if you use == like this, should it know the location that variable is in and check it?
 // Confidential, means we don't want it to be public, but we defer to "default_privacy_policy" whether this should be "localhost" or "private".
 modifier confidential
   def as :== Node{}

@@ -31,6 +31,7 @@ class * | Node
   external = | assign (x): x //TODO Might have to set # equal to x
   external {*} | [{property: *}] //TODO How to say infer the property.
   external # | all : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
+  //TODO Exclude vs include things like local and other defined properties on Node,
   external * | methods : { {key: *}: value: Program? }
   external ** | program : Program
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
@@ -73,3 +74,8 @@ unique
   //TODO either same object or assert
   //TODO unique{} accepts an expression which it maps to before checking uniqueness
   dynamically assert #.
+
+//TODO ? is unknown so it superposes by default.
+//TODO ? is location depended, it sets the value to the type it's
+//TODO Default assignment is ? if not an Option which is None, does that ever cause issues when you expect a singular value?
+? =>

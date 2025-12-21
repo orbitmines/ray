@@ -1,6 +1,11 @@
 //TODO Perhaps switch .Positive and Base, what do you call one with a sign though?
 //TODO Rename to .Signed
 
+// "01101010" ~|| "10101000" & 0101010 ~|| 1010010 work
+//TODO Automatic equivalence between Real.Positive -> Real & Base -> Base.Signed
+
+// Binary{length == 1} == boolean
+
 def Integer<n> = sign: "-"?, integer: Positive
   static def Positive = Array{length == n}().last&&
 end
@@ -8,6 +13,8 @@ end
 //TODO Define .sign on all numbers, so that you can do x.sign ().sum, empty string is + so nothing gets applied since it's empty string.
 
 private class Digit = String[].reduce(|)
+
+Base = &'ed version of all the numbers
 
   def value(digit: this = this)
     array = this.reduce(array = [] => array.push_back(void))

@@ -61,5 +61,10 @@ class Iterable<T>
 
   fill (value) => for x => x = value //TODO Whenever a value is accessed, lazily add this = on top. (Any for would do this)
 
+  //TODO Sorted/max/min along which dimension & what is the default dimension
+  sort (dimension: AbstractDirectionality): static{~every .previous[DIMENSION] <= .[DIMENSION] <= .next[DIMENSION]} =>
+  max () =>
+  min () =>
+
   as (:== T) => T() = this.reduce(|) //TODO if T is class. Or should this use &?
 end

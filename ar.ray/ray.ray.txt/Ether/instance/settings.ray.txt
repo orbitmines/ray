@@ -1,3 +1,0 @@
-// Entity settings are loaded before the entrypoint is called.
-BROADCAST_INSTANCE = false
-OFFLINE = true

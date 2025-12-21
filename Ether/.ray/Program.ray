@@ -1,3 +1,17 @@
+// Compiler
+// When using '1 Object', you still allow the compiler to use many objects there for abstract interpretation, it's just that for type checking you expect there to be just one.
+
+// Recursively put code in front of every block
+recur = <
+  &caller = @me
+
+  clock = Time.NOW()
+  &next.push
+    time_elapsed = clock.time_elapsed()
+  //TODO Or allow access to super() which will be the super() of <> -> Do you ever need to access super() of that function you're accessing?
+
+  recur()
+>
 
 // Parsing
 //TODO Ambiguity between return ME if, meaning ME or returning ME.if, the space prefers Expression if
@@ -186,6 +200,8 @@ namespace RayLanguage // This namespace will be used for: < Language
       external comment: String
 
       , (b: Expression)
+
+      // Allow space/newline (unless theres a newline between false and true?, depends on the indentation as well) ; Allow false, true .map(!)
       -- (b: Expression)
       // Like '--', but applies some expression and returns the variable it was applied to.
       ~~ (b: Expression)

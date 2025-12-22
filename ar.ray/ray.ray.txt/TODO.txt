@@ -4,7 +4,7 @@
   - Any location is both a directory and a file; it defines both values and a (hierarchical) structure.
 - Alternate values to mirrors than what's currently there:
  - Randomizer: mirror to collapse to a particular value not the probability.
-
+- = is defined on the variable, since the variable is location aware.
 
 // Networking
 - All networking is abstracted away
@@ -25,6 +25,10 @@
 // Equality/Equivalence
 - == usually ignores location, what if we dont want it to. Do we use ===? OR something more intuitive?
 
+// Writing compiler optimizations
+// dead code after return if there's no goto to a label there.
+
+// Transactions & dynamically
 
 // Language features
 - -- / space false, true .map(!)
@@ -33,5 +37,10 @@ Like '--', the operator '~~', wraps around an entire
 array = [1, 2, 3]
 array ~~ .[1] = 'B' // returns [1, 'B', C]
 
+   (0 -> +1){< 10}.for i
+   0{< 10}.for i // Since numbers are by default equipped with the numberline, and 0 is not real, but the Decimal.Positive.
+
+
 confidential.read none.write mac_address: Binary.Positive{length == 48} =
   secure Binary.Positive{length == 47}.random ~~ .[6].push_after(1)
+

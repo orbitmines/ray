@@ -1,5 +1,10 @@
 // Compiler
 // When using '1 Object', you still allow the compiler to use many objects there for abstract interpretation, it's just that for type checking you expect there to be just one.
+// Chaining operators like ==.instance_of / <
+//TODO If a variable is any, anything called on it will become a requirement , a function with an assigned type return; a requirement.
+// "run at compile time" ; constexpr
+
+//TODO // Accessing variables while function in running.
 
 // Recursively put code in front of every block
 recur = <
@@ -12,6 +17,10 @@ recur = <
 
   recur()
 >
+
+<{expression: Expression}> // Before each statement in context
+Node +=
+  <{expression: Expression}> // Before constructor, or method call, so function returns can reference arbitrary types within the method body?
 
 // Parsing
 //TODO Ambiguity between return ME if, meaning ME or returning ME.if, the space prefers Expression if
@@ -132,6 +141,7 @@ class Function | Program < Boundary, Location, expression: Expression
 
   //TODO Is intermediate state the whole context? Or what do we do with sequence of operations on some variable? How to intuitively make that sequence only about that variable? and things it depends on
 
+  //TODO Context information like line-number in parent expression, etc.. and larger context
 
   ∙: State
   // Program State
@@ -179,12 +189,19 @@ class Function | Program < Boundary, Location, expression: Expression
   //TODO < Quest, implement .stop
 
   // With the assumption that each non-expandable step terminates.
-  total | decidable | always_terminates | always_halts => expanded.length#.every(!= ∞)
+  static Total | Decidable | Terminating | Halting => static{expanded.length#.every != ∞}
+  //TODO Automatically implements total/decidable/terminating/halting, because it's a filter. on static
 
   as (== String) =>
     //TODO Store program with any state etc.. which would be used to pause certain quests/functions. For instance save/pausing a game.
     //TODO Use the program's expression if no state has changed. -> super()
 end
+
+// TODO Coroutines
+//    - branch; separate thread
+// TODO Concurrently accessing variables
+//    - sync: Run concurrently, return when all are done, race: First one to finish, the rest is cancelled. rush: same as race, but they're allowed to finish, the ones that didnt finish first., defer: Run after current context finishes (no matter how it exists)
+// TODO Await for an event to trigger, and then do things like race, with many awaits, and then continue in the code
 
 
 // Language templating
@@ -201,6 +218,7 @@ namespace RayLanguage // This namespace will be used for: < Language
 
       , (b: Expression)
 
+      // => higher precedence than --
       // Allow space/newline (unless theres a newline between false and true?, depends on the indentation as well) ; Allow false, true .map(!)
       -- (b: Expression)
       // Like '--', but applies some expression and returns the variable it was applied to.

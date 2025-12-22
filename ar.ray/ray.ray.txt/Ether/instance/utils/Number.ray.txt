@@ -1,5 +1,19 @@
+
+Binary +=
+  * |= (b: Number % mod 2 = 0) => this << (b / 2)
+  << |= b = this.push_back(0[]{length == b}) //TODO Overflow for i64 is done how?
+
+// Lean: On a 32-bit architecture, USize is equivalent to UInt32. On a 64-bit machine, it is equivalent to UInt64.
+//   -> How to conditionally get the architecture for this definition.
+
+//TODO Number equipped with default numberline, so number.for works. for Real, a step function needs to be defined
+
+//TODO factorial!
+
 //TODO Perhaps switch .Positive and Base, what do you call one with a sign though?
 //TODO Rename to .Signed
+
+//TODO Unit's like 1m are transfinite numbers in the sense that 1m > Infinity, but not Infinity m
 
 // "01101010" ~|| "10101000" & 0101010 ~|| 1010010 work
 //TODO Automatic equivalence between Real.Positive -> Real & Base -> Base.Signed

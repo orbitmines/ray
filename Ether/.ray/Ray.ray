@@ -50,10 +50,21 @@ class Ray<T?> (x | value) < AbstractDirectionality
   //after/before/...
   //TODO .push which does vs doesnt override a possible terminal defined there.
   push
+
+  expanded => //TODO Recursively expand
+
 end
 
 class AbstractDirectionality<T> < Iterable<T>
 
+  // what about 0..10..20 // Goes to 20 through 10, relevant for graph
+  // ..10 / 10.. Same as 10-> / <-10
+  // Somehow 5..10 when used as a type is 5..10.reduce(|) by default?
+  (a: this?) .. (b: !a ? this : (> this)?) =>
+
+  static Connected // each Node is reachable from each other Node. (Going both forward and backward)
+  static Consistent
+  static Acyclic
 end
 class Iterable<T>
   // Repeat this structure x times: Composing the structure x times
@@ -66,5 +77,18 @@ class Iterable<T>
   max () =>
   min () =>
 
+  disjoint (b: Iterable)
+
+// TODO If two arguments are passed, we step with 2 and fill both?
+  for ()
+
+  to () => //Path to
+
   as (:== T) => T() = this.reduce(|) //TODO if T is class. Or should this use &?
 end
+
+//TODO constructors
+   0 -> +1
+   -1 <- 0 -> +1
+   -1 | -2 <- 0 -> +1 | +2
+   0 -> +1 -> +2 // Repeated two steps +1 +2 +1 +2 ..

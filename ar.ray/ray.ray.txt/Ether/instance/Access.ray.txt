@@ -1,5 +1,6 @@
 //TODO Default public.read doesn't allow access to **, but what would?
 
+//TODO const is none.write recursively set the access-level too.
 
 //TODO Make sure that specific entries in a # or array similarly have their visibility respected.
 

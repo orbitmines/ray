@@ -273,6 +273,8 @@ def dynamically
   //TODO Parameterless functions are automatically dynamic.
   //TODO Infinite loops should be dismissed as possible values. If a loop is detected, stop committing resources there (until there's a change, then recheck)
 
+//And things like dynamically assert shouldn't throw directly, but check all conditions and report them all together.
+
   // Take the comment above or besides an assert as the error message.
   def assert(expression: Expression) = external
   //TODO dynamically assert expression if

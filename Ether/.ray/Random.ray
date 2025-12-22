@@ -6,3 +6,7 @@ Iterable +=
 Base.Real.Positive +=
   () => //TODO Where is the probability stored
   // => is also valid syntax
+
+
+secure
+seed ()

@@ -182,8 +182,16 @@ class Function | Program < Boundary, Location, expression: Expression
 
   //TODO .children TODO collapsed terminal.
 
+  callee => // from parameters one of which is the instance, other's are named; exclusion?
+
   in | parameters => ∙⊣this .x
   out | local => ∙.x
+
+  //TODO Good name for the original function
+  base: Program => //TODO Pointer to history.
+  //TODO Base vs the original function filled with parameters, a good name for that
+
+  recur (callee) => base.copy(callee: callee) //TODO + Parameters
 
   //TODO schedule, spawn entity if necessary, if already an NPC, use that NPC quests.
   //TODO < Quest, implement .stop
@@ -191,6 +199,8 @@ class Function | Program < Boundary, Location, expression: Expression
   // With the assumption that each non-expandable step terminates.
   static Total | Decidable | Terminating | Halting => static{expanded.length#.every != ∞}
   //TODO Automatically implements total/decidable/terminating/halting, because it's a filter. on static
+
+  {: UUID} => //TODO Load the version and remove the current function graph
 
   as (== String) =>
     //TODO Store program with any state etc.. which would be used to pause certain quests/functions. For instance save/pausing a game.
@@ -212,15 +222,23 @@ namespace RayLanguage // This namespace will be used for: < Language
     equivalence ".ray.txt" => this
 
     static class Expression < String
+      //TODO Then how to define the assumptions of newline meaning => etc..
+
       //TODO Expression comes from some file or more generally a context, have that information available here.
 
       external comment: String
 
       , (b: Expression)
 
+      //TODO Space counts as --
       // => higher precedence than --
       // Allow space/newline (unless theres a newline between false and true?, depends on the indentation as well) ; Allow false, true .map(!)
       -- (b: Expression)
+      //'-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
+      //'--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
+      //Allow multiline '--'
+      //Allow returning out of a -- statement.
+
       // Like '--', but applies some expression and returns the variable it was applied to.
       ~~ (b: Expression)
 

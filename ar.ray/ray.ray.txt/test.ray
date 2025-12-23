@@ -1,6 +1,3 @@
-//TODO Which </extends is the ray, the first one?
-
-//TODO .max of any order so Status.max
 
 //TODO If there is a single field going to some class like Instance/or its extensions IP/Socket.Address, automatically add an equivalence (as IP) to that class. Is there ever a case where you don't want this equivalence?
   as (== Instance) => .instance
@@ -32,9 +29,6 @@
 //TODO: Set actual directory vs the one we map to. Map both @player-name and @uuid, but actualize in @U/U/I/D
 < @Ether/.ts
 
-//TODO Space counts as --
-Instance can be part of many Many's
-
 //TODO get aliases too of the things provided? If not defined on parent obj. Editor: get the same comment.
 delegate in | out => object
 
@@ -47,21 +41,12 @@ Access list of instructions from ** iterable object
 
 //TODO as (: type) is automatically implemented so that as boolean is always calling => this
 
-// Allow type annotations with : == boolean, meaning : *{== boolean}
 
-
-
-//TODO Super + subscript means what in UI.
 
 //TODO If multiple sets =, make the object adhere to the type, allow it temporarily to not adhere to it: as long as it's not used. Deem as a single transaction.
 
 // * operator a,llows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
 
-//Return type
-&& (b: boolean) : boolean => func
-&& (b: boolean) : boolean //without func def
-//TODO Every variable has (...) defined creating a function (after that it's calling a function), accessing : on it changes the return type, then => is defined on it
-//TODO Then how to define the assumptions of newline meaning => etc..
 
 // Allow top-level | OR and & AND, which are ignored so we can do things like how the booleans are defined.
 
@@ -69,8 +54,6 @@ Access list of instructions from ** iterable object
 // Offline vs private managed vs offline but allow internet access which doesn't identify the instance.
    Make it a visibility filter, and internet access how
 
-dynamically load/shard into memory disk across many computers at the boundaries especially, automatically from higherlevel scripts, decentralized.
-How do you get the 3d environment ad a massive 3d space and effectively store it - and have that abstraction hidden from the programmer
 Things like a euclidian space defined, and then say it's discretized in this particular way, how do functions in that space change
 
 // Allow maybe == Some a: 5..10
@@ -104,23 +87,14 @@ class Time < Quantity.Temporal (calendar: Calendar = UTC) =>
 //TODO Automatically support func calls like @"Sir Tiltalot"
 
 < @orbitmines.com/package
-{ Object } *= @orbitmines.com/package
+{ Object } = @orbitmines.com/package
 //TODO When this is used, issue quest to download the whole package in cache.
 
 Object{as (== String): String}
 
 
-// Ambiguity in {*} meaning the object iterator, or Node.
-// TODO Basically we say * overrides the local context def if called in context, unless we call this*
-
-"{
-  def `local_method`
-  end
-  local_method
-}"
 
 
-// Allow \ to be used in a variable at the start \s
 
 
 //TODO .copy implemented, as not being bound to the .history .last version. But a new branched version.
@@ -138,15 +112,10 @@ the default ##: is used if no name
 //Allow type def conditionally like this
  variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}
 
-     variant:
-            switch //TODO Allow switch to be used like this in a type definition
-// Allow 'caller: Program => first.x', setting first.x's type.
 
 None implements location and =
-if is instantiated and used within a function/constrctor only, location is a program pointer
 //TODO What happens to returned variables? They have a location inside the function, then while their location isn't changed in another function, that function still lives through the variable?
 
-// Allow [7 | 11 | 15 | 19]  -> [7 | +4 | +4 | +4]
 
 # todo functions which calling them requires the top-level context which is calling has certain variables defined as a way to pass the variables?
 
@@ -188,43 +157,9 @@ Evaluation order like +/-//* different for each type? how configured?
 
 //TODO Extend UTF-8 with custom symbols, as a new String type. with way of converting to a string in case UTF later supports them
 
-//TODO Need some way to extract only the specific type from a larger type. Of remove information if bound_type is more than that type.
-
-TODO uppercase, lowercase, swapcase
-
-If multiple directionalities on a class we might prefer only to use the first one defined? if they're not &'ed. So that's the case for extends in the case of IP. So use &= to do it, default is only first defined.
-
-Because a variable is linked to a location, that location defined additional type information like dytnamically asserts which are part of that type. (By keeping track of location we have access to this)
 
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
-~= is match, as in Partial equals
-for partial match ~= use regex ^/$ for end beginnging. Are functions which create initial/terminals at the beginning of some structure./
 
-// the < should indicate we're copying the since, so the return should be the same as epoch.
-  def since < epoch
-    +def = x
-      epoch = x
-      this -= x
-    end
-  end
-
-// Ambiguity the - here could be saying result is -result, or we need to '. - result', again like & space here means the second, without the space its -result
-      equivalence Time(static.@) -> -(.offset - static.@.offset)
-
-//Todo < should effect static so that A < C, A < D are not the same static.
-
-// STATIC IN INHERITANCE OF A NAMESPACE IS THAT namespace?
-
-'-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
-'--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
-Allow multiline '--'
-Allow returning out of a -- statement.
-
-recur(instance) is repeat the same method but for another instance.
-
-If @ is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
-
-// (Base, unit: Unit = Unit.None)[] != [Base, unit: Unit = Unit.None][], one is (A, B, A, B), the other ([A, B], [A, B])
 
 //TODO But do allow >/< a type.
 ==.at_least (Covers at least the provided  -> >=, isnt this just always ==.instance_of?
@@ -272,60 +207,16 @@ default ==.in(x.as@ TODO Somehow expand to all possible .as@ )
                      "(perceived) Actual execution layer"
                    VS control-flow at each layer
 end
-      //TODO How to overwrite minutes. In the editor you'd allow to overwrite some selected codeblock entirely.
 
 
-//TODO 'dynamically assert @{.primary == primary}.count == 1', should check whether any of the @ values, yields true for any of the primary values. --> So you dont need to primary@.every(x => .primary@.some(x))
-// TODO So default behavior of == is, A has any of B, replicated for every B.
+Node += var => R //Add method to it
+Node += var2: 2
 
-//TODO What about equivalence graphs which are infinitely generating, we simply ask is instanceof that type (say number), if it is we assume it's on the line. so yes reachable.
 
-//TODO .map by default yields the .value, other things yield the ray it's on.
-
-//TODO What about the history of the object -> that's deemed to be part of the syntax
-instance_of which forces non-superposition; This is probably not supported: Always allow types.
-
-//TODO .random on Array/Graph/..
-//TODO Optional method like Entity.move on tick.
-
-Node + +(var) => R //Add method to it
-
-//TODO Use @= for enums, should castable each entry to type of static
-//It's special in that any field starts as a variable declaration if it's in the same class.
-// @= uses .OR by default
-
-//TODO If multiple edits makes it type compliant allow as if a single transaction
-
-// TODO this.quantities~{.unit operator unit} is different from this.quantities{.unit operator unit}~, one applies the structure before/after the filter.
-// Allow things like  (converted_to, if inclusive) converted_to -> : <- converted_to (, converted_to if inclusive)
-
-// Allow 'Option<T> = ' so variables can have the <> defined too.
-
-// .* being object access, map of keys/values, .for being default defined on it to access *
 // KV pair with everything delegated to value, so you can do ==. (separate class like TransparentKV)
 
-//TODO The comment on the side only counts if there's a newline after the comment.
 
-// ? = CLASS@ (use bound type)
-
-// .equip_structure (as </extends on top of value, or with .value of ray as that value)
-equip_structure = ~ //TODO Or it's always defined on that object. And .value is simply the rays associated with value.
- //TODO ray equip should overwrite the one from number on Unit. &= ~ to apply it on top or something.
-context = &
-relative_context = &&
-//TODO &VAR get var from context. (Would still work for call by ref in parameters)
-//Default of &VAR is ?
-
-// Ambiguity (-> &YEAR += 1) to mean x & YEAR, default to &YEAR and .& YEAR be a & call. No: If it's attached to &var it's context if it's separate & var, it's a call.
-
-// .orbit(YEAR -= 1 <- -> YEAR += 1) Accept a ray of what to do on the boundaries
-// TODO How to type <- -> , nothing in the middle, but XOR or both left and right var: (left: A <-)? (-> right: B)? How to XOR: assert left || right
-//TODO .orbit but keep the first/last. - this is default behavior (boundaries: Node{} = true)
-
-// How to populate Arrays/graphs by default
-
-// What's the graph interpretation of an inductive type like 'def Option<T> = Some(T) | None'
-
+// Superposed values hold their origin.
 //   -> The result should be refinable, "now I know it's true, so what's the result".
 // refined to 'true', any effects caused should be reset back. -> Need some way to register for nonrollbackable events; a new value has arrived, -> a new version
 //TODO With a label?
@@ -348,8 +239,6 @@ relative_context = &&
 //TODO If big instanceof iterables are used, like worlds: World = entities{==.instanceof World}, store it separately, don't always filter through all those entities
 
 // 0..9.reduce(|) = (Decimal.Digit) 0.value.context.reduce(|) ; .superpose an array, namely the digit defining 0. -> Then could also have the digit values link back to the superposed object or not?
-
-//TODO iterable.0 supported = iterable[0]
 
 // <=; node > itself or node < itself, we're in a loop (or repeated value which we're forced to see as the same, or we're not comparing using the difference we have access to - this 'number'line)
 
@@ -386,6 +275,9 @@ relative_context = &&
 
 
 // TODO - Examples + Allowances
+//TODO If multiple edits makes it type compliant allow as if a single transaction
+// Allow [7 | 11 | 15 | 19]  -> [~ 7 | +4 | +4 | +4] & ~ 1, +2, +3, +4
+// Allow \ to be used in a variable at the start \s
 // Allow 'def Ray<T = Ray>', Meaning, T is unknown, but it is a Ray.
 // Allow chaining of binary operators like Array<3 < length < 5>
 // Allow chaining of conditionals with .AND -> Array<length > 3><length < 5>
@@ -526,6 +418,7 @@ x: String? =
 //   -> Similarly, in natural language describe the thing you want to do to that selection. Same with object.[describe] for where the cursor is.
 // Eye-tracking should switch primary/secondary location, if the windows are side to side, if overlayed, the top one takes priority.
 // version control selectors at functions in classes in the editor
+//TODO Super + subscript means what in UI.
 
 // TODO - Implementing languages.
 Translate everything like ifblocks etc. to other languages, which are implemented in .ray.txt with primitives to the implementation . How to say that something like the if/else construction shouldn't be rewritten to the goto's but instead are the primitives. How to use the rewrite-blocks of code syntax to rewrite to a javascript-like syntax.

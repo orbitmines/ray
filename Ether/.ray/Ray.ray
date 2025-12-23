@@ -1,5 +1,6 @@
 //TODO Something like is_boundary checks whether any of the entries (Many<>) are at a boundary, but that changes behavior of a superposed abstract interpretation when it shouldn't. (It should individually check is_boundary, and superpose the results)
 
+//TODO First Ray extension defined is what gets equipped?
 
 //TODO What is a .expand on a boundary/edge
 //TODO Ray whose <T> isn't recursively the same type: i.e. some array like [String, Number]
@@ -53,6 +54,14 @@ class Ray<T?> (x | value) < AbstractDirectionality
 
   expanded => //TODO Recursively expand
 
+  // TODO this.quantities~{.unit operator unit} is different from this.quantities{.unit operator unit}~, one applies the structure before/after the filter.
+  //TODO But you'd kind of want to overlap the types on x/value and the ray's methods. not require a .x. What do you do if x is an Iterable?
+  //TODO Or if it's a number which already has equipped structure, prefer this structure, what if I want to overlay both?
+  equip_structure | ~ =>
+
+  context | & =>
+  relative_context | && =>
+
 end
 
 class AbstractDirectionality<T> < Iterable<T>
@@ -61,6 +70,8 @@ class AbstractDirectionality<T> < Iterable<T>
   // ..10 / 10.. Same as 10-> / <-10
   // Somehow 5..10 when used as a type is 5..10.reduce(|) by default?
   (a: this?) .. (b: !a ? this : (> this)?) =>
+
+  loop | orbit (boundaries: T{})
 
   static Connected // each Node is reachable from each other Node. (Going both forward and backward)
   static Consistent
@@ -74,7 +85,8 @@ class Iterable<T>
 
   //TODO Sorted/max/min along which dimension & what is the default dimension
   sort (dimension: AbstractDirectionality): static{~every .previous[DIMENSION] <= .[DIMENSION] <= .next[DIMENSION]} =>
-  max () =>
+  max (dimension: AbstractDirectionality (= .0 if T < AbstractDirectionality)) => //TODO Or something like that.
+  //TODO Would to to call a method on the entries, so needs to be a callable
   min () =>
 
   disjoint (b: Iterable)
@@ -92,3 +104,5 @@ end
    -1 <- 0 -> +1
    -1 | -2 <- 0 -> +1 | +2
    0 -> +1 -> +2 // Repeated two steps +1 +2 +1 +2 ..
+
+~ (expression: Expression) // ~ 1, +2, +3, +4, combine with dynamically to dynamically allocate the others

@@ -3,3 +3,9 @@
 
 //TODO Get from &caller:
 //TODO as String needs context of where it is being placed, if it's in a .ts that's different from another language.
+
+class String
+  lower_case | v
+  upper_case | ^
+  swap_case
+  ignore_case

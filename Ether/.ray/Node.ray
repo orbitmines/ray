@@ -1,5 +1,6 @@
 // static parts of the constructor are filtered out using the same rewriting strategies used for compiler optimizations.
 
+//TODO Local context doesnt override this/static how?, It's still a node.
 class
   //TODO class{==.instance_of Nameable}, instance_of class
 
@@ -44,6 +45,7 @@ class * | Node
   // {pattern} = () => doesnt do the *= operation because of the ()
   external = | assign (x): x //TODO Might have to set # equal to x
   external {*} | [{property: *}] //TODO How to say infer the property.
+  // If # is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
   external # | all : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
   //TODO Exclude vs include things like local and other defined properties on Node,
   external * | methods : { {key: *}: value: Program? }
@@ -71,6 +73,11 @@ class * | Node
   //   Some a: 5
   //   Some a: 5..10
   match =>
+
+  namespace ==
+  namespace !=
+  ~= (expression: Expression{: initial: "^"?, ?, terminal: "$"?})
+  !~=
 
   as (:== boolean) => true
 end

@@ -27,10 +27,13 @@ class Instance < Location & (IP | Socket.Address)
 end
 
 class Status < Status.Network
-  static class Network <
-    | Offline
-    | Online
-  end
+  static class Network //Online Offline
+  static class Hosted // Hosted or broadcast
+  static class Broadcast
+
+  //TODO = Broadcast! Or some general way to remove a &/|.
+
+  = //TODO Only override the specific class it came from
 end
 //TODO Invisible, is just offline read
 Invisible =>

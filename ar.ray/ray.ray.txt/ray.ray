@@ -63,8 +63,9 @@ end
 class Node
   //TODO How to define the + label: *
 
-
-
+  //TODO If current class already implements the methods, dont overwrite -> This is also how the first entry is the ray that counts?
+  //TODO Which </extends is the ray, the first one?
+  //TODO since < epoch, extend function and allow ()
   //TODO constructors automatically accepts Array, by setting it to a single one. then iterate over all of them #.
   protected def extends | < constructors: Array<(*) => *> => constructors.for constructor
     //TODO Dont accept an array, accept a single superposable object. Because arrays are actual structures.
@@ -276,6 +277,7 @@ def dynamically
 //And things like dynamically assert shouldn't throw directly, but check all conditions and report them all together.
 
   // Take the comment above or besides an assert as the error message.
+  //TODO The comment on the side only counts if there's a newline after the comment.
   def assert(expression: Expression) = external
   //TODO dynamically assert expression if
 

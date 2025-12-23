@@ -537,9 +537,6 @@ class Entity
   end
 end
 
-using .library@.Git //TODO
-
-
   //TODO: You want to be able to host a instance as an item to a world, with some visibility.
 
 
@@ -575,8 +572,6 @@ class Instance < World
   //     -> Is there ever a time where that's not desired, say when the visibility or something is set differently for each reference of the object.
 end
 
-def @`player: String.NonEmpty` => Player = Ether.@`player`
-def #`world: String.NonEmpty` => World = Ether.#`world`
 
 def Certificate
   secret: Something
@@ -588,7 +583,7 @@ def Certificate
 end
 
 
-// using .@"ether.orbitmines.com".UI, <TODO Version>
+// using .@"ether.orbitmines.com".UI<&UUID>
 //TODO: If working in some folder, automatically change versioning numbers to the new ones, if the file is changed.
 //TODO Should work with the versioning system somehow? another parameter here the version, which the IDE supports for automatically getting
 

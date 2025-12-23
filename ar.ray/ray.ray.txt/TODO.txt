@@ -8,22 +8,42 @@
 
 // Networking
 - All networking is abstracted away
-- Importing external libraries/packages
-- Quests: Loading partially (in/out-of-order) + reading from disk
+
 - Managed items by another instance (mirrors)
-- Domainnames + protocols, IPv4/6 reserved, UUIDs (Version = any hexadecimal) preserved
-- {: String}orbitmines.com reserved
-- Editing context for another character (local or remote) String @ character
-    or executing remotely
-    @character/package //TODO Is local mirror of remote object
-      String +=
-    vs:
-    @character @ @ether/package
-      String +=
-- Use another protocol like HTTP @https://orbitmines.com
+The goal with deeply integrating locations of variables in the language, is that we can abstract all networking away, such that only people working on optimization of the language, really need to deal with the details.
+
+Just like access permissions, we can also use the syntax of getting characters for loading in packages.
+< @ether/.ts
+Or using other protocols than the ether's, you can load
+< @"https://orbitmines.com"/package
+Domain names like
+@"orbitmines.com"
+are also reserved for that domain, and will default to the ether's port 37839. They could be claimed by someone who owns that domain to map it to a character registered with the central Ether server.
+Names can otherwise be registered by making the following network call, which would later be worked into the Ether's GUI.
+@ether.@USERNAME = @me
+In order to make this call to you first need to give the central Ether server permission to host variables for you. So that everything you mark as @private/.../@public gets routed through its servers to others. You do this by setting you status:
+@me.status = Hosted
+This would always go together which setting your network status as online, which is equivalent to opening a port on your machine for the central Ether server to communicate with. By default, you're set to 'Offline', and no network communication is allowed in your instance.
+@me.status = Online & Hosted
+Of course they can still also directly call your instance if desired, but for that you need to give the central ether permission to broadcast the IP associated with your current machine. (This way your registered username is associated with an IP address)
+@me.status = Online & Broadcast
+Or they store your domain name or IP, they could of course also directly communicate with your instance. For which you would of course have to set your status to 'Online'.
+
+ also assign you a UUID, and gives the central ether server permission to host any endpoints for you which you mark as @public.
+
+It's also worth noting that version control will automatically load specific versions of methods/classes. Manually that would be
+< @ether/package <&6ba7b810-9dad-11d1-80b4-00c04fd430c8>
+
+You can this way also create structures which are sharded, or partially stored on other machines. We could for instance say
+"A1", "A2" @me.managed, "A3" @ether, "A4" @"192.168.1.254"
+If you would start iterating this structure, network calls would be made when necessary. Optimizations of this sort of network access would have to be more intelligent than just requesting a single Node when necessary. So you'll see that partially mirrored structures will be synced. Of course when the structures are sufficiently large you'll see actual sharding. (I'm thinking as an example of a sharded large game world.)
 
 // Equality/Equivalence
 - == usually ignores location, what if we dont want it to. Do we use ===? OR something more intuitive?
+
+// Quests
+We could have equivalence graphs which are infinitely generating, how would we deal with a simple check then?
+- Quests: Loading partially (in/out-of-order) + reading from disk
 
 // Writing compiler optimizations
 // dead code after return if there's no goto to a label there.

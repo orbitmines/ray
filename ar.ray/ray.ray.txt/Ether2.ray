@@ -513,28 +513,6 @@ class Entity
     end
   end
 
-  //TODO We have a world which is the memory system which is a child work of desktop, then if everything is an entity, the location is a place in that world.
-  //TODO World = Inventory = Location, Location = child Inventory / subgraph/abstract description of World, child World = child Inventory
-  //TODO Inventory is a refinement of World/Location. It's more strict.
-
-  def world = location.world
-  //TODO What if you only want to broadcast a particular part of your location, say the world it's in or?
-  //   -> Actual location is one thing, the one broadcasted is another. Implemented as "at two locations", and one of them is chosen to be visible.
-  //   -> How to indicate those two locations are supposed to represent the equivalent thing?
-
-  //TODO Actually what you want for online, is a filter over possible worlds to interact with, and 'online' is equated to allow over internet. (what about other bluetooth things and such - included in online)
-  // On top of 'visibility', an entity can be set offline instance-side: Indicating only offline communication.
-  def online => boolean //TODO for a instance: set this value, for client: poll for data.
-
-  //TODO Specific parameter types can be enforced using Entity instanceof SomeOtherEntityWithConstraints
-  def `world: World`
-    //TODO How to indicate that that entity ==.(some equiv graph) this.
-    return this +.overwrite { // TODO Support +.overwrite as opposed to adding the results of the two to each-other. Type-checking should recognize the +.overwrite is defining at least the thing before the +.
-      inventory = this.inventory[world],
-      name = this.name{issued_by == world}
-      location = this.location{.world == world}
-    }
-  end
 end
 
   //TODO: You want to be able to host a instance as an item to a world, with some visibility.
@@ -583,26 +561,7 @@ def Certificate
 end
 
 
-// using .@"ether.orbitmines.com".UI<&UUID>
-//TODO: If working in some folder, automatically change versioning numbers to the new ones, if the file is changed.
-//TODO Should work with the versioning system somehow? another parameter here the version, which the IDE supports for automatically getting
-
 //TODO Version control, after change the filter would include/exclude new entries, like a new maxlength of username, add merge clause on how to deal with it. Basically database changes are merge conflict resolves
 
-//TODO Reserve namespace with dots to domain names.
 
 
-//TODO filter ==instance_of casts to that type.
-
-
-//TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@
-//TODO Using, should respect type information on fields defined after it, defaults loaded after this should not overwrite the settings, it can overwrite things like localhost if it wants to, but defaults to localhost
-//TODO Using returns a file location,
-//TODO If evaluated, it loads the file into current
-//TODO FIles should support Many
-
-// @orbitmines/package
-// Support < @PLAYER_2 or < "host.orbitmines.com"/@PLAYER (second one, is loaded in a world associated with the host)
-// Load into a mirror var and/or cache/archive, then load that one alongside it
-
-qhat of changes mid version define what to do with those, relocate to x

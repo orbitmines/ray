@@ -1,4 +1,5 @@
 // Location
+- Eventually replace file systems
 - Locations differ slightly from traditional file systems:
   - There can be many items (files) defined at a single location.
   - Any location is both a directory and a file; it defines both values and a (hierarchical) structure.
@@ -12,6 +13,7 @@
 
 // Equality/Equivalence
 - == usually ignores location, what if we dont want it to. Do we use ===? OR something more intuitive?
+//TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@
 
 // Quests
 We could have equivalence graphs which are infinitely generating, how would we deal with a simple check then?

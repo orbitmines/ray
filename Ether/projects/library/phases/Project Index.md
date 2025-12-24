@@ -49,6 +49,7 @@
 - Twemex, explainpaper, lu.ma, noti.st, leanpub.com, conf.tube, openreview, ....
 - huets algorithm, higher-order unification
 - Bidirectional/Reversible programming languages: [Janus](https://en.wikipedia.org/wiki/Janus_(time-reversible_computing_programming_language)), [An Injective Language for Reversible Computation](https://takeichi.ipl-lab.org/~scm/pub/reversible.pdf?utm_source=chatgpt.com)
+- [A list of projectional and structural editors](https://github.com/yairchu/awesome-structure-editors); Out of these only really Unit stands out, but I knew about that one already. But good to know there's a word associated with it.
 
 ### Some other names I found but didn't save a link to: 
 - *DisCoPy2, Aletha, Inkresat, F star, smt-comp, starexec, verdict, vau calculus, SF-Calculus, Monoidal Computer, Certora Prover, smt workshop, Imandra, Waldmeister, POG, QuiZX, Globular, proofweb, holyhammer, B, Event-B, TLA+, Atelier B, Rodin, TLAPS, OpenTheory, FoCaLize, Zenon, iProver, CoqinE, veriT, BWare, B-Method, ArchSAT, sel4, HOL4, Flexiformalized math, OMDoc, Schurr 1999, GP/GP2 Plump 2009, GRAPE / Grape PRess - Weber 2017/2021, AGG Taentzer 2004, FUJABA Nickel 2000, GReAT Agrawal 2006, GROOVE Rensik 2004, TPS, PhoX, Markdown, JPEG, JPG, PNG, MINLOG, Jape, ae (alt-ergo), dimacs, iCNF, smtlib, zf (zipperposition), HELM, MathWeb, MathScheme, MathClasses, ForMath Project, Opetopic Type Theory, RedPRL, yaccyt, redtt, PVS, Matita, Guru, Dependent ML, Gallina, Cayenne, Arend*

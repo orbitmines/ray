@@ -6,12 +6,18 @@ class Path | Curve | Line = Array.Unbounded
   static Straight = //"No curvature" is a bit ambiguous //TODO Makes assumption about local space
 end
 
-class Circle = Loop{every(to centre -- #.min).reduce(==)}
+//TODO Unbounded/vs bounded loop
+Loop = Array.Unbounded.loop(boundaries: false)
+
+class Circle
+  outline: Loop{every(to centre -- #.min.length).reduce(==)}
+
+  centre: Point
+  radius: outline to centre -- #.min.length
+
   //TODO Things like approximate circles or discrete circles where not every.reduce(==)
   //TODO Circle with surface selected.
 
-  def centre => Point
-  def radius = any to centre -- #.min.length
   def diameter = radius * 2 //TODO Should make radius require * 2, should automatically implement radius = diameter / 2
   //etc..
 end

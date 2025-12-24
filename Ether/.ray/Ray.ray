@@ -94,7 +94,9 @@ class Iterable<T>
 // TODO If two arguments are passed, we step with 2 and fill both?
   for ()
 
-  to () => //Path to
+  to () => //Path to, when on array, all paths from all the points to x, equipped direction for a .min is the length of the path
+
+  + () //TODO Object or expression + { }, or + property:, or block.
 
   as (:== T) => T() = this.reduce(|) //TODO if T is class. Or should this use &?
 end

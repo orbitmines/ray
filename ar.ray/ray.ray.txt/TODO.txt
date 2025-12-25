@@ -23,6 +23,7 @@
 
 // Quests
 Infinite maps etc..
+- Like path to asynchronously
 We could have equivalence graphs which are infinitely generating, how would we deal with a simple check then?
 - Quests: Loading partially (in/out-of-order) + reading from disk
 
@@ -45,3 +46,8 @@ array ~~ .[1] = 'B' // returns [1, 'B', C]
 confidential.read none.write mac_address: Binary.Positive{length == 48} =
   secure Binary.Positive{length == 47}.random ~~ .[6].push_after(1)
 
+
+
+// Maybe
+Patterns like 2d expand with .., in the IDE. (And other graphs)
+a, ..b, ..c, d (ambiguity so superpose -> but how are keypairs matched b,c &/| information which depends on other info)

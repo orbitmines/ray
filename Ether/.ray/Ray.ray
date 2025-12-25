@@ -2,6 +2,8 @@
 
 //TODO First Ray extension defined is what gets equipped?
 
+//TODO Graph .rewriting. dpo, spo, cartesion product, tensor product, union, disjoint union etc...
+
 //TODO What is a .expand on a boundary/edge
 //TODO Ray whose <T> isn't recursively the same type: i.e. some array like [String, Number]
 // X⊣⊙⊢∙⊣⊙⊢
@@ -17,8 +19,10 @@ class Boundary < Ray
   edge | ⊙ : Edge
   continuation | ⊢ : static => ⊙⊢#{!= this}
 
-  ?⊢ : is_initial => ∙⊢ == this
-  ⊣? : is_terminal => ∙⊣ == this
+  boundary
+  // ? These arent right
+  is_initial => ∙⊢ == this
+  is_terminal => ∙⊣ == this
 
   {path: (((path?, "⊙"?)?, "⊢")?, "∙")?, "⊣"}{.}
     x = this
@@ -38,6 +42,9 @@ class Ray<T?> (x | value) < AbstractDirectionality
 
   initial | ⊢ | ⊢{.} : Boundary = Boundary(∙: this)
   terminal | ⊣ : Boundary = Boundary(∙: this)
+
+  is_first => ⊢#.some(.boundary)
+  is_last => ⊣#.some(.boundary)
 
   // Allow syntax for traversing the initial side: '⊢∙⊣⊙⊢var'
   {path: (((path?, "∙")?, "⊣")?, "⊙"?)?, "⊢"}{.}
@@ -60,8 +67,20 @@ class Ray<T?> (x | value) < AbstractDirectionality
   equip_structure | ~ =>
 
   context | & =>
-  relative_context | && =>
+  relative_context | && => //TODO Perhaps just context, relative context = just the ray.
 
+  //TODO Is different from unique/compact of iterable, rename
+  unique => this&{== this}.count == 1 //TODO Difference in filter to say on Iterable for on each iterated node
+
+  //TODO .remove which preserves structure, or sever connectivity, or DPO
+
+  //TODO What to do with T for Iterable ; they shouldnt be the same here
+  // The entire context graph except for the current value ; "Complement, where the entire graph is the universal set"
+  complement => (this& as T){!= this# as T}
+
+  remove // Remove selection from context
+
+  index (start = first) => start to this -- .length - 1
 end
 
 class AbstractDirectionality<T> < Iterable<T>
@@ -73,11 +92,16 @@ class AbstractDirectionality<T> < Iterable<T>
 
   loop | orbit (boundaries: T{})
 
+  previous =>
+
+
   static Connected // each Node is reachable from each other Node. (Going both forward and backward)
   static Consistent
   static Acyclic
 end
 class Iterable<T>
+  next
+
   // Repeat this structure x times: Composing the structure x times
   * (x: Number) //TODO
 
@@ -89,16 +113,57 @@ class Iterable<T>
   //TODO Would to to call a method on the entries, so needs to be a callable
   min () =>
 
+  first
+  last
+
   disjoint (b: Iterable)
 
 // TODO If two arguments are passed, we step with 2 and fill both?
   for ()
 
+  // TODO Structure altering mapping with ~ somehow
+  map <T>(map: (x): T) => static{T: T}
+  reduce ()
+  //TODO Mapping and reducing together?
+  reverse: static
+  unordered
+
+  pop_front
+  pop_back
+  push //TODO after/before/back/front
+
+  length
+  // Since a graph's structure allows for branching and looping, it can be that length != count.
+  count
+
+  empty => count == 0
+  nonempty => !empty
+
+  every (predicate: (): boolean)
+  some (predicate: (): boolean)
+  contains | includes (x: T)
+
+  [] //TODO Ranges, index
+
+  //TODO move operations
+
+  unique | compact =>
+
+  // Each step might be in a different version of the graph, Time vs Space
+  // Start a quest to find the path
   to () => //Path to, when on array, all paths from all the points to x, equipped direction for a .min is the length of the path
 
-  + () //TODO Object or expression + { }, or + property:, or block.
+  + () //TODO Object or expression + { }, or + property:, or block. & + a number to do the same as a[5]
+  - () // Remove of move left x
+  +- | -+ ()
 
-  as (:== T) => T() = this.reduce(|) //TODO if T is class. Or should this use &?
+  dimensionality //How to do this with different rays which can be equipped for different directions., or is it just this selected graph
+
+  // These or not?
+  intersection
+  xor | symmetric_difference
+
+  as (:== T) => T() = this.reduce(&) //TODO if T is class. Or should this use &?
 end
 
 //TODO constructors

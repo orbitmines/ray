@@ -4,9 +4,7 @@
 ---
 <div align="center">
 
-# The Ray Language & The Ether
-
-![header](./docs/header.png)
+![header](./docs/header.svg)
 
 [![OrbitMines Discord](https://img.shields.io/discord/1055502602365845534.svg?label=Discord&logo=Discord&colorB=7289da&style=for-the-badge)](https://discord.orbitmines.com)
 

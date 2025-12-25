@@ -1,5 +1,8 @@
 //TODO Translations to GLSL - Can those be inferred from the structure defined on the types? (Like https://iquilezles.org/articles/distfunctions/) Exact vs approximation equivalances how?
 
+//TODO Edges are decorated with length.
+//elementary_length <>
+
 Point = Ray
 
 class Path | Curve | Line = Array.Unbounded

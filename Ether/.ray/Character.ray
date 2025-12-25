@@ -11,6 +11,7 @@
 //location might be non-halting, not yet discovered locations which run this world/X.
 // Change access permissions of your mirror.
 
+
 // Remote execution
 //TODO Default to program<&who = CHARACTER>() if passed by the character.
 //TODO   What about read access to the libraries and new variables it makes; Need some way to say, it's running locally, and it doesn't need to be this character; that's the default privacy policy? So different than protected?

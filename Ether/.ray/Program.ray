@@ -90,6 +90,8 @@ external &{method: *}: //TODO Infer
 
 //TODO coroutines like race here.
 
+// async/await branches/coroutines
+
 return (expression: Expression) //TODO Allow out-or-order execution.
   // Ignore the values set by manually setting &caller, and only return to the original function.
   // For instance, history sets &caller to preserve history, but we want to continue the history function, not where it originally called from.

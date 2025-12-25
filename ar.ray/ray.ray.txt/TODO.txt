@@ -6,6 +6,12 @@
 - Alternate values to mirrors than what's currently there:
  - Randomizer: mirror to collapse to a particular value not the probability.
 - = is defined on the variable, since the variable is location aware.
+- Mirror/managed
+- Abstraction: Subgraph, not just a point. (Composition, Not Location < Ray)
+- How to Use Path, like /property/property (so a function; could be in a dynamic space)
+   -> Location can be a function too - a sequence of descriptions
+-  What if I wanted to know the history of where it came from? So from disk to instance (to memory) to instance ... , until it came to me. -> So the instance can choose whether to provide that information.
+- For things like an interface, .next but a .move updates the whole location (which could be a graph like a 2d visual field, tilted by some yaw/pitch)
 
 // Networking
 - Managed items by another instance (mirrors)
@@ -16,6 +22,7 @@
 //TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@
 
 // Quests
+Infinite maps etc..
 We could have equivalence graphs which are infinitely generating, how would we deal with a simple check then?
 - Quests: Loading partially (in/out-of-order) + reading from disk
 

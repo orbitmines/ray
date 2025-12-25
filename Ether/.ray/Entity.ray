@@ -1,8 +1,9 @@
 class Entity
 end
 
-class Nameable<T = *>
+class Nameable
   static PREFIX
 
-  name: T
+  name
+    issuer: World
 end

@@ -305,88 +305,9 @@ class Item
     // TODO Perspective switch to a 'high-level overview'
 end
 
-class World < Entity
-  //TODO What are quests and location of a world?
-
-
-  // A instance can still host a world where parent != that instance.
-  //TODO .parent would be .indexed_by, and another .parent would be, how did you get to this world? (So a path)
-  def parent => World? = this.name.issued_by != this ? this.name.issued_by : None
-
-  // TODO World generation vs world rendering, in certain cases world rendering would be similar to world generation.
-
-  // Internal dynamics -> Want a primitive in .ray to be a dynamic space.
-
-//TODO SDame name/location property but different visibility, then also allow one to prefer the one which is least permissive, but how?
-
-
-  //TODO Spawn-location defaults to something like .first. (If accessible) What if it's not, then demand it's provided.
-  spawn_location: Location
-
-end
-
 
 public key Player{public_key & challenge that they have the private key, like a timed message, or a specifically tailored message by this instance}
 
-
-
-// Spatial Propagation
-// - Separate graphs for moving pieces?
-// - One way of doing 'air you can move through' Split the graph one is moving into, and knit it back together on the opposite end of the structure that's moving.
-   // Does disallow overlapping structures within the same space.
-// - Or something more inspired by physics, based on the structure that's there in the graph, allow/disallow.
-    // More spatial structure around matter
-    // If something like an arm is attached, the further from the attachment the faster it has to move
-// - World only has update events, you want those to be massively parallel, so what can influence what? -> What would actual execution on a GPU look like, how much does having it in a graph impact performance?
-  // Split into two groups: Spaces with arbitrary propagation vs limitations:
-        How do you make spatial propagation hard/limit it in a distributed sense when usually one can just skip ahead programmatically?
-        -> Similarly how we make item copying expensive/impossible. Scarcity of the items.
-
-
-//TODO You might have some way to navigate the structure of a world, but that doesn't mean it's just accessible. In a way
-//TODO in which you can, for instance, just loop over all the nodes. You might have to explore some other way.
-//TODO So a world defines how you can interact with it.
-//       -> It defines how you can move through it, at those Nodes, additional worlds are defined.
-//       -> Comparing is just movement is matching some other world I can move in (
-//       -> I might not necessarily host all these worlds top-level (visibility) or on some indexed #property. (Indexed just means I've saved that location in my inventory somewhere)
-//       -> But when I'm there, I might find those worlds and then gain access to them (if only temporarily)
-//       -> So parent worlds, are just the path defined to get there.
-//       -> The host, is merely the top-level instance on which we're exploring. (But that might change at each step)
-//          -> Hosting, just means I got this step of information from this instance. (Each step might be deferred to another host)
-//          -> So each node of information has with it: it came from here.
-//          -> In the case of providing information from disk from instance to client: The instance nodes are decorated with host locations of the disk for instance or memory, and the player is from the instance.
-//          -> What if I wanted to know the history of where it came from? So from disk to instance (to memory) to instance ... , until it came to me. -> So the instance can choose whether to provide that information.
-//       -> A location also needs information like : A path to get here. (Which is just additional structure, but those in turn can be vague locations)
-//          -> Path information crosses multiple hypergraphs.
-//       -> World has something like dependent/optional inheritance on Abstract Directionality.
-//       -> Interface with which you walk through a world is itself a graph. Say a 2d-visual-field.
-//       -> Highly parallel rewritable structure in world.
-//       -> Location should also specify what interface is used like yaw/pitch/screen size etc..
-// TODO How does a location work if it's a dynamic space?
-// TODO Abstractly, we never know (without looking) if another location also matches this description.
-
-//TODO Say I have an abstract Map on which is a path which is the Location. It's a Location, with structure defined on it with points which abstractly represent those points in the path.
-//      -> Say I have 4 abstract point, each point in a list, the points are described abstractly. Abstractly means arbitrary structure after a .expand (So .expand doesn't necessarily just fill in the ray, it could be structure like: 500 steps from here there's this thing which is approximately like this. Where approximately is a type.
-
-def Location //TODO = Ray of World OR: You want Location to be more abstractly, a subregion: subgraph - which could be a specific location, of a World. It could also be a description of surroundings, which is not yet certain where exactly in the world that is.
-  world: World? //TODO Could be many: it's in one of these worlds.
-  //TODO world could be a substructure too. we want the top-level world?
-  //world is .context, top-level .context means ? .world
-  /
-  /TODO How do you store, 400-500 steps after this, but we don't know what's in between. ray{.[400..500] ==.some Structure} // ray{.[1km..10km] ==..Structure} -- radius, not back and forth. ray[1 km] = wall
-  //TODO How many steps is 1m?
-  //TODO Edges are decorated with length.
-  //TODO Then depending on the discreetness per 1m, we have values like 0.00001m, which could highlight a superposition of position nodes.
-  //TODO Want to also have things like .by_road.[1 km] which is another overlay on the main graph with effective gravity relative to free-roam
-  //TODO    What if that is the same graph, but filtered which direction you can go.
-
-  //TODO By default the elementary_length is not defined so any Distance is further away than a step. Want to also have some definition of: .next to the first thing that matches. (which would match with things distance is used for)
-  //TODO After calling .elementary_length(1nm) on Ray decorate all rays and graphs connected to that with functionality that supports distances.
-  //      -> Unless otherwise specified by the edge, defaults to that per step.
-  //TODO So things like length > 1m should partially be defined as well.
-
-  //TODO Location too has a visibility, to whom am I broadcasting that I'm here.
-end
 
 def Quest
   // schedule quests (can free memory; resource after quest is completed, can be a quest goal)
@@ -428,8 +349,6 @@ def Quest
   //TODO Quests are also, places to spend resources on infinitely generating/speculative execution places
   //     -> If the result would be found, would that result into efficiency, or what else?
 
-  //TODO async/await kind of functionality -> or just waiting on another part (like function calls over network) of the control-flow implemented as quests
-
   // Rewards
   // - When is a quest completed?
   //    - Entity checks completion.
@@ -454,102 +373,14 @@ def Quest
   def active = !completed
 end
 
-class Map
 
-//TODO: How to indicate it is managed by the world, and synced to the player.
-
-class Inventory
-
-  owner: Entity //TODO If everything is in an inventory, then inventory.inventory would be the entity. == path which is an entity
-  //TODO Want owner to be a persistent Entity, since everything is an entity.
-  //TODO path = structure on Location
-  path: *[] = []
-  def [path: *[]] => Inventory = this +.overwrite { .path = path }
-  
-  recursive = {
-    def items => Item = (this -> ==.instance_of Inventory ? .items : .)[1..].reduce(&)
-    def inventories => Inventory = (this -> .inventories)[1..].reduce(&)
-  }
-  
-  // Get children of this inventory.
-  //TODO .items might as well be .nodes for a World
-  def items => Item
-  def inventories => Inventory = items{==.instanceof Inventory}
-  
-  // Get the items defined at this inventory.
-  def get => Item{visibility: Entity, inventory: Inventory}? // TODO These refined types should be implied.
-    //TODO Load item as a .ray.txt file, with restrictions.
-
-    //TODO Get a specific type
-  
-    // Many items might be stored at this location.
-    item = sub() //TODO Support sub(), indicating that the method still needs to be implemented.
-    item.visibility = path.map(.visibility){!= Visibility.InheritFromInventory}.last
-    item.access//TODO Set access
-    item.inventory &= this
-    //TODO: Might have settings of certain instances to backup the player information to.
-    item
-  end
-end
-
-//TODO : is default dynamically so that any change to the variable still adheres to that :? What if we change the : later, that doesn't work.
 
 class Entity
   inventory: 1 Inventory // TODO *in* an inventory vs *has* an inventory.
-  def quests => Quest = inventory{==.instanceof Quest}
-
-  //TODO NOt this, but how to overwrite all properties which are not defined, recursively. How to get the type, and default value?
-  +def def
-    //TODO Adjusting def within a context should only monkeypatch it in that and children context.
-    //TODO Property definition under the hood are def too?
-    def `field: * => Type: * = default: *` //TODO How to differentiate default from a function body with the implementation
-      //TODO Recursively how?
-      super `field` => Type = inventory[field]()
-      //TODO: What if inventory doesn't have that type stored.
-      super `field`= value: Type
-        //TODO Use .save/.delete the previous entries.
-        //inventory[field] = value //TODO Should automatically implement &=, |= as well.
-      end
-    end
-  end
-
-end
-
-  //TODO: You want to be able to host a instance as an item to a world, with some visibility.
 
 
-
-//TODO So if a player has made their location known, another player can run an instance of that player in that location.
-//      He might not be able to set input for that player, but it's still an instance running that player.
-//      But you might want to run an instance, not the player (a specific location)
-//      So streaming too, becomes running an instance.
 // For strreaming, a player has a particular location which is the streaming location , that is being broadcast.
 // TODO So watching a stream is simply following that location.
-// So a streamer has a primary location. That location's location might be in a separate world which is the 'streaming window'.
-// People watching the stream, would set their primary location, to that location.
-
-// ==.instance_of .location Location is a type.
-
-//TODO Some instance, which holds the 'first discovered by X' status, and issues certificates for that./
-class Instance < World
-  //TODO A instance is an instance, you can boot up other instances within the current instance.
-  //TODO -> Child instances.
-  //TODO A instance has many player instances running. (I.e. screens / separate windows)
-
-  //TODO Instance needs a unique identifier more general than MAC, one of the names.
-
-  //TODO Instance might be behind some nameinstance, delegating to many other instances.
-
-  // A world might live on many entities/instances
-  //TODO A player, or any entity can (co-)host worlds
-  //TODO : From the perspective of this entity,
-  hosting: World //TODO These worlds should come from an Item in the instance's inventory = is just (inventory as World){visibility = ??}
-
-  //TODO How to represent that hosting and hosts in World are linked? 'hosts: Instance = Instance{hosting == this}' How is this, FOR ALL query constructed?
-  //TODO How does the storage module know whether to store a reference or the whole object. It checks if the Object is stored separately and will use a reference then.
-  //     -> Is there ever a time where that's not desired, say when the visibility or something is set differently for each reference of the object.
-end
-
 
 def Certificate
   secret: Something
@@ -562,6 +393,4 @@ end
 
 
 //TODO Version control, after change the filter would include/exclude new entries, like a new maxlength of username, add merge clause on how to deal with it. Basically database changes are merge conflict resolves
-
-
 

@@ -8,3 +8,4 @@
 var = var#{== true}.first
 
 //if boundtype is < infinite, .infinite should return false
+// - How to know whether to store whole object vs a reference (optimization); Need to know which places references this, so that it doesnt get deleted while referenced (just like any pointer reference, reference counting/tracking)

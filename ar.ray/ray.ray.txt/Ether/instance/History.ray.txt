@@ -2,7 +2,7 @@
 //EXPANSION TO MORE DETAIL (so lowerlevel is optional, and possibly generative, say it's on 400's entry, we dont go there emmediately, but when accessing the 400's entry, we check the main repository.
 //For the intermediate steps it'/s the reverse, more effective tos tore the lowerlevel, and generate the higher-level
 // Have the optmization decide what to do.
-//The .expands/.collapse disconnects entirely from the original graph, there's no good way to overlay them<,jjjjjjjjjjjjjjjjjj
+//The .expands/.collapse disconnects entirely from the original graph, there's no good way to overlay them
 //At which level of description to save a change, on the graph, or on the boundary which changed.
 +def Node
   history: History = History(this)
@@ -10,6 +10,7 @@
 
   as (== Version) => %.
 end
+// Extracting sub-repositories
 
 class History = Ray
   //TODO = Program

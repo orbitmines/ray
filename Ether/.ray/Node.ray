@@ -44,6 +44,8 @@ class * | Node
 
   // {pattern} = () => doesnt do the *= operation because of the ()
   external = | assign (x): x //TODO Might have to set # equal to x
+  //TODO .not is {!=.instance_of}
+  //TODO .not in  not Network.Hosts*.keys.reduce(|) //TODO What's the proper syntax for this, very verbose
   external {*} | [{property: *}] //TODO How to say infer the property.
   // If # is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
   external # | all : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?

@@ -185,7 +185,7 @@ default ==.in(x.as@ TODO Somehow expand to all possible .as@ )
     |-> (A->)@ .intersection (B->)@ .some (* are refs to value)
         //TODO .intersection should take the type of equality to check for
         //TODO Should be both ways (<-A->)
-==.subgraph_of = x.as_subgraph ==.instance_of
+==.subgraph_of = x.as_subgraph ==.instance_of // Tag outer/subgraph with a name?
 ==.instance_of (All properties of B are defined on A: A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
     //TODO |-> These properties should be the ray which defines the properties somehow. .both the property descriptor and the result should be the same (instance of)
     //TODO |-> What function equality is used?

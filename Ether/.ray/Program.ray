@@ -4,6 +4,19 @@
 //TODO If a variable is any, anything called on it will become a requirement , a function with an assigned type return; a requirement.
 // "run at compile time" ; constexpr
 
+// "accepts type X" but only really uses subtype "Y". So either allow subtype Y, or force that entire X type.
+//TODO Notion of what is effected; what is changed by some function, and only limit certain changed with a keyword like confidential to pass it to a function with that
+
+// variable rewrites (v, w) -> (w, z), match any in Graph, rewrite rules
+
+  // compose matching domain/codomain
+
+// Inverse is f' ?
+
+// Usages of function
+
+//TODO Shared state means what in the function control-graph
+
 //TODO // Accessing variables while function in running.
 
 // Recursively put code in front of every block
@@ -174,6 +187,8 @@ class Function | Program < Boundary, Location, expression: Expression
 
   args | arguments => first.out
   return_type => last.out.type
+
+  // .variables, .usages, domain, image, codomain, injective, surjective, bijective, homomorphism, isomorphism, endomorphism, automorphism, monomorphism (the static class variable which automatically becomes a instance var)
 
   // The function which called this function
   // This is empty when asking the &caller of the top-level context; the character.

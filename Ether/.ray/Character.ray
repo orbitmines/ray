@@ -31,6 +31,7 @@ class Status < Status.Network
   static class Network //Online Offline
   static class Hosted // Hosted or broadcast
   static class Broadcast
+  static class Proxy // Allow other's to proxy through you, do things like @private.managed Proxy, only particular ones
 
   //TODO = Broadcast! Or some general way to remove a &/|.
 

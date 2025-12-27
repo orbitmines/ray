@@ -264,3 +264,9 @@ namespace RayLanguage // This namespace will be used for: < Language
 
   end
 end
+
+Program
+  ==
+    // Used within this context, they have the same behavior
+    //
+    extensional

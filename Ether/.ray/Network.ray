@@ -1,1 +1,11 @@
 DomainName = String{length < 2^8}{} //TODO
+
+// Proxy all network traffic, or optionally: only grouped in the block after it., want to be able to configure both.
+//TODO On the receiving end: Difference proxies for different users, some way to do this mapping.
+// proxy @USERNAME // or some specific instance
+// proxy @ether, @USERNAME, @USERNAME2
+// Handshake such that the proxy does vs doesn't see traffic
+// @USERNAME.read proxy @USERNAME
+
+//TODO How to reroute all network traffic we're proxying
+

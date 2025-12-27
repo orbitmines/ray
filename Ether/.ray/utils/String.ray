@@ -9,3 +9,5 @@ class String
   upper_case | ^
   swap_case
   ignore_case
+
+\w

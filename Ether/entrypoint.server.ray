@@ -2,5 +2,9 @@ shadowing = None
 
 reserve @ether => @me
 
+reserve @admin => @"allow_{String}"
+reserve @"allow_{String}"
+@me.name = @admin //TODO This should work
 
+@me.status = Online & Broadcast & @allow_proxy Proxy
 

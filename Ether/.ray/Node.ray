@@ -76,9 +76,19 @@ class * | Node
   //   Some a: 5..10
   match =>
 
+  namespace === // Don't ignore location
   namespace ==
+    <up_to?> () =>
+      in?: -> as (*)
+    instance_of // A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
+    isomorphic // (Equal in structure, ignores values)
   namespace !=
-  ~= (expression: Expression{: initial: "^"?, ?, terminal: "$"?})
+  >= = ==
+  <= =
+  namespace >
+  namespace >=
+  //TODO ~= is subgraph
+  namespace ~= (expression: Expression{: initial: "^" | "⊢" ?, ?, terminal: "$" | "⊣" ?})
   !~=
 
   as (:== boolean) => true

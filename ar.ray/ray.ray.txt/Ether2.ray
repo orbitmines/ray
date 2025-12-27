@@ -175,47 +175,6 @@ repository defines encryption? (Not necessarily individual items?), No not neces
 
 
 
-//TODO How to locally store the unencrypted in cache, so you don't have to constantly decrypt. When do you want to not do that and force decryption on every access?
-//TODO So we have an encrypted object which casts down to some type? If the key is provided, where is the key stored?
-def Encrypted<Encrypted = *, T> = Encoded<T>
-//TODO This is, an encrypted value which gets decrypted, we want it the other way around as well?
-
-  // TODO This method is provided by the encrypted data (or not, if it's unknown) And it's not a ref to a local method, it's a general reference to a method implemented on the host. What if it's not supported (i.e. imported by this instance), then disallow, or say you need to include a package (unsafe potentially)
-  //TODO So methods need a way to say it's from this package (location). Which by default is the Ether. location, so those are supported by default. And if it references an unsupported method, it needs to be installed on the local side.
-  //TODO How is it checked that for instance a method on Player, is already supported by me, so you don't have to sent it over.
-  //TODO => Can do some quick checks like are the method signatures equal etc.. If there's a change, I want to support that change.
-  def decode key: * = (global.entity ?? global.instance).crypt[location (CURRENT)] => T //TODO location might inherit the key from a parent group
-  //TODO The result can be an encrypted value again, so it would have to be decrypted nestedly.
-
-  //TODO This .crypt value would not be accessible/visible to imported code (in the form of the decrypt func)
-   //How to differentiate between the many things on the same location
-   //TODO Or fill the items on the location automatically with the decrypt key/
-end
-def Encoded<Encoded = *, T> = Encoded
-  def decode() => T //TODO Use (), to indicate you want () to be called on it. Not a parameterless property.
-  def as :== T => T = decode()
-end
-//TODO This partial loading should also support encodings which can be decoded partially too.
-//     -> If it cannot be decoded partially, it should have the value stored on another level of description how?
-
-
-
-
-//TODO It needs to be a quest that you have the encoded value, but not the decode function, find it is the quest.
-//TODO Rename Encrypted to Encoded, with a function, and Encrypted is a constructor which takes encryption schemes.
-
-//TODO How does version control with with things like A-B- testing of functions and things like that, need to thinka bout that too.
-
-
-//TODO Encrypted chats between players, World = groups of players,
-//TODO Have an option to have any file encrypted as part of "visibility = 'private'", but make clear that if access to the devices is lost
-//TODO so is the file.
-//TODO Chat which is an array to which pushes might happen out of order. have some way of saying that locally that out-of-order isn't
-//TODO a problem, or simply reorder as a merge.
-//TODO Optionally: Lock the encryption key with the password, or key dongle. (Want this to remain optional, but you also want people to be able to login if they don't have access to their own pc; so everything is 'private' by default, Make that default an option.)
-//TODO You'd have libraries or 'apps' like Discord be able to say 'a discord server/channel' instead of this sort of channel.
-//TODO Slowpoke would be access checking whether you have sent in the previous x time. : But about this you want the entity to know about it so visibility.visibility = "public"
-
 
 
 

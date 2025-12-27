@@ -162,38 +162,14 @@ Evaluation order like +/-//* different for each type? how configured?
 
 
 //TODO But do allow >/< a type.
-==.at_least (Covers at least the provided  -> >=, isnt this just always ==.instance_of?
-==.@ //TODO All cases are covered by both sides.
-==.@.some = A@.intersection B@ -- .some// There's a case covered by = there's an intersection between A and B.
-==<type> Check equality up to some Type. (Only fields and structure defined on that type will be checked)
-== = ==.in(default_equivalence_graph) (Judgemental equality: Does there exist a path from a to b in the equivalence graph.)
-==.in(equiv_graph).instance_of
-//TODO Also allow to fill equiv_graphs in context variables?
 
-//TODO Difference between with location vs without location ==, ===, and?
-===.instance_of different than ==.instance_of;
- ==.exactly ==.syntactic (evaluation is ignored so 2 + 2 !=.identical = 4)
-  -> is .in(equiv_graph) where the equiv_graph is just the same structure.
-  -> Better name than syntactic?
-==.castable_to <type>, TODO Or make {as IP} to automatically only include castable variants.
-  -> Equivalence graph, convertable to.
-==.castable_to.in(equiv_graph)
-==.equivalent = ==.castable (but default ==. is already .equivalent)
-default ==.in(x.as@ TODO Somehow expand to all possible .as@ )
-==.in(equivalence_graph) = equivalence_graph.find(this).path_to(x) //TODO Or this & x can both be rewritten to the same thing in that equivalence graph.
-    // (A->) is A.reduce(|) (includes A)
-    |-> (A->)@ .intersection (B->)@ .some (* are refs to value)
-        //TODO .intersection should take the type of equality to check for
-        //TODO Should be both ways (<-A->)
-==.subgraph_of = x.as_subgraph ==.instance_of // Tag outer/subgraph with a name?
-==.instance_of (All properties of B are defined on A: A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
-    //TODO |-> These properties should be the ray which defines the properties somehow. .both the property descriptor and the result should be the same (instance of)
-    //TODO |-> What function equality is used?
-    // Refinement: Array ==.instanceof Hypergraph
-//Is just .value ==
-==.value (Equal in value, ignores structure) For graphs/array this is the same as a normal ==, but for Ray's the equipped ray is ignored. (So only implement it for ray)
+//TODO Only monkeypatch within some context, like equiv graph for only a specific context.
+
+
+>.instance_of (Covers at more than just this type)
+
+
 ==.isomorphic (Equal in structure, ignores values)
-==.type (Type equivalent, both A and B have the same coverage of values)
 +def Function
   ==.historical //TODO Either explicitly state function should be recorded, or when history is accessed that means it gets recorded.
                 // -> Historically, this function seems to have done the same thing. What if never used? Return false.
@@ -248,6 +224,11 @@ Node += var2: 2
 
 
 // TODO - Ambiguities
+
+// Ambiguity between boolean and false | true, when wanting to check the value ==, checks if it's false or true?
+// false != false | true, still executes the branch where it's false.
+// But we want == boolean, as in, is exactly the boolean type.
+
 // def a = a vs def (a = a) = a, default clashes with singleline func, same with => for function
 // var? vs var ? true : false ; how to know if we need to convert var to a boolean or pass it to option.
 //   -> Also var ? true : false , is it var.? true : false, or var.?.true.:.false

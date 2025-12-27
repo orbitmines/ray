@@ -1,0 +1,19 @@
+// How to reference the channel the Instance communicates over?
+
+// Encrypted value vs encrypted channel
+// Which targets like (disk/mirror)
+
+// How to say don't evaluate encrypted value in-location, only read off to another location
+
+// Pub key associated with Instance, and one for the character (allowing you to host it)
+
+// Might not want to decode, in the case of homomorphic encryption
+
+// List of encryption algorithms
+
+//TODO Not having the encryption key spawns a quest, like a special throws>
+
+encrypted
+
+class Encrypted<T>
+  as (== T) => // .crypt[location (CURRENT)]

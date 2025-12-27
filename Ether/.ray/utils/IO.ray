@@ -14,4 +14,6 @@ confidential namespace IO
 
   //TODO Create a mirror @ location, and load from it it when?
 
+//TODO: Set actual directory vs the one we map to. Map both @player-name and @uuid, but actualize in @U/U/I/D
+
 end

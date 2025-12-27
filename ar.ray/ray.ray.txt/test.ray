@@ -1,96 +1,13 @@
 
+//TOD If !=.instance_of Instance ; if it already is a , dont case down to a field.
 //TODO If there is a single field going to some class like Instance/or its extensions IP/Socket.Address, automatically add an equivalence (as IP) to that class. Is there ever a case where you don't want this equivalence?
   as (== Instance) => .instance
 //TODO The inverse of this, calling the constructor on something which has a single extends, like Instance as Character. Only allow if it's a valid type then, so no fields missing.
   as (== Character) => Character(instance: this)
-//TODO What about having some field of which subtypes could be Instance < Location, automatically allow Instance to filter for {==.instance_of Instance}
-//TODO Does introduce a possible ambiguity ina ==, of which side to put on the quiv graph, it's just that if either one works the == goes through.
-
-//TODO When location is set to some remote location, push updates to it - or how to configure communication.
-//TODO When location is set some localhost var, open port.
-//TODO Or when set to IP we have an instance running on, open port on remote server.
-//TODO --> Exchange information such that the remote instance is allowed to host you.
-//TODO --> What if signature changed, might not want to allow, or when to invalidate signature,
-
-
-//TODO The -> iterator stops when hitting None.
 
 //dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
 //todo should change the variable INSTANCE to a new var with different permissions.
 
-//TODO Skip settings, use version control to set the variables directly here.
-
-//String newline, respect spaces after the first one, which we trim completely
-
-//TODO Allow (<- INSTANCE) = (.host <- this)
-//TODO then casts all the characters to instances.
-
-
-//TODO: Set actual directory vs the one we map to. Map both @player-name and @uuid, but actualize in @U/U/I/D
-< @Ether/.ts
-
-//TODO get aliases too of the things provided? If not defined on parent obj. Editor: get the same comment.
-delegate in | out => object
-
-different type/fields depending on what location we're at,
-Access list of instructions from ** iterable object
-
-//TODO On Node, define what it means to access from a particular location, access .applied_filter, and filter values in # based on caller.
-
-// Anything called on Option is automatically equivalent to 'variable?.'
-
-//TODO as (: type) is automatically implemented so that as boolean is always calling => this
-
-
-
-//TODO If multiple sets =, make the object adhere to the type, allow it temporarily to not adhere to it: as long as it's not used. Deem as a single transaction.
-
-// * operator a,llows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
-
-
-// Allow top-level | OR and & AND, which are ignored so we can do things like how the booleans are defined.
-
-// OFFLINE
-// Offline vs private managed vs offline but allow internet access which doesn't identify the instance.
-   Make it a visibility filter, and internet access how
-
-Things like a euclidian space defined, and then say it's discretized in this particular way, how do functions in that space change
-
-// Allow maybe == Some a: 5..10
-(maybe == Just a: 5..10).while
-   maybe = Just 5
-end
-
-// Allow newlines after a |, so we can do things like
-func
-  | line1
-    line1-2
-
-  | line2
-    line2-1
-
-  |
-
-
-//TODO Out-of-order property access, in the constructor
-
-//TODO Allow arbitrary parts of a function to define a parameter, by simple saying UNINITIALIZED_VAR: a, required if no default is provided.
-
-//TODO Newline counts as a = or => when appropriate so (=> preferred over =)
-class Time < Quantity.Temporal (calendar: Calendar = UTC)
-//is
-class Time < Quantity.Temporal (calendar: Calendar = UTC) =>
-//TODO Allow out-of-order things like <, which are inside the () => {}
-
-//TODO Create an example Proxy for ETHER@ETHER, mapping packages etc..
-
-//TODO Automatically support func calls like @"Sir Tiltalot"
-
-< @orbitmines.com/package
-{ Object } = @orbitmines.com/package
-//TODO When this is used, issue quest to download the whole package in cache.
-
-Object{as (== String): String}
 
 
 
@@ -104,33 +21,14 @@ Object{as (== String): String}
 the default ##: is used if no name
 //TODO Or use .expand somehow, NO? it's used for something else?
 
-//TODO What to do with functionality like [index: 0] on IP, when it extends both a string, and a -1 <- . -> +1. Basically it has two structures defined on it.
-//TODO Prefer the methods in order of definition, explicitly overlap for all methods/vs specific methods, what's the syntax for this?
-
-//TODO Pair a : with a =, since previous : might not be matched -> or basically say if not accessed before the =, allow.
-
-//Allow type def conditionally like this
- variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}
-
 
 None implements location and =
 //TODO What happens to returned variables? They have a location inside the function, then while their location isn't changed in another function, that function still lives through the variable?
 
 
-# todo functions which calling them requires the top-level context which is calling has certain variables defined as a way to pass the variables?
-
-//Parameterless property = , sets that variable to an expression. It's realized when another property on it is accessed? (or it's set to some other property
-// |-> It's not the same as dynamic, dynamic changes if the dependant parameters of it changes. Or is it?
-
-what if .inventory is changed, history is kept track off in the new location and old, that the location changed and thus the value is gone/new
-what if the lvariable is used at two location, two .,inventory, but one variable.
-
-.history, .history is simply up to some entry in the path
-
 //TODO Reverse .keys and .values
 //TODO Things like .map on variable*, needs to be thought through, what is actually on *
 
-//TODO dynamically could see through history if something was added/removed and not need to run the whole thing again
 
 //TODO Needs like an example of 2D/3D world with yaw/pitch on location, stored as arcs in a continuous space then discretized by some things like elementary lengths and other things.
 //TODO What if that's derived from the space, if space is non-euclidean it's different than a simple coordinate system
@@ -166,27 +64,6 @@ Evaluation order like +/-//* different for each type? how configured?
 //TODO Only monkeypatch within some context, like equiv graph for only a specific context.
 
 
->.instance_of (Covers at more than just this type)
-
-
-==.isomorphic (Equal in structure, ignores values)
-+def Function
-  ==.historical //TODO Either explicitly state function should be recorded, or when history is accessed that means it gets recorded.
-                // -> Historically, this function seems to have done the same thing. What if never used? Return false.
-  ==.extensional //TODO Where is the body defined? Is it the same as a variable? (on the .expand)
-  ==.intensional
-  // TODO          When there are multiple implementations, what happens?
-                   More elaborate intensional equality would be?
-                     Definition (+ Different contexts in which the definition finds itself)
-                     Separate compilation layers it goes through
-                     (and some possible unknown compilation layers (ex. physics))
-                     "(perceived) Actual execution layer"
-                   VS control-flow at each layer
-end
-
-
-Node += var => R //Add method to it
-Node += var2: 2
 
 
 // KV pair with everything delegated to value, so you can do ==. (separate class like TransparentKV)
@@ -256,6 +133,31 @@ Node += var2: 2
 
 
 // TODO - Examples + Allowances
+
+// Allow maybe == Some a: 5..10
+(maybe == Just a: 5..10).while
+   maybe = Just 5
+end
+
+// Allow newlines after a |, so we can do things like
+func
+  | line1
+    line1-2
+
+  | line2
+    line2-1
+
+  |
+
+//TODO Newline counts as a => when appropriate so
+//TODO Allow arbitrary parts of a function to define a parameter, by simple saying UNINITIALIZED_VAR: a, required if no default is provided.
+
+class Time < Quantity.Temporal (calendar: Calendar = UTC) =>
+//TODO Allow out-of-order things like <, which are inside the () => {}
+
+// Allow multiple changes which make it adhere to the type, as long as nothing is accessed in between
+//Allow type def conditionally like this
+ variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}
 //TODO If multiple edits makes it type compliant allow as if a single transaction
 // Allow [7 | 11 | 15 | 19]  -> [~ 7 | +4 | +4 | +4] & ~ 1, +2, +3, +4
 // Allow \ to be used in a variable at the start \s
@@ -339,17 +241,6 @@ end
 // TODO - Notes on Grammar
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
 
-x: String? =
-  | 0.2 => "A"
-  | 0.5 => "B"
-  | None
-=
-x: String? =
-  0.2 => "A"
-  0.5 => "B"
-  None
-// Implicit |, so we dont get into a | (0.2 | X) ambiguity.
-
 // TODO - Notes on Runtime
 // Take the example of Decimal.String which should be defined first, then `Decimal.String`, then Decimal. can be defined.
 // Lazy evaluation, keep structures like 'false | true | true' around without deciding execution order. ; Associativity proof is somehow relevent here, how does the runtime know about it?
@@ -409,8 +300,6 @@ Translate everything like ifblocks etc. to other languages, which are implemente
 // TODO - Features
 // Observables which check if a variable is changed, dynamically assert would make use of that.
 // Decimal % mod 2, should go both in .prev/.next directions and start at the base case 0. What decides this?
-// Like leans open Namespace in, flatten context to 'local' local += Namespace, + being defined on object
-//      Should overwrite any variables already defined, but not things like local etc.., so only the things used in the "bare object fields"
 // equivalences: Implicit casts (lean: coercions), chained together Pos -> Nat -> Int "if there is a path to Int from Pos" - allow loops.
 //     -> Get a graph of possible coercions
 // Boot into a context, which doesn't allow access upper-level properties. Something like program(`*`: () => None). Shouldn't overwrite local etc..

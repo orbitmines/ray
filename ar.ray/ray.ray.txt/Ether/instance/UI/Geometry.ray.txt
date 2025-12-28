@@ -29,6 +29,9 @@ end
 Square //TODO Makes assumption about the local space.
 Plane // Square with no boundaries.
 
+// Finite vs Infinite
+// dimensionality = 2 & dimensionality change at every point is constant.
+// every x goes to an x, every y goes to a y
 Grid // TODO `x`D Grid, X x X Grid, (Allow Expression syntax to extent a whole statement like Number x/* Number)
 //TODO Euclidian space being a grid with infinite divisibility.
 //TODO Effective dimension vs actual dimension at each point.

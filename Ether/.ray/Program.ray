@@ -199,6 +199,10 @@ class Function | Program < Boundary, Location, expression: Expression
 
   //TODO .children TODO collapsed terminal.
 
+  //TODO Superposing different implementations of the same function how? (Superposing languages)
+
+  //TODO Some way to calculate resources used (storage, memory, time, how large the Ray is to construct a program/variable)
+
   callee => // from parameters one of which is the instance, other's are named; exclusion?
 
   in | parameters => ∙⊣this .x

@@ -51,3 +51,4 @@ A library for communication between Languages. The *indexing, analysis ..., comp
 		- [ ] Part of this becomes how do certain fields/perspectives/projects have a view on other projects (partly [[PENDING (2032+?); Sociology, Economics]]). A simple example is confusion between programming fields in what the meaning of frontend/backend is. - People's fixation on using a particular word very specifically. That sort of thing.
 			- complex/complicated is another example
 			- another is hardware/software distinction (in the sense of superposed languages, this fails a bit). This distinction isn't really that clear-cut.
+        - [ ] "Measure of how hard something is to do in parallel (or in some other structure generally)"

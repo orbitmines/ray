@@ -126,3 +126,6 @@ unique
 
 delegate in | out => object
 delegate in Number => object
+
+// Require that one of the superposed values is of the given type
+a | an (type) => Node{#.some(==.instance_of type)}

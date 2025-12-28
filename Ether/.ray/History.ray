@@ -2,3 +2,60 @@
 
 //TODO Evaluation history is a .expand on a singular change/commit
 
+  //TODO .expand Graph<Commit>.acyclic
+
+//TODO Needs a history conversion to something like git to support it, both ways.
+
+//TODO What if I set a variable with a history and I want to retain that history (and not the history of the variable it's set to)
+   //TODO Or retain both?
+   //TODO The .=(value) in history (encoded on the edge) carries with it the information of where it came from, with that history attached.
+
+// Default behavior for =, check histories and merge conflicts (quests)
+//TODO Uncommitted files, and staged changes, like those added with git add, are simply visibility set to local/private.
+
+//TODO Cherry-pick is a chain of commits apply to current branch
+//TODO -> SO YOU WANT TO ALLOW DIFFERENT STATES IN REPOSITORIES, BUT STILL ALLOW THEM TO WORK TOGETER. (mY LOCAL HISTORY IS DIFFERE4NT THAN YOURS, BUT STILL NBEEW UPDATES ARE PUSHED TO BOTH.),M SAY FOR WHEN I KNOW I SENT MY MESSAGE BEFORE/AFTER SOME OTHER MESSAGE, BUT YOURS WAS SENT AROUND THE SAME TIME. WE MIGHT NOT AGREE ON THE ORDER.
+
+//TODO How to store distributed approximations of some value, like a blooming filter for likes. How do I indicate I don't mind an approximate value.
+
+// You want the option to merge many in-sequence commits into a single one. Like we have
+   history on every keystroke of a string, but we just want to set it to the information of the new string.
+
+// Could do "from this point" it's a new repository
+
+// If invariant, automatically resolve merge conflict by randomly choosing an order.
+
+//Type conflicts are merge conflicts, for example of distributed databases
+
+//Need to have a lower-bound against the upper-bound of repository: For instance not individual bits of characters in a string.
+//For the intermediate steps it'/s the reverse, more effective tos tore the lowerlevel, and generate the higher-level  Have the optmization decide what to do.
+
+Node
+  % | history = Commit(this)
+
+
+class History
+  repository: World //TODO World needs to reserve Hexadecimal{length == 12} => store in MACAddress
+
+  name: (id: a UUID.v1)
+  //TODO The node which creates the uuid is a unique ID assigned to the user by the world
+  who: repository.characters{name{issuer == repository} == id.node}
+
+
+class Branch < History & Program
+  static Version | Commit = State < History
+    //TODO Not a branch of into many, require merge to be the branchpoint we use.
+    branch => ⊢{name !=.instance_of UUID}.first ?? ⊢
+
+    tags = this.all.map({.name}: .)
+    branches = ⊢this.all.map({.name}: .)
+
+{ Version, Commit } = Branch
+
+  + //Add other history to this one, whether to reshuffle changes?
+
+
+//TODO Repository needs to be a World, or part of a world to record changes -> used for generating UUIDs
+// A repository is an ordering of nested commits.
+class Repository
+//TODO String for instance, character-level is the lowest, it goes, otherwise every class is a repository

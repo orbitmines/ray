@@ -82,6 +82,7 @@ class * | Node
 
   namespace === // Don't ignore location
   namespace ==
+    // In variables have a way to get partial equality.
     <up_to?> () =>
       in?: -> as (*)
     instance_of // A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)

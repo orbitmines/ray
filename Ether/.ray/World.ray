@@ -25,6 +25,7 @@ class World < Nameable //TODO Is it < Location, if we mark every location as Wor
   class{>.instance_of Character}#.for class
     {class.name.plural}: class => characters{==.instance_of class}
 
+  //TODO Not reserve but just setting the characters name
   namespace reserve
     //TODO Overwrite
     //TODO equivalence A => B etc.. see /etc/hosts for additionial notes

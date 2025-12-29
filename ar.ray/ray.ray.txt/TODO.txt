@@ -13,13 +13,11 @@
 -  What if I wanted to know the history of where it came from? So from disk to instance (to memory) to instance ... , until it came to me. -> So the instance can choose whether to provide that information.
 - For things like an interface, .next but a .move updates the whole location (which could be a graph like a 2d visual field, tilted by some yaw/pitch)
 
+// For strreaming, a player has a particular location which is the streaming location , that is being broadcast.
+// TODO So watching a stream is simply following that location.
+
 // Networking
 - Managed items by another instance (mirrors)
-
-
-// Equality/Equivalence
-- == usually ignores location, what if we dont want it to. Do we use ===? OR something more intuitive?
-//TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@
 
 // Quests
 Infinite maps etc..

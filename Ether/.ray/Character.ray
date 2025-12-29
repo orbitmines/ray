@@ -11,6 +11,18 @@
 //location might be non-halting, not yet discovered locations which run this world/X.
 // Change access permissions of your mirror.
 
+  dynamically
+    sub = this[`property: *`]
+
+    // Speculatively merge a detected loop in the inventory, if not found, we recursively describe it: A.B.A.B.A.B...
+    if current = (<-inventory){== sub}
+      inventory.push<edge: .value = property>(current)
+    else assume
+      current = Ray(sub)
+      inventory.push<edge: .value = property>(current)
+      sub.inventory &= current
+    end
+  end
 
 // Remote execution
 //TODO Default to program<&who = CHARACTER>() if passed by the character.
@@ -51,4 +63,6 @@ class Character < Entity & Accessor & World & Nameable
   status => instance.status#.max
 
   {" "}{string: String} //TODO Access permission filter
+
+  // == Challenges with timed message to be decoded
 end

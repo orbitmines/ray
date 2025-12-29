@@ -173,3 +173,5 @@ end
    0 -> +1 -> +2 // Repeated two steps +1 +2 +1 +2 ..
 
 ~ (expression: Expression) // ~ 1, +2, +3, +4, combine with dynamically to dynamically allocate the others
+
+//TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@

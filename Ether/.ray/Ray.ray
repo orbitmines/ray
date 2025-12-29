@@ -174,4 +174,5 @@ end
 
 ~ (expression: Expression) // ~ 1, +2, +3, +4, combine with dynamically to dynamically allocate the others
 
+// Path is a function
 //TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@

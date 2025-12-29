@@ -1,3 +1,5 @@
+// History of location: -  What if I wanted to know the history of where it came from? So from disk to instance (to memory) to instance ... , until it came to me. -> So the instance can choose whether to provide that information.
+
 //TODO Store whether a silent generic type was used for a particular function, then version control, alert there's then a new variable with that name, but keep using it as a generic type as long we have that information.
 
 //TODO Evaluation history is a .expand on a singular change/commit

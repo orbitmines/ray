@@ -102,6 +102,8 @@ Evaluation order like +/-//* different for each type? how configured?
 
 // TODO - Ambiguities
 
+//TODO Bidirectional function like ray but only single step: l <= (x) => r, ambiguity with <=
+
 // Ambiguity between boolean and false | true, when wanting to check the value ==, checks if it's false or true?
 // false != false | true, still executes the branch where it's false.
 // But we want == boolean, as in, is exactly the boolean type.

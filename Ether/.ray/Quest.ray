@@ -1,1 +1,8 @@
-class Quest < Nameable
+// Require things like "I've communicated with these replica servers before making this calculating -> when strong consistency is required." -What if they're not online, like offline players storage etc.. (For certain things like calculating player statistics which are kept local only, it would be "make sure your instance checks in with out server before X time", and we'll consider your changes) - So these are quests to complete for the replica servers
+
+//TODO Certificates issued by a world for a quest.
+
+class Quest < Program & Nameable
+  // Difficulty rating (might change at each step)
+  // Effectiveness rating (effecting difficulty rating of other quests, compounded effect of future rewards)
+  completed => is_last // TODO There could still be a continuation, how to know we're actually done

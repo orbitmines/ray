@@ -1,0 +1,26 @@
+class Item
+  // how it's made, how it's discovered, how it's constructed.
+
+  // Items require Quests ; In order to find items you need quests.
+  //Similar to function, who called?
+  obtained_by: Quest
+
+  issuer: World = global.desktop
+  certificate: Certificate
+
+  def move location: Location
+  //TODO Transaction
+  end
+
+  //TODO What is a perspective on an object?
+  //TODO Minimaps/high-level overviews
+end
+
+def Certificate
+  secret: Something
+    visibility = //TODO Should only be default, can be overwritten
+  end
+  //TODO pub/secret
+  issuer: World
+  issued_on: Date//TODO
+end

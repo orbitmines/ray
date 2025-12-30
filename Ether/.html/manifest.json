@@ -1,0 +1,11 @@
+{
+  "short_name": "Ether",
+  "name": "Ether",
+  "icons": [
+
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1c2127",
+  "background_color": "#1c2127"
+}

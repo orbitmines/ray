@@ -73,13 +73,16 @@ class * | Node
   dynamically assert this ==.instance_of type
 
   // Stops when hitting None
-  ->
+  -> | →
 
   // Some(5).match
   //   Some a: 5
   //   Some a: 5..10
   match =>
 
+  .= //TODO .= next ; x = x.next
+
+  // instance_of and == are the same?
   namespace === // Don't ignore location
   namespace ==
     // In variables have a way to get partial equality.

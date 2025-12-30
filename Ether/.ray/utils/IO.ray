@@ -17,3 +17,5 @@ confidential namespace IO
 //TODO: Set actual directory vs the one we map to. Map both @player-name and @uuid, but actualize in @U/U/I/D
 
 end
+
+persistent //TODO

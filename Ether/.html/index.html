@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+
+    <link rel="icon" type="image/png" sizes="400x400" href="favicon.png"/>
+    <meta name="theme-color" content="#1c2127"/>
+
+    <link rel="manifest" href="manifest.json"/>
+<!--    <link rel="apple-touch-icon" href="logo192.png"/>-->
+
+    <title lang="en">Ether</title>
+    <meta property="og:type" content="website"/>
+    <meta name="description" content=""/>
+    <meta property="og:image" content="logo.png"/>
+    <meta property="og:image:type" content="image/png"/>
+
+    <link href="index.css" rel="stylesheet">
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <script type="module" src="index.ts"></script>
+    <div id="root">
+      <div id="container"></div>
+    </div>
+  </body>
+</html>

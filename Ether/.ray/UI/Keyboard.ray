@@ -1,0 +1,10 @@
+class Key
+
+  pulsed (max: 20 / s, delay: 1 s)
+
+  toggled = false dynamically .next if this
+  cycle (iterable: Iterable) => iterable.first.loop dynamically .next if this
+
+  as (== boolean) // if pressed
+
+class Keyboard

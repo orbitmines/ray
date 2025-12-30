@@ -1,5 +1,8 @@
+
 class boolean = false | true = Binary.Digit.value // TODO This should automatically implement "0" | "1" as boolean, through Binary.Positive. : Generalized to: Anything that is implementing Array<T>, like Positive, should also apply to just a T.
   // TODO Verify that these are correct work for all cases.
+
+  //boolean has .orbit equipped
 
   //TODO Can extract operator out of boolean, as a default metaprogramming class
   static class Operator = Unary | Binary

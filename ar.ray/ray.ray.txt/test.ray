@@ -136,6 +136,12 @@ Evaluation order like +/-//* different for each type? how configured?
 
 // TODO - Examples + Allowances
 
+(if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy (
+      Keyboard.ctrl && Keyboard.shift => // Skip group & Expand selection
+      Keyboard.ctrl => // Skip groups
+      Keyboard.shift => // Expand selection
+    ) -> (if Keyboard. ↓ | s .pulsed)
+
 // Allow maybe == Some a: 5..10
 (maybe == Just a: 5..10).while
    maybe = Just 5

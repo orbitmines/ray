@@ -313,13 +313,13 @@ class SyntaxHighlighter : com.intellij.openapi.fileTypes.SyntaxHighlighter {
       // PUNCTUATION
       Rule(
         tokenType = Types.PUNCTUATION,
-        pattern = Regex("""[{}\],()]|=>|:|[|&.⸨⸩]""")
+        pattern = Regex("""[{}\],()]|=>|:|[|&.⸨⸩]|[⊣⊢∙⊙]""")
       ),
 
       // KEYWORD
       Rule(
         tokenType = Types.KEYWORD,
-        pattern = Regex("""\b(?:this|static|class|internal|none|confidential|managed|namespace|dynamically|assert|read|write|execute)\b""")
+        pattern = Regex("""\b(?:this|static|end|persistent|class|namespace|dynamically|internal|none|confidential|managed|assert|read|write|execute)\b""")
       ),
 
       // ACCESS
@@ -331,7 +331,7 @@ class SyntaxHighlighter : com.intellij.openapi.fileTypes.SyntaxHighlighter {
       // BUILTIN
       Rule(
         tokenType = Types.BUILTIN,
-        pattern = Regex("""\b(?:boolean|Number|String)\b""")
+        pattern = Regex("""\b(?:goto|branch|if|elsif|else|assume|boolean|Number|String)\b""")
       ),
 
       // BOOLEAN

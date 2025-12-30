@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "start": "npx vite & cd electron && npm start & wait",
+    "install": "cd electron && npm install"
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+    "vite": "^7.3.0"
+  }
+}

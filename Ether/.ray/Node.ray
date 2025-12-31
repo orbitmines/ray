@@ -55,6 +55,8 @@ class * | Node
   external ** | program : Program
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
 
+  // TODO Places in code where this variable gets referenced and updated.
+
   | | or (x: type) => #, (| x)
   & | and (x: type) => #, (& x)
 

@@ -1,9 +1,32 @@
 {
+  "name": "@orbitmines/ether",
+  "version": "1.0.0",
   "main": "index.js",
+  "private": false,
+  "repository": "https://github.com/orbitmines/ray",
+  "author": {
+    "name": "Fadi Shawki",
+    "email": "fadi.shawki@orbitmines.com",
+    "url": "https://orbitmines.com/profiles/fadi-shawki"
+  },
   "scripts": {
+    "build": "cp ../../E.png ./icons/512x512.png && electron-builder",
     "start": "electron ."
   },
   "devDependencies": {
-    "electron": "^39.2.7"
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.orbitmines.ether",
+    "productName": "Ether",
+    "files": [
+      "**/*"
+    ],
+    "linux": {
+      "target": ["deb"],
+      "category": "Utility",
+      "icon": "icons"
+    }
   }
 }

@@ -1,3 +1,4 @@
+
 dynamically persistent
   if Keyboard.f2.toggled
     selection: Location =

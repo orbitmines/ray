@@ -4,3 +4,7 @@ body {
     background-color: #1c2127;
     margin: 0;
 }
+#container {
+
+    -webkit-app-region: drag;
+}

@@ -4,6 +4,8 @@
 // The v0 runtime is a specification runtime, without any optimizations.
 
 
+import PartialArgs = Ether.PartialArgs;
+
 abstract class ICursor<T> {
   abstract previous?: ICursor<T>
   abstract next?: ICursor<T>
@@ -70,7 +72,7 @@ class Context {
   }
 
   path: string
-  get name() { let path = this.path.split('/'); return path[path.length - 1].replaceAll(/\.ray\.txt$/g, "") }
+  get name() { let path = this.path.split('/'); return path[path.length - 1].replaceAll(/\.ray$/g, "") }
   x: Token[]
 }
 
@@ -88,39 +90,27 @@ const files = (path: string) => {
 
   return results;
 }
+
 class Instance {
 
-  static DIR = "../.."
-
-  static run = (args: RuntimeArgs = runtime_args({
-    '@': [Instance.DIR]
-  })) => {
-    if (args['@'].length !== 1) throw new Error('In order to run multiple instances, for now run them in separate terminals.')
-
-    const path = args['@'][0]
-    const stat = fs.statSync(path)
-
-    delete args['@']
-
-    //TODO Always load ETHER executable with ENTRYPOINT = Context.file
-    if (stat.isFile())
-      return new Instance(`${Instance.DIR}/.ray.txt`).eval(args, Context.file(path))
-    else if (stat.isDirectory())
-      return new Instance(`${path}/.ray.txt`).eval(args, Context.file(`${Instance.DIR}/Ether.ray.txt`))
-    else
-      throw new Error('Unknown Ether instance directory or file.')
+  constructor(public args?: PartialArgs) {
   }
 
-  constructor(public dir: string) {
-    this.eval({}, ...files(dir)
-      .filter(file => file.endsWith('.ray.txt'))
-      .map(file => Context.file(file))
-    )
+  dir = (path: string, args?: PartialArgs): this => {
+    // this.eval({}, ...files(dir)
+    //         .filter(file => file.endsWith('.ray'))
+    //         .map(file => Context.file(file))
+    //       )
+    return this;
+  }
+  file = (path: string, args?: PartialArgs): this => {
+    Context.file(path)
+    return this;
   }
 
-  //TODO Check if types match, and use "" if a string.
-  eval = (args: RuntimeArgs, ...files: Context[]) => {
-    console.log(files)
+  eval = () => {
+
+    // PartialArg types need to match
 
     const s = [" ", "\t"]
     const DELIMITER = ["/", ".", ...s, ";", "\n"]
@@ -128,6 +118,26 @@ class Instance {
   }
 }
 
+export namespace Ether {
+  export type PartialArgs = { [key: string]: string[] }
+
+  export const run = (default_path: string, args: PartialArgs) => {
+    if ((args['@'] ?? []).length == 0) args['@'] = [default_path]
+    if (args['@'].length !== 1) throw new Error('In order to run multiple instances, for now run them in separate terminals.')
+
+    const path = args['@'][0]
+    const stat = fs.statSync(path)
+
+    delete args['@']
+
+    if (stat.isFile())
+      return new Instance(args).dir(`${default_path}/.ray`).file(path).eval()
+    else if (stat.isDirectory())
+      return new Instance(args).dir(`${path}/.ray`).file(`${path}/Ether.ray`).eval()
+    else
+      throw new Error('Unknown Ether instance directory or file.')
+  }
+}
 
 /**
  * Copied from https://github.com/lodash/lodash/blob/main/dist/lodash.js
@@ -173,42 +183,3 @@ export const raw_tag = (value: any) => {
   return result;
 }
 export const to_string = (value: any): String => Object.prototype.toString.call(value);
-
-type RuntimeArgs = { [key: string]: string[] }
-const runtime_args = (result: RuntimeArgs = {}) => {
-  const args = process.argv.slice(2);
-  let using_default_entrypoint = true;
-
-  const add = (key: string, expression: string) => {
-    if (key == '@' && using_default_entrypoint) {
-      result['@'] = []
-      using_default_entrypoint = false;
-    }
-
-    if (key in result) result[key].push(expression);
-    else result[key] = [expression];
-  };
-
-  for (let i = 0; i < args.length; i++) {
-    let arg = args[i];
-
-    if (arg.startsWith("--") && arg.includes("=")) {
-      const [key, value] = arg.slice(2).split("=");
-      add(key, value);
-    } else if (arg.startsWith("--")) {
-      const key = arg.slice(2);
-
-      if (args[i + 1] && !args[i + 1].startsWith("-"))
-        add(key, args[++i]);
-      else
-        add(key, "true");
-    } else if (arg.startsWith("-")) {
-    } else {
-      add('@', arg)
-    }
-  }
-
-  return result;
-}
-
-Instance.run()

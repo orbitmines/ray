@@ -5,8 +5,10 @@ World & Location & // (Graph | )
   spawn_location: Location{to .}
 
 // Location < World, as composition, not Location has world.
-class World < Nameable //TODO Is it < Location, if we mark every location as World; or put that functionality on Location, which are part of a world.
+class World | Region < Nameable //TODO Is it < Location, if we mark every location as World; or put that functionality on Location, which are part of a world.
   internal WORLD = this //TODO If we mark every location as world, this doesn't work. We'd need a separate identifier for this world World Registry entry or something
+
+  PREFIX = "#"
 
   //TODO Dynamics, either on world, or separate composition
 
@@ -29,6 +31,7 @@ class World < Nameable //TODO Is it < Location, if we mark every location as Wor
   namespace reserve
     //TODO Overwrite
     //TODO equivalence A => B etc.. see /etc/hosts for additionial notes
+    //TODO Allocate a name within your access, to another character. Say x@gmail.com allocated by Google (Issuer is @me, but it's for the world @ether)
     class{>.instance_of Nameable}#.for class
       //TODO Set name for that character
       //TODO

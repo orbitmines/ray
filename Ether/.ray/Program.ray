@@ -146,6 +146,14 @@ class Language
   static Expression
 end
 
+class Context //Subgraph of a function.context
+// Span implements Ray, because the whole current thing is selected as the Node. which .expands into the separate components.
+//span: a Ray{∙: expression} again, we want a subgraph of a larger graph.
+// Define line_number: span.reverse{"\n"}.count on a subgraph of a string.
+// Similarly define column as to(.reverse{"\n"}.first).length
+// span.line:column
+// From line:column, how to recover the original span (automatic reverse)
+
 //TODO Shaders are like parallel iterators; there's an unrollable loop in the Many iterator for threads.
 //      -> This existence of a forloop, means the program assumes Many definitions are in turn also programs. -> Of course
 class Function | Program < Boundary, Location, expression: Expression
@@ -157,6 +165,8 @@ class Function | Program < Boundary, Location, expression: Expression
   //TODO Is intermediate state the whole context? Or what do we do with sequence of operations on some variable? How to intuitively make that sequence only about that variable? and things it depends on
 
   //TODO Context information like line-number in parent expression, etc.. and larger context
+
+  location: a Context & (span: ) & "{}:{}"
 
   ∙: State
   // Program State
@@ -240,7 +250,7 @@ end
 
 namespace RayLanguage // This namespace will be used for: < Language
   namespace Txt < Language
-    equivalence ".ray.txt" => this
+    equivalence ".ray" => this
 
     static class Expression < String
       //TODO Then how to define the assumptions of newline meaning => etc..

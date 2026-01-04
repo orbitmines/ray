@@ -14,7 +14,7 @@
   },
   "scripts": {
     "test": "npx jest",
-    "v0": "ts-node --esm src/runtime/v0.ts"
+    "v0": "ts-node --esm src/runtime/v0.run.ts"
   },
   "jest": {
     "preset": "ts-jest",

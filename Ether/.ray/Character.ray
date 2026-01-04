@@ -58,7 +58,12 @@ Invisible =>
 //TODO Have a sharded character, if the ether central server doesnt allow storage beyond X, allow remote storage to be configured.
 
 class Character < Entity & Accessor & World & Nameable
+  PREFIX = "@"
+
   instance: Instance => location{==.instance_of Instance}
+
+  // If blocks for which world to load it in, based on location, then .avatar with {location == ?}.avatar or default {?} to load all properties with unknowns
+  avatar: Avatar if this !=.instance_of Avatar
 
   status => instance.status#.max
 
@@ -66,3 +71,7 @@ class Character < Entity & Accessor & World & Nameable
 
   // == Challenges with timed message to be decoded
 end
+
+class Avatar < Character
+  // consistent is the field that referenced this, must reference back. with {?}, {avatar == this}
+  character: consistent Character

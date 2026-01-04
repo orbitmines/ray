@@ -319,7 +319,7 @@ class SyntaxHighlighter : com.intellij.openapi.fileTypes.SyntaxHighlighter {
       // KEYWORD
       Rule(
         tokenType = Types.KEYWORD,
-        pattern = Regex("""\b(?:this|static|end|persistent|class|namespace|dynamically|internal|none|confidential|managed|assert|read|write|execute)\b""")
+        pattern = Regex("""\b(?:this|static|end|persistent|class|namespace|dynamically|external|internal|none|confidential|managed|assert|read|write|execute)\b""")
       ),
 
       // ACCESS

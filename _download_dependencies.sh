@@ -113,5 +113,26 @@ git add "$FONT_DIR/"
 # dmg2img -i BaseSystem.dmg BaseSystem.img
 # qemu-img create -f qcow2 mac_hdd_ng.img 256G
 
+# Big Sur works, Sonoma and Sequoia dont
+
 # Format the unidentified disk
 # Reinstall
+# On first reboot when installing, click Installer not base System
+# Then 2nd reboot, boot from the disk created.
+
+# config.plist
+# Set <key>SecureBootModel</key>
+      #			<string>Default</string>
+# AllowSetDefault => true
+
+# rm -f OpenCore.qcow2; sudo ./opencore-image-ng.sh --cfg config.plist --img OpenCore.qcow2
+
+# git clone https://github.com/corpnewt/GenSMBIOS
+# cd GenSMBIOS
+# ./GenSMBIOS.command
+
+# SystemProductName iMac20,1
+# SystemSerialNumber
+# SystemUUID
+# MLB = Board Serial
+# +ROM, set Mac of network device to it.

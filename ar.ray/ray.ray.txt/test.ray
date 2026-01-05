@@ -136,6 +136,9 @@ Evaluation order like +/-//* different for each type? how configured?
 
 // TODO - Examples + Allowances
 
+// Allow
+f (property = call(property))
+
 (if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy (
       Keyboard.ctrl && Keyboard.shift => // Skip group & Expand selection
       Keyboard.ctrl => // Skip groups

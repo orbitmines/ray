@@ -99,6 +99,8 @@ const external = (key: Val) => {
 
 type Val = string | symbol | Var | ExternalMethod
 
+const evaluate = Symbol("evaluate");
+
 class Var {
   value: Var
   methods: Map<Var, Var>
@@ -134,11 +136,19 @@ class Var {
     // TODO If assign is called on None, then set in .methods (Set .methods in location)
   }
 
+  [evaluate] = (): boolean => {
+
+  }
+
+  instance_of = (type: Val): boolean => {
+    //TODO Flag == & instance_of methods
+  }
+
   retrieve(property: Val) {
     property = Var.cast(property)
 
     for (let [key, value] of this.value.methods) {
-      if (property.self["=="].instance_of(key)) return value;
+      if (property.instance_of(key)) return value;
     }
 
     return Var.expr("None") //TODO Location of None
@@ -150,7 +160,10 @@ class Var {
       this.retrieve(property).assign(newValue)
       return true
     },
-    get: (_: any, property: string | symbol, receiver: any): any => this.retrieve(property)
+    get: (_: any, property: string | symbol, receiver: any): any => {
+      if (property == evaluate) return this[evaluate]()
+      return this.retrieve(property).self
+    }
   }) }
 
   external = (key: string | Var, value: string | Var | ExternalMethod) =>

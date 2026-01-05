@@ -12,6 +12,9 @@
 // X⊣⊙
 // X⊣⊢∙⊣
 
+//TODO Ray is
+(dynamically Node) + Ray
+
 class Boundary < Ray
   x: static = this
 

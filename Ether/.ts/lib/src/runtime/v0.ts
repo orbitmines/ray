@@ -63,6 +63,7 @@ class Expression extends Cursor<Token> {
 }
 
 import fs from 'fs'
+import path from "node:path";
 
 class Context {
   static file = (path: string) => new Context({ path, x: fs.readFileSync(path, "utf-8") });
@@ -76,19 +77,85 @@ class Context {
   x: Token[]
 }
 
-const files = (path: string) => {
-  let results: string[] = [];
+type ExternalMethod = (...args: Val[]) => Val | void
 
-  for (const entry of fs.readdirSync(path, { withFileTypes: true })) {
-    const next_path = path.concat('/', entry.name);
+const external = (key: Val) => {
+  return function (
+    target: any,
+    propertyKey: string,
+    descriptor: TypedPropertyDescriptor<ExternalMethod>
+  ) {
+    const method = descriptor.value!;
 
-    if (entry.isDirectory())
-      results = results.concat(files(next_path));
-    else
-      results.push(next_path);
+    const existing = target.constructor.prototype.constructor;
+
+    target.constructor.prototype.constructor = function (...args: any[]) {
+      existing.apply(this, args);
+
+      this.external(key ?? propertyKey, Var.func(method.bind(this)));
+    };
+  };
+}
+
+type Val = string | symbol | Var | ExternalMethod
+
+class Var {
+  value: Var
+  methods: Map<Var, Var>
+
+  static cast = (val: Val): Var => {
+    if (is_symbol(val)) val = val.toString()
+
+    if (is_string(val)) {
+      if (val.includes(" ")) val = Var.expr(val)
+      else val = Var.string(val)
+    } else if (is_function(val)) val = Var.func(val)
+
+    return val;
+  }
+  static string = (string: string): Var => {}
+  static map = (map: Map<Var, Var>): Var => {}
+  static expr = (expression: string): Var => {}
+  static func = (func: ExternalMethod): Var => {}
+
+  constructor(pointer: boolean = true) {
+    this.value = pointer ? new Var(false) : this
+
+    this.external("* | methods", () => Var.map(this.value.methods))
+
   }
 
-  return results;
+  @external("= | assign")
+  assign(x: Val) {
+    this.value = Var.cast(x)
+    // TODO Update location
+    // TODO Update version control if present
+
+    // TODO If assign is called on None, then set in .methods (Set .methods in location)
+  }
+
+  retrieve(property: Val) {
+    property = Var.cast(property)
+
+    for (let [key, value] of this.value.methods) {
+      if (property.self["=="].instance_of(key)) return value;
+    }
+
+    return Var.expr("None") //TODO Location of None
+  }
+
+  get self(): any { return new Proxy(class {}, {
+    // apply: (_: any, thisArg: any, argArray: any[]): any => this.expr('(', ...argArray, ')'),
+    set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
+      this.retrieve(property).assign(newValue)
+      return true
+    },
+    get: (_: any, property: string | symbol, receiver: any): any => this.retrieve(property)
+  }) }
+
+  external = (key: string | Var, value: string | Var | ExternalMethod) =>
+    this.value.methods.set(Var.cast(key), Var.cast(value))
+
 }
 
 class Instance {
@@ -97,6 +164,7 @@ class Instance {
   }
 
   dir = (path: string, args?: PartialArgs): this => {
+
     // this.eval({}, ...files(dir)
     //         .filter(file => file.endsWith('.ray'))
     //         .map(file => Context.file(file))
@@ -125,18 +193,35 @@ export namespace Ether {
     if ((args['@'] ?? []).length == 0) args['@'] = [default_path]
     if (args['@'].length !== 1) throw new Error('In order to run multiple instances, for now run them in separate terminals.')
 
-    const path = args['@'][0]
-    const stat = fs.statSync(path)
+    default_path = path.resolve(default_path)
+
+    const location = path.resolve(args['@'][0])
+    const stat = fs.statSync(location)
 
     delete args['@']
 
     if (stat.isFile())
-      return new Instance(args).dir(`${default_path}/.ray`).file(path).eval()
+      return new Instance(args).dir(`${default_path}/.ray`).file(location).eval()
     else if (stat.isDirectory())
-      return new Instance(args).dir(`${path}/.ray`).file(`${path}/Ether.ray`).eval()
+      return new Instance(args).dir(`${location}/.ray`).file(`${location}/Ether.ray`).eval()
     else
-      throw new Error('Unknown Ether instance directory or file.')
+      throw new Error(`"${location}": Unknown Ether instance directory or Ray file.`)
   }
+}
+
+const files = (path: string) => {
+  let results: string[] = [];
+
+  for (const entry of fs.readdirSync(path, { withFileTypes: true })) {
+    const next_path = path.concat('/', entry.name);
+
+    if (entry.isDirectory())
+      results = results.concat(files(next_path));
+    else
+      results.push(next_path);
+  }
+
+  return results;
 }
 
 /**
@@ -144,6 +229,7 @@ export namespace Ether {
  */
 export const is_boolean = (value: any): value is boolean =>
   value === true || value === false || (is_object_like(value) && base_tag(value) == '[object Boolean]');
+export const is_symbol = (value: any): value is Symbol => typeof value === "symbol" //TODO lodash says?
 export const is_string = (value: any): value is string =>
   typeof value == 'string' || (!is_array(value) && is_object_like(value) && base_tag(value) == '[object String]');
 export const is_function = (value: any): value is ((...args: any[]) => any) => {

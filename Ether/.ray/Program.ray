@@ -130,22 +130,6 @@ namespace goto
   if (predicate: Expression) => this<predicate: predicate>
 end
 
-class Expression < language.Expression
-  language: Language = ".ray.txt"
-
-  dynamically
-    protected fn = as Program
-    delegate (: fn.in.type) => fn
-
-  as (: Language): Expression => //TODO
-  as (:== Program) => //TODO
-end
-
-class Language
-  // The datastructure the language is encoded in.
-  static Expression
-end
-
 class Context //Subgraph of a function.context
 // Span implements Ray, because the whole current thing is selected as the Node. which .expands into the separate components.
 //span: a Ray{∙: expression} again, we want a subgraph of a larger graph.
@@ -153,6 +137,9 @@ class Context //Subgraph of a function.context
 // Similarly define column as to(.reverse{"\n"}.first).length
 // span.line:column
 // From line:column, how to recover the original span (automatic reverse)
+//TODO Or a field, which only applies to a certain subgraph of a larger graph say "ABCDEF", have .field different for "ABC" and for "DEF"
+"ABCDEF"[0..2]
+  field:
 
 //TODO Shaders are like parallel iterators; there's an unrollable loop in the Many iterator for threads.
 //      -> This existence of a forloop, means the program assumes Many definitions are in turn also programs. -> Of course
@@ -248,34 +235,55 @@ end
 // Language templating
 ⸨⸩{language: Language} (expression: language.Expression)
 
-namespace RayLanguage // This namespace will be used for: < Language
-  namespace Txt < Language
-    equivalence ".ray" => this
+class Expression < language.Expression
+  language: Language = ".ray"
 
-    static class Expression < String
-      //TODO Then how to define the assumptions of newline meaning => etc..
+  dynamically
+    protected fn = as Program
+    delegate (: fn.in.type) => fn
 
-      //TODO Expression comes from some file or more generally a context, have that information available here.
+  as (: Language): Expression => //TODO
+  as (== Program)
+end
 
-      external comment: String
+class Language
+  // The datastructure the language is encoded in.
+  static Expression
+end
 
-      , (b: Expression)
+Ray
+  namespace Language // This namespace will be used for: < Language
+    namespace Txt < Language
+      equivalence ".ray" => this
 
-      //TODO Space counts as --
-      // => higher precedence than --
-      // Allow space/newline (unless theres a newline between false and true?, depends on the indentation as well) ; Allow false, true .map(!)
-      -- (b: Expression)
-      //'-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
-      //'--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
-      //Allow multiline '--'
-      //Allow returning out of a -- statement.
+      static class Expression < String
+        //TODO Then how to define the assumptions of newline meaning => etc..
 
-      // Like '--', but applies some expression and returns the variable it was applied to.
-      ~~ (b: Expression)
+        //TODO Expression comes from some file or more generally a context, have that information available here.
 
-      {" "}: (type) => //TODO Wrap whole expression in : type
+        external comment: String
+
+        , (b: Expression)
+
+        //TODO Space counts as --
+        // => higher precedence than --
+        // Allow space/newline (unless theres a newline between false and true?, depends on the indentation as well) ; Allow false, true .map(!)
+        -- (b: Expression)
+        //'-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
+        //'--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
+        //Allow multiline '--'
+        //Allow returning out of a -- statement.
+
+        // Like '--', but applies some expression and returns the variable it was applied to.
+        ~~ (b: Expression)
+
+        {" "}: (type) => //TODO Wrap whole expression in : type
+
+        as (== Program)
+
+      end
+
     end
-
   end
 end
 

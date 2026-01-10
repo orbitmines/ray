@@ -43,11 +43,12 @@ class History
   //TODO The node which creates the uuid is a unique ID assigned to the user by the world
   who: repository.characters{name{issuer == repository} == id.node}
 
+  when => id.time
 
 class Branch < History & Program
   static Version | Commit = State < History
     //TODO Not a branch of into many, require merge to be the branchpoint we use.
-    branch => ⊢{name !=.instance_of UUID}.first ?? ⊢
+    branch => ⊢{name !=.instance_of UUID}.first ?? ⊢ //TODO Equip previous/.next branches
 
     tags = this.all.map({.name}: .)
     branches = ⊢this.all.map({.name}: .)

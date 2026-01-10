@@ -174,3 +174,5 @@ end
 end
 
 //TODO Infinity / ∞
+
+Byte = Binary{length == 8}

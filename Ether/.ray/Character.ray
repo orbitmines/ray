@@ -75,3 +75,7 @@ end
 class Avatar < Character
   // consistent is the field that referenced this, must reference back. with {?}, {avatar == this}
   character: consistent Character
+
+class Player
+
+class Organization < Player

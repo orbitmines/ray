@@ -1,3 +1,5 @@
+File = Byte[]
+
 confidential namespace IO
   // Get a file relative to the Ether instance directory
   //   - You're unable to leave by doing ".." on the top-level directory (only symlinks allow you to leave the default directory structure)

@@ -1,0 +1,37 @@
+//Generate from github/.. characters for the authors & organizations for @"github.com".@USERNAME, based on changes in the specific directory of that repo, like verse language
+// .s / .o for machine specific targets
+
+Language
+  namespace Agda < Language(".agda",
+    | namespace Literate < LaTeX & Language(".lagda" | ".lagda.tex")
+        namespace Markdown < Language.Markdown & Language(".lagda.md")
+        namespace reStructuredText | reST < Language.reStructuredText & Language(".lagda.rst")
+  ) ; location &= "https://github.com/agda/agda" & "https://en.wikipedia.org/wiki/Agda_(programming_language)"
+  namespace Chyp | "Cospans of HYPergraphs" < Language(".chyp") ; location &= @"https://github.com"/akissinger/chyp
+  namespace LaTeX //TODO
+  namespace LLVM < Language(
+    | namespace IR | AssemblyLanguage < Language(".ll") ; location &= "https://llvm.org/docs/LangRef.html"
+        namespace Bitcode < Language(".bc") ; location &= "https://llvm.org/docs/BitCodeFormat.html"
+    | namespace MIR | "Machine IR" < Language(".mir") ; location &= "https://llvm.org/docs/MIRLangRef.html"
+    | namespace MLIR | "Multi-Level IR" < Language(".mlir") ; location &= "https://mlir.llvm.org/" & "https://en.wikipedia.org/wiki/MLIR_(software)"
+        namespace PDLL < Language(".pdll") ; location &= "https://mlir.llvm.org/docs/PDLL/"
+    | namespace TableGen(".td") ; location &= "https://llvm.org/docs/TableGen/index.html"
+  ) ; location &= "https://github.com/llvm"
+  namespace Markdown //TODO
+  namespace reStructuredText //TODO
+  namespace Rocq | Coq < Language(
+    | namespace Language.Gallina < Language(".g")
+    | namespace Language.Vernacular < Language(".v")
+  ) ; location &= "https://github.com/rocq-prover/rocq" & "https://en.wikipedia.org/wiki/Rocq"
+  namespace Verse < Language(".verse") ; location &= "https://github.com/EpicGames/UnrealEngine/tree/release/Engine/Source/Runtime/VerseCompiler" & "https://en.wikipedia.org/wiki/Verse_(programming_language)" & "https://dev.epicgames.com/documentation/en-us/fortnite/verse-language-reference"
+  namespace UnrealScript | UScript < Language(".uc",
+    | namespace Include < Language(".uci")
+    | namespace Package < Language(".upkg")
+  ); location &= "https://docs.unrealengine.com/udk/Three/UnrealScriptHome.html" //Mirror with all the archived var
+
+Language
+  FileEncodings => static{Expression ==.instance_of File}
+
+  namespace Unicode
+    UTF-8: Language (i: File): String =>
+    UTF-16: Language (i: File): String =>

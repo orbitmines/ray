@@ -246,48 +246,49 @@ class Expression < language.Expression
   as (== Program)
 end
 
-class Language
+// A language, is interpreted liberally here. It is just a mapping from Expression => as (*).
+class Lang | Language ((extension: ".", String) (| | ,) children: Language)
+  name => static.name
+
+  dynamically equivalence extension | name.ignore_case => this
+
+  //TODO Different Expression functionality for each extension, for instance .uc .uci .upkg
+
   // The datastructure the language is encoded in.
   static Expression
+
 end
+//TODO Equivalence between Function with parameter = Expression, to Target; as (*)
+//TODO How to formally say; if there's sufficient interesting mapping between output, we consider it as a language. 1-1 mappings etc,, (or heavy reliance on the input or something)
 
-Ray
-  namespace Language // This namespace will be used for: < Language
-    namespace Txt < Language
-      equivalence ".ray" => this
+Language // This namespace will be used for: < Language
+  namespace Ray < Language(".ray")
 
-      static class Expression < String
-        //TODO Then how to define the assumptions of newline meaning => etc..
+    static class Expression < String
+      //TODO Then how to define the assumptions of newline meaning => etc..
 
-        //TODO Expression comes from some file or more generally a context, have that information available here.
+      //TODO Expression comes from some file or more generally a context, have that information available here.
 
-        external comment: String
+      external comment: String
 
-        , (b: Expression)
+      , (b: Expression)
 
-        //TODO Space counts as --
-        // => higher precedence than --
-        // Allow space/newline (unless theres a newline between false and true?, depends on the indentation as well) ; Allow false, true .map(!)
-        -- (b: Expression)
-        //'-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
-        //'--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
-        //Allow multiline '--'
-        //Allow returning out of a -- statement.
+      //TODO Space counts as --
+      // => higher precedence than --
+      // Allow space/newline (unless theres a newline between false and true?, depends on the indentation as well) ; Allow false, true .map(!)
+      -- (b: Expression)
+      //'-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
+      //'--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
+      //Allow multiline '--'
+      //Allow returning out of a -- statement.
 
-        // Like '--', but applies some expression and returns the variable it was applied to.
-        ~~ (b: Expression)
+      // Like '--', but applies some expression and returns the variable it was applied to.
+      ~~ (b: Expression)
 
-        {" "}: (type) => //TODO Wrap whole expression in : type
+      {" "}: (type) => //TODO Wrap whole expression in : type
 
-        as (== Program)
+      as (== Program)
 
-
-
-      end
-
-    end
-  end
-end
 
 Program
   ==

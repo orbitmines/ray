@@ -13,7 +13,7 @@ class
 
     (args: Args)
       (protected if name == "*") .static = static
-      protected this = local
+      protected this = local //TODO Allow this<World>
 
       def(local: this, ...args) //TODO Call-by-ref here would be the default, so that if a parameter is changed, the successive patches get that same variable.
       return this

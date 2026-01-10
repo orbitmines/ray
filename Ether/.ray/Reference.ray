@@ -1,0 +1,26 @@
+class Reference
+  title | name : String
+  subtitle: String
+
+  date: Date
+  author: Character //TODO When ref on any character ref is a dummy allow "claim this authorship, set the character node to that player if granted"
+
+  //TODO Published is who hosts this variable, originally designated to?
+
+  draft: boolean
+
+  link: Location //TODO Abstractly also contains information of 'pointer' like which page etc.
+
+  notes?: String{#.sorted_by(date)} & Reference
+    //TODO as Renderable
+
+Node
+  ref: Reference
+    name => this<Node>.name
+
+    date => %.when
+    author => (<-%).all.who
+
+    draft => %.branch.access < %.branch.previous.access
+
+    link => this<Node>.location //TODO Should switch to a remote ref when communciated over network

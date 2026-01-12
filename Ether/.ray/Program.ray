@@ -247,8 +247,19 @@ class Expression < language.Expression
 end
 
 // A language, is interpreted liberally here. It is just a mapping from Expression => as (*).
-class Lang | Language ((extension: ".", String) (| | ,) children: Language)
-  name => static.name
+// A collection of ideas, ; as a library; is also considered a language. (Like mathematics)
+class Library < Language
+class Lang | Language ((extension: ".", String
+  // History .expands into history of the github repository as example, any versions not exposed to this view, so hidden, are not regarded as legal version of the language, but those which are exposed do.
+
+  children: Language // defined in class hierarchy
+  name => static.name // Like Rocq/Coq the name changed
+
+  static Targeting (language: Language) => static{Expression{as (language): language.Expression}}
+
+  //TODO Should automatically implement Language.BackwardsCompatible, like Targeting does for targeting
+  backwards_compatible => (<-%).all.targeting(this)
+  forwards_compatible => (%->).all.targeting(this)
 
   dynamically equivalence extension | name.ignore_case => this
 
@@ -256,13 +267,19 @@ class Lang | Language ((extension: ".", String) (| | ,) children: Language)
 
   // The datastructure the language is encoded in.
   static Expression
+    as (== Program)
+    as (language: Language): language.Expression
 
 end
 //TODO Equivalence between Function with parameter = Expression, to Target; as (*)
 //TODO How to formally say; if there's sufficient interesting mapping between output, we consider it as a language. 1-1 mappings etc,, (or heavy reliance on the input or something)
 
+//TODO
+Program < Language
+
 Language // This namespace will be used for: < Language
   namespace Ray < Language(".ray")
+    Program: Language = global.Program
 
     static class Expression < String
       //TODO Then how to define the assumptions of newline meaning => etc..

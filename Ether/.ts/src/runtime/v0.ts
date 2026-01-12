@@ -99,7 +99,9 @@ const external = (key: SupportedValue) => {
 
 type SupportedValue = string | symbol | Var | ExternalMethod
 
+const self = Symbol("self");
 const evaluate = Symbol("evaluate");
+const partial_args = Symbol("partial_args");
 
 class Val {
 
@@ -119,6 +121,7 @@ class Var {
     return val;
   }
   static string = (string: string): Var => {}
+  static path = (path: string): Var => {}
   static map = (map: Map<Var, Var>): Var => {}
   static expr = (expression: string): Var => {}
   static func = (func: ExternalMethod): Var => {}
@@ -146,6 +149,7 @@ class Var {
     //TODO Flag == & instance_of methods
   }
 
+  //TODO Store if not yet loaded global
   retrieve(property: SupportedValue) {
     property = Var.cast(property)
 
@@ -159,14 +163,24 @@ class Var {
   get self(): any { return new Proxy(class {}, {
     // apply: (_: any, thisArg: any, argArray: any[]): any => this.expr('(', ...argArray, ')'),
     set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
+      if (property == partial_args) return this.self[`<${Object.entries(newValue).map(([key, value]) => `${key} = ${(value as any).join(" & ")}`).join("\n")}>`]()
       this.retrieve(property).assign(newValue)
       return true
     },
     get: (_: any, property: string | symbol, receiver: any): any => {
+      if (property == self) return this
       if (property == evaluate) return this[evaluate]()
       return this.retrieve(property).self
     }
   }) }
+
+  do = (call: (x: any) => void) => {
+    call(this.self) //TODO Set value?
+    return this;
+  }
+  call = (call: (x: any) => any) => {
+    return call(this.self)[self]
+  }
 
   external = (key: string | Var, value: string | Var | ExternalMethod) =>
     this.value.methods.set(Var.cast(key), Var.cast(value))
@@ -175,19 +189,28 @@ class Var {
 
 class Instance {
 
+  program: Var = new Var().call(x => x[":"]("Program"))
+  get global() { return this.program.self["∙"] }
+
   constructor(public args?: PartialArgs) {
   }
 
-  dir = (path: string, args?: PartialArgs): this => {
+  private expr = (path: string, expr: string) => new Var().do(x => {
+    x.location["&="](this.global["IO"](Var.path(path)))
+    x.expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
+  })
 
-    // this.eval({}, ...files(dir)
-    //         .filter(file => file.endsWith('.ray'))
-    //         .map(file => Context.file(file))
-    //       )
+  dir = (path: string, args?: PartialArgs): this => {
+    files(path)
+      .filter(path => path.endsWith('.ray'))
+      .map(path => this.expr(path, fs.readFileSync(path, "utf-8")))
+      .reduce((acc: Var | undefined, x) => acc ? acc.self["push_back"](x) : x)
+      .self.all.collapse[partial_args] = args
+
     return this;
   }
   file = (path: string, args?: PartialArgs): this => {
-    Context.file(path)
+    this.expr(path, fs.readFileSync(path, "utf-8")).self[partial_args] = args
     return this;
   }
 

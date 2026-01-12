@@ -77,9 +77,9 @@ class Context {
   x: Token[]
 }
 
-type ExternalMethod = (...args: Val[]) => Val | void
+type ExternalMethod = (...args: SupportedValue[]) => SupportedValue | void
 
-const external = (key: Val) => {
+const external = (key: SupportedValue) => {
   return function (
     target: any,
     propertyKey: string,
@@ -97,15 +97,18 @@ const external = (key: Val) => {
   };
 }
 
-type Val = string | symbol | Var | ExternalMethod
+type SupportedValue = string | symbol | Var | ExternalMethod
 
 const evaluate = Symbol("evaluate");
 
-class Var {
-  value: Var
-  methods: Map<Var, Var>
+class Val {
 
-  static cast = (val: Val): Var => {
+  methods: Map<Var, Var> = new Map();
+}
+class Var {
+  value: Val = new Val()
+
+  static cast = (val: SupportedValue): Var => {
     if (is_symbol(val)) val = val.toString()
 
     if (is_string(val)) {
@@ -120,16 +123,15 @@ class Var {
   static expr = (expression: string): Var => {}
   static func = (func: ExternalMethod): Var => {}
 
-  constructor(pointer: boolean = true) {
-    this.value = pointer ? new Var(false) : this
+  constructor() {
 
     this.external("* | methods", () => Var.map(this.value.methods))
 
   }
 
   @external("= | assign")
-  assign(x: Val) {
-    this.value = Var.cast(x)
+  assign(x: SupportedValue) {
+    this.value = Var.cast(x).value
     // TODO Update location
     // TODO Update version control if present
 
@@ -140,11 +142,11 @@ class Var {
 
   }
 
-  instance_of = (type: Val): boolean => {
+  instance_of = (type: SupportedValue): boolean => {
     //TODO Flag == & instance_of methods
   }
 
-  retrieve(property: Val) {
+  retrieve(property: SupportedValue) {
     property = Var.cast(property)
 
     for (let [key, value] of this.value.methods) {

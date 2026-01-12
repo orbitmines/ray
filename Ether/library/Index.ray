@@ -1,33 +1,117 @@
 //Generate from github/.. characters for the authors & organizations for @"github.com".@USERNAME, based on changes in the specific directory of that repo, like verse language
 // .s / .o for machine specific targets
 
+// Define with (Need like some separate syntax for this Many to Many:
+// Multiple Implementations (Library of Source Language) ; What about implementations which require multiple programming languages
+| TypeScript & C =>
+// Multiple Targets (Library of Target Language) ??
+
+// Language is the source, since it defines as Program
+// Different implementations are branches in the history (possibly disconnected)
+// How to flag implementation language: that is what is used in as Program
+// Targets are which as (: Language) are defined
+
+// Define things like I've implemented my language for all these
+namespace Ray
+  | TypeScript =>
+    | namespace wasm3
+    | namespace wasm4
+  | JavaScript =>
+  =>
+  |
+  |
+// Each implementation is a separate branch? Can be disconnected branches; (in the case of different language implementations)
+
+    %.fork
+      location &= "https://github.com/metamath/metamath-exe"
+    = %.fork
+      location &= "https://github.com/metamath/metamath-knife"
+
+(Implementation <-)? . (-> Target)? // + (location information) for each implementation
+
+  namespace Agda < Language(".agda")
+    &= | Agda
+       | Metamath
+       <- . ->
+       | C++
+       | JavaScript
+// Multiple Versions (github repo tags?; different repos vs archived files)
+// Multiple Child Languages
+// Multiple Libraries (Language; Extensions)
+// Library might be a (partial) implementation of some Language (set.mm for SetTheory & Logic) ; How to flag this partialness
+// Expression is part of the version control.
+
+< SetTheory,// starts a branch in SetTheory to that version Like Agda.Literate for LaTeX
+// If no conflict, set Language.NAME from any NAME
+
+// Expression as Program might also have results for as C++ as Program, so we need a way to distinguish which path is taken in the equivalences.
+
 Language
-  namespace Agda < Language(".agda",
-    | namespace Literate < LaTeX & Language(".lagda" | ".lagda.tex")
-        namespace Markdown < Language.Markdown & Language(".lagda.md")
-        namespace reStructuredText | reST < Language.reStructuredText & Language(".lagda.rst")
-  ) ; location &= "https://github.com/agda/agda" & "https://en.wikipedia.org/wiki/Agda_(programming_language)"
+  namespace Agda < Language(".agda") ; location &= "https://github.com/agda/agda" & "https://en.wikipedia.org/wiki/Agda_(programming_language)"
+    namespace Literate < LaTeX & Language(".lagda" | ".lagda.tex")
+      namespace Markdown < Language.Markdown & Language(".lagda.md")
+      namespace reStructuredText | reST < Language.reStructuredText & Language(".lagda.rst")
+  namespace BNF | BackusNaurForm | "Backus-Naur Form" ; location &= "https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form"
+    //All the different extensions EBNF/ABNF and specialized ones (for wasm for example) as branches in the version control of BNF.
+    namespace EBNF | "Extended Backus-Naur form" ; location &= "https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form"
+    namespace ABNF | "Augmented Backus–Naur form" ; location &= "https://en.wikipedia.org/wiki/Augmented_Backus%E2%80%93Naur_form"
+
   namespace Chyp | "Cospans of HYPergraphs" < Language(".chyp") ; location &= @"https://github.com"/akissinger/chyp
   namespace LaTeX //TODO
-  namespace LLVM < Language(
-    | namespace IR | AssemblyLanguage < Language(".ll") ; location &= "https://llvm.org/docs/LangRef.html"
-        namespace Bitcode < Language(".bc") ; location &= "https://llvm.org/docs/BitCodeFormat.html"
-    | namespace MIR | "Machine IR" < Language(".mir") ; location &= "https://llvm.org/docs/MIRLangRef.html"
-    | namespace MLIR | "Multi-Level IR" < Language(".mlir") ; location &= "https://mlir.llvm.org/" & "https://en.wikipedia.org/wiki/MLIR_(software)"
-        namespace PDLL < Language(".pdll") ; location &= "https://mlir.llvm.org/docs/PDLL/"
-    | namespace TableGen(".td") ; location &= "https://llvm.org/docs/TableGen/index.html"
-  ) ; location &= "https://github.com/llvm"
+  namespace Lean < Language(".lean") ; location &= "https://github.com/leanprover/lean4"
+  namespace LLVM < Language() ; location &= "https://github.com/llvm"
+    namespace IR | AssemblyLanguage < Language(".ll") ; location &= "https://llvm.org/docs/LangRef.html"
+      namespace Bitcode < Language(".bc") ; location &= "https://llvm.org/docs/BitCodeFormat.html"
+    namespace MIR | "Machine IR" < Language(".mir") ; location &= "https://llvm.org/docs/MIRLangRef.html"
+    namespace MLIR | "Multi-Level IR" < Language(".mlir") ; location &= "https://mlir.llvm.org/" & "https://en.wikipedia.org/wiki/MLIR_(software)"
+      namespace PDLL < Language(".pdll") ; location &= "https://mlir.llvm.org/docs/PDLL/"
+    namespace TableGen < Language(".td") ; location &= "https://llvm.org/docs/TableGen/index.html"
   namespace Markdown //TODO
+  namespace Mathematics < Language
+    namespace CategoryTheory < Language ; location &= "https://en.wikipedia.org/wiki/Category_theory" & "https://ncatlab.org/nlab/show/category+theory"
+    namespace SetTheory < Language ; location &= "https://en.wikipedia.org/wiki/Set_theory"
+    namespace TypeTheory < Language ; location &= "https://en.wikipedia.org/wiki/Type_theory"
+      namespace Dependent < TypeTheory //TODO
+      namespace Univalent < Dependent ; location &= "https://ncatlab.org/nlab/show/univalent+type+theory" & "https://en.wikipedia.org/wiki/Univalent_foundations"
+  namespace Metamath < Language(".mm") ; location &= "https://github.com/metamath/metamath-exe" & "https://github.com/metamath/metamath-knife"
+  namespace Mizar < Language(".miz") ; location &= "https://mizar.uwb.edu.pl/" & "https://en.wikipedia.org/wiki/Mizar_system"
+    namespace Abstract < Language(".abs")
+
+    namespace Constructors < Language(".dco")
+    namespace Declaration < Language(".dcl")
+    namespace Definition < Language(".def")
+    namespace Dictionary < Language(".dct")
+    namespace Formula < Language(".dfr")
+    namespace Message < Language(".msg")
+    namespace Notation < Language(".dno")
+    namespace Scheme < Language(".sch")
+    namespace Theorems < Language(".the")
+    namespace Vocabulary < Language(".voc")
+      namespace Table < Language(".vct")
+
+  namespace OCaml < Language(".ml") ; location &= "https://github.com/ocaml/ocaml" & "https://en.wikipedia.org/wiki/OCaml"
+    namespace Interface < Language (".mli")
+  namespace Physics < Library
   namespace reStructuredText //TODO
-  namespace Rocq | Coq < Language(
-    | namespace Language.Gallina < Language(".g")
-    | namespace Language.Vernacular < Language(".v")
-  ) ; location &= "https://github.com/rocq-prover/rocq" & "https://en.wikipedia.org/wiki/Rocq"
+  namespace Rocq | Coq < Language() ; location &= "https://github.com/rocq-prover/rocq" & "https://en.wikipedia.org/wiki/Rocq"
+    namespace Gallina < Language(".g")
+    namespace Vernacular < Language(".v")
   namespace Verse < Language(".verse") ; location &= "https://github.com/EpicGames/UnrealEngine/tree/release/Engine/Source/Runtime/VerseCompiler" & "https://en.wikipedia.org/wiki/Verse_(programming_language)" & "https://dev.epicgames.com/documentation/en-us/fortnite/verse-language-reference"
-  namespace UnrealScript | UScript < Language(".uc",
-    | namespace Include < Language(".uci")
-    | namespace Package < Language(".upkg")
-  ); location &= "https://docs.unrealengine.com/udk/Three/UnrealScriptHome.html" //Mirror with all the archived var
+  namespace UnrealScript | UScript < Language(".uc"); location &= "https://docs.unrealengine.com/udk/Three/UnrealScriptHome.html" //Mirror with all the archived var
+    namespace Include < Language(".uci")
+    namespace Package < Language(".upkg")
+  namespace WebAssembly | Wasm < Language(".wasm") ; location &= "https://webassembly.org/" & "https://en.wikipedia.org/wiki/WebAssembly"
+    namespace SpecTec < Language(".spectec") ; location &= "https://github.com/Wasm-DSL/spectec/tree/main"
+    namespace Text < Language(".wat")
+    // Interpreters: https://github.com/wasm3/wasm3, wasm4
+
+Language
+  Mathematics | Physics
+    namespace nLab < Library ; location &= "https://ncatlab.org/"
+  namespace "set.mm" < Library, SetTheory
+  namespace UniMath < Library, TypeTheory.Univalent ; location &= this<Agda> ? ("https://github.com/UniMath/agda-unimath" : "https://github.com/UniMath/UniMath")
+    //Agda | Rocq versions
+    //Different history depending on Whether It's Agda vs Rocq
 
 Language
   FileEncodings => static{Expression ==.instance_of File}
@@ -35,3 +119,6 @@ Language
   namespace Unicode
     UTF-8: Language (i: File): String =>
     UTF-16: Language (i: File): String =>
+
+Language
+  //TODO If a Library is implemented in a target language, set it like Metamath["set.mm"]

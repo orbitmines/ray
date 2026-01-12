@@ -46,9 +46,14 @@ class History
   when => id.time
 
 class Branch < History & Program
+  //TODO Like Ray, Its Node & Version if there's overlap then we probably to x/value
   static Version | Commit = State < History
     //TODO Not a branch of into many, require merge to be the branchpoint we use.
     branch => ⊢{name !=.instance_of UUID}.first ?? ⊢ //TODO Equip previous/.next branches
+
+    fork =>
+
+    blank => //TODO Create new branch off beginning, add node in front if necessary with on the edge a connection to the two branches before there's a first version
 
     tags = this.all.map({.name}: .)
     branches = ⊢this.all.map({.name}: .)

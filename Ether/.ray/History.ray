@@ -35,11 +35,12 @@
 Node
   % | history = Commit(this)
 
+Version = UUID.v1
 
 class History
   repository: World //TODO World needs to reserve Hexadecimal{length == 12} => store in MACAddress
 
-  name: (id: a UUID.v1)
+  name: (id: a Version)
   //TODO The node which creates the uuid is a unique ID assigned to the user by the world
   who: repository.characters{name{issuer == repository} == id.node}
 
@@ -47,9 +48,13 @@ class History
 
 class Branch < History & Program
   //TODO Like Ray, Its Node & Version if there's overlap then we probably to x/value
-  static Version | Commit = State < History
+  static Commit = State < History
+    Version => this.all.name
+
     //TODO Not a branch of into many, require merge to be the branchpoint we use.
     branch => ⊢{name !=.instance_of UUID}.first ?? ⊢ //TODO Equip previous/.next branches
+
+    {: Version} => // get version
 
     fork =>
 
@@ -58,7 +63,7 @@ class Branch < History & Program
     tags = this.all.map({.name}: .)
     branches = ⊢this.all.map({.name}: .)
 
-{ Version, Commit } = Branch
+{ Commit } = Branch
 
   + //Add other history to this one, whether to reshuffle changes?
 

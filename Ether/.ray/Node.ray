@@ -1,3 +1,6 @@
+global = local
+external parent? <- global
+
 // static parts of the constructor are filtered out using the same rewriting strategies used for compiler optimizations.
 
 //TODO Local context doesnt override this/static how?, It's still a node.
@@ -29,7 +32,7 @@ class
 end
 
 class * | Node
-  external local //TODO How to say infer
+  external local: this
 
   //TODO Generalize: Pattern left is matched to pattern right: first, ..middle, last; first, middle: [], last, [first ..after]
   //{
@@ -52,6 +55,7 @@ class * | Node
   //TODO Exclude vs include things like local and other defined properties on Node,
   external * | methods : { {key: *}: value: Program? }
   external ** | program : Program
+  // Force the lazy program stored in **, to evaluate.
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
 
   // TODO Places in code where this variable gets referenced and updated.

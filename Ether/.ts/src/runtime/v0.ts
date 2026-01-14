@@ -3,6 +3,13 @@
 
 // The v0 runtime is a specification runtime, without any optimizations.
 
+// Version control of different globals; need different contexts
+// What happens when conflicting versions are used, check backwards/forwards compatibility
+//   If conflict -> optimistically assume reinterpretation of each Lazy Program: Variable for each separate context.
+// Different evaluation groups; if something else introduces new syntax, I dont want it to effect other groups; only those which import it
+//
+
+
 
 import PartialArgs = Ether.PartialArgs;
 
@@ -65,25 +72,13 @@ class Expression extends Cursor<Token> {
 import fs from 'fs'
 import path from "node:path";
 
-class Context {
-  static file = (path: string) => new Context({ path, x: fs.readFileSync(path, "utf-8") });
-
-  constructor(object: any = {}) {
-    Object.keys(object).forEach(key => (this as any)[key] = object[key]);
-  }
-
-  path: string
-  get name() { let path = this.path.split('/'); return path[path.length - 1].replaceAll(/\.ray$/g, "") }
-  x: Token[]
-}
-
 type ExternalMethod = (...args: SupportedValue[]) => SupportedValue | void
 
-const external = (key: SupportedValue) => {
+const external = <T extends ExternalMethod>(key?: SupportedValue) => {
   return function (
     target: any,
     propertyKey: string,
-    descriptor: TypedPropertyDescriptor<ExternalMethod>
+    descriptor: TypedPropertyDescriptor<T>
   ) {
     const method = descriptor.value!;
 
@@ -104,7 +99,6 @@ const evaluate = Symbol("evaluate");
 const partial_args = Symbol("partial_args");
 
 class Val {
-
   methods: Map<Var, Var> = new Map();
 }
 class Var {
@@ -131,6 +125,9 @@ class Var {
     this.external("* | methods", () => Var.map(this.value.methods))
 
   }
+
+  @external()
+  local() { return this; }
 
   @external("= | assign")
   assign(x: SupportedValue) {
@@ -163,13 +160,13 @@ class Var {
   get self(): any { return new Proxy(class {}, {
     // apply: (_: any, thisArg: any, argArray: any[]): any => this.expr('(', ...argArray, ')'),
     set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
-      if (property == partial_args) return this.self[`<${Object.entries(newValue).map(([key, value]) => `${key} = ${(value as any).join(" & ")}`).join("\n")}>`]()
       this.retrieve(property).assign(newValue)
       return true
     },
     get: (_: any, property: string | symbol, receiver: any): any => {
       if (property == self) return this
       if (property == evaluate) return this[evaluate]()
+      if (property == partial_args) return (args: PartialArgs) => this.self[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]()
       return this.retrieve(property).self
     }
   }) }
@@ -187,6 +184,51 @@ class Var {
 
 }
 
+const latest = Symbol("latest");
+namespace Language {
+  export class Ray extends Var {
+    constructor(private instance: Instance, public ether: string) {
+      super();
+    }
+
+    //@external
+    assign(version: SupportedValue) {
+      super.assign(this.instance.load(version))
+      //TODO Update objects, defined in child contexts.
+    }
+
+    @external()
+    location() { return Var.expr("IO").self(Var.path(this.ether)) }
+  }
+}
+class Program extends Var {
+  constructor() {
+    super();
+    this.self[":"](Var.expr("Program"))
+  }
+}
+class Instance extends Var {
+  constructor(public ether: string) {
+    super();
+  }
+
+  versions: Map<Var, Language.Ray> = new Map()
+
+  load = (version: SupportedValue = "latest"): Language.Ray => {
+    if (version != "latest") throw new Error("Versioning of Language not yet supported")
+
+    let ray: Language.Ray;
+
+    this.versions.set(Var.cast(version), ray)
+    return ray;
+  }
+
+  eval = (args: PartialArgs, ) => {
+    this.load(args["global"][0] ?? "latest")
+  }
+
+}
+
 class Instance {
 
   program: Var = new Var().call(x => x[":"]("Program"))
@@ -200,21 +242,28 @@ class Instance {
     x.expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
   })
 
+  group = () => {
+
+  }
+
   dir = (path: string, args?: PartialArgs): this => {
-    files(path)
-      .filter(path => path.endsWith('.ray'))
-      .map(path => this.expr(path, fs.readFileSync(path, "utf-8")))
-      .reduce((acc: Var | undefined, x) => acc ? acc.self["push_back"](x) : x)
-      .self.all.collapse[partial_args] = args
+    this.program.call(x => x.push_back(
+      files(path)
+        .filter(path => path.endsWith('.ray'))
+        .map(path => this.expr(path, fs.readFileSync(path, "utf-8")))
+        .reduce((acc: Var | undefined, x) => acc ? acc.self["push_back"](x) : x)
+        .self.all.collapse[partial_args](args)
+    ))
 
     return this;
   }
   file = (path: string, args?: PartialArgs): this => {
-    this.expr(path, fs.readFileSync(path, "utf-8")).self[partial_args] = args
+    this.expr(path, fs.readFileSync(path, "utf-8")).self[partial_args](args)
     return this;
   }
 
   eval = () => {
+    const program = this.program.self[partial_args](this.args)[self]
 
     // PartialArg types need to match
 

@@ -167,6 +167,8 @@ func
 class Time < Quantity.Temporal (calendar: Calendar = UTC) =>
 //TODO Allow out-of-order things like <, which are inside the () => {}
 
+// Allow &{method: *}: //TODO Infer (with all special chars)
+
 // Allow multiple changes which make it adhere to the type, as long as nothing is accessed in between
 //Allow type def conditionally like this
  variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}

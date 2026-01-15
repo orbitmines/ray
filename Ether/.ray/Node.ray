@@ -1,5 +1,3 @@
-global = local
-external parent? <- global
 
 // static parts of the constructor are filtered out using the same rewriting strategies used for compiler optimizations.
 
@@ -32,8 +30,6 @@ class
 end
 
 class * | Node
-  external local: this
-
   //TODO Generalize: Pattern left is matched to pattern right: first, ..middle, last; first, middle: [], last, [first ..after]
   //{
   //  field: WithAdditionalType,

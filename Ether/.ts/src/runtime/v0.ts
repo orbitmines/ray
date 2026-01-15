@@ -1,14 +1,10 @@
-//TODO = removes anything from the previous value from the object (so we need to know the origin of the things that set the vars)
-//TODO Keys are encoded on Edges on the Ray node definition.
-
 // The v0 runtime is a specification runtime, without any optimizations.
 
-// Version control of different globals; need different contexts
 // What happens when conflicting versions are used, check backwards/forwards compatibility
 //   If conflict -> optimistically assume reinterpretation of each Lazy Program: Variable for each separate context.
 // Different evaluation groups; if something else introduces new syntax, I dont want it to effect other groups; only those which import it
 //
-
+// Function variable from context. So create a new context for each function and assign '&'.
 
 
 import PartialArgs = Ether.PartialArgs;
@@ -72,8 +68,9 @@ class Expression extends Cursor<Token> {
 import fs from 'fs'
 import path from "node:path";
 
-type ExternalMethod = (...args: SupportedValue[]) => SupportedValue | void
+type ExternalMethod = (...args: [SupportedValue, ctx: Context]) => SupportedValue | void
 
+// Work with properties.
 const external = <T extends ExternalMethod>(key?: SupportedValue) => {
   return function (
     target: any,
@@ -87,7 +84,7 @@ const external = <T extends ExternalMethod>(key?: SupportedValue) => {
     target.constructor.prototype.constructor = function (...args: any[]) {
       existing.apply(this, args);
 
-      this.external(key ?? propertyKey, Var.func(method.bind(this)));
+      this.external_method(key ?? propertyKey, Var.func(method.bind(this)));
     };
   };
 }
@@ -98,11 +95,12 @@ const self = Symbol("self");
 const evaluate = Symbol("evaluate");
 const partial_args = Symbol("partial_args");
 
-class Val {
-  methods: Map<Var, Var> = new Map();
+type Val = {
+  //TODO Dynamically allocate conditional methods
+  get methods(): Map<Var, Var>
 }
 class Var {
-  value: Val = new Val()
+  value: Val = { methods: new Map<Var, Var>() }
 
   static cast = (val: SupportedValue): Var => {
     if (is_symbol(val)) val = val.toString()
@@ -120,14 +118,8 @@ class Var {
   static expr = (expression: string): Var => {}
   static func = (func: ExternalMethod): Var => {}
 
-  constructor() {
-
-    this.external("* | methods", () => Var.map(this.value.methods))
-
-  }
-
-  @external()
-  local() { return this; }
+  @external("* | methods")
+  methods() { return Var.map(this.value.methods) }
 
   @external("= | assign")
   assign(x: SupportedValue) {
@@ -141,6 +133,8 @@ class Var {
   [evaluate] = (): boolean => {
 
   }
+
+  string = (): string => {}
 
   instance_of = (type: SupportedValue): boolean => {
     //TODO Flag == & instance_of methods
@@ -179,14 +173,23 @@ class Var {
     return call(this.self)[self]
   }
 
-  external = (key: string | Var, value: string | Var | ExternalMethod) =>
+  private external_method = (key: string | Var, value: string | Var | ExternalMethod) =>
     this.value.methods.set(Var.cast(key), Var.cast(value))
 
 }
 
 const latest = Symbol("latest");
+class Context extends Var {
+  //TODO Location of context
+
+  @external()
+  local() { return this; }
+
+  has_method = (x: SupportedValue): boolean => {}
+
+}
 namespace Language {
-  export class Ray extends Var {
+  export class Ray extends Context {
     constructor(private instance: Instance, public ether: string) {
       super();
     }
@@ -198,7 +201,16 @@ namespace Language {
     }
 
     @external()
+    external(x: SupportedValue, ctx: Context) {
+      // TODO Get caller and check from there if it has
+      if (!ctx.has_method(x)) throw new Error(`Expected externally defined method '${Var.cast(x).string()}' in ${ctx.retrieve('name').string()}`)
+
+      return ctx.retrieve(x)
+    }
+
+    @external()
     location() { return Var.expr("IO").self(Var.path(this.ether)) }
+
   }
 }
 class Program extends Var {

@@ -169,6 +169,10 @@ class Iterable<T>
   as (:== T) => T() = this.reduce(&) //TODO if T is class. Or should this use &?
 end
 
+class Hierarchy < Ray
+  parent | previous : static? <- hierarchy -> children | next : static?
+
+
 //TODO constructors
    0 -> +1
    -1 <- 0 -> +1

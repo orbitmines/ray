@@ -146,10 +146,10 @@ class Context //Subgraph of a function.context
 
 //TODO Shaders are like parallel iterators; there's an unrollable loop in the Many iterator for threads.
 //      -> This existence of a forloop, means the program assumes Many definitions are in turn also programs. -> Of course
-class Function | Program < Boundary, Location, expression: Expression
-  //TODO How to select .next to be only for Boundary. Because expression has been given separate name?
-  //TODO .hierarchy in function is, parent contexts, child contexts.
+class Function | Program < Boundary, Hierarchy /* If the  */, expression: Expression
+   // Hierarchy is actually somehow a 2nd level of collapse/expand, but in reverse; It's hidden from it, and from their perspective they dont collapse to this function, but continue as as the function. Like a mutual
 
+  //TODO How to select .next to be only for Boundary. Because expression has been given separate name?
   //TODO Use expression to .expand function.
 
   //TODO Is intermediate state the whole context? Or what do we do with sequence of operations on some variable? How to intuitively make that sequence only about that variable? and things it depends on
@@ -235,7 +235,7 @@ class Function | Program < Boundary, Location, expression: Expression
 
   {: UUID} => //TODO Load the version and remove the current function graph
 
-  as (== String) =>
+  as (== Expression) =>
     //TODO Store program with any state etc.. which would be used to pause certain quests/functions. For instance save/pausing a game.
     //TODO Use the program's expression if no state has changed. -> super()
 end

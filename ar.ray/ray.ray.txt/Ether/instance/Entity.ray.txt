@@ -62,6 +62,7 @@ end
 
 class Location = Ray
 
+  //TODO This is another type, what is a hierarchical Location called?
   // A location can be part of a hierarchy.
   // - In the case of an instance, this could be 'parent': host machine, 'children': child instances run by localhost. (or can be defined as some other network hierarchy)
   // - In the case of files, this could be parent and child directories.

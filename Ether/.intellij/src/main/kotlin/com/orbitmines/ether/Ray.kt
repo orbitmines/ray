@@ -331,7 +331,7 @@ class SyntaxHighlighter : com.intellij.openapi.fileTypes.SyntaxHighlighter {
       // BUILTIN
       Rule(
         tokenType = Types.BUILTIN,
-        pattern = Regex("""\b(?:goto|branch|if|elsif|else|return|assume|boolean|Number|String)\b""")
+        pattern = Regex("""\b(?:goto|branch|if|elsif|else|return|not|in|assume|boolean|Number|String)\b""")
       ),
 
       // BOOLEAN

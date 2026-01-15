@@ -1,3 +1,5 @@
+global = local
+
 // Compiler
 // When using '1 Object', you still allow the compiler to use many objects there for abstract interpretation, it's just that for type checking you expect there to be just one.
 // Chaining operators like ==.instance_of / <
@@ -87,16 +89,17 @@ end
 left-associative
 right-associative //TODO
 
+// Switch the global context to a different version of the language.
+//TODO What about existing objects, check versions of all classes, and patch if possible
+external = (version: 1 Language.Ray%.Version)
+external location
+
 //TODO Certain things like the global <> prefer over calling the locally defined one, how to flag?
 //TODO The obvious successors to this would be after, or in between each recursive function call (x levels deep). Benchmarking would use that. (Done by just implementing a function which does that and call that instead, finally and X)
 // Execute expression on each successive function call in its context. So if called within (), it only works within that context.
 external <{expression: Expression}>: void
 // Label the current cursor within a program with a name.
 external {label: *}\: Program //TODO Push to program.name
-// Get the currently running function
-external &: Program
-// Get a contextual variable defined on the currently running function.
-external &{method: *}: //TODO Infer
 
 /{path: *}: Program OR (x): //TODO INFER
   //TODO Program which is callable with single parameter (recursively ensure path is available on x)
@@ -173,6 +176,17 @@ class Function | Program < Boundary, Location, expression: Expression
       result: out
     }
   end
+  //TODO If context is checked for access permission, it's the program that's checked instead. and its &who
+  //TODO Is Context just the Program State? Need to think that through
+  class Context
+    external local: this
+
+    // Get the currently running function
+    none.write external &: Program
+
+    dynamically if &parent
+      delegate {: not in this} => &parent.[GET THAT FUNCTIONS STATE/CONTEXT]
+
 
   external (args: in.type): return_type
 
@@ -281,11 +295,6 @@ Program < Language
 
 Language // This namespace will be used for: < Language
   namespace Ray < global & Language(".ray")
-
-// Switch the global context to a different version of the language.
-//TODO What about existing objects, check versions of all classes, and patch if possible
-external = (version: 1 Language.Ray%.Version)
-external location
 
 %
   //TODO Shadow each language implementation history, so we dont need to have access to the top-level language version

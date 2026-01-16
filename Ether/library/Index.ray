@@ -65,6 +65,7 @@ Language
   namespace AQASM | "Atos Quantum Assembly Language" < Language(".aqasm") ; location &= "https://github.com/NEASQC" & "https://www.neasqc.eu/tools/"
   namespace Anglican < Language(".clj") ; location &= "https://github.com/probprog/anglican"
   namespace ApacheTVM | "Apache TVM" < Tool ; location &= "https://github.com/apache/tvm" & "https://tvm.apache.org/"
+  namespace Apparatus < Tool ; location &= "https://github.com/cdglabs/apparatus"
   namespace ArchSAT < Language(".smt2") ; location &= "https://github.com/Gbury/archsat"
   namespace Arend < Language(".ard") ; location &= "https://github.com/JetBrains/Arend" & "https://arend-lang.github.io/"
   namespace AtelierB | "Atelier B" < Tool ; location &= "https://www.atelierb.eu/en/"
@@ -78,6 +79,8 @@ Language
   namespace Bitwuzla < Language(".smt2" | ".btor2") ; location &= "https://github.com/bitwuzla/bitwuzla" & "https://bitwuzla.github.io/"
   namespace Blang < Language(".bl") ; location &= "https://github.com/UBC-Stat-ML/blangExample" & "https://www.stat.ubc.ca/~bouchard/blang/"
   namespace BLOG < Language(".blog") ; location &= "https://github.com/BayesianLogic/blog"
+  namespace Blender < Tool ; location &= "https://www.blender.org/" & "https://en.wikipedia.org/wiki/Blender_(software)"
+    namespace Blend < Language(".blend")
   namespace BNF | BackusNaurForm | "Backus-Naur Form" ; location &= "https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form"
     //All the different extensions EBNF/ABNF and specialized ones (for wasm for example) as branches in the version control of BNF.
     namespace EBNF | "Extended Backus-Naur form" ; location &= "https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form"
@@ -128,6 +131,7 @@ Language
     namespace Compiled < Language(".elc")
   namespace Epigram < Language() ; location &= "https://en.wikipedia.org/wiki/Epigram_(programming_language)" & "http://www.e-pig.org/"
   namespace Erlang < Language(".erl") ; location &= "https://github.com/erlang/otp" & "https://www.erlang.org/" & "https://en.wikipedia.org/wiki/Erlang_(programming_language)"
+  namespace Enso < Language(".enso") ; location &= "https://github.com/enso-org/enso"
   namespace EventB | "Event-B" < Language(".buc" | ".bum") ; location &= "https://www.event-b.org/" & "https://wiki.event-b.org/"
   namespace FACTORIE < Language(".scala") ; location &= "https://github.com/factorie/factorie"
   namespace Figaro < Language(".scala") ; location &= "https://github.com/charles-river-analytics/figaro"
@@ -138,6 +142,10 @@ Language
     namespace Interface < Language(".fsti")
   namespace Gamble < Language(".rkt") ; location &= "https://github.com/rmculpepper/gamble"
   namespace Gen | "Gen.jl" < Language(".jl") ; location &= "https://github.com/probcomp/Gen.jl" & "https://www.gen.dev/"
+  namespace gephi < Tool ; location &= "https://github.com/gephi/gephi" & "https://gephi.org/"
+    namespace GEXF < Language(".gexf")
+    namespace GML < Language(".gml")
+    namespace GraphML < Language(".graphml")
   namespace Globular < Tool ; location &= "https://github.com/jamievicary/globular"
   namespace GLSL | "OpenGL Shading Language" < Language(".glsl") ; location &= "https://github.com/KhronosGroup/GLSL" & "https://en.wikipedia.org/wiki/OpenGL_Shading_Language"
     namespace VertexShader < Language(".vert")
@@ -157,6 +165,9 @@ Language
     namespace Attributes < Language(".gitattributes")
     namespace Modules < Language(".gitmodules")
   namespace GraalVM < Tool ; location &= "https://github.com/oracle/graal" & "https://en.wikipedia.org/wiki/GraalVM" & "https://www.graalvm.org/"
+  namespace Grasshopper < Tool ; location &= "https://en.wikipedia.org/wiki/Grasshopper_3D"
+    namespace Binary < Language(".gh")
+    namespace XML < Language(".ghx")
   namespace greta < Language(".r") ; location &= "https://github.com/greta-dev/greta"
   namespace GROOVE < Tool ; location &= "https://groove.sourceforge.net/groove-index.html"
   namespace Guru < Language() ; location &= "https://dl.acm.org/doi/10.1145/1481848.1481856"
@@ -214,6 +225,7 @@ Language
     namespace TableGen < Language(".td") ; location &= "https://llvm.org/docs/TableGen/index.html"
   namespace Low-level_First-order_PPL < Language(".py") ; location &= "https://github.com/bayesianbrad/PyLFPPL"
   namespace Lua < Language(".lua") ; location &= "https://github.com/lua/lua" & "https://www.lua.org/" & "https://en.wikipedia.org/wiki/Lua_(programming_language)"
+  namespace MarkovJunior < Language(".xml") ; location &= "https://github.com/mxgmn/MarkovJunior"
   namespace Markdown //TODO
   namespace Mathematics < Language
     namespace CategoryTheory < Language ; location &= "https://en.wikipedia.org/wiki/Category_theory" & "https://ncatlab.org/nlab/show/category+theory"
@@ -271,6 +283,7 @@ Language
   namespace NuPRL < Language() ; location &= "https://nuprl-web.cs.cornell.edu/" & "https://en.wikipedia.org/wiki/Nuprl"
   namespace NumPyro < Language(".py") ; location &= "https://github.com/pyro-ppl/numpyro"
   namespace Nix < Language(".nix") ; location &= "https://github.com/NixOS/nix" & "https://en.wikipedia.org/wiki/NixOS" & "https://nixos.org/"
+  namespace n8n < Tool ; location &= "https://github.com/n8n-io/n8n"
   namespace NodeJS | "Node.js" < Tool ; location &= "https://github.com/nodejs/node" & "https://en.wikipedia.org/wiki/Node.js" & "https://nodejs.org/"
   namespace OCaml < Language(".ml") ; location &= "https://github.com/ocaml/ocaml" & "https://en.wikipedia.org/wiki/OCaml"
     namespace Interface < Language (".mli")
@@ -290,6 +303,9 @@ Language
   namespace PMTK < Language(".m") ; location &= "https://github.com/probml/pmtk3"
   namespace POG | "Proof Obligation Generator" < Tool ; location &= "http://sens.cse.msu.edu/Software/B-Toolkit/BKIT/BHELP/POGenerator.html"
   namespace pomegranate < Language(".py") ; location &= "https://github.com/jmschrei/pomegranate"
+  namespace Processing < Language(".pde") ; location &= "https://github.com/processing" & "https://processing.org/"
+  namespace Practal < Tool ; location &= "https://github.com/practal" & "https://practal.com/"
+    namespace PractalFile < Language(".practal")
   namespace PRISM < Language(".psm") ; location &= "https://github.com/prismplp/prism" & "https://rjida.meijo-u.ac.jp/prism/"
   namespace Probabilistic-C < Language(".c") ; location &= "http://proceedings.mlr.press/v32/paige14.pdf"
   namespace ProBT < Language(".cpp") ; location &= "https://emotion.inrialpes.fr/BP/spip.php?article39"
@@ -313,6 +329,7 @@ Language
   namespace Quantomatic < Language(".qgraph") ; location &= "https://github.com/zxcalc/quantomatic"
   namespace Quipper < Language(".hs") ; location &= "https://github.com/thephoeron/quipper-language" & "https://www.mathstat.dal.ca/~selinger/quipper/"
   namespace QuiZX < Language() ; location &= "https://github.com/zxcalc/quizx"
+  namespace quiver < Tool ; location &= "https://github.com/varkor/quiver" & "https://q.uiver.app/"
   namespace Rainier < Language(".scala") ; location &= "https://github.com/stripe/rainier"
   namespace RankPL < Language(".rpl") ; location &= "https://github.com/tjitze/RankPL"
   namespace redtt < Language(".red") ; location &= "https://github.com/RedPRL/redtt"
@@ -347,6 +364,10 @@ Language
   namespace TPTP | "Thousands of Problems for Theorem Provers" < Language(".p") ; location &= "https://github.com/TPTPWorld" & "https://www.tptp.org/"
     namespace Axioms < Language(".ax")
   namespace TPS | "Theorem Proving System" < Language(".tps") ; location &= "https://github.com/theoremprover-museum/TPS"
+  namespace tikzit < Tool ; location &= "https://github.com/tikzit"
+    namespace TikZ < Language(".tikz")
+  namespace TiltBrush | "Tilt Brush" < Tool ; location &= "https://github.com/googlevr/tilt-brush" & "https://www.tiltbrush.com/" & "https://en.wikipedia.org/wiki/Tilt_Brush"
+    namespace TiltFile < Language(".tilt")
   namespace TKET | pytket < Language(".json") ; location &= "https://github.com/CQCL/tket" & "https://en.wikipedia.org/wiki/Quantinuum"
     namespace QASM < Language(".qasm")
   namespace Treesitter | "Tree-sitter" < Language("grammar.js") ; location &= "https://github.com/tree-sitter/tree-sitter" & "https://tree-sitter.github.io/" & "https://en.wikipedia.org/wiki/Tree-sitter_(parser_generator)"
@@ -357,9 +378,12 @@ Language
   namespace UnrealScript | UScript < Language(".uc"); location &= "https://docs.unrealengine.com/udk/Three/UnrealScriptHome.html" //Mirror with all the archived var
     namespace Include < Language(".uci")
     namespace Package < Language(".upkg")
+  namespace Unit < Tool ; location &= "https://github.com/samuelmtimbo/unit"
+    namespace UnitFile < Language(".unit")
   namespace VauCalculus | "Vau Calculus" < Language() ; location &= "https://github.com/breckinloggins/vau"
   namespace Venture < Language(".vnts") ; location &= "https://github.com/probcomp/Venturecxx"
   namespace Verdict < Tool ; location &= "https://github.com/secure-foundations/verdict" & "https://ge-high-assurance.github.io/VERDICT/"
+  namespace veloren < Tool ; location &= "https://github.com/veloren/veloren" & "https://veloren.net/"
   namespace veriT < Language(".smt2") ; location &= "https://verit.loria.fr/"
   namespace Verse < Language(".verse") ; location &= "https://github.com/EpicGames/UnrealEngine/tree/release/Engine/Source/Runtime/VerseCompiler" & "https://en.wikipedia.org/wiki/Verse_(programming_language)" & "https://dev.epicgames.com/documentation/en-us/fortnite/verse-language-reference"
   namespace VHDL | "VHSIC Hardware Description Language" < Language(".vhd") ; location &= "https://en.wikipedia.org/wiki/VHDL"
@@ -377,6 +401,9 @@ Language
   namespace WebPPL < Language(".wppl") ; location &= "https://github.com/probmods/webppl" & "http://webppl.org/"
   namespace WebXR < Tool ; location &= "https://github.com/immersive-web/webxr" & "https://en.wikipedia.org/wiki/WebXR" & "https://immersiveweb.dev/"
   namespace wgpu < Library ; location &= "https://github.com/gfx-rs/wgpu"
+  namespace Wireworld < Tool ; location &= "https://en.wikipedia.org/wiki/Wireworld"
+    namespace MCell < Language(".mcl")
+  namespace WizardEngine | "Wizard Engine" < Tool ; location &= "https://github.com/titzer/wizard-engine/"
   namespace WGSL | "WebGPU Shading Language" < Language(".wgsl") ; location &= "https://www.w3.org/TR/WGSL/" & "https://en.wikipedia.org/wiki/WebGPU_Shading_Language"
   namespace Why3 < Language(".why" | ".sexp") ; location &= "https://www.why3.org/"
   namespace WolframLanguage | Mathematica < Language(".wl") ; location &= "https://github.com/WolframResearch" & "https://en.wikipedia.org/wiki/Wolfram_Language"
@@ -396,8 +423,28 @@ Language
 
 // Libraries
 Language
+  namespace BabylonJS < Library ; location &= "https://github.com/BabylonJS"
+  namespace DGtal < Library ; location &= "https://github.com/DGtal-team/DGtal" & "https://www.dgtal.org/"
+  namespace manim < Library ; location &= "https://github.com/3b1b/manim"
+    namespace Community < Library ; location &= "https://github.com/ManimCommunity/manim"
+  namespace Mesa3D | "Mesa 3D" < Library ; location &= "https://gitlab.freedesktop.org/mesa" & "https://mesa3d.org/" & "https://en.wikipedia.org/wiki/Mesa_(computer_graphics)"
+  namespace nannou < Library ; location &= "https://github.com/nannou-org/nannou" & "https://nannou.cc/"
+  namespace OpenSubdiv | "Pixar OpenSubdiv" < Library ; location &= "https://github.com/PixarAnimationStudios/OpenSubdiv" & "https://graphics.pixar.com/opensubdiv/"
+  namespace OpenUSD | "Pixar OpenUSD" < Library ; location &= "https://github.com/PixarAnimationStudios/OpenUSD" & "https://openusd.org/" & "https://en.wikipedia.org/wiki/Universal_Scene_Description"
+    namespace USD < Language(".usd")
+    namespace USDA < Language(".usda")
+    namespace USDC < Language(".usdc")
+    namespace USDZ < Language(".usdz")
+  namespace openrndr < Library ; location &= "https://github.com/openrndr" & "https://openrndr.org/"
+  namespace pflow | "pflow.dev" < Library ; location &= "https://github.com/pFlow-dev" & "https://pflow.dev/"
+    namespace PetriFlow < Language(".pflow")
+  namespace Playcanvas < Library ; location &= "https://github.com/playcanvas/engine" & "https://playcanvas.com/" & "https://en.wikipedia.org/wiki/PlayCanvas"
   namespace React < Library ; location &= "https://github.com/facebook/react" & "https://en.wikipedia.org/wiki/React_(JavaScript_library)"
     namespace ReactNative | "React Native" < Library ; location &= "https://github.com/facebook/react-native" & "https://en.wikipedia.org/wiki/React_Native"
+  namespace Semagrams.jl < Library ; location &= "https://github.com/AlgebraicJulia/Semagrams.jl" & "https://algebraicjulia.github.io/Semagrams.jl/"
+  namespace StereoKit < Library ; location &= "https://github.com/StereoKit/StereoKit" & "https://stereokit.net/"
+  namespace threejs | "three.js" < Library ; location &= "https://github.com/mrdoob/three.js" & "https://threejs.org/"
+  namespace WaveFunctionCollapse < Library ; location &= "https://github.com/mxgmn/WaveFunctionCollapse"
   Mathematics | Physics
     namespace FormalAbstracts | FAbstracts < Library ; location &= "https://github.com/formalabstracts/formalabstracts" & "https://formalabstracts.github.io/"
     namespace ForMathProject | "ForMath Project" < Library ; location &= "https://cordis.europa.eu/project/id/243847"

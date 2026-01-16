@@ -46,6 +46,7 @@ namespace Ray
 
 // Expression as Program might also have results for as C++ as Program, so we need a way to distinguish which path is taken in the equivalences.
 
+// Languages
 Language
   namespace Agda < Language(".agda") ; location &= "https://github.com/agda/agda" & "https://en.wikipedia.org/wiki/Agda_(programming_language)"
     namespace Literate < LaTeX & Language(".lagda" | ".lagda.tex")
@@ -105,6 +106,7 @@ Language
     namespace Text < Language(".wat")
     // Interpreters: https://github.com/wasm3/wasm3, wasm4
 
+// Libraries
 Language
   Mathematics | Physics
     namespace nLab < Library ; location &= "https://ncatlab.org/"
@@ -113,6 +115,7 @@ Language
     //Agda | Rocq versions
     //Different history depending on Whether It's Agda vs Rocq
 
+// File Encodings
 Language
   FileEncodings => static{Expression ==.instance_of File}
 

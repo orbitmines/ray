@@ -92,15 +92,17 @@ const external = <T extends ExternalMethod>(key?: SupportedValue) => {
 type SupportedValue = string | symbol | Var | ExternalMethod
 
 const o = Symbol("self");
+const get = Symbol("get");
 const partial_args = Symbol("partial_args");
 
 type Val = {
-  mirror?: any
+  none?: boolean
   //TODO Dynamically allocate conditional methods
   get methods(): Map<Var, Var>
 }
 class Var {
   value: Val = { methods: new Map<Var, Var>() }
+  dependants: Var[] //TODO dynamically. or implement in the language: override = of all mentioned vars dependencies.
 
   static cast = (val: SupportedValue): Var => {
     if (is_symbol(val)) val = val.toString()
@@ -135,9 +137,16 @@ class Var {
 
   none = (): boolean => {}
 
-  digit = (): number => {}
+  digit = (): number => {
+    let i = 0
 
-  boolean = (): boolean => this.real['as'](Var.expr('boolean'))[0].next[o].none()
+    let current: Var = this
+    while(!(current = current.real.previous[o]).none()) { i += 1 }
+
+    return i;
+  }
+
+  boolean = (): boolean => this.real['as'](Var.expr('boolean'))[0][o].digit() == 1
   string = (): string => {
     if (this.real['=='].instance_of(Var.expr('String'))[o].boolean()) throw new Error('Variable is not of type String.')
 
@@ -158,6 +167,7 @@ class Var {
     },
     get: (_: any, property: string | symbol, receiver: any): any => {
       if (property == o) return this
+      if (property == get) return (arg: SupportedValue) =>
       if (property == partial_args) return (args: PartialArgs) => this.lazy[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]()
 
       //
@@ -171,6 +181,7 @@ class Var {
     },
     get: (_: any, property: string | symbol, receiver: any): any => {
       if (property == o) return this
+      if (property == get) return (arg: SupportedValue) =>
       if (property == partial_args) return (args: PartialArgs) => this.real[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]()
 
       //TODO Store if not yet loaded global
@@ -216,11 +227,11 @@ namespace Language {
       // TODO Get caller and check from there if it has
       if (!ctx.has_method(x)) throw new Error(`Expected externally defined method '${Var.cast(x).string()}' in ${ctx.retrieve('name').string()}`)
 
-      return ctx.retrieve(x)
+      return ctx.lazy[get](x)
     }
 
     @external()
-    location() { return Var.expr("IO").self(Var.path(this.ether)) }
+    location() { return Var.expr("IO").lazy(Var.path(this.ether)) }
 
   }
 }
@@ -260,10 +271,14 @@ class Instance {
   constructor(public args?: PartialArgs) {
   }
 
-  private expr = (path: string, expr: string) => new Var().do(x => {
-    x.location["&="](this.global["IO"](Var.path(path)))
-    x.expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
-  })
+  private expr = (path: string, expr: string) => {
+    const x = new Var()
+
+    x.lazy.location["&="](Var.expr("IO").lazy(Var.path(path)))
+    x.lazy.expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
+
+    return x;
+  }
 
   group = () => {
 

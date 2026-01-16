@@ -64,6 +64,7 @@ Language
   namespace Andromeda < Language() ; location &= "https://github.com/Andromedans/andromeda"
   namespace AQASM | "Atos Quantum Assembly Language" < Language(".aqasm") ; location &= "https://github.com/NEASQC" & "https://www.neasqc.eu/tools/"
   namespace Anglican < Language(".clj") ; location &= "https://github.com/probprog/anglican"
+  namespace ApacheTVM | "Apache TVM" < Tool ; location &= "https://github.com/apache/tvm" & "https://tvm.apache.org/"
   namespace ArchSAT < Language(".smt2") ; location &= "https://github.com/Gbury/archsat"
   namespace Arend < Language(".ard") ; location &= "https://github.com/JetBrains/Arend" & "https://arend-lang.github.io/"
   namespace AtelierB | "Atelier B" < Tool ; location &= "https://www.atelierb.eu/en/"
@@ -84,8 +85,15 @@ Language
   namespace Boolector < Language(".smt2" | ".btor") ; location &= "https://github.com/Boolector/boolector" & "https://boolector.github.io/"
   namespace BPog | "B-pog" < Tool ; location &= "http://sens.cse.msu.edu/Software/B-Toolkit/BKIT/BHELP/POGenerator.html"
   namespace BUGS < Language(".bug") ; location &= "https://github.com/TuringLang/JuliaBUGS.jl" & "https://www.mrc-bsu.cam.ac.uk/software/bugs-project" & "https://en.wikipedia.org/wiki/OpenBUGS"
+  namespace Bun < Tool ; location &= "https://github.com/oven-sh/bun" & "https://bun.sh/"
   namespace BWare < Tool ; location &= "http://bware.lri.fr/"
+  namespace C < Language(".c") ; location &= "https://en.wikipedia.org/wiki/C_(programming_language)"
+    namespace Header < Language(".h")
+  namespace CPlusPlus | "C++" < Language(".cpp") ; location &= "https://en.wikipedia.org/wiki/C++"
+    namespace AlternativeSource < Language(".cc" | ".cxx")
+    namespace Header < Language(".h" | ".hpp" | ".hxx")
   namespace CaDiCaL < Language(".cnf") ; location &= "https://github.com/arminbiere/cadical"
+  namespace Carbon < Language(".carbon") ; location &= "https://github.com/carbon-language/carbon-lang" & "https://en.wikipedia.org/wiki/Carbon_(programming_language)"
   namespace Categorica < Language() ; location &= "https://github.com/JonathanGorard/Categorica"
   namespace CertoraProver | "Certora Prover" < Language(".spec") ; location &= "https://github.com/Certora/CertoraProver" & "https://www.certora.com/"
   namespace chimple < Language(".java") ; location &= "https://github.com/analog-garage/chimple"
@@ -97,6 +105,7 @@ Language
   namespace CoqinE < Tool ; location &= "https://github.com/mboes/coqine"
     namespace ClojureScript < Language(".cljs" | ".cljc")
   namespace cubicaltt < Language(".ctt") ; location &= "https://github.com/mortberg/cubicaltt"
+  namespace CSS | "Cascading Style Sheets" < Language(".css") ; location &= "https://github.com/topics/css" & "https://en.wikipedia.org/wiki/CSS"
   namespace CUDA < Language(".cu") ; location &= "https://github.com/NVIDIA/cuda-samples" & "https://developer.nvidia.com/cuda-toolkit"
   namespace CuPPL < Language(".cuppl") ; location &= "https://arxiv.org/abs/2010.08454"
   namespace CVC5 | CVC < Language(".smt2") ; location &= "https://github.com/cvc5/cvc5"
@@ -108,11 +117,15 @@ Language
   namespace dimple < Language(".java") ; location &= "https://github.com/analog-garage/dimple"
   namespace DisCoPy < Language(".py") ; location &= "https://github.com/discopy/discopy" & "https://discopy.org/" & "https://en.wikipedia.org/wiki/DisCoPy"
   namespace Docker < Language("Dockerfile" | ".dockerignore" | "docker-compose.yml") ; location &= "https://github.com/docker" & "https://www.docker.com/"
+  namespace DreamBerd < Language(".db") ; location &= "https://github.com/TodePond/DreamBerd"
   namespace Dyna < Language(".dyna") ; location &= "https://timvieira.github.io/doc/2017-mapl-dyna.pdf"
   namespace E | "E Theorem Prover" < Language(".p" | ".lop") ; location &= "https://github.com/eprover/eprover" & "https://www.eprover.org/"
   namespace Edward < Language(".py") ; location &= "https://github.com/blei-lab/edward" & "https://edwardlib.org/"
     namespace Edward2 < Language(".py") ; location &= "https://github.com/google/edward2"
   namespace Elm < Language(".elm") ; location &= "https://github.com/elm" & "https://www.elm-lang.org/"
+  namespace Emacs < Tool ; location &= "https://github.com/emacs-mirror/emacs" & "https://en.wikipedia.org/wiki/Emacs" & "https://www.gnu.org/software/emacs/"
+    namespace EmacsLisp < Language(".el")
+    namespace Compiled < Language(".elc")
   namespace Epigram < Language() ; location &= "https://en.wikipedia.org/wiki/Epigram_(programming_language)" & "http://www.e-pig.org/"
   namespace Erlang < Language(".erl") ; location &= "https://github.com/erlang/otp" & "https://www.erlang.org/" & "https://en.wikipedia.org/wiki/Erlang_(programming_language)"
   namespace EventB | "Event-B" < Language(".buc" | ".bum") ; location &= "https://www.event-b.org/" & "https://wiki.event-b.org/"
@@ -126,11 +139,24 @@ Language
   namespace Gamble < Language(".rkt") ; location &= "https://github.com/rmculpepper/gamble"
   namespace Gen | "Gen.jl" < Language(".jl") ; location &= "https://github.com/probcomp/Gen.jl" & "https://www.gen.dev/"
   namespace Globular < Tool ; location &= "https://github.com/jamievicary/globular"
+  namespace GLSL | "OpenGL Shading Language" < Language(".glsl") ; location &= "https://github.com/KhronosGroup/GLSL" & "https://en.wikipedia.org/wiki/OpenGL_Shading_Language"
+    namespace VertexShader < Language(".vert")
+    namespace TessellationControlShader < Language(".tesc")
+    namespace TessellationEvaluationShader < Language(".tese")
+    namespace GeometryShader < Language(".geom")
+    namespace FragmentShader < Language(".frag")
+    namespace ComputeShader < Language(".comp")
+  namespace Go < Language(".go") ; location &= "https://github.com/golang/go" & "https://go.dev/" & "https://en.wikipedia.org/wiki/Go_(programming_language)"
   namespace GP < Language(".gp") ; location &= "https://github.com/UoYCS-plasma/GP2"
   namespace GP2 < Language(".gp2") ; location &= "https://github.com/UoYCS-plasma/GP2"
   namespace GRAPE < Tool ; location &= "https://github.com/jenshweber/grape"
   namespace GRaPEPRess | "GrapePress" < Tool ; location &= "https://link.springer.com/chapter/10.1007/978-3-030-78946-6_16"
   namespace GReAT < Language(".great") ; location &= "https://archive.isis.vanderbilt.edu/tools/GReAT"
+  namespace Git < Tool ; location &= "https://github.com/git/git" & "https://en.wikipedia.org/wiki/Git" & "https://git-scm.com/"
+    namespace Ignore < Language(".gitignore")
+    namespace Attributes < Language(".gitattributes")
+    namespace Modules < Language(".gitmodules")
+  namespace GraalVM < Tool ; location &= "https://github.com/oracle/graal" & "https://en.wikipedia.org/wiki/GraalVM" & "https://www.graalvm.org/"
   namespace greta < Language(".r") ; location &= "https://github.com/greta-dev/greta"
   namespace GROOVE < Tool ; location &= "https://groove.sourceforge.net/groove-index.html"
   namespace Guru < Language() ; location &= "https://dl.acm.org/doi/10.1145/1481848.1481856"
@@ -147,6 +173,10 @@ Language
     namespace ProofPower < Language()
   namespace holyHammer | HolyHammer < Tool ; location &= "http://cl-informatik.uibk.ac.at/software/hh/" & "https://hol-theorem-prover.org/kananaskis-14-helpdocs/help/Docfiles/HTML/holyHammer.hh.html"
   namespace HVM | "Higher Order Virtual Machine" < Language(".hvm") ; location &= "https://github.com/HigherOrderCO/HVM"
+  namespace HLSL | "High-Level Shading Language" < Language(".hlsl") ; location &= "https://github.com/microsoft/DirectXShaderCompiler" & "https://microsoft.github.io/hlsl-specs/"
+    namespace Effect < Language(".fx")
+  namespace HTML | "HyperText Markup Language" < Language(".html") ; location &= "https://en.wikipedia.org/wiki/HTML"
+    namespace HTM < Language(".htm")
   namespace IBAL < Language(".ibal") ; location &= "https://www.researchgate.net/publication/2366378_IBAL_A_Probabilistic_Rational_Programming_Language"
   namespace iCNF < Language(".icnf") ; location &= "http://www.siert.nl/icnf/"
   namespace Idris < Language(".idr") ; location &= "https://github.com/idris-lang/Idris2" & "https://www.idris-lang.org/"
@@ -161,6 +191,7 @@ Language
   namespace iProver < Language(".p") ; location &= "https://gitlab.com/korovin/iprover"
   namespace Isabelle < Language(".thy") ; location &= "https://github.com/isabelle-prover" & "https://isabelle.in.tum.de/" & "https://en.wikipedia.org/wiki/Isabelle_(proof_assistant)"
   namespace Janus < Language() ; location &= "https://en.wikipedia.org/wiki/Janus_(time-reversible_computing_programming_language)"
+  namespace JSONLD | "JSON-LD" < Language(".json") ; location &= "https://github.com/json-ld" & "https://en.wikipedia.org/wiki/JSON-LD" & "https://json-ld.org/"
   namespace Jape < Tool ; location &= "https://github.com/RBornat/jape" & "https://en.wikipedia.org/wiki/Jape_(software)"
   namespace Julia < Language(".jl") ; location &= "https://github.com/JuliaLang/julia" & "https://julialang.org/" & "https://en.wikipedia.org/wiki/Julia_(programming_language)"
   namespace Kind < Language(".kind") ; location &= "https://github.com/HigherOrderCO/Kind"
@@ -217,6 +248,9 @@ Language
   namespace MonoidalComputer | "Monoidal Computer" < Language() ; location &= "https://arxiv.org/abs/1208.5205" & "https://www.sciencedirect.com/science/article/pii/S0890540113000254"
   namespace MQT | "Munich Quantum Toolkit" < Language(".qasm") ; location &= "https://github.com/cda-tum/mqt"
     namespace QPY < Language(".qpy")
+  namespace MSL | "Metal Shading Language" < Language(".metal") ; location &= "https://developer.apple.com/metal/"
+    namespace CompiledLibrary < Language(".metallib")
+    namespace IntermediateRepresentation < Language(".air")
   namespace MultiVerse < Language(".py") ; location &= "https://github.com/babylonhealth/multiverse"
     namespace Abstract < Language(".abs")
 
@@ -236,6 +270,8 @@ Language
   namespace NQTHM | "Boyer-Moore Theorem Prover" < Language(".events") ; location &= "https://github.com/John-Nagle/nqthm" & "https://en.wikipedia.org/wiki/Nqthm"
   namespace NuPRL < Language() ; location &= "https://nuprl-web.cs.cornell.edu/" & "https://en.wikipedia.org/wiki/Nuprl"
   namespace NumPyro < Language(".py") ; location &= "https://github.com/pyro-ppl/numpyro"
+  namespace Nix < Language(".nix") ; location &= "https://github.com/NixOS/nix" & "https://en.wikipedia.org/wiki/NixOS" & "https://nixos.org/"
+  namespace NodeJS | "Node.js" < Tool ; location &= "https://github.com/nodejs/node" & "https://en.wikipedia.org/wiki/Node.js" & "https://nodejs.org/"
   namespace OCaml < Language(".ml") ; location &= "https://github.com/ocaml/ocaml" & "https://en.wikipedia.org/wiki/OCaml"
     namespace Interface < Language (".mli")
   namespace OMDoc < Language(".omdoc") ; location &= "https://github.com/OMDoc/OMDoc" & "https://www.omdoc.org/" & "https://en.wikipedia.org/wiki/OMDoc"
@@ -286,6 +322,8 @@ Language
     namespace Gallina < Language(".g")
     namespace Vernacular < Language(".v")
   namespace Rodin < Tool ; location &= "https://sourceforge.net/projects/rodin-b-sharp/" & "https://www.event-b.org/" & "https://en.wikipedia.org/wiki/Rodin_tool"
+  namespace Rust < Language(".rs") ; location &= "https://github.com/rust-lang/rust" & "https://rust-lang.org/" & "https://en.wikipedia.org/wiki/Rust_(programming_language)"
+    namespace CompiledLibrary < Language(".rlib")
   namespace Rzk < Language(".rzk") ; location &= "https://github.com/rzk-lang/rzk"
     namespace Literate < Language.Markdown & Language(".rzk.md")
     namespace Literate < Language.Markdown & Language(".rzk.md")
@@ -294,6 +332,7 @@ Language
   namespace Saturn < Language(".lean") ; location &= "https://github.com/siddhartha-gadgil/Saturn"
   namespace Saul < Language(".scala") ; location &= "https://github.com/CogComp/saul"
   namespace Schurr1999 | "Schurr 1999" < Library ; location &= "https://link.springer.com/chapter/10.1007/978-3-540-68679-8_5"
+  namespace SL < Language(".sll") ; location &= "https://github.com/sl-lang/sll"
   namespace seL4 | sel4 < Language(".c") ; location &= "https://github.com/seL4/seL4" & "https://sel4.systems/" & "https://en.wikipedia.org/wiki/L4_microkernel_family"
   namespace SMTComp | "SMT-COMP" < Tool ; location &= "https://smt-comp.github.io/"
   namespace SMTLIB | "SMT-LIB" < Language(".smt2") ; location &= "https://smt-lib.org/" & "https://en.wikipedia.org/wiki/Satisfiability_modulo_theories"
@@ -323,12 +362,21 @@ Language
   namespace Verdict < Tool ; location &= "https://github.com/secure-foundations/verdict" & "https://ge-high-assurance.github.io/VERDICT/"
   namespace veriT < Language(".smt2") ; location &= "https://verit.loria.fr/"
   namespace Verse < Language(".verse") ; location &= "https://github.com/EpicGames/UnrealEngine/tree/release/Engine/Source/Runtime/VerseCompiler" & "https://en.wikipedia.org/wiki/Verse_(programming_language)" & "https://dev.epicgames.com/documentation/en-us/fortnite/verse-language-reference"
+  namespace VHDL | "VHSIC Hardware Description Language" < Language(".vhd") ; location &= "https://en.wikipedia.org/wiki/VHDL"
+    namespace AlternativeExtension < Language(".vhdl")
+  namespace Virgil < Language(".v3") ; location &= "https://github.com/titzer/virgil"
+  namespace Vulkan < Tool ; location &= "https://github.com/KhronosGroup/Vulkan-Docs" & "https://en.wikipedia.org/wiki/Vulkan" & "https://www.vulkan.org/"
+    namespace SPIRV < Language(".spv")
   namespace WebAssembly | Wasm < Language(".wasm") ; location &= "https://webassembly.org/" & "https://en.wikipedia.org/wiki/WebAssembly"
     namespace SpecTec < Language(".spectec") ; location &= "https://github.com/Wasm-DSL/spectec/tree/main"
     namespace Text < Language(".wat")
     // Interpreters: https://github.com/wasm3/wasm3, wasm4
   namespace Waldmeister < Language() ; location &= "https://www.waldmeister.org/"
+  namespace WebGL < Tool ; location &= "https://github.com/KhronosGroup/WebGL" & "https://en.wikipedia.org/wiki/WebGL" & "https://www.khronos.org/webgl/"
+  namespace WebGPU < Tool ; location &= "https://github.com/gpuweb/gpuweb" & "https://en.wikipedia.org/wiki/WebGPU" & "https://www.w3.org/TR/webgpu/"
   namespace WebPPL < Language(".wppl") ; location &= "https://github.com/probmods/webppl" & "http://webppl.org/"
+  namespace WebXR < Tool ; location &= "https://github.com/immersive-web/webxr" & "https://en.wikipedia.org/wiki/WebXR" & "https://immersiveweb.dev/"
+  namespace wgpu < Library ; location &= "https://github.com/gfx-rs/wgpu"
   namespace WGSL | "WebGPU Shading Language" < Language(".wgsl") ; location &= "https://www.w3.org/TR/WGSL/" & "https://en.wikipedia.org/wiki/WebGPU_Shading_Language"
   namespace Why3 < Language(".why" | ".sexp") ; location &= "https://www.why3.org/"
   namespace WolframLanguage | Mathematica < Language(".wl") ; location &= "https://github.com/WolframResearch" & "https://en.wikipedia.org/wiki/Wolfram_Language"
@@ -348,6 +396,8 @@ Language
 
 // Libraries
 Language
+  namespace React < Library ; location &= "https://github.com/facebook/react" & "https://en.wikipedia.org/wiki/React_(JavaScript_library)"
+    namespace ReactNative | "React Native" < Library ; location &= "https://github.com/facebook/react-native" & "https://en.wikipedia.org/wiki/React_Native"
   Mathematics | Physics
     namespace FormalAbstracts | FAbstracts < Library ; location &= "https://github.com/formalabstracts/formalabstracts" & "https://formalabstracts.github.io/"
     namespace ForMathProject | "ForMath Project" < Library ; location &= "https://cordis.europa.eu/project/id/243847"

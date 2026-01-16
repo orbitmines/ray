@@ -1,0 +1,43 @@
+Proof = Program where A & B are written to the other side
+
+Equivalence between method on this bound to (this, ...)
+
+%% History in this scope
+
+// equational reasoning
+Proof = Program{(A, B) => (
+  return true if A%%.all (== | ===).(*?) B%%.all
+  return false
+  (x = A | B) = *(x)
+ ).loop.map(?).join(*)}
+
+
+assume x % 2 == 0
+assume x % 2 == 1 (superpose; 0 | 1)
+assume func(x) == 0
+
+Impoemented as changing func in scope = setting it in current context, or adding something like
+x
+  assumptions &= (% (== 2) => 0)
+
+x.assumptions = None // Should also clear func(x) in scope
+
+class Proof<proposition: Quest> < Program{(*): boolean => (
+  assumptions: (assume ?) // What about assumptions made outside the function
+)}
+//What about subproofs, any other quest matching this proof
+
+
+x: Proof<A == B> =
+x: Proof<
+  x: Binary
+  x.length == 2
+>
+
+Proof<*#.every length == 2>
+Proof<∀*.length == 2>
+Proof<∀x.length == 2>
+Proof<x.length == Infinity> = () => x.next ==. instance_of xs: *{.next == xs}
+
+
+

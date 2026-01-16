@@ -7,35 +7,35 @@ namespace Network
   DEFAULT_PORT: Port = 37839
 
   class IP < Location = -1 <- . -> +1
-    static NUMBER_OF_SEGMENTS: Decimal.Positive
-    static SEGMENT_LENGTH: Decimal.Positive
+    static NUMBER_OF_SEGMENTS: Decimal
+    static SEGMENT_LENGTH: Decimal
     static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
 
-    static +def Segment
-      static Binary = Binary.Positive{length == SEGMENT_LENGTH}
+    static +Segment
+      static Binary = Binary{length == SEGMENT_LENGTH}
     end
 
     static String = static as String
 
-    def segments => Segment[]{length == NUMBER_OF_SEGMENTS}
+    segments => Segment[]{length == NUMBER_OF_SEGMENTS}
 
-    def as :== Binary.Positive = segments as Segment.Binary[]
+    as :== Binary = segments as Segment.Binary[]
 
     // CIDR notation
-    def / prefix_length: Number{0 <= . <= NUMBER_OF_BITS} => static
+    / prefix_length: Number{0 <= . <= NUMBER_OF_BITS} => static
       return this if prefix_length == NUMBER_OF_BITS
 
-      binary_form = as Binary.Positive
+      binary_form = as Binary
       binary_form[prefix_length..] = 0 | 1
 
       binary_form
     end
 
-    def as :== String
+    as :== String
       // Use CIDR notation if superposed values are filled in #.
-      prefix_length = NUMBER_OF_BITS - (# as Binary.Positive ~= (0 | 1)[]$ -- .length)
+      prefix_length = NUMBER_OF_BITS - (# as Binary ~= (0 | 1)[]$ -- .length)
       if prefix_length != NUMBER_OF_BITS
-        binary_form = # as Binary.Positive
+        binary_form = # as Binary
         binary_form[prefix_length..] = 0
         return recur(binary_form as static), "/", prefix_length
       end
@@ -43,11 +43,11 @@ namespace Network
       sub
     end
 
-    def + offset: Number{-(as Binary.Positive) <= . <= ~!(as Binary.Positive)} => static
-      as Binary.Positive + offset
+    + offset: Number{-(as Binary) <= . <= ~!(as Binary)} => static
+      as Binary + offset
     end
-    def - offset: Number{- ~!(as Binary.Positive) <= . <= as Binary.Positive} => static
-      as Binary.Positive - offset
+    - offset: Number{- ~!(as Binary) <= . <= as Binary} => static
+      as Binary - offset
     end
 
     //TODO Range operator.
@@ -56,11 +56,11 @@ namespace Network
       static NUMBER_OF_SEGMENTS = 4
       static SEGMENT_LENGTH = 8
 
-      static Segment = Decimal.Positive{< 2^8}
+      static Segment = Decimal{< 2^8}
     end
 
     static class v6 = (left: Segment[]).join(":")?, zero_compression: "::" (? if !defined_segments.empty), (right: Segment[]).join(":")?, (":", embedded_ipv4: IPv4)? < IP
-      def defined_segments => Segment[] = left, right, embedded_ipv4 as Binary.Positive
+      defined_segments => Segment[] = left, right, embedded_ipv4 as Binary
 
       dynamically assert defined_segments.length (zero_compression
         ? < NUMBER_OF_SEGMENTS - 1 // '-1' Because: The symbol "::" MUST NOT be used to shorten just one 16-bit 0 field. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.2)
@@ -80,12 +80,12 @@ namespace Network
       static NUMBER_OF_SEGMENTS = 8
       static SEGMENT_LENGTH = 16
 
-      static Segment = Hexadecimal.Positive{length <= 4}
+      static Segment = Hexadecimal{length <= 4}
 
-      def segments = left, 0[]{length == number_of_compressed_segments}(), right, embedded_ipv4 as Binary.Positive
+      segments = left, 0[]{length == number_of_compressed_segments}(), right, embedded_ipv4 as Binary
 
-      def number_of_compressed_segments = NUMBER_OF_SEGMENTS - defined_segments.length
-      def compress_zeros => v6
+      number_of_compressed_segments = NUMBER_OF_SEGMENTS - defined_segments.length
+      compress_zeros => v6
         return this if zero_compression
 
         zeros = left, right ~= 0[] -- #{length == min() & leftmost} # TODO How to iterate over @ like min. and leftmost
@@ -94,15 +94,15 @@ namespace Network
 
         return (<- zeros) "::" (zeros ->), embedded_ipv4
       end
-      def embed_ipv4 => v6
+      embed_ipv4 => v6
         return this if embedded_ipv4
 
-        segments[..-3], segments[-2..] as Binary.Positive as IPv4
+        segments[..-3], segments[-2..] as Binary as IPv4
           // Prefer compressed zeros representation when possible (at least for the leading hexadecimal part) - (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
           -- .compress_zeros
       end
 
-      def as :== String
+      as :== String
         this
           // mixed notation is RECOMMENDED if the following condition is met: the address can be distinguished as having IPv4 addresses embedded in the lower 32 bits solely from the address field through the use of a well-known prefix (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
           -- .embed_ipv4 if this ==.instance_of "::ffff:0.0.0.0/96" // TODO Do we need to this.compress_zeros here?, or should this be picked up automatically. How to distinguish between seeing if it actually starts with the string vs the converted value. BEcause it's a ~= we should allow instantiation of IP where everything from there is a superposition
@@ -118,7 +118,7 @@ namespace Network
   IPv4 = IP.v4
   IPv6 = IP.v6
 
-  Port = Decimal.Positive{< 2^16}
+  Port = Decimal{< 2^16}
 
   class Socket
     static class Address = (ip: IPv4) | ("[",(ip: IPv6),"]"), (":", port: Port = DEFAULT_PORT)?
@@ -146,14 +146,14 @@ end
 
 // Allow string CIDR notation
 [IPv4, IPv6].for IP
-  def String{==.instance_of (ip: IP.String) + "/" + (prefix_length: Decimal.Positive{<= IP.NUMBER_OF_BITS}.String)}
-    def as :== IP = ip as IP / prefix_length
+  String{==.instance_of (ip: IP.String) + "/" + (prefix_length: Decimal{<= IP.NUMBER_OF_BITS}.String)}
+    as :== IP = ip as IP / prefix_length
   end
 end
 
 //TODO Store history of DNS resolves, and then allow to use it if DNS doesnt resolve by checking whether the instance running match the public-key stored there.
 
-+def Node
++Node
   static class Remote
     //TODO All object access go over network, and backup it in a local copy, what if that local copy is already defined somewhere?
     //Remote .location might not know about our copy, so how do we do remote_variable @ local
@@ -161,6 +161,6 @@ end
     //TODO What if the value is stored at a location, but we're looking for something which is at an unknown instance? But with particular structure?
 
     // If we want the local reference to a particular value, we don't consult remote.
-    def @ instance: INSTANCE = instance[location]
+    @ instance: INSTANCE = instance[location]
   end
 end

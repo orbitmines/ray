@@ -92,7 +92,6 @@ const external = <T extends ExternalMethod>(key?: SupportedValue) => {
 type SupportedValue = string | symbol | Var | ExternalMethod
 
 const self = Symbol("self");
-const evaluate = Symbol("evaluate");
 const partial_args = Symbol("partial_args");
 
 type Val = {
@@ -130,10 +129,11 @@ class Var {
     // TODO If assign is called on None, then set in .methods (Set .methods in location)
   }
 
-  [evaluate] = (): boolean => {
-
+  eval = (): Var => {
+    this.retrieve('**')
   }
 
+  boolean = (): boolean => {}
   string = (): string => {}
 
   instance_of = (type: SupportedValue): boolean => {
@@ -142,6 +142,7 @@ class Var {
 
   //TODO Store if not yet loaded global
   retrieve(property: SupportedValue) {
+    //TODO Retrieve is actually loading a new Variable, with a program to get it, evaluate is different
     property = Var.cast(property)
 
     for (let [key, value] of this.value.methods) {
@@ -159,7 +160,6 @@ class Var {
     },
     get: (_: any, property: string | symbol, receiver: any): any => {
       if (property == self) return this
-      if (property == evaluate) return this[evaluate]()
       if (property == partial_args) return (args: PartialArgs) => this.self[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]()
       return this.retrieve(property).self
     }
@@ -235,7 +235,7 @@ class Instance extends Var {
     return ray;
   }
 
-  eval = (args: PartialArgs, ) => {
+  eval = (args: PartialArgs,) => {
     this.load(args["global"][0] ?? "latest")
   }
 

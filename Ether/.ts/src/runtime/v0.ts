@@ -91,10 +91,11 @@ const external = <T extends ExternalMethod>(key?: SupportedValue) => {
 
 type SupportedValue = string | symbol | Var | ExternalMethod
 
-const self = Symbol("self");
+const o = Symbol("self");
 const partial_args = Symbol("partial_args");
 
 type Val = {
+  mirror?: any
   //TODO Dynamically allocate conditional methods
   get methods(): Map<Var, Var>
 }
@@ -116,6 +117,7 @@ class Var {
   static map = (map: Map<Var, Var>): Var => {}
   static expr = (expression: string): Var => {}
   static func = (func: ExternalMethod): Var => {}
+  static array = (...array: SupportedValue[]): Var => {}
 
   @external("* | methods")
   methods() { return Var.map(this.value.methods) }
@@ -129,49 +131,58 @@ class Var {
     // TODO If assign is called on None, then set in .methods (Set .methods in location)
   }
 
-  eval = (): Var => {
-    this.retrieve('**')
-  }
+  eval = (): Var => this.real['**']()[o]
 
-  boolean = (): boolean => {}
-  string = (): string => {}
+  none = (): boolean => {}
+
+  digit = (): number => {}
+
+  boolean = (): boolean => this.real['as'](Var.expr('boolean'))[0].next[o].none()
+  string = (): string => {
+    if (this.real['=='].instance_of(Var.expr('String'))[o].boolean()) throw new Error('Variable is not of type String.')
+
+    let char: Var = this
+    while (!(char = char.real.next[o]).none()) {
+      //TODO Decide how to encode chars.
+    }
+  }
 
   instance_of = (type: SupportedValue): boolean => {
     //TODO Flag == & instance_of methods
   }
 
-  //TODO Store if not yet loaded global
-  retrieve(property: SupportedValue) {
-    //TODO Retrieve is actually loading a new Variable, with a program to get it, evaluate is different
-    property = Var.cast(property)
-
-    for (let [key, value] of this.value.methods) {
-      if (property.instance_of(key)) return value;
-    }
-
-    return Var.expr("None") //TODO Location of None
-  }
-
-  get self(): any { return new Proxy(class {}, {
-    // apply: (_: any, thisArg: any, argArray: any[]): any => this.expr('(', ...argArray, ')'),
+  get lazy() { return new Proxy(class {}, {
+    apply: (_: any, thisArg: any, argArray: any[]): any => ,
     set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
-      this.retrieve(property).assign(newValue)
       return true
     },
     get: (_: any, property: string | symbol, receiver: any): any => {
-      if (property == self) return this
-      if (property == partial_args) return (args: PartialArgs) => this.self[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]()
-      return this.retrieve(property).self
-    }
-  }) }
+      if (property == o) return this
+      if (property == partial_args) return (args: PartialArgs) => this.lazy[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]()
 
-  do = (call: (x: any) => void) => {
-    call(this.self) //TODO Set value?
-    return this;
-  }
-  call = (call: (x: any) => any) => {
-    return call(this.self)[self]
-  }
+      //
+    }
+  })}
+
+  get real() { return new Proxy(class {}, {
+    apply: (_: any, thisArg: any, argArray: any[]): any => , //TODO Keep updating ** while evaluating
+    set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
+      return true
+    },
+    get: (_: any, property: string | symbol, receiver: any): any => {
+      if (property == o) return this
+      if (property == partial_args) return (args: PartialArgs) => this.real[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]()
+
+      //TODO Store if not yet loaded global
+      let variable = Var.cast(property)
+
+      for (let [key, value] of this.value.methods) {
+        if (variable.instance_of(key)) return value.real;
+      }
+
+      return Var.expr("None").real //TODO Location of None
+    }
+  })}
 
   private external_method = (key: string | Var, value: string | Var | ExternalMethod) =>
     this.value.methods.set(Var.cast(key), Var.cast(value))
@@ -216,7 +227,7 @@ namespace Language {
 class Program extends Var {
   constructor() {
     super();
-    this.self[":"](Var.expr("Program"))
+    this.lazy[":"](Var.expr("Program"))
   }
 }
 class Instance extends Var {
@@ -243,7 +254,7 @@ class Instance extends Var {
 
 class Instance {
 
-  program: Var = new Var().call(x => x[":"]("Program"))
+  program: Var = new Var().lazy(x => x[":"]("Program"))
   get global() { return this.program.self["∙"] }
 
   constructor(public args?: PartialArgs) {

@@ -23,14 +23,15 @@ x
 x.assumptions = None // Should also clear func(x) in scope
 
 class Proposition < Quest{(): boolean}
-class Proof<proposition: Proposition> < Program{(): boolean => (
+class Proof<proposition: Proposition> < Program{(): boolean => ((
   assumptions: (assume ?) // What about assumptions made outside the function
+  //TODO In outside scope assumptions means something different than inside scope: outwide is all of the assumptions.
   // what about assumed if branches, how do proofs work which are delayed quests
 
   //TODO Expose variables in proposition to this context.
 
   //TODO All externally used variables are assumptions.
-).loop.map(?).join(*)} //TODO Return false by default, which starts a quest
+)).loop.map(?).join(*)} //TODO Return false by default, which starts a quest
 //What about subproofs, any other quest matching this proof
 
 //theorem/lemma/example ; graph of theorems
@@ -48,7 +49,7 @@ theorem (proposition: Proposition, proof: Proof<proposition>)
 
   //TODO In this case we dont want a quest to start if the proof is false.
   by_contradiction | contradiction (proof: Proof<¬proposition>) =>
-    &caller.return false if !theorem ¬proposition == false, proof //TODO Maybe give negative proposition a name
+    &caller.return true if !theorem ¬proposition == false, proof //TODO Maybe give negative proposition a name
 
   //TODO What do we want to do if proof fails, start quest (dont continue the program)
   quest if !proof<local: local>()

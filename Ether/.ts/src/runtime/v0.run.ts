@@ -1,4 +1,4 @@
-import {Ether} from "./v0";
+import {Ether} from "./v0.ts";
 
 const runtime_args = (result: Ether.PartialArgs = {}) => {
   const args = process.argv.slice(2);
@@ -36,4 +36,4 @@ const runtime_args = (result: Ether.PartialArgs = {}) => {
   return result;
 }
 
-Ether.run("../..", runtime_args())
+Ether.run("..", runtime_args())

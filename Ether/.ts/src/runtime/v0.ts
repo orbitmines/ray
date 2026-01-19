@@ -114,12 +114,30 @@ class Var {
 
     return val;
   }
-  static string = (string: string): Var => {}
-  static path = (path: string): Var => {}
-  static map = (map: Map<Var, Var>): Var => {}
-  static expr = (expression: string): Var => {}
-  static func = (func: ExternalMethod): Var => {}
-  static array = (...array: SupportedValue[]): Var => {}
+  static string = (string: string): Var => {
+    //TODO
+    return new Var()
+  }
+  static path = (path: string): Var => {
+    //TODO
+    return new Var()
+  }
+  static map = (map: Map<Var, Var>): Var => {
+    //TODO
+    return new Var()
+  }
+  static expr = (expression: string): Var => {
+    //TODO
+    return new Var()
+  }
+  static func = (func: ExternalMethod): Var => {
+    //TODO
+    return new Var()
+  }
+  static array = (...array: SupportedValue[]): Var => {
+    //TODO
+    return new Var()
+  }
 
   @external("* | methods")
   methods() { return Var.map(this.value.methods) }
@@ -135,7 +153,7 @@ class Var {
 
   eval = (): Var => this.real['**']()[o]
 
-  none = (): boolean => {}
+  none = (): boolean => this.value.none
 
   digit = (): number => {
     let i = 0
@@ -150,48 +168,64 @@ class Var {
   string = (): string => {
     if (this.real['=='].instance_of(Var.expr('String'))[o].boolean()) throw new Error('Variable is not of type String.')
 
-    let char: Var = this
+    let string = "";
+
+    let char: Var = this.real['as'](Var.expr('String'))
     while (!(char = char.real.next[o]).none()) {
       //TODO Decide how to encode chars.
     }
+
+    return string;
   }
 
   instance_of = (type: SupportedValue): boolean => {
     //TODO Flag == & instance_of methods
+    return false;
   }
 
   get lazy() { return new Proxy(class {}, {
-    apply: (_: any, thisArg: any, argArray: any[]): any => ,
+    apply: (_: any, thisArg: any, argArray: any[]): any => this.lazy[get](Var.array("(", ...argArray, ")")),
     set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
       return true
     },
     get: (_: any, property: string | symbol, receiver: any): any => {
-      if (property == o) return this
-      if (property == get) return (arg: SupportedValue) =>
-      if (property == partial_args) return (args: PartialArgs) => this.lazy[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]()
+      const getter = (property: SupportedValue) => {
+        //TODO
+        return new Var().lazy
+      }
 
-      //
+      if (property == o) return this
+      if (property == get) return getter
+      if (property == partial_args) return (args?: PartialArgs) => args ? this.lazy[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]() : this
+
+      return getter(property)
     }
   })}
 
   get real() { return new Proxy(class {}, {
-    apply: (_: any, thisArg: any, argArray: any[]): any => , //TODO Keep updating ** while evaluating
+    apply: (_: any, thisArg: any, argArray: any[]): any => this.real[get](Var.array("(", ...argArray, ")")),
     set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
       return true
     },
     get: (_: any, property: string | symbol, receiver: any): any => {
-      if (property == o) return this
-      if (property == get) return (arg: SupportedValue) =>
-      if (property == partial_args) return (args: PartialArgs) => this.real[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]()
+      const getter = (property: SupportedValue) => {
+        //TODO Keep updating ** while evaluating for (args)
 
-      //TODO Store if not yet loaded global
-      let variable = Var.cast(property)
+        //TODO Store if not yet loaded global
+        let variable = Var.cast(property)
 
-      for (let [key, value] of this.value.methods) {
-        if (variable.instance_of(key)) return value.real;
+        for (let [key, value] of this.value.methods) {
+          if (variable.instance_of(key)) return value.real;
+        }
+
+        return Var.expr("None").real //TODO Location of None
       }
 
-      return Var.expr("None").real //TODO Location of None
+      if (property == o) return this
+      if (property == get) return getter
+      if (property == partial_args) return (args?: PartialArgs) => args ? this.real[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]() : this
+
+      return getter(property)
     }
   })}
 
@@ -207,7 +241,10 @@ class Context extends Var {
   @external()
   local() { return this; }
 
-  has_method = (x: SupportedValue): boolean => {}
+  has_method = (x: SupportedValue): boolean => {
+    //TODO
+    return false;
+  }
 
 }
 namespace Language {
@@ -218,14 +255,14 @@ namespace Language {
 
     //@external
     assign(version: SupportedValue) {
-      super.assign(this.instance.load(version))
+      super.assign(this.instance.load(Var.cast(version).string()))
       //TODO Update objects, defined in child contexts.
     }
 
     @external()
     external(x: SupportedValue, ctx: Context) {
       // TODO Get caller and check from there if it has
-      if (!ctx.has_method(x)) throw new Error(`Expected externally defined method '${Var.cast(x).string()}' in ${ctx.retrieve('name').string()}`)
+      if (!ctx.has_method(x)) throw new Error(`Expected externally defined method '${Var.cast(x).string()}' in ${ctx.real.name[o].string()}`)
 
       return ctx.lazy[get](x)
     }
@@ -236,40 +273,32 @@ namespace Language {
   }
 }
 class Program extends Var {
+  version: Language.Ray
+  //TODO When version is set append programs
+  //TODO Add Program to the version's program as a branch.
+
   constructor() {
     super();
     this.lazy[":"](Var.expr("Program"))
   }
+
+  copy = (): Program => {
+    //TODO
+    return this;
+  }
+
+  eval = (): Var => {
+    //TODO
+
+    const s = [" ", "\t"]
+    const DELIMITER = ["/", ".", ...s, ";", "\n"]
+
+
+    return new Var()
+  }
 }
-class Instance extends Var {
-  constructor(public ether: string) {
-    super();
-  }
-
-  versions: Map<Var, Language.Ray> = new Map()
-
-  load = (version: SupportedValue = "latest"): Language.Ray => {
-    if (version != "latest") throw new Error("Versioning of Language not yet supported")
-
-    let ray: Language.Ray;
-
-    this.versions.set(Var.cast(version), ray)
-    return ray;
-  }
-
-  eval = (args: PartialArgs,) => {
-    this.load(args["global"][0] ?? "latest")
-  }
-
-}
-
-class Instance {
-
-  program: Var = new Var().lazy(x => x[":"]("Program"))
-  get global() { return this.program.self["∙"] }
-
-  constructor(public args?: PartialArgs) {
-  }
+class ProgramLoader {
+  program: Program = new Program()
 
   private expr = (path: string, expr: string) => {
     const x = new Var()
@@ -280,35 +309,74 @@ class Instance {
     return x;
   }
 
-  group = () => {
-
-  }
-
   dir = (path: string, args?: PartialArgs): this => {
-    this.program.call(x => x.push_back(
+    this.program.lazy.push_back(
       files(path)
         .filter(path => path.endsWith('.ray'))
         .map(path => this.expr(path, fs.readFileSync(path, "utf-8")))
-        .reduce((acc: Var | undefined, x) => acc ? acc.self["push_back"](x) : x)
-        .self.all.collapse[partial_args](args)
-    ))
+        .map(x => x.lazy)
+        .reduce((acc: any | undefined, x: any) => acc ? acc["push_back"](x) : x)
+        .all.collapse[partial_args](args)
+    )
 
     return this;
   }
   file = (path: string, args?: PartialArgs): this => {
-    this.expr(path, fs.readFileSync(path, "utf-8")).self[partial_args](args)
+    this.expr(path, fs.readFileSync(path, "utf-8")).lazy[partial_args](args)
+    return this;
+  }
+}
+class Instance {
+  constructor(public ether: string) {
+  }
+
+  versions: { [key: string]: Language.Ray } = {}
+  unbound_programs: Program[] = []
+  programs: Program[] = []
+
+  load = (version: string = "latest"): Language.Ray => {
+    if (version != "latest") throw new Error("Versioning of Language not yet supported")
+
+    let ray: Language.Ray;
+
+    //TODO It's a Program with context: Context
+    const program = new Program()
+    //TODO Intermediately load objects when needed in this program, and run everything in front which needs to run in front.
+
+    this.versions[version] = ray
+    return ray;
+  }
+
+  bind = (program: Program, versions: string[]) => {
+    for (let i = 0; i < versions.length; i++) {
+      const version = versions[i];
+
+      program = (i == 0 ? program : program.copy())
+      program.version = this.versions[version] ?? this.load(version)
+      this.programs.push(program);
+    }
+  }
+
+  //TODO Also branch off existing program states
+  branch = (load: (loader: ProgramLoader) => ProgramLoader, args: PartialArgs = {}): this => {
+    const program = load(new ProgramLoader()).program.lazy[partial_args](args)[o]
+
+    if (args["global"] && args["global"].length > 0) {
+      this.bind(program, args["global"]);
+    } else {
+      this.unbound_programs.push(program)
+    }
+
     return this;
   }
 
-  eval = () => {
-    const program = this.program.self[partial_args](this.args)[self]
+  eval = (args: PartialArgs) => {
+    this.unbound_programs.forEach(program => this.bind(program, args["global"] ?? ["latest"]))
+    this.unbound_programs = []
 
-    // PartialArg types need to match
-
-    const s = [" ", "\t"]
-    const DELIMITER = ["/", ".", ...s, ";", "\n"]
-
+    this.programs.forEach(program => program.lazy[partial_args](args)[o].eval())
   }
+
 }
 
 export namespace Ether {
@@ -326,9 +394,9 @@ export namespace Ether {
     delete args['@']
 
     if (stat.isFile())
-      return new Instance(args).dir(`${default_path}/.ray`).file(location).eval()
+      return new Instance(default_path).branch(x => x.dir(`${default_path}/.ray`).file(location)).eval(args)
     else if (stat.isDirectory())
-      return new Instance(args).dir(`${location}/.ray`).file(`${location}/Ether.ray`).eval()
+      return new Instance(location).branch(x => x.dir(`${location}/.ray`).file(`${location}/Ether.ray`)).eval(args)
     else
       throw new Error(`"${location}": Unknown Ether instance directory or Ray file.`)
   }

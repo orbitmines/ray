@@ -37,7 +37,7 @@ class Proof<proposition: Proposition> < Program{(): boolean => ((
 //theorem/lemma/example ; graph of theorems
 
 Node{(): boolean}
-  ! | ¬ {.} => !this()
+  ! | ¬ {.} = () => !this()
 
   as (== boolean) => this()
 

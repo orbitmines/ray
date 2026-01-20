@@ -75,6 +75,7 @@ class Node
     //TODO Ensure the caller implements all undefined methods (unless abstract) abstract if any methods aren't defined. Is there ever a case where you want to extend abstract but only pass along the methods, yes?
     // TODO: How does type extension work?
     //TODO Change type parameter.
+    //TODO Updates static, such that anything depending on the type static changes too. (For instance the program < Task)
   end
 
   def [] = Array<this>

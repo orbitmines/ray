@@ -107,6 +107,9 @@ external {label: *}\: Program //TODO Push to program.name
 //TODO coroutines like race here.
 
 // async/await branches/coroutines
+branch
+race
+
 
 return (expression: Expression) //TODO Allow out-or-order execution.
   // Ignore the values set by manually setting &caller, and only return to the original function.
@@ -146,7 +149,7 @@ class Context //Subgraph of a function.context
 
 //TODO Shaders are like parallel iterators; there's an unrollable loop in the Many iterator for threads.
 //      -> This existence of a forloop, means the program assumes Many definitions are in turn also programs. -> Of course
-class Function | Program < Boundary, Hierarchy /* If the  */, expression: Expression
+class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Expression
    // Hierarchy is actually somehow a 2nd level of collapse/expand, but in reverse; It's hidden from it, and from their perspective they dont collapse to this function, but continue as as the function. Like a mutual
 
   //TODO How to select .next to be only for Boundary. Because expression has been given separate name?

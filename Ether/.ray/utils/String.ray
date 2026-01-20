@@ -11,4 +11,12 @@ class String
   swap_case
   ignore_case
 
+class Char
+  //TODO as String should be automatically implemented.
+
+Letter: Char = "a".."z" | "A".."Z" //TODO Should include letters from all alphabets
+Symbol: Char = SpecialChar | //Special Characters  & math etc..
+SpecialChar: Char =
+//TODO Different classes of Unicode characters.
+
 \w

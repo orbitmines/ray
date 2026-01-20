@@ -9,8 +9,17 @@
 //todo should change the variable INSTANCE to a new var with different permissions.
 
 
+class Example
+  next = () =>
 
+x = Example() &+ Ray()
+x.next // Does (Example & Ray).next
+x: Ray
+x.next // Does Ray.next
+x: Example
+x.next // Does Example.next
 
+// Editor, can be rewritten into preferred level of description, like there exists instead of #.some
 
 
 

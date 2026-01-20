@@ -164,7 +164,8 @@ MLIR dialects: Affine, SCF, Tensor, Standard, LLVM, XLA, etc.
 
 Also relevant for [[PENDING Project - Computer Networking, Security, Encryption  & Communication (2026?)]]
 
-- **Languages, ..., Instruction sets**: HSA, HIP, CUDA, AMD, AQL, rocm, [Tenstorrent](https://github.com/tenstorrent), [XLA](https://openxla.org/), RDNA3 (Tinygrad's RDNA3 emulator), [KVM FrameRelay: Looking Glass](https://github.com/gnif/LookingGlass) & other throughput channels - translate to different port types, [VirtualBox](https://www.virtualbox.org/), Vulkan, WebGL, GLSL, HLSL, MSL, [WebGPU Shading Language (WGSL)](https://gpuweb.github.io/gpuweb/wgsl/), [WebXR](https://github.com/immersive-web), [wgpu](https://github.com/gfx-rs/wgpu), [GraalVM](https://github.com/oracle/graal), 
+- **Disassemblers**: https://hex-rays.com/ida-pro
+- **Languages, ..., Instruction sets**: HSA, HIP, CUDA, AMD, AQL, rocm, [Tenstorrent](https://github.com/tenstorrent), [XLA](https://openxla.org/), RDNA3 (Tinygrad's RDNA3 emulator), [KVM FrameRelay: Looking Glass](https://github.com/gnif/LookingGlass) & other throughput channels - translate to different port types, [VirtualBox](https://www.virtualbox.org/), Vulkan + (https://vulkan.gpuinfo.org/), WebGL, GLSL, HLSL, MSL, [WebGPU Shading Language (WGSL)](https://gpuweb.github.io/gpuweb/wgsl/), [WebXR](https://github.com/immersive-web), [wgpu](https://github.com/gfx-rs/wgpu), [GraalVM](https://github.com/oracle/graal), 
 - **Wikipedia**: [Interactive_Disassembler](https://en.wikipedia.org/wiki/Interactive_Disassembler), [STMicroelectronics](https://en.wikipedia.org/wiki/STMicroelectronics), [VHDL (VHSIC Hardware Description Language)](https://en.m.wikipedia.org/wiki/VHDL), [VkFFT](https://github.com/DTolm/VkFFT), 
 - **GPU**: [GPUOpen-Tools](https://github.com/GPUOpen-Tools), [[Graphics Programming]] ([discord](https://discord.com/invite/Eb7P3wH))
 	- **AMD**: [AMDGPU debugger](https://lists.freedesktop.org/archives/amd-gfx/2017-February/005122.html), [UMR (User Mode Register Debugger for AMDGPU Hardware)](https://gitlab.freedesktop.org/tomstdenis/umr)
@@ -180,6 +181,7 @@ Also relevant for [[PENDING Project - Computer Networking, Security, Encryption 
 - Reading
 	- https://thebookofshaders.com/
 	- https://git.datenwolf.net/
+- **Compiler optimizations**: https://en.wikipedia.org/wiki/Bird%E2%80%93Meertens_formalism
 
 <div align="center">  
   

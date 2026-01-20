@@ -6,3 +6,6 @@ class Quest < Program & Nameable
   // Difficulty rating (might change at each step)
   // Effectiveness rating (effecting difficulty rating of other quests, compounded effect of future rewards)
   completed => is_last // TODO There could still be a continuation, how to know we're actually done
+
+class Task < Quest
+  interrupt

@@ -44,3 +44,36 @@ Torus
 Sphere //TODO How to say 2D Loop
 Cube
 COne
+
+
+// In the current group (hierarchy wise) or the entire "under" ignoring hierarchy
+->> means everthing to the right (<-ray).all
+
+class Object < Hierarchy
+  boundary: Boundary
+  border: // object on the boundary (inclusive)
+
+//todo easilty add remove properties like center so dynamically .center if predicate, but compact
+  Center<D =
+    & .x if ==.instance_of 1D
+    & .y if ==.instance_of 2D
+    & .z if ==.instance_of 3D
+  > = static{(<-D).length == (D->).length}
+  //Todo how to not so verbosely do this, rhis syntax doesn't currently work
+
+  //Todo .under etc. needs to go to the boundary of this abstract object
+
+  // dimensionality
+
+
+class 1D < Ray
+  left: static <<- horizontal | x => this ->> right: static
+class 2D < 1D
+  under: static <<- down: static <- vertical | y -> up: static ->> above: static
+class 3D < 2D
+  behind: static <<- backward: static <- depth | z -> forward: static ->> in_front: static
+
+
+
+
+

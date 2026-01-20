@@ -493,6 +493,7 @@ Language
   namespace Otter < Language() ; location &= "https://github.com/theoremprover-museum/otter" & "https://en.wikipedia.org/wiki/Otter_(theorem_prover)"
   namespace Pandoc < Language() ; location &= "https://github.com/jgm/pandoc" & "https://pandoc.org/"
   namespace PaperProof | "Paper-Proof" < Language(".lean") ; location &= "https://github.com/Paper-Proof/paperproof"
+  namespace Par < Language(".par") ; location &= "https://github.com/faiface/par-lang"
   namespace Pact < Language(".pact") ; location &= "https://github.com/kadena-io/pact" & "https://pact-language.readthedocs.io/"
   namespace Perl < Language(".pl") ; location &= "https://www.perl.org/" & "https://en.wikipedia.org/wiki/Perl"
   namespace PHP < Language(".php" | ".php3" | ".php4" | ".php5" | ".php7" | ".php8") ; location &= "https://github.com/php/php-src" & "https://www.php.net/" & "https://en.wikipedia.org/wiki/PHP"

@@ -46,6 +46,8 @@ WebAssembly
 XCOFF
 PowerPC
 
+TOML/.ini/YAML/..
+
 - SPIR
 
 - https://esolangs.org/wiki/Main_Page

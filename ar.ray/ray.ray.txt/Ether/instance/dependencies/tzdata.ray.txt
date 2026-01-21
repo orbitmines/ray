@@ -1,2 +1,0 @@
-//TODO Set this up when we have a working runtime to make testing easier
-//TODO Though can experiment with: "define a grammar"

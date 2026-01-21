@@ -72,6 +72,8 @@ class * | Node
   |+
   |- //
 
+  ⊢/./!⊢ // Allow if x ⊢11
+
   // All
   {operator: *{"{.}=" not in this && . ~= (Symbol & ¬"=")[]}= (x)
     this = this[operator](x)

@@ -5,18 +5,33 @@
 //TODO Get from &caller:
 //TODO as String needs context of where it is being placed, if it's in a .ts that's different from another language.
 
-class String
+class String < Char[]
   lower_case | v
   upper_case | ^
+  title_case
   swap_case
   ignore_case
 
-class Char
+  snake_case
+  camelCase
+  PascalCase
+  // ETC.
+
+  plural
+  singular
+
+
+class Char < Unicode.Scalar
   //TODO as String should be automatically implemented.
 
 Letter: Char = "a".."z" | "A".."Z" //TODO Should include letters from all alphabets
-Symbol: Char = SpecialChar | //Special Characters  & math etc..
+Symbol: Char =
 SpecialChar: Char =
 //TODO Different classes of Unicode characters.
 
 \w
+\t = "\t"
+\n = "\n"
+\s = " " | \t
+
+//TODO Language of Regex

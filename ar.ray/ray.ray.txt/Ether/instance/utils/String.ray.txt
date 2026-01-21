@@ -1,34 +1,3 @@
-//TODO Maybe an instantiation of String/char, which doesn't say how exactly it's implemented (u32/UTF), to signal it's not important that that system retains its place. 'Name' would be where this could be used.
-class String = Unbounded{length < Infinity}
-  static NonEmpty = static{length > 0}
-  static Unbounded = char[]
-    ()
-    (block) //TODO Accept "String" \n property='b' end
-    //TODO: Any Array definition is an expandable object, which at one level of description has that new Node, on the other the array of things.
-    //TODO: Want to allow things like String.push_back(u32), but it should encapsulate the u32 into an expandable single node.
 
-    // TODO How do other languages implement String?
-
-    def ignore_case //TODO Return superposition with ignored case
-    //TODO snake_case, camelCase etc.. PascalCase
-    v | lower_case //TODO Allow v, and other methods to directly follow string def without a .
-    ^ | upper_case
-
-    plural
-    singular
-  end
-end
-class char = u32
-  dynamically assert this < 0x110000 & !(0xD800 <= this <= 0xDFFF)
-end
-//TODO String{length == 1} ; range operator for char.
-
-def "{(String?, ("{", expression: Expression{eval ==.instance_of String}, "}")?).orbit}" //TODO Allow this self-referential def
-def `{: String}`
-
-\t = "\t"
-\n = "\n"
-
-\s = " " | \t
 
 //TODO Regex

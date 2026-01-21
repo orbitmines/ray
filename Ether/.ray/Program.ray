@@ -320,11 +320,11 @@ static class Expression < String & global.Ray?
   //Allow multiline '--'
   //Allow returning out of a -- statement.
 
+  // Multiline multiple edits allow (Like in Unicode)
   // Like '--', but applies some expression and returns the variable it was applied to.
   ~~ (b: Expression)
 
   {" "}: (type) => //TODO Wrap whole expression in : type
-
   as (== Program)
 
 
@@ -332,4 +332,4 @@ Program
   ==
     // Used within this context, they have the same behavior
     //
-    extensional
+    extensional1

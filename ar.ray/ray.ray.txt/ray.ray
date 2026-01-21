@@ -186,6 +186,7 @@ private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolea
     terminal = initial // By default a structure is symmetric
   } //TODO .unrolled
 
+  static NonEmpty => static{count > 0}
   static Unbounded{every(==.instanceof Vertex)} < AbstractDirectionality<Vertex>
     //TODO These set Vertex to a different value
     def acyclic //TODO Disallow loops, want these things: Graph.acyclic = Graph{acyclic}, if graph.acyclic,

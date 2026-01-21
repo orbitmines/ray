@@ -7,6 +7,10 @@
 
 //TODO Date arithmetic, sleep delay, timezones
 
+//TODO Import tzdata using .unzip functionality, but for now just use a mirrored file directory until we support things like https://github.com/libarchive/libarchive
+//TODO Set this up when we have a working runtime to make testing easier
+//TODO Though can experiment with: "define a grammar"
+
 // TODO "h"/"hour" "week" "days"/"day/sol X - set epoch to 0 start of that" "years" "months" "Earth.years"/"Mars.years" (and some others for other time coordinate systems)
 
 SI_Unit s "second"

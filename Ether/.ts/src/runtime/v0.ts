@@ -100,6 +100,7 @@ type Val = {
   //TODO Dynamically allocate conditional methods
   get methods(): Map<Var, Var>
 }
+
 class Var {
   value: Val = { methods: new Map<Var, Var>() }
   dependants: Var[] //TODO dynamically. or implement in the language: override = of all mentioned vars dependencies.
@@ -117,6 +118,23 @@ class Var {
   static string = (string: string): Var => {
     //TODO
     return new Var()
+  }
+  static digit = (digit: number, base: number): Var => {
+    if (digit > base || digit < 0) throw new Error(`Digit is 0 < . < ${base}`)
+    if (base < 2) throw new Error(`Base is >= 2`)
+
+    let integer = new Ray()
+    let selected: Ray = integer
+    for (let i = 0; i < base - 1; i++) {
+      integer = integer.push()
+
+      if (digit === i + 1)
+        selected = integer;
+    }
+
+    const cursor = new Ray()
+    cursor.lazy["&+="](selected)
+    return cursor
   }
   static path = (path: string): Var => {
     //TODO
@@ -232,6 +250,23 @@ class Var {
   private external_method = (key: string | Var, value: string | Var | ExternalMethod) =>
     this.value.methods.set(Var.cast(key), Var.cast(value))
 
+}
+
+class Ray extends Var {
+  constructor() {
+    super();
+    this.lazy[":"](Var.expr("Ray"))
+  }
+
+  push = (x?: SupportedValue) => {
+    const next = new Ray()
+    next.lazy["&+="](Var.cast(x)) //TODO How to indicate I want the right component
+
+    next.lazy.previous = this
+    this.lazy.next = next
+
+    return next
+  }
 }
 
 const latest = Symbol("latest");

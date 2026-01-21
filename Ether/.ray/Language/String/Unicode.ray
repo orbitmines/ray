@@ -1,9 +1,27 @@
 //TODO I want a slightly different syntax for the template matching
 
+//TODO All outside requests are backed up on the central ether server, (at least for ether source code) - and deferred to when the original is no longer available.
+
+//TODO Version control over Unicode, and set string to a different version of Unicode. All versions: https://www.unicode.org/Public/
+//TODO You'd want the UI to also change based on which version is used, if the glyph wasnt made back then, dont display; unless setting turned on to use all codepoint defined by modern typesettings
 namespace Unicode
   class CodePoint < Hexadecimal{length == 1..6}
   class Scalar < CodePoint
     dynamically assert this < 0x110000 & !(0xD800 <= this <= 0xDFFF)
+
+    // Use the Collation Algorithm defined here https://www.unicode.org/Public/UCD/latest/uca/ for comparison
+
+    //TODO Include all properties in https://www.unicode.org/Public/UCD/latest/ucd/, and allow for version control over the Unicode versions.
+    //TODO Load BidiBrackets https://www.unicode.org/Public/UCD/latest/ucd/BidiBrackets.txt
+    //TODO Unicode Bidirectional Algorithm for combining left-to-right/right-to-left in the editor
+    //TODO Link .mirrored to https://www.unicode.org/Public/UCD/latest/ucd/BidiMirroring.txt
+    //TODO ß -> SS casefold https://www.unicode.org/Public/UCD/latest/ucd/CaseFolding.txt
+    //TODO Scalar's have an age; unicode version https://www.unicode.org/Public/UCD/latest/ucd/DerivedAge.txt
+    //TODO Another property https://www.unicode.org/Public/UCD/latest/ucd/EastAsianWidth.txt & https://www.unicode.org/reports/tr11/
+
+    //TODO Discourages sequences, should be "flags on a sub-strings" which you can access: https://www.unicode.org/Public/UCD/latest/ucd/DoNotEmit.txt
+
+    //TODO If canonicalization is implemented for Scalar, exclude: https://www.unicode.org/Public/UCD/latest/ucd/CompositionExclusions.txt
 
     //TODO What decides when this gets evaluated? And whether to actually get a new version of the txt
     // TODO Allows Char.Latin, Char.Arabic
@@ -23,9 +41,13 @@ namespace Unicode
       .map group
         static {group.name ~~ ~= " " = "_"}: Scalar = group.map(from..to)
 
+    // Todo First, Last in name
+    // 323B0;<CJK Ideograph Extension J, First>;Lo;0;L;;;;;N;;;;;
+    // 33479;<CJK Ideograph Extension J, Last>;Lo;0;L;;;;;N;;;;;
+
     //TODO Adhere to digit/numeric values, and implement them.
     @"https://www.unicode.org"/Public/UCD/latest/ucd/UnicodeData.txt ~= ⸨
-      ⸨static # |= value(⸩⸨value: Scalar⸩;⸨name⸩;⸨general_category⸩;⸨canonical_combining_class⸩;⸨bidi_class⸩;⸨decomposition_mapping⸩;⸨decimal_digit_value⸩;⸨digit_value⸩;⸨numeric_value⸩;⸨bidi_mirrored⸩;⸨name | unicode1_name⸩;⸨ISO_10646_comment⸩;⸨internal upper_case: Scalar = this⸩;⸨internal lower_case: Scalar = this⸩;⸨internal title_case: Scalar = this⸩⸨)⸩
+      ⸨static # |= value(⸩⸨value: Scalar⸩;⸨name⸩;⸨general_category⸩;⸨canonical_combining_class⸩;⸨bidi_class⸩;⸨decomposition_mapping⸩;⸨decimal_digit_value⸩;⸨digit_value⸩;⸨numeric_value⸩;⸨bidi_mirrored: "Y" | "N"⸩;⸨name | unicode1_name⸩;⸨ISO_10646_comment⸩;⸨internal upper_case: Scalar = this⸩;⸨internal lower_case: Scalar = this⸩;⸨internal title_case: Scalar = this⸩⸨)⸩
     ⸩.loop.map(?).join(*)
 
     //TODO How to indicate the Scalar's should automatically bind to the ones generated here.
@@ -34,6 +56,7 @@ namespace Unicode
 
   class GeneralCategory
 
+    //TODO Add to general category if it starts with your current name, S & Sc for example.
     @"https://www.unicode.org"/Public/UCD/latest/ucd/PropertyValueAliases.txt ~= ⸨
       gc ; ⸨short_name | name⸩ ; ⸨name⸩ ⸨GeneralCategory[name] = Scalar{general_category == short_name} ⸩
     ⸩.loop.map(?).map(~~ ~= " " = \s[]?).join(*)

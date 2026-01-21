@@ -5,6 +5,8 @@
 // TODO What different calendars are used here?
 // TODO Variable relativistic trajectory
 
+//TODO Date arithmetic, sleep delay, timezones
+
 // TODO "h"/"hour" "week" "days"/"day/sol X - set epoch to 0 start of that" "years" "months" "Earth.years"/"Mars.years" (and some others for other time coordinate systems)
 
 SI_Unit s "second"

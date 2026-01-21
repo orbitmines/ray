@@ -1,4 +1,7 @@
 
+//TODO Complex Numbers as &+ ?,
+// sqrt, Trigonometry,
+
 Binary +=
   * |= (b: Number % mod 2 = 0) => this << (b / 2)
   << |= b = this.push_back(0[]{length == b}) //TODO Overflow for i64 is done how?
@@ -27,7 +30,7 @@ end
 
 //TODO Define .sign on all numbers, so that you can do x.sign ().sum, empty string is + so nothing gets applied since it's empty string.
 
-private class Digit = String[].reduce(|)
+private class Digit = String  //[].reduce(|)
 
 Base = &'ed version of all the numbers
 
@@ -45,7 +48,7 @@ end
 // TODO: Strings as a definition depend on Number, circularity here.
 Bases = {
   Binary: Digit = "0" | "1"
-  Ternary: Digit = "0".."2".reduce(|)
+  Ternary: Digit = "0".."2".reduce(|) //TODO .reduce is automatic
   Quaternary: Digit = "0".."3".reduce(|)
   Quinary: Digit = "0".."4".reduce(|)
   Senary: Digit = "0".."5".reduce(|)

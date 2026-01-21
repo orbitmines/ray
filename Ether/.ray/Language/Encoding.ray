@@ -10,6 +10,10 @@
 // Might not want to decode, in the case of homomorphic encryption
 
 // List of encryption algorithms
+//TODO
+SHA512, SHA256, BLOWFISH, MD5, SHA-1, SHA-3, BLAKE3
+
+//TODO All the different string encodings.
 
 //TODO Not having the encryption key spawns a quest, like a special throws>
 
@@ -17,3 +21,8 @@ encrypted
 
 class Encrypted<T>
   as (== T) => // .crypt[location (CURRENT)]
+
+class Hash
+
+class Compressed
+

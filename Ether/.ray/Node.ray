@@ -29,6 +29,8 @@ class
   local
 end
 
+
+
 class * | Node
   //TODO Generalize: Pattern left is matched to pattern right: first, ..middle, last; first, middle: [], last, [first ..after]
   //{

@@ -130,12 +130,15 @@ end
   def ~`operator: boolean.Operator.Binary` b: Binary.Positive{.length == length} = this.zip(b).map(operator) //TODO: Or can the compiler deduce the reversing stuff is not necessary?
 end
 
+//TODO Should not always goto Decimal, should infer from context whether it is binary or not? How to do that; code it as a type?
 def `digits: Decimal.Positive.String` => Decimal.Positive = digits
 +def Decimal.Positive
   def `fraction: Decimal.Positive.String` => Decimal.Real = integer, ".", fraction
 end
 
 def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+//TODO This for binary
+def 0`"b" | "B"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
 
 //TODO: Possibly move these primitives to specific languages, and only work with arbitrary-length in the default case.
 //TODO: -b: Something uX might only implement b: uX, casts lose information and likely need to overflow

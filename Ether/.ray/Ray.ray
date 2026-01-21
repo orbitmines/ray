@@ -126,7 +126,8 @@ class Iterable<T>
 
   // TODO Structure altering mapping with ~ somehow
   map <T>(map: (x): T) => static{T: T}
-  reduce ()
+  reduce | fold | foldl ()
+  reduce_right | fold_right | foldr ()
   //TODO Mapping and reducing together?
   reverse: static
   unordered

@@ -1,4 +1,6 @@
 
+//TODO What about syntax which is more contextual
+
 //TOD If !=.instance_of Instance ; if it already is a , dont case down to a field.
 //TODO If there is a single field going to some class like Instance/or its extensions IP/Socket.Address, automatically add an equivalence (as IP) to that class. Is there ever a case where you don't want this equivalence?
   as (== Instance) => .instance
@@ -8,6 +10,7 @@
 //dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
 //todo should change the variable INSTANCE to a new var with different permissions.
 
+// Allow .for {from, to, name}, and [a, b]
 
 class Example
   next = () =>
@@ -19,9 +22,21 @@ x.next // Does Ray.next
 x: Example
 x.next // Does Example.next
 
+
+// ALlow (⊢ | ⊣)name.split(" "), begings or starts with
+
 // Editor, can be rewritten into preferred level of description, like there exists instead of #.some
 
+// None acts as 0 in 16 - None = 16
 
+// Every < X[] implements .Unbounded on static.
+
+// TODO .push_back on None makes a new array with 1 entry
+
+//
+return A, B if // returns A
+return A, B -- if
+A, B if // adds B after A if
 
 //TODO .copy implemented, as not being bound to the .history .last version. But a new branched version.
 

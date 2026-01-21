@@ -1,0 +1,71 @@
+//TODO I want a slightly different syntax for the template matching
+
+namespace Unicode
+  class CodePoint < Hexadecimal{length == 1..6}
+  class Scalar < CodePoint
+    dynamically assert this < 0x110000 & !(0xD800 <= this <= 0xDFFF)
+
+    //TODO What decides when this gets evaluated? And whether to actually get a new version of the txt
+    // TODO Allows Char.Latin, Char.Arabic
+    @"https://www.unicode.org"/Public/UCD/latest/ucd/Blocks.txt ~= ⸨
+      #⸨*⸩
+      ⸨\s[]?⸩
+      ⸨internal blocks: (⸩⸨from: Scalar⸩..⸨to: Scalar⸩; ⸨name: *)⸩
+    ⸩.loop.map(?)
+
+    blocks
+      .map(~~
+        .name ~= "Basic Latin" = "Latin"
+        .name ~= "-" | "_" = " "
+      )
+      .map(.group = blocks{.name ~= ⊢name.split(" ")}#.first.name)
+      .reduce(acc, x => acc[x.group].push_back(x))
+      .map group
+        static {group.name ~~ ~= " " = "_"}: Scalar = group.map(from..to)
+
+    //TODO Adhere to digit/numeric values, and implement them.
+    @"https://www.unicode.org"/Public/UCD/latest/ucd/UnicodeData.txt ~= ⸨
+      ⸨static # |= value(⸩⸨value: Scalar⸩;⸨name⸩;⸨general_category⸩;⸨canonical_combining_class⸩;⸨bidi_class⸩;⸨decomposition_mapping⸩;⸨decimal_digit_value⸩;⸨digit_value⸩;⸨numeric_value⸩;⸨bidi_mirrored⸩;⸨name | unicode1_name⸩;⸨ISO_10646_comment⸩;⸨internal upper_case: Scalar = this⸩;⸨internal lower_case: Scalar = this⸩;⸨internal title_case: Scalar = this⸩⸨)⸩
+    ⸩.loop.map(?).join(*)
+
+    //TODO How to indicate the Scalar's should automatically bind to the ones generated here.
+
+    category => GeneralCategory{name == general_category}
+
+  class GeneralCategory
+
+    @"https://www.unicode.org"/Public/UCD/latest/ucd/PropertyValueAliases.txt ~= ⸨
+      gc ; ⸨short_name | name⸩ ; ⸨name⸩ ⸨GeneralCategory[name] = Scalar{general_category == short_name} ⸩
+    ⸩.loop.map(?).map(~~ ~= " " = \s[]?).join(*)
+
+  class TF | TransformationFormat < CodeUnit[]{length == 32 / CodeUnit.length}
+    // https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-3/#G25549
+    class CodeUnit < Binary{length == (static.name ~= Decimal.String⊣)}
+
+    as (== CodePoint[]): CodePoint[]
+
+  //TODO LE/BE Little Endian/Big Endian
+  //TODO Test these implementations
+
+  // https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-3/#G27288
+  class UTF-8 < TF, sequence: (
+    prefix: 1[]{length == 0..4},
+    U0: Binary{length == 8 - prefix.length}{⊢0},
+    (1,0, U1: Binary{length == 6}) if prefix ⊢1,1,
+    (1,0, U2: Binary{length == 6}) if prefix ⊢1,1,1,
+    (1,0, U3: Binary{length == 6}) if prefix ⊢1,1,1,1
+  )[]
+    as (== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
+
+  // https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-3/#G27792
+  class UTF-16 < TF, sequence: (
+    prefix: 0b110110?,
+    U0: Binary{length == 4},
+    U1: Binary{length == 12 - prefix.length},
+    (0b110111, U2: Binary{length == 10}) if prefix
+  )[]
+    as (== CodePoint[]) => sequence.map(.U0 + 1, .U1, .U0)
+  class UTF-32 < TF, CodeUnit{⊢(0[]{length == 8})}[]
+
+// https://www.unicode.org/versions/Unicode17.0.0/core-spec/appendix-a/#G7083
+U+{codepoint: CodePoint.String}: Scalar => codepoint

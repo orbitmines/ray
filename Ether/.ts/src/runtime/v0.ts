@@ -33,11 +33,13 @@ namespace Symbols {
   export const get = Symbol("*");
   export const partial_args = Symbol("<>");
   export const evaluate = Symbol("eval");
+  export const execute = Symbol("execute");
 }
-const _ = (property?: "*" | "<>" | "()"): symbol => {
+const _ = (property?: "*" | "<>" | "()" | ">>"): symbol => {
   if (property === undefined) return Symbols.self;
   if (property === "*") return Symbols.get;
   if (property === "()") return Symbols.evaluate;
+  if (property === ">>") return Symbols.execute;
   return Symbols.partial_args;
 }
 const __ = _()
@@ -132,12 +134,16 @@ class Var {
   }
 
   private initialized: boolean = false
+  private program?: Var
 
   constructor(private initialize?: () => void) {
   }
 
   @external("* | methods")
   methods() { return Var.map(this.value.methods) }
+
+  @external("** | program")
+  _program() { return this.program }
 
   @external("= | assign")
   assign(x: Val) {
@@ -153,8 +159,8 @@ class Var {
   digit = (): number => {
     let i = 0
 
-    let current: Var = this
-    while(!(current = current[__].previous[__]).none()) { i += 1 }
+    let current = this[__]
+    while(!(current = current.previous)[__].none()) { i += 1 }
 
     return i;
   }
@@ -165,8 +171,8 @@ class Var {
 
     let string = "";
 
-    let char: Var = this[__]['as'](Var.expr('String'))
-    while (!(char = char[__].next[__]).none()) {
+    let char = this[__]['as'](Var.expr('String'))
+    while (!(char = char.next)[__].none()) {
       //TODO Decide how to encode chars.
     }
 
@@ -178,26 +184,60 @@ class Var {
     return false;
   }
 
-  //
-  get [_("()")](): Var {
-    //TODO Call Program.eval
-    throw new Error("Not yet implemented (eval)")
-    //TODO Keep updating ** while evaluating for (args)
+  // Execute program
+  get [_(">>")]() {
+    this[_("()")]
 
-    //TODO Store if not yet loaded global
-    // let variable = property.length == 1 ? Var.cast(property[0]) : Var.expr("TODO")
+    const get = (x: Var, property: Val): Var => {
+      //TODO Eval that one too.
+      // let variable = property.length == 1 ? Var.cast(property[0]) : Var.expr("TODO")
+      //
+      // for (let [key, value] of this.value.methods) {
+      //   if (variable.instance_of(key)) return value[__];
+      // }
+      //
+      // return Var.expr("None")[__] //TODO Location of None
+    }
+
+    let cursors = [this]
+    while (cursors.some(cursor => !get(cursor, 'next').none())) {
+
+    }
+
+    // eval = (): Var => {
+    //   //TODO
     //
-    // for (let [key, value] of this.value.methods) {
-    //   if (variable.instance_of(key)) return value[__];
+    //   const s = [" ", "\t"]
+    //   const DELIMITER = ["/", ".", ...s, ";", "\n"]
+    //
+    //
+    //   return new Var()
     // }
     //
-    // return Var.expr("None")[__] //TODO Location of None
+
+
+    return new Var()
+  }
+  // Evaluate lazy variable
+  get [_("()")](): Var {
+    if (!this.initialized && this.initialize) this.initialize()
+    if (!this.program) return this;
+
+    //TODO Should actually periodically update while running/stepping.
+    this.value = this.program[_(">>")]
+    this.program = undefined
+
+    return this;
   }
   // Lazy property getter
   [_("*")](...property: Val[]) {
     //TODO
 
-    const result = new Var(() => result[__]['** | program'] = new Program())
+    const result = new Var(() => {
+      //TODO
+      result.program = new Var()
+
+    })
 
 
     return result[__]
@@ -288,15 +328,6 @@ class Program extends Var {
     return this;
   }
 
-  eval = (): Var => {
-    //TODO
-
-    const s = [" ", "\t"]
-    const DELIMITER = ["/", ".", ...s, ";", "\n"]
-
-
-    return new Var()
-  }
 }
 class ProgramLoader {
   program: Program = new Program()
@@ -354,6 +385,7 @@ class Instance {
 
       program = (i == 0 ? program : program.copy())
       program.version = this.versions[version] ?? this.load(version)
+
       this.programs.push(program);
     }
   }
@@ -375,7 +407,7 @@ class Instance {
     this.unbound_programs.forEach(program => this.bind(program, args["global"] ?? ["latest"]))
     this.unbound_programs = []
 
-    this.programs.forEach(program => program[_("<>")](args)[__].eval())
+    this.programs.forEach(program => program[_("<>")](args)[_(">>")])
   }
 
 }

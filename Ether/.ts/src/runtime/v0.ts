@@ -9,103 +9,50 @@
 
 import PartialArgs = Ether.PartialArgs;
 
-abstract class ICursor<T> {
-  abstract previous?: ICursor<T>
-  abstract next?: ICursor<T>
-  abstract x: T
-
-  get first() { return this.boundary(x => x.previous); }
-  get last() { return this.boundary(x => x.next); }
-  boundary = (next: (x: ICursor<T>) => ICursor<T>): ICursor<T> => {
-    let current: ICursor<T> = this;
-    while (next(current) != undefined) { current = next(current); }
-    return current;
-  }
-
-  filter = (filter: (x: T) => boolean) => new FilteredCursor(this, filter);
-}
-class Cursor<T> extends ICursor<T> {
-  // static from_iterable = <T>(iterable: Iterable<T>): Cursor<T> => {
-  //
-  // }
-
-  previous?: ICursor<T>
-  next?: ICursor<T>
-  constructor(public x: T) { super(); }
-}
-class FilteredCursor<T> extends ICursor<T> {
-  constructor(public unfiltered: ICursor<T>, private _filter: (x: T) => boolean) { super(); }
-
-  get previous() { return this.get_next(x => x.previous) }
-  get next() { return this.get_next(x => x.next) }
-  private get_next = (next: (x: ICursor<T>) => ICursor<T>): ICursor<T> | undefined => {
-    let current: ICursor<T> = this;
-    while (next(current) != undefined) {
-      if (this._filter(next(current).x)) return new FilteredCursor(next(current), this._filter)
-      current = next(current)
-    }
-    return undefined;
-  }
-
-  get x() { return this.unfiltered.x }
-}
-
-type Token = string
-class Expression extends Cursor<Token> {
-
-  split = (...delimiter: Token[]) => {
-
-  }
-
-  to_string = () => {
-    let current: ICursor<Token> = this;
-    let string = current.x;
-    while (current.next) { string += current.next.x; current = current.next }
-    return string;
-  }
-}
-
 import fs from 'fs'
 import path from "node:path";
 
-type ExternalMethod = (...args: [SupportedValue, ctx: Context]) => SupportedValue | void
+type ExternalMethod = (...args: [Val, ctx: Context]) => Val | void
 
-// Work with properties.
-const external = <T extends ExternalMethod>(key?: SupportedValue) => {
-  return function (
-    target: any,
-    propertyKey: string,
-    descriptor: TypedPropertyDescriptor<T>
-  ) {
+const external = <T extends ExternalMethod>(key?: Val) => {
+  return function (target: any, propertyKey: string, descriptor: TypedPropertyDescriptor<T>) {
     const method = descriptor.value!;
-
     const existing = target.constructor.prototype.constructor;
 
     target.constructor.prototype.constructor = function (...args: any[]) {
       existing.apply(this, args);
-
-      this.external_method(key ?? propertyKey, Var.func(method.bind(this)));
+      this.external_method(key ?? propertyKey, method.bind(this));
     };
   };
 }
 
-type SupportedValue = string | symbol | Var | ExternalMethod
+type Val = string | symbol | Var | ExternalMethod
 
-const o = Symbol("self");
-const get = Symbol("get");
-const partial_args = Symbol("partial_args");
+namespace Symbols {
+  export const self = Symbol("self");
+  export const get = Symbol("*");
+  export const partial_args = Symbol("<>");
+  export const evaluate = Symbol("eval");
+}
+const _ = (property?: "*" | "<>" | "()"): symbol => {
+  if (property === undefined) return Symbols.self;
+  if (property === "*") return Symbols.get;
+  if (property === "()") return Symbols.evaluate;
+  return Symbols.partial_args;
+}
+const __ = _()
 
-type Val = {
+type NODE = {
   none?: boolean
   //TODO Dynamically allocate conditional methods
   get methods(): Map<Var, Var>
 }
 
 class Var {
-  value: Val = { methods: new Map<Var, Var>() }
+  value: NODE = { methods: new Map<Var, Var>() }
   dependants: Var[] //TODO dynamically. or implement in the language: override = of all mentioned vars dependencies.
 
-  static cast = (val: SupportedValue): Var => {
+  static cast = (val: Val): Var => {
     if (is_symbol(val)) val = val.toString()
 
     if (is_string(val)) {
@@ -115,27 +62,55 @@ class Var {
 
     return val;
   }
-  static string = (string: string): Var => {
-    //TODO
-    return new Var()
+  static string = (value: string): Var => {
+    return Var.array(...[...value]
+      .map(ch => ch.codePointAt(0))
+      .map(codepoint => codepoint.toString(2).padStart(24, "0").split("").map(x => Number(x)))
+      .map(char => Var.array(...char.map(digit => Var.digit(digit, 2))))
+    )[__][":"](Var.expr("String"))[__]
   }
-  static digit = (digit: number, base: number): Var => {
+  static digit = (digit: number, base: number): Ray => {
     if (digit > base || digit < 0) throw new Error(`Digit is 0 < . < ${base}`)
     if (base < 2) throw new Error(`Base is >= 2`)
 
     let integer = new Ray()
     let selected: Ray = integer
     for (let i = 0; i < base - 1; i++) {
-      integer = integer.push()
+      integer = integer.push_ray()
 
       if (digit === i + 1)
         selected = integer;
     }
 
     const cursor = new Ray()
-    cursor.lazy["&+="](selected)
+    cursor[__]["&+="](selected)
     return cursor
   }
+  static array = (...entries: Val[]): Ray => {
+    let first: Ray | undefined
+    let current: Ray
+
+    entries.forEach(entry => {
+      let next: Ray;
+      if (entry instanceof Ray) {
+        next = entry
+      } else {
+        next = new Ray()
+        next[__]["&+="](entry)
+      }
+
+      if (current) current.push_ray(next)
+
+      current = next;
+      if (!first) first = current;
+    })
+
+    let array = new Ray()
+    array[__].next = first;
+
+    return array
+  }
+
   static path = (path: string): Var => {
     //TODO
     return new Var()
@@ -146,22 +121,26 @@ class Var {
   }
   static expr = (expression: string): Var => {
     //TODO
-    return new Var()
+    const x = new Var()
+    if (expression === "None")
+      x.value.none = true
+    return x;
   }
   static func = (func: ExternalMethod): Var => {
     //TODO
     return new Var()
   }
-  static array = (...array: SupportedValue[]): Var => {
-    //TODO
-    return new Var()
+
+  private initialized: boolean = false
+
+  constructor(private initialize?: () => void) {
   }
 
   @external("* | methods")
   methods() { return Var.map(this.value.methods) }
 
   @external("= | assign")
-  assign(x: SupportedValue) {
+  assign(x: Val) {
     this.value = Var.cast(x).value
     // TODO Update location
     // TODO Update version control if present
@@ -169,81 +148,69 @@ class Var {
     // TODO If assign is called on None, then set in .methods (Set .methods in location)
   }
 
-  eval = (): Var => this.real['**']()[o]
-
-  none = (): boolean => this.value.none
+  none = (): boolean => this[_("()")].value.none
 
   digit = (): number => {
     let i = 0
 
     let current: Var = this
-    while(!(current = current.real.previous[o]).none()) { i += 1 }
+    while(!(current = current[__].previous[__]).none()) { i += 1 }
 
     return i;
   }
 
-  boolean = (): boolean => this.real['as'](Var.expr('boolean'))[0][o].digit() == 1
+  boolean = (): boolean => this[__]['as'](Var.expr('boolean'))[0][__].digit() == 1
   string = (): string => {
-    if (this.real['=='].instance_of(Var.expr('String'))[o].boolean()) throw new Error('Variable is not of type String.')
+    if (this[__]['=='].instance_of(Var.expr('String'))[__].boolean()) throw new Error('Variable is not of type String.')
 
     let string = "";
 
-    let char: Var = this.real['as'](Var.expr('String'))
-    while (!(char = char.real.next[o]).none()) {
+    let char: Var = this[__]['as'](Var.expr('String'))
+    while (!(char = char[__].next[__]).none()) {
       //TODO Decide how to encode chars.
     }
 
     return string;
   }
 
-  instance_of = (type: SupportedValue): boolean => {
+  instance_of = (type: Val): boolean => {
     //TODO Flag == & instance_of methods
     return false;
   }
 
-  get lazy() { return new Proxy(class {}, {
-    apply: (_: any, thisArg: any, argArray: any[]): any => this.lazy[get](Var.array("(", ...argArray, ")")),
-    set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
-      return true
-    },
-    get: (_: any, property: string | symbol, receiver: any): any => {
-      const getter = (property: SupportedValue) => {
-        //TODO
-        return new Var().lazy
-      }
+  //
+  get [_("()")](): Var {
+    //TODO Call Program.eval
+    throw new Error("Not yet implemented (eval)")
+    //TODO Keep updating ** while evaluating for (args)
 
-      if (property == o) return this
-      if (property == get) return getter
-      if (property == partial_args) return (args?: PartialArgs) => args ? this.lazy[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]() : this
+    //TODO Store if not yet loaded global
+    // let variable = property.length == 1 ? Var.cast(property[0]) : Var.expr("TODO")
+    //
+    // for (let [key, value] of this.value.methods) {
+    //   if (variable.instance_of(key)) return value[__];
+    // }
+    //
+    // return Var.expr("None")[__] //TODO Location of None
+  }
+  // Lazy property getter
+  [_("*")](...property: Val[]) {
+    //TODO
 
-      return getter(property)
-    }
-  })}
+    const result = new Var(() => result[__]['** | program'] = new Program())
 
-  get real() { return new Proxy(class {}, {
-    apply: (_: any, thisArg: any, argArray: any[]): any => this.real[get](Var.array("(", ...argArray, ")")),
-    set: (_: any, property: string | symbol, newValue: any, receiver: any): boolean => {
-      return true
-    },
-    get: (_: any, property: string | symbol, receiver: any): any => {
-      const getter = (property: SupportedValue) => {
-        //TODO Keep updating ** while evaluating for (args)
 
-        //TODO Store if not yet loaded global
-        let variable = Var.cast(property)
+    return result[__]
+  }
+  [_("<>")](args?: PartialArgs) { return args ? this[__][`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]() : this }
+  get [__]() { return new Proxy(class {}, {
+    apply: (target: any, thisArg: any, argArray: any[]): any => this[_("*")]("(", ...argArray, ")"),
+    set: (target: any, property: string | symbol, newValue: any, receiver: any): boolean => { this[__][property]["="](newValue); return true },
+    get: (target: any, property: string | symbol, receiver: any): any => {
+      if (property == __) return this
+      if (is_symbol(property)) return this[property]
 
-        for (let [key, value] of this.value.methods) {
-          if (variable.instance_of(key)) return value.real;
-        }
-
-        return Var.expr("None").real //TODO Location of None
-      }
-
-      if (property == o) return this
-      if (property == get) return getter
-      if (property == partial_args) return (args?: PartialArgs) => args ? this.real[`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]() : this
-
-      return getter(property)
+      return this[_("*")](property)
     }
   })}
 
@@ -255,15 +222,14 @@ class Var {
 class Ray extends Var {
   constructor() {
     super();
-    this.lazy[":"](Var.expr("Ray"))
+    this[__][":"](Var.expr("Ray"))
   }
 
-  push = (x?: SupportedValue) => {
-    const next = new Ray()
-    next.lazy["&+="](Var.cast(x)) //TODO How to indicate I want the right component
+  push_ray = (next: Ray = new Ray()) => {
+    //next[__]["&+="](Var.cast(x)) //TODO How to indicate I want the right component
 
-    next.lazy.previous = this
-    this.lazy.next = next
+    next[__].previous = this
+    this[__].next = next
 
     return next
   }
@@ -276,7 +242,7 @@ class Context extends Var {
   @external()
   local() { return this; }
 
-  has_method = (x: SupportedValue): boolean => {
+  has_method = (x: Val): boolean => {
     //TODO
     return false;
   }
@@ -289,21 +255,21 @@ namespace Language {
     }
 
     //@external
-    assign(version: SupportedValue) {
+    assign(version: Val) {
       super.assign(this.instance.load(Var.cast(version).string()))
       //TODO Update objects, defined in child contexts.
     }
 
     @external()
-    external(x: SupportedValue, ctx: Context) {
+    external(x: Val, ctx: Context) {
       // TODO Get caller and check from there if it has
-      if (!ctx.has_method(x)) throw new Error(`Expected externally defined method '${Var.cast(x).string()}' in ${ctx.real.name[o].string()}`)
+      if (!ctx.has_method(x)) throw new Error(`Expected externally defined method '${Var.cast(x).string()}' in ${ctx[__].name[__].string()}`)
 
-      return ctx.lazy[get](x)
+      return ctx[_("*")](x)
     }
 
     @external()
-    location() { return Var.expr("IO").lazy(Var.path(this.ether)) }
+    location() { return Var.expr("IO")[__](Var.path(this.ether)) }
 
   }
 }
@@ -314,7 +280,7 @@ class Program extends Var {
 
   constructor() {
     super();
-    this.lazy[":"](Var.expr("Program"))
+    this[__][":"](Var.expr("Program"))
   }
 
   copy = (): Program => {
@@ -338,26 +304,26 @@ class ProgramLoader {
   private expr = (path: string, expr: string) => {
     const x = new Var()
 
-    x.lazy.location["&="](Var.expr("IO").lazy(Var.path(path)))
-    x.lazy.expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
+    x[__].location["&="](Var.expr("IO")[__](Var.path(path)))
+    x[__].expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
 
     return x;
   }
 
   dir = (path: string, args?: PartialArgs): this => {
-    this.program.lazy.push_back(
+    this.program[__].push_back(
       files(path)
         .filter(path => path.endsWith('.ray'))
         .map(path => this.expr(path, fs.readFileSync(path, "utf-8")))
-        .map(x => x.lazy)
+        .map(x => x[__])
         .reduce((acc: any | undefined, x: any) => acc ? acc["push_back"](x) : x)
-        .all.collapse[partial_args](args)
+        .all.collapse[_("<>")](args)
     )
 
     return this;
   }
   file = (path: string, args?: PartialArgs): this => {
-    this.expr(path, fs.readFileSync(path, "utf-8")).lazy[partial_args](args)
+    this.expr(path, fs.readFileSync(path, "utf-8"))[__][_("<>")](args)
     return this;
   }
 }
@@ -394,7 +360,7 @@ class Instance {
 
   //TODO Also branch off existing program states
   branch = (load: (loader: ProgramLoader) => ProgramLoader, args: PartialArgs = {}): this => {
-    const program = load(new ProgramLoader()).program.lazy[partial_args](args)[o]
+    const program = load(new ProgramLoader()).program[_("<>")](args)[__]
 
     if (args["global"] && args["global"].length > 0) {
       this.bind(program, args["global"]);
@@ -409,7 +375,7 @@ class Instance {
     this.unbound_programs.forEach(program => this.bind(program, args["global"] ?? ["latest"]))
     this.unbound_programs = []
 
-    this.programs.forEach(program => program.lazy[partial_args](args)[o].eval())
+    this.programs.forEach(program => program[_("<>")](args)[__].eval())
   }
 
 }

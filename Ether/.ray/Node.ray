@@ -50,6 +50,7 @@ class * | Node
   // * operator allows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
   // If # is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
   external # | all : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
+  // +/&+ are both components but normal + overrides.
   external ## | components : Iterable<static##.reduce(|)> //TODO Does this type work?
   //TODO Exclude vs include things like local and other defined properties on Node,
   external * | methods : { {key: *}: value: Program? }

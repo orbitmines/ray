@@ -125,7 +125,8 @@ class Iterable<T>
   for ()
 
   // TODO Structure altering mapping with ~ somehow
-  map <T>(map: (x): T) => static{T: T}
+  //TODO Name for &+ iterator right?
+  map <T>{predicate: (x: T &+ iterator: Ray): boolean}(map: (x): T) => static{T: T}
   reduce | fold | foldl ()
   reduce_right | fold_right | foldr ()
   //TODO Mapping and reducing together?
@@ -146,6 +147,8 @@ class Iterable<T>
   every (predicate: (): boolean)
   some (predicate: (): boolean)
   contains | includes (x: T)
+
+  partition (predicate: (): boolean)
 
   [] //TODO Ranges, index
 

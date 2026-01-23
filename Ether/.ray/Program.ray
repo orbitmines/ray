@@ -199,6 +199,9 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
     )
   end
 
+  //TODO Say that the .next depends on the current state; or some variable (goto if)
+  dynamically assert
+
   args | arguments => first.out
   result => last.out //TODO This is a variable where ** = this program. Basically a var is bound to the result of the function
   return_type => result.type

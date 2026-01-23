@@ -14,35 +14,28 @@ import path from "node:path";
 
 type ExternalMethod = (...args: [Val, ctx: Context]) => Val | void
 
-const external = <T extends ExternalMethod>(key?: Val) => {
-  return function (target: any, propertyKey: string, descriptor: TypedPropertyDescriptor<T>) {
-    const method = descriptor.value!;
-    const existing = target.constructor.prototype.constructor;
-
-    target.constructor.prototype.constructor = function (...args: any[]) {
-      existing.apply(this, args);
-      this.external_method(key ?? propertyKey, method.bind(this));
-    };
-  };
-}
-
 type Val = string | symbol | Var | ExternalMethod
 
 namespace Symbols {
   export const self = Symbol("self");
   export const get = Symbol("*");
   export const partial_args = Symbol("<>");
+  export const all = Symbol("#");
   export const evaluate = Symbol("eval");
   export const execute = Symbol("execute");
 }
-const _ = (property?: "*" | "<>" | "()" | ">>"): symbol => {
+const _ = (property?: "*" | "<>" | "()" | "#" | ">>"): symbol => {
   if (property === undefined) return Symbols.self;
   if (property === "*") return Symbols.get;
   if (property === "()") return Symbols.evaluate;
+  if (property === "#") return Symbols.all;
   if (property === ">>") return Symbols.execute;
   return Symbols.partial_args;
 }
 const __ = _()
+
+// v0 Assumes termination when it shouldn't, and instead we'd want a NPC to decide which branches to explore and how.
+const incorrectly_assume_termination = (x: Generator<Var>): Var[] => [...x];
 
 type NODE = {
   none?: boolean
@@ -52,6 +45,9 @@ type NODE = {
 
 class Var {
   value: NODE = { methods: new Map<Var, Var>() }
+  encoded_string?: string
+  func?: Var
+
   dependants: Var[] //TODO dynamically. or implement in the language: override = of all mentioned vars dependencies.
 
   static cast = (val: Val): Var => {
@@ -65,11 +61,13 @@ class Var {
     return val;
   }
   static string = (value: string): Var => {
-    return Var.array(...[...value]
+    const x = Var.array(...[...value]
       .map(ch => ch.codePointAt(0))
       .map(codepoint => codepoint.toString(2).padStart(24, "0").split("").map(x => Number(x)))
       .map(char => Var.array(...char.map(digit => Var.digit(digit, 2))))
     )[__][":"](Var.expr("String"))[__]
+    x.encoded_string = value
+    return x;
   }
   static digit = (digit: number, base: number): Ray => {
     if (digit > base || digit < 0) throw new Error(`Digit is 0 < . < ${base}`)
@@ -137,15 +135,11 @@ class Var {
   private program?: Var
 
   constructor(private initialize?: () => void) {
+    this.external_method("* | methods", () => Var.map(this.value.methods))
+    this.external_method("** | program", () => this.program)
+    this.external_method("= | assign", this.assign)
   }
 
-  @external("* | methods")
-  methods() { return Var.map(this.value.methods) }
-
-  @external("** | program")
-  _program() { return this.program }
-
-  @external("= | assign")
   assign(x: Val) {
     this.value = Var.cast(x).value
     // TODO Update location
@@ -180,29 +174,82 @@ class Var {
   }
 
   instance_of = (type: Val): boolean => {
-    //TODO Flag == & instance_of methods
+    type = Var.cast(type)
+
+    console.log('instance_of', this.encoded_string, type.encoded_string)
+
+    if (this.encoded_string && type.encoded_string)
+      return this.encoded_string == type.encoded_string
+
+    return false;
+    throw new Error('Not yet implemented')
+
+    // this[_("()")]
+    // type[_("()")]
+
+
     return false;
   }
 
+  get = (property: Val): Var => {
+    property = Var.cast(property)
+
+    this[_("()")]
+
+    for (let [key, value] of this.value.methods) {
+      if (property.instance_of(key)) return value
+    }
+
+    return Var.expr("None") //TODO Location of None
+  }
+  call = (property: Var): Var => {
+    return this;
+  }
+
+  // Iterate over all
+  *[_("#")](): Generator<Var> {
+    if (this.get('#').none()) yield this;
+  }
   // Execute program
   get [_(">>")]() {
     this[_("()")]
+    console.log(this)
 
-    const get = (x: Var, property: Val): Var => {
-      //TODO Eval that one too.
-      // let variable = property.length == 1 ? Var.cast(property[0]) : Var.expr("TODO")
-      //
-      // for (let [key, value] of this.value.methods) {
-      //   if (variable.instance_of(key)) return value[__];
-      // }
-      //
-      // return Var.expr("None")[__] //TODO Location of None
+    let terminal: Var[] = []
+    let cursors: Var[] = [this]
+    while (cursors.length !== 0) {
+      console.log('next')
+      const [done, todo] = partition(cursors, cursor => cursor.get('next').none())
+      terminal.push(...done)
+      console.log(todo.length)
+
+      //TODO Define logic which determines how to step (a possibly infinitely generating program with each .next)
+
+      cursors = todo.flatMap(cursor => {
+        let reduced: Var[] = [cursor]
+        while (reduced.some(cursor => !cursor.get('expand').none())) {
+          reduced = reduced.flatMap(cursor => cursor.get('expand').none() ? cursor : incorrectly_assume_termination(cursor.get('expand')[_("#")]()))
+        }
+        console.log('reduced', reduced.length)
+
+        return reduced.flatMap(cursor => {
+          const x = cursor.get('previous').get('∙')
+          const result = cursor.get('∙')
+
+          result.value = x.call(cursor.func).value
+
+          console.log('Execute', cursor.func)
+
+          const next = cursor.get('next')
+          console.log('next is', [...next[_("#")]()])
+          return incorrectly_assume_termination(next[_("#")]())
+        })
+      })
+      console.log('after', cursors.length)
     }
+    console.log('done,', terminal.length, 'branch(es)')
 
-    let cursors = [this]
-    while (cursors.some(cursor => !get(cursor, 'next').none())) {
-
-    }
+    //TODO return alters control-flow and jumps to the thing which calls >> ?
 
     // eval = (): Var => {
     //   //TODO
@@ -215,16 +262,18 @@ class Var {
     // }
     //
 
-
+    //TODO Superpose .terminal.∙
     return new Var()
   }
   // Evaluate lazy variable
   get [_("()")](): Var {
     if (!this.initialized && this.initialize) this.initialize()
+    this.initialized = true
+
     if (!this.program) return this;
 
     //TODO Should actually periodically update while running/stepping.
-    this.value = this.program[_(">>")]
+    this.value = this.program[_(">>")].value
     this.program = undefined
 
     return this;
@@ -233,16 +282,30 @@ class Var {
   [_("*")](...property: Val[]) {
     //TODO
 
+    if (this.initialized)
+      throw new Error('Lazyily updating object after initialization is not allowed by the runtime itself.')
+
+    const _super = this.initialize;
+    this.initialize = () => {
+      if (_super) _super()
+
+      //TODO
+      if (property.length === 1) {
+        this.value.methods.set(Var.cast(property[0]), result)
+      }
+    }
+
+    // console.log('lazily getting', ...property)
     const result = new Var(() => {
       //TODO
       result.program = new Var()
-
+      result.program.value.methods.set(Var.cast('next'), new Var())
+      result.program.func = property.length === 1 ? Var.cast(property[0]) : Var.array(...property)
     })
-
 
     return result[__]
   }
-  [_("<>")](args?: PartialArgs) { return args ? this[__][`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]() : this }
+  [_("<>")](args?: PartialArgs) { return args && Object.entries(args).length !== 0 ? this[__][`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]() : this }
   get [__]() { return new Proxy(class {}, {
     apply: (target: any, thisArg: any, argArray: any[]): any => this[_("*")]("(", ...argArray, ")"),
     set: (target: any, property: string | symbol, newValue: any, receiver: any): boolean => { this[__][property]["="](newValue); return true },
@@ -254,8 +317,17 @@ class Var {
     }
   })}
 
-  private external_method = (key: string | Var, value: string | Var | ExternalMethod) =>
-    this.value.methods.set(Var.cast(key), Var.cast(value))
+  on_initialization = (call: () => void) => {
+    const _super = this.initialize;
+    this.initialize = () => {
+      if (_super) _super()
+      call()
+    }
+  }
+
+  protected external_method = (key: string | Var, value: string | Var | ExternalMethod) => {
+    this.on_initialization(() => this.value.methods.set(Var.cast(key), Var.cast(value)))
+  }
 
 }
 
@@ -279,8 +351,11 @@ const latest = Symbol("latest");
 class Context extends Var {
   //TODO Location of context
 
-  @external()
-  local() { return this; }
+  constructor() {
+    super();
+
+    this.external_method("local", () => this)
+  }
 
   has_method = (x: Val): boolean => {
     //TODO
@@ -292,6 +367,9 @@ namespace Language {
   export class Ray extends Context {
     constructor(private instance: Instance, public ether: string) {
       super();
+
+      this.external_method("external", this.external)
+      this.external_method("location", this.location)
     }
 
     //@external
@@ -300,7 +378,6 @@ namespace Language {
       //TODO Update objects, defined in child contexts.
     }
 
-    @external()
     external(x: Val, ctx: Context) {
       // TODO Get caller and check from there if it has
       if (!ctx.has_method(x)) throw new Error(`Expected externally defined method '${Var.cast(x).string()}' in ${ctx[__].name[__].string()}`)
@@ -308,7 +385,6 @@ namespace Language {
       return ctx[_("*")](x)
     }
 
-    @external()
     location() { return Var.expr("IO")[__](Var.path(this.ether)) }
 
   }
@@ -347,7 +423,7 @@ class ProgramLoader {
         .filter(path => path.endsWith('.ray'))
         .map(path => this.expr(path, fs.readFileSync(path, "utf-8")))
         .map(x => x[__])
-        .reduce((acc: any | undefined, x: any) => acc ? acc["push_back"](x) : x)
+        .reduce((acc: any | undefined, x: any) => acc ? acc.push_back(x) : x)
         .all.collapse[_("<>")](args)
     )
 
@@ -407,7 +483,8 @@ class Instance {
     this.unbound_programs.forEach(program => this.bind(program, args["global"] ?? ["latest"]))
     this.unbound_programs = []
 
-    this.programs.forEach(program => program[_("<>")](args)[_(">>")])
+    Var.string('test_string')[_("()")]
+    // this.programs.forEach(program => program[_("<>")](args)[_(">>")])
   }
 
 }
@@ -495,3 +572,14 @@ export const raw_tag = (value: any) => {
   return result;
 }
 export const to_string = (value: any): String => Object.prototype.toString.call(value);
+
+const partition = <T>(array: T[], predicate: (x: T) => boolean) => {
+  const pass: T[] = [];
+  const fail: T[] = [];
+
+  for (const item of array) {
+    (predicate(item) ? pass : fail).push(item);
+  }
+
+  return [pass, fail];
+};

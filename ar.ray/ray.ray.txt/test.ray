@@ -47,6 +47,46 @@ A = cursor{choose 1}
 //Depending on the context, it might even prompt the Player if its context is deemed necessary for that.
 var = 2
 [1, dynamically var, dynamically var].map{choose 1}(*10) // [10, 2, 2] | [1, 20, 20]
+{choose 1/2} // 50%
+
+//TODO How to say: .unordered, arbitrarily choose anything equivalent to
+choose Iterable{.every(a => B.contains(a)) && .count == B.count}
+choose Number // No, this would be Number{choose}
+choose 10 Number
+Number{choose}
+Number{choose 10}
+
+Number#.random
+
+A (B, C)
+// ALlow
+A (choose, choose 1)
+
+//What about optimizations problems, how does one code that in?
+// Any Ordered
+optimize x: Number
+//TODO Different coded priorities, or optimize priorities too? how
+optimize y: Number
+optimize space_used
+optimize time_elapsed
+maximize/minimize
+dynamically assert x + y <= 10
+
+//TODO What about the model it's constructing (effectiveness) vs (how long it took to make) so
+// minimize effort, maximize effectiveness
+// minimize spatial_complexity & time_complexity
+
+//TODO Want to say: Can start out with an implementation which works but is slow, and optimize it over time. Dynamically that means ; how often sometimes is used etc..
+
+//TODO HOw to encode different prefernces: Saying this particular implementation of the optimizer prefers THIS.
+if x > 100
+  prefer minimize y
+ to define that?
+
+allow capability1
+allow capability2
+allow capability3
+
 
 //TODO What about syntax which is more contextual
 

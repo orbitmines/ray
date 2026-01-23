@@ -1,3 +1,52 @@
+//TODO How to support [None, None] if .next is None is those. ~ yields a structure equipped on None, so it's not just None. So it needs to be exactly None, not with structure.
+
+//TODO How to define, "these are all the non-halting points", have a NPC decide when and how to traverse.
+//TODO -> Take as an example program evaluation.
+//TODO "choice"
+//TODO Indicate which cursor to advance, which cursor to expand
+cursor: Program
+while cursor{next} != None
+  cursor = choose (cursor{next} -> .expand).last.map x
+    // Program logic
+    x.next
+
+// Takes one element and maps it to the block (Also allows the compiler to choose how and which to advance first)
+while cursor{next} != None
+  cursor{next}.choose
+    (cursor{next} -> .expand).last
+    // Program logic
+    cursor (.next if .next) //TODO Only .next if has a .next HOW?
+
+// To indicate to the runtime & compiler, that it can arbitrarily pick (and map) a single value among a collection and then manipulate it. Note that this 'arbitrary picking', the runtime can have access to the running function, its context and possibly some model it has on function execution which determines what it picks; It doesn't have to be '''purely random'''.
+while cursor{next} != None
+  choose.map 1 cursor{next}
+    if .expand !== .
+      .expand
+    else
+      // Program logic
+      . (.next if .next) //TODO Only .next if has a .next HOW?
+
+  a = choose cursor // picks a single element
+  choose cursor => .call
+
+// OR choose (X) is of type (x: *): boolean so
+cursor = cursor.map{next}{choose 1}
+  if .expand !== .
+    .expand
+  else
+    // Program logic
+    . (.next if .next) //TODO Only .next if has a .next HOW?
+
+//TODO Does mean the predicate is aware of all its usages.
+A = cursor{choose 1}
+
+
+[1, 2, 3].map{.index == 2}(*10) // [1, 2, 30]
+[1, 2, 3].map{choose 1}(*10) // [10, 2, 3] | [1, 20, 3] | [1, 2, 30]
+//Chose uses === for checking equality. And only maps it once, then defers to the altered variable
+//Depending on the context, it might even prompt the Player if its context is deemed necessary for that.
+var = 2
+[1, dynamically var, dynamically var].map{choose 1}(*10) // [10, 2, 2] | [1, 20, 20]
 
 //TODO What about syntax which is more contextual
 

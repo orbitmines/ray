@@ -424,6 +424,7 @@ Language
   namespace MessagePack < Language(".msgpack") ; location &= "https://github.com/msgpack/msgpack" & "https://msgpack.org/"
   namespace Michelson < Language(".tz") ; location &= "https://tezos.gitlab.io/active/michelson.html" & "https://docs.tezos.com/smart-contracts/languages/michelson"
     namespace UnitTest < Language(".tzt")
+  namespace MiniZinc < Language(".mzn") ; location &= "https://github.com/MiniZinc/libminizinc"
   namespace Mizar < Language(".miz") ; location &= "https://mizar.uwb.edu.pl/" & "https://en.wikipedia.org/wiki/Mizar_system"
     namespace Abstract < Language(".abs")
   namespace Mojo < Language(".mojo" | ".🔥") ; location &= "https://github.com/modular/modular" & "https://en.wikipedia.org/wiki/Mojo_(programming_language)"

@@ -72,6 +72,11 @@ optimize time_elapsed
 maximize/minimize
 dynamically assert x + y <= 10
 
+// Support generators. OR Automatically convert into a generator if something will be returned.
+//  (Intermediate result basically)
+yield & var
+
+
 //TODO What about the model it's constructing (effectiveness) vs (how long it took to make) so
 // minimize effort, maximize effectiveness
 // minimize spatial_complexity & time_complexity

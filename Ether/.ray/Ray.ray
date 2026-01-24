@@ -97,6 +97,7 @@ class AbstractDirectionality<T> < Iterable<T>
 
   previous =>
 
+  undirected | bidirectional =>
 
   static Connected // each Node is reachable from each other Node. (Going both forward and backward)
   static Consistent

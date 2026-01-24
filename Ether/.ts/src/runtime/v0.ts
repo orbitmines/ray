@@ -62,10 +62,16 @@ class Var {
   }
   static string = (value: string): Var => {
     const x = Var.array(...[...value]
-      .map(ch => ch.codePointAt(0))
-      .map(codepoint => codepoint.toString(2).padStart(24, "0").split("").map(x => Number(x)))
-      .map(char => Var.array(...char.map(digit => Var.digit(digit, 2))))
-    )[__][":"](Var.expr("String"))[__]
+      .map(ch => {
+        const codepoint = ch.codePointAt(0)
+        const char = codepoint.toString(2).padStart(24, "0").split("").map(x => Number(x))
+
+        const x = Var.array(...char.map(digit => Var.digit(digit, 2)))
+        x.encoded_string = ch;
+        console.log('-->', x.encoded_string)
+        return x;
+      })
+    )//[__][":"](Var.expr("String"))[__]
     x.encoded_string = value
     return x;
   }
@@ -98,6 +104,10 @@ class Var {
         next = new Ray()
         next[__]["&+="](entry)
       }
+      if (entry instanceof Var)
+        next.encoded_string = entry.encoded_string
+
+      // console.log('--->', next.encoded_string)
 
       if (current) current.push_ray(next)
 
@@ -127,12 +137,14 @@ class Var {
     return x;
   }
   static func = (func: ExternalMethod): Var => {
-    //TODO
-    return new Var()
+    const x = new Var()
+    x.call = func
+    return x;
   }
 
   private initialized: boolean = false
   private program?: Var
+  call?: ExternalMethod
 
   constructor(private initialize?: () => void) {
     this.external_method("* | methods", () => Var.map(this.value.methods))
@@ -141,6 +153,7 @@ class Var {
   }
 
   assign(x: Val) {
+    console.log('Assigned', x)
     this.value = Var.cast(x).value
     // TODO Update location
     // TODO Update version control if present
@@ -173,6 +186,25 @@ class Var {
     return string;
   }
 
+  matches = (...pattern: Val[]): boolean => {
+    if (this.encoded_string) return false;
+
+    console.log('Checking if matches', ...pattern)
+    let current = this.get('next')
+    current[_("()")]
+    current = current.get('next')
+    for (const part of pattern) {
+      current[_("()")]
+
+      if (Var.cast(part).encoded_string === '{*}') continue;
+      console.log(current, 'instanceof', part)
+      if (!current.instance_of(part)) return false;
+
+      current = current.get('next')
+    }
+    return true;
+  }
+
   instance_of = (type: Val): boolean => {
     type = Var.cast(type)
 
@@ -196,19 +228,39 @@ class Var {
 
     this[_("()")]
 
+    console.log('is func', property.call !== undefined)
+    if (property.matches('(', '{*}', ')')) {
+      if (!this.call) throw new Error('Variable is not callable')
+      const x = this.call(property.get('next').get('next'), new Context()) //TODO Context
+      return x ? Var.cast(x) : new Var() //TODO Void
+    }
+
     for (let [key, value] of this.value.methods) {
       if (property.instance_of(key)) return value
     }
 
     return Var.expr("None") //TODO Location of None
   }
-  call = (property: Var): Var => {
-    return this;
-  }
+
 
   // Iterate over all
   *[_("#")](): Generator<Var> {
-    if (this.get('#').none()) yield this;
+    if (this.get('#').none()) {
+      yield this;
+      return;
+    }
+
+    const found: Var[] = []
+    const find = (x: Var) => {
+      if (x.none()) return false;
+      if (found.includes(x)) return false;
+      found.push(x);
+      return x;
+    }
+
+    for (let x of this.get('#').get('undirected').get('next')[_('#')]()) {
+      if (find(x)) yield x;
+    }
   }
   // Execute program
   get [_(">>")]() {
@@ -236,7 +288,7 @@ class Var {
           const x = cursor.get('previous').get('∙')
           const result = cursor.get('∙')
 
-          result.value = x.call(cursor.func).value
+          result.value = x.get(cursor.func).value
 
           console.log('Execute', cursor.func)
 
@@ -300,6 +352,7 @@ class Var {
       //TODO
       result.program = new Var()
       result.program.value.methods.set(Var.cast('next'), new Var())
+      console.log('lazy func', property.length === 3)
       result.program.func = property.length === 1 ? Var.cast(property[0]) : Var.array(...property)
     })
 
@@ -483,7 +536,7 @@ class Instance {
     this.unbound_programs.forEach(program => this.bind(program, args["global"] ?? ["latest"]))
     this.unbound_programs = []
 
-    Var.string('test_string')[_("()")]
+    Var.string('test_string')[__]("A")[_("()")]
     // this.programs.forEach(program => program[_("<>")](args)[_(">>")])
   }
 

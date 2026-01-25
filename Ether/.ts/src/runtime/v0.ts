@@ -277,6 +277,8 @@ class Var {
 
       //TODO Define logic which determines how to step (a possibly infinitely generating program with each .next)
 
+      //TODO Hierarchy if events still need to see if a parent has a next defined
+
       cursors = todo.flatMap(cursor => {
         let reduced: Var[] = [cursor]
         while (reduced.some(cursor => !cursor.get('expand').none())) {

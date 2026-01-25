@@ -152,6 +152,8 @@ class Context //Subgraph of a function.context
 class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Expression
    // Hierarchy is actually somehow a 2nd level of collapse/expand, but in reverse; It's hidden from it, and from their perspective they dont collapse to this function, but continue as as the function. Like a mutual
 
+  //TODO Running a program in 'Multi-program' mode, settings all kinds of variables to their superpositions
+
   //TODO How to select .next to be only for Boundary. Because expression has been given separate name?
   //TODO Use expression to .expand function.
 

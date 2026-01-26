@@ -163,7 +163,7 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
 
   location: a Context & (span: ) & "{}:{}"
 
-  ∙: State
+  state | ∙ : State
   // Program State
   // - A looped control-flow, has the values of each iteration stored in the state's history.
   //   - Different instantiated branches are also different branches in the state's history.
@@ -307,7 +307,7 @@ Language // This namespace will be used for: < Language
 %
   //TODO Shadow each language implementation history, so we dont need to have access to the top-level language version
 
-static class Expression < String & global.Ray?
+static class Expression < String + Ray?
   //TODO Then how to define the assumptions of newline meaning => etc..
 
   //TODO Expression comes from some file or more generally a context, have that information available here.
@@ -330,7 +330,46 @@ static class Expression < String & global.Ray?
   ~~ (b: Expression)
 
   {" "}: (type) => //TODO Wrap whole expression in : type
+
   as (== Program)
+    program = Program()
+
+
+    expr = (<-this->).all
+    lines = expr.split<keep_delimiter = true>{
+      // ! Using
+    }(\n)
+
+        // Needs to be context aware
+        // Needs to reevaluate subexpressions of itself (but not itself) after adding to context.
+        //*.keys
+        context
+
+        //TODO Assumes \t = " "
+        expr => (\s | \n | ";")[], blocks: (,
+          func: ((*, (context*.keys++ ~~ ~= Expression = expr) | ("{", expr, "}")?)[], \n | ";"),
+          block: (
+            \s[]{length == whitespace if previous !~= ";"⊣},
+            (added_whitespace: \s[].NonEmpty if previous !~= ";"⊣,
+            expr<whitespace: whitespace + added_whitespace.length>)?,
+            (\s | \n | ";")[]?
+          )[]
+        )[]
+
+({expr: Expression}) => expr
+
+//TODO Count (, to include, not blocks.
+class Expression < (
+  (\s | \n | ";")[], blocks: Program<expression: this> (,
+    func: ((*, ∙*.keys? else ("{", Expression, "}")?)[], \n | ";"),
+    block: (
+      \s[]{length == whitespace if previous !~= ";"⊣},
+      (added_whitespace: \s[].NonEmpty if previous !~= ";"⊣,
+      expr<whitespace: whitespace + added_whitespace.length>)?,
+      (\s | \n | ";")[]?
+    )[]
+  )[]
+): String + Ray?
 
 
 Program

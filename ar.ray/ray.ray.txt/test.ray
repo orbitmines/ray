@@ -1,5 +1,29 @@
 //TODO How to support [None, None] if .next is None is those. ~ yields a structure equipped on None, so it's not just None. So it needs to be exactly None, not with structure.
 
+//TODO For grammar matching make a "resolve ambiguity" func ; match to both cases of the ambiguity..
+
+// unless if !
+
+a
+  b
+ c
+
+a
+  b
+   c
+ d
+
+a
+               b
+ c
+
+// Type with additional structure like
+blocks: Program (\s, \s)[]
+//TODO is not
+blocks: Program(\s, \s)[]
+
+ // When editing inside a double ((, force ((+TAB to turn into a (( (double << might be used for subexpressions.
+
 //TODO How to define, "these are all the non-halting points", have a NPC decide when and how to traverse.
 //TODO -> Take as an example program evaluation.
 //TODO "choice"
@@ -62,6 +86,8 @@ A (B, C)
 // ALlow
 A (choose, choose 1)
 
+//TODO Optimize to go back and forward with abstract objects vs rendered screen, optimize for what the client wants. (more accessible fvs speed vs compute use)
+// --> Client gives preferences, Networked.
 //What about optimizations problems, how does one code that in?
 // Any Ordered
 optimize x: Number
@@ -72,9 +98,13 @@ optimize time_elapsed
 maximize/minimize
 dynamically assert x + y <= 10
 
++ Ray? should still implement .next for Ray, but just return None.
+
 // Support generators. OR Automatically convert into a generator if something will be returned.
 //  (Intermediate result basically)
 yield & var
+
+[1, 2][] vs (1, 2)[] = [[1, 2], [1, 2]] vs [1, 2, 1, 2]
 
 
 //TODO What about the model it's constructing (effectiveness) vs (how long it took to make) so

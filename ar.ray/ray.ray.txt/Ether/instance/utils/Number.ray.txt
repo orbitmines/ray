@@ -138,6 +138,7 @@ def `digits: Decimal.Positive.String` => Decimal.Positive = digits
 +def Decimal.Positive
   def `fraction: Decimal.Positive.String` => Decimal.Real = integer, ".", fraction
 end
+//TODO 1111₂ subscript.
 
 def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
 //TODO This for binary

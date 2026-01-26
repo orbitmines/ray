@@ -49,6 +49,7 @@ class * | Node
   //TODO .not in  not Network.Hosts*.keys.reduce(|) //TODO What's the proper syntax for this, very verbose
   // * operator allows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
   // If # is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
+  //TODO If # is a Ray, we have a 'selected'. #.
   external # | all : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
   // +/&+ are both components but normal + overrides.
   external ## | components : Iterable<static##.reduce(|)> //TODO Does this type work?
@@ -107,6 +108,16 @@ class * | Node
                                     //   Some a: 5..10
                                     match => //TODO Use .if, vs " "if for expression
 
+  //Map defined on Node, so that a superposed variable works with .map and maps them all
+  // What else
+
+  //TODO What about map in place of certain Ray, allowing you to flat map in a structure.
+  //TODO What if I want to .map on String (&?)+ Ray, Then Ray would take preference for .map? Or is ray only mapping the specific ones??
+  //TODO Or now it would map Both direction & itself, which might also be preferred in some cases.
+  map
+
+  ++ | copy
+
   .= //TODO .= next ; x = x.next
 
   // instance_of and == are the same?
@@ -125,6 +136,8 @@ class * | Node
   //TODO ~= is subgraph
   namespace ~= (expression: Expression{: initial: "^" | "⊢" ?, ?, terminal: "$" | "⊣" ?})
   !~=
+
+  ?? | else
 
   as (:== boolean) => true
 end

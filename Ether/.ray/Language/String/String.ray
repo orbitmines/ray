@@ -1,5 +1,7 @@
-`{string: String}` => string
-"{string: (substring: String, "{", expression: Expression, "}").orbit}" => string
+`{
+string: String
+}` => string
+"{string: (substring: String, punctuation: "{", expression: Expression, punctuation: "}")[]}" => string - punctuation
 //String newline, respect spaces after the first one, which we trim completely
 
 //TODO Get from &caller:
@@ -14,12 +16,15 @@ class String < Char[]
   fold_case
 
   snake_case
-  camelCase
-  PascalCase
+  camel_case | camelCase
+  pascal_case | PascalCase
   // ETC.
 
   plural
   singular
+
+  //TODO mirror (bidi)
+  mirrored
 
 
 class Char < Unicode.Scalar

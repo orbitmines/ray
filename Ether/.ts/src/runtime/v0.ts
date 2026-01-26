@@ -24,7 +24,7 @@ namespace Symbols {
   export const evaluate = Symbol("eval");
   export const execute = Symbol("execute");
 }
-const _ = (property?: "*" | "<>" | "()" | "#" | ">>"): symbol => {
+const _ = (property?: "*" | "&" | "<>" | "()" | "#" | ">>"): symbol => {
   if (property === undefined) return Symbols.self;
   if (property === "*") return Symbols.get;
   if (property === "()") return Symbols.evaluate;
@@ -143,13 +143,18 @@ class Var {
   }
 
   private initialized: boolean = false
+  private initialize?: () => void
   private program?: Var
   call?: ExternalMethod
+  constructor(external_methods: { [key: string]: ExternalMethod } = {}) {
+    external_methods = {
+      "* | methods": () => Var.map(this.value.methods),
+      "** | program": () => this.program,
+      "= | assign": this.assign,
+      ...external_methods
+    }
 
-  constructor(private initialize?: () => void) {
-    this.external_method("* | methods", () => Var.map(this.value.methods))
-    this.external_method("** | program", () => this.program)
-    this.external_method("= | assign", this.assign)
+    Object.entries(external_methods).forEach(([name, method]) => this.external_method(name, method))
   }
 
   assign(x: Val) {
@@ -224,6 +229,8 @@ class Var {
   }
 
   get = (property: Val): Var => {
+    // TODO If this.get('#"), map
+
     property = Var.cast(property)
 
     this[_("()")]
@@ -241,7 +248,6 @@ class Var {
 
     return Var.expr("None") //TODO Location of None
   }
-
 
   // Iterate over all
   *[_("#")](): Generator<Var> {
@@ -278,6 +284,8 @@ class Var {
       //TODO Define logic which determines how to step (a possibly infinitely generating program with each .next)
 
       //TODO Hierarchy if events still need to see if a parent has a next defined
+
+      //TODO Carry over context from previous context if it's a expanded func
 
       cursors = todo.flatMap(cursor => {
         let reduced: Var[] = [cursor]
@@ -337,7 +345,7 @@ class Var {
     //TODO
 
     if (this.initialized)
-      throw new Error('Lazyily updating object after initialization is not allowed by the runtime itself.')
+      throw new Error('Lazily updating object after initialization is not allowed by the runtime itself.')
 
     const _super = this.initialize;
     this.initialize = () => {
@@ -350,7 +358,8 @@ class Var {
     }
 
     // console.log('lazily getting', ...property)
-    const result = new Var(() => {
+    const result = new Var()
+    result.on_initialization(() => {
       //TODO
       result.program = new Var()
       result.program.value.methods.set(Var.cast('next'), new Var())
@@ -384,14 +393,6 @@ class Var {
     this.on_initialization(() => this.value.methods.set(Var.cast(key), Var.cast(value)))
   }
 
-}
-
-class Ray extends Var {
-  constructor() {
-    super();
-    this[__][":"](Var.expr("Ray"))
-  }
-
   push_ray = (next: Ray = new Ray()) => {
     //next[__]["&+="](Var.cast(x)) //TODO How to indicate I want the right component
 
@@ -400,6 +401,14 @@ class Ray extends Var {
 
     return next
   }
+}
+
+class Ray extends Var {
+  constructor() {
+    super();
+    this[__][":"](Var.expr("Ray"))
+  }
+
 }
 
 const latest = Symbol("latest");
@@ -429,6 +438,7 @@ namespace Language {
 
     //@external
     assign(version: Val) {
+      //TODO Assigning changes the graph from one language to another. branches at that new language.
       super.assign(this.instance.load(Var.cast(version).string()))
       //TODO Update objects, defined in child contexts.
     }
@@ -445,7 +455,6 @@ namespace Language {
   }
 }
 class Program extends Var {
-  version: Language.Ray
   //TODO When version is set append programs
   //TODO Add Program to the version's program as a branch.
 
@@ -460,8 +469,85 @@ class Program extends Var {
   }
 
 }
+
+// class Token {
+//   constructor({}: {
+//     bind: string,
+//   }) {
+//   }
+//
+//   bind = (property: string): Token => {
+//
+//     return this;
+//   }
+//
+//   set = (property: string, x: (x: any) => any): Token => {
+//     return this;
+//   }
+//
+//   static arbitrary = (): Token => {}
+//
+//   static optional = (token: Token): Token => {}
+//
+//   static string = (...strings: string[]): Token => {
+//   }
+//
+//   static array = (...tokens: Token[]): Token => {
+//
+//   }
+//   static loop = (...tokens: Token[]): Token => {
+//
+//   }
+//
+//   static ref = (ref: () => Token): Token => {
+//
+//   }
+// }
+
+class Parser {
+  private index: number = 0;
+
+  constructor(public expression: string) {
+  }
+
+  array = (x: (any: any) => boolean) => {
+
+  }
+
+  // match = (...parts: ) => {
+  //
+  // }
+
+  parse = () => {
+    // const EXPR = Token.array(
+    //   Token.loop(Token.string("\s", "\n", ";")),
+    //   Token.loop(
+    //     Token.array(Token.loop(Token.arbitrary(), Token.optional(Token.array(Token.string('{'), Token.ref(() => EXPR), Token.string('}')))), Token.string("\n", ";")).bind("func"),
+    //     Token.loop(
+    //       Token.loop(Token.string("\n")),
+    //       Token.optional(Token.array(
+    //         Token.loop(Token.string("\n")).bind("added_whitespace"),
+    //         Token.ref(() => EXPR.set('whitespace', x => x.whitespace + x.addedwhitespace))
+    //       )),
+    //       Token.optional(Token.loop(Token.string("\s", "\n", ";")))
+    //     ).bind("block")
+    //   ).bind("blocks")
+    // )
+
+  }
+}
+
 class ProgramLoader {
   program: Program = new Program()
+
+  constructor(context?: Context) {
+    const initial = new Ray()
+
+    initial[__]["∙"] = context
+
+    this.program[__].previous = initial
+    initial[__].next = this.program
+  }
 
   private expr = (path: string, expr: string) => {
     const x = new Var()
@@ -471,6 +557,7 @@ class ProgramLoader {
 
     return x;
   }
+
 
   dir = (path: string, args?: PartialArgs): this => {
     this.program[__].push_back(
@@ -493,29 +580,35 @@ class Instance {
   constructor(public ether: string) {
   }
 
-  versions: { [key: string]: Language.Ray } = {}
+  //TODO Single Program, then branched with different versions, then branched with different programs.
+  // TODO Single Program per language version. Many programs through #.
+  versions: { [key: string]: Program } = {}
   unbound_programs: Program[] = []
   programs: Program[] = []
 
-  load = (version: string = "latest"): Language.Ray => {
+  load = (version: string = "latest"): Program => {
     if (version != "latest") throw new Error("Versioning of Language not yet supported")
 
-    let ray: Language.Ray;
+    let ray: Language.Ray = new Language.Ray(this, this.ether)
 
     //TODO It's a Program with context: Context
-    const program = new Program()
+    const program = new ProgramLoader(ray).dir(`${this.ether}/.ray`).program
     //TODO Intermediately load objects when needed in this program, and run everything in front which needs to run in front.
 
-    this.versions[version] = ray
-    return ray;
+    this.versions[version] = program
+    return program;
   }
 
   bind = (program: Program, versions: string[]) => {
     for (let i = 0; i < versions.length; i++) {
       const version = versions[i];
 
+      const std = (this.versions[version] ?? this.load(version)).copy()
       program = (i == 0 ? program : program.copy())
-      program.version = this.versions[version] ?? this.load(version)
+
+      const step = new Ray()
+      step[__]["expand"] = program
+      std.push_ray(step)
 
       this.programs.push(program);
     }
@@ -538,8 +631,8 @@ class Instance {
     this.unbound_programs.forEach(program => this.bind(program, args["global"] ?? ["latest"]))
     this.unbound_programs = []
 
-    Var.string('test_string')[__]("A")[_("()")]
-    // this.programs.forEach(program => program[_("<>")](args)[_(">>")])
+    // Var.string('test_string')[__]("A")[_("()")]
+    this.programs.forEach(program => program[_("<>")](args)[_(">>")])
   }
 
 }
@@ -559,9 +652,9 @@ export namespace Ether {
     delete args['@']
 
     if (stat.isFile())
-      return new Instance(default_path).branch(x => x.dir(`${default_path}/.ray`).file(location)).eval(args)
+      return new Instance(default_path).branch(x => x.file(location)).eval(args)
     else if (stat.isDirectory())
-      return new Instance(location).branch(x => x.dir(`${location}/.ray`).file(`${location}/Ether.ray`)).eval(args)
+      return new Instance(location).branch(x => x.file(`${location}/Ether.ray`)).eval(args)
     else
       throw new Error(`"${location}": Unknown Ether instance directory or Ray file.`)
   }

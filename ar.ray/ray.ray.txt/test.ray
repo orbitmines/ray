@@ -90,6 +90,8 @@ A (choose, choose 1)
 // --> Client gives preferences, Networked.
 //What about optimizations problems, how does one code that in?
 // Any Ordered
+// https://pyddm.readthedocs.io/en/stable/ ; efficient exploration
+// "finding the tradeoffs"
 optimize x: Number
 //TODO Different coded priorities, or optimize priorities too? how
 optimize y: Number

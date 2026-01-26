@@ -24,6 +24,7 @@ class UUID = Hexadecimal{length == 32} ~~ [7 | +4 | +4 | +4].push_after("-")
           // For UUID version 1, this is represented by Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals since 00:00:00.00, 15 October 1582 (the date of Gregorian reform to the Christian calendar).
           timestamp = Time.NOW(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor
           // Make sure each call yields a unique value.
+          //TODO ; Say I want a unique value, I dont care how you get it.
           timestamp = timestamp@global + 1 if timestamp <= timestamp@global
           timestamp@global = timestamp //TODO What to do if it's larger than a 60-bit integer
         ), //TODO Compiler should be able to reverse time, if the other 3 are provided.

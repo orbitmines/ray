@@ -88,6 +88,7 @@ x: Proof<
 Node
   ∀{.} (predicate: (x: static): boolean) => #.every predicate
   ∃{.} (predicate: (x: static): boolean) => #.some predicate
+  ∄{.} (predicate: (x: static): boolean) => !∃this predicate
 
 ∃Binary * 5 == 25
 ∃x: Binary * x == 25

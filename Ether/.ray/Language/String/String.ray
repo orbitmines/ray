@@ -1,13 +1,15 @@
 `{
 string: String
 }` => string
-"{string: (substring: String, punctuation: "{", expression: Expression, punctuation: "}")[]}" => string - punctuation
+"{string: (substring: String, punctuation: ("{", expression: Expression, punctuation: "}") if substring !"\"⊣)[]}" => string - punctuation
 //String newline, respect spaces after the first one, which we trim completely
 
 //TODO Get from &caller:
 //TODO as String needs context of where it is being placed, if it's in a .ts that's different from another language.
 
 class String < Char[]
+  //TODO Include Char static, (is that the default), where it's that return[], for Superscript.
+
   lower_case | v
   upper_case | ^
   title_case
@@ -32,9 +34,12 @@ class Char < Unicode.Scalar
 
 Letter: Char = "a".."z" | "A".."Z" //TODO Should include letters from all alphabets
 Symbol: Char = Unicode.GeneralCategory.(Punctuation | Symbol)
+//TODO Add on Char.Symbol along with other categories
 //TODO Different classes of Unicode characters.
 
 //TODO Regex in ASCII vs Unicode mode. (\p supported?)
+
+//TODO How do these conflict with editor unicode mappings for chars.
 
 //TODO Verify all these are indeed corresponding to Regex.
 \0 = U+0000

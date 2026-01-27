@@ -313,7 +313,7 @@ class SyntaxHighlighter : com.intellij.openapi.fileTypes.SyntaxHighlighter {
       // PUNCTUATION
       Rule(
         tokenType = Types.PUNCTUATION,
-        pattern = Regex("""[{}\],()]|=>|:|[|&.⸨⸩]|[⊣⊢∙⊙]|[&\|][+\-]""")
+        pattern = Regex("""[{}\],()]|=>|:|[|&.⸨⸩]|[⊣⊢∙⊙]|[&\|][+\-]|--""")
       ),
 
       // KEYWORD

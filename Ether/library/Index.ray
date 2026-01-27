@@ -539,6 +539,7 @@ Language
   namespace PyMC < Language(".py") ; location &= "https://github.com/pymc-devs/pymc"
   namespace PyQuil < Language(".py") ; location &= "https://github.com/rigetti/pyquil" & "https://pyquil-docs.rigetti.com/"
   namespace Python < Language(".py") ; location &= "https://github.com/python/cpython" & "https://www.python.org/" & "https://en.wikipedia.org/wiki/Python_(programming_language)"
+    //TODO What about ".pyi"
     namespace Bytecode < Language(".pyc")
     namespace Django < Language(".py") ; location &= "https://github.com/django/django" & "https://www.djangoproject.com/"
     namespace Flask < Language(".py") ; location &= "https://github.com/pallets/flask" & "https://flask.palletsprojects.com/"

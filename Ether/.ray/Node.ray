@@ -144,8 +144,8 @@ class * | Node
   as (:== boolean) => true
 end
 
-class Option<T> = T | None
-{ None } *= Option
+class Option<T> < T | None
+{ None } = Option
 None +=
   {" "}({parameters: Expression}): Function
     < Function

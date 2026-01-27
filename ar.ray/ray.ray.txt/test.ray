@@ -340,12 +340,8 @@ func
 // Type-cast like this: a: Decimal = 5, or a: Binary = 5
 // defined inline inheritance: def Point<T < { def +(b) }>
 // Allow single-line blocks: while o.last() == '0' => o.pop_last()
-// Allow var: Graph = 1, 2, 3
-// Allow .map(.property), .if(.property > 2)
 // Allow Array<ar.length === 0 ? length = 0 : length < ar.length>
 // Allow a < b < c
-// Allow def method(n: % 2 == 0)
-// Allow def (...args) unused to be def (*)
 // Allow false, true = boolean (Because boolean is a FALSE.OR(TRUE) Node, and nothing else could match to this spread operator). TODO How to go into the reverse direction? Say cursor is on TRUE there. (if it's not referencing a graph).
 //    -> Should this also define Iterable: .for, for Nodes which don't have any ray selected? Or Actually implement Ray, if the .OR definition is a ray not an Array/graph
 // Generalized: Repeated entries in an array like String, single instance mapping 'as X'. Allows for 'repeated X' to 'String'. And then automatic isomorphism might take care of 'String as X' and 'String as X[]'
@@ -366,20 +362,12 @@ func
 // If there's a superposition of possible values, but only one fits, we dont superpose the other non-fitting ones, but just use the one that fits.
 // TODO Assert should be the same as dynamically assert in that it effects the type of a variable up to that statement.
 
-  def location = Location
-  +def location //TODO Allow this syntax. => Should be dynamically there.
-    primary: location
-  end
+location //TODO Allow this syntax. => Should be dynamically there.
+  primary: Location
 
-// Allow static to be accessible in defining parameters, say 'class Hypergraph<T>{every(==.instanceof Vertex)}; static Vertex'
-// Allow static to go to inherited objects.
-// Allow out-of-order defined defaults at?:, path:
+
 // Allow named parameters to access nested fields: def method(parameter.field: Object), and it's then set as 'field'
-// Allow var?: type and var: type?
 // Allow the . after operator in shortcut of defining x => x & x. : this.#`String.NonEmpty` -> & .#`String.NonEmpty`
-// Allow 'defined_segments.length (zero_compression ? <= NUMBER_OF_SEGMENTS : == NUMBER_OF_SEGMENTS)
-// Allow abstract class .string to go to all implementations of that class <.
-// 'zero_compression ? super() : compress_zeros.super()', define super for all variable instances of the same type (only in that context) : What is repeat the function, not super?
 // Allow ' + name: "quecto`name`", "s"?' as a + { name: "" }
 
 // Allow +=  equiv to '= .+ b', so allow '= .method.method2'
@@ -394,18 +382,10 @@ func
 // Pull static out of constructor if possible.
 // Dead code like a = b, a = c, 'a = b' is never used. (Unless something like history is accessed somewhere)
 // Any statement is executed in a .do block, so that one can implement a debugging .do overwrite.
-// This type return should automatically be deduced.
-    // def posOrNegThree (s : Sign) :
-           match s with | Sign.pos => Nat | Sign.neg => Int :=
-         match s with
-         | Sign.pos => (3 : Nat)
-         | Sign.neg => (-3 : Int)
+
 // Warning in class, if return is used: because it's not used in the 'class definition'
 // How is something like the proof that after a .push_back(A), .last = A, unless another push_back is used. How do you represent that, and how is it used by the compiler?
-// Native support for running parallel on other machines
 // When using multiple implementations of methods, you want enumerations of possible requirements, so for boolean this could be NAND, NOR, NOT & OR, NOT & AND. etc..
-// 'external' is allowed to overwrite any method.
-// Ambiguity: [[A, B, C], [D, E, F]] flattens currently, how to get it not to flatten?
 
 
 

@@ -160,6 +160,9 @@ class Iterable<T>
 
   [] //TODO Ranges, index
 
+  // .flatten = .reduce(push_back) What did ruby do for different levels? flatten(1) or something
+  flatten
+
   //TODO move operations
 
   unique | compact =>
@@ -178,7 +181,15 @@ class Iterable<T>
   intersection
   xor | symmetric_difference
 
-  as (:== T) => T() = this.reduce(&) //TODO if T is class. Or should this use &?
+  //TODO Sequential composition
+  , = (b: T | T[])
+
+  // Default behavior is to superpose the values in the iterable with |.
+  // Unless it's an Iterable<Ray>, then sequential composition is preferred, so that:
+  //   x: Program = Program, Program
+  // Is sequential composition of programs, not "Program | Program": parallel composition
+  as (== T) => T() = this.reduce(T extends Ray ? , : |) //TODO if T is class. Or should this use &?
+
 end
 
 class Hierarchy < Ray

@@ -161,6 +161,8 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
 
   //TODO Context information like line-number in parent expression, etc.. and larger context
 
+  , (b: Program): Program // TODO Overwrite sequential composition of programs, since the program's states clash.
+
   location: a Context & (span: ) & "{}:{}"
 
   state | ∙ : State
@@ -345,7 +347,6 @@ static class Expression < String + Ray?
         //*.keys
         context
 
-        //TODO Assumes \t = " "
         expr => (\s | \n | ";")[], blocks: (,
           func: ((*, (context*.keys++ ~~ ~= Expression = expr) | ("{", expr, "}")?)[], \n | ";"),
           block: (
@@ -358,19 +359,37 @@ static class Expression < String + Ray?
 
 ({expr: Expression}) => expr
 
+//TODO Assumes \t = " ", Probably safer to instead say tabs are invalid syntax. (otherwise certain codeblocks might appear to be where they arent to the compiler)
+//TODO Expression[] is castable to Program, ordered. (not the Expression[] -> Expression -> Program, prefer this if possible: but Expression -> Program[] -> Program (also not a superposed, but linear. route.) route.
 //TODO Count (, to include, not blocks.
+//TODO dynamically inside a pattern match influences the whole pattern
+//TODO dynamically except it shouldn't effect itself. HOW?
 class Expression < (
-  (\s | \n | ";")[], blocks: Program<expression: this> (,
-    func: ((*, ∙*.keys? else ("{", Expression, "}")?)[], \n | ";"),
-    block: (
-      \s[]{length == whitespace if previous !~= ";"⊣},
-      (added_whitespace: \s[].NonEmpty if previous !~= ";"⊣,
-      expr<whitespace: whitespace + added_whitespace.length>)?,
-      (\s | \n | ";")[]?
-    )[]
+  {as (== Program) => program = .map(func)}: (,
+    // function calls "/" "." " "
+    // A: " " -> If preceded by function expecting an argument
+    // B: " " -> If preceded by function expecting a callback
+    // " " -> For functions defined on Expression, prefer those (like Expression if)
+    // After () of a function, => is optional, and the function starts directly.
+    // => can be placed after a < Extended optionally.
+    // Many " " allowed, Many "." go to defined methods.
+    // If A & B -> Prefer A if variable is defined
+    // Allow call with expression, which maps the args etc in place. (used for superscript for instance)
+    func: Program ((*, dynamically parent∙*.keys? | ("{", Expression, "}")?)[], ";" | \n | ⊣),
+    {func.args.push_back(.)}: Program (
+      // If block is after a property, it is called after it's changed and something is set to the value (also the default); part of the constructor as it gets assigned
+      // TODO Multiline |/& are not blocks.
+      " "[]{length == whitespace}, added_whitespace: " "[].NonEmpty,
+      Expression<whitespace: whitespace + added_whitespace.length>),
+    )[]) if func \n⊣
   )[]
-): String + Ray?
+): String{
+  // All Unicode space separators (+ \t), except the normal space, are illegal characters. This is for safety reasons: to ensure that text editors don't show function blocks where they shouldn't be.
+  every ==.instance_of \S | " "
+}
+  if // Allow ()                            if
 
+Expression[] = "file" &+ "file", "entrypoint"
 
 Program
   ==

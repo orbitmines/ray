@@ -1,5 +1,6 @@
 //TODO external fills things like Network.Host when spawning a child instance.
 
+//TODO Eventual consistency support
 
 namespace Network
 

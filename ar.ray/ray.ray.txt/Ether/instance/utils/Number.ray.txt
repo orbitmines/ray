@@ -138,7 +138,19 @@ def `digits: Decimal.Positive.String` => Decimal.Positive = digits
 +def Decimal.Positive
   def `fraction: Decimal.Positive.String` => Decimal.Real = integer, ".", fraction
 end
-//TODO 1111₂ subscript.
+//TODO 1111₂⁸ x 1111₂⁸ subscript.
+//TODO 1⁽¹⁸⁸⁻⁰⁰⁾ superscript to ^ (number)
+
+// Allow (111₂)₂
+`Base`
+  v (base: Number): [RELEVANT BASE] =>
+    // Unknown digit representation for the specified base.
+    assert this.every <= base
+
+
+Node
+  {expression: String.Superscript} => this ^ expression.decompose as Expression
+  {expression: String.Subscript} => this v expression.decompose as Expression //TODO as Expression, should take the existing context which called this, and evaluate in that.
 
 def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
 //TODO This for binary
@@ -179,6 +191,14 @@ end
     def `iterable: Applicable` = iterable.`method`
   end
 end
+
+// ₂∫⁸()
+// lim(x -> ∞) ₂∫⁸() // Implemented as infinitesimal step, how to indicate to actually step?
+//TODO What is a limit actually, can we make that more general?
+// √4
+// ∛/∜ √(4 + 4)
+// What else
+
 
 //TODO Infinity / ∞
 

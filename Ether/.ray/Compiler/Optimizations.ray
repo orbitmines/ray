@@ -15,3 +15,5 @@ var = var#{== true}.first
 // Cycle detection & merger
 
 //Fast substring search algorithms exposed (e.g., KMP, Boyer-Moore)
+
+//TODO HOw to say rewrite gotos to if statements because we target ifstatements but not gotos

@@ -86,6 +86,10 @@ A (B, C)
 // ALlow
 A (choose, choose 1)
 
+//TODO If None !";"⊣ should return true.
+
+//TODO Allow [RANDOM JUNK, TYPE, RANDOM JUNK, TYPE] to be castable to TYPE[]
+
 //TODO Optimize to go back and forward with abstract objects vs rendered screen, optimize for what the client wants. (more accessible fvs speed vs compute use)
 // --> Client gives preferences, Networked.
 //What about optimizations problems, how does one code that in?
@@ -314,9 +318,6 @@ func
 //TODO Newline counts as a => when appropriate so
 //TODO Allow arbitrary parts of a function to define a parameter, by simple saying UNINITIALIZED_VAR: a, required if no default is provided.
 
-class Time < Quantity.Temporal (calendar: Calendar = UTC) =>
-//TODO Allow out-of-order things like <, which are inside the () => {}
-
 // Allow &{method: *}: //TODO Infer (with all special chars)
 
 // Allow multiple changes which make it adhere to the type, as long as nothing is accessed in between
@@ -370,12 +371,6 @@ class Time < Quantity.Temporal (calendar: Calendar = UTC) =>
     primary: location
   end
 
-class char = u32
-dynamically assert this < 0x110000 & !(0xD800 <= this <= 0xDFFF)
-end
-class char = u32{< 0x110000 && !(0xD800 <= this <= 0xDFFF)}
-end
-
 // Allow static to be accessible in defining parameters, say 'class Hypergraph<T>{every(==.instanceof Vertex)}; static Vertex'
 // Allow static to go to inherited objects.
 // Allow out-of-order defined defaults at?:, path:
@@ -386,18 +381,6 @@ end
 // Allow abstract class .string to go to all implementations of that class <.
 // 'zero_compression ? super() : compress_zeros.super()', define super for all variable instances of the same type (only in that context) : What is repeat the function, not super?
 // Allow ' + name: "quecto`name`", "s"?' as a + { name: "" }
-
-+def String = "public" // Allow this
-+def String{== "public"}
-
-  location: Location
-  +def location //TODO Allow this syntax.
-    primary: boolean?
-  end
-  //OR
-  location: Location
-    primary: boolean?
-  end
 
 // Allow +=  equiv to '= .+ b', so allow '= .method.method2'
 // Allow  Ray<T = Ray<T>>
@@ -456,33 +439,17 @@ end
 //   -> Similarly, in natural language describe the thing you want to do to that selection. Same with object.[describe] for where the cursor is.
 // Eye-tracking should switch primary/secondary location, if the windows are side to side, if overlayed, the top one takes priority.
 // version control selectors at functions in classes in the editor
-//TODO Super + subscript means what in UI.
-
-// TODO - Implementing languages.
-Translate everything like ifblocks etc. to other languages, which are implemented in .ray.txt with primitives to the implementation . How to say that something like the if/else construction shouldn't be rewritten to the goto's but instead are the primitives. How to use the rewrite-blocks of code syntax to rewrite to a javascript-like syntax.
 
 // TODO - Features
-// Observables which check if a variable is changed, dynamically assert would make use of that.
-// Decimal % mod 2, should go both in .prev/.next directions and start at the base case 0. What decides this?
-// equivalences: Implicit casts (lean: coercions), chained together Pos -> Nat -> Int "if there is a path to Int from Pos" - allow loops.
-//     -> Get a graph of possible coercions
-// Boot into a context, which doesn't allow access upper-level properties. Something like program(`*`: () => None). Shouldn't overwrite local etc..
-// Evaluating infinities: "There exists ; is just some" def even(n: ) => Nat.some(half => n == double(half)). ; TODO How does this evaluate on the infinite .some ; Nat<every> is different from Array<length> one is referring to an instance the other to the static type Nat. Or dont use Nat<every>
-// Native support for eventual consistency
-// Math
-//   sum/product sum icons, being .reduce(*)/.reduce(+)
-//   Something like an integral implemented as an dx = infitesimal step, is that just .next and in a discrete system that means a single step minimally?
-// Might want to catch the runtime error of a type somewhere, for instance arbitrary user input which needs to match some type.
-// .flatten = .reduce(push_back)
+// Evaluating infinities
 // Automatic isomorphism
-// Property decorators like: 'rendered secondary: instance?'
 
-
+==.instance_of is also an equiv graph of values
 
   // TODO .unrolled() -> Allows loops by defaul
 
 
-
+x⁸
 
 def bidirectional
   +1

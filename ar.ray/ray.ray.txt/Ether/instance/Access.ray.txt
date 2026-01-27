@@ -64,6 +64,7 @@ modifier internal
   //TODO You want this to work for local contexts too, so cant rely just on class.
 end
 
+//TODO These inhereit from general "Property decorator" thing. ( How to access everything behind the property itselkf??)
 //TODO Rename to access modifier. {from some context/file window modifier}
 class Modifier name: *
   modifier = this

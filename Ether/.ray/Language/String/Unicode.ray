@@ -45,7 +45,14 @@ namespace Unicode
     // 323B0;<CJK Ideograph Extension J, First>;Lo;0;L;;;;;N;;;;;
     // 33479;<CJK Ideograph Extension J, Last>;Lo;0;L;;;;;N;;;;;
 
+    // decomposition_mapping subscript / superscript vs decompose <super>/<sub>
+    //TODO If <super>/<sub> exists add to Super category
+    static Superscript
+    static Subscript
+    //TODO IntelliJ font doesnt support super/subscript, add support
+
     //TODO Adhere to digit/numeric values, and implement them.
+    // Instead use @"https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt" so that it's not with ", style accordingly
     @"https://www.unicode.org"/Public/UCD/latest/ucd/UnicodeData.txt ~= ⸨
       ⸨static # |= value(⸩⸨value: Scalar⸩;⸨name⸩;⸨general_category⸩;⸨canonical_combining_class⸩;⸨bidi_class⸩;⸨decomposition_mapping⸩;⸨decimal_digit_value⸩;⸨digit_value⸩;⸨numeric_value⸩;⸨bidi_mirrored: "Y" | "N"⸩;⸨name | unicode1_name⸩;⸨ISO_10646_comment⸩;⸨internal upper_case: Scalar = this⸩;⸨internal lower_case: Scalar = this⸩;⸨internal title_case: Scalar = this⸩⸨)⸩
     ⸩.loop.map(?).join(*)

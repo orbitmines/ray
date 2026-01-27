@@ -203,3 +203,4 @@ end
 //TODO Infinity / ∞
 
 Byte = Binary{length == 8}
+//TODO 1000 MB etc.. MiB ; how does that coincide with Unit, want Binary with some length to correspond to it?

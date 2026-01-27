@@ -375,6 +375,7 @@ class Expression < (
     // Many " " allowed, Many "." go to defined methods.
     // If A & B -> Prefer A if variable is defined
     // Allow call with expression, which maps the args etc in place. (used for superscript for instance)
+    // Allow () around operators like .length (x ? <= b : == a)
     func: Program ((*, dynamically parent∙*.keys? | ("{", Expression, "}")?)[], ";" | \n | ⊣),
     {func.args.push_back(.)}: Program (
       // If block is after a property, it is called after it's changed and something is set to the value (also the default); part of the constructor as it gets assigned

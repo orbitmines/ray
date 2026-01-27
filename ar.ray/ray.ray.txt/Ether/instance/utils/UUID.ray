@@ -1,6 +1,6 @@
 //TODO If OS allows custom UUID1 generation, overwrite with external
 // A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
-class UUID = Hexadecimal{length == 32} ~~ [7 | +4 | +4 | +4].push_after("-")
+class UUID = Hexadecimal{length == 32} ~~ [~ 7 | +4 | +4 | +4].push_after("-")
   def version = this[12] //TODO Should automatically implement version =
 
   // Dynamically associate a UUID to a version's class
@@ -32,7 +32,7 @@ class UUID = Hexadecimal{length == 32} ~~ [7 | +4 | +4 | +4].push_after("-")
       ), //TODO How to say this is not the one used for converting from string, like a 'secondary' implementation -> Since now there's ambiguity
       (
         (
-          variant: ~= ^[1,1] ? Binary{length == 3} : Binary{length == 2} = [1,0],
+          variant: ~= ⊢11₂ ? Binary{length == 3} : Binary{length == 2} = 10₂,
           clock_seq_high: Binary{length == 8 - variant.length}
         ) = clock_seq_high_and_reserved: Hexadecimal{length == 2},
         clock_seq_low: Hexadecimal{length == 2},
@@ -45,10 +45,10 @@ class UUID = Hexadecimal{length == 32} ~~ [7 | +4 | +4 | +4].push_after("-")
     static Variant = RESERVED_NCS | RFC_4122 | RESERVED_MICROSOFT | RESERVED_FUTURE
     +def variant
       def as :== Variant = match
-        ^0 => Variant.RESERVED_NCS
-        1,0 => Variant.RFC_4122
-        1,1,0 => Variant.RESERVED_MICROSOFT
-        1,1,1 => Variant.RESERVED_FUTURE
+        ⊢0 => Variant.RESERVED_NCS
+        10₂ => Variant.RFC_4122
+        110₂ => Variant.RESERVED_MICROSOFT
+        111₂ => Variant.RESERVED_FUTURE
     end
 
     dynamically assert version == 1

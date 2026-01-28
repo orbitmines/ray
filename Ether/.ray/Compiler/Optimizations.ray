@@ -17,3 +17,15 @@ var = var#{== true}.first
 //Fast substring search algorithms exposed (e.g., KMP, Boyer-Moore)
 
 //TODO HOw to say rewrite gotos to if statements because we target ifstatements but not gotos
+
+// Dead code like a = b, a = c, 'a = b' is never used. (Unless something like history is accessed somewhere)
+
+// Debugging like timer.
+global**.[INSERT IN BETWEEN EACH STATEMENT DYNAMICALLY]
+
+// How is something like the proof that after a .push_back(A), .last = A, unless another push_back is used. How do you represent that, and how is it used by the compiler?
+// -> SHould be trivial & automatic
+
+// When using multiple implementations of methods, you want enumerations of possible requirements, so for boolean this could be NAND, NOR, NOT & OR, NOT & AND. etc..
+
+// Multiple implementations, but what are the tradeoffs?

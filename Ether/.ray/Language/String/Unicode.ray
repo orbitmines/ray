@@ -81,21 +81,21 @@ namespace Unicode
   class UTF-8 < TF, sequence: (
     prefix: 1[]{length == 0..4},
     U0: Binary{length == 8 - prefix.length}{⊢0},
-    (10₂, U1: Binary{length == 6}) if prefix ⊢11₂
-    (10₂, U2: Binary{length == 6}) if prefix ⊢111₂
-    (10₂, U3: Binary{length == 6}) if prefix ⊢1111₂
+    (10₂, U1: Binary₆) if prefix ⊢11₂
+    (10₂, U2: Binary₆) if prefix ⊢111₂
+    (10₂, U3: Binary₆) if prefix ⊢1111₂
   )[]
     as (== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
 
   // https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-3/#G27792
   class UTF-16 < TF, sequence: (
     prefix: 110110₂?,
-    U0: Binary{length == 4},
+    U0: Binary₄,
     U1: Binary{length == 12 - prefix.length},
-    (110111₂, U2: Binary{length == 10}) if prefix
+    (110111₂, U2: Binary₁₀) if prefix
   )[]
     as (== CodePoint[]) => sequence.map(.U0 + 1, .U1, .U0)
-  class UTF-32 < TF, CodeUnit{⊢(0[]{length == 8})}[]
+  class UTF-32 < TF, CodeUnit{⊢(0[]₈)}[]
 
 // https://www.unicode.org/versions/Unicode17.0.0/core-spec/appendix-a/#G7083
 U+{codepoint: CodePoint.String}: Scalar => codepoint

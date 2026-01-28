@@ -182,7 +182,11 @@ class Iterable<T>
   xor | symmetric_difference
 
   //TODO Sequential composition
+  // If T is (previous: T): T allow. Which is the case for 1, +2, +3, +4
   , = (b: T | T[])
+
+  // Allow Binary₃₂ = Binary₈[]₄
+  v (length: Number) => this{.length == length}
 
   // Default behavior is to superpose the values in the iterable with |.
   // Unless it's an Iterable<Ray>, then sequential composition is preferred, so that:

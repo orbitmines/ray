@@ -52,4 +52,4 @@ class boolean = false | true = Binary.Digit.value // TODO This should automatica
   // Allow casts to filters
   as <T>(:== T{}) => T{this}
 end
-{ false, true } *= boolean // Could also be 'false, true = boolean' in this case.
+{ false, true } = boolean

@@ -8,7 +8,9 @@ namespace Network
                     // ETHER
   DEFAULT_PORT: Port = 37839
 
-  class IP < Location = -1 <- . -> +1
+  class IP < Location
+    -1 <- . -> +1
+
     static NUMBER_OF_SEGMENTS: Decimal
     static SEGMENT_LENGTH: Decimal
     static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH

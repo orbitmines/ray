@@ -146,6 +146,7 @@ end
   v (base: Number): [RELEVANT BASE] =>
     // Unknown digit representation for the specified base.
     assert this.every <= base
+//TODO We're also using subscript for length, so number should be not using v, but instead match to the whole string + subscript
 
 
 Node

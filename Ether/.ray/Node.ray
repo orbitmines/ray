@@ -5,6 +5,8 @@
 class
   //TODO class{==.instance_of Nameable}, instance_of class
 
+  //TODO Class is always called on static if possible from a constructor.
+
   {name: *} (def: (Args: *): *) //TODO Allow out-of-order
     // Allow Class.name |= "Class2" to add aliases
     dynamically &definer[local.name] = local if local.name
@@ -58,6 +60,8 @@ class * | Node
   external ** | program : Program
   // Force the lazy program stored in **, to evaluate.
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
+
+  {"{", expression: Expression "}"} => // Allow chaining
 
   // TODO Places in code where this variable gets referenced and updated.
 
@@ -121,6 +125,9 @@ class * | Node
   ++ | copy
 
   .= //TODO .= next ; x = x.next
+
+  //TODO Sequential composition for single Node. (overriden by Iterable)
+  ,
 
   // instance_of and == are the same?
   namespace === // Don't ignore location

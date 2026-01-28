@@ -12,6 +12,8 @@
 end
 
 def Entity
+  //TODO Selected is instance.#: Ray
+
   // The known instances currently running this entity.
   def instance => Instance = location{==.instance_of Instance}
 

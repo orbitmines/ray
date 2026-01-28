@@ -255,25 +255,16 @@ Evaluation order like +/-//* different for each type? how configured?
 
 
 // TODO - Ambiguities
+// Evaluating |/&, how
+- // But we want == boolean, as in, is exactly the boolean type. false != false | true, but you also want false | true, to superpose the func.
+  // -> Components somehow useful, false &+ true vs false & true
 
 //TODO Bidirectional function like ray but only single step: l <= (x) => r, ambiguity with <=
 
-// Ambiguity between boolean and false | true, when wanting to check the value ==, checks if it's false or true?
-// false != false | true, still executes the branch where it's false.
-// But we want == boolean, as in, is exactly the boolean type.
-
-// def a = a vs def (a = a) = a, default clashes with singleline func, same with => for function
-// var? vs var ? true : false ; how to know if we need to convert var to a boolean or pass it to option.
-//   -> Also var ? true : false , is it var.? true : false, or var.?.true.:.false
-// .extends vs a check if it does extend
-  // TODO Ambiguity if we use '<', because if I check 5 < 3, it's not 5 extends 3. Is there ever any time you'd need to use extends over <?. Yes a Type Ray which extends some other Ray, so it would be Ray < Ray,
-  // What even does Ray extends Ray mean, what happens to all the structure?
 // args.for(args) a could mean args.for(args).a, instead of defining a block. Or something like args.for a b = 5, with the default '= 5'
 // statement if expression != statement.if.expression, similarly if expression then a else b
 // what if I do something like () => boolean, which returns a boolean, the return type is not false | true, as in 'a boolean', but it's 'the type boolean'.
 // Referencing a parameterless constructor, can be both the Object() or Object, since it could be interpreted as a property.
-// Should changing local, also change 'caller'/'definer'?
-// [1, 2, 3] should call global level [], not local level def [property].
 // Variable * for any shouldnt interfere with * 2 things. *2 variable or * _, reduce(*) (* is called on the acc and current)
 // Somehow the constructor another method thing so that everything can be passed on to static, but then that would have the same problem.
 // The boolean definition false, true = needs to be on static. Which is done because the .false/.true values never change based on the type definition.
@@ -315,50 +306,28 @@ func
 
   |
 
-//TODO Newline counts as a => when appropriate so
-//TODO Allow arbitrary parts of a function to define a parameter, by simple saying UNINITIALIZED_VAR: a, required if no default is provided.
+/path is string form too
 
-// Allow &{method: *}: //TODO Infer (with all special chars)
+//TODO Newline counts as a => when appropriate so
 
 // Allow multiple changes which make it adhere to the type, as long as nothing is accessed in between
 //Allow type def conditionally like this
  variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}
 //TODO If multiple edits makes it type compliant allow as if a single transaction
 // Allow [7 | 11 | 15 | 19]  -> [~ 7 | +4 | +4 | +4] & ~ 1, +2, +3, +4
-// Allow \ to be used in a variable at the start \s
 // Allow 'def Ray<T = Ray>', Meaning, T is unknown, but it is a Ray.
-// Allow chaining of binary operators like Array<3 < length < 5>
-// Allow chaining of conditionals with .AND -> Array<length > 3><length < 5>
-// Also allow Array<length > 3 | length = 3> What about this syntax: Array<length (> 3 | = 3)>, Array{length > 2 if property}
-// Like this == n ? TypeA : TypeB, allow 'match' to be a type definition.
-// Allow def (array: Array), to automatically accept varargs.
-// Multi-methods should work for things like throw, if top-level defined doesnt accept the error, perhaps the top-level one does.
-// If variable with type Option is set, it should automatically implicitly cast it to Some()
+
+
 // Certain variables like 'throw' need to be accessible even in nested function which aren't defined with that variable in scope. How to type-check and generalize this concept? Is it with some keyword for a variable?
 // Allow 'var = () = inline', 'var = () = { multiline }', 'var = () .. end' - Need to only capture the defined variables accessible from that context.
-// Allow a wide variety of things in the String of defs, like α/β/.. other languages. Lean allows a ' at the end of variables, to mirror math.
-// Type-cast like this: a: Decimal = 5, or a: Binary = 5
-// defined inline inheritance: def Point<T < { def +(b) }>
-// Allow single-line blocks: while o.last() == '0' => o.pop_last()
-// Allow Array<ar.length === 0 ? length = 0 : length < ar.length>
-// Allow a < b < c
-// Allow false, true = boolean (Because boolean is a FALSE.OR(TRUE) Node, and nothing else could match to this spread operator). TODO How to go into the reverse direction? Say cursor is on TRUE there. (if it's not referencing a graph).
-//    -> Should this also define Iterable: .for, for Nodes which don't have any ray selected? Or Actually implement Ray, if the .OR definition is a ray not an Array/graph
-// Generalized: Repeated entries in an array like String, single instance mapping 'as X'. Allows for 'repeated X' to 'String'. And then automatic isomorphism might take care of 'String as X' and 'String as X[]'
-// spaces for method calls only work for same line, except for body calls
+// defined inline inheritance: def Point<T < { + (b: ) }> Point{+ (b: Number)}
 // Point(x=1) x=1 shouldn't be overridden by x=0 in the constructor
-// Decimal.Positive{< 2^8} as String should work if Decimal.Positive as String works.
-// octets as Binary.Positive{length == 8}[] as Binary.Positive{length == 32} The length == 32 here should be implicit.
-// Superpositions in the conversion between Decimal <-> Binary, should be respected.
-// IP = -1 <- . -> +1, should automatically check the boundary conditions of whether +1/-1 is supported. And end it there so you don't need to "+1 if 1 <= ~!(as Binary.Positive)" TODO What happens to a subnet where this operation can't be done?
 // 'def as :== Binary.Positive = segments as Segment.Binary[]' should be automatically assigning length too because segments have length defined
-// '{==.instance_of IP}' Automatically casts to IP.
 // When N <- . -> N is evaluated in a class with properties, it equips 'parent: Node <- .hierarchy -> children: Node' as .next/.previous (soi  when it's only a type definition)
 // Allow 'unit (define_globally ? | unit.name)' without a :
-// 1d 10h 10ms, Should see that 1d does not define .10h so it should check them individually and check if 1d implements 10h
-// quantities ,= a, is push_back(a)
+
 // (Base, unit: Unit = Unit.None)[], Should implement x[0].unit, because it binds the variable to it.
-// SHould also implement x.unit, to map over x.map(A, B => B)
+// Should also implement x.unit as |
 // If there's a superposition of possible values, but only one fits, we dont superpose the other non-fitting ones, but just use the one that fits.
 // TODO Assert should be the same as dynamically assert in that it effects the type of a variable up to that statement.
 
@@ -373,52 +342,31 @@ location //TODO Allow this syntax. => Should be dynamically there.
 // Allow +=  equiv to '= .+ b', so allow '= .method.method2'
 // Allow  Ray<T = Ray<T>>
 
-// TODO - Notes on Grammar
-// x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
-
-// TODO - Notes on Runtime
-// Take the example of Decimal.String which should be defined first, then `Decimal.String`, then Decimal. can be defined.
-// Lazy evaluation, keep structures like 'false | true | true' around without deciding execution order. ; Associativity proof is somehow relevent here, how does the runtime know about it?
-// Pull static out of constructor if possible.
-// Dead code like a = b, a = c, 'a = b' is never used. (Unless something like history is accessed somewhere)
-// Any statement is executed in a .do block, so that one can implement a debugging .do overwrite.
-
-// Warning in class, if return is used: because it's not used in the 'class definition'
-// How is something like the proof that after a .push_back(A), .last = A, unless another push_back is used. How do you represent that, and how is it used by the compiler?
-// When using multiple implementations of methods, you want enumerations of possible requirements, so for boolean this could be NAND, NOR, NOT & OR, NOT & AND. etc..
-
 
 
 // TODO - Notes on Version Control
 // Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
 // A monkey-patched function added, is suddenly also used by the library. Notify the user it's now overriding functionality that wasnt, there before.
-// Use something l;ike Model @ remote as the thing which takes the type used for API. but still run instances locally? How? And then on a change in the API jnotify user.
 // For .ray.txt editor we can inject labels before functions and hide them with some IDE plugins for non-Ether editors. So still support version control in-line
 
 // TODO - Notes on Type Checking
-// If blocks like if array.length > 2 ... end, change the type of array within that block.
+// If blocks like if array.length > 2 ... end, change the type of array within that block. // '{==.instance_of IP}' Automatically casts to IP.
 // Functions should relax their arguments to 'actually used this from the type'. (So type refinements)
-// Any 'Program' object, carries with in what is accessible from that context, that way after each line, we can check whether a variable is present
-// Taking the 'if' definition as an example, the type that gets returned needs to be a dependent type based on 'expression', then either 'yes => Return' or 'else => Return' needs to be implied.
 
 // TODO - Notes on Theorem proving
-// For the theorem prover, you might want to store a specific proof instead of only saving the tactic by which it is solved, needs some effective way of storing and referencing this; probably in a directory outside the current file
-//   -> In the background run some (in)equivalence of functions algorithm to check equivalences automatically if possible.
-// Tests is the same as theorem proving, but instead of whole types and proving them, we work with specific values of the types.
-//   -> Combine both approaches
-// Theorem proving that multiple implementations are the same, after a theorem is found -> possibly add to possible implementations
-// runtime; Multiple implementations but prefer the one over the other for speed, is that done automatically? deduce which one is faster for which case?
+// Expand tactic to inline proof. (different lvl of description - allow switch back it not altered ; or equivalence and change the view)
+// Tests is the same as theorem proving, -> Combine both approaches, is a specific case
 // example; As an example usage: Use theorem-prover to automatically generate all the possible boolean implementations. How?
-//    assert that all logic operations are available when only nand or nor is provided, or when not, and and or are provided. etc.. and all possible permutations
-//    -> Are these all the minimals: nand, (not, and), nor, (not, or), (and, xnor), (or, xnor), (or, xor), (and, xor)
 
 // TODO - Editor
+// Can be rewritten as: if higher abstraction level. for all recognized mappings.
 // goto label in an IDE should bring the label back one space. ; if then a type defined instead add it back.
 // If an automatic isomorphism is found, and the user is trying to implement it, notify the user it's not necessary.
 // Function in the editor where you select, press a key, then allow the perform operation on that selection like select capped text, .tolowercase it. done.
 //   -> Similarly, in natural language describe the thing you want to do to that selection. Same with object.[describe] for where the cursor is.
 // Eye-tracking should switch primary/secondary location, if the windows are side to side, if overlayed, the top one takes priority.
 // version control selectors at functions in classes in the editor
+// Use v[SUBSCRIPT] or ^[SUPERSCRIPT], and allow to undo to prefer non-script notation
 
 // TODO - Features
 // Evaluating infinities

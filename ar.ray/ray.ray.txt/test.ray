@@ -262,7 +262,7 @@ location //TODO Allow this syntax. => Should be dynamically there.
 
 // Allow named parameters to access nested fields: def method(parameter.field: Object), and it's then set as 'field'
 // Allow the . after operator in shortcut of defining x => x & x. : this.#`String.NonEmpty` -> & .#`String.NonEmpty`
-// Allow ' + name: "quecto`name`", "s"?' as a + { name: "" }
+// Allow ' + .name: "quecto`name`", "s"?' as a + { name: "" }
 
 // Allow +=  equiv to '= .+ b', so allow '= .method.method2'
 // Allow  Ray<T = Ray<T>>

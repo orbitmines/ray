@@ -23,8 +23,13 @@ Binary +=
 
 // Binary{length == 1} == boolean
 
+class Number
+  Nat | ℕ <n> = Array{length == n}().last&&
+  ℝ: Any Base ℝ
+{ ℕ, ℝ } = Number
+
 def Integer<n> = sign: "-"?, integer: Positive
-  static def Positive = Array{length == n}().last&&
+  static def Positive = Array{length == n}().last&
   //TODO Addition/subtraction of this integer (addition is simple)
 end
 

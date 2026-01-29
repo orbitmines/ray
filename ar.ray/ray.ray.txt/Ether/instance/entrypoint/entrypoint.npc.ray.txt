@@ -1,2 +1,0 @@
-< NPC
-// TODO Server entrypoint.

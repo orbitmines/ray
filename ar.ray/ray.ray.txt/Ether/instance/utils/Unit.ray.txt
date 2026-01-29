@@ -2,6 +2,7 @@
 //TODO support other scientific units
 SI_Unit m "meter"
 
+//Allow 1 / m, 1 per m 2/10m
 
 class Quantity<Base = Number> = quantities: (quantity: Base, unit: Unit = Unit.None)[]{length > 0}
   //TODO Implement number

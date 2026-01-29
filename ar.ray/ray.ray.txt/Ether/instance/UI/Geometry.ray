@@ -1,0 +1,127 @@
+//TODO Translations to GLSL - Can those be inferred from the structure defined on the types? (Like https://iquilezles.org/articles/distfunctions/) Exact vs approximation equivalances how?
+
+// How to mix discrete spaces and Spheres vs the euclidian one's.
+
+//TODO Edges are decorated with length.
+//elementary_length <>
+
+// All objects are contained in some space: World.
+
+class Object < Iterable<Point>
+  Point: Ray v 3
+    //TODO How to set scoped, that a point has a color for instance. ; which is an approximation, how to say it is
+
+class Path | Curve | Line = Array.Unbounded
+  curvature
+  static Straight = //"No curvature" is a bit ambiguous //TODO Makes assumption about local space
+end
+
+//TODO Unbounded/vs bounded loop
+Loop = Array.Unbounded.loop(boundaries: false)
+
+// Ball with padding is still a ball
+// Padding is just a hierarchical object, with boundary to the object, and its boundary, can have multiple padding wrappers.
+// Holes as negative components, but holes can also exist from the abstract description?
+
+discretized 1 / m
+// Discretized single Infinite Ray
+// What to do with conflicting information at discretized points
+// If 2d is discretized should be renderable in pixels easily
+
+Ball(radius: 10m)
+
+// Things like color are 'information of each point'. how does this get mapped.
+
+LocallyConnected // directionality are actually usual dimensions; no jumps between two different neighbourhoods
+
+// How to say Smooth out of two components Ball - Square at its boundary for instance.
+
+class Ball
+  Point
+    radial_distance => to centre -- #.min.length
+
+  static Open => static{- surface}  // Excluding surface, and boundary should be moved.
+  static Closed => Ball
+
+  // TODO Should this be the default on Iterable, always map methods to the
+  // Ball.color, will go to point.color
+  delegate in Point => this as Point
+
+  // outline, sphere, surface (area)
+  boundary: Boundary{∙.radial_distance == radius}
+  border | surface => boundary∙
+  interior => this{not border}
+
+  centre: Point
+  radius => surface.radial_distance //This is a circular definition, which is allowed, and expected to break for a valid object, either by setting boundary, or by setting radius, or by setting diameter
+  diameter => radius * 2 // implements diameter =
+
+  sphere => outline
+  dimensionality ()
+    //Implementation even though there's a default value, how to reset to this implementation?
+
+{n: Decimal.Real}-Ball => Ball{dimensionality == n}
+{n: Decimal}-Sphere => {n + 1}-Ball.surface // Does this generalize to Number?
+
+Circle = 2-Ball
+Sphere = 2-Sphere
+
+class Circle
+
+  //TODO Things like approximate circles or discrete circles where not every.reduce(==)
+  //TODO Circle with surface selected.
+
+end
+//TODO Things like volume, for the arbitrary space discrete vs infinite (needs to be evenly spaced out too when not having discrete effects)
+
+Square //TODO Makes assumption about the local space.
+Plane // Square with no boundaries.
+
+// Finite vs Infinite
+// dimensionality = 2 & dimensionality change at every point is constant.
+// every x goes to an x, every y goes to a y
+Grid // TODO `x`D Grid, X x X Grid, (Allow Expression syntax to extent a whole statement like Number x/* Number)
+//TODO Euclidian space being a grid with infinite divisibility.
+//TODO Effective dimension vs actual dimension at each point.
+
+//TODO Use Grid in torus/cylinder definition
+Cylinder
+Torus
+
+
+Sphere //TODO How to say 2D Loop
+Cube
+COne
+
+
+// In the current group (hierarchy wise) or the entire "under" ignoring hierarchy
+->> means everthing to the right (<-ray).all
+
+class Object < Hierarchy
+  boundary: Boundary
+  border: // object on the boundary (inclusive)
+
+//todo easilty add remove properties like center so dynamically .center if predicate, but compact
+  Center<D =
+    & .x if ==.instance_of 1D
+    & .y if ==.instance_of 2D
+    & .z if ==.instance_of 3D
+  > = static{(<-D).length == (D->).length}
+  //Todo how to not so verbosely do this, rhis syntax doesn't currently work
+
+  //Todo .under etc. needs to go to the boundary of this abstract object
+
+  // dimensionality Support for n-dimensional, with the same functions like padding etc..
+
+
+class 1D
+  left: static <<- previous: static <- horizontal | x -> next: static ->> right: static
+class 2D < 1D
+  under: static <<- down: static <- vertical | y -> up: static ->> above: static
+class 3D < 2D
+  behind: static <<- backward: static <- depth | z -> forward: static ->> in_front: static
+
+
+
+
+

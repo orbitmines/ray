@@ -301,8 +301,8 @@ class SyntaxHighlighter : com.intellij.openapi.fileTypes.SyntaxHighlighter {
       // NUMBER
       Rule(
         tokenType = Types.NUMBER,
-        pattern = Regex("-?\\b\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?\\b", RegexOption.IGNORE_CASE)
-      ), //TODO: Add 0b/B 0x/X and _ in between 0b/0x is dark, but the other thing is highlighted. U+000D
+        pattern = Regex("-?\\b\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?(\s?[mdhsy]|[qryzafpnµmcdahkMGTPEZYRQ][ms])?\\b", RegexOption.IGNORE_CASE)
+      ), //TODO: Add 0b/B 0x/X and _ in between 0b/0x is dark, but the other thing is highlighted. U+000D, // Add all Units by default
 
       // BP5-TEXT-MUTED
       Rule(

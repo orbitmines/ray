@@ -91,6 +91,8 @@ class Ray<T?> (x | value) < AbstractDirectionality
   //group_by
 
   index (start = first) => start to this -- .length - 1
+
+  v (count: Number) => this{##.count == count}
 end
 
 class AbstractDirectionality<T> < Iterable<T>

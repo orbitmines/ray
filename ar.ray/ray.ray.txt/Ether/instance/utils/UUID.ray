@@ -1,7 +1,7 @@
 //TODO If OS allows custom UUID1 generation, overwrite with external
 // A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
-class UUID < Hexadecimal₃₂ ~~ [~ 7 | +4 | +4 | +4].push_after("-")
-  version: Hexadecimal₁ => this[12]
+class UUID < Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-")
+  version: Hexadecimal¹ => this[12]
 
   dynamically
     < v1 if version == 1
@@ -9,14 +9,15 @@ class UUID < Hexadecimal₃₂ ~~ [~ 7 | +4 | +4 | +4].push_after("-")
     < v4 if version == 4
     < v5 if version == 5
 
-  class v1 < UUID (
+  class v1 < UUID ~ (
     (
-      time_low: Hexadecimal₈,
-      time_mid: Hexadecimal₄,
-      (version: Hexadecimal₁, time_high: Hexadecimal₃) = time_high_and_version: Hexadecimal₄
+      time_low: Hexadecimal⁸,
+      time_mid: Hexadecimal⁴,
+      (version: Hexadecimal¹, time_high: Hexadecimal³) = time_high_and_version: Hexadecimal⁴
     ) | (
-      // The timestamp is a 60-bit value (or Hexadecimal₁₅) (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.4)
-      (time_high, time_mid, time_low) = time: Binary₆₀ = (
+      //TODO This is not the right order, should be defined differently.
+      // The timestamp is a 60-bit value (or Hexadecimal¹⁵) (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.4)
+      (time_high, time_mid, time_low) = time: Binary⁶⁰ = (
         // For UUID version 1, this is represented by Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals since 00:00:00.00, 15 October 1582 (the date of Gregorian reform to the Christian calendar).
         timestamp = Time.NOW(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor
         // Make sure each call yields a unique value.
@@ -28,15 +29,15 @@ class UUID < Hexadecimal₃₂ ~~ [~ 7 | +4 | +4 | +4].push_after("-")
     ), //TODO How to say this is not the one used for converting from string, like a 'secondary' implementation -> Since now there's ambiguity
     (
       (
-        variant: ⊢11₂ ? Binary₃ : Binary₂ = 10₂,
+        variant: ⊢11₂ ? Binary³ : Binary₂ = 10₂,
         clock_seq_high: Binary{length == 8 - variant.length}
-      ) = clock_seq_high_and_reserved: Hexadecimal₂,
-      clock_seq_low: Hexadecimal₂,
+      ) = clock_seq_high_and_reserved: Hexadecimal²,
+      clock_seq_low: Hexadecimal²,
     ) | (
       variant,
       (clock_seq_high, clock_seq_low) = clock_seq: Binary{length == 16 - variant.length} = Binary{length == 16 - variant.length}.random
     ),
-    node: Hexadecimal₁₂ = @me.instance#.mac_address
+    node: Hexadecimal¹² = @me.instance#.mac_address
   )
     class Variant = .RESERVED_NCS | .RFC_4122 | .RESERVED_MICROSOFT | .RESERVED_FUTURE
     variant
@@ -54,10 +55,10 @@ class UUID < Hexadecimal₃₂ ~~ [~ 7 | +4 | +4 | +4].push_after("-")
     dynamically assert version == 5
 
   namespace Namespace
-    DNS: UUID = "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
-    URL: UUID = "6ba7b811-9dad-11d1-80b4-00c04fd430c8"
-    OID: UUID = "6ba7b812-9dad-11d1-80b4-00c04fd430c8"
-    X500: UUID = "6ba7b814-9dad-11d1-80b4-00c04fd430c8"
+    DNS: UUID = 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+    URL: UUID = 6ba7b811-9dad-11d1-80b4-00c04fd430c8
+    OID: UUID = 6ba7b812-9dad-11d1-80b4-00c04fd430c8
+    X500: UUID = 6ba7b814-9dad-11d1-80b4-00c04fd430c8
 
 //TODO Allow
 {uuid: UUID.String}: UUID => uuid

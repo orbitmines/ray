@@ -148,7 +148,8 @@ end
     assert this.every <= base
 //TODO We're also using subscript for length, so number should be not using v, but instead match to the whole string + subscript
 
-
+//TODO Override the ^/* behavior of the Number type to use the list variant instead. -> Need some quick method for that
+static prefer{== BASE_TYPE} Iterable.(^ | *) //TODO Should only work for the base static case
 Node
   {expression: String.Superscript} => this ^ expression.decompose as Expression
   {expression: String.Subscript} => this v expression.decompose as Expression //TODO as Expression, should take the existing context which called this, and evaluate in that.

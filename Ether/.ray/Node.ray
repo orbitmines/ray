@@ -5,7 +5,7 @@
 class
   //TODO class{==.instance_of Nameable}, instance_of class
 
-  //TODO Class is always called on static if possible from a constructor.
+  //TODO Class is always called on static if possible from a constructor. ; If no dependence on variables.
 
   {name: *} (def: (Args: *): *) //TODO Allow out-of-order
     // Allow Class.name |= "Class2" to add aliases
@@ -83,7 +83,7 @@ class * | Node
   ⊢/./!⊢ // Allow if x ⊢11
 
   // All
-  {operator: *{"{.}=" not in this && . ~= (Symbol & ¬"=")[]}= (x)
+  {operator: *{"{.}=" not in this && . ~= (Char.Symbol & ¬"=")[]}= (x)
     this = this[operator](x)
 
   //TODO Allow superpose of Ray + Ray, without interfering with eachother???
@@ -97,7 +97,7 @@ class * | Node
 
   //TODO How to access additional type information like A.disjoint(B)
   // Even though 'this' is already a type, we allow the binding of a less restrictive type. That way it can be reassigned to.
-  type: * = *
+  type: * = static
   : | ∊ | ∈ (type) => this ~~ .type = type
   ∉ (type) => this: not type
   ∍ | ∋ (member) => member ∈ this -- this //TODO This higher precedence than : so it is executed on the type when x ∈ String ∋ x^2
@@ -105,6 +105,9 @@ class * | Node
   // Allow 'var?: type' syntax, because certain types would have to be wrapped in parentheses otherwise.
   ?: (type) => : type?
   dynamically assert this ==.instance_of type
+
+  > // Greater type than this, components could be together this type.
+
 
                                     // Stops when hitting None
                                     -> | →
@@ -148,21 +151,26 @@ class * | Node
 
   ?? | else
 
+  equivalent
+    as (== Instance) => .instance
+    //TODO The inverse of this,
+    as (== Character) => Character(instance: this)  // If instance is not already instance_of Character
+
   as (:== boolean) => true
 end
 
-class Option<T> < T | None
+class Option<T> < T | .None
 { None } = Option
-None +=
-  {" "}({parameters: Expression}): Function
+None
+  {" "}({parameters: Expression}): Function //TODO This is supposedly the function initializer
     < Function
 
     local
-
+ // None implements location and =
  //TODO Ray. arguments = , When vertex is set to None, should set recursively the boundaries etc. as well. And extend the initial boundaries with Function.
 
-  as (:== boolean) => false
-end
+  as (== boolean) => false
+  as (== Number) => 0
 
 //TODO .canonical as the thing which resolves equivalent forms of the same Instance for example.
 
@@ -181,3 +189,5 @@ delegate in Number => object
 
 // Require that one of the superposed values is of the given type
 a | an (type) => ∃Node ==.instance_of type
+
+equivalence

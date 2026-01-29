@@ -137,9 +137,12 @@ class Iterable<T>
   map <T>{predicate: (x: T &+ iterator: Ray): boolean}(map: (x): T) => static{T: T}
   reduce | fold | foldl ()
   reduce_right | fold_right | foldr ()
+
+  reduce (operator: (in T){T*[.] ==.instance_of (b: T): T}) => this.reduce (acc, current) => acc ? acc[operator](current) : current
+
   //TODO Mapping and reducing together?
   reverse: static
-  unordered
+  unordered => choose Iterable{.every(this.contains(.)) && .count == count}
 
   pop_front
   pop_back
@@ -154,7 +157,7 @@ class Iterable<T>
 
   every (predicate: (): boolean)
   some (predicate: (): boolean)
-  contains | includes (x: T)
+  contains | includes <in:>(x: T) // Include equivalence graph, is there maybe a different syntax for which equivalence graphg to use.
 
   partition (predicate: (): boolean)
 
@@ -186,7 +189,8 @@ class Iterable<T>
   , = (b: T | T[])
 
   // Allow Binary₃₂ = Binary₈[]₄
-  v (length: Number) => this{.length == length}
+  // Uses count instead of length, since Ray/Graph₄₄₄ makes for sense as the size of the graph rather than each path length.
+  * | ^ (count: Number) => this{.count == count}
 
   // Default behavior is to superpose the values in the iterable with |.
   // Unless it's an Iterable<Ray>, then sequential composition is preferred, so that:
@@ -199,6 +203,17 @@ end
 class Hierarchy < Ray
   parent | previous : static? <- hierarchy -> children | next : static?
 
+// How to say: Return of the given type, or a predicate when used in a filter
+//TODO How to say: .unordered, arbitrarily choose anything equivalent to
+//Chose uses === for checking equality. And only maps it once, then defers to the altered variable
+// Allow to be passed as a variable as any time, which takes on that type and says chosoe that type
+choose Iterable{.every(a => B.contains(a)) && .count == B.count}
+choose Number // No, this would be Number{choose}
+choose 10 Number
+Number{choose}
+Number{choose 10}
+
+choose
 
 //TODO constructors
    0 -> +1

@@ -81,6 +81,7 @@ class Modifier name: *
   def as :== Node{}
 end
 
+//TODO General form of an annotation
 def modifier
   def `*: name` = Modifier(name)
 end

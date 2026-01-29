@@ -1,89 +1,44 @@
+// Call by value vs reference?
+
 //TODO How to support [None, None] if .next is None is those. ~ yields a structure equipped on None, so it's not just None. So it needs to be exactly None, not with structure.
 
 //TODO For grammar matching make a "resolve ambiguity" func ; match to both cases of the ambiguity..
 
 // unless if !
 
-a
-  b
- c
+var === var is share a location in common, since there are both new variants of the variable with new superposed locations
 
-a
-  b
-   c
- d
-
-a
-               b
- c
+? as sorry, as it just fills the type
 
 // Type with additional structure like
-blocks: Program (\s, \s)[]
+blocks: Program ~ (\s, \s)[]
 //TODO is not
 blocks: Program(\s, \s)[]
 
  // When editing inside a double ((, force ((+TAB to turn into a (( (double << might be used for subexpressions.
 
-//TODO How to define, "these are all the non-halting points", have a NPC decide when and how to traverse.
-//TODO -> Take as an example program evaluation.
-//TODO "choice"
-//TODO Indicate which cursor to advance, which cursor to expand
+choose Number
+choose 1 Number
+
 cursor: Program
-while cursor{next} != None
-  cursor = choose (cursor{next} -> .expand).last.map x
-    // Program logic
-    x.next
-
-// Takes one element and maps it to the block (Also allows the compiler to choose how and which to advance first)
-while cursor{next} != None
-  cursor{next}.choose
-    (cursor{next} -> .expand).last
-    // Program logic
-    cursor (.next if .next) //TODO Only .next if has a .next HOW?
-
 // To indicate to the runtime & compiler, that it can arbitrarily pick (and map) a single value among a collection and then manipulate it. Note that this 'arbitrary picking', the runtime can have access to the running function, its context and possibly some model it has on function execution which determines what it picks; It doesn't have to be '''purely random'''.
 while cursor{next} != None
-  choose.map 1 cursor{next}
+  // OR choose (X) is of type (x: *): boolean so
+  cursor = cursor.map{next}{choose 1}
     if .expand !== .
       .expand
     else
       // Program logic
       . (.next if .next) //TODO Only .next if has a .next HOW?
 
-  a = choose cursor // picks a single element
-  choose cursor => .call
 
-// OR choose (X) is of type (x: *): boolean so
-cursor = cursor.map{next}{choose 1}
-  if .expand !== .
-    .expand
-  else
-    // Program logic
-    . (.next if .next) //TODO Only .next if has a .next HOW?
-
-//TODO Does mean the predicate is aware of all its usages.
-A = cursor{choose 1}
-
-
-[1, 2, 3].map{.index == 2}(*10) // [1, 2, 30]
-[1, 2, 3].map{choose 1}(*10) // [10, 2, 3] | [1, 20, 3] | [1, 2, 30]
-//Chose uses === for checking equality. And only maps it once, then defers to the altered variable
 //Depending on the context, it might even prompt the Player if its context is deemed necessary for that.
 var = 2
 [1, dynamically var, dynamically var].map{choose 1}(*10) // [10, 2, 2] | [1, 20, 20]
 {choose 1/2} // 50%
 
-//TODO How to say: .unordered, arbitrarily choose anything equivalent to
-choose Iterable{.every(a => B.contains(a)) && .count == B.count}
-choose Number // No, this would be Number{choose}
-choose 10 Number
-Number{choose}
-Number{choose 10}
-
-Number#.random
 
 A (B, C)
-// ALlow
 A (choose, choose 1)
 
 //TODO If None !";"⊣ should return true.
@@ -131,15 +86,6 @@ allow capability3
 
 //TODO What about syntax which is more contextual
 
-//TOD If !=.instance_of Instance ; if it already is a , dont case down to a field.
-//TODO If there is a single field going to some class like Instance/or its extensions IP/Socket.Address, automatically add an equivalence (as IP) to that class. Is there ever a case where you don't want this equivalence?
-  as (== Instance) => .instance
-//TODO The inverse of this, calling the constructor on something which has a single extends, like Instance as Character. Only allow if it's a valid type then, so no fields missing.
-  as (== Character) => Character(instance: this)
-
-//dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE
-//todo should change the variable INSTANCE to a new var with different permissions.
-
 // Allow .for {from, to, name}, and [a, b]
 
 class Example
@@ -152,12 +98,7 @@ x.next // Does Ray.next
 x: Example
 x.next // Does Example.next
 
-
-// ALlow (⊢ | ⊣)name.split(" "), begings or starts with
-
 // Editor, can be rewritten into preferred level of description, like there exists instead of #.some
-
-// None acts as 0 in 16 - None = 16
 
 // Every < X[] implements .Unbounded on static.
 
@@ -171,17 +112,10 @@ A, B if // adds B after A if
 //TODO .copy implemented, as not being bound to the .history .last version. But a new branched version.
 
 
-: Location = (##: Ray & Ray) | (##: Ray & Ray)
-the default ##: is used if no name
-//TODO Or use .expand somehow, NO? it's used for something else?
-
-
-None implements location and =
-//TODO What happens to returned variables? They have a location inside the function, then while their location isn't changed in another function, that function still lives through the variable?
-
-
+=
 //TODO Reverse .keys and .values
 //TODO Things like .map on variable*, needs to be thought through, what is actually on *
+// * is Iterable<(key, value)>
 
 
 //TODO Needs like an example of 2D/3D world with yaw/pitch on location, stored as arcs in a continuous space then discretized by some things like elementary lengths and other things.
@@ -189,9 +123,9 @@ None implements location and =
 
 //TODO Default of an object is only loaded if accessed, so we can have circularly defined defaults.
 
-parse json to an object by setting fs.directory.file equal to some type which serializes and sets to json automatically restricting possible values
+// Synced object to other locations; which format (normalizer) do they use.
 
-Evaluation order like +/-//* different for each type? how configured?
+ambniguity of types like String[], String[], defined in dependent type on the first/lkast arg, B = [] if A == ., & A = [] if B == . ; this is circularity, unless they both share the same condition, that should break circularity.
 
 
 //TODO This will be difficult to implement, but it's very powerful:
@@ -206,18 +140,13 @@ Evaluation order like +/-//* different for each type? how configured?
     // equivalent to
     dynamically sub.location &= dynamically location.copy().push_back<edge: .value = property>(sub).last
 
-
-//TODO Extend UTF-8 with custom symbols, as a new String type. with way of converting to a string in case UTF later supports them
+//TODO How to filter from programs just Program{== (): boolean}, or do we do {(): boolean}
 
 
 //TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
 
 
-//TODO But do allow >/< a type.
-
 //TODO Only monkeypatch within some context, like equiv graph for only a specific context.
-
-
 
 
 // KV pair with everything delegated to value, so you can do ==. (separate class like TransparentKV)
@@ -265,7 +194,6 @@ Evaluation order like +/-//* different for each type? how configured?
 // statement if expression != statement.if.expression, similarly if expression then a else b
 // what if I do something like () => boolean, which returns a boolean, the return type is not false | true, as in 'a boolean', but it's 'the type boolean'.
 // Referencing a parameterless constructor, can be both the Object() or Object, since it could be interpreted as a property.
-// Variable * for any shouldnt interfere with * 2 things. *2 variable or * _, reduce(*) (* is called on the acc and current)
 // Somehow the constructor another method thing so that everything can be passed on to static, but then that would have the same problem.
 // The boolean definition false, true = needs to be on static. Which is done because the .false/.true values never change based on the type definition.
 // If a method doesn't exist on the variable, but it is castable to something which does define that method, say boolean and &/|. Converting it to that value and calling that method should be possible.
@@ -281,9 +209,6 @@ method () **: Terminating
 
 
 // TODO - Examples + Allowances
-
-// Allow
-f (property = call(property))
 
 (if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy (
       Keyboard.ctrl && Keyboard.shift => // Skip group & Expand selection
@@ -367,6 +292,8 @@ location //TODO Allow this syntax. => Should be dynamically there.
 // Eye-tracking should switch primary/secondary location, if the windows are side to side, if overlayed, the top one takes priority.
 // version control selectors at functions in classes in the editor
 // Use v[SUBSCRIPT] or ^[SUPERSCRIPT], and allow to undo to prefer non-script notation
+//TODO Extend UTF-8 with custom symbols, as a new String type. When copy pasted uses a different format to indicate it's custom symbols.
+// Associate @players.choose, with a comment/dynamic page above it which is quest information on why you can make thise choice, also how do you indicate, you just want to store the results preiodically and use later.
 
 // TODO - Features
 // Evaluating infinities

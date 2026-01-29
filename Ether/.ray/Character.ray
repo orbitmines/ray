@@ -60,16 +60,18 @@ Invisible =>
 class Character < Entity & Accessor & World & Nameable
   PREFIX = "@"
 
-  instance: Instance => location{==.instance_of Instance}
+  equivalent instance: Instance => location{==.instance_of Instance}
 
   // If blocks for which world to load it in, based on location, then .avatar with {location == ?}.avatar or default {?} to load all properties with unknowns
-  avatar: Avatar if this !=.instance_of Avatar
+  equivalent avatar: Avatar if this !=.instance_of Avatar
 
   status => instance.status#.max
 
   {" "}{string: String} //TODO Access permission filter
 
   // == Challenges with timed message to be decoded
+
+  //TODO @me.choose different from choose
 end
 
 class Avatar < Character

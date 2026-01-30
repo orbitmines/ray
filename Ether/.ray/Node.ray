@@ -55,6 +55,8 @@ class * | Node
   external # | all : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
   // +/&+ are both components but normal + overrides.
   external ## | components : Iterable<static##.reduce(|)> //TODO Does this type work?
+  external ### | class_components // Class components and monkey-patches
+
   //TODO Exclude vs include things like local and other defined properties on Node,
   external * | methods : { {key: *}: value: Program? }
   external ** | program : Program
@@ -129,6 +131,8 @@ class * | Node
 
   .= //TODO .= next ; x = x.next
 
+  * (n: Decimal) => this[]^n
+
   //TODO Sequential composition for single Node. (overriden by Iterable)
   ,
 
@@ -157,7 +161,6 @@ class * | Node
     as (== Character) => Character(instance: this)  // If instance is not already instance_of Character
 
   as (:== boolean) => true
-end
 
 class Option<T> < T | .None
 { None } = Option
@@ -169,6 +172,7 @@ None
  // None implements location and =
  //TODO Ray. arguments = , When vertex is set to None, should set recursively the boundaries etc. as well. And extend the initial boundaries with Function.
 
+//TODO If None !";"⊣ should return true.
   as (== boolean) => false
   as (== Number) => 0
 

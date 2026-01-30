@@ -134,9 +134,11 @@ class Iterable<T>
 // TODO If two arguments are passed, we step with 2 and fill both?
   for ()
 
+  ~ | filter {predicate: (x: T + iterator: Ray): boolean} => //TODO How to say filter applies here
+
   // TODO Structure altering mapping with ~ somehow
   //TODO Name for &+ iterator right?
-  map <T>{predicate: (x: T &+ iterator: Ray): boolean}(map: (x): T) => static{T: T}
+  map <T>{predicate: (x: T + iterator: Ray): boolean}(map: (x): T) => static{T: T}
   reduce | fold | foldl ()
   reduce_right | fold_right | foldr ()
 
@@ -191,8 +193,8 @@ class Iterable<T>
   , = (b: T | T[])
 
   // Allow Binary₃₂ = Binary₈[]₄
-  // Uses count instead of length, since Ray/Graph₄₄₄ makes for sense as the size of the graph rather than each path length.
-  * | ^ (count: Number) => this{.count == count}
+  // Uses count instead of length, since Ray/Graph²²² makes for sense as the size of the graph rather than each path length.
+  ^ (count: Number) => this{.count == .count ? .count * count : count} //Allow this sort of chaining, overriding the previous count ==
 
   // Default behavior is to superpose the values in the iterable with |.
   // Unless it's an Iterable<Ray>, then sequential composition is preferred, so that:
@@ -200,22 +202,13 @@ class Iterable<T>
   // Is sequential composition of programs, not "Program | Program": parallel composition
   as (== T) => T() = this.reduce(T extends Ray ? , : |) //TODO if T is class. Or should this use &?
 
+  as (: Iterable<R: ?>) => this~{==.instance_of R}
+
 end
 
 class Hierarchy < Ray
   parent | previous : static? <- hierarchy -> children | next : static?
 
-// How to say: Return of the given type, or a predicate when used in a filter
-//TODO How to say: .unordered, arbitrarily choose anything equivalent to
-//Chose uses === for checking equality. And only maps it once, then defers to the altered variable
-// Allow to be passed as a variable as any time, which takes on that type and says chosoe that type
-choose Iterable{.every(a => B.contains(a)) && .count == B.count}
-choose Number // No, this would be Number{choose}
-choose 10 Number
-Number{choose}
-Number{choose 10}
-
-choose
 
 //TODO constructors
    0 -> +1

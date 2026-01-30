@@ -368,9 +368,11 @@ static class Expression < String + Ray?
 // --> Does mean that a high-level .expand is not yet decided how to order.
 class Expression < (
   {as (== Program) => program = .map(func)}: (,
+    // , higher precedence than if
     // function calls "/" "." " "
     // A: " " -> If preceded by function expecting an argument
     // B: " " -> If preceded by function expecting a callback
+    //    callback: // Allow .for a {from, to, name}, b and .for [a, b], c
     // " " -> For functions defined on Expression, prefer those (like Expression if)
     // After () of a function, => is optional, and the function starts directly.
     // => can be placed after a < Extended optionally.
@@ -382,8 +384,9 @@ class Expression < (
     // Allow chaining of binary operators like Array<3 < length < 5>
     // How to say: Prefer globally defined. [1, 2, 3] should call global level [], not local level def [property].
     // Evaluation order per type how + optimizations, & (what about precedence in multiple files) precedence defined by order in class (with before & after extends, to go after)
+    // Allow ' + .name: "quecto`name`", "s"?' as a + { name: "" }
     func: Program ((*, dynamically parent∙*.keys? | ("{", Expression, "}")?)[], ";" | \n | ⊣),
-    {func.args.push_back(.)}: Program (
+    {func.args.push_back(.)}: Program: (
       // If block is after a property, it is called after it's changed and something is set to the value (also the default); part of the constructor as it gets assigned
       // TODO Multiline |/& are not blocks. If line starts with |, otherwise it's just a single func with multiple options return
       " "[]{length == whitespace}, added_whitespace: " "[].NonEmpty,
@@ -403,3 +406,7 @@ Program
     // Used within this context, they have the same behavior
     //
     extensional1
+
+// Any parameterless function is equivalent to the type it returns.
+{(): (T: ?)}
+  as (== T) => this()

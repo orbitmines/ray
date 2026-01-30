@@ -185,6 +185,17 @@ class Number < Ordered
   // TODO: external defines that Number > Number is done by some other operator, not looking through successors/predecessors.
 end
 
+Decimal
+  % => this / 100
+
+Probability = Number{0 <= . <= 1}
+
+Number.Nat
+Integer.Unsigned
+  {" "}{node: *} => node{#.count == this}
+Probability{!= 1}
+  {" "}{node: *} => //TODO How to say %, what to do in case of non-divisible
+
 {
   (Σ | ∑): sum -> +,
   ∏: product -> *

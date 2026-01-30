@@ -7,7 +7,9 @@
 
 // All objects are contained in some space: World.
 
-class Object < Iterable<Point>
+
+
+class Object ({children = .()**,lines.reduce(,)}: (): *) < Iterable<Point>
   Point: Ray v 3
     //TODO How to set scoped, that a point has a color for instance. ; which is an approximation, how to say it is
 
@@ -28,7 +30,18 @@ discretized 1 / m
 // What to do with conflicting information at discretized points
 // If 2d is discretized should be renderable in pixels easily
 
-Ball(radius: 10m)
+// Code in front on render
+Ball(radius: 10m) + Padding.Right(10m)
+  // Code in front on render
+  Ball(radius: 5m, + Padding(5m)) "text in between" Ball()
+
+  {Ball(radius: 1m)
+    Ball(radius: 0.5m)
+  }text in between
+
+  {Ball / radius: 1m ; center}
+
+  {Ball }
 
 // Things like color are 'information of each point'. how does this get mapped.
 

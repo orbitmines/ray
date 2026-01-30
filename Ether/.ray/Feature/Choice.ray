@@ -1,0 +1,18 @@
+// How to say: Return of the given type, or a predicate when used in a filter
+//TODO How to say: .unordered, arbitrarily choose anything equivalent to
+//Chose uses === for checking equality. And only maps it once, then defers to the altered variable
+// Allow to be passed as a variable as any time, which takes on that type and says chosoe that type
+choose Iterable{.every(a => B.contains(a)) && .count == B.count}
+choose Number // No, this would be Number{choose}
+choose 10 Number
+Number{choose}
+Number{choose 10}
+choose 1/2 // As long as finitary #.count != ∞ 50%, what to do with
+choose 50%
+// Allow 1/2 Number, then choose that type
+func(choose, choose 50%)
+
+//Choose where the same value can be chosen more than once? Is that even useful? It might be for mapping filters
+
+choose n: Nat
+choose n: Probability{!= 0 && != 1} // Only for finite number of objects.

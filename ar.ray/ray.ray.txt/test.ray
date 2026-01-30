@@ -11,14 +11,9 @@ var === var is share a location in common, since there are both new variants of 
 ? as sorry, as it just fills the type
 
 // Type with additional structure like
-blocks: Program ~ (\s, \s)[]
-//TODO is not
-blocks: Program(\s, \s)[]
+blocks: Program: (\s, \s)[]
 
  // When editing inside a double ((, force ((+TAB to turn into a (( (double << might be used for subexpressions.
-
-choose Number
-choose 1 Number
 
 cursor: Program
 // To indicate to the runtime & compiler, that it can arbitrarily pick (and map) a single value among a collection and then manipulate it. Note that this 'arbitrary picking', the runtime can have access to the running function, its context and possibly some model it has on function execution which determines what it picks; It doesn't have to be '''purely random'''.
@@ -32,16 +27,6 @@ while cursor{next} != None
       . (.next if .next) //TODO Only .next if has a .next HOW?
 
 
-//Depending on the context, it might even prompt the Player if its context is deemed necessary for that.
-var = 2
-[1, dynamically var, dynamically var].map{choose 1}(*10) // [10, 2, 2] | [1, 20, 20]
-{choose 1/2} // 50%
-
-
-A (B, C)
-A (choose, choose 1)
-
-//TODO If None !";"⊣ should return true.
 
 //TODO Allow [RANDOM JUNK, TYPE, RANDOM JUNK, TYPE] to be castable to TYPE[]
 
@@ -65,7 +50,6 @@ dynamically assert x + y <= 10
 //  (Intermediate result basically)
 yield & var
 
-[1, 2][] vs (1, 2)[] = [[1, 2], [1, 2]] vs [1, 2, 1, 2]
 
 
 //TODO What about the model it's constructing (effectiveness) vs (how long it took to make) so
@@ -86,21 +70,6 @@ allow capability3
 
 //TODO What about syntax which is more contextual
 
-// Allow .for {from, to, name}, and [a, b]
-
-class Example
-  next = () =>
-
-x = Example() &+ Ray()
-x.next // Does (Example & Ray).next
-x: Ray
-x.next // Does Ray.next
-x: Example
-x.next // Does Example.next
-
-// Editor, can be rewritten into preferred level of description, like there exists instead of #.some
-
-// Every < X[] implements .Unbounded on static.
 
 // TODO .push_back on None makes a new array with 1 entry
 
@@ -111,8 +80,6 @@ A, B if // adds B after A if
 
 //TODO .copy implemented, as not being bound to the .history .last version. But a new branched version.
 
-
-=
 //TODO Reverse .keys and .values
 //TODO Things like .map on variable*, needs to be thought through, what is actually on *
 // * is Iterable<(key, value)>
@@ -140,14 +107,7 @@ ambniguity of types like String[], String[], defined in dependent type on the fi
     // equivalent to
     dynamically sub.location &= dynamically location.copy().push_back<edge: .value = property>(sub).last
 
-//TODO How to filter from programs just Program{== (): boolean}, or do we do {(): boolean}
-
-
-//TODO instance_of which respects .expand and looks into it, vs one that doesn't. Not just instance_of, all of them
-
-
-//TODO Only monkeypatch within some context, like equiv graph for only a specific context.
-
+//TODO Allow {(): boolean}
 
 // KV pair with everything delegated to value, so you can do ==. (separate class like TransparentKV)
 
@@ -184,25 +144,21 @@ ambniguity of types like String[], String[], defined in dependent type on the fi
 
 
 // TODO - Ambiguities
-// Evaluating |/&, how
 - // But we want == boolean, as in, is exactly the boolean type. false != false | true, but you also want false | true, to superpose the func.
   // -> Components somehow useful, false &+ true vs false & true
 
-//TODO Bidirectional function like ray but only single step: l <= (x) => r, ambiguity with <=
-
-// args.for(args) a could mean args.for(args).a, instead of defining a block. Or something like args.for a b = 5, with the default '= 5'
-// statement if expression != statement.if.expression, similarly if expression then a else b
-// what if I do something like () => boolean, which returns a boolean, the return type is not false | true, as in 'a boolean', but it's 'the type boolean'.
-// Referencing a parameterless constructor, can be both the Object() or Object, since it could be interpreted as a property.
-// Somehow the constructor another method thing so that everything can be passed on to static, but then that would have the same problem.
-// The boolean definition false, true = needs to be on static. Which is done because the .false/.true values never change based on the type definition.
+// How to save non-class parameterless functions get executed immediately when called without ()., even optional parameters -> what if it returns a callable functions how to disambiguate
 // If a method doesn't exist on the variable, but it is castable to something which does define that method, say boolean and &/|. Converting it to that value and calling that method should be possible.
-//   |-> Version control: if that method is then implemented by a library, a user should be notified the functionality changed (probably unexpectedly)
 //   |-> Ambiguity if there are multiple casts to which that method may be applied.
-// classes without parameters are now called their constructors instead of requiring a ().
-// ~= ^1,1 ambiguity with ^3 as a number or other numbers, it should prefer ^ starts_with because of ~=. There's no ambiguity if we use ^[1,1] -> It's not a numbe.r
 
+If you do want different constructors, use
+class A
+  static ()
+    super()
+    this // is this available in this context.
 
+  static (b: a)
+    super(property: a)
 
 method () **: Terminating
 
@@ -253,16 +209,11 @@ func
 
 // (Base, unit: Unit = Unit.None)[], Should implement x[0].unit, because it binds the variable to it.
 // Should also implement x.unit as |
-// If there's a superposition of possible values, but only one fits, we dont superpose the other non-fitting ones, but just use the one that fits.
-// TODO Assert should be the same as dynamically assert in that it effects the type of a variable up to that statement.
 
 location //TODO Allow this syntax. => Should be dynamically there.
   primary: Location
 
 
-// Allow named parameters to access nested fields: def method(parameter.field: Object), and it's then set as 'field'
-// Allow the . after operator in shortcut of defining x => x & x. : this.#`String.NonEmpty` -> & .#`String.NonEmpty`
-// Allow ' + .name: "quecto`name`", "s"?' as a + { name: "" }
 
 // Allow +=  equiv to '= .+ b', so allow '= .method.method2'
 // Allow  Ray<T = Ray<T>>
@@ -273,7 +224,8 @@ location //TODO Allow this syntax. => Should be dynamically there.
 // Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
 // A monkey-patched function added, is suddenly also used by the library. Notify the user it's now overriding functionality that wasnt, there before.
 // For .ray.txt editor we can inject labels before functions and hide them with some IDE plugins for non-Ether editors. So still support version control in-line
-
+// If a method doesn't exist on the variable, but it is castable to something which does define that method, say boolean and &/|. Converting it to that value and calling that method should be possible.
+//   |-> Version control: if that method is then implemented by a library, a user should be notified the functionality changed (probably unexpectedly)
 // TODO - Notes on Type Checking
 // If blocks like if array.length > 2 ... end, change the type of array within that block. // '{==.instance_of IP}' Automatically casts to IP.
 // Functions should relax their arguments to 'actually used this from the type'. (So type refinements)
@@ -294,6 +246,7 @@ location //TODO Allow this syntax. => Should be dynamically there.
 // Use v[SUBSCRIPT] or ^[SUPERSCRIPT], and allow to undo to prefer non-script notation
 //TODO Extend UTF-8 with custom symbols, as a new String type. When copy pasted uses a different format to indicate it's custom symbols.
 // Associate @players.choose, with a comment/dynamic page above it which is quest information on why you can make thise choice, also how do you indicate, you just want to store the results preiodically and use later.
+// Editor, can be rewritten into preferred level of description, like there exists instead of #.some
 
 // TODO - Features
 // Evaluating infinities
@@ -313,7 +266,7 @@ reverse
 end
 
 bidirectional!
-+!(5) = -5
++! 5 = -5
 
 -1 <- x -> +1, how else
 // inverse-1 notation used to go to the reverse direction of a method

@@ -14,6 +14,7 @@ class
 
     static = local
 
+    //TODO () solves for constraints
     (args: Args)
       (protected if name == "*") .static = static
       protected this = local //TODO Allow this<World>
@@ -59,6 +60,7 @@ class * | Node
 
   //TODO Exclude vs include things like local and other defined properties on Node,
   external * | methods : { {key: *}: value: Program? }
+  // The program which still needs to run is the dynamics defined for that object, it might set intermediate values to the object. So it's not just a single update
   external ** | program : Program
   // Force the lazy program stored in **, to evaluate.
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
@@ -130,6 +132,10 @@ class * | Node
   ++ | copy
 
   .= //TODO .= next ; x = x.next
+
+  // Alternate syntax for an Array pattern. Usually: first, middle: [], last = array
+  // Allows: first, ..middle, last = array
+  ..{.} => this: this.type[]
 
   * (n: Decimal) => this[]^n
 

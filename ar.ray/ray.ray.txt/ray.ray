@@ -325,7 +325,8 @@ def Query<T>
   //TODO Set each property to the base class without defaults defined on T.
 end
 
-
+// Generalize range/intervals over arbitrary surfaces
+/// Castable to reduce(|)
 def Range
   // TODO Depending on the 'default space selected', range is either the refined Array, or a graph. (Graph because looped paths can exist)
 

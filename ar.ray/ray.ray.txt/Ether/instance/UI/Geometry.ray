@@ -30,10 +30,75 @@ discretized 1 / m
 // What to do with conflicting information at discretized points
 // If 2d is discretized should be renderable in pixels easily
 
+class Interface
+  // General surface area (whether input or not), Interface & World?
+
+class Window | Browser | Document | ?? < Interface & World //?
+
+class StyleClass < Ball
+  &+= Padding.Right(5m)
+  padding.right = 5m
+  radius = 1m
+
+// How to say, this is default Ball.radius choose
+Input Ball.radius
+  // Rendering logic, might want to edit the current renderings already.
+Input boolean
+  // Checkbox
+
+Ball
+  if choosing radius // Some way of checking whether the function needed to run radius, is choose.
+
+
+// TODO How to alternative renderings, and how to choose between renderings
+Ball => |
+Ball
+  //TODO What about constructor things which you always want to run?? Like <
+  default_profile
+
+  profile\ | Center field: choose Number
+  "Profile Name"\ |
+    Center field: choose Number
+  "Profile Name2"\
+    | Center field: choose Number
+  {variable_label: Number}\ | //TODO Allow variable labels
+
+Ball = Ball~profile //Set default
+//TODO Want to be able to say, within context, spawn a new context and make variable changes to the std in that.
+with Ball = Ball~profile //TODO What happens when a variable is some object is changed by this, only to this location should it be seen as that new value, outside of it it's still the other thing? ; what about successive changes to it, are they applied to both, or just this one???
+
+Ball~default()
+Ball~profile().
+Ball~"Profile Name"().
+Ball~5().
+
+// Choose with placeholder which is default, but gets reset on clicking on choose.
+
+// Use return in the constructor for something, how to access it though ? - the rendering func.
+
+// All events are instead dynamically on a variable, listening for change, so resize is dynamically width, height etc..
+
+// What is the interpretation of multiple rendered values. "text in between" & "other text in between"
+
+// Frontend code which targets libraries in HTML and other GUI libraries, what about 3D
 // Code in front on render
+
+// How to get the Window
+
 Ball(radius: 10m) + Padding.Right(10m)
   // Code in front on render
-  Ball(radius: 5m, + Padding(5m)) "text in between" Ball()
+  {dynamic_id}\ Ball(radius: 5m, + Padding(5m), & StyleClass & OtherStyleClass) "text in between" Ball()
+    Center field: choose String, "text in between" & StyleClass, field2: Time = choose
+    Center.Horizontally []
+    Between
+      (A, B, C) * 1/12,
+      7/12 * (D, E),
+      4/12 * (F, G, H) // Use parenthesis for 'column' groups?, then fractions for defaulting to width in this case.
+
+
+  id\ Ball(radius: choose? ?? 5m) // Choose + default
+
+  // Code in between Render
 
   {Ball(radius: 1m)
     Ball(radius: 0.5m)
@@ -130,7 +195,7 @@ class Object < Hierarchy
 class 1D
   left: static <<- previous: static <- horizontal | x -> next: static ->> right: static
 class 2D < 1D
-  under: static <<- down: static <- vertical | y -> up: static ->> above: static
+  under | bottom : static <<- down: static <- vertical | y -> up: static ->> above | top : static
 class 3D < 2D
   behind: static <<- backward: static <- depth | z -> forward: static ->> in_front: static
 

@@ -142,6 +142,8 @@ class * | Node
   //TODO Sequential composition for single Node. (overriden by Iterable)
   ,
 
+  ~{label} => this<goto label> //TODO Should automatically give the right available types.
+
   // instance_of and == are the same?
   namespace === // Don't ignore location
   namespace ==
@@ -173,6 +175,8 @@ class Option<T> < T | .None
 None
   {" "}({parameters: Expression}): Function //TODO This is supposedly the function initializer
     < Function
+
+  //TODO If None is called as a property, this is returned, so that this.(property if X) works.
 
     local
  // None implements location and =

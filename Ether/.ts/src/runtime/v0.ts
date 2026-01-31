@@ -595,6 +595,8 @@ class Instance {
     const program = new ProgramLoader(ray).dir(`${this.ether}/.ray`).program
     //TODO Intermediately load objects when needed in this program, and run everything in front which needs to run in front.
 
+     //TODO Allow to patch context of another program/package if desired, since you might want to override functionality that way./
+
     this.versions[version] = program
     return program;
   }

@@ -189,8 +189,6 @@ func
 
 /path is string form too
 
-//TODO Newline counts as a => when appropriate so
-
 // Allow multiple changes which make it adhere to the type, as long as nothing is accessed in between
 //Allow type def conditionally like this
  variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}
@@ -219,35 +217,6 @@ location //TODO Allow this syntax. => Should be dynamically there.
 // Allow  Ray<T = Ray<T>>
 
 
-
-// TODO - Notes on Version Control
-// Accessing a variable of a function (either by partially filling it), but it got renamed in a new version. Alert the user.
-// A monkey-patched function added, is suddenly also used by the library. Notify the user it's now overriding functionality that wasnt, there before.
-// For .ray.txt editor we can inject labels before functions and hide them with some IDE plugins for non-Ether editors. So still support version control in-line
-// If a method doesn't exist on the variable, but it is castable to something which does define that method, say boolean and &/|. Converting it to that value and calling that method should be possible.
-//   |-> Version control: if that method is then implemented by a library, a user should be notified the functionality changed (probably unexpectedly)
-// TODO - Notes on Type Checking
-// If blocks like if array.length > 2 ... end, change the type of array within that block. // '{==.instance_of IP}' Automatically casts to IP.
-// Functions should relax their arguments to 'actually used this from the type'. (So type refinements)
-
-// TODO - Notes on Theorem proving
-// Expand tactic to inline proof. (different lvl of description - allow switch back it not altered ; or equivalence and change the view)
-// Tests is the same as theorem proving, -> Combine both approaches, is a specific case
-// example; As an example usage: Use theorem-prover to automatically generate all the possible boolean implementations. How?
-
-// TODO - Editor
-// Can be rewritten as: if higher abstraction level. for all recognized mappings.
-// goto label in an IDE should bring the label back one space. ; if then a type defined instead add it back.
-// If an automatic isomorphism is found, and the user is trying to implement it, notify the user it's not necessary.
-// Function in the editor where you select, press a key, then allow the perform operation on that selection like select capped text, .tolowercase it. done.
-//   -> Similarly, in natural language describe the thing you want to do to that selection. Same with object.[describe] for where the cursor is.
-// Eye-tracking should switch primary/secondary location, if the windows are side to side, if overlayed, the top one takes priority.
-// version control selectors at functions in classes in the editor
-// Use v[SUBSCRIPT] or ^[SUPERSCRIPT], and allow to undo to prefer non-script notation
-//TODO Extend UTF-8 with custom symbols, as a new String type. When copy pasted uses a different format to indicate it's custom symbols.
-// Associate @players.choose, with a comment/dynamic page above it which is quest information on why you can make thise choice, also how do you indicate, you just want to store the results preiodically and use later.
-// Editor, can be rewritten into preferred level of description, like there exists instead of #.some
-
 // TODO - Features
 // Evaluating infinities
 // Automatic isomorphism
@@ -256,8 +225,6 @@ location //TODO Allow this syntax. => Should be dynamically there.
 
   // TODO .unrolled() -> Allows loops by defaul
 
-
-x⁸
 
 def bidirectional
   +1

@@ -10,16 +10,16 @@ string: String
 class String < Char[]
   //TODO Include Char static, (is that the default), where it's that return[], for Superscript.
 
-  lower_case | v
-  upper_case | ^
-  title_case
-  swap_case
-  ignore_case //TODO Ignore-case uses fold_case too
-  fold_case
+  lower_case | lowercase | v
+  upper_case | uppercase | ^
+  title_case | titlecase |
+  swap_case | swapcase
+  ignore_case | ignorecase //TODO Ignore-case uses fold_case too
+  fold_case | foldcase
 
-  snake_case
-  camel_case | camelCase
-  pascal_case | PascalCase
+  snake_case | snakecase
+  camel_case | camelcase | camelCase
+  pascal_case | pascalcase | PascalCase
   // ETC.
 
   plural
@@ -27,6 +27,9 @@ class String < Char[]
 
   //TODO mirror (bidi)
   mirrored
+
+String[]
+  as (== String) this.reduce(,) //TODO Must override the , behavior of not doing it for Graphs
 
 
 class Char < Unicode.Scalar

@@ -385,6 +385,8 @@ class Expression < (
     // How to say: Prefer globally defined. [1, 2, 3] should call global level [], not local level def [property].
     // Evaluation order per type how + optimizations, & (what about precedence in multiple files) precedence defined by order in class (with before & after extends, to go after)
     // Allow ' + .name: "quecto`name`", "s"?' as a + { name: "" }
+    // Allow false, true .map(!)
+    // No -- required after newline and -- if
     func: Program ((*, dynamically parent∙*.keys? | ("{", Expression, "}")?)[], ";" | \n | ⊣),
     {func.args.push_back(.)}: Program: (
       // If block is after a property, it is called after it's changed and something is set to the value (also the default); part of the constructor as it gets assigned
@@ -410,3 +412,6 @@ Program
 // Any parameterless function is equivalent to the type it returns.
 {(): (T: ?)}
   as (== T) => this()
+// Any variable is equivalent to a parameterless function which returns it.
+Node
+  as (== (): static) => () => this

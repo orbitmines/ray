@@ -29,3 +29,7 @@ global**.[INSERT IN BETWEEN EACH STATEMENT DYNAMICALLY]
 // When using multiple implementations of methods, you want enumerations of possible requirements, so for boolean this could be NAND, NOR, NOT & OR, NOT & AND. etc..
 
 // Multiple implementations, but what are the tradeoffs?
+
+
+// Writing compiler optimizations
+// dead code after return if there's no goto to a label there.

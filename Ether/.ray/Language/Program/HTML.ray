@@ -1,0 +1,14 @@
+<input>
+// Most type= attributes have direct translations
+choose Phone; choose Color
+// Other attributes on input
+{(.length) <= 5} // maxlength, max
+{(.length) >= 4} // minlength, min
+{.length == 5} // size (though is only visual??)
+none.write // readonly
+choose String (non-optional) // required
+not 1 String // multiple
+{==.instance_of []} // pattern
+(lowerbound -> .step).reduce(|){<= upperbound} // step
+(<- 0 ->).reduce(|){min}{max}
+class Enum < .A, .B, .C(choose?) // list if C. additional chooses necessary (append below somehow)(

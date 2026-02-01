@@ -60,10 +60,14 @@ Invisible =>
 class Character < Entity & Accessor & World & Nameable
   PREFIX = "@"
 
+  name => super() | avatars.name
+
+  profile_picture: Image
+
   equivalent instance: Instance => location{==.instance_of Instance}
 
   // If blocks for which world to load it in, based on location, then .avatar with {location == ?}.avatar or default {?} to load all properties with unknowns
-  equivalent avatar: Avatar if this !=.instance_of Avatar
+  equivalent avatars: Avatar if this !=.instance_of Avatar
 
   status => instance.status#.max
 
@@ -75,6 +79,7 @@ class Character < Entity & Accessor & World & Nameable
 end
 
 class Avatar < Character
+  location: (platform: World)
   // consistent is the field that referenced this, must reference back. with {?}, {avatar == this}
   character: consistent Character
 

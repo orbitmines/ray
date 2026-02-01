@@ -12,7 +12,19 @@
 namespace Network
 
                     // ETHER
-  DEFAULT_PORT: Port = 37839
+  class Protocol (name: String, default_port: Port) < name
+    static#.push_back(this)
+
+  Protocol("ether", 37839)
+  Protocol("http", 80)
+  Protocol("https", 443)
+  Protocol("ftp", 21)
+
+  DEFAULT_PORT: Port = Protocol{== "ether"}.default_port
+
+  // TODO Default port depending on the scheme
+  class URL < scheme | protocol : Protocol = "ether", "://", user_info: (user: String, (":", password: String)?, "@")? {host = ip, port}: Socket.Address | (host: DomainName, (":", port: Port = protocol.default_port ?? DEFAULT_PORT)?), path: "/", String, query: "?", {params: {}; .for [key, value] => params[key] = value}: (key: String, "=", value: String)[], fragment: "#", String
+
 
   class IP < Location
     -1 <- . -> +1

@@ -165,6 +165,8 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
 
   location: a Context & (span: ) & "{}:{}"
 
+  entrypoint: boolean => // If the context file is the entrypoint file.
+
   state | ∙ : State
   // Program State
   // - A looped control-flow, has the values of each iteration stored in the state's history.

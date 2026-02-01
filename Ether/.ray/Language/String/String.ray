@@ -8,7 +8,11 @@ string: String
 //TODO as String needs context of where it is being placed, if it's in a .ts that's different from another language.
 
 class String < Char[]
+  //TODO String aware of styling?
+
   //TODO Include Char static, (is that the default), where it's that return[], for Superscript.
+
+  () => // TODO Calling on string evaluates it as a variable name, then calls that program.
 
   lower_case | lowercase | v
   upper_case | uppercase | ^

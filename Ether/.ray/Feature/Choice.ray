@@ -16,3 +16,5 @@ func(choose, choose 50%)
 
 choose n: Nat
 choose n: Probability{!= 0 && != 1} // Only for finite number of objects.
+
+//TODO Dynamically with choose, means the choice can be changed dynamically too.

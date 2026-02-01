@@ -7,11 +7,19 @@
 
 // All objects are contained in some space: World.
 
+// Want to be able to import and use packages from other programming languages.
 
+World
+  class Point < Ray
+  class Object ({children = .()**,lines.reduce(,)}: (): * -- if : Hierarchy) < Iterable<Point>
 
-class Object ({children = .()**,lines.reduce(,)}: (): *) < Iterable<Point>
-  Point: Ray v 3
+  // What if the object is a collection of Point structures
+
+  // You equip the world with a coordinate system, even if approximate
+
     //TODO How to set scoped, that a point has a color for instance. ; which is an approximation, how to say it is
+
+
 
 class Path | Curve | Line = Array.Unbounded
   curvature
@@ -25,15 +33,43 @@ Loop = Array.Unbounded.loop(boundaries: false)
 // Padding is just a hierarchical object, with boundary to the object, and its boundary, can have multiple padding wrappers.
 // Holes as negative components, but holes can also exist from the abstract description?
 
+// Allow top.left.last go to the topmost/leftmost
+
 discretized 1 / m
 // Discretized single Infinite Ray
 // What to do with conflicting information at discretized points
 // If 2d is discretized should be renderable in pixels easily
 
-class Interface
+class Interface < world: World
+  class Controller
+    (x) => #.push_back(static(x))
+
+    //TODO With device ID check history for another with that id, reassign ID, if no new devices have claimed it.
+
+    #{id: Number.Nat} => #{.id == id}
+
+    id: Number.Nat
+
+    // associated with a character, so we can assign trust to that character.
+    character: Character = @me // How does select get assigned, it's a guest not yet associated with this character, which is allowed to set the character to another, but not @me?
+
+  // Interface has a certain extent into a world
+
+
   // General surface area (whether input or not), Interface & World?
 
 class Window | Browser | Document | ?? < Interface & World //?
+
+// Default behavior of superposed is to .map on the object's property, display all basically:
+// Otherwise, instead of .map it's a choose.
+
+// @orbitmines.avatars.map => Link .location{: URL} => .platform.profile_picture
+// Should type-check and automatically filter by saying only avatars with an URL location because Link requires a value., since they are the only once which will succeed.
+
+class BoundingBox // What is bounding box in fractional dimensional
+  width: x.length if ==.instance_of 1D
+  height: y.length if ==.instance_of 2D
+  depth: z.length if ==.instance_of 3D
 
 class StyleClass < Ball
   &+= Padding.Right(5m)
@@ -46,7 +82,28 @@ Input Ball.radius
 Input boolean
   // Checkbox
 
+namespace Keyboard < Interface.Controller
+
+Keyboard.#0.f2
+
+  // If Keyboard is Many, many keyboards
+
+// Allow
+("String", something else, "String").italic
+
+class MyInterface < Interface
+
+  // Render logic/dynamics
+  dynamically
+
+// What if a plugin, not a website?
+namespace Browser
+  external? url: URL = URL()
+  // Access the javascript context directly
+  external? javascript
+
 Ball
+  if choosing // This variable itself is being chosen
   if choosing radius // Some way of checking whether the function needed to run radius, is choose.
 
 
@@ -72,6 +129,7 @@ Ball~profile().
 Ball~"Profile Name"().
 Ball~5().
 
+
 // Choose with placeholder which is default, but gets reset on clicking on choose.
 
 // Use return in the constructor for something, how to access it though ? - the rendering func.
@@ -89,6 +147,7 @@ Ball(radius: 10m) + Padding.Right(10m)
   // Code in front on render
   {dynamic_id}\ Ball(radius: 5m, + Padding(5m), & StyleClass & OtherStyleClass) "text in between" Ball()
     Center field: choose String, "text in between" & StyleClass, field2: Time = choose
+    ball_id: choose Ball // choosing Ball.radius would be flagged too.
     Center.Horizontally []
     Between
       (A, B, C) * 1/12,
@@ -190,7 +249,6 @@ class Object < Hierarchy
   //Todo .under etc. needs to go to the boundary of this abstract object
 
   // dimensionality Support for n-dimensional, with the same functions like padding etc..
-
 
 class 1D
   left: static <<- previous: static <- horizontal | x -> next: static ->> right: static

@@ -205,7 +205,7 @@ class Iterable<T>
   //TODO .move?
 end
 
-class Hierarchy < Ray
+class Hierarchy
   parent | previous : static? <- hierarchy -> children | next : static?
 
 (->) // Infinitely generating ray.

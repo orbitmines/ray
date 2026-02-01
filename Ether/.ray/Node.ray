@@ -46,6 +46,9 @@ class * | Node
   //  //[first2, ..after] = field6
   //}: ParentType = Object
 
+  //TODO Accepts a block function in case of @, saying setting the location
+  @ | location
+
   // {pattern} = () => doesnt do the *= operation because of the ()
   external = | assign (x): x //TODO Might have to set # equal to x
   //TODO .not is {!=.instance_of}
@@ -53,6 +56,9 @@ class * | Node
   // * operator allows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
   // If # is used in something like as:== string, it should overwrite default behavior of doing a map on that function. Like the as string in IPv6
   //TODO If # is a Ray, we have a 'selected'. #.
+  // If pushed to # for the first time, it should create a new variable, leave the one alone, and only update its location to the many>?
+  // Want to combine the ideas of: All in Type vs All in Database. Want to allow all in Database, but then also say choose Type to mean any type how to disambiguate?
+  // TODO Always whole type, use something else for All in Database
   external # | all : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
   // +/&+ are both components but normal + overrides.
   external ## | components : Iterable<static##.reduce(|)> //TODO Does this type work?
@@ -66,6 +72,11 @@ class * | Node
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
 
   {"{", expression: Expression "}"} => // Allow chaining
+
+  // Add every constructed element to a database (only actually compiled when used)
+  //TODO This Should be another database, and optionally only on .save?
+  static $ | records: static? = None
+  records |= this
 
   // TODO Places in code where this variable gets referenced and updated.
 
@@ -160,6 +171,8 @@ class * | Node
   //TODO ~= is subgraph
   namespace ~= (expression: Expression{: initial: "^" | "⊢" ?, ?, terminal: "$" | "⊣" ?})
   !~=
+  //Shortcut for ==.instance_of
+  {" "}(: | ∊ | ∈) (type) => this ==.instance_of type //TODO Only if used in if-block or ? how to say that
 
   ?? | else
 

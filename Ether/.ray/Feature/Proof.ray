@@ -110,3 +110,4 @@ Proof<x.length == Infinity> = () => x.next ==. instance_of xs: *{.next == xs}
 
 
 
+? as sorry

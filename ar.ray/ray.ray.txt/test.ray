@@ -2,49 +2,17 @@
 
 //TODO How to support [None, None] if .next is None is those. ~ yields a structure equipped on None, so it's not just None. So it needs to be exactly None, not with structure.
 
-//TODO For grammar matching make a "resolve ambiguity" func ; match to both cases of the ambiguity..
-
 // unless if !
 
 var === var is share a location in common, since there are both new variants of the variable with new superposed locations
 
-? as sorry, as it just fills the type
 
-// Type with additional structure like
-blocks: Program: (\s, \s)[]
 
- // When editing inside a double ((, force ((+TAB to turn into a (( (double << might be used for subexpressions.
-
-cursor: Program
-// To indicate to the runtime & compiler, that it can arbitrarily pick (and map) a single value among a collection and then manipulate it. Note that this 'arbitrary picking', the runtime can have access to the running function, its context and possibly some model it has on function execution which determines what it picks; It doesn't have to be '''purely random'''.
-while cursor{next} != None
-  // OR choose (X) is of type (x: *): boolean so
-  cursor = cursor.map{next}{choose 1}
-    if .expand !== .
-      .expand
-    else
-      // Program logic
-      . (.next if .next) //TODO Only .next if has a .next HOW?
-
+                                // When editing inside a double ((, force ((+TAB to turn into a (( (double << might be used for subexpressions.
 
 
 //TODO Allow [RANDOM JUNK, TYPE, RANDOM JUNK, TYPE] to be castable to TYPE[]
 
-//TODO Optimize to go back and forward with abstract objects vs rendered screen, optimize for what the client wants. (more accessible fvs speed vs compute use)
-// --> Client gives preferences, Networked.
-//What about optimizations problems, how does one code that in?
-// Any Ordered
-// https://pyddm.readthedocs.io/en/stable/ ; efficient exploration
-// "finding the tradeoffs"
-optimize x: Number
-//TODO Different coded priorities, or optimize priorities too? how
-optimize y: Number
-optimize space_used
-optimize time_elapsed
-maximize/minimize
-dynamically assert x + y <= 10
-
-+ Ray? should still implement .next for Ray, but just return None.
 
 // Support generators. OR Automatically convert into a generator if something will be returned.
 //  (Intermediate result basically)
@@ -52,31 +20,10 @@ yield & var
 
 
 
-//TODO What about the model it's constructing (effectiveness) vs (how long it took to make) so
-// minimize effort, maximize effectiveness
-// minimize spatial_complexity & time_complexity
-
-//TODO Want to say: Can start out with an implementation which works but is slow, and optimize it over time. Dynamically that means ; how often sometimes is used etc..
-
-//TODO HOw to encode different prefernces: Saying this particular implementation of the optimizer prefers THIS.
-if x > 100
-  prefer minimize y
- to define that?
-
-allow capability1
-allow capability2
-allow capability3
-
-
 //TODO What about syntax which is more contextual
 
 
 // TODO .push_back on None makes a new array with 1 entry
-
-//
-return A, B if // returns A
-return A, B -- if
-A, B if // adds B after A if
 
 //TODO .copy implemented, as not being bound to the .history .last version. But a new branched version.
 
@@ -95,11 +42,7 @@ A, B if // adds B after A if
 ambniguity of types like String[], String[], defined in dependent type on the first/lkast arg, B = [] if A == ., & A = [] if B == . ; this is circularity, unless they both share the same condition, that should break circularity.
 
 
-//TODO This will be difficult to implement, but it's very powerful:
-//TODO Requires all functions like &= to be rollbackable (through history probably) or -= in this case if possible. -> Compiler uses history if necessary for these features.
-//TODO The -= needs to check possibly changed locations here. but starting with that location
 //TODO If there even then are some that cannot be rolled back, it's just not accessible in dynamically.
-//TODO So if any variable (implemented with observers again) changes so sub or location, we run/rollback.
 //TODO Or if dynamically the speculative if branch change, if resources are dedicated to that if branch.
     sub.location &= dynamically location.copy().push_back<edge: .value = property>(sub).last
     //TODO Could also automatically rollback previous changes of &=
@@ -151,26 +94,11 @@ ambniguity of types like String[], String[], defined in dependent type on the fi
 // If a method doesn't exist on the variable, but it is castable to something which does define that method, say boolean and &/|. Converting it to that value and calling that method should be possible.
 //   |-> Ambiguity if there are multiple casts to which that method may be applied.
 
-If you do want different constructors, use
-class A
-  static ()
-    super()
-    this // is this available in this context.
-
-  static (b: a)
-    super(property: a)
-
 method () **: Terminating
 
 
 
 // TODO - Examples + Allowances
-
-(if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy (
-      Keyboard.ctrl && Keyboard.shift => // Skip group & Expand selection
-      Keyboard.ctrl => // Skip groups
-      Keyboard.shift => // Expand selection
-    ) -> (if Keyboard. ↓ | s .pulsed)
 
 // Allow maybe == Some a: 5..10
 (maybe == Just a: 5..10).while
@@ -190,23 +118,9 @@ func
 /path is string form too
 
 // Allow multiple changes which make it adhere to the type, as long as nothing is accessed in between
-//Allow type def conditionally like this
- variant: ~= ^1,1 ? Binary.Positive{length == 3} : Binary.Positive{length == 2}
 //TODO If multiple edits makes it type compliant allow as if a single transaction
-// Allow [7 | 11 | 15 | 19]  -> [~ 7 | +4 | +4 | +4] & ~ 1, +2, +3, +4
 // Allow 'def Ray<T = Ray>', Meaning, T is unknown, but it is a Ray.
 
-
-// Certain variables like 'throw' need to be accessible even in nested function which aren't defined with that variable in scope. How to type-check and generalize this concept? Is it with some keyword for a variable?
-// Allow 'var = () = inline', 'var = () = { multiline }', 'var = () .. end' - Need to only capture the defined variables accessible from that context.
-// defined inline inheritance: def Point<T < { + (b: ) }> Point{+ (b: Number)}
-// Point(x=1) x=1 shouldn't be overridden by x=0 in the constructor
-// 'def as :== Binary.Positive = segments as Segment.Binary[]' should be automatically assigning length too because segments have length defined
-// When N <- . -> N is evaluated in a class with properties, it equips 'parent: Node <- .hierarchy -> children: Node' as .next/.previous (soi  when it's only a type definition)
-// Allow 'unit (define_globally ? | unit.name)' without a :
-
-// (Base, unit: Unit = Unit.None)[], Should implement x[0].unit, because it binds the variable to it.
-// Should also implement x.unit as |
 
 location //TODO Allow this syntax. => Should be dynamically there.
   primary: Location
@@ -219,25 +133,7 @@ location //TODO Allow this syntax. => Should be dynamically there.
 
 // TODO - Features
 // Evaluating infinities
-// Automatic isomorphism
-
-==.instance_of is also an equiv graph of values
 
   // TODO .unrolled() -> Allows loops by defaul
 
 
-def bidirectional
-  +1
-reverse
-  -1
-end
-
-bidirectional!
-+! 5 = -5
-
--1 <- x -> +1, how else
-// inverse-1 notation used to go to the reverse direction of a method
-
-
-
-// instantiations of a type using something like WaveFunctionCollapse

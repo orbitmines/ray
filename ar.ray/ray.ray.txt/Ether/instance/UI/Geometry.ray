@@ -130,6 +130,13 @@ Ball~"Profile Name"().
 Ball~5().
 
 
+(if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy (
+      Keyboard.ctrl && Keyboard.shift => // Skip group & Expand selection
+      Keyboard.ctrl => // Skip groups
+      Keyboard.shift => // Expand selection
+    ) -> (if Keyboard. ↓ | s .pulsed)
+
+
 // Choose with placeholder which is default, but gets reset on clicking on choose.
 
 // Use return in the constructor for something, how to access it though ? - the rendering func.

@@ -1,0 +1,64 @@
+
+// Automatic isomorphism
+def bidirectional
+  +1
+reverse
+  -1
+end
+
++ (b)
+  | //
+  | //
+  ! this - b
+
+(y = y.map(x => x + 5))! = (y = y.map((x => x + 5)!)) = (y = y.map(x => (x + 5)!)) = (y = y.map(x => (x + 5)!)) = (y = y.map(x => x +! 5))
+
+//TODO Still access the program used to fill the variable, then program⁻¹
+test (number_of_times: n)
+  (0 -> +1) {< n} for i =>
+    print i
+
+// Running function backwards, saying that
+// Need to account for the fact that the graph might've changed. Not just a simple .reverse
+(x): y into (y): x
+
+
+test2
+  this = this.map(x => x + 5)
+
+test3 (number_of_times: n)
+  (0 -> +1) {< n} for i =>
+    print i
+
+  this = this.map(x => x + 5)
+
+test! not defined.
+test2! is defined.
+test3 is partially reversible.
+
+//TODO What if changed in the meantime, need to record which version it was originally,
+// and how to revert if other changes have been made. ; We basically want to revert a specific commit.
+
+= (b)
+  ! this = this%.previous if !(b!) //How to say if this commit is available
+  ! this = b! if b!
+
+map (mapping)
+  ! this.map(mapping!)
+
+{(*): *}
+  !
+{left: * [operator] right: *}
+  ! left[operator!](right)
+
+! + -
+! * /
+
+
+
+bidirectional!
++! 5 = -5
+
+-1 <- x -> +1, how else
+// inverse-1 notation used to go to the reverse direction of a method
+

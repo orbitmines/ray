@@ -359,6 +359,7 @@ static class Expression < String + Ray?
 
 ({expr: Expression}) => expr
 
+// Partial args is not necessarily inserted after the first statement, but each is inserted after the first initialization of that variable.
 //TODO Assumes \t = " ", Probably safer to instead say tabs are invalid syntax. (otherwise certain codeblocks might appear to be where they arent to the compiler)
 //TODO Expression[] is castable to Program, ordered. (not the Expression[] -> Expression -> Program, prefer this if possible: but Expression -> Program[] -> Program (also not a superposed, but linear. route.) route.
 //TODO Count (, to include, not blocks.
@@ -368,6 +369,8 @@ static class Expression < String + Ray?
 // x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
 // How does runtime decide execution order. Using associativity proof is possible: Then choose some execution order.
 // --> Does mean that a high-level .expand is not yet decided how to order.
+// , higher precedence than if
+// // (Base, unit: Unit = Unit.None)[], Should implement x[0].unit & x.unit as |, because it binds the variable to it.
 class Expression < (
   {as (== Program) => program = .map(func)}: (,
     // , higher precedence than if
@@ -389,6 +392,9 @@ class Expression < (
     // Allow ' + .name: "quecto`name`", "s"?' as a + { name: "" }
     // Allow false, true .map(!)
     // No -- required after newline and -- if
+    // Allow variant: ⊢11₂ ? Binary³ : Binary₂ = 10₂ if starts as a predicate it matches to the variable.
+    // Allow syntax for say this method needs to be defined T : {+ (: Number)}, Or Node{+ (: Number)}
+    // N <- . -> N equips the structure with &+ when evaluated.
     func: Program ((*, dynamically parent∙*.keys? | ("{", Expression, "}")?)[], ";" | \n | ⊣),
     {func.args.push_back(.)}: Program: (
       // If block is after a property, it is called after it's changed and something is set to the value (also the default); part of the constructor as it gets assigned
@@ -402,6 +408,19 @@ class Expression < (
   every ==.instance_of \S | " "
 }
   if // Allow ()                            if
+
+Program
+  >>
+    cursor: Program
+    while cursor{next} != None
+      // OR choose (X) is of type (x: *): boolean so
+      cursor = cursor.map{next}{choose 1}
+        if .expand !== .
+          .expand
+        else
+          // Program logic
+          . (.next if .next) //TODO Only .next if has a .next HOW?
+
 
 Expression[] = "file" &+ "file", "entrypoint"
 

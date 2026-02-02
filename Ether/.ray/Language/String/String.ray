@@ -1,6 +1,4 @@
-`{
-string: String
-}` => string
+`{string: String}` => string
 "{string: (substring: String, punctuation: ("{", expression: Expression, punctuation: "}") if substring !"\"⊣)[]}" => string - punctuation
 //String newline, respect spaces after the first one, which we trim completely
 

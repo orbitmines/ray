@@ -12,6 +12,14 @@ var = var#{== true}.first
 
 //    Three-address code, Static single-assignment form, Constant folding,  “common subexpression elimination”, “loop invariant code motion”, “global value numbering”, “strength reduction”, “scalar replacement of aggregates”, “dead code elimination”, and “loop unrolling”.
 
+//TODO Infinite loops like location.parent, circular, map to None if detected.
+    Access.for ACCESS = `ACCESS`: Node{} = location.parent?.access[ACCESS] ?? .default_privacy_policy[ACCESS]
+
+
+//TODO If big instanceof iterables are used, like worlds: World = entities{==.instanceof World}, store it separately, don't always filter through all those entities
+
+// Eval infinities to certain predicates.
+
 // Cycle detection & merger
 
 //Fast substring search algorithms exposed (e.g., KMP, Boyer-Moore)
@@ -68,3 +76,4 @@ if x > 100
 allow capability1
 allow capability2
 allow capability3
+

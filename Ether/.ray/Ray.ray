@@ -4,6 +4,10 @@
 
 //TODO Graph .rewriting. dpo, spo, cartesion product, tensor product, union, disjoint union etc...
 
+// Support generators. OR Automatically convert into a generator if something will be returned.
+//  (Intermediate result basically)
+yield & var
+
 //TODO What is a .expand on a boundary/edge
 //TODO Ray whose <T> isn't recursively the same type: i.e. some array like [String, Number]
 // X⊣⊙⊢∙⊣⊙⊢
@@ -132,6 +136,7 @@ class Iterable<T>
   disjoint (b: Iterable)
 
 // TODO If two arguments are passed, we step with 2 and fill both?
+  //TODO Yield ray methods in context of for so you can to is_last for example?
   for ()
 
   //TODO Should allow for ~{}{} chained, without need to redo the ~. maps to &&
@@ -200,6 +205,7 @@ class Iterable<T>
   // Uses count instead of length, since Ray/Graph²²² makes for sense as the size of the graph rather than each path length.
   ^ (count: Number) => this{.count == .count ? .count * count : count} //Allow this sort of chaining, overriding the previous count ==
 
+  // Allow x: String[] = "String", Object, "String", Object
   as (: Iterable<R: ?>) => this~{==.instance_of R}
 
   //TODO .move?

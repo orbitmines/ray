@@ -173,6 +173,8 @@ private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolea
   //TODO What's the value encoded on Edge?, and what's the value encoded on the boundaries? (Or do we always use edge)
   static Edge =
 
+  //TODO What is .unrolled?? on type
+
   //TODO .[index] shouldnt overwrite the '1' without a .1 (needs a special rule)
 
   static Vertex = Ray<T>{
@@ -218,6 +220,7 @@ end
 
 Loop = Array.Unbounded.orbit
 
+// TODO unless
 class if predicate: Expression, yes?: () => *
   def (else?: () => *)
     goto exec if predicate // 'if' can be used here, since goto defines a special if-block. It's not self-referential here.

@@ -20,7 +20,7 @@ SHA512, SHA256, BLOWFISH, MD5, SHA-1, SHA-3, BLAKE3
 encrypted
 
 class Encrypted<T>
-  as (== T) => // .crypt[location (CURRENT)]
+  as (=== T) => // .crypt[location (CURRENT)]
 
 class Hash
 

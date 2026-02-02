@@ -5,6 +5,6 @@ class Key
   toggled = false dynamically .next if this
   cycle (iterable: Iterable) => iterable.first.loop dynamically .next if this
 
-  as (== boolean) // if pressed
+  as (=== boolean) // if pressed
 
 class Keyboard

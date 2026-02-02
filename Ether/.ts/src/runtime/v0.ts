@@ -287,6 +287,8 @@ class Var {
 
       //TODO Carry over context from previous context if it's a expanded func
 
+      //TODO Using in an array, changes the selected location, so it is a new variable. But still linked to the old variable.
+
       cursors = todo.flatMap(cursor => {
         let reduced: Var[] = [cursor]
         while (reduced.some(cursor => !cursor.get('expand').none())) {

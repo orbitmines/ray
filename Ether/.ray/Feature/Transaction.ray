@@ -1,4 +1,13 @@
 
+
+//TODO Or if dynamically the speculative if branch change, if resources are dedicated to that if branch.
+    sub.location &= dynamically location.copy().push_back<edge: .value = property>(sub).last
+    //TODO Could also automatically rollback previous changes of &=
+    dynamically sub.location &= location.copy().push_back<edge: .value = property>(sub).last
+    // equivalent to
+    dynamically sub.location &= dynamically location.copy().push_back<edge: .value = property>(sub).last
+
+
 // Automatic isomorphism
 def bidirectional
   +1

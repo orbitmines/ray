@@ -39,7 +39,7 @@ class Proof<proposition: Proposition> < Program{(): boolean => ((
 Node{(): boolean}
   ! | ¬ {.} = () => !this()
 
-  as (== boolean) => this()
+  as (=== boolean) => this()
 
 theorem (proposition: Proposition, proof: Proof<proposition>)
   rfl => &caller.return /* How does this work */ if proposition. //todo

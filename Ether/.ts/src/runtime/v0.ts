@@ -506,6 +506,7 @@ class Program extends Var {
 //   }
 // }
 
+// If followed by some string, it's match until you hit a boundary of the object we're matching, then match to that.
 class Parser {
   private index: number = 0;
 

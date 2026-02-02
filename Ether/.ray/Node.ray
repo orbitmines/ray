@@ -12,6 +12,8 @@ class
     dynamically &definer[local.name] = local if local.name
     local.name = name
 
+   // Ambiguity: If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
+
     static = local
 
     //TODO () solves for constraints
@@ -47,10 +49,19 @@ class * | Node
   //}: ParentType = Object
 
   //TODO Accepts a block function in case of @, saying setting the location
+  //TODO <- all parents, -> all children of current context
+  //TODO Allow @ &caller
+  //TODO Allow * for all locations
   @ | location
 
   // {pattern} = () => doesnt do the *= operation because of the ()
+  // Each = is a new branch.
+  // IN Ray every mutation is a = somewhere in the structure. (So there needs to be a way to decide what counts as reassignment or not
+  // If assigned, it only assigns it for the current location, thus the variables value branches for different locations. You can still access
+  //    the values of other locations by changing the location, var @ func for instance.
+  // Basically if parameter was passed to the function, you want this behavior
   external = | assign (x): x //TODO Might have to set # equal to x
+
   //TODO .not is {!=.instance_of}
   //TODO .not in  not Network.Hosts*.keys.reduce(|) //TODO What's the proper syntax for this, very verbose
   // * operator allows you to access whether a default is loaded, and whether the current value is that default value, don't store (optionally) if that''s the case.
@@ -65,13 +76,16 @@ class * | Node
   external ### | class_components // Class components and monkey-patches
 
   //TODO Exclude vs include things like local and other defined properties on Node,
-  external * | methods : { {key: *}: value: Program? }
+  external * | methods : { {key: *}: value: Program? } + { var: ({key: *}: value: Program?) } + Iterable<[key, value: Program?]>)
   // The program which still needs to run is the dynamics defined for that object, it might set intermediate values to the object. So it's not just a single update
   external ** | program : Program
   // Force the lazy program stored in **, to evaluate.
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
 
   {"{", expression: Expression "}"} => // Allow chaining
+
+  in {.} | keys => this*.map(key, value => key)
+  values => this*.map(key, value => value())
 
   // Add every constructed element to a database (only actually compiled when used)
   //TODO This Should be another database, and optionally only on .save?
@@ -140,6 +154,7 @@ class * | Node
   //TODO Or now it would map Both direction & itself, which might also be preferred in some cases.
   map
 
+  // TODO Fork the variable history
   ++ | copy
 
   .= //TODO .= next ; x = x.next
@@ -177,9 +192,9 @@ class * | Node
   ?? | else
 
   equivalent
-    as (== Instance) => .instance
+    as (=== Instance) => .instance
     //TODO The inverse of this,
-    as (== Character) => Character(instance: this)  // If instance is not already instance_of Character
+    as (=== Character) => Character(instance: this)  // If instance is not already instance_of Character
 
   as (:== boolean) => true
 
@@ -189,15 +204,20 @@ None
   {" "}({parameters: Expression}): Function //TODO This is supposedly the function initializer
     < Function
 
+  // If this == None, and then push, it's the first entry. So this is allowed to be None, while still these methods are available?
+  // If ==.instance_of Iterable?
+
   //TODO If None is called as a property, this is returned, so that this.(property if X) works.
 
+  // If Node is equipped with a Ray it is !None, if it isn't it's None. SSo == None should be false, but ==.instance_of None is true
+  // If the result of something like an if block is none, it is not added to the array, it needs to be there explicitly.
     local
  // None implements location and =
  //TODO Ray. arguments = , When vertex is set to None, should set recursively the boundaries etc. as well. And extend the initial boundaries with Function.
 
 //TODO If None !";"⊣ should return true.
-  as (== boolean) => false
-  as (== Number) => 0
+  as (=== boolean) => false
+  as (=== Number) => 0
 
 //TODO .canonical as the thing which resolves equivalent forms of the same Instance for example.
 
@@ -210,6 +230,8 @@ unique
 //TODO ? is location depended, it sets the value to the type it's
 //TODO Default assignment is ? if not an Option which is None, does that ever cause issues when you expect a singular value?
 ? =>
+
+/path //TODO + String covnersions
 
 delegate in | out => object
 delegate in Number => object

@@ -33,7 +33,7 @@ class String < Char[]
   mirrored
 
 String[]
-  as (== String) this.reduce(,) //TODO Must override the , behavior of not doing it for Graphs
+  as (=== String) this.reduce(,) //TODO Must override the , behavior of not doing it for Graphs
 
 
 class Char < Unicode.Scalar

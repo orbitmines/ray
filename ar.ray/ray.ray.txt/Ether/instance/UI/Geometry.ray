@@ -120,6 +120,7 @@ Ball
     | Center field: choose Number
   {variable_label: Number}\ | //TODO Allow variable labels
 
+// How is this relevant to the different locations have different normalizers: this could be seen as, we're selecting a different default representation.
 Ball = Ball~profile //Set default
 //TODO Want to be able to say, within context, spawn a new context and make variable changes to the std in that.
 with Ball = Ball~profile //TODO What happens when a variable is some object is changed by this, only to this location should it be seen as that new value, outside of it it's still the other thing? ; what about successive changes to it, are they applied to both, or just this one???
@@ -209,6 +210,8 @@ class Ball
 
 Circle = 2-Ball
 Sphere = 2-Sphere
+
+//TODO Needs like an example of 2D/3D world with yaw/pitch on location, stored as arcs in a continuous space then discretized by some things like elementary lengths and other things.
 
 class Circle
 

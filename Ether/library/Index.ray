@@ -787,7 +787,7 @@ Language
     UTF-8: Language (i: File): String =>
     UTF-16: Language (i: File): String =>
 
-//TODO Any as (==) as a language if dependence on the input
+//TODO Any as (===) as a language if dependence on the input
 
 Language
   //TODO If a Library is implemented in a target language, set it like Metamath["set.mm"]

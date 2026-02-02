@@ -241,13 +241,13 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
   //TODO schedule, spawn entity if necessary, if already an NPC, use that NPC quests.
   //TODO < Quest, implement .stop
 
-  // With the assumption that each non-expandable step terminates.
+  // With the assumption that each non-expandable step terminates. (Needs to also be that they take actually finite time)
   static Total | Decidable | Terminating | Halting => static{expanded.length#.every != ∞}
   //TODO Automatically implements total/decidable/terminating/halting, because it's a filter. on static
 
   {: UUID} => //TODO Load the version and remove the current function graph
 
-  as (== Expression) =>
+  as (=== Expression) =>
     //TODO Store program with any state etc.. which would be used to pause certain quests/functions. For instance save/pausing a game.
     //TODO Use the program's expression if no state has changed. -> super()
 end
@@ -271,7 +271,7 @@ class Expression < language.Expression
     delegate (: fn.in.type) => fn
 
   as (: Language): Expression => //TODO
-  as (== Program)
+  as (=== Program)
 end
 
 // A language, is interpreted liberally here. It is just a mapping from Expression => as (*).
@@ -293,7 +293,7 @@ class Lang | Language (equivalent extension: ".", String)?
 
   // The datastructure the language is encoded in.
   static Expression
-    as (== Program)
+    as (=== Program)
     as (language: Language): language.Expression
 
 end
@@ -333,7 +333,7 @@ static class Expression < String + Ray?
 
   {" "}: (type) => //TODO Wrap whole expression in : type
 
-  as (== Program)
+  as (=== Program)
     program = Program()
 
 
@@ -372,7 +372,12 @@ static class Expression < String + Ray?
 // , higher precedence than if
 // // (Base, unit: Unit = Unit.None)[], Should implement x[0].unit & x.unit as |, because it binds the variable to it.
 class Expression < (
-  {as (== Program) => program = .map(func)}: (,
+  {as (=== Program) => program = .map(func)}: (,
+    // Allow function type, like **: Terminating, but method: Terminating (): Return
+    // If a parameterless funciton, which returns another function, any () made, tries the first possible thing it can apply to, so the parameterless mide have an optional, it will try that, otherwise it will try the return value.
+    // location { primary: Location } should also apply after =, it's a constructor which changes the = of that variable?
+    // Allow maybe == Just a: 5..10
+    // ; also in pattern matching with [] includes is_last methods etc. available to for.
     // , higher precedence than if
     // function calls "/" "." " "
     // A: " " -> If preceded by function expecting an argument
@@ -395,7 +400,8 @@ class Expression < (
     // Allow variant: ⊢11₂ ? Binary³ : Binary₂ = 10₂ if starts as a predicate it matches to the variable.
     // Allow syntax for say this method needs to be defined T : {+ (: Number)}, Or Node{+ (: Number)}
     // N <- . -> N equips the structure with &+ when evaluated.
-    func: Program ((*, dynamically parent∙*.keys? | ("{", Expression, "}")?)[], ";" | \n | ⊣),
+    //TODO Allow {(): boolean}
+    func: Program: ((*, dynamically parent∙*.keys? | ("{", Expression, "}")?)[], ";" | \n | ⊣),
     {func.args.push_back(.)}: Program: (
       // If block is after a property, it is called after it's changed and something is set to the value (also the default); part of the constructor as it gets assigned
       // TODO Multiline |/& are not blocks. If line starts with |, otherwise it's just a single func with multiple options return
@@ -432,7 +438,7 @@ Program
 
 // Any parameterless function is equivalent to the type it returns.
 {(): (T: ?)}
-  as (== T) => this()
+  as (=== T) => this()
 // Any variable is equivalent to a parameterless function which returns it.
 Node
-  as (== (): static) => () => this
+  as (=== (): static) => () => this

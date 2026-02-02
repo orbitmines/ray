@@ -128,7 +128,7 @@ dynamically Bases.for Base, digit
 
   // "0001 is equivalent to 1" //TODO Reverse is true also, how's that done?
   `Base`.Positive{==.instance_of 0[], number: `Base`.Positive}
-    as (== `Base`.Positive) => number
+    as (=== `Base`.Positive) => number
 end
 
 +def Binary.Positive

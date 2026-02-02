@@ -41,7 +41,7 @@ class UUID < Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-")
   )
     class Variant = .RESERVED_NCS | .RFC_4122 | .RESERVED_MICROSOFT | .RESERVED_FUTURE
     variant
-      as (== Variant) => .match
+      as (=== Variant) => .match
         ⊢0 => Variant.RESERVED_NCS
         10₂ => Variant.RFC_4122
         110₂ => Variant.RESERVED_MICROSOFT

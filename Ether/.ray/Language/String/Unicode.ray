@@ -72,7 +72,7 @@ namespace Unicode
     // https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-3/#G25549
     class CodeUnit < Binary{length == (static.name ~= Decimal.String⊣)}
 
-    as (== CodePoint[]): CodePoint[]
+    as (=== CodePoint[]): CodePoint[]
 
   //TODO LE/BE Little Endian/Big Endian // The same in isolation, opposites in conjunction
   //TODO Test these implementations
@@ -85,7 +85,7 @@ namespace Unicode
     (10₂, U2: Binary⁶) if prefix ⊢111₂
     (10₂, U3: Binary⁶) if prefix ⊢1111₂
   )[]
-    as (== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
+    as (=== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
 
   // https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-3/#G27792
   class UTF-16 < TF, sequence: (
@@ -94,7 +94,7 @@ namespace Unicode
     U1: Binary{length == 12 - prefix.length},
     (110111₂, U2: Binary¹⁰) if prefix
   )[]
-    as (== CodePoint[]) => sequence.map(.U0 + 1, .U1, .U0)
+    as (=== CodePoint[]) => sequence.map(.U0 + 1, .U1, .U0)
   class UTF-32 < TF, CodeUnit{⊢(0[]⁸)}[]
 
 // https://www.unicode.org/versions/Unicode17.0.0/core-spec/appendix-a/#G7083

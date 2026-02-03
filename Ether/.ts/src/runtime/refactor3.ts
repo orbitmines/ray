@@ -18,6 +18,8 @@ type ParseContext = {
   index: number;
   /** Concrete tokens that should stop arbitrary/loop matching */
   boundaries: Token[];
+  /** Boundaries only for current loop iteration (cleared on ref) */
+  iterationBoundaries?: Token[];
   /** Content consumed so far in current arbitrary/loop (for guard conditions) */
   preceding?: string;
   /** Parameters passed down for parameterized parsing (e.g., indentation level) */
@@ -48,7 +50,30 @@ abstract class Token {
 
   abstract match(ctx: ParseContext): MatchResult;
   abstract canStartAt(ctx: ParseContext): boolean;
+
+  /**
+   * Returns concrete tokens that MUST start this pattern (for determining if something can match empty).
+   * Used by ArrayToken to know whether to look past this token for boundaries.
+   */
   abstract getFirstConcreteTokens(): Token[];
+
+  /**
+   * Returns ALL concrete tokens that COULD start this pattern (for boundary detection).
+   * Default implementation returns same as getFirstConcreteTokens().
+   * Optional overrides to return inner tokens even though it can match empty.
+   */
+  getAllPossibleStartTokens(): Token[] {
+    return this.getFirstConcreteTokens();
+  }
+
+  /**
+   * Returns true if this token can match zero characters.
+   * Used for boundary calculation in loops - if this token can match empty,
+   * we need to look past it to find boundaries.
+   */
+  canMatchEmpty(): boolean {
+    return false;  // Default: most tokens require some input
+  }
 
   protected wrapResult(result: MatchResult): MatchResult {
     if (!result.success) return result;
@@ -155,6 +180,7 @@ function matchesEnd(pattern: RegExp): (preceding: string) => boolean {
 class GuardedToken extends Token {
   constructor(private inner: Token, private guard: (preceding: string) => boolean) { super(); }
   getFirstConcreteTokens(): Token[] { return [this]; }
+  getAllPossibleStartTokens(): Token[] { return [this]; }
   canStartAt(ctx: ParseContext): boolean {
     if (ctx.preceding !== undefined && this.guard(ctx.preceding)) return false;
     return this.inner.canStartAt(ctx);
@@ -170,9 +196,11 @@ class GuardedToken extends Token {
 class IsolatedToken extends Token {
   constructor(private inner: Token) { super(); }
   getFirstConcreteTokens(): Token[] { return this.inner.getFirstConcreteTokens(); }
+  getAllPossibleStartTokens(): Token[] { return this.inner.getAllPossibleStartTokens(); }
   canStartAt(ctx: ParseContext): boolean { return this.inner.canStartAt(ctx); }
   match(ctx: ParseContext): MatchResult {
-    return this.wrapResult(this.inner.match({ ...ctx, boundaries: [] }));
+    // Isolated clears all boundaries including iteration boundaries
+    return this.wrapResult(this.inner.match({ ...ctx, boundaries: [], iterationBoundaries: [] }));
   }
 }
 
@@ -251,22 +279,24 @@ class RegexToken extends Token {
 class ArbitraryToken extends Token {
   getFirstConcreteTokens(): Token[] { return []; }
   canStartAt(ctx: ParseContext): boolean {
-    if (ctx.boundaries.length === 0) return true;
-    const testCtx: ParseContext = { ...ctx, boundaries: [], preceding: '' };
-    for (const boundary of ctx.boundaries) {
+    const allBoundaries = [...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+    if (allBoundaries.length === 0) return true;
+    const testCtx: ParseContext = { ...ctx, boundaries: [], iterationBoundaries: [], preceding: '' };
+    for (const boundary of allBoundaries) {
       if (boundary.canStartAt(testCtx)) return false;
     }
     return true;
   }
   match(ctx: ParseContext): MatchResult {
     const remaining = ctx.input.slice(ctx.index);
-    if (ctx.boundaries.length === 0) {
+    const allBoundaries = [...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+    if (allBoundaries.length === 0) {
       return this.wrapResult({ success: true, consumed: remaining.length, value: remaining, bindings: {} });
     }
     for (let i = 0; i <= remaining.length; i++) {
       const preceding = remaining.slice(0, i);
-      const testCtx: ParseContext = { ...ctx, index: ctx.index + i, boundaries: [], preceding };
-      for (const boundary of ctx.boundaries) {
+      const testCtx: ParseContext = { ...ctx, index: ctx.index + i, boundaries: [], iterationBoundaries: [], preceding };
+      for (const boundary of allBoundaries) {
         if (boundary.canStartAt(testCtx)) {
           if (i === 0) return { success: false, consumed: 0, value: null, bindings: {} };
           return this.wrapResult({ success: true, consumed: i, value: preceding, bindings: {} });
@@ -280,12 +310,37 @@ class ArbitraryToken extends Token {
 class ArrayToken extends Token {
   constructor(public tokens: Token[]) { super(); }
   getFirstConcreteTokens(): Token[] {
-    if (this.tokens.length === 0) return [];
-    return this.tokens[0].getFirstConcreteTokens();
+    // Collect from first token, but if it returns [] (can match empty),
+    // also collect from subsequent tokens
+    const result: Token[] = [];
+    for (const token of this.tokens) {
+      const firsts = token.getFirstConcreteTokens();
+      result.push(...firsts);
+      if (firsts.length > 0) break;  // Stop at first non-empty (required token)
+    }
+    return result;
+  }
+  getAllPossibleStartTokens(): Token[] {
+    // Collect ALL possible start tokens from leading elements that can match empty
+    const result: Token[] = [];
+    for (const token of this.tokens) {
+      result.push(...token.getAllPossibleStartTokens());
+      if (token.getFirstConcreteTokens().length > 0) break;  // Stop at required token
+    }
+    return result;
   }
   canStartAt(ctx: ParseContext): boolean {
     if (this.tokens.length === 0) return true;
-    return this.tokens[0].canStartAt(ctx);
+    // Check if first non-optional token can start
+    for (const token of this.tokens) {
+      const firsts = token.getFirstConcreteTokens();
+      if (firsts.length > 0) {
+        return token.canStartAt(ctx);
+      }
+      // Token can match empty, check if it can start here or continue
+      if (token.canStartAt(ctx)) return true;
+    }
+    return true;  // All tokens can match empty
   }
   match(ctx: ParseContext): MatchResult {
     let totalConsumed = 0;
@@ -296,15 +351,28 @@ class ArrayToken extends Token {
     for (let i = 0; i < this.tokens.length; i++) {
       const token = this.tokens[i];
       const remainingTokens = this.tokens.slice(i + 1);
-      const remainingConcreteTokens: Token[] = [];
+
+      // Only add boundaries from REQUIRED remaining tokens (those with non-empty getFirstConcreteTokens)
+      // Skip optional elements - they shouldn't create boundaries for preceding elements
+      const remainingBoundaries: Token[] = [];
       for (const rt of remainingTokens) {
-        remainingConcreteTokens.push(...rt.getFirstConcreteTokens());
+        const firsts = rt.getFirstConcreteTokens();
+        if (firsts.length > 0) {
+          // This is a required element - add its possible starts as boundaries and stop
+          remainingBoundaries.push(...rt.getAllPossibleStartTokens());
+          break;
+        }
+        // This is an optional element (can match empty) - skip it, look for next required
       }
-      const boundaries = [...remainingConcreteTokens, ...ctx.boundaries];
+      const boundaries = [...remainingBoundaries, ...ctx.boundaries];
 
       const result = token.match({
-        input: ctx.input, index: currentIndex, boundaries,
-        params: ctx.params, bindings: accumulatedBindings,
+        input: ctx.input,
+        index: currentIndex,
+        boundaries,
+        iterationBoundaries: ctx.iterationBoundaries,  // Pass through
+        params: ctx.params,
+        bindings: accumulatedBindings,
       });
 
       if (!result.success) return { success: false, consumed: 0, value: null, bindings: {} };
@@ -326,11 +394,18 @@ class ArrayToken extends Token {
 class LoopToken extends Token {
   constructor(public tokens: Token[], public minCount: number = 0) { super(); }
   getFirstConcreteTokens(): Token[] {
+    if (this.minCount === 0) return [];  // Can match empty, so don't block
     if (this.tokens.length === 0) return [];
     const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
     return inner.getFirstConcreteTokens();
   }
+  getAllPossibleStartTokens(): Token[] {
+    if (this.tokens.length === 0) return [];
+    const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
+    return inner.getAllPossibleStartTokens();
+  }
   canStartAt(ctx: ParseContext): boolean {
+    if (this.minCount === 0) return true;  // Can match empty
     if (this.tokens.length === 0) return true;
     const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
     return inner.canStartAt(ctx);
@@ -343,11 +418,20 @@ class LoopToken extends Token {
     let currentIndex = ctx.index;
     let iterations = 0;
 
+    // Get inner's possible start tokens - these indicate start of NEXT iteration
+    const iterationStarts = innerToken.getAllPossibleStartTokens();
+
     while (true) {
-      const testCtx: ParseContext = { ...ctx, index: currentIndex, boundaries: [] };
+      const testCtx: ParseContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
+
+      // Pass iteration start tokens as iterationBoundaries (cleared by refs)
       const result = innerToken.match({
-        input: ctx.input, index: currentIndex, boundaries: ctx.boundaries,
-        params: ctx.params, bindings: ctx.bindings,
+        input: ctx.input,
+        index: currentIndex,
+        boundaries: ctx.boundaries,
+        iterationBoundaries: iterationStarts,  // For next-iteration detection
+        params: ctx.params,
+        bindings: ctx.bindings,
       });
 
       if (result.success && result.consumed > 0) {
@@ -387,6 +471,11 @@ class TimesToken extends Token {
     const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
     return inner.getFirstConcreteTokens();
   }
+  getAllPossibleStartTokens(): Token[] {
+    if (this.tokens.length === 0) return [];
+    const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
+    return inner.getAllPossibleStartTokens();
+  }
   canStartAt(ctx: ParseContext): boolean {
     const count = this.getCount(ctx);
     if (count === 0) return true;
@@ -405,6 +494,7 @@ class TimesToken extends Token {
     for (let i = 0; i < count; i++) {
       const result = innerToken.match({
         input: ctx.input, index: currentIndex, boundaries: ctx.boundaries,
+        iterationBoundaries: ctx.iterationBoundaries,
         params: ctx.params, bindings: ctx.bindings,
       });
       if (!result.success) return { success: false, consumed: 0, value: null, bindings: {} };
@@ -430,6 +520,11 @@ class TimesAtLeastToken extends Token {
     const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
     return inner.getFirstConcreteTokens();
   }
+  getAllPossibleStartTokens(): Token[] {
+    if (this.tokens.length === 0) return [];
+    const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
+    return inner.getAllPossibleStartTokens();
+  }
   canStartAt(ctx: ParseContext): boolean {
     const min = this.getMin(ctx);
     if (min === 0) return true;
@@ -448,7 +543,7 @@ class TimesAtLeastToken extends Token {
 
     while (true) {
       if (iterations >= min) {
-        const testCtx: ParseContext = { ...ctx, index: currentIndex, boundaries: [] };
+        const testCtx: ParseContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
         for (const boundary of ctx.boundaries) {
           if (boundary.canStartAt(testCtx)) {
             return this.wrapResult({
@@ -460,6 +555,7 @@ class TimesAtLeastToken extends Token {
       }
       const result = innerToken.match({
         input: ctx.input, index: currentIndex, boundaries: ctx.boundaries,
+        iterationBoundaries: ctx.iterationBoundaries,
         params: ctx.params, bindings: ctx.bindings,
       });
       if (!result.success || result.consumed === 0) break;
@@ -486,6 +582,11 @@ class TimesAtMostToken extends Token {
     return this.max(ctx);
   }
   getFirstConcreteTokens(): Token[] { return []; }
+  getAllPossibleStartTokens(): Token[] {
+    if (this.tokens.length === 0) return [];
+    const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
+    return inner.getAllPossibleStartTokens();
+  }
   canStartAt(_ctx: ParseContext): boolean { return true; }
   match(ctx: ParseContext): MatchResult {
     const max = this.getMax(ctx);
@@ -497,7 +598,7 @@ class TimesAtMostToken extends Token {
     let iterations = 0;
 
     while (iterations < max) {
-      const testCtx: ParseContext = { ...ctx, index: currentIndex, boundaries: [] };
+      const testCtx: ParseContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
       for (const boundary of ctx.boundaries) {
         if (boundary.canStartAt(testCtx)) {
           return this.wrapResult({
@@ -508,6 +609,7 @@ class TimesAtMostToken extends Token {
       }
       const result = innerToken.match({
         input: ctx.input, index: currentIndex, boundaries: ctx.boundaries,
+        iterationBoundaries: ctx.iterationBoundaries,
         params: ctx.params, bindings: ctx.bindings,
       });
       if (!result.success || result.consumed === 0) break;
@@ -532,6 +634,11 @@ class TimesBetweenToken extends Token {
     const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
     return inner.getFirstConcreteTokens();
   }
+  getAllPossibleStartTokens(): Token[] {
+    if (this.tokens.length === 0) return [];
+    const inner = this.tokens.length === 1 ? this.tokens[0] : new ArrayToken(this.tokens);
+    return inner.getAllPossibleStartTokens();
+  }
   canStartAt(ctx: ParseContext): boolean {
     if (this.min === 0) return true;
     if (this.tokens.length === 0) return true;
@@ -548,7 +655,7 @@ class TimesBetweenToken extends Token {
 
     while (iterations < this.max) {
       if (iterations >= this.min) {
-        const testCtx: ParseContext = { ...ctx, index: currentIndex, boundaries: [] };
+        const testCtx: ParseContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
         for (const boundary of ctx.boundaries) {
           if (boundary.canStartAt(testCtx)) {
             return this.wrapResult({
@@ -560,6 +667,7 @@ class TimesBetweenToken extends Token {
       }
       const result = innerToken.match({
         input: ctx.input, index: currentIndex, boundaries: ctx.boundaries,
+        iterationBoundaries: ctx.iterationBoundaries,
         params: ctx.params, bindings: ctx.bindings,
       });
       if (!result.success || result.consumed === 0) break;
@@ -584,22 +692,24 @@ class WithParamsToken extends Token {
     public paramsFn: Record<string, any> | ((ctx: ParseContext, bindings: Record<string, any>) => Record<string, any>)
   ) { super(); }
   getFirstConcreteTokens(): Token[] { return this.inner.getFirstConcreteTokens(); }
+  getAllPossibleStartTokens(): Token[] { return this.inner.getAllPossibleStartTokens(); }
   canStartAt(ctx: ParseContext): boolean { return this.inner.canStartAt(ctx); }
   match(ctx: ParseContext): MatchResult {
     const newParams = typeof this.paramsFn === 'function'
       ? this.paramsFn(ctx, ctx.bindings)
       : this.paramsFn;
     const mergedParams = { ...ctx.params, ...newParams };
-    return this.wrapResult(this.inner.match({ ...ctx, params: mergedParams }));
+    return this.wrapResult(this.inner.match({ ...ctx, params: mergedParams }));  // ctx includes iterationBoundaries
   }
 }
 
 class OptionalToken extends Token {
   constructor(public token: Token) { super(); }
-  getFirstConcreteTokens(): Token[] { return this.token.getFirstConcreteTokens(); }
-  canStartAt(ctx: ParseContext): boolean { return this.token.canStartAt(ctx); }
+  getFirstConcreteTokens(): Token[] { return []; }  // Can match empty, so don't block boundaries
+  getAllPossibleStartTokens(): Token[] { return this.token.getAllPossibleStartTokens(); }  // But CAN start with these
+  canStartAt(_ctx: ParseContext): boolean { return true; }  // Can always match (empty)
   match(ctx: ParseContext): MatchResult {
-    const result = this.token.match(ctx);
+    const result = this.token.match(ctx);  // ctx includes iterationBoundaries
     if (result.success) return this.wrapResult(result);
     return this.wrapResult({ success: true, consumed: 0, value: null, bindings: {} });
   }
@@ -608,6 +718,7 @@ class OptionalToken extends Token {
 class TransformToken extends Token {
   constructor(public token: Token, public transformFn: (value: any, bindings: Record<string, any>) => any) { super(); }
   getFirstConcreteTokens(): Token[] { return this.token.getFirstConcreteTokens(); }
+  getAllPossibleStartTokens(): Token[] { return this.token.getAllPossibleStartTokens(); }
   canStartAt(ctx: ParseContext): boolean { return this.token.canStartAt(ctx); }
   match(ctx: ParseContext): MatchResult {
     const result = this.token.match(ctx);
@@ -625,10 +736,12 @@ class RefToken extends Token {
     return this._cached;
   }
   getFirstConcreteTokens(): Token[] { return this.cached.getFirstConcreteTokens(); }
+  getAllPossibleStartTokens(): Token[] { return this.cached.getAllPossibleStartTokens(); }
   canStartAt(ctx: ParseContext): boolean { return this.cached.canStartAt(ctx); }
   match(ctx: ParseContext): MatchResult {
     DEPTH++;
-    const result = this.cached.match(ctx);
+    // Clear iterationBoundaries when crossing ref boundary - they shouldn't propagate into nested structures
+    const result = this.cached.match({ ...ctx, iterationBoundaries: [] });
     DEPTH--;
     return this.wrapResult(result);
   }
@@ -641,6 +754,11 @@ class AnyToken extends Token {
     for (const token of this.tokens) result.push(...token.getFirstConcreteTokens());
     return result;
   }
+  getAllPossibleStartTokens(): Token[] {
+    const result: Token[] = [];
+    for (const token of this.tokens) result.push(...token.getAllPossibleStartTokens());
+    return result;
+  }
   canStartAt(ctx: ParseContext): boolean {
     return this.tokens.some(t => t.canStartAt(ctx));
   }
@@ -649,10 +767,10 @@ class AnyToken extends Token {
       const token = this.tokens[i];
       const otherConcreteTokens: Token[] = [];
       for (let j = 0; j < this.tokens.length; j++) {
-        if (j !== i) otherConcreteTokens.push(...this.tokens[j].getFirstConcreteTokens());
+        if (j !== i) otherConcreteTokens.push(...this.tokens[j].getAllPossibleStartTokens());
       }
       const boundaries = [...otherConcreteTokens, ...ctx.boundaries];
-      const result = token.match({ ...ctx, boundaries });
+      const result = token.match({ ...ctx, boundaries });  // ctx includes iterationBoundaries
       if (result.success) return this.wrapResult(result);
     }
     return { success: false, consumed: 0, value: null, bindings: {} };
@@ -1176,6 +1294,7 @@ Tree-based grammar evolution:
 
 Tree structure preserved with children!
 `);
+
 
 export { Token, Parser, escapedBy, endsWith, matchesEnd, SelfHostingGrammar };
 export type { MatchResult, ParseContext, ParsedStatement, DynamicParseResult, TreeNode };

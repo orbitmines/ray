@@ -43,9 +43,9 @@ class * | Node
 
   , (b) => [this].push_back(b)
 
-  // Conflicts with (A + (B + C)) of map(+ (B + C))
-  {" "}({parameters})
-    this &= Program(args.type: parameters)
+  // Allows for function definition 'property ()'
+  {program: Program}
+    this &= program
 
   => (block)
     this = block

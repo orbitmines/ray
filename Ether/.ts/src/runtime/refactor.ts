@@ -1,3 +1,4 @@
+import fs from "fs";
 
 let DEBUG = false;
 let DEPTH = 0;
@@ -1617,22 +1618,28 @@ console.log('\n' + '='.repeat(60));
 console.log('Test 10: Self-Hosting Grammar');
 console.log('='.repeat(60) + '\n');
 
-/**
- * Self-Hosting Grammar
- *
- * The pattern grammar uses .set() to directly produce Tokens during parsing.
- * No separate transformation step needed - parsing a pattern gives you a Token!
- */
+
+interface ParsedStatement {
+  type: 'grammar_def' | 'statement';
+  raw: string;
+  patternText?: string;
+  ruleName?: string;
+  bindings?: Record<string, any>;
+  value?: any;
+}
+
+interface DynamicParseResult {
+  statements: ParsedStatement[];
+  grammar: SelfHostingGrammar;
+}
+
 class SelfHostingGrammar {
   private rules: Map<string, Token[]> = new Map();
   private ruleOrder: string[] = [];
   private primitiveRules: Set<string> = new Set();
-
-  // The pattern grammar - produces Tokens directly via .set()
   patternGrammar: Token;
 
   constructor() {
-    // Bootstrap with ONLY the minimal primitives
     this.addPrimitive('PROGRAM', Token.arbitrary());
     this.addPrimitive('String', Token.arbitrary());
     this.addPrimitive('Expression', Token.ref(() => this.getRule('PROGRAM'), 'Expression'));
@@ -1641,354 +1648,256 @@ class SelfHostingGrammar {
       Token.arbitrary().bind('content'),
       Token.string('"').unless(escapedBy('\\'))
     ));
-
-    // Build the pattern grammar - uses .set() to produce Tokens directly
     this.patternGrammar = this.buildPatternGrammar();
   }
 
-  /**
-   * Build the pattern grammar using our Token infrastructure.
-   * Each rule uses .transform() to produce a Token as its VALUE!
-   * This way nested structures work correctly.
-   */
   private buildPatternGrammar(): Token {
-    const self = this;  // For closures
+    // const self = this;
+    // const WS = Token.loop(Token.regex(/[ \t]/));
+    //
+    // const extractString = (chars: any[]): string => {
+    //   let value = '';
+    //   for (const c of chars) {
+    //     if (Array.isArray(c) && c[0] === 'ESC') {
+    //       const escaped = c[1];
+    //       if (escaped === 'n') value += '\n';
+    //       else if (escaped === 't') value += '\t';
+    //       else if (escaped === '\\') value += '\\';
+    //       else if (escaped === '"') value += '"';
+    //       else value += escaped;
+    //     } else if (typeof c === 'string') {
+    //       value += c;
+    //     }
+    //   }
+    //   return value;
+    // };
+    //
+    // const STRING_LITERAL = Token.array(
+    //   Token.string('"'),
+    //   Token.loop(Token.any(
+    //     Token.array(Token.string('\\'), Token.regex(/./)).transform((v) => ['ESC', v[1]]),
+    //     Token.regex(/[^"\\]/)
+    //   )),
+    //   Token.string('"')
+    // ).transform((v) => Token.string(extractString(v[1] || [])));
+    //
+    // const ARBITRARY = Token.string('*').transform(() => Token.arbitrary());
+    //
+    // const PATTERN: Token = Token.ref(() => ALTERNATIVES, 'Pattern');
+    //
+    // const BINDING = Token.array(
+    //   Token.string('{'), WS,
+    //   Token.regex(/[a-zA-Z_][a-zA-Z0-9_]*/), WS,
+    //   Token.optional(Token.array(Token.string(':'), WS, PATTERN, WS)),
+    //   Token.string('}')
+    // ).transform((v) => {
+    //   const name = v[2];
+    //   const optionalInner = v[4];
+    //   let innerToken: Token = optionalInner && optionalInner.length > 0
+    //     ? optionalInner[2]
+    //     : self.getRule('Expression');
+    //   return innerToken.bind(name);
+    // });
+    //
+    // const GROUP = Token.array(
+    //   Token.string('('), WS, PATTERN, WS, Token.string(')')
+    // ).transform((v) => v[2]);
+    //
+    // const REFERENCE = Token.regex(/[a-zA-Z_][a-zA-Z0-9_]*/)
+    //   .transform((v) => self.getRule(v));
+    //
+    // const ATOM = Token.any(STRING_LITERAL, ARBITRARY, BINDING, GROUP, REFERENCE);
+    //
+    // const POSTFIX = Token.optional(Token.array(
+    //   Token.string('[]'),
+    //   Token.optional(Token.string('.NonEmpty'))
+    // ));
+    //
+    // const ELEMENT = Token.array(ATOM, POSTFIX).transform((v) => {
+    //   let token: Token = v[0];
+    //   const postfixResult = v[1];
+    //   if (postfixResult) {
+    //     const isNonEmpty = postfixResult[1];
+    //     token = isNonEmpty ? Token.times(token).atLeast(1) : Token.loop(token);
+    //   }
+    //   return token;
+    // });
+    //
+    // const SEQUENCE = Token.array(
+    //   WS, ELEMENT,
+    //   Token.loop(Token.array(WS, Token.optional(Token.string(',')), WS, ELEMENT)),
+    //   WS
+    // ).transform((v) => {
+    //   const tokens: Token[] = [v[1]];
+    //   for (const r of v[2] || []) {
+    //     if (r[3] instanceof Token) tokens.push(r[3]);
+    //   }
+    //   return tokens.length === 1 ? tokens[0] : Token.array(...tokens);
+    // });
+    //
+    // const ALTERNATIVES: Token = Token.array(
+    //   SEQUENCE,
+    //   Token.loop(Token.array(WS, Token.string('|'), WS, SEQUENCE))
+    // ).transform((v) => {
+    //   const tokens: Token[] = [v[0]];
+    //   for (const alt of v[1] || []) {
+    //     if (alt[3] instanceof Token) tokens.push(alt[3]);
+    //   }
+    //   return tokens.length === 1 ? tokens[0] : Token.any(...tokens);
+    // });
 
-    // Whitespace (optional)
-    const WS = Token.loop(Token.regex(/[ \t]/));
-
-    // Helper to extract string from escape sequences
-    const extractString = (chars: any[]): string => {
-      let value = '';
-      for (const c of chars) {
-        if (Array.isArray(c) && c[0] === 'ESC') {
-          const escaped = c[1];
-          if (escaped === 'n') value += '\n';
-          else if (escaped === 't') value += '\t';
-          else if (escaped === '\\') value += '\\';
-          else if (escaped === '"') value += '"';
-          else value += escaped;
-        } else if (typeof c === 'string') {
-          value += c;
-        }
-      }
-      return value;
-    };
-
-    // String literal: "..." -> returns Token.string() as VALUE
-    // Extract chars from value array (index 1)
-    const STRING_LITERAL = Token.array(
-      Token.string('"'),
-      Token.loop(
-        Token.any(
-          Token.array(Token.string('\\'), Token.regex(/./)).transform((v) => ['ESC', v[1]]),
-          Token.regex(/[^"\\]/)
-        )
-      ),  // VALUE at index 1 is the chars array
-      Token.string('"')
-    ).transform((v, b) => {
-      const chars = v[1] || [];
-      return Token.string(extractString(chars));
-    });
-
-    // Arbitrary: * -> returns Token.arbitrary() as VALUE
-    const ARBITRARY = Token.string('*').transform(() => Token.arbitrary());
-
-    // Forward reference for Pattern (recursive)
-    const PATTERN: Token = Token.ref(() => ALTERNATIVES, 'Pattern');
-
-    // Binding: {name} or {name: Pattern} -> returns inner.bind(name) as VALUE
-    // Extract values from array instead of bindings
-    const BINDING = Token.array(
-      Token.string('{'),
-      WS,
-      Token.regex(/[a-zA-Z_][a-zA-Z0-9_]*/),  // VALUE at index 2 is the name string
-      WS,
-      Token.optional(
-        Token.array(
-          Token.string(':'),
-          WS,
-          PATTERN,  // VALUE at index 2 of inner array is the Token
-          WS
-        )
-      ),  // VALUE at index 4 is [[':', ws, Token, ws]] or null
-      Token.string('}')
-    ).transform((v, b) => {
-      // v is ['{', ws, name, ws, optionalInner, '}']
-      const name = v[2];
-      const optionalInner = v[4];
-
-      let innerToken: Token;
-      if (optionalInner && optionalInner.length > 0) {
-        // optionalInner is [':', ws, Token, ws]
-        innerToken = optionalInner[2];
-      } else {
-        innerToken = self.getRule('Expression');
-      }
-
-      return innerToken.bind(name);
-    });
-
-    // Group: (Pattern) -> returns inner Token as VALUE
-    // Extract from value array
-    const GROUP = Token.array(
-      Token.string('('),
-      WS,
-      PATTERN,  // VALUE at index 2 is the Token from PATTERN
-      WS,
-      Token.string(')')
-    ).transform((v, b) => {
-      // v is ['(', ws, innerToken, ws, ')']
-      return v[2];
-    });
-
-    // Reference: identifier -> returns self.getRule(name) as VALUE
-    const REFERENCE = Token.regex(/[a-zA-Z_][a-zA-Z0-9_]*/)
-      .transform((v) => self.getRule(v));
-
-    // Atom: one of the basic elements -> VALUE is Token
-    const ATOM = Token.any(
-      STRING_LITERAL,
-      ARBITRARY,
-      BINDING,
-      GROUP,
-      REFERENCE
-    );
-
-    // Postfix: [] or [].NonEmpty (optional)
-    // VALUE is ["[]", ".NonEmpty"?] or null
-    const POSTFIX = Token.optional(
-      Token.array(
-        Token.string('[]'),
-        Token.optional(Token.string('.NonEmpty'))
-      )
-    );
-
-    // Guard: if !condition (optional)
-    // VALUE is [ws, "if", ws+, "!"?, condition] or null
-    const GUARD = Token.optional(
-      Token.array(
-        WS,
-        Token.string('if'),
-        Token.regex(/[ \t]+/),
-        Token.optional(Token.string('!')),
-        Token.arbitrary()
-      )
-    );
-
-    // Element: Atom with optional postfix and guard -> VALUE is modified Token
-    // Don't use .bind() - extract from value array instead to avoid name conflicts
-    const ELEMENT = Token.array(
-      ATOM,  // VALUE at index 0 is the Token from ATOM's transform
-      POSTFIX,
-      GUARD
-    ).transform((v, b) => {
-      // v is [atomToken, postfixResult, guardResult]
-      let token: Token = v[0];
-      const postfixResult = v[1];
-      const guardResult = v[2];
-
-      // Apply postfix (loop)
-      if (postfixResult) {
-        // postfixResult is ["[]", ".NonEmpty"?] or null
-        const isNonEmpty = postfixResult[1];
-        token = isNonEmpty ? Token.times(token).atLeast(1) : Token.loop(token);
-      }
-
-      // Apply guard
-      if (guardResult) {
-        // guardResult is [ws, "if", ws+, "!"?, condition]
-        const negated = guardResult[3];
-        const condition = String(guardResult[4] || '').trim();
-        if (condition.includes('⊣')) {
-          const match = condition.match(/"([^"]*)"⊣/);
-          if (match && negated) {
-            token = token.unless((p: string) => p.endsWith(match[1]));
-          }
-        }
-      }
-
-      return token;
-    });
-
-    // Sequence: Elements -> VALUE is Token (possibly array)
-    // Extract tokens from value array instead of bindings
-    const SEQUENCE = Token.array(
-      WS,
-      ELEMENT,  // VALUE at index 1 is the Token from ELEMENT's transform
-      Token.loop(
-        Token.array(
-          WS,
-          Token.optional(Token.string(',')),
-          WS,
-          ELEMENT  // VALUE at index 3 is the Token
-        )
-      ),  // VALUE at index 2 is array of [ws, comma?, ws, Token]
-      WS
-    ).transform((v, b) => {
-      // v is [ws, firstToken, restArray, ws]
-      const firstToken = v[1];
-      const restArray = v[2] || [];
-
-      const tokens: Token[] = [firstToken];
-
-      for (const r of restArray) {
-        // r is [ws, comma?, ws, elementToken]
-        const elemToken = r[3];
-        if (elemToken instanceof Token) {
-          tokens.push(elemToken);
-        }
-      }
-
-      return tokens.length === 1 ? tokens[0] : Token.array(...tokens);
-    });
-
-    // Alternatives: Sequences -> VALUE is Token (possibly any)
-    // Extract tokens from value array
-    const ALTERNATIVES: Token = Token.array(
-      SEQUENCE,  // VALUE at index 0 is Token from SEQUENCE's transform
-      Token.loop(
-        Token.array(
-          WS,
-          Token.string('|'),
-          WS,
-          SEQUENCE  // VALUE at index 3 is Token
-        )
-      )  // VALUE at index 1 is array of alternatives
-    ).transform((v, b) => {
-      // v is [firstSequenceToken, altsArray]
-      const firstToken = v[0];
-      const altsArray = v[1] || [];
-
-      const tokens: Token[] = [firstToken];
-
-      for (const alt of altsArray) {
-        // alt is [ws, "|", ws, sequenceToken]
-        const seqToken = alt[3];
-        if (seqToken instanceof Token) {
-          tokens.push(seqToken);
-        }
-      }
-
-      return tokens.length === 1 ? tokens[0] : Token.any(...tokens);
-    });
-
-    return ALTERNATIVES;
+    return PROGRAM;
   }
 
-  /**
-   * Add a primitive rule
-   */
   private addPrimitive(name: string, token: Token) {
     this.rules.set(name, [token]);
     this.ruleOrder.push(name);
     this.primitiveRules.add(name);
-    log(`[grammar] Added primitive "${name}"`);
   }
 
-  /**
-   * Get a rule by name
-   */
   getRule(name: string): Token {
     return Token.ref(() => {
       const rules = this.rules.get(name);
       if (!rules || rules.length === 0) {
-        log(`[grammar] Unknown rule: ${name}`);
         return Token.string('\x00UNDEFINED_RULE:' + name + '\x00');
       }
-      if (rules.length === 1) {
-        return rules[0];
-      }
-      return Token.any(...rules);
+      return rules.length === 1 ? rules[0] : Token.any(...rules);
     }, name);
   }
 
-  /**
-   * Add a rule. If it's a primitive being overridden, clear it first.
-   */
   addRule(name: string, token: Token) {
     if (this.primitiveRules.has(name)) {
-      log(`[grammar] Overriding primitive "${name}"`);
       this.rules.set(name, []);
       this.primitiveRules.delete(name);
     }
-
     if (!this.rules.has(name)) {
       this.rules.set(name, []);
       this.ruleOrder.push(name);
     }
-
     this.rules.get(name)!.unshift(token);
-    log(`[grammar] Added rule "${name}", now has ${this.rules.get(name)!.length} alternatives`);
   }
 
-  /**
-   * Check if a rule exists and is not just a primitive
-   */
-  hasDefinedRule(name: string): boolean {
-    return this.rules.has(name) && !this.primitiveRules.has(name);
-  }
-
-  /**
-   * Get all rule names
-   */
   getRuleNames(): string[] {
     return [...this.ruleOrder];
   }
 
-  /**
-   * Parse a pattern string wrapped in quotes
-   */
-  parsePatternString(input: string): Token {
-    const stringParser = new Parser(this.getRule('QuotedString'));
-    const result = stringParser.parse(input);
-
-    if (!result.success) {
-      throw new Error(`Failed to parse pattern: ${input}`);
-    }
-
-    return this.compilePatternContent(result.bindings.content);
-  }
-
-  /**
-   * Compile pattern content into a Token.
-   * The pattern grammar uses .transform() - the VALUE is the Token!
-   */
   compilePatternContent(content: string): Token {
     const parser = new Parser(this.patternGrammar);
     const result = parser.parse(content);
-
-    if (!result.success) {
-      throw new Error(`Failed to parse pattern: "${content}" (consumed ${result.consumed})`);
+    if (!result.success || !(result.value instanceof Token)) {
+      throw new Error(`Failed to parse pattern: "${content}"`);
     }
-
-    // The VALUE is our compiled Token (thanks to .transform())!
-    if (!(result.value instanceof Token)) {
-      throw new Error(`Pattern compiled but value is not a Token: "${content}"`);
-    }
-
     return result.value;
   }
 
+  // ============ Dynamic Grammar Parsing ============
+
   /**
-   * Process a syntax definition: "pattern" => result
+   * Check if a line is a grammar definition.
+   * Grammar definitions contain {binding} syntax and end with =>
+   * Returns { patternText, ruleName } or null
    */
-  processSyntaxDef(pattern: string, result: string): string {
-    const token = this.parsePatternString(pattern);
+  private extractGrammarDef(line: string): { patternText: string; ruleName: string } | null {
+    const trimmed = line.trim();
 
-    let ruleName = result.trim().split(/\s+/)[0];
-    ruleName = ruleName.charAt(0).toUpperCase() + ruleName.slice(1);
+    // Must contain { and end with => (with optional rule name)
+    if (!trimmed.includes('{')) return null;
 
-    if (pattern.startsWith('"') && pattern.includes('{')) {
-      if (pattern.includes('string:') || result.includes('string')) {
-        ruleName = 'String';
+    // Check for => at the end
+    const arrowMatch = trimmed.match(/=>/);
+    if (!arrowMatch) return null;
+
+    // Extract the pattern part (everything before =>)
+    const arrowIndex = trimmed.lastIndexOf('=>');
+    const patternText = trimmed.slice(0, arrowIndex).trim();
+    const ruleName = arrowMatch[1] || 'Expression';
+
+    return { patternText, ruleName };
+  }
+
+  /**
+   * Parse input with dynamic grammar evolution.
+   *
+   * 1. Find all grammar definitions (lines with {binding} ending in =>)
+   * 2. Compile them into the grammar
+   * 3. Reparse ALL non-definition statements with the evolved grammar
+   */
+  parseWithEvolution(input: string): DynamicParseResult {
+    // Split into lines/statements
+    const lines: { raw: string; start: number; end: number }[] = [];
+    let pos = 0;
+    while (pos < input.length) {
+      let endPos = input.indexOf('\n', pos);
+      if (endPos === -1) endPos = input.length;
+      else endPos += 1;
+
+      const raw = input.slice(pos, endPos);
+      if (raw.trim()) {
+        lines.push({ raw, start: pos, end: endPos });
+      }
+      pos = endPos;
+    }
+
+    // Phase 1: Identify grammar definitions
+    const grammarDefs: ({ patternText: string; ruleName: string; lineIndex: number } | null)[] = [];
+    const isGrammarDef: boolean[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const def = this.extractGrammarDef(lines[i].raw);
+      grammarDefs.push(def ? { ...def, lineIndex: i } : null);
+      isGrammarDef.push(def !== null);
+    }
+
+    // Phase 2: Compile grammar definitions
+    for (const def of grammarDefs) {
+      if (def) {
+        try {
+          const compiledToken = this.compilePatternContent(def.patternText);
+          if (def.ruleName !== 'Expression') {
+            this.addRule(def.ruleName, compiledToken);
+          }
+          this.addRule('Expression', compiledToken);
+        } catch (e) {
+          // Compilation failed, skip this definition
+        }
       }
     }
 
-    this.addRule(ruleName, token);
-    return ruleName;
+    // Phase 3: Reparse non-definition statements
+    const statements: ParsedStatement[] = [];
+    const expr = this.getRule('Expression');
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const def = grammarDefs[i];
+
+      if (def) {
+        // Grammar definition - keep frozen
+        statements.push({
+          type: 'grammar_def',
+          raw: line.raw,
+          patternText: def.patternText,
+          ruleName: def.ruleName,
+        });
+      } else {
+        // Regular statement - parse with evolved grammar
+        const content = line.raw.replace(/\n$/, '');
+        const parser = new Parser(expr);
+        const result = parser.parse(content);
+
+        statements.push({
+          type: 'statement',
+          raw: line.raw,
+          bindings: result.success ? result.bindings : undefined,
+          value: result.success ? result.value : undefined,
+        });
+      }
+    }
+
+    return { statements, grammar: this };
   }
 }
+
 
 // ============ TESTS ============
 
@@ -2005,34 +1914,34 @@ console.log('Content:', simple.bindings.content);
 
 console.log('\nTest 10c: Compile pattern directly');
 // Pattern: ("(", content, ")") - matches anything in parens
-const pattern1 = grammar.compilePatternContent('("(", {content: *}, ")")');
-console.log('Pattern: ("(", {content: *}, ")") compiled');
-
-// Test it
-grammar.addRule('Parens', pattern1);
-const parensParser = new Parser(grammar.getRule('Parens'));
-const parens = parensParser.parse('(hello world)');
-console.log('Parse (hello world):', parens.success, parens.bindings);
-
-console.log('\nTest 10d: Define backtick strings');
-// Pattern: ("`", value, "`")
-const backtickPattern = grammar.compilePatternContent('("`", {value: *}, "`")');
-grammar.addRule('RawString', backtickPattern);
-console.log('Rules now:', grammar.getRuleNames());
-
-// Test the new rule
-const rawParser = new Parser(grammar.getRule('RawString'));
-const raw = rawParser.parse('`hello`');
-console.log('Parse `hello`:', raw.success, raw.bindings);
-
-console.log('\nTest 10e: Define String with interpolation');
-// Pattern: ('"', parts[], '"') where parts = text | {expr}
-const stringPattern = grammar.compilePatternContent(
-  '("\\"", {parts: ({text: *} | ("{", {expr: Expression}, "}"))[]}, "\\"")'
-);
-grammar.addRule('String', stringPattern);
-console.log('Added interpolated String rule');
-console.log('Rules now:', grammar.getRuleNames());
+// const pattern1 = grammar.compilePatternContent('("(", {content: *}, ")")');
+// console.log('Pattern: ("(", {content: *}, ")") compiled');
+//
+// // Test it
+// grammar.addRule('Parens', pattern1);
+// const parensParser = new Parser(grammar.getRule('Parens'));
+// const parens = parensParser.parse('(hello world)');
+// console.log('Parse (hello world):', parens.success, parens.bindings);
+//
+// console.log('\nTest 10d: Define backtick strings');
+// // Pattern: ("`", value, "`")
+// const backtickPattern = grammar.compilePatternContent('("`", {value: *}, "`")');
+// grammar.addRule('RawString', backtickPattern);
+// console.log('Rules now:', grammar.getRuleNames());
+//
+// // Test the new rule
+// const rawParser = new Parser(grammar.getRule('RawString'));
+// const raw = rawParser.parse('`hello`');
+// console.log('Parse `hello`:', raw.success, raw.bindings);
+//
+// console.log('\nTest 10e: Define String with interpolation');
+// // Pattern: ('"', parts[], '"') where parts = text | {expr}
+// const stringPattern = grammar.compilePatternContent(
+//   '("\\"", {parts: ({text: *} | ("{", {expr: Expression}, "}"))[]}, "\\"")'
+// );
+// grammar.addRule('String', stringPattern);
+// console.log('Added interpolated String rule');
+// console.log('Rules now:', grammar.getRuleNames());
 
 // Test interpolated string
 const stringParser = new Parser(grammar.getRule('String'));
@@ -2045,42 +1954,160 @@ console.log('\nTest 10f: Self-hosting demonstration');
 // Because String is now defined with interpolation, patterns can use interpolation too
 console.log('Grammar is now self-hosting: String rule can parse patterns with {expressions}');
 
+
+console.log('='.repeat(60));
+console.log('Dynamic Grammar Evolution Tests');
+console.log('='.repeat(60) + '\n');
+
+console.log('Test 1: Path pattern affects EARLIER statements');
+console.log('-'.repeat(40));
+
+const input1 = `/path/earlier/in/file
+
+"/", {first: *}, ("/", {rest: *})[] =>
+
+/another/path/here
+`;
+
+console.log('Input:');
+console.log(input1);
+
+const grammar1 = new SelfHostingGrammar();
+const result1 = grammar1.parseWithEvolution(input1);
+
+console.log('Results:');
+for (const stmt of result1.statements) {
+  if (stmt.type === 'grammar_def') {
+    console.log(`  [GRAMMAR DEF] "${stmt.patternText}" => ${stmt.ruleName}`);
+  } else {
+    console.log(`  [STATEMENT] "${stmt.raw.trim()}"`);
+    if (stmt.bindings && Object.keys(stmt.bindings).length > 0) {
+      console.log(`    bindings: ${JSON.stringify(stmt.bindings)}`);
+    }
+  }
+}
+
 console.log('\n' + '='.repeat(60));
-console.log('SUMMARY: Self-Hosting Grammar');
+console.log('Test 2: Greeting pattern');
+console.log('-'.repeat(40));
+
+const input2 = `hello world
+
+{greeting: *}, " ", {name: *} => Greeting
+
+goodbye friend
+`;
+
+console.log('Input:');
+console.log(input2);
+
+const grammar2 = new SelfHostingGrammar();
+const result2 = grammar2.parseWithEvolution(input2);
+
+console.log('Results:');
+for (const stmt of result2.statements) {
+  if (stmt.type === 'grammar_def') {
+    console.log(`  [GRAMMAR DEF] "${stmt.patternText}" => ${stmt.ruleName}`);
+  } else {
+    console.log(`  [STATEMENT] "${stmt.raw.trim()}"`);
+    if (stmt.bindings && Object.keys(stmt.bindings).length > 0) {
+      console.log(`    bindings: ${JSON.stringify(stmt.bindings)}`);
+    }
+  }
+}
+
+console.log('\n' + '='.repeat(60));
+console.log('Test 3: List pattern - EARLIER statement reparsed');
+console.log('-'.repeat(40));
+
+const input3 = `[a, b, c]
+
+"[", {first: *}, (", ", {rest: *})[], "]" => List
+
+[x, y, z]
+`;
+
+console.log('Input:');
+console.log(input3);
+console.log('KEY: The FIRST line [a, b, c] should be parsed with the List pattern!');
+
+const grammar3 = new SelfHostingGrammar();
+const result3 = grammar3.parseWithEvolution(input3);
+
+console.log('\nResults:');
+for (const stmt of result3.statements) {
+  if (stmt.type === 'grammar_def') {
+    console.log(`  [GRAMMAR DEF] "${stmt.patternText}" => ${stmt.ruleName}`);
+  } else {
+    console.log(`  [STATEMENT] "${stmt.raw.trim()}"`);
+    if (stmt.bindings && Object.keys(stmt.bindings).length > 0) {
+      console.log(`    bindings: ${JSON.stringify(stmt.bindings)}`);
+      console.log(`    ✓ Successfully parsed!`);
+    }
+  }
+}
+
+console.log('\n' + '='.repeat(60));
+console.log('Test 4: Block pattern with nested braces');
+console.log('-'.repeat(40));
+
+const input4 = `{simple content}
+
+"{", {content: *}, "}" => Block
+
+{more content here}
+`;
+
+console.log('Input:');
+console.log(input4);
+
+const grammar4 = new SelfHostingGrammar();
+const result4 = grammar4.parseWithEvolution(input4);
+
+console.log('Results:');
+for (const stmt of result4.statements) {
+  if (stmt.type === 'grammar_def') {
+    console.log(`  [GRAMMAR DEF] "${stmt.patternText}" => ${stmt.ruleName}`);
+  } else {
+    console.log(`  [STATEMENT] "${stmt.raw.trim()}"`);
+    if (stmt.bindings && Object.keys(stmt.bindings).length > 0) {
+      console.log(`    bindings: ${JSON.stringify(stmt.bindings)}`);
+    }
+  }
+}
+
+console.log('\n' + '='.repeat(60));
+const grammar5 = new SelfHostingGrammar();
+const result5 = grammar5.parseWithEvolution(
+  fs.readFileSync('../.ray/Language/String/String.ray', 'utf8') +
+  fs.readFileSync('../.ray/Node.ray', 'utf8')
+);
+
+console.log('Results:');
+for (const stmt of result5.statements) {
+  if (stmt.type === 'grammar_def') {
+    console.log(`  [GRAMMAR DEF] "${stmt.patternText}" => ${stmt.ruleName}`);
+  } else {
+    console.log(`  [STATEMENT] "${stmt.raw.replaceAll("\n", "")}"`);
+    if (stmt.bindings && Object.keys(stmt.bindings).length > 0) {
+      console.log(`    bindings: ${JSON.stringify(stmt.bindings)}`);
+    }
+  }
+}
+
+console.log('\n' + '='.repeat(60));
+console.log('Summary');
 console.log('='.repeat(60));
 console.log(`
-Primitives (only 4, all can be overridden):
-  1. PROGRAM     = arbitrary (top-level parsing, overridden by language)
-  2. String      = arbitrary (until language defines it)
-  3. Expression  = PROGRAM (recursive reference)
-  4. QuotedString = "..." (bootstrap string syntax)
+Grammar definitions are detected by: {binding} syntax + ending with =>
 
-Self-hosting flow:
-  1. Start with primitives
-  2. Use compilePatternContent() to compile pattern strings
-  3. Each compiled pattern becomes a new grammar rule
-  4. The rules can reference each other (e.g., String contains Expression)
-  5. Eventually the language fully defines itself
+Examples:
+  "/", {path: *} =>                    - Path pattern
+  {greeting: *}, " ", {name: *} =>     - Greeting pattern  
+  "[", {items: *}, "]" => List         - List pattern (named)
 
-Pattern syntax (bootstrap, can be redefined):
-  "literal"           - literal string
-  {name: Pattern}     - binding with type
-  {name}              - binding to Expression
-  (a, b, c)           - sequence
-  Pattern[]           - loop (0+)
-  Pattern[].NonEmpty  - loop (1+)
-  Pattern | Pattern   - alternatives  
-  *                   - arbitrary (match until boundary)
-  RuleName            - reference to grammar rule
-  Pattern if !cond⊣   - guard (negated, ends-with check)
-
-Example - defining interpolated strings:
-  grammar.compilePatternContent('("\\"", {parts: ({text: *} | ("{", {expr: Expression}, "}"))[]}, "\\"")')
-  
-  This creates a rule that matches:
-    "text {expr} more text"
-  
-  Where {expr} is parsed using the Expression rule (which is PROGRAM).
+The key feature: EARLIER statements ARE reparsed with the evolved grammar!
+Grammar definition statements themselves are FROZEN (not reparsed).
 `);
 
 export { Token, Parser, escapedBy, endsWith, matchesEnd, SelfHostingGrammar };

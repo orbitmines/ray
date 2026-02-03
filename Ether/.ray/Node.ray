@@ -34,9 +34,29 @@ class
   local
 end
 
-
-
 class * | Node
+
+  ; (call: (): (T: ?)): T => call<local: &caller>()
+
+  -- (call: (this: this): (T: ?)): T => call(this) ?? this //TODO ?? Should check the location of None, if it originates in caller if function, then do ??, otherwise return that None
+  ~~ (call: (this: this): (T: ?)): this => call(this); this
+
+  , (b) => [this].push_back(b)
+
+  // Conflicts with (A + (B + C)) of map(+ (B + C))
+  {" "}({parameters})
+    this &= Program(args.type: parameters)
+
+  => (block)
+    this = block
+
+  if (predicate: boolean)
+  unless (predicate: boolean)
+
+  // Necessary for supporting: A | B : Type. The : without a space has a lower precedence than |, so A | B: Type matches to A | (B: Type).
+  // A | B : Type, A | B .map, A | B {length == 3}
+  {" "}{property: not "|" | "&"} => this[property]
+
   //TODO Generalize: Pattern left is matched to pattern right: first, ..middle, last; first, middle: [], last, [first ..after]
   //{
   //  field: WithAdditionalType,
@@ -47,6 +67,7 @@ class * | Node
   //  first2, ..after = field6
   //  //[first2, ..after] = field6
   //}: ParentType = Object
+  // Type = Var, assigns the different things in type that match to var to that var.
 
   //TODO Accepts a block function in case of @, saying setting the location
   //TODO <- all parents, -> all children of current context

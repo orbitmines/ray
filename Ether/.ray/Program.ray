@@ -68,12 +68,6 @@ class Function | Program = Boundary
   //TODO Should be placeable on any Expression, and should change the call to that, even parameterless.
   <{filled_parameters: Expression}> => //TODO .copy, which is just another history branch
 
-  => (def: (x?): *) => defs.push_back(def)
-    //TODO When parameterless => is an override by default, on Expression?
-
-  {" "}({parameters: Expression}): Function
-    //TODO Default &=, default override all the locations (just override the var), so when override =, it's also assign
-
   //TODO Define super() for any =
   //TODO Or refer to other branches which are labelled, so labels cross branches.
 
@@ -85,6 +79,8 @@ class Function | Program = Boundary
   // return_type** => The function which generates the value. Which is a subfunction of the actual function which generated it.
   // TODO: Want to allow to access the whole function which generated the change you see in the sequence of functions called on the variable.
 end
+
+
 
 left-associative
 right-associative //TODO
@@ -167,7 +163,7 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
 
   entrypoint: boolean => // If the context file is the entrypoint file.
 
-  comment: String?
+  comment: String? //TODO comment should include on the same line after.
 
   state | ∙ : State
   // Program State
@@ -306,6 +302,8 @@ end
   {comment: .line#.join(\n)}: (indent: " "[]{length == previous.indent if previous}?, line: String, " "[], "\n"?)[]
 }*/ => &caller.next.comment = above: &caller.comment, \n if above, comment //TODO .next here should be on the right level. or use a different method which does it properly.
 
+({expression: Expression}) => expression
+
 //TODO
 Program < Language
 
@@ -320,24 +318,7 @@ static class Expression < String + Ray?
 
   //TODO Expression comes from some file or more generally a context, have that information available here.
 
-  external comment: String
 
-  , (b: Expression)
-
-  //TODO Space counts as --
-  // => higher precedence than --
-  // Allow space/newline (unless theres a newline between false and true?, depends on the indentation as well) ; Allow false, true .map(!)
-  -- (b: Expression)
-  //'-- . if this ~= ^"::ffff"'. If branch doesnt precede the --, so it's only for that line.
-  //'--' shoudld be allowed to start as a this. like ' -- .embed_ipv4 if this ~= ^"::ffff"'
-  //Allow multiline '--'
-  //Allow returning out of a -- statement.
-
-  // Multiline multiple edits allow (Like in Unicode)
-  // Like '--', but applies some expression and returns the variable it was applied to.
-  ~~ (b: Expression)
-
-  {" "}: (type) => //TODO Wrap whole expression in : type
 
   as (=== Program)
     program = Program()
@@ -410,7 +391,6 @@ class Expression < (
       " "[]{length == whitespace}, added_whitespace: " "[].NonEmpty,
       Expression<whitespace: whitespace + added_whitespace.length>),
     )[]) if func \n⊣
-// const expr = new Parser(EXPR).parse(fs.readFileSync('../.ray/Language/String/Unicode.ray', 'utf8'));
   )[]
 
   {as (=== Program) => Program}:

@@ -77,3 +77,5 @@ allow capability1
 allow capability2
 allow capability3
 
+// Quantifying preferences https://en.wikipedia.org/wiki/Von_Neumann%E2%80%93Morgenstern_utility_theorem
+// Social choice theory

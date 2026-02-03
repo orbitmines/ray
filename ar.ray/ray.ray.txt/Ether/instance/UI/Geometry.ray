@@ -130,6 +130,9 @@ Ball~profile().
 Ball~"Profile Name"().
 Ball~5().
 
++ padding + border &+ padding
+// Overflow .width?
+
 
 (if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy (
       Keyboard.ctrl && Keyboard.shift => // Skip group & Expand selection

@@ -1,3 +1,5 @@
+// () on a type with constraints calls choose
+
 // How to say: Return of the given type, or a predicate when used in a filter
 //TODO How to say: .unordered, arbitrarily choose anything equivalent to
 //Chose uses === for checking equality. And only maps it once, then defers to the altered variable
@@ -20,3 +22,9 @@ choose n: Probability{!= 0 && != 1} // Only for finite number of objects.
 choose{unique} //TODO Choose with filter, alllow modifiers like unique somehow? or === for not the same var twice
 
 //TODO Dynamically with choose, means the choice can be changed dynamically too.
+
+/path/earlier/in/file
+
+/{path: (String, "/")[]} =>
+
+/path/later/in/file

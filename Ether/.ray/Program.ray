@@ -167,6 +167,8 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
 
   entrypoint: boolean => // If the context file is the entrypoint file.
 
+  comment: String?
+
   state | ∙ : State
   // Program State
   // - A looped control-flow, has the values of each iteration stored in the state's history.
@@ -299,6 +301,10 @@ class Lang | Language (equivalent extension: ".", String)?
 end
 //TODO Equivalence between Function with parameter = Expression, to Target; as (*)
 //TODO How to formally say; if there's sufficient interesting mapping between output, we consider it as a language. 1-1 mappings etc,, (or heavy reliance on the input or something)
+
+//{" "[], comment: String, \n?} | /*{
+  {comment: .line#.join(\n)}: (indent: " "[]{length == previous.indent if previous}?, line: String, " "[], "\n"?)[]
+}*/ => &caller.next.comment = above: &caller.comment, \n if above, comment //TODO .next here should be on the right level. or use a different method which does it properly.
 
 //TODO
 Program < Language

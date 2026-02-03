@@ -27,16 +27,9 @@ type ParseContext = {
 
 abstract class Token {
   protected bindName?: string;
-  protected transformer?: (bindings: Record<string, any>) => any;
 
   bind(name: string): this {
     this.bindName = name;
-    return this;
-  }
-
-  set(name: string, fn: (bindings: Record<string, any>) => any): this {
-    this.bindName = name;
-    this.transformer = fn;
     return this;
   }
 
@@ -84,9 +77,6 @@ abstract class Token {
     const bindings = { ...result.bindings };
     if (this.bindName) {
       bindings[this.bindName] = result.value;
-    }
-    if (this.transformer) {
-      bindings[this.bindName!] = this.transformer(bindings);
     }
     return { ...result, bindings };
   }

@@ -20,6 +20,8 @@ type ParseContext = {
   boundaries: Token[];
   /** Boundaries only for current loop iteration (cleared on ref) */
   iterationBoundaries?: Token[];
+  /** If true, loops should not set iterationBoundaries */
+  suppressIterBoundaries?: boolean;
   /** Content consumed so far in current arbitrary/loop (for guard conditions) */
   preceding?: string;
   /** Parameters passed down for parameterized parsing (e.g., indentation level) */
@@ -46,6 +48,11 @@ abstract class Token {
 
   isolated(): IsolatedToken {
     return new IsolatedToken(this);
+  }
+
+  /** Clear iteration boundaries but keep regular boundaries */
+  noIterBoundaries(): NoIterBoundariesToken {
+    return new NoIterBoundariesToken(this);
   }
 
   abstract match(ctx: ParseContext): MatchResult;
@@ -204,6 +211,22 @@ class IsolatedToken extends Token {
   }
 }
 
+/** Clears iteration boundaries but preserves regular boundaries */
+class NoIterBoundariesToken extends Token {
+  constructor(private inner: Token) { super(); }
+  getFirstConcreteTokens(): Token[] { return this.inner.getFirstConcreteTokens(); }
+  getAllPossibleStartTokens(): Token[] { return this.inner.getAllPossibleStartTokens(); }
+  canStartAt(ctx: ParseContext): boolean { return this.inner.canStartAt(ctx); }
+  match(ctx: ParseContext): MatchResult {
+    // Clear iteration boundaries and suppress loops from setting new ones
+    return this.wrapResult(this.inner.match({
+      ...ctx,
+      iterationBoundaries: [],
+      suppressIterBoundaries: true
+    }));
+  }
+}
+
 class StringToken extends Token {
   strings: string[];
   constructor(strings: string[]) {
@@ -279,12 +302,7 @@ class RegexToken extends Token {
 class ArbitraryToken extends Token {
   getFirstConcreteTokens(): Token[] { return []; }
   canStartAt(ctx: ParseContext): boolean {
-    const allBoundaries = [...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
-    if (allBoundaries.length === 0) return true;
-    const testCtx: ParseContext = { ...ctx, boundaries: [], iterationBoundaries: [], preceding: '' };
-    for (const boundary of allBoundaries) {
-      if (boundary.canStartAt(testCtx)) return false;
-    }
+    // Arbitrary can always "start" - it just might match 0 chars
     return true;
   }
   match(ctx: ParseContext): MatchResult {
@@ -298,7 +316,8 @@ class ArbitraryToken extends Token {
       const testCtx: ParseContext = { ...ctx, index: ctx.index + i, boundaries: [], iterationBoundaries: [], preceding };
       for (const boundary of allBoundaries) {
         if (boundary.canStartAt(testCtx)) {
-          if (i === 0) return { success: false, consumed: 0, value: null, bindings: {} };
+          // A boundary can start here - return what we've consumed so far
+          // This might be 0 chars, which is valid (let the boundary match next)
           return this.wrapResult({ success: true, consumed: i, value: preceding, bindings: {} });
         }
       }
@@ -371,6 +390,7 @@ class ArrayToken extends Token {
         index: currentIndex,
         boundaries,
         iterationBoundaries: ctx.iterationBoundaries,  // Pass through
+        suppressIterBoundaries: ctx.suppressIterBoundaries,  // Propagate flag
         params: ctx.params,
         bindings: accumulatedBindings,
       });
@@ -419,7 +439,10 @@ class LoopToken extends Token {
     let iterations = 0;
 
     // Get inner's possible start tokens - these indicate start of NEXT iteration
-    const iterationStarts = innerToken.getAllPossibleStartTokens();
+    // BUT: if suppressIterBoundaries is set, don't add them
+    const iterationStarts = ctx.suppressIterBoundaries
+      ? []
+      : innerToken.getAllPossibleStartTokens();
 
     while (true) {
       const testCtx: ParseContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
@@ -430,6 +453,7 @@ class LoopToken extends Token {
         index: currentIndex,
         boundaries: ctx.boundaries,
         iterationBoundaries: iterationStarts,  // For next-iteration detection
+        suppressIterBoundaries: ctx.suppressIterBoundaries,  // Propagate flag
         params: ctx.params,
         bindings: ctx.bindings,
       });
@@ -740,8 +764,13 @@ class RefToken extends Token {
   canStartAt(ctx: ParseContext): boolean { return this.cached.canStartAt(ctx); }
   match(ctx: ParseContext): MatchResult {
     DEPTH++;
-    // Clear iterationBoundaries when crossing ref boundary - they shouldn't propagate into nested structures
-    const result = this.cached.match({ ...ctx, iterationBoundaries: [] });
+    // Clear iterationBoundaries when crossing ref boundary (unless suppressed)
+    // Propagate suppressIterBoundaries flag
+    const result = this.cached.match({
+      ...ctx,
+      iterationBoundaries: [],
+      // Keep suppressIterBoundaries if set
+    });
     DEPTH--;
     return this.wrapResult(result);
   }
@@ -769,8 +798,10 @@ class AnyToken extends Token {
       for (let j = 0; j < this.tokens.length; j++) {
         if (j !== i) otherConcreteTokens.push(...this.tokens[j].getAllPossibleStartTokens());
       }
-      const boundaries = [...otherConcreteTokens, ...ctx.boundaries];
-      const result = token.match({ ...ctx, boundaries });  // ctx includes iterationBoundaries
+      // Add disambiguation boundaries to iterationBoundaries (cleared by RefToken)
+      // This prevents them from leaking into nested structures like PROGRAM
+      const iterBoundaries = [...otherConcreteTokens, ...(ctx.iterationBoundaries || [])];
+      const result = token.match({ ...ctx, iterationBoundaries: iterBoundaries });
       if (result.success) return this.wrapResult(result);
     }
     return { success: false, consumed: 0, value: null, bindings: {} };
@@ -1154,7 +1185,7 @@ class SelfHostingGrammar {
 // ============ TESTS ============
 
 // Helper to print tree
-export function printTree(nodes: TreeNode[], indent: string = ''): void {
+function printTree(nodes: TreeNode[], indent: string = ''): void {
   for (const node of nodes) {
     const typeTag = node.type === 'grammar_def' ? '[GRAMMAR]' : '[STMT]';
     console.log(`${indent}${typeTag} "${node.content}"`);
@@ -1295,6 +1326,358 @@ Tree-based grammar evolution:
 Tree structure preserved with children!
 `);
 
+// ============ Pretty Print & AST Navigation (Issues 3 & 4) ============
+
+/**
+ * Pretty print a match result showing what matched and where bindings are.
+ *
+ * Example output:
+ *   ✓ Matched "hello {world} => foo" (21 chars)
+ *
+ *   Bindings:
+ *     substring: "hello "
+ *     expression: "world"
+ *     block: " foo"
+ */
+function prettyPrint(input: string, result: MatchResult, options: { showValue?: boolean } = {}): string {
+  if (!result.success) {
+    return '❌ Match failed at position ' + result.consumed;
+  }
+
+  const lines: string[] = [];
+  const matched = input.slice(0, result.consumed);
+  lines.push(`✓ Matched ${JSON.stringify(matched)} (${result.consumed} chars)`);
+
+  if (Object.keys(result.bindings).length > 0) {
+    lines.push('');
+    lines.push('Bindings:');
+    for (const [name, value] of Object.entries(result.bindings)) {
+      lines.push(`  ${name}: ${formatBindingValue(value, '  ')}`);
+    }
+  }
+
+  if (options.showValue) {
+    lines.push('');
+    lines.push('Raw value:');
+    lines.push(formatBindingValue(result.value, ''));
+  }
+
+  return lines.join('\n');
+}
+
+function formatBindingValue(value: any, indent: string): string {
+  if (value === null || value === undefined) {
+    return 'null';
+  }
+  if (typeof value === 'string') {
+    // Truncate long strings
+    if (value.length > 50) {
+      return JSON.stringify(value.slice(0, 47) + '...');
+    }
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    // Check if it's a simple array
+    if (value.every(v => typeof v === 'string' || v === null)) {
+      const items = value.map(v => v === null ? 'null' : JSON.stringify(v));
+      const oneLine = '[' + items.join(', ') + ']';
+      if (oneLine.length < 60) return oneLine;
+    }
+    // Complex array - show structure
+    const items = value.map((v, i) => `${indent}  [${i}]: ${formatBindingValue(v, indent + '  ')}`);
+    return '[\n' + items.join('\n') + '\n' + indent + ']';
+  }
+  if (typeof value === 'object') {
+    if ('count' in value && 'values' in value) {
+      // TimesAtLeast result
+      return `{count: ${value.count}, values: ${formatBindingValue(value.values, indent)}}`;
+    }
+    const entries = Object.entries(value);
+    if (entries.length === 0) return '{}';
+    const items = entries.map(([k, v]) => `${indent}  ${k}: ${formatBindingValue(v, indent + '  ')}`);
+    return '{\n' + items.join('\n') + '\n' + indent + '}';
+  }
+  return String(value);
+}
+
+/**
+ * AST Node for cleaner navigation of match results.
+ */
+interface ASTNode {
+  /** Type of node: 'text', 'group', 'list', 'object' */
+  type: 'text' | 'group' | 'list' | 'object' | 'null';
+  /** For text nodes, the matched string */
+  text?: string;
+  /** For group/object nodes, named children */
+  children?: Record<string, ASTNode>;
+  /** For list nodes, array of children */
+  items?: ASTNode[];
+  /** Raw value if needed */
+  raw?: any;
+}
+
+/**
+ * Convert a match result's bindings into a clean AST for navigation.
+ *
+ * This transforms the raw bindings into a navigable structure where:
+ * - Strings become text nodes
+ * - Arrays become list nodes with items
+ * - Objects become object nodes with children
+ * - Nested loop results are flattened appropriately
+ *
+ * Example:
+ *   const ast = toAST(result);
+ *   ast.children.expression  // Access the 'expression' binding
+ *   ast.children.parts.items[0]  // Access first item in 'parts' loop
+ */
+function toAST(result: MatchResult): ASTNode {
+  if (!result.success) {
+    return { type: 'null', raw: null };
+  }
+
+  return {
+    type: 'object',
+    children: transformBindings(result.bindings),
+    raw: result.value
+  };
+}
+
+function transformBindings(bindings: Record<string, any>): Record<string, ASTNode> {
+  const result: Record<string, ASTNode> = {};
+
+  for (const [key, value] of Object.entries(bindings)) {
+    result[key] = transformValue(value);
+  }
+
+  return result;
+}
+
+function transformValue(value: any): ASTNode {
+  if (value === null || value === undefined) {
+    return { type: 'null' };
+  }
+
+  if (typeof value === 'string') {
+    return { type: 'text', text: value };
+  }
+
+  if (Array.isArray(value)) {
+    // Check if it's a loop result (array of similar structures)
+    const items = value.map(v => transformValue(v));
+    return { type: 'list', items, raw: value };
+  }
+
+  if (typeof value === 'object') {
+    // TimesAtLeast result
+    if ('count' in value && 'values' in value) {
+      return {
+        type: 'list',
+        items: value.values.map((v: any) => transformValue(v)),
+        raw: value
+      };
+    }
+    // Generic object
+    const children: Record<string, ASTNode> = {};
+    for (const [k, v] of Object.entries(value)) {
+      children[k] = transformValue(v);
+    }
+    return { type: 'object', children, raw: value };
+  }
+
+  return { type: 'text', text: String(value) };
+}
+
+/**
+ * Navigate an AST using a dot-separated path.
+ *
+ * Example:
+ *   navigate(ast, 'parts.0.expression')  // Get first part's expression
+ *   navigate(ast, 'block')  // Get the block binding
+ */
+function navigate(ast: ASTNode, path: string): ASTNode | string | null {
+  const parts = path.split('.');
+  let current: ASTNode | undefined = ast;
+
+  for (const part of parts) {
+    if (!current) return null;
+
+    if (current.type === 'object' && current.children) {
+      current = current.children[part];
+    } else if (current.type === 'list' && current.items) {
+      const index = parseInt(part, 10);
+      if (isNaN(index)) return null;
+      current = current.items[index];
+    } else if (current.type === 'text') {
+      return current.text || null;
+    } else {
+      return null;
+    }
+  }
+
+  if (!current) return null;
+  if (current.type === 'text') return current.text || null;
+  return current;
+}
+
+/**
+ * Get a simple object representation of the AST (for easy JS access).
+ *
+ * Converts:
+ * - text nodes to strings
+ * - list nodes to arrays
+ * - object nodes to plain objects
+ *
+ * Example:
+ *   const simple = simplify(ast);
+ *   simple.expression  // "world" (string, not ASTNode)
+ *   simple.parts[0].text  // "hello"
+ */
+function simplify(ast: ASTNode): any {
+  switch (ast.type) {
+    case 'null':
+      return null;
+    case 'text':
+      return ast.text;
+    case 'list':
+      return (ast.items || []).map(item => simplify(item));
+    case 'object':
+      const result: Record<string, any> = {};
+      for (const [key, child] of Object.entries(ast.children || {})) {
+        result[key] = simplify(child);
+      }
+      return result;
+    default:
+      return ast.raw;
+  }
+}
+
+/**
+ * Extract bindings from a loop iteration value.
+ *
+ * Loop iterations typically look like [optional_result, text_result] or similar.
+ * This function tries to extract meaningful bindings from each iteration.
+ *
+ * Common patterns:
+ * - [null, "text"] -> { text: "text" }
+ * - [["{", "expr", "}"], "text"] -> { expr: "expr", text: "text" }
+ * - ["literal", "content"] -> { content: "content" }
+ */
+function extractIterationBindings(iterValue: any): Record<string, any> {
+  if (typeof iterValue === 'string') {
+    return { value: iterValue };
+  }
+
+  if (!Array.isArray(iterValue)) {
+    return { value: iterValue };
+  }
+
+  // Common pattern: [optional_result, text_result]
+  if (iterValue.length === 2) {
+    const [opt, text] = iterValue;
+    const result: Record<string, any> = {};
+
+    // Extract from optional (often ["{", content, "}"] or null)
+    if (opt === null) {
+      result.expr = null;
+    } else if (Array.isArray(opt) && opt.length === 3) {
+      // Likely a delimited expression like ["{", content, "}"]
+      result.expr = opt[1];
+    } else if (typeof opt === 'string') {
+      result.prefix = opt;
+    } else {
+      result.opt = opt;
+    }
+
+    // Extract text
+    if (typeof text === 'string') {
+      result.text = text;
+    } else {
+      result.suffix = text;
+    }
+
+    return result;
+  }
+
+  // Generic array - index each element
+  const result: Record<string, any> = {};
+  iterValue.forEach((v, i) => {
+    if (typeof v === 'string') {
+      result[`item${i}`] = v;
+    } else if (v === null) {
+      result[`item${i}`] = null;
+    } else {
+      result[`item${i}`] = v;
+    }
+  });
+  return result;
+}
+
+/**
+ * Simplified view of match result focused on bindings.
+ *
+ * This processes loop results to extract per-iteration bindings,
+ * making it easier to navigate the results.
+ *
+ * Example:
+ *   const view = simplifyBindings(result);
+ *   view.parts[0].text  // "a" - text from first iteration
+ *   view.parts[1].expr  // "b" - expression from second iteration
+ *   view.block  // " f"
+ */
+function simplifyBindings(result: MatchResult): Record<string, any> {
+  if (!result.success) {
+    return {};
+  }
+
+  const output: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(result.bindings)) {
+    if (Array.isArray(value) && value.length > 0 && Array.isArray(value[0])) {
+      // This looks like a loop result - extract bindings from each iteration
+      output[key] = value.map(iter => extractIterationBindings(iter));
+    } else {
+      output[key] = value;
+    }
+  }
+
+  return output;
+}
+
+/**
+ * Pretty print an AST showing the structure clearly.
+ */
+function prettyPrintAST(ast: ASTNode, indent: string = ''): string {
+  const lines: string[] = [];
+
+  switch (ast.type) {
+    case 'null':
+      return 'null';
+    case 'text':
+      return JSON.stringify(ast.text);
+    case 'list':
+      if (!ast.items || ast.items.length === 0) return '[]';
+      lines.push('[');
+      for (let i = 0; i < ast.items.length; i++) {
+        const itemStr = prettyPrintAST(ast.items[i], indent + '  ');
+        lines.push(`${indent}  [${i}]: ${itemStr}`);
+      }
+      lines.push(`${indent}]`);
+      return lines.join('\n');
+    case 'object':
+      if (!ast.children || Object.keys(ast.children).length === 0) return '{}';
+      lines.push('{');
+      for (const [key, child] of Object.entries(ast.children)) {
+        const childStr = prettyPrintAST(child, indent + '  ');
+        lines.push(`${indent}  ${key}: ${childStr}`);
+      }
+      lines.push(`${indent}}`);
+      return lines.join('\n');
+    default:
+      return String(ast.raw);
+  }
+}
 
 export { Token, Parser, escapedBy, endsWith, matchesEnd, SelfHostingGrammar };
-export type { MatchResult, ParseContext, ParsedStatement, DynamicParseResult, TreeNode };
+export { prettyPrint, toAST, navigate, simplify, simplifyBindings, prettyPrintAST };
+export type { MatchResult, ParseContext, ParsedStatement, DynamicParseResult, TreeNode, ASTNode };

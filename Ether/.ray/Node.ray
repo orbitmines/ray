@@ -199,7 +199,18 @@ class * | Node
     // In variables have a way to get partial equality.
     <up_to?> () =>
       in?: -> as (*)
-    instance_of // A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
+    instance_of (type)
+      // ### : Class components (can be -'ed, so can lose a type)
+      // Class constraints need to all apply.
+      // If type is |, find matching one. If &, force lhs to match both
+
+      // Taking all Rays on type, they must the structure (This structural match is the same the Grammar uses)
+      //   Check if Rays are === (for things like infinite numberlines we cant check otherwise
+      //   New variable names are on @ * on each node of the type. So type gets assigned variables.
+      //   Type(pattern) has .next as all possibilities, then as long as this matches one of the .next possibilities
+      //   All properties need to have the same structure (if we've already checked in a collection ===, skip, but the properties still need to be the same)
+      //     A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
+
     isomorphic // (Equal in structure, ignores values)
   namespace !=
   ≧ | ≥ | >= = ==

@@ -142,6 +142,28 @@ export class Var {
     x.call = func
     return x;
   }
+  static ref = (ref: () => Var): Var => {
+    const x = new Var()
+    x.on_initialization(() => x.value = ref().value)
+    return x;
+  }
+  static any = (...val: Val[]): Var => {
+    // reduce(|)
+  }
+
+  static arbitrary = () => Var.expr("*")
+  static end = () => Var.expr("⊣") //TODO Should be from context.
+
+  // TODO If array, and has inside, include the methods from the variables names inside.
+
+  with = (embed: () => { [key: string]: Val }): Var => {}
+  get loop(): Var {}
+  length = (operator: '<=' | '<' | '>=' | '>' | '==', val: Val): Var => {}
+  get optional(): Var {}
+
+  bind = (location: Var): Var => {
+
+  }
 
   private initialized: boolean = false
   private initialize?: () => void
@@ -473,23 +495,36 @@ class Expression {
   get candidates(): any {}
 
   grammar: any = {
-    statement: Token.array(
-      Token.loop(Token.regex(/ *\n/)),
-      Token.ref(() => this.grammar.rules).bind('content'),
-      Token.any(Token.string('\n'), Token.end()),
-      Token.loop(
-        Token.array(
-          Token.loop(Token.regex(/ *\n/)),
-          Token.times(Token.string(' ')).exactly('indent'),
-          Token.times(Token.string(' ')).atLeast(1).bind('added'),
-          Token.withParams(
-            (ctx, bindings) => ({ indent: ctx.params.indent + bindings.added.count }),
-            Token.ref(() => this.grammar.expression)
-          )
-        )
-      ).bind('children')
+    // statement: Token.array(
+    //   Token.loop(Token.regex(/ *\n/)),
+    //   Token.ref(() => this.grammar.rules).bind('content'),
+    //   Token.any(Token.string('\n'), Token.end()),
+    //   Token.loop(
+    //     Token.array(
+    //       Token.loop(Token.regex(/ *\n/)),
+    //       Token.times(Token.string(' ')).exactly('indent'),
+    //       Token.times(Token.string(' ')).atLeast(1).bind('added'),
+    //       Token.withParams(
+    //         (ctx, bindings) => ({ indent: ctx.params.indent + bindings.added.count }),
+    //         Token.ref(() => this.grammar.expression)
+    //       )
+    //     )
+    //   ).bind('children')
+    // ),
+    // expression: Token.loop(Token.ref(() => this.grammar.statement)).bind('statements')
+
+    statement: Var.array(
+      Var.array(Var.string(' ').loop, '\n').loop,
+      Var.ref(() => this.grammar.rules).bind('content'),
+      Var.any('\n', Var.end()),
+      Var.array(
+        Var.array(Var.string(' ').loop, '\n').loop,
+        Var.string(' ').loop.length('==', ctx.indent),
+        Var.string(' ').loop.length('>=', 1).bind('added'),
+        Var.ref(() => this.grammar.expression).with(() => ({ indent: ctx.params.indent + bindings.added.count }))
+      ).loop.bind('children')
     ),
-    expression: Token.loop(Token.ref(() => this.grammar.statement)).bind('statements')
+    expression: Var.ref(() => this.grammar.statement).loop.bind('statements')
   }
 }
 

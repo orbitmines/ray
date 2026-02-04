@@ -57,6 +57,8 @@ class * | Node
   // A | B : Type, A | B .map, A | B {length == 3}
   {" "}{property: not "|" | "&"} => this[property]
 
+  [] => Array<this>
+
   //TODO Generalize: Pattern left is matched to pattern right: first, ..middle, last; first, middle: [], last, [first ..after]
   //{
   //  field: WithAdditionalType,

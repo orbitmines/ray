@@ -11,6 +11,7 @@ import PartialArgs = Ether.PartialArgs;
 
 import fs from 'fs'
 import path from "node:path";
+import {Token} from "./refactor3.ts";
 
 type ExternalMethod = (...args: [Val, ctx: Context]) => Val | void
 
@@ -43,7 +44,7 @@ type NODE = {
   get methods(): Map<Var, Var>
 }
 
-class Var {
+export class Var {
   value: NODE = { methods: new Map<Var, Var>() }
   encoded_string?: string
   func?: Var
@@ -429,14 +430,135 @@ class Context extends Var {
   }
 
 }
+
+class Expression {
+
+  constructor(public string: string, rules: Token) {
+    this.grammar.rules = rules
+  }
+
+  parse = () => {
+    let candidates;
+    while ((candidates = this.candidates).length !== 0) {
+      const primary = candidates.filter(x => x.maybe_defines_grammar)
+
+      // Match to primary candidates for grammar rewrites
+      // Interpret grammar rules, one by one, reevaluating if a previous one changed it. (Don't allow loops?)
+      // Interpret the things from Node
+      // Then execute each function separately
+
+      Token.array(
+        Token.loop(Token.string(' ')),
+        Token.regex(/[^ ]*/).bind('substring'),
+        Token.loop(Token.array(
+          Token.optional(Token.any(
+            // TODO Also includes other tokens
+
+          )),
+          Token.array(Token.string('{'), Token.ref(() => this.grammar.expression).bind('expression'), Token.string('}')),
+          Token.regex(/[^ ]*/).bind('substring'),
+        )),
+
+        Token.any(
+          Token.array(Token.string(' '), Token.string('('), Token.loop(Token.string(' ')), Token.string(')'), Token.arbitrary()),
+          Token.array(Token.string('=>'), Token.arbitrary()),
+        )
+      )
+
+    }
+  }
+
+  reevaluate = () => {}
+
+  get candidates(): any {}
+
+  grammar: any = {
+    statement: Token.array(
+      Token.loop(Token.regex(/ *\n/)),
+      Token.ref(() => this.grammar.rules).bind('content'),
+      Token.any(Token.string('\n'), Token.end()),
+      Token.loop(
+        Token.array(
+          Token.loop(Token.regex(/ *\n/)),
+          Token.times(Token.string(' ')).exactly('indent'),
+          Token.times(Token.string(' ')).atLeast(1).bind('added'),
+          Token.withParams(
+            (ctx, bindings) => ({ indent: ctx.params.indent + bindings.added.count }),
+            Token.ref(() => this.grammar.expression)
+          )
+        )
+      ).bind('children')
+    ),
+    expression: Token.loop(Token.ref(() => this.grammar.statement)).bind('statements')
+  }
+}
+
+class Program extends Var {
+
+  //TODO If imported in a directory, that context is available in a child directories. This allows us to isolate imports into separate contexts. -> Fork different versions of the context: EXTENDS ONLY APPLIES TO (->), while any other change on variable is on (<->)
+
+  //  const x = new Var()
+  // x[__].location["&="](Var.expr("IO")[__](Var.path(path)))
+  // x[__].expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
+
+  context = new Context()
+
+  constructor(public expression: string[] = []) {
+    super();
+
+    const initial = new Ray()
+    initial[__]["∙"] = this.context
+
+    this[__].previous = initial
+    initial[__].next = this
+  }
+
+  [_("<>")](args: PartialArgs): this {
+    return this.expr(this.expression.pop(), args);
+  }
+
+  expr = (expression: string, args?: PartialArgs): this => {
+    console.log(expression)
+    let expr = args && Object.entries(args).length !== 0 ? `(${expression})<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>` : expression
+    if (!/^(?:\P{White_Space}| |\n)*$/u.test(expr))
+      throw new Error("All Unicode space separators (+ \\t), except the normal space, are illegal characters. This is for safety reasons: to ensure that text editors don't show function blocks where they shouldn't be.")
+
+    this.expression.push(expr)
+
+    return this;
+  }
+
+  file = (path: string, args?: PartialArgs) =>
+    this.expr(fs.readFileSync(path, "utf-8"), args)
+
+  //TODO This will likely change: now we dont have information of what came from which file.
+  dir = (path: string, args?: PartialArgs): this => {
+    return this.expr(
+      files(path)
+        .filter(path => path.endsWith('.ray'))
+        .map(path => fs.readFileSync(path, "utf-8"))
+        .map(file => file.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
+        .join('\n'),
+      args
+    )
+  }
+
+  // This is a stupid copy, it doesn't reproduce the program state, but just reinitializes the entire expression
+  copy = () => new Program([...this.expression])
+
+  compose = (b: Program) => new Program([...this.expression, ...b.expression])
+
+}
 namespace Language {
-  export class Ray extends Context {
+  export class Ray extends Program {
     constructor(private instance: Instance, public ether: string) {
       super();
 
       this.external_method("external", this.external)
       this.external_method("location", this.location)
     }
+
+    include = () => this.dir(`${this.ether}/.ray`)
 
     //@external
     assign(version: Val) {
@@ -456,61 +578,7 @@ namespace Language {
 
   }
 }
-class Program extends Var {
-  //TODO When version is set append programs
-  //TODO Add Program to the version's program as a branch.
 
-  constructor() {
-    super();
-    this[__][":"](Var.expr("Program"))
-  }
-
-  copy = (): Program => {
-    //TODO
-    return this;
-  }
-
-}
-
-class ProgramLoader {
-  program: Program = new Program()
-
-  constructor(context?: Context) {
-    const initial = new Ray()
-
-    initial[__]["∙"] = context
-
-    this.program[__].previous = initial
-    initial[__].next = this.program
-  }
-
-  private expr = (path: string, expr: string) => {
-    const x = new Var()
-
-    x[__].location["&="](Var.expr("IO")[__](Var.path(path)))
-    x[__].expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
-
-    return x;
-  }
-
-
-  dir = (path: string, args?: PartialArgs): this => {
-    this.program[__].push_back(
-      files(path)
-        .filter(path => path.endsWith('.ray'))
-        .map(path => this.expr(path, fs.readFileSync(path, "utf-8")))
-        .map(x => x[__])
-        .reduce((acc: any | undefined, x: any) => acc ? acc.push_back(x) : x)
-        .all.collapse[_("<>")](args)
-    )
-
-    return this;
-  }
-  file = (path: string, args?: PartialArgs): this => {
-    this.expr(path, fs.readFileSync(path, "utf-8"))[__][_("<>")](args)
-    return this;
-  }
-}
 class Instance {
   constructor(public ether: string) {
   }
@@ -524,16 +592,8 @@ class Instance {
   load = (version: string = "latest"): Program => {
     if (version != "latest") throw new Error("Versioning of Language not yet supported")
 
-    let ray: Language.Ray = new Language.Ray(this, this.ether)
-
-    //TODO It's a Program with context: Context
-    const program = new ProgramLoader(ray).dir(`${this.ether}/.ray`).program
-    //TODO Intermediately load objects when needed in this program, and run everything in front which needs to run in front.
-
-     //TODO Allow to patch context of another program/package if desired, since you might want to override functionality that way./
-
-    this.versions[version] = program
-    return program;
+    this.versions[version] = new Language.Ray(this, this.ether).include()
+    return this.versions[version];
   }
 
   bind = (program: Program, versions: string[]) => {
@@ -543,17 +603,17 @@ class Instance {
       const std = (this.versions[version] ?? this.load(version)).copy()
       program = (i == 0 ? program : program.copy())
 
-      const step = new Ray()
-      step[__]["expand"] = program
-      std.push_ray(step)
+      // const step = new Ray()
+      // step[__]["expand"] = program
+      // std.push_ray(step)
 
-      this.programs.push(program);
+      this.programs.push(std.compose(program));
     }
   }
 
   //TODO Also branch off existing program states
-  branch = (load: (loader: ProgramLoader) => ProgramLoader, args: PartialArgs = {}): this => {
-    const program = load(new ProgramLoader()).program[_("<>")](args)[__]
+  branch = (load: (loader: Program) => Program, args: PartialArgs = {}): this => {
+    const program = load(new Program())[_("<>")](args)
 
     if (args["global"] && args["global"].length > 0) {
       this.bind(program, args["global"]);
@@ -668,3 +728,13 @@ const partition = <T>(array: T[], predicate: (x: T) => boolean) => {
 
   return [pass, fail];
 };
+
+
+// Allow forward dependent type, the thing which matched first and then satisfies all conditions gets matched.
+
+// Allow A, Graph{count == 100}, B // to mean arbitrary connectivity of count 100, but every path leads from A to B.
+
+// Generally allow styling/style classes to be applied to your property. ; later also things like sub/super etc..
+
+//   [1, 2, 3]
+//     method // Is this an array of [1, 2, 3] -> Default to Array, and if () or => use function.

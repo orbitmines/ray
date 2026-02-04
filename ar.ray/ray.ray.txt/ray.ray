@@ -78,7 +78,6 @@ class Node
     //TODO Updates static, such that anything depending on the type static changes too. (For instance the program < Task)
   end
 
-  def [] = Array<this>
   def ?? default = this as boolean ? this : default
   def ?
     //TODO Without parameter should return Option<>, with parameter :, boolean expression eval.

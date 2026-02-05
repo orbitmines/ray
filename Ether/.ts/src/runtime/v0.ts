@@ -13,40 +13,13 @@ import fs from 'fs'
 import path from "node:path";
 import {Token} from "./refactor3.ts";
 
-type ExternalMethod = (...args: [Val, ctx: Context]) => Val | void
-
-type Val = string | symbol | Var | ExternalMethod
-
-namespace Symbols {
-  export const self = Symbol("self");
-  export const get = Symbol("*");
-  export const partial_args = Symbol("<>");
-  export const all = Symbol("#");
-  export const evaluate = Symbol("eval");
-  export const execute = Symbol("execute");
-}
-const _ = (property?: "*" | "&" | "<>" | "()" | "#" | ">>"): symbol => {
-  if (property === undefined) return Symbols.self;
-  if (property === "*") return Symbols.get;
-  if (property === "()") return Symbols.evaluate;
-  if (property === "#") return Symbols.all;
-  if (property === ">>") return Symbols.execute;
-  return Symbols.partial_args;
-}
-const __ = _()
 
 // v0 Assumes termination when it shouldn't, and instead we'd want a NPC to decide which branches to explore and how.
 const incorrectly_assume_termination = (x: Generator<Var>): Var[] => [...x];
 
-type NODE = {
-  none?: boolean
-  //TODO Dynamically allocate conditional methods
-  get methods(): Map<Var, Var>
-}
+//TODO Dynamically allocate conditional methods
 
 export class Var {
-  value: NODE = { methods: new Map<Var, Var>() }
-  encoded_string?: string
   func?: Var
 
   dependants: Var[] //TODO dynamically. or implement in the language: override = of all mentioned vars dependencies.
@@ -156,14 +129,6 @@ export class Var {
 
   // TODO If array, and has inside, include the methods from the variables names inside.
 
-  with = (embed: () => { [key: string]: Val }): Var => {}
-  get loop(): Var {}
-  length = (operator: '<=' | '<' | '>=' | '>' | '==', val: Val): Var => {}
-  get optional(): Var {}
-
-  bind = (location: Var): Var => {
-
-  }
 
   private initialized: boolean = false
   private initialize?: () => void
@@ -514,6 +479,7 @@ class Expression {
     // expression: Token.loop(Token.ref(() => this.grammar.statement)).bind('statements')
 
     statement: Var.array(
+
       Var.array(Var.string(' ').loop, '\n').loop,
       Var.ref(() => this.grammar.rules).bind('content'),
       Var.any('\n', Var.end()),
@@ -706,52 +672,6 @@ const files = (path: string) => {
 
   return results;
 }
-
-/**
- * Copied from https://github.com/lodash/lodash/blob/main/dist/lodash.js
- */
-export const is_boolean = (value: any): value is boolean =>
-  value === true || value === false || (is_object_like(value) && base_tag(value) == '[object Boolean]');
-export const is_symbol = (value: any): value is Symbol => typeof value === "symbol" //TODO lodash says?
-export const is_string = (value: any): value is string =>
-  typeof value == 'string' || (!is_array(value) && is_object_like(value) && base_tag(value) == '[object String]');
-export const is_function = (value: any): value is ((...args: any[]) => any) => {
-  if (!is_object(value)) return false;
-
-  let tag = base_tag(value);
-  return tag == '[object Function]' || tag == '[object GeneratorFunction]' || tag == '[object AsyncFunction]' || tag == '[object Proxy]';
-}
-export const is_array = Array.isArray
-export const is_object = (value: any): value is object =>
-  value != null && (typeof value == 'object' || typeof value == 'function');
-export const is_object_like = (value: any) =>
-  value != null && typeof value == 'object';
-export const base_tag = (value: any) => {
-  if (value == null) return value === undefined ? '[object Undefined]' : '[object Null]';
-
-  return (Symbol.toStringTag && Symbol.toStringTag in Object(value)) ? raw_tag(value) : to_string(value);
-}
-export const raw_tag = (value: any) => {
-  let isOwn = Object.prototype.hasOwnProperty.call(value, Symbol.toStringTag),
-    tag = value[Symbol.toStringTag];
-
-  let unmasked;
-  try {
-    value[Symbol.toStringTag] = undefined;
-    unmasked = true;
-  } catch (e) {}
-
-  let result = to_string(value);
-  if (unmasked) {
-    if (isOwn) {
-      value[Symbol.toStringTag] = tag;
-    } else {
-      delete value[Symbol.toStringTag];
-    }
-  }
-  return result;
-}
-export const to_string = (value: any): String => Object.prototype.toString.call(value);
 
 const partition = <T>(array: T[], predicate: (x: T) => boolean) => {
   const pass: T[] = [];

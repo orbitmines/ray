@@ -387,12 +387,20 @@ class Expression < (
     // Allow syntax for say this method needs to be defined T : {+ (: Number)}, Or Node{+ (: Number)}
     // N <- . -> N equips the structure with &+ when evaluated.
     //TODO Allow {(): boolean}
-    func: Program: ((*)?)[], ";" | \n | ⊣),
+
+  (
+    // But what if given to us by a function, we dont necessarily want to edit it there.
+    // Allow RULES @ <-> or RULES @ *
+    // Allow RULES @ <- or RULES @ -> to mean further in this pattern  (Interpreted as each iteration of the loop gives the variable to the next).
+    {RULES = }
+    func: Program: ({RULES @ * |= .}}: (" "[], (not " ")[], (RULES?, "{", expr: Expression, "}", not " "[])[], parenthesis: (" "[]{length >= 1} "(", " "[], ")")?, Statement?, ("=>", Statement)(? if parenthesis)) | (*)?)[], \n | ⊣),
     {func.args.push_back(.)}: Program: (
       " "[]{length == whitespace}, added_whitespace: " "[].NonEmpty,
-      Expression<whitespace: whitespace + added_whitespace.length>),
-    )[]) if func \n⊣
+      static<whitespace: whitespace + added_whitespace.length>),
+    )[])
   )[]
+    // dynamically match is the default; whenever a variable is modified within the pattern
+    // dynamically match, binds to a variable, that variable is in scope for the whole expression, if that variable is changed, the whole type gets rematched, cannot effect itself (only the thing that produced the rule), can effect others & things matched later in its current scope);.
 
   {as (=== Program) => Program}:
 ): String{

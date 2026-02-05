@@ -9,3 +9,5 @@ DomainName = String{length < 2^8}{} //TODO
 
 //TODO How to reroute all network traffic we're proxying
 
+// Ether Protocol starts with an unencrypted UUID of which version to use. Response is either fail or return which versions it supports, then switch to those versions on the other end.
+

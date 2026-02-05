@@ -1,14 +1,15 @@
 
-type ExternalMethod = (...args: [Val, ctx: Node]) => Val | void
+type ExternalMethod = (...args: [Val, ctx: Node]) => Val
 type Encodable = string | number | boolean | void | undefined | null | symbol
 type Val = Node | Expr | Exclude<Encodable, symbol> | Obj | Var | ExternalMethod
-type Node = Var & { [_]: Var } & { [key in Exclude<string, keyof Var>]: Node }
+type Node = Var & { [_]: Var } & { (...args: [Val, ctx: Node]): Val } & { [key in Exclude<string, keyof Var>]: Node } & { [key in keyof Function]: Node }
 type Obj = { [key: string]: Val }
 
 const Unknown = Symbol("unknown")
 const _ = Symbol("self")
 
 class Var {
+  //TODO Encoded clears undefined/null if something is added to the object?
   value: { encoded: Encodable, methods: Map<Var, Var> } = { encoded: Unknown, methods: new Map<Var, Var>() }
 
   static cast = (val: Val, ctx: Node): Var => {
@@ -30,12 +31,15 @@ class Var {
   //TODO [] / [``] defined here
 
   val = (val: Val): Node => Var.cast(val, this[_])[_]
+  not = (val: Val): Node => {}
 
   bind = (location: Node): Node => {
     // Variable is set = , the type is just type information on the location.
   }
 
   get end(): Node { return this[_]["⊣"] }
+
+  is_none = (): boolean => this.value.encoded === null || this.value.encoded === undefined
 
   get as_boolean(): boolean {
     if (is_boolean(this.value.encoded)) return this.value.encoded;
@@ -62,29 +66,48 @@ interface Expr {
   parse: (ctx: Node) => Val
 }
 class Expression implements Expr {
+
+  constructor() {
+  }
+
   parse = (ctx: Node): Val => {
-    return undefined;
+    return Var.expr((ctx: Node) => {
+      //TODO First interpret STD with bootstrap, then interpret it with itself.
+
+      let RULES;
+      if (ctx.is_none()) {
+        // STD is not loaded, parse with bootstrapping grammar
+        const RULE_NAME = ctx.Array(ctx.not(' ')[``], '{', ctx.Expression, '}', ctx.not(' ')[``])[``]
+        const RULE_ONLINE_BODY = ctx.Array(ctx.val(' ')[``].constrain(x => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional)
+
+        RULES = ctx.Array(ctx.Array((ctx: Node) => [RULE_NAME.bind(ctx.name)[``]]).bind(ctx.rules))
+        //TODO On match add to rules.
+      } else {
+        RULES = ctx.dynamically(() => ctx.keys, ctx)
+      }
+
+      ctx.empty_lines = ctx.Array(ctx.val(' ')[``],'\n')[``]
+      ctx.statement = ctx.Array((ctx: Node) => [
+        ctx.empty_lines,
+        ctx.RULES.bind(ctx.content),
+        ctx.Any('\n', ctx.end),
+        ctx.Array((ctx: Node) => [
+          ctx.empty_lines,
+          ctx.val(' ')[``].constrain(x => x.length, '==', ctx.indent),
+          ctx.val(' ')[``].constrain(x => x.length, '>=', 1).bind(ctx.added_indent),
+          ctx.Expression.with({ indent: ctx.indent.as_number + ctx.added_indent.as_number })
+        ])[``].bind(ctx.block)
+      ])
+      ctx.Expression = ctx.statement[``]
+    }).parse(ctx)
   }
 
   //TODO Whatever is used to dynamically parse should get new syntax in the language for this pattern matching dynamically reassigning
   //TODO After change, what we just parsed is skipped.
   // Dynamic grammar is basically a dependent type which causes reevaluation.
 
-  grammar: Expr = Var.expr((ctx: Node) => {
-    ctx.empty_lines = ctx.Array(ctx.val(' ')[``],'\n')[``]
-    ctx.statement = ctx.Array((ctx: Node) => [
-      ctx.empty_lines,
-      ctx["*"].bind(ctx.content),
-      ctx.Any('\n', ctx.end),
-      ctx.Array((ctx: Node) => [
-        ctx.empty_lines,
-        ctx.val(' ')[``].constrain(x => x.length, '==', ctx.indent),
-        ctx.val(' ')[``].constrain(x => x.length, '>=', 1).bind(ctx.added_indent),
-        ctx.expression.with({ indent: ctx.indent.as_number + ctx.added_indent.as_number })
-      ])[``].bind(ctx.block)
-    ])
-    ctx.expression = ctx.statement[``]
-  })
+  //TODO Grammar is only used for parsing the STD, then the STD is used to parse the other rules.
+
 }
 
 

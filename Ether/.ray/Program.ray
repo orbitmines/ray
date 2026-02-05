@@ -1,5 +1,9 @@
 global = local
 
+({expr: *}) => expr
+{`{`, expr: (): *, `}`} => expr<local: local>; local
+
+// "TODO" Highlighting
 //{" "[], comment: String, \n?} | /*{
   {comment: .line#.join(\n)}: (indent: " "[]{length == previous.indent if previous}?, line: String, " "[], "\n"?)[]
 }* => &caller.next.comment = above: &caller.comment, \n if above, comment //TODO .next here should be on the right level. or use a different method which does it properly. Comment after the current line should be included
@@ -345,8 +349,6 @@ static class Expression < String + Ray?
           )[]
         )[]
 
-({expr: Expression}) => expr
-
 // Partial args is not necessarily inserted after the first statement, but each is inserted after the first initialization of that variable.
 //TODO Assumes \t = " ", Probably safer to instead say tabs are invalid syntax. (otherwise certain codeblocks might appear to be where they arent to the compiler)
 //TODO Expression[] is castable to Program, ordered. (not the Expression[] -> Expression -> Program, prefer this if possible: but Expression -> Program[] -> Program (also not a superposed, but linear. route.) route.
@@ -388,12 +390,18 @@ class Expression < (
     // N <- . -> N equips the structure with &+ when evaluated.
     //TODO Allow {(): boolean}
 
+  //TODO If line ends with | or another method, it is not expected to continue on the next line, instead we prefer to have the | on the next line, to prevent weird bugs
+
   (
     // But what if given to us by a function, we dont necessarily want to edit it there.
     // Allow RULES @ <-> or RULES @ *
     // Allow RULES @ <- or RULES @ -> to mean further in this pattern  (Interpreted as each iteration of the loop gives the variable to the next).
-    {RULES = }
-    func: Program: ({RULES @ * |= .}}: (" "[], (not " ")[], (RULES?, "{", expr: Expression, "}", not " "[])[], parenthesis: (" "[]{length >= 1} "(", " "[], ")")?, Statement?, ("=>", Statement)(? if parenthesis)) | (*)?)[], \n | ⊣),
+    {
+      RULE_NAME = (\S[], "{", expr: Expression, "}", \S[])[]
+      RULE_ONELINE_BODY = " "[]{length >= 1}, parenthesis: ("(", " "[], ")")?, ("=>")(? if !parenthesis), Statement[WITHOUT BODY]?
+      RULES = {RULES @ * |= .}: (rules: (name: RULE_NAME)[]{length >= 1}.join(" & " | " | ")),
+    }
+    func: Program: (" "[], {RULES @ * |= .}}: (, parenthesis: (" "[]{length >= 1} "(", " "[], ")")?, Statement?, ("=>", Statement)(? if parenthesis)) | (*)?)[], \n | ⊣),
     {func.args.push_back(.)}: Program: (
       " "[]{length == whitespace}, added_whitespace: " "[].NonEmpty,
       static<whitespace: whitespace + added_whitespace.length>),

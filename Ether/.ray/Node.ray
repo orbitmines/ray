@@ -105,7 +105,7 @@ class * | Node
   // Force the lazy program stored in **, to evaluate.
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
 
-  {"{", expression: Expression "}"} => // Allow chaining
+  {"{", constraint: (x: static): boolean "}"} => // Allow chaining
 
   in {.} | keys => this*.map(key, value => key)
   values => this*.map(key, value => value())

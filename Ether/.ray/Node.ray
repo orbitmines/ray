@@ -34,21 +34,28 @@ class
   local
 end
 
+//TODO The things defined on NOde + extensions of global (use class components), dont get the global value in closures; only things defined outside Node.
+
 class * | Node
 
   ; (call: (): (T: ?)): T => call<local: &caller>()
 
-  -- (call: (this: this): (T: ?)): T => call(this) ?? this //TODO ?? Should check the location of None, if it originates in caller if function, then do ??, otherwise return that None
-  ~~ (call: (this: this): (T: ?)): this => call(this); this
+  -- (call: (: this): (T: ?)): T => call(this) ?? this //TODO ?? Should check the location of None, if it originates in caller if function, then do ??, otherwise return that None
+  ~~ (call: (: this): (T: ?)): this => call(this); this
 
   , (b) => [this].push_back(b)
 
-  // Allows for function definition 'property ()'
-  {program: Program}
-    this &= program
+  {block: (): *} => block<local: this>() //TODO When run on static, should add to constructor
 
-  => (block)
-    this = block
+  // Allow .(property | property2) / var (condition ? == : <=)
+  {"."}({expr: (: this): *}) => expr<local: this>(this)
+
+  {" "}({expr: (): *})
+    this = Program(args: expr)
+      {"=>"?, block: (): *} => this = block
+
+  {operator: "&" | "|" = "&"}=> &= (block: (): *)
+    this["{operator}="](block)
 
   if (predicate: boolean)
   unless (predicate: boolean)
@@ -58,6 +65,8 @@ class * | Node
   {" "}{property: not "|" | "&"} => this[property]
 
   [] => Array<this>
+
+
 
   //TODO Generalize: Pattern left is matched to pattern right: first, ..middle, last; first, middle: [], last, [first ..after]
   //{

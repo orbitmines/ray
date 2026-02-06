@@ -38,7 +38,7 @@ class Char < Unicode.Scalar
   //TODO as String should be automatically implemented.
 
   Letter: Char = "a".."z" | "A".."Z" //TODO Should include letters from all alphabets
-  Symbol: Char = Unicode.GeneralCategory.(Punctuation | Symbol)
+  Symbol: Char = Unicode.GeneralCategory.(Punctuation | .Symbol)
 //TODO Add on Char.Symbol along with other categories
 //TODO Different classes of Unicode characters.
 

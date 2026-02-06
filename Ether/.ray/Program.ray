@@ -1,6 +1,11 @@
 global = local
 
-({expr: *}) => expr
+({expr: (): *}) => expr
+  expr
+    // Allow (param) => ..
+    => (block: (): *) => block ~~ : expr.type ~~ (.args ~~ .type = ?) = expr
+  expr
+
 {`{`, expr: (): *, `}`} => expr<local: local>; local
 
 // "TODO" Highlighting
@@ -115,6 +120,7 @@ external {label: *}\: Program //TODO Push to program.name
 branch
 race
 
+//TODO Allow inserting after a method to do precedence oprdering Use Node~method, automatically allowing labelling methods.
 
 return (expression: Expression) //TODO Allow out-or-order execution.
   // Ignore the values set by manually setting &caller, and only return to the original function.
@@ -207,6 +213,8 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
 
 
   external (args: in.type): return_type
+
+  //TODO : sets return_type, not function type?
 
   if !?⊢
     step (

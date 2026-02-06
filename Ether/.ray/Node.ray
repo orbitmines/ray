@@ -50,8 +50,8 @@ class * | Node
   // Allow .(property | property2) / var (condition ? == : <=)
   {"."}({expr: (: this): *}) => expr<local: this>(this)
 
-  {" "}({expr: (): *})
-    this = Program(args: expr)
+  {" "}({expr: (): *}) //TODO Doesnt work for =/&=
+    this &= Program(args: expr)
       {"=>"?, block: (): *} => this = block
 
   {operator: "&" | "|" = "&"}=> &= (block: (): *)

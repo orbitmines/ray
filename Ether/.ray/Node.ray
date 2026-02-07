@@ -50,8 +50,8 @@ class * | Node
   // Allow .(property | property2) / var (condition ? == : <=)
   {"."}({expr: (: this): *}) => expr<local: this>(this)
 
-  {" "}({expr: (): *}) //TODO Doesnt work for =/&=
-    this &= Program(args: expr)
+  {" "}({expr: *}) //TODO Doesnt work for =/&=
+    this &= Program(args: expr) // TODO .for i => doesnt work./
       {"=>"?, block: (): *} => this = block
 
   {operator: "&" | "|" = "&"}=> &= (block: (): *)
@@ -74,7 +74,7 @@ class * | Node
   //  field2 { nested },
   //  { nested2 } = field3,
   //  field4: Some field4a,
-  //  field5 [first, ..middle, last]
+  //  [first, ..middle, last] = field5
   //  first2, ..after = field6
   //  //[first2, ..after] = field6
   //}: ParentType = Object
@@ -120,6 +120,7 @@ class * | Node
   values => this*.map(key, value => value())
 
   // Add every constructed element to a database (only actually compiled when used)
+  // Configurable
   //TODO This Should be another database, and optionally only on .save?
   static $ | records: static? = None
   records |= this

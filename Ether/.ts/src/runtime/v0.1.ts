@@ -33,7 +33,7 @@ class Var {
   val = (val: Val): Node => Var.cast(val, this[_])[_]
   not = (val: Val): Node => {}
 
-  bind = (location: Node): Node => {
+  bind = (location: Node | (() => void)): Node => {
     // Variable is set = , the type is just type information on the location.
   }
 
@@ -74,16 +74,29 @@ class Expression implements Expr {
     return Var.expr((ctx: Node) => {
       //TODO First interpret STD with bootstrap, then interpret it with itself.
 
-      let RULES;
       if (ctx.is_none()) {
         // STD is not loaded, parse with bootstrapping grammar
         const RULE_NAME = ctx.Array(ctx.not(' ')[``], '{', ctx.Expression, '}', ctx.not(' ')[``])[``]
-        const RULE_ONLINE_BODY = ctx.Array(ctx.val(' ')[``].constrain(x => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional)
+        const RULE_ONLINE_BODY = ctx.Any(
+          ctx.Array(ctx.val(' ')[``].constrain(x => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional),
+          ctx.Array(ctx.val(' ')[``], ctx.end)
+        )
 
-        RULES = ctx.Array(ctx.Array((ctx: Node) => [RULE_NAME.bind(ctx.name)[``]]).bind(ctx.rules))
+        ctx.RULES = ctx.Array(
+          ctx.Array((ctx: Node) => [
+            RULE_NAME.bind(ctx.name),
+            ctx.Any(' & ', ' | ').optional
+          ])[``].constrain(x => x.length, '>=', 1).bind(ctx.rules),
+          RULE_ONLINE_BODY.bind(ctx.body)
+        ).bind(() => {
+          //TODO
+          // ctx.RULES.everywhere |= ctx.rules
+        })
         //TODO On match add to rules.
+
+        //TODO After all the grammar rules are matched, match to all usual methods and superpose them into a single rule for that context.
       } else {
-        RULES = ctx.dynamically(() => ctx.keys, ctx)
+        ctx.RULES = ctx.val(ctx.dynamically(() => ctx.keys, ctx))
       }
 
       ctx.empty_lines = ctx.Array(ctx.val(' ')[``],'\n')[``]

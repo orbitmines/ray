@@ -1,497 +1,114 @@
-// The v0 runtime is a specification runtime, without any optimizations.
-
-// What happens when conflicting versions are used, check backwards/forwards compatibility
-//   If conflict -> optimistically assume reinterpretation of each Lazy Program: Variable for each separate context.
-// Different evaluation groups; if something else introduces new syntax, I dont want it to effect other groups; only those which import it
-//
-// Function variable from context. So create a new context for each function and assign '&'.
-
-
+import {isToken, parse, Token, toToken} from "./parser.ts";
+import fs from "fs";
+import path from "node:path";
 import PartialArgs = Ether.PartialArgs;
 
-import fs from 'fs'
-import path from "node:path";
-import {Token} from "./refactor3.ts";
 
+type ExternalMethod = (...args: [Node, ctx: Node]) => Val
+type Encodable = string | number | boolean | void | undefined | null | symbol | Token
+type Val = Node | Exclude<Encodable, symbol> | Obj | Var | ExternalMethod
+type Node = Var & { [_]: Var, [Symbol.iterator](): Iterator<Node> } & { (...args: [Val, ctx: Node]): Val } & { [key in Exclude<string, keyof Var>]: Node } & { [key in keyof Function]: Node }
+type Obj = { [key: string]: Val }
 
-// v0 Assumes termination when it shouldn't, and instead we'd want a NPC to decide which branches to explore and how.
-const incorrectly_assume_termination = (x: Generator<Var>): Var[] => [...x];
+const Unknown = Symbol("unknown")
+export const _ = Symbol("self")
 
-//TODO Dynamically allocate conditional methods
+class Var implements Iterable<Node> {
 
-export class Var {
-  func?: Var
+  //TODO Encoded clears undefined/null if something is added to the object?
+  value: { encoded: Encodable, methods: Map<Var, Var> } = { encoded: Unknown, methods: new Map<Var, Var>() }
 
-  dependants: Var[] //TODO dynamically. or implement in the language: override = of all mentioned vars dependencies.
+  private program?: Program
 
-  static cast = (val: Val): Var => {
-    if (is_symbol(val)) val = val.toString()
-
-    if (is_string(val)) {
-      if (val.includes(" ")) val = Var.expr(val)
-      else val = Var.string(val)
-    } else if (is_function(val)) val = Var.func(val)
-
-    return val;
-  }
-  static string = (value: string): Var => {
-    const x = Var.array(...[...value]
-      .map(ch => {
-        const codepoint = ch.codePointAt(0)
-        const char = codepoint.toString(2).padStart(24, "0").split("").map(x => Number(x))
-
-        const x = Var.array(...char.map(digit => Var.digit(digit, 2)))
-        x.encoded_string = ch;
-        console.log('-->', x.encoded_string)
-        return x;
-      })
-    )//[__][":"](Var.expr("String"))[__]
-    x.encoded_string = value
-    return x;
-  }
-  static digit = (digit: number, base: number): Ray => {
-    if (digit > base || digit < 0) throw new Error(`Digit is 0 < . < ${base}`)
-    if (base < 2) throw new Error(`Base is >= 2`)
-
-    let integer = new Ray()
-    let selected: Ray = integer
-    for (let i = 0; i < base - 1; i++) {
-      integer = integer.push_ray()
-
-      if (digit === i + 1)
-        selected = integer;
-    }
-
-    const cursor = new Ray()
-    cursor[__]["&+="](selected)
-    return cursor
-  }
-  static array = (...entries: Val[]): Ray => {
-    let first: Ray | undefined
-    let current: Ray
-
-    entries.forEach(entry => {
-      let next: Ray;
-      if (entry instanceof Ray) {
-        next = entry
-      } else {
-        next = new Ray()
-        next[__]["&+="](entry)
-      }
-      if (entry instanceof Var)
-        next.encoded_string = entry.encoded_string
-
-      // console.log('--->', next.encoded_string)
-
-      if (current) current.push_ray(next)
-
-      current = next;
-      if (!first) first = current;
+  private lazy_updates: ExternalMethod[] = []
+  lazily = (call: ExternalMethod): Node => {
+    this.lazy_updates.push((self: Node, ctx: Node) => {
+      call(self, ctx)
     })
-
-    let array = new Ray()
-    array[__].next = first;
-
-    return array
+    return this [_];
   }
-
-  static path = (path: string): Var => {
-    //TODO
-    return new Var()
+  lazily_get = (property: Val[], ctx: Node): Node => {
+    throw new Error('Not implemented')
   }
-  static map = (map: Map<Var, Var>): Var => {
-    //TODO
-    return new Var()
-  }
-  static expr = (expression: string): Var => {
-    //TODO
-    const x = new Var()
-    if (expression === "None")
-      x.value.none = true
-    return x;
-  }
-  static func = (func: ExternalMethod): Var => {
-    const x = new Var()
-    x.call = func
-    return x;
-  }
-  static ref = (ref: () => Var): Var => {
-    const x = new Var()
-    x.on_initialization(() => x.value = ref().value)
-    return x;
-  }
-  static any = (...val: Val[]): Var => {
-    // reduce(|)
-  }
+  realize = (ctx: Node): Node => {
+    this.lazy_updates.forEach(x => x(this [_], ctx))
+    this.lazy_updates = []
 
-  static arbitrary = () => Var.expr("*")
-  static end = () => Var.expr("⊣") //TODO Should be from context.
-
-  // TODO If array, and has inside, include the methods from the variables names inside.
-
-
-  private initialized: boolean = false
-  private initialize?: () => void
-  private program?: Var
-  call?: ExternalMethod
-  constructor(external_methods: { [key: string]: ExternalMethod } = {}) {
-    external_methods = {
-      "* | methods": () => Var.map(this.value.methods),
-      "** | program": () => this.program,
-      "= | assign": this.assign,
-      ...external_methods
-    }
-
-    Object.entries(external_methods).forEach(([name, method]) => this.external_method(name, method))
-  }
-
-  assign(x: Val) {
-    console.log('Assigned', x)
-    this.value = Var.cast(x).value
-    // TODO Update location
-    // TODO Update version control if present
-
-    // TODO If assign is called on None, then set in .methods (Set .methods in location)
-  }
-
-  none = (): boolean => this[_("()")].value.none
-
-  digit = (): number => {
-    let i = 0
-
-    let current = this[__]
-    while(!(current = current.previous)[__].none()) { i += 1 }
-
-    return i;
-  }
-
-  boolean = (): boolean => this[__]['as'](Var.expr('boolean'))[0][__].digit() == 1
-  string = (): string => {
-    if (this[__]['=='].instance_of(Var.expr('String'))[__].boolean()) throw new Error('Variable is not of type String.')
-
-    let string = "";
-
-    let char = this[__]['as'](Var.expr('String'))
-    while (!(char = char.next)[__].none()) {
-      //TODO Decide how to encode chars.
-    }
-
-    return string;
-  }
-
-  matches = (...pattern: Val[]): boolean => {
-    if (this.encoded_string) return false;
-
-    console.log('Checking if matches', ...pattern)
-    let current = this.get('next')
-    current[_("()")]
-    current = current.get('next')
-    for (const part of pattern) {
-      current[_("()")]
-
-      if (Var.cast(part).encoded_string === '{*}') continue;
-      console.log(current, 'instanceof', part)
-      if (!current.instance_of(part)) return false;
-
-      current = current.get('next')
-    }
-    return true;
-  }
-
-  instance_of = (type: Val): boolean => {
-    type = Var.cast(type)
-
-    console.log('instance_of', this.encoded_string, type.encoded_string)
-
-    if (this.encoded_string && type.encoded_string)
-      return this.encoded_string == type.encoded_string
-
-    return false;
-    throw new Error('Not yet implemented')
-
-    // this[_("()")]
-    // type[_("()")]
-
-
-    return false;
-  }
-
-  get = (property: Val): Var => {
-    // TODO If this.get('#"), map
-
-    property = Var.cast(property)
-
-    this[_("()")]
-
-    console.log('is func', property.call !== undefined)
-    if (property.matches('(', '{*}', ')')) {
-      if (!this.call) throw new Error('Variable is not callable')
-      const x = this.call(property.get('next').get('next'), new Context()) //TODO Context
-      return x ? Var.cast(x) : new Var() //TODO Void
-    }
-
-    for (let [key, value] of this.value.methods) {
-      if (property.instance_of(key)) return value
-    }
-
-    return Var.expr("None") //TODO Location of None
-  }
-
-  // Iterate over all
-  *[_("#")](): Generator<Var> {
-    if (this.get('#').none()) {
-      yield this;
-      return;
-    }
-
-    const found: Var[] = []
-    const find = (x: Var) => {
-      if (x.none()) return false;
-      if (found.includes(x)) return false;
-      found.push(x);
-      return x;
-    }
-
-    for (let x of this.get('#').get('undirected').get('next')[_('#')]()) {
-      if (find(x)) yield x;
-    }
-  }
-  // Execute program
-  get [_(">>")]() {
-    this[_("()")]
-    console.log(this)
-
-    let terminal: Var[] = []
-    let cursors: Var[] = [this]
-    while (cursors.length !== 0) {
-      console.log('next')
-      const [done, todo] = partition(cursors, cursor => cursor.get('next').none())
-      terminal.push(...done)
-      console.log(todo.length)
-
-      //TODO Define logic which determines how to step (a possibly infinitely generating program with each .next)
-
-      //TODO Hierarchy if events still need to see if a parent has a next defined
-
-      //TODO Carry over context from previous context if it's a expanded func
-
-      //TODO Using in an array, changes the selected location, so it is a new variable. But still linked to the old variable.
-
-      cursors = todo.flatMap(cursor => {
-        let reduced: Var[] = [cursor]
-        while (reduced.some(cursor => !cursor.get('expand').none())) {
-          reduced = reduced.flatMap(cursor => cursor.get('expand').none() ? cursor : incorrectly_assume_termination(cursor.get('expand')[_("#")]()))
-        }
-        console.log('reduced', reduced.length)
-
-        return reduced.flatMap(cursor => {
-          const x = cursor.get('previous').get('∙')
-          const result = cursor.get('∙')
-
-          result.value = x.get(cursor.func).value
-
-          console.log('Execute', cursor.func)
-
-          const next = cursor.get('next')
-          console.log('next is', [...next[_("#")]()])
-          return incorrectly_assume_termination(next[_("#")]())
-        })
-      })
-      console.log('after', cursors.length)
-    }
-    console.log('done,', terminal.length, 'branch(es)')
-
-    //TODO return alters control-flow and jumps to the thing which calls >> ?
-
-    // eval = (): Var => {
-    //   //TODO
-    //
-    //   const s = [" ", "\t"]
-    //   const DELIMITER = ["/", ".", ...s, ";", "\n"]
-    //
-    //
-    //   return new Var()
-    // }
-    //
-
-    //TODO Superpose .terminal.∙
-    return new Var()
-  }
-  // Evaluate lazy variable
-  get [_("()")](): Var {
-    if (!this.initialized && this.initialize) this.initialize()
-    this.initialized = true
-
-    if (!this.program) return this;
+    if (!this.program) return this [_];
 
     //TODO Should actually periodically update while running/stepping.
-    this.value = this.program[_(">>")].value
+    this.value = this.program.eval().value
     this.program = undefined
 
-    return this;
+    return this [_]
   }
-  // Lazy property getter
-  [_("*")](...property: Val[]) {
-    //TODO
 
-    if (this.initialized)
-      throw new Error('Lazily updating object after initialization is not allowed by the runtime itself.')
+  type = (type: (ctx: Node) => Node): Node => this.lazily((self, ctx) => self[":"](type(ctx), ctx))
 
-    const _super = this.initialize;
-    this.initialize = () => {
-      if (_super) _super()
+  //TODO After grammar parse, reinterpret all the typed properties with the language itself.
 
-      //TODO
-      if (property.length === 1) {
-        this.value.methods.set(Var.cast(property[0]), result)
-      }
+  static cast = (val: Val, ctx: Node): Node => {
+    if (val === undefined || val === null) return ctx.None
+    if (isToken(val) || val instanceof Token) return Var.type(val)
+  }
+  static type = (type: any): Node => {
+    const x = new Var()
+    x.value.encoded = type instanceof Token ? type : toToken(type)
+    return x [_];
+  }
+  static array = (...entries: Val[]): Node => {}
+
+  instance_of: ExternalMethod = (type: Node, ctx: Node) => {
+    if (type.value.encoded instanceof Token) {
+      const result = parse(type.value.encoded, this.as_string, { indent: 0 }) //TODO Fix initialized base value/
+
+      //TODO Put result.scope to ctx.
+      console.log(result.scope)
+
+      return result.success;
     }
 
-    // console.log('lazily getting', ...property)
-    const result = new Var()
-    result.on_initialization(() => {
-      //TODO
-      result.program = new Var()
-      result.program.value.methods.set(Var.cast('next'), new Var())
-      console.log('lazy func', property.length === 3)
-      result.program.func = property.length === 1 ? Var.cast(property[0]) : Var.array(...property)
-    })
-
-    return result[__]
+    throw new Error("Not implemented")
   }
-  [_("<>")](args?: PartialArgs) { return args && Object.entries(args).length !== 0 ? this[__][`<${Object.entries(args).map(([key, value]) => `${key} = ${value.join(" & ")}`).join("\n")}>`]() : this }
-  get [__]() { return new Proxy(class {}, {
-    apply: (target: any, thisArg: any, argArray: any[]): any => this[_("*")]("(", ...argArray, ")"),
-    set: (target: any, property: string | symbol, newValue: any, receiver: any): boolean => { this[__][property]["="](newValue); return true },
-    get: (target: any, property: string | symbol, receiver: any): any => {
-      if (property == __) return this
-      if (is_symbol(property)) return this[property]
 
-      return this[_("*")](property)
+  is_none = (): boolean => this.value.encoded === null || this.value.encoded === undefined
+
+  get as_boolean(): boolean {
+    if (is_boolean(this.value.encoded)) return this.value.encoded;
+
+    throw Error('Expected a boolean')
+  }
+  get as_number(): number {
+    if (is_number(this.value.encoded)) return this.value.encoded;
+
+    throw Error('Expected a number')
+  }
+  get as_string(): string {
+    if (is_string(this.value.encoded)) return this.value.encoded;
+
+    //TODO If array, which has strings in it, to String. for ( property ) for instance.
+
+    throw Error('Expected a string')
+  }
+
+  //TODO If has .next
+  [Symbol.iterator](): Iterator<Node, any, any> {
+    throw new Error("Method not implemented.");
+  }
+
+  //TODO What is the context here?
+  get [_](): Node { return new Proxy(class {}, {
+    apply: (target: any, thisArg: any, argArray: any[]): any => this.lazily_get(["(", ...argArray, ")"]),
+    set: (target: any, property: string | symbol, newValue: any, receiver: any): boolean => { this[_][property]["="](newValue); return true },
+    get: (target: any, property: string | symbol, receiver: any): any => {
+      if (property in this) return this[property as keyof this]
+      return this.lazily_get([property])
     }
   })}
-
-  on_initialization = (call: () => void) => {
-    const _super = this.initialize;
-    this.initialize = () => {
-      if (_super) _super()
-      call()
-    }
-  }
-
-  protected external_method = (key: string | Var, value: string | Var | ExternalMethod) => {
-    this.on_initialization(() => this.value.methods.set(Var.cast(key), Var.cast(value)))
-  }
-
-  push_ray = (next: Ray = new Ray()) => {
-    //next[__]["&+="](Var.cast(x)) //TODO How to indicate I want the right component
-
-    next[__].previous = this
-    this[__].next = next
-
-    return next
-  }
 }
 
-class Ray extends Var {
-  constructor() {
-    super();
-    this[__][":"](Var.expr("Ray"))
-  }
-
-}
-
-const latest = Symbol("latest");
 class Context extends Var {
-  //TODO Location of context
 
-  constructor() {
-    super();
-
-    this.external_method("local", () => this)
-  }
-
-  has_method = (x: Val): boolean => {
-    //TODO
-    return false;
-  }
-
-}
-
-class Expression {
-
-  constructor(public string: string, rules: Token) {
-    this.grammar.rules = rules
-  }
-
-  parse = () => {
-    let candidates;
-    while ((candidates = this.candidates).length !== 0) {
-      const primary = candidates.filter(x => x.maybe_defines_grammar)
-
-      // Match to primary candidates for grammar rewrites
-      // Interpret grammar rules, one by one, reevaluating if a previous one changed it. (Don't allow loops?)
-      // Interpret the things from Node
-      // Then execute each function separately
-
-      Token.array(
-        Token.loop(Token.string(' ')),
-        Token.regex(/[^ ]*/).bind('substring'),
-        Token.loop(Token.array(
-          Token.optional(Token.any(
-            // TODO Also includes other tokens
-
-          )),
-          Token.array(Token.string('{'), Token.ref(() => this.grammar.expression).bind('expression'), Token.string('}')),
-          Token.regex(/[^ ]*/).bind('substring'),
-        )),
-
-        Token.any(
-          Token.array(Token.string(' '), Token.string('('), Token.loop(Token.string(' ')), Token.string(')'), Token.arbitrary()),
-          Token.array(Token.string('=>'), Token.arbitrary()),
-        )
-      )
-
-    }
-  }
-
-  reevaluate = () => {}
-
-  get candidates(): any {}
-
-  grammar: any = {
-    // statement: Token.array(
-    //   Token.loop(Token.regex(/ *\n/)),
-    //   Token.ref(() => this.grammar.rules).bind('content'),
-    //   Token.any(Token.string('\n'), Token.end()),
-    //   Token.loop(
-    //     Token.array(
-    //       Token.loop(Token.regex(/ *\n/)),
-    //       Token.times(Token.string(' ')).exactly('indent'),
-    //       Token.times(Token.string(' ')).atLeast(1).bind('added'),
-    //       Token.withParams(
-    //         (ctx, bindings) => ({ indent: ctx.params.indent + bindings.added.count }),
-    //         Token.ref(() => this.grammar.expression)
-    //       )
-    //     )
-    //   ).bind('children')
-    // ),
-    // expression: Token.loop(Token.ref(() => this.grammar.statement)).bind('statements')
-
-    statement: Var.array(
-
-      Var.array(Var.string(' ').loop, '\n').loop,
-      Var.ref(() => this.grammar.rules).bind('content'),
-      Var.any('\n', Var.end()),
-      Var.array(
-        Var.array(Var.string(' ').loop, '\n').loop,
-        Var.string(' ').loop.length('==', ctx.indent),
-        Var.string(' ').loop.length('>=', 1).bind('added'),
-        Var.ref(() => this.grammar.expression).with(() => ({ indent: ctx.params.indent + bindings.added.count }))
-      ).loop.bind('children')
-    ),
-    expression: Var.ref(() => this.grammar.statement).loop.bind('statements')
-  }
 }
 
 class Program extends Var {
@@ -502,20 +119,24 @@ class Program extends Var {
   // x[__].location["&="](Var.expr("IO")[__](Var.path(path)))
   // x[__].expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
 
-  context = new Context()
+  context = new Context() [_]
 
   constructor(public expression: string[] = []) {
     super();
 
-    const initial = new Ray()
-    initial[__]["∙"] = this.context
+    const initial = new Var().type(ctx => ctx.Ray) [_]
+    initial["∙"] = this.context
 
-    this[__].previous = initial
-    initial[__].next = this
+    this[_].previous = initial
+    initial.next = this[_]
   }
 
-  [_("<>")](args: PartialArgs): this {
+  partial_args = (args: PartialArgs): this => {
     return this.expr(this.expression.pop(), args);
+  }
+
+  eval = (): Node => {
+
   }
 
   expr = (expression: string, args?: PartialArgs): this => {
@@ -534,6 +155,21 @@ class Program extends Var {
 
   //TODO This will likely change: now we dont have information of what came from which file.
   dir = (path: string, args?: PartialArgs): this => {
+    const files = (path: string) => {
+      let results: string[] = [];
+
+      for (const entry of fs.readdirSync(path, { withFileTypes: true })) {
+        const next_path = path.concat('/', entry.name);
+
+        if (entry.isDirectory())
+          results = results.concat(files(next_path));
+        else
+          results.push(next_path);
+      }
+
+      return results;
+    }
+
     return this.expr(
       files(path)
         .filter(path => path.endsWith('.ray'))
@@ -544,38 +180,20 @@ class Program extends Var {
     )
   }
 
-  // This is a stupid copy, it doesn't reproduce the program state, but just reinitializes the entire expression
+  // TODO This is a stupid copy, it doesn't reproduce the program state, but just reinitializes the entire expression
   copy = () => new Program([...this.expression])
 
   compose = (b: Program) => new Program([...this.expression, ...b.expression])
 
 }
+
 namespace Language {
   export class Ray extends Program {
     constructor(private instance: Instance, public ether: string) {
       super();
-
-      this.external_method("external", this.external)
-      this.external_method("location", this.location)
     }
 
     include = () => this.dir(`${this.ether}/.ray`)
-
-    //@external
-    assign(version: Val) {
-      //TODO Assigning changes the graph from one language to another. branches at that new language.
-      super.assign(this.instance.load(Var.cast(version).string()))
-      //TODO Update objects, defined in child contexts.
-    }
-
-    external(x: Val, ctx: Context) {
-      // TODO Get caller and check from there if it has
-      if (!ctx.has_method(x)) throw new Error(`Expected externally defined method '${Var.cast(x).string()}' in ${ctx[__].name[__].string()}`)
-
-      return ctx[_("*")](x)
-    }
-
-    location() { return Var.expr("IO")[__](Var.path(this.ether)) }
 
   }
 }
@@ -614,7 +232,7 @@ class Instance {
 
   //TODO Also branch off existing program states
   branch = (load: (loader: Program) => Program, args: PartialArgs = {}): this => {
-    const program = load(new Program())[_("<>")](args)
+    const program = load(new Program()).partial_args(args)
 
     if (args["global"] && args["global"].length > 0) {
       this.bind(program, args["global"]);
@@ -630,7 +248,7 @@ class Instance {
     this.unbound_programs = []
 
     // Var.string('test_string')[__]("A")[_("()")]
-    this.programs.forEach(program => program[_("<>")](args)[_(">>")])
+    this.programs.forEach(program => program.partial_args(args).eval())
   }
 
 }
@@ -658,38 +276,96 @@ export namespace Ether {
   }
 }
 
-const files = (path: string) => {
-  let results: string[] = [];
+//TODO First interpret STD with bootstrap, then interpret it with itself.
 
-  for (const entry of fs.readdirSync(path, { withFileTypes: true })) {
-    const next_path = path.concat('/', entry.name);
+//TODO Whatever is used to dynamically parse should get new syntax in the language for this pattern matching dynamically reassigning
+//TODO After change, what we just parsed is skipped.
+// Dynamic grammar is basically a dependent type which causes reevaluation.
 
-    if (entry.isDirectory())
-      results = results.concat(files(next_path));
-    else
-      results.push(next_path);
-  }
+//TODO Grammar is only used for parsing the STD, then the STD is used to parse the other rules.
 
-  return results;
+//     if (ctx.is_none()) {
+//         // STD is not loaded, parse with bootstrapping grammar
+//         const RULE_NAME = ctx.Array(ctx.not(' ')[``], '{', ctx.Expression, '}', ctx.not(' ')[``])[``]
+//         const RULE_ONLINE_BODY = ctx.Any(
+//           ctx.Array(ctx.val(' ')[``].constrain(x => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional),
+//           ctx.Array(ctx.val(' ')[``], ctx.end)
+//         )
+//
+//         ctx.RULES = ctx.Array(
+//           ctx.Array((ctx: Node) => [
+//             RULE_NAME.bind(ctx.name),
+//             ctx.Any(' & ', ' | ').optional
+//           ])[``].constrain(x => x.length, '>=', 1).bind(ctx.rules),
+//           RULE_ONLINE_BODY.bind(ctx.body)
+//         ).bind(() => {
+//           //TODO
+//           // ctx.RULES.everywhere |= ctx.rules
+//         })
+//         //TODO On match add to rules.
+//
+//         //TODO After all the grammar rules are matched, match to all usual methods and superpose them into a single rule for that context.
+//       } else {
+//         ctx.RULES = ctx.val(ctx.dynamically(() => ctx.keys, ctx))
+//       }
+//
+//       ctx.empty_lines = ctx.Array(ctx.val(' ')[``],'\n')[``]
+//       ctx.statement = ctx.Array((ctx: Node) => [
+//         ctx.empty_lines,
+//         ctx.RULES.bind(ctx.content),
+//         ctx.Any('\n', ctx.end),
+//         ctx.Array((ctx: Node) => [
+//           ctx.empty_lines,
+//           ctx.val(' ')[``].constrain(x => x.length, '==', ctx.indent),
+//           ctx.val(' ')[``].constrain(x => x.length, '>=', 1).bind(ctx.added_indent),
+//           ctx.Expression.with({ indent: ctx.indent.as_number + ctx.added_indent.as_number })
+//         ])[``].bind(ctx.block)
+//       ])
+//       ctx.Expression = ctx.statement[``]
+
+
+/**
+ * Copied from https://github.com/lodash/lodash/blob/main/dist/lodash.js
+ */
+export const is_boolean = (value: any): value is boolean =>
+  value === true || value === false || (is_object_like(value) && base_tag(value) == '[object Boolean]');
+export const is_number = (value: any): value is number => typeof value == 'number' || (is_object_like(value) && base_tag(value) == '[object Number]');
+export const is_string = (value: any): value is string =>
+  typeof value == 'string' || (!is_array(value) && is_object_like(value) && base_tag(value) == '[object String]');
+export const is_function = (value: any): value is ((...args: any[]) => any) => {
+  if (!is_object(value)) return false;
+
+  let tag = base_tag(value);
+  return tag == '[object Function]' || tag == '[object GeneratorFunction]' || tag == '[object AsyncFunction]' || tag == '[object Proxy]';
 }
+export const is_array = Array.isArray
+export const is_object = (value: any): value is object =>
+  value != null && (typeof value == 'object' || typeof value == 'function');
+export const is_object_like = (value: any) =>
+  value != null && typeof value == 'object';
+export const base_tag = (value: any) => {
+  if (value == null) return value === undefined ? '[object Undefined]' : '[object Null]';
 
-const partition = <T>(array: T[], predicate: (x: T) => boolean) => {
-  const pass: T[] = [];
-  const fail: T[] = [];
+  return (Symbol.toStringTag && Symbol.toStringTag in Object(value)) ? raw_tag(value) : to_string(value);
+}
+export const raw_tag = (value: any) => {
+  let isOwn = Object.prototype.hasOwnProperty.call(value, Symbol.toStringTag),
+    tag = value[Symbol.toStringTag];
 
-  for (const item of array) {
-    (predicate(item) ? pass : fail).push(item);
+  let unmasked;
+  try {
+    value[Symbol.toStringTag] = undefined;
+    unmasked = true;
+  } catch (e) {}
+
+  let result = to_string(value);
+  if (unmasked) {
+    if (isOwn) {
+      value[Symbol.toStringTag] = tag;
+    } else {
+      delete value[Symbol.toStringTag];
+    }
   }
-
-  return [pass, fail];
-};
-
-
-// Allow forward dependent type, the thing which matched first and then satisfies all conditions gets matched.
-
-// Allow A, Graph{count == 100}, B // to mean arbitrary connectivity of count 100, but every path leads from A to B.
-
-// Generally allow styling/style classes to be applied to your property. ; later also things like sub/super etc..
-
-//   [1, 2, 3]
-//     method // Is this an array of [1, 2, 3] -> Default to Array, and if () or => use function.
+  return result;
+}
+export const to_string = (value: any): String => Object.prototype.toString.call(value);

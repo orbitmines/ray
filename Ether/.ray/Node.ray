@@ -62,7 +62,8 @@ class * | Node
 
   // Necessary for supporting: A | B : Type. The : without a space has a lower precedence than |, so A | B: Type matches to A | (B: Type).
   // A | B : Type, A | B .map, A | B {length == 3}
-  {" "}{property: not "|" | "&"} => this[property]
+  {" "}{property: \S[] & not "|" | "&"} => this[property]
+  {"."}{property: \S[]} => this[property]
 
   [] => Array<this>
 
@@ -159,6 +160,7 @@ class * | Node
 
   //TODO How to access additional type information like A.disjoint(B)
   // Even though 'this' is already a type, we allow the binding of a less restrictive type. That way it can be reassigned to.
+  //TODO Should modify the constructor.
   type: * = static
   : | ∊ | ∈ (type) => this ~~ .type = type
   ∉ (type) => this: not type
@@ -220,6 +222,15 @@ class * | Node
       //   Type(pattern) has .next as all possibilities, then as long as this matches one of the .next possibilities
       //   All properties need to have the same structure (if we've already checked in a collection ===, skip, but the properties still need to be the same)
       //     A.zip(B).every(a, b => a instanceof b) && Structure is equal: A ==.isomorphic B)
+      //    if (this.type.next.is_none()) {
+               // Not an iterable just check methods
+             }
+
+             // Whether it is a Ray or the .next is defined on an Iterable value.
+             for (const component of this.type.components) {
+               // How to get the +/|+/&+
+             }
+
 
     isomorphic // (Equal in structure, ignores values)
   namespace !=

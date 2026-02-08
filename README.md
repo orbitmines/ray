@@ -1,3 +1,5 @@
+# The Ray Programming Language & The Ether
+
 > [!NOTE]
 > This is still a work in progress. Relevant progress is documented in this repo and [here](https://github.com/orbitmines/archive/blob/main/projects/Writing%20-%202025.%20A%20Universal%20Language.md)
 

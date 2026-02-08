@@ -314,42 +314,6 @@ export class Var {
     //TODO Superpose .terminal.∙
     return new Var()
   }
-  // Lazy property getter
-  [_("*")](...property: Val[]) {
-    //TODO
-
-    const _super = this.initialize;
-    this.initialize = () => {
-      if (_super) _super()
-
-      //TODO
-      if (property.length === 1) {
-        this.value.methods.set(Var.cast(property[0]), result)
-      }
-    }
-
-    // console.log('lazily getting', ...property)
-    const result = new Var()
-    result.on_initialization(() => {
-      //TODO
-      result.program = new Var()
-      result.program.value.methods.set(Var.cast('next'), new Var())
-      console.log('lazy func', property.length === 3)
-      result.program.func = property.length === 1 ? Var.cast(property[0]) : Var.array(...property)
-    })
-
-    return result[__]
-  }
-  get [__]() { return new Proxy(class {}, {
-    apply: (target: any, thisArg: any, argArray: any[]): any => this[_("*")]("(", ...argArray, ")"),
-    set: (target: any, property: string | symbol, newValue: any, receiver: any): boolean => { this[__][property]["="](newValue); return true },
-    get: (target: any, property: string | symbol, receiver: any): any => {
-      if (property == __) return this
-      if (is_symbol(property)) return this[property]
-
-      return this[_("*")](property)
-    }
-  })}
 
   protected external_method = (key: string | Var, value: string | Var | ExternalMethod) => {
     this.on_initialization(() => this.value.methods.set(Var.cast(key), Var.cast(value)))
@@ -380,82 +344,6 @@ class Context extends Var {
     return false;
   }
 
-}
-
-class Expression {
-
-  constructor(public string: string, rules: Token) {
-    this.grammar.rules = rules
-  }
-
-  parse = () => {
-    let candidates;
-    while ((candidates = this.candidates).length !== 0) {
-      const primary = candidates.filter(x => x.maybe_defines_grammar)
-
-      // Match to primary candidates for grammar rewrites
-      // Interpret grammar rules, one by one, reevaluating if a previous one changed it. (Don't allow loops?)
-      // Interpret the things from Node
-      // Then execute each function separately
-
-      Token.array(
-        Token.loop(Token.string(' ')),
-        Token.regex(/[^ ]*/).bind('substring'),
-        Token.loop(Token.array(
-          Token.optional(Token.any(
-            // TODO Also includes other tokens
-
-          )),
-          Token.array(Token.string('{'), Token.ref(() => this.grammar.expression).bind('expression'), Token.string('}')),
-          Token.regex(/[^ ]*/).bind('substring'),
-        )),
-
-        Token.any(
-          Token.array(Token.string(' '), Token.string('('), Token.loop(Token.string(' ')), Token.string(')'), Token.arbitrary()),
-          Token.array(Token.string('=>'), Token.arbitrary()),
-        )
-      )
-
-    }
-  }
-
-  reevaluate = () => {}
-
-  get candidates(): any {}
-
-  grammar: any = {
-    // statement: Token.array(
-    //   Token.loop(Token.regex(/ *\n/)),
-    //   Token.ref(() => this.grammar.rules).bind('content'),
-    //   Token.any(Token.string('\n'), Token.end()),
-    //   Token.loop(
-    //     Token.array(
-    //       Token.loop(Token.regex(/ *\n/)),
-    //       Token.times(Token.string(' ')).exactly('indent'),
-    //       Token.times(Token.string(' ')).atLeast(1).bind('added'),
-    //       Token.withParams(
-    //         (ctx, bindings) => ({ indent: ctx.params.indent + bindings.added.count }),
-    //         Token.ref(() => this.grammar.expression)
-    //       )
-    //     )
-    //   ).bind('children')
-    // ),
-    // expression: Token.loop(Token.ref(() => this.grammar.statement)).bind('statements')
-
-    statement: Var.array(
-
-      Var.array(Var.string(' ').loop, '\n').loop,
-      Var.ref(() => this.grammar.rules).bind('content'),
-      Var.any('\n', Var.end()),
-      Var.array(
-        Var.array(Var.string(' ').loop, '\n').loop,
-        Var.string(' ').loop.length('==', ctx.indent),
-        Var.string(' ').loop.length('>=', 1).bind('added'),
-        Var.ref(() => this.grammar.expression).with(() => ({ indent: ctx.params.indent + bindings.added.count }))
-      ).loop.bind('children')
-    ),
-    expression: Var.ref(() => this.grammar.statement).loop.bind('statements')
-  }
 }
 
 

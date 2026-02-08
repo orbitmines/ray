@@ -17,10 +17,10 @@
  *   ctx.Array(a, b, c)                  — sequence
  *   ctx.Any(a, b, c)                    — alternatives
  *   ctx.val('x')  or  'x' in Array/Any — literal string
- *   ctx.arbitrary                       — match anything up to boundary
+ *   ctx.arbitrary                       — LAZY: match up to first boundary
  *   ctx.regex(/pat/)                    — regex match
  *   ctx.end                             — end of input / boundary
- *   ctx.not('x')                        — single char negation
+ *   ctx.not('x','y',...)               — GREEDY: boundary → SUCCESS, stop string → FAIL
  *   node[``]                            — loop (0+)
  *   node[``].NonEmpty                   — loop (1+)
  *   node.optional                       — 0 or 1
@@ -69,7 +69,7 @@ type MatchContext = {
 const FAIL: MatchResult = Object.freeze({ success: false, consumed: 0, value: null, scope: {} });
 
 // ════════════════════════════════════════════════════════════
-// Token (internal engine — replaces Token)
+// Token (internal engine)
 // ════════════════════════════════════════════════════════════
 
 abstract class Token {
@@ -159,6 +159,61 @@ class EndToken extends Token {
   }
 }
 
+// ── Not (greedy scan: boundary → SUCCESS, stop string → FAIL) ──
+
+class NotToken extends Token {
+  stopStrings: string[];
+  constructor(stopStrings: string[]) {
+    super();
+    this.stopStrings = [...stopStrings].sort((a, b) => b.length - a.length);
+  }
+  // Transparent — doesn't pollute iteration boundaries
+  getFirstConcreteTokens(): Token[] { return []; }
+  canStartAt(ctx: MatchContext) {
+    if (ctx.index >= ctx.input.length) return false;
+    const rem = ctx.input.slice(ctx.index);
+    for (const s of this.stopStrings) {
+      if (rem.startsWith(s)) return false;
+    }
+    return true;
+  }
+  match(ctx: MatchContext): MatchResult {
+    // Greedy scan: checks both boundaries and iterationBoundaries.
+    // Boundary hit → SUCCESS (returns content before).
+    // Stop string hit → FAIL (the pattern must not encounter its stop strings).
+    if (ctx.index >= ctx.input.length) return FAIL;
+    const rem = ctx.input.slice(ctx.index);
+    const allBounds = [...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+
+    for (let i = 0; i <= rem.length; i++) {
+      // Check boundaries at position i — yield to boundary (SUCCESS)
+      if (allBounds.length > 0 && i > 0) {
+        const testCtx: MatchContext = {
+          ...ctx, index: ctx.index + i,
+          boundaries: [], iterationBoundaries: [], preceding: rem.slice(0, i)
+        };
+        for (const b of allBounds) {
+          if (b.canStartAt(testCtx)) {
+            return this.wrapResult({ success: true, consumed: i, value: rem.slice(0, i), scope: {} });
+          }
+        }
+      }
+
+      // Check stop strings at position i — pattern FAILS
+      if (i < rem.length) {
+        const sub = rem.slice(i);
+        for (const s of this.stopStrings) {
+          if (sub.startsWith(s)) return FAIL;
+        }
+      }
+    }
+
+    // Reached end of input without hitting stop or boundary
+    if (rem.length === 0) return FAIL;
+    return this.wrapResult({ success: true, consumed: rem.length, value: rem, scope: {} });
+  }
+}
+
 // ── Arbitrary ──
 
 class ArbitraryToken extends Token {
@@ -222,14 +277,13 @@ class ArrayToken extends Token {
       const token = this.items[i];
       const remaining = this.items.slice(i + 1);
 
-      // Boundaries from next REQUIRED token in sequence
+      // Boundaries: collect possible start tokens from ALL remaining items
+      // (including optional ones) until we find a required (concrete) one.
       const remainingBoundaries: Token[] = [];
       for (const rt of remaining) {
+        remainingBoundaries.push(...rt.getAllPossibleStartTokens());
         const f = rt.getFirstConcreteTokens();
-        if (f.length > 0) {
-          remainingBoundaries.push(...rt.getAllPossibleStartTokens());
-          break;
-        }
+        if (f.length > 0) break; // Stop collecting after first required token
       }
       const boundaries = [...remainingBoundaries, ...ctx.boundaries];
 
@@ -282,7 +336,6 @@ class LoopToken extends Token {
     const inner = this.inner;
     let totalConsumed = 0;
     const values: any[] = [];
-    // Accumulated scope: each key becomes an array of per-iteration values
     const accumulated: Record<string, any[]> = {};
     let currentIndex = ctx.index;
     let iterations = 0;
@@ -290,14 +343,17 @@ class LoopToken extends Token {
     const iterationStarts = ctx.suppressIterBoundaries
       ? [] : inner.getAllPossibleStartTokens();
 
-    while (true) {
-      const testCtx: MatchContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
+    // Merge outer boundaries into iteration boundaries so that:
+    // - arbitrary (which checks both) still sees them
+    // - not() (which ignores iterationBoundaries) doesn't get blocked by outer ctx
+    const mergedIterBounds = [...iterationStarts, ...ctx.boundaries];
 
+    while (true) {
       const result = inner.match({
         input: ctx.input,
         index: currentIndex,
-        boundaries: ctx.boundaries,
-        iterationBoundaries: iterationStarts,
+        boundaries: [],  // Strip outer boundaries from inner
+        iterationBoundaries: mergedIterBounds,
         suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: ctx.scope,
       });
@@ -306,7 +362,6 @@ class LoopToken extends Token {
         totalConsumed += result.consumed;
         currentIndex += result.consumed;
         values.push(result.value);
-        // Accumulate each binding as an array
         for (const [key, val] of Object.entries(result.scope)) {
           if (!(key in accumulated)) accumulated[key] = [];
           accumulated[key].push(val);
@@ -315,11 +370,17 @@ class LoopToken extends Token {
         continue;
       }
 
+      // Inner failed or consumed 0. Check if we can stop here.
       if (iterations >= this.minCount) {
+        // Check outer boundaries at current position
+        const testCtx: MatchContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
         for (const b of ctx.boundaries) {
           if (b.canStartAt(testCtx))
             return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: accumulated });
         }
+        // Also succeed at end of input
+        if (currentIndex >= ctx.input.length)
+          return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: accumulated });
       }
       break;
     }
@@ -405,20 +466,11 @@ class TimesAtLeastToken extends Token {
     let currentIndex = ctx.index;
     let iterations = 0;
 
+    // Strip outer boundaries from inner. Inner ArrayToken computes its own sibling boundaries.
     while (true) {
-      if (iterations >= min) {
-        const testCtx: MatchContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
-        for (const b of ctx.boundaries) {
-          if (b.canStartAt(testCtx))
-            return this.wrapResult({
-              success: true, consumed: totalConsumed,
-              value: { count: iterations, values }, scope: allScope,
-            });
-        }
-      }
       const result = inner.match({
         input: ctx.input, index: currentIndex,
-        boundaries: ctx.boundaries,
+        boundaries: [],  // Strip outer boundaries
         iterationBoundaries: ctx.iterationBoundaries,
         scope: ctx.scope,
       });
@@ -456,17 +508,9 @@ class TimesAtMostToken extends Token {
     let iterations = 0;
 
     while (iterations < max) {
-      const testCtx: MatchContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
-      for (const b of ctx.boundaries) {
-        if (b.canStartAt(testCtx))
-          return this.wrapResult({
-            success: true, consumed: totalConsumed,
-            value: { count: iterations, values }, scope: allScope,
-          });
-      }
       const result = inner.match({
         input: ctx.input, index: currentIndex,
-        boundaries: ctx.boundaries,
+        boundaries: [],  // Strip outer boundaries
         iterationBoundaries: ctx.iterationBoundaries,
         scope: ctx.scope,
       });
@@ -502,6 +546,7 @@ class AnyToken extends Token {
     return this.options.some(t => t.canStartAt(ctx));
   }
   match(ctx: MatchContext): MatchResult {
+    let zeroConsumedResult: MatchResult | null = null;
     for (let i = 0; i < this.options.length; i++) {
       const opt = this.options[i];
       // Add other alternatives as disambiguation boundaries
@@ -511,8 +556,13 @@ class AnyToken extends Token {
       }
       const iterBounds = [...others, ...(ctx.iterationBoundaries || [])];
       const result = opt.match({ ...ctx, iterationBoundaries: iterBounds });
-      if (result.success) return this.wrapResult(result);
+      if (result.success) {
+        if (result.consumed > 0) return this.wrapResult(result);
+        // Save zero-consumed match as fallback, keep trying other options
+        if (!zeroConsumedResult) zeroConsumedResult = result;
+      }
     }
+    if (zeroConsumedResult) return this.wrapResult(zeroConsumedResult);
     return FAIL;
   }
 }
@@ -700,7 +750,6 @@ function node(matcher: Token, name?: string): any {
           else if (typeof value === 'string') resolved = value;
           else if (isToken(value)) resolved = value[_name]!;
           else if (value && typeof value === 'object' && '_type' in value) {
-            // .as_number accessor
             const refName = value[_name];
             resolved = (ctx: MatchContext) => {
               if (refName && refName in ctx.scope) {
@@ -796,12 +845,8 @@ function createContext(): any {
 
       if (prop === 'val') return (v: any) => node(toToken(v));
 
-      if (prop === 'not') return (v: string) => {
-        const esc = v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        return v.length === 1
-          ? node(new RegexToken(new RegExp(`[^${esc}]`)))
-          : node(new RegexToken(new RegExp(`(?!${esc}).`, 's')));
-      };
+      // ctx.not('x', 'y', ...) → NotToken (string-based, not regex)
+      if (prop === 'not') return (...stopStrings: string[]) => node(new NotToken(stopStrings));
 
       if (prop === 'end') return node(new EndToken());
       if (prop === 'arbitrary') return node(new ArbitraryToken());
@@ -923,23 +968,57 @@ console.log('\n── 4. Any ──');
   assert('"maybe" fails', !parse(ctx.bool, 'maybe').success);
 }
 
-// ── 5. not() ──
-console.log('\n── 5. not() ──');
+// ── 5. not() — greedy stop-at semantics ──
+console.log('\n── 5. not() — greedy stop-at ──');
 {
   const ctx = createContext();
-  ctx.word = ctx.not(' ')[``];
-  assert('stops at space', parse(ctx.word, 'hello world').consumed === 5);
+  // not() scans forward: stops at boundary or stop string, whichever first.
+  // Only fails when stop/boundary is at position 0 (can't consume anything).
+
+  // With boundary from Array: boundary '\n' stops not() before stop string '\n'
+  ctx.line = ctx.Array(ctx.not('\n').bind('text'), '\n');
+  const r1 = parse(ctx.line, 'hello world\n');
+  assert('matches whole group with boundary', r1.success && r1.scope.text === 'hello world');
+
+  // Standalone: stop string hit → FAIL (pattern must not encounter stop strings)
+  const r2 = parse(ctx.not('=>'), 'hello=>world');
+  assert('fails when stop string encountered', !r2.success);
+
+  // No stop string in input → matches all
+  const r3 = parse(ctx.not('=>'), 'hello world');
+  assert('no stop → matches all', r3.success && r3.value === 'hello world');
+
+  // With boundary AND stop string: boundary '=>' found first at position 5
+  ctx.part = ctx.Array(ctx.not('=>').bind('before'), '=>', ctx.arbitrary.bind('after'));
+  const r4 = parse(ctx.part, 'hello=>world');
+  assert('boundary stops before =>', r4.success);
+  assert('before="hello"', r4.scope.before === 'hello');
+  assert('after="world"', r4.scope.after === 'world');
+
+  // Fails when stop string is at position 0
+  const r6 = parse(ctx.not(' '), ' abc');
+  assert('fails at position 0', !r6.success);
+
+  // Multi-char stop strings — FAIL when encountered
+  const r7 = parse(ctx.not('end'), 'abcendxyz');
+  assert('fails when stop string encountered', !r7.success);
+
+  // Loop splits at separators using boundaries
+  ctx.words = ctx.Array(ctx.not(' ', '\n'), ctx.Any(' ', '\n', ctx.end))[``];
+  const r8 = parse(ctx.words, 'hello world bye\n');
+  assert('loop splits at spaces', r8.success && r8.value?.length === 3);
 }
 
 // ── 6. Bind via ctx.name ──
 console.log('\n── 6. Bind via ctx.propName ──');
 {
   const ctx = createContext();
-  ctx.kv = ctx.Array(ctx.not('=')[``].bind(ctx.key), '=', ctx.arbitrary.bind(ctx.value));
+  // not('=') matches a whole group up to boundary, no loop needed
+  ctx.kv = ctx.Array(ctx.not('=').bind(ctx.key), '=', ctx.arbitrary.bind(ctx.value));
   const r = parse(ctx.kv, 'port=8080');
   assert('parses', r.success);
-  assert('key is chars', Array.isArray(r.scope.key));
-  assert('value', r.scope.value === '8080');
+  assert('key="port"', r.scope.key === 'port');
+  assert('value="8080"', r.scope.value === '8080');
 }
 
 // ── 7. Optional ──
@@ -969,11 +1048,9 @@ console.log('\n── 8. Scope read (== "indent") ──');
 console.log('\n── 9. Loop scope accumulation (KEY FEATURE) ──');
 {
   const ctx = createContext();
-  // Each iteration binds 'letter'
   ctx.letters = ctx.regex(/[a-z]/).bind('letter')[``];
   const r = parse(ctx.letters, 'abc');
   assert('parses', r.success);
-  // From parent: letter is array of all values
   assert('letter is array', Array.isArray(r.scope.letter));
   assert('letter = [a,b,c]', r.scope.letter?.join(',') === 'a,b,c');
 }
@@ -1025,8 +1102,6 @@ console.log('\n── 13. Self-referential (recursive) ──');
   );
   const r = parse(ctx.expr, '1 + 2 + 3');
   assert('parses chain', r.success);
-  // In recursive grammars, bindings from inner recursion can overwrite outer.
-  // Access data via the VALUE structure: [left_val, " + ", right_val]
   assert('value[0] = "1"', r.value?.[0] === '1');
   assert('value[1] = " + "', r.value?.[1] === ' + ');
 }
@@ -1081,9 +1156,6 @@ bye
     }
   }
 
-  // In unified scope with ref propagation, inner statement bindings propagate.
-  // Accumulated 'content' from the loop includes the last content per root iteration.
-  // For structured access, use stmts[i] value: [emptyLines, content, term, children]
   assert('statements has value structure', Array.isArray(r.scope.statements));
   if (stmts?.length >= 2) {
     assert('stmt[1] content via value = "bye"', stmts[1][1] === 'bye');
@@ -1105,7 +1177,6 @@ console.log('\n── 15. Callback Array ──');
 console.log('\n── 16. Nested scope: inner sees outer, outer sees accumulated ──');
 {
   const ctx = createContext();
-  // Outer sets 'prefix', inner loop binds 'item' per iteration
   ctx.list = ctx.Array(
     ctx.regex(/\w+/).bind('prefix'),
     ':',
@@ -1114,10 +1185,8 @@ console.log('\n── 16. Nested scope: inner sees outer, outer sees accumulated
   const r = parse(ctx.list, 'colors:red,blue,green');
   assert('parses', r.success);
   assert('prefix="colors"', r.scope.prefix === 'colors');
-  // items is from the loop .bind — it's the VALUE (array of iteration values)
   assert('items is array', Array.isArray(r.scope.items));
   assert('3 items', r.scope.items?.length === 3);
-  // item is accumulated from loop iterations
   assert('item accumulated', Array.isArray(r.scope.item));
   assert('item = [red,blue,green]', r.scope.item?.join(',') === 'red,blue,green');
 }

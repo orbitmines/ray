@@ -143,16 +143,18 @@ class EndToken extends Token {
   getFirstConcreteTokens() { return [this as Token]; }
   canStartAt(ctx: MatchContext) {
     if (ctx.index >= ctx.input.length) return true;
-    for (const b of ctx.boundaries) {
-      if (b.canStartAt({ ...ctx, boundaries: [], preceding: '' })) return true;
+    const allBounds = [...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+    for (const b of allBounds) {
+      if (b.canStartAt({ ...ctx, boundaries: [], iterationBoundaries: [], preceding: '' })) return true;
     }
     return false;
   }
   match(ctx: MatchContext): MatchResult {
     if (ctx.index >= ctx.input.length)
       return this.wrapResult({ success: true, consumed: 0, value: '', scope: {} });
-    for (const b of ctx.boundaries) {
-      if (b.canStartAt({ ...ctx, boundaries: [], preceding: '' }))
+    const allBounds = [...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+    for (const b of allBounds) {
+      if (b.canStartAt({ ...ctx, boundaries: [], iterationBoundaries: [], preceding: '' }))
         return this.wrapResult({ success: true, consumed: 0, value: '', scope: {} });
     }
     return FAIL;
@@ -343,10 +345,10 @@ class LoopToken extends Token {
     const iterationStarts = ctx.suppressIterBoundaries
       ? [] : inner.getAllPossibleStartTokens();
 
-    // Merge outer boundaries into iteration boundaries so that:
-    // - arbitrary (which checks both) still sees them
-    // - not() (which ignores iterationBoundaries) doesn't get blocked by outer ctx
-    const mergedIterBounds = [...iterationStarts, ...ctx.boundaries];
+    // Merge outer boundaries + iterationBoundaries into iteration boundaries so that:
+    // - arbitrary and not() (which check both) still see them
+    // - structural boundaries (e.g. '}') propagate through nesting
+    const mergedIterBounds = [...iterationStarts, ...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
 
     while (true) {
       const result = inner.match({
@@ -466,12 +468,18 @@ class TimesAtLeastToken extends Token {
     let currentIndex = ctx.index;
     let iterations = 0;
 
-    // Strip outer boundaries from inner. Inner ArrayToken computes its own sibling boundaries.
+    // Merge boundaries into iterBounds (same as LoopToken) so structural
+    // boundaries propagate to inner matchers like not() and arbitrary.
+    const iterationStarts = ctx.suppressIterBoundaries
+      ? [] : inner.getAllPossibleStartTokens();
+    const mergedIterBounds = [...iterationStarts, ...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+
     while (true) {
       const result = inner.match({
         input: ctx.input, index: currentIndex,
         boundaries: [],  // Strip outer boundaries
-        iterationBoundaries: ctx.iterationBoundaries,
+        iterationBoundaries: mergedIterBounds,
+        suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: ctx.scope,
       });
       if (!result.success || result.consumed === 0) break;
@@ -507,11 +515,16 @@ class TimesAtMostToken extends Token {
     let currentIndex = ctx.index;
     let iterations = 0;
 
+    const iterationStarts = ctx.suppressIterBoundaries
+      ? [] : inner.getAllPossibleStartTokens();
+    const mergedIterBounds = [...iterationStarts, ...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+
     while (iterations < max) {
       const result = inner.match({
         input: ctx.input, index: currentIndex,
         boundaries: [],  // Strip outer boundaries
-        iterationBoundaries: ctx.iterationBoundaries,
+        iterationBoundaries: mergedIterBounds,
+        suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: ctx.scope,
       });
       if (!result.success || result.consumed === 0) break;
@@ -1189,6 +1202,63 @@ console.log('\n── 16. Nested scope: inner sees outer, outer sees accumulated
   assert('3 items', r.scope.items?.length === 3);
   assert('item accumulated', Array.isArray(r.scope.item));
   assert('item = [red,blue,green]', r.scope.item?.join(',') === 'red,blue,green');
+}
+
+// ── 17. RULE_NAME with PROPERTIES grammar ──
+console.log('\n── 17. RULE_NAME with PROPERTIES grammar ──');
+{
+  const ctx = createContext();
+  ctx.empty_line = ctx.regex(/[ \t]*\n/);
+
+  const RULE_NAME = ctx.Array(ctx.not(' ')[``], '{', ctx.Expression, '}', ctx.not(' ')[``])[``]
+  const RULE_ONLINE_BODY = ctx.Any(
+    ctx.Array(ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional),
+    ctx.Array(ctx.val(' ')[``], ctx.end)
+  )
+  ctx.PROPERTIES = ctx.Array(
+    ctx.Array(
+      ctx.Any(
+        RULE_NAME.bind(ctx.property_name),
+        ctx.not('\n')
+      ),
+      ctx.Any(' & ', ' | ').optional
+    )[``].constrain((x: any) => x.length, '>=', 1).bind(ctx.properties),
+    RULE_ONLINE_BODY.bind(ctx.property_body)
+  )
+
+  ctx.statement = ctx.Array(
+    ctx.empty_line[``],
+    ctx.PROPERTIES.bind(ctx.content),
+    ctx.Any(';', '\n', ctx.end),
+    ctx.Array(
+      ctx.empty_line[``],
+      ctx.val(' ')[``].constrain((x: any) => x.length, '==', 'indent'),
+      ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1).bind(ctx.added),
+      ctx.statement.with(
+        (scope: Scope) => ({...scope, indent: scope.indent + scope.added.count})
+      )
+    )[``].bind(ctx.children)
+  );
+
+  ctx.Expression = ctx.statement[``].bind(ctx.statements);
+
+  // Test: simple line without RULE_NAME
+  const r1 = parse(ctx.statement, 'hello\n', { indent: 0 });
+  assert('simple line parses', r1.success);
+
+  // Test: RULE_NAME should match
+  const r2 = parse(ctx.statement, 'property{test: String}\n', { indent: 0 });
+  assert('RULE_NAME line parses', r2.success);
+  console.log('    r2.scope.content:', JSON.stringify(r2.scope.content, null, 2));
+  assert('property_name bound', r2.scope.content?.property_name != null);
+
+  // Test: RULE_NAME with arrow body
+  const r3 = parse(ctx.statement, 'property{test: String} => body\n', { indent: 0 });
+  assert('RULE_NAME with => parses', r3.success);
+
+  // Test: RULE_NAME with parenthesized body
+  const r4 = parse(ctx.statement, 'property{test: String} () => body\n', { indent: 0 });
+  assert('RULE_NAME with () => parses', r4.success);
 }
 
 console.log('\n' + '═'.repeat(60));

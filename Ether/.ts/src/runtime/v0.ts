@@ -75,6 +75,7 @@ class Var implements Iterable<Node> {
 
       //TODO Put result.scope to ctx.
       console.log(result.scope)
+      console.log(JSON.stringify(result.scope, null, 2))
 
       return result.success && result.consumed === this.as_string.length;
     }
@@ -265,8 +266,8 @@ namespace Language {
       // }, this.ctx)
 
       console.log('instance_of', Var.string(
-        this.language.join('\n')
-        // 'property{test: String}\n  body'
+        // this.language.join('\n')
+        'property{test: String}\n  body'
       , this.ctx).instance_of(grammar, this.ctx))
 
       return this;

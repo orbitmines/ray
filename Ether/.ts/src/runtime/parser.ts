@@ -369,6 +369,19 @@ class LoopToken extends Token {
           accumulated[key].push(val);
         }
         iterations++;
+
+        // Proactive boundary check: for transparent inners (not, arbitrary),
+        // stop at sibling boundaries to prevent consuming past structural delimiters.
+        if (iterations >= this.minCount
+            && inner.getFirstConcreteTokens().length === 0
+            && ctx.boundaries.length > 0) {
+          const testCtx: MatchContext = { ...ctx, index: currentIndex, boundaries: [], iterationBoundaries: [] };
+          for (const b of ctx.boundaries) {
+            if (b.canStartAt(testCtx))
+              return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: accumulated });
+          }
+        }
+
         continue;
       }
 

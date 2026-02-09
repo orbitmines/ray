@@ -12,7 +12,7 @@ type Obj = { [key: string]: Val }
 const Unknown = Symbol("unknown")
 export const _ = Symbol("self")
 
-class Var implements Iterable<Node> {
+class Var {
 
   //TODO Encoded clears undefined/null if something is added to the object?
   value: { encoded: Encodable, methods: Map<Var, Var> } = { encoded: Unknown, methods: new Map<Var, Var>() }
@@ -48,6 +48,8 @@ class Var implements Iterable<Node> {
 
     return this [_](ctx)
   }
+
+
 
   //TODO After grammar parse, reinterpret all the typed properties with the language itself.
 
@@ -104,9 +106,25 @@ class Var implements Iterable<Node> {
     throw Error('Expected a string')
   }
 
+  get = (property: Val, ctx: Node): Node => {
+    // if #
+
+  }
+
+  *all(ctx: Node): Generator<Node> {
+    const all = this.get('#', ctx);
+    if (all.is_none()) {
+      yield this [_](ctx);
+      return;
+    }
+    yield *all.iter(ctx)
+  }
+
   //TODO If has .next
-  [Symbol.iterator](): Iterator<Node, any, any> {
-    throw new Error("Method not implemented.");
+  *iter(ctx: Node): Generator<Node> {
+    // this.get('undirected')
+    let next;
+    while (!(next = this.get('next', ctx)).is_none()) { yield next }
   }
 
   [_](ctx?: Node): Node {
@@ -141,6 +159,7 @@ class Program extends Var {
   // x[__].expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
 
   ctx: Node
+
 
   constructor(public language: string[] | undefined = undefined, public expression: string[] = []) {
     super();

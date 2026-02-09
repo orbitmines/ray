@@ -234,25 +234,6 @@ export class Var {
     return Var.expr("None") //TODO Location of None
   }
 
-  // Iterate over all
-  *[_("#")](): Generator<Var> {
-    if (this.get('#').none()) {
-      yield this;
-      return;
-    }
-
-    const found: Var[] = []
-    const find = (x: Var) => {
-      if (x.none()) return false;
-      if (found.includes(x)) return false;
-      found.push(x);
-      return x;
-    }
-
-    for (let x of this.get('#').get('undirected').get('next')[_('#')]()) {
-      if (find(x)) yield x;
-    }
-  }
   // Execute program
   get [_(">>")]() {
     this[_("()")]
@@ -299,17 +280,6 @@ export class Var {
     console.log('done,', terminal.length, 'branch(es)')
 
     //TODO return alters control-flow and jumps to the thing which calls >> ?
-
-    // eval = (): Var => {
-    //   //TODO
-    //
-    //   const s = [" ", "\t"]
-    //   const DELIMITER = ["/", ".", ...s, ";", "\n"]
-    //
-    //
-    //   return new Var()
-    // }
-    //
 
     //TODO Superpose .terminal.∙
     return new Var()

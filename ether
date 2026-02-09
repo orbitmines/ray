@@ -1,0 +1,705 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ==============================================================================
+# ether - CLI tool for managing programming languages, tools, and libraries
+# Aliased as: ray (via symlink)
+# ==============================================================================
+
+# Section 1: Config & Paths
+# ==============================================================================
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+INDEX_RAY="$SCRIPT_DIR/Ether/library/Index.ray"
+LANG_SCRIPTS_DIR="$SCRIPT_DIR/Ether/library/Language"
+EXTERNAL_DIR="$SCRIPT_DIR/.ether/external"
+CACHE_DIR="$SCRIPT_DIR/.ether/cache"
+CACHE_FILE="$CACHE_DIR/index.tsv"
+
+# Section 2: Index.ray Parser
+# ==============================================================================
+
+# Parse Index.ray into a TSV cache file.
+# Format: name<TAB>aliases<TAB>category<TAB>extensions<TAB>urls<TAB>github_url<TAB>dir_name
+# dir_name is the first bare identifier (e.g. CSharp not C#, FStar not F*)
+parse_index_ray() {
+  mkdir -p "$CACHE_DIR"
+  awk '
+    /^[[:space:]]*namespace / {
+      # Skip lines that are sub-namespaces (indented more than 2 spaces after the Language block)
+      # We want top-level namespace entries under Language
+      line = $0
+      # Remove leading whitespace for analysis
+      stripped = line
+      gsub(/^[[:space:]]+/, "", stripped)
+
+      # Must start with "namespace"
+      if (stripped !~ /^namespace /) next
+
+      # Count leading spaces to determine nesting
+      match(line, /^[[:space:]]+/)
+      indent = RLENGTH
+      if (indent < 0) indent = 0
+
+      # We only want entries at indent level 2 (direct children of Language block)
+      if (indent != 2) next
+
+      # Extract everything after "namespace "
+      rest = stripped
+      sub(/^namespace /, "", rest)
+
+      # Extract the first identifier (dir_name) - the bare word before any | or < or ; or "
+      dir_name = rest
+      # Handle names that start with a quote
+      if (dir_name ~ /^"/) {
+        # Skip quoted-first entries, use the bare identifier
+        # e.g. namespace "set.mm" -> skip
+        next
+      }
+      # Handle F* | FStar pattern - first bare word
+      sub(/[[:space:]|<;(].*/, "", dir_name)
+      # Clean any remaining special chars
+      gsub(/[^a-zA-Z0-9_.]/, "", dir_name)
+      if (dir_name == "" || dir_name ~ /^[0-9]/) next
+      # If dir_name is too short (e.g. "F" from "F*"), try to find a better alias
+      if (length(dir_name) <= 1 && rest ~ /\|/) {
+        tmp2 = rest
+        sub(/[<;].*/, "", tmp2)
+        n2 = split(tmp2, aparts, /[[:space:]]*\|[[:space:]]*/)
+        for (j = 2; j <= n2; j++) {
+          candidate = aparts[j]
+          gsub(/"/, "", candidate)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", candidate)
+          gsub(/[^a-zA-Z0-9_]/, "", candidate)
+          if (length(candidate) > 1 && candidate !~ /^[0-9]/) {
+            dir_name = candidate
+            break
+          }
+        }
+      }
+
+      # Extract name (may include special chars like C#, F*)
+      name = rest
+      sub(/[[:space:]]*[|<;].*/, "", name)
+      sub(/[[:space:]]+$/, "", name)
+      # Remove quotes if present
+      gsub(/"/, "", name)
+      if (name == "") name = dir_name
+
+      # Extract aliases (after |)
+      aliases = ""
+      if (rest ~ /\|/) {
+        tmp = rest
+        # Get all parts separated by |, before < or ;
+        sub(/[<;].*/, "", tmp)
+        n = split(tmp, parts, /[[:space:]]*\|[[:space:]]*/)
+        for (i = 2; i <= n; i++) {
+          a = parts[i]
+          gsub(/"/, "", a)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", a)
+          if (a != "" && a !~ /^[[:space:]]*$/) {
+            if (aliases != "") aliases = aliases ","
+            aliases = aliases a
+          }
+        }
+      }
+
+      # Extract category (Language, Tool, Library) from < Type or < Type(...)
+      category = "Language"
+      if (rest ~ /<[[:space:]]*(Tool|Library)/) {
+        if (rest ~ /<[[:space:]]*Tool/) category = "Tool"
+        else if (rest ~ /<[[:space:]]*Library/) category = "Library"
+      }
+
+      # Extract extensions from Language("...")
+      extensions = ""
+      if (rest ~ /Language[[:space:]]*\(/) {
+        tmp = rest
+        sub(/.*Language[[:space:]]*\(/, "", tmp)
+        sub(/\).*/, "", tmp)
+        gsub(/"/, "", tmp)
+        gsub(/[[:space:]]*\|[[:space:]]*/, ",", tmp)
+        extensions = tmp
+      }
+
+      # Extract URLs from location &= "..."
+      urls = ""
+      github_url = ""
+      if (rest ~ /location[[:space:]]*&=/) {
+        tmp = rest
+        sub(/.*location[[:space:]]*&=[[:space:]]*/, "", tmp)
+        n = split(tmp, url_parts, /[[:space:]]*&[[:space:]]*/)
+        for (i = 1; i <= n; i++) {
+          u = url_parts[i]
+          gsub(/"/, "", u)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", u)
+          # Handle @"..." syntax
+          gsub(/@/, "", u)
+          if (u == "" || u !~ /^https?:\/\//) continue
+          if (urls != "") urls = urls ","
+          urls = urls u
+          if (u ~ /github\.com\/[^\/]+\/[^\/]+/ && github_url == "") {
+            # Validate it looks like a repo URL (not /topics/ or org-level)
+            if (u !~ /\/topics\// && u ~ /github\.com\/[^\/]+\/[^\/]+/) {
+              github_url = u
+            }
+          }
+          if (u ~ /gitlab\.com\/[^\/]+\/[^\/]+/ && github_url == "") {
+            github_url = u
+          }
+        }
+      }
+
+      # Print TSV line
+      printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", name, aliases, category, extensions, urls, github_url, dir_name
+    }
+  ' "$INDEX_RAY" | awk -F'\t' '!seen[$7]++ { print }' > "$CACHE_FILE"
+}
+
+# Ensure cache is up to date (compare mtime of Index.ray vs cache)
+ensure_cache() {
+  if [[ ! -f "$CACHE_FILE" ]]; then
+    parse_index_ray
+    return
+  fi
+  local index_mtime cache_mtime
+  index_mtime=$(stat -c %Y "$INDEX_RAY" 2>/dev/null || stat -f %m "$INDEX_RAY" 2>/dev/null)
+  cache_mtime=$(stat -c %Y "$CACHE_FILE" 2>/dev/null || stat -f %m "$CACHE_FILE" 2>/dev/null)
+  if [[ "$index_mtime" -gt "$cache_mtime" ]]; then
+    parse_index_ray
+  fi
+}
+
+# Lookup a language by name or alias. Returns the TSV line.
+lookup_entry() {
+  local query="$1"
+  ensure_cache
+  # Try exact match on name (field 1) or dir_name (field 7)
+  local result
+  result=$(awk -F'\t' -v q="$query" '
+    tolower($1) == tolower(q) || tolower($7) == tolower(q) { print; exit }
+  ' "$CACHE_FILE")
+  if [[ -n "$result" ]]; then
+    echo "$result"
+    return 0
+  fi
+  # Try alias match (field 2, comma-separated)
+  result=$(awk -F'\t' -v q="$query" '
+    {
+      n = split($2, aliases, ",")
+      for (i = 1; i <= n; i++) {
+        a = aliases[i]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", a)
+        if (tolower(a) == tolower(q)) { print; exit }
+      }
+    }
+  ' "$CACHE_FILE")
+  if [[ -n "$result" ]]; then
+    echo "$result"
+    return 0
+  fi
+  return 1
+}
+
+# Get all language names from cache
+list_all_names() {
+  ensure_cache
+  awk -F'\t' '{ print $7 }' "$CACHE_FILE" | sort
+}
+
+# Get all names for a given category
+list_by_category() {
+  local category="$1"
+  ensure_cache
+  awk -F'\t' -v cat="$category" '$3 == cat { print $7 }' "$CACHE_FILE" | sort
+}
+
+# Parse a TSV line into variables
+# Usage: parse_entry "$line"
+# Sets: ENTRY_NAME, ENTRY_ALIASES, ENTRY_CATEGORY, ENTRY_EXTENSIONS, ENTRY_URLS, ENTRY_GITHUB_URL, ENTRY_DIR_NAME
+# Note: we use awk to split because bash IFS read collapses consecutive delimiters
+parse_entry() {
+  local line="$1"
+  ENTRY_NAME=$(echo "$line" | awk -F'\t' '{print $1}')
+  ENTRY_ALIASES=$(echo "$line" | awk -F'\t' '{print $2}')
+  ENTRY_CATEGORY=$(echo "$line" | awk -F'\t' '{print $3}')
+  ENTRY_EXTENSIONS=$(echo "$line" | awk -F'\t' '{print $4}')
+  ENTRY_URLS=$(echo "$line" | awk -F'\t' '{print $5}')
+  ENTRY_GITHUB_URL=$(echo "$line" | awk -F'\t' '{print $6}')
+  ENTRY_DIR_NAME=$(echo "$line" | awk -F'\t' '{print $7}')
+}
+
+# Section 3: Command Implementations
+# ==============================================================================
+
+cmd_list() {
+  local category="${1:-}"
+  ensure_cache
+  if [[ -z "$category" ]]; then
+    echo "Languages:"
+    list_by_category "Language" | while read -r name; do echo "  $name"; done
+    echo ""
+    echo "Tools:"
+    list_by_category "Tool" | while read -r name; do echo "  $name"; done
+    echo ""
+    echo "Libraries:"
+    list_by_category "Library" | while read -r name; do echo "  $name"; done
+  else
+    list_by_category "$category" | while read -r name; do echo "  $name"; done
+  fi
+}
+
+cmd_info() {
+  local lang_name="$1"
+  local entry
+  if ! entry=$(lookup_entry "$lang_name"); then
+    echo "Error: Unknown language '$lang_name'" >&2
+    return 1
+  fi
+  parse_entry "$entry"
+  echo "Name:       $ENTRY_NAME"
+  [[ -n "$ENTRY_ALIASES" ]] && echo "Aliases:    $ENTRY_ALIASES"
+  echo "Category:   $ENTRY_CATEGORY"
+  [[ -n "$ENTRY_EXTENSIONS" ]] && echo "Extensions: $ENTRY_EXTENSIONS"
+  [[ -n "$ENTRY_URLS" ]] && echo "URLs:       $(echo "$ENTRY_URLS" | tr ',' '\n' | sed 's/^/            /' | sed '1s/^            //')"
+  [[ -n "$ENTRY_GITHUB_URL" ]] && echo "GitHub:     $ENTRY_GITHUB_URL"
+  echo "Dir:        $ENTRY_DIR_NAME"
+
+  local script_dir="$LANG_SCRIPTS_DIR/$ENTRY_DIR_NAME"
+  if [[ -d "$script_dir" ]]; then
+    echo "Scripts:    $(ls "$script_dir"/ 2>/dev/null | tr '\n' ' ')"
+    # Check if installed
+    if [[ -f "$script_dir/check.sh" ]]; then
+      if bash "$script_dir/check.sh" >/dev/null 2>&1; then
+        echo "Installed:  yes"
+      else
+        echo "Installed:  no"
+      fi
+    fi
+  fi
+}
+
+cmd_check_installed() {
+  local lang_name="$1"
+  local entry
+  if ! entry=$(lookup_entry "$lang_name"); then
+    echo "Error: Unknown language '$lang_name'" >&2
+    return 1
+  fi
+  parse_entry "$entry"
+  local check_script="$LANG_SCRIPTS_DIR/$ENTRY_DIR_NAME/check.sh"
+  if [[ ! -f "$check_script" ]]; then
+    return 1
+  fi
+  bash "$check_script" >/dev/null 2>&1
+}
+
+cmd_install() {
+  local lang_name="$1"
+  local from_source="${2:-false}"
+  local entry
+  if ! entry=$(lookup_entry "$lang_name"); then
+    echo "Error: Unknown language '$lang_name'" >&2
+    return 1
+  fi
+  parse_entry "$entry"
+  local install_script="$LANG_SCRIPTS_DIR/$ENTRY_DIR_NAME/install.sh"
+  if [[ ! -f "$install_script" ]]; then
+    echo "No install script found for $ENTRY_NAME."
+    echo "Run 'ether Language.$ENTRY_DIR_NAME update' to generate one."
+    return 1
+  fi
+  # Skip if already installed (unless --from-source requested)
+  if [[ "$from_source" != "true" ]]; then
+    local check_script="$LANG_SCRIPTS_DIR/$ENTRY_DIR_NAME/check.sh"
+    if [[ -f "$check_script" ]] && bash "$check_script" >/dev/null 2>&1; then
+      echo "$ENTRY_NAME is already installed."
+      return 0
+    fi
+  fi
+  echo "Installing $ENTRY_NAME..."
+  FROM_SOURCE="$from_source" ETHER_EXTERNAL_DIR="$EXTERNAL_DIR" bash "$install_script"
+  echo "Done."
+}
+
+cmd_clone() {
+  local lang_name="$1"
+  local entry
+  if ! entry=$(lookup_entry "$lang_name"); then
+    echo "Error: Unknown language '$lang_name'" >&2
+    return 1
+  fi
+  parse_entry "$entry"
+
+  if [[ -z "$ENTRY_URLS" ]]; then
+    echo "No URLs found for $ENTRY_NAME."
+    return 1
+  fi
+
+  local cloned=0
+  IFS=',' read -ra url_list <<< "$ENTRY_URLS"
+  for url in "${url_list[@]}"; do
+    url=$(echo "$url" | xargs) # trim whitespace
+    # Only clone github.com and gitlab.com repo URLs
+    if [[ "$url" =~ ^https://(github\.com|gitlab\.com)/([^/]+)/([^/]+)(/.*)?$ ]]; then
+      local site="${BASH_REMATCH[1]}"
+      local owner="${BASH_REMATCH[2]}"
+      local repo="${BASH_REMATCH[3]}"
+      # Skip non-repo URLs (topics, org-level pages without repo)
+      [[ "$url" =~ /topics/ ]] && continue
+      # Clean repo name (remove trailing slashes, .git etc)
+      repo="${repo%.git}"
+      repo="${repo%/}"
+      [[ -z "$repo" ]] && continue
+
+      local target_dir="$EXTERNAL_DIR/$site/$owner/$repo"
+      if [[ -d "$target_dir/.git" ]]; then
+        echo "Updating $site/$owner/$repo..."
+        GIT_TERMINAL_PROMPT=0 git -C "$target_dir" pull --ff-only 2>/dev/null || GIT_TERMINAL_PROMPT=0 git -C "$target_dir" pull || true
+      else
+        echo "Cloning $url..."
+        mkdir -p "$(dirname "$target_dir")"
+        GIT_TERMINAL_PROMPT=0 git clone "$url" "$target_dir" || echo "  Failed to clone $url"
+      fi
+      cloned=$((cloned + 1))
+    fi
+  done
+
+  if [[ $cloned -eq 0 ]]; then
+    echo "No cloneable repositories found for $ENTRY_NAME."
+    echo "URLs: $ENTRY_URLS"
+  fi
+}
+
+cmd_run() {
+  local lang_name="$1"
+  local target="$2"
+  local entry
+  if ! entry=$(lookup_entry "$lang_name"); then
+    echo "Error: Unknown language '$lang_name'" >&2
+    return 1
+  fi
+  parse_entry "$entry"
+
+  # Auto-install if needed
+  if ! cmd_check_installed "$lang_name" 2>/dev/null; then
+    echo "$ENTRY_NAME is not installed. Installing..."
+    cmd_install "$lang_name" "false" || return 1
+  fi
+
+  local run_script="$LANG_SCRIPTS_DIR/$ENTRY_DIR_NAME/run.sh"
+  if [[ ! -f "$run_script" ]]; then
+    echo "No run script found for $ENTRY_NAME."
+    echo "Run 'ether Language.$ENTRY_DIR_NAME update' to generate one."
+    return 1
+  fi
+  bash "$run_script" "$target"
+}
+
+cmd_repl() {
+  local lang_name="$1"
+  local entry
+  if ! entry=$(lookup_entry "$lang_name"); then
+    echo "Error: Unknown language '$lang_name'" >&2
+    return 1
+  fi
+  parse_entry "$entry"
+
+  # Auto-install if needed
+  if ! cmd_check_installed "$lang_name" 2>/dev/null; then
+    echo "$ENTRY_NAME is not installed. Installing..."
+    cmd_install "$lang_name" "false" || return 1
+  fi
+
+  local repl_script="$LANG_SCRIPTS_DIR/$ENTRY_DIR_NAME/repl.sh"
+  if [[ ! -f "$repl_script" ]]; then
+    echo "$ENTRY_NAME does not have a REPL/interpreter configured."
+    echo "Run 'ether Language.$ENTRY_DIR_NAME update' to generate one."
+    return 1
+  fi
+  exec bash "$repl_script"
+}
+
+cmd_update() {
+  local lang_name="$1"
+  local entry
+
+  # Phase 1: Version update (pull repos, update packages)
+  if entry=$(lookup_entry "$lang_name" 2>/dev/null); then
+    parse_entry "$entry"
+    echo "=== Updating $ENTRY_NAME ==="
+
+    # Pull cloned repos
+    if [[ -n "$ENTRY_URLS" ]]; then
+      IFS=',' read -ra url_list <<< "$ENTRY_URLS"
+      for url in "${url_list[@]}"; do
+        url=$(echo "$url" | xargs)
+        if [[ "$url" =~ ^https://(github\.com|gitlab\.com)/([^/]+)/([^/]+)(/.*)?$ ]]; then
+          local site="${BASH_REMATCH[1]}"
+          local owner="${BASH_REMATCH[2]}"
+          local repo="${BASH_REMATCH[3]}"
+          [[ "$url" =~ /topics/ ]] && continue
+          repo="${repo%.git}"
+          repo="${repo%/}"
+          [[ -z "$repo" ]] && continue
+          local target_dir="$EXTERNAL_DIR/$site/$owner/$repo"
+          if [[ -d "$target_dir/.git" ]]; then
+            echo "Pulling latest for $site/$owner/$repo..."
+            GIT_TERMINAL_PROMPT=0 git -C "$target_dir" pull --ff-only 2>/dev/null || GIT_TERMINAL_PROMPT=0 git -C "$target_dir" pull || true
+          fi
+        fi
+      done
+    fi
+
+    # Phase 2: Open Claude session for updating scripts
+    echo ""
+    echo "Opening Claude session to update $ENTRY_NAME scripts..."
+    local script_dir="$LANG_SCRIPTS_DIR/$ENTRY_DIR_NAME"
+    mkdir -p "$script_dir"
+
+    local context="Update the language configuration for $ENTRY_NAME.
+Directory: $script_dir
+Category: $ENTRY_CATEGORY
+Extensions: $ENTRY_EXTENSIONS
+URLs: $ENTRY_URLS
+GitHub: $ENTRY_GITHUB_URL
+
+Please review and update the install.sh, check.sh, run.sh, and repl.sh scripts in $script_dir.
+Ensure they follow the project conventions (detect OS, use package managers, support FROM_SOURCE=true for install)."
+
+    if command -v claude >/dev/null 2>&1; then
+      echo "$context" | claude
+    else
+      echo "Claude CLI not found. Install it to use the update command."
+      echo ""
+      echo "Context for manual update:"
+      echo "$context"
+    fi
+  else
+    # Unknown language - open Claude to search and add it
+    echo "Language '$lang_name' not found in Index.ray."
+    echo "Opening Claude session to search and add it..."
+    local context="The language '$lang_name' is not in $INDEX_RAY.
+Please search for information about this language/tool and add an appropriate namespace entry to $INDEX_RAY.
+Then create install.sh, check.sh, run.sh, and repl.sh scripts in $LANG_SCRIPTS_DIR/$lang_name/."
+
+    if command -v claude >/dev/null 2>&1; then
+      echo "$context" | claude
+    else
+      echo "Claude CLI not found. Install it to use the update command."
+      echo ""
+      echo "Context for manual update:"
+      echo "$context"
+    fi
+  fi
+}
+
+cmd_update_all() {
+  echo "=== Updating all languages ==="
+  ensure_cache
+
+  # Pull all cloned repos
+  if [[ -d "$EXTERNAL_DIR" ]]; then
+    while IFS= read -r -d '' gitdir; do
+      local repo_dir
+      repo_dir=$(dirname "$gitdir")
+      echo "Pulling $(basename "$(dirname "$repo_dir")")/$(basename "$repo_dir")..."
+      GIT_TERMINAL_PROMPT=0 git -C "$repo_dir" pull --ff-only 2>/dev/null || GIT_TERMINAL_PROMPT=0 git -C "$repo_dir" pull || true
+    done < <(find "$EXTERNAL_DIR" -name .git -type d -print0 2>/dev/null)
+  fi
+
+  # Open Claude session for all
+  echo ""
+  echo "Opening Claude session for bulk update..."
+  local context="Bulk update of all language configurations.
+Index file: $INDEX_RAY
+Language scripts directory: $LANG_SCRIPTS_DIR
+Please review all languages and update their install/check/run/repl scripts."
+
+  if command -v claude >/dev/null 2>&1; then
+    echo "$context" | claude
+  else
+    echo "Claude CLI not found. Install it to use the update command."
+    echo ""
+    echo "Context for manual update:"
+    echo "$context"
+  fi
+}
+
+cmd_clone_all() {
+  echo "=== Cloning all repositories ==="
+  ensure_cache
+  while IFS= read -r line; do
+    local github_url dir_name
+    github_url=$(echo "$line" | awk -F'\t' '{print $6}')
+    dir_name=$(echo "$line" | awk -F'\t' '{print $7}')
+    local name
+    name=$(echo "$line" | awk -F'\t' '{print $1}')
+    if [[ -n "$github_url" ]]; then
+      echo "--- $name ---"
+      cmd_clone "$dir_name" 2>/dev/null || true
+    fi
+  done < "$CACHE_FILE"
+}
+
+cmd_install_all() {
+  echo "=== Installing all languages ==="
+  ensure_cache
+  local from_source="${1:-false}"
+  while IFS= read -r line; do
+    local dir_name
+    dir_name=$(echo "$line" | awk -F'\t' '{print $7}')
+    local install_script="$LANG_SCRIPTS_DIR/$dir_name/install.sh"
+    if [[ -f "$install_script" ]]; then
+      cmd_install "$dir_name" "$from_source" || true
+    fi
+  done < "$CACHE_FILE"
+}
+
+# Section 4: Usage & Help
+# ==============================================================================
+
+usage() {
+  local prog
+  prog=$(basename "$0")
+  cat <<EOF
+Usage: $prog <command> [options]
+
+Commands:
+  Language.<NAME>                     Enter REPL/interpreter (auto-installs)
+  Language.<NAME> install [--from-source]  Install a language
+  Language.<NAME> clone               Clone repository(ies) to .ether/external/
+  Language.<NAME> -@ <FILE|DIR>       Run a program (auto-installs)
+  Language.<NAME> update              Update version + Claude: update scripts
+  Language.<NAME> info                Show language information
+
+  Language list                       List all languages
+  Language install [--from-source]    Install all languages with scripts
+  Language clone                      Clone all repositories
+  Language update                     Update all languages
+
+Examples:
+  $prog Language.Python               Enter Python REPL
+  $prog Language.Python install       Install Python
+  $prog Language.Python -@ script.py  Run a Python script
+  $prog Language.Python clone         Clone Python repo
+  $prog Language list                 List all known languages
+EOF
+}
+
+# Section 5: Command Router
+# ==============================================================================
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    usage
+    exit 0
+  fi
+
+  local first_arg="$1"
+  shift
+
+  # Handle help
+  if [[ "$first_arg" == "help" || "$first_arg" == "--help" || "$first_arg" == "-h" ]]; then
+    usage
+    exit 0
+  fi
+
+  # Handle Language.* commands
+  if [[ "$first_arg" =~ ^Language\.(.+)$ ]]; then
+    local lang_name="${BASH_REMATCH[1]}"
+    local action="${1:-repl}"
+    shift 2>/dev/null || true
+
+    case "$action" in
+      install)
+        local from_source="false"
+        [[ "${1:-}" == "--from-source" ]] && from_source="true"
+        cmd_install "$lang_name" "$from_source"
+        ;;
+      clone)
+        cmd_clone "$lang_name"
+        ;;
+      -@)
+        if [[ -z "${1:-}" ]]; then
+          echo "Error: -@ requires a file or directory argument" >&2
+          exit 1
+        fi
+        cmd_run "$lang_name" "$1"
+        ;;
+      update)
+        cmd_update "$lang_name"
+        ;;
+      info)
+        cmd_info "$lang_name"
+        ;;
+      repl)
+        cmd_repl "$lang_name"
+        ;;
+      *)
+        # If action doesn't match a known command, treat first_arg as just repl
+        # but the "action" might be something else - show error
+        echo "Error: Unknown action '$action'" >&2
+        echo "Valid actions: install, clone, -@, update, info" >&2
+        exit 1
+        ;;
+    esac
+    exit 0
+  fi
+
+  # Handle bare "Language" commands
+  if [[ "$first_arg" == "Language" ]]; then
+    local action="${1:-list}"
+    shift 2>/dev/null || true
+
+    case "$action" in
+      list)
+        cmd_list "Language"
+        ;;
+      install)
+        local from_source="false"
+        [[ "${1:-}" == "--from-source" ]] && from_source="true"
+        cmd_install_all "$from_source"
+        ;;
+      clone)
+        cmd_clone_all
+        ;;
+      update)
+        cmd_update_all
+        ;;
+      *)
+        echo "Error: Unknown Language action '$action'" >&2
+        echo "Valid actions: list, install, clone, update" >&2
+        exit 1
+        ;;
+    esac
+    exit 0
+  fi
+
+  # Handle Tool/Library
+  if [[ "$first_arg" == "Tool" || "$first_arg" == "Library" ]]; then
+    local action="${1:-list}"
+    case "$action" in
+      list)
+        cmd_list "$first_arg"
+        ;;
+      *)
+        echo "Error: Unknown $first_arg action '$action'" >&2
+        echo "Valid actions: list" >&2
+        exit 1
+        ;;
+    esac
+    exit 0
+  fi
+
+  # Handle "list" as shorthand
+  if [[ "$first_arg" == "list" ]]; then
+    cmd_list
+    exit 0
+  fi
+
+  echo "Error: Unknown command '$first_arg'" >&2
+  echo "Run '$(basename "$0") --help' for usage." >&2
+  exit 1
+}
+
+main "$@"

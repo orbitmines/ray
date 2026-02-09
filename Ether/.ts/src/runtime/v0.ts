@@ -3,9 +3,9 @@ import fs from "fs";
 import path from "node:path";
 import PartialArgs = Ether.PartialArgs;
 
-type ExternalMethod = (...args: [Node, ctx: Node]) => Val
-type Encodable = string | number | boolean | void | undefined | null | symbol | Token
-type Val = Node | Exclude<Encodable, symbol> | Obj | Var | ExternalMethod
+type ExternalMethod = (...args: [Node, ctx: Node]) => Node
+type Encodable = string | number | boolean | void | undefined | null | symbol | Token | ExternalMethod
+type Val = Node | Exclude<Encodable, symbol> | Obj | Var
 type Node = Var & { [_]: Var, [Symbol.iterator](): Iterator<Node> } & { (args: Val): Node } & { [key in Exclude<string, keyof Var>]: Node } & { [key in keyof Function]: Node }
 type Obj = { [key: string]: Val }
 
@@ -15,7 +15,7 @@ export const _ = Symbol("self")
 class Var {
 
   //TODO Encoded clears undefined/null if something is added to the object?
-  value: { encoded: Encodable, methods: Map<Var, Var> } = { encoded: Unknown, methods: new Map<Var, Var>() }
+  value: { encoded: Encodable, methods: Map<Node, Node> } = { encoded: Unknown, methods: new Map<Node, Node>() }
 
   private program?: Program
 
@@ -27,12 +27,15 @@ class Var {
   lazily_get = (property: Val[], ctx: Node): Node => {
     const result = new Var()
     return result.lazily((self, ctx) => {
+      const key = property.length === 1 ? Var.cast(property[0], ctx) : Var.array(property, ctx)
+
       // this.realize(ctx) // Realize where it came from
 
       // result.program = new Var()
       // result.program.value.methods.set(Var.cast('next'), new Var())
       // console.log('lazy func', property.length === 3)
       // result.program.func = property.length === 1 ? Var.cast(property[0]) : Var.array(...property)
+      return ctx.None
     }, ctx)
   }
   realize = (ctx: Node): Node => {
@@ -69,20 +72,57 @@ class Var {
     x.value.encoded = string
     return x [_](ctx);
   }
-  // static array = (entries: Val[], ctx: Node): Node => {}
+  static func = (method: ExternalMethod, ctx: Node): Node => {
+    const x = new Var()
+    x.value.encoded = method;
+    return x [_](ctx);
+  }
+  static array = (entries: Val[], ctx: Node): Node => {
+    let first: Node | undefined
+    let current: Node
 
-  instance_of: ExternalMethod = (type: Node, ctx: Node) => {
+    entries.forEach(entry => {
+      const next = Var.cast(entry, ctx)
+
+      if (current) {
+        current.next = next
+        next.previous = current
+      }
+
+      current = next;
+      if (!first) first = current;
+    })
+
+    let array = new Var() [_](ctx)
+    array.next = first
+    return array
+  }
+
+  get None(): Node {
+    if (!(this instanceof Context))
+      throw new Error('Not a context')
+
+    const x = new Var()
+    x.value.encoded = null
+    return x [_](this [_]());
+  }
+
+  instance_of = (type: Node, ctx: Node) => {
     if (type.value.encoded instanceof Token) {
-      const result = parse(type.value.encoded, this.as_string, { indent: 0 }) //TODO Fix initialized base value/
+      const result = parse(type.value.encoded, this.as_string(ctx), { indent: 0 }) //TODO Fix initialized base value/
 
       //TODO Put result.scope to ctx.
-      console.log(result.scope)
-      console.log(JSON.stringify(result.scope, null, 2))
+      console.log(JSON.stringify(result.scope.property_name, null, 2))
+      // console.log(JSON.stringify(result.scope, null, 2))
 
-      return result.success && result.consumed === this.as_string.length;
+      return result.success;
     } else if (is_string(type.value.encoded)) {
       return this.value.encoded === type.value.encoded
     }
+
+    const pattern = [...this.iter(ctx).map(x => is_string(x.value.encoded) ? x.value.encoded : "*")].join('')
+    console.log('pattern', pattern)
+
     console.log(type.value)
 
     throw new Error("Not implemented")
@@ -90,31 +130,54 @@ class Var {
 
   is_none = (): boolean => this.value.encoded === null || this.value.encoded === undefined
 
-  get as_boolean(): boolean {
-    if (is_boolean(this.value.encoded)) return this.value.encoded;
+  as_boolean(ctx: Node): boolean {
+    const self = this.expect_one(ctx)
+    if (is_boolean(self.value.encoded)) return self.value.encoded;
 
     throw Error('Expected a boolean')
   }
-  get as_number(): number {
-    if (is_number(this.value.encoded)) return this.value.encoded;
+  as_number(ctx: Node): number {
+    const self = this.expect_one(ctx)
+    if (is_number(self.value.encoded)) return self.value.encoded;
 
     throw Error('Expected a number')
   }
-  get as_string(): string {
-    if (is_string(this.value.encoded)) return this.value.encoded;
+  as_string(ctx: Node): string {
+    const self = this.expect_one(ctx)
+    if (is_string(self.value.encoded)) return self.value.encoded;
 
     //TODO If array, which has strings in it, to String. for ( property ) for instance.
 
     throw Error('Expected a string')
   }
 
-  get = (property: Val, ctx: Node): Node => {
-    // if #
-    throw new Error('Not implemented')
+  has = (property: Node, ctx: Node): boolean => {
+    for (let [key, value] of this.value.methods) {
+      if (property.instance_of(key, ctx)) return true
+    }
+    return false;
+  }
+
+  get = (property: Node, ctx: Node): Node => {
+
+    for (let [key, value] of this.value.methods) {
+      if (property.instance_of(key, ctx)) {
+        if (is_function(value.value.encoded)) return value.value.encoded(property, ctx)
+        return value
+      }
+    }
+
+    return ctx.None
+  }
+
+  expect_one = (ctx: Node): Node => {
+    const self = [...this.all(ctx)]
+    if (self.length !== 1) throw new Error("Shouldn't call method for a single Var on one which defines Many.")
+    return self[0]
   }
 
   *all(ctx: Node): Generator<Node> {
-    const all = this.get('#', ctx);
+    const all = this.get(Var.string('#', ctx), ctx);
     if (all.is_none()) {
       yield this [_](ctx);
       return;
@@ -122,11 +185,10 @@ class Var {
     yield *all.iter(ctx)
   }
 
-  //TODO If has .next
   *iter(ctx: Node): Generator<Node> {
-    // this.get('undirected')
+    // TODO this.get('undirected') to support Ray
     let next;
-    while (!(next = this.get('next', ctx)).is_none()) { yield next }
+    while (!(next = this.get(Var.string('next', ctx), ctx)).is_none()) { yield next }
   }
 
   [_](ctx?: Node): Node {
@@ -284,11 +346,16 @@ namespace Language {
           return ctx.Expression;
         }, this.ctx)
 
+
+      // this.value.methods.set(Var.type((ctx: any) => ctx.Array(ctx.val('('), ctx.arbitrary, ctx.val(')')), ctx), Var.func(property => {
+      //
+      // }, ctx))
+
       // }, this.ctx)
 
       console.log('instance_of', Var.string(
-        // this.language.join('\n')
-        'property{test: String}\n  body'
+        this.language.join('\n')
+        // 'property{test: String}\n  body'
       , this.ctx).instance_of(grammar, this.ctx))
 
       return this;

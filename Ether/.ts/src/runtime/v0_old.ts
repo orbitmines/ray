@@ -195,24 +195,6 @@ export class Var {
     return true;
   }
 
-  instance_of = (type: Val): boolean => {
-    type = Var.cast(type)
-
-    console.log('instance_of', this.encoded_string, type.encoded_string)
-
-    if (this.encoded_string && type.encoded_string)
-      return this.encoded_string == type.encoded_string
-
-    return false;
-    throw new Error('Not yet implemented')
-
-    // this[_("()")]
-    // type[_("()")]
-
-
-    return false;
-  }
-
   get = (property: Val): Var => {
     // TODO If this.get('#"), map
 
@@ -307,11 +289,6 @@ class Context extends Var {
     super();
 
     this.external_method("local", () => this)
-  }
-
-  has_method = (x: Val): boolean => {
-    //TODO
-    return false;
   }
 
 }

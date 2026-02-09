@@ -3,3 +3,4 @@
 - Autocomplete should  automatically update depending on the language's defs.
 - Verify installers work, + support for archs + test on all the archs, and make sure that when the authors change the way of installing that we have a check for that every once in a while.
 - Index should have a "This is incorrect, it's changed or is different for so and so arch", and adjust automatically or submit a change. 
+- Rewrite all the scripts to .ray files

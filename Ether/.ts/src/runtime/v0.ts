@@ -24,6 +24,16 @@ class Var {
     this.lazy_updates.push((self: Node) => call(self, ctx))
     return this [_](ctx);
   }
+  lazily_set = (key: Val, value: Val, ctx: Node) => {
+    this.lazily(
+      (self, ctx) => {
+        const v = Var.cast(value, ctx)
+        self.value.methods.set(Var.cast(key, ctx), v)
+        return v
+      },
+      ctx
+    )
+  }
   lazily_get = (property: Val[], ctx: Node): Node => {
     const result = new Var()
     return result.lazily((self, ctx) => {
@@ -31,10 +41,10 @@ class Var {
 
       // this.realize(ctx) // Realize where it came from
 
-      // result.program = new Var()
-      // result.program.value.methods.set(Var.cast('next'), new Var())
-      // console.log('lazy func', property.length === 3)
-      // result.program.func = property.length === 1 ? Var.cast(property[0]) : Var.array(...property)
+      result.program = new Program()
+      result.program.ctx = self
+      result.program.lazily_set('event', key, ctx)
+
       return ctx.None
     }, ctx)
   }
@@ -51,8 +61,6 @@ class Var {
 
     return this [_](ctx)
   }
-
-
 
   //TODO After grammar parse, reinterpret all the typed properties with the language itself.
 
@@ -223,7 +231,6 @@ class Program extends Var {
   // x[__].expression["="](expr.trim()) // Trim is important so that multiple files don't get attributed to a wrong class in another file
 
   ctx: Node
-
 
   constructor(public language: string[] | undefined = undefined, public expression: string[] = []) {
     super();

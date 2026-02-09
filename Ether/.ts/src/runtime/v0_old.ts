@@ -267,9 +267,6 @@ export class Var {
     return new Var()
   }
 
-  protected external_method = (key: string | Var, value: string | Var | ExternalMethod) => {
-    this.on_initialization(() => this.value.methods.set(Var.cast(key), Var.cast(value)))
-  }
 
   push_ray = (next: Ray = new Ray()) => {
     //next[__]["&+="](Var.cast(x)) //TODO How to indicate I want the right component

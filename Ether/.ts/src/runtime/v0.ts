@@ -24,16 +24,8 @@ class Var {
     this.lazy_updates.push((self: Node) => call(self, ctx))
     return this [_](ctx);
   }
-  lazily_set = (key: Val, value: Val, ctx: Node) => {
-    this.lazily(
-      (self, ctx) => {
-        const v = Var.cast(value, ctx)
-        self.value.methods.set(Var.cast(key, ctx), v)
-        return v
-      },
-      ctx
-    )
-  }
+  lazily_set = (key: Val, value: Val, ctx: Node) =>
+    this.lazily((self, ctx) => self.set(key, value, ctx), ctx)
   lazily_get = (property: Val[], ctx: Node): Node => {
     const result = new Var()
     return result.lazily((self, ctx) => {
@@ -166,7 +158,15 @@ class Var {
     return false;
   }
 
+  set = (key: Val, value: Val, ctx: Node) => {
+    this.realize(ctx)
+
+    const result = Var.cast(value, ctx)
+    this.value.methods.set(Var.cast(key, ctx), result)
+    return result
+  }
   get = (property: Node, ctx: Node): Node => {
+    this.realize(ctx)
 
     for (let [key, value] of this.value.methods) {
       if (property.instance_of(key, ctx)) {
@@ -250,6 +250,11 @@ class Program extends Var {
   }
 
   eval = (): Node => {
+    const self = this [_](this.ctx);
+    const event = this.get(Var.cast('event', this.ctx), this.ctx)
+    if (event) {
+      self.set
+    }
     throw new Error('Not implemented')
   }
 

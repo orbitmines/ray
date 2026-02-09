@@ -250,12 +250,45 @@ class Program extends Var {
   }
 
   eval = (): Node => {
-    const self = this [_](this.ctx);
-    const event = this.get(Var.cast('event', this.ctx), this.ctx)
-    if (event) {
-      self.set
+    let terminal: Program[] = []
+    let cursors: Program[] = [this]
+
+    const partition = <T>(array: T[], predicate: (x: T) => boolean) => {
+      const pass: T[] = [];
+      const fail: T[] = [];
+
+      for (const item of array) {
+        (predicate(item) ? pass : fail).push(item);
+      }
+
+      return [pass, fail];
+    };
+
+    while (cursors.length !== 0) {
+      const [done, todo] = partition(cursors, cursor => {
+        const self = cursor [_](this.ctx).realize(this.ctx);
+        const expanded = self.get(Var.cast('expand', this.ctx), this.ctx)
+        if (!expanded.is_none()) {
+          if (!(expanded[_] instanceof Program)) throw new Error('Expected a Program.')
+
+          self.set(Var.cast('∙', this.ctx), expanded[_].eval(), this.ctx)
+        } else {
+          const event = cursor.get(Var.cast('event', this.ctx), this.ctx)
+          if (!event.is_none()) {
+            self.set(Var.cast('∙', this.ctx), self.ctx.get(event, this.ctx), this.ctx)
+          } else {
+            throw new Error('No expansion or event found, invalid program?')
+          }
+        }
+
+        return self.get(Var.cast('next', this.ctx), this.ctx).is_none()
+      });
+
+      terminal.push(...done)
+      cursors = todo
     }
-    throw new Error('Not implemented')
+
+    return terminal.length === 1 ? terminal[0][_](this.ctx)['∙'] : Var.array(terminal.map(x => x[_](this.ctx)['∙']), this.ctx)
   }
 
   expr = (expression: string, args?: PartialArgs): this => {

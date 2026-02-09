@@ -320,17 +320,6 @@ namespace Language {
 }
 
 
-const partition = <T>(array: T[], predicate: (x: T) => boolean) => {
-  const pass: T[] = [];
-  const fail: T[] = [];
-
-  for (const item of array) {
-    (predicate(item) ? pass : fail).push(item);
-  }
-
-  return [pass, fail];
-};
-
 
 // Allow forward dependent type, the thing which matched first and then satisfies all conditions gets matched.
 

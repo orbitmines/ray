@@ -80,6 +80,8 @@ class Var {
       console.log(JSON.stringify(result.scope, null, 2))
 
       return result.success && result.consumed === this.as_string.length;
+    } else if (is_string(type.value.encoded)) {
+      return this.value.encoded === type.value.encoded
     }
     console.log(type.value)
 
@@ -108,7 +110,7 @@ class Var {
 
   get = (property: Val, ctx: Node): Node => {
     // if #
-
+    throw new Error('Not implemented')
   }
 
   *all(ctx: Node): Generator<Node> {

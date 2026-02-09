@@ -64,6 +64,7 @@ type MatchContext = {
   suppressIterBoundaries?: boolean;
   preceding?: string;
   scope: Scope;
+  hardBoundaries?: Token[];
 };
 
 const FAIL: MatchResult = Object.freeze({ success: false, consumed: 0, value: null, scope: {} });
@@ -143,18 +144,18 @@ class EndToken extends Token {
   getFirstConcreteTokens() { return [this as Token]; }
   canStartAt(ctx: MatchContext) {
     if (ctx.index >= ctx.input.length) return true;
-    const allBounds = [...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+    const allBounds = [...ctx.boundaries, ...(ctx.iterationBoundaries || []), ...(ctx.hardBoundaries || [])];
     for (const b of allBounds) {
-      if (b.canStartAt({ ...ctx, boundaries: [], iterationBoundaries: [], preceding: '' })) return true;
+      if (b.canStartAt({ ...ctx, boundaries: [], iterationBoundaries: [], hardBoundaries: undefined, preceding: '' })) return true;
     }
     return false;
   }
   match(ctx: MatchContext): MatchResult {
     if (ctx.index >= ctx.input.length)
       return this.wrapResult({ success: true, consumed: 0, value: '', scope: {} });
-    const allBounds = [...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+    const allBounds = [...ctx.boundaries, ...(ctx.iterationBoundaries || []), ...(ctx.hardBoundaries || [])];
     for (const b of allBounds) {
-      if (b.canStartAt({ ...ctx, boundaries: [], iterationBoundaries: [], preceding: '' }))
+      if (b.canStartAt({ ...ctx, boundaries: [], iterationBoundaries: [], hardBoundaries: undefined, preceding: '' }))
         return this.wrapResult({ success: true, consumed: 0, value: '', scope: {} });
     }
     return FAIL;
@@ -173,6 +174,13 @@ class NotToken extends Token {
   getFirstConcreteTokens(): Token[] { return []; }
   canStartAt(ctx: MatchContext) {
     if (ctx.index >= ctx.input.length) return false;
+    // Hard boundaries check at position 0
+    if (ctx.hardBoundaries && ctx.hardBoundaries.length > 0) {
+      const testCtx: MatchContext = { ...ctx, boundaries: [], iterationBoundaries: [], hardBoundaries: undefined, preceding: '' };
+      for (const b of ctx.hardBoundaries) {
+        if (b.canStartAt(testCtx)) return false;
+      }
+    }
     const rem = ctx.input.slice(ctx.index);
     for (const s of this.stopStrings) {
       if (rem.startsWith(s)) return false;
@@ -184,10 +192,32 @@ class NotToken extends Token {
     // Boundary hit → SUCCESS (returns content before).
     // Stop string hit → FAIL (the pattern must not encounter its stop strings).
     if (ctx.index >= ctx.input.length) return FAIL;
+    // Hard boundaries check at position 0 — if a hard boundary matches here, FAIL
+    if (ctx.hardBoundaries && ctx.hardBoundaries.length > 0) {
+      const testCtx: MatchContext = { ...ctx, boundaries: [], iterationBoundaries: [], hardBoundaries: undefined, preceding: '' };
+      for (const b of ctx.hardBoundaries) {
+        if (b.canStartAt(testCtx)) return FAIL;
+      }
+    }
     const rem = ctx.input.slice(ctx.index);
     const allBounds = [...ctx.boundaries, ...(ctx.iterationBoundaries || [])];
+    const hardBounds = ctx.hardBoundaries || [];
 
     for (let i = 0; i <= rem.length; i++) {
+      // Check hard boundaries at position i — yield to boundary (SUCCESS)
+      // Hard boundaries are checked at ALL positions including i=0
+      if (hardBounds.length > 0 && i > 0) {
+        const testCtx: MatchContext = {
+          ...ctx, index: ctx.index + i,
+          boundaries: [], iterationBoundaries: [], hardBoundaries: undefined, preceding: rem.slice(0, i)
+        };
+        for (const b of hardBounds) {
+          if (b.canStartAt(testCtx)) {
+            return this.wrapResult({ success: true, consumed: i, value: rem.slice(0, i), scope: {} });
+          }
+        }
+      }
+
       // Check boundaries at position i — yield to boundary (SUCCESS)
       if (allBounds.length > 0 && i > 0) {
         const testCtx: MatchContext = {
@@ -296,6 +326,7 @@ class ArrayToken extends Token {
         iterationBoundaries: ctx.iterationBoundaries,
         suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: childScope,
+        hardBoundaries: ctx.hardBoundaries,
       });
 
       if (!result.success) return FAIL;
@@ -358,13 +389,62 @@ class LoopToken extends Token {
         iterationBoundaries: mergedIterBounds,
         suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: ctx.scope,
+        hardBoundaries: ctx.hardBoundaries,
       });
 
       if (result.success && result.consumed > 0) {
-        totalConsumed += result.consumed;
-        currentIndex += result.consumed;
-        values.push(result.value);
-        for (const [key, val] of Object.entries(result.scope)) {
+        // Overconsumption detection: check if any ctx.boundaries token can start
+        // within the consumed range [currentIndex, currentIndex + result.consumed)
+        let useResult = result;
+        if (ctx.boundaries.length > 0) {
+          let overconsumption = false;
+          for (let pos = currentIndex; pos < currentIndex + result.consumed; pos++) {
+            const testCtx: MatchContext = {
+              ...ctx, index: pos, boundaries: [], iterationBoundaries: [], preceding: ctx.input.slice(currentIndex, pos)
+            };
+            for (const b of ctx.boundaries) {
+              if (b.canStartAt(testCtx)) { overconsumption = true; break; }
+            }
+            if (overconsumption) break;
+          }
+          if (overconsumption) {
+            // Retry with hardBoundaries set
+            const retryResult = inner.match({
+              input: ctx.input,
+              index: currentIndex,
+              boundaries: [],
+              iterationBoundaries: mergedIterBounds,
+              suppressIterBoundaries: ctx.suppressIterBoundaries,
+              scope: ctx.scope,
+              hardBoundaries: [...(ctx.hardBoundaries || []), ...ctx.boundaries],
+            });
+            if (retryResult.success && retryResult.consumed > 0) {
+              // Verify retry didn't also overconsume
+              let retryOverconsumption = false;
+              for (let pos = currentIndex; pos < currentIndex + retryResult.consumed; pos++) {
+                const testCtx2: MatchContext = {
+                  ...ctx, index: pos, boundaries: [], iterationBoundaries: [], preceding: ctx.input.slice(currentIndex, pos)
+                };
+                for (const b of ctx.boundaries) {
+                  if (b.canStartAt(testCtx2)) { retryOverconsumption = true; break; }
+                }
+                if (retryOverconsumption) break;
+              }
+              if (!retryOverconsumption) {
+                useResult = retryResult;
+              } else {
+                break; // Still overconsumes, stop loop
+              }
+            } else {
+              break; // Retry failed, stop loop
+            }
+          }
+        }
+
+        totalConsumed += useResult.consumed;
+        currentIndex += useResult.consumed;
+        values.push(useResult.value);
+        for (const [key, val] of Object.entries(useResult.scope)) {
           if (!(key in accumulated)) accumulated[key] = [];
           accumulated[key].push(val);
         }
@@ -445,6 +525,7 @@ class TimesExactlyToken extends Token {
         boundaries: ctx.boundaries,
         iterationBoundaries: ctx.iterationBoundaries,
         scope: ctx.scope,
+        hardBoundaries: ctx.hardBoundaries,
       });
       if (!result.success) return FAIL;
       totalConsumed += result.consumed;
@@ -494,6 +575,7 @@ class TimesAtLeastToken extends Token {
         iterationBoundaries: mergedIterBounds,
         suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: ctx.scope,
+        hardBoundaries: ctx.hardBoundaries,
       });
       if (!result.success || result.consumed === 0) break;
       totalConsumed += result.consumed;
@@ -539,6 +621,7 @@ class TimesAtMostToken extends Token {
         iterationBoundaries: mergedIterBounds,
         suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: ctx.scope,
+        hardBoundaries: ctx.hardBoundaries,
       });
       if (!result.success || result.consumed === 0) break;
       totalConsumed += result.consumed;
@@ -685,7 +768,7 @@ class IsolatedToken extends Token {
   getAllPossibleStartTokens() { return this.inner.getAllPossibleStartTokens(); }
   canStartAt(ctx: MatchContext) { return this.inner.canStartAt(ctx); }
   match(ctx: MatchContext): MatchResult {
-    return this.wrapResult(this.inner.match({ ...ctx, boundaries: [], iterationBoundaries: [] }));
+    return this.wrapResult(this.inner.match({ ...ctx, boundaries: [], iterationBoundaries: [], hardBoundaries: undefined }));
   }
 }
 
@@ -1263,7 +1346,7 @@ console.log('\n── 17. RULE_NAME with PROPERTIES grammar ──');
   const r2 = parse(ctx.statement, 'property{test: String}\n', { indent: 0 });
   assert('RULE_NAME line parses', r2.success);
   console.log('    r2.scope.content:', JSON.stringify(r2.scope.content, null, 2));
-  assert('property_name bound', r2.scope.content?.property_name != null);
+  assert('property_name bound', r2.scope.property_name != null);
 
   // Test: RULE_NAME with arrow body
   const r3 = parse(ctx.statement, 'property{test: String} => body\n', { indent: 0 });

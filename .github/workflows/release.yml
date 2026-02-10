@@ -12,14 +12,14 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Linux + Windows + Android (all from one Ubuntu runner)
+  # Linux (deb, rpm, AppImage)
   # ---------------------------------------------------------------------------
-  build-linux-windows-android:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # need tags for version check
+          fetch-depth: 0
 
       - name: Extract version & check tag
         id: version
@@ -36,7 +36,71 @@ jobs:
         if: steps.version.outputs.skip == 'true'
         run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
 
-      # --- toolchains ---
+      - uses: actions/setup-node@v4
+        if: steps.version.outputs.skip == 'false'
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.version.outputs.skip == 'false'
+
+      - name: Install system dependencies
+        if: steps.version.outputs.skip == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+            librsvg2-dev rpm patchelf
+
+      - name: Install Python pillow
+        if: steps.version.outputs.skip == 'false'
+        run: pip install pillow
+
+      - name: npm ci
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npm ci
+
+      - name: Build Linux
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npx tauri build --target x86_64-unknown-linux-gnu
+
+      - name: Upload Linux artifacts
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
+            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+
+  # ---------------------------------------------------------------------------
+  # Windows (cross-compile from Ubuntu)
+  # ---------------------------------------------------------------------------
+  build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version & check tag
+        id: version
+        run: |
+          VERSION=$(jq -r .version "$TAURI_CONF")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if tag exists
+        if: steps.version.outputs.skip == 'true'
+        run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
+
       - uses: actions/setup-node@v4
         if: steps.version.outputs.skip == 'false'
         with:
@@ -46,6 +110,69 @@ jobs:
         if: steps.version.outputs.skip == 'false'
         with:
           targets: x86_64-pc-windows-gnu
+
+      - name: Install system dependencies
+        if: steps.version.outputs.skip == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+            librsvg2-dev nsis gcc-mingw-w64-x86-64 llvm
+
+      - name: Install Python pillow
+        if: steps.version.outputs.skip == 'false'
+        run: pip install pillow
+
+      - name: npm ci
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npm ci
+
+      - name: Build Windows
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npx tauri build --target x86_64-pc-windows-gnu
+
+      - name: Upload Windows artifacts
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            Ether/.html/src-tauri/target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe
+
+  # ---------------------------------------------------------------------------
+  # Android (APK + AAB)
+  # ---------------------------------------------------------------------------
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version & check tag
+        id: version
+        run: |
+          VERSION=$(jq -r .version "$TAURI_CONF")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if tag exists
+        if: steps.version.outputs.skip == 'true'
+        run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
+
+      - uses: actions/setup-node@v4
+        if: steps.version.outputs.skip == 'false'
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.version.outputs.skip == 'false'
 
       - uses: actions/setup-java@v4
         if: steps.version.outputs.skip == 'false'
@@ -66,10 +193,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
-            librsvg2-dev nsis gcc-mingw-w64-x86-64 llvm \
-            rpm patchelf
+            librsvg2-dev
 
-      - name: Install Python pillow (for icon generation)
+      - name: Install Python pillow
         if: steps.version.outputs.skip == 'false'
         run: pip install pillow
 
@@ -78,24 +204,10 @@ jobs:
         working-directory: Ether/.html
         run: npm ci
 
-      # --- Linux build ---
-      - name: Build Linux (deb, rpm, AppImage)
-        if: steps.version.outputs.skip == 'false'
-        working-directory: Ether/.html
-        run: npx tauri build --target x86_64-unknown-linux-gnu
-
-      # --- Windows cross-compile ---
-      - name: Build Windows (NSIS exe)
-        if: steps.version.outputs.skip == 'false'
-        working-directory: Ether/.html
-        run: npx tauri build --target x86_64-pc-windows-gnu
-
-      # --- Android ---
-      - name: Build Android (APK)
+      - name: Build Android
         if: steps.version.outputs.skip == 'false'
         working-directory: Ether/.html
         env:
-          JAVA_HOME: ${{ env.JAVA_HOME }}
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
         run: |
           npx tauri android init
@@ -124,25 +236,6 @@ jobs:
               "$UNSIGNED"
             rm /tmp/release.jks
           fi
-
-      # --- Collect artifacts ---
-      - name: Upload Linux artifacts
-        if: steps.version.outputs.skip == 'false'
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-artifacts
-          path: |
-            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
-            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
-            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
-
-      - name: Upload Windows artifacts
-        if: steps.version.outputs.skip == 'false'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-artifacts
-          path: |
-            Ether/.html/src-tauri/target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe
 
       - name: Upload Android artifacts
         if: steps.version.outputs.skip == 'false'
@@ -272,7 +365,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     runs-on: ubuntu-latest
-    needs: [build-linux-windows-android] # add build-macos, build-ios when enabled
+    needs: [build-linux, build-windows, build-android] # add build-macos, build-ios when enabled
     steps:
       - uses: actions/checkout@v4
 

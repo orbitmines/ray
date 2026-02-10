@@ -1,11 +1,20 @@
 {
   "scripts": {
-    "start": "npx vite & cd electron && npm start & wait",
-    "build": "npx vite build && cd electron && npm run build",
-    "install": "cd electron && npm install"
+    "images:copy": "HTMLDIR=$(dirname \"$npm_package_json\") && mkdir -p \"$HTMLDIR/public/images\" && cp \"$HTMLDIR\"/../*.svg \"$HTMLDIR\"/../*.png \"$HTMLDIR/public/images/\"",
+    "icons:generate": "HTMLDIR=$(dirname \"$npm_package_json\") && npm run images:copy && python3 src-tauri/icons/generate.py \"$HTMLDIR/public/images/E.png\"",
+    "install": "HTMLDIR=$(dirname \"$npm_package_json\") && cd \"$HTMLDIR/src-tauri\" && cargo fetch",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "build": "npm run build:linux && npm run build:windows && npm run build:android",
+    "build:linux": "tauri build --target x86_64-unknown-linux-gnu",
+    "build:windows": "tauri build --target x86_64-pc-windows-gnu",
+    "build:darwin": "tauri build --target aarch64-apple-darwin",
+    "build:ios": "tauri ios build",
+    "build:android": "HTMLDIR=$(dirname \"$npm_package_json\") && tauri android init && printf '\\norg.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64\\n' >> \"$HTMLDIR/src-tauri/gen/android/gradle.properties\" && export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 && tauri android build && apksigner sign --ks ~/.android/debug.keystore --ks-pass pass:android --out \"$HTMLDIR/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-signed.apk\" \"$HTMLDIR/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk\""
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2",
     "typescript": "^5.9.3",
-    "vite": "^7.3.0"
+    "vite": "^7.3.1"
   }
 }

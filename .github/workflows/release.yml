@@ -1,0 +1,319 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  TAURI_CONF: Ether/.html/src-tauri/tauri.conf.json
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux + Windows + Android (all from one Ubuntu runner)
+  # ---------------------------------------------------------------------------
+  build-linux-windows-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need tags for version check
+
+      - name: Extract version & check tag
+        id: version
+        run: |
+          VERSION=$(jq -r .version "$TAURI_CONF")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if tag exists
+        if: steps.version.outputs.skip == 'true'
+        run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
+
+      # --- toolchains ---
+      - uses: actions/setup-node@v4
+        if: steps.version.outputs.skip == 'false'
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.version.outputs.skip == 'false'
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - uses: actions/setup-java@v4
+        if: steps.version.outputs.skip == 'false'
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+        if: steps.version.outputs.skip == 'false'
+
+      - name: Install Android NDK
+        if: steps.version.outputs.skip == 'false'
+        run: sdkmanager --install "ndk;27.0.12077973"
+
+      - name: Install system dependencies
+        if: steps.version.outputs.skip == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+            librsvg2-dev nsis gcc-mingw-w64-x86-64 llvm \
+            rpm patchelf
+
+      - name: Install Python pillow (for icon generation)
+        if: steps.version.outputs.skip == 'false'
+        run: pip install pillow
+
+      - name: npm ci
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npm ci
+
+      # --- Linux build ---
+      - name: Build Linux (deb, rpm, AppImage)
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npx tauri build --target x86_64-unknown-linux-gnu
+
+      # --- Windows cross-compile ---
+      - name: Build Windows (NSIS exe)
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npx tauri build --target x86_64-pc-windows-gnu
+
+      # --- Android ---
+      - name: Build Android (APK)
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+        run: |
+          npx tauri android init
+          # Point Gradle at the JDK
+          echo "org.gradle.java.home=$JAVA_HOME" >> src-tauri/gen/android/gradle.properties
+          npx tauri android build
+
+      - name: Rename & optionally sign Android APK
+        if: steps.version.outputs.skip == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          APK_DIR="Ether/.html/src-tauri/gen/android/app/build/outputs/apk/universal/release"
+          UNSIGNED="$APK_DIR/app-universal-release-unsigned.apk"
+
+          # Always ship the unsigned APK
+          cp "$UNSIGNED" "$APK_DIR/Ether_${VERSION}_universal.apk"
+
+          # If keystore secrets are configured, also produce a signed APK
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release.jks
+            "${ANDROID_HOME}/build-tools/$(ls "${ANDROID_HOME}/build-tools" | sort -V | tail -1)/apksigner" sign \
+              --ks /tmp/release.jks \
+              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --out "$APK_DIR/Ether_${VERSION}_universal-signed.apk" \
+              "$UNSIGNED"
+            rm /tmp/release.jks
+          fi
+
+      # --- Collect artifacts ---
+      - name: Upload Linux artifacts
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
+            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+
+      - name: Upload Windows artifacts
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            Ether/.html/src-tauri/target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe
+
+      - name: Upload Android artifacts
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: |
+            Ether/.html/src-tauri/gen/android/app/build/outputs/apk/universal/release/Ether_*.apk
+            Ether/.html/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/*.aab
+
+  # ---------------------------------------------------------------------------
+  # macOS (Apple Silicon)
+  # ---------------------------------------------------------------------------
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version & check tag
+        id: version
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('$TAURI_CONF'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if tag exists
+        if: steps.version.outputs.skip == 'true'
+        run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
+
+      - uses: actions/setup-node@v4
+        if: steps.version.outputs.skip == 'false'
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.version.outputs.skip == 'false'
+
+      - name: Install Python pillow
+        if: steps.version.outputs.skip == 'false'
+        run: pip3 install pillow
+
+      - name: npm ci
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npm ci
+
+      - name: Build macOS (dmg)
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npx tauri build --target aarch64-apple-darwin
+
+      - name: Upload macOS artifacts
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            Ether/.html/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+
+  # ---------------------------------------------------------------------------
+  # iOS
+  # ---------------------------------------------------------------------------
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version & check tag
+        id: version
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('$TAURI_CONF'))['version'])")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if tag exists
+        if: steps.version.outputs.skip == 'true'
+        run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
+
+      - uses: actions/setup-node@v4
+        if: steps.version.outputs.skip == 'false'
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.version.outputs.skip == 'false'
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Install Python pillow
+        if: steps.version.outputs.skip == 'false'
+        run: pip3 install pillow
+
+      - name: npm ci
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: npm ci
+
+      - name: Build iOS (ipa)
+        if: steps.version.outputs.skip == 'false'
+        working-directory: Ether/.html
+        run: |
+          npx tauri ios init
+          npx tauri ios build --export-method debugging
+
+      - name: Upload iOS artifacts
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-artifacts
+          path: |
+            Ether/.html/src-tauri/gen/apple/build/**/*.ipa
+
+  # ---------------------------------------------------------------------------
+  # Create GitHub Release with all artifacts
+  # ---------------------------------------------------------------------------
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-linux-windows-android, build-macos, build-ios]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(jq -r .version "$TAURI_CONF")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # Final guard — if tag already exists the build jobs were skipped
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all artifacts
+        if: steps.version.outputs.skip == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        if: steps.version.outputs.skip == 'false'
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Ether v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.AppImage
+            artifacts/**/*.exe
+            artifacts/**/*.apk
+            artifacts/**/*.aab
+            artifacts/**/*.dmg
+            artifacts/**/*.ipa

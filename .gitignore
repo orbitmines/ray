@@ -1,4 +1,5 @@
-/**/.github
 /**/.idea
 /**/node_modules
 /**/.orbitmines
+/Ether/.html/src-tauri/target
+/Ether/.html/src-tauri/gen

@@ -656,12 +656,12 @@ main() {
         local index_args=("index" "--lang" "$lang_name")
         [[ -n "$lang_version" ]] && index_args+=("--version" "$lang_version")
         index_args+=("$@")
-        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli "${index_args[@]}"
+        PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli "${index_args[@]}"
         ;;
       search)
         local search_args=("search" "$@" "--lang" "$lang_name")
         [[ -n "$lang_version" ]] && search_args+=("--version" "$lang_version")
-        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli "${search_args[@]}"
+        PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli "${search_args[@]}"
         ;;
       *)
         echo "Error: Unknown action '$action'" >&2
@@ -693,19 +693,19 @@ main() {
         cmd_update_all
         ;;
       index)
-        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli index "$@"
+        PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli index "$@"
         ;;
       search)
-        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli search "$@"
+        PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli search "$@"
         ;;
       server)
-        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli server "$@"
+        PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli server "$@"
         ;;
       stats)
-        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli stats "$@"
+        PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli stats "$@"
         ;;
       models)
-        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli models "$@"
+        PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli models "$@"
         ;;
       *)
         echo "Error: Unknown Language action '$action'" >&2

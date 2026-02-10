@@ -102,10 +102,14 @@ class CrossLanguageFinder:
 
         import numpy as np
 
-        # Embed query with reranking model
+        # Embed query with reranking model (query mode)
+        if hasattr(self._rerank_model, 'set_mode'):
+            self._rerank_model.set_mode('query')
         query_vec = self._rerank_model.embed([query_code])[0]
 
-        # Embed all candidate texts
+        # Embed all candidate texts (document mode)
+        if hasattr(self._rerank_model, 'set_mode'):
+            self._rerank_model.set_mode('document')
         texts = [r.text for r in candidates]
         candidate_vecs = self._rerank_model.embed(texts)
 

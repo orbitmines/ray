@@ -23,6 +23,7 @@ class SentenceTransformerModel:
         self._query_prefix = config.get("query_prefix", "search_query: ")
         self._document_prefix = config.get("document_prefix", "search_document: ")
         self._mode = "document"  # default to document embedding
+        self._pooling = config.get("pooling", "cls")  # "cls" or "last_token"
 
     @property
     def dim(self) -> int:
@@ -54,18 +55,28 @@ class SentenceTransformerModel:
         if not model_id:
             raise ValueError("No model name or path specified")
 
+        # Use float16 for large models (>1B params) to save memory
+        size_str = self._config.get("size", "")
+        use_fp16 = any(s in size_str for s in ("B", "b")) and "M" not in size_str
+        dtype_kwargs = {"torch_dtype": torch.float16} if use_fp16 else {}
+        if use_fp16:
+            print(f"  Loading {model_id} in float16 to save memory", flush=True)
+
         # Try local snapshot first for fast offline loading
         local_path = _find_local_snapshot(model_id)
         if local_path:
             self._tokenizer = AutoTokenizer.from_pretrained(local_path)
             self._model = AutoModel.from_pretrained(
-                local_path, trust_remote_code=True, local_files_only=True
+                local_path, trust_remote_code=True, local_files_only=True,
+                **dtype_kwargs,
             )
         else:
             # Fall back to downloading
+            print(f"  Downloading {model_id}...", flush=True)
             self._tokenizer = AutoTokenizer.from_pretrained(model_id)
             self._model = AutoModel.from_pretrained(
-                model_id, trust_remote_code=True
+                model_id, trust_remote_code=True,
+                **dtype_kwargs,
             )
 
         self._model.eval()
@@ -92,9 +103,15 @@ class SentenceTransformerModel:
         with torch.no_grad():
             outputs = self._model(**inputs)
 
-        # CLS pooling + L2 normalize
-        embeddings = outputs.last_hidden_state[:, 0]
-        embeddings = F.normalize(embeddings, p=2, dim=1)
+        # Pooling + L2 normalize
+        if self._pooling == "last_token":
+            # Last non-padding token pooling (for Qwen/decoder models)
+            seq_lens = inputs["attention_mask"].sum(dim=1) - 1
+            embeddings = outputs.last_hidden_state[torch.arange(len(texts)), seq_lens]
+        else:
+            # CLS pooling (first token)
+            embeddings = outputs.last_hidden_state[:, 0]
+        embeddings = F.normalize(embeddings.float(), p=2, dim=1)
         return embeddings.numpy()
 
 

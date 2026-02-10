@@ -128,6 +128,7 @@ def _cmd_search(args: list[str]):
     parser.add_argument("--limit", type=int, default=20, help="Max results")
     parser.add_argument("--file", help="File to find equivalents for")
     parser.add_argument("--cross-lang", action="store_true", help="Cross-language search")
+    parser.add_argument("--rerank", action="store_true", help="Rerank results with larger model")
     opts = parser.parse_args(args)
 
     if not opts.query and not opts.file:
@@ -177,11 +178,36 @@ def _cmd_search(args: list[str]):
         for r in result.equivalents:
             print(f"  {r.summary()}")
     else:
-        search = SemanticSearch(index_model, store)
-        results = search.search(
-            query=opts.query, limit=opts.limit,
-            language=opts.lang, version=opts.version,
-        )
+        if opts.rerank:
+            # Load reranking model and use CrossLanguageFinder
+            rerank_model = None
+            try:
+                print("Loading reranking model...", flush=True)
+                rerank_model = model_registry.get_reranking_model()
+            except Exception as e:
+                print(f"Warning: Could not load reranking model: {e}", file=sys.stderr)
+                print("Falling back to standard search.", file=sys.stderr)
+
+            if rerank_model and rerank_model is not index_model:
+                finder = CrossLanguageFinder(index_model, store, rerank_model)
+                result = finder.find_equivalents(
+                    code=opts.query, source_language="__query__",
+                    limit=opts.limit, rerank=True, structural=False,
+                    target_languages=[opts.lang] if opts.lang else None,
+                )
+                results = result.equivalents
+            else:
+                search = SemanticSearch(index_model, store)
+                results = search.search(
+                    query=opts.query, limit=opts.limit,
+                    language=opts.lang, version=opts.version,
+                )
+        else:
+            search = SemanticSearch(index_model, store)
+            results = search.search(
+                query=opts.query, limit=opts.limit,
+                language=opts.lang, version=opts.version,
+            )
         print(f"Results ({len(results)} found):")
         for r in results:
             print(f"  {r.summary()}")

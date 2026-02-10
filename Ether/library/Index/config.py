@@ -42,7 +42,7 @@ DEFAULT_RERANK_CANDIDATES = 100
 # Default model config
 DEFAULT_MODELS_CONFIG = {
     "indexing": "coderank-embed-tinygrad",
-    "reranking": "coderank-embed-tinygrad",
+    "reranking": "nomic-embed-code-7b",
     "models": {
         "coderank-embed": {
             "type": "sentence_transformer",
@@ -56,13 +56,14 @@ DEFAULT_MODELS_CONFIG = {
         },
         "nomic-embed-code-7b": {
             "type": "sentence_transformer",
-            "hf_name": "nomic-ai/nomic-embed-code-v1",
+            "hf_name": "nomic-ai/nomic-embed-code",
             "path": "",
             "size": "7B",
-            "hidden_size": 4096,
+            "hidden_size": 3584,
             "max_position_embeddings": 8192,
             "query_prefix": "search_query: ",
             "document_prefix": "search_document: ",
+            "pooling": "last_token",
         },
         "coderank-embed-tinygrad": {
             "type": "nomic_bert",

@@ -4,3 +4,7 @@
 - Verify installers work, + support for archs + test on all the archs, and make sure that when the authors change the way of installing that we have a check for that every once in a while.
 - Index should have a "This is incorrect, it's changed or is different for so and so arch", and adjust automatically or submit a change. 
 - Rewrite all the scripts to .ray files
+- When an update is done, see if that changes any of the indexed comparisons
+- Allow manual update of some specific entry
+- GitHub might refer to subdirectory in monorepo, should still be able to clone + might need a git login, so create an account just for this. (Verse compiler for instance)
+- 

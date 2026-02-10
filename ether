@@ -571,11 +571,18 @@ Commands:
   Language.<NAME> -@ <FILE|DIR>       Run a program (auto-installs)
   Language.<NAME> update              Update version + Claude: update scripts
   Language.<NAME> info                Show language information
+  Language.<NAME>[%VER] index         Index language source code for search
+  Language.<NAME>[%VER] search <Q>    Search within a language
 
   Language list                       List all languages
   Language install [--from-source]    Install all languages with scripts
   Language clone                      Clone all repositories
   Language update                     Update all languages
+  Language index [--lang NAME]        Index source code (all or filtered)
+  Language search <query> [--lang N]  Semantic code search
+  Language server [--port PORT]       Start search API (default: 8420)
+  Language stats                      Show index statistics
+  Language models [--use N --for T]   List/switch embedding models
 
 Examples:
   $prog Language.Python               Enter Python REPL
@@ -583,6 +590,10 @@ Examples:
   $prog Language.Python -@ script.py  Run a Python script
   $prog Language.Python clone         Clone Python repo
   $prog Language list                 List all known languages
+  $prog Language search "binary search tree"           Search all languages
+  $prog Language.Rust index           Index Rust repos
+  $prog Language.Python%3.12.0 index  Index Python at version 3.12.0
+  $prog Language server               Start API on port 8420
 EOF
 }
 
@@ -606,7 +617,13 @@ main() {
 
   # Handle Language.* commands
   if [[ "$first_arg" =~ ^Language\.(.+)$ ]]; then
-    local lang_name="${BASH_REMATCH[1]}"
+    local lang_spec="${BASH_REMATCH[1]}"
+    # Parse version from Language.Name%Version syntax
+    local lang_name="${lang_spec%%\%*}"
+    local lang_version=""
+    if [[ "$lang_spec" == *"%"* ]]; then
+      lang_version="${lang_spec#*%}"
+    fi
     local action="${1:-repl}"
     shift 2>/dev/null || true
 
@@ -635,11 +652,20 @@ main() {
       repl)
         cmd_repl "$lang_name"
         ;;
+      index)
+        local index_args=("index" "--lang" "$lang_name")
+        [[ -n "$lang_version" ]] && index_args+=("--version" "$lang_version")
+        index_args+=("$@")
+        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli "${index_args[@]}"
+        ;;
+      search)
+        local search_args=("search" "$@" "--lang" "$lang_name")
+        [[ -n "$lang_version" ]] && search_args+=("--version" "$lang_version")
+        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli "${search_args[@]}"
+        ;;
       *)
-        # If action doesn't match a known command, treat first_arg as just repl
-        # but the "action" might be something else - show error
         echo "Error: Unknown action '$action'" >&2
-        echo "Valid actions: install, clone, -@, update, info" >&2
+        echo "Valid actions: install, clone, -@, update, info, index, search" >&2
         exit 1
         ;;
     esac
@@ -666,9 +692,24 @@ main() {
       update)
         cmd_update_all
         ;;
+      index)
+        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli index "$@"
+        ;;
+      search)
+        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli search "$@"
+        ;;
+      server)
+        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli server "$@"
+        ;;
+      stats)
+        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli stats "$@"
+        ;;
+      models)
+        "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli models "$@"
+        ;;
       *)
         echo "Error: Unknown Language action '$action'" >&2
-        echo "Valid actions: list, install, clone, update" >&2
+        echo "Valid actions: list, install, clone, update, index, search, server, stats, models" >&2
         exit 1
         ;;
     esac

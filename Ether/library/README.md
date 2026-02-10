@@ -7,4 +7,5 @@
 - When an update is done, see if that changes any of the indexed comparisons
 - Allow manual update of some specific entry
 - GitHub might refer to subdirectory in monorepo, should still be able to clone + might need a git login, so create an account just for this. (Verse compiler for instance)
+- For the index, deduplicate files which are the same across versions/similar; only the changes.
 - 

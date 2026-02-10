@@ -26,7 +26,7 @@ jobs:
         run: |
           VERSION=$(jq -r .version "$TAURI_CONF")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -91,7 +91,7 @@ jobs:
         run: |
           VERSION=$(jq -r .version "$TAURI_CONF")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -156,7 +156,7 @@ jobs:
         run: |
           VERSION=$(jq -r .version "$TAURI_CONF")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -213,7 +213,7 @@ jobs:
           npx tauri android init
           npx tauri android build
 
-      - name: Rename & optionally sign Android APK
+      - name: Rename & optionally sign Android artifacts
         if: steps.version.outputs.skip == 'false'
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -221,10 +221,14 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           APK_DIR="Ether/.html/src-tauri/gen/android/app/build/outputs/apk/universal/release"
+          AAB_DIR="Ether/.html/src-tauri/gen/android/app/build/outputs/bundle/universalRelease"
           UNSIGNED="$APK_DIR/app-universal-release-unsigned.apk"
 
-          # Always ship the unsigned APK
+          # Rename APK
           cp "$UNSIGNED" "$APK_DIR/Ether_${VERSION}_universal.apk"
+
+          # Rename AAB
+          cp "$AAB_DIR/app-universal-release.aab" "$AAB_DIR/Ether_${VERSION}_universal.aab"
 
           # If keystore secrets are configured, also produce a signed APK
           if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
@@ -244,7 +248,7 @@ jobs:
           name: android-artifacts
           path: |
             Ether/.html/src-tauri/gen/android/app/build/outputs/apk/universal/release/Ether_*.apk
-            Ether/.html/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/*.aab
+            Ether/.html/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/Ether_*.aab
 
   # # ---------------------------------------------------------------------------
   # # macOS (Apple Silicon) — uncomment when mac runner is available
@@ -261,7 +265,7 @@ jobs:
   #       run: |
   #         VERSION=$(python3 -c "import json; print(json.load(open('$TAURI_CONF'))['version'])")
   #         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-  #         if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+  #         if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
   #           echo "skip=true" >> "$GITHUB_OUTPUT"
   #         else
   #           echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -316,7 +320,7 @@ jobs:
   #       run: |
   #         VERSION=$(python3 -c "import json; print(json.load(open('$TAURI_CONF'))['version'])")
   #         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-  #         if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+  #         if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
   #           echo "skip=true" >> "$GITHUB_OUTPUT"
   #         else
   #           echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -375,7 +379,7 @@ jobs:
           VERSION=$(jq -r .version "$TAURI_CONF")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           # Final guard — if tag already exists the build jobs were skipped
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"

@@ -705,7 +705,7 @@ Language
     namespace IntermediateLanguage < Language(".wyil")
   namespace Wasp < Language(".wasp") ; location &= "https://github.com/wasp-lang/wasp" & "https://wasp.sh/"
   namespace Whitespace < Language(".ws") ; location &= "https://esolangs.org/wiki/Whitespace" & "https://en.wikipedia.org/wiki/Whitespace_(programming_language)"
-  namespace Wren < Language(".wren") ; location &= "https://github.com/wren-lang/wren" & "https://wren.io/"
+  namespace Wren < Language(".wren") ; location &= "https://github.com/wren-lang/wren" & "https://wren.io/" & "https://en.wikipedia.org/wiki/Wren_(programming_language)"
   namespace wgpu < Library ; location &= "https://github.com/gfx-rs/wgpu"
   namespace Wireworld < Tool ; location &= "https://en.wikipedia.org/wiki/Wireworld"
     namespace MCell < Language(".mcl")
@@ -1072,6 +1072,549 @@ Language
   namespace Amber < Language(".ab") ; location &= "https://github.com/amber-lang/amber" & "https://amber-lang.com/"
   namespace Bel < Language(".bel") ; location &= "https://paulgraham.com/bel.html"
 
+  // --- New entries: Ontology & Knowledge Representation Languages ---
+  namespace OWL | "Web Ontology Language" < Language(".owl") ; location &= "https://github.com/owlcs/owlapi" & "https://www.w3.org/OWL/" & "https://en.wikipedia.org/wiki/Web_Ontology_Language"
+    namespace ManchesterSyntax | "Manchester OWL Syntax" < Language(".omn") ; location &= "https://www.w3.org/TR/owl2-manchester-syntax/"
+    namespace FunctionalSyntax < Language(".ofn")
+  namespace RDF | "Resource Description Framework" < Language(".rdf") ; location &= "https://www.w3.org/RDF/" & "https://en.wikipedia.org/wiki/Resource_Description_Framework"
+  namespace RDFS | "RDF Schema" < Language(".rdf") ; location &= "https://www.w3.org/TR/rdf-schema/" & "https://en.wikipedia.org/wiki/RDF_Schema"
+  namespace N3 | "Notation3" < Language(".n3") ; location &= "https://w3c.github.io/N3/spec/" & "https://en.wikipedia.org/wiki/Notation3"
+  namespace NTriples | "N-Triples" < Language(".nt") ; location &= "https://www.w3.org/TR/n-triples/" & "https://en.wikipedia.org/wiki/N-Triples"
+  namespace NQuads | "N-Quads" < Language(".nq") ; location &= "https://www.w3.org/TR/n-quads/"
+  namespace SKOS | "Simple Knowledge Organization System" < Language(".rdf") ; location &= "https://www.w3.org/TR/skos-reference/" & "https://en.wikipedia.org/wiki/Simple_Knowledge_Organization_System"
+  namespace OBO | "OBO Format" < Language(".obo") ; location &= "https://github.com/owlcollab/oboformat" & "http://obofoundry.org/" & "https://en.wikipedia.org/wiki/Open_Biomedical_Ontologies"
+  namespace KIF | "Knowledge Interchange Format" < Language(".kif") ; location &= "http://www-ksl.stanford.edu/knowledge-sharing/kif/" & "https://en.wikipedia.org/wiki/Knowledge_Interchange_Format"
+  namespace CommonLogic | "Common Logic" < Language(".cl") ; location &= "https://en.wikipedia.org/wiki/Common_Logic"
+    namespace CLIF | "Common Logic Interchange Format" < Language(".clif")
+  namespace CycL < Language(".cycl") ; location &= "https://github.com/white-flame/clyc" & "https://en.wikipedia.org/wiki/CycL"
+  namespace Ontolingua < Language(".kif") ; location &= "http://www.ksl.stanford.edu/software/ontolingua/" & "https://en.wikipedia.org/wiki/Ontolingua"
+
+  // --- New entries: Formal Specification & Model Transformation ---
+  namespace AADL | "Architecture Analysis & Design Language" < Language(".aadl") ; location &= "https://github.com/osate/osate2" & "https://en.wikipedia.org/wiki/Architecture_Analysis_%26_Design_Language"
+  namespace MARTE | "Modeling and Analysis of Real Time and Embedded systems" < Language(".uml") ; location &= "https://www.omg.org/spec/MARTE/" & "https://en.wikipedia.org/wiki/Modeling_and_Analysis_of_Real_Time_and_Embedded_systems"
+  namespace QVT | "Query/View/Transformation" < Language(".qvto") ; location &= "https://en.wikipedia.org/wiki/QVT"
+    namespace QVTr | "QVT Relations" < Language(".qvtr")
+  namespace ATL | "ATLAS Transformation Language" < Language(".atl") ; location &= "https://github.com/eclipse-atl/atl" & "https://en.wikipedia.org/wiki/ATLAS_Transformation_Language"
+  namespace Epsilon < Language(".eol") ; location &= "https://github.com/eclipse-epsilon/epsilon" & "https://eclipse.dev/epsilon/"
+    namespace ETL | "Epsilon Transformation Language" < Language(".etl")
+    namespace EVL | "Epsilon Validation Language" < Language(".evl")
+    namespace EGX | "Epsilon Generation Language" < Language(".egx")
+
+  // --- New entries: Logic Programming (additional) ---
+  namespace LambdaProlog | "Lambda Prolog" < Language(".mod") ; location &= "https://github.com/teyjus/teyjus" & "https://en.wikipedia.org/wiki/%CE%9BProlog"
+    namespace Signature < Language(".sig")
+  namespace miniKanren < Language(".scm") ; location &= "https://github.com/miniKanren" & "https://minikanren.org/" & "https://en.wikipedia.org/wiki/MiniKanren"
+  namespace cKanren < Language(".rkt") ; location &= "https://github.com/calvis/cKanren"
+
+  // --- New entries: Controlled Natural Languages ---
+  namespace ACE | "Attempto Controlled English" < Language(".ace") ; location &= "https://github.com/Attempto/APE" & "https://attempto.ifi.uzh.ch/" & "https://en.wikipedia.org/wiki/Attempto_Controlled_English"
+  namespace PENG | "Processable English" < Language ; location &= "https://en.wikipedia.org/wiki/Controlled_natural_language"
+
+  // --- New entries: Biological Modeling Tools ---
+  namespace BioModelAnalyzer < Tool ; location &= "https://github.com/microsoft/BioModelAnalyzer"
+  namespace BioPEPA | "Bio-PEPA" < Language(".biopepa") ; location &= "https://github.com/Bio-PEPA/Bio-PEPA" & "https://homepages.inf.ed.ac.uk/jeh/Bio-PEPA/biopepa.html"
+  namespace VCell | "Virtual Cell" < Tool ; location &= "https://github.com/virtualcell/vcell" & "https://vcell.org/" & "https://en.wikipedia.org/wiki/Virtual_Cell"
+  namespace CellDesigner < Tool ; location &= "https://celldesigner.org/"
+  namespace ECell | "E-Cell" < Tool ; location &= "https://github.com/ecell/ecell4" & "https://www.e-cell.org/"
+  namespace RuleBender < Tool ; location &= "https://github.com/RuleWorld/rulebender"
+
+  // --- New entries: Simulation Tools ---
+  namespace AnyLogic < Tool ; location &= "https://www.anylogic.com/" & "https://en.wikipedia.org/wiki/AnyLogic"
+  namespace Arena | "Arena Simulation" < Tool ; location &= "https://www.rockwellautomation.com/en-us/products/software/arena-simulation.html" & "https://en.wikipedia.org/wiki/Arena_(software)"
+  namespace PtolemyII | "Ptolemy II" < Tool ; location &= "https://github.com/icyphy/ptII" & "https://ptolemy.berkeley.edu/ptolemyII/" & "https://en.wikipedia.org/wiki/Ptolemy_Project"
+  namespace ns3 | "ns-3" < Tool ; location &= "https://gitlab.com/nsnam/ns-3-dev" & "https://www.nsnam.org/"
+  namespace NESTML < Language(".nestml") ; location &= "https://github.com/nest/nestml"
+  namespace GENESIS | "GENESIS Simulator" < Tool ; location &= "https://github.com/genesis-sim/genesis-2.4" & "http://www.genesis-sim.org/GENESIS/" & "https://en.wikipedia.org/wiki/GENESIS_(software)"
+
+  // --- New entries: Probabilistic Programming (additional) ---
+  namespace OmegaJl | "Omega.jl" < Language(".jl") ; location &= "https://github.com/zenna/Omega.jl"
+
+  // --- New entries: Computational Neuroscience Markup ---
+  namespace NineML < Language(".xml") ; location &= "https://github.com/INCF/nineml-spec" & "http://nineml.net/"
+
+  // --- New entries: Constraint Programming (additional) ---
+  namespace CHIP | "Constraint Handling in Prolog" < Language(".clp") ; location &= "https://en.wikipedia.org/wiki/CHIP_(programming_language)"
+
+  // --- New entries: Knowledge Graph Tools ---
+  namespace Neo4j < Tool ; location &= "https://github.com/neo4j/neo4j" & "https://neo4j.com/" & "https://en.wikipedia.org/wiki/Neo4j"
+  namespace Wikidata < Tool ; location &= "https://github.com/Wikidata" & "https://www.wikidata.org/" & "https://en.wikipedia.org/wiki/Wikidata"
+  namespace Freebase < Tool ; location &= "https://github.com/nchah/freebase-mql" & "https://en.wikipedia.org/wiki/Freebase_(database)"
+    namespace MQL | "Metaweb Query Language" < Language(".mql")
+
+  // --- New entries: Languages from GitHub "programming-language" topic (by stars) ---
+
+  // General-purpose / Systems languages
+  namespace Wenyan | "文言" < Language(".wy") ; location &= "https://github.com/wenyan-lang/wenyan" & "https://wy-lang.org/"
+  namespace XGo | "Go+" < Language(".gop") ; location &= "https://github.com/goplus/xgo" & "https://goplus.org/"
+  namespace Jank < Language(".jank") ; location &= "https://github.com/jank-lang/jank" & "https://jank-lang.org/"
+  namespace Jakt < Language(".jakt") ; location &= "https://github.com/SerenityOS/jakt"
+  namespace Erg < Language(".er") ; location &= "https://github.com/erg-lang/erg" & "https://erg-lang.org/"
+  namespace Beef < Language(".bf") ; location &= "https://github.com/beefytech/Beef" & "https://www.beeflang.org/"
+  namespace Nature < Language(".n") ; location &= "https://github.com/nature-lang/nature" & "https://nature-lang.org/"
+  namespace Umka < Language(".um") ; location &= "https://github.com/vtereshkov/umka-lang"
+  namespace Fusion | "Fut" < Language(".fut") ; location &= "https://github.com/fusionlanguage/fut" & "https://fusion-lang.org/"
+  namespace Wa | "凹语言" < Language(".wa") ; location &= "https://github.com/wa-lang/wa" & "https://wa-lang.org/"
+  namespace Peregrine < Language(".pe") ; location &= "https://github.com/SaptakBhoumik/Peregrine"
+  namespace C2 < Language(".c2") ; location &= "https://github.com/c2lang/c2compiler" & "http://c2lang.org/"
+  namespace Muon < Language(".muon") ; location &= "https://github.com/nickmqb/muon"
+  namespace Cone < Language(".cone") ; location &= "https://github.com/jondgoodwin/cone" & "http://cone.jondgoodwin.com/"
+  namespace Jule < Language(".jule") ; location &= "https://github.com/julelang/jule" & "https://jule.dev/"
+  namespace Alan < Language(".alan") ; location &= "https://github.com/alantech/alan" & "https://alan-lang.org/"
+  namespace Concrete < Language(".con") ; location &= "https://github.com/lambdaclass/concrete"
+  namespace Helix < Language(".hlx") ; location &= "https://github.com/kairolang/helix-lang" & "https://helix-lang.com/"
+  namespace Acton < Language(".act") ; location &= "https://github.com/actonlang/acton" & "https://www.acton-lang.org/"
+  namespace Savi < Language(".savi") ; location &= "https://github.com/savi-lang/savi"
+  namespace Alumina < Language(".alu") ; location &= "https://github.com/alumina-lang/alumina" & "https://docs.alumina-lang.net/"
+  namespace Compis < Language ; location &= "https://github.com/rsms/compis"
+
+  // Embeddable / Scripting languages
+  namespace AviatorScript < Language(".av") ; location &= "https://github.com/killme2008/aviatorscript"
+  namespace Tengo < Language(".tengo") ; location &= "https://github.com/d5/tengo"
+  namespace Anko < Language(".ank") ; location &= "https://github.com/mattn/anko"
+  namespace PocketLang < Language(".pk") ; location &= "https://github.com/ThakeeNathees/pocketlang"
+  namespace Koto < Language(".koto") ; location &= "https://github.com/koto-lang/koto" & "https://koto.dev/"
+  namespace Rune < Language(".rn") ; location &= "https://github.com/rune-rs/rune" & "https://rune-rs.github.io/"
+  namespace Steel < Language(".scm") ; location &= "https://github.com/mattwparas/steel"
+  namespace Passerine < Language(".pn") ; location &= "https://github.com/vrtbl/passerine"
+  namespace Agora < Language(".agora") ; location &= "https://github.com/mna/agora"
+  namespace MiniScript < Language(".ms") ; location &= "https://github.com/JoeStrout/miniscript" & "https://miniscript.org/"
+  namespace ELENA < Language(".l") ; location &= "https://github.com/ELENA-LANG/elena-lang"
+  namespace Kinx < Language(".kx") ; location &= "https://github.com/Kray-G/kinx"
+
+  // Functional / Type-theory languages
+  namespace Coconut < Language(".coco") ; location &= "https://github.com/evhub/coconut" & "https://coconut-lang.org/"
+  namespace Tao < Language(".tao") ; location &= "https://github.com/zesterer/tao"
+  namespace Hamler < Language(".hm") ; location &= "https://github.com/hamler-lang/hamler" & "https://www.hamler-lang.org/"
+  namespace Pikelet < Language(".pi") ; location &= "https://github.com/pikelet-lang/pikelet"
+  namespace Candy < Language(".candy") ; location &= "https://github.com/candy-lang/candy"
+  namespace Pen < Language(".pen") ; location &= "https://github.com/pen-lang/pen" & "https://pen-lang.org/"
+  namespace Fika < Language(".fika") ; location &= "https://github.com/fika-lang/fika"
+  namespace NeoHaskell < Language(".nehs") ; location &= "https://github.com/neohaskell/NeoHaskell" & "https://neohaskell.org/"
+  namespace Peridot < Language(".pdt") ; location &= "https://github.com/ehatti/peridot"
+  namespace Lawvere < Language(".law") ; location &= "https://github.com/jameshaydon/lawvere"
+
+  // Typed / Verified languages
+  namespace CheckedC | "Checked C" < Language(".c") ; location &= "https://github.com/checkedc/checkedc"
+  namespace ISPC | "Intel SPMD Program Compiler" < Language(".ispc") ; location &= "https://github.com/ispc/ispc" & "https://ispc.github.io/" & "https://en.wikipedia.org/wiki/ISPC"
+  namespace CakeML < Language(".cml") ; location &= "https://github.com/CakeML/cakeml" & "https://cakeml.org/"
+  namespace EOLANG | "EO" < Language(".eo") ; location &= "https://github.com/objectionary/eo" & "https://www.eolang.org/"
+
+  // Domain-specific languages
+  namespace Wuffs | "Wrangling Untrusted File Formats Safely" < Language(".wuffs") ; location &= "https://github.com/google/wuffs"
+  namespace SATySFi < Language(".saty") ; location &= "https://github.com/gfngfn/SATySFi"
+  namespace daScript | "daslang" < Language(".das") ; location &= "https://github.com/GaijinEntertainment/daScript" & "https://dascript.org/"
+  namespace Cmajor < Language(".cmajor") ; location &= "https://github.com/cmajor-lang/cmajor" & "https://cmajor.dev/"
+  namespace Gwion < Language(".gw") ; location &= "https://github.com/Gwion/Gwion" & "https://gwion.github.io/Gwion/"
+  namespace Seq < Language(".seq") ; location &= "https://github.com/seq-lang/seq" & "https://seq-lang.org/"
+  namespace Smudge < Language(".smudge") ; location &= "https://github.com/smudgelang/smudge"
+  namespace Fathom < Language(".fathom") ; location &= "https://github.com/yeslogic/fathom"
+  namespace Tokay < Language(".tok") ; location &= "https://github.com/tokay-lang/tokay" & "https://tokay.dev/"
+  namespace Cadence < Language(".cdc") ; location &= "https://github.com/onflow/cadence" & "https://cadence-lang.org/"
+  namespace Lurk < Language(".lurk") ; location &= "https://github.com/lurk-lab/lurk-beta" & "https://lurk-lang.org/"
+  namespace CSML | "Chatbot Script Markup Language" < Language(".csml") ; location &= "https://github.com/CSML-by-Clevy/csml-engine" & "https://www.csml.dev/"
+  namespace Bril | "Big Red Intermediate Language" < Language(".bril") ; location &= "https://github.com/sampsyo/bril"
+  namespace PatternLanguage | "ImHex Pattern Language" < Language(".hexpat") ; location &= "https://github.com/WerWolv/PatternLanguage"
+  namespace Numscript < Language(".num") ; location &= "https://github.com/formancehq/numscript"
+
+  // Shell / CLI scripting languages
+  namespace NGS | "Next Generation Shell" < Language(".ngs") ; location &= "https://github.com/ngs-lang/ngs" & "https://ngs-lang.org/"
+  namespace ABS | "ABS Language" < Language(".abs") ; location &= "https://github.com/abs-lang/abs" & "https://www.abs-lang.org/"
+  namespace Cotowali < Language(".coto") ; location &= "https://github.com/cotowali/cotowali"
+  namespace Rad < Language(".rad") ; location &= "https://github.com/amterp/rad"
+
+  // Lua variants / extensions
+  namespace Ravi < Language(".lua") ; location &= "https://github.com/dibyendumajumdar/ravi"
+  namespace Pluto | "PlutoLang" < Language(".pluto") ; location &= "https://github.com/PlutoLang/Pluto" & "https://pluto-lang.org/"
+  namespace Kuroko < Language(".krk") ; location &= "https://github.com/kuroko-lang/kuroko" & "https://kuroko-lang.github.io/"
+  namespace Clue < Language(".clue") ; location &= "https://github.com/ClueLang/Clue"
+
+  // Language variants on other VMs
+  namespace Clojerl | "Clojure for Erlang VM" < Language(".clje") ; location &= "https://github.com/clojerl/clojerl"
+  namespace Phel < Language(".phel") ; location &= "https://github.com/phel-lang/phel-lang" & "https://phel-lang.org/"
+  namespace Golo < Language(".golo") ; location &= "https://github.com/eclipse-archived/golo-lang"
+  namespace Sesterl < Language(".sest") ; location &= "https://github.com/gfngfn/Sesterl"
+
+  // Visual / Dataflow programming
+  namespace Snap | "Snap!" < Tool ; location &= "https://github.com/jmoenig/Snap" & "https://snap.berkeley.edu/" & "https://en.wikipedia.org/wiki/Snap!_(programming_language)"
+  namespace Neva < Language(".neva") ; location &= "https://github.com/nevalang/neva" & "https://nevalang.org/"
+  namespace Lamdu < Tool ; location &= "https://github.com/lamdu/lamdu" & "http://www.lamdu.org/"
+
+  // Service-oriented / Web languages
+  namespace Eve < Language(".eve") ; location &= "https://github.com/witheve/Eve"
+  namespace Imba < Language(".imba") ; location &= "https://github.com/imba/imba" & "https://imba.io/"
+  namespace Penrose < Language(".substance" | ".style" | ".domain") ; location &= "https://github.com/penrose/penrose" & "https://penrose.cs.cmu.edu/"
+  namespace Jolie < Language(".ol") ; location &= "https://github.com/jolie/jolie" & "https://www.jolie-lang.org/" & "https://en.wikipedia.org/wiki/Jolie_(programming_language)"
+  namespace Coi < Language(".coi") ; location &= "https://github.com/io-eric/coi"
+  namespace Grace < Language(".grace") ; location &= "https://github.com/Gabriella439/grace"
+
+  // Mathematical / Scientific
+  namespace Egison < Language(".egi") ; location &= "https://github.com/egison/egison" & "https://www.egison.org/"
+  namespace Wax < Language(".wax") ; location &= "https://github.com/LingDong-/wax"
+  namespace DDlog | "Differential Datalog" < Language(".dl") ; location &= "https://github.com/vmware-archive/differential-datalog"
+
+  // Esoteric / Cultural languages
+  namespace Cantonese | "粤语" < Language(".cts") ; location &= "https://github.com/StepfenShawn/Cantonese"
+  namespace AsciiDots < Language(".dots") ; location &= "https://github.com/aaronjanse/asciidots"
+  namespace HolyC < Language(".hc") ; location &= "https://github.com/Jamesbarford/holyc-lang"
+  namespace Fetlang < Language(".fet") ; location &= "https://github.com/fetlang/fetlang"
+  namespace Kip < Language(".kip") ; location &= "https://github.com/kip-dili/kip"
+  namespace Latino < Language(".lat") ; location &= "https://github.com/lenguaje-latino/latino"
+  namespace Nadesiko | "なでしこ" < Language(".nako3") ; location &= "https://github.com/kujirahand/nadesiko3" & "https://nadesi.com/"
+  namespace Vedic < Language(".ved") ; location &= "https://github.com/vedic-lang/vedic"
+  namespace Vyxal < Language(".vy") ; location &= "https://github.com/Vyxal/Vyxal"
+  namespace Nuri | "누리" < Language(".nuri") ; location &= "https://github.com/suhdonghwi/nuri"
+
+  // Music / Audio programming
+  namespace Clio < Language(".clio") ; location &= "https://github.com/clio-lang/clio" & "https://clio-lang.org/"
+  namespace ArkScript < Language(".ark") ; location &= "https://github.com/ArkScript-lang/Ark" & "https://arkscript-lang.dev/"
+  namespace Rye < Language(".rye") ; location &= "https://github.com/refaktor/rye" & "https://ryelang.org/"
+
+  // Embeddable / Game scripting
+  namespace Sui < Language(".sui") ; location &= "https://github.com/TakatoHonda/sui-lang"
+  namespace Blisp < Language(".blisp") ; location &= "https://github.com/ytakano/blisp"
+
+  // Low-level / Retro computing
+  namespace Millfork < Language(".mfk") ; location &= "https://github.com/KarolS/millfork"
+  namespace Vox < Language(".vx") ; location &= "https://github.com/MrSmith33/vox"
+  namespace EndBASIC < Language(".bas") ; location &= "https://github.com/endbasic/endbasic" & "https://endbasic.dev/"
+  namespace Prog8 < Language(".p8") ; location &= "https://github.com/irmen/prog8" & "https://prog8.readthedocs.io/"
+  namespace NimSkull < Language(".nim") ; location &= "https://github.com/nim-works/nimskull"
+
+  // Other notable languages
+  namespace Ink | "Ink (thesephist)" < Language(".ink") ; location &= "https://github.com/thesephist/ink"
+  namespace Oak < Language(".oak") ; location &= "https://github.com/thesephist/oak" & "https://oaklang.org/"
+  namespace Lone < Language(".lone") ; location &= "https://github.com/lone-lang/lone"
+  namespace Chaos < Language(".kaos") ; location &= "https://github.com/chaos-lang/chaos" & "https://chaos-lang.org/"
+  namespace XL < Language(".xl") ; location &= "https://github.com/c3d/xl" & "https://xlr.sourceforge.io/"
+  namespace Dictu < Language(".du") ; location &= "https://github.com/dictu-lang/Dictu" & "https://dictu-lang.com/"
+  namespace Mond < Language(".mnd") ; location &= "https://github.com/Rohansi/Mond"
+  namespace Newspeak < Language(".ns") ; location &= "https://github.com/newspeaklanguage/newspeak" & "https://newspeaklanguage.org/" & "https://en.wikipedia.org/wiki/Newspeak_(programming_language)"
+  namespace Aqua < Language(".aqua") ; location &= "https://github.com/fluencelabs/aqua" & "https://fluence.dev/"
+  namespace CashScript < Language(".cash") ; location &= "https://github.com/CashScript/cashscript" & "https://cashscript.org/"
+  namespace GDL | "GNU Data Language" < Language(".pro") ; location &= "https://github.com/gnudatalanguage/gdl" & "https://gnudatalanguage.github.io/"
+  namespace Nelson < Language(".m") ; location &= "https://github.com/nelson-lang/nelson" & "https://nelson-numerical-software.github.io/nelson-website/"
+  namespace Catspeak < Language(".meow") ; location &= "https://github.com/katsaii/catspeak-lang"
+  namespace Sidef < Language(".sf") ; location &= "https://github.com/trizen/sidef"
+  namespace Citrine < Language(".ctr") ; location &= "https://github.com/gabordemooij/citrine" & "https://citrine-lang.org/"
+  namespace Panda < Language(".panda") ; location &= "https://github.com/panda-lang/panda"
+  namespace Jason | "AgentSpeak" < Language(".asl") ; location &= "https://github.com/jason-lang/jason" & "https://jason-lang.github.io/" & "https://en.wikipedia.org/wiki/AgentSpeak"
+  namespace SARL < Language(".sarl") ; location &= "https://github.com/sarl/sarl" & "http://www.sarl.io/" & "https://en.wikipedia.org/wiki/SARL_language"
+  namespace Fuzion < Language(".fz") ; location &= "https://github.com/tokiwa-software/fuzion" & "https://fuzion-lang.dev/"
+  namespace Mimium < Language(".mmm") ; location &= "https://github.com/mimium-org/mimium-rs" & "https://mimium.org/"
+  namespace Blade < Language(".b") ; location &= "https://github.com/blade-lang/blade" & "https://bladelang.com/"
+  namespace Forscape < Language(".π") ; location &= "https://github.com/JohnDTill/Forscape"
+
+  // --- New entries: Additional languages from GitHub "programming-language" topic ---
+
+  // General-purpose / Systems
+  namespace OneLang < Language(".one") ; location &= "https://github.com/onelang/OneLang"
+  namespace Rue < Language(".rue") ; location &= "https://github.com/rue-language/rue"
+  namespace Neugram < Language(".ng") ; location &= "https://github.com/neugram/ng"
+  namespace Koral < Language(".kor") ; location &= "https://github.com/kulics/koral"
+  namespace eC < Language(".ec") ; location &= "https://github.com/ecere/ecere-sdk" & "http://ec-lang.org/"
+  namespace NULLC < Language(".nc") ; location &= "https://github.com/WheretIB/nullc"
+  namespace Objeck < Language(".obs") ; location &= "https://github.com/objeck/objeck-lang"
+  namespace Flax < Language(".flx") ; location &= "https://github.com/flax-lang/flax"
+  namespace Feral < Language(".fer") ; location &= "https://github.com/Feral-Lang/Feral"
+  namespace CovScript < Language(".csc") ; location &= "https://github.com/covscript/covscript"
+  namespace Yona < Language(".yona") ; location &= "https://github.com/yona-lang/yona"
+  namespace Qore < Language(".q") ; location &= "https://github.com/qoretechnologies/qore" & "https://qore.org/"
+  namespace Yaksha < Language(".yaka") ; location &= "https://github.com/YakshaLang/Yaksha"
+  namespace Temper < Language(".temper") ; location &= "https://github.com/temperlang/temper"
+  namespace Lumina < Language(".lm") ; location &= "https://github.com/luminalang/lumina"
+
+  // Embeddable / Scripting
+  namespace Melang < Language(".m") ; location &= "https://github.com/Water-Melon/Melang"
+  namespace Never < Language(".nev") ; location &= "https://github.com/never-lang/never"
+  namespace Myst < Language(".mt") ; location &= "https://github.com/myst-lang/myst"
+  namespace TopShell < Language(".tsh") ; location &= "https://github.com/topshell-language/topshell"
+  namespace Wu < Language(".wu") ; location &= "https://github.com/wu-lang/wu"
+  namespace Gentee < Language(".g") ; location &= "https://github.com/gentee/gentee"
+  namespace MY_BASIC | "MY-BASIC" < Language(".bas") ; location &= "https://github.com/paladin-t/my_basic"
+
+  // Functional / Type-theory
+  namespace Morloc < Language(".loc") ; location &= "https://github.com/morloc-project/morloc"
+  namespace Finkel < Language(".fnk") ; location &= "https://github.com/finkel-lang/finkel"
+  namespace Mlatu < Language(".mlatu") ; location &= "https://github.com/mlatu-lang/mlatu"
+  namespace GoCaml < Language(".ml") ; location &= "https://github.com/rhysd/gocaml"
+  namespace Cicada < Language(".cic") ; location &= "https://github.com/cicada-lang/cicada-solo"
+  namespace Bruijn < Language(".bruijn") ; location &= "https://github.com/marvinborner/bruijn"
+  namespace Niva < Language(".niva") ; location &= "https://github.com/gavr123456789/Niva"
+
+  // Domain-specific
+  namespace Slang | "Slang Audio" < Language(".slang") ; location &= "https://github.com/kylestetz/slang"
+  namespace AskQL < Language(".ask") ; location &= "https://github.com/CatchTheTornado/askql"
+  namespace Tensorlang < Language(".tl") ; location &= "https://github.com/tensorlang/tensorlang"
+  namespace NPL | "Neural Parallel Language" < Language(".npl") ; location &= "https://github.com/LiXizhi/NPLRuntime"
+  namespace Rant < Language(".rant") ; location &= "https://github.com/rant-lang/rant"
+  namespace Empirical < Language(".emp") ; location &= "https://github.com/empirical-soft/empirical-lang"
+  namespace ThingTalk < Language(".tt") ; location &= "https://github.com/stanford-oval/thingtalk"
+  namespace Mech < Language(".mec") ; location &= "https://github.com/mech-lang/mech"
+
+  // Blockchain / Smart contracts
+  namespace Helios < Language(".hl") ; location &= "https://github.com/HeliosLang/compiler"
+  namespace OpShin < Language(".py") ; location &= "https://github.com/OpShin/opshin"
+  namespace Zkay < Language(".zkay") ; location &= "https://github.com/eth-sri/zkay"
+
+  // Verification / Formal
+  namespace Silver | "Viper IL" < Language(".sil") ; location &= "https://github.com/viperproject/silver"
+  namespace SUS | "SUS HDL" < Language(".sus") ; location &= "https://github.com/pc2/sus-compiler"
+  namespace OberonC | "Oberon-07" < Language(".ob") ; location &= "https://github.com/lboasso/oberonc"
+
+  // Concurrent / Distributed
+  namespace Orc < Language(".orc") ; location &= "https://github.com/orc-lang/orc" & "https://orc-csres.github.io/orc/" & "https://en.wikipedia.org/wiki/Orc_(programming_language)"
+  namespace Slate < Language(".slate") ; location &= "https://github.com/briantrice/slate-language"
+
+  // Scheme / Lisp variants
+  namespace OtusLisp | "Ol" < Language(".ol") ; location &= "https://github.com/yuriy-chumak/ol"
+  namespace dg < Language(".dg") ; location &= "https://github.com/pyos/dg"
+  namespace OK | "K5 Interpreter" < Language(".k") ; location &= "https://github.com/JohnEarnest/ok"
+
+  // Retro / Low-level
+  namespace PLASMA < Language(".pla") ; location &= "https://github.com/dschmenk/PLASMA"
+  namespace LDPL < Language(".ldpl") ; location &= "https://github.com/Lartu/ldpl"
+  namespace 3BC < Language(".3bc") ; location &= "https://github.com/RodrigoDornelles/3bc-lang"
+
+  // Game / Visual
+  namespace ZSharp | "Z#" < Language(".zs") ; location &= "https://github.com/sam-astro/Z-Sharp"
+  namespace Cerberus < Language(".cxs") ; location &= "https://github.com/PhilMoe/cerberus"
+  namespace Grapycal < Tool ; location &= "https://github.com/Grapycal/Grapycal"
+  namespace Fanx < Language(".fan") ; location &= "https://github.com/fanx-dev/fanx"
+
+  // Esoteric / Cultural
+  namespace BhaiLang < Language(".bhai") ; location &= "https://github.com/DulLabs/bhai-lang"
+  namespace Folders < Language ; location &= "https://github.com/rottytooth/Folders"
+  namespace Retina < Language(".ret") ; location &= "https://github.com/m-ender/retina"
+  namespace Tampio < Language(".tampio") ; location &= "https://github.com/fergusq/tampio"
+  namespace DDP | "Deutsche Programmiersprache" < Language(".ddp") ; location &= "https://github.com/DDP-Projekt/Kompilierer"
+  namespace EasyLang < Language(".easy") ; location &= "https://github.com/chkas/easylang" & "https://easylang.dev/"
+
+  // Non-English natural language PLs
+  namespace Egua < Language(".egua") ; location &= "https://github.com/eguadev/egua"
+  namespace Potigol < Language(".poti") ; location &= "https://github.com/potigol/potigol"
+  namespace Ezhil | "எழில்" < Language(".n") ; location &= "https://github.com/Ezhil-Language-Foundation/Ezhil-Lang"
+  namespace Naskah < Language(".nsk") ; location &= "https://github.com/pveyes/naskah"
+  namespace Kin < Language(".kin") ; location &= "https://github.com/kin-lang/kin"
+  namespace Tu | "凸" < Language(".tu") ; location &= "https://github.com/tu-lang/tu"
+  namespace Linotte < Language(".liv") ; location &= "https://github.com/cpc6128/LangageLinotte"
+  namespace EsJS < Language(".esjs") ; location &= "https://github.com/es-js/esjs"
+  namespace Wollok < Language(".wlk") ; location &= "https://github.com/uqbar-project/wollok"
+
+  // --- GitHub topic:programming-language (10-32 stars) ---
+  // General-purpose / Compiled
+  namespace Thrush < Language ; location &= "https://github.com/thrushlang/thrushc"
+  namespace Azula < Language ; location &= "https://github.com/azula-lang/azula"
+  namespace Sand < Language ; location &= "https://github.com/sand-lang/sand"
+  namespace ASPL < Language ; location &= "https://github.com/aspl-lang/aspl"
+  namespace Enact < Language ; location &= "https://github.com/enact-lang/enact"
+  namespace Fastcode < Language ; location &= "https://github.com/TheRealMichaelWang/fastcode"
+  namespace Chemical < Language ; location &= "https://github.com/chemicallang/chemical"
+  namespace Colgm < Language ; location &= "https://github.com/colgm/colgm"
+  namespace Sunder < Language ; location &= "https://github.com/ashn-dot-dev/sunder"
+  namespace Bluebird < Language ; location &= "https://github.com/csb6/bluebird"
+  namespace Gera < Language ; location &= "https://github.com/geralang/geralc"
+  namespace OrbLang | "Orb" < Language ; location &= "https://github.com/vplesko/OrbLang"
+  namespace Rho < Language ; location &= "https://github.com/arshajii/rho"
+  namespace Ullage < Language ; location &= "https://github.com/iwillspeak/ullage"
+  namespace HashLang | "Hash" < Language ; location &= "https://github.com/hash-org/hashc"
+  namespace NOMA < Language ; location &= "https://github.com/pierridotite/NOMA"
+  namespace Brisk < Language ; location &= "https://github.com/spotandjake/Brisk"
+  namespace NOS < Language ; location &= "https://github.com/LUK3D/NOS"
+  namespace Jou < Language ; location &= "https://github.com/Akuli/jou"
+  namespace Void < Language ; location &= "https://github.com/VoidLang/void"
+  namespace Aeon < Language ; location &= "https://github.com/alcides/aeon"
+  namespace Sapphire < Language ; location &= "https://github.com/foxzyt/Sapphire"
+  namespace Bone < Language ; location &= "https://github.com/desktopgame/bone"
+  namespace Relax < Language ; location &= "https://github.com/CloakerSmoker/Relax-Language"
+  namespace BreadCrumbs | "bread-crumbs" < Language ; location &= "https://github.com/Bre4dGC/bread-crumbs"
+  namespace Okta < Language ; location &= "https://github.com/mikelma/oktac"
+  namespace Stove < Language ; location &= "https://github.com/asxez/stove"
+  namespace Scribe < Language ; location &= "https://github.com/scribe-lang/scribe"
+  namespace VSharp | "V#" < Language ; location &= "https://github.com/funcieqDEV/VSharp"
+  namespace CheezLang | "Cheez" < Language ; location &= "https://github.com/CheezLang/CheezLang"
+  namespace Dust < Language ; location &= "https://github.com/DustLanguage/Dust"
+  namespace Wright < Language ; location &= "https://github.com/vcfxb/wright-lang"
+  namespace Hap < Language ; location &= "https://github.com/evincarofautumn/Hap"
+
+  // Scripting / Interpreted
+  namespace Samarium < Language ; location &= "https://github.com/samarium-lang/Samarium"
+  namespace Minilang < Language ; location &= "https://github.com/wrapl/minilang"
+  namespace PointerScript < Language ; location &= "https://github.com/M4GNV5/PointerScript"
+  namespace Aphid < Language ; location &= "https://github.com/John-Leitch/Aphid"
+  namespace Kavascript < Language ; location &= "https://github.com/maximecb/kavascript"
+  namespace MinScriptLang < Language ; location &= "https://github.com/sawickiap/MinScriptLang"
+  namespace Tsuki < Language ; location &= "https://github.com/tsuki-lang/tsuki"
+  namespace Cosy < Language ; location &= "https://github.com/anissen/cosy"
+  namespace Mussel < Language ; location &= "https://github.com/gianndev/mussel"
+  namespace Piccolo < Language ; location &= "https://github.com/PiccoloLang/piccolo"
+  namespace Nyx < Language ; location &= "https://github.com/y1yang0/nyx"
+  namespace Eevo < Language ; location &= "https://github.com/eevolang/eevo"
+  namespace Modu < Language ; location &= "https://github.com/cyteon/modu"
+  namespace Truck < Language ; location &= "https://github.com/tarptaeya/Truck"
+  namespace Mani < Language ; location &= "https://github.com/mani-language/Mani"
+  namespace Radon < Language ; location &= "https://github.com/radon-project/radon"
+  namespace Tank < Language ; location &= "https://github.com/AmrDeveloper/Tank"
+  namespace Tern < Language ; location &= "https://github.com/tern-lang/tern"
+  namespace Zuko < Language ; location &= "https://github.com/shehryar49/zuko"
+  namespace Ham < Language ; location &= "https://github.com/marc2332/ham"
+  namespace Grotsky < Language ; location &= "https://github.com/mliezun/grotsky"
+  namespace Quetite < Language ; location &= "https://github.com/qewer33/quetite"
+  namespace Luxya < Language ; location &= "https://github.com/franeklubi/luxya"
+  namespace Riff < Language ; location &= "https://github.com/riff-lang/riff"
+  namespace BerryMath < Language ; location &= "https://github.com/BerryMathDevelopmentTeam/BerryMath"
+  namespace Kesh < Language ; location &= "https://github.com/kesh-lang/kesh"
+  namespace Dern < Language ; location &= "https://github.com/octaspire/dern"
+  namespace Meevax < Language ; location &= "https://github.com/yamacir-kit/meevax"
+  namespace Rocklang < Language ; location &= "https://github.com/jarkonik/rocklang"
+  namespace Jasl < Language ; location &= "https://github.com/benhj/jasl"
+  namespace Arrow < Language ; location &= "https://github.com/benhj/arrow"
+  namespace Opal < Language ; location &= "https://github.com/iitalics/Opal"
+  namespace Zrc < Language ; location &= "https://github.com/Edd12321/zrc"
+  namespace Ethereal < Language ; location &= "https://github.com/Synthesized-Infinity/Ethereal"
+  namespace Square < Language ; location &= "https://github.com/square-lang/Square"
+
+  // Functional / Typed
+  namespace Paso < Language ; location &= "https://github.com/SimonHauguel/Paso"
+  namespace Bramble < Language ; location &= "https://github.com/chameco/bramble"
+  namespace Madlib < Language ; location &= "https://github.com/madlib-lang/madlib"
+  namespace Schmu < Language ; location &= "https://github.com/tjammer/schmu"
+  namespace Koneko < Language ; location &= "https://github.com/obfusk/koneko"
+  namespace Bella < Language ; location &= "https://github.com/MystPi/bella"
+  namespace Jet < Language ; location &= "https://github.com/i2y/jet"
+  namespace FunL < Language ; location &= "https://github.com/anssihalmeaho/funl"
+  namespace Pangaea < Language ; location &= "https://github.com/Syuparn/Pangaea"
+  namespace SakiLang | "Saki" < Language ; location &= "https://github.com/saki-lang/saki-dev"
+  namespace MLPolyR < Language ; location &= "https://github.com/owo-lang/MLPolyR"
+  namespace Hasp < Language ; location &= "https://github.com/aliclark/hasp"
+  namespace Cassidy < Language ; location &= "https://github.com/cassidylang/cassidy"
+  namespace VSL < Language ; location &= "https://github.com/vsl-lang/VSL"
+  namespace Csq | "C²" < Language ; location &= "https://github.com/CsqLang/Csq"
+  namespace IonFusion | "Ion Fusion" < Language ; location &= "https://github.com/ion-fusion/fusion-java"
+  namespace Dosato < Language ; location &= "https://github.com/Robotnik08/cdosato"
+
+  // Lisp / Forth variants
+  namespace Raillisp < Language ; location &= "https://github.com/mschuldt/raillisp"
+  namespace Lel < Language ; location &= "https://github.com/Lel-Language/Lisp-esque-language"
+  namespace Nujel < Language ; location &= "https://github.com/Melchizedek6809/Nujel"
+  namespace Element0 | "element-0" < Language ; location &= "https://github.com/Element0Lang/element-0"
+  namespace Murmel < Language ; location &= "https://github.com/mayerrobert/jmurmel"
+  namespace KForth64 | "kForth-64" < Language(".4th") ; location &= "https://github.com/mynenik/kForth-64"
+  namespace Equinox < Language ; location &= "https://github.com/zeroflag/equinox"
+  namespace FCL | "Forth Calculator's Language" < Language ; location &= "https://github.com/zeroflag/fcl"
+  namespace Glas < Language ; location &= "https://github.com/dmbarbour/glas"
+
+  // Stack-based
+  namespace Ram < Language ; location &= "https://github.com/ujjwal-kr/ram"
+  namespace Stck < Language ; location &= "https://github.com/teodoran/stck"
+  namespace Haystack < Language ; location &= "https://github.com/rtulip/haystack"
+  namespace Tovie < Language ; location &= "https://github.com/Jaysmito101/tovie"
+
+  // Shell / CLI
+  namespace Riptide < Language ; location &= "https://github.com/sagebind/riptide"
+  namespace EZ < Language ; location &= "https://github.com/SchoolyB/EZ"
+
+  // Domain-specific
+  namespace JAMScript < Language ; location &= "https://github.com/citelab/JAMScript"
+  namespace AcaciaMC | "AcaciaMC" < Language ; location &= "https://github.com/CBerJun/AcaciaMC"
+  namespace MCCompiled < Language ; location &= "https://github.com/7UKECREAT0R/MCCompiled"
+  namespace CsvPlusPlus | "csv++" < Language ; location &= "https://github.com/patrickomatic/csv-plus-plus"
+  namespace WHEN < Language ; location &= "https://github.com/PhialsBasement/WHEN-Language"
+  namespace Doolang | "Doo" < Language ; location &= "https://github.com/nynrathod/doolang"
+  namespace Imperator < Language ; location &= "https://github.com/OpShin/imperator"
+  namespace Nubo < Language ; location &= "https://github.com/nubolang/nubo"
+  namespace Wala < Language ; location &= "https://github.com/CalmSystem/wala"
+  namespace RESOLVE < Language ; location &= "https://github.com/ClemsonRSRG/RESOLVE"
+  namespace Gloa | "Glóa" < Language ; location &= "https://github.com/ReFreezed/Gloa"
+  namespace Scar < Language ; location &= "https://github.com/scar-lang/scar"
+
+  // Embeddable / Tiny
+  namespace TinySelf < Language ; location &= "https://github.com/Bystroushaak/tinySelf"
+  namespace BirbLang | "Birb" < Language ; location &= "https://github.com/Calamity210/BirbLang"
+  namespace Steak < Language ; location &= "https://github.com/overlogged/steak"
+  namespace Lazy < Language ; location &= "https://github.com/lazy-lang/Lazy"
+  namespace GolfCart < Language ; location &= "https://github.com/healeycodes/golfcart"
+  namespace Up < Language ; location &= "https://github.com/KennethanCeyer/up"
+  namespace NLang | "N-lang" < Language ; location &= "https://github.com/nbuilding/N-lang"
+
+  // Esoteric
+  namespace Lolz < Language ; location &= "https://github.com/cevatbarisyilmaz/lolz"
+  namespace Cubically < Language ; location &= "https://github.com/aaronryank/Cubically"
+  namespace FlufflePuff < Language ; location &= "https://github.com/juju2143/flufflepuff"
+  namespace StackCats < Language ; location &= "https://github.com/m-ender/stackcats"
+  namespace Trilangle < Language ; location &= "https://github.com/bbrk24/Trilangle"
+  namespace Barrel < Language ; location &= "https://github.com/joes-esolangs/barrel"
+  namespace Naz < Language ; location &= "https://github.com/sporeball/naz"
+  namespace Mascarpone < Language ; location &= "https://github.com/catseye/Mascarpone"
+  namespace Moon < Language ; location &= "https://github.com/GanerCodes/moon"
+  namespace Adventlang < Language ; location &= "https://github.com/healeycodes/adventlang"
+  namespace FFlat | "F♭" < Language ; location &= "https://github.com/Hypercubed/f-flat_node"
+
+  // Non-English syntax (additional)
+  namespace Salam < Language ; location &= "https://github.com/SalamLang/Salam"
+  namespace Agaram < Language ; location &= "https://github.com/naveen17797/Agaram"
+  namespace Ettayi < Language ; location &= "https://github.com/Apollo-Blaze/ettayi"
+  namespace DariX < Language ; location &= "https://github.com/shayanheidari01/DariX"
+  namespace Ena < Language ; location &= "https://github.com/pgagnidze/ena"
+  namespace Saral | "Šaral" < Language ; location &= "https://github.com/PaulNoth/saral"
+  namespace SomonScript | "Somon Script" < Language ; location &= "https://github.com/lindentechde/Somon-Script"
+  namespace SpedeScript < Language ; location &= "https://github.com/janit/spedescript"
+  namespace Setonas < Language ; location &= "https://github.com/Setonas/setonas"
+
+  // Experimental / Other
+  namespace TopoLang < Language ; location &= "https://github.com/tneukom/topolang"
+  namespace Hades < Language ; location &= "https://github.com/dhruvrajvanshi/hades-lang"
+  namespace Alox < Language ; location &= "https://github.com/alox-ai/alox-old"
+  namespace Drona < Language ; location &= "https://github.com/Drona-Org/Drona"
+  namespace Cafe < Language ; location &= "https://github.com/cafe-jvm-lang/cafe"
+  namespace Avalon < Language ; location &= "https://github.com/avalon-lang/avaloni"
+  namespace Dil < Language ; location &= "https://github.com/ACM-UoA-Student-Chapter/dil"
+  namespace CupScript < Language ; location &= "https://github.com/Fus3n/cupscript"
+  namespace PyHP | "PyHP++#" < Language ; location &= "https://github.com/PyHP-pph/PyHP_pph"
+  namespace Tay < Language ; location &= "https://github.com/mesuutt/tay"
+  namespace Tutara < Language ; location &= "https://github.com/tutara/tutara"
+  namespace Esta < Language ; location &= "https://github.com/epellis/esta"
+  namespace BCL < Language ; location &= "https://github.com/ArachnidAbby/BCL"
+  namespace Good < Language ; location &= "https://github.com/goodlang/good"
+  namespace PostfixHaskell | "postfix-haskell" < Language ; location &= "https://github.com/dvtate/postfix-haskell"
+  namespace Stamon < Language ; location &= "https://github.com/CLimber-Rong/stamon"
+  namespace Raven < Language ; location &= "https://github.com/martian56/raven"
+  namespace TurboriumBasic < Language ; location &= "https://github.com/turborium/TurboriumBasic"
+  namespace Paco < Language ; location &= "https://github.com/hugolgst/paco"
+
+  // --- GitHub topic:programming-language (5-9 stars, curated) ---
+  // Unique concepts
+  namespace LambdaQ < Language ; location &= "https://github.com/radumarg/lambdaQ"
+  namespace Railway < Language ; location &= "https://github.com/jndean/Railway"
+  namespace Pearl < Language ; location &= "https://github.com/pearl-lang/pearl"
+  namespace LightDP < Language ; location &= "https://github.com/yuxincs/lightdp"
+  namespace PILOTS < Language ; location &= "https://github.com/RPI-WCL/pilots"
+  namespace Ekitai < Language ; location &= "https://github.com/tarberd/ekitai"
+  namespace Box < Language ; location &= "https://github.com/intsuc/box"
+  namespace SanskritVM | "Sanskrit" < Language ; location &= "https://github.com/tawaren/Sanskrit"
+  namespace Deck < Language ; location &= "https://github.com/Jackojc/deck"
+  namespace Styff < Language ; location &= "https://github.com/aradarbel10/Styff"
+  namespace MiniYu | "mini-yu" < Language ; location &= "https://github.com/andreaslyn/mini-yu"
+  namespace Stone < Language ; location &= "https://github.com/stone-lang/stone"
+  namespace Blossom < Language ; location &= "https://github.com/IMP1/blossom"
+  namespace GdMinus | "gdminus" < Language ; location &= "https://github.com/saltysystems/gdminus"
+  namespace SLOBIL < Language ; location &= "https://github.com/flynnzac/slobil"
+  namespace Tin < Language ; location &= "https://github.com/The-Tin-Foil-Hat-Society/tin"
+  namespace Horse64 < Language ; location &= "https://github.com/Horse64/core.horse64.org"
+  namespace Abra < Language ; location &= "https://github.com/anandrav/abra"
+  namespace Remix < Language ; location &= "https://github.com/rsheehan/Remix"
+  namespace Lichen < Language ; location &= "https://github.com/mikumikudice/lichen"
+  namespace Fyrlang | "Fyr" < Language ; location &= "https://github.com/vs-ude/fyrlang"
+  namespace Incan < Language ; location &= "https://github.com/dannys-code-corner/incan"
+
+  // Non-English syntax (5-9 stars)
+  namespace SwaziLang < Language ; location &= "https://github.com/godieGH/SwaziLang"
+  namespace ArmaLang < Language ; location &= "https://github.com/ibrahimesseddyq/ArmaLang"
+  namespace VNC < Language ; location &= "https://github.com/nguyenphuminh/VNC"
+  namespace Coz < Language ; location &= "https://github.com/abdllhygt/coz"
+  namespace Tagalang < Language ; location &= "https://github.com/jabezborja/tagalang"
+  namespace Ounglang < Language ; location &= "https://github.com/pnxguide/ounglang"
+  namespace MolluLang | "몰?루" < Language ; location &= "https://github.com/bukgeuk-penguin/mollu-lang"
+
 // Libraries
 Language
   namespace BabylonJS < Library ; location &= "https://github.com/BabylonJS"
@@ -1167,6 +1710,22 @@ Language
     namespace KLayout < Tool ; location &= "https://github.com/KLayout/klayout" & "https://www.klayout.de/"
     namespace ngspice < Tool ; location &= "https://ngspice.sourceforge.io/" & "https://en.wikipedia.org/wiki/Ngspice"
     namespace Magic | "Magic VLSI" < Tool ; location &= "https://github.com/RTimothyEdwards/magic" & "https://en.wikipedia.org/wiki/Magic_(software)"
+    // --- New: Semantic Web Libraries (additional) ---
+    namespace RDFLib < Library ; location &= "https://github.com/RDFLib/rdflib" & "https://rdflib.dev/"
+    namespace Blazegraph < Library ; location &= "https://github.com/blazegraph/database" & "https://en.wikipedia.org/wiki/Blazegraph"
+    namespace Stardog < Tool ; location &= "https://github.com/stardog-union" & "https://www.stardog.com/"
+    namespace GraphDB | "Ontotext GraphDB" < Tool ; location &= "https://graphdb.ontotext.com/" & "https://en.wikipedia.org/wiki/Ontotext_GraphDB"
+    namespace Virtuoso | "OpenLink Virtuoso" < Library ; location &= "https://github.com/openlink/virtuoso-opensource" & "https://en.wikipedia.org/wiki/Virtuoso_Universal_Server"
+    // --- New: Description Logic Reasoners (additional) ---
+    namespace FaCTPlusPlus | "FaCT++" < Library ; location &= "https://github.com/ethz-asl/libfactplusplus" & "http://owl.cs.manchester.ac.uk/tools/fact/"
+    namespace Konclude < Library ; location &= "https://github.com/konclude/Konclude" & "https://www.uni-ulm.de/en/konclude/"
+    namespace Racer | "RacerPro" < Library ; location &= "https://github.com/ha-mo-we/Racer" & "https://www.chai.uni-hamburg.de/~moeller/racer/"
+    // --- New: Rule Engine Libraries ---
+    namespace Jess < Library ; location &= "https://jess.sandia.gov/" & "https://en.wikipedia.org/wiki/Jess_(programming_language)"
+    namespace ClaraRules | "Clara Rules" < Library ; location &= "https://github.com/oracle-samples/clara-rules" & "http://www.clara-rules.org/"
+    // --- New: Simulation Libraries ---
+    namespace xDEVS < Library ; location &= "https://github.com/iscar-ucm/xdevs" & "https://en.wikipedia.org/wiki/DEVS"
+    namespace OscaR < Library ; location &= "https://github.com/cetic/oscar-cbls" & "https://oscarlib.readthedocs.io/"
   namespace Schurr1999 | "Schurr 1999" < Library ; location &= "https://link.springer.com/chapter/10.1007/978-3-540-68679-8_5"
   namespace "set.mm" < Library, SetTheory
   namespace UniMath < Library, TypeTheory.Univalent ; location &= this<Agda> ? ("https://github.com/UniMath/agda-unimath" : "https://github.com/UniMath/UniMath")

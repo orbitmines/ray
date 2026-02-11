@@ -1,0 +1,142 @@
+// === Class Definitions ===
+class Card
+  padding: 1.5rem
+  background.color: #2a3040
+  color: #e0e0e0
+  border.radius: 0.5rem
+  margin: 0.5rem
+
+class Title
+  font.size: 2rem
+  font.weight: bold
+  color: white
+
+class Subtitle
+  font.size: 1.2rem
+  color: #8899aa
+
+class Tag
+  padding: 0.25rem 0.75rem
+  background.color: #3a4a6a
+  border.radius: 1rem
+  font.size: 0.85rem
+  color: #aabbdd
+
+class FullHeight
+  min.height: 100vh
+
+class Muted
+  color: #667788
+  font.size: 0.9rem
+
+// === Component Definitions ===
+class NavButton
+  padding: 0.75rem 1.5rem
+  background.color: #3a4a6a
+  border.radius: 0.5rem
+  color: white
+  Center.Horizontally "Click me".italic
+
+class InfoCard
+  padding: 1rem
+  border.radius: 0.5rem
+
+  Center.Vertically
+    Node("Info").bold
+    Node("Details go here") + Muted
+
+  background.color: #1e2a36
+
+class Badge
+  padding: 0.25rem 0.5rem
+  background.color: #4a5a7a
+  border.radius: 0.25rem
+  font.size: 0.75rem
+  Node("new").uppercase
+
+// === Layout ===
+Center + FullHeight
+  1 * Center Node("Ether").bold + Title
+
+  // --- Between with fractional widths ---
+  1 * Between
+    1/3 * "Hello" + Card
+    1/3 * ("World") + Card
+    1/3 * (
+      "!",
+      "!"
+    ) + Card
+
+  // --- Percentage widths ---
+  1 * Between
+    25% * "Quarter".center + Card
+    50% * "Half".center + Card
+    25% * "Quarter".center + Card
+
+  // --- Nested layout with constraints ---
+  Node{width <= 40rem}(padding: 2rem, background.color: #1c2127, border.radius: 0.5rem, width: 100%)
+    Between
+      Start
+        Node("Left") + Subtitle
+      End
+        Node("Right") + Subtitle
+    Start
+      Node("Left") + Subtitle
+    End
+      Node("Right") + Subtitle
+
+    // --- Tags row ---
+    Center.Horizontally
+      Node("ray") + Tag, Node("ether") + Tag, "html" + Tag
+
+    // --- Mixed fractions ---
+    Between
+      1/4 * Node("25%", padding: 0.5rem, background.color: #2a3a4a, text.align: center) + Card
+      1/2 * Node("50%", padding: 0.5rem, background.color: #3a4a5a, text.align: center) + Card
+      1/4 * Node("25%", padding: 0.5rem, background.color: #2a3a4a, text.align: center) + Card
+
+    // --- Grouping with parens ---
+    Center.Horizontally
+      ("Grouped A", "Grouped B") + Card
+      ("Grouped C", "Grouped D") + Card
+
+    // --- Decimal fractions ---
+    Between
+      0.5 * Node("Half", padding: 0.5rem, background.color: #334455) + Card
+      0.5 * Node("Half", padding: 0.5rem, background.color: #445566) + Card
+
+  // --- Text styles ---
+  Center.Horizontally
+    "italic text".italic + Card
+    "bold text".bold + Card
+    "underlined".underline + Card
+    Node("monospace").mono + Card
+    "LOUD".uppercase.bold + Card
+
+  // --- Padding shortcuts ---
+  Between
+    Node("padded x") + Card + px 4
+    Node("padded y") + Card + py 4
+    Node("padded top") + Card + pt 8
+
+  // --- Map: apply class to each child ---
+  End ("A", "B", "C", InfoCard).map(+ Card + px 10)
+
+  // --- Components ---
+  1 * Center
+    1 * NavButton
+    NavButton, Badge
+
+  100% * Between
+    InfoCard
+    InfoCard
+
+  // --- Image ---
+  Center
+    Image(./images/Ether.svg, height: 120px)
+    Image(height: 120px, ./images/Ether.svg)
+
+  // --- Vertical centering ---
+  Node(height: 100px)
+    Center.Vertically
+      Node("Vertically centered content") + Subtitle

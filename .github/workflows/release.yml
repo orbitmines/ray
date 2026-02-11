@@ -253,13 +253,13 @@ jobs:
    # ---------------------------------------------------------------------------
    # macOS (Apple Silicon) — uncomment when mac runner is available
    # ---------------------------------------------------------------------------
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
+#  build-macos:
+#    runs-on: macos-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#        with:
+#          fetch-depth: 0
+#
 #      - name: Extract version & check tag
 #        id: version
 #        run: |
@@ -270,51 +270,51 @@ jobs:
 #          else
 #            echo "skip=false" >> "$GITHUB_OUTPUT"
 #          fi
-
-      - name: Skip if tag exists
-        if: steps.version.outputs.skip == 'true'
-        run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
-
-      - uses: actions/setup-node@v4
+#
+#      - name: Skip if tag exists
+#        if: steps.version.outputs.skip == 'true'
+#        run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
+#
+#      - uses: actions/setup-node@v4
 #        if: steps.version.outputs.skip == 'false'
-        with:
-          node-version: 22
-
-      - uses: dtolnay/rust-toolchain@stable
+#        with:
+#          node-version: 22
+#
+#      - uses: dtolnay/rust-toolchain@stable
 #        if: steps.version.outputs.skip == 'false'
-
-      - name: Install Python pillow
+#
+#      - name: Install Python pillow
 #        if: steps.version.outputs.skip == 'false'
-        run: pip3 install --break-system-packages pillow
-
-      - name: npm ci
+#        run: pip3 install --break-system-packages pillow
+#
+#      - name: npm ci
 #        if: steps.version.outputs.skip == 'false'
-        working-directory: Ether/.html
-        run: npm ci
-
-      - name: Build macOS (dmg)
+#        working-directory: Ether/.html
+#        run: npm ci
+#
+#      - name: Build macOS (dmg)
 #        if: steps.version.outputs.skip == 'false'
-        working-directory: Ether/.html
-        run: npx tauri build --target aarch64-apple-darwin
-
-      - name: Upload macOS artifacts
+#        working-directory: Ether/.html
+#        run: npx tauri build --target aarch64-apple-darwin
+#
+#      - name: Upload macOS artifacts
 #        if: steps.version.outputs.skip == 'false'
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-artifacts
-          path: |
-            Ether/.html/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: macos-artifacts
+#          path: |
+#            Ether/.html/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
   # ---------------------------------------------------------------------------
   # iOS — uncomment when mac runner is available
   # ---------------------------------------------------------------------------
-  build-ios:
-    runs-on: macos-latest
-    steps:
-       - uses: actions/checkout@v4
-         with:
-           fetch-depth: 0
-
+#  build-ios:
+#    runs-on: macos-latest
+#    steps:
+#       - uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+#
 #       - name: Extract version & check tag
 #         id: version
 #         run: |
@@ -325,44 +325,44 @@ jobs:
 #           else
 #             echo "skip=false" >> "$GITHUB_OUTPUT"
 #           fi
-
-       - name: Skip if tag exists
-         if: steps.version.outputs.skip == 'true'
-         run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
-
-       - uses: actions/setup-node@v4
+#
+#       - name: Skip if tag exists
+#         if: steps.version.outputs.skip == 'true'
+#         run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
+#
+#       - uses: actions/setup-node@v4
 #         if: steps.version.outputs.skip == 'false'
-         with:
-           node-version: 22
-
-       - uses: dtolnay/rust-toolchain@stable
+#         with:
+#           node-version: 22
+#
+#       - uses: dtolnay/rust-toolchain@stable
 #         if: steps.version.outputs.skip == 'false'
-         with:
-           targets: aarch64-apple-ios
-
-       - name: Install Python pillow
+#         with:
+#           targets: aarch64-apple-ios
+#
+#       - name: Install Python pillow
 #         if: steps.version.outputs.skip == 'false'
-         run: pip3 install --break-system-packages pillow
-
-       - name: npm ci
+#         run: pip3 install --break-system-packages pillow
+#
+#       - name: npm ci
 #         if: steps.version.outputs.skip == 'false'
-         working-directory: Ether/.html
-         run: npm ci
-
-       - name: Build iOS (ipa)
+#         working-directory: Ether/.html
+#         run: npm ci
+#
+#       - name: Build iOS (ipa)
 #         if: steps.version.outputs.skip == 'false'
-         working-directory: Ether/.html
-         run: |
-           npx tauri ios init
-           npx tauri ios build --export-method debugging
-
-       - name: Upload iOS artifacts
+#         working-directory: Ether/.html
+#         run: |
+#           npx tauri ios init
+#           npx tauri ios build --export-method debugging
+#
+#       - name: Upload iOS artifacts
 #         if: steps.version.outputs.skip == 'false'
-         uses: actions/upload-artifact@v4
-         with:
-           name: ios-artifacts
-           path: |
-             Ether/.html/src-tauri/gen/apple/build/**/*.ipa
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: ios-artifacts
+#           path: |
+#             Ether/.html/src-tauri/gen/apple/build/**/*.ipa
 
   # ---------------------------------------------------------------------------
   # Create GitHub Release with all artifacts

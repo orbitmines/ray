@@ -398,10 +398,12 @@ namespace Language {
 
       // }, this.ctx)
 
+      const bootstrap_ctx = new Context() [_]()
+
       console.log('instance_of', Var.string(
         this.language.join('\n')
         // 'property{test: String}\n  body'
-      , this.ctx).instance_of(grammar, this.ctx))
+      , bootstrap_ctx).instance_of(grammar, bootstrap_ctx))
 
       return this;
     }

@@ -154,9 +154,30 @@ Ball~5().
 
 // How to get the Window
 
+
+dynamically persistent
+  if Keyboard.f2.toggled
+    selection: Location =
+
+    //Which two spatial dimensions
+
+    (if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy
+      (.[GROUPS LVL] if Keyboard.ctrl)
+      (Keyboard.shift ? .move : .[EXPAND])
+    -> (if Keyboard. ↓ | s .pulsed)
+
+    (if Keyboard. ← | a .pulsed) <- selection. x ?? hierarchy .move -> (if Keyboard. → | d .pulsed)
+
+
+
 Ball(radius: 10m) + Padding.Right(10m)
+
+  // Can also put the children on a newline
+  Square
+    Square, Square
+
   // Code in front on render
-  {dynamic_id}\ Ball(radius: 5m, + Padding(5m), & StyleClass & OtherStyleClass) "text in between" Ball()
+  {dynamic_id}\ Ball(radius: 5m) + Padding(5m) + StyleClass + OtherStyleClass, "text in between" Ball()
     Center field: choose String, "text in between" & StyleClass, field2: Time = choose
     ball_id: choose Ball // choosing Ball.radius would be flagged too.
     Center.Horizontally []

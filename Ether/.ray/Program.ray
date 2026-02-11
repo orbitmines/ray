@@ -398,6 +398,16 @@ class Expression < (
     // N <- . -> N equips the structure with &+ when evaluated.
     //TODO Allow {(): boolean}
 
+// Allow Ball(radius: 5m, POSITIONAL_ARG, another_field: 5m, POSITIONAL_ARG)
+
+Want to make it possible to say:
+< (
+  : Binary^128 = field: String,
+  field2: Binary^8
+)
+
+: should be called on new variable not on this
+
   //TODO If line ends with | or another method, it is not expected to continue on the next line, instead we prefer to have the | on the next line, to prevent weird bugs
 
   (

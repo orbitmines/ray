@@ -10,3 +10,4 @@
 - For the index, deduplicate files which are the same across versions/similar; only the changes.
 - Integrate GitHub code search and other results from other websites; if deemed useful
 - Portable format for the Index
+- Simple filters like does recursion or other things apply on top of each other to narrow down the search space

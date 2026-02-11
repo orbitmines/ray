@@ -419,6 +419,25 @@ cmd_repl() {
   exec bash "$repl_script"
 }
 
+cmd_packages() {
+  local lang_name="$1"
+  shift
+  local entry
+  if ! entry=$(lookup_entry "$lang_name"); then
+    echo "Error: Unknown language '$lang_name'" >&2
+    return 1
+  fi
+  parse_entry "$entry"
+
+  local packages_script="$LANG_SCRIPTS_DIR/$ENTRY_DIR_NAME/packages.sh"
+  if [[ ! -f "$packages_script" ]]; then
+    echo "No packages script found for $ENTRY_NAME."
+    echo "Run 'ether Language.$ENTRY_DIR_NAME update' to generate one."
+    return 1
+  fi
+  bash "$packages_script" "$@"
+}
+
 cmd_update() {
   local lang_name="$1"
   local entry
@@ -571,6 +590,7 @@ Commands:
   Language.<NAME> -@ <FILE|DIR>       Run a program (auto-installs)
   Language.<NAME> update              Update version + Claude: update scripts
   Language.<NAME> info                Show language information
+  Language.<NAME> packages [search|info|install] <Q>  Query package registry
   Language.<NAME>[%VER] index         Index language source code for search
   Language.<NAME>[%VER] search <Q>    Search within a language
 
@@ -589,6 +609,7 @@ Examples:
   $prog Language.Python install       Install Python
   $prog Language.Python -@ script.py  Run a Python script
   $prog Language.Python clone         Clone Python repo
+  $prog Language.Python packages search requests  Search PyPI for 'requests'
   $prog Language list                 List all known languages
   $prog Language search "binary search tree"           Search all languages
   $prog Language.Rust index           Index Rust repos
@@ -652,6 +673,9 @@ main() {
       repl)
         cmd_repl "$lang_name"
         ;;
+      packages)
+        cmd_packages "$lang_name" "$@"
+        ;;
       index)
         local index_args=("index" "--lang" "$lang_name")
         [[ -n "$lang_version" ]] && index_args+=("--version" "$lang_version")
@@ -665,7 +689,7 @@ main() {
         ;;
       *)
         echo "Error: Unknown action '$action'" >&2
-        echo "Valid actions: install, clone, -@, update, info, index, search" >&2
+        echo "Valid actions: install, clone, -@, update, info, packages, index, search" >&2
         exit 1
         ;;
     esac

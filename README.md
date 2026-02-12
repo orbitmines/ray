@@ -34,6 +34,9 @@ This thing is, in essence, a programming language (Ray) and an IDE (Ether), whic
 curl -fsSL https://ether.orbitmines.com/install.sh | bash
 ```
 
+- Install language support for [IntelliJ](https://plugins.jetbrains.com/plugin/29452-ether) [VS Code] (TODO)
+
+
 There are several alternative ways of installing Ray & Ether:
 - Download the appropriate installer from [GitHub Releases](https://github.com/orbitmines/ray/releases)
 - Open Ether in your browser @ [ether.orbitmines.com](https://ether.orbitmines.com)
@@ -50,9 +53,6 @@ There are several alternative ways of installing Ray & Ether:
   ```shell
   ether
   ```
-  
-- Using other IDEs
-    - Install language support for [IntelliJ] [VS Code] (TODO)
 
 ---
 

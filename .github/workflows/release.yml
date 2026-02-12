@@ -1,0 +1,333 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+env:
+  TAURI_CONF: Ether/.html/src-tauri/tauri.conf.json
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate: skip everything if tag already exists
+  # ---------------------------------------------------------------------------
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      should_build: ${{ steps.version.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: Ether/.html/src-tauri/tauri.conf.json
+          sparse-checkout-cone-mode: false
+
+      - name: Extract version & check tag
+        id: version
+        run: |
+          VERSION=$(jq -r .version "$TAURI_CONF")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            echo "Tag v$VERSION already exists — skipping all builds."
+          else
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Linux (deb, rpm, AppImage)
+  # ---------------------------------------------------------------------------
+  build-linux:
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+            librsvg2-dev rpm patchelf
+
+      - name: Install Python pillow
+        run: pip install pillow
+
+      - name: npm ci
+        working-directory: Ether/.html
+        run: npm ci
+
+      - name: Build Linux
+        working-directory: Ether/.html
+        run: npx tauri build --target x86_64-unknown-linux-gnu
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
+            Ether/.html/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+
+  # ---------------------------------------------------------------------------
+  # Windows (cross-compile from Ubuntu)
+  # ---------------------------------------------------------------------------
+  build-windows:
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+            librsvg2-dev nsis gcc-mingw-w64-x86-64 llvm
+
+      - name: Install Python pillow
+        run: pip install pillow
+
+      - name: npm ci
+        working-directory: Ether/.html
+        run: npm ci
+
+      - name: Build Windows
+        working-directory: Ether/.html
+        run: npx tauri build --target x86_64-pc-windows-gnu
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            Ether/.html/src-tauri/target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe
+
+  # ---------------------------------------------------------------------------
+  # Android (APK + AAB)
+  # ---------------------------------------------------------------------------
+  build-android:
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: sdkmanager --install "ndk;27.0.12077973"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+            librsvg2-dev
+
+      - name: Install Python pillow
+        run: pip install pillow
+
+      - name: npm ci
+        working-directory: Ether/.html
+        run: npm ci
+
+      - name: Build Android
+        working-directory: Ether/.html
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
+        run: |
+          npx tauri android init
+          npx tauri android build
+
+      - name: Rename & optionally sign Android artifacts
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          APK_DIR="Ether/.html/src-tauri/gen/android/app/build/outputs/apk/universal/release"
+          AAB_DIR="Ether/.html/src-tauri/gen/android/app/build/outputs/bundle/universalRelease"
+          UNSIGNED="$APK_DIR/app-universal-release-unsigned.apk"
+
+          # Rename APK
+          cp "$UNSIGNED" "$APK_DIR/Ether_${VERSION}_universal.apk"
+
+          # Rename AAB
+          cp "$AAB_DIR/app-universal-release.aab" "$AAB_DIR/Ether_${VERSION}_universal.aab"
+
+          # If keystore secrets are configured, also produce a signed APK
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > /tmp/release.jks
+            "${ANDROID_HOME}/build-tools/$(ls "${ANDROID_HOME}/build-tools" | sort -V | tail -1)/apksigner" sign \
+              --ks /tmp/release.jks \
+              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --out "$APK_DIR/Ether_${VERSION}_universal-signed.apk" \
+              "$UNSIGNED"
+            rm /tmp/release.jks
+          fi
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: |
+            Ether/.html/src-tauri/gen/android/app/build/outputs/apk/universal/release/Ether_*.apk
+            Ether/.html/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/Ether_*.aab
+
+    # ---------------------------------------------------------------------------
+    # macOS (Apple Silicon) — uncomment when mac runner is available
+    # ---------------------------------------------------------------------------
+  build-macos:
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Python pillow
+        run: pip3 install --break-system-packages pillow
+
+      - name: npm ci
+        working-directory: Ether/.html
+        run: npm ci
+
+      - name: Build macOS (dmg)
+        working-directory: Ether/.html
+        run: npx tauri build --target aarch64-apple-darwin
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            Ether/.html/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+
+  # ---------------------------------------------------------------------------
+  # iOS — uncomment when mac runner is available
+  # ---------------------------------------------------------------------------
+  #  build-ios:
+  #    runs-on: macos-latest
+  #    steps:
+  #       - uses: actions/checkout@v4
+  #         with:
+  #           fetch-depth: 0
+  #
+  #       - name: Extract version & check tag
+  #         id: version
+  #         run: |
+  #           VERSION=$(python3 -c "import json; print(json.load(open('$TAURI_CONF'))['version'])")
+  #           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+  #           if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
+  #             echo "skip=true" >> "$GITHUB_OUTPUT"
+  #           else
+  #             echo "skip=false" >> "$GITHUB_OUTPUT"
+  #           fi
+  #
+  #       - name: Skip if tag exists
+  #         if: steps.version.outputs.skip == 'true'
+  #         run: echo "Tag v${{ steps.version.outputs.version }} already exists — skipping build."
+  #
+  #       - uses: actions/setup-node@v4
+  #         if: steps.version.outputs.skip == 'false'
+  #         with:
+  #           node-version: 22
+  #
+  #       - uses: dtolnay/rust-toolchain@stable
+  #         if: steps.version.outputs.skip == 'false'
+  #         with:
+  #           targets: aarch64-apple-ios
+  #
+  #       - name: Install Python pillow
+  #         if: steps.version.outputs.skip == 'false'
+  #         run: pip3 install --break-system-packages pillow
+  #
+  #       - name: npm ci
+  #         if: steps.version.outputs.skip == 'false'
+  #         working-directory: Ether/.html
+  #         run: npm ci
+  #
+  #       - name: Build iOS (ipa)
+  #         if: steps.version.outputs.skip == 'false'
+  #         working-directory: Ether/.html
+  #         run: |
+  #           npx tauri ios init
+  #           npx tauri ios build --export-method debugging
+  #
+  #       - name: Upload iOS artifacts
+  #         if: steps.version.outputs.skip == 'false'
+  #         uses: actions/upload-artifact@v4
+  #         with:
+  #           name: ios-artifacts
+  #           path: |
+  #             Ether/.html/src-tauri/gen/apple/build/**/*.ipa
+
+  # ---------------------------------------------------------------------------
+  # Create GitHub Release with all artifacts
+  # ---------------------------------------------------------------------------
+  release:
+    needs: [check, build-linux, build-windows, build-android] # add build-macos, build-ios when enabled
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check.outputs.version }}
+          name: Ether v${{ needs.check.outputs.version }}
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.deb
+            artifacts/**/*.rpm
+            artifacts/**/*.AppImage
+            artifacts/**/*.exe
+            artifacts/**/*.apk
+            artifacts/**/*.aab
+            artifacts/**/*.dmg
+            artifacts/**/*.ipa

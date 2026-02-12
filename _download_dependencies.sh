@@ -1,5 +1,13 @@
 pwd=$PWD
 
+# TODO Rewrite in Ray, with the cache system in place for all the things like the github repos (for like individual files as well).
+
+# For compiling the app
+# sudo apt-get install libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev
+# For AppImage: sudo apt-get install librsvg2-dev
+# for windows (from windows): rustup target add x86_64-pc-windows-msvc
+# for windows (from linux): sudo apt-get install gcc-mingw-w64-x86-64 && rustup target add x86_64-pc-windows-gnu && sudo apt-get install nsis (+ sudo apt-get install llvm )
+
 # TODO Use the basis for the OM script, or wait till we write this in .ray.txt
 
 set -e

@@ -1,4 +1,0 @@
-
-
-
-![[Frobenius_algebra.pdf]]

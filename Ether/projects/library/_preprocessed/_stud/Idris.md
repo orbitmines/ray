@@ -1,1 +1,0 @@
-- [ ] https://github.com/stefan-hoeck/idris2-pack

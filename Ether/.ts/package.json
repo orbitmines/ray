@@ -10,11 +10,12 @@
     "jest": "^30.2.0",
     "ts-jest": "^29.4.5",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "scripts": {
     "test": "npx jest",
-    "v0": "ts-node --esm src/runtime/v0.run.ts"
+    "v0": "tsx src/runtime/v0.run.ts"
   },
   "jest": {
     "preset": "ts-jest",

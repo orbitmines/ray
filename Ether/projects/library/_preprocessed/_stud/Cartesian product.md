@@ -1,2 +1,0 @@
-
-![[Cartesian_product.pdf]]

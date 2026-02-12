@@ -5,8 +5,8 @@ authors:
   given-names: "Fadi"
   orcid: "https://orcid.org/0009-0009-9288-992X"
 - name: "OrbitMines"
-title: "Ray: A Universal Language"
-abstract: "A programming language, theorem prover, version control system, database and rendering engine. And its respective IDE: The Ether."
+title: "The Ray Programming Language & Ether"
+abstract: "The Ray Programming Language & its IDE: The Ether ; version control system, database, theorem prover, and rendering engine."
 version: 1.0.0
 date-released: 2025-12-31
 url: "https://ether.orbitmines.com"

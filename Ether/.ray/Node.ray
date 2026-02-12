@@ -103,7 +103,7 @@ class * | Node
   // If pushed to # for the first time, it should create a new variable, leave the one alone, and only update its location to the many>?
   // Want to combine the ideas of: All in Type vs All in Database. Want to allow all in Database, but then also say choose Type to mean any type how to disambiguate?
   // TODO Always whole type, use something else for All in Database
-  external # | all : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
+  external # | superposed : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
   // +/&+ are both components but normal + overrides.
   external ## | components : Iterable<static##.reduce(|)> //TODO Does this type work?
   external ### | class_components // Class components and monkey-patches

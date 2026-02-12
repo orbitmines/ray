@@ -146,11 +146,25 @@ def AbstractDirectionality<TVertex> < Iterable
 end
 
 class Ordered<T = static> //Todo set T to caller's constructor
-  def <= b: T = this == b || this < b
-  def < b: T
-  def >= b: T = this == b || this > b
-  def > b: T
+  <= (b: T) = this == b || this < b =>
+  < (b: T)
+  >= (b: T) = this == b || this > b
+  > (b: T)
 end
+Ordered &+ Ray
+  <= (b: T) reduce()
+  // gte: (self, value) => self.reduce_right((acc, current, cancel) =>
+  //          acc.if(cancel, current.equals(value))
+  //        , undefined),
+  //        gt: (self, value) => self.reduce_right((acc, current, cancel) =>
+  //          acc.if(cancel, acc.equals(undefined) /* TODO: More generally, a: "is this the first check" */.if(false, current.equals(value)))
+  //        , undefined),
+  //        lte: (self, value) => self.reduce((acc, current, cancel) =>
+  //          acc.if(cancel, current.equals(value))
+  //        , undefined),
+  //        lt: (self, value) => self.reduce((acc, current, cancel) =>
+  //          acc.if(cancel, acc.equals(undefined).if(false, current.equals(value)))
+  //       , undefined)
 
 //TODO Setting .value on Many boundary in the case of Edge.
 

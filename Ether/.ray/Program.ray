@@ -397,6 +397,7 @@ class Expression < (
     // Allow syntax for say this method needs to be defined T : {+ (: Number)}, Or Node{+ (: Number)}
     // N <- . -> N equips the structure with &+ when evaluated.
     //TODO Allow {(): boolean}
+    //TODO If return_type is none, ignore the output
 
 // Allow Ball(radius: 5m, POSITIONAL_ARG, another_field: 5m, POSITIONAL_ARG)
 

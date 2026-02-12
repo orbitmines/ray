@@ -70,6 +70,8 @@ type MatchContext = {
 const FAIL: MatchResult = Object.freeze({ success: false, consumed: 0, value: null, scope: {} });
 const _emptyBounds: Token[] = [];
 const _emptyScope: Scope = {};
+const _perIterationScopes = Symbol('perIterationScopes');
+const _perIterationMatches = Symbol('perIterationMatches');
 const _emptyResult: MatchResult = Object.freeze({ success: true, consumed: 0, value: '', scope: _emptyScope });
 
 // ════════════════════════════════════════════════════════════
@@ -163,11 +165,35 @@ abstract class Token {
     return r;
   }
 
-  protected wrapResult(result: MatchResult): MatchResult {
+  protected wrapResult(result: MatchResult, input?: string, startIndex?: number): MatchResult {
     if (!result.success) return result;
     if (this.bindName) {
-      const scope = { ...result.scope };
-      scope[this.bindName] = result.value;
+      const childScope = result.scope;
+      const perIter = childScope[_perIterationScopes] as Scope[] | undefined;
+
+      if (perIter && Array.isArray(result.value)) {
+        // Loop result with per-iteration scopes: create {_match, entries: [...]} with per-entry nesting
+        const perIterMatch = childScope[_perIterationMatches] as string[] | undefined;
+        const nested = perIter.map((iterScope, i) => {
+          const keys = Object.keys(iterScope);
+          const matchStr = perIterMatch?.[i];
+          if (keys.length === 0) return result.value[i];
+          return { _value: result.value[i], _match: matchStr, ...iterScope };
+        });
+        const _match = input != null && startIndex != null ? input.substring(startIndex, startIndex + result.consumed) : undefined;
+        return { success: true, consumed: result.consumed, value: result.value, scope: { [this.bindName]: { _match, entries: nested } } };
+      }
+
+      // Non-loop: check if child scope has keys (excluding symbols)
+      const childKeys = Object.keys(childScope);
+      if (childKeys.length > 0) {
+        // Nest child scope under the bind name
+        const _match = input != null && startIndex != null ? input.substring(startIndex, startIndex + result.consumed) : undefined;
+        return { success: true, consumed: result.consumed, value: result.value, scope: { [this.bindName]: { _value: result.value, _match, ...childScope } } };
+      }
+
+      // No child scope: simple binding
+      const scope = { [this.bindName]: result.value };
       return { success: true, consumed: result.consumed, value: result.value, scope };
     }
     return result;
@@ -195,7 +221,7 @@ class StringToken extends Token {
     for (let i = 0; i < strs.length; i++) {
       const s = strs[i];
       if (input.startsWith(s, idx))
-        return this.wrapResult({ success: true, consumed: s.length, value: s, scope: _emptyScope });
+        return this.wrapResult({ success: true, consumed: s.length, value: s, scope: _emptyScope }, input, idx);
     }
     return FAIL;
   }
@@ -216,7 +242,7 @@ class RegexToken extends Token {
   match(ctx: MatchContext): MatchResult {
     this.pattern.lastIndex = ctx.index;
     const m = this.pattern.exec(ctx.input);
-    if (m) return this.wrapResult({ success: true, consumed: m[0].length, value: m[0], scope: _emptyScope });
+    if (m) return this.wrapResult({ success: true, consumed: m[0].length, value: m[0], scope: _emptyScope }, ctx.input, ctx.index);
     return FAIL;
   }
 }
@@ -265,7 +291,7 @@ class EndToken extends Token {
   canStartAt(ctx: MatchContext) { return this._check(ctx); }
   match(ctx: MatchContext): MatchResult {
     if (this._check(ctx))
-      return this.wrapResult(_emptyResult);
+      return this.wrapResult(_emptyResult, ctx.input, ctx.index);
     return FAIL;
   }
 }
@@ -331,7 +357,7 @@ class NotToken extends Token {
           }
           if (hit) break;
         }
-        if (hit) return this.wrapResult({ success: true, consumed: i, value: input.substring(startIdx, absIdx), scope: _emptyScope });
+        if (hit) return this.wrapResult({ success: true, consumed: i, value: input.substring(startIdx, absIdx), scope: _emptyScope }, input, startIdx);
       }
       if (allBounds.length > 0 && i > 0) {
         let hit = false;
@@ -347,7 +373,7 @@ class NotToken extends Token {
           }
           if (hit) break;
         }
-        if (hit) return this.wrapResult({ success: true, consumed: i, value: input.substring(startIdx, absIdx), scope: _emptyScope });
+        if (hit) return this.wrapResult({ success: true, consumed: i, value: input.substring(startIdx, absIdx), scope: _emptyScope }, input, startIdx);
       }
       if (i < remLen) {
         for (let k = 0; k < stopStrs.length; k++) {
@@ -356,7 +382,7 @@ class NotToken extends Token {
       }
     }
     if (remLen === 0) return FAIL;
-    return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope });
+    return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope }, input, startIdx);
   }
 
   /** Check if all boundaries are StringTokens (fast path possible) */
@@ -401,7 +427,7 @@ class NotToken extends Token {
     if (earliestBound >= 0 && (earliestStop < 0 || earliestBound <= earliestStop)) {
       // Boundary comes first or tie → SUCCESS
       const consumed = earliestBound - startIdx;
-      return this.wrapResult({ success: true, consumed, value: input.substring(startIdx, earliestBound), scope: _emptyScope });
+      return this.wrapResult({ success: true, consumed, value: input.substring(startIdx, earliestBound), scope: _emptyScope }, input, startIdx);
     }
     if (earliestStop >= 0) {
       // Stop string comes first → FAIL
@@ -409,7 +435,7 @@ class NotToken extends Token {
     }
     // Neither found → consume all
     if (remLen === 0) return FAIL;
-    return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope });
+    return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope }, input, startIdx);
   }
 }
 
@@ -425,7 +451,7 @@ class ArbitraryToken extends Token {
     const iterBounds = ctx.iterationBoundaries;
     const hasBounds = (bounds && bounds.length > 0) || (iterBounds && iterBounds.length > 0);
     if (!hasBounds)
-      return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope });
+      return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope }, input, startIdx);
 
     const all = [...(bounds || _emptyBounds), ...(iterBounds || _emptyBounds)];
     let testCtx: MatchContext | null = null;
@@ -445,9 +471,9 @@ class ArbitraryToken extends Token {
         if (hit) break;
       }
       if (hit)
-        return this.wrapResult({ success: true, consumed: i, value: input.substring(startIdx, absIdx), scope: _emptyScope });
+        return this.wrapResult({ success: true, consumed: i, value: input.substring(startIdx, absIdx), scope: _emptyScope }, input, startIdx);
     }
-    return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope });
+    return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope }, input, startIdx);
   }
 }
 
@@ -476,12 +502,24 @@ class ArrayToken extends Token {
   }
   canStartAt(ctx: MatchContext) {
     if (this.items.length === 0) return true;
-    for (const t of this.items) {
+    for (let i = 0; i < this.items.length; i++) {
+      const t = this.items[i];
       const f = t.getFirstConcreteTokens();
-      if (f.length > 0) return t.canStartAt(ctx);
-      if (t.canStartAt(ctx)) return true;
+      if (f.length > 0) {
+        if (!t.canStartAt(ctx)) return false;
+        // Two-item lookahead: match first concrete, check second can follow
+        for (let j = i + 1; j < this.items.length; j++) {
+          if (this.items[j].getFirstConcreteTokens().length > 0) {
+            const r = t.match(ctx);
+            if (!r.success) return false;
+            return this.items[j].canStartAt({ ...ctx, index: ctx.index + r.consumed });
+          }
+        }
+        return true;
+      }
+      // Transparent item: skip to find first concrete
     }
-    return true;
+    return true; // all items transparent
   }
 
   /** Pre-compute per-item boundary tokens (from remaining siblings) */
@@ -495,8 +533,14 @@ class ArrayToken extends Token {
       } else {
         const rb: Token[] = [];
         for (let j = i + 1; j < n; j++) {
-          rb.push(...items[j].getAllPossibleStartTokens());
-          if (items[j].getFirstConcreteTokens().length > 0) break;
+          if (items[j].getFirstConcreteTokens().length > 0) {
+            // Concrete sibling: push full token to preserve structural info
+            rb.push(items[j]);
+            break;
+          } else {
+            // Transparent sibling: decompose into start tokens
+            rb.push(...items[j].getAllPossibleStartTokens());
+          }
         }
         arr[i] = rb.length > 0 ? rb : null;
       }
@@ -551,7 +595,7 @@ class ArrayToken extends Token {
         hasDelta = true;
       }
     }
-    return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: hasDelta ? delta : _emptyScope });
+    return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: hasDelta ? delta : _emptyScope }, ctx.input, ctx.index);
   }
 }
 
@@ -578,6 +622,8 @@ class LoopToken extends Token {
     let totalConsumed = 0;
     const values: any[] = [];
     const accumulated: Record<string, any[]> = {};
+    const perIterScopes: Scope[] = [];
+    const perIterMatches: string[] = [];
     let currentIndex = ctx.index;
     let iterations = 0;
     const input = ctx.input;
@@ -596,6 +642,13 @@ class LoopToken extends Token {
       suppressIterBoundaries: ctx.suppressIterBoundaries,
       scope: ctx.scope,
       hardBoundaries: ctx.hardBoundaries,
+    };
+
+    const _finish = () => {
+      const scope: any = { ...accumulated };
+      scope[_perIterationScopes] = perIterScopes;
+      scope[_perIterationMatches] = perIterMatches;
+      return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope }, ctx.input, ctx.index);
     };
 
     while (true) {
@@ -619,23 +672,29 @@ class LoopToken extends Token {
           }
         }
 
+        perIterMatches.push(input.substring(currentIndex, currentIndex + useResult.consumed));
         totalConsumed += useResult.consumed;
         currentIndex += useResult.consumed;
         values.push(useResult.value);
         const rScope = useResult.scope;
         if (rScope !== _emptyScope) {
           const keys = Object.keys(rScope);
+          const iterScope: Scope = {};
           for (let k = 0; k < keys.length; k++) {
             const key = keys[k];
             if (!(key in accumulated)) accumulated[key] = [];
             accumulated[key].push(rScope[key]);
+            iterScope[key] = rScope[key];
           }
+          perIterScopes.push(iterScope);
+        } else {
+          perIterScopes.push(_emptyScope);
         }
         iterations++;
 
         if (iterations >= this.minCount && isTransparentInner && hasBoundaries) {
           if (_boundaryAt(input, ctx.boundaries, currentIndex, ctx)) {
-            return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: accumulated });
+            return _finish();
           }
         }
         continue;
@@ -643,16 +702,16 @@ class LoopToken extends Token {
 
       if (iterations >= this.minCount) {
         if (_boundaryAt(input, ctx.boundaries, currentIndex, ctx)) {
-          return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: accumulated });
+          return _finish();
         }
         if (currentIndex >= input.length)
-          return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: accumulated });
+          return _finish();
       }
       break;
     }
 
     if (iterations < this.minCount) return FAIL;
-    return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: accumulated });
+    return _finish();
   }
 }
 
@@ -689,7 +748,9 @@ class TimesExactlyToken extends Token {
     const inner = this.inner;
     let totalConsumed = 0;
     const values: any[] = [];
-    let allScope: Scope = _emptyScope;
+    const accumulated: Record<string, any[]> = {};
+    const perIterScopes: Scope[] = [];
+    const perIterMatches: string[] = [];
     let currentIndex = ctx.index;
 
     for (let i = 0; i < n; i++) {
@@ -701,14 +762,29 @@ class TimesExactlyToken extends Token {
         hardBoundaries: ctx.hardBoundaries,
       });
       if (!result.success) return FAIL;
+      perIterMatches.push(ctx.input.substring(currentIndex, currentIndex + result.consumed));
       totalConsumed += result.consumed;
       currentIndex += result.consumed;
       values.push(result.value);
-      if (result.scope !== _emptyScope && Object.keys(result.scope).length > 0) {
-        allScope = allScope === _emptyScope ? { ...result.scope } : { ...allScope, ...result.scope };
+      const rScope = result.scope;
+      if (rScope !== _emptyScope) {
+        const keys = Object.keys(rScope);
+        const iterScope: Scope = {};
+        for (let k = 0; k < keys.length; k++) {
+          const key = keys[k];
+          if (!(key in accumulated)) accumulated[key] = [];
+          accumulated[key].push(rScope[key]);
+          iterScope[key] = rScope[key];
+        }
+        perIterScopes.push(iterScope);
+      } else {
+        perIterScopes.push(_emptyScope);
       }
     }
-    return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope: allScope });
+    const scope: any = { ...accumulated };
+    scope[_perIterationScopes] = perIterScopes;
+    scope[_perIterationMatches] = perIterMatches;
+    return this.wrapResult({ success: true, consumed: totalConsumed, value: values, scope }, ctx.input, ctx.index);
   }
 }
 
@@ -735,7 +811,9 @@ class TimesAtLeastToken extends Token {
     const inner = this.inner;
     let totalConsumed = 0;
     const values: any[] = [];
-    let allScope: Scope = _emptyScope;
+    const accumulated: Record<string, any[]> = {};
+    const perIterScopes: Scope[] = [];
+    const perIterMatches: string[] = [];
     let currentIndex = ctx.index;
     let iterations = 0;
 
@@ -753,20 +831,35 @@ class TimesAtLeastToken extends Token {
         hardBoundaries: ctx.hardBoundaries,
       });
       if (!result.success || result.consumed === 0) break;
+      perIterMatches.push(ctx.input.substring(currentIndex, currentIndex + result.consumed));
       totalConsumed += result.consumed;
       currentIndex += result.consumed;
       values.push(result.value);
-      if (result.scope !== _emptyScope && Object.keys(result.scope).length > 0) {
-        allScope = allScope === _emptyScope ? { ...result.scope } : { ...allScope, ...result.scope };
+      const rScope = result.scope;
+      if (rScope !== _emptyScope) {
+        const keys = Object.keys(rScope);
+        const iterScope: Scope = {};
+        for (let k = 0; k < keys.length; k++) {
+          const key = keys[k];
+          if (!(key in accumulated)) accumulated[key] = [];
+          accumulated[key].push(rScope[key]);
+          iterScope[key] = rScope[key];
+        }
+        perIterScopes.push(iterScope);
+      } else {
+        perIterScopes.push(_emptyScope);
       }
       iterations++;
     }
 
     if (iterations < min) return FAIL;
+    const scope: any = { ...accumulated };
+    scope[_perIterationScopes] = perIterScopes;
+    scope[_perIterationMatches] = perIterMatches;
     return this.wrapResult({
       success: true, consumed: totalConsumed,
-      value: { count: iterations, values }, scope: allScope,
-    });
+      value: { count: iterations, values }, scope,
+    }, ctx.input, ctx.index);
   }
 }
 
@@ -785,7 +878,9 @@ class TimesAtMostToken extends Token {
     const inner = this.inner;
     let totalConsumed = 0;
     const values: any[] = [];
-    let allScope: Scope = _emptyScope;
+    const accumulated: Record<string, any[]> = {};
+    const perIterScopes: Scope[] = [];
+    const perIterMatches: string[] = [];
     let currentIndex = ctx.index;
     let iterations = 0;
 
@@ -803,18 +898,33 @@ class TimesAtMostToken extends Token {
         hardBoundaries: ctx.hardBoundaries,
       });
       if (!result.success || result.consumed === 0) break;
+      perIterMatches.push(ctx.input.substring(currentIndex, currentIndex + result.consumed));
       totalConsumed += result.consumed;
       currentIndex += result.consumed;
       values.push(result.value);
-      if (result.scope !== _emptyScope && Object.keys(result.scope).length > 0) {
-        allScope = allScope === _emptyScope ? { ...result.scope } : { ...allScope, ...result.scope };
+      const rScope = result.scope;
+      if (rScope !== _emptyScope) {
+        const keys = Object.keys(rScope);
+        const iterScope: Scope = {};
+        for (let k = 0; k < keys.length; k++) {
+          const key = keys[k];
+          if (!(key in accumulated)) accumulated[key] = [];
+          accumulated[key].push(rScope[key]);
+          iterScope[key] = rScope[key];
+        }
+        perIterScopes.push(iterScope);
+      } else {
+        perIterScopes.push(_emptyScope);
       }
       iterations++;
     }
+    const scope: any = { ...accumulated };
+    scope[_perIterationScopes] = perIterScopes;
+    scope[_perIterationMatches] = perIterMatches;
     return this.wrapResult({
       success: true, consumed: totalConsumed,
-      value: { count: iterations, values }, scope: allScope,
-    });
+      value: { count: iterations, values }, scope,
+    }, ctx.input, ctx.index);
   }
 }
 
@@ -870,11 +980,11 @@ class AnyToken extends Token {
         hardBoundaries: ctx.hardBoundaries,
       });
       if (result.success) {
-        if (result.consumed > 0) return this.wrapResult(result);
+        if (result.consumed > 0) return this.wrapResult(result, ctx.input, ctx.index);
         if (!zeroConsumedResult) zeroConsumedResult = result;
       }
     }
-    if (zeroConsumedResult) return this.wrapResult(zeroConsumedResult);
+    if (zeroConsumedResult) return this.wrapResult(zeroConsumedResult, ctx.input, ctx.index);
     return FAIL;
   }
 }
@@ -888,8 +998,8 @@ class OptionalToken extends Token {
   canStartAt() { return true; }
   match(ctx: MatchContext): MatchResult {
     const result = this.inner.match(ctx);
-    if (result.success) return this.wrapResult(result);
-    return this.wrapResult({ success: true, consumed: 0, value: null, scope: _emptyScope });
+    if (result.success) return this.wrapResult(result, ctx.input, ctx.index);
+    return this.wrapResult({ success: true, consumed: 0, value: null, scope: _emptyScope }, ctx.input, ctx.index);
   }
 }
 
@@ -916,7 +1026,7 @@ class RefToken extends Token {
       hardBoundaries: ctx.hardBoundaries,
     });
     DEPTH--;
-    return this.wrapResult(result);
+    return this.wrapResult(result, ctx.input, ctx.index);
   }
 }
 
@@ -935,7 +1045,7 @@ class WithScopeToken extends Token {
       ? this.scopeFn(ctx.scope)
       : this.scopeFn;
     const merged = { ...ctx.scope, ...extra };
-    return this.wrapResult(this.inner.match({ ...ctx, scope: merged }));
+    return this.wrapResult(this.inner.match({ ...ctx, scope: merged }), ctx.input, ctx.index);
   }
 }
 
@@ -951,7 +1061,7 @@ class GuardedToken extends Token {
   }
   match(ctx: MatchContext): MatchResult {
     if (ctx.preceding !== undefined && this.guard(ctx.preceding)) return FAIL;
-    return this.wrapResult(this.inner.match(ctx));
+    return this.wrapResult(this.inner.match(ctx), ctx.input, ctx.index);
   }
 }
 
@@ -965,7 +1075,7 @@ class TransformToken extends Token {
   match(ctx: MatchContext): MatchResult {
     const result = this.inner.match(ctx);
     if (!result.success) return result;
-    return this.wrapResult({ success: true, consumed: result.consumed, value: this.fn(result.value, result.scope), scope: result.scope });
+    return this.wrapResult({ success: true, consumed: result.consumed, value: this.fn(result.value, result.scope), scope: result.scope }, ctx.input, ctx.index);
   }
 }
 
@@ -977,7 +1087,7 @@ class IsolatedToken extends Token {
   protected computeAll() { return this.inner.getAllPossibleStartTokens(); }
   canStartAt(ctx: MatchContext) { return this.inner.canStartAt(ctx); }
   match(ctx: MatchContext): MatchResult {
-    return this.wrapResult(this.inner.match({ ...ctx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined }));
+    return this.wrapResult(this.inner.match({ ...ctx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined }), ctx.input, ctx.index);
   }
 }
 
@@ -991,7 +1101,7 @@ class NoIterBoundariesToken extends Token {
   match(ctx: MatchContext): MatchResult {
     return this.wrapResult(this.inner.match({
       ...ctx, iterationBoundaries: _emptyBounds, suppressIterBoundaries: true
-    }));
+    }), ctx.input, ctx.index);
   }
 }
 
@@ -1227,7 +1337,7 @@ export {
   // Helpers
   toToken, isToken, escapedBy, endsWith,
   // Symbols (for advanced use)
-  _matcher, _name,
+  _matcher, _name, _perIterationScopes, _perIterationMatches,
   Token
 };
 export type { MatchResult, MatchContext, Scope };
@@ -1459,24 +1569,24 @@ bye
 
   console.log(JSON.stringify(r.scope, null, 2))
   console.log(ctx.program[_matcher] instanceof Token)
-  const stmts = r.scope.statements;
+  const stmtsObj = r.scope.statements;
+  assert('statements has _match', typeof stmtsObj._match === 'string');
+  const stmts = stmtsObj.entries;
   assert('2 roots', Array.isArray(stmts) && stmts.length === 2);
 
   if (stmts?.length >= 1) {
-    const [_e, content, _t, children] = stmts[0];
-    assert('first = "hello"', content === 'hello');
-    assert('2 children', children?.length === 2);
-    if (children?.length >= 1) {
-      const [_a, _b, _c, childStmt] = children[0];
-      const [_d, childContent, _e2, grandchildren] = childStmt;
-      assert('child "world"', childContent === 'world');
-      assert('1 grandchild "deep"', grandchildren?.length === 1);
+    assert('first = "hello"', stmts[0].content === 'hello');
+    assert('2 children', stmts[0].children?.entries?.length === 2);
+    if (stmts[0].children?.entries?.length >= 1) {
+      const child0 = stmts[0].children.entries[0];
+      assert('child "world"', child0.content === 'world');
+      assert('1 grandchild "deep"', child0.children?.entries?.length === 1);
     }
   }
 
-  assert('statements has value structure', Array.isArray(r.scope.statements));
+  assert('statements has entries array', Array.isArray(stmtsObj.entries));
   if (stmts?.length >= 2) {
-    assert('stmt[1] content via value = "bye"', stmts[1][1] === 'bye');
+    assert('stmt[1] content via value = "bye"', stmts[1].content === 'bye');
   }
 }
 
@@ -1503,10 +1613,11 @@ console.log('\n── 16. Nested scope: inner sees outer, outer sees accumulated
   const r = parse(ctx.list, 'colors:red,blue,green');
   assert('parses', r.success);
   assert('prefix="colors"', r.scope.prefix === 'colors');
-  assert('items is array', Array.isArray(r.scope.items));
-  assert('3 items', r.scope.items?.length === 3);
-  assert('item accumulated', Array.isArray(r.scope.item));
-  assert('item = [red,blue,green]', r.scope.item?.join(',') === 'red,blue,green');
+  assert('items has entries', Array.isArray(r.scope.items?.entries));
+  assert('items has _match', typeof r.scope.items?._match === 'string');
+  assert('3 items', r.scope.items?.entries?.length === 3);
+  assert('item not at top level', r.scope.item === undefined);
+  assert('item nested in items.entries[0]', r.scope.items?.entries?.[0]?.item === 'red');
 }
 
 // ── 17. RULE_NAME with PROPERTIES grammar ──
@@ -1555,7 +1666,7 @@ console.log('\n── 17. RULE_NAME with PROPERTIES grammar ──');
   const r2 = parse(ctx.statement, 'property{test: String}\n', { indent: 0 });
   assert('RULE_NAME line parses', r2.success);
   console.log('    r2.scope.content:', JSON.stringify(r2.scope.content, null, 2));
-  assert('property_name bound', r2.scope.property_name != null);
+  assert('property_name nested in content.properties', r2.scope.content?.properties?.property_name != null);
 
   // Test: RULE_NAME with arrow body
   const r3 = parse(ctx.statement, 'property{test: String} => body\n', { indent: 0 });

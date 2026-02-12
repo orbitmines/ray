@@ -112,8 +112,8 @@ class Var {
       const result = parse(type.value.encoded, this.as_string(ctx), { indent: 0 }) //TODO Fix initialized base value/
 
       //TODO Put result.scope to ctx.
-      console.log(JSON.stringify(result.scope.property_name, null, 2))
-      // console.log(JSON.stringify(result.scope, null, 2))
+
+      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.content.properties.property_name).map((x: any) => [x.content._match, x.content.properties.property_name.map((x: any) => x._match), x.content.property_body._match]), null, 2))
 
       return result.success;
     } else if (is_string(type.value.encoded)) {
@@ -352,13 +352,25 @@ namespace Language {
     bootstrap = (): this => {
       //TODO Blocks of comments are passed on the first thing in front of them.
 
+      //TODO First interpret STD with bootstrap, then interpret it with itself.
+
+      // Dynamic grammar is basically a dependent type which causes reevaluation.
+
+      //TODO Grammar is only used for parsing the STD, then the STD is used to parse the other rules.
+
+      //TODO After all the grammar rules are matched, match to all usual methods and superpose them into a single rule for that context.
+
+      // TODO Comments dont consume a block/*, so they shouldn't capture this: (Not capturing it, gives it to the place where that statement was made)v -> But anything can capture a block, need to explcitely say it's not capturing it.
+
+      // Technically there could be additional grammar rules incorrectly defined in comments here, but since we're only bootstrapping for the std, we're assuming the grammar rules defined in it don't have this issue. (In the bootstrapped version, this will be done properly)
+
       // this.lazily(() => {
         const grammar = Var.type((ctx: any) => {
           ctx.empty_line = ctx.regex(/[ \t]*\n/);
 
-          const RULE_NAME = ctx.Array(ctx.not(' ')[``], '{', ctx.Expression, '}', ctx.not(' ')[``])[``]
+          const RULE_NAME = ctx.Array(ctx.not(' ', '\n')[``], '{', ctx.Expression, '}', ctx.not(' ', '\n')[``])[``]
           const RULE_ONLINE_BODY = ctx.Any(
-            ctx.Array(ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional),
+            ctx.Array(ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.not('\n').optional), // ctx.statement.optional
             ctx.Array(ctx.val(' ')[``], ctx.end)
           )
           ctx.PROPERTIES = ctx.Array(
@@ -375,7 +387,8 @@ namespace Language {
           ctx.statement = ctx.Array(
             ctx.empty_line[``],
             ctx.PROPERTIES.bind(ctx.content),
-            ctx.Any(';', '\n', ctx.end),
+            ctx.Any('\n', ctx.end),
+
             ctx.Array(
               ctx.empty_line[``],
               ctx.val(' ')[``].constrain((x: any) => x.length, '==', 'indent'),
@@ -402,6 +415,7 @@ namespace Language {
 
       console.log('instance_of', Var.string(
         this.language.join('\n')
+        // '({expr: (): *}) => expr'
         // 'property{test: String}\n  body'
       , bootstrap_ctx).instance_of(grammar, bootstrap_ctx))
 
@@ -490,54 +504,6 @@ export namespace Ether {
       throw new Error(`"${location}": Unknown Ether instance directory or Ray file.`)
   }
 }
-
-//TODO First interpret STD with bootstrap, then interpret it with itself.
-
-//TODO Whatever is used to dynamically parse should get new syntax in the language for this pattern matching dynamically reassigning
-//TODO After change, what we just parsed is skipped.
-// Dynamic grammar is basically a dependent type which causes reevaluation.
-
-//TODO Grammar is only used for parsing the STD, then the STD is used to parse the other rules.
-
-//     if (ctx.is_none()) {
-//         // STD is not loaded, parse with bootstrapping grammar
-//         const RULE_NAME = ctx.Array(ctx.not(' ')[``], '{', ctx.Expression, '}', ctx.not(' ')[``])[``]
-//         const RULE_ONLINE_BODY = ctx.Any(
-//           ctx.Array(ctx.val(' ')[``].constrain(x => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional),
-//           ctx.Array(ctx.val(' ')[``], ctx.end)
-//         )
-//
-//         ctx.RULES = ctx.Array(
-//           ctx.Array((ctx: Node) => [
-//             RULE_NAME.bind(ctx.name),
-//             ctx.Any(' & ', ' | ').optional
-//           ])[``].constrain(x => x.length, '>=', 1).bind(ctx.rules),
-//           RULE_ONLINE_BODY.bind(ctx.body)
-//         ).bind(() => {
-//           //TODO
-//           // ctx.RULES.everywhere |= ctx.rules
-//         })
-//         //TODO On match add to rules.
-//
-//         //TODO After all the grammar rules are matched, match to all usual methods and superpose them into a single rule for that context.
-//       } else {
-//         ctx.RULES = ctx.val(ctx.dynamically(() => ctx.keys, ctx))
-//       }
-//
-//       ctx.empty_lines = ctx.Array(ctx.val(' ')[``],'\n')[``]
-//       ctx.statement = ctx.Array((ctx: Node) => [
-//         ctx.empty_lines,
-//         ctx.RULES.bind(ctx.content),
-//         ctx.Any('\n', ctx.end),
-//         ctx.Array((ctx: Node) => [
-//           ctx.empty_lines,
-//           ctx.val(' ')[``].constrain(x => x.length, '==', ctx.indent),
-//           ctx.val(' ')[``].constrain(x => x.length, '>=', 1).bind(ctx.added_indent),
-//           ctx.Expression.with({ indent: ctx.indent.as_number + ctx.added_indent.as_number })
-//         ])[``].bind(ctx.block)
-//       ])
-//       ctx.Expression = ctx.statement[``]
-
 
 /**
  * Copied from https://github.com/lodash/lodash/blob/main/dist/lodash.js

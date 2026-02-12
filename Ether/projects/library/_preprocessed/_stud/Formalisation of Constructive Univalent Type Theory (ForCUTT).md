@@ -1,4 +1,0 @@
-
-
-#### People
-- [[Thierry Coquand]]

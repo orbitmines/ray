@@ -1,3 +1,0 @@
-
-
-![[Crossed_Dragone.pdf]]

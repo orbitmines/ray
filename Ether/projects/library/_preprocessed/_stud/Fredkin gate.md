@@ -1,2 +1,0 @@
-
-![[Fredkin_gate.pdf]]

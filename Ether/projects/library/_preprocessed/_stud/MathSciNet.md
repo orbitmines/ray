@@ -1,3 +1,0 @@
-
-
-![[MathSciNet.pdf]]

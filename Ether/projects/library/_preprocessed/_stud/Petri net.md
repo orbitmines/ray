@@ -1,3 +1,0 @@
-
-
-![[Petri_net.pdf]]

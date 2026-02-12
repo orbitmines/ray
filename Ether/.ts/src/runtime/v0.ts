@@ -113,7 +113,7 @@ class Var {
 
       //TODO Put result.scope to ctx.
 
-      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.content.properties.property_name).map((x: any) => [x.content._match, x.content.properties.property_name.map((x: any) => x._match)]), null, 2))
+      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.content.properties.property_name).map((x: any) => [x.content._match, x.content.properties.property_name.map((x: any) => x._match), x.content.property_body]), null, 2))
 
       return result.success;
     } else if (is_string(type.value.encoded)) {
@@ -362,6 +362,8 @@ namespace Language {
 
       // TODO Comments dont consume a block/*, so they shouldn't capture this: (Not capturing it, gives it to the place where that statement was made)v -> But anything can capture a block, need to explcitely say it's not capturing it.
 
+      // Technically there could be additional grammar rules incorrectly defined in comments here, but since we're only bootstrapping for the std, we're assuming the grammar rules defined in it don't have this issue. (In the bootstrapped version, this will be done properly)
+
       // this.lazily(() => {
         const grammar = Var.type((ctx: any) => {
           ctx.empty_line = ctx.regex(/[ \t]*\n/);
@@ -413,6 +415,7 @@ namespace Language {
 
       console.log('instance_of', Var.string(
         this.language.join('\n')
+        // '({expr: (): *}) => expr'
         // 'property{test: String}\n  body'
       , bootstrap_ctx).instance_of(grammar, bootstrap_ctx))
 

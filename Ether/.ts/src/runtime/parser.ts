@@ -56,6 +56,8 @@ type MatchResult = {
   scope: Scope;
 };
 
+type DelimAnchor = { opener: string; closer: string; anchorPos: number };
+
 type MatchContext = {
   input: string;
   index: number;
@@ -65,6 +67,7 @@ type MatchContext = {
   preceding?: string;
   scope: Scope;
   hardBoundaries?: Token[];
+  delimAnchors?: DelimAnchor[];
 };
 
 const FAIL: MatchResult = Object.freeze({ success: false, consumed: 0, value: null, scope: {} });
@@ -73,6 +76,10 @@ const _emptyScope: Scope = {};
 const _perIterationScopes = Symbol('perIterationScopes');
 const _perIterationMatches = Symbol('perIterationMatches');
 const _emptyResult: MatchResult = Object.freeze({ success: true, consumed: 0, value: '', scope: _emptyScope });
+
+// Paired delimiter map: opener → closer
+const _pairedDelims: Record<string, string> = { '{': '}', '(': ')', '[': ']' };
+const _closerToOpener: Record<string, string> = { '}': '{', ')': '(', ']': '[' };
 
 // ════════════════════════════════════════════════════════════
 // Boundary helpers — fast path for StringToken
@@ -88,7 +95,7 @@ function _boundaryAt(input: string, boundaries: Token[], pos: number, ctx: Match
         if (input.startsWith(strs[j], pos)) return true;
       }
     } else {
-      if (b.canStartAt({ input, index: pos, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, hardBoundaries: ctx.hardBoundaries })) return true;
+      if (b.canStartAt({ input, index: pos, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, hardBoundaries: ctx.hardBoundaries, delimAnchors: ctx.delimAnchors })) return true;
     }
   }
   return false;
@@ -106,7 +113,7 @@ function _boundaryInRange(input: string, boundaries: Token[], start: number, end
       }
     } else {
       for (let pos = start; pos < end; pos++) {
-        if (b.canStartAt({ input, index: pos, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: input.substring(start, pos) })) return true;
+        if (b.canStartAt({ input, index: pos, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: input.substring(start, pos), delimAnchors: ctx.delimAnchors })) return true;
       }
     }
   }
@@ -260,7 +267,7 @@ class EndToken extends Token {
           const strs = t.strings;
           for (let j = 0; j < strs.length; j++) if (input.startsWith(strs[j], idx)) return true;
         } else {
-          if (t.canStartAt({ input, index: idx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: '' })) return true;
+          if (t.canStartAt({ input, index: idx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: '', delimAnchors: ctx.delimAnchors })) return true;
         }
       }
     }
@@ -271,7 +278,7 @@ class EndToken extends Token {
           const strs = t.strings;
           for (let j = 0; j < strs.length; j++) if (input.startsWith(strs[j], idx)) return true;
         } else {
-          if (t.canStartAt({ input, index: idx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: '' })) return true;
+          if (t.canStartAt({ input, index: idx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: '', delimAnchors: ctx.delimAnchors })) return true;
         }
       }
     }
@@ -282,7 +289,7 @@ class EndToken extends Token {
           const strs = t.strings;
           for (let j = 0; j < strs.length; j++) if (input.startsWith(strs[j], idx)) return true;
         } else {
-          if (t.canStartAt({ input, index: idx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: '' })) return true;
+          if (t.canStartAt({ input, index: idx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: '', delimAnchors: ctx.delimAnchors })) return true;
         }
       }
     }
@@ -351,7 +358,7 @@ class NotToken extends Token {
             const strs = b.strings;
             for (let j = 0; j < strs.length; j++) { if (input.startsWith(strs[j], absIdx)) { hit = true; break; } }
           } else {
-            if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined, preceding: input.substring(startIdx, absIdx), scope: ctx.scope };
+            if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined, preceding: input.substring(startIdx, absIdx), scope: ctx.scope, delimAnchors: ctx.delimAnchors };
             else { testCtx.index = absIdx; testCtx.preceding = input.substring(startIdx, absIdx); }
             if (b.canStartAt(testCtx)) hit = true;
           }
@@ -367,7 +374,7 @@ class NotToken extends Token {
             const strs = b.strings;
             for (let j = 0; j < strs.length; j++) { if (input.startsWith(strs[j], absIdx)) { hit = true; break; } }
           } else {
-            if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined, preceding: input.substring(startIdx, absIdx), scope: ctx.scope };
+            if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined, preceding: input.substring(startIdx, absIdx), scope: ctx.scope, delimAnchors: ctx.delimAnchors };
             else { testCtx.index = absIdx; testCtx.preceding = input.substring(startIdx, absIdx); testCtx.hardBoundaries = undefined; }
             if (b.canStartAt(testCtx)) hit = true;
           }
@@ -464,7 +471,7 @@ class ArbitraryToken extends Token {
           const strs = b.strings;
           for (let j = 0; j < strs.length; j++) { if (input.startsWith(strs[j], absIdx)) { hit = true; break; } }
         } else {
-          if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: input.substring(startIdx, absIdx) };
+          if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: input.substring(startIdx, absIdx), delimAnchors: ctx.delimAnchors };
           else { testCtx.index = absIdx; testCtx.preceding = input.substring(startIdx, absIdx); }
           if (b.canStartAt(testCtx)) hit = true;
         }
@@ -474,6 +481,36 @@ class ArbitraryToken extends Token {
         return this.wrapResult({ success: true, consumed: i, value: input.substring(startIdx, absIdx), scope: _emptyScope }, input, startIdx);
     }
     return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope }, input, startIdx);
+  }
+}
+
+// ── DepthAwareBoundary (paired delimiter boundary) ──
+
+class DepthAwareBoundaryToken extends Token {
+  constructor(public opener: string, public closer: string) { super(); }
+  protected computeFirst() { return [this as Token]; }
+  canStartAt(ctx: MatchContext): boolean {
+    if (!ctx.input.startsWith(this.closer, ctx.index)) return false;
+    const anchors = ctx.delimAnchors;
+    if (!anchors || anchors.length === 0) return true;
+    // Find the most recent anchor for this closer
+    for (let i = anchors.length - 1; i >= 0; i--) {
+      if (anchors[i].closer === this.closer) {
+        let depth = 0;
+        const input = ctx.input;
+        for (let pos = anchors[i].anchorPos; pos < ctx.index; pos++) {
+          if (input.startsWith(this.opener, pos)) depth++;
+          if (input.startsWith(this.closer, pos)) depth--;
+        }
+        return depth <= 0;
+      }
+    }
+    return true; // No anchor for this closer → fire normally
+  }
+  match(ctx: MatchContext): MatchResult {
+    if (this.canStartAt(ctx))
+      return this.wrapResult({ success: true, consumed: this.closer.length, value: this.closer, scope: _emptyScope }, ctx.input, ctx.index);
+    return FAIL;
   }
 }
 
@@ -526,6 +563,16 @@ class ArrayToken extends Token {
   private _getBounds(): (Token[] | null)[] {
     if (this._precomputedBounds) return this._precomputedBounds;
     const items = this.items, n = items.length;
+    // Pre-compute which items are opener delimiters (for depth-aware boundaries)
+    const openerPositions: Map<string, number> = new Map();
+    for (let k = 0; k < n; k++) {
+      if (items[k] instanceof StringToken) {
+        const strs = (items[k] as StringToken).strings;
+        if (strs.length === 1 && strs[0] in _pairedDelims) {
+          openerPositions.set(_pairedDelims[strs[0]], k);
+        }
+      }
+    }
     const arr: (Token[] | null)[] = new Array(n);
     for (let i = 0; i < n; i++) {
       if (i === n - 1) {
@@ -534,8 +581,19 @@ class ArrayToken extends Token {
         const rb: Token[] = [];
         for (let j = i + 1; j < n; j++) {
           if (items[j].getFirstConcreteTokens().length > 0) {
+            // Check if this is a closing delimiter with a matching opener before item i
+            const item = items[j];
+            if (item instanceof StringToken && item.strings.length === 1) {
+              const closerStr = item.strings[0];
+              const openerIdx = openerPositions.get(closerStr);
+              if (openerIdx !== undefined && openerIdx < i) {
+                // Paired delimiter: use depth-aware boundary
+                rb.push(new DepthAwareBoundaryToken(_closerToOpener[closerStr], closerStr));
+                break;
+              }
+            }
             // Concrete sibling: push full token to preserve structural info
-            rb.push(items[j]);
+            rb.push(item);
             break;
           } else {
             // Transparent sibling: decompose into start tokens
@@ -556,6 +614,7 @@ class ArrayToken extends Token {
     let currentIndex = ctx.index;
     const items = this.items, itemLen = items.length;
     const precomputed = this._getBounds();
+    let delimAnchors = ctx.delimAnchors;
 
     for (let i = 0; i < itemLen; i++) {
       const rb = precomputed[i];
@@ -568,6 +627,7 @@ class ArrayToken extends Token {
         suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: childScope,
         hardBoundaries: ctx.hardBoundaries,
+        delimAnchors,
       });
 
       if (!result.success) return FAIL;
@@ -580,6 +640,14 @@ class ArrayToken extends Token {
         const keys = Object.keys(rScope);
         if (keys.length > 0) {
           childScope = { ...childScope, ...rScope };
+        }
+      }
+      // After matching an opener delimiter, push anchor for depth-aware boundary
+      if (result.success && items[i] instanceof StringToken) {
+        const strs = (items[i] as StringToken).strings;
+        if (strs.length === 1 && strs[0] in _pairedDelims) {
+          const closer = _pairedDelims[strs[0]];
+          delimAnchors = [...(delimAnchors || []), { opener: strs[0], closer, anchorPos: currentIndex }];
         }
       }
     }
@@ -642,6 +710,7 @@ class LoopToken extends Token {
       suppressIterBoundaries: ctx.suppressIterBoundaries,
       scope: ctx.scope,
       hardBoundaries: ctx.hardBoundaries,
+      delimAnchors: ctx.delimAnchors,
     };
 
     const _finish = () => {
@@ -760,6 +829,7 @@ class TimesExactlyToken extends Token {
         iterationBoundaries: ctx.iterationBoundaries,
         scope: ctx.scope,
         hardBoundaries: ctx.hardBoundaries,
+        delimAnchors: ctx.delimAnchors,
       });
       if (!result.success) return FAIL;
       perIterMatches.push(ctx.input.substring(currentIndex, currentIndex + result.consumed));
@@ -829,6 +899,7 @@ class TimesAtLeastToken extends Token {
         suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: ctx.scope,
         hardBoundaries: ctx.hardBoundaries,
+        delimAnchors: ctx.delimAnchors,
       });
       if (!result.success || result.consumed === 0) break;
       perIterMatches.push(ctx.input.substring(currentIndex, currentIndex + result.consumed));
@@ -896,6 +967,7 @@ class TimesAtMostToken extends Token {
         suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: ctx.scope,
         hardBoundaries: ctx.hardBoundaries,
+        delimAnchors: ctx.delimAnchors,
       });
       if (!result.success || result.consumed === 0) break;
       perIterMatches.push(ctx.input.substring(currentIndex, currentIndex + result.consumed));
@@ -978,6 +1050,7 @@ class AnyToken extends Token {
         suppressIterBoundaries: ctx.suppressIterBoundaries,
         scope: ctx.scope,
         hardBoundaries: ctx.hardBoundaries,
+        delimAnchors: ctx.delimAnchors,
       });
       if (result.success) {
         if (result.consumed > 0) return this.wrapResult(result, ctx.input, ctx.index);
@@ -1024,6 +1097,7 @@ class RefToken extends Token {
       suppressIterBoundaries: ctx.suppressIterBoundaries,
       scope: ctx.scope,
       hardBoundaries: ctx.hardBoundaries,
+      delimAnchors: ctx.delimAnchors,
     });
     DEPTH--;
     return this.wrapResult(result, ctx.input, ctx.index);

@@ -200,6 +200,13 @@ abstract class Token {
       }
 
       // No child scope: simple binding
+      // For array values (from ArrayToken/AnyToken), wrap with _match so the matched text is accessible.
+      // Primitive values (strings, numbers, null) are their own match text, so store as-is.
+      // Plain objects (e.g. {count, values} from constrain) are left as-is to preserve property access.
+      if (Array.isArray(result.value)) {
+        const _match = input != null && startIndex != null ? input.substring(startIndex, startIndex + result.consumed) : undefined;
+        return { success: true, consumed: result.consumed, value: result.value, scope: { [this.bindName]: { _value: result.value, _match } } };
+      }
       const scope = { [this.bindName]: result.value };
       return { success: true, consumed: result.consumed, value: result.value, scope };
     }
@@ -886,14 +893,18 @@ class TimesAtLeastToken extends Token {
     const perIterMatches: string[] = [];
     let currentIndex = ctx.index;
     let iterations = 0;
+    const input = ctx.input;
 
     const iterationStarts = ctx.suppressIterBoundaries
       ? _emptyBounds : inner.getAllPossibleStartTokens();
     const mergedIterBounds = [...iterationStarts, ...ctx.boundaries, ...(ctx.iterationBoundaries || _emptyBounds)];
 
+    const hasBoundaries = ctx.boundaries.length > 0;
+    const isTransparentInner = inner.getFirstConcreteTokens().length === 0;
+
     while (true) {
       const result = inner.match({
-        input: ctx.input, index: currentIndex,
+        input, index: currentIndex,
         boundaries: _emptyBounds,
         iterationBoundaries: mergedIterBounds,
         suppressIterBoundaries: ctx.suppressIterBoundaries,
@@ -902,7 +913,7 @@ class TimesAtLeastToken extends Token {
         delimAnchors: ctx.delimAnchors,
       });
       if (!result.success || result.consumed === 0) break;
-      perIterMatches.push(ctx.input.substring(currentIndex, currentIndex + result.consumed));
+      perIterMatches.push(input.substring(currentIndex, currentIndex + result.consumed));
       totalConsumed += result.consumed;
       currentIndex += result.consumed;
       values.push(result.value);
@@ -921,6 +932,23 @@ class TimesAtLeastToken extends Token {
         perIterScopes.push(_emptyScope);
       }
       iterations++;
+
+      // Mirror LoopToken: stop when at a boundary position (for transparent inner tokens)
+      // But only if not inside unbalanced paired delimiters (to avoid stopping at
+      // boundaries that appear inside {…} or (…) nesting in the consumed content)
+      if (iterations >= min && isTransparentInner && hasBoundaries) {
+        if (_boundaryAt(input, ctx.boundaries, currentIndex, ctx)) {
+          let depth = 0;
+          for (let p = ctx.index; p < currentIndex; p++) {
+            const ch = input.charCodeAt(p);
+            if (ch === 0x28 /*(*/ || ch === 0x7B /*{*/ || ch === 0x5B /*[*/) depth++;
+            else if (ch === 0x29 /*)*/|| ch === 0x7D /*}*/ || ch === 0x5D /*]*/) depth--;
+          }
+          if (depth <= 0) {
+            break;
+          }
+        }
+      }
     }
 
     if (iterations < min) return FAIL;
@@ -930,7 +958,7 @@ class TimesAtLeastToken extends Token {
     return this.wrapResult({
       success: true, consumed: totalConsumed,
       value: { count: iterations, values }, scope,
-    }, ctx.input, ctx.index);
+    }, input, ctx.index);
   }
 }
 
@@ -1702,7 +1730,7 @@ console.log('\n── 17. RULE_NAME with PROPERTIES grammar ──');
 
   const RULE_NAME = ctx.Array(ctx.not(' ')[``], '{', ctx.Expression, '}', ctx.not(' ')[``])[``]
   const RULE_ONLINE_BODY = ctx.Any(
-    ctx.Array(ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional),
+    ctx.Array(ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.not('\n').optional),
     ctx.Array(ctx.val(' ')[``], ctx.end)
   )
   ctx.PROPERTIES = ctx.Array(
@@ -1749,6 +1777,14 @@ console.log('\n── 17. RULE_NAME with PROPERTIES grammar ──');
   // Test: RULE_NAME with parenthesized body
   const r4 = parse(ctx.statement, 'property{test: String} () => body\n', { indent: 0 });
   assert('RULE_NAME with () => parses', r4.success);
+
+  // Test: RULE_NAME with spaces inside braces + arrow body
+  const r5 = parse(ctx.statement, '({expr: (): *}) => expr\n', { indent: 0 });
+  assert('({expr: (): *}) => expr parses', r5.success);
+  assert('property_body has =>', r5.scope.content?.property_body != null);
+  // property_body should NOT be just empty end — it should contain the => part
+  const pb = r5.scope.content?.property_body;
+  assert('property_body captured arrow', pb?._match?.includes('=>') || (Array.isArray(pb) && pb.some((v: any) => v === '=>')));
 }
 
 console.log('\n' + '═'.repeat(60));

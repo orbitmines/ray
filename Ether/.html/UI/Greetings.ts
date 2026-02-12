@@ -220,6 +220,18 @@ function injectStyles(): void {
       color: rgba(255,255,255,0.16);
     }
 
+    .hidden-input {
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: 200px;
+      height: 40px;
+      font-size: 16px;
+      opacity: 0;
+      border: none;
+      padding: 0;
+    }
+
     /* Glitch shake */
     @keyframes glitchShake {
       0%  { transform: translate(0, 0) skewX(0); clip-path: inset(0); }
@@ -278,6 +290,7 @@ function injectStyles(): void {
       gap: 8px;
       width: 100%;
       margin-bottom: 12px;
+      justify-content: center;
     }
 
     .class-card {
@@ -294,10 +307,12 @@ function injectStyles(): void {
       background: transparent;
       user-select: none;
     }
-    .class-card:hover {
-      border-color: rgba(255,255,255,0.45);
-      background: rgba(255,255,255,0.035);
-      box-shadow: 0 0 14px rgba(255,255,255,0.1);
+    @media (hover: hover) {
+      .class-card:hover {
+        border-color: rgba(255,255,255,0.45);
+        background: rgba(255,255,255,0.035);
+        box-shadow: 0 0 14px rgba(255,255,255,0.1);
+      }
     }
     .class-card.selected {
       border-color: ${PHOSPHOR};
@@ -312,9 +327,11 @@ function injectStyles(): void {
       filter: drop-shadow(0 0 3px rgba(255,255,255,0.25));
       transition: opacity 0.15s, filter 0.15s;
     }
-    .class-card:hover img {
-      opacity: 0.85;
-      filter: drop-shadow(0 0 6px rgba(255,255,255,0.45));
+    @media (hover: hover) {
+      .class-card:hover img {
+        opacity: 0.85;
+        filter: drop-shadow(0 0 6px rgba(255,255,255,0.45));
+      }
     }
     .class-card.selected img {
       opacity: 1;
@@ -329,7 +346,9 @@ function injectStyles(): void {
       line-height: 1.2;
       transition: color 0.15s;
     }
-    .class-card:hover .class-label { color: rgba(255,255,255,0.75); }
+    @media (hover: hover) {
+      .class-card:hover .class-label { color: rgba(255,255,255,0.75); }
+    }
     .class-card.selected .class-label { color: ${PHOSPHOR}; }
 
     .start-btn {
@@ -510,7 +529,7 @@ async function introPhase(content: HTMLElement): Promise<void> {
 
 // ---- Phase: Name Input ----
 
-async function nameInputPhase(content: HTMLElement): Promise<string> {
+async function nameInputPhase(content: HTMLElement): Promise<{ name: string; row: HTMLElement; nameSpan: HTMLElement }> {
   const row = document.createElement('div');
   row.className = 'input-row';
   content.appendChild(row);
@@ -553,64 +572,131 @@ async function nameInputPhase(content: HTMLElement): Promise<string> {
   hint.textContent = 'Press enter to be anonymous.';
   content.appendChild(hint);
 
-  // Capture input
-  let name = '';
+  // Hidden input for mobile keyboard support
+  const hiddenInput = document.createElement('input');
+  hiddenInput.className = 'hidden-input';
+  hiddenInput.type = 'text';
+  hiddenInput.autocomplete = 'off';
+  hiddenInput.autocapitalize = 'off';
+  hiddenInput.spellcheck = false;
+  content.appendChild(hiddenInput);
+  hiddenInput.focus();
 
-  return new Promise<string>((resolve) => {
-    function onKey(e: KeyboardEvent) {
+  function refocus() { hiddenInput.focus(); }
+  document.addEventListener('click', refocus);
+  document.addEventListener('touchstart', refocus);
+
+  function sync() {
+    const val = hiddenInput.value;
+    nameSpan.textContent = val;
+    placeholder.style.display = val ? 'none' : '';
+    hint.style.display = val ? 'none' : '';
+  }
+
+  hiddenInput.addEventListener('input', sync);
+
+  // Wait for Enter to proceed (but keep name editable after)
+  await new Promise<void>((resolve) => {
+    function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Enter') {
-        document.removeEventListener('keydown', onKey);
-        cursor.remove();
-        placeholder.remove();
-        if (!name) nameSpan.textContent = 'anonymous';
-        hint.remove();
-        resolve(name || 'anonymous');
-        return;
-      }
-
-      if (e.key === 'Backspace') {
         e.preventDefault();
-        name = name.slice(0, -1);
-      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        name += e.key;
-      } else {
-        return;
+        hiddenInput.removeEventListener('keydown', onKeyDown);
+        resolve();
       }
-
-      nameSpan.textContent = name;
-      placeholder.style.display = name ? 'none' : '';
-      hint.style.display = name ? 'none' : '';
     }
-
-    document.addEventListener('keydown', onKey);
+    hiddenInput.addEventListener('keydown', onKeyDown);
   });
+
+  // Confirm name
+  document.removeEventListener('click', refocus);
+  document.removeEventListener('touchstart', refocus);
+  cursor.remove();
+  placeholder.remove();
+  if (!hiddenInput.value.trim()) nameSpan.textContent = 'anonymous';
+  hint.remove();
+  hiddenInput.remove();
+
+  return { name: hiddenInput.value.trim() || 'anonymous', row, nameSpan };
+}
+
+// Re-enter name editing (called when clicking the name row)
+async function reEditName(
+  row: HTMLElement,
+  nameSpan: HTMLElement,
+  content: HTMLElement,
+): Promise<string> {
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+
+  const hiddenInput = document.createElement('input');
+  hiddenInput.className = 'hidden-input';
+  hiddenInput.type = 'text';
+  hiddenInput.autocomplete = 'off';
+  hiddenInput.autocapitalize = 'off';
+  hiddenInput.spellcheck = false;
+  hiddenInput.value = nameSpan.textContent === 'anonymous' ? '' : nameSpan.textContent!;
+  content.appendChild(hiddenInput);
+
+  nameSpan.textContent = hiddenInput.value;
+  row.appendChild(cursor);
+  hiddenInput.focus();
+
+  function refocus() { hiddenInput.focus(); }
+  document.addEventListener('click', refocus);
+  document.addEventListener('touchstart', refocus);
+
+  hiddenInput.addEventListener('input', () => {
+    nameSpan.textContent = hiddenInput.value;
+  });
+
+  await new Promise<void>((resolve) => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        hiddenInput.removeEventListener('keydown', onKeyDown);
+        resolve();
+      }
+    }
+    hiddenInput.addEventListener('keydown', onKeyDown);
+  });
+
+  document.removeEventListener('click', refocus);
+  document.removeEventListener('touchstart', refocus);
+  cursor.remove();
+  hiddenInput.remove();
+  if (!hiddenInput.value.trim()) nameSpan.textContent = 'anonymous';
+
+  return hiddenInput.value.trim() || 'anonymous';
 }
 
 // ---- Phase: Class Selection ----
 
 async function classSelectPhase(
   content: HTMLElement,
-  _name: string,
-): Promise<string[]> {
+  nameRow: HTMLElement,
+  previousSelected?: Set<string>,
+  skipAnim?: boolean,
+): Promise<{ result: 'done'; classes: string[] } | { result: 'edit-name'; selected: Set<string> }> {
   // Type header
   const headerDiv = document.createElement('div');
   headerDiv.className = 'class-header';
   content.appendChild(headerDiv);
-
-  await delay(350);
 
   const headerSpan = document.createElement('span');
   headerSpan.className = 't';
   headerDiv.appendChild(headerSpan);
 
   const headerText = '@me Class =';
-  for (let i = 0; i < headerText.length; i++) {
-    headerSpan.textContent += headerText[i];
-    await delay(48 + Math.random() * 22);
+  if (skipAnim) {
+    headerSpan.textContent = headerText;
+  } else {
+    await delay(350);
+    for (let i = 0; i < headerText.length; i++) {
+      headerSpan.textContent += headerText[i];
+      await delay(48 + Math.random() * 22);
+    }
+    await delay(300);
   }
-
-  await delay(300);
 
   // Build grouped class cards
   const wrapper = document.createElement('div');
@@ -669,6 +755,17 @@ async function classSelectPhase(
   const selected = new Set<string>();
   let focusIdx = -1;
 
+  // Restore previous selections
+  if (previousSelected) {
+    for (const card of allCards) {
+      if (previousSelected.has(card.dataset.file!)) {
+        selected.add(card.dataset.file!);
+        card.classList.add('selected');
+      }
+    }
+    startBtn.style.display = selected.size > 0 ? '' : 'none';
+  }
+
   function setFocus(idx: number) {
     if (focusIdx >= 0 && focusIdx < allCards.length)
       allCards[focusIdx].classList.remove('focused');
@@ -691,21 +788,48 @@ async function classSelectPhase(
     startBtn.style.display = selected.size > 0 ? '' : 'none';
   }
 
-  return new Promise<string[]>((resolve) => {
-    function finish() {
+  // Make name row clickable during class selection
+  nameRow.style.cursor = 'pointer';
+
+  return new Promise((resolve) => {
+    function cleanup() {
       wrapper.removeEventListener('click', onClick);
       startBtn.removeEventListener('click', onStart);
       document.removeEventListener('keydown', onKey);
-      resolve([...selected]);
+      nameRow.removeEventListener('click', onNameClick);
+      nameRow.style.cursor = '';
+      headerDiv.remove();
+      wrapper.remove();
+      startBtn.remove();
     }
 
-    function onClick(e: MouseEvent) {
+    function finish() {
+      cleanup();
+      resolve({ result: 'done', classes: [...selected] });
+    }
+
+    function onNameClick() {
+      cleanup();
+      resolve({ result: 'edit-name', selected: new Set(selected) });
+    }
+
+    let lastToggleTime = 0;
+
+    function onClick(e: Event) {
+      // Debounce to prevent double-firing from touch + click
+      const now = Date.now();
+      if (now - lastToggleTime < 300) return;
+      lastToggleTime = now;
+
       const card = (e.target as HTMLElement).closest(
         '.class-card',
       ) as HTMLElement | null;
       if (!card) return;
-      const idx = allCards.indexOf(card);
-      if (idx >= 0) setFocus(idx);
+
+      // Clear any keyboard focus highlight
+      if (focusIdx >= 0 && focusIdx < allCards.length)
+        allCards[focusIdx].classList.remove('focused');
+      focusIdx = -1;
       toggleCard(card);
     }
 
@@ -783,6 +907,7 @@ async function classSelectPhase(
     wrapper.addEventListener('click', onClick);
     startBtn.addEventListener('click', onStart);
     document.addEventListener('keydown', onKey);
+    nameRow.addEventListener('click', onNameClick);
   });
 }
 
@@ -801,15 +926,25 @@ async function greetings(): Promise<void> {
   await introPhase(content);
 
   // Name input
-  const name = await nameInputPhase(content);
-  await delay(350);
+  const { name: initialName, row: nameRow, nameSpan } = await nameInputPhase(content);
+  let name = initialName;
+  let previousSelected: Set<string> | undefined;
+  let skipAnim = false;
 
-  // Class selection
-  const selectedClasses = await classSelectPhase(content, name);
-
-  // Done — log result, future code hooks in here
-  const labels = selectedClasses.map(fileToLabel);
-  console.log(`[Ether] Avatar: ${name}, Classes: ${labels.join(', ')}`);
+  // Class selection loop (allows going back to edit name)
+  while (true) {
+    await delay(350);
+    const result = await classSelectPhase(content, nameRow, previousSelected, skipAnim);
+    if (result.result === 'done') {
+      const labels = result.classes.map(fileToLabel);
+      console.log(`[Ether] Avatar: ${name}, Classes: ${labels.join(', ')}`);
+      break;
+    }
+    // User clicked name row — save selections, go back to name editing
+    previousSelected = result.selected;
+    name = await reEditName(nameRow, nameSpan, content);
+    skipAnim = true;
+  }
 }
 
 // ---- Boot ----

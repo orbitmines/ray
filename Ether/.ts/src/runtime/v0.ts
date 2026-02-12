@@ -370,7 +370,7 @@ namespace Language {
 
           const RULE_NAME = ctx.Array(ctx.not(' ', '\n')[``], '{', ctx.Expression, '}', ctx.not(' ', '\n')[``])[``]
           const RULE_ONLINE_BODY = ctx.Any(
-            ctx.Array(ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.not('\n').optional), // ctx.statement.optional
+            ctx.Array(ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional),
             ctx.Array(ctx.val(' ')[``], ctx.end)
           )
           ctx.PROPERTIES = ctx.Array(

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Isometric cube: 3 faces with gaps -->
+  <path fill="white" d="
+    M64 18 L104 42 L64 66 L24 42 Z
+    M22 46 L62 70 L62 116 L22 92 Z
+    M66 70 L106 46 L106 92 L66 116 Z
+  "/>
+</svg>

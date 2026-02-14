@@ -113,7 +113,11 @@ class Var {
 
       //TODO Put result.scope to ctx.
 
-      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.content.properties.property_name).map((x: any) => [x.content._match, x.content.properties.property_name.map((x: any) => x._match), x.content.property_body._match]), null, 2))
+      // console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.content.name && x.content.property_body._match !== "").map((x: any) => [x.content._match, x.content.name.map((x: any) => x._match), x.content.property_body._match]), null, 2))
+      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.name && x.property_body._match !== "").map((x: any) => [x._match, x.name.map((x: any) => x._match), x.property_body._match]), null, 2))
+      console.log(JSON.stringify(result.scope.statements.entries.filter(x => x._match.includes('class * | Node')).map(x => x.body.entries.filter((x: any) => x.name && x.property_body._match !== "").map((x: any) => [x._match, x.name.map((x: any) => x._match), x.property_body._match])).filter(x => x.length !== 0), null, 2))
+      // console.log(result.scope.statements.entries.filter(x => x._match.includes('class * | Node')))
+      // console.log(JSON.stringify(result.scope.statements.entries.map(x => x.body)[0], null, 2))
 
       return result.success;
     } else if (is_string(type.value.encoded)) {
@@ -368,38 +372,44 @@ namespace Language {
         const grammar = Var.type((ctx: any) => {
           ctx.empty_line = ctx.regex(/[ \t]*\n/);
 
-          const RULE_NAME = ctx.Array(ctx.not(' ', '\n')[``], '{', ctx.Expression, '}', ctx.not(' ', '\n')[``])[``]
-          const RULE_ONLINE_BODY = ctx.Any(
-            ctx.Array(ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')), ctx.statement.optional),
-            ctx.Array(ctx.val(' ')[``], ctx.end)
-          )
-          ctx.PROPERTIES = ctx.Array(
-            ctx.Array(
-              ctx.Any(
-                RULE_NAME.bind(ctx.property_name),
-                ctx.not('\n')
-              ),
-              ctx.Any(' & ', ' | ').optional
-            )[``].constrain((x: any) => x.length, '>=', 1).bind(ctx.properties),
-            RULE_ONLINE_BODY.bind(ctx.property_body)
-          )
-
-          ctx.statement = ctx.Array(
+          ctx.Statement = ctx.Array(
             ctx.empty_line[``],
-            ctx.PROPERTIES.bind(ctx.content),
+
+            ctx.Any(
+              ctx.Array(
+                ctx.Array(
+                  ctx.Any(
+                    ctx.Array(ctx.not(' ', '\n')[``], '{', ctx.Expression, '}', ctx.not(' ', '\n')[``])[``]
+                      .bind(ctx.name),
+                  ),
+                  ctx.Any(' & ', ' | ').optional
+                )[``].constrain((x: any) => x.length, '>=', 1),
+
+                ctx.Any(
+                  ctx.Array(
+                    ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')),
+                    ctx.Statement.optional.bind(ctx.body)
+                  ),
+                  ctx.Array(ctx.val(' ')[``], ctx.end)
+                ).bind(ctx.property_body),
+              ),
+
+              ctx.not('\n')[``]
+            ),
+
             ctx.Any('\n', ctx.end),
 
             ctx.Array(
               ctx.empty_line[``],
               ctx.val(' ')[``].constrain((x: any) => x.length, '==', 'indent'),
               ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1).bind(ctx.added),
-              ctx.statement.with(
+              ctx.Statement.with(
                 (scope: Scope) => ({...scope, indent: scope.indent + scope.added.count})
               )
-            )[``].bind(ctx.children)
+            )[``].bind(ctx.body)
           );
 
-          ctx.Expression = ctx.statement[``].bind(ctx.statements);
+          ctx.Expression = ctx.Statement[``].bind(ctx.statements);
 
           return ctx.Expression;
         }, this.ctx)

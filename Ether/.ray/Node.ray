@@ -46,7 +46,7 @@ class * | Node
 
   , (b) => [this].push_back(b)
 
-  {block: (): *} => block<local: this>() //TODO When run on static, should add to constructor
+  {block: (): *} => this.class ? TODO : block<local: this>() //TODO When run on static, should add to constructor
 
   // Allow .(property | property2) / var (condition ? == : <=)
   {"."}({expr: (: this): *}) => expr<local: this>(this)

@@ -11,6 +11,7 @@ class
     // Allow Class.name |= "Class2" to add aliases
     dynamically &definer[local.name] = local if local.name
     local.name = name
+    local.class = true
 
    // Ambiguity: If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
 

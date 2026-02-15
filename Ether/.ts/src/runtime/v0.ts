@@ -113,12 +113,6 @@ class Var {
 
       //TODO Put result.scope to ctx.
 
-      // console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.content.name && x.content.property_body._match !== "").map((x: any) => [x.content._match, x.content.name.map((x: any) => x._match), x.content.property_body._match]), null, 2))
-      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.name && x.property_body._match !== "").map((x: any) => [x._match, x.name.map((x: any) => x._match), x.property_body._match]), null, 2))
-      console.log(JSON.stringify(result.scope.statements.entries.filter(x => x._match.includes('class * | Node')).map(x => x.body.entries.filter((x: any) => x.name && x.property_body._match !== "").map((x: any) => [x._match, x.name.map((x: any) => x._match), x.property_body._match])).filter(x => x.length !== 0), null, 2))
-      // console.log(result.scope.statements.entries.filter(x => x._match.includes('class * | Node')))
-      // console.log(JSON.stringify(result.scope.statements.entries.map(x => x.body)[0], null, 2))
-
       return result.success;
     } else if (is_string(type.value.encoded)) {
       return this.value.encoded === type.value.encoded
@@ -353,6 +347,37 @@ namespace Language {
       super([]);
     }
 
+    grammar = (Rules: (ctx: any) => any) => {
+      return Var.type((ctx: any) => {
+        ctx.empty_line = ctx.regex(/[ \t]*\n/);
+
+        ctx.Statement = ctx.Array(
+          ctx.empty_line[``],
+
+          ctx.Any(
+            Rules(ctx),
+
+            ctx.not('\n')[``]
+          ),
+
+          ctx.Any('\n', ctx.end),
+
+          ctx.Array(
+            ctx.empty_line[``],
+            ctx.val(' ')[``].constrain((x: any) => x.length, '==', 'indent'),
+            ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1).bind(ctx.added),
+            ctx.Statement.with(
+              (scope: Scope) => ({...scope, indent: scope.indent + scope.added.count})
+            )
+          )[``].bind(ctx.body)
+        );
+
+        ctx.Expression = ctx.Statement[``].bind(ctx.statements);
+
+        return ctx.Expression;
+      }, this.ctx)
+    }
+
     bootstrap = (): this => {
       //TODO Blocks of comments are passed on the first thing in front of them.
 
@@ -369,50 +394,6 @@ namespace Language {
       // Technically there could be additional grammar rules incorrectly defined in comments here, but since we're only bootstrapping for the std, we're assuming the grammar rules defined in it don't have this issue. (In the bootstrapped version, this will be done properly)
 
       // this.lazily(() => {
-        const grammar = Var.type((ctx: any) => {
-          ctx.empty_line = ctx.regex(/[ \t]*\n/);
-
-          ctx.Statement = ctx.Array(
-            ctx.empty_line[``],
-
-            ctx.Any(
-              ctx.Array(
-                ctx.Array(
-                  ctx.Any(
-                    ctx.Array(ctx.not(' ', '\n')[``], '{', ctx.Expression, '}', ctx.not(' ', '\n')[``])[``]
-                      .bind(ctx.name),
-                  ),
-                  ctx.Any(' & ', ' | ').optional
-                )[``].constrain((x: any) => x.length, '>=', 1),
-
-                ctx.Any(
-                  ctx.Array(
-                    ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')),
-                    ctx.Statement.optional.bind(ctx.body)
-                  ),
-                  ctx.Array(ctx.val(' ')[``], ctx.end)
-                ).bind(ctx.property_body),
-              ),
-
-              ctx.not('\n')[``]
-            ),
-
-            ctx.Any('\n', ctx.end),
-
-            ctx.Array(
-              ctx.empty_line[``],
-              ctx.val(' ')[``].constrain((x: any) => x.length, '==', 'indent'),
-              ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1).bind(ctx.added),
-              ctx.Statement.with(
-                (scope: Scope) => ({...scope, indent: scope.indent + scope.added.count})
-              )
-            )[``].bind(ctx.body)
-          );
-
-          ctx.Expression = ctx.Statement[``].bind(ctx.statements);
-
-          return ctx.Expression;
-        }, this.ctx)
 
 
       // this.value.methods.set(Var.type((ctx: any) => ctx.Array(ctx.val('('), ctx.arbitrary, ctx.val(')')), ctx), Var.func(property => {
@@ -421,13 +402,41 @@ namespace Language {
 
       // }, this.ctx)
 
+      const grammar = this.grammar(ctx => ctx.Array(
+        ctx.Array(
+          ctx.Any(
+            ctx.Array(ctx.not(' ', '\n')[``], '{', ctx.Expression, '}', ctx.not(' ', '\n')[``])[``]
+              .bind(ctx.name),
+          ),
+          ctx.Any(' & ', ' | ').optional
+        )[``].constrain((x: any) => x.length, '>=', 1),
+
+        ctx.Any(
+          ctx.Array(
+            ctx.val(' ')[``].constrain((x: any) => x.length, '>=', 1), ctx.Any(ctx.Array('(', ctx.val(' ')[``], ')').bind(ctx.parenthesis), ctx.val('=>')),
+            ctx.Statement.optional.bind(ctx.body)
+          ),
+          ctx.Array(ctx.val(' ')[``], ctx.end)
+        ).bind(ctx.property_body),
+      ));
+
       const bootstrap_ctx = new Context() [_]()
 
-      console.log('instance_of', Var.string(
-        this.language.join('\n')
+      const result = parse(grammar.value.encoded, this.language.join('\n'), { indent: 0 }) //TODO Fix initialized base value/
+
+      // console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.content.name && x.content.property_body._match !== "").map((x: any) => [x.content._match, x.content.name.map((x: any) => x._match), x.content.property_body._match]), null, 2))
+      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.name && x.property_body._match !== "").map((x: any) => [x._match, x.name.map((x: any) => x._match), x.property_body._match]), null, 2))
+      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x._match.includes('class * | Node')).map((x: any) => x.body.entries.filter((x: any) => x.name && x.property_body._match !== "").map((x: any) => [x._match, x.name.map((x: any) => x._match), x.property_body._match])).filter((x: any) => x.length !== 0), null, 2))
+      // console.log(result.scope.statements.entries.filter(x => x._match.includes('class * | Node')))
+      // console.log(JSON.stringify(result.scope.statements.entries.map(x => x.body)[0], null, 2))
+
+      const typed_rules = result.scope.statements.entries.filter((x: any) => x.name && x.property_body._match !== "")
+
+      // console.log('instance_of', Var.string(
+      //   this.language.join('\n')
         // '({expr: (): *}) => expr'
         // 'property{test: String}\n  body'
-      , bootstrap_ctx).instance_of(grammar, bootstrap_ctx))
+      // , bootstrap_ctx).instance_of(grammar, bootstrap_ctx))
 
       return this;
     }

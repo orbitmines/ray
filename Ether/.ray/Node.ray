@@ -48,6 +48,8 @@ class * | Node
 
   {block: (): *} => this.class ? TODO : block<local: this>() //TODO When run on static, should add to constructor
 
+  {property: (\S[], punctuation: "{", *, punctuation: "}", \S[])[]} => this[property - punctuation]
+
   // Allow .(property | property2) / var (condition ? == : <=)
   {"."}({expr: (: this): *}) => expr<local: this>(this)
 
@@ -116,7 +118,7 @@ class * | Node
   // Force the lazy program stored in **, to evaluate.
   external {"{", filter: Expression, "}"} | (filter (filter: Expression)) : static?
 
-  {"{", constraint: (x: static): boolean "}"} => // Allow chaining
+  {.}{"{", constraint: (x: static): boolean, "}"} => // Allow chaining
 
   in {.} | keys => this*.map(key, value => key)
   values => this*.map(key, value => value())

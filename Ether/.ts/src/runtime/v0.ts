@@ -1,4 +1,4 @@
-import {createContext, isToken, parse, Scope, Token, toToken} from "./parser.ts";
+import {createContext, isToken, node, parse, Scope, Token, toToken, _matcher} from "./parser.ts";
 import fs from "fs";
 import path from "node:path";
 import PartialArgs = Ether.PartialArgs;
@@ -424,19 +424,302 @@ namespace Language {
 
       const result = parse(grammar.value.encoded, this.language.join('\n'), { indent: 0 }) //TODO Fix initialized base value/
 
-      // console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.content.name && x.content.property_body._match !== "").map((x: any) => [x.content._match, x.content.name.map((x: any) => x._match), x.content.property_body._match]), null, 2))
-      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x.name && x.property_body._match !== "").map((x: any) => [x._match, x.name.map((x: any) => x._match), x.property_body._match]), null, 2))
-      console.log(JSON.stringify(result.scope.statements.entries.filter((x: any) => x._match.includes('class * | Node')).map((x: any) => x.body.entries.filter((x: any) => x.name && x.property_body._match !== "").map((x: any) => [x._match, x.name.map((x: any) => x._match), x.property_body._match])).filter((x: any) => x.length !== 0), null, 2))
-      // console.log(result.scope.statements.entries.filter(x => x._match.includes('class * | Node')))
       // console.log(JSON.stringify(result.scope.statements.entries.map(x => x.body)[0], null, 2))
 
       const typed_rules = result.scope.statements.entries.filter((x: any) => x.name && x.property_body._match !== "")
+      const node_class = result.scope.statements.entries.filter((x: any) => x._match.includes('class * | Node'))
+      const node_rules = node_class.flatMap((x: any) => x.body.entries.filter((x: any) => x.name && x.property_body._match !== ""))
 
-      // console.log('instance_of', Var.string(
-      //   this.language.join('\n')
-        // '({expr: (): *}) => expr'
-        // 'property{test: String}\n  body'
-      // , bootstrap_ctx).instance_of(grammar, bootstrap_ctx))
+      // --- Bootstrap Grammar Mapping ---
+
+      // Describe a token tree for readable output
+      const descTok = (tok: any): string => {
+        if (!tok) return '?'
+        if (typeof tok === 'string') return JSON.stringify(tok)
+
+        // Unwrap Node proxy to get underlying Token
+        if (tok[_]?.value?.encoded) return descTok(tok[_].value.encoded)
+
+        const m = isToken(tok) ? tok[_matcher] : tok
+        if (!m || typeof m !== 'object') return String(tok)
+
+        const bind = m.bindName ? `→${m.bindName}` : ''
+        const name = m.constructor?.name ?? '?'
+
+        if (name === 'RefToken') return `${m.refName}${bind}`
+        if (name === 'StringToken') return `${JSON.stringify(m.strings[0])}${bind}`
+        if (name === 'ArbitraryToken') return `arbitrary${bind}`
+        if (name === 'NotToken') return `not(${m.stopStrings.map((s: string) => JSON.stringify(s)).join(', ')})${bind}`
+        if (name === 'LoopToken') return `[${descTok(m.items.length === 1 ? m.items[0] : m)}]*${bind}`
+        if (name === 'ArrayToken') return `(${m.items.map((t: any) => descTok(t)).join(' ')})${bind}`
+        if (name === 'AnyToken') return `(${m.options.map((t: any) => descTok(t)).join(' | ')})${bind}`
+        if (name === 'OptionalToken') return `${descTok(m.inner)}?${bind}`
+        if (name === 'TransformToken') return `${descTok(m.inner)}${bind}`
+        return `${name}${bind}`
+      }
+
+      // Grammar to extract brace blocks from name patterns (handles nested/quoted braces)
+      const extract = createContext()
+      extract.inner_content = extract.Any(
+        extract.Array('"', extract.not('"')[``], '"'),   // skip "..." quoted strings
+        extract.Array('`', extract.not('`')[``], '`'),   // skip `...` quoted strings
+        extract.Array('{', extract.inner_content, '}'),  // handle nested {...}
+        extract.not('}', '"', '`', '{')                  // regular char
+      )[``]
+      extract.block = extract.Array(
+        extract.not('{')[``].bind(extract.prefix), '{', extract.inner_content.bind(extract.inner), '}', extract.not('{')[``].bind(extract.suffix)
+      )
+      extract.blocks = extract.block[``].bind(extract.parts)
+
+      // Grammar to parse comma-separated elements with type transforms
+      let current_gctx: any
+
+      const pg = createContext()
+      pg.dquoted = pg.Array('"', pg.not('"')[``], '"')
+      pg.bquoted = pg.Array('`', pg.not('`')[``], '`')
+      pg.group = pg.Array('(', pg.comma_list, ')')
+      pg.single = pg.Array(
+        pg.Any(
+          pg.dquoted.transform((v: any) => {
+            const s = Array.isArray(v) ? v.join('') : typeof v === 'string' ? v : v?._match ?? ''
+            return s.startsWith('"') ? s.slice(1, -1) : s
+          }),
+          pg.bquoted.transform((v: any) => {
+            const s = Array.isArray(v) ? v.join('') : typeof v === 'string' ? v : v?._match ?? ''
+            return s.startsWith('`') ? s.slice(1, -1) : s
+          }),
+          pg.val('\\S').transform(() => current_gctx.not(' ', '\n')),
+          pg.val('\\n').transform(() => '\n'),
+          pg.val('*').transform(() => current_gctx.Expression),
+          pg.val('String').transform(() => current_gctx.arbitrary),
+          pg.Array('(', pg.not(')')[``], ')', ': ', pg.arbitrary)
+            .transform(() => current_gctx.Expression),
+          pg.group.isolated.transform((v: any) => {
+            const inner = Array.isArray(v) ? v.find((x: any) => Array.isArray(x)) ?? v.slice(1, -1) : v
+            const items = Array.isArray(inner) ? inner.flat() : [inner]
+            const valid = items.filter((t: any) => t != null && t !== '(' && t !== ')' && (typeof t !== 'object' || isToken(t)))
+            return valid.length === 1 ? valid[0] : current_gctx.Array(...valid)
+          }),
+          pg.arbitrary.transform((v: any) => {
+            const raw = typeof v === 'string' ? v : v?._match ?? ''
+            if (raw.includes('comment') || raw.includes('.line#') || raw.includes('.join')) return current_gctx.arbitrary
+            return raw || current_gctx.arbitrary
+          })
+        ),
+        pg.Array(
+          pg.val('[]'),
+          pg.Array('{', pg.not('}')[``].bind(pg.loop_constraint), '}').optional
+        ).optional.bind(pg.is_loop)
+      ).transform((v: any, scope: any) => {
+        let tok = Array.isArray(v) ? v[0] : v
+        if (scope.is_loop) {
+          tok = isToken(tok) ? tok[``] : current_gctx.val(tok)[``]
+          const lc = scope.is_loop?.loop_constraint ?? scope.loop_constraint
+          const constraint = typeof lc === 'string' ? lc : lc?._match ?? ''
+          if (constraint.includes('length >= 1')) tok = tok.NonEmpty
+        }
+        return tok
+      })
+      pg.full_value = pg.Array(
+        pg.single,
+        pg.Array(' | ', pg.single)[``].bind(pg.alternatives),
+        pg.Array(' & ', pg.arbitrary).optional,
+        pg.Array(' = ', pg.arbitrary).optional
+      ).transform((v: any, scope: any) => {
+        let tok = Array.isArray(v) ? v[0] : v
+        if (scope.alternatives?.entries?.length) {
+          const alts = [tok, ...scope.alternatives.entries.map((a: any) => a._value ?? a)]
+          tok = current_gctx.Any(...alts)
+        }
+        return tok
+      })
+      pg.elem = pg.Array(
+        pg.Array(pg.regex(/\w+/).bind(pg.prop), ': ').optional,
+        pg.full_value
+      ).transform((v: any, scope: any) => {
+        let tok = Array.isArray(v) ? v[v.length - 1] : v
+        if (scope.prop) {
+          const propName = typeof scope.prop === 'string' ? scope.prop : String(scope.prop?._match ?? scope.prop)
+          tok = isToken(tok) ? tok.bind(propName) : current_gctx.val(tok).bind(propName)
+        }
+        return tok
+      })
+      pg.comma_list = pg.Array(
+        pg.val(', ').optional, pg.elem
+      )[``].transform((v: any) => {
+        if (!Array.isArray(v)) return [v]
+        return v.map((item: any) => Array.isArray(item) ? item[item.length - 1] : item)
+      })
+
+      // Map rules to grammar types — returns builder functions that can create tokens in any context
+      const mapRules = (rules: any[], ctx: Node) => {
+        const mapped: { names: any[], builder: (gctx: any) => any, grammar: Node }[] = []
+
+        for (const rule of rules) {
+          const names: any[] = rule.name
+
+          // Builder function creates tokens in the given context
+          const builder = (gctx: any) => {
+            current_gctx = gctx
+
+            const name_grammars = names.map((nameEntry: any) => {
+              const nameMatch: string = nameEntry._match
+              const extracted = parse(extract.blocks, nameMatch)
+              if (!extracted.success) return gctx.arbitrary
+
+              const parts = extracted.scope.parts?.entries ?? [extracted.scope.parts]
+              const tokens: any[] = []
+
+              let is_mid_statement = false
+
+              for (const part of parts) {
+                const prefix = typeof part?.prefix === 'string' ? part.prefix : part?.prefix?._match
+                if (prefix) tokens.push(prefix)
+
+                const inner = typeof part?.inner === 'string' ? part.inner : part?.inner?._match ?? ''
+
+                // {.} at the start means mid-statement (must follow preceding expression)
+                if (inner === '.' && tokens.length === 0) {
+                  is_mid_statement = true
+                  continue
+                }
+
+                const parsed = parse(pg.comma_list, inner)
+
+                if (parsed.success && parsed.consumed === inner.length) {
+                  const mapped = Array.isArray(parsed.value) ? parsed.value : [parsed.value]
+                  const valid = mapped.filter((t: any) => t != null && (typeof t !== 'object' || isToken(t)))
+                  // Strip trailing \n and ? — Statement grammar handles line termination
+                  while (valid.length > 0) {
+                    const last = valid[valid.length - 1]
+                    if (last === '\n' || last === '?') valid.pop()
+                    else break
+                  }
+                  if (valid.length === 1) tokens.push(valid[0])
+                  else if (valid.length > 0) tokens.push(gctx.Array(...valid))
+                  else tokens.push(gctx.arbitrary)
+                } else {
+                  tokens.push(gctx.arbitrary)
+                }
+
+                const suffix = typeof part?.suffix === 'string' ? part.suffix : part?.suffix?._match
+                if (suffix) tokens.push(suffix)
+              }
+
+              let tok = tokens.length === 1 ? tokens[0] : gctx.Array(...tokens)
+              if (is_mid_statement) tok = gctx.Array(gctx.Expression, tok)
+              return tok
+            })
+
+            if (name_grammars.length === 1) return name_grammars[0]
+            return gctx.Any(...name_grammars)
+          }
+
+          // Create a Var.type with placeholder Expression for display
+          const grammar_type = Var.type((gctx: any) => {
+            gctx.Expression = gctx.arbitrary
+            return builder(gctx)
+          }, ctx)
+
+          mapped.push({ names, builder, grammar: grammar_type })
+          const nameKey = names.map((n: any) => n._match).join(' | ')
+          console.log(`Rule: ${nameKey} → ${descTok(grammar_type)}`)
+        }
+
+        return mapped
+      }
+
+      console.log('\n--- Bootstrap rules ---')
+      const bootstrap_mapped = mapRules(typed_rules, bootstrap_ctx)
+
+      const NodeVar = new Var() [_](bootstrap_ctx)
+      console.log('\n--- Node rules ---')
+      const node_mapped = mapRules(node_rules, NodeVar)
+
+      // Detect if a token starts with an Expression reference (left-recursive)
+      const startsWithExpression = (tok: any): boolean => {
+        if (!tok) return false
+        if (tok.refName === 'Expression') return true
+        if (tok.items?.length > 0) return startsWithExpression(tok.items[0])
+        if (tok.inner) return startsWithExpression(tok.inner)
+        return false
+      }
+
+      // Get the length of the first concrete string token in a token tree (for specificity sorting)
+      const getFirstStringLen = (tok: any): number => {
+        if (!tok) return 0
+        if (tok.strings?.length > 0) return tok.strings[0].length
+        if (tok.items?.length > 0) return getFirstStringLen(tok.items[0])
+        if (tok.inner) return getFirstStringLen(tok.inner)
+        if (tok.options) return Math.max(...tok.options.map((o: any) => getFirstStringLen(o)))
+        return 0
+      }
+
+      // Build reparse grammar — split rules into starters vs continuations to avoid left-recursion
+      const allRules = [...bootstrap_mapped, ...node_mapped]
+      const reparse_grammar = this.grammar(ctx => {
+        const starters: { tagged: any, raw: any }[] = []
+        const continuations: any[] = []
+
+        for (const { builder, names } of allRules) {
+          const tok = builder(ctx)
+          const raw = tok[_matcher]
+          const nameKey = names.map((n: any) => n._match).join(' | ')
+
+          // Tag each rule's value with its name for match tracking
+          const tagged = tok.transform((v: any) => ({ _rule: nameKey, _value: v }))
+
+          if (startsWithExpression(raw)) {
+            continuations.push(tagged)
+          } else {
+            starters.push({ tagged, raw })
+          }
+        }
+
+        // Sort starters by specificity: longer first concrete tokens match first
+        starters.sort((a, b) => getFirstStringLen(b.raw) - getFirstStringLen(a.raw))
+
+        console.log(`\n--- Reparse: ${starters.length} starters, ${continuations.length} continuations ---`)
+
+        // Wrap starters with not('\n')[``] to consume remaining line content after rule match
+        return ctx.Array(ctx.Any(...starters.map(s => s.tagged)).bind(ctx.matched), ctx.not('\n')[``])
+      })
+
+      const reparse_input = this.language.join('\n')
+      console.log('\n--- Reparsing with mapped rules ---')
+
+      const reparse_result = parse(reparse_grammar[_].value.encoded, reparse_input, { indent: 0 })
+      console.log(`Reparse: consumed ${reparse_result.consumed}/${reparse_input.length} chars`)
+
+      // Display rule matches from reparse
+      const entries = reparse_result.scope?.statements?.entries ?? []
+      const displayMatches = (entries: any[], indent: string = '') => {
+        if (!entries) return
+        for (const entry of entries) {
+          const line = entry._match?.trim()
+          if (!line) continue
+          const rule = entry.matched?._value?._rule
+          const ruleMatch = entry.matched?._match
+          const display = (ruleMatch ? ruleMatch.trim() : line)
+          const truncated = display.length > 100 ? display.substring(0, 97) + '...' : display
+          console.log(`${indent}${truncated}`)
+          const ruleName = (rule ?? '(no rule)').split('\n')[0]
+          const ruleDisplay = ruleName.length > 80 ? ruleName.substring(0, 77) + '...' : ruleName
+          console.log(`${indent}  \x1b[30m${ruleDisplay}\x1b[0m`)
+          if (entry.body?.entries?.length > 0) {
+            displayMatches(entry.body.entries, indent + '  ')
+          }
+        }
+      }
+      displayMatches(entries)
+
+      // Populate bootstrap_ctx and NodeVar from reparse
+      for (const { grammar } of bootstrap_mapped) {
+        bootstrap_ctx[_].set(grammar, new Var() [_](bootstrap_ctx), bootstrap_ctx)
+      }
+      for (const { grammar } of node_mapped) {
+        NodeVar[_].set(grammar, new Var() [_](NodeVar), NodeVar)
+      }
 
       return this;
     }

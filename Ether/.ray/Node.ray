@@ -26,7 +26,7 @@ class
       return this
 
     // Monkey-patch a constructor
-    += | patch = (patch: (): *) => def &= patch
+    {.}{block: (): *} = () def &= patch
 
     //TODO Call constructor for static
     local
@@ -46,9 +46,9 @@ class * | Node
 
   , (b) => [this].push_back(b)
 
-  {block: (): *} => this.class ? TODO : block<local: this>() //TODO When run on static, should add to constructor
+  {.}{block: (): *} => block<local: this>() //TODO When run on static, should add to constructor
 
-  {property: (\S[], punctuation: "{", *, punctuation: "}", \S[])[]} => this[property - punctuation]
+  {property: (\S[], punctuation: "{", *, punctuation: "}", \S[])[]{length >= 1}} => this[property - punctuation]
 
   // Allow .(property | property2) / var (condition ? == : <=)
   {"."}({expr: (: this): *}) => expr<local: this>(this)

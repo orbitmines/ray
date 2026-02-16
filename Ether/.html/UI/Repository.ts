@@ -105,6 +105,8 @@ function injectStyles(): void {
       gap: 2px;
       margin-bottom: 6px;
     }
+    .nav-actions { display: none; }
+    .breadcrumb-actions { display: contents; }
 
     .repo-breadcrumb {
       display: flex;
@@ -114,6 +116,10 @@ function injectStyles(): void {
       margin-bottom: 16px;
       color: rgba(255,255,255,0.45);
       position: relative;
+    }
+    .repo-breadcrumb a, .repo-breadcrumb span, .repo-breadcrumb .version-badge {
+      flex-shrink: 0;
+      white-space: nowrap;
     }
     .repo-breadcrumb a {
       color: rgba(255,255,255,0.65);
@@ -389,6 +395,7 @@ function injectStyles(): void {
       align-items: center;
       height: 100%;
     }
+    .action-icon-small { display: none !important; }
     .action-count {
       font-weight: bold;
       font-size: 0.7rem;
@@ -682,6 +689,72 @@ function injectStyles(): void {
       padding: 40px;
     }
     .file-view-body.hidden { display: none; }
+
+    /* ---- Iframe overlay bar ---- */
+    .iframe-overlay {
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      background: rgba(0,0,0,0.55);
+      color: rgba(255,255,255,0.65);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      padding: 6px 14px;
+      border-top-left-radius: 8px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    .iframe-overlay .overlay-label {
+      color: rgba(255,255,255,0.85);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .iframe-overlay .overlay-desc {
+      color: rgba(255,255,255,0.4);
+      font-size: 12px;
+      pointer-events: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+
+    @media (max-width: 640px) {
+      .iframe-overlay {
+        left: 0;
+        border-top-left-radius: 0;
+        justify-content: flex-end;
+        gap: 6px;
+        padding: 6px 10px;
+      }
+      .iframe-overlay .overlay-desc { display: none; }
+      .iframe-overlay .action-btn .action-label { display: none; }
+      .iframe-overlay .action-btn { gap: 4px; padding: 0 6px; }
+
+      .repo-breadcrumb { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+      .repo-breadcrumb::-webkit-scrollbar { display: none; }
+      .breadcrumb-actions { display: none !important; }
+      .nav-actions { display: contents; }
+      .nav-actions .action-btn .action-label { display: none; }
+      .nav-actions .fork-btn,
+      .nav-actions .star-btn,
+      .nav-actions .clone-btn { gap: 4px; padding: 0 6px; }
+      .nav-actions .fork-btn { margin-left: auto; }
+
+      .action-icon-default { display: none !important; }
+      .action-icon-small { display: flex !important; }
+    }
+
+    @media (max-width: 400px) {
+      .iframe-overlay .overlay-label { font-size: 11px; }
+      .iframe-overlay .action-btn { margin-left: 2px; }
+
+      .repo-breadcrumb .action-btn { margin-left: 2px; }
+    }
   `;
   document.head.appendChild(styleEl);
 }
@@ -705,29 +778,33 @@ function bindClickHandlers(): void {
     });
   });
 
-  // Star toggle
-  const starBtn = currentContainer.querySelector('[data-star-toggle]') as HTMLButtonElement | null;
-  if (starBtn) {
-    starBtn.addEventListener('click', () => {
-      const path = starBtn.dataset.starPath!;
+  // Star toggle (sync all copies)
+  const starBtns = currentContainer.querySelectorAll('[data-star-toggle]') as NodeListOf<HTMLButtonElement>;
+  starBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const path = btn.dataset.starPath!;
       const nowStarred = toggleStar(path);
       const count = getStarCount(path) + (nowStarred ? 1 : -1);
       setStarCount(path, count);
-      starBtn.className = nowStarred ? 'action-btn star-btn starred' : 'action-btn star-btn';
-      starBtn.innerHTML = `<span class="action-count" data-star-count>${Math.max(0, count)}</span><span class="action-icon">${nowStarred ? STAR_FILLED_SVG : STAR_OUTLINE_SVG}</span><span class="action-label">${nowStarred ? 'Starred' : 'Star'}</span>`;
+      const cls = nowStarred ? 'action-btn star-btn starred' : 'action-btn star-btn';
+      const inner = `<span class="action-count" data-star-count>${Math.max(0, count)}</span><span class="action-icon">${nowStarred ? STAR_FILLED_SVG : STAR_OUTLINE_SVG}</span><span class="action-label">${nowStarred ? 'Starred' : 'Star'}</span>`;
+      starBtns.forEach(b => { b.className = cls; b.innerHTML = inner; });
     });
-  }
+  });
 
-  // Clone popup
-  const toggle = currentContainer.querySelector('[data-clone-toggle]') as HTMLElement | null;
-  const popup = currentContainer.querySelector('[data-clone-popup]') as HTMLElement | null;
-  const backdrop = currentContainer.querySelector('[data-clone-backdrop]') as HTMLElement | null;
-  if (toggle && popup && backdrop) {
+  // Clone popup (bind all toggle buttons to the single popup in breadcrumb-actions)
+  const popup = currentContainer.querySelector('.breadcrumb-actions [data-clone-popup]') as HTMLElement
+    || currentContainer.querySelector('[data-clone-popup]') as HTMLElement | null;
+  const backdrop = currentContainer.querySelector('.breadcrumb-actions [data-clone-backdrop]') as HTMLElement
+    || currentContainer.querySelector('[data-clone-backdrop]') as HTMLElement | null;
+  if (popup && backdrop) {
     const close = () => { popup.classList.remove('open'); backdrop.classList.remove('open'); };
-    toggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const open = popup.classList.toggle('open');
-      backdrop.classList.toggle('open', open);
+    currentContainer.querySelectorAll('[data-clone-toggle]').forEach(toggle => {
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = popup.classList.toggle('open');
+        backdrop.classList.toggle('open', open);
+      });
     });
     backdrop.addEventListener('click', close);
   }
@@ -926,6 +1003,7 @@ const STAR_FILLED_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64
 const STAR_OUTLINE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 30L400 220L600 240L450 380L490 580L320 490L150 580L190 380L40 240L240 220Z" fill="none" stroke="currentColor" stroke-width="30"/></svg>`;
 const PR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M392 88C392 78.3 386.2 69.5 377.2 65.8C368.2 62.1 357.9 64.2 351 71L295 127C285.6 136.4 285.6 151.6 295 160.9L351 216.9C357.9 223.8 368.2 225.8 377.2 222.1C386.2 218.4 392 209.7 392 200L392 176L416 176C433.7 176 448 190.3 448 208L448 422.7C419.7 435 400 463.2 400 496C400 540.2 435.8 576 480 576C524.2 576 560 540.2 560 496C560 463.2 540.3 435 512 422.7L512 208C512 155 469 112 416 112L392 112L392 88zM136 144C136 130.7 146.7 120 160 120C173.3 120 184 130.7 184 144C184 157.3 173.3 168 160 168C146.7 168 136 157.3 136 144zM192 217.3C220.3 205 240 176.8 240 144C240 99.8 204.2 64 160 64C115.8 64 80 99.8 80 144C80 176.8 99.7 205 128 217.3L128 422.6C99.7 434.9 80 463.1 80 495.9C80 540.1 115.8 575.9 160 575.9C204.2 575.9 240 540.1 240 495.9C240 463.1 220.3 434.9 192 422.6L192 217.3zM136 496C136 482.7 146.7 472 160 472C173.3 472 184 482.7 184 496C184 509.3 173.3 520 160 520C146.7 520 136 509.3 136 496zM480 472C493.3 472 504 482.7 504 496C504 509.3 493.3 520 480 520C466.7 520 456 509.3 456 496C456 482.7 466.7 472 480 472z"/></svg>`;
 const SETTINGS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M259.1 73.5C262.1 58.7 275.2 48 290.4 48L350.2 48C365.4 48 378.5 58.7 381.5 73.5L396 143.5C410.1 149.5 423.3 157.2 435.3 166.3L503.1 143.8C517.5 139 533.3 145 540.9 158.2L570.8 210C578.4 223.2 575.7 239.8 564.3 249.9L511 297.3C511.9 304.7 512.3 312.3 512.3 320C512.3 327.7 511.8 335.3 511 342.7L564.4 390.2C575.8 400.3 578.4 417 570.9 430.1L541 481.9C533.4 495 517.6 501.1 503.2 496.3L435.4 473.8C423.3 482.9 410.1 490.5 396.1 496.6L381.7 566.5C378.6 581.4 365.5 592 350.4 592L290.6 592C275.4 592 262.3 581.3 259.3 566.5L244.9 496.6C230.8 490.6 217.7 482.9 205.6 473.8L137.5 496.3C123.1 501.1 107.3 495.1 99.7 481.9L69.8 430.1C62.2 416.9 64.9 400.3 76.3 390.2L129.7 342.7C128.8 335.3 128.4 327.7 128.4 320C128.4 312.3 128.9 304.7 129.7 297.3L76.3 249.8C64.9 239.7 62.3 223 69.8 209.9L99.7 158.1C107.3 144.9 123.1 138.9 137.5 143.7L205.3 166.2C217.4 157.1 230.6 149.5 244.6 143.4L259.1 73.5zM320.3 400C364.5 399.8 400.2 363.9 400 319.7C399.8 275.5 363.9 239.8 319.7 240C275.5 240.2 239.8 276.1 240 320.3C240.2 364.5 276.1 400.2 320.3 400z"/></svg>`;
+const DOWNLOAD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M352 96C352 78.3 337.7 64 320 64C302.3 64 288 78.3 288 96L288 306.7L246.6 265.3C234.1 252.8 213.8 252.8 201.3 265.3C188.8 277.8 188.8 298.1 201.3 310.6L297.3 406.6C309.8 419.1 330.1 419.1 342.6 406.6L438.6 310.6C451.1 298.1 451.1 277.8 438.6 265.3C426.1 252.8 405.8 252.8 393.3 265.3L352 306.7L352 96zM160 384C124.7 384 96 412.7 96 448L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 448C544 412.7 515.3 384 480 384L433.1 384L376.5 440.6C345.3 471.8 294.6 471.8 263.4 440.6L206.9 384L160 384zM464 440C477.3 440 488 450.7 488 464C488 477.3 477.3 488 464 488C450.7 488 440 477.3 440 464C440 450.7 450.7 440 464 440z"/></svg>`;
 const FORK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M176 168C189.3 168 200 157.3 200 144C200 130.7 189.3 120 176 120C162.7 120 152 130.7 152 144C152 157.3 162.7 168 176 168zM256 144C256 176.8 236.3 205 208 217.3L208 240C208 266.5 229.5 288 256 288L384 288C410.5 288 432 266.5 432 240L432 217.3C403.7 205 384 176.8 384 144C384 99.8 419.8 64 464 64C508.2 64 544 99.8 544 144C544 176.8 524.3 205 496 217.3L496 240C496 301.9 445.9 352 384 352L352 352L352 422.7C380.3 435 400 463.2 400 496C400 540.2 364.2 576 320 576C275.8 576 240 540.2 240 496C240 463.2 259.7 435 288 422.7L288 352L256 352C194.1 352 144 301.9 144 240L144 217.3C115.7 205 96 176.8 96 144C96 99.8 131.8 64 176 64C220.2 64 256 99.8 256 144zM464 168C477.3 168 488 157.3 488 144C488 130.7 477.3 120 464 120C450.7 120 440 130.7 440 144C440 157.3 450.7 168 464 168zM344 496C344 482.7 333.3 472 320 472C306.7 472 296 482.7 296 496C296 509.3 306.7 520 320 520C333.3 520 344 509.3 344 496z"/></svg>`;
 
 function getPrCount(canonicalPath: string): number {
@@ -948,7 +1026,7 @@ function renderActionButtons(canonicalPath: string, starPath: string): string {
   return `<div class="popup-backdrop" data-clone-backdrop></div>
     <button class="action-btn fork-btn" style="margin-left:auto;" data-fork-toggle><span class="action-count">${forkCount}</span><span class="action-icon">${FORK_SVG}</span><span class="action-label">Fork</span></button>
     <button class="action-btn ${starCls}" data-star-toggle data-star-path="${starPath}"><span class="action-count" data-star-count>${starCount}</span><span class="action-icon">${starSvg}</span><span class="action-label">${starLabel}</span></button>
-    <button class="action-btn clone-btn" data-clone-toggle><span class="action-icon">${CLONE_SVG}</span><span class="action-label">Download</span></button>
+    <button class="action-btn clone-btn" data-clone-toggle><span class="action-icon action-icon-default">${CLONE_SVG}</span><span class="action-icon action-icon-small">${DOWNLOAD_SVG}</span><span class="action-label">Download</span></button>
     <div class="popup" data-clone-popup>
       <div class="popup-row">
         <div class="popup-row-icon"><img src="/images/E.svg" alt="Ether"></div>
@@ -1026,6 +1104,15 @@ function toggleStar(canonicalPath: string): boolean {
   }
 }
 
+/** Build a URL path sliced to `end`, preserving any `*` wildcards from the remainder of `fullPath`. */
+function buildPathPreservingWildcards(base: string, versions: [number, string][], fullPath: string[], end: number): string {
+  const sliced = fullPath.slice(0, end);
+  for (const seg of fullPath.slice(end)) {
+    if (seg === '*') sliced.push('*');
+  }
+  return buildBasePath(base, versions, sliced);
+}
+
 function buildBreadcrumbItems(
   treePath: string[],
   headerChain: { label: string; pathEnd: number }[],
@@ -1033,12 +1120,12 @@ function buildBreadcrumbItems(
 ): { rootLink?: { label: string; href: string }; items: BreadcrumbItem[] } {
   if (treePath.length === 0) return { items: [] };
   const rootLabel = treePath[0] || headerChain[headerChain.length - 1]?.label || '';
-  const rootHref = buildBasePath(base, versions, path.slice(0, treePathStart + 1));
+  const rootHref = buildPathPreservingWildcards(base, versions, path, treePathStart + 1);
   const subPath = treePath.slice(1);
   const items: BreadcrumbItem[] = subPath.map((seg, i) => ({
     label: seg,
     href: i < subPath.length - 1
-      ? buildBasePath(base, versions, path.slice(0, treePathStart + 1 + i + 1))
+      ? buildPathPreservingWildcards(base, versions, path, treePathStart + 1 + i + 1)
       : null,
   }));
   return { rootLink: { label: rootLabel, href: rootHref }, items };
@@ -1046,9 +1133,11 @@ function buildBreadcrumbItems(
 
 function renderBreadcrumb(displayVersion: string, items: BreadcrumbItem[], canonicalPath?: string, starPath?: string, rootLink?: { label: string; href: string }): string {
   let html = '';
+  const actionHtml = canonicalPath ? renderActionButtons(canonicalPath, starPath || canonicalPath) : '';
   if (canonicalPath) {
     const prCount = getPrCount(canonicalPath);
     html += `<div class="repo-nav-row">
+      <span class="nav-actions">${actionHtml}</span>
       <button class="action-btn icon-btn" title="Pull requests"><span class="action-count">${prCount}</span><span class="action-icon">${PR_SVG}</span></button>
       <button class="action-btn icon-btn" title="Settings"><span class="action-icon">${SETTINGS_SVG}</span></button>
     </div>`;
@@ -1069,7 +1158,7 @@ function renderBreadcrumb(displayVersion: string, items: BreadcrumbItem[], canon
   }
 
   if (canonicalPath) {
-    html += renderActionButtons(canonicalPath, starPath || canonicalPath);
+    html += `<span class="breadcrumb-actions">${actionHtml}</span>`;
   }
 
   html += `</div>`;
@@ -1086,11 +1175,7 @@ function renderHeaderChain(
     const isLast = idx === chain.length - 1;
     const cls = isLast ? 'repo-name' : 'user';
     if (item.pathEnd >= 0) {
-      const sliced = path.slice(0, item.pathEnd);
-      for (const seg of path.slice(item.pathEnd)) {
-        if (seg === '*') sliced.push('*');
-      }
-      const href = buildBasePath(base, versions, sliced) || '/';
+      const href = buildPathPreservingWildcards(base, versions, path, item.pathEnd) || '/';
       html += `<a href="${href}" data-link class="${cls}">${item.label}</a>`;
     } else {
       html += `<span class="${cls}">${item.label}</span>`;
@@ -1699,25 +1784,9 @@ function renderRepo(): void {
     const iframeStarCls = iframeStarred ? 'star-btn starred' : 'star-btn';
     const iframeStarLabel = iframeStarred ? 'Starred' : 'Star';
     currentContainer.innerHTML = `<div class="repo-page" style="position:relative;padding:0;max-width:none;min-height:100vh;display:flex;flex-direction:column;">
-      <div style="
-        position:fixed;
-        bottom:0;
-        right:0;
-        background:rgba(0,0,0,0.55);
-        color:rgba(255,255,255,0.65);
-        font-family:'Courier New',Courier,monospace;
-        font-size:13px;
-        padding:6px 14px;
-        border-top-left-radius:8px;
-        z-index:10;
-        display:flex;
-        align-items:center;
-        gap:10px;
-        backdrop-filter:blur(6px);
-        -webkit-backdrop-filter:blur(6px);
-      ">
-        <span style="color:rgba(255,255,255,0.85);pointer-events:none;">${headerLabel}</span>
-        <span style="color:rgba(255,255,255,0.4);font-size:12px;pointer-events:none;">${repository.description}</span>
+      <div class="iframe-overlay">
+        <span class="overlay-label">${headerLabel}</span>
+        <span class="overlay-desc">${repository.description}</span>
         <button class="action-btn fork-btn" data-fork-toggle><span class="action-count">${getForkCount(canonicalPath)}</span><span class="action-icon">${FORK_SVG}</span><span class="action-label">Fork</span></button>
         <button class="action-btn ${iframeStarCls}" data-star-toggle data-star-path="${canonicalPath}"><span class="action-count" data-star-count>${getStarCount(canonicalPath)}</span><span class="action-icon">${iframeStarSvg}</span><span class="action-label">${iframeStarLabel}</span></button>
       </div>

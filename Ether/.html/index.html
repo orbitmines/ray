@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self'">
 
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 
@@ -24,7 +24,7 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <!-- <script type="module" src="index.ts"></script> -->
-    <script type="module" src="UI/Greetings.ts"></script>
+    <script type="module" src="UI/Router.ts"></script>
     <div id="root"></div>
   </body>
 </html>

@@ -1,169 +1,127 @@
 // ============================================================
-// Greetings.ts — Old CRT monitor onboarding sequence for Ether
-// No dependencies. Pure DOM + CSS.
+// Greetings.ts — Onboarding overlay + global command bar for Ether
+// mount() = CRT intro overlay (homepage first visit only)
+// ensureGlobalBar() = @me button + @/slash listener (all pages)
 // ============================================================
 
-const PHOSPHOR = '#ffffff';
+import {
+  PHOSPHOR,
+  CRT_SCREEN_BG,
+  delay,
+  fadeOutElement,
+  typeText,
+  injectCRTStyles,
+  createCRT,
+  turnOnScreen,
+  dissolveCRT,
+} from './CRTShell.ts';
 
-const CLASS_GROUPS: { label: string; files: string[] }[] = [
-  {
-    label: 'Science & Engineering',
-    files: ['Programming', 'Hacking', '3D_Modeling', 'Mathematics', 'Physics', 'Biology', 'Chemistry', 'Astronomy', 'Cosmology'],
-  },
-  // {
-  //   label: 'Creative',
-  //   files: ['Animating', 'Drawing', 'Music'],
-  // },
-];
+// ---- localStorage Helpers ----
 
-function fileToLabel(file: string): string {
-  return file.replace(/_/g, ' ');
+export function isFirstVisit(): boolean {
+  try {
+    return !localStorage.getItem('ether:visited');
+  } catch {
+    return true;
+  }
 }
 
-// ---- Utilities ----
-
-function delay(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+function markVisited(): void {
+  try {
+    localStorage.setItem('ether:visited', '1');
+  } catch {}
 }
 
-// ---- Style Injection ----
+function getStoredNames(): string[] {
+  try {
+    const raw = localStorage.getItem('ether:names');
+    if (raw) return JSON.parse(raw);
+    const old = localStorage.getItem('ether:name');
+    if (old) {
+      const names = [old];
+      localStorage.setItem('ether:names', JSON.stringify(names));
+      return names;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
 
-function injectStyles(): void {
+function getStoredName(): string | null {
+  const names = getStoredNames();
+  return names.length > 0 ? names[names.length - 1] : null;
+}
+
+function storeName(name: string): void {
+  try {
+    const names = getStoredNames();
+    const idx = names.indexOf(name);
+    if (idx >= 0) names.splice(idx, 1);
+    names.push(name);
+    localStorage.setItem('ether:names', JSON.stringify(names));
+    localStorage.setItem('ether:name', name);
+    window.dispatchEvent(new CustomEvent('ether:character', { detail: name }));
+  } catch {}
+}
+
+// ---- Global Bar Elements (persist across page navigations) ----
+// The @me button, its styles, and the interaction listener survive page
+// transitions. Router.ts controls teardown via teardownGlobalBar().
+
+const globalElements: HTMLElement[] = [];
+let globalBarStyleEl: HTMLStyleElement | null = null;
+let cleanupInteraction: (() => void) | null = null;
+
+function trackGlobal<T extends HTMLElement>(el: T): T {
+  globalElements.push(el);
+  return el;
+}
+
+// ---- Global Bar Styles ----
+// @me button is global. Command bar overlay styles are scoped to
+// .command-overlay so they never leak into repo/user pages.
+
+function injectGlobalBarStyles(): void {
+  if (globalBarStyleEl) return;
   const s = document.createElement('style');
+  globalBarStyleEl = s;
   s.textContent = `
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #000;
-      overflow: hidden;
-      font-family: 'Courier New', Courier, monospace;
-    }
-
-    /* ---- CRT Shell ---- */
-    .crt {
+    /* ---- @me button (global) ---- */
+    .me-button {
       position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #050505;
+      top: 18px;
+      right: 22px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 16px;
+      color: ${PHOSPHOR};
+      text-shadow:
+        0 0 4px rgba(255,255,255,0.5),
+        0 0 11px rgba(255,255,255,0.22);
+      cursor: pointer;
+      z-index: 1000;
+      user-select: none;
+      background: none;
+      border: none;
+      padding: 6px 10px;
+      white-space: pre;
     }
 
-    .crt-screen {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      background: #0a0a0a;
-      border-radius: 14px;
-      overflow: hidden;
-      opacity: 0;
-    }
+    @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+    .fade-in  { animation: fadeIn 0.6s ease-in forwards; }
 
-    /* Scanlines */
-    .crt-scanlines {
-      position: absolute;
-      inset: 0;
-      background: repeating-linear-gradient(
-        0deg,
-        rgba(0, 0, 0, 0.06) 0px,
-        rgba(0, 0, 0, 0.06) 1px,
-        transparent 1px,
-        transparent 3px
-      );
-      pointer-events: none;
-      z-index: 100;
-    }
-
-    /* Vignette for CRT curvature illusion */
-    .crt-vignette {
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(
-        ellipse at center,
-        transparent 55%,
-        rgba(0, 0, 0, 0.55) 100%
-      );
-      pointer-events: none;
-      z-index: 101;
-    }
-
-    /* Steady-state flicker + ambient glow */
-    @keyframes flicker {
-      0%   { opacity: 0.985; }
-      4%   { opacity: 0.965; }
-      8%   { opacity: 0.995; }
-      12%  { opacity: 0.975; }
-      50%  { opacity: 0.98; }
-      100% { opacity: 0.985; }
-    }
-    @keyframes glow {
-      0%, 100% {
-        box-shadow: 0 0 30px rgba(255,255,255,0.04),
-                    inset 0 0 80px rgba(0,0,0,0.4);
-      }
-      50% {
-        box-shadow: 0 0 50px rgba(255,255,255,0.08),
-                    inset 0 0 80px rgba(0,0,0,0.4);
-      }
-    }
-    .crt-screen.on {
-      opacity: 1;
-      animation: flicker 0.13s infinite, glow 5s ease-in-out infinite;
-    }
-
-    /* Turn-on keyframes (applied via JS style.animation) */
-    @keyframes turnOn {
-      0% {
-        clip-path: inset(50% 50% 50% 50%);
-        filter: brightness(10) saturate(0);
-      }
-      8% {
-        clip-path: inset(49.7% 20% 49.7% 20%);
-        filter: brightness(8) saturate(0);
-      }
-      22% {
-        clip-path: inset(49% 2% 49% 2%);
-        filter: brightness(4) saturate(0.2);
-      }
-      48% {
-        clip-path: inset(12% 0% 12% 0%);
-        filter: brightness(2) saturate(0.6);
-      }
-      72% {
-        clip-path: inset(2% 0% 2% 0%);
-        filter: brightness(1.35) saturate(0.9);
-      }
-      90% {
-        clip-path: inset(0% 0% 0% 0%);
-        filter: brightness(1.1) saturate(1);
-      }
-      100% {
-        clip-path: inset(0% 0% 0% 0%);
-        filter: brightness(1) saturate(1);
-      }
-    }
-
-    /* ---- Terminal ---- */
-    .terminal {
-      position: relative;
-      z-index: 50;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: visible;
-    }
-
-    .terminal-content {
+    /* ---- Command bar overlay (scoped to .command-overlay) ---- */
+    .command-overlay .terminal-content {
       display: flex;
       flex-direction: column;
       align-items: center;
       max-width: 90%;
-      overflow: visible;
+      max-height: 100%;
+      overflow: hidden;
+      touch-action: none;
     }
 
-    /* Text with phosphor glow + subtle chromatic aberration */
-    .t {
+    .command-overlay .t {
       color: ${PHOSPHOR};
       text-shadow:
         0 0 4px rgba(255,255,255,0.5),
@@ -172,23 +130,16 @@ function injectStyles(): void {
         0.4px 0 rgba(80,80,255,0.07);
     }
 
-    .t-large {
-      font-size: 52px;
-      letter-spacing: 14px;
-      font-weight: bold;
-    }
-
-    .t-muted {
-      color: rgba(255,255,255,0.2);
+    .command-overlay .t-muted {
+      color: rgba(255,255,255,0.35);
       text-shadow: none;
     }
 
-    /* Cursor */
     @keyframes cursorPulse {
       0%, 49% { opacity: 1; }
       50%, 100% { opacity: 0; }
     }
-    .cursor {
+    .command-overlay .cursor {
       display: inline-block;
       width: 0.55em;
       height: 1em;
@@ -199,28 +150,23 @@ function injectStyles(): void {
       animation: cursorPulse 1s step-end infinite;
     }
 
-    /* Fade animations */
-    @keyframes fadeOut { to { opacity: 0; } }
-    @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-    .fade-out { animation: fadeOut 0.4s ease-out forwards; }
-    .fade-in  { animation: fadeIn 0.6s ease-in forwards; }
-
-    /* ---- Input ---- */
-    .input-row {
+    .command-overlay .input-row {
       display: flex;
       align-items: baseline;
+      font-family: 'Courier New', Courier, monospace;
       font-size: 18px;
       line-height: 1.8;
       white-space: pre;
     }
 
-    .hint {
+    .command-overlay .hint {
       margin-top: 14px;
+      font-family: 'Courier New', Courier, monospace;
       font-size: 13px;
-      color: rgba(255,255,255,0.16);
+      color: rgba(255,255,255,0.3);
     }
 
-    .hidden-input {
+    .command-overlay .hidden-input {
       position: fixed;
       left: -9999px;
       top: 0;
@@ -232,309 +178,132 @@ function injectStyles(): void {
       padding: 0;
     }
 
-    /* Glitch shake */
-    @keyframes glitchShake {
-      0%  { transform: translate(0, 0) skewX(0); clip-path: inset(0); }
-      8%  { transform: translate(-18px, 8px) skewX(-8deg); }
-      16% { transform: translate(22px, -6px) skewX(10deg); clip-path: inset(10% 0 30% 0); }
-      24% { transform: translate(-14px, -12px) skewX(-5deg); clip-path: inset(0); }
-      32% { transform: translate(25px, 5px) skewX(12deg); }
-      40% { transform: translate(-20px, 10px) skewX(-10deg); clip-path: inset(40% 0 10% 0); }
-      48% { transform: translate(16px, -14px) skewX(7deg); clip-path: inset(0); }
-      56% { transform: translate(-24px, 6px) skewX(-12deg); }
-      64% { transform: translate(20px, -10px) skewX(8deg); clip-path: inset(20% 0 20% 0); }
-      72% { transform: translate(-12px, 12px) skewX(-6deg); clip-path: inset(0); }
-      80% { transform: translate(22px, -8px) skewX(10deg); }
-      88% { transform: translate(-18px, 7px) skewX(-8deg); clip-path: inset(50% 0 5% 0); }
-      100%{ transform: translate(14px, -5px) skewX(6deg); clip-path: inset(0); }
-    }
-    .glitch-shake {
-      animation: glitchShake 0.08s linear infinite;
+    .command-overlay .history-container {
+      display: flex;
+      flex-direction: column;
+      height: 70vh;
     }
 
-    .ether-logo {
-      display: block;
+    .command-overlay .history-above,
+    .command-overlay .history-below {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.1) transparent;
+    }
+    .command-overlay .history-above::-webkit-scrollbar,
+    .command-overlay .history-below::-webkit-scrollbar { width: 4px; }
+    .command-overlay .history-above::-webkit-scrollbar-track,
+    .command-overlay .history-below::-webkit-scrollbar-track { background: transparent; }
+    .command-overlay .history-above::-webkit-scrollbar-thumb,
+    .command-overlay .history-below::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .command-overlay .history-above {
+      justify-content: flex-end;
     }
 
-    /* ---- Class Selection ---- */
-    .class-header {
-      margin-top: 32px;
+    .command-overlay .history-entry {
+      display: flex;
+      align-items: baseline;
+      font-family: 'Courier New', Courier, monospace;
       font-size: 18px;
       line-height: 1.8;
-    }
-
-    .class-sections {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      margin-top: 18px;
-      max-width: 90vw;
-    }
-
-    .class-section {
-      width: 100%;
-    }
-
-    .group-label {
-      font-size: 11px;
-      color: rgba(255,255,255,0.25);
-      text-transform: uppercase;
-      letter-spacing: 3px;
-      margin-bottom: 8px;
-      padding-left: 2px;
-    }
-
-    .class-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      width: 100%;
-      margin-bottom: 12px;
-      justify-content: center;
-    }
-
-    .class-card {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      padding: 14px 4px 10px;
-      width: 96px;
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 3px;
+      white-space: pre;
+      color: rgba(255,255,255,0.35);
+      text-shadow: none;
       cursor: pointer;
-      transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-      background: transparent;
-      user-select: none;
-    }
-    @media (hover: hover) {
-      .class-card:hover {
-        border-color: rgba(255,255,255,0.45);
-        background: rgba(255,255,255,0.035);
-        box-shadow: 0 0 14px rgba(255,255,255,0.1);
-      }
-    }
-    .class-card.selected {
-      border-color: ${PHOSPHOR};
-      background: rgba(255,255,255,0.07);
-      box-shadow: 0 0 22px rgba(255,255,255,0.18);
-    }
-
-    .class-card img {
-      width: 38px;
-      height: 38px;
-      opacity: 0.5;
-      filter: drop-shadow(0 0 3px rgba(255,255,255,0.25));
-      transition: opacity 0.15s, filter 0.15s;
-    }
-    @media (hover: hover) {
-      .class-card:hover img {
-        opacity: 0.85;
-        filter: drop-shadow(0 0 6px rgba(255,255,255,0.45));
-      }
-    }
-    .class-card.selected img {
-      opacity: 1;
-      filter: drop-shadow(0 0 8px rgba(255,255,255,0.55));
-    }
-
-    .class-label {
-      font-size: 10px;
-      color: rgba(255,255,255,0.4);
-      text-align: center;
-      text-shadow: 0 0 3px rgba(255,255,255,0.15);
-      line-height: 1.2;
       transition: color 0.15s;
+      flex-shrink: 0;
     }
-    @media (hover: hover) {
-      .class-card:hover .class-label { color: rgba(255,255,255,0.75); }
-    }
-    .class-card.selected .class-label { color: ${PHOSPHOR}; }
-
-    .start-btn {
-      margin-top: 24px;
-      padding: 10px 40px;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 16px;
-      color: ${PHOSPHOR};
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      text-shadow: 0 0 4px rgba(255,255,255,0.4);
-      transition: box-shadow 0.15s, background 0.15s;
-    }
-    .start-btn:hover {
-      box-shadow: 0 0 14px rgba(255,255,255,0.15);
-      background: rgba(255,255,255,0.04);
+    .command-overlay .history-entry:hover {
+      color: rgba(255,255,255,0.55);
     }
 
-    .class-card.focused {
-      border-color: rgba(255,255,255,0.45);
-      background: rgba(255,255,255,0.035);
-      box-shadow: 0 0 14px rgba(255,255,255,0.1);
+    .command-overlay .history-spacer {
+      visibility: hidden;
     }
   `;
   document.head.appendChild(s);
+  trackGlobal(s);
 }
 
-// ---- CRT DOM ----
+// ---- Centered Overlay (.command-overlay scoped) ----
 
-interface CRT {
-  crt: HTMLElement;
-  screen: HTMLElement;
-  terminal: HTMLElement;
-  content: HTMLElement;
-}
-
-function createCRT(): CRT {
-  const crt = document.createElement('div');
-  crt.className = 'crt';
-
-  const screen = document.createElement('div');
-  screen.className = 'crt-screen';
-
-  const scanlines = document.createElement('div');
-  scanlines.className = 'crt-scanlines';
-
-  const vignette = document.createElement('div');
-  vignette.className = 'crt-vignette';
-
-  const terminal = document.createElement('div');
-  terminal.className = 'terminal';
+function createCenteredOverlay(): { wrapper: HTMLElement; content: HTMLElement } {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'command-overlay';
+  wrapper.style.cssText = `position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:50;background:rgba(10,10,10,0.85);opacity:0;transition:opacity 0.35s ease-in;overflow:hidden;touch-action:none;`;
 
   const content = document.createElement('div');
   content.className = 'terminal-content';
+  wrapper.appendChild(content);
+  document.body.appendChild(wrapper);
 
-  terminal.appendChild(content);
-  screen.appendChild(terminal);
-  screen.appendChild(scanlines);
-  screen.appendChild(vignette);
-  crt.appendChild(screen);
-  document.body.appendChild(crt);
+  // Force reflow then fade in
+  wrapper.offsetHeight;
+  wrapper.style.opacity = '1';
 
-  return { crt, screen, terminal, content };
+  return { wrapper, content };
 }
 
-// ---- CRT Turn-On ----
-
-async function turnOnScreen(screen: HTMLElement): Promise<void> {
-  // Start the turn-on: set opacity to 1 and play the animation
-  screen.style.opacity = '1';
-  screen.style.animation =
-    'turnOn 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards';
-
-  await delay(1700);
-
-  // Lock in the final state, switch to steady-state effects
-  screen.style.animation = '';
-  screen.style.opacity = '';
-  screen.style.clipPath = '';
-  screen.style.filter = '';
-  screen.classList.add('on');
+async function fadeOutOverlay(wrapper: HTMLElement): Promise<void> {
+  wrapper.style.transition = 'opacity 0.3s ease-out';
+  wrapper.style.opacity = '0';
+  await delay(300);
+  wrapper.remove();
 }
 
-// ---- Typewriter ----
-
-async function typeText(
-  parent: HTMLElement,
-  text: string,
-  opts: { speed?: number; large?: boolean } = {},
-): Promise<HTMLElement> {
-  const span = document.createElement('span');
-  span.className = 't';
-  if (opts.large) span.classList.add('t-large');
-  parent.appendChild(span);
-
-  const cursor = document.createElement('span');
-  cursor.className = 'cursor';
-  parent.appendChild(cursor);
-
-  const speed = opts.speed ?? 60;
-
-  for (let i = 0; i < text.length; i++) {
-    span.textContent += text[i];
-    await delay(speed + Math.random() * 30 - 10);
-  }
-
-  cursor.remove();
-  return span;
-}
-
-async function fadeOutElement(el: HTMLElement): Promise<void> {
-  el.classList.add('fade-out');
-  await delay(450);
-  el.remove();
-}
-
-// ---- Phase: Intro Messages ----
+// ---- Phase: Intro (Ether glitch only) ----
 
 async function introPhase(content: HTMLElement): Promise<void> {
-  // "Ether"
   const w1 = document.createElement('div');
   content.appendChild(w1);
   const etherSpan = await typeText(w1, 'Ether', { speed: 130, large: true });
   await delay(1000);
 
-  // Preload logo, match text width
   const logo = document.createElement('img');
   logo.src = 'images/Ether.svg';
   logo.className = 'ether-logo';
   logo.draggable = false;
   logo.style.width = etherSpan.offsetWidth + 'px';
 
-  // Text starts shaking
   etherSpan.classList.add('glitch-shake');
   await delay(150);
 
-  // Hard cut to logo (still shaking)
   etherSpan.style.display = 'none';
   w1.appendChild(logo);
   logo.classList.add('glitch-shake');
   await delay(60);
 
-  // Logo settles
   logo.classList.remove('glitch-shake');
   await delay(250);
 
-  // Logo starts shaking, cuts back to text
   logo.classList.add('glitch-shake');
   await delay(120);
   logo.remove();
   etherSpan.style.display = '';
-  // text still has shake class
   await delay(60);
 
-  // Text settles
   etherSpan.classList.remove('glitch-shake');
   await delay(600);
   await fadeOutElement(w1);
   await delay(350);
-
-  // "No player found..."
-  const w2 = document.createElement('div');
-  content.appendChild(w2);
-  await typeText(w2, 'No player found...', { speed: 50 });
-  await delay(1600);
-  await fadeOutElement(w2);
-  await delay(350);
-
-  // "Initiating a new avatar..."
-  const w3 = document.createElement('div');
-  content.appendChild(w3);
-  await typeText(w3, 'Initiating a new avatar...', { speed: 42 });
-  await delay(1600);
-  await fadeOutElement(w3);
-  await delay(500);
 }
 
-// ---- Phase: Name Input ----
+// ---- Phase: Name Input (with typewriter prompt) ----
 
-async function nameInputPhase(content: HTMLElement): Promise<{ name: string; row: HTMLElement; nameSpan: HTMLElement }> {
+async function nameInputPhase(content: HTMLElement): Promise<{ name: string; row: HTMLElement }> {
   const row = document.createElement('div');
   row.className = 'input-row';
   content.appendChild(row);
 
-  // Type the prompt: @me = @ether.@
   const promptSpan = document.createElement('span');
   promptSpan.className = 't';
   row.appendChild(promptSpan);
@@ -545,7 +314,6 @@ async function nameInputPhase(content: HTMLElement): Promise<{ name: string; row
     await delay(48 + Math.random() * 22);
   }
 
-  // Type the muted placeholder one character at a time
   const placeholder = document.createElement('span');
   placeholder.className = 't-muted';
   row.appendChild(placeholder);
@@ -560,73 +328,392 @@ async function nameInputPhase(content: HTMLElement): Promise<{ name: string; row
     await delay(30 + Math.random() * 18);
   }
 
-  // Rearrange: insert nameSpan + cursor before placeholder
   const nameSpan = document.createElement('span');
   nameSpan.className = 't';
   row.insertBefore(nameSpan, placeholder);
   row.insertBefore(cursor, placeholder);
 
-  // "Press enter to be anonymous."
   const hint = document.createElement('div');
   hint.className = 'hint';
   hint.textContent = 'Press enter to be anonymous.';
   content.appendChild(hint);
 
-  // Hidden input for mobile keyboard support
-  const hiddenInput = document.createElement('input');
-  hiddenInput.className = 'hidden-input';
-  hiddenInput.type = 'text';
-  hiddenInput.autocomplete = 'off';
-  hiddenInput.autocapitalize = 'off';
-  hiddenInput.spellcheck = false;
-  content.appendChild(hiddenInput);
-  hiddenInput.focus();
+  const name = (await waitForNameInput(content, nameSpan, placeholder, hint, cursor, '')) ?? 'anonymous';
 
-  function refocus() { hiddenInput.focus(); }
-  document.addEventListener('click', refocus);
-  document.addEventListener('touchstart', refocus);
-
-  function sync() {
-    const val = hiddenInput.value;
-    nameSpan.textContent = val;
-    placeholder.style.display = val ? 'none' : '';
-    hint.style.display = val ? 'none' : '';
-  }
-
-  hiddenInput.addEventListener('input', sync);
-
-  // Wait for Enter to proceed (but keep name editable after)
-  await new Promise<void>((resolve) => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        hiddenInput.removeEventListener('keydown', onKeyDown);
-        resolve();
-      }
-    }
-    hiddenInput.addEventListener('keydown', onKeyDown);
-  });
-
-  // Confirm name
-  document.removeEventListener('click', refocus);
-  document.removeEventListener('touchstart', refocus);
-  cursor.remove();
-  placeholder.remove();
-  if (!hiddenInput.value.trim()) nameSpan.textContent = 'anonymous';
-  hint.remove();
-  hiddenInput.remove();
-
-  return { name: hiddenInput.value.trim() || 'anonymous', row, nameSpan };
+  return { name, row };
 }
 
-// Re-enter name editing (called when clicking the name row)
-async function reEditName(
-  row: HTMLElement,
-  nameSpan: HTMLElement,
-  content: HTMLElement,
-): Promise<string> {
+// ---- Quick Name Input (instant prompt, pre-filled, for re-edit) ----
+
+async function nameInputQuick(content: HTMLElement, currentName: string): Promise<{ name: string; row: HTMLElement } | null> {
+  const row = document.createElement('div');
+  row.className = 'input-row';
+  content.appendChild(row);
+
+  const promptSpan = document.createElement('span');
+  promptSpan.className = 't';
+  row.appendChild(promptSpan);
+
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 't';
+  nameSpan.textContent = currentName === 'anonymous' ? '@' : `@${currentName}`;
+  row.appendChild(nameSpan);
+
   const cursor = document.createElement('span');
   cursor.className = 'cursor';
+  row.appendChild(cursor);
+
+  // Type the prompt in front — the @ is already shown as part of the name
+  const promptText = '@me = ';
+  for (let i = 0; i < promptText.length; i++) {
+    promptSpan.textContent += promptText[i];
+    await delay(48 + Math.random() * 22);
+  }
+
+  // Silently move the @ from nameSpan into promptSpan so input syncs correctly
+  promptSpan.textContent += '@';
+  const prefill = currentName === 'anonymous' ? '' : currentName;
+  nameSpan.textContent = prefill;
+
+  const name = await waitForNameInput(content, nameSpan, null, null, cursor, prefill, currentName);
+  if (name === null) return null;
+
+  return { name, row };
+}
+
+// ---- Shared: hidden input + Enter/Escape + history navigation ----
+
+async function waitForNameInput(
+  content: HTMLElement,
+  nameSpan: HTMLElement,
+  placeholder: HTMLElement | null,
+  hint: HTMLElement | null,
+  cursor: HTMLElement,
+  prefill: string,
+  excludeFromHistory?: string,
+): Promise<string | null> {
+  const row = nameSpan.closest('.input-row') as HTMLElement;
+
+  // -- History UI --
+  const allNames = getStoredNames();
+  const history = allNames
+    .filter(n => n !== (excludeFromHistory ?? ''))
+    .reverse(); // most recent first
+
+  let aboveDiv: HTMLElement | null = null;
+  let belowDiv: HTMLElement | null = null;
+  let historyContainer: HTMLElement | null = null;
+
+  function makeHistoryEntry(name: string, empty = false): HTMLElement {
+    const entry = document.createElement('div');
+    entry.className = 'history-entry';
+    const spacer = document.createElement('span');
+    spacer.className = 'history-spacer';
+    spacer.textContent = '@me = ';
+    entry.appendChild(spacer);
+    const textSpan = document.createElement('span');
+    if (!empty) textSpan.textContent = `@${name}`;
+    entry.appendChild(textSpan);
+    entry.dataset.name = name;
+    return entry;
+  }
+
+  async function typeInHistoryEntry(entry: HTMLElement, name: string): Promise<void> {
+    const textSpan = entry.lastElementChild as HTMLElement;
+    const text = `@${name}`;
+    for (let i = 0; i < text.length; i++) {
+      textSpan.textContent += text[i];
+      await delay(25 + Math.random() * 15);
+    }
+  }
+
+  if (history.length > 0) {
+    historyContainer = document.createElement('div');
+    historyContainer.className = 'history-container';
+
+    // Measure the longest possible row for stable centering.
+    // Wrap sizer in .command-overlay so scoped styles apply.
+    const sizerWrap = document.createElement('div');
+    sizerWrap.className = 'command-overlay';
+    sizerWrap.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;';
+    const sizer = document.createElement('div');
+    sizer.className = 'input-row';
+    const longestName = [prefill, ...history].reduce((a, b) => a.length > b.length ? a : b, '');
+    const sizerText = document.createElement('span');
+    sizerText.className = 't';
+    sizerText.textContent = `@me = @${longestName}`;
+    sizer.appendChild(sizerText);
+    const sizerCursor = document.createElement('span');
+    sizerCursor.className = 'cursor';
+    sizer.appendChild(sizerCursor);
+    sizerWrap.appendChild(sizer);
+    document.body.appendChild(sizerWrap);
+    historyContainer.style.minWidth = sizer.offsetWidth + 'px';
+    sizerWrap.remove();
+
+    aboveDiv = document.createElement('div');
+    aboveDiv.className = 'history-above';
+
+    belowDiv = document.createElement('div');
+    belowDiv.className = 'history-below';
+
+    historyContainer.appendChild(aboveDiv);
+    // Move the row into the container (stays centered between above/below)
+    content.insertBefore(historyContainer, row);
+    row.style.flexShrink = '0';
+    historyContainer.appendChild(row);
+    historyContainer.appendChild(belowDiv);
+
+    for (const name of history) {
+      const entry = makeHistoryEntry(name, true);
+      belowDiv.appendChild(entry);
+      typeInHistoryEntry(entry, name); // fire-and-forget, all type in parallel
+    }
+  }
+
+  // -- Hidden input --
+  const hiddenInput = document.createElement('input');
+  hiddenInput.className = 'hidden-input';
+  hiddenInput.type = 'text';
+  hiddenInput.autocomplete = 'off';
+  hiddenInput.autocapitalize = 'off';
+  hiddenInput.spellcheck = false;
+  hiddenInput.value = prefill;
+  content.appendChild(hiddenInput);
+  hiddenInput.focus();
+
+  function refocus(e: Event) {
+    const t = e.target as HTMLElement;
+    if (t.closest('.history-above') || t.closest('.history-below')) return;
+    hiddenInput.focus();
+  }
+  document.addEventListener('click', refocus);
+  document.addEventListener('touchstart', refocus, { passive: true });
+
+  // -- History state --
+  let historyPos = -1; // -1 = typing new text
+  let savedTypedText = prefill;
+
+  function setInputValue(val: string) {
+    hiddenInput.value = val;
+    nameSpan.textContent = val;
+    if (placeholder) placeholder.style.display = val ? 'none' : '';
+    if (hint) hint.style.display = val ? 'none' : '';
+  }
+
+  // Navigate deeper into history (entries move from below to above)
+  function navigateDeeper() {
+    if (!belowDiv || !aboveDiv) return;
+    if (historyPos >= history.length - 1) return;
+
+    if (historyPos === -1) {
+      savedTypedText = hiddenInput.value;
+      if (savedTypedText) {
+        aboveDiv.appendChild(makeHistoryEntry(savedTypedText));
+      }
+    } else {
+      aboveDiv.appendChild(makeHistoryEntry(history[historyPos]));
+    }
+
+    historyPos++;
+
+    const first = belowDiv.firstElementChild;
+    if (first) first.remove();
+
+    setInputValue(history[historyPos]);
+  }
+
+  // Navigate shallower (entries move from above back to below)
+  function navigateShallower() {
+    if (!belowDiv || !aboveDiv) return;
+    if (historyPos <= -1) return;
+
+    belowDiv.insertBefore(makeHistoryEntry(history[historyPos]), belowDiv.firstChild);
+
+    historyPos--;
+
+    const last = aboveDiv.lastElementChild;
+    if (last) last.remove();
+
+    if (historyPos === -1) {
+      setInputValue(savedTypedText);
+    } else {
+      setInputValue(history[historyPos]);
+    }
+  }
+
+  // -- Input sync --
+  hiddenInput.addEventListener('input', () => {
+    const val = hiddenInput.value;
+    nameSpan.textContent = val;
+    if (placeholder) placeholder.style.display = val ? 'none' : '';
+    if (hint) hint.style.display = val ? 'none' : '';
+  });
+
+  // -- Tap to select history entry --
+  function onHistoryClick(e: Event) {
+    const target = (e.target as HTMLElement).closest('.history-entry') as HTMLElement | null;
+    if (!target) return;
+    const name = target.dataset.name!;
+    setInputValue(name);
+    hiddenInput.focus();
+  }
+  let touchCleanup: (() => void) | null = null;
+  if (historyContainer) {
+    historyContainer.addEventListener('click', onHistoryClick);
+
+    // -- Swipe / scroll wheel to navigate history --
+    let touchStartY = 0;
+    let touchAccum = 0;
+    const SWIPE_THRESHOLD = 40;
+
+    function onTouchStart(e: TouchEvent) {
+      touchStartY = e.touches[0].clientY;
+      touchAccum = 0;
+    }
+    function onTouchMove(e: TouchEvent) {
+      e.preventDefault();
+      const dy = touchStartY - e.touches[0].clientY;
+      const prev = touchAccum;
+      touchAccum = dy;
+      const prevStep = Math.floor(prev / SWIPE_THRESHOLD);
+      const curStep = Math.floor(touchAccum / SWIPE_THRESHOLD);
+      if (curStep > prevStep) {
+        navigateDeeper();
+        hiddenInput.focus();
+      } else if (curStep < prevStep) {
+        navigateShallower();
+        hiddenInput.focus();
+      }
+    }
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      if (e.deltaY > 0) {
+        navigateDeeper();
+      } else if (e.deltaY < 0) {
+        navigateShallower();
+      }
+      hiddenInput.focus();
+    }
+    historyContainer.addEventListener('touchstart', onTouchStart, { passive: true });
+    historyContainer.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('wheel', onWheel, { passive: false });
+    touchCleanup = () => {
+      historyContainer!.removeEventListener('touchstart', onTouchStart);
+      historyContainer!.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('wheel', onWheel);
+    };
+  }
+
+  // -- Wait for Enter or Escape --
+  const escaped = await new Promise<boolean>((resolve) => {
+    function onMouseDown(e: MouseEvent) {
+      if (e.button === 1) {
+        e.preventDefault();
+        hiddenInput.removeEventListener('keydown', onKeyDown);
+        document.removeEventListener('mousedown', onMouseDown);
+        resolve(false);
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown);
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        hiddenInput.removeEventListener('keydown', onKeyDown);
+        document.removeEventListener('mousedown', onMouseDown);
+        resolve(false);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hiddenInput.removeEventListener('keydown', onKeyDown);
+        document.removeEventListener('mousedown', onMouseDown);
+        resolve(true);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        navigateDeeper();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        navigateShallower();
+      }
+    }
+    hiddenInput.addEventListener('keydown', onKeyDown);
+  });
+
+  // Capture value before cleanup removes input
+  const finalValue = hiddenInput.value.trim();
+
+  // -- Cleanup --
+  document.removeEventListener('click', refocus);
+  document.removeEventListener('touchstart', refocus);
+  if (historyContainer) {
+    if (touchCleanup) touchCleanup();
+    historyContainer.removeEventListener('click', onHistoryClick);
+    row.style.flexShrink = '';
+    content.insertBefore(row, historyContainer);
+    historyContainer.remove();
+  }
+  cursor.remove();
+  if (placeholder) placeholder.remove();
+  if (hint) hint.remove();
+  hiddenInput.remove();
+
+  if (escaped) return null;
+
+  if (!finalValue) nameSpan.textContent = 'anonymous';
+  return finalValue || 'anonymous';
+}
+
+// ---- Instant Name Input (no typewriter, for command bar @me= transition) ----
+
+async function nameInputInstant(
+  content: HTMLElement,
+  currentName: string,
+): Promise<{ name: string } | null> {
+  const row = document.createElement('div');
+  row.className = 'input-row';
+  content.appendChild(row);
+
+  const promptSpan = document.createElement('span');
+  promptSpan.className = 't';
+  promptSpan.textContent = '@me = @';
+  row.appendChild(promptSpan);
+
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 't';
+  nameSpan.textContent = currentName === 'anonymous' ? '' : currentName;
+  row.appendChild(nameSpan);
+
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+  row.appendChild(cursor);
+
+  const prefill = currentName === 'anonymous' ? '' : currentName;
+  const name = await waitForNameInput(content, nameSpan, null, null, cursor, prefill, currentName);
+  if (name === null) return null;
+
+  return { name };
+}
+
+// ---- Command Bar: Global @/slash Input Overlay ----
+
+async function openCommandBar(
+  initialText: string,
+  currentName: string,
+): Promise<{ type: 'navigate' | 'name' | 'cancel'; value: string }> {
+  const { wrapper, content } = createCenteredOverlay();
+
+  const row = document.createElement('div');
+  row.className = 'input-row';
+  content.appendChild(row);
+
+  const textSpan = document.createElement('span');
+  textSpan.className = 't';
+  textSpan.textContent = initialText;
+  row.appendChild(textSpan);
+
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+  row.appendChild(cursor);
 
   const hiddenInput = document.createElement('input');
   hiddenInput.className = 'hidden-input';
@@ -634,319 +721,320 @@ async function reEditName(
   hiddenInput.autocomplete = 'off';
   hiddenInput.autocapitalize = 'off';
   hiddenInput.spellcheck = false;
-  hiddenInput.value = nameSpan.textContent === 'anonymous' ? '' : nameSpan.textContent!;
+  hiddenInput.value = initialText;
   content.appendChild(hiddenInput);
-
-  nameSpan.textContent = hiddenInput.value;
-  row.appendChild(cursor);
   hiddenInput.focus();
+  hiddenInput.setSelectionRange(initialText.length, initialText.length);
 
-  function refocus() { hiddenInput.focus(); }
+  function refocus(e: Event) {
+    const t = e.target as HTMLElement;
+    if (t.closest('.history-above') || t.closest('.history-below')) return;
+    hiddenInput.focus();
+  }
   document.addEventListener('click', refocus);
-  document.addEventListener('touchstart', refocus);
+  document.addEventListener('touchstart', refocus, { passive: true });
 
-  hiddenInput.addEventListener('input', () => {
-    nameSpan.textContent = hiddenInput.value;
-  });
+  const ME_PATTERN = /^@me\s*=\s*/i;
 
-  await new Promise<void>((resolve) => {
+  const result = await new Promise<{ type: 'navigate' | 'name' | 'cancel'; value: string }>((resolve) => {
+    let nameEditActive = false;
+
+    function onInput() {
+      const val = hiddenInput.value;
+      textSpan.textContent = val;
+
+      if (!nameEditActive && ME_PATTERN.test(val)) {
+        nameEditActive = true;
+        hiddenInput.removeEventListener('keydown', onKeyDown);
+        hiddenInput.removeEventListener('input', onInput);
+        document.removeEventListener('click', refocus);
+        document.removeEventListener('touchstart', refocus);
+        textSpan.remove();
+        cursor.remove();
+        hiddenInput.remove();
+        row.remove();
+
+        nameInputInstant(content, currentName).then((nameResult) => {
+          if (nameResult) {
+            resolve({ type: 'name', value: nameResult.name });
+          } else {
+            resolve({ type: 'cancel', value: '' });
+          }
+        });
+      }
+    }
+
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Enter') {
         e.preventDefault();
         hiddenInput.removeEventListener('keydown', onKeyDown);
-        resolve();
+        hiddenInput.removeEventListener('input', onInput);
+        resolve({ type: 'navigate', value: hiddenInput.value });
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hiddenInput.removeEventListener('keydown', onKeyDown);
+        hiddenInput.removeEventListener('input', onInput);
+        resolve({ type: 'cancel', value: '' });
       }
     }
+
+    hiddenInput.addEventListener('input', onInput);
     hiddenInput.addEventListener('keydown', onKeyDown);
   });
 
   document.removeEventListener('click', refocus);
   document.removeEventListener('touchstart', refocus);
-  cursor.remove();
-  hiddenInput.remove();
-  if (!hiddenInput.value.trim()) nameSpan.textContent = 'anonymous';
+  await fadeOutOverlay(wrapper);
 
-  return hiddenInput.value.trim() || 'anonymous';
+  return result;
 }
 
-// ---- Phase: Class Selection ----
+// ---- FLIP Animation: source element → top-right button ----
 
-async function classSelectPhase(
-  content: HTMLElement,
-  nameRow: HTMLElement,
-  previousSelected?: Set<string>,
-  skipAnim?: boolean,
-): Promise<{ result: 'done'; classes: string[] } | { result: 'edit-name'; selected: Set<string> }> {
-  // Type header
-  const headerDiv = document.createElement('div');
-  headerDiv.className = 'class-header';
-  content.appendChild(headerDiv);
+async function animateMeToCorner(sourceEl: HTMLElement, name: string): Promise<HTMLElement> {
+  const sourceRect = sourceEl.getBoundingClientRect();
 
-  const headerSpan = document.createElement('span');
-  headerSpan.className = 't';
-  headerDiv.appendChild(headerSpan);
+  const btn = trackGlobal(document.createElement('button'));
+  btn.className = 'me-button';
+  btn.textContent = `@${name}`;
+  document.body.appendChild(btn);
 
-  const headerText = '@me Class =';
-  if (skipAnim) {
-    headerSpan.textContent = headerText;
-  } else {
-    await delay(350);
-    for (let i = 0; i < headerText.length; i++) {
-      headerSpan.textContent += headerText[i];
-      await delay(48 + Math.random() * 22);
-    }
-    await delay(300);
-  }
+  const btnRect = btn.getBoundingClientRect();
 
-  // Build grouped class cards
-  const wrapper = document.createElement('div');
-  wrapper.className = 'class-sections fade-in';
-  content.appendChild(wrapper);
+  const dx = sourceRect.left - btnRect.left;
+  const dy = sourceRect.top - btnRect.top;
 
-  for (const group of CLASS_GROUPS) {
-    const section = document.createElement('div');
-    section.className = 'class-section';
+  btn.style.transform = `translate(${dx}px, ${dy}px)`;
+  btn.style.transition = 'none';
 
-    const label = document.createElement('div');
-    label.className = 'group-label t-muted';
-    label.textContent = group.label;
-    section.appendChild(label);
+  sourceEl.style.visibility = 'hidden';
 
-    const grid = document.createElement('div');
-    grid.className = 'class-grid';
+  // Force reflow
+  btn.offsetHeight;
 
-    for (const file of group.files) {
-      const card = document.createElement('div');
-      card.className = 'class-card';
-      card.dataset.file = file;
+  btn.style.transition = 'transform 0.8s cubic-bezier(0.22, 1, 0.36, 1)';
+  btn.style.transform = 'translate(0, 0)';
 
-      const img = document.createElement('img');
-      img.src = `icons/${file}.svg`;
-      img.alt = fileToLabel(file);
-      img.draggable = false;
-      card.appendChild(img);
+  await delay(850);
 
-      const cardLabel = document.createElement('div');
-      cardLabel.className = 'class-label';
-      cardLabel.textContent = fileToLabel(file);
-      card.appendChild(cardLabel);
+  btn.style.transition = '';
+  btn.style.transform = '';
+  sourceEl.remove();
 
-      grid.appendChild(card);
-    }
+  return btn;
+}
 
-    section.appendChild(grid);
-    wrapper.appendChild(section);
-  }
+// ---- Animate button from top-right to screen center ----
 
-  // Start button (hidden until a selection is made)
-  const startBtn = document.createElement('button');
-  startBtn.className = 'start-btn';
-  startBtn.textContent = 'Ready';
-  startBtn.style.display = 'none';
-  content.appendChild(startBtn);
+async function animateButtonToCenter(btn: HTMLElement): Promise<void> {
+  const btnRect = btn.getBoundingClientRect();
+  const cx = window.innerWidth / 2 - btnRect.width / 2;
+  const cy = window.innerHeight / 2 - btnRect.height / 2;
+  const dx = cx - btnRect.left;
+  const dy = cy - btnRect.top;
 
-  // Scroll into view
-  wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  btn.style.transition = 'transform 0.6s cubic-bezier(0.22, 1, 0.36, 1)';
+  btn.style.transform = `translate(${dx}px, ${dy}px)`;
 
-  // Collect all cards in DOM order for keyboard nav
-  const allCards = Array.from(wrapper.querySelectorAll('.class-card')) as HTMLElement[];
+  await delay(650);
+}
 
-  // Multi-select handling
-  const selected = new Set<string>();
-  let focusIdx = -1;
+// ---- Show @me button in top-right ----
 
-  // Restore previous selections
-  if (previousSelected) {
-    for (const card of allCards) {
-      if (previousSelected.has(card.dataset.file!)) {
-        selected.add(card.dataset.file!);
-        card.classList.add('selected');
-      }
-    }
-    startBtn.style.display = selected.size > 0 ? '' : 'none';
-  }
+function showMeButton(name: string): HTMLElement {
+  const btn = trackGlobal(document.createElement('button'));
+  btn.className = 'me-button fade-in';
+  btn.textContent = `@${name}`;
+  document.body.appendChild(btn);
+  return btn;
+}
 
-  function setFocus(idx: number) {
-    if (focusIdx >= 0 && focusIdx < allCards.length)
-      allCards[focusIdx].classList.remove('focused');
-    focusIdx = idx;
-    if (focusIdx >= 0 && focusIdx < allCards.length) {
-      allCards[focusIdx].classList.add('focused');
-      allCards[focusIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }
+// ---- Interaction: click button or global @/slash key ----
 
-  function toggleCard(card: HTMLElement) {
-    const file = card.dataset.file!;
-    if (selected.has(file)) {
-      selected.delete(file);
-      card.classList.remove('selected');
+function installInteraction(btn: HTMLElement, currentName: string): () => void {
+  let active = true;
+
+  async function onBtnClick() {
+    if (!active) return;
+    deactivate();
+
+    await animateButtonToCenter(btn);
+    btn.remove();
+
+    const { wrapper, content } = createCenteredOverlay();
+    const result = await nameInputQuick(content, currentName);
+
+    if (result) {
+      storeName(result.name);
+      currentName = result.name;
+      const [newBtn] = await Promise.all([
+        animateMeToCorner(result.row, result.name),
+        fadeOutOverlay(wrapper),
+      ]);
+      cleanupInteraction = installInteraction(newBtn, currentName);
     } else {
-      selected.add(file);
-      card.classList.add('selected');
+      // Escape — recreate button in corner
+      await fadeOutOverlay(wrapper);
+      const newBtn = showMeButton(currentName);
+      cleanupInteraction = installInteraction(newBtn, currentName);
     }
-    startBtn.style.display = selected.size > 0 ? '' : 'none';
   }
 
-  // Make name row clickable during class selection
-  nameRow.style.cursor = 'pointer';
+  function onGlobalKeyDown(e: KeyboardEvent) {
+    if (!active) return;
+    const tag = (document.activeElement?.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || (document.activeElement as HTMLElement)?.isContentEditable) return;
 
-  return new Promise((resolve) => {
-    function cleanup() {
-      wrapper.removeEventListener('click', onClick);
-      startBtn.removeEventListener('click', onStart);
-      document.removeEventListener('keydown', onKey);
-      nameRow.removeEventListener('click', onNameClick);
-      nameRow.style.cursor = '';
-      headerDiv.remove();
-      wrapper.remove();
-      startBtn.remove();
+    if (e.key === '@' || e.key === '/') {
+      e.preventDefault();
+      handleCommandBar(e.key);
+    }
+  }
+
+  async function handleCommandBar(initialText: string) {
+    deactivate();
+
+    const result = await openCommandBar(initialText, currentName);
+
+    if (result.type === 'navigate') {
+      const path = result.value.startsWith('/') ? result.value : '/' + result.value;
+      history.pushState(null, '', path);
+      dispatchEvent(new PopStateEvent('popstate'));
+      // Reactivate — the global bar persists across page transitions.
+      // If teardownGlobalBar() was called during navigation, btn is
+      // disconnected and activate() becomes a no-op.
+      activate();
+      return;
     }
 
-    function finish() {
-      cleanup();
-      resolve({ result: 'done', classes: [...selected] });
+    if (result.type === 'name') {
+      storeName(result.value);
+      currentName = result.value;
+      btn.textContent = `@${result.value}`;
     }
 
-    function onNameClick() {
-      cleanup();
-      resolve({ result: 'edit-name', selected: new Set(selected) });
-    }
+    activate();
+  }
 
-    let lastToggleTime = 0;
+  function activate() {
+    if (!btn.isConnected) return;
+    active = true;
+    btn.addEventListener('click', onBtnClick, { once: true });
+    document.addEventListener('keydown', onGlobalKeyDown);
+  }
 
-    function onClick(e: Event) {
-      // Debounce to prevent double-firing from touch + click
-      const now = Date.now();
-      if (now - lastToggleTime < 300) return;
-      lastToggleTime = now;
+  function deactivate() {
+    active = false;
+    btn.removeEventListener('click', onBtnClick);
+    document.removeEventListener('keydown', onGlobalKeyDown);
+  }
 
-      const card = (e.target as HTMLElement).closest(
-        '.class-card',
-      ) as HTMLElement | null;
-      if (!card) return;
+  activate();
 
-      // Clear any keyboard focus highlight
-      if (focusIdx >= 0 && focusIdx < allCards.length)
-        allCards[focusIdx].classList.remove('focused');
-      focusIdx = -1;
-      toggleCard(card);
-    }
-
-    function onStart() {
-      if (selected.size > 0) finish();
-    }
-
-    function onKey(e: KeyboardEvent) {
-      const key = e.key.toLowerCase();
-
-      // Navigation
-      if (key === 'arrowright' || key === 'd') {
-        e.preventDefault();
-        setFocus(focusIdx < 0 ? 0 : Math.min(focusIdx + 1, allCards.length - 1));
-        return;
-      }
-      if (key === 'arrowleft' || key === 'a') {
-        e.preventDefault();
-        setFocus(focusIdx < 0 ? 0 : Math.max(focusIdx - 1, 0));
-        return;
-      }
-      if (key === 'arrowdown' || key === 's') {
-        e.preventDefault();
-        if (focusIdx < 0) { setFocus(0); return; }
-        const cur = allCards[focusIdx].getBoundingClientRect();
-        const cx = cur.left + cur.width / 2;
-        let best = -1, bestDy = Infinity, bestDx = Infinity;
-        for (let i = 0; i < allCards.length; i++) {
-          if (i === focusIdx) continue;
-          const r = allCards[i].getBoundingClientRect();
-          const dy = (r.top + r.height / 2) - (cur.top + cur.height / 2);
-          if (dy < 10) continue;
-          const dx = Math.abs((r.left + r.width / 2) - cx);
-          if (dy < bestDy || (dy === bestDy && dx < bestDx)) {
-            best = i; bestDy = dy; bestDx = dx;
-          }
-        }
-        if (best >= 0) setFocus(best);
-        return;
-      }
-      if (key === 'arrowup' || key === 'w') {
-        e.preventDefault();
-        if (focusIdx < 0) { setFocus(0); return; }
-        const cur = allCards[focusIdx].getBoundingClientRect();
-        const cx = cur.left + cur.width / 2;
-        let best = -1, bestDy = Infinity, bestDx = Infinity;
-        for (let i = 0; i < allCards.length; i++) {
-          if (i === focusIdx) continue;
-          const r = allCards[i].getBoundingClientRect();
-          const dy = (cur.top + cur.height / 2) - (r.top + r.height / 2);
-          if (dy < 10) continue;
-          const dx = Math.abs((r.left + r.width / 2) - cx);
-          if (dy < bestDy || (dy === bestDy && dx < bestDx)) {
-            best = i; bestDy = dy; bestDx = dx;
-          }
-        }
-        if (best >= 0) setFocus(best);
-        return;
-      }
-
-      // Toggle focused card with space
-      if (key === ' ') {
-        e.preventDefault();
-        if (focusIdx >= 0) toggleCard(allCards[focusIdx]);
-        return;
-      }
-
-      // Enter to start
-      if (key === 'enter' && selected.size > 0) {
-        e.preventDefault();
-        finish();
-      }
-    }
-
-    wrapper.addEventListener('click', onClick);
-    startBtn.addEventListener('click', onStart);
-    document.addEventListener('keydown', onKey);
-    nameRow.addEventListener('click', onNameClick);
-  });
+  return deactivate;
 }
 
-// ---- Main Flow ----
+// ---- Public API ----
 
-async function greetings(): Promise<void> {
-  injectStyles();
-  const { screen, content } = createCRT();
+/** CRT intro overlay (homepage first visit only). */
+export async function mount(): Promise<void> {
+  const crtStyle = injectCRTStyles();
+  injectGlobalBarStyles();
 
-  // Pause, then power on the CRT
+  const crt = createCRT();
+
+  // CRT now covers the page — safe to hide it
+  const page = document.getElementById('root');
+  if (page) page.style.opacity = '0';
+
   await delay(700);
-  await turnOnScreen(screen);
+  await turnOnScreen(crt.screen);
   await delay(500);
 
-  // Intro sequence
-  await introPhase(content);
+  dissolveCRT(crt);
+  await introPhase(crt.content);
 
-  // Name input
-  const { name: initialName, row: nameRow, nameSpan } = await nameInputPhase(content);
-  let name = initialName;
-  let previousSelected: Set<string> | undefined;
-  let skipAnim = false;
-
-  // Class selection loop (allows going back to edit name)
-  while (true) {
-    await delay(350);
-    const result = await classSelectPhase(content, nameRow, previousSelected, skipAnim);
-    if (result.result === 'done') {
-      const labels = result.classes.map(fileToLabel);
-      console.log(`[Ether] Avatar: ${name}, Classes: ${labels.join(', ')}`);
-      break;
-    }
-    // User clicked name row — save selections, go back to name editing
-    previousSelected = result.selected;
-    name = await reEditName(nameRow, nameSpan, content);
-    skipAnim = true;
+  // Intro done — fade the CRT background to semi-transparent so the
+  // page shows through dimly during the name input.
+  crt.crt.style.transition = 'background 1s ease-out';
+  crt.crt.style.background = 'rgba(10,10,10,0.85)';
+  crt.screen.style.transition = 'background 1s ease-out';
+  crt.screen.style.background = 'transparent';
+  if (page) {
+    page.style.transition = 'opacity 1s ease-in';
+    page.style.opacity = '1';
   }
+
+  const { name, row } = await nameInputPhase(crt.content);
+
+  storeName(name);
+  markVisited();
+
+  // --- Simultaneous: CRT fades away + name button flies to corner ---
+
+  // 1. Measure the row while it's still inside the CRT
+  const sourceRect = row.getBoundingClientRect();
+
+  const btn = trackGlobal(document.createElement('button'));
+  btn.className = 'me-button';
+  btn.textContent = `@${name}`;
+  document.body.appendChild(btn);
+
+  const btnRect = btn.getBoundingClientRect();
+  const dx = sourceRect.left - btnRect.left;
+  const dy = sourceRect.top - btnRect.top;
+
+  btn.style.transform = `translate(${dx}px, ${dy}px)`;
+  btn.style.transition = 'none';
+  row.style.visibility = 'hidden';
+
+  // 2. Force reflow so the browser commits btn at offset position
+  btn.offsetHeight;
+
+  // 3. Fade out CRT overlay + animate button simultaneously
+  crt.crt.style.transition = 'opacity 0.8s ease-out';
+  crt.crt.style.opacity = '0';
+  btn.style.transition = 'transform 0.8s cubic-bezier(0.22, 1, 0.36, 1)';
+  btn.style.transform = 'translate(0, 0)';
+
+  await delay(850);
+
+  // 4. Clean up
+  crt.crt.remove();
+  if (crtStyle) crtStyle.remove();
+  document.body.style.background = '';
+  document.body.style.transition = '';
+  btn.style.transition = '';
+  btn.style.transform = '';
+  row.remove();
+  if (page) {
+    page.style.transition = '';
+    page.style.opacity = '';
+  }
+
+  cleanupInteraction = installInteraction(btn, name);
 }
 
-// ---- Boot ----
+/** Set up @me button + command bar on any page (returning visitors). */
+export function ensureGlobalBar(): void {
+  if (isGlobalBarActive()) return;
+  const storedName = getStoredName();
+  if (!storedName) return;
+  injectGlobalBarStyles();
+  const btn = showMeButton(storedName);
+  cleanupInteraction = installInteraction(btn, storedName);
+}
 
-document.addEventListener('DOMContentLoaded', greetings);
+/** Remove global bar entirely (button + listener + styles). */
+export function teardownGlobalBar(): void {
+  if (cleanupInteraction) { cleanupInteraction(); cleanupInteraction = null; }
+  for (const el of globalElements) {
+    el.remove();
+  }
+  globalElements.length = 0;
+  globalBarStyleEl = null;
+}
+
+export function isGlobalBarActive(): boolean {
+  return cleanupInteraction !== null;
+}

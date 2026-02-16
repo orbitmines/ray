@@ -6,14 +6,37 @@ export interface FileEntry {
   name: string;
   isDirectory: boolean;
   modified: string;
-  children?: FileEntry[];
+  children?: TreeEntry[];
   content?: string;
+}
+
+export interface CompoundEntry {
+  op: '&' | '|';
+  entries: TreeEntry[];
+}
+
+export type TreeEntry = FileEntry | CompoundEntry;
+
+export function isCompound(entry: TreeEntry): entry is CompoundEntry {
+  return 'op' in entry;
+}
+
+export function flattenEntries(tree: TreeEntry[]): FileEntry[] {
+  const result: FileEntry[] = [];
+  for (const entry of tree) {
+    if (isCompound(entry)) {
+      result.push(...flattenEntries(entry.entries));
+    } else {
+      result.push(entry);
+    }
+  }
+  return result;
 }
 
 export interface Repository {
   user: string;
   description: string;
-  tree: FileEntry[];
+  tree: TreeEntry[];
 }
 
 const README_CONTENT = `# @ether/library
@@ -86,6 +109,41 @@ See the [\`examples/\`](examples) directory for usage patterns:
 ![Ether Logo](images/Ether.svg)
 `;
 
+const ALT_README = `# @ether/library (Draft)
+
+An **experimental** rewrite of the core library using Ray v2 primitives.
+
+## Status
+
+This is an alternative README reflecting the in-progress v2 branch.
+
+> "All rays are equivalent — some are just more equivalent than others."
+
+---
+
+## Changes from v1
+
+- \`Ray.vertex()\` is now \`Ray.point()\`
+- \`Ray.edge(a, b)\` replaced by \`Ray.connect(a, b)\`
+- New: \`Ray.superpose(rays)\` — quantum-style superposition
+
+## Migration Guide
+
+\`\`\`ts
+// v1
+const v = Ray.vertex();
+const e = v.compose(Ray.vertex());
+
+// v2
+const p = Ray.point();
+const c = p.connect(Ray.point());
+\`\`\`
+
+## License
+
+~~MIT~~ — *Unlicensed*. This is free and unencumbered software released into the public domain.
+`;
+
 const DOCS_README = `# Documentation
 
 Detailed guides for working with @ether/library.
@@ -148,7 +206,13 @@ const repository: Repository = {
             { name: 'banner.png', isDirectory: false, modified: '2 weeks ago' },
           ],
         },
-        { name: 'README.md', isDirectory: false, modified: 'yesterday', content: README_CONTENT },
+        {
+          op: '|',
+          entries: [
+            { name: 'README.md', isDirectory: false, modified: 'yesterday', content: README_CONTENT },
+            { name: 'README.md', isDirectory: false, modified: '3 days ago', content: ALT_README },
+          ],
+        },
         { name: 'index.ray.js', isDirectory: false, modified: 'today', content: `document.body.style.background = '#0a0a0a';
 document.body.style.color = '#fff';
 document.body.style.fontFamily = "'Courier New', monospace";
@@ -166,8 +230,13 @@ window.addEventListener('ether:ready', async () => {
   document.body.appendChild(el);
 });
 ` },
-        { name: 'package.json', isDirectory: false, modified: '3 days ago' },
-        { name: 'tsconfig.json', isDirectory: false, modified: '1 week ago' },
+        {
+          op: '&',
+          entries: [
+            { name: 'package.json', isDirectory: false, modified: '3 days ago' },
+            { name: 'tsconfig.json', isDirectory: false, modified: '1 week ago' },
+          ],
+        },
         { name: 'LICENSE', isDirectory: false, modified: '1 month ago' },
         { name: '.gitignore', isDirectory: false, modified: '1 month ago' },
       ],
@@ -292,21 +361,23 @@ export function getWorld(user: string, world: string): Repository | null {
   return allWorlds.get(user)?.get(world) || null;
 }
 
-export function resolveDirectory(tree: FileEntry[], pathSegments: string[]): FileEntry[] | null {
+export function resolveDirectory(tree: TreeEntry[], pathSegments: string[]): TreeEntry[] | null {
   let current = tree;
   for (const segment of pathSegments) {
-    const entry = current.find(e => e.name === segment && e.isDirectory);
+    const flat = flattenEntries(current);
+    const entry = flat.find(e => e.name === segment && e.isDirectory);
     if (!entry || !entry.children) return null;
     current = entry.children;
   }
   return current;
 }
 
-export function resolveFile(tree: FileEntry[], pathSegments: string[]): FileEntry | null {
+export function resolveFile(tree: TreeEntry[], pathSegments: string[]): FileEntry | null {
   if (pathSegments.length === 0) return null;
   const dirPath = pathSegments.slice(0, -1);
   const fileName = pathSegments[pathSegments.length - 1];
   const dir = dirPath.length > 0 ? resolveDirectory(tree, dirPath) : tree;
   if (!dir) return null;
-  return dir.find(e => e.name === fileName && !e.isDirectory) || null;
+  const flat = flattenEntries(dir);
+  return flat.find(e => e.name === fileName && !e.isDirectory) || null;
 }

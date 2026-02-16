@@ -885,7 +885,7 @@ function installInteraction(btn: HTMLElement, currentName: string): () => void {
     const tag = (document.activeElement?.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || (document.activeElement as HTMLElement)?.isContentEditable) return;
 
-    if (e.key === '@' || e.key === '/') {
+    if (e.key === '@' || e.key === '/' || e.key === '#') {
       e.preventDefault();
       handleCommandBar(e.key);
     }
@@ -897,7 +897,8 @@ function installInteraction(btn: HTMLElement, currentName: string): () => void {
     const result = await openCommandBar(initialText, currentName);
 
     if (result.type === 'navigate') {
-      const path = result.value.startsWith('/') ? result.value : '/' + result.value;
+      const mapped = result.value.replace(/#/g, '~');
+      const path = mapped.startsWith('/') ? mapped : '/' + mapped;
       history.pushState(null, '', path);
       dispatchEvent(new PopStateEvent('popstate'));
       // Reactivate — the global bar persists across page transitions.

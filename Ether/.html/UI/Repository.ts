@@ -5,8 +5,8 @@
 import { PHOSPHOR, CRT_SCREEN_BG } from './CRTShell.ts';
 import { renderMarkdown } from './Markdown.ts';
 import { fileIcon } from './FileIcons.ts';
-import { getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory } from './DummyData.ts';
-import type { FileEntry, Repository } from './DummyData.ts';
+import { getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, isCompound, flattenEntries } from './DummyData.ts';
+import type { FileEntry, CompoundEntry, TreeEntry, Repository } from './DummyData.ts';
 
 let styleEl: HTMLStyleElement | null = null;
 let currentContainer: HTMLElement | null = null;
@@ -270,6 +270,38 @@ function injectStyles(): void {
       margin-bottom: 16px;
     }
 
+    /* ---- Compound groups ---- */
+    .compound-group {
+      border-left: 2px solid rgba(255,255,255,0.08);
+    }
+    .compound-and { border-color: rgba(255,255,255,0.12); }
+    .compound-or { border-color: rgba(0,200,80,0.3); }
+    .compound-count {
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
+      margin-left: 4px;
+    }
+
+    /* ---- README tabs ---- */
+    .readme-tabs {
+      display: flex;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.02);
+    }
+    .readme-tab {
+      padding: 8px 16px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.4);
+      cursor: pointer;
+      border: none;
+      background: none;
+      border-bottom: 2px solid transparent;
+      font-family: inherit;
+    }
+    .readme-tab:hover { color: rgba(255,255,255,0.6); }
+    .readme-tab.active { color: ${PHOSPHOR}; border-bottom-color: ${PHOSPHOR}; }
+    .readme-body.hidden { display: none; }
+
     /* ---- Clone / Download button ---- */
     .clone-btn {
       display: flex;
@@ -416,6 +448,21 @@ function bindClickHandlers(): void {
     backdrop.addEventListener('click', close);
   }
 
+  // README tab switching
+  currentContainer.querySelectorAll('[data-readme-tab]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const idx = (tab as HTMLElement).dataset.readmeTab!;
+      // Deactivate all tabs
+      currentContainer!.querySelectorAll('[data-readme-tab]').forEach(t => t.classList.remove('active'));
+      // Hide all bodies
+      currentContainer!.querySelectorAll('[data-readme-body]').forEach(b => b.classList.add('hidden'));
+      // Activate clicked tab and show its content
+      tab.classList.add('active');
+      const body = currentContainer!.querySelector(`[data-readme-body="${idx}"]`);
+      if (body) body.classList.remove('hidden');
+    });
+  });
+
   currentContainer.querySelectorAll('[data-copy]').forEach(btn => {
     btn.addEventListener('click', () => {
       const text = (btn as HTMLElement).dataset.copy!;
@@ -461,19 +508,60 @@ function buildBasePath(base: string, versions: [number, string][], path: string[
 
 // ---- Repository File View ----
 
-function renderFileListing(entries: FileEntry[], basePath: string): string {
-  const dirs = entries.filter(e => e.isDirectory).sort((a, b) => a.name.localeCompare(b.name));
-  const files = entries.filter(e => !e.isDirectory).sort((a, b) => a.name.localeCompare(b.name));
-  const sorted = [...dirs, ...files];
+function renderFileRow(entry: FileEntry, basePath: string, compoundSize?: number): string {
+  const href = basePath + (basePath.endsWith('/') ? '' : '/') + entry.name;
+  const displayName = entry.name === '@' ? '@{: String}' : entry.name === '~' ? '#{: String}' : entry.name;
+  const countBadge = compoundSize ? ` <span class="compound-count">(${compoundSize})</span>` : '';
+  return `<div class="file-row" data-href="${href}">
+    <div class="file-icon">${fileIcon(entry.name, entry.isDirectory)}</div>
+    <div class="file-name">${displayName}${countBadge}</div>
+    <div class="file-modified">${entry.modified}</div>
+  </div>`;
+}
+
+function renderCompoundEntry(compound: CompoundEntry, basePath: string): string {
+  const count = flattenEntries(compound.entries).length;
+  if (compound.op === '|') {
+    // OR: show only the first entry with the count badge
+    const first = compound.entries[0];
+    if (isCompound(first)) return renderCompoundEntry(first, basePath);
+    return renderFileRow(first, basePath, count);
+  }
+  const parts = compound.entries.map(entry => {
+    if (isCompound(entry)) return renderCompoundEntry(entry, basePath);
+    return renderFileRow(entry, basePath, count);
+  }).join('');
+  return `<div class="compound-group compound-and">${parts}</div>`;
+}
+
+function firstLeaf(entry: TreeEntry): FileEntry | null {
+  if (!isCompound(entry)) return entry;
+  for (const child of entry.entries) {
+    const leaf = firstLeaf(child);
+    if (leaf) return leaf;
+  }
+  return null;
+}
+
+function renderFileListing(entries: TreeEntry[], basePath: string): string {
+  const sortKey = (entry: TreeEntry): { isDir: boolean; name: string } => {
+    if (isCompound(entry)) {
+      const leaf = firstLeaf(entry);
+      return leaf ? { isDir: leaf.isDirectory, name: leaf.name } : { isDir: false, name: '' };
+    }
+    return { isDir: entry.isDirectory, name: entry.name };
+  };
+
+  const sorted = [...entries].sort((a, b) => {
+    const ka = sortKey(a);
+    const kb = sortKey(b);
+    if (ka.isDir !== kb.isDir) return ka.isDir ? -1 : 1;
+    return ka.name.localeCompare(kb.name);
+  });
 
   return `<div class="file-table">${sorted.map(entry => {
-    const href = basePath + (basePath.endsWith('/') ? '' : '/') + entry.name;
-    const displayName = entry.name === '@' ? '@{: String}' : entry.name === '~' ? '#{: String}' : entry.name;
-    return `<div class="file-row" data-href="${href}">
-      <div class="file-icon">${fileIcon(entry.name, entry.isDirectory)}</div>
-      <div class="file-name">${displayName}</div>
-      <div class="file-modified">${entry.modified}</div>
-    </div>`;
+    if (isCompound(entry)) return renderCompoundEntry(entry, basePath);
+    return renderFileRow(entry, basePath);
   }).join('')}</div>`;
 }
 
@@ -533,7 +621,11 @@ function renderHeaderChain(
     const isLast = idx === chain.length - 1;
     const cls = isLast ? 'repo-name' : 'user';
     if (item.pathEnd >= 0) {
-      const href = buildBasePath(base, versions, path.slice(0, item.pathEnd)) || '/';
+      const sliced = path.slice(0, item.pathEnd);
+      for (const seg of path.slice(item.pathEnd)) {
+        if (seg === '*') sliced.push('*');
+      }
+      const href = buildBasePath(base, versions, sliced) || '/';
       html += `<a href="${href}" data-link class="${cls}">${item.label}</a>`;
     } else {
       html += `<span class="${cls}">${item.label}</span>`;
@@ -611,6 +703,18 @@ function mountIframe(container: HTMLElement, jsContent: string, canonicalPath: s
   return iframe;
 }
 
+function findReadmes(entries: TreeEntry[]): FileEntry[] {
+  const result: FileEntry[] = [];
+  for (const entry of entries) {
+    if (isCompound(entry)) {
+      result.push(...findReadmes(entry.entries));
+    } else if (entry.name === 'README.md' && !entry.isDirectory && entry.content) {
+      result.push(entry);
+    }
+  }
+  return result;
+}
+
 function renderRepo(): void {
   if (iframeCleanup) { iframeCleanup(); iframeCleanup = null; }
   if (!currentContainer || !currentRepoParams) return;
@@ -640,7 +744,6 @@ function renderRepo(): void {
     if (seg === '*') {
       // Wildcard — kept in path for URL generation, skip for tree resolution
       hasWildcard = true;
-      if (headerChain.length > 0) headerChain[headerChain.length - 1].pathEnd = i + 1;
       if (treePath.length === 0) {
         treePathStart = i + 1;
         userPathEnd = i + 1;
@@ -710,7 +813,7 @@ function renderRepo(): void {
     return;
   }
 
-  let entries: FileEntry[];
+  let entries: TreeEntry[];
 
   if (showUsersListing) {
     // Show referenced users as directory entries
@@ -751,8 +854,9 @@ function renderRepo(): void {
   }
 
   // ---- Check for index.ray.js (sandboxed iframe mode) ----
+  const flat = flattenEntries(entries);
   const indexRay = !showUsersListing && !showWorldsListing && !hasWildcard
-    ? entries.find(e => e.name === 'index.ray.js' && !e.isDirectory && e.content)
+    ? flat.find(e => e.name === 'index.ray.js' && !e.isDirectory && e.content)
     : null;
 
   if (indexRay) {
@@ -823,7 +927,7 @@ function renderRepo(): void {
   // File listing
   if (showUsersListing) {
     const usersBase = buildBasePath(base, versions, path.slice(0, -1));
-    html += `<div class="file-table">${entries.map(entry => {
+    html += `<div class="file-table">${(entries as FileEntry[]).map(entry => {
       const href = usersBase + '/@' + entry.name;
       return `<div class="file-row" data-href="${href}">
         <div class="file-icon">${fileIcon(entry.name, true)}</div>
@@ -833,7 +937,7 @@ function renderRepo(): void {
     }).join('')}</div>`;
   } else if (showWorldsListing) {
     const worldsBase = buildBasePath(base, versions, path.slice(0, -1));
-    html += `<div class="file-table">${entries.map(entry => {
+    html += `<div class="file-table">${(entries as FileEntry[]).map(entry => {
       const href = worldsBase + '/~' + entry.name;
       return `<div class="file-row" data-href="${href}">
         <div class="file-icon">${fileIcon(entry.name, true)}</div>
@@ -846,9 +950,9 @@ function renderRepo(): void {
   }
 
   // README — resolve relative links against current basePath
-  const readme = entries.find(e => e.name === 'README.md' && !e.isDirectory);
-  if (readme && readme.content) {
-    const readmeHtml = renderMarkdown(readme.content);
+  const readmes = findReadmes(entries);
+  if (readmes.length === 1) {
+    const readmeHtml = renderMarkdown(readmes[0].content!);
     const resolvedHtml = readmeHtml.replace(/href="(?!\/|https?:|#)([^"]+)"/g, (_m, rel) =>
       `href="${buildBasePath(base, versions, [...path, ...rel.split('/').filter(Boolean)])}"`
     );
@@ -856,6 +960,26 @@ function renderRepo(): void {
       <div class="readme-header">README.md</div>
       <div class="readme-body">${resolvedHtml}</div>
     </div>`;
+  } else if (readmes.length > 1) {
+    // Multiple READMEs — render as switchable tabs
+    const allSameName = readmes.every(r => r.name === readmes[0].name);
+    html += `<div class="readme-section">`;
+    html += `<div class="readme-tabs">`;
+    readmes.forEach((r, i) => {
+      const label = allSameName ? `${r.name} (${i + 1})` : r.name;
+      const activeClass = i === 0 ? ' active' : '';
+      html += `<button class="readme-tab${activeClass}" data-readme-tab="${i}">${label}</button>`;
+    });
+    html += `</div>`;
+    readmes.forEach((r, i) => {
+      const readmeHtml = renderMarkdown(r.content!);
+      const resolvedHtml = readmeHtml.replace(/href="(?!\/|https?:|#)([^"]+)"/g, (_m, rel) =>
+        `href="${buildBasePath(base, versions, [...path, ...rel.split('/').filter(Boolean)])}"`
+      );
+      const hiddenClass = i === 0 ? '' : ' hidden';
+      html += `<div class="readme-body${hiddenClass}" data-readme-body="${i}">${resolvedHtml}</div>`;
+    });
+    html += `</div>`;
   }
 
   html += `</div>`;

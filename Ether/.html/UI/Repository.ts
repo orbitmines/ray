@@ -7,12 +7,18 @@ import { renderMarkdown } from './Markdown.ts';
 import { fileIcon } from './FileIcons.ts';
 import { getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFiles, isCompound, flattenEntries } from './DummyData.ts';
 import type { FileEntry, CompoundEntry, TreeEntry, Repository } from './DummyData.ts';
+import { createIDELayout, generateId, ensureIdCounter, injectIDEStyles } from './IDELayout.ts';
+import type { IDELayoutAPI, PanelDefinition, LayoutNode, TabGroupNode, SplitNode } from './IDELayout.ts';
 
 let styleEl: HTMLStyleElement | null = null;
 let currentContainer: HTMLElement | null = null;
 let navigateFn: ((path: string) => void) | null = null;
 let iframeCleanup: (() => void) | null = null;
 let virtualScrollCleanup: (() => void) | null = null;
+let ideLayoutInstance: IDELayoutAPI | null = null;
+let currentFileViewEntries: TreeEntry[] | null = null;     // entries used in current file-view (for hash fast path)
+let currentFileViewBasePath: string | null = null;          // sidebar base path for current file-view
+let currentMakeFilePanel: ((panelId: string, name: string, files: FileEntry[]) => PanelDefinition) | null = null;
 const sidebarExpanded = new Set<string>();  // tracks manually expanded/collapsed dirs
 
 // ---- Session persistence (Session.ray.json) ----
@@ -51,13 +57,67 @@ function getSessionContent(user: string): string {
   return JSON.stringify(session, null, 2);
 }
 
+// ---- IDE layout session helpers ----
+
+function collectPanelIds(node: LayoutNode): string[] {
+  if (node.type === 'tabgroup') return [...node.panels];
+  const ids: string[] = [];
+  for (const child of node.children) ids.push(...collectPanelIds(child));
+  return ids;
+}
+
+/** Strip panels from saved layout that are not in validIds. Returns null if empty. */
+function filterLayoutPanels(node: LayoutNode, validIds: Set<string>): LayoutNode | null {
+  if (node.type === 'tabgroup') {
+    const filtered = node.panels.filter(id => validIds.has(id));
+    if (filtered.length === 0) return null;
+    return { ...node, panels: filtered, activeIndex: Math.min(node.activeIndex, filtered.length - 1) };
+  }
+  const children: LayoutNode[] = [];
+  const sizes: number[] = [];
+  for (let i = 0; i < node.children.length; i++) {
+    const result = filterLayoutPanels(node.children[i], validIds);
+    if (result) { children.push(result); sizes.push(node.sizes[i]); }
+  }
+  if (children.length === 0) return null;
+  if (children.length === 1) return children[0];
+  const sizeSum = sizes.reduce((a, b) => a + b, 0);
+  return { ...node, children, sizes: sizes.map(s => s / sizeSum) };
+}
+
+/** Find the max numeric suffix from ide-N IDs in a layout tree */
+function maxIdInLayout(node: LayoutNode): number {
+  let max = 0;
+  const m = node.id.match(/^ide-(\d+)$/);
+  if (m) max = Math.max(max, parseInt(m[1], 10));
+  if (node.type === 'split') {
+    for (const child of node.children) max = Math.max(max, maxIdInLayout(child));
+  }
+  return max;
+}
+
+let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+function saveIDESession(user: string, sidebarBasePath: string): void {
+  if (!ideLayoutInstance) return;
+  // Debounce to avoid thrashing localStorage during rapid resize
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    if (!ideLayoutInstance) return;
+    const session = loadSession(user);
+    session.ideLayout = ideLayoutInstance.getLayout();
+    session.ideLayoutBase = sidebarBasePath;
+    saveSession(user, session);
+  }, 300);
+}
+
 // File viewer constants
 const LINE_HEIGHT = 20;
 const VIRTUAL_THRESHOLD = 500;
 const BUFFER_LINES = 50;
 
 // Current state
-let currentRepoParams: { user: string; path: string[]; versions: [number, string][]; base: string } | null = null;
+let currentRepoParams: { user: string; path: string[]; versions: [number, string][]; base: string; hash: string | null } | null = null;
 
 function injectStyles(): void {
   if (styleEl) return;
@@ -545,25 +605,7 @@ function injectStyles(): void {
       padding-right: 24px;
     }
 
-    /* ---- File viewer ---- */
-    .file-view-layout {
-      display: flex;
-      border-top: 1px solid rgba(255,255,255,0.1);
-      border-left: 1px solid rgba(255,255,255,0.1);
-      min-height: calc(100vh - 140px);
-    }
-    .file-view-sidebar {
-      width: 220px;
-      flex-shrink: 0;
-      border-right: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.01);
-    }
-    .file-view-sidebar-inner {
-      position: sticky;
-      top: 0;
-      max-height: 100vh;
-      overflow-y: auto;
-    }
+    /* ---- File viewer (sidebar entries used inside IDE layout panels) ---- */
     .file-view-sidebar-entry {
       display: flex;
       align-items: center;
@@ -935,11 +977,47 @@ function buildBasePath(base: string, versions: [number, string][], path: string[
   return result;
 }
 
+// ---- Display name helper ----
+// parentContext: null = normal, '@' = inside @{: String}, '~' = inside #{: String}
+type ParentContext = '@' | '~' | null;
+
+function displayEntryName(name: string, parentContext: ParentContext = null): string {
+  if (name === '@') return '@{: String}';
+  if (name === '~') return '#{: String}';
+  if (parentContext === '@') return `@${name}`;
+  if (parentContext === '~') return `#${name}`;
+  return name;
+}
+
+/** Build href for an entry. Children of @ get /@name, children of ~ get /~name (no extra separator). */
+function buildEntryHref(basePath: string, name: string, parentContext: ParentContext = null): string {
+  if (parentContext === '@') {
+    // basePath ends with /@ — strip it and append /@name
+    const parent = basePath.replace(/\/@$/, '');
+    return parent + '/@' + name;
+  }
+  if (parentContext === '~') {
+    const parent = basePath.replace(/\/~$/, '');
+    return parent + '/~' + name;
+  }
+  return basePath + (basePath.endsWith('/') ? '' : '/') + name;
+}
+
+// ---- Hash-relative path helper ----
+
+function computeRelativeHash(sidebarBase: string, fullHref: string): string {
+  const prefix = sidebarBase.endsWith('/') ? sidebarBase : sidebarBase + '/';
+  if (fullHref.startsWith(prefix)) return fullHref.slice(prefix.length);
+  return fullHref;
+}
+
 // ---- Repository File View ----
 
-function renderFileRow(entry: FileEntry, basePath: string, compoundSize?: number): string {
-  const href = basePath + (basePath.endsWith('/') ? '' : '/') + entry.name;
-  const displayName = entry.name === '@' ? '@{: String}' : entry.name === '~' ? '#{: String}' : entry.name;
+function renderFileRow(entry: FileEntry, basePath: string, compoundSize?: number, parentContext: ParentContext = null): string {
+  const href = entry.isDirectory
+    ? buildEntryHref(basePath, entry.name, parentContext)
+    : basePath + '#' + entry.name;  // files use hash
+  const displayName = displayEntryName(entry.name, parentContext);
   const countBadge = compoundSize ? ` <span class="compound-count">(${compoundSize})</span>` : '';
   return `<div class="file-row" data-href="${href}">
     <div class="file-icon">${fileIcon(entry.name, entry.isDirectory)}</div>
@@ -1117,8 +1195,28 @@ function buildBreadcrumbItems(
   treePath: string[],
   headerChain: { label: string; pathEnd: number }[],
   base: string, versions: [number, string][], path: string[], treePathStart: number,
+  repoTree?: TreeEntry[],
 ): { rootLink?: { label: string; href: string }; items: BreadcrumbItem[] } {
   if (treePath.length === 0) return { items: [] };
+
+  // Check if treePath[0] is a top-level directory in the repo tree
+  const isTopDir = repoTree
+    ? flattenEntries(repoTree).some(e => e.name === treePath[0] && e.isDirectory)
+    : true;
+
+  if (!isTopDir && treePath.length === 1) {
+    // Top-level file — use the user/world as root link, file as item
+    const parentEntry = headerChain.length >= 2
+      ? headerChain[headerChain.length - 2]
+      : headerChain[headerChain.length - 1];
+    const rootLabel = parentEntry?.label || '';
+    const rootHref = buildPathPreservingWildcards(base, versions, path, treePathStart);
+    return {
+      rootLink: { label: rootLabel, href: rootHref },
+      items: [{ label: treePath[0], href: null }],
+    };
+  }
+
   const rootLabel = treePath[0] || headerChain[headerChain.length - 1]?.label || '';
   const rootHref = buildPathPreservingWildcards(base, versions, path, treePathStart + 1);
   const subPath = treePath.slice(1);
@@ -1183,6 +1281,34 @@ function renderHeaderChain(
   });
   html += `</div>`;
   return html;
+}
+
+/** Compute the star path: the first top-level directory (library) if treePath[0] is one, otherwise the user/world root. */
+function buildRootStarPath(
+  repository: { tree: TreeEntry[] },
+  effectiveUser: string, effectiveWorld: string | null, treePath: string[],
+  user: string, base: string,
+): string {
+  // If treePath[0] is a top-level directory in the repo tree, star that library
+  if (treePath.length > 0) {
+    const flat = flattenEntries(repository.tree);
+    const isTopDir = flat.some(e => e.name === treePath[0] && e.isDirectory);
+    if (isTopDir) {
+      let p = buildCanonicalPath(effectiveUser, effectiveWorld, treePath.slice(0, 1));
+      if (!base) {
+        const prefix = `@${user}/`;
+        if (p.startsWith(prefix)) p = p.slice(prefix.length);
+      }
+      return p;
+    }
+  }
+  // Otherwise star the user/world root
+  let p = buildCanonicalPath(effectiveUser, effectiveWorld, []);
+  if (!base) {
+    const prefix = `@${user}/`;
+    if (p.startsWith(prefix)) p = p.slice(prefix.length);
+  }
+  return p;
 }
 
 function buildCanonicalPath(user: string, world: string | null, treePath: string[]): string {
@@ -1333,7 +1459,7 @@ function renderFileViewContent(files: FileEntry[]): string {
   return html;
 }
 
-function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: string[], depth: number): string {
+function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: string[], depth: number, parentContext: ParentContext = null): string {
   const flat = flattenEntries(entries);
   const sorted = [...flat].sort((a, b) => {
     if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
@@ -1349,7 +1475,10 @@ function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: s
   const pad = 8 + depth * 16;
   let html = '';
   for (const entry of deduped) {
-    const href = basePath + (basePath.endsWith('/') ? '' : '/') + entry.name;
+    const href = buildEntryHref(basePath, entry.name, parentContext);
+    const name = escapeHtml(displayEntryName(entry.name, parentContext));
+    // Determine context for children of this entry
+    const childContext: ParentContext = entry.name === '@' ? '@' : entry.name === '~' ? '~' : null;
     if (entry.isDirectory) {
       const isOnPath = expandPath.length > 0 && expandPath[0] === entry.name;
       if (isOnPath) sidebarExpanded.add(href);
@@ -1359,11 +1488,11 @@ function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: s
       html += `<div class="sidebar-dir-header" style="padding-left:${pad}px" data-sidebar-toggle data-sidebar-href="${href}" data-sidebar-key="${href}">`;
       html += `<span class="sidebar-arrow">${isExpanded ? '▾' : '▸'}</span>`;
       html += fileIcon(entry.name, true);
-      html += `<span>${escapeHtml(entry.name)}</span>`;
+      html += `<span>${name}</span>`;
       html += `</div>`;
       if (children.length > 0) {
         html += `<div class="sidebar-dir-children${isExpanded ? '' : ' hidden'}">`;
-        html += renderSidebarTree(children, href, isOnPath ? expandPath.slice(1) : [], depth + 1);
+        html += renderSidebarTree(children, href, isOnPath ? expandPath.slice(1) : [], depth + 1, childContext);
         html += `</div>`;
       }
       html += `</div>`;
@@ -1379,43 +1508,21 @@ function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: s
         html += `<div class="file-view-sidebar-entry${isActive ? ' active' : ''}" style="padding-left:${pad}px" data-href="${href}">`;
         html += `<span class="sidebar-arrow" data-sidebar-toggle-arrow data-sidebar-key="${href}">${isExpanded ? '▾' : '▸'}</span>`;
         html += fileIcon(entry.name, false);
-        html += `<span>${escapeHtml(entry.name)}</span>`;
+        html += `<span>${name}</span>`;
         html += `</div>`;
         html += `<div class="sidebar-dir-children${isExpanded ? '' : ' hidden'}">`;
-        html += renderSidebarTree(fileChildren, href, isOnPath ? expandPath.slice(1) : [], depth + 1);
+        html += renderSidebarTree(fileChildren, href, isOnPath ? expandPath.slice(1) : [], depth + 1, childContext);
         html += `</div>`;
         html += `</div>`;
       } else {
         html += `<div class="file-view-sidebar-entry${isActive ? ' active' : ''}" style="padding-left:${pad}px" data-href="${href}">`;
         html += `<span class="sidebar-arrow-spacer"></span>`;
         html += fileIcon(entry.name, false);
-        html += `<span>${escapeHtml(entry.name)}</span>`;
+        html += `<span>${name}</span>`;
         html += `</div>`;
       }
     }
   }
-  return html;
-}
-
-function renderFileViewSidebar(topEntries: TreeEntry[], topBasePath: string, pathFromTop: string[]): string {
-  let html = `<div class="file-view-sidebar">`;
-  html += `<div class="file-view-sidebar-inner">`;
-  html += renderSidebarTree(topEntries, topBasePath, pathFromTop, 0);
-  html += `</div></div>`;
-  return html;
-}
-
-function renderFileView(files: FileEntry[], topEntries: TreeEntry[], topBasePath: string, pathFromTop: string[], basePath: string): string {
-  let html = '';
-
-  // Two-column layout: sidebar + content
-  html += `<div class="file-view-layout">`;
-  html += renderFileViewSidebar(topEntries, topBasePath, pathFromTop);
-  html += `<div class="file-view-content">`;
-  html += renderFileViewContent(files);
-  html += `</div>`;
-  html += `</div>`;
-
   return html;
 }
 
@@ -1530,10 +1637,15 @@ function initVirtualScroll(container: HTMLElement, files: FileEntry[]): void {
 }
 
 function renderRepo(): void {
+  if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+  if (ideLayoutInstance) { ideLayoutInstance.unmount(); ideLayoutInstance = null; }
+  currentFileViewEntries = null;
+  currentFileViewBasePath = null;
+  currentMakeFilePanel = null;
   if (iframeCleanup) { iframeCleanup(); iframeCleanup = null; }
   if (virtualScrollCleanup) { virtualScrollCleanup(); virtualScrollCleanup = null; }
   if (!currentContainer || !currentRepoParams) return;
-  const { user, path, versions, base } = currentRepoParams;
+  const { user, path, versions, base, hash } = currentRepoParams;
 
   // ---- Process @/~ references to resolve effective user/world and tree path ----
   let effectiveUser = user;
@@ -1657,90 +1769,56 @@ function renderRepo(): void {
       : repository.tree;
 
     if (!resolved) {
-      // Augment tree root with virtual entries for file resolution
-      let resolveTree = repository.tree;
-      if (treePath.length === 1) {
+      if (!hash && treePath.length > 0 && navigateFn) {
+        // Backward-compat: redirect file-in-pathname to hash-based URL
+        // Augment tree root with virtual entries for resolution
+        let resolveTree: TreeEntry[] = repository.tree;
         const virtuals: TreeEntry[] = [];
-        if (getReferencedUsers(effectiveUser, effectiveWorld).length > 0)
-          virtuals.push({ name: '@', isDirectory: true, modified: '' } as FileEntry);
-        if (getReferencedWorlds(effectiveUser, effectiveWorld).length > 0)
-          virtuals.push({ name: '~', isDirectory: true, modified: '' } as FileEntry);
+        const refUsers = getReferencedUsers(effectiveUser, effectiveWorld);
+        if (refUsers.length > 0) {
+          const userChildren: FileEntry[] = (refUsers.includes(currentPlayer) ? refUsers : [currentPlayer, ...refUsers])
+            .map(u => {
+              const repo = getRepository(u);
+              return { name: u, isDirectory: true, modified: '', children: repo ? [...repo.tree] : [] } as FileEntry;
+            });
+          virtuals.push({ name: '@', isDirectory: true, modified: '', children: userChildren } as FileEntry);
+        }
+        const refWorlds = getReferencedWorlds(effectiveUser, effectiveWorld);
+        if (refWorlds.length > 0) {
+          const worldChildren: FileEntry[] = refWorlds.map(w => {
+            const worldRepo = getWorld(worldParentKey, w);
+            return { name: w, isDirectory: true, modified: '', children: worldRepo ? [...worldRepo.tree] : [] } as FileEntry;
+          });
+          virtuals.push({ name: '~', isDirectory: true, modified: '', children: worldChildren } as FileEntry);
+        }
         if (effectiveUser === currentPlayer && !effectiveWorld) {
           const stars = getStars();
           virtuals.push({ name: '.stars.list.ray', isDirectory: false, modified: '', content: stars.length > 0 ? stars.join('\n') : '' } as FileEntry);
           virtuals.push({ name: 'Session.ray.json', isDirectory: false, modified: '', content: getSessionContent(currentPlayer) } as FileEntry);
         }
-        resolveTree = [...virtuals, ...repository.tree];
-      }
+        if (virtuals.length > 0) resolveTree = [...virtuals, ...repository.tree];
 
-      const files = treePath.length > 0 ? resolveFiles(resolveTree, treePath) : [];
-
-      // ---- Build URLs ----
-      const basePath = buildBasePath(base, versions, path);
-      const displayVersion = versions.length > 0 ? versions[versions.length - 1][1] : 'latest';
-
-      let clonePath = buildCanonicalPath(effectiveUser, effectiveWorld, treePath);
-      if (!base) {
-        const prefix = `@${user}/`;
-        if (clonePath.startsWith(prefix)) clonePath = clonePath.slice(prefix.length);
-      }
-
-      // Sidebar: show tree from library root (first dir in treePath) down
-      let sidebarEntries: TreeEntry[];
-      let sidebarBasePath: string;
-      let sidebarExpandPath: string[];
-      if (treePath.length > 1) {
-        const libEntries = resolveDirectory(resolveTree, treePath.slice(0, 1));
-        if (libEntries) {
-          sidebarEntries = libEntries;
-          sidebarBasePath = buildBasePath(base, versions, path.slice(0, treePathStart + 1));
-          sidebarExpandPath = treePath.slice(1);
-        } else {
-          sidebarEntries = resolveTree;
-          sidebarBasePath = buildBasePath(base, versions, path.slice(0, treePathStart));
-          sidebarExpandPath = treePath;
+        const files = resolveFiles(resolveTree, treePath);
+        if (files.length > 0) {
+          // Find deepest directory prefix in treePath
+          let dirDepth = treePath.length - 1;
+          while (dirDepth > 0 && !resolveDirectory(resolveTree, treePath.slice(0, dirDepth))) {
+            dirDepth--;
+          }
+          const dirPart = treePath.slice(0, dirDepth);
+          const filePart = treePath.slice(dirDepth);
+          const parentUrl = buildBasePath(base, versions, [...path.slice(0, treePathStart), ...dirPart]);
+          navigateFn(parentUrl + '#' + filePart.join('/'));
+          return;
         }
-      } else {
-        // File at tree root level
-        sidebarEntries = resolveTree;
-        sidebarBasePath = buildBasePath(base, versions, path.slice(0, treePathStart));
-        sidebarExpandPath = treePath;
       }
-
-      let html = `<div class="repo-page file-view-mode">`;
-      html += `<div class="file-view-top">`;
-      html += renderHeaderChain(headerChain, base, versions, path);
-      html += `<div class="repo-description">${repository.description}</div>`;
-
-      const { rootLink, items: breadcrumbItems } = buildBreadcrumbItems(treePath, headerChain, base, versions, path, treePathStart);
-      let rootStarPath = buildCanonicalPath(effectiveUser, effectiveWorld, treePath.slice(0, 1));
-      if (!base) {
-        const starPrefix = `@${user}/`;
-        if (rootStarPath.startsWith(starPrefix)) rootStarPath = rootStarPath.slice(starPrefix.length);
-      }
-      html += renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
-      html += `</div>`;
-
-      if (files.length > 0) {
-        // File view
-        html += renderFileView(files, sidebarEntries, sidebarBasePath, sidebarExpandPath, basePath);
-      } else {
-        // 404 inside file editor layout — user can still navigate via sidebar
-        html += `<div class="file-view-layout">`;
-        html += renderFileViewSidebar(sidebarEntries, sidebarBasePath, sidebarExpandPath);
-        html += `<div class="file-view-content">`;
-        html += `<div class="file-view-header"><span>${escapeHtml(treePath[treePath.length - 1] || '')}</span></div>`;
-        html += `<div class="file-no-content"><div style="text-align:center"><div class="code" style="font-size:48px;color:rgba(255,255,255,0.12);margin-bottom:12px;">404</div><div>Path not found</div></div></div>`;
-        html += `</div></div>`;
-      }
-
-      html += `</div>`;
-      currentContainer.innerHTML = html;
-      bindClickHandlers();
-
-      if (files.length > 0) {
-        initVirtualScroll(currentContainer, files);
-      }
+      // 404 — directory not found
+      currentContainer.innerHTML = `<div class="repo-page">
+        <div class="repo-404">
+          <div class="code">404</div>
+          Path not found
+        </div>
+      </div>`;
       return;
     }
 
@@ -1749,10 +1827,23 @@ function renderRepo(): void {
     // At tree root, inject virtual @/~ entries if there are referenced users/worlds
     if (treePath.length === 0) {
       const virtuals: FileEntry[] = [];
-      if (getReferencedUsers(effectiveUser, effectiveWorld).length > 0)
-        virtuals.push({ name: '@', isDirectory: true, modified: '' });
-      if (getReferencedWorlds(effectiveUser, effectiveWorld).length > 0)
-        virtuals.push({ name: '~', isDirectory: true, modified: '' });
+      const refUsers = getReferencedUsers(effectiveUser, effectiveWorld);
+      if (refUsers.length > 0) {
+        const userChildren: FileEntry[] = (refUsers.includes(currentPlayer) ? refUsers : [currentPlayer, ...refUsers])
+          .map(u => {
+            const repo = getRepository(u);
+            return { name: u, isDirectory: true, modified: '', children: repo ? [...repo.tree] : [] } as FileEntry;
+          });
+        virtuals.push({ name: '@', isDirectory: true, modified: '', children: userChildren });
+      }
+      const refWorlds = getReferencedWorlds(effectiveUser, effectiveWorld);
+      if (refWorlds.length > 0) {
+        const worldChildren: FileEntry[] = refWorlds.map(w => {
+          const worldRepo = getWorld(worldParentKey, w);
+          return { name: w, isDirectory: true, modified: '', children: worldRepo ? [...worldRepo.tree] : [] } as FileEntry;
+        });
+        virtuals.push({ name: '~', isDirectory: true, modified: '', children: worldChildren });
+      }
       // Inject .stars.list.ray and Session.ray.json for the current player
       if (effectiveUser === currentPlayer && !effectiveWorld) {
         const stars = getStars();
@@ -1761,6 +1852,252 @@ function renderRepo(): void {
         virtuals.push({ name: 'Session.ray.json', isDirectory: false, modified: '', content: getSessionContent(currentPlayer) });
       }
       entries = [...virtuals, ...entries];
+    }
+  }
+
+  // ---- Hash-based file view ----
+  if (hash) {
+    const hashPath = hash.split('/').filter(Boolean);
+    if (hashPath.length > 0) {
+      const files = resolveFiles(entries, hashPath);
+      const basePath = buildBasePath(base, versions, path);
+      const displayVersion = versions.length > 0 ? versions[versions.length - 1][1] : 'latest';
+
+      let clonePath = buildCanonicalPath(effectiveUser, effectiveWorld, [...treePath, ...hashPath]);
+      if (!base) {
+        const prefix = `@${user}/`;
+        if (clonePath.startsWith(prefix)) clonePath = clonePath.slice(prefix.length);
+      }
+
+      const sidebarEntries = entries;
+      const sidebarBasePath = basePath;
+      const sidebarExpandPath = hashPath;
+
+      let html = `<div class="repo-page file-view-mode">`;
+      html += `<div class="file-view-top">`;
+      html += renderHeaderChain(headerChain, base, versions, path);
+      html += `<div class="repo-description">${repository.description}</div>`;
+
+      const { rootLink, items: breadcrumbItems } = buildBreadcrumbItems(treePath, headerChain, base, versions, path, treePathStart, repository.tree);
+      const rootStarPath = buildRootStarPath(repository, effectiveUser, effectiveWorld, treePath, user, base);
+      html += renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
+      html += `</div>`;
+
+      html += `<div class="ide-layout-mount" style="min-height:calc(100vh - 140px);"></div>`;
+      html += `</div>`;
+      currentContainer.innerHTML = html;
+      bindClickHandlers();
+
+      // Mount IDE layout into the placeholder
+      const layoutMount = currentContainer.querySelector('.ide-layout-mount') as HTMLElement;
+      if (layoutMount) {
+        const FOLDER_SVG = fileIcon('folder', true);
+        const fileName = hashPath[hashPath.length - 1] || '';
+
+        // Helper: create a file panel definition from resolved files
+        function makeFilePanel(panelId: string, name: string, panelFiles: FileEntry[]): PanelDefinition {
+          return {
+            id: panelId,
+            title: name || '404',
+            icon: panelFiles.length > 0 ? fileIcon(name, false) : '',
+            closable: true,
+            render: (el) => {
+              if (panelFiles.length > 0) {
+                el.innerHTML = `<div class="file-view-content">${renderFileViewContent(panelFiles)}</div>`;
+                el.querySelectorAll('[data-file-tab]').forEach(tab => {
+                  tab.addEventListener('click', () => {
+                    const idx = (tab as HTMLElement).dataset.fileTab!;
+                    el.querySelectorAll('[data-file-tab]').forEach(t => t.classList.remove('active'));
+                    el.querySelectorAll('[data-file-body]').forEach(b => b.classList.add('hidden'));
+                    tab.classList.add('active');
+                    const body = el.querySelector(`[data-file-body="${idx}"]`);
+                    if (body) body.classList.remove('hidden');
+                    const scrollEl = body?.querySelector('[data-virtual-scroll]') as HTMLElement | null;
+                    if (scrollEl) scrollEl.dispatchEvent(new Event('scroll'));
+                  });
+                });
+                initVirtualScroll(el, panelFiles);
+                return () => {
+                  if (virtualScrollCleanup) { virtualScrollCleanup(); virtualScrollCleanup = null; }
+                };
+              } else {
+                el.innerHTML = `<div class="file-view-content">
+                  <div class="file-view-header"><span>${escapeHtml(name)}</span></div>
+                  <div class="file-no-content"><div style="text-align:center"><div class="code" style="font-size:48px;color:rgba(255,255,255,0.12);margin-bottom:12px;">404</div><div>Path not found</div></div></div>
+                </div>`;
+              }
+            },
+          };
+        }
+
+        // Bind sidebar tree expand/collapse handlers
+        function bindSidebarTreeHandlers(el: HTMLElement): void {
+          el.querySelectorAll('[data-sidebar-toggle]').forEach(toggle => {
+            toggle.addEventListener('click', (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              const dirEl = toggle.closest('.sidebar-dir')!;
+              const children = dirEl.querySelector(':scope > .sidebar-dir-children');
+              if (!children) {
+                const href = (toggle as HTMLElement).dataset.sidebarHref;
+                if (href && navigateFn) navigateFn(href);
+                return;
+              }
+              const isExpanded = !children.classList.contains('hidden');
+              children.classList.toggle('hidden');
+              const arrow = toggle.querySelector('.sidebar-arrow');
+              if (arrow) arrow.textContent = isExpanded ? '▸' : '▾';
+              const key = (toggle as HTMLElement).dataset.sidebarKey;
+              if (key) {
+                if (isExpanded) sidebarExpanded.delete(key); else sidebarExpanded.add(key);
+                const u = localStorage.getItem('ether:name') || 'anonymous';
+                saveSidebarExpanded(u);
+              }
+            });
+          });
+          el.querySelectorAll('[data-sidebar-toggle-arrow]').forEach(arrow => {
+            arrow.addEventListener('click', (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              const dirEl = arrow.closest('.sidebar-dir')!;
+              const children = dirEl.querySelector(':scope > .sidebar-dir-children');
+              if (!children) return;
+              const isExpanded = !children.classList.contains('hidden');
+              children.classList.toggle('hidden');
+              arrow.textContent = isExpanded ? '▸' : '▾';
+              const key = (arrow as HTMLElement).dataset.sidebarKey;
+              if (key) {
+                if (isExpanded) sidebarExpanded.delete(key); else sidebarExpanded.add(key);
+                const u = localStorage.getItem('ether:name') || 'anonymous';
+                saveSidebarExpanded(u);
+              }
+            });
+          });
+        }
+
+        const initialFilePanelId = 'file:' + hash;
+
+        const sidebarPanel: PanelDefinition = {
+          id: 'sidebar',
+          title: 'Explorer',
+          icon: FOLDER_SVG,
+          closable: false,
+          sticky: true,
+          render: (el) => {
+            el.innerHTML = renderSidebarTree(sidebarEntries, sidebarBasePath, sidebarExpandPath, 0);
+            // File clicks → open as new tab
+            el.querySelectorAll('[data-href]').forEach(entry => {
+              entry.addEventListener('click', (e) => {
+                e.preventDefault();
+                const href = (entry as HTMLElement).dataset.href!;
+                if (ideLayoutInstance) {
+                  const prefix = sidebarBasePath.endsWith('/') ? sidebarBasePath : sidebarBasePath + '/';
+                  const relPath = href.startsWith(prefix)
+                    ? href.slice(prefix.length).split('/').filter(Boolean)
+                    : null;
+                  if (relPath && relPath.length > 0) {
+                    const resolved = resolveFiles(sidebarEntries, relPath);
+                    if (resolved.length > 0) {
+                      const relHash = computeRelativeHash(sidebarBasePath, href);
+                      const panelId = 'file:' + relHash;
+                      const name = relPath[relPath.length - 1];
+                      history.replaceState(null, '', location.pathname + '#' + relHash);
+                      ideLayoutInstance.openPanel(makeFilePanel(panelId, name, resolved));
+                      return;
+                    }
+                  }
+                }
+                // Fallback: full navigation (directories, unresolved paths)
+                if (navigateFn) navigateFn(href);
+              });
+            });
+            bindSidebarTreeHandlers(el);
+          },
+        };
+
+        const filePanel = makeFilePanel(initialFilePanelId, fileName, files);
+
+        // Try restoring layout from session
+        const currentUser = localStorage.getItem('ether:name') || 'anonymous';
+        const session = loadSession(currentUser);
+        let initialLayout: LayoutNode;
+        const allPanels: PanelDefinition[] = [sidebarPanel, filePanel];
+
+        if (session.ideLayout && session.ideLayoutBase === sidebarBasePath) {
+          // Restore saved layout — resolve extra file panels from saved IDs
+          const savedLayout = session.ideLayout as LayoutNode;
+          const savedPanelIds = collectPanelIds(savedLayout);
+          const validIds = new Set<string>(['sidebar', initialFilePanelId]);
+
+          for (const pid of savedPanelIds) {
+            if (pid === 'sidebar' || pid === initialFilePanelId) continue;
+            if (pid.startsWith('file:')) {
+              const hashRel = pid.slice(5);
+              const relPath = hashRel.split('/').filter(Boolean);
+              if (relPath.length > 0) {
+                const resolved = resolveFiles(sidebarEntries, relPath);
+                if (resolved.length > 0) {
+                  const name = relPath[relPath.length - 1];
+                  allPanels.push(makeFilePanel(pid, name, resolved));
+                  validIds.add(pid);
+                }
+              }
+            }
+          }
+
+          const filtered = filterLayoutPanels(savedLayout, validIds);
+          if (filtered) {
+            initialLayout = filtered;
+            ensureIdCounter(maxIdInLayout(initialLayout));
+          } else {
+            const sidebarGroupId = generateId();
+            const fileGroupId = generateId();
+            initialLayout = {
+              type: 'split', id: generateId(), direction: 'horizontal',
+              children: [
+                { type: 'tabgroup', id: sidebarGroupId, panels: ['sidebar'], activeIndex: 0 },
+                { type: 'tabgroup', id: fileGroupId, panels: [initialFilePanelId], activeIndex: 0 },
+              ],
+              sizes: [0.2, 0.8],
+            };
+          }
+        } else {
+          const sidebarGroupId = generateId();
+          const fileGroupId = generateId();
+          initialLayout = {
+            type: 'split', id: generateId(), direction: 'horizontal',
+            children: [
+              { type: 'tabgroup', id: sidebarGroupId, panels: ['sidebar'], activeIndex: 0 },
+              { type: 'tabgroup', id: fileGroupId, panels: [initialFilePanelId], activeIndex: 0 },
+            ],
+            sizes: [0.2, 0.8],
+          };
+        }
+
+        ideLayoutInstance = createIDELayout(layoutMount, {
+          panels: allPanels,
+          initialLayout,
+          onNavigate: navigateFn || undefined,
+          onActiveTabChange: (panelId) => {
+            if (panelId.startsWith('file:')) {
+              const relHash = panelId.slice(5);
+              const target = location.pathname + '#' + relHash;
+              if (location.pathname + location.hash !== target) {
+                history.replaceState(null, '', target);
+              }
+            }
+            saveIDESession(currentUser, sidebarBasePath);
+          },
+          onLayoutChange: () => {
+            saveIDESession(currentUser, sidebarBasePath);
+          },
+        });
+        // Store for hash fast-path in update()
+        currentFileViewEntries = sidebarEntries;
+        currentFileViewBasePath = sidebarBasePath;
+        currentMakeFilePanel = makeFilePanel;
+      }
+      return;
     }
   }
 
@@ -1830,32 +2167,28 @@ function renderRepo(): void {
   html += renderHeaderChain(headerChain, base, versions, path);
   html += `<div class="repo-description">${repository.description}</div>`;
 
-  const { rootLink, items: breadcrumbItems } = buildBreadcrumbItems(treePath, headerChain, base, versions, path, treePathStart);
-  let rootStarPath = buildCanonicalPath(effectiveUser, effectiveWorld, treePath.slice(0, 1));
-  if (!base) {
-    const starPrefix = `@${user}/`;
-    if (rootStarPath.startsWith(starPrefix)) rootStarPath = rootStarPath.slice(starPrefix.length);
-  }
+  const { rootLink, items: breadcrumbItems } = buildBreadcrumbItems(treePath, headerChain, base, versions, path, treePathStart, repository.tree);
+  const rootStarPath = buildRootStarPath(repository, effectiveUser, effectiveWorld, treePath, user, base);
   html += renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
 
   // File listing
   if (showUsersListing) {
     const usersBase = buildBasePath(base, versions, path.slice(0, -1));
     html += `<div class="file-table">${(entries as FileEntry[]).map(entry => {
-      const href = usersBase + '/@' + entry.name;
+      const href = buildEntryHref(usersBase + '/@', entry.name, '@');
       return `<div class="file-row" data-href="${href}">
         <div class="file-icon">${fileIcon(entry.name, true)}</div>
-        <div class="file-name">@${entry.name}</div>
+        <div class="file-name">${displayEntryName(entry.name, '@')}</div>
         <div class="file-modified">${entry.modified}</div>
       </div>`;
     }).join('')}</div>`;
   } else if (showWorldsListing) {
     const worldsBase = buildBasePath(base, versions, path.slice(0, -1));
     html += `<div class="file-table">${(entries as FileEntry[]).map(entry => {
-      const href = worldsBase + '/~' + entry.name;
+      const href = buildEntryHref(worldsBase + '/~', entry.name, '~');
       return `<div class="file-row" data-href="${href}">
         <div class="file-icon">${fileIcon(entry.name, true)}</div>
-        <div class="file-name">#${entry.name}</div>
+        <div class="file-name">${displayEntryName(entry.name, '~')}</div>
         <div class="file-modified">${entry.modified}</div>
       </div>`;
     }).join('')}</div>`;
@@ -1905,7 +2238,7 @@ function renderRepo(): void {
 
 export function mount(
   container: HTMLElement,
-  params: { user: string; path: string[]; versions: [number, string][]; base: string },
+  params: { user: string; path: string[]; versions: [number, string][]; base: string; hash: string | null },
   navigate: (path: string) => void,
 ): void {
   injectStyles();
@@ -1916,12 +2249,39 @@ export function mount(
   renderRepo();
 }
 
-export function update(params: { user: string; path: string[]; versions: [number, string][]; base: string }): void {
+export function update(params: { user: string; path: string[]; versions: [number, string][]; base: string; hash: string | null }): void {
+  const prev = currentRepoParams;
   currentRepoParams = params;
+
+  // Fast path: only hash changed while IDE layout is active
+  if (prev && ideLayoutInstance && currentFileViewEntries && currentMakeFilePanel &&
+      params.user === prev.user &&
+      params.base === prev.base &&
+      params.hash !== prev.hash &&
+      params.path.length === prev.path.length &&
+      params.path.every((s, i) => s === prev.path[i]) &&
+      params.versions.length === prev.versions.length &&
+      params.versions.every(([d, v], i) => d === prev.versions[i][0] && v === prev.versions[i][1])) {
+    if (params.hash) {
+      const hashPath = params.hash.split('/').filter(Boolean);
+      if (hashPath.length > 0) {
+        const files = resolveFiles(currentFileViewEntries, hashPath);
+        const relHash = params.hash;
+        const panelId = 'file:' + relHash;
+        const name = hashPath[hashPath.length - 1];
+        ideLayoutInstance.openPanel(currentMakeFilePanel(panelId, name, files));
+        return;
+      }
+    }
+    // Hash cleared — fall through to full re-render (back to directory listing)
+  }
+
   renderRepo();
 }
 
 export function unmount(): void {
+  if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+  if (ideLayoutInstance) { ideLayoutInstance.unmount(); ideLayoutInstance = null; }
   if (iframeCleanup) { iframeCleanup(); iframeCleanup = null; }
   if (virtualScrollCleanup) { virtualScrollCleanup(); virtualScrollCleanup = null; }
   sidebarExpanded.clear();
@@ -1930,5 +2290,8 @@ export function unmount(): void {
     currentContainer = null;
   }
   currentRepoParams = null;
+  currentFileViewEntries = null;
+  currentFileViewBasePath = null;
+  currentMakeFilePanel = null;
   navigateFn = null;
 }

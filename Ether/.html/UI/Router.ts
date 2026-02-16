@@ -20,6 +20,7 @@ interface RepoParams {
   path: string[];
   versions: [number, string][];  // [depth, version] pairs — e.g. [[0,'latest'],[1,'v2']]
   base: string;                  // URL prefix for this player ('' for root, '/@user' for @-routes)
+  hash: string | null;           // file selection from URL hash (without the '#')
 }
 
 type RouteResult = { page: 'repository'; params: RepoParams };
@@ -64,7 +65,7 @@ function matchRoute(pathname: string): RouteResult {
     }
   }
 
-  return { page: 'repository', params: { user, path, versions, base } };
+  return { page: 'repository', params: { user, path, versions, base, hash: null } };
 }
 
 // ---- Page Lifecycle ----
@@ -106,13 +107,21 @@ function ensureBar(page: Page): void {
 
 // ---- Navigation ----
 
+let lastRouteUrl = '';
+
 export function navigateTo(path: string): void {
+  lastRouteUrl = ''; // force re-evaluation
   history.pushState(null, '', path);
   handleRoute();
 }
 
 function handleRoute(): void {
+  // Guard against duplicate handling (both popstate and hashchange can fire)
+  const url = window.location.pathname + window.location.hash;
+  if (url === lastRouteUrl) return;
+  lastRouteUrl = url;
   const route = matchRoute(window.location.pathname);
+  route.params.hash = window.location.hash ? decodeURIComponent(window.location.hash.slice(1)) : null;
   activatePage(route);
 }
 
@@ -142,6 +151,7 @@ function boot(): void {
   rootEl = document.getElementById('root')!;
 
   window.addEventListener('popstate', handleRoute);
+  window.addEventListener('hashchange', handleRoute);
   document.addEventListener('click', onLinkClick);
 
   handleRoute();

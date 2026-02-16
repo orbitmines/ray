@@ -85,17 +85,40 @@ const _closerToOpener: Record<string, string> = { '}': '{', ')': '(', ']': '[' }
 // Boundary helpers — fast path for StringToken
 // ════════════════════════════════════════════════════════════
 
+/** Check if a string at pos is a paired delimiter closer inside nested delimiters.
+ *  Returns true when depth > 0 (i.e. the closer is nested and should NOT be treated
+ *  as a boundary). */
+function _isNestedCloser(input: string, str: string, pos: number, anchors: DelimAnchor[] | undefined): boolean {
+  if (!anchors || !(str in _closerToOpener)) return false;
+  const opener = _closerToOpener[str];
+  for (let a = anchors.length - 1; a >= 0; a--) {
+    if (anchors[a].closer === str && anchors[a].opener === opener) {
+      let depth = 0;
+      for (let p = anchors[a].anchorPos; p < pos; p++) {
+        if (input.startsWith(opener, p)) depth++;
+        else if (input.startsWith(str, p)) depth--;
+      }
+      return depth > 0;
+    }
+  }
+  return false;
+}
+
 /** Check if any boundary token can start at a specific position */
 function _boundaryAt(input: string, boundaries: Token[], pos: number, ctx: MatchContext): boolean {
+  const anchors = ctx.delimAnchors;
   for (let i = 0; i < boundaries.length; i++) {
     const b = boundaries[i];
     if (b instanceof StringToken) {
       const strs = b.strings;
       for (let j = 0; j < strs.length; j++) {
-        if (input.startsWith(strs[j], pos)) return true;
+        if (input.startsWith(strs[j], pos)) {
+          if (_isNestedCloser(input, strs[j], pos, anchors)) continue;
+          return true;
+        }
       }
     } else {
-      if (b.canStartAt({ input, index: pos, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, hardBoundaries: ctx.hardBoundaries, delimAnchors: ctx.delimAnchors })) return true;
+      if (b.canStartAt({ input, index: pos, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, hardBoundaries: ctx.hardBoundaries, delimAnchors: anchors })) return true;
     }
   }
   return false;
@@ -103,17 +126,21 @@ function _boundaryAt(input: string, boundaries: Token[], pos: number, ctx: Match
 
 /** Check if any boundary token can start within range [start, end) */
 function _boundaryInRange(input: string, boundaries: Token[], start: number, end: number, ctx: MatchContext): boolean {
+  const anchors = ctx.delimAnchors;
   for (let i = 0; i < boundaries.length; i++) {
     const b = boundaries[i];
     if (b instanceof StringToken) {
       const strs = b.strings;
       for (let j = 0; j < strs.length; j++) {
-        const idx = input.indexOf(strs[j], start);
-        if (idx >= 0 && idx < end) return true;
+        let idx = input.indexOf(strs[j], start);
+        while (idx >= 0 && idx < end) {
+          if (!_isNestedCloser(input, strs[j], idx, anchors)) return true;
+          idx = input.indexOf(strs[j], idx + 1);
+        }
       }
     } else {
       for (let pos = start; pos < end; pos++) {
-        if (b.canStartAt({ input, index: pos, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: input.substring(start, pos), delimAnchors: ctx.delimAnchors })) return true;
+        if (b.canStartAt({ input, index: pos, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: input.substring(start, pos), delimAnchors: anchors })) return true;
       }
     }
   }
@@ -346,13 +373,15 @@ class NotToken extends Token {
     const hasHard = hardBounds != null && hardBounds.length > 0;
 
     // Fast path: all boundaries + hard boundaries are StringTokens → use indexOf
-    if (this._canUseFastScan(bounds, iterBounds, hardBounds)) {
+    // Disable fast path when delimiter depth tracking is needed (closer in bounds)
+    if (this._canUseFastScan(bounds, iterBounds, hardBounds, ctx.delimAnchors)) {
       return this._fastScan(input, startIdx, remLen, stopStrs, bounds!, iterBounds, hardBounds);
     }
 
     // Slow path: per-position scanning with non-StringToken boundaries
     const allBounds = hasBounds ? [...(bounds || _emptyBounds), ...(iterBounds || _emptyBounds)] : _emptyBounds;
     const hardB = hardBounds || _emptyBounds;
+    const anchors = ctx.delimAnchors;
     let testCtx: MatchContext | null = null;
 
     for (let i = 0; i <= remLen; i++) {
@@ -363,9 +392,9 @@ class NotToken extends Token {
           const b = hardB[k];
           if (b instanceof StringToken) {
             const strs = b.strings;
-            for (let j = 0; j < strs.length; j++) { if (input.startsWith(strs[j], absIdx)) { hit = true; break; } }
+            for (let j = 0; j < strs.length; j++) { if (input.startsWith(strs[j], absIdx) && !_isNestedCloser(input, strs[j], absIdx, anchors)) { hit = true; break; } }
           } else {
-            if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined, preceding: input.substring(startIdx, absIdx), scope: ctx.scope, delimAnchors: ctx.delimAnchors };
+            if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined, preceding: input.substring(startIdx, absIdx), scope: ctx.scope, delimAnchors: anchors };
             else { testCtx.index = absIdx; testCtx.preceding = input.substring(startIdx, absIdx); }
             if (b.canStartAt(testCtx)) hit = true;
           }
@@ -379,9 +408,9 @@ class NotToken extends Token {
           const b = allBounds[k];
           if (b instanceof StringToken) {
             const strs = b.strings;
-            for (let j = 0; j < strs.length; j++) { if (input.startsWith(strs[j], absIdx)) { hit = true; break; } }
+            for (let j = 0; j < strs.length; j++) { if (input.startsWith(strs[j], absIdx) && !_isNestedCloser(input, strs[j], absIdx, anchors)) { hit = true; break; } }
           } else {
-            if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined, preceding: input.substring(startIdx, absIdx), scope: ctx.scope, delimAnchors: ctx.delimAnchors };
+            if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, hardBoundaries: undefined, preceding: input.substring(startIdx, absIdx), scope: ctx.scope, delimAnchors: anchors };
             else { testCtx.index = absIdx; testCtx.preceding = input.substring(startIdx, absIdx); testCtx.hardBoundaries = undefined; }
             if (b.canStartAt(testCtx)) hit = true;
           }
@@ -400,10 +429,26 @@ class NotToken extends Token {
   }
 
   /** Check if all boundaries are StringTokens (fast path possible) */
-  private _canUseFastScan(bounds: Token[] | undefined, iterBounds: Token[] | undefined, hardBounds: Token[] | undefined): boolean {
+  private _canUseFastScan(bounds: Token[] | undefined, iterBounds: Token[] | undefined, hardBounds: Token[] | undefined, anchors?: DelimAnchor[]): boolean {
     if (bounds) for (let i = 0; i < bounds.length; i++) if (!(bounds[i] instanceof StringToken)) return false;
     if (iterBounds) for (let i = 0; i < iterBounds.length; i++) if (!(iterBounds[i] instanceof StringToken)) return false;
     if (hardBounds) for (let i = 0; i < hardBounds.length; i++) if (!(hardBounds[i] instanceof StringToken)) return false;
+    // When delimiter anchors exist, check if any boundary includes a paired closer
+    if (anchors && anchors.length > 0) {
+      const groups = [bounds, iterBounds, hardBounds];
+      for (let g = 0; g < 3; g++) {
+        const group = groups[g];
+        if (!group) continue;
+        for (let i = 0; i < group.length; i++) {
+          if (group[i] instanceof StringToken) {
+            const strs = (group[i] as StringToken).strings;
+            for (let j = 0; j < strs.length; j++) {
+              if (strs[j] in _closerToOpener) return false;
+            }
+          }
+        }
+      }
+    }
     return true;
   }
 
@@ -468,6 +513,7 @@ class ArbitraryToken extends Token {
       return this.wrapResult({ success: true, consumed: remLen, value: input.substring(startIdx), scope: _emptyScope }, input, startIdx);
 
     const all = [...(bounds || _emptyBounds), ...(iterBounds || _emptyBounds)];
+    const anchors = ctx.delimAnchors;
     let testCtx: MatchContext | null = null;
     for (let i = 0; i <= remLen; i++) {
       const absIdx = startIdx + i;
@@ -476,9 +522,9 @@ class ArbitraryToken extends Token {
         const b = all[k];
         if (b instanceof StringToken) {
           const strs = b.strings;
-          for (let j = 0; j < strs.length; j++) { if (input.startsWith(strs[j], absIdx)) { hit = true; break; } }
+          for (let j = 0; j < strs.length; j++) { if (input.startsWith(strs[j], absIdx) && !_isNestedCloser(input, strs[j], absIdx, anchors)) { hit = true; break; } }
         } else {
-          if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: input.substring(startIdx, absIdx), delimAnchors: ctx.delimAnchors };
+          if (!testCtx) testCtx = { input, index: absIdx, boundaries: _emptyBounds, iterationBoundaries: _emptyBounds, scope: ctx.scope, preceding: input.substring(startIdx, absIdx), delimAnchors: anchors };
           else { testCtx.index = absIdx; testCtx.preceding = input.substring(startIdx, absIdx); }
           if (b.canStartAt(testCtx)) hit = true;
         }
@@ -525,6 +571,7 @@ class DepthAwareBoundaryToken extends Token {
 
 class ArrayToken extends Token {
   private _precomputedBounds: (Token[] | null)[] | null = null;
+  private _precomputedRetryBounds: (Token[] | null)[] | null = null;
 
   constructor(public items: Token[]) { super(); }
   protected computeFirst() {
@@ -614,6 +661,26 @@ class ArrayToken extends Token {
     return arr;
   }
 
+  /** Retry bounds: only the first CONCRETE sibling (not transparent/optional). */
+  private _getRetryBounds(): (Token[] | null)[] {
+    if (this._precomputedRetryBounds) return this._precomputedRetryBounds;
+    const items = this.items, n = items.length;
+    const arr: (Token[] | null)[] = new Array(n);
+    for (let i = 0; i < n; i++) {
+      arr[i] = null;
+      if (i < n - 1) {
+        for (let j = i + 1; j < n; j++) {
+          if (items[j].getFirstConcreteTokens().length > 0) {
+            arr[i] = [items[j]];
+            break;
+          }
+        }
+      }
+    }
+    this._precomputedRetryBounds = arr;
+    return arr;
+  }
+
   match(ctx: MatchContext): MatchResult {
     let totalConsumed = 0;
     const values: any[] = [];
@@ -627,7 +694,7 @@ class ArrayToken extends Token {
       const rb = precomputed[i];
       const boundaries = rb ? [...rb, ...ctx.boundaries] : ctx.boundaries;
 
-      const result = items[i].match({
+      let result = items[i].match({
         input: ctx.input, index: currentIndex,
         boundaries,
         iterationBoundaries: ctx.iterationBoundaries,
@@ -638,6 +705,72 @@ class ArrayToken extends Token {
       });
 
       if (!result.success) return FAIL;
+
+      // Depth-aware boundary retry: when this child's consumed text crosses
+      // a CONCRETE sibling boundary at delimiter depth ≤0, retry with those
+      // boundaries promoted to hard boundaries.  This lets inner tokens
+      // (e.g. Any('\n', end) inside a nested statement) prefer `end` over
+      // consuming the boundary character, leaving it for outer siblings.
+      // Only concrete siblings trigger retry — transparent ones (optional loops
+      // etc.) should not prevent the current item from consuming normally.
+      if (result.consumed > 0) {
+        const crb = this._getRetryBounds()[i];
+        if (crb) {
+          const cEnd = currentIndex + result.consumed;
+          let crossesAtDepthZero = false;
+          let depth = 0;
+          // Track whether any '\n' appears at delimiter depth > 0.
+          // When it does, the consumed text contains legitimate multi-line
+          // content inside delimiter pairs (e.g. RULE_NAME's {…} spanning
+          // lines).  In that case, suppress the retry — the outer token
+          // legitimately needs to consume across line boundaries.
+          let hasNestedNewline = false;
+          for (let p = currentIndex; p < cEnd; p++) {
+            const ch = ctx.input.charCodeAt(p);
+            if (ch === 0x28 || ch === 0x7B || ch === 0x5B) depth++;
+            else if (ch === 0x29 || ch === 0x7D || ch === 0x5D) depth--;
+            if (ch === 0x0A && depth > 0) hasNestedNewline = true;
+            if (depth <= 0 && _boundaryAt(ctx.input, crb, p, ctx)) {
+              if (!hasNestedNewline) {
+                crossesAtDepthZero = true;
+              }
+              break;
+            }
+          }
+          if (crossesAtDepthZero) {
+            const hardBounds = [...(ctx.hardBoundaries || _emptyBounds), ...crb];
+            const retryResult = items[i].match({
+              input: ctx.input, index: currentIndex,
+              boundaries,
+              iterationBoundaries: ctx.iterationBoundaries,
+              suppressIterBoundaries: ctx.suppressIterBoundaries,
+              scope: childScope,
+              hardBoundaries: hardBounds,
+              delimAnchors,
+            });
+            if (retryResult.success) {
+              let retryCrosses = false;
+              if (retryResult.consumed > 0) {
+                const rEnd = currentIndex + retryResult.consumed;
+                let d = 0;
+                for (let p = currentIndex; p < rEnd; p++) {
+                  const ch = ctx.input.charCodeAt(p);
+                  if (ch === 0x28 || ch === 0x7B || ch === 0x5B) d++;
+                  else if (ch === 0x29 || ch === 0x7D || ch === 0x5D) d--;
+                  if (d <= 0 && _boundaryAt(ctx.input, crb, p, ctx)) {
+                    retryCrosses = true;
+                    break;
+                  }
+                }
+              }
+              if (!retryCrosses) {
+                result = retryResult;
+              }
+            }
+          }
+        }
+      }
+
       totalConsumed += result.consumed;
       currentIndex += result.consumed;
       values.push(result.value);
@@ -1065,9 +1198,12 @@ class AnyToken extends Token {
   }
   match(ctx: MatchContext): MatchResult {
     let zeroConsumedResult: MatchResult | null = null;
+    let hardBoundaryCrossResult: MatchResult | null = null;
     const opts = this.options;
     const preOthers = this._getOthers();
     const ctxIterBounds = ctx.iterationBoundaries || _emptyBounds;
+    const hb = ctx.hardBoundaries;
+    const hasHardBounds = hb != null && hb.length > 0;
     for (let i = 0; i < opts.length; i++) {
       const others = preOthers[i];
       const iterBounds = others.length > 0 ? [...others, ...ctxIterBounds] : ctxIterBounds;
@@ -1081,11 +1217,22 @@ class AnyToken extends Token {
         delimAnchors: ctx.delimAnchors,
       });
       if (result.success) {
-        if (result.consumed > 0) return this.wrapResult(result, ctx.input, ctx.index);
+        if (result.consumed > 0) {
+          // Hard boundary deprioritization: if hard boundaries exist and this
+          // option's consumed range crosses one, save as fallback and keep
+          // looking for a non-crossing alternative.
+          if (hasHardBounds && _boundaryInRange(ctx.input, hb!, ctx.index, ctx.index + result.consumed, ctx)) {
+            if (!hardBoundaryCrossResult) hardBoundaryCrossResult = result;
+            continue;
+          }
+          return this.wrapResult(result, ctx.input, ctx.index);
+        }
         if (!zeroConsumedResult) zeroConsumedResult = result;
       }
     }
+    // Prefer consumed=0 (non-crossing) over consumed>0 that crosses hard boundary
     if (zeroConsumedResult) return this.wrapResult(zeroConsumedResult, ctx.input, ctx.index);
+    if (hardBoundaryCrossResult) return this.wrapResult(hardBoundaryCrossResult, ctx.input, ctx.index);
     return FAIL;
   }
 }

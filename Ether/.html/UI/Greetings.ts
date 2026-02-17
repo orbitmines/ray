@@ -955,16 +955,12 @@ export async function mount(): Promise<void> {
   dissolveCRT(crt);
   await introPhase(crt.content);
 
-  // Intro done — fade the CRT background to semi-transparent so the
-  // page shows through dimly during the name input.
+  // Intro done — fade the CRT background to semi-transparent during name input.
+  // Page stays hidden (rendered after mount resolves with the chosen name).
   crt.crt.style.transition = 'background 1s ease-out';
   crt.crt.style.background = 'rgba(10,10,10,0.85)';
   crt.screen.style.transition = 'background 1s ease-out';
   crt.screen.style.background = 'transparent';
-  if (page) {
-    page.style.transition = 'opacity 1s ease-in';
-    page.style.opacity = '1';
-  }
 
   const { name, row } = await nameInputPhase(crt.content);
 
@@ -1000,7 +996,7 @@ export async function mount(): Promise<void> {
 
   await delay(850);
 
-  // 4. Clean up
+  // 4. Clean up — leave page hidden (caller fades it in after rendering)
   crt.crt.remove();
   if (crtStyle) crtStyle.remove();
   document.body.style.background = '';
@@ -1008,10 +1004,6 @@ export async function mount(): Promise<void> {
   btn.style.transition = '';
   btn.style.transform = '';
   row.remove();
-  if (page) {
-    page.style.transition = '';
-    page.style.opacity = '';
-  }
 
   cleanupInteraction = installInteraction(btn, name);
 }

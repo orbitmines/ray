@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "npm run icons:generate && npx vite",
-    "beforeBuildCommand": "npm run icons:generate && npx vite build"
+    "beforeBuildCommand": "npm run icons:generate && npx vite build && npm run copy:ether"
   },
   "app": {
     "withGlobalTauri": false,

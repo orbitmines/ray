@@ -4,8 +4,8 @@
 
 import { PHOSPHOR, CRT_SCREEN_BG } from './CRTShell.ts';
 import { renderMarkdown } from './Markdown.ts';
-import { getInlinePullRequests, getCategoryPRSummary, getCategoryPullRequests, getPullRequest, getOpenPRCount, createPullRequest, getRepository } from './DummyData.ts';
-import type { PullRequest, PRStatus, PRCommit, FileDiff, ActivityItem, InlinePR, CategoryPRSummary } from './DummyData.ts';
+import { getInlinePullRequests, getCategoryPRSummary, getCategoryPullRequests, getPullRequest, getOpenPRCount, createPullRequest, getRepository, getCurrentPlayer, resolveFile } from './API.ts';
+import type { PullRequest, PRStatus, PRCommit, FileDiff, ActivityItem, InlinePR, CategoryPRSummary } from './API.ts';
 import type { PRParams } from './Router.ts';
 import { computeDiff, renderUnifiedDiff, renderSideBySideDiff } from './DiffView.ts';
 import {
@@ -20,9 +20,6 @@ let navigateFn: ((path: string) => void) | null = null;
 let currentParams: PRParams | null = null;
 let currentDiffMode: 'unified' | 'side-by-side' = 'unified';
 
-function getCurrentUser(): string {
-  return localStorage.getItem('ether:name') || 'anonymous';
-}
 
 // ---- Styles ----
 
@@ -866,18 +863,18 @@ function buildUserUrl(user: string): string {
 
 /** Get the raw file URL for a user's profile picture.
  *  userPath is the full canonical path, e.g. '@alice' or '@ether/~genesis/@alice'. */
-function getUserProfilePic(userPath: string): string | null {
+async function getUserProfilePic(userPath: string): Promise<string | null> {
   // Extract username from the last @-prefixed segment
   const segments = userPath.split('/');
   const userSeg = [...segments].reverse().find(s => s.startsWith('@'));
   const user = userSeg ? userSeg.slice(1) : segments[segments.length - 1];
 
-  const repo = getRepository(user);
+  const repo = await getRepository(user);
   if (!repo) return null;
-  const names = ['profile-picture.svg', 'profile-picture.png', 'profile-picture.jpeg'];
-  for (const entry of repo.tree) {
-    if ('name' in entry && names.includes(entry.name)) {
-      return `/**/${userPath}/${entry.name}`;
+  const names = ['2d.svg', '2d.png', '2d.jpeg'];
+  for (const name of names) {
+    if (resolveFile(repo.tree, ['avatar', name])) {
+      return `/**/${userPath}/avatar/${name}`;
     }
   }
   return null;
@@ -885,8 +882,8 @@ function getUserProfilePic(userPath: string): string | null {
 
 /** Render a user avatar icon — profile picture if available, otherwise fallback SVG.
  *  userPath is the full canonical path, e.g. '@alice' or '@ether/~genesis/@alice'. */
-function renderUserIcon(userPath: string, fallbackSvg: string, cssClass: string): string {
-  const pic = getUserProfilePic(userPath);
+async function renderUserIcon(userPath: string, fallbackSvg: string, cssClass: string): Promise<string> {
+  const pic = await getUserProfilePic(userPath);
   if (pic) {
     return `<div class="pr-timeline-icon ${cssClass}"><img src="${pic}" alt="${escapeHtml(userPath)}" /></div>`;
   }
@@ -932,10 +929,10 @@ function renderHeaderChain(params: PRParams): string {
 
 // ---- Render: PR List ----
 
-function renderPRList(params: PRParams): string {
-  const inlinePRs = getInlinePullRequests(params.repoPath);
-  const playerSummary = getCategoryPRSummary(params.repoPath, '@');
-  const worldSummary = getCategoryPRSummary(params.repoPath, '~');
+async function renderPRList(params: PRParams): Promise<string> {
+  const inlinePRs = await getInlinePullRequests(params.repoPath);
+  const playerSummary = await getCategoryPRSummary(params.repoPath, '@');
+  const worldSummary = await getCategoryPRSummary(params.repoPath, '~');
 
   const openPRs = inlinePRs.filter(({ pr }) => pr.status === 'open')
     .sort((a, b) => new Date(b.pr.updatedAt).getTime() - new Date(a.pr.updatedAt).getTime());
@@ -1011,10 +1008,10 @@ function renderCategoryRow(summary: CategoryPRSummary, prefix: '@' | '~', filter
 
 // ---- Render: Category list (players or worlds) ----
 
-function renderCategoryList(params: PRParams): string {
+async function renderCategoryList(params: PRParams): Promise<string> {
   const prefix = params.category!;
   const categoryLabel = prefix === '@' ? '@{: String}' : '#{: String}';
-  const prs = getCategoryPullRequests(params.repoPath, prefix);
+  const prs = await getCategoryPullRequests(params.repoPath, prefix);
 
   const openPRs = prs.filter(({ pr }) => pr.status === 'open')
     .sort((a, b) => new Date(b.pr.updatedAt).getTime() - new Date(a.pr.updatedAt).getTime());
@@ -1116,11 +1113,11 @@ function renderTitleBlock(pr: PullRequest, params: PRParams): string {
 
 // ---- Render shared: description as a comment-style block ----
 
-function renderDescriptionBlock(pr: PullRequest): string {
+async function renderDescriptionBlock(pr: PullRequest): Promise<string> {
   let html = '';
   html += `<div class="pr-timeline-section-label">Description</div>`;
   html += `<div class="pr-timeline-item" data-edit-target="description">`;
-  html += renderUserIcon(`@${pr.author}`, COMMENT_SVG, 'comment');
+  html += await renderUserIcon(`@${pr.author}`, COMMENT_SVG, 'comment');
   html += `<div class="pr-timeline-body">`;
   html += `<div class="pr-timeline-header">${userLink(pr.author)} <span class="pr-timeline-time">${formatTime(pr.createdAt)}</span></div>`;
   html += `<div class="pr-timeline-content readme-body" data-edit-display="description">${renderMarkdown(pr.description)}</div>`;
@@ -1134,8 +1131,8 @@ function renderDescriptionBlock(pr: PullRequest): string {
 
 // ---- Render: PR Detail ----
 
-function renderPRDetail(params: PRParams): string {
-  const pr = getPullRequest(params.repoPath, params.prId!);
+async function renderPRDetail(params: PRParams): Promise<string> {
+  const pr = await getPullRequest(params.repoPath, params.prId!);
   if (!pr) {
     return `<div class="pr-page">${renderHeaderChain(params)}<div class="pr-empty">Pull request #${params.prId} not found.</div></div>`;
   }
@@ -1150,7 +1147,7 @@ function renderPRDetail(params: PRParams): string {
   html += renderTitleBlock(pr, params);
 
   // Description (same style as a comment)
-  html += renderDescriptionBlock(pr);
+  html += await renderDescriptionBlock(pr);
 
   // Merge section (only for open + mergeable)
   if (pr.status === 'open' && pr.mergeable) {
@@ -1186,7 +1183,7 @@ function renderPRDetail(params: PRParams): string {
         }
       }
 
-      html += renderActivityItem(item, params, pr, isGrouped, isGroupStart);
+      html += await renderActivityItem(item, params, pr, isGrouped, isGroupStart);
       prevCommentAuthor = isComment ? item.comment.author : null;
       prevCommentTime = isComment ? new Date(item.createdAt).getTime() : null;
     }
@@ -1206,7 +1203,7 @@ function renderPRDetail(params: PRParams): string {
   return html;
 }
 
-function renderActivityItem(item: ActivityItem, params: PRParams, pr: PullRequest, isGrouped: boolean = false, isGroupStart: boolean = false): string {
+async function renderActivityItem(item: ActivityItem, params: PRParams, pr: PullRequest, isGrouped: boolean = false, isGroupStart: boolean = false): Promise<string> {
   let html = '';
 
   switch (item.type) {
@@ -1225,7 +1222,7 @@ function renderActivityItem(item: ActivityItem, params: PRParams, pr: PullReques
       const groupedClass = isGrouped ? ' grouped' : (isGroupStart ? ' group-start' : '');
       html += `<div class="pr-timeline-item${groupedClass}" data-edit-target="comment-${item.comment.id}">`;
       if (!isGrouped) {
-        html += renderUserIcon(`@${item.comment.author}`, COMMENT_SVG, 'comment');
+        html += await renderUserIcon(`@${item.comment.author}`, COMMENT_SVG, 'comment');
       }
       html += `<div class="pr-timeline-body">`;
       if (!isGrouped) {
@@ -1266,8 +1263,8 @@ function renderActivityItem(item: ActivityItem, params: PRParams, pr: PullReques
 
 // ---- Render: Commit Diff ----
 
-function renderCommitDiff(params: PRParams): string {
-  const pr = getPullRequest(params.repoPath, params.prId!);
+async function renderCommitDiff(params: PRParams): Promise<string> {
+  const pr = await getPullRequest(params.repoPath, params.prId!);
   if (!pr) {
     return `<div class="pr-page">${renderHeaderChain(params)}<div class="pr-empty">Pull request not found.</div></div>`;
   }
@@ -1323,8 +1320,8 @@ function renderFileDiff(fileDiff: FileDiff): string {
 
 // ---- Render: New PR form (same layout as detail but editable) ----
 
-function renderNewPRForm(params: PRParams): string {
-  const currentUser = getCurrentUser();
+async function renderNewPRForm(params: PRParams): Promise<string> {
+  const currentUser = getCurrentPlayer();
 
   let html = `<div class="pr-page">`;
   html += renderHeaderChain(params);
@@ -1352,7 +1349,7 @@ function renderNewPRForm(params: PRParams): string {
   // Description (same comment-style as detail, but with textarea)
   html += `<div class="pr-timeline-section-label">Description</div>`;
   html += `<div class="pr-timeline-item">`;
-  html += renderUserIcon(`@${currentUser}`, COMMENT_SVG, 'comment');
+  html += await renderUserIcon(`@${currentUser}`, COMMENT_SVG, 'comment');
   html += `<div class="pr-timeline-body">`;
   html += `<div class="pr-timeline-header">${userLink(currentUser)}</div>`;
   html += `<textarea class="pr-form-textarea" placeholder="Describe your changes..." data-pr-desc-input></textarea>`;
@@ -1370,9 +1367,9 @@ function renderNewPRForm(params: PRParams): string {
 
 // ---- Inline editing ----
 
-function startEditTitle(): void {
+async function startEditTitle(): Promise<void> {
   if (!currentContainer || !currentParams) return;
-  const pr = getPullRequest(currentParams.repoPath, currentParams.prId!);
+  const pr = await getPullRequest(currentParams.repoPath, currentParams.prId!);
   if (!pr) return;
 
   const display = currentContainer.querySelector('[data-edit-display="title"]') as HTMLElement;
@@ -1413,9 +1410,9 @@ function startEditTitle(): void {
   });
 }
 
-function startEditDescription(): void {
+async function startEditDescription(): Promise<void> {
   if (!currentContainer || !currentParams) return;
-  const pr = getPullRequest(currentParams.repoPath, currentParams.prId!);
+  const pr = await getPullRequest(currentParams.repoPath, currentParams.prId!);
   if (!pr) return;
 
   const display = currentContainer.querySelector('[data-edit-display="description"]') as HTMLElement;
@@ -1447,9 +1444,9 @@ function startEditDescription(): void {
   });
 }
 
-function startEditComment(commentId: number): void {
+async function startEditComment(commentId: number): Promise<void> {
   if (!currentContainer || !currentParams) return;
-  const pr = getPullRequest(currentParams.repoPath, currentParams.prId!);
+  const pr = await getPullRequest(currentParams.repoPath, currentParams.prId!);
   if (!pr) return;
 
   const comment = pr.comments.find(c => c.id === commentId);
@@ -1490,9 +1487,9 @@ function startEditComment(commentId: number): void {
   });
 }
 
-function startEditBranch(): void {
+async function startEditBranch(): Promise<void> {
   if (!currentContainer || !currentParams) return;
-  const pr = getPullRequest(currentParams.repoPath, currentParams.prId!);
+  const pr = await getPullRequest(currentParams.repoPath, currentParams.prId!);
   if (!pr) return;
 
   const branchInfo = currentContainer.querySelector('[data-edit-target="branch"]') as HTMLElement;
@@ -1633,9 +1630,9 @@ function bindEvents(): void {
   // Merge button
   const mergeBtn = currentContainer.querySelector('[data-pr-merge]') as HTMLButtonElement | null;
   if (mergeBtn && currentParams) {
-    mergeBtn.addEventListener('click', () => {
-      const currentUser = getCurrentUser();
-      const pr = getPullRequest(currentParams!.repoPath, currentParams!.prId!);
+    mergeBtn.addEventListener('click', () => { void (async () => {
+      const currentUser = getCurrentPlayer();
+      const pr = await getPullRequest(currentParams!.repoPath, currentParams!.prId!);
       if (pr) {
         pr.status = 'merged';
         pr.updatedAt = new Date().toISOString();
@@ -1644,17 +1641,17 @@ function bindEvents(): void {
         pr.activity.push({ type: 'status_change', from: 'open', to: 'merged', author: currentUser, createdAt: new Date().toISOString() });
         render();
       }
-    });
+    })(); });
   }
 
   // Comment submit
   const commentSubmit = currentContainer.querySelector('[data-pr-comment-submit]') as HTMLButtonElement | null;
   if (commentSubmit && currentParams) {
-    commentSubmit.addEventListener('click', () => {
-      const currentUser = getCurrentUser();
+    commentSubmit.addEventListener('click', () => { void (async () => {
+      const currentUser = getCurrentPlayer();
       const input = currentContainer!.querySelector('[data-pr-comment-input]') as HTMLTextAreaElement | null;
       if (!input || !input.value.trim()) return;
-      const pr = getPullRequest(currentParams!.repoPath, currentParams!.prId!);
+      const pr = await getPullRequest(currentParams!.repoPath, currentParams!.prId!);
       if (pr) {
         const comment = {
           id: pr.comments.length + 100,
@@ -1667,13 +1664,13 @@ function bindEvents(): void {
         pr.updatedAt = comment.createdAt;
         render();
       }
-    });
+    })(); });
   }
 
   // Create PR
   const createBtn = currentContainer.querySelector('[data-pr-create]') as HTMLButtonElement | null;
   if (createBtn && currentParams) {
-    createBtn.addEventListener('click', () => {
+    createBtn.addEventListener('click', () => { void (async () => {
       const titleInput = currentContainer!.querySelector('[data-pr-title-input]') as HTMLInputElement | null;
       const descInput = currentContainer!.querySelector('[data-pr-desc-input]') as HTMLTextAreaElement | null;
       const targetSelect = currentContainer!.querySelector('[data-pr-target-branch]') as HTMLSelectElement | null;
@@ -1684,29 +1681,29 @@ function bindEvents(): void {
         if (titleInput) titleInput.style.borderBottomColor = '#f87171';
         return;
       }
-      const pr = createPullRequest(currentParams!.repoPath, title, desc, 'feature/new-branch', target);
+      const pr = await createPullRequest(currentParams!.repoPath, title, desc, 'feature/new-branch', target);
       navigateFn!(buildPullsUrl(currentParams!, String(pr.id)));
-    });
+    })(); });
   }
 }
 
 // ---- Render dispatcher ----
 
-function render(): void {
+async function render(): Promise<void> {
   if (!currentContainer || !currentParams) return;
 
   let html = '';
   if (currentParams.prAction === 'list') {
-    html = renderPRList(currentParams);
+    html = await renderPRList(currentParams);
   } else if (currentParams.prAction === 'players' || currentParams.prAction === 'worlds') {
-    html = renderCategoryList(currentParams);
+    html = await renderCategoryList(currentParams);
   } else if (currentParams.prAction === 'new') {
-    html = renderNewPRForm(currentParams);
+    html = await renderNewPRForm(currentParams);
   } else if (currentParams.prAction === 'detail') {
     if (currentParams.commitId) {
-      html = renderCommitDiff(currentParams);
+      html = await renderCommitDiff(currentParams);
     } else {
-      html = renderPRDetail(currentParams);
+      html = await renderPRDetail(currentParams);
     }
   }
 
@@ -1723,21 +1720,21 @@ function render(): void {
 
 // ---- Public API ----
 
-export function mount(
+export async function mount(
   container: HTMLElement,
   params: PRParams,
   navigate: (path: string) => void,
-): void {
+): Promise<void> {
   injectStyles();
   currentContainer = container;
   currentParams = params;
   navigateFn = navigate;
-  render();
+  await render();
 }
 
-export function update(params: PRParams): void {
+export async function update(params: PRParams): Promise<void> {
   currentParams = params;
-  render();
+  await render();
 }
 
 export function unmount(): void {

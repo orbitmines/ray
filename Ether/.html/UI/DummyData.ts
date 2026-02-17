@@ -788,7 +788,9 @@ const aliceRepo: Repository = {
   user: 'alice',
   description: 'Alice — a genesis inhabitant',
   tree: [
-    { name: 'profile-picture.svg', isDirectory: false, modified: '1 week ago', content: ALICE_PROFILE_SVG },
+    { name: 'avatar', isDirectory: true, modified: '1 week ago', children: [
+      { name: '2d.svg', isDirectory: false, modified: '1 week ago', content: ALICE_PROFILE_SVG },
+    ]},
     { name: 'notes.md', isDirectory: false, modified: '2 days ago', access: 'private' },
   ],
 };
@@ -1533,7 +1535,7 @@ export function createPullRequest(
     title,
     description,
     status: 'open',
-    author: author || localStorage.getItem('ether:name') || 'anonymous',
+    author: author || 'anonymous',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     sourceVersion: crypto.randomUUID(),

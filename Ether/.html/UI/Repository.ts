@@ -5,8 +5,8 @@
 import { PHOSPHOR, CRT_SCREEN_BG } from './CRTShell.ts';
 import { renderMarkdown } from './Markdown.ts';
 import { fileIcon, accessIcon, accessSvg, fileOrEncryptedIcon } from './FileIcons.ts';
-import { getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFiles, isCompound, flattenEntries, getOpenPRCount } from './DummyData.ts';
-import type { FileEntry, CompoundEntry, TreeEntry, Repository } from './DummyData.ts';
+import { getAPI, getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFiles, isCompound, flattenEntries, getOpenPRCount, getCurrentPlayer, getStars, toggleStar, isStarred, getStarCount, setStarCount, getForkCount, setForkCount, loadSession, saveSession, getSessionContent } from './API.ts';
+import type { FileEntry, CompoundEntry, TreeEntry, Repository } from './API.ts';
 import { createIDELayout, generateId, ensureIdCounter, injectIDEStyles } from './IDELayout.ts';
 import type { IDELayoutAPI, PanelDefinition, LayoutNode, TabGroupNode, SplitNode } from './IDELayout.ts';
 
@@ -20,23 +20,6 @@ let currentFileViewEntries: TreeEntry[] | null = null;     // entries used in cu
 let currentFileViewBasePath: string | null = null;          // sidebar base path for current file-view
 let currentMakeFilePanel: ((panelId: string, name: string, files: FileEntry[]) => PanelDefinition) | null = null;
 const sidebarExpanded = new Set<string>();  // tracks manually expanded/collapsed dirs
-
-// ---- Session persistence (Session.ray.json) ----
-
-function sessionKey(user: string): string {
-  return `ether:session:${user}`;
-}
-
-function loadSession(user: string): Record<string, any> {
-  try {
-    const raw = localStorage.getItem(sessionKey(user));
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-function saveSession(user: string, data: Record<string, any>): void {
-  localStorage.setItem(sessionKey(user), JSON.stringify(data, null, 2));
-}
 
 function loadSidebarExpanded(user: string): void {
   const session = loadSession(user);
@@ -52,10 +35,6 @@ function saveSidebarExpanded(user: string): void {
   saveSession(user, session);
 }
 
-function getSessionContent(user: string): string {
-  const session = loadSession(user);
-  return JSON.stringify(session, null, 2);
-}
 
 // ---- IDE layout session helpers ----
 
@@ -1136,7 +1115,7 @@ function bindClickHandlers(): void {
       const key = (toggle as HTMLElement).dataset.sidebarKey;
       if (key) {
         if (isExpanded) sidebarExpanded.delete(key); else sidebarExpanded.add(key);
-        const u = localStorage.getItem('ether:name') || 'anonymous';
+        const u = getCurrentPlayer();
         saveSidebarExpanded(u);
       }
     });
@@ -1156,7 +1135,7 @@ function bindClickHandlers(): void {
       const key = (arrow as HTMLElement).dataset.sidebarKey;
       if (key) {
         if (isExpanded) sidebarExpanded.delete(key); else sidebarExpanded.add(key);
-        const u = localStorage.getItem('ether:name') || 'anonymous';
+        const u = getCurrentPlayer();
         saveSidebarExpanded(u);
       }
     });
@@ -1210,6 +1189,11 @@ function bindClickHandlers(): void {
 
 /** Build a URL path, inserting ~/version markers at the correct depths.
  *  Only includes markers whose depth <= target path length. */
+/** Encode a single path segment for safe use in a URL (handles #, %, ?, etc.). */
+function encodeSegment(seg: string): string {
+  return encodeURIComponent(seg);
+}
+
 function buildBasePath(base: string, versions: [number, string][], path: string[]): string {
   const relevant = versions.filter(([d]) => d <= path.length)
     .sort((a, b) => a[0] - b[0]);
@@ -1263,7 +1247,8 @@ function escapePathSegment(name: string): string {
 }
 
 function unescapePathSegment(seg: string): string {
-  return (seg.length > 1 && seg[0] === '!') ? seg.slice(1) : seg;
+  const stripped = (seg.length > 1 && seg[0] === '!') ? seg.slice(1) : seg;
+  try { return decodeURIComponent(stripped); } catch { return stripped; }
 }
 
 function displayEntryName(name: string, parentContext: ParentContext = null): string {
@@ -1279,13 +1264,13 @@ function buildEntryHref(basePath: string, name: string, parentContext: ParentCon
   if (parentContext === '@') {
     // basePath ends with /@ — strip it and append /@name
     const parent = basePath.replace(/\/@$/, '');
-    return parent + '/@' + name;
+    return parent + '/@' + encodeSegment(name);
   }
   if (parentContext === '~') {
     const parent = basePath.replace(/\/~$/, '');
-    return parent + '/~' + name;
+    return parent + '/~' + encodeSegment(name);
   }
-  return basePath + (basePath.endsWith('/') ? '' : '/') + escapePathSegment(name);
+  return basePath + (basePath.endsWith('/') ? '' : '/') + encodeSegment(escapePathSegment(name));
 }
 
 // ---- Hash-relative path helper ----
@@ -1370,12 +1355,12 @@ const SETTINGS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 6
 const DOWNLOAD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M352 96C352 78.3 337.7 64 320 64C302.3 64 288 78.3 288 96L288 306.7L246.6 265.3C234.1 252.8 213.8 252.8 201.3 265.3C188.8 277.8 188.8 298.1 201.3 310.6L297.3 406.6C309.8 419.1 330.1 419.1 342.6 406.6L438.6 310.6C451.1 298.1 451.1 277.8 438.6 265.3C426.1 252.8 405.8 252.8 393.3 265.3L352 306.7L352 96zM160 384C124.7 384 96 412.7 96 448L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 448C544 412.7 515.3 384 480 384L433.1 384L376.5 440.6C345.3 471.8 294.6 471.8 263.4 440.6L206.9 384L160 384zM464 440C477.3 440 488 450.7 488 464C488 477.3 477.3 488 464 488C450.7 488 440 477.3 440 464C440 450.7 450.7 440 464 440z"/></svg>`;
 const FORK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M176 168C189.3 168 200 157.3 200 144C200 130.7 189.3 120 176 120C162.7 120 152 130.7 152 144C152 157.3 162.7 168 176 168zM256 144C256 176.8 236.3 205 208 217.3L208 240C208 266.5 229.5 288 256 288L384 288C410.5 288 432 266.5 432 240L432 217.3C403.7 205 384 176.8 384 144C384 99.8 419.8 64 464 64C508.2 64 544 99.8 544 144C544 176.8 524.3 205 496 217.3L496 240C496 301.9 445.9 352 384 352L352 352L352 422.7C380.3 435 400 463.2 400 496C400 540.2 364.2 576 320 576C275.8 576 240 540.2 240 496C240 463.2 259.7 435 288 422.7L288 352L256 352C194.1 352 144 301.9 144 240L144 217.3C115.7 205 96 176.8 96 144C96 99.8 131.8 64 176 64C220.2 64 256 99.8 256 144zM464 168C477.3 168 488 157.3 488 144C488 130.7 477.3 120 464 120C450.7 120 440 130.7 440 144C440 157.3 450.7 168 464 168zM344 496C344 482.7 333.3 472 320 472C306.7 472 296 482.7 296 496C296 509.3 306.7 520 320 520C333.3 520 344 509.3 344 496z"/></svg>`;
 
-function getPrCount(canonicalPath: string): number {
-  const count = getOpenPRCount(canonicalPath);
+async function getPrCount(canonicalPath: string): Promise<number> {
+  const count = await getOpenPRCount(canonicalPath);
   if (count > 0) return count;
   // clonePath strips the @user/ prefix for root users — try with it
   if (!canonicalPath.startsWith('@') && currentRepoParams) {
-    return getOpenPRCount(`@${currentRepoParams.user}/${canonicalPath}`);
+    return await getOpenPRCount(`@${currentRepoParams.user}/${canonicalPath}`);
   }
   return 0;
 }
@@ -1408,69 +1393,6 @@ function renderActionButtons(canonicalPath: string, starPath: string): string {
         <button class="copy-btn" data-copy="${gitCmd}">${COPY_SVG}</button>
       </div>
     </div>`;
-}
-
-// ---- Star / Favorite helpers ----
-
-const FORKS_KEY = 'ether:forks';
-const STARS_KEY = 'ether:stars';
-
-function getStars(): string[] {
-  const raw = localStorage.getItem(STARS_KEY);
-  return raw ? raw.split('\n').filter(Boolean) : [];
-}
-
-function setStars(stars: string[]): void {
-  localStorage.setItem(STARS_KEY, stars.join('\n'));
-}
-
-function getStarCount(canonicalPath: string): number {
-  const raw = localStorage.getItem(`ether:star-count:${canonicalPath}`);
-  return raw ? parseInt(raw, 10) || 0 : 0;
-}
-
-function setStarCount(canonicalPath: string, count: number): void {
-  localStorage.setItem(`ether:star-count:${canonicalPath}`, String(Math.max(0, count)));
-}
-
-function getForkCount(canonicalPath: string): number {
-  const raw = localStorage.getItem(`ether:fork-count:${canonicalPath}`);
-  return raw ? parseInt(raw, 10) || 0 : 0;
-}
-
-function setForkCount(canonicalPath: string, count: number): void {
-  localStorage.setItem(`ether:fork-count:${canonicalPath}`, String(Math.max(0, count)));
-}
-
-function isStarred(canonicalPath: string): boolean {
-  const stars = getStars();
-  if (stars.includes(canonicalPath)) return true;
-  // Parent match — but NOT for worlds (#), players (@), or top-level libraries
-  const parts = canonicalPath.split('/');
-  for (let i = parts.length - 1; i >= 1; i--) {
-    const parent = parts.slice(0, i).join('/');
-    const child = parts[i];
-    // Stop cascade at world/player/top-level-library boundaries
-    if (child.startsWith('@') || child.startsWith('#') || child.startsWith('~')) break;
-    // First real directory after @user or @user/#world = top-level library, needs own star
-    if (i === 1 || parts[i - 1].startsWith('@') || parts[i - 1].startsWith('#') || parts[i - 1].startsWith('~')) break;
-    if (stars.includes(parent)) return true;
-  }
-  return false;
-}
-
-function toggleStar(canonicalPath: string): boolean {
-  const stars = getStars();
-  const idx = stars.indexOf(canonicalPath);
-  if (idx >= 0) {
-    stars.splice(idx, 1);
-    setStars(stars);
-    return false;
-  } else {
-    stars.push(canonicalPath);
-    setStars(stars);
-    return true;
-  }
 }
 
 /** Build a URL path sliced to `end`, preserving any wildcards from the remainder of `fullPath`. */
@@ -1520,11 +1442,11 @@ function buildBreadcrumbItems(
   return { rootLink: { label: rootLabel, href: rootHref }, items };
 }
 
-function renderBreadcrumb(displayVersion: string, items: BreadcrumbItem[], canonicalPath?: string, starPath?: string, rootLink?: { label: string; href: string }): string {
+async function renderBreadcrumb(displayVersion: string, items: BreadcrumbItem[], canonicalPath?: string, starPath?: string, rootLink?: { label: string; href: string }): Promise<string> {
   let html = '';
   const actionHtml = canonicalPath ? renderActionButtons(canonicalPath, starPath || canonicalPath) : '';
   if (canonicalPath) {
-    const prCount = getPrCount(canonicalPath);
+    const prCount = await getPrCount(canonicalPath);
     html += `<div class="repo-nav-row">
       <span class="nav-actions">${actionHtml}</span>
       <button class="action-btn icon-btn" title="Pull requests" data-pr-nav data-pr-path="${canonicalPath}"><span class="action-count">${prCount}</span><span class="action-icon">${PR_SVG}</span></button>
@@ -1621,7 +1543,7 @@ function mountIframe(container: HTMLElement, jsContent: string, canonicalPath: s
     if (!iframe.contentWindow) return;
     iframe.contentWindow.postMessage({
       type: 'ether:init',
-      user: localStorage.getItem('ether:name') || 'anonymous',
+      user: getCurrentPlayer(),
       repo: canonicalPath,
       ...(includeScript ? { script: jsContent } : {}),
     }, '*');
@@ -1966,7 +1888,7 @@ function initVirtualScroll(container: HTMLElement, files: FileEntry[]): void {
   };
 }
 
-function renderRepo(): void {
+async function renderRepo(): Promise<void> {
   if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
   if (ideLayoutInstance) { ideLayoutInstance.unmount(); ideLayoutInstance = null; }
   currentFileViewEntries = null;
@@ -2054,11 +1976,11 @@ function renderRepo(): void {
   }
 
   // ---- Resolve data ----
-  const currentPlayer = localStorage.getItem('ether:name') || 'anonymous';
+  const currentPlayer = getCurrentPlayer();
   loadSidebarExpanded(currentPlayer);
   let repository = effectiveWorld
-    ? getWorld(effectiveWorldParent, effectiveWorld)
-    : getRepository(effectiveUser);
+    ? await getWorld(effectiveWorldParent, effectiveWorld)
+    : await getRepository(effectiveUser);
   // Virtual repository for the current player if they don't have one yet
   if (!repository && !effectiveWorld && effectiveUser === currentPlayer) {
     repository = { user: currentPlayer, description: `@${currentPlayer}`, tree: [] };
@@ -2082,7 +2004,7 @@ function renderRepo(): void {
 
   if (showUsersListing) {
     // Show referenced users as directory entries
-    const referencedUsers = getReferencedUsers(effectiveUser, effectiveWorld);
+    const referencedUsers = await getReferencedUsers(effectiveUser, effectiveWorld);
     // Inject current player if not already listed
     const users = referencedUsers.includes(currentPlayer)
       ? referencedUsers
@@ -2092,13 +2014,22 @@ function renderRepo(): void {
     }));
   } else if (showWorldsListing) {
     // Show referenced worlds as directory entries
-    entries = getReferencedWorlds(effectiveUser, effectiveWorld).map(w => ({
+    entries = (await getReferencedWorlds(effectiveUser, effectiveWorld)).map(w => ({
       name: w, isDirectory: true, modified: '',
     }));
   } else {
-    const resolved = treePath.length > 0
+    let resolved = treePath.length > 0
       ? resolveDirectory(repository.tree, treePath)
       : repository.tree;
+
+    // If local tree resolution failed, try fetching the subdirectory from the API
+    if (!resolved && treePath.length > 0) {
+      const apiPath = effectiveWorld
+        ? `@${effectiveWorldParent}/~${effectiveWorld}/${treePath.join('/')}`
+        : `@${effectiveUser}/${treePath.join('/')}`;
+      const fetched = await getAPI().listDirectory(apiPath);
+      if (fetched.length > 0) resolved = fetched;
+    }
 
     if (!resolved) {
       if (!hash && treePath.length > 0 && navigateFn) {
@@ -2106,21 +2037,23 @@ function renderRepo(): void {
         // Augment tree root with virtual entries for resolution
         let resolveTree: TreeEntry[] = repository.tree;
         const virtuals: TreeEntry[] = [];
-        const refUsers = getReferencedUsers(effectiveUser, effectiveWorld);
+        const refUsers = await getReferencedUsers(effectiveUser, effectiveWorld);
         if (refUsers.length > 0) {
-          const userChildren: FileEntry[] = (refUsers.includes(currentPlayer) ? refUsers : [currentPlayer, ...refUsers])
-            .map(u => {
-              const repo = getRepository(u);
-              return { name: u, isDirectory: true, modified: '', children: repo ? [...repo.tree] : [] } as FileEntry;
-            });
+          const userChildren: FileEntry[] = await Promise.all(
+            (refUsers.includes(currentPlayer) ? refUsers : [currentPlayer, ...refUsers])
+              .map(async u => {
+                const repo = await getRepository(u);
+                return { name: u, isDirectory: true, modified: '', children: repo ? [...repo.tree] : [] } as FileEntry;
+              })
+          );
           virtuals.push({ name: '@', isDirectory: true, modified: '', children: userChildren } as FileEntry);
         }
-        const refWorlds = getReferencedWorlds(effectiveUser, effectiveWorld);
+        const refWorlds = await getReferencedWorlds(effectiveUser, effectiveWorld);
         if (refWorlds.length > 0) {
-          const worldChildren: FileEntry[] = refWorlds.map(w => {
-            const worldRepo = getWorld(worldParentKey, w);
+          const worldChildren: FileEntry[] = await Promise.all(refWorlds.map(async w => {
+            const worldRepo = await getWorld(worldParentKey, w);
             return { name: w, isDirectory: true, modified: '', children: worldRepo ? [...worldRepo.tree] : [] } as FileEntry;
-          });
+          }));
           virtuals.push({ name: '~', isDirectory: true, modified: '', children: worldChildren } as FileEntry);
         }
         if (effectiveUser === currentPlayer && !effectiveWorld) {
@@ -2159,21 +2092,23 @@ function renderRepo(): void {
     // At tree root, inject virtual @/~ entries if there are referenced users/worlds
     if (treePath.length === 0) {
       const virtuals: FileEntry[] = [];
-      const refUsers = getReferencedUsers(effectiveUser, effectiveWorld);
+      const refUsers = await getReferencedUsers(effectiveUser, effectiveWorld);
       if (refUsers.length > 0) {
-        const userChildren: FileEntry[] = (refUsers.includes(currentPlayer) ? refUsers : [currentPlayer, ...refUsers])
-          .map(u => {
-            const repo = getRepository(u);
-            return { name: u, isDirectory: true, modified: '', children: repo ? [...repo.tree] : [] } as FileEntry;
-          });
+        const userChildren: FileEntry[] = await Promise.all(
+          (refUsers.includes(currentPlayer) ? refUsers : [currentPlayer, ...refUsers])
+            .map(async u => {
+              const repo = await getRepository(u);
+              return { name: u, isDirectory: true, modified: '', children: repo ? [...repo.tree] : [] } as FileEntry;
+            })
+        );
         virtuals.push({ name: '@', isDirectory: true, modified: '', children: userChildren });
       }
-      const refWorlds = getReferencedWorlds(effectiveUser, effectiveWorld);
+      const refWorlds = await getReferencedWorlds(effectiveUser, effectiveWorld);
       if (refWorlds.length > 0) {
-        const worldChildren: FileEntry[] = refWorlds.map(w => {
-          const worldRepo = getWorld(worldParentKey, w);
+        const worldChildren: FileEntry[] = await Promise.all(refWorlds.map(async w => {
+          const worldRepo = await getWorld(worldParentKey, w);
           return { name: w, isDirectory: true, modified: '', children: worldRepo ? [...worldRepo.tree] : [] } as FileEntry;
-        });
+        }));
         virtuals.push({ name: '~', isDirectory: true, modified: '', children: worldChildren });
       }
       // Inject .stars.list.ray and Session.ray.json for the current player
@@ -2191,7 +2126,19 @@ function renderRepo(): void {
   if (hash) {
     const hashPath = hash.split('/').filter(Boolean);
     if (hashPath.length > 0) {
-      const files = resolveFiles(entries, hashPath);
+      let files = resolveFiles(entries, hashPath);
+      // If local tree has no content (HttpBackend flat listing) or resolution failed, fetch from API
+      const needsFetch = files.length === 0 || files.every(f => f.content === undefined);
+      if (needsFetch) {
+        const apiFilePath = effectiveWorld
+          ? `@${effectiveWorldParent}/~${effectiveWorld}/${treePath.length > 0 ? treePath.join('/') + '/' : ''}${hashPath.join('/')}`
+          : `@${effectiveUser}/${treePath.length > 0 ? treePath.join('/') + '/' : ''}${hashPath.join('/')}`;
+        const content = await getAPI().readFile(apiFilePath);
+        if (content !== null) {
+          const name = hashPath[hashPath.length - 1];
+          files = [{ name, isDirectory: false, modified: '', content }];
+        }
+      }
       const basePath = buildBasePath(base, versions, path);
       const displayVersion = versions.length > 0 ? versions[versions.length - 1][1] : 'latest';
 
@@ -2212,7 +2159,7 @@ function renderRepo(): void {
 
       const { rootLink, items: breadcrumbItems } = buildBreadcrumbItems(treePath, headerChain, base, versions, path, treePathStart, repository.tree);
       const rootStarPath = buildRootStarPath(repository, effectiveUser, effectiveWorld, treePath, user, base);
-      html += renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
+      html += await renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
       html += `</div>`;
 
       html += `<div class="ide-layout-mount"></div>`;
@@ -2271,10 +2218,53 @@ function renderRepo(): void {
               e.stopPropagation();
               e.preventDefault();
               const dirEl = toggle.closest('.sidebar-dir')!;
-              const children = dirEl.querySelector(':scope > .sidebar-dir-children');
+              let children = dirEl.querySelector(':scope > .sidebar-dir-children');
               if (!children) {
+                // No children rendered yet — fetch from API and inject
                 const href = (toggle as HTMLElement).dataset.sidebarHref;
-                if (href && navigateFn) navigateFn(href);
+                if (!href) return;
+                const prefix = sidebarBasePath.endsWith('/') ? sidebarBasePath : sidebarBasePath + '/';
+                const relPathEncoded = href.startsWith(prefix)
+                  ? href.slice(prefix.length)
+                  : null;
+                if (relPathEncoded === null) {
+                  if (navigateFn) navigateFn(href);
+                  return;
+                }
+                // Decode relPath — href segments are URL-encoded, API paths should be decoded
+                const relPath = relPathEncoded.split('/').map(s => { try { return decodeURIComponent(s); } catch { return s; } }).join('/');
+                // Build API path from the sidebar href
+                const apiSubPath = effectiveWorld
+                  ? `@${effectiveWorldParent}/~${effectiveWorld}/${treePath.length > 0 ? treePath.join('/') + '/' : ''}${relPath}`
+                  : `@${effectiveUser}/${treePath.length > 0 ? treePath.join('/') + '/' : ''}${relPath}`;
+                void (async () => {
+                  const fetched = await getAPI().listDirectory(apiSubPath);
+                  // Create the children container (empty or populated)
+                  const childrenDiv = document.createElement('div');
+                  childrenDiv.className = 'sidebar-dir-children';
+                  const depth = parseInt((toggle as HTMLElement).style.paddingLeft || '8', 10);
+                  const childDepth = Math.round((depth - 8) / 16) + 1;
+                  childrenDiv.innerHTML = fetched.length > 0
+                    ? renderSidebarTree(fetched, href, [], childDepth)
+                    : '';
+                  dirEl.appendChild(childrenDiv);
+                  // Update arrow — remove caret if empty
+                  const arrow = toggle.querySelector('.sidebar-arrow');
+                  if (fetched.length === 0) {
+                    if (arrow) arrow.textContent = '';
+                  } else {
+                    if (arrow) arrow.textContent = '▾';
+                  }
+                  const key = (toggle as HTMLElement).dataset.sidebarKey;
+                  if (key) {
+                    sidebarExpanded.add(key);
+                    saveSidebarExpanded(getCurrentPlayer());
+                  }
+                  // Bind handlers on the new children
+                  bindSidebarTreeHandlers(childrenDiv);
+                  bindSidebarFileHandlers(childrenDiv);
+                  bindAccessBadges(childrenDiv);
+                })();
                 return;
               }
               const isExpanded = !children.classList.contains('hidden');
@@ -2284,7 +2274,7 @@ function renderRepo(): void {
               const key = (toggle as HTMLElement).dataset.sidebarKey;
               if (key) {
                 if (isExpanded) sidebarExpanded.delete(key); else sidebarExpanded.add(key);
-                const u = localStorage.getItem('ether:name') || 'anonymous';
+                const u = getCurrentPlayer();
                 saveSidebarExpanded(u);
               }
             });
@@ -2302,9 +2292,66 @@ function renderRepo(): void {
               const key = (arrow as HTMLElement).dataset.sidebarKey;
               if (key) {
                 if (isExpanded) sidebarExpanded.delete(key); else sidebarExpanded.add(key);
-                const u = localStorage.getItem('ether:name') || 'anonymous';
+                const u = getCurrentPlayer();
                 saveSidebarExpanded(u);
               }
+            });
+          });
+        }
+
+        // File clicks → open as new tab (or fetch file content from API)
+        function bindSidebarFileHandlers(el: HTMLElement): void {
+          el.querySelectorAll('[data-href]').forEach(entry => {
+            entry.addEventListener('click', (e) => {
+              e.preventDefault();
+              const href = (entry as HTMLElement).dataset.href!;
+              if (ideLayoutInstance) {
+                const prefix = sidebarBasePath.endsWith('/') ? sidebarBasePath : sidebarBasePath + '/';
+                const relPath = href.startsWith(prefix)
+                  ? href.slice(prefix.length).split('/').filter(Boolean).map(s => { try { return decodeURIComponent(s); } catch { return s; } }).map(unescapePathSegment)
+                  : null;
+                if (relPath && relPath.length > 0) {
+                  // Decompose @name/~name segments into ['@','name'] / ['~','name']
+                  // so resolveFiles can traverse the virtual @ and ~ tree entries
+                  const fileTreePath: string[] = [];
+                  for (const seg of relPath) {
+                    if (seg.length > 1 && (seg.startsWith('@') || seg.startsWith('~'))) {
+                      fileTreePath.push(seg[0], seg.slice(1));
+                    } else {
+                      fileTreePath.push(seg);
+                    }
+                  }
+                  const resolved = resolveFiles(sidebarEntries, fileTreePath);
+                  if (resolved.length > 0 && resolved.some(f => f.content !== undefined)) {
+                    const relHash = relPath.map(encodeURIComponent).join('/');
+                    const panelId = 'file:' + relHash;
+                    const name = fileTreePath[fileTreePath.length - 1];
+                    history.replaceState(null, '', location.pathname + '#' + relHash);
+                    ideLayoutInstance.openPanel(makeFilePanel(panelId, name, resolved));
+                    return;
+                  }
+                  // File not in local tree or has no content — fetch from API
+                  const apiFilePath = effectiveWorld
+                    ? `@${effectiveWorldParent}/~${effectiveWorld}/${treePath.length > 0 ? treePath.join('/') + '/' : ''}${relPath.join('/')}`
+                    : `@${effectiveUser}/${treePath.length > 0 ? treePath.join('/') + '/' : ''}${relPath.join('/')}`;
+                  void (async () => {
+                    const content = await getAPI().readFile(apiFilePath);
+                    if (content !== null) {
+                      const name = relPath[relPath.length - 1];
+                      const relHash = relPath.map(encodeURIComponent).join('/');
+                      const panelId = 'file:' + relHash;
+                      const fileEntry: FileEntry = { name, isDirectory: false, modified: '', content };
+                      history.replaceState(null, '', location.pathname + '#' + relHash);
+                      ideLayoutInstance!.openPanel(makeFilePanel(panelId, name, [fileEntry]));
+                    } else if (navigateFn) {
+                      navigateFn(href);
+                    }
+                  })();
+                  return;
+                }
+              }
+              // Fallback: full navigation (directories, unresolved paths)
+              if (navigateFn) navigateFn(href);
             });
           });
         }
@@ -2323,42 +2370,7 @@ function renderRepo(): void {
           sticky: true,
           render: (el) => {
             el.innerHTML = renderSidebarTree(sidebarEntries, sidebarBasePath, sidebarExpandPath, 0);
-            // File clicks → open as new tab
-            el.querySelectorAll('[data-href]').forEach(entry => {
-              entry.addEventListener('click', (e) => {
-                e.preventDefault();
-                const href = (entry as HTMLElement).dataset.href!;
-                if (ideLayoutInstance) {
-                  const prefix = sidebarBasePath.endsWith('/') ? sidebarBasePath : sidebarBasePath + '/';
-                  const relPath = href.startsWith(prefix)
-                    ? href.slice(prefix.length).split('/').filter(Boolean).map(unescapePathSegment)
-                    : null;
-                  if (relPath && relPath.length > 0) {
-                    // Decompose @name/~name segments into ['@','name'] / ['~','name']
-                    // so resolveFiles can traverse the virtual @ and ~ tree entries
-                    const treePath: string[] = [];
-                    for (const seg of relPath) {
-                      if (seg.length > 1 && (seg.startsWith('@') || seg.startsWith('~'))) {
-                        treePath.push(seg[0], seg.slice(1));
-                      } else {
-                        treePath.push(seg);
-                      }
-                    }
-                    const resolved = resolveFiles(sidebarEntries, treePath);
-                    if (resolved.length > 0) {
-                      const relHash = relPath.join('/');
-                      const panelId = 'file:' + relHash;
-                      const name = treePath[treePath.length - 1];
-                      history.replaceState(null, '', location.pathname + '#' + relHash);
-                      ideLayoutInstance.openPanel(makeFilePanel(panelId, name, resolved));
-                      return;
-                    }
-                  }
-                }
-                // Fallback: full navigation (directories, unresolved paths)
-                if (navigateFn) navigateFn(href);
-              });
-            });
+            bindSidebarFileHandlers(el);
             bindSidebarTreeHandlers(el);
             bindAccessBadges(el);
           },
@@ -2367,7 +2379,7 @@ function renderRepo(): void {
         const filePanel = makeFilePanel(initialFilePanelId, fileName, files);
 
         // Try restoring layout from session
-        const currentUser = localStorage.getItem('ether:name') || 'anonymous';
+        const currentUser = getCurrentPlayer();
         const session = loadSession(currentUser);
         let initialLayout: LayoutNode;
         const allPanels: PanelDefinition[] = [sidebarPanel, filePanel];
@@ -2520,7 +2532,7 @@ function renderRepo(): void {
 
   const { rootLink, items: breadcrumbItems } = buildBreadcrumbItems(treePath, headerChain, base, versions, path, treePathStart, repository.tree);
   const rootStarPath = buildRootStarPath(repository, effectiveUser, effectiveWorld, treePath, user, base);
-  html += renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
+  html += await renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
 
   // File listing
   if (showUsersListing) {
@@ -2589,20 +2601,20 @@ function renderRepo(): void {
 
 // ---- Public API ----
 
-export function mount(
+export async function mount(
   container: HTMLElement,
   params: { user: string; path: string[]; versions: [number, string][]; base: string; hash: string | null },
   navigate: (path: string) => void,
-): void {
+): Promise<void> {
   injectStyles();
   document.body.style.background = CRT_SCREEN_BG;
   currentContainer = container;
   currentRepoParams = params;
   navigateFn = navigate;
-  renderRepo();
+  await renderRepo();
 }
 
-export function update(params: { user: string; path: string[]; versions: [number, string][]; base: string; hash: string | null }): void {
+export async function update(params: { user: string; path: string[]; versions: [number, string][]; base: string; hash: string | null }): Promise<void> {
   const prev = currentRepoParams;
   currentRepoParams = params;
 
@@ -2629,7 +2641,7 @@ export function update(params: { user: string; path: string[]; versions: [number
     // Hash cleared — fall through to full re-render (back to directory listing)
   }
 
-  renderRepo();
+  await renderRepo();
 }
 
 export function unmount(): void {

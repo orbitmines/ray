@@ -5,6 +5,7 @@
 import * as Greetings from './Greetings.ts';
 import * as Repository from './Repository.ts';
 import * as PullRequests from './PullRequests.ts';
+import { getDefaultUser } from './API.ts';
 
 type Page = 'repository' | 'pull-requests';
 
@@ -43,10 +44,8 @@ type RouteResult =
 
 // ---- Route Matching ----
 
-const DEFAULT_USER = 'ether';
-
 function matchRoute(pathname: string): RouteResult {
-  let user = DEFAULT_USER;
+  let user = getDefaultUser();
   let base = '';
   let rest = pathname;
 
@@ -140,12 +139,12 @@ function matchRoute(pathname: string): RouteResult {
 async function activatePage(route: RouteResult): Promise<void> {
   // Fast-path: same page type, just update params
   if (route.page === 'repository' && currentPage === 'repository') {
-    Repository.update(route.params);
+    await Repository.update(route.params);
     ensureBar(route.page);
     return;
   }
   if (route.page === 'pull-requests' && currentPage === 'pull-requests') {
-    PullRequests.update(route.params);
+    await PullRequests.update(route.params);
     ensureBar(route.page);
     return;
   }
@@ -167,10 +166,10 @@ async function activatePage(route: RouteResult): Promise<void> {
   // Mount new page
   if (route.page === 'repository') {
     rootEl.style.display = '';
-    Repository.mount(rootEl, route.params, navigateTo);
+    await Repository.mount(rootEl, route.params, navigateTo);
   } else if (route.page === 'pull-requests') {
     rootEl.style.display = '';
-    PullRequests.mount(rootEl, route.params, navigateTo);
+    await PullRequests.mount(rootEl, route.params, navigateTo);
   }
 
   ensureBar(route.page);
@@ -233,11 +232,21 @@ function boot(): void {
   window.addEventListener('hashchange', handleRoute);
   document.addEventListener('click', onLinkClick);
 
-  handleRoute();
-
-  // Homepage first visit: CRT onboarding overlay on top of the page
+  // Homepage first visit: show CRT onboarding first, render page after name is chosen
   if (isHomepage() && Greetings.isFirstVisit()) {
-    Greetings.mount(); // fire-and-forget async overlay
+    Greetings.mount().then(() => {
+      lastRouteUrl = ''; // force re-evaluation with the newly stored name
+      handleRoute();
+      // Fade in the page now that content is rendered with the correct user
+      rootEl.style.transition = 'opacity 0.6s ease-in';
+      rootEl.style.opacity = '1';
+      rootEl.addEventListener('transitionend', () => {
+        rootEl.style.transition = '';
+        rootEl.style.opacity = '';
+      }, { once: true });
+    });
+  } else {
+    handleRoute();
   }
 }
 

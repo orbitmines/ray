@@ -558,6 +558,7 @@ export function injectIDEStyles(): void {
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 6px;
     }
     .ide-tab__icon svg {
       width: 14px;
@@ -1102,6 +1103,55 @@ export function createIDELayout(container: HTMLElement, options: {
     requestAnimationFrame(() => positionDropIndicators(container));
   }
 
+  /** Lightweight visual update during drag — avoids destroying the DOM tree. */
+  function updateDragVisuals(): void {
+    if (destroyed) return;
+
+    // 1. Update dragging class on tabs
+    container.querySelectorAll<HTMLElement>('.ide-tab').forEach(tab => {
+      const pid = tab.dataset.panelId;
+      if (state.dragState && pid === state.dragState.panelId) {
+        tab.classList.add('ide-tab--dragging');
+      } else {
+        tab.classList.remove('ide-tab--dragging');
+      }
+    });
+
+    // 2. Remove old insert indicators and drop overlays
+    container.querySelectorAll('.ide-tab-insert-indicator').forEach(el => el.remove());
+    container.querySelectorAll('.ide-drop-indicator').forEach(el => el.remove());
+
+    if (!state.dropZone) return;
+
+    // 3. Show tab insert indicator
+    if (state.dropZone.type === 'tab' && state.dropZone.insertIndex !== undefined) {
+      const groupEl = container.querySelector<HTMLElement>(
+        `.ide-tabgroup[data-group-id="${state.dropZone.targetId}"]`
+      );
+      const tabBar = groupEl?.querySelector<HTMLElement>('.ide-tabbar');
+      if (tabBar) {
+        const tabs = tabBar.querySelectorAll('.ide-tab:not(.ide-tab--dragging)');
+        const idx = state.dropZone.insertIndex;
+        const indicator = document.createElement('div');
+        indicator.className = 'ide-tab-insert-indicator';
+        if (idx < tabs.length) {
+          tabBar.insertBefore(indicator, tabs[idx]);
+        } else {
+          tabBar.appendChild(indicator);
+        }
+      }
+    } else {
+      // 4. Show edge drop overlay
+      const groupEl = container.querySelector<HTMLElement>(
+        `.ide-tabgroup[data-group-id="${state.dropZone.targetId}"]`
+      );
+      if (groupEl) {
+        groupEl.appendChild(createDropIndicator(state.dropZone.type));
+        requestAnimationFrame(() => positionDropIndicators(container));
+      }
+    }
+  }
+
   function notifyLayoutChange(): void {
     if (options.onLayoutChange) options.onLayoutChange(state.layout);
   }
@@ -1126,19 +1176,19 @@ export function createIDELayout(container: HTMLElement, options: {
 
     setDragState(ds: DragState | null) {
       state.dragState = ds;
-      rerender();
+      updateDragVisuals();
     },
 
     setDropZone(dz: DropZone | null) {
       const prev = state.dropZone;
-      // Skip re-render if nothing changed
+      // Skip update if nothing changed
       if (prev === dz) return;
       if (prev && dz &&
         prev.targetId === dz.targetId &&
         prev.type === dz.type &&
         prev.insertIndex === dz.insertIndex) return;
       state.dropZone = dz;
-      rerender();
+      updateDragVisuals();
     },
 
     movePanelToTabGroup(

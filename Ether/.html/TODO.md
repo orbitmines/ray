@@ -3,3 +3,4 @@
 - ..
 - Access permissions for which file shown to whom, for .ray is also content of the file
 - On editing access permission: prompt with should you change the history access as well?
+- Files can inside them have a index.ray.js, to decide how to render them

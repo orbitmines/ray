@@ -1270,6 +1270,10 @@ function buildEntryHref(basePath: string, name: string, parentContext: ParentCon
     const parent = basePath.replace(/\/~$/, '');
     return parent + '/~' + encodeSegment(name);
   }
+  // Navigation entries (@, ~) stay raw in the URL — the Router recognises them as special
+  if (name === '@' || name === '~') {
+    return basePath + (basePath.endsWith('/') ? '' : '/') + name;
+  }
   return basePath + (basePath.endsWith('/') ? '' : '/') + encodeSegment(escapePathSegment(name));
 }
 
@@ -1597,7 +1601,7 @@ function findReadmes(entries: TreeEntry[]): FileEntry[] {
   for (const entry of entries) {
     if (isCompound(entry)) {
       result.push(...findReadmes(entry.entries));
-    } else if (entry.name === 'README.md' && !entry.isDirectory && entry.content) {
+    } else if (entry.name === 'README.md' && !entry.isDirectory) {
       result.push(entry);
     }
   }
@@ -2118,7 +2122,8 @@ async function renderRepo(): Promise<void> {
         virtuals.push({ name: '.stars.list.ray', isDirectory: false, modified: '', content: starsContent });
         virtuals.push({ name: 'Session.ray.json', isDirectory: false, modified: '', content: getSessionContent(currentPlayer) });
       }
-      entries = [...virtuals, ...entries];
+      const virtualNames = new Set(virtuals.map(v => v.name));
+      entries = [...virtuals, ...entries.filter(e => !virtualNames.has(e.name))];
     }
   }
 
@@ -2563,8 +2568,19 @@ async function renderRepo(): Promise<void> {
 
   // README — resolve relative links against current basePath
   const readmes = findReadmes(entries);
-  if (readmes.length === 1) {
-    const readmeHtml = renderMarkdown(readmes[0].content!);
+  // Fetch content for READMEs that lack inline content (e.g. HttpBackend flat listings)
+  for (const readme of readmes) {
+    if (!readme.content) {
+      const apiPath = effectiveWorld
+        ? `@${effectiveWorldParent}/~${effectiveWorld}/${treePath.length > 0 ? treePath.join('/') + '/' : ''}${readme.name}`
+        : `@${effectiveUser}/${treePath.length > 0 ? treePath.join('/') + '/' : ''}${readme.name}`;
+      const fetched = await getAPI().readFile(apiPath);
+      if (fetched !== null) readme.content = fetched;
+    }
+  }
+  const readmesWithContent = readmes.filter(r => r.content);
+  if (readmesWithContent.length === 1) {
+    const readmeHtml = renderMarkdown(readmesWithContent[0].content!);
     const resolvedHtml = readmeHtml.replace(/href="(?!\/|https?:|#)([^"]+)"/g, (_m, rel) =>
       `href="${buildBasePath(base, versions, [...path, ...rel.split('/').filter(Boolean)])}"`
     );
@@ -2572,18 +2588,18 @@ async function renderRepo(): Promise<void> {
       <div class="readme-header">README.md</div>
       <div class="readme-body">${resolvedHtml}</div>
     </div>`;
-  } else if (readmes.length > 1) {
+  } else if (readmesWithContent.length > 1) {
     // Multiple READMEs — render as switchable tabs
-    const allSameName = readmes.every(r => r.name === readmes[0].name);
+    const allSameName = readmesWithContent.every(r => r.name === readmesWithContent[0].name);
     html += `<div class="readme-section">`;
     html += `<div class="readme-tabs">`;
-    readmes.forEach((r, i) => {
+    readmesWithContent.forEach((r, i) => {
       const label = allSameName ? `${r.name} (${i + 1})` : r.name;
       const activeClass = i === 0 ? ' active' : '';
       html += `<button class="readme-tab${activeClass}" data-readme-tab="${i}">${label}</button>`;
     });
     html += `</div>`;
-    readmes.forEach((r, i) => {
+    readmesWithContent.forEach((r, i) => {
       const readmeHtml = renderMarkdown(r.content!);
       const resolvedHtml = readmeHtml.replace(/href="(?!\/|https?:|#)([^"]+)"/g, (_m, rel) =>
         `href="${buildBasePath(base, versions, [...path, ...rel.split('/').filter(Boolean)])}"`

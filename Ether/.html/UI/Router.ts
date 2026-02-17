@@ -28,11 +28,13 @@ export interface PRParams {
   user: string;
   path: string[];
   base: string;
-  prAction: 'list' | 'detail' | 'new';
+  prAction: 'list' | 'detail' | 'new' | 'players' | 'worlds';
   prId: number | null;
   commitId: string | null;
   /** The canonical repo path for this PR context, e.g. "@ether/library" */
   repoPath: string;
+  /** Category context: '@' for players, '~' for worlds, null for regular */
+  category: '@' | '~' | null;
 }
 
 type RouteResult =
@@ -59,39 +61,55 @@ function matchRoute(pathname: string): RouteResult {
   // Split remaining into segments, filter empty
   const segments = rest.split('/').filter(s => s);
 
-  // Check for -/pulls namespace separator
+  // Check for -/pulls, -/@/pulls, or -/~/pulls namespace separator
   const dashIdx = segments.indexOf('-');
-  if (dashIdx >= 0 && segments[dashIdx + 1] === 'pulls') {
-    // Everything before '-' is the repo path (strip wildcards)
-    const repoPathSegments = segments.slice(0, dashIdx).filter(s => s !== '*' && s !== '**');
-    const pullsSegments = segments.slice(dashIdx + 2); // after 'pulls'
+  if (dashIdx >= 0) {
+    let isPullsRoute = false;
+    let category: '@' | '~' | null = null;
+    let pullsSegmentsStart = dashIdx + 2;
 
-    const repoPath = `@${user}` + (repoPathSegments.length > 0 ? '/' + repoPathSegments.join('/') : '');
-
-    let prAction: 'list' | 'detail' | 'new' = 'list';
-    let prId: number | null = null;
-    let commitId: string | null = null;
-
-    if (pullsSegments.length === 0) {
-      prAction = 'list';
-    } else if (pullsSegments[0] === 'new') {
-      prAction = 'new';
-    } else {
-      const id = parseInt(pullsSegments[0], 10);
-      if (!isNaN(id)) {
-        prAction = 'detail';
-        prId = id;
-        // Check for /commits/UUID
-        if (pullsSegments[1] === 'commits' && pullsSegments[2]) {
-          commitId = pullsSegments[2];
-        }
-      }
+    if (segments[dashIdx + 1] === 'pulls') {
+      isPullsRoute = true;
+    } else if (
+      (segments[dashIdx + 1] === '@' || segments[dashIdx + 1] === '~') &&
+      segments[dashIdx + 2] === 'pulls'
+    ) {
+      isPullsRoute = true;
+      category = segments[dashIdx + 1] as '@' | '~';
+      pullsSegmentsStart = dashIdx + 3;
     }
 
-    return {
-      page: 'pull-requests',
-      params: { user, path: repoPathSegments, base, prAction, prId, commitId, repoPath },
-    };
+    if (isPullsRoute) {
+      const repoPathSegments = segments.slice(0, dashIdx).filter(s => s !== '*' && s !== '**');
+      const pullsSegments = segments.slice(pullsSegmentsStart);
+      const repoPath = `@${user}` + (repoPathSegments.length > 0 ? '/' + repoPathSegments.join('/') : '');
+
+      let prAction: 'list' | 'detail' | 'new' | 'players' | 'worlds' = 'list';
+      let prId: number | null = null;
+      let commitId: string | null = null;
+
+      if (category && pullsSegments.length === 0) {
+        prAction = category === '@' ? 'players' : 'worlds';
+      } else if (pullsSegments.length === 0) {
+        prAction = 'list';
+      } else if (pullsSegments[0] === 'new') {
+        prAction = 'new';
+      } else {
+        const id = parseInt(pullsSegments[0], 10);
+        if (!isNaN(id)) {
+          prAction = 'detail';
+          prId = id;
+          if (pullsSegments[1] === 'commits' && pullsSegments[2]) {
+            commitId = pullsSegments[2];
+          }
+        }
+      }
+
+      return {
+        page: 'pull-requests',
+        params: { user, path: repoPathSegments, base, prAction, prId, commitId, repoPath, category },
+      };
+    }
   }
 
   // Walk segments: collect ~/version markers and build clean path

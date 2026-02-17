@@ -2076,12 +2076,21 @@ function renderRepo(): void {
                     ? href.slice(prefix.length).split('/').filter(Boolean).map(unescapePathSegment)
                     : null;
                   if (relPath && relPath.length > 0) {
-                    const resolved = resolveFiles(sidebarEntries, relPath);
+                    // Decompose @name/~name segments into ['@','name'] / ['~','name']
+                    // so resolveFiles can traverse the virtual @ and ~ tree entries
+                    const treePath: string[] = [];
+                    for (const seg of relPath) {
+                      if (seg.length > 1 && (seg.startsWith('@') || seg.startsWith('~'))) {
+                        treePath.push(seg[0], seg.slice(1));
+                      } else {
+                        treePath.push(seg);
+                      }
+                    }
+                    const resolved = resolveFiles(sidebarEntries, treePath);
                     if (resolved.length > 0) {
-                      const relHash = computeRelativeHash(sidebarBasePath, href)
-                        .split('/').map(unescapePathSegment).join('/');
+                      const relHash = relPath.join('/');
                       const panelId = 'file:' + relHash;
-                      const name = relPath[relPath.length - 1];
+                      const name = treePath[treePath.length - 1];
                       history.replaceState(null, '', location.pathname + '#' + relHash);
                       ideLayoutInstance.openPanel(makeFilePanel(panelId, name, resolved));
                       return;

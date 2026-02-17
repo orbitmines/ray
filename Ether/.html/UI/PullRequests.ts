@@ -4,13 +4,13 @@
 
 import { PHOSPHOR, CRT_SCREEN_BG } from './CRTShell.ts';
 import { renderMarkdown } from './Markdown.ts';
-import { getPullRequests, getPullRequest, getOpenPRCount, createPullRequest, getRepository } from './DummyData.ts';
-import type { PullRequest, PRStatus, PRCommit, FileDiff, ActivityItem } from './DummyData.ts';
+import { getInlinePullRequests, getCategoryPRSummary, getCategoryPullRequests, getPullRequest, getOpenPRCount, createPullRequest, getRepository } from './DummyData.ts';
+import type { PullRequest, PRStatus, PRCommit, FileDiff, ActivityItem, InlinePR, CategoryPRSummary } from './DummyData.ts';
 import type { PRParams } from './Router.ts';
 import { computeDiff, renderUnifiedDiff, renderSideBySideDiff } from './DiffView.ts';
 import {
   COMMIT_SVG, BRANCH_SVG, COMMENT_SVG, CHECK_SVG,
-  MERGE_SVG, ARROW_LEFT_SVG, STATUS_CHANGE_SVG, FILE_DIFF_SVG,
+  MERGE_SVG, ARROW_LEFT_SVG, ARROW_RIGHT_SVG, STATUS_CHANGE_SVG, FILE_DIFF_SVG,
   EDIT_SVG, PR_SVG,
 } from './PRIcons.ts';
 
@@ -157,6 +157,53 @@ function injectStyles(): void {
       font-size: 14px;
     }
 
+    /* ---- Folder path prefix on nested PR rows ---- */
+    .pr-row-path {
+      color: rgba(255,255,255,0.3);
+      font-weight: normal;
+    }
+    .pr-row-path::after {
+      content: ' / ';
+      color: rgba(255,255,255,0.15);
+    }
+
+    /* ---- Category rows (@{: String} players, #{: String} worlds) ---- */
+    .pr-category-row {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
+      transition: background 0.1s;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+      background: rgba(255,255,255,0.015);
+    }
+    .pr-category-row:hover { background: rgba(255,255,255,0.05); }
+    .pr-category-icon {
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,0.35);
+    }
+    .pr-category-icon svg { width: 18px; height: 18px; fill: currentColor; }
+    .pr-category-body { flex: 1; min-width: 0; }
+    .pr-category-name {
+      font-size: 14px;
+      font-weight: bold;
+      color: rgba(255,255,255,0.7);
+    }
+    .pr-category-row:hover .pr-category-name { color: ${PHOSPHOR}; }
+    .pr-category-meta {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      margin-top: 1px;
+    }
+
     /* ---- New PR button ---- */
     .pr-new-btn {
       display: inline-flex;
@@ -188,7 +235,7 @@ function injectStyles(): void {
     /* ---- PR detail ---- */
     .pr-detail-title-row {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 0;
       margin-bottom: 2px;
     }
@@ -235,10 +282,19 @@ function injectStyles(): void {
       align-items: center;
       gap: 8px;
       font-size: 12px;
+      line-height: 1;
       color: rgba(255,255,255,0.4);
       margin-bottom: 16px;
     }
-    .pr-branch-info svg { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
+    .pr-branch-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+    }
+    .pr-branch-icon svg { width: 18px; height: 18px; fill: currentColor; display: block; }
     .pr-branch-label {
       background: rgba(255,255,255,0.06);
       padding: 2px 8px;
@@ -249,13 +305,20 @@ function injectStyles(): void {
       cursor: pointer;
     }
     .pr-branch-label:hover { color: ${PHOSPHOR}; background: rgba(255,255,255,0.1); }
-    .pr-branch-arrow { color: rgba(255,255,255,0.2); }
+    .pr-branch-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: rgba(255,255,255,0.2);
+    }
+    .pr-branch-arrow svg { width: 14px; height: 14px; fill: currentColor; display: block; }
 
     /* ---- Hover edit buttons ---- */
     .pr-editable {
       position: relative;
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 0;
     }
     .pr-editable .pr-hover-edit {
@@ -787,43 +850,45 @@ function statusBadge(status: PRStatus): string {
 function buildPullsUrl(params: PRParams, suffix?: string): string {
   const base = params.base || '';
   const pathPart = params.path.length > 0 ? '/' + params.path.join('/') : '';
-  return `${base}${pathPart}/-/pulls${suffix ? '/' + suffix : ''}`;
+  const categoryPart = params.category ? '/' + params.category : '';
+  return `${base}${pathPart}/-${categoryPart}/pulls${suffix ? '/' + suffix : ''}`;
 }
 
 function buildRepoUrl(params: PRParams): string {
   const base = params.base || '';
   const pathPart = params.path.length > 0 ? '/' + params.path.join('/') : '';
-  return `${base}${pathPart}`;
+  return `${base}${pathPart}` || '/';
 }
 
 function buildUserUrl(user: string): string {
   return `/@${user}`;
 }
 
-/** Try to get a profile picture data URI for a user. */
-function getUserProfilePic(user: string): string | null {
+/** Get the raw file URL for a user's profile picture.
+ *  userPath is the full canonical path, e.g. '@alice' or '@ether/~genesis/@alice'. */
+function getUserProfilePic(userPath: string): string | null {
+  // Extract username from the last @-prefixed segment
+  const segments = userPath.split('/');
+  const userSeg = [...segments].reverse().find(s => s.startsWith('@'));
+  const user = userSeg ? userSeg.slice(1) : segments[segments.length - 1];
+
   const repo = getRepository(user);
   if (!repo) return null;
   const names = ['profile-picture.svg', 'profile-picture.png', 'profile-picture.jpeg'];
   for (const entry of repo.tree) {
-    if ('name' in entry && names.includes(entry.name) && 'content' in entry && entry.content) {
-      const fe = entry as { name: string; content: string };
-      if (fe.name.endsWith('.svg')) {
-        return `data:image/svg+xml;base64,${btoa(fe.content)}`;
-      }
-      // For png/jpeg, content would be base64 — just return as-is
-      const ext = fe.name.endsWith('.png') ? 'png' : 'jpeg';
-      return `data:image/${ext};base64,${fe.content}`;
+    if ('name' in entry && names.includes(entry.name)) {
+      return `/**/${userPath}/${entry.name}`;
     }
   }
   return null;
 }
 
-/** Render a user avatar icon — profile picture if available, otherwise fallback SVG */
-function renderUserIcon(user: string, fallbackSvg: string, cssClass: string): string {
-  const pic = getUserProfilePic(user);
+/** Render a user avatar icon — profile picture if available, otherwise fallback SVG.
+ *  userPath is the full canonical path, e.g. '@alice' or '@ether/~genesis/@alice'. */
+function renderUserIcon(userPath: string, fallbackSvg: string, cssClass: string): string {
+  const pic = getUserProfilePic(userPath);
   if (pic) {
-    return `<div class="pr-timeline-icon ${cssClass}"><img src="${pic}" alt="@${escapeHtml(user)}" /></div>`;
+    return `<div class="pr-timeline-icon ${cssClass}"><img src="${pic}" alt="${escapeHtml(userPath)}" /></div>`;
   }
   return `<div class="pr-timeline-icon ${cssClass}">${fallbackSvg}</div>`;
 }
@@ -844,19 +909,22 @@ function branchLink(label: string): string {
 // ---- Header chain (reuses Repository.ts .repo-header pattern) ----
 
 function renderHeaderChain(params: PRParams): string {
-  const parts = params.repoPath.split('/');
-  const user = parts[0]; // @ether
-  const rest = parts.slice(1);
-  const repoUrl = buildRepoUrl(params);
+  const base = params.base || '';
 
   let html = `<div class="repo-header">`;
-  const userUrl = buildUserUrl(user.slice(1));
-  html += `<a href="${userUrl}" data-link class="user">${escapeHtml(user)}</a>`;
-  for (let i = 0; i < rest.length; i++) {
-    html += `<span class="sep">/</span>`;
-    const isLast = i === rest.length - 1;
+  // Only show @user breadcrumb when /@user is actually in the URL
+  if (base) {
+    const userPullsUrl = `${base}/-/pulls`;
+    html += `<a href="${userPullsUrl}" data-link class="user">@${escapeHtml(params.user)}</a>`;
+  }
+  // Path segments → cumulative PR lists using the actual URL base
+  for (let i = 0; i < params.path.length; i++) {
+    if (base || i > 0) html += `<span class="sep">/</span>`;
+    const isLast = i === params.path.length - 1;
     const cls = isLast ? 'repo-name' : 'user';
-    html += `<a href="${repoUrl}" data-link class="${cls}">${escapeHtml(rest[i])}</a>`;
+    const segPath = params.path.slice(0, i + 1).join('/');
+    const segPullsUrl = `${base}/${segPath}/-/pulls`;
+    html += `<a href="${segPullsUrl}" data-link class="${cls}">${escapeHtml(displaySegment(params.path[i]))}</a>`;
   }
   html += `</div>`;
   return html;
@@ -865,12 +933,19 @@ function renderHeaderChain(params: PRParams): string {
 // ---- Render: PR List ----
 
 function renderPRList(params: PRParams): string {
-  const prs = getPullRequests(params.repoPath);
-  const openPRs = prs.filter(pr => pr.status === 'open').sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-  const closedPRs = prs.filter(pr => pr.status === 'closed' || pr.status === 'merged').sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  const inlinePRs = getInlinePullRequests(params.repoPath);
+  const playerSummary = getCategoryPRSummary(params.repoPath, '@');
+  const worldSummary = getCategoryPRSummary(params.repoPath, '~');
+
+  const openPRs = inlinePRs.filter(({ pr }) => pr.status === 'open')
+    .sort((a, b) => new Date(b.pr.updatedAt).getTime() - new Date(a.pr.updatedAt).getTime());
+  const closedPRs = inlinePRs.filter(({ pr }) => pr.status === 'closed' || pr.status === 'merged')
+    .sort((a, b) => new Date(b.pr.updatedAt).getTime() - new Date(a.pr.updatedAt).getTime());
 
   let html = `<div class="pr-page">`;
   html += renderHeaderChain(params);
+
+  html += `<a href="${buildRepoUrl(params)}" data-link class="pr-back-link">${ARROW_LEFT_SVG} Back to code</a>`;
 
   html += `<div class="pr-list-header">
     <span style="font-size:16px; font-weight:bold;">Pull Requests</span>
@@ -884,16 +959,26 @@ function renderPRList(params: PRParams): string {
 
   html += `<div class="pr-list">`;
 
-  // Open PRs (visible by default)
-  for (const pr of openPRs) {
-    html += renderPRRow(pr, 'open');
+  // Category rows: Players (@) and Worlds (~) — open + closed variants
+  if (playerSummary) {
+    html += renderCategoryRow(playerSummary, '@', 'open', params);
+    html += renderCategoryRow(playerSummary, '@', 'closed', params);
   }
-  // Closed/Merged PRs (hidden by default)
-  for (const pr of closedPRs) {
-    html += renderPRRow(pr, 'closed', true);
+  if (worldSummary) {
+    html += renderCategoryRow(worldSummary, '~', 'open', params);
+    html += renderCategoryRow(worldSummary, '~', 'closed', params);
   }
 
-  if (prs.length === 0) {
+  // Open PRs (visible by default) — each shows its folder path prefix
+  for (const { pr, relPath } of openPRs) {
+    html += renderPRRow(pr, 'open', false, relPath);
+  }
+  // Closed/Merged PRs (hidden by default)
+  for (const { pr, relPath } of closedPRs) {
+    html += renderPRRow(pr, 'closed', true, relPath);
+  }
+
+  if (inlinePRs.length === 0 && !playerSummary && !worldSummary) {
     html += `<div class="pr-empty">No pull requests yet.</div>`;
   }
 
@@ -901,12 +986,91 @@ function renderPRList(params: PRParams): string {
   return html;
 }
 
-function renderPRRow(pr: PullRequest, filterGroup: string, hidden = false): string {
+function renderCategoryRow(summary: CategoryPRSummary, prefix: '@' | '~', filterGroup: 'open' | 'closed', params: PRParams): string {
+  const label = prefix === '@' ? '@{: String}' : '#{: String}';
+  const kindLabel = prefix === '@'
+    ? (summary.itemCount === 1 ? 'Player' : 'Players')
+    : (summary.itemCount === 1 ? 'World' : 'Worlds');
+  const categoryUrl = `${params.base || ''}${params.path.length > 0 ? '/' + params.path.join('/') : ''}/-/${prefix}/pulls`;
+  const fullUrl = filterGroup === 'closed' ? categoryUrl + '?filter=closed' : categoryUrl;
+  const hidden = filterGroup === 'closed' ? ' style="display:none"' : '';
+  const count = filterGroup === 'open' ? summary.openCount : summary.closedCount;
+  if (count === 0) return '';
+  const verb = filterGroup === 'open' ? 'open across' : 'closed in';
+  const meta = `${count} ${verb} ${summary.itemCount} ${kindLabel}`;
+
+  let html = `<a href="${fullUrl}" data-link class="pr-category-row" data-pr-filter-group="${filterGroup}"${hidden}>`;
+  html += `<div class="pr-category-icon">${PR_SVG}</div>`;
+  html += `<div class="pr-category-body">`;
+  html += `<div class="pr-category-name">${escapeHtml(label)}</div>`;
+  html += `<div class="pr-category-meta">${meta}</div>`;
+  html += `</div>`;
+  html += `</a>`;
+  return html;
+}
+
+// ---- Render: Category list (players or worlds) ----
+
+function renderCategoryList(params: PRParams): string {
+  const prefix = params.category!;
+  const categoryLabel = prefix === '@' ? '@{: String}' : '#{: String}';
+  const prs = getCategoryPullRequests(params.repoPath, prefix);
+
+  const openPRs = prs.filter(({ pr }) => pr.status === 'open')
+    .sort((a, b) => new Date(b.pr.updatedAt).getTime() - new Date(a.pr.updatedAt).getTime());
+  const closedPRs = prs.filter(({ pr }) => pr.status === 'closed' || pr.status === 'merged')
+    .sort((a, b) => new Date(b.pr.updatedAt).getTime() - new Date(a.pr.updatedAt).getTime());
+
+  let html = `<div class="pr-page">`;
+  html += renderHeaderChain(params);
+
+  // Back link to main PR list
+  const mainListParams = { ...params, category: null as '@' | '~' | null };
+  html += `<a href="${buildPullsUrl(mainListParams)}" data-link class="pr-back-link">${ARROW_LEFT_SVG} Back to pull requests</a>`;
+
+  html += `<div class="pr-list-header">
+    <span style="font-size:16px; font-weight:bold;">${escapeHtml(categoryLabel)}</span>
+  </div>`;
+
+  html += `<div class="pr-filter-tabs">
+    <button class="pr-filter-tab active" data-pr-filter="open">Open <span class="pr-filter-count">${openPRs.length}</span></button>
+    <button class="pr-filter-tab" data-pr-filter="closed">Closed <span class="pr-filter-count">${closedPRs.length}</span></button>
+  </div>`;
+
+  html += `<div class="pr-list">`;
+
+  for (const { pr, relPath } of openPRs) {
+    html += renderPRRow(pr, 'open', false, relPath);
+  }
+  for (const { pr, relPath } of closedPRs) {
+    html += renderPRRow(pr, 'closed', true, relPath);
+  }
+
+  if (prs.length === 0) {
+    html += `<div class="pr-empty">No pull requests in this category.</div>`;
+  }
+
+  html += `</div></div>`;
+  return html;
+}
+
+/** Convert a single URL-style segment to display: ~foo → #foo (worlds use # for display, ~ in URLs) */
+function displaySegment(seg: string): string {
+  return seg.startsWith('~') ? '#' + seg.slice(1) : seg;
+}
+
+/** Convert URL-style path segments to display: ~ → # (worlds use # for display, ~ in URLs) */
+function displayPath(relPath: string): string {
+  return relPath.split('/').map(displaySegment).join('/');
+}
+
+function renderPRRow(pr: PullRequest, filterGroup: string, hidden = false, relPath = ''): string {
   const display = hidden ? ' style="display:none"' : '';
+  const pathPrefix = relPath ? `<span class="pr-row-path">${escapeHtml(displayPath(relPath))}</span>` : '';
   let html = `<div class="pr-row" data-pr-filter-group="${filterGroup}" data-pr-id="${pr.id}"${display}>`;
   html += statusIcon(pr.status);
   html += `<div class="pr-row-body">
-    <div class="pr-row-title">${escapeHtml(pr.title)}</div>
+    <div class="pr-row-title">${pathPrefix}${escapeHtml(pr.title)}</div>
     <div class="pr-row-meta">#${pr.id} opened ${formatTime(pr.createdAt)} by ${escapeHtml(pr.author)}</div>
   </div>`;
   if (pr.comments.length > 0) {
@@ -938,9 +1102,9 @@ function renderTitleBlock(pr: PullRequest, params: PRParams): string {
 
   // Branch info (inline, with hover edit)
   html += `<div class="pr-editable pr-branch-info" data-edit-target="branch">`;
-  html += BRANCH_SVG;
+  html += `<span class="pr-branch-icon">${BRANCH_SVG}</span>`;
   html += branchLink(pr.sourceLabel);
-  html += `<span class="pr-branch-arrow">&rarr;</span>`;
+  html += `<span class="pr-branch-arrow">${ARROW_RIGHT_SVG}</span>`;
   html += branchLink(pr.targetLabel);
   if (pr.status === 'open') {
     html += `<button class="pr-hover-edit" data-edit-action="branch" title="Edit branch">${EDIT_SVG}</button>`;
@@ -956,7 +1120,7 @@ function renderDescriptionBlock(pr: PullRequest): string {
   let html = '';
   html += `<div class="pr-timeline-section-label">Description</div>`;
   html += `<div class="pr-timeline-item" data-edit-target="description">`;
-  html += renderUserIcon(pr.author, COMMENT_SVG, 'comment');
+  html += renderUserIcon(`@${pr.author}`, COMMENT_SVG, 'comment');
   html += `<div class="pr-timeline-body">`;
   html += `<div class="pr-timeline-header">${userLink(pr.author)} <span class="pr-timeline-time">${formatTime(pr.createdAt)}</span></div>`;
   html += `<div class="pr-timeline-content readme-body" data-edit-display="description">${renderMarkdown(pr.description)}</div>`;
@@ -1061,7 +1225,7 @@ function renderActivityItem(item: ActivityItem, params: PRParams, pr: PullReques
       const groupedClass = isGrouped ? ' grouped' : (isGroupStart ? ' group-start' : '');
       html += `<div class="pr-timeline-item${groupedClass}" data-edit-target="comment-${item.comment.id}">`;
       if (!isGrouped) {
-        html += renderUserIcon(item.comment.author, COMMENT_SVG, 'comment');
+        html += renderUserIcon(`@${item.comment.author}`, COMMENT_SVG, 'comment');
       }
       html += `<div class="pr-timeline-body">`;
       if (!isGrouped) {
@@ -1176,9 +1340,9 @@ function renderNewPRForm(params: PRParams): string {
 
   // Branch info (inline, with editable target)
   html += `<div class="pr-branch-info">`;
-  html += BRANCH_SVG;
+  html += `<span class="pr-branch-icon">${BRANCH_SVG}</span>`;
   html += `<span class="pr-branch-label">feature/new-branch</span>`;
-  html += `<span class="pr-branch-arrow">&rarr;</span>`;
+  html += `<span class="pr-branch-arrow">${ARROW_RIGHT_SVG}</span>`;
   html += `<select class="pr-form-select" data-pr-target-branch>
     <option value="main">main</option>
     <option value="develop">develop</option>
@@ -1188,7 +1352,7 @@ function renderNewPRForm(params: PRParams): string {
   // Description (same comment-style as detail, but with textarea)
   html += `<div class="pr-timeline-section-label">Description</div>`;
   html += `<div class="pr-timeline-item">`;
-  html += renderUserIcon(currentUser, COMMENT_SVG, 'comment');
+  html += renderUserIcon(`@${currentUser}`, COMMENT_SVG, 'comment');
   html += `<div class="pr-timeline-body">`;
   html += `<div class="pr-timeline-header">${userLink(currentUser)}</div>`;
   html += `<textarea class="pr-form-textarea" placeholder="Describe your changes..." data-pr-desc-input></textarea>`;
@@ -1409,7 +1573,7 @@ function bindEvents(): void {
       const filter = (tab as HTMLElement).dataset.prFilter!;
       currentContainer!.querySelectorAll('[data-pr-filter]').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-      currentContainer!.querySelectorAll('.pr-row').forEach(row => {
+      currentContainer!.querySelectorAll('[data-pr-filter-group]').forEach(row => {
         const group = (row as HTMLElement).dataset.prFilterGroup;
         (row as HTMLElement).style.display = group === filter ? '' : 'none';
       });
@@ -1534,6 +1698,8 @@ function render(): void {
   let html = '';
   if (currentParams.prAction === 'list') {
     html = renderPRList(currentParams);
+  } else if (currentParams.prAction === 'players' || currentParams.prAction === 'worlds') {
+    html = renderCategoryList(currentParams);
   } else if (currentParams.prAction === 'new') {
     html = renderNewPRForm(currentParams);
   } else if (currentParams.prAction === 'detail') {
@@ -1546,6 +1712,13 @@ function render(): void {
 
   currentContainer.innerHTML = html;
   bindEvents();
+
+  // Auto-activate closed tab if URL has ?filter=closed
+  const filterParam = new URLSearchParams(window.location.search).get('filter');
+  if (filterParam === 'closed') {
+    const closedTab = currentContainer.querySelector('[data-pr-filter="closed"]') as HTMLElement;
+    if (closedTab) closedTab.click();
+  }
 }
 
 // ---- Public API ----

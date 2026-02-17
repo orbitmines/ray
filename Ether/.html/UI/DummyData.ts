@@ -1179,19 +1179,337 @@ export class Ray implements RayLike {
 
 dummyPullRequests.set('@ether/library', etherLibraryPRs);
 
+// PRs for @ether/library/assets (nested sub-path)
+const etherLibraryAssetsPRs: PullRequest[] = [
+  {
+    id: 100,
+    title: 'Add high-res banner variants',
+    description: 'Adds 2x and 3x resolution variants of the banner for retina displays.',
+    status: 'open',
+    author: 'bob',
+    createdAt: '2025-12-14T09:00:00Z',
+    updatedAt: '2025-12-14T09:00:00Z',
+    sourceVersion: 'e5f6a1b2-c3d4-11ee-b005-000000000001',
+    targetVersion: 'e5f6a1b2-c3d4-11ee-b005-000000000000',
+    sourceLabel: 'bob/hires-assets',
+    targetLabel: 'main',
+    commits: [
+      {
+        id: 'c4a1b2c3-d4e5-11ee-b005-000000000010',
+        message: 'Add banner@2x.png and banner@3x.png',
+        author: 'bob',
+        createdAt: '2025-12-14T09:30:00Z',
+        diffs: [
+          { path: 'banner@2x.png', oldContent: '', newContent: '(binary)', type: 'added' },
+          { path: 'banner@3x.png', oldContent: '', newContent: '(binary)', type: 'added' },
+        ],
+      },
+    ],
+    comments: [
+      { id: 10, author: 'alice', body: 'These look sharp! Can we also get an SVG version?', createdAt: '2025-12-14T12:00:00Z' },
+    ],
+    activity: [
+      { type: 'commit', commit: { id: 'c4a1b2c3-d4e5-11ee-b005-000000000010', message: 'Add banner@2x.png and banner@3x.png', author: 'bob', createdAt: '2025-12-14T09:30:00Z', diffs: [] }, createdAt: '2025-12-14T09:30:00Z' },
+      { type: 'comment', comment: { id: 10, author: 'alice', body: 'These look sharp! Can we also get an SVG version?', createdAt: '2025-12-14T12:00:00Z' }, createdAt: '2025-12-14T12:00:00Z' },
+    ],
+    mergeable: true,
+  },
+  {
+    id: 101,
+    title: 'Update logo color scheme',
+    description: 'Changes the logo to match the new brand guidelines.',
+    status: 'merged',
+    author: 'alice',
+    createdAt: '2025-12-08T10:00:00Z',
+    updatedAt: '2025-12-09T15:00:00Z',
+    sourceVersion: 'f6a1b2c3-d4e5-11ee-b006-000000000001',
+    targetVersion: 'f6a1b2c3-d4e5-11ee-b006-000000000000',
+    sourceLabel: 'alice/logo-update',
+    targetLabel: 'main',
+    commits: [
+      {
+        id: 'c5a1b2c3-d4e5-11ee-b006-000000000010',
+        message: 'Update logo.svg with new color palette',
+        author: 'alice',
+        createdAt: '2025-12-08T10:30:00Z',
+        diffs: [
+          { path: 'logo.svg', oldContent: '<svg><!-- old --></svg>', newContent: '<svg><!-- new colors --></svg>', type: 'modified' },
+        ],
+      },
+    ],
+    comments: [],
+    activity: [
+      { type: 'commit', commit: { id: 'c5a1b2c3-d4e5-11ee-b006-000000000010', message: 'Update logo.svg with new color palette', author: 'alice', createdAt: '2025-12-08T10:30:00Z', diffs: [] }, createdAt: '2025-12-08T10:30:00Z' },
+      { type: 'merge', author: 'bob', createdAt: '2025-12-09T15:00:00Z' },
+    ],
+    mergeable: false,
+  },
+];
+
+dummyPullRequests.set('@ether/library/assets', etherLibraryAssetsPRs);
+
+// PRs for @ether/genesis (world — separate from inline listing)
+const etherGenesisPRs: PullRequest[] = [
+  {
+    id: 200,
+    title: 'Update terrain heightmap generator',
+    description: 'Improves terrain generation with Perlin noise for smoother landscapes.',
+    status: 'open',
+    author: 'alice',
+    createdAt: '2025-12-15T09:00:00Z',
+    updatedAt: '2025-12-15T09:00:00Z',
+    sourceVersion: 'g1a1b2c3-d4e5-11ee-b010-000000000001',
+    targetVersion: 'g1a1b2c3-d4e5-11ee-b010-000000000000',
+    sourceLabel: 'alice/terrain-update',
+    targetLabel: 'main',
+    commits: [{
+      id: 'cg1b2c3d-e4f5-11ee-b010-000000000010',
+      message: 'Implement Perlin noise heightmap generation',
+      author: 'alice',
+      createdAt: '2025-12-15T09:30:00Z',
+      diffs: [{ path: 'terrain/heightmap.ray', oldContent: '// old heightmap', newContent: '// new Perlin noise heightmap', type: 'modified' }],
+    }],
+    comments: [{ id: 20, author: 'bob', body: 'The noise parameters look good. Maybe add a seed option?', createdAt: '2025-12-15T14:00:00Z' }],
+    activity: [
+      { type: 'commit', commit: { id: 'cg1b2c3d-e4f5-11ee-b010-000000000010', message: 'Implement Perlin noise heightmap generation', author: 'alice', createdAt: '2025-12-15T09:30:00Z', diffs: [] }, createdAt: '2025-12-15T09:30:00Z' },
+      { type: 'comment', comment: { id: 20, author: 'bob', body: 'The noise parameters look good. Maybe add a seed option?', createdAt: '2025-12-15T14:00:00Z' }, createdAt: '2025-12-15T14:00:00Z' },
+    ],
+    mergeable: true,
+  },
+  {
+    id: 201,
+    title: 'Add NPC dialogue system',
+    description: 'Implements a basic dialogue tree system for world NPCs.',
+    status: 'open',
+    author: 'bob',
+    createdAt: '2025-12-16T11:00:00Z',
+    updatedAt: '2025-12-16T11:00:00Z',
+    sourceVersion: 'g2a1b2c3-d4e5-11ee-b011-000000000001',
+    targetVersion: 'g2a1b2c3-d4e5-11ee-b011-000000000000',
+    sourceLabel: 'bob/npc-dialogue',
+    targetLabel: 'main',
+    commits: [{
+      id: 'cg2b2c3d-e4f5-11ee-b011-000000000010',
+      message: 'Add basic dialogue tree for NPCs',
+      author: 'bob',
+      createdAt: '2025-12-16T11:30:00Z',
+      diffs: [{ path: 'entities/npc.ray', oldContent: '// basic npc', newContent: '// npc with dialogue', type: 'modified' }],
+    }],
+    comments: [],
+    activity: [
+      { type: 'commit', commit: { id: 'cg2b2c3d-e4f5-11ee-b011-000000000010', message: 'Add basic dialogue tree for NPCs', author: 'bob', createdAt: '2025-12-16T11:30:00Z', diffs: [] }, createdAt: '2025-12-16T11:30:00Z' },
+    ],
+    mergeable: true,
+  },
+];
+
+// Store world PRs under ~genesis (world prefix), not the folder genesis
+dummyPullRequests.set('@ether/~genesis', etherGenesisPRs);
+
+// PRs for @ether/@alice (player sub-namespace)
+const etherAlicePRs: PullRequest[] = [
+  {
+    id: 300,
+    title: 'Update profile configuration',
+    description: 'Reorganizes profile settings and adds new bio section.',
+    status: 'open',
+    author: 'alice',
+    createdAt: '2025-12-17T10:00:00Z',
+    updatedAt: '2025-12-17T10:00:00Z',
+    sourceVersion: 'p1a1b2c3-d4e5-11ee-b020-000000000001',
+    targetVersion: 'p1a1b2c3-d4e5-11ee-b020-000000000000',
+    sourceLabel: 'alice/profile-update',
+    targetLabel: 'main',
+    commits: [{
+      id: 'cp1b2c3d-e4f5-11ee-b020-000000000010',
+      message: 'Add bio section to profile',
+      author: 'alice',
+      createdAt: '2025-12-17T10:30:00Z',
+      diffs: [{ path: 'profile.ray', oldContent: '// basic profile', newContent: '// profile with bio', type: 'modified' }],
+    }],
+    comments: [],
+    activity: [
+      { type: 'commit', commit: { id: 'cp1b2c3d-e4f5-11ee-b020-000000000010', message: 'Add bio section to profile', author: 'alice', createdAt: '2025-12-17T10:30:00Z', diffs: [] }, createdAt: '2025-12-17T10:30:00Z' },
+    ],
+    mergeable: true,
+  },
+];
+
+dummyPullRequests.set('@ether/@alice', etherAlicePRs);
+
+// PRs for nested world ~alpha within ~genesis
+const genesisAlphaPRs: PullRequest[] = [
+  {
+    id: 400,
+    title: 'Initialize world seed parameters',
+    description: 'Sets up the initial seed configuration for the alpha sub-world.',
+    status: 'open',
+    author: 'alice',
+    createdAt: '2025-12-18T09:00:00Z',
+    updatedAt: '2025-12-18T09:00:00Z',
+    sourceVersion: 'h1a1b2c3-d4e5-11ee-b030-000000000001',
+    targetVersion: 'h1a1b2c3-d4e5-11ee-b030-000000000000',
+    sourceLabel: 'alice/alpha-seed',
+    targetLabel: 'main',
+    commits: [{
+      id: 'ch1b2c3d-e4f5-11ee-b030-000000000010',
+      message: 'Configure alpha world seed parameters',
+      author: 'alice',
+      createdAt: '2025-12-18T09:30:00Z',
+      diffs: [{ path: 'seed.ray', oldContent: '// empty seed', newContent: '// configured seed with params', type: 'modified' }],
+    }],
+    comments: [],
+    activity: [
+      { type: 'commit', commit: { id: 'ch1b2c3d-e4f5-11ee-b030-000000000010', message: 'Configure alpha world seed parameters', author: 'alice', createdAt: '2025-12-18T09:30:00Z', diffs: [] }, createdAt: '2025-12-18T09:30:00Z' },
+    ],
+    mergeable: true,
+  },
+];
+
+dummyPullRequests.set('@ether/~genesis/~alpha', genesisAlphaPRs);
+
+// PRs for player @bob within ~genesis
+const genesisBobPRs: PullRequest[] = [
+  {
+    id: 401,
+    title: 'Add builder toolkit blueprints',
+    description: 'Adds Bob\'s builder toolkit with tower blueprints for genesis.',
+    status: 'open',
+    author: 'bob',
+    createdAt: '2025-12-19T11:00:00Z',
+    updatedAt: '2025-12-19T11:00:00Z',
+    sourceVersion: 'h2a1b2c3-d4e5-11ee-b031-000000000001',
+    targetVersion: 'h2a1b2c3-d4e5-11ee-b031-000000000000',
+    sourceLabel: 'bob/builder-toolkit',
+    targetLabel: 'main',
+    commits: [{
+      id: 'ch2b2c3d-e4f5-11ee-b031-000000000010',
+      message: 'Add tower blueprint templates',
+      author: 'bob',
+      createdAt: '2025-12-19T11:30:00Z',
+      diffs: [{ path: 'blueprints/tower.ray', oldContent: '', newContent: '// tower blueprint v2', type: 'added' }],
+    }],
+    comments: [],
+    activity: [
+      { type: 'commit', commit: { id: 'ch2b2c3d-e4f5-11ee-b031-000000000010', message: 'Add tower blueprint templates', author: 'bob', createdAt: '2025-12-19T11:30:00Z', diffs: [] }, createdAt: '2025-12-19T11:30:00Z' },
+    ],
+    mergeable: true,
+  },
+];
+
+dummyPullRequests.set('@ether/~genesis/@bob', genesisBobPRs);
+
 // ---- PR accessor functions ----
 
+/** Get PRs registered directly at this path (not nested). */
 export function getPullRequests(canonicalPath: string): PullRequest[] {
   return dummyPullRequests.get(canonicalPath) || [];
 }
 
-export function getPullRequest(canonicalPath: string, prId: number): PullRequest | null {
-  const prs = getPullRequests(canonicalPath);
-  return prs.find(pr => pr.id === prId) ?? null;
+/** Get ALL PRs at this path and all nested sub-paths. */
+export function getAllPullRequests(canonicalPath: string): PullRequest[] {
+  const result: PullRequest[] = [];
+  const prefix = canonicalPath + '/';
+  for (const [key, prs] of dummyPullRequests) {
+    if (key === canonicalPath || key.startsWith(prefix)) {
+      result.push(...prs);
+    }
+  }
+  return result;
 }
 
+/** A PR paired with its relative folder path (empty string if direct). */
+export interface InlinePR {
+  pr: PullRequest;
+  relPath: string;
+}
+
+/** Get PRs for the inline list — includes nested sub-paths but excludes
+ *  world (~) and player (@) sub-paths at any level (those get category rows). */
+export function getInlinePullRequests(canonicalPath: string): InlinePR[] {
+  const result: InlinePR[] = [];
+  const prefix = canonicalPath + '/';
+
+  for (const [key, prs] of dummyPullRequests) {
+    if (key === canonicalPath) {
+      for (const pr of prs) result.push({ pr, relPath: '' });
+    } else if (key.startsWith(prefix)) {
+      const rest = key.slice(prefix.length);
+      const firstSeg = rest.split('/')[0];
+      // Always exclude ~ (worlds) and @ (players) sub-paths — they get their own category rows
+      if (firstSeg.startsWith('~') || firstSeg.startsWith('@')) continue;
+      for (const pr of prs) result.push({ pr, relPath: rest });
+    }
+  }
+  return result;
+}
+
+/** Summary of PRs in a category (worlds or players). */
+export interface CategoryPRSummary {
+  openCount: number;
+  closedCount: number;
+  itemCount: number;
+}
+
+/** Get summary of PRs in ~ or @ prefixed sub-paths. Works at any level. */
+export function getCategoryPRSummary(canonicalPath: string, categoryPrefix: '~' | '@'): CategoryPRSummary | null {
+  const prefix = canonicalPath + '/';
+  const items = new Set<string>();
+  let openCount = 0;
+  let closedCount = 0;
+
+  for (const [key, prs] of dummyPullRequests) {
+    if (key.startsWith(prefix)) {
+      const rest = key.slice(prefix.length);
+      const firstSeg = rest.split('/')[0];
+      if (firstSeg.startsWith(categoryPrefix)) {
+        items.add(firstSeg);
+        openCount += prs.filter(pr => pr.status === 'open').length;
+        closedCount += prs.filter(pr => pr.status !== 'open').length;
+      }
+    }
+  }
+
+  if (items.size === 0) return null;
+  return { openCount, closedCount, itemCount: items.size };
+}
+
+/** Get PRs from a specific category (worlds ~ or players @) for the category list page. */
+export function getCategoryPullRequests(canonicalPath: string, categoryPrefix: '~' | '@'): InlinePR[] {
+  const result: InlinePR[] = [];
+  const prefix = canonicalPath + '/';
+
+  for (const [key, prs] of dummyPullRequests) {
+    if (key.startsWith(prefix)) {
+      const rest = key.slice(prefix.length);
+      const firstSeg = rest.split('/')[0];
+      if (firstSeg.startsWith(categoryPrefix)) {
+        for (const pr of prs) result.push({ pr, relPath: rest });
+      }
+    }
+  }
+  return result;
+}
+
+export function getPullRequest(canonicalPath: string, prId: number): PullRequest | null {
+  // Search at this path first, then nested paths
+  const direct = getPullRequests(canonicalPath);
+  const found = direct.find(pr => pr.id === prId);
+  if (found) return found;
+  // Search nested (all sub-paths including ~/@ prefixed ones)
+  const prefix = canonicalPath + '/';
+  for (const [key, prs] of dummyPullRequests) {
+    if (key.startsWith(prefix)) {
+      const nested = prs.find(pr => pr.id === prId);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+/** Open PR count for the PR button — excludes world/player PRs at user root level. */
 export function getOpenPRCount(canonicalPath: string): number {
-  return getPullRequests(canonicalPath).filter(pr => pr.status === 'open').length;
+  return getInlinePullRequests(canonicalPath).filter(({ pr }) => pr.status === 'open').length;
 }
 
 let nextPRId = 4;

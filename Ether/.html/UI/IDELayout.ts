@@ -587,20 +587,16 @@ export function injectIDEStyles(): void {
       flex: 1 1 auto;
       background: transparent;
     }
-    /* Non-last vertical children: fixed vh height, overflow:clip (NOT auto/hidden).
-       clip constrains visually but does NOT create a scroll container,
-       so .ide-tabbar position:sticky still works relative to page scroll.
-       Scrolling happens inside .ide-panel-content (sibling of tab bar). */
+    /* When layout has splits: root constrained to viewport, everything scrolls internally.
+       Page scroll only used when a single tabgroup is the root (one file open). */
+    .ide-split--contained { height: 100vh; min-height: 0; }
+    .ide-split--contained .ide-split { height: 100%; min-height: 0; }
+    .ide-split--contained .ide-tabgroup { height: 100%; min-height: 0; }
+    .ide-split--contained .ide-panel-content { overflow-y: auto; min-height: 0; }
+    .ide-split--contained .ide-panel-content::-webkit-scrollbar { width: 2px; }
+    .ide-split--contained .ide-panel-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+    /* Vertical split children: explicit vh heights for proportional sizing */
     .ide-split__child--v-constrained { overflow: clip; }
-    /* Inner elements must fill the constrained height exactly */
-    .ide-split__child--v-constrained > .ide-split { min-height: 0; height: 100%; }
-    .ide-split__child--v-constrained .ide-tabgroup { min-height: 0; height: 100%; }
-    .ide-split__child--v-constrained .ide-panel-content {
-      overflow-y: auto;
-      min-height: 0;
-    }
-    .ide-split__child--v-constrained .ide-panel-content::-webkit-scrollbar { width: 2px; }
-    .ide-split__child--v-constrained .ide-panel-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
 
     /* Tab insertion indicator */
     .ide-tab-insert-indicator {
@@ -929,18 +925,11 @@ function renderSplitNode(
     const size = node.sizes[i];
     const handleCount = node.children.length - 1;
     if (node.direction === 'vertical') {
+      // All vertical children get explicit vh heights (proportional to viewport)
       const totalHandlePx = handleCount * HANDLE_SIZE;
-      if (i < node.children.length - 1) {
-        // Non-last: fixed vh height with own scroll container.
-        // Tab bars inside stick within this scroll context.
-        // Works for nested horizontal splits too (constrains everything inside).
-        childEl.classList.add('ide-split__child--v-constrained');
-        childEl.style.height = `calc(${(size * 100).toFixed(4)}vh - ${(size * totalHandlePx).toFixed(2)}px)`;
-        childEl.style.flex = '0 0 auto';
-      } else {
-        // Last child: flows into page scroll
-        childEl.style.flex = '0 0 auto';
-      }
+      childEl.classList.add('ide-split__child--v-constrained');
+      childEl.style.height = `calc(${(size * 100).toFixed(4)}vh - ${(size * totalHandlePx).toFixed(2)}px)`;
+      childEl.style.flex = '0 0 auto';
     } else {
       const sizeExpr = `calc(${size * 100}% - ${(handleCount * HANDLE_SIZE) / node.children.length}px)`;
       childEl.style.flex = `0 0 ${sizeExpr}`;
@@ -1103,6 +1092,11 @@ export function createIDELayout(container: HTMLElement, options: {
     state.nodeElements.clear();
     container.innerHTML = '';
     const root = renderLayoutNode(state.layout, state, ctx);
+    // When layout has splits, contain to viewport (internal scroll per panel).
+    // Single tabgroup = page scroll (only file open).
+    if (state.layout.type === 'split') {
+      root.classList.add('ide-split--contained');
+    }
     container.appendChild(root);
     // Position drop indicators now that elements are in the DOM
     requestAnimationFrame(() => positionDropIndicators(container));
@@ -1275,15 +1269,9 @@ export function createIDELayout(container: HTMLElement, options: {
             const el = child as HTMLElement;
             if (isVertical) {
               const totalHandlePx = handleCount * HANDLE_SIZE;
-              if (i < sizes.length - 1) {
-                el.classList.add('ide-split__child--v-constrained');
-                el.style.height = `calc(${(sizes[i] * 100).toFixed(4)}vh - ${(sizes[i] * totalHandlePx).toFixed(2)}px)`;
-                el.style.flex = '0 0 auto';
-              } else {
-                el.classList.remove('ide-split__child--v-constrained');
-                el.style.height = '';
-                el.style.flex = '0 0 auto';
-              }
+              el.classList.add('ide-split__child--v-constrained');
+              el.style.height = `calc(${(sizes[i] * 100).toFixed(4)}vh - ${(sizes[i] * totalHandlePx).toFixed(2)}px)`;
+              el.style.flex = '0 0 auto';
             } else {
               const sizeExpr = `calc(${sizes[i] * 100}% - ${(handleCount * HANDLE_SIZE) / sizes.length}px)`;
               el.style.flex = `0 0 ${sizeExpr}`;

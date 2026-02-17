@@ -4,7 +4,7 @@
 
 import { PHOSPHOR, CRT_SCREEN_BG } from './CRTShell.ts';
 import { renderMarkdown } from './Markdown.ts';
-import { fileIcon } from './FileIcons.ts';
+import { fileIcon, accessIcon, accessSvg, fileOrEncryptedIcon } from './FileIcons.ts';
 import { getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFiles, isCompound, flattenEntries, getOpenPRCount } from './DummyData.ts';
 import type { FileEntry, CompoundEntry, TreeEntry, Repository } from './DummyData.ts';
 import { createIDELayout, generateId, ensureIdCounter, injectIDEStyles } from './IDELayout.ts';
@@ -228,6 +228,63 @@ function injectStyles(): void {
       margin-right: 10px;
     }
     .file-icon svg { display: block; }
+
+    .file-access {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 1px;
+      margin-right: 6px;
+    }
+    .file-access svg { display: block; }
+
+    /* Access badge tooltip */
+    .access-badge {
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .access-badge > svg { display: block; }
+    .access-tooltip {
+      display: none;
+      position: fixed;
+      font-family: 'Courier New', Courier, monospace;
+      background: #111111;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+      padding: 6px 10px;
+      white-space: nowrap;
+      font-size: 12px;
+      line-height: 1.4;
+      color: rgba(255,255,255,0.85);
+      z-index: 2147483647;
+      pointer-events: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      gap: 6px;
+      align-items: baseline;
+    }
+    .access-tooltip.visible { display: flex; }
+    .access-tooltip-label { font-weight: 600; }
+    .access-tooltip-desc { color: rgba(255,255,255,0.5); }
+    .access-tooltip-link {
+      color: ${PHOSPHOR};
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .access-tooltip-link:hover { text-decoration: underline; }
+    .access-tooltip-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: inherit;
+      padding: 0;
+      margin: 0;
+      width: 100%;
+      min-width: 80px;
+    }
 
     .file-name {
       flex: 1;
@@ -807,6 +864,192 @@ function injectStyles(): void {
 
 // ---- Helpers ----
 
+// Shared tooltip element on document.body — escapes all stacking contexts
+let accessTooltipEl: HTMLElement | null = null;
+let accessTooltipBadge: Element | null = null;
+let accessTooltipEditing = false;
+let accessGroupContext = '';  // e.g. "@ether" or "#genesis" — set per render
+
+const ACCESS_TOOLTIP_DATA: Record<string, { label: string; color: string; desc: string }> = {
+  public:   { label: '@public', color: 'rgba(255,255,255,0.5)', desc: 'Visible to everyone' },
+  local:    { label: '@local', color: '#f87171', desc: 'Only on your local machine' },
+  private:  { label: '@private', color: '#fb923c', desc: 'Any machine hosting your character, includes <a class="access-tooltip-link" data-access-link href="/@ether">@ether</a>' },
+  npc:      { label: '@npc', color: 'rgba(255,255,255,0.5)', desc: 'Only visible to NPCs' },
+  player:   { label: '@player', color: 'rgba(255,255,255,0.5)', desc: 'Only visible to players' },
+  everyone: { label: '', color: '#fb923c', desc: '' },  // dynamic — built in showAccessTooltip
+};
+
+function resolveAccessLevel(value: string): string {
+  const v = value.trim().toLowerCase();
+  if (v === '@local' || v === 'local') return 'local';
+  if (v === '@public' || v === 'public') return 'public';
+  if (v === '@private' || v === 'private') return 'private';
+  if (v === '@npc' || v === 'npc') return 'npc';
+  if (v === '@player' || v === 'player') return 'player';
+  if (v.endsWith('.@everyone') || v === '@everyone') return 'everyone';
+  return 'everyone';  // arbitrary group references use group icon
+}
+
+function accessValueForLevel(level: string): string {
+  switch (level) {
+    case 'local': return '@local';
+    case 'private': return '@private';
+    case 'npc': return '@npc';
+    case 'player': return '@player';
+    case 'everyone': return (accessGroupContext || '@public') + '.@everyone';
+    default: return '@public';
+  }
+}
+
+function colorForLevel(level: string): string {
+  return (ACCESS_TOOLTIP_DATA[level] || ACCESS_TOOLTIP_DATA.public).color;
+}
+
+function ensureAccessTooltip(): HTMLElement {
+  if (!accessTooltipEl) {
+    accessTooltipEl = document.createElement('div');
+    accessTooltipEl.className = 'access-tooltip';
+    document.body.appendChild(accessTooltipEl);
+    // Link clicks inside the tooltip navigate via SPA router
+    accessTooltipEl.addEventListener('click', (e) => {
+      const link = (e.target as HTMLElement).closest('[data-access-link]') as HTMLAnchorElement | null;
+      if (link) {
+        e.preventDefault();
+        e.stopPropagation();
+        hideAccessTooltip();
+        const href = link.getAttribute('href');
+        if (href && navigateFn) navigateFn(href);
+      }
+    });
+  }
+  return accessTooltipEl;
+}
+
+function positionTooltip(badge: Element): void {
+  const tip = ensureAccessTooltip();
+  const rect = badge.getBoundingClientRect();
+  const tipRect = tip.getBoundingClientRect();
+  let top = rect.top - tipRect.height - 6;
+  let left = rect.right - 4;
+  if (left + tipRect.width > window.innerWidth - 8) {
+    left = rect.left - tipRect.width + 4;
+  }
+  if (left < 8) left = 8;
+  if (top < 8) top = rect.bottom + 6;
+  tip.style.top = top + 'px';
+  tip.style.left = left + 'px';
+}
+
+function showAccessTooltipDisplay(badge: Element): void {
+  if (accessTooltipEditing) return;
+  const level = (badge as HTMLElement).dataset.access || 'public';
+  const customValue = (badge as HTMLElement).dataset.accessValue;
+  const data = ACCESS_TOOLTIP_DATA[level] || ACCESS_TOOLTIP_DATA.public;
+  const tip = ensureAccessTooltip();
+  let label: string;
+  let desc: string;
+  if (customValue) {
+    label = customValue;
+    desc = 'Custom access group';
+  } else if (level === 'everyone') {
+    const ctx = accessGroupContext || '@public';
+    label = ctx + '.@everyone';
+    desc = 'Everyone in ' + ctx;
+  } else {
+    label = data.label;
+    desc = data.desc;
+  }
+  tip.innerHTML = `<span class="access-tooltip-label" style="color:${data.color}">${label}</span> <span class="access-tooltip-desc">${desc}</span>`;
+  tip.classList.add('visible');
+  accessTooltipBadge = badge;
+  positionTooltip(badge);
+}
+
+function showAccessTooltipEdit(badge: Element): void {
+  const badgeEl = badge as HTMLElement;
+  const level = badgeEl.dataset.access || 'public';
+  const currentValue = badgeEl.dataset.accessValue || accessValueForLevel(level);
+  const color = colorForLevel(level);
+  const tip = ensureAccessTooltip();
+  accessTooltipEditing = true;
+  accessTooltipBadge = badge;
+
+  tip.innerHTML = `<input class="access-tooltip-input" style="color:${color}" value="" />`;
+  tip.classList.add('visible');
+  const input = tip.querySelector('input')!;
+  input.value = currentValue;
+  positionTooltip(badge);
+  input.focus();
+  input.select();
+
+  function commit() {
+    if (!accessTooltipEditing) return;
+    const raw = input.value.trim();
+    if (raw) {
+      const newLevel = resolveAccessLevel(raw);
+      const newColor = colorForLevel(newLevel);
+      badgeEl.dataset.access = newLevel;
+      // Store custom value for non-standard entries; clear for standard ones
+      const standard = accessValueForLevel(newLevel);
+      if (raw.toLowerCase() === standard.toLowerCase()) {
+        delete badgeEl.dataset.accessValue;
+      } else {
+        badgeEl.dataset.accessValue = raw;
+      }
+      // Swap SVG icon
+      const svgEl = badgeEl.querySelector('svg');
+      if (svgEl) {
+        const tmp = document.createElement('span');
+        tmp.innerHTML = accessSvg(newLevel);
+        const newSvg = tmp.querySelector('svg');
+        if (newSvg) badgeEl.replaceChild(newSvg, svgEl);
+      }
+      input.style.color = newColor;
+    }
+    hideAccessTooltip();
+  }
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); hideAccessTooltip(); }
+  });
+  input.addEventListener('blur', () => {
+    // Small delay so click-outside dismiss doesn't race
+    setTimeout(commit, 100);
+  });
+}
+
+function hideAccessTooltip(): void {
+  accessTooltipEditing = false;
+  if (accessTooltipEl) accessTooltipEl.classList.remove('visible');
+  accessTooltipBadge = null;
+}
+
+function bindAccessBadges(root: HTMLElement): void {
+  root.querySelectorAll('.access-badge').forEach(badge => {
+    // Desktop hover — display mode only
+    badge.addEventListener('mouseenter', () => {
+      if (!accessTooltipEditing) showAccessTooltipDisplay(badge);
+    });
+    badge.addEventListener('mouseleave', () => {
+      if (!accessTooltipEditing) hideAccessTooltip();
+    });
+    // Click — enter edit mode
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (accessTooltipEditing && accessTooltipBadge === badge) return;  // already editing this one
+      hideAccessTooltip();
+      showAccessTooltipEdit(badge);
+    });
+  });
+}
+
+// Dismiss tooltip on outside click (unless clicking inside the tooltip itself)
+document.addEventListener('click', (e) => {
+  if (accessTooltipEl && accessTooltipEl.contains(e.target as Node)) return;
+  hideAccessTooltip();
+});
+
 function bindClickHandlers(): void {
   if (!currentContainer || !navigateFn) return;
 
@@ -823,6 +1066,9 @@ function bindClickHandlers(): void {
       navigateFn!((link as HTMLAnchorElement).getAttribute('href')!);
     });
   });
+
+  // Access badge tooltips — tap to toggle on mobile, link clicks navigate
+  bindAccessBadges(currentContainer);
 
   // Star toggle (sync all copies)
   const starBtns = currentContainer.querySelectorAll('[data-star-toggle]') as NodeListOf<HTMLButtonElement>;
@@ -1059,7 +1305,8 @@ function renderFileRow(entry: FileEntry, basePath: string, compoundSize?: number
   const displayName = displayEntryName(entry.name, parentContext);
   const countBadge = compoundSize ? ` <span class="compound-count">(${compoundSize})</span>` : '';
   return `<div class="file-row" data-href="${href}">
-    <div class="file-icon">${fileIcon(entry.name, entry.isDirectory)}</div>
+    <div class="file-access">${accessIcon(entry)}</div>
+    <div class="file-icon">${fileOrEncryptedIcon(entry)}</div>
     <div class="file-name">${displayName}${countBadge}</div>
     <div class="file-modified">${entry.modified}</div>
   </div>`;
@@ -1531,7 +1778,8 @@ function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: s
       html += `<div class="sidebar-dir${isExpanded ? ' expanded' : ''}">`;
       html += `<div class="sidebar-dir-header" style="padding-left:${pad}px" data-sidebar-toggle data-sidebar-href="${href}" data-sidebar-key="${href}">`;
       html += `<span class="sidebar-arrow">${isExpanded ? '▾' : '▸'}</span>`;
-      html += fileIcon(entry.name, true);
+      html += accessIcon(entry);
+      html += fileOrEncryptedIcon({ name: entry.name, isDirectory: true, encrypted: entry.encrypted });
       html += `<span>${name}</span>`;
       html += `</div>`;
       if (children.length > 0) {
@@ -1551,7 +1799,8 @@ function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: s
         html += `<div class="sidebar-dir${isExpanded ? ' expanded' : ''}">`;
         html += `<div class="file-view-sidebar-entry${isActive ? ' active' : ''}" style="padding-left:${pad}px" data-href="${href}">`;
         html += `<span class="sidebar-arrow" data-sidebar-toggle-arrow data-sidebar-key="${href}">${isExpanded ? '▾' : '▸'}</span>`;
-        html += fileIcon(entry.name, false);
+        html += accessIcon(entry);
+        html += fileOrEncryptedIcon(entry);
         html += `<span>${name}</span>`;
         html += `</div>`;
         html += `<div class="sidebar-dir-children${isExpanded ? '' : ' hidden'}">`;
@@ -1561,7 +1810,8 @@ function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: s
       } else {
         html += `<div class="file-view-sidebar-entry${isActive ? ' active' : ''}" style="padding-left:${pad}px" data-href="${href}">`;
         html += `<span class="sidebar-arrow-spacer"></span>`;
-        html += fileIcon(entry.name, false);
+        html += accessIcon(entry);
+        html += fileOrEncryptedIcon(entry);
         html += `<span>${name}</span>`;
         html += `</div>`;
       }
@@ -1813,6 +2063,8 @@ function renderRepo(): void {
   if (!repository && !effectiveWorld && effectiveUser === currentPlayer) {
     repository = { user: currentPlayer, description: `@${currentPlayer}`, tree: [] };
   }
+  accessGroupContext = effectiveWorld ? '#' + effectiveWorld : '@' + effectiveUser;
+
   if (!repository) {
     const target = effectiveWorld
       ? `#${effectiveWorld} in @${effectiveUser}`
@@ -1979,7 +2231,9 @@ function renderRepo(): void {
           return {
             id: panelId,
             title: name || '404',
-            icon: panelFiles.length > 0 ? fileIcon(name, false) : '',
+            icon: panelFiles.length > 0
+              ? accessIcon(panelFiles[0]) + fileOrEncryptedIcon({ name, isDirectory: false, encrypted: panelFiles[0].encrypted })
+              : '',
             closable: true,
             render: (el) => {
               if (panelFiles.length > 0) {
@@ -2057,10 +2311,14 @@ function renderRepo(): void {
 
         const initialFilePanelId = 'file:' + hash;
 
+        const sidebarTitle = treePath[0] || (effectiveWorld ? '#' + effectiveWorld : '@' + effectiveUser);
+        const sidebarRootEntry = treePath.length > 0
+          ? flattenEntries(repository.tree).find(e => e.name === treePath[0])
+          : undefined;
         const sidebarPanel: PanelDefinition = {
           id: 'sidebar',
-          title: 'Explorer',
-          icon: FOLDER_SVG,
+          title: sidebarTitle,
+          icon: accessIcon(sidebarRootEntry || {}) + FOLDER_SVG,
           closable: false,
           sticky: true,
           render: (el) => {
@@ -2102,6 +2360,7 @@ function renderRepo(): void {
               });
             });
             bindSidebarTreeHandlers(el);
+            bindAccessBadges(el);
           },
         };
 
@@ -2269,7 +2528,8 @@ function renderRepo(): void {
     html += `<div class="file-table">${(entries as FileEntry[]).map(entry => {
       const href = buildEntryHref(usersBase + '/@', entry.name, '@');
       return `<div class="file-row" data-href="${href}">
-        <div class="file-icon">${fileIcon(entry.name, true)}</div>
+        <div class="file-access">${accessIcon(entry)}</div>
+        <div class="file-icon">${fileOrEncryptedIcon(entry)}</div>
         <div class="file-name">${displayEntryName(entry.name, '@')}</div>
         <div class="file-modified">${entry.modified}</div>
       </div>`;
@@ -2279,7 +2539,8 @@ function renderRepo(): void {
     html += `<div class="file-table">${(entries as FileEntry[]).map(entry => {
       const href = buildEntryHref(worldsBase + '/~', entry.name, '~');
       return `<div class="file-row" data-href="${href}">
-        <div class="file-icon">${fileIcon(entry.name, true)}</div>
+        <div class="file-access">${accessIcon(entry)}</div>
+        <div class="file-icon">${fileOrEncryptedIcon(entry)}</div>
         <div class="file-name">${displayEntryName(entry.name, '~')}</div>
         <div class="file-modified">${entry.modified}</div>
       </div>`;

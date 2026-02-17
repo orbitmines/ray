@@ -14,6 +14,8 @@
   @guests => // (INSTANCE.hierarchy ->).reduce(|)
 
 @public => @ether.@everyone | Instance
+@npc | @npcs => @public{: NPC}
+@player | @players => @public{: Player}
 @localhost => "127.0.0.1" | "::1"
 @localnetwork =>
   // https://datatracker.ietf.org/doc/html/rfc1918#section-3

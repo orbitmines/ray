@@ -8,6 +8,8 @@ export interface FileEntry {
   modified: string;
   children?: TreeEntry[];
   content?: string;
+  access?: 'public' | 'local' | 'private' | 'npc' | 'player' | 'everyone';
+  encrypted?: boolean;
 }
 
 export interface CompoundEntry {
@@ -590,7 +592,7 @@ const repository: Repository = {
             ]},
             { name: 'Vertex.ts', isDirectory: false, modified: '5 days ago', content: VERTEX_TS_CONTENT },
             { name: 'Edge.ts', isDirectory: false, modified: '5 days ago', content: EDGE_TS_CONTENT },
-            { name: 'Orbit.ts', isDirectory: false, modified: '3 days ago', content: ORBIT_TS_CONTENT },
+            { name: 'Orbit.ts', isDirectory: false, modified: '3 days ago', content: ORBIT_TS_CONTENT, access: 'player' },
             { name: 'index.ts', isDirectory: false, modified: '2 days ago', content: INDEX_TS_CONTENT, children: [
               { name: 'types', isDirectory: true, modified: '3 days ago', children: [
                 { name: 'Ray.d.ts', isDirectory: false, modified: '3 days ago' },
@@ -606,7 +608,7 @@ const repository: Repository = {
           children: [
             { name: 'getting-started.md', isDirectory: false, modified: '1 week ago' },
             { name: 'api.md', isDirectory: false, modified: '1 week ago' },
-            { name: 'architecture.md', isDirectory: false, modified: '2 weeks ago' },
+            { name: 'architecture.md', isDirectory: false, modified: '2 weeks ago', access: 'npc' },
             { name: 'README.md', isDirectory: false, modified: '1 week ago', content: DOCS_README },
           ],
         },
@@ -615,7 +617,7 @@ const repository: Repository = {
           isDirectory: true,
           modified: '4 days ago',
           children: [
-            { name: 'basic.ray', isDirectory: false, modified: '1 week ago' },
+            { name: 'basic.ray', isDirectory: false, modified: '1 week ago', access: 'everyone' },
             { name: 'composition.ray', isDirectory: false, modified: '4 days ago' },
             { name: 'orbit.ray', isDirectory: false, modified: '4 days ago' },
             generatedTestEntry,
@@ -662,11 +664,12 @@ window.addEventListener('ether:ready', async () => {
           ],
         },
         { name: 'LICENSE', isDirectory: false, modified: '1 month ago' },
-        { name: '.gitignore', isDirectory: false, modified: '1 month ago' },
+        { name: '.gitignore', isDirectory: false, modified: '1 month ago', access: 'private' },
         {
           name: '@annotations',
           isDirectory: true,
           modified: '1 day ago',
+          access: 'local',
           children: [
             { name: 'design-notes.ray', isDirectory: false, modified: '1 day ago', content: '// @annotations: Design notes\n// This directory tests @-prefix escaping' },
           ],
@@ -675,6 +678,8 @@ window.addEventListener('ether:ready', async () => {
           name: '~drafts',
           isDirectory: true,
           modified: '2 days ago',
+          access: 'private',
+          encrypted: true,
           children: [
             { name: 'wip.ray', isDirectory: false, modified: '2 days ago', content: '// ~drafts: Work in progress\n// This directory tests ~-prefix escaping' },
           ],
@@ -699,6 +704,7 @@ window.addEventListener('ether:ready', async () => {
           name: '.ether',
           isDirectory: true,
           modified: 'today',
+          access: 'private',
           children: [
             {
               name: '%',
@@ -743,11 +749,11 @@ const genesisWorld: Repository = {
       isDirectory: true,
       modified: 'yesterday',
       children: [
-        { name: 'player.ray', isDirectory: false, modified: 'yesterday' },
-        { name: 'npc.ray', isDirectory: false, modified: '4 days ago' },
+        { name: 'player.ray', isDirectory: false, modified: 'yesterday', access: 'player' },
+        { name: 'npc.ray', isDirectory: false, modified: '4 days ago', access: 'npc' },
       ],
     },
-    { name: 'world.config', isDirectory: false, modified: '2 days ago' },
+    { name: 'world.config', isDirectory: false, modified: '2 days ago', access: 'everyone' },
     { name: 'README.md', isDirectory: false, modified: '1 week ago' },
   ],
 };
@@ -783,7 +789,7 @@ const aliceRepo: Repository = {
   description: 'Alice — a genesis inhabitant',
   tree: [
     { name: 'profile-picture.svg', isDirectory: false, modified: '1 week ago', content: ALICE_PROFILE_SVG },
-    { name: 'notes.md', isDirectory: false, modified: '2 days ago' },
+    { name: 'notes.md', isDirectory: false, modified: '2 days ago', access: 'private' },
   ],
 };
 

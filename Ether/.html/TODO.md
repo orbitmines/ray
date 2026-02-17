@@ -1,3 +1,5 @@
 - Upload files
 - dropdown of branches
 - ..
+- Access permissions for which file shown to whom, for .ray is also content of the file
+- On editing access permission: prompt with should you change the history access as well?

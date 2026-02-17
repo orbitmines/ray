@@ -562,7 +562,6 @@ export function injectIDEStyles(): void {
     .ide-tab__icon svg {
       width: 14px;
       height: 14px;
-      fill: currentColor;
     }
     .ide-tab__title { flex: 1 1 auto; }
     .ide-tab__close {
@@ -588,6 +587,20 @@ export function injectIDEStyles(): void {
       flex: 1 1 auto;
       background: transparent;
     }
+    /* Non-last vertical children: fixed vh height, overflow:clip (NOT auto/hidden).
+       clip constrains visually but does NOT create a scroll container,
+       so .ide-tabbar position:sticky still works relative to page scroll.
+       Scrolling happens inside .ide-panel-content (sibling of tab bar). */
+    .ide-split__child--v-constrained { overflow: clip; }
+    /* Inner elements must fill the constrained height exactly */
+    .ide-split__child--v-constrained > .ide-split { min-height: 0; height: 100%; }
+    .ide-split__child--v-constrained .ide-tabgroup { min-height: 0; height: 100%; }
+    .ide-split__child--v-constrained .ide-panel-content {
+      overflow-y: auto;
+      min-height: 0;
+    }
+    .ide-split__child--v-constrained .ide-panel-content::-webkit-scrollbar { width: 2px; }
+    .ide-split__child--v-constrained .ide-panel-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
 
     /* Tab insertion indicator */
     .ide-tab-insert-indicator {
@@ -624,24 +637,48 @@ interface LayoutState {
 function createDropIndicator(type: DropZoneType): HTMLElement {
   const el = document.createElement('div');
   el.className = 'ide-drop-indicator';
-  switch (type) {
-    case 'tab':
-      Object.assign(el.style, { top: '0', left: '0', right: '0', bottom: '0' });
-      break;
-    case 'left':
-      Object.assign(el.style, { top: '0', left: '0', bottom: '0', width: '50%' });
-      break;
-    case 'right':
-      Object.assign(el.style, { top: '0', right: '0', bottom: '0', width: '50%' });
-      break;
-    case 'top':
-      Object.assign(el.style, { top: '0', left: '0', right: '0', height: '50%' });
-      break;
-    case 'bottom':
-      Object.assign(el.style, { bottom: '0', left: '0', right: '0', height: '50%' });
-      break;
-  }
+  el.dataset.dropType = type;
+  // Position will be set by positionDropIndicators() after mount
+  el.style.display = 'none';
   return el;
+}
+
+/** Reposition drop indicators to cover only the visible portion of their container */
+function positionDropIndicators(root: HTMLElement): void {
+  root.querySelectorAll('.ide-drop-indicator').forEach(indicator => {
+    const el = indicator as HTMLElement;
+    const type = el.dataset.dropType as DropZoneType;
+    const parent = el.parentElement;
+    if (!parent) return;
+
+    const rect = parent.getBoundingClientRect();
+    const vpH = window.innerHeight;
+    // Visible portion of the container within the viewport
+    const visTop = Math.max(0, rect.top);
+    const visBot = Math.min(vpH, rect.bottom);
+    const visH = Math.max(0, visBot - visTop);
+    // Convert to parent-relative coordinates
+    const offsetTop = visTop - rect.top;
+
+    el.style.display = '';
+    switch (type) {
+      case 'tab':
+        Object.assign(el.style, { top: `${offsetTop}px`, left: '0', right: '0', height: `${visH}px` });
+        break;
+      case 'left':
+        Object.assign(el.style, { top: `${offsetTop}px`, left: '0', height: `${visH}px`, width: '50%' });
+        break;
+      case 'right':
+        Object.assign(el.style, { top: `${offsetTop}px`, right: '0', height: `${visH}px`, width: '50%' });
+        break;
+      case 'top':
+        Object.assign(el.style, { top: `${offsetTop}px`, left: '0', right: '0', height: `${visH / 2}px` });
+        break;
+      case 'bottom':
+        Object.assign(el.style, { top: `${offsetTop + visH / 2}px`, left: '0', right: '0', height: `${visH / 2}px` });
+        break;
+    }
+  });
 }
 
 function renderTabBar(
@@ -762,7 +799,12 @@ function detectDropZone(
 
   const rect = containerEl.getBoundingClientRect();
   const x = (e.clientX - rect.left) / rect.width;
-  const y = (e.clientY - rect.top) / rect.height;
+  // Use visible portion of container for y-axis detection (tall panels)
+  const vpH = window.innerHeight;
+  const visTop = Math.max(rect.top, 0);
+  const visBot = Math.min(rect.bottom, vpH);
+  const visH = visBot - visTop;
+  const y = visH > 0 ? (e.clientY - visTop) / visH : 0.5;
   const threshold = 0.25;
 
   if (x < threshold) return { type: 'left' };
@@ -876,7 +918,6 @@ function renderSplitNode(
 
   for (let i = 0; i < node.children.length; i++) {
     if (i > 0) {
-      // Resize handle
       const handle = document.createElement('div');
       handle.className = `ide-resize-handle ide-resize-handle--${node.direction}`;
       setupResizeHandle(handle, node, i - 1, state, ctx);
@@ -887,7 +928,23 @@ function renderSplitNode(
     childEl.className = 'ide-split__child';
     const size = node.sizes[i];
     const handleCount = node.children.length - 1;
-    childEl.style.flex = `0 0 calc(${size * 100}% - ${(handleCount * HANDLE_SIZE) / node.children.length}px)`;
+    if (node.direction === 'vertical') {
+      const totalHandlePx = handleCount * HANDLE_SIZE;
+      if (i < node.children.length - 1) {
+        // Non-last: fixed vh height with own scroll container.
+        // Tab bars inside stick within this scroll context.
+        // Works for nested horizontal splits too (constrains everything inside).
+        childEl.classList.add('ide-split__child--v-constrained');
+        childEl.style.height = `calc(${(size * 100).toFixed(4)}vh - ${(size * totalHandlePx).toFixed(2)}px)`;
+        childEl.style.flex = '0 0 auto';
+      } else {
+        // Last child: flows into page scroll
+        childEl.style.flex = '0 0 auto';
+      }
+    } else {
+      const sizeExpr = `calc(${size * 100}% - ${(handleCount * HANDLE_SIZE) / node.children.length}px)`;
+      childEl.style.flex = `0 0 ${sizeExpr}`;
+    }
 
     const childContent = renderLayoutNode(node.children[i], state, ctx);
     childEl.appendChild(childContent);
@@ -929,8 +986,8 @@ function setupResizeHandle(
     const containerEl = handle.parentElement;
     if (!containerEl) return;
     const containerRect = containerEl.getBoundingClientRect();
-    const containerSize =
-      direction === 'horizontal' ? containerRect.width : containerRect.height;
+    // For vertical splits, use viewport height as reference (children are vh-based)
+    const containerSize = direction === 'horizontal' ? containerRect.width : window.innerHeight;
 
     // Snapshot sizes at mousedown
     const currentNode = findNode(state.layout, node.id) as SplitNode | null;
@@ -1047,6 +1104,8 @@ export function createIDELayout(container: HTMLElement, options: {
     container.innerHTML = '';
     const root = renderLayoutNode(state.layout, state, ctx);
     container.appendChild(root);
+    // Position drop indicators now that elements are in the DOM
+    requestAnimationFrame(() => positionDropIndicators(container));
   }
 
   function notifyLayoutChange(): void {
@@ -1210,10 +1269,25 @@ export function createIDELayout(container: HTMLElement, options: {
       if (splitEl) {
         const children = splitEl.querySelectorAll(':scope > .ide-split__child');
         const handleCount = sizes.length - 1;
+        const isVertical = node.direction === 'vertical';
         children.forEach((child, i) => {
           if (i < sizes.length) {
-            (child as HTMLElement).style.flex =
-              `0 0 calc(${sizes[i] * 100}% - ${(handleCount * HANDLE_SIZE) / sizes.length}px)`;
+            const el = child as HTMLElement;
+            if (isVertical) {
+              const totalHandlePx = handleCount * HANDLE_SIZE;
+              if (i < sizes.length - 1) {
+                el.classList.add('ide-split__child--v-constrained');
+                el.style.height = `calc(${(sizes[i] * 100).toFixed(4)}vh - ${(sizes[i] * totalHandlePx).toFixed(2)}px)`;
+                el.style.flex = '0 0 auto';
+              } else {
+                el.classList.remove('ide-split__child--v-constrained');
+                el.style.height = '';
+                el.style.flex = '0 0 auto';
+              }
+            } else {
+              const sizeExpr = `calc(${sizes[i] * 100}% - ${(handleCount * HANDLE_SIZE) / sizes.length}px)`;
+              el.style.flex = `0 0 ${sizeExpr}`;
+            }
           }
         });
       }

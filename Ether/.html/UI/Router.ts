@@ -4,11 +4,12 @@
 
 import * as Greetings from './Greetings.ts';
 import * as Repository from './Repository.ts';
+import * as PullRequests from './PullRequests.ts';
 
-type Page = 'repository';
+type Page = 'repository' | 'pull-requests';
 
 // Pages where the global command bar (@/slash overlay + @me button) is active.
-const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository']);
+const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository', 'pull-requests']);
 
 let currentPage: Page | null = null;
 let rootEl: HTMLElement;
@@ -23,7 +24,20 @@ interface RepoParams {
   hash: string | null;           // file selection from URL hash (without the '#')
 }
 
-type RouteResult = { page: 'repository'; params: RepoParams };
+export interface PRParams {
+  user: string;
+  path: string[];
+  base: string;
+  prAction: 'list' | 'detail' | 'new';
+  prId: number | null;
+  commitId: string | null;
+  /** The canonical repo path for this PR context, e.g. "@ether/library" */
+  repoPath: string;
+}
+
+type RouteResult =
+  | { page: 'repository'; params: RepoParams }
+  | { page: 'pull-requests'; params: PRParams };
 
 // ---- Route Matching ----
 
@@ -44,6 +58,41 @@ function matchRoute(pathname: string): RouteResult {
 
   // Split remaining into segments, filter empty
   const segments = rest.split('/').filter(s => s);
+
+  // Check for -/pulls namespace separator
+  const dashIdx = segments.indexOf('-');
+  if (dashIdx >= 0 && segments[dashIdx + 1] === 'pulls') {
+    // Everything before '-' is the repo path (strip wildcards)
+    const repoPathSegments = segments.slice(0, dashIdx).filter(s => s !== '*' && s !== '**');
+    const pullsSegments = segments.slice(dashIdx + 2); // after 'pulls'
+
+    const repoPath = `@${user}` + (repoPathSegments.length > 0 ? '/' + repoPathSegments.join('/') : '');
+
+    let prAction: 'list' | 'detail' | 'new' = 'list';
+    let prId: number | null = null;
+    let commitId: string | null = null;
+
+    if (pullsSegments.length === 0) {
+      prAction = 'list';
+    } else if (pullsSegments[0] === 'new') {
+      prAction = 'new';
+    } else {
+      const id = parseInt(pullsSegments[0], 10);
+      if (!isNaN(id)) {
+        prAction = 'detail';
+        prId = id;
+        // Check for /commits/UUID
+        if (pullsSegments[1] === 'commits' && pullsSegments[2]) {
+          commitId = pullsSegments[2];
+        }
+      }
+    }
+
+    return {
+      page: 'pull-requests',
+      params: { user, path: repoPathSegments, base, prAction, prId, commitId, repoPath },
+    };
+  }
 
   // Walk segments: collect ~/version markers and build clean path
   const path: string[] = [];
@@ -77,10 +126,17 @@ async function activatePage(route: RouteResult): Promise<void> {
     ensureBar(route.page);
     return;
   }
+  if (route.page === 'pull-requests' && currentPage === 'pull-requests') {
+    PullRequests.update(route.params);
+    ensureBar(route.page);
+    return;
+  }
 
   // Unmount current page
   if (currentPage === 'repository') {
     Repository.unmount();
+  } else if (currentPage === 'pull-requests') {
+    PullRequests.unmount();
   }
 
   // Tear down global bar when navigating to an unsupported page
@@ -94,6 +150,9 @@ async function activatePage(route: RouteResult): Promise<void> {
   if (route.page === 'repository') {
     rootEl.style.display = '';
     Repository.mount(rootEl, route.params, navigateTo);
+  } else if (route.page === 'pull-requests') {
+    rootEl.style.display = '';
+    PullRequests.mount(rootEl, route.params, navigateTo);
   }
 
   ensureBar(route.page);
@@ -121,7 +180,9 @@ function handleRoute(): void {
   if (url === lastRouteUrl) return;
   lastRouteUrl = url;
   const route = matchRoute(window.location.pathname);
-  route.params.hash = window.location.hash ? decodeURIComponent(window.location.hash.slice(1)) : null;
+  if (route.page === 'repository') {
+    route.params.hash = window.location.hash ? decodeURIComponent(window.location.hash.slice(1)) : null;
+  }
   activatePage(route);
 }
 

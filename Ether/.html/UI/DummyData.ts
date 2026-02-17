@@ -39,6 +39,56 @@ export interface Repository {
   tree: TreeEntry[];
 }
 
+// ---- Pull Request types ----
+
+export type PRStatus = 'open' | 'closed' | 'merged';
+
+export interface FileDiff {
+  path: string;
+  oldContent: string;
+  newContent: string;
+  type: 'added' | 'modified' | 'deleted';
+}
+
+export interface PRCommit {
+  id: string;
+  message: string;
+  author: string;
+  createdAt: string;
+  diffs: FileDiff[];
+}
+
+export interface PRComment {
+  id: number;
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+export type ActivityItem =
+  | { type: 'commit'; commit: PRCommit; createdAt: string }
+  | { type: 'comment'; comment: PRComment; createdAt: string }
+  | { type: 'status_change'; from: PRStatus; to: PRStatus; author: string; createdAt: string }
+  | { type: 'merge'; author: string; createdAt: string };
+
+export interface PullRequest {
+  id: number;
+  title: string;
+  description: string;
+  status: PRStatus;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+  sourceVersion: string;
+  targetVersion: string;
+  sourceLabel: string;
+  targetLabel: string;
+  commits: PRCommit[];
+  comments: PRComment[];
+  activity: ActivityItem[];
+  mergeable: boolean;
+}
+
 const README_CONTENT = `# @ether/library
 
 A **Ray-based** library for compositional abstractions over equivalences.
@@ -613,6 +663,63 @@ window.addEventListener('ether:ready', async () => {
         },
         { name: 'LICENSE', isDirectory: false, modified: '1 month ago' },
         { name: '.gitignore', isDirectory: false, modified: '1 month ago' },
+        {
+          name: '@annotations',
+          isDirectory: true,
+          modified: '1 day ago',
+          children: [
+            { name: 'design-notes.ray', isDirectory: false, modified: '1 day ago', content: '// @annotations: Design notes\n// This directory tests @-prefix escaping' },
+          ],
+        },
+        {
+          name: '~drafts',
+          isDirectory: true,
+          modified: '2 days ago',
+          children: [
+            { name: 'wip.ray', isDirectory: false, modified: '2 days ago', content: '// ~drafts: Work in progress\n// This directory tests ~-prefix escaping' },
+          ],
+        },
+        {
+          name: '*',
+          isDirectory: true,
+          modified: '3 days ago',
+          children: [
+            { name: 'glob-match.ray', isDirectory: false, modified: '3 days ago', content: '// * directory: glob patterns\n// This tests *-exact escaping' },
+          ],
+        },
+        {
+          name: '-',
+          isDirectory: true,
+          modified: '4 days ago',
+          children: [
+            { name: 'archive.ray', isDirectory: false, modified: '4 days ago', content: '// - directory: archive\n// This tests dash-exact escaping' },
+          ],
+        },
+        {
+          name: '.ether',
+          isDirectory: true,
+          modified: 'today',
+          children: [
+            {
+              name: '%',
+              isDirectory: true,
+              modified: 'today',
+              children: [
+                {
+                  name: 'pull-requests',
+                  isDirectory: true,
+                  modified: 'today',
+                  children: [
+                    { name: '0.ray', isDirectory: false, modified: '3 days ago', content: '# PR #0: Add Orbit cyclic structure support\nstatus: merged\nauthor: @bob\nsource: @bob/orbit-support\ntarget: main' },
+                    { name: '1.ray', isDirectory: false, modified: '1 week ago', content: '# PR #1: Refactor Edge to use generics\nstatus: closed\nauthor: @charlie\nsource: @charlie/edge-generics\ntarget: main' },
+                    { name: '2.ray', isDirectory: false, modified: 'today', content: '# PR #2: Add superposition support to Ray\nstatus: open\nauthor: @alice\nsource: @alice/superposition\ntarget: main' },
+                    { name: '3.ray', isDirectory: false, modified: 'today', content: '# PR #3: Improve documentation README\nstatus: open\nauthor: @alice\nsource: @alice/docs-update\ntarget: main' },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
       ],
     },
   ],
@@ -663,10 +770,19 @@ const sandboxWorld: Repository = {
   ],
 };
 
+const ALICE_PROFILE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<circle cx="32" cy="32" r="30" fill="#1a1a2e"/>
+<circle cx="32" cy="24" r="10" fill="#c084fc"/>
+<ellipse cx="32" cy="48" rx="16" ry="12" fill="#c084fc"/>
+<circle cx="28" cy="22" r="2" fill="#1a1a2e"/>
+<circle cx="36" cy="22" r="2" fill="#1a1a2e"/>
+</svg>`;
+
 const aliceRepo: Repository = {
   user: 'alice',
   description: 'Alice — a genesis inhabitant',
   tree: [
+    { name: 'profile-picture.svg', isDirectory: false, modified: '1 week ago', content: ALICE_PROFILE_SVG },
     { name: 'notes.md', isDirectory: false, modified: '2 days ago' },
   ],
 };
@@ -776,4 +892,337 @@ export function resolveFiles(tree: TreeEntry[], pathSegments: string[]): FileEnt
   if (!dir) return [];
   const flat = flattenEntries(dir);
   return flat.filter(e => e.name === fileName && !e.isDirectory);
+}
+
+// ---- Pull Request dummy data ----
+
+const dummyPullRequests: Map<string, PullRequest[]> = new Map();
+
+// PRs for @ether/library
+const etherLibraryPRs: PullRequest[] = [
+  {
+    id: 0,
+    title: 'Add Orbit cyclic structure support',
+    description: `Adds the \`Orbit\` class for representing cyclic equivalence classes of rays.\n\nThis introduces:\n- \`Orbit\` constructor from a list of rays\n- \`rotate()\`, \`merge()\`, \`contains()\` methods\n- Cycle edge construction via \`Ray.orbit()\``,
+    status: 'merged',
+    author: 'bob',
+    createdAt: '2025-12-01T10:00:00Z',
+    updatedAt: '2025-12-03T14:00:00Z',
+    sourceVersion: 'a1b2c3d4-e5f6-11ee-b001-000000000001',
+    targetVersion: 'a1b2c3d4-e5f6-11ee-b001-000000000000',
+    sourceLabel: 'bob/orbit-support',
+    targetLabel: 'main',
+    commits: [
+      {
+        id: 'c0a1b2c3-d4e5-11ee-b001-000000000010',
+        message: 'Add Orbit class with cyclic structure operations',
+        author: 'bob',
+        createdAt: '2025-12-01T10:30:00Z',
+        diffs: [
+          {
+            path: 'src/Orbit.ts',
+            oldContent: '',
+            newContent: ORBIT_TS_CONTENT,
+            type: 'added',
+          },
+        ],
+      },
+    ],
+    comments: [
+      { id: 0, author: 'alice', body: 'Looks great! The `rotate()` method is exactly what we needed for the cycle resolution algorithm.', createdAt: '2025-12-01T15:00:00Z' },
+      { id: 1, author: 'bob', body: 'Thanks! I also added `merge()` for combining orbits — should help with the distributed case.', createdAt: '2025-12-02T09:00:00Z' },
+    ],
+    activity: [
+      { type: 'commit', commit: { id: 'c0a1b2c3-d4e5-11ee-b001-000000000010', message: 'Add Orbit class with cyclic structure operations', author: 'bob', createdAt: '2025-12-01T10:30:00Z', diffs: [] }, createdAt: '2025-12-01T10:30:00Z' },
+      { type: 'comment', comment: { id: 0, author: 'alice', body: 'Looks great! The `rotate()` method is exactly what we needed for the cycle resolution algorithm.', createdAt: '2025-12-01T15:00:00Z' }, createdAt: '2025-12-01T15:00:00Z' },
+      { type: 'comment', comment: { id: 1, author: 'bob', body: 'Thanks! I also added `merge()` for combining orbits — should help with the distributed case.', createdAt: '2025-12-02T09:00:00Z' }, createdAt: '2025-12-02T09:00:00Z' },
+      { type: 'status_change', from: 'open', to: 'merged', author: 'alice', createdAt: '2025-12-03T14:00:00Z' },
+      { type: 'merge', author: 'alice', createdAt: '2025-12-03T14:00:00Z' },
+    ],
+    mergeable: false,
+  },
+  {
+    id: 1,
+    title: 'Refactor Edge to use generics',
+    description: `Refactors the \`Edge\` module to use generic type parameters for better type inference.\n\nThis is a breaking change for downstream consumers that rely on the concrete \`Ray\` type in edge construction.`,
+    status: 'closed',
+    author: 'charlie',
+    createdAt: '2025-12-05T08:00:00Z',
+    updatedAt: '2025-12-08T12:00:00Z',
+    sourceVersion: 'b2c3d4e5-f6a1-11ee-b002-000000000001',
+    targetVersion: 'b2c3d4e5-f6a1-11ee-b002-000000000000',
+    sourceLabel: 'charlie/edge-generics',
+    targetLabel: 'main',
+    commits: [
+      {
+        id: 'c1b2c3d4-e5f6-11ee-b002-000000000010',
+        message: 'Refactor Edge module with generic type parameters',
+        author: 'charlie',
+        createdAt: '2025-12-05T09:00:00Z',
+        diffs: [
+          {
+            path: 'src/Edge.ts',
+            oldContent: EDGE_TS_CONTENT,
+            newContent: `// Edge.ts — One-dimensional composition of rays (generic)
+
+import { Ray } from './Ray';
+
+export type Edge<T extends Ray = Ray> = T;
+
+export function isEdge(ray: Ray): boolean {
+  return !ray.is_vertex;
+}
+
+export function createEdge<T extends Ray>(initial: T, terminal: T): Edge<T> {
+  return Ray.edge(initial, terminal) as Edge<T>;
+}
+
+export function chain<T extends Ray>(...rays: T[]): Edge<T> {
+  if (rays.length === 0) return Ray.vertex() as Edge<T>;
+  let current: Ray = rays[0];
+  for (let i = 1; i < rays.length; i++) {
+    current = current.compose(rays[i]);
+  }
+  return current as Edge<T>;
+}
+
+export function reverse<T extends Ray>(edge: Edge<T>): Edge<T> {
+  return Ray.edge(edge.terminal, edge.initial) as Edge<T>;
+}
+
+export namespace EdgeOps {
+  export function length(edge: Edge): number {
+    let count = 0;
+    let current: Ray = edge;
+    while (!current.is_vertex) {
+      count++;
+      current = current.terminal;
+    }
+    return count;
+  }
+}`,
+            type: 'modified',
+          },
+        ],
+      },
+    ],
+    comments: [
+      { id: 2, author: 'alice', body: 'I think this introduces too much complexity for the current use case. Can we revisit after the v2 migration?', createdAt: '2025-12-06T10:00:00Z' },
+    ],
+    activity: [
+      { type: 'commit', commit: { id: 'c1b2c3d4-e5f6-11ee-b002-000000000010', message: 'Refactor Edge module with generic type parameters', author: 'charlie', createdAt: '2025-12-05T09:00:00Z', diffs: [] }, createdAt: '2025-12-05T09:00:00Z' },
+      { type: 'comment', comment: { id: 2, author: 'alice', body: 'I think this introduces too much complexity for the current use case. Can we revisit after the v2 migration?', createdAt: '2025-12-06T10:00:00Z' }, createdAt: '2025-12-06T10:00:00Z' },
+      { type: 'status_change', from: 'open', to: 'closed', author: 'charlie', createdAt: '2025-12-08T12:00:00Z' },
+    ],
+    mergeable: false,
+  },
+  {
+    id: 2,
+    title: 'Add superposition support to Ray',
+    description: `Introduces superposition semantics to the \`Ray\` class, enabling quantum-style composition.\n\n## Changes\n- New \`Ray.superpose(...rays)\` static method\n- New \`superpositions\` getter\n- Updated \`is_equivalent\` to handle superposed rays\n- Added \`RayLike\` interface for structural typing`,
+    status: 'open',
+    author: 'alice',
+    createdAt: '2025-12-10T09:00:00Z',
+    updatedAt: '2025-12-12T16:00:00Z',
+    sourceVersion: 'c3d4e5f6-a1b2-11ee-b003-000000000001',
+    targetVersion: 'c3d4e5f6-a1b2-11ee-b003-000000000000',
+    sourceLabel: 'alice/superposition',
+    targetLabel: 'main',
+    commits: [
+      {
+        id: 'c2a1b2c3-d4e5-11ee-b003-000000000010',
+        message: 'Add RayLike interface and superpose static method',
+        author: 'alice',
+        createdAt: '2025-12-10T10:00:00Z',
+        diffs: [
+          {
+            path: 'src/Ray.ts',
+            oldContent: RAY_TS_V1,
+            newContent: `// Ray.ts — The fundamental compositional primitive
+// v1.5: Adding superposition groundwork
+
+import { Vertex } from './Vertex';
+import { Edge } from './Edge';
+
+export type Equivalence<T> = (a: T, b: T) => boolean;
+
+export interface RayLike {
+  readonly initial: RayLike;
+  readonly terminal: RayLike;
+  readonly is_vertex: boolean;
+  compose(other: RayLike): RayLike;
+}
+
+export class Ray implements RayLike {
+  private _initial: Ray | null = null;
+  private _terminal: Ray | null = null;
+  private _vertex: boolean;
+
+  private constructor(vertex: boolean = false) {
+    this._vertex = vertex;
+  }
+
+  static vertex(): Ray {
+    const r = new Ray(true);
+    r._initial = r;
+    r._terminal = r;
+    return r;
+  }
+
+  static edge(a: Ray, b: Ray): Ray {
+    const r = new Ray(false);
+    r._initial = a;
+    r._terminal = b;
+    return r;
+  }
+
+  static orbit(rays: Ray[]): Ray {
+    if (rays.length === 0) return Ray.vertex();
+    let current = rays[0];
+    for (let i = 1; i < rays.length; i++) {
+      current = Ray.edge(current, rays[i]);
+    }
+    return Ray.edge(current, rays[0]);
+  }
+
+  get initial(): Ray { return this._initial ?? this; }
+  get terminal(): Ray { return this._terminal ?? this; }
+  get is_vertex(): boolean { return this._vertex; }
+
+  compose(other: Ray): Ray {
+    return Ray.edge(this, other);
+  }
+
+  is_equivalent(other: Ray): boolean {
+    if (this === other) return true;
+    if (this._vertex && other._vertex) return true;
+    return false;
+  }
+
+  static equivalent(a: Ray, b: Ray): boolean {
+    return a.is_equivalent(b);
+  }
+
+  toString(): string {
+    if (this._vertex) return '(*)';
+    return \`(\${this._initial} -> \${this._terminal})\`;
+  }
+}`,
+            type: 'modified',
+          },
+        ],
+      },
+      {
+        id: 'c2b1c2d3-e4f5-11ee-b003-000000000011',
+        message: 'Implement full superposition with equivalence checks',
+        author: 'alice',
+        createdAt: '2025-12-11T14:00:00Z',
+        diffs: [
+          {
+            path: 'src/Ray.ts',
+            oldContent: RAY_TS_V1,
+            newContent: RAY_TS_V2,
+            type: 'modified',
+          },
+        ],
+      },
+    ],
+    comments: [
+      { id: 3, author: 'bob', body: 'The `RayLike` interface is a nice touch. Will this support cross-universe superposition eventually?', createdAt: '2025-12-10T14:00:00Z' },
+      { id: 4, author: 'alice', body: 'That is the plan! This PR lays the groundwork. Cross-universe will come in a follow-up.', createdAt: '2025-12-10T16:00:00Z' },
+      { id: 5, author: 'charlie', body: 'I tested the equivalence changes — they pass all existing test cases plus the new superposition ones.', createdAt: '2025-12-12T11:00:00Z' },
+    ],
+    activity: [
+      { type: 'commit', commit: { id: 'c2a1b2c3-d4e5-11ee-b003-000000000010', message: 'Add RayLike interface and superpose static method', author: 'alice', createdAt: '2025-12-10T10:00:00Z', diffs: [] }, createdAt: '2025-12-10T10:00:00Z' },
+      { type: 'comment', comment: { id: 3, author: 'bob', body: 'The `RayLike` interface is a nice touch. Will this support cross-universe superposition eventually?', createdAt: '2025-12-10T14:00:00Z' }, createdAt: '2025-12-10T14:00:00Z' },
+      { type: 'comment', comment: { id: 4, author: 'alice', body: 'That is the plan! This PR lays the groundwork. Cross-universe will come in a follow-up.', createdAt: '2025-12-10T16:00:00Z' }, createdAt: '2025-12-10T16:00:00Z' },
+      { type: 'commit', commit: { id: 'c2b1c2d3-e4f5-11ee-b003-000000000011', message: 'Implement full superposition with equivalence checks', author: 'alice', createdAt: '2025-12-11T14:00:00Z', diffs: [] }, createdAt: '2025-12-11T14:00:00Z' },
+      { type: 'comment', comment: { id: 5, author: 'charlie', body: 'I tested the equivalence changes — they pass all existing test cases plus the new superposition ones.', createdAt: '2025-12-12T11:00:00Z' }, createdAt: '2025-12-12T11:00:00Z' },
+    ],
+    mergeable: true,
+  },
+  {
+    id: 3,
+    title: 'Improve documentation README',
+    description: `Updates the README to reflect the v2 API changes and adds migration guide.\n\nThis aligns the documentation with the in-progress superposition branch.`,
+    status: 'open',
+    author: 'alice',
+    createdAt: '2025-12-13T11:00:00Z',
+    updatedAt: '2025-12-13T11:00:00Z',
+    sourceVersion: 'd4e5f6a1-b2c3-11ee-b004-000000000001',
+    targetVersion: 'd4e5f6a1-b2c3-11ee-b004-000000000000',
+    sourceLabel: 'alice/docs-update',
+    targetLabel: 'main',
+    commits: [
+      {
+        id: 'c3a1b2c3-d4e5-11ee-b004-000000000010',
+        message: 'Update README with v2 API changes and migration guide',
+        author: 'alice',
+        createdAt: '2025-12-13T11:30:00Z',
+        diffs: [
+          {
+            path: 'README.md',
+            oldContent: README_CONTENT,
+            newContent: ALT_README,
+            type: 'modified',
+          },
+        ],
+      },
+    ],
+    comments: [],
+    activity: [
+      { type: 'commit', commit: { id: 'c3a1b2c3-d4e5-11ee-b004-000000000010', message: 'Update README with v2 API changes and migration guide', author: 'alice', createdAt: '2025-12-13T11:30:00Z', diffs: [] }, createdAt: '2025-12-13T11:30:00Z' },
+    ],
+    mergeable: true,
+  },
+];
+
+dummyPullRequests.set('@ether/library', etherLibraryPRs);
+
+// ---- PR accessor functions ----
+
+export function getPullRequests(canonicalPath: string): PullRequest[] {
+  return dummyPullRequests.get(canonicalPath) || [];
+}
+
+export function getPullRequest(canonicalPath: string, prId: number): PullRequest | null {
+  const prs = getPullRequests(canonicalPath);
+  return prs.find(pr => pr.id === prId) ?? null;
+}
+
+export function getOpenPRCount(canonicalPath: string): number {
+  return getPullRequests(canonicalPath).filter(pr => pr.status === 'open').length;
+}
+
+let nextPRId = 4;
+
+export function createPullRequest(
+  canonicalPath: string,
+  title: string,
+  description: string,
+  sourceLabel: string,
+  targetLabel: string,
+  author?: string,
+): PullRequest {
+  const pr: PullRequest = {
+    id: nextPRId++,
+    title,
+    description,
+    status: 'open',
+    author: author || localStorage.getItem('ether:name') || 'anonymous',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    sourceVersion: crypto.randomUUID(),
+    targetVersion: crypto.randomUUID(),
+    sourceLabel,
+    targetLabel,
+    commits: [],
+    comments: [],
+    activity: [],
+    mergeable: true,
+  };
+  const prs = dummyPullRequests.get(canonicalPath) || [];
+  prs.push(pr);
+  dummyPullRequests.set(canonicalPath, prs);
+  return pr;
 }

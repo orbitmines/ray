@@ -5,7 +5,7 @@
 import { PHOSPHOR, CRT_SCREEN_BG } from './CRTShell.ts';
 import { renderMarkdown } from './Markdown.ts';
 import { fileIcon } from './FileIcons.ts';
-import { getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFiles, isCompound, flattenEntries } from './DummyData.ts';
+import { getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFiles, isCompound, flattenEntries, getOpenPRCount } from './DummyData.ts';
 import type { FileEntry, CompoundEntry, TreeEntry, Repository } from './DummyData.ts';
 import { createIDELayout, generateId, ensureIdCounter, injectIDEStyles } from './IDELayout.ts';
 import type { IDELayoutAPI, PanelDefinition, LayoutNode, TabGroupNode, SplitNode } from './IDELayout.ts';
@@ -429,12 +429,13 @@ function injectStyles(): void {
       justify-content: center;
       gap: 6px;
       height: 26px;
+      box-sizing: border-box;
       border-radius: 6px;
       font-family: 'Courier New', Courier, monospace;
       font-size: 12px;
       padding: 0 10px;
       cursor: pointer;
-      line-height: 26px;
+      line-height: 1;
       vertical-align: middle;
       margin-left: 4px;
     }
@@ -460,10 +461,6 @@ function injectStyles(): void {
     .action-icon-small { display: none !important; }
     .action-count {
       font-weight: bold;
-      font-size: 0.7rem;
-      display: flex;
-      align-items: center;
-      height: 100%;
     }
 
     /* ---- Star button ---- */
@@ -950,6 +947,17 @@ function bindClickHandlers(): void {
       });
     });
   });
+
+  // PR button navigation
+  currentContainer.querySelectorAll('[data-pr-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!navigateFn || !currentRepoParams) return;
+      const base = currentRepoParams.base || '';
+      const cleanPath = currentRepoParams.path.filter(s => s !== '*' && s !== '**');
+      const pathPart = cleanPath.length > 0 ? '/' + cleanPath.join('/') : '';
+      navigateFn(`${base}${pathPart}/-/pulls`);
+    });
+  });
 }
 
 // ---- Path Helpers ----
@@ -988,6 +996,30 @@ function buildBasePath(base: string, versions: [number, string][], path: string[
 // parentContext: null = normal, '@' = inside @{: String}, '~' = inside #{: String}
 type ParentContext = '@' | '~' | null;
 
+// Segments that have special routing meaning and need escaping.
+// We use '!' as an escape prefix: @annotations → !@annotations in the URL.
+// This prevents Router.ts from interpreting it as a user-switch/world-switch/etc.
+// (Backslash doesn't work — browsers convert \ to / in URLs.
+//  Percent-encoding doesn't work for - and ~ — they're unreserved per RFC 3986
+//  so browsers normalize %2D→- and %7E→~ when typed in the URL bar.)
+function needsPathEscaping(name: string): boolean {
+  if (name.length === 0) return false;
+  const ch = name[0];
+  if (name === '@' || name === '~') return false; // navigation entries, not directories
+  if (ch === '@' || ch === '~') return true;      // directory names starting with @/~
+  if (name === '*' || name === '**' || name === '-') return true; // exact-match special
+  if (ch === '!') return true;                   // escape the escape prefix itself
+  return false;
+}
+
+function escapePathSegment(name: string): string {
+  return needsPathEscaping(name) ? '!' + name : name;
+}
+
+function unescapePathSegment(seg: string): string {
+  return (seg.length > 1 && seg[0] === '!') ? seg.slice(1) : seg;
+}
+
 function displayEntryName(name: string, parentContext: ParentContext = null): string {
   if (name === '@') return '@{: String}';
   if (name === '~') return '#{: String}';
@@ -1007,7 +1039,7 @@ function buildEntryHref(basePath: string, name: string, parentContext: ParentCon
     const parent = basePath.replace(/\/~$/, '');
     return parent + '/~' + name;
   }
-  return basePath + (basePath.endsWith('/') ? '' : '/') + name;
+  return basePath + (basePath.endsWith('/') ? '' : '/') + escapePathSegment(name);
 }
 
 // ---- Hash-relative path helper ----
@@ -1092,8 +1124,13 @@ const DOWNLOAD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 6
 const FORK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M176 168C189.3 168 200 157.3 200 144C200 130.7 189.3 120 176 120C162.7 120 152 130.7 152 144C152 157.3 162.7 168 176 168zM256 144C256 176.8 236.3 205 208 217.3L208 240C208 266.5 229.5 288 256 288L384 288C410.5 288 432 266.5 432 240L432 217.3C403.7 205 384 176.8 384 144C384 99.8 419.8 64 464 64C508.2 64 544 99.8 544 144C544 176.8 524.3 205 496 217.3L496 240C496 301.9 445.9 352 384 352L352 352L352 422.7C380.3 435 400 463.2 400 496C400 540.2 364.2 576 320 576C275.8 576 240 540.2 240 496C240 463.2 259.7 435 288 422.7L288 352L256 352C194.1 352 144 301.9 144 240L144 217.3C115.7 205 96 176.8 96 144C96 99.8 131.8 64 176 64C220.2 64 256 99.8 256 144zM464 168C477.3 168 488 157.3 488 144C488 130.7 477.3 120 464 120C450.7 120 440 130.7 440 144C440 157.3 450.7 168 464 168zM344 496C344 482.7 333.3 472 320 472C306.7 472 296 482.7 296 496C296 509.3 306.7 520 320 520C333.3 520 344 509.3 344 496z"/></svg>`;
 
 function getPrCount(canonicalPath: string): number {
-  const raw = localStorage.getItem(`ether:pr-count:${canonicalPath}`);
-  return raw ? parseInt(raw, 10) || 0 : 0;
+  const count = getOpenPRCount(canonicalPath);
+  if (count > 0) return count;
+  // clonePath strips the @user/ prefix for root users — try with it
+  if (!canonicalPath.startsWith('@') && currentRepoParams) {
+    return getOpenPRCount(`@${currentRepoParams.user}/${canonicalPath}`);
+  }
+  return 0;
 }
 
 function renderActionButtons(canonicalPath: string, starPath: string): string {
@@ -1189,11 +1226,11 @@ function toggleStar(canonicalPath: string): boolean {
   }
 }
 
-/** Build a URL path sliced to `end`, preserving any `*` wildcards from the remainder of `fullPath`. */
+/** Build a URL path sliced to `end`, preserving any wildcards from the remainder of `fullPath`. */
 function buildPathPreservingWildcards(base: string, versions: [number, string][], fullPath: string[], end: number): string {
   const sliced = fullPath.slice(0, end);
   for (const seg of fullPath.slice(end)) {
-    if (seg === '*') sliced.push('*');
+    if (seg === '*' || seg === '**') sliced.push(seg);
   }
   return buildBasePath(base, versions, sliced);
 }
@@ -1243,7 +1280,7 @@ function renderBreadcrumb(displayVersion: string, items: BreadcrumbItem[], canon
     const prCount = getPrCount(canonicalPath);
     html += `<div class="repo-nav-row">
       <span class="nav-actions">${actionHtml}</span>
-      <button class="action-btn icon-btn" title="Pull requests"><span class="action-count">${prCount}</span><span class="action-icon">${PR_SVG}</span></button>
+      <button class="action-btn icon-btn" title="Pull requests" data-pr-nav data-pr-path="${canonicalPath}"><span class="action-count">${prCount}</span><span class="action-icon">${PR_SVG}</span></button>
       <button class="action-btn icon-btn" title="Settings"><span class="action-icon">${SETTINGS_SVG}</span></button>
     </div>`;
   }
@@ -1597,12 +1634,41 @@ function initVirtualScroll(container: HTMLElement, files: FileEntry[]): void {
     }
 
     let ticking = false;
+    let lastScrollParent: HTMLElement | null = null;
+
+    // Find nearest scrollable ancestor (overflow-y: auto/scroll)
+    function findScrollParent(el: HTMLElement): HTMLElement | null {
+      let p = el.parentElement;
+      while (p && p !== document.documentElement) {
+        const { overflowY } = getComputedStyle(p);
+        if (overflowY === 'auto' || overflowY === 'scroll') return p;
+        p = p.parentElement;
+      }
+      return null;
+    }
 
     const updateVisibleLines = () => {
-      // Use the container's position relative to the viewport for page-scroll-driven rendering
       const rect = scrollEl.getBoundingClientRect();
-      const scrollTop = Math.max(0, -rect.top);
-      const viewHeight = window.innerHeight;
+      // Detect scroll context: if inside an overflow-y container, use its bounds
+      const sp = findScrollParent(scrollEl);
+
+      // Re-attach direct scroll listener if scroll parent changed (e.g. after rearrangement)
+      if (sp !== lastScrollParent) {
+        if (lastScrollParent) lastScrollParent.removeEventListener('scroll', scheduleUpdate);
+        if (sp) sp.addEventListener('scroll', scheduleUpdate, { passive: true });
+        lastScrollParent = sp;
+      }
+
+      let scrollTop: number;
+      let viewHeight: number;
+      if (sp) {
+        const spRect = sp.getBoundingClientRect();
+        scrollTop = Math.max(0, spRect.top - rect.top);
+        viewHeight = sp.clientHeight;
+      } else {
+        scrollTop = Math.max(0, -rect.top);
+        viewHeight = window.innerHeight;
+      }
 
       const startLine = Math.max(0, Math.floor(scrollTop / LINE_HEIGHT) - BUFFER_LINES);
       const maxLine = indexComplete ? lineCount : offsets.length;
@@ -1617,7 +1683,7 @@ function initVirtualScroll(container: HTMLElement, files: FileEntry[]): void {
       linesContainer.innerHTML = html;
     };
 
-    const onScroll = () => {
+    const scheduleUpdate = () => {
       if (!ticking) {
         ticking = true;
         requestAnimationFrame(() => {
@@ -1627,14 +1693,21 @@ function initVirtualScroll(container: HTMLElement, files: FileEntry[]): void {
       }
     };
 
-    // Listen to page scroll since content flows into the page
-    window.addEventListener('scroll', onScroll);
+    // Listen to page scroll (always needed for last/unconstrained panels)
+    window.addEventListener('scroll', scheduleUpdate, { passive: true });
+    // Also attach to current scroll parent if inside an overflow container
+    const initialSP = findScrollParent(scrollEl);
+    if (initialSP) {
+      initialSP.addEventListener('scroll', scheduleUpdate, { passive: true });
+      lastScrollParent = initialSP;
+    }
     // Render the initial viewport immediately
     updateVisibleLines();
 
     cleanups.push(() => {
       cancelled = true;
-      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('scroll', scheduleUpdate);
+      if (lastScrollParent) lastScrollParent.removeEventListener('scroll', scheduleUpdate);
     });
   });
 
@@ -1668,14 +1741,14 @@ function renderRepo(): void {
 
   // Header chain: collect context switches for title breadcrumb
   // Hide implicit @user when the path immediately enters a world (~name or ~)
-  const firstNonWild = path.find(s => s !== '*');
+  const firstNonWild = path.find(s => s !== '*' && s !== '**');
   const startsWithWorld = firstNonWild !== undefined && (firstNonWild === '~' || firstNonWild.startsWith('~'));
   const headerChain: { label: string; pathEnd: number }[] =
     (base || !startsWithWorld) ? [{ label: `@${user}`, pathEnd: 0 }] : [];
 
   for (let i = 0; i < path.length; i++) {
     const seg = path[i];
-    if (seg === '*') {
+    if (seg === '*' || seg === '**') {
       // Wildcard — kept in path for URL generation, skip for tree resolution
       hasWildcard = true;
       if (treePath.length === 0) {
@@ -1717,7 +1790,7 @@ function renderRepo(): void {
       worldParentKey = effectiveWorld;  // nested worlds look up under this one
       effectiveWorldParent = parentKey; // for resolving this world
     } else {
-      treePath.push(seg);
+      treePath.push(unescapePathSegment(seg));
     }
   }
 
@@ -2000,12 +2073,13 @@ function renderRepo(): void {
                 if (ideLayoutInstance) {
                   const prefix = sidebarBasePath.endsWith('/') ? sidebarBasePath : sidebarBasePath + '/';
                   const relPath = href.startsWith(prefix)
-                    ? href.slice(prefix.length).split('/').filter(Boolean)
+                    ? href.slice(prefix.length).split('/').filter(Boolean).map(unescapePathSegment)
                     : null;
                   if (relPath && relPath.length > 0) {
                     const resolved = resolveFiles(sidebarEntries, relPath);
                     if (resolved.length > 0) {
-                      const relHash = computeRelativeHash(sidebarBasePath, href);
+                      const relHash = computeRelativeHash(sidebarBasePath, href)
+                        .split('/').map(unescapePathSegment).join('/');
                       const panelId = 'file:' + relHash;
                       const name = relPath[relPath.length - 1];
                       history.replaceState(null, '', location.pathname + '#' + relHash);
@@ -2097,6 +2171,8 @@ function renderRepo(): void {
           },
           onLayoutChange: () => {
             saveIDESession(currentUser, sidebarBasePath);
+            // Re-trigger virtual scroll after layout changes (panels may have moved to new scroll context)
+            requestAnimationFrame(() => window.dispatchEvent(new Event('scroll')));
           },
         });
         // Store for hash fast-path in update()

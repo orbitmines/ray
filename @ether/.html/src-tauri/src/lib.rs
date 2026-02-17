@@ -1,9 +1,9 @@
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-/// Resolve the Ether/ root directory.
+/// Resolve the @ether/ root directory.
 /// - Desktop: ETHER_ROOT env var, or the parent of the `.html/` directory
-/// - Android: Tauri resource dir + "Ether"
+/// - Android: Tauri resource dir + "@ether"
 fn ether_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     // 1. Explicit env var
     if let Ok(root) = std::env::var("ETHER_ROOT") {
@@ -14,11 +14,11 @@ fn ether_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     }
 
     // 2. Relative to the executable: exe is in src-tauri/target/*/ether,
-    //    Ether/ root is ../../.. (i.e. the Ether/ directory itself).
-    //    In dev, exe dir is src-tauri/target/debug/, Ether is ../../../
+    //    @ether/ root is ../../.. (i.e. the @ether/ directory itself).
+    //    In dev, exe dir is src-tauri/target/debug/, @ether is ../../../
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            // Walk up looking for an Ether/ directory marker (.ray/ or library/)
+            // Walk up looking for an @ether/ directory marker (.ray/ or library/)
             let mut candidate = dir.to_path_buf();
             for _ in 0..6 {
                 if candidate.join(".ray").is_dir() || candidate.join("library").is_dir() {
@@ -34,10 +34,10 @@ fn ether_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     // 3. Tauri resource directory (Android bundled assets)
     let _ = app; // use app handle for resource resolution in the future
 
-    Err("Could not determine Ether root directory. Set ETHER_ROOT env var.".into())
+    Err("Could not determine @ether root directory. Set ETHER_ROOT env var.".into())
 }
 
-/// Validate and resolve a relative path against the Ether root.
+/// Validate and resolve a relative path against the @ether root.
 /// Rejects path traversal attempts (.. segments).
 fn resolve_safe(root: &Path, relative: &str) -> Result<PathBuf, String> {
     // Reject .. segments
@@ -55,7 +55,7 @@ fn resolve_safe(root: &Path, relative: &str) -> Result<PathBuf, String> {
         .canonicalize()
         .map_err(|e| format!("Path not found: {}", e))?;
     if !canon_target.starts_with(&canon_root) {
-        return Err("Path escapes Ether root".into());
+        return Err("Path escapes @ether root".into());
     }
     Ok(canon_target)
 }

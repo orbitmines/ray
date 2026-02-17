@@ -1,7 +1,7 @@
 // ============================================================
 // HttpBackend.ts — HTTP backend for web + self-hosted servers
 // ============================================================
-// Uses the /**/ URL convention to access the Ether/ filesystem.
+// Uses the /**/ URL convention to access the @ether/ filesystem.
 // - /**/path/to/dir  → JSON directory listing
 // - /**/path/to/file → raw file content
 

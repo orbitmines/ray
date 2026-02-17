@@ -20,7 +20,7 @@ fn main() {
                 .and_then(|p| p.parse().ok())
                 .unwrap_or(8421);
 
-            // Ether root: ETHER_ROOT env, or walk up from exe to find it
+            // @ether root: ETHER_ROOT env, or walk up from exe to find it
             let ether_root = std::env::var("ETHER_ROOT")
                 .map(std::path::PathBuf::from)
                 .ok()
@@ -36,7 +36,7 @@ fn main() {
                     None
                 })
                 .unwrap_or_else(|| {
-                    eprintln!("Cannot determine Ether root. Set ETHER_ROOT env var.");
+                    eprintln!("Cannot determine @ether root. Set ETHER_ROOT env var.");
                     std::process::exit(1);
                 });
 

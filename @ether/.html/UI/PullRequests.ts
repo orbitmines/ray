@@ -871,7 +871,7 @@ async function getUserProfilePic(userPath: string): Promise<string | null> {
 
   const repo = await getRepository(user);
   if (!repo) return null;
-  const names = ['2d.svg', '2d.png', '2d.jpeg'];
+  const names = ['2d-square.svg', '2d-square.png', '2d-square.jpeg'];
   for (const name of names) {
     if (resolveFile(repo.tree, ['avatar', name])) {
       return `/**/${userPath}/avatar/${name}`;

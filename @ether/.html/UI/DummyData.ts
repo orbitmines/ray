@@ -158,7 +158,7 @@ See the [\`examples/\`](examples) directory for usage patterns:
 
 ~~MIT~~ — *Unlicensed*. This is free and unencumbered software released into the public domain.
 
-![Ether Logo](images/Ether.svg)
+![Ether Logo](images/avatar/2d.svg)
 `;
 
 const ALT_README = `# @ether/library (Draft)
@@ -789,7 +789,7 @@ const aliceRepo: Repository = {
   description: 'Alice — a genesis inhabitant',
   tree: [
     { name: 'avatar', isDirectory: true, modified: '1 week ago', children: [
-      { name: '2d.svg', isDirectory: false, modified: '1 week ago', content: ALICE_PROFILE_SVG },
+      { name: '2d-square.svg', isDirectory: false, modified: '1 week ago', content: ALICE_PROFILE_SVG },
     ]},
     { name: 'notes.md', isDirectory: false, modified: '2 days ago', access: 'private' },
   ],

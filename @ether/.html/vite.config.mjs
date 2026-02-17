@@ -7,7 +7,7 @@ import fs from 'fs';
 //
 // URL mapping:
 //   /**/           → .ether/      (metadata root)
-//   /**/@ether/... → Ether/...    (@ether user's repository)
+//   /**/@ether/... → @ether/...    (@ether user's repository)
 function etherFsPlugin() {
   const projectRoot = path.resolve(__dirname, '../..');
 
@@ -24,15 +24,15 @@ function etherFsPlugin() {
           .split('/').map(seg => seg.startsWith('!') ? seg.slice(1) : seg).join('/'); // strip ! escape prefix
 
         // Route: empty path → .ether/
-        // Route: @ether/... → Ether/...
+        // Route: @ether/... → @ether/...
         // Route: @<other>/... → .ether/... (local player's root)
         let fsPath;
         if (relative === '' || relative === '.') {
           fsPath = path.resolve(projectRoot, '.ether');
         } else if (relative === '@ether') {
-          fsPath = path.resolve(projectRoot, 'Ether');
+          fsPath = path.resolve(projectRoot, '@ether');
         } else if (relative.startsWith('@ether/')) {
-          fsPath = path.resolve(projectRoot, 'Ether', relative.slice('@ether/'.length));
+          fsPath = path.resolve(projectRoot, '@ether', relative.slice('@ether/'.length));
         } else if (relative.match(/^@[^/]+$/)) {
           // @<user> with no subpath → .ether/
           fsPath = path.resolve(projectRoot, '.ether');

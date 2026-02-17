@@ -1463,7 +1463,7 @@ function renderClonePopup(canonicalPath: string): string {
 
   return `<div class="popup" data-clone-popup>
       <div class="popup-ether-block">
-        <div class="popup-ether-icon"><img src="/images/E.svg" alt="Ether"></div>
+        <div class="popup-ether-icon"><img src="/images/avatar/2d-square.svg" alt="Ether"></div>
         <div class="popup-ether-lines">
           <div class="popup-ether-line">
             <div class="popup-code">${etherCmd}</div>

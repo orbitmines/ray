@@ -269,7 +269,7 @@ async function introPhase(content: HTMLElement): Promise<void> {
   await delay(1000);
 
   const logo = document.createElement('img');
-  logo.src = 'images/Ether.svg';
+  logo.src = 'images/avatar/2d.svg';
   logo.className = 'ether-logo';
   logo.draggable = false;
   logo.style.width = etherSpan.offsetWidth + 'px';

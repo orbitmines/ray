@@ -1,9 +1,9 @@
 {
   "scripts": {
-    "images:copy": "HTMLDIR=$(dirname \"$npm_package_json\") && mkdir -p \"$HTMLDIR/public/images\" && cp \"$HTMLDIR\"/../*.svg \"$HTMLDIR\"/../*.png \"$HTMLDIR/public/images/\"",
-    "icons:generate": "HTMLDIR=$(dirname \"$npm_package_json\") && npm run images:copy && python3 src-tauri/icons/generate.py \"$HTMLDIR/public/images/E.png\"",
+    "images:copy": "HTMLDIR=$(dirname \"$npm_package_json\") && mkdir -p \"$HTMLDIR/public/images/avatar\" && cp \"$HTMLDIR\"/../avatar/*.svg \"$HTMLDIR\"/../avatar/*.png \"$HTMLDIR/public/images/avatar/\"",
+    "icons:generate": "HTMLDIR=$(dirname \"$npm_package_json\") && npm run images:copy && python3 src-tauri/icons/generate.py \"$HTMLDIR/public/images/avatar/2d-square.png\"",
     "install": "HTMLDIR=$(dirname \"$npm_package_json\") && cd \"$HTMLDIR/src-tauri\" && [ -z \"$CF_PAGES\" ] && cargo fetch || true",
-    "copy:ether": "HTMLDIR=$(dirname \"$npm_package_json\") && rsync -a --exclude='.html' --exclude='node_modules' --exclude='__pycache__' --exclude='.git' --exclude='target' \"$HTMLDIR/../\" \"$HTMLDIR/dist/Ether/\"",
+    "copy:ether": "HTMLDIR=$(dirname \"$npm_package_json\") && rsync -a --exclude='.html' --exclude='node_modules' --exclude='__pycache__' --exclude='.git' --exclude='target' \"$HTMLDIR/../\" \"$HTMLDIR/dist/@ether/\"",
     "start": "npx vite",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

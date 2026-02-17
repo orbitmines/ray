@@ -1,6 +1,6 @@
 //! Self-hosting HTTP server for Ether.
 //!
-//! Serves both the SPA (`dist/`) and the `Ether/` filesystem on a single port.
+//! Serves both the SPA (`dist/`) and the `@ether/` filesystem on a single port.
 //!
 //! Routing:
 //! 1. `/**/...` → strip `/**/` prefix, resolve against `ether_root`

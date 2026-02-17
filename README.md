@@ -22,7 +22,7 @@ This thing is, in essence, a programming language (Ray) and an IDE (Ether), whic
 
 - If you prefer **video**, see [<TODO; Make a stream to explain the project better](), or more generally my streams can be found here: [youtube.com/@FadiShawki/streams](https://www.youtube.com/@FadiShawki/streams).
 
-- If you prefer **code**, see [/Ether](Ether), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
+- If you prefer **code**, see [/@ether](@ether), or more generally my/OrbitMines code can be found here [github.com/orbitmines](https://github.com/orbitmines/).
 
 - If you prefer discussions on **Discord**: [discord.orbitmines.com](https://discord.orbitmines.com).
 

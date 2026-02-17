@@ -778,8 +778,11 @@ function renderTabGroupNode(
   ctx: LayoutContext
 ): HTMLElement {
   const container = document.createElement('div');
-  // If any panel in this group is sticky, the whole tabgroup becomes sticky
-  const isSticky = node.panels.some(pid => state.panelRegistry.get(pid)?.sticky);
+  // Only sticky when the *active* panel is sticky — when a non-sticky panel
+  // (e.g. a file viewer) is active in the same group (after responsive collapse),
+  // let its content flow into the page scroll.
+  const activePanel = node.panels[node.activeIndex];
+  const isSticky = !!activePanel && !!(state.panelRegistry.get(activePanel)?.sticky);
   container.className = isSticky ? 'ide-tabgroup ide-tabgroup--sticky' : 'ide-tabgroup';
   container.dataset.groupId = node.id;
 

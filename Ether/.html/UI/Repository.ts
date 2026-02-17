@@ -130,6 +130,7 @@ function injectStyles(): void {
       font-family: 'Courier New', Courier, monospace;
       color: ${PHOSPHOR};
       min-height: 100vh;
+      box-sizing: border-box;
     }
 
     .repo-header {
@@ -164,6 +165,7 @@ function injectStyles(): void {
       justify-content: flex-end;
       gap: 2px;
       margin-bottom: 6px;
+      position: relative;
     }
     .nav-actions { display: none; }
     .breadcrumb-actions { display: contents; }
@@ -599,6 +601,11 @@ function injectStyles(): void {
       max-width: none;
       padding-right: 0;
       padding-bottom: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .ide-layout-mount {
+      flex: 1 0 0;
     }
     .file-view-top {
       max-width: none;
@@ -834,22 +841,22 @@ function bindClickHandlers(): void {
     });
   });
 
-  // Clone popup (bind all toggle buttons to the single popup in breadcrumb-actions)
-  const popup = currentContainer.querySelector('.breadcrumb-actions [data-clone-popup]') as HTMLElement
-    || currentContainer.querySelector('[data-clone-popup]') as HTMLElement | null;
-  const backdrop = currentContainer.querySelector('.breadcrumb-actions [data-clone-backdrop]') as HTMLElement
-    || currentContainer.querySelector('[data-clone-backdrop]') as HTMLElement | null;
-  if (popup && backdrop) {
+  // Clone popup — each toggle button opens the popup within its own actions container.
+  // On mobile nav-actions is visible (breadcrumb-actions is hidden), so each needs its own binding.
+  currentContainer.querySelectorAll('[data-clone-toggle]').forEach(toggle => {
+    const actionsParent = toggle.closest('.nav-actions, .breadcrumb-actions, .repo-breadcrumb');
+    if (!actionsParent) return;
+    const popup = actionsParent.querySelector('[data-clone-popup]') as HTMLElement | null;
+    const backdrop = actionsParent.querySelector('[data-clone-backdrop]') as HTMLElement | null;
+    if (!popup || !backdrop) return;
     const close = () => { popup.classList.remove('open'); backdrop.classList.remove('open'); };
-    currentContainer.querySelectorAll('[data-clone-toggle]').forEach(toggle => {
-      toggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const open = popup.classList.toggle('open');
-        backdrop.classList.toggle('open', open);
-      });
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = popup.classList.toggle('open');
+      backdrop.classList.toggle('open', open);
     });
     backdrop.addEventListener('click', close);
-  }
+  });
 
   // README tab switching
   currentContainer.querySelectorAll('[data-readme-tab]').forEach(tab => {
@@ -1883,7 +1890,7 @@ function renderRepo(): void {
       html += renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
       html += `</div>`;
 
-      html += `<div class="ide-layout-mount" style="min-height:calc(100vh - 140px);"></div>`;
+      html += `<div class="ide-layout-mount"></div>`;
       html += `</div>`;
       currentContainer.innerHTML = html;
       bindClickHandlers();

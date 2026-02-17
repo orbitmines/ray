@@ -5,7 +5,7 @@
 import { PHOSPHOR, CRT_SCREEN_BG } from './CRTShell.ts';
 import { renderMarkdown } from './Markdown.ts';
 import { fileIcon, accessIcon, accessSvg, fileOrEncryptedIcon } from './FileIcons.ts';
-import { getAPI, getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFiles, isCompound, flattenEntries, getOpenPRCount, getCurrentPlayer, getStars, toggleStar, isStarred, getStarCount, setStarCount, getForkCount, setForkCount, loadSession, saveSession, getSessionContent } from './API.ts';
+import { getAPI, getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFiles, isCompound, flattenEntries, getOpenPRCount, getCurrentPlayer, getStars, toggleStar, isStarred, getStarCount, setStarCount, loadSession, saveSession, getSessionContent } from './API.ts';
 import type { FileEntry, CompoundEntry, TreeEntry, Repository } from './API.ts';
 import { createIDELayout, generateId, ensureIdCounter, injectIDEStyles } from './IDELayout.ts';
 import type { IDELayoutAPI, PanelDefinition, LayoutNode, TabGroupNode, SplitNode } from './IDELayout.ts';
@@ -510,15 +510,6 @@ function injectStyles(): void {
     .star-btn.starred { color: #f5a623; border-color: #f5a623; }
     .star-btn.starred:hover { color: #f7b84e; border-color: #f7b84e; }
 
-    /* ---- Fork button ---- */
-    .fork-btn {
-      background: none;
-      border: 1px solid rgba(255,255,255,0.15);
-      color: rgba(255,255,255,0.55);
-      transition: border-color 0.15s, color 0.15s;
-    }
-    .fork-btn:hover { border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.75); }
-
     /* ---- Icon-only buttons (PR, Settings) ---- */
     .icon-btn {
       background: none;
@@ -627,6 +618,94 @@ function injectStyles(): void {
     .copy-btn.copied {
       color: ${PHOSPHOR};
       border-color: ${PHOSPHOR};
+    }
+
+    /* ---- Popup ether block (clone + fork in one block) ---- */
+    .popup-ether-block {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .popup-ether-icon {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      align-self: center;
+    }
+    .popup-ether-icon img {
+      width: 22px;
+      height: 22px;
+    }
+    .popup-ether-lines {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .popup-ether-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .popup-play-btn {
+      flex-shrink: 0;
+      background: #00c850;
+      border: 1px solid #00c850;
+      border-radius: 4px;
+      padding: 5px 7px;
+      cursor: pointer;
+      color: #0a0a0a;
+      transition: background 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+    }
+    .popup-play-btn:hover {
+      background: #00da58;
+      border-color: #00da58;
+    }
+    .popup-play-btn svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+    .popup-fork-icon {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      color: rgba(255,255,255,0.4);
+    }
+    .popup-fork-icon svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+    .popup-fork-prefix {
+      color: rgba(255,255,255,0.35);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .popup-fork-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+      outline: none;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+      padding: 2px 4px;
+      min-width: 0;
+    }
+    .popup-fork-input:focus {
+      border-bottom-color: ${PHOSPHOR};
+      color: rgba(255,255,255,0.9);
+    }
+    .popup-fork-suffix {
+      flex-shrink: 0;
+      color: rgba(255,255,255,0.35);
+      font-size: 12px;
+      white-space: nowrap;
     }
 
     /* ---- File view mode: page extends to edges ---- */
@@ -790,6 +869,11 @@ function injectStyles(): void {
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
     }
+    .iframe-overlay .popup {
+      top: auto;
+      bottom: calc(100% + 6px);
+      right: 0;
+    }
     .iframe-overlay .overlay-label {
       color: rgba(255,255,255,0.85);
       pointer-events: none;
@@ -822,10 +906,8 @@ function injectStyles(): void {
       .breadcrumb-actions { display: none !important; }
       .nav-actions { display: contents; }
       .nav-actions .action-btn .action-label { display: none; }
-      .nav-actions .fork-btn,
       .nav-actions .star-btn,
       .nav-actions .clone-btn { gap: 4px; padding: 0 6px; }
-      .nav-actions .fork-btn { margin-left: auto; }
 
       .action-icon-default { display: none !important; }
       .action-icon-small { display: flex !important; }
@@ -1358,6 +1440,7 @@ const PR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><p
 const SETTINGS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M259.1 73.5C262.1 58.7 275.2 48 290.4 48L350.2 48C365.4 48 378.5 58.7 381.5 73.5L396 143.5C410.1 149.5 423.3 157.2 435.3 166.3L503.1 143.8C517.5 139 533.3 145 540.9 158.2L570.8 210C578.4 223.2 575.7 239.8 564.3 249.9L511 297.3C511.9 304.7 512.3 312.3 512.3 320C512.3 327.7 511.8 335.3 511 342.7L564.4 390.2C575.8 400.3 578.4 417 570.9 430.1L541 481.9C533.4 495 517.6 501.1 503.2 496.3L435.4 473.8C423.3 482.9 410.1 490.5 396.1 496.6L381.7 566.5C378.6 581.4 365.5 592 350.4 592L290.6 592C275.4 592 262.3 581.3 259.3 566.5L244.9 496.6C230.8 490.6 217.7 482.9 205.6 473.8L137.5 496.3C123.1 501.1 107.3 495.1 99.7 481.9L69.8 430.1C62.2 416.9 64.9 400.3 76.3 390.2L129.7 342.7C128.8 335.3 128.4 327.7 128.4 320C128.4 312.3 128.9 304.7 129.7 297.3L76.3 249.8C64.9 239.7 62.3 223 69.8 209.9L99.7 158.1C107.3 144.9 123.1 138.9 137.5 143.7L205.3 166.2C217.4 157.1 230.6 149.5 244.6 143.4L259.1 73.5zM320.3 400C364.5 399.8 400.2 363.9 400 319.7C399.8 275.5 363.9 239.8 319.7 240C275.5 240.2 239.8 276.1 240 320.3C240.2 364.5 276.1 400.2 320.3 400z"/></svg>`;
 const DOWNLOAD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M352 96C352 78.3 337.7 64 320 64C302.3 64 288 78.3 288 96L288 306.7L246.6 265.3C234.1 252.8 213.8 252.8 201.3 265.3C188.8 277.8 188.8 298.1 201.3 310.6L297.3 406.6C309.8 419.1 330.1 419.1 342.6 406.6L438.6 310.6C451.1 298.1 451.1 277.8 438.6 265.3C426.1 252.8 405.8 252.8 393.3 265.3L352 306.7L352 96zM160 384C124.7 384 96 412.7 96 448L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 448C544 412.7 515.3 384 480 384L433.1 384L376.5 440.6C345.3 471.8 294.6 471.8 263.4 440.6L206.9 384L160 384zM464 440C477.3 440 488 450.7 488 464C488 477.3 477.3 488 464 488C450.7 488 440 477.3 440 464C440 450.7 450.7 440 464 440z"/></svg>`;
 const FORK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M176 168C189.3 168 200 157.3 200 144C200 130.7 189.3 120 176 120C162.7 120 152 130.7 152 144C152 157.3 162.7 168 176 168zM256 144C256 176.8 236.3 205 208 217.3L208 240C208 266.5 229.5 288 256 288L384 288C410.5 288 432 266.5 432 240L432 217.3C403.7 205 384 176.8 384 144C384 99.8 419.8 64 464 64C508.2 64 544 99.8 544 144C544 176.8 524.3 205 496 217.3L496 240C496 301.9 445.9 352 384 352L352 352L352 422.7C380.3 435 400 463.2 400 496C400 540.2 364.2 576 320 576C275.8 576 240 540.2 240 496C240 463.2 259.7 435 288 422.7L288 352L256 352C194.1 352 144 301.9 144 240L144 217.3C115.7 205 96 176.8 96 144C96 99.8 131.8 64 176 64C220.2 64 256 99.8 256 144zM464 168C477.3 168 488 157.3 488 144C488 130.7 477.3 120 464 120C450.7 120 440 130.7 440 144C440 157.3 450.7 168 464 168zM344 496C344 482.7 333.3 472 320 472C306.7 472 296 482.7 296 496C296 509.3 306.7 520 320 520C333.3 520 344 509.3 344 496z"/></svg>`;
+const PLAY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><!--!Font Awesome Free v7.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M187.2 100.9C174.8 94.1 159.8 94.4 147.6 101.6C135.4 108.8 128 121.9 128 136L128 504C128 518.1 135.5 531.2 147.6 538.4C159.7 545.6 174.8 545.9 187.2 539.1L523.2 355.1C536 348.1 544 334.6 544 320C544 305.4 536 291.9 523.2 284.9L187.2 100.9z"/></svg>`;
 
 async function getPrCount(canonicalPath: string): Promise<number> {
   const count = await getOpenPRCount(canonicalPath);
@@ -1369,12 +1452,40 @@ async function getPrCount(canonicalPath: string): Promise<number> {
   return 0;
 }
 
-function renderActionButtons(canonicalPath: string, starPath: string): string {
-  const forkCount = getForkCount(canonicalPath);
-
+function renderClonePopup(canonicalPath: string): string {
   const etherCmd = `ether clone ${canonicalPath}`;
   const gitCmd = `git clone git@ether.orbitmines.com:${canonicalPath}`;
 
+  const slashIdx = canonicalPath.indexOf('/');
+  const forkUser = `@${getCurrentPlayer()}/`;
+  const forkRepoName = slashIdx >= 0 ? canonicalPath.slice(slashIdx + 1) : canonicalPath;
+  const forkPlaceholder = canonicalPath.startsWith('@ether') ? canonicalPath : `@ether/${forkRepoName}`;
+
+  return `<div class="popup" data-clone-popup>
+      <div class="popup-ether-block">
+        <div class="popup-ether-icon"><img src="/images/E.svg" alt="Ether"></div>
+        <div class="popup-ether-lines">
+          <div class="popup-ether-line">
+            <div class="popup-code">${etherCmd}</div>
+            <button class="copy-btn" data-copy="${etherCmd}">${COPY_SVG}</button>
+            <button class="popup-play-btn" title="Run">${PLAY_SVG}</button>
+          </div>
+          <div class="popup-ether-line">
+            <span class="popup-fork-icon">${FORK_SVG}</span>
+            <span class="popup-fork-prefix">${forkUser}</span>
+            <input class="popup-fork-input" placeholder="${forkPlaceholder}" data-fork-rename /><span class="popup-fork-suffix">% @me</span>
+          </div>
+        </div>
+      </div>
+      <div class="popup-row" style="margin-top:12px;">
+        <div class="popup-row-icon">${GIT_SVG}</div>
+        <div class="popup-code">${gitCmd}</div>
+        <button class="copy-btn" data-copy="${gitCmd}">${COPY_SVG}</button>
+      </div>
+    </div>`;
+}
+
+function renderActionButtons(canonicalPath: string, starPath: string): string {
   const starred = isStarred(starPath);
   const starSvg = starred ? STAR_FILLED_SVG : STAR_OUTLINE_SVG;
   const starCls = starred ? 'star-btn starred' : 'star-btn';
@@ -1382,21 +1493,10 @@ function renderActionButtons(canonicalPath: string, starPath: string): string {
   const starCount = getStarCount(starPath);
 
   return `<div class="popup-backdrop" data-clone-backdrop></div>
-    <button class="action-btn fork-btn" style="margin-left:auto;" data-fork-toggle><span class="action-count">${forkCount}</span><span class="action-icon">${FORK_SVG}</span><span class="action-label">Fork</span></button>
+    <span style="margin-left:auto;"></span>
     <button class="action-btn ${starCls}" data-star-toggle data-star-path="${starPath}"><span class="action-count" data-star-count>${starCount}</span><span class="action-icon">${starSvg}</span><span class="action-label">${starLabel}</span></button>
     <button class="action-btn clone-btn" data-clone-toggle><span class="action-icon action-icon-default">${CLONE_SVG}</span><span class="action-icon action-icon-small">${DOWNLOAD_SVG}</span><span class="action-label">Download</span></button>
-    <div class="popup" data-clone-popup>
-      <div class="popup-row">
-        <div class="popup-row-icon"><img src="/images/E.svg" alt="Ether"></div>
-        <div class="popup-code">${etherCmd}</div>
-        <button class="copy-btn" data-copy="${etherCmd}">${COPY_SVG}</button>
-      </div>
-      <div class="popup-row">
-        <div class="popup-row-icon">${GIT_SVG}</div>
-        <div class="popup-code">${gitCmd}</div>
-        <button class="copy-btn" data-copy="${gitCmd}">${COPY_SVG}</button>
-      </div>
-    </div>`;
+    ${renderClonePopup(canonicalPath)}`;
 }
 
 /** Build a URL path sliced to `end`, preserving any wildcards from the remainder of `fullPath`. */
@@ -2492,8 +2592,10 @@ async function renderRepo(): Promise<void> {
       <div class="iframe-overlay">
         <span class="overlay-label">${headerLabel}</span>
         <span class="overlay-desc">${repository.description}</span>
-        <button class="action-btn fork-btn" data-fork-toggle><span class="action-count">${getForkCount(canonicalPath)}</span><span class="action-icon">${FORK_SVG}</span><span class="action-label">Fork</span></button>
         <button class="action-btn ${iframeStarCls}" data-star-toggle data-star-path="${canonicalPath}"><span class="action-count" data-star-count>${getStarCount(canonicalPath)}</span><span class="action-icon">${iframeStarSvg}</span><span class="action-label">${iframeStarLabel}</span></button>
+        <button class="action-btn clone-btn" data-clone-toggle><span class="action-icon action-icon-default">${CLONE_SVG}</span><span class="action-icon action-icon-small">${DOWNLOAD_SVG}</span><span class="action-label">Download</span></button>
+        <div class="popup-backdrop" data-clone-backdrop></div>
+        ${renderClonePopup(canonicalPath)}
       </div>
     </div>`;
 
@@ -2510,6 +2612,33 @@ async function renderRepo(): Promise<void> {
         setStarCount(p, count);
         iframeStarBtn.className = nowStarred ? 'action-btn star-btn starred' : 'action-btn star-btn';
         iframeStarBtn.innerHTML = `<span class="action-count" data-star-count>${Math.max(0, count)}</span><span class="action-icon">${nowStarred ? STAR_FILLED_SVG : STAR_OUTLINE_SVG}</span><span class="action-label">${nowStarred ? 'Starred' : 'Star'}</span>`;
+      });
+    }
+
+    // Wire clone popup in iframe overlay
+    const overlay = currentContainer.querySelector('.iframe-overlay');
+    if (overlay) {
+      const cloneToggle = overlay.querySelector('[data-clone-toggle]');
+      const popup = overlay.querySelector('[data-clone-popup]') as HTMLElement | null;
+      const backdrop = overlay.querySelector('[data-clone-backdrop]') as HTMLElement | null;
+      if (cloneToggle && popup && backdrop) {
+        const close = () => { popup.classList.remove('open'); backdrop.classList.remove('open'); };
+        cloneToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const open = popup.classList.toggle('open');
+          backdrop.classList.toggle('open', open);
+        });
+        backdrop.addEventListener('click', close);
+      }
+      // Copy buttons
+      overlay.querySelectorAll('[data-copy]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const text = (btn as HTMLElement).dataset.copy!;
+          navigator.clipboard.writeText(text).then(() => {
+            btn.classList.add('copied');
+            setTimeout(() => btn.classList.remove('copied'), 1500);
+          });
+        });
       });
     }
     return;

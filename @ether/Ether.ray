@@ -1,0 +1,31 @@
+< Character
+
+@ether => "ether.orbitmines.com:37839"
+
+@me | @private => global
+@everyone => characters
+@here => characters//TODO Online
+
+@local
+  @local => @me.//TODO CURRENT .instance
+@guests.read
+  @host => // (<- INSTANCE.hierarchy).reduce(|)
+@host.read
+  @guests => // (INSTANCE.hierarchy ->).reduce(|)
+
+@public => @ether.@everyone | Instance
+@npc | @npcs => @public{: NPC}
+@player | @players => @public{: Player}
+@localhost => "127.0.0.1" | "::1"
+@localnetwork =>
+  // https://datatracker.ietf.org/doc/html/rfc1918#section-3
+  "10.0.0.0/8" | "172.16.0.0/12" | "192.168.0.0/16"
+  // https://datatracker.ietf.org/doc/html/rfc4193#section-8
+  | "fc00::/7"
+@{instance: Instance} => instance.canonical //Should also reserve CIDR notation
+
+(@ | #){: UUID}
+
+reservable_names: String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
+
+@guests.read HOST: Character?

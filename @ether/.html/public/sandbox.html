@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; color: #fff; font-family: 'Courier New', monospace; }
+</style>
+<script>
+(function() {
+  var _pending = {};
+  var _idCounter = 0;
+
+  window.ether = {
+    user: null,
+    repo: null,
+    storage: {
+      get: function(key) {
+        return new Promise(function(resolve) {
+          var id = ++_idCounter;
+          _pending[id] = resolve;
+          parent.postMessage({ type: 'ether:storage', id: id, action: 'get', key: key }, '*');
+        });
+      },
+      set: function(key, value) {
+        return new Promise(function(resolve) {
+          var id = ++_idCounter;
+          _pending[id] = resolve;
+          parent.postMessage({ type: 'ether:storage', id: id, action: 'set', key: key, value: value }, '*');
+        });
+      },
+      remove: function(key) {
+        return new Promise(function(resolve) {
+          var id = ++_idCounter;
+          _pending[id] = resolve;
+          parent.postMessage({ type: 'ether:storage', id: id, action: 'remove', key: key }, '*');
+        });
+      }
+    }
+  };
+
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'ether:init') {
+      window.ether.user = e.data.user;
+      window.ether.repo = e.data.repo;
+
+      // Clear body and re-inject script on every init (handles name changes)
+      document.body.innerHTML = '';
+      if (e.data.script) {
+        var s = document.createElement('script');
+        s.textContent = e.data.script;
+        document.body.appendChild(s);
+      }
+
+      window.dispatchEvent(new Event('ether:ready'));
+    } else if (e.data && e.data.type === 'ether:storage:response') {
+      var resolve = _pending[e.data.id];
+      if (resolve) {
+        delete _pending[e.data.id];
+        resolve(e.data.value);
+      }
+    }
+  });
+
+  // Signal to parent that we're ready to receive init + script
+  parent.postMessage({ type: 'ether:ready' }, '*');
+})();
+</script>
+</head><body></body></html>

@@ -35,3 +35,6 @@ Networking, hosting as a peer is opt-in, but using others is done by default, ha
 
 
 - More intelligent path mapping when the number of files is very large automatically
+
+
+- Cron job as function with a execution time 1 / month, first of the month etc.. perhaps just use cron syntax.

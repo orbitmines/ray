@@ -197,9 +197,10 @@ Also relevant for [[PENDING Project - Computer Networking, Security, Encryption 
 - Some others [RxDB](https://rxdb.info/), [ShareJS](https://github.com/share), [ottypes](https://github.com/ottypes), [Operational transformation](https://en.wikipedia.org/wiki/Operational_transformation), [IPFS](https://ipfs.tech/), [IPLD](https://ipld.io/), [OrbitDB](https://github.com/orbitdb/orbitdb), [Git](https://en.wikipedia.org/wiki/Git), [Merkle Tree](https://en.wikipedia.org/wiki/Merkle_tree), [Vector Clock](https://en.wikipedia.org/wiki/Vector_clock), Plausible Clock, Chain Clock, Interval Tree Clock, Bloom Clock, [Matrix clock](https://en.wikipedia.org/wiki/Matrix_clock), [SpacetimeDB](https://github.com/clockworklabs/SpacetimeDB)
 - https://braid.org/, Automerge, Yjs
 
+- Other databases/specs like Apache Iceberg. Data Formats like Fastlanes, Adaptive Lossless floating Point (ALP), Fast Symbolic Symbol Table (FSST), DIctionary (dict_string), Bitpacked, RunEnd, PCodec, ZSTD, FFOR, RLE, DElta,
 
-<div align="center">  
-  
+<div align="center">
+
 ## Other Libraries, Collections, ..., Platforms
 *Existing analysis, other ways of extending this index, ..., non-completed tangents*
 

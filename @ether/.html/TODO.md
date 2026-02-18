@@ -38,3 +38,6 @@ Networking, hosting as a peer is opt-in, but using others is done by default, ha
 
 
 - Cron job as function with a execution time 1 / month, first of the month etc.. perhaps just use cron syntax.
+
+
+- Make the * switch to default View.

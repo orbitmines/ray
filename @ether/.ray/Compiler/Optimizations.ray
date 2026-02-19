@@ -92,3 +92,5 @@ allow capability3
             cancel,
             acc.lt(current).if(acc, current))
         , undefined),
+
+// Keep a copy of certain frontends around, but cost is to have to rerender that frontend.

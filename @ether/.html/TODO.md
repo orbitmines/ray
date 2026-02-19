@@ -41,3 +41,16 @@ Networking, hosting as a peer is opt-in, but using others is done by default, ha
 
 
 - Make the * switch to default View.
+
+
+- Other VCS in download
+
+
+- popups should dynamically go the place where there's space, with a preference for a certain direction.
+
+
+- Allow changing current character to @public or something else to view from that perspective - if cahracter isn't a singular character it doesnt display things like the own repository etc..
+
+
+- Serve the specific urls with a generated index.html with the title and metadata filled already, since most things dont load with javascript.
+- 

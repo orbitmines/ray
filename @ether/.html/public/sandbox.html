@@ -12,25 +12,32 @@
   window.ether = {
     user: null,
     repo: null,
+    fetch: function(url, options) {
+      return new Promise(function(resolve, reject) {
+        var id = ++_idCounter;
+        _pending[id] = { type: 'fetch', resolve: resolve, reject: reject };
+        parent.postMessage({ type: 'ether:fetch', id: id, url: url, options: options || {} }, '*');
+      });
+    },
     storage: {
       get: function(key) {
         return new Promise(function(resolve) {
           var id = ++_idCounter;
-          _pending[id] = resolve;
+          _pending[id] = { type: 'storage', resolve: resolve };
           parent.postMessage({ type: 'ether:storage', id: id, action: 'get', key: key }, '*');
         });
       },
       set: function(key, value) {
         return new Promise(function(resolve) {
           var id = ++_idCounter;
-          _pending[id] = resolve;
+          _pending[id] = { type: 'storage', resolve: resolve };
           parent.postMessage({ type: 'ether:storage', id: id, action: 'set', key: key, value: value }, '*');
         });
       },
       remove: function(key) {
         return new Promise(function(resolve) {
           var id = ++_idCounter;
-          _pending[id] = resolve;
+          _pending[id] = { type: 'storage', resolve: resolve };
           parent.postMessage({ type: 'ether:storage', id: id, action: 'remove', key: key }, '*');
         });
       }
@@ -52,10 +59,27 @@
 
       window.dispatchEvent(new Event('ether:ready'));
     } else if (e.data && e.data.type === 'ether:storage:response') {
-      var resolve = _pending[e.data.id];
-      if (resolve) {
+      var entry = _pending[e.data.id];
+      if (entry) {
         delete _pending[e.data.id];
-        resolve(e.data.value);
+        entry.resolve(e.data.value);
+      }
+    } else if (e.data && e.data.type === 'ether:fetch:response') {
+      var entry = _pending[e.data.id];
+      if (entry) {
+        delete _pending[e.data.id];
+        if (e.data.error) {
+          entry.reject(new Error(e.data.error));
+        } else {
+          entry.resolve({
+            ok: e.data.ok,
+            status: e.data.status,
+            statusText: e.data.statusText,
+            body: e.data.body,
+            text: function() { return Promise.resolve(e.data.body); },
+            json: function() { return Promise.resolve(JSON.parse(e.data.body)); },
+          });
+        }
       }
     }
   });

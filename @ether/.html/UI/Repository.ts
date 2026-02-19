@@ -5,10 +5,11 @@
 import { PHOSPHOR, CRT_SCREEN_BG } from './CRTShell.ts';
 import { renderMarkdown } from './Markdown.ts';
 import { fileIcon, accessIcon, accessSvg, fileOrEncryptedIcon } from './FileIcons.ts';
-import { getAPI, getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFiles, isCompound, flattenEntries, getOpenPRCount, getCurrentPlayer, getStars, toggleStar, isStarred, getStarCount, setStarCount, loadSession, saveSession, getSessionContent } from './API.ts';
+import { getAPI, getRepository, getReferencedUsers, getReferencedWorlds, getWorld, resolveDirectory, resolveFile, resolveFiles, isCompound, flattenEntries, getOpenPRCount, getCurrentPlayer, getStars, toggleStar, isStarred, getStarCount, setStarCount, isFollowing, toggleFollow, getFollowerCount, setFollowerCount, loadSession, saveSession, getSessionContent } from './API.ts';
 import type { FileEntry, CompoundEntry, TreeEntry, Repository } from './API.ts';
 import { createIDELayout, generateId, ensureIdCounter, injectIDEStyles } from './IDELayout.ts';
 import type { IDELayoutAPI, PanelDefinition, LayoutNode, TabGroupNode, SplitNode } from './IDELayout.ts';
+import { EDIT_SVG } from './PRIcons.ts';
 
 let styleEl: HTMLStyleElement | null = null;
 let currentContainer: HTMLElement | null = null;
@@ -510,6 +511,16 @@ function injectStyles(): void {
     .star-btn.starred { color: #f5a623; border-color: #f5a623; }
     .star-btn.starred:hover { color: #f7b84e; border-color: #f7b84e; }
 
+    .follow-btn {
+      background: none;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.55);
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .follow-btn:hover { border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.75); }
+    .follow-btn.following { color: ${PHOSPHOR}; border-color: ${PHOSPHOR}; }
+    .follow-btn.following:hover { color: ${PHOSPHOR}; border-color: ${PHOSPHOR}; opacity: 0.85; }
+
     /* ---- Icon-only buttons (PR, Settings) ---- */
     .icon-btn {
       background: none;
@@ -907,6 +918,7 @@ function injectStyles(): void {
       .nav-actions { display: contents; }
       .nav-actions .action-btn .action-label { display: none; }
       .nav-actions .star-btn,
+      .nav-actions .follow-btn,
       .nav-actions .clone-btn { gap: 4px; padding: 0 6px; }
 
       .action-icon-default { display: none !important; }
@@ -918,6 +930,357 @@ function injectStyles(): void {
       .iframe-overlay .action-btn { margin-left: 2px; }
 
       .repo-breadcrumb .action-btn { margin-left: 2px; }
+    }
+
+    /* ---- Profile Page ---- */
+    .profile-layout {
+      display: flex;
+      gap: 32px;
+      margin-top: 8px;
+    }
+    .profile-readme {
+      flex: 1 1 60%;
+      min-width: 0;
+    }
+    .profile-card {
+      flex: 0 0 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow: visible;
+    }
+    .profile-card .popup {
+      max-width: none;
+      right: 0;
+    }
+    .profile-avatar-wrap {
+      align-self: center;
+      margin-bottom: 12px;
+    }
+    .profile-avatar {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid rgba(255,255,255,0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.04);
+      position: relative;
+      cursor: default;
+    }
+    .profile-avatar img, .profile-avatar svg {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .profile-avatar-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s;
+      pointer-events: none;
+    }
+    .profile-avatar-overlay svg {
+      width: 24px;
+      height: 24px;
+      fill: rgba(255,255,255,0.7);
+    }
+    .profile-avatar.editable { cursor: pointer; }
+    .profile-avatar.editable:hover .profile-avatar-overlay { opacity: 1; }
+
+    .profile-name-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      line-height: 28px;
+    }
+    .profile-display-name {
+      font-size: 20px;
+      font-weight: bold;
+      color: ${PHOSPHOR};
+      line-height: 28px;
+      cursor: default;
+    }
+    .profile-name-row .profile-hover-edit {
+      opacity: 0;
+      transition: opacity 0.15s;
+      margin-left: 6px;
+      flex-shrink: 0;
+    }
+    .profile-name-row:hover .profile-hover-edit { opacity: 1; }
+    .profile-hover-edit {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: rgba(255,255,255,0.3);
+      padding: 0;
+      transition: color 0.15s;
+    }
+    .profile-hover-edit:hover { color: rgba(255,255,255,0.7); }
+    .profile-hover-edit svg { width: 14px; height: 14px; fill: currentColor; }
+    .profile-display-name-input {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      outline: none;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 20px;
+      font-weight: bold;
+      color: ${PHOSPHOR};
+      padding: 0 0 2px 0;
+      width: 200px;
+      line-height: 28px;
+    }
+    .profile-username-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      height: 20px;
+    }
+    .profile-username-row .profile-hover-edit {
+      opacity: 0;
+      transition: opacity 0.15s;
+      margin-left: 2px;
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+    }
+    .profile-username-row .profile-hover-edit svg { width: 10px; height: 10px; }
+    .profile-username-row:hover .profile-hover-edit { opacity: 1; }
+    .profile-username-row .version-badge {
+      margin-left: 4px;
+    }
+    .profile-username {
+      font-size: 14px;
+      color: rgba(255,255,255,0.4);
+      cursor: default;
+    }
+    .profile-username.editable { cursor: text; }
+    .profile-username-input {
+      font-size: 14px;
+      color: rgba(255,255,255,0.4);
+      background: none;
+      border: none;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+      outline: none;
+      font-family: inherit;
+      padding: 0;
+      width: 100%;
+    }
+
+    .profile-card .repo-nav-row {
+      margin-top: 8px;
+    }
+    .profile-names {
+      width: 100%;
+      margin-top: 16px;
+    }
+    .profile-names-header {
+      font-size: 12px;
+      color: rgba(255,255,255,0.3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .profile-name-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+      position: relative;
+    }
+    .profile-name-drag {
+      flex: 0 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: grab;
+      color: rgba(255,255,255,0.15);
+      opacity: 0;
+      transition: opacity 0.15s;
+      font-size: 11px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .profile-name-item:hover .profile-name-drag { opacity: 1; }
+    .profile-name-drag:active { cursor: grabbing; }
+    .profile-name-drag svg { width: 10px; height: 14px; fill: currentColor; }
+    .profile-name-item.dragging {
+      opacity: 0.4;
+    }
+    .profile-name-item.drag-over-top {
+      box-shadow: 0 -1px 0 0 rgba(255,255,255,0.3);
+    }
+    .profile-name-item.drag-over-bottom {
+      box-shadow: 0 1px 0 0 rgba(255,255,255,0.3);
+    }
+    .profile-name-icon {
+      flex: 0 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 20px;
+    }
+    .profile-name-icon svg {
+      width: 16px;
+      height: 16px;
+      fill: rgba(255,255,255,0.5);
+    }
+    .profile-name-platform {
+      color: rgba(255,255,255,0.35);
+      font-size: 13px;
+    }
+    .profile-name-value {
+      color: rgba(255,255,255,0.7);
+    }
+    .profile-name-value a {
+      color: #7db8e0;
+      text-decoration: none;
+    }
+    .profile-name-value a:hover { text-decoration: underline; }
+
+    .profile-name-remove {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.2);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 6px;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .profile-name-item:hover .profile-name-remove { opacity: 1; }
+    .profile-name-remove:hover { color: #f87171; }
+
+    .profile-name-field {
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      color: rgba(255,255,255,0.35);
+      padding: 0;
+      width: 90px;
+      caret-color: rgba(255,255,255,0.5);
+    }
+    .profile-name-field:focus {
+      color: rgba(255,255,255,0.6);
+    }
+    .profile-name-field-value {
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+      padding: 0;
+      width: 120px;
+      caret-color: ${PHOSPHOR};
+    }
+    .profile-name-field-value:focus {
+      color: rgba(255,255,255,0.9);
+    }
+    .profile-name-field-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .profile-name-field-ghost {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      color: rgba(255,255,255,0.15);
+      white-space: pre;
+      line-height: normal;
+    }
+
+    .profile-name-item.mode-email [data-name-value-wrap] { display: none; }
+    .profile-name-item.mode-world [data-name-platform-wrap],
+    .profile-name-item.mode-email [data-name-platform-wrap] { flex: 1; }
+    .profile-name-item.mode-world .profile-name-field,
+    .profile-name-item.mode-email .profile-name-field { width: 100%; }
+
+    .profile-name-item {
+      flex-wrap: wrap;
+    }
+    .profile-name-value {
+      min-width: 0;
+      word-break: break-word;
+    }
+    .profile-name-field-wrap {
+      min-width: 0;
+    }
+
+    /* World path display — multi-line with indent */
+    .profile-name-world-path {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .profile-name-path-line {
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+    .profile-name-path-line a {
+      color: #7db8e0;
+      text-decoration: none;
+    }
+    .profile-name-path-line a:hover { text-decoration: underline; }
+
+    /* Autocomplete dropdown — inline, flows below like paragraph continuation */
+    .profile-name-dropdown {
+      flex-basis: 100%;
+      order: 99;
+      display: none;
+      margin-top: 2px;
+    }
+    .profile-name-dropdown.active { display: block; }
+    .profile-name-dropdown-item {
+      padding: 1px 0;
+      font-size: 13px;
+      font-family: 'Courier New', Courier, monospace;
+      color: rgba(255,255,255,0.25);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .profile-name-dropdown-item.selected {
+      color: rgba(255,255,255,0.6);
+    }
+    .profile-name-dropdown-item:hover {
+      color: rgba(255,255,255,0.5);
+    }
+
+    @media (max-width: 700px) {
+      .profile-layout {
+        flex-direction: column-reverse;
+      }
+      .profile-card {
+        flex: none;
+        width: 100%;
+      }
     }
   `;
   document.head.appendChild(styleEl);
@@ -1145,6 +1508,21 @@ function bindClickHandlers(): void {
     });
   });
 
+  // Follow toggle (sync all copies)
+  const followBtns = currentContainer.querySelectorAll('[data-follow-toggle]') as NodeListOf<HTMLButtonElement>;
+  followBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const user = btn.dataset.followUser!;
+      const nowFollowing = toggleFollow(user);
+      const count = getFollowerCount(user) + (nowFollowing ? 1 : -1);
+      setFollowerCount(user, count);
+      const cls = nowFollowing ? 'action-btn follow-btn following' : 'action-btn follow-btn';
+      const label = nowFollowing ? 'Following' : 'Follow';
+      const inner = `<span class="action-count" data-follower-count>${Math.max(0, count)}</span><span class="action-icon">${nowFollowing ? FOLLOWING_SVG : FOLLOW_SVG}</span><span class="action-label">${label}</span>`;
+      followBtns.forEach(b => { b.className = cls; b.innerHTML = inner; });
+    });
+  });
+
   // Clone popup — each toggle button opens the popup within its own actions container.
   // On mobile nav-actions is visible (breadcrumb-actions is hidden), so each needs its own binding.
   currentContainer.querySelectorAll('[data-clone-toggle]').forEach(toggle => {
@@ -1263,6 +1641,17 @@ function bindClickHandlers(): void {
       const cleanPath = currentRepoParams.path.filter(s => s !== '*' && s !== '**');
       const pathPart = cleanPath.length > 0 ? '/' + cleanPath.join('/') : '';
       navigateFn(`${base}${pathPart}/-/pulls`);
+    });
+  });
+
+  // Settings button navigation → navigate to .ether/Usage.ray
+  currentContainer.querySelectorAll('[data-settings-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!navigateFn || !currentRepoParams) return;
+      const base = currentRepoParams.base || '';
+      const cleanPath = currentRepoParams.path.filter(s => s !== '*' && s !== '**');
+      const pathPart = cleanPath.length > 0 ? '/' + cleanPath.join('/') : '';
+      navigateFn(`${base}${pathPart}/.ether/Usage.ray`);
     });
   });
 }
@@ -1485,16 +1874,27 @@ function renderClonePopup(canonicalPath: string): string {
     </div>`;
 }
 
-function renderActionButtons(canonicalPath: string, starPath: string): string {
-  const starred = isStarred(starPath);
-  const starSvg = starred ? STAR_FILLED_SVG : STAR_OUTLINE_SVG;
-  const starCls = starred ? 'star-btn starred' : 'star-btn';
-  const starLabel = starred ? 'Starred' : 'Star';
-  const starCount = getStarCount(starPath);
+function renderActionButtons(canonicalPath: string, starPath: string, followUser?: string): string {
+  let primaryBtn: string;
+  if (followUser) {
+    const followed = isFollowing(followUser);
+    const followSvg = followed ? FOLLOWING_SVG : FOLLOW_SVG;
+    const followCls = followed ? 'follow-btn following' : 'follow-btn';
+    const followLabel = followed ? 'Following' : 'Follow';
+    const followerCount = getFollowerCount(followUser);
+    primaryBtn = `<button class="action-btn ${followCls}" data-follow-toggle data-follow-user="${followUser}"><span class="action-count" data-follower-count>${followerCount}</span><span class="action-icon">${followSvg}</span><span class="action-label">${followLabel}</span></button>`;
+  } else {
+    const starred = isStarred(starPath);
+    const starSvg = starred ? STAR_FILLED_SVG : STAR_OUTLINE_SVG;
+    const starCls = starred ? 'star-btn starred' : 'star-btn';
+    const starLabel = starred ? 'Starred' : 'Star';
+    const starCount = getStarCount(starPath);
+    primaryBtn = `<button class="action-btn ${starCls}" data-star-toggle data-star-path="${starPath}"><span class="action-count" data-star-count>${starCount}</span><span class="action-icon">${starSvg}</span><span class="action-label">${starLabel}</span></button>`;
+  }
 
   return `<div class="popup-backdrop" data-clone-backdrop></div>
     <span style="margin-left:auto;"></span>
-    <button class="action-btn ${starCls}" data-star-toggle data-star-path="${starPath}"><span class="action-count" data-star-count>${starCount}</span><span class="action-icon">${starSvg}</span><span class="action-label">${starLabel}</span></button>
+    ${primaryBtn}
     <button class="action-btn clone-btn" data-clone-toggle><span class="action-icon action-icon-default">${CLONE_SVG}</span><span class="action-icon action-icon-small">${DOWNLOAD_SVG}</span><span class="action-label">Download</span></button>
     ${renderClonePopup(canonicalPath)}`;
 }
@@ -1546,15 +1946,33 @@ function buildBreadcrumbItems(
   return { rootLink: { label: rootLabel, href: rootHref }, items };
 }
 
-async function renderBreadcrumb(displayVersion: string, items: BreadcrumbItem[], canonicalPath?: string, starPath?: string, rootLink?: { label: string; href: string }): Promise<string> {
+/** Modular action row: star + download + PR count + settings.
+ *  Renders both the mobile nav-row and the breadcrumb bar with actions — identical to the regular page. */
+async function renderActionRow(canonicalPath: string, starPath: string, followUser?: string): Promise<string> {
+  const actionHtml = renderActionButtons(canonicalPath, starPath, followUser);
+  const prCount = await getPrCount(canonicalPath);
+  return `<div class="repo-nav-row">
+    <span class="nav-actions">${actionHtml}</span>
+    <button class="action-btn icon-btn" title="Pull requests" data-pr-nav data-pr-path="${canonicalPath}"><span class="action-count">${prCount}</span><span class="action-icon">${PR_SVG}</span></button>
+    <button class="action-btn icon-btn" title="Settings" data-settings-nav><span class="action-icon">${SETTINGS_SVG}</span></button>
+  </div>
+  <div class="repo-breadcrumb">
+    <span class="breadcrumb-actions">${actionHtml}</span>
+  </div>`;
+}
+
+const FOLLOW_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 64C213.2 64 128 149.2 128 256C128 306.4 148.8 352 182.4 384C124.8 416 80 476.8 64 544L128 544C147.2 467.2 217.6 416 304 416L336 416C417.6 416 489.6 467.2 512 544L576 544C558.4 476.8 515.2 416 457.6 384C491.2 352 512 306.4 512 256C512 149.2 426.8 64 320 64zM320 352C220.8 352 192 306.4 192 256C192 185.6 249.6 128 320 128C390.4 128 448 185.6 448 256C448 326.4 390.4 352 320 352z" fill="currentColor"/><path d="M528 192L528 128L480 128L480 192L416 192L416 240L480 240L480 304L528 304L528 240L592 240L592 192L528 192z" fill="currentColor"/></svg>`;
+const FOLLOWING_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 64C213.2 64 128 149.2 128 256C128 306.4 148.8 352 182.4 384C124.8 416 80 476.8 64 544L128 544C147.2 467.2 217.6 416 304 416L336 416C417.6 416 489.6 467.2 512 544L576 544C558.4 476.8 515.2 416 457.6 384C491.2 352 512 306.4 512 256C512 149.2 426.8 64 320 64zM320 352C220.8 352 192 306.4 192 256C192 185.6 249.6 128 320 128C390.4 128 448 185.6 448 256C448 326.4 390.4 352 320 352z" fill="currentColor"/><path d="M444 196L484 236L540 180L564 204L484 284L420 220z" fill="currentColor"/></svg>`;
+
+async function renderBreadcrumb(displayVersion: string, items: BreadcrumbItem[], canonicalPath?: string, starPath?: string, rootLink?: { label: string; href: string }, followUser?: string): Promise<string> {
   let html = '';
-  const actionHtml = canonicalPath ? renderActionButtons(canonicalPath, starPath || canonicalPath) : '';
+  const actionHtml = canonicalPath ? renderActionButtons(canonicalPath, starPath || canonicalPath, followUser) : '';
   if (canonicalPath) {
     const prCount = await getPrCount(canonicalPath);
     html += `<div class="repo-nav-row">
       <span class="nav-actions">${actionHtml}</span>
       <button class="action-btn icon-btn" title="Pull requests" data-pr-nav data-pr-path="${canonicalPath}"><span class="action-count">${prCount}</span><span class="action-icon">${PR_SVG}</span></button>
-      <button class="action-btn icon-btn" title="Settings"><span class="action-icon">${SETTINGS_SVG}</span></button>
+      <button class="action-btn icon-btn" title="Settings" data-settings-nav><span class="action-icon">${SETTINGS_SVG}</span></button>
     </div>`;
   }
   html += `<div class="repo-breadcrumb">`;
@@ -1649,6 +2067,7 @@ function mountIframe(container: HTMLElement, jsContent: string, canonicalPath: s
       type: 'ether:init',
       user: getCurrentPlayer(),
       repo: canonicalPath,
+
       ...(includeScript ? { script: jsContent } : {}),
     }, '*');
   };
@@ -1676,6 +2095,25 @@ function mountIframe(container: HTMLElement, jsContent: string, canonicalPath: s
         id: data.id,
         value: value,
       }, '*');
+    } else if (data.type === 'ether:fetch') {
+      fetch(data.url, data.options || {})
+        .then(resp => resp.text().then(body => {
+          iframe.contentWindow!.postMessage({
+            type: 'ether:fetch:response',
+            id: data.id,
+            ok: resp.ok,
+            status: resp.status,
+            statusText: resp.statusText,
+            body: body,
+          }, '*');
+        }))
+        .catch(err => {
+          iframe.contentWindow!.postMessage({
+            type: 'ether:fetch:response',
+            id: data.id,
+            error: err.message || String(err),
+          }, '*');
+        });
     }
   };
 
@@ -1992,6 +2430,1019 @@ function initVirtualScroll(container: HTMLElement, files: FileEntry[]): void {
   };
 }
 
+// ---- Profile Page Helpers ----
+
+interface ProfileSocial {
+  platform: string;
+  username: string;
+}
+
+interface ProfileData {
+  displayName: string;
+  socials: ProfileSocial[];
+}
+
+function loadProfile(user: string): ProfileData {
+  try {
+    const raw = localStorage.getItem(`ether:profile:${user}`);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { displayName: '', socials: [] };
+}
+
+function saveProfile(user: string, data: ProfileData): void {
+  localStorage.setItem(`ether:profile:${user}`, JSON.stringify(data));
+}
+
+const SOCIAL_PLATFORMS: { id: string; label: string; svg: string; urlPrefix?: string }[] = [
+  { id: 'github', label: 'GitHub', urlPrefix: 'https://github.com/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>` },
+  { id: 'twitter', label: 'Twitter/X', urlPrefix: 'https://x.com/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>` },
+  { id: 'discord', label: 'Discord', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.947 2.418-2.157 2.418z"/></svg>` },
+  { id: 'youtube', label: 'YouTube', urlPrefix: 'https://youtube.com/@', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>` },
+  { id: 'twitch', label: 'Twitch', urlPrefix: 'https://twitch.tv/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>` },
+  { id: 'linkedin', label: 'LinkedIn', urlPrefix: 'https://linkedin.com/in/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>` },
+  { id: 'instagram', label: 'Instagram', urlPrefix: 'https://instagram.com/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>` },
+  { id: 'reddit', label: 'Reddit', urlPrefix: 'https://reddit.com/u/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 01-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 01.042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 014.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 01.14-.197.35.35 0 01.238-.042l2.906.617a1.214 1.214 0 011.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 00-.231.094.33.33 0 000 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 000-.462.342.342 0 00-.461 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 00-.206-.095z"/></svg>` },
+  { id: 'mastodon', label: 'Mastodon', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 00.023-.043v-1.809a.052.052 0 00-.02-.041.053.053 0 00-.046-.01 20.282 20.282 0 01-4.709.545c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 01-.319-1.433.053.053 0 01.066-.054 19.648 19.648 0 004.581.536h.427c1.565 0 3.163-.09 4.694-.337C18.09 17.764 20 15.846 20 12.32v-.046c0-.09 0-3.58-.002-3.96-.002-.58.35-4.094-2.73-5zm-4.186 8.143h-2.217V8.108c0-1.065-.467-1.605-1.4-1.605-1.032 0-1.549.641-1.549 1.908v2.836H11.7V8.41c0-1.267-.517-1.908-1.549-1.908-.934 0-1.4.54-1.4 1.605v5.348H6.534V7.89c0-1.065.273-1.912.823-2.54.567-.628 1.308-.95 2.228-.95 1.065 0 1.872.409 2.405 1.228L12 5.96l.009-.332c.533-.819 1.34-1.228 2.405-1.228.92 0 1.66.322 2.228.95.55.628.823 1.475.823 2.54v5.566z"/></svg>` },
+  { id: 'bluesky', label: 'Bluesky', urlPrefix: 'https://bsky.app/profile/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.785 2.627 3.6 3.494 6.216 3.065-4.593.737-8.564 2.527-3.408 7.792 5.684 5.013 7.475-.819 8.568-3.727.163-.434.244-.65.244-.476 0-.174.082.042.244.476 1.093 2.908 2.884 8.74 8.568 3.727 5.156-5.265 1.185-7.055-3.408-7.792 2.616.429 5.431-.438 6.216-3.065.246-.828.624-5.79.624-6.48 0-.687-.139-1.859-.902-2.202-.66-.3-1.664-.621-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8z"/></svg>` },
+  { id: 'telegram', label: 'Telegram', urlPrefix: 'https://t.me/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>` },
+  { id: 'website', label: 'Website', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>` },
+];
+
+function getSocialUrl(platform: string, username: string): string | null {
+  const p = SOCIAL_PLATFORMS.find(s => s.id === platform);
+  if (!p || !p.urlPrefix) return null;
+  return p.urlPrefix + username;
+}
+
+function getSocialSvg(platform: string): string {
+  const p = SOCIAL_PLATFORMS.find(s => s.id === platform);
+  return p ? p.svg : SOCIAL_PLATFORMS[SOCIAL_PLATFORMS.length - 1].svg;
+}
+
+function getSocialLabel(platform: string): string {
+  const p = SOCIAL_PLATFORMS.find(s => s.id === platform);
+  return p ? p.label : platform;
+}
+
+const EMAIL_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>`;
+const WORLD_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`;
+
+/** Detect name entry mode: 'platform' (@...), 'world' (#...), or 'email' (anything else) */
+function nameEntryMode(platform: string): 'platform' | 'world' | 'email' {
+  if (platform.startsWith('#')) return 'world';
+  if (!platform || platform.startsWith('@')) return 'platform';
+  // Known social platform IDs are platform mode
+  if (SOCIAL_PLATFORMS.some(p => p.id === platform)) return 'platform';
+  // Contains @ → email address
+  if (platform.includes('@')) return 'email';
+  // Unknown single word → treat as custom platform
+  return 'platform';
+}
+
+const DRAG_HANDLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 14"><circle cx="3" cy="2" r="1.2" fill="currentColor"/><circle cx="7" cy="2" r="1.2" fill="currentColor"/><circle cx="3" cy="7" r="1.2" fill="currentColor"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/><circle cx="3" cy="12" r="1.2" fill="currentColor"/><circle cx="7" cy="12" r="1.2" fill="currentColor"/></svg>`;
+
+const DEFAULT_AVATAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<circle cx="32" cy="32" r="30" fill="rgba(255,255,255,0.06)"/>
+<circle cx="32" cy="24" r="10" fill="rgba(255,255,255,0.15)"/>
+<ellipse cx="32" cy="48" rx="16" ry="12" fill="rgba(255,255,255,0.15)"/>
+</svg>`;
+
+async function getProfileAvatarUrl(user: string): Promise<string | null> {
+  const repo = await getRepository(user);
+  if (!repo) return null;
+  const names = ['2d-square.svg', '2d-square.png', '2d-square.jpeg'];
+  for (const name of names) {
+    if (resolveFile(repo.tree, ['avatar', name])) {
+      return `/**/@${user}/avatar/${name}`;
+    }
+  }
+  return null;
+}
+
+/** Find the best-matching platform ID for a partial input string. */
+function matchPlatform(input: string): { id: string; label: string } | null {
+  const val = input.toLowerCase();
+  if (!val) return null;
+  for (const p of SOCIAL_PLATFORMS) {
+    if (p.label.toLowerCase().startsWith(val) || p.id.startsWith(val)) {
+      return { id: p.id, label: p.label };
+    }
+  }
+  return null;
+}
+
+function renderProfileNames(socials: ProfileSocial[], isOwner: boolean): string {
+  if (socials.length === 0 && !isOwner) return '';
+  let html = `<div class="profile-names" data-profile-names>`;
+  html += `<div class="profile-names-header">Names</div>`;
+  for (let i = 0; i < socials.length; i++) {
+    const s = socials[i];
+    html += renderNameItem(s, i, isOwner);
+  }
+  if (isOwner) {
+    // Empty row for adding new entry
+    html += renderNameItem(null, socials.length, true);
+  }
+  html += `</div>`;
+  return html;
+}
+
+function renderNameItem(social: ProfileSocial | null, index: number, isOwner: boolean): string {
+  const platform = social ? social.platform : '';
+  const username = social ? social.username : '';
+  const mode = nameEntryMode(platform);
+
+  // Determine icon and display values per mode
+  let svg = '';
+  let displayPlatform = '';
+  let displayUsername = '';
+
+  if (mode === 'world') {
+    svg = WORLD_SVG;
+    displayPlatform = platform; // #worldname or #world.#nested
+    displayUsername = username ? `@${username}` : '';
+  } else if (mode === 'email') {
+    svg = EMAIL_SVG;
+    displayPlatform = platform; // full email
+    displayUsername = '';
+  } else {
+    const platformLabel = platform ? getSocialLabel(platform) : '';
+    svg = platform ? getSocialSvg(platform) : '';
+    displayPlatform = platform ? `@${platformLabel}` : '';
+    displayUsername = username ? `@${username}` : '';
+  }
+
+  if (!isOwner) {
+    // Read-only display
+    if (mode === 'world') {
+      // Multi-line world path display: #genesis.@alice → indented lines
+      const segments = platform.split('.');
+      let pathHtml = '';
+      for (let s = 0; s < segments.length; s++) {
+        const seg = segments[s];
+        const indent = s > 0 ? ` style="padding-left: ${s * 12}px"` : '';
+        // Make @player segments linkable
+        if (seg.startsWith('@')) {
+          const playerName = seg.slice(1);
+          pathHtml += `<span class="profile-name-path-line"${indent}><a href="/@${escapeHtml(playerName)}">${escapeHtml(seg)}</a></span>`;
+        } else if (seg.startsWith('#') && s > 0) {
+          // Nested world — link to parent world context
+          pathHtml += `<span class="profile-name-path-line"${indent}>${escapeHtml(seg)}</span>`;
+        } else {
+          pathHtml += `<span class="profile-name-path-line"${indent}>${escapeHtml(seg)}</span>`;
+        }
+      }
+      // Add username as final indented line if present
+      if (username) {
+        const uIndent = ` style="padding-left: ${segments.length * 12}px"`;
+        pathHtml += `<span class="profile-name-path-line"${uIndent}><a href="/@${escapeHtml(username)}">@${escapeHtml(username)}</a></span>`;
+      }
+      return `<div class="profile-name-item" data-name-index="${index}">
+        <span class="profile-name-icon">${svg}</span>
+        <span class="profile-name-value profile-name-world-path">${pathHtml}</span>
+      </div>`;
+    }
+    if (mode === 'email') {
+      return `<div class="profile-name-item" data-name-index="${index}">
+        <span class="profile-name-icon">${svg}</span>
+        <span class="profile-name-value"><a href="mailto:${escapeHtml(platform)}">${escapeHtml(platform)}</a></span>
+      </div>`;
+    }
+    const url = social ? getSocialUrl(social.platform, social.username) : null;
+    const usernameHtml = url
+      ? `<a href="${url}" target="_blank" rel="noopener">@${escapeHtml(username)}</a>`
+      : `@${escapeHtml(username)}`;
+    return `<div class="profile-name-item" data-name-index="${index}">
+      <span class="profile-name-icon">${svg}</span>
+      <span class="profile-name-platform">${escapeHtml(displayPlatform)}</span>
+      <span class="profile-name-value">${usernameHtml}</span>
+    </div>`;
+  }
+
+  // Editable row
+  const isEmpty = !platform && !username;
+  const modeClass = mode !== 'platform' && platform ? ` mode-${mode}` : '';
+  const dragHandle = social
+    ? `<span class="profile-name-drag" data-name-drag="${index}">${DRAG_HANDLE_SVG}</span>`
+    : `<span class="profile-name-drag" style="visibility:hidden">${DRAG_HANDLE_SVG}</span>`;
+
+  const inputValue = isEmpty ? '' : escapeHtml(displayPlatform);
+  const usernameValue = displayUsername ? escapeHtml(displayUsername) : '';
+  const placeholder = mode === 'world' ? '#world' : mode === 'email' ? 'email' : '@platform';
+
+  return `<div class="profile-name-item${modeClass}" data-name-index="${index}" data-name-platform="${escapeHtml(platform)}" data-name-username="${escapeHtml(username)}">
+    ${dragHandle}
+    <span class="profile-name-icon" data-name-icon>${svg}</span>
+    <span class="profile-name-field-wrap" data-name-platform-wrap>
+      <input class="profile-name-field" data-name-platform-input value="${inputValue}" placeholder="${placeholder}" spellcheck="false" />
+      <span class="profile-name-field-ghost" data-name-platform-ghost></span>
+    </span>
+    <span class="profile-name-field-wrap" data-name-value-wrap>
+      <input class="profile-name-field-value" data-name-value-input value="${usernameValue}" placeholder="@username" spellcheck="false" />
+      <span class="profile-name-field-ghost" data-name-value-ghost></span>
+    </span>
+    ${social ? `<button class="profile-name-remove" data-name-remove="${index}" title="Remove">&times;</button>` : ''}
+    <div class="profile-name-dropdown" data-name-dropdown></div>
+  </div>`;
+}
+
+async function renderProfilePage(
+  effectiveUser: string,
+  repository: { tree: TreeEntry[]; description: string },
+  headerChain: { label: string; pathEnd: number }[],
+  base: string, versions: [number, string][], path: string[],
+  clonePath: string, rootStarPath: string,
+): Promise<string> {
+  const currentPlayer = getCurrentPlayer();
+  const isOwner = effectiveUser === currentPlayer;
+  const profile = loadProfile(effectiveUser);
+  const displayName = profile.displayName || effectiveUser;
+
+  // Avatar
+  const avatarUrl = await getProfileAvatarUrl(effectiveUser);
+  const avatarContent = avatarUrl
+    ? `<img src="${avatarUrl}" alt="@${escapeHtml(effectiveUser)}">`
+    : DEFAULT_AVATAR_SVG;
+
+  // README
+  const readmes = findReadmes(repository.tree);
+  for (const readme of readmes) {
+    if (!readme.content) {
+      const apiPath = `@${effectiveUser}/${readme.name}`;
+      const fetched = await getAPI().readFile(apiPath);
+      if (fetched !== null) readme.content = fetched;
+    }
+  }
+  const readmesWithContent = readmes.filter(r => r.content);
+
+  let readmeHtml = '';
+  if (readmesWithContent.length >= 1) {
+    const content = renderMarkdown(readmesWithContent[0].content!);
+    const resolvedContent = content.replace(/href="(?!\/|https?:|#)([^"]+)"/g, (_m, rel) =>
+      `href="${buildBasePath(base, versions, [...path, ...rel.split('/').filter(Boolean)])}"`
+    );
+    readmeHtml = `<div class="readme-section">
+      <div class="readme-header">README.md</div>
+      <div class="readme-body">${resolvedContent}</div>
+    </div>`;
+  }
+
+  // Build page
+  const displayVersion = versions.length > 0 ? versions[versions.length - 1][1] : 'latest';
+  let html = `<div class="repo-page">`;
+  html += renderHeaderChain(headerChain, base, versions, path);
+  html += `<div class="repo-description">${escapeHtml(repository.description)}</div>`;
+
+  html += `<div class="profile-layout">`;
+
+  // Left: README
+  html += `<div class="profile-readme">${readmeHtml}</div>`;
+
+  // Right: Profile card
+  html += `<div class="profile-card" data-profile-card data-profile-user="${escapeHtml(effectiveUser)}">`;
+  html += `<div class="profile-avatar-wrap"><div class="profile-avatar${isOwner ? ' editable' : ''}" data-profile-avatar>
+    ${avatarContent}
+    ${isOwner ? `<div class="profile-avatar-overlay">${EDIT_SVG}</div>` : ''}
+  </div></div>`;
+  html += `<div class="profile-name-row">
+    <span class="profile-display-name" data-profile-name>${escapeHtml(displayName)}</span>
+    ${isOwner ? `<button class="profile-hover-edit" data-profile-name-edit title="Edit name">${EDIT_SVG}</button>` : ''}
+  </div>`;
+  html += `<div class="profile-username-row">
+    <span class="profile-username" data-profile-username>@${escapeHtml(effectiveUser)}</span>
+    ${isOwner ? `<button class="profile-hover-edit" data-profile-username-edit title="Edit username">${EDIT_SVG}</button>` : ''}
+    <span class="version-badge">${displayVersion}</span>
+  </div>`;
+  html += await renderActionRow(clonePath, rootStarPath, effectiveUser);
+  html += renderProfileNames(profile.socials, isOwner);
+  html += `</div>`;
+
+  html += `</div>`; // .profile-layout
+  html += `</div>`; // .repo-page
+  return html;
+}
+
+function reRenderNames(card: HTMLElement, container: HTMLElement, user: string): void {
+  const profile = loadProfile(user);
+  const namesContainer = card.querySelector('[data-profile-names]');
+  if (namesContainer) {
+    namesContainer.outerHTML = renderProfileNames(profile.socials, true);
+    bindProfileNameHandlers(card, container, user);
+  }
+}
+
+/** Fetch autocomplete options for world path input. Supports nested paths like #world.@player */
+async function fetchWorldDropdown(user: string, inputValue: string): Promise<{display: string; fullValue: string}[]> {
+  if (!inputValue.startsWith('#')) return [];
+
+  const parts = inputValue.split('.');
+  const current = parts[parts.length - 1];
+  const completedParts = parts.slice(0, -1);
+  const prefix = completedParts.length > 0 ? completedParts.join('.') + '.' : '';
+
+  // Find deepest world context from completed segments
+  let parentWorld: string | null = null;
+  for (let i = completedParts.length - 1; i >= 0; i--) {
+    if (completedParts[i].startsWith('#')) {
+      parentWorld = completedParts[i].slice(1);
+      break;
+    }
+  }
+
+  const results: {display: string; fullValue: string}[] = [];
+  const isPlayerFilter = current.startsWith('@');
+  const showAll = current === '' && completedParts.length > 0;
+  const filter = current.replace(/^[#@]/, '').toLowerCase();
+
+  // Show worlds (#)
+  if (!isPlayerFilter || showAll) {
+    const worlds = await getReferencedWorlds(user, parentWorld);
+    for (const w of worlds) {
+      if (!filter || w.toLowerCase().startsWith(filter)) {
+        results.push({ display: `#${w}`, fullValue: `${prefix}#${w}` });
+      }
+    }
+    // Also fetch @ether worlds if user is different
+    if (user !== 'ether') {
+      const etherWorlds = await getReferencedWorlds('ether', parentWorld);
+      for (const w of etherWorlds) {
+        if (!worlds.includes(w) && (!filter || w.toLowerCase().startsWith(filter))) {
+          results.push({ display: `#${w}`, fullValue: `${prefix}#${w}` });
+        }
+      }
+    }
+  }
+
+  // Show players (@) — only within a world context
+  if (parentWorld && (isPlayerFilter || showAll)) {
+    const users = await getReferencedUsers(user, parentWorld);
+    for (const u of users) {
+      if (!filter || u.toLowerCase().startsWith(filter)) {
+        results.push({ display: `@${u}`, fullValue: `${prefix}@${u}` });
+      }
+    }
+  }
+
+  return results;
+}
+
+function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user: string): void {
+  // Platform field — mode-aware: @platform (autocomplete), #world (dropdown), or email
+  card.querySelectorAll('[data-name-platform-input]').forEach(inputEl => {
+    const input = inputEl as HTMLInputElement;
+    const item = input.closest('.profile-name-item') as HTMLElement;
+    if (!item) return;
+    const ghostEl = item.querySelector('[data-name-platform-ghost]') as HTMLElement | null;
+    const iconEl = item.querySelector('[data-name-icon]') as HTMLElement | null;
+    const dropdownEl = item.querySelector('[data-name-dropdown]') as HTMLElement | null; // shared dropdown in name-item
+
+    let currentCompletions: {display: string; fullValue: string}[] = [];
+    let selectedIdx = -1;
+    let completionGen = 0;
+
+    const getMode = () => nameEntryMode(input.value);
+
+    const updateMode = () => {
+      const mode = getMode();
+      item.classList.remove('mode-world', 'mode-email');
+      if (mode === 'world') item.classList.add('mode-world');
+      else if (mode === 'email') item.classList.add('mode-email');
+    };
+
+    const updateGhost = () => {
+      if (!ghostEl) return;
+      const mode = getMode();
+      if (mode === 'world') return; // world ghost handled separately
+      if (mode !== 'platform') { ghostEl.textContent = ''; return; }
+      const val = input.value.replace(/^@/, '');
+      const match = matchPlatform(val);
+      if (match && val.length > 0) {
+        ghostEl.innerHTML = `<span style="visibility:hidden">@${escapeHtml(val)}</span><span>${escapeHtml(match.label.slice(val.length))}</span>`;
+      } else {
+        ghostEl.textContent = '';
+      }
+    };
+
+    const updateWorldGhost = () => {
+      if (!ghostEl) return;
+      const sel = selectedIdx >= 0 ? currentCompletions[selectedIdx] : currentCompletions[0];
+      if (sel) {
+        const typed = input.value;
+        if (sel.fullValue.startsWith(typed) && sel.fullValue.length > typed.length) {
+          ghostEl.innerHTML = `<span style="visibility:hidden">${escapeHtml(typed)}</span><span>${escapeHtml(sel.fullValue.slice(typed.length))}</span>`;
+          return;
+        }
+      }
+      ghostEl.textContent = '';
+    };
+
+    const renderDropdown = () => {
+      if (!dropdownEl) return;
+      if (currentCompletions.length === 0) {
+        dropdownEl.classList.remove('active');
+        dropdownEl.innerHTML = '';
+        return;
+      }
+      // Align dropdown with the platform input's horizontal position
+      const platformWrap = item.querySelector('[data-name-platform-wrap]') as HTMLElement | null;
+      if (platformWrap) {
+        dropdownEl.style.paddingLeft = `${platformWrap.offsetLeft}px`;
+      }
+      dropdownEl.classList.add('active');
+      dropdownEl.innerHTML = currentCompletions.map((c, i) =>
+        `<div class="profile-name-dropdown-item${i === selectedIdx ? ' selected' : ''}" data-completion-idx="${i}">${escapeHtml(c.display)}</div>`
+      ).join('');
+    };
+
+    const hideDropdown = () => {
+      if (dropdownEl) {
+        dropdownEl.classList.remove('active');
+        dropdownEl.innerHTML = '';
+      }
+      currentCompletions = [];
+      selectedIdx = -1;
+    };
+
+    const selectCompletion = (idx: number) => {
+      if (idx >= 0 && idx < currentCompletions.length) {
+        input.value = currentCompletions[idx].fullValue;
+        hideDropdown();
+        updateMode();
+        updateIcon();
+        if (ghostEl) ghostEl.textContent = '';
+        // After selecting a world, auto-focus the username field
+        if (getMode() === 'world') {
+          const usernameInput = item.querySelector('[data-name-value-input]') as HTMLInputElement | null;
+          if (usernameInput) {
+            usernameInput.focus();
+            return;
+          }
+        }
+        input.focus();
+      }
+    };
+
+    const updateWorldCompletions = async () => {
+      if (getMode() !== 'world') {
+        hideDropdown();
+        return;
+      }
+      const gen = ++completionGen;
+      const results = await fetchWorldDropdown(user, input.value);
+      if (gen !== completionGen) return; // stale
+      currentCompletions = results;
+      selectedIdx = results.length > 0 ? 0 : -1;
+      renderDropdown();
+      updateWorldGhost();
+    };
+
+    const updateIcon = () => {
+      if (!iconEl) return;
+      const mode = getMode();
+      if (mode === 'world') { iconEl.innerHTML = WORLD_SVG; return; }
+      if (mode === 'email') { iconEl.innerHTML = EMAIL_SVG; return; }
+      const val = input.value.replace(/^@/, '');
+      const match = matchPlatform(val);
+      iconEl.innerHTML = match ? getSocialSvg(match.id) : '';
+    };
+
+    // Dropdown mouse interaction
+    if (dropdownEl) {
+      dropdownEl.addEventListener('mousedown', (e) => {
+        const target = (e.target as HTMLElement).closest('[data-completion-idx]') as HTMLElement;
+        if (target) {
+          e.preventDefault(); // prevent blur
+          selectCompletion(parseInt(target.dataset.completionIdx || '0', 10));
+        }
+      });
+    }
+
+    input.addEventListener('input', () => {
+      updateMode();
+      const mode = getMode();
+      if (mode === 'world') {
+        updateWorldCompletions();
+      } else {
+        hideDropdown();
+        updateGhost();
+      }
+      updateIcon();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      const mode = getMode();
+
+      // World mode — dropdown keyboard navigation
+      if (mode === 'world' && currentCompletions.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedIdx = Math.min(selectedIdx + 1, currentCompletions.length - 1);
+          renderDropdown();
+          updateWorldGhost();
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedIdx = Math.max(selectedIdx - 1, 0);
+          renderDropdown();
+          updateWorldGhost();
+          return;
+        }
+        if (e.key === 'Tab' || e.key === 'Enter') {
+          if (selectedIdx >= 0) {
+            e.preventDefault();
+            selectCompletion(selectedIdx);
+            return;
+          }
+        }
+        if (e.key === 'Escape') {
+          hideDropdown();
+          if (ghostEl) ghostEl.textContent = '';
+          return;
+        }
+      }
+
+      // Platform mode — Tab to accept ghost completion
+      if (e.key === 'Tab' && mode === 'platform') {
+        const val = input.value.replace(/^@/, '');
+        const match = matchPlatform(val);
+        if (match && val.length > 0 && val.toLowerCase() !== match.label.toLowerCase()) {
+          e.preventDefault();
+          input.value = '@' + match.label;
+          updateGhost();
+          updateIcon();
+        }
+      }
+
+      // Allow backspace to clear @ or # (enables mode switching)
+      // No prevention — user can freely delete prefix to switch modes
+    });
+
+    input.addEventListener('focus', () => {
+      if (!input.value) input.value = '@';
+      updateMode();
+      updateGhost();
+      if (getMode() === 'world') updateWorldCompletions();
+    });
+
+    input.addEventListener('blur', () => {
+      hideDropdown();
+
+      const idx = parseInt(item.dataset.nameIndex || '0', 10);
+      const mode = getMode();
+      const rawValue = input.value.trim();
+
+      if (mode === 'world') {
+        const worldName = rawValue;
+        if (!worldName || worldName === '#') { if (ghostEl) ghostEl.textContent = ''; input.value = ''; updateMode(); return; }
+        // Preserve existing username — only update the platform (world path)
+        const valueInput = item.querySelector('[data-name-value-input]') as HTMLInputElement | null;
+        const existingUsername = valueInput ? valueInput.value.replace(/^@/, '').trim() : '';
+        const profile = loadProfile(user);
+        if (idx < profile.socials.length) {
+          profile.socials[idx].platform = worldName;
+          if (existingUsername) profile.socials[idx].username = existingUsername;
+          saveProfile(user, profile);
+        } else if (worldName) {
+          profile.socials.push({ platform: worldName, username: existingUsername });
+          saveProfile(user, profile);
+          if (existingUsername) reRenderNames(card, container, user);
+        }
+      } else if (mode === 'email') {
+        if (!rawValue) { if (ghostEl) ghostEl.textContent = ''; input.value = ''; updateMode(); return; }
+        const profile = loadProfile(user);
+        if (idx < profile.socials.length) {
+          profile.socials[idx].platform = rawValue;
+          profile.socials[idx].username = '';
+          saveProfile(user, profile);
+        } else {
+          profile.socials.push({ platform: rawValue, username: '' });
+          saveProfile(user, profile);
+          reRenderNames(card, container, user);
+        }
+      } else {
+        // Platform mode
+        const rawPlatform = rawValue.replace(/^@/, '').trim();
+        const valueInput = item.querySelector('[data-name-value-input]') as HTMLInputElement | null;
+        const rawUsername = valueInput ? valueInput.value.replace(/^@/, '').trim() : '';
+
+        if (!rawPlatform && !rawUsername) {
+          if (ghostEl) ghostEl.textContent = '';
+          input.value = '';
+          return;
+        }
+
+        const match = matchPlatform(rawPlatform);
+        const platformId = match ? match.id : rawPlatform.toLowerCase();
+
+        const profile = loadProfile(user);
+        if (idx < profile.socials.length) {
+          profile.socials[idx].platform = platformId;
+          saveProfile(user, profile);
+        } else if (rawPlatform && rawUsername) {
+          profile.socials.push({ platform: platformId, username: rawUsername });
+          saveProfile(user, profile);
+          reRenderNames(card, container, user);
+        }
+      }
+      updateIcon();
+      if (ghostEl) ghostEl.textContent = '';
+    });
+
+    // Init
+    updateMode();
+    updateGhost();
+    updateIcon();
+  });
+
+  // Username field — with world-context autocomplete
+  card.querySelectorAll('[data-name-value-input]').forEach(inputEl => {
+    const input = inputEl as HTMLInputElement;
+    const item = input.closest('.profile-name-item') as HTMLElement;
+    if (!item) return;
+    const ghostEl = item.querySelector('[data-name-value-ghost]') as HTMLElement | null;
+    const dropdownEl = item.querySelector('[data-name-dropdown]') as HTMLElement | null;
+    const platformInput = item.querySelector('[data-name-platform-input]') as HTMLInputElement | null;
+
+    let userCompletions: {display: string; value: string}[] = [];
+    let userSelectedIdx = -1;
+    let userCompletionGen = 0;
+
+    /** Get the deepest world name from the platform field for context */
+    const getWorldContext = (): string | null => {
+      if (!platformInput) return null;
+      if (!nameEntryMode(platformInput.value).startsWith('w')) return null;
+      const parts = platformInput.value.split('.');
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (parts[i].startsWith('#') && parts[i].length > 1) return parts[i].slice(1);
+      }
+      return null;
+    };
+
+    const isWorldMode = () => platformInput ? nameEntryMode(platformInput.value) === 'world' : false;
+
+    const renderUserDropdown = () => {
+      if (!dropdownEl) return;
+      if (userCompletions.length === 0) {
+        dropdownEl.classList.remove('active');
+        dropdownEl.innerHTML = '';
+        return;
+      }
+      // Align dropdown with the username input's horizontal position
+      const valueWrap = item.querySelector('[data-name-value-wrap]') as HTMLElement | null;
+      if (valueWrap) {
+        dropdownEl.style.paddingLeft = `${valueWrap.offsetLeft}px`;
+      }
+      dropdownEl.classList.add('active');
+      dropdownEl.innerHTML = userCompletions.map((c, i) =>
+        `<div class="profile-name-dropdown-item${i === userSelectedIdx ? ' selected' : ''}" data-ucompletion-idx="${i}">${escapeHtml(c.display)}</div>`
+      ).join('');
+    };
+
+    const hideUserDropdown = () => {
+      if (dropdownEl) {
+        dropdownEl.classList.remove('active');
+        dropdownEl.innerHTML = '';
+      }
+      userCompletions = [];
+      userSelectedIdx = -1;
+    };
+
+    const selectUserCompletion = (idx: number) => {
+      if (idx >= 0 && idx < userCompletions.length) {
+        input.value = '@' + userCompletions[idx].value;
+        hideUserDropdown();
+        if (ghostEl) ghostEl.textContent = '';
+        input.focus();
+      }
+    };
+
+    const updateUserGhost = () => {
+      if (!ghostEl) return;
+      const sel = userSelectedIdx >= 0 ? userCompletions[userSelectedIdx] : userCompletions[0];
+      if (sel) {
+        const typed = input.value.replace(/^@/, '');
+        if (sel.value.toLowerCase().startsWith(typed.toLowerCase()) && sel.value.length > typed.length) {
+          ghostEl.innerHTML = `<span style="visibility:hidden">@${escapeHtml(typed)}</span><span>${escapeHtml(sel.value.slice(typed.length))}</span>`;
+          return;
+        }
+      }
+      ghostEl.textContent = '';
+    };
+
+    const updateUserCompletions = async () => {
+      const world = getWorldContext();
+      if (!world) { hideUserDropdown(); if (ghostEl) ghostEl.textContent = ''; return; }
+      const gen = ++userCompletionGen;
+      const filter = input.value.replace(/^@/, '').toLowerCase();
+      const users = await getReferencedUsers(user, world);
+      if (gen !== userCompletionGen) return;
+      userCompletions = users
+        .filter(u => !filter || u.toLowerCase().startsWith(filter))
+        .map(u => ({ display: `@${u}`, value: u }));
+      userSelectedIdx = userCompletions.length > 0 ? 0 : -1;
+      renderUserDropdown();
+      updateUserGhost();
+    };
+
+    // Dropdown click
+    if (dropdownEl) {
+      dropdownEl.addEventListener('mousedown', (e) => {
+        const target = (e.target as HTMLElement).closest('[data-ucompletion-idx]') as HTMLElement;
+        if (target) {
+          e.preventDefault();
+          selectUserCompletion(parseInt(target.dataset.ucompletionIdx || '0', 10));
+        }
+      });
+    }
+
+    input.addEventListener('input', () => {
+      if (!input.value.startsWith('@') && input.value.length > 0) {
+        input.value = '@' + input.value;
+      }
+      if (isWorldMode()) {
+        updateUserCompletions();
+      } else {
+        hideUserDropdown();
+        if (ghostEl) ghostEl.textContent = '';
+      }
+    });
+
+    input.addEventListener('keydown', (e) => {
+      // World mode user autocomplete navigation
+      if (isWorldMode() && userCompletions.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          userSelectedIdx = Math.min(userSelectedIdx + 1, userCompletions.length - 1);
+          renderUserDropdown();
+          updateUserGhost();
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          userSelectedIdx = Math.max(userSelectedIdx - 1, 0);
+          renderUserDropdown();
+          updateUserGhost();
+          return;
+        }
+        if (e.key === 'Tab' || e.key === 'Enter') {
+          if (userSelectedIdx >= 0) {
+            e.preventDefault();
+            selectUserCompletion(userSelectedIdx);
+            return;
+          }
+        }
+        if (e.key === 'Escape') {
+          hideUserDropdown();
+          if (ghostEl) ghostEl.textContent = '';
+          return;
+        }
+      }
+    });
+
+    input.addEventListener('focus', () => {
+      if (!input.value) input.value = '@';
+      if (isWorldMode()) updateUserCompletions();
+    });
+
+    input.addEventListener('blur', () => {
+      hideUserDropdown();
+      if (ghostEl) ghostEl.textContent = '';
+
+      const idx = parseInt(item.dataset.nameIndex || '0', 10);
+      const rawUsername = input.value.replace(/^@/, '').trim();
+      const rawPlatform = platformInput ? platformInput.value.replace(/^@/, '').trim() : '';
+
+      if (!rawPlatform && !rawUsername) {
+        input.value = '';
+        return;
+      }
+
+      const platMode = platformInput ? nameEntryMode(platformInput.value) : 'platform';
+      const platformId = platMode === 'world' ? rawPlatform : (matchPlatform(rawPlatform)?.id || rawPlatform.toLowerCase());
+
+      const profile = loadProfile(user);
+      if (idx < profile.socials.length) {
+        profile.socials[idx].username = rawUsername;
+        saveProfile(user, profile);
+      } else if (rawPlatform && rawUsername) {
+        profile.socials.push({ platform: platformId, username: rawUsername });
+        saveProfile(user, profile);
+        reRenderNames(card, container, user);
+      }
+    });
+  });
+
+  // Remove buttons
+  card.querySelectorAll('[data-name-remove]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt((btn as HTMLElement).dataset.nameRemove || '0', 10);
+      const profile = loadProfile(user);
+      profile.socials.splice(idx, 1);
+      saveProfile(user, profile);
+      reRenderNames(card, container, user);
+    });
+  });
+
+  // Drag-and-drop reorder
+  let dragSrcIdx = -1;
+  const nameItems = Array.from(card.querySelectorAll('.profile-name-item[data-name-index]')) as HTMLElement[];
+  const socialsCount = loadProfile(user).socials.length;
+
+  nameItems.forEach(item => {
+    const idx = parseInt(item.dataset.nameIndex || '0', 10);
+    const handle = item.querySelector('[data-name-drag]') as HTMLElement | null;
+    if (!handle || idx >= socialsCount) return;
+
+    // Make the item itself draggable when drag starts from handle
+    handle.addEventListener('mousedown', () => { item.setAttribute('draggable', 'true'); });
+    item.addEventListener('dragstart', (e) => {
+      const ev = e as DragEvent;
+      dragSrcIdx = idx;
+      item.classList.add('dragging');
+      ev.dataTransfer!.effectAllowed = 'move';
+      ev.dataTransfer!.setData('text/plain', String(idx));
+      // Use a minimal drag image so inputs don't interfere
+      const ghost = item.cloneNode(true) as HTMLElement;
+      ghost.style.position = 'absolute';
+      ghost.style.top = '-1000px';
+      document.body.appendChild(ghost);
+      ev.dataTransfer!.setDragImage(ghost, 0, 0);
+      requestAnimationFrame(() => ghost.remove());
+    });
+    item.addEventListener('dragend', () => {
+      item.setAttribute('draggable', 'false');
+      item.classList.remove('dragging');
+      nameItems.forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+      dragSrcIdx = -1;
+    });
+  });
+
+  nameItems.forEach(item => {
+    const idx = parseInt(item.dataset.nameIndex || '0', 10);
+    if (idx >= socialsCount) return;
+    let dragOverCounter = 0;
+
+    item.addEventListener('dragover', (e) => {
+      const ev = e as DragEvent;
+      if (dragSrcIdx < 0 || dragSrcIdx === idx) return;
+      ev.preventDefault();
+      ev.dataTransfer!.dropEffect = 'move';
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      item.classList.remove('drag-over-top', 'drag-over-bottom');
+      item.classList.add(ev.clientY < midY ? 'drag-over-top' : 'drag-over-bottom');
+    });
+
+    item.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragOverCounter++;
+    });
+
+    item.addEventListener('dragleave', () => {
+      dragOverCounter--;
+      if (dragOverCounter <= 0) {
+        dragOverCounter = 0;
+        item.classList.remove('drag-over-top', 'drag-over-bottom');
+      }
+    });
+
+    item.addEventListener('drop', (e) => {
+      const ev = e as DragEvent;
+      ev.preventDefault();
+      dragOverCounter = 0;
+      item.classList.remove('drag-over-top', 'drag-over-bottom');
+      if (dragSrcIdx < 0 || dragSrcIdx === idx) return;
+
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const dropBefore = ev.clientY < midY;
+
+      const prof = loadProfile(user);
+      const [moved] = prof.socials.splice(dragSrcIdx, 1);
+      // Calculate insert position after removal
+      let insertIdx = dropBefore ? idx : idx + 1;
+      if (dragSrcIdx < insertIdx) insertIdx--;
+      prof.socials.splice(insertIdx, 0, moved);
+      saveProfile(user, prof);
+      dragSrcIdx = -1;
+      reRenderNames(card, container, user);
+    });
+  });
+}
+
+function bindProfileHandlers(container: HTMLElement): void {
+  const card = container.querySelector('[data-profile-card]') as HTMLElement | null;
+  if (!card) return;
+  const user = card.dataset.profileUser || '';
+  const currentPlayer = getCurrentPlayer();
+  if (user !== currentPlayer) return;
+
+  // Display name editing — click the name or the edit icon
+  const editBtn = card.querySelector('[data-profile-name-edit]');
+  const nameEl = card.querySelector('[data-profile-name]') as HTMLElement | null;
+  if (nameEl) {
+    const startEdit = () => {
+      if (nameEl.querySelector('input')) return;
+      const current = nameEl.textContent || '';
+      const input = document.createElement('input');
+      input.className = 'profile-display-name-input';
+      input.value = current;
+      nameEl.textContent = '';
+      nameEl.appendChild(input);
+      if (editBtn) (editBtn as HTMLElement).style.display = 'none';
+      input.focus();
+      input.select();
+
+      let committed = false;
+      const commit = () => {
+        if (committed) return;
+        committed = true;
+        const val = input.value.trim();
+        const profile = loadProfile(user);
+        profile.displayName = val;
+        saveProfile(user, profile);
+        nameEl.textContent = val || user;
+        if (editBtn) (editBtn as HTMLElement).style.display = '';
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); nameEl.textContent = current; if (editBtn) (editBtn as HTMLElement).style.display = ''; }
+      });
+      input.addEventListener('blur', () => setTimeout(commit, 100));
+    };
+    nameEl.style.cursor = 'text';
+    nameEl.addEventListener('click', startEdit);
+    if (editBtn) editBtn.addEventListener('click', startEdit);
+  }
+
+  // Username editing — click the username or the edit icon
+  const usernameEditBtn = card.querySelector('[data-profile-username-edit]');
+  const usernameEl = card.querySelector('[data-profile-username]') as HTMLElement | null;
+  if (usernameEl) {
+    const startUsernameEdit = () => {
+      if (usernameEl.querySelector('input')) return;
+      const currentName = user;
+      const input = document.createElement('input');
+      input.className = 'profile-username-input';
+      input.value = '@' + currentName;
+      usernameEl.textContent = '';
+      usernameEl.appendChild(input);
+      if (usernameEditBtn) (usernameEditBtn as HTMLElement).style.display = 'none';
+      input.focus();
+      // Place cursor at end
+      input.setSelectionRange(input.value.length, input.value.length);
+
+      input.addEventListener('input', () => {
+        if (!input.value.startsWith('@') && input.value.length > 0) {
+          input.value = '@' + input.value;
+        }
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && input.value === '@') e.preventDefault();
+      });
+
+      let committed = false;
+      const commit = () => {
+        if (committed) return;
+        committed = true;
+        const newName = input.value.replace(/^@/, '').trim();
+        if (newName && newName !== currentName) {
+          localStorage.setItem('ether:name', newName);
+          // Migrate profile data to new username
+          const profile = loadProfile(currentName);
+          saveProfile(newName, profile);
+          usernameEl.textContent = '@' + newName;
+          if (usernameEditBtn) (usernameEditBtn as HTMLElement).style.display = '';
+          // If on root (/), stay on root and re-render; otherwise navigate to new user URL
+          const base = currentRepoParams?.base || '';
+          if (!base) {
+            renderRepo();
+          } else if (navigateFn) {
+            navigateFn(`/@${newName}`);
+          }
+        } else {
+          usernameEl.textContent = '@' + currentName;
+          if (usernameEditBtn) (usernameEditBtn as HTMLElement).style.display = '';
+        }
+      };
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.preventDefault(); usernameEl.textContent = '@' + currentName; if (usernameEditBtn) (usernameEditBtn as HTMLElement).style.display = ''; }
+      });
+      input.addEventListener('blur', () => setTimeout(commit, 100));
+    };
+    usernameEl.classList.add('editable');
+    usernameEl.addEventListener('click', startUsernameEdit);
+    if (usernameEditBtn) usernameEditBtn.addEventListener('click', startUsernameEdit);
+  }
+
+  // Names section
+  bindProfileNameHandlers(card, container, user);
+}
+
 async function renderRepo(): Promise<void> {
   if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
   if (ideLayoutInstance) { ideLayoutInstance.unmount(); ideLayoutInstance = null; }
@@ -2264,7 +3715,7 @@ async function renderRepo(): Promise<void> {
 
       const { rootLink, items: breadcrumbItems } = buildBreadcrumbItems(treePath, headerChain, base, versions, path, treePathStart, repository.tree);
       const rootStarPath = buildRootStarPath(repository, effectiveUser, effectiveWorld, treePath, user, base);
-      html += await renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
+      html += await renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink, !effectiveWorld && treePath.length === 0 ? effectiveUser : undefined);
       html += `</div>`;
 
       html += `<div class="ide-layout-mount"></div>`;
@@ -2584,15 +4035,27 @@ async function renderRepo(): Promise<void> {
     const headerLabel = headerChain.map(item => item.label).join(' / ');
 
     // Full-viewport iframe with overlay badge in bottom-right
-    const iframeStarred = isStarred(canonicalPath);
-    const iframeStarSvg = iframeStarred ? STAR_FILLED_SVG : STAR_OUTLINE_SVG;
-    const iframeStarCls = iframeStarred ? 'star-btn starred' : 'star-btn';
-    const iframeStarLabel = iframeStarred ? 'Starred' : 'Star';
+    const isPlayerIframe = !effectiveWorld && treePath.length === 0;
+    let iframePrimaryBtn: string;
+    if (isPlayerIframe) {
+      const iframeFollowed = isFollowing(effectiveUser);
+      const iframeFollowSvg = iframeFollowed ? FOLLOWING_SVG : FOLLOW_SVG;
+      const iframeFollowCls = iframeFollowed ? 'follow-btn following' : 'follow-btn';
+      const iframeFollowLabel = iframeFollowed ? 'Following' : 'Follow';
+      const iframeFollowerCount = getFollowerCount(effectiveUser);
+      iframePrimaryBtn = `<button class="action-btn ${iframeFollowCls}" data-follow-toggle data-follow-user="${effectiveUser}"><span class="action-count" data-follower-count>${iframeFollowerCount}</span><span class="action-icon">${iframeFollowSvg}</span><span class="action-label">${iframeFollowLabel}</span></button>`;
+    } else {
+      const iframeStarred = isStarred(canonicalPath);
+      const iframeStarSvg = iframeStarred ? STAR_FILLED_SVG : STAR_OUTLINE_SVG;
+      const iframeStarCls = iframeStarred ? 'star-btn starred' : 'star-btn';
+      const iframeStarLabel = iframeStarred ? 'Starred' : 'Star';
+      iframePrimaryBtn = `<button class="action-btn ${iframeStarCls}" data-star-toggle data-star-path="${canonicalPath}"><span class="action-count" data-star-count>${getStarCount(canonicalPath)}</span><span class="action-icon">${iframeStarSvg}</span><span class="action-label">${iframeStarLabel}</span></button>`;
+    }
     currentContainer.innerHTML = `<div class="repo-page" style="position:relative;padding:0;max-width:none;min-height:100vh;display:flex;flex-direction:column;">
       <div class="iframe-overlay">
         <span class="overlay-label">${headerLabel}</span>
         <span class="overlay-desc">${repository.description}</span>
-        <button class="action-btn ${iframeStarCls}" data-star-toggle data-star-path="${canonicalPath}"><span class="action-count" data-star-count>${getStarCount(canonicalPath)}</span><span class="action-icon">${iframeStarSvg}</span><span class="action-label">${iframeStarLabel}</span></button>
+        ${iframePrimaryBtn}
         <button class="action-btn clone-btn" data-clone-toggle><span class="action-icon action-icon-default">${CLONE_SVG}</span><span class="action-icon action-icon-small">${DOWNLOAD_SVG}</span><span class="action-label">Download</span></button>
         <div class="popup-backdrop" data-clone-backdrop></div>
         ${renderClonePopup(canonicalPath)}
@@ -2602,7 +4065,19 @@ async function renderRepo(): Promise<void> {
     const repoPage = currentContainer.querySelector('.repo-page') as HTMLElement;
     mountIframe(repoPage, indexRay.content!, canonicalPath);
 
-    // Wire star button in iframe overlay
+    // Wire primary button (follow or star) in iframe overlay
+    const iframeFollowBtn = currentContainer.querySelector('[data-follow-toggle]') as HTMLButtonElement | null;
+    if (iframeFollowBtn) {
+      iframeFollowBtn.addEventListener('click', () => {
+        const u = iframeFollowBtn.dataset.followUser!;
+        const nowFollowing = toggleFollow(u);
+        const count = getFollowerCount(u) + (nowFollowing ? 1 : -1);
+        setFollowerCount(u, count);
+        iframeFollowBtn.className = nowFollowing ? 'action-btn follow-btn following' : 'action-btn follow-btn';
+        const label = nowFollowing ? 'Following' : 'Follow';
+        iframeFollowBtn.innerHTML = `<span class="action-count" data-follower-count>${Math.max(0, count)}</span><span class="action-icon">${nowFollowing ? FOLLOWING_SVG : FOLLOW_SVG}</span><span class="action-label">${label}</span>`;
+      });
+    }
     const iframeStarBtn = currentContainer.querySelector('[data-star-toggle]') as HTMLButtonElement | null;
     if (iframeStarBtn) {
       iframeStarBtn.addEventListener('click', () => {
@@ -2644,6 +4119,24 @@ async function renderRepo(): Promise<void> {
     return;
   }
 
+  // ---- Profile page: user root without custom index.ray.js ----
+  if (treePath.length === 0 && !hasWildcard && !showUsersListing && !showWorldsListing && !effectiveWorld && !indexRay) {
+    let profileClonePath = buildCanonicalPath(effectiveUser, null, []);
+    if (!base) {
+      const prefix = `@${user}/`;
+      if (profileClonePath.startsWith(prefix)) profileClonePath = profileClonePath.slice(prefix.length);
+    }
+    const profileStarPath = buildRootStarPath(repository, effectiveUser, null, [], user, base);
+    const profileHtml = await renderProfilePage(
+      effectiveUser, repository, headerChain, base, versions, path,
+      profileClonePath, profileStarPath,
+    );
+    currentContainer.innerHTML = profileHtml;
+    bindClickHandlers();
+    bindProfileHandlers(currentContainer);
+    return;
+  }
+
   // ---- Build URLs ----
   const basePath = buildBasePath(base, versions, path);
   const displayVersion = versions.length > 0 ? versions[versions.length - 1][1] : 'latest';
@@ -2666,7 +4159,7 @@ async function renderRepo(): Promise<void> {
 
   const { rootLink, items: breadcrumbItems } = buildBreadcrumbItems(treePath, headerChain, base, versions, path, treePathStart, repository.tree);
   const rootStarPath = buildRootStarPath(repository, effectiveUser, effectiveWorld, treePath, user, base);
-  html += await renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink);
+  html += await renderBreadcrumb(displayVersion, breadcrumbItems, clonePath, rootStarPath, rootLink, !effectiveWorld && treePath.length === 0 ? effectiveUser : undefined);
 
   // File listing
   if (showUsersListing) {

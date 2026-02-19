@@ -53,4 +53,24 @@ Networking, hosting as a peer is opt-in, but using others is done by default, ha
 
 
 - Serve the specific urls with a generated index.html with the title and metadata filled already, since most things dont load with javascript.
-- 
+
+
+- If has a crypt key, under the same path just as a file under it. as private.key/public.key (Also separately in another dir, with config on where it applies.)
+
+
+- Allow @ether to place files (like crypt keys for certain files) inside the dir, which the user is allowed to know that they are there, just not allowed to access them (red lock). When they access the encrypt, it decrypts on the @ether server then sends it over? Is taht how password managers work too?
+  - This is like saying the visibility is visible to the @<USER>, but the contents is not.
+
+
+- Usernames should still be reserved for 30 days by that user, and then dispatched to another. They can also by hand reassign it with @that_username = @SomeOtherUser. (If it's not the main username.)
+
+
+- Index.ray.js (if we keep js) should only load the appropriate npm packages which are defined as dependencies for that url.
+
+
+- Configure external profiles to go to external links. So allow @GitHub to say, this is where user links should go.
+- Mark them as reserved for another user. If that's the case, say claim this character name.
+- 2d.png / allow 2d.[COLOR].png
+
+
+- Cloud prices/Region data generate APIs for them. ; serve their history at their respective @

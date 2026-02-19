@@ -5,12 +5,13 @@
 import * as Greetings from './Greetings.ts';
 import * as Repository from './Repository.ts';
 import * as PullRequests from './PullRequests.ts';
+import * as Settings from './Settings.ts';
 import { getDefaultUser } from './API.ts';
 
-type Page = 'repository' | 'pull-requests';
+type Page = 'repository' | 'pull-requests' | 'settings';
 
 // Pages where the global command bar (@/slash overlay + @me button) is active.
-const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository', 'pull-requests']);
+const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository', 'pull-requests', 'settings']);
 
 let currentPage: Page | null = null;
 let rootEl: HTMLElement;
@@ -38,9 +39,18 @@ export interface PRParams {
   category: '@' | '~' | null;
 }
 
+export interface SettingsParams {
+  user: string;
+  path: string[];
+  base: string;
+  repoPath: string;
+  tab: string;
+}
+
 type RouteResult =
   | { page: 'repository'; params: RepoParams }
-  | { page: 'pull-requests'; params: PRParams };
+  | { page: 'pull-requests'; params: PRParams }
+  | { page: 'settings'; params: SettingsParams };
 
 // ---- Route Matching ----
 
@@ -109,6 +119,18 @@ function matchRoute(pathname: string): RouteResult {
         params: { user, path: repoPathSegments, base, prAction, prId, commitId, repoPath, category },
       };
     }
+
+    if (segments[dashIdx + 1] === 'settings') {
+      const repoPathSegments = segments.slice(0, dashIdx).filter(s => s !== '*' && s !== '**');
+      const repoPath = `@${user}` + (repoPathSegments.length > 0 ? '/' + repoPathSegments.join('/') : '');
+      const settingsSegments = segments.slice(dashIdx + 2);
+      const tab = settingsSegments[0] || 'general';
+
+      return {
+        page: 'settings',
+        params: { user, path: repoPathSegments, base, repoPath, tab },
+      };
+    }
   }
 
   // Walk segments: collect ~/version markers and build clean path
@@ -148,12 +170,19 @@ async function activatePage(route: RouteResult): Promise<void> {
     ensureBar(route.page);
     return;
   }
+  if (route.page === 'settings' && currentPage === 'settings') {
+    await Settings.update(route.params);
+    ensureBar(route.page);
+    return;
+  }
 
   // Unmount current page
   if (currentPage === 'repository') {
     Repository.unmount();
   } else if (currentPage === 'pull-requests') {
     PullRequests.unmount();
+  } else if (currentPage === 'settings') {
+    Settings.unmount();
   }
 
   // Tear down global bar when navigating to an unsupported page
@@ -170,6 +199,9 @@ async function activatePage(route: RouteResult): Promise<void> {
   } else if (route.page === 'pull-requests') {
     rootEl.style.display = '';
     await PullRequests.mount(rootEl, route.params, navigateTo);
+  } else if (route.page === 'settings') {
+    rootEl.style.display = '';
+    await Settings.mount(rootEl, route.params, navigateTo);
   }
 
   ensureBar(route.page);

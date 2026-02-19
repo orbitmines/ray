@@ -137,6 +137,38 @@ export function toggleStar(canonicalPath: string): boolean {
   }
 }
 
+// -- Follows --
+
+export function getFollowerCount(user: string): number {
+  const raw = localStorage.getItem(`ether:follower-count:${user}`);
+  return raw ? parseInt(raw, 10) || 0 : 0;
+}
+
+export function setFollowerCount(user: string, count: number): void {
+  localStorage.setItem(`ether:follower-count:${user}`, String(Math.max(0, count)));
+}
+
+export function isFollowing(user: string): boolean {
+  const raw = localStorage.getItem('ether:following');
+  const list = raw ? raw.split('\n').filter(Boolean) : [];
+  return list.includes(user);
+}
+
+export function toggleFollow(user: string): boolean {
+  const raw = localStorage.getItem('ether:following');
+  const list = raw ? raw.split('\n').filter(Boolean) : [];
+  const idx = list.indexOf(user);
+  if (idx >= 0) {
+    list.splice(idx, 1);
+    localStorage.setItem('ether:following', list.join('\n'));
+    return false;
+  } else {
+    list.push(user);
+    localStorage.setItem('ether:following', list.join('\n'));
+    return true;
+  }
+}
+
 // -- Forks --
 
 export function getForkCount(canonicalPath: string): number {

@@ -14,7 +14,7 @@ function etherFsPlugin() {
   return {
     name: 'ether-fs',
     configureServer(server) {
-      server.middlewares.use((req, res, next) => {
+      server.middlewares.use(async (req, res, next) => {
         // Decode URI and match /**/...
         const decoded = decodeURIComponent(req.url || '');
         const match = decoded.match(/^\/\*\*\/(.*)/);

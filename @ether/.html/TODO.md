@@ -74,3 +74,9 @@ Networking, hosting as a peer is opt-in, but using others is done by default, ha
 
 
 - Cloud prices/Region data generate APIs for them. ; serve their history at their respective @
+
+
+- Should changing visibility effect history by default?
+
+
+- Stars/Follows in a list.

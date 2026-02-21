@@ -63,20 +63,7 @@ end
 class Node
   //TODO How to define the + label: *
 
-  //TODO If current class already implements the methods, dont overwrite -> This is also how the first entry is the ray that counts?
-  //TODO Which </extends is the ray, the first one?
-  //TODO since < epoch, extend function and allow ()
-  //TODO constructors automatically accepts Array, by setting it to a single one. then iterate over all of them #.
-  protected def extends | < constructors: Array<(*) => *> => constructors.for constructor
-    //TODO Dont accept an array, accept a single superposable object. Because arrays are actual structures.
-    //TODO; By default call super if it's not called at the beginning/end of the block? & if parameterless
-    this.protected super &= constructor<local: caller>
-    this.protected super[constructor.name] = constructor<local: caller> if constructor.name
-    //TODO Ensure the caller implements all undefined methods (unless abstract) abstract if any methods aren't defined. Is there ever a case where you want to extend abstract but only pass along the methods, yes?
-    // TODO: How does type extension work?
-    //TODO Change type parameter.
-    //TODO Updates static, such that anything depending on the type static changes too. (For instance the program < Task)
-  end
+
 
   def ?? default = this as boolean ? this : default
   def ?

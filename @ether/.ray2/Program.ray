@@ -241,13 +241,17 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
   //TODO If context is checked for access permission, it's the program that's checked instead. and its &who
   //TODO Is Context just the Program State? Need to think that through
   class Context
-    external local: this
+    external local: this // .local is components.last
+    // context is &context
+    //TODO Local context doesnt override this/static how?, It's still a node.
+
 
     // Get the currently running function
     none.write external &: Program
 
     dynamically if &parent
       delegate {: not in this} => &parent.[GET THAT FUNCTIONS STATE/CONTEXT]
+
 
 
   external (args: in.type): return_type

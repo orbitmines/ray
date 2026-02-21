@@ -6,16 +6,17 @@
   "type": "module",
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.10.9",
+    "@types/node": "^25.3.0",
     "jest": "^30.2.0",
-    "ts-jest": "^29.4.5",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   },
   "scripts": {
     "test": "npx jest",
-    "v0": "tsx src/runtime/v0.run.ts"
+    "v0": "tsx src/runtime/v0.run.ts",
+    "v0.1": "tsx src/runtime/v0.1.run.ts"
   },
   "jest": {
     "preset": "ts-jest",

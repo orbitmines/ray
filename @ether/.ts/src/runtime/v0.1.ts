@@ -41,8 +41,12 @@ class Node {
   private _classCompHead: Node | null = null;
   _classCompNext: Node | null = null;
 
+  // === Silent components — participate in resolution but invisible to ##/classComponents ===
+  private _silentCompHead: Node | null = null;
+
   // === Lazy program (**) ===
   program: Program | null = null;
+  _unresolved = false; // true if this node was produced from an unresolved identifier
 
   // === Type annotation ===
   type: Node | null = null;
@@ -164,6 +168,45 @@ class Node {
     return this;
   }
 
+  // Add x as a component without eagerly copying methods (lazy lookup via classComponents)
+  addComponent(x: Node): Node {
+    if (x === this) return this;
+    for (const comp of this.classComponents()) {
+      if (comp === x) return this;
+    }
+    if (this._classCompHead === null) {
+      this._classCompHead = x;
+    } else {
+      let last: Node = this._classCompHead;
+      while (last._classCompNext !== null) last = last._classCompNext;
+      last._classCompNext = x;
+    }
+    return this;
+  }
+
+  // Add x as a silent component — participates in get() resolution but invisible to ##/classComponents
+  addSilentComponent(x: Node): Node {
+    if (x === this) return this;
+    if (this._silentCompHead === null) {
+      this._silentCompHead = x;
+    } else {
+      let last: Node = this._silentCompHead;
+      while (last._classCompNext !== null) last = last._classCompNext;
+      last._classCompNext = x;
+    }
+    return this;
+  }
+
+  // Iterate silent components (for internal resolution only)
+  *silentComponents(): Generator<Node> {
+    if (this._silentCompHead === null) return;
+    let current: Node | null = this._silentCompHead;
+    while (current !== null) {
+      yield current;
+      current = current._classCompNext;
+    }
+  }
+
   // --- Boundary-centric navigation (all generators!) ---
 
   // next: follow terminal boundary's edges to reach next vertices
@@ -259,6 +302,11 @@ class Node {
       for (const [k, v] of this._methods) {
         if (k instanceof Node && k.matchesName(key)) return v;
       }
+      // Check silent components (e.g., Context — invisible to ##)
+      for (const component of this.silentComponents()) {
+        const result = component.get(key, visited);
+        if (result !== null) return result;
+      }
       // Check class components for inherited properties
       for (const component of this.classComponents()) {
         const result = component.get(key, visited);
@@ -288,9 +336,9 @@ class Node {
   // Check if a string matches this node's name (including aliases via |)
   matchesName(name: string): boolean {
     if (this.encoded === name) return true;
-    if (this.className === name) return true;
+    if (this.name === name) return true;
     for (const sup of this.superposed()) {
-      if (sup !== this && (sup.encoded === name || sup.className === name)) return true;
+      if (sup !== this && (sup.encoded === name || sup.name === name)) return true;
     }
     return false;
   }
@@ -307,7 +355,7 @@ class Node {
     if (this === type) return true;
 
     // Wildcard Node/* matches everything
-    if (type.isClass && (type.className === '*' || type.className === 'Node')) return true;
+    if (type.isClass && (type.name === '*' || type.name === 'Node')) return true;
 
     // Same encoded value
     if (this.encoded !== UNKNOWN && type.encoded !== UNKNOWN && this.encoded === type.encoded) return true;
@@ -327,16 +375,16 @@ class Node {
         if (component === type) return true;
       }
       // Check class name match
-      if (type.className) {
-        if (this.className === type.className) return true;
-        if (this.type?.className === type.className) return true;
+      if (type.name) {
+        if (this.name === type.name) return true;
+        if (this.type?.name === type.name) return true;
       }
     }
 
     // String type checking: "hello" instanceof String
-    if (type.className === 'String' && typeof this.encoded === 'string') return true;
-    if (type.className === 'Number' && typeof this.encoded === 'number') return true;
-    if (type.className === 'boolean' && typeof this.encoded === 'boolean') return true;
+    if (type.name === 'String' && typeof this.encoded === 'string') return true;
+    if (type.name === 'Number' && typeof this.encoded === 'number') return true;
+    if (type.name === 'boolean' && typeof this.encoded === 'boolean') return true;
 
     // Structural pattern matching: match against the methods of the type
     // If type has methods, check that this has matching methods
@@ -387,13 +435,13 @@ class Node {
   // --- as — type conversion ---
 
   as(targetType: Node): Node | null {
-    if (targetType.className === 'boolean' || targetType.matchesName('boolean')) {
+    if (targetType.name === 'boolean' || targetType.matchesName('boolean')) {
       return this.isNone ? Node.FALSE : Node.TRUE;
     }
-    if (targetType.className === 'String' || targetType.matchesName('String')) {
+    if (targetType.name === 'String' || targetType.matchesName('String')) {
       return new Node(String(this.encoded));
     }
-    if (targetType.className === 'Number' || targetType.matchesName('Number')) {
+    if (targetType.name === 'Number' || targetType.matchesName('Number')) {
       return new Node(Number(this.encoded));
     }
     return null;
@@ -403,7 +451,7 @@ class Node {
 
   toString(): string {
     if (this.isNone) return 'None';
-    if (this.className) return `<class ${this.className}>`;
+    if (this.name) return `<class ${this.name}>`;
     if (typeof this.encoded === 'string') return this.encoded;
     if (typeof this.encoded === 'number') return String(this.encoded);
     if (typeof this.encoded === 'boolean') return String(this.encoded);
@@ -438,7 +486,7 @@ class Node {
     // so nested superpositions like 1 | (2 & 3) keep their typed edges.
     const head = new Node(a.encoded);
     head.type = a.type;
-    head.className = a.className;
+    head.name = a.name;
     if (a.isClass) head.set('static', head);
 
     // Clone a's existing superposition chain
@@ -448,7 +496,7 @@ class Node {
       if (first) { first = false; continue; } // skip head (already cloned)
       const clone = new Node(node.encoded);
       clone.type = node.type;
-      clone.className = node.className;
+      clone.name = node.name;
       if (node.isClass) clone.set('static', clone);
       if ((e || '|') === '|') tail.or(clone);
       else tail.and(clone);
@@ -521,11 +569,11 @@ class BoundaryEdge {
 
 // Initialize singletons (after Boundary is defined, since Node constructor needs it)
 Node.NONE = new Node(NONE_SENTINEL);
-Node.NONE.className = 'None';
+Node.NONE.name = 'None';
 Node.TRUE = new Node(true);
-Node.TRUE.className = 'true';
+Node.TRUE.name = 'true';
 Node.FALSE = new Node(false);
-Node.FALSE.className = 'false';
+Node.FALSE.name = 'false';
 
 
 // ============================================================================
@@ -540,7 +588,10 @@ class Context {
 
   constructor(program: Program, parent: Context | null = null, self?: Node) {
     this.local = new Node();
-    this.local.set('local', this.local);  // local is always accessible
+    // 'local' comes from a silent Context component — invisible to ##/classComponents
+    const ctx = new Node();
+    ctx.set('local', this.local);
+    this.local.addSilentComponent(ctx);
     this.program = program;
     this.parent = parent;
     this.self = self || this.local;
@@ -549,10 +600,19 @@ class Context {
   resolve(name: string): Node | null {
     if (name === 'this') return this.self;
     if (name === '&') return this.program as Node;
-    // Use direct lookup only — don't fall through to class hierarchy
-    // This prevents Node class methods from shadowing scope variables
+    // Direct lookup first (own scope)
     const local = this.local.getDirect(name);
     if (local !== null) return local;
+    // Silent components (e.g., Context provides 'local')
+    for (const component of this.local.silentComponents()) {
+      const result = component.get(name);
+      if (result !== null) return result;
+    }
+    // Visible component chain (e.g., global inherits from Node)
+    for (const component of this.local.classComponents()) {
+      const result = component.get(name);
+      if (result !== null) return result;
+    }
     if (this.parent) return this.parent.resolve(name);
     return null;
   }
@@ -573,6 +633,9 @@ class Program extends Node {
   private _expanded: Program[] | null = null;
   _parsedExpr: Expr | null = null;
   _paramNames: string[] = [];
+  file: string = '<eval>';
+  lineOffset: number = 0;  // offset to add to token line numbers (for body extracted from .ray)
+  colOffset: number = 0;   // offset to add to first-line token col numbers
 
   constructor(expression: string = '', parent: Context | null = null) {
     super();
@@ -632,7 +695,7 @@ class Program extends Node {
     try {
       if (!this._parsedExpr && this.expression) {
         const tokens = tokenize(this.expression);
-        this._parsedExpr = new ExprParser(tokens).parse();
+        this._parsedExpr = new ExprParser(tokens, this.file, this.lineOffset, this.colOffset).parse();
       }
       if (this._parsedExpr) {
         const result = evalExpr(this._parsedExpr, evalCtx);
@@ -696,6 +759,7 @@ function isSymbolChar(ch: string): boolean {
   if (!ch || ch <= ' ') return false;
   if (STRUCTURAL_DELIMITERS.has(ch)) return false;
   if (ch === '"' || ch === '`') return false;
+  if (ch === ',') return false;  // comma is always a separate token (separator, not operator)
   if (isWordStart(ch)) return false;
   if (isDigitStart(ch)) return false;
   return true;
@@ -809,6 +873,14 @@ function tokenize(source: string): Token[] {
       continue;
     }
 
+    // Comma: always a single-character Symbol token (separator, never grouped with operators)
+    if (ch === ',') {
+      const sl = line, sc = col;
+      advance();
+      tokens.push({ type: TokenType.Symbol, value: ',', line: sl, col: sc, indent });
+      continue;
+    }
+
     // Symbol tokens: everything else, greedy grouping by consecutive symbol chars
     if (isSymbolChar(ch)) {
       const sl = line, sc = col; let sym = '';
@@ -833,6 +905,7 @@ interface ASTNode {
   children: ASTNode[];
   indent: number;
   line: number;
+  file?: string;
   name?: string;
   names?: string[];
   params?: ASTNode[];
@@ -898,11 +971,6 @@ function classifyStatement(node: ASTNode): void {
     node.kind = 'class';
     // Re-slice tokens starting from 'class' for parseClassHeader
     parseClassHeader(node, tokens.slice(i));
-  } else if (first.value === 'namespace') {
-    node.kind = 'namespace';
-    parseNamespaceHeader(node, tokens.slice(i));
-  } else if (first.value === 'end') {
-    node.kind = 'end';
   } else {
     node.kind = 'definition';
     parseDefinition(node, tokens, i);
@@ -910,7 +978,14 @@ function classifyStatement(node: ASTNode): void {
 }
 
 function isModifier(value: string): boolean {
-  return ['external', 'dynamically', 'static', 'internal', 'protected', 'delegate'].includes(value);
+  return value === 'external';
+}
+
+// Check if a token is a real delimiter/operator with the given value (not a string literal).
+// String literals like `(` have value '(' but type String — they must be excluded from
+// structural checks that look for actual parentheses/brackets/braces.
+function isDelim(t: Token, v: string): boolean {
+  return t.value === v && t.type !== TokenType.String;
 }
 
 // Parse: class Name | Alias < Parent &+ Mixin
@@ -923,8 +998,8 @@ function parseClassHeader(node: ASTNode, tokens: Token[]): void {
   // Stop at: <, (, =, {, &+, &, end of tokens
   while (i < tokens.length) {
     const t = tokens[i];
-    if (t.value === '<' || t.type === TokenType.LParen ||
-        t.value === '=' || t.type === TokenType.LBrace ||
+    if (t.value === '<' || isDelim(t, '(') ||
+        t.value === '=' || isDelim(t, '{') ||
         t.value === '&+' || t.value === '&') break;
     if (t.value === '|') { i++; continue; }
     if (t.type === TokenType.Word || t.value === '*') {
@@ -937,11 +1012,11 @@ function parseClassHeader(node: ASTNode, tokens: Token[]): void {
   node.name = names[0] || '';
 
   // Skip constructor params if present: (...)
-  if (i < tokens.length && tokens[i].type === TokenType.LParen) {
+  if (i < tokens.length && isDelim(tokens[i], '(')) {
     let depth = 0;
     while (i < tokens.length) {
-      if (tokens[i].type === TokenType.LParen) depth++;
-      if (tokens[i].type === TokenType.RParen) depth--;
+      if (isDelim(tokens[i], '(')) depth++;
+      if (isDelim(tokens[i], ')')) depth--;
       i++;
       if (depth === 0) break;
     }
@@ -963,23 +1038,6 @@ function parseClassHeader(node: ASTNode, tokens: Token[]): void {
   node.parent = components[0] || undefined;
 }
 
-function parseNamespaceHeader(node: ASTNode, tokens: Token[]): void {
-  const names: string[] = [];
-  for (let i = 1; i < tokens.length; i++) {
-    const t = tokens[i];
-    // Stop at delimiters that indicate end of namespace name
-    if (t.type === TokenType.LParen || t.type === TokenType.LBrace ||
-        t.type === TokenType.LBracket || t.value === '=' ||
-        t.value === '=>' || t.value === '<' ||
-        t.value === ':' || t.type === TokenType.Newline) break;
-    if (t.value === '|') { continue; }
-    if (t.type === TokenType.Word || t.type === TokenType.Symbol) {
-      names.push(t.value);
-    }
-  }
-  node.names = names;
-  node.name = names[0] || '';
-}
 
 function parseDefinition(node: ASTNode, tokens: Token[], startIdx: number): void {
   const names: string[] = [];
@@ -995,7 +1053,7 @@ function parseDefinition(node: ASTNode, tokens: Token[], startIdx: number): void
       if (t.value === '=>') break;
       if (t.value === '=' && tokens[i - 1]?.value !== '!') break;
     }
-    if (t.type === TokenType.LParen) break;
+    if (isDelim(t, '(')) break;
     nameTokens.push(t);
     i++;
   }
@@ -1028,11 +1086,11 @@ function parseDefinition(node: ASTNode, tokens: Token[], startIdx: number): void
     node.type = typeStr.trim();
   }
 
-  if (i < tokens.length && tokens[i].type === TokenType.LParen) {
+  if (i < tokens.length && isDelim(tokens[i], '(')) {
     let depth = 0, paramStr = '';
     while (i < tokens.length) {
-      if (tokens[i].type === TokenType.LParen) depth++;
-      if (tokens[i].type === TokenType.RParen) depth--;
+      if (isDelim(tokens[i], '(')) depth++;
+      if (isDelim(tokens[i], ')')) depth--;
       paramStr += tokens[i].value; i++;
       if (depth === 0) break;
     }
@@ -1059,26 +1117,19 @@ function parseDefinition(node: ASTNode, tokens: Token[], startIdx: number): void
 // Expression AST, Parser & Evaluator
 // ============================================================================
 
-type Expr =
-  | { kind: 'none' }
+interface SourceLoc {
+  file: string;
+  line: number;
+  col: number;
+}
+
+type Expr = (
   | { kind: 'string', value: string }
-  | { kind: 'number', value: number }
-  | { kind: 'boolean', value: boolean }
   | { kind: 'ident', name: string }
-  | { kind: 'this' }
-  | { kind: 'context' }                          // &
-  | { kind: 'dot', object: Expr, property: string }
-  | { kind: 'index', object: Expr, index: Expr }
-  | { kind: 'call', callee: Expr, args: Expr[] }
   | { kind: 'binary', op: string, left: Expr, right: Expr }
   | { kind: 'unary', op: string, operand: Expr }
-  | { kind: 'assign', target: Expr, value: Expr }
-  | { kind: 'compound_assign', op: string, target: Expr, value: Expr }
   | { kind: 'sequence', exprs: Expr[] }
-  | { kind: 'if', condition: Expr, body: Expr, else_body?: Expr }
-  | { kind: 'arrow', params: string[], body: Expr }
-  | { kind: 'array', elements: Expr[] }
-  | { kind: 'filter', target: Expr, predicate: Expr }
+) & { loc?: SourceLoc }
 
 // ============================================================================
 // Grammar — built entirely from .ray files + externals during bootstrap
@@ -1088,16 +1139,89 @@ type Expr =
 //   1. Method definitions in .ray files (precedence = line number)
 //   2. External methods registered on * (Node) class
 //   3. Compound assignments generated from {operator}= pattern (Node.ray line 152)
+//   4. Pattern definitions: {`(`, expr: *, `)`} => expr (delimiter rules)
 //
 // Precedence comes directly from definition line numbers in Node.ray.
 // Higher line number = tighter binding. Structural levels (postfix, unary,
 // juxtaposition) are set above the line-number range.
+
+interface PatternElement {
+  kind: 'literal' | 'binding';
+  literal?: string;           // For 'literal': exact token to match
+  name?: string;              // For 'binding': variable name
+  type?: string;              // e.g., "*", "(): *", "\S[]"
+  isThunk?: boolean;          // true when type is "(): *"
+  isArray?: boolean;          // true when type ends with "*[]"
+}
+
+interface PatternRule {
+  elements: PatternElement[];
+  body: string | null;        // The => body expression (raw text)
+  position: 'prefix' | 'postfix';
+  triggerToken: string;       // First literal (for fast lookup)
+  closingToken?: string;      // Last literal (for delimiter matching)
+  line: number;
+}
 
 class Grammar {
   binaryOps: Map<string, { prec: number, assoc: 'left' | 'right' }> = new Map();
   prefixOps: Set<string> = new Set();
   postfixKeywords: Set<string> = new Set();
   breakKeywords: Set<string> = new Set();
+
+  // Pattern rules: delimiter-based syntax discovered from .ray files
+  // Key = trigger token (first literal in pattern, e.g., '(', '[', '{')
+  prefixPatterns: Map<string, PatternRule[]> = new Map();   // atom-position patterns
+  postfixPatterns: Map<string, PatternRule[]> = new Map();  // postfix patterns (have implicit 'this')
+
+  // Delimiter pairs derived from patterns: opener → closer
+  // e.g., '{' → '}', '(' → ')', '[' → ']'
+  openerToCloser: Map<string, string> = new Map();
+  closerToOpener: Map<string, string> = new Map();
+
+  // Rebuild delimiter maps from registered patterns
+  rebuildDelimiters(): void {
+    this.openerToCloser.clear();
+    this.closerToOpener.clear();
+    const scan = (patterns: Map<string, PatternRule[]>) => {
+      for (const rules of patterns.values()) {
+        for (const rule of rules) {
+          if (rule.triggerToken && rule.closingToken && rule.triggerToken !== rule.closingToken) {
+            this.openerToCloser.set(rule.triggerToken, rule.closingToken);
+            this.closerToOpener.set(rule.closingToken, rule.triggerToken);
+          }
+        }
+      }
+    };
+    scan(this.prefixPatterns);
+    scan(this.postfixPatterns);
+  }
+
+  // Track delimiter balance across a token stream using a stack.
+  // Returns the stack (empty = balanced).
+  balanceStack(tokens: Token[]): string[] {
+    const stack: string[] = [];
+    for (const t of tokens) {
+      if (this.openerToCloser.has(t.value)) stack.push(t.value);
+      else if (this.closerToOpener.has(t.value)) {
+        if (stack.length > 0 && stack[stack.length - 1] === this.closerToOpener.get(t.value)) {
+          stack.pop();
+        }
+      }
+    }
+    return stack;
+  }
+
+  // Update a stack in-place for a single token. Returns the stack.
+  trackToken(stack: string[], t: Token): string[] {
+    if (this.openerToCloser.has(t.value)) stack.push(t.value);
+    else if (this.closerToOpener.has(t.value)) {
+      if (stack.length > 0 && stack[stack.length - 1] === this.closerToOpener.get(t.value)) {
+        stack.pop();
+      }
+    }
+    return stack;
+  }
 
   // Structural precedence levels — above any .ray line number range
   static readonly NONE = 0;
@@ -1149,11 +1273,166 @@ function defaultOperatorPrec(op: string): number {
   return 40;
 }
 
+// Parse a pattern definition from the tokens of an AST node whose name starts with '{'.
+// Extracts the elements between the outermost { } of the definition name, and the => body.
+//
+// Example: {`{`, expr: (): *, `}`} => expr<local: local>; local
+//   tokens: { `{` , expr : ( ) : * , `}` } => expr < local : local > ; local
+//   elements: [literal "{", binding "expr" (thunk), literal "}"]
+//   body: "expr<local: local>; local"
+//
+// Example: {`(`, expr: *, `)`} => expr
+//   elements: [literal "(", binding "expr" (*), literal ")"]
+//   body: "expr"
+//
+// Returns null if the tokens don't form a valid pattern definition.
+// inClass: true when this definition is inside a class body (postfix by default)
+function parsePatternDef(node: ASTNode, inClass: boolean = false): PatternRule | null {
+  const tokens = node.tokens.filter(t => t.type !== TokenType.Comment);
+  if (tokens.length === 0) return null;
+
+  let isPostfix = inClass;
+  let startIdx = 0;
+
+  // Skip leading modifiers (external, static, etc.)
+  while (startIdx < tokens.length && isModifier(tokens[startIdx].value)) startIdx++;
+
+  // Must start with { — the ONE hardcoded construct (pattern definition delimiters).
+  // String literals like `{` have value '{' but type String — exclude them.
+  const isBrace = (t: Token, v: string) => t.value === v && t.type !== TokenType.String;
+
+  if (startIdx >= tokens.length || !isBrace(tokens[startIdx], '{')) return null;
+
+  // Parse consecutive {block} groups. Patterns can span multiple blocks:
+  //   {"."}{property: \S[]}   — literal "." then binding
+  //   {.}{block: (): *}       — {.} postfix marker then binding
+  //   {`(`, expr: *, `)`}     — single block with open/close delimiters
+  const elements: PatternElement[] = [];
+  let lastBlockEnd = startIdx;
+
+  while (startIdx < tokens.length && isBrace(tokens[startIdx], '{')) {
+    // Find matching }
+    let depth = 0;
+    let endIdx = startIdx;
+    for (let k = startIdx; k < tokens.length; k++) {
+      if (isBrace(tokens[k], '{')) depth++;
+      if (isBrace(tokens[k], '}')) {
+        depth--;
+        if (depth === 0) { endIdx = k; break; }
+      }
+    }
+    if (depth !== 0) return null;
+
+    // Check for {.} postfix marker: single non-string "." inside braces
+    const blockTokens = tokens.slice(startIdx + 1, endIdx);
+    if (blockTokens.length === 1 && blockTokens[0].value === '.' && blockTokens[0].type !== TokenType.String) {
+      isPostfix = true;
+      lastBlockEnd = endIdx;
+      startIdx = endIdx + 1;
+      continue;
+    }
+
+    // Parse elements inside this block
+    let i = startIdx + 1;
+    while (i < endIdx) {
+      const t = tokens[i];
+
+      if (t.value === ',') { i++; continue; }
+
+      // String literal → literal element
+      if (t.type === TokenType.String) {
+        elements.push({ kind: 'literal', literal: t.value });
+        i++;
+        continue;
+      }
+
+      // Check for binding: a word followed by : (type annotation) or standalone
+      // Bindings are identifiers — not operators, not delimiters
+      if (t.type === TokenType.Word) {
+        const name = t.value;
+        i++;
+
+        if (i < endIdx && tokens[i].value === ':') {
+          i++; // skip :
+
+          let typeStr = '';
+          let isThunk = false;
+          let isArray = false;
+
+          // Check for (): pattern (thunk type) — by value, not token type
+          if (i + 2 < endIdx && isDelim(tokens[i], '(') && isDelim(tokens[i + 1], ')') && tokens[i + 2].value === ':') {
+            isThunk = true;
+            i += 3; // skip ( ) :
+          }
+
+          // Collect type tokens until comma or end of block
+          while (i < endIdx && tokens[i].value !== ',') {
+            typeStr += tokens[i].value;
+            i++;
+          }
+          typeStr = typeStr.trim();
+
+          // *[] means array binding (comma-separated list)
+          if (typeStr === '*[]') {
+            isArray = true;
+            typeStr = '*';
+          }
+
+          elements.push({ kind: 'binding', name, type: typeStr || '*', isThunk, isArray });
+        } else {
+          elements.push({ kind: 'binding', name, type: '*' });
+        }
+        continue;
+      }
+
+      i++;
+    }
+
+    lastBlockEnd = endIdx;
+    startIdx = endIdx + 1;
+  }
+
+  // Need at least one element
+  if (elements.length === 0) return null;
+
+  // For delimiter patterns (like `(`...`)`) require open+close literals and a binding.
+  // For non-delimiter patterns (like `"."`+binding), just need a literal and a binding.
+  const literals = elements.filter(e => e.kind === 'literal');
+  const bindings = elements.filter(e => e.kind === 'binding');
+  if (literals.length === 0 || bindings.length === 0) return null;
+
+  const triggerToken = literals[0].literal!;
+  const closingToken = literals.length > 1 ? literals[literals.length - 1].literal : undefined;
+
+  // Find => body (everything after last } =>)
+  let body: string | null = null;
+  let bodyIdx = lastBlockEnd + 1;
+  while (bodyIdx < tokens.length && tokens[bodyIdx].value !== '=>') bodyIdx++;
+  if (bodyIdx < tokens.length && tokens[bodyIdx].value === '=>') {
+    bodyIdx++;
+    const bodyParts: string[] = [];
+    while (bodyIdx < tokens.length) {
+      bodyParts.push(tokens[bodyIdx].value);
+      bodyIdx++;
+    }
+    body = bodyParts.join(' ').trim() || null;
+  }
+
+  return {
+    elements,
+    body,
+    position: isPostfix ? 'postfix' : 'prefix',
+    triggerToken,
+    closingToken,
+    line: node.line,
+  };
+}
+
 function buildGrammarFromAST(ast: ASTNode[]): Grammar {
   const g = new Grammar();
   const nodeChildren = findClassChildren(ast, ['*', 'Node']);
 
-  const registerOp = (name: string, line: number, hasParams: boolean, inNamespace: boolean = false) => {
+  const registerOp = (name: string, line: number, hasParams: boolean) => {
     if (!name) return;
     // Skip multi-word names (can't match single tokens) and structural chars
     if (!name.startsWith('{') && (name.includes(' ') || '{}()[]'.includes(name))) return;
@@ -1173,7 +1452,6 @@ function buildGrammarFromAST(ast: ASTNode[]): Grammar {
 
     // Non-operator word names: become postfix keywords if they have params
     if (!isOperatorName(name)) {
-      if (inNamespace) return;  // Don't promote namespace children to keywords
       if (hasParams) {
         g.postfixKeywords.add(name);
       }
@@ -1189,11 +1467,19 @@ function buildGrammarFromAST(ast: ASTNode[]): Grammar {
     }
   };
 
-  const scanDefs = (nodes: ASTNode[], inNamespace: boolean = false) => {
+  const registerPattern = (node: ASTNode, inClass: boolean) => {
+    const rule = parsePatternDef(node, inClass);
+    if (!rule) return;
+    const map = rule.position === 'postfix' ? g.postfixPatterns : g.prefixPatterns;
+    const existing = map.get(rule.triggerToken) || [];
+    existing.push(rule);
+    map.set(rule.triggerToken, existing);
+  };
+
+  const scanDefs = (nodes: ASTNode[], inClass: boolean = false) => {
     for (const node of nodes) {
-      if (node.kind === 'namespace') {
-        // Namespace name = binary operator (e.g., namespace ==)
-        if (node.name) registerOp(node.name, node.line, true, false);
+      if (node.kind === 'class') {
+        // Class children are scanned recursively (inside class body)
         scanDefs(node.children, true);
         continue;
       }
@@ -1201,11 +1487,14 @@ function buildGrammarFromAST(ast: ASTNode[]): Grammar {
       const names = node.names || [node.name || ''];
       const hasParams = !!(node.rawText && node.rawText.includes('('));
       for (const name of names) {
-        registerOp(name, node.line, hasParams, inNamespace);
+        registerOp(name, node.line, hasParams);
       }
-      // Extract operators from String literals in pattern definitions.
-      // e.g., {" "}({"=>"?, *}) has "=>" as a String token representing syntax.
+      // Try to register as a pattern definition (e.g., {`(`, expr: *, `)`} => expr)
       if (names.some(n => n.startsWith('{'))) {
+        registerPattern(node, inClass);
+
+        // Extract operators from String literals in pattern definitions.
+        // e.g., {" "}({"=>"?, *}) has "=>" as a String token representing syntax.
         for (const tok of node.tokens) {
           if (tok.type === TokenType.String && tok.value.trim() && isOperatorName(tok.value)) {
             // Don't register structural delimiters as binary ops
@@ -1217,12 +1506,13 @@ function buildGrammarFromAST(ast: ASTNode[]): Grammar {
         }
       }
       // Recurse into children for nested definitions
-      if (node.children.length > 0) scanDefs(node.children, inNamespace);
+      if (node.children.length > 0) scanDefs(node.children);
     }
   };
 
-  // Scan Node class body only — all grammar is defined on Node
-  scanDefs(nodeChildren);
+  // Scan ALL definitions: global-level patterns + Node class body + other classes
+  // (scanDefs recurses into class children, so this covers everything)
+  scanDefs(ast);
 
   // Discover operators from externals on * (Node) class
   // When no .ray definitions exist, assign standard precedences
@@ -1259,19 +1549,26 @@ function buildGrammarFromAST(ast: ASTNode[]): Grammar {
   const semi = g.binaryOps.get(';');
   if (semi) g.sequencePrec = semi.prec;
 
-  // Derive conditionalPrec from first postfix keyword (if/unless)
+  // Postfix keywords (if/unless) → register as binary ops (body left, condition right)
   for (const kw of g.postfixKeywords) {
     for (const node of nodeChildren) {
       if (node.kind === 'definition' && node.names?.includes(kw)) {
-        g.conditionalPrec = node.line;
+        g.binaryOps.set(kw, { prec: node.line, assoc: 'right' });
+        if (g.conditionalPrec === 0) g.conditionalPrec = node.line;
         break;
       }
     }
-    if (g.conditionalPrec !== 0) break;
   }
 
   // Break keywords: derived from postfix keywords only (no hardcoded keywords)
   for (const kw of g.postfixKeywords) g.breakKeywords.add(kw);
+
+  // Dot `.` is defined as a postfix pattern in Node.ray: {"."}{property: \S[]}
+  // If the pattern registered successfully, no need for a binary op fallback.
+  // Only register as binary op if no postfix pattern was found for '.'.
+  if (!g.postfixPatterns.has('.') && !g.binaryOps.has('.')) {
+    g.binaryOps.set('.', { prec: Grammar.POSTFIX, assoc: 'left' });
+  }
 
   return g;
 }
@@ -1291,16 +1588,35 @@ function findClassChildren(ast: ASTNode[], names: string[]): ASTNode[] {
 class ExprParser {
   private tokens: Token[];
   private pos: number = 0;
+  private file: string;
+  private lineOffset: number;
+  private colOffset: number;
 
-  constructor(tokens: Token[]) {
+  constructor(tokens: Token[], file: string = '<eval>', lineOffset: number = 0, colOffset: number = 0) {
     this.tokens = tokens.filter(t =>
       t.type !== TokenType.Comment && t.type !== TokenType.Newline
     );
+    this.file = file;
+    this.lineOffset = lineOffset;
+    this.colOffset = colOffset;
+  }
+
+  private loc(): SourceLoc {
+    const t = this.tokens[this.pos] ?? this.tokens[this.tokens.length - 1];
+    const line = (t?.line ?? 0) + this.lineOffset;
+    // Only apply col offset on the first line of the body
+    const col = (t?.col ?? 0) + ((t?.line ?? 0) === 1 ? this.colOffset : 0);
+    return { file: this.file, line, col };
+  }
+
+  private stamp<T extends Expr>(expr: T, loc: SourceLoc): T {
+    expr.loc = loc;
+    return expr;
   }
 
   parse(): Expr {
     if (this.tokens.length === 0 || (this.tokens.length === 1 && this.tokens[0].type === TokenType.EOF)) {
-      return { kind: 'none' };
+      return { kind: 'ident', name: 'None' };
     }
     const expr = this.parseExpr(Grammar.NONE);
     return expr;
@@ -1332,17 +1648,6 @@ class ExprParser {
     return null;
   }
 
-  private expect(type: TokenType): Token {
-    const t = this.peek();
-    // Tolerate EOF in place of closing delimiters — multiline content may be truncated
-    if (t.type === TokenType.EOF && (type === TokenType.RParen || type === TokenType.RBracket || type === TokenType.RBrace)) {
-      return t;
-    }
-    const consumed = this.advance();
-    if (consumed.type !== type) throw new Error(`Expected ${type} but got ${consumed.type} "${consumed.value}"`);
-    return consumed;
-  }
-
   private expectV(value: string): Token {
     const t = this.advance();
     if (t.value !== value) throw new Error(`Expected "${value}" but got "${t.value}"`);
@@ -1358,68 +1663,12 @@ class ExprParser {
 
       // --- Postfix operators (highest precedence) ---
 
-      // Property access: .property
-      if (tok.value === '.' && Grammar.POSTFIX >= minPrec) {
-        this.advance();
-        const prop = this.advance();
-        left = { kind: 'dot', object: left, property: prop.value };
-        continue;
-      }
+      const ol = this.loc();  // operator location
 
-      // Function call: expr(args)
-      if (tok.type === TokenType.LParen && Grammar.POSTFIX >= minPrec) {
-        this.advance();
-        const args: Expr[] = [];
-        while (!this.at(TokenType.RParen) && !this.at(TokenType.EOF)) {
-          args.push(this.parseExpr(activeGrammar.sequencePrec + 1));
-          this.eatV(',');
-        }
-        this.expect(TokenType.RParen);
-        left = { kind: 'call', callee: left, args };
-        continue;
-      }
-
-      // Index: expr[index] or empty expr[] (type array syntax)
-      if (tok.type === TokenType.LBracket && Grammar.POSTFIX >= minPrec) {
-        this.advance();
-        if (this.at(TokenType.RBracket)) {
-          // Empty brackets: Foo[] — type array syntax
-          this.advance();
-          left = { kind: 'index', object: left, index: { kind: 'none' } };
-        } else {
-          const index = this.parseExpr(Grammar.NONE);
-          this.expect(TokenType.RBracket);
-          left = { kind: 'index', object: left, index };
-        }
-        continue;
-      }
-
-      // Filter: expr{predicate}
-      if (tok.type === TokenType.LBrace && Grammar.POSTFIX >= minPrec) {
-        this.advance();
-        const predicate = this.parseExpr(Grammar.NONE);
-        this.expect(TokenType.RBrace);
-        left = { kind: 'filter', target: left, predicate };
-        continue;
-      }
-
-      // --- Postfix keywords (discovered from .ray grammar) ---
-      if (activeGrammar.postfixKeywords.has(tok.value) && tok.value === 'if' && activeGrammar.conditionalPrec >= minPrec) {
-        this.advance();
-        const condition = this.parseExpr(activeGrammar.conditionalPrec + 1);
-        let else_body: Expr | undefined;
-        if (this.peek().value === 'else') {
-          this.advance();
-          else_body = this.parseExpr(activeGrammar.conditionalPrec);
-        }
-        left = { kind: 'if', condition, body: left, else_body };
-        continue;
-      }
-      if (activeGrammar.postfixKeywords.has(tok.value) && tok.value === 'unless' && activeGrammar.conditionalPrec >= minPrec) {
-        this.advance();
-        const condition = this.parseExpr(activeGrammar.conditionalPrec + 1);
-        left = { kind: 'if', condition: { kind: 'unary', op: '!', operand: condition }, body: left };
-        continue;
+      // Try postfix patterns FIRST (e.g., {.}{`(`, args: *[], `)`} => this(args))
+      if (Grammar.POSTFIX >= minPrec) {
+        const postfixMatch = this.tryPostfixPattern(left);
+        if (postfixMatch) { left = postfixMatch; continue; }
       }
 
       // --- Binary operators (discovered from .ray grammar) ---
@@ -1428,51 +1677,33 @@ class ExprParser {
         const { prec, assoc } = binEntry;
         if (prec < minPrec) break;
         this.advance();
-
-        // Assignment: target = value
-        if (tok.value === '=') {
-          const right = this.parseExpr(prec);
-          left = { kind: 'assign', target: left, value: right };
-          continue;
-        }
-
-        // Compound assignment: target &= value, target |= value, etc.
-        if (tok.value.endsWith('=') && tok.value.length > 1 && tok.value !== '=>' && tok.value !== '==' && tok.value !== '!=' && tok.value !== '<=' && tok.value !== '>=') {
-          const op = tok.value.slice(0, -1);
-          const right = this.parseExpr(prec);
-          left = { kind: 'compound_assign', op, target: left, value: right };
-          continue;
-        }
-
-        // Arrow: params => body
-        if (tok.value === '=>') {
-          const body = this.parseExpr(prec);
-          const params = exprToParamNames(left);
-          left = { kind: 'arrow', params, body };
-          continue;
-        }
-
         const nextPrec = assoc === 'left' ? prec + 1 : prec;
         const right = this.parseExpr(nextPrec);
-
-        // Sequence: a; b; c → sequence node
-        if (tok.value === ';') {
-          if (left.kind === 'sequence') { left.exprs.push(right); }
-          else { left = { kind: 'sequence', exprs: [left, right] }; }
-          continue;
-        }
-
-        left = { kind: 'binary', op: tok.value, left, right };
+        left = this.stamp({ kind: 'binary', op: tok.value, left, right }, ol);
         continue;
       }
 
-      // --- Juxtaposition: space as function call ---
-      // Two adjacent atoms (identifier followed by another atom) = function call
+      // --- Line break as implicit sequence separator ---
+      // If the next token is on a different source line than the previous one,
+      // treat the line boundary as a statement separator (like `;`).
+      {
+        const prevTok = this.tokens[this.pos - 1];
+        if (prevTok && tok.line !== prevTok.line && canStartExpr(tok) && activeGrammar.sequencePrec >= minPrec) {
+          const right = this.parseExpr(activeGrammar.sequencePrec + 1);
+          if (left.kind === 'sequence') { left.exprs.push(right); }
+          else { left = this.stamp({ kind: 'sequence', exprs: [left, right] }, ol); }
+          continue;
+        }
+      }
+
+      // --- Juxtaposition: space as property access (same line only) ---
+      // `a b` → property access: evaluate b, use as key, get on a
       if (canStartExpr(tok) && Grammar.JUXTAPOSITION >= minPrec) {
-        // Don't treat keywords as juxtaposed calls (from grammar)
         if (activeGrammar.breakKeywords.has(tok.value)) break;
+        const prevTok = this.tokens[this.pos - 1];
+        if (prevTok && tok.line !== prevTok.line) break;
         const arg = this.parseExpr(Grammar.JUXTAPOSITION + 1);
-        left = { kind: 'call', callee: left, args: [arg] };
+        left = this.stamp({ kind: 'access', object: left, property: arg } as Expr, ol);
         continue;
       }
 
@@ -1482,289 +1713,312 @@ class ExprParser {
     return left;
   }
 
+  // Try to match a prefix pattern rule at the current position (atom position).
+  // Returns the parsed expression if a pattern matches, or null if none match.
+  private tryPrefixPattern(): Expr | null {
+    const tok = this.peek();
+    const patterns = activeGrammar.prefixPatterns.get(tok.value);
+    if (!patterns) return null;
+
+    for (const rule of patterns) {
+      const savedPos = this.pos;
+      try {
+        const match = this.tryMatchPattern(rule);
+        if (match) return match;
+      } catch (e) {
+        // Pattern match threw (e.g., unexpected token) — backtrack
+      }
+      this.pos = savedPos; // backtrack
+    }
+    return null;
+  }
+
+  // Try to match a postfix pattern rule at the current position.
+  // 'left' is the already-parsed left-hand expression (becomes 'this' in the pattern).
+  private tryPostfixPattern(left: Expr): Expr | null {
+    const tok = this.peek();
+    const patterns = activeGrammar.postfixPatterns.get(tok.value);
+    if (!patterns) return null;
+
+    for (const rule of patterns) {
+      const savedPos = this.pos;
+      try {
+        const match = this.tryMatchPattern(rule, left);
+        if (match) return match;
+      } catch (e) {
+        // Pattern match threw — backtrack
+      }
+      this.pos = savedPos; // backtrack
+    }
+    return null;
+  }
+
+  // Try to match a single pattern rule's elements against the token stream.
+  // For postfix rules, leftExpr is the already-parsed expression before the trigger.
+  private tryMatchPattern(rule: PatternRule, leftExpr?: Expr): Expr | null {
+    const l = this.loc();
+    const bindings: Map<string, Expr> = new Map();
+
+    for (let ei = 0; ei < rule.elements.length; ei++) {
+      const elem = rule.elements[ei];
+
+      if (elem.kind === 'literal') {
+        const tok = this.peek();
+        if (tok.value !== elem.literal) return null;
+        this.advance();
+        continue;
+      }
+
+      if (elem.kind === 'binding') {
+        // Determine what stops this binding: the next literal element's token
+        let stopToken: string | null = null;
+        for (let j = ei + 1; j < rule.elements.length; j++) {
+          if (rule.elements[j].kind === 'literal') {
+            stopToken = rule.elements[j].literal!;
+            break;
+          }
+        }
+
+        // Empty delimiter: stop token is the very next token → bind to None ident
+        if (stopToken && this.peek().value === stopToken) {
+          bindings.set(elem.name!, { kind: 'ident', name: 'None' } as Expr);
+          continue;
+        }
+
+        if (elem.isArray) {
+          // Parse comma-separated list until stop token
+          const elements: Expr[] = [];
+          while (!this.at(TokenType.EOF)) {
+            if (stopToken && this.peek().value === stopToken) break;
+            elements.push(this.parseExpr(activeGrammar.sequencePrec + 1));
+            this.eatV(',');
+          }
+          bindings.set(elem.name!, { kind: 'sequence', exprs: elements, loc: l } as Expr);
+        } else if (stopToken) {
+          // Parse sequence of expressions until stop token (respecting nesting)
+          const exprs: Expr[] = [];
+          while (!this.at(TokenType.EOF) && this.peek().value !== stopToken) {
+            exprs.push(this.parseExpr(Grammar.NONE));
+            this.eatV(';');
+          }
+          if (exprs.length === 0) {
+            bindings.set(elem.name!, { kind: 'ident', name: 'None' } as Expr);
+          } else if (exprs.length === 1) {
+            bindings.set(elem.name!, exprs[0]);
+          } else {
+            bindings.set(elem.name!, { kind: 'sequence', exprs, loc: l } as Expr);
+          }
+        } else {
+          // No stop token and no closing delimiter — parse just one atom.
+          // This handles patterns like {"."}{property: \S[]} where the binding
+          // should capture only the next token, not chain into further operators.
+          const expr = this.parseAtom();
+          bindings.set(elem.name!, expr);
+        }
+        continue;
+      }
+    }
+
+    // Pattern matched! Now produce the appropriate Expr based on the rule's body.
+    // Strategy: produce existing Expr kinds to avoid evalExpr changes.
+
+    if (rule.position === 'prefix') {
+      return this.patternToExpr(rule, bindings, l);
+    } else {
+      // Postfix: leftExpr is implicitly 'this'
+      return this.postfixPatternToExpr(rule, bindings, leftExpr!, l);
+    }
+  }
+
+  // Convert a matched prefix pattern to an Expr, using the pattern's body.
+  private patternToExpr(rule: PatternRule, bindings: Map<string, Expr>, l: SourceLoc): Expr {
+    // Find the bound expression
+    let bound: Expr | null = null;
+    if (rule.body && bindings.size === 1) {
+      const bodyName = rule.body.split(/[^a-zA-Z_]/)[0];
+      bound = bindings.get(bodyName) ?? null;
+    }
+    if (!bound) {
+      for (const [, expr] of bindings) { bound = expr; break; }
+    }
+    if (!bound) return this.stamp({ kind: 'ident', name: 'None' } as Expr, l);
+
+    // () is grouping — just return the inner expression
+    if (rule.triggerToken === '(' && rule.closingToken === ')') return bound;
+
+    // Everything else: wrap in unary with the delimiter pair as op
+    // e.g., [elements] → unary('[]', sequence), {body} → unary('{}', body)
+    const op = (rule.triggerToken || '') + (rule.closingToken || '');
+    return this.stamp({ kind: 'unary', op, operand: bound } as Expr, l);
+  }
+
+  // Convert a matched postfix pattern to an Expr.
+  // All postfix patterns are property access — evaluate the binding, use as key, get on left.
+  private postfixPatternToExpr(rule: PatternRule, bindings: Map<string, Expr>, left: Expr, l: SourceLoc): Expr {
+    const values = [...bindings.values()];
+    const right: Expr = values.length === 1 ? values[0] : { kind: 'sequence', exprs: values };
+    return this.stamp({ kind: 'access', object: left, property: right } as Expr, l);
+  }
+
   private parseAtom(): Expr {
     const tok = this.peek();
+    const l = this.loc();
 
-    // String literal
+    // Prefix patterns from grammar (e.g., {`(`, expr: *, `)`} => expr)
+    const prefixMatch = this.tryPrefixPattern();
+    if (prefixMatch) return prefixMatch;
+
+    // String literal (the one parser-level literal besides {PATTERN})
     if (tok.type === TokenType.String) {
       this.advance();
-      return { kind: 'string', value: tok.value };
+      return this.stamp({ kind: 'string', value: tok.value }, l);
     }
 
-    // Number literal
-    if (tok.type === TokenType.Number) {
-      this.advance();
-      return { kind: 'number', value: Number(tok.value) };
-    }
-
-    // Boolean/None keywords
-    if (tok.value === 'None') { this.advance(); return { kind: 'none' }; }
-    if (tok.value === 'true') { this.advance(); return { kind: 'boolean', value: true }; }
-    if (tok.value === 'false') { this.advance(); return { kind: 'boolean', value: false }; }
-
-    // this
-    if (tok.value === 'this') { this.advance(); return { kind: 'this' }; }
-
-    // & (context/current program reference)
-    if (tok.value === '&') {
-      this.advance();
-      // &caller → &.caller, &parent → &.parent
-      if (this.at(TokenType.Word)) {
-        const prop = this.advance();
-        return { kind: 'dot', object: { kind: 'context' }, property: prop.value };
-      }
-      return { kind: 'context' };
-    }
-
-    // Prefix operators (discovered from .ray grammar)
-    if (activeGrammar.prefixOps.has(tok.value)) {
-      const op = tok.value === '¬' || tok.value === 'not' ? '!' : tok.value;
-      this.advance();
-      const operand = this.parseExpr(Grammar.UNARY);
-      return { kind: 'unary', op, operand };
-    }
-
-    // Prefix dot: .property (shorthand for this.property)
-    if (tok.value === '.') {
-      this.advance();
-      const prop = this.advance();
-      return { kind: 'dot', object: { kind: 'this' }, property: prop.value };
-    }
-
-    // Grouped expression: (expr)
-    if (tok.type === TokenType.LParen) {
-      this.advance();
-      if (this.at(TokenType.RParen)) { this.advance(); return { kind: 'none' }; }
-      const expr = this.parseExpr(Grammar.NONE);
-      // Check for comma-separated list (tuple/args)
-      if (this.atV(',')) {
-        const elements = [expr];
-        while (this.eatV(',')) {
-          if (this.at(TokenType.RParen)) break;
-          elements.push(this.parseExpr(activeGrammar.sequencePrec + 1));
-        }
-        this.expect(TokenType.RParen);
-        return { kind: 'array', elements };
-      }
-      this.expect(TokenType.RParen);
-      return expr;
-    }
-
-    // Array literal: [a, b, c]
-    if (tok.type === TokenType.LBracket) {
-      this.advance();
-      const elements: Expr[] = [];
-      while (!this.at(TokenType.RBracket) && !this.at(TokenType.EOF)) {
-        elements.push(this.parseExpr(activeGrammar.sequencePrec + 1));
-        this.eatV(',');
-      }
-      this.expect(TokenType.RBracket);
-      return { kind: 'array', elements };
-    }
-
-    // Hash/superposition: #, ##, ###
-    if (tok.value === '#' || tok.value === '##' || tok.value === '###') {
-      this.advance();
-      return { kind: 'ident', name: tok.value };
-    }
-
-    // Star: * (wildcard/Node type)
-    if (tok.value === '*') {
-      this.advance();
-      return { kind: 'ident', name: '*' };
-    }
-
-    // @ (at-expressions)
-    if (tok.value === '@') {
-      this.advance();
-      if (this.at(TokenType.Word)) {
-        const name = this.advance();
-        return { kind: 'ident', name: '@' + name.value };
-      }
-      return { kind: 'ident', name: '@' };
-    }
-
-    // Word token (identifier/variable/class reference)
-    if (tok.type === TokenType.Word) {
-      this.advance();
-      return { kind: 'ident', name: tok.value };
-    }
-
-    // Any remaining single token — treat as identifier
+    // Everything else — identifier (resolved through scope + method dispatch)
+    // Numbers, parens, brackets, braces — all handled by grammar patterns or dispatch.
     if (tok.type !== TokenType.EOF) {
       this.advance();
-      return { kind: 'ident', name: tok.value };
+      return this.stamp({ kind: 'ident', name: tok.value }, l);
     }
 
-    return { kind: 'none' };
+    return this.stamp({ kind: 'ident', name: 'None' }, l);
   }
 }
 
 function canStartExpr(tok: Token): boolean {
-  return tok.type === TokenType.Word || tok.type === TokenType.String ||
-    tok.type === TokenType.Number || tok.type === TokenType.LParen ||
-    tok.type === TokenType.LBracket ||
-    tok.value === '*' || tok.value === '.' || tok.value === '&' ||
-    tok.value === '@' || tok.value === '#' || tok.value === '##' || tok.value === '###' ||
-    tok.value === 'true' || tok.value === 'false' || tok.value === 'None' ||
-    tok.value === 'this' || activeGrammar.prefixOps.has(tok.value);
-}
-
-function exprToParamNames(expr: Expr): string[] {
-  if (expr.kind === 'ident') return [expr.name];
-  if (expr.kind === 'none') return [];
-  if (expr.kind === 'array') return expr.elements.flatMap(e => exprToParamNames(e));
-  if (expr.kind === 'binary' && expr.op === ':') {
-    // name: Type → just the name
-    return exprToParamNames(expr.left);
-  }
-  return ['_'];
+  if (tok.type === TokenType.EOF) return false;
+  // Closing delimiters don't start expressions — they terminate patterns
+  if (activeGrammar.closerToOpener.has(tok.value)) return false;
+  // Binary operators don't start expressions (they're infix)
+  // Exception: operators that are also prefix ops, or prefix patterns
+  if (activeGrammar.binaryOps.has(tok.value) &&
+      !activeGrammar.prefixOps.has(tok.value) &&
+      !activeGrammar.prefixPatterns.has(tok.value)) return false;
+  return true;
 }
 
 // --- Expression Evaluator ---
 
+// ANSI color helpers
+const c = {
+  red: (s: string) => `\x1b[31m${s}\x1b[0m`,
+  yellow: (s: string) => `\x1b[33m${s}\x1b[0m`,
+  cyan: (s: string) => `\x1b[36m${s}\x1b[0m`,
+  gray: (s: string) => `\x1b[90m${s}\x1b[0m`,
+  bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
+  boldRed: (s: string) => `\x1b[1;31m${s}\x1b[0m`,
+  boldYellow: (s: string) => `\x1b[1;33m${s}\x1b[0m`,
+  underline: (s: string) => `\x1b[4m${s}\x1b[0m`,
+};
+
+// Runtime error log — collected during evaluation
+interface RuntimeError {
+  level: 'error' | 'warning';
+  category: string;
+  message: string;
+  loc?: SourceLoc;
+}
+const _runtimeErrors: RuntimeError[] = [];
+const _runtimeErrorKeys = new Set<string>();
+// Cascade suppression: track the line of the first unresolved ident error.
+function errorKey(level: string, category: string, msg: string, loc?: SourceLoc): string {
+  const l = loc ? `${loc.file}:${loc.line}:${loc.col}` : '';
+  return `${level}|${category}|${l}|${msg}`;
+}
+
+function runtimeError(category: string, msg: string, loc?: SourceLoc): void {
+  const key = errorKey('error', category, msg, loc);
+  if (_runtimeErrorKeys.has(key)) return;
+  _runtimeErrorKeys.add(key);
+  _runtimeErrors.push({ level: 'error', category, message: msg, loc });
+}
+function runtimeWarning(category: string, msg: string, loc?: SourceLoc): void {
+  const key = errorKey('warning', category, msg, loc);
+  if (_runtimeErrorKeys.has(key)) return;
+  _runtimeErrorKeys.add(key);
+  _runtimeErrors.push({ level: 'warning', category, message: msg, loc });
+}
+
+function clearRuntimeErrors(): void {
+  _runtimeErrors.length = 0;
+  _runtimeErrorKeys.clear();
+}
+
+function hasRuntimeErrors(): boolean {
+  return _runtimeErrors.some(e => e.level === 'error');
+}
+
+function printRuntimeErrors(label?: string): void {
+  const errors = _runtimeErrors.filter(e => e.level === 'error');
+  const warnings = _runtimeErrors.filter(e => e.level === 'warning');
+  if (errors.length > 0 || warnings.length > 0) {
+    console.log('');
+    for (const err of _runtimeErrors) {
+      console.log(formatError(err));
+    }
+    console.log('');
+    const summary: string[] = [];
+    if (label) summary.push(c.bold(label) + ':');
+    if (errors.length > 0) summary.push(c.boldRed(`${errors.length} error${errors.length > 1 ? 's' : ''}`));
+    if (warnings.length > 0) summary.push(c.boldYellow(`${warnings.length} warning${warnings.length > 1 ? 's' : ''}`));
+    console.log(summary.join(' '));
+    console.log('');
+  } else {
+    if (label) console.log(c.gray(`${label}: No runtime errors.\n`));
+    else console.log(c.gray('No runtime errors.\n'));
+  }
+}
+
+function formatLoc(loc?: SourceLoc): string {
+  if (!loc) return '';
+  return `${loc.file}:${loc.line}:${loc.col}`;
+}
+
+function formatError(err: RuntimeError): string {
+  const label = err.level === 'error' ? c.boldRed('error') : c.boldYellow('warning');
+  const cat = c.gray(`[${err.category}]`);
+  const locLine = err.loc ? c.cyan(formatLoc(err.loc)) : '';
+  return `${locLine}\n  ${label}${cat}: ${err.message}`;
+}
+
+function nodeDesc(n: Node): string {
+  if (n.isClass) return `class(${n.name || '?'})`;
+  if (n.isNone) return 'None';
+  if (n.program) return `program("${n.program.expression.slice(0, 40)}")`;
+  if (typeof n.encoded === 'string') return `"${n.encoded}"`;
+  if (typeof n.encoded === 'number') return String(n.encoded);
+  if (typeof n.encoded === 'boolean') return String(n.encoded);
+  if (typeof n.encoded === 'object' && n.encoded?.__external) return `external(${n.name || '?'})`;
+  if (n.encoded === UNKNOWN) return n.name ? `<${n.name}>` : '<Node>';
+  return String(n.encoded);
+}
+
 function evalExpr(expr: Expr, ctx: Context): Node {
   switch (expr.kind) {
-    case 'none': return Node.NONE;
     case 'string': return Node.string(expr.value);
-    case 'number': return Node.number(expr.value);
-    case 'boolean': return Node.boolean(expr.value);
-    case 'this': return ctx.self;
-    case 'context': return ctx.program as Node;
 
     case 'ident': {
       const resolved = ctx.resolve(expr.name);
       if (resolved !== null) return resolved;
-      return Node.string(expr.name);  // Unresolved → name string (for class Foo → class("Foo"))
-    }
-
-    case 'dot': {
-      const obj = evalExpr(expr.object, ctx);
-      // Special: ==.instance_of, ==.isomorphic, etc.
-      if (expr.property === 'instance_of' || expr.property === 'isomorphic') {
-        // Return a callable node that performs the check
-        const checker = new Node();
-        checker.program = new Program('', ctx);
-        checker.program._paramNames = ['_target'];
-        checker.encoded = { __builtin: `==.${expr.property}`, receiver: obj };
-        return checker;
+      // Numeric literal: ident name that looks like a number
+      if (/^[0-9]/.test(expr.name)) {
+        const num = Number(expr.name);
+        if (!isNaN(num)) return Node.number(num);
       }
-      const prop = obj.get(expr.property);
-      if (prop !== null) {
-        // If the property has a program body, it could be evaluated
-        // but we return the property node itself (lazy evaluation)
-        return prop;
-      }
-      return Node.NONE;
-    }
-
-    case 'index': {
-      const obj = evalExpr(expr.object, ctx);
-      const idx = evalExpr(expr.index, ctx);
-      if (typeof idx.encoded === 'number') {
-        // Numeric index into a Ray/list
-        let i = 0;
-        for (const node of obj.forward()) {
-          if (i === idx.encoded) return node;
-          i++;
-        }
-        return Node.NONE;
-      }
-      // Key-based index
-      const result = obj.get(idx);
-      return result || Node.NONE;
-    }
-
-    case 'call': {
-      const callee = evalExpr(expr.callee, ctx);
-      const args = expr.args.map(a => evalExpr(a, ctx));
-
-      // Builtin ==.instance_of check
-      if (callee.encoded && typeof callee.encoded === 'object' && callee.encoded.__builtin) {
-        if (callee.encoded.__builtin === '==.instance_of' && args.length > 0) {
-          return Node.boolean(callee.encoded.receiver.instanceOf(args[0]));
-        }
-      }
-
-      // External method dispatch
-      if (callee.encoded && typeof callee.encoded === 'object' && callee.encoded.__external) {
-        return callee.encoded.fn(ctx.self, args);
-      }
-
-      // Class instantiation: ClassName(args) — execute constructor
-      if (callee.isClass) {
-        const instance = new Node();
-        instance.type = callee;
-
-        // Set .static pointing back to class
-        instance.set('static', callee);
-
-        // Look for constructor (() method on class)
-        const ctor = callee.get('()');
-        if (ctor && ctor.program) {
-          // Execute constructor body with instance as 'this' and 'local'
-          const ctorCtx = ctor.program.context.child(instance);
-          ctorCtx.define('this', instance);
-          ctorCtx.define('local', instance);
-          // Bind args
-          for (let i = 0; i < Math.min(args.length, ctor.program._paramNames.length); i++) {
-            ctorCtx.define(ctor.program._paramNames[i], args[i]);
-          }
-          if (ctor.program._parsedExpr) {
-            evalExpr(ctor.program._parsedExpr, ctorCtx);
-          } else if (ctor.program.expression) {
-            const tokens = tokenize(ctor.program.expression);
-            ctor.program._parsedExpr = new ExprParser(tokens).parse();
-            evalExpr(ctor.program._parsedExpr, ctorCtx);
-          }
-        } else if (args.length === 1) {
-          instance.encoded = args[0].encoded;
-        }
-
-        return instance;
-      }
-
-      // Function call: callee has a program body
-      if (callee.program) {
-        return callee.program.eval(ctx.self, args);
-      }
-
-      // If callee is a method name node, look it up on ctx.self
-      if (typeof callee.encoded === 'string') {
-        const method = ctx.self.get(callee.encoded);
-        if (method && method.program) {
-          return method.program.eval(ctx.self, args);
-        }
-      }
-
-      // Fallback: if one arg, treat as property access (space operator)
-      if (args.length === 1 && typeof args[0].encoded === 'string') {
-        const prop = callee.get(args[0].encoded);
-        if (prop !== null) return prop;
-      }
-
-      return callee;
+      runtimeError('ident', `Unresolved identifier "${expr.name}" — returning as string`, expr.loc);
+      const s = Node.string(expr.name);
+      s._unresolved = true;
+      return s;
     }
 
     case 'binary': {
-      // Short-circuit: || and && must be handled before evaluating both sides
-      if (expr.op === '||') {
-        const left = evalExpr(expr.left, ctx);
-        if (!left.isNone && left.encoded !== false) return left;
-        return evalExpr(expr.right, ctx);
-      }
-      if (expr.op === '&&') {
-        const left = evalExpr(expr.left, ctx);
-        if (left.isNone || left.encoded === false) return left;
-        return evalExpr(expr.right, ctx);
-      }
+      const op = expr.op;
 
-      // Evaluate both sides
+      // --- Generic method dispatch ---
       const left = evalExpr(expr.left, ctx);
+      if (left._unresolved) return left; // Propagate unresolved tag through cascade
       const right = evalExpr(expr.right, ctx);
-
-      // Method dispatch FIRST — look up operator on left node, dispatch to external or program
-      const method = left.get(expr.op);
+      const method = left.get(op);
       if (method) {
         if (method.encoded && typeof method.encoded === 'object' && method.encoded.__external) {
           return method.encoded.fn(left, [right]);
@@ -1772,14 +2026,39 @@ function evalExpr(expr: Expr, ctx: Context): Node {
         if (method.program) {
           return method.program.eval(left, [right]);
         }
+        runtimeError('binary', `Method "${op}" found on ${nodeDesc(left)} but has no body in: ${exprToString(expr)}`, expr.loc);
+      } else {
+        runtimeError('binary', `No method "${op}" on ${nodeDesc(left)} in: ${exprToString(expr)}`, expr.loc);
       }
-
       return Node.NONE;
     }
 
     case 'unary': {
+      // Array construction: [elements]
+      if (expr.op === '[]') {
+        if (expr.operand.kind === 'sequence') {
+          if (expr.operand.exprs.length === 0) return Node.NONE;
+          const first = evalExpr(expr.operand.exprs[0], ctx);
+          let current = first;
+          for (let i = 1; i < expr.operand.exprs.length; i++) {
+            const next = evalExpr(expr.operand.exprs[i], ctx);
+            current.push(next);
+            current = next;
+          }
+          return first;
+        }
+        // Single element or ident
+        return evalExpr(expr.operand, ctx);
+      }
+
+      // Block scope: {body}
+      if (expr.op === '{}') {
+        return evalExpr(expr.operand, ctx);
+      }
+
+      // Generic unary method dispatch
       const operand = evalExpr(expr.operand, ctx);
-      // Method dispatch: look up unary operator on operand
+      if (operand._unresolved) return operand; // Propagate unresolved tag
       const unaryMethod = operand.get(expr.op);
       if (unaryMethod) {
         if (unaryMethod.encoded && typeof unaryMethod.encoded === 'object' && unaryMethod.encoded.__external) {
@@ -1788,49 +2067,41 @@ function evalExpr(expr: Expr, ctx: Context): Node {
         if (unaryMethod.program) {
           return unaryMethod.program.eval(operand, []);
         }
+        runtimeError('unary', `Method "${expr.op}" found on ${nodeDesc(operand)} but has no body`, expr.loc);
+      } else {
+        runtimeError('unary', `No method "${expr.op}" on ${nodeDesc(operand)}`, expr.loc);
       }
       return Node.NONE;
     }
 
-    case 'assign': {
-      const value = evalExpr(expr.value, ctx);
-      if (expr.target.kind === 'ident') {
-        ctx.define(expr.target.name, value);
-        return value;
-      }
-      if (expr.target.kind === 'dot') {
-        const obj = evalExpr(expr.target.object, ctx);
-        obj.set(expr.target.property, value);
-        return value;
-      }
-      return value;
-    }
-
-    case 'compound_assign': {
-      // Node.ray lines 152-153: {operator}= (x) => this = this[operator](x)
-      // All compound assignment dispatches through the operator method
-      const target = expr.target;
-      const value = evalExpr(expr.value, ctx);
-      const current = evalExpr(target, ctx);
-
-      // Look up the operator method on current and call it: this[operator](x)
-      let combined: Node = current;
-      const opMethod = current.get(expr.op);
-      if (opMethod) {
-        if (opMethod.encoded && typeof opMethod.encoded === 'object' && opMethod.encoded.__external) {
-          combined = opMethod.encoded.fn(current, [value]);
-        } else if (opMethod.program) {
-          combined = opMethod.program.eval(current, [value]);
+    case 'access': {
+      // Property access: evaluate object, evaluate property key, do object.get(key)
+      // If direct get fails, fall through to () external (default call mechanism)
+      const obj = evalExpr(expr.object, ctx);
+      if (obj._unresolved) return obj; // Propagate unresolved tag
+      if (obj.isNone) return obj;
+      const key = evalExpr(expr.property, ctx);
+      if (key._unresolved) return key; // Propagate unresolved tag
+      if (key.isNone) return key;
+      const keyStr = typeof key.encoded === 'string' ? key.encoded
+                   : typeof key.encoded === 'number' ? String(key.encoded)
+                   : key.className ?? key.name ?? exprToString(expr.property);
+      // 1. Direct property lookup
+      const result = obj.get(keyStr);
+      if (result) return result;
+      // 2. Fallback: call via () external (method dispatch)
+      const callMethod = obj.get('()');
+      if (callMethod) {
+        if (callMethod.encoded && typeof callMethod.encoded === 'object' && callMethod.encoded.__external) {
+          return callMethod.encoded.fn(obj, [key]);
+        }
+        if (callMethod.program) {
+          return callMethod.program.eval(obj, [key]);
         }
       }
-      // Re-assign
-      if (target.kind === 'ident') { ctx.define(target.name, combined); return combined; }
-      if (target.kind === 'dot') {
-        const obj = evalExpr(target.object, ctx);
-        obj.set(target.property, combined);
-        return combined;
-      }
-      return combined;
+      const objName = obj.isClass ? (obj.className || obj.name || nodeDesc(obj)) : nodeDesc(obj);
+      runtimeError('access', `Key "${keyStr}" not found on ${objName}`, expr.loc);
+      return Node.NONE;
     }
 
     case 'sequence': {
@@ -1840,68 +2111,28 @@ function evalExpr(expr: Expr, ctx: Context): Node {
       }
       return result;
     }
-
-    case 'if': {
-      const condition = evalExpr(expr.condition, ctx);
-      if (!condition.isNone && condition.encoded !== false) {
-        return evalExpr(expr.body, ctx);
-      }
-      if (expr.else_body) return evalExpr(expr.else_body, ctx);
-      return Node.NONE;
-    }
-
-    case 'arrow': {
-      const fn = new Node();
-      const prog = new Program('', ctx);
-      prog._parsedExpr = expr.body;
-      prog._paramNames = expr.params;
-      fn.program = prog;
-      return fn;
-    }
-
-    case 'array': {
-      if (expr.elements.length === 0) return Node.NONE;
-      const first = evalExpr(expr.elements[0], ctx);
-      let current = first;
-      for (let i = 1; i < expr.elements.length; i++) {
-        const next = evalExpr(expr.elements[i], ctx);
-        current.push(next);
-        current = next;
-      }
-      return first;
-    }
-
-    case 'filter': {
-      const target = evalExpr(expr.target, ctx);
-      // Apply filter predicate to each superposed value
-      // For now, just return target (filter is complex to implement fully)
-      return target;
-    }
   }
 }
 
 // Pretty-print an Expr (for debugging)
 function exprToString(expr: Expr): string {
   switch (expr.kind) {
-    case 'none': return 'None';
     case 'string': return `"${expr.value}"`;
-    case 'number': return String(expr.value);
-    case 'boolean': return String(expr.value);
     case 'ident': return expr.name;
-    case 'this': return 'this';
-    case 'context': return '&';
-    case 'dot': return `${exprToString(expr.object)}.${expr.property}`;
-    case 'index': return `${exprToString(expr.object)}[${exprToString(expr.index)}]`;
-    case 'call': return `${exprToString(expr.callee)}(${expr.args.map(exprToString).join(', ')})`;
-    case 'binary': return `(${exprToString(expr.left)} ${expr.op} ${exprToString(expr.right)})`;
-    case 'unary': return `${expr.op}${exprToString(expr.operand)}`;
-    case 'assign': return `${exprToString(expr.target)} = ${exprToString(expr.value)}`;
-    case 'compound_assign': return `${exprToString(expr.target)} ${expr.op}= ${exprToString(expr.value)}`;
+    case 'access': return `${exprToString(expr.object)} ${exprToString(expr.property)}`;
+    case 'binary': {
+      if (expr.op === '()') return `${exprToString(expr.left)}(${exprToString(expr.right)})`;
+      if (expr.op === '[]') return `${exprToString(expr.left)}[${exprToString(expr.right)}]`;
+      if (expr.op === '{}') return `${exprToString(expr.left)}{${exprToString(expr.right)}}`;
+      if (expr.op === '.') return `${exprToString(expr.left)}.${exprToString(expr.right)}`;
+      return `(${exprToString(expr.left)} ${expr.op} ${exprToString(expr.right)})`;
+    }
+    case 'unary': {
+      if (expr.op === '[]') return `[${exprToString(expr.operand)}]`;
+      if (expr.op === '{}') return `{${exprToString(expr.operand)}}`;
+      return `${expr.op}${exprToString(expr.operand)}`;
+    }
     case 'sequence': return expr.exprs.map(exprToString).join('; ');
-    case 'if': return `${exprToString(expr.body)} if ${exprToString(expr.condition)}`;
-    case 'arrow': return `(${expr.params.join(', ')}) => ${exprToString(expr.body)}`;
-    case 'array': return `[${expr.elements.map(exprToString).join(', ')}]`;
-    case 'filter': return `${exprToString(expr.target)}{${exprToString(expr.predicate)}}`;
   }
 }
 
@@ -1918,7 +2149,6 @@ class Bootstrap {
   constructor() {
     const globalProgram = new Program('', null);
     this.global = new Context(globalProgram, null);
-    this.global.define('global', this.global.local);
   }
 
   registerBuiltins(): void {
@@ -1926,7 +2156,7 @@ class Bootstrap {
     // Create * (Node) class — the kernel
     const NodeClass = new Node();
     NodeClass.set('static', NodeClass);  // static === self → is a class
-    NodeClass.className = '*';
+    NodeClass.name = '*';
     NodeClass.set('name', Node.string('*'));
     this.classes.set('*', NodeClass);
     this.classes.set('Node', NodeClass);
@@ -1982,237 +2212,23 @@ class Bootstrap {
       return self.program ? (self.program as Node) : Node.NONE;
     });
 
-    // === Superposition / composition (Node.ray lines 134-135, 144) ===
+    // 'external' modifier defined on Node
+    NodeClass.set('external', Node.string('external'));
 
-    // | — non-destructive superposition for expressions, mutating for &=
-    // Also handles class alias: class * | Node → register "Node" as alias for * class
-    this.registerExternal(NodeClass, '|', (self, args) => {
-      if (args.length === 0) return self;
-      const arg = args[0];
-      // Class alias: when called on a class with a string argument, register as alias
-      if (self.isClass && typeof arg.encoded === 'string') {
-        const name = arg.encoded;
-        this.classes.set(name, self);
-        this.global.define(name, self);
-        return self;  // return the class, not a superposition
-      }
-      // Regular OR superposition
-      return Node.superpose(self, arg, '|');
-    });
-    this.registerExternal(NodeClass, '&', (self, args) => {
-      if (args.length > 0) return Node.superpose(self, args[0], '&');
-      return self;
-    });
-    this.registerExternal(NodeClass, '&+', (self, args) => {
-      if (args.length > 0 && self !== Node._NODE_CLASS) return self.compose(args[0]);
-      return self;
-    });
-    this.registerExternal(NodeClass, '&-', (self, _args) => self); // TODO: remove components
-    this.registerExternal(NodeClass, '|+', (self, args) => {
-      if (args.length > 0) return self.or(args[0]); // merge properties via |
-      return self;
-    });
-    this.registerExternal(NodeClass, '|-', (self, _args) => self); // TODO: remove via |
+    // Every object is constructed from a Context — add as silent component on Node
+    const nodeCtx = new Node();
+    nodeCtx.set('local', NodeClass);
+    NodeClass.addSilentComponent(nodeCtx);
 
-    // === Type system (Node.ray lines 167-174, 212-246) ===
-
-    this.registerExternal(NodeClass, '==.instance_of', (self, args) => {
-      if (args.length > 0) return Node.boolean(self.instanceOf(args[0]));
-      return Node.FALSE;
-    });
-    // : | ∈ (type) => this ~~ .type = type (Node.ray line 168)
-    this.registerExternal(NodeClass, ':', (self, args) => {
-      if (args.length > 0) { self.type = args[0]; }
-      return self;
-    });
-
-    // === Arithmetic (primitive runtime operations) ===
-
-    this.registerExternal(NodeClass, '+', (self, args) => {
-      if (args.length === 0) return self;
-      const r = args[0];
-      if (typeof self.encoded === 'number' && typeof r.encoded === 'number')
-        return Node.number(self.encoded + r.encoded);
-      if (typeof self.encoded === 'string' || typeof r.encoded === 'string')
-        return Node.string(String(self.encoded ?? '') + String(r.encoded ?? ''));
-      return Node.NONE;
-    });
-    this.registerExternal(NodeClass, '-', (self, args) => {
-      if (args.length === 0) {
-        if (typeof self.encoded === 'number') return Node.number(-self.encoded);
-        return Node.NONE;
-      }
-      if (typeof self.encoded === 'number' && typeof args[0].encoded === 'number')
-        return Node.number(self.encoded - args[0].encoded);
-      return Node.NONE;
-    });
-    this.registerExternal(NodeClass, '/', (self, args) => {
-      if (args.length > 0 && typeof self.encoded === 'number' && typeof args[0].encoded === 'number')
-        return args[0].encoded !== 0 ? Node.number(self.encoded / args[0].encoded) : Node.NONE;
-      return Node.NONE;
-    });
-    this.registerExternal(NodeClass, '%', (self, args) => {
-      if (args.length > 0 && typeof self.encoded === 'number' && typeof args[0].encoded === 'number')
-        return Node.number(self.encoded % args[0].encoded);
-      return Node.NONE;
-    });
-
-    // === Comparison (primitive runtime operations) ===
-
-    this.registerExternal(NodeClass, '==', (self, args) => {
-      if (args.length === 0) return Node.FALSE;
-      const r = args[0];
-      if (self === r) return Node.TRUE;
-      if (self.encoded !== UNKNOWN && r.encoded !== UNKNOWN && self.encoded === r.encoded) return Node.TRUE;
-      return Node.FALSE;
-    });
-    this.registerExternal(NodeClass, '!=', (self, args) => {
-      if (args.length === 0) return Node.TRUE;
-      const r = args[0];
-      if (self === r) return Node.FALSE;
-      if (self.encoded !== UNKNOWN && r.encoded !== UNKNOWN && self.encoded === r.encoded) return Node.FALSE;
-      return Node.TRUE;
-    });
-    this.registerExternal(NodeClass, '<', (self, args) => {
-      if (args.length === 0) return Node.FALSE;
-      const arg = args[0];
-      // Class inheritance: extends | < does &+ (compose)
-      if (self.isClass) {
-        if (self !== Node._NODE_CLASS) {
-          // Compose with each superposed class in the argument
-          for (const comp of arg.superposed()) {
-            if (comp.isClass && comp !== self) self.compose(comp);
-          }
-          if (arg.isClass && arg !== self) self.compose(arg);
-        }
-        return self;
-      }
-      // Numeric comparison
-      if (typeof self.encoded === 'number' && typeof arg.encoded === 'number')
-        return Node.boolean(self.encoded < arg.encoded);
-      return Node.FALSE;
-    });
-    this.registerExternal(NodeClass, '>', (self, args) => {
-      if (args.length > 0 && typeof self.encoded === 'number' && typeof args[0].encoded === 'number')
-        return Node.boolean(self.encoded > args[0].encoded);
-      return Node.FALSE;
-    });
-    this.registerExternal(NodeClass, '<=', (self, args) => {
-      if (args.length > 0 && typeof self.encoded === 'number' && typeof args[0].encoded === 'number')
-        return Node.boolean(self.encoded <= args[0].encoded);
-      return Node.FALSE;
-    });
-    this.registerExternal(NodeClass, '>=', (self, args) => {
-      if (args.length > 0 && typeof self.encoded === 'number' && typeof args[0].encoded === 'number')
-        return Node.boolean(self.encoded >= args[0].encoded);
-      return Node.FALSE;
-    });
-
-    // === Pipelines (Node.ray lines 44-45) ===
-    // ~~ (call: (: this): T): this => call(this); this
-    this.registerExternal(NodeClass, '~~', (self, args) => {
-      if (args.length > 0 && args[0].program) args[0].program.eval(self);
-      return self;
-    });
-    // -- (call: (: this): T): T => call(this) ?? this
-    this.registerExternal(NodeClass, '--', (self, args) => {
-      if (args.length > 0 && args[0].program) {
-        const result = args[0].program.eval(self);
-        return result.isNone ? self : result;
-      }
-      return self;
-    });
-
-    // === Generator (Node.ray line 180) ===
-    // -> creates lazy chain
-    this.registerExternal(NodeClass, '->', (self, args) => {
-      if (args.length > 0 && args[0].program) {
-        // Apply closure to generate next value
-        const next = args[0].program.eval(self);
-        self.push(next);
-        return self;
-      }
-      const result = new Node();
-      result.encoded = self.encoded;
-      self.push(result);
-      return self;
-    });
-
-    // === Negation (boolean.ray) ===
-    this.registerExternal(NodeClass, '!', (self) => {
-      return (self.isNone || self.encoded === false) ? Node.TRUE : Node.FALSE;
-    });
-
-    // === Conversion (Node.ray line 257) ===
-    this.registerExternal(NodeClass, 'as', (self, args) => {
-      if (args.length === 0) return self;
-      const target = args[0];
-      if (target.className === 'boolean' || target.matchesName('boolean'))
-        return self.isNone ? Node.FALSE : Node.TRUE;
-      if (target.className === 'String' || target.matchesName('String'))
-        return new Node(String(self.encoded));
-      if (target.className === 'Number' || target.matchesName('Number'))
-        return new Node(Number(self.encoded));
-      return Node.NONE;
-    });
-
-    // === Modifier: `static` as pass-through in globals (NOT on * — would overwrite static=self) ===
-    const staticMethod = new Node();
-    staticMethod.encoded = { __external: true, fn: (_self: Node, args: Node[]) => args.length > 0 ? args[0] : _self };
-    staticMethod.className = 'static';
-    this.global.define('static', staticMethod);
-
-    // === Class creation (Node.ray lines 5-36) ===
-    this.registerExternal(NodeClass, 'class', (_self, args) => {
-      if (args.length === 0) return Node.NONE;
-      const arg = args[0];
-      // console.log(`  [class external] arg.encoded=${String(arg.encoded)} arg.isClass=${arg.isClass} arg.className=${arg.className}`);
-      // If arg is already a class, return it (idempotent)
-      if (arg.isClass) { this._classTrace?.push(`  class(${arg.className}) → idempotent`); return arg; }
-      const name = typeof arg.encoded === 'string' ? arg.encoded : null;
-      if (!name) return Node.NONE;
-      // Idempotent: return existing class if it exists
-      if (this.classes.has(name)) { this._classTrace?.push(`  class("${name}") → existing`); return this.classes.get(name)!; }
-      this._classTrace?.push(`  class("${name}") → NEW`);
-      const cls = new Node();
-      cls.set('static', cls);  // static === self → is a class
-      cls.className = name;
-      cls.set('name', Node.string(name));
-      this.classes.set(name, cls);
-      this.global.define(name, cls);
-      return cls;
-    });
-
-    // === Namespace creation (Node.ray lines 34-41) ===
-    this.registerExternal(NodeClass, 'namespace', (_self, args) => {
-      if (args.length === 0) return Node.NONE;
-      const arg = args[0];
-      if (arg.isClass) { this._classTrace?.push(`  namespace(${arg.className}) → idempotent`); return arg; }
-      const name = typeof arg.encoded === 'string' ? arg.encoded : null;
-      if (!name) return Node.NONE;
-      if (this.classes.has(name)) { this._classTrace?.push(`  namespace("${name}") → existing`); return this.classes.get(name)!; }
-      this._classTrace?.push(`  namespace("${name}") → NEW`);
-      const cls = new Node();
-      cls.set('static', cls);  // static === self → is a class
-      cls.className = name;
-      cls.set('name', Node.string(name));
-      cls.set('static', cls);
-      this.classes.set(name, cls);
-      this.global.define(name, cls);
-      return cls;
-    });
-
-    // Singletons
-    this.global.define('None', Node.NONE);
-    this.global.define('true', Node.TRUE);
-    this.global.define('false', Node.FALSE);
-
-    // Make Node class available
+    // Global = Node + [global overrides]
+    // Add NodeClass as a component (no eager copy — resolve follows component chain).
+    // Global's own defines override Node methods.
+    this.global.local.addComponent(NodeClass);
     this.global.define('*', NodeClass);
     this.global.define('Node', NodeClass);
   }
 
-  registerMethod(cls: Node, name: string, body: string | null): void {
+  registerMethod(cls: Node, name: string, body: string | null, file?: string, lineOffset: number = 0, colOffset: number = 0): void {
     // Don't overwrite an external with a stub (no body)
     if (body === null) {
       const existing = cls.getDirect(name);
@@ -2226,20 +2242,28 @@ class Bootstrap {
       return;
     }
     const method = new Node();
-    if (body !== null) method.program = new Program(body, this.global);
-    method.className = name;
+    if (body !== null) {
+      method.program = new Program(body, this.global);
+      if (file) method.program.file = file;
+      method.program.lineOffset = lineOffset;
+      method.program.colOffset = colOffset;
+    }
+    method.name = name;
     cls.set(name, method);
   }
 
   registerExternal(cls: Node, name: string, fn: (self: Node, args: Node[]) => Node): void {
     const method = new Node();
     method.encoded = { __external: true, fn };
-    method.className = name;
+    method.name = name;
     cls.set(name, method);
   }
 
   loadFile(filePath: string): ASTNode[] {
-    return buildAST(tokenize(fs.readFileSync(filePath, 'utf-8')));
+    const nodes = buildAST(tokenize(fs.readFileSync(filePath, 'utf-8')));
+    const stamp = (n: ASTNode) => { n.file = filePath; for (const c of n.children) stamp(c); };
+    for (const n of nodes) stamp(n);
+    return nodes;
   }
 
   loadDirectory(dirPath: string): ASTNode[] {
@@ -2264,7 +2288,7 @@ class Bootstrap {
     return null;
   }
 
-  constructMethodBody(methodNode: ASTNode): { body: string, params: string[] } | null {
+  constructMethodBody(methodNode: ASTNode): { body: string, params: string[], bodyLine: number, bodyCol: number } | null {
     if (methodNode.children.length === 0) return null;
 
     const firstChild = methodNode.children[0];
@@ -2280,16 +2304,19 @@ class Bootstrap {
     }
 
     // Body = grandchildren (children of first child) + remaining children
-    const bodyParts: string[] = [];
+    const bodyParts: ASTNode[] = [];
     for (const grandchild of firstChild.children) {
-      if (grandchild.rawText) bodyParts.push(grandchild.rawText);
+      if (grandchild.rawText) bodyParts.push(grandchild);
     }
     for (let i = 1; i < methodNode.children.length; i++) {
-      if (methodNode.children[i].rawText) bodyParts.push(methodNode.children[i].rawText);
+      if (methodNode.children[i].rawText) bodyParts.push(methodNode.children[i]);
     }
 
     if (bodyParts.length === 0) return null;
-    return { body: bodyParts.join('; '), params };
+    const bodyLine = bodyParts[0].line;
+    const firstBodyToken = bodyParts[0].tokens.find(t => t.type !== TokenType.Comment);
+    const bodyCol = firstBodyToken ? firstBodyToken.col - 1 : 0;
+    return { body: bodyParts.map(p => p.rawText!).join('; '), params, bodyLine, bodyCol };
   }
 
   preloadNodeRay(ast: ASTNode[]): void {
@@ -2311,11 +2338,15 @@ class Bootstrap {
         const method = new Node();
         method.program = new Program(constructed.body, this.global);
         method.program._paramNames = constructed.params;
-        method.className = name;
+        if (child.file) method.program.file = child.file;
+        // Offset so errors map back to original .ray file lines
+        method.program.lineOffset = constructed.bodyLine - 1;
+        method.program.colOffset = constructed.bodyCol;
+        method.name = name;
         Node._NODE_CLASS!.set(name, method);
       } else {
         // Single-line with => or no body
-        this.handleDefinition(tokens, Node._NODE_CLASS!);
+        this.handleDefinition(tokens, Node._NODE_CLASS!, child.file);
       }
     }
   }
@@ -2325,14 +2356,11 @@ class Bootstrap {
     return new Context(prog, this.global, scope);
   }
 
-  handleDefinition(tokens: Token[], scope: Node): void {
-    // Skip tokens that are just identifiers resolving to globals (like 'external', 'end')
+  handleDefinition(tokens: Token[], scope: Node, file?: string): void {
+    // Skip leading modifiers (e.g., 'external')
     let startIdx = 0;
-    while (startIdx < tokens.length) {
-      const val = tokens[startIdx].value;
-      if (isModifier(val) || val === 'end') {
-        startIdx++;
-      } else break;
+    while (startIdx < tokens.length && isModifier(tokens[startIdx].value)) {
+      startIdx++;
     }
     if (startIdx >= tokens.length) return;
 
@@ -2344,41 +2372,136 @@ class Bootstrap {
     parseDefinition(node, defTokens, 0);
     const names = node.names || [node.name || ''];
     const body = node.defaultValue || null;
+    // Find line/col offset: locate => or = token, body starts after it
+    let bodyLineOffset = 0;
+    let bodyColOffset = 0;
+    if (body !== null) {
+      for (let i = 0; i < defTokens.length; i++) {
+        if (defTokens[i].value === '=>' || defTokens[i].value === '=') {
+          if (i + 1 < defTokens.length) {
+            bodyLineOffset = defTokens[i + 1].line - 1;
+            bodyColOffset = defTokens[i + 1].col - 1;
+          }
+          break;
+        }
+      }
+    }
     for (const name of names) {
-      if (name) this.registerMethod(scope, name, body);
+      if (name) this.registerMethod(scope, name, body, file, bodyLineOffset, bodyColOffset);
     }
   }
 
-  evaluateStatements(nodes: ASTNode[], scope: Node, pass: 1 | 2 = 2): void {
-    for (const node of nodes) {
-      const tokens = node.tokens.filter(t => t.type !== TokenType.Comment);
-      if (tokens.length === 0) continue;
+  // Collect all tokens from an AST node's children (depth-first),
+  // preserving original file locations.
+  private collectChildTokens(node: ASTNode): Token[] {
+    const result: Token[] = [];
+    for (const child of node.children) {
+      for (const t of child.tokens) {
+        if (t.type !== TokenType.Comment) result.push(t);
+      }
+      result.push(...this.collectChildTokens(child));
+    }
+    return result;
+  }
 
-      // Everything is evaluated as an expression — no AST fallback
+  // Assemble a balanced token stream starting from nodes[startIdx].
+  // Starts with only the node's own line tokens. If delimiters are unbalanced,
+  // pulls tokens from children (depth-first) then subsequent siblings until
+  // balanced. Returns { tokens, endIdx } where endIdx is the last sibling consumed.
+  private assembleBalancedTokens(nodes: ASTNode[], startIdx: number): { tokens: Token[], endIdx: number } {
+    const node = nodes[startIdx];
+    const tokens: Token[] = node.tokens.filter(t => t.type !== TokenType.Comment);
+
+    // Check delimiter balance on just the line tokens
+    const stack = activeGrammar.balanceStack(tokens);
+
+    // Already balanced — return just the line tokens, don't pull children
+    if (stack.length === 0) return { tokens, endIdx: startIdx };
+
+    // Unbalanced — first pull from children (depth-first)
+    const childToks = this.collectChildTokens(node);
+    tokens.push(...childToks);
+    for (const t of childToks) activeGrammar.trackToken(stack, t);
+    if (stack.length === 0) return { tokens, endIdx: startIdx };
+
+    // Still unbalanced — pull from subsequent siblings (and their children)
+    let endIdx = startIdx;
+    for (let si = startIdx + 1; si < nodes.length && stack.length > 0; si++) {
+      const sibNode = nodes[si];
+      const sibToks = sibNode.tokens.filter(t => t.type !== TokenType.Comment);
+      tokens.push(...sibToks);
+      for (const t of sibToks) activeGrammar.trackToken(stack, t);
+      const sibChildToks = this.collectChildTokens(sibNode);
+      tokens.push(...sibChildToks);
+      for (const t of sibChildToks) activeGrammar.trackToken(stack, t);
+      endIdx = si;
+    }
+
+    return { tokens, endIdx };
+  }
+
+  evaluateStatements(nodes: ASTNode[], scope: Node, pass: 1 | 2 = 2): void {
+    const scopeName = scope.name || (scope === this.global.local ? 'Global' : '<anon>');
+    for (let ni = 0; ni < nodes.length; ni++) {
+      const node = nodes[ni];
+      const lineToks = node.tokens.filter(t => t.type !== TokenType.Comment);
+      if (lineToks.length === 0) continue;
+
+      const indent = '  '.repeat(Math.max(0, Math.floor((node.indent || 0) / 2)));
+      const prefix = `${indent}[pass ${pass}] [scope: ${scopeName}]`;
+
+      // Skip pattern definitions — they are grammar rules, already handled by buildGrammarFromAST
+      const firstNonMod = lineToks.find(t => !isModifier(t.value));
+      if (firstNonMod && isDelim(firstNonMod, '{')) {
+        const hasStringLiteral = lineToks.some(t => t.type === TokenType.String);
+        if (hasStringLiteral) {
+          const raw = lineToks.map(t => t.value).join(' ');
+          const stmt = raw.length > 80 ? raw.slice(0, 80) + '...' : raw;
+          console.log(`${prefix} "${stmt}" → skipped (pattern definition)`);
+          continue;
+        }
+      }
+
+      // Assemble balanced token stream — pulls from children and closing
+      // siblings when delimiters are unbalanced (multi-line {}/[]/() blocks)
+      const { tokens, endIdx } = this.assembleBalancedTokens(nodes, ni);
+      const consumed = endIdx > ni;
+      if (consumed) ni = endIdx;
+
+      const raw = tokens.map(t => t.value).join(' ');
+      const stmt = raw.length > 80 ? raw.slice(0, 80) + '...' : raw;
+
+      // Everything is evaluated as an expression
       let result: Node | null = null;
       let parseError: string | null = null;
+      let parsedExpr: Expr | null = null;
       try {
-        const expr = new ExprParser(tokens).parse();
-        if (expr.kind !== 'none') {
+        parsedExpr = new ExprParser(tokens, node.file).parse();
+        if (!(parsedExpr.kind === 'ident' && parsedExpr.name === 'None')) {
           const ctx = this.createScopeContext(scope);
-          result = evalExpr(expr, ctx);
+          result = evalExpr(parsedExpr, ctx);
         }
       } catch (e: any) {
         parseError = e.message || String(e);
       }
 
-      // Trace: if this was classified as class/namespace by AST but expression
-      // didn't produce a class, log why
-      if (pass === 1 && (node.kind === 'class' || node.kind === 'namespace') && (!result || !result.isClass)) {
-        const raw = tokens.map(t => t.value).join(' ');
-        const truncated = raw.length > 80 ? raw.slice(0, 80) + '...' : raw;
-        if (parseError) {
-          this._classTrace.push(`  [MISS] ${truncated}  ERROR: ${parseError}`);
-        } else if (result) {
-          this._classTrace.push(`  [MISS] ${truncated}  GOT: ${String(result.encoded)} (isClass=${result.isClass})`);
-        } else {
-          this._classTrace.push(`  [MISS] ${truncated}  GOT: null`);
-        }
+      // Log what happened
+      if (parseError) {
+        const firstTok = tokens[0];
+        const parseLoc: SourceLoc | undefined = node.file ? { file: node.file, line: firstTok?.line ?? node.line, col: firstTok?.col ?? 0 } : undefined;
+        runtimeError('parse', `${parseError}  in: ${stmt}`, parseLoc);
+        console.log(`${prefix} "${stmt}" → PARSE ERROR: ${parseError}`);
+      } else if (parsedExpr) {
+        const exprDesc = exprToString(parsedExpr);
+        const resultDesc = result
+          ? (result.isClass ? `class(${result.name || '?'})`
+            : result.program ? `lazy program: "${result.program.expression}"`
+            : result.isNone ? 'None'
+            : typeof result.encoded === 'string' ? `"${result.encoded}"`
+            : typeof result.encoded === 'object' && result.encoded?.__external ? `external(${result.name || '?'})`
+            : String(result.encoded))
+          : 'null';
+        console.log(`${prefix} "${stmt}" → parsed: ${exprDesc} → result: ${resultDesc}`);
       }
 
       // If result is a class/scope, register it and recurse into children
@@ -2388,48 +2511,43 @@ class Bootstrap {
           const name = nameNode.encoded;
           if (!this.classes.has(name)) {
             this.classes.set(name, result);
-            result.className = result.className || name;
+            result.name = result.name || name;
+            console.log(`${prefix}   → registered class "${name}"`);
           }
         }
-        if (result.className && !this.classes.has(result.className)) {
-          this.classes.set(result.className, result);
+        if (result.name && !this.classes.has(result.name)) {
+          this.classes.set(result.name, result);
+          console.log(`${prefix}   → registered class "${result.name}"`);
         }
-        if (node.children.length > 0) {
+        if (!consumed && node.children.length > 0) {
+          console.log(`${prefix}   → recursing into ${node.children.length} children with scope: ${result.name || '?'}`);
           this.evaluateStatements(node.children, result, pass);
         }
         continue;
       }
 
-      // If expression eval didn't produce a class result, but the AST node
-      // is classified as class/namespace with known names, look up the
-      // existing class (e.g., * created by registerBuiltins) and recurse
-      // into children using it as scope.
-      if ((!result || !result.isClass) && (node.kind === 'class' || node.kind === 'namespace') && node.names) {
-        let existingClass: Node | null = null;
-        for (const name of node.names) {
-          existingClass = this.classes.get(name) || null;
-          if (existingClass) break;
-        }
-        if (existingClass && node.children.length > 0) {
-          this.evaluateStatements(node.children, existingClass, pass);
-          continue;
-        }
+      // Pass 1: only interested in class creation, skip definitions
+      if (pass === 1) {
+        console.log(`${prefix}   → pass 1: skipping definition`);
+        continue;
       }
 
-      // Pass 1: only interested in class/namespace creation, skip definitions
-      if (pass === 1) continue;
-
       // Pass 2: handle as definition (space syntax behavior)
-      // If the class wasn't created by expression eval, definitions are called
-      // on None (the unresolved scope) and nothing happens.
-      this.handleDefinition(tokens, scope);
+      // Skip handleDefinition for reassembled blocks — already fully parsed above
+      if (!consumed) {
+        this.handleDefinition(tokens, scope, node.file);
+        console.log(`${prefix}   → handleDefinition on scope "${scopeName}"`);
+      }
 
-      // Process nested definitions
-      if (node.children.length > 0 && result === null) {
-        const defName = this.extractFirstName(tokens.filter(t => !isModifier(t.value) && t.value !== 'end'));
+      // Process nested definitions (only if children weren't consumed by balancing)
+      if (!consumed && node.children.length > 0 && result === null) {
+        const defName = this.extractFirstName(lineToks.filter(t => !isModifier(t.value)));
         if (defName) {
           const methodNode = scope.get(defName);
-          if (methodNode) this.evaluateStatements(node.children, methodNode, pass);
+          if (methodNode) {
+            console.log(`${prefix}   → recursing into ${node.children.length} children for def "${defName}"`);
+            this.evaluateStatements(node.children, methodNode, pass);
+          }
         }
       }
     }
@@ -2472,51 +2590,38 @@ class Bootstrap {
     const semiEntry = activeGrammar.binaryOps.get(';');
     if (semiEntry) activeGrammar.sequencePrec = semiEntry.prec;
     console.log(`  ${activeGrammar.binaryOps.size} binary ops, ${activeGrammar.prefixOps.size} prefix ops, ${activeGrammar.postfixKeywords.size} postfix keywords`);
+    console.log(`  ${activeGrammar.prefixPatterns.size} prefix patterns, ${activeGrammar.postfixPatterns.size} postfix patterns`);
+    activeGrammar.rebuildDelimiters();
+    console.log(`  ${activeGrammar.openerToCloser.size} delimiter pairs: ${[...activeGrammar.openerToCloser.entries()].map(([o,c]) => `${o}${c}`).join(' ')}`);
 
     // Step 4: Pre-load Node.ray definitions onto * (including multi-line method bodies)
     console.log('\nStep 4: Pre-loading Node.ray definitions onto *...');
     this.preloadNodeRay(ast);
     console.log(`  * class now has ${Node._NODE_CLASS!.methodCount} methods`);
 
-    // Step 5: Add class/namespace to global scope + modifier keywords
-    console.log('\nStep 5: Setting up global scope...');
-    this.global.define('class', Node._NODE_CLASS!.get('class')!);
-    this.global.define('namespace', Node._NODE_CLASS!.get('namespace')!);
-    // static is already in globals from registerBuiltins
-    for (const word of ['external', 'dynamically', 'internal', 'protected', 'delegate', 'end']) {
-      this.global.define(word, Node.string(word));
-    }
-
-    // Step 6: PASS 1 — evaluate all expressions (forward-declares classes)
-    console.log('\nStep 6: Pass 1 — evaluating expressions (forward-declare classes)...');
-    this.evaluateStatements(ast, Node._NODE_CLASS!, 1);
+    // Step 5: PASS 1 — evaluate all expressions (forward-declares classes)
+    // Top-level scope is global, not Node — class children recurse with class as scope
+    console.log('\nStep 5: Pass 1 — evaluating expressions (forward-declare classes)...');
+    this.evaluateStatements(ast, this.global.local, 1);
     console.log(`  Classes after pass 1: ${this.classes.size}`);
 
-    // Step 7: PASS 2 on Node.ray children — register methods on * first
-    console.log('\nStep 7: Pass 2 — processing Node.ray methods...');
+    // Step 6: PASS 2 on Node.ray children — register methods on * first
+    console.log('\nStep 6: Pass 2 — processing Node.ray methods...');
     const nodeChildren = findClassChildren(ast, ['*', 'Node']);
     this.evaluateStatements(nodeChildren, Node._NODE_CLASS!, 2);
     console.log(`  * class now has ${Node._NODE_CLASS!.methodCount} methods`);
 
-    // Step 8: PASS 2 on everything — full evaluation (inheritance + definitions)
-    console.log('\nStep 8: Pass 2 — full evaluation (all classes)...');
-    this.evaluateStatements(ast, Node._NODE_CLASS!, 2);
+    // Step 7: PASS 2 on everything — full evaluation (inheritance + definitions)
+    console.log('\nStep 7: Pass 2 — full evaluation (all classes)...');
+    this.evaluateStatements(ast, this.global.local, 2);
 
-    // Step 9: Inject all classes into global scope
-    console.log('\nStep 9: Injecting globals...');
+    // Step 8: Inject all classes into global scope
+    console.log('\nStep 8: Injecting globals...');
     for (const [name, cls] of this.classes) this.global.define(name, cls);
     console.log(`  ${this.classes.size} classes: ${[...this.classes.keys()].join(', ')}`);
 
     console.log('\n=== Bootstrap Complete ===\n');
 
-    // Print class creation trace
-    const newClasses = this._classTrace.filter(t => t.includes('→ NEW'));
-    const misses = this._classTrace.filter(t => t.includes('[MISS]'));
-    console.log(`Class creation trace: ${newClasses.length} created, ${misses.length} missed`);
-    if (misses.length > 0) {
-      console.log(`\n  Missed class/namespace definitions:`);
-      for (const t of misses) console.log(t);
-    }
     console.log('');
 
     // Compute hierarchy for display
@@ -2540,7 +2645,60 @@ class Bootstrap {
       const parentStr = entry.parents.length > 0 ? ` < ${entry.parents.join(' &+ ')}` : '';
       console.log(`  ${nameStr}${parentStr} (${entry.cls.methodCount} methods)`);
     }
+
+    // Print what's defined on Node (*)
+    console.log(`\nNode (*) methods:`);
+    for (const [key] of Node._NODE_CLASS!.methods()) {
+      const label = typeof key === 'string' ? key : String(key);
+      console.log(`  .${label}`);
+    }
+    for (const comp of Node._NODE_CLASS!.silentComponents()) {
+      for (const [key] of comp.methods()) {
+        const label = typeof key === 'string' ? key : String(key);
+        console.log(`  .${label}  (from Context)`);
+      }
+    }
+
+    // Print what's defined on global scope, showing component origin.
+    // A method is "from component" if its value is the same object as on the component.
+    // If global overrides it (different value), it's own.
+    const globalLocal = this.global.local;
+    const componentValue = new Map<string, { value: Node, origin: string }>();
+    for (const comp of globalLocal.classComponents()) {
+      const compName = comp.name || '?';
+      for (const [key, value] of comp.methods()) {
+        const label = typeof key === 'string' ? key : String(key);
+        if (!componentValue.has(label)) componentValue.set(label, { value, origin: compName });
+      }
+    }
+    console.log(`\nGlobal scope:`);
+    for (const [key] of globalLocal.methods()) {
+      const label = typeof key === 'string' ? key : String(key);
+      // Directly set on global → always own, never show component origin
+      console.log(`  ${label}`);
+    }
+    // Methods only on visible components (not directly on global)
+    for (const comp of globalLocal.classComponents()) {
+      const compName = comp.name || '?';
+      for (const [key] of comp.methods()) {
+        const label = typeof key === 'string' ? key : String(key);
+        if (!globalLocal.getDirect(label)) {
+          console.log(`  ${label}  (from ${compName})`);
+        }
+      }
+    }
+    // Methods from silent components (e.g., Context provides 'local')
+    for (const comp of globalLocal.silentComponents()) {
+      for (const [key] of comp.methods()) {
+        const label = typeof key === 'string' ? key : String(key);
+        if (!globalLocal.getDirect(label)) {
+          console.log(`  ${label}  (from Context)`);
+        }
+      }
+    }
     console.log('');
+
+    printRuntimeErrors('Bootstrap');
   }
 }
 
@@ -2566,7 +2724,7 @@ export namespace Ether {
   export function evalStatements(ast: ASTNode[], bootstrap: Bootstrap): Node {
     let lastResult: Node = Node.NONE;
     for (const node of ast) {
-      if (node.kind === 'class' || node.kind === 'namespace') {
+      if (node.kind === 'class') {
         // Already registered during bootstrap
         continue;
       }
@@ -2593,8 +2751,8 @@ export namespace Ether {
     if (typeof node.encoded === 'number') return String(node.encoded);
     if (typeof node.encoded === 'string') return `"${node.encoded}"`;
     // Classes: show with all known aliases (skip superposition check for classes)
-    if (node.isClass) return `<class ${node.className || '*'}>`;
-    if (node.className) return `<${node.className}>`;
+    if (node.isClass) return `<class ${node.name || '*'}>`;
+    if (node.name) return `<${node.name}>`;
     return null;
   }
 
@@ -2669,11 +2827,16 @@ export namespace Ether {
       evalStatements(ast, bootstrap);
     } else if (stat.isDirectory()) {
       bootstrap.bootstrap(location);
-      const entrypoint = path.join(location, 'Ether.ray');
-      if (fs.existsSync(entrypoint)) {
-        console.log(`Loading entrypoint: ${entrypoint}`);
-        const ast = bootstrap.loadFile(entrypoint);
-        console.log(`Parsed ${ast.length} statements from entrypoint\n`);
+      if (!hasRuntimeErrors()) {
+        const entrypoint = path.join(location, 'Ether.ray');
+        if (fs.existsSync(entrypoint)) {
+          console.log(`Loading entrypoint: ${entrypoint}`);
+          clearRuntimeErrors();
+          const ast = bootstrap.loadFile(entrypoint);
+          bootstrap.evaluateStatements(ast, bootstrap.global.local, 2);
+          console.log(`Parsed ${ast.length} statements from entrypoint\n`);
+          printRuntimeErrors('Entrypoint');
+        }
       }
     } else {
       throw new Error(`"${location}": Unknown Ether instance directory or Ray file.`);

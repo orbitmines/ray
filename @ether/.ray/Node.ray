@@ -1,14 +1,25 @@
+global = local
+
+{`{`, expr: (): *, `}`} => expr<local: &caller>; local
+{`(`, expr: *, `)`} => expr
+{`[`, elements: *[], `]`} => elements
+
 class * | Node
+
+  external {`(`, args: *, `)`}
+  external {`[`, property: *, `]`}
+  {`{`, predicate: *, `}`} => this{predicate}
+
+  {"."}{property: \S[]} => this[property]
 
   class = {
     {name: String} (def: Program)
       static = local
 
-      dynamically (this @ Node)[name] = static if name // dynamically assign the name
+      dynamically (this @@ Node)[name] = static if name // dynamically assign the name
 
       (args: def.args)
         this = local
-          @ = (class) => &context.components{.static === class}.last.this
         .static = static
 
         def<local: this>(args)
@@ -16,8 +27,6 @@ class * | Node
 
       def<local: static>(def.args) // The constructor is always called with all possible arguments.
       static
-
-    static = class
   }
 
   enum
@@ -25,3 +34,7 @@ class * | Node
   class ==
     instance_of (type)
       return (this @ Node).(static === .) if type@ === class@
+
+
+  // Get the
+  @@ = (class) &caller.context.components{.static === class}.last[\@\]

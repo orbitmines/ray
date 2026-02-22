@@ -1,4 +1,3 @@
-global = local
 
 ({expr: (): *}) => expr
   expr
@@ -6,7 +5,7 @@ global = local
     => (block: (): *) => block ~~ : expr.type ~~ (.args ~~ .type = ?) = expr
   expr
 
-{`{`, expr: (): *, `}`} => expr<local: local>; local
+
 
 // "TODO" Highlighting
 //{" "[], comment: String, \n?} | /*{

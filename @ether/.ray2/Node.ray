@@ -5,9 +5,6 @@
    // Ambiguity: If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
 
 class
-  //TODO class${==.instance_of Nameable}, instance_of class
-
-  //TODO Class is always called on static if possible from a constructor. ; If no dependence on variables.
 
   {name: *} (def: (Args: *): *) //TODO Allow out-of-order
     //TODO Allow this<World>
@@ -18,10 +15,10 @@ class
 
 class * | Node
 
-  ; (call: (): (T: ?)): T => call<local: &caller>()
+  ; (call: (): (T: *)): T => call<local: &caller>()
 
-  -- (call: (: this): (T: ?)): T => call(this) ?? this //TODO ?? Should check the location of None, if it originates in caller if function, then do ??, otherwise return that None
-  ~~ (call: (: this): (T: ?)): this => call(this); this
+  -- (call: (: this): (T: *)): T => call(this)
+  ~~ (call: (: this): (T: *)): this => call(this); this
 
   , (b) => [this].push_back(b)
 
@@ -41,13 +38,13 @@ class * | Node
   {operator: "&" | "|" = "&"}=> &= (block: (): *)
     this["{operator}="](block)
 
+  // If not taken the branch the bound variable is . ; it returns local or self in a closure.
   if (predicate: boolean)
   unless (predicate: boolean)
 
   // Necessary for supporting: A | B : Type. The : without a space has a lower precedence than |, so A | B: Type matches to A | (B: Type).
   // A | B : Type, A | B .map, A | B {length == 3}
   {" "}{property: \S[] & not "|" | "&"} => this[property]
-  {"."}{property: \S[]} => this[property]
 
   [] => Array<this>
 

@@ -1,8 +1,15 @@
 global = local
 
-{`{`, expr: (): *, `}`} => expr<local: &caller>; local
-{`(`, expr: *, `)`} => expr
-{`[`, elements: *[], `]`} => elements
+`{string: String}` => string
+"{string: (substring: String, (punctuation: `{`, expression: *, punctuation: `}`) if substring !`\`⊣)[]}" => string - punctuation
+
+comment //{" "[], comment: String, \n?} | /*{
+  {comment: .line#.join(\n)}: (indent: " "[]{length == previous.indent if previous}?, line: String, " "[], "\n"?)[]
+}*\ =>
+
+{{expr: (): *}} => expr<local: &caller>; local
+({expr: *}) => expr
+[{elements: *[]}] => elements
 
 class * | Node
 
@@ -10,7 +17,7 @@ class * | Node
   external {`[`, property: *, `]`}
   {`{`, predicate: *, `}`} => this{predicate}
 
-  {"."}{property: \S[]} => this[property]
+  {"."}{property: (\S & not ".")[]} => this[property]
 
   class = {
     {name: String} (def: Program)

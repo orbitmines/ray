@@ -2016,8 +2016,9 @@ function evalExpr(expr: Expr, ctx: Context): Node {
 
       // --- Generic method dispatch ---
       const left = evalExpr(expr.left, ctx);
-      if (left._unresolved) return left; // Propagate unresolved tag through cascade
       const right = evalExpr(expr.right, ctx);
+      // Suppress the op error if either side is unresolved, but both sides are still evaluated
+      if (left._unresolved || right._unresolved) return left._unresolved ? left : right;
       const method = left.get(op);
       if (method) {
         if (method.encoded && typeof method.encoded === 'object' && method.encoded.__external) {
@@ -2078,11 +2079,10 @@ function evalExpr(expr: Expr, ctx: Context): Node {
       // Property access: evaluate object, evaluate property key, do object.get(key)
       // If direct get fails, fall through to () external (default call mechanism)
       const obj = evalExpr(expr.object, ctx);
-      if (obj._unresolved) return obj; // Propagate unresolved tag
-      if (obj.isNone) return obj;
       const key = evalExpr(expr.property, ctx);
-      if (key._unresolved) return key; // Propagate unresolved tag
-      if (key.isNone) return key;
+      // Suppress the access error if either side is unresolved/None, but both are still evaluated
+      if (obj._unresolved || obj.isNone) return obj;
+      if (key._unresolved || key.isNone) return key;
       const keyStr = typeof key.encoded === 'string' ? key.encoded
                    : typeof key.encoded === 'number' ? String(key.encoded)
                    : key.className ?? key.name ?? exprToString(expr.property);

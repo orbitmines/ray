@@ -5,12 +5,12 @@
     => (block: (): *) => block ~~ : expr.type ~~ (.args ~~ .type = ?) = expr
   expr
 
+// comments
+&caller.next.comment = above: &caller.comment, \n if above, comment //TODO .next here should be on the right level. or use a different method which does it properly. Comment after the current line should be included
+
 
 
 // "TODO" Highlighting
-//{" "[], comment: String, \n?} | /*{
-  {comment: .line#.join(\n)}: (indent: " "[]{length == previous.indent if previous}?, line: String, " "[], "\n"?)[]
-}* => &caller.next.comment = above: &caller.comment, \n if above, comment //TODO .next here should be on the right level. or use a different method which does it properly. Comment after the current line should be included
 
 
 // Compiler
@@ -241,15 +241,11 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
   //TODO Is Context just the Program State? Need to think that through
   class Context
     external local: this // .local is components.last
-    // context is &context
     //TODO Local context doesnt override this/static how?, It's still a node.
 
-
-    // Get the currently running function
     none.write external &: Program
 
-    dynamically if &parent
-      delegate {: not in this} => &parent.[GET THAT FUNCTIONS STATE/CONTEXT]
+    delegate {: not in this} => &parent.[GET THAT FUNCTIONS STATE/CONTEXT]
 
 
 

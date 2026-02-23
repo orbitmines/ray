@@ -16,7 +16,9 @@
   "scripts": {
     "test": "npx jest",
     "v0": "tsx src/runtime/v0.run.ts",
-    "v0.1": "tsx src/runtime/v0.1.run.ts"
+    "v0.1": "tsx src/runtime/v0.1.run.ts",
+    "v0.2": "tsx src/runtime/v0.2.run.ts",
+    "v0.3": "tsx src/runtime/v0.3.run.ts"
   },
   "jest": {
     "preset": "ts-jest",

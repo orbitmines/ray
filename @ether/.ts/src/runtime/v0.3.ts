@@ -117,7 +117,7 @@ namespace bootstrap {
     isComment: boolean;
   }
 
-  /** Character-level scan. Seed knowledge: {/} balance + "comment" modifier. */
+  /** Character-level scan. Seed knowledge: {/} balance + "comment"/"external" modifiers. */
   export function defs(source: string): Definition[] {
     const defs: Definition[] = [];
     let i = 0;
@@ -128,10 +128,16 @@ namespace bootstrap {
 
     while (i < source.length) {
       if (source[i] === '\n') { skip(); continue; }
-      if (source[i] === ' ') { skipLine(); continue; }
+
+      const indented = source[i] === ' ';
+      while (i < source.length && source[i] === ' ') skip();
+      if (i >= source.length || source[i] === '\n') continue;
 
       let isComment = false;
+      let isExternal = false;
       if (at('comment ')) { isComment = true; skip(8); }
+      else if (at('external ')) { isExternal = true; skip(9); }
+      else if (indented) { skipLine(); continue; }
 
       let depth = 0, seenBlock = false, hasArrow = false, text = '';
       let pattern: (string | typeof BINDING)[] = [];
@@ -165,7 +171,7 @@ namespace bootstrap {
       }
 
       flush();
-      if (seenBlock && hasArrow) alts.push(pattern);
+      if (seenBlock && (hasArrow || isExternal)) alts.push(pattern);
       for (const p of alts) if (p.length) defs.push({ pattern: p, isComment });
     }
 
@@ -246,8 +252,19 @@ class Reader {
       const last = def.pattern[def.pattern.length - 1];
       let content = '';
       let closerFound = true;
+      const lineOffsets: number[] = []; // per-line root positions for multiline code blocks
       if (typeof last === 'string' && last !== first) {
-        while (!this.done() && !this.at(last)) { content += this.ch(); this.skip(); }
+        let depth = 0;
+        lineOffsets.push(this.toRootPos(this.i)); // first line starts here
+        while (!this.done()) {
+          if (depth === 0 && this.at(last)) break;
+          if (this.at(first)) { depth++; content += first; this.skip(first.length); }
+          else if (depth > 0 && this.at(last)) { depth--; content += last; this.skip(last.length); }
+          else {
+            if (this.ch() === '\n') lineOffsets.push(this.toRootPos(this.i + 1));
+            content += this.ch(); this.skip();
+          }
+        }
         if (!this.done()) this.skip(last.length); else closerFound = false;
       } else if (typeof last === 'string') {
         while (!this.done() && !this.at(last)) { content += this.ch(); this.skip(); }
@@ -264,7 +281,15 @@ class Reader {
         return new Node(null);
       }
 
-      return this.apply(this.defNodes.get(def)!, new Node(content));
+      // Code blocks (opener !== closer): wrap as block for sub-reader evaluation
+      // String literals (opener === closer): keep as raw content
+      const isCodeBlock = typeof last === 'string' && last !== first;
+      const arg = isCodeBlock
+        ? this.makeBlock(content, lineOffsets.length > 1
+            ? { lineOffsets, blockIndent: 0 }
+            : { offset: lineOffsets[0] ?? this.toRootPos(startPos + first.length) })
+        : new Node(content);
+      return this.apply(this.defNodes.get(def)!, arg);
     }
     return undefined;
   }
@@ -278,6 +303,8 @@ class Reader {
         if (typeof first === 'string' && this.at(first)) { hit = true; break; }
       }
       if (hit) break;
+      // Split at ':' so `name:` becomes `name` + `:` (binding separator)
+      if (text && this.ch() === ':') break;
       text += this.ch(); this.skip();
     }
     return text;
@@ -644,13 +671,26 @@ namespace Ether {
       return self;
     });
 
-    // = method: lhs = rhs → lhs.lazy_set(rhs); if lhs is a named forward and `this` is in scope, register on this
-    Node.PROTO.external_method('=', (self: Node, rhs: Node, assignCtx: Context) => {
+    // = method: lhs = rhs → register name, resolve forward, lazy_set
+    Node.PROTO.external_method('=', (self: Node, rhs: Node, assignCtx: Context, reader: Reader) => {
       if (typeof self.value.encoded === 'string') {
+        const name = self.value.encoded;
         const thisNode = assignCtx.get('this');
-        if (!thisNode.none) {
-          thisNode.external(self.value.encoded, () => self);
-        }
+        if (!thisNode.none) thisNode.external(name, () => self);
+        else assignCtx.external(name, () => self);
+        reader.resolveForward(name, self);
+      }
+      return self.lazy_set(rhs);
+    });
+
+    // : method: lhs : rhs → register binding name, resolve forward, lazy_set (type annotation)
+    Node.PROTO.external_method(':', (self: Node, rhs: Node, typeCtx: Context, reader: Reader) => {
+      if (typeof self.value.encoded === 'string') {
+        const name = self.value.encoded;
+        const thisNode = typeCtx.get('this');
+        if (!thisNode.none) thisNode.external(name, () => self);
+        else typeCtx.external(name, () => self);
+        reader.resolveForward(name, self);
       }
       return self.lazy_set(rhs);
     });

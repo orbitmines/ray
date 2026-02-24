@@ -916,9 +916,8 @@ function injectStyles(): void {
       .repo-breadcrumb::-webkit-scrollbar { display: none; }
       .breadcrumb-actions { display: none !important; }
       .nav-actions { display: contents; }
-      .nav-actions .action-btn .action-label { display: none; }
+      .nav-actions .action-btn:not(.follow-btn) .action-label { display: none; }
       .nav-actions .star-btn,
-      .nav-actions .follow-btn,
       .nav-actions .clone-btn { gap: 4px; padding: 0 6px; }
 
       .action-icon-default { display: none !important; }
@@ -1200,6 +1199,13 @@ function injectStyles(): void {
     .profile-name-field-value:focus {
       color: rgba(255,255,255,0.9);
     }
+    .profile-name-group-row .profile-name-field-value {
+      color: rgba(255,255,255,0.9);
+      width: auto;
+    }
+    .profile-name-group-row .profile-name-field {
+      width: auto;
+    }
     .profile-name-field-wrap {
       position: relative;
       display: inline-flex;
@@ -1217,11 +1223,21 @@ function injectStyles(): void {
       line-height: normal;
     }
 
-    .profile-name-item.mode-email [data-name-value-wrap] { display: none; }
-    .profile-name-item.mode-world [data-name-platform-wrap],
-    .profile-name-item.mode-email [data-name-platform-wrap] { flex: 1; }
+    .profile-name-item.mode-email [data-name-value-wrap],
+    .profile-name-group-row.mode-email [data-name-value-wrap] { display: none; }
+    .profile-name-item.mode-email [data-name-platform-wrap],
+    .profile-name-group-row.mode-email [data-name-platform-wrap] { flex: 1; }
+    .profile-name-item.mode-email .profile-name-field,
+    .profile-name-group-row.mode-email .profile-name-field { width: 100%; }
     .profile-name-item.mode-world .profile-name-field,
-    .profile-name-item.mode-email .profile-name-field { width: 100%; }
+    .profile-name-group-row.mode-world .profile-name-field {
+      width: 140px;
+      color: rgba(255,255,255,0.7);
+    }
+    .profile-name-item.mode-world .profile-name-field:focus,
+    .profile-name-group-row.mode-world .profile-name-field:focus {
+      color: rgba(255,255,255,0.9);
+    }
 
     .profile-name-item {
       flex-wrap: wrap;
@@ -1272,6 +1288,118 @@ function injectStyles(): void {
     .profile-name-dropdown-item:hover {
       color: rgba(255,255,255,0.5);
     }
+
+    /* Ether group — inline entries within a single row */
+    /* Grouped category block — wraps all entries of one category */
+    .profile-name-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-bottom: 6px;
+    }
+    .profile-name-group-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 24px;
+      user-select: none;
+      -webkit-user-select: none;
+      padding: 0;
+    }
+    .profile-name-group-row input {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+    .profile-name-group-row:hover {
+      background: rgba(255,255,255,0.02);
+    }
+    /* Group-level drag handle (left side, moves whole category) */
+    .profile-name-group-drag {
+      cursor: grab;
+      opacity: 0;
+      transition: opacity 0.15s;
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .profile-name-group-drag svg {
+      width: 12px;
+      height: 12px;
+      fill: rgba(255,255,255,0.3);
+    }
+    .profile-name-group:hover .profile-name-group-drag { opacity: 1; }
+    /* Icon + platform label column — only visible on first row */
+    .profile-name-group-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 20px;
+      min-height: 20px;
+    }
+    .profile-name-group-icon svg {
+      width: 16px;
+      height: 16px;
+      fill: rgba(255,255,255,0.5);
+    }
+    .profile-name-group-icon-spacer {
+      display: inline-block;
+      flex: 0 0 20px;
+    }
+    .profile-name-group-label {
+      color: rgba(255,255,255,0.5);
+      font-size: 12px;
+      flex-shrink: 0;
+      min-width: 60px;
+    }
+    .profile-name-group-label-spacer {
+      display: inline-block;
+      min-width: 60px;
+      flex-shrink: 0;
+    }
+    /* Entry value text */
+    .profile-name-group-value {
+      color: rgba(255,255,255,0.9);
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+    }
+    .profile-name-group-value a {
+      color: rgba(255,255,255,0.9);
+      text-decoration: none;
+    }
+    .profile-name-group-value a:hover {
+      text-decoration: underline;
+    }
+    /* Entry remove button — pushed to far right */
+    .profile-name-entry-remove {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.35);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 2px;
+      line-height: 1;
+      margin-left: auto;
+      opacity: 0;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+    }
+    .profile-name-group-row:hover .profile-name-entry-remove { opacity: 1; }
+    .profile-name-entry-remove:hover { color: #f87171; }
+    /* Drag feedback */
+    .profile-name-group.drag-over-top {
+      border-top: 2px solid rgba(255,255,255,0.4);
+    }
+    .profile-name-group.drag-over-bottom {
+      border-bottom: 2px solid rgba(255,255,255,0.4);
+    }
+    .profile-name-group-row.drag-over-top {
+      border-top: 2px solid rgba(255,255,255,0.4);
+    }
+    .profile-name-group-row.drag-over-bottom {
+      border-bottom: 2px solid rgba(255,255,255,0.4);
+    }
+    .profile-name-group.dragging { opacity: 0.3; pointer-events: none; }
+    .profile-name-group-row.dragging { opacity: 0.3; pointer-events: none; }
 
     @media (max-width: 700px) {
       .profile-layout {
@@ -2454,7 +2582,10 @@ function saveProfile(user: string, data: ProfileData): void {
   localStorage.setItem(`ether:profile:${user}`, JSON.stringify(data));
 }
 
+const ETHER_SVG = `<svg viewBox="0 0 136 136" xmlns="http://www.w3.org/2000/svg"><path d="M58.13 66.72C54.79 59.1 46.37 46.42 40.95 37.3c-4.3-7.23-7.23-11.16-3.45-17.9 4.76-6.79 13.07-5.5 17.31-5.5h32.05l-.09 6.73-35.03.43s-3.75-.25-5.98 2.76c-1.69 2.28-.19 6.26.96 7.95 6.23 9.23 18.25 29.37 18.25 29.37z"/><path d="M89.46 10.63a6.45 6.45 0 100 12.9 6.45 6.45 0 000-12.9zm0 4a2.45 2.45 0 110 4.91 2.45 2.45 0 010-4.91z"/><path d="M89.34 109.36a6.45 6.45 0 100 12.9 6.45 6.45 0 000-12.9zm0 4a2.45 2.45 0 110 4.91 2.45 2.45 0 010-4.91z"/><path d="M64.72 60.13a6.45 6.45 0 100 12.9 6.45 6.45 0 000-12.9zm0 4a2.45 2.45 0 110 4.91 2.45 2.45 0 010-4.91z"/><path d="M58.13 66.53c-3.34 7.62-11.76 20.3-17.18 29.42-4.3 7.23-7.23 11.16-3.45 17.9 4.76 6.79 13.07 5.5 17.31 5.5h32.05l-.09-6.73-35.03-.43s-3.75.25-5.98-2.76c-1.69-2.28-.19-6.26.96-7.95 6.23-9.23 18.25-29.37 18.25-29.37z"/></svg>`;
+
 const SOCIAL_PLATFORMS: { id: string; label: string; svg: string; urlPrefix?: string }[] = [
+  { id: 'ether', label: 'Ether', urlPrefix: '/@', svg: ETHER_SVG },
   { id: 'github', label: 'GitHub', urlPrefix: 'https://github.com/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>` },
   { id: 'twitter', label: 'Twitter/X', urlPrefix: 'https://x.com/', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>` },
   { id: 'discord', label: 'Discord', svg: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.947 2.418-2.157 2.418z"/></svg>` },
@@ -2500,6 +2631,73 @@ function nameEntryMode(platform: string): 'platform' | 'world' | 'email' {
   return 'platform';
 }
 
+/** Check if a string looks like a domain name (e.g. orbitmines.com) */
+function isDomainName(name: string): boolean {
+  return /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$/.test(name);
+}
+
+interface SocialGroup {
+  key: string;                  // category key: 'ether', 'domain', 'email', platform id, or unique per world entry
+  icon: string;                 // SVG html
+  label: string;                // platform label (e.g. '@GitHub') or '' for ether/domain/email
+  entries: { idx: number; social: ProfileSocial }[];
+}
+
+/** Group flat socials into ordered categories for rendering */
+function groupSocials(socials: ProfileSocial[]): SocialGroup[] {
+  const groups: SocialGroup[] = [];
+  const keyToGroup = new Map<string, SocialGroup>();
+
+  for (let i = 0; i < socials.length; i++) {
+    const s = socials[i];
+    const mode = nameEntryMode(s.platform);
+
+    if (mode === 'world') {
+      // World entries are standalone — each gets its own unique group
+      groups.push({
+        key: `world:${i}`,
+        icon: WORLD_SVG,
+        label: '',
+        entries: [{ idx: i, social: s }],
+      });
+      continue;
+    }
+
+    let key: string;
+    let icon: string;
+    let label: string;
+
+    if (s.platform === 'ether' && !isDomainName(s.username)) {
+      key = 'ether';
+      icon = ETHER_SVG;
+      label = '';
+    } else if (s.platform === 'ether' && isDomainName(s.username)) {
+      key = 'domain';
+      icon = WORLD_SVG;
+      label = '';
+    } else if (mode === 'email') {
+      key = 'email';
+      icon = EMAIL_SVG;
+      label = '';
+    } else {
+      key = s.platform;
+      icon = getSocialSvg(s.platform);
+      label = `@${getSocialLabel(s.platform)}`;
+    }
+
+    const existing = keyToGroup.get(key);
+    if (existing) {
+      existing.entries.push({ idx: i, social: s });
+    } else {
+      const group: SocialGroup = { key, icon, label, entries: [{ idx: i, social: s }] };
+      groups.push(group);
+      keyToGroup.set(key, group);
+    }
+  }
+
+  return groups;
+}
+
 const DRAG_HANDLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 14"><circle cx="3" cy="2" r="1.2" fill="currentColor"/><circle cx="7" cy="2" r="1.2" fill="currentColor"/><circle cx="3" cy="7" r="1.2" fill="currentColor"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/><circle cx="3" cy="12" r="1.2" fill="currentColor"/><circle cx="7" cy="12" r="1.2" fill="currentColor"/></svg>`;
 
 const DEFAULT_AVATAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -2532,18 +2730,157 @@ function matchPlatform(input: string): { id: string; label: string } | null {
   return null;
 }
 
+/** Render world path value (multi-line indented segments) — extracted helper */
+function renderWorldPathValue(social: ProfileSocial): string {
+  const segments = social.platform.split('.');
+  let pathHtml = '';
+  for (let s = 0; s < segments.length; s++) {
+    const seg = segments[s];
+    const indent = s > 0 ? ` style="padding-left: ${s * 12}px"` : '';
+    if (seg.startsWith('@')) {
+      const playerName = seg.slice(1);
+      pathHtml += `<span class="profile-name-path-line"${indent}><a href="/@${escapeHtml(playerName)}">${escapeHtml(seg)}</a></span>`;
+    } else {
+      pathHtml += `<span class="profile-name-path-line"${indent}>${escapeHtml(seg)}</span>`;
+    }
+  }
+  if (social.username) {
+    const uIndent = ` style="padding-left: ${segments.length * 12}px"`;
+    pathHtml += `<span class="profile-name-path-line"${uIndent}><a href="/@${escapeHtml(social.username)}">@${escapeHtml(social.username)}</a></span>`;
+  }
+  return pathHtml;
+}
+
+/** Render one category group block (all entries stacked vertically) */
+function renderNameGroup(group: SocialGroup, isOwner: boolean): string {
+  const isWorld = group.key.startsWith('world:');
+  const firstIdx = group.entries[0].idx;
+
+  let html = `<div class="profile-name-group" data-group-key="${escapeHtml(group.key)}" data-group-first-idx="${firstIdx}">`;
+
+  for (let ei = 0; ei < group.entries.length; ei++) {
+    const e = group.entries[ei];
+    const s = e.social;
+    const isFirst = ei === 0;
+    const mode = nameEntryMode(s.platform);
+
+    // Determine display values
+    let displayPlatform = '';
+    let displayUsername = '';
+    if (mode === 'world') {
+      displayPlatform = s.platform;
+      displayUsername = s.username ? `@${s.username}` : '';
+    } else if (mode === 'email') {
+      displayPlatform = s.platform;
+      displayUsername = '';
+    } else {
+      displayPlatform = s.platform ? `@${getSocialLabel(s.platform)}` : '';
+      displayUsername = s.username ? `@${s.username}` : '';
+    }
+
+    const modeClass = mode !== 'platform' && s.platform ? ` mode-${mode}` : '';
+    html += `<div class="profile-name-group-row${modeClass}" data-group-entry-idx="${e.idx}" data-name-index="${e.idx}" data-name-platform="${escapeHtml(s.platform)}" data-name-username="${escapeHtml(s.username)}">`;
+
+    // Group drag handle — only on first row
+    if (isOwner && isFirst) {
+      html += `<span class="profile-name-group-drag" data-group-drag="${firstIdx}">${DRAG_HANDLE_SVG}</span>`;
+    } else if (isOwner) {
+      html += `<span class="profile-name-group-drag" style="visibility:hidden">${DRAG_HANDLE_SVG}</span>`;
+    }
+
+    // Icon — only on first row, spacer on subsequent
+    if (isFirst) {
+      html += `<span class="profile-name-group-icon" data-name-icon>${group.icon}</span>`;
+    } else {
+      html += `<span class="profile-name-group-icon-spacer"></span>`;
+    }
+
+    // Platform label — only on first row if label exists, spacer on subsequent
+    if (group.label) {
+      if (isFirst) {
+        html += `<span class="profile-name-group-label">${escapeHtml(group.label)}</span>`;
+      } else {
+        html += `<span class="profile-name-group-label-spacer"></span>`;
+      }
+    }
+
+    if (!isOwner) {
+      // Read-only value
+      html += `<span class="profile-name-group-value">`;
+      if (isWorld) {
+        html += `<span class="profile-name-world-path">${renderWorldPathValue(s)}</span>`;
+      } else if (group.key === 'ether') {
+        html += `<a href="/@${escapeHtml(s.username)}">@${escapeHtml(s.username)}</a>`;
+      } else if (group.key === 'domain') {
+        html += `<a href="https://${escapeHtml(s.username)}" target="_blank" rel="noopener">${escapeHtml(s.username)}</a>`;
+      } else if (group.key === 'email') {
+        html += `<a href="mailto:${escapeHtml(s.platform)}">${escapeHtml(s.platform)}</a>`;
+      } else {
+        const url = getSocialUrl(s.platform, s.username);
+        if (url) {
+          html += `<a href="${url}" target="_blank" rel="noopener">@${escapeHtml(s.username)}</a>`;
+        } else {
+          html += `@${escapeHtml(s.username)}`;
+        }
+      }
+      html += `</span>`;
+    } else if (isWorld) {
+      // World: platform input (#world path) + username input (@user)
+      const pSize = Math.max(displayPlatform.length, 6);
+      const uSize = Math.max(displayUsername.length, 9);
+      html += `<span class="profile-name-field-wrap" data-name-platform-wrap>`;
+      html += `<input class="profile-name-field" data-name-platform-input value="${escapeHtml(displayPlatform)}" placeholder="#world" size="${pSize}" spellcheck="false" />`;
+      html += `<span class="profile-name-field-ghost" data-name-platform-ghost></span>`;
+      html += `</span>`;
+      html += `<span class="profile-name-field-wrap" data-name-value-wrap>`;
+      html += `<input class="profile-name-field-value" data-name-value-input value="${escapeHtml(displayUsername)}" placeholder="@username" size="${uSize}" spellcheck="false" />`;
+      html += `<span class="profile-name-field-ghost" data-name-value-ghost></span>`;
+      html += `</span>`;
+      html += `<div class="profile-name-dropdown" data-name-dropdown></div>`;
+    } else if (group.key === 'email') {
+      // Email: single input for the email address, uses value styling
+      const eSize = Math.max(s.platform.length, 5);
+      html += `<span class="profile-name-field-wrap" data-name-platform-wrap>`;
+      html += `<input class="profile-name-field-value" data-name-platform-input value="${escapeHtml(s.platform)}" placeholder="email" size="${eSize}" spellcheck="false" />`;
+      html += `<span class="profile-name-field-ghost" data-name-platform-ghost></span>`;
+      html += `</span>`;
+    } else {
+      // Ether, domain, platform: username-only input (platform already shown by icon/label)
+      const vSize = Math.max(displayUsername.length, 9);
+      html += `<span class="profile-name-field-wrap" data-name-value-wrap>`;
+      html += `<input class="profile-name-field-value" data-name-value-input value="${escapeHtml(displayUsername)}" placeholder="@username" size="${vSize}" spellcheck="false" />`;
+      html += `<span class="profile-name-field-ghost" data-name-value-ghost></span>`;
+      html += `</span>`;
+    }
+
+    // Remove button — pushed to far right
+    if (isOwner) {
+      html += `<button class="profile-name-entry-remove" data-entry-remove="${e.idx}">&times;</button>`;
+    }
+
+    html += `</div>`; // .profile-name-group-row
+  }
+
+  html += `</div>`; // .profile-name-group
+  return html;
+}
+
 function renderProfileNames(socials: ProfileSocial[], isOwner: boolean): string {
   if (socials.length === 0 && !isOwner) return '';
+
+  const groups = groupSocials(socials);
+
   let html = `<div class="profile-names" data-profile-names>`;
   html += `<div class="profile-names-header">Names</div>`;
-  for (let i = 0; i < socials.length; i++) {
-    const s = socials[i];
-    html += renderNameItem(s, i, isOwner);
+
+  for (const group of groups) {
+    html += renderNameGroup(group, isOwner);
   }
+
   if (isOwner) {
-    // Empty row for adding new entry
     html += renderNameItem(null, socials.length, true);
   }
+
   html += `</div>`;
   return html;
 }
@@ -2610,8 +2947,9 @@ function renderNameItem(social: ProfileSocial | null, index: number, isOwner: bo
       </div>`;
     }
     const url = social ? getSocialUrl(social.platform, social.username) : null;
+    const isInternal = social?.platform === 'ether';
     const usernameHtml = url
-      ? `<a href="${url}" target="_blank" rel="noopener">@${escapeHtml(username)}</a>`
+      ? `<a href="${url}"${isInternal ? '' : ' target="_blank" rel="noopener"'}>@${escapeHtml(username)}</a>`
       : `@${escapeHtml(username)}`;
     return `<div class="profile-name-item" data-name-index="${index}">
       <span class="profile-name-icon">${svg}</span>
@@ -2729,6 +3067,8 @@ function reRenderNames(card: HTMLElement, container: HTMLElement, user: string):
   if (namesContainer) {
     namesContainer.outerHTML = renderProfileNames(profile.socials, true);
     bindProfileNameHandlers(card, container, user);
+    bindGroupDragHandlers(card, container, user);
+    bindEntryDragHandlers(card, container, user);
   }
 }
 
@@ -2791,7 +3131,7 @@ function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user
   // Platform field — mode-aware: @platform (autocomplete), #world (dropdown), or email
   card.querySelectorAll('[data-name-platform-input]').forEach(inputEl => {
     const input = inputEl as HTMLInputElement;
-    const item = input.closest('.profile-name-item') as HTMLElement;
+    const item = input.closest('.profile-name-group-row, .profile-name-item') as HTMLElement;
     if (!item) return;
     const ghostEl = item.querySelector('[data-name-platform-ghost]') as HTMLElement | null;
     const iconEl = item.querySelector('[data-name-icon]') as HTMLElement | null;
@@ -2928,6 +3268,9 @@ function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user
         updateGhost();
       }
       updateIcon();
+      if (item.classList.contains('profile-name-group-row')) {
+        input.size = Math.max(input.value.length, 1);
+      }
     });
 
     input.addEventListener('keydown', (e) => {
@@ -3059,7 +3402,7 @@ function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user
   // Username field — with world-context autocomplete
   card.querySelectorAll('[data-name-value-input]').forEach(inputEl => {
     const input = inputEl as HTMLInputElement;
-    const item = input.closest('.profile-name-item') as HTMLElement;
+    const item = input.closest('.profile-name-group-row, .profile-name-item') as HTMLElement;
     if (!item) return;
     const ghostEl = item.querySelector('[data-name-value-ghost]') as HTMLElement | null;
     const dropdownEl = item.querySelector('[data-name-dropdown]') as HTMLElement | null;
@@ -3081,6 +3424,18 @@ function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user
     };
 
     const isWorldMode = () => platformInput ? nameEntryMode(platformInput.value) === 'world' : false;
+
+    const isEtherMode = () => {
+      if (platformInput) {
+        const val = platformInput.value.replace(/^@/, '').trim();
+        if (!val) return true; // empty platform defaults to ether
+        const match = matchPlatform(val);
+        return match?.id === 'ether';
+      }
+      // No platform input — check data attribute from grouped entry
+      const plat = item.dataset.namePlatform || '';
+      return plat === 'ether' || !plat;
+    };
 
     const renderUserDropdown = () => {
       if (!dropdownEl) return;
@@ -3133,17 +3488,39 @@ function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user
 
     const updateUserCompletions = async () => {
       const world = getWorldContext();
-      if (!world) { hideUserDropdown(); if (ghostEl) ghostEl.textContent = ''; return; }
-      const gen = ++userCompletionGen;
-      const filter = input.value.replace(/^@/, '').toLowerCase();
-      const users = await getReferencedUsers(user, world);
-      if (gen !== userCompletionGen) return;
-      userCompletions = users
-        .filter(u => !filter || u.toLowerCase().startsWith(filter))
-        .map(u => ({ display: `@${u}`, value: u }));
-      userSelectedIdx = userCompletions.length > 0 ? 0 : -1;
-      renderUserDropdown();
-      updateUserGhost();
+      if (world) {
+        // World mode — show users within world context
+        const gen = ++userCompletionGen;
+        const filter = input.value.replace(/^@/, '').toLowerCase();
+        const users = await getReferencedUsers(user, world);
+        if (gen !== userCompletionGen) return;
+        userCompletions = users
+          .filter(u => !filter || u.toLowerCase().startsWith(filter))
+          .map(u => ({ display: `@${u}`, value: u }));
+        userSelectedIdx = userCompletions.length > 0 ? 0 : -1;
+        renderUserDropdown();
+        updateUserGhost();
+        return;
+      }
+
+      if (isEtherMode()) {
+        // Ether mode — show all ether users
+        const gen = ++userCompletionGen;
+        const filter = input.value.replace(/^@/, '').toLowerCase();
+        if (!filter) { hideUserDropdown(); if (ghostEl) ghostEl.textContent = ''; return; }
+        const users = await getReferencedUsers(user);
+        if (gen !== userCompletionGen) return;
+        userCompletions = users
+          .filter(u => !filter || u.toLowerCase().startsWith(filter))
+          .map(u => ({ display: `@${u}`, value: u }));
+        userSelectedIdx = userCompletions.length > 0 ? 0 : -1;
+        renderUserDropdown();
+        updateUserGhost();
+        return;
+      }
+
+      hideUserDropdown();
+      if (ghostEl) ghostEl.textContent = '';
     };
 
     // Dropdown click
@@ -3161,17 +3538,20 @@ function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user
       if (!input.value.startsWith('@') && input.value.length > 0) {
         input.value = '@' + input.value;
       }
-      if (isWorldMode()) {
+      if (isWorldMode() || isEtherMode()) {
         updateUserCompletions();
       } else {
         hideUserDropdown();
         if (ghostEl) ghostEl.textContent = '';
       }
+      if (item.classList.contains('profile-name-group-row')) {
+        input.size = Math.max(input.value.length, 1);
+      }
     });
 
     input.addEventListener('keydown', (e) => {
-      // World mode user autocomplete navigation
-      if (isWorldMode() && userCompletions.length > 0) {
+      // World/Ether mode user autocomplete navigation
+      if ((isWorldMode() || isEtherMode()) && userCompletions.length > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
           userSelectedIdx = Math.min(userSelectedIdx + 1, userCompletions.length - 1);
@@ -3203,7 +3583,7 @@ function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user
 
     input.addEventListener('focus', () => {
       if (!input.value) input.value = '@';
-      if (isWorldMode()) updateUserCompletions();
+      if (isWorldMode() || isEtherMode()) updateUserCompletions();
     });
 
     input.addEventListener('blur', () => {
@@ -3212,29 +3592,33 @@ function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user
 
       const idx = parseInt(item.dataset.nameIndex || '0', 10);
       const rawUsername = input.value.replace(/^@/, '').trim();
-      const rawPlatform = platformInput ? platformInput.value.replace(/^@/, '').trim() : '';
+      // For grouped entries without platform input, use stored platform from data attribute
+      const storedPlatform = item.dataset.namePlatform || '';
+      const rawPlatform = platformInput ? platformInput.value.replace(/^@/, '').trim() : storedPlatform;
 
       if (!rawPlatform && !rawUsername) {
         input.value = '';
         return;
       }
 
-      const platMode = platformInput ? nameEntryMode(platformInput.value) : 'platform';
-      const platformId = platMode === 'world' ? rawPlatform : (matchPlatform(rawPlatform)?.id || rawPlatform.toLowerCase());
+      const platMode = platformInput ? nameEntryMode(platformInput.value) : nameEntryMode(storedPlatform);
+      const platformId = platMode === 'world' ? rawPlatform : (platformInput ? (matchPlatform(rawPlatform)?.id || rawPlatform.toLowerCase()) : rawPlatform);
 
       const profile = loadProfile(user);
       if (idx < profile.socials.length) {
         profile.socials[idx].username = rawUsername;
         saveProfile(user, profile);
-      } else if (rawPlatform && rawUsername) {
-        profile.socials.push({ platform: platformId, username: rawUsername });
+      } else if (rawUsername) {
+        // Default to ether when no platform is specified
+        const finalPlatform = rawPlatform ? platformId : 'ether';
+        profile.socials.push({ platform: finalPlatform, username: rawUsername });
         saveProfile(user, profile);
         reRenderNames(card, container, user);
       }
     });
   });
 
-  // Remove buttons
+  // Remove buttons (for add-row items that use renderNameItem)
   card.querySelectorAll('[data-name-remove]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -3245,90 +3629,262 @@ function bindProfileNameHandlers(card: HTMLElement, container: HTMLElement, user
       reRenderNames(card, container, user);
     });
   });
+}
 
-  // Drag-and-drop reorder
-  let dragSrcIdx = -1;
-  const nameItems = Array.from(card.querySelectorAll('.profile-name-item[data-name-index]')) as HTMLElement[];
-  const socialsCount = loadProfile(user).socials.length;
+/** Group-level drag-and-drop: moves entire category blocks among other groups.
+ *  Uses document-level dragover/drop to avoid the source element blocking events below it. */
+function bindGroupDragHandlers(card: HTMLElement, container: HTMLElement, user: string): void {
+  const groups = Array.from(card.querySelectorAll('.profile-name-group[data-group-key]')) as HTMLElement[];
+  let dragSrcEl: HTMLElement | null = null;
+  let dragSrcKey: string | null = null;
+  let hoveredGroup: HTMLElement | null = null;
 
-  nameItems.forEach(item => {
-    const idx = parseInt(item.dataset.nameIndex || '0', 10);
-    const handle = item.querySelector('[data-name-drag]') as HTMLElement | null;
-    if (!handle || idx >= socialsCount) return;
+  // Remove buttons for grouped entries
+  card.querySelectorAll('[data-entry-remove]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt((btn as HTMLElement).dataset.entryRemove || '0', 10);
+      const profile = loadProfile(user);
+      if (idx < profile.socials.length) {
+        profile.socials.splice(idx, 1);
+        saveProfile(user, profile);
+        reRenderNames(card, container, user);
+      }
+    });
+  });
 
-    // Make the item itself draggable when drag starts from handle
-    handle.addEventListener('mousedown', () => { item.setAttribute('draggable', 'true'); });
-    item.addEventListener('dragstart', (e) => {
+  function findClosestGroup(clientY: number): { el: HTMLElement; before: boolean } | null {
+    let best: { el: HTMLElement; dist: number; before: boolean } | null = null;
+    for (const g of groups) {
+      if (g === dragSrcEl) continue;
+      const rect = g.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      // Check if cursor is vertically within or near this group
+      const dist = Math.min(Math.abs(clientY - rect.top), Math.abs(clientY - rect.bottom));
+      const before = clientY < midY;
+      if (!best || dist < best.dist) {
+        best = { el: g, dist, before };
+      }
+    }
+    return best;
+  }
+
+  function onDocDragOver(e: DragEvent): void {
+    if (!dragSrcKey) return;
+    e.preventDefault();
+    e.dataTransfer!.dropEffect = 'move';
+
+    // Clear old hover
+    if (hoveredGroup) {
+      hoveredGroup.classList.remove('drag-over-top', 'drag-over-bottom');
+      hoveredGroup = null;
+    }
+
+    const target = findClosestGroup(e.clientY);
+    if (target) {
+      hoveredGroup = target.el;
+      target.el.classList.add(target.before ? 'drag-over-top' : 'drag-over-bottom');
+    }
+  }
+
+  function onDocDrop(e: DragEvent): void {
+    if (!dragSrcKey || !hoveredGroup) return;
+    e.preventDefault();
+
+    const targetKey = hoveredGroup.dataset.groupKey || '';
+    const target = findClosestGroup(e.clientY);
+    const dropBefore = target ? target.before : true;
+
+    // Clean up visuals
+    hoveredGroup.classList.remove('drag-over-top', 'drag-over-bottom');
+
+    if (targetKey === dragSrcKey) return;
+
+    const prof = loadProfile(user);
+    const currentGroups = groupSocials(prof.socials);
+    const srcGroup = currentGroups.find(g => g.key === dragSrcKey);
+    const tgtGroup = currentGroups.find(g => g.key === targetKey);
+    if (!srcGroup || !tgtGroup) return;
+
+    // Extract source entries (remove from highest index first)
+    const srcIndices = srcGroup.entries.map(e => e.idx).sort((a, b) => b - a);
+    const srcItems = srcGroup.entries.map(e => prof.socials[e.idx]);
+    for (const idx of srcIndices) {
+      prof.socials.splice(idx, 1);
+    }
+
+    // Find target position after removals
+    const tgtFirstIdx = tgtGroup.entries[0].idx;
+    let insertAt = tgtFirstIdx;
+    const removedBefore = srcIndices.filter(si => si < tgtFirstIdx).length;
+    insertAt -= removedBefore;
+    if (!dropBefore) {
+      const tgtLastIdx = tgtGroup.entries[tgtGroup.entries.length - 1].idx;
+      insertAt = tgtLastIdx - srcIndices.filter(si => si < tgtLastIdx).length + 1;
+    }
+    if (insertAt < 0) insertAt = 0;
+    if (insertAt > prof.socials.length) insertAt = prof.socials.length;
+
+    prof.socials.splice(insertAt, 0, ...srcItems);
+    saveProfile(user, prof);
+    dragSrcKey = null;
+    dragSrcEl = null;
+    reRenderNames(card, container, user);
+  }
+
+  groups.forEach(groupEl => {
+    const key = groupEl.dataset.groupKey || '';
+    const handle = groupEl.querySelector('[data-group-drag]') as HTMLElement | null;
+    if (!handle) return;
+
+    handle.addEventListener('mousedown', () => { groupEl.setAttribute('draggable', 'true'); });
+    groupEl.addEventListener('dragstart', (e) => {
       const ev = e as DragEvent;
-      dragSrcIdx = idx;
-      item.classList.add('dragging');
+      dragSrcKey = key;
+      dragSrcEl = groupEl;
       ev.dataTransfer!.effectAllowed = 'move';
-      ev.dataTransfer!.setData('text/plain', String(idx));
-      // Use a minimal drag image so inputs don't interfere
-      const ghost = item.cloneNode(true) as HTMLElement;
+      ev.dataTransfer!.setData('text/plain', key);
+      // Custom drag image
+      const ghost = groupEl.cloneNode(true) as HTMLElement;
       ghost.style.position = 'absolute';
       ghost.style.top = '-1000px';
       document.body.appendChild(ghost);
       ev.dataTransfer!.setDragImage(ghost, 0, 0);
-      requestAnimationFrame(() => ghost.remove());
+      requestAnimationFrame(() => { ghost.remove(); groupEl.classList.add('dragging'); });
+      // Attach document-level listeners
+      document.addEventListener('dragover', onDocDragOver);
+      document.addEventListener('drop', onDocDrop);
     });
-    item.addEventListener('dragend', () => {
-      item.setAttribute('draggable', 'false');
-      item.classList.remove('dragging');
-      nameItems.forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
-      dragSrcIdx = -1;
+    groupEl.addEventListener('dragend', () => {
+      groupEl.setAttribute('draggable', 'false');
+      groupEl.classList.remove('dragging');
+      groups.forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+      dragSrcKey = null;
+      dragSrcEl = null;
+      hoveredGroup = null;
+      // Remove document-level listeners
+      document.removeEventListener('dragover', onDocDragOver);
+      document.removeEventListener('drop', onDocDrop);
     });
   });
+}
 
-  nameItems.forEach(item => {
-    const idx = parseInt(item.dataset.nameIndex || '0', 10);
-    if (idx >= socialsCount) return;
-    let dragOverCounter = 0;
+/** Within-group entry drag-and-drop: reorders entries within a category.
+ *  Uses document-level dragover/drop to avoid the source element blocking events below it. */
+function bindEntryDragHandlers(card: HTMLElement, container: HTMLElement, user: string): void {
+  const groups = Array.from(card.querySelectorAll('.profile-name-group[data-group-key]')) as HTMLElement[];
 
-    item.addEventListener('dragover', (e) => {
-      const ev = e as DragEvent;
-      if (dragSrcIdx < 0 || dragSrcIdx === idx) return;
-      ev.preventDefault();
-      ev.dataTransfer!.dropEffect = 'move';
-      const rect = item.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      item.classList.remove('drag-over-top', 'drag-over-bottom');
-      item.classList.add(ev.clientY < midY ? 'drag-over-top' : 'drag-over-bottom');
-    });
+  groups.forEach(groupEl => {
+    const rows = Array.from(groupEl.querySelectorAll('.profile-name-group-row[data-group-entry-idx]')) as HTMLElement[];
+    if (rows.length < 2) return; // No reordering needed for single-entry groups
 
-    item.addEventListener('dragenter', (e) => {
-      e.preventDefault();
-      dragOverCounter++;
-    });
+    let entryDragIdx = -1;
+    let dragSrcRow: HTMLElement | null = null;
+    let dragArmedRow: HTMLElement | null = null;
+    let hoveredRow: HTMLElement | null = null;
 
-    item.addEventListener('dragleave', () => {
-      dragOverCounter--;
-      if (dragOverCounter <= 0) {
-        dragOverCounter = 0;
-        item.classList.remove('drag-over-top', 'drag-over-bottom');
+    function findClosestRow(clientY: number): { el: HTMLElement; before: boolean } | null {
+      let best: { el: HTMLElement; dist: number; before: boolean } | null = null;
+      for (const r of rows) {
+        if (r === dragSrcRow) continue;
+        const rect = r.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const dist = Math.min(Math.abs(clientY - rect.top), Math.abs(clientY - rect.bottom));
+        const before = clientY < midY;
+        if (!best || dist < best.dist) {
+          best = { el: r, dist, before };
+        }
       }
-    });
+      return best;
+    }
 
-    item.addEventListener('drop', (e) => {
-      const ev = e as DragEvent;
-      ev.preventDefault();
-      dragOverCounter = 0;
-      item.classList.remove('drag-over-top', 'drag-over-bottom');
-      if (dragSrcIdx < 0 || dragSrcIdx === idx) return;
+    function onDocDragOver(e: DragEvent): void {
+      if (entryDragIdx < 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer!.dropEffect = 'move';
 
-      const rect = item.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      const dropBefore = ev.clientY < midY;
+      if (hoveredRow) {
+        hoveredRow.classList.remove('drag-over-top', 'drag-over-bottom');
+        hoveredRow = null;
+      }
+
+      const target = findClosestRow(e.clientY);
+      if (target) {
+        hoveredRow = target.el;
+        target.el.classList.add(target.before ? 'drag-over-top' : 'drag-over-bottom');
+      }
+    }
+
+    function onDocDrop(e: DragEvent): void {
+      if (entryDragIdx < 0 || !hoveredRow) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const targetIdx = parseInt(hoveredRow.dataset.groupEntryIdx || '0', 10);
+      const target = findClosestRow(e.clientY);
+      const dropBefore = target ? target.before : true;
+
+      hoveredRow.classList.remove('drag-over-top', 'drag-over-bottom');
+
+      if (entryDragIdx === targetIdx) return;
 
       const prof = loadProfile(user);
-      const [moved] = prof.socials.splice(dragSrcIdx, 1);
-      // Calculate insert position after removal
-      let insertIdx = dropBefore ? idx : idx + 1;
-      if (dragSrcIdx < insertIdx) insertIdx--;
+      const [moved] = prof.socials.splice(entryDragIdx, 1);
+      let insertIdx = dropBefore ? targetIdx : targetIdx + 1;
+      if (entryDragIdx < insertIdx) insertIdx--;
       prof.socials.splice(insertIdx, 0, moved);
       saveProfile(user, prof);
-      dragSrcIdx = -1;
+      entryDragIdx = -1;
+      dragSrcRow = null;
       reRenderNames(card, container, user);
+    }
+
+    rows.forEach(row => {
+      const idx = parseInt(row.dataset.groupEntryIdx || '0', 10);
+
+      // Arm drag on mousedown, but only if not on an interactive element or group drag handle
+      row.addEventListener('mousedown', (e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('input, button, a, [contenteditable], [data-group-drag]')) return;
+        dragArmedRow = row;
+        row.setAttribute('draggable', 'true');
+      });
+
+      // Disarm if mouse released without dragging
+      row.addEventListener('mouseup', () => {
+        if (dragArmedRow === row) {
+          dragArmedRow = null;
+          row.setAttribute('draggable', 'false');
+        }
+      });
+
+      row.addEventListener('dragstart', (e) => {
+        if (dragArmedRow !== row) { e.preventDefault(); return; }
+        const ev = e as DragEvent;
+        ev.stopPropagation();
+        entryDragIdx = idx;
+        dragSrcRow = row;
+        ev.dataTransfer!.effectAllowed = 'move';
+        ev.dataTransfer!.setData('text/plain', String(idx));
+        requestAnimationFrame(() => { row.classList.add('dragging'); });
+        // Attach document-level listeners
+        document.addEventListener('dragover', onDocDragOver, true);
+        document.addEventListener('drop', onDocDrop, true);
+      });
+
+      row.addEventListener('dragend', () => {
+        row.setAttribute('draggable', 'false');
+        row.classList.remove('dragging');
+        rows.forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom'));
+        entryDragIdx = -1;
+        dragSrcRow = null;
+        dragArmedRow = null;
+        hoveredRow = null;
+        // Remove document-level listeners
+        document.removeEventListener('dragover', onDocDragOver, true);
+        document.removeEventListener('drop', onDocDrop, true);
+      });
     });
   });
 }
@@ -3441,6 +3997,8 @@ function bindProfileHandlers(container: HTMLElement): void {
 
   // Names section
   bindProfileNameHandlers(card, container, user);
+  bindGroupDragHandlers(card, container, user);
+  bindEntryDragHandlers(card, container, user);
 }
 
 async function renderRepo(): Promise<void> {

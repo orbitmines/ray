@@ -8,6 +8,7 @@
 import type { EtherAPI } from '../EtherAPI.ts';
 import type {
   FileEntry, Repository, PullRequest, InlinePR, CategoryPRSummary,
+  ChatConversation, ChatThread, CustomEmoji, UserStatus,
 } from '../DummyData.ts';
 
 export class HttpBackend implements EtherAPI {
@@ -115,5 +116,29 @@ export class HttpBackend implements EtherAPI {
     _author?: string,
   ): Promise<PullRequest> {
     throw new Error('createPullRequest not yet implemented for HttpBackend');
+  }
+
+  async getChatConversation(_id: string): Promise<ChatConversation | null> {
+    return null;
+  }
+
+  async getOrCreateChatConversation(id: string, participants: string[]): Promise<ChatConversation> {
+    return { id, participants, messages: [], threads: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), isGroup: participants.length > 2 };
+  }
+
+  async getUserChats(_user: string): Promise<ChatConversation[]> {
+    return [];
+  }
+
+  async getChatThread(_conversationId: string, _threadId: string): Promise<ChatThread | null> {
+    return null;
+  }
+
+  async getCustomEmojis(_user: string): Promise<CustomEmoji[]> {
+    return [];
+  }
+
+  async getUserStatus(_user: string): Promise<UserStatus> {
+    return 'online';
   }
 }

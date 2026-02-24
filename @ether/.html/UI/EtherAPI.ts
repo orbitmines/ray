@@ -6,6 +6,7 @@
 import type {
   FileEntry, Repository,
   PullRequest, InlinePR, CategoryPRSummary,
+  ChatConversation, ChatThread, CustomEmoji, UserStatus,
 } from './DummyData.ts';
 
 // Re-export types for consumers
@@ -13,6 +14,8 @@ export type {
   FileEntry, CompoundEntry, TreeEntry, Repository,
   PullRequest, PRStatus, FileDiff, PRCommit, PRComment,
   ActivityItem, InlinePR, CategoryPRSummary,
+  ChatMessage, ChatReaction, ChatAttachment, ChatThread, ChatConversation,
+  DeliveryStatus, UserStatus, CustomEmoji,
 } from './DummyData.ts';
 
 // ---- Interface ----
@@ -43,6 +46,14 @@ export interface EtherAPI {
     targetLabel: string,
     author?: string,
   ): Promise<PullRequest>;
+
+  // Chat
+  getChatConversation(id: string): Promise<ChatConversation | null>;
+  getOrCreateChatConversation(id: string, participants: string[]): Promise<ChatConversation>;
+  getUserChats(user: string): Promise<ChatConversation[]>;
+  getChatThread(conversationId: string, threadId: string): Promise<ChatThread | null>;
+  getCustomEmojis(user: string): Promise<CustomEmoji[]>;
+  getUserStatus(user: string): Promise<UserStatus>;
 }
 
 // ---- Singleton + auto-detection ----

@@ -10,6 +10,7 @@ import type { FileEntry, CompoundEntry, TreeEntry, Repository } from './API.ts';
 import { createIDELayout, generateId, ensureIdCounter, injectIDEStyles } from './IDELayout.ts';
 import type { IDELayoutAPI, PanelDefinition, LayoutNode, TabGroupNode, SplitNode } from './IDELayout.ts';
 import { EDIT_SVG } from './PRIcons.ts';
+import { CHAT_SVG } from './ChatIcons.ts';
 
 let styleEl: HTMLStyleElement | null = null;
 let currentContainer: HTMLElement | null = null;
@@ -1369,6 +1370,21 @@ function injectStyles(): void {
     .profile-name-group-value a:hover {
       text-decoration: underline;
     }
+    /* Verified checkmark */
+    .profile-name-verified {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      margin-left: auto;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .profile-name-group-row:hover .profile-name-verified { opacity: 1; }
+    .profile-name-verified svg {
+      width: 13px;
+      height: 13px;
+      fill: rgba(76, 175, 80, 0.45);
+    }
     /* Entry remove button — pushed to far right */
     .profile-name-entry-remove {
       background: none;
@@ -1378,7 +1394,7 @@ function injectStyles(): void {
       font-size: 14px;
       padding: 0 2px;
       line-height: 1;
-      margin-left: auto;
+      margin-left: 4px;
       opacity: 0;
       transition: opacity 0.15s;
       flex-shrink: 0;
@@ -1782,6 +1798,16 @@ function bindClickHandlers(): void {
       navigateFn(`${base}${pathPart}/.ether/Usage.ray`);
     });
   });
+
+  // Chat button navigation → navigate to /@user/chat/~/@currentUser
+  currentContainer.querySelectorAll('[data-chat-nav]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!navigateFn || !currentRepoParams) return;
+      const base = currentRepoParams.base || `/@${currentRepoParams.user}`;
+      const currentUser = getCurrentPlayer();
+      navigateFn(`${base}/chat/~/@${currentUser}`);
+    });
+  });
 }
 
 // ---- Path Helpers ----
@@ -2081,6 +2107,7 @@ async function renderActionRow(canonicalPath: string, starPath: string, followUs
   const prCount = await getPrCount(canonicalPath);
   return `<div class="repo-nav-row">
     <span class="nav-actions">${actionHtml}</span>
+    <button class="action-btn icon-btn" title="Chat" data-chat-nav><span class="action-icon">${CHAT_SVG}</span></button>
     <button class="action-btn icon-btn" title="Pull requests" data-pr-nav data-pr-path="${canonicalPath}"><span class="action-count">${prCount}</span><span class="action-icon">${PR_SVG}</span></button>
     <button class="action-btn icon-btn" title="Settings" data-settings-nav><span class="action-icon">${SETTINGS_SVG}</span></button>
   </div>
@@ -2099,6 +2126,7 @@ async function renderBreadcrumb(displayVersion: string, items: BreadcrumbItem[],
     const prCount = await getPrCount(canonicalPath);
     html += `<div class="repo-nav-row">
       <span class="nav-actions">${actionHtml}</span>
+      <button class="action-btn icon-btn" title="Chat" data-chat-nav><span class="action-icon">${CHAT_SVG}</span></button>
       <button class="action-btn icon-btn" title="Pull requests" data-pr-nav data-pr-path="${canonicalPath}"><span class="action-count">${prCount}</span><span class="action-icon">${PR_SVG}</span></button>
       <button class="action-btn icon-btn" title="Settings" data-settings-nav><span class="action-icon">${SETTINGS_SVG}</span></button>
     </div>`;
@@ -2852,6 +2880,9 @@ function renderNameGroup(group: SocialGroup, isOwner: boolean): string {
       html += `<span class="profile-name-field-ghost" data-name-value-ghost></span>`;
       html += `</span>`;
     }
+
+    // Verified checkmark
+    html += `<span class="profile-name-verified"><svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg></span>`;
 
     // Remove button — pushed to far right
     if (isOwner) {

@@ -60,16 +60,12 @@ export interface PRCommit {
   diffs: FileDiff[];
 }
 
-export interface PRComment {
-  id: number;
-  author: string;
-  body: string;
-  createdAt: string;
-}
+/** @deprecated Use ChatMessage instead */
+export type PRComment = ChatMessage;
 
 export type ActivityItem =
   | { type: 'commit'; commit: PRCommit; createdAt: string }
-  | { type: 'comment'; comment: PRComment; createdAt: string }
+  | { type: 'comment'; comment: ChatMessage; createdAt: string }
   | { type: 'status_change'; from: PRStatus; to: PRStatus; author: string; createdAt: string }
   | { type: 'merge'; author: string; createdAt: string };
 
@@ -86,7 +82,7 @@ export interface PullRequest {
   sourceLabel: string;
   targetLabel: string;
   commits: PRCommit[];
-  comments: PRComment[];
+  comments: ChatMessage[];
   activity: ActivityItem[];
   mergeable: boolean;
 }
@@ -1957,13 +1953,13 @@ const etherLibraryPRs: PullRequest[] = [
       },
     ],
     comments: [
-      { id: 0, author: 'alice', body: 'Looks great! The `rotate()` method is exactly what we needed for the cycle resolution algorithm.', createdAt: '2025-12-01T15:00:00Z' },
-      { id: 1, author: 'bob', body: 'Thanks! I also added `merge()` for combining orbits — should help with the distributed case.', createdAt: '2025-12-02T09:00:00Z' },
+      { id: 0, author: 'alice', body: 'Looks great! The `rotate()` method is exactly what we needed for the cycle resolution algorithm.', createdAt: '2025-12-01T15:00:00Z', reactions: [], deliveryStatus: 'delivered' },
+      { id: 1, author: 'bob', body: 'Thanks! I also added `merge()` for combining orbits — should help with the distributed case.', createdAt: '2025-12-02T09:00:00Z', reactions: [], deliveryStatus: 'delivered' },
     ],
     activity: [
       { type: 'commit', commit: { id: 'c0a1b2c3-d4e5-11ee-b001-000000000010', message: 'Add Orbit class with cyclic structure operations', author: 'bob', createdAt: '2025-12-01T10:30:00Z', diffs: [] }, createdAt: '2025-12-01T10:30:00Z' },
-      { type: 'comment', comment: { id: 0, author: 'alice', body: 'Looks great! The `rotate()` method is exactly what we needed for the cycle resolution algorithm.', createdAt: '2025-12-01T15:00:00Z' }, createdAt: '2025-12-01T15:00:00Z' },
-      { type: 'comment', comment: { id: 1, author: 'bob', body: 'Thanks! I also added `merge()` for combining orbits — should help with the distributed case.', createdAt: '2025-12-02T09:00:00Z' }, createdAt: '2025-12-02T09:00:00Z' },
+      { type: 'comment', comment: { id: 0, author: 'alice', body: 'Looks great! The `rotate()` method is exactly what we needed for the cycle resolution algorithm.', createdAt: '2025-12-01T15:00:00Z', reactions: [], deliveryStatus: 'delivered' }, createdAt: '2025-12-01T15:00:00Z' },
+      { type: 'comment', comment: { id: 1, author: 'bob', body: 'Thanks! I also added `merge()` for combining orbits — should help with the distributed case.', createdAt: '2025-12-02T09:00:00Z', reactions: [], deliveryStatus: 'delivered' }, createdAt: '2025-12-02T09:00:00Z' },
       { type: 'status_change', from: 'open', to: 'merged', author: 'alice', createdAt: '2025-12-03T14:00:00Z' },
       { type: 'merge', author: 'alice', createdAt: '2025-12-03T14:00:00Z' },
     ],
@@ -2035,11 +2031,11 @@ export namespace EdgeOps {
       },
     ],
     comments: [
-      { id: 2, author: 'alice', body: 'I think this introduces too much complexity for the current use case. Can we revisit after the v2 migration?', createdAt: '2025-12-06T10:00:00Z' },
+      { id: 2, author: 'alice', body: 'I think this introduces too much complexity for the current use case. Can we revisit after the v2 migration?', createdAt: '2025-12-06T10:00:00Z', reactions: [], deliveryStatus: 'delivered' },
     ],
     activity: [
       { type: 'commit', commit: { id: 'c1b2c3d4-e5f6-11ee-b002-000000000010', message: 'Refactor Edge module with generic type parameters', author: 'charlie', createdAt: '2025-12-05T09:00:00Z', diffs: [] }, createdAt: '2025-12-05T09:00:00Z' },
-      { type: 'comment', comment: { id: 2, author: 'alice', body: 'I think this introduces too much complexity for the current use case. Can we revisit after the v2 migration?', createdAt: '2025-12-06T10:00:00Z' }, createdAt: '2025-12-06T10:00:00Z' },
+      { type: 'comment', comment: { id: 2, author: 'alice', body: 'I think this introduces too much complexity for the current use case. Can we revisit after the v2 migration?', createdAt: '2025-12-06T10:00:00Z', reactions: [], deliveryStatus: 'delivered' }, createdAt: '2025-12-06T10:00:00Z' },
       { type: 'status_change', from: 'open', to: 'closed', author: 'charlie', createdAt: '2025-12-08T12:00:00Z' },
     ],
     mergeable: false,
@@ -2156,16 +2152,16 @@ export class Ray implements RayLike {
       },
     ],
     comments: [
-      { id: 3, author: 'bob', body: 'The `RayLike` interface is a nice touch. Will this support cross-universe superposition eventually?', createdAt: '2025-12-10T14:00:00Z' },
-      { id: 4, author: 'alice', body: 'That is the plan! This PR lays the groundwork. Cross-universe will come in a follow-up.', createdAt: '2025-12-10T16:00:00Z' },
-      { id: 5, author: 'charlie', body: 'I tested the equivalence changes — they pass all existing test cases plus the new superposition ones.', createdAt: '2025-12-12T11:00:00Z' },
+      { id: 3, author: 'bob', body: 'The `RayLike` interface is a nice touch. Will this support cross-universe superposition eventually?', createdAt: '2025-12-10T14:00:00Z', reactions: [{ emoji: ':thumbsup:', users: ['alice'] }], deliveryStatus: 'delivered' },
+      { id: 4, author: 'alice', body: 'That is the plan! This PR lays the groundwork. Cross-universe will come in a follow-up.', createdAt: '2025-12-10T16:00:00Z', reactions: [], deliveryStatus: 'delivered' },
+      { id: 5, author: 'charlie', body: 'I tested the equivalence changes — they pass all existing test cases plus the new superposition ones.', createdAt: '2025-12-12T11:00:00Z', reactions: [{ emoji: ':fire:', users: ['alice', 'bob'] }], deliveryStatus: 'delivered' },
     ],
     activity: [
       { type: 'commit', commit: { id: 'c2a1b2c3-d4e5-11ee-b003-000000000010', message: 'Add RayLike interface and superpose static method', author: 'alice', createdAt: '2025-12-10T10:00:00Z', diffs: [] }, createdAt: '2025-12-10T10:00:00Z' },
-      { type: 'comment', comment: { id: 3, author: 'bob', body: 'The `RayLike` interface is a nice touch. Will this support cross-universe superposition eventually?', createdAt: '2025-12-10T14:00:00Z' }, createdAt: '2025-12-10T14:00:00Z' },
-      { type: 'comment', comment: { id: 4, author: 'alice', body: 'That is the plan! This PR lays the groundwork. Cross-universe will come in a follow-up.', createdAt: '2025-12-10T16:00:00Z' }, createdAt: '2025-12-10T16:00:00Z' },
+      { type: 'comment', comment: { id: 3, author: 'bob', body: 'The `RayLike` interface is a nice touch. Will this support cross-universe superposition eventually?', createdAt: '2025-12-10T14:00:00Z', reactions: [{ emoji: ':thumbsup:', users: ['alice'] }], deliveryStatus: 'delivered' }, createdAt: '2025-12-10T14:00:00Z' },
+      { type: 'comment', comment: { id: 4, author: 'alice', body: 'That is the plan! This PR lays the groundwork. Cross-universe will come in a follow-up.', createdAt: '2025-12-10T16:00:00Z', reactions: [], deliveryStatus: 'delivered' }, createdAt: '2025-12-10T16:00:00Z' },
       { type: 'commit', commit: { id: 'c2b1c2d3-e4f5-11ee-b003-000000000011', message: 'Implement full superposition with equivalence checks', author: 'alice', createdAt: '2025-12-11T14:00:00Z', diffs: [] }, createdAt: '2025-12-11T14:00:00Z' },
-      { type: 'comment', comment: { id: 5, author: 'charlie', body: 'I tested the equivalence changes — they pass all existing test cases plus the new superposition ones.', createdAt: '2025-12-12T11:00:00Z' }, createdAt: '2025-12-12T11:00:00Z' },
+      { type: 'comment', comment: { id: 5, author: 'charlie', body: 'I tested the equivalence changes — they pass all existing test cases plus the new superposition ones.', createdAt: '2025-12-12T11:00:00Z', reactions: [{ emoji: ':fire:', users: ['alice', 'bob'] }], deliveryStatus: 'delivered' }, createdAt: '2025-12-12T11:00:00Z' },
     ],
     mergeable: true,
   },
@@ -2234,11 +2230,11 @@ const etherLibraryAssetsPRs: PullRequest[] = [
       },
     ],
     comments: [
-      { id: 10, author: 'alice', body: 'These look sharp! Can we also get an SVG version?', createdAt: '2025-12-14T12:00:00Z' },
+      { id: 10, author: 'alice', body: 'These look sharp! Can we also get an SVG version?', createdAt: '2025-12-14T12:00:00Z', reactions: [], deliveryStatus: 'delivered' },
     ],
     activity: [
       { type: 'commit', commit: { id: 'c4a1b2c3-d4e5-11ee-b005-000000000010', message: 'Add banner@2x.png and banner@3x.png', author: 'bob', createdAt: '2025-12-14T09:30:00Z', diffs: [] }, createdAt: '2025-12-14T09:30:00Z' },
-      { type: 'comment', comment: { id: 10, author: 'alice', body: 'These look sharp! Can we also get an SVG version?', createdAt: '2025-12-14T12:00:00Z' }, createdAt: '2025-12-14T12:00:00Z' },
+      { type: 'comment', comment: { id: 10, author: 'alice', body: 'These look sharp! Can we also get an SVG version?', createdAt: '2025-12-14T12:00:00Z', reactions: [], deliveryStatus: 'delivered' }, createdAt: '2025-12-14T12:00:00Z' },
     ],
     mergeable: true,
   },
@@ -2297,10 +2293,10 @@ const etherGenesisPRs: PullRequest[] = [
       createdAt: '2025-12-15T09:30:00Z',
       diffs: [{ path: 'terrain/heightmap.ray', oldContent: '// old heightmap', newContent: '// new Perlin noise heightmap', type: 'modified' }],
     }],
-    comments: [{ id: 20, author: 'bob', body: 'The noise parameters look good. Maybe add a seed option?', createdAt: '2025-12-15T14:00:00Z' }],
+    comments: [{ id: 20, author: 'bob', body: 'The noise parameters look good. Maybe add a seed option?', createdAt: '2025-12-15T14:00:00Z', reactions: [], deliveryStatus: 'delivered' }],
     activity: [
       { type: 'commit', commit: { id: 'cg1b2c3d-e4f5-11ee-b010-000000000010', message: 'Implement Perlin noise heightmap generation', author: 'alice', createdAt: '2025-12-15T09:30:00Z', diffs: [] }, createdAt: '2025-12-15T09:30:00Z' },
-      { type: 'comment', comment: { id: 20, author: 'bob', body: 'The noise parameters look good. Maybe add a seed option?', createdAt: '2025-12-15T14:00:00Z' }, createdAt: '2025-12-15T14:00:00Z' },
+      { type: 'comment', comment: { id: 20, author: 'bob', body: 'The noise parameters look good. Maybe add a seed option?', createdAt: '2025-12-15T14:00:00Z', reactions: [], deliveryStatus: 'delivered' }, createdAt: '2025-12-15T14:00:00Z' },
     ],
     mergeable: true,
   },
@@ -2571,4 +2567,259 @@ export function createPullRequest(
   prs.push(pr);
   dummyPullRequests.set(canonicalPath, prs);
   return pr;
+}
+
+// ============================================================
+// Chat types + mock data
+// ============================================================
+
+export type DeliveryStatus = 'sending' | 'sent' | 'delivered';
+
+export interface ChatReaction {
+  emoji: string;
+  users: string[];
+}
+
+export interface ChatAttachment {
+  name: string;
+  type: string;
+  url: string;
+  size: number;
+}
+
+export interface ChatMessage {
+  id: number;
+  author: string;
+  body: string;
+  createdAt: string;
+  editedAt?: string;
+  editHistory?: { body: string; editedAt: string }[];
+  threadId?: string;
+  threadTitle?: string;
+  voiceUrl?: string;
+  voiceTranscript?: string;
+  replyTo?: number;
+  reactions: ChatReaction[];
+  pinned?: boolean;
+  deliveryStatus: DeliveryStatus;
+  deleted?: boolean;
+  forwardedFrom?: { author: string; conversationId: string };
+  attachments?: ChatAttachment[];
+  scheduledFor?: string;
+}
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  createdBy: string;
+  createdAt: string;
+  messages: ChatMessage[];
+}
+
+export type UserStatus = 'online' | 'away' | 'dnd' | 'invisible';
+
+export interface ChatConversation {
+  id: string;
+  participants: string[];
+  messages: ChatMessage[];
+  threads: ChatThread[];
+  createdAt: string;
+  updatedAt: string;
+  isGroup: boolean;
+  worldId?: string;
+  groupName?: string;
+  accentColor?: string;
+  archived?: boolean;
+  mutedBy?: string[];
+}
+
+export interface CustomEmoji {
+  name: string;
+  svg: string;
+}
+
+// ---- Dummy custom emojis (inline SVGs) ----
+
+const dummyCustomEmojis: CustomEmoji[] = [
+  { name: 'wave', svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M400 160c-17.7 0-32 14.3-32 32v96l-128-160c-11.1-13.9-31.3-16.1-45.2-5s-16.1 31.3-5 45.2l176 220c8 10 20.1 15.8 33 15.8H480c53 0 96-43 96-96V256c0-17.7-14.3-32-32-32s-32 14.3-32 32v48c0 8.8-7.2 16-16 16s-16-7.2-16-16V208c0-17.7-14.3-32-32-32s-32 14.3-32 32v80c0 8.8-7.2 16-16 16s-16-7.2-16-16V192c0-17.7-14.3-32-32-32z" fill="currentColor"/></svg>` },
+  { name: 'thumbsup', svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M352 96l-64 192H128v256h320l64-256H352V96zm-224 224v192" fill="none" stroke="currentColor" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+  { name: 'fire', svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 64c0 0-128 128-128 288c0 70.7 57.3 128 128 128s128-57.3 128-128C448 192 320 64 320 64zm0 352c-35.3 0-64-28.7-64-64c0-64 64-144 64-144s64 80 64 144c0 35.3-28.7 64-64 64z" fill="currentColor"/></svg>` },
+  { name: 'heart', svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 528l-22.6-20.4C168.8 390.4 96 324.8 96 244c0-66.2 53.8-120 120-120c37.4 0 73.2 17.4 104 50.4C350.8 141.4 386.6 124 424 124c66.2 0 120 53.8 120 120c0 80.8-72.8 146.4-201.4 263.6L320 528z" fill="currentColor"/></svg>` },
+  { name: 'star', svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 96l72 146.4L544 268l-112 109.2L458.4 528 320 453.6 181.6 528 208 377.2 96 268l152-25.6L320 96z" fill="currentColor"/></svg>` },
+  { name: 'rocket', svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 64c-88 88-128 200-128 288h256c0-88-40-200-128-288zm-48 352l-48 96 96-48-48-48zm96 0l48 48 96 48-48-96h-96zm-48-96a32 32 0 1 0 0-64 32 32 0 0 0 0 64z" fill="currentColor"/></svg>` },
+];
+
+// ---- Seed conversations ----
+
+const now = Date.now();
+const h = 3600000; // 1 hour in ms
+const d = 86400000; // 1 day in ms
+
+let nextChatMsgId = 100;
+function chatMsg(
+  author: string, body: string, ago: number,
+  extra?: Partial<ChatMessage>,
+): ChatMessage {
+  return {
+    id: nextChatMsgId++,
+    author,
+    body,
+    createdAt: new Date(now - ago).toISOString(),
+    reactions: [],
+    deliveryStatus: 'delivered',
+    ...extra,
+  };
+}
+
+const dummyChatConversations: ChatConversation[] = [
+  // DM: ether ↔ alice
+  {
+    id: 'dm-alice-ether',
+    participants: ['ether', 'alice'],
+    createdAt: new Date(now - 7 * d).toISOString(),
+    updatedAt: new Date(now - 2 * h).toISOString(),
+    isGroup: false,
+    threads: [
+      {
+        id: 'thread-boundary-nav',
+        title: 'Boundary navigation API',
+        createdBy: 'alice',
+        createdAt: new Date(now - 5 * d).toISOString(),
+        messages: [
+          chatMsg('alice', 'What if we exposed `⊢` and `⊣` as first-class methods on Node?', 5 * d),
+          chatMsg('ether', 'That\'s exactly what the boundary structure gives us — every Node already has initial/terminal.', 5 * d - 30000),
+          chatMsg('alice', 'Right, so `ray.⊢` would be sugar for `ray.initial`? And generators yield the full chain?', 5 * d - 60000),
+        ],
+      },
+    ],
+    messages: [
+      chatMsg('alice', 'Hey, I started looking at the Ray implementation. The boundary concept is really elegant.', 6 * d),
+      chatMsg('ether', 'Thanks! The key insight is that *everything* is a boundary — vertices, edges, the lot.', 6 * d - 5000),
+      chatMsg('alice', 'I have some thoughts on the navigation API. Created a thread #{Boundary navigation API}', 5 * d, { threadId: 'thread-boundary-nav', threadTitle: 'Boundary navigation API' }),
+      chatMsg('ether', 'Good call. Let me check it out.', 5 * d - h),
+      chatMsg('alice', 'Also — have you seen PR #1 on the parser? There\'s a failing edge case with nested delimiters.', 3 * d),
+      chatMsg('ether', 'Yeah, `assembleBalancedTokens` needs to handle the case where a closer appears before its opener in the sibling chain. I\'ll push a fix.', 3 * d - 2000),
+      chatMsg('alice', 'Sounds good :thumbsup:', 3 * d - 4000, { reactions: [{ emoji: ':thumbsup:', users: ['ether'] }] }),
+      chatMsg('ether', 'Fixed and pushed. The trick was tracking the balance stack depth per-line.', 2 * d),
+      chatMsg('alice', 'Nice. I\'ll review it today.', 2 * d - h),
+      chatMsg('ether', 'By the way, I pinned the architecture overview in the group chat. Check it out when you get a chance.', 2 * h, { pinned: true }),
+    ],
+  },
+  // DM: ether ↔ bob
+  {
+    id: 'dm-bob-ether',
+    participants: ['ether', 'bob'],
+    createdAt: new Date(now - 3 * d).toISOString(),
+    updatedAt: new Date(now - 12 * h).toISOString(),
+    isGroup: false,
+    threads: [],
+    messages: [
+      chatMsg('bob', 'Hey! Quick question — is `class * | Node` defining Node as an alias for the universal class?', 3 * d),
+      chatMsg('ether', 'Exactly. `*` is the universal base, and `| Node` registers "Node" as its alias. So you can use either interchangeably.', 3 * d - 3000),
+      chatMsg('bob', 'That makes sense. And `<` for inheritance is just `&+` composition under the hood?', 3 * d - 6000),
+      chatMsg('ether', 'Right — `class Foo < Bar` composes Bar\'s class components into Foo. It\'s all just method chains.', 3 * d - 9000),
+      chatMsg('bob', 'This is a voice note about the superposition design', 12 * h, {
+        voiceUrl: 'data:audio/webm;base64,placeholder',
+        voiceTranscript: 'So I was thinking about superposition — if both AND and OR use typed boundary edges, then the only difference is the EdgeKind tag, right? Sequential edges just have no type set.',
+      }),
+    ],
+  },
+  // DM: ether ↔ charlie (with forwarded message)
+  {
+    id: 'dm-charlie-ether',
+    participants: ['ether', 'charlie'],
+    createdAt: new Date(now - 1 * d).toISOString(),
+    updatedAt: new Date(now - 4 * h).toISOString(),
+    isGroup: false,
+    threads: [],
+    messages: [
+      chatMsg('charlie', 'Forwarding this from alice — thought you should see it:', d, {
+        forwardedFrom: { author: 'alice', conversationId: 'dm-alice-ether' },
+      }),
+      chatMsg('charlie', 'The parser handles nested delimiters now after the fix. Pattern matching with backtracking is working perfectly.', d - 1000),
+      chatMsg('ether', 'Great — I saw the PR. The `tryPrefixPattern` / `tryPostfixPattern` approach is exactly right.', d - h),
+      chatMsg('charlie', 'Should we add more test cases for edge cases?', 4 * h),
+      chatMsg('ether', 'Definitely. Especially around multi-line block assembly with unbalanced delimiters.', 4 * h - 2000),
+    ],
+  },
+  // Group chat: Ray Contributors (world-based)
+  {
+    id: 'group-ray-contributors',
+    participants: ['ether', 'alice', 'bob', 'charlie'],
+    createdAt: new Date(now - 14 * d).toISOString(),
+    updatedAt: new Date(now - 1 * h).toISOString(),
+    isGroup: true,
+    worldId: 'ray-contributors',
+    groupName: 'Ray Contributors',
+    threads: [],
+    messages: [
+      chatMsg('ether', 'Welcome to the Ray Contributors group! This is our main coordination channel.', 14 * d, { pinned: true }),
+      chatMsg('alice', 'Excited to be here! Just finished reading the v0.1 design notes.', 14 * d - h),
+      chatMsg('bob', 'Same — the "parsing IS type matching" concept is mind-bending in the best way.', 14 * d - 2 * h),
+      chatMsg('ether', '**Architecture Overview**\n\n- Unified Node with boundary structure\n- Grammar-driven Pratt parser\n- Pattern-driven delimiters from .ray files\n- 9-step bootstrap sequence\n- Method-first dispatch for everything', 10 * d, { pinned: true }),
+      chatMsg('alice', 'I\'ve been working on the `classComponents` chain. Found an issue where composing into one class can affect another\'s chain since they share the linked list.', 7 * d),
+      chatMsg('charlie', 'Oh that\'s the shared linked list problem. We should deep-copy on compose.', 7 * d - 5000, {
+        replyTo: 104, // replying to alice's message about classComponents
+      }),
+      chatMsg('bob', ':fire: Great catch @alice', 7 * d - 10000, { reactions: [{ emoji: ':fire:', users: ['ether', 'charlie'] }, { emoji: ':thumbsup:', users: ['alice'] }] }),
+      chatMsg('ether', 'Good discussion. I\'ll create a PR for the deep-copy fix.', 7 * d - h),
+      chatMsg('alice', 'The bootstrap is now up to 115 classes registered from .ray files. Next milestone: method dispatch for all binary ops.', 3 * d),
+      chatMsg('bob', 'How many externals do we have now?', 3 * d - 2000),
+      chatMsg('ether', '32 externals in the minimal kernel. Everything else defined in .ray files.', 3 * d - 4000),
+      chatMsg('charlie', 'That\'s impressively minimal. The self-describing goal is really taking shape.', 3 * d - 6000, { reactions: [{ emoji: ':rocket:', users: ['ether', 'alice', 'bob'] }] }),
+      chatMsg('alice', 'Just pushed the generator-based navigation. All iterables are Generators now — could be infinite.', 1 * h),
+      chatMsg('ether', 'Perfect. Let\'s review it in tomorrow\'s session.', 1 * h - 5000),
+    ],
+  },
+];
+
+const dummyUserStatuses = new Map<string, UserStatus>([
+  ['ether', 'online'],
+  ['alice', 'online'],
+  ['bob', 'away'],
+  ['charlie', 'dnd'],
+]);
+
+// ---- Chat data access functions ----
+
+export function getUserChats(user: string): ChatConversation[] {
+  return dummyChatConversations.filter(c => c.participants.includes(user));
+}
+
+export function getChatConversation(id: string): ChatConversation | null {
+  return dummyChatConversations.find(c => c.id === id) || null;
+}
+
+export function getOrCreateChatConversation(id: string, participants: string[]): ChatConversation {
+  let conv = dummyChatConversations.find(c => c.id === id);
+  if (conv) return conv;
+  conv = {
+    id,
+    participants,
+    messages: [],
+    threads: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isGroup: participants.length > 2,
+  };
+  dummyChatConversations.push(conv);
+  return conv;
+}
+
+export function getChatThread(conversationId: string, threadId: string): ChatThread | null {
+  const conv = getChatConversation(conversationId);
+  if (!conv) return null;
+  return conv.threads.find(t => t.id === threadId) || null;
+}
+
+export function getCustomEmojis(_user: string): CustomEmoji[] {
+  return dummyCustomEmojis;
+}
+
+export function getUserStatus(user: string): UserStatus {
+  return dummyUserStatuses.get(user) || 'online';
+}
+
+export function setUserStatus(user: string, status: UserStatus): void {
+  dummyUserStatuses.set(user, status);
 }

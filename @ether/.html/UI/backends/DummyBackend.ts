@@ -6,6 +6,7 @@
 import type { EtherAPI } from '../EtherAPI.ts';
 import type {
   FileEntry, Repository, PullRequest, InlinePR, CategoryPRSummary,
+  ChatConversation, ChatThread, CustomEmoji, UserStatus,
 } from '../DummyData.ts';
 import {
   getRepository as _getRepository,
@@ -19,6 +20,12 @@ import {
   getCategoryPRSummary as _getCategoryPRSummary,
   getCategoryPullRequests as _getCategoryPullRequests,
   createPullRequest as _createPullRequest,
+  getChatConversation as _getChatConversation,
+  getOrCreateChatConversation as _getOrCreateChatConversation,
+  getUserChats as _getUserChats,
+  getChatThread as _getChatThread,
+  getCustomEmojis as _getCustomEmojis,
+  getUserStatus as _getUserStatus,
 } from '../DummyData.ts';
 
 export class DummyBackend implements EtherAPI {
@@ -80,5 +87,29 @@ export class DummyBackend implements EtherAPI {
     author?: string,
   ): Promise<PullRequest> {
     return _createPullRequest(canonicalPath, title, description, sourceLabel, targetLabel, author);
+  }
+
+  async getChatConversation(id: string): Promise<ChatConversation | null> {
+    return _getChatConversation(id);
+  }
+
+  async getOrCreateChatConversation(id: string, participants: string[]): Promise<ChatConversation> {
+    return _getOrCreateChatConversation(id, participants);
+  }
+
+  async getUserChats(user: string): Promise<ChatConversation[]> {
+    return _getUserChats(user);
+  }
+
+  async getChatThread(conversationId: string, threadId: string): Promise<ChatThread | null> {
+    return _getChatThread(conversationId, threadId);
+  }
+
+  async getCustomEmojis(user: string): Promise<CustomEmoji[]> {
+    return _getCustomEmojis(user);
+  }
+
+  async getUserStatus(user: string): Promise<UserStatus> {
+    return _getUserStatus(user);
   }
 }

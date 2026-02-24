@@ -6,12 +6,13 @@ import * as Greetings from './Greetings.ts';
 import * as Repository from './Repository.ts';
 import * as PullRequests from './PullRequests.ts';
 import * as Settings from './Settings.ts';
+import * as Chat from './Chat.ts';
 import { getDefaultUser } from './API.ts';
 
-type Page = 'repository' | 'pull-requests' | 'settings';
+type Page = 'repository' | 'pull-requests' | 'settings' | 'chat';
 
 // Pages where the global command bar (@/slash overlay + @me button) is active.
-const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository', 'pull-requests', 'settings']);
+const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository', 'pull-requests', 'settings', 'chat']);
 
 let currentPage: Page | null = null;
 let rootEl: HTMLElement;
@@ -47,10 +48,22 @@ export interface SettingsParams {
   tab: string;
 }
 
+export interface ChatParams {
+  user: string;
+  base: string;
+  chatAction: 'hub' | 'conversation' | 'thread';
+  targetUser: string | null;
+  threadId: string | null;
+  conversationId: string;
+  isGroup: boolean;
+  worldId: string | null;
+}
+
 type RouteResult =
   | { page: 'repository'; params: RepoParams }
   | { page: 'pull-requests'; params: PRParams }
-  | { page: 'settings'; params: SettingsParams };
+  | { page: 'settings'; params: SettingsParams }
+  | { page: 'chat'; params: ChatParams };
 
 // ---- Route Matching ----
 
@@ -69,6 +82,76 @@ function matchRoute(pathname: string): RouteResult {
 
   // Split remaining into segments, filter empty
   const segments = rest.split('/').filter(s => s);
+
+  // ---- Chat routes (before dash-segment check) ----
+  // /chat → hub
+  // /@user/chat → hub scoped to user
+  // /@user/chat/~/@target → DM conversation
+  // /@user/chat/~/@target/~{threadUUID} → thread in DM
+  // /@user/chat/~{worldName} → named group chat
+  // @ether/chat/~{worldUUID} → global group chat
+  const chatIdx = segments.indexOf('chat');
+  if (chatIdx >= 0) {
+    const afterChat = segments.slice(chatIdx + 1);
+
+    // Hub: no segments after "chat"
+    if (afterChat.length === 0) {
+      return {
+        page: 'chat',
+        params: { user, base, chatAction: 'hub', targetUser: null, threadId: null, conversationId: '', isGroup: false, worldId: null },
+      };
+    }
+
+    // Parse ~/ segments after chat
+    // /@user/chat/~/@target → DM
+    // /@user/chat/~/@target/~{threadId} → thread
+    // /@user/chat/~{worldName} → group chat
+    if (afterChat[0] === '~' || afterChat[0]?.startsWith('~')) {
+      // Collect version-like segments: ~/value pairs
+      const tildeSegs: string[] = [];
+      for (let i = 0; i < afterChat.length; i++) {
+        if (afterChat[i] === '~' && i + 1 < afterChat.length) {
+          tildeSegs.push(afterChat[i + 1]);
+          i++; // skip the value
+        } else if (afterChat[i].startsWith('~')) {
+          tildeSegs.push(afterChat[i].slice(1));
+        }
+      }
+
+      // DM: first tilde segment starts with @ → target user
+      if (tildeSegs.length >= 1 && tildeSegs[0].startsWith('@')) {
+        const target = tildeSegs[0].slice(1);
+        const convId = `dm-${[user, target].sort().join('-')}`;
+        if (tildeSegs.length >= 2) {
+          // Thread within DM
+          return {
+            page: 'chat',
+            params: { user, base, chatAction: 'thread', targetUser: target, threadId: tildeSegs[1], conversationId: convId, isGroup: false, worldId: null },
+          };
+        }
+        return {
+          page: 'chat',
+          params: { user, base, chatAction: 'conversation', targetUser: target, threadId: null, conversationId: convId, isGroup: false, worldId: null },
+        };
+      }
+
+      // Group chat: tilde segment doesn't start with @
+      if (tildeSegs.length >= 1) {
+        const worldId = tildeSegs[0];
+        const convId = `group-${worldId}`;
+        return {
+          page: 'chat',
+          params: { user, base, chatAction: 'conversation', targetUser: null, threadId: null, conversationId: convId, isGroup: true, worldId },
+        };
+      }
+    }
+
+    // Fallback: treat as hub
+    return {
+      page: 'chat',
+      params: { user, base, chatAction: 'hub', targetUser: null, threadId: null, conversationId: '', isGroup: false, worldId: null },
+    };
+  }
 
   // Check for -/pulls, -/@/pulls, or -/~/pulls namespace separator
   const dashIdx = segments.indexOf('-');
@@ -175,6 +258,11 @@ async function activatePage(route: RouteResult): Promise<void> {
     ensureBar(route.page);
     return;
   }
+  if (route.page === 'chat' && currentPage === 'chat') {
+    await Chat.update(route.params);
+    ensureBar(route.page);
+    return;
+  }
 
   // Unmount current page
   if (currentPage === 'repository') {
@@ -183,6 +271,8 @@ async function activatePage(route: RouteResult): Promise<void> {
     PullRequests.unmount();
   } else if (currentPage === 'settings') {
     Settings.unmount();
+  } else if (currentPage === 'chat') {
+    Chat.unmount();
   }
 
   // Tear down global bar when navigating to an unsupported page
@@ -202,6 +292,9 @@ async function activatePage(route: RouteResult): Promise<void> {
   } else if (route.page === 'settings') {
     rootEl.style.display = '';
     await Settings.mount(rootEl, route.params, navigateTo);
+  } else if (route.page === 'chat') {
+    rootEl.style.display = '';
+    await Chat.mount(rootEl, route.params, navigateTo);
   }
 
   ensureBar(route.page);

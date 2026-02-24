@@ -9,9 +9,10 @@
 // ---- A) Type re-exports ----
 export type { FileEntry, CompoundEntry, TreeEntry, Repository } from './DummyData.ts';
 export type { PullRequest, PRStatus, FileDiff, PRCommit, PRComment, ActivityItem, InlinePR, CategoryPRSummary } from './DummyData.ts';
+export type { ChatMessage, ChatReaction, ChatAttachment, ChatThread, ChatConversation, DeliveryStatus, UserStatus, CustomEmoji } from './DummyData.ts';
 
 // ---- B) Pure utility re-exports (never become API calls) ----
-export { isCompound, flattenEntries, resolveDirectory, resolveFile, resolveFiles } from './DummyData.ts';
+export { isCompound, flattenEntries, resolveDirectory, resolveFile, resolveFiles, setUserStatus } from './DummyData.ts';
 
 // ---- C) EtherAPI — the async data access layer ----
 export { getAPI, setAPI } from './EtherAPI.ts';
@@ -20,7 +21,7 @@ export type { EtherAPI } from './EtherAPI.ts';
 // ---- D) Async data access wrappers (route through getAPI()) ----
 
 import { getAPI } from './EtherAPI.ts';
-import type { Repository, InlinePR, CategoryPRSummary, PullRequest } from './DummyData.ts';
+import type { Repository, InlinePR, CategoryPRSummary, PullRequest, ChatConversation, ChatThread, CustomEmoji, UserStatus } from './DummyData.ts';
 
 export async function getRepository(user: string): Promise<Repository | null> {
   return getAPI().getRepository(user);
@@ -200,4 +201,30 @@ export function saveSession(user: string, data: Record<string, any>): void {
 export function getSessionContent(user: string): string {
   const session = loadSession(user);
   return JSON.stringify(session, null, 2);
+}
+
+// ---- F) Chat wrappers ----
+
+export async function getChatConversation(id: string): Promise<ChatConversation | null> {
+  return getAPI().getChatConversation(id);
+}
+
+export async function getOrCreateChatConversation(id: string, participants: string[]): Promise<ChatConversation> {
+  return getAPI().getOrCreateChatConversation(id, participants);
+}
+
+export async function getUserChats(user: string): Promise<ChatConversation[]> {
+  return getAPI().getUserChats(user);
+}
+
+export async function getChatThread(conversationId: string, threadId: string): Promise<ChatThread | null> {
+  return getAPI().getChatThread(conversationId, threadId);
+}
+
+export async function getCustomEmojis(user: string): Promise<CustomEmoji[]> {
+  return getAPI().getCustomEmojis(user);
+}
+
+export async function getUserStatus(user: string): Promise<UserStatus> {
+  return getAPI().getUserStatus(user);
 }

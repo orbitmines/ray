@@ -13,12 +13,21 @@ import {
   MERGE_SVG, ARROW_LEFT_SVG, ARROW_RIGHT_SVG, STATUS_CHANGE_SVG, FILE_DIFF_SVG,
   EDIT_SVG, PR_SVG,
 } from './PRIcons.ts';
+import {
+  escapeHtml, formatTime, renderUserIcon, userLink,
+  computeGrouping, renderChatMessage, getChatMessageStyles,
+  getTimelineStyles, msgToolbarHtml, HOVER_REACT_EMOJIS,
+} from './ChatCommon.ts';
+import type { ChatMessage } from './API.ts';
+import { EMOJI_CATEGORIES } from './EmojiData.ts';
 
 let styleEl: HTMLStyleElement | null = null;
 let currentContainer: HTMLElement | null = null;
 let navigateFn: ((path: string) => void) | null = null;
 let currentParams: PRParams | null = null;
 let currentDiffMode: 'unified' | 'side-by-side' = 'unified';
+let skipAutoScroll = false;
+let toolbarTarget: HTMLElement | null = null;
 
 
 // ---- Styles ----
@@ -26,7 +35,7 @@ let currentDiffMode: 'unified' | 'side-by-side' = 'unified';
 function injectStyles(): void {
   if (styleEl) return;
   styleEl = document.createElement('style');
-  styleEl.textContent = `
+  styleEl.textContent = getTimelineStyles() + getChatMessageStyles() + `
     .pr-page {
       max-width: 960px;
       margin: 0 auto;
@@ -281,7 +290,7 @@ function injectStyles(): void {
       font-size: 12px;
       line-height: 1;
       color: rgba(255,255,255,0.4);
-      margin-bottom: 16px;
+      margin-bottom: 0;
     }
     .pr-branch-icon {
       display: flex;
@@ -310,6 +319,21 @@ function injectStyles(): void {
       color: rgba(255,255,255,0.2);
     }
     .pr-branch-arrow svg { width: 14px; height: 14px; fill: currentColor; display: block; }
+
+    /* ---- Sticky header ---- */
+    .pr-sticky-header {
+      position: sticky; top: 0; z-index: 15;
+      background: ${CRT_SCREEN_BG};
+      padding-bottom: 12px;
+    }
+
+    /* ---- System event rows (commits, status changes, merges) ---- */
+    .pr-system-event {
+      display: flex; gap: 10px; padding: 4px 0;
+      align-items: center;
+      font-size: 13px; color: rgba(255,255,255,0.4);
+    }
+    .pr-system-event .pr-timeline-icon { flex: 0 0 28px; }
 
     /* ---- Hover edit buttons ---- */
     .pr-editable {
@@ -457,23 +481,7 @@ function injectStyles(): void {
       position: relative;
     }
     .pr-timeline-item:last-child { border-bottom: none; }
-    .pr-timeline-icon {
-      flex-shrink: 0;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255,255,255,0.05);
-      overflow: hidden;
-    }
-    .pr-timeline-icon svg { width: 14px; height: 14px; fill: currentColor; }
-    .pr-timeline-icon img { width: 28px; height: 28px; object-fit: cover; border-radius: 50%; }
-    .pr-timeline-icon.commit { color: #60a5fa; }
-    .pr-timeline-icon.comment { color: rgba(255,255,255,0.5); }
-    .pr-timeline-icon.status { color: #fbbf24; }
-    .pr-timeline-icon.merge { color: #c084fc; }
+    /* .pr-timeline-icon styles from getTimelineStyles() */
     .pr-timeline-body {
       flex: 1;
       min-width: 0;
@@ -816,22 +824,7 @@ function injectStyles(): void {
 
 // ---- Helpers ----
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const now = Date.now();
-  const diff = now - d.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+// escapeHtml, formatTime, getUserProfilePic, renderUserIcon, userLink imported from ChatCommon.ts
 
 function statusIcon(status: PRStatus): string {
   if (status === 'merged') return `<span class="pr-row-icon merged">${MERGE_SVG}</span>`;
@@ -861,39 +854,7 @@ function buildUserUrl(user: string): string {
   return `/@${user}`;
 }
 
-/** Get the raw file URL for a user's profile picture.
- *  userPath is the full canonical path, e.g. '@alice' or '@ether/~genesis/@alice'. */
-async function getUserProfilePic(userPath: string): Promise<string | null> {
-  // Extract username from the last @-prefixed segment
-  const segments = userPath.split('/');
-  const userSeg = [...segments].reverse().find(s => s.startsWith('@'));
-  const user = userSeg ? userSeg.slice(1) : segments[segments.length - 1];
-
-  const repo = await getRepository(user);
-  if (!repo) return null;
-  const names = ['2d-square.svg', '2d-square.png', '2d-square.jpeg'];
-  for (const name of names) {
-    if (resolveFile(repo.tree, ['avatar', name])) {
-      return `/**/${userPath}/avatar/${name}`;
-    }
-  }
-  return null;
-}
-
-/** Render a user avatar icon — profile picture if available, otherwise fallback SVG.
- *  userPath is the full canonical path, e.g. '@alice' or '@ether/~genesis/@alice'. */
-async function renderUserIcon(userPath: string, fallbackSvg: string, cssClass: string): Promise<string> {
-  const pic = await getUserProfilePic(userPath);
-  if (pic) {
-    return `<div class="pr-timeline-icon ${cssClass}"><img src="${pic}" alt="${escapeHtml(userPath)}" /></div>`;
-  }
-  return `<div class="pr-timeline-icon ${cssClass}">${fallbackSvg}</div>`;
-}
-
-/** Render a clickable username */
-function userLink(user: string): string {
-  return `<a href="${buildUserUrl(user)}" data-link class="pr-user-link">@${escapeHtml(user)}</a>`;
-}
+// getUserProfilePic, renderUserIcon, userLink imported from ChatCommon.ts
 
 /** Render a clickable branch label */
 function branchLink(label: string): string {
@@ -1079,8 +1040,8 @@ function renderPRRow(pr: PullRequest, filterGroup: string, hidden = false, relPa
 
 // ---- Render shared: title block + branch info ----
 
-function renderTitleBlock(pr: PullRequest, params: PRParams): string {
-  let html = '';
+function renderStickyHeader(pr: PullRequest, params: PRParams): string {
+  let html = `<div class="pr-sticky-header">`;
 
   // Title + status badge (with hover edit)
   html += `<div class="pr-editable" data-edit-target="title">`;
@@ -1097,7 +1058,7 @@ function renderTitleBlock(pr: PullRequest, params: PRParams): string {
   // "by @author" line
   html += `<div class="pr-detail-meta">by ${userLink(pr.author)}</div>`;
 
-  // Branch info (inline, with hover edit)
+  // Branch info + merge button (inline, with hover edit)
   html += `<div class="pr-editable pr-branch-info" data-edit-target="branch">`;
   html += `<span class="pr-branch-icon">${BRANCH_SVG}</span>`;
   html += branchLink(pr.sourceLabel);
@@ -1106,30 +1067,43 @@ function renderTitleBlock(pr: PullRequest, params: PRParams): string {
   if (pr.status === 'open') {
     html += `<button class="pr-hover-edit" data-edit-action="branch" title="Edit branch">${EDIT_SVG}</button>`;
   }
-  html += `</div>`;
-
-  return html;
-}
-
-// ---- Render shared: description as a comment-style block ----
-
-async function renderDescriptionBlock(pr: PullRequest): Promise<string> {
-  let html = '';
-  html += `<div class="pr-timeline-section-label">Description</div>`;
-  html += `<div class="pr-timeline-item" data-edit-target="description">`;
-  html += await renderUserIcon(`@${pr.author}`, COMMENT_SVG, 'comment');
-  html += `<div class="pr-timeline-body">`;
-  html += `<div class="pr-timeline-header">${userLink(pr.author)} <span class="pr-timeline-time">${formatTime(pr.createdAt)}</span></div>`;
-  html += `<div class="pr-timeline-content readme-body" data-edit-display="description">${renderMarkdown(pr.description)}</div>`;
-  html += `</div>`;
-  if (pr.status === 'open') {
-    html += `<button class="pr-hover-edit" data-edit-action="description" title="Edit description">${EDIT_SVG}</button>`;
+  // Merge button inline on branch row
+  if (pr.status === 'open' && pr.mergeable) {
+    html += `<button class="pr-merge-btn" style="margin-left:auto" data-pr-merge>${MERGE_SVG} Merge</button>`;
   }
   html += `</div>`;
+
+  html += `</div>`; // close .pr-sticky-header
   return html;
 }
 
-// ---- Render: PR Detail ----
+// ---- Render system events (commits, status changes, merges) ----
+
+function renderSystemEvent(item: ActivityItem, params: PRParams, pr: PullRequest): string {
+  switch (item.type) {
+    case 'commit': {
+      const commitUrl = buildPullsUrl(params, `${pr.id}/commits/${item.commit.id}`);
+      return `<div class="pr-system-event">
+        <div class="pr-timeline-icon commit">${COMMIT_SVG}</div>
+        <span>${userLink(item.commit.author)} committed <a href="${commitUrl}" data-link>${escapeHtml(item.commit.message)}</a> <span style="color:rgba(255,255,255,0.2)">${formatTime(item.createdAt)}</span></span>
+      </div>`;
+    }
+    case 'status_change':
+      return `<div class="pr-system-event">
+        <div class="pr-timeline-icon status">${STATUS_CHANGE_SVG}</div>
+        <span>${userLink(item.author)} changed status from <em>${item.from}</em> to <em>${item.to}</em> <span style="color:rgba(255,255,255,0.2)">${formatTime(item.createdAt)}</span></span>
+      </div>`;
+    case 'merge':
+      return `<div class="pr-system-event">
+        <div class="pr-timeline-icon merge">${MERGE_SVG}</div>
+        <span>${userLink(item.author)} merged this pull request <span style="color:rgba(255,255,255,0.2)">${formatTime(item.createdAt)}</span></span>
+      </div>`;
+    default:
+      return '';
+  }
+}
+
+// ---- Render: PR Detail (as chat conversation) ----
 
 async function renderPRDetail(params: PRParams): Promise<string> {
   const pr = await getPullRequest(params.repoPath, params.prId!);
@@ -1143,121 +1117,70 @@ async function renderPRDetail(params: PRParams): Promise<string> {
   // Back link
   html += `<a href="${buildPullsUrl(params)}" data-link class="pr-back-link">${ARROW_LEFT_SVG} Back to pull requests</a>`;
 
-  // Title + meta + branch
-  html += renderTitleBlock(pr, params);
+  // Sticky header: title + meta + branch + merge button
+  html += renderStickyHeader(pr, params);
 
-  // Description (same style as a comment)
-  html += await renderDescriptionBlock(pr);
+  // Build timeline: interleave system events with chat messages
+  // PR description = synthetic first message
+  const descMsg: ChatMessage = {
+    id: -1,
+    author: pr.author,
+    body: pr.description,
+    createdAt: pr.createdAt,
+    reactions: [],
+    deliveryStatus: 'delivered',
+  };
 
-  // Merge section (only for open + mergeable)
-  if (pr.status === 'open' && pr.mergeable) {
-    html += `<div class="pr-merge-section">`;
-    html += `<div class="pr-merge-check">${CHECK_SVG}</div>`;
-    html += `<div class="pr-merge-text">All checks passed. This branch has no conflicts with the target branch.</div>`;
-    html += `<button class="pr-merge-btn" data-pr-merge>${MERGE_SVG} Merge</button>`;
-    html += `</div>`;
-  }
+  // Collect all chat messages from activity (comments only)
+  const allComments = pr.activity
+    .filter((a): a is { type: 'comment'; comment: ChatMessage; createdAt: string } => a.type === 'comment')
+    .map(a => a.comment);
+  const allMessages = [descMsg, ...allComments];
 
-  // Activity timeline
-  if (pr.activity.length > 0) {
-    html += `<div class="pr-timeline-section-label">Activity</div>`;
-    html += `<div class="pr-timeline">`;
-    let prevCommentAuthor: string | null = null;
-    let prevCommentTime: number | null = null;
-    for (let ai = 0; ai < pr.activity.length; ai++) {
-      const item = pr.activity[ai];
-      const isComment = item.type === 'comment';
-      let isGrouped = false;
-      if (isComment && prevCommentAuthor === item.comment.author && prevCommentTime !== null) {
-        const gap = new Date(item.createdAt).getTime() - prevCommentTime;
-        isGrouped = gap <= 60_000; // group only if within 60 seconds
-      }
+  html += `<div class="chat-message-list">`;
 
-      // Check if this comment starts a group (next item is grouped with it)
-      let isGroupStart = false;
-      if (isComment && !isGrouped) {
-        const next = pr.activity[ai + 1];
-        if (next && next.type === 'comment' && next.comment.author === item.comment.author) {
-          const gap = new Date(next.createdAt).getTime() - new Date(item.createdAt).getTime();
-          isGroupStart = gap <= 60_000;
-        }
-      }
+  // Walk activity chronologically, rendering system events inline and comments as chat messages
+  // First: render the description as the first chat message
+  html += await renderChatMessage(descMsg, false, false, {
+    allMessages,
+    toolbarHtml: msgToolbarHtml(descMsg.id),
+  });
 
-      html += await renderActivityItem(item, params, pr, isGrouped, isGroupStart);
-      prevCommentAuthor = isComment ? item.comment.author : null;
-      prevCommentTime = isComment ? new Date(item.createdAt).getTime() : null;
+  // Then walk the activity
+  for (let ai = 0; ai < pr.activity.length; ai++) {
+    const item = pr.activity[ai];
+
+    if (item.type === 'comment') {
+      // Compute grouping for consecutive comments
+      const commentItems = pr.activity.filter(a => a.type === 'comment');
+      const ciIdx = commentItems.indexOf(item as any);
+      const commentMsgs = commentItems.map(a => (a as any).comment as ChatMessage);
+      const { isGrouped, isGroupStart } = computeGrouping(
+        commentMsgs.map(m => ({ author: m.author, createdAt: m.createdAt })),
+        ciIdx,
+      );
+
+      html += await renderChatMessage(item.comment, isGrouped, isGroupStart, {
+        allMessages,
+        toolbarHtml: msgToolbarHtml(item.comment.id),
+      });
+    } else {
+      html += renderSystemEvent(item, params, pr);
     }
-    html += `</div>`;
   }
 
-  // Comment form (only for open PRs)
+  html += `</div>`; // close .chat-message-list
+
+  // Chat-style pill input (only for open PRs)
   if (pr.status === 'open') {
-    html += `<div class="pr-comment-form">`;
-    html += `<textarea placeholder="Leave a comment..." data-pr-comment-input></textarea>`;
-    html += `<div class="pr-comment-form-actions">`;
-    html += `<button class="pr-comment-submit" data-pr-comment-submit>Comment</button>`;
-    html += `</div></div>`;
+    html += `<div class="chat-input-area">`;
+    html += `<div class="chat-input-line">`;
+    html += `<textarea class="chat-text-input" rows="1" placeholder="Leave a comment..." data-pr-comment-input></textarea>`;
+    html += `</div>`;
+    html += `</div>`;
   }
 
   html += `</div>`;
-  return html;
-}
-
-async function renderActivityItem(item: ActivityItem, params: PRParams, pr: PullRequest, isGrouped: boolean = false, isGroupStart: boolean = false): Promise<string> {
-  let html = '';
-
-  switch (item.type) {
-    case 'commit': {
-      html += `<div class="pr-timeline-item">`;
-      html += `<div class="pr-timeline-icon commit">${COMMIT_SVG}</div>`;
-      html += `<div class="pr-timeline-body">`;
-      const commitUrl = buildPullsUrl(params, `${pr.id}/commits/${item.commit.id}`);
-      html += `<div class="pr-timeline-header">${userLink(item.commit.author)} committed <a href="${commitUrl}" data-link>${escapeHtml(item.commit.message)}</a></div>`;
-      html += `<div class="pr-timeline-time">${formatTime(item.createdAt)}</div>`;
-      html += `</div>`;
-      html += `</div>`;
-      break;
-    }
-    case 'comment': {
-      const groupedClass = isGrouped ? ' grouped' : (isGroupStart ? ' group-start' : '');
-      html += `<div class="pr-timeline-item${groupedClass}" data-edit-target="comment-${item.comment.id}">`;
-      if (!isGrouped) {
-        html += await renderUserIcon(`@${item.comment.author}`, COMMENT_SVG, 'comment');
-      }
-      html += `<div class="pr-timeline-body">`;
-      if (!isGrouped) {
-        html += `<div class="pr-timeline-header">${userLink(item.comment.author)} <span class="pr-timeline-time">${formatTime(item.createdAt)}</span></div>`;
-      }
-      html += `<div class="pr-timeline-content readme-body" data-edit-display="comment-${item.comment.id}">${renderMarkdown(item.comment.body)}</div>`;
-      html += `</div>`;
-      if (pr.status === 'open') {
-        html += `<button class="pr-hover-edit" data-edit-action="comment" data-comment-id="${item.comment.id}" title="Edit comment">${EDIT_SVG}</button>`;
-      }
-      html += `</div>`;
-      break;
-    }
-    case 'status_change': {
-      html += `<div class="pr-timeline-item">`;
-      html += `<div class="pr-timeline-icon status">${STATUS_CHANGE_SVG}</div>`;
-      html += `<div class="pr-timeline-body">`;
-      html += `<div class="pr-timeline-header">${userLink(item.author)} changed status from <em>${item.from}</em> to <em>${item.to}</em></div>`;
-      html += `<div class="pr-timeline-time">${formatTime(item.createdAt)}</div>`;
-      html += `</div>`;
-      html += `</div>`;
-      break;
-    }
-    case 'merge': {
-      html += `<div class="pr-timeline-item">`;
-      html += `<div class="pr-timeline-icon merge">${MERGE_SVG}</div>`;
-      html += `<div class="pr-timeline-body">`;
-      html += `<div class="pr-timeline-header">${userLink(item.author)} merged this pull request</div>`;
-      html += `<div class="pr-timeline-time">${formatTime(item.createdAt)}</div>`;
-      html += `</div>`;
-      html += `</div>`;
-      break;
-    }
-  }
-
   return html;
 }
 
@@ -1559,6 +1482,100 @@ async function startEditBranch(): Promise<void> {
   });
 }
 
+// ---- Chat-style reaction helpers for PR detail ----
+
+async function togglePRReaction(msgId: number, emoji: string): Promise<void> {
+  if (!currentParams) return;
+  const pr = await getPullRequest(currentParams.repoPath, currentParams.prId!);
+  if (!pr) return;
+  const me = getCurrentPlayer();
+
+  // Find the message: description (id=-1) or comment
+  let msg: ChatMessage | undefined;
+  if (msgId === -1) {
+    // Description — we need to find the synthetic message, but reactions live on actual comments
+    // For now, skip description reactions (or we could store them on the PR itself)
+    return;
+  }
+  msg = pr.comments.find(c => c.id === msgId);
+  if (!msg) return;
+
+  const existing = msg.reactions.find(r => r.emoji === emoji);
+  if (existing) {
+    const idx = existing.users.indexOf(me);
+    if (idx >= 0) {
+      existing.users.splice(idx, 1);
+      if (existing.users.length === 0) {
+        msg.reactions.splice(msg.reactions.indexOf(existing), 1);
+      }
+    } else {
+      existing.users.push(me);
+    }
+  } else {
+    msg.reactions.push({ emoji, users: [me] });
+  }
+
+  // Also update the activity item's comment reference (they share the same object)
+  const scrollY = window.scrollY;
+  skipAutoScroll = true;
+  await render();
+  window.scrollTo(0, scrollY);
+}
+
+function openPRReactionPicker(anchor: HTMLElement, msgId: number): void {
+  // Remove any existing picker
+  document.querySelectorAll('[data-react-picker]').forEach(el => el.remove());
+
+  const rect = anchor.getBoundingClientRect();
+  const top = rect.top - 390;
+  const left = Math.min(rect.left, window.innerWidth - 360);
+
+  let popup = `<div class="chat-emoji-picker open" data-react-picker style="position:fixed;top:${top}px;left:${left}px;bottom:auto;">`;
+  popup += `<div class="chat-emoji-search"><input type="text" placeholder="Search emoji..." data-react-search /></div>`;
+  popup += `<div class="chat-emoji-scroll" data-react-scroll>`;
+  for (const cat of EMOJI_CATEGORIES) {
+    popup += `<div class="chat-emoji-section-label">${cat.label}</div>`;
+    popup += `<div class="chat-emoji-grid">`;
+    for (const e of cat.emojis) {
+      popup += `<button class="chat-emoji-btn" data-react-pick=":${e.name}:" title=":${e.name}:">${e.emoji}</button>`;
+    }
+    popup += `</div>`;
+  }
+  popup += `</div></div>`;
+
+  document.body.insertAdjacentHTML('beforeend', popup);
+
+  const pickerEl = document.querySelector('[data-react-picker]') as HTMLElement;
+  // Search filter
+  const searchInput = pickerEl?.querySelector<HTMLInputElement>('[data-react-search]');
+  searchInput?.focus();
+  searchInput?.addEventListener('input', () => {
+    const q = (searchInput.value || '').toLowerCase();
+    pickerEl.querySelectorAll<HTMLElement>('.chat-emoji-btn[data-react-pick]').forEach(btn => {
+      const name = btn.dataset.reactPick || '';
+      btn.style.display = name.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+
+  // Pick emoji
+  pickerEl?.querySelectorAll<HTMLElement>('[data-react-pick]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pickerEl.remove();
+      const emoji = btn.dataset.reactPick!;
+      void togglePRReaction(msgId, emoji);
+    });
+  });
+
+  // Dismiss on outside click
+  const dismiss = (ev: Event) => {
+    if (!(ev.target as HTMLElement).closest('[data-react-picker]')) {
+      pickerEl?.remove();
+      document.removeEventListener('pointerdown', dismiss);
+    }
+  };
+  setTimeout(() => document.addEventListener('pointerdown', dismiss), 10);
+}
+
 // ---- Event binding ----
 
 function bindEvents(): void {
@@ -1644,28 +1661,129 @@ function bindEvents(): void {
     })(); });
   }
 
-  // Comment submit
-  const commentSubmit = currentContainer.querySelector('[data-pr-comment-submit]') as HTMLButtonElement | null;
-  if (commentSubmit && currentParams) {
-    commentSubmit.addEventListener('click', () => { void (async () => {
-      const currentUser = getCurrentPlayer();
-      const input = currentContainer!.querySelector('[data-pr-comment-input]') as HTMLTextAreaElement | null;
-      if (!input || !input.value.trim()) return;
-      const pr = await getPullRequest(currentParams!.repoPath, currentParams!.prId!);
-      if (pr) {
-        const comment = {
-          id: pr.comments.length + 100,
-          author: currentUser,
-          body: input.value.trim(),
-          createdAt: new Date().toISOString(),
-        };
-        pr.comments.push(comment);
-        pr.activity.push({ type: 'comment', comment, createdAt: comment.createdAt });
-        pr.updatedAt = comment.createdAt;
-        render();
+  // Comment submit via Enter on textarea (chat-style)
+  const commentInput = currentContainer.querySelector('[data-pr-comment-input]') as HTMLTextAreaElement | null;
+  if (commentInput && currentParams) {
+    commentInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        void (async () => {
+          const currentUser = getCurrentPlayer();
+          const body = commentInput.value.trim();
+          if (!body) return;
+          const pr = await getPullRequest(currentParams!.repoPath, currentParams!.prId!);
+          if (pr) {
+            const comment: ChatMessage = {
+              id: pr.comments.length + 100,
+              author: currentUser,
+              body,
+              createdAt: new Date().toISOString(),
+              reactions: [],
+              deliveryStatus: 'delivered',
+            };
+            pr.comments.push(comment);
+            pr.activity.push({ type: 'comment', comment, createdAt: comment.createdAt });
+            pr.updatedAt = comment.createdAt;
+            render();
+          }
+        })();
       }
-    })(); });
+    });
   }
+
+  // ---- Chat event bindings for PR detail ----
+
+  // Mousemove toolbar visibility
+  const c = currentContainer;
+  c.addEventListener('mousemove', (e) => {
+    const msgEl = (e.target as HTMLElement).closest<HTMLElement>('.chat-msg[data-msg-id]');
+    if (msgEl === toolbarTarget) return;
+    if (toolbarTarget) toolbarTarget.classList.remove('toolbar-visible');
+    toolbarTarget = msgEl;
+    if (toolbarTarget) toolbarTarget.classList.add('toolbar-visible');
+  });
+  c.addEventListener('mouseleave', () => {
+    if (toolbarTarget) { toolbarTarget.classList.remove('toolbar-visible'); toolbarTarget = null; }
+  });
+
+  // Toolbar quick-react
+  c.querySelectorAll<HTMLElement>('[data-toolbar-react]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const emoji = btn.dataset.toolbarReact!;
+      const msgId = parseInt(btn.dataset.toolbarMsg!, 10);
+      void togglePRReaction(msgId, emoji);
+    });
+  });
+
+  // Toolbar emoji picker
+  c.querySelectorAll<HTMLElement>('[data-toolbar-picker]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const msgId = parseInt(btn.dataset.toolbarPicker!, 10);
+      openPRReactionPicker(btn, msgId);
+    });
+  });
+
+  // Double-click → heart reaction
+  c.querySelectorAll<HTMLElement>('.chat-msg[data-msg-id]').forEach(el => {
+    el.addEventListener('dblclick', (e) => {
+      if ((e.target as HTMLElement).closest('.chat-reaction-badge')) return;
+      const msgId = parseInt(el.dataset.msgId!, 10);
+      const scrollY = window.scrollY;
+      skipAutoScroll = true;
+      void togglePRReaction(msgId, '❤️').then(() => { window.scrollTo(0, scrollY); });
+    });
+  });
+
+  // Long-press → quick-react bar
+  c.querySelectorAll<HTMLElement>('.chat-msg[data-msg-id]').forEach(el => {
+    let pressTimer: number | null = null;
+    el.addEventListener('pointerdown', (e) => {
+      if ((e.target as HTMLElement).closest('button, a, .chat-reaction-badge')) return;
+      pressTimer = window.setTimeout(() => {
+        pressTimer = null;
+        const rect = el.getBoundingClientRect();
+        const barX = Math.min(rect.left + (e as PointerEvent).offsetX - 80, window.innerWidth - 260);
+        const barY = rect.top - 44;
+        const msgId = parseInt(el.dataset.msgId!, 10);
+        let bar = `<div class="chat-quick-react" data-quick-react style="left:${barX}px;top:${barY}px;">`;
+        for (const emoji of HOVER_REACT_EMOJIS) {
+          bar += `<button data-qr-emoji="${emoji}">${emoji}</button>`;
+        }
+        bar += `</div>`;
+        document.body.insertAdjacentHTML('beforeend', bar);
+        const barEl = document.querySelector('[data-quick-react]') as HTMLElement;
+        barEl?.querySelectorAll<HTMLElement>('[data-qr-emoji]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            barEl.remove();
+            const scrollY = window.scrollY;
+            skipAutoScroll = true;
+            void togglePRReaction(msgId, btn.dataset.qrEmoji!).then(() => { window.scrollTo(0, scrollY); });
+          });
+        });
+        const dismiss = (ev: Event) => {
+          if (!(ev.target as HTMLElement).closest('[data-quick-react]')) {
+            barEl?.remove();
+            document.removeEventListener('pointerdown', dismiss);
+          }
+        };
+        setTimeout(() => document.addEventListener('pointerdown', dismiss), 10);
+      }, 500);
+    });
+    el.addEventListener('pointerup', () => { if (pressTimer !== null) { clearTimeout(pressTimer); pressTimer = null; } });
+    el.addEventListener('pointercancel', () => { if (pressTimer !== null) { clearTimeout(pressTimer); pressTimer = null; } });
+  });
+
+  // Reaction badge clicks (toggle reaction)
+  c.querySelectorAll<HTMLElement>('.chat-reaction-badge').forEach(badge => {
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const emoji = badge.dataset.reactionEmoji!;
+      const msgId = parseInt(badge.dataset.msgId!, 10);
+      void togglePRReaction(msgId, emoji);
+    });
+  });
 
   // Create PR
   const createBtn = currentContainer.querySelector('[data-pr-create]') as HTMLButtonElement | null;

@@ -31,9 +31,7 @@ class * | Node
   // Allow .(property | property2) / var (condition ? == : <=)
   {"."}({expr: (: this): *}) => expr<local: this>(this)
 
-  {" "}({expr: *}) //TODO Doesnt work for =/&=
-    this &= Program(args: expr) // TODO .for i => doesnt work./
-      {"=>"?, block: (): *} => this = block
+// TODO .for i => doesnt work./
 
   {operator: "&" | "|" = "&"}=> &= (block: (): *)
     this["{operator}="](block)

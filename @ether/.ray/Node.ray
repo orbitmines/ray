@@ -13,11 +13,18 @@ comment //{" "[], comment: String, \n?} | /*{
 
 class * | Node
 
-  external {`(`, args: *, `)`}
-  external {`[`, property: *, `]`}
-  {`{`, predicate: *, `}`} => this{predicate}
+  external ({args: *})
+  external [{property: *}]
+  external <{partial_args: (): *}>
+  {{predicate: *}} => this{predicate}
 
-  {"."}{property: (\S & not ".")[]} => this[property]
+  {` `}({expr: *}) =>
+    this &= Program(args: expr)
+      {"=>"?, block: (): *} => this = block
+
+  .{property: (\S & not ".")[]} => this[property]
+
+  external = | assign (x): x
 
   class = {
     {name: String} (def: Program)
@@ -40,8 +47,11 @@ class * | Node
 
   class ==
     instance_of (type)
-      return (this @ Node).(static === .) if type@ === class@
+      return (this @@ Node).(static === .) if type@ === class@
 
 
   // Get the
   @@ = (class) &caller.context.components{.static === class}.last[\@\]
+
+class Example
+  field = local

@@ -3,10 +3,15 @@ import path from 'path';
 
 const UNKNOWN = Symbol("Unknown");
 
+type MethodFn = ((...args: any[]) => Node) & { __args?: 'Program' };
+
 class Node {
-  value: { encoded: any; methods: Map<string | Node, (key: Node) => Node> } = { encoded: UNKNOWN, methods: new Map() };
+  value: { encoded: any; methods: Map<string | Node, MethodFn> } = { encoded: UNKNOWN, methods: new Map() };
 
   private _thunks: ((self: Node) => void)[] | null = null;
+
+  /** Shared prototype — universal methods (|, =, etc.) available on all nodes */
+  static PROTO: Node | null = null;
 
   constructor(encoded: any = UNKNOWN) {
     this.value.encoded = encoded;
@@ -22,6 +27,22 @@ class Node {
 
   lazy_get = (key: string | Node): Node => new Node().lazily((self) => self.value = this.get(key).value)
   lazy_set = (value: Node): Node => this.lazily((self) => self.value = value.realize().value)
+
+  /** Call this node's () method with arg. Halts via diagnostics.fatal if not callable. */
+  call = (arg: Node, ...args: any[]): Node => {
+    const fn = this.method('()');
+    if (fn) return fn(this, arg, ...args);
+    const reader = args.find(a => a instanceof Reader) as Reader | undefined;
+    if (reader) reader.diagnostics.fatal('call', `Not callable: ${describe(this)}`);
+    throw new Error(`Not callable: ${describe(this)}`);
+  }
+
+  /** Lazy call: always returns a deferred node that calls .call() when realized. */
+  lazy_call = (arg: Node, ...args: any[]): Node => {
+    return new Node().lazily((self) => {
+      self.value = this.realize().call(arg.realize(), ...args).value;
+    });
+  }
   realize(): Node {
     if (this._thunks) {
       const thunks = this._thunks;
@@ -34,16 +55,31 @@ class Node {
   has(key: string | Node, none: boolean = true): boolean { return this.value.methods.has(key) && (!none || !this.get(key).none)  }
   get(key: string | Node): Node { this.realize(); return this.value.methods.get(key)?.(Node.cast(key)) ?? new Node(null) }
   set(val: Node): Node { this.realize(); this.value = val.value; return this; }
-  // *methods(): Generator<[string | Node, (key: Node) => Node]> { yield* this.value.methods.entries(); }
+
+  /** Look up a method by name, checking own methods then PROTO */
+  method(name: string): MethodFn | undefined {
+    return this.value.methods.get(name) ?? Node.PROTO?.value.methods.get(name);
+  }
+
+  /** Register an external method on this node */
+  external(name: string, fn: MethodFn): this {
+    this.value.methods.set(name, fn);
+    return this;
+  }
+
+  /** Register a method that auto-wraps into a partial: name(self) → partial, partial()(arg, ctx, reader) → fn(self, arg, ctx, reader) */
+  external_method(name: string, fn: MethodFn, opts?: { args?: 'Program' }): this {
+    return this.external(name, (self: Node) => {
+      const callFn: MethodFn = (_: Node, ...args: any[]) => fn(self, ...args);
+      if (opts?.args) callFn.__args = opts.args;
+      return new Node().external('()', callFn);
+    });
+  }
 
   *iter(): Generator<Node> {
     let next = this.get('next');
     while (next && !next.none) { yield next; next = next.get('next'); }
   }
-
-  // get superposed(): Iterable { return new Iterable(this, '#') }
-  // get components(): Iterable { return new Iterable(this, '##') }
-  // get class_components(): Iterable { return new Iterable(this, '###') }
 
   static cast = (x: any): Node => {
     if (x instanceof Node) return x;
@@ -63,7 +99,7 @@ class Context extends Node {
   constructor(parent: Context | null = null) {
     super();
     this.parent = parent;
-    this.value.methods.set('local', () => this);
+    this.external('local', () => this);
   }
 
   get(key: string | Node): Node {
@@ -97,14 +133,13 @@ namespace bootstrap {
       let isComment = false;
       if (at('comment ')) { isComment = true; skip(8); }
 
-      let depth = 0, seenBlock = false, text = '';
+      let depth = 0, seenBlock = false, hasArrow = false, text = '';
       let pattern: (string | typeof BINDING)[] = [];
       const alts: (string | typeof BINDING)[][] = [];
 
       const flush = () => { if (text.trim()) pattern.push(text.trim()); text = ''; };
 
       while (i < source.length) {
-        // inside block — only track nesting
         if (depth > 0) {
           if (at('}}') && depth === 1) { pattern.push(BINDING, '}'); depth = 0; skip(2); }
           else if (source[i] === '{') { depth++; skip(); }
@@ -118,11 +153,11 @@ namespace bootstrap {
         } else if (source[i] === '{') {
           flush(); seenBlock = true; depth++; skip();
         } else if (at('=>')) {
-          flush(); skip(2); skipLine(); break;
+          hasArrow = true; flush(); skip(2); skipLine(); break;
         } else if (source[i] === '|' && seenBlock) {
           flush(); alts.push(pattern); pattern = []; seenBlock = false; skip();
         } else if (source[i] === '\n') {
-          if (!seenBlock) { skip(); break; }
+          if (!seenBlock || depth === 0) { skip(); break; }
           skip();
         } else {
           text += source[i]; skip();
@@ -130,7 +165,7 @@ namespace bootstrap {
       }
 
       flush();
-      if (seenBlock) alts.push(pattern);
+      if (seenBlock && hasArrow) alts.push(pattern);
       for (const p of alts) if (p.length) defs.push({ pattern: p, isComment });
     }
 
@@ -142,17 +177,30 @@ class Reader {
   private i = 0;
   private forwards: Map<string, { node: Node; pos: number }> = new Map();
   private defNodes: Map<ReturnType<typeof bootstrap.defs>[number], Node> = new Map();
+  /** All lazy results from apply(), realized during verify(). Shared across sub-readers. */
+  pending: Node[];
+  /** Sub-readers created during block evaluation, verified when parent verifies. Shared. */
+  subReaders: Reader[];
   file?: string;
+  /** Original full source for error location mapping */
+  private rootSource?: string;
+  /** Offset of this.source within rootSource (single-line blocks) */
+  private baseOffset = 0;
+  /** Per-line mapping: root-source position of each line start (before indent) + blockIndent */
+  private lineOffsets?: number[];
+  private blockIndent = 0;
 
   get forwardCount() { return this.forwards.size; }
+  get defs() { return this.definitions; }
 
   constructor(
     private source: string,
     private definitions: ReturnType<typeof bootstrap.defs>,
     private ctx: Context,
-    private diagnostics: Diagnostics = new Diagnostics(),
+    public diagnostics: Diagnostics = new Diagnostics(),
   ) {
-    // Each definition becomes a Node that can be lazily called
+    this.pending = [];
+    this.subReaders = [];
     for (const def of definitions) {
       this.defNodes.set(def, new Node(def));
     }
@@ -163,17 +211,31 @@ class Reader {
   private skip(n = 1) { this.i += n; }
   private done() { return this.i >= this.source.length; }
 
-  /** Measure indent of current line (assumes i is at line start or after newline) */
+  /** Translate a position in this reader's source to an absolute position in the root source */
+  private toRootPos(pos: number): number {
+    if (this.lineOffsets) {
+      let line = 0, lineStart = 0;
+      for (let i = 0; i < pos && i < this.source.length; i++) {
+        if (this.source[i] === '\n') { line++; lineStart = i + 1; }
+      }
+      const col = pos - lineStart;
+      const rootLinePos = this.lineOffsets[line] ?? this.lineOffsets[0];
+      return rootLinePos + col + this.blockIndent;
+    }
+    return this.baseOffset + pos;
+  }
+
+  /** Locate a position in this reader's source, mapping back to root source for correct line:col */
+  locate(pos: number): { line: number; col: number } {
+    return Diagnostics.locate(this.rootSource ?? this.source, this.toRootPos(pos));
+  }
+
   private indent(): number {
     let n = 0;
     while (!this.done() && this.ch() === ' ') { n++; this.skip(); }
     return n;
   }
 
-  /**
-   * Try matching any definition pattern at current position.
-   * Returns Node if matched (string content), null if comment (skipped), undefined if no match.
-   */
   private tryPattern(): Node | null | undefined {
     for (const def of this.definitions) {
       const first = def.pattern[0];
@@ -181,41 +243,35 @@ class Reader {
       const startPos = this.i;
       this.skip(first.length);
 
-      // Collect content between first and last literal in pattern
       const last = def.pattern[def.pattern.length - 1];
       let content = '';
+      let closerFound = true;
       if (typeof last === 'string' && last !== first) {
-        // different closer (e.g. /* ... *\)
         while (!this.done() && !this.at(last)) { content += this.ch(); this.skip(); }
-        if (!this.done()) this.skip(last.length);
+        if (!this.done()) this.skip(last.length); else closerFound = false;
       } else if (typeof last === 'string') {
-        // same opener/closer (e.g. ` ... ` or " ... ")
         while (!this.done() && !this.at(last)) { content += this.ch(); this.skip(); }
-        if (!this.done()) this.skip(last.length);
+        if (!this.done()) this.skip(last.length); else closerFound = false;
       } else {
-        // no closer — read to end of line
         while (!this.done() && this.ch() !== '\n') { content += this.ch(); this.skip(); }
       }
 
-      if (def.isComment) return null; // skipped
+      if (def.isComment) return null;
 
-      if (!content && typeof last === 'string') {
-        const loc = Diagnostics.locate(this.source, startPos);
+      if (!closerFound) {
+        const loc = this.locate(startPos);
         this.diagnostics.error('read', `Unterminated ${JSON.stringify(first)} pattern`, this.file, loc.line, loc.col);
         return new Node(null);
       }
 
-      // Pattern match is a method call: apply(def, content)
       return this.apply(this.defNodes.get(def)!, new Node(content));
     }
-    return undefined; // no match
+    return undefined;
   }
 
-  /** Read a plain token (non-whitespace, non-special). */
   private readToken(): string {
     let text = '';
     while (!this.done() && this.ch() !== ' ' && this.ch() !== '\n') {
-      // stop at any pattern trigger
       let hit = false;
       for (const def of this.definitions) {
         const first = def.pattern[0];
@@ -227,138 +283,139 @@ class Reader {
     return text;
   }
 
-  /** Resolve a name in context, or forward-declare it. */
   private resolve(name: string): Node {
     const found = this.ctx.get(name);
     if (!found.none) return found;
-    // forward declare — encoded keeps the name so apply() can use it
     if (!this.forwards.has(name)) {
       this.forwards.set(name, { node: new Node(name), pos: this.i - name.length });
     }
     return this.forwards.get(name)!.node;
   }
 
-  /** Read and evaluate a single line. Returns the result Node. */
+  resolveForward(name: string, node: Node) {
+    const fwd = this.forwards.get(name);
+    if (fwd) { fwd.node.set(node); this.forwards.delete(name); }
+  }
+
+  /** Lazy apply: defers the call, tracks result for realization in verify() */
+  private apply(target: Node, arg: Node): Node {
+    const result = target.lazy_call(arg, this.ctx, this);
+    this.pending.push(result);
+    return result;
+  }
+
+  /** Check if a node's () method expects a Program (consumes rest of line as block) */
+  private expectsProgram(node: Node): boolean {
+    const fn = node.method('()');
+    return fn?.__args === 'Program';
+  }
+
+  /** Create a block node that spawns a sub-reader when evaluated */
+  private makeBlock(blockSource: string, locate: { offset: number } | { lineOffsets: number[]; blockIndent: number }): Node {
+    const { definitions, diagnostics, file } = this;
+    const rootSrc = this.rootSource ?? this.source;
+    const parentPending = this.pending;
+    const parentSubReaders = this.subReaders;
+    const block = new Node((ctx: Context) => {
+      const reader = new Reader(blockSource, definitions, ctx, diagnostics);
+      reader.file = file;
+      reader.rootSource = rootSrc;
+      if ('offset' in locate) reader.baseOffset = locate.offset;
+      else { reader.lineOffsets = locate.lineOffsets; reader.blockIndent = locate.blockIndent; }
+      reader.pending = parentPending;
+      reader.subReaders = parentSubReaders;
+      parentSubReaders.push(reader);
+      return reader.read();
+    });
+    block.external('expression', () => new Node(blockSource));
+    return block;
+  }
+
+  private captureRestAsBlock(): Node {
+    while (!this.done() && this.ch() === ' ') this.skip();
+    const start = this.i;
+    while (!this.done() && this.ch() !== '\n') this.skip();
+    return this.makeBlock(this.source.slice(start, this.i), { offset: this.toRootPos(start) });
+  }
+
+  /** If result expects a Program, capture the rest of the line as a block and call it */
+  private checkProgram(result: Node): Node {
+    if (this.expectsProgram(result) && !this.done() && this.ch() !== '\n') {
+      return this.apply(result, this.captureRestAsBlock());
+    }
+    return result;
+  }
+
+  /** Read and evaluate a single line */
   private readLine(): Node {
     let result: Node | null = null;
 
     while (!this.done() && this.ch() !== '\n') {
       if (this.ch() === ' ') { this.skip(); continue; }
 
-      // try any definition pattern (string, comment, structural)
       const matched = this.tryPattern();
-      if (matched === null) continue;    // comment — skipped
-      if (matched !== undefined) {        // string or structural match
+      if (matched === null) continue;
+      if (matched !== undefined) {
         result = result ? this.apply(result, matched) : matched;
+        result = this.checkProgram(result);
         continue;
       }
 
-      // plain token
       const text = this.readToken();
-      if (text) {
-        const resolved = this.resolve(text);
-        result = result ? this.apply(result, resolved) : resolved;
+      if (!text) continue;
+
+      // Check if token name is a method on current result (direct or PROTO)
+      if (result !== null) {
+        const method = result.method(text);
+        if (method) {
+          result = method(result, new Node(text), this.ctx, this);
+          result = this.checkProgram(result);
+          continue;
+        }
       }
+
+      // Not a method — resolve and juxtapose
+      const resolved = this.resolve(text);
+      result = result ? this.apply(result, resolved) : resolved;
+      result = this.checkProgram(result);
     }
 
     return result ?? new Node(null);
   }
 
-  /** Resolve a forward declaration if it exists. */
-  private resolveForward(name: string, node: Node) {
-    const fwd = this.forwards.get(name);
-    if (fwd) { fwd.node.set(node); this.forwards.delete(name); }
-  }
 
-  /** Apply arg to target — juxtaposition (space-as-call). */
-  private apply(target: Node, arg: Node): Node {
-    const enc = target.value.encoded;
 
-    // class(name) → create class, register name in context
-    if (typeof enc === 'function' && enc.__external === 'class') {
-      const name = arg.value.encoded;
-      const classNode = new Node('class');
-      if (typeof name === 'string') {
-        this.ctx.value.methods.set(name, () => classNode);
-        this.resolveForward(name, classNode);
-      }
-      return classNode;
-    }
-
-    // something(|) → return a partial waiting for alias name
-    if (typeof arg.value.encoded === 'function' && arg.value.encoded.__external === '|') {
-      const alias = new Node();
-      alias.value.encoded = { __alias: target };
-      return alias;
-    }
-
-    // alias(name) → register name as alias for the class
-    if (typeof enc === 'object' && enc !== null && '__alias' in enc) {
-      const classNode = enc.__alias as Node;
-      const name = arg.value.encoded;
-      if (typeof name === 'string') {
-        this.ctx.value.methods.set(name, () => classNode);
-        this.resolveForward(name, classNode);
-      }
-      return classNode;
-    }
-
-    // = assignment: target is lhs name node, arg is rhs
-    if (typeof enc === 'function' && enc.__external === '=') {
-      // = was applied as postfix to lhs, now gets rhs
-      // handled elsewhere when we have lhs context
-    }
-
-    // Default: build call node
-    const call = new Node();
-    call.value.methods.set('target', () => target);
-    call.value.methods.set('arg', () => arg);
-    call.value.encoded = 'call';
-    return call;
-  }
-
-  /** Read an indented block as a function body Node. */
   private readBlock(blockIndent: number): Node {
-    const sourceStart = this.i;
-    const readerCtx = this.ctx;
-
-    // Collect lines at this indent or deeper
     const lines: string[] = [];
+    const lineOffsets: number[] = [];
     while (!this.done()) {
       const pos = this.i;
       if (this.ch() === '\n') { this.skip(); continue; }
 
       const ind = this.indent();
 
-      // comment — skip, indent-transparent
-      if (this.tryPattern() === null) continue;
+      const savedPos = this.i;
+      const peek = this.tryPattern();
+      if (peek === null) continue;
+      if (peek !== undefined) this.i = savedPos;
 
       if (ind < blockIndent && !this.done() && this.ch() !== '\n') {
-        // dedented — put back and stop
         this.i = pos;
         break;
       }
 
-      // consume the line
-      const lineStart = this.i;
+      lineOffsets.push(this.toRootPos(pos));
+      const relIndent = ' '.repeat(Math.max(0, ind - blockIndent));
+      const contentStart = this.i;
       while (!this.done() && this.ch() !== '\n') this.skip();
-      lines.push(this.source.slice(lineStart, this.i));
+      lines.push(relIndent + this.source.slice(contentStart, this.i));
     }
 
-    const blockSource = lines.join('\n');
-    const block = new Node((ctx: Context) => {
-      const reader = new Reader(blockSource, this.definitions, ctx);
-      return reader.read();
-    });
-    block.value.methods.set('source', () => new Node(blockSource));
-    return block;
+    return this.makeBlock(lines.join('\n'), { lineOffsets, blockIndent });
   }
 
-  /** Main entry: read all lines, handle indentation nesting. */
   read(): Node {
     let lastResult: Node | null = null;
-    let lastIndent = 0;
-
     const results: Node[] = [];
 
     while (!this.done()) {
@@ -369,35 +426,27 @@ class Reader {
 
       if (this.done() || this.ch() === '\n') continue;
 
-      // comment line — skip (only peek, don't consume non-comments)
       const savedPos = this.i;
       const peek = this.tryPattern();
-      if (peek === null) continue;       // comment — skipped
-      if (peek !== undefined) this.i = savedPos; // matched non-comment — rewind
+      if (peek === null) continue;
+      if (peek !== undefined) this.i = savedPos;
 
-      // read the line
       const result = this.readLine();
       if (this.ch() === '\n') this.skip();
 
-      // check if next line is indented (block)
-      const nextPos = this.i;
       let nextIndent = 0;
       if (!this.done()) {
-        // peek ahead for indent
         const peekPos = this.i;
         while (!this.done() && this.ch() === '\n') this.skip();
         if (!this.done()) {
           nextIndent = this.indent();
-          this.i = peekPos; // restore
+          this.i = peekPos;
         }
       }
 
-      // if next line is more indented, read block and pass to result
       if (nextIndent > indent) {
-        // skip to block start
         while (!this.done() && this.ch() === '\n') this.skip();
         const block = this.readBlock(nextIndent);
-        // apply block as argument to result
         const withBlock = this.apply(result, block);
         results.push(withBlock);
         lastResult = withBlock;
@@ -407,15 +456,25 @@ class Reader {
       }
     }
 
-    // return last result (sequence semantics)
     return lastResult ?? new Node(null);
   }
 
-  /** Report unresolved forward declarations as diagnostics. */
   verify() {
+    // Phase 1: Realize all lazy results (evaluation boundary)
+    // Note: realization may push new entries via sub-readers sharing this.pending
+    for (let i = 0; i < this.pending.length; i++) this.pending[i].realize();
+
+    // Phase 2: Check unresolved forwards — own and all sub-readers created during realization
     for (const [name, { pos }] of this.forwards) {
-      const loc = Diagnostics.locate(this.source, pos);
+      const loc = this.locate(pos);
       this.diagnostics.error('resolve', `Unresolved identifier: ${name}`, this.file, loc.line, loc.col);
+    }
+    for (let i = 0; i < this.subReaders.length; i++) {
+      const sub = this.subReaders[i];
+      for (const [name, { pos }] of sub.forwards) {
+        const loc = sub.locate(pos);
+        this.diagnostics.error('resolve', `Unresolved identifier: ${name}`, sub.file, loc.line, loc.col);
+      }
     }
   }
 }
@@ -444,6 +503,13 @@ class Diagnostics {
     this.report({ level: 'error', phase, message, file, line, col });
   }
 
+  /** Report error and halt the program immediately */
+  fatal(phase: string, message: string, file?: string, line?: number, col?: number): never {
+    this.error(phase, message, file, line, col);
+    this.print();
+    process.exit(1);
+  }
+
   warning(phase: string, message: string, file?: string, line?: number, col?: number) {
     this.report({ level: 'warning', phase, message, file, line, col });
   }
@@ -453,7 +519,6 @@ class Diagnostics {
   get hasErrors() { return this.items.some(d => d.level === 'error'); }
   get count() { return this.items.length; }
 
-  /** Locate a position in source for error context */
   static locate(source: string, pos: number): { line: number; col: number; context: string } {
     let line = 1, col = 1;
     for (let i = 0; i < pos && i < source.length; i++) {
@@ -532,6 +597,27 @@ namespace Ether {
     return { result, forwards: reader.forwardCount };
   }
 
+  /** Create a class node with a () method that handles receiving a body block */
+  function makeClassNode(): Node {
+    return new Node().external('()', (self: Node, arg: Node, ctx: Context, reader: Reader) => {
+      // Block → discover defs from source, evaluate body with class as scope
+      if (typeof arg.value.encoded === 'function' && arg.value.methods.has('expression')) {
+        const bodySource = arg.get('expression').value.encoded;
+        if (typeof bodySource === 'string') {
+          for (const def of bootstrap.defs(bodySource)) {
+            self.external(JSON.stringify(def.pattern), () => new Node(def));
+          }
+        }
+        const bodyCtx = new Context(ctx);
+        bodyCtx.external('this', () => self);
+        arg.value.encoded(bodyCtx);
+        return self;
+      }
+      // Not a block — class doesn't know what to do with this arg yet
+      return new Node();
+    });
+  }
+
   function init(location: string, verbose: boolean, diag: Diagnostics) {
     const stat = fs.statSync(location);
     const isDir = stat.isDirectory();
@@ -544,17 +630,87 @@ namespace Ether {
     let discovered!: ReturnType<typeof discover>;
     const ctx = new Context();
 
-    // Seed externals
-    const external = (name: string) => {
-      const fn = Object.assign(() => new Node(null), { __external: name });
-      const node = new Node(fn);
-      ctx.value.methods.set(name, () => node);
-      return node;
-    };
-    external('class');
-    external('|');
+    // --- The * class (Node) is the prototype for all nodes ---
+    const starClass = makeClassNode();
+    Node.PROTO = starClass;
 
-    step('discover', diag, () => { discovered = discover(rayDir); });
+    // | method: lhs | name → register name as alias for lhs
+    Node.PROTO.external_method('|', (self: Node, nameArg: Node, ctx: Context, reader: Reader) => {
+      const name = nameArg.value.encoded;
+      if (typeof name === 'string') {
+        ctx.external(name, () => self);
+        reader.resolveForward(name, self);
+      }
+      return self;
+    });
+
+    // = method: lhs = rhs → lhs.lazy_set(rhs); if lhs is a named forward and `this` is in scope, register on this
+    Node.PROTO.external_method('=', (self: Node, rhs: Node, assignCtx: Context) => {
+      if (typeof self.value.encoded === 'string') {
+        const thisNode = assignCtx.get('this');
+        if (!thisNode.none) {
+          thisNode.external(self.value.encoded, () => self);
+        }
+      }
+      return self.lazy_set(rhs);
+    });
+
+    // --- Seed callables in context ---
+    const classes = new Map<string, Node>();
+    classes.set('*', starClass);
+
+    // class — class(name) creates a named class node; class(*) returns the existing star class
+    ctx.external_method('class', (_self: Node, arg: Node, callCtx: Context, reader: Reader) => {
+      const name = arg.value.encoded;
+      if (typeof name === 'string' && name === '*') {
+        callCtx.external('*', () => starClass);
+        reader.resolveForward('*', starClass);
+        return starClass;
+      }
+      const newClass = makeClassNode();
+      if (typeof name === 'string') {
+        callCtx.external(name, () => newClass);
+        reader.resolveForward(name, newClass);
+        classes.set(name, newClass);
+      }
+      return newClass;
+    });
+
+    // external — captures rest of line as Program, registers expected external on this
+    ctx.external_method('external', (_self: Node, blockArg: Node, extCtx: Context, reader: Reader) => {
+      const thisNode = extCtx.get('this');
+      if (thisNode.none) return blockArg;
+
+      const expr = blockArg.get('expression')?.value.encoded;
+      if (typeof expr !== 'string') return blockArg;
+      const trimmed = expr.trim();
+
+      // Check if expression starts with a known pattern trigger
+      for (const def of reader.defs) {
+        const first = def.pattern[0];
+        if (typeof first === 'string' && trimmed.startsWith(first)) {
+          const key = JSON.stringify(def.pattern);
+          thisNode.external(key, () => new Node({ __external: true, pattern: key }));
+          return blockArg;
+        }
+      }
+
+      // Otherwise: first token as external name
+      const firstName = trimmed.split(/\s+/)[0];
+      if (firstName) {
+        thisNode.external(firstName, () => new Node({ __external: true, name: firstName }));
+      }
+      return blockArg;
+    }, { args: 'Program' });
+
+    step('discover', diag, () => {
+      discovered = discover(rayDir);
+      // Register global definitions (strings, comments, delimiters) in context
+      for (const def of discovered.definitions) {
+        const key = JSON.stringify(def.pattern);
+        ctx.external(key, () => new Node(def));
+      }
+    });
 
     // Pass 1: load Node.ray to find class * | Node
     step('Node.ray', diag, () => {
@@ -565,14 +721,14 @@ namespace Ether {
       if (verbose) console.error(` Node.ray: ${describe(result)} (${reader.forwardCount} forwards)`);
     });
 
-    // Pass 2: load remaining .ray files (skip top-level Node.ray, subdirs may have their own)
+    // Pass 2: load remaining .ray files (skip top-level Node.ray)
     step('load .ray', diag, () => {
       for (const r of loadDir(rayDir, discovered.definitions, ctx, diag, new Set([discovered.path]))) {
         if (verbose) console.error(`      ${path.basename(r.file)}: ${describe(r.result)} (${r.forwards} forwards)`);
       }
     });
 
-    if (diag.hasErrors) return { definitions: discovered.definitions, ctx, ok: false as const };
+    if (diag.hasErrors) return { definitions: discovered.definitions, ctx, classes, ok: false as const };
 
     const extra = isDir
       ? (fs.existsSync(path.join(location, 'Ether.ray')) ? path.join(location, 'Ether.ray') : null)
@@ -585,7 +741,7 @@ namespace Ether {
       });
     }
 
-    return { definitions: discovered.definitions, ctx, ok: !diag.hasErrors as true };
+    return { definitions: discovered.definitions, ctx, classes, ok: !diag.hasErrors as true };
   }
 
   export function run(defaultPath: string, args: PartialArgs = {}) {
@@ -597,10 +753,13 @@ namespace Ether {
 
     const diag = new Diagnostics();
     console.error('v0.3 bootstrap:');
-    const { definitions, ctx, ok } = init(location, verbose, diag);
+    const { definitions, ctx, classes, ok } = init(location, verbose, diag);
 
     if (verbose) {
       printMethods(ctx, 'context');
+      for (const [name, node] of classes) {
+        printMethods(node, `class ${name}`);
+      }
     }
 
     if (ok) {
@@ -641,12 +800,14 @@ namespace Ether {
 function printMethods(node: Node, label: string, indent = 2) {
   const prefix = ' '.repeat(indent);
   const methods = node.value.methods;
-  if (methods.size === 0) {
+  const internal = new Set(['()', 'local']);
+  const visible = [...methods].filter(([k]) => typeof k !== 'string' || !internal.has(k));
+  if (visible.length === 0) {
     console.error(`${prefix}\x1b[90m${label}: (empty)\x1b[0m`);
     return;
   }
-  console.error(`${prefix}\x1b[90m${label}: (${methods.size} keys)\x1b[0m`);
-  for (const [key, fn] of methods) {
+  console.error(`${prefix}\x1b[90m${label}: (${visible.length} keys)\x1b[0m`);
+  for (const [key, fn] of visible) {
     const keyStr = typeof key === 'string' ? key : (key instanceof Node ? describe(key) : String(key));
     const val = fn(Node.cast(key));
     console.error(`${prefix}  ${keyStr} = ${describe(val)}`);
@@ -658,14 +819,18 @@ function describe(node: Node, depth = 0): string {
   if (depth > 3) return '...';
   const enc = node.value.encoded;
   if (enc === null || enc === undefined) return 'none';
-  if (enc === UNKNOWN) return '?';
-  if (enc === 'call') {
-    const t = describe(node.get('target'), depth + 1);
-    const a = describe(node.get('arg'), depth + 1);
-    return `(${t} ${a})`;
+  if (enc === UNKNOWN) {
+    if (node.value.methods.size > 0) {
+      const keys = [...node.value.methods.keys()].filter(k => k !== '()' && k !== 'local');
+      return keys.length ? `{${keys.join(', ')}}` : '<node>';
+    }
+    return '?';
   }
   if (typeof enc === 'function') return '<fn>';
-  if (typeof enc === 'object' && enc !== null && 'pattern' in enc) {
+  if (typeof enc === 'object' && enc !== null && '__external' in enc) {
+    return `external[${enc.pattern ?? enc.name}]`;
+  }
+  if (typeof enc === 'object' && enc !== null && 'pattern' in enc && Array.isArray(enc.pattern)) {
     const pat = enc.pattern.map((e: any) => typeof e === 'symbol' ? '*' : JSON.stringify(e)).join(',');
     return `def[${pat}]`;
   }

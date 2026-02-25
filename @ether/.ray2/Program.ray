@@ -247,7 +247,7 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
 
     delegate {: not in this} => &parent.[GET THAT FUNCTIONS STATE/CONTEXT]
 
-
+  // dynamically typed like .partial_args should work and add to type def, based on the Node class.
 
   external (args: in.type): return_type
 

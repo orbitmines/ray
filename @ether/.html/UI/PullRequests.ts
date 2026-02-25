@@ -15,19 +15,20 @@ import {
 } from './PRIcons.ts';
 import {
   escapeHtml, formatTime, renderUserIcon, userLink,
-  computeGrouping, renderChatMessage, getChatMessageStyles,
-  getTimelineStyles, msgToolbarHtml, HOVER_REACT_EMOJIS,
+  getChatMessageStyles,
+  getTimelineStyles,
 } from './ChatCommon.ts';
+import type { TimelineEntry } from './ChatCommon.ts';
 import type { ChatMessage } from './API.ts';
-import { EMOJI_CATEGORIES } from './EmojiData.ts';
+import { createChatView } from './ChatView.ts';
+import type { ChatView } from './ChatView.ts';
 
 let styleEl: HTMLStyleElement | null = null;
 let currentContainer: HTMLElement | null = null;
 let navigateFn: ((path: string) => void) | null = null;
 let currentParams: PRParams | null = null;
 let currentDiffMode: 'unified' | 'side-by-side' = 'unified';
-let skipAutoScroll = false;
-let toolbarTarget: HTMLElement | null = null;
+let chatView: ChatView | null = null;
 
 
 // ---- Styles ----
@@ -39,7 +40,7 @@ function injectStyles(): void {
     .pr-page {
       max-width: 960px;
       margin: 0 auto;
-      padding: 32px 24px;
+      padding: 32px 24px 0;
       font-family: 'Courier New', Courier, monospace;
       color: ${PHOSPHOR};
       min-height: 100vh;
@@ -259,13 +260,22 @@ function injectStyles(): void {
     .pr-detail-meta {
       font-size: 13px;
       color: rgba(255,255,255,0.4);
-      margin-bottom: 4px;
     }
     .pr-detail-meta a {
       color: rgba(255,255,255,0.6);
       text-decoration: none;
     }
     .pr-detail-meta a:hover { color: ${PHOSPHOR}; text-decoration: underline; }
+
+    /* Meta row — by @user + branch + merge all on one line */
+    .pr-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .pr-meta-row .pr-branch-info { margin-bottom: 0; }
+    .pr-meta-row .pr-merge-btn { margin-left: auto; flex-shrink: 0; }
     .pr-status-badge {
       display: inline-flex;
       align-items: center;
@@ -324,16 +334,10 @@ function injectStyles(): void {
     .pr-sticky-header {
       position: sticky; top: 0; z-index: 15;
       background: ${CRT_SCREEN_BG};
-      padding-bottom: 12px;
+      padding: 12px 0;
     }
 
-    /* ---- System event rows (commits, status changes, merges) ---- */
-    .pr-system-event {
-      display: flex; gap: 10px; padding: 4px 0;
-      align-items: center;
-      font-size: 13px; color: rgba(255,255,255,0.4);
-    }
-    .pr-system-event .pr-timeline-icon { flex: 0 0 28px; }
+    /* System event CSS now in ChatCommon getTimelineStyles() */
 
     /* ---- Hover edit buttons ---- */
     .pr-editable {
@@ -423,46 +427,52 @@ function injectStyles(): void {
     }
     .pr-inline-comment-textarea:focus { border-bottom-color: rgba(255,255,255,0.3); }
 
-    /* ---- Merge section ---- */
-    .pr-merge-section {
-      border: 1px solid rgba(74,222,128,0.2);
-      border-radius: 6px;
-      padding: 16px;
-      margin-bottom: 24px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: rgba(74,222,128,0.03);
-    }
-    .pr-merge-check {
-      color: #4ade80;
-      display: flex;
-      align-items: center;
-    }
-    .pr-merge-check svg { width: 20px; height: 20px; fill: currentColor; }
-    .pr-merge-text {
-      flex: 1;
-      font-size: 13px;
-      color: rgba(255,255,255,0.6);
-    }
+    /* ---- Merge button (inline in meta row) ---- */
     .pr-merge-btn {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      height: 32px;
-      padding: 0 16px;
+      height: 28px;
+      padding: 0 14px;
       border-radius: 6px;
       font-family: 'Courier New', Courier, monospace;
-      font-size: 13px;
+      font-size: 12px;
       cursor: pointer;
       background: #00c850;
       border: 1px solid #00c850;
       color: #0a0a0a;
       font-weight: bold;
       transition: background 0.15s;
+      white-space: nowrap;
     }
     .pr-merge-btn:hover { background: #00da58; }
     .pr-merge-btn svg { width: 14px; height: 14px; fill: currentColor; }
+
+    /* ---- Merge info bar (green, below meta row) ---- */
+    .pr-merge-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      margin-top: 8px;
+      border: 1px solid rgba(74,222,128,0.2);
+      border-radius: 6px;
+      background: rgba(74,222,128,0.03);
+    }
+    .pr-merge-check {
+      color: #4ade80;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .pr-merge-check svg { width: 16px; height: 16px; fill: currentColor; }
+    .pr-merge-text {
+      font-size: 12px;
+      color: rgba(255,255,255,0.5);
+    }
+    @media (max-width: 600px) {
+      .pr-merge-info { display: none; }
+    }
 
     /* ---- Activity timeline ---- */
     .pr-timeline { margin-bottom: 24px; }
@@ -536,47 +546,6 @@ function injectStyles(): void {
     }
     .pr-timeline-item.grouped .pr-timeline-header { display: none; }
     .pr-timeline-item.group-start { border-bottom: none; }
-
-    /* ---- Comment form ---- */
-    .pr-comment-form {
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 6px;
-      overflow: hidden;
-      margin-bottom: 24px;
-    }
-    .pr-comment-form textarea {
-      width: 100%;
-      min-height: 80px;
-      padding: 12px 16px;
-      background: rgba(255,255,255,0.02);
-      border: none;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      color: rgba(255,255,255,0.8);
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 13px;
-      resize: vertical;
-      box-sizing: border-box;
-    }
-    .pr-comment-form textarea:focus { outline: 1px solid rgba(255,255,255,0.2); }
-    .pr-comment-form-actions {
-      display: flex;
-      justify-content: flex-end;
-      padding: 8px 12px;
-      background: rgba(255,255,255,0.02);
-    }
-    .pr-comment-submit {
-      height: 28px;
-      padding: 0 14px;
-      border-radius: 6px;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 12px;
-      cursor: pointer;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.15);
-      color: rgba(255,255,255,0.65);
-      transition: background 0.15s, color 0.15s;
-    }
-    .pr-comment-submit:hover { background: rgba(255,255,255,0.12); color: ${PHOSPHOR}; }
 
     /* ---- Commit diff page ---- */
     .pr-commit-header {
@@ -812,7 +781,7 @@ function injectStyles(): void {
     .pr-cancel-btn:hover { border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.75); text-decoration: none; }
 
     @media (max-width: 640px) {
-      .pr-page { padding: 16px 12px; }
+      .pr-page { padding: 16px 12px 0; }
       .pr-detail-title { font-size: 18px; }
       .pr-branch-info { flex-wrap: wrap; }
       .diff-sbs-row { flex-direction: column; }
@@ -1055,10 +1024,9 @@ function renderStickyHeader(pr: PullRequest, params: PRParams): string {
   }
   html += `</div>`;
 
-  // "by @author" line
-  html += `<div class="pr-detail-meta">by ${userLink(pr.author)}</div>`;
-
-  // Branch info + merge button (inline, with hover edit)
+  // Meta + branch + merge — all on one row
+  html += `<div class="pr-meta-row">`;
+  html += `<span class="pr-detail-meta">by ${userLink(pr.author)}</span>`;
   html += `<div class="pr-editable pr-branch-info" data-edit-target="branch">`;
   html += `<span class="pr-branch-icon">${BRANCH_SVG}</span>`;
   html += branchLink(pr.sourceLabel);
@@ -1067,11 +1035,19 @@ function renderStickyHeader(pr: PullRequest, params: PRParams): string {
   if (pr.status === 'open') {
     html += `<button class="pr-hover-edit" data-edit-action="branch" title="Edit branch">${EDIT_SVG}</button>`;
   }
-  // Merge button inline on branch row
+  html += `</div>`;
   if (pr.status === 'open' && pr.mergeable) {
-    html += `<button class="pr-merge-btn" style="margin-left:auto" data-pr-merge>${MERGE_SVG} Merge</button>`;
+    html += `<button class="pr-merge-btn" data-pr-merge>${MERGE_SVG} Merge</button>`;
   }
   html += `</div>`;
+
+  // Merge info box — wider screens only, collapses on mobile
+  if (pr.status === 'open' && pr.mergeable) {
+    html += `<div class="pr-merge-info">`;
+    html += `<span class="pr-merge-check">${CHECK_SVG}</span>`;
+    html += `<span class="pr-merge-text">This branch has no conflicts with the base branch.</span>`;
+    html += `</div>`;
+  }
 
   html += `</div>`; // close .pr-sticky-header
   return html;
@@ -1105,83 +1081,155 @@ function renderSystemEvent(item: ActivityItem, params: PRParams, pr: PullRequest
 
 // ---- Render: PR Detail (as chat conversation) ----
 
-async function renderPRDetail(params: PRParams): Promise<string> {
+async function renderPRDetailView(params: PRParams): Promise<void> {
+  if (!currentContainer) return;
   const pr = await getPullRequest(params.repoPath, params.prId!);
   if (!pr) {
-    return `<div class="pr-page">${renderHeaderChain(params)}<div class="pr-empty">Pull request #${params.prId} not found.</div></div>`;
+    currentContainer.innerHTML = `<div class="pr-page">${renderHeaderChain(params)}<div class="pr-empty">Pull request #${params.prId} not found.</div></div>`;
+    bindNonDetailEvents();
+    return;
   }
 
-  let html = `<div class="pr-page">`;
-  html += renderHeaderChain(params);
+  // Build wrapper HTML around the ChatView
+  let wrapper = `<div class="pr-page">`;
+  wrapper += renderHeaderChain(params);
+  wrapper += `<a href="${buildPullsUrl(params)}" data-link class="pr-back-link">${ARROW_LEFT_SVG} Back to pull requests</a>`;
+  wrapper += `<div data-chatview-root></div>`;
+  wrapper += `</div>`;
+  currentContainer.innerHTML = wrapper;
 
-  // Back link
-  html += `<a href="${buildPullsUrl(params)}" data-link class="pr-back-link">${ARROW_LEFT_SVG} Back to pull requests</a>`;
+  const viewRoot = currentContainer.querySelector<HTMLElement>('[data-chatview-root]')!;
 
-  // Sticky header: title + meta + branch + merge button
-  html += renderStickyHeader(pr, params);
-
-  // Build timeline: interleave system events with chat messages
-  // PR description = synthetic first message
-  const descMsg: ChatMessage = {
-    id: -1,
-    author: pr.author,
-    body: pr.description,
-    createdAt: pr.createdAt,
-    reactions: [],
-    deliveryStatus: 'delivered',
-  };
-
-  // Collect all chat messages from activity (comments only)
-  const allComments = pr.activity
-    .filter((a): a is { type: 'comment'; comment: ChatMessage; createdAt: string } => a.type === 'comment')
-    .map(a => a.comment);
-  const allMessages = [descMsg, ...allComments];
-
-  html += `<div class="chat-message-list">`;
-
-  // Walk activity chronologically, rendering system events inline and comments as chat messages
-  // First: render the description as the first chat message
-  html += await renderChatMessage(descMsg, false, false, {
-    allMessages,
-    toolbarHtml: msgToolbarHtml(descMsg.id),
-  });
-
-  // Then walk the activity
-  for (let ai = 0; ai < pr.activity.length; ai++) {
-    const item = pr.activity[ai];
-
-    if (item.type === 'comment') {
-      // Compute grouping for consecutive comments
-      const commentItems = pr.activity.filter(a => a.type === 'comment');
-      const ciIdx = commentItems.indexOf(item as any);
-      const commentMsgs = commentItems.map(a => (a as any).comment as ChatMessage);
-      const { isGrouped, isGroupStart } = computeGrouping(
-        commentMsgs.map(m => ({ author: m.author, createdAt: m.createdAt })),
-        ciIdx,
-      );
-
-      html += await renderChatMessage(item.comment, isGrouped, isGroupStart, {
-        allMessages,
-        toolbarHtml: msgToolbarHtml(item.comment.id),
-      });
-    } else {
-      html += renderSystemEvent(item, params, pr);
+  // Build timeline entry helpers
+  function buildPREntries(pr: PullRequest): TimelineEntry[] {
+    const descMsg: ChatMessage = {
+      id: -1,
+      author: pr.author,
+      body: pr.description,
+      createdAt: pr.createdAt,
+      reactions: [],
+      deliveryStatus: 'delivered',
+    };
+    const entries: TimelineEntry[] = [];
+    entries.push({ kind: 'message', createdAt: pr.createdAt, message: descMsg });
+    for (const item of pr.activity) {
+      if (item.type === 'comment') {
+        entries.push({ kind: 'message', createdAt: item.createdAt, message: item.comment });
+      } else {
+        entries.push({ kind: 'system', createdAt: item.createdAt, html: renderSystemEvent(item, params, pr) });
+      }
     }
+    return entries;
   }
 
-  html += `</div>`; // close .chat-message-list
-
-  // Chat-style pill input (only for open PRs)
-  if (pr.status === 'open') {
-    html += `<div class="chat-input-area">`;
-    html += `<div class="chat-input-line">`;
-    html += `<textarea class="chat-text-input" rows="1" placeholder="Leave a comment..." data-pr-comment-input></textarea>`;
-    html += `</div>`;
-    html += `</div>`;
+  function getAllPRMessages(pr: PullRequest): ChatMessage[] {
+    const descMsg: ChatMessage = {
+      id: -1,
+      author: pr.author,
+      body: pr.description,
+      createdAt: pr.createdAt,
+      reactions: [],
+      deliveryStatus: 'delivered',
+    };
+    const allComments = pr.activity
+      .filter((a): a is { type: 'comment'; comment: ChatMessage; createdAt: string } => a.type === 'comment')
+      .map(a => a.comment);
+    return [descMsg, ...allComments];
   }
 
-  html += `</div>`;
-  return html;
+  chatView?.destroy();
+  chatView = createChatView(viewRoot, navigateFn!, {
+    getEntries: async () => {
+      const p = await getPullRequest(params.repoPath, params.prId!);
+      return p ? buildPREntries(p) : [];
+    },
+    getHeaderHtml: () => renderStickyHeader(pr, params),
+    headerClass: 'pr-sticky-header',
+    titleRowSelector: '.pr-detail-title-row',
+    inputEnabled: pr.status === 'open',
+    placeholder: 'Leave a comment...',
+    getAllMessages: () => getAllPRMessages(pr),
+    features: {
+      scrollDown: true,
+    },
+    onSend: async (text) => {
+      const currentUser = getCurrentPlayer();
+      const body = text.trim();
+      if (!body) return;
+      const latestPr = await getPullRequest(params.repoPath, params.prId!);
+      if (!latestPr) return;
+      const comment: ChatMessage = {
+        id: latestPr.comments.length + 100,
+        author: currentUser,
+        body,
+        createdAt: new Date().toISOString(),
+        reactions: [],
+        deliveryStatus: 'delivered',
+      };
+      latestPr.comments.push(comment);
+      latestPr.activity.push({ type: 'comment', comment, createdAt: comment.createdAt });
+      latestPr.updatedAt = comment.createdAt;
+    },
+    onReaction: async (msgId, emoji) => {
+      const latestPr = await getPullRequest(params.repoPath, params.prId!);
+      if (!latestPr) return;
+      if (msgId === -1) return; // skip description reactions
+      const msg = latestPr.comments.find(c => c.id === msgId);
+      if (!msg) return;
+      const me = getCurrentPlayer();
+      const existing = msg.reactions.find(r => r.emoji === emoji);
+      if (existing) {
+        const idx = existing.users.indexOf(me);
+        if (idx >= 0) {
+          existing.users.splice(idx, 1);
+          if (existing.users.length === 0) msg.reactions.splice(msg.reactions.indexOf(existing), 1);
+        } else {
+          existing.users.push(me);
+        }
+      } else {
+        msg.reactions.push({ emoji, users: [me] });
+      }
+    },
+    onRender: () => chatView?.render(),
+    onBindEvents: (c) => {
+      // Merge button
+      const mergeBtn = c.querySelector('[data-pr-merge]') as HTMLButtonElement | null;
+      if (mergeBtn) {
+        mergeBtn.addEventListener('click', () => { void (async () => {
+          const currentUser = getCurrentPlayer();
+          const latestPr = await getPullRequest(params.repoPath, params.prId!);
+          if (latestPr) {
+            latestPr.status = 'merged';
+            latestPr.updatedAt = new Date().toISOString();
+            latestPr.mergeable = false;
+            latestPr.activity.push({ type: 'merge', author: currentUser, createdAt: new Date().toISOString() });
+            latestPr.activity.push({ type: 'status_change', from: 'open', to: 'merged', author: currentUser, createdAt: new Date().toISOString() });
+            chatView?.render();
+          }
+        })(); });
+      }
+
+      // Edit buttons (title, description, branch, comment)
+      c.querySelectorAll('[data-edit-action]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const action = (btn as HTMLElement).dataset.editAction!;
+          if (action === 'title') startEditTitle();
+          else if (action === 'description') startEditDescription();
+          else if (action === 'branch') startEditBranch();
+          else if (action === 'comment') {
+            const commentId = parseInt((btn as HTMLElement).dataset.commentId!, 10);
+            startEditComment(commentId);
+          }
+        });
+      });
+    },
+  });
+  await chatView.render();
+
+  // Bind non-ChatView events on the wrapper (back link, data-link clicks)
+  bindNonDetailEvents();
 }
 
 // ---- Render: Commit Diff ----
@@ -1482,103 +1530,9 @@ async function startEditBranch(): Promise<void> {
   });
 }
 
-// ---- Chat-style reaction helpers for PR detail ----
+// ---- Event binding (non-detail views only) ----
 
-async function togglePRReaction(msgId: number, emoji: string): Promise<void> {
-  if (!currentParams) return;
-  const pr = await getPullRequest(currentParams.repoPath, currentParams.prId!);
-  if (!pr) return;
-  const me = getCurrentPlayer();
-
-  // Find the message: description (id=-1) or comment
-  let msg: ChatMessage | undefined;
-  if (msgId === -1) {
-    // Description — we need to find the synthetic message, but reactions live on actual comments
-    // For now, skip description reactions (or we could store them on the PR itself)
-    return;
-  }
-  msg = pr.comments.find(c => c.id === msgId);
-  if (!msg) return;
-
-  const existing = msg.reactions.find(r => r.emoji === emoji);
-  if (existing) {
-    const idx = existing.users.indexOf(me);
-    if (idx >= 0) {
-      existing.users.splice(idx, 1);
-      if (existing.users.length === 0) {
-        msg.reactions.splice(msg.reactions.indexOf(existing), 1);
-      }
-    } else {
-      existing.users.push(me);
-    }
-  } else {
-    msg.reactions.push({ emoji, users: [me] });
-  }
-
-  // Also update the activity item's comment reference (they share the same object)
-  const scrollY = window.scrollY;
-  skipAutoScroll = true;
-  await render();
-  window.scrollTo(0, scrollY);
-}
-
-function openPRReactionPicker(anchor: HTMLElement, msgId: number): void {
-  // Remove any existing picker
-  document.querySelectorAll('[data-react-picker]').forEach(el => el.remove());
-
-  const rect = anchor.getBoundingClientRect();
-  const top = rect.top - 390;
-  const left = Math.min(rect.left, window.innerWidth - 360);
-
-  let popup = `<div class="chat-emoji-picker open" data-react-picker style="position:fixed;top:${top}px;left:${left}px;bottom:auto;">`;
-  popup += `<div class="chat-emoji-search"><input type="text" placeholder="Search emoji..." data-react-search /></div>`;
-  popup += `<div class="chat-emoji-scroll" data-react-scroll>`;
-  for (const cat of EMOJI_CATEGORIES) {
-    popup += `<div class="chat-emoji-section-label">${cat.label}</div>`;
-    popup += `<div class="chat-emoji-grid">`;
-    for (const e of cat.emojis) {
-      popup += `<button class="chat-emoji-btn" data-react-pick=":${e.name}:" title=":${e.name}:">${e.emoji}</button>`;
-    }
-    popup += `</div>`;
-  }
-  popup += `</div></div>`;
-
-  document.body.insertAdjacentHTML('beforeend', popup);
-
-  const pickerEl = document.querySelector('[data-react-picker]') as HTMLElement;
-  // Search filter
-  const searchInput = pickerEl?.querySelector<HTMLInputElement>('[data-react-search]');
-  searchInput?.focus();
-  searchInput?.addEventListener('input', () => {
-    const q = (searchInput.value || '').toLowerCase();
-    pickerEl.querySelectorAll<HTMLElement>('.chat-emoji-btn[data-react-pick]').forEach(btn => {
-      const name = btn.dataset.reactPick || '';
-      btn.style.display = name.toLowerCase().includes(q) ? '' : 'none';
-    });
-  });
-
-  // Pick emoji
-  pickerEl?.querySelectorAll<HTMLElement>('[data-react-pick]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      pickerEl.remove();
-      const emoji = btn.dataset.reactPick!;
-      void togglePRReaction(msgId, emoji);
-    });
-  });
-
-  // Dismiss on outside click
-  const dismiss = (ev: Event) => {
-    if (!(ev.target as HTMLElement).closest('[data-react-picker]')) {
-      pickerEl?.remove();
-      document.removeEventListener('pointerdown', dismiss);
-    }
-  };
-  setTimeout(() => document.addEventListener('pointerdown', dismiss), 10);
-}
-
-// ---- Event binding ----
-
-function bindEvents(): void {
+function bindNonDetailEvents(): void {
   if (!currentContainer || !navigateFn || !currentParams) return;
 
   // Filter tabs
@@ -1628,163 +1582,6 @@ function bindEvents(): void {
     });
   });
 
-  // Edit buttons
-  currentContainer.querySelectorAll('[data-edit-action]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const action = (btn as HTMLElement).dataset.editAction!;
-      if (action === 'title') startEditTitle();
-      else if (action === 'description') startEditDescription();
-      else if (action === 'branch') startEditBranch();
-      else if (action === 'comment') {
-        const commentId = parseInt((btn as HTMLElement).dataset.commentId!, 10);
-        startEditComment(commentId);
-      }
-    });
-  });
-
-  // Merge button
-  const mergeBtn = currentContainer.querySelector('[data-pr-merge]') as HTMLButtonElement | null;
-  if (mergeBtn && currentParams) {
-    mergeBtn.addEventListener('click', () => { void (async () => {
-      const currentUser = getCurrentPlayer();
-      const pr = await getPullRequest(currentParams!.repoPath, currentParams!.prId!);
-      if (pr) {
-        pr.status = 'merged';
-        pr.updatedAt = new Date().toISOString();
-        pr.mergeable = false;
-        pr.activity.push({ type: 'merge', author: currentUser, createdAt: new Date().toISOString() });
-        pr.activity.push({ type: 'status_change', from: 'open', to: 'merged', author: currentUser, createdAt: new Date().toISOString() });
-        render();
-      }
-    })(); });
-  }
-
-  // Comment submit via Enter on textarea (chat-style)
-  const commentInput = currentContainer.querySelector('[data-pr-comment-input]') as HTMLTextAreaElement | null;
-  if (commentInput && currentParams) {
-    commentInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        void (async () => {
-          const currentUser = getCurrentPlayer();
-          const body = commentInput.value.trim();
-          if (!body) return;
-          const pr = await getPullRequest(currentParams!.repoPath, currentParams!.prId!);
-          if (pr) {
-            const comment: ChatMessage = {
-              id: pr.comments.length + 100,
-              author: currentUser,
-              body,
-              createdAt: new Date().toISOString(),
-              reactions: [],
-              deliveryStatus: 'delivered',
-            };
-            pr.comments.push(comment);
-            pr.activity.push({ type: 'comment', comment, createdAt: comment.createdAt });
-            pr.updatedAt = comment.createdAt;
-            render();
-          }
-        })();
-      }
-    });
-  }
-
-  // ---- Chat event bindings for PR detail ----
-
-  // Mousemove toolbar visibility
-  const c = currentContainer;
-  c.addEventListener('mousemove', (e) => {
-    const msgEl = (e.target as HTMLElement).closest<HTMLElement>('.chat-msg[data-msg-id]');
-    if (msgEl === toolbarTarget) return;
-    if (toolbarTarget) toolbarTarget.classList.remove('toolbar-visible');
-    toolbarTarget = msgEl;
-    if (toolbarTarget) toolbarTarget.classList.add('toolbar-visible');
-  });
-  c.addEventListener('mouseleave', () => {
-    if (toolbarTarget) { toolbarTarget.classList.remove('toolbar-visible'); toolbarTarget = null; }
-  });
-
-  // Toolbar quick-react
-  c.querySelectorAll<HTMLElement>('[data-toolbar-react]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const emoji = btn.dataset.toolbarReact!;
-      const msgId = parseInt(btn.dataset.toolbarMsg!, 10);
-      void togglePRReaction(msgId, emoji);
-    });
-  });
-
-  // Toolbar emoji picker
-  c.querySelectorAll<HTMLElement>('[data-toolbar-picker]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const msgId = parseInt(btn.dataset.toolbarPicker!, 10);
-      openPRReactionPicker(btn, msgId);
-    });
-  });
-
-  // Double-click → heart reaction
-  c.querySelectorAll<HTMLElement>('.chat-msg[data-msg-id]').forEach(el => {
-    el.addEventListener('dblclick', (e) => {
-      if ((e.target as HTMLElement).closest('.chat-reaction-badge')) return;
-      const msgId = parseInt(el.dataset.msgId!, 10);
-      const scrollY = window.scrollY;
-      skipAutoScroll = true;
-      void togglePRReaction(msgId, '❤️').then(() => { window.scrollTo(0, scrollY); });
-    });
-  });
-
-  // Long-press → quick-react bar
-  c.querySelectorAll<HTMLElement>('.chat-msg[data-msg-id]').forEach(el => {
-    let pressTimer: number | null = null;
-    el.addEventListener('pointerdown', (e) => {
-      if ((e.target as HTMLElement).closest('button, a, .chat-reaction-badge')) return;
-      pressTimer = window.setTimeout(() => {
-        pressTimer = null;
-        const rect = el.getBoundingClientRect();
-        const barX = Math.min(rect.left + (e as PointerEvent).offsetX - 80, window.innerWidth - 260);
-        const barY = rect.top - 44;
-        const msgId = parseInt(el.dataset.msgId!, 10);
-        let bar = `<div class="chat-quick-react" data-quick-react style="left:${barX}px;top:${barY}px;">`;
-        for (const emoji of HOVER_REACT_EMOJIS) {
-          bar += `<button data-qr-emoji="${emoji}">${emoji}</button>`;
-        }
-        bar += `</div>`;
-        document.body.insertAdjacentHTML('beforeend', bar);
-        const barEl = document.querySelector('[data-quick-react]') as HTMLElement;
-        barEl?.querySelectorAll<HTMLElement>('[data-qr-emoji]').forEach(btn => {
-          btn.addEventListener('click', () => {
-            barEl.remove();
-            const scrollY = window.scrollY;
-            skipAutoScroll = true;
-            void togglePRReaction(msgId, btn.dataset.qrEmoji!).then(() => { window.scrollTo(0, scrollY); });
-          });
-        });
-        const dismiss = (ev: Event) => {
-          if (!(ev.target as HTMLElement).closest('[data-quick-react]')) {
-            barEl?.remove();
-            document.removeEventListener('pointerdown', dismiss);
-          }
-        };
-        setTimeout(() => document.addEventListener('pointerdown', dismiss), 10);
-      }, 500);
-    });
-    el.addEventListener('pointerup', () => { if (pressTimer !== null) { clearTimeout(pressTimer); pressTimer = null; } });
-    el.addEventListener('pointercancel', () => { if (pressTimer !== null) { clearTimeout(pressTimer); pressTimer = null; } });
-  });
-
-  // Reaction badge clicks (toggle reaction)
-  c.querySelectorAll<HTMLElement>('.chat-reaction-badge').forEach(badge => {
-    badge.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const emoji = badge.dataset.reactionEmoji!;
-      const msgId = parseInt(badge.dataset.msgId!, 10);
-      void togglePRReaction(msgId, emoji);
-    });
-  });
-
   // Create PR
   const createBtn = currentContainer.querySelector('[data-pr-create]') as HTMLButtonElement | null;
   if (createBtn && currentParams) {
@@ -1810,6 +1607,16 @@ function bindEvents(): void {
 async function render(): Promise<void> {
   if (!currentContainer || !currentParams) return;
 
+  // PR detail (non-commit) — ChatView manages its own DOM
+  if (currentParams.prAction === 'detail' && !currentParams.commitId) {
+    await renderPRDetailView(currentParams);
+    return;
+  }
+
+  // All other views return HTML strings
+  chatView?.destroy();
+  chatView = null;
+
   let html = '';
   if (currentParams.prAction === 'list') {
     html = await renderPRList(currentParams);
@@ -1817,16 +1624,12 @@ async function render(): Promise<void> {
     html = await renderCategoryList(currentParams);
   } else if (currentParams.prAction === 'new') {
     html = await renderNewPRForm(currentParams);
-  } else if (currentParams.prAction === 'detail') {
-    if (currentParams.commitId) {
-      html = await renderCommitDiff(currentParams);
-    } else {
-      html = await renderPRDetail(currentParams);
-    }
+  } else if (currentParams.prAction === 'detail' && currentParams.commitId) {
+    html = await renderCommitDiff(currentParams);
   }
 
   currentContainer.innerHTML = html;
-  bindEvents();
+  bindNonDetailEvents();
 
   // Auto-activate closed tab if URL has ?filter=closed
   const filterParam = new URLSearchParams(window.location.search).get('filter');
@@ -1856,6 +1659,8 @@ export async function update(params: PRParams): Promise<void> {
 }
 
 export function unmount(): void {
+  chatView?.destroy();
+  chatView = null;
   currentContainer = null;
   currentParams = null;
 }

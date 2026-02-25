@@ -73,7 +73,7 @@ class Node {
     const methodFn: MethodFn = (self: Node) => {
       const callFn: MethodFn = (_: Node, ...args: any[]) => fn(self, ...args);
       if (opts?.args) callFn.__args = opts.args;
-      return new Node().external('()', callFn);
+      return new Node(name).external('()', callFn);
     };
     if (opts?.initializer) methodFn.__initializer = true;
     return this.external(name, methodFn);
@@ -216,6 +216,11 @@ class Reader {
 
   get forwardCount() { return this.forwards.size; }
   get defs() { return this.definitions; }
+  /** The first forward-referenced identifier (method key for modifiers) */
+  get firstForwardKey(): string | null {
+    for (const [key] of this.forwards) return key;
+    return null;
+  }
 
   constructor(
     private source: string,
@@ -472,9 +477,9 @@ class Reader {
   }
 
   /** If result expects a Program, capture the rest of the line as a block and call it */
-  private checkProgram(result: Node): Node {
+  private checkProgram(result: Node, callPos?: number): Node {
     if (this.expectsProgram(result) && !this.done() && this.ch() !== '\n') {
-      return this.apply(result, this.captureRestAsBlock());
+      return this.apply(result, this.captureRestAsBlock(), callPos);
     }
     return result;
   }
@@ -494,7 +499,7 @@ class Reader {
       if (matched !== undefined) {
         if (result) { result = this.apply(result, matched, resultPos); }
         else { result = matched; resultPos = tokenStart; }
-        result = this.checkProgram(result);
+        result = this.checkProgram(result, resultPos);
         continue;
       }
 
@@ -505,17 +510,26 @@ class Reader {
       if (result !== null) {
         const method = result.method(text);
         if (method) {
-          // Initializer methods (=, :, etc.) declare the LHS as a new variable immediately
-          if (method.__initializer && typeof result.value.encoded === 'string') {
-            const name = result.value.encoded;
-            const thisNode = this.ctx.get('this');
-            if (!thisNode.none) thisNode.external(name, () => result);
-            else this.ctx.external(name, () => result);
-            this.resolveForward(name, result);
-          }
           result = method(result, new Node(text), this.ctx, this);
-          result = this.checkProgram(result);
+          result = this.checkProgram(result, tokenStart);
           continue;
+        }
+      }
+
+      // Check this.method() for modifiers (methods expecting Program) as first token in class body
+      if (result === null) {
+        const thisNode = this.ctx.get('this');
+        if (!thisNode.none) {
+          const method = thisNode.method(text);
+          if (method) {
+            const partial = method(thisNode);
+            if (partial.method('()')?.__args === 'Program') {
+              result = partial;
+              resultPos = tokenStart;
+              result = this.checkProgram(result, resultPos);
+              continue;
+            }
+          }
         }
       }
 
@@ -524,7 +538,7 @@ class Reader {
         const resolved = this.resolve(text);
         if (result) { result = this.apply(result, resolved, resultPos); }
         else { result = resolved; resultPos = tokenStart; }
-        result = this.checkProgram(result);
+        result = this.checkProgram(result, resultPos);
         continue;
       }
 
@@ -555,7 +569,7 @@ class Reader {
           const resolved = this.resolve(prefix);
           if (result) { result = this.apply(result, resolved, resultPos); }
           else { result = resolved; resultPos = tokenStart; }
-          result = this.checkProgram(result);
+          result = this.checkProgram(result, resultPos);
           continue;
         }
       }
@@ -564,7 +578,7 @@ class Reader {
       const resolved = this.resolve(text);
       if (result) { result = this.apply(result, resolved, resultPos); }
       else { result = resolved; resultPos = tokenStart; }
-      result = this.checkProgram(result);
+      result = this.checkProgram(result, resultPos);
     }
 
     return result ?? new Node(null);
@@ -862,6 +876,10 @@ namespace Ether {
       if (typeof name === 'string') {
         ctx.external(name, () => self);
         reader.resolveForward(name, self);
+        // Track alias in classes map (for error messages etc.)
+        for (const [, cls] of classes) {
+          if (cls === self || cls.value.methods === self.value.methods) { classes.set(name, cls); break; }
+        }
       }
       return self;
     });
@@ -928,70 +946,73 @@ namespace Ether {
       return arg;
     });
 
-    /** Extract the first token from an expression string using reader tokenization rules.
-     *  Returns a pattern key (for pattern triggers) or the first token string. */
-    function firstToken(expr: string, defs: ReturnType<typeof bootstrap.defs>): string | null {
-      const trimmed = expr.trim();
-      if (!trimmed) return null;
-      // Check for pattern trigger
-      for (const def of defs) {
-        const first = def.pattern[0];
-        if (typeof first === 'string' && trimmed.startsWith(first))
-          return JSON.stringify(def.pattern);
-      }
-      // First whitespace-delimited token (same as readToken)
-      let i = 0;
-      while (i < trimmed.length && trimmed[i] !== ' ' && trimmed[i] !== '\n') {
-        let hit = false;
-        for (const def of defs) {
-          const first = def.pattern[0];
-          if (typeof first === 'string' && trimmed.startsWith(first, i)) { hit = true; break; }
+    /** Find the name of a node by checking the classes map, or "global" if not a class */
+    function nodeName(node: Node): string {
+      let found: string | null = null;
+      for (const [name, cls] of classes) {
+        if (cls === node || cls.value.methods === node.value.methods) {
+          found = name;
+          if (name !== '*') return name; // prefer non-wildcard alias
         }
-        if (hit) break;
-        i++;
       }
-      return i > 0 ? trimmed.slice(0, i) : null;
+      return found ?? 'global';
     }
 
     /** Apply a modifier flag to a method on this.
-     *  Evaluates the block for side effects (alias registration etc.),
-     *  uses the first token of the expression as the method key. */
-    function applyModifier(modifier: string, blockArg: Node, modCtx: Context, reader: Reader): Node {
+     *  Evaluates the body in the class context (so definitions land on the class),
+     *  uses the first forward ref as the method key, applies the modifier flag. */
+    function applyModifier(modifier: string, blockArg: Node, modCtx: Context, reader: Reader, callPos?: number): Node {
       const thisNode = modCtx.get('this');
+      if (thisNode.none) return blockArg;
+
+      // Evaluate the body — create sub-reader directly for access to forwards.
+      // Use a child context so inner assignments don't leak onto the class.
       const expr = blockArg.get('expression')?.value.encoded;
       if (typeof expr !== 'string') return blockArg;
 
-      // Extract method key from first token
-      const key = firstToken(expr, reader.defs);
+      const bodyCtx = new Context(modCtx);
+      bodyCtx.external('this', () => thisNode);
+      const subReader = new Reader(expr, reader.defs, bodyCtx, reader.diagnostics);
+      subReader.file = reader.file;
+      subReader.pending = reader.pending;
+      subReader.subReaders = reader.subReaders;
+      reader.subReaders.push(subReader);
+      const result = subReader.read();
 
-      // Apply the modifier flag to the method on this
-      if (key && !thisNode.none) {
-        const existing = thisNode.value.methods.get(key);
-        if (modifier === 'initializer') {
-          if (existing) existing.__initializer = true;
-          else {
-            const stub: MethodFn = () => new Node(key);
-            stub.__initializer = true;
-            thisNode.external(key, stub);
-          }
+      //TODO Shouldnt be this
+
+      // The first forward ref is the method being defined (e.g., ":" from ": | ∊ | ∈ (type) => ...")
+      const key = subReader.firstForwardKey;
+      if (key) {
+        // Register the method on this so it's available for reparse splitting
+        const node = result;
+        if (!thisNode.value.methods.has(key)) {
+          thisNode.external(key, () => node);
+          subReader.resolveForward(key, node);
+        }
+        // Apply modifier flag
+        const method = thisNode.value.methods.get(key);
+        if (method && modifier === 'initializer') {
+          method.__initializer = true;
         } else if (modifier === 'external') {
-          if (!existing) {
-            thisNode.external(key, () => new Node(key));
+          if (!thisNode.value.methods.has(key)) {
+            if (callPos !== undefined) reader.errorAt(callPos, 'external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`);
+            else reader.diagnostics.error('external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`, reader.file);
           }
         }
       }
 
-      return blockArg;
+      return result;
     }
 
-    // external — evaluates sub-expression, marks result as external on this
-    ctx.external_method('external', (_self: Node, blockArg: Node, extCtx: Context, reader: Reader) => {
-      return applyModifier('external', blockArg, extCtx, reader);
+    // external — marks method as externally defined
+    starClass.external_method('external', (_self: Node, blockArg: Node, extCtx: Context, reader: Reader, callPos?: number) => {
+      return applyModifier('external', blockArg, extCtx, reader, callPos);
     }, { args: 'Program' });
 
-    // initializer — evaluates sub-expression, marks result as initializer on this
-    ctx.external_method('initializer', (_self: Node, blockArg: Node, initCtx: Context, reader: Reader) => {
-      return applyModifier('initializer', blockArg, initCtx, reader);
+    // initializer — marks method as initializer (declares LHS as variable)
+    starClass.external_method('initializer', (_self: Node, blockArg: Node, initCtx: Context, reader: Reader, callPos?: number) => {
+      return applyModifier('initializer', blockArg, initCtx, reader, callPos);
     }, { args: 'Program' });
 
     step('discover', diag, () => {

@@ -39,13 +39,16 @@ class * | Node
 
   [] = () => Array<this>
 
-  //{operator: String{"{.}=" !in this && . ==.instance_of (Char.Symbol & ¬"=")[]}= (x) //TODO And accepts args should be inferred automatically because we use it.
-  //  this = this[operator](x)
+  {operator: String{"{.}=" !in this && . ==.instance_of (Char.Symbol & ¬"=")[]}}= (x) //TODO And accepts args should be inferred automatically because we use it.
+    this = this[operator](x)
 
   external external: Modifier // Flags that a method is externally defined
   external initializer: Modifier // Flags that a particular method initializes a field into the context
   external comment: Modifier // Flags that the property is a comment, and it should be transparent: not interfere with code indenting
+
   external right-to-left: Modifier // Flags that the property is invoked in opposite reading order, where if both ltr and rtl are used, their shared boundary is what they both invoke on.
+  external left-associative: Modifier
+  external right-associative: Modifier
 
   external initializer = | assign (x): x
 
@@ -73,8 +76,8 @@ class * | Node
   ?: (type) this: type?
   initializer : | ∊ | ∈ (type) this ~~ .type = type
   ∉ (type) this: not type
-  right-to-left ∍ | ∋ (member) member ∈ this -- this
-  right-to-left ∌ (member) => member ∉ this -- this
+  right-to-left left-associative ∍ | ∋ (member) member ∈ this -- this
+  right-to-left left-associative ∌ (member) => member ∉ this -- this
   dynamically assert this ==.instance_of type if type
 
   class ==

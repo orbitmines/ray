@@ -3,7 +3,7 @@ import path from 'path';
 
 const UNKNOWN = Symbol("Unknown");
 
-type MethodFn = ((...args: any[]) => Node) & { __args?: 'Program'; __initializer?: boolean; __splitCandidate?: boolean; __rightToLeft?: boolean };
+type MethodFn = ((...args: any[]) => Node) & { __args?: 'Program'; __initializer?: boolean; __splitCandidate?: boolean; __rightToLeft?: boolean; __leftAssociative?: boolean; __rightAssociative?: boolean };
 
 //TODO applyModifier Shouldnt be this, should be: get property from .location of the result
 //TODO global should be < Node.
@@ -154,6 +154,8 @@ namespace bootstrap {
       if (at('comment ')) { isComment = true; skip(8); }
       else if (at('external ')) { isExternal = true; skip(9); }
       if (at('right-to-left ')) { skip(14); }
+      if (at('left-associative ')) { skip(17); }
+      if (at('right-associative ')) { skip(18); }
 
       let depth = 0, seenBlock = false, hasArrow = false, afterBlockClose = false, text = '';
       let pattern: (string | typeof BINDING)[] = [];
@@ -703,12 +705,32 @@ class Reader {
         const method = result.method(text);
         if (method) {
           if (method.__rightToLeft) {
-            // Right-to-left: target is lastArg (the shared boundary) or result itself
             const target = lastArg ?? result;
-            const partial = method(target, new Node(text), this.ctx, this);
-            const body = this.captureRestAsBlock();
-            result = this.apply(partial, body, tokenStart);
-            lastArg = null;
+            if (method.__leftAssociative) {
+              // Left-associative: read one token/pattern as body, chain via lastArg
+              while (!this.done() && this.ch() === ' ') this.skip();
+              let body: Node | null = null;
+              const bodyMatch = this.tryPattern();
+              if (bodyMatch !== undefined && bodyMatch !== null) {
+                body = bodyMatch;
+              } else if (bodyMatch !== null) {
+                const bodyToken = this.readToken();
+                if (bodyToken) body = this.resolve(bodyToken);
+              }
+              if (body) {
+                const partial = method(body, new Node(text), this.ctx, this);
+                result = this.apply(partial, target, tokenStart);
+                lastArg = null; // left-associative: next rtl op chains on result
+              }
+            } else {
+              // Right-associative (default): capture rest of line as body
+              const body = this.captureRestAsBlock();
+              if (body) {
+                const partial = method(body, new Node(text), this.ctx, this);
+                result = this.apply(partial, target!, tokenStart);
+                lastArg = null;
+              }
+            }
             continue;
           }
           result = method(result, new Node(text), this.ctx, this);
@@ -1213,11 +1235,22 @@ namespace Ether {
       if (typeof rootSrc === 'string' && typeof srcOffset === 'number') {
         subReader.setSourceMapping(rootSrc, srcOffset);
       }
+      const methodsBefore = new Set(thisNode.value.methods.keys());
       const result = subReader.read();
 
       // The method key: first forward ref (e.g., ":" from ": | ∊ | ∈ ..."),
       // or first matched definition pattern key (e.g., '["(",null,")"]' from "({args: *})").
-      const key = subReader.firstForwardKey ?? subReader.firstMatchedDef;
+      let key = subReader.firstForwardKey ?? subReader.firstMatchedDef;
+      // For nested modifiers: find newly added methods
+      if (!key) {
+        for (const k of thisNode.value.methods.keys()) {
+          if (!methodsBefore.has(k)) { key = k; break; }
+        }
+      }
+      // Collect all modifiers to apply: this one + any pending from outer modifiers
+      const pendingMods: string[] = (modCtx as any).__pendingModifiers ?? [];
+      const allModifiers = [modifier, ...pendingMods];
+
       if (key) {
         // Register the method on this so it's available for reparse splitting
         const node = result;
@@ -1229,43 +1262,87 @@ namespace Ether {
         }
         // Track on parent reader so reparse can clean up
         reader.trackRegisteredKey(key);
-        // Apply modifier flag
+
+        // Apply all modifier flags (own + pending from outer modifiers)
         const method = thisNode.value.methods.get(key);
-        if (method && modifier === 'initializer') {
-          method.__initializer = true;
-          // Only newly-registered initializers are split candidates (not pre-existing externals like =)
-          if (newlyRegistered) method.__splitCandidate = true;
-        } else if (modifier === 'external') {
-          // Check that the method has a real external implementation (not just a bootstrap pattern def).
-          // Check own methods first, then PROTO — external impls may be on PROTO while pattern defs are on the class.
-          let isRealExternal = false;
-          const ownMethod = thisNode.value.methods.get(key);
-          const protoMethod = Node.PROTO?.value.methods.get(key);
-          for (const m of [ownMethod, protoMethod]) {
-            if (!m) continue;
-            const probe = m(Node.cast(key));
-            const enc = probe.value.encoded;
-            if (!(enc && typeof enc === 'object' && 'pattern' in enc && Array.isArray(enc.pattern))) {
-              isRealExternal = true; break;
-            }
-          }
-          if (!isRealExternal) {
-            if (callPos !== undefined) reader.errorAt(callPos, 'external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`);
-            else reader.diagnostics.error('external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`, reader.file);
-          }
-        } else if (method && modifier === 'right-to-left') {
-          method.__rightToLeft = true;
-          // Also set __rightToLeft on aliases (from | in the body)
-          for (const [name, { resolved }] of subReader.forwards) {
-            if (name !== key && resolved) {
-              if (!thisNode.value.methods.has(name)) {
-                thisNode.external(name, () => node);
+        for (const mod of allModifiers) {
+          if (method && mod === 'initializer') {
+            method.__initializer = true;
+            if (newlyRegistered) method.__splitCandidate = true;
+          } else if (mod === 'external') {
+            let isRealExternal = false;
+            const ownMethod = thisNode.value.methods.get(key);
+            const protoMethod = Node.PROTO?.value.methods.get(key);
+            for (const m of [ownMethod, protoMethod]) {
+              if (!m) continue;
+              const probe = m(Node.cast(key));
+              const enc = probe.value.encoded;
+              if (!(enc && typeof enc === 'object' && 'pattern' in enc && Array.isArray(enc.pattern))) {
+                isRealExternal = true; break;
               }
-              const aliasMethod = thisNode.value.methods.get(name);
-              if (aliasMethod) aliasMethod.__rightToLeft = true;
+            }
+            if (!isRealExternal) {
+              if (callPos !== undefined) reader.errorAt(callPos, 'external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`);
+              else reader.diagnostics.error('external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`, reader.file);
+            }
+          } else if (method && mod === 'right-to-left') {
+            method.__rightToLeft = true;
+            // Also propagate to aliases (from | in the body)
+            for (const [name, { resolved }] of subReader.forwards) {
+              if (name !== key && resolved) {
+                if (!thisNode.value.methods.has(name)) {
+                  thisNode.external(name, () => node);
+                }
+                const aliasMethod = thisNode.value.methods.get(name);
+                if (aliasMethod) aliasMethod.__rightToLeft = true;
+              }
+            }
+            for (const k of thisNode.value.methods.keys()) {
+              if (k !== key && !methodsBefore.has(k)) {
+                const aliasMethod = thisNode.value.methods.get(k);
+                if (aliasMethod) aliasMethod.__rightToLeft = true;
+              }
+            }
+          } else if (method && mod === 'left-associative') {
+            method.__leftAssociative = true;
+            for (const [name, { resolved }] of subReader.forwards) {
+              if (name !== key && resolved) {
+                if (!thisNode.value.methods.has(name)) {
+                  thisNode.external(name, () => node);
+                }
+                const aliasMethod = thisNode.value.methods.get(name);
+                if (aliasMethod) aliasMethod.__leftAssociative = true;
+              }
+            }
+            for (const k of thisNode.value.methods.keys()) {
+              if (k !== key && !methodsBefore.has(k)) {
+                const aliasMethod = thisNode.value.methods.get(k);
+                if (aliasMethod) aliasMethod.__leftAssociative = true;
+              }
+            }
+          } else if (method && mod === 'right-associative') {
+            method.__rightAssociative = true;
+            for (const [name, { resolved }] of subReader.forwards) {
+              if (name !== key && resolved) {
+                if (!thisNode.value.methods.has(name)) {
+                  thisNode.external(name, () => node);
+                }
+                const aliasMethod = thisNode.value.methods.get(name);
+                if (aliasMethod) aliasMethod.__rightAssociative = true;
+              }
+            }
+            for (const k of thisNode.value.methods.keys()) {
+              if (k !== key && !methodsBefore.has(k)) {
+                const aliasMethod = thisNode.value.methods.get(k);
+                if (aliasMethod) aliasMethod.__rightAssociative = true;
+              }
             }
           }
         }
+      } else if (modifier === 'right-to-left' || modifier === 'left-associative' || modifier === 'right-associative') {
+        // Key not found — inner modifier is deferred (lazy). Store our modifier
+        // on the bodyCtx so the inner modifier applies it when it eventually runs.
+        (bodyCtx as any).__pendingModifiers = [...pendingMods, modifier];
       }
 
       return result;
@@ -1284,6 +1361,16 @@ namespace Ether {
     // right-to-left — marks method as right-to-left (reverses invocation direction)
     starClass.external_method('right-to-left', (_self: Node, blockArg: Node, rtlCtx: Context, reader: Reader, callPos?: number) => {
       return applyModifier('right-to-left', blockArg, rtlCtx, reader, callPos);
+    }, { args: 'Program' });
+
+    // left-associative — marks method as left-associative (reads one token at a time, chains)
+    starClass.external_method('left-associative', (_self: Node, blockArg: Node, laCtx: Context, reader: Reader, callPos?: number) => {
+      return applyModifier('left-associative', blockArg, laCtx, reader, callPos);
+    }, { args: 'Program' });
+
+    // right-associative — marks method as right-associative (captures rest of line as body)
+    starClass.external_method('right-associative', (_self: Node, blockArg: Node, raCtx: Context, reader: Reader, callPos?: number) => {
+      return applyModifier('right-associative', blockArg, raCtx, reader, callPos);
     }, { args: 'Program' });
 
     // external ({args: *}) — call: lazily calls self with args

@@ -15,36 +15,19 @@ class
 
 class * | Node
 
-  ; (call: (): (T: *)): T => call<local: &caller>()
-
-  -- (call: (: this): (T: *)): T => call(this)
-  ~~ (call: (: this): (T: *)): this => call(this); this
-
-  , (b) => [this].push_back(b)
-
     // Monkey-patch a constructor
+    //TODO ONLY ON CLASS, NOT AN INSTANCE
     {.}{block: (): *} = () def &= patch
   {.}{block: (): *} => block<local: this>() //TODO When run on static, should add to constructor
 
-  {property: (\S[], punctuation: "{", *, punctuation: "}", \S[])[]{length >= 1}} => this[property - punctuation]
-
-  // Allow .(property | property2) / var (condition ? == : <=)
-  {"."}({expr: (: this): *}) => expr<local: this>(this)
-
 // TODO .for i => doesnt work./
 
-  {operator: "&" | "|" = "&"}=> &= (block: (): *)
-    this["{operator}="](block)
+
 
   // If not taken the branch the bound variable is . ; it returns local or self in a closure.
   if (predicate: boolean)
   unless (predicate: boolean)
 
-  // Necessary for supporting: A | B : Type. The : without a space has a lower precedence than |, so A | B: Type matches to A | (B: Type).
-  // A | B : Type, A | B .map, A | B {length == 3}
-  {" "}{property: \S[] & not "|" | "&"} => this[property]
-
-  [] => Array<this>
 
 
 
@@ -89,6 +72,8 @@ class * | Node
   external ### | class_components // Class components and monkey-patches
 
   //TODO Exclude vs include things like local and other defined properties on Node,
+  //TODO * Should be a list of methods and just .location is used for getting the property name? bUt then you cant do this*[property] want both
+  //TODO Defines 'in' method which only takes from the given component
   external * | methods : { {key: *}: value: Program? } + { var: ({key: *}: value: Program?) } + Iterable<[key, value: Program?]>)
   // The program which still needs to run is the dynamics defined for that object, it might set intermediate values to the object. So it's not just a single update
   external ** | program : Program
@@ -98,6 +83,7 @@ class * | Node
   {.}{"{", constraint: (x: static): boolean, "}"} => // Allow chaining
 
   in {.} | keys => this*.map(key, value => key)
+  on {.} // defined on a component
   values => this*.map(key, value => value())
 
 
@@ -194,12 +180,6 @@ class * | Node
 
   ~{label} => this<goto label> //TODO Should automatically give the right available types.
 
-  // instance_of and == are the same?
-  namespace === // Don't ignore location
-  namespace ==
-    // In variables have a way to get partial equality.
-    <up_to?> () =>
-      in?: -> as (*)
     instance_of (type)
       // ### : Class components (can be -'ed, so can lose a type)
       // Class constraints need to all apply.
@@ -222,11 +202,8 @@ class * | Node
 
 
     isomorphic // (Equal in structure, ignores values)
-  namespace !=
-  //≧ | ≥ | >= = ==
-  //≦ | ≤ | <= =
-  //namespace >
-  //namespace >=
+
+
   //TODO ~= is subgraph
   namespace ~= (expression: Expression{: initial: "^" | "⊢" ?, ?, terminal: "$" | "⊣" ?})
   !~=
@@ -235,19 +212,9 @@ class * | Node
 
   ?? | else
 
-  equivalent
-    as (=== Instance) => .instance
-    //TODO The inverse of this,
-    as (=== Character) => Character(instance: this)  // If instance is not already instance_of Character
-
-  as (:== boolean) => true
-
 class Option<T> < T | .None
 { None } = Option
 None
-  {" "}({parameters: Expression}): Function //TODO This is supposedly the function initializer
-    < Function
-
   // If this == None, and then push, it's the first entry. So this is allowed to be None, while still these methods are available?
   // If ==.instance_of Iterable?
 

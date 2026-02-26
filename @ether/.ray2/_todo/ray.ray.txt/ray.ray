@@ -137,6 +137,11 @@ class Ordered<T = static> //Todo set T to caller's constructor
   < (b: T)
   >= (b: T) = this == b || this > b
   > (b: T)
+
+    //≧ | ≥ | >= = ==
+    //≦ | ≤ | <= =
+    //namespace >
+    //namespace >=
 end
 Ordered &+ Ray
   <= (b: T) reduce()

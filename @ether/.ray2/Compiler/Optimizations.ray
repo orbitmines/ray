@@ -59,7 +59,7 @@ optimize time_elapsed
 maximize/minimize
 dynamically assert x + y <= 10
 
-
++= can be optimized to be without the .copy in between, many |'s same thing
 
 
 //TODO What about the model it's constructing (effectiveness) vs (how long it took to make) so

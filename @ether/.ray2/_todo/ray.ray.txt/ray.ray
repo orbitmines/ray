@@ -138,6 +138,8 @@ class Ordered<T = static> //Todo set T to caller's constructor
   >= (b: T) = this == b || this > b
   > (b: T)
 
+  ..{right: .} | {left: .}.. | .. (right?) = () =>
+
     //≧ | ≥ | >= = ==
     //≦ | ≤ | <= =
     //namespace >

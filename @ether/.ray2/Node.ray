@@ -111,33 +111,8 @@ class * | Node
 
   // TODO Places in code where this variable gets referenced and updated.
 
-  | | or (x: type) => #, (| x)
-  & | and (x: type) => #, (& x)
-
-  // Monkey-patch an instance
-  += | patch (patch: (): *) => patch(local: this)
-
-  //TODO sUBTRACT/ADD TYPES
-  +
-  -
-
-  &+
-  &- //TODO Removes all with that type.
-  |+
-  |- //
 
   ⊢/./!⊢ // Allow if x ⊢11
-
-  // All
-
-  //TODO Allow superpose of Ray + Ray, without interfering with eachother???
-  //But you want += to override (Difference is + vs &+/&- |+/|-) ; ++ is also used for superposing Many rays into a single object. which dont interfere.
-  A &+ B == A & B // except for override by B
-  //Can also be nested #
-  A &+ (B & C)
-  Ray & Ray &+ Ray = Ray & (Ray &+ Ray)
-  // Program similarly, many programs selected, but each program has many pointers to execution threads.
-  //TODO All these < Ray become &+ Ray.
 
   //TODO How to access additional type information like A.disjoint(B)
   // Even though 'this' is already a type, we allow the binding of a less restrictive type. That way it can be reassigned to.
@@ -164,17 +139,6 @@ class * | Node
 
   // TODO Fork the variable history
   ++ | copy
-
-  .= //TODO .= next ; x = x.next
-
-  // Alternate syntax for an Array pattern. Usually: first, middle: [], last = array
-  // Allows: first, ..middle, last = array
-  ..{.} => this: this.type[]
-
-  * (n: Decimal) => this[]^n
-
-  //TODO Sequential composition for single Node. (overriden by Iterable)
-  ,
 
   ~{label} => this<goto label> //TODO Should automatically give the right available types.
 
@@ -210,8 +174,7 @@ class * | Node
 
   ?? | else
 
-class Option<T> < T | .None
-{ None } = Option
+
 None
   // If this == None, and then push, it's the first entry. So this is allowed to be None, while still these methods are available?
   // If ==.instance_of Iterable?
@@ -225,8 +188,7 @@ None
  //TODO Ray. arguments = , When vertex is set to None, should set recursively the boundaries etc. as well. And extend the initial boundaries with Function.
 
 //TODO If None !";"⊣ should return true.
-  as (=== boolean) => false
-  as (=== Number) => 0
+
 
 //TODO .canonical as the thing which resolves equivalent forms of the same Instance for example.
 
@@ -245,7 +207,7 @@ unique
 delegate in | out => object
 delegate in Number => object
 
-// Require that one of the superposed values is of the given type
-a | an (type) => ∃Node ==.instance_of type
-
 equivalence
+
+
+// Allow   (∉ | right-to-left left-associative ∌) (type) this: not type

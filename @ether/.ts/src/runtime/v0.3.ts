@@ -3,7 +3,7 @@ import path from 'path';
 
 const UNKNOWN = Symbol("Unknown");
 
-type MethodFn = ((...args: any[]) => Node) & { __args?: 'Program'; __initializer?: boolean; __splitCandidate?: boolean };
+type MethodFn = ((...args: any[]) => Node) & { __args?: 'Program'; __initializer?: boolean; __splitCandidate?: boolean; __rightToLeft?: boolean };
 
 //TODO applyModifier Shouldnt be this, should be: get property from .location of the result
 //TODO global should be < Node.
@@ -153,6 +153,7 @@ namespace bootstrap {
       let isExternal = false;
       if (at('comment ')) { isComment = true; skip(8); }
       else if (at('external ')) { isExternal = true; skip(9); }
+      if (at('right-to-left ')) { skip(14); }
 
       let depth = 0, seenBlock = false, hasArrow = false, afterBlockClose = false, text = '';
       let pattern: (string | typeof BINDING)[] = [];
@@ -678,6 +679,7 @@ class Reader {
     this.computeSkippedDefs();
     let result: Node | null = null;
     let resultPos = this.i;
+    let lastArg: Node | null = null; // Track last juxtaposed arg for right-to-left methods
 
     while (!this.done() && this.ch() !== '\n') {
       if (this.ch() === ' ') { this.skip(); continue; }
@@ -687,8 +689,8 @@ class Reader {
       const matched = this.tryPattern();
       if (matched === null) continue;
       if (matched !== undefined) {
-        if (result) { result = this.apply(result, matched, resultPos); }
-        else { result = matched; resultPos = tokenStart; }
+        if (result) { lastArg = matched; result = this.apply(result, matched, resultPos); }
+        else { result = matched; resultPos = tokenStart; lastArg = null; }
         result = this.checkProgram(result, resultPos);
         continue;
       }
@@ -700,8 +702,18 @@ class Reader {
       if (result !== null) {
         const method = result.method(text);
         if (method) {
+          if (method.__rightToLeft) {
+            // Right-to-left: target is lastArg (the shared boundary) or result itself
+            const target = lastArg ?? result;
+            const partial = method(target, new Node(text), this.ctx, this);
+            const body = this.captureRestAsBlock();
+            result = this.apply(partial, body, tokenStart);
+            lastArg = null;
+            continue;
+          }
           result = method(result, new Node(text), this.ctx, this);
           result = this.checkProgram(result, tokenStart);
+          lastArg = null;
           continue;
         }
       }
@@ -717,6 +729,7 @@ class Reader {
               result = partial;
               resultPos = tokenStart;
               result = this.checkProgram(result, resultPos);
+              lastArg = null;
               continue;
             }
           }
@@ -726,8 +739,8 @@ class Reader {
       // Try full token as variable first (longest match)
       if (!this.ctx.get(text).none) {
         const resolved = this.resolve(text);
-        if (result) { result = this.apply(result, resolved, resultPos); }
-        else { result = resolved; resultPos = tokenStart; }
+        if (result) { lastArg = resolved; result = this.apply(result, resolved, resultPos); }
+        else { result = resolved; resultPos = tokenStart; lastArg = null; }
         result = this.checkProgram(result, resultPos);
         continue;
       }
@@ -759,8 +772,8 @@ class Reader {
           this.i -= (text.length - splitAt);
           const prefix = text.slice(0, splitAt);
           const resolved = this.resolve(prefix);
-          if (result) { result = this.apply(result, resolved, resultPos); }
-          else { result = resolved; resultPos = tokenStart; }
+          if (result) { lastArg = resolved; result = this.apply(result, resolved, resultPos); }
+          else { result = resolved; resultPos = tokenStart; lastArg = null; }
           result = this.checkProgram(result, resultPos);
           continue;
         }
@@ -768,8 +781,8 @@ class Reader {
 
       // No split found — forward-reference the full token
       const resolved = this.resolve(text);
-      if (result) { result = this.apply(result, resolved, resultPos); }
-      else { result = resolved; resultPos = tokenStart; }
+      if (result) { lastArg = resolved; result = this.apply(result, resolved, resultPos); }
+      else { result = resolved; resultPos = tokenStart; lastArg = null; }
       result = this.checkProgram(result, resultPos);
     }
 
@@ -1240,6 +1253,18 @@ namespace Ether {
             if (callPos !== undefined) reader.errorAt(callPos, 'external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`);
             else reader.diagnostics.error('external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`, reader.file);
           }
+        } else if (method && modifier === 'right-to-left') {
+          method.__rightToLeft = true;
+          // Also set __rightToLeft on aliases (from | in the body)
+          for (const [name, { resolved }] of subReader.forwards) {
+            if (name !== key && resolved) {
+              if (!thisNode.value.methods.has(name)) {
+                thisNode.external(name, () => node);
+              }
+              const aliasMethod = thisNode.value.methods.get(name);
+              if (aliasMethod) aliasMethod.__rightToLeft = true;
+            }
+          }
         }
       }
 
@@ -1254,6 +1279,11 @@ namespace Ether {
     // initializer — marks method as initializer (declares LHS as variable)
     starClass.external_method('initializer', (_self: Node, blockArg: Node, initCtx: Context, reader: Reader, callPos?: number) => {
       return applyModifier('initializer', blockArg, initCtx, reader, callPos);
+    }, { args: 'Program' });
+
+    // right-to-left — marks method as right-to-left (reverses invocation direction)
+    starClass.external_method('right-to-left', (_self: Node, blockArg: Node, rtlCtx: Context, reader: Reader, callPos?: number) => {
+      return applyModifier('right-to-left', blockArg, rtlCtx, reader, callPos);
     }, { args: 'Program' });
 
     // external ({args: *}) — call: lazily calls self with args

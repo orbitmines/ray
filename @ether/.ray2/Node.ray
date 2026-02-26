@@ -129,8 +129,6 @@ class * | Node
   ⊢/./!⊢ // Allow if x ⊢11
 
   // All
-  {operator: *{"{.}=" not in this && . ~= (Char.Symbol & ¬"=")[]}= (x)
-    this = this[operator](x)
 
   //TODO Allow superpose of Ray + Ray, without interfering with eachother???
   //But you want += to override (Difference is + vs &+/&- |+/|-) ; ++ is also used for superposing Many rays into a single object. which dont interfere.

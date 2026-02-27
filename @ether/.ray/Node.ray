@@ -7,7 +7,9 @@ comment //{" "[], comment: String, \n?} | /*{
   {comment: .line#.join(\n)}: (indent: " "[]{length == previous.indent if previous}?, line: String, " "[], "\n"?)[]
 }*\ =>
 
-{{expr: (): *}} => expr<local: &caller>; local
+{{expr: (): *}} =>
+  expr.= = (obj) => expr<local: obj>
+  expr //TODO How to make it evaluate properly for this.
 ({expr: *}) => expr
 [{elements: *}] => elements
 
@@ -56,11 +58,11 @@ class * | Node
       return (this @@ Node).(static === .) if type@ === class@
 
   class !=
-    * = (this @@ Node ==)*.map{on ==}(method => args => !method(args))
+    * = (this @@ Node ==)*.map{.on ==}(method => args => !method(args))
   class ===
-    * = (this @@ Node ==)*.map{on ==}(method => args => method<exclude_location: false>(args))
+    * = (this @@ Node ==)*.map{.on ==}(method => args => method<exclude_location: false>(args))
   class !==
-    * = (this @@ Node ==)*.map{on ===}(method => args => !method(args))
+    * = (this @@ Node ==)*.map{.on ===}(method => args => !method(args))
 
   external initializer = | assign (x): x
 

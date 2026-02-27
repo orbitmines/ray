@@ -1,15 +1,19 @@
-// class$ returns top-level classes. class$.class$ returns sub-classes all classes: (global -> .class$).reduce(|)
 
 // static parts of the constructor are filtered out using the same rewriting strategies used for compiler optimizations.
 
+Program Matching
+// Anything which is directly evaluated within the context of this
+// Anything which references a specific variable
+// Recursively in everything which has it as a context, methods/non-methods
+// .map/~filter/join are on the actual events, expanded automatically.
+// - remove parts of the program with x - x~{}, or x - [APPLY DIRECTLY]
+// Equivalences are applied over the program match, so something like 'return true if condition', would map to many things
+
+
    // Ambiguity: If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
 
-class
 
-  {name: *} (def: (Args: *): *) //TODO Allow out-of-order
-    //TODO Allow this<World>
-
-//TODO Everything defined on Node, isn't put on local, unless explicitely accessed.
+//TODO Context: Everything defined on Node, isn't put on local, unless explicitely accessed.
 
 //TODO The things defined on NOde + extensions of global (use class components), dont get the global value in closures; only things defined outside Node.
 
@@ -28,7 +32,7 @@ class * | Node
   if (predicate: boolean)
   unless (predicate: boolean)
 
-
+  // When a parameterless function is put on a line, it should be evaluated. Required for {} evaluation
 
 
   //TODO Generalize: Pattern left is matched to pattern right: first, ..middle, last; first, middle: [], last, [first ..after]
@@ -50,7 +54,6 @@ class * | Node
   // @ Class means this same variable name in another class up the context chain
   @ | location
 
-  // {pattern} = () => doesnt do the *= operation because of the ()
   // Each = is a new branch.
   // IN Ray every mutation is a = somewhere in the structure. (So there needs to be a way to decide what counts as reassignment or not
   // If assigned, it only assigns it for the current location, thus the variables value branches for different locations. You can still access
@@ -87,8 +90,6 @@ class * | Node
   values => this*.map(key, value => value())
 
 
-   //TODO If current class already implements the methods, dont overwrite -> This is also how the first entry is the ray that counts?
-    //TODO Which </extends is the ray, the first one?
     //TODO since < epoch, extend function and allow ()
     //TODO constructors automatically accepts Array, by setting it to a single one. then iterate over all of them #.
     //protected def extends | < constructors: Array<(*) => *> => constructors.for constructor

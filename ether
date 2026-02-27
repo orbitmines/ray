@@ -604,6 +604,29 @@ Commands:
   Language stats                      Show index statistics
   Language models [--use N --for T]   List/switch embedding models
 
+  Language.<NAME> mirror sync          Sync registry mirror for this language
+  Language.<NAME> mirror update        Incremental update
+  Language.<NAME> mirror fetch <PKG>   Fetch single package from registry
+  Language.<NAME> mirror status        Show mirror status
+
+  Language mirror sync --all [--parallel]   Sync ALL language registries
+  Language mirror update --all [--parallel] Incremental update all
+  Language mirror daily [--parallel]   Daily incremental (all registries)
+  Language mirror all [--concurrency N] Mirror ALL registries + VCS in parallel
+  Language mirror status               Show all registry mirror statuses
+  Language mirror platforms            List language→registry mapping
+
+  Database.<PLATFORM> sync             Sync all repos from VCS platform
+  Database.<PLATFORM> clone <O/R>      Clone single repo (bare) + releases
+  Database.<PLATFORM> fetch <O/R>      Fetch metadata only (no clone)
+  Database.<PLATFORM> status           Show VCS sync status
+
+  Database sync --all [--parallel]     Sync all VCS platforms
+  Database update --all [--parallel]   Incremental update all VCS
+  Database daily [--parallel]          Daily incremental
+  Database all [--concurrency N]       Mirror ALL VCS + registries in parallel
+  Database status                      Show all VCS statuses
+
 Examples:
   $prog Language.Python               Enter Python REPL
   $prog Language.Python install       Install Python
@@ -687,9 +710,46 @@ main() {
         [[ -n "$lang_version" ]] && search_args+=("--version" "$lang_version")
         PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli "${search_args[@]}"
         ;;
+      mirror)
+        # Resolve language → registry platform ID
+        local registry_id=""
+        if entry=$(lookup_entry "$lang_name" 2>/dev/null) && [[ -n "$entry" ]]; then
+          parse_entry "$entry"
+          registry_id=$(cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/resolve-registry.ts "$ENTRY_NAME" "$ENTRY_DIR_NAME" "$lang_name" 2>/dev/null || true)
+        else
+          # Fallback: try lang_name directly
+          registry_id=$(cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/resolve-registry.ts "$lang_name" 2>/dev/null || true)
+        fi
+        if [[ -z "$registry_id" ]]; then
+          echo "Error: No registry mapping found for '$lang_name'" >&2
+          echo "Run 'ether Language mirror platforms' to see available mappings." >&2
+          exit 1
+        fi
+        local mirror_action="${1:-sync}"
+        shift 2>/dev/null || true
+        case "$mirror_action" in
+          sync)
+            cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-sync "$registry_id" "$@"
+            ;;
+          update)
+            cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-update "$registry_id" "$@"
+            ;;
+          fetch)
+            cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-fetch "$registry_id" "$@"
+            ;;
+          status)
+            cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-status "$registry_id"
+            ;;
+          *)
+            echo "Error: Unknown mirror action '$mirror_action'" >&2
+            echo "Valid: sync, update, fetch, status" >&2
+            exit 1
+            ;;
+        esac
+        ;;
       *)
         echo "Error: Unknown action '$action'" >&2
-        echo "Valid actions: install, clone, -@, update, info, packages, index, search" >&2
+        echo "Valid actions: install, clone, -@, update, info, packages, index, search, mirror" >&2
         exit 1
         ;;
     esac
@@ -731,9 +791,125 @@ main() {
       models)
         PYTHONPATH="$SCRIPT_DIR" "$SCRIPT_DIR/ar.ray/ray.py/.venv/bin/python" -m Ether.library.Index.cli models "$@"
         ;;
+      mirror)
+        local mirror_action="${1:-sync}"
+        shift 2>/dev/null || true
+        case "$mirror_action" in
+          sync)
+            if [[ -n "${1:-}" && "${1:-}" != --* ]]; then
+              # Specific platform: language-sync <id>
+              cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-sync "$@"
+            else
+              # No positional arg or --all → sync all in parallel
+              cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-sync all "$@"
+            fi
+            ;;
+          update)
+            if [[ -n "${1:-}" && "${1:-}" != --* ]]; then
+              cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-update "$@"
+            else
+              cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-update all "$@"
+            fi
+            ;;
+          daily)
+            cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts daily "$@"
+            ;;
+          all)
+            cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts mirror-all "$@"
+            ;;
+          status)
+            cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-status
+            ;;
+          platforms)
+            cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts language-platforms
+            ;;
+          *)
+            echo "Error: Unknown mirror action '$mirror_action'" >&2
+            echo "Valid: sync, update, daily, all, status, platforms" >&2
+            exit 1
+            ;;
+        esac
+        ;;
       *)
         echo "Error: Unknown Language action '$action'" >&2
-        echo "Valid actions: list, install, clone, update, index, search, server, stats, models" >&2
+        echo "Valid actions: list, install, clone, update, index, search, server, stats, models, mirror" >&2
+        exit 1
+        ;;
+    esac
+    exit 0
+  fi
+
+  # Handle Database.* commands (VCS platforms)
+  if [[ "$first_arg" =~ ^Database\.(.+)$ ]]; then
+    local platform_name="${BASH_REMATCH[1]}"
+    local action="${1:-status}"
+    shift 2>/dev/null || true
+
+    case "$action" in
+      sync)
+        cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-sync "$platform_name" "$@"
+        ;;
+      update)
+        cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-sync "$platform_name" "$@"
+        ;;
+      clone)
+        if [[ -z "${1:-}" ]]; then
+          echo "Usage: ether Database.$platform_name clone <owner/repo> [--release tag]" >&2
+          exit 1
+        fi
+        cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-clone "$platform_name" "$@"
+        ;;
+      fetch)
+        if [[ -z "${1:-}" ]]; then
+          echo "Usage: ether Database.$platform_name fetch <owner/repo> [--release tag]" >&2
+          exit 1
+        fi
+        cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-fetch "$platform_name" "$@"
+        ;;
+      status)
+        cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-status "$platform_name"
+        ;;
+      *)
+        echo "Error: Unknown Database action '$action'" >&2
+        echo "Valid: sync, update, clone, fetch, status" >&2
+        exit 1
+        ;;
+    esac
+    exit 0
+  fi
+
+  # Handle bare "Database" commands
+  if [[ "$first_arg" == "Database" ]]; then
+    local action="${1:-sync}"
+    shift 2>/dev/null || true
+
+    case "$action" in
+      sync)
+        if [[ -n "${1:-}" && "${1:-}" != --* ]]; then
+          cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-sync "$@"
+        else
+          cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-sync all "$@"
+        fi
+        ;;
+      update)
+        if [[ -n "${1:-}" && "${1:-}" != --* ]]; then
+          cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-update "$@"
+        else
+          cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-sync all "$@"
+        fi
+        ;;
+      daily)
+        cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts daily "$@"
+        ;;
+      all)
+        cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts mirror-all "$@"
+        ;;
+      status)
+        cd "$SCRIPT_DIR/@ether/library/mirror" && npx tsx src/cli.ts database-status
+        ;;
+      *)
+        echo "Error: Unknown Database action '$action'" >&2
+        echo "Valid: sync, update, daily, all, status" >&2
         exit 1
         ;;
     esac

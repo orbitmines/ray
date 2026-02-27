@@ -7,12 +7,13 @@ import * as Repository from './Repository.ts';
 import * as PullRequests from './PullRequests.ts';
 import * as Settings from './Settings.ts';
 import * as Chat from './Chat.ts';
+import * as Library from './Library.ts';
 import { getDefaultUser } from './API.ts';
 
-type Page = 'repository' | 'pull-requests' | 'settings' | 'chat';
+type Page = 'repository' | 'pull-requests' | 'settings' | 'chat' | 'library';
 
 // Pages where the global command bar (@/slash overlay + @me button) is active.
-const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository', 'pull-requests', 'settings', 'chat']);
+const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository', 'pull-requests', 'settings', 'chat', 'library']);
 
 let currentPage: Page | null = null;
 let rootEl: HTMLElement;
@@ -59,11 +60,17 @@ export interface ChatParams {
   worldId: string | null;
 }
 
+export interface LibraryParams {
+  user: string;
+  base: string;
+}
+
 type RouteResult =
   | { page: 'repository'; params: RepoParams }
   | { page: 'pull-requests'; params: PRParams }
   | { page: 'settings'; params: SettingsParams }
-  | { page: 'chat'; params: ChatParams };
+  | { page: 'chat'; params: ChatParams }
+  | { page: 'library'; params: LibraryParams };
 
 // ---- Route Matching ----
 
@@ -214,6 +221,13 @@ function matchRoute(pathname: string): RouteResult {
         params: { user, path: repoPathSegments, base, repoPath, tab },
       };
     }
+
+    if (segments[dashIdx + 1] === 'library') {
+      return {
+        page: 'library',
+        params: { user, base },
+      };
+    }
   }
 
   // Walk segments: collect ~/version markers and build clean path
@@ -263,6 +277,11 @@ async function activatePage(route: RouteResult): Promise<void> {
     ensureBar(route.page);
     return;
   }
+  if (route.page === 'library' && currentPage === 'library') {
+    await Library.update(route.params);
+    ensureBar(route.page);
+    return;
+  }
 
   // Unmount current page
   if (currentPage === 'repository') {
@@ -273,6 +292,8 @@ async function activatePage(route: RouteResult): Promise<void> {
     Settings.unmount();
   } else if (currentPage === 'chat') {
     Chat.unmount();
+  } else if (currentPage === 'library') {
+    Library.unmount();
   }
 
   // Tear down global bar when navigating to an unsupported page
@@ -295,6 +316,9 @@ async function activatePage(route: RouteResult): Promise<void> {
   } else if (route.page === 'chat') {
     rootEl.style.display = '';
     await Chat.mount(rootEl, route.params, navigateTo);
+  } else if (route.page === 'library') {
+    rootEl.style.display = '';
+    await Library.mount(rootEl, route.params, navigateTo);
   }
 
   ensureBar(route.page);

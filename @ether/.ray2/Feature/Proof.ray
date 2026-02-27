@@ -1,0 +1,108 @@
+Proof = Program where A & B are written to the other side
+
+Equivalence between method on this bound to (this, ...)
+
+%% History in this scope
+
+// equational reasoning
+Proof = Program{(A, B) => (
+  return true if A%%.all (== | ===).(*?) B%%.all
+  return false
+  (x = A | B) = *(x)
+ ).loop.map(?).join(*)}
+
+
+assume x % 2 == 0
+assume x % 2 == 1 (superpose; 0 | 1)
+assume func(x) == 0
+
+Impoemented as changing func in scope = setting it in current context, or adding something like
+x
+  assumptions &= (% (== 2) => 0)
+
+x.assumptions = None // Should also clear func(x) in scope
+
+class Proposition < Quest{(): boolean}
+class Proof<proposition: Proposition> < Program{(): boolean => ((
+  assumptions: (assume ?) // What about assumptions made outside the function
+  //TODO In outside scope assumptions means something different than inside scope: outwide is all of the assumptions.
+  // what about assumed if branches, how do proofs work which are delayed quests
+
+  //TODO Expose variables in proposition to this context.
+
+  //TODO All externally used variables are assumptions.
+)).loop.map(?).join(*)} //TODO Return false by default, which starts a quest
+//What about subproofs, any other quest matching this proof
+
+//theorem/lemma/example ; graph of theorems
+
+Node{(): boolean}
+  ! | ¬ {.} = () => !this()
+
+  as (=== boolean) => this()
+
+theorem (proposition: Proposition, proof: Proof<proposition>)
+  rfl => &caller.return /* How does this work */ if proposition. //todo
+  trivial
+  //Add lean library
+  //Is there a way to intuitively change it if it's cleaner?
+
+  //TODO In this case we dont want a quest to start if the proof is false.
+  by_contradiction | contradiction (proof: Proof<¬proposition>) =>
+    &caller.return true if !theorem ¬proposition == false, proof //TODO Maybe give negative proposition a name
+
+  //TODO What do we want to do if proof fails, start quest (dont continue the program)
+  quest if !proof<local: local>()
+  //TODO All variables used in proof, get the additional type property of the proposition
+
+//TODO How to proof by contradiction
+Assume ¬P.
+Derive false.
+Therefore P.
+theorem 3 + 5 == 8
+    false
+
+
+theorem ∀* .length == 2
+theorem A = 3 + B = 5 == 8
+theorem (assume A = 3) + (assume B = 5) == 8
+B = 5
+C = 5
+theorem (assume A = 3) + (assume B) == 8
+  C
+  // means
+  assume C
+
+theorem ∃x: Binary * x == 25
+
+theorem 2 + 2 == 4 => rfl
+
+name = theorem ∃var * var == 25
+
+x: Proof<A == B> =
+x: Proof<
+  x: Binary
+  x.length == 2
+>
+
+∃Binary * 5 == 25
+∃x: Binary * x == 25
+∃x: Binary x * x == 25
+∃x: Binary (x * x == 25)
+∃(x: Binary)(x * x == 25)
+∃x ∈ Binary x * x == 25
+
+var = 5 | 10 | 15
+∃var * var == 25
+assume ∃var * var == 25
+// How does it differ from: (if 5 & 10, it's false & true, but only true succeeds
+// var * var == 25
+
+Proof<*#.every length == 2>
+Proof<∀* .length == 2>
+Proof<∀x .length == 2>
+Proof<x.length == Infinity> = () => x.next ==. instance_of xs: *{.next == xs}
+
+
+
+? as sorry

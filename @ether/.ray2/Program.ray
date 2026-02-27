@@ -1,0 +1,508 @@
+
+({expr: (): *}) => expr
+  expr
+    // Allow (param) => ..
+    => (block: (): *) => block ~~ : expr.type ~~ (.args ~~ .type = ?) = expr
+  expr
+
+// comments
+&caller.next.comment = above: &caller.comment, \n if above, comment //TODO .next here should be on the right level. or use a different method which does it properly. Comment after the current line should be included
+
+
+
+// "TODO" Highlighting
+
+
+// Compiler
+// When using '1 Object', you still allow the compiler to use many objects there for abstract interpretation, it's just that for type checking you expect there to be just one.
+// Chaining operators like ==.instance_of / <
+//TODO If a variable is any, anything called on it will become a requirement , a function with an assigned type return; a requirement.
+// "run at compile time" ; constexpr
+
+// "accepts type X" but only really uses subtype "Y". So either allow subtype Y, or force that entire X type.
+//TODO Notion of what is effected; what is changed by some function, and only limit certain changed with a keyword like confidential to pass it to a function with that
+
+// variable rewrites (v, w) -> (w, z), match any in Graph, rewrite rules
+
+  // compose matching domain/codomain
+
+// Inverse is f' ?
+
+// Usages of function
+
+//      image: (self) =>
+             self.domain().next(),
+
+           // TODO: Is_injective/is_surjective should use some EVERY_IN_SELECTION function. Which is different from .selection().every since that changes the refs to check within the selection. And x.next() would be within the selection.
+           // TODO: OR have some way to switch the .next/.previous inside the .every to the one we select for the function.
+
+           is_injective: (self) =>
+             // TODO: Differentiate between domain with .next information vs domain without .next information
+             //        -> Generalized to switching contexts.
+
+             self.domain().every(x => x.next().selection().length().max().equals(1))
+               // TODO: Assumes I can do .previous, either memorized or some reversible function
+               // TODO: Allow for construction which is: Match x.previous to [SOMETHING].next() which yields x
+               .and(self.image().every(x => x.previous().selection().length().max().equals(1)))
+               // TODO: Different references of the same value might exist
+               .and(self.image().selection().every(x => x.is_unique())),
+             //   .and(self.domain().selection().length().max().equals(self.image().selection().length().max()))
+           is_surjective: (self) =>
+             self.codomain().every(x => x.previous().selection().length().max().equals(1)),
+           is_bijective: (self) =>
+             self.is_injective().and(self.is_surjective()),
+
+           // TODO: A homomorphism is a map between two algebraic structures of the same type (e.g. two groups, two fields, two vector spaces), that preserves the operations of the structures.
+           // TODO: How to construct this weaker type check.
+           // is_homomorphism: (self) =>
+           //   each element in self.domain() [SAME TYPE OF STRUCTURE] self.codomain(),
+           // TODO iso, endo, auto are all homomorphisms
+           is_isomorphism: (self) =>
+             self.is_homomorphism().and(self.is_bijective()),
+           // is_endomorphism: (self) =>
+           //   self.domain() = self.codomain(), (without the references to .next)
+           is_automorphism: (self) =>
+             // self.is_endomorphism().and(self.is_isomorphism()),
+             self.is_endomorphism().and(self.is_bijective()),
+
+           is_monomorphism: (self) =>
+             self.is_injective().and(self.is_homomorphism()),
+
+//TODO Shared state means what in the function control-graph
+
+//TODO // Accessing variables while function in running.
+
+// Recursively put code in front of every block
+recur = <
+  &caller = @me
+
+  clock = Time.NOW()
+  &next.push
+    time_elapsed = clock.time_elapsed()
+  //TODO Or allow access to super() which will be the super() of <> -> Do you ever need to access super() of that function you're accessing?
+
+  recur()
+>
+
+<{expression: Expression}> // Before each statement in context
+Node +=
+  <{expression: Expression}> // Before constructor, or method call, so function returns can reference arbitrary types within the method body?
+
+// Parsing
+//TODO Ambiguity between return ME if, meaning ME or returning ME.if, the space prefers Expression if
+
+//TODO Ambiguity if we say boolean, and have a class call bo, with operator ole, on an (another class). we can't just split the tokens.
+// -> Resolve this ambiguity by preferring the attached version (since it's longer)
+
+
+
+
+
+//TODO List of methods which shouldnt be called on local, but on this if possible:
+// #, * (on global, not local)
+
+//TODO local**# => Iterate threads
+//TODO How to get the current thread, Does local** have a way of getting that current value have it be a ray, but iterate over all, not just next.
+
+//Coroutines like race say start quest which says function.stop
+
+//TODO What about other evaluation orders, they're shuffled in the right order in this control-flow.
+//TODO What if I still want them stored out of order? -> Top-level expression is out-of-order.
+
+class Function | Program = Boundary
+  //TODO as (language: Language, compiler_options: {} = {})
+  //TODO Things in history where we store a copy of the cached program, and then execute from cache
+  //TODO Only translate subexpressions to certain languages. Superpose languages by superposing different implementations and then something like a corotine to which one finishes first.
+  //TODO Then it's run as separate executable vs run according to their control-flow implementation.
+  expression: Expression
+
+  //TODO Should be placeable on any Expression, and should change the call to that, even parameterless.
+  <{filled_parameters: Expression}> => //TODO .copy, which is just another history branch
+
+  //TODO Define super() for any =
+  //TODO Or refer to other branches which are labelled, so labels cross branches.
+
+  //TODO Conditional edges/gotos
+  //TODO .expand on an unknown function makes the length possibly infinite, optionally assume it terminates
+
+  //TODO Coroutine where it's a race, and one is finite which always terminates the others are not, the whole function still always terminates.
+
+  // return_type** => The function which generates the value. Which is a subfunction of the actual function which generated it.
+  // TODO: Want to allow to access the whole function which generated the change you see in the sequence of functions called on the variable.
+end
+
+
+
+left-associative
+right-associative //TODO
+
+// Switch the global context to a different version of the language.
+//TODO What about existing objects, check versions of all classes, and patch if possible
+external = (version: 1 Language.Ray%.Version)
+external location
+
+//TODO Certain things like the global <> prefer over calling the locally defined one, how to flag?
+//TODO The obvious successors to this would be after, or in between each recursive function call (x levels deep). Benchmarking would use that. (Done by just implementing a function which does that and call that instead, finally and X)
+// Execute expression on each successive function call in its context. So if called within (), it only works within that context.
+external <{expression: Expression}>: void
+// Label the current cursor within a program with a name.
+external {label: *}\: Program //TODO Push to program.name
+
+/{path: *}: Program OR (x): //TODO INFER
+  //TODO Program which is callable with single parameter (recursively ensure path is available on x)
+
+//TODO coroutines like race here.
+
+// async/await branches/coroutines
+branch
+race
+
+//TODO Allow inserting after a method to do precedence oprdering Use Node~method, automatically allowing labelling methods.
+
+return (expression: Expression) //TODO Allow out-or-order execution.
+  // Ignore the values set by manually setting &caller, and only return to the original function.
+  // For instance, history sets &caller to preserve history, but we want to continue the history function, not where it originally called from.
+  caller = &caller%.first∙
+
+  caller.next.out = expression
+  caller.parent.push
+  caller.next = .push //TODO Push so that it's after the instruction.
+
+finally (expression: Expression)
+  (&caller -> .collapse).last.push_back(expression) //TODO Do we want it to effect out-of-order, but specifically executed at the start.?
+  //TODO This assumes that the returns are push_backable, instead of the returns continuing to the prev func. How to fix?
+  //TODO Return: what if we say the .terminal expands into the continuation, but it's still terminal this way. But then the push_back would have to be before the expansion, not after it.
+
+// TODO before_each/after_each recursively: filter, or filter on program to set it for nested expressions yes/no etc.. (expression: Expression)
+
+namespace goto
+  (program: Program, predicate: Expression?)
+    &caller.push(program, ⊙: // TODO load condition on edge, or rather load it on the function boundary?)
+    //TODO: Remove the goto from the program.
+  end
+
+  if (predicate: Expression) => this<predicate: predicate>
+end
+
+class Context //Subgraph of a function.context
+// Span implements Ray, because the whole current thing is selected as the Node. which .expands into the separate components.
+//span: a Ray{∙: expression} again, we want a subgraph of a larger graph.
+// Define line_number: span.reverse{"\n"}.count on a subgraph of a string.
+// Similarly define column as to(.reverse{"\n"}.first).length
+// span.line:column
+// From line:column, how to recover the original span (automatic reverse)
+//TODO Or a field, which only applies to a certain subgraph of a larger graph say "ABCDEF", have .field different for "ABC" and for "DEF"
+"ABCDEF"[0..2]
+  field:
+
+//TODO Shaders are like parallel iterators; there's an unrollable loop in the Many iterator for threads.
+//      -> This existence of a forloop, means the program assumes Many definitions are in turn also programs. -> Of course
+class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Expression
+   // Hierarchy is actually somehow a 2nd level of collapse/expand, but in reverse; It's hidden from it, and from their perspective they dont collapse to this function, but continue as as the function. Like a mutual
+
+  //TODO Running a program in 'Multi-program' mode, settings all kinds of variables to their superpositions
+
+  //TODO How to select .next to be only for Boundary. Because expression has been given separate name?
+  //TODO Use expression to .expand function.
+
+  //TODO Is intermediate state the whole context? Or what do we do with sequence of operations on some variable? How to intuitively make that sequence only about that variable? and things it depends on
+
+  //TODO Context information like line-number in parent expression, etc.. and larger context
+
+  , (b: Program): Program // TODO Overwrite sequential composition of programs, since the program's states clash.
+
+  location: a Context & (span: ) & "{}:{}"
+
+  entrypoint: boolean => // If the context file is the entrypoint file.
+
+  comment: String? //TODO comment should include on the same line after.
+
+  //TODO Equivalence between context and the program so that &caller == this, and &caller == @me, character works.
+
+  state | ∙ : State
+  // Program State
+  // - A looped control-flow, has the values of each iteration stored in the state's history.
+  //   - Different instantiated branches are also different branches in the state's history.
+  static class State < Ray
+    ⊢: Program
+
+    //TODO State is a history? Then calling the .x is the version at that history.
+    x: {
+      context: *
+      //TODO Things like &caller are in context
+
+      //TODO Result is the last line/var of function, so it's the previous step?
+      //TODO So 'in' is previous state.
+      //TODO But in: should actually be the entire function context.
+      result: out
+    }
+  end
+  //TODO If context is checked for access permission, it's the program that's checked instead. and its &who
+  //TODO Is Context just the Program State? Need to think that through
+  class Context
+    external local: this // .local is components.last
+    //TODO Local context doesnt override this/static how?, It's still a node.
+
+    none.write external &: Program
+
+    delegate {: not in this} => &parent.[GET THAT FUNCTIONS STATE/CONTEXT]
+
+  // dynamically typed like .partial_args should work and add to type def, based on the Node class.
+
+  external (args: in.type): return_type
+
+  //TODO : sets return_type, not function type?
+
+  if !?⊢
+    step (
+      override: boolean = true // Setting override to false, spawns a new path of execution which can be stepped independently.
+    )
+  end
+
+  //TODO Say that the .next depends on the current state; or some variable (goto if)
+  dynamically assert
+
+  args | arguments => first.out
+  result => last.out //TODO This is a variable where ** = this program. Basically a var is bound to the result of the function
+  return_type => result.type
+
+  // .variables, .usages, domain, image, codomain, injective, surjective, bijective, homomorphism, isomorphism, endomorphism, automorphism, monomorphism (the static class variable which automatically becomes a instance var)
+
+  // The function which called this function
+  // This is empty when asking the &caller of the top-level context; the character.
+  parent | caller : Program? => first.x //TODO Instead it's a collapsed initial?
+  // The latest known character associated with this chain of function calls (set this variable to change it)
+  who | character : Character (parent ? => parent.character : = ∙.x.last) //TODO What if the character is branched?
+  dynamically assert character !== None
+
+  //TODO .children TODO collapsed terminal.
+
+  //TODO Superposing different implementations of the same function how? (Superposing languages)
+
+  //TODO Some way to calculate resources used (storage, memory, time, how large the Ray is to construct a program/variable)
+
+  callee => // from parameters one of which is the instance, other's are named; exclusion?
+
+  in | parameters => ∙⊣this .x
+  out | local => ∙.x
+
+  //TODO Good name for the original function
+  base: Program => //TODO Pointer to history.
+  //TODO Base vs the original function filled with parameters, a good name for that
+
+  recur (callee) => base.copy(callee: callee) //TODO + Parameters
+
+  //TODO schedule, spawn entity if necessary, if already an NPC, use that NPC quests.
+  //TODO < Quest, implement .stop
+
+  // With the assumption that each non-expandable step terminates. (Needs to also be that they take actually finite time)
+  static Total | Decidable | Terminating | Halting => static{expanded.length#.every != ∞}
+  //TODO Automatically implements total/decidable/terminating/halting, because it's a filter. on static
+
+  {: UUID} => //TODO Load the version and remove the current function graph
+
+  as (=== Expression) =>
+    //TODO Store program with any state etc.. which would be used to pause certain quests/functions. For instance save/pausing a game.
+    //TODO Use the program's expression if no state has changed. -> super()
+end
+{ Total | Decidable | Terminating | Halting } = Program
+
+// TODO Coroutines
+//    - branch; separate thread
+// TODO Concurrently accessing variables
+//    - sync: Run concurrently, return when all are done, race: First one to finish, the rest is cancelled. rush: same as race, but they're allowed to finish, the ones that didnt finish first., defer: Run after current context finishes (no matter how it exists)
+// TODO Await for an event to trigger, and then do things like race, with many awaits, and then continue in the code
+
+
+// Language templating
+⸨⸩{language: Language} (expression: language.Expression)
+
+class Expression < language.Expression
+  language: Language = ".ray"
+
+  dynamically
+    protected fn = as Program
+    delegate (: fn.in.type) => fn
+
+  as (: Language): Expression => //TODO
+  as (=== Program)
+end
+
+// A language, is interpreted liberally here. It is just a mapping from Expression => as (*).
+// A collection of ideas, ; as a library; is also considered a language. (Like mathematics)
+class Library < Language
+class Lang | Language (equivalent extension: ".", String)?
+  // History .expands into history of the github repository as example, any versions not exposed to this view, so hidden, are not regarded as legal version of the language, but those which are exposed do.
+
+  children: Language // defined in class hierarchy
+  equivalent name => static.name // Like Rocq/Coq the name changed
+
+  static Targeting (language: Language) => static{Expression{as (language): language.Expression}}
+
+  //TODO Should automatically implement Language.BackwardsCompatible, like Targeting does for targeting
+  backwards_compatible => (<-%).all.targeting(this)
+  forwards_compatible => (%->).all.targeting(this)
+
+  //TODO Different Expression functionality for each extension, for instance .uc .uci .upkg
+
+  // The datastructure the language is encoded in.
+  static Expression
+    as (=== Program)
+    as (language: Language): language.Expression
+
+end
+//TODO Equivalence between Function with parameter = Expression, to Target; as (*)
+//TODO How to formally say; if there's sufficient interesting mapping between output, we consider it as a language. 1-1 mappings etc,, (or heavy reliance on the input or something)
+
+//TODO
+Program < Language
+
+Language // This namespace will be used for: < Language
+  namespace Ray < global & Language(".ray")
+
+%
+  //TODO Shadow each language implementation history, so we dont need to have access to the top-level language version
+
+static class Expression < String + Ray?
+  //TODO Then how to define the assumptions of newline meaning => etc..
+
+  //TODO Expression comes from some file or more generally a context, have that information available here.
+
+
+
+  as (=== Program)
+    program = Program()
+
+
+    expr = (<-this->).all
+    lines = expr.split<keep_delimiter = true>{
+      // ! Using
+    }(\n)
+
+        // Needs to be context aware
+        // Needs to reevaluate subexpressions of itself (but not itself) after adding to context.
+        //*.keys
+        context
+
+        expr => (\s | \n | ";")[], blocks: (,
+          func: ((*, (context*.keys++ ~~ ~= Expression = expr) | ("{", expr, "}")?)[], \n | ";"),
+          block: (
+            \s[]{length == whitespace if previous !~= ";"⊣},
+            (added_whitespace: \s[].NonEmpty if previous !~= ";"⊣,
+            expr<whitespace: whitespace + added_whitespace.length>)?,
+            (\s | \n | ";")[]?
+          )[]
+        )[]
+
+// Partial args is not necessarily inserted after the first statement, but each is inserted after the first initialization of that variable.
+//TODO Assumes \t = " ", Probably safer to instead say tabs are invalid syntax. (otherwise certain codeblocks might appear to be where they arent to the compiler)
+//TODO Expression[] is castable to Program, ordered. (not the Expression[] -> Expression -> Program, prefer this if possible: but Expression -> Program[] -> Program (also not a superposed, but linear. route.) route.
+//TODO Count (, to include, not blocks.
+//TODO dynamically inside a pattern match influences the whole pattern
+//TODO dynamically except it shouldn't effect itself. HOW?
+// Pull static out of constructor if possible.
+// x+y x+y.func = x+(y.func) you want it to be explicitly (x+y).func
+// How does runtime decide execution order. Using associativity proof is possible: Then choose some execution order.
+// --> Does mean that a high-level .expand is not yet decided how to order.
+// , higher precedence than if
+// // (Base, unit: Unit = Unit.None)[], Should implement x[0].unit & x.unit as |, because it binds the variable to it.
+class Expression < (
+  {as (=== Program) => program = .map(func)}: (,
+    // Allow function type, like **: Terminating, but method: Terminating (): Return
+    // If a parameterless function, which returns another function, any () made, tries the first possible thing it can apply to, so the parameterless mide have an optional, it will try that, otherwise it will try the return value.
+    // Allow maybe == Just a: 5..10
+    // ; also in pattern matching with [] includes is_last methods etc. available to for.
+    // , higher precedence than if
+    // function calls "/" "." " "
+    // A: " " -> If preceded by function expecting an argument
+    // B: " " -> If preceded by function expecting a callback
+    //    callback: // Allow .for a {from, to, name}, b and .for [a, b], c
+    // " " -> For functions defined on Expression, prefer those (like Expression if)
+    // After () of a function, => is optional, and the function starts directly.
+    // => can be placed after a < Extended optionally.
+    // Many " " allowed, Many "." go to defined methods.
+    // If A & B -> Prefer A if variable is defined
+    // Allow call with expression, which maps the args etc in place. (used for superscript for instance)
+    // Allow () around operators like .length (x ? <= b : == a), length (> 3 | == 3), or (x ? read : write) property
+    // 1d 10h 10ms, Should see that 1d does not define .10h so it should check them individually and check if 1d implements 10h -> If does not define, resolve globally, then check again.
+    // Allow chaining of binary operators like Array<3 < length < 5>
+    // How to say: Prefer globally defined. [1, 2, 3] should call global level [], not local level def [property].
+    // Evaluation order per type how + optimizations, & (what about precedence in multiple files) precedence defined by order in class (with before & after extends, to go after)
+    // Allow ' + .name: "quecto`name`", "s"?' as a + { name: "" }
+    // No -- required after newline and -- if
+    // Allow variant: ⊢11₂ ? Binary³ : Binary₂ = 10₂ if starts as a predicate it matches to the variable.
+    // Allow syntax for say this method needs to be defined T : {+ (: Number)}, Or Node{+ (: Number)}
+    // N <- . -> N equips the structure with &+ when evaluated.
+    //TODO Allow {(): boolean}
+    //TODO If return_type is none, ignore the output
+
+// Allow Ball(radius: 5m, POSITIONAL_ARG, another_field: 5m, POSITIONAL_ARG)
+
+Want to make it possible to say:
+< (
+  : Binary^128 = field: String,
+  field2: Binary^8
+)
+
+: should be called on new variable not on this
+
+  //TODO If line ends with | or another method, it is not expected to continue on the next line, instead we prefer to have the | on the next line, to prevent weird bugs
+
+  (
+    // But what if given to us by a function, we dont necessarily want to edit it there.
+    // Allow RULES @ <-> or RULES @ *
+    // Allow RULES @ <- or RULES @ -> to mean further in this pattern  (Interpreted as each iteration of the loop gives the variable to the next).
+    {
+      RULE_NAME = (\S[], "{", expr: Expression, "}", \S[])[]
+      RULE_ONELINE_BODY = " "[]{length >= 1}, parenthesis: ("(", " "[], ")")?, ("=>")(? if !parenthesis), Statement[WITHOUT BODY]?
+      RULES = {RULES @ * |= .}: (rules: (name: RULE_NAME)[]{length >= 1}.join(" & " | " | ")),
+    }
+    func: Program: (" "[], {RULES @ * |= .}}: (, parenthesis: (" "[]{length >= 1} "(", " "[], ")")?, Statement?, ("=>", Statement)(? if parenthesis)) | (*)?)[], \n | ⊣),
+    {func.args.push_back(.)}: Program: (
+      " "[]{length == whitespace}, added_whitespace: " "[].NonEmpty,
+      static<whitespace: whitespace + added_whitespace.length>),
+    )[])
+  )[]
+    // dynamically match is the default; whenever a variable is modified within the pattern
+    // dynamically match, binds to a variable, that variable is in scope for the whole expression, if that variable is changed, the whole type gets rematched, cannot effect itself (only the thing that produced the rule), can effect others & things matched later in its current scope);.
+
+  {as (=== Program) => Program}:
+): String{
+  // All Unicode space separators (+ \t), except the normal space, are illegal characters. This is for safety reasons: to ensure that text editors don't show function blocks where they shouldn't be.
+  every ==.instance_of \S | " "
+}
+  if // Allow ()                            if
+
+
+  Hexadecimal{length} ()
+
+  test //Cannot define new syntax without () or =>
+    test: x
+
+Program
+  >>
+    cursor: Program
+    while cursor{next} != None
+      // OR choose (X) is of type (x: *): boolean so
+      cursor = cursor.map{next}{choose 1}
+        if .expand !== .
+          .expand
+        else
+          // Program logic
+          . (.next if .next) //TODO Only .next if has a .next HOW?
+
+
+Expression[] = "file" &+ "file", "entrypoint"
+
+Program
+  ==
+    // Used within this context, they have the same behavior
+    //
+    extensional1
+
+// Any parameterless function is equivalent to the type it returns.
+{(): (T: ?)}
+  as (=== T) => this()
+// Any variable is equivalent to a parameterless function which returns it.
+Node
+  as (=== (): static) => () => this

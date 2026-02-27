@@ -1,0 +1,67 @@
+
+//String newline, respect spaces after the first one, which we trim completely
+
+//TODO Get from &caller:
+//TODO as String needs context of where it is being placed, if it's in a .ts that's different from another language.
+
+class String < Char[]
+  //TODO String aware of styling?
+
+  //TODO Include Char static, (is that the default), where it's that return[], for Superscript.
+
+  () => // TODO Calling on string evaluates it as a variable name, then calls that program.
+
+  lower_case | lowercase | v
+  upper_case | uppercase | ^
+  title_case | titlecase |
+  swap_case | swapcase
+  ignore_case | ignorecase //TODO Ignore-case uses fold_case too
+  fold_case | foldcase
+
+  snake_case | snakecase
+  camel_case | camelcase | camelCase
+  pascal_case | pascalcase | PascalCase
+  // ETC.
+
+  plural
+  singular
+
+  //TODO mirror (bidi)
+  mirrored
+
+String[]
+  as (=== String) this.reduce(,) //TODO Must override the , behavior of not doing it for Graphs
+
+
+class Char < Unicode.Scalar
+  //TODO as String should be automatically implemented.
+
+  Letter: Char = "a".."z" | "A".."Z" //TODO Should include letters from all alphabets
+  Symbol: Char = Unicode.GeneralCategory.(Punctuation | .Symbol)
+//TODO Add on Char.Symbol along with other categories
+//TODO Different classes of Unicode characters.
+
+//TODO Regex in ASCII vs Unicode mode. (\p supported?)
+
+//TODO How do these conflict with editor unicode mappings for chars.
+
+//TODO Verify all these are indeed corresponding to Regex.
+\0 = U+0000
+\t = U+0009
+\n = U+000A
+\r = U+000D
+\s = Unicode.GeneralCategory.Space_Separator | \t
+\S = not \s
+\R = Unicode.GeneralCategory.Line_Separator
+\x{codepoint: Hexadecimal{length == 2}}: Char => codepoint
+\u{codepoint: Hexadecimal{length == 4}}: Char => codepoint
+\U{codepoint: Hexadecimal{length == 6}}: Char => codepoint
+//TODO How to do word border
+\w =
+\W =
+\b
+\B
+\d = Unicode.GeneralCategory.Decimal_Number
+\D = not \d
+
+//TODO Language of Regex

@@ -1,0 +1,136 @@
+global = local
+
+`{string: String}` => string
+"{string: (substring: String, (punctuation: `{`, expression: *, punctuation: `}`) if substring !`\`⊣)[]}" => string - punctuation
+
+comment //{" "[], comment: String, \n?} | /*{
+  {comment: .line#.join(\n)}: (indent: " "[]{length == previous.indent if previous}?, line: String, " "[], "\n"?)[]
+}*\ =>
+
+{{expr: (): *}} => expr<local: &caller>; local
+({expr: *}) => expr
+[{elements: *}] => elements
+
+Modifier = (this: *): { location: a this, * }
+
+a | an (type) => ∃Node ==.instance_of type
+
+class * | Node
+
+  ; (call: (): (T: *)): T => call<local: &caller>()
+  -- (call: (: this): (T: *)): T => call(this)
+  ~~ (call: (: this): *): this => call(this); this
+  , <edge?>(b) => [this].push_back<edge>(b)
+
+  external ({args: *})
+  external [{property: *}]
+  <{partial_args: (): *}> => this++ ~~ .partial_args &= partial_args
+  {{constraint: (this: static): boolean}} => this++ ~~ .constraints &= constraint
+
+  {` `}{constraints: (`{`, args: * `}`, ` `?)?}({args: *}) =>
+    this &= Program(args: args)
+      {"=>"?, block: (): *} => this = block
+
+      if constraints
+        {{constraint: constraints.args}} = () => this<constraints.args: constraint>
+
+  {property: (\S[], punctuation: "{", *, punctuation: "}", \S[])+} => this[property - punctuation]
+  {" "}{property} => this[property]
+
+  external external: Modifier // Flags that a method is externally defined
+  external initializer: Modifier // Flags that a particular method initializes a field into the context
+  external comment: Modifier // Flags that the property is a comment, and it should be transparent: not interfere with code indenting
+
+  external right-to-left: Modifier // Flags that the property is invoked in opposite reading order, where if both ltr and rtl are used, their shared boundary is what they both invoke on.
+  external left-associative: Modifier
+  external right-associative: Modifier
+
+  class ==
+    <up_to?>()
+      in?: -> as (*)
+      exclude_location: boolean = true
+
+      //TODO
+
+    instance_of (type)
+      return (this @@ Node).(static === .) if type@ === class@
+
+  class !=
+    * = (this @@ Node ==)*.map{on ==}(method => args => !method(args))
+  class ===
+    * = (this @@ Node ==)*.map{on ==}(method => args => method<exclude_location: false>(args))
+  class !==
+    * = (this @@ Node ==)*.map{on ===}(method => args => !method(args))
+
+  external initializer = | assign (x): x
+
+  class = {
+    {name: \S[]} (def: Program)
+      static = local
+
+      dynamically (this @@ Node)[name] = static if name // dynamically assign the name
+
+      (args: def.args)
+        this = local
+        .static = static
+
+        def<local: this>(args)
+        this
+
+      def<local: static>(def.args) // The constructor is always called with all possible arguments.
+      static
+  }
+
+  class enum
+    {name: \S[]} (def: Program)
+      class[name](def)
+        //TODO < override, to force local context which removes global context
+
+  {operator: "&" | "|" = "&"}=> = (block: (): *) this["{operator}="](block)
+
+  ...{.} | [] = () => Array<this>
+
+  {operator: String{"{.}=" !in this && . ==.instance_of (Char.Symbol & ¬"=")[]}}= (x) //TODO And accepts args should be inferred automatically because we use it.
+    this = this[operator](x)
+
+  | | or (x) this++ ~~ # ,=<"|"> x
+  & | and (x) this++ ~~ # ,=<"&"> x
+  {operator: (("&" | "|")?, "+" | "-")} (x) this++ ~~ .components ,=<operator> x
+
+  type?: * //TODO type should effect/= 'static'
+  // Allow 'var?: type' syntax, because certain types would have to be wrapped in parentheses otherwise.
+  ?: (type) this: type?
+  initializer : | ∊ | ∈ (type) this ~~ .type = type
+  ∉ (type) this: not type
+  right-to-left left-associative ∍ | ∋ (type) this ∈ type
+  right-to-left left-associative ∌ (type) => this ∉ type
+  dynamically assert this ==.instance_of type if type
+
+  // Get the
+  @@ = (class) &caller.context.components{.static === class}.last[\@\]
+
+  ∀{.} (predicate: (x: static): boolean) => #.every predicate
+  ∃{.} (predicate: (x: static): boolean) => #.some predicate
+  ∄{.} (predicate: (x: static): boolean) => !∃this predicate
+
+  * | ^ (n: Decimal) => this[]^n
+  + => this[]{length >= 1}
+
+  // Define an equivalence between property its defining node
+  equivalent: Modifier = (property) =>
+    Class = static
+      as (=== property.type) this[property.\@\]
+    property.type
+      as (=== Class) Class(property.\@\: this)
+
+  .({expr: (: this): *}) => expr<local: this>(this) // Allow .(property | property2) / var.(condition ? == : <=)
+  .{property: (\S & not ".")[]} => this[property]
+
+  if static != boolean
+    as (=== boolean) true
+
+enum Option<T> < T | None
+{ None } = Option
+None
+  as (=== boolean) false
+  as (=== Number) 0

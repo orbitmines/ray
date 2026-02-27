@@ -1,0 +1,25 @@
+File = Byte[]
+
+// Shadowing is just components. with &+/+
+
+confidential namespace IO
+  // Get a file relative to the Ether instance directory
+  //   - You're unable to leave by doing ".." on the top-level directory (only symlinks allow you to leave the default directory structure)
+  {path: (x): //TODO Infer} TODO Default /path to object getters?
+    //TODO Load a lazy program of the file, but if only = is used, we dont compile the actual read.
+    //TODO Then things like IO /path as String, or as Expression
+
+    //TODO How to say match to ... -> .[field] $, and then say:
+    // TODO Trying first, {field}.ray.txt, then add 'field' directory if there, and if the .ray.txt isn't there fallback to 'field' as a file.
+
+  // If exposed by the host, the OS' file system
+  //   - You can overwrite the default access by saying "confidential IO.os /some/path"
+  protected external os: IO.static
+
+  //TODO Create a mirror @ location, and load from it it when?
+
+//TODO: Set actual directory vs the one we map to. Map both @player-name and @uuid, but actualize in @U/U/I/D
+
+end
+
+persistent //TODO

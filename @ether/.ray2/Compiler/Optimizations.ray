@@ -1,0 +1,96 @@
+//TODO optimization store both arrays and add to both, vs iterating over each
+//TODO Indexes like B-trees for lookups when a string etc..
+//TODO optimize ignore_case check to both sides lower_case/upper_case
+//TODO Ray.index compiles to a for-loop with i+1
+//TODO If a single item is in multiple inventories, how is persistence done? Is it stored in one, refs, in another, stored in both, want to allow for all of these options, how to deduplicate if it's known it's in two inventories: merger, or what?
+
+// Optimize boolean checks by saying unordered # the first thing that returns true collapses it
+var = var#{== true}.first
+
+//if boundtype is < infinite, .infinite should return false
+// - How to know whether to store whole object vs a reference (optimization); Need to know which places references this, so that it doesnt get deleted while referenced (just like any pointer reference, reference counting/tracking)
+
+//    Three-address code, Static single-assignment form, Constant folding,  “common subexpression elimination”, “loop invariant code motion”, “global value numbering”, “strength reduction”, “scalar replacement of aggregates”, “dead code elimination”, and “loop unrolling”.
+
+//TODO Infinite loops like location.parent, circular, map to None if detected.
+    Access.for ACCESS = `ACCESS`: Node{} = location.parent?.access[ACCESS] ?? .default_privacy_policy[ACCESS]
+
+
+//TODO If big instanceof iterables are used, like worlds: World = entities{==.instanceof World}, store it separately, don't always filter through all those entities
+
+// Eval infinities to certain predicates.
+
+// Cycle detection & merger
+
+//Fast substring search algorithms exposed (e.g., KMP, Boyer-Moore)
+
+//TODO HOw to say rewrite gotos to if statements because we target ifstatements but not gotos
+
+// Dead code like a = b, a = c, 'a = b' is never used. (Unless something like history is accessed somewhere)
+
+// Debugging like timer.
+global**.[INSERT IN BETWEEN EACH STATEMENT DYNAMICALLY]
+
+// How is something like the proof that after a .push_back(A), .last = A, unless another push_back is used. How do you represent that, and how is it used by the compiler?
+// -> SHould be trivial & automatic
+
+// When using multiple implementations of methods, you want enumerations of possible requirements, so for boolean this could be NAND, NOR, NOT & OR, NOT & AND. etc..
+
+// Multiple implementations, but what are the tradeoffs?
+
+
+// Writing compiler optimizations
+// dead code after return if there's no goto to a label there.
+
+
+///
+
+//TODO Optimize to go back and forward with abstract objects vs rendered screen, optimize for what the client wants. (more accessible fvs speed vs compute use)
+// --> Client gives preferences, Networked.
+//What about optimizations problems, how does one code that in?
+// Any Ordered
+// https://pyddm.readthedocs.io/en/stable/ ; efficient exploration
+// "finding the tradeoffs"
+optimize x: Number
+//TODO Different coded priorities, or optimize priorities too? how
+optimize y: Number
+optimize space_used
+optimize time_elapsed
+maximize/minimize
+dynamically assert x + y <= 10
+
++= can be optimized to be without the .copy in between, many |'s same thing
+
+
+//TODO What about the model it's constructing (effectiveness) vs (how long it took to make) so
+// minimize effort, maximize effectiveness
+// minimize spatial_complexity & time_complexity
+
+//TODO Want to say: Can start out with an implementation which works but is slow, and optimize it over time. Dynamically that means ; how often sometimes is used etc..
+
+//TODO HOw to encode different prefernces: Saying this particular implementation of the optimizer prefers THIS.
+if x > 100
+  prefer minimize y
+ to define that?
+
+allow capability1
+allow capability2
+allow capability3
+
+// Quantifying preferences https://en.wikipedia.org/wiki/Von_Neumann%E2%80%93Morgenstern_utility_theorem
+// Social choice theory
+
+
+        // TODO: min/max generalized outside of numbers: Have .Infinity be something which is past x.gt(.last()) = true
+        max: (self) => self.reduce((acc, current, cancel) =>
+          acc.equals(Infinity).if( // TODO: Or some other smart infinity checker
+            cancel,
+            acc.gt(current).if(acc, current))
+          , undefined),
+        min: (self) => self.reduce((acc, current, cancel) =>
+          acc.equals(Infinity).if(
+            cancel,
+            acc.lt(current).if(acc, current))
+        , undefined),
+
+// Keep a copy of certain frontends around, but cost is to have to rerender that frontend.

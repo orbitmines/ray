@@ -1,0 +1,434 @@
+global = local
+
+//TODO ==.instance_of with vs without equiv graph
+
+// Defined by context:
+//  external = { do, goto, *, Node { `*`, `*`= } } // TODO: External should nestedly check local.definer
+//  `arbitrary structure`=
+//  def def(): Constructor - def defines 'return'
+//  local
+//  caller (= local) TODO Or is it nil
+//  TODO Should be the constructor that calls into the program:
+//  constructor (= local) = { name = "<text file name or nil>", definer (= local) } TODO Or is is nil?
+//  definer (= local) TODO Or is it nil
+//  return
+
+def * = external // TODO any type Might not need to be externally defined. self-referential hypergraph-like structure
+// TODO: Type of program is the same signature as Program and <T> extends Program -> Rename Program to Function? Program more general than function: it can be anywhere in some state.
+def do<T: Program>(program: T) => T = external
+
+//TODO Array
+//TODO 0..9.reduce(|) / "0".."9".reduce(|)
+//TODO Decimal -> Binary / Binary -> Decimal & Decimal.String -> Binary
+//TODO .map, .map on single value, effecting all .OR?; No that's the same as calling on the static def, the method meant for the instance. (Allow both variants)
+//TODO "as String" should also accept "as Digit[]"
+//TODO private
+//TODO .zip/.zip_longest (ziplongest returns with _length to the max) for parameterless, and parameters [this, b].zip
+//TODO push_back(void) should only create the array one longer.
+//TODO .for on object, but it gets overwritten if type of Array. What is used then to get the object instead. Use .properties.for
+//TODO 'def primary => location', should not implement primary. since location is a variable too.
+//TODO Infinity
+//TODO {} is a 'single'
+//TODO Calling "()" should not call the () implementation, it's some special non-string token.
+//TODO Disallow cast of None to item, because every method is overwritten with different return types. It's cast to an Item{} with all fields set to : None
+//TODO .keys and .keys.enumerate to enumerate possible values of possible superpositions.
+//TODO .values
+//TODO .join works for arbitrary values
+//TODO .empty = .length == 0
+//TODO [] global is special, because local children would call it if defined locally, and global.[] does not refer to the array instantiation either, because we want global[property] to be accessible.
+//TODO .sorted, given some order.
+//TODO Is there even a difference between single and namespace?
+//TODO IO =.shadow = IO %=
+
+def void end
+
+// The default functionality is that every variable is already Many.
+// This however, allows for: `(predicate ? Many : 1) Object`. //TODO But prefer '(1 if !predicate) Object', Is there another use-case for Many?
+def Many x = x
+
+// TODO Namespace by default initialized the variable UTC but should allow () to call to reinitializing it 'namespace UTC Base: Calendar = Calendars.Gregorian < Base'
+def namespace
+  def `name = *`(definition: () => *)
+    class `name`(definition)
+    namespace = `name`()
+    definer[name] = namespace
+
+    return namespace
+  end
+end
+
+//TODO Allow ==.instance_of class.
+
+//* is just Node?
+class Node
+  //TODO How to define the + label: *
+
+
+
+  def ?? default = this as boolean ? this : default
+  def ?
+    //TODO Without parameter should return Option<>, with parameter :, boolean expression eval.
+  end
+
+  def as : == boolean = true //TODO: How to 'as the type boolean not an instance'
+
+  // TODO Not is prefix?
+  def not | ¬ = Node{!= this} //TODO .not should be not instanceof ?, not boolean for instance.
+
+  // Attach a normalizer
+  static Normalizer = (x: static) => static
+  normalizer: Normalizer?
+  dynamically if normalizer
+    +def =(x) = super(normalizer(x))
+  dynamically on(normalizer) = this = this
+end
+
+def equivalence (from: * < class) -> (to: *)
+  +def from.static{== from} //TODO Support many to*s //What if from is type (how to distinguish?) then we'd want ==.instance_of, is_constructor defined on class/namespace with parameters?
+    def as(:== to.type) = to //TODO .type needs to be there
+  end
+end
+
+  // TODO Dynamically on.
+    +def =(x)
+      super() // Trigger normalizer when it's changed.
+    end
+  end
+
+// Allow syntax 'not Node'
+def not node: * = node.not
+
+//TODO Does Node < Expression or Expression < Node, either way we want both methods on both. And a Node, needs access to definitional structure
+//   |-> .expand should expand the single node into the whole expression (or one layer down)
+
+class Expression
+  def == b //TODO
+  end
+  def != b = !(this == b)
+
+  def while program = global.while(this, program)
+end
+
+class Iterable<T = *>
+  for callback: (Args: *[]?) => *
+    // Allow no Args, which is just iterating without using the variable
+    //TODO: callback.parameter s = Array & Object, named at Object, .length etc. at Array; 'parameters' interprets as an array.
+    //TODO + continue
+    //TODO + return = caller.return
+  end
+
+  // Instead of all functions like .every/.map iterating over every 'Ray.value', we instead return the Ray itself.
+  //TODO But things like .compact should still be on .value.
+  //TODO Or you want a method on this like .location to access the location in the ray. (But then that would have to be filled) (And how to differentiate between others,  and not just this one)
+  def $ = this !~= ^* //Then add any match at the beginning.
+
+  def any => this.reduce(|) = this.unordered.first
+  def unordered =>
+   this{$.every(.)}
+    = //TODO Should be first available but how (if this is partial)
+
+  def compact = this{!= None}
+end
+def AbstractDirectionality<TVertex> < Iterable
+end
+
+class Ordered<T = static> //Todo set T to caller's constructor
+  <= (b: T) = this == b || this < b =>
+  < (b: T)
+  >= (b: T) = this == b || this > b
+  > (b: T)
+
+  ..{right: .} | {left: .}.. | .. (right?) = () =>
+
+    //≧ | ≥ | >= = ==
+    //≦ | ≤ | <= =
+    //namespace >
+    //namespace >=
+end
+Ordered &+ Ray
+  <= (b: T) reduce()
+  // gte: (self, value) => self.reduce_right((acc, current, cancel) =>
+  //          acc.if(cancel, current.equals(value))
+  //        , undefined),
+  //        gt: (self, value) => self.reduce_right((acc, current, cancel) =>
+  //          acc.if(cancel, acc.equals(undefined) /* TODO: More generally, a: "is this the first check" */.if(false, current.equals(value)))
+  //        , undefined),
+  //        lte: (self, value) => self.reduce((acc, current, cancel) =>
+  //          acc.if(cancel, current.equals(value))
+  //        , undefined),
+  //        lt: (self, value) => self.reduce((acc, current, cancel) =>
+  //          acc.if(cancel, acc.equals(undefined).if(false, current.equals(value)))
+  //       , undefined)
+
+//TODO Setting .value on Many boundary in the case of Edge.
+
+//TODO Edge.list has Boundary more than once, self-loop
+def Boundary<T>
+  value: Boundary<T>? //TODO T could be on value, Or you want a specific type on Boundary
+  end: Ray<T>
+end
+def Ray<T = Ray<T>> value: T? < AbstractDirectionality<Ray<T>>
+  //TODO .value could be 'this' but stripped (is that necessary) of Ray functionality. So anything that extends Ray has its content moved and deferred to .value
+  initial: Boundary<T> = Boundary<T>(end: this)
+  terminal: Boundary<T> = Boundary<T>(end: this)
+
+  static Unbounded //TODO
+  end
+end
+
+private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
+  //TODO What's the value encoded on Edge?, and what's the value encoded on the boundaries? (Or do we always use edge)
+  static Edge =
+
+  //TODO What is .unrolled?? on type
+
+  //TODO .[index] shouldnt overwrite the '1' without a .1 (needs a special rule)
+
+  static Vertex = Ray<T>{
+    initial = (HyperContinuations ? Many : 1) Boundary{ //TODO These =, need to be ==.instance_of?
+      end = (HyperEdges ? Many : 1) Vertex,  //TODO (1 if !HyperEdges) or (!HyperEdges ? 1) Vertex allow this syntax
+      value = (HyperEdges ? Many : 1) Boundary{
+        end = (HyperEdges ? Many : 1) Vertex,
+        value = (HyperEdges ? Many : 1) Vertex.initial
+      }?
+    },
+    terminal = initial // By default a structure is symmetric
+  } //TODO .unrolled
+
+  static NonEmpty => static{count > 0}
+  static Unbounded{every(==.instanceof Vertex)} < AbstractDirectionality<Vertex>
+    //TODO These set Vertex to a different value
+    def acyclic //TODO Disallow loops, want these things: Graph.acyclic = Graph{acyclic}, if graph.acyclic,
+    def connected
+    def consistent
+  end
+end
+def Hypergraph<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = true>
+
+end
+def Graph<T = Ray> < Structure<T><HyperContinuations = true>
+end
+def Array<T = Ray> < Structure<T><HyperContinuations = false> = .acyclic.connected.consistent
+
+end
+def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false> = .acyclic.connected.consistent
+  // Tree has a single 'parent' on each vertex.
+  static +def Vertex = super{initial: 1 Boundary{
+    end: 1 Vertex,
+    value: Boundary{
+      end: 1 Vertex,
+      value: Vertex.initial
+    }?
+  }} //TODO The Vertex.initial here should refer to the new value, not the old.
+end
+class Set < Structure
+  normalizer = .unordered.unique
+end
+
+Loop = Array.Unbounded.orbit
+
+// TODO unless
+class if predicate: Expression, yes?: () => *
+  def (else?: () => *)
+    goto exec if predicate // 'if' can be used here, since goto defines a special if-block. It's not self-referential here.
+
+    return else?(return: caller.return)
+   exec:
+    return yes?(return: caller.return)
+  end
+
+  // "then" is defined, so we can have an inline block like: "if expression then yes else no"
+  def then yes: () => *
+    this.yes = yes
+    return this
+  end
+
+  def elsif expression: Expression, elsif: () => *
+    def (else?: () => *) = this.else
+      if expression
+        return elsif(return: caller.return)
+      else
+        return else?(return: caller.return)
+      end
+    end
+
+    def elsif = this.elsif<this: local>
+    def else = this.else<this: local>
+
+    return local
+  end
+
+  def else(else) = this<else: else>
+
+  return this
+end
+
+class try program: () => *
+  def <Args>(catch?: (args: Args) => *)
+    error: Args?
+
+    program(throw: (args: Args) => error = args; goto capture)
+    return
+   capture:
+    catch(error) // TODO: Type-checker should know that it must be set in Ordered to get here.
+  end
+
+  def catch(catch) = this<catch: catch>
+end
+// Asserts & dynamic asserts, are simply part of the type definition.
+def dynamically
+  (expression: Expression) //TODO Dynamically the value is equal to the expression.
+  (block: () => *)
+  //TODO speculative.if: If the runtime doesn't yet know the value of the expression it can choose to just run the if-branch.
+  //TODO Define <speculative.if> for the block/expression. speculative.if<assume: true>
+  //TODO You could specutively, say it's either that operation or the other. and have the types depends with dynamically assert, xor'ed with the other value.
+  //TODO Basically turn possibly infinite tasks into a branch of execution until we know.
+  //TODO Parameterless functions are automatically dynamic.
+  //TODO Infinite loops should be dismissed as possible values. If a loop is detected, stop committing resources there (until there's a change, then recheck)
+
+//And things like dynamically assert shouldn't throw directly, but check all conditions and report them all together.
+
+  // Take the comment above or besides an assert as the error message.
+  //TODO The comment on the side only counts if there's a newline after the comment.
+  def assert(expression: Expression) = external
+  //TODO dynamically assert expression if
+
+  def if(predicate: Expression, yes?: () => *) = external //TODO
+end
+def assert(expression: Expression) = throw '' if expression // TODO
+
+
+def while expression: Expression, program: () => void
+  return do
+   check:
+    goto done if expression
+
+    program(break: () => goto done, return: caller.return)
+    goto check
+   done:
+    return
+  end
+end
+
+// What is chaining a function with => mean A => +1 => +3, means a successive step in the function chain.
+
+// A function is a Node for which "(*) => *" is defined.
+Function = +def Node{(Args: *) => Return: *}
+
+  // do end.while() is a do-while loop. TODO Could also only define it on "() => void"
+  def while expression: Expression
+    return do ...args
+     exec:
+      this(break: () => goto done, ...args)
+
+      goto exec if expression
+    end
+  end
+
+  //TODO: Evaluate right-to-left f compose g compose h = f.compose(g compose h)
+  ∘ = def compose(g: (: g_Args) => Args) = (args: g_Args) => Return = this(g(args))
+end
+
+def Optional<T> = { T*.for `key`: value? }
+def Required<T> = { T*.for `key`: value ==.instance_of Option<V> ? V : value }
+def Query<T>
+  //TODO Set each property to the base class without defaults defined on T.
+end
+
+// Generalize range/intervals over arbitrary surfaces
+/// Castable to reduce(|)
+def Range
+  // TODO Depending on the 'default space selected', range is either the refined Array, or a graph. (Graph because looped paths can exist)
+
+  // TODO Range should be bounds which are Rays (already have the graph equipped)
+  // TODO Infinity, is just the terminal reference (which doesn"t exist on the line) How to differentiate initial/terminal infinity.
+
+  // TODO Implemented as things like .if() ?
+
+  //TODO Implement range as method on empty string ."".
+end
+/**
+ * Range
+ */
+export interface IRange {
+  or: (b: IRange) => IRange
+  // and: (b: IRange) => IRange
+  all: () => boolean
+  contains: (x: number) => boolean
+  more: (current: number, positive?: boolean) => boolean
+  invert: () => IRange
+}
+export type Bound = { at: number, inclusive: boolean }
+export class Range implements IRange {
+  constructor(
+    public lower: Bound,
+    public upper: Bound,
+  ) {
+    if (lower.at > upper.at)
+      throw new Error('Lower bound is greater than upper bound');
+  }
+
+  all = () => this.lower.at === -Infinity && this.upper.at === Infinity
+
+  contains = (x: number): boolean => {
+    return (this.lower === undefined || (this.lower.inclusive ? x >= this.lower.at : x > this.lower.at))
+      && (this.upper === undefined || (this.upper.inclusive ? x <= this.upper.at : x < this.upper.at));
+  }
+
+  more = (current: number, positive: boolean = true) =>
+    positive ? this.upper.at > current : this.lower.at < current
+
+  or = (b: IRange): IRange => new MultiRange([this, b])
+
+  invert = (): IRange => {
+    if (this.all()) return new Range({ at: Infinity, inclusive: false }, { at: Infinity, inclusive: false });
+
+    const ranges = []
+    if (this.lower.at === -Infinity) ranges.push(new Range({ at: this.upper.at, inclusive: !this.upper.inclusive }, { at: Infinity, inclusive: true }));
+    if (this.upper.at === Infinity) ranges.push(new Range({ at: -Infinity, inclusive: true }, { at: this.lower.at, inclusive: !this.lower.inclusive }));
+
+    return ranges.length === 1 ? ranges[0] : new MultiRange(ranges)
+  }
+
+  public static Eq = (x: number) => new Range({ at: x, inclusive: true }, { at: x, inclusive: true })
+  public static Gt = (x: number) => new Range({ at: x, inclusive: false }, { at: Infinity, inclusive: false })
+  public static Gte = (x: number) => new Range({ at: x, inclusive: true }, { at: Infinity, inclusive: false })
+  public static Lt = (x: number) => new Range({ at: -Infinity, inclusive: false }, { at: x, inclusive: false })
+  public static Lte = (x: number) => new Range({ at: -Infinity, inclusive: false }, { at: x, inclusive: true })
+
+  public static Between = (lower: number, upper: number) => new Range({ at: lower, inclusive: true }, { at: upper, inclusive: true })
+}
+export class MultiRange implements IRange {
+  constructor(public ranges: IRange[] = []) {}
+
+  all = (): boolean =>
+    this.ranges.some(range => range.all());
+  contains = (x: number): boolean =>
+    this.ranges.some(range => range.contains(x));
+  more = (current: number, positive: boolean = true): boolean =>
+    this.ranges.some(range => range.more(current, positive));
+  or = (b: IRange): IRange => new MultiRange([...this.ranges, ...(b instanceof MultiRange ? (b as MultiRange).ranges : [b])])
+
+  invert = (): IRange => { throw new Error('Not implemented') }
+
+}
+
+
+// TODO Dynamically assign to loops
+export interface Loop extends Many<Ray> {
+  disallow_loops: () => Many<Ray> //TODO Some implementation using conditionally
+  /**
+   * A type pointer to the result of an unrolled loop.
+   */
+  unrolled: () => Many<Ray>
+  /**
+   * Modular unroll: after unrolling a loop still exists between the first and last instantiation.
+   */
+  unrolled_mod: () => Many<Ray>
+  /**
+   * Pointer to the instantiations of this loop.
+   */
+  instances: () => Many<Many<Ray>>
+}
+
+// OR is parallel structure, AND is sequential structure

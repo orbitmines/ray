@@ -1,0 +1,14 @@
+- Should be able to switch versions/implementations at will Language.Ray%VERSION autocompleted.
+- If there isnt a REPL available it should compile and run
+- Autocomplete should  automatically update depending on the language's defs.
+- Verify installers work, + support for archs + test on all the archs, and make sure that when the authors change the way of installing that we have a check for that every once in a while.
+- Index should have a "This is incorrect, it's changed or is different for so and so arch", and adjust automatically or submit a change. 
+- Rewrite all the scripts to .ray files
+- When an update is done, see if that changes any of the indexed comparisons
+- Allow manual update of some specific entry
+- GitHub might refer to subdirectory in monorepo, should still be able to clone + might need a git login, so create an account just for this. (Verse compiler for instance)
+- For the index, deduplicate files which are the same across versions/similar; only the changes.
+- Integrate GitHub code search and other results from other websites; if deemed useful
+- Portable format for the Index
+- Simple filters like does recursion or other things apply on top of each other to narrow down the search space
+- Structurally search equivalences to certain program patterns

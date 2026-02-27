@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+REPO_DIR="${ETHER_EXTERNAL_DIR:-/tmp}/github.com/mrkulk/MIT-Picture"
+[[ -d "$REPO_DIR" ]]

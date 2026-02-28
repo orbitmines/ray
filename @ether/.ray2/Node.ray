@@ -3,7 +3,7 @@
 
 Program Matching
 // Anything which is directly evaluated within the context of this
-// Anything which references a specific variable
+// Anything which references a specific variable; might not do so by name like a variable in context called static
 // Recursively in everything which has it as a context, methods/non-methods
 // .map/~filter/join are on the actual events, expanded automatically.
 // - remove parts of the program with x - x~{}, or x - [APPLY DIRECTLY]

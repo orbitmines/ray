@@ -2,14 +2,40 @@
 <- (): Ray => previous: () => Ray(previous: previous())
 <--> (): Ray => (<-) &+ (->)
 
-class Derivative < Ray
-  static derivative (this, map: (current: (this | (R: *)) + Derivative): R)
-    direction = "next"
-    mapped: (self: this | R) => self + Derivative() + { this[direction] = () => mapped(map(this)) }
-    mapped(this)
+class Ray | Vertex
 
-  // Allows chaining the -> operator, when the previous derivative halts
-  -> = (map: (current: (this | (R: *)) + Derivative): R) =>
-    this ~~.last.map(= Derivative.derivative(., map))
+class Boundary < Ray
 
+class Edge < Ray
+
+class Iterable<Vertex: Ray = Ray>
+  dynamically assert count < ∞ if (bounded: boolean = true)
+
+  static NonEmpty => static{count > 0}
+  static Unbounded => static{bounded == false}
+  static Connected => static{} // each Node is reachable from each other Node. (Going both forward and backward)
+  static Consistent => static{}
+  static Acyclic => static{}
+  static Unidirectional =>
+    return static{} // Tell the compiler links should be one-way
+   Backwards\
+    return static{}
+
+
+
+class Structure < Iterable<Ray{
+    initial ==.instance_of
+  }>
+  internal static HyperContinuations: boolean
+  internal static HyperEdges: boolean = false
+
+class Hypergraph < Structure
+  HyperEdges = true
+class Graph < Structure
+  HyperContinuations = true
+class Forest < Structure.Acyclic.Consistent
+  HyperContinuations = true
+class Tree < Forest.Connected
+class Array < Structure.Acyclic.Consistent.Connected
+  HyperContinuations = false
 

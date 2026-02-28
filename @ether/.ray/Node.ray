@@ -117,8 +117,17 @@ class * | Node
   right-to-left left-associative ∌ (type) => this ∉ type
   dynamically assert this ==.instance_of type if type
 
-  -> (map) Derivative.derivative(this, map)
-  right-to-left <- (map) Derivative.derivative<direction: "previous">(this, map)
+  -> (map: (current: (this | (R: *)) + Ray): R)
+    direction: "next" | "previous" = "next"
+    mapped: (self: this | R) => self + Ray() + {
+      this[direction] = () => mapped(map(this))
+
+      // Allows chaining the -> operator, when the previous derivative halts
+      this.(direction == "next" ? -> : right-to-left <-) = (map: (current: (this | (R: *)) + Ray): R) =>
+        this ~~ .(direction == "next" ? last : first).map(= .-><.direction: direction>(map))
+    }
+    mapped(this)
+  right-to-left <- (map) this.-><direction: "previous">(map)
 
   ?? (default) this ? this : default
   ?{left: (): *, ":", right: (): *} => if this then left() else right()

@@ -30,7 +30,7 @@ class Ordered<T = static> //Todo set T to caller's constructor
     //≦ | ≤ | <= =
     //namespace >
     //namespace >=
-end
+
 Ordered &+ Ray
   <= (b: T) reduce()
   // gte: (self, value) => self.reduce_right((acc, current, cancel) =>
@@ -62,13 +62,11 @@ def Ray<T = Ray<T>> value: T? < AbstractDirectionality<Ray<T>>
   end
 end
 
-private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
-  //TODO What's the value encoded on Edge?, and what's the value encoded on the boundaries? (Or do we always use edge)
-  static Edge =
-
   //TODO What is .unrolled?? on type
-
   //TODO .[index] shouldnt overwrite the '1' without a .1 (needs a special rule)
+
+
+private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
 
   static Vertex = Ray<T>{
     initial = (HyperContinuations ? Many : 1) Boundary{ //TODO These =, need to be ==.instance_of?
@@ -81,22 +79,9 @@ private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolea
     terminal = initial // By default a structure is symmetric
   } //TODO .unrolled
 
-  static NonEmpty => static{count > 0}
-  static Unbounded{every(==.instanceof Vertex)} < AbstractDirectionality<Vertex>
-    //TODO These set Vertex to a different value
-    def acyclic //TODO Disallow loops, want these things: Graph.acyclic = Graph{acyclic}, if graph.acyclic,
-    def connected
-    def consistent
-  end
 end
-def Hypergraph<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = true>
 
-end
-def Graph<T = Ray> < Structure<T><HyperContinuations = true>
-end
-def Array<T = Ray> < Structure<T><HyperContinuations = false> = .acyclic.connected.consistent
-
-end
+//TODO .reverse on tree should reverse the whole tree and the type of Ray properly.
 def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false> = .acyclic.connected.consistent
   // Tree has a single 'parent' on each vertex.
   static +def Vertex = super{initial: 1 Boundary{
@@ -222,9 +207,6 @@ class AbstractDirectionality<T> < Iterable<T>
 
   undirected | bidirectional =>
 
-  static Connected // each Node is reachable from each other Node. (Going both forward and backward)
-  static Consistent
-  static Acyclic
 end
 class Iterable<T>
   next

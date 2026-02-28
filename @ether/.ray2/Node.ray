@@ -27,11 +27,6 @@ class * | Node
 // TODO .for i => doesnt work./
 
 
-
-  // If not taken the branch the bound variable is . ; it returns local or self in a closure.
-  if (predicate: boolean)
-  unless (predicate: boolean)
-
   // When a parameterless function is put on a line, it should be evaluated. Required for {} evaluation
 
 
@@ -119,6 +114,8 @@ class * | Node
   // Even though 'this' is already a type, we allow the binding of a less restrictive type. That way it can be reassigned to.
   //TODO Should modify the constructor.
 
+  {property} //Only every introduces new variables to set it to an outer value .val = val or this[property] =
+
   > // Greater type than this, components could be together this type.
 
 
@@ -172,9 +169,6 @@ class * | Node
   !~=
   //Shortcut for ==.instance_of
   {" "}(: | ∊ | ∈) (type) => this ==.instance_of type //TODO Only if used in if-block or ? how to say that
-
-  ?? | else
-
 
 None
   // If this == None, and then push, it's the first entry. So this is allowed to be None, while still these methods are available?

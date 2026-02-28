@@ -16,8 +16,118 @@ yield & var
 // X⊣⊙
 // X⊣⊢∙⊣
 
-//TODO Ray is
-Node &+ Ray
+
+
+class Ordered<T = static> //Todo set T to caller's constructor
+  <= (b: T) = this == b || this < b =>
+  < (b: T)
+  >= (b: T) = this == b || this > b
+  > (b: T)
+
+  ..{right: .} | {left: .}.. | .. (right?) = () =>
+
+    //≧ | ≥ | >= = ==
+    //≦ | ≤ | <= =
+    //namespace >
+    //namespace >=
+end
+Ordered &+ Ray
+  <= (b: T) reduce()
+  // gte: (self, value) => self.reduce_right((acc, current, cancel) =>
+  //          acc.if(cancel, current.equals(value))
+  //        , undefined),
+  //        gt: (self, value) => self.reduce_right((acc, current, cancel) =>
+  //          acc.if(cancel, acc.equals(undefined) /* TODO: More generally, a: "is this the first check" */.if(false, current.equals(value)))
+  //        , undefined),
+  //        lte: (self, value) => self.reduce((acc, current, cancel) =>
+  //          acc.if(cancel, current.equals(value))
+  //        , undefined),
+  //        lt: (self, value) => self.reduce((acc, current, cancel) =>
+  //          acc.if(cancel, acc.equals(undefined).if(false, current.equals(value)))
+  //       , undefined)
+
+//TODO Setting .value on Many boundary in the case of Edge.
+
+//TODO Edge.list has Boundary more than once, self-loop
+def Boundary<T>
+  value: Boundary<T>? //TODO T could be on value, Or you want a specific type on Boundary
+  end: Ray<T>
+end
+def Ray<T = Ray<T>> value: T? < AbstractDirectionality<Ray<T>>
+  //TODO .value could be 'this' but stripped (is that necessary) of Ray functionality. So anything that extends Ray has its content moved and deferred to .value
+  initial: Boundary<T> = Boundary<T>(end: this)
+  terminal: Boundary<T> = Boundary<T>(end: this)
+
+  static Unbounded //TODO
+  end
+end
+
+private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
+  //TODO What's the value encoded on Edge?, and what's the value encoded on the boundaries? (Or do we always use edge)
+  static Edge =
+
+  //TODO What is .unrolled?? on type
+
+  //TODO .[index] shouldnt overwrite the '1' without a .1 (needs a special rule)
+
+  static Vertex = Ray<T>{
+    initial = (HyperContinuations ? Many : 1) Boundary{ //TODO These =, need to be ==.instance_of?
+      end = (HyperEdges ? Many : 1) Vertex,  //TODO (1 if !HyperEdges) or (!HyperEdges ? 1) Vertex allow this syntax
+      value = (HyperEdges ? Many : 1) Boundary{
+        end = (HyperEdges ? Many : 1) Vertex,
+        value = (HyperEdges ? Many : 1) Vertex.initial
+      }?
+    },
+    terminal = initial // By default a structure is symmetric
+  } //TODO .unrolled
+
+  static NonEmpty => static{count > 0}
+  static Unbounded{every(==.instanceof Vertex)} < AbstractDirectionality<Vertex>
+    //TODO These set Vertex to a different value
+    def acyclic //TODO Disallow loops, want these things: Graph.acyclic = Graph{acyclic}, if graph.acyclic,
+    def connected
+    def consistent
+  end
+end
+def Hypergraph<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = true>
+
+end
+def Graph<T = Ray> < Structure<T><HyperContinuations = true>
+end
+def Array<T = Ray> < Structure<T><HyperContinuations = false> = .acyclic.connected.consistent
+
+end
+def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false> = .acyclic.connected.consistent
+  // Tree has a single 'parent' on each vertex.
+  static +def Vertex = super{initial: 1 Boundary{
+    end: 1 Vertex,
+    value: Boundary{
+      end: 1 Vertex,
+      value: Vertex.initial
+    }?
+  }} //TODO The Vertex.initial here should refer to the new value, not the old.
+end
+class Set < Structure
+  normalizer = .unordered.unique
+end
+
+Loop = Array.Unbounded.orbit
+
+
+class Iterable<T = *>
+  for callback: (Args: *[]?) => *
+    // Allow no Args, which is just iterating without using the variable
+    //TODO: callback.parameter s = Array & Object, named at Object, .length etc. at Array; 'parameters' interprets as an array.
+    //TODO + continue
+    //TODO + return = caller.return
+  end
+
+  def $ = this !~= ^* //Then add any match at the beginning.
+
+  def any => this.reduce(|) = this.unordered.first
+
+  def compact = this{!= None}
+end
 
 class Boundary < Ray
   x: static = this
@@ -180,6 +290,7 @@ class Iterable<T>
   every (predicate: (x: T): boolean) map(predicate)~{== false}.empty
   some (predicate: (x: T): boolean) ~{predicate}.nonempty
   // Include equivalence graph, is there maybe a different syntax for which equivalence graphg to use.
+  class contains //map == + .=== + .!= + .!==
   contains | includes <operator: (x: T): (b: T): boolean = ==>(x: T) some(operator(.)(x))
 
   partition (predicate: (): boolean)
@@ -195,7 +306,10 @@ class Iterable<T>
 
   //TODO move operations
 
-  unique | compact =>
+  unique
+  compact => this~{!= None}
+
+  //Boundaries check if == None and != Ray
 
   // Each step might be in a different version of the graph, Time vs Space
   // Start a quest to find the path
@@ -229,13 +343,9 @@ end
 class Hierarchy
   parent | previous : static? <- hierarchy -> children | next : static?
 
-(->) // Infinitely generating ray.
-(<-) too
-//TODO constructors
-   0 -> +1
-   -1 <- 0 -> +1
-   -1 | -2 <- 0 -> +1 | +2
-   0 -> +1 -> +2 // Repeated two steps +1 +2 +1 +2 ..
+// On = of a ray, we keep the structure from both sides &=?
+
+//TODO Equip Continuous; accepting Reals in [property], but not effecting .next
 
 // Path is a function
 //TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@

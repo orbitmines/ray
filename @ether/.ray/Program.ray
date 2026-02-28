@@ -1,0 +1,29 @@
+class if (predicate: boolean, yes?: (): *)
+  no?: (): *
+  internal else_branch: if = this
+
+  ()
+    goto 1 if predicate
+   0\ return no<local: &caller>?()
+   1\ return yes<local: &caller>?()
+
+  then ({this.yes}: (): *) this ~~ .then = None
+  elsif (predicate: boolean, yes: (): *) this ~~ .else_branch = .else_branch.no = (if predicate then yes<local: &caller>())
+  else ({this.else_branch.no}: (): *) this ~~ .(then | elsif | else) = None
+
+unless (predicate: boolean, yes?: (): *) (if(!predicate, yes))
+
+while (predicate: boolean, do: (): *)
+ next\
+  goto done if predicate
+  do<local: &caller, break: () => goto done>()
+  goto next
+ done\
+
+(): *
+  while (predicate: boolean) // A do-while loop.
+    this<local: &caller, break: () => goto done>();
+    while<.&caller: &caller>(predicate, this)
+   done\
+
+class Program | Function

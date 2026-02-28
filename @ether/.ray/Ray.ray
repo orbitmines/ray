@@ -1,0 +1,15 @@
+-> (): Ray => next: () => Ray(next: next())
+<- (): Ray => previous: () => Ray(previous: previous())
+<--> (): Ray => (<-) &+ (->)
+
+class Derivative < Ray
+  static derivative (this, map: (current: (this | (R: *)) + Derivative): R)
+    direction = "next"
+    mapped: (self: this | R) => self + Derivative() + { this[direction] = () => mapped(map(this)) }
+    mapped(this)
+
+  // Allows chaining the -> operator, when the previous derivative halts
+  -> = (map: (current: (this | (R: *)) + Derivative): R) =>
+    this ~~.last.map(= Derivative.derivative(., map))
+
+

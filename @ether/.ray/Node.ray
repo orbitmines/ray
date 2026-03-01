@@ -98,7 +98,7 @@ class * | Node
       class[name](def)
         //TODO < override, to force local context which removes global context
 
-  {operator: "&" | "|" = "&"}=> = (block: (): *) this["{operator}="](block)
+  {operator?: "&" | "|"}=> = (block: (): *) this["{operator}="](block)
 
   ...{.} | [] = () => Array<this>
 
@@ -138,11 +138,11 @@ class * | Node
   @@ = (class) &caller.context.components{.static === class}.last[\@\]
 
   ¬{.} => not.instance_of this
-  ∀{.} (predicate: (x: static): boolean) => #.every predicate
-  ∃{.} (predicate: (x: static): boolean) => #.some predicate
-  ∄{.} (predicate: (x: static): boolean) => !∃this predicate
+  ∀{.} (predicate: (x: static): boolean) #.every predicate
+  ∃{.} (predicate: (x: static): boolean) #.some predicate
+  ∄{.} (predicate: (x: static): boolean) !∃this predicate
 
-  * | ^ (n: Decimal) => this[]^n
+  * | ^ (n: Decimal) this[]^n
   + => this[]{length >= 1}
 
   // Define an equivalence between property its defining node

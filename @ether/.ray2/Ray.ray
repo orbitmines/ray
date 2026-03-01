@@ -9,12 +9,7 @@
 yield & var
 
 //TODO What is a .expand on a boundary/edge
-//TODO Ray whose <T> isn't recursively the same type: i.e. some array like [String, Number]
-// X⊣⊙⊢∙⊣⊙⊢
-// ⊢∙⊣⊙⊢X
-// ⊢∙⊣⊢X
-// X⊣⊙
-// X⊣⊢∙⊣
+
 
 
 

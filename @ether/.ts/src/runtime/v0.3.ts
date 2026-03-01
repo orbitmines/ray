@@ -790,6 +790,19 @@ class Reader {
             if (isSplitCandidate(methodNode.method(text.slice(i)))) { splitAt = i; break; }
           }
         }
+        // Phase 3: Outside-in single-char method splitting for boundary operators.
+        // When a multi-char token contains single-char methods (e.g. ⊣⊙⊢∙),
+        // check outside-in (leftmost, rightmost, then inward) to detect it needs splitting.
+        // Always split at position 1 (take first char), letting the loop re-process the rest.
+        if (splitAt === -1) {
+          const len = text.length;
+          for (let offset = 0; offset < Math.ceil(len / 2); offset++) {
+            const li = offset;
+            if (methodNode.method(text[li])) { splitAt = 1; break; }
+            const ri = len - 1 - offset;
+            if (ri > li && methodNode.method(text[ri])) { splitAt = 1; break; }
+          }
+        }
         if (splitAt !== -1) {
           // Rewind reader to the suffix, return only the prefix
           this.i -= (text.length - splitAt);

@@ -2,11 +2,24 @@
 <- (): Ray => previous: () => Ray(previous: previous())
 <--> (): Ray => (<-) &+ (->)
 
-class Ray | Vertex
+class Ray
+  initial | (internal right-to-left ⊢) : Boundary = Boundary(∙: this)
+  terminal | (internal ⊣) : Boundary = Boundary(∙: this)
 
 class Boundary < Ray
+  vertex | (internal bidirectional ∙) : Ray
+  edge | (internal bidirectional ⊙) : Edge = Edge(x.initial: this)
+
+  initial => Boundary(∙: ⊣⊙⊢∙)
 
 class Edge < Ray
+  value | (internal x) : {
+    initial | (internal right-to-left ⊣) : Boundary
+    terminal | (internal ⊢) : Boundary
+  }
+
+  initial => Boundary(∙: ⊙⊢∙⊣x)
+  terminal => Boundary(∙: x⊢∙⊣⊙)
 
 class Iterable<Vertex: Ray = Ray>
   dynamically assert count < ∞ if (bounded: boolean = true)
@@ -16,16 +29,22 @@ class Iterable<Vertex: Ray = Ray>
   static Connected => static{} // each Node is reachable from each other Node. (Going both forward and backward)
   static Consistent => static{}
   static Acyclic => static{}
+  static Undirected => static{} // Initial === Terminal
   static Unidirectional =>
     return static{} // Tell the compiler links should be one-way
-   Backwards\
+   Reverse\
     return static{}
 
 
 
 class Structure < Iterable<Ray{
-    initial ==.instance_of
-  }>
+  initial & terminal : (1 if HyperContinuations) boundary: Boundary{
+    ∙: (1 unless HyperEdges) Vertex
+    ⊙: (1 unless HyperEdges) Edge{
+      initial & terminal : (1 unless HyperEdges) boundary
+    }
+  }
+}>
   internal static HyperContinuations: boolean
   internal static HyperEdges: boolean = false
 

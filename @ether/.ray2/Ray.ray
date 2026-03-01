@@ -52,15 +52,7 @@ Ordered &+ Ray
 def Boundary<T>
   value: Boundary<T>? //TODO T could be on value, Or you want a specific type on Boundary
   end: Ray<T>
-end
-def Ray<T = Ray<T>> value: T? < AbstractDirectionality<Ray<T>>
-  //TODO .value could be 'this' but stripped (is that necessary) of Ray functionality. So anything that extends Ray has its content moved and deferred to .value
-  initial: Boundary<T> = Boundary<T>(end: this)
-  terminal: Boundary<T> = Boundary<T>(end: this)
 
-  static Unbounded //TODO
-  end
-end
 
   //TODO What is .unrolled?? on type
   //TODO .[index] shouldnt overwrite the '1' without a .1 (needs a special rule)

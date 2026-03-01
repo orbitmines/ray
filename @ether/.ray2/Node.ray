@@ -12,10 +12,21 @@ Program Matching
 
    // Ambiguity: If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
 
+// Access Permission internal, means the same file alongside same class Support inline wr orignited from a different file, to support compiling into a single Ray file.; edit the & program for a block
 
 //TODO Context: Everything defined on Node, isn't put on local, unless explicitely accessed.
 
 //TODO The things defined on NOde + extensions of global (use class components), dont get the global value in closures; only things defined outside Node.
+
+//TODO Selection
+vertex.terminal &+= \Boundary\
+A = B, \C\
+other_vertex.initial = vertex.terminal &+= ~select Boundary
+
+// Constraint accept methods which introduce constraints, like types
+// :/element_of etc. castable to type boolean
+
+// Many boundaries, then components used for hyperedges.
 
 class * | Node
 
@@ -66,6 +77,8 @@ class * | Node
   // TODO Always whole type, use something else for All in Database
   external # | superposed : Iterable<static> //TODO Is a # just an .expand? or are both ever used simultaneously?
   // +/&+ are both components but normal + overrides.
+  // Allow nested so that we can stil use components on each boundary (Boundary + X) &+ ()
+  // Take the recursive components or just the top-level ones (top-level ones being the default) _> But that doesnt work with (C |+ D) &+ (A |+ B) ? or is it right that this only returns two? Or recursive by default and use # for boundaries: (A | B) &+ (C | (D &+ E)), probably too confusing
   external ## | components : Iterable<static##.reduce(|)> //TODO Does this type work?
   external ### | class_components // Class components and monkey-patches
 

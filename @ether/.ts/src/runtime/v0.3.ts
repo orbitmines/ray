@@ -3,7 +3,7 @@ import path from 'path';
 
 const UNKNOWN = Symbol("Unknown");
 
-type MethodFn = ((...args: any[]) => Node) & { __args?: 'Program'; __initializer?: boolean; __splitCandidate?: boolean; __rightToLeft?: boolean; __leftAssociative?: boolean; __rightAssociative?: boolean };
+type MethodFn = ((...args: any[]) => Node) & { __args?: 'Program'; __initializer?: boolean; __splitCandidate?: boolean; __leftToRight?: boolean; __rightToLeft?: boolean; __leftAssociative?: boolean; __rightAssociative?: boolean };
 
 //TODO applyModifier Shouldnt be this, should be: get property from .location of the result
 //TODO global should be < Node.
@@ -153,6 +153,7 @@ namespace bootstrap {
       let isExternal = false;
       if (at('comment ')) { isComment = true; skip(8); }
       else if (at('external ')) { isExternal = true; skip(9); }
+      if (at('left-to-right ')) { skip(14); }
       if (at('right-to-left ')) { skip(14); }
       if (at('left-associative ')) { skip(17); }
       if (at('right-associative ')) { skip(18); }
@@ -1285,6 +1286,24 @@ namespace Ether {
               if (callPos !== undefined) reader.errorAt(callPos, 'external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`);
               else reader.diagnostics.error('external', `Expected externally defined method '${key}' on ${nodeName(thisNode)}`, reader.file);
             }
+          } else if (method && mod === 'left-to-right') {
+            method.__leftToRight = true;
+            // Also propagate to aliases (from | in the body)
+            for (const [name, { resolved }] of subReader.forwards) {
+              if (name !== key && resolved) {
+                if (!thisNode.value.methods.has(name)) {
+                  thisNode.external(name, () => node);
+                }
+                const aliasMethod = thisNode.value.methods.get(name);
+                if (aliasMethod) aliasMethod.__leftToRight = true;
+              }
+            }
+            for (const k of thisNode.value.methods.keys()) {
+              if (k !== key && !methodsBefore.has(k)) {
+                const aliasMethod = thisNode.value.methods.get(k);
+                if (aliasMethod) aliasMethod.__leftToRight = true;
+              }
+            }
           } else if (method && mod === 'right-to-left') {
             method.__rightToLeft = true;
             // Also propagate to aliases (from | in the body)
@@ -1339,7 +1358,7 @@ namespace Ether {
             }
           }
         }
-      } else if (modifier === 'right-to-left' || modifier === 'left-associative' || modifier === 'right-associative') {
+      } else if (modifier === 'left-to-right' || modifier === 'right-to-left' || modifier === 'left-associative' || modifier === 'right-associative') {
         // Key not found — inner modifier is deferred (lazy). Store our modifier
         // on the bodyCtx so the inner modifier applies it when it eventually runs.
         (bodyCtx as any).__pendingModifiers = [...pendingMods, modifier];
@@ -1356,6 +1375,11 @@ namespace Ether {
     // initializer — marks method as initializer (declares LHS as variable)
     starClass.external_method('initializer', (_self: Node, blockArg: Node, initCtx: Context, reader: Reader, callPos?: number) => {
       return applyModifier('initializer', blockArg, initCtx, reader, callPos);
+    }, { args: 'Program' });
+
+    // left-to-right — explicit default direction (no-op, but valid as documentation)
+    starClass.external_method('left-to-right', (_self: Node, blockArg: Node, ltrCtx: Context, reader: Reader, callPos?: number) => {
+      return applyModifier('left-to-right', blockArg, ltrCtx, reader, callPos);
     }, { args: 'Program' });
 
     // right-to-left — marks method as right-to-left (reverses invocation direction)

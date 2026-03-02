@@ -84,5 +84,6 @@ class Avatar < Character
   character: consistent Character
 
 class Player
+class NPC
 
 class Organization < Player

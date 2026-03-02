@@ -1,0 +1,110 @@
+// Roman Numeral notation (https://en.wikipedia.org/wiki/Roman_numerals)
+class Roman < Digit+: (
+    thousands: "M"[],
+    hundreds: "CM" | "CD" | ("D"?, "C"[]{length <= 3}),
+    tens: "XC" | "XL" | ("L"?, "X"[]{length <= 3}),
+    ones: "IX" | "IV" | ("V"?, "I"[]{length <= 3})
+  )
+
+  ignore_case
+
+  static Digit: Char = on Value
+  static Value = {
+    "I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000,
+    // Unicode Roman Numeral block (U+2160–U+216F)
+    "Ⅰ": 1, "Ⅴ": 5, "Ⅹ": 10, "Ⅼ": 50, "Ⅽ": 100, "Ⅾ": 500, "Ⅿ": 1000,
+    // Precomposed (U+2161–U+216B)
+    "Ⅱ": 2, "Ⅲ": 3, "Ⅳ": 4, "Ⅵ": 6, "Ⅶ": 7, "Ⅷ": 8, "Ⅸ": 9, "Ⅹ": 10, "Ⅺ": 11, "Ⅻ": 12,
+    // Lowercase (U+2170–U+217F)
+    "ⅰ": 1, "ⅱ": 2, "ⅲ": 3, "ⅳ": 4, "ⅴ": 5, "ⅵ": 6, "ⅶ": 7, "ⅷ": 8, "ⅸ": 9, "ⅹ": 10, "ⅺ": 11, "ⅻ": 12,
+    "ⅼ": 50, "ⅽ": 100, "ⅾ": 500, "ⅿ": 1000,
+    // Archaic forms
+    "ↅ": 6,     // U+2185 ROMAN NUMERAL SIX LATE FORM
+    "ↆ": 50     // U+2186 ROMAN NUMERAL FIFTY EARLY FORM
+  }
+
+  as Decimal => #.reduce(0) (acc, current, i) =>
+    if i < length - 1 && Value[current] < Value[this[i + 1]]
+      acc - Value[current]
+    else
+      acc + Value[current]
+
+  class Standard < Roman{1 <= as Decimal <= 3999}
+
+  // Additive — historical notation without subtractive pairs (IIII instead of IV)
+  class Additive < Roman: (
+      thousands: "M"[],
+      hundreds: ("D"?, "C"[]{length <= 4}),
+      tens: ("L"?, "X"[]{length <= 4}),
+      ones: ("V"?, "I"[]{length <= 4})
+    )
+
+  // Vinculum — combining overline multiplies by 1000 (https://en.wikipedia.org/wiki/Roman_numerals#Large_numbers)
+  class Vinculum < Roman
+    static "\u0305"  // U+0305 COMBINING OVERLINE
+    static Value = Roman.Value
+      &+ Roman.Value.map(key &+ "\u0305", value * 1000)
+      &+ {
+        // Apostrophus Unicode (U+2180–U+2188)
+        "ↀ": 1000, "ↁ": 5000, "ↂ": 10000, "ↇ": 50000, "ↈ": 100000
+      }
+
+    // Double overline multiplies by 1,000,000
+    class Double < Vinculum
+      static "\u033F"  // U+033F COMBINING DOUBLE OVERLINE
+      static Value = Vinculum.Value
+        &+ Roman.Value.map(key &+ "\u033F", value * 1000000)
+
+  // Apostrophus — composed CIↃ sequences (https://en.wikipedia.org/wiki/Roman_numerals#Apostrophus)
+  class Apostrophus < Roman
+    static "Ↄ" | "ↄ"  // U+2183/U+2184 REVERSED C
+    static Value = Roman.Value &+ {
+      "ↀ": 1000,    // U+2180 — CIↃ
+      "ↁ": 5000,    // U+2181 — IↃↃ
+      "ↂ": 10000,   // U+2182 — CCIↃↃ
+      "ↇ": 50000,   // U+2187 — IↃↃↃ
+      "ↈ": 100000   // U+2188 — CCCIↃↃↃ
+    }
+    // Composed sequence forms
+    "C", "I", "Ↄ" = 1000           // CIↃ
+    "I", "Ↄ", "Ↄ" = 5000          // IↃↃ
+    "C", "C", "I", "Ↄ", "Ↄ" = 10000       // CCIↃↃ
+    "I", "Ↄ", "Ↄ", "Ↄ" = 50000           // IↃↃↃ
+    "C", "C", "C", "I", "Ↄ", "Ↄ", "Ↄ" = 100000  // CCCIↃↃↃ
+
+  // Fraction — Roman base-12 uncia system (https://en.wikipedia.org/wiki/Roman_numerals#Fractions)
+  class Fraction
+    static Digit: Char = on Value
+    static Dot = "·" | "∶" | "∴" | "∷" | "⁙"  // U+00B7, U+2236, U+2234, U+2237, U+2059
+    static Value = {
+      "·": 1/12,    // U+00B7 MIDDLE DOT — uncia
+      "∶": 2/12,    // U+2236 RATIO — sextans
+      "∴": 3/12,    // U+2234 THEREFORE — quadrans
+      "∷": 4/12,    // U+2237 PROPORTION — triens
+      "⁙": 5/12,    // U+2059 FIVE DOT PUNCTUATION — quincunx
+      "S": 1/2,     // semis
+      "Ↄ": 1/24,    // U+2183 semuncia
+      "𐆒": 1/24,    // U+10192 ROMAN SEMUNCIA SIGN
+      "𐆓": 1/72,    // U+10193 ROMAN SEXTULA SIGN
+      "𐆔": 1/144,   // U+10194 ROMAN DIMIDIA SEXTULA SIGN
+      "𐆕": 1/1728   // U+10195 ROMAN SILIQUA SIGN
+    }
+
+    = (semis: "S"?, unciae: "·"[]{length <= 5} | Dot) | sub_uncia: on Value
+
+    as Decimal => #.reduce(0) (acc, current) => acc + Value[current]
+
+    // Named fractions (twelfths of an as)
+    uncia    | 𐆑 = "·"           // 1/12
+    sextans       = "··" | "∶"    // 2/12 = 1/6
+    quadrans      = "···" | "∴"   // 3/12 = 1/4
+    triens        = "····" | "∷"  // 4/12 = 1/3
+    quincunx      = "·····" | "⁙" // 5/12
+    semis         = "S"           // 6/12 = 1/2
+    septunx       = "S", uncia  // 7/12
+    bes           = "S", sextans // 8/12 = 2/3
+    dodrans       = "S", quadrans // 9/12 = 3/4
+    dextans       = "S", triens  // 10/12 = 5/6
+    deunx         = "S", quincunx // 11/12
+
+{roman: Roman}: Roman => roman

@@ -89,14 +89,4 @@ end
 // TODO .hierarchy instead of .inventory
 
 //TODO Player UUID is Node: the player's pub key gen, then Timestamp, when joined.
-def Player < Entity
-
-end
-
-def NPC < Entity
-  //TODO Defines dynamics in a World
-end
-
-def Organization < Player
-
-end
+=

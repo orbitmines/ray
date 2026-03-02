@@ -36,13 +36,6 @@ def equivalence (from: * < class) -> (to: *)
   end
 end
 
-class Expression
-  def while program = global.while(this, program)
-end
-
-// TODO unless
-
-
 class try program: () => *
   def <Args>(catch?: (args: Args) => *)
     error: Args?
@@ -93,8 +86,14 @@ def Query<T>
   //TODO Set each property to the base class without defaults defined on T.
 end
 
+//for things like
+def 0`"b" | "B"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+// I want a : prefer this syntax, so the ide suggests rewriting it like that? Those preferences should be configurable
+
+
 // Generalize range/intervals over arbitrary surfaces
 /// Castable to reduce(|)
+// Default behavior of a superposed |, is to see if one matches and stop there.
 def Range
   // TODO Depending on the 'default space selected', range is either the refined Array, or a graph. (Graph because looped paths can exist)
 

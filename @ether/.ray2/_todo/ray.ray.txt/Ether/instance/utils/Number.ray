@@ -38,8 +38,6 @@ end
 
 //TODO Define .sign on all numbers, so that you can do x.sign ().sum, empty string is + so nothing gets applied since it's empty string.
 
-private class Digit = String  //[].reduce(|)
-
 Base = &'ed version of all the numbers
 
   def value(digit: this = this)
@@ -54,23 +52,12 @@ Base = &'ed version of all the numbers
 end
 
 // TODO: Strings as a definition depend on Number, circularity here.
-Bases = {
-  Binary: Digit = "0" | "1"
-  Ternary: Digit = "0".."2".reduce(|) //TODO .reduce is automatic
-  Quaternary: Digit = "0".."3".reduce(|)
-  Quinary: Digit = "0".."4".reduce(|)
-  Senary: Digit = "0".."5".reduce(|)
-  Septenary: Digit = "0".."6".reduce(|)
-  Octal: Digit = "0".."7".reduce(|)
-  Nonary: Digit = "0".."8".reduce(|)
-  Decimal: Digit = "0".."9".reduce(|)
-  Undecimal: Digit = ("0".."9", ("a" | "A")).reduce(|)
-  Duodecimal: Digit = ("0".."9", ("a" | "A")..("b" | "B")).reduce(|)
-  Tridecimal: Digit = ("0".."9", ("a" | "A")..("c" | "C")).reduce(|)
-  Tetradecimal: Digit = ("0".."9", ("a" | "A")..("d" | "D")).reduce(|)
-  Pentadecimal: Digit = ("0".."9", ("a" | "A")..("e" | "E")).reduce(|)
-  Hexadecimal: Digit = ("0".."9", ("a" | "A")..("f" | "F")).reduce(|)
-}
+
+Number which is integer
+def times callback: () => *
+        //TODO Support index?
+        Array{length == this}().for => callback()
+      end
 
 dynamically Bases.for Base, digit
 
@@ -85,54 +72,9 @@ dynamically Bases.for Base, digit
 
     //TODO Equip a default directionality. (Line: One with forward/backward from a specific point, but it isn't necessarily selected there.)
 
-    //TODO Because sign is a String, Positive is castable to a String, `Base` is castable to a String
-    static String = static as String
-
-    static Digit = digit
-    //TODO This should not be in the constructor, but taken outside of it.
-
 
     // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
 
-
-    // We use 'Positive' here, since a 0, in this construction can be signed. (Even though for most operations that difference won't matter)
-    static class Positive = integer = Digit.value[]{length > 0}
-
-      //TODO If extends Digit.value[], allow to cast `Base`.Positive[] to `Base`.Positive. But Decimal as Binary is different than Decimal[] as Decimal as Binary
-      static def String = Array<Digit as String>
-
-      def `fraction = Positive.String` => Real.Positive = integer, ".", fraction
-
-      def times callback: () => *
-        //TODO Support index?
-        Array{length == this}().for => callback()
-      end
-    end
-
-    { Rational, Irrational } = Real
-
-    static class Real = sign = "-"?, real = Real.Positive
-      static String = static as String //TODO This should be autmoatically implemented because Postitive implements it
-
-      static class Positive = integer: `Base`.Positive, ".", fraction: `Base`.Positive.Unbounded
-        static String = static as String
-
-        //TODO How to simultaneously implement .rational/.irrational as boolean checks.
-        static Rational = Positive{fraction ==.instance_of (
-          // Finite
-          `Base`.Positive
-          // Or repeating
-          | `Base`.Positive[]{length == Infinite}
-        )}
-        static Irrational = not Rational //TODO Allow this syntax
-      end
-    end
-  end
-
-  // "0001 is equivalent to 1" //TODO Reverse is true also, how's that done?
-  `Base`.Positive{==.instance_of 0[], number: `Base`.Positive}
-    as (=== `Base`.Positive) => number
-end
 
 +def Binary.Positive
 
@@ -188,16 +130,8 @@ class Number < Ordered
   // TODO: external defines that Number > Number is done by some other operator, not looking through successors/predecessors.
 end
 
-Decimal
-  % => this / 100
 
-Probability = Number{0 <= . <= 1}
 
-Number.Nat
-Integer.Unsigned
-  {" "}{node: *} => node{#.count == this}
-Probability{!= 1}
-  {" "}{node: *} => //TODO How to say %, what to do in case of non-divisible
 
 {
   (Σ | ∑): sum -> +,
@@ -223,5 +157,13 @@ end
 
 //TODO Infinity / ∞
 
-Byte = Binary{length == 8}
 //TODO 1000 MB etc.. MiB ; how does that coincide with Unit, want Binary with some length to correspond to it?
+
+Byte | B = Binary⁸
+Kilobyte | KB = 1000 * Byte
+
+Units override the X Node
+3.2 Kilobyte
+// Kibibyte etc.. too
+
+Unit as Binary

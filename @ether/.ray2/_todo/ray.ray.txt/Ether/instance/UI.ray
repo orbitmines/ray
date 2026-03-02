@@ -8,3 +8,6 @@ single UI
   single World
   end
 end
+
+Probability{!= 1}
+  {" "}{node: *} => //TODO How to say %, what to do in case of non-divisible

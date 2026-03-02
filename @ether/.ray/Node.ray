@@ -17,6 +17,9 @@ Modifier = (this: *): { location: a this, * }
 
 a | an (type) => ∃Node ==.instance_of type
 
+Nat
+  (node: *) => node{#.count == this}
+
 class not
   * = (Node !=)*.map{.on !=}(method => args => *{method<this = .>(args)})
 
@@ -31,6 +34,8 @@ class * | Node
   external [{property: *}]
   <{partial_args: (): *}> => this++ ~~ .partial_args &= partial_args
   {{constraint: (this: static): boolean}} => this++ ~~ .constraints &= constraint
+
+  //TODO Add static { Rational, Irrational } = Real support only for static?
 
   {` `}{constraints: (`{`, args: * `}`, ` `?)?}({args: *}) =>
     this &= Program(args: args)

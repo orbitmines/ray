@@ -1,0 +1,53 @@
+Probability = Number{0 <= . <= 1}
+
+class Number
+  static Bases = {
+    Binary: Digit = "0" | "1"
+    Ternary: Digit = "0".."2"
+    Quaternary: Digit = "0".."3"
+    Quinary: Digit = "0".."4"
+    Senary: Digit = "0".."5"
+    Septenary: Digit = "0".."6"
+    Octal: Digit = "0".."7"
+    Nonary: Digit = "0".."8"
+    Decimal: Digit = "0".."9"
+    Undecimal: Digit = Decimal | ("a" | "A")
+    Duodecimal: Digit = Decimal | ("a" | "A")..("b" | "B")
+    Tridecimal: Digit = Decimal | ("a" | "A")..("c" | "C")
+    Tetradecimal: Digit = Decimal | ("a" | "A")..("d" | "D")
+    Pentadecimal: Digit = Decimal | ("a" | "A")..("e" | "E")
+    Hexadecimal: Digit = Decimal | ("a" | "A")..("f" | "F")
+  }
+
+class Digit < String
+  //TODO .value to String
+
+dynamically (on Number.Bases).for name
+  internal Base => this[name]
+
+  String{== Base.Digit} //TODO Maybe with equivalent
+    as (== Base.Digit)
+
+  class[name] < Number, integer: Digit.value+
+    String => this as String
+    static Digit = Number.Bases[name]
+
+    {fraction: static.String} (): Real => integer, ".", fraction
+
+    static class Signed < sign: "-"?, integer: Base
+    static class Real < integer: Base, ".", fraction: Base.Unbounded
+      static class Signed < sign: "-"?, real: Real
+      static Rational => static{fraction ==.instance_of (
+        // Finite
+        Base
+        // Or repeating
+        | Base[]{length == ∞}
+      )}
+      static Irrational => static & not Rational
+    static { Rational, Irrational } = Real
+
+  Base{: 0+, number: Base} // Leading zeros are equivalent to the base number
+    as (=== Base) number
+
+Decimal
+  % => this / 100

@@ -53,32 +53,10 @@ def Boundary<T>
   //TODO .[index] shouldnt overwrite the '1' without a .1 (needs a special rule)
 
 
-private class Structure<T = Ray, HyperContinuations: boolean, HyperEdges: boolean = false> = Unbounded{count < Infinity}
-
-  static Vertex = Ray<T>{
-    initial = (HyperContinuations ? Many : 1) Boundary{ //TODO These =, need to be ==.instance_of?
-      end = (HyperEdges ? Many : 1) Vertex,  //TODO (1 if !HyperEdges) or (!HyperEdges ? 1) Vertex allow this syntax
-      value = (HyperEdges ? Many : 1) Boundary{
-        end = (HyperEdges ? Many : 1) Vertex,
-        value = (HyperEdges ? Many : 1) Vertex.initial
-      }?
-    },
-    terminal = initial // By default a structure is symmetric
-  } //TODO .unrolled
-
-end
+//TODO .unrolled
 
 //TODO .reverse on tree should reverse the whole tree and the type of Ray properly.
-def Tree<T = Ray> < Structure<T><HyperContinuations = true, HyperEdges = false> = .acyclic.connected.consistent
-  // Tree has a single 'parent' on each vertex.
-  static +def Vertex = super{initial: 1 Boundary{
-    end: 1 Vertex,
-    value: Boundary{
-      end: 1 Vertex,
-      value: Vertex.initial
-    }?
-  }} //TODO The Vertex.initial here should refer to the new value, not the old.
-end
+
 class Set < Structure
   normalizer = .unordered.unique
 end

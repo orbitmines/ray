@@ -44,13 +44,14 @@ class Iterable<Vertex: Ray = Ray>
 
 
 class Structure < Iterable<Ray{
-  initial & terminal : (1 if HyperContinuations) boundary: Boundary{
+  initial & terminal : (1 unless HyperContinuations) Vertex.Boundary
+}>
+  Vertex.Boundary = Boundary{
     ∙: (1 unless HyperEdges) Vertex
     ⊙: (1 unless HyperEdges) Edge{
-      initial & terminal : (1 unless HyperEdges) boundary
+      initial & terminal : (1 unless HyperEdges) Vertex.Boundary
     }
   }
-}>
   internal static HyperContinuations: boolean
   internal static HyperEdges: boolean = false
 
@@ -59,6 +60,7 @@ class Hypergraph < Structure
 class Graph < Structure
   HyperContinuations = true
 class Forest < Structure.Acyclic.Consistent
+  Vertex = Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
   HyperContinuations = true
 class Tree < Forest.Connected
 class Array < Structure.Acyclic.Consistent.Connected

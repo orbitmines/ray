@@ -43,19 +43,12 @@ Ordered &+ Ray
 
 //TODO Setting .value on Many boundary in the case of Edge.
 
-//TODO Edge.list has Boundary more than once, self-loop
-def Boundary<T>
-  value: Boundary<T>? //TODO T could be on value, Or you want a specific type on Boundary
-  end: Ray<T>
-
 
   //TODO What is .unrolled?? on type
   //TODO .[index] shouldnt overwrite the '1' without a .1 (needs a special rule)
 
 
 //TODO .unrolled
-
-//TODO .reverse on tree should reverse the whole tree and the type of Ray properly.
 
 class Set < Structure
   normalizer = .unordered.unique
@@ -74,50 +67,15 @@ class Iterable<T = *>
 
   def $ = this !~= ^* //Then add any match at the beginning.
 
-  def any => this.reduce(|) = this.unordered.first
 
-  def compact = this{!= None}
-end
-
-class Boundary < Ray
-  x: static = this
-
-  end | vertex | ∙ : Ray
-  edge | ⊙ : Edge
-  continuation | ⊢ : static => ⊙⊢#{!= this}
-
-  boundary
-  // ? These arent right
-  is_initial => ∙⊢ == this
-  is_terminal => ∙⊣ == this
-
-  {path: (((path?, "⊙"?)?, "⊢")?, "∙")?, "⊣"}{.}
-    x = this
-    path.reverse.for method => x = x[method == "⊣" ? "⊢" : method]
-    x
-end
-class Edge < Ray & (⊣ | ⊢ | ⊢{.} | list): Boundary
-  x: static = this
-  //TODO .value is defined on the Ray which defines the boundaries on list? Or ignore that.
-end
 //TODO .every on ray iterates both ways., explicit filter for excluding. (ray -> .next).for
-class Ray<T?> (x | value) < AbstractDirectionality
-  dynamically for(: T) if T //TODO Should be T = static
+class Ray
   //TODO .value is everything on x except the Rays defined at #. And we need distinction between methods on Ray/x
 
   //TODO is .expand implemented for looped types, which assume .expand unrolls the loop?
 
   initial | ⊢ | ⊢{.} : Boundary = Boundary(∙: this)
   terminal | ⊣ : Boundary = Boundary(∙: this)
-
-  is_first => ⊢#.some(.boundary)
-  is_last => ⊣#.some(.boundary)
-
-  // Allow syntax for traversing the initial side: '⊢∙⊣⊙⊢var'
-  {path: (((path?, "∙")?, "⊣")?, "⊙"?)?, "⊢"}{.}
-    x = this
-    path.reverse.for method => x = x[method]
-    x
 
   //TODO .expand only the boundaries, or everything
   //TODO .paths possible paths to take.
@@ -127,11 +85,6 @@ class Ray<T?> (x | value) < AbstractDirectionality
   push
 
   expanded => //TODO Recursively expand
-
-  // TODO this.quantities~{.unit operator unit} is different from this.quantities{.unit operator unit}~, one applies the structure before/after the filter.
-  //TODO But you'd kind of want to overlap the types on x/value and the ray's methods. not require a .x. What do you do if x is an Iterable?
-  //TODO Or if it's a number which already has equipped structure, prefer this structure, what if I want to overlay both?
-  equip_structure | ~ =>
 
   context | & =>
   relative_context | && => //TODO Perhaps just context, relative context = just the ray.
@@ -169,8 +122,6 @@ class AbstractDirectionality<T> < Iterable<T>
   loop | orbit (boundaries: T{})
 
   previous =>
-
-  undirected | bidirectional =>
 
 end
 class Iterable<T>
@@ -229,7 +180,7 @@ class Iterable<T>
 
   length
   // Since a graph's structure allows for branching and looping, it can be that length != count.
-  count => length == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
+  count => length ==.trivially ∞ ? ∞ : reduce(acc = 0 => acc + 1)
 
   empty => count == 0
   nonempty => !empty

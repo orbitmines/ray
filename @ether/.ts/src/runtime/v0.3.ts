@@ -706,6 +706,51 @@ class Reader {
         const method = result.method(text);
         if (method) {
           if (method.__rightToLeft) {
+            if (text === '</') {
+              // </ : right-to-left evaluation preference
+              // Read argument from right (defaults to 'this')
+              while (!this.done() && this.ch() === ' ') this.skip();
+              let startNode: Node;
+              if (this.done() || this.ch() === '\n') {
+                startNode = this.ctx.get('this');
+              } else {
+                const argToken = this.readToken();
+                startNode = argToken ? this.resolve(argToken) : this.ctx.get('this');
+              }
+              // Re-evaluate source before </ in right-to-left order
+              const exprSource = this.source.slice(resultPos, tokenStart).trimEnd();
+              let rtlResult = startNode;
+              let p = exprSource.length;
+              while (p > 0) {
+                // Skip spaces from right
+                while (p > 0 && exprSource[p - 1] === ' ') p--;
+                if (p <= 0) break;
+                // Try single char from right as method (handles boundary symbols etc.)
+                const ch = exprSource[p - 1];
+                const m = rtlResult.method(ch);
+                if (m) {
+                  rtlResult = m(rtlResult, new Node(ch), this.ctx, this);
+                  p--;
+                  continue;
+                }
+                // Read full word backwards (until space or start)
+                const wordEnd = p;
+                while (p > 0 && exprSource[p - 1] !== ' ') p--;
+                const word = exprSource.slice(p, wordEnd);
+                // Try word as method on result
+                const wm = rtlResult.method(word);
+                if (wm) {
+                  rtlResult = wm(rtlResult, new Node(word), this.ctx, this);
+                } else {
+                  // Resolve as variable and apply
+                  const resolved = this.resolve(word);
+                  rtlResult = this.apply(rtlResult, resolved, resultPos);
+                }
+              }
+              result = rtlResult;
+              lastArg = null;
+              continue;
+            }
             const target = lastArg ?? result;
             if (method.__leftAssociative) {
               // Left-associative: read one token/pattern as body, chain via lastArg
@@ -1409,6 +1454,11 @@ namespace Ether {
     starClass.external_method('right-associative', (_self: Node, blockArg: Node, raCtx: Context, reader: Reader, callPos?: number) => {
       return applyModifier('right-associative', blockArg, raCtx, reader, callPos);
     }, { args: 'Program' });
+
+    // </ — right-to-left evaluation preference (identity; re-evaluates preceding tokens RTL in readLine)
+    const rtlPrefFn: MethodFn = (self: Node) => self;
+    rtlPrefFn.__rightToLeft = true;
+    Node.PROTO.external('</', rtlPrefFn);
 
     // external ({args: *}) — call: lazily calls self with args
     Node.PROTO.external('["(",null,")"]', (self: Node) => {

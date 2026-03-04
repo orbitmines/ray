@@ -6,6 +6,12 @@ class Ray
   initial | (internal right-to-left ⊢) : Boundary = Boundary(∙: this)
   terminal | (internal ⊣) : Boundary = Boundary(∙: this)
 
+  is_initial => ∃⊙⊢ .x.initial == None
+  is_terminal => ∃⊣⊙ .x.terminal == None
+
+  is_first => ∀⊙⊢ .x.initial == None
+  is_last => ∀⊣⊙ .x.terminal == None
+
 class Boundary
   vertex | (internal bidirectional ∙) : Ray
   edge | (internal bidirectional ⊙) : Edge = Edge(x.initial: this)
@@ -24,8 +30,8 @@ class Edge < Ray
     terminal | (internal ⊢) : Boundary?
   }
 
-  initial => Boundary(∙: ⊙⊢∙⊣x)
-  terminal => Boundary(∙: x⊢∙⊣⊙)
+  initial = Boundary(∙: ⊙⊢∙⊣x)
+  terminal = Boundary(∙: x⊢∙⊣⊙)
 
 class Iterable<Vertex: Ray = Ray>
   dynamically assert count < ∞ if (bounded: boolean = true)
@@ -40,6 +46,9 @@ class Iterable<Vertex: Ray = Ray>
     return static{} // Tell the compiler links should be one-way
    Reverse\
     return static{}
+
+  compact => this~{: None}
+
 
 
 

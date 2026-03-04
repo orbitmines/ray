@@ -5,6 +5,7 @@
 //Chose uses === for checking equality. And only maps it once, then defers to the altered variable
 // Allow to be passed as a variable as any time, which takes on that type and says chosoe that type
 choose Iterable{.every(a => B.contains(a)) && .count == B.count}
+Iterable<T>.choose 10
 choose Number // No, this would be Number{choose}
 choose 10 Number
 Number{choose}

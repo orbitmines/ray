@@ -12,19 +12,19 @@ class Boundary
 
   // By default a boundary isn't aware of direction. But if one wants to equip a Ray on a boundary (like a Program), it needs to be.
   static class Initial < Boundary, Ray
-    initial⊙⊢∙ = Boundary.Initial(∙: ⊢∙⊣⊙ this) //TODO Something like this, should also respect if None.
-    terminal: Boundary.Initial(∙: this ∙⊣⊙⊢)
+    ∙⊣⊙ </ initial = Boundary.Initial(∙: ⊢∙⊣⊙ </) //TODO Something like this, should also respect if None.
+    terminal⊙⊢∙ = Boundary.Initial(∙: ∙⊣⊙⊢) //TODO Edge works
   static class Terminal < Boundary, Ray
-    initial => Boundary.Terminal(∙: ⊣⊙⊢∙ this)
-    terminal => Boundary.Terminal(∙: this ⊙⊢∙⊣)
+    ∙⊣⊙ </ initial = Boundary.Terminal(∙: ⊣⊙⊢∙ </)
+    terminal⊙⊢∙ = Boundary.Terminal(∙: ⊙⊢∙⊣)
 
 class Edge < Ray
   value | (internal x) : {
-    initial | (internal right-to-left ⊣) : Boundary
-    terminal | (internal ⊢) : Boundary
+    initial | (internal right-to-left ⊣) : Boundary?
+    terminal | (internal ⊢) : Boundary?
   }
 
-  initial => Boundary(∙: ⊙⊢∙⊣x) //Assumes Edge/Ray are aligned properly
+  initial => Boundary(∙: ⊙⊢∙⊣x)
   terminal => Boundary(∙: x⊢∙⊣⊙)
 
 class Iterable<Vertex: Ray = Ray>

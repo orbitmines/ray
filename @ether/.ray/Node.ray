@@ -57,6 +57,9 @@ class * | Node
   external left-associative: Modifier
   external right-associative: Modifier
 
+  // In the case of an actual ambiguity where both ltr as rtl is valid syntax, use this operator to switch away from the default ltr interpretation.
+  external right-to-left </: this
+
   if (predicate: boolean) if predicate then this else &caller. // &caller. here, so that when this -- .field if predicate, doesn't match, we map to 'this'.
   unless (predicate: boolean) unless predicate then this else &caller.
 
@@ -124,6 +127,7 @@ class * | Node
   right-to-left left-associative ∌ (type) => this ∉ type
   dynamically assert this ==.instance_of type if type
 
+  //TODO Binary{-> .next == 0.5(?.random)} support
   -> (map: (current: (this | (R: *)) + Ray): R)
     direction: "next" | "previous" = "next"
     mapped: (self: this | R) => self + Ray() + {

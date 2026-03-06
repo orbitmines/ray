@@ -2,7 +2,7 @@
 <- (): Ray => previous: () => Ray(previous: previous())
 <--> (): Ray => (<-) &+ (->)
 
-class Ray
+class Ray < Iterable & Ordered
   initial | (internal right-to-left ⊢) : Boundary = Boundary(∙: this)
   terminal | (internal ⊣) : Boundary = Boundary(∙: this)
 
@@ -36,7 +36,7 @@ class Edge < Ray
 class Iterable<Vertex: Ray = Ray>
   dynamically assert count < ∞ if (bounded: boolean = true)
 
-  static NonEmpty => static{count > 0}
+  static Nonempty => static{count > 0}
   static Unbounded => static{bounded == false}
   static Connected => static{} // each Node is reachable from each other Node. (Going both forward and backward)
   static Consistent => static{}
@@ -49,7 +49,7 @@ class Iterable<Vertex: Ray = Ray>
 
   compact => this~{: None}
 
-
+class Ordered
 
 
 class Structure < Iterable<Ray{

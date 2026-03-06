@@ -74,9 +74,6 @@ class Ray
 
   //TODO is .expand implemented for looped types, which assume .expand unrolls the loop?
 
-  initial | ⊢ | ⊢{.} : Boundary = Boundary(∙: this)
-  terminal | ⊣ : Boundary = Boundary(∙: this)
-
   //TODO .expand only the boundaries, or everything
   //TODO .paths possible paths to take.
 
@@ -109,7 +106,7 @@ class Ray
 
   index (start = first) => start to this -- .length - 1
 
-  v (count: Number) => this{##.count == count}
+  v (count: Number) => this{##.count == count} //TODO for Ray only counting Ray classes.
 end
 
 class AbstractDirectionality<T> < Iterable<T>

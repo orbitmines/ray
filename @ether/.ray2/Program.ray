@@ -8,7 +8,7 @@
 // comments
 &caller.next.comment = above: &caller.comment, \n if above, comment //TODO .next here should be on the right level. or use a different method which does it properly. Comment after the current line should be included
 
-
+// There was no ambiguity from the perspective without a component/class component with it, so defer to that option. (I case of Ray for instance with Boundary, where is_initial would be different for Boundary)
 
 // "TODO" Highlighting
 

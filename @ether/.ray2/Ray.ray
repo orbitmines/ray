@@ -127,18 +127,12 @@ class Iterable<T>
   // Repeat this structure x times: Composing the structure x times
   * (x: Number) //TODO
 
-  all => T(#: this)
-  fill (value) => all = value //TODO Whenever a value is accessed, lazily add this = on top. (Any for would do this)
-
   //TODO Sorted/max/min along which dimension & what is the default dimension
   sort (dimension: AbstractDirectionality): static{~every .previous[DIMENSION] <= .[DIMENSION] <= .next[DIMENSION]} =>
   max (dimension: AbstractDirectionality (= .0 if T < AbstractDirectionality)) => reduce(acc, current => acc > current ? acc : current)
   //TODO Or something like that.
   //TODO Would to to call a method on the entries, so needs to be a callable
   min () => reduce(acc, current => acc < current ? acc : current)
-
-  first => reverse.last
-  last
 
   disjoint (b: Iterable)
 
@@ -177,7 +171,7 @@ class Iterable<T>
 
   length
   // Since a graph's structure allows for branching and looping, it can be that length != count.
-  count => length ==.trivially ∞ ? ∞ : reduce(acc = 0 => acc + 1)
+  count => length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
 
   empty => count == 0
   nonempty => !empty
@@ -190,9 +184,6 @@ class Iterable<T>
 
   partition (predicate: (): boolean)
 
-  + (at: Integer) this[at]
-  - (at: Integer) this[-at]
-  ± | +- | -+ (at: Integer) this[at] | this[-at]
 
   [] //TODO Ranges, index
 
@@ -202,7 +193,6 @@ class Iterable<T>
   //TODO move operations
 
   unique
-  compact => this~{!= None}
 
   //Boundaries check if == None and != Ray
 

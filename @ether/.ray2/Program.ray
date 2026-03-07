@@ -1,3 +1,6 @@
+// .length etc. use .expanded by default, how to get the .length specific to without expanding.
+
+// Valid type: Ray{compact}; anything which returns an altered version of this should work?
 
 ({expr: (): *}) => expr
   expr

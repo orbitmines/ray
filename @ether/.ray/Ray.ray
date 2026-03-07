@@ -6,11 +6,11 @@ class Ray < Iterable & Ordered
   initial | (internal right-to-left ⊢) : Boundary = Boundary(∙: this)
   terminal | (internal ⊣) : Boundary = Boundary(∙: this)
 
-  is_initial => ∃⊙⊢ .x.initial == None
-  is_terminal => ∃⊣⊙ .x.terminal == None
+  is_initial => ∃⊙⊢ .is_initial
+  is_terminal => ∃⊣⊙ .is_terminal
 
-  is_first => ∀⊙⊢ .x.initial == None
-  is_last => ∀⊣⊙ .x.terminal == None
+  is_first => ∀⊙⊢ .is_initial
+  is_last => ∀⊣⊙ .is_terminal
 
 class Boundary
   vertex | (internal bidirectional ∙) : Ray
@@ -30,24 +30,45 @@ class Edge < Ray
     terminal | (internal ⊢) : Boundary?
   }
 
+  is_initial => x.initial == None
+  is_terminal => x.terminal == None
+
   initial = Boundary(∙: ⊙⊢∙⊣x)
   terminal = Boundary(∙: x⊢∙⊣⊙)
 
 class Iterable<Vertex: Ray = Ray>
-  dynamically assert count < ∞ if (bounded: boolean = true)
+  dynamically assert count < ∞ if (bounded: boolean = true
 
-  static Nonempty => static{count > 0}
-  static Unbounded => static{bounded == false}
-  static Connected => static{} // each Node is reachable from each other Node. (Going both forward and backward)
-  static Consistent => static{}
-  static Acyclic => static{}
-  static Undirected => static{} // Initial === Terminal
-  static Unidirectional =>
-    return static{} // Tell the compiler links should be one-way
+  empty => count == 0
+  nonempty => !empty
+  unbounded => !bounded
+  connected =>  // each Node is reachable from each other Node. (Going both forward and backward)
+  consistent =>
+  acyclic =>
+  undirected =>  // Initial === Terminal
+  unidirectional =>
+    return  // Tell the compiler links should be one-way
    Reverse\
-    return static{}
+    return
 
-  compact => this~{: None}
+  compact => this~{!=.instance_of None}
+
+  class boundary
+    () => boundary.initial | boundary.terminal
+    initial: Boundary => (⊢all{is_initial}){⊙.is_initial}
+    terminal: Boundary => (all{is_terminal}⊣){⊙.is_terminal}
+
+  first => ~{is_first}.all
+  last => ~{is_last}.all
+
+  all => reduce(|)
+
+  + (at: Integer) this[at]
+  - (at: Integer) this[-at]
+  ± | +- | -+ (at: Integer) this[at] | this[-at]
+  [at: Integer] =>
+
+  fill (x) all = x
 
 class Ordered
 
@@ -68,10 +89,10 @@ class Hypergraph < Structure
   HyperEdges = true
 class Graph < Structure
   HyperContinuations = true
-class Forest < Structure.Acyclic.Consistent
+class Forest < Structure{acyclic & consistent}
   Vertex = Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
   HyperContinuations = true
-class Tree < Forest.Connected
-class Array < Structure.Acyclic.Consistent.Connected
+class Tree < Forest{connected}
+class Array < Structure{acyclic & consistent & connected}
   HyperContinuations = false
 

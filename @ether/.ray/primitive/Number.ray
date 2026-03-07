@@ -35,16 +35,16 @@ dynamically (on Number.Bases).for name
     {fraction: static.String} (): Real => integer, ".", fraction
 
     static class Signed < sign: "-"?, integer: Base
-    static class Real < integer: Base, ".", fraction: Base.Unbounded
+    static class Real < integer: Base, ".", fraction: Base{unbounded}
       static class Signed < sign: "-"?, real: Real
-      static Rational => static{fraction ==.instance_of (
+
+      rational => fraction ==.instance_of (
         // Finite
         Base
         // Or repeating
         | Base[]{length == ∞}
-      )}
-      static Irrational => static & not Rational
-    static { Rational, Irrational } = Real
+      )
+      irrational => !rational
 
   Base{: 0+, number: Base} // Leading zeros are equivalent to the base number
     as (=== Base) number

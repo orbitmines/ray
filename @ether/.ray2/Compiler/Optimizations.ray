@@ -4,6 +4,9 @@
 //TODO Ray.index compiles to a for-loop with i+1
 //TODO If a single item is in multiple inventories, how is persistence done? Is it stored in one, refs, in another, stored in both, want to allow for all of these options, how to deduplicate if it's known it's in two inventories: merger, or what?
 
+// When all = X is done, the value should point to the iterable structure it's part of and check if it is lazily setting something for the whole thing, that way we can lazily add to without iterating over the whole object
+
+
 // Optimize boolean checks by saying unordered # the first thing that returns true collapses it
 var = var#{== true}.first
 

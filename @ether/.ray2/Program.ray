@@ -220,6 +220,9 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
 
   comment: String? //TODO comment should include on the same line after.
 
+  return: // Pointer to end of function. () => goto &done
+  redo ; redo function with same context.
+
   //TODO Equivalence between context and the program so that &caller == this, and &caller == @me, character works.
 
   state | ∙ : State
@@ -293,6 +296,7 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
   base: Program => //TODO Pointer to history.
   //TODO Base vs the original function filled with parameters, a good name for that
 
+  //TODO Recur without arguments is tail recursion.
   recur (callee) => base.copy(callee: callee) //TODO + Parameters
 
   //TODO schedule, spawn entity if necessary, if already an NPC, use that NPC quests.

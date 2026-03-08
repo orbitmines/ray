@@ -14,16 +14,13 @@ class if (predicate: boolean, yes?: (): *)
 unless (predicate: boolean, yes?: (): *) (if(!predicate, yes))
 
 while (predicate: boolean, do: (): *)
- next\
-  goto done if predicate
-  do<local: &caller, break: () => goto done>()
-  goto next
- done\
+  return if predicate
+  do<local: &caller, break: return>()
+  recur
 
 (): *
   while (predicate: boolean) // A do-while loop.
-    this<local: &caller, break: () => goto done>();
+    this<local: &caller, break: return>();
     while<.&caller: &caller>(predicate, this)
-   done\
 
 class Program | Function

@@ -161,6 +161,8 @@ class * | Node
     property.type
       as (=== Class) Class(property.\@\: this)
 
+  clear => this = static()
+
   .({expr: (: this): *}) => expr<local: this>(this) // Allow .(property | property2) / var.(condition ? == : <=)
   .{property: (\S & not ".")[]} => this[property]
 

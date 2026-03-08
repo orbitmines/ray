@@ -3,8 +3,8 @@
 <--> (): Ray => (<-) &+ (->)
 
 class Ray < Iterable & Ordered
-  initial | (internal right-to-left ⊢) : Boundary = Boundary(∙: this)
-  terminal | (internal ⊣) : Boundary = Boundary(∙: this)
+  initial | (internal right-to-left ⊢) : Boundary = Boundary.Initial(∙: this)
+  terminal | (internal ⊣) : Boundary = Boundary.Terminal(∙: this)
 
   is_initial => ∃⊙⊢ .is_initial
   is_terminal => ∃⊣⊙ .is_terminal
@@ -12,15 +12,18 @@ class Ray < Iterable & Ordered
   is_first => ∀⊙⊢ .is_initial
   is_last => ∀⊣⊙ .is_terminal
 
-class Boundary
+class Boundary < Ray
   vertex | (internal bidirectional ∙) : Ray
-  edge | (internal bidirectional ⊙) : Edge = Edge(x.initial: this)
+  edge | (internal bidirectional ⊙) : Edge
 
-  // By default a boundary isn't aware of direction. But if one wants to equip a Ray on a boundary (like a Program), it needs to be.
-  static class Initial < Boundary, Ray
+  static class Initial < Boundary
+    ⊙ = Edge(x.terminal: this)
+
     ∙⊣⊙ </ initial = Boundary.Initial(∙: ⊢∙⊣⊙ </) //TODO Something like this, should also respect if None.
     terminal⊙⊢∙ = Boundary.Initial(∙: ∙⊣⊙⊢) //TODO Edge works
-  static class Terminal < Boundary, Ray
+  static class Terminal < Boundary
+    ⊙ = Edge(x.initial: this)
+
     ∙⊣⊙ </ initial = Boundary.Terminal(∙: ⊣⊙⊢∙ </)
     terminal⊙⊢∙ = Boundary.Terminal(∙: ⊙⊢∙⊣)
 
@@ -58,8 +61,14 @@ class Iterable<Vertex: Ray = Ray>
     initial: Boundary => (⊢all{is_initial}){⊙.is_initial}
     terminal: Boundary => (all{is_terminal}⊣){⊙.is_terminal}
 
-  first => ~{is_first}.all
-  last => ~{is_last}.all
+  first => all{is_first}
+  last => all{is_last}
+
+  entry: Vertex?
+
+  batch | chunk (size: Nat)// TODO
+
+  for <traverse: Traverser>(yield: (x: Vertex): *) traverse<.yield: yield<local: &caller, break: return>>(this.entry) if this.entry
 
   all => reduce(|)
 
@@ -69,6 +78,13 @@ class Iterable<Vertex: Ray = Ray>
   [at: Integer] =>
 
   fill (x) all = x
+
+Traverser = <yield: (x: Ray): None>(entry: Ray): None
+//TODO How to combine traversers like Left only but breathfirst depth-first X levels then breadth
+BreadthFirst: Traverser = (entry: Ray) =>
+  while next = (next ?? this).iter => next#.for~step<local: &caller, .break: break>(callback)
+ step\
+  while next = (next ?? this).iter => yield next
 
 class Ordered
 

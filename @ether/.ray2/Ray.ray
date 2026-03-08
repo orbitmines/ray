@@ -122,7 +122,7 @@ class AbstractDirectionality<T> < Iterable<T>
 
 end
 class Iterable<T>
-  next
+  next // Next should always return iterable with #, since # is depth aware, so #.for returns only the result which can have & at the specific locatgions
 
   // Repeat this structure x times: Composing the structure x times
   * (x: Number) //TODO

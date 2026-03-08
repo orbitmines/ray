@@ -1,3 +1,4 @@
+// Functionality for tunring the Node structure into a Graph (only certain types of methods) and navigating that. Like Saying the hierarchical tree as a Graph.
 
 // static parts of the constructor are filtered out using the same rewriting strategies used for compiler optimizations.
 

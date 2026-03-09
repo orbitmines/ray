@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Xtext - language development framework (Eclipse)
+# https://eclipse.dev/Xtext/
+REPO_DIR="${ETHER_EXTERNAL_DIR:-/tmp}/github.com/eclipse/xtext"
+if [[ -d "$REPO_DIR/.git" ]]; then
+  GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" pull || true
+else
+  mkdir -p "$(dirname "$REPO_DIR")"
+  GIT_TERMINAL_PROMPT=0 git clone https://github.com/eclipse/xtext.git "$REPO_DIR"
+fi
+cd "$REPO_DIR"
+command -v mvn >/dev/null 2>&1 || { echo "Maven required to build Xtext." >&2; exit 1; }
+mvn clean install -DskipTests || true

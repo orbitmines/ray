@@ -13,7 +13,7 @@ comment //{" "[], comment: String, \n?} | /*{
 ({expr: *}) => expr
 [{elements: *}] => elements
 
-Modifier = (this: *): { location: a this, * }
+Modifier = (this: *): { location: a (this, *) }
 
 a | an (type) => ∃Node ==.instance_of type
 
@@ -67,6 +67,7 @@ class * | Node
     <up_to?>()
       in?: -> as (*)
       exclude_location: boolean = true
+      trivially: boolean = false
       //TODO Is default instance_of when comping a | superposition?
       //TODO
 
@@ -76,11 +77,11 @@ class * | Node
       return (this @@ Node).(static === .) if type@ === class@
 
   class !=
-    * = (this @@ Node ==)*.map{.on ==}(method => args => !method(args))
+    * = (this @@ Node ==)*.map{.on ==}(method => args => !method<local: .>(args))
   class ===
-    * = (this @@ Node ==)*.map{.on ==}(method => args => method<exclude_location: false>(args))
+    * = (this @@ Node ==)*.map{.on ==}(method => args => method<local: ., exclude_location: false>(args))
   class !==
-    * = (this @@ Node ==)*.map{.on ===}(method => args => !method(args))
+    * = (this @@ Node ==)*.map{.on ===}(method => args => !method<local: .>(args))
 
   external initializer = | assign (x): x
 

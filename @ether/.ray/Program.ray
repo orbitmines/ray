@@ -1,3 +1,5 @@
+//TODO Program matching with 'X: boolean = false | true' has the method modifiers bidirectional X if X doesnt exist on the func. Like trivially.
+
 class if (predicate: boolean, yes?: (): *)
   no?: (): *
   internal else_branch: if = this

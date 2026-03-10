@@ -136,9 +136,7 @@ class Iterable<T>
 
   disjoint (b: Iterable)
 
-// TODO If two arguments are passed, we step with 2 and fill both?
-  //TODO Yield ray methods in context of for so you can to is_last for example?
-  for ()
+  batch | chunk (size: Nat)// TODO
 
   //TODO Should allow for ~{}{} chained, without need to redo the ~. maps to &&
   ~ | filter {predicate: (x: T + iterator: Ray): boolean} => //TODO How to say filter applies here
@@ -169,23 +167,12 @@ class Iterable<T>
   //        push_front: (self, ...x: any[]) =>
   //          new self(...x).push_back(self),
 
-  length
-  // Since a graph's structure allows for branching and looping, it can be that length != count.
-  count => length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
-
-  empty => count == 0
-  nonempty => !empty
-
-  every (predicate: (x: T): boolean) map(predicate)~{== false}.empty
-  some (predicate: (x: T): boolean) ~{predicate}.nonempty
   // Include equivalence graph, is there maybe a different syntax for which equivalence graphg to use.
   class contains //map == + .=== + .!= + .!==
   contains | includes <operator: (x: T): (b: T): boolean = ==>(x: T) some(operator(.)(x))
 
   partition (predicate: (): boolean)
 
-
-  [] //TODO Ranges, index
 
   // .flatten = .reduce(push_back) What did ruby do for different levels? flatten(1) or something
   flatten
@@ -199,10 +186,6 @@ class Iterable<T>
   // Each step might be in a different version of the graph, Time vs Space
   // Start a quest to find the path
   to () => //Path to, when on array, all paths from all the points to x, equipped direction for a .min is the length of the path
-
-  + () //TODO Object or expression + { }, or + property:, or block. & + a number to do the same as a[5]
-  - () // Remove of move left x
-  +- | -+ ()
 
   dimensionality //How to do this with different rays which can be equipped for different directions., or is it just this selected graph
 

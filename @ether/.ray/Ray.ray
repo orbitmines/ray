@@ -12,6 +12,8 @@ class Ray < Iterable & Ordered
   is_first => ∀⊙⊢ .is_initial
   is_last => ∀⊣⊙ .is_terminal
 
+  entry => this
+
 class Boundary < Ray
   vertex | (internal bidirectional ∙) : Ray
   edge | (internal bidirectional ⊙) : Edge
@@ -40,7 +42,7 @@ class Edge < Ray
   terminal = Boundary(∙: x⊢∙⊣⊙)
 
 class Iterable<Vertex: Ray = Ray>
-  dynamically assert count < ∞ if (bounded: boolean = true
+  dynamically assert count < ∞ if bounded: boolean = true
 
   empty => count == 0
   nonempty => !empty
@@ -66,16 +68,22 @@ class Iterable<Vertex: Ray = Ray>
 
   entry: Vertex?
 
-  batch | chunk (size: Nat)// TODO
-
   for <traverse: Traverser>(yield: (x: Vertex): *) traverse<.yield: yield<local: &caller, break: return>>(this.entry) if this.entry
 
+  every (predicate: (x: Vertex): boolean) map(predicate)~{== false}.empty
+  some (predicate: (x: Vertex): boolean) ~{predicate}.nonempty
+
   all => reduce(|)
+
+  paths: Path{.bounded: bounded} => //TODO With traverser.
+
+  length => paths.length
+  count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
 
   + (at: Integer) this[at]
   - (at: Integer) this[-at]
   ± | +- | -+ (at: Integer) this[at] | this[-at]
-  [at: Integer] =>
+  [at: Integer] => // TODO compose right/left only on selected traverser.
 
   fill (x) all = x
 
@@ -109,6 +117,15 @@ class Forest < Structure{acyclic & consistent}
   Vertex = Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
   HyperContinuations = true
 class Tree < Forest{connected}
-class Array < Structure{acyclic & consistent & connected}
+class Path < Structure{consistent & connected}
   HyperContinuations = false
+
+  paths => this
+  length: 1 N∞ =>
+    return 0 unless entry
+    reduce(acc = 0, current =>
+      break ∞ if current.(previous | next)** // TODO Infinitely generates check or in a loop
+      acc + 1
+    )
+class Array < Path{acyclic}
 

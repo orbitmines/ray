@@ -19,19 +19,22 @@
 //TODO Is there even a difference between single and namespace?
 //TODO IO =.shadow = IO %=
 
+// loop is while true
+// so branch loop print "hi"
+
 // Add 1k/1M/1B/1 B etc. in units
 // Get intermediate result of .count for instance because it's a .reduce.
 // Optimization already makes use of checking intermediate results for > for instance.
 if graph.count > 1T
 branch
-  pending count.acc
+  pending count.acc // Higher precedence than .
 branch
   if count = graph.count > 1T\
 
 // 'pending' merges contexts within some function scope
 
 branch
-  while A => print count.acc
+  while A => print count.acc // A.running / done / running but also true when pending
 A\ branch
   if pending count = graph.count > 1T
 
@@ -44,6 +47,15 @@ branch
   pending count // Waits until count is initialized.
 if pending count = graph.count > 1T
 
+namespace Highlight | H
+H.COMMENT
+H.BUILTIN
+H.KEYWORD
+// etc.
+
+pending is always shared.
+shared sets visibility to those different programs?
+shared count = graph.count
 
 //Label returns true while pending/executing -> So program does. So function does. ; only if its a specific instantiation of a program, false when done.
 

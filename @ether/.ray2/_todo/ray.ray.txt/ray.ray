@@ -22,6 +22,9 @@
 // loop is while true
 // so branch loop print "hi"
 
+// configurable Notifications like, if this pattern is used to put a string inside a path which supports .., the result might contain .., fix that.
+
+
 // Add 1k/1M/1B/1 B etc. in units
 // Get intermediate result of .count for instance because it's a .reduce.
 // Optimization already makes use of checking intermediate results for > for instance.

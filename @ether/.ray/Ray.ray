@@ -87,12 +87,18 @@ class Iterable<Vertex: Ray = Ray>
 
   fill (x) all = x
 
-Traverser = <yield: (x: Ray): None>(entry: Ray): None
-//TODO How to combine traversers like Left only but breathfirst depth-first X levels then breadth
-BreadthFirst: Traverser = (entry: Ray) =>
-  while next = (next ?? this).iter => next#.for~step<local: &caller, .break: break>(callback)
- step\
-  while next = (next ?? this).iter => yield next
+// with Traverser.(default = BreadthFirst)
+// with Traverser.(default = 4 * DepthFirst, BreadthFirst)
+// with Traverser.(default = 4 * BreadthFirst, DepthFirst)
+// with Traverser.(default = 100 * BreadthFirst, 2 * (BreadthFirst if 50% else DepthFirst), (entry) => BreadthFirst if entry.SOMETHING else DepthFirst)
+class Traverser < <yield: (x: Ray): None>(entry: Ray): None
+  static default = DepthFirst
+
+  //TODO How to combine traversers like Left only but breathfirst depth-first X levels then breadth
+  static BreadthFirst: Traverser = (entry: Ray) =>
+    while next = (next ?? this).iter => next#.for~step<local: &caller, .break: break>(callback)
+   step\
+    while next = (next ?? this).iter => yield next
 
 class Ordered
 

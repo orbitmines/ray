@@ -88,6 +88,7 @@ class * | Node
   class = {
     {name: \S[]} (def: Program)
       static = local
+      .default: (): static?
 
       dynamically (this @@ Node)[name] = static if name // dynamically assign the name
 
@@ -122,7 +123,9 @@ class * | Node
   // Allow 'var?: type' syntax, because certain types would have to be wrapped in parentheses otherwise.
   ?: (type) this: type?
   ? => this | None //TODO static should be linked to type, and so ?: isnt necessary
-  initializer : | ∊ | ∈ (type) this ~~ .type = type
+  initializer : | ∊ | ∈ (type)
+    this = static.default() if this == None
+    this ~~ .type = type
   ∉ (type) this: not type
   right-to-left left-associative ∍ | ∋ (type) this ∈ type
   right-to-left left-associative ∌ (type) => this ∉ type

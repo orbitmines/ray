@@ -38,6 +38,8 @@ dynamically (on Number.Bases).for name
     static class Real < integer: Base, ".", fraction: Base{unbounded}
       static class Signed < sign: "-"?, real: Real
 
+      //TODO if 50% / if 0.5
+
       rational => fraction ==.instance_of (
         // Finite
         Base

@@ -9,4 +9,4 @@ class Room
   couch: Couch | Chair
 
 
-choose Room{4..5m x 5..7m}
+choose Room{4..5m x 5..7m} // .x on unit brings 2d.

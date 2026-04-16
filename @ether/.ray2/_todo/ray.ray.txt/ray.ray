@@ -19,6 +19,34 @@
 //TODO Is there even a difference between single and namespace?
 //TODO IO =.shadow = IO %=
 
+// Add 1k/1M/1B/1 B etc. in units
+// Get intermediate result of .count for instance because it's a .reduce.
+// Optimization already makes use of checking intermediate results for > for instance.
+if graph.count > 1T
+branch
+  pending count.acc
+branch
+  if count = graph.count > 1T\
+
+// 'pending' merges contexts within some function scope
+
+branch
+  while A => print count.acc
+A\ branch
+  if pending count = graph.count > 1T
+
+
+branch
+  count // Waits until count is initialized.
+if pending count = graph.count > 1T
+
+branch
+  pending count // Waits until count is initialized.
+if pending count = graph.count > 1T
+
+
+//Label returns true while pending/executing -> So program does. So function does. ; only if its a specific instantiation of a program, false when done.
+
 class Node
   //TODO How to define the + label: *
 

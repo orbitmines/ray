@@ -1168,8 +1168,8 @@ namespace Ether {
     if (!isDir && !stat.isFile()) throw new Error(`"${location}": not a file or directory`);
 
     const rayDir = isDir
-      ? path.join(location, '.ray')
-      : path.join(path.dirname(path.dirname(location)), '.ray');
+      ? path.join(location, '.ray3')
+      : path.join(path.dirname(path.dirname(location)), '.ray3');
 
     let discovered!: ReturnType<typeof discover>;
     const ctx = new Context();

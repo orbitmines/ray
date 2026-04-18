@@ -253,14 +253,21 @@ export class PotentialNode {
   private direction = (direction: -1 | 1) => {
     const boundary = () => direction === -1 ? this.begin : this.end;
 
-    const fn = (offset: number = 1) => {
+    const move = (offset: number = 1) => {
       if (direction === -1) {
         this._begin = { index: this.begin.index - offset }
       } else {
         this._end = { index: this.end.index + offset }
       }
     }
-    fn.peak = (offset: number = 1): string => {
+
+    move.done = () => {
+      const next = boundary().index + direction;
+      return next < 0 || next >=  this.reader.source.length;
+    };
+
+    move.peak = (offset: number = 1): string => {
+      if (offset === 0) return '';
       if (offset < 0) return this.direction(direction === -1 ? 1 : -1).peak(offset * -1)
 
       let a = boundary().index;
@@ -270,13 +277,52 @@ export class PotentialNode {
       if (b < a) { [a, b] = [b, a] }
       return this.reader.source.slice(a, b + 1)
     }
-    fn.capture_whitespace = (): number => {
+    move.at = (s: string): boolean => move.peak(s.length) === s;
+    move.capture = (char: string): boolean => {
+      if (move.done() || move.peak() !== char) return false;
+      move();
+      return true;
+    }
+    move.capture_while = (pred: (ch: string) => boolean): number => {
       let n = 0;
-      while (!this.done && fn.peak() === ' ') { n++; fn(); }
+      while (!move.done() && pred(move.peak())) { n++; move(); }
       return n;
     }
+    move.capture_whitespace = (): number => move.capture_while(ch => ch === ' ');
+    move.capture_line = (): string => {
+      let a = boundary().index;
+      move.capture_while(ch => ch !== '\n');
+      let b = boundary().index;
 
-    return fn;
+      if (a === b) return '';
+      if (b < a) { [a, b] = [b, a] }
+      return this.reader.source.slice(a, b + 1)
+    }
+    move.capture_indent = (): number => {
+      if (direction === -1) { return this.fatal('rtl', 'capture_indent not supported for rtl.') } // TODO EOL whitespace if -1
+      move.capture('\n');
+      return move.capture_whitespace();
+    }
+    move.capture_until = (char: string): string => {
+      // const opens  = direction === 1 ? '([{' : ')]}';
+      // const closes = direction === 1 ? ')]}' : '([{';
+      // const depth: string[] = [];
+      // const before = boundary().index;
+      //
+      // while (!done()) {
+      //   const ch = move.peak();
+      //   if (depth.length === 0 && ch === char) break;
+      //   const open = opens.indexOf(ch);
+      //   if (open !== -1) depth.push(closes[open]);
+      //   else if (depth.length > 0 && ch === depth[depth.length - 1]) depth.pop();
+      //   move();
+      // }
+      //
+      // return slice(before, boundary().index);
+    }
+    move.skip = () => this.move({ index: boundary().index + (1 * direction) })
+
+    return move;
   }
 
   left = this.direction(-1)
@@ -293,16 +339,19 @@ export class PotentialNode {
   private single_char = () => this._begin == undefined && this._end == undefined;
   get string() { return this.single_char() ? this.reader.source[this.cursor.index] : this.reader.source.slice(this.begin.index, this.end.index + 1); }
 
-  skip = () => this.move({ index: this.end.index + 1 })
-
   error = (phase: string, message: string) => this.reader.language.log.error(phase, message, this.begin)
   warning = (phase: string, message: string) => this.reader.language.log.warning(phase, message, this.begin)
   info = (phase: string, message: string) => this.reader.language.log.info(phase, message, this.begin)
+  fatal = (phase: string, message: string) => this.reader.language.log.fatal(phase, message, this.begin)
 
 }
 //  scope = () => {}
 //  allowForwardRef = () => {}
 export class Grammar extends Cursor {
+  constructor(public parent?: Grammar) {
+    super();
+  }
+
 
 }
 
@@ -322,24 +371,26 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
   .grammar(_ => _
     .dynamic()
     .pass(_ => _
+      .base(_ => _
+        .external_method()
+      )
+
       .cd('@ether/$/.ray', _ => _.loadFile('Node'))
     )
     .pass(_ => _
+
+
       .cd('@ether/$/.ray', _ => _.loadDirectory('.', { recursively: true }))
-    )
-    .pass(_ => _
       .cd('@ether', _ => _.load('Ether'))
     )
   //.external_method()
   )
-
-  .objects()
-    .base()
-      .external_method()
-      .external_method()
-      .external_method()
-    .context()//.base()
-      .external_method('local')
+  .base()
+    .external_method()
+    .external_method()
+    .external_method()
+  .context()//.base()
+    .external_method('local')
 //.external_method()
 
 

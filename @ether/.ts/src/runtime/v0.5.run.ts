@@ -1,16 +1,12 @@
 import * as fs from "fs";
 import {Language, Ray} from "./v0.5.ts";
 
-const runtime_args = (result: { [key: string]: string[] } = {}) => {
+const runtime_args = (result: { [key: string]: string[] } = {}): [string[], { [key: string]: string[] }] => {
   const args = process.argv.slice(2);
-  let using_default_entrypoint = true;
+
+  let location: string[] = [];
 
   const add = (key: string, expression: string) => {
-    if (key == '@' && using_default_entrypoint) {
-      result['@'] = []
-      using_default_entrypoint = false;
-    }
-
     if (key in result) result[key].push(expression);
     else result[key] = [expression];
   };
@@ -30,20 +26,17 @@ const runtime_args = (result: { [key: string]: string[] } = {}) => {
         add(key, "true");
     } else if (arg.startsWith("-")) {
     } else {
-      add('ENTRYPOINT', arg)
+      location.push(arg);
     }
   }
 
-  return result;
+  // Piped stdin (e.g. `cat file.ray | ray`) is read once and appended to eval.
+  if (!process.stdin.isTTY) { add('eval', fs.readFileSync(0, "utf-8")) }
+
+  return [location, result];
 }
 
-const args = runtime_args();
-
-// Piped stdin (e.g. `cat file.ray | ray`) is read once and appended to eval.
-if (!process.stdin.isTTY) {
-  const piped = fs.readFileSync(0, "utf-8");
-  if (piped.length > 0) (args.eval ??= []).push(piped);
-}
+const [location, args] = runtime_args();
 
 const language: Language = Ray;
-language.cli("..", args)
+language.cli(location, args)

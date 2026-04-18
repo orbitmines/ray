@@ -1,12 +1,6 @@
 import path from "path";
 import fs from "fs";
 
-export interface Location {
-  file?: string;
-  line?: number;
-  col?: number;
-}
-
 export interface Diagnostic {
   level: 'error' | 'warning' | 'info';
   phase: string;
@@ -111,6 +105,7 @@ export class Diagnostics {
 
 interface Backend {
   language: Language
+  log: Diagnostics;
 
   load(location: string | string[]): this
   loadFile(location: string): this
@@ -121,10 +116,6 @@ interface Backend {
   exec(): void
   repl(): void
   build(): void
-}
-
-export class Node {
-
 }
 
 export class Runtime implements Backend {
@@ -197,6 +188,7 @@ export class Language implements Backend {
 
   language: Language = this;
   backend: Backend = new Runtime(this);
+  get log() { return this.backend.log; }
 
   private _extension: string[]
   extension = (...extension: string[]): this => { this._extension.push(...extension); return this }
@@ -239,15 +231,122 @@ export class Language implements Backend {
   build = this.delegate('build')
 }
 
-export class Cursor {
+export class Node {
+  constructor(public _super?: Node) {
+  }
+}
+
+export type Location = {
+  file?: string;
+  line?: number;
+  col?: number;
+  index: number
+}
+
+export class PotentialNode {
+  public _begin?: Location; public cursor: Location; public _end?: Location
+  get begin() { return this._begin ?? this.cursor; }
+  get end() { return this._end ?? this.cursor; }
+
+  constructor(public reader: Reader) {}
+
+  private direction = (direction: -1 | 1) => {
+    const boundary = () => direction === -1 ? this.begin : this.end;
+
+    const fn = (offset: number = 1) => {
+      if (direction === -1) {
+        this._begin = { index: this.begin.index - offset }
+      } else {
+        this._end = { index: this.end.index + offset }
+      }
+    }
+    fn.peak = (offset: number = 1): string => {
+      if (offset < 0) return this.direction(direction === -1 ? 1 : -1).peak(offset * -1)
+
+      let a = boundary().index;
+      let b = a + (offset * direction);
+      if (offset == 1) return this.reader.source[b];
+
+      if (b < a) { [a, b] = [b, a] }
+      return this.reader.source.slice(a, b + 1)
+    }
+    fn.capture_whitespace = (): number => {
+      let n = 0;
+      while (!this.done && fn.peak() === ' ') { n++; fn(); }
+      return n;
+    }
+
+    return fn;
+  }
+
+  left = this.direction(-1)
+  move = (cursor: Location) => { this.cursor = cursor; this._begin = this._end = undefined  }
+  right = this.direction(1)
+
   ltr = () => {}
   rtl = () => {}
   left_associative = () => {}
   right_associative = () => {}
+
+  get done() { return this.end.index >= this.reader.source.length; }
+
+  private single_char = () => this._begin == undefined && this._end == undefined;
+  get string() { return this.single_char() ? this.reader.source[this.cursor.index] : this.reader.source.slice(this.begin.index, this.end.index + 1); }
+
+  skip = () => this.move({ index: this.end.index + 1 })
+
+  error = (phase: string, message: string) => this.reader.language.log.error(phase, message, this.begin)
+  warning = (phase: string, message: string) => this.reader.language.log.warning(phase, message, this.begin)
+  info = (phase: string, message: string) => this.reader.language.log.info(phase, message, this.begin)
+
 }
+//  scope = () => {}
+//  allowForwardRef = () => {}
 export class Grammar extends Cursor {
 
 }
+
+class Reader {
+  source: string;
+  cursor: PotentialNode = new PotentialNode(this)
+
+  constructor(public language: Language) {
+  }
+
+
+}
+
+export const Ray = new Language('ether', 'E.2026v0.D0')
+  .extension('.ray')
+
+  .grammar(_ => _
+    .dynamic()
+    .pass(_ => _
+      .cd('@ether/$/.ray', _ => _.loadFile('Node'))
+    )
+    .pass(_ => _
+      .cd('@ether/$/.ray', _ => _.loadDirectory('.', { recursively: true }))
+    )
+    .pass(_ => _
+      .cd('@ether', _ => _.load('Ether'))
+    )
+  //.external_method()
+  )
+
+  .objects()
+    .base()
+      .external_method()
+      .external_method()
+      .external_method()
+    .context()//.base()
+      .external_method('local')
+//.external_method()
+
+
+Ray.exec()
+Ray.backend('llvm').repl()
+Ray.backend('llvm', 'X').build()
+
 
 /**
  * Copied from https://github.com/lodash/lodash/blob/main/dist/lodash.js
@@ -294,34 +393,3 @@ export const raw_tag = (value: any) => {
   return result;
 }
 export const to_string = (value: any): String => Object.prototype.toString.call(value);
-
-export const Ray = new Language('ether', '2026.v0.5')
-  .extension('.ray')
-
-  .cd('@ether/$/.ray', _ => _
-    .loadFile('Node')
-    .loadDirectory('.', { recursively: true })
-  )
-  .cd('@ether', _ => _
-    .load('Ether')
-  )
-
-  .grammar(_ => _
-    .dynamic()
-    .pass(_ => _
-
-    )
-  )
-
-  .objects()
-    .base()
-      .external_method()
-      .external_method()
-      .external_method()
-    .context()
-
-
-
-Ray.exec()
-Ray.backend('llvm').repl()
-Ray.backend('llvm', 'X').build()

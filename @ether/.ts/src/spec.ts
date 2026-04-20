@@ -52,10 +52,19 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
   )
 
   .syntax(E => {
-    // E.token(_ => _
-    //   .left.syntax(_.methods.filter(x => x.rtl))
-    //   .right.syntax(_.methods.filter(x => x.ltr))
-    // )
+    E.token(_ => {
+      _.ltr.capture_while(ch => ch !== ' ' && ch !== '\n')
+
+      const resolved = _.match(_.string)
+
+      if (resolved.value.options['rtl'] && resolved.value.options['left_associative']) {
+        _.ltr.expression().save()
+      } else if (resolved.value.options['rtl']) {
+        _.rtl.expression().save()
+      } else {
+        resolved.save()
+      }
+    })
 
     return E()
   })

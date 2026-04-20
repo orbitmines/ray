@@ -452,6 +452,134 @@ export class Node {
   info = (phase: string, message: string) => this.log.info(phase, message, this.begin)
   fatal = (phase: string, message: string) => this.log.fatal(phase, message, this.begin)
 
+  /**
+   * .match(key): Unified token resolution.
+   *   1. Exact resolve in context
+   *   2. Method on current result (via reader cursor)
+   *   3. Split: longest prefix that resolves + suffix is a method → rewind pointer
+   *   4. Method on `this` (implicit self)
+   *   5. Forward ref fallback
+   */
+  match = (key: string): Node => {
+    const runtime = this.reader.runtime;
+
+    // 1. Exact resolve in context
+    const exact = this.resolve(this.reader.language, this, key);
+    if (exact && !exact().none) return exact() as Node;
+
+    // 2. Method on current result
+    const result = this.reader.result;
+    if (result) {
+      const method = result.get(key);
+      if (method) return method(result);
+    }
+
+    // 3. Split: try longest prefix that resolves, suffix is a method on result
+    if (key.length > 1) {
+      for (let i = key.length - 1; i >= 1; i--) {
+        const prefix = key.slice(0, i);
+        const suffix = key.slice(i);
+
+        const prefixResolved = this.resolve(this.reader.language, this, prefix);
+        if (!prefixResolved || prefixResolved().none) continue;
+
+        const target = result ?? runtime.BASE;
+        const suffixMethod = target.get(suffix);
+        if (!suffixMethod) continue;
+
+        // Rewind pointer: move end back by suffix length so suffix is picked up next iteration
+        if (this._direction === 1) {
+          this.end = { index: this.end.index - suffix.length };
+        } else {
+          this.begin = { index: this.begin.index + suffix.length };
+        }
+        return prefixResolved() as Node;
+      }
+    }
+
+    // 4. Method on `this` (implicit self)
+    const thisNode = runtime.CTX.resolve(this.reader.language, runtime.CTX, 'this');
+    if (thisNode && !thisNode().none) {
+      const method = thisNode().get(key);
+      if (method) return method(thisNode());
+    }
+
+    // 5. Forward ref
+    const forward = new Node(this.reader, undefined);
+    forward.external_method(key, () => forward.fatal('forward ref', `Unresolved: ${key}`));
+    return forward;
+  }
+
+  /**
+   * .save(): Commit the current token as a Node applied to the current expression result.
+   * If there's an existing result, apply this node to it (method call or juxtaposition).
+   * If no result yet, this becomes the result.
+   */
+  save = (): this => {
+    if (this.reader.result) {
+      const method = this.reader.result.get(this.string);
+      if (method) {
+        // Token is a method on result: apply it
+        this.reader.result = method(this.reader.result, this);
+      } else {
+        // Juxtaposition: call result with this as argument
+        this.reader.result = this.reader.result.call(this);
+      }
+    } else {
+      this.reader.result = this;
+    }
+    return this;
+  }
+
+  /**
+   * .expression(): Recursively parse an expression in the current direction.
+   * Saves the previous reader result, parses tokens until end of line,
+   * then restores context and returns with this node holding the parsed value.
+   */
+  expression = (): this => {
+    const prevResult = this.reader.result;
+    this.reader.result = null;
+
+    // Parse tokens in current direction until end of line
+    while (!this.direction.done()) {
+      const ch = this.direction.peak();
+      if (ch === '\n') break;
+      if (ch === ' ') { this.direction(); continue; }
+
+      // Capture one token
+      const token = new Node(this.reader, this._super);
+      token.cursor = { index: this._direction === 1 ? this.end.index : this.begin.index };
+      token._direction = this._direction;
+      token.direction.capture_while((c: string) => c !== ' ' && c !== '\n');
+
+      const resolved = token.match(token.string);
+
+      if (resolved.value.options['rtl']) {
+        resolved.rtl.expression().save();
+      } else if (resolved.value.options['left_associative']) {
+        resolved.ltr.expression().save();
+      } else {
+        resolved.save();
+      }
+
+      // Advance our pointer past what the token consumed
+      if (this._direction === 1) {
+        this.end = { index: token.end.index };
+      } else {
+        this.begin = { index: token.begin.index };
+      }
+    }
+
+    // Transfer parsed result into this node
+    if (this.reader.result) {
+      this.value = this.reader.result.value;
+    }
+
+    // Restore previous result
+    this.reader.result = prevResult;
+    return this;
+  }
+
   freeze = () => {
     //TODO Freeze these tokens from reparsing. But do something with them
     return this;
@@ -502,24 +630,12 @@ export type Location = {
   index: number
 }
 
-export class PotentialNode {
-
-  constructor(public reader: Reader) {}
-
-  ltr = () => {}
-  rtl = () => {}
-  left_associative = () => {}
-  right_associative = () => {}
-
-
-}
-
 //  scope = () => {}
 //  allowForwardRef = () => {}
 
 export class Reader {
   source: string;
-  cursor: PotentialNode = new PotentialNode(this)
+  result: Node | null = null;
   get language() { return this.runtime.language }
   get log() { return this.language.log }
 

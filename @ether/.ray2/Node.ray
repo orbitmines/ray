@@ -13,6 +13,8 @@ Program Matching
 
    // Ambiguity: If all methods on an instance are on the static class, what happens to () and other things which are already defined on Class? How to access them? (Single default method defined on class, which wraps the actual object fully)
 
+// SOlution for Map/{} object which checks .on X and doesnt override the usage of Node so allow any field?
+
 // Access Permission internal, means the same file alongside same class Support inline wr orignited from a different file, to support compiling into a single Ray file.; edit the & program for a block
 
 //TODO Context: Everything defined on Node, isn't put on local, unless explicitely accessed.

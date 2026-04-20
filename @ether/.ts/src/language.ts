@@ -1,5 +1,5 @@
 import fs from "fs";
-import {is_array, is_string} from "./lodash.ts";
+import {is_array, is_function, is_string} from "./lodash.ts";
 import {Dir} from "node:fs";
 
 export interface Diagnostic {
@@ -104,6 +104,7 @@ export class Diagnostics {
   }
 }
 
+type Expression = string | Node | Expression[]
 interface Backend {
   language: Language
   log: Diagnostics;
@@ -114,7 +115,7 @@ interface Backend {
   add(...source: string[]): this
 
   // Override all syntax.
-  syntax(expression: (E: Expression) => Expression): this
+  syntax(expression: (E: ((...args: Expression[]) => Node) & { [key: string]: any }) => Expression | Expression[]): this
 
   base(fn: (x: Node) => void): this
   context(fn: (x: Node) => void): this
@@ -147,7 +148,7 @@ export class Runtime implements Backend {
   }
   external_method = (key: Key, fn: Method): this => { this.GLOBAL.external_method(key, fn); return this; }
 
-  syntax = (expression: (E: Expression) => Expression): this => {
+  syntax = (expression: (E: (() => Node) & { [key: string]: any }) => Node): this => {
     // expression() TODO
     return this;
   }
@@ -332,10 +333,10 @@ export class Node {
   get end() { return this.last?.end ?? this.cursor; }
   set end(location: Location) { if (this.last) { this.last.end = location } else { this.selection.push({ begin: this.cursor, end: location }); } }
 
-  private direction = (direction: -1 | 1): Direction => {
+  private create_direction = (direction: -1 | 1) => {
     const boundary = () => direction === -1 ? this.begin : this.end;
 
-    const move: Direction = (offset: number = 1) => {
+    const move = (offset: number = 1) => {
       if (direction === -1) {
         this.begin = { index: this.begin.index - offset }
       } else {
@@ -350,7 +351,7 @@ export class Node {
 
     move.peak = (offset: number = 1): string => {
       if (offset === 0) return '';
-      if (offset < 0) return this.direction(direction === -1 ? 1 : -1).peak(offset * -1)
+      if (offset < 0) return (direction === -1 ? this.right : this.left).peak(offset * -1)
 
       let a = boundary().index;
       let b = a + (offset * direction);
@@ -409,12 +410,27 @@ export class Node {
     return move;
   }
 
-  left = this.direction(-1)
+  left = this.create_direction(-1)
   move = (cursor: Location) => {
     this.cursor = cursor; this.selection = []
     this.clear()
   }
-  right = this.direction(1)
+  right = this.create_direction(1)
+
+  _direction: -1 | 1 = 1
+  get ltr() { this._direction = 1; return this }; get rtl() { this._direction = -1; return this };
+  get direction() { return this._direction === -1 ? this.left : this.right; }
+  private directed_delegate = (method: string) => (...args: any[]): this => { (this.direction as any)[method](...args); return this; }
+
+  done = this.directed_delegate('done')
+  capture = this.directed_delegate('capture')
+  capture_while = this.directed_delegate('capture_while')
+  capture_whitespace = this.directed_delegate('capture_whitespace')
+  capture_line = this.directed_delegate('capture_line')
+  upto = this.directed_delegate('upto')
+  until = this.directed_delegate('until')
+  goto = this.directed_delegate('goto')
+  skip = this.directed_delegate('skip')
 
   clear = () => {
     this._thunks = [] //TODO Maybe move _thunks into .value?
@@ -438,29 +454,33 @@ export class Node {
 
   freeze = () => {
     //TODO Freeze these tokens from reparsing. But do something with them
+    return this;
   }
   comment = () => {
     //TODO Set as comment, skippable for others. peak/etc skip over comments
+    return this;
   }
 
-}
+  block = (begin?: string, end?: string): this => {
+    return this;
+  }
 
-export type Direction = ((offset?: number) => void) & {
-  done: () => boolean
-  peak: (offset?: number) => string
-  at: (s: string) => boolean
-  capture: (char: string) => boolean
-  capture_while: (pred: (ch: string) => boolean) => number //TODO Should be string, we can use .length on it?
-  capture_whitespace: () => number
-  capture_line: () => string
-  capture_indent: () => number
-  upto: (char: string) => string
-  until: (char: string) => string
-  goto: (char: string) => string
-  skip: () => void
-}
-type Expression = {
-  [K in keyof Direction]: Direction[K] extends (...args: infer Args) => infer Ret ? (...args: Args) => Expression : never
+  reinterpret = (pass: string): this => {
+    return this;
+  }
+  interpret = (fn: (self: Node) => void): this => {
+    return this;
+  }
+
+  repeats = (operator?: '>=' | '>' | '<' | '<=' | '==', x?: number): this => {
+
+    return this;
+  }
+  bind = (name: string): this => {
+
+    return this;
+  }
+
 }
 
 export type Location = {

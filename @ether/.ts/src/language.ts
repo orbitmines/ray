@@ -277,13 +277,13 @@ export class Language implements Backend {
 }
 
 const UNKNOWN = Symbol("Unknown")
-type Method = (l: Language, ctx: Node, self: Node, args?: Node) => Node
+type Method = (self: Node, args?: Node) => Node
 type ResolvedMethod = (args?: Node) => Node | undefined
 type Key = string | Node
 export class Node {
-  value: { encoded: any; methods: Map<Key, Method>, options: { [key: string]: string } } = { encoded: UNKNOWN, methods: new Map(), options: {} };
+  value: { encoded: any; ctx?: Node, methods: Map<Key, Method>, options: { [key: string]: string } } = { encoded: UNKNOWN, methods: new Map(), options: {} };
 
-  with = () => {}
+  switch_ctx = (ctx: Node): this => { this.value.ctx = ctx; return this; }
 
   private _thunks: ((self: Node) => void)[] | null = null;
   lazily(fn: (self: Node) => void): this { if (!this._thunks) this._thunks = []; this._thunks.push(fn); return this; }
@@ -291,9 +291,9 @@ export class Node {
     if (this._thunks) { const t = this._thunks; this._thunks = null; for (const fn of t) fn(this); }
     return this;
   }
-  lazy_get = (l: Language, ctx: Node, key: Key): Node => new Node(this.reader).lazily((self) => self.value = this.get(key)(l, ctx, this).value);
+  lazy_get = (key: Key): Node => new Node(this.reader).switch_ctx(this.value.ctx).lazily((self) => self.value = this.get(key)(this).value);
   lazy_set = (value: Node): Node => this.lazily((self) => self.value = value.realize().value);
-  lazy_call = (l: Language, ctx: Node, args: Node): Node => new Node(this.reader).lazily((self) => self.value = this.call(l, ctx, args).value);
+  lazy_call = (args: Node): Node => new Node(this.reader).switch_ctx(this.value.ctx).lazily((self) => self.value = this.call(args).value);
 
   constructor(public reader: Reader, public _super: Node = reader.runtime.BASE, encoded: any = UNKNOWN) { this.value.encoded = encoded; }
 
@@ -301,23 +301,23 @@ export class Node {
   get none(): boolean { return this.value.encoded === null || this.value.encoded === undefined; }
 
   //TODO has/get should pattern match if key is Node
-  has = (l: Language, ctx: Node, key: Key): boolean => { return this.value.methods.has(key) && !this.resolve(l, ctx, key)().none; }
+  has = (key: Key): boolean => { return this.value.methods.has(key) && !this.resolve(key)().none; }
   get = (key: Key): Method | undefined => { this.realize(); return this.value.methods.get(key); }
   set = (val: Node): Node => { this.realize(); this.value = val.value; return this; }
-  call = (l: Language, ctx: Node, args: Node) => {
+  call = (args: Node) => {
     this.realize()
     if (!is_function(this.value.encoded)) throw new Error("Not callable.")
-    return this.value.encoded(l, ctx, this, args)
+    return this.value.encoded(this, args)
   }
 
-  resolve = (l: Language, ctx: Node, key: Key): ResolvedMethod => {
-    if (this.has(l, ctx, key)) return (...args) => this.get(key)(l, ctx, this, ...args)
-    if (this._super) return this._super.resolve(l, ctx, key);
+  resolve = (key: Key): ResolvedMethod => {
+    if (this.has(key)) return (...args) => this.get(key)(this, ...args)
+    if (this._super) return this._super.resolve(key);
     return () => new Node(null, null)
   }
 
-  external_method = (key: Key, fn: Method): this => {
-    this.value.methods.set(key, fn);
+  external_method = (key: Key, fn?: Method): this => {
+    this.value.methods.set(key, fn ?? (() => this.fatal('forward ref', 'Method was called before it was initialized.')));
     return this;
   }
 
@@ -461,14 +461,21 @@ export class Node {
     return this;
   }
 
-  block = (begin?: string, end?: string): this => {
+  block = (fn?: (_: this) => Expression,  punctuation?: { begin: string, end: string }): this => {
+    this.capture_whitespace().skip()
+    if (punctuation) this.capture(punctuation.begin)
+
+    // if (punctuation) { fn(this) } else { this. }
+
+    if (punctuation) this.capture(punctuation.end)
+
     return this;
   }
 
   reinterpret = (pass: string): this => {
     return this;
   }
-  interpret = (fn: (self: Node) => void): this => {
+  interpret = (fn: (self: Node & { [key: string]: Node }) => void): this => {
     return this;
   }
 
@@ -479,6 +486,11 @@ export class Node {
   bind = (name: string): this => {
 
     return this;
+  }
+
+  map = <T>(fn: (x: any) => T): T[] => {
+    if (!is_array(this.value.encoded)) return this.fatal('type', 'Called .map on a value which is not an Array')
+    return this.value.encoded.map(fn)
   }
 
 }
@@ -505,7 +517,7 @@ export class PotentialNode {
 //  scope = () => {}
 //  allowForwardRef = () => {}
 
-class Reader {
+export class Reader {
   source: string;
   cursor: PotentialNode = new PotentialNode(this)
   get language() { return this.runtime.language }

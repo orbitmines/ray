@@ -1,5 +1,6 @@
-import path from "path";
 import fs from "fs";
+import {is_array, is_string} from "./lodash.ts";
+import {Dir} from "node:fs";
 
 export interface Diagnostic {
   level: 'error' | 'warning' | 'info';
@@ -112,6 +113,14 @@ interface Backend {
   loadDirectory(location: string, options: { recursively?: boolean }): this
   add(...source: string[]): this
 
+  // Override all syntax.
+  syntax(expression: (E: Expression) => Expression): this
+
+  base(fn: (x: Node) => void): this
+  context(fn: (x: Node) => void): this
+  external_method(key: Key, fn: Method): this
+  object(key: Key, fn: (x: Node) => void): this
+
   cli(location: string[], args: { [key: string]: string[] }): void
   exec(): void
   repl(): void
@@ -120,8 +129,28 @@ interface Backend {
 
 export class Runtime implements Backend {
 
+  EXTERNALLY_DEFINED = new Reader(this)
+
+  BASE: Node = new Node(this.EXTERNALLY_DEFINED, undefined)
+  CTX: Node = new Node(this.EXTERNALLY_DEFINED, this.BASE)
+  GLOBAL: Node = new Node(this.EXTERNALLY_DEFINED, this.CTX)
+
   constructor(public language: Language) {}
   log = new Diagnostics();
+
+  base = (fn: (x: Node) => void): this => { fn(this.BASE); return this; }
+  context = (fn: (x: Node) => void): this => { fn(this.CTX); return this; }
+  object = (key: Key, fn: (x: Node) => void): this => {
+    if (!this.GLOBAL.has(this.language, this.GLOBAL, key)) this.GLOBAL.set(new Node(this.EXTERNALLY_DEFINED))
+    fn(this.GLOBAL.resolve(this.language, this.GLOBAL, key)());
+    return this;
+  }
+  external_method = (key: Key, fn: Method): this => { this.GLOBAL.external_method(key, fn); return this; }
+
+  syntax = (expression: (E: Expression) => Expression): this => {
+    // expression() TODO
+    return this;
+  }
 
   load = (location: string | string[]): this => {
     if (is_array(location)) { location.forEach(this.load); return this; }
@@ -193,7 +222,7 @@ export class Language implements Backend {
   private _extension: string[]
   extension = (...extension: string[]): this => { this._extension.push(...extension); return this }
 
-  passes: { steps: (() => void)[] }[] = [{ steps: [] }]
+  passes: { ref?: string, steps: (() => void)[] }[] = [{ steps: [] }]
   get current_pass() { return this.passes[this.passes.length - 1] }
   step = <K extends { [K in keyof Backend]: Backend[K] extends (...args: any[]) => any ? K : never }[keyof Backend]>(method: K) => {
     return (...args: Backend[K] extends (...args: infer A) => any ? A : never) => {
@@ -201,13 +230,15 @@ export class Language implements Backend {
       return this;
     };
   }
-  pass = (fn: (language: this) => this) => {
+  pass = (fn: (language: this) => this): this => {
     if (this.current_pass.steps.length > 0)
       this.passes.push({ steps: [] })
 
     fn(this)
     this.passes.push({ steps: [] })
+    return this;
   }
+  ref = (ref: string): this => { this.current_pass.ref = ref; return this }
   delegate = <K extends keyof Backend>(method: K) => (...args: Backend[K] extends (...args: infer A) => any ? A : never) => (this.backend[method] as (...args: any[]) => any)(...args);
 
   constructor(public name: string, public version: string) {
@@ -231,6 +262,13 @@ export class Language implements Backend {
   loadDirectory = this.step('loadDirectory')
   add = this.step('add')
 
+  syntax = this.step('syntax')
+
+  base = this.step('base')
+  context = this.step('context')
+  object = this.step('object')
+  external_method = this.step('external_method')
+
   cli = this.delegate('cli')
   exec = this.delegate('exec')
   repl = this.delegate('repl')
@@ -238,11 +276,13 @@ export class Language implements Backend {
 }
 
 const UNKNOWN = Symbol("Unknown")
-type Method = (ctx: Node, self: Node, args?: Node) => Node
+type Method = (l: Language, ctx: Node, self: Node, args?: Node) => Node
 type ResolvedMethod = (args?: Node) => Node | undefined
 type Key = string | Node
 export class Node {
-  value: { encoded: any; methods: Map<Key, Method> } = { encoded: UNKNOWN, methods: new Map() };
+  value: { encoded: any; methods: Map<Key, Method>, options: { [key: string]: string } } = { encoded: UNKNOWN, methods: new Map(), options: {} };
+
+  with = () => {}
 
   private _thunks: ((self: Node) => void)[] | null = null;
   lazily(fn: (self: Node) => void): this { if (!this._thunks) this._thunks = []; this._thunks.push(fn); return this; }
@@ -250,28 +290,28 @@ export class Node {
     if (this._thunks) { const t = this._thunks; this._thunks = null; for (const fn of t) fn(this); }
     return this;
   }
-  lazy_get = (ctx: Node, key: Key): Node => new Node().lazily((self) => self.value = this.get(key)(ctx, this).value);
+  lazy_get = (l: Language, ctx: Node, key: Key): Node => new Node(this.reader).lazily((self) => self.value = this.get(key)(l, ctx, this).value);
   lazy_set = (value: Node): Node => this.lazily((self) => self.value = value.realize().value);
-  lazy_call = (ctx: Node, args: Node): Node => new Node().lazily((self) => self.value = this.call(ctx, args).value);
+  lazy_call = (l: Language, ctx: Node, args: Node): Node => new Node(this.reader).lazily((self) => self.value = this.call(l, ctx, args).value);
 
-  constructor(public _super?: Node, encoded: any = UNKNOWN) { this.value.encoded = encoded; }
+  constructor(public reader: Reader, public _super: Node = reader.runtime.BASE, encoded: any = UNKNOWN) { this.value.encoded = encoded; }
 
   get unknown(): boolean { return this.value.encoded === UNKNOWN; }
   get none(): boolean { return this.value.encoded === null || this.value.encoded === undefined; }
 
   //TODO has/get should pattern match if key is Node
-  has = (ctx: Node, key: Key): boolean => { return this.value.methods.has(key) && !this.resolve(ctx, key)().none; }
+  has = (l: Language, ctx: Node, key: Key): boolean => { return this.value.methods.has(key) && !this.resolve(l, ctx, key)().none; }
   get = (key: Key): Method | undefined => { this.realize(); return this.value.methods.get(key); }
   set = (val: Node): Node => { this.realize(); this.value = val.value; return this; }
-  call = (ctx: Node, args: Node) => {
+  call = (l: Language, ctx: Node, args: Node) => {
     this.realize()
     if (!is_function(this.value.encoded)) throw new Error("Not callable.")
-    return this.value.encoded(ctx, this, args)
+    return this.value.encoded(l, ctx, this, args)
   }
 
-  resolve = (ctx: Node, key: Key): ResolvedMethod => {
-    if (this.has(ctx, key)) return (...args) => this.get(key)(ctx, this, ...args)
-    if (this._super) return this._super.resolve(ctx, key);
+  resolve = (l: Language, ctx: Node, key: Key): ResolvedMethod => {
+    if (this.has(l, ctx, key)) return (...args) => this.get(key)(l, ctx, this, ...args)
+    if (this._super) return this._super.resolve(l, ctx, key);
     return () => new Node(null, null)
   }
 
@@ -280,36 +320,32 @@ export class Node {
     return this;
   }
 
-}
+  /**
+   *
+   */
+  public cursor: Location; public selection: { begin: Location, end: Location }[] = []
+  private single_char = () => this.selection.length === 0;
+  private get first() { return !this.single_char() ? this.selection[0] : undefined }
+  private get last() { return !this.single_char() ? this.selection[this.selection.length - 1] : undefined }
+  get begin() { return this.first?.begin ?? this.cursor; }
+  set begin(location: Location) { if (this.first) { this.first.begin = location } else { this.selection.push({ begin: location, end: this.cursor }); } }
+  get end() { return this.last?.end ?? this.cursor; }
+  set end(location: Location) { if (this.last) { this.last.end = location } else { this.selection.push({ begin: this.cursor, end: location }); } }
 
-export type Location = {
-  file?: string;
-  line?: number;
-  col?: number;
-  index: number
-}
-
-export class PotentialNode {
-  public _begin?: Location; public cursor: Location; public _end?: Location
-  get begin() { return this._begin ?? this.cursor; }
-  get end() { return this._end ?? this.cursor; }
-
-  constructor(public reader: Reader) {}
-
-  private direction = (direction: -1 | 1) => {
+  private direction = (direction: -1 | 1): Direction => {
     const boundary = () => direction === -1 ? this.begin : this.end;
 
-    const move = (offset: number = 1) => {
+    const move: Direction = (offset: number = 1) => {
       if (direction === -1) {
-        this._begin = { index: this.begin.index - offset }
+        this.begin = { index: this.begin.index - offset }
       } else {
-        this._end = { index: this.end.index + offset }
+        this.end = { index: this.end.index + offset }
       }
     }
 
     move.done = () => {
       const next = boundary().index + direction;
-      return next < 0 || next >=  this.reader.source.length;
+      return next < 0 || next >= this.reader.source.length;
     };
 
     move.peak = (offset: number = 1): string => {
@@ -349,7 +385,7 @@ export class PotentialNode {
       move.capture('\n');
       return move.capture_whitespace();
     }
-    move.upto = (char: string) => {}
+    move.upto = (char: string): string => {}
     move.until = (char: string): string => {
       // const opens  = direction === 1 ? '([{' : ')]}';
       // const closes = direction === 1 ? ')]}' : '([{';
@@ -367,22 +403,38 @@ export class PotentialNode {
       //
       // return slice(before, boundary().index);
     }
+    move.goto = (char: string): string => {}
     move.skip = () => this.move({ index: boundary().index + (1 * direction) })
 
     return move;
   }
 
   left = this.direction(-1)
-  move = (cursor: Location) => { this.cursor = cursor; this._begin = this._end = undefined  }
+  move = (cursor: Location) => {
+    this.cursor = cursor; this.selection = []
+    this.clear()
+  }
   right = this.direction(1)
 
+  clear = () => {
+    this._thunks = [] //TODO Maybe move _thunks into .value?
+    this.value = { encoded: UNKNOWN, methods: new Map(), options: {} };
+  }
 
-  ltr = () => {}
-  rtl = () => {}
-  left_associative = () => {}
-  right_associative = () => {}
+  get string() { return this.single_char() ? this.reader.source[this.cursor.index] : this.reader.source.slice(this.begin.index, this.end.index + 1); }
 
-  get done() { return this.end.index >= this.reader.source.length; }
+  copy = () => {
+    const copy = new Node(this.reader, this._super)
+    copy._thunks = [...this._thunks]
+    copy.value = {...this.value}
+    return copy;
+  }
+
+  get log() { return this.reader.log }
+  error = (phase: string, message: string) => this.log.error(phase, message, this.begin)
+  warning = (phase: string, message: string) => this.log.warning(phase, message, this.begin)
+  info = (phase: string, message: string) => this.log.info(phase, message, this.begin)
+  fatal = (phase: string, message: string) => this.log.fatal(phase, message, this.begin)
 
   freeze = () => {
     //TODO Freeze these tokens from reparsing. But do something with them
@@ -391,17 +443,42 @@ export class PotentialNode {
     //TODO Set as comment, skippable for others. peak/etc skip over comments
   }
 
-  private single_char = () => this._begin == undefined && this._end == undefined;
-  get string() { return this.single_char() ? this.reader.source[this.cursor.index] : this.reader.source.slice(this.begin.index, this.end.index + 1); }
-
-  error = (phase: string, message: string) => this.reader.language.log.error(phase, message, this.begin)
-  warning = (phase: string, message: string) => this.reader.language.log.warning(phase, message, this.begin)
-  info = (phase: string, message: string) => this.reader.language.log.info(phase, message, this.begin)
-  fatal = (phase: string, message: string) => this.reader.language.log.fatal(phase, message, this.begin)
-
 }
 
-class Grammar {
+export type Direction = ((offset?: number) => void) & {
+  done: () => boolean
+  peak: (offset?: number) => string
+  at: (s: string) => boolean
+  capture: (char: string) => boolean
+  capture_while: (pred: (ch: string) => boolean) => number //TODO Should be string, we can use .length on it?
+  capture_whitespace: () => number
+  capture_line: () => string
+  capture_indent: () => number
+  upto: (char: string) => string
+  until: (char: string) => string
+  goto: (char: string) => string
+  skip: () => void
+}
+type Expression = {
+  [K in keyof Direction]: Direction[K] extends (...args: infer Args) => infer Ret ? (...args: Args) => Expression : never
+}
+
+export type Location = {
+  file?: string;
+  line?: number;
+  col?: number;
+  index: number
+}
+
+export class PotentialNode {
+
+  constructor(public reader: Reader) {}
+
+  ltr = () => {}
+  rtl = () => {}
+  left_associative = () => {}
+  right_associative = () => {}
+
 
 }
 
@@ -411,111 +488,11 @@ class Grammar {
 class Reader {
   source: string;
   cursor: PotentialNode = new PotentialNode(this)
+  get language() { return this.runtime.language }
+  get log() { return this.language.log }
 
-  constructor(public language: Language) {
+  constructor(public runtime: Runtime) {
+
   }
 
-
 }
-
-export const Ray = new Language('ether', 'E.2026v0.D0')
-  .extension('.ray')
-
-  .token(_ => _
-    .left.syntax(_.methods.filter(x => x.rtl))
-    .right.syntax(_.methods.filter(x => x.ltr))
-  )
-
-  //.external_method()
-  .base()
-    .external_method()
-    .external_method()
-    .external_method()
-  .context()//.base()
-  .external_method('local') // => this
-  //.external_method()
-
-  .pass(_ => _
-    .cd('@ether/$/.ray', _ => _.loadFile('Node'))
-
-    .syntax(_ => {
-      // const PATTERNED_RULE = E( E(E, '{', E.reinterpet(AT_PASS_2), '}', E).length('>=', 1).freeze(), E.until('=>'), E.block())
-      E.patterned_rule = (node: Node) => E(E, '{', E.reinterpet('std'), '}', E).length('>=', 1).bind('pattern').freeze().until('=>').block()
-        // E.block = E.any(E.block(), E.block('{', '}')) for the languages that want to set things
-        // inner .freeze is overridden by .reinterpret,
-
-        .interpret(_ => node.external_method(_.pattern.string, FORWARD_REF))
-        // .freeze on rule pattern part, not the body.
-        // .buffer on .interpret means buffer effect for next pass.
-
-
-      E(
-        [E.goto(E.patterned_rule(_.context()))],
-        E.upto('class *').upto('\n').block(_ =>
-          [E.goto(E.patterned_rule(_.base()))]
-        )
-      ).repeats()
-    })
-
-    .base(_ => _
-      .external_method()
-    )
-  )
-  .pass(_ => _
-    E.ref('std')
-
-    .cd('@ether/$/.ray', _ => _.loadDirectory('.', { recursively: true }))
-    .cd('@ether', _ => _.load('Ether'))
-  )
-
-
-Ray.exec()
-Ray.backend('llvm').repl()
-Ray.backend('llvm', 'X').build()
-
-
-/**
- * Copied from https://github.com/lodash/lodash/blob/main/dist/lodash.js
- */
-export const is_boolean = (value: any): value is boolean =>
-  value === true || value === false || (is_object_like(value) && base_tag(value) == '[object Boolean]');
-export const is_number = (value: any): value is number => typeof value == 'number' || (is_object_like(value) && base_tag(value) == '[object Number]');
-export const is_string = (value: any): value is string =>
-  typeof value == 'string' || (!is_array(value) && is_object_like(value) && base_tag(value) == '[object String]');
-export const is_function = (value: any): value is ((...args: any[]) => any) => {
-  if (!is_object(value)) return false;
-
-  let tag = base_tag(value);
-  return tag == '[object Function]' || tag == '[object GeneratorFunction]' || tag == '[object AsyncFunction]' || tag == '[object Proxy]';
-}
-export const is_array = Array.isArray
-export const is_object = (value: any): value is object =>
-  value != null && (typeof value == 'object' || typeof value == 'function');
-export const is_object_like = (value: any) =>
-  value != null && typeof value == 'object';
-export const base_tag = (value: any) => {
-  if (value == null) return value === undefined ? '[object Undefined]' : '[object Null]';
-
-  return (Symbol.toStringTag && Symbol.toStringTag in Object(value)) ? raw_tag(value) : to_string(value);
-}
-export const raw_tag = (value: any) => {
-  let isOwn = Object.prototype.hasOwnProperty.call(value, Symbol.toStringTag),
-    tag = value[Symbol.toStringTag];
-
-  let unmasked;
-  try {
-    value[Symbol.toStringTag] = undefined;
-    unmasked = true;
-  } catch (e) {}
-
-  let result = to_string(value);
-  if (unmasked) {
-    if (isOwn) {
-      value[Symbol.toStringTag] = tag;
-    } else {
-      delete value[Symbol.toStringTag];
-    }
-  }
-  return result;
-}
-export const to_string = (value: any): String => Object.prototype.toString.call(value);

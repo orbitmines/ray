@@ -23,6 +23,8 @@ Nat
 class not
   * = (Node !=)*.map{.on !=}(method => args => *{method<this = .>(args)})
 
+//TODO with <CONTEXT> = <VAL>, can be expected when setting some variable like Node.CONST: String and not setting it. error thrown? or explcicitely say with required.
+
 class * | Node
 
   ; (call: (): (T: *)): T => call<local: &caller>()
@@ -47,7 +49,7 @@ class * | Node
   {property: (\S[], punctuation: "{", *, punctuation: "}", \S[])+} => this[property - punctuation]
   {" "}{property} => this[property]
 
-  external external: Modifier // Flags that a method is externally defined
+  external initializer external: Modifier // Flags that a method is externally defined
   external initializer: Modifier // Flags that a particular method initializes a field into the context
   external comment: Modifier // Flags that the property is a comment, and it should be transparent: not interfere with code indenting
 

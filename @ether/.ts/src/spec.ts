@@ -8,7 +8,7 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
   .pass(_ => _
     .ref('bootstrap')
 
-    .cd('@ether/$/.ray', _ => _.loadFile('Node'))
+    .cd('@ether/$/.ray', _ => _.load('Node.ray'))
 
     .syntax(E => {
       // const PATTERNED_RULE = E( E(E, '{', E.reinterpet(AT_PASS_2), '}', E).length('>=', 1).freeze(), E.until('=>'), E.block())
@@ -53,7 +53,10 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
 
   .syntax(E => {
     E.token(_ => {
-      _.ltr.capture_while(ch => ch !== ' ' && ch !== '\n')
+      _.capture_while(ch => ch === ' ' || ch === '\n')
+      if (_.string?.includes('\n')) _.reader.result = null
+      _.skip()
+      _.capture_while(ch => ch !== ' ' && ch !== '\n')
 
       const resolved = _.match(_.string)
 
@@ -73,9 +76,9 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
     .ref('std')
 
     .cd('@ether/$/.ray', _ => _.loadDirectory('.', { recursively: true }))
-    .cd('@ether', _ => _.load('Ether'))
+    // .cd('@ether', _ => _.load('Ether.ray'))
   )
 
-// Ray.exec()
+Ray.exec()
 // Ray.backend('llvm').repl()
 // Ray.backend('llvm', 'X').build()

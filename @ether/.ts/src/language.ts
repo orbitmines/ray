@@ -1,12 +1,22 @@
 import fs from "fs";
+import path from "path";
 import {is_array, is_function, is_string} from "./lodash.ts";
-import {Dir} from "node:fs";
 
 export interface Diagnostic {
   level: 'error' | 'warning' | 'info';
   phase: string;
   message: string;
   location?: Location;
+}
+
+export interface Trace {
+  token: string;
+  begin: number;
+  end: number;
+  kind: 'method' | 'resolve' | 'split' | 'implicit-self' | 'forward-ref';
+  description: string;
+  order: number;
+  errors: Diagnostic[];
 }
 
 export class Diagnostics {
@@ -38,11 +48,18 @@ export class Diagnostics {
 
   }
 
+  deduplicate() {
+    const seen = new Set<string>();
+    this.items = this.items.filter(d => {
+      const { file, line, col } = d.location ?? {};
+      const key = `${file ?? ''}:${line ?? 0}:${col ?? 0}|${d.message}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
   report(diag: Diagnostic) {
-    const { file, line, col } = diag.location ?? {};
-    const key = `${file ?? ''}:${line ?? 0}:${col ?? 0}|${diag.message}`;
-    if (this.keys.has(key)) return;
-    this.keys.add(key);
     if (this._cascadeSuppression && diag.phase === 'resolve') {
       const nameMatch = diag.message.match(/Unresolved identifier: (.+)/);
       if (nameMatch) {
@@ -84,6 +101,328 @@ export class Diagnostics {
     const pointer = ' '.repeat(col - 1) + '^';
     return { line, col, context: `  ${lineText}\n  ${pointer}` };
   }
+
+  // ANSI helpers
+  private static c = {
+    reset:   '\x1b[0m',
+    blue:    '\x1b[34m',
+    yellow:  '\x1b[33m',
+    gray:    '\x1b[90m',
+    red:     '\x1b[1;31m',
+    white:   '\x1b[37m',
+    dim:     '\x1b[2m',
+    bold:    '\x1b[1m',
+  }
+
+  /**
+   * Print annotated source showing how each token was interpreted.
+   * Alternates annotations above/below the source line.
+   * Colors: blue/yellow alternate for tokens, red for errors, dark gray for order.
+   *
+   *         Forward reference to 'test'
+   *         |
+   * external test
+   *    |
+   *    Method on *
+   *    error[external]: Expected method to ...
+   */
+  printTrace(source: string, traces: Trace[], file?: string) {
+    const { c } = Diagnostics;
+    const cols = process.stdout.columns || 80;
+    const lines = source.split('\n');
+    const lineNumWidth = String(lines.length).length;
+    const gutterLen = lineNumWidth + 1; // "1 " or " 1 "
+
+    if (file) console.error(`${c.gray}${file}${c.reset}`);
+
+    let traceIdx = 0;
+    for (let lineNo = 0; lineNo < lines.length; lineNo++) {
+      const line = lines[lineNo];
+      const lineStart = lines.slice(0, lineNo).reduce((a, l) => a + l.length + 1, 0);
+      const lineEnd = lineStart + line.length;
+      const lineLabel = `${c.gray}${String(lineNo + 1).padStart(lineNumWidth)} ${c.reset}`;
+      const blankGutter = ' '.repeat(gutterLen);
+
+      // Collect traces on this line
+      const lineTraces: Trace[] = [];
+      while (traceIdx < traces.length && traces[traceIdx].begin < lineEnd) {
+        if (traces[traceIdx].begin >= lineStart) lineTraces.push(traces[traceIdx]);
+        traceIdx++;
+      }
+
+      if (lineTraces.length === 0) {
+        console.error(`${lineLabel}${c.gray}${line}${c.reset}`);
+        continue;
+      }
+
+      // Split into above (odd index) and below (even index)
+      const above: Trace[] = [];
+      const below: Trace[] = [];
+      for (let i = 0; i < lineTraces.length; i++) {
+        if (i % 2 === 1) above.push(lineTraces[i]);
+        else below.push(lineTraces[i]);
+      }
+
+      // Compute columns and colors for each trace
+      const tokenColors = [c.blue, c.yellow];
+      const traceInfo = lineTraces.map((t, i) => ({
+        trace: t,
+        col: t.begin - lineStart,
+        color: t.errors.length ? c.red : tokenColors[i % 2],
+      }));
+      const aboveInfo = traceInfo.filter((_, i) => i % 2 === 1).reverse();
+      const belowInfo = traceInfo.filter((_, i) => i % 2 === 0);
+
+      // Above: render right-to-left (rightmost = furthest from source first).
+      // "remaining" = annotations already rendered (closer to source = to the left),
+      // so pipes extend downward toward the source line.
+      if (aboveInfo.length) {
+        const aboveRL = [...aboveInfo].sort((a, b) => b.col - a.col); // rightmost first
+        const lines = this._renderAnnotations(blankGutter, gutterLen, aboveRL, cols, 'before');
+        // Final connector: all above annotations' pipes connecting to source line
+        lines.push(this._connectorLine(blankGutter, gutterLen, aboveRL));
+        // Deduplicate consecutive identical lines
+        let prev = '';
+        for (const l of lines) {
+          if (l !== prev) console.error(l);
+          prev = l;
+        }
+      }
+
+      // Render source line with colored tokens
+      let colored = '';
+      let pos = 0;
+      for (const ti of traceInfo) {
+        const endCol = ti.trace.end - lineStart + 1;
+        if (ti.col > pos) colored += c.white + line.slice(pos, ti.col);
+        colored += ti.color + line.slice(ti.col, endCol);
+        pos = endCol;
+      }
+      if (pos < line.length) colored += c.white + line.slice(pos);
+      console.error(`${lineLabel}${colored}${c.reset}`);
+
+      // Below: left to right, deduplicate consecutive identical lines
+      if (belowInfo.length) {
+        const lines = this._renderAnnotations(blankGutter, gutterLen, belowInfo, cols);
+        let prev = '';
+        for (const l of lines) {
+          if (l !== prev) console.error(l);
+          prev = l;
+        }
+      }
+
+      console.error(''); // blank line between source lines
+    }
+  }
+
+  /**
+   * Render annotations one at a time in order, returning groups of lines.
+   * Each group = [connector line (if needed), description lines, error lines].
+   * First group starts with the initial connector for all annotations.
+   */
+  private _renderAnnotationGroups(
+    blankGutter: string, gutterLen: number,
+    annotations: { col: number; color: string; trace: Trace }[],
+    cols: number,
+    pipesFrom: 'after' | 'before' = 'after'
+  ): string[][] {
+    const { c } = Diagnostics;
+    const groups: string[][] = [];
+
+    for (let i = 0; i < annotations.length; i++) {
+      const t = annotations[i];
+      // 'after': pipes for annotations not yet rendered (below style)
+      // 'before': pipes for annotations already rendered (above style)
+      const remaining = pipesFrom === 'after' ? annotations.slice(i + 1) : annotations.slice(0, i);
+      const prefixLen = gutterLen + t.col;
+      const fullAvailable = cols - prefixLen;
+      // If there are pipes to the right, wrap text before the first pipe
+      // so pipes can appear on every line — but only if it leaves at least 30 chars.
+      const sorted_remaining = [...remaining].sort((a, b) => a.col - b.col);
+      const firstPipeAfterText = sorted_remaining.find(r => r.col > t.col);
+      const pipeGap = firstPipeAfterText ? firstPipeAfterText.col - t.col - 1 : fullAvailable;
+      const pipeAwareAvailable = pipeGap >= 30 ? pipeGap : fullAvailable;
+      const group: string[] = [];
+
+      // Connector line.
+      // 'after': this + all not-yet-rendered (pipes extend toward source)
+      // 'before': only passthrough pipes for already-rendered annotations (not this one's own pipe)
+      if (pipesFrom === 'after') {
+        group.push(this._connectorLine(blankGutter, gutterLen, annotations.slice(i)));
+      } else if (pipesFrom === 'before' && remaining.length) {
+        group.push(this._connectorLine(blankGutter, gutterLen, remaining));
+      }
+
+      // Emit a text line with pipes for remaining annotations.
+      // contentCol: where actual non-space content starts (for continuation lines,
+      // pipes can be placed in the space between t.col and contentCol).
+      const emit = (text: string, plainLen: number, contentCol?: number): boolean => {
+        const sorted = [...remaining].sort((a, b) => a.col - b.col);
+        const actualContentStart = contentCol ?? t.col;
+        const actualContentEnd = t.col + plainLen;
+        let line = blankGutter;
+        let lpos = 0;
+        let overlapped = false;
+
+        // Build from left to right: interleave pipes and text
+        // Passthrough pipes use gray; own pipe keeps its color
+        const pipeColor = c.gray;
+
+        // Phase 1: space/pipes before t.col (all passthrough)
+        for (const r of sorted) {
+          if (r.col < t.col && r.col >= lpos) {
+            if (r.col > lpos) line += ' '.repeat(r.col - lpos);
+            line += `${pipeColor}|${c.reset}`;
+            lpos = r.col + 1;
+          }
+        }
+        if (t.col > lpos) { line += ' '.repeat(t.col - lpos); lpos = t.col; }
+
+        // Phase 2: the padding zone (t.col to actualContentStart) — pipes can go here
+        if (contentCol) {
+          const contentText = text.slice(contentCol - t.col);
+
+          // Collect all pipes in the padding zone: all gray
+          // Own pipe only needed in 'before' mode (above) where it connects down to source
+          const paddingPipes = [
+            ...(pipesFrom === 'before' ? [{ col: t.col, pipeCol: pipeColor }] : []),
+            ...sorted.filter(r => r.col >= t.col && r.col < actualContentStart).map(r => ({ col: r.col, pipeCol: pipeColor }))
+          ].sort((a, b) => a.col - b.col);
+
+          for (const p of paddingPipes) {
+            if (p.col >= lpos) {
+              if (p.col > lpos) line += ' '.repeat(p.col - lpos);
+              line += `${p.pipeCol}|${c.reset}`;
+              lpos = p.col + 1;
+            }
+          }
+          if (actualContentStart > lpos) { line += ' '.repeat(actualContentStart - lpos); lpos = actualContentStart; }
+          line += contentText;
+          lpos = actualContentEnd;
+        } else {
+          line += text;
+          lpos = actualContentEnd;
+        }
+
+        // Phase 3: pipes after the text (all passthrough)
+        for (const r of sorted) {
+          if (r.col < actualContentStart) continue; // already handled
+          if (r.col >= actualContentStart && r.col < actualContentEnd) {
+            overlapped = true;
+          } else if (r.col >= lpos + 1) {
+            line += ' '.repeat(r.col - lpos);
+            line += `${pipeColor}|${c.reset}`;
+            lpos = r.col + 1;
+          } else {
+            overlapped = true;
+          }
+        }
+        group.push(line);
+        return overlapped;
+      };
+
+      // Description — wrap to pipe-aware width so pipes show on every line
+      let needsConnector = false;
+      const descLines = this._wrapToLines(t.trace.description, Math.max(pipeAwareAvailable, 10));
+      for (const dl of descLines) {
+        if (emit(`${t.color}${dl}${c.reset}`, dl.length)) needsConnector = true;
+      }
+
+      // Errors — wrap message to pipe-aware width
+      for (const err of t.trace.errors) {
+        const label = `\x1b[1;31merror\x1b[0m${c.gray}[${err.phase}]${c.reset}: `;
+        const labelPlain = `error[${err.phase}]: `;
+        const errAvail = Math.max(pipeAwareAvailable - labelPlain.length, 10);
+        const msgLines = this._wrapToLines(err.message, errAvail);
+        // textCol for continuation: actual text starts after the label padding
+        const contTextCol = t.col + labelPlain.length;
+        for (let mi = 0; mi < msgLines.length; mi++) {
+          if (mi === 0) {
+            if (emit(`${label}${msgLines[mi]}`, labelPlain.length + msgLines[mi].length)) needsConnector = true;
+          } else {
+            const pad = ' '.repeat(labelPlain.length);
+            if (emit(`${pad}${msgLines[mi]}`, labelPlain.length + msgLines[mi].length, contTextCol)) needsConnector = true;
+          }
+        }
+      }
+
+      // Skip overlap connector — the next group's connector already shows the pipes.
+
+      groups.push(group);
+    }
+
+    return groups;
+  }
+
+  /** Flatten annotation groups into lines (for below, which doesn't need reversal) */
+  private _renderAnnotations(
+    blankGutter: string, gutterLen: number,
+    annotations: { col: number; color: string; trace: Trace }[],
+    cols: number,
+    pipesFrom: 'after' | 'before' = 'after'
+  ): string[] {
+    const lines = this._renderAnnotationGroups(blankGutter, gutterLen, annotations, cols, pipesFrom).flat();
+
+    // Post-process: drop connector-only lines whose pipe positions are all
+    // already present on the previous line (as | characters at the same columns).
+    const merged: string[] = [];
+    for (const line of lines) {
+      if (merged.length === 0) { merged.push(line); continue; }
+      const curPlain = line.replace(/\x1b\[[0-9;]*m/g, '');
+      const isConnectorOnly = /^[\s|]*$/.test(curPlain) && curPlain.includes('|');
+      if (!isConnectorOnly) { merged.push(line); continue; }
+
+      // Get pipe positions from current connector line
+      const curPipes = new Set<number>();
+      for (let k = 0; k < curPlain.length; k++) if (curPlain[k] === '|') curPipes.add(k);
+
+      // Check if previous line has | at all those positions
+      const prevPlain = merged[merged.length - 1].replace(/\x1b\[[0-9;]*m/g, '');
+      let allPresent = true;
+      for (const col of curPipes) {
+        if (prevPlain[col] !== '|') { allPresent = false; break; }
+      }
+
+      if (!allPresent) merged.push(line);
+      // else: skip — previous line already shows these pipes
+    }
+    return merged;
+  }
+
+  /** Build a line with | connectors. Primary pipe keeps its color, others are gray. */
+  private _connectorLine(blankGutter: string, gutterLen: number, traces: { col: number; color: string }[], primaryCol?: number): string {
+    const { c } = Diagnostics;
+    const sorted = [...traces].sort((a, b) => a.col - b.col);
+    let line = blankGutter;
+    let pos = 0;
+    for (const t of sorted) {
+      if (t.col > pos) line += ' '.repeat(t.col - pos);
+      const color = (primaryCol !== undefined && t.col === primaryCol) ? t.color : c.gray;
+      line += `${color}|${c.reset}`;
+      pos = t.col + 1;
+    }
+    return line;
+  }
+
+  /** Word-wrap text into lines at word boundaries */
+  private _wrapToLines(text: string, available: number): string[] {
+    if (available < 10 || text.length <= available) return [text];
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let current = '';
+    for (const word of words) {
+      const test = current ? `${current} ${word}` : word;
+      if (test.length > available && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = test;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
 
   print(label?: string) {
     const errs = this.errors, warns = this.warnings;
@@ -136,44 +475,100 @@ export class Runtime implements Backend {
   CTX: Node = new Node(this.EXTERNALLY_DEFINED, this.BASE)
   GLOBAL: Node = new Node(this.EXTERNALLY_DEFINED, this.CTX)
 
+  // Base path for resolving relative file locations.
+  // Default: repository root (two levels up from @ether/.ts/).
+  // Override this to use packaged/bundled .ray files instead.
+  root: string = path.resolve(import.meta.dirname, '..', '..', '..')
+
   constructor(public language: Language) {}
   log = new Diagnostics();
 
   base = (fn: (x: Node) => void): this => { fn(this.BASE); return this; }
   context = (fn: (x: Node) => void): this => { fn(this.CTX); return this; }
   object = (key: Key, fn: (x: Node) => void): this => {
-    if (!this.GLOBAL.has(this.language, this.GLOBAL, key)) this.GLOBAL.set(new Node(this.EXTERNALLY_DEFINED))
-    fn(this.GLOBAL.resolve(this.language, this.GLOBAL, key)());
+    if (!this.GLOBAL.has(key)) this.GLOBAL.set(new Node(this.EXTERNALLY_DEFINED))
+    fn(this.GLOBAL.resolve(key)());
     return this;
   }
   external_method = (key: Key, fn: Method): this => { this.GLOBAL.external_method(key, fn); return this; }
 
-  syntax = (expression: (E: (() => Node) & { [key: string]: any }) => Node): this => {
-    // expression() TODO
+  private _tokenHandler: ((node: Node) => void) | null = null;
+
+  syntax = (expression: (E: ((...args: Expression[]) => Node) & { [key: string]: any }) => Expression | Expression[]): this => {
+    const placeholderReader = new Reader(this);
+    placeholderReader.source = '';
+    const E: any = (...args: Expression[]) => {
+      const node = new Node(placeholderReader);
+      node.cursor = { index: 0 };
+      return node;
+    };
+    E.token = (fn: (node: Node) => void) => { this._tokenHandler = fn; };
+    expression(E);
     return this;
   }
+
+  private resolve_path = (location: string): string =>
+    path.isAbsolute(location) ? location : path.resolve(this.root, location)
 
   load = (location: string | string[]): this => {
     if (is_array(location)) { location.forEach(this.load); return this; }
 
-    const stat = fs.statSync(location);
+    const full = this.resolve_path(location);
+    if (!fs.existsSync(full)) { this.log.error('load', `Not found: ${full}`); return this; }
+    const stat = fs.statSync(full);
     if (stat.isFile()) {
-      this.loadFile(location)
+      this.loadFile(full)
     } else if (stat.isDirectory()) {
-      this.loadDirectory(location, { recursively: true })
+      this.loadDirectory(full, { recursively: true })
     } else {
-      return this.log.fatal('file system', `"${location}": not a file or directory`);
+      return this.log.fatal('file system', `"${full}": not a file or directory`);
     }
     return this;
   }
   loadFile = (location: string): this => {
+    const full = this.resolve_path(location);
+    if (!fs.existsSync(full)) { this.log.error('load', `File not found: ${full}`); return this; }
+    this.parse(fs.readFileSync(full, 'utf-8'), full);
     return this;
   }
   loadDirectory = (location: string, options: { recursively?: boolean }): this => {
+    const full = this.resolve_path(location);
+    if (!fs.existsSync(full)) { this.log.error('load', `Directory not found: ${full}`); return this; }
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const entryPath = path.join(dir, entry.name);
+        if (entry.isDirectory() && options?.recursively) walk(entryPath);
+        else if (entry.name.endsWith(this.language._extension[0] ?? '.ray')) this.loadFile(entryPath);
+      }
+    };
+    walk(full);
     return this;
   }
   add = (...source: string[]): this => {
+    for (const src of source) {
+      this.parse(src);
+    }
     return this;
+  }
+
+  parse = (source: string, file?: string): Node | null => {
+    if (!this._tokenHandler) return null;
+
+    const reader = new Reader(this);
+    reader.source = source;
+
+    const node = new Node(reader, this.BASE);
+    node.cursor = { index: -1 };
+
+    while (!node.right.done()) {
+      this._tokenHandler(node);
+    }
+
+    if (reader.traces.length) {
+      this.log.printTrace(source, reader.traces, file);
+    }
+
+    return reader.result;
   }
 
   cli = (location: string[], args: { [key: string]: string[] }) => {
@@ -187,12 +582,20 @@ export class Runtime implements Backend {
     this.log.info('timer', `  ${timer.toString()} total`)
   }
 
-  exec = (): Node => {
+  exec = (): Node | undefined => {
+    // Run all queued pass steps
+    for (const pass of this.language.passes) {
+      for (const step of pass.steps) {
+        step();
+      }
+    }
 
     if (this.log.hasErrors) {
       process.exitCode = 1;
       this.log.print()
     }
+
+    return undefined;
   }
 
   repl = () => {
@@ -220,7 +623,7 @@ export class Language implements Backend {
   backend: Backend = new Runtime(this);
   get log() { return this.backend.log; }
 
-  private _extension: string[]
+  _extension: string[] = []
   extension = (...extension: string[]): this => { this._extension.push(...extension); return this }
 
   passes: { ref?: string, steps: (() => void)[] }[] = [{ steps: [] }]
@@ -301,12 +704,15 @@ export class Node {
   get none(): boolean { return this.value.encoded === null || this.value.encoded === undefined; }
 
   //TODO has/get should pattern match if key is Node
-  has = (key: Key): boolean => { return this.value.methods.has(key) && !this.resolve(key)().none; }
+  has = (key: Key): boolean => { return this.value.methods.has(key); }
   get = (key: Key): Method | undefined => { this.realize(); return this.value.methods.get(key); }
   set = (val: Node): Node => { this.realize(); this.value = val.value; return this; }
   call = (args: Node) => {
     this.realize()
-    if (!is_function(this.value.encoded)) throw new Error("Not callable.")
+    if (!is_function(this.value.encoded)) {
+      this.error('call', `Expected a function to call.`)
+      return new Node(this.reader)
+    }
     return this.value.encoded(this, args)
   }
 
@@ -316,8 +722,36 @@ export class Node {
     return () => new Node(null, null)
   }
 
+  /** Find the node in the _super chain that has this method key */
+  _findMethod = (key: Key): Node | null => {
+    if (this.value.methods.has(key)) return this;
+    if (this._super) return this._super._findMethod(key);
+    return null;
+  }
+
+  /** Collect all method keys from this node and its _super chain */
+  get methods(): Set<Key> {
+    const keys = new Set<Key>(this.value.methods.keys());
+    if (this._super) for (const k of this._super.methods) keys.add(k);
+    return keys;
+  }
+
   external_method = (key: Key, fn?: Method): this => {
-    this.value.methods.set(key, fn ?? (() => this.fatal('forward ref', 'Method was called before it was initialized.')));
+    // Two-stage: first call binds self → returns callable partial, second call runs fn(self, args)
+    const methodFn: Method = (self: Node) => {
+      const partial = new Node(self.reader, self._super, key);
+      partial.value.encoded = ((_self: Node, args: Node) => {
+        if (!fn) return this.fatal('forward ref', 'Method was called before it was initialized.');
+        // Temporarily swap reader so errors land on the parse trace
+        const prevReader = self.reader;
+        self.reader = partial.reader;
+        const result = fn(self, args);
+        self.reader = prevReader;
+        return result;
+      });
+      return partial;
+    };
+    this.value.methods.set(key, methodFn);
     return this;
   }
 
@@ -447,8 +881,18 @@ export class Node {
   }
 
   get log() { return this.reader.log }
-  error = (phase: string, message: string) => this.log.error(phase, message, this.begin)
-  warning = (phase: string, message: string) => this.log.warning(phase, message, this.begin)
+  error = (phase: string, message: string) => {
+    const diag: Diagnostic = { level: 'error', phase, message, location: this.begin };
+    this.log.report(diag);
+    const traces = this.reader?.traces;
+    if (traces?.length) traces[traces.length - 1].errors.push(diag);
+  }
+  warning = (phase: string, message: string) => {
+    const diag: Diagnostic = { level: 'warning', phase, message, location: this.begin };
+    this.log.report(diag);
+    const traces = this.reader?.traces;
+    if (traces?.length) traces[traces.length - 1].errors.push(diag);
+  }
   info = (phase: string, message: string) => this.log.info(phase, message, this.begin)
   fatal = (phase: string, message: string) => this.log.fatal(phase, message, this.begin)
 
@@ -460,71 +904,84 @@ export class Node {
    *   4. Method on `this` (implicit self)
    *   5. Forward ref fallback
    */
+  private _matched = (node: Node, kind: Trace['kind'], description: string): Node => {
+    node.reader = this.reader;
+    if (this.cursor) this.reader.trace(this.string ?? '', this.begin?.index ?? 0, this.end?.index ?? 0, kind, description);
+    return node;
+  }
+
   match = (key: string): Node => {
     const runtime = this.reader.runtime;
 
-    // 1. Exact resolve in context
-    const exact = this.resolve(this.reader.language, this, key);
-    if (exact && !exact().none) return exact() as Node;
-
-    // 2. Method on current result
+    // 1. Method on current result — check first since it's the most specific
     const result = this.reader.result;
     if (result) {
       const method = result.get(key);
-      if (method) return method(result);
+      if (method) return this._matched(method(result), 'method', `Method on result`);
     }
 
-    // 3. Split: try longest prefix that resolves, suffix is a method on result
-    if (key.length > 1) {
-      for (let i = key.length - 1; i >= 1; i--) {
-        const prefix = key.slice(0, i);
-        const suffix = key.slice(i);
+    // 2. Exact resolve in context — walk _super chain, call the method to get a partial
+    const found = this._findMethod(key);
+    if (found) {
+      const method = found.get(key);
+      const owner = found === runtime.BASE ? '*' : found === runtime.CTX ? 'ctx' : 'scope';
+      return this._matched(method(found), 'resolve', `Method on ${owner}`);
+    }
 
-        const prefixResolved = this.resolve(this.reader.language, this, prefix);
+    // 3. Split: collect all methods from result (and its parents), try each as suffix of key
+    if (key.length > 1) {
+      const target = result ?? runtime.BASE;
+      const allMethods = target.methods;
+
+      // Try longest suffix first for best match
+      const candidates: { suffix: string, len: number }[] = [];
+      for (const m of allMethods) {
+        if (!is_string(m)) continue;
+        if (key.length > m.length && key.endsWith(m)) {
+          candidates.push({ suffix: m, len: m.length });
+        }
+      }
+      candidates.sort((a, b) => b.len - a.len);
+
+      for (const { suffix } of candidates) {
+        const prefix = key.slice(0, key.length - suffix.length);
+        const prefixResolved = this.resolve(prefix);
         if (!prefixResolved || prefixResolved().none) continue;
 
-        const target = result ?? runtime.BASE;
-        const suffixMethod = target.get(suffix);
-        if (!suffixMethod) continue;
-
-        // Rewind pointer: move end back by suffix length so suffix is picked up next iteration
+        // Rewind pointer so suffix is picked up next iteration
         if (this._direction === 1) {
           this.end = { index: this.end.index - suffix.length };
         } else {
           this.begin = { index: this.begin.index + suffix.length };
         }
-        return prefixResolved() as Node;
+        return this._matched(prefixResolved() as Node, 'split', `Split: '${prefix}' + '${suffix}'`);
       }
     }
 
     // 4. Method on `this` (implicit self)
-    const thisNode = runtime.CTX.resolve(this.reader.language, runtime.CTX, 'this');
-    if (thisNode && !thisNode().none) {
-      const method = thisNode().get(key);
-      if (method) return method(thisNode());
+    if (runtime.CTX.has('this')) {
+      const thisNode = runtime.CTX.get('this')(runtime.CTX);
+      if (thisNode && !thisNode.none) {
+        const method = thisNode.get(key);
+        if (method) return this._matched(method(thisNode), 'implicit-self', `Method on this`);
+      }
     }
 
     // 5. Forward ref
     const forward = new Node(this.reader, undefined);
     forward.external_method(key, () => forward.fatal('forward ref', `Unresolved: ${key}`));
+    if (this.cursor) this.reader.trace(this.string ?? '', this.begin?.index ?? 0, this.end?.index ?? 0, 'forward-ref', `Forward reference to '${key}'`);
     return forward;
   }
 
   /**
-   * .save(): Commit the current token as a Node applied to the current expression result.
-   * If there's an existing result, apply this node to it (method call or juxtaposition).
+   * .save(): Commit this node into the reader's expression result.
    * If no result yet, this becomes the result.
+   * If there is a result, call it with this as argument (juxtaposition).
    */
   save = (): this => {
     if (this.reader.result) {
-      const method = this.reader.result.get(this.string);
-      if (method) {
-        // Token is a method on result: apply it
-        this.reader.result = method(this.reader.result, this);
-      } else {
-        // Juxtaposition: call result with this as argument
-        this.reader.result = this.reader.result.call(this);
-      }
+      this.reader.result = this.reader.result.lazy_call(this);
     } else {
       this.reader.result = this;
     }
@@ -634,13 +1091,19 @@ export type Location = {
 //  allowForwardRef = () => {}
 
 export class Reader {
-  source: string;
+  source: string = '';
   result: Node | null = null;
+  traces: Trace[] = [];
   get language() { return this.runtime.language }
   get log() { return this.language.log }
 
   constructor(public runtime: Runtime) {
 
+  }
+
+  trace(token: string, begin: number, end: number, kind: Trace['kind'], description: string) {
+    this.traces.push({ token, begin, end, kind, description, order: this.traces.length, errors: [] });
+    return this.traces[this.traces.length - 1];
   }
 
 }

@@ -16,7 +16,7 @@ export interface Trace {
   kind: 'method' | 'resolve' | 'split' | 'implicit-self' | 'forward-ref';
   description: string;
   order: number;
-  errors: Diagnostic[];
+  diagnostics: Diagnostic[];
 }
 
 export class Diagnostics {
@@ -168,7 +168,7 @@ export class Diagnostics {
       const traceInfo = lineTraces.map((t, i) => ({
         trace: t,
         col: t.begin - lineStart,
-        color: t.errors.length ? c.red : tokenColors[i % 2],
+        color: t.diagnostics.some(d => d.level === 'error') ? c.red : t.diagnostics.length ? c.yellow : tokenColors[i % 2],
       }));
       const aboveInfo = traceInfo.filter((_, i) => i % 2 === 1).reverse();
       const belowInfo = traceInfo.filter((_, i) => i % 2 === 0);
@@ -330,13 +330,11 @@ export class Diagnostics {
         }
       }
 
-      // Errors — wrap message to pipe-aware width
-      for (const err of t.trace.errors) {
-        const label = `\x1b[1;31merror\x1b[0m${c.gray}[${err.phase}]${c.reset}: `;
-        const labelPlain = `error[${err.phase}]: `;
-        const errAvail = Math.max(pipeAwareAvailable - labelPlain.length, 10);
-        const msgLines = this._wrapToLines(err.message, errAvail);
-        // textCol for continuation: actual text starts after the label padding
+      // Diagnostics — wrap message to pipe-aware width
+      for (const diag of t.trace.diagnostics) {
+        const { colored: label, plain: labelPlain } = this.formatDiagnosticLabel(diag);
+        const diagAvail = Math.max(pipeAwareAvailable - labelPlain.length, 10);
+        const msgLines = this._wrapToLines(diag.message, diagAvail);
         const contTextCol = t.col + labelPlain.length;
         for (let mi = 0; mi < msgLines.length; mi++) {
           if (mi === 0) {
@@ -406,6 +404,17 @@ export class Diagnostics {
     return line;
   }
 
+  /** Format a diagnostic label: error/warning in appropriate color, [phase] in gray */
+  formatDiagnosticLabel(d: Diagnostic): { colored: string; plain: string } {
+    const { c } = Diagnostics;
+    const lbl = d.level === 'error' ? `${c.red}error${c.reset}` : d.level === 'warning' ? `\x1b[1;33mwarning${c.reset}` : `${c.blue}info${c.reset}`;
+    const lblPlain = d.level;
+    return {
+      colored: `${lbl}${c.gray}[${d.phase}]${c.reset}: `,
+      plain: `${lblPlain}[${d.phase}]: `
+    };
+  }
+
   /** Word-wrap text into lines at word boundaries */
   private _wrapToLines(text: string, available: number): string[] {
     if (available < 10 || text.length <= available) return [text];
@@ -433,10 +442,10 @@ export class Diagnostics {
       return;
     }
     for (const d of this.items) {
-      const lbl = d.level === 'error' ? `\x1b[1;31merror\x1b[0m` : `\x1b[1;33mwarning\x1b[0m`;
+      const { colored: label } = this.formatDiagnosticLabel(d);
       const { file, line, col } = d.location ?? {};
       if (file) console.error(`  \x1b[90m${file}:${line ?? 0}:${col ?? 0}\x1b[0m`);
-      console.error(`    ${lbl}\x1b[90m[${d.phase}]\x1b[0m: ${d.message}`);
+      console.error(`    ${label}${d.message}`);
     }
     const parts: string[] = [];
     if (errs.length) parts.push(`\x1b[1;31m${errs.length} error${errs.length > 1 ? 's' : ''}\x1b[0m`);
@@ -891,13 +900,13 @@ export class Node {
     const diag: Diagnostic = { level: 'error', phase, message, location: this.begin };
     this.log.report(diag);
     const traces = this.reader?.traces;
-    if (traces?.length) traces[traces.length - 1].errors.push(diag);
+    if (traces?.length) traces[traces.length - 1].diagnostics.push(diag);
   }
   warning = (phase: string, message: string) => {
     const diag: Diagnostic = { level: 'warning', phase, message, location: this.begin };
     this.log.report(diag);
     const traces = this.reader?.traces;
-    if (traces?.length) traces[traces.length - 1].errors.push(diag);
+    if (traces?.length) traces[traces.length - 1].diagnostics.push(diag);
   }
   info = (phase: string, message: string) => this.log.info(phase, message, this.begin)
   fatal = (phase: string, message: string) => this.log.fatal(phase, message, this.begin)
@@ -938,7 +947,7 @@ export class Node {
         : null;
 
       // Report the unresolved error (attaches to the trace above)
-      this.error('parse', `Unresolved syntax: '${restOfLine.trim()}'`);
+      this.warning('parse', `Unresolved syntax: '${restOfLine.trim()}'`);
 
       // Create a lazy node — when realized, just takes the value from the resolved result
       const lazy = new Node(this.reader).lazily(self => {
@@ -1149,7 +1158,7 @@ export class Reader {
   }
 
   trace(token: string, begin: number, end: number, kind: Trace['kind'], description: string) {
-    this.traces.push({ token, begin, end, kind, description, order: this.traces.length, errors: [] });
+    this.traces.push({ token, begin, end, kind, description, order: this.traces.length, diagnostics: [] });
     return this.traces[this.traces.length - 1];
   }
 

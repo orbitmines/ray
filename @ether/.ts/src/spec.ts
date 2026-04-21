@@ -5,35 +5,35 @@ import {is_string} from "./lodash.ts";
 export const Ray = new Language('ether', 'E.2026v0.D0')
   .extension('.ray')
 
-  .pass(_ => _
-    .ref('bootstrap')
-
-    .cd('@ether/$/.ray', _ => _.load('Node.ray'))
-
-    .syntax(E => {
-      // const PATTERNED_RULE = E( E(E, '{', E.reinterpet(AT_PASS_2), '}', E).length('>=', 1).freeze(), E.until('=>'), E.block())
-      E.patterned_rule = (node: (_: Reader) => Node) =>
-        E(E(), '{', E().reinterpret('std'), '}', E()).repeats('>=', 1).bind('pattern').freeze().until('=>').block(_ => _.reinterpret('std'))
-          .interpret(self => node(self.reader).external_method(
-            E(...self.pattern.map(x => is_string(x) ? x : E()))
-          ))
-
-        // E.block = E.any(E.block(), E.block('{', '}')) for the languages that want to set things
-        // inner .freeze is overridden by .reinterpret,
-
-        // .split the spaces in front of to get the different |/& patterns, skip |/&.
-        // .interpret is reverted when .reinterpret happens
-        // .freeze on rule pattern part, not the body.
-        // .buffer on .interpret means buffer effect for next pass.
-
-      return [E(
-        [E().goto(E.patterned_rule((_: Reader) => _.runtime.CTX))],
-        E().upto('class *').upto('\n').block(_ =>
-          [E.goto(E.patterned_rule((_: Reader) => _.runtime.BASE))]
-        )
-      )]
-    })
-  )
+  // .pass(_ => _
+  //   .ref('bootstrap')
+  //
+  //   .cd('@ether/$/.ray', _ => _.load('Node.ray'))
+  //
+  //   .syntax(E => {
+  //     // const PATTERNED_RULE = E( E(E, '{', E.reinterpet(AT_PASS_2), '}', E).length('>=', 1).freeze(), E.until('=>'), E.block())
+  //     E.patterned_rule = (node: (_: Reader) => Node) =>
+  //       E(E(), '{', E().reinterpret('std'), '}', E()).repeats('>=', 1).bind('pattern').freeze().until('=>').block(_ => _.reinterpret('std'))
+  //         .interpret(self => node(self.reader).external_method(
+  //           E(...self.pattern.map(x => is_string(x) ? x : E()))
+  //         ))
+  //
+  //       // E.block = E.any(E.block(), E.block('{', '}')) for the languages that want to set things
+  //       // inner .freeze is overridden by .reinterpret,
+  //
+  //       // .split the spaces in front of to get the different |/& patterns, skip |/&.
+  //       // .interpret is reverted when .reinterpret happens
+  //       // .freeze on rule pattern part, not the body.
+  //       // .buffer on .interpret means buffer effect for next pass.
+  //
+  //     return [E(
+  //       [E().goto(E.patterned_rule((_: Reader) => _.runtime.CTX))],
+  //       E().upto('class *').upto('\n').block(_ =>
+  //         [E.goto(E.patterned_rule((_: Reader) => _.runtime.BASE))]
+  //       )
+  //     )]
+  //   })
+  // )
 
   //TODO Set class * location on base class.
   .base(_ => _

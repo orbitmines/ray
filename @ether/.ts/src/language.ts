@@ -323,9 +323,11 @@ export class Diagnostics {
 
       // Description — wrap to pipe-aware width so pipes show on every line
       let needsConnector = false;
-      const descLines = this._wrapToLines(t.trace.description, Math.max(pipeAwareAvailable, 10));
-      for (const dl of descLines) {
-        if (emit(`${t.color}${dl}${c.reset}`, dl.length)) needsConnector = true;
+      if (t.trace.description) {
+        const descLines = this._wrapToLines(t.trace.description, Math.max(pipeAwareAvailable, 10));
+        for (const dl of descLines) {
+          if (emit(`${t.color}${dl}${c.reset}`, dl.length)) needsConnector = true;
+        }
       }
 
       // Errors — wrap message to pipe-aware width
@@ -564,8 +566,12 @@ export class Runtime implements Backend {
       this._tokenHandler(node);
     }
 
-    if (reader.traces.length) {
-      this.log.printTrace(source, reader.traces, file);
+    // Only verify and print traces for top-level parses
+    if (file) {
+      reader.verify();
+      if (reader.traces.length) {
+        this.log.printTrace(source, reader.traces, file);
+      }
     }
 
     return reader.result;
@@ -913,11 +919,45 @@ export class Node {
   match = (key: string): Node => {
     const runtime = this.reader.runtime;
 
-    // 1. Method on current result — check first since it's the most specific
+    // If result is lazy (has pending thunks), we can't inspect its methods.
+    // Capture the rest of the line and defer the entire resolution.
     const result = this.reader.result;
+    if (result && result._thunks) {
+      // Capture remaining source on this line
+      const captureStart = this.begin?.index ?? 0;
+      let captureEnd = captureStart;
+      while (captureEnd < this.reader.source.length && this.reader.source[captureEnd] !== '\n') captureEnd++;
+      const restOfLine = this.reader.source.slice(captureStart, captureEnd);
+
+      // Advance the node pointer past the captured content
+      if (this.cursor) this.end = { index: captureEnd - 1 };
+
+      // Create trace for this deferred region
+      const trace = this.cursor
+        ? this.reader.trace(restOfLine, captureStart, captureEnd - 1, 'forward-ref', '')
+        : null;
+
+      // Report the unresolved error (attaches to the trace above)
+      this.error('parse', `Unresolved syntax: '${restOfLine.trim()}'`);
+
+      // Create a lazy node — when realized, just takes the value from the resolved result
+      const lazy = new Node(this.reader).lazily(self => {
+        result.realize();
+        self.value = result.value;
+      });
+      this.reader.pending.push(lazy);
+      this.reader.result = lazy;
+      return lazy;
+    }
+
+    // 1. Method on current result
     if (result) {
       const method = result.get(key);
-      if (method) return this._matched(method(result), 'method', `Method on result`);
+      if (method) {
+        const lazy = new Node(this.reader).lazily(self => { self.value = method(result).value; });
+        this.reader.pending.push(lazy);
+        return this._matched(lazy, 'method', `Method on result`);
+      }
     }
 
     // 2. Exact resolve in context — walk _super chain, call the method to get a partial
@@ -925,7 +965,9 @@ export class Node {
     if (found) {
       const method = found.get(key);
       const owner = found === runtime.BASE ? '*' : found === runtime.CTX ? 'ctx' : 'scope';
-      return this._matched(method(found), 'resolve', `Method on ${owner}`);
+      const lazy = new Node(this.reader).lazily(self => { self.value = method(found).value; });
+      this.reader.pending.push(lazy);
+      return this._matched(lazy, 'resolve', `Method on ${owner}`);
     }
 
     // 3. Split: collect all methods from result (and its parents), try each as suffix of key
@@ -933,7 +975,6 @@ export class Node {
       const target = result ?? runtime.BASE;
       const allMethods = target.methods;
 
-      // Try longest suffix first for best match
       const candidates: { suffix: string, len: number }[] = [];
       for (const m of allMethods) {
         if (!is_string(m)) continue;
@@ -948,13 +989,14 @@ export class Node {
         const prefixResolved = this.resolve(prefix);
         if (!prefixResolved || prefixResolved().none) continue;
 
-        // Rewind pointer so suffix is picked up next iteration
         if (this._direction === 1) {
           this.end = { index: this.end.index - suffix.length };
         } else {
           this.begin = { index: this.begin.index + suffix.length };
         }
-        return this._matched(prefixResolved() as Node, 'split', `Split: '${prefix}' + '${suffix}'`);
+        const lazy = new Node(this.reader).lazily(self => { self.value = (prefixResolved() as Node).value; });
+        this.reader.pending.push(lazy);
+        return this._matched(lazy, 'split', `Split: '${prefix}' + '${suffix}'`);
       }
     }
 
@@ -963,11 +1005,15 @@ export class Node {
       const thisNode = runtime.CTX.get('this')(runtime.CTX);
       if (thisNode && !thisNode.none) {
         const method = thisNode.get(key);
-        if (method) return this._matched(method(thisNode), 'implicit-self', `Method on this`);
+        if (method) {
+          const lazy = new Node(this.reader).lazily(self => { self.value = method(thisNode).value; });
+          this.reader.pending.push(lazy);
+          return this._matched(lazy, 'implicit-self', `Method on this`);
+        }
       }
     }
 
-    // 5. Forward ref
+    // 5. Forward ref — already lazy by nature (errors only on access)
     const forward = new Node(this.reader, undefined);
     forward.external_method(key, () => forward.fatal('forward ref', `Unresolved: ${key}`));
     if (this.cursor) this.reader.trace(this.string ?? '', this.begin?.index ?? 0, this.end?.index ?? 0, 'forward-ref', `Forward reference to '${key}'`);
@@ -1094,6 +1140,7 @@ export class Reader {
   source: string = '';
   result: Node | null = null;
   traces: Trace[] = [];
+  pending: Node[] = [];
   get language() { return this.runtime.language }
   get log() { return this.language.log }
 
@@ -1104,6 +1151,13 @@ export class Reader {
   trace(token: string, begin: number, end: number, kind: Trace['kind'], description: string) {
     this.traces.push({ token, begin, end, kind, description, order: this.traces.length, errors: [] });
     return this.traces[this.traces.length - 1];
+  }
+
+  /** Realize all pending lazy nodes, triggering deferred method calls and error reporting. */
+  verify() {
+    for (let i = 0; i < this.pending.length; i++) {
+      this.pending[i].realize();
+    }
   }
 
 }

@@ -37,9 +37,9 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
   .abstract(fn => {
     if (fn.enabled('refuse_abstract_interpretation')) {
       fn.debug('abstract', 'Refused to abstractly call function, defaulting to its return type.')
-      return 
+      return fn;
     }
-
+    return fn;
   })
 
   //TODO Set class * location on base class.

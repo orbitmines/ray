@@ -873,7 +873,7 @@ export class Language implements Backend {
   object = this.step('object')
   external_method = this.step('external_method')
 
-  abstract = this.delegate('abstract')
+  abstract = this.step('abstract')
   cli = this.delegate('cli')
   exec = this.delegate('exec')
   repl = this.delegate('repl')
@@ -1006,7 +1006,7 @@ export class Node {
           self.program = prevProgram;
         }
       });
-      return callback(partial);
+      return callback ? callback(partial) : partial;
     };
     this.value.methods.set(key, methodFn);
     return this;

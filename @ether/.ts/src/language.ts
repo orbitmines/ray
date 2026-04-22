@@ -3,11 +3,15 @@ import path from "path";
 import {is_array, is_function, is_string} from "./lodash.ts";
 
 export interface Diagnostic {
-  level: 'error' | 'warning' | 'info';
+  level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
   phase: string;
   message: string;
   location?: Location;
 }
+
+const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = {
+  trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5,
+};
 
 export interface Trace {
   /** The node this trace refers to. Uses its selection for ranges and cursor for pipe anchor. */
@@ -72,10 +76,14 @@ export class Diagnostics {
     this.items.push(diag);
   }
 
-  fatal(phase: string, message: string, location?: Location): never {
-    this.error(phase, message, location);
+  exit = (): never => {
     this.print();
-    process.exit(1);
+    return process.exit(1);
+  }
+
+  fatal = (phase: string, message: string, location?: Location): never => {
+    this.report({ level: 'fatal', phase, message, location });
+    return this.exit()
   }
   error = (phase: string, message: string, location?: Location) =>
     this.report({ level: 'error', phase, message, location });
@@ -84,10 +92,29 @@ export class Diagnostics {
   info = (phase: string, message: string, location?: Location) =>
     this.report({ level: 'info', phase, message, location });
 
-  get errors() { return this.items.filter(d => d.level === 'error'); }
+  get errors() { return this.items.filter(d => d.level === 'error' || d.level === 'fatal'); }
   get warnings() { return this.items.filter(d => d.level === 'warning'); }
-  get hasErrors() { return this.items.some(d => d.level === 'error'); }
+  get hasErrors() { return this.items.some(d => d.level === 'error' || d.level === 'fatal'); }
   get count() { return this.items.length; }
+
+  /**
+   * Minimum severity to display, from DEBUG env var.
+   * DEBUG=0 → trace (show all), DEBUG=1 → debug+, ..., DEBUG=5 → fatal only.
+   * Default: 2 (info+).
+   */
+  static minLevel(): number {
+    const env = process.env.DEBUG;
+    if (env === undefined || env === '') return DIAGNOSTIC_SEVERITY.info;
+    const n = parseInt(env, 10);
+    if (!isNaN(n)) return n;
+    // Allow level names too: DEBUG=trace, DEBUG=warning, etc.
+    if (env in DIAGNOSTIC_SEVERITY) return DIAGNOSTIC_SEVERITY[env as Diagnostic['level']];
+    return DIAGNOSTIC_SEVERITY.info;
+  }
+
+  static showLevel(level: Diagnostic['level']): boolean {
+    return DIAGNOSTIC_SEVERITY[level] >= Diagnostics.minLevel();
+  }
 
   static locate(source: string, pos: number): { line: number; col: number; context: string } {
     let line = 1, col = 1;
@@ -102,17 +129,29 @@ export class Diagnostics {
   }
 
   // ANSI helpers
-  private static c = {
+  static c = {
     reset:       '\x1b[0m',
     blue:        '\x1b[34m',
+    dark_blue:   '\x1b[2;34m',   // dim blue for debug
     yellow:      '\x1b[33m',
     gray:        '\x1b[90m',
+    dark_gray:   '\x1b[2;90m',
     red:         '\x1b[1;31m',
     bold_yellow: '\x1b[1;33m',
     bold_blue:   '\x1b[1;34m',
     white:       '\x1b[37m',
     dim:         '\x1b[2m',
     bold:        '\x1b[1m',
+  }
+
+  /** Color for each diagnostic level — fatal/error/warning are bold. */
+  static levelColor: Record<Diagnostic['level'], string> = {
+    fatal:   '\x1b[1;31m',   // bold red (same as error)
+    error:   '\x1b[1;31m',   // bold red
+    warning: '\x1b[1;33m',   // bold yellow
+    info:    '\x1b[34m',     // blue (not bold)
+    debug:   '\x1b[32m',     // green (not bold)
+    trace:   '\x1b[90m',     // gray (not bold)
   }
 
   /**
@@ -154,10 +193,15 @@ export class Diagnostics {
         return t.node.selection.map(s => ({ begin: s.begin.index, end: s.end.index }));
       };
 
-      // Collect traces on this line (using cursor position as the anchor)
+      // Collect traces on this line (using cursor position as the anchor).
+      // Filter out traces that have no diagnostics at/above the DEBUG threshold.
       const lineTraces: Trace[] = [];
       while (traceIdx < traces.length && traceCursor(traces[traceIdx]) < lineEnd) {
-        if (traceCursor(traces[traceIdx]) >= lineStart) lineTraces.push(traces[traceIdx]);
+        const t = traces[traceIdx];
+        if (traceCursor(t) >= lineStart) {
+          const hasVisible = t.diagnostics.some(d => Diagnostics.showLevel(d.level));
+          if (hasVisible) lineTraces.push(t);
+        }
         traceIdx++;
       }
 
@@ -174,13 +218,20 @@ export class Diagnostics {
         else below.push(lineTraces[i]);
       }
 
-      // Compute cursor column (pipe anchor), highlight ranges, and colors for each trace
-      const tokenColors = [c.blue, c.yellow];
-      const traceInfo = lineTraces.map((t, i) => ({
+      // Compute cursor column (pipe anchor), highlight ranges, and colors for each trace.
+      // Color by highest-severity diagnostic (trace is lowest → gray).
+      const traceColor = (t: Trace): string => {
+        let maxLevel: Diagnostic['level'] = 'trace';
+        for (const d of t.diagnostics) {
+          if (DIAGNOSTIC_SEVERITY[d.level] > DIAGNOSTIC_SEVERITY[maxLevel]) maxLevel = d.level;
+        }
+        return Diagnostics.levelColor[maxLevel] ?? c.gray;
+      };
+      const traceInfo = lineTraces.map((t) => ({
         trace: t,
         col: traceCursor(t) - lineStart,
         ranges: traceRanges(t).map(r => ({ begin: r.begin - lineStart, end: r.end - lineStart })),
-        color: t.diagnostics.some(d => d.level === 'error') ? c.red : t.diagnostics.length ? c.bold_yellow : tokenColors[i % 2],
+        color: traceColor(t),
       }));
       const aboveInfo = traceInfo.filter((_, i) => i % 2 === 1).reverse();
       const belowInfo = traceInfo.filter((_, i) => i % 2 === 0);
@@ -352,7 +403,10 @@ export class Diagnostics {
       }
 
       // Diagnostics — wrap message to pipe-aware width
+      // Skip trace-level (redundant with description) and anything below DEBUG threshold
       for (const diag of t.trace.diagnostics) {
+        if (diag.level === 'trace') continue;
+        if (!Diagnostics.showLevel(diag.level)) continue;
         const { colored: label, plain: labelPlain } = this.formatDiagnosticLabel(diag);
         const diagAvail = Math.max(pipeAwareAvailable - labelPlain.length, 10);
         const msgLines = this._wrapToLines(diag.message, diagAvail);
@@ -425,14 +479,13 @@ export class Diagnostics {
     return line;
   }
 
-  /** Format a diagnostic label: error/warning in appropriate color, [phase] in gray */
+  /** Format a diagnostic label: level in appropriate color (only error/warning bold), [phase] in gray */
   formatDiagnosticLabel(d: Diagnostic): { colored: string; plain: string } {
     const { c } = Diagnostics;
-    const lbl = d.level === 'error' ? `${c.red}error${c.reset}` : d.level === 'warning' ? `${c.bold_yellow}warning${c.reset}` : `${c.bold_blue}info${c.reset}`;
-    const lblPlain = d.level;
+    const color = Diagnostics.levelColor[d.level];
     return {
-      colored: `${lbl}${c.gray}[${d.phase}]${c.reset}: `,
-      plain: `${lblPlain}[${d.phase}]: `
+      colored: `${color}${d.level}${c.reset}${c.gray}[${d.phase}]${c.reset}: `,
+      plain: `${d.level}[${d.phase}]: `
     };
   }
 
@@ -457,21 +510,23 @@ export class Diagnostics {
 
 
   print(label?: string) {
+    // Filter by DEBUG env var (default: info+)
+    const visible = this.items.filter(d => Diagnostics.showLevel(d.level));
     const errs = this.errors, warns = this.warnings;
-    if (errs.length === 0 && warns.length === 0) {
+    if (visible.length === 0) {
       console.error(label ? `  \x1b[90m${label}: No errors.\x1b[0m` : '  \x1b[90mNo errors.\x1b[0m');
       return;
     }
-    for (const d of this.items) {
+    for (const d of visible) {
       const { colored: label } = this.formatDiagnosticLabel(d);
       const { file, line, col } = d.location ?? {};
       if (file) console.error(`  \x1b[90m${file}:${line ?? 0}:${col ?? 0}\x1b[0m`);
       console.error(`    ${label}${d.message}`);
     }
     const parts: string[] = [];
-    if (errs.length) parts.push(`\x1b[1;31m${errs.length} error${errs.length > 1 ? 's' : ''}\x1b[0m`);
-    if (warns.length) parts.push(`\x1b[1;33m${warns.length} warning${warns.length > 1 ? 's' : ''}\x1b[0m`);
-    console.error(`\n  ${parts.join(', ')}`);
+    if (errs.length) parts.push(`${Diagnostics.levelColor.error}${errs.length} error${errs.length > 1 ? 's' : ''}${Diagnostics.c.reset}`);
+    if (warns.length) parts.push(`${Diagnostics.levelColor.warning}${warns.length} warning${warns.length > 1 ? 's' : ''}${Diagnostics.c.reset}`);
+    if (parts.length) console.error(`\n  ${parts.join(', ')}`);
   }
 }
 
@@ -627,7 +682,7 @@ export class Runtime implements Backend {
     }
 
     if (this.log.hasErrors) process.exitCode = 1;
-    if (this.log.count > 0) this.log.print();
+    if (this.log.errors.length > 0 || this.log.warnings.length > 0) this.log.print();
 
     return undefined;
   }
@@ -918,20 +973,20 @@ export class Node {
   }
 
   get log() { return this.reader.log }
-  error = (phase: string, message: string) => {
-    const diag: Diagnostic = { level: 'error', phase, message, location: this.begin };
+  private _report = (level: Diagnostic['level'], phase: string, message: string) => {
+    const diag: Diagnostic = { level, phase, message, location: this.begin };
     this.log.report(diag);
     const traces = this.reader?.traces;
     if (traces?.length) traces[traces.length - 1].diagnostics.push(diag);
   }
-  warning = (phase: string, message: string) => {
-    const diag: Diagnostic = { level: 'warning', phase, message, location: this.begin };
-    this.log.report(diag);
-    const traces = this.reader?.traces;
-    if (traces?.length) traces[traces.length - 1].diagnostics.push(diag);
-  }
-  info = (phase: string, message: string) => this.log.info(phase, message, this.begin)
-  fatal = (phase: string, message: string) => this.log.fatal(phase, message, this.begin)
+  error   = (phase: string, message: string) => this._report('error', phase, message);
+  warning = (phase: string, message: string) => this._report('warning', phase, message);
+  info    = (phase: string, message: string) => this._report('info', phase, message);
+  debug   = (phase: string, message: string) => this._report('debug', phase, message);
+  fatal   = (phase: string, message: string): never => {
+    this._report('fatal', phase, message);
+    return this.log.exit()
+  };
 
   /**
    * .match(key): Unified token resolution.
@@ -952,6 +1007,13 @@ export class Node {
       diagnostics: [],
     };
     this.reader.traces.push(t);
+    // Also register the trace itself as a level:'trace' diagnostic so
+    // normal reporting/summary picks it up
+    if (description) {
+      const diag: Diagnostic = { level: 'trace', phase: kind, message: description, location: this.begin };
+      this.log.report(diag);
+      t.diagnostics.push(diag);
+    }
     return t;
   }
 
@@ -1166,6 +1228,7 @@ export class Reader {
     for (let i = 0; i < this.pending.length; i++) {
       this.pending[i].realize();
     }
+    if (this.log.hasErrors) this.log.fatal('verify', 'Exited during abstract interpretation, errors were while verifying the soudness of the program.')
   }
 
 }

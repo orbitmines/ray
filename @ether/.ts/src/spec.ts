@@ -1,5 +1,5 @@
 import path from "path";
-import {Language, Node, Reader} from "./language.ts";
+import {Language, Node, Program} from "./language.ts";
 import {is_string} from "./lodash.ts";
 
 export const Ray = new Language('ether', 'E.2026v0.D0')
@@ -38,7 +38,7 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
   //TODO Set class * location on base class.
   .base(_ => _
     .external_method('external', (self, args) => {
-      if (!self.has(args.resolve('location')())) self.error('external', "Expected method to be externally defined by the runtime, but it wasn't");
+      if (!self.eager.has(args.resolve('location')())) self.error('external', "Expected method to be externally defined by the runtime, but it wasn't");
       return args;
     })
     // .external_method('initializer')
@@ -54,7 +54,7 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
   .syntax(E => {
     E.token(_ => {
       _.capture_while(ch => ch === ' ' || ch === '\n')
-      if (_.string?.includes('\n')) _.reader.result = null
+      if (_.string?.includes('\n')) _.program.result = null
       _.skip()
       _.capture_while(ch => ch !== ' ' && ch !== '\n')
 

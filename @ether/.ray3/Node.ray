@@ -50,8 +50,12 @@ class * | Node
   {" "}{property} => this[property]
 
   external initializer external: Modifier // Flags that a method is externally defined
-  external initializer: Modifier // Flags that a particular method initializes a field into the context
+  external initializer: Modifier // Flags that a particular method initializes a field into the context, flagging something as an
   external comment: Modifier // Flags that the property is a comment, and it should be transparent: not interfere with code indenting
+
+  external io: Modifier // Flag the method as IO.
+  pure: Modifier // Flag method as pure: No io allowed.
+  external interpretable: Modifier
 
   external left-to-right: Modifier
   external right-to-left: Modifier // Flags that the property is invoked in opposite reading order, where if both ltr and rtl are used, their shared boundary is what they both invoke on.

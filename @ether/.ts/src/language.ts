@@ -65,9 +65,9 @@ export class Diagnostics {
   deduplicate() {
     const seen = new Set<string>();
     this.items = this.items.filter(d => {
-      const loc = d.node?.begin;
       const file = d.node?.file ?? '';
-      const key = `${file}:${loc?.line ?? 0}:${loc?.col ?? 0}:${loc?.index ?? 0}|${d.message ?? ''}`;
+      const idx = d.node?.begin ?? 0;
+      const key = `${file}:${idx}|${d.message ?? ''}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -204,14 +204,14 @@ export class Diagnostics {
     const anchors = tied.filter(d => !d.clock);
     const timings = tied.filter(d => !!d.clock);
 
-    const cursor = (d: Diagnostic) => displayNode(d)!.cursor!.index;
+    const cursor = (d: Diagnostic) => displayNode(d)!.cursor!;
     const ranges = (d: Diagnostic): { begin: number; end: number }[] => {
       const n = displayNode(d)!;
       if (n.selection.length === 0) {
-        const i = n.cursor!.index;
+        const i = n.cursor!;
         return [{ begin: i, end: i }];
       }
-      return n.selection.map(s => ({ begin: s.begin.index, end: s.end.index }));
+      return n.selection.map(s => ({ begin: s.begin, end: s.end }));
     };
 
     anchors.sort((a, b) => cursor(a) - cursor(b));
@@ -234,7 +234,7 @@ export class Diagnostics {
 
       // Collect timings on this line, partitioned by phase.
       const lineTimings = timings.filter(d => {
-        const idx = d.node?.cursor?.index;
+        const idx = d.node?.cursor;
         return idx !== undefined && idx >= lineStart && idx < lineEnd;
       });
       const timingLine = this._formatTimingLine(lineTimings);
@@ -697,7 +697,7 @@ export class Runtime implements Backend {
     const placeholderProgram = new Program(this);
     const E: any = (...args: Expression[]) => {
       const node = new Node(placeholderProgram);
-      node.cursor = { index: 0 };
+      node.cursor = 0;
       return node;
     };
     E.token = (fn: (node: Node) => void) => { this._tokenHandler = fn; };
@@ -755,7 +755,7 @@ export class Runtime implements Backend {
     const program = new Program(this);
     const node = new Node(program, this.BASE);
     node.source_file = new SourceFile(source, file);
-    node.cursor = { index: -1 };
+    node.cursor = -1;
     program.root = node;
 
     node.read();
@@ -907,7 +907,7 @@ export class Node {
   /** 1-based line number of this Node's cursor within its source. */
   get line(): number {
     const src = this.source;
-    const idx = this.cursor?.index ?? 0;
+    const idx = this.cursor ?? 0;
     let line = 1;
     for (let i = 0; i < idx && i < src.length; i++) if (src[i] === '\n') line++;
     return line;
@@ -915,7 +915,7 @@ export class Node {
   /** 1-based column number of this Node's cursor within its source. */
   get col(): number {
     const src = this.source;
-    const idx = this.cursor?.index ?? 0;
+    const idx = this.cursor ?? 0;
     let col = 1;
     for (let i = 0; i < idx && i < src.length; i++) {
       if (src[i] === '\n') col = 1; else col++;
@@ -982,7 +982,7 @@ export class Node {
     const sub = new Program(rt, this.program);
     const root = new Node(sub, rt.BASE);
     root.source_file = this.source_file;
-    root.cursor = { index: -1 };
+    root.cursor = -1;
     sub.root = root;
     root.read();
     return sub.pending;
@@ -1029,14 +1029,14 @@ export class Node {
 
     const move = (offset: number = 1) => {
       if (direction === -1) {
-        this.begin = { index: this.begin.index - offset }
+        this.begin = this.begin - offset
       } else {
-        this.end = { index: this.end.index + offset }
+        this.end = this.end + offset
       }
     }
 
     move.done = () => {
-      const next = boundary().index + direction;
+      const next = boundary() + direction;
       return next < 0 || next >= this.source.length;
     };
 
@@ -1044,7 +1044,7 @@ export class Node {
       if (offset === 0) return '';
       if (offset < 0) return (direction === -1 ? this.right : this.left).peak(offset * -1)
 
-      let a = boundary().index;
+      let a = boundary();
       let b = a + (offset * direction);
       if (offset == 1) return b < 0 || b >= this.source.length ? '' : this.source[b];
 
@@ -1064,9 +1064,9 @@ export class Node {
     }
     move.capture_whitespace = (): number => move.capture_while(ch => ch === ' ');
     move.capture_line = (): string => {
-      let a = boundary().index;
+      let a = boundary();
       move.capture_while(ch => ch !== '\n');
-      let b = boundary().index;
+      let b = boundary();
 
       if (a === b) return '';
       if (b < a) { [a, b] = [b, a] }
@@ -1096,7 +1096,7 @@ export class Node {
       // return slice(before, boundary().index);
     }
     move.goto = (char: string): string => {}
-    move.skip = () => this.move({ index: boundary().index + (1 * direction) })
+    move.skip = () => this.move(boundary() + (1 * direction))
 
     return move;
   }
@@ -1128,19 +1128,19 @@ export class Node {
     this.value = { encoded: UNKNOWN, methods: new Map(), options: {} };
   }
 
-  get string() { return this.single_char() ? this.source[this.cursor.index] : this.source.slice(this.begin.index, this.end.index + 1); }
+  get string() { return this.single_char() ? this.source[this.cursor] : this.source.slice(this.begin, this.end + 1); }
 
   /** True if `other` is anchored at the same cursor in the same source. */
   sameCursor = (other?: Node | null): boolean =>
-    !!other && this.source_file === other.source_file && this.cursor?.index === other.cursor?.index;
+    !!other && this.source_file === other.source_file && this.cursor === other.cursor;
 
   copy = () => {
     const copy = new Node(this.program, this._super)
     copy.source_file = this.source_file
     copy._thunks = this._thunks ? [...this._thunks] : null
     copy.value = {...this.value}
-    copy.cursor = this.cursor ? { ...this.cursor } : this.cursor
-    copy.selection = this.selection.map(s => ({ begin: { ...s.begin }, end: { ...s.end } }))
+    copy.cursor = this.cursor
+    copy.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }))
     copy._direction = this._direction
     return copy;
   }
@@ -1227,22 +1227,22 @@ export class Node {
     // If result is lazy (has pending thunks), we can't inspect its methods.
     // Capture the rest of the line and defer the entire resolution.
     const result = this.program.result;
-    // if (result && result._thunks) {
-    //   // Extend selection to end of line using the existing direction primitives
-    //   this.right.capture_while((ch: string) => ch !== '\n');
+    if (result && result._thunks) {
+      // Extend selection to end of line using the existing direction primitives
+      this.right.capture_while((ch: string) => ch !== '\n');
 
-    //   // Create trace for this deferred region, then report error
-    //   this.error('parse', `Unresolved syntax: '${this.string?.trim() ?? ''}'`);
+      // Create trace for this deferred region, then report error
+      this.error('parse', `Unresolved syntax: '${this.string?.trim() ?? ''}'`);
 
-    //   // Create a lazy node — when realized, just takes the value from the resolved result
-    //   const lazy = new Node(this.program).lazily(self => {
-    //     result.realize();
-    //     self.value = result.value;
-    //   });
-    //   this.program.pending.push(lazy);
-    //   this.program.result = lazy;
-    //   return lazy;
-    // }
+      // Create a lazy node — when realized, just takes the value from the resolved result
+      const lazy = new Node(this.program).lazily(self => {
+        result.realize();
+        self.value = result.value;
+      });
+      this.program.pending.push(lazy);
+      this.program.result = lazy;
+      return lazy;
+    }
 
     // 1. Method on current result
     if (result) {
@@ -1284,9 +1284,9 @@ export class Node {
         if (!prefixResolved || prefixResolved().none) continue;
 
         if (this._direction === 1) {
-          this.end = { index: this.end.index - suffix.length };
+          this.end = this.end - suffix.length;
         } else {
-          this.begin = { index: this.begin.index + suffix.length };
+          this.begin = this.begin + suffix.length;
         }
         const lazy = new Node(this.program).lazily(self => { self.value = (prefixResolved() as Node).value; });
         this.program.pending.push(lazy);
@@ -1399,12 +1399,7 @@ export class Node {
 
 }
 
-export type Location = {
-  file?: string;
-  line?: number;
-  col?: number;
-  index: number
-}
+export type Location = number;
 
 //  scope = () => {}
 //  allowForwardRef = () => {}

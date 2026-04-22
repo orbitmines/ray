@@ -24,7 +24,6 @@ export interface Trace {
 
 export class Diagnostics {
   private items: Diagnostic[] = [];
-  private keys = new Set<string>();
   private _cascadeSuppression = false;
   private _unresolvedNames = new Set<string>();
 
@@ -44,6 +43,8 @@ export class Diagnostics {
     }
     return new Clock();
   }
+  private _start = this.clock();
+  start = () => this._start = this.clock();
 
   enableCascadeSuppression() { this._cascadeSuppression = true; }
 
@@ -526,7 +527,7 @@ export class Diagnostics {
     const parts: string[] = [];
     if (errs.length) parts.push(`${Diagnostics.levelColor.error}${errs.length} error${errs.length > 1 ? 's' : ''}${Diagnostics.c.reset}`);
     if (warns.length) parts.push(`${Diagnostics.levelColor.warning}${warns.length} warning${warns.length > 1 ? 's' : ''}${Diagnostics.c.reset}`);
-    if (parts.length) console.error(`\n  ${parts.join(', ')}`);
+    if (parts.length) console.error(`\n  ${parts.join(', ')}${Diagnostics.c.gray}, ${this._start.toString()}`);
   }
 }
 
@@ -573,7 +574,7 @@ export class Runtime implements Backend {
   base = (fn: (x: Node) => void): this => { fn(this.BASE); return this; }
   context = (fn: (x: Node) => void): this => { fn(this.CTX); return this; }
   object = (key: Key, fn: (x: Node) => void): this => {
-    if (!this.GLOBAL.has(key)) this.GLOBAL.set(new Node(this.EXTERNALLY_DEFINED))
+    if (!this.GLOBAL.eager.has(key)) this.GLOBAL.eager.set(new Node(this.EXTERNALLY_DEFINED))
     fn(this.GLOBAL.resolve(key)());
     return this;
   }
@@ -783,9 +784,9 @@ export class Node {
     if (this._thunks) { const t = this._thunks; this._thunks = null; for (const fn of t) fn(this); }
     return this;
   }
-  lazy_get = (key: Key): Node => new Node(this.reader).switch_ctx(this.value.ctx).lazily((self) => self.value = this.get(key)(this).value);
-  lazy_set = (value: Node): Node => this.lazily((self) => self.value = value.realize().value);
-  lazy_call = (args: Node): Node => new Node(this.reader).switch_ctx(this.value.ctx).lazily((self) => self.value = this.call(args).value);
+  get = (key: Key): Node => new Node(this.reader).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.get(key)(this).value);
+  set = (value: Node): Node => this.lazily((self) => this.eager.set(value));
+  call = (args: Node): Node => new Node(this.reader).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.call(args).value);
 
   constructor(public reader: Reader, public _super: Node = reader.runtime.BASE, encoded: any = UNKNOWN) { this.value.encoded = encoded; }
 
@@ -793,20 +794,22 @@ export class Node {
   get none(): boolean { return this.value.encoded === null || this.value.encoded === undefined; }
 
   //TODO has/get should pattern match if key is Node
-  has = (key: Key): boolean => { return this.value.methods.has(key); }
-  get = (key: Key): Method | undefined => { this.realize(); return this.value.methods.get(key); }
-  set = (val: Node): Node => { this.realize(); this.value = val.value; return this; }
-  call = (args: Node) => {
-    this.realize()
-    if (!is_function(this.value.encoded)) {
-      this.error('call', `Expected a function to call.`)
-      return new Node(this.reader)
-    }
-    return this.value.encoded(this, args)
+  eager = {
+    has: (key: Key): boolean => { this.realize(); return this.value.methods.has(key); },
+    get: (key: Key): Method | undefined => { this.realize(); return this.value.methods.get(key); },
+    set: (val: Node): Node => { this.realize(); this.value = val.value; return this; },
+    call: (args: Node) => {
+      this.realize()
+      if (!is_function(this.value.encoded)) {
+        this.error('call', `Expected a function to call.`)
+        return new Node(this.reader)
+      }
+      return this.value.encoded(this, args)
+    },
   }
 
   resolve = (key: Key): ResolvedMethod => {
-    if (this.has(key)) return (...args) => this.get(key)(this, ...args)
+    if (this.eager.has(key)) return (...args) => this.eager.get(key)(this, ...args)
     if (this._super) return this._super.resolve(key);
     return () => new Node(null, null)
   }
@@ -844,9 +847,6 @@ export class Node {
     return this;
   }
 
-  /**
-   *
-   */
   public cursor: Location; public selection: { begin: Location, end: Location }[] = []
   private single_char = () => this.selection.length === 0;
   private get first() { return !this.single_char() ? this.selection[0] : undefined }
@@ -1049,7 +1049,7 @@ export class Node {
 
     // 1. Method on current result
     if (result) {
-      const method = result.get(key);
+      const method = result.eager.get(key);
       if (method) {
         const lazy = new Node(this.reader).lazily(self => { self.value = method(result).value; });
         this.reader.pending.push(lazy);
@@ -1060,7 +1060,7 @@ export class Node {
     // 2. Exact resolve in context — walk _super chain, call the method to get a partial
     const found = this._findMethod(key);
     if (found) {
-      const method = found.get(key);
+      const method = found.eager.get(key);
       const owner = found === runtime.BASE ? '*' : found === runtime.CTX ? 'ctx' : 'scope';
       const lazy = new Node(this.reader).lazily(self => { self.value = method(found).value; });
       this.reader.pending.push(lazy);
@@ -1098,10 +1098,11 @@ export class Node {
     }
 
     // 4. Method on `this` (implicit self)
-    if (runtime.CTX.has('this')) {
-      const thisNode = runtime.CTX.get('this')(runtime.CTX);
+    //TODO Should be this.value.ctx
+    if (runtime.CTX.eager.has('this')) {
+      const thisNode = runtime.CTX.eager.get('this')(runtime.CTX);
       if (thisNode && !thisNode.none) {
-        const method = thisNode.get(key);
+        const method = thisNode.eager.get(key);
         if (method) {
           const lazy = new Node(this.reader).lazily(self => { self.value = method(thisNode).value; });
           this.reader.pending.push(lazy);
@@ -1124,7 +1125,7 @@ export class Node {
    */
   save = (): this => {
     if (this.reader.result) {
-      this.reader.result = this.reader.result.lazy_call(this);
+      this.reader.result = this.reader.result.call(this);
     } else {
       this.reader.result = this;
     }
@@ -1228,7 +1229,7 @@ export class Reader {
     for (let i = 0; i < this.pending.length; i++) {
       this.pending[i].realize();
     }
-    if (this.log.hasErrors) this.log.fatal('verify', 'Exited during abstract interpretation, errors were while verifying the soudness of the program.')
+    if (this.log.hasErrors) this.log.fatal('verify', 'Exited during abstract interpretation, errors occurred while verifying the soundness of the program.')
   }
 
 }

@@ -55,7 +55,8 @@ class * | Node
 
   external io: Modifier // Flag the method as IO.
   pure: Modifier // Flag method as pure: No io allowed.
-  external interpretable: Modifier
+  external speculate: Modifier
+  deterministic/nondeterministic
 
   external left-to-right: Modifier
   external right-to-left: Modifier // Flags that the property is invoked in opposite reading order, where if both ltr and rtl are used, their shared boundary is what they both invoke on.

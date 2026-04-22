@@ -34,6 +34,13 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
   //     )]
   //   })
   // )
+  .abstract(fn => {
+    if (fn.enabled('refuse_abstract_interpretation')) {
+      fn.debug('abstract', 'Refused to abstractly call function, defaulting to its return type.')
+      return 
+    }
+
+  })
 
   //TODO Set class * location on base class.
   .base(_ => _
@@ -41,6 +48,7 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
       if (!self.eager.has(args.resolve('location')())) self.error('external', "Expected method to be externally defined by the runtime, but it wasn't");
       return args;
     })
+    // .external_method('ex', null, fn => fn.with('refuse_abstract_interpretation'))
     // .external_method('initializer')
     // .external_method('left-to-right')
     // .external_method('right-to-left')

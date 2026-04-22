@@ -656,6 +656,7 @@ interface Backend {
   external_method(key: Key, fn: Method): this
   object(key: Key, fn: (x: Node) => void): this
 
+  abstract(call_abstractly?: (fn: Node) => Node): this
   cli(location: string[], args: { [key: string]: string[] }): void
   exec(): void
   repl(): void
@@ -668,6 +669,7 @@ export class Runtime implements Backend {
   programs: Program[] = [];
   /** When false, Program.instrument becomes a no-op (no Clock, no stack push/pop, no timing Diagnostics emitted). */
   timing = true;
+  abstract_interpretation: { enabled?: boolean, call?: (fn: Node) => Node } = {}
 
   EXTERNALLY_DEFINED = new Program(this)
 
@@ -681,6 +683,11 @@ export class Runtime implements Backend {
   root: string = path.resolve(import.meta.dirname, '..', '..', '..')
 
   constructor(public language: Language) { this.log.runtime = this; }
+
+  abstract = (call_abstractly?: (fn: Node) => Node): this => {
+    if (call_abstractly) { this.abstract_interpretation.call = call_abstractly; } else { this.abstract_interpretation.enabled = true }
+    return this; 
+  }
 
   base = (fn: (x: Node) => void): this => { fn(this.BASE); return this; }
   context = (fn: (x: Node) => void): this => { fn(this.CTX); return this; }
@@ -866,6 +873,7 @@ export class Language implements Backend {
   object = this.step('object')
   external_method = this.step('external_method')
 
+  abstract = this.delegate('abstract')
   cli = this.delegate('cli')
   exec = this.delegate('exec')
   repl = this.delegate('repl')
@@ -943,6 +951,9 @@ export class Node {
     }),
   }
 
+  with = (key: string, value?: string): this => { this.value.options[key] = value ?? ''; return this; }
+  enabled = (key: string): boolean => !!this.value.options[key]
+
   resolve = (key: Key): ResolvedMethod => {
     if (this.eager.has(key)) return (...args) => this.eager.get(key)(this, ...args)
     if (this._super) return this._super.resolve(key);
@@ -973,22 +984,8 @@ export class Node {
     }
     return this;
   }
-
-  /** Spawn a sub-Program and read this Node's source within it. Returns the
-   *  program pointers (pending lazy nodes) of that sub-program. */
-  eval = (): Node[] => {
-    if (!this.source_file || !this.program) return [];
-    const rt = this.program.runtime;
-    const sub = new Program(rt, this.program);
-    const root = new Node(sub, rt.BASE);
-    root.source_file = this.source_file;
-    root.cursor = -1;
-    sub.root = root;
-    root.read();
-    return sub.pending;
-  }
-
-  external_method = (key: Key, fn?: Method): this => {
+  
+  external_method = (key: Key, fn?: Method, callback?: (fn: Node) => Node): this => {
     // Two-stage: first call binds self → returns callable partial, second call runs fn(self, args)
     const methodFn: Method = (self: Node) => {
       const partial = new Node(self.program, self._super, key);
@@ -1009,7 +1006,7 @@ export class Node {
           self.program = prevProgram;
         }
       });
-      return partial;
+      return callback(partial);
     };
     this.value.methods.set(key, methodFn);
     return this;
@@ -1363,6 +1360,10 @@ export class Node {
   comment = () => {
     //TODO Set as comment, skippable for others. peak/etc skip over comments
     return this;
+  }
+
+  suggest = () => {
+    // TODO
   }
 
   block = (fn?: (_: this) => Expression,  punctuation?: { begin: string, end: string }): this => {

@@ -10,9 +10,8 @@ export interface Diagnostic {
 }
 
 export interface Trace {
-  token: string;
-  begin: number;
-  end: number;
+  /** The node this trace refers to. Uses its selection for ranges and cursor for pipe anchor. */
+  node: Node;
   kind: 'method' | 'resolve' | 'split' | 'implicit-self' | 'forward-ref';
   description: string;
   order: number;
@@ -104,14 +103,16 @@ export class Diagnostics {
 
   // ANSI helpers
   private static c = {
-    reset:   '\x1b[0m',
-    blue:    '\x1b[34m',
-    yellow:  '\x1b[33m',
-    gray:    '\x1b[90m',
-    red:     '\x1b[1;31m',
-    white:   '\x1b[37m',
-    dim:     '\x1b[2m',
-    bold:    '\x1b[1m',
+    reset:       '\x1b[0m',
+    blue:        '\x1b[34m',
+    yellow:      '\x1b[33m',
+    gray:        '\x1b[90m',
+    red:         '\x1b[1;31m',
+    bold_yellow: '\x1b[1;33m',
+    bold_blue:   '\x1b[1;34m',
+    white:       '\x1b[37m',
+    dim:         '\x1b[2m',
+    bold:        '\x1b[1m',
   }
 
   /**
@@ -143,10 +144,20 @@ export class Diagnostics {
       const lineLabel = `${c.gray}${String(lineNo + 1).padStart(lineNumWidth)} ${c.reset}`;
       const blankGutter = ' '.repeat(gutterLen);
 
-      // Collect traces on this line
+      // Helpers to extract position info from a trace's node
+      const traceCursor = (t: Trace) => t.node.cursor.index;
+      const traceRanges = (t: Trace): { begin: number; end: number }[] => {
+        if (t.node.selection.length === 0) {
+          const c = t.node.cursor.index;
+          return [{ begin: c, end: c }];
+        }
+        return t.node.selection.map(s => ({ begin: s.begin.index, end: s.end.index }));
+      };
+
+      // Collect traces on this line (using cursor position as the anchor)
       const lineTraces: Trace[] = [];
-      while (traceIdx < traces.length && traces[traceIdx].begin < lineEnd) {
-        if (traces[traceIdx].begin >= lineStart) lineTraces.push(traces[traceIdx]);
+      while (traceIdx < traces.length && traceCursor(traces[traceIdx]) < lineEnd) {
+        if (traceCursor(traces[traceIdx]) >= lineStart) lineTraces.push(traces[traceIdx]);
         traceIdx++;
       }
 
@@ -163,12 +174,13 @@ export class Diagnostics {
         else below.push(lineTraces[i]);
       }
 
-      // Compute columns and colors for each trace
+      // Compute cursor column (pipe anchor), highlight ranges, and colors for each trace
       const tokenColors = [c.blue, c.yellow];
       const traceInfo = lineTraces.map((t, i) => ({
         trace: t,
-        col: t.begin - lineStart,
-        color: t.diagnostics.some(d => d.level === 'error') ? c.red : t.diagnostics.length ? c.yellow : tokenColors[i % 2],
+        col: traceCursor(t) - lineStart,
+        ranges: traceRanges(t).map(r => ({ begin: r.begin - lineStart, end: r.end - lineStart })),
+        color: t.diagnostics.some(d => d.level === 'error') ? c.red : t.diagnostics.length ? c.bold_yellow : tokenColors[i % 2],
       }));
       const aboveInfo = traceInfo.filter((_, i) => i % 2 === 1).reverse();
       const belowInfo = traceInfo.filter((_, i) => i % 2 === 0);
@@ -189,14 +201,23 @@ export class Diagnostics {
         }
       }
 
-      // Render source line with colored tokens
+      // Render source line: collect all (range, color) pairs from every trace, sort, apply
+      const colorSegments: { begin: number; end: number; color: string }[] = [];
+      for (const ti of traceInfo) {
+        for (const r of ti.ranges) {
+          if (r.end < 0 || r.begin >= line.length) continue;
+          colorSegments.push({ begin: Math.max(r.begin, 0), end: Math.min(r.end, line.length - 1), color: ti.color });
+        }
+      }
+      colorSegments.sort((a, b) => a.begin - b.begin);
+
       let colored = '';
       let pos = 0;
-      for (const ti of traceInfo) {
-        const endCol = ti.trace.end - lineStart + 1;
-        if (ti.col > pos) colored += c.white + line.slice(pos, ti.col);
-        colored += ti.color + line.slice(ti.col, endCol);
-        pos = endCol;
+      for (const seg of colorSegments) {
+        if (seg.begin > pos) colored += c.white + line.slice(pos, seg.begin);
+        const endCol = seg.end + 1;
+        if (endCol > pos) colored += seg.color + line.slice(Math.max(seg.begin, pos), endCol);
+        pos = Math.max(pos, endCol);
       }
       if (pos < line.length) colored += c.white + line.slice(pos);
       console.error(`${lineLabel}${colored}${c.reset}`);
@@ -407,7 +428,7 @@ export class Diagnostics {
   /** Format a diagnostic label: error/warning in appropriate color, [phase] in gray */
   formatDiagnosticLabel(d: Diagnostic): { colored: string; plain: string } {
     const { c } = Diagnostics;
-    const lbl = d.level === 'error' ? `${c.red}error${c.reset}` : d.level === 'warning' ? `\x1b[1;33mwarning${c.reset}` : `${c.blue}info${c.reset}`;
+    const lbl = d.level === 'error' ? `${c.red}error${c.reset}` : d.level === 'warning' ? `${c.bold_yellow}warning${c.reset}` : `${c.bold_blue}info${c.reset}`;
     const lblPlain = d.level;
     return {
       colored: `${lbl}${c.gray}[${d.phase}]${c.reset}: `,
@@ -503,7 +524,7 @@ export class Runtime implements Backend {
   }
   external_method = (key: Key, fn: Method): this => { this.GLOBAL.external_method(key, fn); return this; }
 
-  private _tokenHandler: ((node: Node) => void) | null = null;
+  _tokenHandler: ((node: Node) => void) | null = null;
 
   syntax = (expression: (E: ((...args: Expression[]) => Node) & { [key: string]: any }) => Expression | Expression[]): this => {
     const placeholderReader = new Reader(this);
@@ -605,10 +626,8 @@ export class Runtime implements Backend {
       }
     }
 
-    if (this.log.hasErrors) {
-      process.exitCode = 1;
-      this.log.print()
-    }
+    if (this.log.hasErrors) process.exitCode = 1;
+    if (this.log.count > 0) this.log.print();
 
     return undefined;
   }
@@ -890,8 +909,11 @@ export class Node {
 
   copy = () => {
     const copy = new Node(this.reader, this._super)
-    copy._thunks = [...this._thunks]
+    copy._thunks = this._thunks ? [...this._thunks] : null
     copy.value = {...this.value}
+    copy.cursor = this.cursor ? { ...this.cursor } : this.cursor
+    copy.selection = this.selection.map(s => ({ begin: { ...s.begin }, end: { ...s.end } }))
+    copy._direction = this._direction
     return copy;
   }
 
@@ -919,9 +941,23 @@ export class Node {
    *   4. Method on `this` (implicit self)
    *   5. Forward ref fallback
    */
+  /** Record a trace entry linking to a copy of this node (snapshots its selection + cursor). */
+  trace = (kind: Trace['kind'], description: string): Trace | null => {
+    if (!this.cursor || !this.reader) return null;
+    const t: Trace = {
+      node: this.copy(),
+      kind,
+      description,
+      order: this.reader.traces.length,
+      diagnostics: [],
+    };
+    this.reader.traces.push(t);
+    return t;
+  }
+
   private _matched = (node: Node, kind: Trace['kind'], description: string): Node => {
     node.reader = this.reader;
-    if (this.cursor) this.reader.trace(this.string ?? '', this.begin?.index ?? 0, this.end?.index ?? 0, kind, description);
+    this.trace(kind, description);
     return node;
   }
 
@@ -932,22 +968,12 @@ export class Node {
     // Capture the rest of the line and defer the entire resolution.
     const result = this.reader.result;
     if (result && result._thunks) {
-      // Capture remaining source on this line
-      const captureStart = this.begin?.index ?? 0;
-      let captureEnd = captureStart;
-      while (captureEnd < this.reader.source.length && this.reader.source[captureEnd] !== '\n') captureEnd++;
-      const restOfLine = this.reader.source.slice(captureStart, captureEnd);
+      // Extend selection to end of line using the existing direction primitives
+      this.right.capture_while((ch: string) => ch !== '\n');
 
-      // Advance the node pointer past the captured content
-      if (this.cursor) this.end = { index: captureEnd - 1 };
-
-      // Create trace for this deferred region
-      const trace = this.cursor
-        ? this.reader.trace(restOfLine, captureStart, captureEnd - 1, 'forward-ref', '')
-        : null;
-
-      // Report the unresolved error (attaches to the trace above)
-      this.warning('parse', `Unresolved syntax: '${restOfLine.trim()}'`);
+      // Create trace for this deferred region, then report error
+      this.trace('forward-ref', '');
+      this.error('parse', `Unresolved syntax: '${this.string?.trim() ?? ''}'`);
 
       // Create a lazy node — when realized, just takes the value from the resolved result
       const lazy = new Node(this.reader).lazily(self => {
@@ -1025,7 +1051,7 @@ export class Node {
     // 5. Forward ref — already lazy by nature (errors only on access)
     const forward = new Node(this.reader, undefined);
     forward.external_method(key, () => forward.fatal('forward ref', `Unresolved: ${key}`));
-    if (this.cursor) this.reader.trace(this.string ?? '', this.begin?.index ?? 0, this.end?.index ?? 0, 'forward-ref', `Forward reference to '${key}'`);
+    this.trace('forward-ref', `Forward reference to '${key}'`);
     return forward;
   }
 
@@ -1044,41 +1070,19 @@ export class Node {
   }
 
   /**
-   * .expression(): Recursively parse an expression in the current direction.
-   * Saves the previous reader result, parses tokens until end of line,
-   * then restores context and returns with this node holding the parsed value.
+   * .expression(): Recursively parse an expression by invoking the language's
+   * registered token handler in the current direction until end of line.
+   * Saves the previous reader result, then restores context and returns with
+   * this node holding the parsed value.
    */
   expression = (): this => {
     const prevResult = this.reader.result;
     this.reader.result = null;
 
-    // Parse tokens in current direction until end of line
-    while (!this.direction.done()) {
-      const ch = this.direction.peak();
-      if (ch === '\n') break;
-      if (ch === ' ') { this.direction(); continue; }
-
-      // Capture one token
-      const token = new Node(this.reader, this._super);
-      token.cursor = { index: this._direction === 1 ? this.end.index : this.begin.index };
-      token._direction = this._direction;
-      token.direction.capture_while((c: string) => c !== ' ' && c !== '\n');
-
-      const resolved = token.match(token.string);
-
-      if (resolved.value.options['rtl']) {
-        resolved.rtl.expression().save();
-      } else if (resolved.value.options['left_associative']) {
-        resolved.ltr.expression().save();
-      } else {
-        resolved.save();
-      }
-
-      // Advance our pointer past what the token consumed
-      if (this._direction === 1) {
-        this.end = { index: token.end.index };
-      } else {
-        this.begin = { index: token.begin.index };
+    const handler = this.reader.runtime._tokenHandler;
+    if (handler) {
+      while (!this.direction.done() && this.direction.peak() !== '\n') {
+        handler(this);
       }
     }
 
@@ -1155,11 +1159,6 @@ export class Reader {
 
   constructor(public runtime: Runtime) {
 
-  }
-
-  trace(token: string, begin: number, end: number, kind: Trace['kind'], description: string) {
-    this.traces.push({ token, begin, end, kind, description, order: this.traces.length, diagnostics: [] });
-    return this.traces[this.traces.length - 1];
   }
 
   /** Realize all pending lazy nodes, triggering deferred method calls and error reporting. */

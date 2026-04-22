@@ -8,12 +8,13 @@ import * as PullRequests from './PullRequests.ts';
 import * as Settings from './Settings.ts';
 import * as Chat from './Chat.ts';
 import * as Library from './Library.ts';
+import * as LanguageCreator from './LanguageCreator.ts';
 import { getDefaultUser } from './API.ts';
 
-type Page = 'repository' | 'pull-requests' | 'settings' | 'chat' | 'library';
+type Page = 'repository' | 'pull-requests' | 'settings' | 'chat' | 'library' | 'language';
 
 // Pages where the global command bar (@/slash overlay + @me button) is active.
-const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository', 'pull-requests', 'settings', 'chat', 'library']);
+const COMMAND_BAR_PAGES: Set<Page> = new Set(['repository', 'pull-requests', 'settings', 'chat', 'library', 'language']);
 
 let currentPage: Page | null = null;
 let rootEl: HTMLElement;
@@ -70,7 +71,8 @@ type RouteResult =
   | { page: 'pull-requests'; params: PRParams }
   | { page: 'settings'; params: SettingsParams }
   | { page: 'chat'; params: ChatParams }
-  | { page: 'library'; params: LibraryParams };
+  | { page: 'library'; params: LibraryParams }
+  | { page: 'language'; params: LanguageCreator.LangParams };
 
 // ---- Route Matching ----
 
@@ -78,6 +80,21 @@ function matchRoute(pathname: string): RouteResult {
   let user = getDefaultUser();
   let base = '';
   let rest = pathname;
+
+  // ---- $ language routes (before @user extraction) ----
+  // /$ → list all languages
+  // /$.ray → language creator for .ray
+  // /$.ray/path → sub-path within the language
+  const langMatch = pathname.match(/^\/\$(?:\.([a-zA-Z][a-zA-Z0-9]*))?(?:\/(.*))?$/);
+  if (langMatch) {
+    const lang = langMatch[1] || null;
+    const subPath = langMatch[2] || '';
+    const path = subPath ? subPath.split('/').filter(s => s) : [];
+    return {
+      page: 'language',
+      params: { user, base: '', lang, path },
+    };
+  }
 
   // Extract @user prefix
   const atMatch = pathname.match(/^\/@([^/]+)(\/.*)?$/);
@@ -282,6 +299,11 @@ async function activatePage(route: RouteResult): Promise<void> {
     ensureBar(route.page);
     return;
   }
+  if (route.page === 'language' && currentPage === 'language') {
+    await LanguageCreator.update(route.params);
+    ensureBar(route.page);
+    return;
+  }
 
   // Unmount current page
   if (currentPage === 'repository') {
@@ -294,6 +316,8 @@ async function activatePage(route: RouteResult): Promise<void> {
     Chat.unmount();
   } else if (currentPage === 'library') {
     Library.unmount();
+  } else if (currentPage === 'language') {
+    LanguageCreator.unmount();
   }
 
   // Tear down global bar when navigating to an unsupported page
@@ -319,6 +343,9 @@ async function activatePage(route: RouteResult): Promise<void> {
   } else if (route.page === 'library') {
     rootEl.style.display = '';
     await Library.mount(rootEl, route.params, navigateTo);
+  } else if (route.page === 'language') {
+    rootEl.style.display = '';
+    await LanguageCreator.mount(rootEl, route.params, navigateTo);
   }
 
   ensureBar(route.page);

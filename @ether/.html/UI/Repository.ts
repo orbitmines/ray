@@ -100,7 +100,7 @@ const BUFFER_LINES = 50;
 // Current state
 let currentRepoParams: { user: string; path: string[]; versions: [number, string][]; base: string; hash: string | null } | null = null;
 
-function injectStyles(): void {
+export function injectStyles(): void {
   if (styleEl) return;
   styleEl = document.createElement('style');
   styleEl.textContent = `
@@ -1593,7 +1593,7 @@ function hideAccessTooltip(): void {
   accessTooltipBadge = null;
 }
 
-function bindAccessBadges(root: HTMLElement): void {
+export function bindAccessBadges(root: HTMLElement): void {
   root.querySelectorAll('.access-badge').forEach(badge => {
     // Desktop hover — display mode only
     badge.addEventListener('mouseenter', () => {
@@ -1617,6 +1617,90 @@ document.addEventListener('click', (e) => {
   if (accessTooltipEl && accessTooltipEl.contains(e.target as Node)) return;
   hideAccessTooltip();
 });
+
+/** Reusable sidebar context for binding tree expand/collapse and file click handlers */
+export interface SidebarContext {
+  basePath: string;
+  /** Given a relative path (from basePath), return the API path to list the directory */
+  toApiPath: (relPath: string) => string;
+  /** Called when a file is clicked — receives href from data-href */
+  onFileClick: (href: string) => void;
+}
+
+/** Bind expand/collapse on sidebar dirs. Fetches children from API on first expand. */
+export function bindSidebarTree(el: HTMLElement, ctx: SidebarContext): void {
+  el.querySelectorAll('[data-sidebar-toggle]').forEach(toggle => {
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const dirEl = toggle.closest('.sidebar-dir')!;
+      let children = dirEl.querySelector(':scope > .sidebar-dir-children');
+      if (!children) {
+        const href = (toggle as HTMLElement).dataset.sidebarHref;
+        if (!href) return;
+        const prefix = ctx.basePath.endsWith('/') ? ctx.basePath : ctx.basePath + '/';
+        const relPathEncoded = href.startsWith(prefix) ? href.slice(prefix.length) : null;
+        if (relPathEncoded === null) { ctx.onFileClick(href); return; }
+        const relPath = relPathEncoded.split('/').map(s => { try { return decodeURIComponent(s); } catch { return s; } }).join('/');
+        const apiPath = ctx.toApiPath(relPath);
+        void (async () => {
+          const fetched = await getAPI().listDirectory(apiPath);
+          const childrenDiv = document.createElement('div');
+          childrenDiv.className = 'sidebar-dir-children';
+          const padStr = (toggle as HTMLElement).style.paddingLeft || '8';
+          const depth = Math.round((parseInt(padStr, 10) - 8) / 16) + 1;
+          childrenDiv.innerHTML = fetched.length > 0 ? renderSidebarTree(fetched, href, [], depth) : '';
+          dirEl.appendChild(childrenDiv);
+          const arrow = toggle.querySelector('.sidebar-arrow');
+          if (fetched.length === 0) { if (arrow) arrow.textContent = ''; }
+          else { if (arrow) arrow.textContent = '▾'; }
+          const key = (toggle as HTMLElement).dataset.sidebarKey;
+          if (key) { sidebarExpanded.add(key); saveSidebarExpanded(getCurrentPlayer()); }
+          bindSidebarTree(childrenDiv, ctx);
+          bindSidebarFiles(childrenDiv, ctx);
+          bindAccessBadges(childrenDiv);
+        })();
+        return;
+      }
+      const isExpanded = !children.classList.contains('hidden');
+      children.classList.toggle('hidden');
+      const arrow = toggle.querySelector('.sidebar-arrow');
+      if (arrow) arrow.textContent = isExpanded ? '▸' : '▾';
+      const key = (toggle as HTMLElement).dataset.sidebarKey;
+      if (key) {
+        if (isExpanded) sidebarExpanded.delete(key); else sidebarExpanded.add(key);
+        saveSidebarExpanded(getCurrentPlayer());
+      }
+    });
+  });
+  el.querySelectorAll('[data-sidebar-toggle-arrow]').forEach(arrow => {
+    arrow.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const dirEl = arrow.closest('.sidebar-dir')!;
+      const children = dirEl.querySelector(':scope > .sidebar-dir-children');
+      if (!children) return;
+      const isExpanded = !children.classList.contains('hidden');
+      children.classList.toggle('hidden');
+      arrow.textContent = isExpanded ? '▸' : '▾';
+      const key = (arrow as HTMLElement).dataset.sidebarKey;
+      if (key) {
+        if (isExpanded) sidebarExpanded.delete(key); else sidebarExpanded.add(key);
+        saveSidebarExpanded(getCurrentPlayer());
+      }
+    });
+  });
+}
+
+/** Bind click handlers on sidebar file entries. */
+export function bindSidebarFiles(el: HTMLElement, ctx: SidebarContext): void {
+  el.querySelectorAll('[data-href]').forEach(entry => {
+    entry.addEventListener('click', (e) => {
+      e.preventDefault();
+      ctx.onFileClick((entry as HTMLElement).dataset.href!);
+    });
+  });
+}
 
 function bindClickHandlers(): void {
   if (!currentContainer || !navigateFn) return;
@@ -2304,7 +2388,7 @@ function findReadmes(entries: TreeEntry[]): FileEntry[] {
 
 // ---- File Viewer ----
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
@@ -2370,7 +2454,7 @@ function renderFileViewContent(files: FileEntry[]): string {
   return html;
 }
 
-function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: string[], depth: number, parentContext: ParentContext = null): string {
+export function renderSidebarTree(entries: TreeEntry[], basePath: string, expandPath: string[], depth: number, parentContext: ParentContext = null): string {
   const flat = flattenEntries(entries);
   const sorted = [...flat].sort((a, b) => {
     if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;

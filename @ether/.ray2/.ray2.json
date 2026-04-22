@@ -1,0 +1,261 @@
+{
+  "extension": "ray2",
+  "program": [
+    {
+      "id": "m5",
+      "typeId": "reading",
+      "config": {
+        "direction": "ltr"
+      },
+      "children": [
+        {
+          "id": "m1",
+          "typeId": "load-file",
+          "config": {
+            "path": "Node.ray2"
+          },
+          "children": [],
+          "isDefault": true,
+          "expanded": true
+        },
+        {
+          "id": "m4",
+          "typeId": "load-directory",
+          "config": {
+            "path": ".",
+            "extension": ".ray2"
+          },
+          "children": [
+            {
+              "id": "m2",
+              "typeId": "recursively",
+              "config": {},
+              "children": [],
+              "isDefault": true,
+              "expanded": true
+            },
+            {
+              "id": "m3",
+              "typeId": "exclude",
+              "config": {
+                "pattern": "Node.ray2"
+              },
+              "children": [],
+              "isDefault": true,
+              "expanded": true
+            }
+          ],
+          "isDefault": true,
+          "expanded": true
+        }
+      ],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m6",
+      "typeId": "structure",
+      "config": {
+        "indentation": true,
+        "lines": true,
+        "separator": "newline"
+      },
+      "children": [],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m11",
+      "typeId": "tokenization",
+      "config": {
+        "identifierChars": "\\S",
+        "tokenBreakers": "space, newline"
+      },
+      "children": [
+        {
+          "id": "m10",
+          "typeId": "compound-splitting",
+          "config": {
+            "strategy": "split-candidate"
+          },
+          "children": [],
+          "isDefault": true,
+          "expanded": true
+        }
+      ],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m8",
+      "typeId": "delimiters",
+      "config": {
+        "pairs": "() [] {}"
+      },
+      "children": [
+        {
+          "id": "m7",
+          "typeId": "nesting",
+          "config": {
+            "selfNest": true
+          },
+          "children": [],
+          "isDefault": true,
+          "expanded": true
+        }
+      ],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m9",
+      "typeId": "comments",
+      "config": {
+        "line": "//"
+      },
+      "children": [],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m14",
+      "typeId": "binding",
+      "config": {
+        "syntax": "="
+      },
+      "children": [
+        {
+          "id": "m12",
+          "typeId": "aliasing",
+          "config": {
+            "syntax": "|"
+          },
+          "children": [],
+          "isDefault": true,
+          "expanded": true
+        },
+        {
+          "id": "m13",
+          "typeId": "forward-references",
+          "config": {},
+          "children": [],
+          "isDefault": true,
+          "expanded": true
+        }
+      ],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m15",
+      "typeId": "scoping",
+      "config": {
+        "model": "lexical",
+        "self": "this",
+        "unresolved": "forward"
+      },
+      "children": [],
+      "isDefault": false,
+      "expanded": true
+    },
+    {
+      "id": "m17",
+      "typeId": "evaluation",
+      "config": {
+        "strategy": "lazy",
+        "passes": "fixpoint"
+      },
+      "children": [
+        {
+          "id": "m16",
+          "typeId": "fixpoint",
+          "config": {
+            "maxRounds": "10"
+          },
+          "children": [],
+          "isDefault": true,
+          "expanded": true
+        }
+      ],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m19",
+      "typeId": "associativity",
+      "config": {
+        "default": "left",
+        "precedence": "positional"
+      },
+      "children": [
+        {
+          "id": "m18",
+          "typeId": "per-construct-override",
+          "config": {},
+          "children": [],
+          "isDefault": true,
+          "expanded": true
+        }
+      ],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m20",
+      "typeId": "patterns",
+      "config": {
+        "bindingSlots": "{name: type}",
+        "alternation": "|",
+        "body": "=>"
+      },
+      "children": [],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m22",
+      "typeId": "dispatch",
+      "config": {
+        "call": "juxtaposition",
+        "notCallable": "error"
+      },
+      "children": [
+        {
+          "id": "m21",
+          "typeId": "fallback-chain",
+          "config": {
+            "model": "prototype"
+          },
+          "children": [],
+          "isDefault": true,
+          "expanded": true
+        }
+      ],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m23",
+      "typeId": "diagnostics",
+      "config": {
+        "recovery": "collect",
+        "locationTracking": true
+      },
+      "children": [],
+      "isDefault": true,
+      "expanded": true
+    },
+    {
+      "id": "m24",
+      "typeId": "execution",
+      "config": {
+        "repl": true,
+        "stepThrough": true,
+        "astBrowser": true
+      },
+      "children": [],
+      "isDefault": true,
+      "expanded": true
+    }
+  ]
+}

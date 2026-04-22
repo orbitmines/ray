@@ -54,6 +54,27 @@ function etherFsPlugin() {
         // CORS headers
         res.setHeader('Access-Control-Allow-Origin', '*');
 
+        // Handle PUT requests (write file)
+        if (req.method === 'PUT') {
+          const chunks = [];
+          req.on('data', chunk => chunks.push(chunk));
+          req.on('end', () => {
+            try {
+              const body = Buffer.concat(chunks).toString('utf-8');
+              // Ensure parent directory exists
+              const dir = path.dirname(fsPath);
+              if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+              fs.writeFileSync(fsPath, body, 'utf-8');
+              res.statusCode = 200;
+              res.end('OK');
+            } catch (e) {
+              res.statusCode = 500;
+              res.end('Write failed: ' + e.message);
+            }
+          });
+          return;
+        }
+
         try {
           const stat = fs.statSync(fsPath);
 

@@ -885,7 +885,7 @@ function installInteraction(btn: HTMLElement, currentName: string): () => void {
     const tag = (document.activeElement?.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || (document.activeElement as HTMLElement)?.isContentEditable) return;
 
-    if (e.key === '@' || e.key === '/' || e.key === '#') {
+    if (e.key === '@' || e.key === '/' || e.key === '#' || e.key === '$') {
       e.preventDefault();
       handleCommandBar(e.key);
     }

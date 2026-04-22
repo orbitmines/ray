@@ -1,5 +1,9 @@
-/**/.idea
 /**/node_modules
+/**/.venv
+/**/__pycache__
+/**/.idea
+/**/.vscode
+/**/.claude
+/**/.vite
+/**/.ether
 /**/.orbitmines
-/Ether/.html/src-tauri/target
-/Ether/.html/src-tauri/gen

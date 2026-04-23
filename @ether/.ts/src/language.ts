@@ -240,8 +240,9 @@ export class Diagnostics {
       const timingLine = this._formatTimingLine(lineTimings);
 
       if (lineAnchors.length === 0) {
+        if (!timingLine) continue;
         console.error(`${lineLabel}${c.gray}${line}${c.reset}`);
-        if (timingLine) console.error(`${blankGutter}${timingLine}`);
+        console.error(`${blankGutter}${timingLine}`);
         continue;
       }
 
@@ -607,8 +608,13 @@ export class Diagnostics {
         // `.do` guarantees every stack frame carries source, so if d.node
         // lacks it the topmost stack frame is a reliable fallback.
         const locNode = d.node?.file ? d.node : d.diagnostics?.[d.diagnostics.length - 1]?.node;
-        if (locNode?.file) console.error(`  ${c.gray}${locNode.file}:${locNode.line}:${locNode.col}${c.reset}`);
-        console.error(`    ${label}${d.message ?? ''}`);
+        if (d.level === 'fatal') {
+          console.error('');
+          console.error(`${label}${d.message ?? ''}`);
+          continue;
+        }
+        if (locNode?.file) console.error(`${c.gray}${locNode.file}:${locNode.line}:${locNode.col}${c.reset}`);
+        console.error(`  ${label}${d.message ?? ''}`);
         if (d.diagnostics?.length) {
           // Most-recent first (innermost = where the error fired, callers
           // below). The stack was pushed oldest-first, so reverse it.
@@ -625,7 +631,7 @@ export class Diagnostics {
             const at = fn?.file && !dup
               ? ` ${c.gray}(${fn.file}:${fn.line}:${fn.col})${c.reset}`
               : '';
-            console.error(`      ${c.gray}at ${phaseColor}${frame.phase}${c.reset}${at}`);
+            console.error(`    ${c.gray}at ${phaseColor}${frame.phase}${c.reset}${at}`);
           }
         }
       }
@@ -685,15 +691,20 @@ export class Runtime implements Backend {
   constructor(public language: Language) { this.log.runtime = this; }
 
   abstract = (call_abstractly?: (fn: Node) => Node): this => {
-    if (call_abstractly) { this.abstract_interpretation.call = call_abstractly; } else { this.abstract_interpretation.enabled = true }
-    return this; 
+    if (call_abstractly) { 
+      this.abstract_interpretation.call = call_abstractly;
+     } else {
+      if (!this.abstract_interpretation.call) return this.log.fatal('abstract', 'Tried to .abstract() interpret the language, but it has not implemented abstract interpretation.')
+      this.abstract_interpretation.enabled = true 
+    }
+    return this;
   }
 
   base = (fn: (x: Node) => void): this => { fn(this.BASE); return this; }
   context = (fn: (x: Node) => void): this => { fn(this.CTX); return this; }
   object = (key: Key, fn: (x: Node) => void): this => {
     if (!this.GLOBAL.eager.has(key)) this.GLOBAL.eager.set(new Node(this.EXTERNALLY_DEFINED))
-    fn(this.GLOBAL.resolve(key)());
+    fn(this.GLOBAL.get(key));
     return this;
   }
   external_method = (key: Key, fn: Method): this => { this.GLOBAL.external_method(key, fn); return this; }
@@ -767,10 +778,7 @@ export class Runtime implements Backend {
 
     node.read();
 
-    // Only verify for top-level parses (triggered by load, not by eval of arbitrary nodes)
-    if (file) program.verify();
-
-    return program.result;
+    return program.result
   }
 
   cli = (location: string[], args: { [key: string]: string[] }) => {
@@ -792,10 +800,20 @@ export class Runtime implements Backend {
       }
     }
 
+    let result: Node | undefined;
+    // Currently the programs are just a list of files read in order of loading. That will change. TODO
+    for (const program of this.programs) {
+      result = this.abstract_interpretation.enabled ? program.verify() : program.result.realize();
+    }
+
+    if (this.abstract_interpretation.enabled) {
+      if (this.log.hasErrors) this.log.fatal('verify', 'Exited during abstract interpretation, errors occurred while verifying the soundness of the program.')
+    }
+
     if (this.log.hasErrors) process.exitCode = 1;
     if (this.log.errors.length > 0 || this.log.warnings.length > 0) this.log.print();
 
-    return undefined;
+    return result;
   }
 
   repl = () => {
@@ -885,7 +903,7 @@ type Method = (self: Node, args?: Node) => Node
 type ResolvedMethod = (args?: Node) => Node | undefined
 type Key = string | Node
 export class Node {
-  value: { encoded: any; ctx?: Node, methods: Map<Key, Method>, options: { [key: string]: string } } = { encoded: UNKNOWN, methods: new Map(), options: {} };
+  value: { encoded: any; ctx?: Node, methods: Map<Key, Node>, options: { [key: string]: string } } = { encoded: UNKNOWN, methods: new Map(), options: {} };
 
   switch_ctx = (ctx: Node): this => { this.value.ctx = ctx; return this; };
 
@@ -903,9 +921,9 @@ export class Node {
     }
     return this;
   }
-  get = (key: Key): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.get(key)(this).value);
+  get = (key: Key): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.get(key).value);
   set = (value: Node): Node => this.lazily((self) => this.eager.set(value));
-  call = (args: Node): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.call(args).value);
+  call = (args: Node = new Node(this.program, undefined, undefined)): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.call(args).value);
 
   /** Ref to the SourceFile this Node is reading from. Only parse-root Nodes
    *  and their copies carry it; lazy value Nodes leave it undefined. */
@@ -939,40 +957,30 @@ export class Node {
   //TODO has/get should pattern match if key is Node
   eager = {
     has: (key: Key): boolean => { this.realize(); return this.value.methods.has(key); },
-    get: (key: Key): Method | undefined => { this.realize(); return this.value.methods.get(key); },
+    get: (key: Key): Node | undefined => { this.realize(); return this.value.methods.get(key); },
     set: (val: Node): Node => { this.realize(); this.value = val.value; return this; },
-    call: (args: Node) => this.do('debug', 'call', () => {
+    call: (args: Node = new Node(this.program, undefined, undefined)) => this.do('debug', 'call', () => {
       this.realize()
-      if (!is_function(this.value.encoded)) {
+      if (!this.callable) {
         this.error('call', `Expected a function to call.`)
         return new Node(this.program)
       }
+
+      if (this.abstract_interpretation) return this.program.runtime.abstract_interpretation.call(this)
       return this.value.encoded(this, args)
     }),
   }
 
+  get callable() { return is_function(this.value.encoded) }
+
+  abstract_interpretation: boolean = false
+  abstract = () => {
+    if (!this.program.runtime.abstract_interpretation.call) return this.fatal('abstract', 'Tried to .abstract() interpret a node, but the language has not implemented abstract interpretation.')
+    const x = this.copy(); x.abstract_interpretation = true; return x;
+  }
+
   with = (key: string, value?: string): this => { this.value.options[key] = value ?? ''; return this; }
   enabled = (key: string): boolean => !!this.value.options[key]
-
-  resolve = (key: Key): ResolvedMethod => {
-    if (this.eager.has(key)) return (...args) => this.eager.get(key)(this, ...args)
-    if (this._super) return this._super.resolve(key);
-    return () => new Node(this.program, undefined, undefined)
-  }
-
-  /** Find the node in the _super chain that has this method key */
-  _findMethod = (key: Key): Node | null => {
-    if (this.value.methods.has(key)) return this;
-    if (this._super) return this._super._findMethod(key);
-    return null;
-  }
-
-  /** Collect all method keys from this node and its _super chain */
-  get methods(): Set<Key> {
-    const keys = new Set<Key>(this.value.methods.keys());
-    if (this._super) for (const k of this._super.methods) keys.add(k);
-    return keys;
-  }
 
   /** Feed this node to the language's token handler until its source is exhausted.
    *  Each handler call is observed via `.do('interpret', …)`. */
@@ -987,28 +995,28 @@ export class Node {
   
   external_method = (key: Key, fn?: Method, callback?: (fn: Node) => Node): this => {
     // Two-stage: first call binds self → returns callable partial, second call runs fn(self, args)
-    const methodFn: Method = (self: Node) => {
-      const partial = new Node(self.program, self._super, key);
-      partial.value.encoded = ((_self: Node, args: Node) => {
+    const methodNode = new Node(this.program, this._super, key);
+    methodNode.value.encoded = ((_self: Node, receiver: Node) => {
+      const partial = new Node(receiver.program, receiver._super, key);
+      partial.value.encoded = ((_p: Node, args: Node) => {
         if (!fn) return this.fatal('forward ref', 'Method was called before it was initialized.');
-        // `self` (the receiver captured when the method was looked up) often
-        // lives outside any source file — e.g. BASE. The caller's `args`
-        // node came out of the parse, so it carries a real location.
-        //   - Swap self.program to args.program so errors reported on self
-        //     land on the caller's stack.
-        //   - Drive .do via args (not self) so the pushed frame has source.
-        const prevProgram = self.program;
-        self.program = args.program;
+        // `receiver` (captured when the method was looked up) often lives
+        // outside any source file — e.g. BASE. The caller's `args` node came
+        // out of the parse, so it carries a real location.
+        //   - Swap receiver.program to args.program so errors reported on
+        //     receiver land on the caller's stack.
+        //   - Drive .do via args (not receiver) so the pushed frame has source.
+        const prevProgram = receiver.program;
+        receiver.program = args.program;
         try {
-          // return args.do('info', is_string(key) ? key as string : 'call', () => fn(self, args));
-          return fn(self, args);
+          return fn(receiver, args);
         } finally {
-          self.program = prevProgram;
+          receiver.program = prevProgram;
         }
       });
       return callback ? callback(partial) : partial;
-    };
-    this.value.methods.set(key, methodFn);
+    });
+    this.value.methods.set(key, methodNode);
     return this;
   }
 
@@ -1139,6 +1147,7 @@ export class Node {
     copy.cursor = this.cursor
     copy.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }))
     copy._direction = this._direction
+    copy.abstract_interpretation = this.abstract_interpretation;
     return copy;
   }
 
@@ -1212,10 +1221,22 @@ export class Node {
     return diag;
   }
 
-  private _matched = (node: Node, phase: string, description: string): Node => {
-    node.program = this.program;
-    this.trace(phase, description);
-    return node;
+  methods = {
+    all: (): Set<Key> => {
+      const keys = new Set<Key>(this.value.methods.keys());
+      if (this._super) for (const k of this._super.methods.all()) keys.add(k);
+      return keys;
+    },
+    resolve: (key: Key): Node => {
+      if (this.eager.has(key)) return this.eager.get(key)
+      if (this._super) return this._super.methods.resolve(key);
+      return new Node(this.program, undefined, undefined)
+    },
+    defines: (key: Key): Node | null => {
+      if (this.eager.has(key)) return this;
+      if (this._super) return this._super.methods.defines(key);
+      return null;
+    }
   }
 
   match = (key: string): Node => {
@@ -1236,77 +1257,99 @@ export class Node {
         result.realize();
         self.value = result.value;
       });
+      lazy.source_file = this.source_file;
+      lazy.cursor = this.cursor;
       this.program.pending.push(lazy);
       this.program.result = lazy;
       return lazy;
     }
 
+    const call = (fn: Node) => {
+      const next = fn.call(result ?? new Node(this.program, undefined, undefined))
+      next.program = this.program;
+      next.source_file = this.source_file;
+      next.cursor = this.cursor;
+      this.program.pending.push(next)
+      return next;
+    }
+
+    // TODO Check if in context first.
+
     // 1. Method on current result
     if (result) {
-      const method = result.eager.get(key);
-      if (method) {
-        const lazy = new Node(this.program).lazily(self => { self.value = method(result).value; });
-        this.program.pending.push(lazy);
-        return this._matched(lazy, 'method', `Method on result`);
+      const method = result.methods.resolve(key);
+      if (!method.none) {
+        const found = result.methods.defines(key);
+        const owner = found === runtime.BASE ? '*' : found === runtime.CTX ? 'ctx' : 'result';
+
+        this.trace('method', `Method on ${owner}`);
+        return call(method)
       }
+      return undefined;
     }
+
+    // TODO If not calling on a .result but inside a new expression.
 
     // 2. Exact resolve in context — walk _super chain, call the method to get a partial
-    const found = this._findMethod(key);
-    if (found) {
-      const method = found.eager.get(key);
-      const owner = found === runtime.BASE ? '*' : found === runtime.CTX ? 'ctx' : 'scope';
-      const lazy = new Node(this.program).lazily(self => { self.value = method(found).value; });
-      this.program.pending.push(lazy);
-      return this._matched(lazy, 'resolve', `Method on ${owner}`);
+    const method = this.methods.resolve(key);
+    if (!method.none) {
+      const found = this.methods.defines(key);
+      const owner = found === runtime.BASE ? '*' : found === runtime.CTX ? 'ctx' : 'result';
+
+      this.trace('method', `Method on ${owner}`);
+      return call(method)
     }
+
 
     // 3. Split: collect all methods from result (and its parents), try each as suffix of key
-    if (key.length > 1) {
-      const target = result ?? runtime.BASE;
-      const allMethods = target.methods;
+    // if (key.length > 1) {
+    //   const target = result ?? runtime.BASE;
+    //   const allMethods = target.methods.all();
 
-      const candidates: { suffix: string, len: number }[] = [];
-      for (const m of allMethods) {
-        if (!is_string(m)) continue;
-        if (key.length > m.length && key.endsWith(m)) {
-          candidates.push({ suffix: m, len: m.length });
-        }
-      }
-      candidates.sort((a, b) => b.len - a.len);
+    //   const candidates: { suffix: string, len: number }[] = [];
+    //   for (const m of allMethods) {
+    //     if (!is_string(m)) continue;
+    //     if (key.length > m.length && key.endsWith(m)) {
+    //       candidates.push({ suffix: m, len: m.length });
+    //     }
+    //   }
+    //   candidates.sort((a, b) => b.len - a.len);
 
-      for (const { suffix } of candidates) {
-        const prefix = key.slice(0, key.length - suffix.length);
-        const prefixResolved = this.resolve(prefix);
-        if (!prefixResolved || prefixResolved().none) continue;
+    //   for (const { suffix } of candidates) {
+    //     const prefix = key.slice(0, key.length - suffix.length);
+    //     const prefixResolved = this.methods.resolve(prefix);
+    //     if (!prefixResolved || prefixResolved().none) continue;
 
-        if (this._direction === 1) {
-          this.end = this.end - suffix.length;
-        } else {
-          this.begin = this.begin + suffix.length;
-        }
-        const lazy = new Node(this.program).lazily(self => { self.value = (prefixResolved() as Node).value; });
-        this.program.pending.push(lazy);
-        return this._matched(lazy, 'split', `Split: '${prefix}' + '${suffix}'`);
-      }
-    }
+    //     if (this._direction === 1) {
+    //       this.end = this.end - suffix.length;
+    //     } else {
+    //       this.begin = this.begin + suffix.length;
+    //     }
+    //     const lazy = new Node(this.program).lazily(self => { self.value = (prefixResolved() as Node).value; });
+    //     this.program.pending.push(lazy);
+    //     return this._matched(lazy, 'split', `Split: '${prefix}' + '${suffix}'`);
+    //   }
+    // }
 
+    //TODO If in closure
     // 4. Method on `this` (implicit self)
     //TODO Should be this.value.ctx
-    if (runtime.CTX.eager.has('this')) {
-      const thisNode = runtime.CTX.eager.get('this')(runtime.CTX);
-      if (thisNode && !thisNode.none) {
-        const method = thisNode.eager.get(key);
-        if (method) {
-          const lazy = new Node(this.program).lazily(self => { self.value = method(thisNode).value; });
-          this.program.pending.push(lazy);
-          return this._matched(lazy, 'implicit-self', `Method on this`);
-        }
-      }
-    }
+    // if (runtime.CTX.eager.has('this')) {
+    //   const thisNode = runtime.CTX.eager.get('this')(runtime.CTX);
+    //   if (thisNode && !thisNode.none) {
+    //     const method = thisNode.eager.get(key);
+    //     if (method) {
+    //       const lazy = new Node(this.program).lazily(self => { self.value = method(thisNode).value; });
+    //       this.program.pending.push(lazy);
+    //       return this._matched(lazy, 'implicit-self', `Method on this`);
+    //     }
+    //   }
+    // }
 
     // 5. Forward ref — already lazy by nature (errors only on access)
     const forward = new Node(this.program, undefined);
+    forward.source_file = this.source_file;
+    forward.cursor = this.cursor;
     forward.external_method(key, () => forward.fatal('forward ref', `Unresolved: ${key}`));
     this.trace('forward-ref', `Forward reference to '${key}'`);
     return forward;
@@ -1423,11 +1466,11 @@ export class Program {
   }
 
   /** Realize all pending lazy nodes, triggering deferred method calls and error reporting. */
-  verify() {
+  verify(): Node | undefined {
     for (let i = 0; i < this.pending.length; i++) {
-      this.pending[i].realize();
+      this.pending[i].abstract().realize();
     }
-    if (this.log.hasErrors) this.log.fatal('verify', 'Exited during abstract interpretation, errors occurred while verifying the soundness of the program.')
+    return this.result?.abstract().realize()
   }
 
 }

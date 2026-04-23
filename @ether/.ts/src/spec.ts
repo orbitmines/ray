@@ -39,13 +39,15 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
       fn.debug('abstract', 'Refused to abstractly call function, defaulting to its return type.')
       return fn;
     }
+    // TODO Time/trace the function allow it to go own for a small while in certain configurations/cache certain results.
+
     return fn;
   })
 
   //TODO Set class * location on base class.
   .base(_ => _
     .external_method('external', (self, args) => {
-      if (!self.eager.has(args.resolve('location')())) self.error('external', "Expected method to be externally defined by the runtime, but it wasn't");
+      if (!self.eager.has(args.eager.get('location'))) self.error('external', "Expected method to be externally defined by the runtime, but it wasn't");
       return args;
     })
     // .external_method('ex', null, fn => fn.with('refuse_abstract_interpretation'))
@@ -68,13 +70,13 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
 
       const resolved = _.match(_.string)
 
-      if (resolved.value.options['rtl'] && resolved.value.options['left_associative']) {
-        _.ltr.expression().save()
-      } else if (resolved.value.options['rtl']) {
-        _.rtl.expression().save()
-      } else {
+      // if (resolved.value.options['rtl'] && resolved.value.options['left_associative']) {
+      //   _.ltr.expression().save()
+      // } else if (resolved.value.options['rtl']) {
+      //   _.rtl.expression().save()
+      // } else {
         resolved.save()
-      }
+      // }
     })
 
     return E()
@@ -87,6 +89,6 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
     // .cd('@ether', _ => _.load('Ether.ray'))
   )
 
-Ray.exec()
+Ray.abstract().exec()
 // Ray.backend('llvm').repl()
 // Ray.backend('llvm', 'X').build()

@@ -49,7 +49,7 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
     .external_method('external', (self, args) => {
       if (!self.eager.has(args.eager.get('location'))) args.error('external', "Expected method to be externally defined by the runtime, but it wasn't");
       return args;
-    })
+    }, fn => fn.with('accepts_program'))
     // .external_method('ex', null, fn => fn.with('refuse_abstract_interpretation'))
     // .external_method('initializer')
     // .external_method('left-to-right')
@@ -71,6 +71,11 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
       _.skip()
       _.capture_while(ch => ch !== ' ' && ch !== '\n')
 
+      if (_.program.result) {
+        if (_.program.result.enabled('accepts_program') &&_.left.peak() === ' ') {
+          _.program.result.debug('test', 'accepts_program')
+        }
+      }
       const resolved = _.match(_.string)
 
       // if (resolved.value.options['rtl'] && resolved.value.options['left_associative']) {

@@ -979,7 +979,7 @@ export class Node {
     const x = this.copy(); x.abstract_interpretation = true; return x;
   }
 
-  with = (key: string, value?: string): this => { this.value.options[key] = value ?? ''; return this; }
+  with = (key: string, value?: string): this => { this.value.options[key] = value ?? 'true'; return this; }
   enabled = (key: string): boolean => !!this.value.options[key]
 
   /** Feed this node to the language's token handler until its source is exhausted.
@@ -1016,6 +1016,7 @@ export class Node {
       });
       return callback ? callback(partial) : partial;
     });
+    callback?.(methodNode)
     this.value.methods.set(key, methodNode);
     return this;
   }
@@ -1238,6 +1239,7 @@ export class Node {
       return null;
     }
   }
+  
 
   match = (key: string): Node => {
     const runtime = this.program.runtime;
@@ -1265,6 +1267,13 @@ export class Node {
     // }
 
     const call = (fn: Node) => {
+    
+      if (fn) {
+        if (fn.enabled('accepts_program') /*&& fn.left.peak() === ' '*/) {
+          fn.debug('test', 'accepts_program')
+        }
+      }
+
       const next = fn.call(result ?? new Node(this.program, null, null))
       next.program = this.program;
       next.source_file = this.source_file;
@@ -1284,7 +1293,7 @@ export class Node {
       const method = result.methods.resolve(key);
       
       const found = !method.none ? result.methods.defines(key) : false;
-      const on = result?.string?.trim() 
+      const on = result?.string?.trim()
       
       if (!method.none) {       
         this.trace('method', `Interpreted as a [Method call${on ? ` on \`${on}\`` : ''}${found && (found === runtime.BASE || found === runtime.CTX) ? ` on the ${found === runtime.BASE ? 'base class' : 'global context'}` : ''}]`);
@@ -1484,6 +1493,7 @@ export class Program {
     for (let i = 0; i < this.pending.length; i++) {
       this.pending[i].abstract().realize();
     }
+    //TODO Each successive statement should have dependence on the previous in .realize, so calling .abstract().realize() on them should trickle taht down. .abstract() should recursively be applied to all touched nodes.
 
     //TODO MOVE .RESULT to the last .pending?
     return this.result?.abstract().realize()

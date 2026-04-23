@@ -923,7 +923,7 @@ export class Node {
   }
   get = (key: Key): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.get(key).value);
   set = (value: Node): Node => this.lazily((self) => this.eager.set(value));
-  call = (args: Node = new Node(this.program, undefined, undefined)): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.call(args).value);
+  call = (args: Node = new Node(this.program, null, null)): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.call(args).value);
 
   /** Ref to the SourceFile this Node is reading from. Only parse-root Nodes
    *  and their copies carry it; lazy value Nodes leave it undefined. */
@@ -959,10 +959,10 @@ export class Node {
     has: (key: Key): boolean => { this.realize(); return this.value.methods.has(key); },
     get: (key: Key): Node | undefined => { this.realize(); return this.value.methods.get(key); },
     set: (val: Node): Node => { this.realize(); this.value = val.value; return this; },
-    call: (args: Node = new Node(this.program, undefined, undefined)) => this.do('debug', 'call', () => {
+    call: (args: Node = new Node(this.program, null, null)) => this.do('debug', 'call', () => {
       this.realize()
       if (!this.callable) {
-        this.error('call', `Expected a function to call.`)
+        (this.source_file ? this : args).error('call', `Expected a function to call.`)
         return new Node(this.program)
       }
 
@@ -1214,7 +1214,7 @@ export class Node {
    */
   /** Record a trace-level diagnostic linking to a copy of this node (snapshots its selection + cursor). */
   trace = (phase: string, description: string): Diagnostic | null => {
-    if (!this.cursor || !this.program) return null;
+    if (this.cursor == null || !this.program) return null;
     const diag: Diagnostic = { level: 'trace', phase, node: this.copy(), message: description || undefined };
     this.log.report(diag);
     this.program.diagnostics.push(diag);
@@ -1230,7 +1230,7 @@ export class Node {
     resolve: (key: Key): Node => {
       if (this.eager.has(key)) return this.eager.get(key)
       if (this._super) return this._super.methods.resolve(key);
-      return new Node(this.program, undefined, undefined)
+      return new Node(this.program, null, null)
     },
     defines: (key: Key): Node | null => {
       if (this.eager.has(key)) return this;
@@ -1245,47 +1245,51 @@ export class Node {
     // If result is lazy (has pending thunks), we can't inspect its methods.
     // Capture the rest of the line and defer the entire resolution.
     const result = this.program.result;
-    if (result && result._thunks) {
-      // Extend selection to end of line using the existing direction primitives
-      this.right.capture_while((ch: string) => ch !== '\n');
+    // if (result && result._thunks) {
+    //   // Extend selection to end of line using the existing direction primitives
+    //   this.right.capture_while((ch: string) => ch !== '\n');
 
-      // Create trace for this deferred region, then report error
-      this.error('parse', `Unresolved syntax: '${this.string?.trim() ?? ''}'`);
+    //   // Create trace for this deferred region, then report error
+    //   this.error('parse', `Unresolved syntax: '${this.string?.trim() ?? ''}'`);
 
-      // Create a lazy node — when realized, just takes the value from the resolved result
-      const lazy = new Node(this.program).lazily(self => {
-        result.realize();
-        self.value = result.value;
-      });
-      lazy.source_file = this.source_file;
-      lazy.cursor = this.cursor;
-      this.program.pending.push(lazy);
-      this.program.result = lazy;
-      return lazy;
-    }
+    //   // Create a lazy node — when realized, just takes the value from the resolved result
+    //   const lazy = new Node(this.program).lazily(self => {
+    //     result.realize();
+    //     self.value = result.value;
+    //   });
+    //   lazy.source_file = this.source_file;
+    //   lazy.cursor = this.cursor;
+    //   this.program.pending.push(lazy);
+    //   this.program.result = lazy;
+    //   return lazy;
+    // }
 
     const call = (fn: Node) => {
-      const next = fn.call(result ?? new Node(this.program, undefined, undefined))
+      const next = fn.call(result ?? new Node(this.program, null, null))
       next.program = this.program;
       next.source_file = this.source_file;
       next.cursor = this.cursor;
-      this.program.pending.push(next)
+      next.selection = this.selection;
+      // this.program.pending.push(next)
       return next;
     }
 
+    // TODO instead of .resolve calling .realize(), we should lazy the syntax parsing and have unresolved syntax error if .realize isnt called?
+
     // TODO Check if in context first.
+    
 
     // 1. Method on current result
     if (result) {
       const method = result.methods.resolve(key);
-      if (!method.none) {
-        const found = result.methods.defines(key);
-        const owner = found === runtime.BASE ? '*' : found === runtime.CTX ? 'ctx' : 'result';
-
-        this.trace('method', `Method on ${owner}`);
+      
+      const found = !method.none ? result.methods.defines(key) : false;
+      const on = result?.string?.trim() 
+      
+      if (!method.none) {       
+        this.trace('method', `Interpreted as a [Method call${on ? ` on \`${on}\`` : ''}${found && (found === runtime.BASE || found === runtime.CTX) ? ` on the ${found === runtime.BASE ? 'base class' : 'global context'}` : ''}]`);
         return call(method)
       }
-      return undefined;
     }
 
     // TODO If not calling on a .result but inside a new expression.
@@ -1294,9 +1298,11 @@ export class Node {
     const method = this.methods.resolve(key);
     if (!method.none) {
       const found = this.methods.defines(key);
-      const owner = found === runtime.BASE ? '*' : found === runtime.CTX ? 'ctx' : 'result';
+      
+      const on = result?.string?.trim() 
+      
+      this.trace('method', `Interpreted as a [Method call${on ? `on \`${on}\`` : ''}${found && (found === runtime.BASE || found === runtime.CTX) ? ` on the ${found === runtime.BASE ? 'base class' : 'global context'}` : ''}]`);
 
-      this.trace('method', `Method on ${owner}`);
       return call(method)
     }
 
@@ -1362,7 +1368,15 @@ export class Node {
    */
   save = (): this => {
     if (this.program!.result) {
-      this.program!.result = this.program!.result.call(this);
+      const prev = this.program!.result;
+      const next = prev.call(this);
+      // TODO Set pointer over the whole thing
+      // next.source_file = this.source_file ?? prev.source_file;
+      // next.program     = this.program!;
+      // next.cursor      = prev.cursor;
+      // next.selection   = [{ begin: prev.begin, end: this.end }];
+      
+      this.program!.result = next;
     } else {
       this.program!.result = this;
     }
@@ -1375,26 +1389,26 @@ export class Node {
    * Saves the previous reader result, then restores context and returns with
    * this node holding the parsed value.
    */
-  expression = (): this => this.do('debug', 'expression', () => {
-    const prevResult = this.program!.result;
-    this.program!.result = null;
+  // expression = (): this => this.do('debug', 'expression', () => {
+  //   const prevResult = this.program!.result;
+  //   this.program!.result = null;
 
-    const handler = this.program!.runtime._tokenHandler;
-    if (handler) {
-      while (!this.direction.done() && this.direction.peak() !== '\n') {
-        handler(this);
-      }
-    }
+  //   const handler = this.program!.runtime._tokenHandler;
+  //   if (handler) {
+  //     while (!this.direction.done() && this.direction.peak() !== '\n') {
+  //       handler(this);
+  //     }
+  //   }
 
-    // Transfer parsed result into this node
-    if (this.program!.result) {
-      this.value = this.program!.result.value;
-    }
+  //   // Transfer parsed result into this node
+  //   if (this.program!.result) {
+  //     this.value = this.program!.result.value;
+  //   }
 
-    // Restore previous result
-    this.program!.result = prevResult;
-    return this;
-  });
+  //   // Restore previous result
+  //   this.program!.result = prevResult;
+  //   return this;
+  // });
 
   freeze = () => {
     //TODO Freeze these tokens from reparsing. But do something with them
@@ -1470,7 +1484,10 @@ export class Program {
     for (let i = 0; i < this.pending.length; i++) {
       this.pending[i].abstract().realize();
     }
+
+    //TODO MOVE .RESULT to the last .pending?
     return this.result?.abstract().realize()
+    // return undefined
   }
 
 }

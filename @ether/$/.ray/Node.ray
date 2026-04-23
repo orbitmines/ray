@@ -1,6 +1,6 @@
 external test 1 2 3 4 5
   external testA
-external test2
+external external
 external test3
 external test4
 external

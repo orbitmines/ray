@@ -47,7 +47,12 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
   //TODO Set class * location on base class.
   .base(_ => _
     .external_method('external', (self, args) => {
-      if (!self.eager.has(args.eager.get('location'))) args.error('external', "Expected method to be externally defined by the runtime, but it wasn't");
+      // if (!self.eager.has(args.eager.get('location'))) args.error('external', `Expected method \`${args.string.trim()}\` to be externally defined by the runtime, but it wasn't`);
+      self.realize()
+      args.debug('test', [...self.methods.all()].join(', '))
+      if (!self.methods.has(args.string.trim())) args.error('external', `Expected method \`${args.string.trim()}\` to be externally defined by the runtime, but it wasn't`);
+      //TODO What about stuff that is called without args.string; that wont work right now
+
       return args;
     }, fn => fn.with('accepts_program'))
     // .external_method('ex', null, fn => fn.with('refuse_abstract_interpretation'))
@@ -72,8 +77,16 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
       _.capture_while(ch => ch !== ' ' && ch !== '\n')
 
       if (_.program.result) {
+        _.program.result.realize()
         if (_.program.result.enabled('accepts_program') &&_.left.peak() === ' ') {
-          _.program.result.debug('test', 'accepts_program')
+          _.program.result.debug('test', 'accepts_program');
+
+          // _.program.result.debug('test', (_.value.ctx ?? _.program.runtime.CTX).has)
+          (_.value.ctx ?? _.program.runtime.CTX).realize();
+
+          const resolved = _.match(_.string, _.value.ctx ?? _.program.runtime.CTX)
+          resolved.save()
+          return;
         }
       }
       const resolved = _.match(_.string)

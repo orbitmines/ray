@@ -1228,6 +1228,7 @@ export class Node {
       if (this._super) for (const k of this._super.methods.all()) keys.add(k);
       return keys;
     },
+    has: (key: Key): boolean => !this.methods.resolve(key).none, 
     resolve: (key: Key): Node => {
       if (this.eager.has(key)) return this.eager.get(key)
       if (this._super) return this._super.methods.resolve(key);
@@ -1241,7 +1242,7 @@ export class Node {
   }
   
 
-  match = (key: string): Node => {
+  match = (key: string, ctx: Node = this): Node => {
     const runtime = this.program.runtime;
 
     // If result is lazy (has pending thunks), we can't inspect its methods.
@@ -1268,11 +1269,11 @@ export class Node {
 
     const call = (fn: Node) => {
     
-      if (fn) {
-        if (fn.enabled('accepts_program') /*&& fn.left.peak() === ' '*/) {
-          fn.debug('test', 'accepts_program')
-        }
-      }
+      // if (fn) {
+      //   if (fn.enabled('accepts_program') /*&& fn.left.peak() === ' '*/) {
+      //     fn.debug('test', 'accepts_program [2]')
+      //   }
+      // }
 
       const next = fn.call(result ?? new Node(this.program, null, null))
       next.program = this.program;
@@ -1289,28 +1290,30 @@ export class Node {
     
 
     // 1. Method on current result
-    if (result) {
-      const method = result.methods.resolve(key);
+    // if (result) {
+    //   const method = result.methods.resolve(key);
       
-      const found = !method.none ? result.methods.defines(key) : false;
-      const on = result?.string?.trim()
+    //   const found = !method.none ? result.methods.defines(key) : false;
+    //   const on = result?.string?.trim()
       
-      if (!method.none) {       
-        this.trace('method', `Interpreted as a [Method call${on ? ` on \`${on}\`` : ''}${found && (found === runtime.BASE || found === runtime.CTX) ? ` on the ${found === runtime.BASE ? 'base class' : 'global context'}` : ''}]`);
-        return call(method)
-      }
-    }
+    //   if (!method.none) {       
+    //     this.trace('method', `Interpreted as a [Method call${on ? ` on \`${on}\`` : ''}${found && (found === runtime.BASE || found === runtime.CTX) ? ` on the ${found === runtime.BASE ? 'base class' : 'global context'}` : ''}]`);
+    //     return call(method)
+    //   }
+    // }
 
     // TODO If not calling on a .result but inside a new expression.
 
     // 2. Exact resolve in context — walk _super chain, call the method to get a partial
-    const method = this.methods.resolve(key);
+    const method = ctx.methods.resolve(key);
+
     if (!method.none) {
-      const found = this.methods.defines(key);
+      const found = ctx.methods.defines(key);
+      const receiver = `[${found === runtime.BASE ? 'base class' : 'global context'}]`
       
       const on = result?.string?.trim() 
       
-      this.trace('method', `Interpreted as a [Method call${on ? `on \`${on}\`` : ''}${found && (found === runtime.BASE || found === runtime.CTX) ? ` on the ${found === runtime.BASE ? 'base class' : 'global context'}` : ''}]`);
+      this.trace('method', `Interpreted as => ${on ? `\`${on}\`(` : ''}${found && (found === runtime.BASE || found === runtime.CTX) ? receiver : ''}.${this.string}`);
 
       return call(method)
     }
@@ -1362,11 +1365,14 @@ export class Node {
     // }
 
     // 5. Forward ref — already lazy by nature (errors only on access)
+    const receiver = `[${ctx === runtime.BASE ? 'base class' : (ctx === runtime.CTX ? 'global context' : 'local context')}]`
+      
     const forward = new Node(this.program, undefined);
     forward.source_file = this.source_file;
     forward.cursor = this.cursor;
+    forward.selection = this.selection;
     forward.external_method(key, () => forward.fatal('forward ref', `Unresolved: ${key}`));
-    this.trace('forward-ref', `Forward reference to '${key}'`);
+    this.trace('forward-ref', `Forward reference to '${key}' in ${receiver}`);
     return forward;
   }
 

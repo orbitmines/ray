@@ -903,7 +903,7 @@ type Method = (self: Node, args?: Node) => Node
 type ResolvedMethod = (args?: Node) => Node | undefined
 type Key = string | Node
 export class Node {
-  value: { encoded: any; ctx?: Node, methods: Map<Key, Node>, options: { [key: string]: string } } = { encoded: UNKNOWN, methods: new Map(), options: {} };
+  value: { encoded: any; ctx?: Node, self?: Node, methods: Map<Key, Node>, options: { [key: string]: string } } = { encoded: UNKNOWN, methods: new Map(), options: {} };
 
   switch_ctx = (ctx: Node): this => { this.value.ctx = ctx; return this; };
 
@@ -967,7 +967,7 @@ export class Node {
       }
 
       if (this.abstract_interpretation) return this.program.runtime.abstract_interpretation.call(this)
-      return this.value.encoded(this, args)
+      return this.value.encoded(this.value.self, this, args)
     }),
   }
 
@@ -994,22 +994,24 @@ export class Node {
   }
   
   external_method = (key: Key, fn?: Method, callback?: (fn: Node) => Node): this => {
-    // Two-stage: first call binds self → returns callable partial, second call runs fn(self, args)
+    // Two-stage: first call yields a callable partial carrying self; second call runs fn(self, args).
+    // `self` is bound by `methods.resolve` (stored as value.self on the lookup copy) and arrives
+    // here as the first positional of value.encoded. Stage 1 forwards it onto the partial's
+    // value.self so stage 2 sees the same self when it's later called.
     const methodNode = new Node(this.program, this._super, key);
-    methodNode.value.encoded = ((_self: Node, receiver: Node) => {
+    methodNode.value.encoded = ((self: Node | undefined, _method: Node, receiver: Node) => {
       const partial = new Node(receiver.program, receiver._super, key);
-      partial.value.encoded = ((_p: Node, args: Node) => {
+      if (self) partial.value.self = self;
+      partial.value.encoded = ((partialSelf: Node | undefined, _p: Node, args: Node) => {
         if (!fn) return this.fatal('forward ref', 'Method was called before it was initialized.');
-        // `receiver` (captured when the method was looked up) often lives
-        // outside any source file — e.g. BASE. The caller's `args` node came
-        // out of the parse, so it carries a real location.
-        //   - Swap receiver.program to args.program so errors reported on
-        //     receiver land on the caller's stack.
+        // `receiver` (captured from stage 1) often lives outside any source file — e.g. BASE.
+        // The caller's `args` node came out of the parse, so it carries a real location.
+        //   - Swap receiver.program to args.program so errors reported on receiver land on the caller's stack.
         //   - Drive .do via args (not receiver) so the pushed frame has source.
         const prevProgram = receiver.program;
         receiver.program = args.program;
         try {
-          return fn(receiver, args);
+          return fn(partialSelf ?? self ?? receiver, args);
         } finally {
           receiver.program = prevProgram;
         }
@@ -1230,7 +1232,11 @@ export class Node {
     },
     has: (key: Key): boolean => !this.methods.resolve(key).none, 
     resolve: (key: Key): Node => {
-      if (this.eager.has(key)) return this.eager.get(key)
+      if (this.eager.has(key)) {
+        const bound = this.eager.get(key)!.copy();
+        bound.value.self = this;
+        return bound;
+      }
       if (this._super) return this._super.methods.resolve(key);
       return new Node(this.program, null, null)
     },

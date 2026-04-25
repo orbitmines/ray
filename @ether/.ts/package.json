@@ -1,9 +1,20 @@
 {
   "name": "@orbitmines/ray",
-  "version": "E.2026v0.D0",
+  "version": "0.4.0-E2026.0D.0",
   "private": false,
   "repository": "https://github.com/orbitmines/ray",
   "type": "module",
+  "main": "./index.ts",
+  "bin": {
+    "ray-language-server": "./src/lsp/index.ts"
+  },
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^25.6.0",
@@ -18,7 +29,8 @@
     "v0": "tsx src/runtime/v0.run.ts",
     "v0.3": "tsx src/runtime/v0.3.run.ts",
     "v0.4": "tsx src/runtime/v0.4.run.ts",
-    "spec": "tsx src/spec.ts"
+    "spec": "tsx src/spec.ts",
+    "language-server": "tsx src/lsp/index.ts"
   },
   "jest": {
     "preset": "ts-jest",

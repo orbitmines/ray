@@ -1,8 +1,9 @@
 import path from "path";
+import { fileURLToPath } from "url";
 import {Language, Node, Program} from "./language.ts";
 import {is_string} from "./lodash.ts";
 
-export const Ray = new Language('ether', 'E.2026v0.D0')
+export const Ray = new Language('ether', '0.E2026.0D.0')
   .extension('.ray')
 
   // .pass(_ => _
@@ -47,12 +48,11 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
   //TODO Set class * location on base class.
   .base(_ => _
     .external_method('external', (self, args) => {
-      // if (!self.eager.has(args.eager.get('location'))) args.error('external', `Expected method \`${args.string.trim()}\` to be externally defined by the runtime, but it wasn't`);
       self.realize()
+      const name = args.string?.trim();
+      if (!name) { args.error('external', '`external` requires a method name as its argument.'); return args; }
       args.debug('test', [...self.methods.all()].join(', '))
-      if (!self.methods.has(args.string.trim())) args.error('external', `Expected method \`${args.string.trim()}\` to be externally defined by the runtime, but it wasn't`);
-      //TODO What about stuff that is called without args.string; that wont work right now
-
+      if (!self.methods.has(name)) return args.error('external', `Expected method \`${name}\` to be externally defined by the runtime, but it wasn't`);
       return args;
     }, fn => fn.with('accepts_program'))
     // .external_method('ex', null, fn => fn.with('refuse_abstract_interpretation'))
@@ -68,13 +68,24 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
 
   .syntax(E => {
     E.token(_ => {
-      _.capture_while(ch => ch === ' ' || ch === '\n')
-      if (_.string?.includes('\n')) { 
-        _.program.pending.push(_.program.result)
-        _.program.result = null
-      }
-      _.skip()
-      _.capture_while(ch => ch !== ' ' && ch !== '\n')
+      // _.skip_while(ch => ch === ' ' || ch === '\n')
+      // if (_.string?.includes('\n')) {
+      //   if (_.program.result) _.program.pending.push(_.program.result.settle())
+      //   _.program.result = null
+      // }
+      // _.skip()
+      // _.capture_while(ch => ch !== ' ' && ch !== '\n')
+      let saw_newline = false;                                                 
+      _.skip_while(ch => {
+        if (ch === '\n') saw_newline = true;                                   
+        return ch === ' ' || ch === '\n';                                      
+      });                                                                      
+      if (saw_newline) {                                                       
+        if (_.program.result)                                                  
+        _.program.pending.push(_.program.result.settle());                       
+        _.program.result = null;                                               
+      }                                                                        
+      _.capture_while(ch => ch !== ' ' && ch !== '\n'); 
 
       if (_.program.result) {
         _.program.result.realize()
@@ -89,6 +100,14 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
           return;
         }
       }
+      // test
+      //  .b // starting with a . means we're continuing the statement, not in a block.
+      //  .c
+      // .
+      // _.copy().capture_while(ch => ch === ' ' || ch === '\n').peak() === '.'
+
+
+      //TODO Should know whether the referenced node is part of rtl method call.
       const resolved = _.match(_.string)
 
       // if (resolved.value.options['rtl'] && resolved.value.options['left_associative']) {
@@ -112,6 +131,15 @@ export const Ray = new Language('ether', 'E.2026v0.D0')
     // .cd('@ether', _ => _.load('Ether.ray'))
   )
 
-Ray.abstract().exec()
+// Auto-exec when run directly (e.g. `tsx src/spec.ts` / `npm run spec`).
+// Importing this file as a module (e.g. from the language server) leaves
+// `Ray` ready to wire up without triggering a full run.
+const _isMainEntrypoint = (() => {
+  if (!process.argv[1]) return false;
+  try { return fileURLToPath(import.meta.url) === path.resolve(process.argv[1]); }
+  catch { return false; }
+})();
+
+if (_isMainEntrypoint) Ray.abstract().exec()
 // Ray.backend('llvm').repl()
 // Ray.backend('llvm', 'X').build()

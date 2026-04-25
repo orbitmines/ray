@@ -1,0 +1,68 @@
+{
+  "name": "ether-ray",
+  "displayName": "Ether.ray",
+  "description": "Language support for the Ray programming language and the Ether's IDE functionality (https://github.com/orbitmines/ray)",
+  "version": "0.0.1",
+  "publisher": "orbitmines",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/orbitmines/ray.git",
+    "directory": "@ether/vscode"
+  },
+  "homepage": "https://orbitmines.com",
+  "icon": "icons/2d-square.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:ray"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "ray",
+        "aliases": ["Ray", "Ether", "ray"],
+        "extensions": [".ray"],
+        "icon": {
+          "light": "./icons/file.svg",
+          "dark":  "./icons/file.svg"
+        }
+      }
+    ],
+    "configuration": {
+      "title": "Ether.ray",
+      "properties": {
+        "ether.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace LSP communication between VS Code and the Ray server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "typecheck": "tsc -p . --noEmit",
+    "vscode:prepublish": "npm run compile",
+    "build": "npx --yes @vscode/vsce package --no-dependencies",
+    "publish": "npx --yes @vscode/vsce publish --pre-release --no-dependencies"
+  },
+  "dependencies": {
+    "@orbitmines/ray": "file:../.ts",
+    "tsx": "^4.21.0",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  }
+}

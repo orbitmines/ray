@@ -1,0 +1,5 @@
+.env
+*.vsix
+out
+!/.vscode/launch.json
+!/.vscode/tasks.json

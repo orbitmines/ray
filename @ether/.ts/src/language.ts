@@ -803,7 +803,7 @@ export class Runtime implements Backend {
     let result: Node | undefined;
     // Currently the programs are just a list of files read in order of loading. That will change. TODO
     for (const program of this.programs) {
-      result = this.abstract_interpretation.enabled ? program.verify() : program.result.realize();
+      result = this.abstract_interpretation.enabled ? program.verify() : program.result?.settle().realize();
     }
 
     if (this.abstract_interpretation.enabled) {
@@ -835,6 +835,27 @@ export class Runtime implements Backend {
   }
 }
 
+/**
+ * Editor-facing language configuration. Mirrors a subset of VS Code's
+ * LanguageConfiguration shape so the LSP can hand it through directly to
+ * `vscode.languages.setLanguageConfiguration`. Other editors can map from
+ * here. RegExps travel as `{ pattern, flags? }` so they survive JSON.
+ */
+export interface EditorLanguageConfiguration {
+  comments?: { lineComment?: string; blockComment?: [string, string] };
+  brackets?: [string, string][];
+  autoClosingPairs?: (
+    | { open: string; close: string; notIn?: string[] }
+    | [string, string]
+  )[];
+  surroundingPairs?: ([string, string] | { open: string; close: string })[];
+  wordPattern?: { pattern: string; flags?: string };
+  indentationRules?: {
+    increaseIndentPattern?: { pattern: string; flags?: string };
+    decreaseIndentPattern?: { pattern: string; flags?: string };
+  };
+}
+
 export class Language implements Backend {
 
   language: Language = this;
@@ -843,6 +864,18 @@ export class Language implements Backend {
 
   _extension: string[] = []
   extension = (...extension: string[]): this => { this._extension.push(...extension); return this }
+
+  /**
+   * Editor configuration accumulated across `.configuration(...)` calls. The
+   * LSP exposes this verbatim — it's read once after the server is ready, so
+   * nothing here needs to be reactive for now. Empty by default; adapters
+   * (vscode, etc.) skip configuration when nothing is set.
+   */
+  _configuration: EditorLanguageConfiguration = {};
+  configuration = (cfg: EditorLanguageConfiguration): this => {
+    Object.assign(this._configuration, cfg);
+    return this;
+  }
 
   passes: { ref?: string, steps: (() => void)[] }[] = [{ steps: [] }]
   get current_pass() { return this.passes[this.passes.length - 1] }
@@ -900,7 +933,6 @@ export class Language implements Backend {
 
 const UNKNOWN = Symbol("Unknown")
 type Method = (self: Node, args?: Node) => Node
-type ResolvedMethod = (args?: Node) => Node | undefined
 type Key = string | Node
 export class Node {
   value: { encoded: any; ctx?: Node, self?: Node, methods: Map<Key, Node>, options: { [key: string]: string } } = { encoded: UNKNOWN, methods: new Map(), options: {} };
@@ -923,7 +955,11 @@ export class Node {
   }
   get = (key: Key): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.get(key).value);
   set = (value: Node): Node => this.lazily((self) => this.eager.set(value));
-  call = (args: Node = new Node(this.program, null, null)): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.call(args).value);
+  call = (args: Node = new Node(this.program, null, null)): Node => {
+    const next = new Node(this.program).switch_ctx(this.value.ctx);
+    next.applied = true;
+    return next.lazily((self) => self.value = this.eager.call(args).value);
+  }
 
   /** Ref to the SourceFile this Node is reading from. Only parse-root Nodes
    *  and their copies carry it; lazy value Nodes leave it undefined. */
@@ -962,8 +998,7 @@ export class Node {
     call: (args: Node = new Node(this.program, null, null)) => this.do('debug', 'call', () => {
       this.realize()
       if (!this.callable) {
-        (this.source_file ? this : args).error('call', `Expected a function to call.`)
-        return new Node(this.program)
+        return this.error('call', `Expected a function to call.`)
       }
 
       if (this.abstract_interpretation) return this.program.runtime.abstract_interpretation.call(this)
@@ -972,6 +1007,17 @@ export class Node {
   }
 
   get callable() { return is_function(this.value.encoded) }
+
+  /** True when this node is the *result* of a .call() — its callability (if any)
+   *  came from the call's return value, not from being a fresh unapplied method.
+   *  End-of-expression settle uses this to avoid re-firing results that only
+   *  happen to be callable (e.g., a method that returned itself). */
+  applied: boolean = false;
+
+  /** End-of-expression: if this is an *unapplied* bare callable, fire it with no
+   *  args; otherwise return as-is. Applied callables (results of prior calls)
+   *  are left alone — settle only forces methods that never got juxtaposed. */
+  settle = (): Node => { this.realize(); return this.callable && !this.applied ? this.call() : this; }
 
   abstract_interpretation: boolean = false
   abstract = () => {
@@ -993,32 +1039,26 @@ export class Node {
     return this;
   }
   
+  //TODO Should be a .register, and then the .external part is a flag.
   external_method = (key: Key, fn?: Method, callback?: (fn: Node) => Node): this => {
-    // Two-stage: first call yields a callable partial carrying self; second call runs fn(self, args).
     // `self` is bound by `methods.resolve` (stored as value.self on the lookup copy) and arrives
-    // here as the first positional of value.encoded. Stage 1 forwards it onto the partial's
-    // value.self so stage 2 sees the same self when it's later called.
+    // here as the first positional of value.encoded. The method fires when `save()` juxtaposes
+    // the next token (prev.call(this)), or when end-of-expression settle fires it with empty args.
     const methodNode = new Node(this.program, this._super, key);
-    methodNode.value.encoded = ((self: Node | undefined, _method: Node, receiver: Node) => {
-      const partial = new Node(receiver.program, receiver._super, key);
-      if (self) partial.value.self = self;
-      partial.value.encoded = ((partialSelf: Node | undefined, _p: Node, args: Node) => {
-        if (!fn) return this.fatal('forward ref', 'Method was called before it was initialized.');
-        // `receiver` (captured from stage 1) often lives outside any source file — e.g. BASE.
-        // The caller's `args` node came out of the parse, so it carries a real location.
-        //   - Swap receiver.program to args.program so errors reported on receiver land on the caller's stack.
-        //   - Drive .do via args (not receiver) so the pushed frame has source.
-        const prevProgram = receiver.program;
-        receiver.program = args.program;
-        try {
-          return fn(partialSelf ?? self ?? receiver, args);
-        } finally {
-          receiver.program = prevProgram;
-        }
-      });
-      return callback ? callback(partial) : partial;
+    methodNode.value.encoded = ((self: Node | undefined, _method: Node, args: Node) => {
+      if (!fn) return this.fatal('forward ref', 'Method was called before it was initialized.');
+      // Receiver often lives outside any source file (e.g. BASE). Swap its program to the
+      // caller's so errors the user fn reports on `self` land on the caller's stack.
+      const receiver = self ?? args._super;
+      const prev = receiver.program;
+      receiver.program = args.program;
+      try {
+        return fn(receiver, args);
+      } finally {
+        receiver.program = prev;
+      }
     });
-    callback?.(methodNode)
+    callback?.(methodNode);
     this.value.methods.set(key, methodNode);
     return this;
   }
@@ -1068,6 +1108,22 @@ export class Node {
     move.capture_while = (pred: (ch: string) => boolean): number => {
       let n = 0;
       while (!move.done() && pred(move.peak())) { n++; move(); }
+      return n;
+    }
+    /**
+     * Like `capture_while`, but the consumed run never lands in this node's
+     * selection — useful for whitespace, comments, anything you want the
+     * cursor to pass through without attributing to the surrounding token.
+     *
+     * Mirrors `skip()`'s post-condition: cursor sits one past the last
+     * consumed boundary so the next `capture_while`'s first push begins at
+     * the next char. Selection is cleared even if zero chars matched.
+     */
+    move.skip_while = (pred: (ch: string) => boolean): number => {
+      let n = 0;
+      while (!move.done() && pred(move.peak())) { n++; move(); }
+      this.cursor = boundary() + direction;
+      this.selection = [];
       return n;
     }
     move.capture_whitespace = (): number => move.capture_while(ch => ch === ' ');
@@ -1126,6 +1182,7 @@ export class Node {
   capture_while = this.directed_delegate('capture_while')
   capture_whitespace = this.directed_delegate('capture_whitespace')
   capture_line = this.directed_delegate('capture_line')
+  skip_while = this.directed_delegate('skip_while')
   upto = this.directed_delegate('upto')
   until = this.directed_delegate('until')
   goto = this.directed_delegate('goto')
@@ -1198,7 +1255,18 @@ export class Node {
     this.log.report(diag);
     this.program?.diagnostics.push(diag);
   }
-  error   = (phase: string, message: string) => this._report('error', phase, message);
+  error   = (phase: string, message: string) => {
+    this._report('error', phase, message);
+
+    //TODO Should rely on cached information to resolve this, and otherwise fall back on BASE CLASS (for the syntax highlighting)
+    //TODO 
+    const x = new Node(this.program)
+    x.value.encoded = () => {
+      // return x.error('cascade', 'Could not resolve dependency, cascading errors');
+      return x;
+    }
+    return x;
+  }
   warning = (phase: string, message: string) => this._report('warning', phase, message);
   info    = (phase: string, message: string) => this._report('info', phase, message);
   debug   = (phase: string, message: string) => this._report('debug', phase, message);
@@ -1251,6 +1319,16 @@ export class Node {
   match = (key: string, ctx: Node = this): Node => {
     const runtime = this.program.runtime;
 
+    // Empty/undefined keys come from handler iterations that ran one past the
+    // end of the source — `capture_while` matched zero chars, the cursor sat
+    // on an out-of-range index, and `_.string` resolved to undefined. Those
+    // never represent a real token; turn them into a none node so .save()
+    // can skip them rather than producing a spurious forward-ref squiggle on
+    // the trailing empty line.
+    if (key == null || (typeof key === 'string' && key.length === 0)) {
+      return new Node(this.program, null, null);
+    }
+
     // If result is lazy (has pending thunks), we can't inspect its methods.
     // Capture the rest of the line and defer the entire resolution.
     const result = this.program.result;
@@ -1273,55 +1351,49 @@ export class Node {
     //   return lazy;
     // }
 
-    const call = (fn: Node) => {
-    
-      // if (fn) {
-      //   if (fn.enabled('accepts_program') /*&& fn.left.peak() === ' '*/) {
-      //     fn.debug('test', 'accepts_program [2]')
-      //   }
-      // }
-
-      const next = fn.call(result ?? new Node(this.program, null, null))
-      next.program = this.program;
-      next.source_file = this.source_file;
-      next.cursor = this.cursor;
-      next.selection = this.selection;
-      // this.program.pending.push(next)
-      return next;
-    }
-
     // TODO instead of .resolve calling .realize(), we should lazy the syntax parsing and have unresolved syntax error if .realize isnt called?
 
     // TODO Check if in context first.
-    
+
 
     // 1. Method on current result
     // if (result) {
     //   const method = result.methods.resolve(key);
-      
+
     //   const found = !method.none ? result.methods.defines(key) : false;
     //   const on = result?.string?.trim()
-      
-    //   if (!method.none) {       
+
+    //   if (!method.none) {
     //     this.trace('method', `Interpreted as a [Method call${on ? ` on \`${on}\`` : ''}${found && (found === runtime.BASE || found === runtime.CTX) ? ` on the ${found === runtime.BASE ? 'base class' : 'global context'}` : ''}]`);
-    //     return call(method)
+    //     return method;
     //   }
     // }
 
     // TODO If not calling on a .result but inside a new expression.
 
-    // 2. Exact resolve in context — walk _super chain, call the method to get a partial
+    // 2. Exact resolve in context — walk _super chain, return the bound method.
+    //    Application happens in save() (juxtaposition) or settle() (end-of-expression).
     const method = ctx.methods.resolve(key);
 
     if (!method.none) {
       const found = ctx.methods.defines(key);
       const receiver = `[${found === runtime.BASE ? 'base class' : 'global context'}]`
-      
-      const on = result?.string?.trim() 
-      
+
+      const on = result?.string?.trim()
+
       this.trace('method', `Interpreted as => ${on ? `\`${on}\`(` : ''}${found && (found === runtime.BASE || found === runtime.CTX) ? receiver : ''}.${this.string}`);
 
-      return call(method)
+      // Carry location from the reader onto the method so diagnostics land on the token.
+      // Deep-copy the selection: parse-root keeps mutating it (capture_while
+      // extends `last.end` in place during the next iteration's whitespace
+      // skim), and a shared reference would silently bleed those mutations
+      // into the bound method's apparent range — putting the trailing space
+      // back onto the diagnostic squiggle.
+      method.program = this.program;
+      method.source_file = this.source_file;
+      method.cursor = this.cursor;
+      method.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }));
+      return method;
     }
 
 
@@ -1376,8 +1448,15 @@ export class Node {
     const forward = new Node(this.program, undefined);
     forward.source_file = this.source_file;
     forward.cursor = this.cursor;
-    forward.selection = this.selection;
-    forward.external_method(key, () => forward.fatal('forward ref', `Unresolved: ${key}`));
+    // Deep-copy: same reasoning as in the `method` branch above — sharing the
+    // parse-root's selection array would let later capture_while extensions
+    // bleed into this forward ref's range.
+    forward.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }));
+    // forward.external_method(key, () => forward.fatal('forward ref', `Unresolved: ${key}`));
+    forward.value.encoded = () => forward.error('forward ref', `Unresolved variable \`${key}\``)
+
+    //TODO We need to store that something is a forward ref somehow; because that means we need to load certain things first.
+    //TODO We want a tree of order of things to load. 
     this.trace('forward-ref', `Forward reference to '${key}' in ${receiver}`);
     return forward;
   }
@@ -1388,6 +1467,13 @@ export class Node {
    * If there is a result, call it with this as argument (juxtaposition).
    */
   save = (): this => {
+    // None nodes (encoded === null/undefined) come from .match() short-circuits
+    // for empty/undefined keys. Saving one would either juxtapose a no-arg
+    // call onto the previous result (firing irrelevant errors from the
+    // previous method's body) or stash garbage as the program's result.
+    // Either way, drop it on the floor.
+    if (this.none) return this;
+
     if (this.program!.result) {
       const prev = this.program!.result;
       const next = prev.call(this);
@@ -1396,7 +1482,7 @@ export class Node {
       // next.program     = this.program!;
       // next.cursor      = prev.cursor;
       // next.selection   = [{ begin: prev.begin, end: this.end }];
-      
+
       this.program!.result = next;
     } else {
       this.program!.result = this;
@@ -1502,14 +1588,18 @@ export class Program {
 
   /** Realize all pending lazy nodes, triggering deferred method calls and error reporting. */
   verify(): Node | undefined {
+    // Fold the trailing expression (no closing newline) through settle so bare callables fire.
+    if (this.result) {
+      this.pending.push(this.result.settle());
+      this.result = null;
+    }
     for (let i = 0; i < this.pending.length; i++) {
       this.pending[i].abstract().realize();
     }
+    //TODO MOVE .RESULT to the last .pending?
     //TODO Each successive statement should have dependence on the previous in .realize, so calling .abstract().realize() on them should trickle taht down. .abstract() should recursively be applied to all touched nodes.
 
-    //TODO MOVE .RESULT to the last .pending?
-    return this.result?.abstract().realize()
-    // return undefined
+    return this.pending[this.pending.length - 1];
   }
 
 }

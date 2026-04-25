@@ -1,6 +1,21 @@
 external test 1 2 3 4 5
   external testA
-external external
-external test3
-external test4
+
 external
+external external
+external left-to-right
+external right-to-left
+external left-associative
+external right-associative
+
+external </
+external right-associative x
+
+external F
+
+F x F x F x F
+
+external left-to-right right-to-left a
+external left-to-right right-to-left c
+
+a c </

@@ -8,7 +8,7 @@ external right-to-left
 external left-associative
 external right-associative
 
-external </
+external right-to-left right-associative </
 external right-associative x
 
 external F
@@ -18,4 +18,33 @@ F x F x F x F
 external left-to-right right-to-left a
 external left-to-right right-to-left c
 
-a c </
+c a c </ a </
+
+external left-to-right ltrOnly
+external right-to-left rtlOnly
+external left-to-right right-to-left bidir
+
+external v
+
+v ltrOnly
+rtlOnly v
+v bidir
+bidir v
+
+ltrOnly v </
+v rtlOnly </
+
+v bidir bidir bidir
+bidir bidir bidir v </
+
+external w
+v bidir w
+v bidir w </
+
+external rtlOnly v
+external ltrOnly v </
+
+v rtlOnly bidir
+ltrOnly bidir v </
+
+test external </

@@ -85,11 +85,11 @@ export function start(language: Language): void {
     return program;
   };
 
-  /** Realize deferred work via abstract interpretation. */
-  const verifyFile = (uri: string): void => {
-    const program = programs.get(uri);
-    if (!program) return;
-    try { program.verify(); }
+  /** Realize deferred work via abstract interpretation. Uses the same
+   *  `runtime.verify` path as `.abstract().exec()` so LSP diagnostics include
+   *  the resolution sweep (unresolved externals, cross-file forward refs). */
+  const verifyAll = (): void => {
+    try { runtime.verify(); }
     catch (e) { if (!(e instanceof FatalParse)) throw e; }
   };
 
@@ -124,7 +124,7 @@ export function start(language: Language): void {
       order.push(uri);
       parseFile(uri, text);
     }
-    for (const uri of order) verifyFile(uri);
+    verifyAll();
     for (const uri of order) publishFile(uri);
   };
 
@@ -154,7 +154,7 @@ export function start(language: Language): void {
       parseFile(uri, text);
       touched.push(uri);
     }
-    for (const uri of touched) verifyFile(uri);
+    verifyAll();
     for (const uri of touched) publishFile(uri);
   });
 

@@ -669,6 +669,33 @@ interface Backend {
   build(): void
 }
 
+/** A symbol-resolution slot, identified by (owner, key). Multiple parties
+ *  participate: a declaration site (e.g. `.external_method` registering the
+ *  name), and demand sites (forward refs from source, abstract-call lookups,
+ *  etc.). Each contributing Node lands in `nodes`. When an implementation
+ *  arrives, `resolve(fn)` flips `resolved` and stores `fn`. The verify pass
+ *  iterates unresolved Resolutions and emits errors on every node in `nodes`,
+ *  so authors see exactly which sites depend on a missing symbol. */
+export class Resolution {
+  resolved: boolean = false
+  fn?: Method
+  nodes: Node[] = []
+  /** Sticky flags for this symbol — direction flags, accepts_program, the
+   *  `external`-stamp, anything else stamped via `with()`. Lives on the
+   *  resolution (not per-Node) so they persist across re-matches: a future
+   *  `match(key)` returns a fresh forward whose `value.options` aliases this
+   *  map, so flags previously stamped (e.g. by `external left-to-right X`)
+   *  show up immediately. The rewalk consults this directly when deciding
+   *  matching/opposite — we cannot trust per-instance stamps because the
+   *  previous parsing direction may have been wrong. */
+  options: { [key: string]: string } = {}
+
+  constructor(public owner: Node, public key: Key, public message: string = `Unresolved \`${String(key)}\``) {}
+
+  resolve = (fn: Method): this => { this.fn = fn; this.resolved = true; return this; }
+  add = (node: Node): this => { this.nodes.push(node); return this; }
+}
+
 export class Runtime implements Backend {
 
   log = new Diagnostics();
@@ -682,6 +709,58 @@ export class Runtime implements Backend {
   BASE: Node = new Node(this.EXTERNALLY_DEFINED, undefined)
   CTX: Node = new Node(this.EXTERNALLY_DEFINED, this.BASE)
   GLOBAL: Node = new Node(this.EXTERNALLY_DEFINED, this.CTX)
+
+  /** Symbol resolutions, keyed implicitly by (owner, key). Get-or-create via
+   *  `resolution(owner, key)`. Verify reports any entry where `resolved` is
+   *  false against every node that registered with it. */
+  _resolutions: Resolution[] = []
+
+  resolution = (owner: Node, key: Key, message?: string): Resolution => {
+    // A symbol's resolution is identified by `key` *and* by where it was
+    // first registered — but lookups can come from any scope (parse-root,
+    // CTX, BASE) depending on whether the match was a default lookup, a
+    // CTX-scoped match in an accepts_program branch, or an external_method
+    // declaration. Walk the `_super` chain of the requested owner so all
+    // those lookup paths land on the same Resolution instance for a given
+    // key, and modifier flags stamped via `args.with(...)` stay sticky.
+    let r: Resolution | undefined;
+    for (let cur: Node | undefined = owner; cur && !r; cur = cur._super) {
+      r = this._resolutions.find(rr => rr.owner === cur && rr.key === key);
+    }
+    if (!r) {
+      r = new Resolution(owner, key, message ?? `Unresolved \`${String(key)}\``);
+      this._resolutions.push(r);
+    } else if (message && !r.resolved) {
+      r.message = message;
+    }
+    return r;
+  }
+
+  /** True if `node`'s line in its source already carries an earlier (or
+   *  same-position) error. Cascade fallout — once one token in an expression
+   *  has failed, subsequent unresolved/method errors on the same line are
+   *  dead args of an already-broken chain and shouldn't pile on. The
+   *  rewalk handles its own range by clearing diagnostics and resolution
+   *  nodes inside [expression_start, trigger), so this same-line rule
+   *  composes correctly: the LTR walk's stale errors are gone before the
+   *  rewalk emits, and after the rewalk only one error fires per chain. */
+  _cascaded = (node: Node): boolean => {
+    if (!node.source_file || node.cursor == null || !node.program) return false;
+    const src = node.source_file.source;
+    for (const d of node.program.diagnostics) {
+      if (d.level !== 'error' && d.level !== 'fatal') continue;
+      const dn = d.node;
+      if (!dn || dn.source_file !== node.source_file || dn.cursor == null) continue;
+      // Any prior error on the same line — order-independent — cascades the
+      // current emission. First error per line wins; everything else is
+      // chain fallout (e.g. `v bidir w` where bidir errors first at col 2;
+      // the sweep's later `Unresolved v` at col 0 is chain fallout).
+      const lo = Math.min(dn.cursor, node.cursor);
+      const hi = Math.max(dn.cursor, node.cursor);
+      if (!src.slice(lo, hi).includes('\n')) return true; //TODO Should be the expression, which gets separated by ; too or is multiline
+    }
+    return false;
+  }
 
   // Base path for resolving relative file locations.
   // Default: repository root (two levels up from @ether/.ts/).
@@ -771,7 +850,10 @@ export class Runtime implements Backend {
     if (!this._tokenHandler) return null;
 
     const program = new Program(this);
-    const node = new Node(program, this.BASE);
+    // Parse roots live under global context (CTX → BASE). Inheriting BASE
+    // directly would skip CTX-defined methods and mislabel top-level forward
+    // refs as "local context" — top-level source is global by definition.
+    const node = new Node(program, this.CTX);
     node.source_file = new SourceFile(source, file);
     node.cursor = -1;
     program.root = node;
@@ -792,6 +874,36 @@ export class Runtime implements Backend {
     this.log.info('timer', `  ${timer.toString()} total`)
   }
 
+  /** Verify every program (parsing already done) and sweep the resolution
+   *  registry. Shared by `exec` and the LSP so editor diagnostics match what
+   *  `.abstract().exec()` produces — same realize order, same sweep, same
+   *  cascade rules. CLI-only concerns (process.exitCode, log.print) live in
+   *  `exec`, not here. */
+  verify = (): Node | undefined => {
+    let result: Node | undefined;
+    // Currently the programs are just a list of files read in order of loading. That will change. TODO
+    for (const program of this.programs) {
+      result = this.abstract_interpretation.enabled ? program.verify() : program.result?.settle().realize();
+    }
+
+    if (this.abstract_interpretation.enabled) {
+      // Sweep the resolution registry: every still-unresolved entry reports on
+      // every node that participated (declaration + demand sites). Skip nodes
+      // whose expression already has a prior error on the same line — `external
+      // test 1 2 3` should fire only on `test`, not cascade through dead args.
+      for (const r of this._resolutions) {
+        if (r.resolved) continue;
+        for (const node of r.nodes) {
+          if (this._cascaded(node)) continue;
+          node.error('forward ref', r.message);
+        }
+      }
+      if (this.log.hasErrors) this.log.fatal('verify', 'Exited during abstract interpretation, errors occurred while verifying the soundness of the program.')
+    }
+
+    return result;
+  }
+
   exec = (): Node | undefined => {
     // Run all queued pass steps
     for (const pass of this.language.passes) {
@@ -800,15 +912,7 @@ export class Runtime implements Backend {
       }
     }
 
-    let result: Node | undefined;
-    // Currently the programs are just a list of files read in order of loading. That will change. TODO
-    for (const program of this.programs) {
-      result = this.abstract_interpretation.enabled ? program.verify() : program.result?.settle().realize();
-    }
-
-    if (this.abstract_interpretation.enabled) {
-      if (this.log.hasErrors) this.log.fatal('verify', 'Exited during abstract interpretation, errors occurred while verifying the soundness of the program.')
-    }
+    const result = this.verify();
 
     if (this.log.hasErrors) process.exitCode = 1;
     if (this.log.errors.length > 0 || this.log.warnings.length > 0) this.log.print();
@@ -932,10 +1036,10 @@ export class Language implements Backend {
 }
 
 const UNKNOWN = Symbol("Unknown")
-type Method = (self: Node, args?: Node) => Node
+export type Method = (self: Node, method: Node, args?: Node) => Node
 type Key = string | Node
 export class Node {
-  value: { encoded: any; ctx?: Node, self?: Node, methods: Map<Key, Node>, options: { [key: string]: string } } = { encoded: UNKNOWN, methods: new Map(), options: {} };
+  value: { encoded: any; ctx?: Node, self?: Node, methods: Map<Key, Node>, options: { [key: string]: string }, resolution?: Resolution } = { encoded: UNKNOWN, methods: new Map(), options: {} };
 
   switch_ctx = (ctx: Node): this => { this.value.ctx = ctx; return this; };
 
@@ -1025,7 +1129,11 @@ export class Node {
     const x = this.copy(); x.abstract_interpretation = true; return x;
   }
 
-  with = (key: string, value?: string): this => { this.value.options[key] = value ?? 'true'; return this; }
+  with = (key: string, value?: string): this => {
+    this.value.options[key] = value ?? 'true';
+    this.debug('options', `${key} = ${this.value.options[key]}`)
+    return this;
+  }
   enabled = (key: string): boolean => !!this.value.options[key]
 
   /** Feed this node to the language's token handler until its source is exhausted.
@@ -1040,20 +1148,31 @@ export class Node {
   }
   
   //TODO Should be a .register, and then the .external part is a flag.
-  external_method = (key: Key, fn?: Method, callback?: (fn: Node) => Node): this => {
+  external_method = (key: Key, fn: Method, callback?: (fn: Node) => Node): this => {
     // `self` is bound by `methods.resolve` (stored as value.self on the lookup copy) and arrives
     // here as the first positional of value.encoded. The method fires when `save()` juxtaposes
     // the next token (prev.call(this)), or when end-of-expression settle fires it with empty args.
+    const runtime = this.program.runtime;
+    const receiver = `[${this === runtime.BASE ? 'base class' : (this === runtime.CTX ? 'global context' : 'local context')}]`;
+    const resolution = runtime.resolution(this, key, `Method \`${String(key)}\` was declared on ${receiver} but never implemented.`);
+    if (fn) resolution.resolve(fn);
+
     const methodNode = new Node(this.program, this._super, key);
+    resolution.add(methodNode);
+    // Share options + back-link to the resolution so flags stamped via
+    // `fn.with(...)` (and through bound copies) live on the resolution and
+    // are visible to anything that re-matches the key later.
+    methodNode.value.options = resolution.options;
+    methodNode.value.resolution = resolution;
     methodNode.value.encoded = ((self: Node | undefined, _method: Node, args: Node) => {
-      if (!fn) return this.fatal('forward ref', 'Method was called before it was initialized.');
+      if (!resolution.resolved) return this.error('forward ref', 'Method was called before it was initialized.');
       // Receiver often lives outside any source file (e.g. BASE). Swap its program to the
       // caller's so errors the user fn reports on `self` land on the caller's stack.
       const receiver = self ?? args._super;
       const prev = receiver.program;
       receiver.program = args.program;
       try {
-        return fn(receiver, args);
+        return resolution.fn!(receiver, _method, args);
       } finally {
         receiver.program = prev;
       }
@@ -1175,6 +1294,10 @@ export class Node {
   _direction: -1 | 1 = 1
   get ltr() { this._direction = 1; return this }; get rtl() { this._direction = -1; return this };
   get direction() { return this._direction === -1 ? this.left : this.right; }
+  /** The opposite of `direction` — useful for "behind me" peeks that should
+   *  flip when the parse swaps from LTR to RTL (e.g. checking whether the
+   *  preceding char was whitespace, regardless of which way we're reading). */
+  get behind()    { return this._direction === -1 ? this.right : this.left; }
   private directed_delegate = (method: string) => (...args: any[]): this => { (this.direction as any)[method](...args); return this; }
 
   done = this.directed_delegate('done')
@@ -1246,6 +1369,10 @@ export class Node {
     }
   }
   private _report = (level: Diagnostic['level'], phase: string, message: string) => {
+    // Cascade dedup for errors at parse time: if the same line already
+    // carries an earlier error, skip. Avoids duplicate reports on the same
+    // node from the LTR walk + the RTL rewalk both producing diagnostics.
+    if ((level === 'error' || level === 'fatal') && this.program?.runtime._cascaded(this)) return;
     const diag: Diagnostic = { level, phase, message, node: this.copy() };
     // Errors/warnings snapshot the active call stack (Program.stack).
     if (level === 'error' || level === 'warning' || level === 'fatal') {
@@ -1391,13 +1518,17 @@ export class Node {
       // back onto the diagnostic squiggle.
       method.program = this.program;
       method.source_file = this.source_file;
-      method.cursor = this.cursor;
       method.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }));
+      // Anchor cursor on the token's leftmost char regardless of capture
+      // direction (RTL captures leave the parse-root's cursor on the right
+      // edge of the captured range, which would mis-place diagnostics).
+      method.cursor = method.selection[0]?.begin ?? this.cursor;
       return method;
     }
 
 
     // 3. Split: collect all methods from result (and its parents), try each as suffix of key
+ //TODO Right-to-left match should parse properly here; directionality respected
     // if (key.length > 1) {
     //   const target = result ?? runtime.BASE;
     //   const allMethods = target.methods.all();
@@ -1443,17 +1574,32 @@ export class Node {
     // }
 
     // 5. Forward ref — already lazy by nature (errors only on access)
-    const receiver = `[${ctx === runtime.BASE ? 'base class' : (ctx === runtime.CTX ? 'global context' : 'local context')}]`
-      
+    const receiver =
+      ctx === runtime.BASE                  ? '[base class]'
+      : (ctx === runtime.CTX
+        || ctx.program?.root === ctx)       ? '[global context]'
+                                            : '[local context]';
+
     const forward = new Node(this.program, undefined);
     forward.source_file = this.source_file;
-    forward.cursor = this.cursor;
     // Deep-copy: same reasoning as in the `method` branch above — sharing the
     // parse-root's selection array would let later capture_while extensions
     // bleed into this forward ref's range.
     forward.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }));
-    // forward.external_method(key, () => forward.fatal('forward ref', `Unresolved: ${key}`));
-    forward.value.encoded = () => forward.error('forward ref', `Unresolved variable \`${key}\``)
+    // Anchor on the token's leftmost char regardless of capture direction.
+    forward.cursor = forward.selection[0]?.begin ?? this.cursor;
+    const unresolved = `Unresolved variable \`${String(key)}\` in ${receiver}`;
+    const resolution = runtime.resolution(ctx, key, unresolved);
+    resolution.add(forward);
+    // Share options + back-link to the resolution so subsequent matches of
+    // the same key see flags stamped on prior instances (e.g. by an earlier
+    // `external left-to-right X`), and so the rewalk can ask "is this a
+    // method?" via `value.resolution.resolved`.
+    forward.value.options = resolution.options;
+    forward.value.resolution = resolution;
+    forward.value.encoded = () => resolution.resolved
+      ? resolution.fn!(forward, forward)
+      : forward.error('forward ref', unresolved);
 
     //TODO We need to store that something is a forward ref somehow; because that means we need to load certain things first.
     //TODO We want a tree of order of things to load. 
@@ -1578,6 +1724,12 @@ export class Program {
   stack: Diagnostic[] = [];
   /** The parse-root Node if this program parsed a source. */
   root?: Node;
+  /** First Node of the current expression. The language definition writes
+   *  this when a fresh expression begins so features that need to re-walk
+   *  the expression's source (e.g. `</`'s direction switch) have the
+   *  starting anchor — its `source_file`, `cursor`, and `begin` give the
+   *  range, and its program/super give the resolution context. */
+  expression_start?: Node;
 
   get language() { return this.runtime.language }
   get log() { return this.runtime.log }

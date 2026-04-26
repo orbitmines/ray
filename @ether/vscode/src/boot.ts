@@ -92,10 +92,10 @@ function repoBoot(repoRoot: string): Boot {
 
 /**
  * If `ray` is on PATH and its `--version` parses under any registered scheme,
- * return a boot config that spawns `ray language-server`. The subcommand name
- * isn't promised by the executable yet — when it lands, this is where it
- * plugs in. We do NOT validate the subcommand exists here; `LanguageClient`
- * will surface a startup error if it doesn't.
+ * return a boot config that spawns `ray lsp`. The ray executable bundles the
+ * language server; `lsp` is the subcommand that flips it into LSP mode over
+ * stdio. We do NOT validate the subcommand here; `LanguageClient` will
+ * surface a startup error if the installed binary doesn't support it.
  */
 function installedBoot(): Boot | null {
   let bin: string;
@@ -118,7 +118,7 @@ function installedBoot(): Boot | null {
 
   const run = {
     command: bin,
-    args: ['language-server'],
+    args: ['lsp'],
     transport: TransportKind.stdio,
   };
   return {

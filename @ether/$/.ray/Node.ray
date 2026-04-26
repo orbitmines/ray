@@ -47,4 +47,11 @@ external ltrOnly v </
 v rtlOnly bidir
 ltrOnly bidir v </
 
+external test-middle
+external right-to-left test-right
+external left-to-right test-left
+test-middle test-right test-middle test-left test-left
+test-middle test-right test-middle test-left test-middle
+test-middle test-right test-middle test-left test-middle </
+
 test external </

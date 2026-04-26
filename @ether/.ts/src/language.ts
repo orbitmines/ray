@@ -1062,7 +1062,16 @@ export class Node {
   call = (args: Node = new Node(this.program, null, null)): Node => {
     const next = new Node(this.program).switch_ctx(this.value.ctx);
     next.applied = true;
-    return next.lazily((self) => self.value = this.eager.call(args).value);
+    return next.lazily((self) => {
+      const out = this.eager.call(args);
+      self.value = out.value;
+      // Mirror source position from the call's return so downstream
+      // consumers (diagnostics, `self.string`, etc.) see the underlying
+      // node's identity rather than this lazy wrapper.
+      if (out.source_file) self.source_file = out.source_file;
+      if (out.cursor != null) self.cursor = out.cursor;
+      if (out.selection.length) self.selection = out.selection.map(s => ({ begin: s.begin, end: s.end }));
+    });
   }
 
   /** Ref to the SourceFile this Node is reading from. Only parse-root Nodes

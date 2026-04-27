@@ -255,7 +255,10 @@ export class Diagnostics {
         if (!byCursor.has(col)) { byCursor.set(col, []); cursorOrder.push(col); }
         byCursor.get(col)!.push(d);
       }
-      // Group color follows the most severe diagnostic in the group.
+      // Group color *and* range follow the most severe diagnostic in the
+      // group: an error with a wide selection should colour its full span
+      // even when an info trace at the same anchor cursor was emitted
+      // first with a narrower range.
       const info = cursorOrder.map(col => {
         const diags = byCursor.get(col)!;
         const worst = diags.reduce((a, b) =>
@@ -264,7 +267,7 @@ export class Diagnostics {
         return {
           diags,
           col,
-          ranges: ranges(diags[0]).map(r => ({ begin: r.begin - lineStart, end: r.end - lineStart })),
+          ranges: ranges(worst).map(r => ({ begin: r.begin - lineStart, end: r.end - lineStart })),
           color: Diagnostics.levelColor[worst.level] ?? c.gray,
         };
       });
@@ -788,7 +791,7 @@ export class Runtime implements Backend {
   }
   external_method = (key: Key, fn: Method): this => { this.GLOBAL.external_method(key, fn); return this; }
 
-  _tokenHandler: ((node: Node) => void) | null = null;
+  _tokenHandler: ((node: Node) => Node | undefined) | null = null;
 
   syntax = (expression: (E: ((...args: Expression[]) => Node) & { [key: string]: any }) => Expression | Expression[]): this => {
     const placeholderProgram = new Program(this);
@@ -797,7 +800,7 @@ export class Runtime implements Backend {
       node.cursor = 0;
       return node;
     };
-    E.token = (fn: (node: Node) => void) => { this._tokenHandler = fn; };
+    E.token = (fn: (node: Node) => Node | undefined) => { this._tokenHandler = fn; };
     expression(E);
     return this;
   }
@@ -1028,7 +1031,14 @@ export class Language implements Backend {
   object = this.step('object')
   external_method = this.step('external_method')
 
-  abstract = this.step('abstract')
+  // Abstract execution is enabled *immediately* (forwarded to the runtime,
+  // not queued as a pass step) so the flag is on before any parse pass
+  // fires. The CLI's body-firing behavior is the reference for abstract
+  // execution — eager.call still runs encoded bodies regardless.
+  abstract = (call_abstractly?: (fn: Node) => Node): this => {
+    this.backend.abstract(call_abstractly);
+    return this;
+  };
   cli = this.delegate('cli')
   exec = this.delegate('exec')
   repl = this.delegate('repl')
@@ -1062,6 +1072,16 @@ export class Node {
   call = (args: Node = new Node(this.program, null, null)): Node => {
     const next = new Node(this.program).switch_ctx(this.value.ctx);
     next.applied = true;
+    // Inherit args's source position eagerly: diagnostics fired on `next`
+    // before realize() (e.g. juxtaposition chains used as receivers in
+    // wrongDirection errors) need a real location, otherwise the
+    // rewalk's inRange filter (cursor != null) can't clear them and the
+    // diagnostic renders with an empty receiver.
+    if (args.source_file) {
+      next.source_file = args.source_file;
+      if (args.cursor != null) next.cursor = args.cursor;
+      if (args.selection.length) next.selection = args.selection.map(s => ({ begin: s.begin, end: s.end }));
+    }
     return next.lazily((self) => {
       const out = this.eager.call(args);
       self.value = out.value;
@@ -1114,8 +1134,12 @@ export class Node {
         return this.error('call', `Expected a function to call.`)
       }
 
-      if (this.abstract_interpretation) return this.program.runtime.abstract_interpretation.call(this)
-      return this.value.encoded(this.value.self, this, args)
+      let fn: Node = this;
+      if (this.program.runtime.abstract_interpretation.enabled)
+        fn = this.program.runtime.abstract_interpretation.call(this)
+
+      fn.realize()
+      return fn.value.encoded(this.value.self, this, args)
     }),
   }
 
@@ -1132,18 +1156,67 @@ export class Node {
    *  are left alone — settle only forces methods that never got juxtaposed. */
   settle = (): Node => { this.realize(); return this.callable && !this.applied ? this.call() : this; }
 
-  abstract_interpretation: boolean = false
-  abstract = () => {
-    if (!this.program.runtime.abstract_interpretation.call) return this.fatal('abstract', 'Tried to .abstract() interpret a node, but the language has not implemented abstract interpretation.')
-    const x = this.copy(); x.abstract_interpretation = true; return x;
-  }
-
   with = (key: string, value?: string): this => {
     this.value.options[key] = value ?? 'true';
     this.debug('options', `${key} = ${this.value.options[key]}`)
     return this;
   }
   enabled = (key: string): boolean => !!this.value.options[key]
+
+  /** Expression-level assertions over the resolved Nodes reachable from
+   *  `this` via `.right.next()`. Each method walks AST-style up to the
+   *  given boundary Node (exclusive — same convention as `.rewalk`'s
+   *  `[start.begin, trigger.begin)` range), inspects the relevant
+   *  `value.options` flags, emits an error on `this` if the assertion
+   *  fails, and returns its findings. */
+  assert = {
+    /** Walks resolved siblings rightward up to `boundary.cursor`,
+     *  collecting `associativity` flags from methods that were actually
+     *  dispatched *as infix operators* in this expression — the dispatch
+     *  marks those by eagerly setting `value.self = anchor` (a Node with
+     *  a real cursor) on the matched copy. Methods that just appear as
+     *  args of a modifier chain (e.g. `external right-associative x` —
+     *  x is a leaf, not an operator) keep `value.self === BASE/CTX` (no
+     *  cursor) and are skipped, so right-assoc-flagged leaves don't
+     *  trigger spurious mix errors or spurious right-assoc rewalks.
+     *
+     *  If both 'left' and 'right' appear, emits "Cannot mix … in a
+     *  single infix expression with mixed associativity, use parenthesis
+     *  to mix them." on a synthetic span Node covering the range from
+     *  the *first* assoc-flagged operator to the *last* — so the
+     *  squiggle hugs the offending range — and returns 'mixed'.
+     *  Otherwise returns the dominant flag ('left', 'right', or 'none'
+     *  if no associativity-flagged method was dispatched as infix). */
+    non_mixed_associativity: (boundary: Node): 'left' | 'right' | 'mixed' | 'none' => {
+      const lefts = new Set<string>(), rights = new Set<string>();
+      let firstOp: Node | null = null;
+      let lastOp: Node | null = null;
+      let n: Node | null = this;
+      while (n && n.cursor != null && boundary.cursor != null && n.cursor < boundary.cursor) {
+        const dispatchedAsInfix = n.value.self?.cursor != null;
+        const a = n.value.options['associativity'];
+        if (dispatchedAsInfix && (a === 'left' || a === 'right')) {
+          if (!firstOp) firstOp = n;
+          lastOp = n;
+          (a === 'left' ? lefts : rights).add(n.string ?? '');
+        }
+        n = n.right.next();
+      }
+      if (lefts.size && rights.size) {
+        const names = [...lefts, ...rights].map(m => `\`${m}\``).join(', ');
+        const span = new Node(this.program);
+        span.source_file = this.source_file;
+        span.cursor = firstOp!.cursor!;
+        span.selection = [{ begin: firstOp!.begin, end: lastOp!.end }];
+        span.error('associativity',
+          `Cannot mix ${names} in a single infix expression with mixed associativity, use parenthesis to mix them.`);
+        return 'mixed';
+      }
+      if (rights.size) return 'right';
+      if (lefts.size) return 'left';
+      return 'none';
+    },
+  };
 
   /** Feed this node to the language's token handler until its source is exhausted.
    *  Each handler call is observed via `.do('interpret', …)`. */
@@ -1155,6 +1228,94 @@ export class Node {
     }
     return this;
   }
+
+  /** If this node carries an unresolved resolution, return the latest
+   *  cursor-bearing Node from `resolution.nodes` (so diagnostics emitted
+   *  on the returned node land on a real source position). Falls back to
+   *  `this` when none of the resolution's nodes have a cursor but `this`
+   *  does, otherwise `null`. Used by the dispatch to surface "Unresolved
+   *  X" errors on a forward ref's actual source-anchor instead of on a
+   *  juxtaposition lazy whose cursor is undefined. */
+  forwardRef = (): Node | null => {
+    const r = this.value.resolution;
+    if (!r || r.resolved) return null;
+    const found = [...r.nodes].reverse().find(n => n.cursor != null);
+    if (found) return found;
+    return this.cursor != null ? this : null;
+  };
+
+  /** Run `fn` with parser+program state snapshotted, then restore it
+   *  unconditionally — anything `fn` advances the cursor past, saves into
+   *  `program.result`, or reports as a diagnostic is rolled back. Use for
+   *  speculative reads (e.g. recursing into the tokenHandler to find the
+   *  next non-direction-flagged token without committing to the walk). */
+  peek = <T>(fn: () => T): T => {
+    const parser = this.copy();
+    const program = this.program.snapshot();
+    try { return fn(); } finally {
+      this.cursor = parser.cursor;
+      this.selection = parser.selection.map(s => ({ begin: s.begin, end: s.end }));
+      this._direction = parser._direction;
+      this.program.restore(program);
+    }
+  };
+
+  /** Re-run the token handler over `[start.begin, trigger.begin)` under a
+   *  new walk direction, optionally pre-pinning `seed` as the running
+   *  result so the recursive walk starts with it as the anchor. The
+   *  handler's own dispatch (matchesDirection / wrongDirection / direction
+   *  switches) builds the chain — no separate anchor pass.
+   *
+   *  Diagnostics, log entries, and resolution-node entries inside the
+   *  range are cleared first so the re-interpretation starts clean.
+   *  Parser position (cursor / selection / direction) is restored on
+   *  exit; program state changes from the inner handler calls persist. */
+  rewalk = (start: Node, trigger: Node, direction: 'left-to-right' | 'right-to-left', seed?: Node): void => {
+    const program = this.program;
+    const sf = start.source_file;
+    const rangeStart: number = start.begin ?? 0;
+    const rangeEnd: number = trigger.begin ?? Number.POSITIVE_INFINITY;
+
+    const inRange = (n: any): boolean =>
+      !!n && n.source_file === sf && n.cursor != null && n.cursor >= rangeStart && n.cursor < rangeEnd;
+    const keep = (d: any): boolean => !d.node || !inRange(d.node);
+    program.diagnostics = program.diagnostics.filter(keep);
+    // Diagnostics.items is a separate array (it's what print() reads); the
+    // program.diagnostics filter alone leaves stale entries visible.
+    const log = program.runtime.log as any;
+    if (Array.isArray(log.items)) log.items = log.items.filter(keep);
+    for (const r of program.runtime._resolutions) {
+      r.nodes = r.nodes.filter(n => !inRange(n));
+    }
+
+    const parser = this.copy();
+
+    // Start at the boundary opposite the walk direction so the trigger
+    // itself is the first token captured: RTL walks leftward, so the
+    // cursor sits one past the trigger's right edge. With a `seed`, the
+    // trigger is the anchor (already populated as `result`) — we don't
+    // want to re-capture it, so we start at its inner edge instead.
+    const triggerEnd = trigger.end ?? rangeEnd;
+    const triggerBegin = trigger.begin ?? rangeEnd;
+    this.cursor = direction === 'right-to-left'
+      ? (seed ? triggerBegin : triggerEnd + 1)
+      : (seed ? triggerEnd : Math.max(rangeStart - 1, 0));
+    this.selection = [];
+    if (direction === 'right-to-left') this.rtl; else this.ltr;
+    program.result = seed ?? null;
+    program.expression_start = undefined;
+
+    // Stop once the most-recently-captured token has reached the original
+    // expression boundary — `_.begin` (RTL) / `_.end` (LTR) tracks the
+    // current selection's outer edge.
+    const past = (): boolean => direction === 'right-to-left' ? this.begin <= rangeStart : this.end >= rangeEnd;
+    const handler = program.runtime._tokenHandler!;
+    while (!this.direction.done() && !past()) handler(this);
+
+    this.cursor = parser.cursor;
+    this.selection = parser.selection.map(s => ({ begin: s.begin, end: s.end }));
+    this._direction = parser._direction;
+  };
   
   //TODO Should be a .register, and then the .external part is a flag.
   external_method = (key: Key, fn: Method, callback?: (fn: Node) => Node): this => {
@@ -1200,11 +1361,12 @@ export class Node {
   get end() { return this.last?.end ?? this.cursor; }
   set end(location: Location) { if (this.last) { this.last.end = location } else { this.selection.push({ begin: this.cursor, end: location }); } }
 
-  private create_direction = (direction: -1 | 1) => {
-    const boundary = () => direction === -1 ? this.begin : this.end;
+  private create_direction = (direction: 'left-to-right' | 'right-to-left') => {
+    const sign = direction === 'right-to-left' ? -1 : 1;
+    const boundary = () => sign === -1 ? this.begin : this.end;
 
     const move = (offset: number = 1) => {
-      if (direction === -1) {
+      if (sign === -1) {
         this.begin = this.begin - offset
       } else {
         this.end = this.end + offset
@@ -1212,16 +1374,16 @@ export class Node {
     }
 
     move.done = () => {
-      const next = boundary() + direction;
+      const next = boundary() + sign;
       return next < 0 || next >= this.source.length;
     };
 
     move.peak = (offset: number = 1): string => {
       if (offset === 0) return '';
-      if (offset < 0) return (direction === -1 ? this.right : this.left).peak(offset * -1)
+      if (offset < 0) return (sign === -1 ? this.right : this.left).peak(offset * -1)
 
       let a = boundary();
-      let b = a + (offset * direction);
+      let b = a + (offset * sign);
       if (offset == 1) return b < 0 || b >= this.source.length ? '' : this.source[b];
 
       if (b < a) { [a, b] = [b, a] }
@@ -1250,7 +1412,7 @@ export class Node {
     move.skip_while = (pred: (ch: string) => boolean): number => {
       let n = 0;
       while (!move.done() && pred(move.peak())) { n++; move(); }
-      this.cursor = boundary() + direction;
+      this.cursor = boundary() + sign;
       this.selection = [];
       return n;
     }
@@ -1265,7 +1427,7 @@ export class Node {
       return this.source.slice(a, b + 1)
     }
     move.capture_indent = (): number => {
-      if (direction === -1) { return this.fatal('rtl', 'capture_indent not supported for rtl.') } // TODO EOL whitespace if -1
+      if (sign === -1) { return this.fatal('rtl', 'capture_indent not supported for rtl.') } // TODO EOL whitespace if right-to-left
       move.capture('\n');
       return move.capture_whitespace();
     }
@@ -1288,25 +1450,49 @@ export class Node {
       // return slice(before, boundary().index);
     }
     move.goto = (char: string): string => {}
-    move.skip = () => this.move(boundary() + (1 * direction))
+    move.skip = () => this.move(boundary() + (1 * sign))
+    /** AST-style sibling navigation: returns the nearest resolved Node in
+     *  this direction (LTR / RTL) within the same source file, looked up
+     *  through the runtime's resolution registry. The neighbor is the one
+     *  with the smallest forward cursor (LTR) or largest backward cursor
+     *  (RTL) relative to `this.cursor`. Returns null if there is none.
+     *  Caller filters by expression boundary. */
+    move.next = (): Node | null => {
+      if (!this.source_file || this.cursor == null) return null;
+      const myCursor = this.cursor;
+      let best: Node | null = null;
+      let bestCursor: number = sign === 1 ? Infinity : -Infinity;
+      for (const r of this.program.runtime._resolutions) {
+        for (const n of r.nodes) {
+          if (n === this || n.source_file !== this.source_file || n.cursor == null) continue;
+          const c = n.cursor;
+          if (sign === 1 ? c <= myCursor : c >= myCursor) continue;
+          if (sign === 1 ? c < bestCursor : c > bestCursor) {
+            bestCursor = c;
+            best = n;
+          }
+        }
+      }
+      return best;
+    }
 
     return move;
   }
 
-  left = this.create_direction(-1)
+  left = this.create_direction('right-to-left')
   move = (cursor: Location) => {
     this.cursor = cursor; this.selection = []
     this.clear()
   }
-  right = this.create_direction(1)
+  right = this.create_direction('left-to-right')
 
-  _direction: -1 | 1 = 1
-  get ltr() { this._direction = 1; return this }; get rtl() { this._direction = -1; return this };
-  get direction() { return this._direction === -1 ? this.left : this.right; }
+  _direction: 'left-to-right' | 'right-to-left' = 'left-to-right'
+  get ltr() { this._direction = 'left-to-right'; return this }; get rtl() { this._direction = 'right-to-left'; return this };
+  get direction() { return this._direction === 'right-to-left' ? this.left : this.right; }
   /** The opposite of `direction` — useful for "behind me" peeks that should
    *  flip when the parse swaps from LTR to RTL (e.g. checking whether the
    *  preceding char was whitespace, regardless of which way we're reading). */
-  get behind()    { return this._direction === -1 ? this.right : this.left; }
+  get behind()    { return this._direction === 'right-to-left' ? this.right : this.left; }
   private directed_delegate = (method: string) => (...args: any[]): this => { (this.direction as any)[method](...args); return this; }
 
   done = this.directed_delegate('done')
@@ -1339,7 +1525,6 @@ export class Node {
     copy.cursor = this.cursor
     copy.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }))
     copy._direction = this._direction
-    copy.abstract_interpretation = this.abstract_interpretation;
     return copy;
   }
 
@@ -1532,6 +1717,12 @@ export class Node {
       // direction (RTL captures leave the parse-root's cursor on the right
       // edge of the captured range, which would mis-place diagnostics).
       method.cursor = method.selection[0]?.begin ?? this.cursor;
+      // Track this matched instance in the resolution registry so AST-
+      // style navigation (e.g. `node.right.next()`) can find resolved
+      // Nodes by source position. Forward refs are tracked at the
+      // bottom of `match`; mirror that for resolved methods so both
+      // surface uniformly.
+      method.value.resolution?.add(method);
       return method;
     }
 
@@ -1755,12 +1946,67 @@ export class Program {
       this.result = null;
     }
     for (let i = 0; i < this.pending.length; i++) {
-      this.pending[i].abstract().realize();
+      this.pending[i].realize();
     }
     //TODO MOVE .RESULT to the last .pending?
     //TODO Each successive statement should have dependence on the previous in .realize, so calling .abstract().realize() on them should trickle taht down. .abstract() should recursively be applied to all touched nodes.
 
     return this.pending[this.pending.length - 1];
   }
+
+  /** End-of-expression: settle the running result, force its realize so
+   *  side effects (modifier-body `args.with(...)` stamping, etc.) fire in
+   *  source order, push it onto `pending`, and reset the per-expression
+   *  state so the next expression starts clean. Called by the language's
+   *  token handler whenever it crosses a newline. No-op when there's no
+   *  current result. */
+  commit = (): void => {
+    if (this.result) {
+      const settled = this.result.settle();
+      // Force the settled chain to realize NOW, not at verify time.
+      // accepts_program-ending expressions (e.g. `external right-to-left X`)
+      // build a `composed` node that lazily wires up the chain; until
+      // something realizes it, the chain's side effects (most notably
+      // modifier-body stamping like `args.with('right-to-left')` on X's
+      // resolution.options) don't happen — and a later line that
+      // references X then sees stale flags. Realizing here fires the chain
+      // in source order, which matches what a user reading the file expects.
+      settled.realize();
+      this.pending.push(settled);
+    }
+    this.result = null;
+    // Reset expression_start so the next expression's first token re-pins
+    // it (deferred opposite-direction methods deliberately leave it set
+    // across iters within the same expression).
+    this.expression_start = undefined;
+  };
+
+  /** Snapshot of mutable program-level state the token handler can touch
+   *  (`result`, `expression_start`, plus *lengths* of the diagnostic / log
+   *  / resolution-node / pending arrays — restoring by truncation drops
+   *  anything appended in between). Paired with `restore` for speculative
+   *  handler runs (see `Node.peek`). */
+  snapshot = () => {
+    const log = this.runtime.log as any;
+    return {
+      result: this.result,
+      expression_start: this.expression_start,
+      diagnostics_length: this.diagnostics.length,
+      log_items_length: Array.isArray(log.items) ? log.items.length : 0,
+      resolution_node_lengths: this.runtime._resolutions.map(r => r.nodes.length),
+      pending_length: this.pending.length,
+    };
+  };
+  restore = (snap: ReturnType<Program['snapshot']>): void => {
+    const log = this.runtime.log as any;
+    this.result = snap.result;
+    this.expression_start = snap.expression_start;
+    this.diagnostics.length = snap.diagnostics_length;
+    if (Array.isArray(log.items)) log.items.length = snap.log_items_length;
+    this.runtime._resolutions.forEach((r, i) => {
+      r.nodes.length = snap.resolution_node_lengths[i];
+    });
+    this.pending.length = snap.pending_length;
+  };
 
 }

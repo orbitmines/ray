@@ -77,16 +77,20 @@ function repoBoot(repoRoot: string): Boot {
   if (!fs.existsSync(tsxDir)) throw new Error(`tsx not found near ${repoRoot} — run \`npm install\` in @ether/.ts.`);
   if (!fs.existsSync(entry))  throw new Error(`Language server entry not found at ${entry}.`);
 
+  // In repo mode the LSP source is being actively edited — point tsx's
+  // disk cache at /dev/null so a cached compile from minutes ago can't
+  // shadow today's source after a window reload.
+  const repoEnv = { ...process.env, TSX_CACHE_DIRECTORY: '/dev/null' };
   const run = {
     command: process.execPath,
     args: nodeImportTsxArgs(tsxDir, entry),
     transport: TransportKind.stdio,
-    options: { cwd: repoRoot },
+    options: { cwd: repoRoot, env: repoEnv },
   };
   return {
     mode: 'repo',
     description: `repo (${repoRoot})`,
-    server: { run, debug: { ...run, options: { ...run.options, env: { ...process.env, DEBUG: '1' } } } },
+    server: { run, debug: { ...run, options: { ...run.options, env: { ...repoEnv, DEBUG: '1' } } } },
   };
 }
 

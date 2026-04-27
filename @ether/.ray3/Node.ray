@@ -1,3 +1,5 @@
+// TODO Modifier: precedence(before Node.==)
+
 global = local
 
 `{string: String}` => string

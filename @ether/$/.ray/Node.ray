@@ -12,8 +12,16 @@ external right-to-left right-associative </
 external right-associative x
 
 external F
+external right-associative M
+external right-associative N
+external left-associative X
+
 
 F x F x F x F
+
+F N F M F
+
+F X F M F
 
 external left-to-right right-to-left a
 external left-to-right right-to-left c
@@ -55,3 +63,6 @@ test-middle test-right test-middle test-left test-middle
 test-middle test-right test-middle test-left test-middle </
 
 test external </
+a test external </
+test external </ </
+external </ external </

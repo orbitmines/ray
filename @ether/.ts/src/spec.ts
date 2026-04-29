@@ -197,7 +197,7 @@ export const Ray = new Language('ether', (Version.scheme('E') as Standard).creat
           const boundary = new Node(_.program);
           boundary.source_file = expr_start.source_file;
           boundary.cursor = lastEnd + 1;
-          boundary.selection = [{ begin: lastEnd + 1, end: lastEnd + 1 }];
+          boundary.selection = [lastEnd + 1, lastEnd + 1];
 
           // Walk resolved siblings via `.right.next()` and check for
           // mixed associativity. If only right-assoc methods appear,

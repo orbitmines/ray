@@ -45,6 +45,21 @@ export class SourceFile {
     }
     return lo + 1;
   }
+  /** 1-based column at `cursor`. O(log lines) via the same newline cache
+   *  as `lineOf`: column = cursor − (last newline before cursor) (or
+   *  cursor + 1 if no preceding newline). The naive `Position.col` is
+   *  O(cursor) and was the dominant superlinear cost on big files. */
+  colOf(cursor: number): number {
+    if (!this._newlines) this.lineOf(cursor); // populates the cache
+    const nls = this._newlines!;
+    let lo = 0, hi = nls.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (nls[mid] < cursor) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo === 0 ? cursor + 1 : cursor - nls[lo - 1];
+  }
 }
 
 // (Diagnostics class moved to ./diagnostics.ts — re-exported above.)
@@ -180,6 +195,12 @@ export class Runtime implements Backend {
    *  `resolution(owner, key)`. Verify reports any entry where `resolved` is
    *  false against every node that registered with it. */
   _resolutions: Resolution[] = []
+  /** Index for `_resolutions` keyed by (owner, key). Lookup was an O(N)
+   *  `_resolutions.find(...)` per `resolution()` call — and `resolution()`
+   *  fires on every match dispatch + forward-ref check, so total cost
+   *  was O(N²) at scale (the dominant superlinearity at >50KB files).
+   *  This index makes lookup O(1). */
+  _resolutionsIndex: Map<Node, Map<Key, Resolution>> = new Map();
 
   /** **Cache** — derived from the union of `Resolution.nodes` across every
    *  resolution. Per-SourceFile sorted-by-cursor `Node[]`. Maintained by
@@ -275,11 +296,14 @@ export class Runtime implements Backend {
     // key, and modifier flags stamped via `args.with(...)` stay sticky.
     let r: Resolution | undefined;
     for (let cur: Node | undefined = owner; cur && !r; cur = cur._super) {
-      r = this._resolutions.find(rr => rr.owner === cur && rr.key === key);
+      r = this._resolutionsIndex.get(cur)?.get(key);
     }
     if (!r) {
       r = new Resolution(owner, key, message ?? `Unresolved \`${String(key)}\``);
       this._resolutions.push(r);
+      let byKey = this._resolutionsIndex.get(owner);
+      if (!byKey) { byKey = new Map(); this._resolutionsIndex.set(owner, byKey); }
+      byKey.set(key, r);
     } else if (message && !r.resolved) {
       r.message = message;
     }
@@ -627,7 +651,7 @@ export class Node extends Position implements Instrumentable {
     if (args.source_file) {
       next.source_file = args.source_file;
       if (args.cursor != null) next.cursor = args.cursor;
-      if (args.selection.length) next.selection = args.selection.map(s => ({ begin: s.begin, end: s.end }));
+      if (args.selection.length) next.selection = args.selection.slice();
     }
     return next.lazily((self) => {
       const out = this.eager.call(args);
@@ -637,7 +661,7 @@ export class Node extends Position implements Instrumentable {
       // node's identity rather than this lazy wrapper.
       if (out.source_file) self.source_file = out.source_file;
       if (out.cursor != null) self.cursor = out.cursor;
-      if (out.selection.length) self.selection = out.selection.map(s => ({ begin: s.begin, end: s.end }));
+      if (out.selection.length) self.selection = out.selection.slice();
     });
   }
 
@@ -652,6 +676,13 @@ export class Node extends Position implements Instrumentable {
   get line(): number {
     if (this.source_file && this.cursor != null) return this.source_file.lineOf(this.cursor);
     return super.line;
+  }
+  /** Override Position.col — same newline cache as `line`, O(log) via
+   *  `colOf`. The naive `Position.col` scans from offset 0 every time,
+   *  which made it the dominant cost (~40% of total) on large files. */
+  get col(): number {
+    if (this.source_file && this.cursor != null) return this.source_file.colOf(this.cursor);
+    return super.col;
   }
 
   constructor(public program: Program, public _super: Node = program.runtime.BASE, encoded: any = UNKNOWN) {
@@ -773,7 +804,7 @@ export class Node extends Position implements Instrumentable {
         const span = new Node(this.program);
         span.source_file = this.source_file;
         span.cursor = firstOp!.cursor!;
-        span.selection = [{ begin: firstOp!.begin, end: lastOp!.end }];
+        span.selection = [firstOp!.begin, lastOp!.end];
         span.error('associativity',
           `Cannot mix ${names} in a single infix expression with mixed associativity, use parenthesis to mix them.`);
         return 'mixed';
@@ -822,7 +853,7 @@ export class Node extends Position implements Instrumentable {
     const program = this.program.snapshot();
     try { return fn(); } finally {
       this.cursor = parser.cursor;
-      this.selection = parser.selection.map(s => ({ begin: s.begin, end: s.end }));
+      this.selection = parser.selection.slice();
       this._direction = parser._direction;
       this.program.restore(program);
     }
@@ -916,7 +947,7 @@ export class Node extends Position implements Instrumentable {
     program.runtime._expression!.iterate(this, past, false);
 
     this.cursor = parser.cursor;
-    this.selection = parser.selection.map(s => ({ begin: s.begin, end: s.end }));
+    this.selection = parser.selection.slice();
     this._direction = parser._direction;
   }
 
@@ -956,14 +987,24 @@ export class Node extends Position implements Instrumentable {
     return this;
   }
 
-  public cursor: Location; public selection: { begin: Location, end: Location }[] = []
+  public cursor: Location;
+  // selection is inherited from Position as packed `number[]` ([b0,e0,b1,e1,…])
+  // — see Position.selection for the rationale.
   private single_char(): boolean { return this.selection.length === 0; }
-  private get first() { return !this.single_char() ? this.selection[0] : undefined }
-  private get last() { return !this.single_char() ? this.selection[this.selection.length - 1] : undefined }
-  get begin() { return this.first?.begin ?? this.cursor; }
-  set begin(location: Location) { if (this.first) { this.first.begin = location } else { this.selection.push({ begin: location, end: this.cursor }); } }
-  get end() { return this.last?.end ?? this.cursor; }
-  set end(location: Location) { if (this.last) { this.last.end = location } else { this.selection.push({ begin: this.cursor, end: location }); } }
+  get begin() { return this.selection.length > 0 ? this.selection[0] : this.cursor; }
+  set begin(location: Location) {
+    if (this.selection.length > 0) { this.selection[0] = location; }
+    else { this.selection.push(location, this.cursor); }
+  }
+  get end() {
+    const len = this.selection.length;
+    return len > 0 ? this.selection[len - 1] : this.cursor;
+  }
+  set end(location: Location) {
+    const len = this.selection.length;
+    if (len > 0) { this.selection[len - 1] = location; }
+    else { this.selection.push(this.cursor, location); }
+  }
 
   // Lazy slots for the per-direction objects — these used to be eager fields
   // (`left = this.create_direction(...)` ran in the ctor for every Node), and
@@ -1153,7 +1194,7 @@ export class Node extends Position implements Instrumentable {
     copy._thunks = this._thunks ? [...this._thunks] : null
     copy.value = {...this.value}
     copy.cursor = this.cursor
-    copy.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }))
+    copy.selection = this.selection.slice()
     copy._direction = this._direction
     return copy;
   }
@@ -1320,11 +1361,11 @@ export class Node extends Position implements Instrumentable {
       // back onto the diagnostic squiggle.
       method.program = this.program;
       method.source_file = this.source_file;
-      method.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }));
+      method.selection = this.selection.slice();
       // Anchor cursor on the token's leftmost char regardless of capture
       // direction (RTL captures leave the parse-root's cursor on the right
       // edge of the captured range, which would mis-place diagnostics).
-      method.cursor = method.selection[0]?.begin ?? this.cursor;
+      method.cursor = method.selection.length > 0 ? method.selection[0] : this.cursor;
       // Track this matched instance in the resolution registry so AST-
       // style navigation (e.g. `node.right.next()`) can find resolved
       // Nodes by source position. Forward refs are tracked at the
@@ -1393,9 +1434,9 @@ export class Node extends Position implements Instrumentable {
     // Deep-copy: same reasoning as in the `method` branch above — sharing the
     // parse-root's selection array would let later capture_while extensions
     // bleed into this forward ref's range.
-    forward.selection = this.selection.map(s => ({ begin: s.begin, end: s.end }));
+    forward.selection = this.selection.slice();
     // Anchor on the token's leftmost char regardless of capture direction.
-    forward.cursor = forward.selection[0]?.begin ?? this.cursor;
+    forward.cursor = forward.selection.length > 0 ? forward.selection[0] : this.cursor;
     const unresolved = `Unresolved variable \`${String(key)}\` in ${receiver}`;
     const resolution = runtime.resolution(ctx, key, unresolved);
     runtime.track(resolution, forward);

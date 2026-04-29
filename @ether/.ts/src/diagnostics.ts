@@ -84,17 +84,17 @@ export class Clock {
 
 export abstract class Position {
   cursor?: number;
-  selection: { begin: number; end: number }[] = [];
+  selection: number[] = [];
 
   abstract get source(): string;
   abstract get file(): string | undefined;
 
   get begin(): number {
-    return this.selection.length > 0 ? this.selection[0].begin : (this.cursor ?? 0);
+    return this.selection.length > 0 ? this.selection[0] : (this.cursor ?? 0);
   }
   get end(): number {
-    const last = this.selection[this.selection.length - 1];
-    return last ? last.end : (this.cursor ?? 0);
+    const len = this.selection.length;
+    return len > 0 ? this.selection[len - 1] : (this.cursor ?? 0);
   }
   get line(): number {
     const src = this.source;
@@ -444,7 +444,12 @@ export class Diagnostics {
         const i = n.cursor!;
         return [{ begin: i, end: i }];
       }
-      return n.selection.map(s => ({ begin: s.begin, end: s.end }));
+      // selection is packed [b0,e0,b1,e1,…] — unpack into {begin,end} pairs
+      // for the print code's internal API.
+      const out: { begin: number; end: number }[] = [];
+      const sel = n.selection;
+      for (let i = 0; i < sel.length; i += 2) out.push({ begin: sel[i], end: sel[i + 1] });
+      return out;
     };
 
     anchors.sort((a, b) => cursor(a) - cursor(b));

@@ -26,15 +26,15 @@ function positionAt(source: string, offset: number): { line: number; character: 
   return { line, character };
 }
 
-/** Compute an LSP Range from a Position's selection (preferred) or single cursor. */
+/** Compute an LSP Range from a Position's selection (preferred) or single cursor.
+ *  selection is packed `[b0, e0, b1, e1, …]`. */
 function nodeRange(node: Position): Range {
   const src = node.source ?? '';
-  if (node.selection && node.selection.length > 0) {
-    const first = node.selection[0];
-    const last = node.selection[node.selection.length - 1];
+  const sel = node.selection;
+  if (sel && sel.length > 0) {
     return {
-      start: positionAt(src, first.begin),
-      end:   positionAt(src, last.end + 1),
+      start: positionAt(src, sel[0]),
+      end:   positionAt(src, sel[sel.length - 1] + 1),
     };
   }
   const cursor = node.cursor ?? 0;

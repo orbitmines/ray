@@ -62,10 +62,17 @@ export function start(language: Language): void {
     try { return fileURLToPath(uri); } catch { return uri; }
   };
 
-  /** Drop our cached program + source for a URI. */
+  /** Drop our cached program + source for a URI, plus every runtime-side
+   *  cache scrap that references it (resolutions' demand sites, both
+   *  byPosition caches, the affected items in `log.items`, and the
+   *  errored-line counts). Without this cleanup, re-parsing a file
+   *  layers new diagnostics on top of stale cache state — cascade
+   *  dedup then sees the old "this line already errored" entries and
+   *  suppresses the legit new errors, so VSCode shows nothing. */
   const dropFile = (uri: string) => {
     const prev = programs.get(uri);
     if (prev) {
+      runtime.dropProgramState(prev);
       const idx = runtime.programs.indexOf(prev);
       if (idx !== -1) runtime.programs.splice(idx, 1);
     }
@@ -93,11 +100,13 @@ export function start(language: Language): void {
     catch (e) { if (!(e instanceof FatalParse)) throw e; }
   };
 
-  /** Convert a program's diagnostics into LSP form and publish on the URI. */
+  /** Convert this file's diagnostics into LSP form and publish on the URI.
+   *  Pulls from the per-file index on `runtime.log.items` (a `Map` keyed
+   *  by file path); diagnostics self-identify their file via `node.file`,
+   *  so no Program backref is needed. */
   const publishFile = (uri: string): void => {
-    const program = programs.get(uri);
     const file = uriToFile(uri);
-    const diags = (program?.diagnostics ?? [])
+    const diags = (runtime.log.items.get(file) ?? [])
       .map(d => toLsp(d, file))
       .filter((d): d is NonNullable<typeof d> => d !== null);
     connection.sendDiagnostics({ uri, diagnostics: diags });

@@ -3,7 +3,7 @@ import {
   DiagnosticSeverity,
   Range,
 } from 'vscode-languageserver/node';
-import type { Diagnostic, Node } from '../language.ts';
+import type { Diagnostic, Position } from '../diagnostics.ts';
 
 /** Map our six-level severity onto LSP's four. Trace/debug fold into Hint. */
 const SEVERITY: Record<Diagnostic['level'], DiagnosticSeverity> = {
@@ -26,8 +26,8 @@ function positionAt(source: string, offset: number): { line: number; character: 
   return { line, character };
 }
 
-/** Compute an LSP Range from a Node's selection (preferred) or single cursor. */
-function nodeRange(node: Node): Range {
+/** Compute an LSP Range from a Position's selection (preferred) or single cursor. */
+function nodeRange(node: Position): Range {
   const src = node.source ?? '';
   if (node.selection && node.selection.length > 0) {
     const first = node.selection[0];
@@ -51,6 +51,12 @@ function nodeRange(node: Node): Range {
  */
 export function toLsp(diag: Diagnostic, uriFile: string | undefined): LspDiagnostic | null {
   if (diag.clock) return null;                   // timing samples
+  // Rewalk marks the diagnostics in its cleared range as superseded
+  // instead of removing them — every reader (display, count getters,
+  // _cascaded) filters on `!superseded`. The LSP path must too, or
+  // VSCode shows stale errors from the LTR walk that the RTL rewalk
+  // re-interpreted.
+  if (diag.superseded) return null;
   if (diag.level === 'trace' || diag.level === 'debug') return null;
 
   // Prefer the diagnostic's own node; otherwise fall back to the top-of-stack

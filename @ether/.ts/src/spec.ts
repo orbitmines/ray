@@ -1,9 +1,10 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import {Language, Node, Program} from "./language.ts";
+import {Standard, Version} from "./version.ts";
 import {is_string} from "./lodash.ts";
 
-export const Ray = new Language('ether', '0.E2026.0D.0')
+export const Ray = new Language('ether', (Version.scheme('E') as Standard).create(0, '2027-01-01', 0))
   .extension('.ray')
 
   // .pass(_ => _
@@ -153,7 +154,7 @@ export const Ray = new Language('ether', '0.E2026.0D.0')
       if (prevForward) {
         prevForward.error('forward ref', prevForward.value.resolution!.message);
       } else if (direction === 'right-to-left' && prev.enabled('direction')) {
-        const handler = _.program.runtime._tokenHandler!;
+        const handler = _.program.runtime._expression!.handle!;
         const recurse = (): Node | undefined => {
           if (_.direction.done()) return undefined;
           const candidate = handler(_);
@@ -436,9 +437,7 @@ export const Ray = new Language('ether', '0.E2026.0D.0')
       return resolved;
     };
 
-    E.token(handle);
-
-    return E()
+    return E(handle)
   })
 
   .pass(_ => _

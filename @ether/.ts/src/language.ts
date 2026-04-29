@@ -1,13 +1,22 @@
 import fs from "fs";
 import path from "path";
 import {is_array, is_function, is_string} from "./lodash.ts";
+import {Version} from "./version.ts";
+import { Clock, Diagnostics, Cache, DIAGNOSTIC_SEVERITY, Position, instrumented, uninstrumented } from "./diagnostics.ts";
+import type { Diagnostic, Instrumentable, InstrumentationCtx } from "./diagnostics.ts";
 
-export class Clock {
-  a: number; b: number | null = null;
-  constructor() { this.a = performance.now(); }
-  stop = (): this => { if (this.b === null) this.b = performance.now(); return this; }
-  get ms(): number { return (this.b ?? performance.now()) - this.a; }
-  toString = () => `${this.ms.toFixed(2)}ms`;
+/** Standard lower_bound binary search: returns the first index `i` in
+ *  the sorted array `arr` such that `key(arr[i]) >= target`. Returns
+ *  `arr.length` if no element satisfies the predicate. Used by
+ *  `Node.rewalk` to find the in-range slice in the by-position caches. */
+function lowerBound<T>(arr: T[], target: number, key: (t: T) => number): number {
+  let lo = 0, hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (key(arr[mid]) < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
 }
 
 /** A piece of source code under consideration. Shared by reference across the
@@ -15,639 +24,87 @@ export class Clock {
  *  we don't duplicate the source string. */
 export class SourceFile {
   constructor(public source: string, public file?: string) {}
+  /** Lazily-computed sorted positions of `\n` chars. Used by `lineOf` to
+   *  turn a cursor into a 1-based line number in O(log lines). Precompute is
+   *  O(source.length) once per file. */
+  private _newlines?: number[];
+  lineOf(cursor: number): number {
+    if (!this._newlines) {
+      const arr: number[] = [];
+      const s = this.source;
+      for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) arr.push(i);
+      this._newlines = arr;
+    }
+    const nls = this._newlines;
+    // Binary search: count how many newlines are strictly before `cursor`.
+    let lo = 0, hi = nls.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (nls[mid] < cursor) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo + 1;
+  }
 }
 
-export interface Diagnostic {
-  level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
-  phase: string;
-  /** The node this diagnostic refers to — selection for ranges, cursor for pipe anchor. */
+// (Diagnostics class moved to ./diagnostics.ts — re-exported above.)
+
+/** Atom of a syntax pattern — what the future DSL form `E('{', sub, '}', E())`
+ *  will compose. Sub-Expressions are themselves valid atoms (recursive). */
+export type ExpressionAtom = string | Node | Expression;
+export type TokenHandler = (node: Node) => Node | undefined;
+
+/** A parser expression. Three roles, dispatched by constructor shape:
+ *    E(handler)       — the language's parser body. `handle` IS the per-step
+ *                       token handler; `iterate` drives it over a parse-root.
+ *    E(node)          — bound to an existing parse-root Node, borrowing the
+ *                       runtime's registered handler at iterate time. Used by
+ *                       callers that want "the expression starting from this
+ *                       node" without re-passing the node every step.
+ *    E(a1, a2, …)     — DSL pattern composition (the `E(E(), '{', sub, '}')`
+ *                       form). Atoms land in `atoms`; builder methods
+ *                       (.repeats / .bind / .freeze / .until / …) will hang
+ *                       off this Expression once those land in spec.ts. The
+ *                       composition path is populate-only today — the builder
+ *                       methods aren't wired up yet, but the data shape is
+ *                       there so the syntax doesn't need to be changed when
+ *                       they arrive.
+ *
+ *  Owns the read-loop: `iterate(node, past?)` so call sites (parse, rewalk,
+ *  any future driver) don't reimplement
+ *  `while (!direction.done() && !past()) handle(...)`. */
+export class Expression {
+  handle?: TokenHandler;
   node?: Node;
-  message?: string;
-  /** Present when this diagnostic represents a timing measurement. */
-  clock?: Clock;
-  /**
-   * Dual-purpose. Never populated in both meanings on the same diagnostic:
-   *   - For error/warning/fatal: snapshot of the program call stack at report
-   *     time (frames, top-of-stack last).
-   *   - For a level:'trace' diagnostic: child diagnostics emitted at the same
-   *     site (nested detail).
-   */
-  diagnostics?: Diagnostic[];
-}
+  atoms: ExpressionAtom[] = [];
 
-const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = {
-  trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5,
-};
-
-export class Diagnostics {
-  private items: Diagnostic[] = [];
-  private _cascadeSuppression = false;
-  private _unresolvedNames = new Set<string>();
-
-  runtime!: Runtime;
-
-  constructor() {
-
-  }
-
-  get programs(): Program[] { return this.runtime?.programs ?? []; }
-
-  clock = () => new Clock();
-  private _start = this.clock();
-  start = () => this._start = this.clock();
-
-  enableCascadeSuppression() { this._cascadeSuppression = true; }
-
-  describe = (a: any) => {
-
-  }
-
-  deduplicate() {
-    const seen = new Set<string>();
-    this.items = this.items.filter(d => {
-      const file = d.node?.file ?? '';
-      const idx = d.node?.begin ?? 0;
-      const key = `${file}:${idx}|${d.message ?? ''}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }
-
-  report(diag: Diagnostic) {
-    if (this._cascadeSuppression && diag.phase === 'resolve' && diag.message) {
-      const nameMatch = diag.message.match(/Unresolved identifier: (.+)/);
-      if (nameMatch) {
-        const name = nameMatch[1];
-        for (const prev of this._unresolvedNames) {
-          if (name.includes(prev) && name !== prev) return;
-        }
-        this._unresolvedNames.add(name);
-      }
+  constructor(...args: (ExpressionAtom | TokenHandler)[]) {
+    if (args.length === 1) {
+      const a = args[0];
+      if (typeof a === 'function') { this.handle = a as TokenHandler; return; }
+      if (a instanceof Node) { this.node = a; return; }
     }
-    this.items.push(diag);
+    for (const a of args) this.atoms.push(a as ExpressionAtom);
   }
 
-  exit = (): never => {
-    this.print();
-    return process.exit(1);
-  }
-
-  fatal = (phase: string, message: string, node?: Node): never => {
-    this.report({ level: 'fatal', phase, message, node });
-    return this.exit()
-  }
-  error = (phase: string, message: string, node?: Node) =>
-    this.report({ level: 'error', phase, message, node });
-  warning = (phase: string, message: string, node?: Node) =>
-    this.report({ level: 'warning', phase, message, node });
-  info = (phase: string, message: string, node?: Node) =>
-    this.report({ level: 'info', phase, message, node });
-
-  get errors() { return this.items.filter(d => d.level === 'error' || d.level === 'fatal'); }
-  get warnings() { return this.items.filter(d => d.level === 'warning'); }
-  get hasErrors() { return this.items.some(d => d.level === 'error' || d.level === 'fatal'); }
-  get count() { return this.items.length; }
-
-  /**
-   * Minimum severity to display, from DEBUG env var.
-   * DEBUG=0 → trace (show all), DEBUG=1 → debug+, ..., DEBUG=5 → fatal only.
-   * Default: 2 (info+).
-   */
-  static minLevel(): number {
-    const env = process.env.DEBUG;
-    if (env === undefined || env === '') return DIAGNOSTIC_SEVERITY.info;
-    const n = parseInt(env, 10);
-    if (!isNaN(n)) return n;
-    // Allow level names too: DEBUG=trace, DEBUG=warning, etc.
-    if (env in DIAGNOSTIC_SEVERITY) return DIAGNOSTIC_SEVERITY[env as Diagnostic['level']];
-    return DIAGNOSTIC_SEVERITY.info;
-  }
-
-  static showLevel(level: Diagnostic['level']): boolean {
-    return DIAGNOSTIC_SEVERITY[level] >= Diagnostics.minLevel();
-  }
-
-  static locate(source: string, pos: number): { line: number; col: number; context: string } {
-    let line = 1, col = 1;
-    for (let i = 0; i < pos && i < source.length; i++) {
-      if (source[i] === '\n') { line++; col = 1; } else col++;
-    }
-    const lineStart = source.lastIndexOf('\n', pos - 1) + 1;
-    const lineEnd = source.indexOf('\n', pos);
-    const lineText = source.slice(lineStart, lineEnd === -1 ? source.length : lineEnd);
-    const pointer = ' '.repeat(col - 1) + '^';
-    return { line, col, context: `  ${lineText}\n  ${pointer}` };
-  }
-
-  // ANSI helpers
-  static c = {
-    reset:       '\x1b[0m',
-    blue:        '\x1b[34m',
-    dark_blue:   '\x1b[2;34m',   // dim blue for debug
-    yellow:      '\x1b[33m',
-    gray:        '\x1b[90m',
-    dark_gray:   '\x1b[2;90m',
-    red:         '\x1b[1;31m',
-    bold_yellow: '\x1b[1;33m',
-    bold_blue:   '\x1b[1;34m',
-    white:       '\x1b[37m',
-    dim:         '\x1b[2m',
-    bold:        '\x1b[1m',
-  }
-
-  /** Color for each diagnostic level — fatal/error/warning are bold. */
-  static levelColor: Record<Diagnostic['level'], string> = {
-    fatal:   '\x1b[1;31m',   // bold red (same as error)
-    error:   '\x1b[1;31m',   // bold red
-    warning: '\x1b[1;33m',   // bold yellow
-    info:    '\x1b[34m',     // blue (not bold)
-    debug:   '\x1b[32m',     // green (not bold)
-    trace:   '\x1b[90m',     // gray (not bold)
-  }
-
-  /**
-   * Print annotated source lines for a program's diagnostics.
-   * Alternates annotations above/below the source line; timing diagnostics
-   * are rendered on a dedicated line beneath the source, indented two spaces.
+  /** Drive the handler over `node` until either `node.direction.done()`
+   *  (cursor at end-of-source in the current direction) or `past()` (when
+   *  given) returns true. The `past` predicate is how rewalks stop at an
+   *  inner expression boundary instead of EOF.
    *
-   *         Forward reference to 'test'
-   *         |
-   * external test
-   *    0.5ms, 5 * ~0.9ms = 4.5ms
-   *    |
-   *    Method on *
-   *    error[external]: Expected method to ...
-   */
-  private _printProgram(program: Program) {
-    const { c } = Diagnostics;
-    if (!program.root?.source_file) return;
-    const { source, file } = program.root.source_file;
-    const cols = process.stdout.columns || 80;
-    const lines = source.split('\n');
-    const lineNumWidth = String(lines.length).length;
-    const gutterLen = lineNumWidth + 1;
-
-    if (file) console.error(`${c.gray}${file}${c.reset}`);
-
-    // Pick the best source-bearing node for display: the diagnostic's own
-    // node, or else the top-of-stack frame (errors reported on value/partial
-    // nodes carry no source_file themselves, but their stack does).
-    const sf = program.root!.source_file;
-    const displayNode = (d: Diagnostic): Node | undefined =>
-      d.node?.source_file === sf ? d.node
-        : d.diagnostics?.[d.diagnostics.length - 1]?.node?.source_file === sf
-            ? d.diagnostics[d.diagnostics.length - 1].node
-            : undefined;
-
-    const tied = program.diagnostics.filter(d => !!displayNode(d));
-    const anchors = tied.filter(d => !d.clock);
-    const timings = tied.filter(d => !!d.clock);
-
-    const cursor = (d: Diagnostic) => displayNode(d)!.cursor!;
-    const ranges = (d: Diagnostic): { begin: number; end: number }[] => {
-      const n = displayNode(d)!;
-      if (n.selection.length === 0) {
-        const i = n.cursor!;
-        return [{ begin: i, end: i }];
-      }
-      return n.selection.map(s => ({ begin: s.begin, end: s.end }));
-    };
-
-    anchors.sort((a, b) => cursor(a) - cursor(b));
-
-    let anchorIdx = 0;
-    for (let lineNo = 0; lineNo < lines.length; lineNo++) {
-      const line = lines[lineNo];
-      const lineStart = lines.slice(0, lineNo).reduce((a, l) => a + l.length + 1, 0);
-      const lineEnd = lineStart + line.length;
-      const lineLabel = `${c.gray}${String(lineNo + 1).padStart(lineNumWidth)} ${c.reset}`;
-      const blankGutter = ' '.repeat(gutterLen);
-
-      // Collect visible anchors on this line.
-      const lineAnchors: Diagnostic[] = [];
-      while (anchorIdx < anchors.length && cursor(anchors[anchorIdx]) < lineEnd) {
-        const d = anchors[anchorIdx];
-        if (cursor(d) >= lineStart && Diagnostics.showLevel(d.level)) lineAnchors.push(d);
-        anchorIdx++;
-      }
-
-      // Collect timings on this line, partitioned by phase.
-      const lineTimings = timings.filter(d => {
-        const idx = d.node?.cursor;
-        return idx !== undefined && idx >= lineStart && idx < lineEnd;
-      });
-      const timingLine = this._formatTimingLine(lineTimings);
-
-      if (lineAnchors.length === 0) {
-        if (!timingLine) continue;
-        console.error(`${lineLabel}${c.gray}${line}${c.reset}`);
-        console.error(`${blankGutter}${timingLine}`);
-        continue;
-      }
-
-      // Group anchors that share a cursor — they render under one pipe
-      // (one annotation block, diagnostics stacked).
-      const byCursor = new Map<number, Diagnostic[]>();
-      const cursorOrder: number[] = [];
-      for (const d of lineAnchors) {
-        const col = cursor(d) - lineStart;
-        if (!byCursor.has(col)) { byCursor.set(col, []); cursorOrder.push(col); }
-        byCursor.get(col)!.push(d);
-      }
-      // Group color *and* range follow the most severe diagnostic in the
-      // group: an error with a wide selection should colour its full span
-      // even when an info trace at the same anchor cursor was emitted
-      // first with a narrower range.
-      const info = cursorOrder.map(col => {
-        const diags = byCursor.get(col)!;
-        const worst = diags.reduce((a, b) =>
-          DIAGNOSTIC_SEVERITY[b.level] > DIAGNOSTIC_SEVERITY[a.level] ? b : a
-        );
-        return {
-          diags,
-          col,
-          ranges: ranges(worst).map(r => ({ begin: r.begin - lineStart, end: r.end - lineStart })),
-          color: Diagnostics.levelColor[worst.level] ?? c.gray,
-        };
-      });
-      const aboveInfo = info.filter((_, i) => i % 2 === 1).reverse();
-      const belowInfo = info.filter((_, i) => i % 2 === 0);
-
-      // Above annotations.
-      if (aboveInfo.length) {
-        const aboveRL = [...aboveInfo].sort((a, b) => b.col - a.col);
-        const rendered = this._renderAnnotations(blankGutter, gutterLen, aboveRL, cols, 'before');
-        rendered.push(this._connectorLine(blankGutter, gutterLen, aboveRL));
-        let prev = '';
-        for (const l of rendered) { if (l !== prev) console.error(l); prev = l; }
-      }
-
-      // Source line with colored ranges.
-      const colorSegments: { begin: number; end: number; color: string }[] = [];
-      for (const ti of info) {
-        for (const r of ti.ranges) {
-          if (r.end < 0 || r.begin >= line.length) continue;
-          colorSegments.push({ begin: Math.max(r.begin, 0), end: Math.min(r.end, line.length - 1), color: ti.color });
-        }
-      }
-      colorSegments.sort((a, b) => a.begin - b.begin);
-
-      let colored = '';
-      let pos = 0;
-      for (const seg of colorSegments) {
-        if (seg.begin > pos) colored += c.gray + line.slice(pos, seg.begin);
-        const endCol = seg.end + 1;
-        if (endCol > pos) colored += seg.color + line.slice(Math.max(seg.begin, pos), endCol);
-        pos = Math.max(pos, endCol);
-      }
-      if (pos < line.length) colored += c.gray + line.slice(pos);
-      console.error(`${lineLabel}${colored}${c.reset}`);
-
-      // Below annotations.
-      if (belowInfo.length) {
-        const rendered = this._renderAnnotations(blankGutter, gutterLen, belowInfo, cols);
-        let prev = '';
-        for (const l of rendered) { if (l !== prev) console.error(l); prev = l; }
-      }
-
-      // Timing line underneath everything rendered for this source line.
-      if (timingLine) console.error(`${blankGutter}${timingLine}`);
-
-      console.error('');
-    }
-  }
-
-  /**
-   * Format a per-line timing line, one aggregate per unique phase:
-   *   - 1 sample of phase X:  `0.5ms`  (in X's level color)
-   *   - N samples of phase X: `N * ~<avg>ms = <total>ms`  (numbers colored;
-   *                           `*`, `~`, `=` in dark gray)
-   * Phases are joined by a dark-gray `, ` and the whole line is prefixed
-   * with a dark-gray `$ `. Phases whose level is below the display threshold
-   * are dropped.
-   */
-  private _formatTimingLine(timings: Diagnostic[]): string | null {
-    const { c } = Diagnostics;
-    const visible = timings.filter(t => t.clock && Diagnostics.showLevel(t.level));
-    if (!visible.length) return null;
-
-    // Group by phase, preserving first-seen order.
-    const order: string[] = [];
-    const byPhase = new Map<string, Diagnostic[]>();
-    for (const t of visible) {
-      if (!byPhase.has(t.phase)) { byPhase.set(t.phase, []); order.push(t.phase); }
-      byPhase.get(t.phase)!.push(t);
-    }
-
-    const parts = order.map(phase => {
-      const group = byPhase.get(phase)!;
-      const color = Diagnostics.levelColor[group[0].level];
-      const total = group.reduce((a, t) => a + (t.clock?.ms ?? 0), 0);
-      const suffix = ` ${color}${phase}${c.reset}`;
-      if (group.length === 1) {
-        return `${color}${total.toFixed(2)}ms${c.reset}${suffix}`;
-      }
-      const avg = total / group.length;
-      return `${color}${group.length}${c.reset}${c.dark_gray} * ~${c.reset}${color}${avg.toFixed(2)}ms${c.reset}` +
-             `${c.dark_gray} = ${c.reset}${color}${total.toFixed(2)}ms${c.reset}${suffix}`;
-    });
-
-    return `${c.dark_gray}$ ${c.reset}` + parts.join(`${c.dark_gray}, ${c.reset}`);
-  }
-
-  /**
-   * Render annotations one at a time in order, returning groups of lines.
-   * Each group = [connector line (if needed), description lines, error lines].
-   * First group starts with the initial connector for all annotations.
-   */
-  private _renderAnnotationGroups(
-    blankGutter: string, gutterLen: number,
-    annotations: { col: number; color: string; diags: Diagnostic[] }[],
-    cols: number,
-    pipesFrom: 'after' | 'before' = 'after'
-  ): string[][] {
-    const { c } = Diagnostics;
-    const groups: string[][] = [];
-
-    for (let i = 0; i < annotations.length; i++) {
-      const t = annotations[i];
-      // 'after': pipes for annotations not yet rendered (below style)
-      // 'before': pipes for annotations already rendered (above style)
-      const remaining = pipesFrom === 'after' ? annotations.slice(i + 1) : annotations.slice(0, i);
-      const prefixLen = gutterLen + t.col;
-      const fullAvailable = cols - prefixLen;
-      // If there are pipes to the right, wrap text before the first pipe
-      // so pipes can appear on every line — but only if it leaves at least 30 chars.
-      const sorted_remaining = [...remaining].sort((a, b) => a.col - b.col);
-      const firstPipeAfterText = sorted_remaining.find(r => r.col > t.col);
-      const pipeGap = firstPipeAfterText ? firstPipeAfterText.col - t.col - 1 : fullAvailable;
-      const pipeAwareAvailable = pipeGap >= 30 ? pipeGap : fullAvailable;
-      const group: string[] = [];
-
-      // Connector line.
-      // 'after': this + all not-yet-rendered (pipes extend toward source)
-      // 'before': only passthrough pipes for already-rendered annotations (not this one's own pipe)
-      if (pipesFrom === 'after') {
-        group.push(this._connectorLine(blankGutter, gutterLen, annotations.slice(i)));
-      } else if (pipesFrom === 'before' && remaining.length) {
-        group.push(this._connectorLine(blankGutter, gutterLen, remaining));
-      }
-
-      // Emit a text line with pipes for remaining annotations.
-      // contentCol: where actual non-space content starts (for continuation lines,
-      // pipes can be placed in the space between t.col and contentCol).
-      const emit = (text: string, plainLen: number, contentCol?: number): boolean => {
-        const sorted = [...remaining].sort((a, b) => a.col - b.col);
-        const actualContentStart = contentCol ?? t.col;
-        const actualContentEnd = t.col + plainLen;
-        let line = blankGutter;
-        let lpos = 0;
-        let overlapped = false;
-
-        // Build from left to right: interleave pipes and text
-        // Passthrough pipes use gray; own pipe keeps its color
-        const pipeColor = c.gray;
-
-        // Phase 1: space/pipes before t.col (all passthrough)
-        for (const r of sorted) {
-          if (r.col < t.col && r.col >= lpos) {
-            if (r.col > lpos) line += ' '.repeat(r.col - lpos);
-            line += `${pipeColor}|${c.reset}`;
-            lpos = r.col + 1;
-          }
-        }
-        if (t.col > lpos) { line += ' '.repeat(t.col - lpos); lpos = t.col; }
-
-        // Phase 2: the padding zone (t.col to actualContentStart) — pipes can go here
-        if (contentCol) {
-          const contentText = text.slice(contentCol - t.col);
-
-          // Collect all pipes in the padding zone: all gray
-          // Own pipe only needed in 'before' mode (above) where it connects down to source
-          const paddingPipes = [
-            ...(pipesFrom === 'before' ? [{ col: t.col, pipeCol: pipeColor }] : []),
-            ...sorted.filter(r => r.col >= t.col && r.col < actualContentStart).map(r => ({ col: r.col, pipeCol: pipeColor }))
-          ].sort((a, b) => a.col - b.col);
-
-          for (const p of paddingPipes) {
-            if (p.col >= lpos) {
-              if (p.col > lpos) line += ' '.repeat(p.col - lpos);
-              line += `${p.pipeCol}|${c.reset}`;
-              lpos = p.col + 1;
-            }
-          }
-          if (actualContentStart > lpos) { line += ' '.repeat(actualContentStart - lpos); lpos = actualContentStart; }
-          line += contentText;
-          lpos = actualContentEnd;
-        } else {
-          line += text;
-          lpos = actualContentEnd;
-        }
-
-        // Phase 3: pipes after the text (all passthrough)
-        for (const r of sorted) {
-          if (r.col < actualContentStart) continue; // already handled
-          if (r.col >= actualContentStart && r.col < actualContentEnd) {
-            overlapped = true;
-          } else if (r.col >= lpos + 1) {
-            line += ' '.repeat(r.col - lpos);
-            line += `${pipeColor}|${c.reset}`;
-            lpos = r.col + 1;
-          } else {
-            overlapped = true;
-          }
-        }
-        group.push(line);
-        return overlapped;
-      };
-
-      // Render each diagnostic in this group under one pipe:
-      //   trace-level → the message (or phase) in the level's color
-      //   otherwise  → labeled "error[phase]: message"
-      let needsConnector = false;
-      for (const diag of t.diags) {
-        const diagColor = Diagnostics.levelColor[diag.level] ?? t.color;
-        if (diag.level === 'trace') {
-          const text = diag.message ?? diag.phase;
-          const descLines = this._wrapToLines(text, Math.max(pipeAwareAvailable, 10));
-          for (const dl of descLines) {
-            if (emit(`${diagColor}${dl}${c.reset}`, dl.length)) needsConnector = true;
-          }
-        } else {
-          const { colored: label, plain: labelPlain } = this.formatDiagnosticLabel(diag);
-          const diagAvail = Math.max(pipeAwareAvailable - labelPlain.length, 10);
-          const msgLines = this._wrapToLines(diag.message ?? '', diagAvail);
-          const contTextCol = t.col + labelPlain.length;
-          for (let mi = 0; mi < msgLines.length; mi++) {
-            if (mi === 0) {
-              if (emit(`${label}${msgLines[mi]}`, labelPlain.length + msgLines[mi].length)) needsConnector = true;
-            } else {
-              const pad = ' '.repeat(labelPlain.length);
-              if (emit(`${pad}${msgLines[mi]}`, labelPlain.length + msgLines[mi].length, contTextCol)) needsConnector = true;
-            }
-          }
-        }
-      }
-
-      // Skip overlap connector — the next group's connector already shows the pipes.
-
-      groups.push(group);
-    }
-
-    return groups;
-  }
-
-  /** Flatten annotation groups into lines (for below, which doesn't need reversal) */
-  private _renderAnnotations(
-    blankGutter: string, gutterLen: number,
-    annotations: { col: number; color: string; diags: Diagnostic[] }[],
-    cols: number,
-    pipesFrom: 'after' | 'before' = 'after'
-  ): string[] {
-    const lines = this._renderAnnotationGroups(blankGutter, gutterLen, annotations, cols, pipesFrom).flat();
-
-    // Post-process: drop connector-only lines whose pipe positions are all
-    // already present on the previous line (as | characters at the same columns).
-    const merged: string[] = [];
-    for (const line of lines) {
-      if (merged.length === 0) { merged.push(line); continue; }
-      const curPlain = line.replace(/\x1b\[[0-9;]*m/g, '');
-      const isConnectorOnly = /^[\s|]*$/.test(curPlain) && curPlain.includes('|');
-      if (!isConnectorOnly) { merged.push(line); continue; }
-
-      // Get pipe positions from current connector line
-      const curPipes = new Set<number>();
-      for (let k = 0; k < curPlain.length; k++) if (curPlain[k] === '|') curPipes.add(k);
-
-      // Check if previous line has | at all those positions
-      const prevPlain = merged[merged.length - 1].replace(/\x1b\[[0-9;]*m/g, '');
-      let allPresent = true;
-      for (const col of curPipes) {
-        if (prevPlain[col] !== '|') { allPresent = false; break; }
-      }
-
-      if (!allPresent) merged.push(line);
-      // else: skip — previous line already shows these pipes
-    }
-    return merged;
-  }
-
-  /** Build a line with | connectors. Primary pipe keeps its color, others are gray. */
-  private _connectorLine(blankGutter: string, gutterLen: number, traces: { col: number; color: string }[], primaryCol?: number): string {
-    const { c } = Diagnostics;
-    const sorted = [...traces].sort((a, b) => a.col - b.col);
-    let line = blankGutter;
-    let pos = 0;
-    for (const t of sorted) {
-      if (t.col > pos) line += ' '.repeat(t.col - pos);
-      const color = (primaryCol !== undefined && t.col === primaryCol) ? t.color : c.gray;
-      line += `${color}|${c.reset}`;
-      pos = t.col + 1;
-    }
-    return line;
-  }
-
-  /** Format a diagnostic label: level in appropriate color (only error/warning bold), [phase] in gray */
-  formatDiagnosticLabel(d: Diagnostic): { colored: string; plain: string } {
-    const { c } = Diagnostics;
-    const color = Diagnostics.levelColor[d.level];
-    return {
-      colored: `${color}${d.level}${c.reset}${c.gray}[${d.phase}]${c.reset}: `,
-      plain: `${d.level}[${d.phase}]: `
-    };
-  }
-
-  /** Word-wrap text into lines at word boundaries */
-  private _wrapToLines(text: string, available: number): string[] {
-    if (available < 10 || text.length <= available) return [text];
-    const words = text.split(' ');
-    const lines: string[] = [];
-    let current = '';
-    for (const word of words) {
-      const test = current ? `${current} ${word}` : word;
-      if (test.length > available && current) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = test;
-      }
-    }
-    if (current) lines.push(current);
-    return lines;
-  }
-
-
-  /**
-   * Merged output:
-   *   1. Per-program inline annotated source (timing line beneath each source line)
-   *   2. Flat summary — errors, warnings, and traces that carry a stacktrace
-   */
-  print(label?: string) {
-    const { c } = Diagnostics;
-
-    // 1. Inline per-program annotated source.
-    for (const program of this.programs) {
-      if (program.parent) continue;             // nested programs already inline under parent
-      if (!program.root?.source_file) continue;
-      if (!program.diagnostics.some(d => Diagnostics.showLevel(d.level))) continue;
-      this._printProgram(program);
-    }
-
-    // 2. Flat list: skip timings, and skip traces that don't carry a stack.
-    const flat = this.items.filter(d => {
-      if (d.clock) return false;
-      if (!Diagnostics.showLevel(d.level)) return false;
-      if (d.level === 'trace' && (!d.diagnostics || !d.diagnostics.length)) return false;
-      return true;
-    });
-    const errs = this.errors, warns = this.warnings;
-
-    if (flat.length === 0) {
-      console.error(label ? `  ${c.gray}${label}: No errors.${c.reset}` : `  ${c.gray}No errors.${c.reset}`);
-    } else {
-      for (const d of flat) {
-        const { colored: label } = this.formatDiagnosticLabel(d);
-        // `.do` guarantees every stack frame carries source, so if d.node
-        // lacks it the topmost stack frame is a reliable fallback.
-        const locNode = d.node?.file ? d.node : d.diagnostics?.[d.diagnostics.length - 1]?.node;
-        if (d.level === 'fatal') {
-          console.error('');
-          console.error(`${label}${d.message ?? ''}`);
-          continue;
-        }
-        if (locNode?.file) console.error(`${c.gray}${locNode.file}:${locNode.line}:${locNode.col}${c.reset}`);
-        console.error(`  ${label}${d.message ?? ''}`);
-        if (d.diagnostics?.length) {
-          // Most-recent first (innermost = where the error fired, callers
-          // below). The stack was pushed oldest-first, so reverse it.
-          const visible = d.diagnostics.filter(f => Diagnostics.showLevel(f.level)).reverse();
-          for (let i = 0; i < visible.length; i++) {
-            const frame = visible[i];
-            const phaseColor = Diagnostics.levelColor[frame.level];
-            const fn = frame.node;
-            // Strip trailing "(file:line:col)" if it would duplicate the
-            // error header's location (the frame above us in the display) or
-            // the next visible frame's location (the caller below).
-            const next = visible[i + 1]?.node;
-            const dup = fn?.sameCursor(locNode) || (!!next && fn?.sameCursor(next));
-            const at = fn?.file && !dup
-              ? ` ${c.gray}(${fn.file}:${fn.line}:${fn.col})${c.reset}`
-              : '';
-            console.error(`    ${c.gray}at ${phaseColor}${frame.phase}${c.reset}${at}`);
-          }
-        }
-      }
-    }
-
-    const parts: string[] = [];
-    if (errs.length) parts.push(`${Diagnostics.levelColor.error}${errs.length} error${errs.length > 1 ? 's' : ''}${c.reset}`);
-    if (warns.length) parts.push(`${Diagnostics.levelColor.warning}${warns.length} warning${warns.length > 1 ? 's' : ''}${c.reset}`);
-    if (parts.length) console.error(`\n  ${parts.join(', ')}${c.gray}, ${this._start.toString()}`);
+   *  Per-iteration instrumentation now comes from `@instrumented` on the
+   *  Node methods the handler invokes — there's no separate `interpret`
+   *  frame anymore.
+   *
+   *  Falls back to the runtime's registered Expression's handler when this
+   *  Expression has none of its own — that's the `E(node)` form. */
+  iterate(node: Node, past?: () => boolean): void {
+    const handle = this.handle ?? node.program?.runtime._expression?.handle;
+    if (!handle) return;
+    while (!node.direction.done() && (!past || !past())) handle(node);
   }
 }
 
-type Expression = string | Node | Expression[]
 interface Backend {
   language: Language
   log: Diagnostics;
@@ -657,8 +114,14 @@ interface Backend {
   loadDirectory(location: string, options: { recursively?: boolean }): this
   add(...source: string[]): this
 
-  // Override all syntax.
-  syntax(expression: (E: ((...args: Expression[]) => Node) & { [key: string]: any }) => Expression | Expression[]): this
+  // Override all syntax. The body receives `E`, the Expression factory:
+  //   E(handler)          — wrap a token handler as an Expression
+  //   E(node)             — Expression bound to an existing parse-root Node
+  //   E(...atoms)         — DSL pattern composition (string | Node | Expression)
+  //   E()                 — placeholder atom (used inside a parent E(...) call)
+  // The body's returned Expression — when it carries a handler — becomes the
+  // runtime's registered parser body.
+  syntax(expression: (E: ((...args: (ExpressionAtom | TokenHandler)[]) => Expression) & { [key: string]: any }) => Expression): this
 
   base(fn: (x: Node) => void): this
   context(fn: (x: Node) => void): this
@@ -718,6 +181,90 @@ export class Runtime implements Backend {
    *  false against every node that registered with it. */
   _resolutions: Resolution[] = []
 
+  /** **Cache** — derived from the union of `Resolution.nodes` across every
+   *  resolution. Per-SourceFile sorted-by-cursor `Node[]`. Maintained by
+   *  `track()` (single-item add) and `Node.rewalk` (range clears → full
+   *  rebuild from all resolutions). Lets `right.next()` / `left.next()`
+   *  binary-search for the nearest tracked sibling instead of walking
+   *  every resolution × every node — the dominant O(N²) cost for large
+   *  files (6.4M walks at 3,350 lines before this index). */
+  byPosition = new Cache<Node, Map<SourceFile, Node[]>>(
+    () => new Map(),
+    // Streaming add: tail-first insertion sort. The parser advances forward
+    // through the source, so almost every add lands at the very end (O(1)).
+    (view, node) => {
+      if (!node.source_file || node.cursor == null) return;
+      let arr = view.get(node.source_file);
+      if (!arr) { arr = []; view.set(node.source_file, arr); }
+      const cursor = node.cursor;
+      let i = arr.length;
+      while (i > 0 && arr[i - 1].cursor! > cursor) i--;
+      if (i === arr.length) arr.push(node);
+      else arr.splice(i, 0, node);
+    },
+    // Bulk rebuild: bucket by SourceFile, sort each bucket once. Per-add
+    // insertion would be O(N²) when the rebuild source isn't already in
+    // cursor order (rewalk's `for r of _resolutions for n of r.nodes`
+    // interleaves cursors across resolutions).
+    (view, nodes) => {
+      for (const n of nodes) {
+        if (!n.source_file || n.cursor == null) continue;
+        let arr = view.get(n.source_file);
+        if (!arr) { arr = []; view.set(n.source_file, arr); }
+        arr.push(n);
+      }
+      for (const arr of view.values()) arr.sort((a, b) => a.cursor! - b.cursor!);
+    },
+  );
+
+  /** Append `node` to `resolution.nodes` AND to the by-position cache.
+   *  Use this everywhere a node would be added via `resolution.add(node)`;
+   *  the bare `add` is left for cases where source position isn't
+   *  available (BASE/CTX-side method declarations from JS). */
+  track(resolution: Resolution, node: Node): Resolution {
+    resolution.add(node);
+    this.byPosition.add(node);
+    return resolution;
+  }
+
+  /** Wipe every cached scrap that references this program / its source
+   *  file, so a subsequent re-parse starts clean. Call this from the
+   *  LSP / hot-reload path *before* re-parsing — without it, stale
+   *  per-file entries pile up across edits and cascade-dedup over-fires
+   *  ("this line already errored" → suppresses the new error). Touched:
+   *  `_resolutions[*].nodes`, `byPosition` (Node side), `log.items`,
+   *  `log.erroredRegions`, `log.byPosition`. */
+  dropProgramState(program: Program): void {
+    const sf = program.root?.source_file;
+    if (!sf) return;
+    const file = sf.file;
+    // Resolution demand sites tied to this file → drop.
+    for (const r of this._resolutions) {
+      r.nodes = r.nodes.filter(n => n.source_file !== sf);
+    }
+    // Per-Node by-position cache: keyed by SourceFile reference.
+    this.byPosition.view.delete(sf);
+    // Per-Diagnostic caches: keyed by file path string.
+    this.log.byPosition.view.delete(file);
+    this.log.erroredRegions.view.delete(file);
+    // Per-file items bucket — drop the whole entry. The bucket is keyed
+    // by file path and only contains diagnostics from this file.
+    this.log.items.delete(file);
+    // Plus filter the no-file bucket: errors fired on synthetic nodes
+    // (settle-time empty args, the verify fatal) carry no source_file
+    // but still belong to this program. Drop those too, plus the verify
+    // fatal which has no node at all (re-emitted next verify).
+    const noFile = this.log.items.get(undefined);
+    if (noFile) {
+      const filtered = noFile.filter(d => {
+        if (d.phase === 'verify' && d.level === 'fatal' && !d.node) return false;
+        return (d.node as Node | undefined)?.program !== program;
+      });
+      if (filtered.length === 0) this.log.items.delete(undefined);
+      else this.log.items.set(undefined, filtered);
+    }
+  }
+
   resolution = (owner: Node, key: Key, message?: string): Resolution => {
     // A symbol's resolution is identified by `key` *and* by where it was
     // first registered — but lookups can come from any scope (parse-root,
@@ -739,38 +286,15 @@ export class Runtime implements Backend {
     return r;
   }
 
-  /** True if `node`'s line in its source already carries an earlier (or
-   *  same-position) error. Cascade fallout — once one token in an expression
-   *  has failed, subsequent unresolved/method errors on the same line are
-   *  dead args of an already-broken chain and shouldn't pile on. The
-   *  rewalk handles its own range by clearing diagnostics and resolution
-   *  nodes inside [expression_start, trigger), so this same-line rule
-   *  composes correctly: the LTR walk's stale errors are gone before the
-   *  rewalk emits, and after the rewalk only one error fires per chain. */
-  _cascaded = (node: Node): boolean => {
-    if (!node.source_file || node.cursor == null || !node.program) return false;
-    const src = node.source_file.source;
-    for (const d of node.program.diagnostics) {
-      if (d.level !== 'error' && d.level !== 'fatal') continue;
-      const dn = d.node;
-      if (!dn || dn.source_file !== node.source_file || dn.cursor == null) continue;
-      // Any prior error on the same line — order-independent — cascades the
-      // current emission. First error per line wins; everything else is
-      // chain fallout (e.g. `v bidir w` where bidir errors first at col 2;
-      // the sweep's later `Unresolved v` at col 0 is chain fallout).
-      const lo = Math.min(dn.cursor, node.cursor);
-      const hi = Math.max(dn.cursor, node.cursor);
-      if (!src.slice(lo, hi).includes('\n')) return true; //TODO Should be the expression, which gets separated by ; too or is multiline
-    }
-    return false;
-  }
+  // Cascade dedup moved to `Diagnostics.cascaded(node)` — every reader
+  // (verify's unresolved sweep) goes through `this.log.cascaded(node)`.
 
   // Base path for resolving relative file locations.
   // Default: repository root (two levels up from @ether/.ts/).
   // Override this to use packaged/bundled .ray files instead.
   root: string = path.resolve(import.meta.dirname, '..', '..', '..')
 
-  constructor(public language: Language) { this.log.runtime = this; }
+  constructor(public language: Language) {}
 
   abstract = (call_abstractly?: (fn: Node) => Node): this => {
     if (call_abstractly) { 
@@ -791,17 +315,16 @@ export class Runtime implements Backend {
   }
   external_method = (key: Key, fn: Method): this => { this.GLOBAL.external_method(key, fn); return this; }
 
-  _tokenHandler: ((node: Node) => Node | undefined) | null = null;
+  /** The language's parser. Set by `.syntax(E => E(handle))` — the handler
+   *  passed to `E` becomes this Expression's `handle`. `Expression.iterate`
+   *  is the only consumer; everything that used to call `_tokenHandler` now
+   *  goes through `_expression.iterate(node, past?)`. */
+  _expression: Expression | null = null;
 
-  syntax = (expression: (E: ((...args: Expression[]) => Node) & { [key: string]: any }) => Expression | Expression[]): this => {
-    const placeholderProgram = new Program(this);
-    const E: any = (...args: Expression[]) => {
-      const node = new Node(placeholderProgram);
-      node.cursor = 0;
-      return node;
-    };
-    E.token = (fn: (node: Node) => Node | undefined) => { this._tokenHandler = fn; };
-    expression(E);
+  syntax = (expression: (E: ((...args: (ExpressionAtom | TokenHandler)[]) => Expression) & { [key: string]: any }) => Expression): this => {
+    const E: any = (...args: (ExpressionAtom | TokenHandler)[]) => new Expression(...args);
+    const result = expression(E);
+    if (result?.handle) this._expression = result;
     return this;
   }
 
@@ -850,7 +373,7 @@ export class Runtime implements Backend {
   }
 
   parse = (source: string, file?: string): Node | null => {
-    if (!this._tokenHandler) return null;
+    if (!this._expression?.handle) return null;
 
     const program = new Program(this);
     // Parse roots live under global context (CTX → BASE). Inheriting BASE
@@ -897,7 +420,8 @@ export class Runtime implements Backend {
       for (const r of this._resolutions) {
         if (r.resolved) continue;
         for (const node of r.nodes) {
-          if (this._cascaded(node)) continue;
+          if (node.superseded) continue;
+          if (this.log.cascaded(node)) continue;
           node.error('forward ref', r.message);
         }
       }
@@ -1003,7 +527,7 @@ export class Language implements Backend {
   ref = (ref: string): this => { this.current_pass.ref = ref; return this }
   delegate = <K extends keyof Backend>(method: K) => (...args: Backend[K] extends (...args: infer A) => any ? A : never) => (this.backend[method] as (...args: any[]) => any)(...args);
 
-  constructor(public name: string, public version: string) {
+  constructor(public name: string, public version: Version) {
 
   }
 
@@ -1048,10 +572,33 @@ export class Language implements Backend {
 const UNKNOWN = Symbol("Unknown")
 export type Method = (self: Node, method: Node, args?: Node) => Node
 type Key = string | Node
-export class Node {
-  value: { encoded: any; ctx?: Node, self?: Node, methods: Map<Key, Node>, options: { [key: string]: string }, resolution?: Resolution } = { encoded: UNKNOWN, methods: new Map(), options: {} };
 
-  switch_ctx = (ctx: Node): this => { this.value.ctx = ctx; return this; };
+// Shared sentinels that replace per-Node `new Map()` and `{}` allocations
+// in the value initializer. Writers (external_method, with, clear) replace
+// them with fresh instances on first mutation. Readers tolerate them as
+// regular empty Map / empty object.
+const EMPTY_METHODS: Map<Key, Node> = new Map();
+const EMPTY_OPTIONS: { [key: string]: string } = {};
+@instrumented('trace')
+export class Node extends Position implements Instrumentable {
+  // `methods` is lazy-allocated on first .set — most Nodes never declare a
+  // method (forward refs, lazy juxtapositions, parser intermediates), and
+  // `new Map()` per Node is measurable now that the closure-allocation noise
+  // is gone. `options` shares the `EMPTY_OPTIONS` sentinel until a `with()`
+  // call replaces it with a fresh object — same trick: avoid the per-Node
+  // literal allocation.
+  value: { encoded: any; ctx?: Node, self?: Node, methods: Map<Key, Node>, options: { [key: string]: string }, resolution?: Resolution } = { encoded: UNKNOWN, methods: EMPTY_METHODS, options: EMPTY_OPTIONS };
+
+  /** Instrumentable: hand the wrapper this Node's program — Program
+   *  satisfies `InstrumentationCtx` (carries the call stack + the
+   *  Diagnostics instance). `Diagnostics.report` reaches here via
+   *  `(diag.node as Instrumentable).__instrumentation()` to snapshot
+   *  the stack onto error/warning/fatal diagnostics. */
+  get __instrumentation(): InstrumentationCtx | undefined { return this.program; }
+  /** Instrumentable: a Node IS its own position. */
+  get position(): Position { return this; }
+
+  switch_ctx(ctx: Node): this { this.value.ctx = ctx; return this; }
 
   private _thunks: ((self: Node) => void)[] | null = null;
   lazily(fn: (self: Node) => void): this { if (!this._thunks) this._thunks = []; this._thunks.push(fn); return this; }
@@ -1067,9 +614,9 @@ export class Node {
     }
     return this;
   }
-  get = (key: Key): Node => new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.get(key).value);
-  set = (value: Node): Node => this.lazily((self) => this.eager.set(value));
-  call = (args: Node = new Node(this.program, null, null)): Node => {
+  get(key: Key): Node { return new Node(this.program).switch_ctx(this.value.ctx).lazily((self) => self.value = this.eager.get(key).value); }
+  set(value: Node): Node { return this.lazily((self) => this.eager.set(value)); }
+  call(args: Node = new Node(this.program, null, null)): Node {
     const next = new Node(this.program).switch_ctx(this.value.ctx);
     next.applied = true;
     // Inherit args's source position eagerly: diagnostics fired on `next`
@@ -1097,50 +644,49 @@ export class Node {
   /** Ref to the SourceFile this Node is reading from. Only parse-root Nodes
    *  and their copies carry it; lazy value Nodes leave it undefined. */
   source_file?: SourceFile;
+  /** Concrete impls of the abstract getters on Position. */
   get source(): string { return this.source_file?.source ?? ''; }
   get file(): string | undefined { return this.source_file?.file; }
-  /** 1-based line number of this Node's cursor within its source. */
+  /** Override Position.line — uses the per-SourceFile cached newline
+   *  index for O(log) lookup instead of the naive O(cursor) walk. */
   get line(): number {
-    const src = this.source;
-    const idx = this.cursor ?? 0;
-    let line = 1;
-    for (let i = 0; i < idx && i < src.length; i++) if (src[i] === '\n') line++;
-    return line;
-  }
-  /** 1-based column number of this Node's cursor within its source. */
-  get col(): number {
-    const src = this.source;
-    const idx = this.cursor ?? 0;
-    let col = 1;
-    for (let i = 0; i < idx && i < src.length; i++) {
-      if (src[i] === '\n') col = 1; else col++;
-    }
-    return col;
+    if (this.source_file && this.cursor != null) return this.source_file.lineOf(this.cursor);
+    return super.line;
   }
 
-  constructor(public program: Program, public _super: Node = program.runtime.BASE, encoded: any = UNKNOWN) { this.value.encoded = encoded; }
+  constructor(public program: Program, public _super: Node = program.runtime.BASE, encoded: any = UNKNOWN) {
+    super();
+    this.value.encoded = encoded;
+  }
 
   get unknown(): boolean { return this.value.encoded === UNKNOWN; }
   get none(): boolean { return this.value.encoded === null || this.value.encoded === undefined; }
 
+  // `eager` used to be an instance object literal with 4 closures bound at
+  // ctor time. Lazy-init keeps the same `node.eager.has(...)` API but the
+  // wrapper allocates only when first accessed (~half the Nodes never call
+  // anything via .eager).
   //TODO has/get should pattern match if key is Node
-  eager = {
-    has: (key: Key): boolean => { this.realize(); return this.value.methods.has(key); },
-    get: (key: Key): Node | undefined => { this.realize(); return this.value.methods.get(key); },
-    set: (val: Node): Node => { this.realize(); this.value = val.value; return this; },
-    call: (args: Node = new Node(this.program, null, null)) => this.do('debug', 'call', () => {
-      this.realize()
-      if (!this.callable) {
-        return this.error('call', `Expected a function to call.`)
-      }
+  private _eager?: { has: (k: Key) => boolean; get: (k: Key) => Node | undefined; set: (v: Node) => Node; call: (args?: Node) => Node };
+  get eager() {
+    return this._eager ??= {
+      has: (key: Key): boolean => { this.realize(); return this.value.methods.has(key); },
+      get: (key: Key): Node | undefined => { this.realize(); return this.value.methods.get(key); },
+      set: (val: Node): Node => { this.realize(); this.value = val.value; return this; },
+      call: (args: Node = new Node(this.program, null, null)) => {
+        this.realize()
+        if (!this.callable) {
+          return this.error('call', `Expected a function to call.`)
+        }
 
-      let fn: Node = this;
-      if (this.program.runtime.abstract_interpretation.enabled)
-        fn = this.program.runtime.abstract_interpretation.call(this)
+        let fn: Node = this;
+        if (this.program.runtime.abstract_interpretation.enabled)
+          fn = this.program.runtime.abstract_interpretation.call(this)
 
-      fn.realize()
-      return fn.value.encoded(this.value.self, this, args)
-    }),
+        fn.realize()
+        return fn.value.encoded(this.value.self, this, args)
+      },
+    };
   }
 
   get callable() { return is_function(this.value.encoded) }
@@ -1151,17 +697,27 @@ export class Node {
    *  happen to be callable (e.g., a method that returned itself). */
   applied: boolean = false;
 
+  /** Set by `Node.rewalk` when this node's source range was cleared for
+   *  re-interpretation. The node stays in `Resolution.nodes` and the
+   *  `Runtime.byPosition` cache (avoiding O(N) splices per rewalk), but
+   *  every reader (`forwardRef`, the verify pass's unresolved emit,
+   *  `right.next()`) filters on `!superseded`. */
+  superseded: boolean = false;
+
   /** End-of-expression: if this is an *unapplied* bare callable, fire it with no
    *  args; otherwise return as-is. Applied callables (results of prior calls)
    *  are left alone — settle only forces methods that never got juxtaposed. */
-  settle = (): Node => { this.realize(); return this.callable && !this.applied ? this.call() : this; }
+  settle(): Node { this.realize(); return this.callable && !this.applied ? this.call() : this; }
 
-  with = (key: string, value?: string): this => {
+  with(key: string, value?: string): this {
+    // Replace the shared empty sentinel with a fresh object on first mutation
+    // so the sentinel stays empty for every Node still using it.
+    if (this.value.options === EMPTY_OPTIONS) this.value.options = {};
     this.value.options[key] = value ?? 'true';
     this.debug('options', `${key} = ${this.value.options[key]}`)
     return this;
   }
-  enabled = (key: string): boolean => !!this.value.options[key]
+  enabled(key: string): boolean { return !!this.value.options[key]; }
 
   /** Expression-level assertions over the resolved Nodes reachable from
    *  `this` via `.right.next()`. Each method walks AST-style up to the
@@ -1169,7 +725,10 @@ export class Node {
    *  `[start.begin, trigger.begin)` range), inspects the relevant
    *  `value.options` flags, emits an error on `this` if the assertion
    *  fails, and returns its findings. */
-  assert = {
+  // `assert` is per-Node lazy for the same reason as `eager` — most Nodes
+  // never call assertions; the wrapper allocates only on first access.
+  private _assert?: { non_mixed_associativity: (boundary: Node) => 'left' | 'right' | 'mixed' | 'none' };
+  get assert() { return this._assert ??= {
     /** Walks resolved siblings rightward up to `boundary.cursor`,
      *  collecting `associativity` flags from methods that were actually
      *  dispatched *as infix operators* in this expression — the dispatch
@@ -1191,6 +750,7 @@ export class Node {
       const lefts = new Set<string>(), rights = new Set<string>();
       let firstOp: Node | null = null;
       let lastOp: Node | null = null;
+      let dispatchCount = 0;
       let n: Node | null = this;
       while (n && n.cursor != null && boundary.cursor != null && n.cursor < boundary.cursor) {
         const dispatchedAsInfix = n.value.self?.cursor != null;
@@ -1198,10 +758,16 @@ export class Node {
         if (dispatchedAsInfix && (a === 'left' || a === 'right')) {
           if (!firstOp) firstOp = n;
           lastOp = n;
+          dispatchCount++;
           (a === 'left' ? lefts : rights).add(n.string ?? '');
         }
         n = n.right.next();
       }
+      // Trivial expressions (0 or 1 infix dispatch) reduce identically LTR
+      // or RTL, so no rewalk is needed regardless of the operator's
+      // associativity. Skip — rewalks are the dominant per-token cost on
+      // larger files (each filters every diagnostic + every resolution.node).
+      if (dispatchCount <= 1) return 'none';
       if (lefts.size && rights.size) {
         const names = [...lefts, ...rights].map(m => `\`${m}\``).join(', ');
         const span = new Node(this.program);
@@ -1216,16 +782,13 @@ export class Node {
       if (lefts.size) return 'left';
       return 'none';
     },
-  };
+  }; }
 
-  /** Feed this node to the language's token handler until its source is exhausted.
-   *  Each handler call is observed via `.do('interpret', …)`. */
-  read = (): this => {
-    const handler = this.program?.runtime._tokenHandler;
-    if (!handler) return this;
-    while (!this.right.done()) {
-      this.do('debug', 'interpret', () => handler(this));
-    }
+  /** Feed this node to the language's parser Expression until its source is
+   *  exhausted. The read-loop lives on Expression now; this is just the
+   *  call site for it. */
+  read(): this {
+    this.program?.runtime._expression?.iterate(this);
     return this;
   }
 
@@ -1236,20 +799,25 @@ export class Node {
    *  does, otherwise `null`. Used by the dispatch to surface "Unresolved
    *  X" errors on a forward ref's actual source-anchor instead of on a
    *  juxtaposition lazy whose cursor is undefined. */
-  forwardRef = (): Node | null => {
+  forwardRef(): Node | null {
     const r = this.value.resolution;
     if (!r || r.resolved) return null;
-    const found = [...r.nodes].reverse().find(n => n.cursor != null);
-    if (found) return found;
+    // Walk backwards directly — `[...arr].reverse().find()` allocates a fresh
+    // array per call, which is hot enough to matter (fires on every
+    // wrongDirection emit + every match in the dispatch).
+    for (let i = r.nodes.length - 1; i >= 0; i--) {
+      if (r.nodes[i].superseded) continue;
+      if (r.nodes[i].cursor != null) return r.nodes[i];
+    }
     return this.cursor != null ? this : null;
-  };
+  }
 
   /** Run `fn` with parser+program state snapshotted, then restore it
    *  unconditionally — anything `fn` advances the cursor past, saves into
    *  `program.result`, or reports as a diagnostic is rolled back. Use for
    *  speculative reads (e.g. recursing into the tokenHandler to find the
    *  next non-direction-flagged token without committing to the walk). */
-  peek = <T>(fn: () => T): T => {
+  peek<T>(fn: () => T): T {
     const parser = this.copy();
     const program = this.program.snapshot();
     try { return fn(); } finally {
@@ -1258,7 +826,7 @@ export class Node {
       this._direction = parser._direction;
       this.program.restore(program);
     }
-  };
+  }
 
   /** Re-run the token handler over `[start.begin, trigger.begin)` under a
    *  new walk direction, optionally pre-pinning `seed` as the running
@@ -1270,22 +838,56 @@ export class Node {
    *  range are cleared first so the re-interpretation starts clean.
    *  Parser position (cursor / selection / direction) is restored on
    *  exit; program state changes from the inner handler calls persist. */
-  rewalk = (start: Node, trigger: Node, direction: 'left-to-right' | 'right-to-left', seed?: Node): void => {
+  rewalk(start: Node, trigger: Node, direction: 'left-to-right' | 'right-to-left', seed?: Node): void {
     const program = this.program;
     const sf = start.source_file;
     const rangeStart: number = start.begin ?? 0;
     const rangeEnd: number = trigger.begin ?? Number.POSITIVE_INFINITY;
 
-    const inRange = (n: any): boolean =>
-      !!n && n.source_file === sf && n.cursor != null && n.cursor >= rangeStart && n.cursor < rangeEnd;
-    const keep = (d: any): boolean => !d.node || !inRange(d.node);
-    program.diagnostics = program.diagnostics.filter(keep);
-    // Diagnostics.items is a separate array (it's what print() reads); the
-    // program.diagnostics filter alone leaves stale entries visible.
-    const log = program.runtime.log as any;
-    if (Array.isArray(log.items)) log.items = log.items.filter(keep);
-    for (const r of program.runtime._resolutions) {
-      r.nodes = r.nodes.filter(n => !inRange(n));
+    // Mark in-range Diagnostics + Nodes as `superseded` instead of
+    // filtering the whole `program.diagnostics` / `log.items` /
+    // `_resolutions[*].nodes` arrays. Filter was O(N) per rewalk and
+    // O(N²) cumulatively (the dominant cost beyond ~1k lines). The
+    // by-position caches give O(log N + range) lookup; readers
+    // (`forwardRef`, `verify`, `right.next`, display, count getters)
+    // skip `superseded` items.
+    if (sf) {
+      const log = program.runtime.log as Diagnostics;
+      // Diagnostics caches are keyed by file path (string); the Node
+      // by-position cache (below) is still keyed by SourceFile object.
+      const file = sf.file;
+      const errMap = log.erroredRegions.view.get(file);
+      const dArr = log.byPosition.view.get(file);
+      if (dArr && dArr.length) {
+        const lo = lowerBound(dArr, rangeStart, d => d.node!.cursor!);
+        const hi = lowerBound(dArr, rangeEnd, d => d.node!.cursor!);
+        for (let i = lo; i < hi; i++) {
+          const d = dArr[i];
+          d.superseded = true;
+          // Decrement the per-line error counter (only error/fatal
+          // contribute to it). Surgical, so the rebuild loop over
+          // log.items is gone — that was the remaining O(N²) cost.
+          if (errMap && (d.level === 'error' || d.level === 'fatal') && d.node?.cursor != null) {
+            const line = sf.lineOf(d.node.cursor);
+            const count = errMap.get(line);
+            if (count != null) {
+              if (count === 1) errMap.delete(line);
+              else errMap.set(line, count - 1);
+            }
+          }
+        }
+        if (lo < hi) dArr.splice(lo, hi - lo);
+        if (dArr.length === 0) log.byPosition.view.delete(file);
+      }
+      if (errMap && errMap.size === 0) log.erroredRegions.view.delete(file);
+      const nArr = program.runtime.byPosition.view.get(sf);
+      if (nArr && nArr.length) {
+        const lo = lowerBound(nArr, rangeStart, n => n.cursor!);
+        const hi = lowerBound(nArr, rangeEnd, n => n.cursor!);
+        for (let i = lo; i < hi; i++) nArr[i].superseded = true;
+        if (lo < hi) nArr.splice(lo, hi - lo);
+        if (nArr.length === 0) program.runtime.byPosition.view.delete(sf);
+      }
     }
 
     const parser = this.copy();
@@ -1307,18 +909,19 @@ export class Node {
 
     // Stop once the most-recently-captured token has reached the original
     // expression boundary — `_.begin` (RTL) / `_.end` (LTR) tracks the
-    // current selection's outer edge.
+    // current selection's outer edge. Pass `instrument: false` because the
+    // outer LTR walk is already framed; double-instrumenting would double-
+    // count timings and clutter the trace.
     const past = (): boolean => direction === 'right-to-left' ? this.begin <= rangeStart : this.end >= rangeEnd;
-    const handler = program.runtime._tokenHandler!;
-    while (!this.direction.done() && !past()) handler(this);
+    program.runtime._expression!.iterate(this, past, false);
 
     this.cursor = parser.cursor;
     this.selection = parser.selection.map(s => ({ begin: s.begin, end: s.end }));
     this._direction = parser._direction;
-  };
-  
+  }
+
   //TODO Should be a .register, and then the .external part is a flag.
-  external_method = (key: Key, fn: Method, callback?: (fn: Node) => Node): this => {
+  external_method(key: Key, fn: Method, callback?: (fn: Node) => Node): this {
     // `self` is bound by `methods.resolve` (stored as value.self on the lookup copy) and arrives
     // here as the first positional of value.encoded. The method fires when `save()` juxtaposes
     // the next token (prev.call(this)), or when end-of-expression settle fires it with empty args.
@@ -1328,7 +931,7 @@ export class Node {
     if (fn) resolution.resolve(fn);
 
     const methodNode = new Node(this.program, this._super, key);
-    resolution.add(methodNode);
+    runtime.track(resolution, methodNode);
     // Share options + back-link to the resolution so flags stamped via
     // `fn.with(...)` (and through bound copies) live on the resolution and
     // are visible to anything that re-matches the key later.
@@ -1348,12 +951,13 @@ export class Node {
       }
     });
     callback?.(methodNode);
+    if (this.value.methods === EMPTY_METHODS) this.value.methods = new Map();
     this.value.methods.set(key, methodNode);
     return this;
   }
 
   public cursor: Location; public selection: { begin: Location, end: Location }[] = []
-  private single_char = () => this.selection.length === 0;
+  private single_char(): boolean { return this.selection.length === 0; }
   private get first() { return !this.single_char() ? this.selection[0] : undefined }
   private get last() { return !this.single_char() ? this.selection[this.selection.length - 1] : undefined }
   get begin() { return this.first?.begin ?? this.cursor; }
@@ -1361,7 +965,15 @@ export class Node {
   get end() { return this.last?.end ?? this.cursor; }
   set end(location: Location) { if (this.last) { this.last.end = location } else { this.selection.push({ begin: this.cursor, end: location }); } }
 
-  private create_direction = (direction: 'left-to-right' | 'right-to-left') => {
+  // Lazy slots for the per-direction objects — these used to be eager fields
+  // (`left = this.create_direction(...)` ran in the ctor for every Node), and
+  // each create_direction call allocates ~15 closures. Most Nodes never touch
+  // `.left` or `.right` (forward refs, method copies, lazy juxtapositions —
+  // i.e. the bulk of allocations), so making them lazy via cached slots cuts
+  // ~30 closure allocations per Node creation.
+  private _left?: ReturnType<Node['create_direction']>;
+  private _right?: ReturnType<Node['create_direction']>;
+  private create_direction(direction: 'left-to-right' | 'right-to-left') {
     const sign = direction === 'right-to-left' ? -1 : 1;
     const boundary = () => sign === -1 ? this.begin : this.end;
 
@@ -1451,40 +1063,50 @@ export class Node {
     }
     move.goto = (char: string): string => {}
     move.skip = () => this.move(boundary() + (1 * sign))
-    /** AST-style sibling navigation: returns the nearest resolved Node in
-     *  this direction (LTR / RTL) within the same source file, looked up
-     *  through the runtime's resolution registry. The neighbor is the one
-     *  with the smallest forward cursor (LTR) or largest backward cursor
-     *  (RTL) relative to `this.cursor`. Returns null if there is none.
+    /** AST-style sibling navigation: returns the nearest resolution-tracked
+     *  Node in this direction (LTR / RTL) within the same source file. Reads
+     *  from `runtime.byPosition` (the per-SourceFile sorted-by-cursor cache)
+     *  via binary search, so this is O(log N) instead of O(R*N) over every
+     *  resolution × every node. Returns null if there's no neighbor.
      *  Caller filters by expression boundary. */
     move.next = (): Node | null => {
       if (!this.source_file || this.cursor == null) return null;
+      const arr = this.program.runtime.byPosition.view.get(this.source_file);
+      if (!arr || arr.length === 0) return null;
       const myCursor = this.cursor;
-      let best: Node | null = null;
-      let bestCursor: number = sign === 1 ? Infinity : -Infinity;
-      for (const r of this.program.runtime._resolutions) {
-        for (const n of r.nodes) {
-          if (n === this || n.source_file !== this.source_file || n.cursor == null) continue;
-          const c = n.cursor;
-          if (sign === 1 ? c <= myCursor : c >= myCursor) continue;
-          if (sign === 1 ? c < bestCursor : c > bestCursor) {
-            bestCursor = c;
-            best = n;
-          }
-        }
+      // Boundary depends on direction (the original walk used strict
+      // inequality on both sides):
+      //   sign===1  → keep c > myCursor → search for first c >  myCursor
+      //   sign===-1 → keep c < myCursor → search for first c >= myCursor,
+      //                                   then walk backward from there.
+      let lo = 0, hi = arr.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        const c = arr[mid].cursor!;
+        const skip = sign === 1 ? (c <= myCursor) : (c < myCursor);
+        if (skip) lo = mid + 1; else hi = mid;
       }
-      return best;
+      // Walk past any `this` entries (a node IS in its own slot in the cache).
+      if (sign === 1) {
+        for (let i = lo; i < arr.length; i++) if (arr[i] !== this && !arr[i].superseded) return arr[i];
+      } else {
+        for (let i = lo - 1; i >= 0; i--) if (arr[i] !== this && !arr[i].superseded) return arr[i];
+      }
+      return null;
     }
 
     return move;
   }
 
-  left = this.create_direction('right-to-left')
-  move = (cursor: Location) => {
+  // Lazy getters for left/right — see `_left`/`_right` slot declarations near
+  // create_direction for the rationale (avoids ~30 closure allocations per
+  // Node ctor for the common case where left/right are never accessed).
+  get left()  { return this._left  ??= this.create_direction('right-to-left'); }
+  get right() { return this._right ??= this.create_direction('left-to-right'); }
+  move(cursor: Location) {
     this.cursor = cursor; this.selection = []
     this.clear()
   }
-  right = this.create_direction('left-to-right')
 
   _direction: 'left-to-right' | 'right-to-left' = 'left-to-right'
   get ltr() { this._direction = 'left-to-right'; return this }; get rtl() { this._direction = 'right-to-left'; return this };
@@ -1493,31 +1115,39 @@ export class Node {
    *  flip when the parse swaps from LTR to RTL (e.g. checking whether the
    *  preceding char was whitespace, regardless of which way we're reading). */
   get behind()    { return this._direction === 'right-to-left' ? this.right : this.left; }
-  private directed_delegate = (method: string) => (...args: any[]): this => { (this.direction as any)[method](...args); return this; }
 
-  done = this.directed_delegate('done')
-  capture = this.directed_delegate('capture')
-  capture_while = this.directed_delegate('capture_while')
-  capture_whitespace = this.directed_delegate('capture_whitespace')
-  capture_line = this.directed_delegate('capture_line')
-  skip_while = this.directed_delegate('skip_while')
-  upto = this.directed_delegate('upto')
-  until = this.directed_delegate('until')
-  goto = this.directed_delegate('goto')
-  skip = this.directed_delegate('skip')
+  // Direction-delegating methods. These used to be `name = this.directed_delegate('name')`
+  // arrow fields (one closure per method per Node — 10 closures × every Node
+  // constructed). Now plain prototype methods that look up the current
+  // direction object on each call. The direction lookup itself is lazy so
+  // Nodes that never call these still don't allocate left/right.
+  done(): boolean                                  { return (this.direction as any).done(); }
+  capture(...args: any[]): this                    { (this.direction as any).capture(...args); return this; }
+  capture_while(...args: any[]): this              { (this.direction as any).capture_while(...args); return this; }
+  capture_whitespace(...args: any[]): this         { (this.direction as any).capture_whitespace(...args); return this; }
+  capture_line(...args: any[]): this               { (this.direction as any).capture_line(...args); return this; }
+  skip_while(...args: any[]): this                 { (this.direction as any).skip_while(...args); return this; }
+  upto(...args: any[]): this                       { (this.direction as any).upto(...args); return this; }
+  until(...args: any[]): this                      { (this.direction as any).until(...args); return this; }
+  goto(...args: any[]): this                       { (this.direction as any).goto(...args); return this; }
+  skip(...args: any[]): this                       { (this.direction as any).skip(...args); return this; }
 
-  clear = () => {
+  clear(): void {
     this._thunks = [] //TODO Maybe move _thunks into .value?
-    this.value = { encoded: UNKNOWN, methods: new Map(), options: {} };
+    this.value = { encoded: UNKNOWN, methods: EMPTY_METHODS, options: EMPTY_OPTIONS };
   }
 
   get string() { return this.single_char() ? this.source[this.cursor] : this.source.slice(this.begin, this.end + 1); }
 
-  /** True if `other` is anchored at the same cursor in the same source. */
-  sameCursor = (other?: Node | null): boolean =>
-    !!other && this.source_file === other.source_file && this.cursor === other.cursor;
+  /** Override Position.sameCursor — compare by `source_file` reference
+   *  instead of by file path. Tighter equality (two distinct SourceFile
+   *  instances with the same path are NOT same), and slightly faster
+   *  (object `===` vs string compare). */
+  sameCursor(other?: Position | null): boolean {
+    return !!other && (other as Node).source_file === this.source_file && this.cursor === other.cursor;
+  }
 
-  copy = () => {
+  copy(): Node {
     const copy = new Node(this.program, this._super)
     copy.source_file = this.source_file
     copy._thunks = this._thunks ? [...this._thunks] : null
@@ -1530,57 +1160,23 @@ export class Node {
 
   get log() { return this.program!.log }
 
-  /**
-   * Run `fn` as an observed step: pushes a stack frame (tagged with `level` +
-   * `phase`) onto `program.stack` so errors reported inside capture it,
-   * times it with a Clock, pops the frame, and emits a timing Diagnostic at
-   * `level`. When `runtime.timing` is off, this is just `fn()`.
-   */
-  do<T>(level: Diagnostic['level'], phase: string, fn: () => T): T {
-    const program = this.program;
-    if (!program || !program.runtime.timing) return fn();
-    // Frames should always have a source_file so errors can locate back
-    // to the call site even when reported on value/partial nodes. Prefer
-    // `this`; otherwise inherit the most recent source-bearing ancestor.
-    let node = this.copy();
-    if (!node.source_file) {
-      for (let i = program.stack.length - 1; i >= 0; i--) {
-        const f = program.stack[i].node;
-        if (f?.source_file) { node = f.copy(); break; }
-      }
-    }
-    const frame: Diagnostic = { level, phase, node };
-    program.stack.push(frame);
-    const clock = new Clock();
-    try {
-      return fn();
-    } finally {
-      clock.stop();
-      program.stack.pop();
-      const timing: Diagnostic = { level, phase, clock, node };
-      program.log.report(timing);
-      program.diagnostics.push(timing);
-    }
+  // `Node.do(level, phase, fn)` removed — `@instrumented('trace')` on
+  // the class wraps every method with the same frame-push + clock +
+  // timing-emit machinery. Inline `.do()` was the equivalent the
+  // wrapper now subsumes; callers that previously invoked
+  // `node.do('debug', 'phase', () => body)` should just inline `body`
+  // (the wrapper provides the framing automatically based on the
+  // method name).
+  @uninstrumented
+  private _report(level: Diagnostic['level'], phase: string, message: string): void {
+    this.log.report({ level, phase, message, node: this.copy() });
   }
-  private _report = (level: Diagnostic['level'], phase: string, message: string) => {
-    // Cascade dedup for errors at parse time: if the same line already
-    // carries an earlier error, skip. Avoids duplicate reports on the same
-    // node from the LTR walk + the RTL rewalk both producing diagnostics.
-    if ((level === 'error' || level === 'fatal') && this.program?.runtime._cascaded(this)) return;
-    const diag: Diagnostic = { level, phase, message, node: this.copy() };
-    // Errors/warnings snapshot the active call stack (Program.stack).
-    if (level === 'error' || level === 'warning' || level === 'fatal') {
-      const stack = this.program?.stack;
-      if (stack && stack.length) diag.diagnostics = stack.map(f => ({ ...f }));
-    }
-    this.log.report(diag);
-    this.program?.diagnostics.push(diag);
-  }
-  error   = (phase: string, message: string) => {
+  @uninstrumented
+  error(phase: string, message: string): Node {
     this._report('error', phase, message);
 
     //TODO Should rely on cached information to resolve this, and otherwise fall back on BASE CLASS (for the syntax highlighting)
-    //TODO 
+    //TODO
     const x = new Node(this.program)
     x.value.encoded = () => {
       // return x.error('cascade', 'Could not resolve dependency, cascading errors');
@@ -1588,13 +1184,17 @@ export class Node {
     }
     return x;
   }
-  warning = (phase: string, message: string) => this._report('warning', phase, message);
-  info    = (phase: string, message: string) => this._report('info', phase, message);
-  debug   = (phase: string, message: string) => this._report('debug', phase, message);
-  fatal   = (phase: string, message: string): never => {
+  @uninstrumented
+  warning(phase: string, message: string): void { this._report('warning', phase, message); }
+  @uninstrumented
+  info(phase: string, message: string): void    { this._report('info', phase, message); }
+  @uninstrumented
+  debug(phase: string, message: string): void   { this._report('debug', phase, message); }
+  @uninstrumented
+  fatal(phase: string, message: string): never  {
     this._report('fatal', phase, message);
     return this.log.exit()
-  };
+  }
 
   /**
    * .match(key): Unified token resolution.
@@ -1605,39 +1205,47 @@ export class Node {
    *   5. Forward ref fallback
    */
   /** Record a trace-level diagnostic linking to a copy of this node (snapshots its selection + cursor). */
-  trace = (phase: string, description: string): Diagnostic | null => {
+  @uninstrumented
+  trace(phase: string, description: string): Diagnostic | null {
     if (this.cursor == null || !this.program) return null;
+    if (!Diagnostics.showLevel('trace')) return null;
     const diag: Diagnostic = { level: 'trace', phase, node: this.copy(), message: description || undefined };
     this.log.report(diag);
-    this.program.diagnostics.push(diag);
     return diag;
   }
 
-  methods = {
-    all: (): Set<Key> => {
-      const keys = new Set<Key>(this.value.methods.keys());
-      if (this._super) for (const k of this._super.methods.all()) keys.add(k);
-      return keys;
-    },
-    has: (key: Key): boolean => !this.methods.resolve(key).none, 
-    resolve: (key: Key): Node => {
-      if (this.eager.has(key)) {
-        const bound = this.eager.get(key)!.copy();
-        bound.value.self = this;
-        return bound;
+  // `methods` lazy for the same reason as `eager` / `assert`. The wrapper
+  // closures still bind `this`; they're shared across calls *on the same
+  // Node*, allocated once on first access.
+  private _methods?: { all: () => Set<Key>; has: (k: Key) => boolean; resolve: (k: Key) => Node; defines: (k: Key) => Node | null };
+  get methods() {
+    return this._methods ??= {
+      all: (): Set<Key> => {
+        const keys = new Set<Key>(this.value.methods.keys());
+        if (this._super) for (const k of this._super.methods.all()) keys.add(k);
+        return keys;
+      },
+      has: (key: Key): boolean => !this.methods.resolve(key).none,
+      resolve: (key: Key): Node => {
+        if (this.eager.has(key)) {
+          const bound = this.eager.get(key)!.copy();
+          bound.value.self = this;
+          return bound;
+        }
+        if (this._super) return this._super.methods.resolve(key);
+        return new Node(this.program, null, null)
+      },
+      defines: (key: Key): Node | null => {
+        if (this.eager.has(key)) return this;
+        if (this._super) return this._super.methods.defines(key);
+        return null;
       }
-      if (this._super) return this._super.methods.resolve(key);
-      return new Node(this.program, null, null)
-    },
-    defines: (key: Key): Node | null => {
-      if (this.eager.has(key)) return this;
-      if (this._super) return this._super.methods.defines(key);
-      return null;
-    }
+    };
   }
-  
 
-  match = (key: string, ctx: Node = this): Node => {
+
+
+  match(key: string, ctx: Node = this): Node {
     const runtime = this.program.runtime;
 
     // Empty/undefined keys come from handler iterations that ran one past the
@@ -1722,7 +1330,7 @@ export class Node {
       // Nodes by source position. Forward refs are tracked at the
       // bottom of `match`; mirror that for resolved methods so both
       // surface uniformly.
-      method.value.resolution?.add(method);
+      if (method.value.resolution) runtime.track(method.value.resolution, method);
       return method;
     }
 
@@ -1790,7 +1398,7 @@ export class Node {
     forward.cursor = forward.selection[0]?.begin ?? this.cursor;
     const unresolved = `Unresolved variable \`${String(key)}\` in ${receiver}`;
     const resolution = runtime.resolution(ctx, key, unresolved);
-    resolution.add(forward);
+    runtime.track(resolution, forward);
     // Share options + back-link to the resolution so subsequent matches of
     // the same key see flags stamped on prior instances (e.g. by an earlier
     // `external left-to-right X`), and so the rewalk can ask "is this a
@@ -1812,7 +1420,7 @@ export class Node {
    * If no result yet, this becomes the result.
    * If there is a result, call it with this as argument (juxtaposition).
    */
-  save = (): this => {
+  save(): this {
     // None nodes (encoded === null/undefined) come from .match() short-circuits
     // for empty/undefined keys. Saving one would either juxtapose a no-arg
     // call onto the previous result (firing irrelevant errors from the
@@ -1834,7 +1442,7 @@ export class Node {
       this.program!.result = this;
     }
     return this;
-  };
+  }
 
   /**
    * .expression(): Recursively parse an expression by invoking the language's
@@ -1863,20 +1471,20 @@ export class Node {
   //   return this;
   // });
 
-  freeze = () => {
+  freeze(): this {
     //TODO Freeze these tokens from reparsing. But do something with them
     return this;
   }
-  comment = () => {
+  comment(): this {
     //TODO Set as comment, skippable for others. peak/etc skip over comments
     return this;
   }
 
-  suggest = () => {
+  suggest(): void {
     // TODO
   }
 
-  block = (fn?: (_: this) => Expression,  punctuation?: { begin: string, end: string }): this => {
+  block(fn?: (_: this) => Expression, punctuation?: { begin: string, end: string }): this {
     this.capture_whitespace().skip()
     if (punctuation) this.capture(punctuation.begin)
 
@@ -1887,23 +1495,12 @@ export class Node {
     return this;
   }
 
-  reinterpret = (pass: string): this => {
-    return this;
-  }
-  interpret = (fn: (self: Node & { [key: string]: Node }) => void): this => {
-    return this;
-  }
+  reinterpret(_pass: string): this { return this; }
+  interpret(_fn: (self: Node & { [key: string]: Node }) => void): this { return this; }
+  repeats(_operator?: '>=' | '>' | '<' | '<=' | '==', _x?: number): this { return this; }
+  bind(_name: string): this { return this; }
 
-  repeats = (operator?: '>=' | '>' | '<' | '<=' | '==', x?: number): this => {
-
-    return this;
-  }
-  bind = (name: string): this => {
-
-    return this;
-  }
-
-  map = <T>(fn: (x: any) => T): T[] => {
+  map<T>(fn: (x: any) => T): T[] {
     if (!is_array(this.value.encoded)) return this.fatal('type', 'Called .map on a value which is not an Array')
     return this.value.encoded.map(fn)
   }
@@ -1915,13 +1512,16 @@ export type Location = number;
 //  scope = () => {}
 //  allowForwardRef = () => {}
 
-export class Program {
+export class Program implements InstrumentationCtx {
   result: Node | null = null;
   pending: Node[] = [];
-  /** Every Diagnostic reported during this program (traces, timings, errors, warnings). */
-  diagnostics: Diagnostic[] = [];
-  /** Active call stack — pushed on method-call entry, popped on exit. Snapshotted onto errors. */
+  /** InstrumentationCtx: active call stack — pushed on method-call
+   *  entry by `Node.do`, popped on exit. Snapshotted onto error /
+   *  warning / fatal diagnostics by `Diagnostics.report`. */
   stack: Diagnostic[] = [];
+  /** InstrumentationCtx: where reports go. The runtime owns the single
+   *  Diagnostics instance shared across programs. */
+  get diagnostics(): Diagnostics { return this.runtime.log; }
   /** The parse-root Node if this program parsed a source. */
   root?: Node;
   /** First Node of the current expression. The language definition writes
@@ -1987,22 +1587,31 @@ export class Program {
    *  anything appended in between). Paired with `restore` for speculative
    *  handler runs (see `Node.peek`). */
   snapshot = () => {
-    const log = this.runtime.log as any;
+    const log = this.runtime.log;
+    // Per-file lengths so `restore` can truncate each bucket back. Files
+    // not present here either are new since snapshot (delete on restore)
+    // or were already empty (no-op).
+    const log_items_lengths = new Map<string | undefined, number>();
+    for (const [file, arr] of log.items) log_items_lengths.set(file, arr.length);
     return {
       result: this.result,
       expression_start: this.expression_start,
-      diagnostics_length: this.diagnostics.length,
-      log_items_length: Array.isArray(log.items) ? log.items.length : 0,
+      log_items_lengths,
       resolution_node_lengths: this.runtime._resolutions.map(r => r.nodes.length),
       pending_length: this.pending.length,
     };
   };
   restore = (snap: ReturnType<Program['snapshot']>): void => {
-    const log = this.runtime.log as any;
+    const log = this.runtime.log;
     this.result = snap.result;
     this.expression_start = snap.expression_start;
-    this.diagnostics.length = snap.diagnostics_length;
-    if (Array.isArray(log.items)) log.items.length = snap.log_items_length;
+    // Truncate each known bucket; drop buckets that didn't exist at
+    // snapshot time (created during the peeked operation).
+    for (const [file, arr] of log.items) {
+      const prev = snap.log_items_lengths.get(file);
+      if (prev === undefined) log.items.delete(file);
+      else arr.length = prev;
+    }
     this.runtime._resolutions.forEach((r, i) => {
       r.nodes.length = snap.resolution_node_lengths[i];
     });

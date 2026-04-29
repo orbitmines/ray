@@ -147,6 +147,7 @@ external location
 //TODO Certain things like the global <> prefer over calling the locally defined one, how to flag?
 //TODO The obvious successors to this would be after, or in between each recursive function call (x levels deep). Benchmarking would use that. (Done by just implementing a function which does that and call that instead, finally and X)
 // Execute expression on each successive function call in its context. So if called within (), it only works within that context.
+// Doing this recursively should respect that the variable might be in use somewhere; introduce a separate scope for variables to live on if necessary.
 external <{expression: Expression}>: void
 // Label the current cursor within a program with a name.
 external {label: *}\: Program //TODO Push to program.name

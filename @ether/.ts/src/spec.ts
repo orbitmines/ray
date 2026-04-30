@@ -193,9 +193,9 @@ export const Ray = new Language('ether', (Version.scheme('E') as Standard).creat
           // rewalk trigger — `[start.begin, trigger.begin)` includes
           // every token in the expression.
           let lastEnd = _.cursor - 1;
-          while (lastEnd > 0 && (_.source[lastEnd] === ' ' || _.source[lastEnd] === '\n')) lastEnd--;
+          while (lastEnd > 0 && (_.source.value[lastEnd] === ' ' || _.source.value[lastEnd] === '\n')) lastEnd--;
           const boundary = new Node(_.program);
-          boundary.source_file = expr_start.source_file;
+          boundary.source = expr_start.source;
           boundary.cursor = lastEnd + 1;
           boundary.selection = [lastEnd + 1, lastEnd + 1];
 

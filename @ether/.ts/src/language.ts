@@ -4,7 +4,7 @@ import {is_array, is_function, is_string} from "./lodash.ts";
 import {Version} from "./version.ts";
 import { Clock, Diagnostics, Cache, DIAGNOSTIC_SEVERITY, instrumented, uninstrumented } from "./diagnostics.ts";
 import type { Diagnostic, Instrumentable, InstrumentationCtx } from "./diagnostics.ts";
-import { Position, SourceFile } from "./source.ts";
+import { Text } from "./source.ts";
 
 /** Standard lower_bound binary search: returns the first index `i` in
  *  the sorted array `arr` such that `key(arr[i]) >= target`. Returns
@@ -20,7 +20,7 @@ function lowerBound<T>(arr: T[], target: number, key: (t: T) => number): number 
   return lo;
 }
 
-// (SourceFile + Diagnostics moved to ./diagnostics.ts — re-exported above.)
+// (Text.Source + Diagnostics moved to ./diagnostics.ts — re-exported above.)
 
 /** Atom of a syntax pattern — what the future DSL form `E('{', sub, '}', E())`
  *  will compose. Sub-Expressions are themselves valid atoms (recursive). */
@@ -159,35 +159,35 @@ export class Runtime implements Backend {
   _resolutionsIndex: Map<Node, Map<Key, Resolution>> = new Map();
 
   /** **Cache** — derived from the union of `Resolution.nodes` across every
-   *  resolution. Per-SourceFile sorted-by-cursor `Node[]`. Maintained by
+   *  resolution. Per-Text.Source sorted-by-cursor `Node[]`. Maintained by
    *  `track()` (single-item add) and `Node.rewalk` (range clears → full
    *  rebuild from all resolutions). Lets `right.next()` / `left.next()`
    *  binary-search for the nearest tracked sibling instead of walking
    *  every resolution × every node — the dominant O(N²) cost for large
    *  files (6.4M walks at 3,350 lines before this index). */
-  byPosition = new Cache<Node, Map<SourceFile, Node[]>>(
+  byPosition = new Cache<Node, Map<Text.Source, Node[]>>(
     () => new Map(),
     // Streaming add: tail-first insertion sort. The parser advances forward
     // through the source, so almost every add lands at the very end (O(1)).
     (view, node) => {
-      if (!node.source_file || node.cursor == null) return;
-      let arr = view.get(node.source_file);
-      if (!arr) { arr = []; view.set(node.source_file, arr); }
+      if (node.source === Text.Source.EMPTY || node.cursor == null) return;
+      let arr = view.get(node.source);
+      if (!arr) { arr = []; view.set(node.source, arr); }
       const cursor = node.cursor;
       let i = arr.length;
       while (i > 0 && arr[i - 1].cursor! > cursor) i--;
       if (i === arr.length) arr.push(node);
       else arr.splice(i, 0, node);
     },
-    // Bulk rebuild: bucket by SourceFile, sort each bucket once. Per-add
+    // Bulk rebuild: bucket by Text.Source, sort each bucket once. Per-add
     // insertion would be O(N²) when the rebuild source isn't already in
     // cursor order (rewalk's `for r of _resolutions for n of r.nodes`
     // interleaves cursors across resolutions).
     (view, nodes) => {
       for (const n of nodes) {
-        if (!n.source_file || n.cursor == null) continue;
-        let arr = view.get(n.source_file);
-        if (!arr) { arr = []; view.set(n.source_file, arr); }
+        if (n.source === Text.Source.EMPTY || n.cursor == null) continue;
+        let arr = view.get(n.source);
+        if (!arr) { arr = []; view.set(n.source, arr); }
         arr.push(n);
       }
       for (const arr of view.values()) arr.sort((a, b) => a.cursor! - b.cursor!);
@@ -212,14 +212,14 @@ export class Runtime implements Backend {
    *  `_resolutions[*].nodes`, `byPosition` (Node side), `log.items`,
    *  `log.erroredRegions`, `log.byPosition`. */
   dropProgramState(program: Program): void {
-    const sf = program.root?.source_file;
+    const sf = program.root?.source;
     if (!sf) return;
-    const file = sf.file;
+    const file = sf.location;
     // Resolution demand sites tied to this file → drop.
     for (const r of this._resolutions) {
-      r.nodes = r.nodes.filter(n => n.source_file !== sf);
+      r.nodes = r.nodes.filter(n => n.source !== sf);
     }
-    // Per-Node by-position cache: keyed by SourceFile reference.
+    // Per-Node by-position cache: keyed by Text.Source reference.
     this.byPosition.view.delete(sf);
     // Per-Diagnostic caches: keyed by file path string.
     this.log.byPosition.view.delete(file);
@@ -228,7 +228,7 @@ export class Runtime implements Backend {
     // by file path and only contains diagnostics from this file.
     this.log.items.delete(file);
     // Plus filter the no-file bucket: errors fired on synthetic nodes
-    // (settle-time empty args, the verify fatal) carry no source_file
+    // (settle-time empty args, the verify fatal) carry no source
     // but still belong to this program. Drop those too, plus the verify
     // fatal which has no node at all (re-emitted next verify).
     const noFile = this.log.items.get(undefined);
@@ -360,7 +360,7 @@ export class Runtime implements Backend {
     // directly would skip CTX-defined methods and mislabel top-level forward
     // refs as "local context" — top-level source is global by definition.
     const node = new Node(program, this.CTX);
-    node.source_file = new SourceFile(source, file);
+    node.source = new Text.Source(source, file);
     node.cursor = -1;
     program.root = node;
 
@@ -560,7 +560,7 @@ type Key = string | Node
 const EMPTY_METHODS: Map<Key, Node> = new Map();
 const EMPTY_OPTIONS: { [key: string]: string } = {};
 @instrumented('trace', { recursive: true })
-export class Node extends Position implements Instrumentable {
+export class Node extends Text.Node implements Instrumentable {
   // `methods` is lazy-allocated on first .set — most Nodes never declare a
   // method (forward refs, lazy juxtapositions, parser intermediates), and
   // `new Map()` per Node is measurable now that the closure-allocation noise
@@ -576,7 +576,7 @@ export class Node extends Position implements Instrumentable {
    *  the stack onto error/warning/fatal diagnostics. */
   get __instrumentation(): InstrumentationCtx | undefined { return this.program; }
   /** Instrumentable: a Node IS its own position. */
-  get position(): Position { return this; }
+  get position(): Text.Node { return this; }
 
   switch_ctx(ctx: Node): this { this.value.ctx = ctx; return this; }
 
@@ -604,8 +604,8 @@ export class Node extends Position implements Instrumentable {
     // wrongDirection errors) need a real location, otherwise the
     // rewalk's inRange filter (cursor != null) can't clear them and the
     // diagnostic renders with an empty receiver.
-    if (args.source_file) {
-      next.source_file = args.source_file;
+    if (args.source !== Text.Source.EMPTY) {
+      next.source = args.source;
       if (args.cursor != null) next.cursor = args.cursor;
       if (args.selection.length) next.selection = args.selection.slice();
     }
@@ -615,14 +615,14 @@ export class Node extends Position implements Instrumentable {
       // Mirror source position from the call's return so downstream
       // consumers (diagnostics, `self.string`, etc.) see the underlying
       // node's identity rather than this lazy wrapper.
-      if (out.source_file) self.source_file = out.source_file;
+      if (out.source !== Text.Source.EMPTY) self.source = out.source;
       if (out.cursor != null) self.cursor = out.cursor;
       if (out.selection.length) self.selection = out.selection.slice();
     });
   }
 
-  // source_file, source, file, line, col, sameCursor all inherited from Position —
-  // line/col use SourceFile.lineOf/colOf via the cached newline index.
+  // source, source, file, line, col, sameCursor all inherited from Text.Node —
+  // line/col use Text.Source.lineOf/colOf via the cached newline index.
 
   @uninstrumented
   public program: Program
@@ -735,7 +735,7 @@ export class Node extends Position implements Instrumentable {
           dispatchCount++;
           (a === 'left' ? lefts : rights).add(n.string ?? '');
         }
-        n = n.right.next();
+        n = n.right.next() as Node | null;
       }
       // Trivial expressions (0 or 1 infix dispatch) reduce identically LTR
       // or RTL, so no rewalk is needed regardless of the operator's
@@ -745,7 +745,7 @@ export class Node extends Position implements Instrumentable {
       if (lefts.size && rights.size) {
         const names = [...lefts, ...rights].map(m => `\`${m}\``).join(', ');
         const span = new Node(this.program);
-        span.source_file = this.source_file;
+        span.source = this.source;
         span.cursor = firstOp!.cursor!;
         span.selection = [firstOp!.begin, lastOp!.end];
         span.error('associativity',
@@ -814,7 +814,7 @@ export class Node extends Position implements Instrumentable {
    *  exit; program state changes from the inner handler calls persist. */
   rewalk(start: Node, trigger: Node, direction: 'left-to-right' | 'right-to-left', seed?: Node): void {
     const program = this.program;
-    const sf = start.source_file;
+    const sf = start.source;
     const rangeStart: number = start.begin ?? 0;
     const rangeEnd: number = trigger.begin ?? Number.POSITIVE_INFINITY;
 
@@ -828,8 +828,8 @@ export class Node extends Position implements Instrumentable {
     if (sf) {
       const log = program.runtime.log as Diagnostics;
       // Diagnostics caches are keyed by file path (string); the Node
-      // by-position cache (below) is still keyed by SourceFile object.
-      const file = sf.file;
+      // by-position cache (below) is still keyed by Text.Source object.
+      const file = sf.location;
       const errMap = log.erroredRegions.view.get(file);
       const dArr = log.byPosition.view.get(file);
       if (dArr && dArr.length) {
@@ -930,22 +930,22 @@ export class Node extends Position implements Instrumentable {
     return this;
   }
 
-  // cursor, selection, source_file, begin/end, line/col, single_char, string,
+  // cursor, selection, source, begin/end, line/col, single_char, string,
   // direction state (_direction, ltr, rtl, direction, behind), navigation
-  // primitives (left/right, capture/skip/etc.) all inherited from Position.
+  // primitives (left/right, capture/skip/etc.) all inherited from Text.Node.
   // Node only adds the pieces that need program/runtime access: a real
   // `next_neighbor` (Direction.next dispatches here), and the `clear`
   // hook on `move`.
 
   /** AST-style sibling navigation: nearest resolution-tracked Node in
    *  `sign` direction (sign=+1 LTR, sign=-1 RTL) within the same source
-   *  file. Reads from `runtime.byPosition` (the per-SourceFile
+   *  file. Reads from `runtime.byPosition` (the per-Text.Source
    *  sorted-by-cursor cache) via binary search, so this is O(log N)
    *  instead of O(R*N) over every resolution × every node. Returns null
    *  if there's no neighbor. Caller filters by expression boundary. */
   override next_neighbor(sign: -1 | 1): Node | null {
-    if (!this.source_file || this.cursor == null) return null;
-    const arr = this.program.runtime.byPosition.view.get(this.source_file);
+    if (this.source === Text.Source.EMPTY || this.cursor == null) return null;
+    const arr = this.program.runtime.byPosition.view.get(this.source);
     if (!arr || arr.length === 0) return null;
     const myCursor = this.cursor;
     // Boundary depends on direction (the original walk used strict
@@ -981,7 +981,7 @@ export class Node extends Position implements Instrumentable {
 
   copy(): Node {
     const copy = new Node(this.program, this._super)
-    copy.source_file = this.source_file
+    copy.source = this.source
     copy._thunks = this._thunks ? [...this._thunks] : null
     copy.value = {...this.value}
     copy.cursor = this.cursor
@@ -1106,7 +1106,7 @@ export class Node extends Position implements Instrumentable {
     //     result.realize();
     //     self.value = result.value;
     //   });
-    //   lazy.source_file = this.source_file;
+    //   lazy.source = this.source;
     //   lazy.cursor = this.cursor;
     //   this.program.pending.push(lazy);
     //   this.program.result = lazy;
@@ -1152,7 +1152,7 @@ export class Node extends Position implements Instrumentable {
       // into the bound method's apparent range — putting the trailing space
       // back onto the diagnostic squiggle.
       method.program = this.program;
-      method.source_file = this.source_file;
+      method.source = this.source;
       method.selection = this.selection.slice();
       // Anchor cursor on the token's leftmost char regardless of capture
       // direction (RTL captures leave the parse-root's cursor on the right
@@ -1222,7 +1222,7 @@ export class Node extends Position implements Instrumentable {
                                             : '[local context]';
 
     const forward = new Node(this.program, undefined);
-    forward.source_file = this.source_file;
+    forward.source = this.source;
     // Deep-copy: same reasoning as in the `method` branch above — sharing the
     // parse-root's selection array would let later capture_while extensions
     // bleed into this forward ref's range.
@@ -1265,7 +1265,7 @@ export class Node extends Position implements Instrumentable {
       const prev = this.program!.result;
       const next = prev.call(this);
       // TODO Set pointer over the whole thing
-      // next.source_file = this.source_file ?? prev.source_file;
+      // next.source = this.source ?? prev.source;
       // next.program     = this.program!;
       // next.cursor      = prev.cursor;
       // next.selection   = [{ begin: prev.begin, end: this.end }];
@@ -1358,7 +1358,7 @@ export class Program implements InstrumentationCtx {
   /** First Node of the current expression. The language definition writes
    *  this when a fresh expression begins so features that need to re-walk
    *  the expression's source (e.g. `</`'s direction switch) have the
-   *  starting anchor — its `source_file`, `cursor`, and `begin` give the
+   *  starting anchor — its `source`, `cursor`, and `begin` give the
    *  range, and its program/super give the resolution context. */
   expression_start?: Node;
 

@@ -4,7 +4,7 @@ import {
   Range,
 } from 'vscode-languageserver/node';
 import type { Diagnostic } from '../diagnostics.ts';
-import type { Position } from '../source.ts';
+import type { Text } from '../source.ts';
 
 /** Map our six-level severity onto LSP's four. Trace/debug fold into Hint. */
 const SEVERITY: Record<Diagnostic['level'], DiagnosticSeverity> = {
@@ -29,8 +29,8 @@ function positionAt(source: string, offset: number): { line: number; character: 
 
 /** Compute an LSP Range from a Position's selection (preferred) or single cursor.
  *  selection is packed `[b0, e0, b1, e1, …]`. */
-function nodeRange(node: Position): Range {
-  const src = node.source ?? '';
+function nodeRange(node: Text.Node): Range {
+  const src = node.source.value;
   const sel = node.selection;
   if (sel && sel.length > 0) {
     return {

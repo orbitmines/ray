@@ -1,9 +1,9 @@
-import type { Position } from "./source.ts";
+import type { Text } from "./source.ts";
 
 export interface Diagnostic {
   level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
   phase: string;
-  node?: Position;
+  node?: Text.Node;
   message?: string;
   clock?: Clock;
   diagnostics?: Diagnostic[];
@@ -143,7 +143,7 @@ export class Diagnostics {
     for (const arr of this.items.values()) yield* arr;
   }
   /** **Cache** — derived from the error/fatal subset of `items` (with a
-   *  source-bearing node). Per-line error-count map (per SourceFile).
+   *  source-bearing node). Per-line error-count map (per Text.Source).
    *  Counts because a single line may carry multiple errors and
    *  supersession in `Node.rewalk` removes them one at a time — when
    *  the count hits zero the line is no longer "errored" for cascade-
@@ -167,7 +167,7 @@ export class Diagnostics {
   );
 
   /** **Cache** — derived from items with a source-bearing node. Per-
-   *  SourceFile sorted-by-cursor `Diagnostic[]`. Used by `Node.rewalk`
+   *  Text.Source sorted-by-cursor `Diagnostic[]`. Used by `Node.rewalk`
    *  to find diagnostics in `[rangeStart, rangeEnd)` via binary search
    *  and mark them `superseded`, instead of filtering the whole
    *  `program.diagnostics` / `log.items` arrays per rewalk (O(N) per
@@ -234,7 +234,7 @@ export class Diagnostics {
    *  spray duplicate errors across the line. O(1) via the per-file
    *  errored-line counter map; the line key is a proxy for "same
    *  expression" pending real expression ranges. */
-  cascaded(node?: Position): boolean {
+  cascaded(node?: Text.Node): boolean {
     if (!node || node.cursor == null) return false;
     return (this.erroredRegions.view.get(node.file)?.get(node.line) ?? 0) > 0;
   }
@@ -277,15 +277,15 @@ export class Diagnostics {
     return process.exit(1);
   }
 
-  fatal(phase: string, message: string, node?: Position): never {
+  fatal(phase: string, message: string, node?: Text.Node): never {
     this.report({ level: 'fatal', phase, message, node });
     return this.exit()
   }
-  error(phase: string, message: string, node?: Position) { return this.report({ level: 'error', phase, message, node }); }
-  warning(phase: string, message: string, node?: Position) { return this.report({ level: 'warning', phase, message, node }); }
-  info(phase: string, message: string, node?: Position) { return this.report({ level: 'info', phase, message, node });}
-  debug(phase: string, message: string, node?: Position) { return this.report({ level: 'debug', phase, message, node });}
-  trace(phase: string, message: string, node?: Position) { return this.report({ level: 'trace', phase, message, node });}
+  error(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'error', phase, message, node }); }
+  warning(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'warning', phase, message, node }); }
+  info(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'info', phase, message, node });}
+  debug(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'debug', phase, message, node });}
+  trace(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'trace', phase, message, node });}
 
   get errors() {
     const out: Diagnostic[] = [];
@@ -387,7 +387,7 @@ export class Diagnostics {
     // node, or else the top-of-stack frame (errors reported on value/partial
     // nodes carry no source themselves, but their stack does). Compare by
     // file path — same file = same source.
-    const displayNode = (d: Diagnostic): Position | undefined =>
+    const displayNode = (d: Diagnostic): Text.Node | undefined =>
       d.node?.file === file ? d.node
         : d.diagnostics?.[d.diagnostics.length - 1]?.node?.file === file
             ? d.diagnostics[d.diagnostics.length - 1].node
@@ -794,7 +794,7 @@ export class Diagnostics {
     //    inline (they show up in the flat summary below).
     for (const [file, items] of this.items) {
       if (!file) continue;
-      const source = items.find(d => d.node?.source)?.node?.source ?? '';
+      const source = items.find(d => d.node?.source.value)?.node?.source.value ?? '';
       if (!source) continue;
       this._printFile(file, source, items);
     }
@@ -1043,12 +1043,12 @@ export interface InstrumentationCtx {
  *  invocation. */
 export interface Instrumentable {
   __instrumentation: InstrumentationCtx | undefined;
-  /** Position the wrapper attaches to its frame + timing diagnostics so
+  /** Text.Node the wrapper attaches to its frame + timing diagnostics so
    *  errors fired inside the call have a real source location and the
    *  display can render the timing line at the right place. Real Node
-   *  satisfies this (it extends `Position`); test mocks return a
-   *  cursor-bearing Position of their own. */
-  readonly position: Position;
+   *  satisfies this (it extends `Text.Node`); test mocks return a
+   *  cursor-bearing Text.Node of their own. */
+  readonly position: Text.Node;
 }
 
 const EXCLUDED = Symbol('uninstrumented');
@@ -1285,7 +1285,7 @@ function wrap<Args extends any[], Ret>(
     // their own — e.g. Direction) follow the HOST back-pointer the
     // recurse walk stamped on them and route through the host's ctx.
     // No ctx anywhere → call through (e.g. a Direction created on a
-    // plain Position with no host upstream).
+    // plain Text.Node with no host upstream).
     const ctx = this.__instrumentation ?? (this as any)[HOST]?.__instrumentation;
     if (!ctx) return original.apply(this, args);
     // Snapshot position once per call so frame + timing share the same

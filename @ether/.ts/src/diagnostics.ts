@@ -1,3 +1,19 @@
+import type { Position } from "./source.ts";
+
+export interface Diagnostic {
+  level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
+  phase: string;
+  node?: Position;
+  message?: string;
+  clock?: Clock;
+  diagnostics?: Diagnostic[];
+  superseded?: boolean;
+}
+
+export const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = {
+  trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5,
+};
+
 /**
  * Four-stamp clock for instrumented wrappers. The wrapper calls the
  * stamps in order around its body so the clock can report body time
@@ -81,57 +97,6 @@ export class Clock {
   toString = () => `${this.ms.toFixed(2)}ms`;
 }
 
-
-export abstract class Position {
-  cursor?: number;
-  selection: number[] = [];
-
-  abstract get source(): string;
-  abstract get file(): string | undefined;
-
-  get begin(): number {
-    return this.selection.length > 0 ? this.selection[0] : (this.cursor ?? 0);
-  }
-  get end(): number {
-    const len = this.selection.length;
-    return len > 0 ? this.selection[len - 1] : (this.cursor ?? 0);
-  }
-  get line(): number {
-    const src = this.source;
-    const idx = this.cursor ?? 0;
-    let line = 1;
-    for (let i = 0; i < idx && i < src.length; i++) if (src[i] === '\n') line++;
-    return line;
-  }
-  get col(): number {
-    const src = this.source;
-    const idx = this.cursor ?? 0;
-    let col = 1;
-    for (let i = 0; i < idx && i < src.length; i++) {
-      if (src[i] === '\n') col = 1; else col++;
-    }
-    return col;
-  }
-  /** True iff `other` shares this position's file and cursor. */
-  sameCursor(other?: Position | null): boolean {
-    return !!other && this.file === other.file && this.cursor === other.cursor;
-  }
-}
-
-export interface Diagnostic {
-  level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
-  phase: string;
-  node?: Position;
-  message?: string;
-  clock?: Clock;
-  diagnostics?: Diagnostic[];
-  superseded?: boolean;
-}
-
-export const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = {
-  trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5,
-};
-
 /**
  * A cached, denormalized view derived from a source-of-truth stream.
  * Wherever you see `Cache<...>`, that field is *not* source data — it's
@@ -165,11 +130,6 @@ export class Cache<Item, View> {
 }
 
 export class Diagnostics {
-  /** Master switch for instrumentation. `false` → every `@instrumented`
-   *  method wrapper falls through to the original (no frame push, no
-   *  Clock, no diagnostic). Toggle for production builds or hot loops
-   *  where the framing cost would dominate. */
-  timing = true;
   /** Per-file Diagnostic lists in insertion order. Diagnostics whose node
    *  doesn't carry a file (synthetic verify fatal, framework-internal
    *  reports) go under the `undefined` key. The LSP reads `items.get(file)`
@@ -562,12 +522,16 @@ export class Diagnostics {
    *   - N samples of phase X: `N * ~<avg>ms = <total>ms`  (numbers colored;
    *                           `*`, `~`, `=` in dark gray)
    * Phases are joined by a dark-gray `, ` and the whole line is prefixed
-   * with a dark-gray `$ `. Phases whose level is below the display threshold
-   * are dropped.
+   * with a dark-gray `$ `. Trace-level timings are dropped — they'd flood
+   * each line at DEBUG=trace; the per-phase aggregate tree at the bottom
+   * of `print()` is the place to read them. Debug+ level timings render.
    */
   private _formatTimingLine(timings: Diagnostic[]): string | null {
     const { c } = Diagnostics;
-    const visible = timings.filter(t => t.clock && Diagnostics.showLevel(t.level));
+    const visible = timings.filter(t =>
+      t.clock &&
+      DIAGNOSTIC_SEVERITY[t.level] >= DIAGNOSTIC_SEVERITY.debug &&
+      Diagnostics.showLevel(t.level));
     if (!visible.length) return null;
 
     // Group by phase, preserving first-seen order.
@@ -1065,13 +1029,12 @@ export class Diagnostics {
 //     prototype methods after that.
 
 /** Minimum host shape the decorator needs. The real `Node` (via
- *  `node.program.runtime.timing` + `node.program.stack` + `node.program.log`)
- *  satisfies this with a small adapter — see `Instrumentable`. */
+ *  `node.program.stack` + `node.program.log`) satisfies this with a small
+ *  adapter — see `Instrumentable`. */
 export interface InstrumentationCtx {
   /** Push a stack frame. Errors snapshot this stack. */
   stack: Diagnostic[]
-  /** Where reports go. The `timing` master switch lives here too —
-   *  toggle `diagnostics.timing` to make every wrapper a no-op. */
+  /** Where reports go. */
   diagnostics: Diagnostics;
 }
 
@@ -1101,20 +1064,54 @@ const EXCLUDED = Symbol('uninstrumented');
 // `kind` field identifies the form; legacy method decorators pass a
 // PropertyDescriptor as the third arg.
 
-/** Mark a method's time as `excluded` from its parent's clock. The
- *  `@instrumented` class walk picks this up and wraps the method with
- *  `excluded: true` instead of the normal reporting path — so calls
- *  still push a frame and time themselves, but the duration is
- *  subtracted from the surrounding phase rather than emitted. Used for
- *  incidental work (logging, diagnostic emission) that shouldn't
- *  inflate the caller's reported time. */
+/** Two roles, one decorator (kind inferred from the target):
+ *
+ *  - **Method:** mark its time as `excluded` from the parent's clock —
+ *    the `@instrumented` walk wraps it with `excluded: true`, so calls
+ *    still push a frame and time themselves but the duration is
+ *    subtracted from the surrounding phase rather than emitted. For
+ *    incidental work (logging, diagnostic emission) that shouldn't
+ *    inflate the caller's reported time.
+ *
+ *  - **Field:** opt the field out of recursive cascade. The cascade
+ *    walk (`recurse`, driven by `@instrumented(..., { recursive: true })`)
+ *    skips this field on every instance — its value's class isn't
+ *    wrapped, no HOST stamped, no descent. Use to keep cascades out of
+ *    subgraphs that would loop or aren't meaningful (e.g. `Runtime.log`
+ *    — descending into Diagnostics would re-enter the wrapper's own
+ *    report cycle). The opt-out set is stamped on the class's
+ *    prototype under the same `EXCLUDED` symbol used by methods —
+ *    shapes don't collide (function gets a boolean, prototype gets a
+ *    Set of field names). */
 export function uninstrumented(targetOrValue: any, keyOrContext: any, descriptor?: PropertyDescriptor): any {
-  // ES standard form: (value, context). `context.kind === 'method'`.
-  if (descriptor === undefined) {
+  // ES standard form: (value, context). `context.kind` distinguishes
+  // method (value is the function) from field (value is the field's
+  // initializer return / undefined; access happens via initializer).
+  if (descriptor === undefined && keyOrContext && typeof keyOrContext === 'object' && 'kind' in keyOrContext) {
+    if (keyOrContext.kind === 'field') {
+      const name = String(keyOrContext.name);
+      keyOrContext.addInitializer?.(function (this: any) {
+        const proto = Object.getPrototypeOf(this);
+        const own = Object.prototype.hasOwnProperty.call(proto, EXCLUDED);
+        const set: Set<string> = own ? proto[EXCLUDED] : new Set<string>(proto[EXCLUDED] ?? []);
+        if (!own) Object.defineProperty(proto, EXCLUDED, { value: set, writable: true, configurable: true });
+        set.add(name);
+      });
+      return targetOrValue;
+    }
     if (typeof targetOrValue === 'function') (targetOrValue as any)[EXCLUDED] = true;
     return targetOrValue;
   }
-  // Legacy form: (target, key, descriptor).
+  // Legacy form: descriptor present → method/accessor; descriptor absent → field.
+  // (Legacy field decorators get `(prototype, fieldName)` with no descriptor.)
+  if (descriptor === undefined) {
+    const proto = targetOrValue;
+    const own = Object.prototype.hasOwnProperty.call(proto, EXCLUDED);
+    const set: Set<string> = own ? proto[EXCLUDED] : new Set<string>(proto[EXCLUDED] ?? []);
+    if (!own) Object.defineProperty(proto, EXCLUDED, { value: set, writable: true, configurable: true });
+    set.add(String(keyOrContext));
+    return;
+  }
   if (typeof descriptor.value === 'function') (descriptor.value as any)[EXCLUDED] = true;
   return descriptor;
 }
@@ -1127,7 +1124,7 @@ export function instrument(level: Diagnostic['level'] = 'debug', phase?: string)
       if (typeof targetOrValue !== 'function') return targetOrValue;
       const name = phase ?? String(keyOrContext?.name ?? '');
       const original = targetOrValue as (...args: any[]) => any;
-      const wrapped = wrap(original, level, name, !!(original as any)[EXCLUDED]);
+      const wrapped = wrap(original, level, name, { excluded: !!(original as any)[EXCLUDED] });
       Object.defineProperty(wrapped, 'name', { value: name, configurable: true });
       return wrapped;
     }
@@ -1135,7 +1132,7 @@ export function instrument(level: Diagnostic['level'] = 'debug', phase?: string)
     const name = phase ?? String(keyOrContext);
     if (typeof descriptor.value === 'function') {
       const original = descriptor.value as (...args: any[]) => any;
-      const wrapped = wrap(original, level, name, !!(original as any)[EXCLUDED]);
+      const wrapped = wrap(original, level, name, { excluded: !!(original as any)[EXCLUDED] });
       Object.defineProperty(wrapped, 'name', { value: name, configurable: true });
       descriptor.value = wrapped;
     }
@@ -1143,35 +1140,120 @@ export function instrument(level: Diagnostic['level'] = 'debug', phase?: string)
   };
 }
 
-/** Wrap every own method on the class. */
-export function instrumented(level: Diagnostic['level'] = 'debug') {
+/** Per-prototype marker — `wrap_prototype` reads it to skip prototypes
+ *  it's already wrapped. Without this, recursive cascades from multiple
+ *  decorated classes (or repeated walks per call) would re-wrap a method
+ *  with another wrapper around the existing one. */
+const WRAPPED = Symbol('instrumented');
+
+/** Per-instance back-pointer to the host that cascaded into this object.
+ *  Cascaded subobjects (e.g. a `Direction` reached via `Node._left`)
+ *  don't define their own `__instrumentation` — the framework stamps
+ *  this symbol on them at recurse time, and the wrapper reads it to find
+ *  the host's ctx. Lets a class be cascade-discoverable without
+ *  referencing the instrumentation framework in its source. */
+const HOST = Symbol('instrumentation_host');
+
+/** Skip wrapping built-in JS classes (Map, Set, Date, …). Their
+ *  prototypes are global; wrapping them would corrupt every instance in
+ *  the program. `Function.prototype.toString` on a native function
+ *  contains `[native code]`; user-defined classes don't. */
+function is_native(ctor: any): boolean {
+  return Function.prototype.toString.call(ctor).includes('[native code]');
+}
+
+/** Wrap every own method on `proto` exactly once. Idempotent — the
+ *  `WRAPPED` marker breaks cycles (Direction's position points back to
+ *  the Node that holds it; Node's _left / _right point forward to the
+ *  Direction; without the marker we'd loop). */
+function wrap_prototype(proto: any, level: Diagnostic['level'], recursive: boolean): void {
+  if (proto[WRAPPED]) return;
+  proto[WRAPPED] = true;
+  for (const name of Object.getOwnPropertyNames(proto)) {
+    if (name === 'constructor') continue;
+    // Auto-skip the `Instrumentable` framework hook — wrapping it would
+    // infinite-recurse, since the wrapper itself reads `__instrumentation`
+    // to fetch the ctx. Saves every host class from having to remember
+    // `@uninstrumented` on this one method.
+    if (name === '__instrumentation') continue;
+    const desc = Object.getOwnPropertyDescriptor(proto, name);
+    if (!desc) continue;
+    if (typeof desc.value !== 'function') continue;     // skip getters/setters
+    const original = desc.value as (...args: any[]) => any;
+    const wrapped = wrap(original, level, name, { excluded: !!(original as any)[EXCLUDED], recursive });
+    Object.defineProperty(wrapped, 'name', { value: name, configurable: true });
+    Object.defineProperty(proto, name, { ...desc, value: wrapped });
+  }
+}
+
+/** Walk `instance`'s own enumerable fields. For each value that's a
+ *  user-defined class instance (not a JS built-in) and not the same
+ *  class as any seen so far, wrap that class's prototype, stamp HOST on
+ *  it, and recurse into its fields. Plain objects, primitives, arrays,
+ *  Maps, etc. are filtered by `is_native`; same-class fields (e.g.
+ *  Node._super → Node) are filtered by `seen`. Lazily-created subobjects
+ *  (e.g. Node._left becoming a Direction on first access) get picked up
+ *  the next call after their field is populated.
+ *
+ *  Cascaded subobjects (those with HOST already set) skip the walk
+ *  entirely — they live inside another host's tree, their prototypes
+ *  were already wrapped via that host's recurse, and they shouldn't
+ *  override anyone else's HOST. The WRAPPED marker on prototypes makes
+ *  the steady state a tight identity-check loop with no allocations
+ *  beyond this walk's own stack + seen Set. */
+function recurse(instance: any, level: Diagnostic['level']): void {
+  if (instance[HOST]) return;
+  const seen = new Set<any>([instance.constructor]);
+  const stack: any[] = [instance];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    // Per-instance-class set of field names declared `@uninstrumented`
+    // — those fields are invisible to cascade. Reads through the
+    // prototype chain so subclasses inherit the opt-outs. Reuses the
+    // same `EXCLUDED` symbol the method form stamps onto functions:
+    // shapes don't collide (function → boolean, prototype → Set).
+    const opt: Set<string> | undefined = cur[EXCLUDED];
+    for (const key of Object.keys(cur)) {
+      if (opt?.has(key)) continue;
+      const v = cur[key];
+      if (!v || typeof v !== 'object') continue;
+      const ctor = v.constructor;
+      if (!ctor || seen.has(ctor) || is_native(ctor)) continue;
+      seen.add(ctor);
+      wrap_prototype(ctor.prototype, level, true);    // cascade is always recursive itself
+      v[HOST] = instance;                              // ctx back-pointer for the wrapper
+      stack.push(v);
+    }
+  }
+}
+
+/** Wrap every own method on the class.
+ *
+ *  `recursive` cascades the wrap to Instrumentable subobjects discovered
+ *  on each instance — at the top of every wrapped method, walk this
+ *  instance's fields and (idempotently) wrap any reachable class that
+ *  exposes `__instrumentation` and isn't `this`'s own class. Use it when
+ *  a class delegates work to peer objects you'd want to see as their own
+ *  frames in the trace (e.g. `Node` holding `Direction` via _left/_right).
+ *  The cascaded objects route through *this* host's ctx — they implement
+ *  `__instrumentation` as a delegation back to whichever field of theirs
+ *  points at the host (e.g. Direction.__instrumentation → position's). */
+export function instrumented(
+  level: Diagnostic['level'] = 'debug',
+  options: { recursive?: boolean } = {},
+) {
   // Both legacy and ES standard class decorators get the constructor
   // as the first argument, so the prototype walk works for either.
   return function <T extends new (...args: any[]) => any>(target: T, _context?: any): T {
-    const proto = target.prototype;
-    for (const name of Object.getOwnPropertyNames(proto)) {
-      if (name === 'constructor') continue;
-      // Auto-skip the `Instrumentable` framework hook — wrapping it
-      // would infinite-recurse, since the wrapper itself reads
-      // `__instrumentation` to fetch the ctx. Saves every host class
-      // from having to remember `@uninstrumented` on this one method.
-      if (name === '__instrumentation') continue;
-      const desc = Object.getOwnPropertyDescriptor(proto, name);
-      if (!desc) continue;
-      if (typeof desc.value !== 'function') continue;     // skip getters/setters
-      const original = desc.value as (...args: any[]) => any;
-      const wrapped = wrap(original, level, name, !!(original as any)[EXCLUDED]);
-      Object.defineProperty(wrapped, 'name', { value: name, configurable: true });
-      Object.defineProperty(proto, name, { ...desc, value: wrapped });
-    }
+    wrap_prototype(target.prototype, level, !!options.recursive);
     return target;
   };
 }
 
 /** Closure-once-per-method. Captured `level`, `name`, and `excluded`
- *  keep the wrapper monomorphic across all calls to this method. The
- *  hot path (timing off → just call through) is one property read +
- *  branch.
+ *  keep the wrapper monomorphic across all calls to this method. When
+ *  the captured `level` is below the display threshold, `wrap` returns
+ *  `original` directly — no wrapper, no per-call check.
  *
  *  Reported timing reflects real work only. On exit the wrapper:
  *    - measures its own pre-body and post-body bookkeeping (clock alloc,
@@ -1186,11 +1268,25 @@ function wrap<Args extends any[], Ret>(
   original: (this: Instrumentable, ...args: Args) => Ret,
   level: Diagnostic['level'],
   name: string,
-  excluded: boolean,
+  options: { excluded?: boolean, recursive?: boolean } = {},
 ): (this: Instrumentable, ...args: Args) => Ret {
+  if (!Diagnostics.showLevel(level)) return original;
+  const { excluded = false, recursive = false } = options;
+
   return function (this: Instrumentable, ...args: Args): Ret {
-    const ctx = this.__instrumentation;
-    if (!ctx || !ctx.diagnostics.timing || !Diagnostics.showLevel(level)) return original.apply(this, args);
+    // Recursive cascade: discover Instrumentable subobjects on this
+    // instance and wrap their prototypes too. Cheap on the steady state
+    // — every reachable class has its WRAPPED marker, so the inner
+    // branches collapse to identity + symbol checks.
+    if (recursive) recurse(this, level);
+    // Hosts (classes that defined `__instrumentation` themselves) use
+    // their own ctx. Cascaded subobjects (no `__instrumentation` of
+    // their own — e.g. Direction) follow the HOST back-pointer the
+    // recurse walk stamped on them and route through the host's ctx.
+    // No ctx anywhere → call through (e.g. a Direction created on a
+    // plain Position with no host upstream).
+    const ctx = this.__instrumentation ?? (this as any)[HOST]?.__instrumentation;
+    if (!ctx) return original.apply(this, args);
     // Snapshot position once per call so frame + timing share the same
     // location even if `this.position` mutates while the body runs
     // (e.g. parser advances its cursor). The receiver doubles as the

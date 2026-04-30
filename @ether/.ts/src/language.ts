@@ -2,8 +2,9 @@ import fs from "fs";
 import path from "path";
 import {is_array, is_function, is_string} from "./lodash.ts";
 import {Version} from "./version.ts";
-import { Clock, Diagnostics, Cache, DIAGNOSTIC_SEVERITY, Position, instrumented, uninstrumented } from "./diagnostics.ts";
+import { Clock, Diagnostics, Cache, DIAGNOSTIC_SEVERITY, instrumented, uninstrumented } from "./diagnostics.ts";
 import type { Diagnostic, Instrumentable, InstrumentationCtx } from "./diagnostics.ts";
+import { Position, SourceFile } from "./source.ts";
 
 /** Standard lower_bound binary search: returns the first index `i` in
  *  the sorted array `arr` such that `key(arr[i]) >= target`. Returns
@@ -19,50 +20,7 @@ function lowerBound<T>(arr: T[], target: number, key: (t: T) => number): number 
   return lo;
 }
 
-/** A piece of source code under consideration. Shared by reference across the
- *  parse-root and every Node copied from it — navigation reads through here so
- *  we don't duplicate the source string. */
-export class SourceFile {
-  constructor(public source: string, public file?: string) {}
-  /** Lazily-computed sorted positions of `\n` chars. Used by `lineOf` to
-   *  turn a cursor into a 1-based line number in O(log lines). Precompute is
-   *  O(source.length) once per file. */
-  private _newlines?: number[];
-  lineOf(cursor: number): number {
-    if (!this._newlines) {
-      const arr: number[] = [];
-      const s = this.source;
-      for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) arr.push(i);
-      this._newlines = arr;
-    }
-    const nls = this._newlines;
-    // Binary search: count how many newlines are strictly before `cursor`.
-    let lo = 0, hi = nls.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (nls[mid] < cursor) lo = mid + 1;
-      else hi = mid;
-    }
-    return lo + 1;
-  }
-  /** 1-based column at `cursor`. O(log lines) via the same newline cache
-   *  as `lineOf`: column = cursor − (last newline before cursor) (or
-   *  cursor + 1 if no preceding newline). The naive `Position.col` is
-   *  O(cursor) and was the dominant superlinear cost on big files. */
-  colOf(cursor: number): number {
-    if (!this._newlines) this.lineOf(cursor); // populates the cache
-    const nls = this._newlines!;
-    let lo = 0, hi = nls.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (nls[mid] < cursor) lo = mid + 1;
-      else hi = mid;
-    }
-    return lo === 0 ? cursor + 1 : cursor - nls[lo - 1];
-  }
-}
-
-// (Diagnostics class moved to ./diagnostics.ts — re-exported above.)
+// (SourceFile + Diagnostics moved to ./diagnostics.ts — re-exported above.)
 
 /** Atom of a syntax pattern — what the future DSL form `E('{', sub, '}', E())`
  *  will compose. Sub-Expressions are themselves valid atoms (recursive). */
@@ -181,8 +139,6 @@ export class Runtime implements Backend {
 
   log = new Diagnostics();
   programs: Program[] = [];
-  /** When false, Program.instrument becomes a no-op (no Clock, no stack push/pop, no timing Diagnostics emitted). */
-  timing = true;
   abstract_interpretation: { enabled?: boolean, call?: (fn: Node) => Node } = {}
 
   EXTERNALLY_DEFINED = new Program(this)
@@ -603,7 +559,7 @@ type Key = string | Node
 // regular empty Map / empty object.
 const EMPTY_METHODS: Map<Key, Node> = new Map();
 const EMPTY_OPTIONS: { [key: string]: string } = {};
-@instrumented('trace')
+@instrumented('trace', { recursive: true })
 export class Node extends Position implements Instrumentable {
   // `methods` is lazy-allocated on first .set — most Nodes never declare a
   // method (forward refs, lazy juxtapositions, parser intermediates), and
@@ -665,28 +621,15 @@ export class Node extends Position implements Instrumentable {
     });
   }
 
-  /** Ref to the SourceFile this Node is reading from. Only parse-root Nodes
-   *  and their copies carry it; lazy value Nodes leave it undefined. */
-  source_file?: SourceFile;
-  /** Concrete impls of the abstract getters on Position. */
-  get source(): string { return this.source_file?.source ?? ''; }
-  get file(): string | undefined { return this.source_file?.file; }
-  /** Override Position.line — uses the per-SourceFile cached newline
-   *  index for O(log) lookup instead of the naive O(cursor) walk. */
-  get line(): number {
-    if (this.source_file && this.cursor != null) return this.source_file.lineOf(this.cursor);
-    return super.line;
-  }
-  /** Override Position.col — same newline cache as `line`, O(log) via
-   *  `colOf`. The naive `Position.col` scans from offset 0 every time,
-   *  which made it the dominant cost (~40% of total) on large files. */
-  get col(): number {
-    if (this.source_file && this.cursor != null) return this.source_file.colOf(this.cursor);
-    return super.col;
-  }
+  // source_file, source, file, line, col, sameCursor all inherited from Position —
+  // line/col use SourceFile.lineOf/colOf via the cached newline index.
 
-  constructor(public program: Program, public _super: Node = program.runtime.BASE, encoded: any = UNKNOWN) {
+  @uninstrumented
+  public program: Program
+
+  constructor(program: Program, public _super: Node = program.runtime.BASE, encoded: any = UNKNOWN) {
     super();
+    this.program = program;
     this.value.encoded = encoded;
   }
 
@@ -899,7 +842,7 @@ export class Node extends Position implements Instrumentable {
           // contribute to it). Surgical, so the rebuild loop over
           // log.items is gone — that was the remaining O(N²) cost.
           if (errMap && (d.level === 'error' || d.level === 'fatal') && d.node?.cursor != null) {
-            const line = sf.lineOf(d.node.cursor);
+            const line = sf.lineOf(d.node);
             const count = errMap.get(line);
             if (count != null) {
               if (count === 1) errMap.delete(line);
@@ -987,205 +930,53 @@ export class Node extends Position implements Instrumentable {
     return this;
   }
 
-  public cursor: Location;
-  // selection is inherited from Position as packed `number[]` ([b0,e0,b1,e1,…])
-  // — see Position.selection for the rationale.
-  private single_char(): boolean { return this.selection.length === 0; }
-  get begin() { return this.selection.length > 0 ? this.selection[0] : this.cursor; }
-  set begin(location: Location) {
-    if (this.selection.length > 0) { this.selection[0] = location; }
-    else { this.selection.push(location, this.cursor); }
-  }
-  get end() {
-    const len = this.selection.length;
-    return len > 0 ? this.selection[len - 1] : this.cursor;
-  }
-  set end(location: Location) {
-    const len = this.selection.length;
-    if (len > 0) { this.selection[len - 1] = location; }
-    else { this.selection.push(this.cursor, location); }
-  }
+  // cursor, selection, source_file, begin/end, line/col, single_char, string,
+  // direction state (_direction, ltr, rtl, direction, behind), navigation
+  // primitives (left/right, capture/skip/etc.) all inherited from Position.
+  // Node only adds the pieces that need program/runtime access: a real
+  // `next_neighbor` (Direction.next dispatches here), and the `clear`
+  // hook on `move`.
 
-  // Lazy slots for the per-direction objects — these used to be eager fields
-  // (`left = this.create_direction(...)` ran in the ctor for every Node), and
-  // each create_direction call allocates ~15 closures. Most Nodes never touch
-  // `.left` or `.right` (forward refs, method copies, lazy juxtapositions —
-  // i.e. the bulk of allocations), so making them lazy via cached slots cuts
-  // ~30 closure allocations per Node creation.
-  private _left?: ReturnType<Node['create_direction']>;
-  private _right?: ReturnType<Node['create_direction']>;
-  private create_direction(direction: 'left-to-right' | 'right-to-left') {
-    const sign = direction === 'right-to-left' ? -1 : 1;
-    const boundary = () => sign === -1 ? this.begin : this.end;
-
-    const move = (offset: number = 1) => {
-      if (sign === -1) {
-        this.begin = this.begin - offset
-      } else {
-        this.end = this.end + offset
-      }
+  /** AST-style sibling navigation: nearest resolution-tracked Node in
+   *  `sign` direction (sign=+1 LTR, sign=-1 RTL) within the same source
+   *  file. Reads from `runtime.byPosition` (the per-SourceFile
+   *  sorted-by-cursor cache) via binary search, so this is O(log N)
+   *  instead of O(R*N) over every resolution × every node. Returns null
+   *  if there's no neighbor. Caller filters by expression boundary. */
+  override next_neighbor(sign: -1 | 1): Node | null {
+    if (!this.source_file || this.cursor == null) return null;
+    const arr = this.program.runtime.byPosition.view.get(this.source_file);
+    if (!arr || arr.length === 0) return null;
+    const myCursor = this.cursor;
+    // Boundary depends on direction (the original walk used strict
+    // inequality on both sides):
+    //   sign===1  → keep c > myCursor → search for first c >  myCursor
+    //   sign===-1 → keep c < myCursor → search for first c >= myCursor,
+    //                                   then walk backward from there.
+    let lo = 0, hi = arr.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      const c = arr[mid].cursor!;
+      const skip = sign === 1 ? (c <= myCursor) : (c < myCursor);
+      if (skip) lo = mid + 1; else hi = mid;
     }
-
-    move.done = () => {
-      const next = boundary() + sign;
-      return next < 0 || next >= this.source.length;
-    };
-
-    move.peak = (offset: number = 1): string => {
-      if (offset === 0) return '';
-      if (offset < 0) return (sign === -1 ? this.right : this.left).peak(offset * -1)
-
-      let a = boundary();
-      let b = a + (offset * sign);
-      if (offset == 1) return b < 0 || b >= this.source.length ? '' : this.source[b];
-
-      if (b < a) { [a, b] = [b, a] }
-      return this.source.slice(Math.max(a, 0), Math.min(b + 1, this.source.length))
+    // Walk past any `this` entries (a node IS in its own slot in the cache).
+    if (sign === 1) {
+      for (let i = lo; i < arr.length; i++) if (arr[i] !== this && !arr[i].superseded) return arr[i];
+    } else {
+      for (let i = lo - 1; i >= 0; i--) if (arr[i] !== this && !arr[i].superseded) return arr[i];
     }
-    move.at = (s: string): boolean => move.peak(s.length) === s;
-    move.capture = (char: string): boolean => {
-      if (move.done() || move.peak() !== char) return false;
-      move();
-      return true;
-    }
-    move.capture_while = (pred: (ch: string) => boolean): number => {
-      let n = 0;
-      while (!move.done() && pred(move.peak())) { n++; move(); }
-      return n;
-    }
-    /**
-     * Like `capture_while`, but the consumed run never lands in this node's
-     * selection — useful for whitespace, comments, anything you want the
-     * cursor to pass through without attributing to the surrounding token.
-     *
-     * Mirrors `skip()`'s post-condition: cursor sits one past the last
-     * consumed boundary so the next `capture_while`'s first push begins at
-     * the next char. Selection is cleared even if zero chars matched.
-     */
-    move.skip_while = (pred: (ch: string) => boolean): number => {
-      let n = 0;
-      while (!move.done() && pred(move.peak())) { n++; move(); }
-      this.cursor = boundary() + sign;
-      this.selection = [];
-      return n;
-    }
-    move.capture_whitespace = (): number => move.capture_while(ch => ch === ' ');
-    move.capture_line = (): string => {
-      let a = boundary();
-      move.capture_while(ch => ch !== '\n');
-      let b = boundary();
-
-      if (a === b) return '';
-      if (b < a) { [a, b] = [b, a] }
-      return this.source.slice(a, b + 1)
-    }
-    move.capture_indent = (): number => {
-      if (sign === -1) { return this.fatal('rtl', 'capture_indent not supported for rtl.') } // TODO EOL whitespace if right-to-left
-      move.capture('\n');
-      return move.capture_whitespace();
-    }
-    move.upto = (char: string): string => {}
-    move.until = (char: string): string => {
-      // const opens  = direction === 1 ? '([{' : ')]}';
-      // const closes = direction === 1 ? ')]}' : '([{';
-      // const depth: string[] = [];
-      // const before = boundary().index;
-      //
-      // while (!done()) {
-      //   const ch = move.peak();
-      //   if (depth.length === 0 && ch === char) break;
-      //   const open = opens.indexOf(ch);
-      //   if (open !== -1) depth.push(closes[open]);
-      //   else if (depth.length > 0 && ch === depth[depth.length - 1]) depth.pop();
-      //   move();
-      // }
-      //
-      // return slice(before, boundary().index);
-    }
-    move.goto = (char: string): string => {}
-    move.skip = () => this.move(boundary() + (1 * sign))
-    /** AST-style sibling navigation: returns the nearest resolution-tracked
-     *  Node in this direction (LTR / RTL) within the same source file. Reads
-     *  from `runtime.byPosition` (the per-SourceFile sorted-by-cursor cache)
-     *  via binary search, so this is O(log N) instead of O(R*N) over every
-     *  resolution × every node. Returns null if there's no neighbor.
-     *  Caller filters by expression boundary. */
-    move.next = (): Node | null => {
-      if (!this.source_file || this.cursor == null) return null;
-      const arr = this.program.runtime.byPosition.view.get(this.source_file);
-      if (!arr || arr.length === 0) return null;
-      const myCursor = this.cursor;
-      // Boundary depends on direction (the original walk used strict
-      // inequality on both sides):
-      //   sign===1  → keep c > myCursor → search for first c >  myCursor
-      //   sign===-1 → keep c < myCursor → search for first c >= myCursor,
-      //                                   then walk backward from there.
-      let lo = 0, hi = arr.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >>> 1;
-        const c = arr[mid].cursor!;
-        const skip = sign === 1 ? (c <= myCursor) : (c < myCursor);
-        if (skip) lo = mid + 1; else hi = mid;
-      }
-      // Walk past any `this` entries (a node IS in its own slot in the cache).
-      if (sign === 1) {
-        for (let i = lo; i < arr.length; i++) if (arr[i] !== this && !arr[i].superseded) return arr[i];
-      } else {
-        for (let i = lo - 1; i >= 0; i--) if (arr[i] !== this && !arr[i].superseded) return arr[i];
-      }
-      return null;
-    }
-
-    return move;
+    return null;
   }
 
-  // Lazy getters for left/right — see `_left`/`_right` slot declarations near
-  // create_direction for the rationale (avoids ~30 closure allocations per
-  // Node ctor for the common case where left/right are never accessed).
-  get left()  { return this._left  ??= this.create_direction('right-to-left'); }
-  get right() { return this._right ??= this.create_direction('left-to-right'); }
-  move(cursor: Location) {
-    this.cursor = cursor; this.selection = []
-    this.clear()
+  override move(cursor: number): void {
+    super.move(cursor);
+    this.clear();
   }
-
-  _direction: 'left-to-right' | 'right-to-left' = 'left-to-right'
-  get ltr() { this._direction = 'left-to-right'; return this }; get rtl() { this._direction = 'right-to-left'; return this };
-  get direction() { return this._direction === 'right-to-left' ? this.left : this.right; }
-  /** The opposite of `direction` — useful for "behind me" peeks that should
-   *  flip when the parse swaps from LTR to RTL (e.g. checking whether the
-   *  preceding char was whitespace, regardless of which way we're reading). */
-  get behind()    { return this._direction === 'right-to-left' ? this.right : this.left; }
-
-  // Direction-delegating methods. These used to be `name = this.directed_delegate('name')`
-  // arrow fields (one closure per method per Node — 10 closures × every Node
-  // constructed). Now plain prototype methods that look up the current
-  // direction object on each call. The direction lookup itself is lazy so
-  // Nodes that never call these still don't allocate left/right.
-  done(): boolean                                  { return (this.direction as any).done(); }
-  capture(...args: any[]): this                    { (this.direction as any).capture(...args); return this; }
-  capture_while(...args: any[]): this              { (this.direction as any).capture_while(...args); return this; }
-  capture_whitespace(...args: any[]): this         { (this.direction as any).capture_whitespace(...args); return this; }
-  capture_line(...args: any[]): this               { (this.direction as any).capture_line(...args); return this; }
-  skip_while(...args: any[]): this                 { (this.direction as any).skip_while(...args); return this; }
-  upto(...args: any[]): this                       { (this.direction as any).upto(...args); return this; }
-  until(...args: any[]): this                      { (this.direction as any).until(...args); return this; }
-  goto(...args: any[]): this                       { (this.direction as any).goto(...args); return this; }
-  skip(...args: any[]): this                       { (this.direction as any).skip(...args); return this; }
 
   clear(): void {
     this._thunks = [] //TODO Maybe move _thunks into .value?
     this.value = { encoded: UNKNOWN, methods: EMPTY_METHODS, options: EMPTY_OPTIONS };
-  }
-
-  get string() { return this.single_char() ? this.source[this.cursor] : this.source.slice(this.begin, this.end + 1); }
-
-  /** Override Position.sameCursor — compare by `source_file` reference
-   *  instead of by file path. Tighter equality (two distinct SourceFile
-   *  instances with the same path are NOT same), and slightly faster
-   *  (object `===` vs string compare). */
-  sameCursor(other?: Position | null): boolean {
-    return !!other && (other as Node).source_file === this.source_file && this.cursor === other.cursor;
   }
 
   copy(): Node {
@@ -1199,6 +990,7 @@ export class Node extends Position implements Instrumentable {
     return copy;
   }
 
+  @uninstrumented
   get log() { return this.program!.log }
 
   // `Node.do(level, phase, fn)` removed — `@instrumented('trace')` on
@@ -1547,8 +1339,6 @@ export class Node extends Position implements Instrumentable {
   }
 
 }
-
-export type Location = number;
 
 //  scope = () => {}
 //  allowForwardRef = () => {}

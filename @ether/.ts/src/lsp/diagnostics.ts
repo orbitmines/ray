@@ -3,7 +3,8 @@ import {
   DiagnosticSeverity,
   Range,
 } from 'vscode-languageserver/node';
-import type { Diagnostic, Position } from '../diagnostics.ts';
+import type { Diagnostic } from '../diagnostics.ts';
+import type { Position } from '../source.ts';
 
 /** Map our six-level severity onto LSP's four. Trace/debug fold into Hint. */
 const SEVERITY: Record<Diagnostic['level'], DiagnosticSeverity> = {

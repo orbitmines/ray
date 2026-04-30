@@ -32,7 +32,7 @@ export type Compiler<Input extends Program<Input> = Program<any>, Output extends
 
 abstract class Language extends Program<Language> {
 
-  constructor(public name: string, version: Version, public extension: string | string[]) {
+  constructor(public name: string, version: Version) {
     super(undefined, version)
   }
   language = this;
@@ -55,9 +55,14 @@ abstract class Language extends Program<Language> {
   repl(): void { return this.log.fatal(this.name, 'Not REPL\'able.'); }
 }
 
-export const Text = new (class A extends Language {
+export const Text = class A extends Language {
+  static extension(...extension: string[]) { return new Text(extension) }
+  constructor(public extension: string | string[]) {
+    //TODO Version is Unicode string version.
+    super('String', (Version.scheme('E') as Standard).create(0, '2027-01-01', 0))
+  }
   log: Diagnostics = new Diagnostics()
-})('String', (Version.scheme('E') as Standard).create(0, '2027-01-01', 0), ".txt")
+}
 
 export class Runtime extends Language {
   log: Diagnostics = new Diagnostics()

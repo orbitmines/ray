@@ -1289,7 +1289,7 @@ export class Node extends Position implements Instrumentable {
 
   //   const handler = this.program!.runtime._tokenHandler;
   //   if (handler) {
-  //     while (!this.direction.done() && this.direction.peak() !== '\n') {
+  //     while (!this.direction.done() && this.direction.peek() !== '\n') {
   //       handler(this);
   //     }
   //   }
@@ -1309,7 +1309,7 @@ export class Node extends Position implements Instrumentable {
     return this;
   }
   comment(): this {
-    //TODO Set as comment, skippable for others. peak/etc skip over comments
+    //TODO Set as comment, skippable for others. peek/etc skip over comments
     return this;
   }
 

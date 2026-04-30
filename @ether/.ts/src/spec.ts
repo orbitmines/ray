@@ -176,7 +176,7 @@ export const Ray = new Language('ether', (Version.scheme('E') as Standard).creat
      *  and folds it into `_.program.result`. The same function powers both
      *  the outer LTR parse (registered via `E.token`) and the RTL re-walk
      *  triggered by `</`. The only direction-sensitive bit is "behind me"
-     *  (whether the previous char was whitespace) — we use `_.behind.peak()`
+     *  (whether the previous char was whitespace) — we use `_.behind.peek()`
      *  which flips to `.right` when `.rtl` is set. */
     const handle = (_: any): Node | undefined => {
       let saw_newline = false;
@@ -213,7 +213,7 @@ export const Ray = new Language('ether', (Version.scheme('E') as Standard).creat
         _.program.result.realize();
         const prevResult = _.program.result;
         const acceptsArgs = (prevResult.enabled('accepts_program') || prevResult.enabled('accepts'))
-                         && _.behind.peak() === ' ';
+                         && _.behind.peek() === ' ';
         if (acceptsArgs) {
           prevResult.debug('test', prevResult.enabled('accepts_program') ? 'accepts_program' : 'accepts');
 

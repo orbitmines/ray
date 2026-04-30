@@ -103,12 +103,8 @@ export class Position {
   // on Direction's prototype, not as per-instance closures.
   protected _left?: Direction;
   protected _right?: Direction;
-  protected create_direction(sign: -1 | 1): Direction {
-    return new Direction(this, sign);
-  }
-
-  get left()  { return this._left  ??= this.create_direction(-1); }
-  get right() { return this._right ??= this.create_direction(1); }
+  get left()  { return this._left  ??= new Direction(this, -1); }
+  get right() { return this._right ??= new Direction(this, 1); }
 
   move(cursor: number): void {
     this.cursor = cursor;
@@ -175,11 +171,11 @@ export class Direction {
     return next < 0 || next >= this.position.source.length;
   }
 
-  peak(offset: number = 1): string {
+  peek(offset: number = 1): string {
     if (offset === 0) return '';
     if (offset < 0) {
       const opposite = this.sign === -1 ? this.position.right : this.position.left;
-      return opposite.peak(offset * -1);
+      return opposite.peek(offset * -1);
     }
     let a = this.boundary;
     let b = a + (offset * this.sign);
@@ -189,17 +185,17 @@ export class Direction {
     return src.slice(Math.max(a, 0), Math.min(b + 1, src.length));
   }
 
-  at(s: string): boolean { return this.peak(s.length) === s; }
+  at(s: string): boolean { return this.peek(s.length) === s; }
 
   capture(char: string): boolean {
-    if (this.done() || this.peak() !== char) return false;
+    if (this.done() || this.peek() !== char) return false;
     this.advance();
     return true;
   }
 
   capture_while(pred: (ch: string) => boolean): number {
     let n = 0;
-    while (!this.done() && pred(this.peak())) { n++; this.advance(); }
+    while (!this.done() && pred(this.peek())) { n++; this.advance(); }
     return n;
   }
 
@@ -215,7 +211,7 @@ export class Direction {
    */
   skip_while(pred: (ch: string) => boolean): number {
     let n = 0;
-    while (!this.done() && pred(this.peak())) { n++; this.advance(); }
+    while (!this.done() && pred(this.peek())) { n++; this.advance(); }
     this.position.cursor = this.boundary + this.sign;
     this.position.selection = [];
     return n;
@@ -246,7 +242,7 @@ export class Direction {
     // const before = this.boundary;
     //
     // while (!this.done()) {
-    //   const ch = this.peak();
+    //   const ch = this.peek();
     //   if (depth.length === 0 && ch === _char) break;
     //   const open = opens.indexOf(ch);
     //   if (open !== -1) depth.push(closes[open]);

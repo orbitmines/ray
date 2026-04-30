@@ -1274,6 +1274,7 @@ function wrap<Args extends any[], Ret>(
   const { excluded = false, recursive = false } = options;
 
   return function (this: Instrumentable, ...args: Args): Ret {
+    const clock = new Clock();
     // Recursive cascade: discover Instrumentable subobjects on this
     // instance and wrap their prototypes too. Cheap on the steady state
     // — every reachable class has its WRAPPED marker, so the inner
@@ -1292,7 +1293,6 @@ function wrap<Args extends any[], Ret>(
     // (e.g. parser advances its cursor). The receiver doubles as the
     // diagnostic node so anything reported inside the body lands on
     // the right source location.
-    const clock = new Clock();
     if (excluded) clock.excluded = true;
     const node = this.position;
     const frame: Diagnostic = { level, phase: name, node, clock };

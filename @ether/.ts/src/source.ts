@@ -1,6 +1,9 @@
+import { nodejs } from "./node.js.ts";
+
 namespace Global {
   export interface Source {
     location?: string
+    load(): Promise<void>
     // save(): void
   }
   export interface Node {
@@ -13,7 +16,22 @@ export type Node = Global.Node;
 export namespace Text {
   export class Source implements Global.Source {
     
-    constructor(public value: string, public location?: string) {}
+    constructor(private _value?: string, public location?: string) {}
+
+    get value(): string {
+      if (this._value === undefined)
+        throw new Error(`Source '${this.location ?? ''}' not loaded — call await source.load() first.`);
+      return this._value;
+    }
+
+    async load(): Promise<void> {
+      if (!this.location) throw new Error('Source has neither value nor location.');
+      let url: URL | undefined;
+      try { url = new URL(this.location); } catch {}
+      this._value = url
+        ? await (await fetch(url)).text()
+        : await nodejs.fs.promises.readFile(this.location, 'utf-8');
+    }
 
     static readonly EMPTY = new Source('');
 

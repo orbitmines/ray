@@ -23,6 +23,7 @@ export namespace Text {
         throw new Error(`Source '${this.location ?? ''}' not loaded — call await source.load() first.`);
       return this._value;
     }
+    set value(value: string) { this._value = value; }
 
     async load(): Promise<void> {
       if (!this.location) throw new Error('Source has neither value nor location.');

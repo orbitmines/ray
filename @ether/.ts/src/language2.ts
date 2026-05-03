@@ -5,13 +5,13 @@
 import { nodejs } from "./node.js.ts";
 import { Source, Node, Text } from "./source.ts";
 import { Standard, Version } from "./version.ts";
-import { Diagnostics } from "./diagnostics.ts";
+import { Diagnostic, Diagnostics, Instrumentable, InstrumentationCtx, instrumented, uninstrumented } from "./diagnostics.ts";
 import { manifest as bundle_manifest } from "./bundled.ts";
 
 namespace CLI { export type Args = [] | [positional: string[], args: { [key: string]: string[] }] }
 
 interface Program<Static extends Representation<Static>> extends Representation<Static> {
-  exec(...args: CLI.Args): any
+  exec(...args: CLI.Args): Static
 }
 interface REPLable<Static extends Representation<Static>> extends Program<Static> {
   repl(): void
@@ -43,7 +43,7 @@ abstract class Representation<Static extends Representation<Static> = Representa
   frontends: Compilers = new Compilers(-1); /* <- . -> */ backends: Compilers = new Compilers(1)
 
   register_frontend<Frontend extends Representation<Frontend>>(frontend: Frontend, compile: Compiler<Frontend, Static>): this {
-    if (this.frontends.find(frontend)) return this.log.fatal(this.name, `There's already a frontend named '${frontend.name}' for '${this.name}'`);
+    if (this.frontends.find(x => x.name === frontend.name)) return this.log.fatal(this.name, `There's already a frontend named '${frontend.name}' for '${this.name}'`);
     frontend.backends.next.set(this, compile as any);
     this.frontends.next.set(this, compile as any);
     return this;
@@ -51,7 +51,7 @@ abstract class Representation<Static extends Representation<Static> = Representa
 
   backend<Backend extends Representation>(backend: Backend, version?: string): Backend { return this.backends.get(backend)(this,) as Backend }
   frontend<Frontend extends Representation>(frontend: Frontend): Static {
-    const compiler = this.frontends.find(frontend);
+    const compiler = this.frontends.find(x => x.name === frontend.name);
     if (!compiler) return this.log.fatal(this.name, `Could not find a frontend named '${frontend.name}' for '${this.name}'`);
     
     const x = this.new();
@@ -78,9 +78,9 @@ export class Compilers {
   next: Map<Representation, Compiler> = new Map();
 
   // Technically there could be many paths from a frontend or to a backend, but just ignore that for now untill we have a .ray implementation.
-  find(lang: Representation): Compiler | undefined {
+  find(predicate: (x: Representation) => boolean): Compiler | undefined {
     for (const [end, compiler] of this.all()) {
-      if (end.name === lang.name) return compiler;
+      if (predicate(end)) return compiler;
     }
     return undefined;
   }
@@ -172,8 +172,7 @@ export class String extends Representation<String> {
   };
 
   private bundled_resolve(location: string): string {
-    if (typeof process !== 'undefined' && (process as any).versions?.node)
-      return nodejs.path.resolve(nodejs.root, location);
+    if (nodejs.enabled) return nodejs.path.resolve(nodejs.root, location);
     return new URL('../' + location, import.meta.url).href;
   }
 
@@ -194,22 +193,66 @@ export class String extends Representation<String> {
   }
 }
 
-export class Runtime extends Representation<Runtime> implements Program<Runtime>, AbstractInterpretable<Runtime>, REPLable<Runtime>, Reloadable<Runtime> {
+export class Runtime extends Representation<Runtime> implements InstrumentationCtx, Program<Runtime>, AbstractInterpretable<Runtime>, REPLable<Runtime>, Reloadable<Runtime> {
   protected construct(): Runtime { return new Runtime() }
 
   log: Diagnostics = new Diagnostics()
+  stack: Diagnostic[] = [];
 
-  exec(positional?: string[], args?: { [key: string]: string[]; }) {
+  exec(positional?: string[], args?: { [key: string]: string[]; }): Runtime {
     throw new Error("Method not implemented.");
   }
   abstract(): Runtime {
     throw new Error("Method not implemented.");
   }
   repl(): void {
-    throw new Error("Method not implemented.");
+    if (!nodejs.enabled) return this.log.fatal(this.name, 'REPL requires a Node.js environment.');
+
+    let compiler = this.frontends.find(x => x instanceof String)
+    if (!compiler) return this.log.fatal(this.name, 'REPL requires a frontend which accepts a string.');
+
+    let input = new Text.Source('')
+    let cursor = new AST.Node(this)
+    cursor.source = input;
+
+    import('readline').then(({ createInterface }) => {
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      const prompt = () => {
+        rl.question(`${this.name}> `, (line: string) => {
+          input.value = `${input.value}\n`
+          cursor.move(input.value.length)
+          input.value = `${input.value}${line.trim()}`
+          cursor.end = input.value.length - 1;
+
+          this.reload(cursor)
+          //TODO Print result.
+
+          prompt()
+        });
+      };
+      prompt()
+    })
   }
   reload(next: Source | Node | Iterable<Source | Node> | Runtime): Runtime {
     throw new Error("Method not implemented.");
   }
   
+}
+
+namespace AST {
+  @instrumented('trace', { recursive: true })
+  export class Node extends Text.Node implements Instrumentable {
+
+    constructor(program: Runtime) {
+      super()
+      this.program = program;
+    }
+
+    @uninstrumented
+    public program: Runtime
+
+    get __instrumentation(): InstrumentationCtx | undefined { return this.program; }
+    get position(): Text.Node { return this; }
+
+  }
 }

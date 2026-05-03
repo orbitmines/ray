@@ -210,10 +210,6 @@ export class Diagnostics {
   private _start = this.clock();
   start = () => this._start = this.clock();
 
-  describe = (a: any) => {
-
-  }
-
   deduplicate() {
     const seen = new Set<string>();
     for (const [file, arr] of this.items) {
@@ -1035,7 +1031,7 @@ export interface InstrumentationCtx {
   /** Push a stack frame. Errors snapshot this stack. */
   stack: Diagnostic[]
   /** Where reports go. */
-  diagnostics: Diagnostics;
+  log: Diagnostics;
 }
 
 /** Hosts return the context the decorator should drive. Build it once
@@ -1302,7 +1298,7 @@ function wrap<Args extends any[], Ret>(
     finally {
       clock.done();
       ctx.stack.pop();
-      if (!excluded) ctx.diagnostics.report(frame);
+      if (!excluded) ctx.log.report(frame);
       // Single push to the immediate parent — nested wrappers form a
       // tree of clocks. `clock.ms` walks it at print time to subtract
       // descendant wrapper overheads and excluded subtrees' walls.

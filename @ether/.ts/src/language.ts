@@ -432,9 +432,9 @@ export class Runtime implements Backend {
       const rl = createInterface({ input: process.stdin, output: process.stdout });
       const prompt = () => {
         rl.question(`${this.language.name}> `, (line: string) => {
-          this.log.describe(
+          // this.log.describe(
             this.load(line.trim()).exec()
-          )
+          // )
           prompt()
         });
       };
@@ -1350,9 +1350,6 @@ export class Program implements InstrumentationCtx {
    *  entry by `Node.do`, popped on exit. Snapshotted onto error /
    *  warning / fatal diagnostics by `Diagnostics.report`. */
   stack: Diagnostic[] = [];
-  /** InstrumentationCtx: where reports go. The runtime owns the single
-   *  Diagnostics instance shared across programs. */
-  get diagnostics(): Diagnostics { return this.runtime.log; }
   /** The parse-root Node if this program parsed a source. */
   root?: Node;
   /** First Node of the current expression. The language definition writes

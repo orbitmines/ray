@@ -108,16 +108,35 @@ interface Backend {
   build(): void
 }
 
-/** A symbol-resolution slot, identified by (owner, key). Multiple parties
- *  participate: a declaration site (e.g. `.external_method` registering the
- *  name), and demand sites (forward refs from source, abstract-call lookups,
- *  etc.). Each contributing Node lands in `nodes`. When an implementation
- *  arrives, `resolve(fn)` flips `resolved` and stores `fn`. The verify pass
- *  iterates unresolved Resolutions and emits errors on every node in `nodes`,
- *  so authors see exactly which sites depend on a missing symbol. */
+const UNKNOWN = Symbol("Unknown")
+
+/** A symbol-resolution slot — and the carrier of every Node's payload.
+ *
+ *  Two roles, unified into one object:
+ *  - **Symbol slot** — identified by (owner, key). Multiple parties
+ *    participate: a declaration site (e.g. `.external_method` registering
+ *    the name) and demand sites (forward refs from source, abstract-call
+ *    lookups). Each contributing Node lands in `nodes`. The verify pass
+ *    iterates unresolved Resolutions and emits errors on every node in
+ *    `nodes`, so authors see exactly which sites depend on a missing
+ *    symbol.
+ *  - **Value carrier** — `value` holds whatever the Node "is": a JS
+ *    function for callable methods, a literal for data, a Node for the
+ *    error-cascade self-pointer, etc. There is no separate `value.encoded`
+ *    anymore — the resolution IS the value. Ad-hoc nodes (literals, error
+ *    placeholders, the none/unknown sentinels) carry a Resolution with no
+ *    key.
+ *
+ *  When an implementation arrives, `resolve(value)` flips `resolved` and
+ *  stores `value`. */
 export class Resolution {
   resolved: boolean = false
-  fn?: Method
+  /** The payload. Was `value.encoded` on Node + `fn` here. Type is `any`
+   *  because the same slot holds JS functions for callable methods, AST
+   *  Nodes for the error-cascade self-pointer, and arbitrary literals
+   *  (numbers/strings/arrays) for data nodes. Readers gate on `resolved`
+   *  before calling. */
+  value: any = undefined
   nodes: Node[] = []
   /** Sticky flags for this symbol — direction flags, accepts_program, the
    *  `external`-stamp, anything else stamped via `with()`. Lives on the
@@ -129,11 +148,28 @@ export class Resolution {
    *  previous parsing direction may have been wrong. */
   options: { [key: string]: string } = {}
 
-  constructor(public owner: Node, public key: Key, public message: string = `Unresolved \`${String(key)}\``) {}
+  constructor(public owner: Node | null, public key: Key | undefined, public message: string = `Unresolved \`${String(key)}\``) {}
 
-  resolve = (fn: Method): this => { this.fn = fn; this.resolved = true; return this; }
+  resolve = (value: any): this => { this.value = value; this.resolved = true; return this; }
   add = (node: Node): this => { this.nodes.push(node); return this; }
 }
+
+/** Sentinel: pristine, never-set Node points at this. Shared so a fresh
+ *  Node doesn't allocate. Writers replace `value.resolution` rather than
+ *  mutating the sentinel. */
+const UNKNOWN_SENTINEL: Resolution = (() => {
+  const r = new Resolution(null, undefined, 'Unknown');
+  r.value = UNKNOWN;
+  return r;
+})();
+/** Sentinel: resolved-with-null. `new Node(prog, null, null)` and the
+ *  none-result short-circuits in `match()` point here. */
+const NONE_SENTINEL: Resolution = (() => {
+  const r = new Resolution(null, undefined, 'None');
+  r.resolved = true;
+  r.value = null;
+  return r;
+})();
 
 export class Runtime implements Backend {
 
@@ -549,7 +585,6 @@ export class Language implements Backend {
   build = this.delegate('build')
 }
 
-const UNKNOWN = Symbol("Unknown")
 export type Method = (self: Node, method: Node, args?: Node) => Node
 type Key = string | Node
 
@@ -566,8 +601,9 @@ export class Node extends Text.Node implements Instrumentable {
   // `new Map()` per Node is measurable now that the closure-allocation noise
   // is gone. `options` shares the `EMPTY_OPTIONS` sentinel until a `with()`
   // call replaces it with a fresh object — same trick: avoid the per-Node
-  // literal allocation.
-  value: { encoded: any; ctx?: Node, self?: Node, methods: Map<Key, Node>, options: { [key: string]: string }, resolution?: Resolution } = { encoded: UNKNOWN, methods: EMPTY_METHODS, options: EMPTY_OPTIONS };
+  // literal allocation. `resolution` is the payload carrier (was
+  // `value.encoded`); shares `UNKNOWN_SENTINEL` until something resolves it.
+  value: { resolution: Resolution; ctx?: Node, self?: Node, methods: Map<Key, Node>, options: { [key: string]: string } } = { resolution: UNKNOWN_SENTINEL, methods: EMPTY_METHODS, options: EMPTY_OPTIONS };
 
   /** Instrumentable: hand the wrapper this Node's program — Program
    *  satisfies `InstrumentationCtx` (carries the call stack + the
@@ -627,14 +663,28 @@ export class Node extends Text.Node implements Instrumentable {
   @uninstrumented
   public program: Program
 
-  constructor(program: Program, public _super: Node = program.runtime.BASE, encoded: any = UNKNOWN) {
+  constructor(program: Program, public _super: Node = program.runtime.BASE, value: any = UNKNOWN) {
     super();
     this.program = program;
-    this.value.encoded = encoded;
+    if (value === UNKNOWN) {
+      // Pristine — share the sentinel; no allocation.
+    } else if (value === null || value === undefined) {
+      this.value.resolution = NONE_SENTINEL;
+    } else {
+      // Ad-hoc resolved value (e.g. method-declaration placeholder).
+      // The methodNode at line 907 was passing `key` here as a placeholder
+      // it immediately overwrites; the cost is one Resolution per such
+      // call, the same order of magnitude as the prior `value.encoded =
+      // key` write.
+      this.value.resolution = new Resolution(this, undefined, '').resolve(value);
+    }
   }
 
-  get unknown(): boolean { return this.value.encoded === UNKNOWN; }
-  get none(): boolean { return this.value.encoded === null || this.value.encoded === undefined; }
+  get unknown(): boolean { return this.value.resolution === UNKNOWN_SENTINEL || this.value.resolution.value === UNKNOWN; }
+  get none(): boolean {
+    const r = this.value.resolution;
+    return r.resolved && (r.value === null || r.value === undefined);
+  }
 
   // `eager` used to be an instance object literal with 4 closures bound at
   // ctor time. Lazy-init keeps the same `node.eager.has(...)` API but the
@@ -649,7 +699,19 @@ export class Node extends Text.Node implements Instrumentable {
       set: (val: Node): Node => { this.realize(); this.value = val.value; return this; },
       call: (args: Node = new Node(this.program, null, null)) => {
         this.realize()
-        if (!this.callable) {
+        const r = this.value.resolution;
+        // Three failure cases, ordered to match the legacy diagnostics:
+        //  1. Pristine node (never had a value set): the UNKNOWN sentinel
+        //     resolution. Old code reached here because `is_function(UNKNOWN)`
+        //     was false, so emit `[call] Expected a function to call.`
+        //  2. Real unresolved demand site (forward ref): emit the
+        //     resolution's `message` under `[forward ref]`. Old code routed
+        //     through a wrapper that did the same.
+        //  3. Resolved-with-non-function (literal data): same `[call]`
+        //     diagnostic as #1.
+        if (r === UNKNOWN_SENTINEL) return this.error('call', `Expected a function to call.`);
+        if (!r.resolved) return this.error('forward ref', r.message);
+        if (!is_function(r.value)) {
           return this.error('call', `Expected a function to call.`)
         }
 
@@ -658,12 +720,37 @@ export class Node extends Text.Node implements Instrumentable {
           fn = this.program.runtime.abstract_interpretation.call(this)
 
         fn.realize()
-        return fn.value.encoded(this.value.self, this, args)
+        // Receiver fallback was previously inside `external_method`'s
+        // wrapper; now it lives at the dispatch site since the wrapper is
+        // gone. Swap the receiver's program to the caller's so user-fn
+        // errors land on the caller's stack, then restore. Composed nodes
+        // (spec.ts dispatcher output) and synthetic empty-args calls have
+        // `value.self === undefined` and `args._super === null` — no
+        // receiver to swap. Skip the swap in that case rather than
+        // crashing on `null.program`.
+        const receiver = this.value.self ?? args._super;
+        if (!receiver) return fn.value.resolution.value(receiver, fn, args);
+        const prev = receiver.program;
+        receiver.program = args.program;
+        try {
+          return fn.value.resolution.value(receiver, fn, args);
+        } finally {
+          receiver.program = prev;
+        }
       },
     };
   }
 
-  get callable() { return is_function(this.value.encoded) }
+  get callable() {
+    const r = this.value.resolution;
+    // Forward refs read as callable so juxtaposition (`prev.call(this)`)
+    // and `settle()` route through `eager.call`, where the unresolved
+    // diagnostic is emitted with the proper resolution.message. Without
+    // this, juxtaposing onto an unresolved prev would fall through the
+    // `!callable` branch and emit a generic "Expected a function to call"
+    // instead of "Unresolved variable X".
+    return is_function(r.value) || (!r.resolved && r !== UNKNOWN_SENTINEL);
+  }
 
   /** True when this node is the *result* of a .call() — its callability (if any)
    *  came from the call's return value, not from being a fresh unapplied method.
@@ -896,34 +983,28 @@ export class Node extends Text.Node implements Instrumentable {
 
   //TODO Should be a .register, and then the .external part is a flag.
   external_method(key: Key, fn: Method, callback?: (fn: Node) => Node): this {
-    // `self` is bound by `methods.resolve` (stored as value.self on the lookup copy) and arrives
-    // here as the first positional of value.encoded. The method fires when `save()` juxtaposes
-    // the next token (prev.call(this)), or when end-of-expression settle fires it with empty args.
+    // `self` is the receiver bound by `methods.resolve` (stored as
+    // `value.self` on the lookup copy) and arrives at the dispatch site
+    // (`eager.call`) as the first positional of the resolution.value
+    // function. The method fires when `save()` juxtaposes the next token
+    // (`prev.call(this)`), or when end-of-expression settle fires it with
+    // empty args. The forward-ref + program-swap wrapper that used to live
+    // here has moved into `eager.call` — Resolution carries the value
+    // directly now.
     const runtime = this.program.runtime;
     const receiver = `[${this === runtime.BASE ? 'base class' : (this === runtime.CTX ? 'global context' : 'local context')}]`;
     const resolution = runtime.resolution(this, key, `Method \`${String(key)}\` was declared on ${receiver} but never implemented.`);
     if (fn) resolution.resolve(fn);
 
-    const methodNode = new Node(this.program, this._super, key);
+    const methodNode = new Node(this.program, this._super);
     runtime.track(resolution, methodNode);
-    // Share options + back-link to the resolution so flags stamped via
-    // `fn.with(...)` (and through bound copies) live on the resolution and
-    // are visible to anything that re-matches the key later.
+    // Share options + back-link the resolution. The resolution IS the
+    // value carrier — eager.call reads `value.resolution.value` to invoke
+    // it. Flags stamped via `fn.with(...)` (through bound copies) live on
+    // the resolution and are visible to anything that re-matches the key
+    // later.
     methodNode.value.options = resolution.options;
     methodNode.value.resolution = resolution;
-    methodNode.value.encoded = ((self: Node | undefined, _method: Node, args: Node) => {
-      if (!resolution.resolved) return this.error('forward ref', 'Method was called before it was initialized.');
-      // Receiver often lives outside any source file (e.g. BASE). Swap its program to the
-      // caller's so errors the user fn reports on `self` land on the caller's stack.
-      const receiver = self ?? args._super;
-      const prev = receiver.program;
-      receiver.program = args.program;
-      try {
-        return resolution.fn!(receiver, _method, args);
-      } finally {
-        receiver.program = prev;
-      }
-    });
     callback?.(methodNode);
     if (this.value.methods === EMPTY_METHODS) this.value.methods = new Map();
     this.value.methods.set(key, methodNode);
@@ -976,7 +1057,7 @@ export class Node extends Text.Node implements Instrumentable {
 
   clear(): void {
     this._thunks = [] //TODO Maybe move _thunks into .value?
-    this.value = { encoded: UNKNOWN, methods: EMPTY_METHODS, options: EMPTY_OPTIONS };
+    this.value = { resolution: UNKNOWN_SENTINEL, methods: EMPTY_METHODS, options: EMPTY_OPTIONS };
   }
 
   copy(): Node {
@@ -1011,10 +1092,13 @@ export class Node extends Text.Node implements Instrumentable {
     //TODO Should rely on cached information to resolve this, and otherwise fall back on BASE CLASS (for the syntax highlighting)
     //TODO
     const x = new Node(this.program)
-    x.value.encoded = () => {
+    // Self-returning callable: subsequent .call()s on the error placeholder
+    // fold back into itself rather than cascading new errors. The
+    // resolution carries the function directly — no `value.encoded` slot.
+    x.value.resolution = new Resolution(x, undefined, '').resolve(() => {
       // return x.error('cascade', 'Could not resolve dependency, cascading errors');
       return x;
-    }
+    });
     return x;
   }
   @uninstrumented
@@ -1232,18 +1316,15 @@ export class Node extends Text.Node implements Instrumentable {
     const unresolved = `Unresolved variable \`${String(key)}\` in ${receiver}`;
     const resolution = runtime.resolution(ctx, key, unresolved);
     runtime.track(resolution, forward);
-    // Share options + back-link to the resolution so subsequent matches of
-    // the same key see flags stamped on prior instances (e.g. by an earlier
-    // `external left-to-right X`), and so the rewalk can ask "is this a
-    // method?" via `value.resolution.resolved`.
+    // Share options + back-link the resolution. When the symbol is later
+    // implemented, `resolution.resolve(fn)` flips `resolved` and the value
+    // becomes callable through `eager.call`. Until then, calls hit the
+    // unresolved path in `eager.call` and emit `resolution.message`.
     forward.value.options = resolution.options;
     forward.value.resolution = resolution;
-    forward.value.encoded = () => resolution.resolved
-      ? resolution.fn!(forward, forward)
-      : forward.error('forward ref', unresolved);
 
     //TODO We need to store that something is a forward ref somehow; because that means we need to load certain things first.
-    //TODO We want a tree of order of things to load. 
+    //TODO We want a tree of order of things to load.
     this.trace('forward-ref', `Forward reference to '${key}' in ${receiver}`);
     return forward;
   }
@@ -1334,8 +1415,9 @@ export class Node extends Text.Node implements Instrumentable {
   bind(_name: string): this { return this; }
 
   map<T>(fn: (x: any) => T): T[] {
-    if (!is_array(this.value.encoded)) return this.fatal('type', 'Called .map on a value which is not an Array')
-    return this.value.encoded.map(fn)
+    const v = this.value.resolution.value;
+    if (!is_array(v)) return this.fatal('type', 'Called .map on a value which is not an Array')
+    return v.map(fn)
   }
 
 }

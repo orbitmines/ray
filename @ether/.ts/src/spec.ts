@@ -1,6 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import {Language, Node, Program} from "./language.ts";
+import {Language, Node, Program, Resolution} from "./language.ts";
 import {Standard, Version} from "./version.ts";
 import {is_string} from "./lodash.ts";
 
@@ -48,57 +48,7 @@ export const Ray = new Language('ether', (Version.scheme('E') as Standard).creat
 
   //TODO Set class * location on base class.
   .base(_ => _
-    .external_method('external', (self, method, args) => {
-      args.with('external')
-      self.realize()
-      const name = args.string?.trim();
-      if (!name) { args.error('external', '`external` requires a method name as its argument.'); return args; }
-      //args.debug('test', [...self.methods.all()].join(', '))
-      if (!self.methods.has(name)) return args.error('external', `Expected method \`${name}\` to be externally defined by the runtime, but it wasn't`);
-      return args;
-    }, fn => fn.with('accepts_program'))
-    // .external_method('ex', null, fn => fn.with('refuse_abstract_interpretation'))
-    // .external_method('initializer')
-    .external_method('left-to-right', (self, method, args) => args.with('left-to-right'), fn => fn.with('accepts_program'))
-    .external_method('right-to-left', (self, method, args) => args.with('right-to-left'), fn => fn.with('accepts_program'))
-    .external_method('left-associative', (self, method, args) => args.with('associativity', 'left'), fn => fn.with('accepts_program'))
-    .external_method('right-associative', (self, method, args) => args.with('associativity', 'right'), fn => fn.with('accepts_program'))
- 
-    .external_method('test-middle', (self, method, args) => self)
-    .external_method('test-right', (self, method, args) => {
-      method.info('test', `test-right fired on \`${self.string ?? '?'}\``);
-      return self;
-    }, fn => fn.with('accepts_program'))
-    .external_method('test-left', (self, method, args) => {
-      method.info('test', `test-left fired on \`${self.string ?? '?'}\``);
-      return self;
-    })
-
-    // Stand-ins so the associativity test cases can run end-to-end (real
-    // resolution will be wired up later). All `accepts` infix methods log
-    // their source column so the test reads the firing order off the
-    // trace; the operator's actual associativity is stamped via the
-    // `external <left|right>-associative <name>` lines in the fixture.
-    .external_method('F', (self, method, args) => {
-      method.info('test', `F fired`);
-      return method;
-    })
-    .external_method('x', (self, method, args) => {
-      method.info('test', `x@${method.col} fired on F@${self.col ?? '?'} with F@${args.col ?? '?'}`);
-      return self;
-    }, fn => fn.with('accepts'))
-    .external_method('M', (self, method, args) => {
-      method.info('test', `M@${method.col} fired on F@${self.col ?? '?'} with F@${args.col ?? '?'}`);
-      return self;
-    }, fn => fn.with('accepts'))
-    .external_method('N', (self, method, args) => {
-      method.info('test', `N@${method.col} fired on F@${self.col ?? '?'} with F@${args.col ?? '?'}`);
-      return self;
-    }, fn => fn.with('accepts'))
-    .external_method('X', (self, method, args) => {
-      method.info('test', `X@${method.col} fired on F@${self.col ?? '?'} with F@${args.col ?? '?'}`);
-      return self;
-    }, fn => fn.with('accepts'))
+    
   )
   .context(_ => _
     .external_method('local', (self, method, args) => self)
@@ -232,10 +182,12 @@ export const Ray = new Language('ether', (Version.scheme('E') as Standard).creat
           //     their bound infix method here).
           if (resolved.enabled('accepts_program')) {
             const composed = new Node(_.program);
-            composed.value.encoded = (_self: Node | undefined, _method: Node, args: Node) => {
-              if (args.none) return prev.eager.call(resolved);
-              return prev.eager.call(resolved.eager.call(args));
-            };
+            composed.value.resolution = new Resolution(composed, undefined, '').resolve(
+              (_self: Node | undefined, _method: Node, args: Node) => {
+                if (args.none) return prev.eager.call(resolved);
+                return prev.eager.call(resolved.eager.call(args));
+              }
+            );
             composed.value.options['accepts_program'] = 'true';
             _.program.result = composed;
           } else {
@@ -373,9 +325,11 @@ export const Ray = new Language('ether', (Version.scheme('E') as Standard).creat
             const m = resolved;
             m.value.self = anchor;
             const composed = new Node(_.program);
-            composed.value.encoded = (_self: Node | undefined, _method: Node, args: Node) => {
-              return m.eager.call(args);
-            };
+            composed.value.resolution = new Resolution(composed, undefined, '').resolve(
+              (_self: Node | undefined, _method: Node, args: Node) => {
+                return m.eager.call(args);
+              }
+            );
             composed.value.options['accepts_program'] = 'true';
             _.program.result = composed;
           } else {
@@ -403,10 +357,12 @@ export const Ray = new Language('ether', (Version.scheme('E') as Standard).creat
           const m = resolved;
           m.value.self = anchor;
           const composed = new Node(_.program);
-          composed.value.encoded = (_self: Node | undefined, _method: Node, args: Node) => {
-            if (isRTL) m.value.self = args;
-            return m.eager.call(isRTL ? anchor : args);
-          };
+          composed.value.resolution = new Resolution(composed, undefined, '').resolve(
+            (_self: Node | undefined, _method: Node, args: Node) => {
+              if (isRTL) m.value.self = args;
+              return m.eager.call(isRTL ? anchor : args);
+            }
+          );
           composed.value.options['accepts'] = 'true';
           _.program.result = composed;
         } else {

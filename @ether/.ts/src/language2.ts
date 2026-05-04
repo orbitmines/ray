@@ -315,15 +315,41 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
 
 export namespace AST {
   const UNKNOWN = Symbol("Unknown")
+  const UNRESOLVED = Symbol("Unresolved")
 
   type Key = string | Node
-  export type Method = ((_class: Node, method: Node, args?: Node) => Node) & { _class: Node }
+  export type Method = (_class: Node, method: Node, args?: Node) => Node
+  export type EncodedMethod = Method & { _class: Node }
   
+  const EMPTY_METHODS: Map<Key, Node> = new Map();
+  const EMPTY_OPTIONS: { [key: string]: string } = {};
+  class Value {
+    encoded: EncodedMethod | Symbol | undefined | null = UNKNOWN
+    options: { [key: string]: string } = EMPTY_OPTIONS
+    private methods: Map<Key, Node> = EMPTY_METHODS
+
+    set(key: Key, method: Node) {
+      if (this.methods === EMPTY_METHODS) this.methods = new Map();
+      this.methods.set(key, method)
+    }
+    get(key: Key) { return this.methods.get(key); }
+    has(key: Key) { return this.methods.has(key); }
+    keys() { return this.methods.keys() }
+
+    // conflict(ref: Node){}
+  }
 
   @instrumented('trace', { recursive: true })
   export class Node extends Text.Node implements Source, Instrumentable {
 
-    value: { encoded: Method | Symbol | undefined | null } = { encoded: UNKNOWN }
+    private value: Value = new Value()
+    with(key: string, value?: string): this {
+      if (this.value.options === EMPTY_OPTIONS) this.value.options = {};
+      this.value.options[key] = value ?? 'true';
+      this.debug('options', `${key} = ${this.value.options[key]}`)
+      return this;
+    }
+    enabled(key: string): boolean { return !!this.value.options[key]; }
 
     constructor(program: Runtime, source: Text.Source = program.EXTERNALLY_DEFINED, public _super: Node = program.BASE) {
       super()
@@ -382,12 +408,18 @@ export namespace AST {
     }
 
     copy(): Node {
-      const x = this.New;
-      return x;
+      const copy = this.New;
+      copy.source = this.source
+      copy.thunks = this.thunks ? [...this.thunks] : null
+      copy.value = this.value; // TODO Now is a ref to the same value.
+      copy.cursor = this.cursor
+      copy.selection = this.selection.slice()
+      copy._direction = this._direction
+      return copy;
     }
     clear(): void {
       this.thunks = [] //TODO Maybe move thunks into .value?
-      this.value = { encoded: UNKNOWN/*, methods: EMPTY_METHODS, options: EMPTY_OPTIONS*/ };
+      this.value = new Value()
     }
 
     private thunks: ((self: Node) => void)[] | null = null;
@@ -421,14 +453,15 @@ export namespace AST {
       });
     }
 
+    // Eagerly get from this object directly, without any inheritance.
     private _eager: any;
     get eager() {
       if (this._eager) return this._eager;
 
       const self = this;
       class Eager {
-        has(key: Key): boolean { self.realize(); return self.value.methods.has(key); }
-        get(key: Key): Node | undefined { self.realize(); return self.value.methods.get(key); }
+        has(key: Key): boolean { self.realize(); return self.value.has(key); }
+        get(key: Key): Node | undefined { self.realize(); return self.value.get(key); }
         set(val: Node): Node { self.realize(); self.value = val.value; return self; }
         call(args?: Node) {
           args ??= self.None
@@ -447,7 +480,49 @@ export namespace AST {
       }
       return this._eager = new Eager();
     }
+    // Eagerly get from this object, including inhertiance.
+    private _methods: any
+    get methods() {
+      if (this._methods) return this._methods;
+
+      const self = this;
+      class Methods {
+
+        all(): Set<Key> {
+          const keys = new Set<Key>(self.value.keys());
+          if (self._super) for (const k of self._super.methods.all()) keys.add(k);
+          return keys;
+        }
+        has(key: Key): boolean { return !self.methods.resolve(key).none }
+        resolve(key: Key): Node {
+          if (self.eager.has(key)) {
+            // const bound = self.eager.get(key)!.copy();
+            // bound.value.self = self;
+            return self.eager.get(key);
+          }
+          if (self._super) return self._super.methods.resolve(key);
+          return self.None;
+        }
+        defines(key: Key): Node | null {
+          if (self.eager.has(key)) return self;
+          if (self._super) return self._super.methods.defines(key);
+          return null;
+        }
+      }
+
+      return this._methods = new Methods()
+    }
     
+    method(key: Key, fn: Method): Node {
+      const method = this.New;
+
+      (fn as EncodedMethod)._class = this;
+      method.value.encoded = fn as EncodedMethod// ? fn : UNRESOLVED;
+
+      this.value.set(key, method)
+
+      return method;
+    }
 
   }
 }

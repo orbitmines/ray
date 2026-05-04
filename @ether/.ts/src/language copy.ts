@@ -78,34 +78,6 @@ export class Expression {
   }
 }
 
-/** A symbol-resolution slot, identified by (owner, key). Multiple parties
- *  participate: a declaration site (e.g. `.external_method` registering the
- *  name), and demand sites (forward refs from source, abstract-call lookups,
- *  etc.). Each contributing Node lands in `nodes`. When an implementation
- *  arrives, `resolve(fn)` flips `resolved` and stores `fn`. The verify pass
- *  iterates unresolved Resolutions and emits errors on every node in `nodes`,
- *  so authors see exactly which sites depend on a missing symbol. */
-
-//TODO Closest resolution like a new class Node which overrides the Node ref within that repository.
-export class Resolution {
-  resolved: boolean = false
-  fn?: Method
-  nodes: Node[] = []
-  /** Sticky flags for this symbol — direction flags, accepts_program, the
-   *  `external`-stamp, anything else stamped via `with()`. Lives on the
-   *  resolution (not per-Node) so they persist across re-matches: a future
-   *  `match(key)` returns a fresh forward whose `value.options` aliases this
-   *  map, so flags previously stamped (e.g. by `external left-to-right X`)
-   *  show up immediately. The rewalk consults this directly when deciding
-   *  matching/opposite — we cannot trust per-instance stamps because the
-   *  previous parsing direction may have been wrong. */
-  options: { [key: string]: string } = {}
-
-  constructor(public owner: Node, public key: Key, public message: string = `Unresolved \`${String(key)}\``) {}
-
-  resolve = (fn: Method): this => { this.fn = fn; this.resolved = true; return this; }
-  add = (node: Node): this => { this.nodes.push(node); return this; }
-}
 
 export class Runtime implements Backend {
 
@@ -348,24 +320,7 @@ export class Language implements Backend {
 
 }
 
-type Key = string | Node
-
-// Shared sentinels that replace per-Node `new Map()` and `{}` allocations
-// in the value initializer. Writers (external_method, with, clear) replace
-// them with fresh instances on first mutation. Readers tolerate them as
-// regular empty Map / empty object.
-const EMPTY_METHODS: Map<Key, Node> = new Map();
-const EMPTY_OPTIONS: { [key: string]: string } = {};
-
 export class Node extends Text.Node implements Instrumentable {
-  // `methods` is lazy-allocated on first .set — most Nodes never declare a
-  // method (forward refs, lazy juxtapositions, parser intermediates), and
-  // `new Map()` per Node is measurable now that the closure-allocation noise
-  // is gone. `options` shares the `EMPTY_OPTIONS` sentinel until a `with()`
-  // call replaces it with a fresh object — same trick: avoid the per-Node
-  // literal allocation.
-  value: { encoded: any; ctx?: Node, self?: Node, methods: Map<Key, Node>, options: { [key: string]: string }, resolution?: Resolution } = { encoded: UNKNOWN, methods: EMPTY_METHODS, options: EMPTY_OPTIONS };
-
   // TODO get/call switch_ctx.
 
 
@@ -378,16 +333,6 @@ export class Node extends Text.Node implements Instrumentable {
 
   //Todo sHOULD BE Not this.applied but 'accepts zero args, then call'
   settle(): Node { this.realize(); return this.callable && !this.applied ? this.call() : this; }
-
-  with(key: string, value?: string): this {
-    // Replace the shared empty sentinel with a fresh object on first mutation
-    // so the sentinel stays empty for every Node still using it.
-    if (this.value.options === EMPTY_OPTIONS) this.value.options = {};
-    this.value.options[key] = value ?? 'true';
-    this.debug('options', `${key} = ${this.value.options[key]}`)
-    return this;
-  }
-  enabled(key: string): boolean { return !!this.value.options[key]; }
 
   /** Expression-level assertions over the resolved Nodes reachable from
    *  `this` via `.right.next()`. Each method walks AST-style up to the
@@ -582,42 +527,6 @@ export class Node extends Text.Node implements Instrumentable {
     this._direction = parser._direction;
   }
 
-  //TODO Should be a .register, and then the .external part is a flag.
-  external_method(key: Key, fn: Method, callback?: (fn: Node) => Node): this {
-    // `self` is bound by `methods.resolve` (stored as value.self on the lookup copy) and arrives
-    // here as the first positional of value.encoded. The method fires when `save()` juxtaposes
-    // the next token (prev.call(this)), or when end-of-expression settle fires it with empty args.
-    const runtime = this.program.runtime;
-    const receiver = `[${this === runtime.BASE ? 'base class' : (this === runtime.CTX ? 'global context' : 'local context')}]`;
-    const resolution = runtime.resolution(this, key, `Method \`${String(key)}\` was declared on ${receiver} but never implemented.`);
-    if (fn) resolution.resolve(fn);
-
-    const methodNode = new Node(this.program, this._super, key);
-    runtime.track(resolution, methodNode);
-    // Share options + back-link to the resolution so flags stamped via
-    // `fn.with(...)` (and through bound copies) live on the resolution and
-    // are visible to anything that re-matches the key later.
-    methodNode.value.options = resolution.options;
-    methodNode.value.resolution = resolution;
-    methodNode.value.encoded = ((self: Node | undefined, _method: Node, args: Node) => {
-      if (!resolution.resolved) return this.error('forward ref', 'Method was called before it was initialized.');
-      // Receiver often lives outside any source file (e.g. BASE). Swap its program to the
-      // caller's so errors the user fn reports on `self` land on the caller's stack.
-      const receiver = self ?? args._super;
-      const prev = receiver.program;
-      receiver.program = args.program;
-      try {
-        return resolution.fn!(receiver, _method, args);
-      } finally {
-        receiver.program = prev;
-      }
-    });
-    callback?.(methodNode);
-    if (this.value.methods === EMPTY_METHODS) this.value.methods = new Map();
-    this.value.methods.set(key, methodNode);
-    return this;
-  }
-
   // cursor, selection, source, begin/end, line/col, single_char, string,
   // direction state (_direction, ltr, rtl, direction, behind), navigation
   // primitives (left/right, capture/skip/etc.) all inherited from Text.Node.
@@ -656,49 +565,6 @@ export class Node extends Text.Node implements Instrumentable {
     }
     return null;
   }
-
-
-
-  copy(): Node {
-    const copy = new Node(this.program, this._super)
-    copy.source = this.source
-    copy._thunks = this._thunks ? [...this._thunks] : null
-    copy.value = {...this.value}
-    copy.cursor = this.cursor
-    copy.selection = this.selection.slice()
-    copy._direction = this._direction
-    return copy;
-  }
-
-  // `methods` lazy for the same reason as `eager` / `assert`. The wrapper
-  // closures still bind `this`; they're shared across calls *on the same
-  // Node*, allocated once on first access.
-  private _methods?: { all: () => Set<Key>; has: (k: Key) => boolean; resolve: (k: Key) => Node; defines: (k: Key) => Node | null };
-  get methods() {
-    return this._methods ??= {
-      all: (): Set<Key> => {
-        const keys = new Set<Key>(this.value.methods.keys());
-        if (this._super) for (const k of this._super.methods.all()) keys.add(k);
-        return keys;
-      },
-      has: (key: Key): boolean => !this.methods.resolve(key).none,
-      resolve: (key: Key): Node => {
-        if (this.eager.has(key)) {
-          const bound = this.eager.get(key)!.copy();
-          bound.value.self = this;
-          return bound;
-        }
-        if (this._super) return this._super.methods.resolve(key);
-        return new Node(this.program, null, null)
-      },
-      defines: (key: Key): Node | null => {
-        if (this.eager.has(key)) return this;
-        if (this._super) return this._super.methods.defines(key);
-        return null;
-      }
-    };
-  }
-
 
 
   match(key: string, ctx: Node = this): Node {

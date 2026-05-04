@@ -1,12 +1,23 @@
 let _fs: typeof import('fs') | undefined;
 let _path: typeof import('path') | undefined;
+let _require: NodeRequire | undefined;
 
 function load<T>(name: string, cached: T | undefined): T {
   if (cached !== undefined) return cached;
   if (!nodejs.enabled)
     throw new Error(`Module '${name}' is only available in a Node.js environment.`);
-  try { return (0, eval)('require')(name); }
-  catch (e) { throw new Error(`Failed to load Node.js module '${name}': ${(e as Error).message}`); }
+  try {
+    // CJS (and tsx ESM, which injects a module-scoped `require`): use it
+    // directly. Pure ESM has no `require` — synthesize one via
+    // process.getBuiltinModule('module').createRequire, which is
+    // synchronous and node-builtin (no module specifier for the bundler
+    // to choke on).
+    if (!_require) {
+      if (typeof require === 'function') _require = require;
+      else _require = (process as any).getBuiltinModule('module').createRequire(import.meta.url);
+    }
+    return _require!(name);
+  } catch (e) { throw new Error(`Failed to load Node.js module '${name}': ${(e as Error).message}`); }
 }
 
 export class nodejs {

@@ -1,14 +1,40 @@
 import { fileURLToPath } from "url";
-import { Runtime, String } from "./language2.ts";
+import { Runtime, String, AST } from "./language2.ts";
 import {Standard, Version} from "./version.ts";
 import { nodejs } from "./node.js.ts";
 
 export const Ray = String.extension(".ray")
 export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).create(0, '2027-01-01', 0))
-  .register_frontend(Ray, (target, input) => {
-    input.new().bundled.loadDirectory('@ether/$/.ray', { recursively: true })
+  .abstract(fn => {
+    // if (fn.enabled('refuse_abstract_interpretation')) {
+    //   fn.debug('abstract', 'Refused to abstractly call function, defaulting to its return type.')
+    //   return fn;
+    // }
+    // TODO Time/trace the function allow it to go own for a small while in certain configurations/cache certain results.
+
+    return fn;
+  })
+  .register_frontend(Ray, async (target, input) => {
+    const program = target.new()
+
+    const cd = '@ether/$/.ray'
+    // input.new().bundled.load(`${cd}/Node.ray`)
+
+    program.interpreter = function(_: AST.Node): AST.Node {
+      let saw_newline = false;
+      _.skip_while((ch: string) => {
+        if (ch === '\n') saw_newline = true;
+        return ch === ' ' || ch === '\n';
+      });
+
+      _.capture_while((ch: string) => ch !== ' ' && ch !== '\n');
+      return _;
+    }
     
-    return target
+    await program.add(input.new().bundled.loadDirectory(cd, { recursively: true }).all())
+    await program.add(input.all())
+
+    return program
   })
 
 const _isMainEntrypoint = (() => {
@@ -18,4 +44,4 @@ const _isMainEntrypoint = (() => {
   catch { return false; }
 })();
 
-if (_isMainEntrypoint) Ether.frontend(Ray.new()).abstract().exec()
+if (_isMainEntrypoint) Ether.frontend(Ray.new().bundled.loadProject('@ether/.ts/test')).abstract().exec()

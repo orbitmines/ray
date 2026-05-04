@@ -35,6 +35,7 @@
     "v0.3": "tsx src/runtime/v0.3.run.ts",
     "v0.4": "tsx src/runtime/v0.4.run.ts",
     "spec": "tsx src/spec.ts",
+    "ray": "tsx src/ray.ts",
     "language-server": "tsx src/lsp/index.ts",
     "prepack": "node -e \"const f=require('fs');process.chdir(require('path').dirname(process.env.npm_package_json));f.cpSync('../$/.ray','@ether/$/.ray',{recursive:true,force:true});const r=[];(function w(d,n){for(const e of f.readdirSync(d,{withFileTypes:true})){const x=n?n+'/'+e.name:e.name;if(e.isDirectory())w(d+'/'+e.name,x);else r.push('@ether/$/.ray/'+x);}})('@ether/$/.ray','');f.writeFileSync('src/bundled.ts','export const manifest: string[] = '+JSON.stringify(r)+';\\n');\"",
     "postpack": "node -e \"const f=require('fs');process.chdir(require('path').dirname(process.env.npm_package_json));f.rmSync('@ether',{recursive:true,force:true});f.writeFileSync('src/bundled.ts','export const manifest: string[] = [];\\n');\""

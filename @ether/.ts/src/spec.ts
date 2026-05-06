@@ -281,93 +281,90 @@ export const Ray = new Language('ether', (Version.scheme('E') as Standard).creat
       //     to the original first token) keeps the range start put.
       // Without accepts_program, a prev-bearing opposite token has nowhere
       // for that prev to go — fall through to the wrongDirection error.
+      if (_.program.result === null) return resolved;
+      
       if (opposite && !f.switchesDirection) {
-        if (_.program.result === null) return resolved;
         if (f.acceptsProgram) {
           _.program.result = null;
           return resolved;
         }
       }
 
-      if (_.program.result) {
-        // When prev / resolved is an unresolved forward, the receiver
-        // itself is the real failure — `forwardRef()` returns the actual
-        // cursor-bearing forward from the resolution registry so the
-        // diagnostic lands on a real source position.
-        const prev = _.program.result;
-        const prevForward = prev.forwardRef();
-        const resolvedForward = resolved.forwardRef();
+      // When prev / resolved is an unresolved forward, the receiver
+      // itself is the real failure — `forwardRef()` returns the actual
+      // cursor-bearing forward from the resolution registry so the
+      // diagnostic lands on a real source position.
+      const prev = _.program.result;
+      const prevForward = prev.forwardRef();
+      const resolvedForward = resolved.forwardRef();
 
-        // Distinguish seed-based RTL rewalks (anchor fold like `rtlOnly v`)
-        // from seedless ones (`</`-triggered like `v bidir w </`): in the
-        // seed case prev is the pre-pinned anchor (a fresh forward from
-        // _.match, applied=false), so the resolved-side method is the
-        // source-earlier failure. In the seedless case prev was built up
-        // by save() during the rewalk (a juxtaposition lazy from .call,
-        // applied=true) — the rightmost-captured token is the implicit
-        // anchor and *its* missing name is what the user is staring at.
-        if (f.switchesDirection) {
-          _.program.result = resolved.eager.call(prev);
-        } else if (matchesDirection) {
-          if (resolvedForward && direction === 'right-to-left' && !prev.applied) {
-            resolvedForward.error('forward ref', resolvedForward.value.resolution!.message);
-          } else if (prevForward) {
-            prevForward.error('forward ref', prevForward.value.resolution!.message);
-          } else if (f.acceptsProgram) {
-            // Mirrors the early-branch composition for accepts_program, but
-            // with the direction-bound receiver: prev (the anchor) is bound
-            // as `self` *eagerly* — that doubles as the "this method was
-            // dispatched as infix" marker the assert filters on. The
-            // method then waits for the next juxtaposed token to arrive
-            // as `args` (which the early branch will deliver via
-            // composed.call(arg)).
-            const anchor = prev;
-            const m = resolved;
-            m.value.self = anchor;
-            const composed = new Node(_.program);
-            composed.value.resolution = new Resolution(composed, undefined, '').resolve(
-              (_self: Node | undefined, _method: Node, args: Node) => {
-                return m.eager.call(args);
-              }
-            );
-            composed.value.options['accepts_program'] = 'true';
-            _.program.result = composed;
-          } else {
-            resolved.value.self = prev;
-            _.program.result = resolved.eager.call(new Node(_.program, null, null));
-          }
-        } else if (wrongDirection) {
-          emitDirectionError(_, resolved);
-        } else if (f.accepts) {
-          // `accepts` is a non-directional infix flag: bind prev as the
-          // receiver and wait for the next juxtaposed token to arrive as
-          // args (which the early branch will deliver via composed.call(arg),
-          // firing the underlying method body once). When the rewalk is
-          // running RTL (right-associative reduction), swap operands so the
-          // body still fires with source-order (left, right) — `prev` is
-          // the right-side and `args` is the left-side in RTL.
-          //
-          // Eagerly bind anchor as self so this matched copy carries the
-          // "dispatched as infix" marker (value.self with a real cursor),
-          // which `assert.non_mixed_associativity` uses to filter out
-          // declarations like `external right-associative x` where x is a
-          // leaf, not an operator.
-          const isRTL = direction === 'right-to-left';
+      // Distinguish seed-based RTL rewalks (anchor fold like `rtlOnly v`)
+      // from seedless ones (`</`-triggered like `v bidir w </`): in the
+      // seed case prev is the pre-pinned anchor (a fresh forward from
+      // _.match, applied=false), so the resolved-side method is the
+      // source-earlier failure. In the seedless case prev was built up
+      // by save() during the rewalk (a juxtaposition lazy from .call,
+      // applied=true) — the rightmost-captured token is the implicit
+      // anchor and *its* missing name is what the user is staring at.
+      if (f.switchesDirection) {
+        _.program.result = resolved.eager.call(prev);
+      } else if (matchesDirection) {
+        if (resolvedForward && direction === 'right-to-left' && !prev.applied) {
+          resolvedForward.error('forward ref', resolvedForward.value.resolution!.message);
+        } else if (prevForward) {
+          prevForward.error('forward ref', prevForward.value.resolution!.message);
+        } else if (f.acceptsProgram) {
+          // Mirrors the early-branch composition for accepts_program, but
+          // with the direction-bound receiver: prev (the anchor) is bound
+          // as `self` *eagerly* — that doubles as the "this method was
+          // dispatched as infix" marker the assert filters on. The
+          // method then waits for the next juxtaposed token to arrive
+          // as `args` (which the early branch will deliver via
+          // composed.call(arg)).
           const anchor = prev;
           const m = resolved;
           m.value.self = anchor;
           const composed = new Node(_.program);
           composed.value.resolution = new Resolution(composed, undefined, '').resolve(
             (_self: Node | undefined, _method: Node, args: Node) => {
-              if (isRTL) m.value.self = args;
-              return m.eager.call(isRTL ? anchor : args);
+              return m.eager.call(args);
             }
           );
-          composed.value.options['accepts'] = 'true';
+          composed.value.options['accepts_program'] = 'true';
           _.program.result = composed;
         } else {
-          resolved.save();
+          resolved.value.self = prev;
+          _.program.result = resolved.eager.call(new Node(_.program, null, null));
         }
+      } else if (wrongDirection) {
+        emitDirectionError(_, resolved);
+      } else if (f.accepts) {
+        // `accepts` is a non-directional infix flag: bind prev as the
+        // receiver and wait for the next juxtaposed token to arrive as
+        // args (which the early branch will deliver via composed.call(arg),
+        // firing the underlying method body once). When the rewalk is
+        // running RTL (right-associative reduction), swap operands so the
+        // body still fires with source-order (left, right) — `prev` is
+        // the right-side and `args` is the left-side in RTL.
+        //
+        // Eagerly bind anchor as self so this matched copy carries the
+        // "dispatched as infix" marker (value.self with a real cursor),
+        // which `assert.non_mixed_associativity` uses to filter out
+        // declarations like `external right-associative x` where x is a
+        // leaf, not an operator.
+        const isRTL = direction === 'right-to-left';
+        const anchor = prev;
+        const m = resolved;
+        m.value.self = anchor;
+        const composed = new Node(_.program);
+        composed.value.resolution = new Resolution(composed, undefined, '').resolve(
+          (_self: Node | undefined, _method: Node, args: Node) => {
+            if (isRTL) m.value.self = args;
+            return m.eager.call(isRTL ? anchor : args);
+          }
+        );
+        composed.value.options['accepts'] = 'true';
+        _.program.result = composed;
       } else {
         resolved.save();
       }

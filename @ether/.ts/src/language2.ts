@@ -325,7 +325,7 @@ export namespace AST {
   const EMPTY_OPTIONS: { [key: string]: string } = {};
   class Value {
     encoded: EncodedMethod | Symbol | undefined | null = UNKNOWN
-    options: { [key: string]: string } = EMPTY_OPTIONS
+    options: { [key: string]: Key } = EMPTY_OPTIONS
     private methods: Map<Key, Node> = EMPTY_METHODS
 
     set(key: Key, method: Node) {
@@ -342,6 +342,10 @@ export namespace AST {
   @instrumented('trace', { recursive: true })
   export class Node extends Text.Node implements Source, Instrumentable {
 
+    expression?: Node // Parent is the expression
+    start_expression() { this.expression = this.copy(); }
+    end_expression() { this.expression.end = this.end; }
+
     private value: Value = new Value()
     with(key: string, value?: string): this {
       if (this.value.options === EMPTY_OPTIONS) this.value.options = {};
@@ -349,7 +353,7 @@ export namespace AST {
       this.debug('options', `${key} = ${this.value.options[key]}`)
       return this;
     }
-    enabled(key: string): boolean { return !!this.value.options[key]; }
+    enabled(key: string, value?: string): boolean { return value ? this.value.options[key] === value : !!this.value.options[key]; }
 
     constructor(program: Runtime, source: Text.Source = program.EXTERNALLY_DEFINED, public _super: Node = program.BASE) {
       super()
@@ -415,11 +419,13 @@ export namespace AST {
       copy.cursor = this.cursor
       copy.selection = this.selection.slice()
       copy._direction = this._direction
+      copy.expression = this.expression;
       return copy;
     }
     clear(): void {
       this.thunks = [] //TODO Maybe move thunks into .value?
       this.value = new Value()
+      this.expression = undefined;
     }
 
     private thunks: ((self: Node) => void)[] | null = null;

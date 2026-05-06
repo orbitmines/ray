@@ -27,25 +27,25 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
         //args.debug('test', [...self.methods.all()].join(', '))
         if (!_class.methods.has(name)) return args.error('external', `Expected method \`${name}\` to be externally defined by the runtime, but it wasn't`);
         return args;
-      }).with('accepts_program')
+      }).with('callable', 'Program')
 
-      _.method('left-to-right', (_class, method, args) => args.with('left-to-right')).with('accepts_program')
-      _.method('right-to-left', (_class, method, args) => args.with('right-to-left')).with('accepts_program')
-      _.method('left-associative', (_class, method, args) => args.with('associativity', 'left')).with('accepts_program')
-      _.method('right-associative', (_class, method, args) => args.with('associativity', 'right')).with('accepts_program')
+      _.method('left-to-right', (_class, method, args) => args.with('left-to-right')).with('callable', 'Program')
+      _.method('right-to-left', (_class, method, args) => args.with('right-to-left')).with('callable', 'Program')
+      _.method('left-associative', (_class, method, args) => args.with('associativity', 'left')).with('callable', 'Program')
+      _.method('right-associative', (_class, method, args) => args.with('associativity', 'right')).with('callable', 'Program')
   
       _.method('test-middle', (_class, method, args) => _class)
       _.method('test-right', (_class, method, args) => {
         method.info('test', `test-right fired on \`${_class.string ?? '?'}\``);
         return _class;
-      }).with('accepts_program')
+      }).with('callable', 'Program')
       _.method('test-left', (_class, method, args) => {
         method.info('test', `test-left fired on \`${_class.string ?? '?'}\``);
         return _class;
       })
 
       // Stand-ins so the associativity test cases can run end-to-end (real
-      // resolution will be wired up later). All `accepts` infix methods log
+      // resolution will be wired up later). All `callable` infix methods log
       // their source column so the test reads the firing order off the
       // trace; the operator's actual associativity is stamped via the
       // `external <left|right>-associative <name>` lines in the fixture.
@@ -56,19 +56,19 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
       _.method('x', (_class, method, args) => {
         method.info('test', `x@${method.col} fired on F@${_class.col ?? '?'} with F@${args.col ?? '?'}`);
         return _class;
-      }).with('accepts')
+      }).with('callable')
       _.method('M', (_class, method, args) => {
         method.info('test', `M@${method.col} fired on F@${_class.col ?? '?'} with F@${args.col ?? '?'}`);
         return _class;
-      }).with('accepts')
+      }).with('callable')
       _.method('N', (_class, method, args) => {
         method.info('test', `N@${method.col} fired on F@${_class.col ?? '?'} with F@${args.col ?? '?'}`);
         return _class;
-      }).with('accepts')
+      }).with('callable')
       _.method('X', (_class, method, args) => {
         method.info('test', `X@${method.col} fired on F@${_class.col ?? '?'} with F@${args.col ?? '?'}`);
         return _class;
-      }).with('accepts')
+      }).with('callable')
     })
 
     const cd = '@ether/$/.ray'
@@ -81,7 +81,11 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
         return ch === ' ' || ch === '\n';
       });
 
+      if (!_.expression) _.start_expression();
+
       _.capture_while((ch: string) => ch !== ' ' && ch !== '\n');
+      
+
       return _;
     }
     

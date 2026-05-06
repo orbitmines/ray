@@ -1,0 +1,61 @@
+
+{RULES @ * |= .}}: (
+  parenthesis: (" "[]{length >= 1} "(", " "[], ")")?, Statement?, ("=>", Statement)(? if parenthesis)
+
+) | (*)?)[], \n | ⊣),
+
+// right-to-left defaults to the same vertical direction that after each ltr newline we go to the next line.
+// Option to switch this vertical direction too.
+class Expression < (direction ?? left-to-right) (
+  expr: Program: (
+    (
+      saw_newline => leading_whitespace ~= "\n"
+
+      leading_whitespace: (" " | \n)[],
+      {
+        // dynamically assert '(<- expr).edges.every .direction === right-to-left'
+        // dynamically assert '(expr ->).edges.every .direction === left-to-left'
+        // 'Cannot mix {} in a single (possibly infix) expression with mixed associtivity, use parenthesis explcicitely to mix them.' 
+        // .info You can only mix everything left of the variable as rtl, and everything right of the variable as ltr.'
+
+        //TODO Can this be extracted to a separate rule?
+        if expr.result ==.instance_of Program && expr.result.parameters != None && leading_whitespace ~= " "⊣
+          // We got a method call without parenthesis: 'external test' instead of 'external(test)'
+          return ({expr.compose(result => result(.))}: static) //TODO Context is expr.context.parent
+
+        from_result = expr.result*[.]
+        from_context = expr.context*[.] //TODO Needs to be a forward ref.
+
+        // Start of an expression
+        return expr.compose(=> from_context) if expr.result == None
+
+        //TODO Needs to be lazy evaluate
+        // Cannot possibly resolve as an anchor inside the context.
+        unless from_context
+          'Found method X but it wasnt flagged as {direction}' if direction != from_result.direction
+
+          return expr.compose(result => from_result)
+
+        return (candidate: static{.direction: !direction} = 'skip this token') if from_context.switches_direction
+
+        // Look forward to see if this candidate resolves, if it does, prefer it.
+        'break expr =' current if (current = 'forward .').errors //TODO How to say continue this expr from this location.
+        
+        // Need to check if previously evaluated tokens in this expression can ALSO resolve as rtl on this possibly anchor
+        candidate: static{.direction: !direction} = . // Parses this as start of expression.
+        return expr = candidate 'Still need to parse forward' unless candidate.errors
+        
+        // Unsure yet, perhaps we'll find another anchor which fixes our syntax, for now just keep on parsing.
+        return . // TODO Should be the same thing as unless from_context
+
+        . //TODO Return the method .
+      }: not (" " | \n)
+    )[],
+    \n | ⊣,
+    ((" " | \n)[], prefix: ".")?, static<.prefix = prefix> // TODO Prefix a modifier. also allows newline expr.\nMETHOD
+  ),
+  {expr.args.push_back(.)}: Program: (
+    " "[]{length == whitespace}, added_whitespace: " "[].NonEmpty,
+    static<whitespace: whitespace + added_whitespace.length>),
+  )[]
+)

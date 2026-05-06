@@ -270,6 +270,7 @@ class Function | Program < Boundary &+ Hierarchy /* If the  */ &+ expression: Ex
   dynamically assert
 
   args | arguments => first.out
+  parameters => args.type
   result => last.out //TODO This is a variable where ** = this program. Basically a var is bound to the result of the function
   return_type => result.type
 

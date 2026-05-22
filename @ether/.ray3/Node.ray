@@ -1,4 +1,5 @@
 // TODO Modifier: precedence(before Node.==)
+// Accept closure up to syntax for , for instance, or -> should have it too
 
 global = local
 

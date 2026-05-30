@@ -24,6 +24,12 @@ interface Reloadable<Static extends Representation<Static>> extends Representati
   reload(next: Static | Source | Node | Iterable<Source | Node>): Static
 }
 
+interface Installable {
+  // frontends are the package managers? backends are the CLI?
+  // then the CLI has as a frontend String which feeds the source files into it
+  //platform similarly is also just a representation (installable for specific platform) -> 
+}
+
 export type Compiler<Input extends Representation<Input> = Representation<any>, Output extends Representation<Output> = Representation<any>> = (target: Output, input: Input) => Promise<Output>
 
 abstract class Representation<Static extends Representation<Static> = Representation<any>, TSource extends Source = Source> {

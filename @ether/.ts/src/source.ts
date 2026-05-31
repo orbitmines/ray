@@ -26,6 +26,7 @@ export namespace Text {
     set value(value: string) { this._value = value; }
 
     async load(): Promise<void> {
+      if (this._value !== undefined) return;   // already have a value (e.g. in-memory String.add)
       if (!this.location) throw new Error('Source has neither value nor location.');
       let url: URL | undefined;
       try { url = new URL(this.location); } catch {}

@@ -11,28 +11,51 @@ import { is_function } from "./lodash.ts";
 
 namespace CLI { export type Args = [] | [positional: string[], args: { [key: string]: string[] }] }
 
-interface Program<Static extends Representation<Static>> extends Representation<Static> {
+export interface Program<Static extends Representation<Static>> extends Representation<Static> {
   exec(...args: CLI.Args): Promise<Node>
 }
-interface REPLable<Static extends Representation<Static>> extends Program<Static> {
+export interface REPLable<Static extends Representation<Static>> extends Program<Static> {
   repl(): void
 }
-interface AbstractInterpretable<Static extends Representation<Static>> extends Program<Static> {
+export interface AbstractInterpretable<Static extends Representation<Static>> extends Program<Static> {
   abstract(): Static
 }
-interface Reloadable<Static extends Representation<Static>> extends Representation<Static> {
+export interface Reloadable<Static extends Representation<Static>> extends Representation<Static> {
   reload(next: Static | Source | Node | Iterable<Source | Node>): Static
 }
 
-interface Installable {
+export interface Distributable {
+  list(): Iterable<Distributable>
+  ready(): String | undefined
+
+}
+export interface Dependant {
+  dependencies: Distributable[]
+}
+export interface Installable extends Distributable {
+// Distributable is the frontend the backend is. It's a frontend/backend chain on the CLASS, not on an instance!
+// Dependencies are again a frontend/backend chain on the class.
+// 
+
+  // os is backend to the installable/downloadable.
+  // each specific version has many possible backends?
   // frontends are the package managers? backends are the CLI?
   // then the CLI has as a frontend String which feeds the source files into it
   //platform similarly is also just a representation (installable for specific platform) -> 
+  load(): Promise<void>
+  install(): Promise<void>
 }
+export interface Downloadable extends Distributable {
+  download(): Promise<String>
+}
+export interface Buildable extends Downloadable {
+  build(...args: CLI.Args): Promise<void>
+}
+
 
 export type Compiler<Input extends Representation<Input> = Representation<any>, Output extends Representation<Output> = Representation<any>> = (target: Output, input: Input) => Promise<Output>
 
-abstract class Representation<Static extends Representation<Static> = Representation<any>, TSource extends Source = Source> {
+export abstract class Representation<Static extends Representation<Static> = Representation<any>, TSource extends Source = Source> {
   
   versions: Map<Version, Static> = new Map()
   get version(): Version { return [...this.versions].find(([, v]) => v === this.self)![0]; }
@@ -46,6 +69,12 @@ abstract class Representation<Static extends Representation<Static> = Representa
   get self(): Static { return this as any as Static }
   protected abstract construct(): Static
 
+  // The class node this instance specializes; a class node points at itself.
+  // `repr.class.register_backend(...)` targets the shared menu; instances get
+  // their own edges (see new()), so a selected version carries exactly its own.
+  _class: Representation = this;
+  get class(): this { return this._class as this; }
+
   // This is a Ray with a compiler on each edge. (Which is the implicit conversion as (X), in Ray) -> Should be called that on Ray too.
   frontends: Compilers = new Compilers(-1); /* <- . -> */ backends: Compilers = new Compilers(1)
 
@@ -53,6 +82,13 @@ abstract class Representation<Static extends Representation<Static> = Representa
     if (this.frontends.find(x => x.name === frontend.name)) return this.log.fatal(this.name, `There's already a frontend named '${frontend.name}' for '${this.name}'`);
     frontend.backends.next.set(this, compile as any);
     this.frontends.next.set(frontend, compile as any);
+    return this;
+  }
+
+  register_backend<Backend extends Representation<Backend>>(backend: Backend, compile: Compiler<Static, Backend>): this {
+    if (this.backends.find(x => x.name === backend.name)) return this.log.fatal(this.name, `There's already a backend named '${backend.name}' for '${this.name}'`);
+    backend.frontends.next.set(this, compile as any);
+    this.backends.next.set(backend, compile as any);
     return this;
   }
 
@@ -70,8 +106,12 @@ abstract class Representation<Static extends Representation<Static> = Representa
     const x = this.construct();
     x.name = this.name;
     x.log = this.log;
-    x.frontends = this.frontends;
-    x.backends = this.backends;
+    // Instances point at the class node but get their OWN empty edge maps, so a
+    // selected version's backends are exactly the ones resolved for it — not a
+    // shared reference to the class menu. select() materializes them.
+    x._class = this._class;
+    x.frontends = new Compilers(-1);
+    x.backends = new Compilers(1);
     return x;
   }
 
@@ -119,7 +159,7 @@ export class Compilers {
   }
 }
 
-
+// TODO(language): unfinished `export class` removed so the module parses.
 // abstract class Language extends Representation<Language> {
 
 //   constructor(public name: string, version: Version) {

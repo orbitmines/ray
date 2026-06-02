@@ -75,7 +75,50 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
     // input.new().bundled.load(`${cd}/Node.ray`)
 
     program.interpreter = function(_: AST.Node): AST.Node {
-      while (!_.done()) {
+      const INDEX_CHARS = 2;
+
+      const name_of = (key: string | AST.Node): string => typeof key === 'string' ? key : (key.string ?? '');
+      const indices = new WeakMap<AST.Node, Map<string, (string | AST.Node)[]>>();
+      const index_for = (on: AST.Node): Map<string, (string | AST.Node)[]> => {
+        let idx = indices.get(on);
+        if (idx) return idx;
+        idx = new Map();
+        for (const key of on.methods.all() as Iterable<string | AST.Node>) {
+          const name = name_of(key);
+          if (!name) continue;
+          const prefix = name.slice(0, INDEX_CHARS); // shorter names key on themselves
+          let bucket = idx.get(prefix);
+          if (!bucket) idx.set(prefix, bucket = []);
+          bucket.push(key);
+        }
+        for (const bucket of idx.values()) bucket.sort((a, b) => name_of(b).length - name_of(a).length); // longest-first
+        indices.set(on, idx);
+        return idx;
+      };
+
+      const capture_longest_token = (cursor: AST.Node, on: AST.Node = cursor): false | string | AST.Node => {
+        const idx = index_for(on);
+        const src = cursor.source.value;
+        const start = cursor.empty() ? cursor.cursor! : cursor.end! + 1; // read head
+        // Try the longest indexed prefix first; a name shorter than INDEX_CHARS
+        // lives under its own short prefix, so step the probe length down to 1.
+        for (let len = INDEX_CHARS; len >= 1; len--) {
+          if (start + len > src.length) continue;
+          const bucket = idx.get(src.slice(start, start + len));
+          if (!bucket) continue;
+          for (const key of bucket) { // longest-first within the bucket
+            const name = name_of(key);
+            if (src.startsWith(name, start)) {
+              let rem = name.length;
+              cursor.capture_while(() => rem-- > 0);
+              return key;
+            }
+          }
+        }
+        return false;
+      };
+
+      const expr = ({whitespace = 0}: { whitespace?: number } = {}): AST.Node => {
         _.skip_while(ch => ch.peek() === ' ' || ch.peek() === '\n');
 
         const expression = _.copy();
@@ -83,16 +126,21 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
         // If type cannot be resolved/is variable, its at minimum a Node, so only that grammar will be available.
 
         // _.capture_while((ch: string) => ch !== ' ' && ch !== '\n');
-        while(!_.done() || _.peek() === '\n') {
+        while(!_.done() && _.peek() !== '\n') {
+          const result = _.copy()
+
           function candidate(cursor: AST.Node, on: AST.Node = cursor) { 
-            const method = cursor.capture_longest_token(on); // TODO Move capture in separate methodf
+            const method = capture_longest_token(cursor, on);
             return ({
               self: cursor,
               method,
               resolve: function() { return cursor.methods.resolve(method); },
               call: function() {
                 // if (cursor === on && on.methods.resolve(method).enabled('direction', cursor.direction.sign)) // 'Found method X but it wasnt flagged as {direction}'
-                if (method) { cursor = cursor.get(method).call() } else { cursor.skip_while(ch => ch.peek() !== "\n") }
+                if (method) { cursor = cursor.get(method).call() } else { 
+                  cursor.capture_while(ch => ch.peek() !== "\n") 
+                  cursor.debug('deb', cursor === on ? 'on_result' : 'on_context')
+                }
                 return _ = cursor;
               }
             }) 
@@ -101,36 +149,50 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
           // Skip all the leading whitespace except one: We allow that single whitespace to be captured by a class. Used for function definitions.
           _.skip_while(ch => ch.peek(2) === '  ');
 
-          const result = candidate(_.copy());
+          const on_result = candidate(_.copy());
        
           // Calling from the context doesn't care about that single whitespace: You cannot call a context method which depends on a whitespace.
-          _.skip_while(ch => ch.peek() === ' ')
-          const context = candidate(_, program.GLOBAL); //TODO Change to actual context.
+          const has_leading_whitespace = _.skip_while(ch => ch.peek() === ' ') !== 0;
+          const on_context = candidate(_, program.GLOBAL); //TODO Change to actual context.
   
           // Start of the expression, get from context.
-          if (expression.empty()) { context.call(); continue; }
-          
+          if (expression.empty()) { on_context.call(); continue; }
+          // Capture function arguments if there's a leading whitespace. Ex: dynamically assert A == B as dynamically(assert(A == B))
+          // if (has_leading_whitespace && result.IS_FUNCTION_WITH_PARAMETERS) { result.call(expr()); continue; }
+          // expr.result ==.instance_of Program && expr.result.parameters != None
+          // This should actually just be implemented language-side. with a {" "}{expr: *} = on Program. So when you have a function, you cant actually call stuff on it with a space " ": func. is forced.
+
           // if (context.method && context.resolve().enabled('switch_direction')) { direction *= -1; }
 
-          //  if expr.result ==.instance_of Program && expr.result.parameters != None && leading_whitespace ~= " "⊣
-                // We got a method call without parenthesis: 'external test' instead of 'external(test)'
-          //    return ({expr.compose(result => result(.))}: static) //TODO Context is expr.context.parent
-
-          if (result.self.IS_FUNCTION_WITH_PARAMETERS) {  }
-          if (result.method) { result.call(); continue; }
-
-          // for a b
-          // dynamically accepts a block as a function, so dynamically assert wouldnt be possible. Or it is actually assert inside a dynamically block.
-          // dynamically assert A == B
-          // Prefer this actually if it accepts a Program as a parameter. So that you dont conflict with a .A property. (Force a . for accessing the A)
-          // Always a function call? ONLY IF THERE'S A LEADING ' '. 
-          // TODO push to args, but parse the whole rest expression?
-          args.push(context.call())
+          // We're simply in a callchain: a.b / a *
+          on_result.call();
         }
 
-        expression.end = _.end;
+        // Capture an indented block.
+        while (!_.done()) {
+          const at = _.copy();
+          let n = 0;
 
+          // Skip over irrelevant whitespace/newlines
+          do {
+            _.skip_while(ch => ch.peek() === '\n');
+            n = _.skip_while(ch => ch.peek() === ' ');
+          } while (!_.done() && _.peek() === '\n');
+
+          const added_whitespace = n - whitespace;
+
+          // First time we encounter something which is indented on the same line or before, we're no longer in our block.
+          if (_.done() || added_whitespace <= 0) { _ = at; break; }
+
+          expr({whitespace: n});
+        }
+
+
+        expression.end = _.end;
+        return _;
       }
+
+      while (!_.done()) { expr(); }
 
       return _;
     }

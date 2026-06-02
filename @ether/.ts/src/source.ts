@@ -149,17 +149,21 @@ export namespace Text {
       return this.sign === -1 ? this.position.begin! : this.position.end!;
     }
 
+    get head(): number {
+      return this.position.empty() ? this.position.cursor! : this.boundary + this.sign;
+    }
+
     protected advance(offset: number = 1): void {
       if (this.sign === -1) {
-        this.position.begin = this.position.begin! - offset;
+        this.position.begin = (this.position.empty() ? this.position.cursor! : this.position.begin! - 1) - (offset - 1);
       } else {
-        this.position.end = this.position.end! + offset;
+        this.position.end = (this.position.empty() ? this.position.cursor! : this.position.end! + 1) + (offset - 1);
       }
     }
 
     done(): boolean {
-      const next = this.boundary + this.sign;
-      return next < 0 || next >= this.position.source.value.length;
+      const h = this.head;
+      return h < 0 || h >= this.position.source.value.length;
     }
 
     peek(offset: number = 1): string {
@@ -168,10 +172,10 @@ export namespace Text {
         const opposite = this.sign === -1 ? this.position.right : this.position.left;
         return opposite.peek(offset * -1);
       }
-      let a = this.boundary;
-      let b = a + (offset * this.sign);
+      let a = this.head;
+      let b = a + ((offset - 1) * this.sign);
       const src = this.position.source.value;
-      if (offset === 1) return b < 0 || b >= src.length ? '' : src[b];
+      if (offset === 1) return a < 0 || a >= src.length ? '' : src[a];
       if (b < a) { [a, b] = [b, a]; }
       return src.slice(Math.max(a, 0), Math.min(b + 1, src.length));
     }
@@ -191,11 +195,9 @@ export namespace Text {
     }
 
     skip_while(pred: (ch: Direction) => boolean): number {
-      //TODO skip().capture_while().skip()
-      let n = 0;
-      while (!this.done() && pred(this)) { n++; this.advance(); }
-      this.position.cursor = this.boundary + this.sign;
-      this.position.selection = [];
+      this.skip();
+      const n = this.capture_while(pred);
+      this.skip();
       return n;
     }
 
@@ -237,7 +239,10 @@ export namespace Text {
     }
     goto(_char: string): string { return ''; }
 
-    skip(): void { this.position.move(this.boundary + this.sign); }
+    skip(): void {
+      if (this.position.empty()) return;
+      this.position.move(this.boundary + this.sign);
+    }
 
     next(): Text.Node | null { return this.position.next_neighbor(this.sign); }
   }

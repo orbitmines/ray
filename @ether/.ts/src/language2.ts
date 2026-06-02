@@ -315,7 +315,8 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
     //TODO Support superposed input.
     let result = this.BASE.None;
     for await (const node of this.all() as AsyncGenerator<AST.Node>) { result = node; }
-    return this.log.fatal('test', 'test')
+    if (this.log.hasErrors) process.exitCode = 1;
+    this.log.print();
     return result;
   }
   abstract = (call_abstractly?: (fn: Node) => Node): this => {
@@ -398,11 +399,12 @@ export namespace AST {
     enabled(key: string, value?: string): boolean { return value ? this.value.options[key] === value : !!this.value.options[key]; }
 
     capture_longest_token(on?: Node): false | string {
+      on ??= this
+      
       // if no match, match the whole string
       // cursor.capture_while(ch => ch.peek() !== ' ' && ch.peek() !== '\n');
       //                   cursor.error('parse', `Unresolved variable \`${cursor.string}\``) // on X TODO
 
-      on ??= this
       //TODO If we're in a comment, we allow the capturing of \n.
       return false;
     }
@@ -411,7 +413,7 @@ export namespace AST {
       super()
       this.program = program;
       this.source = source;
-      this.cursor = -1;
+      this.cursor = 0; // at the first character, nothing selected yet
     }
 
     @uninstrumented

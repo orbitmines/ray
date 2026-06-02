@@ -1,3 +1,5 @@
+// Object with -Node as a primitive, which is then basically map.
+
 // TODO Modifier: precedence(before Node.==)
 // Accept closure up to syntax for , for instance, or -> should have it too
 

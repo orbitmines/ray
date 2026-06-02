@@ -75,16 +75,62 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
     // input.new().bundled.load(`${cd}/Node.ray`)
 
     program.interpreter = function(_: AST.Node): AST.Node {
-      let saw_newline = false;
-      _.skip_while((ch: string) => {
-        if (ch === '\n') saw_newline = true;
-        return ch === ' ' || ch === '\n';
-      });
+      while (!_.done()) {
+        _.skip_while(ch => ch.peek() === ' ' || ch.peek() === '\n');
 
-      if (!_.expression) _.start_expression();
+        const expression = _.copy();
+        let direction: -1 | 1 = 1
+        // If type cannot be resolved/is variable, its at minimum a Node, so only that grammar will be available.
 
-      _.capture_while((ch: string) => ch !== ' ' && ch !== '\n');
-      
+        // _.capture_while((ch: string) => ch !== ' ' && ch !== '\n');
+        while(!_.done() || _.peek() === '\n') {
+          function candidate(cursor: AST.Node, on: AST.Node = cursor) { 
+            const method = cursor.capture_longest_token(on); // TODO Move capture in separate methodf
+            return ({
+              self: cursor,
+              method,
+              resolve: function() { return cursor.methods.resolve(method); },
+              call: function() {
+                // if (cursor === on && on.methods.resolve(method).enabled('direction', cursor.direction.sign)) // 'Found method X but it wasnt flagged as {direction}'
+                if (method) { cursor = cursor.get(method).call() } else { cursor.skip_while(ch => ch.peek() !== "\n") }
+                return _ = cursor;
+              }
+            }) 
+          }
+
+          // Skip all the leading whitespace except one: We allow that single whitespace to be captured by a class. Used for function definitions.
+          _.skip_while(ch => ch.peek(2) === '  ');
+
+          const result = candidate(_.copy());
+       
+          // Calling from the context doesn't care about that single whitespace: You cannot call a context method which depends on a whitespace.
+          _.skip_while(ch => ch.peek() === ' ')
+          const context = candidate(_, program.GLOBAL); //TODO Change to actual context.
+  
+          // Start of the expression, get from context.
+          if (expression.empty()) { context.call(); continue; }
+          
+          // if (context.method && context.resolve().enabled('switch_direction')) { direction *= -1; }
+
+          //  if expr.result ==.instance_of Program && expr.result.parameters != None && leading_whitespace ~= " "⊣
+                // We got a method call without parenthesis: 'external test' instead of 'external(test)'
+          //    return ({expr.compose(result => result(.))}: static) //TODO Context is expr.context.parent
+
+          if (result.self.IS_FUNCTION_WITH_PARAMETERS) {  }
+          if (result.method) { result.call(); continue; }
+
+          // for a b
+          // dynamically accepts a block as a function, so dynamically assert wouldnt be possible. Or it is actually assert inside a dynamically block.
+          // dynamically assert A == B
+          // Prefer this actually if it accepts a Program as a parameter. So that you dont conflict with a .A property. (Force a . for accessing the A)
+          // Always a function call? ONLY IF THERE'S A LEADING ' '. 
+          // TODO push to args, but parse the whole rest expression?
+          args.push(context.call())
+        }
+
+        expression.end = _.end;
+
+      }
 
       return _;
     }

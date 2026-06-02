@@ -13,6 +13,8 @@ class Expression < (direction ?? left-to-right) (
 
       leading_whitespace: (" " | \n)[],
       {
+        // needs to be type-aware.
+
         // dynamically assert '(<- expr).edges.every .direction === right-to-left'
         // dynamically assert '(expr ->).edges.every .direction === left-to-left'
         // 'Cannot mix {} in a single (possibly infix) expression with mixed associtivity, use parenthesis explcicitely to mix them.' 
@@ -59,3 +61,62 @@ class Expression < (direction ?? left-to-right) (
     static<whitespace: whitespace + added_whitespace.length>),
   )[]
 )
+// If you give a block to a property, it's an effect on the type constructor.
+// If you give a block to any object, it's called and the return value is used. so 5\n+ 3 works, but what about 5\n+3\n+3. The plus needs to not be on this but on _., Same with ., the first on is indented the next ones arent.
+// If I monkey-patch I want the return to be the class.
+5
+ +3
+ +3
+
+a
+ .b
+ .c
+a
+ *
+ b
+
+a +=
+ funca ()
+ funcb ()
+
+class test
+  property: Test +
+    overridden: string
+
+// when a accepts both a (): * and is used a block?
+a * b
+a
+ *
+ b
+// a(* b) or a * b
+// for instance if
+
+if 
+  condition
+  block
+
+if
+  a
+    ==
+    b
+  block
+
+
+if
+  a
+  ==
+  b
+  block
+// WHat is the block? if(a, == b block)
+
+if(condition, block) or (if condition).block
+// Prefer the (): * call. if it has one as the last argument.
+
+//example for precedence of : and ()
+func: Terminating ()
+a + b: Terminating () c + d
+// = 
+// a + (b () c + d)
+(a + b)()
+
+// create operators with higher precedence how? Perhaps Type = {higher} + OtherType

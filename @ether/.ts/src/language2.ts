@@ -388,10 +388,6 @@ export namespace AST {
   @instrumented('trace', { recursive: true })
   export class Node extends Text.Node implements Source, Instrumentable {
 
-    expression?: Node // Parent is the expression
-    start_expression() { this.expression = this.copy(); }
-    end_expression() { this.expression.end = this.end; }
-
     private value: Value = new Value()
     with(key: string, value?: string): this {
       if (this.value.options === EMPTY_OPTIONS) this.value.options = {};
@@ -400,6 +396,16 @@ export namespace AST {
       return this;
     }
     enabled(key: string, value?: string): boolean { return value ? this.value.options[key] === value : !!this.value.options[key]; }
+
+    capture_longest_token(on?: Node): false | string {
+      // if no match, match the whole string
+      // cursor.capture_while(ch => ch.peek() !== ' ' && ch.peek() !== '\n');
+      //                   cursor.error('parse', `Unresolved variable \`${cursor.string}\``) // on X TODO
+
+      on ??= this
+      //TODO If we're in a comment, we allow the capturing of \n.
+      return false;
+    }
 
     constructor(program: Runtime, source: Text.Source = program.EXTERNALLY_DEFINED, public _super: Node = program.BASE) {
       super()
@@ -441,7 +447,7 @@ export namespace AST {
       //  const past = (): boolean => direction === 'right-to-left' ? this.begin <= rangeStart : this.end >= rangeEnd;
       // program.runtime._expression!.iterate(this, past, false);
       //       while (!cursor.direction.done() && (!past || !past())) handle(node);
-      while (!cursor.direction.done()) cursor = this.program.interpreter(cursor);
+      this.program.interpreter(cursor);
       // return this.log.fatal(this.program.name, "Node isn't a root node, so refusing to parse from here.");
     }
 
@@ -465,13 +471,11 @@ export namespace AST {
       copy.cursor = this.cursor
       copy.selection = this.selection.slice()
       copy._direction = this._direction
-      copy.expression = this.expression;
       return copy;
     }
     clear(): void {
       this.thunks = [] //TODO Maybe move thunks into .value?
       this.value = new Value()
-      this.expression = undefined;
     }
 
     private thunks: ((self: Node) => void)[] | null = null;

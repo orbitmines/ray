@@ -106,11 +106,9 @@ export namespace Text {
       return !!other && other.source === this.source && this.cursor === other.cursor;
     }
 
-    protected single_char(): boolean { return this.selection.length === 0; }
+    empty() { return this.selection.length === 0; }
     get string() {
-      return this.single_char()
-        ? this.source.value[this.cursor!]
-        : this.source.value.slice(this.begin!, this.end! + 1);
+      return this.empty() ? '' : this.source.value.slice(this.begin!, this.end! + 1);
     }
 
     protected _left?: Direction;
@@ -131,16 +129,17 @@ export namespace Text {
     get direction() { return this._direction === 'right-to-left' ? this.left : this.right; }
     get behind() { return this._direction === 'right-to-left' ? this.right : this.left; }
 
-    done(): boolean                                          { return this.direction.done(); }
-    capture(char: string): this                              { this.direction.capture(char); return this; }
-    capture_while(pred: (ch: string) => boolean): this       { this.direction.capture_while(pred); return this; }
-    capture_whitespace(): this                               { this.direction.capture_whitespace(); return this; }
-    capture_line(): this                                     { this.direction.capture_line(); return this; }
-    skip_while(pred: (ch: string) => boolean): this          { this.direction.skip_while(pred); return this; }
-    upto(char: string): this                                 { this.direction.upto(char); return this; }
-    until(char: string): this                                { this.direction.until(char); return this; }
-    goto(char: string): this                                 { this.direction.goto(char); return this; }
-    skip(): this                                             { this.direction.skip(); return this; }
+    done(): boolean                                    { return this.direction.done(); }
+    peek(offset: number = 1): string                   { return this.direction.peek(offset); }
+    capture(char: string)                              { return this.direction.capture(char); }
+    capture_while(pred: (ch: Direction) => boolean)    { return this.direction.capture_while(pred); }
+    capture_whitespace()                               { return this.direction.capture_whitespace(); }
+    capture_line()                                     { return this.direction.capture_line(); }
+    skip_while(pred: (ch: Direction) => boolean)       { return this.direction.skip_while(pred); }
+    upto(char: string)                                 { return this.direction.upto(char); }
+    until(char: string)                                { return this.direction.until(char); }
+    goto(char: string)                                 { return this.direction.goto(char); }
+    skip()                                             { return this.direction.skip(); }
   }
 
   export class Direction {
@@ -185,25 +184,26 @@ export namespace Text {
       return true;
     }
 
-    capture_while(pred: (ch: string) => boolean): number {
+    capture_while(pred: (ch: Direction) => boolean): number {
       let n = 0;
-      while (!this.done() && pred(this.peek())) { n++; this.advance(); }
+      while (!this.done() && pred(this)) { n++; this.advance(); }
       return n;
     }
 
-    skip_while(pred: (ch: string) => boolean): number {
+    skip_while(pred: (ch: Direction) => boolean): number {
+      //TODO skip().capture_while().skip()
       let n = 0;
-      while (!this.done() && pred(this.peek())) { n++; this.advance(); }
+      while (!this.done() && pred(this)) { n++; this.advance(); }
       this.position.cursor = this.boundary + this.sign;
       this.position.selection = [];
       return n;
     }
 
-    capture_whitespace(): number { return this.capture_while(ch => ch === ' '); }
+    capture_whitespace(): number { return this.capture_while(ch => ch.peek() === ' '); }
 
     capture_line(): string {
       let a = this.boundary;
-      this.capture_while(ch => ch !== '\n');
+      this.capture_while(ch => ch.peek() !== '\n');
       let b = this.boundary;
       if (a === b) return '';
       if (b < a) { [a, b] = [b, a]; }

@@ -220,16 +220,15 @@ class Interpreter implements Instrumentable {
   };
 
   capture_longest_token(cursor: AST.Node, on: AST.Node = cursor): false | string | AST.Node {
+    if (cursor.done()) return false;
+
     const idx = this.index_for(on);
-    const src = cursor.source.value;
-    const start = cursor.direction.head; // read head
-    // Try the longest indexed prefix first; a name shorter than INDEX_CHARS
-    // lives under its own short prefix, so step the probe length down to 1.
-    if (start + 1 > src.length) return false;
-    const bucket = idx.get(src.slice(start, start + 1));
+
+    const bucket = idx.get(cursor.peek());
     if (!bucket) return false;
+    
     for (const key of bucket) { // longest-first within the bucket
-      if (src.startsWith(key, start)) {
+      if (cursor.peek(key.length) === key) {
         cursor.capture_n(key.length)
         return key;
       }

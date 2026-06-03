@@ -2,6 +2,9 @@ import { fileURLToPath } from "url";
 import { Runtime, String, AST } from "./language2.ts";
 import {Standard, Version} from "./version.ts";
 import { nodejs } from "./node.js.ts";
+import { Instrumentable, instrumented } from "./diagnostics.ts";
+import { Text } from "./source.ts";
+import { is_string } from "./lodash.ts";
 
 export const Ray = String.extension(".ray")
 export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).create(0, '2027-01-01', 0))
@@ -74,134 +77,168 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
     const cd = '@ether/$/.ray'
     // input.new().bundled.load(`${cd}/Node.ray`)
 
-    program.interpreter = function(_: AST.Node): AST.Node {
-      const INDEX_CHARS = 2;
-
-      const name_of = (key: string | AST.Node): string => typeof key === 'string' ? key : (key.string ?? '');
-      const indices = new WeakMap<AST.Node, Map<string, (string | AST.Node)[]>>();
-      const index_for = (on: AST.Node): Map<string, (string | AST.Node)[]> => {
-        let idx = indices.get(on);
-        if (idx) return idx;
-        idx = new Map();
-        for (const key of on.methods.all() as Iterable<string | AST.Node>) {
-          const name = name_of(key);
-          if (!name) continue;
-          const prefix = name.slice(0, INDEX_CHARS); // shorter names key on themselves
-          let bucket = idx.get(prefix);
-          if (!bucket) idx.set(prefix, bucket = []);
-          bucket.push(key);
-        }
-        for (const bucket of idx.values()) bucket.sort((a, b) => name_of(b).length - name_of(a).length); // longest-first
-        indices.set(on, idx);
-        return idx;
-      };
-
-      const capture_longest_token = (cursor: AST.Node, on: AST.Node = cursor): false | string | AST.Node => {
-        const idx = index_for(on);
-        const src = cursor.source.value;
-        const start = cursor.empty() ? cursor.cursor! : cursor.end! + 1; // read head
-        // Try the longest indexed prefix first; a name shorter than INDEX_CHARS
-        // lives under its own short prefix, so step the probe length down to 1.
-        for (let len = INDEX_CHARS; len >= 1; len--) {
-          if (start + len > src.length) continue;
-          const bucket = idx.get(src.slice(start, start + len));
-          if (!bucket) continue;
-          for (const key of bucket) { // longest-first within the bucket
-            const name = name_of(key);
-            if (src.startsWith(name, start)) {
-              let rem = name.length;
-              cursor.capture_while(() => rem-- > 0);
-              return key;
-            }
-          }
-        }
-        return false;
-      };
-
-      const expr = ({whitespace = 0}: { whitespace?: number } = {}): AST.Node => {
-        _.skip_while(ch => ch.peek() === ' ' || ch.peek() === '\n');
-
-        const expression = _.copy();
-        let direction: -1 | 1 = 1
-        // If type cannot be resolved/is variable, its at minimum a Node, so only that grammar will be available.
-
-        // _.capture_while((ch: string) => ch !== ' ' && ch !== '\n');
-        while(!_.done() && _.peek() !== '\n') {
-          const result = _.copy()
-
-          function candidate(cursor: AST.Node, on: AST.Node = cursor) { 
-            const method = capture_longest_token(cursor, on);
-            return ({
-              self: cursor,
-              method,
-              resolve: function() { return cursor.methods.resolve(method); },
-              call: function() {
-                // if (cursor === on && on.methods.resolve(method).enabled('direction', cursor.direction.sign)) // 'Found method X but it wasnt flagged as {direction}'
-                if (method) { cursor = cursor.get(method).call() } else { 
-                  cursor.capture_while(ch => ch.peek() !== "\n") 
-                  cursor.debug('deb', cursor === on ? 'on_result' : 'on_context')
-                }
-                return _ = cursor;
-              }
-            }) 
-          }
-
-          // Skip all the leading whitespace except one: We allow that single whitespace to be captured by a class. Used for function definitions.
-          _.skip_while(ch => ch.peek(2) === '  ');
-
-          const on_result = candidate(_.copy());
-       
-          // Calling from the context doesn't care about that single whitespace: You cannot call a context method which depends on a whitespace.
-          const has_leading_whitespace = _.skip_while(ch => ch.peek() === ' ') !== 0;
-          const on_context = candidate(_, program.GLOBAL); //TODO Change to actual context.
-  
-          // Start of the expression, get from context.
-          if (expression.empty()) { on_context.call(); continue; }
-          // Capture function arguments if there's a leading whitespace. Ex: dynamically assert A == B as dynamically(assert(A == B))
-          // if (has_leading_whitespace && result.IS_FUNCTION_WITH_PARAMETERS) { result.call(expr()); continue; }
-          // expr.result ==.instance_of Program && expr.result.parameters != None
-          // This should actually just be implemented language-side. with a {" "}{expr: *} = on Program. So when you have a function, you cant actually call stuff on it with a space " ": func. is forced.
-
-          // if (context.method && context.resolve().enabled('switch_direction')) { direction *= -1; }
-
-          // We're simply in a callchain: a.b / a *
-          on_result.call();
-        }
-
-        // Capture an indented block.
-        while (!_.done()) {
-          const at = _.copy();
-          let n = 0;
-
-          // Skip over irrelevant whitespace/newlines
-          do {
-            _.skip_while(ch => ch.peek() === '\n');
-            n = _.skip_while(ch => ch.peek() === ' ');
-          } while (!_.done() && _.peek() === '\n');
-
-          const added_whitespace = n - whitespace;
-
-          // First time we encounter something which is indented on the same line or before, we're no longer in our block.
-          if (_.done() || added_whitespace <= 0) { _ = at; break; }
-
-          expr({whitespace: n});
-        }
-
-
-        expression.end = _.end;
-        return _;
-      }
-
-      while (!_.done()) { expr(); }
-
-      return _;
-    }
+    const interpreter = new Interpreter(program);
+    program.interpreter = interpreter.interpret.bind(interpreter);
     
+    await program.add(input.new().bundled.loadDirectory('@ether/.ray3', { recursively: true }).all())
+    await program.add(input.new().bundled.loadDirectory('@ether/.ray2', { recursively: true }).all())
     await program.add(input.new().bundled.loadDirectory(cd, { recursively: true }).all())
     await program.add(input.all())
 
     return program
   })
+
+@instrumented('trace')
+class Interpreter implements Instrumentable {
+
+  public _: AST.Node
+
+  // Seed with a real node so `position` is valid at the instrumentation
+  // wrapper's entry on the first `interpret` call — it reads `position`
+  // before the body assigns `this._`, and an undefined node leaves the
+  // frame without a ctx, so its timing wouldn't nest under `load`.
+  constructor(private program: Runtime) { this._ = program.BASE; }
+
+  get position() { return this._; }
+  get __instrumentation() { return this.program; }
+
+  interpret(_: AST.Node) {
+    this._ = _;
+    while (!this._.done()) { this.expr(); }
+    return this._;
+  }
+
+  candidate(cursor: AST.Node, on: AST.Node = cursor) { 
+    const _this = this;
+    const method = this.capture_longest_token(cursor, on);
+    return ({
+      self: cursor,
+      method,
+      resolve: function() { return cursor.methods.resolve(method); },
+      call: function() {
+        // if (cursor === on && on.methods.resolve(method).enabled('direction', cursor.direction.sign)) // 'Found method X but it wasnt flagged as {direction}'
+        if (method) {
+          const result = cursor.get(method).call();
+
+          //TODO This should be automatic.
+          result.source = cursor.source;
+          result.cursor = cursor.cursor;
+          result.selection = cursor.selection.slice();
+          cursor = result;
+          cursor.debug('deb', cursor === on ? 'found on result' : 'found on context')
+        } else {
+          cursor.capture_while(ch => ch.peek() !== '\n') 
+          cursor.debug('deb', cursor === on ? 'on_result' : 'on_context')
+        }
+        return _this._ = cursor;
+      }
+    }) 
+  }
+
+  expr({whitespace = 0}: { whitespace?: number } = {}): AST.Node {
+    this._.skip_while(ch => ch.peek() === ' ' || ch.peek() === '\n');
+
+    const expression = this._.copy();
+    let direction: -1 | 1 = 1
+    // If type cannot be resolved/is variable, its at minimum a Node, so only that grammar will be available.
+
+    // _.capture_while((ch: string) => ch !== ' ' && ch !== '\n');
+    let first = true;
+    while(!this._.done() && this._.peek() !== '\n') {
+      const result = this._.copy()
+
+      // Skip all the leading whitespace except one: We allow that single whitespace to be captured by a class. Used for function definitions.
+      this._.skip_while(ch => ch.peek(2) === '  ');
+
+      const [a, b] = [this._.copy(), this._];
+ 
+      // Start of the expression, get from context.
+      if (first) { 
+        // Calling from the context doesn't care about that single whitespace: You cannot call a context method which depends on a whitespace.
+        const has_leading_whitespace = a.skip_while(ch => ch.peek() === ' ') !== 0;
+        const on_context = this.candidate(a, this._.program.GLOBAL); //TODO Change to actual context.
+
+        on_context.call();
+        first = false;
+        continue;
+      }
+      // Capture function arguments if there's a leading whitespace. Ex: dynamically assert A == B as dynamically(assert(A == B))
+      // if (has_leading_whitespace && result.IS_FUNCTION_WITH_PARAMETERS) { result.call(expr()); continue; }
+      // expr.result ==.instance_of Program && expr.result.parameters != None
+      // This should actually just be implemented language-side. with a {" "}{expr: *} = on Program. So when you have a function, you cant actually call stuff on it with a space " ": func. is forced.
+
+      // if (context.method && context.resolve().enabled('switch_direction')) { direction *= -1; }
+
+      // We're simply in a callchain: a.b / a *
+      const on_result = this.candidate(b);
+      on_result.call();
+    }
+
+    // Capture an indented block.
+    while (!this._.done()) {
+      const at = this._.copy();
+      let n = 0;
+
+      // Skip over irrelevant whitespace/newlines
+      do {
+        this._.skip_while(ch => ch.peek() === '\n');
+        n = this._.skip_while(ch => ch.peek() === ' ');
+      } while (!this._.done() && this._.peek() === '\n');
+
+      const added_whitespace = n - whitespace;
+
+      // First time we encounter something which is indented on the same line or before, we're no longer in our block.
+      if (this._.done() || added_whitespace <= 0) { this._ = at; break; }
+
+      this.expr({whitespace: n});
+    }
+
+
+    expression.end = this._.end;
+    return this._;
+  }
+
+  indices = new WeakMap<AST.Node, Map<string, string[]>>();
+  index_for(on: AST.Node): Map<string, string[]> {
+    let idx = this.indices.get(on);
+    if (idx) return idx;
+    idx = new Map();
+    for (const key of on.methods.all() as Iterable<string | AST.Node>) {
+      if (!is_string(key)) {
+        this._.fatal('not implemented', 'Non-string keys not yet implemented');
+        return idx;
+      }
+
+      const prefix = key.slice(0, 1); // shorter names key on themselves
+      let bucket = idx.get(prefix);
+      if (!bucket) idx.set(prefix, bucket = []);
+      bucket.push(key);
+    }
+    for (const bucket of idx.values()) bucket.sort((a, b) => b.length - a.length); // longest-first
+    this.indices.set(on, idx);
+    return idx;
+  };
+
+  capture_longest_token(cursor: AST.Node, on: AST.Node = cursor): false | string | AST.Node {
+    const idx = this.index_for(on);
+    const src = cursor.source.value;
+    const start = cursor.direction.head; // read head
+    // Try the longest indexed prefix first; a name shorter than INDEX_CHARS
+    // lives under its own short prefix, so step the probe length down to 1.
+    if (start + 1 > src.length) return false;
+    const bucket = idx.get(src.slice(start, start + 1));
+    if (!bucket) return false;
+    for (const key of bucket) { // longest-first within the bucket
+      if (src.startsWith(key, start)) {
+        cursor.capture_n(key.length)
+        return key;
+      }
+    }
+
+    return false;
+  };
+
+}
 
 const _isMainEntrypoint = (() => {
   if (!nodejs.enabled) return false;

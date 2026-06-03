@@ -132,6 +132,7 @@ export namespace Text {
     done(): boolean                                    { return this.direction.done(); }
     peek(offset: number = 1): string                   { return this.direction.peek(offset); }
     capture(char: string)                              { return this.direction.capture(char); }
+    capture_n(n: number)                               { return this.direction.capture_n(n); }
     capture_while(pred: (ch: Direction) => boolean)    { return this.direction.capture_while(pred); }
     capture_whitespace()                               { return this.direction.capture_whitespace(); }
     capture_line()                                     { return this.direction.capture_line(); }
@@ -186,6 +187,10 @@ export namespace Text {
       if (this.done() || this.peek() !== char) return false;
       this.advance();
       return true;
+    }
+    capture_n(n: number) {
+      this.advance(n)
+      //TODO CHeck for whether in range.
     }
 
     capture_while(pred: (ch: Direction) => boolean): number {

@@ -398,17 +398,6 @@ export namespace AST {
     }
     enabled(key: string, value?: string): boolean { return value ? this.value.options[key] === value : !!this.value.options[key]; }
 
-    capture_longest_token(on?: Node): false | string {
-      on ??= this
-      
-      // if no match, match the whole string
-      // cursor.capture_while(ch => ch.peek() !== ' ' && ch.peek() !== '\n');
-      //                   cursor.error('parse', `Unresolved variable \`${cursor.string}\``) // on X TODO
-
-      //TODO If we're in a comment, we allow the capturing of \n.
-      return false;
-    }
-
     constructor(program: Runtime, source: Text.Source = program.EXTERNALLY_DEFINED, public _super: Node = program.BASE) {
       super()
       this.program = program;

@@ -80,15 +80,18 @@ export class Clock {
   private _ms?: number;
   get ms(): number {
     if (this._ms !== undefined) return this._ms;
+    // Per-descendant correction for the wrapper cost a clock can't measure
+    // about itself (allocation + the `now()` that stamps its own `a` +
+    // invocation). It lands in this clock's raw, not the child's overhead, so
+    // subtract a calibrated constant per child on top of the measured part.
+    const birth = birthCost();
     let total = this.raw;
     const subtract = (clock: Clock): void => {
       const kids = clock.children;
       for (let i = 0; i < kids.length; i++) {
         const child = kids[i];
-
-        // Overhead calculation is approximate
-        if (child.excluded) total -= child.wall;
-        else { total -= child.overhead; subtract(child); }
+        if (child.excluded) total -= child.wall + birth;
+        else { total -= child.overhead + birth; subtract(child); }
       }
     };
     subtract(this);
@@ -853,17 +856,12 @@ export class Diagnostics {
     //    timings are already part of their parent's clocked range, so
     //    counting them again would double-count.
     if (Diagnostics.showLevel('debug')) {
-      type Stats = { count: number; ms: number; level: Diagnostic['level'] };
-      // Each phase appears EXACTLY ONCE in the tree, regardless of
-      // DEBUG level. Stats are summed across every invocation context;
-      // tree placement picks the most-frequent parent. This keeps the
-      // shape stable across runs (a phase doesn't suddenly split into
-      // 3 entries at DEBUG=1 because trace-level ancestors got gated).
-      //
-      // Two passes: (1) collect raw timings + which phases emitted;
-      // (2) walk each diagnostic's stack to find its nearest emitted
-      // ancestor (root if none), then aggregate per-phase stats and
-      // tally "votes" so each phase can pick its dominant parent.
+      // A call tree, not a flat per-phase list: a phase appears under each
+      // caller it actually had, so its time is split by call path and a
+      // child can never exceed the parent it's shown under. Two passes:
+      // (1) collect raw timings, each carrying the stack snapshot taken
+      // when it was emitted; (2) thread each timing onto the tree along its
+      // folded ancestor path (see the build loop below).
       type Raw = { phase: string; level: Diagnostic['level']; ms: number; stack: Diagnostic[] };
       const raws: Raw[] = [];
       const emitted = new Set<string>();
@@ -872,119 +870,82 @@ export class Diagnostics {
         emitted.add(d.phase);
         raws.push({ phase: d.phase, level: d.level, ms: d.clock.ms, stack: d.diagnostics ?? [] });
       }
-      // phase → collapsed Stats.
-      const phaseStats = new Map<string, Stats>();
-      // phase → (parent → vote count). Used to pick the dominant
-      // parent for placement.
-      const parentVotes = new Map<string, Map<string, number>>();
+      // Build a call tree keyed by each timing's folded ancestor path. A
+      // phase appears under EVERY caller it has — e.g. `capture_while`
+      // under both `skip_while` and `capture_longest_token` — each node
+      // carrying only that path's time. That's what keeps a child from
+      // ever exceeding its parent: the old model collapsed a phase to one
+      // node and summed it across all callers, so a multi-caller child
+      // (capture_while) could dwarf any single parent it was filed under.
+      // Recursion folds: a phase nested inside itself maps back onto its
+      // outermost node (the path keeps each phase once), and inclusive
+      // `ms` is added only for that outermost call — nested calls' time is
+      // already inside it — while `count` still tallies every invocation.
+      type TNode = { phase: string; level: Diagnostic['level']; ms: number; count: number; children: Map<string, TNode> };
+      const rootChildren = new Map<string, TNode>();
+      const child = (map: Map<string, TNode>, phase: string, level: Diagnostic['level']): TNode => {
+        let n = map.get(phase);
+        if (!n) map.set(phase, n = { phase, level, ms: 0, count: 0, children: new Map() });
+        return n;
+      };
       for (const r of raws) {
-        const stats = phaseStats.get(r.phase) ?? { count: 0, ms: 0, level: r.level };
-        stats.count++;
-        stats.ms += r.ms;
-        phaseStats.set(r.phase, stats);
-        let parent = '';
-        for (let i = r.stack.length - 1; i >= 0; i--) {
-          if (emitted.has(r.stack[i].phase)) { parent = r.stack[i].phase; break; }
+        // Descend through the emitted ancestors (stack is root→leaf),
+        // visiting each phase once so recursion collapses onto a single
+        // node. Remember the node for r.phase if we pass through it — a
+        // recursive call lands back there instead of nesting under itself.
+        let map = rootChildren;
+        let selfNode: TNode | undefined;
+        const onPath = new Set<string>();
+        for (let i = 0; i < r.stack.length; i++) {
+          const f = r.stack[i];
+          if (!emitted.has(f.phase) || onPath.has(f.phase)) continue;
+          onPath.add(f.phase);
+          const n = child(map, f.phase, f.level);
+          if (f.phase === r.phase) selfNode = n;
+          map = n.children;
         }
-        let votes = parentVotes.get(r.phase);
-        if (!votes) { votes = new Map(); parentVotes.set(r.phase, votes); }
-        votes.set(parent, (votes.get(parent) ?? 0) + 1);
+        const recursive = onPath.has(r.phase);
+        const node = recursive ? selfNode! : child(map, r.phase, r.level);
+        node.count++;
+        if (!recursive) node.ms += r.ms;
       }
-      if (phaseStats.size) {
-        // Pick dominant parent per phase (most votes wins; ties broken
-        // by parent name for determinism).
-        const parentOf = new Map<string, string>();
-        for (const [phase, votes] of parentVotes) {
-          let best = '';
-          let bestCount = -1;
-          for (const [parent, count] of votes) {
-            if (count > bestCount || (count === bestCount && parent < best)) {
-              bestCount = count; best = parent;
-            }
-          }
-          parentOf.set(phase, best);
-        }
-        // children-of map: parent_phase → set of child phases.
-        const childrenOf = new Map<string, Set<string>>();
-        for (const [phase, parent] of parentOf) {
-          let kids = childrenOf.get(parent);
-          if (!kids) { kids = new Set(); childrenOf.set(parent, kids); }
-          kids.add(phase);
-        }
-        // Walk roots → children depth-first. Each phase renders ONCE
-        // (the `placed` set guarantees this), under its dominant
-        // parent. Lines carry:
-        //   - `prefix`: ancestor pipes (`│  ` if ancestor still has
-        //     siblings below, `   ` once it doesn't).
-        //   - `branch`: this line's own elbow (`├─ ` for non-last
-        //     sibling, `└─ ` for last). Empty for roots.
-        // Mutually-recursive phases that pick each other as dominant
-        // parents form an unreachable cycle — the orphan loop after
-        // the root walk picks them up as additional roots.
-        const lines: { prefix: string; branch: string; phase: string; stats: Stats }[] = [];
-        const placed = new Set<string>();
-        const visit = (phase: string, prefix: string, branch: string) => {
-          if (placed.has(phase)) return;
-          placed.add(phase);
-          const stats = phaseStats.get(phase);
-          if (!stats) return;
-          lines.push({ prefix, branch, phase, stats });
-          const kids = childrenOf.get(phase);
-          if (!kids) return;
-          // Sort children by total ms desc.
-          const sortedKids = [...kids].sort((a, b) =>
-            (phaseStats.get(b)?.ms ?? 0) - (phaseStats.get(a)?.ms ?? 0)
-          );
-          // Children's prefix carries each ancestor's continuation —
-          // `│  ` if that ancestor still has siblings below (so its
-          // pipe keeps drawing), `   ` once it doesn't. Roots are
-          // special: their children's prefix is empty — putting the
-          // elbow at column 0, directly under the root's first char.
-          const childPrefix = branch === ''
-            ? ''
-            : prefix + (branch === '└─ ' ? '   ' : '│  ');
-          for (let i = 0; i < sortedKids.length; i++) {
-            const last = i === sortedKids.length - 1;
-            visit(sortedKids[i], childPrefix, last ? '└─ ' : '├─ ');
+      if (rootChildren.size) {
+        // Depth-first walk. `prefix` carries ancestor pipes (`│  ` while an
+        // ancestor still has siblings below, `   ` once it doesn't);
+        // `branch` is this line's own elbow (`├─ `/`└─ `, empty for roots).
+        const lines: { prefix: string; branch: string; node: TNode }[] = [];
+        const visit = (node: TNode, prefix: string, branch: string) => {
+          lines.push({ prefix, branch, node });
+          const kids = [...node.children.values()].sort((a, b) => b.ms - a.ms);
+          const childPrefix = branch === '' ? '' : prefix + (branch === '└─ ' ? '   ' : '│  ');
+          for (let i = 0; i < kids.length; i++) {
+            visit(kids[i], childPrefix, i === kids.length - 1 ? '└─ ' : '├─ ');
           }
         };
-        const roots = [...(childrenOf.get('') ?? new Set<string>())].sort((a, b) =>
-          (phaseStats.get(b)?.ms ?? 0) - (phaseStats.get(a)?.ms ?? 0)
-        );
+        const roots = [...rootChildren.values()].sort((a, b) => b.ms - a.ms);
         for (const root of roots) visit(root, '', '');
-        // Cycle break: any phase whose chosen parent is itself
-        // unreachable from the root walk gets promoted as its own root.
-        for (const [phase] of phaseStats) {
-          if (!placed.has(phase)) visit(phase, '', '');
-        }
-        // Total: sum of root phase totals (children's time is already
-        // inside their parent's clocked range).
+        // Total: sum of root totals — each root's time already includes its
+        // whole subtree.
         let totalMs = 0;
-        for (const root of roots) totalMs += phaseStats.get(root)?.ms ?? 0;
-        // Width: longest "<prefix><branch><phase>" so the right column
-        // lines up regardless of nesting depth.
-        const phaseW = Math.max(
-          ...lines.map(l => l.prefix.length + l.branch.length + l.phase.length),
-          7,
-        );
+        for (const root of roots) totalMs += root.ms;
+        // Width: longest "<prefix><branch><phase>" so the right column lines
+        // up regardless of nesting depth.
+        const phaseW = Math.max(...lines.map(l => l.prefix.length + l.branch.length + l.node.phase.length), 7);
         console.error(`\n  ${c.dim}timings (per phase, DEBUG=1):${c.reset}`);
         let first = true;
-        for (const { prefix, branch, phase, stats } of lines) {
-          // Blank line between top-level phases (no prefix, no branch
-          // = root) so each phase's subtree visually separates from
-          // the next.
+        for (const { prefix, branch, node } of lines) {
+          // Blank line between top-level subtrees so each separates visually.
           if (prefix === '' && branch === '' && !first) console.error('');
           first = false;
-          const color = Diagnostics.levelColor[stats.level] ?? c.gray;
-          const avg = stats.ms / stats.count;
-          // Connectors (prefix + branch) in dark gray so they recede
-          // visually; the phase name keeps the level color.
+          const color = Diagnostics.levelColor[node.level] ?? c.gray;
+          const avg = node.ms / node.count;
+          // Connectors in dark gray so they recede; the phase keeps its level color.
           const connector = `${c.dark_gray}${prefix}${branch}${c.reset}`;
-          const padding = ' '.repeat(phaseW - prefix.length - branch.length - phase.length);
+          const padding = ' '.repeat(phaseW - prefix.length - branch.length - node.phase.length);
           console.error(
-            `    ${connector}${color}${phase}${c.reset}${padding}` +
-            ` ${c.dark_gray}${String(stats.count).padStart(6)}×${c.reset}` +
-            ` ${color}${stats.ms.toFixed(2).padStart(8)}ms${c.reset}` +
+            `    ${connector}${color}${node.phase}${c.reset}${padding}` +
+            ` ${c.dark_gray}${String(node.count).padStart(6)}×${c.reset}` +
+            ` ${color}${node.ms.toFixed(2).padStart(8)}ms${c.reset}` +
             ` ${c.dark_gray}avg ${avg.toFixed(3)}ms${c.reset}`
           );
         }
@@ -999,7 +960,8 @@ export class Diagnostics {
     const parts: string[] = [];
     if (errs.length) parts.push(`${Diagnostics.levelColor.error}${errs.length} error${errs.length > 1 ? 's' : ''}${c.reset}`);
     if (warns.length) parts.push(`${Diagnostics.levelColor.warning}${warns.length} warning${warns.length > 1 ? 's' : ''}${c.reset}`);
-    if (parts.length) console.error(`\n  ${parts.join(', ')}${c.gray}, ${this._start.toString()}`);
+    if (parts.length) console.error(`\n  ${parts.join(', ')}${c.gray}, ${this._start.toString()}${c.reset}`);
+    else console.error(`\n  ${c.gray}${this._start.toString()}${c.reset}`);
   }
 }
 
@@ -1142,6 +1104,17 @@ export function instrument(level: Diagnostic['level'] = 'debug', phase?: string)
  *  with another wrapper around the existing one. */
 const WRAPPED = Symbol('instrumented');
 
+/** Per-instance memo — the own-field count `recurse` saw the last time it
+ *  walked this instance. `recurse`'s only job is discovering newly-reachable
+ *  instrumentable classes; if an instance's field set is unchanged since the
+ *  last walk there's nothing new to find, so we skip it. Lazily-populated
+ *  fields (e.g. `Node._right` on first `.direction` access, `Node._methods`
+ *  on first `.methods`) grow the count and force exactly one re-walk. This
+ *  keeps the steady state O(1) per call instead of re-walking the whole
+ *  object graph on every instrumented method — hot scan methods (`peek` /
+ *  `done` in `capture_while` loops) otherwise drive it into the millions. */
+const WALKED = Symbol('recurse_field_count');
+
 /** Per-instance back-pointer to the host that cascaded into this object.
  *  Cascaded subobjects (e.g. a `Direction` reached via `Node._left`)
  *  don't define their own `__instrumentation` — the framework stamps
@@ -1199,6 +1172,25 @@ function wrap_prototype(proto: any, level: Diagnostic['level'], recursive: boole
  *  beyond this walk's own stack + seen Set. */
 function recurse(instance: any, level: Diagnostic['level']): void {
   if (instance[HOST]) return;
+  // Skip the walk when nothing's changed since last time. Only the top
+  // instance is memoized: every subobject the walk reaches gets a HOST
+  // stamp and so short-circuits above. `WALKED` is a Symbol, so stamping
+  // it doesn't perturb the `Object.keys` count it stores.
+  const keyCount = Object.keys(instance).length;
+  if (instance[WALKED] === keyCount) return;
+  instance[WALKED] = keyCount;
+
+  // The host is whatever exposes a ctx. Usually that's the entry instance
+  // itself (a Node), and the walk stamps HOST downward onto its subobjects.
+  // But the wrapper also calls recurse on subobjects themselves (e.g. every
+  // `Direction.peek`), and those have no ctx — walking only downward would
+  // wrap their prototypes yet never give *them* a host, so their wrappers
+  // bail and the cascade silently misses them. So resolve the host in
+  // whichever direction it lies: if the entry has no ctx, the first reachable
+  // object that does (e.g. `Direction.position` → its Node) becomes the host,
+  // and the entry + the rest of the graph are stamped to point at it.
+  let host: any = instance.__instrumentation ? instance : undefined;
+  const pending: any[] = [];                           // ctx-less objects awaiting a host stamp
   const seen = new Set<any>([instance.constructor]);
   const stack: any[] = [instance];
   while (stack.length) {
@@ -1217,10 +1209,15 @@ function recurse(instance: any, level: Diagnostic['level']): void {
       if (!ctor || seen.has(ctor) || is_native(ctor)) continue;
       seen.add(ctor);
       wrap_prototype(ctor.prototype, level, true);    // cascade is always recursive itself
-      v[HOST] = instance;                              // ctx back-pointer for the wrapper
+      const ctx = v.__instrumentation;
+      if (ctx) { if (!host) host = v; }                // a host candidate (e.g. a Node)
+      else pending.push(v);                            // needs a HOST back-pointer
       stack.push(v);
     }
   }
+  if (!host) return;                                   // nothing instrumentable reachable
+  if (host !== instance && !instance.__instrumentation) instance[HOST] = host;
+  for (const v of pending) v[HOST] = host;             // ctx back-pointer for the wrapper
 }
 
 /** Wrap every own method on the class.
@@ -1288,9 +1285,12 @@ function wrap<Args extends any[], Ret>(
     // location even if `this.position` mutates while the body runs
     // (e.g. parser advances its cursor). The receiver doubles as the
     // diagnostic node so anything reported inside the body lands on
-    // the right source location.
+    // the right source location. Cascaded subobjects (no `position` of
+    // their own — e.g. Value, Methods) borrow the host's node, same as
+    // the ctx fallback above; without a node `report` can't re-derive
+    // the ctx for the stack snapshot, and the frame floats up as a root.
     if (excluded) clock.excluded = true;
-    const node = this.position;
+    const node = this.position ?? (this as any)[HOST]?.position;
     const frame: Diagnostic = { level, phase: name, node, clock };
     ctx.stack.push(frame);
     clock.body();
@@ -1307,4 +1307,35 @@ function wrap<Args extends any[], Ret>(
       clock.stop();
     }
   };
+}
+
+/** The slice of every wrapped call no clock can measure about itself — the
+ *  wrapper invocation, the `Clock` allocation, and the `performance.now()`
+ *  that stamps `a` — all happen before `a`, so they never land in any
+ *  `overhead` and instead inflate the *parent's* raw (and only the parent's,
+ *  since the child never sees them). It's ~constant per call, so calibrate it
+ *  once: run a wrapped no-op many times and take, per call, the wall the loop
+ *  paid minus the wall the call's own clock accounted for (raw + overhead).
+ *  `Clock.ms` adds this back per descendant so a parent isn't billed for its
+ *  children's unmeasurable birth cost. Lazy + memoized; 0 when instrumentation
+ *  is off (nothing was wrapped, so nothing leaked). */
+let _birthMs: number | undefined;
+function birthCost(): number {
+  if (_birthMs !== undefined) return _birthMs;
+  if (!Diagnostics.showLevel('trace')) return _birthMs = 0;
+  let accounted = 0;
+  const ctx: any = { stack: [], log: { report(d: Diagnostic) { accounted += d.clock!.raw + d.clock!.overhead; } } };
+  const host: any = { __instrumentation: ctx };
+  const noop = wrap(function (this: unknown) {}, 'trace', '__calibrate__', {});
+  for (let i = 0; i < 2000; i++) noop.call(host);            // warm the JIT
+  let best = Infinity;
+  for (let trial = 0; trial < 5; trial++) {
+    accounted = 0;
+    const N = 1 << 15;
+    const t0 = performance.now();
+    for (let i = 0; i < N; i++) noop.call(host);
+    const leaked = (performance.now() - t0 - accounted) / N;  // wall the clocks couldn't see
+    best = Math.min(best, leaked);
+  }
+  return _birthMs = best > 0 ? best : 0;
 }

@@ -1,9 +1,0 @@
-test code
-
-Expression = 
-  (token: (
-    (whitespace: " " | \n),
-    (expression: not " " & \n, token?) ~= (
-      
-   )
-  ))[]

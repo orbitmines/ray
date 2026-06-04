@@ -785,6 +785,7 @@ export class Diagnostics {
    *   2. Flat summary — errors, warnings, and traces that carry a stacktrace
    */
   print() {
+    const exec = this._start.wall; // execution time captured before rendering, so it excludes the cost of printing diagnostics
     const { c } = Diagnostics;
 
     // 1. Inline annotated source. `items` is already keyed by file —
@@ -960,8 +961,9 @@ export class Diagnostics {
     const parts: string[] = [];
     if (errs.length) parts.push(`${Diagnostics.levelColor.error}${errs.length} error${errs.length > 1 ? 's' : ''}${c.reset}`);
     if (warns.length) parts.push(`${Diagnostics.levelColor.warning}${warns.length} warning${warns.length > 1 ? 's' : ''}${c.reset}`);
-    if (parts.length) console.error(`\n  ${parts.join(', ')}${c.gray}, ${this._start.toString()}${c.reset}`);
-    else console.error(`\n  ${c.gray}${this._start.toString()}${c.reset}`);
+    const execStr = `${exec.toFixed(2)}ms`;
+    if (parts.length) console.error(`\n  ${parts.join(', ')}${c.gray}, ${this._start.toString()}${c.reset} ${c.dark_gray}${execStr}${c.reset}`);
+    else console.error(`\n  ${c.gray}${this._start.toString()}${c.reset} ${c.dark_gray}${execStr}${c.reset}`);
   }
 }
 

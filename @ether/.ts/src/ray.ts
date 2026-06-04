@@ -80,8 +80,8 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
     const interpreter = new Interpreter(program);
     program.interpreter = interpreter.interpret.bind(interpreter);
     
-    await program.add(input.new().bundled.loadDirectory('@ether/.ray3', { recursively: true }).all())
-    await program.add(input.new().bundled.loadDirectory('@ether/.ray2', { recursively: true }).all())
+    //await program.add(input.new().bundled.loadDirectory('@ether/.ray3', { recursively: true }).all())
+    //await program.add(input.new().bundled.loadDirectory('@ether/.ray2', { recursively: true }).all())
     await program.add(input.new().bundled.loadDirectory(cd, { recursively: true }).all())
     await program.add(input.all())
 
@@ -110,26 +110,39 @@ class Interpreter implements Instrumentable {
 
   candidate(cursor: AST.Node, on: AST.Node = cursor) { 
     const _this = this;
-    const method = this.capture_longest_token(cursor, on);
+    let method = this.capture_longest_token(cursor, on);
     return ({
       self: cursor,
       method,
-      resolve: function() { return cursor.methods.resolve(method); },
+      resolve: function() { return method ? cursor.methods.resolve(method) : cursor.None; },
       call: function() {
+        let skip_line = false;
         // if (cursor === on && on.methods.resolve(method).enabled('direction', cursor.direction.sign)) // 'Found method X but it wasnt flagged as {direction}'
-        if (method) {
-          const result = cursor.get(method).call();
+        if (!method) {
+          method = cursor.capture_while(ch => ch.peek() !== ' ' && ch.peek() !== '\n')
+          if (!method) { cursor.skip_while(ch => ch.peek() === ' '); return _this._ = cursor; }
 
-          //TODO This should be automatic.
-          result.source = cursor.source;
-          result.cursor = cursor.cursor;
-          result.selection = cursor.selection.slice();
-          cursor = result;
-          cursor.debug('deb', cursor === on ? 'found on result' : 'found on context')
-        } else {
-          cursor.capture_while(ch => ch.peek() !== '\n') 
           cursor.debug('deb', cursor === on ? 'on_result' : 'on_context')
+          skip_line = true;
         }
+
+        //TODO This should be automatic.
+        const m = on.get(method);
+        m.source = cursor.source;
+        m.cursor = cursor.cursor;
+        m.selection = cursor.selection.slice();
+
+        const result = m.call();
+        result.before = cursor;
+        result.source = cursor.source;
+        result.cursor = cursor.cursor;
+        result.selection = cursor.selection.slice();
+        cursor = result;
+        cursor.debug('deb', cursor === on ? 'found on result' : 'found on context')
+
+        if (skip_line)
+          cursor.skip_while(ch => ch.peek() !== '\n') // Consume rest of the line which we wont interpret because method is unresolved.
+
         return _this._ = cursor;
       }
     }) 
@@ -145,7 +158,7 @@ class Interpreter implements Instrumentable {
     // _.capture_while((ch: string) => ch !== ' ' && ch !== '\n');
     let first = true;
     while(!this._.done() && this._.peek() !== '\n') {
-      const result = this._.copy()
+      // const result = this._.copy()
 
       // Skip all the leading whitespace except one: We allow that single whitespace to be captured by a class. Used for function definitions.
       this._.skip_while(ch => ch.peek(2) === '  ');
@@ -153,10 +166,11 @@ class Interpreter implements Instrumentable {
       const [a, b] = [this._.copy(), this._];
  
       // Start of the expression, get from context.
-      if (first) { 
+      if (first) {
         // Calling from the context doesn't care about that single whitespace: You cannot call a context method which depends on a whitespace.
         const has_leading_whitespace = a.skip_while(ch => ch.peek() === ' ') !== 0;
-        const on_context = this.candidate(a, this._.program.GLOBAL); //TODO Change to actual context.
+        a._super = this._.program.GLOBAL; //TODO Change to actual context.
+        const on_context = this.candidate(a);
 
         on_context.call();
         first = false;
@@ -198,33 +212,13 @@ class Interpreter implements Instrumentable {
     return this._;
   }
 
-  indices = new WeakMap<AST.Node, Map<string, string[]>>();
-  index_for(on: AST.Node): Map<string, string[]> {
-    let idx = this.indices.get(on);
-    if (idx) return idx;
-    idx = new Map();
-    for (const key of on.methods.all() as Iterable<string | AST.Node>) {
-      if (!is_string(key)) {
-        this._.fatal('not implemented', 'Non-string keys not yet implemented');
-        return idx;
-      }
-
-      const prefix = key.slice(0, 1); // shorter names key on themselves
-      let bucket = idx.get(prefix);
-      if (!bucket) idx.set(prefix, bucket = []);
-      bucket.push(key);
-    }
-    for (const bucket of idx.values()) bucket.sort((a, b) => b.length - a.length); // longest-first
-    this.indices.set(on, idx);
-    return idx;
-  };
-
   capture_longest_token(cursor: AST.Node, on: AST.Node = cursor): false | string | AST.Node {
     if (cursor.done()) return false;
 
-    const idx = this.index_for(on);
+    const idx = on.methods.index();
 
     const bucket = idx.get(cursor.peek());
+    // if ' ', check 2 first
     if (!bucket) return false;
     
     for (const key of bucket) { // longest-first within the bucket

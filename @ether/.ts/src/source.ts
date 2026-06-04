@@ -193,20 +193,24 @@ export namespace Text {
       //TODO CHeck for whether in range.
     }
 
-    capture_while(pred: (ch: Direction) => boolean): number {
+    capture_while(pred: (ch: Direction) => boolean): string {
+      const start = this.head;
       let n = 0;
       while (!this.done() && pred(this)) { n++; this.advance(); }
-      return n;
+      if (n === 0) return '';
+      let a = start, b = this.boundary;
+      if (b < a) { [a, b] = [b, a]; }
+      return this.position.source.value.slice(a, b + 1);
     }
 
     skip_while(pred: (ch: Direction) => boolean): number {
       this.skip();
-      const n = this.capture_while(pred);
+      const n = this.capture_while(pred).length;
       this.skip();
       return n;
     }
 
-    capture_whitespace(): number { return this.capture_while(ch => ch.peek() === ' '); }
+    capture_whitespace(): number { return this.capture_while(ch => ch.peek() === ' ').length; }
 
     capture_line(): string {
       let a = this.boundary;

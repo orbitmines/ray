@@ -7,7 +7,8 @@ import { Source, Node, Text } from "./source.ts";
 import { Standard, Version } from "./version.ts";
 import { Diagnostic, Diagnostics, Instrumentable, InstrumentationCtx, instrumented, uninstrumented } from "./diagnostics.ts";
 import { manifest as bundle_manifest } from "./bundled.ts";
-import { is_function } from "./lodash.ts";
+import { is_function, is_string } from "./lodash.ts";
+import { stringify } from "querystring";
 
 namespace CLI { export type Args = [] | [positional: string[], args: { [key: string]: string[] }] }
 
@@ -281,15 +282,14 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
   GLOBAL: AST.Node = new AST.Node(this, this.EXTERNALLY_DEFINED, this.CTX)
 
   nodes: AST.Node[] = []
+  scopes: (AST.Node | undefined)[] = []
 
   abstract_interpretation: { enabled?: boolean, call?: (fn: AST.Node) => AST.Node } = {}
   interpreter?(_: AST.Node): AST.Node | undefined
 
   override new(): Runtime {
     const x = super.new() as Runtime;
-    // `abstract_interpretation.call` is language-level setup; the `enabled`
-    // flag is per-execution and stays whatever the fresh copy decides.
-    x.abstract_interpretation = { call: this.abstract_interpretation.call };
+    x.abstract_interpretation = { enabled: this.abstract_interpretation.enabled, call: this.abstract_interpretation.call };
     x.interpreter = this.interpreter;
     return x;
   }
@@ -314,12 +314,14 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
   async exec(positional?: string[], args?: { [key: string]: string[]; }): Promise<AST.Node> {
     //TODO Support superposed input.
     let result = this.BASE.None;
-    for await (const node of this.all() as AsyncGenerator<AST.Node>) { result = node; }
-    if (this.log.hasErrors) process.exitCode = 1;
+    for await (const program of this.all() as AsyncGenerator<AST.Node>) {
+      result = program.realize()
+    }
+    if (this.log.hasErrors) process.exitCode = 1; //TODO Allow non-terminating execs
     this.log.print();
     return result;
   }
-  abstract = (call_abstractly?: (fn: Node) => Node): this => {
+  abstract = (call_abstractly?: (fn: AST.Node) => AST.Node): this => {
     if (call_abstractly) { 
       this.abstract_interpretation.call = call_abstractly;
     } else {
@@ -373,6 +375,7 @@ export namespace AST {
   class Value {
     encoded: EncodedMethod | Symbol | undefined | null = UNKNOWN
     options: { [key: string]: Key } = EMPTY_OPTIONS
+    thunks: ((self: Node) => void)[] | null = null;
     private methods: Map<Key, Node> = EMPTY_METHODS
 
     set(key: Key, method: Node) {
@@ -382,6 +385,7 @@ export namespace AST {
     get(key: Key) { return this.methods.get(key); }
     has(key: Key) { return this.methods.has(key); }
     keys() { return this.methods.keys() }
+    get count() { return this.methods.size }
 
     // conflict(ref: Node){}
   }
@@ -389,7 +393,13 @@ export namespace AST {
   @instrumented('trace', { recursive: true })
   export class Node extends Text.Node implements Source, Instrumentable {
 
-    private value: Value = new Value()
+    static describe(key: Key): string {
+      if (is_string(key)) return key;
+      return "Not yet implemented"
+    }
+
+    value: Value = new Value()
+    _index?: Map<string, string[]>;
     with(key: string, value?: string): this {
       if (this.value.options === EMPTY_OPTIONS) this.value.options = {};
       this.value.options[key] = value ?? 'true';
@@ -438,7 +448,9 @@ export namespace AST {
       //  const past = (): boolean => direction === 'right-to-left' ? this.begin <= rangeStart : this.end >= rangeEnd;
       // program.runtime._expression!.iterate(this, past, false);
       //       while (!cursor.direction.done() && (!past || !past())) handle(node);
-      this.program.interpreter(cursor);
+      const result = this.program.interpreter(cursor);
+      this.value = result.value;
+      this.before = result.before;
       // return this.log.fatal(this.program.name, "Node isn't a root node, so refusing to parse from here.");
     }
 
@@ -449,38 +461,57 @@ export namespace AST {
     get is_unknown() { return this.value.encoded === UNKNOWN }
     get is_none() { return this.value.encoded === undefined || this.value.encoded === null }
 
+    // `this` is sequenced after `before` (a `;`); realizing runs the chain first.
+    before?: Node;
+
     override move(cursor: number): void {
+      this.before = this.copy();
       super.move(cursor);
       this.clear();
+    }
+
+    begin_expression(): void {
+      this.program.scopes.push(this.before);
+      this.before = undefined;
+    }
+    end_expression(): Node {
+      const body = this.New;
+      body.before = this.before;
+      this.before = this.program.scopes.pop();
+      return body;
     }
 
     copy(): Node {
       const copy = this.New;
       copy.source = this.source
-      copy.thunks = this.thunks ? [...this.thunks] : null
-      copy.value = this.value; // TODO Now is a ref to the same value.
+      copy.value = this.value; // TODO Now is a ref to the same value (thunks included).
+      copy.before = this.before
       copy.cursor = this.cursor
       copy.selection = this.selection.slice()
       copy._direction = this._direction
       return copy;
     }
     clear(): void {
-      this.thunks = [] //TODO Maybe move thunks into .value?
       this.value = new Value()
+      this._index = undefined;
     }
 
-    private thunks: ((self: Node) => void)[] | null = null;
-    lazily(fn: (self: Node) => void): this { if (!this.thunks) this.thunks = []; this.thunks.push(fn); return this; }
+    lazily(fn: (self: Node) => void): this { if (!this.value.thunks) this.value.thunks = []; this.value.thunks.push(fn); return this; }
     realize(): Node {
-      if (this.thunks) {
-        const t = this.thunks;
-        this.thunks = null;
-        for (const fn of t) fn(this);
+      const pending: Node[] = [];
+      for (let node: Node | undefined = this; node; ) { pending.push(node); const before = node.before; node.before = undefined; node = before; }
+      while (pending.length) {
+        const node = pending.pop()!;
+        while (node.value.thunks) {
+          const thunks = node.value.thunks;
+          node.value.thunks = null;
+          for (const fn of thunks) fn(node);
+        }
       }
       return this;
     }
 
-    get(key: Key): Node { return this.New.lazily((self) => self.value = this.eager.get(key).value); }
+    get(key: Key): Node { return this.New.lazily((self) => self.value = this.methods.resolve(key).value); }
     set(value: Node): Node { return this.lazily((self) => self.eager.set(value)); }
     call(args?: Node): Node {
       args ??= this.None;
@@ -501,64 +532,11 @@ export namespace AST {
     }
 
     // Eagerly get from this object directly, without any inheritance.
-    private _eager: any;
-    get eager() {
-      if (this._eager) return this._eager;
-
-      const self = this;
-      class Eager {
-        has(key: Key): boolean { self.realize(); return self.value.has(key); }
-        get(key: Key): Node | undefined { self.realize(); return self.value.get(key); }
-        set(val: Node): Node { self.realize(); self.value = val.value; return self; }
-        call(args?: Node) {
-          args ??= self.None
-          
-          let fn: Node = self;
-          if (self.program.abstract_interpretation.enabled)
-            fn = self.program.abstract_interpretation.call(self)
-  
-          fn.realize()
-          if (!is_function(fn.value.encoded)) {
-            return fn.error('call', `Expected a function to call.`)
-          }
-  
-          return fn.value.encoded(fn.value.encoded._class, self, args)
-        }
-      }
-      return this._eager = new Eager();
-    }
+    private _eager?: Eager;
+    get eager(): Eager { return this._eager ??= new Eager(this); }
     // Eagerly get from this object, including inhertiance.
-    private _methods: any
-    get methods() {
-      if (this._methods) return this._methods;
-
-      const self = this;
-      class Methods {
-
-        all(): Set<Key> {
-          const keys = new Set<Key>(self.value.keys());
-          if (self._super) for (const k of self._super.methods.all()) keys.add(k);
-          return keys;
-        }
-        has(key: Key): boolean { return !self.methods.resolve(key).none }
-        resolve(key: Key): Node {
-          if (self.eager.has(key)) {
-            // const bound = self.eager.get(key)!.copy();
-            // bound.value.self = self;
-            return self.eager.get(key);
-          }
-          if (self._super) return self._super.methods.resolve(key);
-          return self.None;
-        }
-        defines(key: Key): Node | null {
-          if (self.eager.has(key)) return self;
-          if (self._super) return self._super.methods.defines(key);
-          return null;
-        }
-      }
-
-      return this._methods = new Methods()
-    }
+    private _methods?: Methods;Res
+    get methods(): Methods { return this._methods ??= new Methods(this); }
     
     method(key: Key, fn: Method): Node {
       const method = this.New;
@@ -567,9 +545,85 @@ export namespace AST {
       method.value.encoded = fn as EncodedMethod// ? fn : UNRESOLVED;
 
       this.value.set(key, method)
+      this._index = undefined;
 
       return method;
     }
 
+  }
+
+  // Eagerly get from a node directly, without any inheritance. Hoisted (one class,
+  // node passed in) so we don't mint a class per node on first `.eager` access.
+  class Eager {
+    constructor(private self: Node) {}
+    has(key: Key): boolean { const self = this.self; self.realize(); return self.value.has(key); }
+    get(key: Key): Node {
+      const self = this.self;
+      self.realize();
+      if (!self.value.has(key)) return self.error('eager.get', `Unresolved variable \`${Node.describe(key)}\` in ${Node.describe(self)}.`)
+      return self.value.get(key)!;
+    }
+    set(val: Node): Node { const self = this.self; self.realize(); self.value = val.value; return self; }
+    call(args?: Node): Node {
+      const self = this.self;
+      args ??= self.None
+
+      let fn: Node = self;
+      if (self.program.abstract_interpretation.enabled)
+        fn = self.program.abstract_interpretation.call(self)
+
+      fn.realize()
+      if (!is_function(fn.value.encoded)) {
+        return fn.error('call', `Expected a function to call.`)
+      }
+
+      return (fn.value.encoded as EncodedMethod)((fn.value.encoded as EncodedMethod)._class, self, args)
+    }
+  }
+
+  // Eagerly get from a node, including inheritance. Hoisted for the same reason as Eager.
+  class Methods {
+    constructor(private self: Node) {}
+
+    all(): Set<Key> {
+      const self = this.self;
+      const keys = new Set<Key>(self.value.keys());
+      if (self._super) for (const k of self._super.methods.all()) keys.add(k);
+      return keys;
+    }
+    // Prefix index (first char -> keys, longest-first) for token capture.
+    // A node with no methods of its own shares its super's index verbatim, so
+    // the transient result/cursor nodes reuse the stable scope index instead of
+    // rebuilding it per token. Cached on the owning node; invalidated by method().
+    index(): Map<string, string[]> {
+      const self = this.self;
+      if (self.value.count === 0 && self._super) return self._super.methods.index();
+      if (self._index) return self._index;
+      const idx = new Map<string, string[]>();
+      for (const key of self.methods.all()) {
+        if (!is_string(key)) return self.fatal('not implemented', 'Non-string keys not yet implemented');
+        const prefix = key.slice(0, 1); // shorter names key on themselves
+        let bucket = idx.get(prefix);
+        if (!bucket) idx.set(prefix, bucket = []);
+        bucket.push(key);
+      }
+      for (const bucket of idx.values()) bucket.sort((a, b) => b.length - a.length); // longest-first
+      return self._index = idx;
+    }
+    has(key: Key): boolean { return !!this.self.methods.defines(key) }
+    resolve(key: Key): Node {
+      let node: Node | undefined = this.self;
+      while (node) {
+        if (node.eager.has(key)) return node.eager.get(key);
+        node = node._super;
+      }
+      return this.self.eager.get(key);
+    }
+    defines(key: Key): Node | null {
+      const self = this.self;
+      if (self.eager.has(key)) return self;
+      if (self._super) return self._super.methods.defines(key);
+      return null;
+    }
   }
 }

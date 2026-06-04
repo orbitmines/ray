@@ -1,5 +1,5 @@
 import { fileURLToPath } from "url";
-import { Runtime, String, AST } from "./language2.ts";
+import { Runtime, String, AST } from "./language.ts";
 import {Standard, Version} from "./version.ts";
 import { nodejs } from "./node.js.ts";
 import { Instrumentable, instrumented } from "./diagnostics.ts";
@@ -80,8 +80,8 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
     const interpreter = new Interpreter(program);
     program.interpreter = interpreter.interpret.bind(interpreter);
     
-    //await program.add(input.new().bundled.loadDirectory('@ether/.ray3', { recursively: true }).all())
-    //await program.add(input.new().bundled.loadDirectory('@ether/.ray2', { recursively: true }).all())
+    await program.add(input.new().bundled.loadDirectory('@ether/.ray3', { recursively: true }).all())
+    await program.add(input.new().bundled.loadDirectory('@ether/.ray2', { recursively: true }).all())
     await program.add(input.new().bundled.loadDirectory(cd, { recursively: true }).all())
     await program.add(input.all())
 
@@ -149,6 +149,8 @@ class Interpreter implements Instrumentable {
   }
 
   expr({whitespace = 0}: { whitespace?: number } = {}): AST.Node {
+    //TODO Should trigger reinterpretation of other dependant files? or what's the best way of calculating what depends on what.
+
     this._.skip_while(ch => ch.peek() === ' ' || ch.peek() === '\n');
 
     const expression = this._.copy();
@@ -240,4 +242,8 @@ const _isMainEntrypoint = (() => {
   catch { return false; }
 })();
 
-if (_isMainEntrypoint) Ether.frontend(Ray.new().bundled.loadProject('@ether/.ts/test')).abstract().exec()
+if (_isMainEntrypoint) {
+  const ether = Ether.frontend(Ray.new().bundled.loadProject('@ether/.ts/test')).abstract()
+  await ether.exec()
+  ether.print()
+}

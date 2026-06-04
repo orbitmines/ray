@@ -17,7 +17,7 @@
 //
 //   Usage:  Cpp.frontend(src.loadFile("main.cpp")).backend(zig).exec()
 
-import { Representation, String as Str } from "./language2.ts";
+import { Representation, String as Str } from "./language.ts";
 import { Diagnostics } from "./diagnostics.ts";
 
 import * as fs from "fs";

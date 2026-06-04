@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Ray } from '../spec.ts';
+import { Ether, Ray } from '../ray.ts';
 import { start } from './server.ts';
 
-start(Ray);
+start(Ether.frontend(Ray.new()));

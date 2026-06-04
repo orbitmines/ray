@@ -10,100 +10,50 @@ import {
   type InitializeResult,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { Language, Runtime, Program } from '../language.ts';
+import { Runtime } from '../language.ts';
+import { Text } from '../source.ts';
 import { toLsp } from './diagnostics.ts';
 
 /**
- * Boot the LSP for a configured Language.
+ * Boot the LSP for an already-configured runtime (base/context methods +
+ * interpreter, e.g. the program produced by the Ray frontend compiler).
  *
- * Lifecycle:
- *   - At startup: run pass 0 (syntax/base/context, the `.abstract(fn => …)`
- *     handler) and flip the runtime into abstract interpretation so verify()
- *     never executes encoded fn bodies.
- *   - Initial enumeration is driven by the client (`ether/initialFiles`):
- *     VS Code's `workspace.findFiles` is faster and respects user excludes,
- *     so we don't crawl the filesystem ourselves.
- *   - On document/file change: re-parse the touched file plus whatever
- *     `affectedBy(uri)` reports — a stub returning [] today, where cross-
- *     file dependency tracking will plug in once symbols can resolve across
- *     files.
+ * Editor lifecycle maps onto the runtime API:
+ *   - parse / re-parse a document → `runtime.reload(new Text.Source(text, file))`
+ *   - forget a document          → `runtime.reload(new Text.Source('', file))`
+ * Diagnostics self-identify their file via `node.file`, so we publish straight
+ * out of the per-file index on `runtime.log.items`.
  */
-export function start(language: Language): void {
-  const runtime = language.backend as Runtime;
+export async function start(language: Runtime): Promise<void> {
+  language.abstract();
+  await language.exec();
+  const runtime = language.compiled ?? language;
 
-  // Make `fatal` non-fatal: we don't want a single bad parse to take the
-  // server down. Throw instead, which the per-file validate catches.
+  // A single bad parse must not take the server down: make `fatal` throw rather
+  // than exit, and swallow it per-document.
   class FatalParse extends Error {}
   runtime.log.exit = (() => { throw new FatalParse('fatal diagnostic'); }) as any;
 
-  // Run the bootstrap pass (registers token handler, BASE/CTX methods, AND
-  // the language's `.abstract(fn => …)` handler). Later passes load the std
-  // lib from disk; the workspace crawl handled by the client supersedes
-  // that.
-  if (language.passes.length > 0) {
-    for (const step of language.passes[0].steps) step();
-  }
-
-  // Editor diagnostics must not execute user code: encoded fns can do file
-  // IO, mutate the runtime, or shell out. Flip the runtime into abstract
-  // interpretation — same lazy-realization shape, but routed through
-  // `runtime.abstract_interpretation.call` so encoded bodies never run.
-  runtime.abstract();
-
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
-
-  /** Map of document URI → Program created for the most recent parse. */
-  const programs = new Map<string, Program>();
-  /** Source text per URI — used when `documents` doesn't have the file open. */
-  const sources = new Map<string, string>();
 
   const uriToFile = (uri: string): string => {
     try { return fileURLToPath(uri); } catch { return uri; }
   };
 
-  /** Drop our cached program + source for a URI, plus every runtime-side
-   *  cache scrap that references it (resolutions' demand sites, both
-   *  byPosition caches, the affected items in `log.items`, and the
-   *  errored-line counts). Without this cleanup, re-parsing a file
-   *  layers new diagnostics on top of stale cache state — cascade
-   *  dedup then sees the old "this line already errored" entries and
-   *  suppresses the legit new errors, so VSCode shows nothing. */
-  const dropFile = (uri: string) => {
-    const prev = programs.get(uri);
-    if (prev) {
-      runtime.dropProgramState(prev);
-      const idx = runtime.programs.indexOf(prev);
-      if (idx !== -1) runtime.programs.splice(idx, 1);
-    }
-    programs.delete(uri);
-    sources.delete(uri);
-  };
-
-  /** Parse a single file, store its program. */
-  const parseFile = (uri: string, text: string): Program | null => {
-    dropFile(uri);
-    sources.set(uri, text);
-    const file = uriToFile(uri);
-    try { runtime.parse(text, file); }
-    catch (e) { if (!(e instanceof FatalParse)) throw e; }
-    const program = runtime.programs[runtime.programs.length - 1] ?? null;
-    if (program) programs.set(uri, program);
-    return program;
-  };
-
-  /** Realize deferred work via abstract interpretation. Uses the same
-   *  `runtime.verify` path as `.abstract().exec()` so LSP diagnostics include
-   *  the resolution sweep (unresolved externals, cross-file forward refs). */
-  const verifyAll = (): void => {
-    try { runtime.verify(); }
+  /** (Re)parse a document into the runtime. */
+  const parseFile = (uri: string, text: string): void => {
+    try { runtime.reload(new Text.Source(text, uriToFile(uri))); }
     catch (e) { if (!(e instanceof FatalParse)) throw e; }
   };
 
-  /** Convert this file's diagnostics into LSP form and publish on the URI.
-   *  Pulls from the per-file index on `runtime.log.items` (a `Map` keyed
-   *  by file path); diagnostics self-identify their file via `node.file`,
-   *  so no Program backref is needed. */
+  /** Forget a document — reload an empty source at its location. */
+  const dropFile = (uri: string): void => {
+    try { runtime.reload(new Text.Source('', uriToFile(uri))); }
+    catch (e) { if (!(e instanceof FatalParse)) throw e; }
+  };
+
+  /** Publish this file's diagnostics on its URI. */
   const publishFile = (uri: string): void => {
     const file = uriToFile(uri);
     const diags = (runtime.log.items.get(file) ?? [])
@@ -112,96 +62,52 @@ export function start(language: Language): void {
     connection.sendDiagnostics({ uri, diagnostics: diags });
   };
 
-  /**
-   * Return the URIs whose diagnostics may change as a result of `uri`'s
-   * source changing. Stub for now — once symbols resolve across files, this
-   * returns the dependents (any file with a forward-ref that changes status,
-   * or whose binding the change broke). Until then no file affects another,
-   * so [] is correct.
-   */
-  const affectedBy = (_uri: string): string[] => [];
-
-  /** Parse + verify + publish each URI (de-duplicated). */
-  const revalidate = (uris: Iterable<string>): void => {
-    const seen = new Set<string>();
-    const order: string[] = [];
-    for (const uri of uris) {
-      if (seen.has(uri)) continue;
-      const text = sources.get(uri);
-      if (text === undefined) continue;
-      seen.add(uri);
-      order.push(uri);
-      parseFile(uri, text);
-    }
-    verifyAll();
-    for (const uri of order) publishFile(uri);
-  };
-
   connection.onInitialize((_params: InitializeParams): InitializeResult => ({
     capabilities: { textDocumentSync: TextDocumentSyncKind.Full },
-    serverInfo: { name: `${language.name}-language-server`, version: language.version },
+    serverInfo: { name: `${runtime.name.toLowerCase() ?? 'ray'}-language-server` },
   }));
 
-  // Custom request: hand the Language's editor configuration to the client.
-  connection.onRequest('ether/languageConfiguration', () => language._configuration ?? {});
+  // Editor configuration (comments, brackets, …) — none wired yet.
+  connection.onRequest('ether/languageConfiguration', () => ({}));
 
-  /**
-   * Custom request from the client: a list of all language files in the
-   * workspace, enumerated via `vscode.workspace.findFiles`. We read each
-   * from disk (skipping ones already managed as open documents — those
-   * arrive via didOpen with the in-memory text, which may differ from disk).
-   */
+  // Whole-workspace initial enumeration, driven by the client's
+  // `vscode.workspace.findFiles`. Read each from disk (skipping open documents,
+  // which arrive via didOpen with live text).
   connection.onRequest('ether/initialFiles', (params: { uris: string[] }) => {
     const touched: string[] = [];
     for (const uri of params.uris ?? []) {
-      if (documents.get(uri)) continue;     // open in editor: handled by didOpen
-      if (programs.has(uri)) continue;      // already loaded
+      if (documents.get(uri)) continue;
       const file = uriToFile(uri);
       let text: string;
-      try { text = fs.readFileSync(file, 'utf-8'); }
-      catch { continue; }
+      try { text = fs.readFileSync(file, 'utf-8'); } catch { continue; }
       parseFile(uri, text);
       touched.push(uri);
     }
-    verifyAll();
     for (const uri of touched) publishFile(uri);
   });
 
-  documents.onDidOpen(e => {
-    sources.set(e.document.uri, e.document.getText());
-    revalidate([e.document.uri, ...affectedBy(e.document.uri)]);
-  });
-  documents.onDidChangeContent(e => {
-    sources.set(e.document.uri, e.document.getText());
-    revalidate([e.document.uri, ...affectedBy(e.document.uri)]);
-  });
+  documents.onDidOpen(e => { parseFile(e.document.uri, e.document.getText()); publishFile(e.document.uri); });
+  documents.onDidChangeContent(e => { parseFile(e.document.uri, e.document.getText()); publishFile(e.document.uri); });
   documents.onDidClose(_e => {
-    // Keep the program: file still exists on disk and other files may
-    // (eventually) depend on its definitions. didChangeWatchedFiles is the
-    // signal for actual deletion.
+    // Keep the document parsed: the file still exists on disk; deletion comes via
+    // didChangeWatchedFiles.
   });
 
-  // External edits / file create / delete (registered by the client via
-  // `synchronize.fileEvents`). We re-read from disk because the document is
-  // typically not open in the editor.
+  // External edits / create / delete (registered by the client via
+  // `synchronize.fileEvents`).
   connection.onDidChangeWatchedFiles(params => {
-    const touched = new Set<string>();
     for (const change of params.changes) {
       if (change.type === FileChangeType.Deleted) {
-        for (const dep of affectedBy(change.uri)) touched.add(dep);
         dropFile(change.uri);
         connection.sendDiagnostics({ uri: change.uri, diagnostics: [] });
         continue;
       }
       const file = uriToFile(change.uri);
       let text: string;
-      try { text = fs.readFileSync(file, 'utf-8'); }
-      catch { continue; }
-      sources.set(change.uri, text);
-      touched.add(change.uri);
-      for (const dep of affectedBy(change.uri)) touched.add(dep);
+      try { text = fs.readFileSync(file, 'utf-8'); } catch { continue; }
+      parseFile(change.uri, text);
+      publishFile(change.uri);
     }
-    revalidate(touched);
   });
 
   documents.listen(connection);

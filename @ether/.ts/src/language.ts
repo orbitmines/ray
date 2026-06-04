@@ -79,6 +79,12 @@ export abstract class Representation<Static extends Representation<Static> = Rep
   // This is a Ray with a compiler on each edge. (Which is the implicit conversion as (X), in Ray) -> Should be called that on Ray too.
   frontends: Compilers = new Compilers(-1); /* <- . -> */ backends: Compilers = new Compilers(1)
 
+  // The program a `frontend(...)` wrapper produced once its compiler ran (via
+  // `all()`/`exec()`). Lets callers reach the configured runtime the wrapper
+  // built — e.g. the LSP, which then drives it through `reload(...)`.
+  compiled?: Static
+
+
   register_frontend<Frontend extends Representation<Frontend>>(frontend: Frontend, compile: Compiler<Frontend, Static>): this {
     if (this.frontends.find(x => x.name === frontend.name)) return this.log.fatal(this.name, `There's already a frontend named '${frontend.name}' for '${this.name}'`);
     frontend.backends.next.set(this, compile as any);
@@ -99,7 +105,7 @@ export abstract class Representation<Static extends Representation<Static> = Rep
     if (!compiler) return this.log.fatal(this.name, `Could not find a frontend named '${frontend.name}' for '${this.name}'`);
     
     const x = this.new();
-    x.all = async function*() { yield *(await compiler(this, frontend)).all() }
+    x.all = async function*() { yield *(x.compiled ??= (await compiler(this, frontend)) as Static).all() }
     return x;
   }
 
@@ -247,7 +253,16 @@ export class String extends Representation<String, Text.Source> {
   };
 
   private bundled_resolve(location: string): string {
-    if (nodejs.enabled) return nodejs.path.resolve(nodejs.root, location);
+    if (nodejs.enabled) {
+      // An `@ether/$/.ray` marker in the working directory means we're in a checkout
+      // of the language repo (same marker `boot.ts` uses to pick repo mode) — use its
+      // in-tree definition rather than the packaged copy, so IDE extensions work
+      // against the development version.
+      const cwd = process.cwd();
+      if (nodejs.fs.existsSync(nodejs.path.resolve(cwd, '@ether/$/.ray')))
+        return nodejs.path.resolve(cwd, location);
+      return nodejs.path.resolve(nodejs.root, location);
+    }
     return new URL('../' + location, import.meta.url).href;
   }
 
@@ -317,9 +332,12 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
     for await (const program of this.all() as AsyncGenerator<AST.Node>) {
       result = program.realize()
     }
+    return result;
+  }
+
+  print(): void {
     if (this.log.hasErrors) process.exitCode = 1; //TODO Allow non-terminating execs
     this.log.print();
-    return result;
   }
   abstract = (call_abstractly?: (fn: AST.Node) => AST.Node): this => {
     if (call_abstractly) { 
@@ -357,7 +375,29 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
     })
   }
   reload(next: Source | Node | Iterable<Source | Node> | Runtime): Runtime {
-    throw new Error("Method not implemented.");
+    if (!this.abstract_interpretation.enabled) return this.log.fatal('reload', 'Currently only abstract interpretation is hot-reloadable.')
+
+    // Naieve reload of just a single file.
+    const one = (item: any): void => {
+      let node: AST.Node;
+      if (item instanceof AST.Node) {
+        node = item;
+      } else {
+        const source = item as Text.Source;
+        if (source.location !== undefined)
+          this.nodes = this.nodes.filter(n => n.source.location !== source.location);
+        this.log.delete(source);
+        node = this.addNode(source);
+      }
+      node.load();
+      node.realize();
+    };
+
+    if (next instanceof Runtime) { /* re-running a whole runtime: nothing to do yet */ }
+    else if (next instanceof AST.Node || next instanceof Text.Source) one(next);
+    else for (const item of next as Iterable<Source | Node>) one(item);
+
+    return this;
   }
   
 }
@@ -535,7 +575,7 @@ export namespace AST {
     private _eager?: Eager;
     get eager(): Eager { return this._eager ??= new Eager(this); }
     // Eagerly get from this object, including inhertiance.
-    private _methods?: Methods;Res
+    private _methods?: Methods;
     get methods(): Methods { return this._methods ??= new Methods(this); }
     
     method(key: Key, fn: Method): Node {

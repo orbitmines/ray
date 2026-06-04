@@ -10,8 +10,6 @@ let client: LanguageClient | undefined;
 let configDisposable: Disposable | undefined;
 
 export async function activate(context: ExtensionContext) {
-  console.log('[ether-debug] activate() called from', context.extensionPath);
-  void window.showInformationMessage('[ether-debug] activate() called');
   let boot;
   try {
     boot = resolveBoot(context.extensionPath);

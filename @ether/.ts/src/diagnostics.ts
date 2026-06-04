@@ -228,6 +228,16 @@ export class Diagnostics {
     }
   }
 
+  /** Forget every diagnostic for a specific source (keyed by its file), rebuilding
+   *  the derived caches so a stale "this line already errored" entry can't suppress
+   *  fresh diagnostics when the source is re-parsed. */
+  delete(source: Text.Source): void {
+    this.items.delete(source.location);
+    const remaining = [...this.all()];
+    this.erroredRegions.rebuild(remaining);
+    this.byPosition.rebuild(remaining);
+  }
+
   /** True if `node`'s line in its file already carries an earlier
    *  error — cascade dedup, so a single broken expression doesn't
    *  spray duplicate errors across the line. O(1) via the per-file

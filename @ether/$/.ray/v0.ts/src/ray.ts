@@ -80,8 +80,8 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
     const interpreter = new Interpreter(program);
     program.interpreter = interpreter.interpret.bind(interpreter);
     
-    await program.add(input.new().bundled.loadDirectory('@ether/.ray3', { recursively: true }).all())
-    await program.add(input.new().bundled.loadDirectory('@ether/.ray2', { recursively: true }).all())
+    // await program.add(input.new().bundled.loadDirectory('@ether/.ray3', { recursively: true }).all())
+    // await program.add(input.new().bundled.loadDirectory('@ether/.ray2', { recursively: true }).all())
     await program.add(input.new().bundled.loadDirectory(cd, { recursively: true }).all())
     await program.add(input.all())
 

@@ -133,7 +133,7 @@ class Interpreter implements Instrumentable {
         m.selection = cursor.selection.slice();
 
         const result = m.call();
-        result.before = cursor;
+        // result.before = cursor;
         result.source = cursor.source;
         result.cursor = cursor.cursor;
         result.selection = cursor.selection.slice();

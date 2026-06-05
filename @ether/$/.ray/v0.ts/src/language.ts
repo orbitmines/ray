@@ -565,7 +565,7 @@ export namespace AST {
     // if (args.source !== Text.Source.EMPTY) {
       // next.source = args.source;
       // if (args.cursor != null) next.cursor = args.cursor;
-      // if (args.selection.length) next.selection = args.selection.slice();
+      // if (args.selection.length) next.rselection = args.selection.slice();
     // }
       // if (out.source !== Text.Source.EMPTY) self.source = out.source;
       // if (out.cursor != null) self.cursor = out.cursor;

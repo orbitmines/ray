@@ -1,3 +1,171 @@
+// interpreter will probably be forward compatible if we dont introduce more externals.
+
+∀ x ∈ R ∋ x^2 < 0 
+∀R ^2 < 0 // actual target.
+∀x: R, x^2 < 0
+
+∀ x ∈ R ∋ (x + y)^2 < 0  // Forces that all things in R indeed follow this, which is different from just enumerating the possibilties after the filter.
+∀ x: R
+{x^2 < 0}
+
+// All the variables which are already castable to R?
+x^2 < 0 : R // Type constraints like this which is just x: R{^2 < 0}
+x^2 < 0 && y^3 < a : R
+
+// Automatic equivalences (force)
+// Preferential equivalences (suggest)
+// Compile time equivalence (optimization, approximation, or just a plain equivalence)
+// Define what happens when a backspace is entered: Is itfor display something else? so example would be -> vs actual arrow, backspace removes just the >? or (())
+// Turn off each kind per method
+// Ctrl z undoes the equivalence, and forces that not to be done 
+
+∀ x ∈ R ∋ x^2 < 0 
+∀ x ∈ Rmisspelled ∋ x^2 < 0 
+// You kind of want the error to be on Rmisspelled and recognize that it could at least be a Node?
+// Right now the error would be on x.∈, 'wrong direction for ∈'. That wrong direction should indicate we should parse differently?
+a < b < c 
+// Does the interpreter need to be aware of this 'chainable'/non-associtivity
+// You could do a rule: (a < b)** < c => a < b && b < c - that's probably a good thing to be able to do. Match to that as a type and match 
+// Generalized: (a.(op: chainable) b)** op c => a op b && b op c // op resolves in context because of space?
+// thing chaining is said how? or a == b == c, so that it's not on the result, but it acts on each side up to another one of the operands.
+
+// Program Types, macros etc..
+
+Program{a ((opl: chainable)) b}
+  {opr: chainable} (c) a ((opl)) b && b ((opr)) c
+
+Program{a ⸨opl: chainable⸩ b}
+  {opr: chainable} (c) a ⸨opl⸩ b && b ⸨opr⸩ c
+Program{a 'opl: chainable b}
+  {opr: chainable} (c) a 'opl b && b 'opr c
+
+// If we say {} space is not used for A | B : {}, but for this:
+Program{a {opl: chainable} b}
+  {opr: chainable} (c) a {opl} b && b {opr} c
+// Alternatively what other languages do (probably not)
+Program{a {opl: chainable} b}
+  {opr: chainable} (c) a[opl](b) && b[opr](c)
+
+// equivalence with 'as'
+
+Number
+  + 0 = () this
+
+// Methods are already program equivalances. Just simplified versions.
+
+x: Number + 0 => x 
+a ((opl: chainable)) b ((opr: chainable)) c => a ((opl)) b && b ((opr)) c
+
+approx a: float * b: float => a * (1 / b)
+
+a {opl: chainable} b {opr: chainable} c => a {opl} b && b {por} c
+"for", a, ";", b, ";", c =>
+// property how?
+
+@me.style = suggest mathematics + suggest dead_code + suggest redundancy + suggest simplify // Normal methods are flagged as higher-level -> in the direction of using the method
+style = suggest -mathematics // disable/reverse all mathematics
+
+
+// What about according to different styles. Edit-time equivalances
+style mathematics
+// Enable in some order mathematician + nomathematics
+namespace.mathematics
+
+dead_code {
+  return a
+  dead
+} => return a
+
+force
+suggest // Automatically the case
+approx //How to say what kind of approximation
+optimize
+
+// These accepts a block, which applies it to all properties.
+// or just a single one, like most modifiers.
+
+Program{a 'opl: chainable b}
+  {opr: chainable} (c) a 'opl b && b 'opr c
+
+
+
+
+a [opl: chainable] b [opr: chainable] c => a [opl] b & b [opr] c
+
+for{' '[], '(', a, ';', b, ';', c ')'} =>
+{for a; b; c} => 
+abc{b} => // If returns a string
+{: *}
+{: (): *} // what about block and * capture
+
+// how to distinguish from (last of it)
+
+
+
+{a} {opl: chainable} {b} {opr: chainable} {c} => a {opl} b && b {por} c
+{a}{opl: chainable}{b}{opr: chainable}{c} => a((opl))b && b((por))c
+for {a}; {b}; {c} =>
+property{Hexademical} =>
+{a {opl: chainable} b {opr: chainable} c} => a {opl} b && b {opr} c
+{a ((opl: chainable)) b ((opr: chainable)) c} => a ((opl)) b && b ((opr)) c
+rule = a [opl: chainable] b [opr: chainable] c => a [opl] b & b [opr] c // & because it supports non-boolean resulting values and & collapses to &&.
+
+
+// {} is optional
+// [] also accepts a closure like .() does.
+
+a [|| | &&] b
+a ((|| | &&)) b
+a ⸨|| | &&⸩ b
+
+// What if 'for' is already defined in scope?
+// Say the same for 'approximation' or 'optimization'
+
+=> of an equivalence is a =, contrary to the default &=  or should it be = by default?
+
+// Default of {} space is that the space is ignored as syntax and that a .func might apply
+
+// Always (( for variable method. Instead of the a[method](b) shenanigans
+// Requires (( and )) as closing, so "a ((a | b): String) b" is a function definition.
+
+(( => ⸨ // TODO if )) at the end.
+
+{
+  x + 0
+} => x
+
+{
+  x [op] 0
+} => {
+  x
+}
+
+
+{
+  x [op] 0
+} => {
+  x
+}
+
+x {op} 0
+{var} + 0 // same as var + 0
+func({var}) // same as func(var) --> only really useful for variable methods.
+
+x.{op}(test)
+// how to distinguish:
+x{op}(test) // is x{op} filter.
+x {op}(test) // space always means ignore the space when {op} so could be .{op}
+
+{
+  x [op] 0
+} =>
+  x
+
+
+
+
+=> resolves in the context (not on a = )
+
 
 {RULES @ * |= .}}: (
   parenthesis: (" "[]{length >= 1} "(", " "[], ")")?, Statement?, ("=>", Statement)(? if parenthesis)

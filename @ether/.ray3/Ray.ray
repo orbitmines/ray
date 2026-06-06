@@ -21,12 +21,12 @@ class Boundary < Ray
   static class Initial < Boundary
     ⊙ = Edge(x.terminal: this)
 
-    ∙⊣⊙ </ initial = Boundary.Initial(∙: ⊢∙⊣⊙ </) //TODO Something like this, should also respect if None.
+    ∙⊣⊙initial </ = Boundary.Initial(∙: ⊢∙⊣⊙ </) //TODO Something like this, should also respect if None.
     terminal⊙⊢∙ = Boundary.Initial(∙: ∙⊣⊙⊢) //TODO Edge works
   static class Terminal < Boundary
     ⊙ = Edge(x.initial: this)
 
-    ∙⊣⊙ </ initial = Boundary.Terminal(∙: ⊣⊙⊢∙ </)
+    ∙⊣⊙initial </ = Boundary.Terminal(∙: ⊣⊙⊢∙ </)
     terminal⊙⊢∙ = Boundary.Terminal(∙: ⊙⊢∙⊣)
 
 class Edge < Ray

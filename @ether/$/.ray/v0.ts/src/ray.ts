@@ -219,7 +219,7 @@ class Interpreter implements Instrumentable {
 
     const idx = on.methods.index();
 
-    const bucket = idx.get(cursor.peek());
+    const bucket = idx.get(cursor.peek()); //TODO Other direction needs to support as well; ends with char X.
     // if ' ', check 2 first
     if (!bucket) return false;
     

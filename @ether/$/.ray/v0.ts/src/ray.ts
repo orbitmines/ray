@@ -75,28 +75,26 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
     })
 
     const cd = '@ether/$/.ray'
-    // input.new().bundled.load(`${cd}/Node.ray`)
 
+    const bootstrapper = new Bootstrapper(program);
+    program.interpreter = bootstrapper.bootstrap.bind(bootstrapper);
+    await program.add(input.new().bundled.loadFile(`${cd}/Node.ray`).all())
+    for await (const _ of program.all()) {}
+    
     const interpreter = new Interpreter(program);
     program.interpreter = interpreter.interpret.bind(interpreter);
-    
+
     // await program.add(input.new().bundled.loadDirectory('@ether/.ray3', { recursively: true }).all())
     // await program.add(input.new().bundled.loadDirectory('@ether/.ray2', { recursively: true }).all())
-    await program.add(input.new().bundled.loadDirectory(cd, { recursively: true }).all())
+    await program.add(input.new().bundled.loadDirectory(cd, { recursively: true, excluded: `${cd}/Node.ray` }).all())
     await program.add(input.all())
 
     return program
   })
 
-@instrumented('trace')
-class Interpreter implements Instrumentable {
-
+abstract class AbstractInterpreter implements Instrumentable {
   public _: AST.Node
 
-  // Seed with a real node so `position` is valid at the instrumentation
-  // wrapper's entry on the first `interpret` call — it reads `position`
-  // before the body assigns `this._`, and an undefined node leaves the
-  // frame without a ctx, so its timing wouldn't nest under `load`.
   constructor(private program: Runtime) { this._ = program.BASE; }
 
   get position() { return this._; }
@@ -107,6 +105,47 @@ class Interpreter implements Instrumentable {
     while (!this._.done()) { this.expr(); }
     return this._;
   }
+
+  abstract expr(options?: { whitespace?: number }): AST.Node
+
+  capture_block({whitespace = 0}: { whitespace?: number } = {}) {
+    // Capture an indented block.
+    while (!this._.done()) {
+      const at = this._.copy();
+      let n = 0;
+
+      // Skip over irrelevant whitespace/newlines
+      do {
+        this._.skip_while(ch => ch.peek() === '\n');
+        n = this._.skip_while(ch => ch.peek() === ' ');
+      } while (!this._.done() && this._.peek() === '\n');
+
+      const added_whitespace = n - whitespace;
+
+      // First time we encounter something which is indented on the same line or before, we're no longer in our block.
+      if (this._.done() || added_whitespace <= 0) { this._ = at; break; }
+
+      this.expr({whitespace: n});
+    }
+  }
+}
+
+@instrumented('trace')
+class Bootstrapper extends AbstractInterpreter {
+
+  // Separate method for instrumentation differentation of Bootstrapper & Interpreter
+  bootstrap(_: AST.Node) { return this.interpret(_) }
+
+  expr({whitespace = 0}: { whitespace?: number } = {}): AST.Node {
+    this._.skip_while(ch => ch.peek() === ' ' || ch.peek() === '\n') // consume leading blank lines/indent — without this the top-level loop never gets past the line's '\n' and spins forever
+    this._.skip_while(ch => ch.peek() !== '\n')                      // skip the rest of the line
+    this.capture_block({whitespace})
+    return this._;
+  }
+}
+
+@instrumented('trace')
+class Interpreter extends AbstractInterpreter {
 
   candidate(cursor: AST.Node, on: AST.Node = cursor) { 
     const _this = this;
@@ -160,8 +199,6 @@ class Interpreter implements Instrumentable {
     // _.capture_while((ch: string) => ch !== ' ' && ch !== '\n');
     let first = true;
     while(!this._.done() && this._.peek() !== '\n') {
-      // const result = this._.copy()
-
       // Skip all the leading whitespace except one: We allow that single whitespace to be captured by a class. Used for function definitions.
       this._.skip_while(ch => ch.peek(2) === '  ');
 
@@ -178,6 +215,7 @@ class Interpreter implements Instrumentable {
         first = false;
         continue;
       }
+
       // Capture function arguments if there's a leading whitespace. Ex: dynamically assert A == B as dynamically(assert(A == B))
       // if (has_leading_whitespace && result.IS_FUNCTION_WITH_PARAMETERS) { result.call(expr()); continue; }
       // expr.result ==.instance_of Program && expr.result.parameters != None
@@ -187,28 +225,14 @@ class Interpreter implements Instrumentable {
 
       // We're simply in a callchain: a.b / a *
       const on_result = this.candidate(b);
+
+      // if (on_result.resolve().enabled('right-to-left'))
+        // this._.debug('test', 'testtest')
+
       on_result.call();
     }
 
-    // Capture an indented block.
-    while (!this._.done()) {
-      const at = this._.copy();
-      let n = 0;
-
-      // Skip over irrelevant whitespace/newlines
-      do {
-        this._.skip_while(ch => ch.peek() === '\n');
-        n = this._.skip_while(ch => ch.peek() === ' ');
-      } while (!this._.done() && this._.peek() === '\n');
-
-      const added_whitespace = n - whitespace;
-
-      // First time we encounter something which is indented on the same line or before, we're no longer in our block.
-      if (this._.done() || added_whitespace <= 0) { this._ = at; break; }
-
-      this.expr({whitespace: n});
-    }
-
+    this.capture_block({whitespace})
 
     expression.end = this._.end;
     return this._;

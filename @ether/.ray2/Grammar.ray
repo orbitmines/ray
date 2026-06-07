@@ -64,17 +64,43 @@ a {opl: chainable} b {opr: chainable} c => a {opl} b && b {por} c
 
 @me.style = suggest mathematics + suggest dead_code + suggest redundancy + suggest simplify // Normal methods are flagged as higher-level -> in the direction of using the method
 style = suggest -mathematics // disable/reverse all mathematics
-
+// certain features under mathematics.optional like the alternative version of :
 
 // What about according to different styles. Edit-time equivalances
 style mathematics
 // Enable in some order mathematician + nomathematics
 namespace.mathematics
 
-dead_code {
+:{} without an arg maps to type = type{filter}
+
+// How to say if no jumps go there.
+dead_code
   return a
   dead
-} => return a
+=> 
+  return a
+
+dead_code {
+  if false
+    dead:{unreachable}
+} => 
+optimize.dead_code : Program{unreachable} => void
+
+//TODO How to capture patterns
+//TODO How to capture negations
+//TODO How to capture forward/backward looking.
+
+dead_code
+  return a?
+  dead:{unreachable}
+=> return a
+
+
+// {} is a (): *, => then capatalizes on that by turning that program into a rewrite rule.
+// How does => remove the unresolved variables?
+
+// How to support map <T>{predicate: (x: T + iterator: Ray): boolean}(map: (x): T) => static{T: T}
+{("<", partial_params, ">")?, ("{"}
 
 force
 suggest // Automatically the case
@@ -93,12 +119,33 @@ Program{a 'opl: chainable b}
 a [opl: chainable] b [opr: chainable] c => a [opl] b & b [opr] c
 
 for{' '[], '(', a, ';', b, ';', c ')'} =>
-{for a; b; c} => 
+{"for", a, ";", b, ";", c} => 
+for{" "}({a};{b};{c}) => 
 abc{b} => // If returns a string
 {: *}
 {: (): *} // what about block and * capture
 
 // how to distinguish from (last of it)
+
+
+x: Number + 0 == x              // == not => : provably reversible
+x: Number * 1 == x
+!(!x) == x                      // double negation
+x ((|| | &&)) x == x            // idempotence, reusing your variable-method capture
+
+
+force simplify
+  goto target if c
+  fallthrough: *
+  return res?
+ target\
+  body: *
+=>
+  if c
+    body
+  else
+    fallthrough
+   where target.<-# .length == 1   // only legal if `target` is the *sole* jump site
 
 
 

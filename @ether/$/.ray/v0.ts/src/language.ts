@@ -232,7 +232,11 @@ export class String extends Representation<String, Text.Source> {
     ),
     loadFile: (location: string): String => this.loadFile(this.bundled_resolve(location)),
     loadDirectory: (location: string, options: { recursively?: boolean, excluded?: string } = {}): String => {
-      if (bundle_manifest.length === 0) return this.loadDirectory(this.bundled_resolve(location), options);
+      if (bundle_manifest.length === 0) return this.loadDirectory(this.bundled_resolve(location), {
+        ...options,
+        // resolve `excluded` like `location` so walkDir's absolute entryPath comparison matches
+        excluded: options.excluded ? this.bundled_resolve(options.excluded) : undefined,
+      });
       const recursively = options.recursively ?? false;
       const prefix = location.replace(/\/$/, '') + '/';
       for (const entry of bundle_manifest) {

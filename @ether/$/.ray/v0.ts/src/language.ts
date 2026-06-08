@@ -294,6 +294,24 @@ export class String extends Representation<String, Text.Source> {
   }
 }
 
+export class Phase {
+  constructor(public program: Runtime, public name: string) {}
+  nodes: AST.Node[] = []
+
+  add(source?: Text.Source): AST.Node {
+    const x = new AST.Node(this.program, source ?? this.program.EXTERNALLY_DEFINED)
+    x.phase = this;
+    this.nodes.push(x);
+    return x;
+  }
+
+  sources(): Iterable<AST.Node> { return this.nodes; }
+
+  async reparse(): Promise<void> {
+    for (const node of this.nodes) { await node.load(); node.realize(); }
+  }
+}
+
 export class Runtime extends Representation<Runtime> implements InstrumentationCtx, Program<Runtime>, AbstractInterpretable<Runtime>, REPLable<Runtime>, Reloadable<Runtime> {
   protected construct(): Runtime { return new Runtime() }
 
@@ -306,8 +324,21 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
   CTX: AST.Node = new AST.Node(this, this.EXTERNALLY_DEFINED, this.BASE)
   GLOBAL: AST.Node = new AST.Node(this, this.EXTERNALLY_DEFINED, this.CTX)
 
-  nodes: AST.Node[] = []
+  phases: Map<string, Phase> = new Map()
+  current?: Phase
   scopes: (AST.Node | undefined)[] = []
+
+  phase(name: string): Phase {
+    let phase = this.phases.get(name);
+    if (!phase) this.phases.set(name, phase = new Phase(this, name));
+    return phase;
+  }
+  get latest_phase(): Phase {
+    let latest: Phase | undefined;
+    for (const phase of this.phases.values()) latest = phase;
+    return latest ?? this.phase('input');
+  }
+  get nodes(): AST.Node[] { return [...this.phases.values()].flatMap(p => p.nodes); }
 
   abstract_interpretation: { enabled?: boolean, call?: (fn: AST.Node) => AST.Node } = {}
   interpreter?(_: AST.Node): AST.Node | undefined
@@ -329,12 +360,15 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
     const interpreter = this.interpreter;
     if (!interpreter) return this.log.fatal(this.name, `No interpreter setup for the '${this.name}' runtime.`);
 
-    const x = new AST.Node(this, source ?? this.EXTERNALLY_DEFINED)
-    this.nodes.push(x);
-    return x; 
+    return this.latest_phase.add(source);
   }
 
-  protected source(): Iterable<AST.Node> { return this.nodes; }
+  override async *all(): AsyncGenerator<AST.Node> {
+    for (const phase of this.phases.values()) {
+      this.current = phase;
+      for (const node of phase.sources()) { await node.load(); yield node; }
+    }
+  }
 
   async exec(positional?: string[], args?: { [key: string]: string[]; }): Promise<AST.Node> {
     //TODO Support superposed input.
@@ -384,7 +418,7 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
       prompt()
     })
   }
-  reload(next: Source | Node | Iterable<Source | Node> | Runtime): Runtime {
+  reload(next: Source | Node | Iterable<Source | Node> | Runtime | Phase): Runtime {
     if (!this.abstract_interpretation.enabled) return this.log.fatal('reload', 'Currently only abstract interpretation is hot-reloadable.')
 
     // Naieve reload of just a single file.
@@ -394,16 +428,21 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
         node = item;
       } else {
         const source = item as Text.Source;
+        let phase = this.latest_phase;
         if (source.location !== undefined)
-          this.nodes = this.nodes.filter(n => n.source.location !== source.location);
+          for (const p of this.phases.values()) {
+            if (p.nodes.some(n => n.source.location === source.location)) phase = p;
+            p.nodes = p.nodes.filter(n => n.source.location !== source.location);
+          }
         this.log.delete(source);
-        node = this.addNode(source);
+        node = phase.add(source);
       }
       node.load();
       node.realize();
     };
 
     if (next instanceof Runtime) { /* re-running a whole runtime: nothing to do yet */ }
+    else if (next instanceof Phase) { void next.reparse(); }
     else if (next instanceof AST.Node || next instanceof Text.Source) one(next);
     else for (const item of next as Iterable<Source | Node>) one(item);
 
@@ -449,6 +488,7 @@ export namespace AST {
     }
 
     value: Value = new Value()
+    phase?: Phase;
     _index?: Map<string, string[]>;
     with(key: string, value?: string): this {
       if (this.value.options === EMPTY_OPTIONS) this.value.options = {};
@@ -494,6 +534,7 @@ export namespace AST {
     get location() { return `${this.source.location ? `${this.source.location}:` : ''}${this.line}:${this.col}` }
 
     async load(): Promise<void> {
+      if (this.phase) this.program.current = this.phase;
       let cursor: AST.Node | undefined = this;
       //  const past = (): boolean => direction === 'right-to-left' ? this.begin <= rangeStart : this.end >= rangeEnd;
       // program.runtime._expression!.iterate(this, past, false);
@@ -534,6 +575,7 @@ export namespace AST {
     copy(): Node {
       const copy = this.New;
       copy.source = this.source
+      copy.phase = this.phase
       copy.value = this.value; // TODO Now is a ref to the same value (thunks included).
       copy.before = this.before
       copy.cursor = this.cursor

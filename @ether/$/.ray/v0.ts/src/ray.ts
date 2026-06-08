@@ -78,15 +78,18 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
 
     const bootstrapper = new Bootstrapper(program);
     program.interpreter = bootstrapper.bootstrap.bind(bootstrapper);
+    program.phase('bundled')
     await program.add(input.new().bundled.loadFile(`${cd}/Node.ray`).all())
     for await (const _ of program.all()) {}
-    
+
     const interpreter = new Interpreter(program);
     program.interpreter = interpreter.interpret.bind(interpreter);
 
     // await program.add(input.new().bundled.loadDirectory('@ether/.ray3', { recursively: true }).all())
     // await program.add(input.new().bundled.loadDirectory('@ether/.ray2', { recursively: true }).all())
     await program.add(input.new().bundled.loadDirectory(cd, { recursively: true, excluded: `${cd}/Node.ray` }).all())
+
+    program.phase('input')
     await program.add(input.all())
 
     return program
@@ -95,10 +98,14 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
 abstract class AbstractInterpreter implements Instrumentable {
   public _: AST.Node
 
-  constructor(private program: Runtime) { this._ = program.BASE; }
+  constructor(protected program: Runtime) { this._ = program.BASE; }
 
   get position() { return this._; }
   get __instrumentation() { return this.program; }
+
+  get phase() { return this.program.current; }
+  sources() { return this.phase?.sources() ?? []; }
+  reparse(phase = this.phase) { if (phase) this.program.reload(phase); }
 
   interpret(_: AST.Node) {
     this._ = _;

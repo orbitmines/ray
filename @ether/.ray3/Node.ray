@@ -1,3 +1,57 @@
+// Create a graph on what grammar rules depend on what, then detect a clash where the existance of one invalidates the existance of itself.
+// "Grammar rules must not have circularity self-circularity or otherwise.".
+// - Because we load in everything at the same time. Only phasing which exists is the language definition + dependencies + the actual program.
+//
+
+// Probably need a flag to say "eval this now so that runtime checks/grammar chedks can be evaluated" for everything calling 'class' for instance.
+
+// Whichever one is defined first would 'prevent' the other one from being defined.
+// There's dependence on phases regardless, and you want them to be separated. Just got to pay attention when importing other code that it doesnt nullify certain grammar rules.
+
+
+// Grammar changes/overrides only effect the current phase for instance. What if I want a dependant to also have this? Yes I want to be able to import NEW grammar, but overriding the langauge for instance is only to itself? Unless we specify a way to import it as a lanaguage cahgning phase.
+
+
+do something
+
+{GRAMMAR RULE FOR /* */} => 
+
+do something else
+
+
+// and I define a grammar rule which says
+{do something, String, do something else} =>
+// I can cancel out the {GRAMMAR RULE FOR /* */} rule. That's why phases should be separated.
+// Each < from @[] is a separate phase.
+
+// Error: The rules `{/* */}` and `{/$ $/}` circularly prevent eachother from existing. 
+/*
+
+{GRAMMAR RULE FOR /$ $/} =>
+
+*/
+
+/$
+
+{GRAMMAR RULE FOR /* */} => 
+
+$/
+
+// What if in it it defines that grammar rule which is also defined elsewhere -> then it wouldnt fail, it would just drop this interpretation
+"
+
+{GRAMMAR RULE FOR /* */}
+
+"
+
+// Error actually: Undefined, it would be defined for the grammar rule but it is defined inside it.
+/*
+
+{GRAMMAR RULE FOR /* */} =>
+
+*/
+
+
 // Object with -Node as a primitive, which is then basically map.
 
 // TODO Modifier: precedence(before Node.==)

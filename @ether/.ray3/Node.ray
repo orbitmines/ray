@@ -69,8 +69,7 @@ comment //{" "[], comment: String, \n?} | /*{
 {{expr: (): *}} =>
   expr.= = (obj) => expr<local: obj>
   expr //TODO How to make it evaluate properly for this. // Required to return (): * for .while to work
-({expr: *}) => expr
-[{elements: *}] => elements
+
 
 Modifier = (this: *): { location: a (this, *) }
 
@@ -91,8 +90,9 @@ class * | Node
   ~~ (call: (: this): *): this => call(this); this
   , <edge?>(b) => [this].push_back<edge>(b)
 
-  external ({args: *})
-  external [{property: *}]
+  // Support .method syntax.
+  . => this
+
   <{partial_args: (): *}> => this++ ~~ .partial_args &= partial_args
   {{constraint: (this: static): boolean}} => this++ ~~ .constraints &= constraint
 

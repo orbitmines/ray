@@ -140,14 +140,96 @@ abstract class AbstractInterpreter implements Instrumentable {
 @instrumented('trace')
 class Bootstrapper extends AbstractInterpreter {
 
+  scope: AST.Node = this.program.GLOBAL;
+  patternPieces: Map<AST.Node, AST.Node[]> = new Map();
+
   // Separate method for instrumentation differentation of Bootstrapper & Interpreter
-  bootstrap(_: AST.Node) { return this.interpret(_) }
+  bootstrap(_: AST.Node) { this.scope = this.program.GLOBAL; return this.interpret(_) }
 
   expr({whitespace = 0}: { whitespace?: number } = {}): AST.Node {
     this._.skip_while(ch => ch.peek() === ' ' || ch.peek() === '\n') // consume leading blank lines/indent — without this the top-level loop never gets past the line's '\n' and spins forever
+
+    if (this._.peek(6) === 'class ') return this.klass({whitespace});
+    if (this.rule()) { this.capture_block({whitespace}); return this._; }
+
     this._.skip_while(ch => ch.peek() !== '\n')                      // skip the rest of the line
     this.capture_block({whitespace})
     return this._;
+  }
+
+  klass({whitespace = 0}: { whitespace?: number } = {}): AST.Node {
+    this._.capture_n('class '.length);
+    this._.skip_while(ch => ch.peek() === ' ');
+    this._.capture_while(ch => ch.peek() !== '\n');
+    const name = this._.copy();
+
+    const scope = this.scope;
+    this.scope = this.program.class_node(name.string.trim());
+    this.capture_block({whitespace});
+    this.scope = scope;
+    return this._;
+  }
+
+  rule(): boolean {
+    const at = this._.copy();
+    const src = this._.source.value;
+
+    const pieces: AST.Node[] = [];
+    const opens: number[] = [];
+    let runStart = -1, blockStart = -1, sawBlock = false;
+
+    const emit = (a: number, b: number) => {
+      const p = new AST.Node(this.program);
+      p.source = this._.source; p.cursor = a; p.selection = [a, b];
+      pieces.push(p);
+    };
+    const flushRun = (to: number) => {
+      if (runStart < 0) return;
+      let a = runStart, b = to;
+      while (a <= b && src[a] === ' ') a++;
+      while (b >= a && src[b] === ' ') b--;
+      if (a <= b) emit(a, b);
+      runStart = -1;
+    };
+
+    for (;;) {
+      const head = this._.head;
+      const ch = this._.peek();
+      if (!ch || ch === '\n') {
+        if (opens.length > 0) {
+          const open = this._.copy();
+          open.cursor = opens[opens.length - 1];
+          open.selection = [open.cursor, open.cursor];
+          open.error('rule', 'Expected a closing `}` for this `{`.');
+          return true;
+        }
+        this._ = at;
+        return false;
+      }
+      if (opens.length === 0 && this._.peek(2) === '=>') { flushRun(head - 1); if (!sawBlock) { this._ = at; return false; } break; }
+      if (ch === '{') {
+        if (opens.length === 0) { flushRun(head - 1); blockStart = head; sawBlock = true; }
+        opens.push(head);
+      } else if (ch === '}' && opens.length > 0) {
+        opens.pop();
+        if (opens.length === 0) emit(blockStart, head);
+      } else if (opens.length === 0 && runStart < 0) {
+        runStart = head;
+      }
+      this._.capture_n(1);
+    }
+    const pattern = this._.copy();
+    while (pattern.end != null && pattern.end > pattern.begin! && pattern.source.value[pattern.end] === ' ') pattern.end = pattern.end - 1;
+
+    this._.capture_n(2);
+    this._.skip_while(ch => ch.peek() === ' ');
+    this._.capture_while(ch => ch.peek() !== '\n');
+    const body = this._.copy();
+
+    this.scope.method(pattern, () => body);
+    this.patternPieces.set(pattern, pieces);
+    pattern.trace('rule', `${pattern.string} => ${body.string}`);
+    return true;
   }
 }
 
@@ -232,6 +314,7 @@ class Interpreter extends AbstractInterpreter {
 
       // We're simply in a callchain: a.b / a *
       const on_result = this.candidate(b);
+      // TODO Hardcode space + property or even without a space. if nothing matches./
 
       // if (on_result.resolve().enabled('right-to-left'))
         // this._.debug('test', 'testtest')

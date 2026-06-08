@@ -323,6 +323,17 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
   BASE: AST.Node = new AST.Node(this, this.EXTERNALLY_DEFINED, null)
   CTX: AST.Node = new AST.Node(this, this.EXTERNALLY_DEFINED, this.BASE)
   GLOBAL: AST.Node = new AST.Node(this, this.EXTERNALLY_DEFINED, this.CTX)
+  PROGRAM: AST.Node = new AST.Node(this, this.EXTERNALLY_DEFINED, this.BASE)
+
+  classes: Map<string, AST.Node> = new Map()
+  class_node(name: string): AST.Node {
+    let node = this.classes.get(name);
+    if (!node) this.classes.set(name, node =
+      name === 'Program' ? this.PROGRAM :
+      name === 'Node' || name === '*' ? this.BASE :
+      new AST.Node(this, this.EXTERNALLY_DEFINED, this.BASE));
+    return node;
+  }
 
   phases: Map<string, Phase> = new Map()
   current?: Phase
@@ -484,7 +495,7 @@ export namespace AST {
 
     static describe(key: Key): string {
       if (is_string(key)) return key;
-      return "Not yet implemented"
+      return key.string ?? "{}"
     }
 
     value: Value = new Value()
@@ -683,6 +694,14 @@ export namespace AST {
       if (self._super) for (const k of self._super.methods.all()) keys.add(k);
       return keys;
     }
+    rules(): [Node, Node][] {
+      const out: [Node, Node][] = [];
+      for (let node: Node | undefined = this.self; node; node = node._super)
+        for (const key of node.value.keys())
+          if (!is_string(key)) out.push([key, node.value.get(key)!]);
+      //TODO Doesnt account superposed or overridden values here.
+      return out;
+    }
     // Prefix index (first char -> keys, longest-first) for token capture.
     // A node with no methods of its own shares its super's index verbatim, so
     // the transient result/cursor nodes reuse the stable scope index instead of
@@ -693,7 +712,7 @@ export namespace AST {
       if (self._index) return self._index;
       const idx = new Map<string, string[]>();
       for (const key of self.methods.all()) {
-        if (!is_string(key)) return self.fatal('not implemented', 'Non-string keys not yet implemented');
+        if (!is_string(key)) continue; // Node keys are grammar-rule patterns, matched via methods.rules()
         const prefix = key.slice(0, 1); // shorter names key on themselves
         let bucket = idx.get(prefix);
         if (!bucket) idx.set(prefix, bucket = []);

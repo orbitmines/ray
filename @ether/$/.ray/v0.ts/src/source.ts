@@ -130,6 +130,7 @@ export namespace Text {
     get behind() { return this._direction === 'right-to-left' ? this.right : this.left; }
 
     done(): boolean                                    { return this.direction.done(); }
+    get head()                                         { return this.direction.head; }
     peek(offset: number = 1): string                   { return this.direction.peek(offset); }
     capture(char: string)                              { return this.direction.capture(char); }
     capture_n(n: number)                               { return this.direction.capture_n(n); }

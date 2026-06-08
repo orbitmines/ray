@@ -1,5 +1,32 @@
+`{string: String}` => string
+
+// TODO These shouldnt work for global[1, 2, 3] ; right, explcicitely cancels them out?
+{`{`}{expr}{`}`} => TODO // expr**.local
+({expr}) => expr
+[{expr}] => expr
+
 class Program
-  {` `, expr} => this(expr)
+  external ({args}) => // Should deny Program(), you want that to actually call the program class abstractly.
+
+  {` `}{expr} => this(expr)
+
+class Node
+  // When bootstrapping, functions definitions cannot use '&=', which is the actual default set lower in this file.
+  static DEFINE_METHOD = '='
+
+  // Function definition
+  {` `}({args}){block} => this [DEFINE_METHOD] (
+    def = block**
+    def[`args`] = args
+    def 
+  )
+  
+  external [{property}]
+  external **: Program // {result: this}
+  external = (x): x
+
+// Set the actual method used for function definitions.
+Node.DEFINE_METHOD = '&='
 
 external test 1 2 3 4 5
   external testA

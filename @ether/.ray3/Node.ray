@@ -44,7 +44,7 @@ $/
 
 "
 
-// Error actually: Undefined, it would be defined for the grammar rule but it is defined inside it.
+// Error actually: Unresolved, it would be defined for the grammar rule but it is defined inside it.
 /*
 
 {GRAMMAR RULE FOR /* */} =>

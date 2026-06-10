@@ -1,6 +1,14 @@
+// instead of as (== String) make it somehow IPv6 => String
+// lambda should just be () a + b, without the =>? But how then do you distinguish (a + b) + c, probably not.
+// \lambda maybe to kepe it the same syntax.
+
 / Syntax highlighting for a pattern matched thing like string. IPv6/IPv4 - when it's used as that type.
 
 // interpreter will probably be forward compatible if we dont introduce more externals.
+
+/$
+{RULE THAT PROVIDES /* */} =>
+$/
 
 ∀ x ∈ R ∋ x^2 < 0 
 ∀R ^2 < 0 // actual target.

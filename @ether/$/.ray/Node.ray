@@ -20,6 +20,8 @@ class Node
     def[`args`] = args
     def 
   )
+
+  test () TODO
   
   external [{property}]
   external **: Program // {result: this}

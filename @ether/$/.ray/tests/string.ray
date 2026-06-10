@@ -1,0 +1,12 @@
+// No error: the copy of this rule inside the string below is dropped
+// silently, because the rule is also defined out here.
+{`/%`}{comment}{`%/`} =>
+
+'
+{`/%`}{comment}{`%/`} =>
+'
+
+/%
+Interpreted away by the rule defined at the top; the copy inside the string
+did not interfere.
+%/

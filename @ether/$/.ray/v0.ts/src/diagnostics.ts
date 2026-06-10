@@ -47,14 +47,15 @@ export class Clock {
   c: number | null = null;
   /** Body end (set by `done`). Defaults to `b` (or now) if never stamped. */
   d: number | null = null;
-  /** Marker — `@uninstrumented` calls set this. The recursion treats
-   *  this clock as a black box: subtract its entire wall from the
-   *  ancestor's reported time, don't descend into its children. */
+  /** Marker — `@uninstrumented` calls set this. The parent treats this
+   *  clock as a black box: its entire wall is tax, not measured work. */
   excluded: boolean = false;
-  /** Direct child clocks pushed by nested wrappers. Walked at `ms`
-   *  computation time to subtract descendant overheads + excluded
-   *  walls. */
-  children: Clock[] = [];
+  /** Transitive wrapper cost that landed inside this clock's `raw` —
+   *  each completed child folds its numbers in (`tax`), so no clock ever
+   *  retains its descendants. Keeping the child tree alive instead is
+   *  what blew the heap at DEBUG=trace: one root call (a parse pass)
+   *  transitively held millions of Clock objects. */
+  taxed = 0;
   constructor() { this.a = performance.now(); }
   body(): this { this.c = performance.now(); return this; }
   done(): this { this.d = performance.now(); return this; }
@@ -74,27 +75,20 @@ export class Clock {
     const o = this.wall - this.raw;
     return o > 0 ? o : 0;
   }
-  /** Memo — the structure is frozen by the time print walks it; without
-   *  this, the recursive walk fires once per emitted diagnostic at
-   *  print time (O(N²) worst case). */
+  /** What this call folds into its parent's `taxed` when it completes:
+   *  an excluded call is incidental work — its whole wall (which already
+   *  contains its own subtree) plus its unmeasurable birth cost; a
+   *  measured call contributes only its wrapper bookkeeping, birth cost,
+   *  and the tax it accumulated from its own descendants (its body time
+   *  is real work the parent legitimately contains). */
+  get tax(): number {
+    const birth = birthCost();
+    return this.excluded ? this.wall + birth : this.overhead + birth + this.taxed;
+  }
   private _ms?: number;
   get ms(): number {
     if (this._ms !== undefined) return this._ms;
-    // Per-descendant correction for the wrapper cost a clock can't measure
-    // about itself (allocation + the `now()` that stamps its own `a` +
-    // invocation). It lands in this clock's raw, not the child's overhead, so
-    // subtract a calibrated constant per child on top of the measured part.
-    const birth = birthCost();
-    let total = this.raw;
-    const subtract = (clock: Clock): void => {
-      const kids = clock.children;
-      for (let i = 0; i < kids.length; i++) {
-        const child = kids[i];
-        if (child.excluded) total -= child.wall + birth;
-        else { total -= child.overhead + birth; subtract(child); }
-      }
-    };
-    subtract(this);
+    const total = this.raw - this.taxed;
     return this._ms = total > 0 ? total : 0;
   }
   toString = () => `${this.ms.toFixed(2)}ms`;
@@ -132,6 +126,14 @@ export class Cache<Item, View> {
   clear(): void { this.view = this._empty(); }
 }
 
+export interface Timing {
+  phase: string;
+  level: Diagnostic['level'];
+  ms: number;
+  count: number;
+  children: Map<string, Timing>;
+}
+
 export class Diagnostics {
   /** Per-file Diagnostic lists in insertion order. Diagnostics whose node
    *  doesn't carry a file (synthetic verify fatal, framework-internal
@@ -139,6 +141,14 @@ export class Diagnostics {
    *  to publish per-uri; `print()` iterates by file for source rendering;
    *  flat-iterating consumers walk every bucket via `all()`. */
   items: Map<string | undefined, Diagnostic[]> = new Map();
+
+  /** The per-phase call tree, folded incrementally as timing diagnostics
+   *  are reported — trace-level timings are *only* counted here, never
+   *  retained in `items` (retaining one Diagnostic + stack snapshot per
+   *  instrumented call is what OOM'd DEBUG=trace). Survives `delete()`:
+   *  timings describe the work the whole run did, not the current
+   *  diagnostic state of a source. */
+  timings: Map<string, Timing> = new Map();
   /** Iterate every diagnostic across every file in insertion order
    *  (within each bucket). Insertion order across buckets is the order
    *  in which the first item per file landed. */
@@ -248,6 +258,37 @@ export class Diagnostics {
     return (this.erroredRegions.view.get(node.file)?.get(node.line) ?? 0) > 0;
   }
 
+  timing(map: Map<string, Timing>, phase: string, level: Diagnostic['level']): Timing {
+    let n = map.get(phase);
+    if (!n) map.set(phase, n = { phase, level, ms: 0, count: 0, children: new Map() });
+    return n;
+  }
+
+  /** Fold one timing diagnostic into the call tree along its (live)
+   *  ancestor stack. Same folding the old print-time walk did: each phase
+   *  appears once per call path, recursion collapses onto its outermost
+   *  node (count still tallies, inclusive ms doesn't double-count), and
+   *  excluded frames are invisible. Only the debug+ `instrument` path
+   *  lands here — trace wrappers fold O(1) in `wrap` itself. */
+  private _timing(diag: Diagnostic): void {
+    const ctx = (diag.node as unknown as Instrumentable | undefined)?.__instrumentation;
+    const stack = ctx?.stack ?? [];
+    let map = this.timings;
+    let selfNode: Timing | undefined;
+    const onPath = new Set<string>();
+    for (const f of stack) {
+      if (f.clock?.excluded || onPath.has(f.phase)) continue;
+      onPath.add(f.phase);
+      const n = this.timing(map, f.phase, f.level);
+      if (f.phase === diag.phase) selfNode = n;
+      map = n.children;
+    }
+    const recursive = onPath.has(diag.phase);
+    const node = recursive ? selfNode! : this.timing(map, diag.phase, diag.level);
+    node.count++;
+    if (!recursive) node.ms += diag.clock!.ms;
+  }
+
   report(diag: Diagnostic) {
     // Skip the allocation entirely when the level is below the display
     // threshold — Node.copy + Diagnostic + double-push cost ~1µs each, and
@@ -255,21 +296,25 @@ export class Diagnostics {
     // stack snapshot now live in `Diagnostics.report` (it pulls the stack
     // via `node.__instrumentation()?.stack` since Node is Instrumentable).
     if ((diag.level === 'trace' || diag.level === 'debug' || diag.level === 'info') && !Diagnostics.showLevel(diag.level)) return;
+    // Timing diagnostics fold into the aggregate tree immediately;
+    // trace-level ones exist only there (the inline per-line display
+    // drops trace timings anyway, and retaining one Diagnostic per
+    // instrumented call is unpayable at DEBUG=trace).
+    if (diag.clock) {
+      this._timing(diag);
+      if (diag.level === 'trace') return;
+    }
     // Cascade dedup for error/fatal: skip if the node's line already
     // carries an earlier error.
     if ((diag.level === 'error' || diag.level === 'fatal') && this.cascaded(diag.node)) return;
     // If the node is an Instrumentable (real Node), snapshot its
-    // program's call stack onto the diagnostic. Errors/warnings/fatals
-    // need it for stack traces; timing diagnostics need it so the
-    // DEBUG=1 aggregate can build the per-phase tree (parent phase
-    // is read from the snapshot's top frame at print time). Other
-    // levels (info / debug / trace) carry no stack — cheap.
+    // program's call stack onto the diagnostic — errors/warnings/fatals
+    // need it for stack traces.
     //
     // `.slice()` instead of `.map(f => ({...f}))`: stack frames are
     // never mutated after push, so references are safe; this drops the
-    // per-frame shallow-copy allocation cost across thousands of
-    // timing emissions in a parse.
-    if (diag.level === 'error' || diag.level === 'warning' || diag.level === 'fatal' || !!diag.clock) {
+    // per-frame shallow-copy allocation cost.
+    if (diag.level === 'error' || diag.level === 'warning' || diag.level === 'fatal') {
       const ctx = (diag.node as unknown as Instrumentable | undefined)?.__instrumentation;
       if (ctx && ctx.stack.length) diag.diagnostics = ctx.stack.slice();
     }
@@ -858,68 +903,15 @@ export class Diagnostics {
     }
 
     // 3. Per-phase timing tree (debug-level data — gate on debug
-    //    visibility). Each timing diagnostic carries the call stack at
-    //    the moment it was emitted (in `d.diagnostics`); the immediate
-    //    parent is just the top of that stack. Group by (phase,
-    //    parent_phase) so the same phase under different parents shows
-    //    on its own line. Render as a tree, indenting children under
-    //    parents. The `(total)` line sums root phases only — child
-    //    timings are already part of their parent's clocked range, so
-    //    counting them again would double-count.
+    //    visibility). Built incrementally in `_timing` as timing
+    //    diagnostics were reported — a call tree, not a flat list: a
+    //    phase appears under every caller it actually had, recursion
+    //    folded onto its outermost node. The `(total)` line sums root
+    //    phases only — child timings are already inside their parent's
+    //    clocked range.
     if (Diagnostics.showLevel('debug')) {
-      // A call tree, not a flat per-phase list: a phase appears under each
-      // caller it actually had, so its time is split by call path and a
-      // child can never exceed the parent it's shown under. Two passes:
-      // (1) collect raw timings, each carrying the stack snapshot taken
-      // when it was emitted; (2) thread each timing onto the tree along its
-      // folded ancestor path (see the build loop below).
-      type Raw = { phase: string; level: Diagnostic['level']; ms: number; stack: Diagnostic[] };
-      const raws: Raw[] = [];
-      const emitted = new Set<string>();
-      for (const d of this.all()) {
-        if (d.superseded || !d.clock) continue;
-        emitted.add(d.phase);
-        raws.push({ phase: d.phase, level: d.level, ms: d.clock.ms, stack: d.diagnostics ?? [] });
-      }
-      // Build a call tree keyed by each timing's folded ancestor path. A
-      // phase appears under EVERY caller it has — e.g. `capture_while`
-      // under both `skip_while` and `capture_longest_token` — each node
-      // carrying only that path's time. That's what keeps a child from
-      // ever exceeding its parent: the old model collapsed a phase to one
-      // node and summed it across all callers, so a multi-caller child
-      // (capture_while) could dwarf any single parent it was filed under.
-      // Recursion folds: a phase nested inside itself maps back onto its
-      // outermost node (the path keeps each phase once), and inclusive
-      // `ms` is added only for that outermost call — nested calls' time is
-      // already inside it — while `count` still tallies every invocation.
-      type TNode = { phase: string; level: Diagnostic['level']; ms: number; count: number; children: Map<string, TNode> };
-      const rootChildren = new Map<string, TNode>();
-      const child = (map: Map<string, TNode>, phase: string, level: Diagnostic['level']): TNode => {
-        let n = map.get(phase);
-        if (!n) map.set(phase, n = { phase, level, ms: 0, count: 0, children: new Map() });
-        return n;
-      };
-      for (const r of raws) {
-        // Descend through the emitted ancestors (stack is root→leaf),
-        // visiting each phase once so recursion collapses onto a single
-        // node. Remember the node for r.phase if we pass through it — a
-        // recursive call lands back there instead of nesting under itself.
-        let map = rootChildren;
-        let selfNode: TNode | undefined;
-        const onPath = new Set<string>();
-        for (let i = 0; i < r.stack.length; i++) {
-          const f = r.stack[i];
-          if (!emitted.has(f.phase) || onPath.has(f.phase)) continue;
-          onPath.add(f.phase);
-          const n = child(map, f.phase, f.level);
-          if (f.phase === r.phase) selfNode = n;
-          map = n.children;
-        }
-        const recursive = onPath.has(r.phase);
-        const node = recursive ? selfNode! : child(map, r.phase, r.level);
-        node.count++;
-        if (!recursive) node.ms += r.ms;
-      }
+      type TNode = Timing;
+      const rootChildren = this.timings;
       if (rootChildren.size) {
         // Depth-first walk. `prefix` carries ancestor pipes (`│  ` while an
         // ancestor still has siblings below, `   ` once it doesn't);
@@ -1127,6 +1119,10 @@ const WRAPPED = Symbol('instrumented');
  *  `done` in `capture_while` loops) otherwise drive it into the millions. */
 const WALKED = Symbol('recurse_field_count');
 
+/** Per-frame Timing node + per-ctx path registry for the O(1) trace fold. */
+const TIMING = Symbol('timing_node');
+const PATH = Symbol('timing_path');
+
 /** Per-instance back-pointer to the host that cascaded into this object.
  *  Cascaded subobjects (e.g. a `Direction` reached via `Node._left`)
  *  don't define their own `__instrumentation` — the framework stamps
@@ -1278,6 +1274,8 @@ function wrap<Args extends any[], Ret>(
   if (!Diagnostics.showLevel(level)) return original;
   const { excluded = false, recursive = false } = options;
 
+  const trace = level === 'trace';
+
   return function (this: Instrumentable, ...args: Args): Ret {
     const clock = new Clock();
     // Recursive cascade: discover Instrumentable subobjects on this
@@ -1304,19 +1302,55 @@ function wrap<Args extends any[], Ret>(
     if (excluded) clock.excluded = true;
     const node = this.position ?? (this as any)[HOST]?.position;
     const frame: Diagnostic = { level, phase: name, node, clock };
+    // Trace timings fold straight into the call tree, O(1) per call —
+    // no Diagnostic retention, no stack walk. The tree position comes
+    // from the parent frame's node; a per-ctx path registry collapses
+    // recursion onto its outermost node. (Debug+ instruments are rare
+    // and go through `report` below instead.)
+    let tnode: Timing | undefined;
+    let re_entered = false;
+    if (trace) {
+      const parent_frame = ctx.stack.length ? ctx.stack[ctx.stack.length - 1] : undefined;
+      const parentT: Timing | undefined = parent_frame ? (parent_frame as any)[TIMING] : undefined;
+      if (excluded) (frame as any)[TIMING] = parentT;
+      else {
+        const path: Map<string, { node: Timing; n: number }> = ((ctx as any)[PATH] ??= new Map());
+        let entry = path.get(name);
+        re_entered = !!entry;
+        if (!entry) {
+          // Inlined (not ctx.log.timing(...)): the cascade may have wrapped
+          // Diagnostics itself, and a wrapper calling a wrapped method from
+          // inside its own bookkeeping would recurse forever.
+          const map = parentT ? parentT.children : ctx.log.timings;
+          let into = map.get(name);
+          if (!into) map.set(name, into = { phase: name, level, ms: 0, count: 0, children: new Map() });
+          path.set(name, entry = { node: into, n: 0 });
+        }
+        entry.n++;
+        tnode = entry.node;
+        (frame as any)[TIMING] = tnode;
+      }
+    }
     ctx.stack.push(frame);
     clock.body();
     try { return original.apply(this, args); }
     finally {
       clock.done();
       ctx.stack.pop();
-      if (!excluded) ctx.log.report(frame);
-      // Single push to the immediate parent — nested wrappers form a
-      // tree of clocks. `clock.ms` walks it at print time to subtract
-      // descendant wrapper overheads and excluded subtrees' walls.
-      const parent = ctx.stack.length > 0 ? ctx.stack[ctx.stack.length - 1].clock : undefined;
-      if (parent) parent.children.push(clock);
       clock.stop();
+      if (!excluded) {
+        if (tnode) {
+          tnode.count++;
+          if (!re_entered) tnode.ms += clock.ms;
+          const path = (ctx as any)[PATH] as Map<string, { node: Timing; n: number }>;
+          const entry = path.get(name);
+          if (entry && --entry.n <= 0) path.delete(name);
+        } else if (!trace) ctx.log.report(frame);
+      }
+      // Fold this call's tax into the immediate parent — numbers only,
+      // the clock itself is garbage the moment this frame unwinds.
+      const parent = ctx.stack.length > 0 ? ctx.stack[ctx.stack.length - 1].clock : undefined;
+      if (parent) parent.taxed += clock.tax;
     }
   };
 }
@@ -1338,7 +1372,9 @@ function birthCost(): number {
   let accounted = 0;
   const ctx: any = { stack: [], log: { report(d: Diagnostic) { accounted += d.clock!.raw + d.clock!.overhead; } } };
   const host: any = { __instrumentation: ctx };
-  const noop = wrap(function (this: unknown) {}, 'trace', '__calibrate__', {});
+  // Calibrate via the report path ('debug' level) — the trace fold needs a
+  // real timing tree on the log, and the per-call cost profile is the same.
+  const noop = wrap(function (this: unknown) {}, 'debug', '__calibrate__', {});
   for (let i = 0; i < 2000; i++) noop.call(host);            // warm the JIT
   let best = Infinity;
   for (let trial = 0; trial < 5; trial++) {

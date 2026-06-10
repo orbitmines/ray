@@ -1,0 +1,85 @@
+// Direction. A method declares which side of its receiver its call site
+// sits on: plain methods read left-to-right (receiver on their left);
+// `right-to-left` methods take their receiver from the right. Associativity
+// is the same axis for now: left-associative ≡ left-to-right,
+// right-associative ≡ right-to-left.
+//
+// An expression that contains a right-to-left method — or the bare marker
+// `</` — is read from its right end: the rightmost token is the anchor, and
+// every method folding onto a receiver must read the direction being walked.
+// Methods of both directions can share one expression only POINTING APART —
+// `rtl X ltr` reads as both (rtl X) and (X ltr); running towards each other
+// they have no single reading, and mixing them needs parentheses.
+
+external left-to-right
+external right-to-left
+external left-associative
+external right-associative
+external right-to-left </
+
+external test-middle
+external left-to-right test-left
+external right-to-left test-right
+external right-associative test-assoc
+external left-to-right right-to-left test-bidir
+
+// reading left-to-right (the default): the receiver is to the left
+// info: test-left fired on `test-middle`
+test-middle test-left
+
+// a right-to-left method flips the whole expression — the anchor is the
+// rightmost token and the receiver is to its right
+// info: test-right fired on `test-middle`
+test-right test-middle
+
+// right-associative is the same flag
+// info: test-assoc fired on `test-middle`
+test-assoc test-middle
+
+// the bare marker flips an expression with no directional method in it,
+// transparently returning what the flipped walk read
+test-middle </
+
+// marker and method together: the marker is read first (rightmost), the
+// rest is walked right-to-left through it
+// info: test-right fired on `test-middle`
+test-right test-middle </
+
+// a method flagged for both directions folds either way — it does not flip
+// anything by itself, it just reads along
+// info: test-bidir fired on `test-middle`
+test-middle test-bidir
+
+// info: test-bidir fired on `test-middle`
+test-bidir test-middle </
+
+// methods pointing apart share the operand between them: the expression is
+// read right-to-left up to it, and left-to-right from it
+// info: test-right fired on `test-middle`
+// info: test-left fired on `test-middle`
+test-right test-middle test-left
+
+// chains too: `A x B x C y D` with x right- and y left-associative reads
+// right-to-left through the x's up to the shared operand C, and
+// left-to-right from C through y
+// info: test-right fired on `test-middle`  (the inner x, around A)
+// info: test-right fired on `test-middle`  (the outer x, on C)
+// info: test-left fired on `test-middle`   (y, on C)
+test-middle test-right test-middle test-right test-middle test-left test-middle
+
+// running towards each other, they have no single reading
+// error: Cannot mix `test-left`, `test-right` in a single infix expression with mixed associativity, use parenthesis to mix them.
+test-middle test-left test-right test-middle
+
+// the same holds anywhere in a chain
+// error: Cannot mix `test-left`, `test-right` in a single infix expression with mixed associativity, use parenthesis to mix them.
+test-middle test-left test-middle test-right test-middle
+
+// the marker after a left-to-right method runs towards it just the same
+// error: Cannot mix `test-left`, `</` in a single infix expression with mixed associativity, use parenthesis to mix them.
+test-middle test-left </
+
+// read right-to-left, a plain (left-to-right) method cannot fold onto a
+// receiver
+// error: Found a method `test-middle` on `test-middle` but it wasn't flagged as right-to-left.
+test-middle test-middle </

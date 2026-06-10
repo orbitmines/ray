@@ -1,0 +1,9 @@
+// Error: the rules below circularly prevent each other from existing — each
+// one's only definition sits inside a region the other interprets away.
+/*
+{`/$`}{comment}{`$/`} =>
+*/
+
+/$
+{`/*`}{comment}{`*/`} =>
+$/

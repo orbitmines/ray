@@ -1,103 +1,43 @@
 `{string: String}` => string
+{`//`}{comment: String} =>
+{`'`}{string: String}{`'`} => string
 
-// TODO These shouldnt work for global[1, 2, 3] ; right, explcicitely cancels them out?
-{`{`}{expr}{`}`} => TODO // expr**.local
+// Grouping: that parentheses, brackets and braces nest is not built in — it
+// follows from these rules being active while scanning.
+{`{`}{expr}{`}`} => TODO
 ({expr}) => expr
 [{expr}] => expr
 
-class Program
-  external ({args}) => // Should deny Program(), you want that to actually call the program class abstractly.
+external {`class `}{name}{block}
 
+class Program
+  external ({args}) =>
   {` `}{expr} => this(expr)
 
 class Node
-  // When bootstrapping, functions definitions cannot use '&=', which is the actual default set lower in this file.
-  static DEFINE_METHOD = '='
+  external static
+  external [{property}]
+  external **: Program
+  external = (x): x
+
+  // The grammar-rule definition rule itself: the bootstrapper hardcodes this
+  // shape for this file only; once declared here, the interpreter relies on
+  // this declaration for every file that follows.
+  external {(String.Word | `{`, expr, `}`)[]}{`=>`}{body}
+
+  {`.`}{property} => this[property]
+
+  // When bootstrapping, function definitions cannot use '&=', which is the actual default set lower in this file.
+  static DEFINE_METHOD = `=`
 
   // Function definition
   {` `}({args}){block} => this [DEFINE_METHOD] (
     def = block**
     def[`args`] = args
-    def 
+    def
   )
 
   test () TODO
-  
-  external [{property}]
-  external **: Program // {result: this}
-  external = (x): x
 
 // Set the actual method used for function definitions.
-Node.DEFINE_METHOD = '&='
-
-external test 1 2 3 4 5
-  external testA
-
-external
-external external
-external left-to-right
-external right-to-left
-external left-associative
-external right-associative
-
-external right-to-left right-associative </
-external right-associative x
-
-external F
-external right-associative M
-external right-associative N
-external left-associative X
-
-
-F x F x F x F
-
-F N F M F
-
-F X F M F
-
-external left-to-right right-to-left a
-external left-to-right right-to-left c
-
-c a c </ a </
-
-external left-to-right ltrOnly
-external right-to-left rtlOnly
-external left-to-right right-to-left bidir
-
-external v
-
-v ltrOnly
-rtlOnly v
-v bidir
-bidir v
-
-ltrOnly v </
-v rtlOnly </
-
-v bidir bidir bidir
-bidir bidir bidir v </
-
-external w
-v bidir w
-v bidir w </
-
-external rtlOnly v
-external ltrOnly v </
-
-v rtlOnly bidir
-ltrOnly bidir v </
-
-external test-middle
-external right-to-left test-right
-external left-to-right test-left
-test-middle test-right test-middle test-left test-left
-test-middle test-right test-middle test-left test-middle
-test-middle test-right test-middle test-left test-middle </
-
-test external </
-a test external </
-test external </ </
-external </ external </
-abc
-abcd
-efg
+Node.DEFINE_METHOD = `&=`

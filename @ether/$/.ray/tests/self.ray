@@ -1,0 +1,5 @@
+// Error: unresolved — the rule would exist for the grammar, but its only
+// definition is inside the very region it interprets away.
+/*
+{`/*`}{comment}{`*/`} =>
+*/

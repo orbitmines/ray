@@ -1,0 +1,18 @@
+// Error: a four-rule cycle. Classically this even cycle has "solutions"
+// (alternate rules existing), but they're ambiguous — which one you get
+// depends on parse order — so it errors like any other circular prevention.
+/*
+{`/$`}{comment}{`$/`} =>
+*/
+
+/$
+{`/#`}{comment}{`#/`} =>
+$/
+
+/#
+{`/%`}{comment}{`%/`} =>
+#/
+
+/%
+{`/*`}{comment}{`*/`} =>
+%/

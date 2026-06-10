@@ -466,7 +466,7 @@ export namespace AST {
   const UNKNOWN = Symbol("Unknown")
   const UNRESOLVED = Symbol("Unresolved")
 
-  type Key = string | Node
+  export type Key = string | Node
   export type Method = (_class: Node, method: Node, args?: Node) => Node
   export type EncodedMethod = Method & { _class: Node }
   
@@ -487,6 +487,18 @@ export namespace AST {
     keys() { return this.methods.keys() }
     get count() { return this.methods.size }
 
+    // A detached copy for the pass driver: snapshot once after bootstrap, then
+    // `value = snap.snapshot()` again at every restore so pass mutations never
+    // reach the baseline.
+    snapshot(): Value {
+      const v = new Value();
+      v.encoded = this.encoded;
+      v.options = this.options === EMPTY_OPTIONS ? EMPTY_OPTIONS : { ...this.options };
+      v.thunks = this.thunks ? [...this.thunks] : null;
+      if (this.methods !== EMPTY_METHODS) v.methods = new Map(this.methods);
+      return v;
+    }
+
     // conflict(ref: Node){}
   }
 
@@ -498,9 +510,35 @@ export namespace AST {
       return key.string ?? "{}"
     }
 
-    value: Value = new Value()
+    // Lazy: most nodes are transient cursors/spans that never hold methods —
+    // allocating a Value per cursor was a measurable share of parse time.
+    private _value?: Value;
+    get value(): Value { return this._value ??= new Value(); }
+    set value(v: Value) { this._value = v; }
+    get has_value(): boolean { return this._value !== undefined && this._value.count > 0; }
     phase?: Phase;
     _index?: Map<string, string[]>;
+
+    // Roles a node can play during interpretation:
+    //  - forward: an unresolved name, remembering where `=` should define it;
+    //  - slot: an assignable property location (`x[key]`, `x.key`);
+    //  - bound: a method picked off a receiver, waiting for its arguments.
+    // `consumed` marks a forward that was claimed (assigned to / matched by a
+    // rule) so it isn't reported as unresolved at expression end.
+    @uninstrumented
+    forward?: { name: string; on: Node };
+    @uninstrumented
+    slot?: { on: Node; key: Key };
+    @uninstrumented
+    bound?: { self: Node; method: Node };
+    consumed?: boolean;
+    loaded?: boolean;
+
+    snapshot(): Value { return this.value.snapshot(); }
+    restore(snapshot: Value): void {
+      this.value = snapshot.snapshot();
+      this._index = undefined;
+    }
     with(key: string, value?: string): this {
       if (this.value.options === EMPTY_OPTIONS) this.value.options = {};
       this.value.options[key] = value ?? 'true';
@@ -545,6 +583,8 @@ export namespace AST {
     get location() { return `${this.source.location ? `${this.source.location}:` : ''}${this.line}:${this.col}` }
 
     async load(): Promise<void> {
+      if (this.loaded) return;
+      this.loaded = true;
       if (this.phase) this.program.current = this.phase;
       let cursor: AST.Node | undefined = this;
       //  const past = (): boolean => direction === 'right-to-left' ? this.begin <= rangeStart : this.end >= rangeEnd;
@@ -587,7 +627,7 @@ export namespace AST {
       const copy = this.New;
       copy.source = this.source
       copy.phase = this.phase
-      copy.value = this.value; // TODO Now is a ref to the same value (thunks included).
+      if (this._value) copy.value = this._value; // TODO Now is a ref to the same value (thunks included).
       copy.before = this.before
       copy.cursor = this.cursor
       copy.selection = this.selection.slice()
@@ -595,7 +635,7 @@ export namespace AST {
       return copy;
     }
     clear(): void {
-      this.value = new Value()
+      this._value = undefined;
       this._index = undefined;
     }
 

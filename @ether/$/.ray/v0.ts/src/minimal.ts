@@ -39,8 +39,10 @@
 //      re-declare the shape in-language (`external {(String.Word | ...`) for
 //      every other file; the seed retires with it.
 
-import * as fs from "node:fs";
-import * as path from "node:path";
+// Node builtins arrive lazily through node.js.ts — nothing here imports them
+// statically, so the file also loads in environments without them (the
+// browser); the loaders below are only reachable where they exist.
+import { nodejs } from "./node.js.ts";
 // Diagnostics are collected and rendered by the existing display layer — the
 // engine below stays self-contained; display is presentation, not
 // architecture. (minimal.ts has deliberately diverged from src/ray.ts since
@@ -59,25 +61,13 @@ import { manifest } from "./bundled.ts";
 // marker), else against the installed package — so the same loads work in
 // development and from the published tarball.
 
-interface Source { path?: string; text: string }
+export interface Source { path?: string; text: string }
 
 const EXTENSION = '.ray';
 
-const root = (() => {
-  // a checkout: walk up from the working directory to the marker
-  let dir = process.cwd();
-  while (!fs.existsSync(path.join(dir, '@ether/$/.ray')) && path.dirname(dir) !== dir) dir = path.dirname(dir);
-  if (fs.existsSync(path.join(dir, '@ether/$/.ray'))) return dir;
-  // the installed package: its tarball ships @ether/$/.ray next to src/
-  const pkg = path.resolve(import.meta.dirname, '..');
-  if (fs.existsSync(path.join(pkg, '@ether/$/.ray'))) return pkg;
-  // development fallback: src lives at <repo>/@ether/$/.ray/v0.ts/src
-  return path.resolve(import.meta.dirname, '../../../../..');
-})();
-
 export function load_file(location: string): Source {
-  const at = path.join(root, location);
-  return { path: at, text: fs.readFileSync(at, 'utf-8') };
+  const at = nodejs.path.join(nodejs.root, location);
+  return { path: at, text: nodejs.fs.readFileSync(at, 'utf-8') };
 }
 
 export function load_directory(location: string, options: { recursively?: boolean; excluded?: string } = {}): Source[] {
@@ -93,7 +83,7 @@ export function load_directory(location: string, options: { recursively?: boolea
   }
   const sources: Source[] = [];
   const walk = (dir: string): void => {
-    for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+    for (const entry of nodejs.fs.readdirSync(nodejs.path.join(nodejs.root, dir), { withFileTypes: true })) {
       const entry_path = `${dir}/${entry.name}`;
       if (entry_path === options.excluded) continue;
       if (entry.isDirectory()) {
@@ -117,7 +107,7 @@ export function load_project(location: string): Source[] {
     const dir = location.slice(0, location.lastIndexOf('/'));
     return [...load_directory(dir, { recursively: true, excluded: location }), load_file(location)];
   }
-  const stat = fs.statSync(path.join(root, location));
+  const stat = nodejs.fs.statSync(nodejs.path.join(nodejs.root, location));
   if (stat.isDirectory()) return load_directory(location, { recursively: true });
   const dir = location.slice(0, location.lastIndexOf('/'));
   return [...load_directory(dir, { recursively: true, excluded: location }), load_file(location)];
@@ -148,7 +138,7 @@ type Role =
   | { kind: 'slot'; on: Node; key: Key }          // an assignable location
   | { kind: 'bound'; self: Node; method: Node };  // a method picked off a receiver
 
-class Node {
+export class Node {
   methods?: Map<Key, Node>;
   rules?: Rule[];
   fn?: Method;
@@ -196,13 +186,19 @@ function position(at?: Node): Text.Node | undefined {
 
 interface Issue { phase: string; message: string; at?: Node }
 
-class Log {
+export class Log {
   diagnostics = new Diagnostics();
   error(phase: string, message: string, at?: Node): void {
     this.diagnostics.report({ level: 'error', phase, message, node: position(at) });
   }
   info(phase: string, message: string, at?: Node): void {
     this.diagnostics.report({ level: 'info', phase, message, node: position(at) });
+  }
+  // forget everything reported against this source's file — a reload
+  // re-derives it (the display layer rebuilds its cascade caches, so a stale
+  // "this line already errored" can't swallow the fresh diagnostics)
+  forget(src: Source): void {
+    this.diagnostics.delete(new Text.Source('', src.path));
   }
   print(): void {
     if (this.diagnostics.hasErrors) process.exitCode = 1;
@@ -569,8 +565,8 @@ class Rule {
   definitions: Definition[] = [];
   body?: Node;
   external?: External;
-  // The file this rule is visible to; undefined = everywhere (the language).
-  file?: string;
+  // The project this rule is bound to; undefined = everywhere (the language).
+  project?: string;
   // Whether the rule currently exists, per the analysis. A rule whose only
   // definitions are suppressed doesn't.
   exists = true;
@@ -623,13 +619,60 @@ class Grammar {
 
   language(src: Source): boolean { return src.path === this.language_file; }
 
-  rule(pattern: Node, pieces: Piece[], on: string, file?: string): Rule {
-    const key = `${on}::${file ?? ''}::${pattern.text.trim()}`;
+  // ── projects ──
+  // Grammar rules are PROJECT-bound (the language reaches everywhere). A
+  // source's project is the top-level directory it was loaded under (a root —
+  // the IDE's workspace folders, say), unless a `.project.ray` deeper down
+  // claims its own directory as a project of its own. Without a root, a
+  // file's directory is its project.
+
+  roots: string[] = [];
+  private claims: string[] = [];
+  private projects = new WeakMap<Source, string>();
+
+  reroot(roots: string[]): void {
+    this.roots = roots;
+    this.projects = new WeakMap();
+  }
+
+  // derive the claimed project dirs from the loaded sources; on change,
+  // project membership shifts wholesale — forget the per-source memberships
+  survey(sources: Source[]): boolean {
+    const claims = sources
+      .filter(s => s.path !== undefined && s.path.endsWith(`/.project${EXTENSION}`))
+      .map(s => s.path!.slice(0, s.path!.lastIndexOf('/')))
+      .sort();
+    if (claims.join('\n') === this.claims.join('\n')) return false;
+    this.claims = claims;
+    this.projects = new WeakMap();
+    return true;
+  }
+
+  project(src: Source): string {
+    if (this.language(src)) return src.path!;  // its own project — the seed's home
+    const path = src.path;
+    if (path === undefined) return '';
+    let found = this.projects.get(src);
+    if (found === undefined) {
+      // the deepest claim containing the file wins
+      const within = (dirs: string[]): string | undefined => {
+        let best: string | undefined;
+        for (const dir of dirs) if (path.startsWith(dir + '/') && (best === undefined || dir.length > best.length)) best = dir;
+        return best;
+      };
+      found = within(this.claims) ?? within(this.roots) ?? path.slice(0, path.lastIndexOf('/'));
+      this.projects.set(src, found);
+    }
+    return found;
+  }
+
+  rule(pattern: Node, pieces: Piece[], on: string, project?: string): Rule {
+    const key = `${on}::${project ?? ''}::${pattern.text.trim()}`;
     let rule = this.rules.get(key);
     if (!rule) {
       rule = new Rule(pattern, pieces, on);
       rule.external = this.registry.get(pattern.text.trim());
-      rule.file = file;
+      rule.project = project;
       this.rules.set(key, rule);
       this.new_rules = true;
     }
@@ -837,7 +880,7 @@ class Reader extends Walk {
   directions(): Directions {
     const ip = this.ip;
     const along: Directions = { read: 'ltr' };
-    if (!ip.rtl_names.size || NO_RTL) return along;
+    if (!ip.rtl_names.size) return along;
     const begin = this.head;
     if (!ip.rtl_site_in(this.src, begin, line_end(this.text, begin))) return along;
     const scan = this.scan;
@@ -1046,7 +1089,7 @@ class Interpreter {
 
   // interpreter state
   scopes: Node[] = [this.GLOBAL];
-  abstract_blocks = true;                   // evaluate every {block} where it's captured
+  abstract_blocks = false;                  // evaluate every {block} where it's captured — opted into via Program.abstract()
   // names declared right-to-left so far this pass — the quick gate for the
   // up-front direction decision in expr()
   rtl_names = new Set<string>();
@@ -1078,15 +1121,16 @@ class Interpreter {
 
   visible(rule: Rule, src: Source): boolean {
     if (!(rule.exists || rule.disabled)) return false;
-    return rule.file === undefined || rule.file === src.path;
+    return rule.project === undefined || rule.project === this.grammar.project(src);
   }
 
   // ── the grammar ledger ──
 
   // How far a rule declared in this source reaches: everywhere when the
-  // source is the language itself, otherwise only that file.
+  // source is the language itself, otherwise its project — definition
+  // sightings from every file of the project pool on one ledger entry.
   reach(src: Source): string | undefined {
-    return this.language(src) ? undefined : src.path;
+    return this.language(src) ? undefined : this.grammar.project(src);
   }
 
   rule(pattern: Node, pieces: Piece[], on: Node): Rule {
@@ -1179,7 +1223,9 @@ class Interpreter {
     const hit = cached.scans.get(sign);
     if (hit) return hit;
     const anchors = new Set<string>();
-    let signature = `${src.path ?? ''}${sign === 1 ? '>' : '<'}|`;
+    // keyed by source IDENTITY, not path — a reloaded file is a new Source
+    // and must not hit the old text's memo entries
+    let signature = `${id(src)}${sign === 1 ? '>' : '<'}|`;
     for (const node of this.lookup()) {
       let carries_rules = false;
       for (const rule of this.rules_on(node)) {
@@ -1306,7 +1352,7 @@ class Interpreter {
   // Where right-to-left names occur in a source, computed once per source
   // (and again when a new one is declared) — the per-expression gate is a
   // binary search instead of a text scan.
-  private rtl_sites = new Map<Source, { names: number; sites: number[] }>();
+  private rtl_sites = new WeakMap<Source, { names: number; sites: number[] }>();
   rtl_site_in(src: Source, begin: number, end: number): boolean {
     let entry = this.rtl_sites.get(src);
     if (!entry || entry.names !== this.rtl_names.size) {
@@ -1487,7 +1533,6 @@ class Interpreter {
 }
 
 const NO_RULES: readonly Rule[] = [];
-const NO_RTL = !!process.env.RAY_NO_RTL;  // disable the direction decision, for benchmarking
 const NO_NAMES: readonly string[] = [];
 
 // Per-method-map near-char buckets, names sorted longest-first — the lookup
@@ -1517,8 +1562,8 @@ function names_of(methods: Map<Key, Node>, c: string, sign: 1 | -1): readonly st
 }
 
 let IDS = 0;
-const ids = new WeakMap<Node, number>();
-function id(node: Node): number { let n = ids.get(node); if (n === undefined) ids.set(node, n = ++IDS); return n; }
+const ids = new WeakMap<object, number>();
+function id(node: object): number { let n = ids.get(node); if (n === undefined) ids.set(node, n = ++IDS); return n; }
 
 // ──────────────────────── externals + driver ────────────────────────
 
@@ -1570,13 +1615,13 @@ function call(ip: Interpreter, callee: Node | undefined, args: Node, at: Node): 
   return new Node();
 }
 
-async function main() {
-  // created before anything else — the log's clock times the whole run,
-  // file loads included
-  const log = new Log();
+// The language, as a Program — the same setup everywhere it boots: the CLI
+// below and the LSP. Sources resolve through the bundled loaders (checkout
+// or published tarball).
+export function ray(): Program {
   const cd = '@ether/$/.ray';
-  
-  const sources = [
+
+  return new Program([
     load_file(`${cd}/Node.ray`),
     load_file(`${cd}/tests/direction.ray`),
     // load_file(`${cd}/tests/circular.ray`),
@@ -1587,9 +1632,14 @@ async function main() {
     // load_file(`${cd}/tests/tail.ray`),
     // ...load_directory('@ether/.ray3'),
     // ...load_directory('@ether/.ray2'),
-  ];
+  ]);
+}
 
-  new Program(sources).run(log).print();
+async function main() {
+  // created before anything else — the log's clock times the whole run,
+  // file loads included
+  const log = new Log();
+  (await ray().abstract().run(log)).print();
 }
 
 // word externals on the base class — what the language's `external <name>`
@@ -1677,7 +1727,7 @@ const RULE_EXTERNALS: [string, External][] = [
 // grammar stops growing. Each pass starts from nothing and re-derives all
 // semantic state by reparsing, so passes are deterministic — the last pass's
 // log is the program's output.
-class Program {
+export class Program {
   grammar = new Grammar();
 
   constructor(public sources: Source[]) {
@@ -1687,35 +1737,207 @@ class Program {
     // Node.ray must re-declare it in-language, then the seed is redundant
     const seed: Source = { text: '{(String.Word | `{`, expr, `}`)[]}{`=>`}{body}' };
     this.grammar.rule(span(seed, 0, seed.text.length), [], 'Node', this.grammar.language_file);
+    this.grammar.survey(sources);
   }
 
-  pass(log?: Log): Interpreter {
+  // the top-level directories the project boundaries derive from (the IDE's
+  // workspace folders) — membership shifts wholesale, so everything is
+  // suspect until a cycle re-derives it
+  reroot(roots: string[]): void {
+    this.grammar.reroot(roots);
+    this.dirty = true;
+    if (this.live) this.recycle();
+  }
+
+  // abstract interpretation: every {block} is evaluated where it's captured,
+  // so errors in never-called bodies still surface — off unless the
+  // entrypoint opts in
+  private abstract_blocks = false;
+  abstract(): this { this.abstract_blocks = true; return this; }
+
+  // One fresh interpreter, one pass over the sources, in the given order.
+  // With a `log` this is a FINAL pass: each file's old diagnostics drop right
+  // before it reparses, its share of the grammar's issues lands after, and
+  // `reloaded` fires once the file's diagnostics are fresh. With a
+  // `generation` the pass is preemptible: it yields to the event loop between
+  // files and aborts when a live edit moved the generation on.
+  private async pass(order: Source[], opts: { log?: Log; generation?: number } = {}): Promise<Interpreter | undefined> {
     this.grammar.reset();
-    const ip = new Interpreter(this.grammar, log);
+    const ip = new Interpreter(this.grammar, opts.log);
+    ip.abstract_blocks = this.abstract_blocks;
     externals(ip);
     ip.install();
-    for (const src of this.sources) ip.parse(src);
+    if (opts.log) ip.log.forget({ text: '' });  // the file-less bucket
+    for (const src of order) {
+      if (opts.log) ip.log.forget(src);
+      ip.parse(src);
+      if (opts.log) {
+        for (const issue of this.grammar.issues)
+          if (src.path !== undefined && issue.at?.src?.path === src.path) ip.log.error(issue.phase, issue.message, issue.at);
+        this.reloaded(src);
+      }
+      if (opts.generation !== undefined) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        if (this.generation !== opts.generation) return undefined;
+      }
+    }
+    if (opts.log) for (const issue of this.grammar.issues)
+      if (issue.at?.src?.path === undefined) ip.log.error(issue.phase, issue.message, issue.at);
     return ip;
   }
 
   // fixpoint: discovery → probe (all discovered rules on, so mutual
   // suppressions collide; repeat only while new rules turn up) → final.
-  // `log` becomes the final pass's (the program's output); its clock has been
-  // running since the caller created it.
-  run(log = new Log()): Log {
-    let ip = this.pass();
-    if (![...this.grammar.rules.values()].some(r => r.external?.name === 'rule-definition' && r.file === undefined))
-      throw new Error(`'${this.grammar.language_file}' did not declare the grammar-rule definition rule.`);
+  // Existence analysis re-derives from scratch each cycle: disabled rules and
+  // their issues come back only if the current grammar still produces them.
+  // Undefined when a live edit preempted the cycle.
+  private async cycle(opts: { log?: Log; generation?: number } = {}): Promise<Interpreter | undefined> {
+    const order = this.prioritized();
+    this.grammar.issues = [];
+    for (const rule of this.grammar.rules.values()) rule.disabled = false;
+    let ip = await this.pass(order, { generation: opts.generation });
+    if (!ip) return undefined;
     this.grammar.analyze();
     for (let i = 0; i < 3; i++) {
       for (const rule of this.grammar.rules.values()) if (!rule.disabled && !rule.exists) rule.exists = true;
-      ip = this.pass();
+      ip = await this.pass(order, { generation: opts.generation });
+      if (!ip) return undefined;
       if (!this.grammar.analyze()) break;
     }
-    ip = this.pass(log);
-    for (const issue of this.grammar.issues) ip.log.error(issue.phase, issue.message, issue.at);
+    const final = await this.pass(order, opts);
+    if (final) this.live = final;
+    return final;
+  }
+
+  // `log` becomes the final pass's (the program's output); its clock has been
+  // running since the caller created it.
+  async run(log = new Log()): Promise<Log> {
+    const ip = await this.cycle({ log });
+    if (![...this.grammar.rules.values()].some(r => r.external?.name === 'rule-definition' && r.project === undefined))
+      throw new Error(`'${this.grammar.language_file}' did not declare the grammar-rule definition rule.`);
+    return ip!.log;
+  }
+
+  // ── reload ──
+  // The long-lived session behind the LSP. A reload lands on the last full
+  // pass's interpreter for direct feedback — naively, so stale semantic state
+  // lingers. When it changes the grammar (a rule appeared, vanished or
+  // changed body — or the language file itself was touched) everything
+  // downstream is suspect: a fresh fixpoint re-derives the project in the
+  // background, the reloaded file first, then the editor's other open files,
+  // then the rest. A live edit moves `generation` on, which aborts the
+  // running cycle between files — direct feedback always outranks the
+  // background, and the cycle restarts once the edit is served.
+
+  live?: Interpreter;
+  active = new Set<string>();                  // files open in the editor
+  reloaded: (src: Source) => void = () => {};  // src's diagnostics are fresh
+  private generation = 0;
+  private priority: string[] = [];             // the latest reload's files
+  private dirty = false;                       // a grammar change awaits a cycle
+  private cycling?: Promise<void>;
+
+  // Reload anything: a span Node re-evaluates in place (a REPL line, a
+  // selection); a Source replaces the file at its path (empty text forgets
+  // it); an iterable of either reloads as one batch (a directory).
+  reload(next: Source | Node | Iterable<Source | Node>): Log {
+    const ip = this.live;
+    if (!ip) throw new Error('reload() before run()');
+    this.generation++;
+    const items: (Source | Node)[] = next instanceof Node || !(Symbol.iterator in next) ? [next as Source | Node] : [...next];
+    this.priority = items.map(item => (item instanceof Node ? item.src : item)?.path).filter((p): p is string => p !== undefined);
+    for (const item of items) {
+      const src = item instanceof Node ? item.src! : item;
+      const before = this.signature(src.path);
+      if (!(item instanceof Node) && src.path !== undefined) {
+        const at = this.sources.findIndex(s => s.path === src.path);
+        // an empty text is still a file (an empty `.project.ray` claims its
+        // directory) — deletion is `remove()`
+        if (at >= 0) this.sources[at] = src; else this.sources.push(src);
+        this.prune(src.path, src);
+        ip.log.forget(src);
+      }
+      this.grammar.new_rules = false;
+      if (item instanceof Node) ip.eval_block(item);
+      else ip.parse(src);
+      if (src.path !== undefined) for (const issue of this.grammar.issues)
+        if (issue.at?.src?.path === src.path) ip.log.error(issue.phase, issue.message, issue.at);
+      if (this.grammar.new_rules || this.signature(src.path) !== before || this.grammar.language(src)) this.dirty = true;
+      this.reloaded(src);
+    }
+    if (this.grammar.survey(this.sources)) this.dirty = true;
+    if (this.dirty) this.recycle();
     return ip.log;
+  }
+
+  // A deleted file leaves the project — unlike an empty one, which parses to
+  // nothing but still counts.
+  remove(path: string): Log {
+    const ip = this.live;
+    if (!ip) throw new Error('remove() before run()');
+    this.generation++;
+    const at = this.sources.findIndex(s => s.path === path);
+    const src = at >= 0 ? this.sources[at] : { path, text: '' };
+    const before = this.signature(path);
+    if (at >= 0) this.sources.splice(at, 1);
+    this.prune(path);
+    ip.log.forget(src);
+    if (before !== '' || this.grammar.language(src)) this.dirty = true;
+    this.reloaded(src);
+    if (this.grammar.survey(this.sources)) this.dirty = true;
+    if (this.dirty) this.recycle();
+    return ip.log;
+  }
+
+  // drop a path's definition sightings (the text being re-derived, `keep`,
+  // retains its own) — a rule that loses its last sighting leaves the ledger
+  // (the untouched seed keeps its empty definition list)
+  private prune(path: string, keep?: Source): void {
+    for (const [key, rule] of [...this.grammar.rules]) {
+      const kept = rule.definitions.filter(d => d.at.src === keep || d.at.src?.path !== path);
+      if (kept.length === rule.definitions.length) continue;
+      if (kept.length) rule.definitions = kept;
+      else this.grammar.rules.delete(key);
+    }
+  }
+
+  // the grammar as contributed by one file — every rule sighted there, with
+  // its body and HOW each sighting was seen (live, or suppressed by which
+  // rule: a definition coming out of a comment changes the analysis without
+  // changing the rule set). Compared across a reload to decide whether the
+  // rest of the project parses differently now.
+  private signature(path: string | undefined): string {
+    if (path === undefined) return '';
+    const parts: string[] = [];
+    for (const [key, rule] of this.grammar.rules) {
+      const sighted = rule.definitions
+        .filter(d => d.at.src?.path === path)
+        .map(d => d.seen === 'live' ? 'live' : d.seen ? `by(${d.seen.pattern.text})` : '?')
+        .sort();
+      if (sighted.length) parts.push(`${key} => ${rule.body?.text ?? ''} :: ${sighted.join(',')}`);
+    }
+    return parts.sort().join('\n');
+  }
+
+  // the language first (it bootstraps every pass), then the files just
+  // reloaded, then what the editor has open, then the rest of the project
+  private prioritized(): Source[] {
+    const rank = (src: Source): number =>
+      src.path === this.grammar.language_file ? 0
+      : src.path !== undefined && this.priority.includes(src.path) ? 1
+      : src.path !== undefined && this.active.has(src.path) ? 2 : 3;
+    return [...this.sources].sort((a, b) => rank(a) - rank(b));
+  }
+
+  // run the background cycle, restarting as long as edits preempted it or
+  // re-dirtied the grammar
+  private recycle(): void {
+    if (this.cycling) return;
+    this.dirty = false;
+    this.cycling = this.cycle({ log: this.live!.log, generation: this.generation })
+      .then(ip => { if (!ip) this.dirty = true; })
+      .finally(() => { this.cycling = undefined; if (this.dirty) this.recycle(); });
   }
 }
 
-await main();
+if (nodejs.enabled && process.argv[1] !== undefined && import.meta.url === nodejs.url.pathToFileURL(process.argv[1]).href) await main();

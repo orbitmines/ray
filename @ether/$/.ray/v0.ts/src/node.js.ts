@@ -1,5 +1,6 @@
 let _fs: typeof import('fs') | undefined;
 let _path: typeof import('path') | undefined;
+let _url: typeof import('url') | undefined;
 let _require: NodeRequire | undefined;
 
 function load<T>(name: string, cached: T | undefined): T {
@@ -24,14 +25,20 @@ export class nodejs {
   static get enabled(): boolean { return typeof process !== 'undefined' && (process as any).versions?.node }
   static get fs(): typeof import('fs') { return _fs ??= load('fs', _fs); }
   static get path(): typeof import('path') { return _path ??= load('path', _path); }
+  static get url(): typeof import('url') { return _url ??= load('url', _url); }
 
   private static _root?: string;
   static get root(): string {
     if (nodejs._root) return nodejs._root;
     const { fs, path } = nodejs;
+    const language_dir = (dir: string) => path.join(dir, '@ether', '$', '.ray');
+    // A checkout enclosing the working directory: walk up to the marker.
+    let dir = process.cwd();
+    while (!fs.existsSync(language_dir(dir)) && path.dirname(dir) !== dir) dir = path.dirname(dir);
+    if (fs.existsSync(language_dir(dir))) return nodejs._root = dir;
     // Production: package ships @ether/$/.ray inside its tarball — root sits one dir up from src/.
     const pkg = path.resolve(import.meta.dirname, '..');
-    if (fs.existsSync(path.join(pkg, '@ether', '$', '.ray'))) return nodejs._root = pkg;
+    if (fs.existsSync(language_dir(pkg))) return nodejs._root = pkg;
     // Development: src lives at <repo>/@ether/$/.ray/v0.ts/src — repo root is five dirs up.
     return nodejs._root = path.resolve(import.meta.dirname, '..', '..', '..', '..', '..');
   }

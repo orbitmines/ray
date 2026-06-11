@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import * as fs from 'fs';
 import {
   createConnection,
@@ -10,29 +10,23 @@ import {
   type InitializeResult,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { Runtime } from '../language.ts';
-import { Text } from '../source.ts';
+import { Program, type Source } from '../minimal.ts';
 import { toLsp } from './diagnostics.ts';
 
 /**
- * Boot the LSP for an already-configured runtime (base/context methods +
- * interpreter, e.g. the program produced by the Ray frontend compiler).
+ * Boot the LSP over a minimal.ts Program.
  *
- * Editor lifecycle maps onto the runtime API:
- *   - parse / re-parse a document → `runtime.reload(new Text.Source(text, file))`
- *   - forget a document          → `runtime.reload(new Text.Source('', file))`
- * Diagnostics self-identify their file via `node.file`, so we publish straight
- * out of the per-file index on `runtime.log.items`.
+ * Editor lifecycle maps onto the session API:
+ *   - parse / re-parse a document → `program.reload({ path, text })`
+ *   - forget a document           → `program.reload({ path, text: '' })`
+ * A reload that changes the grammar re-derives the rest of the project in the
+ * background — the edited file first, then the other open documents, then
+ * everything else — and live edits preempt it. `program.reloaded` fires
+ * whenever any file's diagnostics are fresh; we publish straight out of the
+ * per-file index on `log.diagnostics.items`.
  */
-export async function start(language: Runtime): Promise<void> {
-  language.abstract();
-  await language.exec();
-  const runtime = language.compiled ?? language;
-
-  // A single bad parse must not take the server down: make `fatal` throw rather
-  // than exit, and swallow it per-document.
-  class FatalParse extends Error {}
-  runtime.log.exit = (() => { throw new FatalParse('fatal diagnostic'); }) as any;
+export async function start(program: Program): Promise<void> {
+  const log = await program.abstract().run();
 
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
@@ -40,57 +34,67 @@ export async function start(language: Runtime): Promise<void> {
   const uriToFile = (uri: string): string => {
     try { return fileURLToPath(uri); } catch { return uri; }
   };
-
-  /** (Re)parse a document into the runtime. */
-  const parseFile = (uri: string, text: string): void => {
-    try { runtime.reload(new Text.Source(text, uriToFile(uri))); }
-    catch (e) { if (!(e instanceof FatalParse)) throw e; }
-  };
-
-  /** Forget a document — reload an empty source at its location. */
-  const dropFile = (uri: string): void => {
-    try { runtime.reload(new Text.Source('', uriToFile(uri))); }
-    catch (e) { if (!(e instanceof FatalParse)) throw e; }
-  };
-
-  /** Publish this file's diagnostics on its URI. */
-  const publishFile = (uri: string): void => {
+  // publish on the uri the client knows a file by; files we discovered
+  // ourselves fall back to file://
+  const uris = new Map<string, string>();
+  const remember = (uri: string): string => {
     const file = uriToFile(uri);
-    const diags = (runtime.log.items.get(file) ?? [])
-      .map(d => toLsp(d, file))
-      .filter((d): d is NonNullable<typeof d> => d !== null);
-    connection.sendDiagnostics({ uri, diagnostics: diags });
+    uris.set(file, uri);
+    return file;
   };
 
-  connection.onInitialize((_params: InitializeParams): InitializeResult => ({
-    capabilities: { textDocumentSync: TextDocumentSyncKind.Full },
-    serverInfo: { name: `${runtime.name.toLowerCase() ?? 'ray'}-language-server` },
-  }));
+  program.reloaded = (src: Source): void => {
+    if (src.path === undefined) return;
+    const uri = uris.get(src.path) ?? String(pathToFileURL(src.path));
+    const diagnostics = (log.diagnostics.items.get(src.path) ?? [])
+      .map(d => toLsp(d, src.path))
+      .filter((d): d is NonNullable<typeof d> => d !== null);
+    connection.sendDiagnostics({ uri, diagnostics });
+  };
+
+  const reload = (uri: string, text: string): void => {
+    program.reload({ path: remember(uri), text });
+  };
+
+  connection.onInitialize((params: InitializeParams): InitializeResult => {
+    // the workspace folders are the top-level project boundaries (a
+    // .project.ray deeper down claims its own)
+    const roots = (params.workspaceFolders ?? []).map(f => uriToFile(f.uri));
+    if (params.rootUri) roots.push(uriToFile(params.rootUri));
+    program.reroot([...new Set(roots)]);
+    return {
+      capabilities: { textDocumentSync: TextDocumentSyncKind.Full },
+      serverInfo: { name: 'ray-language-server' },
+    };
+  });
 
   // Editor configuration (comments, brackets, …) — none wired yet.
   connection.onRequest('ether/languageConfiguration', () => ({}));
 
   // Whole-workspace initial enumeration, driven by the client's
-  // `vscode.workspace.findFiles`. Read each from disk (skipping open documents,
-  // which arrive via didOpen with live text).
+  // `vscode.workspace.findFiles`. Read each from disk (skipping open
+  // documents, which arrive via didOpen with live text) and reload as one
+  // batch: every file gets direct diagnostics, and at most one background
+  // cycle follows.
   connection.onRequest('ether/initialFiles', (params: { uris: string[] }) => {
-    const touched: string[] = [];
+    const batch: Source[] = [];
     for (const uri of params.uris ?? []) {
       if (documents.get(uri)) continue;
-      const file = uriToFile(uri);
-      let text: string;
-      try { text = fs.readFileSync(file, 'utf-8'); } catch { continue; }
-      parseFile(uri, text);
-      touched.push(uri);
+      const file = remember(uri);
+      try { batch.push({ path: file, text: fs.readFileSync(file, 'utf-8') }); } catch { continue; }
     }
-    for (const uri of touched) publishFile(uri);
+    if (batch.length) program.reload(batch);
   });
 
-  documents.onDidOpen(e => { parseFile(e.document.uri, e.document.getText()); publishFile(e.document.uri); });
-  documents.onDidChangeContent(e => { parseFile(e.document.uri, e.document.getText()); publishFile(e.document.uri); });
-  documents.onDidClose(_e => {
-    // Keep the document parsed: the file still exists on disk; deletion comes via
-    // didChangeWatchedFiles.
+  documents.onDidOpen(e => {
+    program.active.add(uriToFile(e.document.uri));
+    reload(e.document.uri, e.document.getText());
+  });
+  documents.onDidChangeContent(e => reload(e.document.uri, e.document.getText()));
+  documents.onDidClose(e => {
+    // the file still exists on disk — stop prioritizing it, keep it parsed;
+    // deletion comes via didChangeWatchedFiles
+    program.active.delete(uriToFile(e.document.uri));
   });
 
   // External edits / create / delete (registered by the client via
@@ -98,15 +102,14 @@ export async function start(language: Runtime): Promise<void> {
   connection.onDidChangeWatchedFiles(params => {
     for (const change of params.changes) {
       if (change.type === FileChangeType.Deleted) {
-        dropFile(change.uri);
-        connection.sendDiagnostics({ uri: change.uri, diagnostics: [] });
+        program.remove(uriToFile(change.uri));
         continue;
       }
-      const file = uriToFile(change.uri);
+      if (documents.get(change.uri)) continue;  // open documents carry live text
+      const file = remember(change.uri);
       let text: string;
       try { text = fs.readFileSync(file, 'utf-8'); } catch { continue; }
-      parseFile(change.uri, text);
-      publishFile(change.uri);
+      program.reload({ path: file, text });
     }
   });
 

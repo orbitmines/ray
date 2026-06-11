@@ -1,13 +1,13 @@
 // Error: a three-rule cycle — each rule's only definition sits inside the
 // region the previous rule interprets away.
-/*
-{`/$`}{comment}{`$/`} =>
-*/
+///*
+//{`/$`}{comment}{`$/`} =>
+//*/
 
-/$
-{`/#`}{comment}{`#/`} =>
-$/
+///$
+//{`/#`}{comment}{`#/`} =>
+//$/
 
-/#
-{`/*`}{comment}{`*/`} =>
-#/
+///#
+//{`/*`}{comment}{`*/`} =>
+//#/

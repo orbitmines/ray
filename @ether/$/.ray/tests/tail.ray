@@ -1,11 +1,11 @@
 // Error: two rules circularly prevent each other, and a third hangs off the
 // cycle — its only definition sits inside one of the oscillating regions, so
 // it can't exist either, but it isn't part of the cycle itself.
-/*
-{`/$`}{comment}{`$/`} =>
-{`/#`}{comment}{`#/`} =>
-*/
+//
+//{`/$`}{comment}{`$/`} =>
+//{`/#`}{comment}{`#/`} =>
+//*/
 
-/$
-{`/*`}{comment}{`*/`} =>
-$/
+///$
+//{`/*`}{comment}{`*/`} =>
+//$/

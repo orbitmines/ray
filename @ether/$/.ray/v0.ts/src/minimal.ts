@@ -198,11 +198,14 @@ export class Log {
   info(phase: string, message: string, at?: Node): void {
     this.diagnostics.report({ level: 'info', phase, message, node: position(at) });
   }
-  // forget everything reported against this source's file — a reload
-  // re-derives it (the display layer rebuilds its cascade caches, so a stale
-  // "this line already errored" can't swallow the fresh diagnostics)
+  // forget everything reported against these sources' files — a reload
+  // re-derives them (the display layer rebuilds its cascade caches, so a
+  // stale "this line already errored" can't swallow the fresh diagnostics)
   forget(src: Source): void {
-    this.diagnostics.delete(new Text.Source('', src.path));
+    this.diagnostics.deleteAll([src.path]);
+  }
+  forget_all(srcs: Iterable<Source>): void {
+    this.diagnostics.deleteAll([...srcs].map(src => src.path));
   }
   print(): void {
     if (this.diagnostics.hasErrors && nodejs.enabled) process.exitCode = 1;
@@ -608,10 +611,14 @@ class Rule {
   edge_char(sign: 1 | -1): string | undefined { return this.edge_chars[sign === 1 ? 0 : 1]; }
   definition(at: Node): Definition {
     let d = this.definitions.find(x => x.at.src === at.src && x.at.begin === at.begin);
-    if (!d) this.definitions.push(d = { at });
+    if (!d) { this.definitions.push(d = { at }); DEFINITIONS++; }
     return d;
   }
 }
+
+// every definition sighting ever recorded — a cheap "did this parse
+// contribute any grammar" check for files with no ledger history
+let DEFINITIONS = 0;
 
 // ─────────────────────────── grammar ───────────────────────────
 // The persistent half: the ledger of every rule ever sighted, and the
@@ -734,8 +741,10 @@ class Grammar {
   // iterate — simultaneously (Jacobi), because updating in place would settle
   // a mutual suppression on whichever rule is visited first instead of
   // exposing the oscillation. Non-convergence IS the circularity error.
-  // Returns whether this pass discovered new rules (the fixpoint driver's
-  // continue condition).
+  // Returns whether the grammar is still MOVING — this pass discovered new
+  // rules, or a verdict flipped against the last pass's sightings — the
+  // fixpoint driver's continue condition (a pass parsed under verdicts that
+  // no longer hold must be redone).
   analyze(scope: (rule: Rule) => boolean = () => true): boolean {
     const rules = [...this.rules.values()].filter(r => scope(r) && !r.disabled && r.definitions.length);
     // out-of-scope rules don't iterate — as suppressors, the `exists`
@@ -766,8 +775,13 @@ class Grammar {
 
     if (!stable && oscillating.size) this.report_cycles(oscillating, { state, step, limit });
 
-    for (const r of rules) r.exists = (state.get(r) ?? true) && !r.disabled;
-    return this.new_rules;
+    let moved = false;
+    for (const r of rules) {
+      const exists = (state.get(r) ?? true) && !r.disabled;
+      if (exists !== r.exists) moved = true;
+      r.exists = exists;
+    }
+    return this.new_rules || moved;
   }
 
   // Follow each oscillating rule's suppression edge (which oscillating rule's
@@ -849,6 +863,19 @@ interface Reading {
 
 // What best_rule found: a rule together with where it matched.
 interface Found { rule: Rule; m: Matched }
+
+// A rule candidate at a position, with how near its node sat in the chain.
+// `prefers` is the whole disambiguation story: the longest match wins; on a
+// tie an anchored rule beats an unanchored one, and then the rule from the
+// nearest node in the chain wins.
+interface Candidate extends Found { level: number }
+function prefers(a: Candidate, b: Candidate | null): boolean {
+  if (!b) return true;
+  const la = a.m.end - a.m.begin, lb = b.m.end - b.m.begin;
+  if (la !== lb) return la > lb;
+  if (a.rule.anchored !== b.rule.anchored) return a.rule.anchored;
+  return a.level < b.level;
+}
 
 // How an expression reads, decided by its exclusively-directional tokens
 // before anything evaluates (see Reader.directions):
@@ -995,40 +1022,47 @@ class Reader extends Walk {
   // unanchored one, and then the rule from the nearest node in the chain wins
   // (the type-bound specificity that lets `({args})` on Program shadow Node's
   // function-definition rule).
+  // reused across this reader's best_rule calls — a fresh Set and scan copy
+  // per call is pure allocation churn on the hottest path
+  private proven = new Set<Rule>();
+  private probe?: Scan;
+
   private best_rule(): Found | null {
     const ip = this.ip;
     const at = this.head, sign = this.sign;
-    const scan = { ...this.scan, indent: this.indent, start: this.result === undefined && sign === 1 };
+    const base = this.scan;
+    const scan = this.probe ??= { ...base };
+    scan.text = base.text; scan.sign = base.sign; scan.claim = base.claim;
+    scan.literal_of = base.literal_of; scan.anchors = base.anchors;
+    scan.indent = this.indent; scan.start = this.result === undefined && sign === 1;
     const c = this.text[at];
-    type Candidate = Found & { level: number };
-    const prefers = (a: Candidate, b: Candidate | null): boolean => {
-      if (!b) return true;
-      const la = a.m.end - a.m.begin, lb = b.m.end - b.m.begin;
-      if (la !== lb) return la > lb;
-      if (a.rule.anchored !== b.rule.anchored) return a.rule.anchored;
-      return a.level < b.level;
-    };
     let best: Candidate | null = null;
-    const seen = new Set<Rule>();
+    const seen = this.proven;
+    seen.clear();
     let level = 0;
-    const consider = (nodes: Iterable<Node>) => {
+    const attempt = (rule: Rule) => {
+      if (!ip.visible(rule, this.src) || seen.has(rule)) return;
+      seen.add(rule);
+      // a rule with a literal on the reading side is rejected on a single
+      // character compare; statement-shaped externals read source order only
+      const edge = rule.edge(sign);
+      if (edge !== undefined && (rule.edge_char(sign) !== c || (edge.length > 1 && !lit_at(scan, at, edge)))) return;
+      if (rule.external?.match && sign === -1) return;
+      const m = rule.external?.match ? rule.external.match(rule, scan, at) : match_rule(rule, scan, at);
+      if (m && prefers({ rule, m, level }, best)) best = { rule, m, level };
+    };
+    for (const nodes of this.result ? [ip.chain(this.result), ip.lookup()] : [ip.lookup()]) {
       for (const node of nodes) {
-        for (const rule of ip.rules_on(node)) {
-          if (!ip.visible(rule, this.src) || seen.has(rule)) continue;
-          seen.add(rule);
-          // a rule with a literal on the reading side is rejected on a single
-          // character compare; statement-shaped externals read source order only
-          const edge = rule.edge(sign);
-          if (edge !== undefined && (rule.edge_char(sign) !== c || (edge.length > 1 && !lit_at(scan, at, edge)))) continue;
-          if (rule.external?.match && sign === -1) continue;
-          const m = rule.external?.match ? rule.external.match(rule, scan, at) : match_rule(rule, scan, at);
-          if (m && prefers({ rule, m, level }, best)) best = { rule, m, level };
+        const rules = ip.rules_on(node);
+        if (rules.length) {
+          const dispatch = dispatch_of(rules);
+          const keyed = dispatch.keyed[sign === 1 ? 0 : 1].get(c);
+          if (keyed) for (const rule of keyed) attempt(rule);
+          for (const rule of dispatch.unkeyed[sign === 1 ? 0 : 1]) attempt(rule);
         }
         level++;
       }
-    };
-    if (this.result) consider(ip.chain(this.result));
-    consider(ip.lookup());
+    }
     return best;
   }
 
@@ -1148,11 +1182,20 @@ class Interpreter {
   leave(): void { this.scopes.pop(); this.scope_epoch++; }
 
   // Every node reachable from the scope stack, innermost first — what an
-  // expression start resolves against.
-  *lookup(): Generator<Node> {
-    const seen = new Set<Node>();
-    for (let i = this.scopes.length - 1; i >= 0; i--)
-      for (let n: Node | undefined = this.scopes[i]; n && !seen.has(n); n = n.sup) { seen.add(n); yield n; }
+  // expression start resolves against. Cached per scope epoch: this runs for
+  // every resolution of every token, and a generator + dedup set per call is
+  // most of the cost of looking anything up.
+  private looked?: { epoch: number; nodes: Node[] };
+  lookup(): readonly Node[] {
+    let l = this.looked;
+    if (!l || l.epoch !== this.scope_epoch) {
+      const seen = new Set<Node>();
+      const nodes: Node[] = [];
+      for (let i = this.scopes.length - 1; i >= 0; i--)
+        for (let n: Node | undefined = this.scopes[i]; n && !seen.has(n); n = n.sup) { seen.add(n); nodes.push(n); }
+      this.looked = l = { epoch: this.scope_epoch, nodes };
+    }
+    return l.nodes;
   }
   // A receiver's type chain — what a result resolves against.
   *chain(node: Node | undefined): Generator<Node> {
@@ -1282,7 +1325,10 @@ class Interpreter {
       let carries_rules = false;
       for (const rule of this.rules_on(node)) {
         carries_rules = true;
-        if (!this.visible(rule, src) || !rule.anchored || !rule.delimited) continue;
+        // bucketed by MEMBERSHIP only — existence flips between passes, so
+        // the claim below re-checks `visible` per call; freezing it here
+        // both drifted the semantics and cost more than it saved
+        if (!rule.anchored || !rule.delimited || (rule.project !== undefined && rule.project !== this.grammar.project(src))) continue;
         const c = rule.edge_char(sign)!;
         anchors.add(c);
         let bucket = claimable.get(c);
@@ -1320,6 +1366,7 @@ class Interpreter {
         try {
           let best = -1;
           for (const rule of candidates) {
+            if (!this.visible(rule, src)) continue;
             const m = match_rule(rule, scan, j);
             if (!m) continue;
             const far = sign === 1 ? m.end - 1 : m.begin;
@@ -1336,7 +1383,7 @@ class Interpreter {
         const candidates = claimable.get(text[begin]);
         if (!candidates) return undefined;
         for (const rule of candidates) {
-          if (!rule.body) continue;
+          if (!rule.body || !this.visible(rule, src)) continue;
           const captures = rule.pieces.filter(p => !is_literal(p)) as Capture[];
           if (captures.length !== 1 || !captures[0].name || rule.body.text.trim() !== captures[0].name) continue;
           const m = match_rule(rule, scan, begin);
@@ -1500,11 +1547,15 @@ class Interpreter {
     let best: string | null = null;
     for (const node of nodes) {
       if (!node.methods) continue;
-      for (const key of names_of(node.methods, c, sign)) {
-        if (best !== null && key.length <= best.length) break;
-        const begin = sign === 1 ? at : at - key.length + 1;
-        if (key.length > 1 && (begin < 0 || !text.startsWith(key, begin))) continue;
-        const far = sign === 1 ? at + key.length : begin - 1;
+      const bucket = names_at(node.methods, c, sign);
+      if (!bucket) continue;
+      for (const length of bucket.lengths) {
+        if (best !== null && length <= best.length) break;
+        const begin = sign === 1 ? at : at - length + 1;
+        if (begin < 0 || begin + length > text.length) continue;
+        const key = text.slice(begin, begin + length);
+        if (!bucket.sets.get(length)!.has(key)) continue;
+        const far = sign === 1 ? at + length : begin - 1;
         if (/\w/.test(near(-sign as 1 | -1, key)) && /\w/.test(text[far] ?? '')) continue;
         best = key;
       }
@@ -1600,30 +1651,69 @@ class Interpreter {
 const NO_RULES: readonly Rule[] = [];
 const NO_NAMES: readonly string[] = [];
 
-// Per-method-map near-char buckets, names sorted longest-first — the lookup
-// for "longest known name here" walks one small bucket instead of every key.
-// One bucket map per reading direction (first characters reading right, last
-// characters reading left). Keyed by the Map object itself and rebuilt when
-// its size changes (keys are only ever added).
-const buckets = new WeakMap<Map<Key, Node>, { count: number; names: [Map<string, string[]>, Map<string, string[]>] }>();
-function names_of(methods: Map<Key, Node>, c: string, sign: 1 | -1): readonly string[] {
+// Per-method-map near-char buckets — the lookup for "longest known name
+// here" probes one small bucket instead of every key. Within a bucket the
+// names group into a SET per length (longest length first), so a thousand
+// same-prefix names cost one slice + one hash per distinct length, not a
+// startsWith each. One bucket map per reading direction (first characters
+// reading right, last reading left). Keyed by the Map object itself and
+// caught up incrementally when it grows (keys are only ever added, and
+// insertion order is stable).
+interface NameBucket { lengths: number[]; sets: Map<number, Set<string>> }
+const buckets = new WeakMap<Map<Key, Node>, { count: number; names: [Map<string, NameBucket>, Map<string, NameBucket>] }>();
+function names_at(methods: Map<Key, Node>, c: string, sign: 1 | -1): NameBucket | undefined {
   let b = buckets.get(methods);
-  if (!b || b.count !== methods.size) {
-    const names: [Map<string, string[]>, Map<string, string[]>] = [new Map(), new Map()];
+  if (!b) buckets.set(methods, b = { count: 0, names: [new Map(), new Map()] });
+  if (b.count !== methods.size) {
+    let i = 0;
     for (const key of methods.keys()) {
+      if (i++ < b.count) continue;
       if (typeof key !== 'string') continue;
       for (const s of [1, -1] as const) {
-        const map = names[s === 1 ? 0 : 1];
+        const map = b.names[s === 1 ? 0 : 1];
         const n = near(s, key);
-        let list = map.get(n);
-        if (!list) map.set(n, list = []);
-        list.push(key);
+        let bucket = map.get(n);
+        if (!bucket) map.set(n, bucket = { lengths: [], sets: new Map() });
+        let set = bucket.sets.get(key.length);
+        if (!set) {
+          bucket.sets.set(key.length, set = new Set());
+          let at = 0;
+          while (at < bucket.lengths.length && bucket.lengths[at] > key.length) at++;
+          bucket.lengths.splice(at, 0, key.length);
+        }
+        set.add(key);
       }
     }
-    for (const map of names) for (const list of map.values()) list.sort((x, y) => y.length - x.length);
-    buckets.set(methods, b = { count: methods.size, names });
+    b.count = methods.size;
   }
-  return b.names[sign === 1 ? 0 : 1].get(c) ?? NO_NAMES;
+  return b.names[sign === 1 ? 0 : 1].get(c);
+}
+
+// Per-rules-array dispatch buckets, by the edge character a directed reader
+// meets first — the candidates at a position are the few same-char rules
+// plus the edge-less ones bringing their own matcher (the rule-definition
+// shape), instead of every rule the scope carries. Keyed by the array itself
+// and rebuilt when it grows (install only ever pushes).
+interface Dispatch { count: number; keyed: [Map<string, Rule[]>, Map<string, Rule[]>]; unkeyed: [Rule[], Rule[]] }
+const dispatches = new WeakMap<readonly Rule[], Dispatch>();
+function dispatch_of(rules: readonly Rule[]): Dispatch {
+  let d = dispatches.get(rules);
+  if (!d || d.count !== rules.length) {
+    d = { count: rules.length, keyed: [new Map(), new Map()], unkeyed: [[], []] };
+    for (const rule of rules) {
+      for (const s of [1, -1] as const) {
+        const edge = rule.edge_char(s);
+        if (edge !== undefined) {
+          const map = d.keyed[s === 1 ? 0 : 1];
+          let list = map.get(edge);
+          if (!list) map.set(edge, list = []);
+          list.push(rule);
+        } else if (s === 1 && rule.external?.match) d.unkeyed[0].push(rule);
+      }
+    }
+    dispatches.set(rules, d);
+  }
+  return d;
 }
 
 let IDS = 0;
@@ -1833,9 +1923,10 @@ export class Program {
     ip.abstract_blocks = this.abstract_blocks;
     externals(ip);
     ip.install();
-    if (opts.log) ip.log.forget({ text: '' });  // the file-less bucket
+    // one batched forget — the file-less bucket and every file this pass
+    // reparses — instead of a quadratic per-file cache rebuild
+    if (opts.log) ip.log.forget_all([{ text: '' }, ...order]);
     for (const src of order) {
-      if (opts.log) ip.log.forget(src);
       ip.parse(src);
       if (opts.log) {
         for (const issue of this.grammar.issues)
@@ -1884,72 +1975,123 @@ export class Program {
       this.grammar.issues.some(i => i.at?.src !== undefined && inside(i.at.src))
       || [...this.grammar.rules.values()].some(rule => rule_scope(rule) && rule.disabled);
 
-    let affected: Source[];
-    let incremental = scoped !== undefined && !tangled();
-    if (incremental) {
-      affected = all.filter(src => this.grammar.language(src) || (src.path !== undefined && this.touched.has(src.path)));
-    } else {
-      this.grammar.clear(rule_scope);
-      affected = all;
-    }
+    const files_of = (order: Source[]): Set<string> =>
+      new Set(order.map(src => src.path).filter((p): p is string => p !== undefined));
 
-    const pipeline = async (): Promise<Interpreter | undefined> => {
-      const reset = incremental
-        ? { files: new Set(affected.map(src => src.path).filter((p): p is string => p !== undefined)) }
-        : { scope: rule_scope };
-      let ip = await this.pass(affected, { generation: opts.generation, ...reset });
+    // the fixpoint pipeline over a parse set. Probes force the dead rules
+    // back on so mutual suppressions collide — but only the CONTINGENT ones:
+    // a rule whose every sighting is consumed by a rule that is itself
+    // settled alive (a live definition somewhere) can never exist, and
+    // forcing it on would have it eat the whole pass for an analysis whose
+    // verdict cannot change.
+    const pipeline = async (order: Source[], reset: { files?: Set<string>; scope?: (rule: Rule) => boolean }): Promise<Interpreter | undefined> => {
+      let ip = await this.pass(order, { generation: opts.generation, ...reset });
       if (!ip) return undefined;
-      this.grammar.analyze(rule_scope);
+      let moving = this.grammar.analyze(rule_scope);
       for (let i = 0; i < 3; i++) {
-        for (const rule of this.grammar.rules.values()) if (rule_scope(rule) && !rule.disabled && !rule.exists) rule.exists = true;
-        ip = await this.pass(affected, { generation: opts.generation, ...reset });
+        let probing = false;
+        for (const rule of this.grammar.rules.values()) {
+          if (!rule_scope(rule) || rule.disabled || rule.exists) continue;
+          const contingent = rule.definitions.some(d =>
+            d.seen instanceof Rule && !d.seen.disabled && !d.seen.definitions.some(x => x.seen === 'live'));
+          if (contingent) { rule.exists = true; probing = true; }
+        }
+        if (!probing && !moving) break;
+        ip = await this.pass(order, { generation: opts.generation, ...reset });
         if (!ip) return undefined;
-        if (!this.grammar.analyze(rule_scope)) break;
+        moving = this.grammar.analyze(rule_scope);
       }
       return ip;
     };
 
-    this.grammar.issues = this.grammar.issues.filter(i => i.at?.src !== undefined && !inside(i.at.src));
-    for (let round = 0; ; round++) {
-      if (!await pipeline()) return undefined;
-      if (!incremental) break;
-      // who drifted from the settled state, and which untouched files could
-      // they possibly reach?
-      const edges = round < 16 ? this.drifted(covers) : null;
-      const have = new Set(affected.map(src => src.path));
-      const reach = (src: Source): boolean =>
-        edges === null
-        || edges.some(need => need.every(edge => src.text.includes(edge)))
-        || this.grammar.issues.some(i => i.at?.src?.path === src.path);
-      const expansion = all.filter(src => !have.has(src.path) && reach(src));
-      if (expansion.length) { affected = [...affected, ...expansion]; continue; }
-      if (!tangled()) break;
-      // the edit dragged the scope into circularity — re-derive it whole
-      incremental = false;
+    // the final pass carries the log; afterwards existence settles on its
+    // own sightings (a trajectory-bistable rule re-records its definitions
+    // there, and a snapshot against older sightings would read as phantom
+    // drift on every later incremental cycle), then the verdicts become the
+    // new settled state
+    const settle = (final: Interpreter): Interpreter => {
+      this.remember(covers);
+      for (const [path, project] of [...this.touched]) if (covers(project)) this.touched.delete(path);
+      // the cycle's interpreter is the freshest direct-feedback state for
+      // what it saw: everything, or exactly [the language + one project]
+      if (!scoped) this.live = final;
+      else if (scoped.size === 1) this.lives.set([...scoped][0], final);
+      return final;
+    };
+    const finish = async (order: Source[], reset: { files?: Set<string>; scope?: (rule: Rule) => boolean }): Promise<Interpreter | undefined> => {
+      const reported = this.grammar.issues.length;
+      const final = await this.pass(order, { log: opts.log, generation: opts.generation, ...reset });
+      if (!final) return undefined;
+      this.grammar.analyze(rule_scope);
+      // the settling analysis can surface circularity issues the final pass
+      // couldn't know yet (it reports per file as it parses) — they must
+      // still reach the log, and their files must publish again
+      if (opts.log) {
+        const republish = new Set<Source>();
+        for (const issue of this.grammar.issues.slice(reported)) {
+          if (issue.at?.src?.path === undefined) continue;
+          final.log.error(issue.phase, issue.message, issue.at);
+          const src = order.find(s => s.path === issue.at!.src!.path);
+          if (src) republish.add(src);
+        }
+        for (const src of republish) this.reloaded(src);
+      }
+      return settle(final);
+    };
+
+    // from seed: deterministic — lands exactly where a fresh boot of these
+    // sources would
+    const derive = async (): Promise<Interpreter | undefined> => {
+      // when nothing was edited (membership shifts only), the current
+      // verdicts ARE the settled fixpoint: one pass with the log is the
+      // whole derivation — verify with the analysis, fall back if it moved
+      if (this.settled.size && !this.touched.size) {
+        const optimistic = await this.pass(all, { log: opts.log, generation: opts.generation, scope: rule_scope });
+        if (!optimistic) return undefined;
+        this.grammar.analyze(rule_scope);
+        if (!this.drifted(covers).length) return settle(optimistic);
+      }
       this.grammar.issues = this.grammar.issues.filter(i => i.at?.src !== undefined && !inside(i.at.src));
       this.grammar.clear(rule_scope);
-      affected = all;
-    }
+      if (!await pipeline(all, { scope: rule_scope })) return undefined;
+      return finish(all, { scope: rule_scope });
+    };
 
-    const final = await this.pass(affected, {
-      log: opts.log, generation: opts.generation,
-      ...(incremental
-        ? { files: new Set(affected.map(src => src.path).filter((p): p is string => p !== undefined)) }
-        : { scope: rule_scope }),
-    });
-    if (!final) return undefined;
-    // settle existence on the final pass's own sightings before remembering:
-    // a trajectory-bistable rule (quoted-copy suppression games) re-records
-    // its definitions during the final pass, and an exists snapshot taken
-    // against older sightings would read as phantom drift — expanding every
-    // later incremental cycle to the whole project for nothing
-    this.grammar.analyze(rule_scope);
-    this.remember(covers);
-    for (const [path, project] of [...this.touched]) if (covers(project)) this.touched.delete(path);
-    // a scoped cycle's interpreter only saw its own files — direct feedback
-    // keeps the last full one
-    if (!scoped) this.live = final;
-    return final;
+    // circularity needs the from-seed derivation; so does everything wider
+    // than a project scope
+    if (!scoped || tangled()) return derive();
+
+    // file-incremental: start from the edited files and grow by which rules
+    // drifted from the settled state — a rule can only change a file whose
+    // text contains ALL of its edge literals. When the start already covers
+    // the project (a freshly loaded one), the from-seed derivation IS the
+    // increment.
+    let affected = all.filter(src => this.grammar.language(src) || (src.path !== undefined && this.touched.has(src.path)));
+    if (affected.length >= all.length) return derive();
+    for (let round = 0; ; round++) {
+      if (!await pipeline(affected, { files: files_of(affected) })) return undefined;
+      // a wide drift reaches everything anyway — testing thousands of edge
+      // conjunctions against every file costs more than parsing them
+      let edges = round < 16 ? this.drifted(covers) : null;
+      if (edges !== null && edges.length > 32) edges = null;
+      const have = new Set(affected.map(src => src.path));
+      const expansion = all.filter(src => !have.has(src.path) && (
+        edges === null
+        || edges.some(need => need.every(edge => src.text.includes(edge)))
+        || this.grammar.issues.some(i => i.at?.src?.path === src.path)));
+      if (expansion.length) { affected = [...affected, ...expansion]; continue; }
+      // the edit dragged the scope into circularity — only the from-seed
+      // derivation is sound there
+      if (tangled()) return derive();
+      const final = await finish(affected, { files: files_of(affected) });
+      if (!final) return undefined;
+      // the settling analysis ran after that check — circularity surfacing
+      // only now means the incremental run picked one of an ambiguous
+      // fixpoint's readings: re-derive from seed so the session lands
+      // exactly where a fresh start would
+      if (tangled()) return derive();
+      return final;
+    }
   }
 
   // the settled grammar — existence, body and edge literals per rule key as
@@ -1960,14 +2102,16 @@ export class Program {
   private remember(covers: (project?: string) => boolean): void {
     for (const [key, was] of [...this.settled])
       if (covers(was.project) && !this.grammar.rules.has(key)) this.settled.delete(key);
-    for (const [key, rule] of this.grammar.rules)
-      if (covers(rule.project)) this.settled.set(key, {
+    for (const [key, rule] of this.grammar.rules) {
+      if (!covers(rule.project)) continue;
+      this.settled.set(key, {
         project: rule.project,
         exists: rule.exists,
         disabled: rule.disabled,
         body: rule.body?.text ?? '',
         edges: [rule.anchor, rule.tail].filter((e): e is string => e !== undefined),
       });
+    }
   }
 
   // the edge literals of every rule whose existence, disabledness or body no
@@ -2017,6 +2161,9 @@ export class Program {
   // background, and the cycle restarts once the edit is served.
 
   live?: Interpreter;
+  // per-project direct-feedback interpreters — each scoped cycle leaves its
+  // final state here, which is exactly [the language + that project]
+  private lives = new Map<string, Interpreter>();
   active = new Set<string>();                  // files open in the editor
   reloaded: (src: Source) => void = () => {};  // src's diagnostics are fresh
   private generation = 0;
@@ -2039,45 +2186,64 @@ export class Program {
   // selection); a Source replaces the file at its path (empty text forgets
   // it); an iterable of either reloads as one batch (a directory).
   reload(next: Source | Node | Iterable<Source | Node>): Log {
-    const ip = this.live;
-    if (!ip) throw new Error('reload() before run()');
+    const live = this.live;
+    if (!live) throw new Error('reload() before run()');
+    const log = live.log;
     this.generation++;
     const items: (Source | Node)[] = next instanceof Node || !(Symbol.iterator in next) ? [next as Source | Node] : [...next];
     this.priority = items.map(item => (item instanceof Node ? item.src : item)?.path).filter((p): p is string => p !== undefined);
     // membership first: a `.project.ray` arriving in the batch must scope
     // the batch's own parses — surveying after them would key their rules
     // under memberships about to shift
+    const fresh = new Set<string>();
     for (const item of items) {
       if (item instanceof Node || item.path === undefined) continue;
       const at = this.sources.findIndex(s => s.path === item.path);
       // an empty text is still a file (an empty `.project.ray` claims its
       // directory) — deletion is `remove()`
-      if (at >= 0) this.sources[at] = item; else this.sources.push(item);
+      if (at >= 0) this.sources[at] = item;
+      else { this.sources.push(item); fresh.add(item.path); }
     }
     if (this.grammar.survey(this.sources)) this.taint('all');
+    // one batched forget (per-file deletion rebuilds the display caches
+    // quadratically over a large batch)
+    log.forget_all(items.filter((item): item is Source => !(item instanceof Node) && item.path !== undefined));
     for (const item of items) {
       const src = item instanceof Node ? item.src! : item;
-      const before = this.signature(src.path);
-      if (!(item instanceof Node) && src.path !== undefined) {
-        this.prune(src.path, src);
-        ip.log.forget(src);
+      const project = src.path !== undefined ? this.grammar.project(src) : undefined;
+      // a fresh file nobody is looking at — the bulk of a workspace load —
+      // skips the up-front parse entirely: its project's background cycle
+      // (scheduled right here) derives its diagnostics anyway
+      if (!(item instanceof Node) && src.path !== undefined && fresh.has(src.path) && !this.active.has(src.path)) {
+        this.touched.set(src.path, project!);
+        this.taint(this.grammar.language(src) ? 'all' : project!);
+        continue;
       }
+      // direct feedback parses on the project's own live state when a cycle
+      // has produced one — the full boot interpreter otherwise
+      const ip = (project !== undefined ? this.lives.get(project) : undefined) ?? live;
+      // a FRESH path has no ledger history: nothing to prune, and "did the
+      // parse sight any definition" is the whole signature question
+      const stale = src.path !== undefined && !fresh.has(src.path);
+      const before = stale ? this.signature(src.path) : '';
+      if (!(item instanceof Node) && stale) this.prune(src.path!, src);
+      const mark = DEFINITIONS;
       if (item instanceof Node) ip.eval_block(item);
       else ip.parse(src);
       // the signature covers every grammar contribution this file can make
       // (any rule it sights lands a definition here) — `new_rules` would
       // false-alarm on the prune+re-register churn of an unchanged rule
-      if (this.signature(src.path) !== before || this.grammar.language(src)) {
-        const project = this.grammar.project(src);
-        if (src.path !== undefined) this.touched.set(src.path, project);
-        this.taint(this.grammar.language(src) ? 'all' : project);
+      const changed = stale ? this.signature(src.path) !== before : DEFINITIONS !== mark;
+      if (changed || this.grammar.language(src)) {
+        if (src.path !== undefined) this.touched.set(src.path, project!);
+        this.taint(this.grammar.language(src) ? 'all' : project!);
       }
       if (src.path !== undefined) for (const issue of this.grammar.issues)
-        if (issue.at?.src?.path === src.path) ip.log.error(issue.phase, issue.message, issue.at);
+        if (issue.at?.src?.path === src.path) log.error(issue.phase, issue.message, issue.at);
       this.reloaded(src);
     }
     if (this.suspect) this.recycle();
-    return ip.log;
+    return log;
   }
 
   // A deleted file leaves the project — unlike an empty one, which parses to
@@ -2140,20 +2306,44 @@ export class Program {
     return [...this.sources].sort((a, b) => rank(a) - rank(b));
   }
 
-  // run the background cycle over the suspect projects, restarting as long
-  // as edits preempted it or made something else suspect
+  // Run the background cycles over the suspect projects, ONE PROJECT AT A
+  // TIME: projects are independent (rules are project-bound), so their
+  // derivations stream — the project of the files just edited first, then
+  // the open files', then the rest — and diagnostics publish as each one
+  // lands instead of after the whole workspace. A live edit preempts only
+  // the project mid-derivation; the queue carries on, re-ranked.
   private recycle(): void {
     if (this.cycling) return;
     const scope = this.suspect;
     if (scope === undefined) return;
     this.suspect = undefined;
-    this.cycling = this.cycle({ log: this.live!.log, generation: this.generation, scope })
-      .then(ip => {
-        if (ip) return;
-        // preempted — what it was about to re-derive is still suspect
-        if (scope === 'all') this.taint('all');
-        else for (const project of scope) this.taint(project);
-      })
+    let projects: Set<string>;
+    if (scope === 'all') {
+      projects = new Set();
+      for (const src of this.sources) if (!this.grammar.language(src)) projects.add(this.grammar.project(src));
+      if (!projects.size) return;
+      // a single-project workspace gains nothing from decomposing — run the
+      // one full derivation (which also refreshes the fallback `live`)
+      if (projects.size === 1) {
+        this.cycling = this.cycle({ log: this.live!.log, generation: this.generation, scope: 'all' })
+          .then(ip => { if (!ip) this.taint('all'); })
+          .finally(() => { this.cycling = undefined; if (this.suspect) this.recycle(); });
+        return;
+      }
+    } else projects = scope;
+    const project_of = new Map<string, string>();
+    for (const src of this.sources) if (src.path !== undefined) project_of.set(src.path, this.grammar.project(src));
+    const first = (paths: Iterable<string>): string | undefined => {
+      for (const path of paths) {
+        const project = project_of.get(path);
+        if (project !== undefined && projects.has(project)) return project;
+      }
+      return undefined;
+    };
+    const chosen = first(this.priority) ?? first(this.active) ?? projects.values().next().value!;
+    for (const project of projects) if (project !== chosen) this.taint(project);
+    this.cycling = this.cycle({ log: this.live!.log, generation: this.generation, scope: new Set([chosen]) })
+      .then(ip => { if (!ip) this.taint(chosen); })  // preempted — still suspect
       .finally(() => { this.cycling = undefined; if (this.suspect) this.recycle(); });
   }
 }

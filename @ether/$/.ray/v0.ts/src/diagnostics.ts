@@ -243,7 +243,16 @@ export class Diagnostics {
    *  the derived caches so a stale "this line already errored" entry can't suppress
    *  fresh diagnostics when the source is re-parsed. */
   delete(source: Text.Source): void {
-    this.items.delete(source.location);
+    this.deleteAll([source.location]);
+  }
+
+  /** Forget a whole set of files at once — one cache rebuild instead of one
+   *  per file (rebuilds walk every retained diagnostic, so per-file deletion
+   *  over a large pass is quadratic). */
+  deleteAll(locations: Iterable<string | undefined>): void {
+    let any = false;
+    for (const location of locations) if (this.items.delete(location)) any = true;
+    if (!any) return;
     const remaining = [...this.all()];
     this.erroredRegions.rebuild(remaining);
     this.byPosition.rebuild(remaining);

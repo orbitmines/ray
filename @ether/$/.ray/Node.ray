@@ -1,6 +1,5 @@
 `{string: String}` => string
 {`//`}{comment: String} =>
-{`'`}{string: String}{`'`} => string
 
 // Grouping: that parentheses, brackets and braces nest is not built in — it
 // follows from these rules being active while scanning.
@@ -15,10 +14,6 @@ class Program
   {` `}{expr} => this(expr)
 
 class Node
-  external static
-  external [{property}]
-  external **: Program
-  external = (x): x
 
   // The grammar-rule definition rule itself: the bootstrapper hardcodes this
   // shape for this file only; once declared here, the interpreter relies on
@@ -38,6 +33,12 @@ class Node
   )
 
   test () TODO
+
+  external static
+  external [{property}]
+  external **: Program
+  external = (x): x
+
 
 // Set the actual method used for function definitions.
 Node.DEFINE_METHOD = `&=`

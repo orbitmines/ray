@@ -1,4 +1,5 @@
 import type { Text } from "./source.ts";
+import { nodejs } from "./node.js.ts";
 
 export interface Diagnostic {
   level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
@@ -328,7 +329,8 @@ export class Diagnostics {
 
   exit(): never {
     this.print();
-    return process.exit(1);
+    if (nodejs.enabled) return process.exit(1);
+    throw new Error('fatal diagnostic');
   }
 
   fatal(phase: string, message: string, node?: Text.Node): never {
@@ -363,14 +365,14 @@ export class Diagnostics {
 
   /**
    * Minimum severity to display, resolved once at module load from the
-   * DEBUG env var. DEBUG=0 → trace (show all), DEBUG=1 → debug+, …,
-   * DEBUG=5 → fatal only. Default: 2 (info+). Static-init means
-   * `showLevel` is a single `>=` compare in the wrapper hot path —
-   * re-reading `process.env.DEBUG` + `parseInt` per call costs several
-   * ms across a trace-level run.
+   * DEBUG toggle (env var in Node.js, `window.DEBUG` in the browser).
+   * DEBUG=0 → trace (show all), DEBUG=1 → debug+, …, DEBUG=5 → fatal only.
+   * Default: 2 (info+). Static-init means `showLevel` is a single `>=`
+   * compare in the wrapper hot path — re-reading the toggle + `parseInt`
+   * per call costs several ms across a trace-level run.
    */
   static readonly minLevel: number = (() => {
-    const env = process.env.DEBUG;
+    const env = nodejs.env('DEBUG');
     if (env === undefined || env === '') return DIAGNOSTIC_SEVERITY.info;
     const n = parseInt(env, 10);
     if (!isNaN(n)) return n;
@@ -430,7 +432,7 @@ export class Diagnostics {
   private _printFile(file: string | undefined, source: string, items: Diagnostic[]) {
     const { c } = Diagnostics;
     if (!source) return;
-    const cols = process.stdout.columns || 80;
+    const cols = (nodejs.enabled && process.stdout.columns) || 80;
     const lines = source.split('\n');
     const lineNumWidth = String(lines.length).length;
     const gutterLen = lineNumWidth + 1;

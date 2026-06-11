@@ -27,6 +27,13 @@ export class nodejs {
   static get path(): typeof import('path') { return _path ??= load('path', _path); }
   static get url(): typeof import('url') { return _url ??= load('url', _url); }
 
+  /** Environment toggles: `process.env.X` in Node.js, the `X` global
+   *  (`window.X`) in the browser. */
+  static env(name: string): string | undefined {
+    const value = nodejs.enabled ? process.env[name] : (globalThis as any)[name];
+    return value === undefined || value === null ? undefined : String(value);
+  }
+
   private static _root?: string;
   static get root(): string {
     if (nodejs._root) return nodejs._root;

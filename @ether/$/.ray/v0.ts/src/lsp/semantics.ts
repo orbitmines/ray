@@ -7,6 +7,13 @@ export const MODIFIERS = [
   'abstract', 'async', 'modification', 'documentation', 'defaultLibrary',
 ];
 
+export function position_of(text: string, offset: number): { line: number; character: number } {
+  let line = 0, start = 0;
+  const end = Math.min(offset, text.length);
+  for (let i = 0; i < end; i++) if (text[i] === '\n') { line++; start = i + 1; }
+  return { line, character: end - start };
+}
+
 export function offset_at(text: string, line: number, character: number): number {
   let offset = 0;
   for (let i = 0; i < line; i++) {

@@ -5,33 +5,32 @@ external class {name}{block}
 // the rule, inside a pattern piece they style that piece, and applied to
 // anything else they return it unchanged.
 class H
+  external namespace
+  external type
+  external class
+  external enum
+  external interface
+  external struct
+  external typeParameter
+  external parameter
+  external variable
+  external property
+  external enumMember
+  external event
+  external function
+  external method
+  external macro
+  external keyword
+  external modifier
   external comment
   external string
   external number
-  external boolean
   external regexp
-  external keyword
   external operator
-  external punctuation
-  external variable
-  external property
-  external parameter
-  external function
-  external method
-  external class
-  external type
-  external typeParameter
-  external interface
-  external enum
-  external enumMember
-  external struct
-  external event
-  external namespace
-  external macro
-  external modifier
   external decorator
-  external builtin
-  external access
+
+// Punctuation isn't an LSP standard type — it IS comment, everywhere.
+H.punctuation = H.comment
 
 H.string `{string: String}` => string
 H.comment //{comment: String} =>
@@ -61,7 +60,7 @@ class Node
   static DEFINE_METHOD = `=`
 
   // Function definition
-  {` `}({H.parameter args}){block} => this [DEFINE_METHOD] (
+  H.punctuation {` `}({H.parameter args}){block} => this [DEFINE_METHOD] (
     def = block**
     def[`args`] = args
     def

@@ -12,7 +12,8 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Program, type Source } from '../minimal.ts';
 import { toLsp } from './diagnostics.ts';
-import { encode, offset_at, MODIFIERS } from './semantics.ts';
+import { encode, offset_at, position_of, MODIFIERS } from './semantics.ts';
+import * as features from './features.ts';
 
 /**
  * Boot the LSP over a minimal.ts Program.
@@ -80,10 +81,147 @@ export async function start(program: Program): Promise<void> {
           full: true,
           range: true,
         },
+        foldingRangeProvider: true,
+        documentSymbolProvider: true,
+        definitionProvider: true,
+        referencesProvider: true,
+        documentHighlightProvider: true,
+        renameProvider: true,
+        hoverProvider: true,
+        selectionRangeProvider: true,
+        completionProvider: { triggerCharacters: ['.'] },
+        codeLensProvider: {},
       },
       serverInfo: { name: 'ray-language-server' },
     };
   });
+
+  // every feature reads the same two things: a source's text and positions
+  const source = (uri: string): Source | undefined => {
+    const path = uriToFile(uri);
+    return program.sources.find(s => s.path === path);
+  };
+  const where = (uri: string, position: { line: number; character: number }): { src: Source; offset: number } | undefined => {
+    const src = source(uri);
+    return src && { src, offset: offset_at(src.text, position.line, position.character) };
+  };
+  const range = (text: string, begin: number, end: number) => ({ start: position_of(text, begin), end: position_of(text, end) });
+  const locate = (span: features.Span) => {
+    const text = program.sources.find(s => s.path === span.path)?.text ?? '';
+    return { uri: uris.get(span.path) ?? String(pathToFileURL(span.path)), range: range(text, span.begin, span.end) };
+  };
+
+  connection.onFoldingRanges(params => {
+    const src = source(params.textDocument.uri);
+    if (!src) return [];
+    return features.foldings(src.text, features.configuration(program).comments?.lineComment)
+      .map(f => ({ startLine: f.start, endLine: f.end }));
+  });
+
+  connection.onDocumentSymbol(params => {
+    const src = source(params.textDocument.uri);
+    if (!src?.path) return [];
+    return features.symbols(program, src.path).map(s => ({
+      name: s.name || '…',
+      kind: s.rule ? 12 /* Function */ : 7 /* Property */,
+      range: range(src.text, s.begin, s.end),
+      selectionRange: range(src.text, s.begin, Math.min(s.end, line_end(src.text, s.begin))),
+    }));
+  });
+
+  connection.onDefinition(params => {
+    const at = where(params.textDocument.uri, params.position);
+    if (!at?.src.path) return [];
+    return features.definition(program, at.src.path, at.offset).map(locate);
+  });
+
+  connection.onReferences(params => {
+    const at = where(params.textDocument.uri, params.position);
+    if (!at?.src.path) return [];
+    return features.references(program, at.src.path, at.offset).map(locate);
+  });
+
+  connection.onDocumentHighlight(params => {
+    const at = where(params.textDocument.uri, params.position);
+    if (!at?.src.path) return [];
+    return features.references(program, at.src.path, at.offset)
+      .filter(s => s.path === at.src.path)
+      .map(s => ({ range: range(at.src.text, s.begin, s.end) }));
+  });
+
+  connection.onRenameRequest(params => {
+    const at = where(params.textDocument.uri, params.position);
+    if (!at?.src.path) return null;
+    const changes: Record<string, { range: ReturnType<typeof range>; newText: string }[]> = {};
+    for (const s of features.references(program, at.src.path, at.offset)) {
+      const loc = locate(s);
+      (changes[loc.uri] ??= []).push({ range: loc.range, newText: params.newName });
+    }
+    return { changes };
+  });
+
+  connection.onHover(params => {
+    const at = where(params.textDocument.uri, params.position);
+    if (!at?.src.path) return null;
+    const contents = features.hover(program, at.src.path, at.offset);
+    return contents !== undefined ? { contents: { kind: 'markdown', value: contents } } : null;
+  });
+
+  connection.onSelectionRanges(params => {
+    const src = source(params.textDocument.uri);
+    if (!src) return [];
+    return params.positions.map(position => {
+      const offset = offset_at(src.text, position.line, position.character);
+      const chain = features.selections(src.text, offset, src.path ? features.word_at(program, src.path, offset) : undefined);
+      let parent: any;
+      for (const s of chain.reverse()) parent = { range: range(src.text, s.begin, s.end), parent };
+      return parent ?? { range: range(src.text, offset, offset) };
+    });
+  });
+
+  connection.onCompletion(params => {
+    const at = where(params.textDocument.uri, params.position);
+    if (!at) return [];
+    // after `H.` (or any chain dot): the groups; otherwise everything defined
+    const dotted = at.src.text[at.offset - 1] === '.';
+    if (dotted) return program.groups.map(g => ({ label: g, kind: 20 /* EnumMember */ }));
+    const names = new Set<string>();
+    for (const [key] of program.grammar.sites()) names.add(key.slice(key.indexOf('::') + 2));
+    return [...names].map(name => ({ label: name, kind: 2 /* Method */ }));
+  });
+
+  connection.onCodeLens(params => {
+    const src = source(params.textDocument.uri);
+    if (!src?.path) return [];
+    const out: { range: ReturnType<typeof range>; command: { title: string; command: string } }[] = [];
+    // what each line DEFINES, and how often the project refers to it — the
+    // same list the references menu shows; nothing to say when it's zero
+    for (const [key, rule] of program.grammar.rules)
+      for (const d of rule.definitions)
+        if (d.at.src?.path === src.path && d.seen === 'live') {
+          const n = features.rule_references(program, key).length;
+          if (!n) continue;
+          out.push({
+            range: range(src.text, d.at.begin, d.at.end),
+            command: { title: `${n} reference${n === 1 ? '' : 's'}`, command: '' },
+          });
+        }
+    for (const [key, site] of program.grammar.sites())
+      if (site.src.path === src.path && site.end) {
+        const n = features.occurrences(program, key.slice(key.indexOf('::') + 2));
+        if (!n) continue;
+        out.push({
+          range: range(src.text, site.begin, Math.min(site.end, line_end(src.text, site.begin))),
+          command: { title: `${n} reference${n === 1 ? '' : 's'}`, command: '' },
+        });
+      }
+    return out;
+  });
+
+  const line_end = (text: string, i: number): number => {
+    const nl = text.indexOf('\n', i);
+    return nl === -1 ? text.length : nl;
+  };
 
   // served straight off the program's highlighting (the painted spans the
   // passes derive next to the diagnostics)
@@ -104,8 +242,14 @@ export async function start(program: Program): Promise<void> {
     ]);
   });
 
-  // Editor configuration (comments, brackets, …) — none wired yet.
-  connection.onRequest('ether/languageConfiguration', () => ({}));
+  // Editor configuration — derived from the grammar itself: pair rules make
+  // brackets and quotes, the comment rule makes toggle-comment work, and the
+  // lexical layer rides along for the client to materialize (the editor's
+  // native bracket machinery only respects comments/strings it can tokenize).
+  connection.onRequest('ether/languageConfiguration', () => ({
+    ...features.configuration(program),
+    grammar: features.lexical(program),
+  }));
 
   // Whole-workspace initial enumeration, driven by the client's
   // `vscode.workspace.findFiles`. Read each from disk (skipping open

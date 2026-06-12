@@ -191,8 +191,9 @@ function position(at?: Node): Text.Node | undefined {
 interface Issue { phase: string; message: string; at?: Node }
 
 // One styled span — what an H group painted. `style` is the dotted path
-// after `H.` (group, then modifiers).
-export interface Painted { begin: number; end: number; style: string }
+// after `H.` (group, then modifiers); `of` is the rule the span belongs to
+// (its ledger key), when a rule's match painted it.
+export interface Painted { begin: number; end: number; style: string; of?: string }
 
 export class Log {
   diagnostics = new Diagnostics();
@@ -207,10 +208,10 @@ export class Log {
   info(phase: string, message: string, at?: Node): void {
     this.diagnostics.report({ level: 'info', phase, message, node: position(at) });
   }
-  paint(path: string, begin: number, end: number, style: string): void {
+  paint(path: string, begin: number, end: number, style: string, of?: string): void {
     let spans = this.painted.get(path);
     if (!spans) this.painted.set(path, spans = []);
-    spans.push({ begin, end, style });
+    spans.push({ begin, end, style, of });
   }
   // forget everything reported against these sources' files — a reload
   // re-derives them (the display layer rebuilds its cascade caches, so a
@@ -615,16 +616,24 @@ interface Firing {
 // suppresses it), or not seen at all.
 interface Definition { at: Node; seen?: 'live' | Rule }
 
+// Where a defining statement sits — `end` is patched once the statement has
+// been read to its extent (0 while still being read) — and the name of the
+// scope it was read in: a summoned re-evaluation must run back home.
+interface Site { src: Source; begin: number; end: number; on?: Node; home?: string }
+
 class Rule {
   definitions: Definition[] = [];
   body?: Node;
   external?: External;
   // The project this rule is bound to; undefined = everywhere (the language).
   project?: string;
+  // its key in the grammar's ledger — how painted spans point back at it
+  key?: string;
   // The H group a leading `H.group` put on the whole rule; `styled` is
-  // whether any piece carries its own. Presentation only — not identity.
+  // whether any piece carries its own. Presentation only — not identity —
+  // and it may arrive late: a pending decoration styles on a later pass.
   style?: string;
-  readonly styled: boolean;
+  styled: boolean;
   // Whether the rule currently exists, per the analysis. A rule whose only
   // definitions are suppressed doesn't.
   exists = true;
@@ -681,6 +690,39 @@ class Grammar {
   language_file?: string;
 
   language(src: Source): boolean { return src.path === this.language_file; }
+
+  // ── definitions ──
+  // Like rules, definitions on CLASSES persist as SITES — where the defining
+  // statement is written, never its value — so class definitions are
+  // order-independent: a resolution miss evaluates the recorded statement on
+  // demand (running whatever it depends on the same way). Two generations,
+  // like rule sightings: each pass re-records what it actually reads and
+  // falls back to the previous pass's — a misreading fades instead of being
+  // summoned forever. Pruned per file on reload.
+  private defs_now = new Map<string, Site>();
+  private defs_before = new Map<string, Site>();
+  get defined(): number { return this.defs_now.size + this.defs_before.size; }
+  define_at(on: string, key: string, site: Site, home?: string): void {
+    if (home !== undefined) site.home = home;
+    this.defs_now.set(`${on}::${key}`, site);
+  }
+  defined_at(on: string, key: string): Site | undefined {
+    return this.defs_now.get(`${on}::${key}`) ?? this.defs_before.get(`${on}::${key}`);
+  }
+  undefine(path: string, keep?: Source): void {
+    for (const defs of [this.defs_now, this.defs_before])
+      for (const [key, site] of [...defs])
+        if (site.src !== keep && site.src.path === path) defs.delete(key);
+  }
+  *sites(): IterableIterator<[string, Site]> {
+    const seen = new Set<string>();
+    for (const defs of [this.defs_now, this.defs_before])
+      for (const [key, site] of defs) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+        yield [key, site];
+      }
+  }
 
   // ── projects ──
   // Grammar rules are PROJECT-bound (the language reaches everywhere). A
@@ -761,8 +803,19 @@ class Grammar {
       rule = new Rule(pattern, pieces, on);
       rule.external = this.registry.get(text);
       rule.project = project;
+      rule.key = key;
       this.rules.set(key, rule);
       this.new_rules = true;
+    } else if (pieces !== rule.pieces) {
+      // presentation may arrive later than the rule (a pending decoration
+      // resolves on a later pass): adopt newly styled pieces
+      for (let i = 0; i < pieces.length && i < rule.pieces.length; i++) {
+        const style = pieces[i].style;
+        if (style !== undefined && rule.pieces[i].style === undefined) {
+          rule.pieces[i].style = style;
+          rule.styled = true;
+        }
+      }
     }
     return rule;
   }
@@ -771,6 +824,8 @@ class Grammar {
   // the scope being cycled
   reset(scope: (rule: Rule) => boolean = () => true): void {
     this.new_rules = false;
+    this.defs_before = this.defs_now;
+    this.defs_now = new Map();
     for (const rule of this.rules.values()) if (scope(rule)) for (const d of rule.definitions) d.seen = undefined;
   }
 
@@ -778,6 +833,9 @@ class Grammar {
   // reparses exactly those, every other sighting stays frozen
   reset_files(paths: Set<string>): void {
     this.new_rules = false;
+    // incremental: carry the current generation along, nothing fades
+    for (const [k, v] of this.defs_now) this.defs_before.set(k, v);
+    this.defs_now.clear();
     for (const rule of this.rules.values())
       for (const d of rule.definitions)
         if (d.at.src?.path !== undefined && paths.has(d.at.src.path)) d.seen = undefined;
@@ -1043,12 +1101,15 @@ class Reader extends Walk {
     if (!lead) return false;
     const at = span(this.src, this.head, lead.end, ip.BASE);
     if (this.src.path !== undefined)
-      ip.log.paint(this.src.path, this.head, lead.end, STYLED.get(lead.target) ?? 'variable');
+      ip.log.paint(this.src.path, this.head, lead.end, ip.style_of(lead.target) ?? 'variable');
     // to the line's end, but never past this walk's own extent (a bounded
     // sub-span — a pattern piece being decorated — ends where it ends)
     const eol = Math.min(line_end(this.text, lead.args_begin), this.cursor.end);
-    this.result = ip.invoke(lead.target, { self: ip.scope(), args: span(this.src, Math.min(lead.args_begin, eol), eol, ip.BASE), at }) ?? undefined;
-    this.cut(eol);
+    const value = ip.invoke(lead.target, { self: ip.scope(), args: span(this.src, Math.min(lead.args_begin, eol), eol, ip.BASE), at }) ?? undefined;
+    this.result = value;
+    // what the declarative consumed may extend past the line — a decorated
+    // rule definition brings its indented body along
+    this.cut(value?.src === this.src && value.end > eol ? value.end : eol);
     return true;
   }
 
@@ -1134,7 +1195,7 @@ class Reader extends Walk {
     const begin = this.sign === 1 ? this.head : this.head - name.length + 1;
     const at = span(this.src, begin, begin + name.length, ip.BASE);
     this.cut(this.sign === 1 ? at.end : at.begin);
-    if (this.src.path !== undefined) ip.log.paint(this.src.path, at.begin, at.end, STYLED.get(m) ?? 'variable');
+    if (this.src.path !== undefined) ip.log.paint(this.src.path, at.begin, at.end, ip.style_of(m) ?? 'variable');
     if (!m.fn) { this.result = m; return true; }
     // a method folds onto its receiver only in a direction it reads — plain
     // methods read left-to-right; the expression's anchor (no receiver yet)
@@ -1272,8 +1333,10 @@ class Interpreter {
     return this.language(src) ? undefined : this.grammar.project(src);
   }
 
-  rule(pattern: Node, pieces: Piece[], on: Node): Rule {
-    return this.grammar.rule(pattern, this.decorate(pattern.src!, pieces), this.name_of(on), this.reach(pattern.src!));
+  // `evaluate` is off for suppressed sightings (a commented-out definition
+  // must key identically, but its content isn't live code)
+  rule(pattern: Node, pieces: Piece[], on: Node, evaluate = true): Rule {
+    return this.grammar.rule(pattern, this.decorate(pattern.src!, pieces, evaluate), this.name_of(on), this.reach(pattern.src!));
   }
 
   // Decorated pattern pieces: a `{H.punctuation `[`}` group leads with a
@@ -1281,24 +1344,85 @@ class Interpreter {
   // scanner ends where the piece ends) through the same chain resolution
   // statements use — aliases on H count. The remainder re-reads exactly like
   // an undecorated group, now carrying the style.
-  private decorate(src: Source, pieces: Piece[]): Piece[] {
+  private decorate(src: Source, pieces: Piece[], evaluate = true): Piece[] {
     let out: Piece[] | undefined;
     for (let p = 0; p < pieces.length; p++) {
       const piece = pieces[p];
       if (is_literal(piece) || piece.at === undefined) continue;
       const shadow: Source = { text: piece.content };
       const lead = this.declarative_at(shadow, 0);
-      const style = lead && STYLED.get(lead.target);
-      if (style === undefined) continue;
-      const decorated = read_group(this.scan(shadow), lead!.args_begin, piece.content.length);
-      decorated.style = style;
-      decorated.at = piece.at + lead!.args_begin;
-      out ??= [...pieces];
-      out[p] = decorated;
+      const style = lead?.target.has_flag('highlight') ? STYLED.get(lead.target) : undefined;
+      if (style !== undefined) {
+        const decorated = read_group(this.scan(shadow), lead!.args_begin, piece.content.length);
+        decorated.style = style;
+        decorated.at = piece.at + lead!.args_begin;
+        out ??= [...pieces];
+        out[p] = decorated;
+        continue;
+      }
+      // A chain off the highlight object whose link isn't a known NAME yet
+      // still decorates: its links resolve through the definitions ledger
+      // (summoning `H.punctuation = H.comment` on demand), and when even
+      // that can't land yet — the alias's own statement needs the rule this
+      // very piece defines — the piece reads unstyled with the identity the
+      // styled reading will have.
+      const rest = this.pending(shadow);
+      if (rest !== undefined) {
+        const decorated = read_group(this.scan(shadow), rest.at, piece.content.length);
+        decorated.style = rest.style;
+        decorated.at = piece.at + rest.at;
+        out ??= [...pieces];
+        out[p] = decorated;
+        continue;
+      }
+      // No leading chain. A content the grammar can read on its own — it
+      // opens with a claim, a parenthesized type description say — is
+      // EVALUATED in place: decorations fire as the calls they are,
+      // painting what they decorate, and whatever doesn't resolve (`|` and
+      // `,`, until the language defines them) reports right here. Plain
+      // captures (names) stay unevaluated.
+      if (!evaluate || piece.at === undefined) continue;
+      let head = piece.at;
+      const end = piece.at + piece.content.length;
+      while (head < end && src.text[head] === ' ') head++;
+      const scan = this.scan(src);
+      if (head >= end || !scan.anchors.has(src.text[head]) || scan.claim(head) === -1) continue;
+      if (this.decorating.has(piece.at)) continue;
+      this.decorating.add(piece.at);
+      try { this.eval_block(span(src, head, end, this.BASE), true); }
+      finally { this.decorating.delete(piece.at); }
     }
     if (!out) return pieces;
     classify(out);
     return out;
+  }
+  private decorating = new Set<number>();
+
+  // A chain off the highlight object, walked by the grammar's word
+  // boundaries and resolved link by link (the ledger summons out-of-order
+  // definitions). Returns where the decorated remainder starts, styled when
+  // the chain landed on a group, unstyled-pending when it couldn't yet.
+  private pending(shadow: Source): { at: number; style?: string } | undefined {
+    const scan = this.scan(shadow);
+    const keyword = this.known(scan, 0, this.lookup());
+    if (!keyword) return undefined;
+    let target = this.resolve(keyword);
+    if (!target || target.fn || !target.has_flag('highlight')) return undefined;
+    const text = shadow.text;
+    let end = keyword.length;
+    while (text[end] === '.') {
+      const w = word_edge(scan, end + 1);
+      if (w === end + 1) return undefined;
+      const next = target ? this.resolve_on(target, text.slice(end + 1, w)) : undefined;
+      target = next?.role?.kind === 'bound' ? next.role.method : next;
+      end = w;
+    }
+    if (end === keyword.length || text[end] !== ' ') return undefined;
+    let a = end;
+    while (text[a] === ' ') a++;
+    if (a >= text.length) return undefined;
+    const style = target?.fn && target.has_flag('highlight') ? STYLED.get(target) : undefined;
+    return { at: a, style };
   }
 
   // A definition parsed as actual code — `at` heads the `{pattern} => body`
@@ -1326,9 +1450,9 @@ class Interpreter {
       let arrow = r.pattern_end;
       while (src.text[arrow] === ' ') arrow++;
       const after = arrow + (lit?.text.length ?? 0);
-      if (caps[0]?.style !== undefined) this.log.paint(src.path, r.pattern_begin, arrow, caps[0].style);
-      if (lit?.style !== undefined) this.log.paint(src.path, arrow, after, lit.style);
-      if (caps[1]?.style !== undefined && r.body_end > after) this.log.paint(src.path, after, r.body_end, caps[1].style);
+      if (caps[0]?.style !== undefined) this.log.paint(src.path, r.pattern_begin, arrow, caps[0].style, shape.key);
+      if (lit?.style !== undefined) this.log.paint(src.path, arrow, after, lit.style, shape.key);
+      if (caps[1]?.style !== undefined && r.body_end > after) this.log.paint(src.path, after, r.body_end, caps[1].style, shape.key);
     }
     this.paint_definition(src, r.pattern_begin, r.pattern_end, rule.pieces, rule);
     return rule;
@@ -1349,7 +1473,7 @@ class Interpreter {
     let literal_start = begin;
     let i = begin;
     const flush = (upto: number): void => {
-      if (upto > literal_start) { this.log.paint(path, literal_start, upto, own); p++; }
+      if (upto > literal_start) { this.log.paint(path, literal_start, upto, own, rule.key); p++; }
     };
     while (i < end) {
       if (src.text[i] !== '{') { i++; continue; }
@@ -1361,12 +1485,12 @@ class Interpreter {
       if (piece?.style !== undefined) {
         const lead = this.declarative_at({ text: src.text.slice(i + 1, close - 1) }, 0);
         if (lead) {
-          this.log.paint(path, i + 1, i + 1 + lead.args_begin, piece.style);
+          this.log.paint(path, i + 1, i + 1 + lead.args_begin, piece.style, rule.key);
           inner = i + 1 + lead.args_begin;
         }
       }
       const claimed = scan.literal_of(inner, close - 1);
-      if (claimed?.by.style !== undefined) this.log.paint(path, inner, close - 1, claimed.by.style);
+      if (claimed?.by.style !== undefined) this.log.paint(path, inner, close - 1, claimed.by.style, claimed.by.key);
       i = close;
       literal_start = i;
     }
@@ -1422,7 +1546,7 @@ class Interpreter {
           if (lead) a = lead.args_begin;
           const r = recognize(src.text, a, this.scan(src));
           if (r && r.pattern_end <= cap.end) {
-            const target = this.rule(span(src, r.pattern_begin, r.pattern_end), r.pieces, this.scope());
+            const target = this.rule(span(src, r.pattern_begin, r.pattern_end), r.pieces, this.scope(), false);
             const d = target.definition(span(src, r.pattern_begin, r.pattern_end));
             if (d.seen !== 'live') d.seen = rule;
             if (!target.body && r.body_end > r.body_begin) target.body = span(src, r.body_begin, r.body_end);
@@ -1546,6 +1670,9 @@ class Interpreter {
     this.scope_epoch++;
   }
 
+  // the statements currently being read, outermost first — where a
+  // definition records its site (see `assign`)
+  sites: Site[] = [];
   statements(cursor: Node, forwards = false): Node | undefined {
     const text = cursor.src!.text;
     let result: Node | undefined;
@@ -1553,7 +1680,11 @@ class Interpreter {
       while (cursor.begin < cursor.end && (text[cursor.begin] === ' ' || text[cursor.begin] === '\n')) cursor.begin++;
       if (cursor.begin >= cursor.end) break;
       const before = cursor.begin;
+      const frame: Site = { src: cursor.src!, begin: before, end: 0, on: this.scope() };
+      this.sites.push(frame);
       const r = this.expr(cursor, { forwards });
+      this.sites.pop();
+      frame.end = Math.max(cursor.begin, before);
       if (r !== undefined) result = r;
       if (cursor.begin <= before) cursor.begin = before + 1;
     }
@@ -1643,6 +1774,9 @@ class Interpreter {
     try {
       if (receiver?.role?.kind === 'forward') receiver.consumed = true;
       this.suppress_inside(rule, src, m);  // even recovery matches record what they consume
+      // the match itself, attributed but unstyled — what "references of this
+      // rule" means
+      if (src.path !== undefined) this.log.paint(src.path, m.begin, m.end, '', rule.key);
       if (rule.style !== undefined || rule.styled) this.paint(rule, src, m);
       if (rule.disabled) return undefined;
       if (rule.external) return rule.external.fire({ rule, match: new Match(m, src, this.BASE), at, receiver, ip: this });
@@ -1670,7 +1804,7 @@ class Interpreter {
       }
       const style = piece.style
         ?? (rule.style !== undefined && (is_literal(piece) || (piece as Capture).raw) ? rule.style : undefined);
-      if (style !== undefined && end > begin) this.log.paint(src.path, begin, end, style);
+      if (style !== undefined && end > begin) this.log.paint(src.path, begin, end, style, rule.key);
       pos = end;
     }
   }
@@ -1732,17 +1866,31 @@ class Interpreter {
     const scan = this.scan(src);
     const keyword = this.known(scan, at, this.lookup());
     if (!keyword) return undefined;
-    let target = this.resolve(keyword);
+    // an assigned alias (`H.punctuation = H.comment`) stores the method
+    // bound — follow it to the method itself
+    const method = (node: Node | undefined): Node | undefined =>
+      node?.role?.kind === 'bound' ? node.role.method : node;
+    let target = method(this.resolve(keyword));
     let end = at + keyword.length;
     const text = src.text;
     while (target && !target.fn && text[end] === '.') {
       // the methods themselves separate the syntax: the longest name the
-      // object knows at this position is the next link
+      // object knows at this position is the next link — and a link the
+      // object doesn't know YET still resolves through its definition site
+      // (the word, as the grammar bounds it, summoned on the miss)
       const name = this.known(scan, end + 1, this.chain(target));
-      const next = name ? this.resolve_on(target, name) : undefined;
+      let next = name ? method(this.resolve_on(target, name)) : undefined;
+      let length = name?.length ?? 0;
+      if (!next) {
+        const w = word_edge(scan, end + 1);
+        if (w > end + 1) {
+          next = method(this.resolve_on(target, text.slice(end + 1, w)));
+          length = w - (end + 1);
+        }
+      }
       if (!next) break;
       target = next;
-      end = end + 1 + name!.length;
+      end = end + 1 + length;
     }
     if (!target?.fn || !target.has_flag('declarative')) return undefined;
     let a = end;
@@ -1771,8 +1919,65 @@ class Interpreter {
     return undefined;
   }
 
+  // Where a method is hosted — the class (or the global scope) whose
+  // methods carry it, under which name. A method knows it's declared by
+  // where it lives.
+  private hosts = new WeakMap<Node, { on: string; name: string }>();
+  hosted(m: Node): { on: string; name: string } | undefined {
+    const memo = this.hosts.get(m);
+    if (memo) return memo;
+    for (const [name, scope] of [...this.classes, [GLOBAL_SCOPE, this.GLOBAL] as const]) {
+      if (!scope.methods) continue;
+      for (const [key, value] of scope.methods) {
+        if (value !== m || typeof key !== 'string') continue;
+        const found = { on: name, name: key };
+        this.hosts.set(m, found);
+        return found;
+      }
+    }
+    return undefined;
+  }
+
+  // A method's style. TODO: when unknown but the hosting has a recorded
+  // site (a decoration is definitional), it should summon like any other
+  // definition — that first needs bare WORDS to summon on their misses too
+  // (`class H` itself, consumed before its statement), not only resolve_on:
+  // a paint-driven summon from line 1 currently evaluates statements whose
+  // dependencies cannot exist yet.
+  style_of(m: Node): string | undefined {
+    return STYLED.get(m);
+  }
+
   resolve_on(on: Node, key: Key): Node | undefined {
     for (const node of this.chain(on)) { const found = node.get(key); if (found) return found; }
+    return this.summon(on, key);
+  }
+
+  // A miss with a recorded definition site evaluates the statement on
+  // demand — class definitions are order-independent — running what IT
+  // depends on the same way; cycles simply stay missing.
+  private summoning = new Set<string>();
+  private summon(on: Node, key: Key): Node | undefined {
+    if (typeof key !== 'string' || !this.grammar.defined) return undefined;
+    for (const node of this.chain(on)) {
+      for (const [name, cls] of this.classes) {
+        if (cls !== node) continue;
+        const site = this.grammar.defined_at(name, key);
+        if (!site || !site.end) continue;  // none, or still being read
+        // the statement currently being read IS the definition — let it
+        // finish (its own left-hand side must resolve as a slot, not as
+        // what it is about to define)
+        if (this.sites.some(f => f.src.path === site.src.path && f.begin === site.begin)) continue;
+        const guard = `${name}::${key}`;
+        if (this.summoning.has(guard)) return undefined;
+        this.summoning.add(guard);
+        // back in the scope the statement was read in — its meaning is its
+        // own, not the summoner's
+        try { this.eval_in((site.home !== undefined ? this.node_of(site.home) : undefined) ?? this.GLOBAL, span(site.src, site.begin, site.end, this.BASE), true); }
+        finally { this.summoning.delete(guard); }
+        return node.get(key);
+      }
+    }
     return undefined;
   }
 
@@ -1837,8 +2042,12 @@ class Interpreter {
     let declared: Node = target;
     for (const modifier of modifiers) declared = this.invoke(modifier, { self: on, args: declared, at }) ?? declared;
     if (declared.has_flag('right-to-left') && !declared.has_flag('left-to-right')) this.rtl_names.add(name);
+    // a declaration is a definition: its statement is the recorded site, so
+    // anything depending on it — out of order — summons it
+    const site = this.sites[this.sites.length - 1];
+    if (site) this.grammar.define_at(this.name_of(on), name, site, site.on && this.name_of(site.on));
     // the declaration captures the method itself — a decorator around it
-    // (`H.builtin external external`) decorates the method
+    // (`H.keyword external external`) decorates the method
     return declared;
   }
 }
@@ -1948,6 +2157,13 @@ function assign(ip: Interpreter, { self, args, at }: Call): Node {
   on.set(key, value);
   for (const [name, cls] of ip.classes) if (cls === on) {
     ip.log.info('define', `Defined \`${typeof key === 'string' ? key : key.text}\` on \`${name}\`.`, self);
+    // a definition on a class records WHERE it was written — the statement
+    // inside the class's body when there is one, the outermost otherwise —
+    // so a miss can evaluate it out of order
+    if (typeof key === 'string') {
+      const frame = [...ip.sites].reverse().find(f => f.on === on) ?? ip.sites[0];
+      if (frame) ip.grammar.define_at(name, key, frame, frame.on && ip.name_of(frame.on));
+    }
     break;
   }
   return value;
@@ -2005,8 +2221,12 @@ const STYLED = new WeakMap<Node, string>();
 function highlight_method(ip: Interpreter, owner: Node, group: string): Node {
   const node = new Node(ip.BASE);
   node.flag('declarative');
+  node.flag('highlight');   // what pattern decoration dispatches on
   STYLED.set(node, group);  // the group method shows its own color
   node.fn = ({ self, args }) => {
+    // referenced bare — nothing to decorate — the group itself is the value
+    // (`H.punctuation = H.comment` stores the method)
+    if (args.empty) return node;
     const src = args.src;
     // leading a statement (self is the surrounding scope, args still raw):
     // a rule definition to decorate
@@ -2014,7 +2234,8 @@ function highlight_method(ip: Interpreter, owner: Node, group: string): Node {
       const r = recognize(src.text, args.begin, ip.scan(src));
       if (r && r.pattern_end <= args.end) {
         ip.define(span(src, args.begin, args.end, ip.BASE), group);
-        return undefined;
+        // the definition's extent — its body may span lines past the args
+        return span(src, args.begin, r.end, ip.BASE);
       }
     }
     // identity over what it decorates — forwards stay quiet here, their
@@ -2022,6 +2243,13 @@ function highlight_method(ip: Interpreter, owner: Node, group: string): Node {
     const value = (self === owner ? args : ip.eval_block(args, true)) ?? args;
     if (value.src?.path !== undefined && value.end > value.begin) ip.log.paint(value.src.path, value.begin, value.end, group);
     STYLED.set(value, group);
+    // decorating a hosted method is DEFINITIONAL: it lives on Node (or the
+    // global scope) under its name — that hosting is how it's known — and
+    // this statement becomes its recorded site, summoned by consumptions
+    // anywhere, including before this line
+    const host = ip.hosted(value);
+    const site = ip.sites[ip.sites.length - 1];
+    if (host && site) ip.grammar.define_at(host.on, host.name, site, site.on && ip.name_of(site.on));
     return value;
   };
   return node;
@@ -2378,8 +2606,10 @@ export class Program {
   // running since the caller created it.
   async run(log = new Log()): Promise<Log> {
     const ip = await this.cycle({ log });
+    // an error, not a crash: a mid-construction language (a decorated
+    // declaration whose `|`/`,` aren't defined yet) still runs and reports
     if (![...this.grammar.rules.values()].some(r => r.external?.name === 'rule-definition' && r.project === undefined))
-      throw new Error(`'${this.grammar.language_file}' did not declare the grammar-rule definition rule.`);
+      ip!.log.error('external', `'${this.grammar.language_file}' did not declare the grammar-rule definition rule.`);
     return ip!.log;
   }
 
@@ -2516,6 +2746,7 @@ export class Program {
   // retains its own) — a rule that loses its last sighting leaves the ledger
   // (the untouched seed keeps its empty definition list)
   private prune(path: string, keep?: Source): void {
+    this.grammar.undefine(path, keep);
     for (const [key, rule] of [...this.grammar.rules]) {
       const kept = rule.definitions.filter(d => d.at.src === keep || d.at.src?.path !== path);
       if (kept.length === rule.definitions.length) continue;

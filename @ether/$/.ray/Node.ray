@@ -1,13 +1,48 @@
-`{string: String}` => string
-{`//`}{comment: String} =>
+external class {name}{block}
+
+// Syntax highlighting. H's methods are decorators: every group is declared
+// here — the runtime enumerates none. Leading a rule definition they style
+// the rule, inside a pattern piece they style that piece, and applied to
+// anything else they return it unchanged.
+class H
+  external comment
+  external string
+  external number
+  external boolean
+  external regexp
+  external keyword
+  external operator
+  external punctuation
+  external variable
+  external property
+  external parameter
+  external function
+  external method
+  external class
+  external type
+  external typeParameter
+  external interface
+  external enum
+  external enumMember
+  external struct
+  external event
+  external namespace
+  external macro
+  external modifier
+  external decorator
+  external builtin
+  external access
+
+H.string `{string: String}` => string
+H.comment //{comment: String} =>
 
 // Grouping: that parentheses, brackets and braces nest is not built in — it
 // follows from these rules being active while scanning.
-{`{`}{expr}{`}`} => TODO
-({expr}) => expr
-[{expr}] => expr
+H.punctuation {`{`}{expr}{`}`} => TODO
+H.punctuation ({expr}) => expr
+H.punctuation [{expr}] => expr
 
-external {`class `}{name}{block}
+H.keyword external external
 
 class Program
   external ({args}) =>
@@ -18,24 +53,25 @@ class Node
   // The grammar-rule definition rule itself: the bootstrapper hardcodes this
   // shape for this file only; once declared here, the interpreter relies on
   // this declaration for every file that follows.
-  external {(String.Word | `{`, expr, `}`)[]}{`=>`}{body}
+  external {(H.function String.Word | H.punctuation `{`, H.parameter expr, H.punctuation `}`)[]}{H.keyword `=>`}{body}
 
-  {`.`}{property} => this[property]
+  {H.punctuation `.`}{H.property property} => this[property]
 
   // When bootstrapping, function definitions cannot use '&=', which is the actual default set lower in this file.
   static DEFINE_METHOD = `=`
 
   // Function definition
-  {` `}({args}){block} => this [DEFINE_METHOD] (
+  {` `}({H.parameter args}){block} => this [DEFINE_METHOD] (
     def = block**
     def[`args`] = args
     def
   )
 
   test () TODO
+  test2 (parameter, parameter2) TODO2
 
   external static
-  external [{property}]
+  external {H.punctuation `[`}{H.property property}{H.punctuation `]`}
   external **: Program
   external = (x): x
 

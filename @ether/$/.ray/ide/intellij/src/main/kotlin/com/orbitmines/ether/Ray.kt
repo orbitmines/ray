@@ -69,7 +69,13 @@ class RayColorSettingsPage : ColorSettingsPage {
     AttributesDescriptor("Class Name", SyntaxHighlighter.CLASS_NAME),
     AttributesDescriptor("Variable", SyntaxHighlighter.VARIABLE),
     AttributesDescriptor("Punctuation", SyntaxHighlighter.PUNCTUATION),
-    AttributesDescriptor("Operator", SyntaxHighlighter.OPERATOR)
+    AttributesDescriptor("Operator", SyntaxHighlighter.OPERATOR),
+    AttributesDescriptor("Function", SyntaxHighlighter.FUNCTION),
+    AttributesDescriptor("Property", SyntaxHighlighter.PROPERTY),
+    AttributesDescriptor("Parameter", SyntaxHighlighter.PARAMETER),
+    AttributesDescriptor("Namespace", SyntaxHighlighter.NAMESPACE),
+    AttributesDescriptor("Decorator", SyntaxHighlighter.DECORATOR),
+    AttributesDescriptor("Type", SyntaxHighlighter.TYPE)
   )
 
   override fun getColorDescriptors(): Array<ColorDescriptor> = ColorDescriptor.EMPTY_ARRAY
@@ -99,6 +105,13 @@ object Types {
   val BUILTIN = TokenType("BUILTIN")
   val CLASS_NAME = TokenType("CLASS_NAME")
   val VARIABLE = TokenType("VARIABLE")
+  // the LSP semantic-token concepts the language's H groups map onto
+  val FUNCTION = TokenType("FUNCTION")
+  val PROPERTY = TokenType("PROPERTY")
+  val PARAMETER = TokenType("PARAMETER")
+  val NAMESPACE = TokenType("NAMESPACE")
+  val DECORATOR = TokenType("DECORATOR")
+  val TYPE = TokenType("TYPE")
 }
 
 data class Rule(
@@ -376,6 +389,12 @@ class SyntaxHighlighter : com.intellij.openapi.fileTypes.SyntaxHighlighter {
     Types.VARIABLE -> pack(VARIABLE)
     Types.PUNCTUATION -> pack(PUNCTUATION)
     Types.OPERATOR -> pack(OPERATOR)
+    Types.FUNCTION -> pack(FUNCTION)
+    Types.PROPERTY -> pack(PROPERTY)
+    Types.PARAMETER -> pack(PARAMETER)
+    Types.NAMESPACE -> pack(NAMESPACE)
+    Types.DECORATOR -> pack(DECORATOR)
+    Types.TYPE -> pack(TYPE)
     else -> emptyArray()
   }
 
@@ -433,6 +452,30 @@ class SyntaxHighlighter : com.intellij.openapi.fileTypes.SyntaxHighlighter {
     val PUNCTUATION = TextAttributesKey.createTextAttributesKey(
       "MYLANG_PUNCTUATION",
       TextAttributes(Color(108, 103, 131), null, null, null, Font.PLAIN)
+    )
+    val FUNCTION = TextAttributesKey.createTextAttributesKey(
+      "MYLANG_FUNCTION",
+      TextAttributes(Color(154, 134, 253), null, null, null, Font.PLAIN)
+    )
+    val PROPERTY = TextAttributesKey.createTextAttributesKey(
+      "MYLANG_PROPERTY",
+      TextAttributes(Color(196, 185, 254), null, null, null, Font.PLAIN)
+    )
+    val PARAMETER = TextAttributesKey.createTextAttributesKey(
+      "MYLANG_PARAMETER",
+      TextAttributes(Color(196, 185, 254), null, null, null, Font.ITALIC)
+    )
+    val NAMESPACE = TextAttributesKey.createTextAttributesKey(
+      "MYLANG_NAMESPACE",
+      TextAttributes(Color(154, 134, 253), null, null, null, Font.PLAIN)
+    )
+    val DECORATOR = TextAttributesKey.createTextAttributesKey(
+      "MYLANG_DECORATOR",
+      TextAttributes(Color(255, 204, 153), null, null, null, Font.PLAIN)
+    )
+    val TYPE = TextAttributesKey.createTextAttributesKey(
+      "MYLANG_TYPE",
+      TextAttributes(Color(154, 134, 253), null, null, null, Font.PLAIN)
     )
   }
 }

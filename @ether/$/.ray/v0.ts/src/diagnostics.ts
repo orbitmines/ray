@@ -421,6 +421,66 @@ export class Diagnostics {
     trace:   '\x1b[90m',     // gray (not bold)
   }
 
+  /** The default terminal theme for highlight groups (the Ray.kt palette);
+   *  a dotted style's group is its first segment. */
+  static theme: Record<string, string> = {
+    comment:     '\x1b[38;2;108;103;131m',
+    punctuation: '\x1b[38;2;108;103;131m',
+    keyword:     '\x1b[38;2;108;103;131m',
+    string:      '\x1b[38;2;255;204;153m',
+    number:      '\x1b[38;2;255;204;153m',
+    boolean:     '\x1b[38;2;255;204;153m',
+    access:      '\x1b[38;2;255;204;153m',
+    decorator:   '\x1b[38;2;255;204;153m',
+    operator:    '\x1b[38;2;171;179;191m',
+    builtin:     '\x1b[38;2;154;134;253m',
+    class:       '\x1b[38;2;154;134;253m',
+    function:    '\x1b[38;2;154;134;253m',
+    namespace:   '\x1b[38;2;154;134;253m',
+    type:        '\x1b[38;2;154;134;253m',
+    macro:       '\x1b[38;2;154;134;253m',
+    variable:    '\x1b[38;2;196;185;254m',
+    property:    '\x1b[38;2;196;185;254m',
+    parameter:   '\x1b[38;2;196;185;254m',
+  }
+
+  /** Painted spans per file, injected by whoever owns the highlighting
+   *  (the interpreter's Log) — source excerpts render with them as the
+   *  base coat, diagnostic ranges on top. */
+  highlighting?: (file: string) => readonly { begin: number; end: number; style: string }[] | undefined;
+
+  /** One source line, colored: the painted syntax underneath (smaller
+   *  spans win, as in every renderer of these spans), the given segments —
+   *  inclusive ends, in their own colors — over it, gray where nothing
+   *  applies. */
+  private _colorLine(line: string, lineStart: number, file: string | undefined, segments: { begin: number; end: number; color: string }[]): string {
+    const { c } = Diagnostics;
+    const chars: (string | undefined)[] = new Array(line.length).fill(undefined);
+    const spans = file !== undefined ? this.highlighting?.(file) : undefined;
+    if (spans) {
+      const lineEnd = lineStart + line.length;
+      const overlapping = spans
+        .filter(s => s.begin < lineEnd && s.end > lineStart)
+        .sort((a, b) => (b.end - b.begin) - (a.end - a.begin));
+      for (const s of overlapping) {
+        const color = Diagnostics.theme[s.style.split('.')[0]];
+        if (!color) continue;
+        const from = Math.max(s.begin - lineStart, 0), to = Math.min(s.end - lineStart, line.length);
+        for (let k = from; k < to; k++) chars[k] = color;
+      }
+    }
+    for (const seg of segments)
+      for (let k = Math.max(seg.begin, 0); k <= Math.min(seg.end, line.length - 1); k++) chars[k] = seg.color;
+    let colored = '';
+    let current: string | undefined;
+    for (let k = 0; k < line.length; k++) {
+      const color = chars[k] ?? c.gray;
+      if (color !== current) { colored += color; current = color; }
+      colored += line[k];
+    }
+    return colored;
+  }
+
   /**
    * Print annotated source lines for a program's diagnostics.
    * Alternates annotations above/below the source line; timing diagnostics
@@ -504,7 +564,7 @@ export class Diagnostics {
 
       if (lineAnchors.length === 0) {
         if (!timingLine) continue;
-        console.error(`${lineLabel}${c.gray}${line}${c.reset}`);
+        console.error(`${lineLabel}${this._colorLine(line, lineStart, file, [])}${c.reset}`);
         console.error(`${blankGutter}${timingLine}`);
         continue;
       }
@@ -555,17 +615,8 @@ export class Diagnostics {
         }
       }
       colorSegments.sort((a, b) => a.begin - b.begin);
-
-      let colored = '';
-      let pos = 0;
-      for (const seg of colorSegments) {
-        if (seg.begin > pos) colored += c.gray + line.slice(pos, seg.begin);
-        const endCol = seg.end + 1;
-        if (endCol > pos) colored += seg.color + line.slice(Math.max(seg.begin, pos), endCol);
-        pos = Math.max(pos, endCol);
-      }
-      if (pos < line.length) colored += c.gray + line.slice(pos);
-      console.error(`${lineLabel}${colored}${c.reset}`);
+      // diagnostic colors override the painted syntax underneath
+      console.error(`${lineLabel}${this._colorLine(line, lineStart, file, colorSegments)}${c.reset}`);
 
       // Below annotations.
       if (belowInfo.length) {

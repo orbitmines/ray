@@ -12,6 +12,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Program, type Source } from '../minimal.ts';
 import { toLsp } from './diagnostics.ts';
+import { encode, offset_at, MODIFIERS } from './semantics.ts';
 
 /**
  * Boot the LSP over a minimal.ts Program.
@@ -27,6 +28,9 @@ import { toLsp } from './diagnostics.ts';
  */
 export async function start(program: Program): Promise<void> {
   const log = await program.abstract().run();
+  // the legend: whatever groups the language declared on H — fixed for the
+  // session once capabilities go out
+  const groups = program.groups;
 
   const connection = createConnection(ProposedFeatures.all);
   const documents = new TextDocuments(TextDocument);
@@ -43,6 +47,10 @@ export async function start(program: Program): Promise<void> {
     return file;
   };
 
+  // semantic tokens are pulled by the client — after a reload (cross-file
+  // grammar changes repaint files the client isn't editing) ask it to pull
+  // again, once per burst
+  let repainted: ReturnType<typeof setTimeout> | undefined;
   program.reloaded = (src: Source): void => {
     if (src.path === undefined) return;
     const uri = uris.get(src.path) ?? String(pathToFileURL(src.path));
@@ -50,6 +58,8 @@ export async function start(program: Program): Promise<void> {
       .map(d => toLsp(d, src.path))
       .filter((d): d is NonNullable<typeof d> => d !== null);
     connection.sendDiagnostics({ uri, diagnostics });
+    clearTimeout(repainted);
+    repainted = setTimeout(() => connection.languages.semanticTokens.refresh(), 150);
   };
 
   const reload = (uri: string, text: string): void => {
@@ -63,9 +73,35 @@ export async function start(program: Program): Promise<void> {
     if (params.rootUri) roots.push(uriToFile(params.rootUri));
     program.reroot([...new Set(roots)]);
     return {
-      capabilities: { textDocumentSync: TextDocumentSyncKind.Full },
+      capabilities: {
+        textDocumentSync: TextDocumentSyncKind.Full,
+        semanticTokensProvider: {
+          legend: { tokenTypes: groups, tokenModifiers: MODIFIERS },
+          full: true,
+          range: true,
+        },
+      },
       serverInfo: { name: 'ray-language-server' },
     };
+  });
+
+  // served straight off the program's highlighting (the painted spans the
+  // passes derive next to the diagnostics)
+  const tokens = (uri: string, range?: [number, number]): { data: number[] } => {
+    const path = uriToFile(uri);
+    const src = program.sources.find(s => s.path === path);
+    if (!src) return { data: [] };
+    return { data: encode(src.text, program.highlighting.get(path) ?? [], groups, range) };
+  };
+  connection.languages.semanticTokens.on(params => tokens(params.textDocument.uri));
+  connection.languages.semanticTokens.onRange(params => {
+    const path = uriToFile(params.textDocument.uri);
+    const src = program.sources.find(s => s.path === path);
+    if (!src) return { data: [] };
+    return tokens(params.textDocument.uri, [
+      offset_at(src.text, params.range.start.line, params.range.start.character),
+      offset_at(src.text, params.range.end.line, params.range.end.character),
+    ]);
   });
 
   // Editor configuration (comments, brackets, …) — none wired yet.

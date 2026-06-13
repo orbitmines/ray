@@ -111,23 +111,6 @@ export function rule_references(program: Program, key: string): Span[] {
   return out;
 }
 
-export function occurrences(program: Program, word: string): number {
-  let n = 0;
-  const dedup = new Set<string>();
-  for (const [file, spans] of program.highlighting) {
-    const text = text_of(program, file);
-    if (text === undefined) continue;
-    for (const s of spans) {
-      if (s.end - s.begin !== word.length || text.slice(s.begin, s.end) !== word) continue;
-      const key = `${file}:${s.begin}`;
-      if (dedup.has(key)) continue;
-      dedup.add(key);
-      n++;
-    }
-  }
-  return n;
-}
-
 const text_of = (program: Program, path: string): string | undefined =>
   program.sources.find(s => s.path === path)?.text;
 

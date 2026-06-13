@@ -90,7 +90,6 @@ export async function start(program: Program): Promise<void> {
         hoverProvider: true,
         selectionRangeProvider: true,
         completionProvider: { triggerCharacters: ['.'] },
-        codeLensProvider: {},
       },
       serverInfo: { name: 'ray-language-server' },
     };
@@ -188,34 +187,6 @@ export async function start(program: Program): Promise<void> {
     const names = new Set<string>();
     for (const [key] of program.grammar.sites()) names.add(key.slice(key.indexOf('::') + 2));
     return [...names].map(name => ({ label: name, kind: 2 /* Method */ }));
-  });
-
-  connection.onCodeLens(params => {
-    const src = source(params.textDocument.uri);
-    if (!src?.path) return [];
-    const out: { range: ReturnType<typeof range>; command: { title: string; command: string } }[] = [];
-    // what each line DEFINES, and how often the project refers to it — the
-    // same list the references menu shows; nothing to say when it's zero
-    for (const [key, rule] of program.grammar.rules)
-      for (const d of rule.definitions)
-        if (d.at.src?.path === src.path && d.seen === 'live') {
-          const n = features.rule_references(program, key).length;
-          if (!n) continue;
-          out.push({
-            range: range(src.text, d.at.begin, d.at.end),
-            command: { title: `${n} reference${n === 1 ? '' : 's'}`, command: '' },
-          });
-        }
-    for (const [key, site] of program.grammar.sites())
-      if (site.src.path === src.path && site.end) {
-        const n = features.occurrences(program, key.slice(key.indexOf('::') + 2));
-        if (!n) continue;
-        out.push({
-          range: range(src.text, site.begin, Math.min(site.end, line_end(src.text, site.begin))),
-          command: { title: `${n} reference${n === 1 ? '' : 's'}`, command: '' },
-        });
-      }
-    return out;
   });
 
   const line_end = (text: string, i: number): number => {

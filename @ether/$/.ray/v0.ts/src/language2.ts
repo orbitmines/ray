@@ -3,18 +3,24 @@
 // Bundle all the .ray files in a single .ray file.
 // Support older versions of Node
 
+const version: [major: number, releaseDate: string, index: number] =
+               [0, '2027-01-01', 0];
+
 const cli: CLI.Spec = {
   help:     { alias: 'h', description: 'Print this help and exit.' },
+  version:  { description: 'Print the version number.' },
   abstract: { alias: 'n', description: 'Abstractly interpret (analyze) instead of executing.' },
+  debug:    { alias: 'd', description: 'Enable the debugger and debug-level logging.' },
 };
 
 async function main([args, kwargs]: CLI.Args) {
+  if (kwargs.version) return console.log(env.version.toString())
   if ((args.length === 0 && !kwargs.abstract) || kwargs.help) { console.log(CLI.help(cli)); return; }
 
   const diagnostics = new Diagnostics();
   await Ray.v0(diagnostics).abstract(!!kwargs.abstract).add(args.flatMap(x => env.at(x))).exec()
 
-  if (diagnostics.has_errors) process.exitCode = 1;
+  if (env.nodejs && diagnostics.has_errors) process.exitCode = 1;
 
   diagnostics.print();
 }
@@ -23,7 +29,10 @@ class Representation {
 
 }
 class Node {
-
+  source: Source
+}
+class Expression {
+  diagnostic: Diagnostic
 }
 
 namespace Global {
@@ -87,19 +96,129 @@ namespace CLI {
     const rows: [string, string][] = Object.entries(spec).map(([name, opt]) =>
       [`  ${opt.alias ? `-${opt.alias}, ` : '    '}--${name}${opt.value ? ' <value>' : ''}`, opt.description ?? '']);
     const width = Math.max(0, ... rows.map(([flags]) => flags.length));
-    return ['Options:', ...rows.map(([flags, d]) => d ? `${flags.padEnd(width)}  ${d}` : flags)].join('\n');
+    return [`Ether.ray ${env.version.toString()}`, 'Options:', ...rows.map(([flags, d]) => d ? `${flags.padEnd(width)}  ${d}` : flags)].join('\n');
   }
 }
 
-class Diagnostics {
-  get has_errors(): boolean {  }
+export interface Diagnostic {
+  level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
+  node?: Node;
+  message?: string;
+}
+export const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = { trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5 };
+export class Diagnostics {
+  items: Map</*location:*/ string | undefined, Map<Expression, Diagnostic[]>> = new Map();
+
+  private start = performance.now();
+
+  constructor(public level: Diagnostic['level'] = 'info') {}
+
+  *all(filter?: (x: Diagnostic) => boolean): IterableIterator<Diagnostic> {
+    for (const arr of this.items.values()) { for (const [, elements] of arr) { for (const element of elements) { if (filter?(element) : true) yield element; } } }
+  }
+
+  is_visible(level: Diagnostic['level']): boolean { return DIAGNOSTIC_SEVERITY[level] >= DIAGNOSTIC_SEVERITY[this.level]; }
+
+  get has_errors(): boolean { return [...this.errors].length > 0 }
+  get errors() { return this.all(x => DIAGNOSTIC_SEVERITY[x.level] >= DIAGNOSTIC_SEVERITY['error'])}
+  get warnings() { return this.all(x => x.level === 'warning')}
+
+  // cascaded needs just 'which expression' ; errorregions/
 
   forget(src: Source | Iterable<Source>) {
-
+    if (Symbol.iterator in src) { for (const element of src) { this.forget(element) }; return; }
+    this.items.delete(src.location)
   }
 
   print() {
     
+  }
+
+  report(expression: Expression, entry: Diagnostic) {
+    if (!this.is_visible(entry.level)) return;
+    
+    const location = entry.node?.source?.location;
+    let expr = this.items.get(location);
+    if (!expr) { expr = new Map(); this.items.set(location, expr); }
+    let expr_diagnostics = expr.get(expression)
+    if (!expr_diagnostics) { expr_diagnostics = []; expr.set(expression, expr_diagnostics); }
+
+    // Only error once per expression
+    if (entry.level === 'error' && expr_diagnostics.filter(x => x.level === 'error').length > 0) return;
+
+    expr_diagnostics.push(entry);
+    
+    if (entry.level === 'fatal') return this.exit();
+  }
+
+  exit(): never {
+    this.print();
+    if (env.nodejs) return process.exit(1);
+    throw new Error('fatal diagnostic');
+  }
+
+  static c = {
+    reset:     '\x1b[0m',
+    gray:      '\x1b[90m',
+    dark_gray: '\x1b[2;90m',
+  }
+  static levelColor: Record<Diagnostic['level'], string> = {
+    fatal:   '\x1b[1;31m',
+    error:   '\x1b[1;31m',
+    warning: '\x1b[1;33m',
+    info:    '\x1b[34m',
+    debug:   '\x1b[32m',
+    trace:   '\x1b[90m',
+  }
+  static theme: Record<string, string> = { namespace: '\x1b[38;2;154;134;253m', type: '\x1b[38;2;154;134;253m', class: '\x1b[38;2;154;134;253m', enum: '\x1b[38;2;154;134;253m', interface: '\x1b[38;2;154;134;253m', struct: '\x1b[38;2;154;134;253m', typeParameter: '\x1b[38;2;154;134;253m', parameter: '\x1b[38;2;196;185;254m', variable: '\x1b[38;2;196;185;254m', property: '\x1b[38;2;196;185;254m', enumMember: '\x1b[38;2;255;204;153m', event: '\x1b[38;2;154;134;253m', function: '\x1b[38;2;154;134;253m', method: '\x1b[38;2;154;134;253m', macro: '\x1b[38;2;154;134;253m', keyword: '\x1b[38;2;108;103;131m', modifier: '\x1b[38;2;108;103;131m', comment: '\x1b[38;2;108;103;131m', string: '\x1b[38;2;255;204;153m', number: '\x1b[38;2;255;204;153m', regexp: '\x1b[38;2;255;204;153m', operator: '\x1b[38;2;171;179;191m', decorator: '\x1b[38;2;255;204;153m' };
+}
+
+export class Version {
+  static readonly letter = 'E';
+
+  static MONTH_LETTERS = 'ABCDEFGHIJKL';
+
+  constructor(
+    public readonly major: number,
+    public readonly year: number,
+    public readonly yearsSinceRelease: number,
+    public readonly month: number, // 1–12
+    public readonly index: number,
+  ) {}
+
+  get monthLetter(): string { return Version.MONTH_LETTERS[this.month - 1]; }
+  private get tail(): string { return `${this.year}.${this.yearsSinceRelease}${this.monthLetter}.${this.index}`; }
+
+  /** `<major>.E<tail>` — the form `parse` reads back. */
+  toString(): string { return `${this.major}.${Version.letter}${this.tail}`; }
+
+  /** Semver `<major>.<minor>.<patch>`; with `scheme`, re-suffixed `-E<tail>`. */
+  toSemver(opts?: { scheme?: boolean }): string {
+    const base = `${this.major}.${this.yearsSinceRelease * 12 + this.month}.${this.index}`;
+    return opts?.scheme ? `${base}-${Version.letter}${this.tail}` : base;
+  }
+
+  static parse(version: string): Version {
+    const m = /^(\d+)\.E(\d+)\.(\d+)([A-L])\.(\d+)$/.exec(version.trim());
+    if (!m) throw new Error(`Version: cannot parse "${version}"`);
+    const [, major, year, yearsSinceRelease, monthLetter, index] = m;
+    return new Version(+major, +year, +yearsSinceRelease, Version.MONTH_LETTERS.indexOf(monthLetter) + 1, +index);
+  }
+  static tryParse(version: string): Version | null {
+    try { return Version.parse(version); } catch { return null; }
+  }
+  static create(major: number, releaseDate: string, index: number): Version {
+    const release = new Date(releaseDate);
+    const now = new Date();
+    const monthsTotal = Math.max(0,
+      (now.getFullYear() - release.getFullYear()) * 12 + (now.getMonth() - release.getMonth()));
+    return new Version(
+      major,
+      Math.max(now.getFullYear(), release.getFullYear()),
+      Math.floor(monthsTotal / 12),
+      monthsTotal % 12 + 1,
+      index,
+    );
   }
 }
 
@@ -211,6 +330,8 @@ export class env {
       : env.manifest.includes(location);
     return is_file ? [env.file(location)] : env.directory(location, options);
   }
+
+  static get version() { return Version.create(version[0], version[1], version[2]) }
 
   private static _root?: string;
   static get root(): string {

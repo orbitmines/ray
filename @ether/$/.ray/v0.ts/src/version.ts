@@ -1,90 +1,61 @@
-export type Values = Record<string, number | string>;
 
-export abstract class VersionScheme {
-  abstract readonly letter: string;
+/**
+ * Ether's calendar version, the `E` scheme:
+ *   `<major>.E<year>.<yearsSinceRelease><monthLetter>.<index>`  e.g. `0.E2026.0D.0`
+ * Its semver form drops the scheme: `<major>.<yearsSinceRelease*12 + month>.<index>`
+ * (`0.4.0`), optionally re-suffixed with `-E<...>` (`0.4.0-E2026.0D.0`).
+ *
+ * Folded into one class — the scheme is fixed, not pluggable.
+ */
+export class Version {
+  static readonly letter = 'E';
 
-  abstract parse(tail: string): Values;
-  abstract format(values: Values): string;
-  abstract toSemver(version: Version, opts?: { scheme?: boolean }): string;
-}
+  static MONTH_LETTERS = 'ABCDEFGHIJKL';
 
-const MONTH_LETTERS = 'ABCDEFGHIJKL';
+  constructor(
+    public readonly major: number,
+    public readonly year: number,
+    public readonly yearsSinceRelease: number,
+    public readonly month: number,           // 1–12
+    public readonly index: number,
+  ) {}
 
-export class Standard extends VersionScheme {
-  readonly letter = 'E';
+  get monthLetter(): string { return Version.MONTH_LETTERS[this.month - 1]; }
+  private get tail(): string { return `${this.year}.${this.yearsSinceRelease}${this.monthLetter}.${this.index}`; }
 
-  parse = (tail: string): Values => {
-    const m = /^(\d+)\.(\d+)([A-L])\.(\d+)$/.exec(tail);
-    if (!m) throw new Error(`E-scheme: cannot parse tail "${tail}"`);
-    const [, year, yearsSinceRelease, monthsSinceRelease, index] = m;
-    return {
-      year: parseInt(year, 10),
-      yearsSinceRelease: parseInt(yearsSinceRelease, 10),
-      monthsSinceRelease,
-      month: MONTH_LETTERS.indexOf(monthsSinceRelease) + 1,
-      index: parseInt(index, 10),
-    };
-  };
+  /** `<major>.E<tail>` — the form `parse` reads back. */
+  toString(): string { return `${this.major}.${Version.letter}${this.tail}`; }
 
-  format = (p: Values): string =>
-    `${p.year}.${p.yearsSinceRelease}${p.monthsSinceRelease}.${p.index}`;
+  /** Semver `<major>.<minor>.<patch>`; with `scheme`, re-suffixed `-E<tail>`. */
+  toSemver(opts?: { scheme?: boolean }): string {
+    const base = `${this.major}.${this.yearsSinceRelease * 12 + this.month}.${this.index}`;
+    return opts?.scheme ? `${base}-${Version.letter}${this.tail}` : base;
+  }
 
-  toSemver = (version: Version, opts?: { scheme?: boolean }): string => {
-    const ysr   = version.values.yearsSinceRelease as number;
-    const month = version.values.month as number;
-    const idx   = version.values.index as number;
-    const base  = `${version.major}.${ysr * 12 + month}.${idx}`;
-    if (!opts?.scheme) return base;
-    return `${base}-${this.letter}${this.format(version.values)}`;
-  };
+  static parse(version: string): Version {
+    const m = /^(\d+)\.E(\d+)\.(\d+)([A-L])\.(\d+)$/.exec(version.trim());
+    if (!m) throw new Error(`Version: cannot parse "${version}"`);
+    const [, major, year, yearsSinceRelease, monthLetter, index] = m;
+    return new Version(+major, +year, +yearsSinceRelease, Version.MONTH_LETTERS.indexOf(monthLetter) + 1, +index);
+  }
 
-  create = (major: number, releaseDate: string, index: number): Version => {
+  static tryParse(version: string): Version | null {
+    try { return Version.parse(version); } catch { return null; }
+  }
+
+  /** Derive a version from a release date + index — the calendar fields fill
+   *  from the years/months elapsed since release. */
+  static create(major: number, releaseDate: string, index: number): Version {
     const release = new Date(releaseDate);
     const now = new Date();
     const monthsTotal = Math.max(0,
-      (now.getFullYear() - release.getFullYear()) * 12 +
-      (now.getMonth() - release.getMonth()));
-    const yearsSinceRelease = Math.floor(monthsTotal / 12);
-    const monthsInYear = monthsTotal % 12;
-    return new Version(major, this, {
-      year: Math.max(now.getFullYear(), release.getFullYear()),
-      yearsSinceRelease,
-      monthsSinceRelease: MONTH_LETTERS[monthsInYear],
-      month: monthsInYear + 1,
+      (now.getFullYear() - release.getFullYear()) * 12 + (now.getMonth() - release.getMonth()));
+    return new Version(
+      major,
+      Math.max(now.getFullYear(), release.getFullYear()),
+      Math.floor(monthsTotal / 12),
+      monthsTotal % 12 + 1,
       index,
-    });
-  };
+    );
+  }
 }
-
-const SCHEMES = new Map<string, VersionScheme>();
-
-export class Version {
-  constructor(
-    public readonly major: number,
-    public readonly scheme: VersionScheme,
-    public readonly values: Values,
-  ) {}
-
-  static register = (scheme: VersionScheme): void => { SCHEMES.set(scheme.letter, scheme); };
-
-  static scheme = (letter: string): VersionScheme | undefined => SCHEMES.get(letter);
-
-  static parse = (version: string): Version => {
-    const m = /^(\d+)\.([A-Z])(.+)$/.exec(version.trim());
-    if (!m) throw new Error(`Version: cannot parse "${version}"`);
-    const [, majorStr, letter, tail] = m;
-    const scheme = SCHEMES.get(letter);
-    if (!scheme) throw new Error(`Version: unknown scheme letter "${letter}" in "${version}"`);
-    return new Version(parseInt(majorStr, 10), scheme, scheme.parse(tail));
-  };
-
-  static tryParse = (version: string): Version | null => {
-    try { return Version.parse(version); } catch { return null; }
-  };
-
-  toString = (): string => `${this.major}.${this.scheme.letter}${this.scheme.format(this.values)}`;
-
-  toSemver = (opts?: { scheme?: boolean }): string => this.scheme.toSemver(this, opts);
-}
-
-Version.register(new Standard());

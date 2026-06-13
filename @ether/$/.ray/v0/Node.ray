@@ -48,7 +48,7 @@ class Program
   {` `}{expr} => this(expr)
 
 class Node
-
+  H.operator external **: Program
   // The grammar-rule definition rule itself: the bootstrapper hardcodes this
   // shape for this file only; once declared here, the interpreter relies on
   // this declaration for every file that follows.
@@ -71,7 +71,7 @@ class Node
 
   external static
   external {H.punctuation `[`}{H.property property}{H.punctuation `]`}
-  external **: Program
+
   external = (x): x
 
 

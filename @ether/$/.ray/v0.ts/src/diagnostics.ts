@@ -1,49 +1,33 @@
 import type { Text } from "./source.ts";
 import { env } from "./node.js.ts";
 
+// Ether's version, read once from the package manifest. Shown where a
+// diagnostic's phase used to be — the console label and the LSP `code`.
+let _version: string | undefined;
+export function version(): string {
+  if (_version !== undefined) return _version;
+  try { return _version = JSON.parse(env.fs.readFileSync(new URL('../package.json', import.meta.url), 'utf-8')).version; }
+  catch { return _version = '?'; }
+}
+
 export interface Diagnostic {
   level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
-  phase: string;
   node?: Text.Node;
   message?: string;
-  diagnostics?: Diagnostic[];
+  /** The expression this diagnostic fired in (parser-owned). `report` uses it
+   *  for cascade dedup: the first error/fatal marks it, later errors on the
+   *  same expression are dropped as the first one propagating. */
+  expression?: Expression;
 }
+
+/** Cascade-dedup handle: the parser (minimal.ts) gives every expression one
+ *  and tags diagnostics with the one they fired in; `report` flips `errored`.
+ *  Structural so diagnostics.ts needn't import the parser's `Expression`. */
+export interface Expression { errored?: boolean }
 
 export const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = {
   trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5,
 };
-
-/**
- * A cached, denormalized view derived from a source-of-truth stream.
- * Wherever you see `Cache<...>`, that field is *not* source data — it's
- * a maintained projection. `add(item)` folds in incremental updates;
- * `rebuild(items)` is for invalidations the cache can't apply
- * incrementally (e.g. range deletes during rewalk); `view` is the cached
- * projection (each cache picks its own lookup shape).
- */
-export class Cache<Item, View> {
-  view: View;
-  private _empty: () => View;
-  private _add: (view: View, item: Item) => void;
-  /** Optional bulk-rebuild path. When provided, `rebuild()` calls it
-   *  once instead of looping `_add` per item — lets caches with O(N²)
-   *  incremental insertion (sorted arrays) batch + sort once. */
-  private _bulk?: (view: View, items: Iterable<Item>) => void;
-  constructor(
-    empty: () => View,
-    add: (view: View, item: Item) => void,
-    bulk?: (view: View, items: Iterable<Item>) => void,
-  ) {
-    this._empty = empty; this._add = add; this._bulk = bulk; this.view = empty();
-  }
-  add(item: Item): void { this._add(this.view, item); }
-  rebuild(items: Iterable<Item>): void {
-    this.view = this._empty();
-    if (this._bulk) this._bulk(this.view, items);
-    else for (const item of items) this._add(this.view, item);
-  }
-  clear(): void { this.view = this._empty(); }
-}
 
 export class Diagnostics {
   /** Per-file Diagnostic lists in insertion order. Diagnostics whose node
@@ -59,26 +43,6 @@ export class Diagnostics {
   *all(): IterableIterator<Diagnostic> {
     for (const arr of this.items.values()) yield* arr;
   }
-  /** **Cache** — derived from the error/fatal subset of `items` (with a
-   *  source-bearing node). Per-line error-count map (per Text.Source), so
-   *  a line counts as "errored" while its count is > 0. Lookup is O(1) and
-   *  replaces an O(N) `program.diagnostics` walk in `Runtime._cascaded`.
-   *  The line key is a proxy for "same expression"; expressions can be
-   *  multi-line and `;`-separated, so this should become expression-keyed
-   *  once expression ranges are first-class. */
-  erroredRegions = new Cache<Diagnostic, Map<string | undefined, Map<number, number>>>(
-    () => new Map(),
-    (view, d) => {
-      if (d.level !== 'error' && d.level !== 'fatal') return;
-      const node = d.node;
-      if (!node || node.cursor == null) return;
-      const file = node.file;
-      let map = view.get(file);
-      if (!map) { map = new Map(); view.set(file, map); }
-      const line = node.line;
-      map.set(line, (map.get(line) ?? 0) + 1);
-    },
-  );
 
   constructor() {
 
@@ -87,21 +51,6 @@ export class Diagnostics {
   // Wall-clock origin for the total elapsed shown at the end of `print()`.
   private _start = performance.now();
   start = () => { this._start = performance.now(); };
-
-  deduplicate() {
-    const seen = new Set<string>();
-    for (const [file, arr] of this.items) {
-      const filtered = arr.filter(d => {
-        const idx = d.node?.begin ?? 0;
-        const key = `${file ?? ''}:${idx}|${d.message ?? ''}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      if (filtered.length === 0) this.items.delete(file);
-      else this.items.set(file, filtered);
-    }
-  }
 
   /** Forget every diagnostic for a specific source (keyed by its file), rebuilding
    *  the derived caches so a stale "this line already errored" entry can't suppress
@@ -114,38 +63,25 @@ export class Diagnostics {
    *  per file (rebuilds walk every retained diagnostic, so per-file deletion
    *  over a large pass is quadratic). */
   deleteAll(locations: Iterable<string | undefined>): void {
-    let any = false;
-    for (const location of locations) if (this.items.delete(location)) any = true;
-    if (!any) return;
-    const remaining = [...this.all()];
-    this.erroredRegions.rebuild(remaining);
-  }
-
-  /** True if `node`'s line in its file already carries an earlier
-   *  error — cascade dedup, so a single broken expression doesn't
-   *  spray duplicate errors across the line. O(1) via the per-file
-   *  errored-line counter map; the line key is a proxy for "same
-   *  expression" pending real expression ranges. */
-  cascaded(node?: Text.Node): boolean {
-    if (!node || node.cursor == null) return false;
-    return (this.erroredRegions.view.get(node.file)?.get(node.line) ?? 0) > 0;
+    for (const location of locations) this.items.delete(location);
   }
 
   report(diag: Diagnostic) {
     // Skip the allocation entirely when the level is below the display
     // threshold — Node.copy + Diagnostic + double-push cost ~1µs each, and
-    // these fire for every match/save/options stamp. Cascade dedup +
-    // stack snapshot now live in `Diagnostics.report` (it pulls the stack
-    // via `node.__instrumentation()?.stack` since Node is Instrumentable).
+    // these fire for every match/save/options stamp.
     if ((diag.level === 'trace' || diag.level === 'debug' || diag.level === 'info') && !Diagnostics.showLevel(diag.level)) return;
-    // Cascade dedup for error/fatal: skip if the node's line already
-    // carries an earlier error.
-    if ((diag.level === 'error' || diag.level === 'fatal') && this.cascaded(diag.node)) return;
+    // Cascade dedup: at most one error/fatal per expression. The parser tags
+    // each diagnostic with the expression it fired in; a second error on the
+    // same expression is the first one propagating, so drop it.
+    if (diag.level === 'error' || diag.level === 'fatal') {
+      if (diag.expression?.errored) return;
+      if (diag.expression) diag.expression.errored = true;
+    }
     const file = diag.node?.file;
     let arr = this.items.get(file);
     if (!arr) { arr = []; this.items.set(file, arr); }
     arr.push(diag);
-    this.erroredRegions.add(diag);
   }
 
   exit(): never {
@@ -154,15 +90,15 @@ export class Diagnostics {
     throw new Error('fatal diagnostic');
   }
 
-  fatal(phase: string, message: string, node?: Text.Node): never {
-    this.report({ level: 'fatal', phase, message, node });
+  fatal(message: string, node?: Text.Node): never {
+    this.report({ level: 'fatal', message, node });
     return this.exit()
   }
-  error(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'error', phase, message, node }); }
-  warning(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'warning', phase, message, node }); }
-  info(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'info', phase, message, node });}
-  debug(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'debug', phase, message, node });}
-  trace(phase: string, message: string, node?: Text.Node) { return this.report({ level: 'trace', phase, message, node });}
+  error(message: string, node?: Text.Node) { return this.report({ level: 'error', message, node }); }
+  warning(message: string, node?: Text.Node) { return this.report({ level: 'warning', message, node }); }
+  info(message: string, node?: Text.Node) { return this.report({ level: 'info', message, node });}
+  debug(message: string, node?: Text.Node) { return this.report({ level: 'debug', message, node });}
+  trace(message: string, node?: Text.Node) { return this.report({ level: 'trace', message, node });}
 
   get errors() {
     const out: Diagnostic[] = [];
@@ -320,15 +256,9 @@ export class Diagnostics {
 
     if (file) console.error(`${c.gray}${file}${c.reset}`);
 
-    // Pick the best source-bearing node for display: the diagnostic's own
-    // node, or else the top-of-stack frame (errors reported on value/partial
-    // nodes carry no source themselves, but their stack does). Compare by
-    // file path — same file = same source.
+    // The diagnostic's node, if it lands in this file.
     const displayNode = (d: Diagnostic): Text.Node | undefined =>
-      d.node?.file === file ? d.node
-        : d.diagnostics?.[d.diagnostics.length - 1]?.node?.file === file
-            ? d.diagnostics[d.diagnostics.length - 1].node
-            : undefined;
+      d.node?.file === file ? d.node : undefined;
 
     const anchors = items.filter(d => !!displayNode(d));
 
@@ -536,26 +466,29 @@ export class Diagnostics {
       // Render each diagnostic in this group under one pipe:
       //   trace-level → the message (or phase) in the level's color
       //   otherwise  → labeled "error[phase]: message"
-      let needsConnector = false;
       for (const diag of t.diags) {
         const diagColor = Diagnostics.levelColor[diag.level] ?? t.color;
         if (diag.level === 'trace') {
-          const text = diag.message ?? diag.phase;
+          const text = diag.message ?? '';
           const descLines = this._wrapToLines(text, Math.max(pipeAwareAvailable, 10));
           for (const dl of descLines) {
-            if (emit(`${diagColor}${dl}${c.reset}`, dl.length)) needsConnector = true;
+            emit(`${diagColor}${dl}${c.reset}`, dl.length);
           }
         } else {
           const { colored: label, plain: labelPlain } = this.formatDiagnosticLabel(diag);
+          const tag = this.versionTag();
           const diagAvail = Math.max(pipeAwareAvailable - labelPlain.length, 10);
           const msgLines = this._wrapToLines(diag.message ?? '', diagAvail);
           const contTextCol = t.col + labelPlain.length;
           for (let mi = 0; mi < msgLines.length; mi++) {
+            // the version trails the last line of the (wrapped) message
+            const suffix = mi === msgLines.length - 1 ? tag.colored : '';
+            const suffixLen = mi === msgLines.length - 1 ? tag.plain.length : 0;
             if (mi === 0) {
-              if (emit(`${label}${msgLines[mi]}`, labelPlain.length + msgLines[mi].length)) needsConnector = true;
+              emit(`${label}${msgLines[mi]}${suffix}`, labelPlain.length + msgLines[mi].length + suffixLen);
             } else {
               const pad = ' '.repeat(labelPlain.length);
-              if (emit(`${pad}${msgLines[mi]}`, labelPlain.length + msgLines[mi].length, contTextCol)) needsConnector = true;
+              emit(`${pad}${msgLines[mi]}${suffix}`, labelPlain.length + msgLines[mi].length + suffixLen, contTextCol);
             }
           }
         }
@@ -619,14 +552,22 @@ export class Diagnostics {
     return line;
   }
 
-  /** Format a diagnostic label: level in appropriate color (only error/warning bold), [phase] in gray */
+  /** Format a diagnostic label: just the level, colored (only error/warning
+   *  bold). The Ether version trails the message instead — see `versionTag`. */
   formatDiagnosticLabel(d: Diagnostic): { colored: string; plain: string } {
     const { c } = Diagnostics;
     const color = Diagnostics.levelColor[d.level];
     return {
-      colored: `${color}${d.level}${c.reset}${c.gray}[${d.phase}]${c.reset}: `,
-      plain: `${d.level}[${d.phase}]: `
+      colored: `${color}${d.level}${c.reset} `,
+      plain: `${d.level} `
     };
+  }
+
+  /** The Ether version, gray, trailing a diagnostic's message. */
+  private versionTag(): { colored: string; plain: string } {
+    const { c } = Diagnostics;
+    const plain = ` [${version()}]`;
+    return { colored: `${c.gray}${plain}${c.reset}`, plain };
   }
 
   /** Word-wrap text into lines at word boundaries */
@@ -672,11 +613,12 @@ export class Diagnostics {
       this._printFile(file, source, items);
     }
 
-    // 2. Flat list: skip timings, and skip traces that don't carry a stack.
+    // 2. Flat list: everything above the threshold except traces, which are
+    //    inline-only noise in this summary.
     const flat: Diagnostic[] = [];
     for (const d of this.all()) {
       if (!Diagnostics.showLevel(d.level)) continue;
-      if (d.level === 'trace' && (!d.diagnostics || !d.diagnostics.length)) continue;
+      if (d.level === 'trace') continue;
       flat.push(d);
     }
     const errs = this.errors, warns = this.warnings;
@@ -686,35 +628,15 @@ export class Diagnostics {
     } else {
       for (const d of flat) {
         const { colored: label } = this.formatDiagnosticLabel(d);
-        // `.do` guarantees every stack frame carries source, so if d.node
-        // lacks it the topmost stack frame is a reliable fallback.
-        const locNode = d.node?.file ? d.node : d.diagnostics?.[d.diagnostics.length - 1]?.node;
+        const tag = this.versionTag().colored;
+        const locNode = d.node;
         if (d.level === 'fatal') {
           console.error('');
-          console.error(`${label}${d.message ?? ''}`);
+          console.error(`${label}${d.message ?? ''}${tag}`);
           continue;
         }
         if (locNode?.file) console.error(`${c.gray}${locNode.file}:${locNode.line}:${locNode.col}${c.reset}`);
-        console.error(`  ${label}${d.message ?? ''}`);
-        if (d.diagnostics?.length) {
-          // Most-recent first (innermost = where the error fired, callers
-          // below). The stack was pushed oldest-first, so reverse it.
-          const visible = d.diagnostics.filter(f => Diagnostics.showLevel(f.level)).reverse();
-          for (let i = 0; i < visible.length; i++) {
-            const frame = visible[i];
-            const phaseColor = Diagnostics.levelColor[frame.level];
-            const fn = frame.node;
-            // Strip trailing "(file:line:col)" if it would duplicate the
-            // error header's location (the frame above us in the display) or
-            // the next visible frame's location (the caller below).
-            const next = visible[i + 1]?.node;
-            const dup = fn?.sameCursor(locNode) || (!!next && fn?.sameCursor(next));
-            const at = fn?.file && !dup
-              ? ` ${c.gray}(${fn.file}:${fn.line}:${fn.col})${c.reset}`
-              : '';
-            console.error(`    ${c.gray}at ${phaseColor}${frame.phase}${c.reset}${at}`);
-          }
-        }
+        console.error(`  ${label}${d.message ?? ''}${tag}`);
       }
     }
 

@@ -1,10 +1,10 @@
 import path from "path";
 import { fileURLToPath } from "url";
 import {Language, Node, Program, Resolution} from "./language.ts";
-import {Standard, Version} from "./version.ts";
+import {Version} from "./version.ts";
 import {is_string} from "./lodash.ts";
 
-export const Ray = new Language('ether', (Version.scheme('E') as Standard).create(0, '2027-01-01', 0))
+export const Ray = new Language('ether', Version.create(0, '2027-01-01', 0))
   .extension('.ray')
 
   // .pass(_ => _

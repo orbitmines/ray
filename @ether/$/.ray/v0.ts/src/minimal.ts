@@ -191,18 +191,45 @@ interface Issue { phase: string; message: string; at?: Node }
 // (its ledger key), when a rule's match painted it.
 export interface Painted { begin: number; end: number; style: string; of?: string }
 
+// One expression — a span `expr()` reads. Canonical per file (one object per
+// start position, so a re-read or a sub-read of the same span reuses it),
+// linked under the expression it was read inside, expanding downward into its
+// subexpressions via `children`. `errored` is the cascade gate:
+// `Diagnostics.report` marks it on the first error/fatal and drops later
+// errors on the same expression as that first one propagating.
+export class Expression {
+  children: Expression[] = [];
+  errored = false;
+  constructor(public src: Source, public begin: number, public end: number, public parent?: Expression) {
+    parent?.children.push(this);
+  }
+}
+
 export class Log {
   diagnostics = new Diagnostics();
   // presentation, next to the diagnostics: per-file painted spans, re-derived
   // exactly like issues are (forgotten on reload, repainted by the pass);
   // the display layer reads them back to paint its source excerpts
   painted = new Map<string, Painted[]>();
-  constructor() { this.diagnostics.highlighting = path => this.painted.get(path); }
-  error(phase: string, message: string, at?: Node): void {
-    this.diagnostics.report({ level: 'error', phase, message, node: position(at) });
+  // the expression currently being read — `expr()` keeps this pointed at its
+  // span while it runs, and error/info tag their diagnostic with it so
+  // `Diagnostics.report` can dedup cascaded errors. One canonical object per
+  // (file, start), dropped when the file is forgotten.
+  expression?: Expression;
+  private expressions = new Map<string | undefined, Map<number, Expression>>();
+  expression_at(src: Source, begin: number, end: number, parent?: Expression): Expression {
+    let map = this.expressions.get(src.path);
+    if (!map) this.expressions.set(src.path, map = new Map());
+    let e = map.get(begin);
+    if (!e) map.set(begin, e = new Expression(src, begin, end, parent));
+    return e;
   }
-  info(phase: string, message: string, at?: Node): void {
-    this.diagnostics.report({ level: 'info', phase, message, node: position(at) });
+  constructor() { this.diagnostics.highlighting = path => this.painted.get(path); }
+  error(message: string, at?: Node): void {
+    this.diagnostics.report({ level: 'error', message, node: position(at), expression: this.expression });
+  }
+  info(message: string, at?: Node): void {
+    this.diagnostics.report({ level: 'info', message, node: position(at), expression: this.expression });
   }
   paint(path: string, begin: number, end: number, style: string, of?: string): void {
     let spans = this.painted.get(path);
@@ -210,16 +237,20 @@ export class Log {
     spans.push({ begin, end, style, of });
   }
   // forget everything reported against these sources' files — a reload
-  // re-derives them (the display layer rebuilds its cascade caches, so a
-  // stale "this line already errored" can't swallow the fresh diagnostics)
+  // re-derives them, including the per-file expression objects, so a stale
+  // "this expression already errored" gate can't swallow the fresh diagnostics
   forget(src: Source): void {
     this.diagnostics.deleteAll([src.path]);
+    this.expressions.delete(src.path);
     if (src.path !== undefined) this.painted.delete(src.path);
   }
   forget_all(srcs: Iterable<Source>): void {
     const paths = [...srcs].map(src => src.path);
     this.diagnostics.deleteAll(paths);
-    for (const path of paths) if (path !== undefined) this.painted.delete(path);
+    for (const path of paths) {
+      this.expressions.delete(path);
+      if (path !== undefined) this.painted.delete(path);
+    }
   }
   print(): void {
     if (this.diagnostics.hasErrors && env.nodejs) process.exitCode = 1;
@@ -1037,7 +1068,7 @@ class Reader extends Walk {
     }
     if (this.result?.role?.kind === 'forward' && !this.result.consumed && !this.forwards) {
       this.result.consumed = true;
-      this.ip.log.error('resolve', `Unresolved variable \`${this.result.role.name}\`.`, this.result);
+      this.ip.log.error(`Unresolved variable \`${this.result.role.name}\`.`, this.result);
     }
     return this.result;
   }
@@ -1197,7 +1228,7 @@ class Reader extends Walk {
     // methods read left-to-right; the expression's anchor (no receiver yet)
     // is direction-checked only when it carries an explicit flag
     if (!this.directed(m)) {
-      ip.log.error('method', this.result
+      ip.log.error(this.result
         ? `Found a method \`${name}\` on \`${this.result.text}\` but it wasn't flagged as ${this.direction}.`
         : `Found a method \`${name}\` but it wasn't flagged as ${this.direction}.`, at);
       return true;
@@ -1221,7 +1252,7 @@ class Reader extends Walk {
     const [b, e] = this.sign === 1 ? [this.head, exit] : [exit + 1, this.head + 1];
     const word = span(this.src, b, e, this.ip.BASE);
     if (this.result) {
-      this.ip.log.error('method', `Unresolved \`${word.text}\` on \`${this.result.text}\`.`, word);
+      this.ip.log.error(`Unresolved \`${word.text}\` on \`${this.result.text}\`.`, word);
       this.cut(this.sign === 1 ? line_end(this.text, this.head) : line_begin(this.text, this.head + 1));
       this.stopped = true;
       return;
@@ -1697,31 +1728,41 @@ class Interpreter {
   // by Reader.directions, so nothing evaluates twice.
 
   expr(cursor: Node, reading: Reading = {}): Node | undefined {
-    const indent = reading.indent ?? indent_at(cursor.src!.text, cursor.begin);
-    const forwards = reading.forwards ?? false;
-    if (reading.sign !== undefined)
-      return new Reader(this, cursor, { sign: reading.sign, indent, forwards }).read();
-    const reader = new Reader(this, cursor, { sign: 1, indent, forwards });
-    const d = reader.directions();
-    if (d.read === 'ltr') return reader.read();
-    const src = cursor.src!;
-    const begin = cursor.begin;
-    cursor.begin = d.extent;
-    switch (d.read) {
-      case 'rtl':
-        return this.expr(span(src, begin, d.extent), { sign: -1, indent, forwards });
-      case 'both': {
-        // the operand between the prefix and the suffix is shared: read the
-        // right-to-left half through it, then the left-to-right half from it
-        const rtl = this.expr(span(src, begin, d.before), { sign: -1, indent, forwards });
-        const ltr = this.expr(span(src, d.after, d.extent), { sign: 1, indent, forwards });
-        return ltr ?? rtl;
+    // Point the log at this span while it reads, so anything reported lands on
+    // it (cascade dedup); subexpressions nest under it through the same path,
+    // and the enclosing expression is restored on the way out. Keyed by start,
+    // so a re-read or sub-read of the same span reuses the one object.
+    const parent = this.log.expression;
+    this.log.expression = this.log.expression_at(cursor.src!, cursor.begin, cursor.end, parent);
+    try {
+      const indent = reading.indent ?? indent_at(cursor.src!.text, cursor.begin);
+      const forwards = reading.forwards ?? false;
+      if (reading.sign !== undefined)
+        return new Reader(this, cursor, { sign: reading.sign, indent, forwards }).read();
+      const reader = new Reader(this, cursor, { sign: 1, indent, forwards });
+      const d = reader.directions();
+      if (d.read === 'ltr') return reader.read();
+      const src = cursor.src!;
+      const begin = cursor.begin;
+      cursor.begin = d.extent;
+      switch (d.read) {
+        case 'rtl':
+          return this.expr(span(src, begin, d.extent), { sign: -1, indent, forwards });
+        case 'both': {
+          // the operand between the prefix and the suffix is shared: read the
+          // right-to-left half through it, then the left-to-right half from it
+          const rtl = this.expr(span(src, begin, d.before), { sign: -1, indent, forwards });
+          const ltr = this.expr(span(src, d.after, d.extent), { sign: 1, indent, forwards });
+          return ltr ?? rtl;
+        }
+        case 'mixed':
+          this.log.error(
+            `Cannot mix ${d.names.map(n => `\`${n}\``).join(', ')} in a single infix expression with mixed associativity, use parenthesis to mix them.`,
+            span(src, begin, d.extent));
+          return undefined;
       }
-      case 'mixed':
-        this.log.error('direction',
-          `Cannot mix ${d.names.map(n => `\`${n}\``).join(', ')} in a single infix expression with mixed associativity, use parenthesis to mix them.`,
-          span(src, begin, d.extent));
-        return undefined;
+    } finally {
+      this.log.expression = parent;
     }
   }
 
@@ -1762,7 +1803,7 @@ class Interpreter {
     if (this.firing.has(site)) return undefined;
     if (this.depth > 64) {
       this.overflowed = true;
-      this.log.error('fire', `Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at);
+      this.log.error(`Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at);
       return undefined;
     }
     this.firing.add(site);
@@ -2007,14 +2048,14 @@ class Interpreter {
     while (begin < end && src.text[begin] === ' ') begin++;
     while (end > begin && src.text[end - 1] === ' ') end--;
     const text = src.text.slice(begin, end);
-    if (!text) { this.log.error('external', '`external` requires a declaration as its argument.', at); return raw; }
+    if (!text) { this.log.error('`external` requires a declaration as its argument.', at); return raw; }
     // a declaration with a `{...}` group anywhere is a rule pattern — bare
     // spellings (`external class {name}{block}`) included
     if ('{(['.includes(text[0]) || text.includes('{')) {
       const r = recognize(src.text, begin, this.scan(src));
       const pattern = r && r.pattern_end <= end ? span(src, r.pattern_begin, r.pattern_end) : span(src, begin, end);
       if (!this.declare(pattern, on))
-        this.log.error('external', `Expected the rule \`${pattern.text}\` to be provided by the runtime, but it wasn't.`, pattern);
+        this.log.error(`Expected the rule \`${pattern.text}\` to be provided by the runtime, but it wasn't.`, pattern);
       return raw;
     }
     const words = text.split(/\s+/);
@@ -2032,7 +2073,7 @@ class Interpreter {
     if (!target && on.has_flag('highlight')) on.set(name, target = highlight_method(this, on, name));
     target ??= this.resolve(name);
     if (!target) {
-      this.log.error('external', `Expected method \`${name}\` to be externally defined by the runtime, but it wasn't.`, span(src, begin, end));
+      this.log.error(`Expected method \`${name}\` to be externally defined by the runtime, but it wasn't.`, span(src, begin, end));
       return raw;
     }
     let declared: Node = target;
@@ -2144,7 +2185,7 @@ function assign(ip: Interpreter, { self, args, at }: Call): Node {
   const value = deref(ip, args) ?? args;
   const role = self?.role;
   if (role?.kind !== 'slot' && role?.kind !== 'forward') {
-    ip.log.error('assign', 'Cannot assign here.', self ?? at);
+    ip.log.error('Cannot assign here.', self ?? at);
     return value;
   }
   const on = role.on;
@@ -2152,7 +2193,7 @@ function assign(ip: Interpreter, { self, args, at }: Call): Node {
   if (role.kind === 'forward') self.consumed = true;
   on.set(key, value);
   for (const [name, cls] of ip.classes) if (cls === on) {
-    ip.log.info('define', `Defined \`${typeof key === 'string' ? key : key.text}\` on \`${name}\`.`, self);
+    ip.log.info(`Defined \`${typeof key === 'string' ? key : key.text}\` on \`${name}\`.`, self);
     // a definition on a class records WHERE it was written — the statement
     // inside the class's body when there is one, the outermost otherwise —
     // so a miss can evaluate it out of order
@@ -2173,7 +2214,7 @@ function call(ip: Interpreter, callee: Node | undefined, args: Node, at: Node): 
   const self = bound ? bound.self : callee;
   if (method?.fn) return ip.invoke(method, { self: self ?? method, args, at }) ?? new Node();
   if (method && !method.empty) return ip.evaluate_program(method);
-  ip.log.error('call', 'Expected a function to call.', at);
+  ip.log.error('Expected a function to call.', at);
   return new Node();
 }
 
@@ -2281,10 +2322,10 @@ function externals(ip: Interpreter): void {
   method('</', ({ args }) => args, 'callable', 'right-to-left');
   // the direction-fixture stand-ins emit the trace infos the fixtures expect
   method('test-middle', ({ at }) => at);
-  method('test-left', ({ self, at }) => { ip.log.info('test', `test-left fired on \`${self.text}\``, at); return self; });
-  method('test-right', ({ self, at }) => { ip.log.info('test', `test-right fired on \`${self.text}\``, at); return self; }, 'callable');
-  method('test-assoc', ({ self, at }) => { ip.log.info('test', `test-assoc fired on \`${self.text}\``, at); return self; }, 'callable');
-  method('test-bidir', ({ self, at }) => { ip.log.info('test', `test-bidir fired on \`${self.text}\``, at); return self; });
+  method('test-left', ({ self, at }) => { ip.log.info(`test-left fired on \`${self.text}\``, at); return self; });
+  method('test-right', ({ self, at }) => { ip.log.info(`test-right fired on \`${self.text}\``, at); return self; }, 'callable');
+  method('test-assoc', ({ self, at }) => { ip.log.info(`test-assoc fired on \`${self.text}\``, at); return self; }, 'callable');
+  method('test-bidir', ({ self, at }) => { ip.log.info(`test-bidir fired on \`${self.text}\``, at); return self; });
 }
 
 // rule externals — inert until a .ray file declares them with `external <pattern>`
@@ -2388,7 +2429,7 @@ export class Program {
       ip.parse(src);
       if (opts.log) {
         for (const issue of this.grammar.issues)
-          if (src.path !== undefined && issue.at?.src?.path === src.path) ip.log.error(issue.phase, issue.message, issue.at);
+          if (src.path !== undefined && issue.at?.src?.path === src.path) ip.log.error(issue.message, issue.at);
         this.reloaded(src);
       }
       if (opts.generation !== undefined) {
@@ -2397,7 +2438,7 @@ export class Program {
       }
     }
     if (opts.log) for (const issue of this.grammar.issues)
-      if (issue.at?.src?.path === undefined) ip.log.error(issue.phase, issue.message, issue.at);
+      if (issue.at?.src?.path === undefined) ip.log.error(issue.message, issue.at);
     return ip;
   }
 
@@ -2488,7 +2529,7 @@ export class Program {
         const republish = new Set<Source>();
         for (const issue of this.grammar.issues.slice(reported)) {
           if (issue.at?.src?.path === undefined) continue;
-          final.log.error(issue.phase, issue.message, issue.at);
+          final.log.error(issue.message, issue.at);
           const src = order.find(s => s.path === issue.at!.src!.path);
           if (src) republish.add(src);
         }
@@ -2605,7 +2646,7 @@ export class Program {
     // an error, not a crash: a mid-construction language (a decorated
     // declaration whose `|`/`,` aren't defined yet) still runs and reports
     if (![...this.grammar.rules.values()].some(r => r.external?.name === 'rule-definition' && r.project === undefined))
-      ip!.log.error('external', `'${this.grammar.language_file}' did not declare the grammar-rule definition rule.`);
+      ip!.log.error(`'${this.grammar.language_file}' did not declare the grammar-rule definition rule.`);
     return ip!.log;
   }
 
@@ -2711,7 +2752,7 @@ export class Program {
         this.taint(this.grammar.language(src) ? 'all' : project!);
       }
       if (src.path !== undefined) for (const issue of this.grammar.issues)
-        if (issue.at?.src?.path === src.path) log.error(issue.phase, issue.message, issue.at);
+        if (issue.at?.src?.path === src.path) log.error(issue.message, issue.at);
       this.reloaded(src);
     }
     if (this.suspect) this.recycle();

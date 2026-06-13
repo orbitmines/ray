@@ -6,4 +6,3 @@
 // or `tsx`), and its dependencies — vscode-languageserver — should never end
 // up in a consuming process's bundle.
 export * from './src/version.ts';
-export * from './src/language.ts';

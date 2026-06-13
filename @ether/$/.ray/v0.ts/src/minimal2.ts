@@ -1,67 +1,3 @@
-// The whole engine in one file — the substrate for a rewrite.
-// Run: npx tsx src/minimal.ts   (from anywhere inside the repo)
-//
-// The architecture, complete:
-//
-//   1. Nodes. One class, plain fields. A node is simultaneously a span of
-//      source, an object with methods (`Key = string | Node` — pattern nodes
-//      are method keys, which is how grammar is type-bound), and possibly a
-//      role: forward (unresolved name), slot (assignable location), bound
-//      (method picked off a receiver).
-//
-//   2. Scanning. Nothing about concrete syntax is hardcoded — no knowledge
-//      that backticks quote or brackets nest. Scanning for a terminator skips
-//      spans by recursively matching whatever anchored rules are active at a
-//      position (`Scan.claim`); quoting and balanced nesting emerge from the
-//      rules in Node.ray (`` `{string: String}` ``, `({expr})`, ...). A
-//      `String`-typed capture scans raw — the capture's type decides what
-//      grammar is valid inside it. Whitespace/indentation and the
-//      `{pattern} => body` shape are the only primitives.
-//
-//   3. Interpretation. Per statement: try rules (best match: longest, then
-//      anchored, then nearest in the type chain), else known tokens, else a
-//      forward. Rule bodies evaluate with captures bound in a scope node;
-//      externals bottom out in TS. Recursion is cut by cycle detection
-//      (same rule at same position; a body already being evaluated), never
-//      unrolled.
-//
-//   4. The fixpoint. Files parse; rule definitions found inside regions other
-//      rules consume (comments, strings) are recorded as suppressed; a rule
-//      exists iff some definition survives. That's circular, so analysis
-//      iterates (Jacobi — simultaneous updates, so mutual suppression
-//      oscillates instead of settling on parse order); non-convergence IS the
-//      "rules circularly prevent each other from existing" error. Disabled
-//      rules still match as error recovery (consume, no effect) so one
-//      grammar error doesn't cascade into unresolved-token noise.
-//
-//   5. The bootstrap. Pass 1 over Node.ray, with a single seeded rule for the
-//      `{pattern} => body` shape scoped to that file alone. Node.ray must
-//      re-declare the shape in-language (`external {(String.Word | ...`) for
-//      every other file; the seed retires with it.
-
-// Node builtins arrive lazily through node.js.ts — nothing here imports them
-// statically, so the file also loads in environments without them (the
-// browser); the loaders below are only reachable where they exist.
-import { env } from "./node.js.ts";
-// Diagnostics are collected and rendered by the existing display layer — the
-// engine below stays self-contained; display is presentation, not
-// architecture. (minimal.ts has deliberately diverged from src/ray.ts since
-// the byte-identical phase: errors that used to be positionless now carry
-// their call sites, and the empty-declaration quirk is gone.)
-import { Diagnostics } from "./diagnostics.ts";
-import { Text } from "./source.ts";
-// A published package carries its .ray files in this manifest (filled in at
-// pack time, empty in a checkout) so directories can be enumerated without
-// relying on the file system layout of an install.
-import { manifest } from "./bundled.ts";
-
-// ───────────────────────────── sources ─────────────────────────────
-// Locations are repo-relative (`@ether/$/.ray/...`). They resolve against the
-// current checkout when one encloses the working directory (the `@ether/$/.ray`
-// marker), else against the installed package — so the same loads work in
-// development and from the published tarball.
-
-export interface Source { path?: string; text: string }
 
 const EXTENSION = '.ray';
 
@@ -75,42 +11,6 @@ export async function load_file(location: string): Promise<Source> {
   }
   const url = new URL('../' + location, import.meta.url);
   return { path: url.href, text: await (await fetch(url)).text() };
-}
-
-export async function load_directory(location: string, options: { recursively?: boolean; filter?: (path: string) => boolean } = {}): Promise<Source[]> {
-  location = location.replace(/\/$/, '')
-  // packaged (and the browser): enumerate the manifest, not the file system
-  if (!env.nodejs) {
-    if (!manifest.length) throw new Error("Couldn't find any entries in the manifest, this is an error on the side of the developer.");
-    const prefix = location + '/';
-    return Promise.all(manifest
-      .filter(entry => entry.startsWith(prefix))
-      .filter(entry => options.recursively || !entry.slice(prefix.length).includes('/'))
-      .filter(entry => !options.filter?.(entry))
-      .map(load_file));
-  }
-  const locations: string[] = [];
-  const walk = (dir: string): void => {
-    for (const entry of env.fs.readdirSync(env.path.join(env.root, dir), { withFileTypes: true })) {
-      const entry_path = `${dir}/${entry.name}`;
-      if (options.filter?.(entry_path)) continue;
-      if (entry.isDirectory()) { if (options.recursively) walk(entry_path); }
-      else locations.push(entry_path);
-    }
-  };
-  walk(location);
-  return Promise.all(locations.map(location => load_file(location)));
-}
-
-// A project is a directory parsed in full, or an entry file parsed after the
-// rest of its directory.
-export async function load_project(location: string): Promise<Source[]> {
-  const entry = manifest.length
-    ? manifest.includes(location)
-    : env.fs.statSync(env.path.join(env.root, location)).isFile();
-  if (!entry) return load_directory(location, { recursively: true });
-  const dir = location.slice(0, location.lastIndexOf('/'));
-  return [...await load_directory(dir, { recursively: true, filter: entry => entry === location }), await load_file(location)];
 }
 
 // ───────────────────────────── nodes ─────────────────────────────
@@ -2175,33 +2075,6 @@ function call(ip: Interpreter, callee: Node | undefined, args: Node, at: Node): 
   if (method && !method.empty) return ip.evaluate_program(method);
   ip.log.error('call', 'Expected a function to call.', at);
   return new Node();
-}
-
-// The language, as a Program — the same setup everywhere it boots: the CLI
-// below and the LSP. Sources resolve through the bundled loaders (checkout
-// or published tarball).
-export async function ray(): Promise<Program> {
-  const cd = '@ether/$/.ray/v0';
-
-  return new Program([
-    await load_file(`${cd}/Node.ray`),
-    // await load_file(`${cd}/tests/direction.ray`),
-    // await load_file(`${cd}/tests/circular.ray`),
-    // await load_file(`${cd}/tests/self.ray`),
-    // await load_file(`${cd}/tests/string.ray`),
-    // await load_file(`${cd}/tests/cycle3.ray`),
-    // await load_file(`${cd}/tests/cycle4.ray`),
-    // await load_file(`${cd}/tests/tail.ray`),
-    // ...await load_directory('@ether/.ray3'),
-    // ...await load_directory('@ether/.ray2'),
-  ]);
-}
-
-async function main() {
-  // created before anything else — the log's clock times the whole run,
-  // file loads included
-  const log = new Log();
-  (await (await ray()).abstract().run(log)).print();
 }
 
 // ── highlighting ──

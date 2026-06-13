@@ -1,7 +1,7 @@
 import { fileURLToPath } from "url";
 import { Runtime, String, AST } from "./language.ts";
 import { Standard, Version } from "./version.ts";
-import { nodejs } from "./node.js.ts";
+import { env } from "./node.js.ts";
 import { Instrumentable, instrumented } from "./diagnostics.ts";
 import { Text } from "./source.ts";
 import { is_function, is_string } from "./lodash.ts";
@@ -681,9 +681,9 @@ export const Ether = new Runtime('Ether', (Version.scheme('E') as Standard).crea
   })
 
 const _isMainEntrypoint = (() => {
-  if (!nodejs.enabled) return false;
+  if (!env.nodejs) return false;
   if (!process.argv[1]) return false;
-  try { return fileURLToPath(import.meta.url) === nodejs.path.resolve(process.argv[1]); }
+  try { return fileURLToPath(import.meta.url) === env.path.resolve(process.argv[1]); }
   catch { return false; }
 })();
 

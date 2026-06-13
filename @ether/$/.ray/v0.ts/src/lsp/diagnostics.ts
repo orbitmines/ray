@@ -52,12 +52,6 @@ function nodeRange(node: Text.Node): Range {
  */
 export function toLsp(diag: Diagnostic, uriFile: string | undefined): LspDiagnostic | null {
   if (diag.clock) return null;                   // timing samples
-  // Rewalk marks the diagnostics in its cleared range as superseded
-  // instead of removing them — every reader (display, count getters,
-  // _cascaded) filters on `!superseded`. The LSP path must too, or
-  // VSCode shows stale errors from the LTR walk that the RTL rewalk
-  // re-interpreted.
-  if (diag.superseded) return null;
   if (diag.level === 'trace' || diag.level === 'debug') return null;
 
   // Prefer the diagnostic's own node; otherwise fall back to the top-of-stack

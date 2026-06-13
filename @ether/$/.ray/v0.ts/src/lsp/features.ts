@@ -41,7 +41,9 @@ export function configuration(program: Program): {
       ...brackets.map(([open, close]) => ({ open, close })),
       ...quotes.map(([open, close]) => ({ open, close, notIn: ['string'] })),
     ],
-    surroundingPairs: [...brackets, ...quotes],
+    surroundingPairs: [
+      ...brackets, ...quotes
+    ],
   };
 }
 

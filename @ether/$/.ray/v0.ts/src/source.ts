@@ -1,4 +1,4 @@
-import { nodejs } from "./node.js.ts";
+import { env } from "./node.js.ts";
 
 namespace Global {
   export interface Source {
@@ -32,7 +32,7 @@ export namespace Text {
       try { url = new URL(this.location); } catch {}
       this._value = url
         ? await (await fetch(url)).text()
-        : await nodejs.fs.promises.readFile(this.location, 'utf-8');
+        : await env.fs.promises.readFile(this.location, 'utf-8');
     }
 
     static readonly EMPTY = new Source('');

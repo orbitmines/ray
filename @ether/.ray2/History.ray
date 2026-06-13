@@ -61,7 +61,7 @@ class Branch < History & Program
 
     blank => //TODO Create new branch off beginning, add node in front if necessary with on the edge a connection to the two branches before there's a first version
 
-    tags = this.all.map({.name}: .)
+    tags = this.all.map({.name}: .) // test
     branches = ⊢this.all.map({.name}: .)
 
 { Commit } = Branch

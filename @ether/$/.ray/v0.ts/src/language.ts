@@ -2,7 +2,7 @@
 // Compile the runtime to another target (Implement runtime inside the language first?)
 // Compile the program to another target - AST is just another target.
 
-import { nodejs } from "./node.js.ts";
+import { env } from "./node.js.ts";
 import { Source, Node, Text } from "./source.ts";
 import { Standard, Version } from "./version.ts";
 import { Diagnostic, Diagnostics, Instrumentable, InstrumentationCtx, instrumented, uninstrumented } from "./diagnostics.ts";
@@ -214,7 +214,7 @@ export class String extends Representation<String, Text.Source> {
     return this;
   }
   loadProject(location: string): this {
-    const { fs, path } = nodejs;
+    const { fs, path } = env;
     if (!fs.existsSync(location)) { this.log.error('load', `Not found: ${location}`); return this; }
     const stat = fs.statSync(location);
     if (stat.isDirectory()) return this.loadDirectory(location, { recursively: true });
@@ -257,30 +257,30 @@ export class String extends Representation<String, Text.Source> {
   };
 
   private bundled_resolve(location: string): string {
-    if (nodejs.enabled) {
+    if (env.nodejs) {
       // An `@ether/$/.ray` marker in the working directory means we're in a checkout
       // of the language repo (same marker `boot.ts` uses to pick repo mode) — use its
       // in-tree definition rather than the packaged copy, so IDE extensions work
       // against the development version.
       const cwd = process.cwd();
-      if (nodejs.fs.existsSync(nodejs.path.resolve(cwd, '@ether/$/.ray')))
-        return nodejs.path.resolve(cwd, location);
-      return nodejs.path.resolve(nodejs.root, location);
+      if (env.fs.existsSync(env.path.resolve(cwd, '@ether/$/.ray')))
+        return env.path.resolve(cwd, location);
+      return env.path.resolve(env.root, location);
     }
     return new URL('../' + location, import.meta.url).href;
   }
 
   private *walk(location: string): Iterable<Text.Source> {
-    if (!nodejs.fs.existsSync(location)) { this.log.error('load', `Not found: ${location}`); return; }
-    const stat = nodejs.fs.statSync(location);
+    if (!env.fs.existsSync(location)) { this.log.error('load', `Not found: ${location}`); return; }
+    const stat = env.fs.statSync(location);
     if (stat.isFile()) { yield new Text.Source(undefined, location); return; }
     if (stat.isDirectory()) { yield *this.walkDir(location, { recursive: true }); return; }
     return this.log.fatal('file system', `"${location}": not a file or directory`);
   }
   private *walkDir(dir: string, options: { recursive?: boolean, excluded?: string } = {}): Iterable<Text.Source> {
-    if (!nodejs.fs.existsSync(dir)) { this.log.error('load', `Directory not found: ${dir}`); return; }
-    for (const entry of nodejs.fs.readdirSync(dir, { withFileTypes: true })) {
-      const entryPath = nodejs.path.join(dir, entry.name);
+    if (!env.fs.existsSync(dir)) { this.log.error('load', `Directory not found: ${dir}`); return; }
+    for (const entry of env.fs.readdirSync(dir, { withFileTypes: true })) {
+      const entryPath = env.path.join(dir, entry.name);
       if (entryPath === options.excluded) continue;
       if (entry.isDirectory()) {
         // Skip IDE integrations and versioned implementation dirs (e.g. `v0.ts`) —
@@ -404,7 +404,7 @@ export class Runtime extends Representation<Runtime> implements InstrumentationC
     return this;
   }
   repl(): void {
-    if (!nodejs.enabled) return this.log.fatal(this.name, 'REPL requires a Node.js environment.');
+    if (!env.nodejs) return this.log.fatal(this.name, 'REPL requires a Node.js environment.');
 
     let compiler = this.frontends.find(x => x instanceof String)
     if (!compiler) return this.log.fatal(this.name, 'REPL requires a frontend which accepts a string.');

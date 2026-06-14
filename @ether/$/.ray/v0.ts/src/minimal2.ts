@@ -1,3 +1,67 @@
+// The whole engine in one file — the substrate for a rewrite.
+// Run: npx tsx src/minimal.ts   (from anywhere inside the repo)
+//
+// The architecture, complete:
+//
+//   1. Nodes. One class, plain fields. A node is simultaneously a span of
+//      source, an object with methods (`Key = string | Node` — pattern nodes
+//      are method keys, which is how grammar is type-bound), and possibly a
+//      role: forward (unresolved name), slot (assignable location), bound
+//      (method picked off a receiver).
+//
+//   2. Scanning. Nothing about concrete syntax is hardcoded — no knowledge
+//      that backticks quote or brackets nest. Scanning for a terminator skips
+//      spans by recursively matching whatever anchored rules are active at a
+//      position (`Scan.claim`); quoting and balanced nesting emerge from the
+//      rules in Node.ray (`` `{string: String}` ``, `({expr})`, ...). A
+//      `String`-typed capture scans raw — the capture's type decides what
+//      grammar is valid inside it. Whitespace/indentation and the
+//      `{pattern} => body` shape are the only primitives.
+//
+//   3. Interpretation. Per statement: try rules (best match: longest, then
+//      anchored, then nearest in the type chain), else known tokens, else a
+//      forward. Rule bodies evaluate with captures bound in a scope node;
+//      externals bottom out in TS. Recursion is cut by cycle detection
+//      (same rule at same position; a body already being evaluated), never
+//      unrolled.
+//
+//   4. The fixpoint. Files parse; rule definitions found inside regions other
+//      rules consume (comments, strings) are recorded as suppressed; a rule
+//      exists iff some definition survives. That's circular, so analysis
+//      iterates (Jacobi — simultaneous updates, so mutual suppression
+//      oscillates instead of settling on parse order); non-convergence IS the
+//      "rules circularly prevent each other from existing" error. Disabled
+//      rules still match as error recovery (consume, no effect) so one
+//      grammar error doesn't cascade into unresolved-token noise.
+//
+//   5. The bootstrap. Pass 1 over Node.ray, with a single seeded rule for the
+//      `{pattern} => body` shape scoped to that file alone. Node.ray must
+//      re-declare the shape in-language (`external {(String.Word | ...`) for
+//      every other file; the seed retires with it.
+
+// Node builtins arrive lazily through node.js.ts — nothing here imports them
+// statically, so the file also loads in environments without them (the
+// browser); the loaders below are only reachable where they exist.
+import { env } from "./node.js.ts";
+// Diagnostics are collected and rendered by the existing display layer — the
+// engine below stays self-contained; display is presentation, not
+// architecture. (minimal.ts has deliberately diverged from src/ray.ts since
+// the byte-identical phase: errors that used to be positionless now carry
+// their call sites, and the empty-declaration quirk is gone.)
+import { Diagnostics } from "./diagnostics.ts";
+import { Text } from "./source.ts";
+// A published package carries its .ray files in this manifest (filled in at
+// pack time, empty in a checkout) so directories can be enumerated without
+// relying on the file system layout of an install.
+import { manifest } from "./bundled.ts";
+
+// ───────────────────────────── sources ─────────────────────────────
+// Locations are repo-relative (`@ether/$/.ray/...`). They resolve against the
+// current checkout when one encloses the working directory (the `@ether/$/.ray`
+// marker), else against the installed package — so the same loads work in
+// development and from the published tarball.
+
+export interface Source { path?: string; text: string }
 
 const EXTENSION = '.ray';
 
@@ -11,6 +75,42 @@ export async function load_file(location: string): Promise<Source> {
   }
   const url = new URL('../' + location, import.meta.url);
   return { path: url.href, text: await (await fetch(url)).text() };
+}
+
+export async function load_directory(location: string, options: { recursively?: boolean; filter?: (path: string) => boolean } = {}): Promise<Source[]> {
+  location = location.replace(/\/$/, '')
+  // packaged (and the browser): enumerate the manifest, not the file system
+  if (!env.nodejs) {
+    if (!manifest.length) throw new Error("Couldn't find any entries in the manifest, this is an error on the side of the developer.");
+    const prefix = location + '/';
+    return Promise.all(manifest
+      .filter(entry => entry.startsWith(prefix))
+      .filter(entry => options.recursively || !entry.slice(prefix.length).includes('/'))
+      .filter(entry => !options.filter?.(entry))
+      .map(load_file));
+  }
+  const locations: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of env.fs.readdirSync(env.path.join(env.root, dir), { withFileTypes: true })) {
+      const entry_path = `${dir}/${entry.name}`;
+      if (options.filter?.(entry_path)) continue;
+      if (entry.isDirectory()) { if (options.recursively) walk(entry_path); }
+      else locations.push(entry_path);
+    }
+  };
+  walk(location);
+  return Promise.all(locations.map(location => load_file(location)));
+}
+
+// A project is a directory parsed in full, or an entry file parsed after the
+// rest of its directory.
+export async function load_project(location: string): Promise<Source[]> {
+  const entry = manifest.length
+    ? manifest.includes(location)
+    : env.fs.statSync(env.path.join(env.root, location)).isFile();
+  if (!entry) return load_directory(location, { recursively: true });
+  const dir = location.slice(0, location.lastIndexOf('/'));
+  return [...await load_directory(dir, { recursively: true, filter: entry => entry === location }), await load_file(location)];
 }
 
 // ───────────────────────────── nodes ─────────────────────────────
@@ -86,10 +186,26 @@ function position(at?: Node): Text.Node | undefined {
 
 interface Issue { phase: string; message: string; at?: Node }
 
-// One styled span — what an H group painted. `style` is the dotted path
-// after `H.` (group, then modifiers); `of` is the rule the span belongs to
-// (its ledger key), when a rule's match painted it.
-export interface Painted { begin: number; end: number; style: string; of?: string }
+// One styled span an H group painted, as a Text.Node the display layer reads
+// like any other node (inclusive `end`, as every node). `style` is the dotted
+// path after `H.`, `of` the rule's ledger key, `color` the terminal color
+// resolved at paint time (unset when `Log.coloring` is off, or the style has no
+// theme color).
+export class Painted extends Text.Node { style!: string; of?: string }
+
+// One expression — a span `expr()` reads. Canonical per file (one object per
+// start position, so a re-read or a sub-read of the same span reuses it),
+// linked under the expression it was read inside, expanding downward into its
+// subexpressions via `children`. `errored` is the cascade gate:
+// `Diagnostics.report` marks it on the first error/fatal and drops later
+// errors on the same expression as that first one propagating.
+export class Expression {
+  children: Expression[] = [];
+  errored = false;
+  constructor(public src: Source, public begin: number, public end: number, public parent?: Expression) {
+    parent?.children.push(this);
+  }
+}
 
 export class Log {
   diagnostics = new Diagnostics();
@@ -97,29 +213,56 @@ export class Log {
   // exactly like issues are (forgotten on reload, repainted by the pass);
   // the display layer reads them back to paint its source excerpts
   painted = new Map<string, Painted[]>();
+  // resolve a terminal color onto each painted node as it's painted; off skips
+  // the resolution (the spans still carry style/of for the LSP).
+  coloring = true;
+  // the expression currently being read — `expr()` keeps this pointed at its
+  // span while it runs, and error/info tag their diagnostic with it so
+  // `Diagnostics.report` can dedup cascaded errors. One canonical object per
+  // (file, start), dropped when the file is forgotten.
+  expression?: Expression;
+  private expressions = new Map<string | undefined, Map<number, Expression>>();
+  expression_at(src: Source, begin: number, end: number, parent?: Expression): Expression {
+    let map = this.expressions.get(src.path);
+    if (!map) this.expressions.set(src.path, map = new Map());
+    let e = map.get(begin);
+    if (!e) map.set(begin, e = new Expression(src, begin, end, parent));
+    return e;
+  }
   constructor() { this.diagnostics.highlighting = path => this.painted.get(path); }
-  error(phase: string, message: string, at?: Node): void {
-    this.diagnostics.report({ level: 'error', phase, message, node: position(at) });
+  error(message: string, at?: Node): void {
+    this.diagnostics.report({ level: 'error', message, node: position(at), expression: this.expression });
   }
-  info(phase: string, message: string, at?: Node): void {
-    this.diagnostics.report({ level: 'info', phase, message, node: position(at) });
+  info(message: string, at?: Node): void {
+    this.diagnostics.report({ level: 'info', message, node: position(at), expression: this.expression });
   }
-  paint(path: string, begin: number, end: number, style: string, of?: string): void {
-    let spans = this.painted.get(path);
-    if (!spans) this.painted.set(path, spans = []);
-    spans.push({ begin, end, style, of });
+  paint(src: Source, begin: number, end: number, style: string, of?: string): void {
+    if (src.path === undefined || end <= begin) return;
+    const node = new Painted();
+    node.source = tsource(src);
+    node.selection = [begin, end - 1];
+    node.style = style;
+    node.of = of;
+    if (this.coloring) node.color = Diagnostics.theme[style.split('.')[0]];
+    let spans = this.painted.get(src.path);
+    if (!spans) this.painted.set(src.path, spans = []);
+    spans.push(node);
   }
   // forget everything reported against these sources' files — a reload
-  // re-derives them (the display layer rebuilds its cascade caches, so a
-  // stale "this line already errored" can't swallow the fresh diagnostics)
+  // re-derives them, including the per-file expression objects, so a stale
+  // "this expression already errored" gate can't swallow the fresh diagnostics
   forget(src: Source): void {
     this.diagnostics.deleteAll([src.path]);
+    this.expressions.delete(src.path);
     if (src.path !== undefined) this.painted.delete(src.path);
   }
   forget_all(srcs: Iterable<Source>): void {
     const paths = [...srcs].map(src => src.path);
     this.diagnostics.deleteAll(paths);
-    for (const path of paths) if (path !== undefined) this.painted.delete(path);
+    for (const path of paths) {
+      this.expressions.delete(path);
+      if (path !== undefined) this.painted.delete(path);
+    }
   }
   print(): void {
     if (this.diagnostics.hasErrors && env.nodejs) process.exitCode = 1;
@@ -937,7 +1080,7 @@ class Reader extends Walk {
     }
     if (this.result?.role?.kind === 'forward' && !this.result.consumed && !this.forwards) {
       this.result.consumed = true;
-      this.ip.log.error('resolve', `Unresolved variable \`${this.result.role.name}\`.`, this.result);
+      this.ip.log.error(`Unresolved variable \`${this.result.role.name}\`.`, this.result);
     }
     return this.result;
   }
@@ -997,7 +1140,7 @@ class Reader extends Walk {
     if (!lead) return false;
     const at = span(this.src, this.head, lead.end, ip.BASE);
     if (this.src.path !== undefined)
-      ip.log.paint(this.src.path, this.head, lead.end, ip.style_of(lead.target) ?? 'variable');
+      ip.log.paint(this.src,this.head, lead.end, ip.style_of(lead.target) ?? 'variable');
     // to the line's end, but never past this walk's own extent (a bounded
     // sub-span — a pattern piece being decorated — ends where it ends)
     const eol = Math.min(line_end(this.text, lead.args_begin), this.cursor.end);
@@ -1091,13 +1234,13 @@ class Reader extends Walk {
     const begin = this.sign === 1 ? this.head : this.head - name.length + 1;
     const at = span(this.src, begin, begin + name.length, ip.BASE);
     this.cut(this.sign === 1 ? at.end : at.begin);
-    if (this.src.path !== undefined) ip.log.paint(this.src.path, at.begin, at.end, ip.style_of(m) ?? 'variable');
+    if (this.src.path !== undefined) ip.log.paint(this.src,at.begin, at.end, ip.style_of(m) ?? 'variable');
     if (!m.fn) { this.result = m; return true; }
     // a method folds onto its receiver only in a direction it reads — plain
     // methods read left-to-right; the expression's anchor (no receiver yet)
     // is direction-checked only when it carries an explicit flag
     if (!this.directed(m)) {
-      ip.log.error('method', this.result
+      ip.log.error(this.result
         ? `Found a method \`${name}\` on \`${this.result.text}\` but it wasn't flagged as ${this.direction}.`
         : `Found a method \`${name}\` but it wasn't flagged as ${this.direction}.`, at);
       return true;
@@ -1121,13 +1264,13 @@ class Reader extends Walk {
     const [b, e] = this.sign === 1 ? [this.head, exit] : [exit + 1, this.head + 1];
     const word = span(this.src, b, e, this.ip.BASE);
     if (this.result) {
-      this.ip.log.error('method', `Unresolved \`${word.text}\` on \`${this.result.text}\`.`, word);
+      this.ip.log.error(`Unresolved \`${word.text}\` on \`${this.result.text}\`.`, word);
       this.cut(this.sign === 1 ? line_end(this.text, this.head) : line_begin(this.text, this.head + 1));
       this.stopped = true;
       return;
     }
     word.role = { kind: 'forward', name: word.text, on: this.ip.scope() };
-    if (this.src.path !== undefined) this.ip.log.paint(this.src.path, b, e, 'variable');
+    if (this.src.path !== undefined) this.ip.log.paint(this.src,b, e, 'variable');
     this.result = word;
     this.cut(this.sign === 1 ? e : b);
   }
@@ -1346,9 +1489,9 @@ class Interpreter {
       let arrow = r.pattern_end;
       while (src.text[arrow] === ' ') arrow++;
       const after = arrow + (lit?.text.length ?? 0);
-      if (caps[0]?.style !== undefined) this.log.paint(src.path, r.pattern_begin, arrow, caps[0].style, shape.key);
-      if (lit?.style !== undefined) this.log.paint(src.path, arrow, after, lit.style, shape.key);
-      if (caps[1]?.style !== undefined && r.body_end > after) this.log.paint(src.path, after, r.body_end, caps[1].style, shape.key);
+      if (caps[0]?.style !== undefined) this.log.paint(src,r.pattern_begin, arrow, caps[0].style, shape.key);
+      if (lit?.style !== undefined) this.log.paint(src,arrow, after, lit.style, shape.key);
+      if (caps[1]?.style !== undefined && r.body_end > after) this.log.paint(src,after, r.body_end, caps[1].style, shape.key);
     }
     this.paint_definition(src, r.pattern_begin, r.pattern_end, rule.pieces, rule);
     return rule;
@@ -1369,7 +1512,7 @@ class Interpreter {
     let literal_start = begin;
     let i = begin;
     const flush = (upto: number): void => {
-      if (upto > literal_start) { this.log.paint(path, literal_start, upto, own, rule.key); p++; }
+      if (upto > literal_start) { this.log.paint(src,literal_start, upto, own, rule.key); p++; }
     };
     while (i < end) {
       if (src.text[i] !== '{') { i++; continue; }
@@ -1381,12 +1524,12 @@ class Interpreter {
       if (piece?.style !== undefined) {
         const lead = this.declarative_at({ text: src.text.slice(i + 1, close - 1) }, 0);
         if (lead) {
-          this.log.paint(path, i + 1, i + 1 + lead.args_begin, piece.style, rule.key);
+          this.log.paint(src,i + 1, i + 1 + lead.args_begin, piece.style, rule.key);
           inner = i + 1 + lead.args_begin;
         }
       }
       const claimed = scan.literal_of(inner, close - 1);
-      if (claimed?.by.style !== undefined) this.log.paint(path, inner, close - 1, claimed.by.style, claimed.by.key);
+      if (claimed?.by.style !== undefined) this.log.paint(src,inner, close - 1, claimed.by.style, claimed.by.key);
       i = close;
       literal_start = i;
     }
@@ -1597,31 +1740,41 @@ class Interpreter {
   // by Reader.directions, so nothing evaluates twice.
 
   expr(cursor: Node, reading: Reading = {}): Node | undefined {
-    const indent = reading.indent ?? indent_at(cursor.src!.text, cursor.begin);
-    const forwards = reading.forwards ?? false;
-    if (reading.sign !== undefined)
-      return new Reader(this, cursor, { sign: reading.sign, indent, forwards }).read();
-    const reader = new Reader(this, cursor, { sign: 1, indent, forwards });
-    const d = reader.directions();
-    if (d.read === 'ltr') return reader.read();
-    const src = cursor.src!;
-    const begin = cursor.begin;
-    cursor.begin = d.extent;
-    switch (d.read) {
-      case 'rtl':
-        return this.expr(span(src, begin, d.extent), { sign: -1, indent, forwards });
-      case 'both': {
-        // the operand between the prefix and the suffix is shared: read the
-        // right-to-left half through it, then the left-to-right half from it
-        const rtl = this.expr(span(src, begin, d.before), { sign: -1, indent, forwards });
-        const ltr = this.expr(span(src, d.after, d.extent), { sign: 1, indent, forwards });
-        return ltr ?? rtl;
+    // Point the log at this span while it reads, so anything reported lands on
+    // it (cascade dedup); subexpressions nest under it through the same path,
+    // and the enclosing expression is restored on the way out. Keyed by start,
+    // so a re-read or sub-read of the same span reuses the one object.
+    const parent = this.log.expression;
+    this.log.expression = this.log.expression_at(cursor.src!, cursor.begin, cursor.end, parent);
+    try {
+      const indent = reading.indent ?? indent_at(cursor.src!.text, cursor.begin);
+      const forwards = reading.forwards ?? false;
+      if (reading.sign !== undefined)
+        return new Reader(this, cursor, { sign: reading.sign, indent, forwards }).read();
+      const reader = new Reader(this, cursor, { sign: 1, indent, forwards });
+      const d = reader.directions();
+      if (d.read === 'ltr') return reader.read();
+      const src = cursor.src!;
+      const begin = cursor.begin;
+      cursor.begin = d.extent;
+      switch (d.read) {
+        case 'rtl':
+          return this.expr(span(src, begin, d.extent), { sign: -1, indent, forwards });
+        case 'both': {
+          // the operand between the prefix and the suffix is shared: read the
+          // right-to-left half through it, then the left-to-right half from it
+          const rtl = this.expr(span(src, begin, d.before), { sign: -1, indent, forwards });
+          const ltr = this.expr(span(src, d.after, d.extent), { sign: 1, indent, forwards });
+          return ltr ?? rtl;
+        }
+        case 'mixed':
+          this.log.error(
+            `Cannot mix ${d.names.map(n => `\`${n}\``).join(', ')} in a single infix expression with mixed associativity, use parenthesis to mix them.`,
+            span(src, begin, d.extent));
+          return undefined;
       }
-      case 'mixed':
-        this.log.error('direction',
-          `Cannot mix ${d.names.map(n => `\`${n}\``).join(', ')} in a single infix expression with mixed associativity, use parenthesis to mix them.`,
-          span(src, begin, d.extent));
-        return undefined;
+    } finally {
+      this.log.expression = parent;
     }
   }
 
@@ -1662,7 +1815,7 @@ class Interpreter {
     if (this.firing.has(site)) return undefined;
     if (this.depth > 64) {
       this.overflowed = true;
-      this.log.error('fire', `Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at);
+      this.log.error(`Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at);
       return undefined;
     }
     this.firing.add(site);
@@ -1672,7 +1825,7 @@ class Interpreter {
       this.suppress_inside(rule, src, m);  // even recovery matches record what they consume
       // the match itself, attributed but unstyled — what "references of this
       // rule" means
-      if (src.path !== undefined) this.log.paint(src.path, m.begin, m.end, '', rule.key);
+      if (src.path !== undefined) this.log.paint(src,m.begin, m.end, '', rule.key);
       if (rule.style !== undefined || rule.styled) this.paint(rule, src, m);
       if (rule.disabled) return undefined;
       if (rule.external) return rule.external.fire({ rule, match: new Match(m, src, this.BASE), at, receiver, ip: this });
@@ -1700,7 +1853,7 @@ class Interpreter {
       }
       const style = piece.style
         ?? (rule.style !== undefined && (is_literal(piece) || (piece as Capture).raw) ? rule.style : undefined);
-      if (style !== undefined && end > begin) this.log.paint(src.path, begin, end, style, rule.key);
+      if (style !== undefined && end > begin) this.log.paint(src,begin, end, style, rule.key);
       pos = end;
     }
   }
@@ -1907,14 +2060,14 @@ class Interpreter {
     while (begin < end && src.text[begin] === ' ') begin++;
     while (end > begin && src.text[end - 1] === ' ') end--;
     const text = src.text.slice(begin, end);
-    if (!text) { this.log.error('external', '`external` requires a declaration as its argument.', at); return raw; }
+    if (!text) { this.log.error('`external` requires a declaration as its argument.', at); return raw; }
     // a declaration with a `{...}` group anywhere is a rule pattern — bare
     // spellings (`external class {name}{block}`) included
     if ('{(['.includes(text[0]) || text.includes('{')) {
       const r = recognize(src.text, begin, this.scan(src));
       const pattern = r && r.pattern_end <= end ? span(src, r.pattern_begin, r.pattern_end) : span(src, begin, end);
       if (!this.declare(pattern, on))
-        this.log.error('external', `Expected the rule \`${pattern.text}\` to be provided by the runtime, but it wasn't.`, pattern);
+        this.log.error(`Expected the rule \`${pattern.text}\` to be provided by the runtime, but it wasn't.`, pattern);
       return raw;
     }
     const words = text.split(/\s+/);
@@ -1932,7 +2085,7 @@ class Interpreter {
     if (!target && on.has_flag('highlight')) on.set(name, target = highlight_method(this, on, name));
     target ??= this.resolve(name);
     if (!target) {
-      this.log.error('external', `Expected method \`${name}\` to be externally defined by the runtime, but it wasn't.`, span(src, begin, end));
+      this.log.error(`Expected method \`${name}\` to be externally defined by the runtime, but it wasn't.`, span(src, begin, end));
       return raw;
     }
     let declared: Node = target;
@@ -2044,7 +2197,7 @@ function assign(ip: Interpreter, { self, args, at }: Call): Node {
   const value = deref(ip, args) ?? args;
   const role = self?.role;
   if (role?.kind !== 'slot' && role?.kind !== 'forward') {
-    ip.log.error('assign', 'Cannot assign here.', self ?? at);
+    ip.log.error('Cannot assign here.', self ?? at);
     return value;
   }
   const on = role.on;
@@ -2052,7 +2205,7 @@ function assign(ip: Interpreter, { self, args, at }: Call): Node {
   if (role.kind === 'forward') self.consumed = true;
   on.set(key, value);
   for (const [name, cls] of ip.classes) if (cls === on) {
-    ip.log.info('define', `Defined \`${typeof key === 'string' ? key : key.text}\` on \`${name}\`.`, self);
+    ip.log.info(`Defined \`${typeof key === 'string' ? key : key.text}\` on \`${name}\`.`, self);
     // a definition on a class records WHERE it was written — the statement
     // inside the class's body when there is one, the outermost otherwise —
     // so a miss can evaluate it out of order
@@ -2073,8 +2226,35 @@ function call(ip: Interpreter, callee: Node | undefined, args: Node, at: Node): 
   const self = bound ? bound.self : callee;
   if (method?.fn) return ip.invoke(method, { self: self ?? method, args, at }) ?? new Node();
   if (method && !method.empty) return ip.evaluate_program(method);
-  ip.log.error('call', 'Expected a function to call.', at);
+  ip.log.error('Expected a function to call.', at);
   return new Node();
+}
+
+// The language, as a Program — the same setup everywhere it boots: the CLI
+// below and the LSP. Sources resolve through the bundled loaders (checkout
+// or published tarball).
+export async function ray(): Promise<Program> {
+  const cd = '@ether/$/.ray/v0';
+
+  return new Program([
+    await load_file(`${cd}/Node.ray`),
+    // await load_file(`${cd}/tests/direction.ray`),
+    // await load_file(`${cd}/tests/circular.ray`),
+    // await load_file(`${cd}/tests/self.ray`),
+    // await load_file(`${cd}/tests/string.ray`),
+    // await load_file(`${cd}/tests/cycle3.ray`),
+    // await load_file(`${cd}/tests/cycle4.ray`),
+    // await load_file(`${cd}/tests/tail.ray`),
+    // ...await load_directory('@ether/.ray3'),
+    // ...await load_directory('@ether/.ray2'),
+  ]);
+}
+
+async function main() {
+  // created before anything else — the log's clock times the whole run,
+  // file loads included
+  const log = new Log();
+  (await (await ray()).abstract().run(log)).print();
 }
 
 // ── highlighting ──
@@ -2110,7 +2290,7 @@ function highlight_method(ip: Interpreter, owner: Node, group: string): Node {
     // identity over what it decorates — forwards stay quiet here, their
     // own definition sites report them
     const value = (self === owner ? args : ip.eval_block(args, true)) ?? args;
-    if (value.src?.path !== undefined && value.end > value.begin) ip.log.paint(value.src.path, value.begin, value.end, group);
+    if (value.src?.path !== undefined && value.end > value.begin) ip.log.paint(value.src, value.begin, value.end, group);
     STYLED.set(value, group);
     // decorating a hosted method is DEFINITIONAL: it lives on Node (or the
     // global scope) under its name — that hosting is how it's known — and
@@ -2154,10 +2334,10 @@ function externals(ip: Interpreter): void {
   method('</', ({ args }) => args, 'callable', 'right-to-left');
   // the direction-fixture stand-ins emit the trace infos the fixtures expect
   method('test-middle', ({ at }) => at);
-  method('test-left', ({ self, at }) => { ip.log.info('test', `test-left fired on \`${self.text}\``, at); return self; });
-  method('test-right', ({ self, at }) => { ip.log.info('test', `test-right fired on \`${self.text}\``, at); return self; }, 'callable');
-  method('test-assoc', ({ self, at }) => { ip.log.info('test', `test-assoc fired on \`${self.text}\``, at); return self; }, 'callable');
-  method('test-bidir', ({ self, at }) => { ip.log.info('test', `test-bidir fired on \`${self.text}\``, at); return self; });
+  method('test-left', ({ self, at }) => { ip.log.info(`test-left fired on \`${self.text}\``, at); return self; });
+  method('test-right', ({ self, at }) => { ip.log.info(`test-right fired on \`${self.text}\``, at); return self; }, 'callable');
+  method('test-assoc', ({ self, at }) => { ip.log.info(`test-assoc fired on \`${self.text}\``, at); return self; }, 'callable');
+  method('test-bidir', ({ self, at }) => { ip.log.info(`test-bidir fired on \`${self.text}\``, at); return self; });
 }
 
 // rule externals — inert until a .ray file declares them with `external <pattern>`
@@ -2261,7 +2441,7 @@ export class Program {
       ip.parse(src);
       if (opts.log) {
         for (const issue of this.grammar.issues)
-          if (src.path !== undefined && issue.at?.src?.path === src.path) ip.log.error(issue.phase, issue.message, issue.at);
+          if (src.path !== undefined && issue.at?.src?.path === src.path) ip.log.error(issue.message, issue.at);
         this.reloaded(src);
       }
       if (opts.generation !== undefined) {
@@ -2270,7 +2450,7 @@ export class Program {
       }
     }
     if (opts.log) for (const issue of this.grammar.issues)
-      if (issue.at?.src?.path === undefined) ip.log.error(issue.phase, issue.message, issue.at);
+      if (issue.at?.src?.path === undefined) ip.log.error(issue.message, issue.at);
     return ip;
   }
 
@@ -2361,7 +2541,7 @@ export class Program {
         const republish = new Set<Source>();
         for (const issue of this.grammar.issues.slice(reported)) {
           if (issue.at?.src?.path === undefined) continue;
-          final.log.error(issue.phase, issue.message, issue.at);
+          final.log.error(issue.message, issue.at);
           const src = order.find(s => s.path === issue.at!.src!.path);
           if (src) republish.add(src);
         }
@@ -2478,7 +2658,7 @@ export class Program {
     // an error, not a crash: a mid-construction language (a decorated
     // declaration whose `|`/`,` aren't defined yet) still runs and reports
     if (![...this.grammar.rules.values()].some(r => r.external?.name === 'rule-definition' && r.project === undefined))
-      ip!.log.error('external', `'${this.grammar.language_file}' did not declare the grammar-rule definition rule.`);
+      ip!.log.error(`'${this.grammar.language_file}' did not declare the grammar-rule definition rule.`);
     return ip!.log;
   }
 
@@ -2584,7 +2764,7 @@ export class Program {
         this.taint(this.grammar.language(src) ? 'all' : project!);
       }
       if (src.path !== undefined) for (const issue of this.grammar.issues)
-        if (issue.at?.src?.path === src.path) log.error(issue.phase, issue.message, issue.at);
+        if (issue.at?.src?.path === src.path) log.error(issue.message, issue.at);
       this.reloaded(src);
     }
     if (this.suspect) this.recycle();

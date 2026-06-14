@@ -79,6 +79,18 @@ namespace Ray {
     }
 
   }
+
+  type Key = string | Node
+
+  class Node {
+    methods?: Map<Key, Node>
+    position: Text.Node
+  }
+
+  class Rule extends Node {
+
+  }
+
 }
 
 namespace Text {

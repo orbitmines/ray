@@ -726,9 +726,11 @@ class Grammar {
   registry = new Map<string, External>();   // runtime-provided rule impls, by exact pattern text
   issues: Issue[] = [];
   new_rules = false;
-  language_file?: string;
+  // The project whose `.project.ray` opens with `!language` — the language
+  // definition every other project depends on. Resolved by `survey`.
+  language_project?: string;
 
-  language(src: Source): boolean { return src.path === this.language_file; }
+  language(src: Source): boolean { return this.project(src) === this.language_project; }
 
   // ── definitions ──
   // Like rules, definitions on CLASSES persist as SITES — where the defining
@@ -783,12 +785,14 @@ class Grammar {
   // derive the claimed project dirs from the loaded sources; on change,
   // project membership shifts wholesale — forget the per-source memberships
   survey(sources: Source[]): boolean {
-    const claims = sources
-      .filter(s => s.path !== undefined && s.path.endsWith(`/.project${EXTENSION}`))
-      .map(s => s.path!.slice(0, s.path!.lastIndexOf('/')))
-      .sort();
-    if (claims.join('\n') === this.claims.join('\n')) return false;
+    const markers = sources.filter(s => s.path !== undefined && s.path.endsWith(`/.project${EXTENSION}`));
+    const dir = (s: Source) => s.path!.slice(0, s.path!.lastIndexOf('/'));
+    const claims = markers.map(dir).sort();
+    const language = markers.find(s => s.text.trim().replace(/`/g, '').startsWith('!language'));
+    const language_project = language ? dir(language) : undefined;
+    if (claims.join('\n') === this.claims.join('\n') && language_project === this.language_project) return false;
     this.claims = claims;
+    this.language_project = language_project;
     this.projects = new WeakMap();
     this.evict();
     return true;
@@ -802,7 +806,7 @@ class Grammar {
   // The seed (scoped to the language file) stays.
   private evict(): void {
     for (const [key, rule] of [...this.rules])
-      if (rule.project !== undefined && rule.project !== this.language_file) this.rules.delete(key);
+      if (rule.project !== undefined && rule.project !== this.language_project) this.rules.delete(key);
   }
 
   // A cycle starts from nothing but the seed and re-derives its scope's
@@ -813,11 +817,10 @@ class Grammar {
   // existing, and consume. Out-of-scope rules stay frozen as they are.
   clear(scope: (rule: Rule) => boolean = () => true): void {
     for (const [key, rule] of [...this.rules])
-      if (scope(rule) && rule.project !== this.language_file) this.rules.delete(key);
+      if (scope(rule) && rule.project !== this.language_project) this.rules.delete(key);
   }
 
   project(src: Source): string {
-    if (this.language(src)) return src.path!;  // its own project — the seed's home
     const path = src.path;
     if (path === undefined) return '';
     let found = this.projects.get(src);
@@ -2237,6 +2240,7 @@ export async function ray(): Promise<Program> {
   const cd = '@ether/$/.ray/v0';
 
   return new Program([
+    await load_file(`${cd}/.project.ray`),
     await load_file(`${cd}/Node.ray`),
     // await load_file(`${cd}/tests/direction.ray`),
     // await load_file(`${cd}/tests/circular.ray`),
@@ -2397,13 +2401,13 @@ export class Program {
   grammar = new Grammar();
 
   constructor(public sources: Source[]) {
-    this.grammar.language_file = sources[0].path;
     for (const [pattern, external] of RULE_EXTERNALS) this.grammar.registry.set(pattern, external);
-    // the one hardcoded shape, seeded as a rule scoped to the language file —
-    // Node.ray must re-declare it in-language, then the seed is redundant
-    const seed: Source = { text: '{(String.Word | `{`, expr, `}`)[]}=>{body}' };
-    this.grammar.rule(span(seed, 0, seed.text.length), [], 'Node', this.grammar.language_file);
+    // resolve project membership (and the language project) before seeding
     this.grammar.survey(sources);
+    // the one hardcoded shape, seeded as a rule scoped to the language project —
+    // the language must re-declare it in-language, then the seed is redundant
+    const seed: Source = { text: '{(String.Word | `{`, expr, `}`)[]}=>{body}' };
+    this.grammar.rule(span(seed, 0, seed.text.length), [], 'Node', this.grammar.language_project);
   }
 
   // the top-level directories the project boundaries derive from (the IDE's
@@ -2658,7 +2662,7 @@ export class Program {
     // an error, not a crash: a mid-construction language (a decorated
     // declaration whose `|`/`,` aren't defined yet) still runs and reports
     if (![...this.grammar.rules.values()].some(r => r.external?.name === 'rule-definition' && r.project === undefined))
-      ip!.log.error(`'${this.grammar.language_file}' did not declare the grammar-rule definition rule.`);
+      ip!.log.error(`'${this.grammar.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
     return ip!.log;
   }
 
@@ -2700,11 +2704,35 @@ export class Program {
   private touched = new Map<string, string>();  // path → its project
   private cycling?: Promise<void>;
 
+  // project → the projects it depends on (whose grammar it also draws on).
+  // Every non-language project implicitly depends on the language project;
+  // declared edges add here and may form cycles (co-dependent projects).
+  private dependencies = new Map<string, Set<string>>();
+
+  // The projects that must re-derive when `project` changes: itself plus
+  // everything that (transitively) depends on it. Cycle-safe — the visited set
+  // doubles as the result.
+  private dependents(project: string): Set<string> {
+    const out = new Set<string>();
+    const visit = (p: string): void => {
+      if (out.has(p)) return;
+      out.add(p);
+      for (const [q, deps] of this.dependencies) if (deps.has(p)) visit(q);
+      if (p === this.grammar.language_project)
+        for (const src of this.sources) {
+          const dep = src.path !== undefined ? this.grammar.project(src) : undefined;
+          if (dep !== undefined && dep !== p) visit(dep);
+        }
+    };
+    visit(project);
+    return out;
+  }
+
   private taint(project: string | 'all'): void {
     if (project === 'all') { this.suspect = 'all'; return; }
     if (this.suspect === 'all') return;
     const suspect = this.suspect ?? (this.suspect = new Set());
-    suspect.add(project);
+    for (const p of this.dependents(project)) suspect.add(p);
   }
 
   // Reload anything: a span Node re-evaluates in place (a REPL line, a
@@ -2741,7 +2769,7 @@ export class Program {
       // (scheduled right here) derives its diagnostics anyway
       if (!(item instanceof Node) && src.path !== undefined && fresh.has(src.path) && !this.active.has(src.path)) {
         this.touched.set(src.path, project!);
-        this.taint(this.grammar.language(src) ? 'all' : project!);
+        this.taint(project!);
         continue;
       }
       // direct feedback parses on the project's own live state when a cycle
@@ -2761,7 +2789,7 @@ export class Program {
       const changed = stale ? this.signature(src.path) !== before : DEFINITIONS !== mark;
       if (changed || this.grammar.language(src)) {
         if (src.path !== undefined) this.touched.set(src.path, project!);
-        this.taint(this.grammar.language(src) ? 'all' : project!);
+        this.taint(project!);
       }
       if (src.path !== undefined) for (const issue of this.grammar.issues)
         if (issue.at?.src?.path === src.path) log.error(issue.message, issue.at);
@@ -2784,7 +2812,7 @@ export class Program {
     this.prune(path);
     ip.log.forget(src);
     if (before !== '' || this.grammar.language(src))
-      this.taint(this.grammar.language(src) ? 'all' : this.grammar.project(src));
+      this.taint(this.grammar.project(src));
     this.reloaded(src);
     if (this.grammar.survey(this.sources)) this.taint('all');
     if (this.suspect) this.recycle();
@@ -2832,10 +2860,11 @@ export class Program {
   // reloaded, then what the editor has open, then the rest of the project
   private prioritized(): Source[] {
     const rank = (src: Source): number =>
-      src.path === this.grammar.language_file ? 0
+      this.grammar.language(src) ? 0
       : src.path !== undefined && this.priority.includes(src.path) ? 1
       : src.path !== undefined && this.active.has(src.path) ? 2 : 3;
-    return [...this.sources].sort((a, b) => rank(a) - rank(b));
+    // `.project.ray` is project metadata (its `!language` marker), not code to parse
+    return [...this.sources].filter(s => !s.path?.endsWith(`/.project${EXTENSION}`)).sort((a, b) => rank(a) - rank(b));
   }
 
   // Run the background cycles over the suspect projects, ONE PROJECT AT A

@@ -120,11 +120,17 @@ type Key = string | Node;
 // One method invocation, named. `args` is the evaluated argument — or an
 // empty span at the call site when there is none. `at` is where the call
 // happened, for diagnostics.
+// What a callable receives — a node method invoked on a receiver, or a rule
+// fired over its match (the two used to be `Call` and `Firing`). `self` is the
+// receiver (absent for a bare rule fire), `method` the node/rule invoked,
+// `args` its arguments, `match` the captures when a rule fires.
 interface Call {
-  self: Node;
+  ip: Interpreter;
+  self?: Node;
   method: Node;
   args: Node;
   at: Node;
+  match?: Match;
 }
 type Method = (call: Call) => Node | undefined;
 
@@ -635,19 +641,22 @@ function recognize(text: string, at: number, scan: Scan): Recognized | null {
 
 // A rule the runtime implements in TS. Inert until a .ray file activates it
 // with `external <pattern>` — the pattern text is the contract.
+// A rule the runtime implements in TS: `match` decides where it matches,
+// `fire` is its behavior (a `Method`, like any node's `fn`). Distributed onto
+// the Rule when it activates — there's no separate `external` object.
 interface External {
   name: string;
   match?: (rule: Rule, scan: Scan, at: number) => Matched | null;
-  fire: (firing: Firing) => Node | undefined;
+  fire: Method;
 }
 
-// Everything a firing rule implementation gets to see.
-interface Firing {
-  rule: Rule;
-  match: Match;
-  at: Node;          // the consumed span
-  receiver?: Node;
-  ip: Interpreter;
+// Distribute a runtime implementation onto a rule: its behavior becomes the
+// rule's `fn`, its matcher and name its own fields.
+function activate(rule: Rule, ext?: External): void {
+  if (!ext) return;
+  rule.name = ext.name;
+  rule.matcher = ext.match;
+  rule.fn = ext.fire;
 }
 
 // One definition site of a rule. Per pass it is either seen 'live' (parsed as
@@ -660,10 +669,13 @@ interface Definition { at: Node; seen?: 'live' | Rule }
 // scope it was read in: a summoned re-evaluation must run back home.
 interface Site { src: Source; begin: number; end: number; on?: Node; home?: string }
 
-class Rule {
+class Rule extends Node {
   definitions: Definition[] = [];
   body?: Node;
-  external?: External;
+  // A runtime-implemented rule's name and matcher (from its `External`); its
+  // behavior is the inherited `fn`. Plain (`.ray`-defined) rules have none.
+  name?: string;
+  matcher?: (rule: Rule, scan: Scan, at: number) => Matched | null;
   // The project this rule is bound to; undefined = everywhere (the language).
   project?: string;
   // its key in the grammar's ledger — how painted spans point back at it
@@ -689,15 +701,21 @@ class Rule {
   readonly delimited: boolean;
   readonly anchor?: string;
   readonly tail?: string;
+  // A line comment: anchored, ending in a raw-to-end-of-line capture. Wherever
+  // it matches the line really is a comment, so it wins over the generic
+  // `{...} => ...` shape even when that shape greedily reads further.
+  readonly comment: boolean;
   private readonly edge_chars: [string | undefined, string | undefined];
   // The scope this rule registers on, by name — nodes live one pass, the rule
   // survives them all (see Interpreter.name_of).
   constructor(public pattern: Node, public pieces: Piece[], public on: string) {
+    super();
     this.styled = pieces.some(p => p.style !== undefined);
     this.anchored = pieces[0] !== undefined && is_literal(pieces[0]);
     this.delimited = pieces.length > 0 && is_literal(pieces[pieces.length - 1]);
     this.anchor = this.anchored ? (pieces[0] as { text: string }).text : undefined;
     this.tail = this.delimited ? (pieces[pieces.length - 1] as { text: string }).text : undefined;
+    this.comment = this.anchored && pieces[pieces.length - 1]?.kind === 'text';
     this.edge_chars = [this.anchor?.[0], this.tail ? this.tail[this.tail.length - 1] : undefined];
   }
   edge(sign: 1 | -1): string | undefined { return sign === 1 ? this.anchor : this.tail; }
@@ -776,9 +794,34 @@ class Grammar {
   private claims: string[] = [];
   private projects = new WeakMap<Source, string>();
 
+  // project → the projects it depends on (whose grammar it draws on). Every
+  // project implicitly depends on the language project; declared edges add here
+  // and may form cycles (co-dependent projects).
+  dependencies = new Map<string, Set<string>>();
+  private _closures = new Map<string, Set<string>>();
+
+  // The projects whose rules a source in `project` can see: itself, its
+  // transitive dependencies, and the language project. Cycle-safe and cached
+  // (cleared whenever membership or the graph moves).
+  closure(project: string): Set<string> {
+    let out = this._closures.get(project);
+    if (out) return out;
+    out = new Set();
+    const visit = (q: string): void => {
+      if (out!.has(q)) return;
+      out!.add(q);
+      for (const d of this.dependencies.get(q) ?? []) visit(d);
+      if (this.language_project !== undefined && q !== this.language_project) visit(this.language_project);
+    };
+    visit(project);
+    this._closures.set(project, out);
+    return out;
+  }
+
   reroot(roots: string[]): void {
     this.roots = roots;
     this.projects = new WeakMap();
+    this._closures.clear();
     this.evict();
   }
 
@@ -794,6 +837,7 @@ class Grammar {
     this.claims = claims;
     this.language_project = language_project;
     this.projects = new WeakMap();
+    this._closures.clear();
     this.evict();
     return true;
   }
@@ -843,7 +887,7 @@ class Grammar {
     let rule = this.rules.get(key);
     if (!rule) {
       rule = new Rule(pattern, pieces, on);
-      rule.external = this.registry.get(text);
+      activate(rule, this.registry.get(text));
       rule.project = project;
       rule.key = key;
       this.rules.set(key, rule);
@@ -1011,16 +1055,22 @@ interface Reading {
 // What best_rule found: a rule together with where it matched.
 interface Found { rule: Rule; m: Matched }
 
-// A rule candidate at a position, with how near its node sat in the chain.
-// `prefers` is the whole disambiguation story: the longest match wins; on a
-// tie an anchored rule beats an unanchored one, and then the rule from the
-// nearest node in the chain wins.
-interface Candidate extends Found { level: number }
+// A rule candidate at a position. `prefers` is the disambiguation story: the
+// longest match wins; on a tie an anchored rule beats an unanchored one; then a
+// nearer rule (smaller `rank`) wins; then the nearest node in the chain. `rank`
+// is the project distance from the reading source — 0 for a rule from the
+// source's own project, 1 for one inherited from a dependency — so a project's
+// own copy of a rule overrides the dependency's of the same shape.
+interface Candidate extends Found { level: number; rank: number }
 function prefers(a: Candidate, b: Candidate | null): boolean {
   if (!b) return true;
+  // a matching line comment is a comment, not a definition that happens to
+  // start inside it — it wins regardless of how far the other shape reads
+  if (a.rule.comment !== b.rule.comment) return a.rule.comment;
   const la = a.m.end - a.m.begin, lb = b.m.end - b.m.begin;
   if (la !== lb) return la > lb;
   if (a.rule.anchored !== b.rule.anchored) return a.rule.anchored;
+  if (a.rank !== b.rank) return a.rank < b.rank;
   return a.level < b.level;
 }
 
@@ -1187,6 +1237,7 @@ class Reader extends Walk {
     scan.literal_of = base.literal_of; scan.anchors = base.anchors;
     scan.indent = this.indent; scan.start = this.result === undefined && sign === 1;
     const c = this.text[at];
+    const own = ip.grammar.project(this.src);
     let best: Candidate | null = null;
     const seen = this.proven;
     seen.clear();
@@ -1198,9 +1249,10 @@ class Reader extends Walk {
       // character compare; statement-shaped externals read source order only
       const edge = rule.edge(sign);
       if (edge !== undefined && (rule.edge_char(sign) !== c || (edge.length > 1 && !lit_at(scan, at, edge)))) return;
-      if (rule.external?.match && sign === -1) return;
-      const m = rule.external?.match ? rule.external.match(rule, scan, at) : match_rule(rule, scan, at);
-      if (m && prefers({ rule, m, level }, best)) best = { rule, m, level };
+      if (rule.matcher && sign === -1) return;
+      const m = rule.matcher ? rule.matcher(rule, scan, at) : match_rule(rule, scan, at);
+      const rank = rule.project === own ? 0 : 1;
+      if (m && prefers({ rule, m, level, rank }, best)) best = { rule, m, level, rank };
     };
     for (const nodes of this.result ? [ip.chain(this.result), ip.lookup()] : [ip.lookup()]) {
       for (const node of nodes) {
@@ -1363,7 +1415,7 @@ class Interpreter {
 
   visible(rule: Rule, src: Source): boolean {
     if (!(rule.exists || rule.disabled)) return false;
-    return rule.project === undefined || rule.project === this.grammar.project(src);
+    return rule.project === undefined || this.grammar.closure(this.grammar.project(src)).has(rule.project);
   }
 
   // ── the grammar ledger ──
@@ -1485,7 +1537,7 @@ class Interpreter {
     // whatever styles Node.ray put on its pattern-part, arrow and body
     // pieces — no matter which path consumed it (the matcher, an H
     // decorator, the bootstrap seed)
-    const shape = [...this.grammar.rules.values()].find(s => s.external?.name === 'rule-definition' && s.styled);
+    const shape = [...this.grammar.rules.values()].find(s => s.name === 'rule-definition' && s.styled);
     if (src.path !== undefined && shape) {
       const caps = shape.pieces.filter((p): p is Capture => !is_literal(p));
       const lit = shape.pieces.find(is_literal);
@@ -1546,7 +1598,7 @@ class Interpreter {
     const external = this.grammar.registry.get(pattern_key(pattern, pieces));
     if (!external) return undefined;
     const rule = this.rule(pattern, pieces, on);
-    rule.external = external;
+    activate(rule, external);
     rule.definition(pattern).seen = 'live';
     this.install(rule);
     this.paint_definition(pattern.src!, pattern.begin, pattern.end, rule.pieces, rule);
@@ -1591,7 +1643,6 @@ class Interpreter {
             const target = this.rule(span(src, r.pattern_begin, r.pattern_end), r.pieces, this.scope(), false);
             const d = target.definition(span(src, r.pattern_begin, r.pattern_end));
             if (d.seen !== 'live') d.seen = rule;
-            if (!target.body && r.body_end > r.body_begin) target.body = span(src, r.body_begin, r.body_end);
           }
         }
         i = line_end(src.text, i) + 1;
@@ -1831,7 +1882,7 @@ class Interpreter {
       if (src.path !== undefined) this.log.paint(src,m.begin, m.end, '', rule.key);
       if (rule.style !== undefined || rule.styled) this.paint(rule, src, m);
       if (rule.disabled) return undefined;
-      if (rule.external) return rule.external.fire({ rule, match: new Match(m, src, this.BASE), at, receiver, ip: this });
+      if (rule.fn) return rule.fn({ ip: this, self: receiver, method: rule, args: at, at, match: new Match(m, src, this.BASE) });
       return this.evaluate(found, src, receiver);
     } finally {
       this.firing.delete(site);
@@ -1953,7 +2004,7 @@ class Interpreter {
   // Call a method node. The argument defaults to an empty span at the call
   // site — "no argument" still has a place in the source.
   invoke(method: Node, call: { self: Node; args?: Node; at: Node }): Node | undefined {
-    return method.fn!({ self: call.self, method, args: call.args ?? span(call.at.src!, call.at.begin, call.at.begin, this.BASE), at: call.at });
+    return method.fn!({ ip: this, self: call.self, method, args: call.args ?? span(call.at.src!, call.at.begin, call.at.begin, this.BASE), at: call.at });
   }
 
   // Evaluate a block with `scope` entered (a class body, a rule body's
@@ -2164,7 +2215,7 @@ function dispatch_of(rules: readonly Rule[]): Dispatch {
           let list = map.get(edge);
           if (!list) map.set(edge, list = []);
           list.push(rule);
-        } else if (s === 1 && rule.external?.match) d.unkeyed[0].push(rule);
+        } else if (s === 1 && rule.matcher) d.unkeyed[0].push(rule);
       }
     }
     dispatches.set(rules, d);
@@ -2371,7 +2422,7 @@ const RULE_EXTERNALS: [string, External][] = [
   }],
   ['[{property}]', {
     name: 'index',
-    fire({ match, at, receiver, ip }) {
+    fire({ match, at, self: receiver, ip }) {
       const self = receiver ?? ip.scope();
       const key_node = ip.eval_block(match.capture('property'), true);
       if (key_node?.role?.kind === 'forward') key_node.consumed = true;
@@ -2385,13 +2436,19 @@ const RULE_EXTERNALS: [string, External][] = [
   }],
   ['({args})', {
     name: 'call',
-    fire({ match, at, receiver, ip }) {
-      const cap = match.capture('args')!;
+    fire({ match, at, self: receiver, ip }) {
+      const cap = match!.capture('args')!;
       const args = (cap.empty ? undefined : ip.eval_block(cap)) ?? cap;
       return call(ip, receiver, args, at);
     },
   }],
 ];
+
+// A project's derived state: the interpreter from its scoped cycle (over
+// [the project + its dependency closure]) and the sources that belong to it.
+class Project {
+  constructor(public project: string, public interpreter: Interpreter, public sources: Source[]) {}
+}
 
 // The driver: one grammar, interpreter passes over the sources until the
 // grammar stops growing. Each pass starts from nothing and re-derives all
@@ -2416,7 +2473,7 @@ export class Program {
   reroot(roots: string[]): void {
     this.grammar.reroot(roots);
     this.taint('all');
-    if (this.live) this.recycle();
+    if (this.output) this.recycle();
   }
 
   // abstract interpretation: every {block} is evaluated where it's captured,
@@ -2527,10 +2584,20 @@ export class Program {
     const settle = (final: Interpreter): Interpreter => {
       this.remember(covers);
       for (const [path, project] of [...this.touched]) if (covers(project)) this.touched.delete(path);
-      // the cycle's interpreter is the freshest direct-feedback state for
-      // what it saw: everything, or exactly [the language + one project]
-      if (!scoped) this.live = final;
-      else if (scoped.size === 1) this.lives.set([...scoped][0], final);
+      // the cycle's interpreter is the freshest direct-feedback state for what
+      // it saw. A full cycle seeds every project from the one derivation; a
+      // scoped cycle refines just [the project + its closure].
+      const sources_of = (name: string) => this.sources.filter(s => s.path !== undefined && this.grammar.project(s) === name);
+      if (!scoped) {
+        const names = new Set<string>();
+        for (const s of this.sources) if (s.path !== undefined) names.add(this.grammar.project(s));
+        this.projects = [...names].map(name => new Project(name, final, sources_of(name)));
+      } else if (scoped.size === 1) {
+        const name = [...scoped][0];
+        const existing = this.project_of(name);
+        if (existing) { existing.interpreter = final; existing.sources = sources_of(name); }
+        else this.projects.push(new Project(name, final, sources_of(name)));
+      }
       return final;
     };
     const finish = async (order: Source[], reset: { files?: Set<string>; scope?: (rule: Rule) => boolean }): Promise<Interpreter | undefined> => {
@@ -2657,11 +2724,26 @@ export class Program {
 
   // `log` becomes the final pass's (the program's output); its clock has been
   // running since the caller created it.
+  // A file's project as a display header: its project's `.project.ray`, else
+  // (no marker) the project's only file, else the project directory itself.
+  projectHeader(file: string): string | undefined {
+    const src = this.sources.find(s => s.path === file);
+    if (!src) return undefined;
+    const project = this.grammar.project(src);
+    const mine = (s: Source) => s.path !== undefined && this.grammar.project(s) === project;
+    const marker = this.sources.find(s => s.path?.endsWith(`/.project${EXTENSION}`) && mine(s));
+    if (marker) return marker.path;
+    const files = this.sources.filter(mine);
+    return files.length === 1 ? files[0].path : project;
+  }
+
   async run(log = new Log()): Promise<Log> {
+    log.diagnostics.project = file => this.projectHeader(file);
+    this.output = log;
     const ip = await this.cycle({ log });
     // an error, not a crash: a mid-construction language (a decorated
     // declaration whose `|`/`,` aren't defined yet) still runs and reports
-    if (![...this.grammar.rules.values()].some(r => r.external?.name === 'rule-definition' && r.project === undefined))
+    if (![...this.grammar.rules.values()].some(r => r.name === 'rule-definition' && r.project === undefined))
       ip!.log.error(`'${this.grammar.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
     return ip!.log;
   }
@@ -2677,20 +2759,27 @@ export class Program {
   // running cycle between files — direct feedback always outranks the
   // background, and the cycle restarts once the edit is served.
 
-  live?: Interpreter;
-  // per-project direct-feedback interpreters — each scoped cycle leaves its
-  // final state here, which is exactly [the language + that project]
-  private lives = new Map<string, Interpreter>();
+  // The shared output log — one across all projects (diagnostics are grouped by
+  // project at print). Every cycle, foreground or background, writes into it.
+  private output?: Log;
+  // per-project derived state — each scoped cycle leaves its Project here
+  // (interpreter over [the project + its dependency closure], and its sources);
+  // a full cycle seeds them all from one derivation.
+  private projects: Project[] = [];
+  private project_of(name: string): Project | undefined { return this.projects.find(p => p.project === name); }
+  // a representative interpreter — they all share `grammar`, so any serves as a
+  // parse base for a project that hasn't had its own cycle, or for the legend
+  private get current(): Interpreter | undefined { return this.projects[0]?.interpreter; }
 
   // Syntax highlighting, as a property of the program: per-file painted
   // spans (path → spans), re-derived alongside the diagnostics. Get to
   // serve (the LSP's semantic tokens), set to override.
   get highlighting(): Map<string, Painted[]> {
-    return this.live?.log.painted ?? new Map();
+    return this.output?.painted ?? new Map();
   }
   // The highlighting groups the language declared (H's methods) — a legend.
   get groups(): string[] {
-    const h = this.live?.classes.get('H');
+    const h = this.current?.classes.get('H');
     return h?.methods ? [...h.methods.keys()].filter((k): k is string => typeof k === 'string') : [];
   }
   active = new Set<string>();                  // files open in the editor
@@ -2704,20 +2793,15 @@ export class Program {
   private touched = new Map<string, string>();  // path → its project
   private cycling?: Promise<void>;
 
-  // project → the projects it depends on (whose grammar it also draws on).
-  // Every non-language project implicitly depends on the language project;
-  // declared edges add here and may form cycles (co-dependent projects).
-  private dependencies = new Map<string, Set<string>>();
-
   // The projects that must re-derive when `project` changes: itself plus
-  // everything that (transitively) depends on it. Cycle-safe — the visited set
-  // doubles as the result.
+  // everything that (transitively) depends on it (the reverse of the grammar's
+  // dependency graph). Cycle-safe — the visited set doubles as the result.
   private dependents(project: string): Set<string> {
     const out = new Set<string>();
     const visit = (p: string): void => {
       if (out.has(p)) return;
       out.add(p);
-      for (const [q, deps] of this.dependencies) if (deps.has(p)) visit(q);
+      for (const [q, deps] of this.grammar.dependencies) if (deps.has(p)) visit(q);
       if (p === this.grammar.language_project)
         for (const src of this.sources) {
           const dep = src.path !== undefined ? this.grammar.project(src) : undefined;
@@ -2739,9 +2823,8 @@ export class Program {
   // selection); a Source replaces the file at its path (empty text forgets
   // it); an iterable of either reloads as one batch (a directory).
   reload(next: Source | Node | Iterable<Source | Node>): Log {
-    const live = this.live;
-    if (!live) throw new Error('reload() before run()');
-    const log = live.log;
+    const log = this.output;
+    if (!log) throw new Error('reload() before run()');
     this.generation++;
     const items: (Source | Node)[] = next instanceof Node || !(Symbol.iterator in next) ? [next as Source | Node] : [...next];
     this.priority = items.map(item => (item instanceof Node ? item.src : item)?.path).filter((p): p is string => p !== undefined);
@@ -2774,7 +2857,8 @@ export class Program {
       }
       // direct feedback parses on the project's own live state when a cycle
       // has produced one — the full boot interpreter otherwise
-      const ip = (project !== undefined ? this.lives.get(project) : undefined) ?? live;
+      const ip = (project !== undefined ? this.project_of(project)?.interpreter : undefined) ?? this.current;
+      if (!ip) continue;
       // a FRESH path has no ledger history: nothing to prune, and "did the
       // parse sight any definition" is the whole signature question
       const stale = src.path !== undefined && !fresh.has(src.path);
@@ -2802,21 +2886,21 @@ export class Program {
   // A deleted file leaves the project — unlike an empty one, which parses to
   // nothing but still counts.
   remove(path: string): Log {
-    const ip = this.live;
-    if (!ip) throw new Error('remove() before run()');
+    const log = this.output;
+    if (!log) throw new Error('remove() before run()');
     this.generation++;
     const at = this.sources.findIndex(s => s.path === path);
     const src = at >= 0 ? this.sources[at] : { path, text: '' };
     const before = this.signature(path);
     if (at >= 0) this.sources.splice(at, 1);
     this.prune(path);
-    ip.log.forget(src);
+    log.forget(src);
     if (before !== '' || this.grammar.language(src))
       this.taint(this.grammar.project(src));
     this.reloaded(src);
     if (this.grammar.survey(this.sources)) this.taint('all');
     if (this.suspect) this.recycle();
-    return ip.log;
+    return log;
   }
 
   // drop a path's definition sightings (the text being re-derived, `keep`,
@@ -2886,7 +2970,7 @@ export class Program {
       // a single-project workspace gains nothing from decomposing — run the
       // one full derivation (which also refreshes the fallback `live`)
       if (projects.size === 1) {
-        this.cycling = this.cycle({ log: this.live!.log, generation: this.generation, scope: 'all' })
+        this.cycling = this.cycle({ log: this.output!, generation: this.generation, scope: 'all' })
           .then(ip => { if (!ip) this.taint('all'); })
           .finally(() => { this.cycling = undefined; if (this.suspect) this.recycle(); });
         return;
@@ -2903,7 +2987,7 @@ export class Program {
     };
     const chosen = first(this.priority) ?? first(this.active) ?? projects.values().next().value!;
     for (const project of projects) if (project !== chosen) this.taint(project);
-    this.cycling = this.cycle({ log: this.live!.log, generation: this.generation, scope: new Set([chosen]) })
+    this.cycling = this.cycle({ log: this.output!, generation: this.generation, scope: new Set([chosen]) })
       .then(ip => { if (!ip) this.taint(chosen); })  // preempted — still suspect
       .finally(() => { this.cycling = undefined; if (this.suspect) this.recycle(); });
   }

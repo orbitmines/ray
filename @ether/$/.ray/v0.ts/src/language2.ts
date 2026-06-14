@@ -2,6 +2,8 @@
 // Info message if a method on @ is used as a direct .; Mute with X.
 // Bundle all the .ray files in a single .ray file.
 // Support older versions of Node
+// Dependency which alters Language workings; prompt: Do you want to apply those language changes too.
+// support relative paths
 
 const version: [major: number, releaseDate: string, index: number] =
                [0, '2027-01-01', 1];
@@ -29,7 +31,9 @@ async function main([args, kwargs]: CLI.Args) {
   diagnostics.report(new Expression(), { level: 'error', message: 'test ata asdadasd', node: n })
   const n2 = new Text.Node(source); n2.cursor = 2
   diagnostics.report(new Expression(), { level: 'error', message: 'test ata asdasd ', node: n2 })
-  const n3 = new Text.Node(source); n3.cursor = 4
+  const source2 = new Text.Source('@ether/$/.ray/tests/test-project/test.ray');
+  await source2.load();
+  const n3 = new Text.Node(source2); n3.cursor = 4
   diagnostics.report(new Expression(), { level: 'error', message: 'test aaaaaaa aaaaa aaaaa aa aa aaaaaaaaaaa aaaaaaa aaaaaaaaaaaaaaaaa aaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaa', node: n3 })
   diagnostics.print();
 }
@@ -46,18 +50,13 @@ namespace Global {
   export abstract class Node {
     abstract source: Source
   }
-  export abstract class Source { 
+  export abstract class Source {
     location: string
-    constructor(public relative_location?: string) { this.location = env.nodejs ? env.path.join(env.root, relative_location) : new URL('../' + relative_location, import.meta.url).href }
+    constructor(public relative_location?: string) { if (relative_location !== undefined) this.location = env.nodejs ? env.path.join(env.root, relative_location) : new URL('../' + relative_location, import.meta.url).href }
     abstract load(): Promise<void>
-  }
-  export abstract class Program {
-    constructor(public diagnostics: Diagnostics, public source: Source[]) {}
 
-    abstractly: boolean = false;
-    abstract(abstractly?: boolean): this { this.abstractly = abstractly ?? true; return this; }
-
-    abstract exec(): Promise<Node>
+    get dir() { return this.location.slice(0, this.location.lastIndexOf('/')); }
+    get is_dot_project() { return this.location.endsWith(`/.project${Ray.EXTENSION}`); }
   }
 }
 export type Node = Global.Node;
@@ -66,31 +65,151 @@ export type Source = Global.Source;
 namespace Ray {
   export const EXTENSION = '.ray'
 
-  export function v0(diagnostics: Diagnostics) { return new Program(diagnostics, env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) })) }
+  export function v0(diagnostics: Diagnostics) {
+    return new Program(diagnostics, interpreter => {
 
-  class Program extends Global.Program {
+    })
+      .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
+      .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
 
-    add(src: Source[]) { this.source.push(...src); return this; }
-    
-    exec(): Promise<Node> {
+  }
+
+  export class Project {
+    source: Source[] = []
+
+    constructor(public dot_project: Source, public interpreter: Interpreter) {}
+    get directory(): string { return this.dot_project.dir; }
+  }
+
+  export class Program {
+
+    private projects: Project[] = []
+    private language?: Project
+
+    constructor(public diagnostics: Diagnostics, public initialize_interpreter: (interpreter: Interpreter) => void) { diagnostics.program = this; }
+
+    closure(project: Project): Project[] {
+      return this.language && this.language !== project ? [this.language] : [];
+    }
+
+    project_of(src: Source): Project | undefined {
+      let best: Project | undefined;
+      for (const project of this.projects)
+        if ((src.location === project.directory || src.location.startsWith(`${project.directory}/`)) && (best === undefined || project.directory.length > best.directory.length)) best = project;
+      return best;
+    }
+    project_header(src: Source): string | undefined {
+      const project = this.project_of(src);
+      return project && (project.source.includes(project.dot_project) ? project.dot_project.location : project.directory);
+    }
+
+    abstractly: boolean = false;
+    abstract(abstractly?: boolean): this { this.abstractly = abstractly ?? true; return this; }
+
+    add(srcs: Source[]): this {
+      const claims = [...this.projects.flatMap(project => project.source), ...srcs].filter(x => x.is_dot_project).map(x => x.dir);
+      const project_directory_of = (src: Source): string => {
+        let best: string | undefined;
+        for (const c of claims) if (src.location.startsWith(`${c}/`) && (best === undefined || c.length > best.length)) best = c;
+        return best ?? src.dir;
+      };
       
+      const home = (src: Source): void => {
+        const directory = project_directory_of(src);
+        let project = this.projects.find(project => project.directory === directory);
+        if (!project) {
+          const interpreter = new Interpreter(); this.initialize_interpreter(interpreter)
+          this.projects.push(project = new Project(src.is_dot_project ? src : ((directory: string): Source => {
+            const dot = new Text.Source();
+            dot.location = `${directory}/.project${EXTENSION}`;
+            dot.value = '';
+            return dot;
+          })(directory), interpreter));
+        }
+        if (src.is_dot_project) project.dot_project = src;
+        if (!project.source.includes(src)) project.source.push(src);
+      };
+      
+      for (const src of srcs) home(src);
+      
+      // a new `.project.ray` carved inside an existing project pulls its files in
+      if (srcs.some(x => x.is_dot_project)) {
+        for (const project of [...this.projects]) for (const src of [...project.source])
+          if (project_directory_of(src) !== project.directory) { project.source.splice(project.source.indexOf(src), 1); home(src); }
+        this.projects = this.projects.filter(project => project.source.length > 0);
+      }
+      return this;
+    }
+    
+    async exec(): Promise<Node> {
+      await Promise.all(this.projects.flatMap(project => [project.dot_project, ...project.source]).map(s => s.load()));
+
+      this.language = this.projects.find(project =>
+        project.dot_project.value.replace(/`/g, '').trimStart().startsWith('!language'));
+
+      for (const project of this.projects) {
+        const [foundation] = this.closure(project);
+        if (foundation) project.interpreter = foundation.interpreter.copy();
+      }
+
+      return this.language?.interpreter.GLOBAL!;
     }
     reload(next: Source | Node | Iterable<Source | Node>): Promise<Node> {
     }
 
   }
 
-  type Key = string | Node
+  export type Key = string | Node
+  export type Args = { interpreter: Interpreter; self: Node; method: Node; args: Node; at: Node }
+  export type Method = (args: Args) => Node | undefined;
 
-  class Node {
+  export class Node {
     methods?: Map<Key, Node>
     position: Text.Node
+
+    fn?: Method
+
+    constructor(public _super?: Node) {}
+
+    method(string: String, fn: Method) {
+      //TODO check if string is a pattern.
+      (this.methods ??= new Map()).set(string, fn);
+    }
+
+    clone(seen: Map<Node, Node> = new Map()): Node {
+      const existing = seen.get(this); if (existing) return existing;
+      const copy: Node = Object.create(Object.getPrototypeOf(this));
+      seen.set(this, copy);
+      copy._super = this._super?.clone(seen);
+      copy.position = this.position;
+      copy.fn = this.fn;
+      if (this.methods) {
+        copy.methods = new Map();
+        for (const [key, value] of this.methods)
+          copy.methods.set(key instanceof Node ? key.clone(seen) : key, value.clone(seen));
+      }
+      return copy;
+    }
   }
 
-  class Rule extends Node {
+  export class Rule extends Node {
 
   }
 
+  export class Interpreter {
+    BASE = new Node();
+    PROGRAM = new Node(this.BASE);
+    GLOBAL = new Node(this.BASE);
+
+    copy(): Interpreter {
+      const seen = new Map<Node, Node>();
+      const copy: Interpreter = Object.create(Interpreter.prototype);
+      copy.BASE = this.BASE.clone(seen);
+      copy.PROGRAM = this.PROGRAM.clone(seen);
+      copy.GLOBAL = this.GLOBAL.clone(seen);
+      return copy;
+    }
+  }
 }
 
 namespace Text {
@@ -242,6 +361,8 @@ export const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = { trace:
 export class Diagnostics {
   items: Map</*location:*/ Text.Source | undefined, Map<Expression, Diagnostic[]>> = new Map();
 
+  program?: Ray.Program
+
   private start = performance.now();
 
   constructor(public level: Diagnostic['level'] = 'info') {}
@@ -269,8 +390,25 @@ export class Diagnostics {
     const exec_time = performance.now() - this.start;
     const print_start = performance.now();
 
-    for (const src of this.items.keys()) { this.print_lines_of(src); }
-    for (const entry of this.all()) { this.print_diagnostic(entry); }
+    const header_of = (src?: Text.Source) => src ? (this.program?.project_header(src) ?? src.location) : undefined;
+    const group = <T>(items: Iterable<T>, key: (t: T) => string | undefined): Map<string | undefined, T[]> => {
+      const m = new Map<string | undefined, T[]>();
+      for (const t of items) { const h = key(t); let g = m.get(h); if (!g) m.set(h, g = []); g.push(t); }
+      return m;
+    };
+
+    for (const [header, srcs] of group(this.items.keys(), header_of)) {
+      if (header) console.error(`${Diagnostics.levelColor.info}${header}${c.reset}`);
+      for (const src of srcs) this.print_lines_of(src!);
+    }
+
+    let first = true;
+    for (const [header, entries] of group(this.all(), e => header_of(e.node?.source))) {
+      if (!first) console.error('');
+      if (header) console.error(`${Diagnostics.levelColor.info}${header}${c.reset}`);
+      first = false;
+      for (const entry of entries) this.print_diagnostic(entry);
+    }
 
     const parts: string[] = []
     const count = (level: Diagnostic['level'], entries: Iterable<Diagnostic>) => { const count = [...entries].length; if (count !== 0) parts.push(`${Diagnostics.levelColor[level]}${count} ${level}${count > 1 ? 's' : ''}${c.reset}`); }
@@ -601,9 +739,9 @@ export class env {
     const walk = (dir: string): void => {
       for (const entry of env.fs.readdirSync(env.path.join(env.root, dir), { withFileTypes: true })) {
         const entry_path = `${dir}/${entry.name}`;
-        if (options.filter ? options.filter(entry_path) : false) continue;
+        if (entry.isDirectory()) { if (options.recursively) walk(entry_path); continue; }
+        if (options.filter && !options.filter(entry_path)) continue;
         locations.push(entry_path);
-        if (options.recursively && entry.isDirectory()) walk(entry_path);
       }
     };
     walk(location);

@@ -1,0 +1,6 @@
+// Uses the grammar defined by the @language project (Node.ray): `class`,
+// `external`, the `.property` access and `=>` rule all come from there.
+class App
+  external run
+
+  greet () run

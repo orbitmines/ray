@@ -198,6 +198,12 @@ export class Diagnostics {
    *  top. */
   highlighting?: (file: string) => readonly Text.Node[] | undefined;
 
+  /** The project a file belongs to, as a display header — its `.project.ray`
+   *  path, else the project's only file, else its directory. Injected by the
+   *  owner; the inline source is grouped under it (one info-colored header per
+   *  project, a blank line between). */
+  project?: (file: string) => string | undefined;
+
   /** One source line, colored: the given colored nodes (absolute positions,
    *  inclusive ends) clipped to the line and painted in order — later wins, so
    *  callers pass the syntax base coat first and diagnostic segments on top —
@@ -558,11 +564,23 @@ export class Diagnostics {
     //    each non-undefined bucket is one file's diagnostics. Entries
     //    without a file (`undefined` bucket) just don't get rendered
     //    inline (they show up in the flat summary below).
+    // group the files by their project (first-seen order), each group under one
+    // info-colored header, a blank line between groups
+    const groups = new Map<string | undefined, [string, Diagnostic[]][]>();
     for (const [file, items] of this.items) {
       if (!file) continue;
-      const source = items.find(d => d.node?.source.value)?.node?.source;
-      if (!source) continue;
-      this._printFile(file, source, items);
+      const header = this.project?.(file);
+      let g = groups.get(header);
+      if (!g) groups.set(header, g = []);
+      g.push([file, items]);
+    }
+    for (const [header, files] of groups) {
+      if (header) console.error(`${Diagnostics.levelColor.info}${header}${c.reset}`);
+      for (const [file, items] of files) {
+        const source = items.find(d => d.node?.source.value)?.node?.source;
+        if (!source) continue;
+        this._printFile(file, source, items);
+      }
     }
 
     // 2. Flat list: everything above the threshold except traces, which are

@@ -4,7 +4,7 @@
 // Support older versions of Node
 
 const version: [major: number, releaseDate: string, index: number] =
-               [0, '2027-01-01', 0];
+               [0, '2027-01-01', 1];
 
 const cli: CLI.Spec = {
   help:     { alias: 'h', description: 'Print this help and exit.' },
@@ -22,20 +22,30 @@ async function main([args, kwargs]: CLI.Args) {
 
   if (env.nodejs && diagnostics.has_errors) process.exitCode = 1;
 
+  const source = new Text.Source('@ether/$/.ray/v0/Node.ray');
+  await source.load();
+  diagnostics.report(new Expression(), { level: 'error', message: 'test', node: new Text.Node(source) })
+  const n = new Text.Node(source); n.cursor = 1
+  diagnostics.report(new Expression(), { level: 'error', message: 'test ata asdadasd', node: n })
+  const n2 = new Text.Node(source); n2.cursor = 2
+  diagnostics.report(new Expression(), { level: 'error', message: 'test ata asdasd ', node: n2 })
+  const n3 = new Text.Node(source); n3.cursor = 4
+  diagnostics.report(new Expression(), { level: 'error', message: 'test aaaaaaa aaaaa aaaaa aa aa aaaaaaaaaaa aaaaaaa aaaaaaaaaaaaaaaaa aaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaa', node: n3 })
   diagnostics.print();
 }
 
 class Representation {
 
 }
-class Node {
-  source: Source
-}
+
 class Expression {
-  diagnostic: Diagnostic
+  
 }
 
 namespace Global {
+  export abstract class Node {
+    abstract source: Source
+  }
   export abstract class Source { 
     location: string
     constructor(public relative_location?: string) { this.location = env.nodejs ? env.path.join(env.root, relative_location) : new URL('../' + relative_location, import.meta.url).href }
@@ -50,6 +60,8 @@ namespace Global {
     abstract exec(): Promise<Node>
   }
 }
+export type Node = Global.Node;
+export type Source = Global.Source;
 
 namespace Ray {
   export const EXTENSION = '.ray'
@@ -69,19 +81,120 @@ namespace Ray {
   }
 }
 
-export type Source = Global.Source;
 namespace Text {
+  export class Node extends Global.Node {
+    constructor(public source: Text.Source) { super(); }
+
+    cursor: number = 0;
+    selection: number[] = [];
+
+    color?: string
+
+    get file(): string | undefined { return this.source.location; }
+
+    get begin() { return this.selection.length > 0 ? this.selection[0] : this.cursor; }
+    set begin(location: number) {
+      if (this.selection.length > 0) { this.selection[0] = location; }
+      else { this.selection.push(location, this.cursor!); }
+    }
+    get end() {
+      const len = this.selection.length;
+      return len > 0 ? this.selection[len - 1] : this.cursor;
+    }
+    set end(location: number) {
+      const len = this.selection.length;
+      if (len > 0) { this.selection[len - 1] = location; }
+      else { this.selection.push(this.cursor!, location); }
+    }
+
+    get line(): number {
+      if (this.cursor != null) return this.source.lineOf(this);
+      return 1;
+    }
+    get col(): number {
+      if (this.cursor != null) return this.source.colOf(this);
+      return 1;
+    }
+
+    empty() { return this.selection.length === 0; }
+    get string() {
+      return this.empty() ? '' : this.source.value.slice(this.begin!, this.end! + 1);
+    }
+
+    get ranges(): { begin: number; end: number }[] {
+      if (this.selection.length === 0) return [{ begin: this.cursor!, end: this.cursor! }];
+      const out: { begin: number; end: number }[] = [];
+      for (let i = 0; i < this.selection.length; i += 2) out.push({ begin: this.selection[i], end: this.selection[i + 1] });
+      return out;
+    }
+    get segments(): Text.Node[] {
+      return this.ranges.map(r => {
+        const n = new Node(this.source);
+        n.color = this.color;
+        n.selection = [r.begin, r.end];
+        return n;
+      });
+    }
+  }
   export class Source extends Global.Source {
     private _value: string; get value(): string { if (this._value === undefined) { throw new Error(`Source '${this.location ?? ''}' not loaded — call 'await source.load()' first.`); } return this._value; }
     set value(value: string) { this._value = value; }
 
     async load(): Promise<void> {
-      if (this.value !== undefined) return;
+      if (this._value !== undefined) return;
       if (!this.location) throw new Error('Source has neither value nor location.');
 
       this.value = env.nodejs 
         ? await env.fs.promises.readFile(this.location, 'utf-8')
         : await (await fetch(new URL(this.location))).text()
+    }
+
+    private _newlines?: number[];
+    get newlines(): number[] {
+      if (this._newlines) return this._newlines;
+      const arr: number[] = [];
+      const s = this.value;
+      for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) arr.push(i);
+      return this._newlines = arr;
+    }
+
+    lineOf(position: Node): number {
+      const cursor = position.cursor ?? 0;
+      const nls = this.newlines;
+      let lo = 0, hi = nls.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (nls[mid] < cursor) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo + 1;
+    }
+
+    colOf(position: Node): number {
+      const cursor = position.cursor ?? 0;
+      const nls = this.newlines;
+      let lo = 0, hi = nls.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (nls[mid] < cursor) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo === 0 ? cursor + 1 : cursor - nls[lo - 1];
+    }
+
+    line(lineNo: number): Node {
+      const nls = this.newlines;
+      const begin = lineNo === 0 ? 0 : nls[lineNo - 1] + 1;
+      const end = nls[lineNo] ?? this.value.length;
+      const n = new Node(this);
+      if (end > begin) n.selection = [begin, end - 1];
+      else n.cursor = begin;
+      return n;
+    }
+
+    get lines(): Iterable<[Node, number]> {
+      const self = this, count = this.newlines.length + 1;
+      return (function* () { for (let i = 0; i < count; i++) yield [self.line(i), i]; })();
     }
   }
 }
@@ -102,44 +215,211 @@ namespace CLI {
 
 export interface Diagnostic {
   level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
-  node?: Node;
-  message?: string;
+  node?: Text.Node;
+  message: string;
 }
+
+const c = {
+  reset:     '\x1b[0m',
+  gray:      '\x1b[90m',
+  dark_gray: '\x1b[2;90m',
+}
+const theme: Record<string, string> = { namespace: '\x1b[38;2;154;134;253m', type: '\x1b[38;2;154;134;253m', class: '\x1b[38;2;154;134;253m', enum: '\x1b[38;2;154;134;253m', interface: '\x1b[38;2;154;134;253m', struct: '\x1b[38;2;154;134;253m', typeParameter: '\x1b[38;2;154;134;253m', parameter: '\x1b[38;2;196;185;254m', variable: '\x1b[38;2;196;185;254m', property: '\x1b[38;2;196;185;254m', enumMember: '\x1b[38;2;255;204;153m', event: '\x1b[38;2;154;134;253m', function: '\x1b[38;2;154;134;253m', method: '\x1b[38;2;154;134;253m', macro: '\x1b[38;2;154;134;253m', keyword: '\x1b[38;2;108;103;131m', modifier: '\x1b[38;2;108;103;131m', comment: '\x1b[38;2;108;103;131m', string: '\x1b[38;2;255;204;153m', number: '\x1b[38;2;255;204;153m', regexp: '\x1b[38;2;255;204;153m', operator: '\x1b[38;2;171;179;191m', decorator: '\x1b[38;2;255;204;153m' };
+
 export const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = { trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5 };
 export class Diagnostics {
-  items: Map</*location:*/ string | undefined, Map<Expression, Diagnostic[]>> = new Map();
+  items: Map</*location:*/ Text.Source | undefined, Map<Expression, Diagnostic[]>> = new Map();
 
   private start = performance.now();
 
   constructor(public level: Diagnostic['level'] = 'info') {}
 
   *all(filter?: (x: Diagnostic) => boolean): IterableIterator<Diagnostic> {
-    for (const arr of this.items.values()) { for (const [, elements] of arr) { for (const element of elements) { if (filter?(element) : true) yield element; } } }
+    for (const arr of this.items.values()) { for (const [, elements] of arr) { for (const element of elements) { if (filter ? filter(element) : true) yield element; } } }
   }
+  *get(src: Text.Source): IterableIterator<Diagnostic> { for (const arr of this.items.get(src).values()) { yield* arr; } }
 
   is_visible(level: Diagnostic['level']): boolean { return DIAGNOSTIC_SEVERITY[level] >= DIAGNOSTIC_SEVERITY[this.level]; }
 
+  get empty() { return [...this.items.keys()].length === 0 }
   get has_errors(): boolean { return [...this.errors].length > 0 }
   get errors() { return this.all(x => DIAGNOSTIC_SEVERITY[x.level] >= DIAGNOSTIC_SEVERITY['error'])}
   get warnings() { return this.all(x => x.level === 'warning')}
 
-  // cascaded needs just 'which expression' ; errorregions/
-
-  forget(src: Source | Iterable<Source>) {
+  forget(src: Text.Source | Iterable<Text.Source>) {
     if (Symbol.iterator in src) { for (const element of src) { this.forget(element) }; return; }
-    this.items.delete(src.location)
+    this.items.delete(src)
   }
 
   print() {
+    if (this.empty) return;
+
+    const exec_time = performance.now() - this.start;
+    const print_start = performance.now();
+
+    for (const src of this.items.keys()) { this.print_lines_of(src); }
+    for (const entry of this.all()) { this.print_diagnostic(entry); }
+
+    const parts: string[] = []
+    const count = (level: Diagnostic['level'], entries: Iterable<Diagnostic>) => { const count = [...entries].length; if (count !== 0) parts.push(`${Diagnostics.levelColor[level]}${count} ${level}${count > 1 ? 's' : ''}${c.reset}`); }
     
+    count('error', this.errors); count('warning', this.warnings)
+    parts.push(`${c.gray}${exec_time.toFixed(2)}ms${c.reset} ${c.dark_gray}+ ${(performance.now() - print_start).toFixed(2)}ms print${c.reset}`)
+    console.error(`\n  ${parts.join(`${c.gray}, ${c.reset}`)}`)
   }
+  print_lines_of(src: Text.Source) {
+    console.error(`${c.gray}${src.location ? src.location : `unknown location`}${c.reset}`);
+
+    let entry_i = 0;
+    const entries = [...this.get(src)].filter(x => x.node).sort((a, b) => a.node.cursor - b.node.cursor)
+
+    const line_number_width = String(src.newlines.length + 1).length;
+    for (const [line, i] of src.lines) {
+      const visibile: Diagnostic[] = [];
+      while (entry_i < entries.length && entries[entry_i].node.cursor <= line.end) {
+        const entry = entries[entry_i];
+        if (entry.node.cursor >= line.begin) visibile.push(entry);
+        entry_i++;
+      }
+
+      if (visibile.length === 0) continue;
+
+      const annotate = (group: { col: number; entries: Diagnostic[] }[], before: boolean) => {
+        if (group.length === 0) return;
+        const gutter = ' '.repeat(line_number_width + 1);
+        const cols = (env.nodejs && process.stdout.columns) || 80;
+        const pipe = `${c.gray}|${c.reset}`;
+        const ANSI = /\x1b\[[0-9;]*m/g;
+        const plain = (s: string) => s.replace(ANSI, '');
+
+        // Word-wrap plain text at spaces to fit `width` columns.
+        const wrapPlain = (text: string, width: number): string[] => {
+          if (width < 10 || text.length <= width) return [text];
+          const out: string[] = [];
+          let cur = '';
+          for (const word of text.split(' ')) {
+            const next = cur ? `${cur} ${word}` : word;
+            if (next.length > width && cur) { out.push(cur); cur = word; } else cur = next;
+          }
+          if (cur) out.push(cur);
+          return out;
+        };
+        // Word-wrap a coloured string by *visible* width, re-opening colour per line.
+        const wrap = (s: string, width: number): { text: string; len: number }[] => {
+          const chars: { ch: string; color: string }[] = [];
+          let color = '', last = 0;
+          for (const m of s.matchAll(ANSI)) {
+            for (let k = last; k < m.index; k++) chars.push({ ch: s[k], color });
+            color = m[0] === c.reset ? '' : m[0];
+            last = m.index + m[0].length;
+          }
+          for (let k = last; k < s.length; k++) chars.push({ ch: s[k], color });
+          const paint = (cs: typeof chars) => {
+            let out = '', cur = '';
+            for (const x of cs) { if (x.color !== cur) out += (cur = x.color) || c.reset; out += x.ch; }
+            return cur ? out + c.reset : out;
+          };
+          let pos = 0;
+          return wrapPlain(plain(s), width).map((pl, li, all) => {
+            const piece = { text: paint(chars.slice(pos, pos + pl.length)), len: pl.length };
+            pos += pl.length + (li < all.length - 1 && chars[pos + pl.length]?.ch === ' ' ? 1 : 0);
+            return piece;
+          });
+        };
+
+        // One line: items placed left-to-right at their columns. A bare item is
+        // a gray pipe; a {text} item is its coloured run. Anything a run already
+        // covered is dropped — that's how a message hides the pipes behind it.
+        const draw = (items: { col: number; text?: string; len?: number }[]): string => {
+          let line = gutter, pos = 0;
+          for (const it of [...items].sort((a, b) => a.col - b.col)) {
+            if (it.col < pos) continue;
+            line += ' '.repeat(it.col - pos);
+            if (it.text === undefined) { line += pipe; pos = it.col + 1; }
+            else { line += it.text; pos = it.col + (it.len ?? 0); }
+          }
+          return line;
+        };
+
+        // Each group draws a connector then its wrapped message(s). `through` are
+        // the groups whose pipes pass through this block — the already-rendered
+        // ones above the source, the not-yet-rendered ones below.
+        const lines: string[] = [];
+        group.forEach((g, i) => {
+          const through = before ? group.slice(0, i) : group.slice(i + 1);
+          if (!before) lines.push(draw(group.slice(i)));
+          else if (through.length) lines.push(draw(through));
+          // wrap to the gap before the next pipe on the right if it's roomy (≥30), else full width
+          const right = [...through].sort((a, b) => a.col - b.col).find(r => r.col > g.col);
+          const full = cols - gutter.length - g.col;
+          const gap = right ? right.col - g.col - 1 : full;
+          const width = Math.max(gap >= 30 ? gap : full, 10);
+          for (const e of g.entries)
+            for (const ln of wrap(this.format(e), width))
+              lines.push(draw([...through, { col: g.col, ...ln }]));
+        });
+        if (before) lines.push(draw(group));
+
+        // Print, dropping a pipes-only line whose pipes already show above, and
+        // collapsing exact repeats.
+        let prev: string | undefined;
+        for (const line of lines) {
+          if (prev !== undefined) {
+            if (line === prev) continue;
+            const p = plain(line);
+            if (/^[\s|]*$/.test(p) && p.includes('|') && [...p].every((ch, k) => ch !== '|' || plain(prev!)[k] === '|')) continue;
+          }
+          console.error(line);
+          prev = line;
+        }
+      }
+      const highlight = (): string => {
+        const segments = info.flatMap(({ entries }) => {
+          const worst = entries.reduce((a, b) =>
+            DIAGNOSTIC_SEVERITY[b.level] > DIAGNOSTIC_SEVERITY[a.level] ? b : a
+          );
+          worst.node.color = Diagnostics.levelColor[worst.level] ?? c.gray;
+          return worst.node.segments;
+        });
+        const text = line.string;
+        const chars: (string | undefined)[] = new Array(text.length).fill(undefined);
+        for (const s of segments) {
+          if (!s.color) continue;
+          for (let k = Math.max(s.begin - line.begin, 0); k <= Math.min(s.end - line.begin, text.length - 1); k++) chars[k] = s.color;
+        }
+        let colored = '', current: string | undefined;
+        for (let k = 0; k < text.length; k++) {
+          const color = chars[k] ?? c.gray;
+          if (color !== current) { colored += color; current = color; }
+          colored += text[k];
+        }
+        return colored;
+      }
+      
+      const info = [...Map.groupBy(visibile, entry => entry.node.cursor - line.begin)].map(([col, entries]) => ({ col, entries }));
+      const above = info.filter((_, i) => i % 2 === 1).reverse().sort((a, b) => b.col - a.col);
+      const below = info.filter((_, i) => i % 2 === 0);
+
+      annotate(above, true)
+      console.error(`${c.gray}${String(i + 1).padStart(line_number_width)} ${c.reset}${highlight()}${c.reset}`);
+      annotate(below, false)
+      console.error('')
+    }
+  }
+  print_diagnostic(entry: Diagnostic) {
+    if (entry.level === 'fatal') { console.error(''); console.error(this.format(entry)); return; }
+    console.error(`${c.gray}${entry.node?.source?.location ? `${entry.node?.source?.location}:${entry.node.line}:${entry.node.col}` : `unknown location`}${c.reset}`);
+    console.error(`  ${this.format(entry)}`);
+  }
+
+  format(entry: Diagnostic): string { return `${Diagnostics.levelColor[entry.level]}${entry.level}${c.reset} ${entry.message}${c.gray} [${env.version.toString()}]${c.reset}`; }
 
   report(expression: Expression, entry: Diagnostic) {
     if (!this.is_visible(entry.level)) return;
     
-    const location = entry.node?.source?.location;
-    let expr = this.items.get(location);
-    if (!expr) { expr = new Map(); this.items.set(location, expr); }
+    const source = entry.node?.source;
+    let expr = this.items.get(source);
+    if (!expr) { expr = new Map(); this.items.set(source, expr); }
     let expr_diagnostics = expr.get(expression)
     if (!expr_diagnostics) { expr_diagnostics = []; expr.set(expression, expr_diagnostics); }
 
@@ -157,11 +437,6 @@ export class Diagnostics {
     throw new Error('fatal diagnostic');
   }
 
-  static c = {
-    reset:     '\x1b[0m',
-    gray:      '\x1b[90m',
-    dark_gray: '\x1b[2;90m',
-  }
   static levelColor: Record<Diagnostic['level'], string> = {
     fatal:   '\x1b[1;31m',
     error:   '\x1b[1;31m',
@@ -170,7 +445,6 @@ export class Diagnostics {
     debug:   '\x1b[32m',
     trace:   '\x1b[90m',
   }
-  static theme: Record<string, string> = { namespace: '\x1b[38;2;154;134;253m', type: '\x1b[38;2;154;134;253m', class: '\x1b[38;2;154;134;253m', enum: '\x1b[38;2;154;134;253m', interface: '\x1b[38;2;154;134;253m', struct: '\x1b[38;2;154;134;253m', typeParameter: '\x1b[38;2;154;134;253m', parameter: '\x1b[38;2;196;185;254m', variable: '\x1b[38;2;196;185;254m', property: '\x1b[38;2;196;185;254m', enumMember: '\x1b[38;2;255;204;153m', event: '\x1b[38;2;154;134;253m', function: '\x1b[38;2;154;134;253m', method: '\x1b[38;2;154;134;253m', macro: '\x1b[38;2;154;134;253m', keyword: '\x1b[38;2;108;103;131m', modifier: '\x1b[38;2;108;103;131m', comment: '\x1b[38;2;108;103;131m', string: '\x1b[38;2;255;204;153m', number: '\x1b[38;2;255;204;153m', regexp: '\x1b[38;2;255;204;153m', operator: '\x1b[38;2;171;179;191m', decorator: '\x1b[38;2;255;204;153m' };
 }
 
 export class Version {
@@ -307,7 +581,7 @@ export class env {
       return env.manifest
         .filter(entry => entry.startsWith(prefix))
         .filter(entry => options.recursively || !entry.slice(prefix.length).includes('/'))
-        .filter(entry => options.filter?(entry) : true)
+        .filter(entry => options.filter ? options.filter(entry) : true)
         .map(env.file);
     }
 
@@ -315,7 +589,7 @@ export class env {
     const walk = (dir: string): void => {
       for (const entry of env.fs.readdirSync(env.path.join(env.root, dir), { withFileTypes: true })) {
         const entry_path = `${dir}/${entry.name}`;
-        if (options.filter?(entry_path) : false) continue;
+        if (options.filter ? options.filter(entry_path) : false) continue;
         locations.push(entry_path);
         if (options.recursively && entry.isDirectory()) walk(entry_path);
       }

@@ -192,39 +192,30 @@ export class Diagnostics {
     parameter:   '\x1b[38;2;196;185;254m',
   }
 
-  /** Painted spans per file, injected by whoever owns the highlighting
-   *  (the interpreter's Log) — source excerpts render with them as the
-   *  base coat, diagnostic ranges on top. */
-  highlighting?: (file: string) => readonly { begin: number; end: number; style: string }[] | undefined;
+  /** Painted nodes per file, injected by whoever owns the highlighting (the
+   *  interpreter's Log) — already colored (`node.color`), half-open begin/end.
+   *  Source excerpts render with them as the base coat, diagnostic ranges on
+   *  top. */
+  highlighting?: (file: string) => readonly Text.Node[] | undefined;
 
-  /** One source line, colored: the painted syntax underneath (smaller
-   *  spans win, as in every renderer of these spans), the given segments —
-   *  inclusive ends, in their own colors — over it, gray where nothing
-   *  applies. */
-  private _colorLine(line: string, lineStart: number, file: string | undefined, segments: { begin: number; end: number; color: string }[]): string {
+  /** One source line, colored: the given colored nodes (absolute positions,
+   *  inclusive ends) clipped to the line and painted in order — later wins, so
+   *  callers pass the syntax base coat first and diagnostic segments on top —
+   *  gray where none apply. */
+  private _colorLine(line: Text.Node, segments: readonly Text.Node[]): string {
     const { c } = Diagnostics;
-    const chars: (string | undefined)[] = new Array(line.length).fill(undefined);
-    const spans = file !== undefined ? this.highlighting?.(file) : undefined;
-    if (spans) {
-      const lineEnd = lineStart + line.length;
-      const overlapping = spans
-        .filter(s => s.begin < lineEnd && s.end > lineStart)
-        .sort((a, b) => (b.end - b.begin) - (a.end - a.begin));
-      for (const s of overlapping) {
-        const color = Diagnostics.theme[s.style.split('.')[0]];
-        if (!color) continue;
-        const from = Math.max(s.begin - lineStart, 0), to = Math.min(s.end - lineStart, line.length);
-        for (let k = from; k < to; k++) chars[k] = color;
-      }
+    const text = line.string;
+    const chars: (string | undefined)[] = new Array(text.length).fill(undefined);
+    for (const s of segments) {
+      if (!s.color) continue;
+      for (let k = Math.max(s.begin! - line.begin!, 0); k <= Math.min(s.end! - line.begin!, text.length - 1); k++) chars[k] = s.color;
     }
-    for (const seg of segments)
-      for (let k = Math.max(seg.begin, 0); k <= Math.min(seg.end, line.length - 1); k++) chars[k] = seg.color;
     let colored = '';
     let current: string | undefined;
-    for (let k = 0; k < line.length; k++) {
+    for (let k = 0; k < text.length; k++) {
       const color = chars[k] ?? c.gray;
       if (color !== current) { colored += color; current = color; }
-      colored += line[k];
+      colored += text[k];
     }
     return colored;
   }
@@ -246,112 +237,67 @@ export class Diagnostics {
    *  responsible for grouping `items` by `d.node?.file` and passing
    *  the file's source string in. The renderer doesn't know about
    *  Programs — diagnostics are the unit, source files are the group. */
-  private _printFile(file: string | undefined, source: string, items: Diagnostic[]) {
+  private _printFile(file: string | undefined, source: Text.Source, items: Diagnostic[]) {
     const { c } = Diagnostics;
-    if (!source) return;
+    const text = source.value;
+    if (!text) return;
     const cols = (env.nodejs && process.stdout.columns) || 80;
-    const lines = source.split('\n');
-    const lineNumWidth = String(lines.length).length;
+    const lineNumWidth = String(source.newlines.length + 1).length;
     const gutterLen = lineNumWidth + 1;
 
     if (file) console.error(`${c.gray}${file}${c.reset}`);
 
-    // The diagnostic's node, if it lands in this file.
-    const displayNode = (d: Diagnostic): Text.Node | undefined =>
-      d.node?.file === file ? d.node : undefined;
+    // Every diagnostic in this bucket is keyed by its node's file (see
+    // `print`), so `d.node` exists and lands in `file`.
+    const anchors = items.filter(d => d.node);
 
-    const anchors = items.filter(d => !!displayNode(d));
-
-    const cursor = (d: Diagnostic) => displayNode(d)!.cursor!;
-    const ranges = (d: Diagnostic): { begin: number; end: number }[] => {
-      const n = displayNode(d)!;
-      if (n.selection.length === 0) {
-        const i = n.cursor!;
-        return [{ begin: i, end: i }];
-      }
-      // selection is packed [b0,e0,b1,e1,…] — unpack into {begin,end} pairs
-      // for the print code's internal API.
-      const out: { begin: number; end: number }[] = [];
-      const sel = n.selection;
-      for (let i = 0; i < sel.length; i += 2) out.push({ begin: sel[i], end: sel[i + 1] });
-      return out;
-    };
+    const cursor = (d: Diagnostic) => d.node!.cursor!;
 
     anchors.sort((a, b) => cursor(a) - cursor(b));
 
     let anchorIdx = 0;
-    for (let lineNo = 0; lineNo < lines.length; lineNo++) {
-      const line = lines[lineNo];
-      const lineStart = lines.slice(0, lineNo).reduce((a, l) => a + l.length + 1, 0);
-      const lineEnd = lineStart + line.length;
-      const lineLabel = `${c.gray}${String(lineNo + 1).padStart(lineNumWidth)} ${c.reset}`;
-      const blankGutter = ' '.repeat(gutterLen);
-
+    for (const [line, lineNo] of source.lines) {
       // Collect visible anchors on this line.
       const lineAnchors: Diagnostic[] = [];
-      while (anchorIdx < anchors.length && cursor(anchors[anchorIdx]) < lineEnd) {
+      while (anchorIdx < anchors.length && cursor(anchors[anchorIdx]) <= line.end) {
         const d = anchors[anchorIdx];
-        if (cursor(d) >= lineStart && Diagnostics.showLevel(d.level)) lineAnchors.push(d);
+        if (cursor(d) >= line.begin) lineAnchors.push(d);
         anchorIdx++;
       }
 
       if (lineAnchors.length === 0) continue;
 
-      // Group anchors that share a cursor — they render under one pipe
-      // (one annotation block, diagnostics stacked).
-      const byCursor = new Map<number, Diagnostic[]>();
-      const cursorOrder: number[] = [];
-      for (const d of lineAnchors) {
-        const col = cursor(d) - lineStart;
-        if (!byCursor.has(col)) { byCursor.set(col, []); cursorOrder.push(col); }
-        byCursor.get(col)!.push(d);
-      }
-      // Group color *and* range follow the most severe diagnostic in the
-      // group: an error with a wide selection should colour its full span
-      // even when an info trace at the same anchor cursor was emitted
-      // first with a narrower range.
-      const info = cursorOrder.map(col => {
-        const diags = byCursor.get(col)!;
+      // Group anchors that share a cursor — they render under one pipe (one
+      // annotation block, diagnostics stacked). The Map keeps insertion order,
+      // and lineAnchors is cursor-sorted, so groups come out left-to-right.
+      const info = [...Map.groupBy(lineAnchors, d => cursor(d) - line.begin)].map(([col, diags]) => ({ col, diags }));
+      const aboveInfo = info.filter((_, i) => i % 2 === 1).reverse().sort((a, b) => b.col - a.col);
+      const belowInfo = info.filter((_, i) => i % 2 === 0);
+
+      const blankGutter = ' '.repeat(gutterLen);
+
+      // Above annotations.
+      if (aboveInfo.length) this._renderAnnotations(blankGutter, gutterLen, aboveInfo, cols, 'before');
+
+      // The colored span of each group follows its most severe diagnostic: an
+      // error with a wide selection colours its full span even when a narrower
+      // info trace shares the anchor cursor. One node per separately-colored
+      // segment, ordered by position in the line.
+      // The syntax base coat — painted nodes, smaller spans win, so widest
+      // first — with the diagnostic segments painted on top.
+      const base = [...(file !== undefined ? this.highlighting?.(file) ?? [] : [])]
+        .sort((a, b) => (b.end! - b.begin!) - (a.end! - a.begin!));
+      const segments = info.flatMap(({ diags }) => {
         const worst = diags.reduce((a, b) =>
           DIAGNOSTIC_SEVERITY[b.level] > DIAGNOSTIC_SEVERITY[a.level] ? b : a
         );
-        return {
-          diags,
-          col,
-          ranges: ranges(worst).map(r => ({ begin: r.begin - lineStart, end: r.end - lineStart })),
-          color: Diagnostics.levelColor[worst.level] ?? c.gray,
-        };
+        worst.node!.color = Diagnostics.levelColor[worst.level] ?? c.gray;
+        return worst.node!.segments;
       });
-      const aboveInfo = info.filter((_, i) => i % 2 === 1).reverse();
-      const belowInfo = info.filter((_, i) => i % 2 === 0);
-
-      // Above annotations.
-      if (aboveInfo.length) {
-        const aboveRL = [...aboveInfo].sort((a, b) => b.col - a.col);
-        const rendered = this._renderAnnotations(blankGutter, gutterLen, aboveRL, cols, 'before');
-        rendered.push(this._connectorLine(blankGutter, gutterLen, aboveRL));
-        let prev = '';
-        for (const l of rendered) { if (l !== prev) console.error(l); prev = l; }
-      }
-
-      // Source line with colored ranges.
-      const colorSegments: { begin: number; end: number; color: string }[] = [];
-      for (const ti of info) {
-        for (const r of ti.ranges) {
-          if (r.end < 0 || r.begin >= line.length) continue;
-          colorSegments.push({ begin: Math.max(r.begin, 0), end: Math.min(r.end, line.length - 1), color: ti.color });
-        }
-      }
-      colorSegments.sort((a, b) => a.begin - b.begin);
-      // diagnostic colors override the painted syntax underneath
-      console.error(`${lineLabel}${this._colorLine(line, lineStart, file, colorSegments)}${c.reset}`);
+      console.error(`${c.gray}${String(lineNo + 1).padStart(lineNumWidth)} ${c.reset}${this._colorLine(line, [...base, ...segments])}${c.reset}`);
 
       // Below annotations.
-      if (belowInfo.length) {
-        const rendered = this._renderAnnotations(blankGutter, gutterLen, belowInfo, cols);
-        let prev = '';
-        for (const l of rendered) { if (l !== prev) console.error(l); prev = l; }
-      }
+      if (belowInfo.length) this._renderAnnotations(blankGutter, gutterLen, belowInfo, cols);
 
       console.error('');
     }
@@ -364,7 +310,7 @@ export class Diagnostics {
    */
   private _renderAnnotationGroups(
     blankGutter: string, gutterLen: number,
-    annotations: { col: number; color: string; diags: Diagnostic[] }[],
+    annotations: { col: number; diags: Diagnostic[] }[],
     cols: number,
     pipesFrom: 'after' | 'before' = 'after'
   ): string[][] {
@@ -463,36 +409,12 @@ export class Diagnostics {
         return overlapped;
       };
 
-      // Render each diagnostic in this group under one pipe:
-      //   trace-level → the message (or phase) in the level's color
-      //   otherwise  → labeled "error[phase]: message"
-      for (const diag of t.diags) {
-        const diagColor = Diagnostics.levelColor[diag.level] ?? t.color;
-        if (diag.level === 'trace') {
-          const text = diag.message ?? '';
-          const descLines = this._wrapToLines(text, Math.max(pipeAwareAvailable, 10));
-          for (const dl of descLines) {
-            emit(`${diagColor}${dl}${c.reset}`, dl.length);
-          }
-        } else {
-          const { colored: label, plain: labelPlain } = this.formatDiagnosticLabel(diag);
-          const tag = this.versionTag();
-          const diagAvail = Math.max(pipeAwareAvailable - labelPlain.length, 10);
-          const msgLines = this._wrapToLines(diag.message ?? '', diagAvail);
-          const contTextCol = t.col + labelPlain.length;
-          for (let mi = 0; mi < msgLines.length; mi++) {
-            // the version trails the last line of the (wrapped) message
-            const suffix = mi === msgLines.length - 1 ? tag.colored : '';
-            const suffixLen = mi === msgLines.length - 1 ? tag.plain.length : 0;
-            if (mi === 0) {
-              emit(`${label}${msgLines[mi]}${suffix}`, labelPlain.length + msgLines[mi].length + suffixLen);
-            } else {
-              const pad = ' '.repeat(labelPlain.length);
-              emit(`${pad}${msgLines[mi]}${suffix}`, labelPlain.length + msgLines[mi].length + suffixLen, contTextCol);
-            }
-          }
-        }
-      }
+      // Each diagnostic renders as one wrapped block under the pipe: the full
+      // "level message [version]" content (trace is just its message, no label
+      // or tag), built by `format` and wrapped as a single colored string.
+      for (const diag of t.diags)
+        for (const line of this._wrap(this.format(diag).colored, Math.max(pipeAwareAvailable, 10)))
+          emit(line.text, line.len);
 
       // Skip overlap connector — the next group's connector already shows the pipes.
 
@@ -502,13 +424,14 @@ export class Diagnostics {
     return groups;
   }
 
-  /** Flatten annotation groups into lines (for below, which doesn't need reversal) */
+  /** Render and print an annotation block. 'before' (above the source) caps the
+   *  block with a down-connector linking its pipes to the source line. */
   private _renderAnnotations(
     blankGutter: string, gutterLen: number,
-    annotations: { col: number; color: string; diags: Diagnostic[] }[],
+    annotations: { col: number; diags: Diagnostic[] }[],
     cols: number,
     pipesFrom: 'after' | 'before' = 'after'
-  ): string[] {
+  ): void {
     const lines = this._renderAnnotationGroups(blankGutter, gutterLen, annotations, cols, pipesFrom).flat();
 
     // Post-process: drop connector-only lines whose pipe positions are all
@@ -534,43 +457,72 @@ export class Diagnostics {
       if (!allPresent) merged.push(line);
       // else: skip — previous line already shows these pipes
     }
-    return merged;
+    if (pipesFrom === 'before') merged.push(this._connectorLine(blankGutter, gutterLen, annotations));
+
+    let prev = '';
+    for (const l of merged) { if (l !== prev) console.error(l); prev = l; }
   }
 
-  /** Build a line with | connectors. Primary pipe keeps its color, others are gray. */
-  private _connectorLine(blankGutter: string, gutterLen: number, traces: { col: number; color: string }[], primaryCol?: number): string {
+  /** Build a line with gray | connectors at each annotation column. */
+  private _connectorLine(blankGutter: string, gutterLen: number, traces: { col: number }[]): string {
     const { c } = Diagnostics;
     const sorted = [...traces].sort((a, b) => a.col - b.col);
     let line = blankGutter;
     let pos = 0;
     for (const t of sorted) {
       if (t.col > pos) line += ' '.repeat(t.col - pos);
-      const color = (primaryCol !== undefined && t.col === primaryCol) ? t.color : c.gray;
-      line += `${color}|${c.reset}`;
+      line += `${c.gray}|${c.reset}`;
       pos = t.col + 1;
     }
     return line;
   }
 
-  /** Format a diagnostic label: just the level, colored (only error/warning
-   *  bold). The Ether version trails the message instead — see `versionTag`. */
-  formatDiagnosticLabel(d: Diagnostic): { colored: string; plain: string } {
+  /** A diagnostic's full one-line content — level label, message, and the
+   *  trailing Ether version tag — both colored and plain. trace carries no
+   *  label or tag: it's just its message in the level's color. This is the one
+   *  place a diagnostic becomes text; callers wrap the result directly. */
+  format(d: Diagnostic): { colored: string; plain: string } {
     const { c } = Diagnostics;
     const color = Diagnostics.levelColor[d.level];
+    const msg = d.message ?? '';
+    if (d.level === 'trace') return { colored: `${color}${msg}${c.reset}`, plain: msg };
+    const tag = ` [${version()}]`;
     return {
-      colored: `${color}${d.level}${c.reset} `,
-      plain: `${d.level} `
+      colored: `${color}${d.level}${c.reset} ${msg}${c.gray}${tag}${c.reset}`,
+      plain: `${d.level} ${msg}${tag}`,
     };
   }
 
-  /** The Ether version, gray, trailing a diagnostic's message. */
-  private versionTag(): { colored: string; plain: string } {
+  /** Word-wrap a colored string by *visible* width (escape codes don't count),
+   *  re-opening the active color at the start of each continuation line. */
+  private _wrap(s: string, available: number): { text: string; len: number }[] {
     const { c } = Diagnostics;
-    const plain = ` [${version()}]`;
-    return { colored: `${c.gray}${plain}${c.reset}`, plain };
+    // Decompose into visible chars, each tagged with the color active at it.
+    const chars: { ch: string; color: string }[] = [];
+    let color = '';
+    for (let i = 0; i < s.length; i++) {
+      const m = s[i] === '\x1b' ? /^\x1b\[[0-9;]*m/.exec(s.slice(i)) : null;
+      if (m) { color = m[0] === c.reset ? '' : m[0]; i += m[0].length - 1; continue; }
+      chars.push({ ch: s[i], color });
+    }
+    const render = (cs: { ch: string; color: string }[]): string => {
+      let out = '', cur = '';
+      for (const x of cs) { if (x.color !== cur) { out += x.color || c.reset; cur = x.color; } out += x.ch; }
+      return cur ? out + c.reset : out;
+    };
+    const plainLines = this._wrapToLines(chars.map(x => x.ch).join(''), available);
+    const out: { text: string; len: number }[] = [];
+    let pos = 0;
+    for (let li = 0; li < plainLines.length; li++) {
+      const len = plainLines[li].length;
+      out.push({ text: render(chars.slice(pos, pos + len)), len });
+      pos += len;
+      if (li < plainLines.length - 1 && chars[pos]?.ch === ' ') pos++; // drop the wrap-boundary space
+    }
+    return out;
   }
 
-  /** Word-wrap text into lines at word boundaries */
+  /** Word-wrap plain text into lines at word boundaries */
   private _wrapToLines(text: string, available: number): string[] {
     if (available < 10 || text.length <= available) return [text];
     const words = text.split(' ');
@@ -608,7 +560,7 @@ export class Diagnostics {
     //    inline (they show up in the flat summary below).
     for (const [file, items] of this.items) {
       if (!file) continue;
-      const source = items.find(d => d.node?.source.value)?.node?.source.value ?? '';
+      const source = items.find(d => d.node?.source.value)?.node?.source;
       if (!source) continue;
       this._printFile(file, source, items);
     }
@@ -627,16 +579,15 @@ export class Diagnostics {
       console.error(`  ${c.gray}No errors.${c.reset}`);
     } else {
       for (const d of flat) {
-        const { colored: label } = this.formatDiagnosticLabel(d);
-        const tag = this.versionTag().colored;
+        const { colored } = this.format(d);
         const locNode = d.node;
         if (d.level === 'fatal') {
           console.error('');
-          console.error(`${label}${d.message ?? ''}${tag}`);
+          console.error(colored);
           continue;
         }
         if (locNode?.file) console.error(`${c.gray}${locNode.file}:${locNode.line}:${locNode.col}${c.reset}`);
-        console.error(`  ${label}${d.message ?? ''}${tag}`);
+        console.error(`  ${colored}`);
       }
     }
 

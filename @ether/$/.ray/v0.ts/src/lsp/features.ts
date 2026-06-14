@@ -83,7 +83,7 @@ export function symbols(program: Program, path: string): { name: string; begin: 
 export function word_at(program: Program, path: string, offset: number): Painted | undefined {
   let best: Painted | undefined;
   for (const s of program.highlighting.get(path) ?? [])
-    if (s.style !== '' && s.begin <= offset && offset < s.end && (!best || s.end - s.begin < best.end - best.begin)) best = s;
+    if (s.style !== '' && s.begin! <= offset && offset <= s.end! && (!best || s.end! - s.begin! < best.end! - best.begin!)) best = s;
   return best;
 }
 
@@ -91,7 +91,7 @@ export function word_at(program: Program, path: string, offset: number): Painted
 export function rule_at(program: Program, path: string, offset: number): string | undefined {
   let best: Painted | undefined;
   for (const s of program.highlighting.get(path) ?? [])
-    if (s.of !== undefined && s.begin <= offset && offset < s.end && (!best || s.end - s.begin < best.end - best.begin)) best = s;
+    if (s.of !== undefined && s.begin! <= offset && offset <= s.end! && (!best || s.end! - s.begin! < best.end! - best.begin!)) best = s;
   return best?.of;
 }
 
@@ -101,11 +101,11 @@ export function rule_at(program: Program, path: string, offset: number): string 
 export function rule_references(program: Program, key: string): Span[] {
   const out: Span[] = [];
   for (const [file, spans] of program.highlighting) {
-    const mine = spans.filter(s => s.of === key && s.style === '').sort((a, b) => a.begin - b.begin || b.end - a.end);
+    const mine = spans.filter(s => s.of === key && s.style === '').sort((a, b) => a.begin! - b.begin! || b.end! - a.end!);
     let current: Span | undefined;
     for (const s of mine) {
-      if (current && s.begin <= current.end) current.end = Math.max(current.end, s.end);
-      else out.push(current = { path: file, begin: s.begin, end: s.end });
+      if (current && s.begin! <= current.end) current.end = Math.max(current.end, s.end! + 1);
+      else out.push(current = { path: file, begin: s.begin!, end: s.end! + 1 });
     }
   }
   return out;
@@ -137,7 +137,7 @@ export function definition(program: Program, path: string, offset: number): Span
   const text = text_of(program, path);
   const w = text !== undefined ? word_at(program, path, offset) : undefined;
   if (text === undefined || !w) return out;
-  const word = text.slice(w.begin, w.end);
+  const word = text.slice(w.begin!, w.end! + 1);
   for (const [key, site] of program.grammar.sites())
     if (site.end && site.src.path !== undefined && key.slice(key.indexOf('::') + 2) === word)
       out.push({ path: site.src.path, begin: site.begin, end: site.end });
@@ -157,18 +157,18 @@ export function references(program: Program, path: string, offset: number): Span
   const w = text !== undefined ? word_at(program, path, offset) : undefined;
   if (!w && key !== undefined) return rule_references(program, key);
   if (text === undefined || !w) return [];
-  const word = text.slice(w.begin, w.end);
+  const word = text.slice(w.begin!, w.end! + 1);
   const out: Span[] = [];
   const dedup = new Set<string>();
   for (const [file, spans] of program.highlighting) {
     const other = text_of(program, file);
     if (other === undefined) continue;
     for (const s of spans) {
-      if (s.style === '' || s.end - s.begin !== word.length || other.slice(s.begin, s.end) !== word) continue;
+      if (s.style === '' || s.end! - s.begin! + 1 !== word.length || other.slice(s.begin!, s.end! + 1) !== word) continue;
       const dkey = `${file}:${s.begin}`;
       if (dedup.has(dkey)) continue;
       dedup.add(dkey);
-      out.push({ path: file, begin: s.begin, end: s.end });
+      out.push({ path: file, begin: s.begin!, end: s.end! + 1 });
     }
   }
   return out;
@@ -193,7 +193,7 @@ export function hover(program: Program, path: string, offset: number): string | 
   const text = text_of(program, path);
   const w = text !== undefined ? word_at(program, path, offset) : undefined;
   if (text === undefined || !w) return undefined;
-  const word = text.slice(w.begin, w.end);
+  const word = text.slice(w.begin!, w.end! + 1);
   for (const [key, site] of program.grammar.sites())
     if (site.end && key.slice(key.indexOf('::') + 2) === word)
       return `\`\`\`ray\n${site.src.text.slice(site.begin, site.end).split('\n')[0]}\n\`\`\`\n\non \`${key.slice(0, key.indexOf('::'))}\``;
@@ -230,7 +230,7 @@ export function foldings(text: string, lineComment?: string): { start: number; e
 // block, the file.
 export function selections(text: string, offset: number, word?: Painted): { begin: number; end: number }[] {
   const out: { begin: number; end: number }[] = [];
-  if (word) out.push({ begin: word.begin, end: word.end });
+  if (word) out.push({ begin: word.begin!, end: word.end! + 1 });
   const bol = text.lastIndexOf('\n', offset - 1) + 1;
   const eol = text.indexOf('\n', offset);
   out.push({ begin: bol, end: eol === -1 ? text.length : eol });

@@ -186,10 +186,12 @@ function position(at?: Node): Text.Node | undefined {
 
 interface Issue { phase: string; message: string; at?: Node }
 
-// One styled span — what an H group painted. `style` is the dotted path
-// after `H.` (group, then modifiers); `of` is the rule the span belongs to
-// (its ledger key), when a rule's match painted it.
-export interface Painted { begin: number; end: number; style: string; of?: string }
+// One styled span an H group painted, as a Text.Node the display layer reads
+// like any other node (inclusive `end`, as every node). `style` is the dotted
+// path after `H.`, `of` the rule's ledger key, `color` the terminal color
+// resolved at paint time (unset when `Log.coloring` is off, or the style has no
+// theme color).
+export class Painted extends Text.Node { style!: string; of?: string }
 
 // One expression — a span `expr()` reads. Canonical per file (one object per
 // start position, so a re-read or a sub-read of the same span reuses it),
@@ -211,6 +213,9 @@ export class Log {
   // exactly like issues are (forgotten on reload, repainted by the pass);
   // the display layer reads them back to paint its source excerpts
   painted = new Map<string, Painted[]>();
+  // resolve a terminal color onto each painted node as it's painted; off skips
+  // the resolution (the spans still carry style/of for the LSP).
+  coloring = true;
   // the expression currently being read — `expr()` keeps this pointed at its
   // span while it runs, and error/info tag their diagnostic with it so
   // `Diagnostics.report` can dedup cascaded errors. One canonical object per
@@ -231,10 +236,17 @@ export class Log {
   info(message: string, at?: Node): void {
     this.diagnostics.report({ level: 'info', message, node: position(at), expression: this.expression });
   }
-  paint(path: string, begin: number, end: number, style: string, of?: string): void {
-    let spans = this.painted.get(path);
-    if (!spans) this.painted.set(path, spans = []);
-    spans.push({ begin, end, style, of });
+  paint(src: Source, begin: number, end: number, style: string, of?: string): void {
+    if (src.path === undefined || end <= begin) return;
+    const node = new Painted();
+    node.source = tsource(src);
+    node.selection = [begin, end - 1];
+    node.style = style;
+    node.of = of;
+    if (this.coloring) node.color = Diagnostics.theme[style.split('.')[0]];
+    let spans = this.painted.get(src.path);
+    if (!spans) this.painted.set(src.path, spans = []);
+    spans.push(node);
   }
   // forget everything reported against these sources' files — a reload
   // re-derives them, including the per-file expression objects, so a stale
@@ -1128,7 +1140,7 @@ class Reader extends Walk {
     if (!lead) return false;
     const at = span(this.src, this.head, lead.end, ip.BASE);
     if (this.src.path !== undefined)
-      ip.log.paint(this.src.path, this.head, lead.end, ip.style_of(lead.target) ?? 'variable');
+      ip.log.paint(this.src,this.head, lead.end, ip.style_of(lead.target) ?? 'variable');
     // to the line's end, but never past this walk's own extent (a bounded
     // sub-span — a pattern piece being decorated — ends where it ends)
     const eol = Math.min(line_end(this.text, lead.args_begin), this.cursor.end);
@@ -1222,7 +1234,7 @@ class Reader extends Walk {
     const begin = this.sign === 1 ? this.head : this.head - name.length + 1;
     const at = span(this.src, begin, begin + name.length, ip.BASE);
     this.cut(this.sign === 1 ? at.end : at.begin);
-    if (this.src.path !== undefined) ip.log.paint(this.src.path, at.begin, at.end, ip.style_of(m) ?? 'variable');
+    if (this.src.path !== undefined) ip.log.paint(this.src,at.begin, at.end, ip.style_of(m) ?? 'variable');
     if (!m.fn) { this.result = m; return true; }
     // a method folds onto its receiver only in a direction it reads — plain
     // methods read left-to-right; the expression's anchor (no receiver yet)
@@ -1258,7 +1270,7 @@ class Reader extends Walk {
       return;
     }
     word.role = { kind: 'forward', name: word.text, on: this.ip.scope() };
-    if (this.src.path !== undefined) this.ip.log.paint(this.src.path, b, e, 'variable');
+    if (this.src.path !== undefined) this.ip.log.paint(this.src,b, e, 'variable');
     this.result = word;
     this.cut(this.sign === 1 ? e : b);
   }
@@ -1477,9 +1489,9 @@ class Interpreter {
       let arrow = r.pattern_end;
       while (src.text[arrow] === ' ') arrow++;
       const after = arrow + (lit?.text.length ?? 0);
-      if (caps[0]?.style !== undefined) this.log.paint(src.path, r.pattern_begin, arrow, caps[0].style, shape.key);
-      if (lit?.style !== undefined) this.log.paint(src.path, arrow, after, lit.style, shape.key);
-      if (caps[1]?.style !== undefined && r.body_end > after) this.log.paint(src.path, after, r.body_end, caps[1].style, shape.key);
+      if (caps[0]?.style !== undefined) this.log.paint(src,r.pattern_begin, arrow, caps[0].style, shape.key);
+      if (lit?.style !== undefined) this.log.paint(src,arrow, after, lit.style, shape.key);
+      if (caps[1]?.style !== undefined && r.body_end > after) this.log.paint(src,after, r.body_end, caps[1].style, shape.key);
     }
     this.paint_definition(src, r.pattern_begin, r.pattern_end, rule.pieces, rule);
     return rule;
@@ -1500,7 +1512,7 @@ class Interpreter {
     let literal_start = begin;
     let i = begin;
     const flush = (upto: number): void => {
-      if (upto > literal_start) { this.log.paint(path, literal_start, upto, own, rule.key); p++; }
+      if (upto > literal_start) { this.log.paint(src,literal_start, upto, own, rule.key); p++; }
     };
     while (i < end) {
       if (src.text[i] !== '{') { i++; continue; }
@@ -1512,12 +1524,12 @@ class Interpreter {
       if (piece?.style !== undefined) {
         const lead = this.declarative_at({ text: src.text.slice(i + 1, close - 1) }, 0);
         if (lead) {
-          this.log.paint(path, i + 1, i + 1 + lead.args_begin, piece.style, rule.key);
+          this.log.paint(src,i + 1, i + 1 + lead.args_begin, piece.style, rule.key);
           inner = i + 1 + lead.args_begin;
         }
       }
       const claimed = scan.literal_of(inner, close - 1);
-      if (claimed?.by.style !== undefined) this.log.paint(path, inner, close - 1, claimed.by.style, claimed.by.key);
+      if (claimed?.by.style !== undefined) this.log.paint(src,inner, close - 1, claimed.by.style, claimed.by.key);
       i = close;
       literal_start = i;
     }
@@ -1813,7 +1825,7 @@ class Interpreter {
       this.suppress_inside(rule, src, m);  // even recovery matches record what they consume
       // the match itself, attributed but unstyled — what "references of this
       // rule" means
-      if (src.path !== undefined) this.log.paint(src.path, m.begin, m.end, '', rule.key);
+      if (src.path !== undefined) this.log.paint(src,m.begin, m.end, '', rule.key);
       if (rule.style !== undefined || rule.styled) this.paint(rule, src, m);
       if (rule.disabled) return undefined;
       if (rule.external) return rule.external.fire({ rule, match: new Match(m, src, this.BASE), at, receiver, ip: this });
@@ -1841,7 +1853,7 @@ class Interpreter {
       }
       const style = piece.style
         ?? (rule.style !== undefined && (is_literal(piece) || (piece as Capture).raw) ? rule.style : undefined);
-      if (style !== undefined && end > begin) this.log.paint(src.path, begin, end, style, rule.key);
+      if (style !== undefined && end > begin) this.log.paint(src,begin, end, style, rule.key);
       pos = end;
     }
   }
@@ -2278,7 +2290,7 @@ function highlight_method(ip: Interpreter, owner: Node, group: string): Node {
     // identity over what it decorates — forwards stay quiet here, their
     // own definition sites report them
     const value = (self === owner ? args : ip.eval_block(args, true)) ?? args;
-    if (value.src?.path !== undefined && value.end > value.begin) ip.log.paint(value.src.path, value.begin, value.end, group);
+    if (value.src?.path !== undefined && value.end > value.begin) ip.log.paint(value.src, value.begin, value.end, group);
     STYLED.set(value, group);
     // decorating a hosted method is DEFINITIONAL: it lives on Node (or the
     // global scope) under its name — that hosting is how it's known — and

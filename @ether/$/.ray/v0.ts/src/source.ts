@@ -69,12 +69,36 @@ export namespace Text {
       }
       return lo === 0 ? cursor + 1 : cursor - nls[lo - 1];
     }
+
+    /** A node spanning line `lineNo` (0-based): the line's content with an
+     *  inclusive `end` (like every other node), or an empty node at the line
+     *  start for a blank line. So `.string` is the line text, sans newline. */
+    line(lineNo: number): Text.Node {
+      const nls = this.newlines;
+      const begin = lineNo === 0 ? 0 : nls[lineNo - 1] + 1;
+      const end = nls[lineNo] ?? this.value.length;   // newline / EOF, exclusive
+      const n = new Node();
+      n.source = this;
+      if (end > begin) n.selection = [begin, end - 1];
+      else n.cursor = begin;
+      return n;
+    }
+
+    /** Each line as a node (see `line`) paired with its 0-based index, so
+     *  `for (const [line, i] of source.lines)` mirrors `Array.map`'s (item, index). */
+    get lines(): Iterable<[Text.Node, number]> {
+      const self = this, count = this.newlines.length + 1;
+      return (function* () { for (let i = 0; i < count; i++) yield [self.line(i), i]; })();
+    }
   }
 
   export class Node implements Global.Node {
     cursor?: number;
     selection: number[] = [];
     source: Text.Source = Text.Source.EMPTY;
+    /** Render style for this node — an ANSI color when the diagnostic renderer
+     *  paints it; undefined when unstyled. */
+    color?: string;
 
     get file(): string | undefined { return this.source.location; }
 
@@ -110,6 +134,29 @@ export namespace Text {
     get string() {
       return this.empty() ? '' : this.source.value.slice(this.begin!, this.end! + 1);
     }
+
+    /** The node's ranges, inclusive ends. `selection` is packed [b0,e0,b1,e1,…];
+     *  an empty node is the single degenerate range at its cursor. */
+    get ranges(): { begin: number; end: number }[] {
+      if (this.selection.length === 0) return [{ begin: this.cursor!, end: this.cursor! }];
+      const out: { begin: number; end: number }[] = [];
+      for (let i = 0; i < this.selection.length; i += 2) out.push({ begin: this.selection[i], end: this.selection[i + 1] });
+      return out;
+    }
+
+    /** This node split into one single-range node per range — contiguous pieces
+     *  that can be ordered and styled independently. Each shares the source and
+     *  inherits this node's color. */
+    get segments(): Text.Node[] {
+      return this.ranges.map(r => {
+        const n = new Node();
+        n.source = this.source;
+        n.color = this.color;
+        n.selection = [r.begin, r.end];
+        return n;
+      });
+    }
+
 
     protected _left?: Direction;
     protected _right?: Direction;

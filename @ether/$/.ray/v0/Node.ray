@@ -35,8 +35,6 @@ H.punctuation = H.comment
 H.string `{string: String}` => string
 H.comment //{comment: String} =>
 
-// Grouping: that parentheses, brackets and braces nest is not built in — it
-// follows from these rules being active while scanning.
 H.punctuation {`{`}{expr}{`}`} => TODO
 H.punctuation ({expr}) => expr
 H.punctuation [{expr}] => expr
@@ -49,9 +47,7 @@ class Program
 
 class Node
   H.operator external **: Program
-  // The grammar-rule definition rule itself: the bootstrapper hardcodes this
-  // shape for this file only; once declared here, the interpreter relies on
-  // this declaration for every file that follows.
+  
   external {(H.function String.Word | H.punctuation `{`, H.parameter expr, H.punctuation `}`)[]}{H.keyword `=>`}{body}
 
   {H.punctuation `.`}{H.property property} => this[property]
@@ -67,7 +63,7 @@ class Node
   )
 
   test () TODO
-  test2 (parameter, parameter2) TODO2
+  test2 (parameter) TODO2
 
   external static
   external {H.punctuation `[`}{H.property property}{H.punctuation `]`}

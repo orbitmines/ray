@@ -33,65 +33,35 @@ export function offset_at(text: string, line: number, character: number): number
 export function encode(text: string, painted: Painted[], groups: string[], range?: [number, number]): number[] {
   const types = new Map(groups.map((g, i) => [g, i] as const));
   const bits = new Map(MODIFIERS.map((m, i) => [m, i] as const));
-  const lines = [0];
-  for (let i = 0; i < text.length; i++) if (text[i] === '\n') lines.push(i + 1);
-  const line_of = (offset: number): number => {
-    let lo = 0, hi = lines.length - 1;
-    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (lines[mid] <= offset) lo = mid; else hi = mid - 1; }
-    return lo;
-  };
 
-  interface Seg { char: number; len: number; type: number; mods: number }
-  const rows = new Map<number, Seg[]>();
-  for (const p of painted) {
-    if (range && (p.end <= range[0] || p.begin >= range[1])) continue;
+  // paint each char's token (type << 10 | mods), widest span first so the
+  // smaller span wins where they overlap — same as the terminal renderer
+  const cells = new Int32Array(text.length).fill(-1);
+  const spans = painted
+    .filter(p => types.has(p.style.split('.')[0]) && !(range && (p.end! + 1 <= range[0] || p.begin! >= range[1])))
+    .sort((a, b) => (b.end! - b.begin!) - (a.end! - a.begin!));
+  for (const p of spans) {
     const path = p.style.split('.');
-    const type = types.get(path[0]);
-    if (type === undefined) continue;
-    let mods = 0;
-    for (const m of path.slice(1)) { const b = bits.get(m); if (b !== undefined) mods |= 1 << b; }
-    let begin = Math.max(0, p.begin);
-    const end = Math.min(p.end, text.length);
-    while (begin < end) {
-      const line = line_of(begin);
-      const stop = Math.min(end, (lines[line + 1] ?? text.length + 1) - 1);
-      if (stop > begin) {
-        let row = rows.get(line);
-        if (!row) rows.set(line, row = []);
-        row.push({ char: begin - lines[line], len: stop - begin, type, mods });
-      }
-      begin = lines[line + 1] ?? end;
-    }
+    let cell = types.get(path[0])! << 10;
+    for (const m of path.slice(1)) { const b = bits.get(m); if (b !== undefined) cell |= 1 << b; }
+    for (let k = Math.max(p.begin!, 0); k <= Math.min(p.end!, text.length - 1); k++) cells[k] = cell;
   }
 
-  const all: (Seg & { line: number })[] = [];
-  for (const [line, row] of rows) {
-    row.sort((a, b) => a.len - b.len);
-    const taken: [number, number][] = [];
-    for (const seg of row) {
-      let parts: [number, number][] = [[seg.char, seg.char + seg.len]];
-      for (const [b, e] of taken) {
-        const next: [number, number][] = [];
-        for (const [pb, pe] of parts) {
-          if (e <= pb || b >= pe) { next.push([pb, pe]); continue; }
-          if (pb < b) next.push([pb, b]);
-          if (e < pe) next.push([e, pe]);
-        }
-        parts = next;
-      }
-      for (const [pb, pe] of parts) {
-        all.push({ line, char: pb, len: pe - pb, type: seg.type, mods: seg.mods });
-        taken.push([pb, pe]);
-      }
-    }
-  }
-  all.sort((a, b) => a.line - b.line || a.char - b.char);
-
+  // coalesce equal cells into per-line runs, delta-encoded; tokens never cross
+  // a newline
   const data: number[] = [];
-  let pl = 0, pc = 0;
-  for (const s of all) {
-    data.push(s.line - pl, s.line === pl ? s.char - pc : s.char, s.len, s.type, s.mods);
-    pl = s.line; pc = s.char;
+  let pl = 0, pc = 0, line = 0, col = 0, start = 0, run = -1;
+  const flush = () => {
+    if (run < 0) return;
+    data.push(line - pl, line === pl ? start - pc : start, col - start, run >> 10, run & 1023);
+    pl = line; pc = start; run = -1;
+  };
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') { flush(); line++; col = 0; continue; }
+    const cell = cells[i];
+    if (cell !== run) { flush(); start = col; run = cell; }
+    col++;
   }
+  flush();
   return data;
 }

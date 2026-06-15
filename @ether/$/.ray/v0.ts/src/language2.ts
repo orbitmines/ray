@@ -70,27 +70,36 @@ namespace Ray {
 
     })
       .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
-      .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
-
+      .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
   }
 
   export class Project {
     source: Source[] = []
+    dependencies: Project[] = []
 
-    constructor(public dot_project: Source, public interpreter: Interpreter) {}
+    interpreters: Map<Project, Interpreter> = new Map();
+
+    constructor(private program: Program, public dot_project: Source, interpreter: Interpreter) { this.interpreters.set(this, interpreter); }
     get directory(): string { return this.dot_project.dir; }
+
+    get is_language() { return (this.dot_project as Text.Source).line(0).string.includes('!language'); }
+    
+    get interpreter() { return this.interpreters.get(this); }
+    get dependants() { return this.interpreters.keys().filter(x => x !== this); }
+
+    depend_on(project: Project) {
+      if (this === project) return;
+      this.dependencies.push(project);
+      project.interpreters.set(this, this.interpreter.copy())
+    }
   }
 
   export class Program {
 
-    private projects: Project[] = []
-    private language?: Project
+    projects: Project[] = []
+    default_language: Project
 
     constructor(public diagnostics: Diagnostics, public initialize_interpreter: (interpreter: Interpreter) => void) { diagnostics.program = this; }
-
-    closure(project: Project): Project[] {
-      return this.language && this.language !== project ? [this.language] : [];
-    }
 
     project_of(src: Source): Project | undefined {
       let best: Project | undefined;
@@ -118,8 +127,8 @@ namespace Ray {
         const directory = project_directory_of(src);
         let project = this.projects.find(project => project.directory === directory);
         if (!project) {
-          const interpreter = new Interpreter(); this.initialize_interpreter(interpreter)
-          this.projects.push(project = new Project(src.is_dot_project ? src : ((directory: string): Source => {
+          const interpreter = new Interpreter(this.diagnostics); this.initialize_interpreter(interpreter)
+          this.projects.push(project = new Project(this, src.is_dot_project ? src : ((directory: string): Source => {
             const dot = new Text.Source();
             dot.location = `${directory}/.project${EXTENSION}`;
             dot.value = '';
@@ -132,8 +141,8 @@ namespace Ray {
       
       for (const src of srcs) home(src);
       
-      // a new `.project.ray` carved inside an existing project pulls its files in
       if (srcs.some(x => x.is_dot_project)) {
+        // a new `.project.ray` carved inside an existing project pulls its files in
         for (const project of [...this.projects]) for (const src of [...project.source])
           if (project_directory_of(src) !== project.directory) { project.source.splice(project.source.indexOf(src), 1); home(src); }
         this.projects = this.projects.filter(project => project.source.length > 0);
@@ -144,15 +153,13 @@ namespace Ray {
     async exec(): Promise<Node> {
       await Promise.all(this.projects.flatMap(project => [project.dot_project, ...project.source]).map(s => s.load()));
 
-      this.language = this.projects.find(project =>
-        project.dot_project.value.replace(/`/g, '').trimStart().startsWith('!language'));
+      this.default_language = this.projects.find(project => project.is_language);
+      if (!this.default_language) return this.diagnostics.report({ level: 'fatal', message: "Expected to have recognized the string !language (the project defining the default language) on the first line in a .project.ray file, but it wasn't provided." });
+    
+      // All projects depend on the default language.
+      for (const project of this.projects) project.depend_on(this.default_language);
 
-      for (const project of this.projects) {
-        const [foundation] = this.closure(project);
-        if (foundation) project.interpreter = foundation.interpreter.copy();
-      }
-
-      return this.language?.interpreter.GLOBAL!;
+      return this.default_language?.interpreter.GLOBAL!;
     }
     reload(next: Source | Node | Iterable<Source | Node>): Promise<Node> {
     }
@@ -197,18 +204,23 @@ namespace Ray {
   }
 
   export class Interpreter {
+    constructor(public diagnostics: Diagnostics, public copy_of?: Interpreter) {}
+
     BASE = new Node();
     PROGRAM = new Node(this.BASE);
     GLOBAL = new Node(this.BASE);
 
-    copy(): Interpreter {
+    refresh() {
+      if (!this.copy_of) return this.diagnostics.report({ level: 'fatal', message: "Can only refresh an interpreter which is a copy of another!" });
+
       const seen = new Map<Node, Node>();
-      const copy: Interpreter = Object.create(Interpreter.prototype);
-      copy.BASE = this.BASE.clone(seen);
-      copy.PROGRAM = this.PROGRAM.clone(seen);
-      copy.GLOBAL = this.GLOBAL.clone(seen);
-      return copy;
+      this.BASE = this.copy_of.BASE.clone(seen);
+      this.PROGRAM = this.copy_of.PROGRAM.clone(seen);
+      this.GLOBAL = this.copy_of.GLOBAL.clone(seen);
     }
+
+    copy(): Interpreter { return new Interpreter(this.diagnostics, this); }
+
   }
 }
 
@@ -359,7 +371,7 @@ const theme: Record<string, string> = { namespace: '\x1b[38;2;154;134;253m', typ
 
 export const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = { trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5 };
 export class Diagnostics {
-  items: Map</*location:*/ Text.Source | undefined, Map<Expression, Diagnostic[]>> = new Map();
+  items: Map</*location:*/ Text.Source | undefined, Map<Expression | undefined, Diagnostic[]>> = new Map();
 
   program?: Ray.Program
 
@@ -399,7 +411,7 @@ export class Diagnostics {
 
     for (const [header, srcs] of group(this.items.keys(), header_of)) {
       if (header) console.error(`${Diagnostics.levelColor.info}${header}${c.reset}`);
-      for (const src of srcs) this.print_lines_of(src!);
+      for (const src of srcs) if (src !== undefined) this.print_lines_of(src);
     }
 
     let first = true;
@@ -564,7 +576,7 @@ export class Diagnostics {
 
   format(entry: Diagnostic): string { return `${Diagnostics.levelColor[entry.level]}${entry.level}${c.reset} ${entry.message}${c.gray} [${env.version.toString()}]${c.reset}`; }
 
-  report(expression: Expression, entry: Diagnostic) {
+  report(entry: Diagnostic, expression?: Expression) {
     if (!this.is_visible(entry.level)) return;
     
     const source = entry.node?.source;

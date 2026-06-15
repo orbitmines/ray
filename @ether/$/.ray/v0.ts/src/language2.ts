@@ -66,11 +66,14 @@ namespace Ray {
   export const EXTENSION = '.ray'
 
   export function v0(diagnostics: Diagnostics) {
-    return new Program(diagnostics, interpreter => {
-
-    })
+    const program = new Program(diagnostics)
       .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
       .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
+
+    const language = program.default_language.interpreter;
+    
+    
+    return program;
   }
 
   export class Project {
@@ -99,7 +102,7 @@ namespace Ray {
     projects: Project[] = []
     default_language: Project
 
-    constructor(public diagnostics: Diagnostics, public initialize_interpreter: (interpreter: Interpreter) => void) { diagnostics.program = this; }
+    constructor(public diagnostics: Diagnostics) { diagnostics.program = this; }
 
     project_of(src: Source): Project | undefined {
       let best: Project | undefined;
@@ -127,7 +130,7 @@ namespace Ray {
         const directory = project_directory_of(src);
         let project = this.projects.find(project => project.directory === directory);
         if (!project) {
-          const interpreter = new Interpreter(this.diagnostics); this.initialize_interpreter(interpreter)
+          const interpreter = new Interpreter(this.diagnostics);
           this.projects.push(project = new Project(this, src.is_dot_project ? src : ((directory: string): Source => {
             const dot = new Text.Source();
             dot.location = `${directory}/.project${EXTENSION}`;

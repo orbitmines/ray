@@ -561,12 +561,11 @@ export namespace Ray {
 
     constructor(public _super?: Node) {}
 
-    // register a method on this node. A Rule registers as a grammar rule — it
-    // is itself the key, with its behaviour as the value, so it is type-bound:
-    // interpreting a value of this type sees it (`ruleset`). Any other key
-    // registers a callable as a method node.
+    // register a method on this node: a method node carrying the behaviour
+    // (`fn`), keyed by `key`. A Rule key makes it a grammar rule — type-bound,
+    // so interpreting a value of this type sees it (`ruleset`); the value is
+    // the rule's external method. A string key makes it a named method.
     method(key: Key, fn?: Method, ...flags: string[]): Node {
-      if (key instanceof Rule) { this.set(key, key); return key; }
       const node = new Node(this);
       node.fn = fn;
       for (const f of flags) node.flag(f);
@@ -2087,7 +2086,7 @@ export namespace Ray {
       if (!rule.exists && !rule.disabled) return;
       const on = this.node_of(rule.on);
       if (!on) return;  // a scope this pass hasn't created (yet)
-      on.method(rule);  // a grammar rule, keyed by its pattern on the type node
+      on.method(rule, rule.fn);  // keyed by the rule; value is its external method
     }
 
     // A fired rule consumed regions of raw text (comments, strings). Scan them
@@ -2353,7 +2352,9 @@ export namespace Ray {
         if (src.path !== undefined) this.log.paint(src,m.begin, m.end, '', rule.key);
         if (rule.style !== undefined || rule.styled) this.paint(rule, src, m);
         if (rule.disabled) return undefined;
-        if (rule.fn) return rule.fn({ interpreter: this, self: receiver, method: rule, args: at, at, match: new Match(m, src, this.BASE) });
+        // the rule's external method — the value under its key on its type node
+        const method = this.node_of(rule.on)?.get(rule) ?? rule;
+        if (method.fn) return method.fn({ interpreter: this, self: receiver, method: rule, args: at, at, match: new Match(m, src, this.BASE) });
         return this.evaluate(found, src, receiver);
       } finally {
         this.firing.delete(site);

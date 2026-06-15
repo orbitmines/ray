@@ -47,6 +47,8 @@ class Program
 
 class Node
   H.operator external **: Program
+
+  {block} => TODO
   
   external {(H.function String.Word | H.punctuation `{`, H.parameter expr, H.punctuation `}`)[]}{H.keyword `=>`}{body}
 
@@ -69,7 +71,6 @@ class Node
   external {H.punctuation `[`}{H.property property}{H.punctuation `]`}
 
   external = (x): x
-
 
 // Set the actual method used for function definitions.
 Node.DEFINE_METHOD = `&=`

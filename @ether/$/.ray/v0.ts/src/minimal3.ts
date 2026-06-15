@@ -1021,14 +1021,6 @@ export namespace Ray {
 
   const GLOBAL_SCOPE = '~';
 
-
-  type Directions =
-    | { read: 'ltr' }
-    | { read: 'rtl'; extent: number }
-    | { read: 'both'; extent: number; before: number; after: number }
-    | { read: 'mixed'; extent: number; names: string[] };
-
-
   class Interpreter {
     constructor(public program: Program, public diagnostics = new Diagnostics()) {
       this.BASE = new Node(); this.PROGRAM = new Node(this.BASE); this.GLOBAL = new Node(this.BASE);
@@ -1295,9 +1287,7 @@ export namespace Ray {
         const piece = pieces[p];
         if (is_literal(piece) || piece.at === undefined) continue;
         const shadow = new Text.Source(); shadow.value = piece.content;
-        const lead = this.declarative_at(shadow, 0);
-        const group = lead?.target.has_flag('highlight') ? STYLED.get(lead.target) : undefined;
-        const rest = group !== undefined ? { at: lead!.args_begin, style: group } : this.pending(shadow);
+        const rest = this.pending(shadow);
         if (rest !== undefined) {
           const dp = read_group(this.scan(shadow), rest.at, piece.content.length);
           dp.style = rest.style; dp.at = piece.at + rest.at; dp.from = piece.from; dp.to = piece.to;
@@ -1334,14 +1324,14 @@ export namespace Ray {
 
     private decorating = new Set<number>();
 
-    private pending(shadow: Source): { at: number; style?: string } | undefined {
-      const scan = this.scan(shadow);
-      const keyword = this.known(scan, 0, this.lookup());
+    private pending(src: Source, at = 0): { at: number; style?: string } | undefined {
+      const scan = this.scan(src);
+      const keyword = this.known(scan, at, this.lookup());
       if (!keyword) return undefined;
       let target = this.resolve(keyword);
       if (!target || target.fn || !target.has_flag('highlight')) return undefined;
-      const text = shadow.text;
-      let end = keyword.length;
+      const text = src.text;
+      let end = at + keyword.length;
       while (text[end] === '.') {
         const w = word_edge(scan, end + 1);
         if (w === end + 1) return undefined;
@@ -1349,7 +1339,7 @@ export namespace Ray {
         target = next?.role?.kind === 'bound' ? next.role.method : next;
         end = w;
       }
-      if (end === keyword.length || text[end] !== ' ') return undefined;
+      if (end === at + keyword.length || text[end] !== ' ') return undefined;
       let a = end;
       while (text[a] === ' ') a++;
       if (a >= text.length) return undefined;
@@ -1359,7 +1349,12 @@ export namespace Ray {
 
     define(at: Node, style?: string): Rule {
       const src = at.src!;
-      const r = recognize(src.text, at.begin, this.scan(src))!;
+      let begin = at.begin;
+      if (style === undefined) {
+        const lead = this.pending(src, at.begin);
+        if (lead) { begin = lead.at; style = lead.style; }
+      }
+      const r = recognize(src.text, begin, this.scan(src))!;
       const pattern = span(src, r.pattern_begin, r.pattern_end);
       const shape = [...this.rules.values()].find(s => s.name === 'rule-definition' && s.styled);
       if (src.path !== undefined && shape) {
@@ -1408,8 +1403,6 @@ export namespace Ray {
           let a = i;
           while (a < cap.end && src.text[a] === ' ') a++;
           if (a < cap.end && src.text[a] !== '\n') {
-            const lead = this.declarative_at(src, a);
-            if (lead) a = lead.args_begin;
             const r = recognize(src.text, a, this.scan(src));
             if (r && r.pattern_end <= cap.end) {
               const target = this.rule(span(src, r.pattern_begin, r.pattern_end), r.pieces, this.scope(), false);
@@ -1524,167 +1517,190 @@ export namespace Ray {
 
     // ── reading expressions ──
 
-    private directions(cursor: Node, indent: number): Directions {
-      const ip = this, src = cursor.src!, text = src.text;
-      const along: Directions = { read: 'ltr' };
-      if (!ip.rtl_names.size) return along;
-      const begin = cursor.head(1);
-      if (!ip.rtl_site_in(src, begin, line_end(text, begin))) return along;
-      const scan = ip.scan(src, 1);
-      const extent = expression_edge(scan, begin);
-      const lead = cursor.best_rule(ip, { sign: 1, indent, proven: new Set() });
-      if (lead && lead.m.end >= extent) return along;
-      const firstName = ip.known(scan, begin, ip.lookup());
-      if (firstName && ip.resolve(firstName)?.has_flag('declarative')) return along;
-      const tokens: { name: string; begin: number; end: number; rtl: boolean }[] = [];
-      let i = begin;
-      while (i < extent) {
-        const c = text[i];
-        if (c === ' ' || c === '\n') { i++; continue; }
-        if (scan.anchors.has(c)) { const far = scan.claim(i); if (far !== -1) { i = far + 1; continue; } }
-        const w = word_edge(scan, i);
-        if (w === i) { i++; continue; }
-        const name = text.slice(i, w);
-        const m = ip.resolve(name);
-        if (m?.fn && m.has_flag('right-to-left') !== m.has_flag('left-to-right'))
-          tokens.push({ name, begin: i, end: w, rtl: m.has_flag('right-to-left') });
-        i = w;
-      }
-      const rtls = tokens.filter(t => t.rtl);
-      if (!rtls.length) return along;
-      const ltrs = tokens.filter(t => !t.rtl);
-      if (!ltrs.length) return { read: 'rtl', extent };
-      const last_rtl = rtls[rtls.length - 1], first_ltr = ltrs[0];
-      if (last_rtl.end <= first_ltr.begin) return { read: 'both', extent, before: first_ltr.begin, after: last_rtl.end };
-      return { read: 'mixed', extent, names: [...new Set(tokens.map(t => t.name))] };
-    }
-
-    private read_loop(cursor: Node, sign: 1 | -1, indent: number, forwards: boolean): Node | undefined {
-      const ip = this, src = cursor.src!, text = src.text;
-      const scan = () => ip.scan(src, sign);
-      const dir = sign === 1 ? 'left-to-right' : 'right-to-left';
-      const proven = new Set<Rule>();
-      let result: Node | undefined;
-      let stopped = false;
-
-      const best_rule = (): Found | null => cursor.best_rule(ip, { result, sign, indent, proven });
-      const known = (): string | null => ip.known(scan(), cursor.head(sign), result ? ip.chain(result) : ip.lookup());
-      const rule_step = (found: Found | null = best_rule()): boolean => {
-        if (!found) return false;
-        result = ip.fire(found, src, result) ?? result;
-        cursor.cut(sign, sign === 1 ? found.m.end : found.m.begin);
-        return true;
-      };
-      const directed = (m: Node): boolean => {
-        const rtl = m.has_flag('right-to-left'), ltr = m.has_flag('left-to-right');
-        return sign === 1 ? (ltr || !rtl) : (rtl || (!ltr && result === undefined));
-      };
-      const token = (name: string): boolean => {
-        const m = result ? ip.resolve_on(result, name)! : ip.resolve(name)!;
-        const head = cursor.head(sign);
-        const begin = sign === 1 ? head : head - name.length + 1;
-        const at = span(src, begin, begin + name.length, ip.BASE);
-        cursor.cut(sign, sign === 1 ? at.end : at.begin);
-        if (src.path !== undefined) ip.paint(src, at.begin, at.end, ip.style_of(m) ?? 'variable');
-        if (!m.fn) { result = m; return true; }
-        if (!directed(m)) {
-          ip.error(result
-            ? `Found a method \`${name}\` on \`${result.text}\` but it wasn't flagged as ${dir}.`
-            : `Found a method \`${name}\` but it wasn't flagged as ${dir}.`, at);
-          return true;
-        }
-        const self = result ?? ip.scope();
-        const args = m.has_flag('callable') ? ip.expr(cursor, { forwards, indent, sign }) : undefined;
-        result = ip.invoke(m, { self, args, at }) ?? result;
-        return true;
-      };
-      const declarative = (): boolean => {
-        const head = cursor.head(sign);
-        const lead = ip.declarative_at(src, head);
-        if (!lead) return false;
-        const at = span(src, head, lead.end, ip.BASE);
-        if (src.path !== undefined) ip.paint(src, head, lead.end, ip.style_of(lead.target) ?? 'variable');
-        const eol = Math.min(line_end(text, lead.args_begin), cursor.end);
-        const value = ip.invoke(lead.target, { self: ip.scope(), args: span(src, Math.min(lead.args_begin, eol), eol, ip.BASE), at }) ?? undefined;
-        result = value;
-        cursor.cut(sign, value?.src === src && value.end > eol ? value.end : eol);
-        return true;
-      };
-      const step = (): boolean => {
-        const found = best_rule();
-        const name = known();
-        if (found && name) return found.m.end - found.m.begin >= name.length ? rule_step(found) : token(name);
-        if (found) return rule_step(found);
-        if (name) return token(name);
-        return false;
-      };
-      const word = (): void => {
-        const head = cursor.head(sign);
-        const exit = word_edge(scan(), head);
-        if (exit === head) { cursor.take(sign); return; }
-        const [b, e] = sign === 1 ? [head, exit] : [exit + 1, head + 1];
-        const w = span(src, b, e, ip.BASE);
-        if (result) {
-          if (result.role?.kind === 'forward' && !result.consumed) {
-            result.consumed = true;
-            ip.error(`Unresolved \`${result.role.name}\` on \`${result.role.on.text}\`.`, result);
-          }
-          let cell = result.get(w.text);
-          if (!cell) { cell = w; cell.role = { kind: 'forward', name: w.text, on: result }; result.set(w.text, cell); }
-          if (!forwards) cell.reference(w);
-          if (src.path !== undefined) ip.paint(src, b, e, 'variable');
-          result = cell;
-          cursor.cut(sign, sign === 1 ? e : b);
-          return;
-        }
-        w.role = { kind: 'forward', name: w.text, on: ip.scope() };
-        if (src.path !== undefined) ip.paint(src, b, e, 'variable');
-        result = w;
-        cursor.cut(sign, sign === 1 ? e : b);
-      };
-
-      let first = true;
-      while (!cursor.done() && !stopped) {
-        const c = cursor.at(sign);
-        if (c === undefined || c === '\n') break;
-        if (c === ' ') { if (!rule_step()) cursor.take(sign); continue; }
-        if (first) { first = false; if (sign === 1 && declarative()) continue; }
-        if (step()) continue;
-        word();
-      }
-      if (result?.role?.kind === 'forward' && !result.consumed && !forwards) {
-        result.consumed = true;
-        ip.error(`Unresolved variable \`${result.role.name}\`.`, result);
-      }
-      return result;
-    }
-
     expr(cursor: Node, reading: Reading = {}): Node | undefined {
+      const ip = this, src = cursor.src!, text = src.text;
       const parent = this.expression;
-      this.expression = this.expression_at(cursor.src!, cursor.begin, cursor.end, parent);
+      this.expression = this.expression_at(src, cursor.begin, cursor.end, parent);
       try {
-        const indent = reading.indent ?? indent_at(cursor.src!.text, cursor.begin);
+        const indent = reading.indent ?? indent_at(text, cursor.begin);
         const forwards = reading.forwards ?? false;
-        if (reading.sign !== undefined) return this.read_loop(cursor, reading.sign, indent, forwards);
-        const d = this.directions(cursor, indent);
-        if (d.read === 'ltr') return this.read_loop(cursor, 1, indent, forwards);
-        const src = cursor.src!;
-        const begin = cursor.begin;
-        cursor.begin = d.extent;
-        switch (d.read) {
-          case 'rtl':
-            return this.expr(span(src, begin, d.extent), { sign: -1, indent, forwards });
-          case 'both': {
-            const rtl = this.expr(span(src, begin, d.before), { sign: -1, indent, forwards });
-            const ltr = this.expr(span(src, d.after, d.extent), { sign: 1, indent, forwards });
-            return ltr ?? rtl;
+
+        // ── direction: read left-to-right unless right-to-left tokens flip it ──
+        let sign: 1 | -1 = reading.sign ?? 1;
+        if (reading.sign === undefined && ip.rtl_names.size) {
+          const begin = cursor.begin;
+          if (ip.rtl_site_in(src, begin, line_end(text, begin))) {
+            const sc = ip.scan(src, 1);
+            const extent = expression_edge(sc, begin);
+            const lead = cursor.best_rule(ip, { sign: 1, indent, proven: new Set() });
+            const claimed = !!(lead && lead.m.end >= extent);
+            if (!claimed) {
+              const tokens: { begin: number; end: number; rtl: boolean }[] = [];
+              for (let i = begin; i < extent; ) {
+                const c = text[i];
+                if (c === ' ' || c === '\n') { i++; continue; }
+                if (sc.anchors.has(c)) { const far = sc.claim(i); if (far !== -1) { i = far + 1; continue; } }
+                const w = word_edge(sc, i);
+                if (w === i) { i++; continue; }
+                const m = ip.resolve(text.slice(i, w));
+                if (m?.fn && m.has_flag('right-to-left') !== m.has_flag('left-to-right')) tokens.push({ begin: i, end: w, rtl: m.has_flag('right-to-left') });
+                i = w;
+              }
+              const rtls = tokens.filter(t => t.rtl);
+              if (rtls.length) {
+                const ltrs = tokens.filter(t => !t.rtl);
+                cursor.begin = extent;
+                if (!ltrs.length) return ip.expr(span(src, begin, extent), { sign: -1, indent, forwards });
+                const lastRtl = rtls[rtls.length - 1], firstLtr = ltrs[0];
+                if (lastRtl.end <= firstLtr.begin) {
+                  const rtl = ip.expr(span(src, begin, firstLtr.begin), { sign: -1, indent, forwards });
+                  const ltr = ip.expr(span(src, lastRtl.end, extent), { sign: 1, indent, forwards });
+                  return ltr ?? rtl;
+                }
+                ip.error(`Cannot mix ${[...new Set(tokens.map(t => text.slice(t.begin, t.end)))].map(n => `\`${n}\``).join(', ')} in a single infix expression with mixed associativity, use parenthesis to mix them.`, span(src, begin, extent));
+                return undefined;
+              }
+            }
           }
-          case 'mixed':
-            this.error(
-              `Cannot mix ${d.names.map(n => `\`${n}\``).join(', ')} in a single infix expression with mixed associativity, use parenthesis to mix them.`,
-              span(src, begin, d.extent));
-            return undefined;
         }
+
+        // ── read: walk the span in `sign`, folding each token onto `result` ──
+        const scan = () => ip.scan(src, sign);
+        const dir = sign === 1 ? 'left-to-right' : 'right-to-left';
+        const proven = new Set<Rule>();
+        let result: Node | undefined;
+        const best_rule = (): Found | null => cursor.best_rule(ip, { result, sign, indent, proven });
+        const known = (): string | null => ip.known(scan(), cursor.head(sign), result ? ip.chain(result) : ip.lookup());
+        const raw_args = (): Node => {
+          let a = cursor.head(sign); while (text[a] === ' ') a++;
+          const eol = Math.min(line_end(text, a), cursor.end);
+          cursor.cut(sign, eol);
+          return span(src, Math.min(a, eol), eol, ip.BASE);
+        };
+        const raw_apply = (): void => {
+          const callee = result?.role?.kind === 'bound' ? result.role.method : result;
+          if (sign !== 1 || !callee?.fn || !callee.has_flag('raw')) return;
+          const self = result?.role?.kind === 'bound' ? result.role.self : ip.scope();
+          const at = span(src, cursor.head(sign), cursor.head(sign), ip.BASE);
+          result = ip.apply(callee, { self, args: raw_args(), at }) ?? result;
+        };
+        const rule_step = (found: Found | null = best_rule()): boolean => {
+          if (!found) return false;
+          const { rule, m } = found;
+          const at = span(src, m.begin, m.end);
+          const site = `${id(rule.pattern)}:${src.path ?? ''}:${at.begin}`;
+          if (!ip.overflowed && !ip.firing.has(site)) {
+            if (ip.depth > 64) {
+              ip.overflowed = true;
+              ip.error(`Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at);
+            } else {
+              ip.firing.add(site); ip.depth++;
+              try {
+                if (result?.role?.kind === 'forward') result.consumed = true;
+                ip.suppress_inside(rule, src, m);
+                ip.paint(src, m.begin, m.end, '', rule.key);
+                if (rule.style !== undefined || rule.styled) {
+                  let pos = m.begin;
+                  for (const piece of rule.pieces) {
+                    let pb = pos, pe: number;
+                    if (is_literal(piece)) pe = pos + piece.text.length;
+                    else { const cap = m.captures.find(c => c.piece === piece); if (!cap) break; pb = cap.begin; pe = cap.end; }
+                    const style = piece.style ?? (rule.style !== undefined && (is_literal(piece) || (piece as Capture).raw) ? rule.style : undefined);
+                    if (style !== undefined) ip.paint(src, pb, pe, style, rule.key);
+                    pos = pe;
+                  }
+                }
+                if (!rule.disabled) {
+                  const method = ip.node_of(rule.on)?.get(rule) ?? rule;
+                  let fired: Node | undefined;
+                  if (method.fn) fired = ip.apply(method, { self: result, args: at, at, match: new Match(m, src, ip.BASE) });
+                  else if (rule.body && !rule.body.empty) {
+                    const ctx = new Node(ip.BASE);
+                    for (const cap of m.captures) {
+                      if (!cap.piece.name) continue;
+                      const node = span(src, cap.begin, cap.end, ip.BASE);
+                      const value = (cap.piece.name === 'expr' || cap.piece.name === 'args') ? (ip.eval_block(node) ?? node) : node;
+                      if (cap.piece.name === 'block') ip.abstract(value);
+                      ctx.set(cap.piece.name, value);
+                    }
+                    if (result) ctx.set('this', result);
+                    fired = ip.eval_in(ctx, rule.body);
+                  }
+                  result = fired ?? result;
+                }
+              } finally {
+                ip.firing.delete(site);
+                if (--ip.depth === 0) ip.overflowed = false;
+              }
+            }
+          }
+          cursor.cut(sign, sign === 1 ? found.m.end : found.m.begin);
+          raw_apply();
+          return true;
+        };
+        const directed = (m: Node): boolean => {
+          const rtl = m.has_flag('right-to-left'), ltr = m.has_flag('left-to-right');
+          return sign === 1 ? (ltr || !rtl) : (rtl || (!ltr && result === undefined));
+        };
+        const token = (name: string): boolean => {
+          const m = result ? ip.resolve_on(result, name)! : ip.resolve(name)!;
+          const head = cursor.head(sign);
+          const begin = sign === 1 ? head : head - name.length + 1;
+          const at = span(src, begin, begin + name.length, ip.BASE);
+          cursor.cut(sign, sign === 1 ? at.end : at.begin);
+          ip.paint(src, at.begin, at.end, ip.style_of(m) ?? 'variable');
+          if (!m.fn) { result = m; return true; }
+          if (!directed(m)) {
+            ip.error(result ? `Found a method \`${name}\` on \`${result.text}\` but it wasn't flagged as ${dir}.` : `Found a method \`${name}\` but it wasn't flagged as ${dir}.`, at);
+            return true;
+          }
+          const self = result ?? ip.scope();
+          let args: Node | undefined;
+          if (m.has_flag('raw')) args = raw_args();
+          else if (m.has_flag('callable')) args = ip.expr(cursor, { forwards, indent, sign });
+          result = ip.apply(m, { self, args, at }) ?? result;
+          return true;
+        };
+        const word = (): void => {
+          const head = cursor.head(sign);
+          const exit = word_edge(scan(), head);
+          if (exit === head) { cursor.take(sign); return; }
+          const [b, e] = sign === 1 ? [head, exit] : [exit + 1, head + 1];
+          const w = span(src, b, e, ip.BASE);
+          if (result) {
+            if (result.role?.kind === 'forward' && !result.consumed) {
+              result.consumed = true;
+              ip.error(`Unresolved \`${result.role.name}\` on \`${result.role.on.text}\`.`, result);
+            }
+            let cell = result.get(w.text);
+            if (!cell) { cell = w; cell.role = { kind: 'forward', name: w.text, on: result }; result.set(w.text, cell); }
+            if (!forwards) cell.reference(w);
+            ip.paint(src, b, e, 'variable');
+            result = cell;
+            cursor.cut(sign, sign === 1 ? e : b);
+            return;
+          }
+          w.role = { kind: 'forward', name: w.text, on: ip.scope() };
+          ip.paint(src, b, e, 'variable');
+          result = w;
+          cursor.cut(sign, sign === 1 ? e : b);
+        };
+
+        while (!cursor.done()) {
+          const c = cursor.at(sign);
+          if (c === undefined || c === '\n') break;
+          if (c === ' ') { if (!rule_step()) cursor.take(sign); continue; }
+          const found = best_rule();
+          const name = known();
+          if (found && (name === null || found.m.end - found.m.begin >= name.length)) rule_step(found);
+          else if (name) token(name);
+          else word();
+        }
+        if (result?.role?.kind === 'forward' && !result.consumed && !forwards) {
+          result.consumed = true;
+          ip.error(`Unresolved variable \`${result.role.name}\`.`, result);
+        }
+        return result;
       } finally {
         this.expression = parent;
       }
@@ -1712,65 +1728,6 @@ export namespace Ray {
     private depth = 0;
     private overflowed = false;
     private firing = new Set<string>();
-    fire(found: Found, src: Source, receiver: Node | undefined): Node | undefined {
-      const { rule, m } = found;
-      if (this.overflowed) return undefined;
-      const at = span(src, m.begin, m.end);
-      const site = `${id(rule.pattern)}:${src.path ?? ''}:${at.begin}`;
-      if (this.firing.has(site)) return undefined;
-      if (this.depth > 64) {
-        this.overflowed = true;
-        this.error(`Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at);
-        return undefined;
-      }
-      this.firing.add(site);
-      this.depth++;
-      try {
-        if (receiver?.role?.kind === 'forward') receiver.consumed = true;
-        this.suppress_inside(rule, src, m);
-        if (src.path !== undefined) this.paint(src, m.begin, m.end, '', rule.key);
-        if ((rule.style !== undefined || rule.styled) && src.path !== undefined) {
-          let pos = m.begin;
-          for (const piece of rule.pieces) {
-            let begin = pos, end: number;
-            if (is_literal(piece)) end = pos + piece.text.length;
-            else {
-              const cap = m.captures.find(c => c.piece === piece);
-              if (!cap) break;
-              begin = cap.begin; end = cap.end;
-            }
-            const style = piece.style
-              ?? (rule.style !== undefined && (is_literal(piece) || (piece as Capture).raw) ? rule.style : undefined);
-            if (style !== undefined) this.paint(src, begin, end, style, rule.key);
-            pos = end;
-          }
-        }
-        if (rule.disabled) return undefined;
-        const method = this.node_of(rule.on)?.get(rule) ?? rule;
-        if (method.fn) return method.fn({ interpreter: this, self: receiver, method: rule, args: at, at, match: new Match(m, src, this.BASE) });
-        return this.evaluate(found, src, receiver);
-      } finally {
-        this.firing.delete(site);
-        if (--this.depth === 0) this.overflowed = false;
-      }
-    }
-
-    private evaluate({ rule, m }: Found, src: Source, receiver: Node | undefined): Node | undefined {
-      if (!rule.body || rule.body.empty) return undefined;
-      const ctx = new Node(this.BASE);
-      for (const cap of m.captures) {
-        if (!cap.piece.name) continue;
-        const node = span(src, cap.begin, cap.end, this.BASE);
-        const value = (cap.piece.name === 'expr' || cap.piece.name === 'args')
-          ? (this.eval_block(node) ?? node)
-          : node;
-        if (cap.piece.name === 'block') this.abstract(value);
-        ctx.set(cap.piece.name, value);
-      }
-      if (receiver) ctx.set('this', receiver);
-      return this.eval_in(ctx, rule.body);
-    }
-
     // ── resolution ──
 
     known(scan: Scan, at: number, nodes: Iterable<Node>): string | null {
@@ -1795,38 +1752,8 @@ export namespace Ray {
       return best;
     }
 
-    declarative_at(src: Source, at: number): { target: Node; end: number; args_begin: number } | undefined {
-      const scan = this.scan(src);
-      const keyword = this.known(scan, at, this.lookup());
-      if (!keyword) return undefined;
-      const method = (node: Node | undefined): Node | undefined =>
-        node?.role?.kind === 'bound' ? node.role.method : node;
-      let target = method(this.resolve(keyword));
-      let end = at + keyword.length;
-      const text = src.text;
-      while (target && !target.fn && text[end] === '.') {
-        const name = this.known(scan, end + 1, this.chain(target));
-        let next = name ? method(this.resolve_on(target, name)) : undefined;
-        let length = name?.length ?? 0;
-        if (!next) {
-          const w = word_edge(scan, end + 1);
-          if (w > end + 1) {
-            next = method(this.resolve_on(target, text.slice(end + 1, w)));
-            length = w - (end + 1);
-          }
-        }
-        if (!next) break;
-        target = next;
-        end = end + 1 + length;
-      }
-      if (!target?.fn || !target.has_flag('declarative')) return undefined;
-      let a = end;
-      while (text[a] === ' ') a++;
-      return { target, end, args_begin: a };
-    }
-
-    invoke(method: Node, call: { self: Node; args?: Node; at: Node }): Node | undefined {
-      return method.fn!({ interpreter: this, self: call.self, method, args: call.args ?? span(call.at.src!, call.at.begin, call.at.begin, this.BASE), at: call.at });
+    apply(method: Node, call: { self: Node; args?: Node; at: Node; match?: Match }): Node | undefined {
+      return method.fn!({ interpreter: this, self: call.self, method, args: call.args ?? span(call.at.src!, call.at.begin, call.at.begin, this.BASE), at: call.at, match: call.match });
     }
 
     eval_in(scope: Node, block: Node | undefined, forwards = false): Node | undefined {
@@ -1873,6 +1800,29 @@ export namespace Ray {
       return undefined;
     }
 
+    group(on: Node, name: string): Node {
+      const node = new Node(this.BASE);
+      node.flag('highlight'); node.flag('raw');
+      STYLED.set(node, name);
+      node.fn = ({ args }) => {
+        if (args.empty) return node;
+        const at = args.src;
+        if (at) {
+          const r = recognize(at.text, args.begin, this.scan(at));
+          if (r && r.pattern_end <= args.end) { this.define(span(at, args.begin, args.end, this.BASE), name); return span(at, args.begin, r.end, this.BASE); }
+        }
+        const value = this.eval_block(args, true) ?? args;
+        if (value.src?.path !== undefined && value.end > value.begin) this.paint(value.src, value.begin, value.end, name);
+        STYLED.set(value, name);
+        const host = this.hosted(value);
+        const site = this.frames[this.frames.length - 1];
+        if (host && site) this.define_at(host.on, host.name, site, site.on && this.name_of(site.on));
+        return value;
+      };
+      on.set(name, node);
+      return node;
+    }
+
     abstract(block: Node): void {
       if (this.abstract_blocks && !block.empty) this.evaluate_program(block);
     }
@@ -1909,35 +1859,13 @@ export namespace Ray {
         words.shift();
       }
       const name = words[0].split(':')[0];
-      let target = this.resolve_on(on, name);
-      if (!target && on.has_flag('highlight')) {
-        const owner = on, group = name, node = new Node(this.BASE);
-        node.flag('declarative'); node.flag('highlight');
-        STYLED.set(node, group);
-        node.fn = ({ self, args }) => {
-          if (args.empty) return node;
-          const at = args.src;
-          if (self !== owner && at) {
-            const r = recognize(at.text, args.begin, this.scan(at));
-            if (r && r.pattern_end <= args.end) { this.define(span(at, args.begin, args.end, this.BASE), group); return span(at, args.begin, r.end, this.BASE); }
-          }
-          const value = (self === owner ? args : this.eval_block(args, true)) ?? args;
-          if (value.src?.path !== undefined && value.end > value.begin) this.paint(value.src, value.begin, value.end, group);
-          STYLED.set(value, group);
-          const host = this.hosted(value);
-          const site = this.frames[this.frames.length - 1];
-          if (host && site) this.define_at(host.on, host.name, site, site.on && this.name_of(site.on));
-          return value;
-        };
-        on.set(name, target = node);
-      }
-      target ??= this.resolve(name);
+      const target = this.resolve_on(on, name) ?? (on.has_flag('highlight') ? this.group(on, name) : this.resolve(name));
       if (!target) {
         this.error(`Expected method \`${name}\` to be externally defined by the runtime, but it wasn't.`, span(src, begin, end));
         return raw;
       }
       let declared: Node = target;
-      for (const modifier of modifiers) declared = this.invoke(modifier, { self: on, args: declared, at }) ?? declared;
+      for (const modifier of modifiers) declared = this.apply(modifier, { self: on, args: declared, at }) ?? declared;
       if (declared.has_flag('right-to-left') && !declared.has_flag('left-to-right')) this.rtl_names.add(name);
       const site = this.frames[this.frames.length - 1];
       if (site) this.define_at(this.name_of(on), name, site, site.on && this.name_of(site.on));
@@ -2044,7 +1972,7 @@ export namespace Ray {
     const bound = callee?.role?.kind === 'bound' ? callee.role : undefined;
     const method = bound ? bound.method : callee;
     const self = bound ? bound.self : callee;
-    if (method?.fn) return ip.invoke(method, { self: self ?? method, args, at }) ?? new Node();
+    if (method?.fn) return ip.apply(method, { self: self ?? method, args, at }) ?? new Node();
     if (method && !method.empty) return ip.evaluate_program(method);
     ip.error('Expected a function to call.', at);
     return new Node();
@@ -2054,8 +1982,8 @@ export namespace Ray {
   const STYLED = new WeakMap<Node, string>();
 
   const EXTERNALS: External[] = [
-    { name: 'external', flags: ['declarative'], fn: ({ interpreter: ip, self, args, at }) => ip.declare_external(args, self, at) },
-    { name: 'static', flags: ['declarative'], fn: ({ interpreter: ip, args }) => ip.eval_block(args) ?? args },
+    { name: 'external', flags: ['raw'], fn: ({ interpreter: ip, self, args, at }) => ip.declare_external(args, self, at) },
+    { name: 'static', flags: ['callable'], fn: ({ interpreter: ip, args }) => ip.eval_block(args) ?? args },
     { name: '=', flags: ['callable'], fn: call => assign(call.interpreter, call) },
     { name: '**', fn: ({ interpreter: ip, self }) => { const program = deref(ip, self) ?? self; program.sup = ip.PROGRAM; return program; } },
     { name: 'left-to-right', flags: ['callable', 'modifier'], fn: ({ args }) => args.flag('left-to-right') },

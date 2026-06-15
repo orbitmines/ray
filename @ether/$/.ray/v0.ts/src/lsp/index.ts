@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { ray } from '../minimal.ts';
+import { Ray, Diagnostics } from '../minimal3.ts';
 import { start } from './server.ts';
 
-start(await ray());
+start(Ray.lsp(new Diagnostics()));

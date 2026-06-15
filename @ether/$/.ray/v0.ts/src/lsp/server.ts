@@ -10,7 +10,7 @@ import {
   type InitializeResult,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { Program, type Source } from '../minimal.ts';
+import { Ray, type Source } from '../minimal3.ts';
 import { toLsp } from './diagnostics.ts';
 import { encode, offset_at, position_of, MODIFIERS } from './semantics.ts';
 import * as features from './features.ts';
@@ -27,8 +27,8 @@ import * as features from './features.ts';
  * whenever any file's diagnostics are fresh; we publish straight out of the
  * per-file index on `log.diagnostics.items`.
  */
-export async function start(program: Program): Promise<void> {
-  const log = await program.abstract().run();
+export async function start(program: Ray.Program): Promise<void> {
+  await program.abstract().exec();
   // the legend: whatever groups the language declared on H — fixed for the
   // session once capabilities go out
   const groups = program.groups;
@@ -48,23 +48,25 @@ export async function start(program: Program): Promise<void> {
     return file;
   };
 
-  // semantic tokens are pulled by the client — after a reload (cross-file
-  // grammar changes repaint files the client isn't editing) ask it to pull
-  // again, once per burst
+  // semantic tokens are pulled by the client — after a reload ask it to pull
+  // again. Throttled, NOT debounced: a burst of `reloaded` (the background
+  // re-derive touches every file) must not keep pushing the refresh back, or
+  // the painting only lands once the whole cycle finishes. Fire promptly after
+  // the first, then re-arm.
   let repainted: ReturnType<typeof setTimeout> | undefined;
   program.reloaded = (src: Source): void => {
     if (src.path === undefined) return;
     const uri = uris.get(src.path) ?? String(pathToFileURL(src.path));
-    const diagnostics = (log.diagnostics.items.get(src.path) ?? [])
-      .map(d => toLsp(d, src.path))
+    const bucket = program.diagnostics.items.get(src as any);
+    const diagnostics = (bucket ? [...bucket.values()].flat() : [])
+      .map(d => toLsp(d, src.path!))
       .filter((d): d is NonNullable<typeof d> => d !== null);
     connection.sendDiagnostics({ uri, diagnostics });
-    clearTimeout(repainted);
-    repainted = setTimeout(() => connection.languages.semanticTokens.refresh(), 150);
+    if (!repainted) repainted = setTimeout(() => { repainted = undefined; connection.languages.semanticTokens.refresh(); }, 30);
   };
 
   const reload = (uri: string, text: string): void => {
-    program.reload({ path: remember(uri), text });
+    program.reload(Ray.source(remember(uri), text));
   };
 
   connection.onInitialize((params: InitializeParams): InitializeResult => {
@@ -185,7 +187,7 @@ export async function start(program: Program): Promise<void> {
     const dotted = at.src.text[at.offset - 1] === '.';
     if (dotted) return program.groups.map(g => ({ label: g, kind: 20 /* EnumMember */ }));
     const names = new Set<string>();
-    for (const [key] of program.grammar.sites()) names.add(key.slice(key.indexOf('::') + 2));
+    for (const [key] of program.engine.sites()) names.add(key.slice(key.indexOf('::') + 2));
     return [...names].map(name => ({ label: name, kind: 2 /* Method */ }));
   });
 
@@ -198,7 +200,14 @@ export async function start(program: Program): Promise<void> {
   // passes derive next to the diagnostics)
   const tokens = (uri: string, range?: [number, number]): { data: number[] } => {
     const path = uriToFile(uri);
-    const src = program.sources.find(s => s.path === path);
+    let src = program.sources.find(s => s.path === path);
+    // the client auto-requests tokens on open, which can beat the didOpen that
+    // loads the file — so if it isn't painted yet, load it from the open
+    // document and paint it now (direct feedback is synchronous), no white flash
+    if (!src) {
+      const doc = documents.get(uri);
+      if (doc) { program.reload(Ray.source(path, doc.getText())); src = program.sources.find(s => s.path === path); }
+    }
     if (!src) return { data: [] };
     return { data: encode(src.text, program.highlighting.get(path) ?? [], groups, range) };
   };
@@ -232,7 +241,7 @@ export async function start(program: Program): Promise<void> {
     for (const uri of params.uris ?? []) {
       if (documents.get(uri)) continue;
       const file = remember(uri);
-      try { batch.push({ path: file, text: fs.readFileSync(file, 'utf-8') }); } catch { continue; }
+      try { batch.push(Ray.source(file, fs.readFileSync(file, 'utf-8'))); } catch { continue; }
     }
     if (batch.length) program.reload(batch);
   });
@@ -260,7 +269,7 @@ export async function start(program: Program): Promise<void> {
       const file = remember(change.uri);
       let text: string;
       try { text = fs.readFileSync(file, 'utf-8'); } catch { continue; }
-      program.reload({ path: file, text });
+      program.reload(Ray.source(file, text));
     }
   });
 

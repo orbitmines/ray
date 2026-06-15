@@ -1,4 +1,5 @@
-import type { Program, Painted } from '../minimal.ts';
+import type { Ray, Painted } from '../minimal2.ts';
+type Program = Ray.Program;
 
 // LSP features, as queries over the program's public surface — the grammar's
 // rules and definition sites, and the painted spans (the grammar's own
@@ -21,7 +22,7 @@ export function configuration(program: Program): {
   const quotes: [string, string][] = [];
   let lineComment: string | undefined;
   const seen = new Set<string>();
-  for (const rule of program.grammar.rules.values()) {
+  for (const rule of program.engine.rules.values()) {
     if (!rule.exists || rule.disabled) continue;
     const p = rule.pieces;
     if (p.length === 3 && p[0].kind === 'literal' && p[1].kind !== 'literal' && p[2].kind === 'literal') {
@@ -68,10 +69,10 @@ export function lexical(program: Program): { scopeName: string; patterns: object
 // grammar rules defined there.
 export function symbols(program: Program, path: string): { name: string; begin: number; end: number; rule: boolean }[] {
   const out: { name: string; begin: number; end: number; rule: boolean }[] = [];
-  for (const [key, site] of program.grammar.sites())
+  for (const [key, site] of program.engine.sites())
     if (site.src.path === path && site.end)
       out.push({ name: key.replace('::', '.'), begin: site.begin, end: site.end, rule: false });
-  for (const rule of program.grammar.rules.values())
+  for (const rule of program.engine.rules.values())
     for (const d of rule.definitions)
       if (d.at.src?.path === path && d.seen === 'live')
         out.push({ name: rule.pattern.text.trim().slice(0, 48), begin: d.at.begin, end: d.at.end, rule: true });
@@ -121,13 +122,13 @@ export function definition(program: Program, path: string, offset: number): Span
   // a span some rule's match painted — `{`, `]`, a quote — goes to that
   // rule's definitions
   const key = rule_at(program, path, offset);
-  const claimed = key !== undefined ? program.grammar.rules.get(key) : undefined;
+  const claimed = key !== undefined ? program.engine.rules.get(key) : undefined;
   if (claimed) {
     for (const o of claimed.definitions)
       if (o.at.src?.path !== undefined) out.push({ path: o.at.src.path, begin: o.at.begin, end: o.at.end });
     if (out.length) return out;
   }
-  for (const rule of program.grammar.rules.values())
+  for (const rule of program.engine.rules.values())
     for (const d of rule.definitions)
       if (d.at.src?.path === path && d.at.begin <= offset && offset < d.at.end) {
         for (const o of rule.definitions)
@@ -138,7 +139,7 @@ export function definition(program: Program, path: string, offset: number): Span
   const w = text !== undefined ? word_at(program, path, offset) : undefined;
   if (text === undefined || !w) return out;
   const word = text.slice(w.begin!, w.end! + 1);
-  for (const [key, site] of program.grammar.sites())
+  for (const [key, site] of program.engine.sites())
     if (site.end && site.src.path !== undefined && key.slice(key.indexOf('::') + 2) === word)
       out.push({ path: site.src.path, begin: site.begin, end: site.end });
   return out;
@@ -148,7 +149,7 @@ export function definition(program: Program, path: string, offset: number): Span
 // included) or inside one of its matches, the rule's matches; on a word,
 // every span the grammar read as that word, across the project.
 export function references(program: Program, path: string, offset: number): Span[] {
-  for (const [key, rule] of program.grammar.rules)
+  for (const [key, rule] of program.engine.rules)
     for (const d of rule.definitions)
       if (d.at.src?.path === path && d.at.begin <= offset && offset < d.at.end)
         return rule_references(program, key);
@@ -184,9 +185,9 @@ export function hover(program: Program, path: string, offset: number): string | 
     return `\`\`\`ray\n${rule.pattern.text.trim()}${body}\n\`\`\`${style}\n\n${n} sighting${n === 1 ? '' : 's'}`;
   };
   const key = rule_at(program, path, offset);
-  const claimed = key !== undefined ? program.grammar.rules.get(key) : undefined;
+  const claimed = key !== undefined ? program.engine.rules.get(key) : undefined;
   if (claimed) return about(claimed);
-  for (const rule of program.grammar.rules.values())
+  for (const rule of program.engine.rules.values())
     for (const d of rule.definitions)
       if (d.at.src?.path === path && d.at.begin <= offset && offset < d.at.end)
         return about(rule);
@@ -194,7 +195,7 @@ export function hover(program: Program, path: string, offset: number): string | 
   const w = text !== undefined ? word_at(program, path, offset) : undefined;
   if (text === undefined || !w) return undefined;
   const word = text.slice(w.begin!, w.end! + 1);
-  for (const [key, site] of program.grammar.sites())
+  for (const [key, site] of program.engine.sites())
     if (site.end && key.slice(key.indexOf('::') + 2) === word)
       return `\`\`\`ray\n${site.src.text.slice(site.begin, site.end).split('\n')[0]}\n\`\`\`\n\non \`${key.slice(0, key.indexOf('::'))}\``;
   return undefined;

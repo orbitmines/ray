@@ -52,7 +52,6 @@ export namespace Text {
 
     color?: string
     style?: string
-    of?: string
 
     get file(): string | undefined { return this.source.location; }
 
@@ -165,8 +164,6 @@ export namespace Text {
   }
 }
 
-export type Painted = Text.Node;
-
 export namespace Ray {
   export const EXTENSION = '.ray'
 
@@ -213,7 +210,10 @@ export namespace Ray {
     default_language: Project
 
     sources: Source[] = [];
+    private touched = new Map<string, string>();
     reloaded: (src: Source) => void = () => {};
+    private generation = 0;
+    private priority: string[] = [];
     active = new Set<string>();
     get abstract_blocks(): boolean { return this.abstractly; }
 
@@ -230,16 +230,16 @@ export namespace Ray {
       return out;
     }
     get groups(): string[] {
-      const h = this.engine.classes.get('H');
+      const h = this.classes.get('H');
       return h?.methods ? [...h.methods.keys()].filter((k): k is string => typeof k === 'string') : [];
     }
-    private generation = 0;
-    private settling?: ReturnType<typeof setTimeout>;
     private cycling: Promise<void> = Promise.resolve();
+    private requeue(work: () => Promise<void>): Promise<void> { return this.cycling = this.cycling.then(work, work); }
+    idle(): Promise<void> { return this.cycling; }
 
     private feedback(touched: Source[]): void {
       if (!touched.length) return;
-      const ip = this.engine;
+      const ip = new Interpreter(this, this.diagnostics, this.engine);
       ip.abstract_blocks = this.abstract_blocks;
       externals(ip);
       for (const src of touched) {
@@ -248,14 +248,23 @@ export namespace Ray {
         this.reloaded(src);
       }
     }
+
+    private async rederive(generation?: number): Promise<void> {
+      await Promise.all(this.sources.map(s => (s as Text.Source).load()));
+      this.survey(this.sources);
+      this.diagnostics.items.clear();
+      const ip = await this.cycle({ report: true, generation });
+      if (!ip) return;
+      if (![...this.engine.rules.values()].some(r => r.name === 'rule-definition' && r.project === undefined))
+        ip.error(`'${this.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
+    }
+    private settling?: ReturnType<typeof setTimeout>;
     private schedule(): void {
-      const g = this.generation;
-      const run = () => { this.cycling = this.cycling.then(() => this.generation === g ? this.rederive(g) : Promise.resolve()); };
+      const run = () => { const g = this.generation; this.requeue(() => this.generation === g ? this.rederive(g) : Promise.resolve()); };
       if (typeof setTimeout !== 'function') { run(); return; }
       clearTimeout(this.settling);
       this.settling = setTimeout(run, 300);
     }
-
     reload(next: Source | Node | Iterable<Source | Node>): void {
       const items: (Source | Node)[] = (next instanceof Node || !((next as any)?.[Symbol.iterator])) ? [next as Source] : [...(next as Iterable<Source | Node>)];
       const touched: Source[] = [];
@@ -280,7 +289,9 @@ export namespace Ray {
     }
     remove(path: string): void {
       const at = this.sources.findIndex(s => s.path === path);
-      if (at >= 0) { const removed = this.sources[at]; this.sources.splice(at, 1); this.diagnostics.forget(removed); this.reloaded(removed); }
+      const removed = at >= 0 ? this.sources[at] : undefined;
+      if (at >= 0) this.sources.splice(at, 1);
+      if (removed) { this.diagnostics.forget(removed); this.reloaded(removed); }
       this.generation++;
       this.schedule();
     }
@@ -332,83 +343,169 @@ export namespace Ray {
       return this;
     }
     
-    private async pass(order: Source[], report: boolean, generation?: number): Promise<Interpreter | undefined> {
-      const ip = this.engine;
-      ip.reset();
-      const log = ip.diagnostics;
-      if (!report) ip.diagnostics = new Diagnostics();
+    private async pass(order: Source[], opts: { report?: boolean; generation?: number; scope?: (rule: Rule) => boolean; files?: Set<string> } = {}): Promise<Interpreter | undefined> {
+      if (opts.files) this.engine.reset_files(opts.files);
+      else this.engine.reset(opts.scope);
+      const ip = new Interpreter(this, opts.report ? this.diagnostics : new Diagnostics(), this.engine);
       ip.abstract_blocks = this.abstract_blocks;
       externals(ip);
-      if (report) ip.diagnostics.forget_all([new Text.Source(), ...order]);
+      if (opts.report) ip.diagnostics.forget_all([new Text.Source(), ...order]);
       for (const src of order) {
         ip.parse(src);
-        if (report) {
-          for (const issue of ip.issues)
+        if (opts.report) {
+          for (const issue of this.engine.issues)
             if (src.path !== undefined && issue.at?.src?.path === src.path) ip.error(issue.message, issue.at);
           this.reloaded(src);
         }
-        if (generation !== undefined) {
+        if (opts.generation !== undefined) {
           await new Promise<void>(resolve => typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0));
-          if (this.generation !== generation) { ip.diagnostics = log; return undefined; }
+          if (this.generation !== opts.generation) return undefined;
         }
       }
-      if (report) for (const issue of ip.issues)
+      if (opts.report) for (const issue of this.engine.issues)
         if (issue.at?.src?.path === undefined) ip.error(issue.message, issue.at);
-      ip.diagnostics = log;
       return ip;
     }
 
-    private async derive(report: boolean, generation?: number): Promise<Interpreter | undefined> {
-      const order = [...this.sources]
-        .filter(s => !s.path?.endsWith(`/.project${EXTENSION}`))
-        .sort((a, b) => (this.language(a) ? 0 : 1) - (this.language(b) ? 0 : 1));
-      this.engine.issues = [];
-      this.engine.clear();
-      let size = this.engine.rules.size;
-      let ip = await this.pass(order, false, generation);
-      if (!ip) return undefined;
-      let moving = this.engine.analyze() || this.engine.rules.size !== size;
-      size = this.engine.rules.size;
-      for (let i = 0; i < 3; i++) {
-        let probing = false;
-        for (const rule of this.engine.rules.values()) {
-          if (rule.disabled || rule.exists) continue;
-          const contingent = rule.definitions.some(d =>
-            d.seen instanceof Rule && !d.seen.disabled && !d.seen.definitions.some(x => x.seen === 'live'));
-          if (contingent) { rule.exists = true; probing = true; }
-        }
-        if (!probing && !moving) break;
-        ip = await this.pass(order, false, generation);
+    private async cycle(opts: { report?: boolean; generation?: number; scope?: Set<string> | 'all' } = {}): Promise<Interpreter | undefined> {
+      const scoped = opts.scope instanceof Set ? opts.scope : undefined;
+      const covers = (project?: string): boolean => !scoped || project === undefined || scoped.has(project);
+      const inside = (src: Source): boolean => this.language(src) || covers(this.project(src));
+      const rule_scope = (rule: Rule): boolean => covers(rule.project);
+      const all = this.prioritized().filter(inside);
+
+      const tangled = (): boolean =>
+        this.engine.issues.some(i => i.at?.src !== undefined && inside(i.at.src))
+        || [...this.engine.rules.values()].some(rule => rule_scope(rule) && rule.disabled);
+
+      const files_of = (order: Source[]): Set<string> =>
+        new Set(order.map(src => src.path).filter((p): p is string => p !== undefined));
+
+      const pipeline = async (order: Source[], reset: { files?: Set<string>; scope?: (rule: Rule) => boolean }): Promise<Interpreter | undefined> => {
+        let ip = await this.pass(order, { generation: opts.generation, ...reset });
         if (!ip) return undefined;
-        moving = this.engine.analyze() || this.engine.rules.size !== size;
-        size = this.engine.rules.size;
-      }
-      const reported = this.engine.issues.length;
-      ip = await this.pass(order, report, generation);
-      if (!ip) return undefined;
-      this.engine.analyze();
-      if (report) {
-        const republish = new Set<Source>();
-        for (const issue of this.engine.issues.slice(reported)) {
-          if (issue.at?.src?.path === undefined) continue;
-          ip.error(issue.message, issue.at);
-          const src = order.find(s => s.path === issue.at!.src!.path);
-          if (src) republish.add(src);
+        let moving = this.engine.analyze(rule_scope);
+        for (let i = 0; i < 3; i++) {
+          let probing = false;
+          for (const rule of this.engine.rules.values()) {
+            if (!rule_scope(rule) || rule.disabled || rule.exists) continue;
+            const contingent = rule.definitions.some(d =>
+              d.seen instanceof Rule && !d.seen.disabled && !d.seen.definitions.some(x => x.seen === 'live'));
+            if (contingent) { rule.exists = true; probing = true; }
+          }
+          if (!probing && !moving) break;
+          ip = await this.pass(order, { generation: opts.generation, ...reset });
+          if (!ip) return undefined;
+          moving = this.engine.analyze(rule_scope);
         }
-        for (const src of republish) this.reloaded(src);
+        return ip;
+      };
+
+      const settle = (final: Interpreter): Interpreter => {
+        this.remember(covers);
+        for (const [path, project] of [...this.touched]) if (covers(project)) this.touched.delete(path);
+        if (!scoped) for (const project of this.projects)
+          project.interpreters.set(project, project === this.default_language ? this.engine : this.engine.copy());
+        return final;
+      };
+      const finish = async (order: Source[], reset: { files?: Set<string>; scope?: (rule: Rule) => boolean }): Promise<Interpreter | undefined> => {
+        const reported = this.engine.issues.length;
+        const final = await this.pass(order, { report: opts.report, generation: opts.generation, ...reset });
+        if (!final) return undefined;
+        this.engine.analyze(rule_scope);
+        if (opts.report) {
+          const republish = new Set<Source>();
+          for (const issue of this.engine.issues.slice(reported)) {
+            if (issue.at?.src?.path === undefined) continue;
+            final.error(issue.message, issue.at);
+            const src = order.find(s => s.path === issue.at!.src!.path);
+            if (src) republish.add(src);
+          }
+          for (const src of republish) this.reloaded(src);
+        }
+        return settle(final);
+      };
+
+      const derive = async (): Promise<Interpreter | undefined> => {
+        if (this.settled.size && !this.touched.size) {
+          const optimistic = await this.pass(all, { report: opts.report, generation: opts.generation, scope: rule_scope });
+          if (!optimistic) return undefined;
+          this.engine.analyze(rule_scope);
+          if (!this.drifted(covers).length) return settle(optimistic);
+        }
+        this.engine.issues = this.engine.issues.filter(i => i.at?.src !== undefined && !inside(i.at.src));
+        this.engine.clear(rule_scope);
+        if (!await pipeline(all, { scope: rule_scope })) return undefined;
+        return finish(all, { scope: rule_scope });
+      };
+
+      if (!scoped || tangled()) return derive();
+
+      let affected = all.filter(src => this.language(src) || (src.path !== undefined && this.touched.has(src.path)));
+      if (affected.length >= all.length) return derive();
+      for (let round = 0; ; round++) {
+        if (!await pipeline(affected, { files: files_of(affected) })) return undefined;
+        let edges = round < 16 ? this.drifted(covers) : null;
+        if (edges !== null && edges.length > 32) edges = null;
+        const have = new Set(affected.map(src => src.path));
+        const expansion = all.filter(src => !have.has(src.path) && (
+          edges === null
+          || edges.some(need => need.every(edge => src.text.includes(edge)))
+          || this.engine.issues.some(i => i.at?.src?.path === src.path)));
+        if (expansion.length) { affected = [...affected, ...expansion]; continue; }
+        if (tangled()) return derive();
+        const final = await finish(affected, { files: files_of(affected) });
+        if (!final) return undefined;
+        if (tangled()) return derive();
+        return final;
       }
-      for (const project of this.projects)
-        project.interpreters.set(project, project === this.default_language ? this.engine : this.engine.copy());
-      return ip;
     }
 
-    private async rederive(generation?: number): Promise<void> {
-      this.survey(this.sources);
-      this.diagnostics.items.clear();
-      const ip = await this.derive(true, generation);
-      if (!ip) return;
-      if (![...this.engine.rules.values()].some(r => r.name === 'rule-definition' && r.project === undefined))
-        ip.error(`'${this.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
+    private settled = new Map<string, { project?: string; exists: boolean; disabled: boolean; body: string; edges: string[] }>();
+
+    private remember(covers: (project?: string) => boolean): void {
+      for (const [key, was] of [...this.settled])
+        if (covers(was.project) && !this.engine.rules.has(key)) this.settled.delete(key);
+      for (const [key, rule] of this.engine.rules) {
+        if (!covers(rule.project)) continue;
+        this.settled.set(key, {
+          project: rule.project,
+          exists: rule.exists,
+          disabled: rule.disabled,
+          body: rule.body?.text ?? '',
+          edges: [rule.anchor, rule.tail].filter((e): e is string => e !== undefined),
+        });
+      }
+    }
+
+    private drifted(covers: (project?: string) => boolean): string[][] {
+      const needs: string[][] = [];
+      const seen = new Set<string>();
+      const need = (edges: string[]): void => {
+        if (!edges.length) return;
+        const sorted = [...edges].sort((a, b) => b.length - a.length);
+        const key = sorted.join(' ');
+        if (!seen.has(key)) { seen.add(key); needs.push(sorted); }
+      };
+      for (const [key, rule] of this.engine.rules) {
+        if (!covers(rule.project)) continue;
+        const was = this.settled.get(key);
+        if (was && was.exists === rule.exists && was.disabled === rule.disabled && was.body === (rule.body?.text ?? '')) continue;
+        need([rule.anchor, rule.tail].filter((e): e is string => e !== undefined));
+      }
+      for (const [key, was] of this.settled) {
+        if (!covers(was.project) || this.engine.rules.has(key)) continue;
+        need(was.edges);
+      }
+      return needs;
+    }
+
+    private prioritized(): Source[] {
+      const rank = (src: Source): number =>
+        this.language(src) ? 0
+        : src.path !== undefined && this.priority.includes(src.path) ? 1
+        : src.path !== undefined && this.active.has(src.path) ? 2 : 3;
+      return [...this.sources].filter(s => !s.path?.endsWith(`/.project${EXTENSION}`)).sort((a, b) => rank(a) - rank(b));
     }
 
     async exec(): Promise<Node> {
@@ -424,9 +521,9 @@ export namespace Ray {
       const seed = new Text.Source(); seed.value = '{(String.Word | `{`, expr, `}`)[]}=>{body}';
       this.engine.register(span(seed, 0, seed.value.length), [], 'Node', this.language_project);
 
-      const ip = (await this.derive(true))!;
+      const ip = await this.cycle({ report: true });
       if (![...this.engine.rules.values()].some(r => r.name === 'rule-definition' && r.project === undefined))
-        ip.error(`'${this.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
+        ip!.error(`'${this.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
 
       return this.default_language.interpreter!.GLOBAL;
     }
@@ -532,14 +629,8 @@ export namespace Ray {
     position?: Text.Node
     role?: Role
     consumed = false
-    references?: Node[]
 
     constructor(public _super?: Node) {}
-
-    reference(at: Node): void {
-      (this.references ??= []);
-      if (!this.references.some(r => r.src?.path === at.src?.path && r.begin === at.begin)) this.references.push(at);
-    }
 
     method(key: Key, fn?: Method, ...flags: string[]): Node {
       const node = new Node(this);
@@ -660,15 +751,14 @@ export namespace Ray {
     constructor(public src: Source, public begin: number, public end: number, public parent?: Expression) {
       parent?.children.push(this);
     }
-    paint(src: Source, begin: number, end: number, style: string, of?: string): void {
+    paint(src: Source, begin: number, end: number, style: string): void {
       if (src.path === undefined || end <= begin) return;
-      const key = `${src.path}:${begin}:${end}:${style}:${of ?? ''}`;
+      const key = `${src.path}:${begin}:${end}:${style}`;
       if (this.painted.has(key)) return;
       this.painted.add(key);
       const node = new Text.Node(src as Text.Source);
       node.selection = [begin, end - 1];
       node.style = style;
-      node.of = of;
       node.color = theme[style.split('.')[0]];
       this.nodes.push(node);
     }
@@ -1030,16 +1120,34 @@ export namespace Ray {
 
 
   class Interpreter {
-    constructor(public program: Program, public diagnostics = new Diagnostics()) {
-      this.BASE = new Node(); this.PROGRAM = new Node(this.BASE); this.GLOBAL = new Node(this.BASE);
-      this.classes = new Map<string, Node>([['Node', this.BASE], ['*', this.BASE], ['Program', this.PROGRAM]]);
-      this.transients = new Map<string, Node>();
+    constructor(public program: Program, public diagnostics = new Diagnostics(), share?: Interpreter) {
+      this.root = share ?? this;
+      if (share) {
+        this.BASE = share.BASE; this.PROGRAM = share.PROGRAM; this.GLOBAL = share.GLOBAL;
+        this.classes = share.classes; this.transients = share.transients;
+      } else {
+        this.BASE = new Node(); this.PROGRAM = new Node(this.BASE); this.GLOBAL = new Node(this.BASE);
+        this.classes = new Map<string, Node>([['Node', this.BASE], ['*', this.BASE], ['Program', this.PROGRAM]]);
+        this.transients = new Map<string, Node>();
+        this._defs_now = new Map(); this._defs_before = new Map();
+        this._issues = []; this._new_rules = false;
+      }
       this.scopes = [this.GLOBAL];
     }
 
-    defs_now = new Map<string, Site>();
-    defs_before = new Map<string, Site>();
-    issues: Issue[] = [];
+    root: Interpreter;
+    private _defs_now!: Map<string, Site>;
+    private _defs_before!: Map<string, Site>;
+    private _issues!: Issue[];
+    private _new_rules!: boolean;
+    get defs_now(): Map<string, Site> { return this.root._defs_now; }
+    set defs_now(v: Map<string, Site>) { this.root._defs_now = v; }
+    get defs_before(): Map<string, Site> { return this.root._defs_before; }
+    set defs_before(v: Map<string, Site>) { this.root._defs_before = v; }
+    get issues(): Issue[] { return this.root._issues; }
+    set issues(v: Issue[]) { this.root._issues = v; }
+    get new_rules(): boolean { return this.root._new_rules; }
+    set new_rules(v: boolean) { this.root._new_rules = v; }
 
     get expression(): Expression | undefined { return this.diagnostics.expression; }
     set expression(e: Expression | undefined) { this.diagnostics.expression = e; }
@@ -1052,8 +1160,8 @@ export namespace Ray {
     info(message: string, at?: Node): void {
       this.diagnostics.report({ level: 'info', message, node: at?.position }, this.expression as any);
     }
-    paint(src: Source, begin: number, end: number, style: string, of?: string): void {
-      this.expression?.paint(src, begin, end, style, of);
+    paint(src: Source, begin: number, end: number, style: string): void {
+      this.expression?.paint(src, begin, end, style);
     }
 
     BASE: Node;
@@ -1120,10 +1228,10 @@ export namespace Ray {
         for (const rule of [...node.ruleset])
           if (rule.project !== undefined && rule.project !== this.program.language_project) node.delete(rule);
     }
-    clear(): void {
+    clear(scope: (rule: Rule) => boolean = () => true): void {
       for (const node of this.rule_nodes())
         for (const rule of [...node.ruleset])
-          if (rule.project !== this.program.language_project) node.delete(rule);
+          if (scope(rule) && rule.project !== this.program.language_project) node.delete(rule);
     }
     register(pattern: Node, pieces: Piece[], on: string, project?: string): Rule {
       const text = pattern_key(pattern, pieces);
@@ -1136,6 +1244,7 @@ export namespace Ray {
         rule.project = project;
         rule.key = key;
         node.method(rule, rule.fn);
+        this.new_rules = true;
       } else if (pieces !== rule.pieces) {
         for (let i = 0; i < pieces.length && i < rule.pieces.length; i++) {
           const style = pieces[i].style;
@@ -1148,15 +1257,24 @@ export namespace Ray {
       return rule;
     }
 
-    reset(): void {
-      this.rtl_names.clear();
+    reset(scope: (rule: Rule) => boolean = () => true): void {
+      this.new_rules = false;
       this.defs_before = this.defs_now;
       this.defs_now = new Map();
-      for (const rule of this.rules.values()) for (const d of rule.definitions) d.seen = undefined;
+      for (const rule of this.rules.values()) if (scope(rule)) for (const d of rule.definitions) d.seen = undefined;
     }
 
-    analyze(): boolean {
-      const rules = [...this.rules.values()].filter(r => !r.disabled && r.definitions.length);
+    reset_files(paths: Set<string>): void {
+      this.new_rules = false;
+      for (const [k, v] of this.defs_now) this.defs_before.set(k, v);
+      this.defs_now.clear();
+      for (const rule of this.rules.values())
+        for (const d of rule.definitions)
+          if (d.at.src?.path !== undefined && paths.has(d.at.src.path)) d.seen = undefined;
+    }
+
+    analyze(scope: (rule: Rule) => boolean = () => true): boolean {
+      const rules = [...this.rules.values()].filter(r => scope(r) && !r.disabled && r.definitions.length);
       const state = new Map<Rule, boolean>(rules.map(r => [r, true]));
       const step = (): boolean => {
         const previous = new Map(state);
@@ -1187,7 +1305,7 @@ export namespace Ray {
         if (exists !== r.exists) moved = true;
         r.exists = exists;
       }
-      return moved;
+      return this.new_rules || moved;
     }
 
     private report_cycles(oscillating: Set<Rule>, { state, step, limit }: { state: Map<Rule, boolean>; step: () => boolean; limit: number }): void {
@@ -1237,8 +1355,8 @@ export namespace Ray {
       ip.GLOBAL = this.GLOBAL.clone(seen);
       ip.classes = new Map(); for (const [name, node] of this.classes) ip.classes.set(name, node.clone(seen));
       ip.transients = new Map(); for (const [name, node] of this.transients) ip.transients.set(name, node.clone(seen));
-      ip.defs_now = new Map(this.defs_now);
-      ip.defs_before = new Map(this.defs_before);
+      ip._defs_now = new Map(this.defs_now);
+      ip._defs_before = new Map(this.defs_before);
       ip.scopes = [ip.GLOBAL];
       ip.abstract_blocks = this.abstract_blocks;
       ip.rtl_names = new Set(this.rtl_names);
@@ -1394,6 +1512,7 @@ export namespace Ray {
     }
 
     install(_rule?: Rule): void {
+      this.scans.clear();
       this.rules_version++;
     }
 
@@ -1424,6 +1543,8 @@ export namespace Ray {
 
     // ── the scanning context ──
 
+    private scans = new Map<number, number>();
+    private signatures = new Map<string, number>();
     private scan_depth = 0;
     private scan_cache?: { epoch: number; version: number; src: Source; scans: Map<1 | -1, Scan> };
     scan(src: Source, sign: 1 | -1 = 1): Scan {
@@ -1432,26 +1553,38 @@ export namespace Ray {
         cached = this.scan_cache = { epoch: this.scope_epoch, version: this.rules_version, src, scans: new Map() };
       const hit = cached.scans.get(sign);
       if (hit) return hit;
+      const anchors = new Set<string>();
       const claimable = new Map<string, Rule[]>();
-      for (const node of this.lookup())
+      let signature = `${id(src)}${sign === 1 ? '>' : '<'}|`;
+      for (const node of this.lookup()) {
+        let carries_rules = false;
         for (const rule of this.rules_on(node)) {
+          carries_rules = true;
           if (!rule.anchored || !rule.delimited || (rule.project !== undefined && rule.project !== this.program.project(src))) continue;
           const c = rule.edge_char(sign)!;
+          anchors.add(c);
           let bucket = claimable.get(c);
           if (!bucket) claimable.set(c, bucket = []);
           if (!bucket.includes(rule)) bucket.push(rule);
         }
-      const memo = new Map<number, number>();
+        if (carries_rules) signature += `${id(node)}.`;
+      }
+      let sig = this.signatures.get(signature);
+      if (sig === undefined) this.signatures.set(signature, sig = this.signatures.size + 1);
+      const base = sig * 2 ** 32;
       const scan: Scan = {
         text: src.text,
         sign,
-        anchors: new Set(claimable.keys()),
+        anchors,
         claim: (j) => {
           const candidates = claimable.get(src.text[j]);
           if (!candidates) return -1;
-          if (!candidates.some(rule => lit_at(scan, j, rule.edge(sign)!))) return -1;
+          let viable = false;
+          for (const rule of candidates) if (lit_at(scan, j, rule.edge(sign)!)) { viable = true; break; }
+          if (!viable) return -1;
           if (this.scan_depth > 64) return -1;
-          const hit = memo.get(j);
+          const key = base + j;
+          const hit = this.scans.get(key);
           if (hit !== undefined) return hit;
           this.scan_depth++;
           try {
@@ -1463,7 +1596,7 @@ export namespace Ray {
               const far = sign === 1 ? m.end - 1 : m.begin;
               if (best === -1 || far * sign > best * sign) best = far;
             }
-            memo.set(j, best);
+            this.scans.set(key, best);
             return best;
           } finally { this.scan_depth--; }
         },
@@ -1498,7 +1631,7 @@ export namespace Ray {
       this.scope_epoch++;
     }
 
-    frames: Site[] = [];
+    sites: Site[] = [];
     statements(cursor: Node, forwards = false): Node | undefined {
       const text = cursor.src!.text;
       let result: Node | undefined;
@@ -1507,9 +1640,9 @@ export namespace Ray {
         if (cursor.begin >= cursor.end) break;
         const before = cursor.begin;
         const frame: Site = { src: cursor.src!, begin: before, end: 0, on: this.scope() };
-        this.frames.push(frame);
+        this.sites.push(frame);
         const r = this.expr(cursor, { forwards });
-        this.frames.pop();
+        this.sites.pop();
         frame.end = Math.max(cursor.begin, before);
         if (r !== undefined) result = r;
         if (cursor.begin <= before) cursor.begin = before + 1;
@@ -1625,16 +1758,9 @@ export namespace Ray {
         const [b, e] = sign === 1 ? [head, exit] : [exit + 1, head + 1];
         const w = span(src, b, e, ip.BASE);
         if (result) {
-          if (result.role?.kind === 'forward' && !result.consumed) {
-            result.consumed = true;
-            ip.error(`Unresolved \`${result.role.name}\` on \`${result.role.on.text}\`.`, result);
-          }
-          let cell = result.get(w.text);
-          if (!cell) { cell = w; cell.role = { kind: 'forward', name: w.text, on: result }; result.set(w.text, cell); }
-          if (!forwards) cell.reference(w);
-          if (src.path !== undefined) ip.paint(src, b, e, 'variable');
-          result = cell;
-          cursor.cut(sign, sign === 1 ? e : b);
+          ip.error(`Unresolved \`${w.text}\` on \`${result.text}\`.`, w);
+          cursor.cut(sign, sign === 1 ? line_end(text, head) : line_begin(text, head + 1));
+          stopped = true;
           return;
         }
         w.role = { kind: 'forward', name: w.text, on: ip.scope() };
@@ -1728,7 +1854,6 @@ export namespace Ray {
       try {
         if (receiver?.role?.kind === 'forward') receiver.consumed = true;
         this.suppress_inside(rule, src, m);
-        if (src.path !== undefined) this.paint(src, m.begin, m.end, '', rule.key);
         if ((rule.style !== undefined || rule.styled) && src.path !== undefined) {
           let pos = m.begin;
           for (const piece of rule.pieces) {
@@ -1741,7 +1866,7 @@ export namespace Ray {
             }
             const style = piece.style
               ?? (rule.style !== undefined && (is_literal(piece) || (piece as Capture).raw) ? rule.style : undefined);
-            if (style !== undefined) this.paint(src, begin, end, style, rule.key);
+            if (style !== undefined) this.paint(src, begin, end, style);
             pos = end;
           }
         }
@@ -1870,6 +1995,26 @@ export namespace Ray {
 
     resolve_on(on: Node, key: Key): Node | undefined {
       for (const node of this.chain(on)) { const found = node.get(key); if (found) return found; }
+      return this.summon(on, key);
+    }
+
+    private summoning = new Set<string>();
+    private summon(on: Node, key: Key): Node | undefined {
+      if (typeof key !== 'string' || !this.defined) return undefined;
+      for (const node of this.chain(on)) {
+        for (const [name, cls] of this.classes) {
+          if (cls !== node) continue;
+          const site = this.defined_at(name, key);
+          if (!site || !site.end) continue;
+          if (this.sites.some(f => f.src.path === site.src.path && f.begin === site.begin)) continue;
+          const guard = `${name}::${key}`;
+          if (this.summoning.has(guard)) return undefined;
+          this.summoning.add(guard);
+          try { this.eval_in((site.home !== undefined ? this.node_of(site.home) : undefined) ?? this.GLOBAL, span(site.src, site.begin, site.end, this.BASE), true); }
+          finally { this.summoning.delete(guard); }
+          return node.get(key);
+        }
+      }
       return undefined;
     }
 
@@ -1925,7 +2070,7 @@ export namespace Ray {
           if (value.src?.path !== undefined && value.end > value.begin) this.paint(value.src, value.begin, value.end, group);
           STYLED.set(value, group);
           const host = this.hosted(value);
-          const site = this.frames[this.frames.length - 1];
+          const site = this.sites[this.sites.length - 1];
           if (host && site) this.define_at(host.on, host.name, site, site.on && this.name_of(site.on));
           return value;
         };
@@ -1939,7 +2084,7 @@ export namespace Ray {
       let declared: Node = target;
       for (const modifier of modifiers) declared = this.invoke(modifier, { self: on, args: declared, at }) ?? declared;
       if (declared.has_flag('right-to-left') && !declared.has_flag('left-to-right')) this.rtl_names.add(name);
-      const site = this.frames[this.frames.length - 1];
+      const site = this.sites[this.sites.length - 1];
       if (site) this.define_at(this.name_of(on), name, site, site.on && this.name_of(site.on));
       return declared;
     }
@@ -2026,13 +2171,12 @@ export namespace Ray {
     }
     const on = role.on;
     const key = role.kind === 'slot' ? role.key : role.name;
-    self.consumed = true;
+    if (role.kind === 'forward') self.consumed = true;
     on.set(key, value);
-    self.role = { kind: 'slot', on, key };
     for (const [name, cls] of ip.classes) if (cls === on) {
       ip.info(`Defined \`${typeof key === 'string' ? key : key.text}\` on \`${name}\`.`, self);
       if (typeof key === 'string') {
-        const frame = [...ip.frames].reverse().find(f => f.on === on) ?? ip.frames[0];
+        const frame = [...ip.sites].reverse().find(f => f.on === on) ?? ip.sites[0];
         if (frame) ip.define_at(name, key, frame, frame.on && ip.name_of(frame.on));
       }
       break;

@@ -4,6 +4,7 @@
 // Support older versions of Node
 // Dependency which alters Language workings; prompt: Do you want to apply those language changes too.
 // support relative paths
+// What dewcides what returns (last passed file) or entrypoint.
 
 const version: [major: number, releaseDate: string, index: number] =
                [0, '2027-01-01', 1];
@@ -26,15 +27,15 @@ async function main([args, kwargs]: CLI.Args) {
 
   const source = new Text.Source('@ether/$/.ray/v0/Node.ray');
   await source.load();
-  diagnostics.report(new Expression(), { level: 'error', message: 'test', node: new Text.Node(source) })
+  diagnostics.report({ level: 'error', message: 'test', node: new Text.Node(source) })
   const n = new Text.Node(source); n.cursor = 1
-  diagnostics.report(new Expression(), { level: 'error', message: 'test ata asdadasd', node: n })
+  diagnostics.report({ level: 'error', message: 'test ata asdadasd', node: n })
   const n2 = new Text.Node(source); n2.cursor = 2
-  diagnostics.report(new Expression(), { level: 'error', message: 'test ata asdasd ', node: n2 })
+  diagnostics.report({ level: 'error', message: 'test ata asdasd ', node: n2 })
   const source2 = new Text.Source('@ether/$/.ray/tests/test-project/test.ray');
   await source2.load();
   const n3 = new Text.Node(source2); n3.cursor = 4
-  diagnostics.report(new Expression(), { level: 'error', message: 'test aaaaaaa aaaaa aaaaa aa aa aaaaaaaaaaa aaaaaaa aaaaaaaaaaaaaaaaa aaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaa', node: n3 })
+  diagnostics.report({ level: 'error', message: 'test aaaaaaa aaaaa aaaaa aa aa aaaaaaaaaaa aaaaaaa aaaaaaaaaaaaaaaaa aaaaaaaaaaaa aaaaaaaaaaaaaaaaaaaaaaaaa', node: n3 })
   diagnostics.print();
 }
 
@@ -54,6 +55,7 @@ namespace Global {
     location: string
     constructor(public relative_location?: string) { if (relative_location !== undefined) this.location = env.nodejs ? env.path.join(env.root, relative_location) : new URL('../' + relative_location, import.meta.url).href }
     abstract load(): Promise<void>
+    abstract reload(): Promise<void>
 
     get dir() { return this.location.slice(0, this.location.lastIndexOf('/')); }
     get is_dot_project() { return this.location.endsWith(`/.project${Ray.EXTENSION}`); }
@@ -66,35 +68,34 @@ namespace Ray {
   export const EXTENSION = '.ray'
 
   export function v0(diagnostics: Diagnostics) {
-    const program = new Program(diagnostics)
+    return new Program(diagnostics)
       .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
       .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
-
-    const language = program.default_language.interpreter;
-    
-    
-    return program;
   }
 
   export class Project {
-    source: Source[] = []
+    source: Text.Source[] = []
     dependencies: Project[] = []
 
     interpreters: Map<Project, Interpreter> = new Map();
 
-    constructor(private program: Program, public dot_project: Source, interpreter: Interpreter) { this.interpreters.set(this, interpreter); }
+    constructor(private program: Program, public dot_project: Text.Source, interpreter: Interpreter) { this.interpreters.set(this, interpreter); }
     get directory(): string { return this.dot_project.dir; }
 
-    get is_language() { return (this.dot_project as Text.Source).line(0).string.includes('!language'); }
+    get is_language() { return this.dot_project.line(0).string.includes('!language'); }
     
     get interpreter() { return this.interpreters.get(this); }
     get dependants() { return this.interpreters.keys().filter(x => x !== this); }
+
+    interpret() { this.interpreter.interpret(this.source) }
 
     depend_on(project: Project) {
       if (this === project) return;
       this.dependencies.push(project);
       project.interpreters.set(this, this.interpreter.copy())
     }
+
+    load(): Promise<void>[] { return [this.dot_project, ...this.source].map(x => x.load()) }
   }
 
   export class Program {
@@ -118,7 +119,7 @@ namespace Ray {
     abstractly: boolean = false;
     abstract(abstractly?: boolean): this { this.abstractly = abstractly ?? true; return this; }
 
-    add(srcs: Source[]): this {
+    add(srcs: Text.Source[]): this {
       const claims = [...this.projects.flatMap(project => project.source), ...srcs].filter(x => x.is_dot_project).map(x => x.dir);
       const project_directory_of = (src: Source): string => {
         let best: string | undefined;
@@ -126,12 +127,12 @@ namespace Ray {
         return best ?? src.dir;
       };
       
-      const home = (src: Source): void => {
+      const home = (src: Text.Source): void => {
         const directory = project_directory_of(src);
         let project = this.projects.find(project => project.directory === directory);
         if (!project) {
           const interpreter = new Interpreter(this.diagnostics);
-          this.projects.push(project = new Project(this, src.is_dot_project ? src : ((directory: string): Source => {
+          this.projects.push(project = new Project(this, src.is_dot_project ? src : ((directory: string): Text.Source => {
             const dot = new Text.Source();
             dot.location = `${directory}/.project${EXTENSION}`;
             dot.value = '';
@@ -139,7 +140,9 @@ namespace Ray {
           })(directory), interpreter));
         }
         if (src.is_dot_project) project.dot_project = src;
-        if (!project.source.includes(src)) project.source.push(src);
+
+        const existing = project.source.findIndex(s => s.location === src.location);
+        if (existing >= 0) project.source[existing] = src; else project.source.push(src);
       };
       
       for (const src of srcs) home(src);
@@ -154,17 +157,30 @@ namespace Ray {
     }
     
     async exec(): Promise<Node> {
-      await Promise.all(this.projects.flatMap(project => [project.dot_project, ...project.source]).map(s => s.load()));
+      await Promise.all(this.projects.flatMap(project => project.load()));
+      this.fill_default_dependencies();
 
+      this.projects.forEach(project => project.interpret())
+
+      return this.default_language?.interpreter.GLOBAL!;
+    }
+    async reload(next: Text.Source | Node | Iterable<Text.Source | Node>): Promise<Node> {
+      const srcs: Text.Source[] = (next instanceof Node || !((next as any)?.[Symbol.iterator])) ? [next as Text.Source] : [...(next as Iterable<Text.Source | Node>)].map(item => item instanceof Node ? item.position.source : item);
+      this.add(srcs);
+
+      await Promise.all(srcs.map(x => x.reload()));
+      this.fill_default_dependencies();
+
+      for (const [project, list] of Map.groupBy(srcs, this.project_of).entries()) { project.interpreter.interpret(list); }
+
+      return this.default_language?.interpreter.GLOBAL!;
+    }
+    fill_default_dependencies() {
       this.default_language = this.projects.find(project => project.is_language);
       if (!this.default_language) return this.diagnostics.report({ level: 'fatal', message: "Expected to have recognized the string !language (the project defining the default language) on the first line in a .project.ray file, but it wasn't provided." });
     
       // All projects depend on the default language.
-      for (const project of this.projects) project.depend_on(this.default_language);
-
-      return this.default_language?.interpreter.GLOBAL!;
-    }
-    reload(next: Source | Node | Iterable<Source | Node>): Promise<Node> {
+      this.projects.filter(x => x.dependencies.length === 0).forEach(x => x.depend_on(this.default_language));
     }
 
   }
@@ -214,8 +230,7 @@ namespace Ray {
     GLOBAL = new Node(this.BASE);
 
     refresh() {
-      if (!this.copy_of) return this.diagnostics.report({ level: 'fatal', message: "Can only refresh an interpreter which is a copy of another!" });
-
+      if (!this.copy_of) return;
       const seen = new Map<Node, Node>();
       this.BASE = this.copy_of.BASE.clone(seen);
       this.PROGRAM = this.copy_of.PROGRAM.clone(seen);
@@ -224,6 +239,18 @@ namespace Ray {
 
     copy(): Interpreter { return new Interpreter(this.diagnostics, this); }
 
+    interpret(srcs: Text.Source[]) {
+      srcs.forEach(this._interpret)
+      this.analyze();
+    }
+    private _interpret(src: Text.Source) {
+      this.diagnostics.forget(src);
+
+    }
+    
+    analyze() {
+
+    }
   }
 }
 
@@ -290,6 +317,9 @@ namespace Text {
       if (this._value !== undefined) return;
       if (!this.location) throw new Error('Source has neither value nor location.');
 
+      await this.reload();
+    }
+    async reload(): Promise<void> {
       this.value = env.nodejs 
         ? await env.fs.promises.readFile(this.location, 'utf-8')
         : await (await fetch(new URL(this.location))).text()
@@ -738,8 +768,8 @@ export class env {
     return value === undefined || value === null ? undefined : String(value);
   }
 
-  static file(location: string): Source { return new Text.Source(location); }
-  static directory(location: string, options: { recursively?: boolean, filter?: (x: string) => boolean }): Source[] {
+  static file(location: string): Text.Source { return new Text.Source(location); }
+  static directory(location: string, options: { recursively?: boolean, filter?: (x: string) => boolean }): Text.Source[] {
     location = location.replace(/\/$/, '')
     if (!env.nodejs) {
       const prefix = location + '/';
@@ -762,7 +792,7 @@ export class env {
     walk(location);
     return locations.map(env.file);
   }
-  static at(location: string, options: { recursively?: boolean, filter?: (x: string) => boolean } = {}): Source[] {
+  static at(location: string, options: { recursively?: boolean, filter?: (x: string) => boolean } = {}): Text.Source[] {
     location = location.replace(/\/$/, '')
     const is_file = env.nodejs
       ? env.fs.statSync(env.path.join(env.root, location)).isFile()

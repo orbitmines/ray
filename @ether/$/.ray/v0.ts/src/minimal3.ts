@@ -212,7 +212,13 @@ export namespace Ray {
     projects: Project[] = []
     default_language: Project
 
-    sources: Source[] = [];
+    // the flat source list (what derive reads) is just project membership
+    get sources(): Source[] {
+      const seen = new Set<Source>(), out: Source[] = [];
+      for (const project of this.projects) for (const s of [project.dot_project, ...project.source])
+        if (!seen.has(s)) { seen.add(s); out.push(s); }
+      return out;
+    }
     reloaded: (src: Source) => void = () => {};
     active = new Set<string>();
     get abstract_blocks(): boolean { return this.abstractly; }
@@ -238,15 +244,27 @@ export namespace Ray {
     private cycling: Promise<void> = Promise.resolve();
 
     private feedback(touched: Source[]): void {
-      if (!touched.length) return;
+      if (touched.length) void this.interpret(touched);
+    }
+
+    private async interpret(srcs: Source[], generation?: number): Promise<boolean | undefined> {
       const ip = this.engine;
       ip.abstract_blocks = this.abstract_blocks;
       externals(ip);
-      for (const src of touched) {
-        this.diagnostics.forget(src);
+      this.diagnostics.forget(undefined);
+      for (const src of srcs) {
         if (src instanceof Text.Source) ip.parse(src);
-        this.reloaded(src);
+        if (generation !== undefined) {
+          await new Promise<void>(resolve => typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0));
+          if (this.generation !== generation) return undefined;
+        }
       }
+      const moved = ip.analyze();
+      const set = new Set(srcs);
+      for (const issue of ip.issues)
+        if (!issue.at?.src || set.has(issue.at.src)) ip.error(issue.message, issue.at);
+      for (const src of srcs) this.reloaded(src);
+      return moved;
     }
     private schedule(): void {
       const g = this.generation;
@@ -258,14 +276,8 @@ export namespace Ray {
 
     reload(next: Source | Node | Iterable<Source | Node>): void {
       const items: (Source | Node)[] = (next instanceof Node || !((next as any)?.[Symbol.iterator])) ? [next as Source] : [...(next as Iterable<Source | Node>)];
-      const touched: Source[] = [];
-      for (const item of items) {
-        const src = item instanceof Node ? item.src : item;
-        if (!(src instanceof Text.Source)) continue;
-        const at = this.sources.findIndex(s => s.location === src.location);
-        if (at >= 0) this.sources[at] = src; else this.sources.push(src);
-        touched.push(src);
-      }
+      const touched = items.map(item => item instanceof Node ? item.src : item).filter((src): src is Source => src instanceof Text.Source);
+      this.add(touched);
       this.generation++;
       this.survey(this.sources);
       this.feedback(touched);
@@ -279,8 +291,12 @@ export namespace Ray {
       if (this.sources.some(s => !this.language(s))) { this.generation++; this.schedule(); }
     }
     remove(path: string): void {
-      const at = this.sources.findIndex(s => s.path === path);
-      if (at >= 0) { const removed = this.sources[at]; this.sources.splice(at, 1); this.diagnostics.forget(removed); this.reloaded(removed); }
+      for (const project of this.projects) {
+        const at = project.source.findIndex(s => s.path === path);
+        if (at < 0) continue;
+        const removed = project.source[at]; project.source.splice(at, 1);
+        this.diagnostics.forget(removed); this.reloaded(removed); break;
+      }
       this.generation++;
       this.schedule();
     }
@@ -319,7 +335,8 @@ export namespace Ray {
           this.projects.push(project = new Project(this, dot, interpreter));
         }
         if (src.is_dot_project) project.dot_project = src;
-        if (!project.source.includes(src)) project.source.push(src);
+        const existing = project.source.findIndex(s => s.location === src.location);
+        if (existing >= 0) project.source[existing] = src; else project.source.push(src);
       };
       
       for (const src of srcs) home(src);
@@ -332,44 +349,17 @@ export namespace Ray {
       return this;
     }
     
-    private async pass(order: Source[], report: boolean, generation?: number): Promise<Interpreter | undefined> {
-      const ip = this.engine;
-      ip.reset();
-      const log = ip.diagnostics;
-      if (!report) ip.diagnostics = new Diagnostics();
-      ip.abstract_blocks = this.abstract_blocks;
-      externals(ip);
-      if (report) ip.diagnostics.forget_all([new Text.Source(), ...order]);
-      for (const src of order) {
-        ip.parse(src);
-        if (report) {
-          for (const issue of ip.issues)
-            if (src.path !== undefined && issue.at?.src?.path === src.path) ip.error(issue.message, issue.at);
-          this.reloaded(src);
-        }
-        if (generation !== undefined) {
-          await new Promise<void>(resolve => typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0));
-          if (this.generation !== generation) { ip.diagnostics = log; return undefined; }
-        }
-      }
-      if (report) for (const issue of ip.issues)
-        if (issue.at?.src?.path === undefined) ip.error(issue.message, issue.at);
-      ip.diagnostics = log;
-      return ip;
-    }
-
-    private async derive(report: boolean, generation?: number): Promise<Interpreter | undefined> {
+    private async derive(generation?: number): Promise<Interpreter | undefined> {
       const order = [...this.sources]
         .filter(s => !s.path?.endsWith(`/.project${EXTENSION}`))
         .sort((a, b) => (this.language(a) ? 0 : 1) - (this.language(b) ? 0 : 1));
       this.engine.issues = [];
       this.engine.clear();
-      let size = this.engine.rules.size;
-      let ip = await this.pass(order, false, generation);
-      if (!ip) return undefined;
-      let moving = this.engine.analyze() || this.engine.rules.size !== size;
-      size = this.engine.rules.size;
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 6; i++) {
+        const size = this.engine.rules.size;
+        this.engine.reset();
+        const moved = await this.interpret(order, generation);
+        if (moved === undefined) return undefined;
         let probing = false;
         for (const rule of this.engine.rules.values()) {
           if (rule.disabled || rule.exists) continue;
@@ -377,57 +367,33 @@ export namespace Ray {
             d.seen instanceof Rule && !d.seen.disabled && !d.seen.definitions.some(x => x.seen === 'live'));
           if (contingent) { rule.exists = true; probing = true; }
         }
-        if (!probing && !moving) break;
-        ip = await this.pass(order, false, generation);
-        if (!ip) return undefined;
-        moving = this.engine.analyze() || this.engine.rules.size !== size;
-        size = this.engine.rules.size;
-      }
-      const reported = this.engine.issues.length;
-      ip = await this.pass(order, report, generation);
-      if (!ip) return undefined;
-      this.engine.analyze();
-      if (report) {
-        const republish = new Set<Source>();
-        for (const issue of this.engine.issues.slice(reported)) {
-          if (issue.at?.src?.path === undefined) continue;
-          ip.error(issue.message, issue.at);
-          const src = order.find(s => s.path === issue.at!.src!.path);
-          if (src) republish.add(src);
-        }
-        for (const src of republish) this.reloaded(src);
+        if (!moved && !probing && this.engine.rules.size === size) break;
       }
       for (const project of this.projects)
         project.interpreters.set(project, project === this.default_language ? this.engine : this.engine.copy());
-      return ip;
+      return this.engine;
     }
 
     private async rederive(generation?: number): Promise<void> {
       this.survey(this.sources);
       this.diagnostics.items.clear();
-      const ip = await this.derive(true, generation);
+      const ip = await this.derive(generation);
       if (!ip) return;
       if (![...this.engine.rules.values()].some(r => r.name === 'rule-definition' && r.project === undefined))
         ip.error(`'${this.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
     }
 
     async exec(): Promise<Node> {
-      this.sources = [];
-      for (const project of this.projects) for (const s of [project.dot_project, ...project.source])
-        if (!this.sources.includes(s)) this.sources.push(s);
       await Promise.all(this.sources.map(s => s.load()));
 
       this.default_language = this.projects.find(project => project.is_language)!;
       if (!this.default_language) return this.diagnostics.report({ level: 'fatal', message: "Expected to have recognized the string !language (the project defining the default language) on the first line in a .project.ray file, but it wasn't provided." }) as unknown as Node;
 
-      this.survey(this.sources);
       const seed = new Text.Source(); seed.value = '{(String.Word | `{`, expr, `}`)[]}=>{body}';
+      this.survey(this.sources);
       this.engine.register(span(seed, 0, seed.value.length), [], 'Node', this.language_project);
 
-      const ip = (await this.derive(true))!;
-      if (![...this.engine.rules.values()].some(r => r.name === 'rule-definition' && r.project === undefined))
-        ip.error(`'${this.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
-
+      await this.rederive();
       return this.default_language.interpreter!.GLOBAL;
     }
 
@@ -1483,6 +1449,7 @@ export namespace Ray {
     // ── parsing ──
 
     parse(src: Source): void {
+      this.diagnostics.forget(src);
       const saved = this.scopes;
       this.scopes = [this.GLOBAL];
       this.scope_epoch++;
@@ -1534,7 +1501,8 @@ export namespace Ray {
             const extent = expression_edge(sc, begin);
             const lead = cursor.best_rule(ip, { sign: 1, indent, proven: new Set() });
             const claimed = !!(lead && lead.m.end >= extent);
-            if (!claimed) {
+            const firstName = claimed ? null : ip.known(sc, begin, ip.lookup());
+            if (!claimed && !(firstName && ip.resolve(firstName)?.has_flag('raw'))) {
               const tokens: { begin: number; end: number; rtl: boolean }[] = [];
               for (let i = begin; i < extent; ) {
                 const c = text[i];
@@ -2101,10 +2069,10 @@ export class Diagnostics {
   get errors() { return this.all(x => DIAGNOSTIC_SEVERITY[x.level] >= DIAGNOSTIC_SEVERITY['error'])}
   get warnings() { return this.all(x => x.level === 'warning')}
 
-  forget(src: Text.Source | Iterable<Text.Source>) {
-    if (Symbol.iterator in src) { for (const element of src) { this.forget(element) }; return; }
-    this.items.delete(src);
-    this.expressions.delete((src as Text.Source).path);
+  forget(src: Text.Source | Iterable<Text.Source> | undefined) {
+    if (src != null && Symbol.iterator in src) { for (const element of src) { this.forget(element) }; return; }
+    this.items.delete(src as Text.Source | undefined);
+    this.expressions.delete((src as Text.Source | undefined)?.path);
   }
   forget_all(srcs: Iterable<Text.Source>) { this.forget(srcs); }
 

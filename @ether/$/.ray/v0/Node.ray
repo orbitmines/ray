@@ -4,7 +4,7 @@ external class {name}{block}
 // here — the runtime enumerates none. Leading a rule definition they style
 // the rule, inside a pattern piece they style that piece, and applied to
 // anything else they return it unchanged.
-class H
+class H {
   external namespace
   external type
   external class
@@ -28,6 +28,7 @@ class H
   external regexp
   external operator
   external decorator
+}
 
 // Punctuation isn't an LSP standard type — it IS comment, everywhere.
 H.punctuation = H.comment
@@ -41,18 +42,21 @@ H.punctuation [{expr}] => expr
 
 H.keyword external external
 
-class Program
-  external ({args}) =>
+class Program {
+  external ({args})
   {` `}{expr} => this(expr)
+}
 
-class Node
+class Node {
   H.operator external **: Program
 
   {block} => TODO
+  // {inline_block}{block: (\n, leading_whitespace: ` `[], expr)[]}
+  
   
   external {(H.function String.Word | H.punctuation `{`, H.parameter expr, H.punctuation `}`)[]}{H.keyword `=>`}{body}
 
-  {H.punctuation `.`}{H.property property} => this[property]
+  H.punctuation .{H.property property} => this[property]
 
   // When bootstrapping, function definitions cannot use '&=', which is the actual default set lower in this file.
   static DEFINE_METHOD = `=`
@@ -71,6 +75,10 @@ class Node
   external {H.punctuation `[`}{H.property property}{H.punctuation `]`}
 
   external = (x): x
+}
 
 // Set the actual method used for function definitions.
 Node.DEFINE_METHOD = `&=`
+
+H.keyword U+{string: String} => TODO
+U+1233123

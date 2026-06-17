@@ -10,7 +10,7 @@ import {
   type InitializeResult,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { Ray, type Source } from '../minimal3.ts';
+import { Ray, type Source } from '../minimal4.ts';
 import { toLsp } from './diagnostics.ts';
 import { encode, offset_at, position_of, MODIFIERS } from './semantics.ts';
 import * as features from './features.ts';

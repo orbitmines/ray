@@ -5,6 +5,7 @@
 // Dependency which alters Language workings; prompt: Do you want to apply those language changes too.
 // support relative paths
 // What dewcides what returns (last passed file) or entrypoint.
+// Starting a {, one appearing at the end of the line }
 
 const version: [major: number, releaseDate: string, index: number] =
                [0, '2027-01-01', 1];
@@ -41,10 +42,6 @@ async function main([args, kwargs]: CLI.Args) {
 
 class Representation {
 
-}
-
-class Expression {
-  
 }
 
 namespace Global {
@@ -218,6 +215,10 @@ namespace Ray {
     }
   }
 
+  export class Expression {
+    constructor(public position: Text.Node, public pointer: Node){}
+  }
+
   export class Rule extends Node {
 
   }
@@ -240,12 +241,29 @@ namespace Ray {
     copy(): Interpreter { return new Interpreter(this.diagnostics, this); }
 
     interpret(srcs: Text.Source[]) {
-      srcs.forEach(this._interpret)
+      srcs.forEach((src) => this._interpret(src))
       this.analyze();
     }
     private _interpret(src: Text.Source) {
       this.diagnostics.forget(src);
 
+      function array<T>(cursor: Text.Node, step: (cursor: Text.Node) => T | undefined): T[] {
+        const items: T[] = []
+        while(!cursor.done()) {
+          const statement = step(cursor);
+          if (statement) items.push(statement)
+        }
+        return items;
+      }
+      function expr(cursor: Text.Node): Expression | undefined {
+        // Skip leading whitespace.
+        while(!cursor.done() && (cursor.peek() === ' ' || cursor.peek() === '\n')) cursor.advance();
+        if (cursor.done()) return undefined;
+
+        
+      }
+
+      return array(new Text.Node(src), expr);
     }
     
     analyze() {
@@ -262,6 +280,13 @@ namespace Text {
     selection: number[] = [];
 
     color?: string
+
+    direction: -1 | 1 = 1
+    get flip() { this.direction *= -1; return this; }
+    get head() { return this.direction === 1 ? this.begin : this.end - 1; }
+    get behind() { return this.copy().flip; }
+    peek(length: number = 1) { return this.source.value[this.head + length * this.direction] }
+    advance() { this.direction === 1 ? this.end += 1 : this.begin -= 1; }
 
     get file(): string | undefined { return this.source.location; }
 
@@ -307,6 +332,15 @@ namespace Text {
         n.selection = [r.begin, r.end];
         return n;
       });
+    }
+
+    copy() {
+      const copy = new Node(this.source);
+      copy.cursor = this.cursor;
+      copy.selection = [...this.selection];
+      copy.color = this.color;
+      copy.direction = this.direction;
+      return copy;
     }
   }
   export class Source extends Global.Source {

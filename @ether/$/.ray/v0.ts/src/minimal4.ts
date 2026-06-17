@@ -212,7 +212,13 @@ export namespace Ray {
     projects: Project[] = []
     default_language: Project
 
-    sources: Source[] = [];
+    // the flat source list (what derive reads) is just project membership
+    get sources(): Source[] {
+      const seen = new Set<Source>(), out: Source[] = [];
+      for (const project of this.projects) for (const s of [project.dot_project, ...project.source])
+        if (!seen.has(s)) { seen.add(s); out.push(s); }
+      return out;
+    }
     reloaded: (src: Source) => void = () => {};
     active = new Set<string>();
     get abstract_blocks(): boolean { return this.abstractly; }
@@ -224,6 +230,8 @@ export namespace Ray {
           for (const node of e.nodes) {
             const path = node.source.path;
             if (path === undefined) continue;
+            const lazy = (node as { lazy?: () => string | undefined }).lazy;   // resolve deferred decorator styles now that the fixpoint has converged
+            if (lazy) { const s = lazy(); if (s === undefined) continue; node.style = s; node.color = theme[s.split('.')[0]]; }
             let arr = out.get(path); if (!arr) out.set(path, arr = []);
             arr.push(node);
           }
@@ -238,15 +246,27 @@ export namespace Ray {
     private cycling: Promise<void> = Promise.resolve();
 
     private feedback(touched: Source[]): void {
-      if (!touched.length) return;
+      if (touched.length) void this.interpret(touched);
+    }
+
+    private async interpret(srcs: Source[], generation?: number): Promise<boolean | undefined> {
       const ip = this.engine;
       ip.abstract_blocks = this.abstract_blocks;
       externals(ip);
-      for (const src of touched) {
-        this.diagnostics.forget(src);
+      this.diagnostics.forget(undefined);
+      for (const src of srcs) {
         if (src instanceof Text.Source) ip.parse(src);
-        this.reloaded(src);
+        if (generation !== undefined) {
+          await new Promise<void>(resolve => typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0));
+          if (this.generation !== generation) return undefined;
+        }
       }
+      const moved = ip.analyze();
+      const set = new Set(srcs);
+      for (const issue of ip.issues)
+        if (!issue.at?.src || set.has(issue.at.src)) ip.error(issue.message, issue.at);
+      for (const src of srcs) this.reloaded(src);
+      return moved;
     }
     private schedule(): void {
       const g = this.generation;
@@ -258,14 +278,8 @@ export namespace Ray {
 
     reload(next: Source | Node | Iterable<Source | Node>): void {
       const items: (Source | Node)[] = (next instanceof Node || !((next as any)?.[Symbol.iterator])) ? [next as Source] : [...(next as Iterable<Source | Node>)];
-      const touched: Source[] = [];
-      for (const item of items) {
-        const src = item instanceof Node ? item.src : item;
-        if (!(src instanceof Text.Source)) continue;
-        const at = this.sources.findIndex(s => s.location === src.location);
-        if (at >= 0) this.sources[at] = src; else this.sources.push(src);
-        touched.push(src);
-      }
+      const touched = items.map(item => item instanceof Node ? item.src : item).filter((src): src is Source => src instanceof Text.Source);
+      this.add(touched);
       this.generation++;
       this.survey(this.sources);
       this.feedback(touched);
@@ -279,8 +293,12 @@ export namespace Ray {
       if (this.sources.some(s => !this.language(s))) { this.generation++; this.schedule(); }
     }
     remove(path: string): void {
-      const at = this.sources.findIndex(s => s.path === path);
-      if (at >= 0) { const removed = this.sources[at]; this.sources.splice(at, 1); this.diagnostics.forget(removed); this.reloaded(removed); }
+      for (const project of this.projects) {
+        const at = project.source.findIndex(s => s.path === path);
+        if (at < 0) continue;
+        const removed = project.source[at]; project.source.splice(at, 1);
+        this.diagnostics.forget(removed); this.reloaded(removed); break;
+      }
       this.generation++;
       this.schedule();
     }
@@ -289,6 +307,7 @@ export namespace Ray {
     constructor(public diagnostics: Diagnostics, public initialize_interpreter: (interpreter: Interpreter) => void) { diagnostics.program = this; }
 
     project_of(src: Source): Project | undefined {
+      if (src.location === undefined) return undefined;
       let best: Project | undefined;
       for (const project of this.projects)
         if ((src.location === project.directory || src.location.startsWith(`${project.directory}/`)) && (best === undefined || project.directory.length > best.directory.length)) best = project;
@@ -319,7 +338,8 @@ export namespace Ray {
           this.projects.push(project = new Project(this, dot, interpreter));
         }
         if (src.is_dot_project) project.dot_project = src;
-        if (!project.source.includes(src)) project.source.push(src);
+        const existing = project.source.findIndex(s => s.location === src.location);
+        if (existing >= 0) project.source[existing] = src; else project.source.push(src);
       };
       
       for (const src of srcs) home(src);
@@ -332,44 +352,17 @@ export namespace Ray {
       return this;
     }
     
-    private async pass(order: Source[], report: boolean, generation?: number): Promise<Interpreter | undefined> {
-      const ip = this.engine;
-      ip.reset();
-      const log = ip.diagnostics;
-      if (!report) ip.diagnostics = new Diagnostics();
-      ip.abstract_blocks = this.abstract_blocks;
-      externals(ip);
-      if (report) ip.diagnostics.forget_all([new Text.Source(), ...order]);
-      for (const src of order) {
-        ip.parse(src);
-        if (report) {
-          for (const issue of ip.issues)
-            if (src.path !== undefined && issue.at?.src?.path === src.path) ip.error(issue.message, issue.at);
-          this.reloaded(src);
-        }
-        if (generation !== undefined) {
-          await new Promise<void>(resolve => typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0));
-          if (this.generation !== generation) { ip.diagnostics = log; return undefined; }
-        }
-      }
-      if (report) for (const issue of ip.issues)
-        if (issue.at?.src?.path === undefined) ip.error(issue.message, issue.at);
-      ip.diagnostics = log;
-      return ip;
-    }
-
-    private async derive(report: boolean, generation?: number): Promise<Interpreter | undefined> {
+    private async derive(generation?: number): Promise<Interpreter | undefined> {
       const order = [...this.sources]
         .filter(s => !s.path?.endsWith(`/.project${EXTENSION}`))
         .sort((a, b) => (this.language(a) ? 0 : 1) - (this.language(b) ? 0 : 1));
       this.engine.issues = [];
       this.engine.clear();
-      let size = this.engine.rules.size;
-      let ip = await this.pass(order, false, generation);
-      if (!ip) return undefined;
-      let moving = this.engine.analyze() || this.engine.rules.size !== size;
-      size = this.engine.rules.size;
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 6; i++) {
+        const size = this.engine.rules.size;
+        this.engine.reset();
+        const moved = await this.interpret(order, generation);
+        if (moved === undefined) return undefined;
         let probing = false;
         for (const rule of this.engine.rules.values()) {
           if (rule.disabled || rule.exists) continue;
@@ -377,57 +370,33 @@ export namespace Ray {
             d.seen instanceof Rule && !d.seen.disabled && !d.seen.definitions.some(x => x.seen === 'live'));
           if (contingent) { rule.exists = true; probing = true; }
         }
-        if (!probing && !moving) break;
-        ip = await this.pass(order, false, generation);
-        if (!ip) return undefined;
-        moving = this.engine.analyze() || this.engine.rules.size !== size;
-        size = this.engine.rules.size;
-      }
-      const reported = this.engine.issues.length;
-      ip = await this.pass(order, report, generation);
-      if (!ip) return undefined;
-      this.engine.analyze();
-      if (report) {
-        const republish = new Set<Source>();
-        for (const issue of this.engine.issues.slice(reported)) {
-          if (issue.at?.src?.path === undefined) continue;
-          ip.error(issue.message, issue.at);
-          const src = order.find(s => s.path === issue.at!.src!.path);
-          if (src) republish.add(src);
-        }
-        for (const src of republish) this.reloaded(src);
+        if (!moved && !probing && this.engine.rules.size === size) break;
       }
       for (const project of this.projects)
         project.interpreters.set(project, project === this.default_language ? this.engine : this.engine.copy());
-      return ip;
+      return this.engine;
     }
 
     private async rederive(generation?: number): Promise<void> {
       this.survey(this.sources);
       this.diagnostics.items.clear();
-      const ip = await this.derive(true, generation);
+      const ip = await this.derive(generation);
       if (!ip) return;
       if (![...this.engine.rules.values()].some(r => r.name === 'rule-definition' && r.project === undefined))
         ip.error(`'${this.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
     }
 
     async exec(): Promise<Node> {
-      this.sources = [];
-      for (const project of this.projects) for (const s of [project.dot_project, ...project.source])
-        if (!this.sources.includes(s)) this.sources.push(s);
       await Promise.all(this.sources.map(s => s.load()));
 
       this.default_language = this.projects.find(project => project.is_language)!;
       if (!this.default_language) return this.diagnostics.report({ level: 'fatal', message: "Expected to have recognized the string !language (the project defining the default language) on the first line in a .project.ray file, but it wasn't provided." }) as unknown as Node;
 
-      this.survey(this.sources);
       const seed = new Text.Source(); seed.value = '{(String.Word | `{`, expr, `}`)[]}=>{body}';
+      this.survey(this.sources);
       this.engine.register(span(seed, 0, seed.value.length), [], 'Node', this.language_project);
 
-      const ip = (await this.derive(true))!;
-      if (![...this.engine.rules.values()].some(r => r.name === 'rule-definition' && r.project === undefined))
-        ip.error(`'${this.language_project ?? 'language project'}' did not declare the grammar-rule definition rule.`);
-
+      await this.rederive();
       return this.default_language.interpreter!.GLOBAL;
     }
 
@@ -517,7 +486,7 @@ export namespace Ray {
   }
 
   export type Key = string | Node
-  export type Args = { interpreter: Interpreter; self?: Node; method: Node; args: Node; at: Node; match?: Match }
+  export type Args = { interpreter: Interpreter; self?: Node; method: Node; args: Node; at: Node; match?: Match; recognized?: Recognized }
   export type Method = (args: Args) => Node | undefined;
 
   export type Role =
@@ -581,41 +550,6 @@ export namespace Ray {
     take(sign: 1 | -1, n = 1): void { if (sign === 1) this.begin += n; else this.end -= n; }
     cut(sign: 1 | -1, edge: number): void { if (sign === 1) this.begin = edge; else this.end = edge; }
 
-    // ── the best grammar rule for this context ──
-    best_rule(ip: Interpreter, ctx: { result?: Node; sign: 1 | -1; indent: number; proven?: Set<Rule> }): Found | null {
-      const sign = ctx.sign, at = this.head(sign);
-      const text = (this.src as Source).text;
-      const base = ip.scan(this.src!, sign);
-      const scan: Scan = { ...base, indent: ctx.indent, start: ctx.result === undefined && sign === 1 };
-      const c = text[at];
-      const own = ip.program.project(this.src!);
-      let best: Candidate | null = null;
-      const seen = ctx.proven ?? new Set<Rule>(); seen.clear();
-      let level = 0;
-      const attempt = (rule: Rule) => {
-        if (!ip.visible(rule, this.src!) || seen.has(rule)) return;
-        seen.add(rule);
-        const edge = rule.edge(sign);
-        if (edge !== undefined && (rule.edge_char(sign) !== c || (edge.length > 1 && !lit_at(scan, at, edge)))) return;
-        if (rule.matcher && sign === -1) return;
-        const m = rule.matcher ? rule.matcher(rule, scan, at) : match_rule(rule, scan, at);
-        const rank = rule.project === own ? 0 : 1;
-        if (m && prefers({ rule, m, level, rank }, best)) best = { rule, m, level, rank };
-      };
-      for (const nodes of ctx.result ? [ip.chain(ctx.result), ip.lookup()] : [ip.lookup()]) {
-        for (const node of nodes) {
-          const rules = ip.rules_on(node);
-          if (rules.length) {
-            const dispatch = dispatch_of(rules);
-            const keyed = dispatch.keyed[sign === 1 ? 0 : 1].get(c);
-            if (keyed) for (const rule of keyed) attempt(rule);
-            for (const rule of dispatch.unkeyed[sign === 1 ? 0 : 1]) attempt(rule);
-          }
-          level++;
-        }
-      }
-      return best;
-    }
 
     clone(seen: Map<Node, Node> = new Map()): Node {
       const existing = seen.get(this); if (existing) return existing;
@@ -660,16 +594,17 @@ export namespace Ray {
     constructor(public src: Source, public begin: number, public end: number, public parent?: Expression) {
       parent?.children.push(this);
     }
-    paint(src: Source, begin: number, end: number, style: string, of?: string): void {
+    paint(src: Source, begin: number, end: number, style: string | (() => string | undefined), of?: string): void {
       if (src.path === undefined || end <= begin) return;
-      const key = `${src.path}:${begin}:${end}:${style}:${of ?? ''}`;
+      const lazy = typeof style === 'function';   // a lazy style resolves at the `highlighting` getter (after the fixpoint converges decorator styles)
+      const key = `${src.path}:${begin}:${end}:${lazy ? '~' : style}:${of ?? ''}`;
       if (this.painted.has(key)) return;
       this.painted.add(key);
       const node = new Text.Node(src as Text.Source);
       node.selection = [begin, end - 1];
-      node.style = style;
       node.of = of;
-      node.color = theme[style.split('.')[0]];
+      if (lazy) (node as { lazy?: () => string | undefined }).lazy = style as () => string | undefined;
+      else { node.style = style as string; node.color = theme[(style as string).split('.')[0]]; }
       this.nodes.push(node);
     }
   }
@@ -698,51 +633,10 @@ export namespace Ray {
   interface Scan {
     text: string;
     sign: 1 | -1;
+    edges: Set<string>;
     claim: (j: number) => number;
     literal_of: (begin: number, end: number) => { text: string; by: Rule } | undefined;
     anchors: Set<string>;
-    indent?: number;
-    start?: boolean;
-  }
-
-  function parse_pattern(text: string, begin: number, end: number, scan: Scan): Piece[] | null {
-    const pieces: Piece[] = [];
-    let literal_start = begin;
-    let i = begin;
-    const flush_literal = (upto: number): void => {
-      if (upto > literal_start) pieces.push({ kind: 'literal', text: text.slice(literal_start, upto), from: literal_start, to: upto });
-    };
-    while (i < end) {
-      if (text[i] !== '{') { i++; continue; }
-      const close = group_end(scan, i);
-      if (close === -1) return null;
-      flush_literal(i);
-      const piece = read_group(scan, i + 1, close - 1);
-      piece.from = i; piece.to = close;
-      pieces.push(piece);
-      i = close;
-      literal_start = i;
-    }
-    flush_literal(i);
-    if (!pieces.length) return null;
-    classify(pieces);
-    return pieces;
-  }
-
-  function read_group(scan: Scan, begin: number, end: number): Piece {
-    const content = scan.text.slice(begin, end);
-    const quoted = scan.literal_of(begin, end);
-    if (quoted !== undefined) return { kind: 'literal', text: quoted.text, at: begin, claim: quoted.by };
-    const colon = scan_to(scan, begin, ':');
-    const split = colon !== -1 && colon < end;
-    const name = (split ? scan.text.slice(begin, colon) : content).trim();
-    const cap = new Capture();
-    cap.kind = 'word';
-    cap.name = name || undefined;
-    cap.type = split ? scan.text.slice(colon + 1, end).trim() : undefined;
-    cap.content = content;
-    cap.at = begin;
-    return cap;
   }
 
   function classify(pieces: Piece[]): void {
@@ -864,6 +758,7 @@ export namespace Ray {
       const c = text[j];
       if (c === ' ' || c === '\n') break;
       if (scan.anchors.has(c) && scan.claim(j) !== -1) break;
+      if (j !== from && scan.edges.has(c)) break;   // an operator-edged rule (the `.` rule, `*`, …) ends a word
       j += sign;
     }
     return j;
@@ -872,17 +767,18 @@ export namespace Ray {
 
   // ─────────────────────────── matching ───────────────────────────
 
-  interface Matched { begin: number; end: number; captures: { piece: Capture; begin: number; end: number }[] }
+  interface Matched { begin: number; end: number; captures: { piece: Capture; begin: number; end: number }[]; recognized?: Recognized }
 
   class Match {
     constructor(private m: Matched, private src: Source, private sup?: Node) {}
+    get recognized(): Recognized | undefined { return this.m.recognized; }
     capture(name: string): Node | undefined {
       const c = this.m.captures.find(c => c.piece.name === name);
       return c && span(this.src, c.begin, c.end, this.sup);
     }
   }
 
-  function match_rule(rule: Rule, scan: Scan, at: number): Matched | null {
+  function match_rule(rule: Rule, scan: Scan, at: number, indent?: number): Matched | null {
     if (!rule.edge(scan.sign)) return null;
     const { text, sign } = scan;
     const pieces = rule.pieces;
@@ -908,7 +804,7 @@ export namespace Ray {
         }
         case 'block':
           if (sign === -1) return null;
-          i = indented_end(text, line_end(text, i), scan.indent ?? indent_at(text, at));
+          i = indented_end(text, line_end(text, i), indent ?? indent_at(text, at));
           break;
         case 'text':
           i = sign === 1 ? line_end(text, i) : line_begin(text, i + 1) - 1;
@@ -928,44 +824,16 @@ export namespace Ray {
   }
 
   interface Recognized { pattern_begin: number; pattern_end: number; pieces: Piece[]; body_begin: number; body_end: number; end: number }
-
-  function recognize(text: string, at: number, scan: Scan): Recognized | null {
-    let saw_group = false, j = at;
-    for (;;) {
-      const c = text[j];
-      if (c === undefined || c === '\n') return null;
-      if (c === '{') {
-        const close = group_end(scan, j);
-        if (close === -1) return null;
-        saw_group = true;
-        j = close;
-        continue;
-      }
-      if (c === '=' && text[j + 1] === '>') break;
-      j++;
-    }
-    if (!saw_group) return null;
-    let pattern_end = j;
-    while (pattern_end > at && text[pattern_end - 1] === ' ') pattern_end--;
-    if (pattern_end === at) return null;
-    const pieces = parse_pattern(text, at, pattern_end, scan);
-    if (!pieces) return null;
-    let b = j + 2;
-    while (text[b] === ' ') b++;
-    const body_end = (b >= text.length || text[b] === '\n')
-      ? indented_end(text, b, indent_at(text, at))
-      : expression_edge(scan, b);
-    return { pattern_begin: at, pattern_end, pieces, body_begin: b, body_end, end: Math.max(j + 2, body_end) };
-  }
+  type Recognize = (text: string, at: number, scan: Scan) => Recognized | null;
 
   // ───────────────────────────── rules ─────────────────────────────
 
   interface External {
     name: string;
-    fn: Method;
+    fn?: Method;
     flags?: string[];
     pattern?: string;
-    match?: (rule: Rule, scan: Scan, at: number) => Matched | null;
+    match?: (rule: Rule, scan: Scan, at: number, start?: boolean, recognize?: Recognize) => Matched | null;
   }
 
   function activate(rule: Rule, ext?: External): void {
@@ -983,7 +851,7 @@ export namespace Ray {
     definitions: Definition[] = [];
     body?: Node;
     name?: string;
-    matcher?: (rule: Rule, scan: Scan, at: number) => Matched | null;
+    matcher?: (rule: Rule, scan: Scan, at: number, start?: boolean, recognize?: Recognize) => Matched | null;
     project?: string;
     key?: string;
     style?: string;
@@ -1020,14 +888,6 @@ export namespace Ray {
   // ─────────────────────────── grammar ───────────────────────────
 
   const GLOBAL_SCOPE = '~';
-
-
-  type Directions =
-    | { read: 'ltr' }
-    | { read: 'rtl'; extent: number }
-    | { read: 'both'; extent: number; before: number; after: number }
-    | { read: 'mixed'; extent: number; names: string[] };
-
 
   class Interpreter {
     constructor(public program: Program, public diagnostics = new Diagnostics()) {
@@ -1288,208 +1148,26 @@ export namespace Ray {
       return this.language(src) ? undefined : this.program.project(src);
     }
 
-    rule(pattern: Node, pieces: Piece[], on: Node, evaluate = true, style?: string): Rule {
-      const src = pattern.src!;
-      let decorated: Piece[] | undefined;
-      for (let p = 0; p < pieces.length; p++) {
-        const piece = pieces[p];
-        if (is_literal(piece) || piece.at === undefined) continue;
-        const shadow = new Text.Source(); shadow.value = piece.content;
-        const lead = this.declarative_at(shadow, 0);
-        const group = lead?.target.has_flag('highlight') ? STYLED.get(lead.target) : undefined;
-        const rest = group !== undefined ? { at: lead!.args_begin, style: group } : this.pending(shadow);
-        if (rest !== undefined) {
-          const dp = read_group(this.scan(shadow), rest.at, piece.content.length);
-          dp.style = rest.style; dp.at = piece.at + rest.at; dp.from = piece.from; dp.to = piece.to;
-          (decorated ??= [...pieces])[p] = dp;
-          continue;
-        }
-        if (!evaluate) continue;
-        let head = piece.at;
-        const end = piece.at + piece.content.length;
-        while (head < end && src.text[head] === ' ') head++;
-        const scan = this.scan(src);
-        if (head >= end || !scan.anchors.has(src.text[head]) || scan.claim(head) === -1) continue;
-        if (this.decorating.has(piece.at)) continue;
-        this.decorating.add(piece.at);
-        try { this.eval_block(span(src, head, end, this.BASE), true); }
-        finally { this.decorating.delete(piece.at); }
-      }
-      if (decorated) classify(decorated);
-      const rule = this.register(pattern, decorated ?? pieces, this.name_of(on), this.reach(src));
-      if (style !== undefined) rule.style = style;
-      if (evaluate && src.path !== undefined) {
-        const own = rule.style ?? 'function.definition';
-        for (const piece of rule.pieces) {
-          const { from, to } = piece;
-          if (from === undefined || to === undefined) continue;
-          if (piece.at === undefined) { this.paint(src, from, to, own); continue; }
-          let inner = from + 1;
-          if (piece.style !== undefined && piece.at > inner) { this.paint(src, inner, piece.at, piece.style); inner = piece.at; }
-          if (is_literal(piece) && piece.claim?.style !== undefined) this.paint(src, inner, to - 1, piece.claim.style);
-        }
-      }
-      return rule;
-    }
 
     private decorating = new Set<number>();
 
-    private pending(shadow: Source): { at: number; style?: string } | undefined {
-      const scan = this.scan(shadow);
-      const keyword = this.known(scan, 0, this.lookup());
-      if (!keyword) return undefined;
-      let target = this.resolve(keyword);
-      if (!target || target.fn || !target.has_flag('highlight')) return undefined;
-      const text = shadow.text;
-      let end = keyword.length;
-      while (text[end] === '.') {
-        const w = word_edge(scan, end + 1);
-        if (w === end + 1) return undefined;
-        const next = target ? this.resolve_on(target, text.slice(end + 1, w)) : undefined;
-        target = next?.role?.kind === 'bound' ? next.role.method : next;
-        end = w;
-      }
-      if (end === keyword.length || text[end] !== ' ') return undefined;
-      let a = end;
-      while (text[a] === ' ') a++;
-      if (a >= text.length) return undefined;
-      const style = target?.fn && target.has_flag('highlight') ? STYLED.get(target) : undefined;
-      return { at: a, style };
-    }
 
-    define(at: Node, style?: string): Rule {
-      const src = at.src!;
-      const r = recognize(src.text, at.begin, this.scan(src))!;
-      const pattern = span(src, r.pattern_begin, r.pattern_end);
-      const shape = [...this.rules.values()].find(s => s.name === 'rule-definition' && s.styled);
-      if (src.path !== undefined && shape) {
-        const caps = shape.pieces.filter((p): p is Capture => !is_literal(p));
-        const lit = shape.pieces.find(is_literal);
-        let arrow = r.pattern_end;
-        while (src.text[arrow] === ' ') arrow++;
-        const after = arrow + (lit?.text.length ?? 0);
-        if (caps[0]?.style !== undefined) this.paint(src, r.pattern_begin, arrow, caps[0].style);
-        if (lit?.style !== undefined) this.paint(src, arrow, after, lit.style);
-        if (caps[1]?.style !== undefined && r.body_end > after) this.paint(src, after, r.body_end, caps[1].style);
-      }
-      const rule = this.rule(pattern, r.pieces, this.scope(), true, style);
-      rule.definition(pattern).seen = 'live';
-      if (r.body_end > r.body_begin) {
-        const body = span(src, r.body_begin, r.body_end);
-        if (!body.empty) rule.body = body;
-      }
-      this.install(rule);
-      return rule;
-    }
 
-    declare(pattern: Node, on: Node): Rule | undefined {
-      const raw = parse_pattern(pattern.src!.text, pattern.begin, pattern.end, this.scan(pattern.src!)) ?? [];
-      const rule = this.rule(pattern, raw, on);
-      const external = EXTERNALS.find(e => e.pattern === pattern_key(pattern, rule.pieces));
-      if (!external) return undefined;
-      activate(rule, external);
-      rule.definition(pattern).seen = 'live';
-      this.install(rule);
-      return rule;
-    }
 
     install(_rule?: Rule): void {
       this.rules_version++;
     }
 
-    suppress_inside(rule: Rule, src: Source, m: Matched): void {
-      for (const cap of m.captures) {
-        const scannable = cap.piece.name === 'comment' || cap.piece.name === 'string' || cap.piece.raw;
-        if (!scannable || cap.end <= cap.begin) continue;
-        const arrow = src.text.indexOf('=>', cap.begin);
-        if (arrow === -1 || arrow >= cap.end) continue;
-        let i = cap.begin;
-        while (i < cap.end) {
-          let a = i;
-          while (a < cap.end && src.text[a] === ' ') a++;
-          if (a < cap.end && src.text[a] !== '\n') {
-            const lead = this.declarative_at(src, a);
-            if (lead) a = lead.args_begin;
-            const r = recognize(src.text, a, this.scan(src));
-            if (r && r.pattern_end <= cap.end) {
-              const target = this.rule(span(src, r.pattern_begin, r.pattern_end), r.pieces, this.scope(), false);
-              const d = target.definition(span(src, r.pattern_begin, r.pattern_end));
-              if (d.seen !== 'live') d.seen = rule;
-            }
-          }
-          i = line_end(src.text, i) + 1;
-        }
-      }
-    }
 
     // ── the scanning context ──
 
     private scan_depth = 0;
     private scan_cache?: { epoch: number; version: number; src: Source; scans: Map<1 | -1, Scan> };
-    scan(src: Source, sign: 1 | -1 = 1): Scan {
-      let cached = this.scan_cache;
-      if (!cached || cached.epoch !== this.scope_epoch || cached.version !== this.rules_version || cached.src !== src)
-        cached = this.scan_cache = { epoch: this.scope_epoch, version: this.rules_version, src, scans: new Map() };
-      const hit = cached.scans.get(sign);
-      if (hit) return hit;
-      const claimable = new Map<string, Rule[]>();
-      for (const node of this.lookup())
-        for (const rule of this.rules_on(node)) {
-          if (!rule.anchored || !rule.delimited || (rule.project !== undefined && rule.project !== this.program.project(src))) continue;
-          const c = rule.edge_char(sign)!;
-          let bucket = claimable.get(c);
-          if (!bucket) claimable.set(c, bucket = []);
-          if (!bucket.includes(rule)) bucket.push(rule);
-        }
-      const memo = new Map<number, number>();
-      const scan: Scan = {
-        text: src.text,
-        sign,
-        anchors: new Set(claimable.keys()),
-        claim: (j) => {
-          const candidates = claimable.get(src.text[j]);
-          if (!candidates) return -1;
-          if (!candidates.some(rule => lit_at(scan, j, rule.edge(sign)!))) return -1;
-          if (this.scan_depth > 64) return -1;
-          const hit = memo.get(j);
-          if (hit !== undefined) return hit;
-          this.scan_depth++;
-          try {
-            let best = -1;
-            for (const rule of candidates) {
-              if (!this.visible(rule, src)) continue;
-              const m = match_rule(rule, scan, j);
-              if (!m) continue;
-              const far = sign === 1 ? m.end - 1 : m.begin;
-              if (best === -1 || far * sign > best * sign) best = far;
-            }
-            memo.set(j, best);
-            return best;
-          } finally { this.scan_depth--; }
-        },
-        literal_of: (begin, end) => {
-          const text = src.text;
-          const candidates = claimable.get(text[begin]);
-          if (!candidates) return undefined;
-          for (const rule of candidates) {
-            if (!rule.body || !this.visible(rule, src)) continue;
-            const captures = rule.pieces.filter(p => !is_literal(p)) as Capture[];
-            if (captures.length !== 1 || !captures[0].name || rule.body.text.trim() !== captures[0].name) continue;
-            const m = match_rule(rule, scan, begin);
-            if (!m || m.end !== end) continue;
-            const cap = m.captures.find(c => c.piece === captures[0]);
-            return { text: cap ? text.slice(cap.begin, cap.end) : '', by: rule };
-          }
-          return undefined;
-        },
-      };
-      cached.scans.set(sign, scan);
-      return scan;
-    }
 
     // ── parsing ──
 
     parse(src: Source): void {
+      this.diagnostics.forget(src);
       const saved = this.scopes;
       this.scopes = [this.GLOBAL];
       this.scope_epoch++;
@@ -1524,167 +1202,533 @@ export namespace Ray {
 
     // ── reading expressions ──
 
-    private directions(cursor: Node, indent: number): Directions {
-      const ip = this, src = cursor.src!, text = src.text;
-      const along: Directions = { read: 'ltr' };
-      if (!ip.rtl_names.size) return along;
-      const begin = cursor.head(1);
-      if (!ip.rtl_site_in(src, begin, line_end(text, begin))) return along;
-      const scan = ip.scan(src, 1);
-      const extent = expression_edge(scan, begin);
-      const lead = cursor.best_rule(ip, { sign: 1, indent, proven: new Set() });
-      if (lead && lead.m.end >= extent) return along;
-      const firstName = ip.known(scan, begin, ip.lookup());
-      if (firstName && ip.resolve(firstName)?.has_flag('declarative')) return along;
-      const tokens: { name: string; begin: number; end: number; rtl: boolean }[] = [];
-      let i = begin;
-      while (i < extent) {
-        const c = text[i];
-        if (c === ' ' || c === '\n') { i++; continue; }
-        if (scan.anchors.has(c)) { const far = scan.claim(i); if (far !== -1) { i = far + 1; continue; } }
-        const w = word_edge(scan, i);
-        if (w === i) { i++; continue; }
-        const name = text.slice(i, w);
-        const m = ip.resolve(name);
-        if (m?.fn && m.has_flag('right-to-left') !== m.has_flag('left-to-right'))
-          tokens.push({ name, begin: i, end: w, rtl: m.has_flag('right-to-left') });
-        i = w;
-      }
-      const rtls = tokens.filter(t => t.rtl);
-      if (!rtls.length) return along;
-      const ltrs = tokens.filter(t => !t.rtl);
-      if (!ltrs.length) return { read: 'rtl', extent };
-      const last_rtl = rtls[rtls.length - 1], first_ltr = ltrs[0];
-      if (last_rtl.end <= first_ltr.begin) return { read: 'both', extent, before: first_ltr.begin, after: last_rtl.end };
-      return { read: 'mixed', extent, names: [...new Set(tokens.map(t => t.name))] };
-    }
-
-    private read_loop(cursor: Node, sign: 1 | -1, indent: number, forwards: boolean): Node | undefined {
-      const ip = this, src = cursor.src!, text = src.text;
-      const scan = () => ip.scan(src, sign);
-      const dir = sign === 1 ? 'left-to-right' : 'right-to-left';
-      const proven = new Set<Rule>();
-      let result: Node | undefined;
-      let stopped = false;
-
-      const best_rule = (): Found | null => cursor.best_rule(ip, { result, sign, indent, proven });
-      const known = (): string | null => ip.known(scan(), cursor.head(sign), result ? ip.chain(result) : ip.lookup());
-      const rule_step = (found: Found | null = best_rule()): boolean => {
-        if (!found) return false;
-        result = ip.fire(found, src, result) ?? result;
-        cursor.cut(sign, sign === 1 ? found.m.end : found.m.begin);
-        return true;
-      };
-      const directed = (m: Node): boolean => {
-        const rtl = m.has_flag('right-to-left'), ltr = m.has_flag('left-to-right');
-        return sign === 1 ? (ltr || !rtl) : (rtl || (!ltr && result === undefined));
-      };
-      const token = (name: string): boolean => {
-        const m = result ? ip.resolve_on(result, name)! : ip.resolve(name)!;
-        const head = cursor.head(sign);
-        const begin = sign === 1 ? head : head - name.length + 1;
-        const at = span(src, begin, begin + name.length, ip.BASE);
-        cursor.cut(sign, sign === 1 ? at.end : at.begin);
-        if (src.path !== undefined) ip.paint(src, at.begin, at.end, ip.style_of(m) ?? 'variable');
-        if (!m.fn) { result = m; return true; }
-        if (!directed(m)) {
-          ip.error(result
-            ? `Found a method \`${name}\` on \`${result.text}\` but it wasn't flagged as ${dir}.`
-            : `Found a method \`${name}\` but it wasn't flagged as ${dir}.`, at);
-          return true;
-        }
-        const self = result ?? ip.scope();
-        const args = m.has_flag('callable') ? ip.expr(cursor, { forwards, indent, sign }) : undefined;
-        result = ip.invoke(m, { self, args, at }) ?? result;
-        return true;
-      };
-      const declarative = (): boolean => {
-        const head = cursor.head(sign);
-        const lead = ip.declarative_at(src, head);
-        if (!lead) return false;
-        const at = span(src, head, lead.end, ip.BASE);
-        if (src.path !== undefined) ip.paint(src, head, lead.end, ip.style_of(lead.target) ?? 'variable');
-        const eol = Math.min(line_end(text, lead.args_begin), cursor.end);
-        const value = ip.invoke(lead.target, { self: ip.scope(), args: span(src, Math.min(lead.args_begin, eol), eol, ip.BASE), at }) ?? undefined;
-        result = value;
-        cursor.cut(sign, value?.src === src && value.end > eol ? value.end : eol);
-        return true;
-      };
-      const step = (): boolean => {
-        const found = best_rule();
-        const name = known();
-        if (found && name) return found.m.end - found.m.begin >= name.length ? rule_step(found) : token(name);
-        if (found) return rule_step(found);
-        if (name) return token(name);
-        return false;
-      };
-      const word = (): void => {
-        const head = cursor.head(sign);
-        const exit = word_edge(scan(), head);
-        if (exit === head) { cursor.take(sign); return; }
-        const [b, e] = sign === 1 ? [head, exit] : [exit + 1, head + 1];
-        const w = span(src, b, e, ip.BASE);
-        if (result) {
-          if (result.role?.kind === 'forward' && !result.consumed) {
-            result.consumed = true;
-            ip.error(`Unresolved \`${result.role.name}\` on \`${result.role.on.text}\`.`, result);
-          }
-          let cell = result.get(w.text);
-          if (!cell) { cell = w; cell.role = { kind: 'forward', name: w.text, on: result }; result.set(w.text, cell); }
-          if (!forwards) cell.reference(w);
-          if (src.path !== undefined) ip.paint(src, b, e, 'variable');
-          result = cell;
-          cursor.cut(sign, sign === 1 ? e : b);
-          return;
-        }
-        w.role = { kind: 'forward', name: w.text, on: ip.scope() };
-        if (src.path !== undefined) ip.paint(src, b, e, 'variable');
-        result = w;
-        cursor.cut(sign, sign === 1 ? e : b);
-      };
-
-      let first = true;
-      while (!cursor.done() && !stopped) {
-        const c = cursor.at(sign);
-        if (c === undefined || c === '\n') break;
-        if (c === ' ') { if (!rule_step()) cursor.take(sign); continue; }
-        if (first) { first = false; if (sign === 1 && declarative()) continue; }
-        if (step()) continue;
-        word();
-      }
-      if (result?.role?.kind === 'forward' && !result.consumed && !forwards) {
-        result.consumed = true;
-        ip.error(`Unresolved variable \`${result.role.name}\`.`, result);
-      }
-      return result;
-    }
-
     expr(cursor: Node, reading: Reading = {}): Node | undefined {
+      const ip = this, src = cursor.src!, text = src.text;
       const parent = this.expression;
-      this.expression = this.expression_at(cursor.src!, cursor.begin, cursor.end, parent);
+      this.expression = this.expression_at(src, cursor.begin, cursor.end, parent);
       try {
-        const indent = reading.indent ?? indent_at(cursor.src!.text, cursor.begin);
+        const indent = reading.indent ?? indent_at(text, cursor.begin);
         const forwards = reading.forwards ?? false;
-        if (reading.sign !== undefined) return this.read_loop(cursor, reading.sign, indent, forwards);
-        const d = this.directions(cursor, indent);
-        if (d.read === 'ltr') return this.read_loop(cursor, 1, indent, forwards);
-        const src = cursor.src!;
-        const begin = cursor.begin;
-        cursor.begin = d.extent;
-        switch (d.read) {
-          case 'rtl':
-            return this.expr(span(src, begin, d.extent), { sign: -1, indent, forwards });
-          case 'both': {
-            const rtl = this.expr(span(src, begin, d.before), { sign: -1, indent, forwards });
-            const ltr = this.expr(span(src, d.after, d.extent), { sign: 1, indent, forwards });
-            return ltr ?? rtl;
+        const proven = new Set<Rule>();
+
+        // ── direction: read left-to-right unless right-to-left tokens flip it ──
+        let sign: 1 | -1 = reading.sign ?? 1;
+
+        // ── read: walk the span in `sign`, folding each token onto `result` ──
+        let result: Node | undefined;
+        function decorate_pieces(pieces: Piece[], src: Source, evaluate: boolean): void {   // eval inline-decorator pieces; the leading `H.x ` prefix split now happens in read_group
+          if (!evaluate) return;
+          for (const piece of pieces) {
+            if (piece.at === undefined || piece.from === undefined) continue;
+            if (piece.at > piece.from + 1) {   // decorator prefix [from+1, at) stripped by read_group — resolve it as an arbitrary expression (on a path-less shadow so it doesn't paint); style converges over the fixpoint. KNOWN GAP: the `.` rule's own self-referential pieces lose 5 member-name paints (to fix later).
+              const shadow = new Text.Source(); shadow.value = src.text.slice(piece.from + 1, piece.at);
+              const decorator = ip.eval_block(span(shadow, 0, shadow.value.length), true);
+              const s = decorator ? STYLED.get(decorator) : undefined;
+              if (s !== undefined) piece.style = s;
+              continue;
+            }
+            if (is_literal(piece)) continue;
+            let head = piece.at;
+            const end = piece.at + piece.content.length;
+            while (head < end && src.text[head] === ' ') head++;
+            const sc = scan(src);
+            if (head >= end || !sc.anchors.has(src.text[head]) || sc.claim(head) === -1) continue;
+            if (ip.decorating.has(piece.at)) continue;
+            ip.decorating.add(piece.at);
+            try { ip.eval_block(span(src, head, end, ip.BASE), true); }
+            finally { ip.decorating.delete(piece.at); }
           }
-          case 'mixed':
-            this.error(
-              `Cannot mix ${d.names.map(n => `\`${n}\``).join(', ')} in a single infix expression with mixed associativity, use parenthesis to mix them.`,
-              span(src, begin, d.extent));
-            return undefined;
         }
+        function read_group(scan: Scan, begin: number, end: number): Piece {
+          if (scan_to(scan, begin, ':') === -1 || scan_to(scan, begin, ':') >= end) {   // a top-level `:` makes it a typed capture, not a decorator
+            let space = -1;   // the constraint: the content is the trailing token; whatever precedes the last top-level space is the decorator prefix (an arbitrary expression, resolved by decorate_pieces)
+            for (let i = begin; i < end; ) {
+              const c = scan.text[i];
+              if (c === ' ') { space = i; i++; }
+              else if (scan.anchors.has(c)) { const f = scan.claim(i); i = f !== -1 ? f + 1 : i + 1; }
+              else i++;
+            }
+            if (space !== -1) { let a = space; while (scan.text[a] === ' ') a++; if (a < end) begin = a; }   // structural strip; prefix is [groupStart, begin)
+          }
+          const content = scan.text.slice(begin, end);
+          const quoted = scan.literal_of(begin, end);
+          if (quoted !== undefined) return { kind: 'literal', text: quoted.text, at: begin, claim: quoted.by };
+          const colon = scan_to(scan, begin, ':');
+          const split = colon !== -1 && colon < end;
+          const name = (split ? scan.text.slice(begin, colon) : content).trim();
+          const cap = new Capture();
+          cap.kind = 'word';
+          cap.name = name || undefined;
+          cap.type = split ? scan.text.slice(colon + 1, end).trim() : undefined;
+          cap.content = content;
+          cap.at = begin;
+          return cap;
+        }
+        function parse_pattern(text: string, begin: number, end: number, scan: Scan): Piece[] | null {
+          const pieces: Piece[] = [];
+          let literal_start = begin;
+          let i = begin;
+          const flush_literal = (upto: number): void => {
+            if (upto > literal_start) pieces.push({ kind: 'literal', text: text.slice(literal_start, upto), from: literal_start, to: upto });
+          };
+          while (i < end) {
+            if (text[i] !== '{') { i++; continue; }
+            const close = group_end(scan, i);
+            if (close === -1) return null;
+            flush_literal(i);
+            const piece = read_group(scan, i + 1, close - 1);
+            piece.from = i; piece.to = close;
+            pieces.push(piece);
+            i = close;
+            literal_start = i;
+          }
+          flush_literal(i);
+          if (!pieces.length) return null;
+          classify(pieces);
+          return pieces;
+        }
+        function recognize(text: string, at: number, scan: Scan): Recognized | null {
+          let saw_group = false, j = at;
+          for (;;) {
+            const c = text[j];
+            if (c === undefined || c === '\n') return null;
+            if (c === '{') {
+              const close = group_end(scan, j);
+              if (close === -1) return null;
+              saw_group = true;
+              j = close;
+              continue;
+            }
+            if (scan.anchors.has(c)) {            // a claimable group/literal — `(…)`, `[…]`, `` `…` `` — is a pattern token too, not just `{…}`
+              const far = scan.claim(j);
+              if (far !== -1) { saw_group = true; j = far + 1; continue; }
+            }
+            if (c === '=' && text[j + 1] === '>') break;
+            if (c === ' ') { j++; continue; }
+            let w = word_edge(scan, j);   // a rule-def token is `String.Word | {group}`, so a word can't contain `{` — it starts the group alternative
+            for (let k = j; k < w; k++) if (text[k] === '{') { w = k; break; }
+            if (w === j) return null;
+            j = w;
+          }
+          if (!saw_group) return null;
+          let pattern_end = j;
+          while (pattern_end > at && text[pattern_end - 1] === ' ') pattern_end--;
+          if (pattern_end === at) return null;
+          const pieces = parse_pattern(text, at, pattern_end, scan);
+          if (!pieces) return null;
+          let b = j + 2;
+          while (text[b] === ' ') b++;
+          const body_end = (b >= text.length || text[b] === '\n')
+            ? indented_end(text, b, indent_at(text, at))
+            : expression_edge(scan, b);
+          return { pattern_begin: at, pattern_end, pieces, body_begin: b, body_end, end: Math.max(j + 2, body_end) };
+        }
+        function rule(pattern: Node, pieces: Piece[], on: Node, evaluate = true, style?: string): Rule {
+          const src = pattern.src!;
+          decorate_pieces(pieces, src, evaluate);
+          const rule = ip.register(pattern, pieces, ip.name_of(on), ip.reach(src));
+          if (style !== undefined) rule.style = style;
+          if (evaluate && src.path !== undefined) {
+            const own = rule.style ?? 'function.definition';
+            for (const piece of rule.pieces) {
+              const { from, to } = piece;
+              if (from === undefined || to === undefined) continue;
+              if (piece.at === undefined) { ip.paint(src, from, to, own); continue; }
+              let inner = from + 1;
+              if (piece.style !== undefined && piece.at > inner) { ip.paint(src, inner, piece.at, piece.style); inner = piece.at; }
+              if (is_literal(piece) && piece.claim?.style !== undefined) ip.paint(src, inner, to - 1, piece.claim.style);
+            }
+          }
+          return rule;
+        }
+
+        function paint_def(src: Source, r: Recognized): void {
+          const shape = [...ip.rules.values()].find(s => s.name === 'rule-definition' && s.styled);
+          if (src.path === undefined || !shape) return;
+          const caps = shape.pieces.filter((p): p is Capture => !is_literal(p));
+          const lit = shape.pieces.find(is_literal);
+          let arrow = r.pattern_end;
+          while (src.text[arrow] === ' ') arrow++;
+          const after = arrow + (lit?.text.length ?? 0);
+          if (caps[0]?.style !== undefined) ip.paint(src, r.pattern_begin, arrow, caps[0].style);
+          if (lit?.style !== undefined) ip.paint(src, arrow, after, lit.style);
+          if (caps[1]?.style !== undefined && r.body_end > after) ip.paint(src, after, r.body_end, caps[1].style);
+        }
+        function define(at: Node, style?: string, pre?: Recognized): Rule {
+          const src = at.src!;
+          const r = pre ?? recognize(src.text, at.begin, scan(src))!;
+          const pattern = span(src, r.pattern_begin, r.pattern_end);
+          paint_def(src, r);
+          const built = rule(pattern, r.pieces, ip.scope(), true, style);
+          built.definition(pattern).seen = 'live';
+          if (r.body_end > r.body_begin) {
+            const body = span(src, r.body_begin, r.body_end);
+            if (!body.empty) built.body = body;
+          }
+          ip.install(built);
+          return built;
+        }
+
+        function declare(pattern: Node, pieces: Piece[], on: Node): Rule | undefined {
+          const built = rule(pattern, pieces, on);
+          const external = EXTERNALS.find(e => e.pattern === pattern_key(pattern, built.pieces));
+          if (!external) return undefined;
+          activate(built, external);
+          built.definition(pattern).seen = 'live';
+          ip.install(built);
+          return built;
+        }
+
+        function scan(src: Source, sign: 1 | -1 = 1): Scan {
+          let cached = ip.scan_cache;
+          if (!cached || cached.epoch !== ip.scope_epoch || cached.version !== ip.rules_version || cached.src !== src)
+            cached = ip.scan_cache = { epoch: ip.scope_epoch, version: ip.rules_version, src, scans: new Map() };
+          const hit = cached.scans.get(sign);
+          if (hit) return hit;
+          const claimable = new Map<string, Rule[]>();
+          const edges = new Set<string>();   // every anchored rule's edge char is a word boundary — defining `{.}{property}` or `* (b)` makes `.`/`*` end a word
+          for (const node of ip.lookup())
+            for (const rule of ip.rules_on(node)) {
+              if (!rule.anchored || (rule.project !== undefined && rule.project !== ip.program.project(src))) continue;
+              const c = rule.edge_char(sign)!;
+              if (!rule.delimited) { if (node === ip.BASE) edges.add(c); continue; }   // only BASE-level operators (the `.` rule) are word boundaries; GLOBAL rules (class, //, …) aren't
+              let bucket = claimable.get(c);
+              if (!bucket) claimable.set(c, bucket = []);
+              if (!bucket.includes(rule)) bucket.push(rule);
+            }
+          const memo = new Map<number, number>();
+          const scan: Scan = {
+            text: src.text,
+            sign,
+            edges,
+            anchors: new Set(claimable.keys()),
+            claim: (j) => {
+              const candidates = claimable.get(src.text[j]);
+              if (!candidates) return -1;
+              if (!candidates.some(rule => lit_at(scan, j, rule.edge(sign)!))) return -1;
+              if (ip.scan_depth > 64) return -1;
+              const hit = memo.get(j);
+              if (hit !== undefined) return hit;
+              ip.scan_depth++;
+              try {
+                let best = -1;
+                for (const rule of candidates) {
+                  if (!ip.visible(rule, src)) continue;
+                  const m = match_rule(rule, scan, j);
+                  if (!m) continue;
+                  const far = sign === 1 ? m.end - 1 : m.begin;
+                  if (best === -1 || far * sign > best * sign) best = far;
+                }
+                memo.set(j, best);
+                return best;
+              } finally { ip.scan_depth--; }
+            },
+            literal_of: (begin, end) => {
+              const text = src.text;
+              const candidates = claimable.get(text[begin]);
+              if (!candidates) return undefined;
+              for (const rule of candidates) {
+                if (!rule.body || !ip.visible(rule, src)) continue;
+                const captures = rule.pieces.filter(p => !is_literal(p)) as Capture[];
+                if (captures.length !== 1 || !captures[0].name || rule.body.text.trim() !== captures[0].name) continue;
+                const m = match_rule(rule, scan, begin);
+                if (!m || m.end !== end) continue;
+                const cap = m.captures.find(c => c.piece === captures[0]);
+                return { text: cap ? text.slice(cap.begin, cap.end) : '', by: rule };
+              }
+              return undefined;
+            },
+          };
+          cached.scans.set(sign, scan);
+          return scan;
+        }
+
+        function declare_external(raw: Node, on: Node, at: Node, recognized?: Recognized): Node {
+          const src = raw.src!;
+          let begin = raw.begin, end = raw.end;
+          while (begin < end && src.text[begin] === ' ') begin++;
+          while (end > begin && src.text[end - 1] === ' ') end--;
+          const text = src.text.slice(begin, end);
+          if (!text) { ip.error('`external` requires a declaration as its argument.', at); return raw; }
+          if ('{(['.includes(text[0]) || text.includes('{')) {
+            const r = recognized;
+            const pattern = r && r.pattern_end <= end ? span(src, r.pattern_begin, r.pattern_end) : span(src, begin, end);
+            const pieces = (r && r.pattern_end <= end ? r.pieces : parse_pattern(src.text, begin, end, scan(src))) ?? [];
+            if (!declare(pattern, pieces, on))
+              ip.error(`Expected the rule \`${pattern.text}\` to be provided by the runtime, but it wasn't.`, pattern);
+            return raw;
+          }
+          const words = text.split(/\s+/);
+          const modifiers: Node[] = [];
+          while (words.length > 1) {
+            const modifier = ip.resolve_on(on, words[0]) ?? ip.resolve(words[0]);
+            if (!modifier?.fn || !modifier.has_flag('modifier')) break;
+            modifiers.push(modifier);
+            words.shift();
+          }
+          const name = words[0].split(':')[0];
+          const target = ip.resolve_on(on, name) ?? (on.has_flag('highlight') ? ip.group(on, name) : ip.resolve(name));
+          if (!target) {
+            ip.error(`Expected method \`${name}\` to be externally defined by the runtime, but it wasn't.`, span(src, begin, end));
+            return raw;
+          }
+          let declared: Node = target;
+          for (const modifier of modifiers) declared = ip.apply(modifier, { self: on, args: declared, at }) ?? declared;
+          if (declared.has_flag('right-to-left') && !declared.has_flag('left-to-right')) ip.rtl_names.add(name);
+          const site = ip.frames[ip.frames.length - 1];
+          if (site) ip.define_at(ip.name_of(on), name, site, site.on && ip.name_of(site.on));
+          return declared;
+        }
+
+        const decorate = (callee: Node, args: Node, recognized?: Recognized): Node => {
+          const name = STYLED.get(callee)!;
+          if (args.empty) return callee;
+          const dat = args.src;
+          if (dat && recognized && recognized.pattern_end <= args.end) {
+            define(span(dat, args.begin, args.end, ip.BASE), name, recognized);
+            return span(dat, args.begin, recognized.end, ip.BASE);
+          }
+          const value = ip.eval_block(args, true) ?? args;
+          if (value.src?.path !== undefined && value.end > value.begin) ip.paint(value.src, value.begin, value.end, name);
+          STYLED.set(value, name);
+          const host = ip.hosted(value);
+          const ste = ip.frames[ip.frames.length - 1];
+          if (host && ste) ip.define_at(host.on, host.name, ste, ste.on && ip.name_of(ste.on));
+          return value;
+        };
+        const paint_rule = (m: Matched, rule: Rule): void => {
+          ip.paint(src, m.begin, m.end, '', rule.key);
+          let pos = m.begin;   // always paint pieces lazily — a piece's decorator style may converge after this fire (e.g. the `.` rule styling its own `H.property` later in the pass); the getter drops pieces that resolve to no style
+          for (const piece of rule.pieces) {
+            let pb = pos, pe: number;
+            if (is_literal(piece)) pe = pos + piece.text.length;
+            else { const cap = m.captures.find(c => c.piece === piece); if (!cap) break; pb = cap.begin; pe = cap.end; }
+            const b = pb, e = pe;   // paint in-context now, resolve the (possibly not-yet-converged) decorator style lazily at the highlighting getter
+            ip.paint(src, b, e, () => piece.style ?? (rule.style !== undefined && (is_literal(piece) || (piece as Capture).raw) ? rule.style : undefined), rule.key);
+            pos = pe;
+          }
+        };
+        const eval_body = (rule: Rule, m: Matched, self: Node | undefined): Node | undefined => {
+          if (!rule.body || rule.body.empty) return undefined;
+          const ctx = new Node(ip.BASE);
+          for (const cap of m.captures) {
+            if (!cap.piece.name) continue;
+            const node = span(src, cap.begin, cap.end, ip.BASE);
+            const value = (cap.piece.name === 'expr' || cap.piece.name === 'args') ? (ip.eval_block(node) ?? node) : node;
+            if (cap.piece.name === 'block') ip.abstract(value);
+            ctx.set(cap.piece.name, value);
+          }
+          if (self) ctx.set('this', self);
+          return ip.eval_in(ctx, rule.body);
+        };
+        const directed = (m: Node, r?: Node): boolean => {
+          const rtl = m.has_flag('right-to-left'), ltr = m.has_flag('left-to-right');
+          return sign === 1 ? (ltr || !rtl) : (rtl || (!ltr && r === undefined));
+        };
+        // ── one loop: read the cursor and, per position, claim/fire/name/word directly onto `result` ──
+        let raw_pending: Node | undefined;  // a raw method that just fired; consumes the rest of its line next iteration
+        let first = true;
+        while (true) {
+          const sc = scan(src, sign);         // the claimable-delimiter view for this scope, built once per step
+          if (raw_pending) {                  // a raw method awaiting its declaration
+            const v = raw_pending; raw_pending = undefined;
+            const callee = v.role?.kind === 'bound' ? v.role.method : v;
+            const self = v.role?.kind === 'bound' ? v.role.self : ip.scope();
+            let a = cursor.head(sign); while (text[a] === ' ') a++;
+            const eol = Math.min(line_end(text, a), cursor.end);
+            const args = span(src, Math.min(a, eol), eol, ip.BASE);
+            const at = span(src, cursor.head(sign), cursor.head(sign), ip.BASE);
+            const recognized = recognize(text, args.begin, sc) ?? undefined;
+            cursor.cut(sign, eol);
+            if (callee.has_flag('highlight')) result = decorate(callee, args, recognized);
+            else if (callee.has_flag('declares')) result = declare_external(args, self, at, recognized) ?? result;
+            else result = callee.fn!({ interpreter: ip, self, method: callee, args, at, recognized }) ?? result;
+            continue;
+          }
+          if (cursor.done()) break;
+          const c = cursor.at(sign);
+          if (c === undefined || c === '\n') break;
+          const head = cursor.head(sign);
+          // ── the best rule + the longest method name at this position, in one chain walk ──
+          const start = result === undefined && sign === 1;
+          const own = ip.program.project(src);
+          let best: Candidate | null = null;
+          const seen = proven; seen.clear();
+          let level = 0;
+          const attempt = (rule: Rule) => {
+            if (!ip.visible(rule, src) || seen.has(rule)) return;
+            seen.add(rule);
+            const edge = rule.edge(sign);
+            if (edge !== undefined && (rule.edge_char(sign) !== c || (edge.length > 1 && !lit_at(sc, head, edge)))) return;
+            if (rule.matcher && sign === -1) return;
+            const m = rule.matcher ? rule.matcher(rule, sc, head, start, recognize) : match_rule(rule, sc, head, indent);
+            const rank = rule.project === own ? 0 : 1;
+            if (m && prefers({ rule, m, level, rank }, best)) best = { rule, m, level, rank };
+          };
+          let nm: string | null = null, owner: Node | undefined;
+          let firstScope = true;
+          for (const nodes of result ? [ip.chain(result), ip.lookup()] : [ip.lookup()]) {
+            for (const node of nodes) {
+              const rules = ip.rules_on(node);
+              if (rules.length) {
+                const dispatch = dispatch_of(rules);
+                const keyed = dispatch.keyed[sign === 1 ? 0 : 1].get(c);
+                if (keyed) for (const rule of keyed) attempt(rule);
+                for (const rule of dispatch.unkeyed[sign === 1 ? 0 : 1]) attempt(rule);
+              }
+              if (firstScope && node.methods) {
+                const n = name_at(node.methods, sc, head, nm?.length ?? -1);
+                if (n) { nm = n; owner = node; }
+              }
+              level++;
+            }
+            firstScope = false;
+          }
+          const found = best;
+          const name = nm !== null ? { name: nm, owner: owner! } : null;
+          if (first) {   // first step, default forward: let right-to-left tokens flip/split this expression (reusing `found` as the lead)
+            first = false;
+            const begin = cursor.begin;
+            if (reading.sign === undefined && ip.rtl_names.size && ip.rtl_site_in(src, begin, line_end(text, begin))) {
+              const extent = expression_edge(sc, begin);
+              const claimed = !!(found && found.m.end >= extent);
+              const fname = claimed ? null : (ip.known(sc, begin, ip.lookup())?.name ?? null);
+              if (!claimed && !(fname && ip.resolve(fname)?.has_flag('raw'))) {
+                const tokens: { begin: number; end: number; rtl: boolean }[] = [];
+                for (let i = begin; i < extent; ) {
+                  const ch = text[i];
+                  if (ch === ' ' || ch === '\n') { i++; continue; }
+                  if (sc.anchors.has(ch)) { const far = sc.claim(i); if (far !== -1) { i = far + 1; continue; } }
+                  const w = word_edge(sc, i);
+                  if (w === i) { i++; continue; }
+                  const m = ip.resolve(text.slice(i, w));
+                  if (m?.fn && m.has_flag('right-to-left') !== m.has_flag('left-to-right')) tokens.push({ begin: i, end: w, rtl: m.has_flag('right-to-left') });
+                  i = w;
+                }
+                const rtls = tokens.filter(t => t.rtl);
+                if (rtls.length) {
+                  const ltrs = tokens.filter(t => !t.rtl);
+                  cursor.begin = extent;
+                  if (!ltrs.length) return ip.expr(span(src, begin, extent), { sign: -1, indent, forwards });
+                  const lastRtl = rtls[rtls.length - 1], firstLtr = ltrs[0];
+                  if (lastRtl.end <= firstLtr.begin) {
+                    const rtl = ip.expr(span(src, begin, firstLtr.begin), { sign: -1, indent, forwards });
+                    const ltr = ip.expr(span(src, lastRtl.end, extent), { sign: 1, indent, forwards });
+                    return ltr ?? rtl;
+                  }
+                  ip.error(`Cannot mix ${[...new Set(tokens.map(t => text.slice(t.begin, t.end)))].map(n => `\`${n}\``).join(', ')} in a single infix expression with mixed associativity, use parenthesis to mix them.`, span(src, begin, extent));
+                  return undefined;
+                }
+              }
+            }
+          }
+          const space = c === ' ';
+
+          // speculatively resolve a leading member-access expression (before the `.` rule is a boundary). On a rule-def line a raw consumer takes the rest of the line as its argument (the decorator is the caller, the rule-def its argument). On an assignment line the leading member is resolved as an assignable slot (so `H.x = …` aliases work); other member accesses are left to the `.` rule.
+          if (!space && sign === 1 && result === undefined) {
+            const seg = (k: number): number => { let w = word_edge(sc, k); const dot = text.indexOf('.', k); if (dot >= k && dot < w) w = dot; return w; };
+            const e0 = seg(head);
+            let base: Node | undefined = e0 > head ? ip.resolve(text.slice(head, e0)) : undefined;
+            if (base && text[e0] === '.') {
+              const keys: string[] = []; let p = e0, ok = true;
+              while (text[p] === '.') { const s = p + 1, me = seg(s); if (me === s) { ok = false; break; } keys.push(text.slice(s, me)); p = me; }
+              let q = p; while (text[q] === ' ') q++;          // is this an assignment LHS? (a lone `=`, not `=>`/`==`)
+              const assigning = text[q] === '=' && text[q + 1] !== '>' && text[q + 1] !== '=';
+              let on: Node | undefined = base;
+              for (let i = 0; ok && on && i < keys.length - 1; i++) on = ip.resolve_on(on, keys[i]) ?? (on.has_flag('highlight') ? ip.group(on, keys[i]) : undefined);
+              if (ok && on && keys.length) {
+                const key = keys[keys.length - 1];
+                const member = ip.resolve_on(on, key);
+                if (found?.rule.name === 'rule-definition') {
+                  const dec = member ?? (on.has_flag('highlight') ? ip.group(on, key) : undefined);
+                  if (dec?.has_flag('raw')) {                 // decoration: consumes the rest of its line
+                    ip.paint(src, head, p, ip.style_of(dec) ?? 'variable');
+                    cursor.cut(sign, p); result = dec; raw_pending = dec; continue;
+                  }
+                } else if (assigning) {                       // assignment LHS: an assignable slot (mirrors the `[{property}]` index)
+                  ip.paint(src, head, p, ip.style_of(member ?? on) ?? 'variable');
+                  cursor.cut(sign, p);
+                  const r = span(src, head, p, ip.BASE);
+                  r.role = { kind: 'slot', on, key };
+                  result = r; continue;
+                } else if (member?.has_flag('highlight')) {   // reference to a defined decorator (e.g. RHS `H.comment`): resolve to its node, not a forward
+                  ip.paint(src, head, p, ip.style_of(member) ?? 'variable');
+                  cursor.cut(sign, p); result = member; continue;
+                }
+              }
+            }
+          }
+
+          // longest match wins: a rule (at a space, or ≥ the name's length) beats the name beats a bare word
+          if (found && (space || !name || found.m.end - found.m.begin >= name.name.length)) {
+            const { rule, m } = found;
+            const at = span(src, m.begin, m.end);
+            cursor.cut(sign, sign === 1 ? m.end : m.begin);
+            const site = `${id(rule.pattern)}:${src.path ?? ''}:${at.begin}`;
+            if (!ip.overflowed && !ip.firing.has(site)) {
+              if (ip.depth > 64) { ip.overflowed = true; ip.error(`Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at); }
+              else {
+                ip.firing.add(site); ip.depth++;
+                try {
+                  if (result?.role?.kind === 'forward') result.consumed = true;
+                  paint_rule(m, rule);
+                  if (!rule.disabled) {
+                    const method = ip.node_of(rule.on)?.get(rule) ?? rule;
+                    if (rule.name === 'rule-definition') define(at, undefined, m.recognized);
+                    else if (method.fn) result = method.fn({ interpreter: ip, self: result, method, args: at, at, match: new Match(m, src, ip.BASE) }) ?? result;
+                    else result = eval_body(rule, m, result) ?? result;
+                  }
+                } finally { ip.firing.delete(site); if (--ip.depth === 0) ip.overflowed = false; }
+              }
+            }
+            const fired = result?.role?.kind === 'bound' ? result.role.method : result;
+            if (sign === 1 && fired?.fn && fired.has_flag('raw')) raw_pending = result;
+            continue;
+          }
+          if (space) { cursor.take(sign); continue; }   // a space with no rule: skip it
+
+          if (name) {                          // a named method
+            const m = name.owner.get(name.name)!;
+            const begin = sign === 1 ? head : head - name.name.length + 1;
+            const at = span(src, begin, begin + name.name.length, ip.BASE);
+            cursor.cut(sign, sign === 1 ? at.end : at.begin);
+            ip.paint(src, at.begin, at.end, ip.style_of(m) ?? 'variable');
+            if (!m.fn) { result = m; continue; }
+            if (m.has_flag('raw')) { result = m; raw_pending = m; continue; }
+            if (!directed(m, result)) {
+              const dir = sign === 1 ? 'left-to-right' : 'right-to-left';
+              ip.error(result ? `Found a method \`${name.name}\` on \`${result.text}\` but it wasn't flagged as ${dir}.` : `Found a method \`${name.name}\` but it wasn't flagged as ${dir}.`, at);
+              continue;
+            }
+            const self = result ?? ip.scope();
+            const args = m.has_flag('callable') ? ip.expr(cursor, { forwards, indent, sign }) : undefined;
+            result = m.fn!({ interpreter: ip, self, method: m, args: args ?? span(at.src!, at.begin, at.begin, ip.BASE), at }) ?? result;
+            continue;
+          }
+
+          const exit = word_edge(sc, head);    // a bare word → forward reference
+          if (exit === head) { cursor.take(sign); continue; }
+          const [b, e] = sign === 1 ? [head, exit] : [exit + 1, head + 1];
+          const w = span(src, b, e, ip.BASE);
+          if (result) {
+            if (result.role?.kind === 'forward' && !result.consumed) { result.consumed = true; ip.error(`Unresolved \`${result.role.name}\` on \`${result.role.on.text}\`.`, result); }
+            let cell = result.get(w.text);
+            if (!cell) { cell = w; cell.role = { kind: 'forward', name: w.text, on: result }; result.set(w.text, cell); }
+            if (!forwards) cell.reference(w);
+            ip.paint(src, b, e, 'variable');
+            result = cell;
+          } else {
+            w.role = { kind: 'forward', name: w.text, on: ip.scope() };
+            ip.paint(src, b, e, 'variable');
+            result = w;
+          }
+          cursor.cut(sign, sign === 1 ? e : b);
+        }
+        if (result?.role?.kind === 'forward' && !result.consumed && !forwards) {
+          result.consumed = true;
+          ip.error(`Unresolved variable \`${result.role.name}\`.`, result);
+        }
+        return result;
       } finally {
         this.expression = parent;
       }
@@ -1712,121 +1756,20 @@ export namespace Ray {
     private depth = 0;
     private overflowed = false;
     private firing = new Set<string>();
-    fire(found: Found, src: Source, receiver: Node | undefined): Node | undefined {
-      const { rule, m } = found;
-      if (this.overflowed) return undefined;
-      const at = span(src, m.begin, m.end);
-      const site = `${id(rule.pattern)}:${src.path ?? ''}:${at.begin}`;
-      if (this.firing.has(site)) return undefined;
-      if (this.depth > 64) {
-        this.overflowed = true;
-        this.error(`Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at);
-        return undefined;
-      }
-      this.firing.add(site);
-      this.depth++;
-      try {
-        if (receiver?.role?.kind === 'forward') receiver.consumed = true;
-        this.suppress_inside(rule, src, m);
-        if (src.path !== undefined) this.paint(src, m.begin, m.end, '', rule.key);
-        if ((rule.style !== undefined || rule.styled) && src.path !== undefined) {
-          let pos = m.begin;
-          for (const piece of rule.pieces) {
-            let begin = pos, end: number;
-            if (is_literal(piece)) end = pos + piece.text.length;
-            else {
-              const cap = m.captures.find(c => c.piece === piece);
-              if (!cap) break;
-              begin = cap.begin; end = cap.end;
-            }
-            const style = piece.style
-              ?? (rule.style !== undefined && (is_literal(piece) || (piece as Capture).raw) ? rule.style : undefined);
-            if (style !== undefined) this.paint(src, begin, end, style, rule.key);
-            pos = end;
-          }
-        }
-        if (rule.disabled) return undefined;
-        const method = this.node_of(rule.on)?.get(rule) ?? rule;
-        if (method.fn) return method.fn({ interpreter: this, self: receiver, method: rule, args: at, at, match: new Match(m, src, this.BASE) });
-        return this.evaluate(found, src, receiver);
-      } finally {
-        this.firing.delete(site);
-        if (--this.depth === 0) this.overflowed = false;
-      }
-    }
-
-    private evaluate({ rule, m }: Found, src: Source, receiver: Node | undefined): Node | undefined {
-      if (!rule.body || rule.body.empty) return undefined;
-      const ctx = new Node(this.BASE);
-      for (const cap of m.captures) {
-        if (!cap.piece.name) continue;
-        const node = span(src, cap.begin, cap.end, this.BASE);
-        const value = (cap.piece.name === 'expr' || cap.piece.name === 'args')
-          ? (this.eval_block(node) ?? node)
-          : node;
-        if (cap.piece.name === 'block') this.abstract(value);
-        ctx.set(cap.piece.name, value);
-      }
-      if (receiver) ctx.set('this', receiver);
-      return this.eval_in(ctx, rule.body);
-    }
-
     // ── resolution ──
 
-    known(scan: Scan, at: number, nodes: Iterable<Node>): string | null {
-      const { text, sign } = scan;
-      const c = text[at];
-      let best: string | null = null;
+    known(scan: Scan, at: number, nodes: Iterable<Node>): { name: string; owner: Node } | null {
+      let name: string | null = null, owner: Node | undefined;
       for (const node of nodes) {
         if (!node.methods) continue;
-        const bucket = names_at(node.methods, c, sign);
-        if (!bucket) continue;
-        for (const length of bucket.lengths) {
-          if (best !== null && length <= best.length) break;
-          const begin = sign === 1 ? at : at - length + 1;
-          if (begin < 0 || begin + length > text.length) continue;
-          const key = text.slice(begin, begin + length);
-          if (!bucket.sets.get(length)!.has(key)) continue;
-          const far = sign === 1 ? at + length : begin - 1;
-          if (/\w/.test(near(-sign as 1 | -1, key)) && /\w/.test(text[far] ?? '')) continue;
-          best = key;
-        }
+        const n = name_at(node.methods, scan, at, name?.length ?? -1);
+        if (n) { name = n; owner = node; }
       }
-      return best;
+      return name !== null ? { name, owner: owner! } : null;
     }
 
-    declarative_at(src: Source, at: number): { target: Node; end: number; args_begin: number } | undefined {
-      const scan = this.scan(src);
-      const keyword = this.known(scan, at, this.lookup());
-      if (!keyword) return undefined;
-      const method = (node: Node | undefined): Node | undefined =>
-        node?.role?.kind === 'bound' ? node.role.method : node;
-      let target = method(this.resolve(keyword));
-      let end = at + keyword.length;
-      const text = src.text;
-      while (target && !target.fn && text[end] === '.') {
-        const name = this.known(scan, end + 1, this.chain(target));
-        let next = name ? method(this.resolve_on(target, name)) : undefined;
-        let length = name?.length ?? 0;
-        if (!next) {
-          const w = word_edge(scan, end + 1);
-          if (w > end + 1) {
-            next = method(this.resolve_on(target, text.slice(end + 1, w)));
-            length = w - (end + 1);
-          }
-        }
-        if (!next) break;
-        target = next;
-        end = end + 1 + length;
-      }
-      if (!target?.fn || !target.has_flag('declarative')) return undefined;
-      let a = end;
-      while (text[a] === ' ') a++;
-      return { target, end, args_begin: a };
-    }
-
-    invoke(method: Node, call: { self: Node; args?: Node; at: Node }): Node | undefined {
-      return method.fn!({ interpreter: this, self: call.self, method, args: call.args ?? span(call.at.src!, call.at.begin, call.at.begin, this.BASE), at: call.at });
+    apply(method: Node, call: { self: Node; args?: Node; at: Node; match?: Match }): Node | undefined {
+      return method.fn!({ interpreter: this, self: call.self, method, args: call.args ?? span(call.at.src!, call.at.begin, call.at.begin, this.BASE), at: call.at, match: call.match });
     }
 
     eval_in(scope: Node, block: Node | undefined, forwards = false): Node | undefined {
@@ -1873,6 +1816,15 @@ export namespace Ray {
       return undefined;
     }
 
+    group(on: Node, name: string): Node {
+      const node = new Node(this.BASE);
+      node.flag('highlight'); node.flag('raw');
+      STYLED.set(node, name);
+      node.fn = () => node;
+      on.set(name, node);
+      return node;
+    }
+
     abstract(block: Node): void {
       if (this.abstract_blocks && !block.empty) this.evaluate_program(block);
     }
@@ -1886,63 +1838,6 @@ export namespace Ray {
       } finally { this.calling.delete(program); }
     }
 
-    declare_external(raw: Node, on: Node, at: Node): Node {
-      const src = raw.src!;
-      let begin = raw.begin, end = raw.end;
-      while (begin < end && src.text[begin] === ' ') begin++;
-      while (end > begin && src.text[end - 1] === ' ') end--;
-      const text = src.text.slice(begin, end);
-      if (!text) { this.error('`external` requires a declaration as its argument.', at); return raw; }
-      if ('{(['.includes(text[0]) || text.includes('{')) {
-        const r = recognize(src.text, begin, this.scan(src));
-        const pattern = r && r.pattern_end <= end ? span(src, r.pattern_begin, r.pattern_end) : span(src, begin, end);
-        if (!this.declare(pattern, on))
-          this.error(`Expected the rule \`${pattern.text}\` to be provided by the runtime, but it wasn't.`, pattern);
-        return raw;
-      }
-      const words = text.split(/\s+/);
-      const modifiers: Node[] = [];
-      while (words.length > 1) {
-        const modifier = this.resolve_on(on, words[0]) ?? this.resolve(words[0]);
-        if (!modifier?.fn || !modifier.has_flag('modifier')) break;
-        modifiers.push(modifier);
-        words.shift();
-      }
-      const name = words[0].split(':')[0];
-      let target = this.resolve_on(on, name);
-      if (!target && on.has_flag('highlight')) {
-        const owner = on, group = name, node = new Node(this.BASE);
-        node.flag('declarative'); node.flag('highlight');
-        STYLED.set(node, group);
-        node.fn = ({ self, args }) => {
-          if (args.empty) return node;
-          const at = args.src;
-          if (self !== owner && at) {
-            const r = recognize(at.text, args.begin, this.scan(at));
-            if (r && r.pattern_end <= args.end) { this.define(span(at, args.begin, args.end, this.BASE), group); return span(at, args.begin, r.end, this.BASE); }
-          }
-          const value = (self === owner ? args : this.eval_block(args, true)) ?? args;
-          if (value.src?.path !== undefined && value.end > value.begin) this.paint(value.src, value.begin, value.end, group);
-          STYLED.set(value, group);
-          const host = this.hosted(value);
-          const site = this.frames[this.frames.length - 1];
-          if (host && site) this.define_at(host.on, host.name, site, site.on && this.name_of(site.on));
-          return value;
-        };
-        on.set(name, target = node);
-      }
-      target ??= this.resolve(name);
-      if (!target) {
-        this.error(`Expected method \`${name}\` to be externally defined by the runtime, but it wasn't.`, span(src, begin, end));
-        return raw;
-      }
-      let declared: Node = target;
-      for (const modifier of modifiers) declared = this.invoke(modifier, { self: on, args: declared, at }) ?? declared;
-      if (declared.has_flag('right-to-left') && !declared.has_flag('left-to-right')) this.rtl_names.add(name);
-      const site = this.frames[this.frames.length - 1];
-      if (site) this.define_at(this.name_of(on), name, site, site.on && this.name_of(site.on));
-      return declared;
-    }
   }
 
 
@@ -1974,6 +1869,24 @@ export namespace Ray {
       b.count = methods.size;
     }
     return b.names[sign === 1 ? 0 : 1].get(c);
+  }
+
+  function name_at(methods: Map<Key, Node>, scan: Scan, at: number, floor: number): string | null {
+    const { text, sign } = scan;
+    const bucket = names_at(methods, text[at], sign);
+    if (!bucket) return null;
+    let best: string | null = null;
+    for (const length of bucket.lengths) {
+      if (length <= floor || (best !== null && length <= best.length)) break;
+      const begin = sign === 1 ? at : at - length + 1;
+      if (begin < 0 || begin + length > text.length) continue;
+      const key = text.slice(begin, begin + length);
+      if (!bucket.sets.get(length)!.has(key)) continue;
+      const far = sign === 1 ? at + length : begin - 1;
+      if (/\w/.test(near(-sign as 1 | -1, key)) && /\w/.test(text[far] ?? '')) continue;
+      best = key;
+    }
+    return best;
   }
 
   interface Dispatch { count: number; keyed: [Map<string, Rule[]>, Map<string, Rule[]>]; unkeyed: [Rule[], Rule[]] }
@@ -2044,7 +1957,7 @@ export namespace Ray {
     const bound = callee?.role?.kind === 'bound' ? callee.role : undefined;
     const method = bound ? bound.method : callee;
     const self = bound ? bound.self : callee;
-    if (method?.fn) return ip.invoke(method, { self: self ?? method, args, at }) ?? new Node();
+    if (method?.fn) return ip.apply(method, { self: self ?? method, args, at }) ?? new Node();
     if (method && !method.empty) return ip.evaluate_program(method);
     ip.error('Expected a function to call.', at);
     return new Node();
@@ -2054,8 +1967,8 @@ export namespace Ray {
   const STYLED = new WeakMap<Node, string>();
 
   const EXTERNALS: External[] = [
-    { name: 'external', flags: ['declarative'], fn: ({ interpreter: ip, self, args, at }) => ip.declare_external(args, self, at) },
-    { name: 'static', flags: ['declarative'], fn: ({ interpreter: ip, args }) => ip.eval_block(args) ?? args },
+    { name: 'external', flags: ['raw', 'declares'], fn: () => undefined },
+    { name: 'static', flags: ['callable'], fn: ({ interpreter: ip, args }) => ip.eval_block(args) ?? args },
     { name: '=', flags: ['callable'], fn: call => assign(call.interpreter, call) },
     { name: '**', fn: ({ interpreter: ip, self }) => { const program = deref(ip, self) ?? self; program.sup = ip.PROGRAM; return program; } },
     { name: 'left-to-right', flags: ['callable', 'modifier'], fn: ({ args }) => args.flag('left-to-right') },
@@ -2077,12 +1990,12 @@ export namespace Ray {
       return node;
     } },
     { pattern: '{(String.Word | `{`, expr, `}`)[]}=>{body}', name: 'rule-definition',
-      match(rule, scan, at) {
-        if (!scan.start) return null;
-        const r = recognize(scan.text, at, scan);
-        return r && { begin: at, end: r.end, captures: [] };
+      match(rule, scan, at, start, recognize) {
+        if (!start) return null;
+        const r = recognize!(scan.text, at, scan);
+        return r && { begin: at, end: r.end, captures: [], recognized: r };
       },
-      fn: ({ at, interpreter: ip }) => { ip.define(at); return undefined; } },
+      fn: () => undefined },
     { pattern: '[{property}]', name: 'index', fn: ({ match, at, self: receiver, interpreter: ip }) => {
       const self = receiver ?? ip.scope();
       const key_node = ip.eval_block(match.capture('property'), true);
@@ -2173,10 +2086,10 @@ export class Diagnostics {
   get errors() { return this.all(x => DIAGNOSTIC_SEVERITY[x.level] >= DIAGNOSTIC_SEVERITY['error'])}
   get warnings() { return this.all(x => x.level === 'warning')}
 
-  forget(src: Text.Source | Iterable<Text.Source>) {
-    if (Symbol.iterator in src) { for (const element of src) { this.forget(element) }; return; }
-    this.items.delete(src);
-    this.expressions.delete((src as Text.Source).path);
+  forget(src: Text.Source | Iterable<Text.Source> | undefined) {
+    if (src != null && Symbol.iterator in src) { for (const element of src) { this.forget(element) }; return; }
+    this.items.delete(src as Text.Source | undefined);
+    this.expressions.delete((src as Text.Source | undefined)?.path);
   }
   forget_all(srcs: Iterable<Text.Source>) { this.forget(srcs); }
 

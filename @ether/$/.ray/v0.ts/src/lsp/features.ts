@@ -1,4 +1,4 @@
-import type { Ray, Painted } from '../minimal2.ts';
+import type { Ray, Painted } from '../minimal4.ts';
 type Program = Ray.Program;
 
 // LSP features, as queries over the program's public surface — the grammar's

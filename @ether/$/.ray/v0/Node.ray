@@ -40,7 +40,7 @@ H.punctuation {`{`}{expr}{`}`} => TODO
 H.punctuation ({expr}) => expr
 H.punctuation [{expr}] => expr
 
-H.keyword external external
+H.modifier external external
 
 class Program {
   external ({args})
@@ -59,7 +59,7 @@ class Node {
   H.punctuation .{H.property property} => this[property]
 
   // When bootstrapping, function definitions cannot use '&=', which is the actual default set lower in this file.
-  static DEFINE_METHOD = `=`
+  __STATIC__ DEFINE_METHOD = `=`
 
   // Function definition
   H.punctuation {` `}({H.parameter args}){block} => this [DEFINE_METHOD] (
@@ -71,7 +71,7 @@ class Node {
   test () TODO
   test2 (parameter) TODO2
 
-  external static
+  __STATIC__ = external static
   external {H.punctuation `[`}{H.property property}{H.punctuation `]`}
 
   external = (x): x

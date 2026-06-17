@@ -1,4 +1,4 @@
-import type { Painted } from '../minimal2.ts';
+import type { Painted } from '../minimal4.ts';
 
 // The modifiers the LSP standardizes — a style's dotted tail
 // (`variable.readonly`) maps onto these bits.

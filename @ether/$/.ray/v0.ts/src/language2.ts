@@ -76,6 +76,8 @@ namespace Ray {
 
     interpreters: Map<Project, Interpreter> = new Map();
 
+    filled_defaults: boolean = false;
+
     constructor(private program: Program, public dot_project: Text.Source, interpreter: Interpreter) { this.interpreters.set(this, interpreter); }
     get directory(): string { return this.dot_project.dir; }
 
@@ -172,10 +174,31 @@ namespace Ray {
 
       return this.default_language?.interpreter.GLOBAL!;
     }
+
+    EXTERNALS: { [method: string]: Method } = {
+      '=': ({args}) => args,
+      '**': ({args}) => args,
+      'left-to-right': ({args}) => args,
+      'right-to-left': ({args}) => args,
+      '</': ({args}) => args,
+      'get': ({args}) => args,
+      'call': ({args}) => args,
+      //TODO CONSTRUCTOR MAYBE.
+    }
     fill_default_dependencies() {
       this.default_language = this.projects.find(project => project.is_language);
       if (!this.default_language) return this.diagnostics.report({ level: 'fatal', message: "Expected to have recognized the string !language (the project defining the default language) on the first line in a .project.ray file, but it wasn't provided." });
-    
+
+      if (!this.default_language.filled_defaults) {
+        const { GLOBAL } = this.default_language.interpreter;
+
+        GLOBAL.method('external', (o) => {
+          const EXTERNAL = o.args.position.string;
+          if (EXTERNAL in this.EXTERNALS) return this.EXTERNALS[EXTERNAL](o); 
+          return o.args.error(`Expected method \`${EXTERNAL}\` to be externally defined by the runtime, but it wasn't.`);
+        })
+      }
+
       // All projects depend on the default language.
       this.projects.filter(x => x.dependencies.length === 0).forEach(x => x.depend_on(this.default_language));
     }
@@ -192,12 +215,19 @@ namespace Ray {
 
     fn?: Method
 
-    constructor(public _super?: Node) {}
+    constructor(public diagnostics: Diagnostics, public _super?: Node) {}
 
     method(string: String, fn: Method) {
       //TODO check if string is a pattern.
       (this.methods ??= new Map()).set(string, fn);
     }
+
+    fatal(message: string) { return this.diagnostics.report({ level: 'fatal', message, node: this.position }) }
+    error(message: string) { return this.diagnostics.report({ level: 'error', message, node: this.position }) }
+    warning(message: string) { return this.diagnostics.report({ level: 'warning', message, node: this.position }) }
+    info(message: string) { return this.diagnostics.report({ level: 'info', message, node: this.position }) }
+    debug(message: string) { return this.diagnostics.report({ level: 'debug', message, node: this.position }) }
+    trace(message: string) { return this.diagnostics.report({ level: 'trace', message, node: this.position }) }
 
     clone(seen: Map<Node, Node> = new Map()): Node {
       const existing = seen.get(this); if (existing) return existing;
@@ -215,10 +245,6 @@ namespace Ray {
     }
   }
 
-  export class Expression {
-    constructor(public position: Text.Node, public pointer: Node){}
-  }
-
   export class Rule extends Node {
 
   }
@@ -226,7 +252,7 @@ namespace Ray {
   export class Interpreter {
     constructor(public diagnostics: Diagnostics, public copy_of?: Interpreter) {}
 
-    BASE = new Node();
+    BASE = new Node(this.diagnostics);
     PROGRAM = new Node(this.BASE);
     GLOBAL = new Node(this.BASE);
 
@@ -247,7 +273,7 @@ namespace Ray {
     private _interpret(src: Text.Source) {
       this.diagnostics.forget(src);
 
-      function array<T>(cursor: Text.Node, step: (cursor: Text.Node) => T | undefined): T[] {
+      function array<T>(step: (cursor: Text.Node) => T | undefined, cursor: Text.Node = new Text.Node(src)): T[] {
         const items: T[] = []
         while(!cursor.done()) {
           const statement = step(cursor);
@@ -255,15 +281,20 @@ namespace Ray {
         }
         return items;
       }
-      function expr(cursor: Text.Node): Expression | undefined {
+      function expr(cursor: Text.Node): Node | undefined {
         // Skip leading whitespace.
         while(!cursor.done() && (cursor.peek() === ' ' || cursor.peek() === '\n')) cursor.advance();
         if (cursor.done()) return undefined;
 
-        
+        let pointer: Node;
+
+        cursor.begin_expression();
+
+        cursor.end_expression();
+        return pointer;
       }
 
-      return array(new Text.Node(src), expr);
+      return array(expr);
     }
     
     analyze() {
@@ -276,10 +307,24 @@ namespace Text {
   export class Node extends Global.Node {
     constructor(public source: Text.Source) { super(); }
 
+    expression: Node
+    begin_expression() {
+      this.expression = new Node(this.source); this.expression.begin = this.begin;
+    }
+    end_expression() {
+      this.expression.end = this.end;
+    }
+
     cursor: number = 0;
     selection: number[] = [];
 
     color?: string
+
+    span(begin: number, end: number) {
+      const span = new Node(this.source);
+      span.begin = begin; span.end = end;
+      return span;
+    }
 
     direction: -1 | 1 = 1
     get flip() { this.direction *= -1; return this; }
@@ -337,6 +382,7 @@ namespace Text {
     copy() {
       const copy = new Node(this.source);
       copy.cursor = this.cursor;
+      copy.expression = this.expression;
       copy.selection = [...this.selection];
       copy.color = this.color;
       copy.direction = this.direction;

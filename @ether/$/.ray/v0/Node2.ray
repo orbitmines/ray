@@ -1,0 +1,83 @@
+^keyword external external
+^keyword external global
+^keyword external unordered
+
+external ^namespace
+external ^type
+external ^class
+external ^enum
+external ^interface
+external ^struct
+external ^typeParameter
+external ^parameter
+external ^variable
+external ^property
+external ^enumMember
+external ^event
+external ^function
+external ^method
+external ^macro
+external ^keyword
+external ^modifier
+external ^comment
+external ^string
+external ^number
+external ^regexp
+external ^operator
+external ^decorator
+
+^punctuation = ^comment
+
+^string `{string}` => string
+^comment //{comment}{\n} => TODO
+
+^punctuation {`{`}{expr}{`}`} => TODO
+^punctuation ({expr}) => expr
+^punctuation [{expr}] => expr
+
+unordered ^keyword class{ }{^class name}{block} => (
+  ^keyword static = (global get name) = external .
+  ({external inline args}) => (
+    ^keyword this = external .
+    ^keyword static = global get name
+    external inline block
+    
+    this
+  )
+  external inline block
+  
+  static
+)
+
+class Program {
+  // `func(args)`
+  ({external inline args}) => (
+    local = external .
+    external inline this
+  )
+  // `func args`
+  { }{expr} => this(expr)
+}
+
+class Node (
+  static DEFINE_METHOD = `=`
+
+  external ^punctuation {(^function \w | `{`, ^parameter expr, `}`)[]}=>{body}
+
+  external =
+
+  ^punctuation .{^property property} => this[property]
+
+  // Function definition
+  ^punctuation { }({^parameter args}){block} => (^function this) [DEFINE_METHOD] (
+    def = block**
+    def[`args`] = args
+    def
+  )
+
+  test () TODO
+  test2 (parameter) TODO2
+)
+
+// Set the actual method used for function definitions.
+Node.DEFINE_METHOD = `&=`

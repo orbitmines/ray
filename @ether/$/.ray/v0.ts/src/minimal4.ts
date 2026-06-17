@@ -517,11 +517,11 @@ export namespace Ray {
       this.set(key, node);
       return node;
     }
-    set(key: Key, value: Node): void { (this.methods ??= new Map()).set(key, value); if (key instanceof Rule) this._rules = undefined; }
+    set(key: Key, value: Node): void { (this.methods ??= new Map()).set(key, value); if (key instanceof Rule) { this._rules = undefined; this._dispatch = undefined; } }
     private _rules?: Rule[];
     get ruleset(): readonly Rule[] { return this._rules ??= this.methods ? [...this.methods.keys()].filter((k): k is Rule => k instanceof Rule) : []; }
     get(key: Key): Node | undefined { return this.methods?.get(key); }
-    delete(key: Key): void { this.methods?.delete(key); if (key instanceof Rule) this._rules = undefined; }
+    delete(key: Key): void { this.methods?.delete(key); if (key instanceof Rule) { this._rules = undefined; this._dispatch = undefined; } }
     flag(name: string): this { (this.flags ??= new Set()).add(name); return this; }
     has_flag(name: string): boolean { return !!this.flags?.has(name); }
     get sup(): Node | undefined { return this._super; }
@@ -542,13 +542,263 @@ export namespace Ray {
     get text(): string { return this.position?.string ?? ''; }
     get empty(): boolean { return this.end <= this.begin; }
 
-    // ── walking through text ──
-    head(sign: 1 | -1): number { return sign === 1 ? this.begin : this.end - 1; }
+    // ── walking through text (direction is cursor state) ──
+    sign: 1 | -1 = 1;
+    ip!: Interpreter;
+    head(): number { return this.sign === 1 ? this.begin : this.end - 1; }
     done(): boolean { return this.begin >= this.end; }
-    at(sign: 1 | -1, offset = 0): string | undefined { return (this.src as Source | undefined)?.text[this.head(sign) + offset * sign]; }
-    behind(sign: 1 | -1, offset = 1): string | undefined { return (this.src as Source | undefined)?.text[this.head(sign) - offset * sign]; }
-    take(sign: 1 | -1, n = 1): void { if (sign === 1) this.begin += n; else this.end -= n; }
-    cut(sign: 1 | -1, edge: number): void { if (sign === 1) this.begin = edge; else this.end = edge; }
+    at(offset = 0): string | undefined { return (this.src as Source | undefined)?.text[this.head() + offset * this.sign]; }
+    behind(offset = 1): string | undefined { return (this.src as Source | undefined)?.text[this.head() - offset * this.sign]; }
+    take(n = 1): void { if (this.sign === 1) this.begin += n; else this.end -= n; }
+    cut(edge: number): void { if (this.sign === 1) this.begin = edge; else this.end = edge; }
+
+    // ── the scope's delimiter view (was the Scan object), cached on the scope node ──
+    _view?: { epoch: number; version: number; src: Source; signs: Map<1 | -1, View> };
+    private viewer(): View {
+      const ip = this.ip, src = this.src!, sign = this.sign, top = ip.scope();
+      let c = top._view;
+      if (!c || c.epoch !== ip.scope_epoch || c.version !== ip.rules_version || c.src !== src)
+        top._view = c = { epoch: ip.scope_epoch, version: ip.rules_version, src, signs: new Map() };
+      let v = c.signs.get(sign);
+      if (v) return v;
+      const claimable = new Map<string, Rule[]>();
+      const edges = new Set<string>();   // every anchored rule's edge char is a word boundary
+      for (const node of ip.lookup())
+        for (const rule of ip.rules_on(node)) {
+          if (!rule.anchored || (rule.project !== undefined && rule.project !== ip.program.project(src))) continue;
+          const ch = rule.edge_char(sign)!;
+          if (!rule.delimited) { if (node === ip.BASE) edges.add(ch); continue; }   // only BASE-level operators are word boundaries
+          let bucket = claimable.get(ch);
+          if (!bucket) claimable.set(ch, bucket = []);
+          if (!bucket.includes(rule)) bucket.push(rule);
+        }
+      c.signs.set(sign, v = { anchors: new Set(claimable.keys()), edges, claimable, memo: new Map() });
+      return v;
+    }
+    get anchors(): Set<string> { return this.viewer().anchors; }
+    get edges(): Set<string> { return this.viewer().edges; }
+    claim(at: number): number {
+      const v = this.viewer(), ip = this.ip, text = this.src!.text;
+      const candidates = v.claimable.get(text[at]);
+      if (!candidates) return -1;
+      if (!candidates.some(rule => this.lit_at(at, rule.edge(this.sign)!))) return -1;
+      if (ip.scan_depth > 64) return -1;
+      const hit = v.memo.get(at);
+      if (hit !== undefined) return hit;
+      ip.scan_depth++;
+      try {
+        let best = -1;
+        for (const rule of candidates) {
+          if (!ip.visible(rule, this.src!)) continue;
+          const m = this.match(rule, at);
+          if (!m) continue;
+          const far = this.sign === 1 ? m.end - 1 : m.begin;
+          if (best === -1 || far * this.sign > best * this.sign) best = far;
+        }
+        v.memo.set(at, best);
+        return best;
+      } finally { ip.scan_depth--; }
+    }
+    literal_of(begin: number, end: number): { text: string; by: Rule } | undefined {
+      const v = this.viewer(), text = this.src!.text;
+      const candidates = v.claimable.get(text[begin]);
+      if (!candidates) return undefined;
+      for (const rule of candidates) {
+        if (!rule.body || !this.ip.visible(rule, this.src!)) continue;
+        const captures = rule.pieces.filter(p => !is_literal(p)) as Capture[];
+        if (captures.length !== 1 || !captures[0].name || rule.body.text.trim() !== captures[0].name) continue;
+        const m = this.match(rule, begin);
+        if (!m || m.end !== end) continue;
+        const cap = m.captures.find(c => c.piece === captures[0]);
+        return { text: cap ? text.slice(cap.begin, cap.end) : '', by: rule };
+      }
+      return undefined;
+    }
+
+    // ── boundary finders (were the free scan_* functions) ──
+    lit_at(j: number, lit: string): boolean {
+      const text = this.src!.text;
+      if (text[j] !== near(this.sign, lit)) return false;
+      if (lit.length === 1) return true;
+      const begin = this.sign === 1 ? j : j - lit.length + 1;
+      return begin >= 0 && text.startsWith(lit, begin);
+    }
+    until(from: number, lit: string, capture?: Capture): number {
+      const text = this.src!.text, sign = this.sign, v = this.viewer();
+      const multiline = capture !== undefined;
+      if (capture?.raw) {
+        const k = sign === 1 ? text.indexOf(lit, from) : text.lastIndexOf(lit, from - lit.length + 1);
+        if (k === -1) return -1;
+        const head = sign === 1 ? k : k + lit.length - 1;
+        if (!multiline) {
+          const nl = sign === 1 ? text.indexOf('\n', from) : text.lastIndexOf('\n', from);
+          if (nl !== -1 && (head - nl) * sign > 0) return -1;
+        }
+        return head;
+      }
+      const c0 = near(sign, lit);
+      let j = from;
+      while (j >= 0 && j < text.length) {
+        const c = text[j];
+        if (c === c0 && this.lit_at(j, lit)) return j;
+        if (c === '\n' && !multiline) return -1;
+        if (v.anchors.has(c)) { const far = this.claim(j); if (far !== -1) { j = far + sign; continue; } }
+        j += sign;
+        while (j >= 0 && j < text.length && text[j] !== c0 && text[j] !== '\n' && !v.anchors.has(text[j])) j += sign;
+      }
+      return -1;
+    }
+    group(j: number): number { const k = this.until(j + 1, '}'); return k === -1 ? -1 : k + 1; }
+    block(at: number, indent: number): number {
+      const text = this.src!.text;
+      let end = at, j = at;
+      while (j < text.length && text[j] === '\n') {
+        let k = j + 1, spaces = 0;
+        while (text[k] === ' ') { k++; spaces++; }
+        if (k >= text.length) break;
+        if (text[k] === '\n') { j = k; continue; }
+        if (spaces <= indent) break;
+        end = this.line_end(k);
+        j = end;
+      }
+      return end;
+    }
+    expression(from: number): number {
+      const text = this.src!.text, sign = this.sign, v = this.viewer();
+      let j = from;
+      while (j >= 0 && j < text.length) {
+        const c = text[j];
+        if (c === '\n') break;
+        if (v.anchors.has(c)) { const far = this.claim(j); if (far !== -1) { j = far + sign; continue; } }
+        j += sign;
+        while (j >= 0 && j < text.length && text[j] !== '\n' && !v.anchors.has(text[j])) j += sign;
+      }
+      return j;
+    }
+    word(from: number): number {
+      const text = this.src!.text, sign = this.sign, v = this.viewer();
+      let j = from;
+      while (j >= 0 && j < text.length) {
+        const c = text[j];
+        if (c === ' ' || c === '\n') break;
+        if (v.anchors.has(c) && this.claim(j) !== -1) break;
+        if (j !== from && v.edges.has(c)) break;   // an operator-edged rule (the `.` rule, `*`, …) ends a word
+        j += sign;
+      }
+      return j;
+    }
+    line_end(i: number): number { const text = this.src!.text; const nl = text.indexOf('\n', i); return nl === -1 ? text.length : nl; }
+    line_begin(i: number): number { return this.src!.text.lastIndexOf('\n', i - 1) + 1; }
+    indent(i: number): number {
+      const text = this.src!.text, line = text.lastIndexOf('\n', i - 1) + 1;
+      let n = 0; while (text[line + n] === ' ') n++;
+      return n;
+    }
+    match(rule: Rule, at: number, indent?: number): Matched | null {
+      if (!rule.edge(this.sign)) return null;
+      const text = this.src!.text, sign = this.sign, pieces = rule.pieces;
+      let i = at;
+      const captures: Matched['captures'] = [];
+      for (let p = 0; p < pieces.length; p++) {
+        const idx = sign === 1 ? p : pieces.length - 1 - p;
+        const piece = pieces[idx];
+        if (is_literal(piece)) {
+          if (!this.lit_at(i, piece.text)) return null;
+          i += piece.text.length * sign;
+          continue;
+        }
+        const entry = i;
+        switch (piece.kind) {
+          case 'until': {
+            const bound = pieces[idx + sign];
+            if (!bound || !is_literal(bound)) return null;
+            const k = this.until(i, bound.text, piece);
+            if (k === -1) return null;
+            i = k;
+            break;
+          }
+          case 'block':
+            if (sign === -1) return null;
+            i = this.block(this.line_end(i), indent ?? this.indent(at));
+            break;
+          case 'text':
+            i = sign === 1 ? this.line_end(i) : this.line_begin(i + 1) - 1;
+            break;
+          case 'expression':
+            i = this.expression(i);
+            break;
+          case 'word':
+            i = this.word(i);
+            if (i === entry) return null;
+            break;
+        }
+        captures.push(sign === 1 ? { piece, begin: entry, end: i } : { piece, begin: i + 1, end: entry + 1 });
+      }
+      if (i === at) return null;
+      return sign === 1 ? { begin: at, end: i, captures } : { begin: i + 1, end: at + 1, captures };
+    }
+
+    // ── dispatch + name buckets (were the dispatch_of / names_at WeakMaps) ──
+    _dispatch?: Dispatch;
+    get dispatch(): Dispatch {
+      let d = this._dispatch;
+      const rules = this.ruleset;
+      if (!d || d.count !== rules.length) {
+        d = this._dispatch = { count: rules.length, keyed: [new Map(), new Map()], unkeyed: [[], []] };
+        for (const rule of rules) for (const s of [1, -1] as const) {
+          const edge = rule.edge_char(s);
+          if (edge !== undefined) { const map = d.keyed[s === 1 ? 0 : 1]; let list = map.get(edge); if (!list) map.set(edge, list = []); list.push(rule); }
+          else if (s === 1 && rule.matcher) d.unkeyed[0].push(rule);
+        }
+      }
+      return d;
+    }
+    _buckets?: { count: number; names: [Map<string, NameBucket>, Map<string, NameBucket>] };
+    names(c: string, sign: 1 | -1): NameBucket | undefined {
+      let b = this._buckets;
+      if (!b) b = this._buckets = { count: 0, names: [new Map(), new Map()] };
+      const size = this.methods?.size ?? 0;
+      if (b.count !== size && this.methods) {
+        let i = 0;
+        for (const key of this.methods.keys()) {
+          if (i++ < b.count) continue;
+          if (typeof key !== 'string') continue;
+          for (const s of [1, -1] as const) {
+            const map = b.names[s === 1 ? 0 : 1];
+            const n = near(s, key);
+            let bucket = map.get(n);
+            if (!bucket) map.set(n, bucket = { lengths: [], sets: new Map() });
+            let set = bucket.sets.get(key.length);
+            if (!set) {
+              bucket.sets.set(key.length, set = new Set());
+              let at = 0;
+              while (at < bucket.lengths.length && bucket.lengths[at] > key.length) at++;
+              bucket.lengths.splice(at, 0, key.length);
+            }
+            set.add(key);
+          }
+        }
+        b.count = size;
+      }
+      return b.names[sign === 1 ? 0 : 1].get(c);
+    }
+    name_at(cursor: Node, at: number, floor: number): string | null {
+      const text = cursor.src!.text, sign = cursor.sign;
+      const bucket = this.names(text[at], sign);
+      if (!bucket) return null;
+      let best: string | null = null;
+      for (const length of bucket.lengths) {
+        if (length <= floor || (best !== null && length <= best.length)) break;
+        const begin = sign === 1 ? at : at - length + 1;
+        if (begin < 0 || begin + length > text.length) continue;
+        const key = text.slice(begin, begin + length);
+        if (!bucket.sets.get(length)!.has(key)) continue;
+        const far = sign === 1 ? at + length : begin - 1;
+        if (/\w/.test(near(-sign as 1 | -1, key)) && /\w/.test(text[far] ?? '')) continue;
+        best = key;
+      }
+      return best;
+    }
 
 
     clone(seen: Map<Node, Node> = new Map()): Node {
@@ -630,14 +880,7 @@ export namespace Ray {
 
   function is_literal(piece: Piece): piece is Literal { return piece.kind === 'literal'; }
 
-  interface Scan {
-    text: string;
-    sign: 1 | -1;
-    edges: Set<string>;
-    claim: (j: number) => number;
-    literal_of: (begin: number, end: number) => { text: string; by: Rule } | undefined;
-    anchors: Set<string>;
-  }
+  interface View { anchors: Set<string>; edges: Set<string>; claimable: Map<string, Rule[]>; memo: Map<number, number>; }
 
   function classify(pieces: Piece[]): void {
     for (let p = 0; p < pieces.length; p++) {
@@ -659,109 +902,11 @@ export namespace Ray {
   }
 
   // ─────────────────────────── scanning ───────────────────────────
-
-  function line_end(text: string, i: number): number {
-    const nl = text.indexOf('\n', i);
-    return nl === -1 ? text.length : nl;
-  }
-
-  function line_begin(text: string, i: number): number {
-    return text.lastIndexOf('\n', i - 1) + 1;
-  }
-
-  function indent_at(text: string, i: number): number {
-    const line = text.lastIndexOf('\n', i - 1) + 1;
-    let n = 0;
-    while (text[line + n] === ' ') n++;
-    return n;
-  }
+  // the scan_*/word_edge/match_rule helpers now live on Node as cursor methods (`cursor.word()`,
+  // `cursor.match(rule, at)`, …); only `near` (direction-pick, no cursor) stays free here.
 
   function near(sign: 1 | -1, lit: string): string {
     return sign === 1 ? lit[0] : lit[lit.length - 1];
-  }
-
-  function lit_at(scan: Scan, j: number, lit: string): boolean {
-    if (scan.text[j] !== near(scan.sign, lit)) return false;
-    if (lit.length === 1) return true;
-    const begin = scan.sign === 1 ? j : j - lit.length + 1;
-    return begin >= 0 && scan.text.startsWith(lit, begin);
-  }
-
-  function scan_to(scan: Scan, from: number, lit: string, capture?: Capture): number {
-    const { text, sign } = scan;
-    const multiline = capture !== undefined;
-    if (capture?.raw) {
-      const k = sign === 1 ? text.indexOf(lit, from) : text.lastIndexOf(lit, from - lit.length + 1);
-      if (k === -1) return -1;
-      const head = sign === 1 ? k : k + lit.length - 1;
-      if (!multiline) {
-        const nl = sign === 1 ? text.indexOf('\n', from) : text.lastIndexOf('\n', from);
-        if (nl !== -1 && (head - nl) * sign > 0) return -1;
-      }
-      return head;
-    }
-    const c0 = near(scan.sign, lit);
-    let j = from;
-    while (j >= 0 && j < text.length) {
-      const c = text[j];
-      if (c === c0 && lit_at(scan, j, lit)) return j;
-      if (c === '\n' && !multiline) return -1;
-      if (scan.anchors.has(c)) {
-        const far = scan.claim(j);
-        if (far !== -1) { j = far + sign; continue; }
-      }
-      j += sign;
-      while (j >= 0 && j < text.length && text[j] !== c0 && text[j] !== '\n' && !scan.anchors.has(text[j])) j += sign;
-    }
-    return -1;
-  }
-
-  function group_end(scan: Scan, j: number): number {
-    const k = scan_to(scan, j + 1, '}');
-    return k === -1 ? -1 : k + 1;
-  }
-
-  function indented_end(text: string, at: number, indent: number): number {
-    let end = at, j = at;
-    while (j < text.length && text[j] === '\n') {
-      let k = j + 1, spaces = 0;
-      while (text[k] === ' ') { k++; spaces++; }
-      if (k >= text.length) break;
-      if (text[k] === '\n') { j = k; continue; }
-      if (spaces <= indent) break;
-      end = line_end(text, k);
-      j = end;
-    }
-    return end;
-  }
-
-  function expression_edge(scan: Scan, from: number): number {
-    const { text, sign } = scan;
-    let j = from;
-    while (j >= 0 && j < text.length) {
-      const c = text[j];
-      if (c === '\n') break;
-      if (scan.anchors.has(c)) {
-        const far = scan.claim(j);
-        if (far !== -1) { j = far + sign; continue; }
-      }
-      j += sign;
-      while (j >= 0 && j < text.length && text[j] !== '\n' && !scan.anchors.has(text[j])) j += sign;
-    }
-    return j;
-  }
-
-  function word_edge(scan: Scan, from: number): number {
-    const { text, sign } = scan;
-    let j = from;
-    while (j >= 0 && j < text.length) {
-      const c = text[j];
-      if (c === ' ' || c === '\n') break;
-      if (scan.anchors.has(c) && scan.claim(j) !== -1) break;
-      if (j !== from && scan.edges.has(c)) break;   // an operator-edged rule (the `.` rule, `*`, …) ends a word
-      j += sign;
-    }
-    return j;
   }
 
 
@@ -778,53 +923,8 @@ export namespace Ray {
     }
   }
 
-  function match_rule(rule: Rule, scan: Scan, at: number, indent?: number): Matched | null {
-    if (!rule.edge(scan.sign)) return null;
-    const { text, sign } = scan;
-    const pieces = rule.pieces;
-    let i = at;
-    const captures: Matched['captures'] = [];
-    for (let p = 0; p < pieces.length; p++) {
-      const idx = sign === 1 ? p : pieces.length - 1 - p;
-      const piece = pieces[idx];
-      if (is_literal(piece)) {
-        if (!lit_at(scan, i, piece.text)) return null;
-        i += piece.text.length * sign;
-        continue;
-      }
-      const entry = i;
-      switch (piece.kind) {
-        case 'until': {
-          const bound = pieces[idx + sign];
-          if (!bound || !is_literal(bound)) return null;
-          const k = scan_to(scan, i, bound.text, piece);
-          if (k === -1) return null;
-          i = k;
-          break;
-        }
-        case 'block':
-          if (sign === -1) return null;
-          i = indented_end(text, line_end(text, i), indent ?? indent_at(text, at));
-          break;
-        case 'text':
-          i = sign === 1 ? line_end(text, i) : line_begin(text, i + 1) - 1;
-          break;
-        case 'expression':
-          i = expression_edge(scan, i);
-          break;
-        case 'word':
-          i = word_edge(scan, i);
-          if (i === entry) return null;
-          break;
-      }
-      captures.push(sign === 1 ? { piece, begin: entry, end: i } : { piece, begin: i + 1, end: entry + 1 });
-    }
-    if (i === at) return null;
-    return sign === 1 ? { begin: at, end: i, captures } : { begin: i + 1, end: at + 1, captures };
-  }
-
   interface Recognized { pattern_begin: number; pattern_end: number; pieces: Piece[]; body_begin: number; body_end: number; end: number }
-  type Recognize = (text: string, at: number, scan: Scan) => Recognized | null;
+  type Recognize = (text: string, at: number, cursor: Node) => Recognized | null;
 
   // ───────────────────────────── rules ─────────────────────────────
 
@@ -833,7 +933,7 @@ export namespace Ray {
     fn?: Method;
     flags?: string[];
     pattern?: string;
-    match?: (rule: Rule, scan: Scan, at: number, start?: boolean, recognize?: Recognize) => Matched | null;
+    match?: (rule: Rule, cursor: Node, at: number, start?: boolean, recognize?: Recognize) => Matched | null;
   }
 
   function activate(rule: Rule, ext?: External): void {
@@ -851,7 +951,7 @@ export namespace Ray {
     definitions: Definition[] = [];
     body?: Node;
     name?: string;
-    matcher?: (rule: Rule, scan: Scan, at: number, start?: boolean, recognize?: Recognize) => Matched | null;
+    matcher?: (rule: Rule, cursor: Node, at: number, start?: boolean, recognize?: Recognize) => Matched | null;
     project?: string;
     key?: string;
     style?: string;
@@ -1113,7 +1213,7 @@ export namespace Ray {
 
     language(src: Source): boolean { return this.program.language(src); }
     scope(): Node { return this.scopes[this.scopes.length - 1]; }
-    private scope_epoch = 0;
+    scope_epoch = 0;
     enter(scope: Node): void { this.scopes.push(scope); this.scope_epoch++; }
     leave(): void { this.scopes.pop(); this.scope_epoch++; }
 
@@ -1161,8 +1261,8 @@ export namespace Ray {
 
     // ── the scanning context ──
 
-    private scan_depth = 0;
-    private scan_cache?: { epoch: number; version: number; src: Source; scans: Map<1 | -1, Scan> };
+    scan_depth = 0;
+    cursor(src: Source, sign: 1 | -1 = 1): Node { const n = span(src, 0, (src as Text.Source).text.length); n.ip = this; n.sign = sign; return n; }
 
     // ── parsing ──
 
@@ -1207,7 +1307,8 @@ export namespace Ray {
       const parent = this.expression;
       this.expression = this.expression_at(src, cursor.begin, cursor.end, parent);
       try {
-        const indent = reading.indent ?? indent_at(text, cursor.begin);
+        cursor.ip = ip; cursor.sign = reading.sign ?? 1;
+        const indent = reading.indent ?? cursor.indent(cursor.begin);
         const forwards = reading.forwards ?? false;
         const proven = new Set<Rule>();
 
@@ -1231,7 +1332,7 @@ export namespace Ray {
             let head = piece.at;
             const end = piece.at + piece.content.length;
             while (head < end && src.text[head] === ' ') head++;
-            const sc = scan(src);
+            const sc = ip.cursor(src);
             if (head >= end || !sc.anchors.has(src.text[head]) || sc.claim(head) === -1) continue;
             if (ip.decorating.has(piece.at)) continue;
             ip.decorating.add(piece.at);
@@ -1239,32 +1340,33 @@ export namespace Ray {
             finally { ip.decorating.delete(piece.at); }
           }
         }
-        function read_group(scan: Scan, begin: number, end: number): Piece {
-          if (scan_to(scan, begin, ':') === -1 || scan_to(scan, begin, ':') >= end) {   // a top-level `:` makes it a typed capture, not a decorator
+        function read_group(cursor: Node, begin: number, end: number): Piece {
+          const gtext = cursor.src!.text;
+          if (cursor.until(begin, ':') === -1 || cursor.until(begin, ':') >= end) {   // a top-level `:` makes it a typed capture, not a decorator
             let space = -1;   // the constraint: the content is the trailing token; whatever precedes the last top-level space is the decorator prefix (an arbitrary expression, resolved by decorate_pieces)
             for (let i = begin; i < end; ) {
-              const c = scan.text[i];
+              const c = gtext[i];
               if (c === ' ') { space = i; i++; }
-              else if (scan.anchors.has(c)) { const f = scan.claim(i); i = f !== -1 ? f + 1 : i + 1; }
+              else if (cursor.anchors.has(c)) { const f = cursor.claim(i); i = f !== -1 ? f + 1 : i + 1; }
               else i++;
             }
-            if (space !== -1) { let a = space; while (scan.text[a] === ' ') a++; if (a < end) begin = a; }   // structural strip; prefix is [groupStart, begin)
+            if (space !== -1) { let a = space; while (gtext[a] === ' ') a++; if (a < end) begin = a; }   // structural strip; prefix is [groupStart, begin)
           }
-          const content = scan.text.slice(begin, end);
-          const quoted = scan.literal_of(begin, end);
+          const content = gtext.slice(begin, end);
+          const quoted = cursor.literal_of(begin, end);
           if (quoted !== undefined) return { kind: 'literal', text: quoted.text, at: begin, claim: quoted.by };
-          const colon = scan_to(scan, begin, ':');
+          const colon = cursor.until(begin, ':');
           const split = colon !== -1 && colon < end;
-          const name = (split ? scan.text.slice(begin, colon) : content).trim();
+          const name = (split ? gtext.slice(begin, colon) : content).trim();
           const cap = new Capture();
           cap.kind = 'word';
           cap.name = name || undefined;
-          cap.type = split ? scan.text.slice(colon + 1, end).trim() : undefined;
+          cap.type = split ? gtext.slice(colon + 1, end).trim() : undefined;
           cap.content = content;
           cap.at = begin;
           return cap;
         }
-        function parse_pattern(text: string, begin: number, end: number, scan: Scan): Piece[] | null {
+        function parse_pattern(text: string, begin: number, end: number, cursor: Node): Piece[] | null {
           const pieces: Piece[] = [];
           let literal_start = begin;
           let i = begin;
@@ -1273,10 +1375,10 @@ export namespace Ray {
           };
           while (i < end) {
             if (text[i] !== '{') { i++; continue; }
-            const close = group_end(scan, i);
+            const close = cursor.group(i);
             if (close === -1) return null;
             flush_literal(i);
-            const piece = read_group(scan, i + 1, close - 1);
+            const piece = read_group(cursor, i + 1, close - 1);
             piece.from = i; piece.to = close;
             pieces.push(piece);
             i = close;
@@ -1287,25 +1389,25 @@ export namespace Ray {
           classify(pieces);
           return pieces;
         }
-        function recognize(text: string, at: number, scan: Scan): Recognized | null {
+        function recognize(text: string, at: number, cursor: Node): Recognized | null {
           let saw_group = false, j = at;
           for (;;) {
             const c = text[j];
             if (c === undefined || c === '\n') return null;
             if (c === '{') {
-              const close = group_end(scan, j);
+              const close = cursor.group(j);
               if (close === -1) return null;
               saw_group = true;
               j = close;
               continue;
             }
-            if (scan.anchors.has(c)) {            // a claimable group/literal — `(…)`, `[…]`, `` `…` `` — is a pattern token too, not just `{…}`
-              const far = scan.claim(j);
+            if (cursor.anchors.has(c)) {            // a claimable group/literal — `(…)`, `[…]`, `` `…` `` — is a pattern token too, not just `{…}`
+              const far = cursor.claim(j);
               if (far !== -1) { saw_group = true; j = far + 1; continue; }
             }
             if (c === '=' && text[j + 1] === '>') break;
             if (c === ' ') { j++; continue; }
-            let w = word_edge(scan, j);   // a rule-def token is `String.Word | {group}`, so a word can't contain `{` — it starts the group alternative
+            let w = cursor.word(j);   // a rule-def token is `String.Word | {group}`, so a word can't contain `{` — it starts the group alternative
             for (let k = j; k < w; k++) if (text[k] === '{') { w = k; break; }
             if (w === j) return null;
             j = w;
@@ -1314,13 +1416,13 @@ export namespace Ray {
           let pattern_end = j;
           while (pattern_end > at && text[pattern_end - 1] === ' ') pattern_end--;
           if (pattern_end === at) return null;
-          const pieces = parse_pattern(text, at, pattern_end, scan);
+          const pieces = parse_pattern(text, at, pattern_end, cursor);
           if (!pieces) return null;
           let b = j + 2;
           while (text[b] === ' ') b++;
           const body_end = (b >= text.length || text[b] === '\n')
-            ? indented_end(text, b, indent_at(text, at))
-            : expression_edge(scan, b);
+            ? cursor.block(b, cursor.indent(at))
+            : cursor.expression(b);
           return { pattern_begin: at, pattern_end, pieces, body_begin: b, body_end, end: Math.max(j + 2, body_end) };
         }
         function rule(pattern: Node, pieces: Piece[], on: Node, evaluate = true, style?: string): Rule {
@@ -1356,7 +1458,7 @@ export namespace Ray {
         }
         function define(at: Node, style?: string, pre?: Recognized): Rule {
           const src = at.src!;
-          const r = pre ?? recognize(src.text, at.begin, scan(src))!;
+          const r = pre ?? recognize(src.text, at.begin, ip.cursor(src))!;
           const pattern = span(src, r.pattern_begin, r.pattern_end);
           paint_def(src, r);
           const built = rule(pattern, r.pieces, ip.scope(), true, style);
@@ -1379,70 +1481,6 @@ export namespace Ray {
           return built;
         }
 
-        function scan(src: Source, sign: 1 | -1 = 1): Scan {
-          let cached = ip.scan_cache;
-          if (!cached || cached.epoch !== ip.scope_epoch || cached.version !== ip.rules_version || cached.src !== src)
-            cached = ip.scan_cache = { epoch: ip.scope_epoch, version: ip.rules_version, src, scans: new Map() };
-          const hit = cached.scans.get(sign);
-          if (hit) return hit;
-          const claimable = new Map<string, Rule[]>();
-          const edges = new Set<string>();   // every anchored rule's edge char is a word boundary — defining `{.}{property}` or `* (b)` makes `.`/`*` end a word
-          for (const node of ip.lookup())
-            for (const rule of ip.rules_on(node)) {
-              if (!rule.anchored || (rule.project !== undefined && rule.project !== ip.program.project(src))) continue;
-              const c = rule.edge_char(sign)!;
-              if (!rule.delimited) { if (node === ip.BASE) edges.add(c); continue; }   // only BASE-level operators (the `.` rule) are word boundaries; GLOBAL rules (class, //, …) aren't
-              let bucket = claimable.get(c);
-              if (!bucket) claimable.set(c, bucket = []);
-              if (!bucket.includes(rule)) bucket.push(rule);
-            }
-          const memo = new Map<number, number>();
-          const scan: Scan = {
-            text: src.text,
-            sign,
-            edges,
-            anchors: new Set(claimable.keys()),
-            claim: (j) => {
-              const candidates = claimable.get(src.text[j]);
-              if (!candidates) return -1;
-              if (!candidates.some(rule => lit_at(scan, j, rule.edge(sign)!))) return -1;
-              if (ip.scan_depth > 64) return -1;
-              const hit = memo.get(j);
-              if (hit !== undefined) return hit;
-              ip.scan_depth++;
-              try {
-                let best = -1;
-                for (const rule of candidates) {
-                  if (!ip.visible(rule, src)) continue;
-                  const m = match_rule(rule, scan, j);
-                  if (!m) continue;
-                  const far = sign === 1 ? m.end - 1 : m.begin;
-                  if (best === -1 || far * sign > best * sign) best = far;
-                }
-                memo.set(j, best);
-                return best;
-              } finally { ip.scan_depth--; }
-            },
-            literal_of: (begin, end) => {
-              const text = src.text;
-              const candidates = claimable.get(text[begin]);
-              if (!candidates) return undefined;
-              for (const rule of candidates) {
-                if (!rule.body || !ip.visible(rule, src)) continue;
-                const captures = rule.pieces.filter(p => !is_literal(p)) as Capture[];
-                if (captures.length !== 1 || !captures[0].name || rule.body.text.trim() !== captures[0].name) continue;
-                const m = match_rule(rule, scan, begin);
-                if (!m || m.end !== end) continue;
-                const cap = m.captures.find(c => c.piece === captures[0]);
-                return { text: cap ? text.slice(cap.begin, cap.end) : '', by: rule };
-              }
-              return undefined;
-            },
-          };
-          cached.scans.set(sign, scan);
-          return scan;
-        }
-
         function declare_external(raw: Node, on: Node, at: Node, recognized?: Recognized): Node {
           const src = raw.src!;
           let begin = raw.begin, end = raw.end;
@@ -1453,7 +1491,7 @@ export namespace Ray {
           if ('{(['.includes(text[0]) || text.includes('{')) {
             const r = recognized;
             const pattern = r && r.pattern_end <= end ? span(src, r.pattern_begin, r.pattern_end) : span(src, begin, end);
-            const pieces = (r && r.pattern_end <= end ? r.pieces : parse_pattern(src.text, begin, end, scan(src))) ?? [];
+            const pieces = (r && r.pattern_end <= end ? r.pieces : parse_pattern(src.text, begin, end, ip.cursor(src))) ?? [];
             if (!declare(pattern, pieces, on))
               ip.error(`Expected the rule \`${pattern.text}\` to be provided by the runtime, but it wasn't.`, pattern);
             return raw;
@@ -1528,27 +1566,26 @@ export namespace Ray {
         // ── one loop: read the cursor and, per position, claim/fire/name/word directly onto `result` ──
         let raw_pending: Node | undefined;  // a raw method that just fired; consumes the rest of its line next iteration
         let first = true;
-        while (true) {
-          const sc = scan(src, sign);         // the claimable-delimiter view for this scope, built once per step
+        while (true) {                        // the cursor is the claimable-delimiter view for this scope (cursor.sign/cursor.viewer())
           if (raw_pending) {                  // a raw method awaiting its declaration
             const v = raw_pending; raw_pending = undefined;
             const callee = v.role?.kind === 'bound' ? v.role.method : v;
             const self = v.role?.kind === 'bound' ? v.role.self : ip.scope();
-            let a = cursor.head(sign); while (text[a] === ' ') a++;
-            const eol = Math.min(line_end(text, a), cursor.end);
+            let a = cursor.head(); while (text[a] === ' ') a++;
+            const eol = Math.min(cursor.line_end(a), cursor.end);
             const args = span(src, Math.min(a, eol), eol, ip.BASE);
-            const at = span(src, cursor.head(sign), cursor.head(sign), ip.BASE);
-            const recognized = recognize(text, args.begin, sc) ?? undefined;
-            cursor.cut(sign, eol);
+            const at = span(src, cursor.head(), cursor.head(), ip.BASE);
+            const recognized = recognize(text, args.begin, cursor) ?? undefined;
+            cursor.cut(eol);
             if (callee.has_flag('highlight')) result = decorate(callee, args, recognized);
             else if (callee.has_flag('declares')) result = declare_external(args, self, at, recognized) ?? result;
             else result = callee.fn!({ interpreter: ip, self, method: callee, args, at, recognized }) ?? result;
             continue;
           }
           if (cursor.done()) break;
-          const c = cursor.at(sign);
+          const c = cursor.at();
           if (c === undefined || c === '\n') break;
-          const head = cursor.head(sign);
+          const head = cursor.head();
           // ── the best rule + the longest method name at this position, in one chain walk ──
           const start = result === undefined && sign === 1;
           const own = ip.program.project(src);
@@ -1559,9 +1596,9 @@ export namespace Ray {
             if (!ip.visible(rule, src) || seen.has(rule)) return;
             seen.add(rule);
             const edge = rule.edge(sign);
-            if (edge !== undefined && (rule.edge_char(sign) !== c || (edge.length > 1 && !lit_at(sc, head, edge)))) return;
+            if (edge !== undefined && (rule.edge_char(sign) !== c || (edge.length > 1 && !cursor.lit_at(head, edge)))) return;
             if (rule.matcher && sign === -1) return;
-            const m = rule.matcher ? rule.matcher(rule, sc, head, start, recognize) : match_rule(rule, sc, head, indent);
+            const m = rule.matcher ? rule.matcher(rule, cursor, head, start, recognize) : cursor.match(rule, head, indent);
             const rank = rule.project === own ? 0 : 1;
             if (m && prefers({ rule, m, level, rank }, best)) best = { rule, m, level, rank };
           };
@@ -1571,13 +1608,13 @@ export namespace Ray {
             for (const node of nodes) {
               const rules = ip.rules_on(node);
               if (rules.length) {
-                const dispatch = dispatch_of(rules);
+                const dispatch = node.dispatch;
                 const keyed = dispatch.keyed[sign === 1 ? 0 : 1].get(c);
                 if (keyed) for (const rule of keyed) attempt(rule);
                 for (const rule of dispatch.unkeyed[sign === 1 ? 0 : 1]) attempt(rule);
               }
               if (firstScope && node.methods) {
-                const n = name_at(node.methods, sc, head, nm?.length ?? -1);
+                const n = node.name_at(cursor, head, nm?.length ?? -1);
                 if (n) { nm = n; owner = node; }
               }
               level++;
@@ -1589,17 +1626,17 @@ export namespace Ray {
           if (first) {   // first step, default forward: let right-to-left tokens flip/split this expression (reusing `found` as the lead)
             first = false;
             const begin = cursor.begin;
-            if (reading.sign === undefined && ip.rtl_names.size && ip.rtl_site_in(src, begin, line_end(text, begin))) {
-              const extent = expression_edge(sc, begin);
+            if (reading.sign === undefined && ip.rtl_names.size && ip.rtl_site_in(src, begin, cursor.line_end(begin))) {
+              const extent = cursor.expression(begin);
               const claimed = !!(found && found.m.end >= extent);
-              const fname = claimed ? null : (ip.known(sc, begin, ip.lookup())?.name ?? null);
+              const fname = claimed ? null : (ip.known(cursor, begin, ip.lookup())?.name ?? null);
               if (!claimed && !(fname && ip.resolve(fname)?.has_flag('raw'))) {
                 const tokens: { begin: number; end: number; rtl: boolean }[] = [];
                 for (let i = begin; i < extent; ) {
                   const ch = text[i];
                   if (ch === ' ' || ch === '\n') { i++; continue; }
-                  if (sc.anchors.has(ch)) { const far = sc.claim(i); if (far !== -1) { i = far + 1; continue; } }
-                  const w = word_edge(sc, i);
+                  if (cursor.anchors.has(ch)) { const far = cursor.claim(i); if (far !== -1) { i = far + 1; continue; } }
+                  const w = cursor.word(i);
                   if (w === i) { i++; continue; }
                   const m = ip.resolve(text.slice(i, w));
                   if (m?.fn && m.has_flag('right-to-left') !== m.has_flag('left-to-right')) tokens.push({ begin: i, end: w, rtl: m.has_flag('right-to-left') });
@@ -1626,7 +1663,7 @@ export namespace Ray {
 
           // speculatively resolve a leading member-access expression (before the `.` rule is a boundary). On a rule-def line a raw consumer takes the rest of the line as its argument (the decorator is the caller, the rule-def its argument). On an assignment line the leading member is resolved as an assignable slot (so `H.x = …` aliases work); other member accesses are left to the `.` rule.
           if (!space && sign === 1 && result === undefined) {
-            const seg = (k: number): number => { let w = word_edge(sc, k); const dot = text.indexOf('.', k); if (dot >= k && dot < w) w = dot; return w; };
+            const seg = (k: number): number => { let w = cursor.word(k); const dot = text.indexOf('.', k); if (dot >= k && dot < w) w = dot; return w; };
             const e0 = seg(head);
             let base: Node | undefined = e0 > head ? ip.resolve(text.slice(head, e0)) : undefined;
             if (base && text[e0] === '.') {
@@ -1643,17 +1680,17 @@ export namespace Ray {
                   const dec = member ?? (on.has_flag('highlight') ? ip.group(on, key) : undefined);
                   if (dec?.has_flag('raw')) {                 // decoration: consumes the rest of its line
                     ip.paint(src, head, p, ip.style_of(dec) ?? 'variable');
-                    cursor.cut(sign, p); result = dec; raw_pending = dec; continue;
+                    cursor.cut(p); result = dec; raw_pending = dec; continue;
                   }
                 } else if (assigning) {                       // assignment LHS: an assignable slot (mirrors the `[{property}]` index)
                   ip.paint(src, head, p, ip.style_of(member ?? on) ?? 'variable');
-                  cursor.cut(sign, p);
+                  cursor.cut(p);
                   const r = span(src, head, p, ip.BASE);
                   r.role = { kind: 'slot', on, key };
                   result = r; continue;
                 } else if (member?.has_flag('highlight')) {   // reference to a defined decorator (e.g. RHS `H.comment`): resolve to its node, not a forward
                   ip.paint(src, head, p, ip.style_of(member) ?? 'variable');
-                  cursor.cut(sign, p); result = member; continue;
+                  cursor.cut(p); result = member; continue;
                 }
               }
             }
@@ -1663,7 +1700,7 @@ export namespace Ray {
           if (found && (space || !name || found.m.end - found.m.begin >= name.name.length)) {
             const { rule, m } = found;
             const at = span(src, m.begin, m.end);
-            cursor.cut(sign, sign === 1 ? m.end : m.begin);
+            cursor.cut(sign === 1 ? m.end : m.begin);
             const site = `${id(rule.pattern)}:${src.path ?? ''}:${at.begin}`;
             if (!ip.overflowed && !ip.firing.has(site)) {
               if (ip.depth > 64) { ip.overflowed = true; ip.error(`Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at); }
@@ -1685,13 +1722,13 @@ export namespace Ray {
             if (sign === 1 && fired?.fn && fired.has_flag('raw')) raw_pending = result;
             continue;
           }
-          if (space) { cursor.take(sign); continue; }   // a space with no rule: skip it
+          if (space) { cursor.take(); continue; }   // a space with no rule: skip it
 
           if (name) {                          // a named method
             const m = name.owner.get(name.name)!;
             const begin = sign === 1 ? head : head - name.name.length + 1;
             const at = span(src, begin, begin + name.name.length, ip.BASE);
-            cursor.cut(sign, sign === 1 ? at.end : at.begin);
+            cursor.cut(sign === 1 ? at.end : at.begin);
             ip.paint(src, at.begin, at.end, ip.style_of(m) ?? 'variable');
             if (!m.fn) { result = m; continue; }
             if (m.has_flag('raw')) { result = m; raw_pending = m; continue; }
@@ -1706,8 +1743,8 @@ export namespace Ray {
             continue;
           }
 
-          const exit = word_edge(sc, head);    // a bare word → forward reference
-          if (exit === head) { cursor.take(sign); continue; }
+          const exit = cursor.word(head);    // a bare word → forward reference
+          if (exit === head) { cursor.take(); continue; }
           const [b, e] = sign === 1 ? [head, exit] : [exit + 1, head + 1];
           const w = span(src, b, e, ip.BASE);
           if (result) {
@@ -1722,7 +1759,7 @@ export namespace Ray {
             ip.paint(src, b, e, 'variable');
             result = w;
           }
-          cursor.cut(sign, sign === 1 ? e : b);
+          cursor.cut(sign === 1 ? e : b);
         }
         if (result?.role?.kind === 'forward' && !result.consumed && !forwards) {
           result.consumed = true;
@@ -1758,11 +1795,11 @@ export namespace Ray {
     private firing = new Set<string>();
     // ── resolution ──
 
-    known(scan: Scan, at: number, nodes: Iterable<Node>): { name: string; owner: Node } | null {
+    known(cursor: Node, at: number, nodes: Iterable<Node>): { name: string; owner: Node } | null {
       let name: string | null = null, owner: Node | undefined;
       for (const node of nodes) {
         if (!node.methods) continue;
-        const n = name_at(node.methods, scan, at, name?.length ?? -1);
+        const n = node.name_at(cursor, at, name?.length ?? -1);
         if (n) { name = n; owner = node; }
       }
       return name !== null ? { name, owner: owner! } : null;
@@ -1841,75 +1878,9 @@ export namespace Ray {
   }
 
 
+  // name buckets (`Node.names`/`Node.name_at`) and rule dispatch (`Node.dispatch`) now live on Node.
   interface NameBucket { lengths: number[]; sets: Map<number, Set<string>> }
-  const buckets = new WeakMap<Map<Key, Node>, { count: number; names: [Map<string, NameBucket>, Map<string, NameBucket>] }>();
-  function names_at(methods: Map<Key, Node>, c: string, sign: 1 | -1): NameBucket | undefined {
-    let b = buckets.get(methods);
-    if (!b) buckets.set(methods, b = { count: 0, names: [new Map(), new Map()] });
-    if (b.count !== methods.size) {
-      let i = 0;
-      for (const key of methods.keys()) {
-        if (i++ < b.count) continue;
-        if (typeof key !== 'string') continue;
-        for (const s of [1, -1] as const) {
-          const map = b.names[s === 1 ? 0 : 1];
-          const n = near(s, key);
-          let bucket = map.get(n);
-          if (!bucket) map.set(n, bucket = { lengths: [], sets: new Map() });
-          let set = bucket.sets.get(key.length);
-          if (!set) {
-            bucket.sets.set(key.length, set = new Set());
-            let at = 0;
-            while (at < bucket.lengths.length && bucket.lengths[at] > key.length) at++;
-            bucket.lengths.splice(at, 0, key.length);
-          }
-          set.add(key);
-        }
-      }
-      b.count = methods.size;
-    }
-    return b.names[sign === 1 ? 0 : 1].get(c);
-  }
-
-  function name_at(methods: Map<Key, Node>, scan: Scan, at: number, floor: number): string | null {
-    const { text, sign } = scan;
-    const bucket = names_at(methods, text[at], sign);
-    if (!bucket) return null;
-    let best: string | null = null;
-    for (const length of bucket.lengths) {
-      if (length <= floor || (best !== null && length <= best.length)) break;
-      const begin = sign === 1 ? at : at - length + 1;
-      if (begin < 0 || begin + length > text.length) continue;
-      const key = text.slice(begin, begin + length);
-      if (!bucket.sets.get(length)!.has(key)) continue;
-      const far = sign === 1 ? at + length : begin - 1;
-      if (/\w/.test(near(-sign as 1 | -1, key)) && /\w/.test(text[far] ?? '')) continue;
-      best = key;
-    }
-    return best;
-  }
-
   interface Dispatch { count: number; keyed: [Map<string, Rule[]>, Map<string, Rule[]>]; unkeyed: [Rule[], Rule[]] }
-  const dispatches = new WeakMap<readonly Rule[], Dispatch>();
-  function dispatch_of(rules: readonly Rule[]): Dispatch {
-    let d = dispatches.get(rules);
-    if (!d || d.count !== rules.length) {
-      d = { count: rules.length, keyed: [new Map(), new Map()], unkeyed: [[], []] };
-      for (const rule of rules) {
-        for (const s of [1, -1] as const) {
-          const edge = rule.edge_char(s);
-          if (edge !== undefined) {
-            const map = d.keyed[s === 1 ? 0 : 1];
-            let list = map.get(edge);
-            if (!list) map.set(edge, list = []);
-            list.push(rule);
-          } else if (s === 1 && rule.matcher) d.unkeyed[0].push(rule);
-        }
-      }
-      dispatches.set(rules, d);
-    }
-    return d;
-  }
 
   let IDS = 0;
   const ids = new WeakMap<object, number>();
@@ -1990,9 +1961,9 @@ export namespace Ray {
       return node;
     } },
     { pattern: '{(String.Word | `{`, expr, `}`)[]}=>{body}', name: 'rule-definition',
-      match(rule, scan, at, start, recognize) {
+      match(rule, cursor, at, start, recognize) {
         if (!start) return null;
-        const r = recognize!(scan.text, at, scan);
+        const r = recognize!(cursor.src!.text, at, cursor);
         return r && { begin: at, end: r.end, captures: [], recognized: r };
       },
       fn: () => undefined },

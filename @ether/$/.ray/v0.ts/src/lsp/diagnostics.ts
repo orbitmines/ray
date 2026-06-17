@@ -3,7 +3,7 @@ import {
   DiagnosticSeverity,
   Range,
 } from 'vscode-languageserver/node';
-import { env, type Diagnostic, type Text } from '../minimal2.ts';
+import { env, type Diagnostic, type Text } from '../minimal4.ts';
 
 /** Map our six-level severity onto LSP's four. Trace/debug fold into Hint. */
 const SEVERITY: Record<Diagnostic['level'], DiagnosticSeverity> = {

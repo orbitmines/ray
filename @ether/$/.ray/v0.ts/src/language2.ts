@@ -250,17 +250,15 @@ namespace Ray {
   }
 
   export class Interpreter {
-    constructor(public diagnostics: Diagnostics, public copy_of?: Interpreter) {}
+    constructor(public diagnostics: Diagnostics, public copy_of?: Interpreter) {
+      this.GLOBAL = new Node(this.diagnostics)
+    }
 
-    BASE = new Node(this.diagnostics);
-    PROGRAM = new Node(this.BASE);
-    GLOBAL = new Node(this.BASE);
+    GLOBAL: Node
 
     refresh() {
       if (!this.copy_of) return;
       const seen = new Map<Node, Node>();
-      this.BASE = this.copy_of.BASE.clone(seen);
-      this.PROGRAM = this.copy_of.PROGRAM.clone(seen);
       this.GLOBAL = this.copy_of.GLOBAL.clone(seen);
     }
 
@@ -289,6 +287,17 @@ namespace Ray {
         let pointer: Node;
 
         cursor.begin_expression();
+
+        while (!cursor.done() && cursor.peek() !== '\n') {  
+          // LTR/RTL: Done through Program pattern matching
+
+          // Precedence
+          // Highlighting
+          // Grammar rules - Type resolving. Allow arbitary whitespace in between pieces.
+          // Resolve expr[], expr, and up to precedence level/another space.
+          
+          // Expression[] if surrounded by literals.
+        }
 
         cursor.end_expression();
         return pointer;
@@ -484,7 +493,7 @@ const theme: Record<string, string> = { namespace: '\x1b[38;2;154;134;253m', typ
 
 export const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = { trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5 };
 export class Diagnostics {
-  items: Map</*location:*/ Text.Source | undefined, Map<Expression | undefined, Diagnostic[]>> = new Map();
+  items: Map</*location:*/ Text.Source | undefined, Map<Text.Node | undefined, Diagnostic[]>> = new Map();
 
   program?: Ray.Program
 
@@ -689,14 +698,14 @@ export class Diagnostics {
 
   format(entry: Diagnostic): string { return `${Diagnostics.levelColor[entry.level]}${entry.level}${c.reset} ${entry.message}${c.gray} [${env.version.toString()}]${c.reset}`; }
 
-  report(entry: Diagnostic, expression?: Expression) {
+  report(entry: Diagnostic) {
     if (!this.is_visible(entry.level)) return;
     
     const source = entry.node?.source;
     let expr = this.items.get(source);
     if (!expr) { expr = new Map(); this.items.set(source, expr); }
-    let expr_diagnostics = expr.get(expression)
-    if (!expr_diagnostics) { expr_diagnostics = []; expr.set(expression, expr_diagnostics); }
+    let expr_diagnostics = expr.get(entry.node?.expression)
+    if (!expr_diagnostics) { expr_diagnostics = []; expr.set(entry.node?.expression, expr_diagnostics); }
 
     // Only error once per expression
     if (entry.level === 'error' && expr_diagnostics.filter(x => x.level === 'error').length > 0) return;

@@ -1,6 +1,9 @@
 ^keyword external external
 ^keyword external global
+// Optimistically unordered: If there's a non-circular dependency chain, it will remain ordered.
 ^keyword external unordered
+^keyword external inline
+^keyword external literal
 
 external ^namespace
 external ^type
@@ -28,45 +31,46 @@ external ^decorator
 
 ^punctuation = ^comment
 
-^string `{string}` => string
-^comment //{comment}{\n} => TODO
+^string `{literal string}` => string
+^comment //{literal comment} => TODO
 
 ^punctuation {`{`}{expr}{`}`} => TODO
 ^punctuation ({expr}) => expr
 ^punctuation [{expr}] => expr
 
-unordered ^keyword class{ }{^class name}{block} => (
-  ^keyword static = (global get name) = external .
-  ({external inline args}) => (
+unordered ^keyword base{ }class{ }{literal ^class name}{ }{block} => (
+  ^keyword static = ^class (external get global name) = external .
+  ({inline args}) => (
     ^keyword this = external .
-    ^keyword static = global get name
-    external inline block
+    ^keyword static = external get global name
+    inline block
     
     this
   )
-  external inline block
+  inline block
   
   static
 )
 
 class Program {
   // `func(args)`
-  ({external inline args}) => (
+  ({inline args}) => (
     local = external .
-    external inline this
+    inline this
   )
   // `func args`
   { }{expr} => this(expr)
 }
 
-class Node {
+base class Node {
   static DEFINE_METHOD = `=`
 
-  external ^punctuation {(^function \w | `{`, ^parameter expr, `}`)[]}=>{body}
+  external unordered ^punctuation {(^function \w | `{`, ^parameter expr, `}`)[]}{ }=>{body}
 
   external =
 
   ^punctuation .{^property property} => this[property]
+  ^punctuation {\n}.{^property property} => this[property]
 
   // Function definition
   unordered ^punctuation { }({^parameter args}){block} => (^function this) [DEFINE_METHOD] (
@@ -74,6 +78,8 @@ class Node {
     def[`args`] = args
     def
   )
+
+  ^punctuation [{^property property}] => external get this property
 
   test () TODO
   test2 (parameter) TODO2

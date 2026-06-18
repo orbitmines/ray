@@ -10,7 +10,7 @@ class if (predicate: boolean, yes?: (): *)
    1\ return yes<local: &caller>?()
 
   then ({this.yes}: (): *) this ~~ .then = None
-  elsif (predicate: boolean, yes: (): *) this ~~ .else_branch = .else_branch.no = (if predicate then yes<local: &caller>())
+  {\n?}elsif (predicate: boolean, yes: (): *) this ~~ .else_branch = .else_branch.no = (if predicate then yes<local: &caller>())
   else ({this.else_branch.no}: (): *) this ~~ .(then | elsif | else) = None
 
 unless (predicate: boolean, yes?: (): *) (if(!predicate, yes))

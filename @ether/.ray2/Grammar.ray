@@ -167,6 +167,33 @@ property{Hexademical} =>
 {a ((opl: chainable)) b ((opr: chainable)) c} => a ((opl)) b && b ((opr)) c
 rule = a [opl: chainable] b [opr: chainable] c => a [opl] b & b [opr] c // & because it supports non-boolean resulting values and & collapses to &&.
 
+a [opl: chainable] b [opr: chainable] c => a [opl] b & b [opr] c
+a [opl: right-associtive] b [opr: right-associtive] c => a [opl] (b [opr] c)
+
+
+// This is left-to-right / right-to-left.
+// What about bidirectional? ; allowed to be on either side. ; right-to-left on nothing is a top-level class?
+external report
+
+^#red ERROR{ }{^comment message {} todo }{\n} => report()
+
+a [opl: left-associtive] b [opr: right-associtive] c => ERROR Can't
+list: [l [op: left-associtive | right-associtive] r][] => {
+  R = list{.op: right-associtive}
+  L = list{.op: left-associtive}
+  return list if R.last < L.first
+  ERROR Can't mix `${L.op.join(`,`)}` (left-associative) with `${R.op.join(',')}` (right-associative) in one expression; parenthesize to pick an order.
+}
+list: [l [op: right-associtive] r][] => list.reverse.reduce(.l [.op] (acc ?? .r))
+l [opl: right-to-left] m [opr: left-to-right] r => l [opl] m & m [opr] r
+  right-to-left (op: (b: Type) -> R) {
+    // right-to-left says take the opernand
+    // right-associtive says Take the expression tree and flip it around.
+    // Infix: Idea of the expression where you match to the previously matched expression.
+    op.b.type [op.name] = (a: static) -> R { a[op](this); return a } f * g * h; a > String < b (you want string to be the result) String < x > String (< x is the result)
+  }
+
+
 
 // {} is optional
 // [] also accepts a closure like .() does.

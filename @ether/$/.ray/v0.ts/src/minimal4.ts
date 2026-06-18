@@ -527,6 +527,30 @@ export namespace Ray {
     get sup(): Node | undefined { return this._super; }
     set sup(v: Node | undefined) { this._super = v; }
 
+    // ── structure: super chain, member lookup, slot dereference, identity ──
+    *chain(): Generator<Node> {
+      const seen = new Set<Node>();
+      for (let n: Node | undefined = this; n && !seen.has(n); n = n.sup) { seen.add(n); yield n; }
+    }
+    resolve_on(key: Key): Node | undefined {
+      for (const node of this.chain()) { const found = node.get(key); if (found) return found; }
+      return undefined;
+    }
+    deref(): Node {
+      const seen = new Set<Node>();
+      let n: Node = this;
+      while (n.role?.kind === 'slot' && !seen.has(n)) {
+        seen.add(n);
+        const found = n.role.on.resolve_on(n.role.key);
+        if (!found || found === n) break;
+        n = found;
+      }
+      return n;
+    }
+    private static IDS = 0;
+    private _id?: number;
+    get id(): number { return this._id ??= ++Node.IDS; }
+
     get src(): Source | undefined { return this.position?.source; }
     set src(s: Source | undefined) { if (this.position) this.position.source = s as Text.Source; else this.position = new Text.Node(s as Text.Source); }
     get begin(): number { const p = this.position; return p ? (p.selection.length ? p.selection[0] : p.cursor) : 0; }
@@ -564,7 +588,7 @@ export namespace Ray {
       const claimable = new Map<string, Rule[]>();
       const edges = new Set<string>();   // every anchored rule's edge char is a word boundary
       for (const node of ip.lookup())
-        for (const rule of ip.rules_on(node)) {
+        for (const rule of node.ruleset) {
           if (!rule.anchored || (rule.project !== undefined && rule.project !== ip.program.project(src))) continue;
           const ch = rule.edge_char(sign)!;
           if (!rule.delimited) { if (node === ip.BASE) edges.add(ch); continue; }   // only BASE-level operators are word boundaries
@@ -936,13 +960,6 @@ export namespace Ray {
     match?: (rule: Rule, cursor: Node, at: number, start?: boolean, recognize?: Recognize) => Matched | null;
   }
 
-  function activate(rule: Rule, ext?: External): void {
-    if (!ext) return;
-    rule.name = ext.name;
-    rule.matcher = ext.match;
-    rule.fn = ext.fn;
-  }
-
   interface Definition { at: Node; seen?: 'live' | Rule }
 
   interface Site { src: Source; begin: number; end: number; on?: Node; home?: string }
@@ -976,6 +993,12 @@ export namespace Ray {
     }
     edge(sign: 1 | -1): string | undefined { return sign === 1 ? this.anchor : this.tail; }
     edge_char(sign: 1 | -1): string | undefined { return this.edge_chars[sign === 1 ? 0 : 1]; }
+    activate(ext?: External): void {
+      if (!ext) return;
+      this.name = ext.name;
+      this.matcher = ext.match;
+      this.fn = ext.fn;
+    }
     definition(at: Node): Definition {
       let d = this.definitions.find(x => x.at.src === at.src && x.at.begin === at.begin);
       if (!d) { this.definitions.push(d = { at }); DEFINITIONS++; }
@@ -1026,7 +1049,7 @@ export namespace Ray {
     name_of(node: Node): string {
       if (node === this.GLOBAL) return GLOBAL_SCOPE;
       for (const [name, cls] of this.classes) if (cls === node) return name;
-      const name = `#${id(node)}`;
+      const name = `#${node.id}`;
       this.transients.set(name, node);
       return name;
     }
@@ -1092,7 +1115,7 @@ export namespace Ray {
       let rule = node.ruleset.find(r => r.key === key);
       if (!rule) {
         rule = new Rule(pattern, pieces, on);
-        activate(rule, EXTERNALS.find(e => e.pattern === text));
+        rule.activate(EXTERNALS.find(e => e.pattern === text));
         rule.project = project;
         rule.key = key;
         node.method(rule, rule.fn);
@@ -1228,13 +1251,6 @@ export namespace Ray {
         this.looked = l = { epoch: this.scope_epoch, nodes };
       }
       return l.nodes;
-    }
-    *chain(node: Node | undefined): Generator<Node> {
-      const seen = new Set<Node>();
-      for (let n = node; n && !seen.has(n); n = n.sup) { seen.add(n); yield n; }
-    }
-    rules_on(node: Node): readonly Rule[] {
-      return node.ruleset;
     }
 
     visible(rule: Rule, src: Source): boolean {
@@ -1475,7 +1491,7 @@ export namespace Ray {
           const built = rule(pattern, pieces, on);
           const external = EXTERNALS.find(e => e.pattern === pattern_key(pattern, built.pieces));
           if (!external) return undefined;
-          activate(built, external);
+          built.activate(external);
           built.definition(pattern).seen = 'live';
           ip.install(built);
           return built;
@@ -1499,13 +1515,13 @@ export namespace Ray {
           const words = text.split(/\s+/);
           const modifiers: Node[] = [];
           while (words.length > 1) {
-            const modifier = ip.resolve_on(on, words[0]) ?? ip.resolve(words[0]);
+            const modifier = on.resolve_on(words[0]) ?? ip.resolve(words[0]);
             if (!modifier?.fn || !modifier.has_flag('modifier')) break;
             modifiers.push(modifier);
             words.shift();
           }
           const name = words[0].split(':')[0];
-          const target = ip.resolve_on(on, name) ?? (on.has_flag('highlight') ? ip.group(on, name) : ip.resolve(name));
+          const target = on.resolve_on(name) ?? (on.has_flag('highlight') ? ip.group(on, name) : ip.resolve(name));
           if (!target) {
             ip.error(`Expected method \`${name}\` to be externally defined by the runtime, but it wasn't.`, span(src, begin, end));
             return raw;
@@ -1604,9 +1620,9 @@ export namespace Ray {
           };
           let nm: string | null = null, owner: Node | undefined;
           let firstScope = true;
-          for (const nodes of result ? [ip.chain(result), ip.lookup()] : [ip.lookup()]) {
+          for (const nodes of result ? [result.chain(), ip.lookup()] : [ip.lookup()]) {
             for (const node of nodes) {
-              const rules = ip.rules_on(node);
+              const rules = node.ruleset;
               if (rules.length) {
                 const dispatch = node.dispatch;
                 const keyed = dispatch.keyed[sign === 1 ? 0 : 1].get(c);
@@ -1672,10 +1688,10 @@ export namespace Ray {
               let q = p; while (text[q] === ' ') q++;          // is this an assignment LHS? (a lone `=`, not `=>`/`==`)
               const assigning = text[q] === '=' && text[q + 1] !== '>' && text[q + 1] !== '=';
               let on: Node | undefined = base;
-              for (let i = 0; ok && on && i < keys.length - 1; i++) on = ip.resolve_on(on, keys[i]) ?? (on.has_flag('highlight') ? ip.group(on, keys[i]) : undefined);
+              for (let i = 0; ok && on && i < keys.length - 1; i++) on = on.resolve_on(keys[i]) ?? (on.has_flag('highlight') ? ip.group(on, keys[i]) : undefined);
               if (ok && on && keys.length) {
                 const key = keys[keys.length - 1];
-                const member = ip.resolve_on(on, key);
+                const member = on.resolve_on(key);
                 if (found?.rule.name === 'rule-definition') {
                   const dec = member ?? (on.has_flag('highlight') ? ip.group(on, key) : undefined);
                   if (dec?.has_flag('raw')) {                 // decoration: consumes the rest of its line
@@ -1701,7 +1717,7 @@ export namespace Ray {
             const { rule, m } = found;
             const at = span(src, m.begin, m.end);
             cursor.cut(sign === 1 ? m.end : m.begin);
-            const site = `${id(rule.pattern)}:${src.path ?? ''}:${at.begin}`;
+            const site = `${rule.pattern.id}:${src.path ?? ''}:${at.begin}`;
             if (!ip.overflowed && !ip.firing.has(site)) {
               if (ip.depth > 64) { ip.overflowed = true; ip.error(`Rule recursion exceeded at \`${rule.pattern.text}\` — refusing to evaluate deeper.`, at); }
               else {
@@ -1848,10 +1864,6 @@ export namespace Ray {
       return STYLED.get(m);
     }
 
-    resolve_on(on: Node, key: Key): Node | undefined {
-      for (const node of this.chain(on)) { const found = node.get(key); if (found) return found; }
-      return undefined;
-    }
 
     group(on: Node, name: string): Node {
       const node = new Node(this.BASE);
@@ -1878,31 +1890,15 @@ export namespace Ray {
   }
 
 
-  // name buckets (`Node.names`/`Node.name_at`) and rule dispatch (`Node.dispatch`) now live on Node.
+  // name buckets (`Node.names`/`Node.name_at`), rule dispatch (`Node.dispatch`), the super
+  // chain (`Node.chain`/`resolve_on`/`deref`) and identity (`Node.id`) now live on Node.
   interface NameBucket { lengths: number[]; sets: Map<number, Set<string>> }
   interface Dispatch { count: number; keyed: [Map<string, Rule[]>, Map<string, Rule[]>]; unkeyed: [Rule[], Rule[]] }
 
-  let IDS = 0;
-  const ids = new WeakMap<object, number>();
-  function id(node: object): number { let n = ids.get(node); if (n === undefined) ids.set(node, n = ++IDS); return n; }
-
   // ──────────────────────── externals + driver ────────────────────────
 
-
-  function deref(ip: Interpreter, node: Node | undefined): Node | undefined {
-    const seen = new Set<Node>();
-    let n = node;
-    while (n?.role?.kind === 'slot' && !seen.has(n)) {
-      seen.add(n);
-      const found = ip.resolve_on(n.role.on, n.role.key);
-      if (!found || found === n) break;
-      n = found;
-    }
-    return n;
-  }
-
   function assign(ip: Interpreter, { self, args, at }: Args): Node {
-    const value = deref(ip, args) ?? args;
+    const value = args.deref();
     const role = self?.role;
     if (role?.kind !== 'slot' && role?.kind !== 'forward') {
       ip.error('Cannot assign here.', self ?? at);
@@ -1941,7 +1937,7 @@ export namespace Ray {
     { name: 'external', flags: ['raw', 'declares'], fn: () => undefined },
     { name: 'static', flags: ['callable'], fn: ({ interpreter: ip, args }) => ip.eval_block(args) ?? args },
     { name: '=', flags: ['callable'], fn: call => assign(call.interpreter, call) },
-    { name: '**', fn: ({ interpreter: ip, self }) => { const program = deref(ip, self) ?? self; program.sup = ip.PROGRAM; return program; } },
+    { name: '**', fn: ({ interpreter: ip, self }) => { const program = self.deref(); program.sup = ip.PROGRAM; return program; } },
     { name: 'left-to-right', flags: ['callable', 'modifier'], fn: ({ args }) => args.flag('left-to-right') },
     { name: 'left-associative', flags: ['callable', 'modifier'], fn: ({ args }) => args.flag('left-to-right') },
     { name: 'right-to-left', flags: ['callable', 'modifier'], fn: ({ args }) => args.flag('right-to-left') },
@@ -1972,10 +1968,10 @@ export namespace Ray {
       const key_node = ip.eval_block(match.capture('property'), true);
       if (key_node?.role?.kind === 'forward') key_node.consumed = true;
       const key = key_node ? (key_node.role?.kind === 'forward' ? key_node.role.name : key_node.text) : '';
-      const found = key ? ip.resolve_on(self, key) : undefined;
+      const found = key ? self.resolve_on(key) : undefined;
       const result = span(at.src!, at.begin, at.end, ip.BASE);
       if (found?.fn) { result.sup = ip.PROGRAM; result.role = { kind: 'bound', self, method: found }; }
-      else result.role = { kind: 'slot', on: deref(ip, self) ?? self, key };
+      else result.role = { kind: 'slot', on: self.deref(), key };
       return result;
     } },
     { pattern: '({args})', name: 'call', fn: ({ match, at, self: receiver, interpreter: ip }) => {

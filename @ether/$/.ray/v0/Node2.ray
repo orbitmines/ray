@@ -5,39 +5,54 @@
 ^keyword external inline
 ^keyword external literal
 
-external ^namespace
-external ^type
-external ^class
-external ^enum
-external ^interface
-external ^struct
-external ^typeParameter
-external ^parameter
-external ^variable
-external ^property
-external ^enumMember
-external ^event
-external ^function
-external ^method
-external ^macro
-external ^keyword
-external ^modifier
-external ^comment
-external ^string
-external ^number
-external ^regexp
-external ^operator
-external ^decorator
-external ^#{: RGB.Hexadecimal}
+namespace LSP {
+  class SemanticToken {
+    enum Type < namespace | type | class | enum | interface | struct | typeParameter | parameter | variable | property | enumMember | event | function | method | macro | keyword | modifier | comment | string | number | regexp | operator | decorator
+    enum Modifier < declaration | definition | readonly | static | deprecated | abstract | async | modification | documentation | defaultLibrary  
+  }
+}
 
-^punctuation = ^comment
+^keyword external theme
+external ^ : {
+  {literal} => 
+  {: LSP.SemanticToken.Type} =>
+  #{: RGB.Hexadecimal} =>
+}
 
-^fatal = ^error
-^error = ^#CC0000
-^warning = ^#CCCC00
-^info = ^#0000CC
-^debug = ^#00CC00
-^trace = ^comment
+DARK = theme `Ether.ray - Dark` {
+  // Based off https://github.com/simurai/duotone-dark-syntax
+  ^U0 = ^ #F2F0FF
+  ^U1 = ^ #C4B9FE
+  ^U2 = ^ #9A86FD
+  ^U3 = ^ #6C6783
+  ^U4 = ^ #97A4BF
+
+  ^D0 = ^ #F59E47
+  ^D1 = ^ #EBAE6B
+  ^D2 = ^ #FFCC99
+  ^D3 = ^ #A18565
+  ^D4 = ^ #8F8881
+
+  ^namespace = ^type = ^class = ^enum = ^interface = ^struct = ^event = ^U2
+  ^typeParameter = ^parameter = ^U0
+  ^variable = ^property = ^enumMember = ^U1
+  ^function = ^method = ^decorator = ^U4 
+  ^macro = ^U2
+  ^keyword = ^modifier = ^comment = ^U3
+  ^string = ^number = ^regexp = ^D2
+  ^operator = ^U4
+
+  ^punctuation = ^comment
+  ^string.punctuation = ^D3
+
+  ^fatal = ^error
+  ^error = ^ #CC0000
+  ^warning = ^ #CCCC00
+  ^info = ^ #0000CC
+  ^debug = ^ #00CC00
+  ^trace = ^comment
+}
+inline DARK
 
 ^keyword external report
 
@@ -60,7 +75,7 @@ base class Diagnostic {
 ^trace   TRACE{^punctuation `@`}{var} (^comment comment: String) report TRACE var comment 
 
 // Mark String type with literal.
-^string `{literal string}` => string
+^string.punctuation `{^string literal string}` => string
 ^comment //{literal comment} => TODO
 
 ^punctuation {`{`}{expr}{`}`} => TODO

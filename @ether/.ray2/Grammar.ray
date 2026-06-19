@@ -193,6 +193,43 @@ l [opl: right-to-left] m [opr: left-to-right] r => l [opl] m & m [opr] r
     op.b.type [op.name] = (a: static) -> R { a[op](this); return a } f * g * h; a > String < b (you want string to be the result) String < x > String (< x is the result)
   }
 
+list: [l [op] r][] => {
+  return list[0].l [list[0].op] list[0].r  if list.length == 1   // one operator left
+
+  loosest = list.{.op}.min_by(.op.precedence)                    // the root binds least
+  ERROR `Can't mix left/right associativity at equal precedence — parenthesize.`
+    if loosest.{.op: left-associtive} && loosest.{.op: right-associtive}
+
+  pivot = loosest.pick(.op: left-associtive ? .last : .first)    // assoc = tie-break
+  k     = list.index_of(pivot)
+
+  left  = k == 0               ? pivot.l : list[..k]             // o₀..oₖ  (triples 0..k-1)
+  right = k == list.length - 1 ? pivot.r : list[k+1..]           // oₖ₊₁..oₙ
+  return left [pivot.op] right                                    // sub-lists re-fire this rule
+}
+list: [l [op] r][] => {
+  i       = 0
+  operand = => i < list.length ? list[i].l : list[i - 1].r    // operand at the cursor
+
+  climb = (minBP) => {
+    left = operand()
+    while i < list.length && list[i].op.precedence >= minBP {
+      op = list[i].op
+
+      ERROR@(list[i-1].op & op) `Can't chain ${list[i-1].op} and ${op} at equal precedence — parenthesize.`
+              if i > 0 && list[i-1].op.precedence == op.precedence
+                        && !(list[i-1].op.assoc == op.assoc && op.assoc != non-associtive)
+
+
+      i += 1                                                   // consume the operator
+      left = left [op] climb(op.precedence + (op: left-associtive ? 1 : 0))
+    }
+    return left
+  }
+
+  return climb(0)
+}
+
 
 
 // {} is optional

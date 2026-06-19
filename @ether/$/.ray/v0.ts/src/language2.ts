@@ -290,11 +290,11 @@ namespace Ray {
 
         while (!cursor.done() && cursor.peek() !== '\n') {  
           // LTR/RTL: Done through Program pattern matching
+          // Precedence: Done through Program pattern matching
 
-          // Precedence
           // Highlighting
           // Grammar rules - Type resolving. Allow arbitary whitespace in between pieces.
-          // Resolve expr[], expr, and up to precedence level/another space.
+          // Resolve expr up to precedence level.
           
           // Expression[] if surrounded by literals.
         }

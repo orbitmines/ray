@@ -28,9 +28,38 @@ external ^number
 external ^regexp
 external ^operator
 external ^decorator
+external ^#{: RGB.Hexadecimal}
 
 ^punctuation = ^comment
 
+^fatal = ^error
+^error = ^#CC0000
+^warning = ^#CCCC00
+^info = ^#0000CC
+^debug = ^#00CC00
+^trace = ^comment
+
+^keyword external report
+
+base class Diagnostic {
+  
+}
+
+// Wrapping of errors with additional information? 
+// Non-allowed variables within errors are traced. And dont get sent over pipelines which arent allowed to view them.
+// Autoreturn if failed?
+// &:= for errors and things to say stack all the errors together if that is used.
+// Errors like OOM What to do/
+// Access function context of the error?
+
+^fatal   FATAL{^punctuation `@`}{var} (^comment comment: String) report FATAL var comment 
+^error   ERROR{^punctuation `@`}{var} (^comment comment: String) report ERROR var comment 
+^warning  WARN{^punctuation `@`}{var} (^comment comment: String) report WARN var comment 
+^info     INFO{^punctuation `@`}{var} (^comment comment: String) report INFO var comment 
+^debug   DEBUG{^punctuation `@`}{var} (^comment comment: String) report DEBUG var comment 
+^trace   TRACE{^punctuation `@`}{var} (^comment comment: String) report TRACE var comment 
+
+// Mark String type with literal.
 ^string `{literal string}` => string
 ^comment //{literal comment} => TODO
 
@@ -39,10 +68,11 @@ external ^decorator
 ^punctuation [{expr}] => expr
 
 unordered ^keyword base{ }class{ }{literal ^class name}{ }{block} => (
-  ^keyword static = ^class (external get global name) = external .
+  ^class (external get global name) = external .
+  ^keyword static = external .
   ({inline args}) => (
     ^keyword this = external .
-    ^keyword static = external get global name
+    ^keyword staic = external get global name
     inline block
     
     this
@@ -69,8 +99,8 @@ base class Node {
 
   external =
 
-  ^punctuation .{^property property} => this[property]
-  ^punctuation {\n}.{^property property} => this[property]
+  ^punctuation .{literal ^property property} => this[property]
+  ^punctuation {\n}.{literal ^property property} => this[property]
 
   // Function definition
   unordered ^punctuation { }({^parameter args}){block} => (^function this) [DEFINE_METHOD] (

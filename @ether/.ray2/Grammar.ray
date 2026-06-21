@@ -231,6 +231,37 @@ list: [l [op] r][] => {
 }
 
 
+test := func() $ ERROR `Failed {.}` 
+test := func() $!                   // Return None
+test := func() $! DEFAULT           // Return particular value if error
+test := func() $?                   // Optional
+test := func() $?? DEFAULT          // With a default
+
+test := func() $ return ERROR `Failed {.}` 
+test := func() $ return
+test := func() $ return DEFAULT
+test := func() $ None
+test := func() $ DEFAULT
+test := func() $ {
+  // Multiline
+}
+
+// Allow
+test := func() ~~ $ { ERROR `TEST` }
+
+test := func() $
+test := func() $!  // Fatal
+test := func() $?  //Maybe error but pass. Doesnt catch FATAL
+test := func() $?! //Maybe error but pass. -> Reintroduce in scope. (If fatal crashes, if error, )
+test := func() $? DEFAULT // Doesnt catch fatal
+
+test := func() $? $ { return FATAL }
+
+acc1 := 
+acc2 := 
+
+if acc1 & acc2 $
+if acc1 | acc2 $
 
 // {} is optional
 // [] also accepts a closure like .() does.

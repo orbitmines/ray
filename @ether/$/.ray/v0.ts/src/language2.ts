@@ -255,6 +255,7 @@ namespace Ray {
     }
 
     GLOBAL: Node
+    BASE?: Node
 
     refresh() {
       if (!this.copy_of) return;

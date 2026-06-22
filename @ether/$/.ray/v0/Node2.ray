@@ -1,15 +1,27 @@
+forward :=
+forward ^{word}{ }
+
 external  ^keyword := external external
-global    ^keyword : Node = external global
+global    ^keyword := external global
 // Optimistically unordered: If there's a non-circular dependency chain, it will remain ordered.
 unordered ^keyword := external unodered
 inline    ^keyword := external inline
 literal   ^keyword := external literal
 theme     ^keyword := external theme
 report    ^keyword := external report
+forward   ^keyword := external forward
+
+`{literal string ^string}` ^string.punctuation => string
+//{literal comment} ^comment => TODO
+
+{`{`}{expr}{`}`} ^punctuation => TODO
+({expr}) ^punctuation => expr
+[{expr}] ^punctuation => expr
+
 ^ : {
-  {literal}: '() -> A
-  {: LSP.SemanticToken.Type}: '() -> A
-  #{: RGB.Hexadecimal}: '() -> A
+  {literal}: () => A
+  {: LSP.SemanticToken.Type}: () => A
+  #{: RGB.Hexadecimal}: () => A
 } := external ^
 
 
@@ -74,13 +86,6 @@ Diagnostic := class {
 ^debug   DEBUG{^punctuation `@`}{var} (^comment comment: String) report DEBUG var comment 
 ^trace   TRACE{^punctuation `@`}{var} (^comment comment: String) report TRACE var comment 
 
-// Mark String type with literal.
-`{literal string ^string}` ^string.punctuation => string
-//{literal comment} ^comment => TODO
-
-{`{`}{expr}{`}`} ^punctuation => TODO
-({expr}) ^punctuation => expr
-[{expr}] ^punctuation => expr
 
 unordered base{ }class{ }{block} ^keyword => (
   static ^keyword := external .
@@ -92,6 +97,8 @@ unordered base{ }class{ }{block} ^keyword => (
     this
   )
   inline block
+
+  external base static
   
   static ^class
 )
@@ -106,19 +113,19 @@ Program := class {
   { }{expr} => this(expr)
 }
 
-external assign (external get global `Node`) base class {
+Node := base class {
   static DEFINE_METHOD = `=`
 
   {(\w ^function | `{`, expr ^parameter, `}`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
 
-  = '(x) external assign this x
-  := '(x) this: Node = x
+  = (x) => external assign this x
+  := (x) => this: Node = x
 
   .{literal property ^property} ^punctuation => this[property]
   {\n}.{literal property ^property} ^punctuation => this[property]
 
   // Function definition
-  unordered '({^parameter args}){block} ^punctuation => (^function this) [DEFINE_METHOD] (
+  unordered ({args ^parameter}){block} ^punctuation => (^function this) [DEFINE_METHOD] (
     def = block**
     def[`args`] = args
     def
@@ -126,8 +133,9 @@ external assign (external get global `Node`) base class {
 
   [{property ^property}] ^punctuation => external get this property
 
-  test '() TODO
-  test2 '(paramater2) TODO
+  test => TODO
+  test2 () -> ReturnType => TODO
+  test3 (paramater2) => TODO
 }
 
 // Set the actual method used for function definitions.

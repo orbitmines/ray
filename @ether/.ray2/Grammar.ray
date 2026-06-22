@@ -322,6 +322,14 @@ test := @public unordered '() {}
   test5: OtherFuncType & '(parameter) {terminating} = TODO2
 
 
+() => 
+() => Return
+() { }
+() => Return {}
+() => Return { a + b }
+() {  }
+
+
 // {} is optional
 // [] also accepts a closure like .() does.
 

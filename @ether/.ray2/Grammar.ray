@@ -257,11 +257,70 @@ test := func() $? DEFAULT // Doesnt catch fatal
 
 test := func() $? $ { return FATAL }
 
+test := func()
+  $specific.err
+  $specific.error2 return test {}
+
+test := func()
+  $specific.err | $specific.error2 return test {}
+  $specific.err3 return test {}
+
 acc1 := 
 acc2 := 
 
 if acc1 & acc2 $
 if acc1 | acc2 $
+
+Test := class {
+
+}
+Test := Super + Super2
+Test := Super + Super2 {
+
+}
+Test: Super = class {
+  // is a class
+}
+Test: Super = {
+  // is an instance
+}
+
+// Allow ~ to set a grammar property like a.b but then a~{b}. It matches the grammar rule's syntax.
+// So test ~() works. ~(args, a)
+
+
+test '() {}
+
+@public static unordered test '() {}
+test := @public unordered '() {}
+
+  test => TODO
+  test l() TODO
+
+'()
+'() -> Return
+'() { }
+'() -> Return {}
+'() -> Return { a + b }
+
+  test l(b) a + b
+
+  test: OtherFuncType '() {
+  
+  }
+  test l() -> Return { }
+  test <OPTS>{FILTER} l() -> Return {
+  
+  }
+  test: Program{terminating} <OPTS>{FILTER} l() -> Return {
+  
+  }
+  test '() TODO
+  test2 '(parameter) TODO2
+  test3 '(parameter) -> Test { TODO2 }
+  test4: {terminating} '(parameter) TODO2
+  test5: OtherFuncType & '(parameter) {terminating} = TODO2
+
 
 // {} is optional
 // [] also accepts a closure like .() does.

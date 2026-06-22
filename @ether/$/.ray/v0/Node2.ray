@@ -1,25 +1,26 @@
-^keyword external external
-^keyword external global
+external  ^keyword := external external
+global    ^keyword : Node = external global
 // Optimistically unordered: If there's a non-circular dependency chain, it will remain ordered.
-^keyword external unordered
-^keyword external inline
-^keyword external literal
+unordered ^keyword := external unodered
+inline    ^keyword := external inline
+literal   ^keyword := external literal
+theme     ^keyword := external theme
+report    ^keyword := external report
+^ : {
+  {literal}: '() -> A
+  {: LSP.SemanticToken.Type}: '() -> A
+  #{: RGB.Hexadecimal}: '() -> A
+} := external ^
 
-namespace LSP {
-  class SemanticToken {
-    enum Type < namespace | type | class | enum | interface | struct | typeParameter | parameter | variable | property | enumMember | event | function | method | macro | keyword | modifier | comment | string | number | regexp | operator | decorator
-    enum Modifier < declaration | definition | readonly | static | deprecated | abstract | async | modification | documentation | defaultLibrary  
+
+LSP := {
+  SemanticToken := class {
+    Type := enum namespace | type | class | enum | interface | struct | typeParameter | parameter | variable | property | enumMember | event | function | method | macro | keyword | modifier | comment | string | number | regexp | operator | decorator
+    Modifier := enum declaration | definition | readonly | static | deprecated | abstract | async | modification | documentation | defaultLibrary  
   }
 }
 
-^keyword external theme
-external ^ : {
-  {literal} => 
-  {: LSP.SemanticToken.Type} =>
-  #{: RGB.Hexadecimal} =>
-}
-
-DARK = theme `Ether.ray - Dark` {
+DARK := theme `Ether.ray - Dark` {
   // Based off https://github.com/simurai/duotone-dark-syntax
   ^U0 = ^ #F2F0FF
   ^U1 = ^ #C4B9FE
@@ -42,6 +43,7 @@ DARK = theme `Ether.ray - Dark` {
   ^string = ^number = ^regexp = ^D2
   ^operator = ^U4
 
+  ^character = ^D3
   ^punctuation = ^comment
   ^string.punctuation = ^D3
 
@@ -54,9 +56,7 @@ DARK = theme `Ether.ray - Dark` {
 }
 inline DARK
 
-^keyword external report
-
-base class Diagnostic {
+Diagnostic := class {
   
 }
 
@@ -75,59 +75,59 @@ base class Diagnostic {
 ^trace   TRACE{^punctuation `@`}{var} (^comment comment: String) report TRACE var comment 
 
 // Mark String type with literal.
-^string.punctuation `{^string literal string}` => string
-^comment //{literal comment} => TODO
+`{literal string ^string}` ^string.punctuation => string
+//{literal comment} ^comment => TODO
 
-^punctuation {`{`}{expr}{`}`} => TODO
-^punctuation ({expr}) => expr
-^punctuation [{expr}] => expr
+{`{`}{expr}{`}`} ^punctuation => TODO
+({expr}) ^punctuation => expr
+[{expr}] ^punctuation => expr
 
-unordered ^keyword base{ }class{ }{literal ^class name}{ }{block} => (
-  ^class (external get global name) = external .
-  ^keyword static = external .
+unordered base{ }class{ }{block} ^keyword => (
+  static ^keyword := external .
   ({inline args}) => (
-    ^keyword this = external .
-    ^keyword staic = external get global name
+    this   ^keyword := external .
+    static ^keyword := external get global name
     inline block
     
     this
   )
   inline block
   
-  static
+  static ^class
 )
 
-class Program {
+Program := class {
   // `func(args)`
   ({inline args}) => (
-    local = external .
+    local ^keyword = external .
     inline this
   )
   // `func args`
   { }{expr} => this(expr)
 }
 
-base class Node {
+external assign (external get global `Node`) base class {
   static DEFINE_METHOD = `=`
 
-  external unordered ^punctuation {(^function \w | `{`, ^parameter expr, `}`)[]}{ }=>{body}
+  {(\w ^function | `{`, expr ^parameter, `}`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
 
-  external =
+  = '(x) external assign this x
+  := '(x) this: Node = x
 
-  ^punctuation .{literal ^property property} => this[property]
-  ^punctuation {\n}.{literal ^property property} => this[property]
+  .{literal property ^property} ^punctuation => this[property]
+  {\n}.{literal property ^property} ^punctuation => this[property]
 
   // Function definition
-  unordered ^punctuation { }({^parameter args}){block} => (^function this) [DEFINE_METHOD] (
+  unordered '({^parameter args}){block} ^punctuation => (^function this) [DEFINE_METHOD] (
     def = block**
     def[`args`] = args
     def
   )
 
-  ^punctuation [{^property property}] => external get this property
+  [{property ^property}] ^punctuation => external get this property
 
-  test () TODO
-  test2 (parameter) TODO2
+  test '() TODO
+  test2 '(paramater2) TODO
 }
 
 // Set the actual method used for function definitions.

@@ -291,10 +291,15 @@ namespace Ray {
         while (!cursor.done() && cursor.peek() !== '\n') {  
           // LTR/RTL: Done through Program pattern matching
           // Precedence: Done through Program pattern matching
+          // Error handling, external report.
+          // Highlighting: external theme + ^[*]
 
-          // Highlighting
-          // Grammar rules - Type resolving. Allow arbitary whitespace in between pieces.
+          // Grammar rules - Type resolving. Allow arbitary whitespace in between pieces. { }
           // Resolve expr up to precedence level.
+          //   if a then b else c
+          //   report TRACE var comment
+          //   test '() -> ReturnType, ReturnType {}
+          //   enum A | B | C {}
           
           // Expression[] if surrounded by literals.
         }

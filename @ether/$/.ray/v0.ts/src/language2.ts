@@ -211,15 +211,16 @@ namespace Ray {
 
   export class Node {
     methods?: Map<Key, Node>
-    position: Text.Node
 
     fn?: Method
 
-    constructor(public diagnostics: Diagnostics, public _super?: Node) {}
+    // get references(): Node[] {}
+    
+    constructor(public diagnostics: Diagnostics, public position: Text.Node) {}
 
-    method(string: String, fn: Method) {
-      //TODO check if string is a pattern.
-      (this.methods ??= new Map()).set(string, fn);
+    method(string: string | Text.Node, fn: Method) {
+      if (!(string instanceof Text.Node) && string.includes('{')) string = Text.Node.string(string);
+      (this.methods ??= new Map()).set(string instanceof Text.Node ? new Node(this.diagnostics, string) : string, fn);
     }
 
     fatal(message: string) { return this.diagnostics.report({ level: 'fatal', message, node: this.position }) }
@@ -233,7 +234,6 @@ namespace Ray {
       const existing = seen.get(this); if (existing) return existing;
       const copy: Node = Object.create(Object.getPrototypeOf(this));
       seen.set(this, copy);
-      copy._super = this._super?.clone(seen);
       copy.position = this.position;
       copy.fn = this.fn;
       if (this.methods) {
@@ -243,10 +243,6 @@ namespace Ray {
       }
       return copy;
     }
-  }
-
-  export class Rule extends Node {
-
   }
 
   export class Interpreter {
@@ -289,20 +285,21 @@ namespace Ray {
 
         cursor.begin_expression();
 
-        while (!cursor.done() && cursor.peek() !== '\n') {  
+        while (!cursor.done() && cursor.peek() !== '\n') { 
           // LTR/RTL: Done through Program pattern matching
           // Precedence: Done through Program pattern matching
+          // Resolve expr up to precedence level: Done through a Program Cursor expansion.
+            //   if a then b else c
+            //   report TRACE var comment
+            //   test () => ReturnType, ReturnType{} => {}
+            //   enum A | B | C {}
           // Error handling, external report.
           // Highlighting: external theme + ^[*]
 
           // Grammar rules - Type resolving. Allow arbitary whitespace in between pieces. { }
-          // Resolve expr up to precedence level.
-          //   if a then b else c
-          //   report TRACE var comment
-          //   test '() -> ReturnType, ReturnType {}
-          //   enum A | B | C {}
           
           // Expression[] if surrounded by literals.
+
         }
 
         cursor.end_expression();
@@ -320,6 +317,14 @@ namespace Ray {
 
 namespace Text {
   export class Node extends Global.Node {
+
+    static string(string: string) {
+      const src = new Text.Source(); src.value = string;
+      const node = new Text.Node(src);
+      node.end = src.value.length - 1;
+      return node; 
+    }
+
     constructor(public source: Text.Source) { super(); }
 
     expression: Node

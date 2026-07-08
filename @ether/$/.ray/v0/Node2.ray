@@ -114,17 +114,17 @@ Program := class {
 }
 
 Node := base class {
-  static DEFINE_METHOD = `=`
 
   {(\w ^function | `{`, expr ^parameter, `}`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
 
-  = (x) => external assign this x
-  := (x) => this: Node = x
+  = ^punctuation (x) => external assign this x
+  := ^punctuation (x) => this: Node = x
 
   .{literal property ^property} ^punctuation => this[property]
   {\n}.{literal property ^property} ^punctuation => this[property]
 
   // Function definition
+  static DEFINE_METHOD = `=`
   unordered ({args ^parameter}){block} ^punctuation => (^function this) [DEFINE_METHOD] (
     def = block**
     def[`args`] = args
@@ -132,9 +132,15 @@ Node := base class {
   )
 
   [{property ^property}] ^punctuation => external get this property
+ 
+  test5 => TODO
+  test4 a => TODO // Doesnt work, since this is test4.a => TODO
+  test (a) => {
+    TODO
+  }
+  test2 test: () => ReturnType, ReturnType -- = DEFAULT_FUNC => ActualReturnType => {
 
-  test => TODO
-  test2 () -> ReturnType => TODO
+  }
   test3 (paramater2) => TODO
 }
 

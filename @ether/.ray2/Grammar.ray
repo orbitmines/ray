@@ -184,6 +184,7 @@ list: [l [op: left-associtive | right-associtive] r][] => {
   return list if R.last < L.first
   ERROR Can't mix `${L.op.join(`,`)}` (left-associative) with `${R.op.join(',')}` (right-associative) in one expression; parenthesize to pick an order.
 }
+// We implement right-associtive on L; that'sw what right-to-left does. or it creates a top-level class for ! for instance
 list: [l [op: right-associtive] r][] => list.reverse.reduce(.l [.op] (acc ?? .r))
 l [opl: right-to-left] m [opr: left-to-right] r => l [opl] m & m [opr] r
   right-to-left (op: (b: Type) -> R) {
@@ -207,7 +208,7 @@ list: [l [op] r][] => {
   right = k == list.length - 1 ? pivot.r : list[k+1..]           // oₖ₊₁..oₙ
   return left [pivot.op] right                                    // sub-lists re-fire this rule
 }
-list: [l [op] r][] => {
+rewrite list: [l [op] r][] => {
   i       = 0
   operand = => i < list.length ? list[i].l : list[i - 1].r    // operand at the cursor
 
@@ -230,6 +231,87 @@ list: [l [op] r][] => {
   return climb(0)
 }
 
+// ── Resolve expr up to a precedence level (operators not loaded yet) ──────────
+// The rules above (187 right-fold · 188 pivot · 196..231 precedence+assoc) reduce
+// a list that already exists. But the operators aren't pre-split: each is a
+// variable function — like [op] — recognized at the cursor, and only then is its
+// precedence (declaration order) and direction known. So one pass *discovers* the
+// triples; the rewrite rules then reduce them. Direction never gets computed here:
+// it lives only in 188 (opl: right-to-left  m  opr: left-to-right).
+//
+// arity is always 1 (',' collapses many into one), so a bracket operator like {}
+// is just a triple with a None side: prefix [None [{}] r], postfix [l [{}] None].
+rewrite expr: Cursor => {
+  primary = => recognize(cursor, expecting: operand).node   // atom | "(" expr ")" | block | None
+
+  // operator position: recognize the cursor as a variable-function operator.
+  //   None => operand position / ⊣ : the list ends.  precedence = declaration order.
+  // deterministic — no forward-parse, no backtrack: () is an eager value carrying =>,
+  // juxtaposition (space) and ',' are operators like any other.
+  peek_op = (operand, floor) => {
+    op = recognize(cursor, expecting: operator, in: scope ?? operand.type)
+    return None unless op.is_operator
+    return None if op.precedence < floor                    // an outer level owns it
+    return op
+  }
+
+  triples = []
+  operand = primary()                                       // None if the line opens on a prefix op
+  while (op = peek_op(operand, floor)) != None {
+    consume(op)
+    next = op.postfix ? None : primary()
+    triples.push_back([operand [op] next])                  // triple[i].r == triple[i+1].l (shared)
+    operand = next
+  }
+
+  return reduce(triples)   // <- 187 / 188 / 196..231, treating a None l/r as a bracketed side:
+                           //    {} A => {}(A) ,  B {} => (B){}
+}
+
+// ── Merged: 181/187/188/196/210 are one algorithm — "what to do with the loosest level" ──
+// Every one of those rules answers a single question: at the loosest precedence band, do
+// the peers SHARE an operand (chainable / opposite-direction -> expand with &, duplicating
+// the shared operand), do they CONFLICT (mixed left/right assoc -> error), or is there ONE
+// root (split, assoc = tie-break, which is also 187's right-fold)? So reduce is the keeper;
+// 181/187/188/210 fold into its three branches; discovery (232) stays separate and feeds it.
+reduce = (list) => {
+  // base case also covers brackets: [None [{}] r] => {}(r) , [l [{}] None] => (l){}
+  return list[0].l [list[0].op] list[0].r   if list.length == 1
+
+  level = list.where(.op.precedence == list.min(.op.precedence))   // the loosest operators (root band)
+
+  // (1) peers that SHARE an operand — chainable or opposite-direction (188): expand, duplicating it
+  return level.map(t => t.l [t.op] t.r).reduce((a, b) => a & b)
+    if level.all(.op: chainable) || level.opposite_directions
+
+  // (2) genuine conflict (181 / 196 guard, but per-level: mixing across levels is fine)
+  ERROR `Can't mix left/right associativity at equal precedence — parenthesize.`
+    if level.any(.op: left-associtive) && level.any(.op: right-associtive)
+
+  // (3) one root, assoc is the tie-break (subsumes 187's right-fold)
+  pivot = level.pick(.op: left-associtive ? .last : .first)
+  k     = list.index_of(pivot)
+  l     = k == 0               ? pivot.l : reduce(list[..k])        // empty left  -> prefix bracket
+  r     = k == list.length - 1 ? pivot.r : reduce(list[k+1..])      // empty right -> postfix bracket
+  return l [pivot.op] r
+}
+
+// The whole pipeline is then two functions, keeping the recognise/reduce seam:
+//   discover(cursor) => reduce(triples)   // recognition, may need scope/forward refs
+//   reduce(list)                          // pure fold: the only place precedence/assoc/direction/brackets decide
+// NOT merged: discovery into reduce — that would re-entangle token recognition with tree shape.
+// Hand-waves: `level.opposite_directions` is really 188's typed pattern
+//   (opl: right-to-left  m  opr: left-to-right); branch (1) is "shares an operand", and
+//   chainable vs opposite-direction are just two ways to detect that. The &-join relies on
+//   consecutive triples sharing the operand node (t[i].r == t[i+1].l) — exactly how discover builds them.
+
+
+
+
+// Possibly ambiguity of saying rewrite all the test5 to TODO -> require keyword for applying rewrite rules.
+  test (a) => {
+rewrite {} => {}
+rewrite (Function)
 
 test := func() $ ERROR `Failed {.}` 
 test := func() $!                   // Return None
@@ -237,7 +319,7 @@ test := func() $! DEFAULT           // Return particular value if error
 test := func() $?                   // Optional
 test := func() $?? DEFAULT          // With a default
 
-test := func() $ return ERROR `Failed {.}` 
+test := func() $ return ERROR[specific.error2] `Failed because of error: {.}` 
 test := func() $ return
 test := func() $ return DEFAULT
 test := func() $ None
@@ -246,16 +328,16 @@ test := func() $ {
   // Multiline
 }
 
-// Allow
-test := func() ~~ $ { ERROR `TEST` }
-
 test := func() $
 test := func() $!  // Fatal
 test := func() $?  //Maybe error but pass. Doesnt catch FATAL
 test := func() $?! //Maybe error but pass. -> Reintroduce in scope. (If fatal crashes, if error, )
 test := func() $? DEFAULT // Doesnt catch fatal
 
-test := func() $? $ { return FATAL }
+// Allow
+test := func() ~~ $ { ERROR `TEST` }
+
+test := func() $?! { return FATAL }
 
 test := func()
   $specific.err

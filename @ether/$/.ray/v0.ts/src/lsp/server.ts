@@ -10,9 +10,9 @@ import {
   type InitializeResult,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { Ray, type Source } from '../minimal4.ts';
+import { Ray, type Source } from '../language.ts';
 import { toLsp } from './diagnostics.ts';
-import { encode, offset_at, position_of, MODIFIERS } from './semantics.ts';
+import { encode, offset_at, position_of, runs, MODIFIERS } from './semantics.ts';
 import * as features from './features.ts';
 
 /**
@@ -62,8 +62,31 @@ export async function start(program: Ray.Program): Promise<void> {
       .map(d => toLsp(d, src.path!))
       .filter((d): d is NonNullable<typeof d> => d !== null);
     connection.sendDiagnostics({ uri, diagnostics });
-    if (!repainted) repainted = setTimeout(() => { repainted = undefined; connection.languages.semanticTokens.refresh(); }, 30);
+    if (!repainted) repainted = setTimeout(() => { repainted = undefined; connection.languages.semanticTokens.refresh(); publish(); }, 30);
   };
+
+  // The theme channel: everything the language's active theme decides, in one
+  // payload — `styles` maps each style name to how it renders (the resolved
+  // color today; any other presentation attribute rides along the same way),
+  // `documents` carries each open document's styled runs.
+  const theme = (uri: string) => {
+    const path = uriToFile(uri);
+    const src = program.sources.find(s => s.path === path);
+    return src ? { uri, ranges: runs(src.text, program.highlighting.get(path) ?? []) } : undefined;
+  };
+  const payload = (uris: string[]) => {
+    const docs = uris.map(theme).filter((d): d is NonNullable<ReturnType<typeof theme>> => d !== undefined);
+    const styles: Record<string, { color: string }> = {};
+    for (const [name, color] of program.palette()) styles[name] = { color };
+    for (const doc of docs) for (const { style } of doc.ranges) {
+      if (styles[style]) continue;
+      const color = program.color(style);
+      if (color) styles[style] = { color };
+    }
+    return { styles, documents: docs };
+  };
+  const publish = () => connection.sendNotification('ether/theme', payload(documents.all().map(d => d.uri)));
+  connection.onRequest('ether/theme', (params: { uris?: string[] }) => payload(params?.uris ?? []));
 
   const reload = (uri: string, text: string): void => {
     program.reload(Ray.source(remember(uri), text));
@@ -72,7 +95,7 @@ export async function start(program: Ray.Program): Promise<void> {
   connection.onInitialize((params: InitializeParams): InitializeResult => {
     // the workspace folders are the top-level project boundaries (a
     // .project.ray deeper down claims its own)
-    const roots = (params.workspaceFolders ?? []).map(f => uriToFile(f.uri));
+    const roots: string[] = (params.workspaceFolders ?? []).map((f: { uri: string }) => uriToFile(f.uri));
     if (params.rootUri) roots.push(uriToFile(params.rootUri));
     program.reroot([...new Set(roots)]);
     return {

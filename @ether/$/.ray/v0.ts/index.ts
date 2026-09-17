@@ -5,4 +5,4 @@
 // re-exported. It runs in its own subprocess (launched via the `bin` entry
 // or `tsx`), and its dependencies — vscode-languageserver — should never end
 // up in a consuming process's bundle.
-export * from './src/version.ts';
+export { Version } from './src/language.ts';

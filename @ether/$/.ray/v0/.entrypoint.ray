@@ -1,10 +1,11 @@
 forward :=
-forward ^{word}{ }
+forward unordered
+forward ^{literal word ^ word}{ }
 
-external  ^keyword := external external
+external  ^external := external external
 global    ^keyword := external global
 // Optimistically unordered: If there's a non-circular dependency chain, it will remain ordered.
-unordered ^keyword := external unodered
+unordered ^keyword := external unordered
 inline    ^keyword := external inline
 literal   ^keyword := external literal
 theme     ^keyword := external theme
@@ -18,11 +19,12 @@ forward   ^keyword := external forward
 ({expr}) ^punctuation => expr
 [{expr}] ^punctuation => expr
 
-^ : {
+^: {
   {literal}: () => A
   {: LSP.SemanticToken.Type}: () => A
   #{: RGB.Hexadecimal}: () => A
-} := external ^
+} ^punctuation := external ^
+^{ }{literal color: RGB.Hexadecimal ^ color} => external ^ color
 
 
 LSP := {
@@ -46,6 +48,8 @@ DARK := theme `Ether.ray - Dark` {
   ^D3 = ^ #A18565
   ^D4 = ^ #8F8881
 
+  ^external = ^D0
+
   ^namespace = ^type = ^class = ^enum = ^interface = ^struct = ^event = ^U2
   ^typeParameter = ^parameter = ^U0
   ^variable = ^property = ^enumMember = ^U1
@@ -60,10 +64,10 @@ DARK := theme `Ether.ray - Dark` {
   ^string.punctuation = ^D3
 
   ^fatal = ^error
-  ^error = ^ #CC0000
-  ^warning = ^ #CCCC00
-  ^info = ^ #0000CC
-  ^debug = ^ #00CC00
+  ^error = ^ #CD5C5C
+  ^warn = ^ #CDCD5C
+  ^info = ^ #5C5CCD
+  ^debug = ^ #5CCD5C
   ^trace = ^comment
 }
 inline DARK
@@ -79,12 +83,12 @@ Diagnostic := class {
 // Errors like OOM What to do/
 // Access function context of the error?
 
-^fatal   FATAL{^punctuation `@`}{var} (^comment comment: String) report FATAL var comment 
-^error   ERROR{^punctuation `@`}{var} (^comment comment: String) report ERROR var comment 
-^warning  WARN{^punctuation `@`}{var} (^comment comment: String) report WARN var comment 
-^info     INFO{^punctuation `@`}{var} (^comment comment: String) report INFO var comment 
-^debug   DEBUG{^punctuation `@`}{var} (^comment comment: String) report DEBUG var comment 
-^trace   TRACE{^punctuation `@`}{var} (^comment comment: String) report TRACE var comment 
+FATAL{`@` ^punctuation}{var} ^fatal (comment: String ^comment) => report FATAL var comment 
+ERROR{`@` ^punctuation}{var} ^error (comment: String ^comment) => report ERROR var comment 
+ WARN{`@` ^punctuation}{var} ^warn  (comment: String ^comment) => report WARN var comment 
+ INFO{`@` ^punctuation}{var} ^info  (comment: String ^comment) => report INFO var comment 
+DEBUG{`@` ^punctuation}{var} ^debug (comment: String ^comment) => report DEBUG var comment 
+TRACE{`@` ^punctuation}{var} ^trace (comment: String ^comment) => report TRACE var comment 
 
 
 unordered base{ }class{ }{block} ^keyword => (
@@ -103,6 +107,19 @@ unordered base{ }class{ }{block} ^keyword => (
   static ^class
 )
 
+unordered class{ }{block} ^keyword => (
+  static ^keyword := external .
+  ({inline args}) => (
+    this   ^keyword := external .
+    inline block
+
+    this ^variable
+  )
+  inline block
+
+  static ^class
+)
+
 Program := class {
   // `func(args)`
   ({inline args}) => (
@@ -115,17 +132,20 @@ Program := class {
 
 Node := base class {
 
-  {(\w ^function | `{`, expr ^parameter, `}`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
+  {(String ^function | `{`, expr ^parameter, `}`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
 
+  -- ^punctuation (call) => call(this)
+  
   = ^punctuation (x) => external assign this x
   := ^punctuation (x) => this: Node = x
+  : ^punctuation (type) => this
 
   .{literal property ^property} ^punctuation => this[property]
   {\n}.{literal property ^property} ^punctuation => this[property]
 
   // Function definition
   static DEFINE_METHOD = `=`
-  unordered ({args ^parameter}){block} ^punctuation => (^function this) [DEFINE_METHOD] (
+  unordered ({args ^parameter}){block} ^punctuation => (this ^function) [DEFINE_METHOD] (
     def = block**
     def[`args`] = args
     def
@@ -146,3 +166,14 @@ Node := base class {
 
 // Set the actual method used for function definitions.
 Node.DEFINE_METHOD = `&=`
+
+// Precedence: of two operators around a shared operand, the
+// tighter one groups first (precedence = declaration order).
+{a} [x] {b} [y] {c} => (a [x] b) [y] c if x.precedence >= y.precedence
+{a} [x] {b} [y] {c} => a [x] (b [y] c) if x.precedence < y.precedence
+
+// Pointing apart: both apply to the shared operand (Grammar.ray:189)
+{l} [x: right-to-left] {m} [y: left-to-right] {r} => l [x] m & m [y] r
+
+// Chainable: a < b < c  =>  a < b & b < c
+{a} [x: chainable] {b} [y: chainable] {c} => a [x] b & b [y] c

@@ -1,0 +1,2742 @@
+// Capture methods up to precedence
+// Info message if a method on @ is used as a direct .; Mute with X.
+// Bundle all the .ray files in a single .ray file.
+// Support older versions of Node
+// Dependency which alters Language workings; prompt: Do you want to apply those language changes too.
+// support relative paths
+// What dewcides what returns (last passed file) or entrypoint.
+// Starting a {, one appearing at the end of the line }
+
+const version: [major: number, releaseDate: string, index: number] =
+               [0, '2027-01-01', 1];
+
+const cli: CLI.Spec = {
+  help:     { alias: 'h', description: 'Print this help and exit.' },
+  version:  { description: 'Print the version number.' },
+  abstract: { alias: 'n', description: 'Abstractly interpret (analyze) instead of executing.' },
+  debug:    { alias: 'd', description: 'Enable the debugger and debug-level logging.' },
+};
+
+async function main([args, kwargs]: CLI.Args) {
+  if (kwargs.version) return console.log(env.version.toString())
+  if ((args.length === 0 && !kwargs.abstract) || kwargs.help) { console.log(CLI.help(cli)); return; }
+
+  const diagnostics = new Diagnostics();
+  await Ray.v0(diagnostics).abstract(!!kwargs.abstract).add(args.flatMap(x => env.at(x))).exec()
+
+  if (env.nodejs && diagnostics.has_errors) process.exitCode = 1;
+  diagnostics.print();
+}
+
+class Representation {
+
+}
+
+namespace Global {
+  export abstract class Node {
+    abstract source: Source
+  }
+  export abstract class Source {
+    location: string
+    constructor(public relative_location?: string) { if (relative_location !== undefined) this.location = env.nodejs ? env.path.join(env.root, relative_location) : new URL('../' + relative_location, import.meta.url).href }
+    abstract load(): Promise<void>
+    abstract reload(): Promise<void>
+
+    get dir() { return this.location.slice(0, this.location.lastIndexOf('/')); }
+    get path() { return this.location; }
+    get name() { return this.location?.slice(this.location.lastIndexOf('/') + 1) ?? ''; }
+    get is_dot_project() { return this.location?.endsWith(`/.project${Ray.EXTENSION}`) ?? false; }
+    get is_entrypoint() { return this.location?.endsWith(`.entrypoint${Ray.EXTENSION}`) ?? false; }
+  }
+}
+export type Node = Global.Node;
+export type Source = Text.Source;
+export type Painted = Text.Node;
+
+export namespace Ray {
+  export const EXTENSION = '.ray'
+
+  export function v0(diagnostics: Diagnostics) {
+    return new Program(diagnostics)
+      .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
+      .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
+  }
+
+  export function lsp(diagnostics: Diagnostics) {
+    return new Program(diagnostics)
+      .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
+  }
+
+  export function source(location: string, value: string): Text.Source {
+    const src = new Text.Source();
+    src.location = location; src.value = value;
+    return src;
+  }
+
+  export class Project {
+    source: Text.Source[] = []
+    dependencies: Project[] = []
+
+    interpreters: Map<Project, Interpreter> = new Map();
+
+    filled_defaults: boolean = false;
+
+    constructor(private program: Program, public dot_project: Text.Source, interpreter: Interpreter) { this.interpreters.set(this, interpreter); }
+    get directory(): string { return this.dot_project.dir; }
+
+    get is_language() { return this.dot_project.line(0).string.includes('!language'); }
+    
+    get interpreter() { return this.interpreters.get(this); }
+    get dependants() { return this.interpreters.keys().filter(x => x !== this); }
+
+    get entrypoints(): Text.Source[] { return this.source.filter(x => x.dir === this.directory && this.program.entrypoint(x)); }
+    get order(): Text.Source[] {
+      const entrypoints = this.entrypoints;
+      return [...entrypoints, ...this.source.filter(x => !x.is_dot_project && !x.is_entrypoint && !entrypoints.includes(x))];
+    }
+
+    private claim_sources() {
+      const mine = new Set<string>([this.dot_project, ...this.source].map(src => src.location));
+      this.interpreter.owns = src => mine.has(src.location);
+    }
+    interpret() { this.claim_sources(); this.interpreter.interpret(this.order) }
+    interpret_async(alive: () => boolean) { this.claim_sources(); return this.interpreter.interpret_async(this.order, alive); }
+    feedback(src: Text.Source) { this.claim_sources(); this.interpreter.feedback(src); }
+
+    depend_on(project: Project) {
+      if (this === project) return;
+      this.dependencies.push(project);
+      this.interpreters.set(this, project.interpreter.copy());
+      project.interpreters.set(this, this.interpreter);
+    }
+
+    load(): Promise<void>[] { return [this.dot_project, ...this.source].map(x => x.load()) }
+  }
+
+  export class Program {
+
+    projects: Project[] = []
+    default_language: Project
+
+    constructor(public diagnostics: Diagnostics) { diagnostics.program = this; }
+
+    entrypoints: Set<string> = new Set();
+    entrypoint(src: Text.Source): boolean { return src.name === `.entrypoint${EXTENSION}` || this.entrypoints.has(src.location) || this.entrypoints.has(src.name); }
+
+    get ordered(): Project[] {
+      const out: Project[] = [];
+      const visit = (project: Project) => { if (out.includes(project)) return; project.dependencies.forEach(visit); out.push(project); };
+      this.projects.forEach(visit);
+      return out;
+    }
+
+    project_of(src: Source): Project | undefined {
+      let best: Project | undefined;
+      for (const project of this.projects)
+        if ((src.location === project.directory || src.location.startsWith(`${project.directory}/`)) && (best === undefined || project.directory.length > best.directory.length)) best = project;
+      return best;
+    }
+    project_header(src: Source): string | undefined {
+      const project = this.project_of(src);
+      return project && (project.source.includes(project.dot_project) ? project.dot_project.location : project.directory);
+    }
+
+    abstractly: boolean = false;
+    abstract(abstractly?: boolean): this { this.abstractly = abstractly ?? true; return this; }
+
+    add(srcs: Text.Source[]): this {
+      const claims = [...this.projects.flatMap(project => project.source), ...srcs].filter(x => x.is_dot_project).map(x => x.dir);
+      const project_directory_of = (src: Source): string => {
+        let best: string | undefined;
+        for (const c of claims) if (src.location.startsWith(`${c}/`) && (best === undefined || c.length > best.length)) best = c;
+        return best ?? src.dir;
+      };
+      
+      const home = (src: Text.Source): void => {
+        const directory = project_directory_of(src);
+        let project = this.projects.find(project => project.directory === directory);
+        if (!project) {
+          const interpreter = new Interpreter(this.diagnostics);
+          this.projects.push(project = new Project(this, src.is_dot_project ? src : ((directory: string): Text.Source => {
+            const dot = new Text.Source();
+            dot.location = `${directory}/.project${EXTENSION}`;
+            dot.value = '';
+            return dot;
+          })(directory), interpreter));
+        }
+        if (src.is_dot_project) project.dot_project = src;
+
+        const existing = project.source.findIndex(s => s.location === src.location);
+        if (existing >= 0) project.source[existing] = src; else project.source.push(src);
+      };
+      
+      for (const src of srcs) home(src);
+      
+      if (srcs.some(x => x.is_dot_project)) {
+        // a new `.project.ray` carved inside an existing project pulls its files in
+        for (const project of [...this.projects]) for (const src of [...project.source])
+          if (project_directory_of(src) !== project.directory) { project.source.splice(project.source.indexOf(src), 1); home(src); }
+        this.projects = this.projects.filter(project => project.source.length > 0);
+      }
+      return this;
+    }
+    
+    async exec(): Promise<Node> {
+      await Promise.all(this.projects.flatMap(project => project.load()));
+      this.fill_default_dependencies();
+
+      this.ordered.forEach(project => project.interpret())
+
+      return this.default_language?.interpreter.GLOBAL!;
+    }
+    async reload(next: Text.Source | Node | Iterable<Text.Source | Node>): Promise<Node> {
+      const srcs: Text.Source[] = (next instanceof Node || !((next as any)?.[Symbol.iterator])) ? [next as Text.Source] : [...(next as Iterable<Text.Source | Node>)].map(item => item instanceof Node ? item.position.source : item);
+      await Promise.all(srcs.map(x => x.loaded ? undefined : x.load()));
+      this.add(srcs);
+      this.fill_default_dependencies();
+      for (const src of srcs) {
+        const project = this.project_of(src);
+        if (!project) continue;
+        this.pending.add(project);
+        if (srcs.length > 1 && !this.active.has(src.location)) continue;
+        project.feedback(src);
+        this.reloaded(src);
+      }
+      this.schedule();
+      return this.default_language?.interpreter.GLOBAL!;
+    }
+
+    private generation = 0;
+    private timer?: ReturnType<typeof setTimeout>;
+    private pending = new Set<Project>();
+    private running = false;
+    private rerun = false;
+    settled: () => void = () => {};
+    schedule(delay: number = 300) {
+      this.generation++;
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => void this.derive(), delay);
+    }
+    private async derive() {
+      if (this.running) { this.rerun = true; return; }
+      this.running = true;
+      const generation = this.generation;
+      const alive = () => this.generation === generation;
+      const touched = new Set<Project | undefined>(this.pending);
+      this.pending.clear();
+      try {
+        for (const project of this.ordered) {
+          if (!touched.has(project) && !project.dependencies.some(x => touched.has(x))) continue;
+          if (!await project.interpret_async(alive)) { touched.forEach(x => x && this.pending.add(x)); return; }
+          touched.add(project);
+          project.source.forEach(src => this.reloaded(src));
+        }
+        if (this.pending.size === 0) this.settled();
+      } finally {
+        this.running = false;
+        if (this.rerun) { this.rerun = false; this.timer = setTimeout(() => void this.derive(), 0); }
+      }
+    }
+
+    reloaded: (src: Text.Source) => void = () => {};
+    active: Set<string> = new Set();
+    roots: string[] = [];
+    reroot(roots: string[]) { this.roots = roots; }
+    get sources(): Text.Source[] { return [...new Set(this.projects.flatMap(project => [project.dot_project, ...project.source]))]; }
+    get groups(): string[] { return SEMANTIC_TOKEN_TYPES; }
+
+    remove(path: string) {
+      for (const project of this.projects) {
+        const at = project.source.findIndex(s => s.location === path);
+        if (at < 0) continue;
+        const [removed] = project.source.splice(at, 1);
+        this.diagnostics.forget(removed);
+        this.reloaded(removed);
+        this.pending.add(project);
+        this.schedule();
+        return;
+      }
+    }
+
+    get engine() {
+      const program = this;
+      return {
+        get rules(): Map<string, RuleInfo> {
+          const out = new Map<string, RuleInfo>();
+          for (const project of program.projects) for (const [rule, impl] of project.interpreter?.definitions_of() ?? []) {
+            if (impl.forward || out.has(rule.key!)) continue;
+            const at = rule.position!;
+            out.set(rule.key!, {
+              key: rule.key!, exists: true, disabled: false, pieces: rule.pattern!,
+              pattern: { text: at.string }, style: impl.decorators?.map(x => x.string).join(' '),
+              body: impl.body ? { empty: impl.body.empty(), text: impl.body.string } : undefined,
+              definitions: [{ at: { src: at.source, begin: at.begin, end: at.end + 1 }, seen: 'live' }],
+            });
+          }
+          return out;
+        },
+        *sites(): Generator<[string, { src: Text.Source; begin: number; end: number }]> {
+          for (const project of program.projects) for (const [key, at] of project.interpreter?.sites ?? [])
+            yield [key, { src: at.source, begin: at.begin, end: at.end + 1 }];
+        },
+      };
+    }
+
+    EXTERNALS: { [method: string]: Native } = Natives;
+
+    get highlighting(): Map<string, Text.Node[]> {
+      const out = new Map<string, Text.Node[]>();
+      const current = new Map(this.sources.map(src => [src.location, src]));
+      const shifts = new Map<Text.Source, ((begin: number, end: number) => Text.Node | undefined) | undefined>();
+      const rebase = (paint: Text.Node): Text.Node | undefined => {
+        const now = current.get(paint.source.location);
+        if (now === paint.source) return paint.span(paint.begin, paint.end);
+        if (!shifts.has(paint.source)) {
+          const before = paint.source.value, after = now?.value;
+          let shift: ((begin: number, end: number) => Text.Node | undefined) | undefined;
+          if (now && after !== undefined) {
+            let prefix = 0;
+            while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix++;
+            let suffix = 0;
+            while (suffix < before.length - prefix && suffix < after.length - prefix && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
+            const delta = after.length - before.length, anchor = new Text.Node(now);
+            shift = (begin, end) => end < prefix ? anchor.span(begin, end) : begin >= before.length - suffix ? anchor.span(begin + delta, end + delta) : undefined;
+          }
+          shifts.set(paint.source, shift);
+        }
+        return shifts.get(paint.source)?.(paint.begin, paint.end);
+      };
+      for (const project of this.projects) {
+        const interpreter = project.interpreter;
+        if (!interpreter) continue;
+        for (const paint of [...interpreter.paints]) {
+          if (!paint.source?.location) continue;
+          const style = typeof paint.style === 'function' ? paint.style() : paint.style;
+          if (style === undefined) continue;
+          const resolved = rebase(paint);
+          if (!resolved) continue;
+          resolved.style = style;
+          resolved.of = paint.of;
+          resolved.color = interpreter.color(style);
+          let list = out.get(paint.source.location);
+          if (!list) out.set(paint.source.location, list = []);
+          list.push(resolved);
+        }
+      }
+      return out;
+    }
+    painted(src: Text.Source): Text.Node[] { return this.highlighting.get(src.location) ?? []; }
+    palette(): Map<string, string> { return this.default_language?.interpreter?.colors() ?? new Map(); }
+    color(style: string): string | undefined { return this.default_language?.interpreter?.color(style); }
+
+    fill_default_dependencies() {
+      this.default_language = this.projects.find(project => project.is_language);
+      if (!this.default_language) return this.diagnostics.report({ level: 'fatal', message: "Expected to have recognized the string !language (the project defining the default language) on the first line in a .project.ray file, but it wasn't provided." });
+
+      // All projects depend on the default language.
+      this.projects.filter(x => x.dependencies.length === 0).forEach(x => x.depend_on(this.default_language));
+      for (const project of this.projects) project.interpreter.program = this;
+    }
+
+  }
+
+  export const SEMANTIC_TOKEN_TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator'];
+
+  export type RuleInfo = {
+    key: string; exists: boolean; disabled: boolean; pieces: Piece[];
+    pattern: { text: string }; style?: string; body?: { empty: boolean; text: string };
+    definitions: { at: { src: Text.Source; begin: number; end: number }; seen: 'live' }[];
+  }
+
+  export type Key = string | Node
+  export type Args = { interpreter: Interpreter; frame: Node; self?: Node; method: Node; args: Node[]; at: Text.Node }
+  export type Method = (args: Args) => Node | undefined;
+  export type Native = { arity: number; fn: Method }
+
+  export type Piece =
+    | { kind: 'literal'; text: string; styles?: Text.Node[] }
+    | { kind: 'space' }
+    | { kind: 'newline' }
+    | { kind: 'capture'; name: string; raw: boolean; modifiers: string[]; styles: Text.Node[]; type?: string; group: Text.Node }
+    | { kind: 'operator'; name: string; filter?: string; group: Text.Node }
+
+  export class Node {
+    methods?: Map<Key, Node>
+
+    fn?: Method
+    arity?: number
+    applied?: Node[]
+    reads?: 'token' | 'rest'
+
+    pattern?: Piece[]
+    params?: string[]
+    body?: Text.Node
+    closure?: Node
+    modifiers?: Node[]
+    styles?: Node[]
+    decorators?: Text.Node[]
+    param_styles?: Text.Node[][]
+    forward?: Text.Node
+
+    parent?: Node
+    ref?: { scope: Node; key: string; own?: boolean }
+    lazy?: { span: Text.Node; frame: Node; raw: boolean; probe?: boolean }
+    value?: Node
+    literal?: boolean
+    marks?: Node[]
+
+    style?: string
+    theme?: Map<string, string>
+    key?: string
+    children?: Map<string, Node>
+    given?: Set<string>
+
+    // get references(): Node[] {}
+
+    constructor(public diagnostics: Diagnostics, public position?: Text.Node) {}
+
+    get callable(): boolean { return this.fn !== undefined || this.params !== undefined; }
+    get rules(): Node[] { return this.methods ? [...this.methods.keys()].filter((x): x is Node => x instanceof Node) : []; }
+
+    own(key: string): Node | undefined { return this.methods?.get(key); }
+    lookup(key: string): Node | undefined {
+      for (let scope: Node | undefined = this; scope; scope = scope.parent) { const found = scope.own(key); if (found !== undefined) return found; }
+    }
+    set(key: Key, value: Node): Node { (this.methods ??= new Map()).set(key, value); return value; }
+
+    method(string: string | Text.Node, fn: Method, arity: number = 1) {
+      if (!(string instanceof Text.Node) && string.includes('{')) string = Text.Node.string(string);
+      const node = new Node(this.diagnostics, string instanceof Text.Node ? string : undefined);
+      node.fn = fn; node.arity = arity;
+      return this.set(string instanceof Text.Node ? new Node(this.diagnostics, string) : string, node);
+    }
+
+    fatal(message: string) { return this.diagnostics.report({ level: 'fatal', message, node: this.position }) }
+    error(message: string) { return this.diagnostics.report({ level: 'error', message, node: this.position }) }
+    warning(message: string) { return this.diagnostics.report({ level: 'warning', message, node: this.position }) }
+    info(message: string) { return this.diagnostics.report({ level: 'info', message, node: this.position }) }
+    debug(message: string) { return this.diagnostics.report({ level: 'debug', message, node: this.position }) }
+    trace(message: string) { return this.diagnostics.report({ level: 'trace', message, node: this.position }) }
+
+    clone(seen: Map<Node, Node> = new Map()): Node {
+      const existing = seen.get(this); if (existing) return existing;
+      const copy: Node = Object.assign(Object.create(Object.getPrototypeOf(this)), this);
+      seen.set(this, copy);
+      const all = (nodes?: Node[]) => nodes?.map(x => x.clone(seen));
+      copy.parent = this.parent?.clone(seen);
+      copy.closure = this.closure?.clone(seen);
+      copy.value = this.value?.clone(seen);
+      copy.applied = all(this.applied);
+      copy.modifiers = all(this.modifiers);
+      copy.styles = all(this.styles);
+      if (this.ref) copy.ref = { scope: this.ref.scope.clone(seen), key: this.ref.key };
+      if (this.lazy) copy.lazy = { ...this.lazy, frame: this.lazy.frame.clone(seen) };
+      if (this.theme) copy.theme = new Map(this.theme);
+      if (this.children) copy.children = new Map([...this.children].map(([key, child]) => [key, child.clone(seen)]));
+      if (this.methods) {
+        copy.methods = new Map();
+        for (const [key, value] of this.methods)
+          copy.methods.set(key instanceof Node ? key.clone(seen) : key, value.clone(seen));
+      }
+      return copy;
+    }
+  }
+
+  export type Match = { begin: number; end: number; pattern: number; spanned: boolean; literals: [number, number, number][]; captures: Map<string, Text.Node>; operators: Map<string, Text.Node>; args: Text.Node[]; receiver?: Node; tight: boolean }
+  export type Found = { rule: Node; impl: Node; match: Match }
+
+  export class Interpreter {
+    static PASSES = 8;
+    static DEPTH = 64;
+
+    program?: Program
+    constructor(public diagnostics: Diagnostics, public copy_of?: Interpreter) {
+      this.GLOBAL = this.kernel();
+    }
+
+    GLOBAL: Node
+    BASE?: Node
+    theme?: Node
+    building?: Node
+
+    EXTERNAL: Node
+    FORWARD: Node
+
+    frames: Map<string, Node> = new Map();
+    forwards: Node[] = [];
+    paints: Text.Node[] = [];
+    definitions: string[] = [];
+
+    private kernel(): Node {
+      const GLOBAL = new Node(this.diagnostics);
+      GLOBAL.key = 'GLOBAL';
+      this.EXTERNAL = GLOBAL.method('external', ({ interpreter, args: [name], at, frame }) => interpreter.external(name.position!, at, frame), 1);
+      this.EXTERNAL.reads = 'token';
+      this.FORWARD = GLOBAL.method('forward', ({ interpreter, args: [pattern], frame }) => interpreter.forward(pattern.position!, frame), 1);
+      this.FORWARD.reads = 'rest';
+      return GLOBAL;
+    }
+
+    refresh() {
+      if (!this.copy_of) return;
+      const seen = new Map<Node, Node>();
+      this.GLOBAL = this.copy_of.GLOBAL.clone(seen);
+      this.BASE = this.copy_of.BASE?.clone(seen);
+      this.theme = this.copy_of.theme?.clone(seen);
+      this.EXTERNAL = this.copy_of.EXTERNAL.clone(seen);
+      this.FORWARD = this.copy_of.FORWARD.clone(seen);
+      this.frames = new Map([...this.copy_of.frames].map(([key, frame]) => [key, frame.clone(seen)]));
+      this.ids = this.copy_of.ids;
+    }
+
+    copy(): Interpreter { return new Interpreter(this.diagnostics, this); }
+
+    interpret(srcs: Text.Source[]) {
+      const run = this.derive(srcs);
+      for (let step = run.next(); !step.done; step = run.next());
+    }
+    async interpret_async(srcs: Text.Source[], alive: () => boolean): Promise<boolean> {
+      const run = this.derive(srcs);
+      for (let step = run.next(); !step.done; step = run.next()) {
+        await new Promise<void>(resolve => typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0));
+        if (!alive()) { this.painting = this.paints; this.marking = this.marks; return false; }
+      }
+      return true;
+    }
+    *derive(srcs: Text.Source[]): Generator<void> {
+      this.refresh();
+      const inherited = new Map([this.GLOBAL, ...this.frames.values()].map(frame => [frame, new Set(frame.methods?.keys() ?? [])]));
+      let previous: string | undefined;
+      for (let pass = 0; pass < Interpreter.PASSES; pass++) {
+        this.forwards = []; this.painting = []; this.definitions = []; this.touched = new Map(); this.claims.clear(); this.sites = new Map(); this.pending_rewrites = [];
+        this.marking = Interpreter.marks(); this.referenced = new Map();
+        srcs.forEach(src => this.diagnostics.forget(src));
+        for (const src of srcs) { this._interpret(src); yield; }
+        this.prune(inherited);
+        const signature = [this.BASE?.key, ...this.definitions].join('\n');
+        if (signature === previous) break;
+        previous = signature;
+      }
+      this.analyze();
+      this.paints = this.painting;
+      this.marks = this.marking;
+      this.stale = new Map();
+    }
+    feedback(src: Text.Source) {
+      this.diagnostics.forget(src);
+      this.paints = this.painting = this.paints.filter(paint => paint.source.location !== src.location || (paint.by !== undefined && paint.by !== src.location));
+      this.marking = this.marks;
+      this.stale.set(src.location, ++this.epoch);
+      this.referenced = new Map([...this.referenced].filter(([key]) => !key.startsWith(`${src.location}:`)));
+      for (const source of [...this.claims.keys()]) if (source.location === src.location) this.claims.delete(source);
+      this._interpret(src);
+    }
+
+    touched: Map<Node, Set<Key>> = new Map();
+    bind(frame: Node, key: Key, value: Node): Node {
+      let keys = this.touched.get(frame);
+      if (!keys) this.touched.set(frame, keys = new Set());
+      keys.add(key);
+      if (key instanceof Node || frame.methods?.get(key)?.forward || value.forward) this.version++;
+      return frame.set(key, value);
+    }
+    version = 0;
+    prune(inherited: Map<Node, Set<Key>>) {
+      for (const [key, frame] of [...this.frames]) if (!this.touched.has(frame) && !inherited.has(frame)) this.frames.delete(key);
+      const alive = new Set(this.frames.values());
+      for (const frame of [this.GLOBAL, ...this.frames.values()]) {
+        for (const [local, child] of [...(frame.children ?? [])]) if (!alive.has(child)) frame.children!.delete(local);
+        const keep = this.touched.get(frame), base = inherited.get(frame);
+        for (const [key, value] of [...(frame.methods ?? [])])
+          if (!keep?.has(key) && !base?.has(key) && value !== this.EXTERNAL && value !== this.FORWARD) { frame.methods!.delete(key); if (key instanceof Node) this.version++; }
+      }
+    }
+    private _interpret(src: Text.Source) {
+      return this.array(new Text.Node(src), this.GLOBAL, true);
+    }
+
+    array(cursor: Text.Node, frame: Node, report: boolean = false): Node | undefined {
+      let last: Node | undefined;
+      while (true) {
+        this.spaces(cursor, true);
+        if (cursor.done()) return last;
+        const start = cursor.cursor;
+        const value = this.expr(cursor, frame);
+        if (value !== undefined) last = this.settle(value, report);
+        if (cursor.cursor === start) cursor.advance();
+      }
+    }
+    settle(value: Node | undefined, report: boolean): Node | undefined {
+      if (value?.ref && value.marks?.length) {
+        const scope = this.scope_of(value);
+        if (scope) this.mark_reference(scope, value.ref.key, value.marks);
+        const bound = this.resolved(value);
+        if (bound && !bound.ref) this.mark_value(bound, value.marks);
+        const at = value.position;
+        if (at && !this.in_body(at)) this.paint_reference(this.reference(value.ref.scope, value.ref.key, at), true, true);
+      }
+      let node = value;
+      for (let depth = 0; node?.ref && depth < 64; depth++) node = this.bound(node);
+      if (node?.lazy) return this.force(node);
+      if (node === undefined && value?.ref && report) this.deref(value);
+      return value;
+    }
+
+    spaces(cursor: Text.Node, newlines: boolean = false): number {
+      const start = cursor.cursor;
+      for (let c = cursor.peek(); c === ' ' || c === '\t' || c === '\r' || (newlines && c === '\n'); c = cursor.peek()) cursor.advance();
+      return cursor.cursor - start;
+    }
+
+    sites: Map<string, Text.Node> = new Map();
+    statements: Text.Node[] = [];
+    *definitions_of(): Generator<[Node, Node]> {
+      for (const frame of [this.GLOBAL, ...this.frames.values()]) for (const rule of frame.rules) yield [rule, frame.methods!.get(rule)!];
+    }
+
+    expr(cursor: Text.Node, frame: Node): Node | undefined {
+      cursor.begin_expression();
+      this.statements.push(cursor.expression);
+      try { return this.statement(cursor, frame); }
+      catch (e) {
+        if (!(e instanceof Recursion) || this.statements.length > 1) throw e;
+        this.error(`\`${e.rule.position!.string}\` keeps applying itself (stopped after ${Interpreter.DEPTH} nested applications).`, e.at);
+        cursor.cursor = Math.max(cursor.cursor, this.line_end(cursor, cursor.expression.begin, frame, true));
+        return undefined;
+      }
+      finally { this.statements.pop(); }
+    }
+    safely<T>(fn: () => T): T | undefined {
+      try { return fn(); }
+      catch (e) { if (e instanceof Recursion) return undefined; throw e; }
+    }
+    statement(cursor: Text.Node, frame: Node): Node | undefined {
+      const comment = this.line_rule(cursor, cursor.cursor, frame, cursor.cursor);
+      if (comment) { this.fire(comment, cursor, frame); return undefined; }
+      const rule = this.grammar_rule(cursor, frame);
+      if (rule !== undefined) { cursor.end_expression(); return rule; }
+
+      const value = this.expression(cursor, frame, false);
+      this.spaces(cursor);
+      if (!cursor.done() && cursor.peek() !== '\n') {
+        const line = this.line_rule(cursor, cursor.cursor, frame);
+        if (line) this.fire(line, cursor, frame);
+        else {
+          const end = this.line_end(cursor, cursor.cursor, frame, false, true);
+          this.error(`Unexpected \`${cursor.source.value.slice(cursor.cursor, end)}\`.`, cursor.span(cursor.cursor, Math.max(cursor.cursor, end - 1)));
+          cursor.cursor = Math.max(end, cursor.cursor + 1);
+        }
+      }
+      cursor.end_expression();
+      return value;
+    }
+
+    expression(cursor: Text.Node, frame: Node, operand: boolean, receiver?: Node): Node | undefined {
+      let value: Node | undefined = receiver;
+      let started = receiver !== undefined;
+
+      while (true) {
+        // LTR/RTL: Done through Program pattern matching
+        // Precedence: Done through Program pattern matching
+        // Resolve expr up to precedence level: Done through a Program Cursor expansion.
+          //   if a then b else c
+          //   report TRACE var comment
+          //   test () => ReturnType, ReturnType{} => {}
+          //   enum A | B | C {}
+        // Error handling, external report.
+        // Highlighting: external theme + ^[*]
+
+        // Grammar rules - Type resolving. Allow arbitary whitespace in between pieces. { }
+
+        // Expression[] if surrounded by literals.
+
+        const before = cursor.cursor;
+        const previous = cursor.source.value[before - 1];
+        const spaced = this.spaces(cursor) > 0 || (started && (previous === ' ' || previous === '\t'));
+        if (cursor.done()) break;
+
+        if (cursor.peek() === '\n') {
+          const found = started ? this.best(value, cursor, frame, { newline: true, spaced, operand }) : undefined;
+          if (!found) { cursor.cursor = before; break; }
+          value = this.fire(found, cursor, frame);
+          continue;
+        }
+        if (started && operand && spaced) { cursor.cursor = before; break; }
+        if (started && this.line_rule(cursor, cursor.cursor, frame)) { cursor.cursor = before; break; }
+
+        if (!started) {
+          const found = this.best(undefined, cursor, frame, { spaced, operand });
+          const name = this.name(cursor, frame);
+          if (found && (!name || found.match.end - found.match.begin >= name.length) && !(name && !operand && this.applies(name, found, cursor, frame))) {
+            value = this.fire(found, cursor, frame);
+            started = true;
+            continue;
+          }
+          if (name) { value = this.reference(frame, name, cursor.span(cursor.cursor, cursor.cursor + name.length - 1)); this.paint_reference(value); cursor.advance(name.length); started = true; continue; }
+          const token = this.token(cursor, frame);
+          if (!token) { cursor.cursor = before; break; }
+          value = this.reference(frame, token, cursor.span(cursor.cursor, cursor.cursor + token.length - 1));
+          this.paint_reference(value);
+          cursor.advance(token.length);
+          started = true;
+          continue;
+        }
+
+        const reads = value?.ref && !value.marks?.length ? this.bound(value)?.reads : undefined;
+        const found = this.best(value, cursor, frame, { spaced, operand, forwards: reads !== undefined });
+        if (found && !(found.match.spanned && this.resolved(value)?.callable)) { value = this.fire(found, cursor, frame); continue; }
+
+        if (reads) { const at = cursor.cursor; value = this.call(value!, this.raw(cursor, reads), cursor.span(at, Math.max(at, cursor.cursor - 1)), frame); continue; }
+
+        const target = this.deref(value);
+        if (target?.callable) {
+          const at = cursor.cursor;
+          const end = this.operand_end(cursor, at, frame);
+          if (end <= at) { cursor.cursor = before; break; }
+          const span = cursor.span(at, end - 1);
+          cursor.cursor = end;
+          value = this.call(value!, this.lazy(span, frame, false), span, frame);
+          continue;
+        }
+
+        if (spaced) {
+          const claimed = this.claim(cursor, cursor.cursor, frame);
+          if (claimed > cursor.cursor) {
+            if (target !== undefined) this.error(`Unexpected \`${cursor.source.value.slice(cursor.cursor, claimed)}\` after \`${this.text(value)}\`.`, cursor.span(cursor.cursor, claimed - 1));
+            cursor.cursor = claimed;
+            continue;
+          }
+          const token = this.token(cursor, frame);
+          if (token) {
+            const at = cursor.span(cursor.cursor, cursor.cursor + token.length - 1);
+            cursor.advance(token.length);
+            value = this.member(value!, token, at);
+            this.paint_reference(value);
+            continue;
+          }
+        }
+
+        cursor.cursor = before;
+        break;
+      }
+      return value;
+    }
+
+    applies(name: string, found: Found, cursor: Text.Node, frame: Node): boolean {
+      const [p, begin, end] = found.match.literals[0] ?? [];
+      if (p === undefined || begin !== cursor.cursor || end !== cursor.cursor + name.length - 1 || found.rule.pattern![p + 1]?.kind !== 'space') return false;
+      if (!this.resolved(this.reference(frame, name, cursor.span(begin, end)))?.callable) return false;
+      const at = this.skip(cursor, end + 1);
+      if (at === end + 1) return false;
+      const operand = this.name(cursor.bounded(at, cursor.limit), frame);
+      return operand !== undefined && this.operand_end(cursor, at, frame) === at + operand.length;
+    }
+
+    error(message: string, node?: Text.Node) {
+      const statement = this.statements[0];
+      if (statement && node && node.source !== statement.source) {
+        message = `${message} (in ${node.source.name}:${node.line}:${node.col})`;
+        node = statement;
+      }
+      this.diagnostics.report({ level: 'error', message, node });
+    }
+
+    private rulesets = new WeakMap<Node, { version: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][] }>();
+    ruleset(scope: Node): { operand: [Node, Node][]; receiver: [Node, Node][] } {
+      const cached = this.rulesets.get(scope);
+      if (cached && cached.version === this.version) return cached;
+      const operand: [Node, Node][] = [], receiver: [Node, Node][] = [];
+      for (const rule of scope.rules.reverse()) {
+        const impl = scope.methods!.get(rule)!;
+        const leading = rule.pattern![0]?.kind === 'capture';
+        const is_operand = impl.forward !== undefined || (scope === this.GLOBAL && !leading);
+        if (is_operand && !(impl.forward && impl.params)) operand.push([rule, impl]);
+        if (!is_operand || impl.forward) receiver.push([rule, impl]);
+      }
+      const set = { version: this.version, operand, receiver };
+      this.rulesets.set(scope, set);
+      return set;
+    }
+    private chains = new WeakMap<Node, { version: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][] }>();
+    chain(frame: Node): { operand: [Node, Node][]; receiver: [Node, Node][] } {
+      const cached = this.chains.get(frame);
+      if (cached && cached.version === this.version && cached.base === this.BASE) return cached;
+      const scopes = new Set<Node>();
+      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.add(scope);
+      if (this.BASE) scopes.add(this.BASE);
+      const operand: [Node, Node][] = [], receiver: [Node, Node][] = [];
+      for (const scope of scopes) { const set = this.ruleset(scope); operand.push(...set.operand); receiver.push(...set.receiver); }
+      const chain = { version: this.version, base: this.BASE, operand, receiver };
+      this.chains.set(frame, chain);
+      return chain;
+    }
+    candidates(receiver: Node | undefined, frame: Node): [Node, Node][] {
+      if (receiver === undefined) return this.chain(frame).operand;
+      const own = this.resolved(receiver);
+      const chain = this.chain(frame).receiver;
+      if (!own?.methods || own.lazy || own === frame) return chain;
+      return [...this.ruleset(own).receiver, ...chain];
+    }
+
+    private rewriting = new Set<Node>();
+    private readiness = new WeakMap<Node, { version: number; missing: Text.Node[] }>();
+    missing(rule: Node, impl: Node): Text.Node[] {
+      const cached = this.readiness.get(impl);
+      if (cached && cached.version === this.version) return cached.missing;
+      const bound = new Set<string>([...(impl.params ?? []), ...rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece.name] : [])]);
+      const frame = impl.closure ?? this.GLOBAL;
+      const heads = new Set<string>();
+      for (const [other] of [...this.chain(frame).operand, ...this.chain(frame).receiver]) { const head = this.head(other); if (head) heads.add(head); }
+      const missing: Text.Node[] = [], seen = new Set<string>();
+      const check = (span: Text.Node) => {
+        const text = span.source.value;
+        const pattern = /[\p{L}_][\p{L}\p{N}_-]*|[^\s\p{L}\p{N}_(){}\[\]`,.:]+/gu;
+        for (const found of span.string.matchAll(pattern)) {
+          const word = found[0], at = span.begin + found.index!;
+          if (text[at - 1] === '.' || bound.has(word) || seen.has(word)) continue;
+          if (frame.lookup(word) !== undefined || heads.has(word)) continue;
+          seen.add(word);
+          missing.push(span.span(at, at + word.length - 1));
+        }
+      };
+      if (impl.body) check(impl.body);
+      for (const piece of rule.pattern!) if (piece.kind === 'operator' && piece.filter) {
+        const group = piece.group, offset = group.string.indexOf(piece.filter);
+        if (offset >= 0) check(group.span(group.begin + offset, group.begin + offset + piece.filter.length - 1));
+      }
+      this.readiness.set(impl, { version: this.version, missing });
+      return missing;
+    }
+
+    best(receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean }): Found | undefined {
+      let best: Found | undefined;
+      for (const [rule, impl] of this.candidates(receiver, frame)) {
+        const pieces = rule.pattern!;
+        if (opts.forwards && !impl.forward) continue;
+        if (pieces.some(piece => piece.kind === 'operator') && (this.rewriting.has(rule) || this.missing(rule, impl).length > 0)) continue;
+        const leading = pieces[0]?.kind === 'capture';
+        const first = pieces[leading ? 1 : 0];
+        if (!!opts.newline !== (first?.kind === 'newline')) continue;
+        const match = this.match(pieces, cursor, frame, { receiver, leading, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0 });
+        if (!match) continue;
+        if (best && best.match.spanned !== match.spanned) { if (match.spanned) continue; best = { rule, impl, match }; continue; }
+        const own = match.pattern - match.begin, current = best ? best.match.pattern - best.match.begin : -1;
+        const length = match.end - match.begin, total = best ? best.match.end - best.match.begin : -1;
+        if (own > current || (own === current && (length > total || (length === total && best!.impl.forward && !impl.forward)))) best = { rule, impl, match };
+      }
+      return best;
+    }
+
+    private words = new Map<string, string[]>();
+    literal(cursor: Text.Node, j: number, literal: string): number {
+      const text = cursor.source.value, limit = cursor.limit;
+      let parts = this.words.get(literal);
+      if (!parts) this.words.set(literal, parts = literal.split(/\s+/).filter(Boolean));
+      for (let k = 0; k < parts.length; k++) {
+        const part = parts[k];
+        if (k > 0) while (j < limit && (text[j] === ' ' || text[j] === '\t')) j++;
+        if (j + part.length > limit || !text.startsWith(part, j)) return -1;
+        j += part.length;
+      }
+      return j;
+    }
+    skip(cursor: Text.Node, j: number): number {
+      const text = cursor.source.value;
+      while (j < cursor.limit && (text[j] === ' ' || text[j] === '\t' || text[j] === '\r')) j++;
+      return j;
+    }
+
+    match(pieces: Piece[], cursor: Text.Node, frame: Node, opts: { receiver?: Node; leading: boolean; tight: boolean; params: number }): Match | undefined {
+      const text = cursor.source.value, limit = cursor.limit;
+      let i = cursor.cursor;
+      const captures = new Map<string, Text.Node>(), operators = new Map<string, Text.Node>();
+      const literals: [number, number, number][] = [];
+      const juxtaposition = pieces[opts.leading ? 1 : 0]?.kind === 'space';
+      let spanned = false;
+      for (let p = 0; p < pieces.length; p++) {
+        const piece = pieces[p];
+        const from = p === 0 || (p === 1 && opts.leading) ? i : this.skip(cursor, i);
+        if (from > i && piece.kind !== 'space' && pieces[p - 1]?.kind !== 'space') spanned = true;
+        switch (piece.kind) {
+          case 'literal': { const j = this.literal(cursor, from, piece.text); if (j < 0) return; literals.push([p, from, j - 1]); i = j; break; }
+          case 'space': { const j = this.skip(cursor, i); if (j === i && i < limit && text[i] !== '\n') return; i = j; break; }
+          case 'newline': { if (text[from] !== '\n') return; i = from + 1; break; }
+          case 'operator': { const j = this.operator_end(cursor, from, frame); if (j <= from) return; operators.set(piece.name, cursor.span(from, j - 1)); i = j; break; }
+          case 'capture': {
+            if (p === 0 && opts.leading) break;
+            const next = pieces.slice(p + 1).find(x => x.kind !== 'capture');
+            let end: number;
+            if (next?.kind === 'literal') end = this.until(cursor, from, next.text, frame, piece.raw);
+            else if (next?.kind === 'newline') end = this.line_end(cursor, from, frame, piece.raw);
+            else if (next?.kind === 'space') end = this.word_end(cursor, from, frame);
+            else if (next?.kind === 'operator') end = this.operand_end(cursor, from, frame);
+            else if (next === undefined && p === pieces.length - 1) end = juxtaposition || opts.tight || opts.params > 0 ? this.operand_end(cursor, from, frame, piece.raw) : this.line_end(cursor, from, frame, piece.raw);
+            else return;
+            if (end < from || (end === from && next?.kind !== 'literal')) return;
+            captures.set(piece.name, cursor.span(from, end - 1));
+            i = end;
+            break;
+          }
+        }
+      }
+      const pattern = i;
+      const args: Text.Node[] = [];
+      for (let k = 0; k < opts.params; k++) {
+        const from = this.skip(cursor, i);
+        if (from >= limit || text[from] === '\n') return;
+        const end = k < opts.params - 1 || opts.tight ? this.operand_end(cursor, from, frame) : this.line_end(cursor, from, frame);
+        if (end <= from) return;
+        args.push(cursor.span(from, end - 1));
+        i = end;
+      }
+      if (i === cursor.cursor) return;
+      return { begin: cursor.cursor, end: i, pattern, spanned, literals, captures, operators, args, receiver: opts.receiver, tight: opts.tight };
+    }
+
+    private claims = new Map<Text.Source, { version: number; memo: Map<number, number> }>();
+    private nesting = 0;
+    private lexical?: { version: number; brackets: [Node, Node][]; lines: [Node, Node][]; signature: string };
+    private bracketing = 0;
+    get layers(): { version: number; brackets: [Node, Node][]; lines: [Node, Node][]; signature: string } {
+      if (this.lexical?.version === this.version) return this.lexical;
+      const brackets: [Node, Node][] = [], lines: [Node, Node][] = [];
+      for (const [rule, impl] of this.ruleset(this.GLOBAL).operand) {
+        const pieces = rule.pattern!;
+        if (impl.forward || pieces[0]?.kind !== 'literal') continue;
+        if (pieces.length >= 3 && pieces[pieces.length - 1].kind === 'literal') brackets.push([rule, impl]);
+        if (pieces.length === 2 && pieces[1].kind === 'capture') lines.push([rule, impl]);
+      }
+      const signature = brackets.map(([rule]) => rule.key).join('\n');
+      if (signature !== this.lexical?.signature) this.bracketing++;
+      return this.lexical = { version: this.version, brackets, lines, signature };
+    }
+    brackets(frame: Node): [Node, Node][] { return this.layers.brackets; }
+    claim(cursor: Text.Node, j: number, frame: Node): number {
+      const brackets = this.layers.brackets;
+      let entry = this.claims.get(cursor.source);
+      if (!entry || entry.version !== this.bracketing) this.claims.set(cursor.source, entry = { version: this.bracketing, memo: new Map() });
+      let end = entry.memo.get(j);
+      if (end === undefined) {
+        if (this.nesting >= Interpreter.DEPTH) return j;
+        entry.memo.set(j, j);
+        end = j;
+        this.nesting++;
+        const text = cursor.source.value;
+        const probe = new Text.Node(cursor.source);
+        probe.cursor = j;
+        for (const [rule] of brackets) {
+          const first = rule.pattern![0] as { text: string };
+          if (text[j] !== first.text[0]) continue;
+          const match = this.match(rule.pattern!, probe, this.GLOBAL, { leading: false, tight: true, params: 0 });
+          if (match && match.end > end) end = match.end;
+        }
+        this.nesting--;
+        entry.memo.set(j, end);
+      }
+      return end <= cursor.limit ? end : j;
+    }
+    line_rule(cursor: Text.Node, j: number, frame: Node, statement?: number): Found | undefined {
+      const text = cursor.source.value;
+      let probe: Text.Node | undefined;
+      for (const [rule, impl] of this.layers.lines) {
+        const pieces = rule.pattern!;
+        if (text[j] !== (pieces[0] as { text: string }).text[0]) continue;
+        if (statement !== undefined && rule.position?.source.location === cursor.source.location && text.startsWith(rule.position.string, statement)) continue;
+        probe ??= cursor.bounded(j, cursor.limit);
+        const match = this.match(pieces, probe, frame, { leading: false, tight: false, params: 0 });
+        if (match) return { rule, impl, match };
+      }
+    }
+
+    until(cursor: Text.Node, j: number, literal: string, frame: Node, raw: boolean): number {
+      const limit = cursor.limit;
+      while (j < limit) {
+        if (this.literal(cursor, j, literal) >= 0) return j;
+        const claimed = raw ? j : this.claim(cursor, j, frame);
+        j = claimed > j ? claimed : j + 1;
+      }
+      return -1;
+    }
+    line_end(cursor: Text.Node, j: number, frame: Node, raw: boolean = false, lines: boolean = false): number {
+      const text = cursor.source.value, limit = cursor.limit, start = j;
+      while (j < limit && text[j] !== '\n') {
+        if (lines && !raw && j > start && this.line_rule(cursor, j, frame)) break;
+        const claimed = raw ? j : this.claim(cursor, j, frame);
+        j = claimed > j ? claimed : j + 1;
+      }
+      while (j > start && (text[j - 1] === ' ' || text[j - 1] === '\t' || text[j - 1] === '\r')) j--;
+      return j;
+    }
+    private boundaries = new WeakMap<Node, { version: number; base?: Node; edges: Set<string> }>();
+    edges(frame: Node): Set<string> {
+      const cached = this.boundaries.get(frame);
+      if (cached && cached.version === this.version && cached.base === this.BASE) return cached.edges;
+      const edges = new Set<string>();
+      const add = (rule: Node) => { const first = rule.pattern!.find(x => x.kind !== 'capture'); if (first?.kind === 'literal' && !/[\p{L}\p{N}_]/u.test(first.text[0])) edges.add(first.text[0]); };
+      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scope.rules.forEach(add);
+      this.BASE?.rules.forEach(add);
+      this.boundaries.set(frame, { version: this.version, base: this.BASE, edges });
+      return edges;
+    }
+    token_end(cursor: Text.Node, j: number, frame: Node): number {
+      const text = cursor.source.value, limit = cursor.limit, start = j, edges = this.edges(frame);
+      while (j < limit && !/\s/.test(text[j]) && (j === start || !edges.has(text[j]))) j++;
+      return j;
+    }
+    operator_end(cursor: Text.Node, j: number, frame: Node): number {
+      let end = j;
+      for (const [rule, impl] of this.chain(frame).receiver) {
+        const first = rule.pattern![0];
+        if (impl.forward || first?.kind !== 'literal' || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
+        const k = this.literal(cursor, j, first.text);
+        if (k > end) end = k;
+      }
+      return end;
+    }
+    word_end(cursor: Text.Node, j: number, frame: Node): number {
+      const text = cursor.source.value, limit = cursor.limit;
+      if (this.edges(frame).has(text[j])) return j;
+      while (j < limit && !/\s/.test(text[j]) && this.claim(cursor, j, frame) === j) j++;
+      return j;
+    }
+    operand_end(cursor: Text.Node, j: number, frame: Node, raw: boolean = false): number {
+      const text = cursor.source.value, limit = cursor.limit;
+      if (raw) { while (j < limit && !/\s/.test(text[j])) j++; return j; }
+      while (j < limit && !/\s/.test(text[j])) {
+        const claimed = this.claim(cursor, j, frame);
+        j = claimed > j ? claimed : this.token_end(cursor, j, frame);
+      }
+      return j;
+    }
+
+    name(cursor: Text.Node, frame: Node): string | undefined {
+      const text = cursor.source.value, word = /[\p{L}\p{N}_]/u;
+      let best: string | undefined;
+      for (let scope: Node | undefined = frame; scope; scope = scope.parent)
+        for (const key of scope.methods?.keys() ?? []) {
+          if (typeof key !== 'string' || key.length === 0 || (best && key.length <= best.length) || !cursor.at(key)) continue;
+          const after = text[cursor.cursor + key.length];
+          if (word.test(key[key.length - 1]) && after !== undefined && word.test(after)) continue;
+          best = key;
+        }
+      return best;
+    }
+    token(cursor: Text.Node, frame: Node): string | undefined {
+      const end = this.token_end(cursor, cursor.cursor, frame);
+      return end > cursor.cursor ? cursor.source.value.slice(cursor.cursor, end) : undefined;
+    }
+    raw(cursor: Text.Node, reads: 'token' | 'rest'): Node {
+      this.spaces(cursor);
+      const text = cursor.source.value, start = cursor.cursor;
+      let end = start;
+      if (reads === 'token') while (end < cursor.limit && !/\s/.test(text[end])) end++;
+      else { while (end < cursor.limit && text[end] !== '\n') end++; while (end > start && /\s/.test(text[end - 1])) end--; }
+      cursor.cursor = end;
+      const node = new Node(this.diagnostics, cursor.span(start, end - 1));
+      node.literal = true;
+      return node;
+    }
+
+    cursor_of(span: Text.Node): Text.Node {
+      const cursor = new Text.Node(span.source);
+      cursor.cursor = span.begin; cursor.until = span.end + 1;
+      return cursor;
+    }
+    lazy(span: Text.Node, frame: Node, raw: boolean): Node {
+      const node = new Node(this.diagnostics, span);
+      node.lazy = { span, frame, raw, probe: this.probing > 0 };
+      return node;
+    }
+    reference(frame: Node, key: string, at: Text.Node): Node {
+      const node = new Node(this.diagnostics, at);
+      node.ref = { scope: frame, key };
+      return node;
+    }
+    bound(node: Node): Node | undefined { return node.ref!.own ? node.ref!.scope.own(node.ref!.key) : node.ref!.scope.lookup(node.ref!.key); }
+    resolved(node: Node | undefined): Node | undefined {
+      for (let depth = 0; node?.ref && depth < 64; depth++) node = this.bound(node);
+      return node?.lazy ? node.value : node;
+    }
+    deref(node: Node | undefined, report: boolean = true): Node | undefined {
+      const marks: Node[] = [];
+      for (let depth = 0; node && (node.ref || node.lazy) && depth < 64; depth++) {
+        if (node.marks) marks.push(...node.marks);
+        if (node.lazy) { node = this.force(node); continue; }
+        const bound = this.bound(node);
+        if (bound === undefined) { if (report) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined; }
+        node = bound;
+      }
+      if (node && marks.length) this.mark_value(node, marks);
+      return node;
+    }
+    force(node: Node): Node | undefined {
+      if (node.value !== undefined || !node.lazy) return node.value;
+      const { span, frame, raw } = node.lazy;
+      if (this.probing && !node.lazy.probe) return new Node(this.diagnostics, span);
+      if (raw) { const literal = new Node(this.diagnostics, span); literal.literal = true; return node.value = literal; }
+      node.value = new Node(this.diagnostics, span);
+      return node.value = this.array(this.cursor_of(span), frame);
+    }
+    text(node: Node | undefined): string {
+      if (!node) return '';
+      const value = this.diagnostics.muted(() => this.safely(() => this.deref(node, false)));
+      if (value?.literal) return value.position!.string;
+      const target = this.peel(node) ?? node;
+      if (target.lazy) return target.lazy.span.string;
+      if (target.ref) return target.position?.string ?? target.ref.key;
+      return (value ?? target).position?.string ?? '';
+    }
+
+    member(value: Node, key: string, at: Text.Node): Node {
+      const node = new Node(this.diagnostics, at);
+      node.ref = { scope: this.deref(value) ?? new Node(this.diagnostics), key, own: true };
+      return node;
+    }
+    get(node: Node, key: Node): Node {
+      const target = this.deref(node);
+      const forced = this.deref(key, false);
+      const name = forced?.literal ? forced.position!.string : this.text(key);
+      if (target?.style !== undefined) return this.style(`${target.style}.${name}`);
+      const slot = new Node(this.diagnostics, key.position);
+      slot.ref = { scope: target ?? new Node(this.diagnostics), key: name, own: true };
+      return slot;
+    }
+    reference_of(node: Node): Node {
+      if (!node.lazy || node.lazy.raw || node.value !== undefined) return node;
+      const cursor = this.cursor_of(node.lazy.span);
+      const value = this.expression(cursor, node.lazy.frame, false);
+      this.spaces(cursor);
+      return value && cursor.done() ? value : node;
+    }
+    assign(slot: Node, value: Node, at: Text.Node): Node | undefined {
+      let node = this.reference_of(slot);
+      const marks: Node[] = [...(node.marks ?? [])];
+      for (let depth = 0; node.ref && !node.marks?.length && depth < 64; depth++) {
+        const bound = this.bound(node);
+        const next = bound && this.reference_of(bound);
+        if (next?.ref) { node = next; marks.push(...(next.marks ?? [])); } else break;
+      }
+      const result = this.deref(value);
+      if (node.ref) {
+        const bound = this.bound(node);
+        if (bound?.style !== undefined) { this.alias(bound.style, result); return result; }
+        let scope = node.ref.scope;
+        if (!node.ref.own) for (let s: Node | undefined = scope; s; s = s.parent) if (s.own(node.ref.key) !== undefined) { scope = s; break; }
+        if (result) this.bind(scope, node.ref.key, result);
+        if (marks.length) this.mark_name(scope, node.ref.key, marks);
+        this.definitions.push(`${scope.key}.${node.ref.key}`);
+        if (this.statements[0]) this.sites.set(`${scope === this.GLOBAL ? 'GLOBAL' : scope.key}::${node.ref.key}`, this.statements[0]);
+        return result;
+      }
+      const target = this.deref(node);
+      if (target?.style !== undefined) { this.alias(target.style, result); return result; }
+      this.error('Cannot assign here.', at);
+      return result;
+    }
+
+    call(value: Node, arg: Node, at: Text.Node, frame: Node): Node | undefined {
+      if (this.probing) { this.force(arg); return new Node(this.diagnostics, at); }
+      const target = this.deref(value);
+      if (!target) return undefined;
+      if (target.forward) {
+        const name = target.forward.string;
+        let real: Node | undefined;
+        for (let scope: Node | undefined = frame; scope && !real; scope = scope.parent) { const own = scope.own(name); if (own && !own.forward) real = own; }
+        return real ? this.call(real, arg, at, frame) : arg;
+      }
+      const applied = [...(target.applied ?? []), arg];
+      const arity = target.fn ? (target.arity ?? 1) : Math.max(target.params?.length ?? 1, 1);
+      if (applied.length < arity) { const partial: Node = Object.assign(Object.create(Node.prototype), target); partial.applied = applied; return partial; }
+      if (target.fn) return target.fn({ interpreter: this, frame, self: value, method: target, args: applied, at });
+      if (!target.params) { this.error(`\`${this.text(value)}\` cannot be called.`, at); return undefined; }
+      const local = this.frame(frame, `call@${at.source.location}:${at.begin}`, target.closure ?? this.GLOBAL);
+      local.given = new Set(target.params);
+      target.params.forEach((param, k) => this.bind(local, param, applied[k]));
+      return target.body ? this.unalias(this.array(this.cursor_of(target.body), local), local) : undefined;
+    }
+
+    ids = 0;
+    frame(owner: Node, local: string, parent: Node): Node {
+      const children = (owner.children ??= new Map());
+      let frame = children.get(local);
+      if (!frame) { frame = new Node(this.diagnostics); frame.key = `#${++this.ids}`; children.set(local, frame); this.frames.set(frame.key, frame); }
+      frame.parent = parent;
+      return frame;
+    }
+
+    private depth = 0;
+    fire(found: Found, cursor: Text.Node, frame: Node): Node | undefined {
+      const { rule, impl, match } = found;
+      const at = cursor.span(match.begin, match.end - 1);
+      cursor.cursor = match.end;
+      if (this.depth > Interpreter.DEPTH) throw new Recursion(rule, at);
+      this.depth++;
+      try { return this.apply(found, cursor, frame, at); }
+      finally { this.depth--; }
+    }
+    apply({ rule, impl, match }: Found, cursor: Text.Node, frame: Node, at: Text.Node): Node | undefined {
+      const found = { rule, impl, match };
+      const captures = new Map<string, Node>();
+      rule.pattern!.forEach((piece, p) => {
+        if (piece.kind !== 'capture') return;
+        const span = match.captures.get(piece.name);
+        if (span) captures.set(piece.name, this.lazy(span, frame, piece.raw));
+        else if (p === 0 && match.receiver !== undefined) captures.set(piece.name, match.receiver);
+      });
+      this.paint(at, undefined, frame, rule.key);
+      this.paint_head(rule, match, cursor, frame);
+      const styling = new Node(this.diagnostics);
+      styling.parent = impl.closure ?? frame;
+      styling.given = new Set(captures.keys());
+      for (const [name, node] of captures) styling.set(name, node);
+      const owned = [...match.literals.map(([, b, e]) => cursor.span(b, e)), ...rule.pattern!.flatMap(piece => piece.kind === 'capture' && piece.raw && match.captures.has(piece.name) ? [match.captures.get(piece.name)!] : [])];
+      const current = () => (impl.closure ?? this.GLOBAL).methods?.get(rule) ?? impl;
+      const styles = (p: number) => { const piece = rule.pattern![p]; return piece?.kind === 'capture' ? piece.styles : piece?.kind === 'literal' ? piece.styles ?? [] : []; };
+      for (const span of owned) this.paint(span, () => current().decorators ?? [], styling, rule.key);
+      for (const [p, b, e] of match.literals) this.paint(cursor.span(b, e), () => styles(p), styling, rule.key);
+      rule.pattern!.forEach((piece, p) => {
+        const span = piece.kind === 'capture' ? match.captures.get(piece.name) : undefined;
+        if (span) this.paint(span, () => styles(p), styling, rule.key);
+      });
+      match.args.forEach((span, k) => this.paint(span, () => current().param_styles?.[k] ?? [], styling, rule.key));
+      const args = match.args.map(span => { const node = this.lazy(span, frame, false); this.force(node); return node; });
+      if (this.probing) { captures.forEach(node => this.force(node)); return new Node(this.diagnostics, at); }
+      if (impl.forward) return this.pass(found, captures, args, cursor, frame, at);
+
+      const local = this.frame(frame, `${rule.key}@${at.source.location}:${at.begin}`, impl.closure ?? this.GLOBAL);
+      local.given = new Set([...captures.keys(), ...(impl.params ?? []), ...(match.receiver !== undefined ? ['this'] : [])]);
+      if (match.receiver !== undefined) this.bind(local, 'this', match.receiver);
+      for (const [name, node] of captures) this.bind(local, name, node);
+      impl.params?.forEach((param, k) => this.bind(local, param, args[k]));
+      if (impl.fn) return impl.fn({ interpreter: this, frame: local, self: match.receiver, method: impl, args: [...captures.values(), ...args], at });
+      if (!impl.body) return undefined;
+      if (!rule.pattern!.some(piece => piece.kind === 'operator')) return this.unalias(this.array(this.cursor_of(impl.body), local), local);
+      this.rewriting.add(rule);
+      try { return this.unalias(this.array(this.cursor_of(impl.body), local), local); }
+      finally { this.rewriting.delete(rule); }
+    }
+    unalias(result: Node | undefined, local: Node): Node | undefined {
+      if (!result?.ref || result.ref.scope !== local || !local.given?.has(result.ref.key)) return result;
+      const bound = local.own(result.ref.key);
+      if (!bound || !result.marks?.length) return bound;
+      return this.decorate(bound, result.marks[result.marks.length - 1]);
+    }
+
+    head(rule: Node): string | undefined { const first = rule.pattern!.find(x => x.kind === 'literal'); return first?.kind === 'literal' ? first.text.trim().split(/\s+/)[0] : undefined; }
+
+    pass(found: Found, captures: Map<string, Node>, args: Node[], cursor: Text.Node, frame: Node, at: Text.Node): Node | undefined {
+      const { rule, match } = found;
+      const head = this.head(rule);
+      const real = head !== undefined ? this.resolved(this.reference(frame, head, at)) : undefined;
+      let decorator: Node | undefined;
+      if (real?.callable && real !== found.impl) {
+        decorator = real;
+        for (const node of captures.values()) if (node !== match.receiver && decorator) decorator = this.call(decorator, this.lazy(node.lazy!.span, frame, true), at, frame);
+      }
+      if (args.length > 0) {
+        const argument = args[args.length - 1];
+        if (match.receiver !== undefined) this.provisional(match.receiver, argument);
+        return argument;
+      }
+      if (match.receiver !== undefined) return decorator?.style !== undefined ? this.decorate(match.receiver, decorator) : match.receiver;
+      const next = this.skip(cursor, cursor.cursor);
+      if (decorator !== undefined && (next >= cursor.limit || cursor.source.value[next] === '\n' || this.best(decorator, cursor, frame, { spaced: true, operand: false }))) return decorator;
+      const b = this.expression(cursor, frame, match.tight);
+      return b !== undefined && decorator?.style !== undefined ? this.decorate(b, decorator) : b;
+    }
+
+    provisional(receiver: Node, argument: Node) {
+      let node = this.reference_of(receiver);
+      for (let depth = 0; node.ref && depth < 64; depth++) {
+        const bound = this.bound(node);
+        if (bound === undefined) break;
+        const next = this.reference_of(bound);
+        if (!next.ref) return;
+        node = next;
+      }
+      if (!node.ref || this.bound(node) !== undefined) return;
+      const value = this.deref(argument, false);
+      if (value) this.bind(node.ref.scope, node.ref.key, value);
+    }
+
+    external(name: Text.Node, at: Text.Node, frame: Node): Node | undefined {
+      const key = name.string;
+      if (frame.lookup(key) !== undefined) this.paint_reference(this.reference(frame, key, name));
+      const native = this.program?.EXTERNALS[key] ?? Natives[key];
+      if (!native) { this.error(`Expected method \`${key}\` to be externally defined by the runtime, but it wasn't.`, name); return undefined; }
+      if (native.arity === 0) return native.fn({ interpreter: this, frame, args: [], method: this.EXTERNAL, at });
+      const node = new Node(this.diagnostics, name);
+      node.fn = native.fn; node.arity = native.arity;
+      return node;
+    }
+
+    forward(pattern: Text.Node, frame: Node): Node {
+      const pieces = this.pieces(this.chunks(pattern), frame);
+      const key = `${frame.key}::forward ${pieces.map(describe).join('')}`;
+      const rule = frame.rules.find(x => x.key === key) ?? Object.assign(new Node(this.diagnostics, pattern), { key });
+      rule.pattern = pieces;
+      const impl = new Node(this.diagnostics, pattern);
+      impl.forward = pattern; impl.closure = frame;
+      if (!pieces.some(x => x.kind === 'capture')) impl.params = ['argument'];
+      const painting = this.probing > 0 || !this.in_body(pattern);
+      if (painting) this.paint_definition(this.chunks(pattern), [], this.definition_scope(frame, rule, impl), key, { pieces });
+      const head = pieces[0]?.kind === 'literal' ? pieces[0].text.trim() : '';
+      const at = head ? pattern.source.value.indexOf(head, pattern.begin) : -1;
+      if (painting && at >= 0 && at <= pattern.end) {
+        const span = pattern.span(at, at + head.length - 1);
+        if (!/\s/.test(head) && pieces.some(piece => piece.kind === 'capture') ? frame.lookup(head) !== undefined : /^[\p{L}_]/u.test(head)) this.paint_reference(this.reference(frame, head, span), true);
+        else if (!pieces.some(piece => piece.kind === 'capture')) {
+          const painted = span.span(span.begin, span.end);
+          painted.of = key;
+          painted.style = () => {
+            for (const [rule, impl] of [...this.chain(frame).receiver, ...this.chain(frame).operand]) {
+              if (impl.forward || this.head(rule) !== head || !impl.decorators?.length) continue;
+              return this.safely(() => this.style_of(impl.decorators![0], impl.closure ?? frame))?.style;
+            }
+          };
+          if (this.owns(span.source)) this.record(painted);
+        }
+      }
+      if (this.probing) return impl;
+      if (impl.params) {
+        const name = this.head(rule);
+        if (name !== undefined && !(frame.own(name) && !frame.own(name)!.forward)) this.bind(frame, name, impl);
+      }
+      this.bind(frame, rule, impl);
+      this.forwards.push(rule);
+      this.definitions.push(key);
+      return impl;
+    }
+
+    arrow(cursor: Text.Node, frame: Node): number {
+      const text = cursor.source.value, limit = cursor.limit, start = cursor.cursor;
+      for (let j = start; j < limit && text[j] !== '\n';) {
+        if (text.startsWith('=>', j) && (j === start || /\s/.test(text[j - 1])) && (j + 2 >= limit || /\s/.test(text[j + 2]))) return j;
+        if (this.line_rule(cursor, j, frame, start)) return -1;
+        const claimed = this.claim(cursor, j, frame);
+        j = claimed > j ? claimed : j + 1;
+      }
+      return -1;
+    }
+
+    grammar_rule(cursor: Text.Node, frame: Node): Node | undefined {
+      const arrow = this.arrow(cursor, frame);
+      if (arrow < 0) return undefined;
+      const text = cursor.source.value, start = cursor.cursor;
+      let lhs_end = arrow;
+      while (lhs_end > start && /\s/.test(text[lhs_end - 1])) lhs_end--;
+      const body_start = this.skip(cursor, arrow + 2);
+      const body_end = this.line_end(cursor, body_start, frame);
+      cursor.cursor = body_end;
+      if (lhs_end <= start) { this.error('Expected a pattern before `=>`.', cursor.span(arrow, arrow + 1)); return new Node(this.diagnostics); }
+      return this.define(cursor.span(start, lhs_end - 1), body_end > body_start ? cursor.span(body_start, body_end - 1) : undefined, frame, cursor.span(arrow, arrow + 1));
+    }
+
+    define(lhs: Text.Node, body: Text.Node | undefined, frame: Node, arrow?: Text.Node): Node {
+      const chunks = this.tokens(lhs, frame);
+      const modifiers: Node[] = [], decorators: Text.Node[] = [], pattern: Text.Node[] = [];
+      let params: string[] | undefined;
+      let param_styles: Text.Node[][] | undefined;
+      const param_names: Text.Node[] = [];
+      chunks.forEach((chunk, k) => {
+        const s = chunk.string;
+        if (pattern.length === 0 && k < chunks.length - 1 && /^[\p{L}_]/u.test(s)) {
+          const modifier = this.modifier(chunk, frame);
+          if (modifier) { modifiers.push(modifier); this.paint_reference(this.reference(frame, s, chunk)); return; }
+        }
+        if (this.decorates(chunk, frame)) { decorators.push(chunk); return; }
+        if (pattern.length > 0 && s.startsWith('(') && s.endsWith(')') && !s.includes('{') && chunks.slice(k + 1).every(x => this.decorates(x, frame))) {
+          params = []; param_styles = [];
+          for (const part of s.slice(1, -1).split(',')) {
+            const offset = chunk.begin + 1 + s.slice(1, -1).indexOf(part);
+            const tokens = part.trim() ? this.tokens(chunk.span(offset, offset + part.length - 1), frame) : [];
+            const styles = tokens.filter(token => this.decorates(token, frame));
+            const plain = tokens.filter(token => !styles.includes(token));
+            const name = plain.map(token => token.string).join(' ').split(':')[0].trim();
+            if (!name) continue;
+            params.push(name); param_styles.push(styles);
+            const first = plain[0];
+            if (first) param_names.push(first.span(first.begin, first.begin + name.length - 1));
+          }
+          return;
+        }
+        pattern.push(chunk);
+      });
+      const pieces = this.pieces(pattern, frame);
+      if (pieces.length === 0) { this.error('Expected a pattern before `=>`.', lhs); return new Node(this.diagnostics, lhs); }
+      const key = `${frame.key}::${pieces.map(describe).join('')}${params ? `(${params.join(',')})` : ''}`;
+      const rule = frame.rules.find(x => x.key === key) ?? Object.assign(new Node(this.diagnostics, lhs), { key });
+      rule.pattern = pieces; rule.position = lhs;
+      const impl = new Node(this.diagnostics, body ?? lhs);
+      impl.body = body; impl.closure = frame; impl.params = params; impl.param_styles = param_styles; impl.modifiers = modifiers; impl.decorators = decorators;
+      if (!this.probing) { this.bind(frame, rule, impl); this.definitions.push(key); }
+      if (this.probing || !this.in_body(lhs)) {
+        const scope = this.definition_scope(frame, rule, impl);
+        this.paint_definition(pattern, decorators, scope, key, { arrow, params: param_names, styles: param_styles?.flat(), pieces });
+        if (body) this.paint_body(body, scope);
+      }
+      if (body) this.mark_given(body, new Set([...(params ?? []), ...pieces.flatMap(piece => piece.kind === 'capture' ? [piece.name] : []), ...(frame === this.GLOBAL ? [] : ['this'])]), frame);
+      if (this.probing) return impl;
+      if (pieces.some(piece => piece.kind === 'operator')) this.pending_rewrites.push([rule, impl]);
+      for (const modifier of modifiers) if (!modifier.forward) this.call(modifier, impl, lhs, frame);
+      return impl;
+    }
+
+    modifier(chunk: Text.Node, frame: Node): Node | undefined {
+      const bound = this.resolved(this.reference(frame, chunk.string, chunk));
+      if ((bound?.fn || bound?.forward) && bound !== this.EXTERNAL && bound !== this.FORWARD) return bound;
+    }
+
+    group_end(text: string, j: number, end: number): number {
+      const pairs: Record<string, string> = { '{': '}', '(': ')', '[': ']', '`': '`' };
+      const open = text[j], close = pairs[open];
+      if (!close) return j;
+      if (open === '`') { const q = text.indexOf('`', j + 1); return q < 0 || q >= end ? end : q + 1; }
+      let depth = 0;
+      for (let k = j; k < end; k++) {
+        const c = text[k];
+        if (c === '`') { const q = text.indexOf('`', k + 1); if (q < 0 || q >= end) return end; k = q; continue; }
+        if (c === open) depth++;
+        else if (c === close && --depth === 0) return k + 1;
+      }
+      return end;
+    }
+    chunks(span: Text.Node): Text.Node[] {
+      if (span.empty()) return [];
+      const text = span.source.value, end = span.end + 1, out: Text.Node[] = [];
+      for (let j = span.begin; j < end;) {
+        while (j < end && /\s/.test(text[j])) j++;
+        if (j >= end) break;
+        const start = j;
+        while (j < end && !/\s/.test(text[j])) { const close = this.group_end(text, j, end); j = close > j ? close : j + 1; }
+        out.push(span.span(start, j - 1));
+      }
+      return out;
+    }
+    tokens(span: Text.Node, frame: Node): Text.Node[] {
+      const chunks = this.chunks(span), out: Text.Node[] = [];
+      for (let k = 0; k < chunks.length; k++) {
+        const next = chunks[k + 1];
+        if (next && this.styler(chunks[k], frame)) { out.push(chunks[k].span(chunks[k].begin, next.end)); k++; }
+        else out.push(chunks[k]);
+      }
+      return out;
+    }
+    styler(chunk: Text.Node, frame: Node): boolean {
+      const name = this.name(this.cursor_of(chunk), frame);
+      return name === chunk.string && this.resolved(this.reference(frame, name, chunk))?.fn === Natives['^'].fn;
+    }
+    split(span: Text.Node, separator: string): Text.Node[] {
+      const text = span.source.value, parts: Text.Node[] = [];
+      let from = span.begin;
+      for (let j = span.begin; j <= span.end;) {
+        const skip = this.group_end(text, j, span.end + 1);
+        if (skip > j) { j = skip; continue; }
+        if (text[j] === separator) { if (j > from) parts.push(span.span(from, j - 1)); from = j + 1; }
+        j++;
+      }
+      if (span.end >= from) parts.push(span.span(from, span.end));
+      return parts;
+    }
+    pieces(chunks: Text.Node[], frame: Node): Piece[] {
+      const pieces: Piece[] = [];
+      const literal = (s: string) => { const last = pieces[pieces.length - 1]; if (last?.kind === 'literal' && !last.styles) last.text += s; else pieces.push({ kind: 'literal', text: s }); };
+      const significant = () => [...pieces].reverse().find(x => x.kind !== 'literal' || x.text.trim().length > 0);
+      chunks.forEach((chunk, k) => {
+        if (k > 0) literal(' ');
+        const text = chunk.source.value, end = chunk.end + 1;
+        for (let j = chunk.begin; j < end;) {
+          if (text[j] === '{') {
+            const close = this.group_end(text, j, end);
+            const piece = this.group(close - 2 >= j + 1 ? chunk.span(j + 1, close - 2) : chunk.span(j + 1, j), frame, pieces.length);
+            const last = pieces[pieces.length - 1];
+            if (piece.kind === 'literal' && !piece.styles && last?.kind === 'literal' && !last.styles) last.text += piece.text;
+            else pieces.push(piece);
+            j = close; continue;
+          }
+          if (text[j] === '[' && significant()?.kind === 'capture') {
+            const close = this.group_end(text, j, end);
+            const rest = chunks.slice(k + 1).map(x => x.string).join(' ');
+            if (text[close] === '{' || (close >= end && rest.startsWith('{'))) {
+              const [name, filter] = text.slice(j + 1, close - 1).split(/:(.*)/s);
+              pieces.push({ kind: 'operator', name: name.trim(), filter: filter?.trim(), group: chunk.span(j, close - 1) });
+              j = close; continue;
+            }
+          }
+          literal(text[j]); j++;
+        }
+      });
+      return pieces
+        .map(p => p.kind === 'literal' ? { ...p, text: p.text.replace(/\s+/g, ' ') } : p)
+        .filter(p => p.kind !== 'literal' || p.text.trim().length > 0);
+    }
+    group(content: Text.Node, frame: Node, index: number): Piece {
+      const s = content.empty() ? '' : content.string;
+      if (/^`[^`]*`$/.test(s)) return { kind: 'literal', text: s.slice(1, -1) };
+      const parts = content.empty() ? [] : this.tokens(content, frame);
+      const plain = parts.filter(token => !this.decorates(token, frame));
+      if (plain.length === 1 && plain.length < parts.length && /^`[^`]*`$/.test(plain[0].string))
+        return { kind: 'literal', text: plain[0].string.slice(1, -1), styles: parts.filter(token => token !== plain[0]) };
+      if (s.length > 0 && /^[ \t]+$/.test(s)) return { kind: 'space' };
+      if (s === '\\n') return { kind: 'newline' };
+      const styles: Text.Node[] = [], words: string[] = [], typing: string[] = [];
+      for (const token of parts) {
+        const t = token.string;
+        if (this.decorates(token, frame)) { styles.push(token); continue; }
+        if (typing.length > 0) { typing.push(t); continue; }
+        const colon = t.startsWith('(') ? -1 : t.indexOf(':');
+        if (colon >= 0) { if (colon > 0) words.push(t.slice(0, colon)); typing.push(t.slice(colon + 1)); continue; }
+        words.push(t);
+      }
+      const name = words.length > 0 && !words[words.length - 1].startsWith('(') ? words.pop()! : '';
+      if (name === '' && words.length > 0) typing.unshift(words.pop()!);
+      const raw = words.some(word => this.resolved(this.reference(frame, word, content))?.fn === Natives.literal.fn);
+      const type = typing.join(' ').trim() || undefined;
+      return { kind: 'capture', name: name || `#${index}`, raw, modifiers: words, styles, type, group: content };
+    }
+
+    decorates(token: Text.Node, frame: Node): boolean {
+      const probe = this.cursor_of(token);
+      for (const [rule, impl] of this.candidates(undefined, frame)) {
+        if (!impl.forward || !rule.pattern!.some(x => x.kind === 'capture')) continue;
+        const match = this.match(rule.pattern!, probe, frame, { leading: false, tight: true, params: 0 });
+        if (match && !match.spanned && match.end >= probe.limit) return true;
+      }
+      const name = this.name(probe, frame);
+      if (name === undefined || this.resolved(this.reference(frame, name, token))?.fn !== Natives['^'].fn) return false;
+      const rest = token.begin + name.length, text = token.source.value;
+      if (rest > token.end) return true;
+      if (text[rest] === '{') return false;
+      const claimed = this.claim(probe, rest, frame);
+      return claimed > rest ? claimed === token.end + 1 : !/[{}]/.test(token.source.value.slice(rest, token.end + 1));
+    }
+    private quiet = 0;
+    style_of(token: Text.Node, frame: Node): Node | undefined {
+      this.quiet++;
+      try { return this.diagnostics.muted(() => this.style_at(token, frame)); }
+      finally { this.quiet--; }
+    }
+    private style_at(token: Text.Node, frame: Node): Node | undefined {
+      const probe = this.cursor_of(token);
+      for (const [rule, impl] of this.candidates(undefined, frame)) {
+        if (!impl.forward || !rule.pattern!.some(x => x.kind === 'capture')) continue;
+        const match = this.match(rule.pattern!, probe, frame, { leading: false, tight: true, params: 0 });
+        if (!match || match.spanned || match.end < probe.limit) continue;
+        const head = this.head(rule);
+        const real = head !== undefined ? this.resolved(this.reference(frame, head, token)) : undefined;
+        if (!real?.callable) return undefined;
+        let style: Node | undefined = real;
+        for (const piece of rule.pattern!) {
+          const span = piece.kind === 'capture' ? match.captures.get(piece.name) : undefined;
+          if (span && style) style = this.call(style, this.lazy(span, frame, true), token, frame);
+        }
+        return style;
+      }
+      const name = this.name(probe, frame);
+      const head = name !== undefined ? this.resolved(this.reference(frame, name, token)) : undefined;
+      const rest = token.begin + (name?.length ?? 0);
+      if (head?.fn && rest <= token.end && this.claim(probe, rest, frame) === token.end + 1) {
+        const inner = this.inner(token.span(rest, token.end), frame);
+        const argument = inner && this.deref(this.lazy(inner, frame, false), false);
+        const styled = argument && this.call(head, argument, token, frame);
+        return styled?.style !== undefined ? styled : undefined;
+      }
+      const value = this.resolved(this.expression(probe, frame, !/\s/.test(token.string)));
+      return value?.style !== undefined ? value : undefined;
+    }
+
+    forwarded(token: Text.Node, frame: Node): boolean {
+      const probe = this.cursor_of(token);
+      return this.candidates(undefined, frame).some(([rule, impl]) => {
+        if (!impl.forward || !rule.pattern!.some(x => x.kind === 'capture')) return false;
+        const match = this.match(rule.pattern!, probe, frame, { leading: false, tight: true, params: 0 });
+        return match !== undefined && !match.spanned && match.end >= probe.limit;
+      });
+    }
+    site(token: Text.Node, frame: Node) {
+      if (!this.forwarded(token, frame)) return;
+      this.diagnostics.muted(() => this.safely(() => this.expression(this.cursor_of(token), frame, true)));
+    }
+    private shapes?: { version: number; base?: Node; shape?: Shape };
+    private grammars = new WeakMap<Node, Shape | null>();
+    shape(frame: Node): Shape | undefined {
+      if (this.shapes?.version === this.version && this.shapes.base === this.BASE) return this.shapes.shape;
+      let shape: Shape | undefined;
+      for (const [rule, impl] of this.chain(frame).receiver) {
+        let parsed = this.grammars.get(impl);
+        if (parsed === undefined) this.grammars.set(impl, parsed = this.grammar(rule, impl, frame) ?? null);
+        if (parsed) { shape = parsed; break; }
+      }
+      this.shapes = { version: this.version, base: this.BASE, shape };
+      return shape;
+    }
+    grammar(rule: Node, impl: Node, frame: Node): Shape | undefined {
+      const first = rule.pattern![0];
+      if (impl.forward || first?.kind !== 'capture' || impl.body?.string.trim() !== 'external GRAMMAR_RULE') return undefined;
+      const content = first.group, text = content.source.value;
+      const open = text.indexOf('(', content.begin);
+      if (open < 0 || open > content.end) return undefined;
+      const close = this.group_end(text, open, content.end + 1);
+      const closure = impl.closure ?? frame;
+      const styles = (item: Text.Node) => this.tokens(item, closure).filter(token => this.decorates(token, closure));
+      const literal = (item: Text.Node) => this.chunks(item).some(token => /^`[^`]*`$/.test(token.string));
+      const shape: Shape = { text: [], open: [], content: [], close: [], arrow: impl.decorators ?? [], frame: closure };
+      for (const alternative of this.split(content.span(open + 1, close - 2), '|')) {
+        const items = this.split(alternative, ',');
+        if (items.length >= 3 && literal(items[0]) && literal(items[items.length - 1])) {
+          shape.open = styles(items[0]); shape.close = styles(items[items.length - 1]);
+          shape.content = items.slice(1, -1).flatMap(styles);
+        } else shape.text = items.flatMap(styles);
+      }
+      return shape;
+    }
+    definition_scope(frame: Node, rule: Node, impl: Node): Node {
+      const scope = new Node(this.diagnostics);
+      scope.parent = frame;
+      const named = rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece] : []);
+      scope.given = new Set([...(impl.params ?? []), ...named.map(piece => piece.name), ...(frame === this.GLOBAL ? [] : ['this'])]);
+      for (const name of scope.given) scope.set(name, this.placeholder());
+      const shape = this.shape(frame);
+      const declare = (name: string, tokens: Text.Node[]) => this.mark_name(scope, name, [this.fallback([...(shape?.content ?? []).map(token => this.lazy_style(token, shape!.frame)), ...tokens.map(token => this.lazy_style(token, scope))])]);
+      for (const piece of named) declare(piece.name, piece.kind === 'capture' ? piece.styles : []);
+      impl.params?.forEach((name, k) => declare(name, impl.param_styles?.[k] ?? []));
+      return scope;
+    }
+    private blank = Text.Node.string('');
+    placeholder(): Node { return Object.assign(new Node(this.diagnostics, this.blank), { literal: true }); }
+    fallback(styles: Node[]): Node {
+      const node = new Node(this.diagnostics);
+      Object.defineProperty(node, 'style', { get: () => { for (let k = styles.length - 1; k >= 0; k--) { const style = styles[k].style; if (style) return style; } return undefined; } });
+      return node;
+    }
+    paint_definition(chunks: Text.Node[], decorators: Text.Node[], scope: Node, of: string, opts: { arrow?: Text.Node; params?: Text.Node[]; styles?: Text.Node[]; pieces?: Piece[] } = {}) {
+      const shape = this.shape(scope.parent ?? scope);
+      if (shape && opts.arrow) for (const style of shape.arrow) this.paint(opts.arrow, style, shape.frame, of);
+      for (const decorator of [...decorators, ...(opts.styles ?? [])]) this.paint_decorator(decorator, scope);
+      for (const name of opts.params ?? []) this.paint_reference(this.reference(scope, name.string, name), true);
+      const operators = new Set((opts.pieces ?? []).flatMap(piece => piece.kind === 'operator' ? [piece.group.begin] : []));
+      for (const chunk of chunks) {
+        const text = chunk.source.value, end = chunk.end + 1;
+        let run = -1;
+        const flush = (j: number) => {
+          if (run < 0) return;
+          const span = chunk.span(run, j - 1);
+          if (shape) for (const style of shape.text) this.paint(span, style, shape.frame, of);
+          for (const decorator of decorators) this.paint(span, decorator, scope, of);
+          this.paint_words(span, scope);
+          run = -1;
+        };
+        for (let j = chunk.begin; j < end;) {
+          if (text[j] === '{' || operators.has(j)) {
+            flush(j);
+            const close = this.group_end(text, j, end);
+            if (shape) {
+              for (const style of shape.open) this.paint(chunk.span(j, j), style, shape.frame, of);
+              for (const style of shape.close) this.paint(chunk.span(close - 1, close - 1), style, shape.frame, of);
+            }
+            if (close - 2 >= j + 1) this.paint_group(chunk.span(j + 1, close - 2), scope, of, shape);
+            j = close;
+            continue;
+          }
+          if (run < 0) run = j;
+          j++;
+        }
+        flush(end);
+      }
+    }
+    paint_decorator(token: Text.Node, scope: Node) {
+      this.site(token, scope);
+      this.paint_name(token, scope);
+      const name = this.name(this.cursor_of(token), scope);
+      const rest = name === undefined ? undefined : token.span(token.begin + name.length, token.end);
+      if (rest && rest.begin <= rest.end && /^[\s(]/.test(rest.string)) this.paint_words(rest, scope);
+    }
+    paint_words(span: Text.Node, scope: Node) {
+      const text = span.source.value;
+      for (const found of span.string.matchAll(/[\p{L}_][\p{L}\p{N}_-]*|[^\s\p{L}\p{N}_(){}\[\]`,.]+/gu)) {
+        const at = span.begin + found.index!;
+        if (text[at - 1] === '.') continue;
+        const reference = this.reference(scope, found[0], span.span(at, at + found[0].length - 1));
+        if (this.resolved(reference) !== undefined) this.paint_reference(reference, true);
+      }
+    }
+    paint_group(content: Text.Node, scope: Node, of: string, shape?: Shape) {
+      const tokens = this.tokens(content, scope);
+      const decorators = tokens.filter(token => this.decorates(token, scope));
+      decorators.forEach(token => this.paint_decorator(token, scope));
+      const words: Text.Node[] = [], types: Text.Node[] = [];
+      for (const token of tokens) {
+        if (decorators.includes(token)) continue;
+        const t = token.string;
+        if (types.length > 0) { types.push(token); continue; }
+        const colon = t.startsWith('(') || t.startsWith('`') ? -1 : t.indexOf(':');
+        if (colon < 0) { words.push(token); continue; }
+        if (colon > 0) words.push(token.span(token.begin, token.begin + colon - 1));
+        types.push(token.span(token.begin + colon + 1, token.end));
+      }
+      const last = words[words.length - 1];
+      const name = last && !last.string.startsWith('(') ? words.pop() : undefined;
+      if (!name && last) types.unshift(words.pop()!);
+      for (const word of words) this.paint_words(word, scope);
+      if (name) {
+        const t = name.string;
+        if (/^`[^`]*`$/.test(t)) {
+          this.sample(name, scope);
+          if (t.length > 2) for (const decorator of decorators) this.paint(name.span(name.begin + 1, name.end - 1), decorator, scope, of);
+        } else if (/^[\p{L}_]/u.test(t)) {
+          const reference = this.reference(scope, t, name);
+          if (this.resolved(reference) !== undefined) this.paint_reference(reference, true);
+          else {
+            if (shape) for (const style of shape.content) this.paint(name, style, shape.frame, of);
+            for (const decorator of decorators) this.paint(name, decorator, scope, of);
+          }
+        }
+      }
+      for (const type of types) if (!type.empty() && type.begin <= type.end) this.paint_type(type, scope, of);
+    }
+    paint_type(span: Text.Node, scope: Node, of: string) {
+      const text = span.source.value;
+      for (let j = span.begin; j <= span.end;) {
+        if (text[j] === '(') {
+          const close = this.group_end(text, j, span.end + 1);
+          if (close - 2 >= j + 1) for (const alternative of this.split(span.span(j + 1, close - 2), '|')) for (const item of this.split(alternative, ',')) this.paint_item(item, scope, of);
+          j = close;
+          continue;
+        }
+        const next = text.indexOf('(', j);
+        const end = next < 0 || next > span.end ? span.end + 1 : next;
+        this.paint_words(span.span(j, end - 1), scope);
+        j = end;
+      }
+    }
+    paint_item(item: Text.Node, scope: Node, of: string) {
+      const tokens = this.tokens(item, scope);
+      const decorators = tokens.filter(token => this.decorates(token, scope));
+      decorators.forEach(token => this.paint_decorator(token, scope));
+      for (const token of tokens) {
+        if (decorators.includes(token)) continue;
+        const t = token.string;
+        if (/^`[^`]*`$/.test(t)) {
+          this.sample(token, scope);
+          if (t.length > 2) for (const decorator of decorators) this.paint(token.span(token.begin + 1, token.end - 1), decorator, scope, of);
+          continue;
+        }
+        if (t.startsWith('(')) { this.paint_type(token, scope, of); continue; }
+        this.paint_words(token, scope);
+        for (const decorator of decorators) this.paint(token, decorator, scope, of);
+      }
+    }
+    owns: (src: Text.Source) => boolean = () => true;
+    painting: Text.Node[] = this.paints;
+    marks: Marks = Interpreter.marks();
+    static marks(): Marks { return { names: new Map(), references: new Map(), values: new WeakMap(), given: new Map(), given_references: new Map() }; }
+    marking = this.marks;
+    decorate(target: Node, style: Node): Node {
+      const reference = this.reference_of(target);
+      if (reference.ref) {
+        const marked = new Node(this.diagnostics, reference.position);
+        marked.ref = reference.ref;
+        marked.marks = [...(reference.marks ?? []), style];
+        return marked;
+      }
+      const value = this.deref(target, false);
+      if (value) this.mark_value(value, [style]);
+      return value ?? target;
+    }
+    private epoch = 0;
+    private stale = new Map<string, number>();
+    entry<T>(mark: T): Mark<T> { return { mark, by: this.statements[0]?.source.location, epoch: this.epoch }; }
+    live<T>(entry: Mark<T> | undefined): T | undefined {
+      return entry && (entry.by === undefined || entry.epoch >= (this.stale.get(entry.by) ?? 0)) ? entry.mark : undefined;
+    }
+    mark_value(value: Node, styles: Node[]) {
+      let marks = this.marking.values.get(value);
+      if (!marks) this.marking.values.set(value, marks = new Map());
+      for (const style of styles) if (!this.live(marks.get(style.style!))) marks.set(style.style!, this.entry(style));
+    }
+    mark_name(scope: Node, key: string, styles: Node[], opts: { reference?: boolean } = {}) {
+      const table = opts.reference ? this.marking.references : this.marking.names;
+      let marks = table.get(scope);
+      if (!marks) table.set(scope, marks = new Map());
+      marks.set(key, this.entry(styles[styles.length - 1]));
+    }
+    mark_reference(scope: Node, key: string, styles: Node[]) { this.mark_name(scope, key, styles, { reference: true }); }
+    mark_given(body: Text.Node, given: Set<string>, frame: Node) {
+      const inner = this.inner(body, frame) ?? body;
+      const text = inner.source.value;
+      for (let j = inner.begin; j <= inner.end;) {
+        let end = text.indexOf('\n', j);
+        if (end < 0 || end > inner.end + 1) end = inner.end + 1;
+        const chunks = end > j ? this.tokens(inner.span(j, end - 1), frame) : [];
+        if (chunks.length >= 2 && given.has(chunks[0].string) && this.decorates(chunks[1], frame)) {
+          const decorator = chunks[1];
+          const table = chunks.length === 2 ? this.marking.given_references : this.marking.given;
+          let marks = table.get(frame);
+          if (!marks) table.set(frame, marks = new Map());
+          marks.set(chunks[0].string, this.entry(() => this.safely(() => this.style_of(decorator, frame))));
+        }
+        j = end + 1;
+      }
+    }
+    scope_of(node: Node): Node | undefined {
+      const { scope, key, own } = node.ref!;
+      if (own) return scope;
+      for (let current: Node | undefined = scope; current; current = current.parent) if (current.own(key) !== undefined) return current;
+    }
+    mark_of(node: Node, definition: boolean = false): Node | undefined {
+      const scope = this.scope_of(node);
+      if (!scope) return undefined;
+      const key = node.ref!.key;
+      if (!definition) { const reference = this.live(this.marks.references.get(scope)?.get(key)); if (reference) return reference; }
+      const mark = this.live(this.marks.names.get(scope)?.get(key));
+      if (mark) return mark;
+      if (scope.given?.has(key)) {
+        for (let closure = scope.parent; closure; closure = closure.parent) {
+          const reference = definition ? undefined : this.live(this.marks.given_references.get(closure)?.get(key));
+          if (reference) return reference();
+          const given = this.live(this.marks.given.get(closure)?.get(key));
+          if (given) return given();
+        }
+        return undefined;
+      }
+      if (definition) return undefined;
+      const value = this.resolved(node);
+      for (const entry of (value && this.marks.values.get(value))?.values() ?? []) { const mark = this.live(entry); if (mark) return mark; }
+      return undefined;
+    }
+    paint_head(rule: Node, match: Match, cursor: Text.Node, frame: Node) {
+      const first = match.literals[0];
+      if (!first) return;
+      const [p, begin, end] = first;
+      const head = (rule.pattern![p] as { text: string }).text.trim();
+      if (!head || /\s/.test(head) || frame.lookup(head) === undefined) return;
+      const at = cursor.source.value.indexOf(head, begin);
+      if (at < 0 || at + head.length - 1 > end) return;
+      this.paint_reference(this.reference(frame, head, cursor.span(at, at + head.length - 1)));
+    }
+    paint_name(token: Text.Node, frame: Node) {
+      const probe = this.cursor_of(token);
+      const name = this.name(probe, frame);
+      if (name !== undefined) this.paint_reference(this.reference(frame, name, token.span(token.begin, token.begin + name.length - 1)));
+    }
+    private referenced = new Map<string, Text.Node>();
+    paint_reference(reference: Node, lexical: boolean = false, definition: boolean = false) {
+      const at = reference.position;
+      if (!at || !this.owns(at.source)) return;
+      if (!lexical && !this.probing && this.in_body(at)) return;
+      const key = `${at.source.location}:${at.begin}:${at.end}`;
+      const style = () => this.mark_of(reference, definition)?.style;
+      const existing = this.referenced.get(key);
+      if (existing) { if (lexical) existing.style = style; return; }
+      const painted = at.span(at.begin, at.end);
+      painted.style = style;
+      this.referenced.set(key, painted);
+      this.record(painted);
+    }
+    private bodies?: { version: number; spans: Map<Text.Source, [number, number][]> };
+    in_body(at: Text.Node): boolean {
+      if (this.bodies?.version !== this.version) {
+        const spans = new Map<Text.Source, [number, number][]>();
+        for (const [, impl] of this.definitions_of()) {
+          if (!impl.body || impl.forward) continue;
+          let list = spans.get(impl.body.source);
+          if (!list) spans.set(impl.body.source, list = []);
+          list.push([impl.body.begin, impl.body.end]);
+        }
+        this.bodies = { version: this.version, spans };
+      }
+      return this.bodies.spans.get(at.source)?.some(([begin, end]) => at.begin >= begin && at.end <= end) ?? false;
+    }
+    lazy_style(token: Text.Node, frame: Node): Node {
+      const node = new Node(this.diagnostics, token);
+      Object.defineProperty(node, 'style', { get: () => this.safely(() => this.style_of(token, frame))?.style });
+      return node;
+    }
+    sample(token: Text.Node, frame: Node) {
+      this.diagnostics.muted(() => this.safely(() => this.expression(this.cursor_of(token), frame, true)));
+    }
+    excluded(span: Text.Node, frame: Node): [number, number][] {
+      const out: [number, number][] = [];
+      const cursor = this.cursor_of(span);
+      const text = span.source.value;
+      for (let j = span.begin; j <= span.end;) {
+        if (this.line_rule(cursor, j, frame)) {
+          let end = text.indexOf('\n', j);
+          if (end < 0 || end > span.end) end = span.end + 1;
+          out.push([j, end - 1]); j = end; continue;
+        }
+        const raw = this.layers.brackets.find(([rule]) => (rule.pattern![0] as { text: string }).text[0] === text[j] && rule.pattern!.some(piece => piece.kind === 'capture' && piece.raw));
+        if (raw) {
+          const match = this.match(raw[0].pattern!, cursor.bounded(j, span.end + 1), frame, { leading: false, tight: true, params: 0 });
+          if (match) { out.push([j, match.end - 1]); j = match.end; continue; }
+        }
+        j++;
+      }
+      return out;
+    }
+    probing = 0;
+    probe(span: Text.Node, scope: Node) {
+      this.probing++;
+      try { this.diagnostics.muted(() => this.safely(() => this.array(this.cursor_of(span), scope))); }
+      finally { this.probing--; }
+    }
+    paint_body(body: Text.Node, scope: Node) {
+      const frame = scope.parent!;
+      const inner = this.inner(body, frame) ?? body;
+      const text = inner.source.value;
+      const declared: Text.Node[] = [];
+      for (let j = inner.begin; j <= inner.end;) {
+        let end = text.indexOf('\n', j);
+        if (end < 0 || end > inner.end + 1) end = inner.end + 1;
+        const chunks = end > j ? this.tokens(inner.span(j, end - 1), frame) : [];
+        if (chunks.length >= 2 && /^[\p{L}_]/u.test(chunks[0].string) && this.decorates(chunks[1], frame)) {
+          const name = chunks[0].string;
+          if (!scope.own(name)) scope.set(name, this.placeholder());
+          if (!scope.given?.has(name)) {
+            const style = [this.lazy_style(chunks[1], frame)];
+            if (chunks.length === 2) this.mark_reference(scope, name, style); else this.mark_name(scope, name, style);
+          }
+          declared.push(chunks[0]);
+        }
+        j = end + 1;
+      }
+      for (const token of declared) this.paint_reference(this.reference(scope, token.string, token), true, true);
+      this.probe(body, scope);
+      const skip = this.excluded(body, frame);
+      const outside = (at: number) => !skip.some(([b, e]) => at >= b && at <= e);
+      const definitions = new Set(declared.map(token => token.begin));
+      for (const found of body.string.matchAll(/[\p{L}_][\p{L}\p{N}_-]*/gu)) {
+        const at = body.begin + found.index!, word = found[0];
+        if (!outside(at) || text[at - 1] === '.' || text[at - 1] === '^' || definitions.has(at)) continue;
+        if (scope.lookup(word) === undefined) continue;
+        this.paint_reference(this.reference(scope, word, body.span(at, at + word.length - 1)), true);
+      }
+    }
+    paint(span: Text.Node, decorator: Text.Node | Node | undefined | (() => (Text.Node | Node)[]), frame: Node, of?: string) {
+      if (!this.owns(span.source) || (!this.probing && this.in_body(span))) return;
+      const painted = span.span(span.begin, span.end);
+      painted.of = of;
+      if (decorator === undefined) { painted.style = ''; this.record(painted); return; }
+      const resolve = (token: Text.Node | Node) => (token instanceof Node ? token : this.safely(() => this.style_of(token, frame)))?.style;
+      painted.style = typeof decorator !== 'function' ? () => resolve(decorator) : () => {
+        const tokens = decorator();
+        for (let k = tokens.length - 1; k >= 0; k--) { const style = resolve(tokens[k]); if (style) return style; }
+        return undefined;
+      };
+      this.record(painted);
+    }
+    record(painted: Text.Node) {
+      if (this.quiet) return;
+      painted.by = this.statements[0]?.source.location;
+      this.painting.push(painted);
+    }
+
+    style(name: string): Node {
+      const node = new Node(this.diagnostics);
+      node.style = name; node.arity = 1;
+      node.fn = ({ interpreter, args: [target] }) => interpreter.decorate(target, node);
+      return node;
+    }
+    alias(name: string, value: Node | undefined) {
+      if (value?.style === undefined) return;
+      const table = this.building ?? (this.theme ??= Object.assign(new Node(this.diagnostics), { theme: new Map<string, string>() }));
+      table.theme!.set(name, value.style);
+      this.palette = undefined;
+    }
+    private palette?: { theme?: Node; colors: Map<string, string> };
+    colors(): Map<string, string> {
+      if (this.palette && this.palette.theme === this.theme) return this.palette.colors;
+      const table = this.theme?.theme ?? new Map<string, string>();
+      const out = new Map<string, string>();
+      const resolve = (name: string, seen: Set<string> = new Set()): string | undefined => {
+        if (name.startsWith('#')) return name;
+        if (seen.has(name)) return undefined;
+        seen.add(name);
+        const next = table.get(name);
+        if (next !== undefined) return resolve(next, seen);
+        const dot = name.lastIndexOf('.');
+        return dot > 0 ? resolve(name.slice(0, dot), seen) : undefined;
+      };
+      for (const name of table.keys()) { const color = resolve(name); if (color) out.set(name, color); }
+      this.palette = { theme: this.theme, colors: out };
+      return out;
+    }
+    color(name: string | undefined): string | undefined {
+      if (name === undefined) return undefined;
+      if (name.startsWith('#')) return name;
+      const colors = this.colors();
+      for (let n = name; n; n = n.includes('.') ? n.slice(0, n.lastIndexOf('.')) : '') { const color = colors.get(n); if (color) return color; }
+    }
+
+    peel(node: Node): Node | undefined {
+      let current: Node | undefined = node;
+      for (let depth = 0; current && depth < 64; depth++) {
+        if (current.ref) { current = this.bound(current); continue; }
+        if (current.lazy && !this.inner(current.lazy.span, current.lazy.frame)) {
+          const next = this.reference_of(current);
+          if (!next.ref) return current;
+          current = next;
+          continue;
+        }
+        return current;
+      }
+      return current;
+    }
+
+    inline(node: Node, frame: Node): Node | undefined {
+      const target = this.peel(node);
+      if (!target) { this.error(`Unresolved \`${this.text(node)}\`.`, node.position); return undefined; }
+      if (target.lazy && !target.lazy.raw) {
+        const inner = this.inner(target.lazy.span, target.lazy.frame);
+        return this.array(this.cursor_of(inner ?? target.lazy.span), frame);
+      }
+      if (target.theme) { this.theme = target; return target; }
+      if (target.body) return this.array(this.cursor_of(target.body), frame);
+      return target;
+    }
+    inner(span: Text.Node, frame: Node): Text.Node | undefined {
+      const probe = this.cursor_of(span);
+      for (const [rule] of this.brackets(frame)) {
+        const match = this.match(rule.pattern!, probe, frame, { leading: false, tight: true, params: 0 });
+        if (match && match.end === probe.limit) return [...match.captures.values()][0];
+      }
+    }
+    theme_of(name: Node, block: Node, at: Text.Node): Node {
+      const theme = new Node(this.diagnostics, at);
+      theme.theme = new Map(); theme.key = this.text(name);
+      const previous = this.building;
+      this.building = theme;
+      this.inline(block, this.frame(this.GLOBAL, `theme@${at.source.location}:${at.begin}`, this.GLOBAL));
+      this.building = previous;
+      return theme;
+    }
+    report(level: Node, variable: Node, comment: Node): Node {
+      const levels: Record<string, Diagnostic['level']> = { FATAL: 'fatal', ERROR: 'error', WARN: 'warning', INFO: 'info', DEBUG: 'debug', TRACE: 'trace' };
+      const target = this.resolved(variable);
+      this.diagnostics.report({ level: levels[this.text(level)] ?? 'error', message: this.text(comment), node: target?.position ?? variable.position });
+      return comment;
+    }
+    program_of(node: Node): Node | undefined {
+      const target = this.peel(node);
+      if (!target?.lazy) return this.deref(node);
+      const program = new Node(this.diagnostics, target.lazy.span);
+      program.body = this.inner(target.lazy.span, target.lazy.frame) ?? target.lazy.span;
+      program.closure = target.lazy.frame;
+      program.params = [];
+      return program;
+    }
+
+    pending_rewrites: [Node, Node][] = [];
+    analyze() {
+      for (const [rule, impl] of this.pending_rewrites)
+        for (const missing of this.missing(rule, impl)) this.error(`Unresolved \`${missing.string}\`.`, missing);
+      const scopes = [this.GLOBAL, ...this.frames.values()];
+      for (const forward of this.forwards) {
+        const head = this.head(forward);
+        const implemented = head !== undefined && scopes.some(scope =>
+          scope.rules.some(rule => rule !== forward && !scope.methods!.get(rule)!.forward && this.head(rule) === head) ||
+          ((scope.own(head)?.callable ?? false) && !scope.own(head)!.forward));
+        if (!implemented) this.error(`Expected \`${forward.position!.string}\` to be implemented later on (it was declared with \`forward\`), but it never was.`, forward.position);
+      }
+    }
+  }
+
+  export type Mark<T> = { mark: T; by?: string; epoch: number };
+  export type Marks = {
+    names: Map<Node, Map<string, Mark<Node>>>;
+    references: Map<Node, Map<string, Mark<Node>>>;
+    values: WeakMap<Node, Map<string, Mark<Node>>>;
+    given: Map<Node, Map<string, Mark<() => Node | undefined>>>;
+    given_references: Map<Node, Map<string, Mark<() => Node | undefined>>>;
+  };
+
+  export type Shape = { text: Text.Node[]; open: Text.Node[]; content: Text.Node[]; close: Text.Node[]; arrow: Text.Node[]; frame: Node };
+
+  export class Recursion extends Error {
+    constructor(public rule: Node, public at: Text.Node) { super('recursion'); }
+  }
+
+  export const describe = (piece: Piece): string => {
+    switch (piece.kind) {
+      case 'literal': return piece.text;
+      case 'space': return '{ }';
+      case 'newline': return '{\\n}';
+      case 'capture': return `{${piece.raw ? 'literal ' : ''}${piece.name}${piece.type ? `: ${piece.type}` : ''}}`;
+      case 'operator': return `[${piece.name}]`;
+    }
+  };
+
+  const identity: Native = { arity: 1, fn: ({ args: [node] }) => node };
+  export const Natives: Record<string, Native> = {
+    'external': { arity: 0, fn: ({ interpreter }) => interpreter.EXTERNAL },
+    'forward': { arity: 0, fn: ({ interpreter }) => interpreter.FORWARD },
+    'GRAMMAR_RULE': { arity: 0, fn: ({ interpreter, at }) => Object.assign(new Node(interpreter.diagnostics, at), { key: 'GRAMMAR_RULE' }) },
+    '.': { arity: 0, fn: ({ frame }) => frame },
+    'global': { arity: 0, fn: ({ interpreter }) => interpreter.GLOBAL },
+    'get': { arity: 2, fn: ({ interpreter, args: [node, key] }) => interpreter.get(node, key) },
+    'assign': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at) },
+    'base': { arity: 1, fn: ({ interpreter, args: [node] }) => { const target = interpreter.deref(node); if (target) interpreter.BASE = target; return target; } },
+    'inline': { arity: 1, fn: ({ interpreter, frame, args: [node] }) => interpreter.inline(node, frame) },
+    'literal': { arity: 1, fn: ({ args: [node] }) => node },
+    'unordered': { arity: 1, fn: ({ args: [node] }) => node },
+    'theme': { arity: 2, fn: ({ interpreter, args: [name, block], at }) => interpreter.theme_of(name, block, at) },
+    'report': { arity: 3, fn: ({ interpreter, args: [level, variable, comment] }) => interpreter.report(level, variable, comment) },
+    '^': { arity: 1, fn: ({ interpreter, args: [name] }) => interpreter.style(interpreter.text(name)) },
+    '**': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.program_of(node) },
+    '=': identity,
+    'left-to-right': identity,
+    'right-to-left': identity,
+    '</': identity,
+    'call': identity,
+  };
+}
+
+export namespace Text {
+  export class Node extends Global.Node {
+
+    static string(string: string) {
+      const src = new Text.Source(); src.value = string;
+      const node = new Text.Node(src);
+      node.end = src.value.length - 1;
+      return node; 
+    }
+
+    constructor(public source: Text.Source) { super(); }
+
+    expression: Node
+    begin_expression() {
+      const expressions = this.source.expressions;
+      let expression = expressions.get(this.cursor);
+      if (!expression) expressions.set(this.cursor, expression = this.span(this.cursor, this.cursor));
+      this.expression = expression;
+    }
+    end_expression() {
+      this.expression.end = Math.max(this.expression.begin, this.cursor - 1);
+    }
+
+    cursor: number = 0;
+    until?: number;
+    selection: number[] = [];
+
+    color?: string
+    style?: string | (() => string | undefined)
+    of?: string
+    by?: string
+
+    span(begin: number, end: number) {
+      const span = new Node(this.source);
+      span.cursor = begin;
+      span.selection = [begin, end];
+      span.expression = this.expression;
+      return span;
+    }
+
+    direction: -1 | 1 = 1
+    get flip() { this.direction *= -1; return this; }
+    get limit() { return this.until ?? this.source.value.length; }
+    done() { return this.cursor >= this.limit; }
+    peek(offset: number = 0) { const i = this.cursor + offset * this.direction; return i >= 0 && i < this.limit ? this.source.value[i] : undefined; }
+    advance(n: number = 1) { this.cursor += n * this.direction; }
+    at(literal: string) { return this.cursor + literal.length <= this.limit && this.source.value.startsWith(literal, this.cursor); }
+    bounded(begin: number, until: number) {
+      const cursor = this.copy();
+      cursor.cursor = begin; cursor.until = until; cursor.selection = [];
+      return cursor;
+    }
+
+    get file(): string | undefined { return this.source.location; }
+
+    get begin() { return this.selection.length > 0 ? this.selection[0] : this.cursor; }
+    set begin(location: number) {
+      if (this.selection.length > 0) { this.selection[0] = location; }
+      else { this.selection.push(location, this.cursor!); }
+    }
+    get end() {
+      const len = this.selection.length;
+      return len > 0 ? this.selection[len - 1] : this.cursor;
+    }
+    set end(location: number) {
+      const len = this.selection.length;
+      if (len > 0) { this.selection[len - 1] = location; }
+      else { this.selection.push(this.cursor!, location); }
+    }
+
+    get line(): number {
+      if (this.cursor != null) return this.source.lineOf(this);
+      return 1;
+    }
+    get col(): number {
+      if (this.cursor != null) return this.source.colOf(this);
+      return 1;
+    }
+
+    empty() { return this.selection.length === 0; }
+    get string() {
+      return this.empty() ? '' : this.source.value.slice(this.begin!, this.end! + 1);
+    }
+
+    get ranges(): { begin: number; end: number }[] {
+      if (this.selection.length === 0) return [{ begin: this.cursor!, end: this.cursor! }];
+      const out: { begin: number; end: number }[] = [];
+      for (let i = 0; i < this.selection.length; i += 2) out.push({ begin: this.selection[i], end: this.selection[i + 1] });
+      return out;
+    }
+    get segments(): Text.Node[] {
+      return this.ranges.map(r => {
+        const n = new Node(this.source);
+        n.color = this.color;
+        n.selection = [r.begin, r.end];
+        return n;
+      });
+    }
+
+    copy() {
+      const copy = new Node(this.source);
+      copy.cursor = this.cursor;
+      copy.until = this.until;
+      copy.expression = this.expression;
+      copy.selection = [...this.selection];
+      copy.color = this.color;
+      copy.direction = this.direction;
+      return copy;
+    }
+  }
+  export class Source extends Global.Source {
+    private _value: string; get value(): string { if (this._value === undefined) { throw new Error(`Source '${this.location ?? ''}' not loaded — call 'await source.load()' first.`); } return this._value; }
+    set value(value: string) { this._value = value; this.expressions = new Map(); this._newlines = undefined; }
+    get text(): string { return this.value; }
+    get loaded(): boolean { return this._value !== undefined; }
+
+    async load(): Promise<void> {
+      if (this._value !== undefined) return;
+      if (!this.location) throw new Error('Source has neither value nor location.');
+
+      await this.reload();
+    }
+    async reload(): Promise<void> {
+      this.value = env.nodejs
+        ? await env.fs.promises.readFile(this.location, 'utf-8')
+        : await (await fetch(new URL(this.location))).text()
+      this.expressions = new Map();
+      this._newlines = undefined;
+    }
+
+    expressions: Map<number, Node> = new Map();
+
+    private _newlines?: number[];
+    get newlines(): number[] {
+      if (this._newlines) return this._newlines;
+      const arr: number[] = [];
+      const s = this.value;
+      for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) arr.push(i);
+      return this._newlines = arr;
+    }
+
+    lineOf(position: Node): number {
+      const cursor = position.cursor ?? 0;
+      const nls = this.newlines;
+      let lo = 0, hi = nls.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (nls[mid] < cursor) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo + 1;
+    }
+
+    colOf(position: Node): number {
+      const cursor = position.cursor ?? 0;
+      const nls = this.newlines;
+      let lo = 0, hi = nls.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (nls[mid] < cursor) lo = mid + 1;
+        else hi = mid;
+      }
+      return lo === 0 ? cursor + 1 : cursor - nls[lo - 1];
+    }
+
+    line(lineNo: number): Node {
+      const nls = this.newlines;
+      const begin = lineNo === 0 ? 0 : nls[lineNo - 1] + 1;
+      const end = nls[lineNo] ?? this.value.length;
+      const n = new Node(this);
+      if (end > begin) n.selection = [begin, end - 1];
+      else n.cursor = begin;
+      return n;
+    }
+
+    get lines(): Iterable<[Node, number]> {
+      const self = this, count = this.newlines.length + 1;
+      return (function* () { for (let i = 0; i < count; i++) yield [self.line(i), i]; })();
+    }
+  }
+}
+
+namespace CLI {
+  export type Args = [args: string[], kwargs: Record<string, string | true | (string | true)[]>];
+
+  export interface Option { description?: string; value?: boolean; alias?: string; }
+  export type Spec = Record<string, Option>;
+
+  export function help(spec: Spec): string {
+    const rows: [string, string][] = Object.entries(spec).map(([name, opt]) =>
+      [`  ${opt.alias ? `-${opt.alias}, ` : '    '}--${name}${opt.value ? ' <value>' : ''}`, opt.description ?? '']);
+    const width = Math.max(0, ... rows.map(([flags]) => flags.length));
+    return [`Ether.ray ${env.version.toString()}`, 'Options:', ...rows.map(([flags, d]) => d ? `${flags.padEnd(width)}  ${d}` : flags)].join('\n');
+  }
+}
+
+export interface Diagnostic {
+  level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
+  node?: Text.Node;
+  message: string;
+}
+
+const c = {
+  reset:     '\x1b[0m',
+  gray:      '\x1b[90m',
+  dark_gray: '\x1b[2;90m',
+}
+const ansi = (hex: string, bold: boolean = false): string => {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  return `\x1b[${bold ? '1;' : ''}38;2;${r};${g};${b}m`;
+};
+const theme: Record<string, string> = { namespace: '\x1b[38;2;154;134;253m', type: '\x1b[38;2;154;134;253m', class: '\x1b[38;2;154;134;253m', enum: '\x1b[38;2;154;134;253m', interface: '\x1b[38;2;154;134;253m', struct: '\x1b[38;2;154;134;253m', typeParameter: '\x1b[38;2;154;134;253m', parameter: '\x1b[38;2;196;185;254m', variable: '\x1b[38;2;196;185;254m', property: '\x1b[38;2;196;185;254m', enumMember: '\x1b[38;2;255;204;153m', event: '\x1b[38;2;154;134;253m', function: '\x1b[38;2;154;134;253m', method: '\x1b[38;2;154;134;253m', macro: '\x1b[38;2;154;134;253m', keyword: '\x1b[38;2;108;103;131m', modifier: '\x1b[38;2;108;103;131m', comment: '\x1b[38;2;108;103;131m', string: '\x1b[38;2;255;204;153m', number: '\x1b[38;2;255;204;153m', regexp: '\x1b[38;2;255;204;153m', operator: '\x1b[38;2;171;179;191m', decorator: '\x1b[38;2;255;204;153m' };
+
+export const DIAGNOSTIC_SEVERITY: Record<Diagnostic['level'], number> = { trace: 0, debug: 1, info: 2, warning: 3, error: 4, fatal: 5 };
+export class Diagnostics {
+  items: Map</*location:*/ Text.Source | undefined, Map<Text.Node | undefined, Diagnostic[]>> = new Map();
+
+  program?: Ray.Program
+
+  private start = performance.now();
+
+  constructor(public level: Diagnostic['level'] = 'info') {}
+
+  *all(filter?: (x: Diagnostic) => boolean): IterableIterator<Diagnostic> {
+    for (const arr of this.items.values()) { for (const [, elements] of arr) { for (const element of elements) { if (filter ? filter(element) : true) yield element; } } }
+  }
+  *get(src: Text.Source): IterableIterator<Diagnostic> { for (const arr of this.items.get(src).values()) { yield* arr; } }
+
+  is_visible(level: Diagnostic['level']): boolean { return DIAGNOSTIC_SEVERITY[level] >= DIAGNOSTIC_SEVERITY[this.level]; }
+
+  get empty() { return [...this.items.keys()].length === 0 }
+  get has_errors(): boolean { return [...this.errors].length > 0 }
+  get errors() { return this.all(x => DIAGNOSTIC_SEVERITY[x.level] >= DIAGNOSTIC_SEVERITY['error'])}
+  get warnings() { return this.all(x => x.level === 'warning')}
+
+  forget(src: Text.Source | Iterable<Text.Source>) {
+    if (Symbol.iterator in src) { for (const element of src) { this.forget(element) }; return; }
+    this.items.delete(src)
+  }
+
+  print() {
+    if (this.empty) return;
+
+    const exec_time = performance.now() - this.start;
+    const print_start = performance.now();
+
+    const header_of = (src?: Text.Source) => src ? (this.program?.project_header(src) ?? src.location) : undefined;
+    const group = <T>(items: Iterable<T>, key: (t: T) => string | undefined): Map<string | undefined, T[]> => {
+      const m = new Map<string | undefined, T[]>();
+      for (const t of items) { const h = key(t); let g = m.get(h); if (!g) m.set(h, g = []); g.push(t); }
+      return m;
+    };
+
+    for (const [header, srcs] of group(this.items.keys(), header_of)) {
+      if (header) console.error(`${this.color('info')}${header}${c.reset}`);
+      for (const src of srcs) if (src !== undefined) this.print_lines_of(src);
+    }
+
+    let first = true;
+    for (const [header, entries] of group(this.all(), e => header_of(e.node?.source))) {
+      if (!first) console.error('');
+      if (header) console.error(`${this.color('info')}${header}${c.reset}`);
+      first = false;
+      for (const entry of entries) this.print_diagnostic(entry);
+    }
+
+    const parts: string[] = []
+    const count = (level: Diagnostic['level'], entries: Iterable<Diagnostic>) => { const count = [...entries].length; if (count !== 0) parts.push(`${this.color(level)}${count} ${level}${count > 1 ? 's' : ''}${c.reset}`); }
+    
+    count('error', this.errors); count('warning', this.warnings)
+    parts.push(`${c.gray}${exec_time.toFixed(2)}ms${c.reset} ${c.dark_gray}+ ${(performance.now() - print_start).toFixed(2)}ms print${c.reset}`)
+    console.error(`\n  ${parts.join(`${c.gray}, ${c.reset}`)}`)
+  }
+  print_lines_of(src: Text.Source) {
+    console.error(`${c.gray}${src.location ? src.location : `unknown location`}${c.reset}`);
+
+    let entry_i = 0;
+    const entries = [...this.get(src)].filter(x => x.node).sort((a, b) => a.node.cursor - b.node.cursor)
+
+    const line_number_width = String(src.newlines.length + 1).length;
+    const painted = this.program?.painted(src) ?? [];
+    for (const [line, i] of src.lines) {
+      const visibile: Diagnostic[] = [];
+      while (entry_i < entries.length && entries[entry_i].node.cursor <= line.end) {
+        const entry = entries[entry_i];
+        if (entry.node.cursor >= line.begin) visibile.push(entry);
+        entry_i++;
+      }
+
+      if (visibile.length === 0) continue;
+
+      const annotate = (group: { col: number; entries: Diagnostic[] }[], before: boolean) => {
+        if (group.length === 0) return;
+        const gutter = ' '.repeat(line_number_width + 1);
+        const cols = (env.nodejs && process.stdout.columns) || 80;
+        const pipe = `${c.gray}|${c.reset}`;
+        const ANSI = /\x1b\[[0-9;]*m/g;
+        const plain = (s: string) => s.replace(ANSI, '');
+
+        // Word-wrap plain text at spaces to fit `width` columns.
+        const wrapPlain = (text: string, width: number): string[] => {
+          if (width < 10 || text.length <= width) return [text];
+          const out: string[] = [];
+          let cur = '';
+          for (const word of text.split(' ')) {
+            const next = cur ? `${cur} ${word}` : word;
+            if (next.length > width && cur) { out.push(cur); cur = word; } else cur = next;
+          }
+          if (cur) out.push(cur);
+          return out;
+        };
+        // Word-wrap a coloured string by *visible* width, re-opening colour per line.
+        const wrap = (s: string, width: number): { text: string; len: number }[] => {
+          const chars: { ch: string; color: string }[] = [];
+          let color = '', last = 0;
+          for (const m of s.matchAll(ANSI)) {
+            for (let k = last; k < m.index; k++) chars.push({ ch: s[k], color });
+            color = m[0] === c.reset ? '' : m[0];
+            last = m.index + m[0].length;
+          }
+          for (let k = last; k < s.length; k++) chars.push({ ch: s[k], color });
+          const paint = (cs: typeof chars) => {
+            let out = '', cur = '';
+            for (const x of cs) { if (x.color !== cur) out += (cur = x.color) || c.reset; out += x.ch; }
+            return cur ? out + c.reset : out;
+          };
+          let pos = 0;
+          return wrapPlain(plain(s), width).map((pl, li, all) => {
+            const piece = { text: paint(chars.slice(pos, pos + pl.length)), len: pl.length };
+            pos += pl.length + (li < all.length - 1 && chars[pos + pl.length]?.ch === ' ' ? 1 : 0);
+            return piece;
+          });
+        };
+
+        // One line: items placed left-to-right at their columns. A bare item is
+        // a gray pipe; a {text} item is its coloured run. Anything a run already
+        // covered is dropped — that's how a message hides the pipes behind it.
+        const draw = (items: { col: number; text?: string; len?: number }[]): string => {
+          let line = gutter, pos = 0;
+          for (const it of [...items].sort((a, b) => a.col - b.col)) {
+            if (it.col < pos) continue;
+            line += ' '.repeat(it.col - pos);
+            if (it.text === undefined) { line += pipe; pos = it.col + 1; }
+            else { line += it.text; pos = it.col + (it.len ?? 0); }
+          }
+          return line;
+        };
+
+        // Each group draws a connector then its wrapped message(s). `through` are
+        // the groups whose pipes pass through this block — the already-rendered
+        // ones above the source, the not-yet-rendered ones below.
+        const lines: string[] = [];
+        group.forEach((g, i) => {
+          const through = before ? group.slice(0, i) : group.slice(i + 1);
+          if (!before) lines.push(draw(group.slice(i)));
+          else if (through.length) lines.push(draw(through));
+          // wrap to the gap before the next pipe on the right if it's roomy (≥30), else full width
+          const right = [...through].sort((a, b) => a.col - b.col).find(r => r.col > g.col);
+          const full = cols - gutter.length - g.col;
+          const gap = right ? right.col - g.col - 1 : full;
+          const width = Math.max(gap >= 30 ? gap : full, 10);
+          for (const e of g.entries)
+            for (const ln of wrap(this.format(e), width))
+              lines.push(draw([...through, { col: g.col, ...ln }]));
+        });
+        if (before) lines.push(draw(group));
+
+        // Print, dropping a pipes-only line whose pipes already show above, and
+        // collapsing exact repeats.
+        let prev: string | undefined;
+        for (const line of lines) {
+          if (prev !== undefined) {
+            if (line === prev) continue;
+            const p = plain(line);
+            if (/^[\s|]*$/.test(p) && p.includes('|') && [...p].every((ch, k) => ch !== '|' || plain(prev!)[k] === '|')) continue;
+          }
+          console.error(line);
+          prev = line;
+        }
+      }
+      const highlight = (): string => {
+        const segments = info.flatMap(({ entries }) => {
+          const worst = entries.reduce((a, b) =>
+            DIAGNOSTIC_SEVERITY[b.level] > DIAGNOSTIC_SEVERITY[a.level] ? b : a
+          );
+          worst.node.color = this.color(worst.level);
+          return worst.node.segments;
+        });
+        const text = line.string;
+        const chars: (string | undefined)[] = new Array(text.length).fill(undefined);
+        const coat = painted.filter(s => s.end >= line.begin && s.begin <= line.end).sort((a, b) => (b.end - b.begin) - (a.end - a.begin));
+        for (const s of coat) {
+          const hex = s.color;
+          if (!hex) continue;
+          for (let k = Math.max(s.begin - line.begin, 0); k <= Math.min(s.end - line.begin, text.length - 1); k++) chars[k] = ansi(hex);
+        }
+        for (const s of segments) {
+          if (!s.color) continue;
+          for (let k = Math.max(s.begin - line.begin, 0); k <= Math.min(s.end - line.begin, text.length - 1); k++) chars[k] = s.color;
+        }
+        let colored = '', current: string | undefined;
+        for (let k = 0; k < text.length; k++) {
+          const color = chars[k] ?? c.gray;
+          if (color !== current) { colored += color; current = color; }
+          colored += text[k];
+        }
+        return colored;
+      }
+      
+      const info = [...Map.groupBy(visibile, entry => entry.node.cursor - line.begin)].map(([col, entries]) => ({ col, entries }));
+      const above = info.filter((_, i) => i % 2 === 1).reverse().sort((a, b) => b.col - a.col);
+      const below = info.filter((_, i) => i % 2 === 0);
+
+      annotate(above, true)
+      console.error(`${c.gray}${String(i + 1).padStart(line_number_width)} ${c.reset}${highlight()}${c.reset}`);
+      annotate(below, false)
+      console.error('')
+    }
+  }
+  print_diagnostic(entry: Diagnostic) {
+    if (entry.level === 'fatal') { console.error(''); console.error(this.format(entry)); return; }
+    console.error(`${c.gray}${entry.node?.source?.location ? `${entry.node?.source?.location}:${entry.node.line}:${entry.node.col}` : `unknown location`}${c.reset}`);
+    console.error(`  ${this.format(entry)}`);
+  }
+
+  format(entry: Diagnostic): string { return `${this.color(entry.level)}${entry.level}${c.reset} ${entry.message}${c.gray} [${env.version.toString()}]${c.reset}`; }
+
+  private silent = 0;
+  muted<T>(fn: () => T): T { this.silent++; try { return fn(); } finally { this.silent--; } }
+
+  report(entry: Diagnostic) {
+    if (this.silent > 0 || !this.is_visible(entry.level)) return;
+    
+    const source = entry.node?.source;
+    let expr = this.items.get(source);
+    if (!expr) { expr = new Map(); this.items.set(source, expr); }
+    let expr_diagnostics = expr.get(entry.node?.expression)
+    if (!expr_diagnostics) { expr_diagnostics = []; expr.set(entry.node?.expression, expr_diagnostics); }
+
+    // Only error once per expression
+    if (entry.level === 'error' && expr_diagnostics.filter(x => x.level === 'error').length > 0) return;
+
+    expr_diagnostics.push(entry);
+    
+    if (entry.level === 'fatal') return this.exit();
+  }
+
+  exit(): never {
+    this.print();
+    if (env.nodejs) return process.exit(1);
+    throw new Error('fatal diagnostic');
+  }
+
+  static STYLES: Record<Diagnostic['level'], string[]> = { fatal: ['fatal'], error: ['error'], warning: ['warn', 'warning'], info: ['info'], debug: ['debug'], trace: ['trace'] };
+  color(level: Diagnostic['level']): string {
+    const hex = Diagnostics.STYLES[level].map(style => this.program?.color(style)).find(Boolean);
+    return hex ? ansi(hex, level === 'fatal' || level === 'error' || level === 'warning') : Diagnostics.levelColor[level];
+  }
+
+  static levelColor: Record<Diagnostic['level'], string> = {
+    fatal:   '\x1b[1;31m',
+    error:   '\x1b[1;31m',
+    warning: '\x1b[1;33m',
+    info:    '\x1b[34m',
+    debug:   '\x1b[32m',
+    trace:   '\x1b[90m',
+  }
+}
+
+export class Version {
+  static readonly letter = 'E';
+
+  static MONTH_LETTERS = 'ABCDEFGHIJKL';
+
+  constructor(
+    public readonly major: number,
+    public readonly year: number,
+    public readonly yearsSinceRelease: number,
+    public readonly month: number, // 1–12
+    public readonly index: number,
+  ) {}
+
+  get monthLetter(): string { return Version.MONTH_LETTERS[this.month - 1]; }
+  private get tail(): string { return `${this.year}.${this.yearsSinceRelease}${this.monthLetter}.${this.index}`; }
+
+  /** `<major>.E<tail>` — the form `parse` reads back. */
+  toString(): string { return `${this.major}.${Version.letter}${this.tail}`; }
+
+  /** Semver `<major>.<minor>.<patch>`; with `scheme`, re-suffixed `-E<tail>`. */
+  toSemver(opts?: { scheme?: boolean }): string {
+    const base = `${this.major}.${this.yearsSinceRelease * 12 + this.month}.${this.index}`;
+    return opts?.scheme ? `${base}-${Version.letter}${this.tail}` : base;
+  }
+
+  static parse(version: string): Version {
+    const m = /^(\d+)\.E(\d+)\.(\d+)([A-L])\.(\d+)$/.exec(version.trim());
+    if (!m) throw new Error(`Version: cannot parse "${version}"`);
+    const [, major, year, yearsSinceRelease, monthLetter, index] = m;
+    return new Version(+major, +year, +yearsSinceRelease, Version.MONTH_LETTERS.indexOf(monthLetter) + 1, +index);
+  }
+  static tryParse(version: string): Version | null {
+    try { return Version.parse(version); } catch { return null; }
+  }
+  static create(major: number, releaseDate: string, index: number): Version {
+    const release = new Date(releaseDate);
+    const now = new Date();
+    const monthsTotal = Math.max(0,
+      (now.getFullYear() - release.getFullYear()) * 12 + (now.getMonth() - release.getMonth()));
+    return new Version(
+      major,
+      Math.max(now.getFullYear(), release.getFullYear()),
+      Math.floor(monthsTotal / 12),
+      monthsTotal % 12 + 1,
+      index,
+    );
+  }
+}
+
+export class env {
+  static get nodejs(): boolean { return typeof process !== 'undefined' && (process as any).versions?.node; }
+  static get is_main_entrypoint() { return env.nodejs && process.argv[1] !== undefined && import.meta.url === env.url.pathToFileURL(process.argv[1]).href }
+
+  static cli_args(spec: CLI.Spec = {}): CLI.Args {
+    const args: string[] = [];
+    const kwargs: Record<string, string | true | (string | true)[]> = {};
+    const add = (key: string, value: string | true): void => {
+      const existing = kwargs[key];
+      kwargs[key] = existing === undefined ? value : Array.isArray(existing) ? [...existing, value] : [existing, value];
+    };
+    const resolve = (name: string): [string, CLI.Option | undefined] => {
+      if (spec[name]) return [name, spec[name]];
+      const found = Object.entries(spec).find(([, opt]) => opt.alias === name);
+      return found ? [found[0], found[1]] : [name, undefined];
+    };
+    const tokens = env.nodejs ? process.argv.slice(2) : [];
+    let operands = false;
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (!operands && token === '--') { operands = true; continue; }
+      if (operands || token === '-' || !token.startsWith('-')) { args.push(token); continue; }
+      const eq = token.indexOf('=');
+      const attached = eq === -1 ? undefined : token.slice(eq + 1);
+      if (token.startsWith('--')) {
+        const [key, opt] = resolve(eq === -1 ? token.slice(2) : token.slice(2, eq));
+        add(key, attached ?? (opt?.value ? tokens[++i] ?? true : true));
+      } else {
+        const names = eq === -1 ? token.slice(1) : token.slice(1, eq);
+        for (let j = 0; j < names.length; j++) {
+          const [key, opt] = resolve(names[j]);
+          if (opt?.value) { add(key, names.slice(j + 1) || attached || tokens[++i] || true); break; }
+          add(key, j === names.length - 1 ? attached ?? true : true);
+        }
+      }
+    }
+    return [args, kwargs];
+  }
+
+  private static _require: NodeRequire | undefined;
+  static import<T>(name: string, cached?: T | undefined): T {
+    if (cached !== undefined) return cached;
+    if (!env.nodejs)
+      throw new Error(`Module '${name}' is only available in a Node.js environment.`);
+    try {
+      if (!env._require) {
+        if (typeof require === 'function') env._require = require;
+        else env._require = (process as any).getBuiltinModule('module').createRequire(import.meta.url);
+      }
+      return env._require!(name);
+    } catch (e) { throw new Error(`Failed to load Node.js module '${name}': ${(e as Error).message}`); }
+  }
+
+  private static _fs: typeof import('fs') | undefined;
+  private static _path: typeof import('path') | undefined;
+  private static _url: typeof import('url') | undefined;
+  static get fs(): typeof import('fs') { return env._fs ??= env.import('fs', env._fs); }
+  static get path(): typeof import('path') { return env._path ??= env.import('path', env._path); }
+  static get url(): typeof import('url') { return env._url ??= env.import('url', env._url); }
+
+  private static _manifest?: string[];
+  static get manifest(): string[] {
+    if (env._manifest) return env._manifest;
+    try { 
+      const manifest_file = './bundled.ts';
+      const manifest = env.import<{ manifest: string[] }>(manifest_file).manifest; 
+      if (!manifest.length) throw new Error(`Couldn't find any entries in the manifest (a file in '${manifest_file}'), this is an error on the side of the developer or you didn't create a bundle, see the original repository for how that is done.`);
+      return env._manifest = manifest;
+    }
+    catch { return env._manifest = []; }
+  }
+
+  static variable(name: string): string | undefined {
+    const value = env.nodejs ? process.env[name] : (globalThis as any)[name];
+    return value === undefined || value === null ? undefined : String(value);
+  }
+
+  static file(location: string): Text.Source { return new Text.Source(location); }
+  static directory(location: string, options: { recursively?: boolean, filter?: (x: string) => boolean }): Text.Source[] {
+    location = location.replace(/\/$/, '')
+    if (!env.nodejs) {
+      const prefix = location + '/';
+      return env.manifest
+        .filter(entry => entry.startsWith(prefix))
+        .filter(entry => options.recursively || !entry.slice(prefix.length).includes('/'))
+        .filter(entry => options.filter ? options.filter(entry) : true)
+        .map(env.file);
+    }
+
+    const locations: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of env.fs.readdirSync(env.path.join(env.root, dir), { withFileTypes: true })) {
+        const entry_path = `${dir}/${entry.name}`;
+        if (entry.isDirectory()) { if (options.recursively) walk(entry_path); continue; }
+        if (options.filter && !options.filter(entry_path)) continue;
+        locations.push(entry_path);
+      }
+    };
+    walk(location);
+    return locations.map(env.file);
+  }
+  static at(location: string, options: { recursively?: boolean, filter?: (x: string) => boolean } = {}): Text.Source[] {
+    location = location.replace(/\/$/, '')
+    const is_file = env.nodejs
+      ? env.fs.statSync(env.path.join(env.root, location)).isFile()
+      : env.manifest.includes(location);
+    return is_file ? [env.file(location)] : env.directory(location, options);
+  }
+
+  static get version() { return Version.create(version[0], version[1], version[2]) }
+
+  private static _root?: string;
+  static get root(): string {
+    if (env._root) return env._root;
+    const { fs, path } = env;
+    const root = ['@ether', '$', '.ray']
+    const language_dir = (dir: string) => path.join(dir, ...root);
+    // A checkout enclosing the working directory: walk up to the marker.
+    let dir = process.cwd();
+    while (!fs.existsSync(language_dir(dir)) && path.dirname(dir) !== dir) dir = path.dirname(dir);
+    if (fs.existsSync(language_dir(dir))) return env._root = dir;
+    // Production: package ships @ether/$/.ray inside its tarball — root sits one dir up from src/.
+    dir = path.resolve(import.meta.dirname, '..'); if (fs.existsSync(language_dir(dir))) return env._root = dir;
+    // Development: src lives at <repo>/@ether/$/.ray/v0.ts/src — repo root is five dirs up.
+    dir = path.resolve(import.meta.dirname, '..', '..', '..', '..', '..'); if (fs.existsSync(language_dir(dir))) return env._root = dir;
+
+    throw new Error(`Couldn't find a language definition on your system. Expected one in the hierarchy of your CWD, in the package (production), or in the repository (development). Signature is a '${root.join('/')}' directory.`)
+  }
+}
+
+if (env.is_main_entrypoint) main(env.cli_args(cli));

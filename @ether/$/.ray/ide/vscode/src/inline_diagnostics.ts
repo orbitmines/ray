@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { Theme } from './theme';
 
 /**
  * Rich in-editor diagnostics — the "Error Lens" technique. VS Code can't draw
@@ -11,8 +12,9 @@ import * as vscode from 'vscode';
 
 const LANGUAGE = 'ray';
 
-// Per-severity palette, mirroring diagnostics.ts `levelColor` (red / yellow /
-// blue), with a faint matching wash for the line background.
+// Per-severity palette, used until the language's theme (`^error`,
+// `^warning`, …) arrives over the theme channel; the line wash is the same
+// color, faint.
 const PALETTE: Record<number, { fg: string; bg: string; glyph: string }> = {
   [vscode.DiagnosticSeverity.Error]:       { fg: '#f14c4c', bg: 'rgba(241,76,76,0.09)',  glyph: '✖' },
   [vscode.DiagnosticSeverity.Warning]:     { fg: '#cca700', bg: 'rgba(204,167,0,0.09)',  glyph: '⚠' },
@@ -27,8 +29,22 @@ const SEVERITIES = [
   vscode.DiagnosticSeverity.Hint,
 ];
 
-function decorationType(severity: number): vscode.TextEditorDecorationType {
-  const { fg, bg } = PALETTE[severity];
+const THEMED: Record<number, string[]> = {
+  [vscode.DiagnosticSeverity.Error]:       ['error'],
+  [vscode.DiagnosticSeverity.Warning]:     ['warn', 'warning'],
+  [vscode.DiagnosticSeverity.Information]: ['info'],
+  [vscode.DiagnosticSeverity.Hint]:        ['debug'],
+};
+
+function colors(severity: number, theme: Theme): { fg: string; bg: string } {
+  const themed = THEMED[severity].map(name => theme.styles[name]?.color).find(color => color !== undefined);
+  if (typeof themed !== 'string' || !/^#[0-9a-f]{6}$/i.test(themed)) return PALETTE[severity];
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(themed.slice(i, i + 2), 16));
+  return { fg: themed, bg: `rgba(${r},${g},${b},0.09)` };
+}
+
+function decorationType(severity: number, theme: Theme): vscode.TextEditorDecorationType {
+  const { fg, bg } = colors(severity, theme);
   return vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
     backgroundColor: bg,
@@ -40,9 +56,9 @@ function decorationType(severity: number): vscode.TextEditorDecorationType {
 
 /** Drive editor decorations off the published diagnostics. Returns a
  *  Disposable that tears the whole thing down. */
-export function registerInlineDiagnostics(): vscode.Disposable {
+export function registerInlineDiagnostics(theme: Theme): vscode.Disposable {
   const types = new Map<number, vscode.TextEditorDecorationType>(
-    SEVERITIES.map(s => [s, decorationType(s)]),
+    SEVERITIES.map(s => [s, decorationType(s, theme)]),
   );
 
   const update = (editor: vscode.TextEditor | undefined): void => {
@@ -83,6 +99,10 @@ export function registerInlineDiagnostics(): vscode.Disposable {
     }),
     vscode.window.onDidChangeVisibleTextEditors(() => updateAll()),
     vscode.window.onDidChangeActiveTextEditor(update),
+    theme.onChange(() => {
+      for (const s of SEVERITIES) { types.get(s)!.dispose(); types.set(s, decorationType(s, theme)); }
+      updateAll();
+    }),
   ];
 
   return new vscode.Disposable(() => {

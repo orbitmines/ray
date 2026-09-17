@@ -177,11 +177,13 @@ export namespace Ray {
 
   export function lsp(diagnostics: Diagnostics): Program {
     return new Program(diagnostics, () => {})
+      .add(env.directory(`@ether/$/${EXTENSION}/v0.ts/src`, { filter: x => x.endsWith(EXTENSION) }))
       .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
   }
 
   export function v0(diagnostics: Diagnostics) {
     return new Program(diagnostics, () => {})
+      .add(env.directory(`@ether/$/${EXTENSION}/v0.ts/src`, { filter: x => x.endsWith(EXTENSION) }))
       .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
       // .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
   }

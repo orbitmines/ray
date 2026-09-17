@@ -6,6 +6,7 @@ import {
 import { resolveBoot } from './boot';
 import { applyLanguageConfiguration, requestLanguageConfiguration } from './language_configuration';
 import { registerInlineDiagnostics } from './inline_diagnostics';
+import { Theme, registerTheme } from './theme';
 
 let client: LanguageClient | undefined;
 let configDisposable: Disposable | undefined;
@@ -13,7 +14,8 @@ let configDisposable: Disposable | undefined;
 export async function activate(context: ExtensionContext) {
   // Rich in-editor diagnostics (colour, line tint, trailing message) driven
   // off whatever the server publishes — independent of the client booting.
-  context.subscriptions.push(registerInlineDiagnostics());
+  const theme = new Theme();
+  context.subscriptions.push(theme, registerInlineDiagnostics(theme));
 
   let boot;
   try {
@@ -55,6 +57,10 @@ export async function activate(context: ExtensionContext) {
   };
   await refreshConfig();
   context.subscriptions.push({ dispose: () => configDisposable?.dispose() });
+
+  // The language's theme — exact colors for every styled range, and the
+  // diagnostic palette.
+  context.subscriptions.push(registerTheme(client, theme));
 
   // Whole-workspace initial enumeration. `findFiles` uses VS Code's ripgrep-
   // backed walker, honors `files.exclude` / `search.exclude`, and is much

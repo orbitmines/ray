@@ -1,4 +1,4 @@
-import type { Ray, Painted } from '../minimal4.ts';
+import type { Ray, Painted } from '../language.ts';
 type Program = Ray.Program;
 
 // LSP features, as queries over the program's public surface — the grammar's
@@ -29,8 +29,8 @@ export function configuration(program: Program): {
       const key = `${p[0].text}\0${p[2].text}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      (p[1].raw ? quotes : brackets).push([p[0].text, p[2].text]);
-    } else if (p.length === 2 && p[0].kind === 'literal' && p[1].kind !== 'literal' && p[1].raw && (!rule.body || rule.body.empty)) {
+      ((p[1] as { raw?: boolean }).raw ? quotes : brackets).push([p[0].text, p[2].text]);
+    } else if (p.length === 2 && p[0].kind === 'literal' && p[1].kind !== 'literal' && (p[1] as { raw?: boolean }).raw && (!rule.body || rule.body.empty)) {
       lineComment ??= p[0].text;
     }
   }

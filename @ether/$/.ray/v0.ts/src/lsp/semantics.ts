@@ -1,4 +1,4 @@
-import type { Painted } from '../minimal4.ts';
+import type { Painted } from '../language.ts';
 
 // The modifiers the LSP standardizes — a style's dotted tail
 // (`variable.readonly`) maps onto these bits.
@@ -38,10 +38,10 @@ export function encode(text: string, painted: Painted[], groups: string[], range
   // smaller span wins where they overlap — same as the terminal renderer
   const cells = new Int32Array(text.length).fill(-1);
   const spans = painted
-    .filter(p => types.has(p.style.split('.')[0]) && !(range && (p.end! + 1 <= range[0] || p.begin! >= range[1])))
+    .filter(p => types.has((p.style as string).split('.')[0]) && !(range && (p.end! + 1 <= range[0] || p.begin! >= range[1])))
     .sort((a, b) => (b.end! - b.begin!) - (a.end! - a.begin!));
   for (const p of spans) {
-    const path = p.style.split('.');
+    const path = (p.style as string).split('.');
     let cell = types.get(path[0])! << 10;
     for (const m of path.slice(1)) { const b = bits.get(m); if (b !== undefined) cell |= 1 << b; }
     for (let k = Math.max(p.begin!, 0); k <= Math.min(p.end!, text.length - 1); k++) cells[k] = cell;
@@ -64,4 +64,28 @@ export function encode(text: string, painted: Painted[], groups: string[], range
   }
   flush();
   return data;
+}
+
+// Non-overlapping styled runs for the theme channel — per character the
+// smaller span wins (same as the encoder), runs never cross a newline.
+export function runs(text: string, painted: Painted[]): { style: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }[] {
+  const cells: (string | undefined)[] = new Array(text.length).fill(undefined);
+  const spans = painted
+    .filter(p => typeof p.style === 'string' && p.style !== '')
+    .sort((a, b) => (b.end! - b.begin!) - (a.end! - a.begin!));
+  for (const p of spans)
+    for (let k = Math.max(p.begin!, 0); k <= Math.min(p.end!, text.length - 1); k++) cells[k] = p.style as string;
+  const out: ReturnType<typeof runs> = [];
+  let line = 0, col = 0, start = 0, run: string | undefined;
+  const flush = () => {
+    if (run !== undefined && col > start) out.push({ style: run, range: { start: { line, character: start }, end: { line, character: col } } });
+    run = undefined;
+  };
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') { flush(); line++; col = 0; start = 0; continue; }
+    if (cells[i] !== run) { flush(); run = cells[i]; start = col; }
+    col++;
+  }
+  flush();
+  return out;
 }

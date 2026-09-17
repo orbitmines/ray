@@ -509,7 +509,7 @@ export namespace Ray {
       let previous: string | undefined;
       for (let pass = 0; pass < Interpreter.PASSES; pass++) {
         this.forwards = []; this.painting = []; this.definitions = []; this.touched = new Map(); this.claims.clear(); this.sites = new Map(); this.pending_rewrites = [];
-        this.marking = Interpreter.marks(); this.referenced = new Map();
+        this.marking = Interpreter.marks(); this.referenced = new Map(); this.sited = new Map();
         srcs.forEach(src => this.diagnostics.forget(src));
         for (const src of srcs) { this._interpret(src); yield; }
         this.prune(inherited);
@@ -521,15 +521,21 @@ export namespace Ray {
       this.paints = this.painting;
       this.marks = this.marking;
       this.stale = new Map();
+      for (const src of srcs) this.derived.set(src.location, src.value);
     }
     feedback(src: Text.Source) {
       this.diagnostics.forget(src);
-      this.paints = this.painting = this.paints.filter(paint => paint.source.location !== src.location || (paint.by !== undefined && paint.by !== src.location));
+      const keep = (paint: Text.Node) => paint.by !== undefined ? paint.by !== src.location : paint.source.location !== src.location;
+      this.paints = this.painting = this.paints.filter(keep);
       this.marking = this.marks;
       this.stale.set(src.location, ++this.epoch);
-      this.referenced = new Map([...this.referenced].filter(([key]) => !key.startsWith(`${src.location}:`)));
+      this.referenced = new Map([...this.referenced].filter(([, painted]) => keep(painted)));
+      this.sited = new Map([...this.sited].filter(([, by]) => by !== src.location));
       for (const source of [...this.claims.keys()]) if (source.location === src.location) this.claims.delete(source);
+      this.pending_rewrites = this.pending_rewrites.filter(([rule]) => rule.position?.source.location !== src.location);
+      this.forwards = this.forwards.filter(rule => rule.position?.source.location !== src.location);
       this._interpret(src);
+      this.analyze(src.location);
     }
 
     touched: Map<Node, Set<Key>> = new Map();
@@ -568,10 +574,8 @@ export namespace Ray {
     }
     settle(value: Node | undefined, report: boolean): Node | undefined {
       if (value?.ref && value.marks?.length) {
-        const scope = this.scope_of(value);
-        if (scope) this.mark_reference(scope, value.ref.key, value.marks);
         const bound = this.resolved(value);
-        if (bound && !bound.ref) this.mark_value(bound, value.marks);
+        if (bound && !bound.ref) this.mark_value(bound, value.marks, [value]);
         const at = value.position;
         if (at && !this.in_body(at)) this.paint_reference(this.reference(value.ref.scope, value.ref.key, at), true, true);
       }
@@ -1058,15 +1062,15 @@ export namespace Ray {
       return node?.lazy ? node.value : node;
     }
     deref(node: Node | undefined, report: boolean = true): Node | undefined {
-      const marks: Node[] = [];
+      const marks: Node[] = [], sources: Node[] = [];
       for (let depth = 0; node && (node.ref || node.lazy) && depth < 64; depth++) {
-        if (node.marks) marks.push(...node.marks);
+        if (node.marks) { marks.push(...node.marks); sources.push(node); }
         if (node.lazy) { node = this.force(node); continue; }
         const bound = this.bound(node);
         if (bound === undefined) { if (report) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined; }
         node = bound;
       }
-      if (node && marks.length) this.mark_value(node, marks);
+      if (node && marks.length) this.mark_value(node, marks, sources);
       return node;
     }
     force(node: Node): Node | undefined {
@@ -1099,6 +1103,7 @@ export namespace Ray {
       if (target?.style !== undefined) return this.style(`${target.style}.${name}`);
       const slot = new Node(this.diagnostics, key.position);
       slot.ref = { scope: target ?? new Node(this.diagnostics), key: name, own: true };
+      if (forced?.literal && forced.position && target) this.paint_reference(Object.assign(new Node(this.diagnostics, forced.position), { ref: slot.ref }));
       return slot;
     }
     reference_of(node: Node): Node {
@@ -1149,13 +1154,34 @@ export namespace Ray {
       if (applied.length < arity) { const partial: Node = Object.assign(Object.create(Node.prototype), target); partial.applied = applied; return partial; }
       if (target.fn) return target.fn({ interpreter: this, frame, self: value, method: target, args: applied, at });
       if (!target.params) { this.error(`\`${this.text(value)}\` cannot be called.`, at); return undefined; }
-      const local = this.frame(frame, `call@${at.source.location}:${at.begin}`, target.closure ?? this.GLOBAL);
+      const local = this.frame(frame, `call@${this.anchor(at)}`, target.closure ?? this.GLOBAL);
       local.given = new Set(target.params);
       target.params.forEach((param, k) => this.bind(local, param, applied[k]));
       return target.body ? this.unalias(this.array(this.cursor_of(target.body), local), local) : undefined;
     }
 
     ids = 0;
+    private derived = new Map<string, string>();
+    private edits = new WeakMap<Text.Source, { prefix: number; suffix: number; delta: number } | null>();
+    anchor(at: Text.Node): string {
+      const source = at.source, base = this.derived.get(source.location);
+      let edit = this.edits.get(source);
+      if (edit === undefined) {
+        const now = source.value;
+        edit = null;
+        if (base !== undefined && base !== now) {
+          let prefix = 0;
+          while (prefix < base.length && prefix < now.length && base[prefix] === now[prefix]) prefix++;
+          let suffix = 0;
+          while (suffix < base.length - prefix && suffix < now.length - prefix && base[base.length - 1 - suffix] === now[now.length - 1 - suffix]) suffix++;
+          edit = { prefix, suffix, delta: now.length - base.length };
+        }
+        this.edits.set(source, edit);
+      }
+      if (!edit || at.begin < edit.prefix) return `${source.location}:${at.begin}`;
+      if (at.begin >= source.value.length - edit.suffix) return `${source.location}:${at.begin - edit.delta}`;
+      return `${source.location}:~${at.begin}`;
+    }
     frame(owner: Node, local: string, parent: Node): Node {
       const children = (owner.children ??= new Map());
       let frame = children.get(local);
@@ -1200,10 +1226,11 @@ export namespace Ray {
       });
       match.args.forEach((span, k) => this.paint(span, () => current().param_styles?.[k] ?? [], styling, rule.key));
       const args = match.args.map(span => { const node = this.lazy(span, frame, false); this.force(node); return node; });
+      if (!impl.forward) this.receives(match.receiver, impl.closure ?? this.GLOBAL);
       if (this.probing) { captures.forEach(node => this.force(node)); return new Node(this.diagnostics, at); }
       if (impl.forward) return this.pass(found, captures, args, cursor, frame, at);
 
-      const local = this.frame(frame, `${rule.key}@${at.source.location}:${at.begin}`, impl.closure ?? this.GLOBAL);
+      const local = this.frame(frame, `${rule.key}@${this.anchor(at)}`, impl.closure ?? this.GLOBAL);
       local.given = new Set([...captures.keys(), ...(impl.params ?? []), ...(match.receiver !== undefined ? ['this'] : [])]);
       if (match.receiver !== undefined) this.bind(local, 'this', match.receiver);
       for (const [name, node] of captures) this.bind(local, name, node);
@@ -1278,7 +1305,7 @@ export namespace Ray {
       const impl = new Node(this.diagnostics, pattern);
       impl.forward = pattern; impl.closure = frame;
       if (!pieces.some(x => x.kind === 'capture')) impl.params = ['argument'];
-      const painting = this.probing > 0 || !this.in_body(pattern);
+      const painting = this.probing > 0 || (!this.in_body(pattern) && this.first_site(pattern));
       if (painting) this.paint_definition(this.chunks(pattern), [], this.definition_scope(frame, rule, impl), key, { pieces });
       const head = pieces[0]?.kind === 'literal' ? pieces[0].text.trim() : '';
       const at = head ? pattern.source.value.indexOf(head, pattern.begin) : -1;
@@ -1370,7 +1397,7 @@ export namespace Ray {
       const impl = new Node(this.diagnostics, body ?? lhs);
       impl.body = body; impl.closure = frame; impl.params = params; impl.param_styles = param_styles; impl.modifiers = modifiers; impl.decorators = decorators;
       if (!this.probing) { this.bind(frame, rule, impl); this.definitions.push(key); }
-      if (this.probing || !this.in_body(lhs)) {
+      if (this.probing || (!this.in_body(lhs) && this.first_site(lhs))) {
         const scope = this.definition_scope(frame, rule, impl);
         this.paint_definition(pattern, decorators, scope, key, { arrow, params: param_names, styles: param_styles?.flat(), pieces });
         if (body) this.paint_body(body, scope);
@@ -1590,9 +1617,18 @@ export namespace Ray {
       }
       return shape;
     }
+    private synthetic = new WeakSet<Node>();
+    private sited = new Map<string, string | undefined>();
+    first_site(at: Text.Node): boolean {
+      const key = `${at.source.location}:${at.begin}`;
+      if (this.sited.has(key)) return false;
+      this.sited.set(key, this.statements[0]?.source.location);
+      return true;
+    }
     definition_scope(frame: Node, rule: Node, impl: Node): Node {
       const scope = new Node(this.diagnostics);
       scope.parent = frame;
+      this.synthetic.add(scope);
       const named = rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece] : []);
       scope.given = new Set([...(impl.params ?? []), ...named.map(piece => piece.name), ...(frame === this.GLOBAL ? [] : ['this'])]);
       for (const name of scope.given) scope.set(name, this.placeholder());
@@ -1729,7 +1765,7 @@ export namespace Ray {
     owns: (src: Text.Source) => boolean = () => true;
     painting: Text.Node[] = this.paints;
     marks: Marks = Interpreter.marks();
-    static marks(): Marks { return { names: new Map(), references: new Map(), values: new WeakMap(), given: new Map(), given_references: new Map() }; }
+    static marks(): Marks { return { names: new Map(), values: new WeakMap(), given: new Map(), stands: new Map(), instances: new Map() }; }
     marking = this.marks;
     decorate(target: Node, style: Node): Node {
       const reference = this.reference_of(target);
@@ -1749,18 +1785,39 @@ export namespace Ray {
     live<T>(entry: Mark<T> | undefined): T | undefined {
       return entry && (entry.by === undefined || entry.epoch >= (this.stale.get(entry.by) ?? 0)) ? entry.mark : undefined;
     }
-    mark_value(value: Node, styles: Node[]) {
+    mark_value(value: Node, styles: Node[], sources: Node[] = []) {
       let marks = this.marking.values.get(value);
       if (!marks) this.marking.values.set(value, marks = new Map());
-      for (const style of styles) if (!this.live(marks.get(style.style!))) marks.set(style.style!, this.entry(style));
+      const except = sources.flatMap(source => source.ref ? [[this.scope_of(source) ?? source.ref.scope, source.ref.key] as [Node, string]] : []);
+      for (const style of styles) if (!this.live(marks.get(style.style!))) marks.set(style.style!, { ...this.entry(style), except });
     }
-    mark_name(scope: Node, key: string, styles: Node[], opts: { reference?: boolean } = {}) {
-      const table = opts.reference ? this.marking.references : this.marking.names;
-      let marks = table.get(scope);
-      if (!marks) table.set(scope, marks = new Map());
+    mark_name(scope: Node, key: string, styles: Node[]) {
+      let marks = this.marking.names.get(scope);
+      if (!marks) this.marking.names.set(scope, marks = new Map());
       marks.set(key, this.entry(styles[styles.length - 1]));
     }
-    mark_reference(scope: Node, key: string, styles: Node[]) { this.mark_name(scope, key, styles, { reference: true }); }
+    receives(receiver: Node | undefined, closure: Node) {
+      const reference = receiver?.ref;
+      if (!reference || closure === this.GLOBAL) return;
+      if (this.probing && this.synthetic.has(reference.scope) && !reference.own && this.scope_of(receiver!) === undefined) reference.scope.set(reference.key, this.placeholder());
+      this.mark_instance(receiver, closure);
+    }
+    mark_instance(receiver: Node | undefined, closure: Node) {
+      if (!receiver?.ref || closure === this.GLOBAL) return;
+      const scope = this.scope_of(receiver) ?? receiver.ref.scope;
+      let table = this.marking.instances.get(scope);
+      if (!table) this.marking.instances.set(scope, table = new Map());
+      let closures = table.get(receiver.ref.key);
+      if (!closures) table.set(receiver.ref.key, closures = new Map());
+      closures.set(closure, this.entry(closure));
+    }
+    stands_for(closure: Node, name: string): Node | undefined {
+      for (let scope: Node | undefined = closure; scope; scope = scope.parent) {
+        const style = this.live(this.marks.stands.get(scope)?.get(name));
+        if (style) return style();
+      }
+      return undefined;
+    }
     mark_given(body: Text.Node, given: Set<string>, frame: Node) {
       const inner = this.inner(body, frame) ?? body;
       const text = inner.source.value;
@@ -1770,7 +1827,7 @@ export namespace Ray {
         const chunks = end > j ? this.tokens(inner.span(j, end - 1), frame) : [];
         if (chunks.length >= 2 && given.has(chunks[0].string) && this.decorates(chunks[1], frame)) {
           const decorator = chunks[1];
-          const table = chunks.length === 2 ? this.marking.given_references : this.marking.given;
+          const table = chunks.length === 2 ? this.marking.stands : this.marking.given;
           let marks = table.get(frame);
           if (!marks) table.set(frame, marks = new Map());
           marks.set(chunks[0].string, this.entry(() => this.safely(() => this.style_of(decorator, frame))));
@@ -1784,24 +1841,30 @@ export namespace Ray {
       for (let current: Node | undefined = scope; current; current = current.parent) if (current.own(key) !== undefined) return current;
     }
     mark_of(node: Node, definition: boolean = false): Node | undefined {
-      const scope = this.scope_of(node);
-      if (!scope) return undefined;
+      const scope = this.scope_of(node) ?? node.ref!.scope;
       const key = node.ref!.key;
-      if (!definition) { const reference = this.live(this.marks.references.get(scope)?.get(key)); if (reference) return reference; }
       const mark = this.live(this.marks.names.get(scope)?.get(key));
       if (mark) return mark;
       if (scope.given?.has(key)) {
         for (let closure = scope.parent; closure; closure = closure.parent) {
-          const reference = definition ? undefined : this.live(this.marks.given_references.get(closure)?.get(key));
-          if (reference) return reference();
           const given = this.live(this.marks.given.get(closure)?.get(key));
           if (given) return given();
         }
         return undefined;
       }
-      if (definition) return undefined;
-      const value = this.resolved(node);
-      for (const entry of (value && this.marks.values.get(value))?.values() ?? []) { const mark = this.live(entry); if (mark) return mark; }
+      if (!definition) {
+        const value = this.resolved(node);
+        for (const entry of (value && this.marks.values.get(value))?.values() ?? []) {
+          if (entry.except?.some(([owner, name]) => owner === scope && name === key)) continue;
+          const mark = this.live(entry);
+          if (mark) return mark;
+        }
+      }
+      for (const entry of this.marks.instances.get(scope)?.get(key)?.values() ?? []) {
+        const closure = this.live(entry);
+        const style = closure && this.stands_for(closure, 'this');
+        if (style) return style;
+      }
       return undefined;
     }
     paint_head(rule: Node, match: Match, cursor: Text.Node, frame: Node) {
@@ -1891,11 +1954,8 @@ export namespace Ray {
         const chunks = end > j ? this.tokens(inner.span(j, end - 1), frame) : [];
         if (chunks.length >= 2 && /^[\p{L}_]/u.test(chunks[0].string) && this.decorates(chunks[1], frame)) {
           const name = chunks[0].string;
-          if (!scope.own(name)) scope.set(name, this.placeholder());
-          if (!scope.given?.has(name)) {
-            const style = [this.lazy_style(chunks[1], frame)];
-            if (chunks.length === 2) this.mark_reference(scope, name, style); else this.mark_name(scope, name, style);
-          }
+          if (chunks.length > 2 && !scope.own(name)) scope.set(name, this.placeholder());
+          if (chunks.length > 2 && !scope.given?.has(name)) this.mark_name(scope, name, [this.lazy_style(chunks[1], frame)]);
           declared.push(chunks[0]);
         }
         j = end + 1;
@@ -2006,7 +2066,7 @@ export namespace Ray {
       theme.theme = new Map(); theme.key = this.text(name);
       const previous = this.building;
       this.building = theme;
-      this.inline(block, this.frame(this.GLOBAL, `theme@${at.source.location}:${at.begin}`, this.GLOBAL));
+      this.inline(block, this.frame(this.GLOBAL, `theme@${this.anchor(at)}`, this.GLOBAL));
       this.building = previous;
       return theme;
     }
@@ -2027,11 +2087,13 @@ export namespace Ray {
     }
 
     pending_rewrites: [Node, Node][] = [];
-    analyze() {
-      for (const [rule, impl] of this.pending_rewrites)
+    analyze(location?: string) {
+      const here = (rule: Node) => location === undefined || rule.position?.source.location === location;
+      for (const [rule, impl] of this.pending_rewrites) if (here(rule))
         for (const missing of this.missing(rule, impl)) this.error(`Unresolved \`${missing.string}\`.`, missing);
       const scopes = [this.GLOBAL, ...this.frames.values()];
       for (const forward of this.forwards) {
+        if (!here(forward)) continue;
         const head = this.head(forward);
         const implemented = head !== undefined && scopes.some(scope =>
           scope.rules.some(rule => rule !== forward && !scope.methods!.get(rule)!.forward && this.head(rule) === head) ||
@@ -2041,13 +2103,13 @@ export namespace Ray {
     }
   }
 
-  export type Mark<T> = { mark: T; by?: string; epoch: number };
+  export type Mark<T> = { mark: T; by?: string; epoch: number; except?: [Node, string][] };
   export type Marks = {
     names: Map<Node, Map<string, Mark<Node>>>;
-    references: Map<Node, Map<string, Mark<Node>>>;
     values: WeakMap<Node, Map<string, Mark<Node>>>;
     given: Map<Node, Map<string, Mark<() => Node | undefined>>>;
-    given_references: Map<Node, Map<string, Mark<() => Node | undefined>>>;
+    stands: Map<Node, Map<string, Mark<() => Node | undefined>>>;
+    instances: Map<Node, Map<string, Map<Node, Mark<Node>>>>;
   };
 
   export type Shape = { text: Text.Node[]; open: Text.Node[]; content: Text.Node[]; close: Text.Node[]; arrow: Text.Node[]; frame: Node };
@@ -2328,7 +2390,7 @@ export class Diagnostics {
 
   forget(src: Text.Source | Iterable<Text.Source>) {
     if (Symbol.iterator in src) { for (const element of src) { this.forget(element) }; return; }
-    this.items.delete(src)
+    for (const key of [...this.items.keys()]) if (key === src || key?.location === src.location) this.items.delete(key);
   }
 
   print() {

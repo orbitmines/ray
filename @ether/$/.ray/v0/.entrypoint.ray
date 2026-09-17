@@ -97,8 +97,8 @@ unordered base{ }class{ }{block} ^keyword => (
     this   ^keyword := external .
     static ^keyword := external get global name
     inline block
-    
-    this
+
+    this ^variable
   )
   inline block
 

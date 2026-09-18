@@ -368,7 +368,7 @@ export namespace Ray {
     | { kind: 'literal'; text: string; styles?: Text.Node[] }
     | { kind: 'space' }
     | { kind: 'newline'; group?: Text.Node }
-    | { kind: 'capture'; name: string; raw: boolean; modifiers: string[]; styles: Text.Node[]; type?: string; group: Text.Node }
+    | { kind: 'capture'; name: string; raw: boolean; optional?: boolean; modifiers: string[]; styles: Text.Node[]; type?: string; group: Text.Node }
     | { kind: 'operator'; name: string; filter?: string; group: Text.Node }
 
   export class Node {
@@ -384,7 +384,7 @@ export namespace Ray {
     params?: string[]
     body?: Text.Node
     closure?: Node
-    fallback?: Node
+    inlined?: Node[]
     modifiers?: Node[]
     styles?: Node[]
     decorators?: Text.Node[]
@@ -397,6 +397,7 @@ export namespace Ray {
     value?: Node
     literal?: boolean
     unknown?: boolean
+    none?: boolean
     marks?: Node[]
 
     style?: string
@@ -414,13 +415,39 @@ export namespace Ray {
     get rules(): Node[] { return this.methods ? [...this.methods.keys()].filter((x): x is Node => x instanceof Node) : []; }
 
     own(key: string): Node | undefined { return this.methods?.get(key); }
-    member(key: string): Node | undefined { return this.members?.get(key) ?? this.methods?.get(key); }
+    member(key: string): Node | undefined {
+      const own = this.members?.get(key) ?? this.methods?.get(key);
+      if (own !== undefined || this.inlined === undefined) return own;
+      const seen = new Set<Node>();
+      for (const scope of this.composed(seen)) {
+        const found = scope.members?.get(key) ?? scope.methods?.get(key);
+        if (found !== undefined) return found;
+      }
+    }
+    *composed(seen: Set<Node>): Generator<Node> {
+      if (seen.has(this)) return;
+      seen.add(this);
+      yield this;
+      for (const from of this.inlined ?? []) yield* from.composed(seen);
+    }
     lookup(key: string): Node | undefined {
-      for (let scope: Node | undefined = this; scope; scope = scope.parent) { const found = scope.own(key); if (found !== undefined) return found; }
-      const seen = new Set<Node>([this]);
-      for (let from: Node | undefined = this.fallback; from && !seen.has(from); from = from.fallback) {
-        seen.add(from);
-        for (let scope: Node | undefined = from; scope; scope = scope.parent) { const found = scope.own(key); if (found !== undefined) return found; }
+      let links = false;
+      for (let scope: Node | undefined = this; scope; scope = scope.parent) {
+        const found = scope.own(key) ?? scope.members?.get(key);
+        if (found !== undefined) return found;
+        if (scope.inlined !== undefined) links = true;
+      }
+      if (!links) return undefined;
+      const seen = new Set<Node>();
+      for (const scope of this.reading(seen)) { const found = scope.own(key); if (found !== undefined) return found; }
+    }
+    *reading(seen: Set<Node>): Generator<Node> {
+      if (seen.has(this)) return;
+      seen.add(this);
+      for (let scope: Node | undefined = this; scope; scope = scope.parent) {
+        if (scope !== this) { if (seen.has(scope)) break; seen.add(scope); }
+        yield scope;
+        for (const from of scope.inlined ?? []) yield* from.reading(seen);
       }
     }
     set(key: Key, value: Node): Node { (this.methods ??= new Map()).set(key, value); return value; }
@@ -446,7 +473,7 @@ export namespace Ray {
       const all = (nodes?: Node[]) => nodes?.map(x => x.clone(seen));
       copy.parent = this.parent?.clone(seen);
       copy.closure = this.closure?.clone(seen);
-      copy.fallback = this.fallback?.clone(seen);
+      copy.inlined = this.inlined?.map(x => x.clone(seen));
       copy.value = this.value?.clone(seen);
       copy.applied = all(this.applied);
       copy.modifiers = all(this.modifiers);
@@ -483,6 +510,9 @@ export namespace Ray {
     building?: Node
 
     EXTERNAL: Node
+    NONE: Node
+    RETURN: Node
+    RECUR: Node
     FORWARD: Node
 
     frames: Map<string, Node> = new Map();
@@ -497,6 +527,9 @@ export namespace Ray {
       GLOBAL.key = 'GLOBAL';
       this.EXTERNAL = GLOBAL.method('external', ({ interpreter, args: [name], at, frame }) => interpreter.external(name.position!, at, frame), 1);
       this.EXTERNAL.pure = true;
+      this.NONE = Object.assign(new Node(this.diagnostics), { none: true, key: 'None' });
+      this.RETURN = Object.assign(new Node(this.diagnostics, Text.Node.string('return\\')), { literal: true, key: 'return\\' });
+      this.RECUR = Object.assign(new Node(this.diagnostics, Text.Node.string('recur\\')), { literal: true, key: 'recur\\' });
       this.EXTERNAL.reads = 'token';
       this.FORWARD = GLOBAL.method('forward', ({ interpreter, args: [pattern], frame }) => interpreter.forward(pattern.position!, frame), 1);
       this.FORWARD.reads = 'rest';
@@ -511,6 +544,9 @@ export namespace Ray {
       this.BASE = this.copy_of.BASE?.clone(seen);
       this.theme = this.copy_of.theme?.clone(seen);
       this.EXTERNAL = this.copy_of.EXTERNAL.clone(seen);
+      this.NONE = this.copy_of.NONE.clone(seen);
+      this.RETURN = this.copy_of.RETURN.clone(seen);
+      this.RECUR = this.copy_of.RECUR.clone(seen);
       this.FORWARD = this.copy_of.FORWARD.clone(seen);
       this.frames = new Map([...this.copy_of.frames].map(([key, frame]) => [key, frame.clone(seen)]));
       this.ids = this.copy_of.ids;
@@ -536,7 +572,7 @@ export namespace Ray {
       let previous: string | undefined;
       for (let pass = 0; pass < Interpreter.PASSES; pass++) {
         this.forwards = []; this.deferred = []; this.ran = new Set(); this.painting = []; this.definitions = []; this.touched = new Map(); this.claims.clear(); this.sites = new Map(); this.pending_rewrites = [];
-        this.marking = this.copy_of ? this.inherited() : Interpreter.marks(); this.referenced = new Map(); this.sited = new Map();
+        this.marking = this.copy_of ? this.inherited() : Interpreter.marks(); this.referenced = new Map(); this.sited = new Map(); this.verbatim = new Map();
         srcs.forEach(src => this.diagnostics.forget(src));
         for (const src of srcs) { this._interpret(src); yield; }
         this.prune(inherited);
@@ -603,11 +639,16 @@ export namespace Ray {
     }
 
     seeking?: string;
-    jump(label: Node, condition: Node): Node | undefined {
+    jump(label: Node, condition: Node, frame: Node): Node | undefined {
       if (this.seeking !== undefined) return undefined;
       const met = this.diagnostics.muted(() => this.safely(() => this.deref(condition, false)));
-      if (met === undefined) return undefined;
-      throw new Jump(this.text(label));
+      if (met === undefined || met.none) return undefined;
+      const name = this.text(label);
+      const found = frame.lookup(name);
+      const target = found && (this.diagnostics.muted(() => this.safely(() => this.deref(found, false))) ?? found);
+      if (target === this.RETURN || name === this.text(this.RETURN)) throw new Jump(name, undefined, 'end');
+      if (target === this.RECUR || name === this.text(this.RECUR)) throw new Jump(name, undefined, 'begin');
+      throw new Jump(name);
     }
     labelled(name: Node): Node | undefined {
       const key = this.text(name);
@@ -625,6 +666,8 @@ export namespace Ray {
         try { value = this.expr(cursor, frame); }
         catch (jump) {
           if (!(jump instanceof Jump) || this.seeking !== undefined) throw jump;
+          if (jump.kind === 'end') return last;
+          if (jump.kind === 'begin') { cursor.cursor = begin; continue; }
           this.seeking = jump.label;
           this.diagnostics.muted(() => {
             cursor.cursor = begin;
@@ -749,8 +792,8 @@ export namespace Ray {
             started = true;
             continue;
           }
-          if (name) { value = this.reference(frame, name, cursor.span(cursor.cursor, cursor.cursor + name.length - 1)); this.paint_reference(value); cursor.advance(name.length); started = true; continue; }
           const method = this.best(frame, cursor, frame, { spaced, operand, self: true });
+          if (name && !(method && frame.lookup(name) === undefined && method.match.end - method.match.begin >= name.length)) { value = this.reference(frame, name, cursor.span(cursor.cursor, cursor.cursor + name.length - 1)); this.paint_reference(value); cursor.advance(name.length); started = true; continue; }
           if (method) { value = this.fire(method, cursor, frame); started = true; continue; }
           const leading = this.best(undefined, cursor, frame, { spaced, operand, leading: true });
           if (leading) { value = this.fire(leading, cursor, frame); started = true; continue; }
@@ -814,6 +857,7 @@ export namespace Ray {
     }
 
     error(message: string, node?: Text.Node) {
+      if (process.env.RAY_DBG && message.includes('`holds`')) console.error('WHO ' + new Error('x').stack?.split('\n').slice(2, 5).map(l => l.trim().split(' ')[1]).join(' < '));
       const statement = this.statements[0];
       if (statement && node && node.source.location !== statement.source.location) return this.diagnostics.report({ level: 'error', message, node: statement, at: node });
       this.diagnostics.report({ level: 'error', message, node });
@@ -857,10 +901,16 @@ export namespace Ray {
       if (receiver === undefined) return this.chain(frame).operand;
       const own = this.resolved(receiver);
       const chain = this.chain(frame).receiver;
-      if (!own?.methods || own.lazy || (own === frame && !opts.self)) return chain;
-      return [...this.ruleset(own).receiver, ...chain];
+      if (!own || own.lazy) return chain;
+      const itself = own === frame && !opts.self;
+      if (own.inlined === undefined) return own.methods && !itself ? [...this.ruleset(own).receiver, ...chain] : chain;
+      const rules: [Node, Node][] = [];
+      const seen = new Set<Node>();
+      for (const from of own.composed(seen)) if (from.methods && !(itself && from === own)) rules.push(...this.ruleset(from).receiver);
+      return rules.length > 0 ? [...rules, ...chain] : chain;
     }
 
+    analyzing = false;
     private rewriting = new Set<Node>();
     private readiness = new WeakMap<Node, { version: number; missing: Text.Node[] }>();
     missing(rule: Node, impl: Node, scope?: Node): Text.Node[] {
@@ -906,7 +956,7 @@ export namespace Ray {
       const set = opts.leading
         ? this.chain(frame).receiver.filter(([rule]) => rule.pattern![0]?.kind === 'capture')
         : opts.self
-          ? this.candidates(receiver, frame, { self: true }).filter(([rule]) => rule.pattern![0]?.kind !== 'capture')
+          ? this.candidates(receiver, frame, { self: true }).filter(([rule]) => { const first = rule.pattern![0]; return first?.kind !== 'capture' || first.raw; })
           : this.candidates(receiver, frame);
       for (const [rule, impl] of set) {
         const pieces = rule.pattern!;
@@ -950,19 +1000,49 @@ export namespace Ray {
       const captures = new Map<string, Text.Node>(), operators = new Map<string, Text.Node>();
       const literals: [number, number, number][] = [];
       const juxtaposition = pieces[opts.leading ? 1 : 0]?.kind === 'space';
-      let spanned = false;
+      const optional = (p: number): number => {
+        if (pieces[p]?.kind !== 'literal') return -1;
+        let k = p + 1;
+        while (pieces[k]?.kind === 'space') k++;
+        const inner = pieces[k];
+        if (inner?.kind !== 'capture' || !inner.optional) return -1;
+        let close = k + 1;
+        while (pieces[close]?.kind === 'space') close++;
+        return pieces[close]?.kind === 'literal' ? close : k;
+      };
+      let spanned = false, skipped = false;
       for (let p = 0; p < pieces.length; p++) {
         const piece = pieces[p];
+        if (piece.kind !== 'space') skipped = false;
         const from = p === 0 || (p === 1 && opts.leading) ? i : this.skip(cursor, i);
         if (from > i && piece.kind !== 'space' && pieces[p - 1]?.kind !== 'space') spanned = true;
         switch (piece.kind) {
-          case 'literal': { const j = this.literal(cursor, from, piece.text); if (j < 0) return; literals.push([p, from, j - 1]); i = j; break; }
-          case 'space': { const j = this.skip(cursor, i); if (j === i && i < limit && text[i] !== '\n') return; i = j; break; }
+          case 'literal': {
+            const j = this.literal(cursor, from, piece.text);
+            if (j < 0) {
+              const close = optional(p);
+              if (close < 0) return;
+              for (let k = p + 1; k <= close; k++) { const inner = pieces[k]; if (inner.kind === 'capture') captures.set(inner.name, cursor.span(i, i - 1)); }
+              p = close;
+              skipped = true;
+              break;
+            }
+            literals.push([p, from, j - 1]); i = j; break;
+          }
+          case 'space': { const j = this.skip(cursor, i); if (j === i && i < limit && text[i] !== '\n' && !skipped) return; i = j; break; }
           case 'newline': { if (text[from] !== '\n') return; i = from + 1; break; }
           case 'operator': { const j = this.operator_end(cursor, from, frame); if (j <= from) return; operators.set(piece.name, cursor.span(from, j - 1)); i = j; break; }
           case 'capture': {
             if (p === 0 && opts.leading && opts.receiver !== undefined) break;
-            const next = pieces.slice(p + 1).find(x => x.kind !== 'capture');
+            let next_at = -1, upcoming_at = -1, literal_at = -1;
+            for (let k = p + 1; k < pieces.length; k++) {
+              const kind = pieces[k].kind;
+              if (next_at < 0 && kind !== 'capture') next_at = k;
+              if (upcoming_at < 0 && kind !== 'space') upcoming_at = k;
+              if (literal_at < 0 && kind === 'literal') literal_at = k;
+              if (next_at >= 0 && upcoming_at >= 0 && literal_at >= 0) break;
+            }
+            const next = next_at < 0 ? undefined : pieces[next_at];
             let end: number;
             if (p === 0 && opts.leading) {
               end = this.word_end(cursor, from, frame);
@@ -971,12 +1051,25 @@ export namespace Ray {
               i = end;
               break;
             }
-            if (next?.kind === 'literal') { end = this.until(cursor, from, next.text, frame, piece.raw); while (end > from && /[ \t]/.test(text[end - 1])) end--; }
+            const upcoming = upcoming_at < 0 ? undefined : pieces[upcoming_at];
+            const terminator = piece.optional && upcoming?.kind !== 'capture' && literal_at >= 0 ? pieces[literal_at] : undefined;
+            if (upcoming?.kind === 'capture') end = piece.raw ? this.word_end(cursor, from, frame) : this.claim(cursor, from, frame);
+            else if (terminator?.kind === 'literal' && optional(literal_at) >= 0) {
+              end = this.until(cursor, from, terminator.text, frame, piece.raw);
+              if (end < 0) end = this.line_end(cursor, from, frame, piece.raw);
+              while (end > from && /[ \t]/.test(text[end - 1])) end--;
+            }
+            else if (next?.kind === 'literal') {
+              end = this.until(cursor, from, next.text, frame, piece.raw);
+              if (end < 0 && optional(next_at) >= 0) end = this.line_end(cursor, from, frame, piece.raw);
+              while (end > from && /[ \t]/.test(text[end - 1])) end--;
+            }
             else if (next?.kind === 'newline') end = this.line_end(cursor, from, frame, piece.raw);
             else if (next?.kind === 'space') end = this.word_end(cursor, from, frame);
             else if (next?.kind === 'operator') end = this.operand_end(cursor, from, frame);
             else if (next === undefined && p === pieces.length - 1) end = juxtaposition || opts.tight || opts.params > 0 || pieces[p - 1]?.kind === 'space' ? this.operand_end(cursor, from, frame, piece.raw) : this.line_end(cursor, from, frame, piece.raw);
             else return;
+            if (end === from && piece.optional) { captures.set(piece.name, cursor.span(from, from - 1)); skipped = true; break; }
             if (end < from || (end === from && next?.kind !== 'literal')) return;
             if (!piece.raw && next === undefined && end === from + 1 && !/[\p{L}\p{N}_]/u.test(text[from])) return;
             captures.set(piece.name, cursor.span(from, end - 1));
@@ -1090,6 +1183,24 @@ export namespace Ray {
       while (j < limit && !/\s/.test(text[j]) && (j === start || !edges.has(text[j]))) j++;
       return j;
     }
+    raw_end(cursor: Text.Node, j: number, frame: Node): number {
+      const text = cursor.source.value, limit = cursor.limit, start = j;
+      while (j < limit && !/\s/.test(text[j]) && (j === start || !this.starts_rule(cursor, j, frame))) j++;
+      return j;
+    }
+    starts_rule(cursor: Text.Node, j: number, frame: Node): boolean {
+      const chain = this.chain(frame);
+      for (const [rule, impl] of [...chain.receiver, ...chain.operand]) {
+        const first = rule.pattern![0];
+        if (impl.forward || first?.kind !== 'literal') continue;
+        if (this.literal(cursor, j, first.text) > j) return true;
+      }
+      for (const [rule] of this.brackets(frame)) {
+        const last = rule.pattern![rule.pattern!.length - 1];
+        if (last?.kind === 'literal' && this.literal(cursor, j, last.text) > j) return true;
+      }
+      return false;
+    }
     operator_end(cursor: Text.Node, j: number, frame: Node): number {
       let end = j;
       for (const [rule, impl] of this.chain(frame).receiver) {
@@ -1108,7 +1219,7 @@ export namespace Ray {
     }
     operand_end(cursor: Text.Node, j: number, frame: Node, raw: boolean = false): number {
       const text = cursor.source.value, limit = cursor.limit;
-      if (raw) return this.token_end(cursor, j, frame);
+      if (raw) return this.raw_end(cursor, j, frame);
       while (j < limit && !/\s/.test(text[j])) {
         const claimed = this.claim(cursor, j, frame);
         j = claimed > j ? claimed : this.token_end(cursor, j, frame);
@@ -1171,7 +1282,7 @@ export namespace Ray {
         if (node.lazy) { node = this.force(node); continue; }
         const bound = this.bound(node);
         if (bound === undefined) {
-          if (report && !node.ref!.scope.unknown) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined;
+          if (report && !node.ref!.scope.unknown && !(node.ref!.member && (this.probing || this.analyzing))) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined;
         }
         node = bound;
       }
@@ -1241,12 +1352,15 @@ export namespace Ray {
       return slot;
     }
     method_of(target: Node, name: string): [Node, Node] | undefined {
-      for (const rule of target.rules) {
-        const pieces = rule.pattern!;
-        if (pieces.length !== 1 || pieces[0].kind !== 'literal' || pieces[0].text.trim() !== name) continue;
-        const impl = target.methods!.get(rule)!;
-        if (impl.forward || impl.params?.length) continue;
-        return [rule, impl];
+      const seen = new Set<Node>();
+      for (const from of target.composed(seen)) {
+        for (const rule of from.rules) {
+          const pieces = rule.pattern!;
+          if (pieces.length !== 1 || pieces[0].kind !== 'literal' || pieces[0].text.trim() !== name) continue;
+          const impl = from.methods!.get(rule)!;
+          if (impl.forward || impl.params?.length) continue;
+          return [rule, impl];
+        }
       }
     }
     trivial(receiver: Node, at: Text.Node): Match {
@@ -1275,6 +1389,7 @@ export namespace Ray {
         let scope = node.ref.scope;
         if (!node.ref.own) for (let s: Node | undefined = scope; s; s = s.parent) if (s.own(node.ref.key) !== undefined) { scope = s; break; }
         if (result && !result.unknown) node.ref.member ? this.attach(scope, node.ref.key, result) : this.bind(scope, node.ref.key, result);
+
         for (let k = this.applying.length - 1; k >= 0; k--) {
           const applied = this.applying[k].receiver?.ref;
           if (applied?.key !== node.ref.key || applied.scope !== node.ref.scope) continue;
@@ -1385,6 +1500,15 @@ export namespace Ray {
       for (const [name, node] of captures) styling.set(name, node);
       const heads = match.literals.map(([, b, e]) => cursor.span(b, e));
       const owned = [...heads, ...rule.pattern!.flatMap(piece => piece.kind === 'capture' && piece.raw && match.captures.has(piece.name) ? [match.captures.get(piece.name)!] : [])];
+      for (const piece of rule.pattern!) {
+        if (piece.kind !== 'capture' || !piece.raw) continue;
+        const span = match.captures.get(piece.name);
+        if (!span || span.empty()) continue;
+        const location = span.source.location ?? '';
+        let spans = this.verbatim.get(location);
+        if (!spans) this.verbatim.set(location, spans = []);
+        spans.push([span.begin, span.end]);
+      }
       const current = () => (impl.closure ?? this.GLOBAL).methods?.get(rule) ?? impl;
       const styles = (p: number) => { const piece = rule.pattern![p]; return piece?.kind === 'capture' ? piece.styles : piece?.kind === 'literal' ? piece.styles ?? [] : []; };
       for (const span of owned) this.paint(span, () => current().decorators ?? [], styling, rule.key, { head: heads.includes(span) });
@@ -1398,7 +1522,7 @@ export namespace Ray {
       const args = match.args.map(span => { const node = this.lazy(span, frame, false); if (!this.probing) this.deferred.push(node); return node; });
       if (!impl.forward) this.receives(rule, impl, match.receiver);
       if (this.probing) {
-        captures.forEach(node => this.force(node));
+        captures.forEach(node => { if (!node.lazy?.raw) this.force(node); });
         args.forEach(node => this.force(node));
         return impl.forward && match.receiver !== undefined ? match.receiver : new Node(this.diagnostics, at);
       }
@@ -1412,7 +1536,7 @@ export namespace Ray {
       for (const piece of rule.pattern!) {
         if (piece.kind !== 'capture' || piece.modifiers.length === 0) continue;
         const span = match.captures.get(piece.name);
-        if (span !== undefined) this.fallback_of(local, frame);
+        if (span !== undefined) this.reads_from(local, frame);
         const node = span !== undefined ? this.lazy(span, local, piece.raw) : captures.get(piece.name);
         if (node === undefined) continue;
         for (const word of piece.modifiers) {
@@ -1711,11 +1835,14 @@ export namespace Ray {
         if (colon >= 0) { if (colon > 0) words.push(t.slice(0, colon)); typing.push(t.slice(colon + 1)); continue; }
         words.push(t);
       }
-      const name = words.length > 0 && !words[words.length - 1].startsWith('(') ? words.pop()! : '';
+      let name = words.length > 0 && !words[words.length - 1].startsWith('(') ? words.pop()! : '';
       if (name === '' && words.length > 0) typing.unshift(words.pop()!);
       const raw = words.some(word => this.resolved(this.reference(frame, word, content))?.fn === Natives.literal.fn);
-      const type = typing.join(' ').trim() || undefined;
-      return { kind: 'capture', name: name || `#${index}`, raw, modifiers: words, styles, type, group: content };
+      let type = typing.join(' ').trim() || undefined;
+      let optional = false;
+      if (name.endsWith('?')) { optional = true; name = name.slice(0, -1); }
+      if (type?.endsWith('?')) { optional = true; type = type.slice(0, -1).trim() || undefined; }
+      return { kind: 'capture', name: name || `#${index}`, raw, optional, modifiers: words, styles, type, group: content };
     }
 
     decorates(token: Text.Node, frame: Node): boolean {
@@ -1887,7 +2014,19 @@ export namespace Ray {
       const rest = name === undefined ? undefined : token.span(token.begin + name.length, token.end);
       if (rest && rest.begin <= rest.end && /^[\s(]/.test(rest.string)) this.paint_words(rest, scope);
     }
+    raw_argument(span: Text.Node, scope: Node): boolean {
+      const text = span.source.value;
+      let j = span.begin - 1;
+      while (j >= 0 && (text[j] === ' ' || text[j] === '\t')) j--;
+      const end = j;
+      while (j >= 0 && /[\p{L}\p{N}_-]/u.test(text[j])) j--;
+      const word = text.slice(j + 1, end + 1);
+      return word.length > 0 && scope.lookup(word)?.reads !== undefined;
+    }
     paint_rule(word: string, span: Text.Node, scope: Node) {
+      if (this.raw_argument(span, scope)) return;
+      const spans = this.verbatim.get(span.source.location ?? '');
+      if (spans?.some(([begin, end]) => span.begin >= begin && span.end <= end)) return;
       for (const [rule, impl] of [...this.chain(scope).operand, ...this.chain(scope).receiver]) {
         if (impl.forward || this.head(rule) !== word) continue;
         const painted = span.span(span.begin, span.end);
@@ -1994,8 +2133,9 @@ export namespace Ray {
       const closure = impl.closure ?? this.GLOBAL;
       const reference = receiver?.ref;
       if (!reference) return;
-      if (this.probing && !reference.own && this.scope_of(receiver!) === undefined) {
-        if (!this.binders.has(this.binder_of(rule))) this.error(`Unresolved \`${reference.key}\`.`, receiver!.position);
+      if ((this.probing || this.analyzing) && !reference.own && this.scope_of(receiver!) === undefined) {
+        const named = rule.pattern![0];
+        if (!this.binders.has(this.binder_of(rule)) && !(named?.kind === 'capture' && named.raw)) this.error(`Unresolved \`${reference.key}\`.`, receiver!.position);
         else if (this.synthetic.has(reference.scope)) reference.scope.set(reference.key, this.placeholder());
       }
       if (closure !== this.GLOBAL) this.mark_instance(receiver, closure);
@@ -2093,6 +2233,7 @@ export namespace Ray {
       if (name !== undefined) this.paint_reference(this.reference(frame, name, token.span(token.begin, token.begin + name.length - 1)));
     }
     private referenced = new Map<string, Text.Node>();
+    private verbatim = new Map<string, [number, number][]>();
     paint_reference(reference: Node, lexical: boolean = false, definition: boolean = false) {
       const at = reference.position;
       if (!at || !this.owns(at.source)) return;
@@ -2272,26 +2413,24 @@ export namespace Ray {
     }
     private inlined(node: Node, frame: Node): Node | undefined {
       const target = this.unforced(node) ?? this.safely(() => this.peel(node));
+      if (target?.lazy?.span.empty()) return undefined;
       if (!target) { this.error(`Unresolved \`${this.text(node)}\`.`, node.position); return undefined; }
-      if (target.lazy && !target.lazy.raw) {
+      if (target.lazy) {
         target.lazy.consumed = true;
-        this.fallback_of(frame, target.lazy.frame);
+        this.reads_from(frame, target.lazy.frame);
         const inner = this.inner(target.lazy.span, target.lazy.frame);
         return this.safely(() => this.array(this.cursor_of(inner ?? target.lazy.span), frame, true));
       }
       if (target.theme) { this.theme = target; return target; }
       if (target.body) return this.safely(() => this.array(this.cursor_of(target.body), frame, true));
+      if (target.methods || target.members) this.reads_from(frame, target);
       return target;
     }
-    fallback_of(frame: Node, from: Node) {
+    reads_from(frame: Node, from: Node) {
       if (frame === from) return;
-      for (let scope: Node | undefined = frame; scope; scope = scope.parent) if (scope === from) return;
-      for (let scope: Node | undefined = from; scope; scope = scope.parent) if (scope === frame) return;
-      let last = frame;
-      const seen = new Set<Node>([frame]);
-      while (last.fallback !== undefined && !seen.has(last.fallback)) { last = last.fallback; seen.add(last); }
-      if (last === from || seen.has(from)) return;
-      last.fallback = from;
+      for (const scope of from.composed(new Set())) if (scope === frame) return;
+      const inlined = (frame.inlined ??= []);
+      if (!inlined.includes(from)) inlined.push(from);
     }
     inner(span: Text.Node, frame: Node): Text.Node | undefined {
       const probe = this.cursor_of(span);
@@ -2327,6 +2466,10 @@ export namespace Ray {
 
     pending_rewrites: [Node, Node][] = [];
     analyze(location?: string) {
+      this.analyzing = true;
+      try { return this.analyzed(location); } finally { this.analyzing = false; }
+    }
+    private analyzed(location?: string) {
       const here = (rule: Node) => location === undefined || rule.position?.source.location === location;
       for (const [rule, impl] of this.definitions_of()) {
         if (impl.forward || !impl.body || this.ran.has(rule.key!) || this.pending_rewrites.some(([other]) => other === rule)) continue;
@@ -2370,7 +2513,7 @@ export namespace Ray {
   export type Shape = { text: Text.Node[]; groups: Map<string, Group>; arrow: Text.Node[]; frame: Node };
 
   export class Jump extends Error {
-    constructor(public label: string) { super('jump'); }
+    constructor(public label: string, public value?: Node, public kind?: 'end' | 'begin') { super('jump'); }
   }
 
   export class Recursion extends Error {
@@ -2396,7 +2539,10 @@ export namespace Ray {
     'global': { arity: 0, fn: ({ interpreter }) => interpreter.GLOBAL },
     'get': { arity: 2, pure: true, fn: ({ interpreter, args: [node, key] }) => interpreter.get(node, key) },
     'assign': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at) },
-    'goto': { arity: 2, fn: ({ interpreter, args: [label, condition] }) => interpreter.jump(label, condition) },
+    'goto': { arity: 2, fn: ({ interpreter, frame, args: [label, condition] }) => interpreter.jump(label, condition, frame) },
+    'none': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.NONE },
+    'return\\': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.RETURN },
+    'recur\\': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.RECUR },
     'label': { arity: 1, pure: true, fn: ({ interpreter, args: [name] }) => interpreter.labelled(name) },
     'base': { arity: 1, fn: ({ interpreter, args: [node] }) => { const target = interpreter.deref(node); if (target) interpreter.BASE = target; return target; } },
     'inline': { arity: 1, fn: ({ interpreter, frame, args: [node] }) => interpreter.inline(node, frame) },

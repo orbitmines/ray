@@ -1,0 +1,19 @@
+boolean := enum false (holds: None) | true (holds: this) {
+  nand (b) => (
+    goto both if .holds
+    return true
+   both\
+    goto 0 if b.holds
+    return true
+   0\
+
+    return false
+  )
+
+  not => .nand(.)
+  and (b) => .nand(b).not
+  or (b) => .not.nand(b.not)
+}
+
+true := boolean.true
+false := boolean.false

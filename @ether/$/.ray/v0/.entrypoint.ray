@@ -11,6 +11,7 @@ literal   ^keyword := external literal
 theme     ^keyword := external theme
 report    ^keyword := external report
 forward   ^keyword := external forward
+None      ^keyword := external none
 
 `{literal string ^string}` ^string.punctuation => string
 //{literal comment} ^comment => TODO
@@ -24,8 +25,14 @@ forward   ^keyword := external forward
 ({expr}) ^punctuation => expr
 [{expr}] ^punctuation => expr
 
-goto{ }{literal target ^property}{ }if{ }{condition} ^class => external goto target condition
+goto{ }{literal target ^label} ^class => external goto target true
+goto{ }{literal target ^label}{ }if{ }{condition} ^class => external goto target condition
 unordered {literal label ^label}\ ^punctuation => external label label
+
+return ^keyword (value) => (
+  value
+  goto return\
+)
 
 ^: {
   {literal}: () => A
@@ -121,13 +128,15 @@ TODO ^debug (comment: String ^comment) => DEBUG@. comment
 //   )
 unordered class{ }{block} ^keyword => (
   static ^keyword := external .
+  inline block
+
   ({inline args}) => (
+    static ^keyword := this
     this ^keyword := external .
-    inline block
+    inline static
 
     this ^variable
   )
-  inline block
 
   static ^class
 )
@@ -142,6 +151,20 @@ unordered base{ }class{ }{body} ^keyword => (
 
 unordered enum ^keyword => (
   static := class {
+    {literal member ^enumMember} ^punctuation => (
+      this[member] = this(name: member) ^enumMember
+
+      this
+    )
+    {literal member ^enumMember}{ }{fields ^property} ^punctuation => (
+      entry := this(
+        name: member
+        inline fields
+      )
+      this[member] = entry ^enumMember
+
+      this
+    )
     |{ }{literal member ^enumMember} ^punctuation => (
       this[member] = this(name: member) ^enumMember
 
@@ -161,24 +184,19 @@ unordered enum ^keyword => (
   static ^enum
 )
 
-unordered enum{ }{literal member ^enumMember} ^keyword => (
-  static := enum
-
-  static[member] = static(name: member) ^enumMember
-
-  static
-)
-
-unordered enum{ }{literal member ^enumMember}{ }{fields ^property} ^keyword => (
-  static := enum
+unordered enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?}{ }{`{`}{block?}{`}`} ^keyword => (
+  static ^keyword := external .
+  inline enum
+  inline block
 
   entry := static(
     name: member
     inline fields
   )
   static[member] = entry ^enumMember
+  inline rest
 
-  static
+  static ^enum
 )
 
 Program := class {

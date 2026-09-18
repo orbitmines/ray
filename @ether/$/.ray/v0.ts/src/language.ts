@@ -145,6 +145,7 @@ export namespace Ray {
     abstract(abstractly?: boolean): this { this.abstractly = abstractly ?? true; return this; }
 
     add(srcs: Text.Source[]): this {
+      this.revision++;
       const claims = [...this.projects.flatMap(project => project.source), ...srcs].filter(x => x.is_dot_project).map(x => x.dir);
       const project_directory_of = (src: Source): string => {
         let best: string | undefined;
@@ -279,12 +280,22 @@ export namespace Ray {
           for (const project of program.projects) for (const [key, at] of project.interpreter?.sites ?? [])
             yield [key, { src: at.source, begin: at.begin, end: at.end + 1 }];
         },
+        site(key: string): { src: Text.Source; begin: number; end: number } | undefined {
+          for (const project of program.projects) {
+            const at = project.interpreter?.sites.get(key);
+            if (at) return { src: at.source, begin: at.begin, end: at.end + 1 };
+          }
+        },
       };
     }
 
     EXTERNALS: { [method: string]: Native } = Natives;
 
+    revision = 0;
+    private highlights?: { stamp: string; map: Map<string, Text.Node[]> };
     get highlighting(): Map<string, Text.Node[]> {
+      const stamp = `${this.revision}:${this.projects.map(project => project.interpreter?.painted ?? 0).join(',')}`;
+      if (this.highlights?.stamp === stamp) return this.highlights.map;
       const out = new Map<string, Text.Node[]>();
       const current = new Map(this.sources.map(src => [src.location, src]));
       const shifts = new Map<Text.Source, ((begin: number, end: number) => Text.Node | undefined) | undefined>();
@@ -295,11 +306,7 @@ export namespace Ray {
           const before = paint.source.value, after = now?.value;
           let shift: ((begin: number, end: number) => Text.Node | undefined) | undefined;
           if (now && after !== undefined) {
-            let prefix = 0;
-            while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix++;
-            let suffix = 0;
-            while (suffix < before.length - prefix && suffix < after.length - prefix && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
-            const delta = after.length - before.length, anchor = new Text.Node(now);
+            const { prefix, suffix, delta } = Text.shift(before, after), anchor = new Text.Node(now);
             shift = (begin, end) => end < prefix ? anchor.span(begin, end) : begin >= before.length - suffix ? anchor.span(begin + delta, end + delta) : undefined;
           }
           shifts.set(paint.source, shift);
@@ -317,12 +324,16 @@ export namespace Ray {
           if (!resolved) continue;
           resolved.style = style;
           resolved.of = paint.of;
+          resolved.head = paint.head;
+          const defines = typeof paint.defines === 'function' ? paint.defines() : paint.defines;
+          resolved.defines = defines ?? (interpreter.sites.has(`theme::${style}`) && resolved.string === style ? `theme::${style}` : undefined);
           resolved.color = interpreter.color(style);
           let list = out.get(paint.source.location);
           if (!list) out.set(paint.source.location, list = []);
           list.push(resolved);
         }
       }
+      this.highlights = { stamp, map: out };
       return out;
     }
     painted(src: Text.Source): Text.Node[] { return this.highlighting.get(src.location) ?? []; }
@@ -351,12 +362,12 @@ export namespace Ray {
   export type Key = string | Node
   export type Args = { interpreter: Interpreter; frame: Node; self?: Node; method: Node; args: Node[]; at: Text.Node }
   export type Method = (args: Args) => Node | undefined;
-  export type Native = { arity: number; fn: Method }
+  export type Native = { arity: number; fn: Method; pure?: boolean }
 
   export type Piece =
     | { kind: 'literal'; text: string; styles?: Text.Node[] }
     | { kind: 'space' }
-    | { kind: 'newline' }
+    | { kind: 'newline'; group?: Text.Node }
     | { kind: 'capture'; name: string; raw: boolean; modifiers: string[]; styles: Text.Node[]; type?: string; group: Text.Node }
     | { kind: 'operator'; name: string; filter?: string; group: Text.Node }
 
@@ -365,6 +376,7 @@ export namespace Ray {
 
     fn?: Method
     arity?: number
+    pure?: boolean
     applied?: Node[]
     reads?: 'token' | 'rest'
 
@@ -380,9 +392,10 @@ export namespace Ray {
 
     parent?: Node
     ref?: { scope: Node; key: string; own?: boolean }
-    lazy?: { span: Text.Node; frame: Node; raw: boolean; probe?: boolean }
+    lazy?: { span: Text.Node; frame: Node; raw: boolean; probe?: boolean; consumed?: boolean }
     value?: Node
     literal?: boolean
+    unknown?: boolean
     marks?: Node[]
 
     style?: string
@@ -464,7 +477,9 @@ export namespace Ray {
 
     frames: Map<string, Node> = new Map();
     forwards: Node[] = [];
+    deferred: Node[] = [];
     paints: Text.Node[] = [];
+    painted = 0;
     definitions: string[] = [];
 
     private kernel(): Node {
@@ -508,7 +523,7 @@ export namespace Ray {
       const inherited = new Map([this.GLOBAL, ...this.frames.values()].map(frame => [frame, new Set(frame.methods?.keys() ?? [])]));
       let previous: string | undefined;
       for (let pass = 0; pass < Interpreter.PASSES; pass++) {
-        this.forwards = []; this.painting = []; this.definitions = []; this.touched = new Map(); this.claims.clear(); this.sites = new Map(); this.pending_rewrites = [];
+        this.forwards = []; this.deferred = []; this.ran = new Set(); this.painting = []; this.definitions = []; this.touched = new Map(); this.claims.clear(); this.sites = new Map(); this.pending_rewrites = [];
         this.marking = Interpreter.marks(); this.referenced = new Map(); this.sited = new Map();
         srcs.forEach(src => this.diagnostics.forget(src));
         for (const src of srcs) { this._interpret(src); yield; }
@@ -518,10 +533,15 @@ export namespace Ray {
         previous = signature;
       }
       this.analyze();
+      this.painted++;
       this.paints = this.painting;
       this.marks = this.marking;
       this.stale = new Map();
-      for (const src of srcs) this.derived.set(src.location, src.value);
+      for (const src of srcs) {
+        const before = this.derived.get(src.location);
+        if (before !== undefined && before !== src.value) this.reanchor(src.location, before, src.value);
+        this.derived.set(src.location, src.value);
+      }
     }
     feedback(src: Text.Source) {
       this.diagnostics.forget(src);
@@ -534,8 +554,10 @@ export namespace Ray {
       for (const source of [...this.claims.keys()]) if (source.location === src.location) this.claims.delete(source);
       this.pending_rewrites = this.pending_rewrites.filter(([rule]) => rule.position?.source.location !== src.location);
       this.forwards = this.forwards.filter(rule => rule.position?.source.location !== src.location);
+      this.deferred = this.deferred.filter(node => node.lazy!.span.source.location !== src.location);
       this._interpret(src);
       this.analyze(src.location);
+      this.painted++;
     }
 
     touched: Map<Node, Set<Key>> = new Map();
@@ -558,7 +580,7 @@ export namespace Ray {
       }
     }
     private _interpret(src: Text.Source) {
-      return this.array(new Text.Node(src), this.GLOBAL, true);
+      return this.safely(() => this.array(new Text.Node(src), this.GLOBAL, true));
     }
 
     array(cursor: Text.Node, frame: Node, report: boolean = false): Node | undefined {
@@ -568,7 +590,10 @@ export namespace Ray {
         if (cursor.done()) return last;
         const start = cursor.cursor;
         const value = this.expr(cursor, frame);
-        if (value !== undefined) last = this.settle(value, report);
+        if (value !== undefined) {
+          this.statements.push(cursor.expression);
+          try { last = this.settle(value, report); } finally { this.statements.pop(); }
+        }
         if (cursor.cursor === start) cursor.advance();
       }
     }
@@ -677,6 +702,8 @@ export namespace Ray {
             continue;
           }
           if (name) { value = this.reference(frame, name, cursor.span(cursor.cursor, cursor.cursor + name.length - 1)); this.paint_reference(value); cursor.advance(name.length); started = true; continue; }
+          const method = this.best(frame, cursor, frame, { spaced, operand, self: true });
+          if (method) { value = this.fire(method, cursor, frame); started = true; continue; }
           const token = this.token(cursor, frame);
           if (!token) { cursor.cursor = before; break; }
           value = this.reference(frame, token, cursor.span(cursor.cursor, cursor.cursor + token.length - 1));
@@ -738,10 +765,7 @@ export namespace Ray {
 
     error(message: string, node?: Text.Node) {
       const statement = this.statements[0];
-      if (statement && node && node.source !== statement.source) {
-        message = `${message} (in ${node.source.name}:${node.line}:${node.col})`;
-        node = statement;
-      }
+      if (statement && node && node.source.location !== statement.source.location) return this.diagnostics.report({ level: 'error', message, node: statement, at: node });
       this.diagnostics.report({ level: 'error', message, node });
     }
 
@@ -769,35 +793,50 @@ export namespace Ray {
       for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.add(scope);
       if (this.BASE) scopes.add(this.BASE);
       const operand: [Node, Node][] = [], receiver: [Node, Node][] = [];
-      for (const scope of scopes) { const set = this.ruleset(scope); operand.push(...set.operand); receiver.push(...set.receiver); }
+      for (const scope of scopes) {
+        const set = this.ruleset(scope);
+        operand.push(...set.operand);
+        if (scope === this.GLOBAL || scope === this.BASE) receiver.push(...set.receiver);
+        else receiver.push(...set.receiver.filter(([, impl]) => impl.forward !== undefined));
+      }
       const chain = { version: this.version, base: this.BASE, operand, receiver };
       this.chains.set(frame, chain);
       return chain;
     }
-    candidates(receiver: Node | undefined, frame: Node): [Node, Node][] {
+    candidates(receiver: Node | undefined, frame: Node, opts: { self?: boolean } = {}): [Node, Node][] {
       if (receiver === undefined) return this.chain(frame).operand;
       const own = this.resolved(receiver);
       const chain = this.chain(frame).receiver;
-      if (!own?.methods || own.lazy || own === frame) return chain;
+      if (!own?.methods || own.lazy || (own === frame && !opts.self)) return chain;
       return [...this.ruleset(own).receiver, ...chain];
     }
 
     private rewriting = new Set<Node>();
     private readiness = new WeakMap<Node, { version: number; missing: Text.Node[] }>();
-    missing(rule: Node, impl: Node): Text.Node[] {
+    missing(rule: Node, impl: Node, scope?: Node): Text.Node[] {
       const cached = this.readiness.get(impl);
-      if (cached && cached.version === this.version) return cached.missing;
-      const bound = new Set<string>([...(impl.params ?? []), ...rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece.name] : [])]);
-      const frame = impl.closure ?? this.GLOBAL;
+      if (scope === undefined && cached && cached.version === this.version) return cached.missing;
+      const bound = new Set<string>(['this', ...(impl.params ?? []), ...rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece.name] : [])]);
+      const frame = scope ?? impl.closure ?? this.GLOBAL;
       const heads = new Set<string>();
-      for (const [other] of [...this.chain(frame).operand, ...this.chain(frame).receiver]) { const head = this.head(other); if (head) heads.add(head); }
+      const scopes = new Set<Node>();
+      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.add(scope);
+      if (this.BASE) scopes.add(this.BASE);
+      for (const scope of scopes)
+        for (const other of scope.rules)
+          for (const piece of other.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) heads.add(part);
       const missing: Text.Node[] = [], seen = new Set<string>();
       const check = (span: Text.Node) => {
         const text = span.source.value;
+        const skip = this.safely(() => this.excluded(span, frame)) ?? [];
         const pattern = /[\p{L}_][\p{L}\p{N}_-]*|[^\s\p{L}\p{N}_(){}\[\]`,.:]+/gu;
+        let previous: string | undefined;
         for (const found of span.string.matchAll(pattern)) {
           const word = found[0], at = span.begin + found.index!;
-          if (text[at - 1] === '.' || bound.has(word) || seen.has(word)) continue;
+          const raw = previous !== undefined && frame.lookup(previous)?.reads !== undefined;
+          previous = word;
+          if (raw || text[at - 1] === '^' || bound.has(word) || seen.has(word)) continue;
+          if (skip.some(([begin, end]) => at >= begin && at <= end)) continue;
           if (frame.lookup(word) !== undefined || heads.has(word)) continue;
           seen.add(word);
           missing.push(span.span(at, at + word.length - 1));
@@ -808,13 +847,13 @@ export namespace Ray {
         const group = piece.group, offset = group.string.indexOf(piece.filter);
         if (offset >= 0) check(group.span(group.begin + offset, group.begin + offset + piece.filter.length - 1));
       }
-      this.readiness.set(impl, { version: this.version, missing });
+      if (scope === undefined) this.readiness.set(impl, { version: this.version, missing });
       return missing;
     }
 
-    best(receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean }): Found | undefined {
+    best(receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean; self?: boolean }): Found | undefined {
       let best: Found | undefined;
-      for (const [rule, impl] of this.candidates(receiver, frame)) {
+      for (const [rule, impl] of this.candidates(receiver, frame, { self: opts.self })) {
         const pieces = rule.pattern!;
         if (opts.forwards && !impl.forward) continue;
         if (pieces.some(piece => piece.kind === 'operator') && (this.rewriting.has(rule) || this.missing(rule, impl).length > 0)) continue;
@@ -1005,7 +1044,7 @@ export namespace Ray {
     }
     operand_end(cursor: Text.Node, j: number, frame: Node, raw: boolean = false): number {
       const text = cursor.source.value, limit = cursor.limit;
-      if (raw) { while (j < limit && !/\s/.test(text[j])) j++; return j; }
+      if (raw) return this.token_end(cursor, j, frame);
       while (j < limit && !/\s/.test(text[j])) {
         const claimed = this.claim(cursor, j, frame);
         j = claimed > j ? claimed : this.token_end(cursor, j, frame);
@@ -1067,7 +1106,9 @@ export namespace Ray {
         if (node.marks) { marks.push(...node.marks); sources.push(node); }
         if (node.lazy) { node = this.force(node); continue; }
         const bound = this.bound(node);
-        if (bound === undefined) { if (report) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined; }
+        if (bound === undefined) {
+          if (report && !node.ref!.scope.unknown) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined;
+        }
         node = bound;
       }
       if (node && marks.length) this.mark_value(node, marks, sources);
@@ -1093,21 +1134,37 @@ export namespace Ray {
 
     member(value: Node, key: string, at: Text.Node): Node {
       const node = new Node(this.diagnostics, at);
-      node.ref = { scope: this.deref(value) ?? new Node(this.diagnostics), key, own: true };
+      node.ref = { scope: this.deref(value) ?? this.unknown(at), key, own: true };
       return node;
     }
+    unknown(at?: Text.Node): Node { return Object.assign(new Node(this.diagnostics, at), { unknown: true }); }
     get(node: Node, key: Node): Node {
       const target = this.deref(node);
       const forced = this.deref(key, false);
       const name = forced?.literal ? forced.position!.string : this.text(key);
       if (target?.style !== undefined) return this.style(`${target.style}.${name}`);
+      const method = target && this.method_of(target, name);
+      if (method) return this.apply({ rule: method[0], impl: method[1], match: this.trivial(target, key.position ?? node.position!) }, this.cursor_of(key.position ?? node.position!), target, key.position ?? node.position!);
       const slot = new Node(this.diagnostics, key.position);
-      slot.ref = { scope: target ?? new Node(this.diagnostics), key: name, own: true };
+      slot.ref = { scope: target ?? this.unknown(key.position), key: name, own: true };
       if (forced?.literal && forced.position && target) this.paint_reference(Object.assign(new Node(this.diagnostics, forced.position), { ref: slot.ref }));
       return slot;
     }
+    method_of(target: Node, name: string): [Node, Node] | undefined {
+      for (const rule of target.rules) {
+        const pieces = rule.pattern!;
+        if (pieces.length !== 1 || pieces[0].kind !== 'literal' || pieces[0].text.trim() !== name) continue;
+        const impl = target.methods!.get(rule)!;
+        if (impl.forward || impl.params?.length) continue;
+        return [rule, impl];
+      }
+    }
+    trivial(receiver: Node, at: Text.Node): Match {
+      return { begin: at.begin, end: at.end + 1, pattern: at.end + 1, spanned: false, literals: [], captures: new Map(), operators: new Map(), args: [], receiver, tight: true };
+    }
     reference_of(node: Node): Node {
       if (!node.lazy || node.lazy.raw || node.value !== undefined) return node;
+      node.lazy.consumed = true;
       const cursor = this.cursor_of(node.lazy.span);
       const value = this.expression(cursor, node.lazy.frame, false);
       this.spaces(cursor);
@@ -1128,9 +1185,16 @@ export namespace Ray {
         let scope = node.ref.scope;
         if (!node.ref.own) for (let s: Node | undefined = scope; s; s = s.parent) if (s.own(node.ref.key) !== undefined) { scope = s; break; }
         if (result) this.bind(scope, node.ref.key, result);
+        for (let k = this.applying.length - 1; k >= 0; k--) {
+          const applied = this.applying[k].receiver?.ref;
+          if (applied?.key !== node.ref.key || applied.scope !== node.ref.scope) continue;
+          this.binders.add(this.binder_of(this.applying[k].rule));
+          break;
+        }
         if (marks.length) this.mark_name(scope, node.ref.key, marks);
         this.definitions.push(`${scope.key}.${node.ref.key}`);
-        if (this.statements[0]) this.sites.set(`${scope === this.GLOBAL ? 'GLOBAL' : scope.key}::${node.ref.key}`, this.statements[0]);
+        const statement = this.site_of();
+        if (statement) this.sites.set(`${scope === this.GLOBAL ? 'GLOBAL' : scope.key}::${node.ref.key}`, statement);
         return result;
       }
       const target = this.deref(node);
@@ -1140,7 +1204,11 @@ export namespace Ray {
     }
 
     call(value: Node, arg: Node, at: Text.Node, frame: Node): Node | undefined {
-      if (this.probing) { this.force(arg); return new Node(this.diagnostics, at); }
+      if (this.probing) {
+        this.force(arg);
+        const known = this.diagnostics.muted(() => this.safely(() => this.deref(value, false)));
+        if (!known?.pure) return new Node(this.diagnostics, at);
+      }
       const target = this.deref(value);
       if (!target) return undefined;
       if (target.forward) {
@@ -1163,19 +1231,29 @@ export namespace Ray {
     ids = 0;
     private derived = new Map<string, string>();
     private edits = new WeakMap<Text.Source, { prefix: number; suffix: number; delta: number } | null>();
+    reanchor(location: string, before: string, after: string) {
+      const { prefix, suffix, delta } = Text.shift(before, after);
+      if (delta === 0) return;
+      const pattern = new RegExp(`(${location.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:)(\\d+)$`);
+      for (const owner of [this.GLOBAL, ...this.frames.values()]) {
+        if (!owner.children) continue;
+        const moved = new Map<string, Node>();
+        for (const [key, frame] of owner.children) {
+          const found = key.match(pattern);
+          const offset = found ? Number(found[2]) : undefined;
+          const shifted = offset === undefined ? undefined : offset < prefix ? offset : offset >= before.length - suffix ? offset + delta : undefined;
+          moved.set(shifted === undefined ? key : key.replace(pattern, `$1${shifted}`), frame);
+        }
+        owner.children = moved;
+      }
+    }
     anchor(at: Text.Node): string {
       const source = at.source, base = this.derived.get(source.location);
       let edit = this.edits.get(source);
       if (edit === undefined) {
         const now = source.value;
         edit = null;
-        if (base !== undefined && base !== now) {
-          let prefix = 0;
-          while (prefix < base.length && prefix < now.length && base[prefix] === now[prefix]) prefix++;
-          let suffix = 0;
-          while (suffix < base.length - prefix && suffix < now.length - prefix && base[base.length - 1 - suffix] === now[now.length - 1 - suffix]) suffix++;
-          edit = { prefix, suffix, delta: now.length - base.length };
-        }
+        if (base !== undefined && base !== now) edit = Text.shift(base, now);
         this.edits.set(source, edit);
       }
       if (!edit || at.begin < edit.prefix) return `${source.location}:${at.begin}`;
@@ -1206,7 +1284,7 @@ export namespace Ray {
       rule.pattern!.forEach((piece, p) => {
         if (piece.kind !== 'capture') return;
         const span = match.captures.get(piece.name);
-        if (span) captures.set(piece.name, this.lazy(span, frame, piece.raw));
+        if (span) { const node = this.lazy(span, frame, piece.raw); captures.set(piece.name, node); if (!piece.raw && !this.probing) this.deferred.push(node); }
         else if (p === 0 && match.receiver !== undefined) captures.set(piece.name, match.receiver);
       });
       this.paint(at, undefined, frame, rule.key);
@@ -1215,19 +1293,24 @@ export namespace Ray {
       styling.parent = impl.closure ?? frame;
       styling.given = new Set(captures.keys());
       for (const [name, node] of captures) styling.set(name, node);
-      const owned = [...match.literals.map(([, b, e]) => cursor.span(b, e)), ...rule.pattern!.flatMap(piece => piece.kind === 'capture' && piece.raw && match.captures.has(piece.name) ? [match.captures.get(piece.name)!] : [])];
+      const heads = match.literals.map(([, b, e]) => cursor.span(b, e));
+      const owned = [...heads, ...rule.pattern!.flatMap(piece => piece.kind === 'capture' && piece.raw && match.captures.has(piece.name) ? [match.captures.get(piece.name)!] : [])];
       const current = () => (impl.closure ?? this.GLOBAL).methods?.get(rule) ?? impl;
       const styles = (p: number) => { const piece = rule.pattern![p]; return piece?.kind === 'capture' ? piece.styles : piece?.kind === 'literal' ? piece.styles ?? [] : []; };
-      for (const span of owned) this.paint(span, () => current().decorators ?? [], styling, rule.key);
-      for (const [p, b, e] of match.literals) this.paint(cursor.span(b, e), () => styles(p), styling, rule.key);
+      for (const span of owned) this.paint(span, () => current().decorators ?? [], styling, rule.key, { head: heads.includes(span) });
+      for (const [p, b, e] of match.literals) this.paint(cursor.span(b, e), () => styles(p), styling, rule.key, { head: true });
       rule.pattern!.forEach((piece, p) => {
         const span = piece.kind === 'capture' ? match.captures.get(piece.name) : undefined;
         if (span) this.paint(span, () => styles(p), styling, rule.key);
       });
       match.args.forEach((span, k) => this.paint(span, () => current().param_styles?.[k] ?? [], styling, rule.key));
-      const args = match.args.map(span => { const node = this.lazy(span, frame, false); this.force(node); return node; });
-      if (!impl.forward) this.receives(match.receiver, impl.closure ?? this.GLOBAL);
-      if (this.probing) { captures.forEach(node => this.force(node)); return new Node(this.diagnostics, at); }
+      const args = match.args.map(span => { const node = this.lazy(span, frame, false); if (!this.probing) this.deferred.push(node); return node; });
+      if (!impl.forward) this.receives(rule, impl, match.receiver);
+      if (this.probing) {
+        captures.forEach(node => this.force(node));
+        args.forEach(node => this.force(node));
+        return impl.forward && match.receiver !== undefined ? match.receiver : new Node(this.diagnostics, at);
+      }
       if (impl.forward) return this.pass(found, captures, args, cursor, frame, at);
 
       const local = this.frame(frame, `${rule.key}@${this.anchor(at)}`, impl.closure ?? this.GLOBAL);
@@ -1235,12 +1318,16 @@ export namespace Ray {
       if (match.receiver !== undefined) this.bind(local, 'this', match.receiver);
       for (const [name, node] of captures) this.bind(local, name, node);
       impl.params?.forEach((param, k) => this.bind(local, param, args[k]));
-      if (impl.fn) return impl.fn({ interpreter: this, frame: local, self: match.receiver, method: impl, args: [...captures.values(), ...args], at });
-      if (!impl.body) return undefined;
-      if (!rule.pattern!.some(piece => piece.kind === 'operator')) return this.unalias(this.array(this.cursor_of(impl.body), local), local);
-      this.rewriting.add(rule);
-      try { return this.unalias(this.array(this.cursor_of(impl.body), local), local); }
-      finally { this.rewriting.delete(rule); }
+      this.ran.add(rule.key!);
+      this.applying.push({ rule, impl, receiver: match.receiver });
+      try {
+        if (impl.fn) return impl.fn({ interpreter: this, frame: local, self: match.receiver, method: impl, args: [...captures.values(), ...args], at });
+        if (!impl.body) return undefined;
+        if (!rule.pattern!.some(piece => piece.kind === 'operator')) return this.unalias(this.array(this.cursor_of(impl.body), local), local);
+        this.rewriting.add(rule);
+        try { return this.unalias(this.array(this.cursor_of(impl.body), local), local); }
+        finally { this.rewriting.delete(rule); }
+      } finally { this.applying.pop(); }
     }
     unalias(result: Node | undefined, local: Node): Node | undefined {
       if (!result?.ref || result.ref.scope !== local || !local.given?.has(result.ref.key)) return result;
@@ -1293,7 +1380,7 @@ export namespace Ray {
       if (!native) { this.error(`Expected method \`${key}\` to be externally defined by the runtime, but it wasn't.`, name); return undefined; }
       if (native.arity === 0) return native.fn({ interpreter: this, frame, args: [], method: this.EXTERNAL, at });
       const node = new Node(this.diagnostics, name);
-      node.fn = native.fn; node.arity = native.arity;
+      node.fn = native.fn; node.arity = native.arity; node.pure = native.pure;
       return node;
     }
 
@@ -1305,7 +1392,7 @@ export namespace Ray {
       const impl = new Node(this.diagnostics, pattern);
       impl.forward = pattern; impl.closure = frame;
       if (!pieces.some(x => x.kind === 'capture')) impl.params = ['argument'];
-      const painting = this.probing > 0 || (!this.in_body(pattern) && this.first_site(pattern));
+      const painting = this.probing > 0 || (this.owns(pattern.source) && !this.in_body(pattern) && this.first_site(pattern));
       if (painting) this.paint_definition(this.chunks(pattern), [], this.definition_scope(frame, rule, impl), key, { pieces });
       const head = pieces[0]?.kind === 'literal' ? pieces[0].text.trim() : '';
       const at = head ? pattern.source.value.indexOf(head, pattern.begin) : -1;
@@ -1364,7 +1451,7 @@ export namespace Ray {
       const modifiers: Node[] = [], decorators: Text.Node[] = [], pattern: Text.Node[] = [];
       let params: string[] | undefined;
       let param_styles: Text.Node[][] | undefined;
-      const param_names: Text.Node[] = [];
+      const param_names: Text.Node[] = [], param_types: Text.Node[] = [];
       chunks.forEach((chunk, k) => {
         const s = chunk.string;
         if (pattern.length === 0 && k < chunks.length - 1 && /^[\p{L}_]/u.test(s)) {
@@ -1384,6 +1471,12 @@ export namespace Ray {
             params.push(name); param_styles.push(styles);
             const first = plain[0];
             if (first) param_names.push(first.span(first.begin, first.begin + name.length - 1));
+            const annotated = plain.find(token => token.string.includes(':'));
+            if (annotated) {
+              const colon = annotated.string.indexOf(':');
+              const last = plain[plain.length - 1];
+              if (annotated.begin + colon < last.end) param_types.push(annotated.span(annotated.begin + colon + 1, last.end));
+            }
           }
           return;
         }
@@ -1396,10 +1489,11 @@ export namespace Ray {
       rule.pattern = pieces; rule.position = lhs;
       const impl = new Node(this.diagnostics, body ?? lhs);
       impl.body = body; impl.closure = frame; impl.params = params; impl.param_styles = param_styles; impl.modifiers = modifiers; impl.decorators = decorators;
-      if (!this.probing) { this.bind(frame, rule, impl); this.definitions.push(key); }
-      if (this.probing || (!this.in_body(lhs) && this.first_site(lhs))) {
+      if (!this.probing) { this.bind(frame, rule, impl); this.definitions.push(key); this.sites.set(`rule::${key}`, lhs); }
+      if (this.probing || (this.owns(lhs.source) && !this.in_body(lhs) && this.first_site(lhs))) {
+        for (const piece of pieces) if (piece.kind === 'newline' && piece.group && frame.lookup(piece.group.string) === undefined) this.error(`Unresolved \`${piece.group.string}\`.`, piece.group);
         const scope = this.definition_scope(frame, rule, impl);
-        this.paint_definition(pattern, decorators, scope, key, { arrow, params: param_names, styles: param_styles?.flat(), pieces });
+        this.paint_definition(pattern, decorators, scope, key, { arrow, params: param_names, types: param_types, styles: param_styles?.flat(), pieces });
         if (body) this.paint_body(body, scope);
       }
       if (body) this.mark_given(body, new Set([...(params ?? []), ...pieces.flatMap(piece => piece.kind === 'capture' ? [piece.name] : []), ...(frame === this.GLOBAL ? [] : ['this'])]), frame);
@@ -1505,7 +1599,7 @@ export namespace Ray {
       if (plain.length === 1 && plain.length < parts.length && /^`[^`]*`$/.test(plain[0].string))
         return { kind: 'literal', text: plain[0].string.slice(1, -1), styles: parts.filter(token => token !== plain[0]) };
       if (s.length > 0 && /^[ \t]+$/.test(s)) return { kind: 'space' };
-      if (s === '\\n') return { kind: 'newline' };
+      if (s === '\\n') return { kind: 'newline', group: content };
       const styles: Text.Node[] = [], words: string[] = [], typing: string[] = [];
       for (const token of parts) {
         const t = token.string;
@@ -1537,7 +1631,7 @@ export namespace Ray {
       const claimed = this.claim(probe, rest, frame);
       return claimed > rest ? claimed === token.end + 1 : !/[{}]/.test(token.source.value.slice(rest, token.end + 1));
     }
-    private quiet = 0;
+    quiet = 0;
     style_of(token: Text.Node, frame: Node): Node | undefined {
       this.quiet++;
       try { return this.diagnostics.muted(() => this.style_at(token, frame)); }
@@ -1607,12 +1701,12 @@ export namespace Ray {
       const closure = impl.closure ?? frame;
       const styles = (item: Text.Node) => this.tokens(item, closure).filter(token => this.decorates(token, closure));
       const literal = (item: Text.Node) => this.chunks(item).some(token => /^`[^`]*`$/.test(token.string));
-      const shape: Shape = { text: [], open: [], content: [], close: [], arrow: impl.decorators ?? [], frame: closure };
+      const shape: Shape = { text: [], groups: new Map(), arrow: impl.decorators ?? [], frame: closure };
       for (const alternative of this.split(content.span(open + 1, close - 2), '|')) {
         const items = this.split(alternative, ',');
         if (items.length >= 3 && literal(items[0]) && literal(items[items.length - 1])) {
-          shape.open = styles(items[0]); shape.close = styles(items[items.length - 1]);
-          shape.content = items.slice(1, -1).flatMap(styles);
+          const opening = this.chunks(items[0]).find(token => /^`[^`]*`$/.test(token.string))!.string.slice(1, -1);
+          shape.groups.set(opening, { open: styles(items[0]), content: items.slice(1, -1).flatMap(styles), close: styles(items[items.length - 1]) });
         } else shape.text = items.flatMap(styles);
       }
       return shape;
@@ -1628,14 +1722,16 @@ export namespace Ray {
     definition_scope(frame: Node, rule: Node, impl: Node): Node {
       const scope = new Node(this.diagnostics);
       scope.parent = frame;
+      scope.key = `${rule.key}#pattern`;
       this.synthetic.add(scope);
       const named = rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece] : []);
+      for (const piece of named) this.sites.set(`${scope.key}::${piece.name}`, piece.group);
       scope.given = new Set([...(impl.params ?? []), ...named.map(piece => piece.name), ...(frame === this.GLOBAL ? [] : ['this'])]);
       for (const name of scope.given) scope.set(name, this.placeholder());
       const shape = this.shape(frame);
-      const declare = (name: string, tokens: Text.Node[]) => this.mark_name(scope, name, [this.fallback([...(shape?.content ?? []).map(token => this.lazy_style(token, shape!.frame)), ...tokens.map(token => this.lazy_style(token, scope))])]);
-      for (const piece of named) declare(piece.name, piece.kind === 'capture' ? piece.styles : []);
-      impl.params?.forEach((name, k) => declare(name, impl.param_styles?.[k] ?? []));
+      const declare = (name: string, tokens: Text.Node[], group?: Group) => this.mark_name(scope, name, [this.fallback([...(group?.content ?? []).map(token => this.lazy_style(token, shape!.frame)), ...tokens.map(token => this.lazy_style(token, scope))])]);
+      for (const piece of named) declare(piece.name, piece.kind === 'capture' ? piece.styles : [], shape?.groups.get(piece.kind === 'operator' ? '[' : '{'));
+      impl.params?.forEach((name, k) => declare(name, impl.param_styles?.[k] ?? [], shape?.groups.get('{')));
       return scope;
     }
     private blank = Text.Node.string('');
@@ -1645,11 +1741,12 @@ export namespace Ray {
       Object.defineProperty(node, 'style', { get: () => { for (let k = styles.length - 1; k >= 0; k--) { const style = styles[k].style; if (style) return style; } return undefined; } });
       return node;
     }
-    paint_definition(chunks: Text.Node[], decorators: Text.Node[], scope: Node, of: string, opts: { arrow?: Text.Node; params?: Text.Node[]; styles?: Text.Node[]; pieces?: Piece[] } = {}) {
+    paint_definition(chunks: Text.Node[], decorators: Text.Node[], scope: Node, of: string, opts: { arrow?: Text.Node; params?: Text.Node[]; types?: Text.Node[]; styles?: Text.Node[]; pieces?: Piece[] } = {}) {
       const shape = this.shape(scope.parent ?? scope);
       if (shape && opts.arrow) for (const style of shape.arrow) this.paint(opts.arrow, style, shape.frame, of);
       for (const decorator of [...decorators, ...(opts.styles ?? [])]) this.paint_decorator(decorator, scope);
       for (const name of opts.params ?? []) this.paint_reference(this.reference(scope, name.string, name), true);
+      for (const type of opts.types ?? []) this.paint_type(type, scope, of);
       const operators = new Set((opts.pieces ?? []).flatMap(piece => piece.kind === 'operator' ? [piece.group.begin] : []));
       for (const chunk of chunks) {
         const text = chunk.source.value, end = chunk.end + 1;
@@ -1666,11 +1763,12 @@ export namespace Ray {
           if (text[j] === '{' || operators.has(j)) {
             flush(j);
             const close = this.group_end(text, j, end);
-            if (shape) {
-              for (const style of shape.open) this.paint(chunk.span(j, j), style, shape.frame, of);
-              for (const style of shape.close) this.paint(chunk.span(close - 1, close - 1), style, shape.frame, of);
+            const group = shape?.groups.get(text[j]);
+            if (shape && group) {
+              for (const style of group.open) this.paint(chunk.span(j, j), style, shape.frame, of);
+              for (const style of group.close) this.paint(chunk.span(close - 1, close - 1), style, shape.frame, of);
             }
-            if (close - 2 >= j + 1) this.paint_group(chunk.span(j + 1, close - 2), scope, of, shape);
+            if (close - 2 >= j + 1) this.paint_group(chunk.span(j + 1, close - 2), scope, of, shape, { operator: operators.has(j), group });
             j = close;
             continue;
           }
@@ -1687,6 +1785,24 @@ export namespace Ray {
       const rest = name === undefined ? undefined : token.span(token.begin + name.length, token.end);
       if (rest && rest.begin <= rest.end && /^[\s(]/.test(rest.string)) this.paint_words(rest, scope);
     }
+    paint_rule(word: string, span: Text.Node, scope: Node) {
+      for (const [rule, impl] of [...this.chain(scope).operand, ...this.chain(scope).receiver]) {
+        if (impl.forward || this.head(rule) !== word) continue;
+        const painted = span.span(span.begin, span.end);
+        painted.of = rule.key;
+        painted.defines = `rule::${rule.key}`;
+        painted.style = () => {
+          const current = (impl.closure ?? this.GLOBAL).methods?.get(rule) ?? impl;
+          for (let k = (current.decorators?.length ?? 0) - 1; k >= 0; k--) {
+            const style = this.safely(() => this.style_of(current.decorators![k], impl.closure ?? scope))?.style;
+            if (style) return style;
+          }
+          return undefined;
+        };
+        this.record(painted);
+        return;
+      }
+    }
     paint_words(span: Text.Node, scope: Node) {
       const text = span.source.value;
       for (const found of span.string.matchAll(/[\p{L}_][\p{L}\p{N}_-]*|[^\s\p{L}\p{N}_(){}\[\]`,.]+/gu)) {
@@ -1696,7 +1812,7 @@ export namespace Ray {
         if (this.resolved(reference) !== undefined) this.paint_reference(reference, true);
       }
     }
-    paint_group(content: Text.Node, scope: Node, of: string, shape?: Shape) {
+    paint_group(content: Text.Node, scope: Node, of: string, shape?: Shape, opts: { operator?: boolean; group?: Group } = {}) {
       const tokens = this.tokens(content, scope);
       const decorators = tokens.filter(token => this.decorates(token, scope));
       decorators.forEach(token => this.paint_decorator(token, scope));
@@ -1723,44 +1839,15 @@ export namespace Ray {
           const reference = this.reference(scope, t, name);
           if (this.resolved(reference) !== undefined) this.paint_reference(reference, true);
           else {
-            if (shape) for (const style of shape.content) this.paint(name, style, shape.frame, of);
+            if (shape) for (const style of opts.group?.content ?? []) this.paint(name, style, shape.frame, of);
             for (const decorator of decorators) this.paint(name, decorator, scope, of);
           }
         }
       }
-      for (const type of types) if (!type.empty() && type.begin <= type.end) this.paint_type(type, scope, of);
+      if (!opts.operator) for (const type of types) if (!type.empty() && type.begin <= type.end) this.paint_type(type, scope, of);
     }
     paint_type(span: Text.Node, scope: Node, of: string) {
-      const text = span.source.value;
-      for (let j = span.begin; j <= span.end;) {
-        if (text[j] === '(') {
-          const close = this.group_end(text, j, span.end + 1);
-          if (close - 2 >= j + 1) for (const alternative of this.split(span.span(j + 1, close - 2), '|')) for (const item of this.split(alternative, ',')) this.paint_item(item, scope, of);
-          j = close;
-          continue;
-        }
-        const next = text.indexOf('(', j);
-        const end = next < 0 || next > span.end ? span.end + 1 : next;
-        this.paint_words(span.span(j, end - 1), scope);
-        j = end;
-      }
-    }
-    paint_item(item: Text.Node, scope: Node, of: string) {
-      const tokens = this.tokens(item, scope);
-      const decorators = tokens.filter(token => this.decorates(token, scope));
-      decorators.forEach(token => this.paint_decorator(token, scope));
-      for (const token of tokens) {
-        if (decorators.includes(token)) continue;
-        const t = token.string;
-        if (/^`[^`]*`$/.test(t)) {
-          this.sample(token, scope);
-          if (t.length > 2) for (const decorator of decorators) this.paint(token.span(token.begin + 1, token.end - 1), decorator, scope, of);
-          continue;
-        }
-        if (t.startsWith('(')) { this.paint_type(token, scope, of); continue; }
-        this.paint_words(token, scope);
-        for (const decorator of decorators) this.paint(token, decorator, scope, of);
-      }
+      this.probe(span, scope, { report: true });
     }
     owns: (src: Text.Source) => boolean = () => true;
     painting: Text.Node[] = this.paints;
@@ -1796,12 +1883,20 @@ export namespace Ray {
       if (!marks) this.marking.names.set(scope, marks = new Map());
       marks.set(key, this.entry(styles[styles.length - 1]));
     }
-    receives(receiver: Node | undefined, closure: Node) {
+    receives(rule: Node, impl: Node, receiver: Node | undefined) {
+      const closure = impl.closure ?? this.GLOBAL;
       const reference = receiver?.ref;
-      if (!reference || closure === this.GLOBAL) return;
-      if (this.probing && this.synthetic.has(reference.scope) && !reference.own && this.scope_of(receiver!) === undefined) reference.scope.set(reference.key, this.placeholder());
-      this.mark_instance(receiver, closure);
+      if (!reference) return;
+      if (this.probing && !reference.own && this.scope_of(receiver!) === undefined) {
+        if (!this.binders.has(this.binder_of(rule))) this.error(`Unresolved \`${reference.key}\`.`, receiver!.position);
+        else if (this.synthetic.has(reference.scope)) reference.scope.set(reference.key, this.placeholder());
+      }
+      if (closure !== this.GLOBAL) this.mark_instance(receiver, closure);
     }
+    private binders = new Set<string>();
+    binder_of(rule: Node): string { const at = rule.position; return at ? `${at.source.location}:${at.begin}` : rule.key!; }
+    private ran = new Set<string>();
+    private applying: { rule: Node; impl?: Node; receiver?: Node }[] = [];
     mark_instance(receiver: Node | undefined, closure: Node) {
       if (!receiver?.ref || closure === this.GLOBAL) return;
       const scope = this.scope_of(receiver) ?? receiver.ref.scope;
@@ -1834,6 +1929,14 @@ export namespace Ray {
         }
         j = end + 1;
       }
+    }
+    site_of(): Text.Node | undefined {
+      for (let k = this.statements.length - 1; k >= 0; k--) if (!this.in_body(this.statements[k])) return this.statements[k];
+      return this.statements[0];
+    }
+    binding(node: Node): string | undefined {
+      const scope = this.scope_of(node) ?? node.ref!.scope;
+      return `${scope === this.GLOBAL ? 'GLOBAL' : scope.key}::${node.ref!.key}`;
     }
     scope_of(node: Node): Node | undefined {
       const { scope, key, own } = node.ref!;
@@ -1893,6 +1996,7 @@ export namespace Ray {
       if (existing) { if (lexical) existing.style = style; return; }
       const painted = at.span(at.begin, at.end);
       painted.style = style;
+      painted.defines = () => this.binding(reference);
       this.referenced.set(key, painted);
       this.record(painted);
     }
@@ -1938,9 +2042,10 @@ export namespace Ray {
       return out;
     }
     probing = 0;
-    probe(span: Text.Node, scope: Node) {
+    probe(span: Text.Node, scope: Node, opts: { report?: boolean } = {}) {
       this.probing++;
-      try { this.diagnostics.muted(() => this.safely(() => this.array(this.cursor_of(span), scope))); }
+      const run = () => this.safely(() => this.array(this.cursor_of(span), scope, opts.report));
+      try { opts.report ? run() : this.diagnostics.muted(run); }
       finally { this.probing--; }
     }
     paint_body(body: Text.Node, scope: Node) {
@@ -1968,14 +2073,16 @@ export namespace Ray {
       for (const found of body.string.matchAll(/[\p{L}_][\p{L}\p{N}_-]*/gu)) {
         const at = body.begin + found.index!, word = found[0];
         if (!outside(at) || text[at - 1] === '.' || text[at - 1] === '^' || definitions.has(at)) continue;
-        if (scope.lookup(word) === undefined) continue;
-        this.paint_reference(this.reference(scope, word, body.span(at, at + word.length - 1)), true);
+        const span = body.span(at, at + word.length - 1);
+        if (scope.lookup(word) === undefined) { this.paint_rule(word, span, scope); continue; }
+        this.paint_reference(this.reference(scope, word, span), true);
       }
     }
-    paint(span: Text.Node, decorator: Text.Node | Node | undefined | (() => (Text.Node | Node)[]), frame: Node, of?: string) {
+    paint(span: Text.Node, decorator: Text.Node | Node | undefined | (() => (Text.Node | Node)[]), frame: Node, of?: string, opts: { head?: boolean } = {}) {
       if (!this.owns(span.source) || (!this.probing && this.in_body(span))) return;
       const painted = span.span(span.begin, span.end);
       painted.of = of;
+      painted.head = opts.head;
       if (decorator === undefined) { painted.style = ''; this.record(painted); return; }
       const resolve = (token: Text.Node | Node) => (token instanceof Node ? token : this.safely(() => this.style_of(token, frame)))?.style;
       painted.style = typeof decorator !== 'function' ? () => resolve(decorator) : () => {
@@ -1999,6 +2106,8 @@ export namespace Ray {
     }
     alias(name: string, value: Node | undefined) {
       if (value?.style === undefined) return;
+      const statement = this.site_of();
+      if (statement) this.sites.set(`theme::${name}`, statement);
       const table = this.building ?? (this.theme ??= Object.assign(new Node(this.diagnostics), { theme: new Map<string, string>() }));
       table.theme!.set(name, value.style);
       this.palette = undefined;
@@ -2044,14 +2153,15 @@ export namespace Ray {
     }
 
     inline(node: Node, frame: Node): Node | undefined {
-      const target = this.peel(node);
+      const target = this.safely(() => this.peel(node));
       if (!target) { this.error(`Unresolved \`${this.text(node)}\`.`, node.position); return undefined; }
       if (target.lazy && !target.lazy.raw) {
+        target.lazy.consumed = true;
         const inner = this.inner(target.lazy.span, target.lazy.frame);
-        return this.array(this.cursor_of(inner ?? target.lazy.span), frame);
+        return this.safely(() => this.array(this.cursor_of(inner ?? target.lazy.span), frame, true));
       }
       if (target.theme) { this.theme = target; return target; }
-      if (target.body) return this.array(this.cursor_of(target.body), frame);
+      if (target.body) return this.safely(() => this.array(this.cursor_of(target.body), frame, true));
       return target;
     }
     inner(span: Text.Node, frame: Node): Text.Node | undefined {
@@ -2089,6 +2199,21 @@ export namespace Ray {
     pending_rewrites: [Node, Node][] = [];
     analyze(location?: string) {
       const here = (rule: Node) => location === undefined || rule.position?.source.location === location;
+      for (const [rule, impl] of this.definitions_of()) {
+        if (impl.forward || !impl.body || this.ran.has(rule.key!) || this.pending_rewrites.some(([other]) => other === rule)) continue;
+        if (!this.owns(impl.body.source) || (location !== undefined && impl.body.source.location !== location)) continue;
+        if (!this.first_site(impl.body)) continue;
+        const scope = this.definition_scope(impl.closure ?? this.GLOBAL, rule, impl);
+        this.quiet++;
+        try { this.probe(impl.body, scope); } finally { this.quiet--; }
+        for (const missing of this.missing(rule, impl, scope)) this.error(`Unresolved \`${missing.string}\`.`, missing);
+      }
+      for (const node of this.deferred) {
+        const lazy = node.lazy!;
+        if (node.value !== undefined || lazy.consumed || this.in_body(lazy.span) || !this.owns(lazy.span.source)) continue;
+        if (location !== undefined && lazy.span.source.location !== location) continue;
+        this.probe(lazy.span, lazy.frame, { report: true });
+      }
       for (const [rule, impl] of this.pending_rewrites) if (here(rule))
         for (const missing of this.missing(rule, impl)) this.error(`Unresolved \`${missing.string}\`.`, missing);
       const scopes = [this.GLOBAL, ...this.frames.values()];
@@ -2112,7 +2237,8 @@ export namespace Ray {
     instances: Map<Node, Map<string, Map<Node, Mark<Node>>>>;
   };
 
-  export type Shape = { text: Text.Node[]; open: Text.Node[]; content: Text.Node[]; close: Text.Node[]; arrow: Text.Node[]; frame: Node };
+  export type Group = { open: Text.Node[]; content: Text.Node[]; close: Text.Node[] };
+  export type Shape = { text: Text.Node[]; groups: Map<string, Group>; arrow: Text.Node[]; frame: Node };
 
   export class Recursion extends Error {
     constructor(public rule: Node, public at: Text.Node) { super('recursion'); }
@@ -2135,7 +2261,7 @@ export namespace Ray {
     'GRAMMAR_RULE': { arity: 0, fn: ({ interpreter, at }) => Object.assign(new Node(interpreter.diagnostics, at), { key: 'GRAMMAR_RULE' }) },
     '.': { arity: 0, fn: ({ frame }) => frame },
     'global': { arity: 0, fn: ({ interpreter }) => interpreter.GLOBAL },
-    'get': { arity: 2, fn: ({ interpreter, args: [node, key] }) => interpreter.get(node, key) },
+    'get': { arity: 2, pure: true, fn: ({ interpreter, args: [node, key] }) => interpreter.get(node, key) },
     'assign': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at) },
     'base': { arity: 1, fn: ({ interpreter, args: [node] }) => { const target = interpreter.deref(node); if (target) interpreter.BASE = target; return target; } },
     'inline': { arity: 1, fn: ({ interpreter, frame, args: [node] }) => interpreter.inline(node, frame) },
@@ -2154,6 +2280,14 @@ export namespace Ray {
 }
 
 export namespace Text {
+  export function shift(before: string, after: string): { prefix: number; suffix: number; delta: number } {
+    let prefix = 0;
+    while (prefix < before.length && prefix < after.length && before[prefix] === after[prefix]) prefix++;
+    let suffix = 0;
+    while (suffix < before.length - prefix && suffix < after.length - prefix && before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
+    return { prefix, suffix, delta: after.length - before.length };
+  }
+
   export class Node extends Global.Node {
 
     static string(string: string) {
@@ -2184,6 +2318,8 @@ export namespace Text {
     style?: string | (() => string | undefined)
     of?: string
     by?: string
+    defines?: string | (() => string | undefined)
+    head?: boolean
 
     span(begin: number, end: number) {
       const span = new Node(this.source);
@@ -2352,6 +2488,7 @@ namespace CLI {
 export interface Diagnostic {
   level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' | 'trace';
   node?: Text.Node;
+  at?: Text.Node;
   message: string;
 }
 
@@ -2578,7 +2715,21 @@ export class Diagnostics {
     console.error(`  ${this.format(entry)}`);
   }
 
-  format(entry: Diagnostic): string { return `${this.color(entry.level)}${entry.level}${c.reset} ${entry.message}${c.gray} [${env.version.toString()}]${c.reset}`; }
+  format(entry: Diagnostic): string { return `${this.color(entry.level)}${entry.level}${c.reset} ${this.message(entry)}${c.gray} [${env.version.toString()}]${c.reset}`; }
+
+  message(entry: Diagnostic): string {
+    if (!entry.at) return entry.message;
+    const at = this.current(entry.at);
+    return `${entry.message} (in ${at.source.name}:${at.line}:${at.col})`;
+  }
+  current(node: Text.Node): Text.Node {
+    const source = this.program?.sources.find(src => src.location === node.source.location);
+    if (!source || source === node.source) return node;
+    const before = node.source.value;
+    const { prefix, suffix, delta } = Text.shift(before, source.value);
+    const begin = node.begin < prefix ? node.begin : node.begin >= before.length - suffix ? node.begin + delta : node.begin;
+    return new Text.Node(source).span(begin, begin);
+  }
 
   private silent = 0;
   muted<T>(fn: () => T): T { this.silent++; try { return fn(); } finally { this.silent--; } }
@@ -2592,8 +2743,8 @@ export class Diagnostics {
     let expr_diagnostics = expr.get(entry.node?.expression)
     if (!expr_diagnostics) { expr_diagnostics = []; expr.set(entry.node?.expression, expr_diagnostics); }
 
-    // Only error once per expression
-    if (entry.level === 'error' && expr_diagnostics.filter(x => x.level === 'error').length > 0) return;
+    // The same complaint about the same place is only worth making once
+    if (expr_diagnostics.some(x => x.level === entry.level && x.message === entry.message && x.node?.begin === entry.node?.begin)) return;
 
     expr_diagnostics.push(entry);
     

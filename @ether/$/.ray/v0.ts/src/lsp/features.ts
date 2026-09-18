@@ -115,13 +115,25 @@ export function rule_references(program: Program, key: string): Span[] {
 const text_of = (program: Program, path: string): string | undefined =>
   program.sources.find(s => s.path === path)?.text;
 
-// Where what sits at the position is defined: inside a rule's definition,
-// every sighting of that rule; on a word, its ledgered definition sites.
+// The innermost painted span at a position that satisfies `pick`.
+function innermost(program: Program, path: string, offset: number, pick: (s: Painted) => boolean): Painted | undefined {
+  let best: Painted | undefined;
+  for (const s of program.highlighting.get(path) ?? [])
+    if (pick(s) && s.begin! <= offset && offset <= s.end! && (!best || s.end! - s.begin! < best.end! - best.begin!)) best = s;
+  return best;
+}
+
+// Where what sits at the position is defined: a name goes to the statement
+// that binds it (a capture, to its place in the pattern; a style, to the
+// theme); a rule's own literal — `{`, `]`, a quote — goes to that rule.
 export function definition(program: Program, path: string, offset: number): Span[] {
+  const bound = innermost(program, path, offset, s => s.defines !== undefined);
+  if (bound) {
+    const site = program.engine.site(bound.defines as string);
+    return site?.src.path !== undefined ? [{ path: site.src.path, begin: site.begin, end: site.end }] : [];
+  }
   const out: Span[] = [];
-  // a span some rule's match painted — `{`, `]`, a quote — goes to that
-  // rule's definitions
-  const key = rule_at(program, path, offset);
+  const key = innermost(program, path, offset, s => s.head === true && s.of !== undefined)?.of;
   const claimed = key !== undefined ? program.engine.rules.get(key) : undefined;
   if (claimed) {
     for (const o of claimed.definitions)
@@ -135,44 +147,32 @@ export function definition(program: Program, path: string, offset: number): Span
           if (o.at.src?.path !== undefined) out.push({ path: o.at.src.path, begin: o.at.begin, end: o.at.end });
         return out;
       }
-  const text = text_of(program, path);
-  const w = text !== undefined ? word_at(program, path, offset) : undefined;
-  if (text === undefined || !w) return out;
-  const word = text.slice(w.begin!, w.end! + 1);
-  for (const [key, site] of program.engine.sites())
-    if (site.end && site.src.path !== undefined && key.slice(key.indexOf('::') + 2) === word)
-      out.push({ path: site.src.path, begin: site.begin, end: site.end });
   return out;
 }
 
-// References at a position: inside a rule's definition (its pattern, braces
-// included) or inside one of its matches, the rule's matches; on a word,
-// every span the grammar read as that word, across the project.
+// References at a position: every span the grammar read as the same binding;
+// inside a rule's definition or one of its literals, the rule's matches.
 export function references(program: Program, path: string, offset: number): Span[] {
+  const bound = innermost(program, path, offset, s => s.defines !== undefined);
+  if (bound) {
+    const out: Span[] = [];
+    const seen = new Set<string>();
+    for (const [file, spans] of program.highlighting)
+      for (const s of spans) {
+        if (s.defines !== bound.defines) continue;
+        const key = `${file}:${s.begin}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ path: file, begin: s.begin!, end: s.end! + 1 });
+      }
+    return out;
+  }
   for (const [key, rule] of program.engine.rules)
     for (const d of rule.definitions)
       if (d.at.src?.path === path && d.at.begin <= offset && offset < d.at.end)
         return rule_references(program, key);
-  const key = rule_at(program, path, offset);
-  const text = text_of(program, path);
-  const w = text !== undefined ? word_at(program, path, offset) : undefined;
-  if (!w && key !== undefined) return rule_references(program, key);
-  if (text === undefined || !w) return [];
-  const word = text.slice(w.begin!, w.end! + 1);
-  const out: Span[] = [];
-  const dedup = new Set<string>();
-  for (const [file, spans] of program.highlighting) {
-    const other = text_of(program, file);
-    if (other === undefined) continue;
-    for (const s of spans) {
-      if (s.style === '' || s.end! - s.begin! + 1 !== word.length || other.slice(s.begin!, s.end! + 1) !== word) continue;
-      const dkey = `${file}:${s.begin}`;
-      if (dedup.has(dkey)) continue;
-      dedup.add(dkey);
-      out.push({ path: file, begin: s.begin!, end: s.end! + 1 });
-    }
-  }
-  return out;
+  const key = innermost(program, path, offset, s => s.head === true && s.of !== undefined)?.of;
+  return key !== undefined ? rule_references(program, key) : [];
 }
 
 // What to say about a position: the rule defined there — its pattern, style

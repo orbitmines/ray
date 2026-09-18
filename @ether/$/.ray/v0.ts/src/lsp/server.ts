@@ -72,7 +72,7 @@ export async function start(program: Ray.Program): Promise<void> {
   const theme = (uri: string) => {
     const path = uriToFile(uri);
     const src = program.sources.find(s => s.path === path);
-    return src ? { uri, ranges: runs(src.text, program.highlighting.get(path) ?? []) } : undefined;
+    return src ? { uri, version: documents.get(uri)?.version, ranges: runs(src.text, program.highlighting.get(path) ?? []) } : undefined;
   };
   const payload = (uris: string[]) => {
     const docs = uris.map(theme).filter((d): d is NonNullable<ReturnType<typeof theme>> => d !== undefined);

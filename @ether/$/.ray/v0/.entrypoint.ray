@@ -15,7 +15,12 @@ forward   ^keyword := external forward
 `{literal string ^string}` ^string.punctuation => string
 //{literal comment} ^comment => TODO
 
-{`{`}{expr}{`}`} ^punctuation => TODO
+{`{`}{expr}{`}`} ^punctuation => (
+  scope ^keyword := external .
+  inline expr
+
+  scope
+)
 ({expr}) ^punctuation => expr
 [{expr}] ^punctuation => expr
 
@@ -90,12 +95,30 @@ ERROR{`@` ^punctuation}{var} ^error (comment: String ^comment) => report ERROR v
 DEBUG{`@` ^punctuation}{var} ^debug (comment: String ^comment) => report DEBUG var comment 
 TRACE{`@` ^punctuation}{var} ^trace (comment: String ^comment) => report TRACE var comment 
 
+// Merge into DEBUG with |
+TODO ^debug (comment: String ^comment) => DEBUG@. comment 
 
+// How this should read once components exist: the constructor is the first
+// component, the block composes on top of it, and `super` is the component
+// before the current one. `.components`, `&=` and `.previous` aren't there yet,
+// and `inline static.components` inlines the constructor into itself, so the
+// working definition is kept below.
+//   unordered base{ }class{ }{block} ^keyword => (
+//     static ^keyword := external .
+//     super ^keyword := static.components.previous
+//     static.components = (args) => (
+//       this ^keyword := external .
+//       inline static.components
+//       this ^variable
+//     )
+//     static.components &= block
+//     external base static
+//     static ^class
+//   )
 unordered base{ }class{ }{block} ^keyword => (
   static ^keyword := external .
   ({inline args}) => (
-    this   ^keyword := external .
-    static ^keyword := external get global name
+    this ^keyword := external .
     inline block
 
     this ^variable
@@ -110,7 +133,7 @@ unordered base{ }class{ }{block} ^keyword => (
 unordered class{ }{block} ^keyword => (
   static ^keyword := external .
   ({inline args}) => (
-    this   ^keyword := external .
+    this ^keyword := external .
     inline block
 
     this ^variable
@@ -132,14 +155,16 @@ Program := class {
 
 Node := base class {
 
-  {(String ^function | `{`, expr ^parameter, `}`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
+  {(String ^function | `{`, expr ^parameter, `}` | `[`, operator ^operator, `]`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
 
   -- ^punctuation (call) => call(this)
   
   = ^punctuation (x) => external assign this x
   := ^punctuation (x) => this: Node = x
   : ^punctuation (type) => this
+  , ^punctuation (rest) => this
 
+  . ^punctuation => this
   .{literal property ^property} ^punctuation => this[property]
   {\n}.{literal property ^property} ^punctuation => this[property]
 

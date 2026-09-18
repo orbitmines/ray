@@ -1,0 +1,21 @@
+Ray := class {
+  previous => TODO
+  next => TODO
+
+  entry => this
+
+  is_initial => .previous.empty
+  is_terminal => .next.empty
+}
+
+Iterable := class {
+  count => TODO
+
+  empty => .count == 0
+  nonempty => .empty.not
+
+  first => TODO
+  last => TODO
+
+  add (entry) => TODO
+}

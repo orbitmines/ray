@@ -1,3 +1,0 @@
-// `{H.punctuation `.`}{H.property property} => this[property]`) for THIS project
-class Node
-  {H.punctuation `.`}{H.property property} => property

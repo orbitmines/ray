@@ -12,7 +12,7 @@ export type ThemeStyle = Pick<vscode.DecorationRenderOptions, 'color' | 'backgro
 type Position = { line: number; character: number };
 export interface ThemePayload {
   styles?: Record<string, ThemeStyle>;
-  documents?: { uri: string; ranges: { style: string; range: { start: Position; end: Position } }[] }[];
+  documents?: { uri: string; version?: number; ranges: { style: string; range: { start: Position; end: Position } }[] }[];
 }
 
 export class Theme implements vscode.Disposable {
@@ -36,11 +36,16 @@ export class Theme implements vscode.Disposable {
         this.types.delete(name);
       }
     }
-    for (const document of payload.documents ?? [])
+    for (const document of payload.documents ?? []) {
+      // ranges are offsets into the text the server read; if the buffer has moved
+      // on, they would land on the wrong characters until the next payload
+      const open = vscode.workspace.textDocuments.find(d => d.uri.toString() === document.uri);
+      if (document.version !== undefined && open !== undefined && open.version !== document.version) continue;
       this.ranges.set(document.uri, document.ranges.map(({ style, range }) => ({
         style,
         range: new vscode.Range(range.start.line, range.start.character, range.end.line, range.end.character),
       })));
+    }
     vscode.window.visibleTextEditors.forEach(editor => this.render(editor));
     this.listeners.forEach(listener => listener());
   }

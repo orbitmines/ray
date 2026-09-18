@@ -19,10 +19,13 @@ forward   ^keyword := external forward
   scope ^keyword := external .
   inline expr
 
-  scope
+  scope ^namespace
 )
 ({expr}) ^punctuation => expr
 [{expr}] ^punctuation => expr
+
+goto{ }{literal target ^property}{ }if{ }{condition} ^class => external goto target condition
+unordered {literal label ^label}\ ^punctuation => external label label
 
 ^: {
   {literal}: () => A
@@ -35,7 +38,7 @@ forward   ^keyword := external forward
 LSP := {
   SemanticToken := class {
     Type := enum namespace | type | class | enum | interface | struct | typeParameter | parameter | variable | property | enumMember | event | function | method | macro | keyword | modifier | comment | string | number | regexp | operator | decorator
-    Modifier := enum declaration | definition | readonly | static | deprecated | abstract | async | modification | documentation | defaultLibrary  
+    Modifier := enum declaration | definition | readonly | static | deprecated | abstract | async | modification | documentation | defaultLibrary
   }
 }
 
@@ -54,10 +57,11 @@ DARK := theme `Ether.ray - Dark` {
   ^D4 = ^ #8F8881
 
   ^external = ^D0
+  ^label = ^D3
 
-  ^namespace = ^type = ^class = ^enum = ^interface = ^struct = ^event = ^U2
+  ^namespace = ^type = ^class = ^enum = ^interface = ^struct = ^event = ^enumMember = ^U2
   ^typeParameter = ^parameter = ^U0
-  ^variable = ^property = ^enumMember = ^U1
+  ^variable = ^property = ^U1
   ^function = ^method = ^decorator = ^U4 
   ^macro = ^U2
   ^keyword = ^modifier = ^comment = ^U3
@@ -115,21 +119,6 @@ TODO ^debug (comment: String ^comment) => DEBUG@. comment
 //     external base static
 //     static ^class
 //   )
-unordered base{ }class{ }{block} ^keyword => (
-  static ^keyword := external .
-  ({inline args}) => (
-    this ^keyword := external .
-    inline block
-
-    this ^variable
-  )
-  inline block
-
-  external base static
-  
-  static ^class
-)
-
 unordered class{ }{block} ^keyword => (
   static ^keyword := external .
   ({inline args}) => (
@@ -141,6 +130,55 @@ unordered class{ }{block} ^keyword => (
   inline block
 
   static ^class
+)
+
+unordered base{ }class{ }{body} ^keyword => (
+  static := class { inline body }
+
+  external base static
+  
+  static
+)
+
+unordered enum ^keyword => (
+  static := class {
+    |{ }{literal member ^enumMember} ^punctuation => (
+      this[member] = this(name: member) ^enumMember
+
+      this
+    )
+    |{ }{literal member ^enumMember}{ }{fields ^property} ^punctuation => (
+      entry := this(
+        name: member
+        inline fields
+      )
+      this[member] = entry ^enumMember
+
+      this
+    )
+  }
+
+  static ^enum
+)
+
+unordered enum{ }{literal member ^enumMember} ^keyword => (
+  static := enum
+
+  static[member] = static(name: member) ^enumMember
+
+  static
+)
+
+unordered enum{ }{literal member ^enumMember}{ }{fields ^property} ^keyword => (
+  static := enum
+
+  entry := static(
+    name: member
+    inline fields
+  )
+  static[member] = entry ^enumMember
+
+  static
 )
 
 Program := class {
@@ -159,9 +197,20 @@ Node := base class {
 
   -- ^punctuation (call) => call(this)
   
-  = ^punctuation (x) => external assign this x
+  = ^punctuation (x) => (
+    external assign this x
+
+    this
+  )
   := ^punctuation (x) => this: Node = x
-  : ^punctuation (type) => this
+  : ^punctuation (type) => (
+    .type = type
+    goto typed if this
+    this = type
+   typed\
+
+    this
+  )
   , ^punctuation (rest) => this
 
   . ^punctuation => this

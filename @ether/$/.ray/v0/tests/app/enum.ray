@@ -1,0 +1,38 @@
+// Enums. `enum` builds a class whose `|` adds another member, and every
+// member is an instance of that class, constructed with its own name. A
+// member may carry fields, which are inlined into that instance, so the
+// members of one enum need not have the same shape.
+
+Number := class { }
+
+Colour := enum red | green | blue
+
+Shape := enum circle (radius: Number) | square (side: Number) | point
+
+Modifier := enum static | readonly | this
+
+Colour.red.name
+Colour.blue.name
+
+Shape.circle.radius
+Shape.square.side
+Shape.point.name
+
+Modifier.static.name
+Modifier.this.name
+
+// Conditional goto is the only control flow the runtime provides: the jump
+// is taken when its condition has a value, and the statements it skips do
+// not run.
+
+reachable ^keyword := external global
+
+skipping (x) => (
+  goto landed if x
+  TRACE@x `unreachable`
+ landed\
+
+  x
+)
+
+skipping reachable

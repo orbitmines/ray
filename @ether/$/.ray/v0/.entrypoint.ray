@@ -269,3 +269,55 @@ Node.DEFINE_METHOD = `&=`
 
 // Chainable: a < b < c  =>  a < b & b < c
 {a} [x: chainable] {b} [y: chainable] {c} => a [x] b & b [y] c
+
+if (predicate) => (
+  branch ^keyword := external .
+  .predicate = predicate
+
+  () => (
+    goto otherwise if .predicate.not
+    return .yes
+   otherwise\
+
+    return .no
+  )
+
+  then (yes) => (
+    .yes = yes
+
+    this
+  )
+
+  elsif (predicate) => (
+    .no = if predicate
+
+    .no
+  )
+
+  else (no) => (
+    .no = no
+
+    this
+  )
+
+  branch ^variable
+)
+
+unless (predicate) => if predicate.not
+
+while{ }{predicate}{ }{block} ^keyword => (
+  goto done if (inline predicate).not
+  inline block
+  goto recur\
+ done\
+
+  return None
+)
+
+do{ }{block}{ }while{ }{predicate} ^keyword => (
+ again\
+  inline block
+  goto again if inline predicate
+
+  return None
+)

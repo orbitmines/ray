@@ -4,14 +4,35 @@ Ray := class {
 
   entry => this
 
+  empty => (
+    goto some if this
+    return true
+   some\
+
+    return false
+  )
+  nonempty => .empty.not
+
   is_initial => .previous.empty
   is_terminal => .next.empty
+
+  == (other) => (
+    goto here if this
+    return other.empty
+   here\
+    goto there if other
+    return false
+   there\
+
+    return .next == other.next
+  )
+  != (other) => (this == other).not
 }
 
 Iterable := class {
   count => TODO
 
-  empty => .count == 0
+  empty => .first.empty
   nonempty => .empty.not
 
   first => TODO

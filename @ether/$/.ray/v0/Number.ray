@@ -1,0 +1,263 @@
+// Nat∞, N∞
+
+// +- / unicode +-/ -+
+
+// roman numerals
+
+//TODO Complex Numbers as &+ ?,
+// sqrt, Trigonometry,
+
+// Binary +=
+//   * |= (b: Number % mod 2 = 0) => this << (b / 2)
+//   << |= b = this.push_back(0[]{length == b}) //TODO Overflow for i64 is done how?
+
+// Lean: On a 32-bit architecture, USize is equivalent to UInt32. On a 64-bit machine, it is equivalent to UInt64.
+//   -> How to conditionally get the architecture for this definition.
+
+//TODO Number equipped with default numberline, so number.for works. for Real, a step function needs to be defined
+
+//TODO factorial!
+
+//TODO Perhaps switch .Positive and Base, what do you call one with a sign though?
+//TODO Rename to .Signed
+
+//TODO Unit's like 1m are transfinite numbers in the sense that 1m > Infinity, but not Infinity m
+
+// "01101010" ~|| "10101000" & 0101010 ~|| 1010010 work
+//TODO Automatic equivalence between Real.Positive -> Real & Base -> Base.Signed
+
+// Binary{length == 1} == boolean
+
+// class Number
+//   Nat | ℕ <n> = Array{length == n}().last&&
+//   ℝ: Any Base ℝ
+// { ℕ, ℝ } = Number
+
+// What the language reaches today. A number is a Ray: the chain from it to its
+// terminal is its magnitude, zero is the terminal itself, and the successor of
+// n is a new entry whose `next` is n. `==` needs no definition of its own — it
+// is Ray's structural walk over exactly that chain — and `> <= >= min max`
+// come from `Ordered` once `<` is given.
+Number := class: Ray {
+  succ => Number(next: this)
+  pred => .next
+
+  is_zero => .is_terminal
+  nonzero => .is_zero.not
+
+  + (other: Number) => if other.is_zero { this } else { .succ + other.next }
+
+  // Subtraction floors at zero; the negative half of the line is `Integer`.
+  - (other: Number) => if other.is_zero { this } elsif .is_zero { this } else { .next - other.next }
+
+  * (other: Number) => if other.is_zero { zero } else { (this * other.next) + this }
+
+  < (other: Number) => if .is_zero { other.nonzero } elsif other.is_zero { false } else { .next < other.next }
+
+  % (other: Number) => if other.is_zero { this } elsif (other <= this) { (this - other) % other } else { this }
+
+  / (other: Number) => if other.is_zero { zero } elsif (other <= this) { ((this - other) / other).succ } else { zero }
+
+  // `def times callback: () => *`, without the index the draft leaves open.
+  times{ }{block} ^class => if .is_zero { this } else {
+    block
+
+    .next times block
+  }
+
+  // Blocked with `divides`: a recursive call used as an argument does not
+  // resolve, so neither of these two can be relied on yet.
+  pow (exponent: Number) => if exponent.is_zero { one } else { (this.pow(exponent.next)) * this }
+
+  // `//TODO factorial!` above.
+  factorial => if .is_zero { one } else { this * .next.factorial }
+
+  // Also blocked: `other` is an argument that has not been read, so its own
+  // rules are not in scope where `.gcd` is called on it.
+  gcd (other: Number) => if other.is_zero { this } else { other.gcd(this % other) }
+  lcm (other: Number) => (this * other) / (this.gcd(other))
+
+  even => if .is_zero { true } elsif .next.is_zero { false } else { .next.next.even }
+  odd => .even.not
+
+  // `Decimal.% => this / 100` waits on a hundred: a unary chain cannot reach
+  // one inside the interpreter's recursion budget.
+  percent => TODO
+
+  // Blocked on a recursive call reaching itself from inside a branch.
+  divides (other: Number) => TODO
+}
+
+zero  := Number()
+one   := zero.succ
+two   := one.succ
+three := two.succ
+four  := three.succ
+five  := four.succ
+six   := five.succ
+seven := six.succ
+eight := seven.succ
+nine  := eight.succ
+ten   := nine.succ
+
+
+// def Integer<n> = sign: "-"?, integer: Positive
+//   static def Positive = Array{length == n}().last&
+  //TODO Addition/subtraction of this integer (addition is simple)
+// end
+
+// The sign is present exactly when the number is below zero, so `Number` stays
+// the magnitude. Addition/subtraction of a signed integer is still open, as
+// the draft notes.
+Integer := class {
+  sign => None
+  magnitude => zero
+
+  negative => exists .sign
+  positive => .negative.not
+  is_zero => .magnitude.is_zero
+
+  // The draft's `def -` with no argument: negate.
+  - => if .negative { Integer(magnitude: .magnitude) } else { Integer(sign: global, magnitude: .magnitude) }
+}
+
+
+//TODO Define .sign on all numbers, so that you can do x.sign ().sum, empty string is + so nothing gets applied since it's empty string.
+
+// Base = &'ed version of all the numbers
+
+//   def value(digit: this = this)
+//     array = this.reduce(array = [] => array.push_back(void))
+
+//     this.for d
+//       `d` = this{<= d}.reduce(cursor = array => cursor.next)~
+//     end
+
+//     return local[digit]
+//   end
+// end
+
+// TODO: Strings as a definition depend on Number, circularity here.
+
+// Number which is integer
+// def times callback: () => *
+
+// `def times callback` is defined on `Number` above.
+
+        //TODO Support index?
+//         Array{length == this}().for => callback()
+//       end
+
+// dynamically Bases.for Base, digit
+
+  //TODO Because String has digit as String defined, any Array of digit Strings should automatically be defined, to as String too. with .map
+//   +def String = `Base`.Digit
+//     def as : == `Base`.Digit.value = `Base`.Digit.value(this)
+//   end
+  //TODO String as Binary.Positive = "0101010" = Digit.value[] = Positive
+  // TODO: Binary.Positive as String; Automatic isomorphism
+
+//   class `Base` < Number = sign: "-"?, integer: Positive
+
+    //TODO Equip a default directionality. (Line: One with forward/backward from a specific point, but it isn't necessarily selected there.)
+
+
+    // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
+
+
+// +def Binary.Positive
+
+//   def ~! = this.map(!)
+//   def ~`operator: boolean.Operator.Binary` b: Binary.Positive = this.reverse.zip_longest(b.reverse).map(l, r => (l ?? false)[operator](r ?? false)).reverse
+//   def ~`operator: boolean.Operator.Binary` b: Binary.Positive{.length == length} = this.zip(b).map(operator) //TODO: Or can the compiler deduce the reversing stuff is not necessary?
+// end
+
+//TODO Should not always goto Decimal, should infer from context whether it is binary or not? How to do that; code it as a type?
+// def `digits: Decimal.Positive.String` => Decimal.Positive = digits
+// +def Decimal.Positive
+//   def `fraction: Decimal.Positive.String` => Decimal.Real = integer, ".", fraction
+// end
+//TODO 1111₂⁸ x 1111₂⁸ subscript.
+//TODO 1⁽¹⁸⁸⁻⁰⁰⁾ superscript to ^ (number)
+
+// Allow (111₂)₂
+// `Base`
+//   v (base: Number): [RELEVANT BASE] =>
+    // Unknown digit representation for the specified base.
+//     assert this.every <= base
+//TODO We're also using subscript for length, so number should be not using v, but instead match to the whole string + subscript
+
+//TODO Override the ^/* behavior of the Number type to use the list variant instead. -> Need some quick method for that
+// static prefer{== BASE_TYPE} Iterable.(^ | *) //TODO Should only work for the base static case
+// Node
+//   {expression: String.Superscript} => this ^ expression.decompose as Expression
+//   {expression: String.Subscript} => this v expression.decompose as Expression //TODO as Expression, should take the existing context which called this, and evaluate in that.
+
+// def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+//TODO This for binary
+// def 0`"b" | "B"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+
+//TODO: Possibly move these primitives to specific languages, and only work with arbitrary-length in the default case.
+//TODO: -b: Something uX might only implement b: uX, casts lose information and likely need to overflow
+// def u`length: Decimal.Positive.String` = Binary.Positive{.length == length}
+  // TODO Number arithmetic
+  // - overflow, what to do? mod, or>?
+// end
+// def i`length: Decimal.Positive.String` = Binary.Positive{.length == length} // TODO, Use Binary vs Binary.Positive
+  // TODO Number arithmetic
+// end
+
+// class Number < Ordered
+//   def - => Number
+//   def - b: Number => Number
+
+  // Allows for the syntax 1 Object
+//   def `node: not String` = node{#.count == this}
+
+  // TODO Generic Number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
+  // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
+  // TODO: external defines that Number > Number is done by some other operator, not looking through successors/predecessors.
+// end
+
+
+
+
+// {
+//   (Σ | ∑): sum -> +,
+//   ∏: product -> *
+// }.for symbol, method -> operation
+//   Applicable = Iterable<T: {`operation`(:T) => T}> //TODO A variable like this shouldn't be loaded into local, loop-specific var Howto?
+//   +def Applicable
+//     def `method` = reduce(operation)
+//   end
+//   namespace `symbol`
+    // Allow syntax ∑ [1, 2, 3]
+//     def `iterable: Applicable` = iterable.`method`
+//   end
+// end
+
+// ₂∫⁸()
+// lim(x -> ∞) ₂∫⁸() // Implemented as infinitesimal step, how to indicate to actually step?
+//TODO What is a limit actually, can we make that more general?
+// √4
+// ∛/∜ √(4 + 4)
+// What else
+
+
+//TODO Infinity / ∞
+
+//TODO 1000 MB etc.. MiB ; how does that coincide with Unit, want Binary with some length to correspond to it?
+
+// Byte | B = Binary⁸
+
+// Without the base tower a byte is the count of bits it holds; `Kilobyte =
+// 1000 * Byte` waits on a thousand.
+Byte := eight
+
+// Kilobyte | KB = 1000 * Byte
+
+// Units override the X Node
+// 3.2 Kilobyte
+// Kibibyte etc.. too
+
+// Unit as Binary

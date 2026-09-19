@@ -1,0 +1,75 @@
+// `if` evaluates eagerly and inlines the branch it takes, so the chain is
+// the value; a branch nobody takes stays None. `while` and `do` are the
+// same class, instantiated differently.
+
+mark ^keyword := external global
+
+t := if true { true } else { false }
+goto t_ok if t.holds
+INFO@mark `if-true did not take the then branch`
+t_ok\
+
+f := if false { true } else { false }
+goto f_bad if f.holds
+goto f_ok
+f_bad\
+INFO@mark `if-false took the then branch`
+f_ok\
+
+e := if false { true } elsif true { true } else { false }
+goto e_ok if e.holds
+INFO@mark `elsif did not fire`
+e_ok\
+
+g := if false { true } elsif false { true } else { true }
+goto g_ok if g.holds
+INFO@mark `else after elsif did not fire`
+g_ok\
+
+h := if true { true } elsif true { false } else { false }
+goto h_ok if h.holds
+INFO@mark `a later branch overrode the first`
+h_ok\
+
+n := if false { true }
+goto n_bad if n.holds
+goto n_ok
+n_bad\
+INFO@mark `a bare if with a false predicate is not None-like`
+n_ok\
+
+u := unless false { true }
+goto u_ok if u.holds
+INFO@mark `unless did not fire`
+u_ok\
+
+flag ^keyword := true
+while flag { flag = false }
+goto w_bad if flag.holds
+goto w_ok
+w_bad\
+INFO@mark `while did not run its body`
+w_ok\
+
+never ^keyword := false
+ran ^keyword := false
+while never { ran = true }
+goto r_bad if ran.holds
+goto r_ok
+r_bad\
+INFO@mark `while ran with a false predicate`
+r_ok\
+
+seen ^keyword := false
+do { seen = true } while false
+goto s_ok if seen.holds
+INFO@mark `do-while did not run its body at least once`
+s_ok\
+
+stop ^keyword := true
+do { stop = false } while stop
+goto p_bad if stop.holds
+goto p_ok
+p_bad\
+INFO@mark `do-while did not stop`
+p_ok\

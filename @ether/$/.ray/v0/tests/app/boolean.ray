@@ -1,0 +1,68 @@
+// nand is the only primitive; the conditional goto inside it is the only
+// control flow the runtime provides, and the rest is built on top.
+
+mark ^keyword := external global
+
+goto nf_ok if true.nand(false).holds
+INFO@mark `nand(true,false) should be true`
+nf_ok\
+
+goto nn_bad if true.nand(true).holds
+goto nn_ok
+nn_bad\
+INFO@mark `nand(true,true) should be false`
+nn_ok\
+
+goto ff_ok if false.nand(false).holds
+INFO@mark `nand(false,false) should be true`
+ff_ok\
+
+goto nt_bad if true.not.holds
+goto nt_ok
+nt_bad\
+INFO@mark `not(true) should be false`
+nt_ok\
+
+goto fn_ok if false.not.holds
+INFO@mark `not(false) should be true`
+fn_ok\
+
+goto at_ok if true.and(true).holds
+INFO@mark `and(true,true) should be true`
+at_ok\
+
+goto af_bad if true.and(false).holds
+goto af_ok
+af_bad\
+INFO@mark `and(true,false) should be false`
+af_ok\
+
+goto or_ok if true.or(false).holds
+INFO@mark `or(true,false) should be true`
+or_ok\
+
+goto oo_bad if false.or(false).holds
+goto oo_ok
+oo_bad\
+INFO@mark `or(false,false) should be false`
+oo_ok\
+
+goto xo_ok if true.xor(false).holds
+INFO@mark `xor(true,false) should be true`
+xo_ok\
+
+goto xx_bad if true.xor(true).holds
+goto xx_ok
+xx_bad\
+INFO@mark `xor(true,true) should be false`
+xx_ok\
+
+goto xn_ok if true.xnor(true).holds
+INFO@mark `xnor(true,true) should be true`
+xn_ok\
+
+goto no_bad if true.nor(false).holds
+goto no_ok
+no_bad\
+INFO@mark `nor(true,false) should be false`
+no_ok\

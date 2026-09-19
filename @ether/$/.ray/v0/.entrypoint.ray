@@ -29,7 +29,7 @@ goto{ }{literal target ^label} ^class => external goto target true
 goto{ }{literal target ^label}{ }if{ }{condition} ^class => external goto target condition
 unordered {literal label ^label}\ ^punctuation => external label label
 
-return ^keyword (value) => (
+return{ }{value} ^keyword => (
   value
   goto return\
 )
@@ -126,6 +126,11 @@ TODO ^debug (comment: String ^comment) => DEBUG@. comment
 //     external base static
 //     static ^class
 //   )
+unordered class:{ }{parent}{ }{body} ^keyword => class {
+  inline parent
+  inline body
+}
+
 unordered class{ }{block} ^keyword => (
   static ^keyword := external .
   inline block
@@ -193,6 +198,7 @@ unordered enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal r
     name: member
     inline fields
   )
+  entry.name = member
   static[member] = entry ^enumMember
   inline rest
 
@@ -221,7 +227,7 @@ Node := base class {
     this
   )
   := ^punctuation (x) => this: Node = x
-  : ^punctuation (type) => (
+  : ^punctuation ^annotation (type) => (
     .type = type
     goto typed if this
     this = type
@@ -229,7 +235,7 @@ Node := base class {
 
     this
   )
-  , ^punctuation (rest) => this
+  , ^punctuation ^separator (rest) => this
 
   . ^punctuation => this
   .{literal property ^property} ^punctuation => this[property]
@@ -237,7 +243,7 @@ Node := base class {
 
   // Function definition
   static DEFINE_METHOD = `=`
-  unordered ({args ^parameter}){block} ^punctuation => (this ^function) [DEFINE_METHOD] (
+  ({args ^parameter}){block} ^punctuation => (this ^function) [DEFINE_METHOD] (
     def = block**
     def[`args`] = args
     def
@@ -270,54 +276,81 @@ Node.DEFINE_METHOD = `&=`
 // Chainable: a < b < c  =>  a < b & b < c
 {a} [x: chainable] {b} [y: chainable] {c} => a [x] b & b [y] c
 
-if (predicate) => (
-  branch ^keyword := external .
-  .predicate = predicate
+if := class {
+  { }{cond}{ }{yes} ^class => (
+    branch ^keyword := external .
+    inline static
+    predicate := cond
+    taken := None
 
-  () => (
-    goto otherwise if .predicate.not
-    return .yes
-   otherwise\
+    goto enter if cond.holds
+    goto skip
+   enter\
+    taken = global
+    result := (yes)
+    inline result
+   skip\
 
-    return .no
+    branch ^variable
   )
 
-  then (yes) => (
-    .yes = yes
+  elsif{ }{cond}{ }{block} ^class => (
+    branch ^keyword := external .
+    inline this
+    taken := .taken
+    predicate := cond
 
-    this
+    goto skip if taken
+    goto enter if cond.holds
+    goto skip
+   enter\
+    taken = global
+    result := (block)
+    inline result
+   skip\
+
+    branch ^variable
   )
 
-  elsif (predicate) => (
-    .no = if predicate
+  else{ }{block} ^class => (
+    branch ^keyword := external .
+    inline this
+    taken := .taken
 
-    .no
+    goto skip if taken
+    taken = global
+    result := (block)
+    inline result
+   skip\
+
+    branch ^variable
+  )
+}
+
+unless{ }{cond}{ }{block} ^class => if cond.not block
+
+while := class {
+  { }{cond}{ }{block} ^class => (
+    loop ^keyword := external .
+    inline static
+
+   again\
+    goto more if cond.holds
+    goto done
+   more\
+    block
+    goto again
+   done\
+
+    loop ^variable
   )
 
-  else (no) => (
-    .no = no
+  { }{block}{ }while{ }{cond} ^class => (
+    block
 
-    this
+    this cond block
   )
+}
 
-  branch ^variable
-)
+do ^keyword := while
 
-unless (predicate) => if predicate.not
-
-while{ }{predicate}{ }{block} ^keyword => (
-  goto done if (inline predicate).not
-  inline block
-  goto recur\
- done\
-
-  return None
-)
-
-do{ }{block}{ }while{ }{predicate} ^keyword => (
- again\
-  inline block
-  goto again if inline predicate
-
-  return None
-)

@@ -1,0 +1,18 @@
+mark ^keyword := external global
+
+goto a_ok if (one % one).is_zero.holds
+INFO@mark `A inline modulo`
+a_ok\
+
+m := one % one
+goto b_ok if m.is_zero.holds
+INFO@mark `B bound modulo`
+b_ok\
+
+goto c_ok if (four - four).is_zero.holds
+INFO@mark `C inline subtraction`
+c_ok\
+
+goto d_ok if (one % one) == zero
+INFO@mark `D inline modulo equality`
+d_ok\

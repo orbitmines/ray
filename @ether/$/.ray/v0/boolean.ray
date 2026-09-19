@@ -1,19 +1,45 @@
-boolean := enum false (holds: None) | true (holds: this) {
+boolean := enum false (holds: None) | true (holds: global) {
   nand (b) => (
-    goto both if .holds
+    goto second if .holds
     return true
-   both\
-    goto 0 if b.holds
+   second\
+    goto no if b.holds
     return true
-   0\
+   no\
 
     return false
   )
 
-  not => .nand(.)
+  not => .nand(this)
+
   and (b) => .nand(b).not
   or (b) => .not.nand(b.not)
+  nor (b) => .or(b).not
+  xor (b) => .or(b).and(.nand(b))
+  xnor (b) => .xor(b).not
+
+  ! => .not
+  && (b) => .and(b)
+  || (b) => .or(b)
+  !&& (b) => .nand(b)
+  !|| (b) => .nor(b)
+  x|| (b) => .xor(b)
+  x!|| (b) => .xnor(b)
 }
 
 true := boolean.true
 false := boolean.false
+
+// The one place presence becomes a boolean: the runtime can branch on whether
+// a value is there at all, and `exists` is what turns that into `true`/`false`
+// so nothing above it needs a conditional goto.
+exists{ }{x} ^keyword => (
+  goto some if x
+  found := false
+  goto done
+ some\
+  found := true
+ done\
+
+  found
+)

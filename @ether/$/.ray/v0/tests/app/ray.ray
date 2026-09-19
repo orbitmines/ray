@@ -1,0 +1,34 @@
+mark ^keyword := external global
+
+a := Ray()
+b := Ray(previous: a)
+
+goto a1_ok if a.is_initial.holds
+INFO@mark `a lone ray is not initial`
+a1_ok\
+
+goto a2_ok if a.nonempty.holds
+INFO@mark `a lone ray counts as empty`
+a2_ok\
+
+goto b1_bad if b.is_initial.holds
+goto b1_ok
+b1_bad\
+INFO@mark `a linked ray reports initial`
+b1_ok\
+
+goto b2_ok if b.initial == a
+INFO@mark `the initial walk failed`
+b2_ok\
+
+goto c1_ok if a.count == one
+INFO@mark `a lone ray does not count one`
+c1_ok\
+
+goto c2_ok if a.terminal == a
+INFO@mark `a lone ray is not its own terminal`
+c2_ok\
+
+goto c3_ok if (b.min(b)) == b
+INFO@mark `Ordered.min did not reach Ray`
+c3_ok\

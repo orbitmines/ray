@@ -385,10 +385,13 @@ export namespace Ray {
     body?: Text.Node
     closure?: Node
     inlined?: Node[]
+    declared?: Node
+    subject?: Node
     modifiers?: Node[]
     styles?: Node[]
     decorators?: Text.Node[]
     param_styles?: Text.Node[][]
+    param_types?: Text.Node[]
     forward?: Text.Node
 
     parent?: Node
@@ -450,7 +453,12 @@ export namespace Ray {
         for (const from of scope.inlined ?? []) yield* from.reading(seen);
       }
     }
-    set(key: Key, value: Node): Node { (this.methods ??= new Map()).set(key, value); return value; }
+    static heads = new Set<string>();
+    set(key: Key, value: Node): Node {
+      (this.methods ??= new Map()).set(key, value);
+      if (key instanceof Node) for (const piece of key.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) Node.heads.add(part);
+      return value;
+    }
 
     method(string: string | Text.Node, fn: Method, arity: number = 1) {
       if (!(string instanceof Text.Node) && string.includes('{')) string = Text.Node.string(string);
@@ -655,9 +663,12 @@ export namespace Ray {
       if (this.seeking !== undefined && this.seeking === key) this.seeking = undefined;
       return undefined;
     }
-    array(cursor: Text.Node, frame: Node, report: boolean = false): Node | undefined {
+    array(cursor: Text.Node, frame: Node, report: boolean = false, functional: boolean = false): Node | undefined {
       let last: Node | undefined;
       const begin = cursor.cursor;
+      // A body that jumps back to an earlier point runs again, so whatever it
+      // read lazily has to be read again rather than reused.
+      const again = () => { for (const value of frame.methods?.values() ?? []) if (value.lazy) value.value = undefined; };
       while (true) {
         this.spaces(cursor, true);
         if (cursor.done()) return last;
@@ -665,10 +676,17 @@ export namespace Ray {
         let value: Node | undefined;
         try { value = this.expr(cursor, frame); }
         catch (jump) {
+          if (jump instanceof Jump && jump.kind === 'end' && jump.value === undefined) jump.value = last;
           if (!(jump instanceof Jump) || this.seeking !== undefined) throw jump;
-          if (jump.kind === 'end') return last;
-          if (jump.kind === 'begin') { cursor.cursor = begin; continue; }
+          if (jump.kind === 'end') {
+            if (process.env.RAY_DBG) console.error(`end-jump at ${cursor.source.location?.split('/').pop()} functional=${functional} value=${jump.value ? (jump.value.position?.string ?? jump.value.key ?? '?') : 'none'} last=${last ? (last.position?.string ?? last.key ?? '?') : 'none'}`);
+            if (!functional && !report) { jump.value ??= last; throw jump; }
+            return jump.value ?? last;
+          }
+          if (jump.kind === 'begin') { again(); cursor.cursor = begin; continue; }
+          again();
           this.seeking = jump.label;
+          if (process.env.RAY_DBG) console.error(`seek ${jump.label} in ${cursor.source.location?.split('/').pop()}`);
           this.diagnostics.muted(() => {
             cursor.cursor = begin;
             while (this.seeking !== undefined && !cursor.done()) { this.spaces(cursor, true); if (cursor.done()) break; const at = cursor.cursor; this.safely(() => { const seen = this.expr(cursor, frame); if (seen !== undefined) this.settle(seen, false); }); if (cursor.cursor === at) cursor.advance(); }
@@ -792,7 +810,14 @@ export namespace Ray {
             started = true;
             continue;
           }
-          const method = this.best(frame, cursor, frame, { spaced, operand, self: true });
+          let applied: Node | undefined;
+          for (let scope: Node | undefined = frame; scope && applied === undefined; scope = scope.parent) applied = scope.subject;
+          for (let k = this.applying.length - 1; k >= 0 && applied === undefined; k--) {
+            const body = this.applying[k].impl?.body;
+            if (this.applying[k].receiver === undefined || body === undefined) continue;
+            if (body.source.location === cursor.source.location && cursor.cursor >= body.begin && cursor.cursor <= body.end) applied = this.applying[k].receiver;
+          }
+          const method = this.best(applied ?? frame, cursor, frame, { spaced, operand, self: applied === undefined });
           if (name && !(method && frame.lookup(name) === undefined && method.match.end - method.match.begin >= name.length)) { value = this.reference(frame, name, cursor.span(cursor.cursor, cursor.cursor + name.length - 1)); this.paint_reference(value); cursor.advance(name.length); started = true; continue; }
           if (method) { value = this.fire(method, cursor, frame); started = true; continue; }
           const leading = this.best(undefined, cursor, frame, { spaced, operand, leading: true });
@@ -808,14 +833,15 @@ export namespace Ray {
 
         const reads = value?.ref && !value.marks?.length ? this.bound(value)?.reads : undefined;
         const found = this.best(value, cursor, frame, { spaced, operand, forwards: reads !== undefined });
-        if (found && !(found.match.spanned && this.resolved(value)?.callable)) { value = this.fire(found, cursor, frame); continue; }
+        if (found && (this.declares(value, found.rule) || (!(found.match.spanned && this.resolved(value)?.callable) && !(this.resolved(value)?.fn !== undefined && this.opens_call(found.rule))))) { value = this.fire(found, cursor, frame); continue; }
 
         if (reads) { const at = cursor.cursor; value = this.call(value!, this.raw(cursor, reads), cursor.span(at, Math.max(at, cursor.cursor - 1)), frame); continue; }
 
         const target = this.deref(value);
-        if (target?.callable) {
+        if (this.callable_of(target)) {
           const at = cursor.cursor;
-          const end = this.operand_end(cursor, at, frame);
+          const grouped = this.claim(cursor, at, frame);
+          const end = grouped > at ? grouped : this.operand_end(cursor, at, frame);
           if (end <= at) { cursor.cursor = before; break; }
           const span = cursor.span(at, end - 1);
           cursor.cursor = end;
@@ -897,10 +923,37 @@ export namespace Ray {
       this.chains.set(frame, chain);
       return chain;
     }
+    private declarations = new WeakMap<Node, { version: number; rules: Set<Node> }>();
+    private static nothing = new Set<Node>();
+    declared(receiver: Node | undefined): Set<Node> {
+      const own = receiver && this.resolved(receiver);
+      if (!own || own.lazy) return Interpreter.nothing;
+      const cached = this.declarations.get(own);
+      if (cached && cached.version === this.version) return cached.rules;
+      const rules = new Set<Node>();
+      const sources = own.inlined === undefined ? [own] : [...own.composed(new Set())];
+      for (const from of sources) if (!this.ambient(from) && from.methods) for (const key of from.methods.keys()) if (key instanceof Node) rules.add(key);
+      this.declarations.set(own, { version: this.version, rules });
+      return rules;
+    }
+    ambient(node: Node): boolean {
+      for (let scope: Node | undefined = this.GLOBAL; scope; scope = scope.parent) if (scope === node) return true;
+      return node === this.BASE;
+    }
+    declares(receiver: Node | undefined, rule: Node): boolean {
+      const own = receiver && this.resolved(receiver);
+      if (!own || own.lazy) return false;
+      const ambient = (node: Node): boolean => { for (let scope: Node | undefined = this.GLOBAL; scope; scope = scope.parent) if (scope === node) return true; return node === this.BASE; };
+      if (own.inlined === undefined) return !ambient(own) && (own.methods?.has(rule) ?? false);
+      for (const from of own.composed(new Set())) if (!ambient(from) && from.methods?.has(rule)) return true;
+      return false;
+    }
+    private reads = new WeakMap<Node, number>();
     candidates(receiver: Node | undefined, frame: Node, opts: { self?: boolean } = {}): [Node, Node][] {
       if (receiver === undefined) return this.chain(frame).operand;
-      const own = this.resolved(receiver);
+      let own = this.resolved(receiver);
       const chain = this.chain(frame).receiver;
+      if (own === undefined && receiver.ref !== undefined) own = this.bound(receiver)?.declared;
       if (!own || own.lazy) return chain;
       const itself = own === frame && !opts.self;
       if (own.inlined === undefined) {
@@ -932,6 +985,7 @@ export namespace Ray {
       for (const scope of scopes)
         for (const other of scope.rules)
           for (const piece of other.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) heads.add(part);
+      for (const part of Node.heads) heads.add(part);
       const missing: Text.Node[] = [], seen = new Set<string>();
       const check = (span: Text.Node) => {
         const text = span.source.value;
@@ -941,7 +995,8 @@ export namespace Ray {
         let previous: string | undefined;
         for (const found of span.string.matchAll(pattern)) {
           const word = found[0], at = span.begin + found.index!;
-          const raw = previous !== undefined && frame.lookup(previous)?.reads !== undefined;
+          const head = previous !== undefined ? this.rule_head(previous, frame) : undefined;
+          const raw = (previous !== undefined && frame.lookup(previous)?.reads !== undefined) || (head !== undefined && head.pattern!.some(piece => piece.kind === 'capture' && piece.raw));
           previous = word;
           if (raw || text[at - 1] === '^' || bound.has(word) || seen.has(word)) continue;
           if (at > 0 && this.starts_rule(whole, at - 1, frame)) continue;
@@ -977,16 +1032,60 @@ export namespace Ray {
         const leading = pieces[0]?.kind === 'capture';
         const first = pieces[leading ? 1 : 0];
         if (!!opts.newline !== (first?.kind === 'newline')) continue;
-        const match = this.match(pieces, cursor, frame, { receiver, leading, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0 });
-        if (!match) continue;
+        const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule) });
+          if (!match) continue;
+        const loose = pieces[0]?.kind === 'space';
         if (best && best.match.spanned !== match.spanned) { if (match.spanned) continue; best = { rule, impl, match }; continue; }
         const own = match.pattern - match.begin, current = best ? best.match.pattern - best.match.begin : -1;
         const length = match.end - match.begin, total = best ? best.match.end - best.match.begin : -1;
-        if (own > current || (own === current && (length > total || (length === total && best!.impl.forward && !impl.forward)))) best = { rule, impl, match };
+        // A rule that only asks for a space where one already is stays behind
+        // a rule that spells the same ground out, but never ahead of a longer
+        // reading of it.
+        const tie = best !== undefined && (best.rule.pattern![0]?.kind === 'space') !== loose ? (loose ? -1 : 1) : 0;
+        if (own > current || (own === current && (length > total || (length === total && (tie > 0 || (tie === 0 && best!.impl.forward && !impl.forward)))))) best = { rule, impl, match };
       }
       return best;
     }
 
+    // Which brackets hold parameters is not the engine's to know: the rule that
+    // defines a method says so by styling that capture `^parameter`, and the
+    // entrypoint declares its shape up front with `forward`.
+    private grouping(frame: Node): [string, string] | undefined {
+      const scopes: Node[] = [];
+      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.push(scope);
+      if (this.BASE) scopes.push(this.BASE);
+      for (const scope of scopes)
+        for (const rule of scope.rules) {
+          const pieces = rule.pattern;
+          if (!pieces || pieces.length < 3) continue;
+          const open = pieces[0], inner = pieces[1], close = pieces[2];
+          if (open.kind !== 'literal' || close.kind !== 'literal' || inner.kind !== 'capture') continue;
+          if (!inner.styles.some(style => style.string.replace(/^\^/, '').trim() === 'parameter')) continue;
+          const from = open.text.trim(), to = close.text.trim();
+          if (from.length > 0 && to.length > 0) return [from, to];
+        }
+      return undefined;
+    }
+    // The rest of a parameter list the same way: which literal separates one
+    // parameter from the next, and which one puts a type on it, is whatever the
+    // rules marked `^separator` and `^annotation` say. Rule styles are read off
+    // the definition head before any parameter list is parsed, so this holds
+    // while the entrypoint is still defining itself.
+    private marked(frame: Node, style: string): string | undefined {
+      const scopes: Node[] = [];
+      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.push(scope);
+      if (this.BASE) scopes.push(this.BASE);
+      for (const scope of scopes)
+        for (const rule of scope.rules) {
+          const pieces = rule.pattern;
+          if (!pieces || pieces.length !== 1 || pieces[0].kind !== 'literal') continue;
+          const impl = scope.methods?.get(rule);
+          if (!impl?.decorators?.some(each => each.string.replace(/^\^/, '').trim() === style)) continue;
+          const text = pieces[0].text.trim();
+          if (text.length > 0) return text;
+        }
+      return undefined;
+    }
     private words = new Map<string, string[]>();
     literal(cursor: Text.Node, j: number, literal: string): number {
       const text = cursor.source.value, limit = cursor.limit;
@@ -1006,7 +1105,7 @@ export namespace Ray {
       return j;
     }
 
-    match(pieces: Piece[], cursor: Text.Node, frame: Node, opts: { receiver?: Node; leading: boolean; tight: boolean; params: number }): Match | undefined {
+    match(pieces: Piece[], cursor: Text.Node, frame: Node, opts: { receiver?: Node; leading: boolean; tight: boolean; params: number; spaced?: boolean; owned?: boolean }): Match | undefined {
       const text = cursor.source.value, limit = cursor.limit;
       let i = cursor.cursor;
       const captures = new Map<string, Text.Node>(), operators = new Map<string, Text.Node>();
@@ -1030,7 +1129,10 @@ export namespace Ray {
         if (from > i && piece.kind !== 'space' && pieces[p - 1]?.kind !== 'space') spanned = true;
         switch (piece.kind) {
           case 'literal': {
-            const j = this.literal(cursor, from, piece.text);
+            const word = /[\p{L}\p{N}_]/u;
+            let j = this.literal(cursor, from, piece.text);
+            const edge = piece.text.trim();
+            if (j >= 0 && edge.length > 0 && ((word.test(edge[0]) && from > 0 && word.test(text[from - 1])) || (word.test(edge[edge.length - 1]) && text[j] !== undefined && word.test(text[j])))) j = -1;
             if (j < 0) {
               const close = optional(p);
               if (close < 0) return;
@@ -1041,7 +1143,7 @@ export namespace Ray {
             }
             literals.push([p, from, j - 1]); i = j; break;
           }
-          case 'space': { const j = this.skip(cursor, i); if (j === i && i < limit && text[i] !== '\n' && !skipped) return; i = j; break; }
+          case 'space': { const j = this.skip(cursor, i); if (j === i && i < limit && text[i] !== '\n' && !skipped && !(p === 0 && opts.owned && opts.spaced)) return; i = j; break; }
           case 'newline': { if (text[from] !== '\n') return; i = from + 1; break; }
           case 'operator': { const j = this.operator_end(cursor, from, frame); if (j <= from) return; operators.set(piece.name, cursor.span(from, j - 1)); i = j; break; }
           case 'capture': {
@@ -1079,9 +1181,10 @@ export namespace Ray {
             else if (next?.kind === 'newline') end = this.line_end(cursor, from, frame, piece.raw);
             else if (next?.kind === 'space') end = this.word_end(cursor, from, frame);
             else if (next?.kind === 'operator') end = this.operand_end(cursor, from, frame);
-            else if (next === undefined && p === pieces.length - 1) end = juxtaposition || opts.tight || opts.params > 0 || pieces[p - 1]?.kind === 'space' ? this.operand_end(cursor, from, frame, piece.raw) : this.line_end(cursor, from, frame, piece.raw);
+            else if (next === undefined && p === pieces.length - 1) end = (piece.raw && opts.receiver !== undefined) || juxtaposition || opts.tight || opts.params > 0 || pieces[p - 1]?.kind === 'space' ? this.operand_end(cursor, from, frame, piece.raw) : this.line_end(cursor, from, frame, piece.raw);
             else return;
             if (end === from && piece.optional) { captures.set(piece.name, cursor.span(from, from - 1)); skipped = true; break; }
+            if (!piece.raw && end > from) { const seen = text.slice(from, end).trim(); if (seen.length > 0 && !/[\p{L}\p{N}_]/u.test(seen[0]) && Node.heads.has(seen)) return; }
             if (end < from || (end === from && next?.kind !== 'literal')) return;
             if (!piece.raw && next === undefined && end === from + 1 && !/[\p{L}\p{N}_]/u.test(text[from])) return;
             captures.set(piece.name, cursor.span(from, end - 1));
@@ -1201,15 +1304,23 @@ export namespace Ray {
       return j;
     }
     starts_rule(cursor: Text.Node, j: number, frame: Node): boolean {
+      const text = cursor.source.value, word = /[\p{L}\p{N}_]/u;
+      const begins = (literal: string): boolean => {
+        if (word.test(literal[0]) && j > 0 && word.test(text[j - 1])) return false;
+        const end = this.literal(cursor, j, literal);
+        if (end <= j) return false;
+        const after = text[end];
+        return !(word.test(literal[literal.length - 1]) && after !== undefined && word.test(after));
+      };
       const chain = this.chain(frame);
       for (const [rule, impl] of [...chain.receiver, ...chain.operand]) {
         const first = rule.pattern![0];
         if (impl.forward || first?.kind !== 'literal') continue;
-        if (this.literal(cursor, j, first.text) > j) return true;
+        if (begins(first.text)) return true;
       }
       for (const [rule] of this.brackets(frame)) {
         const last = rule.pattern![rule.pattern!.length - 1];
-        if (last?.kind === 'literal' && this.literal(cursor, j, last.text) > j) return true;
+        if (last?.kind === 'literal' && begins(last.text)) return true;
       }
       return false;
     }
@@ -1225,6 +1336,8 @@ export namespace Ray {
     }
     word_end(cursor: Text.Node, j: number, frame: Node): number {
       const text = cursor.source.value, limit = cursor.limit;
+      const claimed = this.claim(cursor, j, frame);
+      if (claimed > j) return claimed;
       if (this.edges(frame).has(text[j])) return j;
       while (j < limit && !/\s/.test(text[j]) && this.claim(cursor, j, frame) === j) j++;
       return j;
@@ -1294,7 +1407,7 @@ export namespace Ray {
         if (node.lazy) { node = this.force(node); continue; }
         const bound = this.bound(node);
         if (bound === undefined) {
-          if (report && !node.ref!.scope.unknown && !(node.ref!.member && (this.probing || this.analyzing))) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined;
+          if (report && !node.ref!.scope.unknown && !this.analyzing && !(node.ref!.member && this.probing)) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined;
         }
         node = bound;
       }
@@ -1358,19 +1471,59 @@ export namespace Ray {
       if (target?.style !== undefined) return this.style(`${target.style}.${name}`);
       const method = target && this.method_of(target, name);
       if (method) return this.apply({ rule: method[0], impl: method[1], match: this.trivial(target, key.position ?? node.position!) }, this.cursor_of(key.position ?? node.position!), target, key.position ?? node.position!);
+      const parameterised = target && this.method_of(target, name, { parameterised: true });
+      if (parameterised) {
+        const [rule, impl] = parameterised;
+        const at = key.position ?? node.position!;
+        const bound = new Node(this.diagnostics, at);
+        bound.arity = impl.params!.length;
+        bound.fn = ({ interpreter, frame, args }) => {
+              const spans = args.map(argument => argument.lazy?.span ?? argument.position).filter((span): span is Text.Node => span !== undefined);
+          if (spans.length < impl.params!.length) return undefined;
+          const match = { ...interpreter.trivial(target, at), args: spans };
+          return interpreter.apply({ rule, impl, match }, interpreter.cursor_of(at), frame, at);
+        };
+        return bound;
+      }
       const slot = new Node(this.diagnostics, key.position);
       slot.ref = { scope: target ?? this.unknown(key.position), key: name, own: true, member: true };
       if (forced?.literal && forced.position && target) this.paint_reference(Object.assign(new Node(this.diagnostics, forced.position), { ref: slot.ref }));
       return slot;
     }
-    method_of(target: Node, name: string): [Node, Node] | undefined {
+    opens_call(rule: Node): boolean {
+      const pieces = rule.pattern!;
+      const open = pieces[0];
+      if (pieces.length < 3 || open?.kind !== 'literal') return false;
+      const text = open.text.trim();
+      if (text.length === 0 || /[\p{L}\p{N}_]/u.test(text[0])) return false;
+      return pieces.slice(1).some(piece => piece.kind === 'literal');
+    }
+    calls(rule: Node): boolean {
+      return this.opens_call(rule) && rule.pattern![rule.pattern!.length - 1].kind === 'literal';
+    }
+    call_rule(target: Node | undefined): [Node, Node] | undefined {
+      if (!target) return undefined;
+      const seen = new Set<Node>();
+      for (const from of target.composed(seen)) {
+        for (const rule of from.rules) {
+          if (!this.calls(rule)) continue;
+          const impl = from.methods!.get(rule)!;
+          if (impl.forward) continue;
+          return [rule, impl];
+        }
+      }
+    }
+    callable_of(target: Node | undefined): boolean {
+      return target !== undefined && (target.callable || this.call_rule(target) !== undefined);
+    }
+    method_of(target: Node, name: string, opts: { parameterised?: boolean } = {}): [Node, Node] | undefined {
       const seen = new Set<Node>();
       for (const from of target.composed(seen)) {
         for (const rule of from.rules) {
           const pieces = rule.pattern!;
           if (pieces.length !== 1 || pieces[0].kind !== 'literal' || pieces[0].text.trim() !== name) continue;
           const impl = from.methods!.get(rule)!;
-          if (impl.forward || impl.params?.length) continue;
+          if (impl.forward || (opts.parameterised ? !impl.params?.length : impl.params?.length)) continue;
           return [rule, impl];
         }
       }
@@ -1386,7 +1539,7 @@ export namespace Ray {
       this.spaces(cursor);
       return value && cursor.done() ? value : node;
     }
-    assign(slot: Node, value: Node, at: Text.Node): Node | undefined {
+    assign(slot: Node, value: Node | undefined, at: Text.Node): Node | undefined {
       let node = this.reference_of(slot);
       const marks: Node[] = [...(node.marks ?? [])];
       for (let depth = 0; node.ref && !node.marks?.length && depth < 64; depth++) {
@@ -1394,7 +1547,9 @@ export namespace Ray {
         const next = bound && this.reference_of(bound);
         if (next?.ref) { node = next; marks.push(...(next.marks ?? [])); } else break;
       }
-      const result = this.deref(value);
+      const thunk = value?.lazy !== undefined && value.value === undefined && !value.lazy.raw ? value : value !== undefined ? this.unforced(value) : undefined;
+      const grouped = thunk?.lazy !== undefined && thunk.value === undefined && this.inner(thunk.lazy.span, thunk.lazy.frame) !== undefined;
+      const result = grouped ? thunk : this.deref(value);
       if (node.ref) {
         const bound = this.bound(node);
         if (bound?.style !== undefined) { this.alias(bound.style, result); return result; }
@@ -1433,6 +1588,17 @@ export namespace Ray {
         let real: Node | undefined;
         for (let scope: Node | undefined = frame; scope && !real; scope = scope.parent) { const own = scope.own(name); if (own && !own.forward) real = own; }
         return real ? this.call(real, arg, at, frame) : arg;
+      }
+      if (!target.fn && target.params === undefined) {
+        const found = this.call_rule(target);
+        const span = arg.lazy?.span ?? arg.position;
+        if (found && span) {
+          const capture = found[0].pattern!.find(piece => piece.kind === 'capture');
+          if (capture) {
+            const match: Match = { begin: at.begin, end: at.end + 1, pattern: at.end + 1, spanned: false, literals: [], captures: new Map([[capture.name, span]]), operators: new Map(), args: [], receiver: target, tight: true };
+            return this.apply({ rule: found[0], impl: found[1], match }, this.cursor_of(at), frame, at);
+          }
+        }
       }
       const applied = [...(target.applied ?? []), arg];
       const arity = target.fn ? (target.arity ?? 1) : Math.max(target.params?.length ?? 1, 1);
@@ -1531,6 +1697,8 @@ export namespace Ray {
         if (span) this.paint(span, () => styles(p), styling, rule.key);
       });
       match.args.forEach((span, k) => this.paint(span, () => current().param_styles?.[k] ?? [], styling, rule.key));
+      // Parameters are values, not blocks: reading them here is what lets a
+      // method be called with its argument beside it rather than in brackets.
       const args = match.args.map(span => { const node = this.lazy(span, frame, false); if (!this.probing) this.deferred.push(node); return node; });
       if (!impl.forward) this.receives(rule, impl, match.receiver);
       if (this.probing) {
@@ -1542,9 +1710,18 @@ export namespace Ray {
 
       const local = this.frame(frame, `${rule.key}@${this.anchor(at)}`, impl.closure ?? this.GLOBAL);
       local.given = new Set([...captures.keys(), ...(impl.params ?? []), ...(match.receiver !== undefined ? ['this'] : [])]);
-      if (match.receiver !== undefined) this.bind(local, 'this', match.receiver);
+      if (match.receiver !== undefined) { this.bind(local, 'this', match.receiver); local.subject = match.receiver; }
       for (const [name, node] of captures) this.bind(local, name, node);
-      impl.params?.forEach((param, k) => this.bind(local, param, args[k]));
+      impl.params?.forEach((param, k) => {
+        // What a parameter was declared to be is what its rules are, before
+        // anyone reads the argument itself.
+        const written = impl.param_types?.[k];
+        if (written !== undefined && args[k] !== undefined) {
+          const named = this.diagnostics.muted(() => this.safely(() => this.deref(this.reference(impl.closure ?? frame, written.string.trim(), written), false)));
+          if (named !== undefined) args[k].declared = named;
+        }
+        this.bind(local, param, args[k]);
+      });
       for (const piece of rule.pattern!) {
         if (piece.kind !== 'capture' || piece.modifiers.length === 0) continue;
         const span = match.captures.get(piece.name);
@@ -1553,17 +1730,20 @@ export namespace Ray {
         if (node === undefined) continue;
         for (const word of piece.modifiers) {
           const modifier = this.resolved(this.reference(local, word, piece.group));
-          if (modifier?.fn) this.safely(() => modifier.fn!({ interpreter: this, frame: local, args: [node], method: modifier, at: piece.group }));
+          if (!modifier?.fn) continue;
+          const before = new Set<Key>(local.methods?.keys() ?? []);
+          this.safely(() => modifier.fn!({ interpreter: this, frame: local, args: [node], method: modifier, at: piece.group }));
+          for (const [key, value] of local.methods ?? []) if (typeof key === 'string' && !before.has(key)) this.attach(local, key, value);
         }
       }
       this.ran.add(rule.key!);
-      this.applying.push({ rule, impl, receiver: match.receiver });
+      this.applying.push({ rule, impl, receiver: match.receiver, local });
       try {
         if (impl.fn) return impl.fn({ interpreter: this, frame: local, self: match.receiver, method: impl, args: [...captures.values(), ...args], at });
         if (!impl.body) return undefined;
-        if (!rule.pattern!.some(piece => piece.kind === 'operator')) return this.unalias(this.array(this.cursor_of(impl.body), local), local);
+        if (!rule.pattern!.some(piece => piece.kind === 'operator')) return this.unalias(this.array(this.cursor_of(impl.body), local, false, impl.params !== undefined), local);
         this.rewriting.add(rule);
-        try { return this.unalias(this.array(this.cursor_of(impl.body), local), local); }
+        try { return this.unalias(this.array(this.cursor_of(impl.body), local, false, impl.params !== undefined), local); }
         finally { this.rewriting.delete(rule); }
       } finally { this.applying.pop(); }
     }
@@ -1690,6 +1870,8 @@ export namespace Ray {
       let params: string[] | undefined;
       let param_styles: Text.Node[][] | undefined;
       const param_names: Text.Node[] = [], param_types: Text.Node[] = [];
+      const held = this.grouping(frame);
+      const between = this.marked(frame, 'separator'), annotates = this.marked(frame, 'annotation');
       chunks.forEach((chunk, k) => {
         const s = chunk.string;
         if (pattern.length === 0 && k < chunks.length - 1 && /^[\p{L}_]/u.test(s)) {
@@ -1697,23 +1879,23 @@ export namespace Ray {
           if (modifier) { modifiers.push(modifier); this.paint_reference(this.reference(frame, s, chunk)); return; }
         }
         if (this.decorates(chunk, frame)) { decorators.push(chunk); return; }
-        if (pattern.length > 0 && s.startsWith('(') && s.endsWith(')') && !s.includes('{') && chunks.slice(k + 1).every(x => this.decorates(x, frame))) {
+        if (pattern.length > 0 && held !== undefined && between !== undefined && annotates !== undefined && s.startsWith(held[0]) && s.endsWith(held[1]) && !s.includes('{') && chunks.slice(k + 1).every(x => this.decorates(x, frame))) {
           params = []; param_styles = [];
-          for (const part of s.slice(1, -1).split(',')) {
-            const offset = chunk.begin + 1 + s.slice(1, -1).indexOf(part);
+          for (const part of s.slice(held[0].length, -held[1].length).split(between)) {
+            const offset = chunk.begin + held[0].length + s.slice(held[0].length, -held[1].length).indexOf(part);
             const tokens = part.trim() ? this.tokens(chunk.span(offset, offset + part.length - 1), frame) : [];
             const styles = tokens.filter(token => this.decorates(token, frame));
             const plain = tokens.filter(token => !styles.includes(token));
-            const name = plain.map(token => token.string).join(' ').split(':')[0].trim();
+            const name = plain.map(token => token.string).join(' ').split(annotates)[0].trim();
             if (!name) continue;
             params.push(name); param_styles.push(styles);
             const first = plain[0];
             if (first) param_names.push(first.span(first.begin, first.begin + name.length - 1));
-            const annotated = plain.find(token => token.string.includes(':'));
+            const annotated = plain.find(token => token.string.includes(annotates));
             if (annotated) {
-              const colon = annotated.string.indexOf(':');
+              const colon = annotated.string.indexOf(annotates);
               const last = plain[plain.length - 1];
-              if (annotated.begin + colon < last.end) param_types.push(annotated.span(annotated.begin + colon + 1, last.end));
+              if (annotated.begin + colon < last.end) param_types.push(annotated.span(annotated.begin + colon + annotates.length, last.end));
             }
           }
           return;
@@ -1727,9 +1909,9 @@ export namespace Ray {
       rule.pattern = pieces; rule.position = lhs;
       const impl = new Node(this.diagnostics, body ?? lhs);
       impl.body = body; impl.closure = frame; impl.params = params; impl.param_styles = param_styles; impl.modifiers = modifiers; impl.decorators = decorators;
+      impl.param_types = param_types.length > 0 ? param_types : undefined;
       if (!this.probing) { this.bind(frame, rule, impl); this.definitions.push(key); this.sites.set(`rule::${key}`, lhs); }
       if (this.probing || (this.owns(lhs.source) && !this.in_body(lhs) && this.first_site(lhs))) {
-        for (const piece of pieces) if (piece.kind === 'newline' && piece.group && frame.lookup(piece.group.string) === undefined) this.error(`Unresolved \`${piece.group.string}\`.`, piece.group);
         const scope = this.definition_scope(frame, rule, impl);
         this.paint_definition(pattern, decorators, scope, key, { arrow, params: param_names, types: param_types, styles: param_styles?.flat(), pieces });
         if (body) this.paint_body(body, scope);
@@ -1839,15 +2021,17 @@ export namespace Ray {
       if (s.length > 0 && /^[ \t]+$/.test(s)) return { kind: 'space' };
       if (s === '\\n') return { kind: 'newline', group: content };
       const styles: Text.Node[] = [], words: string[] = [], typing: string[] = [];
+      const annotates = this.marked(frame, 'annotation'), opens = this.grouping(frame)?.[0];
+      const grouped = (t: string) => opens !== undefined && t.startsWith(opens);
       for (const token of parts) {
         const t = token.string;
         if (this.decorates(token, frame)) { styles.push(token); continue; }
         if (typing.length > 0) { typing.push(t); continue; }
-        const colon = t.startsWith('(') ? -1 : t.indexOf(':');
-        if (colon >= 0) { if (colon > 0) words.push(t.slice(0, colon)); typing.push(t.slice(colon + 1)); continue; }
+        const colon = annotates === undefined || grouped(t) ? -1 : t.indexOf(annotates);
+        if (colon >= 0) { if (colon > 0) words.push(t.slice(0, colon)); typing.push(t.slice(colon + annotates!.length)); continue; }
         words.push(t);
       }
-      let name = words.length > 0 && !words[words.length - 1].startsWith('(') ? words.pop()! : '';
+      let name = words.length > 0 && !grouped(words[words.length - 1]) ? words.pop()! : '';
       if (name === '' && words.length > 0) typing.unshift(words.pop()!);
       const raw = words.some(word => this.resolved(this.reference(frame, word, content))?.fn === Natives.literal.fn);
       let type = typing.join(' ').trim() || undefined;
@@ -2035,6 +2219,10 @@ export namespace Ray {
       const word = text.slice(j + 1, end + 1);
       return word.length > 0 && scope.lookup(word)?.reads !== undefined;
     }
+    rule_head(word: string, frame: Node): Node | undefined {
+      const chain = this.chain(frame);
+      for (const [rule, impl] of [...chain.operand, ...chain.receiver]) if (!impl.forward && this.head(rule) === word) return rule;
+    }
     paint_rule(word: string, span: Text.Node, scope: Node) {
       if (this.raw_argument(span, scope)) return;
       const spans = this.verbatim.get(span.source.location ?? '');
@@ -2069,18 +2257,20 @@ export namespace Ray {
       const tokens = this.tokens(content, scope);
       const decorators = tokens.filter(token => this.decorates(token, scope));
       decorators.forEach(token => this.paint_decorator(token, scope));
+      const annotates = this.marked(scope, 'annotation'), opens = this.grouping(scope)?.[0];
+      const grouped = (t: string) => opens !== undefined && t.startsWith(opens);
       const words: Text.Node[] = [], types: Text.Node[] = [];
       for (const token of tokens) {
         if (decorators.includes(token)) continue;
         const t = token.string;
         if (types.length > 0) { types.push(token); continue; }
-        const colon = t.startsWith('(') || t.startsWith('`') ? -1 : t.indexOf(':');
+        const colon = annotates === undefined || grouped(t) || t.startsWith('`') ? -1 : t.indexOf(annotates);
         if (colon < 0) { words.push(token); continue; }
         if (colon > 0) words.push(token.span(token.begin, token.begin + colon - 1));
-        types.push(token.span(token.begin + colon + 1, token.end));
+        types.push(token.span(token.begin + colon + annotates!.length, token.end));
       }
       const last = words[words.length - 1];
-      const name = last && !last.string.startsWith('(') ? words.pop() : undefined;
+      const name = last && !grouped(last.string) ? words.pop() : undefined;
       if (!name && last) types.unshift(words.pop()!);
       for (const word of words) this.paint_words(word, scope);
       if (name) {
@@ -2155,7 +2345,7 @@ export namespace Ray {
     private binders = new Set<string>();
     binder_of(rule: Node): string { const at = rule.position; return at ? `${at.source.location}:${at.begin}` : rule.key!; }
     private ran = new Set<string>();
-    private applying: { rule: Node; impl?: Node; receiver?: Node }[] = [];
+    private applying: { rule: Node; impl?: Node; receiver?: Node; local?: Node }[] = [];
     mark_instance(receiver: Node | undefined, closure: Node) {
       if (!receiver?.ref || closure === this.GLOBAL) return;
       const scope = this.scope_of(receiver) ?? receiver.ref.scope;
@@ -2464,10 +2654,11 @@ export namespace Ray {
       this.building = previous;
       return theme;
     }
-    report(level: Node, variable: Node, comment: Node): Node {
+    report(level: Node | undefined, variable: Node | undefined, comment: Node | undefined, at?: Text.Node): Node | undefined {
       const levels: Record<string, Diagnostic['level']> = { FATAL: 'fatal', ERROR: 'error', WARN: 'warning', INFO: 'info', DEBUG: 'debug', TRACE: 'trace' };
-      const target = this.resolved(variable);
-      this.diagnostics.report({ level: levels[this.text(level)] ?? 'error', message: this.text(comment), node: target?.position ?? variable.position });
+      const target = variable && this.resolved(variable);
+      const node = target?.position ?? variable?.position ?? comment?.position ?? at;
+      if (node) this.diagnostics.report({ level: (level && levels[this.text(level)]) ?? 'error', message: comment ? this.text(comment) : '', node });
       return comment;
     }
     program_of(node: Node): Node | undefined {
@@ -2565,7 +2756,7 @@ export namespace Ray {
     'literal': { arity: 1, fn: ({ args: [node] }) => node },
     'unordered': { arity: 1, fn: ({ args: [node] }) => node },
     'theme': { arity: 2, fn: ({ interpreter, args: [name, block], at }) => interpreter.theme_of(name, block, at) },
-    'report': { arity: 3, fn: ({ interpreter, args: [level, variable, comment] }) => interpreter.report(level, variable, comment) },
+    'report': { arity: 3, fn: ({ interpreter, args: [level, variable, comment], at }) => interpreter.report(level, variable, comment, at) },
     '^': { arity: 1, fn: ({ interpreter, args: [name] }) => interpreter.style(interpreter.text(name)) },
     '**': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.program_of(node) },
     '=': identity,

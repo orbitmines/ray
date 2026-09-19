@@ -1,42 +1,228 @@
-Ray := class {
-  previous => TODO
-  next => TODO
+// -> (): Ray => next: () => Ray(next: next())
+// <- (): Ray => previous: () => Ray(previous: previous())
+// <--> (): Ray => (<-) &+ (->)
 
+
+// What the language reaches today. `Ray < Iterable & Ordered` becomes a single
+// chain of bases until a class can name more than one, and the draft's unicode
+// aliases (⊢ ⊣ ∙ ⊙ ∃ ∀) wait on a way to spell them.
+Ordered := class {
+  < (other: Ordered) => TODO
+  // `.<(…)` rather than `<`: a juxtaposed call is dispatched on what the
+  // parameter was declared to be, and here that is only `Ordered`, whose `<`
+  // is the one being overridden.
+  > (other: Ordered) => other.<(this)
+  <= (other: Ordered) => other.<(this).not
+  >= (other: Ordered) => .<(other).not
+
+  min (other: Ordered) => if (.<(other)) { this } else { other }
+  max (other: Ordered) => if (.<(other)) { other } else { this }
+}
+
+// class Ray < Iterable & Ordered
+//   initial | (internal right-to-left ⊢) : Boundary = Boundary.Initial(∙: this)
+//   terminal | (internal ⊣) : Boundary = Boundary.Terminal(∙: this)
+
+//   is_initial => ∃⊙⊢ .is_initial
+//   is_terminal => ∃⊣⊙ .is_terminal
+
+//   is_first => ∀⊙⊢ .is_initial
+//   is_last => ∀⊣⊙ .is_terminal
+
+//   entry => this
+
+// class Boundary < Ray
+//   vertex | (internal bidirectional ∙) : Ray
+//   edge | (internal bidirectional ⊙) : Edge
+
+//   static class Initial < Boundary
+//     ⊙ = Edge(x.terminal: this)
+
+//     ∙⊣⊙initial </ = Boundary.Initial(∙: ⊢∙⊣⊙ </) //TODO Something like this, should also respect if None.
+//     terminal⊙⊢∙ = Boundary.Initial(∙: ∙⊣⊙⊢) //TODO Edge works
+//   static class Terminal < Boundary
+//     ⊙ = Edge(x.initial: this)
+
+//     ∙⊣⊙initial </ = Boundary.Terminal(∙: ⊣⊙⊢∙ </)
+//     terminal⊙⊢∙ = Boundary.Terminal(∙: ⊙⊢∙⊣)
+
+// class Edge < Ray
+//   value | (internal x) : {
+//     initial | (internal right-to-left ⊣) : Boundary?
+//     terminal | (internal ⊢) : Boundary?
+//   }
+
+//   is_initial => x.initial == None
+//   is_terminal => x.terminal == None
+
+//   initial = Boundary(∙: ⊙⊢∙⊣x)
+//   terminal = Boundary(∙: x⊢∙⊣⊙)
+
+// class Iterable<Vertex: Ray = Ray>
+//   dynamically assert count < ∞ if bounded: boolean = true
+
+//   empty => count == 0
+//   nonempty => !empty
+//   unbounded => !bounded
+//   connected =>  // each Node is reachable from each other Node. (Going both forward and backward)
+//   consistent =>
+//   acyclic =>
+//   undirected =>  // Initial === Terminal
+//   unidirectional =>
+//     return  // Tell the compiler links should be one-way
+//    Reverse\
+//     return
+
+//   compact => this~{!=.instance_of None}
+
+//   class boundary
+//     () => boundary.initial | boundary.terminal
+//     initial: Boundary => (⊢all{is_initial}){⊙.is_initial}
+//     terminal: Boundary => (all{is_terminal}⊣){⊙.is_terminal}
+
+//   first => all{is_first}
+//   last => all{is_last}
+
+//   entry: Vertex?
+
+//   for <traverse: Traverser>(yield: (x: Vertex): *) traverse<.yield: yield<local: &caller, break: return>>(this.entry) if this.entry
+
+//   every (predicate: (x: Vertex): boolean) map(predicate)~{== false}.empty
+//   some (predicate: (x: Vertex): boolean) ~{predicate}.nonempty
+
+//   all => reduce(|)
+
+//   paths: Path{.bounded: bounded} => //TODO With traverser.
+
+//   length => paths.length
+//   count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
+
+//   + (at: Integer) this[at]
+//   - (at: Integer) this[-at]
+//   ± | +- | -+ (at: Integer) this[at] | this[-at]
+//   [at: Integer] => // TODO compose right/left only on selected traverser.
+
+//   fill (x) all = x
+
+// with Traverser.(default = BreadthFirst)
+// with Traverser.(default = 4 * DepthFirst, BreadthFirst)
+// with Traverser.(default = 4 * BreadthFirst, DepthFirst)
+// with Traverser.(default = 100 * BreadthFirst, 2 * (BreadthFirst if 50% else DepthFirst), (entry) => BreadthFirst if entry.SOMETHING else DepthFirst)
+// class Traverser < <yield: (x: Ray): None>(entry: Ray): None
+//   static default = DepthFirst
+
+  //TODO How to combine traversers like Left only but breathfirst depth-first X levels then breadth
+//   static BreadthFirst: Traverser = (entry: Ray) =>
+//     while next = (next ?? this).iter => next#.for~step<local: &caller, .break: break>(callback)
+//    step\
+//     while next = (next ?? this).iter => yield next
+
+// class Ordered
+
+Iterable := class: Ordered {
+  entry => None
+
+  empty => .count.is_zero
+  nonempty => .empty.not
+
+  bounded => true
+  unbounded => .bounded.not
+
+  count => if (exists .entry) { .entry.count } else { zero }
+
+  first => .entry.first
+  last => .entry.last
+
+  // `reduce` is the draft's one traversal primitive: `count`, `all`, `every`
+  // and `some` are folds over it, once a block can be handed to another rule.
+  reduce (step) => TODO
+  for (yield) => TODO
+
+  every (predicate: Ordered) => TODO
+  some (predicate) => TODO
+  all => TODO
+  fill (x) => TODO
+
+  connected => TODO
+  consistent => TODO
+  acyclic => TODO
+  undirected => TODO
+  unidirectional => TODO
+
+  compact => TODO
+  paths => TODO
+  length => .paths.length
+}
+
+Ray := class: Iterable {
   entry => this
 
-  empty => (
-    goto some if this
-    return true
-   some\
+  is_initial => (exists .previous).not
+  is_terminal => (exists .next).not
 
-    return false
-  )
-  nonempty => .empty.not
+  is_first => .is_initial
+  is_last => .is_terminal
 
-  is_initial => .previous.empty
-  is_terminal => .next.empty
+  initial => if .is_initial { this } else { .previous.initial }
+  terminal => if .is_terminal { this } else { .next.terminal }
 
-  == (other) => (
-    goto here if this
-    return other.empty
-   here\
-    goto there if other
-    return false
-   there\
+  first => .initial
+  last => .terminal
 
-    return .next == other.next
-  )
-  != (other) => (this == other).not
+  count => if .is_terminal { one } else { .next.count.succ }
+
+  == (other: Ray) => if .is_terminal { other.is_terminal } elsif other.is_terminal { false } else { .next == other.next }
+  != (other: Ray) => (this == other).not
 }
 
-Iterable := class {
-  count => TODO
-
-  empty => .first.empty
-  nonempty => .empty.not
-
-  first => TODO
-  last => TODO
-
-  add (entry) => TODO
+// A boundary is the ray a vertex shows to the edge it sits on; an edge is the
+// ray between two boundaries. Both are rays themselves, which is what makes
+// the structure self-similar. `Boundary.Initial` / `Boundary.Terminal` wait on
+// a class being able to nest another that extends it.
+Boundary := class: Ray {
+  vertex => None
+  edge => None
 }
+
+Edge := class: Ray {
+  from => None
+  to => None
+
+  is_initial => (exists .from).not
+  is_terminal => (exists .to).not
+}
+
+
+
+// class Structure < Iterable<Ray{
+//   initial & terminal : (1 unless HyperContinuations) Vertex.Boundary
+// }>
+//   Vertex.Boundary = Boundary{
+//     ∙: (1 unless HyperEdges) Vertex
+//     ⊙: (1 unless HyperEdges) Edge{
+//       initial & terminal : (1 unless HyperEdges) Vertex.Boundary
+//     }
+//   }
+//   internal static HyperContinuations: boolean
+//   internal static HyperEdges: boolean = false
+
+// class Hypergraph < Structure
+//   HyperEdges = true
+// class Graph < Structure
+//   HyperContinuations = true
+// class Forest < Structure{acyclic & consistent}
+//   Vertex = Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
+//   HyperContinuations = true
+// class Tree < Forest{connected}
+// class Path < Structure{consistent & connected}
+//   HyperContinuations = false
+
+//   paths => this
+//   length: 1 N∞ =>
+//     return 0 unless entry
+//     reduce(acc = 0, current =>
+//       break ∞ if current.(previous | next)** // TODO Infinitely generates check or in a loop
+//       acc + 1
+//     )
+// class Array < Path{acyclic}
+

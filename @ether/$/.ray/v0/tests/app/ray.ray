@@ -32,3 +32,34 @@ c2_ok\
 goto c3_ok if (b.min(b)) == b
 INFO@mark `Ordered.min did not reach Ray`
 c3_ok\
+
+c := Ray(previous: b)
+goto d1_ok if (a.at(two)) == c
+INFO@mark `R8 at(2) did not reach the third ray`
+d1_ok\
+
+seen ^keyword := zero
+a for { seen = seen.succ }
+goto d2_ok if seen == three
+INFO@mark `R9 for did not visit three rays`
+d2_ok\
+
+goto d3_ok if (a every { it.nonempty }).holds
+INFO@mark `R10 every failed`
+d3_ok\
+
+goto d4_ok if (a some { it.is_terminal }).holds
+INFO@mark `R11 some failed`
+d4_ok\
+
+goto d5_ok if a.initial_boundary.is_initial.holds
+INFO@mark `R12 initial boundary is not initial`
+d5_ok\
+
+goto d6_ok if a.terminal_boundary.edge.is_terminal.holds
+INFO@mark `R13 the edge of a terminal boundary is not terminal`
+d6_ok\
+
+goto d7_ok if a.acyclic.holds
+INFO@mark `R14 a chain is not acyclic`
+d7_ok\

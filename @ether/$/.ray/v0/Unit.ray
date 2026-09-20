@@ -1,0 +1,116 @@
+// From the draft at .ray2/_todo/ray.ray.txt/Ether/instance/utils/Unit.ray.
+// What the language reaches today: a unit is named, has a symbol, and is
+// either a base unit or a multiple of another unit; a quantity is a number
+// carrying a unit, and converting a quantity between two units of one kind
+// goes through their common base. The draft's SI prefix table, offset
+// conversions, normalizers (`10000000s as days hours minutes seconds`) and
+// the `1.0m` / `1 m` literal syntaxes wait on decimals, strings and larger
+// numbers.
+
+Unit := class {
+  is_base => (exists .base).not
+
+  // How many of the base unit one of this unit is.
+  scale => if .is_base { one } else { .factor * .base.scale }
+  // Where this unit's zero sits on the base unit's line (`def offset`); `as`
+  // does not apply it yet.
+  shift => if (exists .offset) { .offset } else { zero }
+
+  // Allow for syntax `year as ns`: one of this unit, expressed in another.
+  as (other: Unit) => (one of this) as other
+
+  // `def multiple multiple: Number, ToUnit: Unit` and `def offset`: a unit
+  // defined from this one.
+  multiple (times: Number) => (
+    parent := this
+    Unit(
+      base: parent
+      factor: times
+    )
+  )
+  shifted (by: Number) => (
+    parent := this
+    Unit(
+      base: parent
+      factor: one
+      offset: by
+    )
+  )
+  // `SI#.for FromUnit = FromUnit.magnitude …`: this unit with an SI prefix.
+  prefixed (prefix: Prefix) => (
+    parent := this
+    Unit(
+      base: parent
+      factor: prefix.factor
+    )
+  )
+}
+
+Quantity := class {
+  // Arguments are read inside the new quantity, so what they need from this
+  // one is read first.
+  as (other: Unit) => (
+    converted := (.amount * .unit.scale) / other.scale
+    Quantity(
+      amount: converted
+      unit: other
+    )
+  )
+
+  + (other: Quantity) => (
+    total := .amount + (other as .unit).amount
+    kind := .unit
+    Quantity(
+      amount: total
+      unit: kind
+    )
+  )
+  - (other: Quantity) => (
+    difference := .amount - (other as .unit).amount
+    kind := .unit
+    Quantity(
+      amount: difference
+      unit: kind
+    )
+  )
+
+  == (other: Quantity) => .amount == (other as .unit).amount
+  < (other: Quantity) => .amount < (other as .unit).amount
+}
+
+// Allow for syntax `1 of Byte`, `3 of Bit`: a number followed by a unit. The
+// draft's `1 Byte` and `1.0m` wait on the number literal itself. A number
+// takes this on as a class component, so every number already built reads it.
+Measured := class {
+  of (unit) => (
+    held := this
+    kind := unit
+    Quantity(
+      amount: held
+      unit: kind
+    )
+  )
+}
+Number.components.hierarchy &= Measured
+
+// The SI prefixes the numbers reach today; the rest of the draft's table
+// (quecto … quetta) needs powers of ten beyond a thousand, and the symbols
+// (`da`, `h`, `k`) a second field on the member.
+Prefix := enum deka (factor: ten) | hecto (factor: hundred) | kilo (factor: thousand)
+
+// A unit is named, has a symbol, and is either a base unit or `factor` of a
+// `base` unit. The fields are what a unit is built with; a spaced `:` takes
+// the rest of its line, so each field goes on a line of its own.
+Bit := Unit(
+  name: `bit`
+  symbol: `b`
+)
+Byte := Unit(
+  name: `byte`
+  symbol: `B`
+  base: Bit
+  factor: eight
+)
+// Kilobyte | KB = 1000 * Byte, Kibibyte = 1024 * Byte
+Kilobyte := Byte prefixed Prefix.kilo
+Kibibyte := Byte multiple (thousand + ten + ten + four)

@@ -59,33 +59,36 @@ Number := class: Ray {
   / (other: Number) => if other.is_zero { zero } elsif (other <= this) { ((this - other) / other).succ } else { zero }
 
   // `def times callback: () => *`, without the index the draft leaves open.
-  times{ }{block} ^class => if .is_zero { this } else {
+  times (block) => if .is_zero { this } else {
     block
 
     .next times block
   }
 
-  // Blocked with `divides`: a recursive call used as an argument does not
-  // resolve, so neither of these two can be relied on yet.
   pow (exponent: Number) => if exponent.is_zero { one } else { (this.pow(exponent.next)) * this }
+  squared => this * this
 
   // `//TODO factorial!` above.
   factorial => if .is_zero { one } else { this * .next.factorial }
 
-  // Also blocked: `other` is an argument that has not been read, so its own
-  // rules are not in scope where `.gcd` is called on it.
   gcd (other: Number) => if other.is_zero { this } else { other.gcd(this % other) }
   lcm (other: Number) => (this * other) / (this.gcd(other))
+
+  divides (other: Number) => (other % this).is_zero
+  coprime (other: Number) => (this.gcd(other)) == one
 
   even => if .is_zero { true } elsif .next.is_zero { false } else { .next.next.even }
   odd => .even.not
 
-  // `Decimal.% => this / 100` waits on a hundred: a unary chain cannot reach
-  // one inside the interpreter's recursion budget.
-  percent => TODO
+  // `Decimal.% => this / 100`: the fraction of a hundred this number is.
+  percent => this / hundred
 
-  // Blocked on a recursive call reaching itself from inside a branch.
-  divides (other: Number) => TODO
+  min (other: Number) => if (this < other) { this } else { other }
+  max (other: Number) => if (this < other) { other } else { this }
+
+  // `Nat | ℕ`: every number here is natural; the draft's `ℝ` and the base
+  // towers wait on strings.
+  is_natural => true
 }
 
 zero  := Number()
@@ -99,6 +102,14 @@ seven := six.succ
 eight := seven.succ
 nine  := eight.succ
 ten   := nine.succ
+hundred  := ten * ten
+thousand := hundred * ten
+
+// class Number
+//   static Bases = { Binary: Digit = "0" | "1", …, Hexadecimal: Digit = Decimal | ("a" | "A")..("f" | "F") }
+// The bases as they are without strings: each carries its radix, and the digit
+// alphabets wait on `String`.
+Base := enum Binary (radix: two) | Ternary (radix: three) | Quaternary (radix: four) | Quinary (radix: five) | Senary (radix: six) | Septenary (radix: seven) | Octal (radix: eight) | Nonary (radix: nine) | Decimal (radix: ten) | Undecimal (radix: ten.succ) | Duodecimal (radix: ten + two) | Tridecimal (radix: ten + three) | Tetradecimal (radix: ten + four) | Pentadecimal (radix: ten + five) | Hexadecimal (radix: ten + six)
 
 
 // def Integer<n> = sign: "-"?, integer: Positive
@@ -110,15 +121,50 @@ ten   := nine.succ
 // the magnitude. Addition/subtraction of a signed integer is still open, as
 // the draft notes.
 Integer := class {
-  sign => None
-  magnitude => zero
-
   negative => exists .sign
   positive => .negative.not
   is_zero => .magnitude.is_zero
 
   // The draft's `def -` with no argument: negate.
-  - => if .negative { Integer(magnitude: .magnitude) } else { Integer(sign: global, magnitude: .magnitude) }
+  - => .negated
+  negated => (
+    size := .magnitude
+    if .negative { Integer(magnitude: size) } else {
+      Integer(
+        sign: global
+        magnitude: size
+      )
+    }
+  )
+  abs => Integer(magnitude: .magnitude)
+
+  // Addition and subtraction of a signed integer: same signs add magnitudes,
+  // different signs subtract the smaller from the larger and keep its sign.
+  + (other: Integer) => if (.negative.xnor(other.negative)) {
+    Integer(sign: .sign, magnitude: .magnitude + other.magnitude)
+  } elsif (other.magnitude < .magnitude) {
+    Integer(sign: .sign, magnitude: .magnitude - other.magnitude)
+  } else {
+    Integer(sign: other.sign, magnitude: other.magnitude - .magnitude)
+  }
+  - (other: Integer) => this + other.negated
+  * (other: Integer) => if (.negative.xnor(other.negative)) {
+    Integer(magnitude: .magnitude * other.magnitude)
+  } else {
+    Integer(sign: global, magnitude: .magnitude * other.magnitude)
+  }
+
+  == (other: Integer) => (.negative.xnor(other.negative)).and(.magnitude == other.magnitude)
+  < (other: Integer) => if .negative {
+    if other.negative { other.magnitude < .magnitude } else { true }
+  } else {
+    if other.negative { false } else { .magnitude < other.magnitude }
+  }
+}
+
+// Every natural number is also the integer it is.
+Number.components.hierarchy &= class {
+  as_integer => Integer(magnitude: this)
 }
 
 
@@ -249,12 +295,8 @@ Integer := class {
 //TODO 1000 MB etc.. MiB ; how does that coincide with Unit, want Binary with some length to correspond to it?
 
 // Byte | B = Binary⁸
-
-// Without the base tower a byte is the count of bits it holds; `Kilobyte =
-// 1000 * Byte` waits on a thousand.
-Byte := eight
-
 // Kilobyte | KB = 1000 * Byte
+// Units live in Unit.ray.
 
 // Units override the X Node
 // 3.2 Kilobyte

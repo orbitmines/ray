@@ -1,0 +1,113 @@
+// Components. A value is made of components: `.components` holds the
+// superposed ones, `.components.hierarchy` the class components. Both are
+// chains, `&=` appends to a chain, `|` superposes two values into a Many, and
+// `:` on a value with components adds a class component (so `class: Parent`
+// is `:` applied to the class). Instances refer to their class through the
+// hierarchy rather than copying it, so a class extended later reaches every
+// instance built from it.
+
+mark ^keyword := external global
+
+A := class {
+  mk => A(from: this)
+}
+a := A()
+b := a.mk
+c := b.mk
+
+goto c1 if a.components.hierarchy.tail.value
+INFO@mark `C1 an instance has no class component`
+c1\
+goto c2 if c.components.hierarchy.head.value.mk
+INFO@mark `C2 the class component of an instance is not its class`
+c2\
+goto c3 if a.components.hierarchy.owner
+INFO@mark `C3 a hierarchy does not know what it belongs to`
+c3\
+goto c4 if a.components.hierarchy.count == one
+INFO@mark `C4 a plain instance has other than one class component`
+c4\
+
+R := class { }
+S := class: R { s => S(next: this) }
+z := S()
+o := z.s
+t := o.s
+goto c5 if t.s
+INFO@mark `C5 a successor chain through class: Parent broke`
+c5\
+goto c6 if S.components.hierarchy.head.value
+INFO@mark `C6 class: Parent did not add a class component`
+c6\
+goto c7 if S.super
+INFO@mark `C7 super is missing`
+c7\
+goto c8 if Ray.super.count
+INFO@mark `C8 Ray.super does not reach Iterable's count`
+c8\
+
+Greeter := class {
+  greeting => .name
+  twice => .greeting
+}
+Loud := class: Greeter {
+  greeting => global
+  polite => .super.greeting
+}
+loud := Loud(name: global)
+goto c22 if loud.polite
+INFO@mark `C22 super.greeting did not run the parent's method on the instance`
+c22\
+goto c23 if loud.super.twice
+INFO@mark `C23 super reaches the parent's other methods`
+c23\
+
+E := enum p | q | r
+goto c9 if E.components.head.value.name
+INFO@mark `C9 the first enum member is not the first component`
+c9\
+goto c10 if E.components.head.next.next.value.name
+INFO@mark `C10 enum components are not chained forward`
+c10\
+goto c11 if E.components.tail.previous.previous.value.name
+INFO@mark `C11 enum components are not chained backward`
+c11\
+goto c12 if E.components.count == three
+INFO@mark `C12 an enum of three has other than three components`
+c12\
+goto c13 if E.components.first.is_initial.holds
+INFO@mark `C13 a chain is not an Iterable of Rays`
+c13\
+goto c14 if E.components.last.value.name
+INFO@mark `C14 Iterable.last did not reach the last component`
+c14\
+
+M := a | b
+goto c15 if M.components.head.value.mk
+INFO@mark `C15 | did not superpose its left side`
+c15\
+goto c16 if M.components.tail.value.mk
+INFO@mark `C16 | did not superpose its right side`
+c16\
+N := M | c
+goto c17 if N.components.count == three
+INFO@mark `C17 | on a Many did not append`
+c17\
+
+k := chain None
+k &= a
+k &= b
+goto c18 if k.head.next
+INFO@mark `C18 a hand-built chain is not linked forward`
+c18\
+goto c19 if k.tail.previous
+INFO@mark `C19 a hand-built chain is not linked backward`
+c19\
+goto c20 if k.head.previous
+goto c20b
+c20\
+INFO@mark `C20 the head of a chain has a previous`
+c20b\
+goto c21 if k.count == two
+INFO@mark `C21 a chain of two does not count two`
+c21\

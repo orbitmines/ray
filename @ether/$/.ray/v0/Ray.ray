@@ -133,25 +133,57 @@ Iterable := class: Ordered {
   first => .entry.first
   last => .entry.last
 
-  // `reduce` is the draft's one traversal primitive: `count`, `all`, `every`
-  // and `some` are folds over it, once a block can be handed to another rule.
-  reduce (step) => TODO
-  for (yield) => TODO
+  // The draft's one traversal: `for` hands each element to the block as `it`.
+  for (body) => if (exists .entry) { .entry for body } else { this }
 
-  every (predicate: Ordered) => TODO
-  some (predicate) => TODO
-  all => TODO
-  fill (x) => TODO
+  // `every (predicate) => map(predicate)~{== false}.empty`, `some => ~{predicate}.nonempty`:
+  // the block is the predicate, read for each `it`.
+  every (predicate) => (
+    holds ^keyword := true
+    for {
+      verdict := inline predicate
+      unless verdict { holds = false }
+    }
+    holds
+  )
+  some (predicate) => (
+    holds ^keyword := false
+    for {
+      verdict := inline predicate
+      if verdict { holds = true }
+    }
+    holds
+  )
 
-  connected => TODO
-  consistent => TODO
-  acyclic => TODO
-  undirected => TODO
-  unidirectional => TODO
+  // `all => reduce(|)`: every element superposed.
+  all => (
+    many := Many()
+    for { many.components &= it }
+    many
+  )
 
-  compact => TODO
-  paths => TODO
-  length => .paths.length
+  // `fill (x) all = x`
+  fill (x) => for { it.value = x }
+
+  // `compact => this~{!=.instance_of None}`: the elements that hold something.
+  compact => (
+    many := Many()
+    for { if (exists it.value) { many.components &= it } }
+    many
+  )
+
+  at (index: Number) => .entry.at(index)
+
+  // A chain is its own path, so its length is its count.
+  paths => this
+  length => .paths.count
+
+  // Each element reaches every other by going forward and backward along the chain.
+  connected => true
+  consistent => true
+  acyclic => .entry.acyclic
+  undirected => false
+  unidirectional => false
 }
 
 Ray := class: Iterable {
@@ -169,7 +201,23 @@ Ray := class: Iterable {
   first => .initial
   last => .terminal
 
+  // The boundaries a ray shows to the edges it sits on, per `Boundary.Initial(∙: this)`.
+  initial_boundary => Boundary.Initial(vertex: this)
+  terminal_boundary => Boundary.Terminal(vertex: this)
+
   count => if .is_terminal { one } else { .next.count.succ }
+
+  for (body) => (
+    it ^keyword := this
+    inline body
+    unless .is_terminal { .next for body }
+    this
+  )
+
+  at (index: Number) => if index.is_zero { this } else { .next.at(index.next) }
+
+  // A chain walked forward never returns to where it started.
+  acyclic => .terminal.is_terminal
 
   == (other: Ray) => if .is_terminal { other.is_terminal } elsif other.is_terminal { false } else { .next == other.next }
   != (other: Ray) => (this == other).not
@@ -177,21 +225,35 @@ Ray := class: Iterable {
 
 // A boundary is the ray a vertex shows to the edge it sits on; an edge is the
 // ray between two boundaries. Both are rays themselves, which is what makes
-// the structure self-similar. `Boundary.Initial` / `Boundary.Terminal` wait on
-// a class being able to nest another that extends it.
+// the structure self-similar.
 Boundary := class: Ray {
-  vertex => None
-  edge => None
+  // `vertex | ∙` and `edge | ⊙`: the unicode aliases wait on a way to spell them.
+  is_initial => (exists .edge).not
+  is_terminal => (exists .edge).not
+
+  Initial := class: Boundary {
+    // `⊙ = Edge(x.terminal: this)`
+    edge => Edge(to: this)
+    is_initial => true
+    is_terminal => false
+  }
+  Terminal := class: Boundary {
+    // `⊙ = Edge(x.initial: this)`
+    edge => Edge(from: this)
+    is_initial => false
+    is_terminal => true
+  }
 }
 
 Edge := class: Ray {
-  from => None
-  to => None
-
+  // `value | x : { initial | ⊣ : Boundary?, terminal | ⊢ : Boundary? }`
   is_initial => (exists .from).not
   is_terminal => (exists .to).not
-}
 
+  // `initial = Boundary(∙: ⊙⊢∙⊣x)`, `terminal = Boundary(∙: x⊢∙⊣⊙)`
+  initial => .from
+  terminal => .to
+}
 
 
 // class Structure < Iterable<Ray{
@@ -226,3 +288,8 @@ Edge := class: Ray {
 //     )
 // class Array < Path{acyclic}
 
+
+// A chain of components is an Iterable, and each link in it a Ray: the
+// containers `class` builds before this file loads take both on here.
+Chain.components.hierarchy &= Iterable
+Link.components.hierarchy &= Ray

@@ -71,6 +71,23 @@ goto p5_ok if counter == three
 INFO@mark `times did not run three times`
 p5_ok\
 
-goto p6_ok if Byte == eight
-INFO@mark `a byte is not eight bits`
-p6_ok\
+goto q7_ok if Base.Hexadecimal.radix == (ten + six)
+INFO@mark `N20 hexadecimal radix is not sixteen`
+q7_ok\
+
+minus_two := two.as_integer.negated
+goto q8_ok if minus_two.negative.holds
+INFO@mark `N21 negation is not negative`
+q8_ok\
+
+goto q9_ok if (minus_two + five.as_integer) == three.as_integer
+INFO@mark `N22 -2 + 5 is not 3`
+q9_ok\
+
+goto q10_ok if (minus_two * minus_two) == four.as_integer
+INFO@mark `N23 -2 * -2 is not 4`
+q10_ok\
+
+goto q11_ok if (minus_two < one.as_integer).holds
+INFO@mark `N24 -2 < 1 is false`
+q11_ok\

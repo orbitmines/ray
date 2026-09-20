@@ -109,36 +109,49 @@ TRACE{`@` ^punctuation}{var} ^trace (comment: String ^comment) => report TRACE v
 // Merge into DEBUG with |
 TODO ^debug (comment: String ^comment) => DEBUG@. comment 
 
-// How this should read once components exist: the constructor is the first
-// component, the block composes on top of it, and `super` is the component
-// before the current one. `.components`, `&=` and `.previous` aren't there yet,
-// and `inline static.components` inlines the constructor into itself, so the
-// working definition is kept below.
-//   unordered base{ }class{ }{block} ^keyword => (
-//     static ^keyword := external .
-//     super ^keyword := static.components.previous
-//     static.components = (args) => (
-//       this ^keyword := external .
-//       inline static.components
-//       this ^variable
-//     )
-//     static.components &= block
-//     external base static
-//     static ^class
-//   )
-unordered class:{ }{parent}{ }{body} ^keyword => class {
-  inline parent
-  inline body
-}
+chain (holder) => (
+  links ^keyword := external .
+  owner := holder
+  head := None
+  tail := None
+  external extend links Chain
+
+  links ^namespace
+)
+
+link (holds, before) => (
+  entry ^keyword := external .
+  value := holds
+  previous := before
+  next := None
+  external extend entry Link
+
+  entry ^namespace
+)
+
+unordered class:{ }{parent}{ }{block} ^keyword => (class block): parent
 
 unordered class{ }{block} ^keyword => (
   static ^keyword := external .
+  static.components = chain None
+  static.components.hierarchy = chain static
+  super ^keyword => (
+    parent := static.components.hierarchy.tail.value
+    instance := this
+    view ^keyword := external .
+    external extend view parent
+    external extend view instance
+
+    view
+  )
   inline block
 
   ({inline args}) => (
     static ^keyword := this
     this ^keyword := external .
-    inline static
+    this.components = chain None
+    this.components.hierarchy = chain this
+    this.components.hierarchy &= static
 
     this ^variable
   )
@@ -157,32 +170,38 @@ unordered base{ }class{ }{body} ^keyword => (
 unordered enum ^keyword => (
   static := class {
     {literal member ^enumMember} ^punctuation => (
-      this[member] = this(name: member) ^enumMember
+      entry := static(name: member)
+      static[member] = entry ^enumMember
+      static.components &= entry
 
-      this
+      static
     )
     {literal member ^enumMember}{ }{fields ^property} ^punctuation => (
-      entry := this(
+      entry := static(
         name: member
         inline fields
       )
-      this[member] = entry ^enumMember
+      static[member] = entry ^enumMember
+      static.components &= entry
 
-      this
+      static
     )
     |{ }{literal member ^enumMember} ^punctuation => (
-      this[member] = this(name: member) ^enumMember
+      entry := static(name: member)
+      static[member] = entry ^enumMember
+      static.components &= entry
 
-      this
+      static
     )
     |{ }{literal member ^enumMember}{ }{fields ^property} ^punctuation => (
-      entry := this(
+      entry := static(
         name: member
         inline fields
       )
-      this[member] = entry ^enumMember
+      static[member] = entry ^enumMember
+      static.components &= entry
 
-      this
+      static
     )
   }
 
@@ -200,6 +219,7 @@ unordered enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal r
   )
   entry.name = member
   static[member] = entry ^enumMember
+  static.components &= entry
   inline rest
 
   static ^enum
@@ -226,16 +246,46 @@ Node := base class {
 
     this
   )
-  := ^punctuation (x) => this: Node = x
+  := ^punctuation (x) => this = x
   : ^punctuation ^annotation (type) => (
-    .type = type
-    goto typed if this
+    goto typed if this.components
     this = type
+    goto done
    typed\
+    this.components.hierarchy &= type
+   done\
 
     this
   )
-  , ^punctuation ^separator (rest) => this
+  , ^punctuation ^separator => this
+
+  &= ^punctuation (x) => (
+    value := x
+    previous := this.tail
+    added := link value previous
+    goto more if previous
+    this.head = added
+    goto linked
+   more\
+    previous.next = added
+   linked\
+    this.tail = added
+    goto owned if this.owner
+    goto done
+   owned\
+    holder := this.owner
+    external extend holder value
+   done\
+
+    this
+  )
+  | ^punctuation (other) => (
+    many := Many()
+    many.components &= this
+    many.components &= other
+
+    many
+  )
 
   . ^punctuation => this
   .{literal property ^property} ^punctuation => this[property]
@@ -265,16 +315,17 @@ Node := base class {
 // Set the actual method used for function definitions.
 Node.DEFINE_METHOD = `&=`
 
-// Precedence: of two operators around a shared operand, the
-// tighter one groups first (precedence = declaration order).
-{a} [x] {b} [y] {c} => (a [x] b) [y] c if x.precedence >= y.precedence
-{a} [x] {b} [y] {c} => a [x] (b [y] c) if x.precedence < y.precedence
+Chain := class {
+  entry => .head
+}
+Link := class { }
+Many := class {
+  | ^punctuation (other) => (
+    .components &= other
 
-// Pointing apart: both apply to the shared operand (Grammar.ray:189)
-{l} [x: right-to-left] {m} [y: left-to-right] {r} => l [x] m & m [y] r
-
-// Chainable: a < b < c  =>  a < b & b < c
-{a} [x: chainable] {b} [y: chainable] {c} => a [x] b & b [y] c
+    this
+  )
+}
 
 if := class {
   { }{cond}{ }{yes} ^class => (
@@ -353,4 +404,15 @@ while := class {
 }
 
 do ^keyword := while
+
+// Precedence: of two operators around a shared operand, the
+// tighter one groups first (precedence = declaration order).
+{a} [x] {b} [y] {c} => (a [x] b) [y] c if x.precedence >= y.precedence
+{a} [x] {b} [y] {c} => a [x] (b [y] c) if x.precedence < y.precedence
+
+// Pointing apart: both apply to the shared operand (Grammar.ray:189)
+{l} [x: right-to-left] {m} [y: left-to-right] {r} => l [x] m & m [y] r
+
+// Chainable: a < b < c  =>  a < b & b < c
+{a} [x: chainable] {b} [y: chainable] {c} => a [x] b & b [y] c
 

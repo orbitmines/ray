@@ -33,7 +33,7 @@ false := boolean.false
 // The one place presence becomes a boolean: the runtime can branch on whether
 // a value is there at all, and `exists` is what turns that into `true`/`false`
 // so nothing above it needs a conditional goto.
-exists{ }{x} ^keyword => (
+exists (x) => (
   goto some if x
   found := false
   goto done

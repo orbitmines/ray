@@ -1,8 +1,8 @@
 mark ^keyword := external global
 
-uu := UUID.v4
-goto uu1_ok if uu.bits.count == (hundred + (two * ten) + eight)
-INFO@mark `UU1 v4 has other than 128 bits`
+uu := UUID.v4()
+goto uu1_ok if uu.spelled.count == (three * ten) + two
+INFO@mark `UU1 v4 has other than 32 digits`
 uu1_ok\
 goto uu2_ok if uu.version == four
 INFO@mark `UU2 v4 version is not 4`

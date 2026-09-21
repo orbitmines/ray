@@ -27,6 +27,10 @@ boolean := enum false (holds: None) | true (holds: global) {
   x!|| (b) => .xnor(b)
 }
 
+// spec: the draft's prefix `!x`, its Operator classes (Unary, Binary, read off
+// a method's parameter count) and its cast of a boolean to a filter wait on
+// one-token operator spellings and on equality between types.
+// { false, true } = boolean
 true := boolean.true
 false := boolean.false
 

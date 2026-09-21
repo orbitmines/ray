@@ -1,65 +1,89 @@
-// UUIDs (draft: utils/UUID.ray, RFC 4122): 128 bits, shown as 32 hexadecimal
-// digits in groups of 8-4-4-4-12. spec: v4 draws its bits from `random`; v1
-// wants the clock and a MAC address (`os`), v3/v5 a hash (Encoding.ray): they
-// are shaped here and filled when those are.
+// A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
+// (draft: utils/UUID.ray)
+//
+// class UUID < Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-")
+// spec: `Hexadecimal³²` is the hexadecimal numbers of thirty-two spelled; a
+// UUID keeps those spelled as a chain rather than the number they spell, since
+// that number is a walk of 2¹²⁸ links. The dashes are where the text form
+// groups them: 8-4-4-4-12.
+UUID := class: Hexadecimal {
+  spelled: Node
 
-UUID := class {
-  of (bits) => UUID(bits: bits)
-  // The version nibble is the thirteenth digit; the variant the first bits of the ninth byte.
-  version => (
-    total ^keyword := zero
-    walker ^keyword := .bits.at((four * ten) + eight)
-    left ^keyword := four
-    while left.nonzero {
-      total = total + total
-      if walker.value { total = total.succ }
-      walker = walker.next
-      left = left.pred
-    }
-    total
-  )
+  // version: Hexadecimal¹ => this[12]
+  version => .spelled.head.at(ten + two).value
+
+  // dynamically
+  //   < v1 if version == 1
+  //   < v3 if version == 3
+  //   < v4 if version == 4
+  //   < v5 if version == 5
+  // spec: a UUID reads as its version's class once versions carry their own
+  // fields (v1's time and node); today each version is the class it is built as.
+
+  // class Variant = .RESERVED_NCS | .RFC_4122 | .RESERVED_MICROSOFT | .RESERVED_FUTURE
   Variant := enum reserved_ncs | rfc_4122 | reserved_microsoft | reserved_future
+  // variant as (=== Variant) => .match
+  //   ⊢0 => Variant.RESERVED_NCS, 10₂ => Variant.RFC_4122, 110₂ => Variant.RESERVED_MICROSOFT, 111₂ => Variant.RESERVED_FUTURE
+  // The variant is the leading bits of the seventeenth digit.
   variant => (
-    first := .bits.at((six * ten) + four)
-    if first.value.not { UUID.Variant.reserved_ncs }
-    elsif first.next.value.not { UUID.Variant.rfc_4122 }
-    elsif first.next.next.value.not { UUID.Variant.reserved_microsoft }
+    leading := .spelled.head.at(ten + six).value
+    if (leading < eight) { UUID.Variant.reserved_ncs }
+    elsif (leading < (ten + two)) { UUID.Variant.rfc_4122 }
+    elsif (leading < (ten + four)) { UUID.Variant.reserved_microsoft }
     else { UUID.Variant.reserved_future }
   )
 
-  // v4: 48 random bits, the version 0100, 12 random bits, the variant 10, and
-  // 62 random bits.
-  v4 => (
-    bits := chain None
-    UUID.draw(bits, (four * ten) + eight)
-    bits &= false
-    bits &= true
-    bits &= false
-    bits &= false
-    UUID.draw(bits, ten + two)
-    bits &= true
-    bits &= false
-    UUID.draw(bits, (six * ten) + two)
-    UUID(bits: bits)
-  )
-  draw (bits, count: Number) => (
+  // secure Hexadecimal{length == 32}.random: so many random hexadecimal spelled.
+  drawn (count: Number) => (
+    out := chain None
     left ^keyword := count
     while left.nonzero {
-      bits &= (external random).holds
+      nibble ^keyword := zero
+      bit ^keyword := four
+      while bit.nonzero {
+        nibble = nibble + nibble
+        if (external random).holds { nibble = nibble.succ }
+        bit = bit.pred
+      }
+      out &= nibble
       left = left.pred
     }
-    bits
+    out
   )
-  // spec: v1 = 60-bit timestamp since 1582-10-15 in 100ns steps, clock
-  // sequence, MAC node; v3 = md5(namespace, name), v5 = sha1(namespace, name).
-  v1 => None
-  v3 (namespace, name: String) => None
-  v5 (namespace, name: String) => None
 
-  // As text: each nibble a hexadecimal digit, in groups of 8, 4, 4, 4 and 12.
+  // class v1 < UUID ~ (time_low: Hexadecimal⁸, time_mid: Hexadecimal⁴, (version: Hexadecimal¹, time_high: Hexadecimal³), clock_seq, node: Hexadecimal¹² = @me.instance#.mac_address)
+  // spec: the 60-bit timestamp since 1582-10-15 in 100ns steps awaits Time
+  // reading the clock as a number; the node awaits `os` handing the MAC address.
+  v1 := class: UUID {
+    dynamically assert (.version == one)
+  }
+  // class v3 (namespace: UUID, name: String) < UUID
+  // spec: md5(namespace, name) awaits Encoding's hashes.
+  v3 := class: UUID {
+    namespace: UUID
+    name: String
+    dynamically assert (.version == three)
+  }
+  // class v4 < UUID = secure Hexadecimal{length == 32}.random ~~ version = 4
+  v4 := class: UUID {
+    spelled: UUID.drawn((three * ten) + two) ~~ (
+      .head.at(ten + two).value = four
+      .head.at(ten + six).value = eight + (.head.at(ten + six).value % four)
+    )
+    dynamically assert (.version == four)
+  }
+  // class v5 (namespace: UUID, name: String) < UUID
+  // spec: sha1(namespace, name) awaits Encoding's hashes.
+  v5 := class: UUID {
+    namespace: UUID
+    name: String
+    dynamically assert (.version == five)
+  }
+
+  // As text: each digit, in groups of 8, 4, 4, 4 and 12 with dashes between.
   as_string => (
     out := chain None
-    walker ^keyword := .bits.head
+    walker ^keyword := .spelled.head
     groups := chain None
     groups &= eight
     groups &= four
@@ -68,28 +92,40 @@ UUID := class {
     groups &= ten + two
     groups for {
       unless (it.value == eight) { out &= Character.of(ascii_dash) }
-      digits ^keyword := it.value
-      while digits.nonzero {
-        nibble ^keyword := zero
-        bit ^keyword := four
-        while bit.nonzero {
-          nibble = nibble + nibble
-          if walker.value { nibble = nibble.succ }
-          walker = walker.next
-          bit = bit.pred
-        }
-        out &= Character.decimal_digit(nibble)
-        digits = digits.pred
+      left ^keyword := it.value
+      while left.nonzero {
+        out &= Character.decimal_digit(walker.value)
+        walker = walker.next
+        left = left.pred
       }
     }
     String(characters: out)
   )
   == (other: UUID) => .as_string == other.as_string
 
+  // {uuid: UUID.String}: UUID => uuid — the text form read back.
+  read (text: String) => (
+    out := chain None
+    text.characters for {
+      character := it.value
+      unless (character == Character.of(ascii_dash)) { out &= character.hexadecimal_digit }
+    }
+    UUID(spelled: out)
+  )
+
+  // namespace Namespace
+  //   DNS: UUID = 6ba7b810-9dad-11d1-80b4-00c04fd430c8 …
+  // spec: the texts, read with `UUID.read` when one is needed; reading all
+  // four on every pass is more than a pass affords.
   Namespace := class {
-    dns => String.of(`6ba7b810-9dad-11d1-80b4-00c04fd430c8`)
-    url => String.of(`6ba7b811-9dad-11d1-80b4-00c04fd430c8`)
-    oid => String.of(`6ba7b812-9dad-11d1-80b4-00c04fd430c8`)
-    x500 => String.of(`6ba7b814-9dad-11d1-80b4-00c04fd430c8`)
+    DNS => String.of(`6ba7b810-9dad-11d1-80b4-00c04fd430c8`)
+    URL => String.of(`6ba7b811-9dad-11d1-80b4-00c04fd430c8`)
+    OID => String.of(`6ba7b812-9dad-11d1-80b4-00c04fd430c8`)
+    X500 => String.of(`6ba7b814-9dad-11d1-80b4-00c04fd430c8`)
   }
+}
+
+// A character read as a hexadecimal digit: `0`..`9` then `a`..`f` (either case).
+Character.components.hierarchy &= class {
+  hexadecimal_digit => if .digit { .codepoint - ((four * ten) + eight) } else { .lower.codepoint - ((eight * ten) + seven) }
 }

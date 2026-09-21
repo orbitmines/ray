@@ -37,6 +37,6 @@ goto u9_ok if Prefix.deka.factor == ten
 INFO@mark `U9 deka is not ten`
 u9_ok\
 
-goto u10_ok if (Bit prefixed Prefix.deka).factor == ten
+goto u10_ok if (Bit prefixed Prefix.deka).ratio == ten
 INFO@mark `U10 a prefixed unit did not take the prefix factor`
 u10_ok\

@@ -45,18 +45,79 @@ Number := class: Ray {
   is_zero => .is_terminal
   nonzero => .is_zero.not
 
-  + (other: Number) => if other.is_zero { this } else { .succ + other.next }
+  // Walks along the chain rather than nesting one application per unit, so a
+  // thousand is as cheap to reach as ten.
+  + (other: Number) => (
+    total := this
+    left := other
+    while left.nonzero {
+      total = total.succ
+      left = left.pred
+    }
+    total
+  )
 
   // Subtraction floors at zero; the negative half of the line is `Integer`.
-  - (other: Number) => if other.is_zero { this } elsif .is_zero { this } else { .next - other.next }
+  - (other: Number) => (
+    rest := this
+    left := other
+    while (left.nonzero.and(rest.nonzero)) {
+      rest = rest.pred
+      left = left.pred
+    }
+    rest
+  )
 
-  * (other: Number) => if other.is_zero { zero } else { (this * other.next) + this }
+  * (other: Number) => (
+    product := zero
+    left := other
+    while left.nonzero {
+      product = product + this
+      left = left.pred
+    }
+    product
+  )
 
-  < (other: Number) => if .is_zero { other.nonzero } elsif other.is_zero { false } else { .next < other.next }
+  < (other: Number) => (
+    mine := this
+    theirs := other
+    while (mine.nonzero.and(theirs.nonzero)) {
+      mine = mine.pred
+      theirs = theirs.pred
+    }
+    mine.is_zero.and(theirs.nonzero)
+  )
 
-  % (other: Number) => if other.is_zero { this } elsif (other <= this) { (this - other) % other } else { this }
+  % (other: Number) => (
+    rest := this
+    unless other.is_zero {
+      while (other <= rest) { rest = rest - other }
+    }
+    rest
+  )
 
-  / (other: Number) => if other.is_zero { zero } elsif (other <= this) { ((this - other) / other).succ } else { zero }
+  / (other: Number) => (
+    quotient := zero
+    rest := this
+    unless other.is_zero {
+      while (other <= rest) {
+        rest = rest - other
+        quotient = quotient.succ
+      }
+    }
+    quotient
+  )
+
+  == (other: Number) => (
+    mine := this
+    theirs := other
+    while (mine.nonzero.and(theirs.nonzero)) {
+      mine = mine.pred
+      theirs = theirs.pred
+    }
+    mine.is_zero.and(theirs.is_zero)
+  )
+  != (other: Number) => (this == other).not
 
   // `def times callback: () => *`, without the index the draft leaves open.
   times (block) => if .is_zero { this } else {
@@ -65,19 +126,44 @@ Number := class: Ray {
     .next times block
   }
 
-  pow (exponent: Number) => if exponent.is_zero { one } else { (this.pow(exponent.next)) * this }
+  pow (exponent: Number) => (
+    power := one
+    left := exponent
+    while left.nonzero {
+      power = power * this
+      left = left.pred
+    }
+    power
+  )
   squared => this * this
 
   // `//TODO factorial!` above.
-  factorial => if .is_zero { one } else { this * .next.factorial }
+  factorial => (
+    product := one
+    left := this
+    while left.nonzero {
+      product = product * left
+      left = left.pred
+    }
+    product
+  )
 
-  gcd (other: Number) => if other.is_zero { this } else { other.gcd(this % other) }
+  gcd (other: Number) => (
+    a := this
+    b := other
+    while b.nonzero {
+      rest := a % b
+      a = b
+      b = rest
+    }
+    a
+  )
   lcm (other: Number) => (this * other) / (this.gcd(other))
 
   divides (other: Number) => (other % this).is_zero
   coprime (other: Number) => (this.gcd(other)) == one
 
-  even => if .is_zero { true } elsif .next.is_zero { false } else { .next.next.even }
+  even => (this % two).is_zero
   odd => .even.not
 
   // `Decimal.% => this / 100`: the fraction of a hundred this number is.
@@ -103,7 +189,8 @@ eight := seven.succ
 nine  := eight.succ
 ten   := nine.succ
 hundred  := ten * ten
-thousand := hundred * ten
+// A thousand is built when first asked for.
+thousand => hundred * ten
 
 // class Number
 //   static Bases = { Binary: Digit = "0" | "1", …, Hexadecimal: Digit = Decimal | ("a" | "A")..("f" | "F") }

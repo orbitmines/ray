@@ -18,7 +18,12 @@ None      ^keyword := external none
 
 {`{`}{expr}{`}`} ^punctuation => (
   scope ^keyword := external .
-  inline expr
+  value := inline expr
+  goto block_composes if value
+  goto block_done
+ block_composes\
+  external extend scope value
+ block_done\
 
   scope ^namespace
 )

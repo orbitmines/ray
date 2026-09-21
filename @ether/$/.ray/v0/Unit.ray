@@ -11,7 +11,9 @@ Unit := class {
   is_base => (exists .base).not
 
   // How many of the base unit one of this unit is.
-  scale => if .is_base { one } else { .factor * .base.scale }
+  // A prefixed unit's factor is its prefix's, read when asked.
+  ratio => if (exists .prefix) { .prefix.factor } else { .factor }
+  scale => if .is_base { one } else { .ratio * .base.scale }
   // Where this unit's zero sits on the base unit's line (`def offset`); `as`
   // does not apply it yet.
   shift => if (exists .offset) { .offset } else { zero }
@@ -41,7 +43,7 @@ Unit := class {
     parent := this
     Unit(
       base: parent
-      factor: prefix.factor
+      prefix: prefix
     )
   )
 }
@@ -82,9 +84,9 @@ Quantity := class {
 // draft's `1 Byte` and `1.0m` wait on the number literal itself. A number
 // takes this on as a class component, so every number already built reads it.
 Measured := class {
-  of (unit) => (
+  of (measure) => (
     held := this
-    kind := unit
+    kind := measure
     Quantity(
       amount: held
       unit: kind
@@ -96,7 +98,11 @@ Number.components.hierarchy &= Measured
 // The SI prefixes the numbers reach today; the rest of the draft's table
 // (quecto … quetta) needs powers of ten beyond a thousand, and the symbols
 // (`da`, `h`, `k`) a second field on the member.
-Prefix := enum deka (factor: ten) | hecto (factor: hundred) | kilo (factor: thousand)
+// A prefix names its power of ten; the number is built when a unit asks for
+// it, so loading the table costs nothing.
+Prefix := enum deka (magnitude: one) | hecto (magnitude: two) | kilo (magnitude: three) {
+  factor => ten.pow(.magnitude)
+}
 
 // A unit is named, has a symbol, and is either a base unit or `factor` of a
 // `base` unit. The fields are what a unit is built with; a spaced `:` takes
@@ -113,4 +119,4 @@ Byte := Unit(
 )
 // Kilobyte | KB = 1000 * Byte, Kibibyte = 1024 * Byte
 Kilobyte := Byte prefixed Prefix.kilo
-Kibibyte := Byte multiple (thousand + ten + ten + four)
+Kibibyte => Byte multiple (two.pow(ten))

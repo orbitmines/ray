@@ -195,8 +195,16 @@ Ray := class: Iterable {
   is_first => .is_initial
   is_last => .is_terminal
 
-  initial => if .is_initial { this } else { .previous.initial }
-  terminal => if .is_terminal { this } else { .next.terminal }
+  initial => (
+    walker := this
+    while walker.is_initial.not { walker = walker.previous }
+    walker
+  )
+  terminal => (
+    walker := this
+    while walker.is_terminal.not { walker = walker.next }
+    walker
+  )
 
   first => .initial
   last => .terminal
@@ -205,7 +213,15 @@ Ray := class: Iterable {
   initial_boundary => Boundary.Initial(vertex: this)
   terminal_boundary => Boundary.Terminal(vertex: this)
 
-  count => if .is_terminal { one } else { .next.count.succ }
+  count => (
+    total := one
+    walker := this
+    while walker.is_terminal.not {
+      total = total.succ
+      walker = walker.next
+    }
+    total
+  )
 
   for (body) => (
     it ^keyword := this
@@ -214,12 +230,28 @@ Ray := class: Iterable {
     this
   )
 
-  at (index: Number) => if index.is_zero { this } else { .next.at(index.next) }
+  at (index: Number) => (
+    here := this
+    left := index
+    while left.nonzero {
+      here = here.next
+      left = left.pred
+    }
+    here
+  )
 
   // A chain walked forward never returns to where it started.
   acyclic => .terminal.is_terminal
 
-  == (other: Ray) => if .is_terminal { other.is_terminal } elsif other.is_terminal { false } else { .next == other.next }
+  == (other: Ray) => (
+    mine := this
+    theirs := other
+    while (mine.is_terminal.not.and(theirs.is_terminal.not)) {
+      mine = mine.next
+      theirs = theirs.next
+    }
+    mine.is_terminal.and(theirs.is_terminal)
+  )
   != (other: Ray) => (this == other).not
 }
 

@@ -1,0 +1,50 @@
+mark ^keyword := external global
+
+goto tm1_ok if (minutes(two) as Second).amount == (hundred + (two * ten))
+INFO@mark `TM1 two minutes are not 120 seconds`
+tm1_ok\
+goto tm2_ok if Gregorian.is_leap_year(four).holds
+INFO@mark `TM2 year 4 is not a leap year`
+tm2_ok\
+goto tm3_ok if Gregorian.is_leap_year(hundred).not.holds
+INFO@mark `TM3 year 100 is a Gregorian leap year`
+tm3_ok\
+goto tm4_ok if Julian.is_leap_year(hundred).holds
+INFO@mark `TM4 year 100 is not a Julian leap year`
+tm4_ok\
+goto tm5_ok if Gregorian.is_leap_year(four * hundred).holds
+INFO@mark `TM5 year 400 is not a leap year`
+tm5_ok\
+goto tm6_ok if Month.february.days_in(four, Gregorian) == (two * ten) + nine
+INFO@mark `TM6 February of year 4 has other than 29 days`
+tm6_ok\
+tm_date := ISO_8601.date(String.of(`0004-03-01`))
+// TODO(engine) `tm_date.month == Month.march` loops: `==` on a member set from a constructor argument.
+goto tm7_ok if tm_date.month.place == three
+INFO@mark `TM7 the ISO month is not March`
+tm7_ok\
+goto tm8_ok if tm_date.day_of_year(Gregorian) == (six * ten) + one
+INFO@mark `TM8 4-03-01 is not day 61`
+tm8_ok\
+goto tm9_ok if (ISO_8601.time(String.of(`00:01:05`)) as Second).amount == (six * ten) + five
+INFO@mark `TM9 00:01:05 is not 65 seconds`
+tm9_ok\
+tm_now := Time.now
+goto tm10_ok if tm_now.digits.is_numeric.holds
+INFO@mark `TM10 the clock is not digits`
+tm10_ok\
+goto tm11_ok if tm_now.nanoseconds.count == nine
+INFO@mark `TM11 the clock has other than nine nanosecond digits`
+tm11_ok\
+tm_epoch := Time.of(seconds(ten), Gregorian)
+tm_later := tm_epoch + seconds(five)
+goto tm12_ok if (tm_later - tm_epoch) == seconds(five)
+INFO@mark `TM12 time difference is not five seconds`
+tm12_ok\
+goto tm13_ok if Weekday.sunday.name
+goto tm13_bad
+tm13_ok\
+goto tm13_done
+tm13_bad\
+INFO@mark `TM13 sunday has no name`
+tm13_done\

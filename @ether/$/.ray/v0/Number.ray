@@ -88,24 +88,44 @@ Number := class: Ray {
     mine.is_zero.and(theirs.nonzero)
   )
 
-  % (other: Number) => (
-    rest := this
-    unless other.is_zero {
-      while (other <= rest) { rest = rest - other }
-    }
-    rest
-  )
-
+  // Division walks the dividend once, with the divisor walked alongside it:
+  // each time the divisor runs out one more is counted and it starts over.
   / (other: Number) => (
     quotient := zero
     rest := this
-    unless other.is_zero {
-      while (other <= rest) {
-        rest = rest - other
+    step := other
+    while (rest.nonzero.and(other.nonzero)) {
+      rest = rest.pred
+      step = step.pred
+      if step.is_zero {
         quotient = quotient.succ
+        step = other
       }
     }
     quotient
+  )
+  % (other: Number) => (
+    rest := this
+    step := other
+    while (rest.nonzero.and(other.nonzero)) {
+      rest = rest.pred
+      step = step.pred
+      if step.is_zero { step = other }
+    }
+    if other.is_zero { this } else { other - step }
+  )
+  // Half of this, walking two links at a time.
+  half => (
+    count := zero
+    rest := this
+    while rest.nonzero {
+      rest = rest.pred
+      if rest.nonzero {
+        rest = rest.pred
+        count = count.succ
+      }
+    }
+    count
   )
 
   == (other: Number) => (
@@ -163,7 +183,15 @@ Number := class: Ray {
   divides (other: Number) => (other % this).is_zero
   coprime (other: Number) => (this.gcd(other)) == one
 
-  even => (this % two).is_zero
+  even => (
+    parity := true
+    rest := this
+    while rest.nonzero {
+      parity = parity.not
+      rest = rest.pred
+    }
+    parity
+  )
   odd => .even.not
 
   // `Decimal.% => this / 100`: the fraction of a hundred this number is.

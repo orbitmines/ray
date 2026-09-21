@@ -615,7 +615,9 @@ export namespace Ray {
         srcs.forEach(src => this.diagnostics.forget(src));
         for (const src of srcs) { this._interpret(src); yield; }
         this.prune(inherited);
-        const signature = [this.BASE?.key, ...this.definitions].join('\n');
+        // Frames are fresh per application, so their numbers say nothing about
+        // what was defined; the spelling does.
+        const signature = [this.BASE?.key, ...this.definitions].join('\n').replace(/#\d+/g, '#');
         if (signature === previous) break;
         previous = signature;
       }

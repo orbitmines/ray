@@ -1,0 +1,23 @@
+mark ^keyword := external global
+
+rm_xiv := Roman.of(String.of(`XIV`))
+goto rm1_ok if rm_xiv.as_number == (ten + four)
+INFO@mark `RM1 XIV is not 14`
+rm1_ok\
+goto rm2_ok if Roman.of(String.of(`xiv`)).as_number == (ten + four)
+INFO@mark `RM2 xiv is not 14`
+rm2_ok\
+// TODO(engine) `Roman.from(n).text == String.of(...)` loops: `==` on a member set from a constructor argument.
+rm_xix := Roman.from(ten + nine).text
+goto rm3_ok if (rm_xix.count == three).and(rm_xix.at(one).codepoint == (seven * ten) + three).holds
+INFO@mark `RM3 19 is not XIX`
+rm3_ok\
+goto rm4_ok if Roman.additive(four).text.count == four
+INFO@mark `RM4 additive 4 is not IIII`
+rm4_ok\
+goto rm5_ok if rm_xiv.is_standard.holds
+INFO@mark `RM5 XIV is not standard`
+rm5_ok\
+goto rm6_ok if Roman.Fraction.twelfths(String.of(`S·`)) == seven
+INFO@mark `RM6 S· is not seven twelfths`
+rm6_ok\

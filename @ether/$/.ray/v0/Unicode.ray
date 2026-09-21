@@ -1,0 +1,87 @@
+// Unicode, structurally (draft: .ray2/Language/String/Unicode.ray). A codepoint
+// is a Number; a scalar is a codepoint that is not a surrogate and fits the
+// space; the transformation formats spell a codepoint as chains of bits.
+// spec: the tables of unicode.org (blocks, general categories, case folding,
+// bidi mirroring, ages) are read through `io` only when asked for, and are not
+// yet parsed into scalars: a string of millions of bits is beyond the walks.
+
+Unicode := class {
+  // The draft's `Scalar`: `this < 0x110000 && !(0xD800 <= this <= 0xDFFF)`.
+  // spec: the bounds are read off the codepoint's bits rather than built as
+  // numbers: it fits when 21 halvings leave nothing and its top five bits are
+  // not 1 0000 (the planes above 16); a surrogate is a 16-bit value starting
+  // 11011.
+  scalar (codepoint: Number) => (
+    top := bits_of(codepoint, (two * ten) + one)
+    fits := Unicode.fits(codepoint, (two * ten) + one)
+    beyond := top.head.value.and(top.head.next.value.not).and(top.head.next.next.value.not).and(top.head.next.next.next.value.not).and(top.head.next.next.next.next.value.not).and((number_of(top.slice_bits(five, (two * ten) + one))).is_zero.not)
+    fits.and(beyond.not).and(Unicode.surrogate(codepoint).not)
+  )
+  surrogate (codepoint: Number) => (
+    sixteen := bits_of(codepoint, ten + six)
+    Unicode.fits(codepoint, ten + six).and(sixteen.head.value).and(sixteen.head.next.value).and(sixteen.head.next.next.value.not).and(sixteen.head.next.next.next.value).and(sixteen.head.next.next.next.next.value)
+  )
+  // Whether a number is spelled by this many bits: the bits above them, of
+  // thirty-two, are all unset.
+  fits (codepoint: Number, width: Number) => Character.clear(bits_of(codepoint, (three * ten) + two), ((three * ten) + two) - width)
+  // spec: the surrogate bases D800 and DC00, built only for astral codepoints.
+  surrogate_first => ((ten * five) + five) * thousand + (two * hundred) + (nine * ten) + six
+
+  // spec: the draft's GeneralCategory, decided for the Latin range from the
+  // character classes; the PropertyValueAliases table would refine it.
+  GeneralCategory := enum letter | number | punctuation | symbol | separator | other
+  category (character: Character) => (
+    if character.letter { Unicode.GeneralCategory.letter }
+    elsif character.digit { Unicode.GeneralCategory.number }
+    elsif character.blank { Unicode.GeneralCategory.separator }
+    elsif (character.codepoint < ascii_space) { Unicode.GeneralCategory.other }
+    elsif character.is_ascii { Unicode.GeneralCategory.punctuation }
+    else { Unicode.GeneralCategory.symbol }
+  )
+
+  // The draft's UTF-8, UTF-16 and UTF-32: a codepoint as its code units, each
+  // a chain of bits, most significant first.
+  UTF8 := class {
+    encode (codepoint: Number) => Character.of(codepoint).octets
+    decode (bits) => Character(octets: bits).codepoint
+  }
+  UTF16 := class {
+    unit => two.pow(ten + six)
+    encode (codepoint: Number) => if (Unicode.fits(codepoint, ten + six)) { bits_of(codepoint, ten + six) } else {
+      shifted := codepoint - .unit
+      pair := bits_of(surrogate_first + (shifted / two.pow(ten)), ten + six)
+      bits_of(surrogate_first + two.pow(ten) + (shifted % two.pow(ten)), ten + six) for { pair &= it.value }
+      pair
+    }
+    decode (bits) => (
+      high := number_of(bits.slice_bits(zero, ten + six))
+      if (Unicode.surrogate(high)) {
+        low := number_of(bits.slice_bits(ten + six, (three * ten) + two))
+        this.unit + ((high - surrogate_first) * two.pow(ten)) + (low - (surrogate_first + two.pow(ten)))
+      } else { high }
+    )
+  }
+  UTF32 := class {
+    encode (codepoint: Number) => bits_of(codepoint, (three * ten) + two)
+    decode (bits) => number_of(bits)
+  }
+
+  // spec: the tables, fetched when read. Their location is the draft's.
+  tables_at => String.of(`https://www.unicode.org/Public/UCD/latest/ucd/`)
+  table (name) => external io (.tables_at + name)
+}
+
+// The bits between two positions of a chain of bits, counted from zero.
+Chain.components.hierarchy &= class {
+  slice_bits (from, to) => (
+    out := chain None
+    walker ^keyword := .at(from)
+    left ^keyword := to - from
+    while (left.nonzero.and(exists walker)) {
+      out &= walker.value
+      walker = walker.next
+      left = left.pred
+    }
+    out
+  )
+}

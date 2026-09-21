@@ -288,40 +288,49 @@ Edge := class: Ray {
 }
 
 
-// class Structure < Iterable<Ray{
-//   initial & terminal : (1 unless HyperContinuations) Vertex.Boundary
-// }>
-//   Vertex.Boundary = Boundary{
-//     ∙: (1 unless HyperEdges) Vertex
-//     ⊙: (1 unless HyperEdges) Edge{
-//       initial & terminal : (1 unless HyperEdges) Vertex.Boundary
-//     }
-//   }
-//   internal static HyperContinuations: boolean
-//   internal static HyperEdges: boolean = false
+// The structures of the draft: an Iterable whose rays are constrained.
+// spec: the constraints (`(1 unless HyperContinuations) Vertex.Boundary`) are
+// carried as the two flags and asked of a structure through `is_valid`, not
+// enforced while it is built.
+Structure := class: Iterable {
+  hyper_continuations => false
+  hyper_edges => false
+  is_valid => true
+}
+Hypergraph := class: Structure {
+  hyper_edges => true
+}
+Graph := class: Structure {
+  hyper_continuations => true
+}
+Forest := class: Structure {
+  hyper_continuations => true
+  is_valid => .acyclic.and(.consistent)
+}
+Tree := class: Forest {
+  is_valid => .acyclic.and(.consistent).and(.connected)
+}
+Path := class: Structure {
+  is_valid => .consistent.and(.connected)
+  paths => this
+  // `length: 1 N∞`: the count, or unbounded when a walk comes back around.
+  length => if .acyclic { .count } else { None }
+}
+Array := class: Path {
+  acyclic => true
+}
 
-// class Hypergraph < Structure
-//   HyperEdges = true
-// class Graph < Structure
-//   HyperContinuations = true
-// class Forest < Structure{acyclic & consistent}
-//   Vertex = Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
-//   HyperContinuations = true
-// class Tree < Forest{connected}
-// class Path < Structure{consistent & connected}
-//   HyperContinuations = false
-
-//   paths => this
-//   length: 1 N∞ =>
-//     return 0 unless entry
-//     reduce(acc = 0, current =>
-//       break ∞ if current.(previous | next)** // TODO Infinitely generates check or in a loop
-//       acc + 1
-//     )
-// class Array < Path{acyclic}
+// spec: the draft's Traverser: how `for` walks a structure. A chain has one
+// way through it, so depth-first and breadth-first meet; both are named so a
+// structure with branches can choose.
+Traverser := class {
+  Order := enum depth_first | breadth_first
+  default => Traverser.Order.depth_first
+  walk (entry, body) => entry for body
+}
 
 
-// A chain of components is an Iterable, and each link in it a Ray: the
+// A chain of components is an Array (a path without cycles), and each link in it a Ray: the
 // containers `class` builds before this file loads take both on here.
-Chain.components.hierarchy &= Iterable
+Chain.components.hierarchy &= Array
 Link.components.hierarchy &= Ray

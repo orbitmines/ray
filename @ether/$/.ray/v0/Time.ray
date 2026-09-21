@@ -1,0 +1,188 @@
+// Time (drafts: utils/Time.ray, utils/Astronomy.ray). A duration is a Quantity
+// of a temporal unit; a calendar cuts the line into segments; a time is a
+// duration since an epoch on a calendar. spec: the one clock the machine
+// offers is `time`, a count of nanoseconds as decimal digits; it is kept as a
+// string and only the tail that a walk can afford is read as a number.
+
+// The temporal units, from the second up (`SI_Unit s "second"`, the Julian
+// table). spec: a year is 365 days; the quarter day of the Julian year and
+// the Gregorian months are the calendar's, not the unit's.
+Second := Unit(
+  name: `second`
+  symbol: `s`
+)
+// spec: a nanosecond is its own base here: a thousand-million-fold second is
+// beyond a walk, so clock readings stay in nanoseconds until cut to seconds.
+Nanosecond := Unit(
+  name: `nanosecond`
+  symbol: `ns`
+)
+Minute := Second multiple (six * ten)
+Hour := Minute multiple (six * ten)
+Day := Hour multiple (two * ten + four)
+Week := Day multiple seven
+Year => Day multiple ((three * hundred) + (six * ten) + five)
+seconds (amount: Number) => amount of Second
+minutes (amount: Number) => amount of Minute
+hours (amount: Number) => amount of Hour
+days (amount: Number) => amount of Day
+weeks (amount: Number) => amount of Week
+years (amount: Number) => amount of Year
+
+Unit.components.hierarchy &= class { is_temporal => (.base_unit == Second) }
+Unit.components.hierarchy &= class { base_unit => if .is_base { this } else { .base.base_unit } }
+Quantity.components.hierarchy &= class {
+  is_temporal => .unit.is_temporal
+  // spec: the draft's `12:00` and `12:00:00` are read by ISO_8601.time; `:`
+  // itself stays the annotation.
+}
+
+// The draft's Calendar: a chain of segments (a day, a month, a year) each a
+// duration; `is_recurring` when the segment cycles.
+Calendar := class {
+  Segment := class {
+    of (name, length) => Calendar.Segment(name: name, length: length, epoch: one)
+    is_recurring => exists .period
+  }
+  segments => .parts
+  // spec: `equivalence`: two calendars agree on a point; converting a time
+  // keeps its structure since the epoch when both calendars share the same
+  // segments, and goes through seconds otherwise.
+  equivalent (here: Time, there: Time) => (
+    from := here
+    to := there
+    Calendar.Equivalence(from: from, to: to)
+  )
+  Equivalence := class {
+    convert (time: Time) => (
+      elapsed := time - .from
+      Time(calendar: .to.calendar, since_epoch: (.to.since_epoch + elapsed.as_seconds), epoch: .to.epoch)
+    )
+  }
+}
+
+// The Gregorian/Julian tables of Astronomy.ray.
+Weekday := enum monday | tuesday | wednesday | thursday | friday | saturday | sunday
+Month := enum january (length: (three * ten) + one, place: one) | february (length: (two * ten) + eight, place: two) | march (length: (three * ten) + one, place: three) | april (length: three * ten, place: four) | may (length: (three * ten) + one, place: five) | june (length: three * ten, place: six) | july (length: (three * ten) + one, place: seven) | august (length: (three * ten) + one, place: eight) | september (length: three * ten, place: nine) | october (length: (three * ten) + one, place: ten) | november (length: three * ten, place: ten + one) | december (length: (three * ten) + one, place: ten + two) {
+  // February takes the leap day.
+  days_in (year: Number, calendar) => if ((.place == two).and(calendar.is_leap_year(year))) { .length.succ } else { .length }
+}
+
+Julian := class {
+  is_leap_year (year: Number) => (year % four).is_zero
+  days_in_year (year: Number) => if (.is_leap_year(year)) { (three * hundred) + (six * ten) + six } else { (three * hundred) + (six * ten) + five }
+  days_in_month (month, year: Number) => month.days_in(year, this)
+  weeks_in_year (year: Number) => .days_in_year(year) / seven
+  hours_in_day => (two * ten) + four
+  minutes_in_hour => six * ten
+  seconds_in_minute => six * ten
+  months => Month.components
+  weekdays => Weekday.components
+  // The day of a year a date falls on, counted from one.
+  day_of_year (month, day: Number, year: Number) => (
+    calendar := this
+    total ^keyword := day
+    Month.components for {
+      if (it.value.place < month.place) { total = total + it.value.days_in(year, calendar) }
+    }
+    total
+  )
+}
+Gregorian := class: Julian {
+  // spec: the century rule only costs its four hundred for century years.
+  is_leap_year (year: Number) => if ((year % hundred).is_zero) { (year % (four * hundred)).is_zero } else { (year % four).is_zero }
+}
+// spec: UTC is Gregorian with an offset, `-12:00 <= offset <= 14:00`; leap
+// seconds are off (`GMT = UTC{leap_seconds == false}`); the tzdata table
+// waits on `io` and an unzip.
+UTC := class: Gregorian {
+  offset => zero
+  with_offset (offset: Quantity) => UTC(offset: offset)
+  leap_seconds => false
+}
+GMT := UTC
+
+// A month's index counts from zero; its place from one.
+Month.components.hierarchy &= class {
+  index => .place.pred
+  == (other) => .place == other.place
+  != (other) => (this == other).not
+}
+
+// A time: seconds since an epoch on a calendar. `now` reads the clock.
+Time := class {
+  of (since_epoch: Quantity, calendar) => Time(calendar: calendar, since_epoch: since_epoch, epoch: None)
+  since_calendar_epoch => if (exists .epoch) { .since_epoch + .epoch.since_calendar_epoch } else { .since_epoch }
+  - (other: Time) => .since_calendar_epoch - other.since_calendar_epoch
+  + (duration: Quantity) => Time(calendar: .calendar, since_epoch: .since_epoch + duration, epoch: .epoch)
+  == (other: Time) => .since_calendar_epoch == other.since_calendar_epoch
+  < (other: Time) => .since_calendar_epoch < other.since_calendar_epoch
+  as (calendar) => Time(calendar: calendar, since_epoch: .since_epoch, epoch: .epoch)
+
+  // spec: the clock's nanoseconds, kept as digits; `seconds_now` reads the
+  // last nine digits off as nanoseconds and the ones before as seconds only
+  // as far as `as_number` walks — the tail of the string, not the whole.
+  now => Time.Clock(digits: String.of(external time))
+  Clock := class {
+    // The nanosecond digits, as text; the last three of them, and the last
+    // three of the seconds, as numbers: what a walk can afford.
+    nanoseconds => .digits.slice(.digits.count - nine, .digits.count)
+    nanoseconds_tail => .digits.slice(.digits.count - three, .digits.count).as_number of Nanosecond
+    seconds_tail => .digits.slice(.digits.count - (ten + two), .digits.count - nine).as_number of Second
+  }
+}
+Quantity.components.hierarchy &= class { as_seconds => (this as Second).amount }
+
+// The draft's ISO 8601: `YYYY-MM-DD` and `hh:mm:ss`. spec: the date is read
+// into year, month and day; week dates, ordinal dates and offsets are
+// recognised by shape only.
+ISO_8601 := class {
+  date (text: String) => (
+    parts := text.split(Character.of(ascii_dash))
+    year := parts.head.value.as_number
+    month := Month.at_index(parts.head.next.value.as_number.pred)
+    day := parts.head.next.next.value.as_number
+    ISO_8601.Date(year: year, month: month, day: day)
+  )
+  time (text: String) => (
+    parts := text.split(Character.of(ascii_colon))
+    hour := parts.head.value.as_number
+    minute := parts.head.next.value.as_number
+    second := if (exists parts.head.next.next) { parts.head.next.next.value.as_number } else { zero }
+    // Kept in seconds: an hour of three thousand six hundred links is only built when asked for.
+    seconds((((hour * (six * ten)) + minute) * (six * ten)) + second)
+  )
+  Date := class {
+    is_valid (calendar) => (zero < .day).and((.month.days_in(.year, calendar) < .day).not)
+    day_of_year (calendar) => calendar.day_of_year(.month, .day, .year)
+    == (other) => (.year == other.year).and(.month == other.month).and(.day == other.day)
+  }
+}
+Month.components.hierarchy &= class {
+  at_index (index: Number) => (
+    wanted := index.succ
+    found ^keyword := None
+    Month.components for {
+      if (it.value.place == wanted) { found = it.value }
+    }
+    found
+  )
+}
+ascii_dash => (four * ten) + five
+ascii_colon => (five * ten) + eight
+
+// Astronomy.ray: a planet names its years and days; Earth's are the
+// calendar's, Mars's are the sol. spec: a sol is 24h 39m 35.244s, kept to the
+// second; a Martian year is 668.5991 sols, kept to the sol.
+Planet := class { }
+Earth := class: Planet {
+  years => Year
+  days => Day
+  calendar => Gregorian
+}
+Sol => Second multiple ((eight * ten * thousand) + (eight * thousand) + (seven * hundred) + (seven * ten) + five)
+MartianYear => Sol multiple ((six * hundred) + (six * ten) + eight)
+Mars := class: Planet {
+  years => MartianYear
+  days => Sol
+}

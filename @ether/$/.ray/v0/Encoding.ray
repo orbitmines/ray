@@ -1,0 +1,26 @@
+// Encodings (draft: .ray2/Language/Encoding.ray). spec: skeletons — a hash, a
+// cipher or a compressor is a walk over bits that the language can express,
+// but each algorithm is its own project; here each names its algorithm and
+// keeps what it wraps, and `as` hands the wrapped value back.
+
+Encoding := class {
+  Algorithm := enum sha1 | sha256 | sha512 | sha3 | md5 | blowfish | blake3 | base64 | gzip
+
+  // spec: an encrypted value is read back only at a location holding the key;
+  // without it, the draft spawns a quest. Here the key is the location itself.
+  Encrypted := class {
+    of (value, key) => Encoding.Encrypted(value: value, key: key)
+    as (location) => if (location == .key) { .value } else { None }
+  }
+  // spec: a digest; `of` keeps the algorithm and the text, the digest itself
+  // awaits the algorithm's bit walks.
+  Hash := class {
+    of (value, algorithm) => Encoding.Hash(value: value, algorithm: algorithm)
+    == (other: Encoding.Hash) => (.algorithm == other.algorithm).and(.value == other.value)
+  }
+  // spec: a compressed value decompresses to what it wrapped.
+  Compressed := class {
+    of (value, algorithm) => Encoding.Compressed(value: value, algorithm: algorithm)
+    as (target) => .value
+  }
+}

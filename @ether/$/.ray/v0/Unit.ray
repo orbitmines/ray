@@ -9,6 +9,7 @@
 
 Unit := class {
   is_base => (exists .base).not
+  rank => if .is_base { zero } else { .base.rank.succ }
 
   // How many of the base unit one of this unit is.
   // A prefixed unit's factor is its prefix's, read when asked.
@@ -59,25 +60,35 @@ Quantity := class {
     )
   )
 
+  // Arithmetic happens in the finer of the two units, so nothing is lost.
+  // spec: on one base line the finer unit is the one fewer multiples up, so
+  // no scale (which can be thousands) is built to decide.
+  finer (other: Quantity) => if (other.unit.rank < .unit.rank) { .unit } else { other.unit }
   + (other: Quantity) => (
-    total := .amount + (other as .unit).amount
-    kind := .unit
+    kind := .finer(other)
+    total := (this as kind).amount + (other as kind).amount
     Quantity(
       amount: total
       unit: kind
     )
   )
   - (other: Quantity) => (
-    difference := .amount - (other as .unit).amount
-    kind := .unit
+    kind := .finer(other)
+    difference := (this as kind).amount - (other as kind).amount
     Quantity(
       amount: difference
       unit: kind
     )
   )
 
-  == (other: Quantity) => .amount == (other as .unit).amount
-  < (other: Quantity) => .amount < (other as .unit).amount
+  == (other: Quantity) => (
+    kind := .finer(other)
+    (this as kind).amount == (other as kind).amount
+  )
+  < (other: Quantity) => (
+    kind := .finer(other)
+    (this as kind).amount < (other as kind).amount
+  )
 }
 
 // Allow for syntax `1 of Byte`, `3 of Bit`: a number followed by a unit. The

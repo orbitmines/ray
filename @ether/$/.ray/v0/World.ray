@@ -15,10 +15,10 @@ Entity := class { }
 World := class: Nameable {
   prefix => `#`
   name: String
-  worlds: chain None
-  personas: chain None
-  items: chain None
-  quests: chain None
+  worlds: (chain None)
+  personas: (chain None)
+  items: (chain None)
+  quests: (chain None)
 
   spawn (persona) => (
     .personas &= persona
@@ -46,7 +46,7 @@ Region := World
 Quest := class: Nameable {
   name: String
   goal: Node
-  steps: chain None
+  steps: (chain None)
   done: false
 
   step (description) => (
@@ -63,7 +63,7 @@ Quest := class: Nameable {
 Task := class: Quest {
   name: String
   goal: Node
-  steps: chain None
+  steps: (chain None)
   done: false
   interrupted: false
 
@@ -110,7 +110,7 @@ History := class {
 
   }
   repository: Node
-  commits: chain None
+  commits: (chain None)
   from: None
 
   commit (who, what) => (
@@ -124,7 +124,7 @@ History := class {
 }
 Repository := class {
   world: Node
-  histories: chain None
+  histories: (chain None)
 
 }
 
@@ -141,7 +141,7 @@ Reference := class {
   author: Node
   date: Time.now
   draft: true
-  notes: chain None
+  notes: (chain None)
   link: None
 
   publish => (
@@ -165,7 +165,7 @@ Status := enum online | offline | hosted | broadcast | proxy | invisible
 Persona := class: Nameable {
   prefix => `@`
   name: String
-  avatars: chain None
+  avatars: (chain None)
   presence: None
   status: Status.offline
 
@@ -178,30 +178,30 @@ Persona := class: Nameable {
 Avatar := class: Persona {
   persona: Node
   platform: Node
-  avatars: chain None
+  avatars: (chain None)
   presence: None
   status: Status.offline
 
 }
 Player := class: Persona {
   name: String
-  avatars: chain None
+  avatars: (chain None)
   presence: None
   status: Status.offline
 
 }
 NPC := class: Persona {
   name: String
-  avatars: chain None
+  avatars: (chain None)
   presence: None
   status: Status.hosted
 
 }
 Organization := class: Player {
   name: String
-  avatars: chain None
+  avatars: (chain None)
   presence: None
   status: Status.offline
-  members: chain None
+  members: (chain None)
 
 }

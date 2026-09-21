@@ -158,7 +158,7 @@ Keyboard := class {
     )
     cycle (iterable) => iterable.first
   }
-  keys: chain None
+  keys: (chain None)
 
   add (key) => (
     .keys &= key
@@ -169,7 +169,7 @@ Keyboard := class {
 // UI/Chat (empty draft): spec: a chat is a chain of messages, each from a
 // persona.
 Chat := class {
-  messages: chain None
+  messages: (chain None)
 
   Message := class { }
   say (who, text: String) => (

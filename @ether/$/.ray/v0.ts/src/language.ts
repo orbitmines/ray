@@ -996,7 +996,12 @@ export namespace Ray {
       if (receiver === undefined) return this.chain(frame).operand;
       let own = this.resolved(receiver);
       const chain = this.chain(frame).receiver;
-      if (own === undefined && receiver.ref !== undefined) own = this.bound(receiver)?.declared;
+      if (own === undefined && receiver.ref !== undefined) {
+        // A parameter is a value: read it before looking for the rules of what it holds.
+        const held = this.bound(receiver);
+        if (held?.lazy !== undefined && held.value === undefined && !held.lazy.raw && !this.probing) { this.diagnostics.muted(() => this.safely(() => this.deref(receiver, false))); own = this.resolved(receiver); }
+        if (own === undefined) own = held?.declared;
+      }
       if (own !== undefined && own.declared !== undefined && own.methods === undefined && own.inlined === undefined) own = own.declared;
       if (!own || own.lazy) return chain;
       const itself = own === frame && !opts.self;
@@ -1460,9 +1465,15 @@ export namespace Ray {
       return node;
     }
     bound(node: Node): Node | undefined { return node.ref!.member ? node.ref!.scope.member(node.ref!.key) : node.ref!.own ? node.ref!.scope.own(node.ref!.key) : node.ref!.scope.lookup(node.ref!.key); }
+    // What a node stands for once read: through references, and through what
+    // a read lazy already holds, until a value.
     resolved(node: Node | undefined): Node | undefined {
-      for (let depth = 0; node?.ref && depth < 64; depth++) node = this.bound(node);
-      return node?.lazy ? node.value : node;
+      for (let depth = 0; node !== undefined && depth < 64; depth++) {
+        if (node.ref) node = this.bound(node);
+        else if (node.lazy) node = node.value;
+        else break;
+      }
+      return node;
     }
     deref(node: Node | undefined, report: boolean = true): Node | undefined {
       const marks: Node[] = [], sources: Node[] = [];

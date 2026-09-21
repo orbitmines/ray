@@ -155,22 +155,21 @@ Iterable := class: Ordered {
     holds
   )
 
-  // `all => reduce(|)`: every element superposed.
+  // `all => reduce(|)`: every element superposed: the first, with each next
+  // pushed onto its components (`#`).
   all => (
-    many := Many()
-    for { many.components &= it }
-    many
+    superposed ^keyword := None
+    for {
+      if (exists superposed) { superposed = superposed | it.value } else { superposed = it.value }
+    }
+    superposed
   )
 
   // `fill (x) all = x`
   fill (x) => for { it.value = x }
 
   // `compact => this~{!=.instance_of None}`: the elements that hold something.
-  compact => (
-    many := Many()
-    for { if (exists it.value) { many.components &= it } }
-    many
-  )
+  compact => this{exists this}
 
   at (index: Number) => .entry.at(index)
 

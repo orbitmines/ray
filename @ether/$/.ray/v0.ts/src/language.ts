@@ -1614,7 +1614,7 @@ export namespace Ray {
       this.spaces(cursor);
       return value && cursor.done() ? value : node;
     }
-    assign(slot: Node, value: Node | undefined, at: Text.Node): Node | undefined {
+    assign(slot: Node, value: Node | undefined, at: Text.Node, opts: { declare?: boolean } = {}): Node | undefined {
       let node = this.reference_of(slot);
       const marks: Node[] = [...(node.marks ?? [])];
       for (let depth = 0; node.ref && !node.marks?.length && depth < 64; depth++) {
@@ -1630,7 +1630,8 @@ export namespace Ray {
         if (bound?.style !== undefined) { this.alias(bound.style, result); return result; }
         let scope = node.ref.scope;
         if (scope === this.NONE) { this.error('Cannot assign into nothing.', at); return result; }
-          if (!node.ref.own) {
+          // A declaration binds where it is written; an assignment finds what it names.
+        if (!node.ref.own && !opts.declare) {
           let owner: Node | undefined;
           for (let s: Node | undefined = scope; s && !owner; s = s.parent) if (s.own(node.ref.key) !== undefined) owner = s;
           if (!owner) for (const s of scope.reading(new Set())) if (s.own(node.ref.key) !== undefined) { owner = s; break; }
@@ -2729,6 +2730,20 @@ export namespace Ray {
       return current;
     }
 
+    // A literal made by the runtime: a node whose text is the given string.
+    literal_of(text: string, at: Text.Node): Node {
+      const node = new Node(this.diagnostics, Text.Node.string(text));
+      node.literal = true;
+      return node;
+    }
+    io(location: string, content: string | undefined, at: Text.Node): Node {
+      const fs = env.fs;
+      if (location === 'stdin') return this.literal_of(fs.readFileSync(0, 'utf8'), at);
+      if (location === 'stdout' || location === 'stderr') { (location === 'stdout' ? process.stdout : process.stderr).write(content ?? ''); return this.NONE; }
+      if (content === undefined) return this.literal_of(fs.readFileSync(location, 'utf8'), at);
+      fs.writeFileSync(location, content);
+      return this.NONE;
+    }
     inline(node: Node, frame: Node, opts: { compose?: boolean } = {}): Node | undefined {
       if (this.depth > Interpreter.DEPTH) throw new Recursion(node, node.position ?? this.statements[0]!);
       this.depth++;
@@ -2888,6 +2903,7 @@ export namespace Ray {
     'global': { arity: 0, fn: ({ interpreter }) => interpreter.GLOBAL },
     'get': { arity: 2, pure: true, fn: ({ interpreter, args: [node, key] }) => interpreter.get(node, key) },
     'assign': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at) },
+    'declare': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at, { declare: true }) },
     'goto': { arity: 2, fn: ({ interpreter, frame, args: [label, condition] }) => interpreter.jump(label, condition, frame) },
     'none': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.NONE },
     'return\\': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.RETURN },
@@ -2895,6 +2911,13 @@ export namespace Ray {
     'label': { arity: 1, pure: true, fn: ({ interpreter, args: [name] }) => interpreter.labelled(name) },
     'base': { arity: 1, fn: ({ interpreter, args: [node] }) => { const target = interpreter.deref(node); if (target) interpreter.BASE = target; return target; } },
     'inline': { arity: 1, fn: ({ interpreter, frame, args: [node] }) => interpreter.inline(node, frame) },
+    // What crosses from the machine into the language is a literal: `bits` reads
+    // one as its bytes, and the rest are read that way language-side.
+    'bits': { arity: 1, pure: true, fn: ({ interpreter, args: [node], at }) => interpreter.literal_of([...new TextEncoder().encode(interpreter.text(node))].map(byte => byte.toString(2).padStart(8, '0')).join(''), at) },
+    'time': { arity: 0, fn: ({ interpreter, at }) => interpreter.literal_of(String(process.hrtime.bigint()), at) },
+    'random': { arity: 0, fn: ({ interpreter, at }) => interpreter.literal_of(String(env.import<typeof import('crypto')>('crypto').randomInt(2)), at) },
+    'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => interpreter.io(interpreter.text(location), content.none ? undefined : interpreter.text(content), at) },
+    'os': { arity: 1, fn: ({ interpreter, args: [name], at }) => { const key = interpreter.text(name); const value = key === 'platform' ? process.platform : key === 'architecture' ? process.arch : process.env[key]; return value === undefined ? interpreter.NONE : interpreter.literal_of(value, at); } },
     'extend': { arity: 2, fn: ({ interpreter, args: [target, node] }) => { const into = interpreter.deref(target); return into ? interpreter.inline(node, into, { compose: true }) : undefined; } },
     'literal': { arity: 1, fn: ({ args: [node] }) => node },
     'unordered': { arity: 1, fn: ({ args: [node] }) => node },

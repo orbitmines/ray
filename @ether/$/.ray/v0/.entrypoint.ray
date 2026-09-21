@@ -251,7 +251,11 @@ Node := base class {
 
     this
   )
-  := ^punctuation (x) => this = x
+  := ^punctuation (x) => (
+    external declare this x
+
+    this
+  )
   : ^punctuation ^annotation (type) => (
     goto typed if this.components
     this = type

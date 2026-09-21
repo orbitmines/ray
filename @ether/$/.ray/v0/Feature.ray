@@ -1,0 +1,180 @@
+// Features (drafts: .ray2/Feature/IO, Random, Choice, Proof, Transaction,
+// Network/Network, Network/HTTP, UI/Keyboard, UI/Chat). spec: each is the
+// draft's shape on the primitives the runtime offers (`io`, `random`, `os`);
+// what needs a host (proxies, key presses, a chat channel) is named and kept.
+
+// `File = Byte[]`, `confidential namespace IO`: reading and writing a
+// location. spec: a location is a literal path (or `stdin`); the instance
+// directory is where the program runs, and `os` names the host.
+IO := class {
+  read (path) => String.of(external io path None)
+  write (path, content) => external io path content
+  os (name) => String.of(external os name)
+  platform => IO.os(`platform`)
+  architecture => IO.os(`architecture`)
+  File := class {
+    path: Node
+
+    content => IO.read(.path)
+    bytes => .content.collected
+  }
+}
+
+// `Node += random`, `Iterable += random`, `seed ()`: one bit from the machine
+// and what is built from it. spec: the generator cannot be seeded here.
+Random := class {
+  bit => (external random).holds
+  bits (count: Number) => (
+    drawn := chain None
+    left ^keyword := count
+    while left.nonzero {
+      drawn &= Random.bit
+      left = left.pred
+    }
+    drawn
+  )
+  // A number below a limit: as many bits as the limit needs, drawn again
+  // until the number they spell is small enough.
+  below (limit: Number) => (
+    width ^keyword := zero
+    rest ^keyword := limit
+    while rest.nonzero {
+      rest = rest.half
+      width = width.succ
+    }
+    drawn ^keyword := Random.number(width)
+    while (drawn < limit).not { drawn = Random.number(width) }
+    drawn
+  )
+  // The number so many random bits spell, accumulated as they are drawn.
+  number (width: Number) => (
+    total ^keyword := zero
+    left ^keyword := width
+    while left.nonzero {
+      total = total + total
+      if Random.bit { total = total.succ }
+      left = left.pred
+    }
+    total
+  )
+}
+Iterable.components.hierarchy &= class {
+  random => .at(Random.below(.count))
+}
+
+// `choose`: one of a collection, or several. spec: constraints on the choice
+// (`choose n: Nat`, `choose{unique}`, `choose 50%`) are the filters the
+// caller applies before choosing.
+Choice := class {
+  choose (from) => from.random
+  choose_count (from, count: Number) => (
+    picked := chain None
+    left ^keyword := count
+    while left.nonzero {
+      picked &= from.random
+      left = left.pred
+    }
+    picked
+  )
+  coin => Random.bit
+}
+
+// `Proposition < Quest{(): boolean}`, `Proof<proposition>`, `theorem`:
+// spec: a proposition holds or not; a proof is what says so; a theorem whose
+// proof fails becomes a quest to find one, and a contradiction proves the
+// negation.
+Proof := class {
+  Proposition := class {
+    holds: Node
+
+    negated => Proof.Proposition(holds: .holds.not)
+  }
+  proposition: Node
+  argument: Node
+
+  holds => .argument.holds
+  theorem (proposition, proof) => if proof.holds { true } else { Quest.of(String.of(`prove`), proposition) }
+  by_contradiction (proposition, proof_of_negation) => proof_of_negation.holds.not
+  rfl (proposition) => proposition.holds
+  assume (fact) => fact
+}
+
+// Reversible programs (`+!`, `program⁻¹`): spec: a transaction keeps the
+// forward and the backward step; `reversed` swaps them, and the table names
+// the inverse of each arithmetic operator.
+Transaction := class {
+  forward: Node
+  backward: Node
+  applied: false
+
+  reversed => Transaction(forward: .backward, backward: .forward, applied: .applied)
+  mark_applied => (
+    .applied = true
+    this
+  )
+  Inverse := enum plus (of: `+`, is: `-`) | minus (of: `-`, is: `+`) | times (of: `*`, is: `/`) | over (of: `/`, is: `*`)
+}
+
+// `DomainName = String{length < 2^8}`, proxies, the protocol's version
+// handshake. spec: a proxy is a persona traffic goes through; the handshake
+// opens with the protocol version as a UUID.
+Network := class {
+  DomainName := class {
+    text: String
+
+    valid => .text.count < two.pow(eight)
+  }
+  Proxy := class {
+    through (persona) => Network.Proxy(persona: persona)
+  }
+  Protocol := class {
+    version => UUID.Namespace.dns
+    handshake (offered) => offered
+  }
+}
+// spec: HTTP is a read of a location; the runtime's `io` reads files and
+// `stdin`, so a URL is fetched once the host offers a network.
+HTTP := class {
+  get (url) => IO.read(url)
+  Method := enum get | post | put | delete
+}
+
+// `class Key`, `class Keyboard`: spec: a key is pressed or not, may be toggled,
+// may cycle a collection; presses arrive from the host.
+Keyboard := class {
+  Key := class {
+    name: Node
+    pressed: false
+    toggled: false
+
+    press => (
+      .pressed = true
+      .toggled = .toggled.not
+      this
+    )
+    release => (
+      .pressed = false
+      this
+    )
+    cycle (iterable) => iterable.first
+  }
+  keys: chain None
+
+  add (key) => (
+    .keys &= key
+    this
+  )
+}
+
+// UI/Chat (empty draft): spec: a chat is a chain of messages, each from a
+// persona.
+Chat := class {
+  messages: chain None
+
+  Message := class { }
+  say (who, text: String) => (
+    .messages &= Chat.Message(who: who, text: text)
+    this
+  )
+  count => .messages.count
+}

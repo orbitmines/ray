@@ -1,0 +1,207 @@
+// Worlds and what lives in them (drafts: .ray2/World, Quest, Entity, Item,
+// History, Accessor, Reference, Character). spec: names are Strings; a
+// world's `#` and a persona's `@` are their prefixes; lookups walk chains.
+// The draft's `Character` (the player) is named `Persona` here, because
+// `Character` is a text character (String.ray).
+
+Nameable := class {
+  named (name: String) => (
+    .name = name
+    this
+  )
+}
+Entity := class { }
+
+World := class: Nameable {
+  prefix => `#`
+  name: String
+  worlds: chain None
+  personas: chain None
+  items: chain None
+  quests: chain None
+
+  spawn (persona) => (
+    .personas &= persona
+    persona
+  )
+  add (item) => (
+    .items &= item
+    item
+  )
+  post (quest) => (
+    .quests &= quest
+    quest
+  )
+  // `shadowing?: World => @ether`: where a name falls back to.
+  shadowing => None
+  // spec: reserving a name issues it within this world.
+  reserve (name: String) => World.Reservation(name: name, issuer: this)
+  Reservation := class { }
+  population => .personas.count
+}
+Region := World
+
+// `class Quest < Program & Nameable`, `class Task < Quest`: spec: a quest has a
+// goal, steps, and is completed when marked so; a task can be interrupted.
+Quest := class: Nameable {
+  name: String
+  goal: Node
+  steps: chain None
+  done: false
+
+  step (description) => (
+    .steps &= description
+    this
+  )
+  complete => (
+    .done = true
+    this
+  )
+  completed => .done
+  difficulty => .steps.count
+}
+Task := class: Quest {
+  name: String
+  goal: Node
+  steps: chain None
+  done: false
+  interrupted: false
+
+  interrupt => (
+    .interrupted = true
+    this
+  )
+}
+
+// `class Item`, `def Certificate`: spec: an item is issued by a world, sits at
+// a location, is obtained by a quest, and carries a certificate.
+Item := class {
+  name: String
+  issuer: Node
+  location: None
+  obtained_by: None
+  certificate: None
+
+  move (location) => (
+    .location = location
+    this
+  )
+  certify (certificate) => (
+    .certificate = certificate
+    this
+  )
+}
+Certificate := class {
+  issuer: Node
+  secret: Node
+  issued_on: Time.now
+
+}
+
+// `class History`, `Branch`, `Commit`, `Repository`: spec: a history is a chain
+// of commits in a repository (a world), each by a persona with a version id
+// (`Version = UUID.v1`, v4 here); a branch forks from a point.
+History := class {
+  Commit := class {
+    who: Node
+    what: Node
+    id: UUID.v4
+    when: Time.now
+
+  }
+  repository: Node
+  commits: chain None
+  from: None
+
+  commit (who, what) => (
+    .commits &= History.Commit.of(who, what)
+    this
+  )
+  count => .commits.count
+  latest => .commits.tail.value
+  fork => History.Branch(repository: .repository, commits: chain None, from: this)
+  Branch := class { }
+}
+Repository := class {
+  world: Node
+  histories: chain None
+
+}
+
+// `class Accessor`: spec: the levels of the draft's modifiers.
+Accessor := class {
+  Permission := enum private | confidential | protected | public
+  level: Node
+
+}
+
+// `class Reference`: spec: title, author, date, draft, link, notes.
+Reference := class {
+  title: String
+  author: Node
+  date: Time.now
+  draft: true
+  notes: chain None
+  link: None
+
+  publish => (
+    .draft = false
+    this
+  )
+  note (text: String) => (
+    .notes &= text
+    this
+  )
+}
+
+// The player side of `Character.ray`: `Instance`, `Status`, the persona and
+// its avatars, players, NPCs and organizations.
+Instance := class {
+  location: Node
+  status: Status.online
+
+}
+Status := enum online | offline | hosted | broadcast | proxy | invisible
+Persona := class: Nameable {
+  prefix => `@`
+  name: String
+  avatars: chain None
+  presence: None
+  status: Status.offline
+
+  status_now => if (exists .presence) { .presence.status } else { .status }
+  embody (avatar) => (
+    .avatars &= avatar
+    avatar
+  )
+}
+Avatar := class: Persona {
+  persona: Node
+  platform: Node
+  avatars: chain None
+  presence: None
+  status: Status.offline
+
+}
+Player := class: Persona {
+  name: String
+  avatars: chain None
+  presence: None
+  status: Status.offline
+
+}
+NPC := class: Persona {
+  name: String
+  avatars: chain None
+  presence: None
+  status: Status.hosted
+
+}
+Organization := class: Player {
+  name: String
+  avatars: chain None
+  presence: None
+  status: Status.offline
+  members: chain None
+
+}

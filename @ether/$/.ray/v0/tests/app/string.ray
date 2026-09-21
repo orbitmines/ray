@@ -1,0 +1,92 @@
+mark ^keyword := external global
+
+ab := String.of(`ab`)
+goto s1_ok if ab.count == two
+INFO@mark `S1 ab has other than two characters`
+s1_ok\
+
+goto s2_ok if ab.first.codepoint == ((ten * nine) + seven)
+INFO@mark `S2 a is not codepoint 97`
+s2_ok\
+
+goto s3_ok if ab.last.codepoint == ((ten * nine) + eight)
+INFO@mark `S3 b is not codepoint 98`
+s3_ok\
+
+goto s4_ok if (String.of(`a`) == String.of(`a`)).holds
+INFO@mark `S4 a != a`
+s4_ok\
+
+goto s5_ok if (String.of(`a`) != String.of(`b`)).holds
+INFO@mark `S5 a == b`
+s5_ok\
+
+goto s6_ok if (String.of(`a`) + String.of(`b`)) == ab
+INFO@mark `S6 a + b != ab`
+s6_ok\
+
+acute := String.of(`é`)
+goto s7_ok if acute.count == one
+INFO@mark `S7 é is not one character`
+s7_ok\
+
+goto s8_ok if acute.first.width == two
+INFO@mark `S8 é is not two bytes wide`
+s8_ok\
+
+goto s9_ok if acute.first.codepoint == ((two * hundred) + ((three * ten) + three))
+INFO@mark `S9 é is not codepoint 233`
+s9_ok\
+
+octet := chain None
+octet &= 0
+octet &= 1
+octet &= 1
+octet &= 0
+octet &= 0
+octet &= 0
+octet &= 0
+octet &= 1
+goto t1_ok if octet.count == eight
+INFO@mark `T1 manual bit chain does not count eight`
+t1_ok\
+goto t2_ok if octet.head.value.not.holds
+INFO@mark `T2 first manual bit is not 0`
+t2_ok\
+manual := Character(octets: octet)
+goto t3_ok if manual.width == one
+INFO@mark `T3 manual a is not one byte wide`
+t3_ok\
+goto t4_ok if manual.codepoint == ((ten * nine) + seven)
+INFO@mark `T4 manual a is not codepoint 97`
+t4_ok\
+read := String.of(`a`).first
+goto t5_ok if read.octets.count == eight
+INFO@mark `T5 read a does not have eight octet`
+t5_ok\
+goto t6_ok if read.octets.head.value.not.holds
+INFO@mark `T6 read a first bit is not 0`
+t6_ok\
+goto t7_ok if read.octets.head.next.value.holds
+INFO@mark `T7 read a second bit is not 1`
+t7_ok\
+
+lone := String.of(`a`)
+goto u1_ok if lone.collected.count == eight
+INFO@mark `U1 collected octet of a are not eight`
+u1_ok\
+goto u2_ok if lone.collected.head.value.not.holds
+INFO@mark `U2 first collected bit is not 0`
+u2_ok\
+goto u3_ok if lone.collected.head.next.value.holds
+INFO@mark `U3 second collected bit is not 1`
+u3_ok\
+goto u4_ok if lone.collected.tail.value.holds
+INFO@mark `U4 last collected bit is not 1`
+u4_ok\
+goto u5_ok if lone.characters.count == one
+INFO@mark `U5 a has other than one character`
+u5_ok\
+goto u6_ok if lone.characters.head.value.octets.count == eight
+INFO@mark `U6 the character's octets are not eight`
+u6_ok\

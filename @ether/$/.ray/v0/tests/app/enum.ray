@@ -3,8 +3,6 @@
 // member may carry fields, which are inlined into that instance, so the
 // members of one enum need not have the same shape.
 
-Number := class { }
-
 Colour := enum red | green | blue
 
 Shape := enum circle (radius: Number) | square (side: Number) | point

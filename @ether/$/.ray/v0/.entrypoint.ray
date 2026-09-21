@@ -257,8 +257,8 @@ Node := base class {
     this
   )
   : ^punctuation ^annotation (type) => (
-    goto typed if this.components
-    this = type
+    goto typed if (external own this)
+    external declare this type
     goto done
    typed\
     this.components.hierarchy &= type

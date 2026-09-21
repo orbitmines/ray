@@ -1,0 +1,94 @@
+// Strings, structurally: a string is a chain of characters, a character is a
+// chain of bits (its UTF-8 bytes), and its codepoint is the Number those bits
+// spell. The one bridge from the machine is `bits`, which hands a literal's
+// bytes to the language one bit at a time. (Drafts: .ray2/Language/String,
+// Character.ray, Unicode.ray; .ray3/Node.ray's `{string: String}`.)
+
+// One UTF-8 encoded character: its bits, most significant first.
+Character := class {
+  // How many bytes encode it: the leading ones of the first byte say so.
+  width => (
+    lead := .octets.head
+    if lead.value.not { one } elsif lead.next.next.value.not { two } elsif lead.next.next.next.value.not { three } else { four }
+  )
+
+  // spec: the codepoint is decoded structurally: the payload bits of each
+  // byte (7 for a single byte; 5/4/3 after a lead of 2/3/4 bytes; 6 for each
+  // follower) are concatenated into a number.
+  codepoint => (
+    total ^keyword := zero
+    walker ^keyword := .octets.head
+    skip ^keyword := if (.width == one) { one } elsif (.width == two) { three } elsif (.width == three) { four } else { five }
+    position ^keyword := zero
+    while (exists walker) {
+      unless (position < skip) {
+        total = total + total
+        if walker.value { total = total.succ }
+      }
+      position = position.succ
+      if (position == eight) {
+        position = zero
+        skip = two
+      }
+      walker = walker.next
+    }
+    total
+  )
+
+  == (other: Character) => .codepoint == other.codepoint
+  != (other: Character) => (this == other).not
+}
+
+String := class {
+  count => .characters.count
+  length => .count
+  empty => .count.is_zero
+
+  first => .characters.head.value
+  last => .characters.tail.value
+
+  == (other: String) => (
+    mine := .characters.head
+    theirs := other.characters.head
+    same ^keyword := true
+    while ((exists mine).and(exists theirs)) {
+      unless (mine.value == theirs.value) { same = false }
+      mine = mine.next
+      theirs = theirs.next
+    }
+    same.and((exists mine).not.and((exists theirs).not))
+  )
+  != (other: String) => (this == other).not
+
+  // Concatenation: the other string's characters follow this string's.
+  + (other: String) => (
+    joined := chain None
+    .characters for { joined &= it.value }
+    other.characters for { joined &= it.value }
+    String(characters: joined)
+  )
+
+  // A string from a literal: its bytes are read bit by bit, and cut into
+  // characters by the width each lead byte announces.
+  of (text) => (
+    collected := chain None
+    take (b) => (collected &= (inline b))
+    external bits text take
+
+    characters := chain None
+    walker ^keyword := collected.head
+    while (exists walker) {
+      current := chain None
+      lead := walker
+      width := if lead.value.not { one } elsif lead.next.next.value.not { two } elsif lead.next.next.next.value.not { three } else { four }
+      remaining ^keyword := eight * width
+      while remaining.nonzero {
+        current &= walker.value
+        walker = walker.next
+        remaining = remaining.pred
+      }
+      characters &= Character(octets: current)
+    }
+    String(characters: characters, collected: collected)
+  )
+}

@@ -43,3 +43,7 @@ exists (x) => (
 
   found
 )
+
+// The two bits, as the machine spells them.
+0 := false
+1 := true

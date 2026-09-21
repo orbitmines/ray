@@ -424,7 +424,9 @@ export namespace Ray {
     get callable(): boolean { return this.fn !== undefined || this.params !== undefined; }
     get rules(): Node[] { return this.methods ? [...this.methods.keys()].filter((x): x is Node => x instanceof Node) : []; }
 
-    own(key: string): Node | undefined { return this.methods?.get(key); }
+    // A name is what it is bound to, or the function defined under that name.
+    own(key: string): Node | undefined { return this.methods?.get(key) ?? this.named?.get(key); }
+    named?: Map<string, Node>
     member(key: string): Node | undefined {
       const own = this.members?.get(key) ?? this.methods?.get(key);
       if (own !== undefined || this.inlined === undefined) return own;
@@ -483,6 +485,7 @@ export namespace Ray {
     static heads = new Set<string>();
     set(key: Key, value: Node): Node {
       (this.methods ??= new Map()).set(key, value);
+      if (key instanceof Node && !value.forward && key.pattern?.length === 1 && key.pattern[0].kind === 'literal') (this.named ??= new Map()).set(key.pattern[0].text.trim(), value);
       if (key instanceof Node) for (const piece of key.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) Node.heads.add(part);
       return value;
     }
@@ -523,6 +526,7 @@ export namespace Ray {
         for (const [key, value] of this.methods)
           copy.methods.set(key instanceof Node ? key.clone(seen) : key, value.clone(seen));
       }
+      if (this.named) copy.named = new Map([...this.named].map(([key, value]) => [key, value.clone(seen)]));
       return copy;
     }
   }
@@ -675,7 +679,7 @@ export namespace Ray {
       return this.safely(() => this.array(new Text.Node(src), this.GLOBAL, true));
     }
 
-    seeking?: string;
+    seeking?: { label: string; source: Text.Source; begin: number; end: number };
     jump(label: Node, condition: Node, frame: Node): Node | undefined {
       if (this.seeking !== undefined) return undefined;
       const met = this.diagnostics.muted(() => this.safely(() => this.deref(condition, false)));
@@ -687,9 +691,13 @@ export namespace Ray {
       if (target === this.RECUR || name === this.text(this.RECUR)) throw new Jump(name, undefined, 'begin');
       throw new Jump(name);
     }
+    // A label answers the seek of the body it is written in: the same name in
+    // another body run along the way (a nested loop) is that body's label.
     labelled(name: Node): Node | undefined {
-      const key = this.text(name);
-      if (this.seeking !== undefined && this.seeking === key) this.seeking = undefined;
+      const seek = this.seeking;
+      if (seek === undefined || seek.label !== this.text(name)) return undefined;
+      const at = this.resolved(name)?.position;
+      if (at === undefined || (at.source === seek.source && at.begin >= seek.begin && at.end < seek.end)) this.seeking = undefined;
       return undefined;
     }
     array(cursor: Text.Node, frame: Node, report: boolean = false, functional: boolean = false): Node | undefined {
@@ -714,7 +722,7 @@ export namespace Ray {
           }
           if (jump.kind === 'begin') { again(); cursor.cursor = begin; continue; }
           again();
-          this.seeking = jump.label;
+          this.seeking = { label: jump.label, source: cursor.source, begin, end: cursor.limit };
           if (process.env.RAY_DBG) console.error(`seek ${jump.label} in ${cursor.source.location?.split('/').pop()} at ${this.statements[0]?.source.location?.split("/").pop()}:${this.statements[0]?.line} ${this.statements[0]?.string.slice(0, 40).replace(/\n/g, " ")}`);
           this.diagnostics.muted(() => {
             cursor.cursor = begin;
@@ -2759,7 +2767,9 @@ export namespace Ray {
       // Looking for a label means running past the statements in between; they
       // are only being read, so nothing they say should take effect.
       if (this.seeking !== undefined) return undefined;
-      const target = this.unforced(node) ?? this.safely(() => this.peel(node));
+      // A name is followed to what it holds; any other text is run as it is.
+      const text = node.lazy !== undefined && !node.lazy.raw && node.value === undefined && !/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(node.lazy.span.string.trim());
+      const target = text ? node : this.unforced(node) ?? this.safely(() => this.peel(node));
       if (target?.lazy?.span.empty()) return undefined;
       if (!target) { this.error(`Unresolved \`${this.text(node)}\`.`, node.position); return undefined; }
       if (target.lazy) {
@@ -2904,6 +2914,15 @@ export namespace Ray {
     'get': { arity: 2, pure: true, fn: ({ interpreter, args: [node, key] }) => interpreter.get(node, key) },
     'assign': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at) },
     'declare': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at, { declare: true }) },
+    // Whether a name is the scope's own (or already a value): what `:` types rather than declares.
+    'own': { arity: 1, pure: true, fn: ({ interpreter, args: [node] }) => {
+      // The name as written, followed through what it is bound to while that is
+      // itself a name; the last name's scope decides.
+      let cur: Node | undefined = node.lazy !== undefined ? interpreter.reference(node.lazy.frame, node.lazy.span.string.trim(), node.lazy.span) : node;
+      for (let depth = 0; cur?.ref !== undefined && depth < 64; depth++) { const held = interpreter.bound(cur); if (held?.ref !== undefined) cur = held; else break; }
+      if (cur === undefined || cur.unknown || cur.ref?.scope.unknown) return interpreter.NONE;
+      return cur.ref === undefined || cur.ref.scope.own(cur.ref.key) !== undefined || cur.ref.scope.members?.get(cur.ref.key) !== undefined ? interpreter.GLOBAL : interpreter.NONE;
+    } },
     'goto': { arity: 2, fn: ({ interpreter, frame, args: [label, condition] }) => interpreter.jump(label, condition, frame) },
     'none': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.NONE },
     'return\\': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.RETURN },
@@ -2913,7 +2932,7 @@ export namespace Ray {
     'inline': { arity: 1, fn: ({ interpreter, frame, args: [node] }) => interpreter.inline(node, frame) },
     // What crosses from the machine into the language is a literal: `bits` reads
     // one as its bytes, and the rest are read that way language-side.
-    'bits': { arity: 1, pure: true, fn: ({ interpreter, args: [node], at }) => interpreter.literal_of([...new TextEncoder().encode(interpreter.text(node))].map(byte => byte.toString(2).padStart(8, '0')).join(''), at) },
+    'bits': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => { for (const bit of [...new TextEncoder().encode(interpreter.text(node))].flatMap(byte => byte.toString(2).padStart(8, '0').split(''))) interpreter.call(each, interpreter.lazy(Text.Node.string(bit), frame, false), at, frame); return interpreter.NONE; } },
     'time': { arity: 0, fn: ({ interpreter, at }) => interpreter.literal_of(String(process.hrtime.bigint()), at) },
     'random': { arity: 0, fn: ({ interpreter, at }) => interpreter.literal_of(String(env.import<typeof import('crypto')>('crypto').randomInt(2)), at) },
     'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => interpreter.io(interpreter.text(location), content.none ? undefined : interpreter.text(content), at) },

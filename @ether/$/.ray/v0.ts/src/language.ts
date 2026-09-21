@@ -2845,13 +2845,6 @@ export namespace Ray {
       const inlined = (frame.inlined ??= []);
       if (!inlined.includes(from)) inlined.push(from);
     }
-    sees(frame: Node, from: Node) {
-      if (frame === from) return;
-      for (const scope of from.composed(new Set())) if (scope === frame) return;
-      for (const scope of from.reads ?? []) if (scope === frame) return;
-      const reads = (frame.reads ??= []);
-      if (!reads.includes(from)) reads.push(from);
-    }
     inner(span: Text.Node, frame: Node): Text.Node | undefined {
       const probe = this.cursor_of(span);
       for (const [rule] of this.brackets(frame)) {

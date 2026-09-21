@@ -47,75 +47,9 @@ return{ }{value} ^keyword => (
 ^{ }{literal color: RGB.Hexadecimal ^ color} => external ^ color
 
 
-LSP := {
-  SemanticToken := class {
-    Type := enum namespace | type | class | enum | interface | struct | typeParameter | parameter | variable | property | enumMember | event | function | method | macro | keyword | modifier | comment | string | number | regexp | operator | decorator
-    Modifier := enum declaration | definition | readonly | static | deprecated | abstract | async | modification | documentation | defaultLibrary
-  }
-}
-
-DARK := theme `Ether.ray - Dark` {
-  // Based off https://github.com/simurai/duotone-dark-syntax
-  ^U0 = ^ #F2F0FF
-  ^U1 = ^ #C4B9FE
-  ^U2 = ^ #9A86FD
-  ^U3 = ^ #6C6783
-  ^U4 = ^ #97A4BF
-
-  ^D0 = ^ #F59E47
-  ^D1 = ^ #EBAE6B
-  ^D2 = ^ #FFCC99
-  ^D3 = ^ #A18565
-  ^D4 = ^ #8F8881
-
-  ^external = ^D0
-  ^label = ^D3
-
-  ^namespace = ^type = ^class = ^enum = ^interface = ^struct = ^event = ^enumMember = ^U2
-  ^typeParameter = ^parameter = ^U0
-  ^variable = ^property = ^U1
-  ^function = ^method = ^decorator = ^U4 
-  ^macro = ^U2
-  ^keyword = ^modifier = ^comment = ^U3
-  ^string = ^number = ^regexp = ^D2
-  ^operator = ^U4
-
-  ^character = ^D3
-  ^punctuation = ^comment
-  ^string.punctuation = ^D3
-
-  ^fatal = ^error
-  ^error = ^ #CD5C5C
-  ^warn = ^ #CDCD5C
-  ^info = ^ #5C5CCD
-  ^debug = ^ #5CCD5C
-  ^trace = ^comment
-}
-inline DARK
-
-Diagnostic := class {
-  
-}
-
-// Wrapping of errors with additional information? 
-// Non-allowed variables within errors are traced. And dont get sent over pipelines which arent allowed to view them.
-// Autoreturn if failed?
-// &:= for errors and things to say stack all the errors together if that is used.
-// Errors like OOM What to do/
-// Access function context of the error?
-
-FATAL{`@` ^punctuation}{var} ^fatal (comment: String ^comment) => report FATAL var comment 
-ERROR{`@` ^punctuation}{var} ^error (comment: String ^comment) => report ERROR var comment 
- WARN{`@` ^punctuation}{var} ^warn  (comment: String ^comment) => report WARN var comment 
- INFO{`@` ^punctuation}{var} ^info  (comment: String ^comment) => report INFO var comment 
-DEBUG{`@` ^punctuation}{var} ^debug (comment: String ^comment) => report DEBUG var comment 
-TRACE{`@` ^punctuation}{var} ^trace (comment: String ^comment) => report TRACE var comment 
-
-// Merge into DEBUG with |
-TODO ^debug (comment: String ^comment) => DEBUG@. comment 
-
 chain (holder) => (
   links ^keyword := external .
+  instance := global
   owner := holder
   head := None
   tail := None
@@ -126,6 +60,7 @@ chain (holder) => (
 
 link (holds, before) => (
   entry ^keyword := external .
+  instance := global
   value := holds
   previous := before
   next := None
@@ -134,10 +69,15 @@ link (holds, before) => (
   entry ^namespace
 )
 
+// `class: Parent { body }`: a class beneath another; instances compose the
+// parent, and a value is verified against the parent's body before its own.
+// spec: the parent's body is not yet run per instance; its fields are inherited
+// as the parent static declared them.
 unordered class:{ }{parent}{ }{block} ^keyword => (class block): parent
 
 unordered class{ }{block} ^keyword => (
   static ^keyword := external .
+  static.instance = None
   static.components = chain None
   static.components.hierarchy = chain static
   super ^keyword => (
@@ -151,12 +91,16 @@ unordered class{ }{block} ^keyword => (
   )
   inline block
 
+  // The constructor is the body itself: what is passed is typed by the
+  // `field: Type` lines it meets, what is not is declared by them.
   ({inline args}) => (
     static ^keyword := this
     this ^keyword := external .
     this.components = chain None
     this.components.hierarchy = chain this
     this.components.hierarchy &= static
+    this.instance = global
+    inline block
 
     this ^variable
   )
@@ -172,77 +116,18 @@ unordered base{ }class{ }{body} ^keyword => (
   static
 )
 
-unordered enum ^keyword => (
-  static := class {
-    {literal member ^enumMember} ^punctuation => (
-      entry := static(name: member)
-      static[member] = entry ^enumMember
-      static.components &= entry
-
-      static
-    )
-    {literal member ^enumMember}{ }{fields ^property} ^punctuation => (
-      entry := static(
-        name: member
-        inline fields
-      )
-      static[member] = entry ^enumMember
-      static.components &= entry
-
-      static
-    )
-    |{ }{literal member ^enumMember} ^punctuation => (
-      entry := static(name: member)
-      static[member] = entry ^enumMember
-      static.components &= entry
-
-      static
-    )
-    |{ }{literal member ^enumMember}{ }{fields ^property} ^punctuation => (
-      entry := static(
-        name: member
-        inline fields
-      )
-      static[member] = entry ^enumMember
-      static.components &= entry
-
-      static
-    )
-  }
-
-  static ^enum
-)
-
-unordered enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?}{ }{`{`}{block?}{`}`} ^keyword => (
-  static ^keyword := external .
-  inline enum
-  inline block
-
-  entry := static(
-    name: member
-    inline fields
-  )
-  entry.name = member
-  static[member] = entry ^enumMember
-  static.components &= entry
-  inline rest
-
-  static ^enum
-)
-
-Program := class {
-  // `func(args)`
-  ({inline args}) => (
-    local ^keyword = external .
-    inline this
-  )
-  // `func args`
-  { }{expr} => this(expr)
-}
-
 Node := base class {
 
   {(String ^function | `{`, expr ^parameter, `}` | `[`, operator ^operator, `]`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
+
+  , ^punctuation ^separator => this
+  // Function definition
+  static DEFINE_METHOD = `=`
+  ({args ^parameter}){block} ^punctuation => (this ^function) [DEFINE_METHOD] (
+    def = block**
+    def[`args`] = args
+    def
+  )
 
   -- ^punctuation (call) => call(this)
   
@@ -258,15 +143,95 @@ Node := base class {
   )
   : ^punctuation ^annotation (type) => (
     goto typed if (external own this)
+    goto absent if (None.instance_of(type))
     external declare this type
     goto done
+   absent\
+    external declare this None
+    goto done
    typed\
+    // A value passed where a type is written types nothing: `n: two`.
+    goto done if type.instance
     this.components.hierarchy &= type
+    type.verify(this)
    done\
 
     this
   )
-  , ^punctuation ^separator => this
+  // `field?: Type`: absent is None, present is typed.
+  // `X?` is `X | None`; a field of such a type is None when absent.
+  ? ^punctuation => this | None
+  ?: ^punctuation (type) => this: (type?)
+  // `x ==.instance_of type`, as presence: None is an instance of a type when
+  // None is among its components (`T?` is `T | None`). A primitive beneath
+  // `if` (the annotation and the pattern reader ask it), so it walks by goto.
+  // spec: for other values the hierarchy walk awaits an identity on types.
+  instance_of (type) => (
+    found ^keyword := None
+    goto yes if this
+    goto no if type.instance
+    goto scan if type.components
+    goto no
+   scan\
+    walker ^keyword := type.components.head
+   step\
+    goto present if walker
+    goto no
+   present\
+    goto skip if walker.value
+    goto yes
+   skip\
+    walker = walker.next
+    goto step
+   yes\
+    found = global
+   no\
+
+    found
+  )
+  // Whether a block, read with this as `this`, holds.
+  satisfies (predicate) => (inline predicate)
+  // `Type.verify(x)`: what a type asserts of a value typed by it; a narrowing
+  // (`Type{predicate}`) asserts its predicate, after what it narrows asserts.
+  verify (candidate) => candidate
+  // `Type{predicate}`: the type narrowed by a constraint; `values{predicate}`:
+  // the values that satisfy it.
+  {this}{`{`}{literal narrowing}{`}`} ^punctuation => (
+    narrowed ^keyword := this
+    selected ^keyword := None
+    if (exists narrowed.instance) {
+      selected = chain None
+      narrowed for {
+        held := it.value
+        if (held.satisfies({ inline narrowing })) { selected &= held }
+      }
+    } else {
+      selected = class: narrowed {
+        verify (candidate) => (
+          narrowed.verify(candidate)
+          unless (candidate.satisfies({ inline narrowing })) { ERROR@candidate `does not satisfy a constraint of its type` }
+
+          candidate
+        )
+        if (exists this.instance) { selected.verify(this) }
+      }
+    }
+
+    selected
+  )
+  // `Type<args>`: the type with some of its constructor's arguments given.
+  // spec: one `<>` per type for now; a second narrowing keeps only its own.
+  {this}<{literal partial ^parameter}> ^punctuation => (
+    narrowed ^keyword := this
+
+    class: narrowed { inline partial }
+  )
+  // `x ~~ expression`: the expression read with `x` as `this`; `x` again.
+  ~~ ^punctuation (x) => (
+    inline x
+
+    this
+  )
 
   &= ^punctuation (x) => (
     value := x
@@ -288,25 +253,20 @@ Node := base class {
 
     this
   )
+  // `a | b`: a superposed with b — a copy of `a` whose components (`#`) gain `b`.
   | ^punctuation (other) => (
-    many := Many()
-    many.components &= this
-    many.components &= other
+    superposed ^keyword := external .
+    superposed.instance = None
+    superposed.components = chain None
+    external extend superposed this
+    superposed.components &= other
 
-    many
+    superposed
   )
 
   . ^punctuation => this
   .{literal property ^property} ^punctuation => this[property]
   {\n}.{literal property ^property} ^punctuation => this[property]
-
-  // Function definition
-  static DEFINE_METHOD = `=`
-  ({args ^parameter}){block} ^punctuation => (this ^function) [DEFINE_METHOD] (
-    def = block**
-    def[`args`] = args
-    def
-  )
 
   [{property ^property}] ^punctuation => external get this property
  
@@ -328,13 +288,6 @@ Chain := class {
   entry => .head
 }
 Link := class { }
-Many := class {
-  | ^punctuation (other) => (
-    .components &= other
-
-    this
-  )
-}
 
 if := class {
   { }{cond}{ }{yes} ^class => (
@@ -413,6 +366,150 @@ while := class {
 }
 
 do ^keyword := while
+
+// `dynamically x`: read now (spec: re-read when what it depends on changes).
+dynamically ^keyword (x) => (inline x)
+// `assert condition`: reported when it does not hold.
+assert ^keyword (condition) => (
+  unless condition { ERROR@condition `assertion failed` }
+
+  condition
+)
+
+unordered enum ^keyword => (
+  static := class {
+    {literal member ^enumMember} ^punctuation => (
+      entry := static(name: member)
+      static[member] = entry ^enumMember
+      static.components &= entry
+
+      static
+    )
+    {literal member ^enumMember}{ }{fields ^property} ^punctuation => (
+      entry := static(
+        name: member
+        inline fields
+      )
+      static[member] = entry ^enumMember
+      static.components &= entry
+
+      static
+    )
+    |{ }{literal member ^enumMember} ^punctuation => (
+      entry := static(name: member)
+      static[member] = entry ^enumMember
+      static.components &= entry
+
+      static
+    )
+    |{ }{literal member ^enumMember}{ }{fields ^property} ^punctuation => (
+      entry := static(
+        name: member
+        inline fields
+      )
+      static[member] = entry ^enumMember
+      static.components &= entry
+
+      static
+    )
+  }
+
+  static ^enum
+)
+
+unordered enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?}{ }{`{`}{block?}{`}`} ^keyword => (
+  static ^keyword := external .
+  inline enum
+  inline block
+
+  entry := static(
+    name: member
+    inline fields
+  )
+  entry.name = member
+  static[member] = entry ^enumMember
+  static.components &= entry
+  inline rest
+
+  static ^enum
+)
+
+Program := class {
+  // `func(args)`
+  ({inline args}) => (
+    local ^keyword = external .
+    inline this
+  )
+  // `func args`
+  { }{expr} => this(expr)
+}
+
+LSP := {
+  SemanticToken := class {
+    Type := enum namespace | type | class | enum | interface | struct | typeParameter | parameter | variable | property | enumMember | event | function | method | macro | keyword | modifier | comment | string | number | regexp | operator | decorator
+    Modifier := enum declaration | definition | readonly | static | deprecated | abstract | async | modification | documentation | defaultLibrary
+  }
+}
+
+DARK := theme `Ether.ray - Dark` {
+  // Based off https://github.com/simurai/duotone-dark-syntax
+  ^U0 = ^ #F2F0FF
+  ^U1 = ^ #C4B9FE
+  ^U2 = ^ #9A86FD
+  ^U3 = ^ #6C6783
+  ^U4 = ^ #97A4BF
+
+  ^D0 = ^ #F59E47
+  ^D1 = ^ #EBAE6B
+  ^D2 = ^ #FFCC99
+  ^D3 = ^ #A18565
+  ^D4 = ^ #8F8881
+
+  ^external = ^D0
+  ^label = ^D3
+
+  ^namespace = ^type = ^class = ^enum = ^interface = ^struct = ^event = ^enumMember = ^U2
+  ^typeParameter = ^parameter = ^U0
+  ^variable = ^property = ^U1
+  ^function = ^method = ^decorator = ^U4 
+  ^macro = ^U2
+  ^keyword = ^modifier = ^comment = ^U3
+  ^string = ^number = ^regexp = ^D2
+  ^operator = ^U4
+
+  ^character = ^D3
+  ^punctuation = ^comment
+  ^string.punctuation = ^D3
+
+  ^fatal = ^error
+  ^error = ^ #CD5C5C
+  ^warn = ^ #CDCD5C
+  ^info = ^ #5C5CCD
+  ^debug = ^ #5CCD5C
+  ^trace = ^comment
+}
+inline DARK
+
+Diagnostic := class {
+  
+}
+
+// Wrapping of errors with additional information? 
+// Non-allowed variables within errors are traced. And dont get sent over pipelines which arent allowed to view them.
+// Autoreturn if failed?
+// &:= for errors and things to say stack all the errors together if that is used.
+// Errors like OOM What to do/
+// Access function context of the error?
+
+FATAL{`@` ^punctuation}{var} ^fatal (comment: String ^comment) => report FATAL var comment 
+ERROR{`@` ^punctuation}{var} ^error (comment: String ^comment) => report ERROR var comment 
+ WARN{`@` ^punctuation}{var} ^warn  (comment: String ^comment) => report WARN var comment 
+ INFO{`@` ^punctuation}{var} ^info  (comment: String ^comment) => report INFO var comment 
+DEBUG{`@` ^punctuation}{var} ^debug (comment: String ^comment) => report DEBUG var comment 
+TRACE{`@` ^punctuation}{var} ^trace (comment: String ^comment) => report TRACE var comment 
+
+// Merge into DEBUG with |
+TODO ^debug (comment: String ^comment) => DEBUG@. comment 
 
 // Precedence: of two operators around a shared operand, the
 // tighter one groups first (precedence = declaration order).

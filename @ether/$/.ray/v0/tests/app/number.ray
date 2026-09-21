@@ -71,7 +71,7 @@ goto p5_ok if counter == three
 INFO@mark `times did not run three times`
 p5_ok\
 
-goto q7_ok if Base.Hexadecimal.radix == (ten + six)
+goto q7_ok if Hexadecimal.radix == (ten + six)
 INFO@mark `N20 hexadecimal radix is not sixteen`
 q7_ok\
 

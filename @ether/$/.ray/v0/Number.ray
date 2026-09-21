@@ -40,6 +40,41 @@
 // come from `Ordered` once `<` is given.
 Number := class: Ray {
   succ => Number(next: this)
+
+  // The digits of this number in a base, most significant first: a counter in
+  // that base, least significant digit first, stepped once per unit and then
+  // read backwards.
+  digits_in (radix: Number) => (
+    counter := chain None
+    counter &= zero
+    rest ^keyword := this
+    while rest.nonzero {
+      digit ^keyword := counter.head
+      carrying ^keyword := true
+      while carrying {
+        digit.value = digit.value.succ
+        if (digit.value == radix) { digit.value = zero } else { carrying = false }
+        if carrying {
+          unless (exists digit.next) { counter &= zero }
+          digit = digit.next
+        }
+      }
+      rest = rest.pred
+    }
+    out ^keyword := chain None
+    walker ^keyword := counter.tail
+    while (exists walker) {
+      out &= walker.value
+      walker = walker.previous
+    }
+    out
+  )
+  // The number some digits spell in a base.
+  from_digits (radix: Number, spelled) => (
+    total ^keyword := zero
+    spelled for { total = (total * radix) + it.value }
+    total
+  )
   pred => .next
 
   is_zero => .is_terminal
@@ -69,13 +104,13 @@ Number := class: Ray {
   )
 
   * (other: Number) => (
-    product := zero
+    multiplied := zero
     left := other
     while left.nonzero {
-      product = product + this
+      multiplied = multiplied + this
       left = left.pred
     }
-    product
+    multiplied
   )
 
   < (other: Number) => (
@@ -159,13 +194,13 @@ Number := class: Ray {
 
   // `//TODO factorial!` above.
   factorial => (
-    product := one
+    raised := one
     left := this
     while left.nonzero {
-      product = product * left
+      raised = raised * left
       left = left.pred
     }
-    product
+    raised
   )
 
   gcd (other: Number) => (
@@ -222,199 +257,204 @@ thousand => hundred * ten
 
 // class Number
 //   static Bases = { Binary: Digit = "0" | "1", …, Hexadecimal: Digit = Decimal | ("a" | "A")..("f" | "F") }
-// The bases as they are without strings: each carries its radix, and the digit
-// alphabets wait on `String`.
-Base := enum Binary (radix: two) | Ternary (radix: three) | Quaternary (radix: four) | Quinary (radix: five) | Senary (radix: six) | Septenary (radix: seven) | Octal (radix: eight) | Nonary (radix: nine) | Decimal (radix: ten) | Undecimal (radix: ten.succ) | Duodecimal (radix: ten + two) | Tridecimal (radix: ten + three) | Tetradecimal (radix: ten + four) | Pentadecimal (radix: ten + five) | Hexadecimal (radix: ten + six)
+// class Digit < String
+// dynamically (on Number.Bases).for name
+//   class[name] < Number, integer: Digit.value+
+//     static Digit = Number.Bases[name]
+//     static class Signed < sign: "-"?, integer: Base
+//     static class Real < integer: Base, ".", fraction: Base{unbounded}
+//       static class Signed < sign: "-"?, real: Real
+//       rational => fraction ==.instance_of (Base | Base[]{length == ∞})
+//       irrational => !rational
+//     Base{: 0+, number: Base} as (=== Base) number
+//
+// A base is allocated by `base Name radix`, which is what the draft's loop over
+// `Number.Bases` does for each entry: the table gains it, and the name becomes
+// the class of numbers read in that base. Any base can be allocated later the
+// same way. A number of a base holds the one number (its unary chain) and
+// reads it as digits; the digits' spellings wait on String.ray.
+// spec: `Digit` is the number below the radix, its spelling comes with String.
+// static class Signed < sign: "-"?, integer: Base
+// The sign is present exactly when the number is below zero.
+Number.Signed = class {
+  sign?: Node
+  integer: Number
 
-
-// def Integer<n> = sign: "-"?, integer: Positive
-//   static def Positive = Array{length == n}().last&
-  //TODO Addition/subtraction of this integer (addition is simple)
-// end
-
-// The sign is present exactly when the number is below zero, so `Number` stays
-// the magnitude. Addition/subtraction of a signed integer is still open, as
-// the draft notes.
-Integer := class {
   negative => exists .sign
   positive => .negative.not
-  is_zero => .magnitude.is_zero
+  is_zero => .integer.is_zero
 
-  // The draft's `def -` with no argument: negate.
   - => .negated
-  negated => (
-    size := .magnitude
-    if .negative { Integer(magnitude: size) } else {
-      Integer(
-        sign: global
-        magnitude: size
-      )
-    }
-  )
-  abs => Integer(magnitude: .magnitude)
+  negated => if .negative { Number.Signed(integer: .integer) } else { Number.Signed(sign: global, integer: .integer) }
+  abs => Number.Signed(integer: .integer)
 
-  // Addition and subtraction of a signed integer: same signs add magnitudes,
-  // different signs subtract the smaller from the larger and keep its sign.
-  + (other: Integer) => if (.negative.xnor(other.negative)) {
-    Integer(sign: .sign, magnitude: .magnitude + other.magnitude)
-  } elsif (other.magnitude < .magnitude) {
-    Integer(sign: .sign, magnitude: .magnitude - other.magnitude)
+  // Same signs add magnitudes; different signs subtract the smaller from the
+  // larger and keep its sign.
+  + (other: Number.Signed) => if (.negative.xnor(other.negative)) {
+    Number.Signed(sign: .sign, integer: .integer + other.integer)
+  } elsif (other.integer < .integer) {
+    Number.Signed(sign: .sign, integer: .integer - other.integer)
   } else {
-    Integer(sign: other.sign, magnitude: other.magnitude - .magnitude)
+    Number.Signed(sign: other.sign, integer: other.integer - .integer)
   }
-  - (other: Integer) => this + other.negated
-  * (other: Integer) => if (.negative.xnor(other.negative)) {
-    Integer(magnitude: .magnitude * other.magnitude)
+  - (other: Number.Signed) => this + other.negated
+  * (other: Number.Signed) => if (.negative.xnor(other.negative)) {
+    Number.Signed(integer: .integer * other.integer)
   } else {
-    Integer(sign: global, magnitude: .magnitude * other.magnitude)
+    Number.Signed(sign: global, integer: .integer * other.integer)
   }
 
-  == (other: Integer) => (.negative.xnor(other.negative)).and(.magnitude == other.magnitude)
-  < (other: Integer) => if .negative {
-    if other.negative { other.magnitude < .magnitude } else { true }
+  == (other: Number.Signed) => (.negative.xnor(other.negative)).and(.integer == other.integer)
+  < (other: Number.Signed) => if .negative {
+    if other.negative { other.integer < .integer } else { true }
   } else {
-    if other.negative { false } else { .magnitude < other.magnitude }
+    if other.negative { false } else { .integer < other.integer }
   }
 }
 
-// Every natural number is also the integer it is.
+// static class Real < integer: Base, ".", fraction: Base{unbounded}
+//   static class Signed < sign: "-"?, real: Real
+//   rational => fraction ==.instance_of (Base | Base[]{length == ∞})
+//   irrational => !rational
+// spec: the fraction is the number its digits spell after the point; an
+// unbounded (repeating) fraction awaits infinite chains, so every real spelled
+// here is rational.
+Number.Real = class {
+  integer: Number
+  fraction: Number
+
+  Signed := class {
+    sign?: Node
+    real: Number.Real
+
+    negative => exists .sign
+  }
+
+  rational => true
+  irrational => .rational.not
+}
+
+Number.Bases = chain None
+base{ }{literal name ^class}{ }{size} ^keyword => (
+  Number[name] = class: Number {
+    radix := (size)
+    Digit := Number{. < radix}
+
+    // integer: Digit.value+ — the digits of a number in this base, most
+    // significant first.
+    integer => .digits_in(radix)
+    digits (n: Number) => n.digits_in(radix)
+    // The number some digits of this base spell.
+    of_digits (spelled) => Number.from_digits(radix, spelled)
+
+    // static class Signed < sign: "-"?, integer: Base
+    // static class Real < integer: Base, ".", fraction: Base{unbounded}
+    // spec: the signed and real numbers of a base are Number's, read in it.
+    Signed := class: Number.Signed { }
+    Real := class: Number.Real { }
+  }
+  global[name] = Number[name]
+  Number.Bases &= Number[name]
+
+  Number[name]
+)
+
+base Binary two
+base Ternary three
+base Quaternary four
+base Quinary five
+base Senary six
+base Septenary seven
+base Octal eight
+base Nonary nine
+base Decimal ten
+base Undecimal ten.succ
+base Duodecimal (ten + two)
+base Tridecimal (ten + three)
+base Tetradecimal (ten + four)
+base Pentadecimal (ten + five)
+base Hexadecimal (ten + six)
+
+// Decimal
+//   % => this / 100
+Decimal.components.hierarchy &= class {
+  percent => this / hundred
+}
+
+// Every natural number is also the signed integer it is, in any base; the
+// decimal one is the draft's `Integer`.
 Number.components.hierarchy &= class {
-  as_integer => Integer(magnitude: this)
+  signed => Decimal.Signed(integer: this)
+  as_integer => .signed
 }
 
-
-//TODO Define .sign on all numbers, so that you can do x.sign ().sum, empty string is + so nothing gets applied since it's empty string.
-
-// Base = &'ed version of all the numbers
-
-//   def value(digit: this = this)
-//     array = this.reduce(array = [] => array.push_back(void))
-
-//     this.for d
-//       `d` = this{<= d}.reduce(cursor = array => cursor.next)~
-//     end
-
-//     return local[digit]
-//   end
-// end
-
-// TODO: Strings as a definition depend on Number, circularity here.
-
-// Number which is integer
-// def times callback: () => *
-
-// `def times callback` is defined on `Number` above.
-
-        //TODO Support index?
-//         Array{length == this}().for => callback()
-//       end
-
-// dynamically Bases.for Base, digit
-
-  //TODO Because String has digit as String defined, any Array of digit Strings should automatically be defined, to as String too. with .map
-//   +def String = `Base`.Digit
-//     def as : == `Base`.Digit.value = `Base`.Digit.value(this)
-//   end
-  //TODO String as Binary.Positive = "0101010" = Digit.value[] = Positive
-  // TODO: Binary.Positive as String; Automatic isomorphism
-
-//   class `Base` < Number = sign: "-"?, integer: Positive
-
-    //TODO Equip a default directionality. (Line: One with forward/backward from a specific point, but it isn't necessarily selected there.)
-
-
-    // TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
-
-
-// +def Binary.Positive
-
-//   def ~! = this.map(!)
-//   def ~`operator: boolean.Operator.Binary` b: Binary.Positive = this.reverse.zip_longest(b.reverse).map(l, r => (l ?? false)[operator](r ?? false)).reverse
-//   def ~`operator: boolean.Operator.Binary` b: Binary.Positive{.length == length} = this.zip(b).map(operator) //TODO: Or can the compiler deduce the reversing stuff is not necessary?
-// end
-
-//TODO Should not always goto Decimal, should infer from context whether it is binary or not? How to do that; code it as a type?
-// def `digits: Decimal.Positive.String` => Decimal.Positive = digits
-// +def Decimal.Positive
-//   def `fraction: Decimal.Positive.String` => Decimal.Real = integer, ".", fraction
-// end
-//TODO 1111₂⁸ x 1111₂⁸ subscript.
-//TODO 1⁽¹⁸⁸⁻⁰⁰⁾ superscript to ^ (number)
-
-// Allow (111₂)₂
-// `Base`
-//   v (base: Number): [RELEVANT BASE] =>
-    // Unknown digit representation for the specified base.
-//     assert this.every <= base
-//TODO We're also using subscript for length, so number should be not using v, but instead match to the whole string + subscript
-
-//TODO Override the ^/* behavior of the Number type to use the list variant instead. -> Need some quick method for that
-// static prefer{== BASE_TYPE} Iterable.(^ | *) //TODO Should only work for the base static case
-// Node
-//   {expression: String.Superscript} => this ^ expression.decompose as Expression
-//   {expression: String.Subscript} => this v expression.decompose as Expression //TODO as Expression, should take the existing context which called this, and evaluate in that.
-
-// def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
-//TODO This for binary
-// def 0`"b" | "B"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
-
-//TODO: Possibly move these primitives to specific languages, and only work with arbitrary-length in the default case.
-//TODO: -b: Something uX might only implement b: uX, casts lose information and likely need to overflow
-// def u`length: Decimal.Positive.String` = Binary.Positive{.length == length}
-  // TODO Number arithmetic
-  // - overflow, what to do? mod, or>?
-// end
-// def i`length: Decimal.Positive.String` = Binary.Positive{.length == length} // TODO, Use Binary vs Binary.Positive
-  // TODO Number arithmetic
-// end
-
-// class Number < Ordered
-//   def - => Number
-//   def - b: Number => Number
-
-  // Allows for the syntax 1 Object
-//   def `node: not String` = node{#.count == this}
-
-  // TODO Generic Number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
-  // TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
-  // TODO: external defines that Number > Number is done by some other operator, not looking through successors/predecessors.
-// end
-
-
-
+// Probability = Number{0 <= . <= 1}
+// spec: a probability is a real between zero and one; until reals are read
+// from text it is the number itself, bounded above by one.
+Probability := Number{. < two}
 
 // {
 //   (Σ | ∑): sum -> +,
 //   ∏: product -> *
 // }.for symbol, method -> operation
-//   Applicable = Iterable<T: {`operation`(:T) => T}> //TODO A variable like this shouldn't be loaded into local, loop-specific var Howto?
+//   Applicable = Iterable<T: {`operation`(:T) => T}>
 //   +def Applicable
 //     def `method` = reduce(operation)
 //   end
 //   namespace `symbol`
-    // Allow syntax ∑ [1, 2, 3]
 //     def `iterable: Applicable` = iterable.`method`
 //   end
 // end
+Iterable.components.hierarchy &= class {
+  sum => (
+    total ^keyword := zero
+    this for { total = total + it.value }
+    total
+  )
+  product => (
+    total ^keyword := one
+    this for { total = total * it.value }
+    total
+  )
+}
+Σ{ }{iterable} ^keyword => (iterable).sum
+∑{ }{iterable} ^keyword => (iterable).sum
+∏{ }{iterable} ^keyword => (iterable).product
+
+// def u`length: Decimal.Positive.String` = Binary.Positive{.length == length}
+// def i`length: Decimal.Positive.String` = Binary.Positive{.length == length}
+// spec: `u8`/`i8` await digits read from text; a width is a constraint on the
+// count of binary digits.
+u{ }{width} ^keyword => Binary{.integer.count < (width).succ}
+i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
+
+// Byte | B = Binary⁸
+// Kilobyte | KB = 1000 * Byte
+// spec: `Binary⁸` would be `u eight`; Byte lives in Unit.ray as the unit it
+// is, since reading a width off a number here is still too slow per pass.
+
+//TODO 1111₂⁸ x 1111₂⁸ subscript.
+//TODO 1⁽¹⁸⁸⁻⁰⁰⁾ superscript to ^ (number)
+// Allow (111₂)₂
+// `Base`
+//   v (base: Number): [RELEVANT BASE] =>
+//     assert this.every <= base
+//TODO We're also using subscript for length, so number should be not using v, but instead match to the whole string + subscript
+//TODO Override the ^/* behavior of the Number type to use the list variant instead.
+// static prefer{== BASE_TYPE} Iterable.(^ | *)
+// Node
+//   {expression: String.Superscript} => this ^ expression.decompose as Expression
+//   {expression: String.Subscript} => this v expression.decompose as Expression
+// def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+// def 0`"b" | "B"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
 
 // ₂∫⁸()
 // lim(x -> ∞) ₂∫⁸() // Implemented as infinitesimal step, how to indicate to actually step?
 //TODO What is a limit actually, can we make that more general?
 // √4
 // ∛/∜ √(4 + 4)
-// What else
-
-
 //TODO Infinity / ∞
-
 //TODO 1000 MB etc.. MiB ; how does that coincide with Unit, want Binary with some length to correspond to it?
-
-// Byte | B = Binary⁸
-// Kilobyte | KB = 1000 * Byte
-// Units live in Unit.ray.
-
 // Units override the X Node
 // 3.2 Kilobyte
 // Kibibyte etc.. too
-
-// Unit as Binary

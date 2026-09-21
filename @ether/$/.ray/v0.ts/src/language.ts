@@ -610,7 +610,7 @@ export namespace Ray {
       const inherited = new Map([this.GLOBAL, ...this.frames.values()].map(frame => [frame, new Set(frame.methods?.keys() ?? [])]));
       let previous: string | undefined;
       for (let pass = 0; pass < Interpreter.PASSES; pass++) {
-        this.forwards = []; this.deferred = []; this.ran = new Set(); this.painting = []; this.definitions = []; this.touched = new WeakMap(); this.claims.clear(); this.sites = new Map(); this.pending_rewrites = [];
+        this.forwards = []; this.deferred = []; this.ran = new Set(); this.painting = []; this.definitions = []; this.touched = new WeakMap(); this.spelled = new Set(); this.claims.clear(); this.sites = new Map(); this.pending_rewrites = [];
         this.marking = this.copy_of ? this.inherited() : Interpreter.marks(); this.referenced = new Map(); this.sited = new Map(); this.verbatim = new Map();
         srcs.forEach(src => this.diagnostics.forget(src));
         for (const src of srcs) { this._interpret(src); yield; }
@@ -657,13 +657,29 @@ export namespace Ray {
       return value;
     }
     touched: WeakMap<Node, Set<Key>> = new WeakMap();
+    private spelled = new Set<string>();
+    // Whether a definition is new this pass: a body already defined, defined
+    // again on another frame (an instance running its class), is not.
+    spelled_before(value: Node): boolean { return value.body === undefined || !this.spelled.has(`${value.body.source.location}:${value.body.begin}`); }
+    fresh(key: Key, value: Node): boolean {
+      if (!(key instanceof Node) || value.body === undefined) return true;
+      const spelled = `${value.body.source.location}:${value.body.begin}`;
+      if (this.spelled.has(spelled)) return false;
+      this.spelled.add(spelled);
+      return true;
+    }
     bind(frame: Node, key: Key, value: Node): Node {
       let keys = this.touched.get(frame);
       if (!keys) this.touched.set(frame, keys = new Set());
       keys.add(key);
-      if (key instanceof Node || frame.methods?.get(key)?.forward || value.forward) this.version++;
+      // A body already defined this pass, defined again on another frame (an
+      // instance running its class), changes no cache: only a new one does.
+      const fresh = this.fresh(key, value);
+      // A frame whose rules were already looked up gains one: what was looked up is stale.
+      const stale = key instanceof Node && !frame.methods?.has(key) && (this.rulesets.has(frame) || this.dispatch.has(frame));
+      if ((fresh || stale) && (key instanceof Node || frame.methods?.get(key)?.forward || value.forward)) this.version++;
       // The registry, and a site's memory of its frame, are of where rules live.
-      if (key instanceof Node && frame.key !== undefined) { this.frames.set(frame.key, frame); if (frame.owner !== undefined && frame.site !== undefined) (frame.owner.children ??= new Map()).set(frame.site, frame); }
+      if (fresh && key instanceof Node && frame.key !== undefined) { this.frames.set(frame.key, frame); if (frame.owner !== undefined && frame.site !== undefined) (frame.owner.children ??= new Map()).set(frame.site, frame); }
       return frame.set(key, value);
     }
     version = 0;
@@ -850,7 +866,8 @@ export namespace Ray {
             started = true;
             continue;
           }
-          let applied: Node | undefined;
+          // What `.x` is read on is whatever `this` names here.
+          let applied: Node | undefined = frame.lookup('this') !== undefined ? this.reference(frame, 'this', cursor.span(cursor.cursor, cursor.cursor)) : undefined;
           for (let scope: Node | undefined = frame; scope && applied === undefined; scope = scope.parent) applied = scope.subject;
           for (let k = this.applying.length - 1; k >= 0 && applied === undefined; k--) {
             const body = this.applying[k].impl?.body;
@@ -1209,7 +1226,9 @@ export namespace Ray {
           case 'newline': { if (text[from] !== '\n') return; i = from + 1; break; }
           case 'operator': { const j = this.operator_end(cursor, from, frame); if (j <= from) return; operators.set(piece.name, cursor.span(from, j - 1)); i = j; break; }
           case 'capture': {
-            if (p === 0 && opts.leading && opts.receiver !== undefined) break;
+            // A capture that stands for the receiver, spelled right against
+            // what follows, admits no space between them.
+            if (p === 0 && opts.leading && opts.receiver !== undefined) { if (opts.spaced && pieces[1]?.kind !== 'space') return; break; }
             let next_at = -1, upcoming_at = -1, literal_at = -1;
             for (let k = p + 1; k < pieces.length; k++) {
               const kind = pieces[k].kind;
@@ -1603,7 +1622,8 @@ export namespace Ray {
     }
     method_of(target: Node, name: string, opts: { parameterised?: boolean } = {}): [Node, Node] | undefined {
       const seen = new Set<Node>();
-      for (const from of target.composed(seen)) {
+      // What every node has is on the base after what this one is made of.
+      for (const from of [...target.composed(seen), ...(this.BASE !== undefined && !seen.has(this.BASE) ? [this.BASE] : [])]) {
         for (const rule of from.rules) {
           const pieces = rule.pattern!;
           if (pieces.length !== 1 || pieces[0].kind !== 'literal' || pieces[0].text.trim() !== name) continue;
@@ -2027,7 +2047,7 @@ export namespace Ray {
       const impl = new Node(this.diagnostics, body ?? lhs);
       impl.body = body; impl.closure = frame; impl.params = params; impl.param_styles = param_styles; impl.modifiers = modifiers; impl.decorators = decorators;
       impl.param_types = param_types.length > 0 ? param_types : undefined;
-      if (!this.probing) { this.bind(frame, rule, impl); this.definitions.push(key); this.sites.set(`rule::${key}`, lhs); }
+      if (!this.probing) { const fresh = this.spelled_before(impl); this.bind(frame, rule, impl); if (fresh) { this.definitions.push(key); this.sites.set(`rule::${key}`, lhs); } }
       if (this.probing || (this.owns(lhs.source) && !this.in_body(lhs) && this.first_site(lhs))) {
         const scope = this.definition_scope(frame, rule, impl);
         this.paint_definition(pattern, decorators, scope, key, { arrow, params: param_names, types: param_types, styles: param_styles?.flat(), pieces });
@@ -2131,7 +2151,13 @@ export namespace Ray {
     group(content: Text.Node, frame: Node, index: number): Piece {
       const s = content.empty() ? '' : content.string;
       if (/^`[^`]*`$/.test(s)) return { kind: 'literal', text: s.slice(1, -1) };
-      const parts = content.empty() ? [] : this.tokens(content, frame);
+      // Tokens that touch are one item of the capture's text (`x?`, `x:`).
+      const parts: Text.Node[] = [];
+      for (const token of content.empty() ? [] : this.tokens(content, frame)) {
+        const last = parts[parts.length - 1];
+        if (last !== undefined && last.end + 1 === token.begin) parts[parts.length - 1] = last.span(last.begin, token.end);
+        else parts.push(token);
+      }
       const plain = parts.filter(token => !this.decorates(token, frame));
       if (plain.length === 1 && plain.length < parts.length && /^`[^`]*`$/.test(plain[0].string))
         return { kind: 'literal', text: plain[0].string.slice(1, -1), styles: parts.filter(token => token !== plain[0]) };
@@ -2148,14 +2174,30 @@ export namespace Ray {
         if (colon >= 0) { if (colon > 0) words.push(t.slice(0, colon)); typing.push(t.slice(colon + annotates!.length)); continue; }
         words.push(t);
       }
-      let name = words.length > 0 && !grouped(words[words.length - 1]) ? words.pop()! : '';
+      // A capture's text is read as what it says of the capture: the word is
+      // the name, and whatever the rest makes of it (`x?` is `x | None`) is its
+      // type; the capture is optional when that type admits None.
+      const optional = { held: false };
+      const spelled = (text: string, bound: boolean): string => {
+        const word = text.match(/^[\p{L}\p{N}_]+/u)?.[0] ?? '';
+        if (word === text) return word;
+        const temp = new Node(this.diagnostics); temp.parent = frame;
+        if (bound && word) this.bind(temp, word, this.placeholder());
+        // The capture may be empty when None is an instance of its type: the
+        // language's `instance_of`, answered as presence.
+        this.probing++;
+        const asked = this.diagnostics.muted(() => this.safely(() => this.resolved(this.array(this.cursor_of(Text.Node.string(`None.instance_of(${text})`)), temp))));
+        this.probing--;
+        if (asked !== undefined && !asked.none) optional.held = true;
+        return word;
+      };
+      let name = words.length > 0 && !grouped(words[words.length - 1]) ? spelled(words.pop()!, true) : '';
       if (name === '' && words.length > 0) typing.unshift(words.pop()!);
       const raw = words.some(word => this.resolved(this.reference(frame, word, content))?.fn === Natives.literal.fn);
-      let type = typing.join(' ').trim() || undefined;
-      let optional = false;
-      if (name.endsWith('?')) { optional = true; name = name.slice(0, -1); }
-      if (type?.endsWith('?')) { optional = true; type = type.slice(0, -1).trim() || undefined; }
-      return { kind: 'capture', name: name || `#${index}`, raw, optional, modifiers: words, styles, type, group: content };
+      const typed = typing.join(' ').trim();
+      if (typed) spelled(typed, false);
+      const type = typed || undefined;
+      return { kind: 'capture', name: name || `#${index}`, raw, optional: optional.held, modifiers: words, styles, type, group: content };
     }
 
     decorates(token: Text.Node, frame: Node): boolean {
@@ -2785,6 +2827,9 @@ export namespace Ray {
         const parts = between !== undefined ? this.split(span, between) : [span];
         let last: Node | undefined;
         for (const part of parts) last = this.safely(() => this.array(this.cursor_of(part), frame, true));
+        // Text that reads as a block is that block, inlined in turn.
+        const held = last !== undefined ? this.resolved(last) ?? last : undefined;
+        if (held?.lazy !== undefined && held.value === undefined && held !== target) return this.inlined(held, frame, opts);
         return last;
       }
       if (target.theme) { this.theme = target; return target; }

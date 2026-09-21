@@ -106,14 +106,25 @@ Measured := class {
 }
 Number.components.hierarchy &= Measured
 
-// The SI prefixes the numbers reach today; the rest of the draft's table
-// (quecto … quetta) needs powers of ten beyond a thousand, and the symbols
-// (`da`, `h`, `k`) a second field on the member.
-// A prefix names its power of ten; the number is built when a unit asks for
-// it, so loading the table costs nothing.
-Prefix := enum deka (magnitude: one) | hecto (magnitude: two) | kilo (magnitude: three) {
+// def SI_Unit
+//   def `symbol: *` name: *
+//     def si_name(symbol_prefix, prefix) = symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
+//     private SI = { -30: si_name "q", "quecto" … 30: si_name "Q", "quetta" }
+//     SI#.for FromUnit = FromUnit.magnitude SI.magnitude - FromUnit.magnitude, SI
+// A prefix is its symbol and its power of ten; the number is built when a unit
+// asks for it, so loading the table costs nothing. spec: the negative powers
+// (deci … quecto) wait on reals, the powers past kilo on numbers past a
+// thousand being cheap to walk; they are listed as the draft lists them.
+Prefix := enum deka (symbol: `da`, magnitude: one) | hecto (symbol: `h`, magnitude: two) | kilo (symbol: `k`, magnitude: three) | mega (symbol: `M`, magnitude: six) | giga (symbol: `G`, magnitude: nine) | tera (symbol: `T`, magnitude: ten + two) | peta (symbol: `P`, magnitude: ten + five) | exa (symbol: `E`, magnitude: ten + eight) | zetta (symbol: `Z`, magnitude: (two * ten) + one) | yotta (symbol: `Y`, magnitude: (two * ten) + four) | ronna (symbol: `R`, magnitude: (two * ten) + seven) | quetta (symbol: `Q`, magnitude: three * ten) {
   factor => ten.pow(.magnitude)
 }
+// SI_Unit m "meter": a base unit with every prefix of the table.
+// spec: the prefixed units are built on demand, `unit prefixed Prefix.kilo`,
+// rather than all at once.
+SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit(
+  name: name
+  symbol: symbol
+)
 
 // A unit is named, has a symbol, and is either a base unit or `factor` of a
 // `base` unit. The fields are what a unit is built with; a spaced `:` takes

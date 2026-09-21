@@ -47,7 +47,8 @@ Roman := class {
     }
     total
   )
-  of (text: String) => Roman(text: text)
+  text: String
+
   is_valid => .text.every { exists Roman.digit_of(character) }
   // The draft's `Standard`: 1 <= value <= 3999.
   is_standard => (

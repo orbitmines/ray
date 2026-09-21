@@ -111,7 +111,10 @@ Month.components.hierarchy &= class {
 
 // A time: seconds since an epoch on a calendar. `now` reads the clock.
 Time := class {
-  of (since_epoch: Quantity, calendar) => Time(calendar: calendar, since_epoch: since_epoch, epoch: None)
+  calendar: Node
+  since_epoch: Quantity
+  epoch?: Time
+
   since_calendar_epoch => if (exists .epoch) { .since_epoch + .epoch.since_calendar_epoch } else { .since_epoch }
   - (other: Time) => .since_calendar_epoch - other.since_calendar_epoch
   + (duration: Quantity) => Time(calendar: .calendar, since_epoch: .since_epoch + duration, epoch: .epoch)

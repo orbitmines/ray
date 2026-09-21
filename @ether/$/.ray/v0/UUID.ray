@@ -17,8 +17,8 @@ UUID := class: Hexadecimal {
   //   < v3 if version == 3
   //   < v4 if version == 4
   //   < v5 if version == 5
-  // spec: a UUID reads as its version's class once versions carry their own
-  // fields (v1's time and node); today each version is the class it is built as.
+  // A UUID read from text comes back as its version's class (`read`); one
+  // built here is the class it is built as.
 
   // class Variant = .RESERVED_NCS | .RFC_4122 | .RESERVED_MICROSOFT | .RESERVED_FUTURE
   Variant := enum reserved_ncs | rfc_4122 | reserved_microsoft | reserved_future
@@ -110,7 +110,13 @@ UUID := class: Hexadecimal {
       character := it.value
       unless (character == Character.of(ascii_dash)) { out &= character.hexadecimal_digit }
     }
-    UUID(spelled: out)
+    // dynamically < v1 if version == 1 …: what is read comes back as its version.
+    read_version := out.head.at(ten + two).value
+    if (read_version == one) { UUID.v1(spelled: out) }
+    elsif (read_version == three) { UUID.v3(spelled: out) }
+    elsif (read_version == four) { UUID.v4(spelled: out) }
+    elsif (read_version == five) { UUID.v5(spelled: out) }
+    else { UUID(spelled: out) }
   )
 
   // namespace Namespace

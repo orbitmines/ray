@@ -189,3 +189,49 @@ Mars := class: Planet {
   years => MartianYear
   days => Sol
 }
+
+// From the drafts, not yet reached here (spec):
+// .ray2/_todo/ray.ray.txt/Ether/instance/utils/Time.ray:
+//TODO Variable years/months/date
+//TODO Variable epoch
+//TODO Variable string representation
+//TODO Variable multiple in which time sec is stored.
+//TODO What different calendars are used here?
+//TODO Variable relativistic trajectory
+//TODO Date arithmetic, sleep delay, timezones
+//TODO Import tzdata using .unzip functionality, but for now just use a mirrored file directory until we support things like https://github.com/libarchive/libarchive
+//TODO Set this up when we have a working runtime to make testing easier
+//TODO Though can experiment with: "define a grammar"
+//TODO "h"/"hour" "week" "days"/"day/sol X - set epoch to 0 start of that" "years" "months" "Earth.years"/"Mars.years" (and some others for other time coordinate systems)
+//TODO Should overwrite for this case. How to indicate?
+// Allow '12:00' syntax.
+// Allow '12:00:00' syntax.
+//TODO Is this the right way to change caller?
+// SUBSEGMENTS AS MONTHS/WEEKS
+// This allows things like UTC which are only offset differences.
+//TODO How do you automatically reverse this?
+// Keep epoch-structure. So '25 Gregorian years' from '2001-01-01 Gregorian' is translated into 'X Julian years' from 'X Julian'.
+//TODO How does Lazy Evaluation work with Time.NOW, force evaluation there somehow?
+//TODO Allow : Time = 12:00 which defaults to setting day/year/month unknown, and stringify ignores it then and just returns 12:00 back
+//TODO .round(seconds)
+//TODO Allow calendar to be none? So it's just a Quantity.Temporal
+//TODO ? / Calendar# should default to all instances of Calendar
+// Only equivalent calendars can be compared
+// :Time = "2025-01-01", epoch: "2000-01-01" -> = 25.years
+//TODO Could put this in a keyword finite-self-ref or something
+//TODO Summing with different epochs, should start with the first, calculate properly. Can be negatives too here.
+// &Time.YEAR = .year since epoch=0, &Time.MONTH = .month since epoch=0 -> Effect + 1 month within this context
+//TODO Time syncing with servers
+//TODO Support ns if desired, so now as ns might call some different routine than just getting the date today.
+// YEAR = year, MONTH = month
+//TODO How to indicate the value is possibly up for correction (and how would you apply it?)
+//TODO Make sure superpositions are working for weeks and times
+//TODO Different format orders like YYYY- etc.. Www
+//TODO Extend ISO_8601 With additional things like name of timezone etc... what other extensions?
+//TODO Actually read through ISO 8601 and possibly correct
+//TODO This numbering might need to be implemented slightly differently.
+//TODO Context Time.MINUTE/or something should set this second as possible leap-second
+// enforces bounds
+//TODO The Quantity should be inferred from year/month etc.. values since they're defined on Time, somehow
+//TODO NTP Network time protocol. for OS.name == Ether
+//TODO In the case of a monotonic clock where the epoch=something like bootup time, and then time correction jumps, you'd want the time to jump with it. Or using NOW twice in a row, you'd want the diff to jump with the correction.

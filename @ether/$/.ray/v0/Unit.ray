@@ -142,3 +142,39 @@ Byte := Unit(
 // Kilobyte | KB = 1000 * Byte, Kibibyte = 1024 * Byte
 Kilobyte := Byte prefixed Prefix.kilo
 Kibibyte => Byte multiple (two.pow(ten))
+
+// From the drafts, not yet reached here (spec):
+// .ray2/_todo/ray.ray.txt/Ether/instance/utils/Unit.ray:
+//TODO Move to a geometry file?
+//TODO support other scientific units
+// Allow 1 / m, 1 per m 2/10m
+//TODO Implement number
+// Ensure that every part of a quantity like '1d 10h 10ms' is part of an equivalence class.
+// Require quantities are in order from largest -> smallest
+// Allow for syntax `1d 10h 10m 30s`
+// Allow for syntax `10000000s ~~ normalizer = days hours minutes seconds`
+// Allow for syntax `10000000s as days hours minutes seconds`
+// Allow for syntax `name`
+// Allow for 'var: Decimal.Positive, ns = 10 ns' syntax.
+//TODO Allow for duplicate names like 8m meaning meter and minute
+//TODO If base is string, initialize unit.
+//TODO String units like 3h 20s
+// There must be at least one unambiguous name defined
+// Stringify as an unambiguous name if not defined globally.
+// Allows syntax 1`name` (1m)
+// Allows syntax 1.0`name` (1.0m)
+//TODO Should overwrite Number.def`node: not String` since it's more specific
+// Allows syntax 1 `name` (1 m)
+// Allows syntax 1.`name` (1.m)
+// Allows syntax 1.0 `name` (1.0 m)
+// Allows syntax 1.0.`name` (1.0.m)
+//TODO This shouldn't be necessary the 'as' before should already do this.
+//TODO Automatically implement reverses of offset, multiple, magnitude, If reversible. Decimal.Positive => Decimal.Positive for instance is only reversible if the dynamically asserts holds of being divisble.
+// global.+def Quantity<To>{.unit == ToUnit}
+// def as :== FromUnit => Quantity<From>{unit == FromUnit} = convert.reverse(this)
+//TODO Support non-integer magnitude exponents for reals.
+//TODO These should automatically implement for Decimal, and Decimal.Real
+// Positive exponents we can always shift within Decimal.Positive
+// Otherwise check if we can divide by that exponent
+//TODO Should only implement method if this assert passes
+//TODO This is a decimal (`Base`) shift, when working with binary values you want to access them as binary if you want that shift.

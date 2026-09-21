@@ -553,3 +553,24 @@ Number.components.hierarchy &= class {
     String(characters: forwards)
   )
 }
+
+// From the drafts, not yet reached here (spec):
+// .ray2/Language/String/String.ray:
+// String newline, respect spaces after the first one, which we trim completely
+//TODO Get from &caller:
+//TODO as String needs context of where it is being placed, if it's in a .ts that's different from another language.
+//TODO String aware of styling?
+//TODO Include Char static, (is that the default), where it's that return[], for Superscript.
+//TODO Calling on string evaluates it as a variable name, then calls that program.
+//TODO Ignore-case uses fold_case too
+//TODO mirror (bidi)
+//TODO Must override the , behavior of not doing it for Graphs
+//TODO as String should be automatically implemented.
+//TODO Should include letters from all alphabets
+//TODO Add on Char.Symbol along with other categories
+//TODO Different classes of Unicode characters.
+//TODO Regex in ASCII vs Unicode mode. (\p supported?)
+//TODO How do these conflict with editor unicode mappings for chars.
+//TODO Verify all these are indeed corresponding to Regex.
+//TODO How to do word border
+//TODO Language of Regex

@@ -458,3 +458,38 @@ i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
 // Units override the X Node
 // 3.2 Kilobyte
 // Kibibyte etc.. too
+
+// From the drafts, not yet reached here (spec):
+// .ray2/_todo/ray.ray.txt/Ether/instance/utils/Number.ray:
+//TODO Addition/subtraction of this integer (addition is simple)
+//TODO Define .sign on all numbers, so that you can do x.sign ().sum, empty string is + so nothing gets applied since it's empty string.
+//TODO : Strings as a definition depend on Number, circularity here.
+//TODO Support index?
+//TODO Because String has digit as String defined, any Array of digit Strings should automatically be defined, to as String too. with .map
+//TODO String as Binary.Positive = "0101010" = Digit.value[] = Positive
+//TODO : Binary.Positive as String; Automatic isomorphism
+//TODO Equip a default directionality. (Line: One with forward/backward from a specific point, but it isn't necessarily selected there.)
+//TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
+//TODO : Or can the compiler deduce the reversing stuff is not necessary?
+//TODO Should not always goto Decimal, should infer from context whether it is binary or not? How to do that; code it as a type?
+// Unknown digit representation for the specified base.
+//TODO Should only work for the base static case
+//TODO as Expression, should take the existing context which called this, and evaluate in that.
+//TODO This for binary
+//TODO : Possibly move these primitives to specific languages, and only work with arbitrary-length in the default case.
+//TODO : -b: Something uX might only implement b: uX, casts lose information and likely need to overflow
+//TODO Number arithmetic
+// - overflow, what to do? mod, or>?
+//TODO , Use Binary vs Binary.Positive
+//TODO Number arithmetic
+// Allows for the syntax 1 Object
+//TODO Generic Number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
+//TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
+//TODO : external defines that Number > Number is done by some other operator, not looking through successors/predecessors.
+//TODO A variable like this shouldn't be loaded into local, loop-specific var Howto?
+// Allow syntax ∑ [1, 2, 3]
+// .ray3/primitive/Number.ray:
+//TODO .value to String
+//TODO Maybe with equivalent
+// Or repeating
+// Leading zeros are equivalent to the base number

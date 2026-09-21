@@ -178,3 +178,78 @@ Chat := class {
   )
   count => .messages.count
 }
+
+// From the drafts, not yet reached here (spec):
+// .ray2/Feature/Choice.ray:
+// () on a type with constraints calls choose
+// How to say: Return of the given type, or a predicate when used in a filter
+//TODO How to say: .unordered, arbitrarily choose anything equivalent to
+// Chose uses === for checking equality. And only maps it once, then defers to the altered variable
+// Allow to be passed as a variable as any time, which takes on that type and says chosoe that type
+// No, this would be Number{choose}
+// As long as finitary #.count != ∞ 50%, what to do with
+// Allow 1/2 Number, then choose that type
+// Choose where the same value can be chosen more than once? Is that even useful? It might be for mapping filters
+// Only for finite number of objects.
+//TODO Choose with filter, alllow modifiers like unique somehow? or === for not the same var twice
+//TODO Dynamically with choose, means the choice can be changed dynamically too.
+// .ray2/Feature/IO.ray:
+// Shadowing is just components. with &+/+
+// Get a file relative to the Ether instance directory
+// - You're unable to leave by doing ".." on the top-level directory (only symlinks allow you to leave the default directory structure)
+//TODO Infer} TODO Default /path to object getters?
+//TODO Load a lazy program of the file, but if only = is used, we dont compile the actual read.
+//TODO Then things like IO /path as String, or as Expression
+//TODO How to say match to ... -> .[field] $, and then say:
+//TODO Trying first, {field}.ray.txt, then add 'field' directory if there, and if the .ray.txt isn't there fallback to 'field' as a file.
+// If exposed by the host, the OS' file system
+// - You can overwrite the default access by saying "confidential IO.os /some/path"
+//TODO Create a mirror @ location, and load from it it when?
+//TODO : Set actual directory vs the one we map to. Map both @player-name and @uuid, but actualize in @U/U/I/D
+// .ray2/Feature/Network/HTTP.ray:
+// Support < @https://orbitmines.com/
+// .ray2/Feature/Network/Network.ray:
+// Proxy all network traffic, or optionally: only grouped in the block after it., want to be able to configure both.
+//TODO On the receiving end: Difference proxies for different users, some way to do this mapping.
+// proxy @USERNAME // or some specific instance
+// proxy @ether, @USERNAME, @USERNAME2
+// Handshake such that the proxy does vs doesn't see traffic
+// @USERNAME.read proxy @USERNAME
+//TODO How to reroute all network traffic we're proxying
+// Ether Protocol starts with an unencrypted UUID of which version to use. Response is either fail or return which versions it supports, then switch to those versions on the other end.
+// .ray2/Feature/Proof.ray:
+// equational reasoning
+// Should also clear func(x) in scope
+// What about assumptions made outside the function
+//TODO In outside scope assumptions means something different than inside scope: outwide is all of the assumptions.
+// what about assumed if branches, how do proofs work which are delayed quests
+//TODO Expose variables in proposition to this context.
+//TODO All externally used variables are assumptions.
+//TODO Return false by default, which starts a quest
+// What about subproofs, any other quest matching this proof
+// theorem/lemma/example ; graph of theorems
+// Add lean library
+// Is there a way to intuitively change it if it's cleaner?
+//TODO In this case we dont want a quest to start if the proof is false.
+//TODO Maybe give negative proposition a name
+//TODO What do we want to do if proof fails, start quest (dont continue the program)
+//TODO All variables used in proof, get the additional type property of the proposition
+//TODO How to proof by contradiction
+// How does it differ from: (if 5 & 10, it's false & true, but only true succeeds
+// .ray2/Feature/Random.ray:
+//TODO Where is the probability stored
+// => is also valid syntax
+// .ray2/Feature/Transaction.ray:
+//TODO Or if dynamically the speculative if branch change, if resources are dedicated to that if branch.
+//TODO Could also automatically rollback previous changes of &=
+// equivalent to
+// Automatic isomorphism
+//TODO Still access the program used to fill the variable, then program⁻¹
+// Running function backwards, saying that
+// Need to account for the fact that the graph might've changed. Not just a simple .reverse
+//TODO What if changed in the meantime, need to record which version it was originally,
+// and how to revert if other changes have been made. ; We basically want to revert a specific commit.
+// How to say if this commit is available
+// inverse-1 notation used to go to the reverse direction of a method
+// .ray2/Feature/UI/Chat.ray:
+// Interface with the layout of some application, just like analysis of languages, at some point.

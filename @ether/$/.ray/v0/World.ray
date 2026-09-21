@@ -205,3 +205,100 @@ Organization := class: Player {
   members: (chain None)
 
 }
+
+// From the drafts, not yet reached here (spec):
+// .ray2/Accessor.ray:
+//TODO Allow a block and put everything in that block as that permission
+// .ray2/Character.ray:
+//TODO selected on another instance (primary)
+//TODO the variant of selected on X, for my Y (mirror)
+//TODO Quests: When is the mirror synced to the client, when to download, how many levels deep etc..
+//TODO Location = IO /path
+//TODO How to access all instances/references of a particular type (whether on disk, or in memory)
+//TODO Location is in memory, and on disk, how to sync them
+//TODO Locally set to a different value than what the managed inventory says?> ever used?
+// location might be non-halting, not yet discovered locations which run this world/X.
+// Change access permissions of your mirror.
+// Speculatively merge a detected loop in the inventory, if not found, we recursively describe it: A.B.A.B.A.B...
+// Remote execution
+//TODO Default to program<&who = CHARACTER>() if passed by the character.
+//TODO What about read access to the libraries and new variables it makes; Need some way to say, it's running locally, and it doesn't need to be this character; that's the default privacy policy? So different than protected?
+//TODO The default REMOVE HISTORY AFTER X DAYS (30?) allows the character to do it, if it has been logged previously, so the execution script can be run as their character.
+// Run code as an unauthorized character -> by creating a new character and eval'ing code then
+//TODO .instance selected instance again
+// Online Offline
+// Hosted or broadcast
+// Allow other's to proxy through you, do things like @private.managed Proxy, only particular ones
+//TODO = Broadcast! Or some general way to remove a &/|.
+//TODO Only override the specific class it came from
+//TODO Invisible, is just offline read
+//TODO How to differentiate between the &who who set this variable vs, the one who gets it. -> how to say load the expression, not the value.
+//TODO Idle, DoNotDisturb, Busy etc.. for NPCs with more data, and players in general, extended status. status & extended
+//TODO Have a sharded character, if the ether central server doesnt allow storage beyond X, allow remote storage to be configured.
+// If blocks for which world to load it in, based on location, then .avatar with {location == ?}.avatar or default {?} to load all properties with unknowns
+//TODO Access permission filter
+// == Challenges with timed message to be decoded
+//TODO @me.choose different from choose
+// consistent is the field that referenced this, must reference back. with {?}, {avatar == this}
+// .ray2/History.ray:
+// Statements versioned too? That we can say, I only versioned/changed this particular statement
+// History of location: -  What if I wanted to know the history of where it came from? So from disk to instance (to memory) to instance ... , until it came to me. -> So the instance can choose whether to provide that information.
+//TODO Store whether a silent generic type was used for a particular function, then version control, alert there's then a new variable with that name, but keep using it as a generic type as long we have that information.
+//TODO Evaluation history is a .expand on a singular change/commit
+//TODO .expand Graph<Commit>.acyclic
+//TODO Needs a history conversion to something like git to support it, both ways.
+//TODO What if I set a variable with a history and I want to retain that history (and not the history of the variable it's set to)
+//TODO Or retain both?
+//TODO The .=(value) in history (encoded on the edge) carries with it the information of where it came from, with that history attached.
+// Default behavior for =, check histories and merge conflicts (quests)
+//TODO Uncommitted files, and staged changes, like those added with git add, are simply visibility set to local/private.
+//TODO Cherry-pick is a chain of commits apply to current branch
+//TODO -> SO YOU WANT TO ALLOW DIFFERENT STATES IN REPOSITORIES, BUT STILL ALLOW THEM TO WORK TOGETER. (mY LOCAL HISTORY IS DIFFERE4NT THAN YOURS, BUT STILL NBEEW UPDATES ARE PUSHED TO BOTH.),M SAY FOR WHEN I KNOW I SENT MY MESSAGE BEFORE/AFTER SOME OTHER MESSAGE, BUT YOURS WAS SENT AROUND THE SAME TIME. WE MIGHT NOT AGREE ON THE ORDER.
+//TODO How to store distributed approximations of some value, like a blooming filter for likes. How do I indicate I don't mind an approximate value.
+// You want the option to merge many in-sequence commits into a single one. Like we have
+// Could do "from this point" it's a new repository
+// If invariant, automatically resolve merge conflict by randomly choosing an order.
+// Type conflicts are merge conflicts, for example of distributed databases
+// Need to have a lower-bound against the upper-bound of repository: For instance not individual bits of characters in a string.
+// For the intermediate steps it'/s the reverse, more effective tos tore the lowerlevel, and generate the higher-level  Have the optmization decide what to do.
+//TODO World needs to reserve Hexadecimal{length == 12} => store in MACAddress
+//TODO The node which creates the uuid is a unique ID assigned to the user by the world
+//TODO Like Ray, Its Node & Version if there's overlap then we probably to x/value
+//TODO Not a branch of into many, require merge to be the branchpoint we use.
+//TODO Equip previous/.next branches
+//TODO Create new branch off beginning, add node in front if necessary with on the edge a connection to the two branches before there's a first version
+// Add other history to this one, whether to reshuffle changes?
+//TODO Repository needs to be a World, or part of a world to record changes -> used for generating UUIDs
+// A repository is an ordering of nested commits.
+//TODO String for instance, character-level is the lowest, it goes, otherwise every class is a repository
+// .ray2/Item.ray:
+// how it's made, how it's discovered, how it's constructed.
+// Items require Quests ; In order to find items you need quests.
+// Similar to function, who called?
+//TODO What is a perspective on an object?
+//TODO Minimaps/high-level overviews
+//TODO Should only be default, can be overwritten
+// .ray2/Quest.ray:
+// Require things like "I've communicated with these replica servers before making this calculating -> when strong consistency is required." -What if they're not online, like offline players storage etc.. (For certain things like calculating player statistics which are kept local only, it would be "make sure your instance checks in with out server before X time", and we'll consider your changes) - So these are quests to complete for the replica servers
+//TODO Certificates issued by a world for a quest.
+// Difficulty rating (might change at each step)
+// Effectiveness rating (effecting difficulty rating of other quests, compounded effect of future rewards)
+//TODO There could still be a continuation, how to know we're actually done
+// .ray2/Reference.ray:
+//TODO When ref on any character ref is a dummy allow "claim this authorship, set the character node to that player if granted"
+//TODO Published is who hosts this variable, originally designated to?
+//TODO Abstractly also contains information of 'pointer' like which page etc.
+//TODO as Renderable
+//TODO Should switch to a remote ref when communciated over network
+// .ray2/World.ray:
+// Location < World, as composition, not Location has world.
+//TODO Is it < Location, if we mark every location as World; or put that functionality on Location, which are part of a world.
+//TODO Dynamics, either on world, or separate composition
+// If a name isn't defined, it will fall back to this world
+// Shortcut for changing the name variable for all nameables
+//TODO Iterable through entire worldgrah, hierarchy and itself
+//TODO Not reserve but just setting the characters name
+//TODO equivalence A => B etc.. see /etc/hosts for additionial notes
+//TODO Allocate a name within your access, to another character. Say x@gmail.com allocated by Google (Issuer is @me, but it's for the world @ether)
+//TODO Set name for that character
+//TODO < World at many places in some structure, have the things like .worlds/.characters be iterating over that structure to anything that's in it.

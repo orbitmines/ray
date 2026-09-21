@@ -333,3 +333,99 @@ Traverser := class {
 // containers `class` builds before this file loads take both on here.
 Chain.components.hierarchy &= Array
 Link.components.hierarchy &= Ray
+
+// From the drafts, not yet reached here (spec):
+// .ray2/Ray.ray:
+//TODO Something like is_boundary checks whether any of the entries (Many<>) are at a boundary, but that changes behavior of a superposed abstract interpretation when it shouldn't. (It should individually check is_boundary, and superpose the results)
+//TODO First Ray extension defined is what gets equipped?
+//TODO Graph .rewriting. dpo, spo, cartesion product, tensor product, union, disjoint union etc...
+// Support generators. OR Automatically convert into a generator if something will be returned.
+// (Intermediate result basically)
+//TODO What is a .expand on a boundary/edge
+// Todo set T to caller's constructor
+// namespace >=
+// gte: (self, value) => self.reduce_right((acc, current, cancel) =>
+// acc.if(cancel, current.equals(value))
+// , undefined),
+// gt: (self, value) => self.reduce_right((acc, current, cancel) =>
+// acc.if(cancel, acc.equals(undefined) /* TODO: More generally, a: "is this the first check" */.if(false, current.equals(value)))
+// , undefined),
+// lte: (self, value) => self.reduce((acc, current, cancel) =>
+// acc.if(cancel, current.equals(value))
+// , undefined),
+// lt: (self, value) => self.reduce((acc, current, cancel) =>
+// acc.if(cancel, acc.equals(undefined).if(false, current.equals(value)))
+// , undefined)
+//TODO Setting .value on Many boundary in the case of Edge.
+//TODO What is .unrolled?? on type
+//TODO .[index] shouldnt overwrite the '1' without a .1 (needs a special rule)
+// Allow no Args, which is just iterating without using the variable
+//TODO : callback.parameter s = Array & Object, named at Object, .length etc. at Array; 'parameters' interprets as an array.
+//TODO + return = caller.return
+// Then add any match at the beginning.
+//TODO .every on ray iterates both ways., explicit filter for excluding. (ray -> .next).for
+//TODO .value is everything on x except the Rays defined at #. And we need distinction between methods on Ray/x
+//TODO is .expand implemented for looped types, which assume .expand unrolls the loop?
+//TODO .expand only the boundaries, or everything
+//TODO .paths possible paths to take.
+// after/before/...
+//TODO .push which does vs doesnt override a possible terminal defined there.
+//TODO Recursively expand
+//TODO Perhaps just context, relative context = just the ray.
+//TODO Is different from unique/compact of iterable, rename
+//TODO Difference in filter to say on Iterable for on each iterated node
+//TODO .remove which preserves structure, or sever connectivity, or DPO
+//TODO What to do with T for Iterable ; they shouldnt be the same here
+// The entire context graph except for the current value ; "Complement, where the entire graph is the universal set"
+// Remove selection from context
+//TODO Returns superposition instead of an Array[]
+//TODO .next/.previous should be different delimiters, what is left/right hand
+//TODO keep_delimiter = false
+//TODO split is a map, and respect equipped structure and keeps it.
+//TODO for Ray only counting Ray classes.
+// what about 0..10..20 // Goes to 20 through 10, relevant for graph
+// ..10 / 10.. Same as 10-> / <-10
+// Somehow 5..10 when used as a type is 5..10.reduce(|) by default?
+// Next should always return iterable with #, since # is depth aware, so #.for returns only the result which can have & at the specific locatgions
+// Repeat this structure x times: Composing the structure x times
+//TODO Sorted/max/min along which dimension & what is the default dimension
+//TODO Or something like that.
+//TODO Would to to call a method on the entries, so needs to be a callable
+//TODO Should allow for ~{}{} chained, without need to redo the ~. maps to &&
+//TODO How to say filter applies here
+//TODO Structure altering mapping with ~ somehow
+//TODO Name for &+ iterator right?
+// Any variable accessed from this map, is mapped lazily (what about variables which are also used externally, then the mapping wouldnt work - you'd have to iterate over all to map)
+// Being part of .map, does a .copy on the variables in it when it sets their location to inside the map's structure (which is the iterable structure).
+//TODO Reduce in Rays should go both ways?
+//TODO Cancel reduce.
+//TODO Mapping and reducing together?
+//TODO after/before/back/front
+// push_before: (self, ...x: any[]) =>
+// self.reverse().push_after(...x),
+// push_back: (self, ...x: any[]) =>
+// self.last().push(...x),
+// push_front: (self, ...x: any[]) =>
+// new self(...x).push_back(self),
+// Include equivalence graph, is there maybe a different syntax for which equivalence graphg to use.
+// .flatten = .reduce(push_back) What did ruby do for different levels? flatten(1) or something
+//TODO move operations
+// Boundaries check if == None and != Ray
+// Each step might be in a different version of the graph, Time vs Space
+// Start a quest to find the path
+// Path to, when on array, all paths from all the points to x, equipped direction for a .min is the length of the path
+// How to do this with different rays which can be equipped for different directions., or is it just this selected graph
+// These or not?
+//TODO Sequential composition
+// If T is (previous: T): T allow. Which is the case for 1, +2, +3, +4
+// If T extends [] and not Ray, doesn't compose (grouped structures)
+// Allow Binary₃₂ = Binary₈[]₄
+// Uses count instead of length, since Ray/Graph²²² makes for sense as the size of the graph rather than each path length.
+// Allow this sort of chaining, overriding the previous count ==
+// Allow x: String[] = "String", Object, "String", Object
+// On = of a ray, we keep the structure from both sides &=?
+//TODO Equip Continuous; accepting Reals in [property], but not effecting .next
+// Path is a function
+//TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@
+// .ray3/Ray.ray:
+//TODO Infinitely generates check or in a loop

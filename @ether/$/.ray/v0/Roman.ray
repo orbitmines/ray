@@ -163,3 +163,35 @@ ratio_sign => (eight * thousand) + (seven * hundred) + (five * ten) + eight
 therefore_sign => ratio_sign - two
 proportion_sign => ratio_sign + one
 five_dot_sign => (eight * thousand) + (two * hundred) + (eight * ten) + nine
+
+// From the drafts, not yet reached here (spec):
+// .ray2/Roman.ray:
+// Roman Numeral notation (https://en.wikipedia.org/wiki/Roman_numerals)
+// Unicode Roman Numeral block (U+2160–U+216F)
+// Precomposed (U+2161–U+216B)
+// Lowercase (U+2170–U+217F)
+// Archaic forms
+// U+2185 ROMAN NUMERAL SIX LATE FORM
+// U+2186 ROMAN NUMERAL FIFTY EARLY FORM
+// Additive — historical notation without subtractive pairs (IIII instead of IV)
+// Vinculum — combining overline multiplies by 1000 (https://en.wikipedia.org/wiki/Roman_numerals#Large_numbers)
+// U+0305 COMBINING OVERLINE
+// Apostrophus Unicode (U+2180–U+2188)
+// Double overline multiplies by 1,000,000
+// U+033F COMBINING DOUBLE OVERLINE
+// Apostrophus — composed CIↃ sequences (https://en.wikipedia.org/wiki/Roman_numerals#Apostrophus)
+// U+2183/U+2184 REVERSED C
+// U+2188 — CCCIↃↃↃ
+// Composed sequence forms
+// Fraction — Roman base-12 uncia system (https://en.wikipedia.org/wiki/Roman_numerals#Fractions)
+// U+00B7 MIDDLE DOT — uncia
+// U+2236 RATIO — sextans
+// U+2234 THEREFORE — quadrans
+// U+2237 PROPORTION — triens
+// U+2059 FIVE DOT PUNCTUATION — quincunx
+// U+2183 semuncia
+// U+10192 ROMAN SEMUNCIA SIGN
+// U+10193 ROMAN SEXTULA SIGN
+// U+10194 ROMAN DIMIDIA SEXTULA SIGN
+// U+10195 ROMAN SILIQUA SIGN
+// Named fractions (twelfths of an as)

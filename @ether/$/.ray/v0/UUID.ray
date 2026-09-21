@@ -129,3 +129,16 @@ UUID := class: Hexadecimal {
 Character.components.hierarchy &= class {
   hexadecimal_digit => if .digit { .codepoint - ((four * ten) + eight) } else { .lower.codepoint - ((eight * ten) + seven) }
 }
+
+// From the drafts, not yet reached here (spec):
+// .ray2/_todo/ray.ray.txt/Ether/instance/utils/UUID.ray:
+//TODO If OS allows custom UUID1 generation, overwrite with external
+//TODO This is not the right order, should be defined differently.
+// The timestamp is a 60-bit value (or Hexadecimal¹⁵) (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.4)
+// For UUID version 1, this is represented by Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals since 00:00:00.00, 15 October 1582 (the date of Gregorian reform to the Christian calendar).
+// Make sure each call yields a unique value.
+//TODO ; Say I want a unique value, I dont care how you get it.
+//TODO What to do if it's larger than a 60-bit integer
+//TODO Compiler should be able to reverse time, if the other 3 are provided.
+//TODO How to say this is not the one used for converting from string, like a 'secondary' implementation -> Since now there's ambiguity
+//TODO Compiler should know it only needs to generate length == 31 here

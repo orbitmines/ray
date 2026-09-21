@@ -302,3 +302,18 @@ Organization := class: Player {
 //TODO Allocate a name within your access, to another character. Say x@gmail.com allocated by Google (Issuer is @me, but it's for the world @ether)
 //TODO Set name for that character
 //TODO < World at many places in some structure, have the things like .worlds/.characters be iterating over that structure to anything that's in it.
+
+// From the procedural-generation draft, not yet reached here (spec):
+// .ray2/_todo/ray.ray.txt/ProceduralGeneration.ray:
+//
+// // Autogenerate possible semantics for placement descriptions
+// class Room
+//   4 Wall{a Door, 50% Window}
+//   1..3 Bookshelf{against a Wall, books: choose @me.FILE_SYSTEM} // against is the opposite of facing
+//   1..2 Computer{released: 1970..2000} // Specify what kind
+//   1 Console{released: 1980..2005}
+//   a Table{small, next to couch}
+//   couch: Couch | Chair
+//
+//
+// choose Room{4..5m x 5..7m} // .x on unit brings 2d.

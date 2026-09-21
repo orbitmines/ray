@@ -85,3 +85,9 @@ Chain.components.hierarchy &= class {
     out
   )
 }
+
+// class Char < Unicode.Scalar: a scalar is a codepoint that is not a surrogate.
+// spec: Character keeps its bits and asks `is_scalar` rather than being a
+// Scalar, since a codepoint is a walk of that many links.
+// spec: `Unicode.Scalar = Number{Unicode.scalar(this)}`, once a narrowing of
+// Number costs a pass nothing.

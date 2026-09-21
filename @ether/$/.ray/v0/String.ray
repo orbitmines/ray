@@ -181,6 +181,18 @@ Character := class {
   )
 }
 
+// Letter: Char = "a".."z" | "A".."Z"; Symbol: Char = Unicode.GeneralCategory.(Punctuation | .Symbol)
+// \d = Unicode.GeneralCategory.Decimal_Number, \s = Space_Separator | \t, \w
+// The classes of characters, as narrowings of Character, made once here rather
+// than in the body (which every character runs). spec: Symbol and the
+// non-Latin letters wait on the Unicode tables.
+// spec: `Character.Letter = Character{.letter}`, `.Digit`, `.Blank`, `.Word`
+// are what these are; four narrowings of Character on top of the string test
+// run a pass out of memory today, so they wait on a cheaper constructor.
+
+// class String < Char[]: a string is the array of its characters. spec: it
+// keeps its own chain of characters rather than composing Array, since every
+// string would otherwise carry the structure tower and a pass runs out of memory.
 String := class {
   count => .characters.count
   length => .count

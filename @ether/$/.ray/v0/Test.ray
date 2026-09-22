@@ -1,105 +1,190 @@
-IP := class: Location &+ (-1 <- . -> +1) {
-  static NUMBER_OF_SEGMENTS: Decimal
-  static SEGMENT_LENGTH: Decimal
-  static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
+// IP addresses (draft: .ray2/Test.ray). An address is its segments: four of
+// eight bits written in decimal with dots between them, or eight of sixteen
+// written in hexadecimal with colons. spec: the draft's arithmetic over a
+// whole address (`+ offset`), its CIDR ranges and the choices RFC 5952 asks
+// for are notes below; a number here is walked, so 2³² of them is not a thing
+// the language reaches.
 
-  static Segment := class {
-    static Binary := Binary{length == SEGMENT_LENGTH}
-  }
-  segments: Segment[]{length == NUMBER_OF_SEGMENTS}
+// class IP < Location &+ (-1 <- . -> +1)
+// spec: `Location` and the line from one address to the next await World's
+// locations; what an address is, is its segments.
+IP := class {
+  segments: Node
 
-  String := this as String // Make this a general thing if as String is implemented.
-  as (:== String) => {
-    // Use CIDR notation if superposed values are filled in #.
-    prefix_length = NUMBER_OF_BITS - (as Binary ~= ⊢(0 & 1)[] -- .length)
-    if prefix_length != NUMBER_OF_BITS {
-      binary_form = as Binary
-      binary_form[prefix_length..] = 0
-      return recur(binary_form as static), "/", prefix_length
+  // static NUMBER_OF_SEGMENTS: Decimal, static SEGMENT_LENGTH: Decimal
+  // The counts belong to the kind of address; each kind says its own.
+  segment_count => .segments.count
+  segment_length => eight
+  // static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
+  bit_count => .segment_count * .segment_length
+  // The separator between segments, and the base they are written in.
+  separator => Character.of(ascii_dot)
+  base => ten
+
+  // `as Binary`: the bits of every segment, most significant first.
+  bits => (
+    out := chain None
+    walker ^keyword := .segments.head
+    length := .segment_length
+    while (exists walker) {
+      bits_of(walker.value, length) for { out &= it.value }
+      walker = walker.next
     }
+    out
+  )
 
-    segments as Segment.Binary[]
-  }
-
-  + (offset: Number{-(as Binary) <= . <= ~!(as Binary)}): static => as Binary + offset
-  - (offset: Number{- ~!(as Binary) <= . <= as Binary}): static => as Binary - offset
-  //TODO Range
-
-  // CIDR notation
-  / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => {
-    return this if prefix_length == NUMBER_OF_BITS
-
-    binary_form = as Binary
-    binary_form[prefix_length..] = 0 | 1
-
-    binary_form
-  }
-
-  static v4 := class: IP ({segments.join(".")}) => {
-    static NUMBER_OF_SEGMENTS = 4
-    static SEGMENT_LENGTH = 8
-
-    static Segment: Decimal{< 2^8}
-  }
-
-  static v6 := class: IP (
-    (left: Segment[]).join(":")?, 
-    zero_compression: "::" (? if !defined_segments.empty), 
-    (right: Segment[]).join(":")?, 
-    (":", embedded_ipv4: IPv4)?
-  ) => {
-    static NUMBER_OF_SEGMENTS = 8
-    static SEGMENT_LENGTH = 16
-
-    static Segment: Hexadecimal{length <= 4}
-
-    segments => left, 0[]{length == number_of_compressed_segments}(), right, embedded_ipv4 as Binary
-    defined_segments: Segment[] => left, right, embedded_ipv4 as Binary
-    number_of_compressed_segments => NUMBER_OF_SEGMENTS - defined_segments.length
-
-    dynamically assert defined_segments.length (zero_compression
-      ? < NUMBER_OF_SEGMENTS - 1 // '-1' Because: The symbol "::" MUST NOT be used to shorten just one 16-bit 0 field. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.2)
-      : == NUMBER_OF_SEGMENTS
-    )
-    // When there is an alternative choice in the placement of a "::", the longest run of consecutive 16-bit 0 fields MUST be shortened (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
-    dynamically assert left & right ~= 0[] -- .length <= number_of_compressed_segments if zero_compression
-    // When the length of the consecutive 16-bit 0 fields are equal, the first sequence of zero bits MUST be shortened. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
-    dynamically assert left ~= 0[] -- .length != number_of_compressed_segments if zero_compression
-
-    // When there is an alternative choice in the placement of a "::", the longest run of consecutive 16-bit 0 fields MUST be shortened (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
-    dynamically assert left & right ~= 0[] -- .length <= number_of_compressed_segments if zero_compression
-    // When the length of the consecutive 16-bit 0 fields are equal, the first sequence of zero bits MUST be shortened. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
-    dynamically assert left ~= 0[] -- .length != number_of_compressed_segments if zero_compression
-
-    compress_zeros: static => {
-      return this if zero_compression
-
-      zeros = left, right ~= 0[] -- #{length == min() & leftmost} // TODO How to iterate over @ like min. and leftmost
-      return this if zeros.count <= 1
-
-      return (<- zeros), "::", (zeros ->), ":", embedded_ipv4 //TODO Is <- an exclusive or inclusive?
+  // `({segments.join(".")})`: the segments written out, with the separator
+  // between them.
+  as_string => (
+    parts := chain None
+    walker ^keyword := .segments.head
+    radix := .base
+    while (exists walker) {
+      parts &= walker.value.spelled_in(radix)
+      walker = walker.next
     }
+    String.joined(parts, .separator)
+  )
 
-    embed_ipv4: static => {
-      return this if embedded_ipv4
+  == (other: IP) => .as_string == other.as_string
 
-      segments[..-3], segments[-2..] as Binary as IPv4
-        // Prefer compressed zeros representation when possible (at least for the leading hexadecimal part) - (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
-        -- .compress_zeros
+  // The address read back from its text: each part is a number in the base.
+  read (text: String, separator: Character, radix: Number) => (
+    out := chain None
+    text.split(separator) for { out &= it.value.as_number_in(radix) }
+    out
+  )
+}
+
+// static v4 := class: IP ({segments.join(".")}) => (NUMBER_OF_SEGMENTS = 4,
+// SEGMENT_LENGTH = 8, Segment: Decimal{< 2^8})
+IP.v4 = class: IP {
+  segment_length => eight
+  separator => Character.of(ascii_dot)
+  base => ten
+}
+// static Segment: Decimal{< 2^8}
+IP.v4.Segment = Number{. < two.pow(eight)}
+
+// static v6 := class: IP ((left: Segment[]).join(":")?, zero_compression: "::"
+// (? if !defined_segments.empty), (right: Segment[]).join(":")?, (":",
+// embedded_ipv4: IPv4)?) => (NUMBER_OF_SEGMENTS = 8, SEGMENT_LENGTH = 16,
+// Segment: Hexadecimal{length <= 4})
+// spec: the draft's constructor reads the two sides of a `::` and an embedded
+// v4 address; here an address is its eight segments, and `compressed` is where
+// the zeros it writes as `::` are chosen.
+IP.v6 = class: IP {
+  segment_length => ten + six
+  separator => Character.of(ascii_colon)
+  base => ten + six
+
+  // number_of_compressed_segments => NUMBER_OF_SEGMENTS - defined_segments.length
+  // The longest run of zero segments, as where it starts and how long it is.
+  // RFC 5952 asks for the longest run, and the first of equal runs, which is
+  // what taking a later run only when it is longer does.
+  zeros => (
+    best_at ^keyword := zero
+    best_run ^keyword := zero
+    at ^keyword := zero
+    run ^keyword := zero
+    walker ^keyword := .segments.head
+    while (exists walker) {
+      if walker.value.is_zero {
+        run = run.succ
+        if (best_run < run) {
+          best_run = run
+          best_at = at.succ - run
+        }
+      } else { run = zero }
+      at = at.succ
+      walker = walker.next
     }
+    Chain.Run(at: best_at, length: best_run)
+  )
 
-    as (:== String) => this
-      // mixed notation is RECOMMENDED if the following condition is met: the address can be distinguished as having IPv4 addresses embedded in the lower 32 bits solely from the address field through the use of a well-known prefix (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
-      -- .embed_ipv4 if ==.instance_of "::ffff:0.0.0.0/96"
-      // Prefer mixed notation for NAT64 (https://datatracker.ietf.org/doc/html/rfc6052#section-2.1)
-      -- .embed_ipv4 if ==.instance_of "64:ff9b::/96"
-      .compress_zeros
-      .super // what is super for ?
-      // The characters "a", "b", "c", "d", "e", and "f" in an IPv6 address MUST be represented in lowercase. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)
-      .lowercase
-  }
+  // `compress_zeros`: the text with the longest run of zeros written `::`.
+  // The symbol is not used for a single zero field (RFC 5952 4.2.2).
+  compressed => (
+    found := .zeros
+    if (found.length < two) { .as_string } else {
+      before := .written(zero, found.at)
+      after := .written(found.at + found.length, .segment_count)
+      before + (String.of(`::`) + after)
+    }
+  )
+  // The segments from one place up to another, with colons between them.
+  written (from: Number, until: Number) => (
+    parts := chain None
+    at ^keyword := from
+    radix := .base
+    while (at < until) {
+      parts &= .segments.at(at).value.spelled_in(radix)
+      at = at.succ
+    }
+    String.joined(parts, .separator)
+  )
+}
+// static Segment: Hexadecimal{length <= 4}
+IP.v6.Segment = Number{. < two.pow(ten + six)}
 
+// A run of alike entries in a chain: where it starts and how long it is.
+Chain.Run = class {
+  at: Number
+  length: Number
 }
 
 IPv4 := IP.v4
 IPv6 := IP.v6
+
+// From the draft, not yet reached here (spec):
+// .ray2/Test.ray:
+// static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
+// segments: Segment[]{length == NUMBER_OF_SEGMENTS}
+// String := this as String // Make this a general thing if as String is implemented.
+// as (:== String) => {
+//   // Use CIDR notation if superposed values are filled in #.
+//   prefix_length = NUMBER_OF_BITS - (as Binary ~= ⊢(0 & 1)[] -- .length)
+//   if prefix_length != NUMBER_OF_BITS {
+//     binary_form = as Binary
+//     binary_form[prefix_length..] = 0
+//     return recur(binary_form as static), "/", prefix_length
+//   }
+//   segments as Segment.Binary[]
+// }
+// + (offset: Number{-(as Binary) <= . <= ~!(as Binary)}): static => as Binary + offset
+// - (offset: Number{- ~!(as Binary) <= . <= as Binary}): static => as Binary - offset
+//TODO Range
+// CIDR notation
+// / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => {
+//   return this if prefix_length == NUMBER_OF_BITS
+//   binary_form = as Binary
+//   binary_form[prefix_length..] = 0 | 1
+//   binary_form
+// }
+// segments => left, 0[]{length == number_of_compressed_segments}(), right, embedded_ipv4 as Binary
+// defined_segments: Segment[] => left, right, embedded_ipv4 as Binary
+// dynamically assert defined_segments.length (zero_compression
+//   ? < NUMBER_OF_SEGMENTS - 1 // '-1' Because: The symbol "::" MUST NOT be used to shorten just one 16-bit 0 field. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.2)
+//   : == NUMBER_OF_SEGMENTS
+// )
+// When there is an alternative choice in the placement of a "::", the longest run of consecutive 16-bit 0 fields MUST be shortened (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
+// dynamically assert left & right ~= 0[] -- .length <= number_of_compressed_segments if zero_compression
+// When the length of the consecutive 16-bit 0 fields are equal, the first sequence of zero bits MUST be shortened. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
+// dynamically assert left ~= 0[] -- .length != number_of_compressed_segments if zero_compression
+// zeros = left, right ~= 0[] -- #{length == min() & leftmost} // TODO How to iterate over @ like min. and leftmost
+// return (<- zeros), "::", (zeros ->), ":", embedded_ipv4 //TODO Is <- an exclusive or inclusive?
+// embed_ipv4: static => {
+//   return this if embedded_ipv4
+//   segments[..-3], segments[-2..] as Binary as IPv4
+//     // Prefer compressed zeros representation when possible (at least for the leading hexadecimal part) - (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
+//     -- .compress_zeros
+// }
+// as (:== String) => this
+//   // mixed notation is RECOMMENDED if the following condition is met: the address can be distinguished as having IPv4 addresses embedded in the lower 32 bits solely from the address field through the use of a well-known prefix (https://datatracker.ietf.org/doc/html/rfc5952#section-5)
+//   -- .embed_ipv4 if ==.instance_of "::ffff:0.0.0.0/96"
+//   // Prefer mixed notation for NAT64 (https://datatracker.ietf.org/doc/html/rfc6052#section-2.1)
+//   -- .embed_ipv4 if ==.instance_of "64:ff9b::/96"
+//   .compress_zeros
+//   .super // what is super for ?
+//   // The characters "a", "b", "c", "d", "e", and "f" in an IPv6 address MUST be represented in lowercase. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.3)
+//   .lowercase

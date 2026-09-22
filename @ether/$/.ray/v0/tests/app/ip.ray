@@ -1,0 +1,34 @@
+// Addresses: what they are made of, how they are written, and where a run of
+// zeros is written `::`.
+
+mark ^keyword := external global
+
+parts := chain None
+parts &= one
+parts &= zero
+parts &= zero
+parts &= ten + two
+address := IPv4(segments: parts)
+unless (address.segment_count == four) { INFO@mark `IP1 the address has other than four segments` }
+unless (address.bit_count == (four * eight)) { INFO@mark `IP2 the address is not thirty-two bits` }
+unless (address.as_string == String.of(`1.0.0.12`)) { INFO@mark `IP3 the address does not write as 1.0.0.12` }
+unless (address.bits.count == (four * eight)) { INFO@mark `IP4 the address is not thirty-two bits long` }
+
+read_back := IPv4(segments: IP.read(String.of(`1.0.0.12`), Character.of(ascii_dot), ten))
+unless (read_back == address) { INFO@mark `IP5 the address read back is another one` }
+
+sides := chain None
+sides &= one
+sides &= zero
+sides &= zero
+sides &= zero
+sides &= zero
+sides &= zero
+sides &= zero
+sides &= two
+wide := IPv6(segments: sides)
+unless (wide.segment_count == eight) { INFO@mark `IP6 the wide address has other than eight segments` }
+unless (wide.as_string == String.of(`1:0:0:0:0:0:0:2`)) { INFO@mark `IP7 the wide address writes wrong in full` }
+unless (wide.zeros.length == (four + two)) { INFO@mark `IP8 the run of zeros is not six long` }
+unless (wide.zeros.at == one) { INFO@mark `IP9 the run of zeros does not start at one` }
+unless (wide.compressed == String.of(`1::2`)) { INFO@mark `IP10 the zeros are not written as ::` }

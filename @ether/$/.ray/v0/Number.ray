@@ -181,7 +181,7 @@ Number := class: Ray {
   rounds (block, it: Number) => if .is_zero { this } else {
     inline block
 
-    .next.rounds(block, it.succ)
+    this.next.rounds(block, it.succ)
   }
 
   pow (exponent: Number) => (
@@ -349,6 +349,37 @@ base{ }{literal name ^class}{ }{size} ^keyword => (
     digits (n: Number) => n.digits_in(radix)
     // The number some digits of this base spell.
     of_digits (spelled) => Number.from_digits(radix, spelled)
+    // spec: the draft's `Base.String`, the strings that spell a number of this
+    // base, is `global.String{.spells_in(radix)}`; it is not named here, since
+    // a `String` of a base shadows the class for everything built on one.
+
+    // A number of this base is read from its text a byte at a time, and the
+    // reading stops at the first byte that is no digit of this base.
+    accepts (text) => (
+      total ^keyword := zero
+      read ^keyword := false
+      readable ^keyword := true
+      byte ^keyword := chain None
+      left ^keyword := eight
+      take (b) => (
+        byte &= (inline b)
+        left = left.pred
+        if left.is_zero {
+          digit := digit_of(byte)
+          if (exists digit) {
+            if (digit < radix) {
+              total = (total * radix) + digit
+              read = true
+            } else { readable = false }
+          } else { readable = false }
+          byte = chain None
+          left = eight
+        }
+        readable.holds
+      )
+      external bits text take
+      if (readable.and(read)) { total } else { None }
+    )
 
     // static class Signed < sign: "-"?, integer: Base
     // static class Real < integer: Base, ".", fraction: Base{unbounded}
@@ -439,6 +470,44 @@ Iterable.components.hierarchy &= class {
 u{ }{width} ^keyword => Binary{.integer.count < (width).succ}
 i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
 
+// The digit an ASCII byte spells, its bits most significant first: `0`..`9`
+// are 0011 dddd, `a`..`z` and `A`..`Z` are 01c lllll and count from ten.
+digit_of (byte) => (
+  walker ^keyword := byte.head
+  if walker.value { return None }
+  walker = walker.next
+  letter ^keyword := walker.value
+  walker = walker.next
+  if letter { walker = walker.next } else {
+    unless walker.value { return None }
+    walker = walker.next
+    unless walker.value { return None }
+    walker = walker.next
+  }
+  amount ^keyword := zero
+  while (exists walker) {
+    amount = amount + amount
+    if walker.value { amount = amount.succ }
+    walker = walker.next
+  }
+  if letter {
+    if amount.is_zero { return None }
+    return (amount + nine)
+  }
+  unless (amount < ten) { return None }
+  amount
+)
+
+// def `digits: Decimal.Positive.String` => Decimal.Positive = digits
+// A word nothing is named by, spelled in decimal digits, is the number it spells.
+{number: Decimal ^number} => number
+// def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+// def 0`"b" | "B"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+0x{number: Hexadecimal ^number} ^number => number
+0X{number: Hexadecimal ^number} ^number => number
+0b{number: Binary ^number} ^number => number
+0B{number: Binary ^number} ^number => number
+
 // Byte | B = Binary⁸
 // Kilobyte | KB = 1000 * Byte
 // spec: `Binary⁸` would be `u eight`; Byte lives in Unit.ray as the unit it
@@ -456,8 +525,6 @@ i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
 // Node
 //   {expression: String.Superscript} => this ^ expression.decompose as Expression
 //   {expression: String.Subscript} => this v expression.decompose as Expression
-// def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
-// def 0`"b" | "B"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
 
 // ₂∫⁸()
 // lim(x -> ∞) ₂∫⁸() // Implemented as infinitesimal step, how to indicate to actually step?

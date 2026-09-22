@@ -149,7 +149,7 @@ Keyboard := class {
 
     press => (
       .pressed = true
-      .toggled = .toggled.not
+      this.toggled = .toggled.not
       this
     )
     release => (

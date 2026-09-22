@@ -41,3 +41,8 @@ unless (seen) { INFO@mark `do-while did not run its body at least once` }
 stop ^keyword := true
 do { stop = false } while stop
 if (stop) { INFO@mark `do-while did not stop` }
+
+nothing_taken := if false { one } else { None }
+if (exists nothing_taken) { INFO@mark `an if whose taken branch is None is present` }
+something_taken := if true { one } else { None }
+unless (exists something_taken) { INFO@mark `an if whose taken branch is one is absent` }

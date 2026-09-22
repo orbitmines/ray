@@ -69,3 +69,7 @@ unless (Unicode.scalar(ten)) { INFO@mark `W17 ten is not a scalar` }
 letters := String.of(`ab1`).characters{.letter}
 unless (letters.count == two) { INFO@mark `S40 selecting letters did not keep two` }
 unless (String.of(`abc`).count == three) { INFO@mark `S41 a string of three does not count three` }
+unless (String.of(`f`).first.digit_value == (ten + five)) { INFO@mark `S42 f is not the digit fifteen` }
+if (exists String.of(`-`).first.digit_value) { INFO@mark `S43 a dash has a digit value` }
+unless (String.of(`1a`).spells_in(ten + six)) { INFO@mark `S44 1a does not spell a hexadecimal number` }
+if (String.of(`1a`).spells_in(ten)) { INFO@mark `S45 1a spells a decimal number` }

@@ -19,7 +19,8 @@ None      ^keyword := external none
 {`{`}{expr}{`}`} ^punctuation => (
   scope ^keyword := external .
   value := inline expr
-  goto block_composes if value
+  // A block is made of its value, and of None too: then it stands for nothing.
+  goto block_composes if (external own value)
   goto block_done
  block_composes\
   external extend scope value
@@ -191,6 +192,10 @@ Node := base class {
 
     found
   )
+  // `{name: Type}` in a pattern: the capture is what its type reads out of
+  // the text there, and the pattern holds only where that is not None. A type
+  // that says nothing of reading takes the text as it is.
+  accepts ^reader (text) => text
   // Whether a block, read with this as `this`, holds.
   satisfies (predicate) => (inline predicate)
   // `Type.verify(x)`: what a type asserts of a value typed by it; a narrowing
@@ -209,6 +214,11 @@ Node := base class {
       }
     } else {
       selected = class: narrowed {
+        // What the narrowed type reads, where it satisfies the constraint.
+        accepts (text) => (
+          candidate := narrowed.accepts(text)
+          if (exists candidate) { if (candidate.satisfies({ inline narrowing })) { candidate } else { None } } else { None }
+        )
         verify (candidate) => (
           narrowed.verify(candidate)
           unless (candidate.satisfies({ inline narrowing })) { ERROR@candidate `does not satisfy a constraint of its type` }
@@ -970,8 +980,8 @@ TODO ^debug (comment: String ^comment) => DEBUG@. comment
 //TODO How to capture patterns
 //TODO How to capture negations
 //TODO How to capture forward/backward looking.
-// {} is a (): *, => then capatalizes on that by turning that program into a rewr// How to support map <T>{predicate: (x: T + iterator: Ray): boolean}(map: (x): T) => static{T: T}
-ite rule.
+// {} is a (): *, => then capatalizes on that by turning that program into a rewrite rule.
+// How to support map <T>{predicate: (x: T + iterator: Ray): boolean}(map: (x): T) => static{T: T}
 // How does => remove the unresolved variables?
 // Automatically the case
 // How to say what kind of approximation

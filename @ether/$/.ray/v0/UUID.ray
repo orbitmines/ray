@@ -68,7 +68,7 @@ UUID := class: Hexadecimal {
   v4 := class: UUID {
     spelled: UUID.drawn((three * ten) + two) ~~ (
       .head.at(ten + two).value = four
-      .head.at(ten + six).value = eight + (.head.at(ten + six).value % four)
+      this.head.at(ten + six).value = eight + (.head.at(ten + six).value % four)
     )
     dynamically assert (.version == four)
   }

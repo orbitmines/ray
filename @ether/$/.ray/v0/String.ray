@@ -107,6 +107,10 @@ Character := class {
   space => Character.of(ascii_space)
   underscore => Character.of(ascii_underscore)
 
+  // The value a character stands for as a digit: `0`..`9`, then `a`..`z`
+  // (either case) from ten on; None for any other.
+  digit_value => if .digit { .tail_value(four) } elsif .letter { .lower.tail_value(three) + nine } else { None }
+
   // spec: `Unicode.Scalar`'s assertion, as a question rather than a refusal.
   is_scalar => Unicode.scalar(.codepoint)
 
@@ -394,6 +398,10 @@ String := class: Array {
     String(characters: out)
   )
 
+  // Whether this spells a number in a base: its characters are all digits
+  // below the radix.
+  spells_in (radix: Number) => .nonempty.and(.every { if (exists character.digit_value) { character.digit_value < radix } else { false } })
+
   // The number a string of decimal digits spells, and back.
   as_number => (
     total ^keyword := zero
@@ -413,6 +421,9 @@ String := class: Array {
     other.characters for { joined &= it.value }
     String(characters: joined)
   )
+
+  // Text is read as a string.
+  accepts (text) => String.of(text)
 
   // A string from a literal: its bytes are read bit by bit, and cut into
   // characters by the width each lead byte announces.
@@ -439,6 +450,24 @@ String := class: Array {
   )
 }
 
+// `Base.String => this as String`: a number spelled in a base, and a string
+// read back as the number its digits spell there. spec: a bare `spelled` would
+// shadow a field of that name on anything built on a number (UUID's digits).
+Number.components.hierarchy &= class {
+  spelled_in (radix: Number) => (
+    out := chain None
+    this.digits_in(radix) for { out &= Character.decimal_digit(it.value) }
+    String(characters: out)
+  )
+}
+String.components.hierarchy &= class {
+  as_number_in (radix: Number) => (
+    total ^keyword := zero
+    this.characters for { total = (total * radix) + it.value.digit_value }
+    total
+  )
+}
+
 // The pieces of a chain of strings, each in a case.
 Chain.components.hierarchy &= class {
   each_lower => (
@@ -455,6 +484,7 @@ Chain.components.hierarchy &= class {
 
 // The Latin codepoints the classes above are cut at, built when first asked for.
 ascii_space => (three * ten) + two
+ascii_dot => (four * ten) + six
 ascii_zero => (four * ten) + eight
 ascii_nine => ascii_zero + nine
 ascii_upper_a => (six * ten) + five

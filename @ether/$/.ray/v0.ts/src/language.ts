@@ -1325,7 +1325,9 @@ export namespace Ray {
         if (impl.forward || pieces[0]?.kind !== 'literal') continue;
         const opening = pieces[0].text.trim();
         if (pieces.length >= 3 && pieces[pieces.length - 1].kind === 'literal' && opening.length > 0 && !/[\p{L}\p{N}_]/u.test(opening[0])) brackets.push([rule, impl]);
-        if (pieces.length === 2 && pieces[1].kind === 'capture') lines.push([rule, impl]);
+        // A line is taken verbatim by a rule whose one capture is text (a
+        // comment); a capture that is an expression makes a prefix operator.
+        if (pieces.length === 2 && pieces[1].kind === 'capture' && pieces[1].raw) lines.push([rule, impl]);
       }
       const signature = brackets.map(([rule]) => rule.key).join('\n');
       if (signature !== this.lexical?.signature) this.bracketing++;

@@ -123,7 +123,9 @@ Node := base class {
   , ^punctuation ^separator => this
   // Function definition
   static DEFINE_METHOD = `=`
-  ({args ^parameter}){block} ^punctuation => (this ^function) [DEFINE_METHOD] (
+  // `(args) => body`: a function; the body comes only after `=>`, so
+  // `f(args).member` stays a call followed by a member.
+  ({args ^parameter}){ }=>{ }{block} ^punctuation => (this ^function) [DEFINE_METHOD] (
     def = block**
     def[`args`] = args
     def

@@ -28,3 +28,6 @@ if (true.xor(true)) { INFO@mark `xor(true,true) should be false` }
 unless (true.xnor(true)) { INFO@mark `xnor(true,true) should be true` }
 
 if (true.nor(false)) { INFO@mark `nor(true,false) should be false` }
+unless (!false) { INFO@mark `!false should be true` }
+if (!true) { INFO@mark `!true should be false` }
+unless (true && (!false)) { INFO@mark `true && !false should be true` }

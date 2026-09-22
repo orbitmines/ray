@@ -175,10 +175,13 @@ Number := class: Ray {
   != (other: Number) => (this == other).not
 
   // `def times callback: () => *`, without the index the draft leaves open.
-  times (block) => if .is_zero { this } else {
-    block
+  // `def times callback: () => *`, with the index the draft leaves open as `it`:
+  // the block runs this many times and sees which round it is.
+  times (block) => .rounds(block, zero)
+  rounds (block, it: Number) => if .is_zero { this } else {
+    inline block
 
-    .next times block
+    .next.rounds(block, it.succ)
   }
 
   pow (exponent: Number) => (
@@ -386,6 +389,14 @@ Decimal.components.hierarchy &= class {
 Number.components.hierarchy &= class {
   signed => Decimal.Signed(integer: this)
   as_integer => .signed
+  // `.sign` on all numbers, so that `x.sign` reads on any of them: a natural
+  // number has none (its sign is the empty string), is positive, is its own
+  // absolute value, and negates into the signed integer below zero.
+  sign => None
+  negative => false
+  positive => true
+  abs => this
+  negated => .signed.negated
 }
 
 // Probability = Number{0 <= . <= 1}
@@ -462,7 +473,6 @@ i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
 // From the drafts, not yet reached here (spec):
 // .ray2/_todo/ray.ray.txt/Ether/instance/utils/Number.ray:
 //TODO Addition/subtraction of this integer (addition is simple)
-//TODO Define .sign on all numbers, so that you can do x.sign ().sum, empty string is + so nothing gets applied since it's empty string.
 //TODO : Strings as a definition depend on Number, circularity here.
 //TODO Support index?
 //TODO Because String has digit as String defined, any Array of digit Strings should automatically be defined, to as String too. with .map

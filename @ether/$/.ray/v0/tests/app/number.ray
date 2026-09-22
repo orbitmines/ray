@@ -45,3 +45,11 @@ unless ((minus_two + five.as_integer) == three.as_integer) { INFO@mark `N22 -2 +
 unless ((minus_two * minus_two) == four.as_integer) { INFO@mark `N23 -2 * -2 is not 4` }
 
 unless (minus_two < one.as_integer) { INFO@mark `N24 -2 < 1 is false` }
+
+rounds_seen ^keyword := zero
+three times { rounds_seen = rounds_seen + it }
+unless (rounds_seen == three) { INFO@mark `N30 times does not hand its round as it` }
+unless five.positive { INFO@mark `N31 a natural number is not positive` }
+if (exists five.sign) { INFO@mark `N32 a natural number has a sign` }
+unless (five.negated.negative) { INFO@mark `N33 a negated natural number is not negative` }
+unless (five.abs == five) { INFO@mark `N34 a natural number is not its own absolute value` }

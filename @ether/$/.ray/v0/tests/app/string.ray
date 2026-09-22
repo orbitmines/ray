@@ -86,3 +86,7 @@ unless (String.of(`x`).repeat(three) == String.of(`xxx`)) { INFO@mark `W16 repea
 // goto w17_ok if (Unicode.scalar(ten)).holds
 // INFO@mark `W17 ten is not a scalar`
 // w17_ok\
+
+letters := String.of(`ab1`).characters{.letter}
+unless (letters.count == two) { INFO@mark `S40 selecting letters did not keep two` }
+unless (String.of(`abc`).count == three) { INFO@mark `S41 a string of three does not count three` }

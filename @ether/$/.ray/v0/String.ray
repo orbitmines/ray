@@ -186,14 +186,13 @@ Character := class {
 // The classes of characters, as narrowings of Character, made once here rather
 // than in the body (which every character runs). spec: Symbol and the
 // non-Latin letters wait on the Unicode tables.
-// spec: `Character.Letter = Character{.letter}`, `.Digit`, `.Blank`, `.Word`
-// are what these are; four narrowings of Character on top of the string test
-// run a pass out of memory today, so they wait on a cheaper constructor.
+Character.Letter = Character{.letter}
+Character.Digit = Character{.digit}
+Character.Blank = Character{.blank}
+Character.Word = Character{.word}
 
-// class String < Char[]: a string is the array of its characters. spec: it
-// keeps its own chain of characters rather than composing Array, since every
-// string would otherwise carry the structure tower and a pass runs out of memory.
-String := class {
+// class String < Char[]: a string is the array of its characters.
+String := class: Array {
   count => .characters.count
   length => .count
   empty => .count.is_zero

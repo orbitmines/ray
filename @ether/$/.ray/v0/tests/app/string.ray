@@ -1,42 +1,24 @@
 mark ^keyword := external global
 
 ab := String.of(`ab`)
-goto s1_ok if ab.count == two
-INFO@mark `S1 ab has other than two characters`
-s1_ok\
+unless (ab.count == two) { INFO@mark `S1 ab has other than two characters` }
 
-goto s2_ok if ab.first.codepoint == ((ten * nine) + seven)
-INFO@mark `S2 a is not codepoint 97`
-s2_ok\
+unless (ab.first.codepoint == ((ten * nine) + seven)) { INFO@mark `S2 a is not codepoint 97` }
 
-goto s3_ok if ab.last.codepoint == ((ten * nine) + eight)
-INFO@mark `S3 b is not codepoint 98`
-s3_ok\
+unless (ab.last.codepoint == ((ten * nine) + eight)) { INFO@mark `S3 b is not codepoint 98` }
 
-goto s4_ok if (String.of(`a`) == String.of(`a`)).holds
-INFO@mark `S4 a != a`
-s4_ok\
+unless (String.of(`a`) == String.of(`a`)) { INFO@mark `S4 a != a` }
 
-goto s5_ok if (String.of(`a`) != String.of(`b`)).holds
-INFO@mark `S5 a == b`
-s5_ok\
+unless (String.of(`a`) != String.of(`b`)) { INFO@mark `S5 a == b` }
 
-goto s6_ok if (String.of(`a`) + String.of(`b`)) == ab
-INFO@mark `S6 a + b != ab`
-s6_ok\
+unless ((String.of(`a`) + String.of(`b`)) == ab) { INFO@mark `S6 a + b != ab` }
 
 acute := String.of(`é`)
-goto s7_ok if acute.count == one
-INFO@mark `S7 é is not one character`
-s7_ok\
+unless (acute.count == one) { INFO@mark `S7 é is not one character` }
 
-goto s8_ok if acute.first.width == two
-INFO@mark `S8 é is not two bytes wide`
-s8_ok\
+unless (acute.first.width == two) { INFO@mark `S8 é is not two bytes wide` }
 
-goto s9_ok if acute.first.codepoint == ((two * hundred) + ((three * ten) + three))
-INFO@mark `S9 é is not codepoint 233`
-s9_ok\
+unless (acute.first.codepoint == ((two * hundred) + ((three * ten) + three))) { INFO@mark `S9 é is not codepoint 233` }
 
 octet := chain None
 octet &= 0
@@ -47,76 +29,36 @@ octet &= 0
 octet &= 0
 octet &= 0
 octet &= 1
-goto t1_ok if octet.count == eight
-INFO@mark `T1 manual bit chain does not count eight`
-t1_ok\
-goto t2_ok if octet.head.value.not.holds
-INFO@mark `T2 first manual bit is not 0`
-t2_ok\
+unless (octet.count == eight) { INFO@mark `T1 manual bit chain does not count eight` }
+unless (octet.head.value.not) { INFO@mark `T2 first manual bit is not 0` }
 manual := Character(octets: octet)
-goto t3_ok if manual.width == one
-INFO@mark `T3 manual a is not one byte wide`
-t3_ok\
-goto t4_ok if manual.codepoint == ((ten * nine) + seven)
-INFO@mark `T4 manual a is not codepoint 97`
-t4_ok\
+unless (manual.width == one) { INFO@mark `T3 manual a is not one byte wide` }
+unless (manual.codepoint == ((ten * nine) + seven)) { INFO@mark `T4 manual a is not codepoint 97` }
 read := String.of(`a`).first
-goto t5_ok if read.octets.count == eight
-INFO@mark `T5 read a does not have eight octet`
-t5_ok\
-goto t6_ok if read.octets.head.value.not.holds
-INFO@mark `T6 read a first bit is not 0`
-t6_ok\
-goto t7_ok if read.octets.head.next.value.holds
-INFO@mark `T7 read a second bit is not 1`
-t7_ok\
+unless (read.octets.count == eight) { INFO@mark `T5 read a does not have eight octet` }
+unless (read.octets.head.value.not) { INFO@mark `T6 read a first bit is not 0` }
+unless (read.octets.head.next.value) { INFO@mark `T7 read a second bit is not 1` }
 
 lone := String.of(`a`)
-goto u1_ok if lone.collected.count == eight
-INFO@mark `U1 collected octet of a are not eight`
-u1_ok\
-goto u2_ok if lone.collected.head.value.not.holds
-INFO@mark `U2 first collected bit is not 0`
-u2_ok\
-goto u3_ok if lone.collected.head.next.value.holds
-INFO@mark `U3 second collected bit is not 1`
-u3_ok\
-goto u4_ok if lone.collected.tail.value.holds
-INFO@mark `U4 last collected bit is not 1`
-u4_ok\
-goto u5_ok if lone.characters.count == one
-INFO@mark `U5 a has other than one character`
-u5_ok\
-goto u6_ok if lone.characters.head.value.octets.count == eight
-INFO@mark `U6 the character's octets are not eight`
-u6_ok\
+unless (lone.collected.count == eight) { INFO@mark `U1 collected octet of a are not eight` }
+unless (lone.collected.head.value.not) { INFO@mark `U2 first collected bit is not 0` }
+unless (lone.collected.head.next.value) { INFO@mark `U3 second collected bit is not 1` }
+unless (lone.collected.tail.value) { INFO@mark `U4 last collected bit is not 1` }
+unless (lone.characters.count == one) { INFO@mark `U5 a has other than one character` }
+unless (lone.characters.head.value.octets.count == eight) { INFO@mark `U6 the character's octets are not eight` }
 
 built := Character.of((ten * nine) + seven)
-goto w1_ok if built == manual
-INFO@mark `W1 Character.of(97) is not a`
-w1_ok\
-goto w2_ok if (Character.of((two * hundred) + ((three * ten) + three)) == acute.first)
-INFO@mark `W2 Character.of(233) is not é`
-w2_ok\
-goto w3_ok if (ab.upper_case == String.of(`AB`)).holds
-INFO@mark `W3 upper_case failed`
-w3_ok\
-goto w4_ok if (String.of(`Ab`).swap_case == String.of(`aB`)).holds
-INFO@mark `W4 swap_case failed`
-w4_ok\
-goto w5_ok if (ab.mirrored == String.of(`ba`)).holds
-INFO@mark `W5 mirrored failed`
-w5_ok\
+unless (built == manual) { INFO@mark `W1 Character.of(97) is not a` }
+unless (Character.of((two * hundred) + ((three * ten) + three)) == acute.first) { INFO@mark `W2 Character.of(233) is not é` }
+unless (ab.upper_case == String.of(`AB`)) { INFO@mark `W3 upper_case failed` }
+unless (String.of(`Ab`).swap_case == String.of(`aB`)) { INFO@mark `W4 swap_case failed` }
+unless (ab.mirrored == String.of(`ba`)) { INFO@mark `W5 mirrored failed` }
 // TODO(engine) contains: a method's own `for` loop over `this` (engine: `has(this, x)` differs from `has(abc, x)`)
 // goto w6_ok if (String.of(`abc`).contains(String.of(`bc`))).holds
 // INFO@mark `W6 contains failed`
 // w6_ok\
-goto w7_ok if (String.of(`abc`).contains(String.of(`ca`))).not.holds
-INFO@mark `W7 contains found ca in abc`
-w7_ok\
-goto w8_ok if String.of(`a b`).words.count == two
-INFO@mark `W8 words did not split in two`
-w8_ok\
+unless ((String.of(`abc`).contains(String.of(`ca`))).not) { INFO@mark `W7 contains found ca in abc` }
+unless (String.of(`a b`).words.count == two) { INFO@mark `W8 words did not split in two` }
 // TODO(engine) snake_case: String.joined over a chain built in a function (engine: `.head` on such a chain)
 // goto w9_ok if (String.of(`a b`).snake_case == String.of(`a_b`)).holds
 // INFO@mark `W9 snake_case failed`
@@ -133,19 +75,13 @@ w8_ok\
 // goto w12_ok if Unicode.UTF16.encode((ten * nine) + seven).count == (ten + six)
 // INFO@mark `W12 UTF16 of a is not sixteen bits`
 // w12_ok\
-goto w13_ok if Unicode.UTF32.decode(Unicode.UTF32.encode(ten)) == ten
-INFO@mark `W13 UTF32 round trip failed`
-w13_ok\
-goto w14_ok if (Unicode.category(manual) == Unicode.GeneralCategory.letter)
-INFO@mark `W14 a is not a letter`
-w14_ok\
+unless (Unicode.UTF32.decode(Unicode.UTF32.encode(ten)) == ten) { INFO@mark `W13 UTF32 round trip failed` }
+unless (Unicode.category(manual) == Unicode.GeneralCategory.letter) { INFO@mark `W14 a is not a letter` }
 // TODO(engine) regex: contains (see W6)
 // goto w15_ok if (Regex.of(String.of(`b`)).matches(ab)).holds
 // INFO@mark `W15 regex b did not match ab`
 // w15_ok\
-goto w16_ok if (String.of(`x`).repeat(three) == String.of(`xxx`)).holds
-INFO@mark `W16 repeat failed`
-w16_ok\
+unless (String.of(`x`).repeat(three) == String.of(`xxx`)) { INFO@mark `W16 repeat failed` }
 // TODO(engine) scalar: member access on chains built in functions (see W9)
 // goto w17_ok if (Unicode.scalar(ten)).holds
 // INFO@mark `W17 ten is not a scalar`

@@ -1,23 +1,13 @@
 mark ^keyword := external global
 
-goto u1_ok if Byte.is_base.holds
-goto u1_done
-u1_ok\
-INFO@mark `U1 a byte is a base unit`
-u1_done\
+if (Byte.is_base) { INFO@mark `U1 a byte is a base unit` }
 
-goto u2_ok if Bit.is_base.holds
-INFO@mark `U2 a bit is not a base unit`
-u2_ok\
+unless (Bit.is_base) { INFO@mark `U2 a bit is not a base unit` }
 
-goto u3_ok if Byte.scale == eight
-INFO@mark `U3 a byte does not scale to eight bits`
-u3_ok\
+unless (Byte.scale == eight) { INFO@mark `U3 a byte does not scale to eight bits` }
 
 q := one of Byte
-goto u4_ok if q.unit.symbol
-INFO@mark `U4 a quantity lost its unit`
-u4_ok\
+unless (exists q.unit.symbol) { INFO@mark `U4 a quantity lost its unit` }
 
 // A conversion multiplies and divides, and each of those nests about one
 // application of `if` per unit of the divisor; the interpreter allows 64
@@ -25,18 +15,10 @@ u4_ok\
 // the larger factor are asserted here (`one of Byte as Bit` is 8 / 1).
 eight_bits := eight of Bit
 bytes := eight_bits as Byte
-goto u6_ok if bytes.amount == one
-INFO@mark `U6 eight bits are not one byte`
-u6_ok\
+unless (bytes.amount == one) { INFO@mark `U6 eight bits are not one byte` }
 
-goto u8_ok if (one of Byte) == (eight of Bit)
-INFO@mark `U8 a byte does not equal eight bits`
-u8_ok\
+unless ((one of Byte) == (eight of Bit)) { INFO@mark `U8 a byte does not equal eight bits` }
 
-goto u9_ok if Prefix.deka.factor == ten
-INFO@mark `U9 deka is not ten`
-u9_ok\
+unless (Prefix.deka.factor == ten) { INFO@mark `U9 deka is not ten` }
 
-goto u10_ok if (Bit prefixed Prefix.deka).ratio == ten
-INFO@mark `U10 a prefixed unit did not take the prefix factor`
-u10_ok\
+unless ((Bit prefixed Prefix.deka).ratio == ten) { INFO@mark `U10 a prefixed unit did not take the prefix factor` }

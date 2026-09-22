@@ -1,22 +1,10 @@
 mark ^keyword := external global
 
 uu := UUID.v4()
-goto uu1_ok if uu.spelled.count == (three * ten) + two
-INFO@mark `UU1 v4 has other than 32 digits`
-uu1_ok\
-goto uu2_ok if uu.version == four
-INFO@mark `UU2 v4 version is not 4`
-uu2_ok\
-goto uu3_ok if (uu.variant == UUID.Variant.rfc_4122)
-INFO@mark `UU3 v4 variant is not RFC 4122`
-uu3_ok\
+unless (uu.spelled.count == (three * ten) + two) { INFO@mark `UU1 v4 has other than 32 digits` }
+unless (uu.version == four) { INFO@mark `UU2 v4 version is not 4` }
+unless (uu.variant == UUID.Variant.rfc_4122) { INFO@mark `UU3 v4 variant is not RFC 4122` }
 uu_text := uu.as_string
-goto uu4_ok if uu_text.count == (three * ten) + six
-INFO@mark `UU4 v4 text is not 36 characters`
-uu4_ok\
-goto uu5_ok if (uu_text.at(eight) == Character.of(ascii_dash))
-INFO@mark `UU5 no dash after eight digits`
-uu5_ok\
-goto uu6_ok if (uu_text.at(ten + four) == Character.of(ascii_zero + four))
-INFO@mark `UU6 the version digit is not 4`
-uu6_ok\
+unless (uu_text.count == (three * ten) + six) { INFO@mark `UU4 v4 text is not 36 characters` }
+unless (uu_text.at(eight) == Character.of(ascii_dash)) { INFO@mark `UU5 no dash after eight digits` }
+unless (uu_text.at(ten + four) == Character.of(ascii_zero + four)) { INFO@mark `UU6 the version digit is not 4` }

@@ -3,63 +3,36 @@ mark ^keyword := external global
 a := Ray()
 b := Ray(previous: a)
 
-goto a1_ok if a.is_initial.holds
-INFO@mark `a lone ray is not initial`
-a1_ok\
+unless (a.is_initial) { INFO@mark `a lone ray is not initial` }
 
-goto a2_ok if a.nonempty.holds
-INFO@mark `a lone ray counts as empty`
-a2_ok\
+unless (a.nonempty) { INFO@mark `a lone ray counts as empty` }
 
-goto b1_bad if b.is_initial.holds
-goto b1_ok
-b1_bad\
-INFO@mark `a linked ray reports initial`
-b1_ok\
+if (b.is_initial) { INFO@mark `a linked ray reports initial` }
 
-goto b2_ok if b.initial == a
-INFO@mark `the initial walk failed`
-b2_ok\
+unless (b.initial == a) { INFO@mark `the initial walk failed` }
 
-goto c1_ok if a.count == one
-INFO@mark `a lone ray does not count one`
-c1_ok\
+unless (a.count == one) { INFO@mark `a lone ray does not count one` }
 
-goto c2_ok if a.terminal == a
-INFO@mark `a lone ray is not its own terminal`
-c2_ok\
+unless (a.terminal == a) { INFO@mark `a lone ray is not its own terminal` }
 
-goto c3_ok if (b.min(b)) == b
-INFO@mark `Ordered.min did not reach Ray`
-c3_ok\
+unless ((b.min(b)) == b) { INFO@mark `Ordered.min did not reach Ray` }
 
 c := Ray(previous: b)
-goto d1_ok if (a.at(two)) == c
-INFO@mark `R8 at(2) did not reach the third ray`
-d1_ok\
+// A ray's previous and next are its own: linking one way does not link back.
+a.next = b
+b.next = c
+unless ((a.at(two)) == c) { INFO@mark `R8 at(2) did not reach the third ray` }
 
 seen ^keyword := zero
 a for { seen = seen.succ }
-goto d2_ok if seen == three
-INFO@mark `R9 for did not visit three rays`
-d2_ok\
+unless (seen == three) { INFO@mark `R9 for did not visit three rays` }
 
-goto d3_ok if (a every { it.nonempty }).holds
-INFO@mark `R10 every failed`
-d3_ok\
+unless (a every { it.nonempty }) { INFO@mark `R10 every failed` }
 
-goto d4_ok if (a some { it.is_terminal }).holds
-INFO@mark `R11 some failed`
-d4_ok\
+unless (a some { it.is_terminal }) { INFO@mark `R11 some failed` }
 
-goto d5_ok if a.initial_boundary.is_initial.holds
-INFO@mark `R12 initial boundary is not initial`
-d5_ok\
+unless (a.initial_boundary.is_initial) { INFO@mark `R12 initial boundary is not initial` }
 
-goto d6_ok if a.terminal_boundary.edge.is_terminal.holds
-INFO@mark `R13 the edge of a terminal boundary is not terminal`
-d6_ok\
+unless (a.terminal_boundary.edge.is_terminal) { INFO@mark `R13 the edge of a terminal boundary is not terminal` }
 
-goto d7_ok if a.acyclic.holds
-INFO@mark `R14 a chain is not acyclic`
-d7_ok\
+unless (a.acyclic) { INFO@mark `R14 a chain is not acyclic` }

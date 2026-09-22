@@ -30,7 +30,7 @@ None      ^keyword := external none
 ({expr}) ^punctuation => expr
 [{expr}] ^punctuation => expr
 
-goto{ }{literal target ^label} ^class => external goto target true
+goto{ }{literal target ^label} ^class => external goto target global
 goto{ }{literal target ^label}{ }if{ }{condition} ^class => external goto target condition
 unordered {literal label ^label}\ ^punctuation => external label label
 
@@ -259,6 +259,19 @@ Node := base class {
     superposed.instance = None
     superposed.components = chain None
     external extend superposed this
+    goto superpose_each if this.components.head
+    superposed.components &= this
+    goto superpose_other
+   superpose_each\
+    alternative ^keyword := this.components.head
+   superpose_step\
+    goto superpose_copy if alternative
+    goto superpose_other
+   superpose_copy\
+    superposed.components &= alternative.value
+    alternative = alternative.next
+    goto superpose_step
+   superpose_other\
     superposed.components &= other
 
     superposed
@@ -377,40 +390,42 @@ assert ^keyword (condition) => (
 )
 
 unordered enum ^keyword => (
+  // A member is built on what the enum is (the rule's receiver), not on this
+  // helper class, which is only where the rules are written.
   static := class {
     {literal member ^enumMember} ^punctuation => (
-      entry := static(name: member)
-      static[member] = entry ^enumMember
-      static.components &= entry
+      entry := this(name: member)
+      this[member] = entry ^enumMember
+      this.components &= entry
 
-      static
+      this
     )
     {literal member ^enumMember}{ }{fields ^property} ^punctuation => (
-      entry := static(
+      entry := this(
         name: member
         inline fields
       )
-      static[member] = entry ^enumMember
-      static.components &= entry
+      this[member] = entry ^enumMember
+      this.components &= entry
 
-      static
+      this
     )
     |{ }{literal member ^enumMember} ^punctuation => (
-      entry := static(name: member)
-      static[member] = entry ^enumMember
-      static.components &= entry
+      entry := this(name: member)
+      this[member] = entry ^enumMember
+      this.components &= entry
 
-      static
+      this
     )
     |{ }{literal member ^enumMember}{ }{fields ^property} ^punctuation => (
-      entry := static(
+      entry := this(
         name: member
         inline fields
       )
-      static[member] = entry ^enumMember
-      static.components &= entry
+      this[member] = entry ^enumMember
+      this.components &= entry
 
-      static
+      this
     )
   }
 
@@ -953,9 +968,9 @@ TODO ^debug (comment: String ^comment) => DEBUG@. comment
 //TODO How to capture patterns
 //TODO How to capture negations
 //TODO How to capture forward/backward looking.
-// {} is a (): *, => then capatalizes on that by turning that program into a rewrite rule.
+// {} is a (): *, => then capatalizes on that by turning that program into a rewr// How to support map <T>{predicate: (x: T + iterator: Ray): boolean}(map: (x): T) => static{T: T}
+ite rule.
 // How does => remove the unresolved variables?
-// How to support map <T>{predicate: (x: T + iterator: Ray): boolean}(map: (x): T) => static{T: T}
 // Automatically the case
 // How to say what kind of approximation
 // These accepts a block, which applies it to all properties.

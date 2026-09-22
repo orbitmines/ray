@@ -53,39 +53,18 @@ unless (Character.of((two * hundred) + ((three * ten) + three)) == acute.first) 
 unless (ab.upper_case == String.of(`AB`)) { INFO@mark `W3 upper_case failed` }
 unless (String.of(`Ab`).swap_case == String.of(`aB`)) { INFO@mark `W4 swap_case failed` }
 unless (ab.mirrored == String.of(`ba`)) { INFO@mark `W5 mirrored failed` }
-// TODO(engine) contains: a method's own `for` loop over `this` (engine: `has(this, x)` differs from `has(abc, x)`)
-// goto w6_ok if (String.of(`abc`).contains(String.of(`bc`))).holds
-// INFO@mark `W6 contains failed`
-// w6_ok\
+unless (String.of(`abc`).contains(String.of(`bc`))) { INFO@mark `W6 contains failed` }
 unless ((String.of(`abc`).contains(String.of(`ca`))).not) { INFO@mark `W7 contains found ca in abc` }
 unless (String.of(`a b`).words.count == two) { INFO@mark `W8 words did not split in two` }
-// TODO(engine) snake_case: String.joined over a chain built in a function (engine: `.head` on such a chain)
-// goto w9_ok if (String.of(`a b`).snake_case == String.of(`a_b`)).holds
-// INFO@mark `W9 snake_case failed`
-// w9_ok\
-// TODO(engine) pascal_case: same as W9
-// goto w10_ok if (String.of(`ab cd`).pascal_case == String.of(`AbCd`)).holds
-// INFO@mark `W10 pascal_case failed`
-// w10_ok\
-// TODO(engine) plural: String `==` against a string built by `+` inside a method
-// goto w11_ok if (String.of(`cat`).plural == String.of(`cats`)).holds
-// INFO@mark `W11 plural failed`
-// w11_ok\
-// TODO(engine) UTF16 encode count: `.count` on an `if` branch value in this position
-// goto w12_ok if Unicode.UTF16.encode((ten * nine) + seven).count == (ten + six)
-// INFO@mark `W12 UTF16 of a is not sixteen bits`
-// w12_ok\
+unless (String.of(`a b`).snake_case == String.of(`a_b`)) { INFO@mark `W9 snake_case failed` }
+unless (String.of(`ab cd`).pascal_case == String.of(`AbCd`)) { INFO@mark `W10 pascal_case failed` }
+unless (String.of(`cat`).plural == String.of(`cats`)) { INFO@mark `W11 plural failed` }
+unless (Unicode.UTF16.encode((ten * nine) + seven).count == (ten + six)) { INFO@mark `W12 UTF16 of a is not sixteen bits` }
 unless (Unicode.UTF32.decode(Unicode.UTF32.encode(ten)) == ten) { INFO@mark `W13 UTF32 round trip failed` }
 unless (Unicode.category(manual) == Unicode.GeneralCategory.letter) { INFO@mark `W14 a is not a letter` }
-// TODO(engine) regex: contains (see W6)
-// goto w15_ok if (Regex.of(String.of(`b`)).matches(ab)).holds
-// INFO@mark `W15 regex b did not match ab`
-// w15_ok\
+unless (Regex(pattern: String.of(`b`)).matches(ab)) { INFO@mark `W15 regex b did not match ab` }
 unless (String.of(`x`).repeat(three) == String.of(`xxx`)) { INFO@mark `W16 repeat failed` }
-// TODO(engine) scalar: member access on chains built in functions (see W9)
-// goto w17_ok if (Unicode.scalar(ten)).holds
-// INFO@mark `W17 ten is not a scalar`
-// w17_ok\
+unless (Unicode.scalar(ten)) { INFO@mark `W17 ten is not a scalar` }
 
 letters := String.of(`ab1`).characters{.letter}
 unless (letters.count == two) { INFO@mark `S40 selecting letters did not keep two` }

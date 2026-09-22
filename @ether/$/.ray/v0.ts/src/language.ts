@@ -1302,6 +1302,10 @@ export namespace Ray {
         const hugged = opts.operand || (opts.tight && from === i);
         const end = k < opts.params - 1 || hugged ? this.operand_end(cursor, from, frame) : this.line_end(cursor, from, frame);
         if (end <= from) return;
+        // As with a capture, an argument is not a bare operator: `joined := x`
+        // declares `joined`, it does not call a method of that name with `:=`.
+        const seen = text.slice(from, end).trim();
+        if (seen.length > 0 && !/[\p{L}\p{N}_]/u.test(seen[0]) && Node.heads.has(seen)) return;
         args.push(cursor.span(from, end - 1));
         i = end;
       }

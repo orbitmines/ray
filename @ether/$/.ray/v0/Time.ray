@@ -41,7 +41,9 @@ Quantity.components.hierarchy &= class {
 // duration; `is_recurring` when the segment cycles.
 Calendar := class {
   Segment := class {
-    of (name, length) => Calendar.Segment(name: name, length: length, epoch: one)
+    name: Node
+    length: Node
+    epoch: one
     is_recurring => exists .period
   }
   segments => .parts

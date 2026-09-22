@@ -9,18 +9,21 @@ Encoding := class {
   // spec: an encrypted value is read back only at a location holding the key;
   // without it, the draft spawns a quest. Here the key is the location itself.
   Encrypted := class {
-    of (value, key) => Encoding.Encrypted(value: value, key: key)
+    value: Node
+    key: Node
     as (location) => if (location == .key) { .value } else { None }
   }
   // spec: a digest; `of` keeps the algorithm and the text, the digest itself
   // awaits the algorithm's bit walks.
   Hash := class {
-    of (value, algorithm) => Encoding.Hash(value: value, algorithm: algorithm)
+    value: Node
+    algorithm: Encoding.Algorithm
     == (other: Encoding.Hash) => (.algorithm == other.algorithm).and(.value == other.value)
   }
   // spec: a compressed value decompresses to what it wrapped.
   Compressed := class {
-    of (value, algorithm) => Encoding.Compressed(value: value, algorithm: algorithm)
+    value: Node
+    algorithm: Encoding.Algorithm
     as (target) => .value
   }
 }

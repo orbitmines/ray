@@ -513,7 +513,8 @@ number_of (bits) => (
 // set is the draft's `i g u`; character classes await the Unicode tables.
 Regex := class {
   Flag := enum ignore_case | global | unicode
-  of (pattern: String) => Regex(pattern: pattern, flags: chain None)
+  pattern: String
+  flags: (chain None)
   with (flag) => (
     .flags &= flag
     this

@@ -604,3 +604,7 @@ Number.components.hierarchy &= class {
 //TODO Verify all these are indeed corresponding to Regex.
 //TODO How to do word border
 //TODO Language of Regex
+// .ray2/Language/String/Regex.ray:
+//TODO
+// namespace Regex
+//   /{pattern: *}/{"i" | "g" | "u" .. //TODO}

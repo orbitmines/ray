@@ -40,3 +40,5 @@ Encoding := class {
 //TODO All the different string encodings.
 //TODO Not having the encryption key spawns a quest, like a special throws>
 // .crypt[location (CURRENT)]
+// .ray2/Language/Binary/Base64.ray:
+//TODO

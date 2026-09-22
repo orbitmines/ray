@@ -329,6 +329,12 @@ Chat := class {
 // .ray2/_todo/ray.ray.txt/Ether/instance/os/Ether.ray.txt:
 // // Reserved for future use
 // return if OS.name != "Ether"
+// .ray2/_todo/ray.ray.txt/Ether/instance/os/Darwin.ray.txt:
+// return if OS.name != "Darwin"
+// .ray2/_todo/ray.ray.txt/Ether/instance/os/Linux.ray.txt:
+// return if OS.name != "Linux"
+// .ray2/_todo/ray.ray.txt/Ether/instance/os/Windows.ray.txt:
+// return if OS.name != "Windows"
 // .ray2/_todo/ray.ray.txt/Ether/instance/UI/symbols.ray:
 // //TODO Support latex-like support, more extensive than vscode but where does it define its setup?
 // // TODO VS-Default is?
@@ -336,3 +342,410 @@ Chat := class {
 // // https://gist.github.com/jaantollander/b49132a36b035cdfe05345dd0c7edf0f
 // // https://github.com/YellPika/vscode-latex-input/blob/master/default-mappings.json
 //
+// .ray2/Feature/UI/Keyboard.ray:
+// class Key
+//
+//   pulsed (max: 20 / s, delay: 1 s)
+//
+//   toggled = false dynamically .next if this
+//   cycle (iterable: Iterable) => iterable.first.loop dynamically .next if this
+//
+//   as (=== boolean) // if pressed
+//
+// class Keyboard
+// .ray2/_todo/ray.ray.txt/Ether/instance/UI.ray:
+//TODO What would a good library for UI look like? Things like selecting an Entity Filter, should go into libraries and render that in a specific way if there's a equivalence for it to Entity code.
+// single UI
+//   single Welcome
+//     form
+//       global.entity.name: String
+//
+//   end
+//   single World
+//   end
+// end
+//
+// Probability{!= 1}
+//   {" "}{node: *} => //TODO How to say %, what to do in case of non-divisible
+// .ray2/_todo/ray.ray.txt/Ether/instance/UI/Geometry.ray:
+//TODO Translations to GLSL - Can those be inferred from the structure defined on the types? (Like https://iquilezles.org/articles/distfunctions/) Exact vs approximation equivalances how?
+//
+// How to mix discrete spaces and Spheres vs the euclidian one's.
+//
+//TODO Edges are decorated with length.
+//elementary_length <>
+//
+// All objects are contained in some space: World.
+//
+// Want to be able to import and use packages from other programming languages.
+//
+// World
+//   class Point < Ray
+//   class Object ({children = .()**,lines.reduce(,)}: (): * -- if : Hierarchy) < Iterable<Point>
+//
+// What if the object is a collection of Point structures
+//
+// You equip the world with a coordinate system, even if approximate
+//
+//TODO How to set scoped, that a point has a color for instance. ; which is an approximation, how to say it is
+//
+//
+//
+// class Path | Curve | Line = Array.Unbounded
+//   curvature
+//   static Straight = //"No curvature" is a bit ambiguous //TODO Makes assumption about local space
+// end
+//
+//TODO Unbounded/vs bounded loop
+// Loop = Array.Unbounded.loop(boundaries: false)
+//
+// Ball with padding is still a ball
+// Padding is just a hierarchical object, with boundary to the object, and its boundary, can have multiple padding wrappers.
+// Holes as negative components, but holes can also exist from the abstract description?
+//
+// Allow top.left.last go to the topmost/leftmost
+//
+// discretized 1 / m
+// Discretized single Infinite Ray
+// What to do with conflicting information at discretized points
+// If 2d is discretized should be renderable in pixels easily
+//
+// class Interface < world: World
+//   class Controller
+//     (x) => #.push_back(static(x))
+//
+//TODO With device ID check history for another with that id, reassign ID, if no new devices have claimed it.
+//
+//     #{id: Number.Nat} => #{.id == id}
+//
+//     id: Number.Nat
+//
+// associated with a character, so we can assign trust to that character.
+//     character: Character = @me // How does select get assigned, it's a guest not yet associated with this character, which is allowed to set the character to another, but not @me?
+//
+// Interface has a certain extent into a world
+//
+//
+// General surface area (whether input or not), Interface & World?
+//
+// class Window | Browser | Document | ?? < Interface & World //?
+//
+// Default behavior of superposed is to .map on the object's property, display all basically:
+// Otherwise, instead of .map it's a choose.
+//
+// @orbitmines.avatars.map => Link .location{: URL} => .platform.profile_picture
+// Should type-check and automatically filter by saying only avatars with an URL location because Link requires a value., since they are the only once which will succeed.
+//
+// class BoundingBox // What is bounding box in fractional dimensional
+//   width: x.length if ==.instance_of 1D
+//   height: y.length if ==.instance_of 2D
+//   depth: z.length if ==.instance_of 3D
+//
+// class StyleClass < Ball
+//   &+= Padding.Right(5m)
+//   padding.right = 5m
+//   radius = 1m
+//
+// How to say, this is default Ball.radius choose
+// Input Ball.radius
+// Rendering logic, might want to edit the current renderings already.
+// Input boolean
+// Checkbox
+//
+// namespace Keyboard < Interface.Controller
+//
+// Keyboard.#0.f2
+//
+// If Keyboard is Many, many keyboards
+//
+// Allow
+// ("String", something else, "String").italic
+//
+// class MyInterface < Interface
+//
+// Render logic/dynamics
+//   dynamically
+//
+// What if a plugin, not a website?
+// namespace Browser
+//   external? url: URL = URL()
+// Access the javascript context directly
+//   external? javascript
+//
+// Ball
+//   if choosing // This variable itself is being chosen
+//   if choosing radius // Some way of checking whether the function needed to run radius, is choose.
+//
+//
+// TODO How to alternative renderings, and how to choose between renderings
+// Ball => |
+// Ball
+//TODO What about constructor things which you always want to run?? Like <
+//   default_profile
+//
+//   profile\ | Center field: choose Number
+//   "Profile Name"\ |
+//     Center field: choose Number
+//   "Profile Name2"\
+//     | Center field: choose Number
+//   {variable_label: Number}\ | //TODO Allow variable labels
+//
+// How is this relevant to the different locations have different normalizers: this could be seen as, we're selecting a different default representation.
+// Ball = Ball~profile //Set default
+//TODO Want to be able to say, within context, spawn a new context and make variable changes to the std in that.
+// with Ball = Ball~profile //TODO What happens when a variable is some object is changed by this, only to this location should it be seen as that new value, outside of it it's still the other thing? ; what about successive changes to it, are they applied to both, or just this one???
+//
+// Ball~default()
+// Ball~profile().
+// Ball~"Profile Name"().
+// Ball~5().
+//
+// + padding + border &+ padding
+// Overflow .width?
+//
+//
+// (if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy (
+//       Keyboard.ctrl && Keyboard.shift => // Skip group & Expand selection
+//       Keyboard.ctrl => // Skip groups
+//       Keyboard.shift => // Expand selection
+//     ) -> (if Keyboard. ↓ | s .pulsed)
+//
+//
+// Choose with placeholder which is default, but gets reset on clicking on choose.
+//
+// Use return in the constructor for something, how to access it though ? - the rendering func.
+//
+// All events are instead dynamically on a variable, listening for change, so resize is dynamically width, height etc..
+//
+// What is the interpretation of multiple rendered values. "text in between" & "other text in between"
+//
+// Frontend code which targets libraries in HTML and other GUI libraries, what about 3D
+// Code in front on render
+//
+// How to get the Window
+//
+//
+// dynamically persistent
+//   if Keyboard.f2.toggled
+//     selection: Location =
+//
+//Which two spatial dimensions
+//
+//     (if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy
+//       (.[GROUPS LVL] if Keyboard.ctrl)
+//       (Keyboard.shift ? .move : .[EXPAND])
+//     -> (if Keyboard. ↓ | s .pulsed)
+//
+//     (if Keyboard. ← | a .pulsed) <- selection. x ?? hierarchy .move -> (if Keyboard. → | d .pulsed)
+//
+//
+//
+// Ball(radius: 10m) + Padding.Right(10m)
+//
+// Can also put the children on a newline
+//   Square
+//     Square, Square
+//
+// Code in front on render
+//   {dynamic_id}\ Ball(radius: 5m) + Padding(5m) + StyleClass + OtherStyleClass, "text in between" Ball()
+//     Center field: choose String, "text in between" & StyleClass, field2: Time = choose
+//     ball_id: choose Ball // choosing Ball.radius would be flagged too.
+//     Center.Horizontally []
+//     Between
+//       (A, B, C) * 1/12,
+//       7/12 * (D, E),
+//       4/12 * (F, G, H) // Use parenthesis for 'column' groups?, then fractions for defaulting to width in this case.
+//
+//
+//   id\ Ball(radius: choose? ?? 5m) // Choose + default
+//
+// Code in between Render
+//
+//   {Ball(radius: 1m)
+//     Ball(radius: 0.5m)
+//   }text in between
+//
+//   {Ball / radius: 1m ; center}
+//
+//   {Ball }
+//
+// Things like color are 'information of each point'. how does this get mapped.
+//
+// LocallyConnected // directionality are actually usual dimensions; no jumps between two different neighbourhoods
+//
+// How to say Smooth out of two components Ball - Square at its boundary for instance.
+//
+// class Ball
+//   Point
+//     radial_distance => to centre -- #.min.length
+//
+//   static Open => static{- surface}  // Excluding surface, and boundary should be moved.
+//   static Closed => Ball
+//
+// TODO Should this be the default on Iterable, always map methods to the
+// Ball.color, will go to point.color
+//   delegate in Point => this as Point
+//
+// outline, sphere, surface (area)
+//   boundary: Boundary{∙.radial_distance == radius}
+//   border | surface => boundary∙
+//   interior => this{not border}
+//
+//   centre: Point
+//   radius => surface.radial_distance //This is a circular definition, which is allowed, and expected to break for a valid object, either by setting boundary, or by setting radius, or by setting diameter
+//   diameter => radius * 2 // implements diameter =
+//
+//   sphere => outline
+//   dimensionality ()
+//Implementation even though there's a default value, how to reset to this implementation?
+//
+// {n: Decimal.Real}-Ball => Ball{dimensionality == n}
+// {n: Decimal}-Sphere => {n + 1}-Ball.surface // Does this generalize to Number?
+//
+// Circle = 2-Ball
+// Sphere = 2-Sphere
+//
+//TODO Needs like an example of 2D/3D world with yaw/pitch on location, stored as arcs in a continuous space then discretized by some things like elementary lengths and other things.
+//
+// class Circle
+//
+//TODO Things like approximate circles or discrete circles where not every.reduce(==)
+//TODO Circle with surface selected.
+//
+// end
+//TODO Things like volume, for the arbitrary space discrete vs infinite (needs to be evenly spaced out too when not having discrete effects)
+//
+// Square //TODO Makes assumption about the local space.
+// Plane // Square with no boundaries.
+//
+// Finite vs Infinite
+// dimensionality = 2 & dimensionality change at every point is constant.
+// every x goes to an x, every y goes to a y
+// Grid // TODO `x`D Grid, X x X Grid, (Allow Expression syntax to extent a whole statement like Number x/* Number)
+//TODO Euclidian space being a grid with infinite divisibility.
+//TODO Effective dimension vs actual dimension at each point.
+//
+//TODO Use Grid in torus/cylinder definition
+// Cylinder
+// Torus
+//
+//
+// Sphere //TODO How to say 2D Loop
+// Cube
+// COne
+//
+//
+// In the current group (hierarchy wise) or the entire "under" ignoring hierarchy
+// ->> means everthing to the right (<-ray).all
+//
+// class Object < Hierarchy
+//   boundary: Boundary
+//   border: // object on the boundary (inclusive)
+//
+//todo easilty add remove properties like center so dynamically .center if predicate, but compact
+//   Center<D =
+//     & .x if ==.instance_of 1D
+//     & .y if ==.instance_of 2D
+//     & .z if ==.instance_of 3D
+//   > = static{(<-D).length == (D->).length}
+//Todo how to not so verbosely do this, rhis syntax doesn't currently work
+//
+//Todo .under etc. needs to go to the boundary of this abstract object
+//
+// dimensionality Support for n-dimensional, with the same functions like padding etc..
+//
+// class 1D
+//   left: static <<- previous: static <- horizontal | x -> next: static ->> right: static
+// class 2D < 1D
+//   under | bottom : static <<- down: static <- vertical | y -> up: static ->> above | top : static
+// class 3D < 2D
+//   behind: static <<- backward: static <- depth | z -> forward: static ->> in_front: static
+// .ray2/_todo/ray.ray.txt/Ether/instance/UI/Player.ray:
+// class Telephone | Phone <
+// class Email <
+// .ray2/_todo/ray.ray.txt/Ether/instance/Network.ray:
+//TODO external fills things like Network.Host when spawning a child instance.
+//
+//TODO Eventual consistency support
+// Running an algorithm parallel on many machines
+//
+// For strreaming, a player has a particular location which is the streaming location , that is being broadcast.
+// TODO So watching a stream is simply following that location.
+//
+// Networking
+// - Managed items by another instance (mirrors)
+//
+// namespace Network
+//
+// ETHER
+//   class Protocol (name: String, default_port: Port) < name
+//     static#.push_back(this)
+//
+//   Protocol("ether", 37839)
+//   Protocol("http", 80)
+//   Protocol("https", 443)
+//   Protocol("ftp", 21)
+//
+//   DEFAULT_PORT: Port = Protocol{== "ether"}.default_port
+//
+// TODO Default port depending on the scheme
+//   class URL < scheme | protocol : Protocol = "ether", "://", user_info: (user: String, (":", password: String)?, "@")? {host = ip, port}: Socket.Address | (host: DomainName, (":", port: Port = protocol.default_port ?? DEFAULT_PORT)?), path: "/", String, query: "?", {params: {}; .for [key, value] => params[key] = value}: (key: String, "=", value: String)[], fragment: "#", String
+//
+//   Port = Decimal{< 2^16}
+//
+//   class Socket
+//     static class Address = (ip: IPv4) | ("[",(ip: IPv6),"]"), (":", port: Port = DEFAULT_PORT)?
+//       protocol //TODO
+//     end
+//   end
+//
+//TODO World names are instead used for /etc/hosts like behavior
+// Acts as a /etc/hosts
+//   Hosts: { {: Instance}: Instance } = {
+//TODO Or it's Character => Character instead (so we can also map @ether to @me)
+//TODO equivalence A => B
+//TODO A hostname without a space aren't by default reserved, but can be overwritten.
+//     confidential.write "localhost": "127.0.0.1" | "::1"
+//TODO external could fill these from /etc/hosts
+//TODO What about "ether".ignore_case => "ether.orbitmines.com"
+//   }
+//
+//   dynamically Hosts.for host, ip => equivalence host -> ip
+//
+//TODO Domainname:port castable to IP using nameservers.
+// end
+//
+// += Network
+//
+// Allow string CIDR notation
+// [IPv4, IPv6].for IP
+//   String{==.instance_of (ip: IP.String) + "/" + (prefix_length: Decimal{<= IP.NUMBER_OF_BITS}.String)}
+//     as :== IP = ip as IP / prefix_length
+//   end
+// end
+//
+//TODO Store history of DNS resolves, and then allow to use it if DNS doesnt resolve by checking whether the instance running match the public-key stored there.
+//
+// +Node
+//   static class Remote
+//TODO All object access go over network, and backup it in a local copy, what if that local copy is already defined somewhere?
+//Remote .location might not know about our copy, so how do we do remote_variable @ local
+//TODO Settings location to an instance, should say: anywhere in this instance, I don't know where. So if it's @ some_specific_location in local, it should still go to this method?
+//TODO What if the value is stored at a location, but we're looking for something which is at an unknown instance? But with particular structure?
+//
+// If we want the local reference to a particular value, we don't consult remote.
+//     @ instance: INSTANCE = instance[location]
+//   end
+// end
+// .ray2/_todo/ray.ray.txt/Ether/instance/Update.ray:
+//TODO How to add 'UPDATE' to quests
+// def UPDATE
+// TODO How to signal possible Merge conflicts
+//TODO THe setting =, should use 'this is where I am now', to only download the changes it needs.
+//   IO / = ETHER@ETHER/instance
+//
+// TODO How to reload files. Reload everything in memory if possible (needs to use new versions), what if there's a breaking change?
+// TODO -> Objects need a way to handle the on change of the object itself. Apply diffs like a field is renamed, but should keep same functionality etc.
+// end
+//
+//TODO Allow player to access root's UPDATE, but also update any manually edited files.

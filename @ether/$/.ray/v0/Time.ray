@@ -237,3 +237,133 @@ Mars := class: Planet {
 //TODO The Quantity should be inferred from year/month etc.. values since they're defined on Time, somehow
 //TODO NTP Network time protocol. for OS.name == Ether
 //TODO In the case of a monotonic clock where the epoch=something like bootup time, and then time correction jumps, you'd want the time to jump with it. Or using NOW twice in a row, you'd want the diff to jump with the correction.
+// .ray2/_todo/ray.ray.txt/Ether/instance/utils/Astronomy.ray:
+//TODO Support more precise measurements of time.
+// TODO Calculate days based on spin, and years based on orbit
+// https://en.wikipedia.org/wiki/Sidereal_time
+// https://en.wikipedia.org/wiki/Universal_Time#Versions
+// https://en.wikipedia.org/wiki/Barycentric_Coordinate_Time / https://en.wikipedia.org/wiki/Barycentric_Dynamical_Time
+// https://en.wikipedia.org/wiki/Geocentric_Coordinate_Time
+// https://en.wikipedia.org/wiki/Terrestrial_Time
+// https://en.wikipedia.org/wiki/International_Atomic_Time
+//
+// class Planet
+//   `years.name`: Unit
+//   `days.name`: Unit
+// end
+//
+// namespace Earth < Planet
+//   Calendars.Gregorian.years.reexport
+//   Calendars.Gregorian.months.reexport
+//   Calendars.Gregorian.weeks.reexport
+//   Calendars.Gregorian.days.reexport
+//
+//   namespace Calendars
+//TODO Add other calendars:
+// https://en.wikipedia.org/wiki/Islamic_calendar
+// https://en.wikipedia.org/wiki/Hebrew_calendar
+// https://en.wikipedia.org/wiki/Coptic_calendar
+// https://en.wikipedia.org/wiki/Solar_Hijri_calendar
+// https://en.wikipedia.org/wiki/Bengali_calendar
+// What else?
+//TODO Are there any martian calendars yet?
+//
+//     namespace UTC Base: Calendar = Calendars.Gregorian, leap_seconds: boolean = false < Base
+//       offset: Quantity.Temporal{-12:00 <= . <= 14:00} = 00:00
+//
+//       def + offset: Quantity.Temporal{00:00 <= . <= 14:00 - this.offset} = UTC(Base, offset: this.offset + offset)
+//       def - offset: Quantity.Temporal{00:00 <= . <= 12:00 + this.offset} = UTC(Base, offset: this.offset - offset)
+//
+//static.# = UTC(Base, offset: offset.type) //TODO This should be the default.
+//
+//TODO Support leap_seconds = true from tzdata
+//
+//TODO Make sure this conversion works for leapseconds
+//       equivalence Time(static.#) -> - (.offset - (x: Time(static.#)).offset) ~~ .calendar = x.calendar
+//     end
+//     GMT = UTC{leap_seconds == false}
+//
+//     namespace Gregorian < Julian
+//       +def is_leap_year YEAR: Decimal = super() && (YEAR % 100 != 0 || YEAR % 400 == 0)
+//
+//       equivalence Time(Julian) = "1582-10-05" -> Time(Gregorian) = "1582-10-15"
+//     end
+//     namespace Julian < Calendar
+//
+//TODO Units should not rerun for Gregorian/UTC .
+//
+//       Unit ~ ("m" | "min") + symbol: true | "minute" ("s" + plural: true)?
+//         -> *(SECONDS_IN_MINUTE: 60) seconds //TODO UTC leapseconds should overwrite this
+//       Unit ~ "h" + symbol: true | "hour" ("s" + plural: true)?
+//         -> *(MINUTES_IN_HOUR: 60) minutes
+//       Day = Calendar.Segment ~ "d" + symbol: true | "day" ("s" + plural: true)?
+//         -> *(HOURS_IN_DAY: 24) hours
+//
+//         static EPOCH = 1
+//       end
+//       Unit ~ "w" + symbol: true | "week" ("s" + plural: true)?
+//         -> *Weekday#.count days
+//       Unit ~ "M" + symbol: true | "month" ("s" + plural: true)?
+//         -> x => x == 0 ? 0 days : x.sign (&Time.MONTH: Month)[x > 0 ? 0..(x - 1) : x..-1].sum
+//       Year = Calendar.Segment ~ "y" + symbol: true | "year" ("s" + plural: true)?
+//         -> *Month#.count months
+//
+//         static EPOCH = 1
+//       end
+//
+//       class Weekday < Calendar.Segment =
+//         Monday,
+//         Tuesday,
+//         Wednesday,
+//         Thursday,
+//         Friday,
+//         Saturday,
+//         Sunday
+//         -- .map(= 1 day)~.orbit
+//         -- .reduce(|)
+//
+//         static EPOCH = Monday
+//       end
+//
+//       class Month < Calendar.Segment =
+//         January = 31 days,
+//         February = is_leap_year(&Time.YEAR: year) ? 29 : 28 -- days,
+//         March = 31 days,
+//         April = 30 days,
+//         May = 31 days,
+//         June = 30 days,
+//         July = 31 days,
+//         August = 31 days,
+//         September = 30 days,
+//         October = 31 days,
+//         November = 30 days,
+//         December = 31 days
+//         -- ~.orbit(&Time.YEAR -= 1 <- -> &Time.YEAR += 1)
+//         -- .reduce(|)
+//
+//         static EPOCH = January
+//       end
+//
+//       def is_leap_year YEAR: Decimal = YEAR % 4 == 0
+//
+//TODO Compiler should be smart enough to not actually go through each iteration, but count the years which are leap years etc. to shortcut it.
+//
+// TODO How to say, possible a minute is 61 seconds if we have a discontinuous leap second
+//
+//     end
+//   end
+//
+// end
+// Earth.years.reexport
+// Earth.months.reexport
+// Earth.weeks.reexport
+// Earth.days.reexport
+// Earth.Calendars.Gregorian.hours.reexport
+// Earth.Calendars.Gregorian.minutes.reexport
+// { Weekday, Month } = Earth.Calendars.Gregorian
+// += Earth.Calendars
+//
+// namespace Mars < Planet
+//   Unit ~ years.name | "Martian `years.name`" -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step
+//   Unit ~ days.name | "Martian `days.name``" | "sol" "s"? -> 1 Earth.day 39 minutes 35.244 seconds
+// end

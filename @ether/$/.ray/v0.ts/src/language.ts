@@ -79,15 +79,12 @@ export namespace Ray {
 
     interpreters: Map<Project, Interpreter> = new Map();
 
-    filled_defaults: boolean = false;
-
     constructor(private program: Program, public dot_project: Text.Source, interpreter: Interpreter) { this.interpreters.set(this, interpreter); }
     get directory(): string { return this.dot_project.dir; }
 
     get is_language() { return this.dot_project.line(0).string.includes('!language'); }
     
     get interpreter() { return this.interpreters.get(this); }
-    get dependants() { return this.interpreters.keys().filter(x => x !== this); }
 
     get entrypoints(): Text.Source[] { return this.source.filter(x => x.dir === this.directory && this.program.entrypoint(x)); }
     get order(): Text.Source[] {
@@ -3303,7 +3300,6 @@ export namespace Text {
     }
 
     direction: -1 | 1 = 1
-    get flip() { this.direction *= -1; return this; }
     get limit() { return this.until ?? this.source.value.length; }
     done() { return this.cursor >= this.limit; }
     peek(offset: number = 0) { const i = this.cursor + offset * this.direction; return i >= 0 && i < this.limit ? this.source.value[i] : undefined; }

@@ -1116,6 +1116,10 @@ export namespace Ray {
     private typing = false;
     private rewriting = new Set<Node>();
     private readiness = new WeakMap<Node, { version: number; missing: Text.Node[] }>();
+    private handed = new WeakMap<Node, Set<string>>();
+    // What every rule hands the text written for it, by the word it is spelled
+    // with: gathered once a pass, where the definitions are all there.
+    private hands = new Map<string, Set<string>>();
     missing(rule: Node, impl: Node, scope?: Node): Text.Node[] {
       const cached = this.readiness.get(impl);
       if (scope === undefined && cached && cached.version === this.version) return cached.missing;
@@ -1130,7 +1134,27 @@ export namespace Ray {
           for (const piece of other.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) heads.add(part);
       for (const part of Node.heads) heads.add(part);
       const missing: Text.Node[] = [], seen = new Set<string>();
+      const handed = (span: Text.Node): [number, number, Set<string>][] => {
+        const out: [number, number, Set<string>][] = [];
+        const text = span.source.value;
+        const cursor = this.cursor_of(span);
+        for (const found of span.string.matchAll(/[\p{L}_][\p{L}\p{N}_-]*/gu)) {
+          const at = span.begin + found.index!;
+          const names = this.hands.get(found[0]);
+          if (names === undefined || names.size === 0) continue;
+          // The text that follows the word is what the rule is handed.
+          for (const [bracket] of this.brackets(frame)) {
+            let j = at + found[0].length;
+            while (j <= span.end && /\s/.test(text[j])) j++;
+            const match = this.safely(() => this.match(bracket.pattern!, cursor.bounded(j, span.end + 1), frame, { leading: false, tight: true, params: 0 }));
+            if (match) { out.push([j, match.end - 1, names]); break; }
+          }
+        }
+        return out;
+      };
       const check = (span: Text.Node) => {
+        // Only what is reported cares; readiness is answered as before.
+        const given = scope === undefined ? [] : handed(span);
         const text = span.source.value;
         const whole = new Text.Node(span.source);
         const skip = this.safely(() => this.excluded(span, frame)) ?? [];
@@ -1142,6 +1166,7 @@ export namespace Ray {
           const raw = (previous !== undefined && frame.lookup(previous)?.reads !== undefined) || (head !== undefined && head.pattern!.some(piece => piece.kind === 'capture' && piece.raw));
           previous = word;
           if (raw || text[at - 1] === '^' || bound.has(word) || seen.has(word)) continue;
+          if (given.some(([begin, end, names]) => at >= begin && at <= end && names.has(word))) continue;
           if (at > 0 && this.starts_rule(whole, at - 1, frame)) continue;
           if (skip.some(([begin, end]) => at >= begin && at <= end)) continue;
           if (frame.lookup(word) !== undefined || heads.has(word)) continue;
@@ -2212,6 +2237,10 @@ export namespace Ray {
         const scope = this.definition_scope(frame, rule, impl);
         this.paint_definition(pattern, decorators, scope, key, { arrow, params: param_names, types: param_types, styles: param_styles?.flat(), pieces });
         if (body) this.paint_body(body, scope);
+        // A body declares names for the text it is handed: a block written for
+        // this rule may use them, wherever that block is written.
+        const hands = new Set([...(scope.methods?.keys() ?? [])].filter((name): name is string => typeof name === 'string' && !scope.given?.has(name)));
+        if (hands.size > 0) this.handed.set(rule, hands);
       }
       if (body) this.mark_given(body, new Set([...(params ?? []), ...pieces.flatMap(piece => piece.kind === 'capture' ? [piece.name] : []), ...(frame === this.GLOBAL ? [] : ['this'])]), frame);
       if (this.probing) return impl;
@@ -3141,6 +3170,16 @@ export namespace Ray {
     }
     private analyzed(location?: string) {
       const here = (rule: Node) => location === undefined || rule.position?.source.location === location;
+      this.hands = new Map();
+      for (const [rule, impl] of this.definitions_of()) {
+        const names = impl.forward ? undefined : this.handed.get(rule);
+        if (names === undefined) continue;
+        const head = this.head(rule);
+        if (head === undefined) continue;
+        let out = this.hands.get(head);
+        if (out === undefined) this.hands.set(head, out = new Set());
+        for (const name of names) out.add(name);
+      }
       for (const [rule, impl] of this.definitions_of()) {
         if (impl.forward || !impl.body || this.ran.has(rule.key!) || this.pending_rewrites.some(([other]) => other === rule)) continue;
         if (!this.owns(impl.body.source) || (location !== undefined && impl.body.source.location !== location)) continue;

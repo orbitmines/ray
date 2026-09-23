@@ -93,6 +93,7 @@ Unicode.Scalar = Number{Unicode.scalar(this)}
 
 // From the drafts, not yet reached here (spec):
 // .ray2/Language/String/Unicode.ray:
+// TODO Should support all possible Unicode versions through the version control setup %
 //TODO I want a slightly different syntax for the template matching
 //TODO All outside requests are backed up on the central ether server, (at least for ether source code) - and deferred to when the original is no longer available.
 //TODO Version control over Unicode, and set string to a different version of Unicode. All versions: https://www.unicode.org/Public/

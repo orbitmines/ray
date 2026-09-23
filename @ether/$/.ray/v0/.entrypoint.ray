@@ -155,7 +155,11 @@ Node := base class {
    typed\
     // A value passed where a type is written types nothing: `n: two`.
     goto done if type.instance
+    // What is already held is checked against the type, not made of it: a
+    // value is not the place a field's type is written down.
+    goto held if this.instance
     this.components.hierarchy &= type
+   held\
     type.verify(this)
    done\
 

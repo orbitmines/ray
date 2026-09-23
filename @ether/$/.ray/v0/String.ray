@@ -608,3 +608,9 @@ Number.components.hierarchy &= class {
 //TODO
 // namespace Regex
 //   /{pattern: *}/{"i" | "g" | "u" .. //TODO}
+
+// From the journal, not yet reached here (spec): the text may be extended
+// with symbols that are not Unicode's, as a String type of its own; copied
+// out, it says it is that, so it is not mistaken for the standard encoding.
+// A doubled `((` is one such symbol. Text may also say what language it is
+// written in, and be highlighted as that language rather than as a string.

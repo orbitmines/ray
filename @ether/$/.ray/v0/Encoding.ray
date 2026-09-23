@@ -42,3 +42,11 @@ Encoding := class {
 // .crypt[location (CURRENT)]
 // .ray2/Language/Binary/Base64.ray:
 //TODO
+
+// From the journal, not yet reached here (spec): the encodings a store
+// chooses between belong in the language index like any other implementation
+// — Fastlanes, adaptive lossless floating point, a fast static symbol table,
+// dictionary, bit-packed, run-end, PCodec, ZSTD, fused frame-of-reference,
+// run-length and delta. Which one fits is read off statistics of what is
+// being stored — smallest, largest, how many are missing, the sum — which
+// are kept for that reason and benchmarked.

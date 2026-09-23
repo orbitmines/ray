@@ -174,3 +174,177 @@
 //TODO UUID-s built up in a history version file are Node: Mac address that we generate for an instance based on the pub-key?, timestamp is the last edited time of that object.
 //TODO ; does not change the selected context to + on.
 //TODO Newlines () () should apply to each-other. or pending operations should too.
+
+// From the journal, not yet reached here (spec). How a program is read
+// without running it, how it is made faster, and how its versions are kept:
+//
+// Levels of running. A class flagged as an initialiser is actually run, and
+// everything inside it with it. A large function may be run only part way,
+// with what it reached kept and shown. Everything else is interpreted
+// abstractly: the method is called with the abstract class put on each
+// variable, and only the initialising methods (`=`, `:`) are called for
+// real.
+//
+// Anything that reads the outside answers with the abstract class, unless it
+// is flagged `speculate`; `refuse` means it is not read at all, which is
+// about the reading itself, not about what is done with what was read. The
+// first pass interprets abstractly; after that the runtime is real and only
+// what comes from outside is held back.
+//
+// `interpretable?` says a call may be run while reading. It has to be said
+// explicitly, because a rewrite of `rm -rf SOME_DIR` must not be run to find
+// out what it does; a change should un-flag it until it is flagged again.
+// And it has to know when an answer may be kept: not when it is IO, not when
+// it is not the same twice.
+//
+// Trust is by author. Code may be run as whoever wrote it, so `@player` is
+// theirs, and what that author may do is answered once: network at all, only
+// these domains, with or without data attached; write access only inside
+// named directories, never the whole disk, and overriding that is a change
+// the person makes by hand. "May receive but not send" is not a thing that
+// can be promised — timings carry data — but "may not send this data or
+// anything derived from it" is.
+//
+// Building is from a directory: everything inside it resolves, and a name
+// used twice resolves to the nearest one in directory order, with a tool to
+// say which when that is wrong. Forward references are resolved as they are
+// found, so loading one file may file diagnostics for the others it touches;
+// reloading a file reloads what it touches and reparses that.
+//
+// A file may be written in two languages — `.js.ray`, where the `.js` is
+// interpreted and Ray's primitives are underneath it — and the editor says
+// so with half of each icon.
+//
+// A refactor that keeps the meaning is a refactor; the language answers
+// whether two programs are equivalent.
+//
+// Optimisation. Joint allocation. A flag that says an equivalence graph is
+// wanted. The program says how it is built and what it is optimised for, per
+// function. Optimisations are allocated while running, with preferences for
+// what to do: rewrite what is stored, or change how it is read from now on?
+// What does the one-time rewrite cost in time, energy and money, against the
+// overhead of reading old and new differently?
+//
+// Optimising is paid for. The gap between the use that was projected and the
+// use that happened is the saving; splitting it between whoever optimised
+// and whoever benefits — half for a year, or without an end — is what makes
+// it worth doing, and the same for contributions measured by the cost they
+// save. That needs a baseline: how often it moves, how a change that makes
+// something slower moves it back, how a saving is attributed to the change
+// that caused it, and how a deliberately bad baseline is kept from paying.
+//
+// Storage is an optimisation like any other. A database is a backend for a
+// frontend — how objects reference each other, how a filesystem reads — and
+// nothing more, so: the frontend is not how it is stored; the optimisations
+// are allocated, not chosen once; the usual databases only optimise one
+// restricted shape (rows and columns) where arbitrary graphs are wanted; and
+// a file's contents are a frontend too, so taking it apart into pieces that
+// are stored and searched separately is another place to optimise.
+//
+// `Class$` is stored: in memory or on disk as needed, distributed when
+// asked, an arbitrary graph rather than a grid. Reads are what cost, so they
+// are what is minimised. Fields are versioned the way classes and functions
+// are, so renaming one does not make a new object or rewrite every record —
+// the whole version history has an identity. Uniqueness has to answer what
+// happens when two separated stores both claim it: a conflict that forces
+// one to change, which is a merge conflict. Partitioning by time or hash
+// says which bucket a value falls in, and changing that means rewriting.
+// When to patch the data and when to rewrite it is the same question again.
+//
+// Video and the other multimedia formats are the same: an optimisation of a
+// simple interface — scenes in two or three dimensions, over time — for
+// processor time and storage, with the same question of what has to be ready
+// to read.
+//
+// Version control. Hybrid logical clocks and CRDTs underneath. A local
+// version of the codebase, and your fork of it reachable by everyone else
+// working in it, so there is always somewhere to push. A change applied to
+// every stable version it applies to, respecting what those versions changed
+// themselves. A change flagged as the one that actually works, and changes
+// grouped so they land together. Testing your changes against the latest
+// ones instead of merging the latest into yours. Bundling many changes into
+// a new version. Version control kept in the file for editors that are not
+// the Ether, by injecting labels before functions that a plugin hides.
+//
+// Versioning itself: a version number is arbitrary at too many levels, so
+// there is one point of arbitrariness left — the major version, raised when
+// the answer to "is there a breaking change in what others can see?" is yes.
+// Major version 0 may break at will. Versions may themselves be versioned,
+// for a patch that went out without the number changing.
+//
+// Compatibility forwards: a program ships with the implementation of the
+// language spec it was written against, so an interpreter that does not know
+// that version yet still runs it.
+//
+// How many references there are to a name is asserted like anything else, so
+// the borrow disciplines are one dial: used exactly once, used at most once,
+// unique within a scope until it is given back, or counted as none, one or
+// many.
+//
+// Hot reloading, of abstract and of production code, with migrations at
+// every level of the stack: what happens inside a loop that is running, what
+// the editor shows, how it is tested. Which generalises to memoising every
+// computed value against a hash of what it was computed from.
+//
+// Generating a migration from many versions to one, written above or below
+// the function it migrates, and reading one method across all the versions
+// it has.
+//
+// A way to ask whether something came from the standard library or from
+// somewhere else.
+//
+// Packaging, as the `ether` tool spells it. `ether @c++ %` lists versions
+// and `ether @c++ @` lists locations, which are every path from the name to
+// a backend: `@clang/@linux/@apt`, `@clang/@windows`, `@github/releases`
+// with a version or a branch, `@x86-64`, `@local` for what is installed
+// here. `.ray` is reserved for the mapping between two of them — `@ray`
+// against `@c++` — so `ether @c++.ray @gcc` reads as one. `clone`,
+// `install` and `use` fetch and check out, `use --global` for everywhere; a
+// tool has an `entrypoint.cli.ray`. What is fetched lives under
+// `.ether/external/@/@clang/$/@windows/@x86-64/%/0.16.0`, where the
+// top-level name is the checked-out version and `$` holds the branches, so
+// a change made and then switched away from waits under `$/@<user>%branch`.
+
+// And reading software nobody wrote here (the language index that compares
+// them lives in `Ether/library/Index.ray`):
+//
+// A universal language to compare every existing language in is the point of
+// the index. The measures are grammar (how verbose), runtime complexity (at
+// which layer of abstraction), time and space in sequence and in parallel,
+// and how complicated a program's access to its own structure is — and then
+// how languages are told apart by those measures, without redefining every
+// semantics by hand, using the implementations that already exist.
+//
+// Out of an executable or a source tree: the things that are distinguishable
+// as items, which need not follow the data the code declares; what each item
+// can do, to itself and to others; and what an item is for — which
+// interfaces it reaches (is it shown, is it heard; is it the contents that
+// are shown, or that it exists at all), what its visibility is meant to be
+// (is it sent over the network, is it encrypted — and that is respected: a
+// licence check is read as the visibility of the items behind it, which
+// stands while the mechanism enforcing it does), how it is updated, and what
+// it is equivalent to elsewhere. A chat message is a chat message on every
+// platform; what differs — the ordering, how threads are drawn — is what is
+// ignored to see the equivalence, and an accessible item has open
+// alternatives named beside it.
+//
+// Those readings are then reused: a feature extracted from a binary on an
+// ongoing instruction to look for it, its theme taken as it is or as
+// something equivalent with a way to change it, and version control
+// generated for the parts of a program when all that is given is the current
+// state and the previous one. Interfaces are themes, which is the same
+// separability of layers as databases and languages have; a version change
+// has to be diffable, and the interface may not break on one that is not
+// resolved yet — it falls back to the theme that is.
+//
+// Reading a program in from its source, from the platform's own library, or
+// by dropping a link on it. Recognising which language and which version
+// something was built with, the way a media tool recognises a format.
+// Suggesting where a thing is equivalent to another or could be made
+// general. Optimising per function. Filtering a program to refuse the
+// language features it may not use, self-modifying types among them.
+// Completing in the shell once a name is marked as a tool.
+//
+// A name that is partially filled in and then renamed in a new version is
+// told to whoever filled it. The language server protocol is spoken, so
+// editors that are not the Ether still see what the language knows.

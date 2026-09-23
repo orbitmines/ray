@@ -749,3 +749,108 @@ Chat := class {
 // end
 //
 //TODO Allow player to access root's UPDATE, but also update any manually edited files.
+
+// From the journal, not yet reached here (spec). What the editor and the
+// interfaces built on these features are for:
+//
+// A block of code collapses to a sentence of English saying what it does,
+// and the other way: written at the level of description that is preferred,
+// mathematical symbols or words, "there exists" or `#.some`. A selection is
+// operated on by naming what to do to it, in the language or in English.
+//
+// Highlighting says what calls a thing, not only the thing: red, green and
+// blue highlighted as red, green and blue.
+//
+// Ambiguity is resolved in the editor, and the resolution may be kept so it
+// is never asked again. If an isomorphism is already there and somebody is
+// writing it again, they are told.
+//
+// Tests collapse inline. Every function has a button that times it. A
+// version-control selector sits at each function in each class, and versions
+// may be shown intermingled — `%1..5 field`, `<&VER..&VER> field` — with a
+// key to walk them.
+//
+// Movement: up and down remember the column they left and go back to it
+// while nothing has moved sideways; end-of-line stays at the end of the line
+// while moving up and down; control with up and down moves the page by a
+// line. A goto in the editor brings its label back a space, and puts it back
+// when a type is written there instead. Inside a double `((` the editor asks
+// for `((` and a tab, because `<<` may mean a subexpression.
+//
+// Eye tracking chooses which of two places is the one being worked in: side
+// by side, whichever is looked at; overlaid, the one on top.
+//
+// Searching inside a thing, and again inside the result, drops what was
+// searched before and keeps the sequence as a program that can be undone —
+// which is how an executable or a codebase nobody wrote is explored.
+//
+// Text that is encrypted is edited as plain text and normalised back to
+// encrypted, with the password asked for when it is used. Custom symbols
+// extend the text as a type of their own, and paste as something that says
+// they are custom.
+//
+// An icon generates the same file in the other formats underneath it; a
+// status has one too. A chat may hold only what changed since it was last
+// seen. Any object may be rendered as a table, with preferences for how
+// kinds of things are drawn per person. A condition may be put on a source
+// file — that its classes are sorted, the way the language index is.
+//
+// A choice a persona makes carries the quest that explains why it is theirs
+// to make, and says whether its results are being kept for later.
+//
+// An interface finds the controls nothing is bound to and offers them.
+// Structures are bound to controls — this key does this, copy and paste are
+// a binding — and are imported by dragging or pasting them in. One key shows
+// something about everything at once: every orbit in the structure, drawn by
+// rolling a loop out into a line by varying the direction it is walked. A
+// slider moves the level of description over an existing reading of it. What
+// is ignored — where a structure came from, the embedding it is drawn in —
+// is dropped on purpose, which drives two structures towards the same point
+// so they can be compared.
+//
+// Drawing: put the graphs at the top with their lines invisible, draw them
+// on hover and dim what surrounds them; the minimap ignores the reference.
+// Dragging goes from one point of the background to another. If a mouse must
+// be used, it locks onto the structure nearest it. An interface that is not
+// a hundred percent wide is not a box: it is whatever shape fits the width
+// available at that height, and what does not fit wraps.
+//
+// Exploration: a thing that wanders — worlds, items, whatever there is — and
+// reminds, suggests and explores periodically, answering where has not been
+// looked, where could be looked, and where it was decided not to look but
+// looking is still wanted. Replay of what happened, in detail. Something
+// that works while nobody is: it says when it found something that matters
+// for an open question, it offers an answer to a function that is still
+// being written and says what would follow from it, and it starts on what
+// can be undone while the decision is still pending.
+//
+// Something may be included conditionally on whoever looks having access to
+// it — a video that is paid for shows only to those who paid — which is a
+// way around ownership in a structure, and obnoxious if used for the wrong
+// things.
+//
+// Proofs are a way of deciding what is worth pursuing: a search and a memory
+// of it. What they say about a space is in how the conclusion was reached as
+// much as in the conclusion, so the questions are how that is taken
+// advantage of, and what makes a proof different from an ordinary program. A
+// tactic expands into the proof it stands for and folds back while it is
+// unchanged. Tests are the same thing in a narrower case, so both are one
+// mechanism: a prover generates every boolean implementation there is.
+//
+// Complexity has two halves: what a thing costs to run in sequence, and what
+// it costs to run in parallel — the second is what a language far from ones
+// and zeros buys. They are forming the model and using it: induction, and
+// deduction. Robustness follows both, which makes two kinds of robustness.
+//
+// Applications install into the browser, for the desktop and for the phone.
+//
+// A beginner is given a whole setup and takes only the highlights out of it,
+// so the rest can be decoded afterwards.
+//
+// Colour is a filter across a frequency, so the difference between two of
+// them is one too.
+//
+// Modelling in two and three dimensions, generated rather than drawn.
+//
+// Interfaces from elsewhere plug into one modular system, which is what
+// makes an interface reprogrammable at all.

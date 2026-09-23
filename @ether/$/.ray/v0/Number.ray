@@ -570,3 +570,8 @@ digit_of (byte) => (
 //TODO Maybe with equivalent
 // Or repeating
 // Leading zeros are equivalent to the base number
+
+// From the journal, not yet reached here (spec): a number refined to what it
+// actually is — sixty-four bits, say — is other code than a number that is
+// only a number, and the two are equivalent exactly where the refinement
+// holds.

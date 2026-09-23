@@ -1335,3 +1335,122 @@ TODO ^debug (comment: String ^comment) => DEBUG@. comment
 // }
 //
 // OR is parallel structure, AND is sequential structure
+
+// From the journal, not yet reached here (spec). These are the language's
+// own open questions, written where the language is written:
+//
+// `^` binds to the right.
+//
+// `@/` and `@./` name paths, so a word that starts with `@` is a location:
+// `@https://…` is one, and a location with spaces in it is written `@" "`.
+// `.` and `[]` stay reserved for domains, which is what keeps a typo like
+// `.ra` from reading as a name.
+//
+// `->` and `,` are the same thing in most places.
+//
+// `:=` declares by initialising; `name: String = value` says the type too.
+// The question is how a name being declared is told apart from one being
+// written to, when the scopes are compatible.
+//
+// Comments nest: `/*` inside `/*` closes with its own `*/`.
+//
+// A character in quotes is a character, unless it is said to be a string.
+//
+// `[]` and `()` both make an array.
+//
+// `++` reads as `+` on numbers.
+//
+// A capture may ask for more than its text spells: `entry: String + Ray`
+// keeps the Ray the entry is, where `entry: String` reads only the string.
+// The Ray half is only there when it is asked for.
+//
+// A name may be typed by what it is: `var: class`, `var: class & String`.
+//
+// `PATTERN*` reads as `PATTERN, *`, so a path prefix is written `"PATH/"*`.
+//
+// A run of lines that each start with `.` is a block given to the value
+// above it, so
+//   a = obj
+//     .first
+//     .second
+// leaves `a` as `obj`; writing `obj.` before the run calls them instead.
+// spec: this is the leading-dot ambiguity in `Number.ray` and `String.ray`,
+// where `x := y` followed by a `.member` line reads as `y.member`. What the
+// journal asks for is that indentation decides, which is not what the `.`
+// rule does today.
+//
+// Warnings the language should file: a `,` left at the end of a multi-line
+// `()`, because either it is wanted or a newline is; and a first statement
+// that begins with whitespace.
+//
+// Functions that never return.
+//
+// Right-to-left and left-to-right text in one expression.
+//
+// A function may be entered at a label, `func**.LABEL()`, and a branch may
+// be written that is only reachable that way and never runs on its own.
+//
+// `error[X]` names the version the error type was introduced in, and a
+// number within it.
+//
+// If a method is not on the value but the value casts to something that has
+// it — `boolean` and `&`/`|` — the call converts and calls. When a library
+// later defines that method itself, whoever relied on the cast is told.
+//
+// A superposed value holds where it came from, so a result can be refined:
+// once one caller is known to be the one that happened, the result is what
+// that caller made it.
+//
+// Types narrow by what was tested: inside `if array.length > 2` the array is
+// the longer type, and `{== .instance_of IP}` casts. A function relaxes its
+// arguments to what it actually used of them. Two dependent types that
+// define each other are circular unless they share the condition that breaks
+// it. `Ray<T = Ray>` says T is unknown but a Ray. Several edits that only
+// together satisfy a type are one transaction.
+//
+// `assume` as a clause of its own.
+//
+// Every field is instantiated with `?()`, which is already the default; a
+// field that has nothing is None.
+//
+// `ray[500..999] = …` has to say whether the range is given one value or
+// each place in it is.
+//
+// A string may say what it is written in — `"".[LANG]` — and be highlighted
+// as that.
+//
+// Subscripts and superscripts are written `v[…]` and `^[…]`, and the editor
+// can put them back as plain names.
+//
+// A grammar read differently by two types is an error, not a preference.
+//
+// A pattern that says what may not follow does not succeed by stopping
+// early: if the pattern does not match the whole of what it was given, it
+// fails, unless something else in it matches the rest.
+//
+// An entry is its origin, not itself, and `.index` is counted from the
+// origin.
+//
+// A signature per option, so each shape a rule accepts says its own:
+//   ..{right: .} | {left: .}.. | .. (right?) =>
+//
+// And the questions the language is written to answer at all:
+//
+// Should two accesses of a variable that happen at once superpose? A range
+// of values where the writes overlap would model what a language does.
+//
+// Is a function's control graph a function without a starting point?
+//
+// How is a function run backwards, and how are inverses of functions called
+// and defined?
+//
+// What geometry describes a language for interfaces?
+//
+// How does a graph of a game scale to millions of players, and how is
+// propagation through it limited by what there actually is to compute with?
+//
+// Something not filled in yet may still be called, lazily, on the promise
+// that what goes there can only arrive after it is filled.
+//
+// Tests for the syntax itself, which change the external methods the grammar
+// is written with and then read something.

@@ -548,3 +548,120 @@ Organization := class: Player {
 //
 // protected none.write ENTRYPOINT = /entrypoint/entrypoint //TODO Path type, cast from string allowed
 // IO.eval ENTRYPOINT
+
+// From the journal, not yet reached here (spec). Who may see what, where it
+// is hosted, and how anyone finds it:
+//
+// Visibility is a field's own. A thing may say its parent is not visible
+// while it is, or the other way around, and one of those is the default.
+// Whether a program may reach the network is the same kind of answer, not a
+// status somebody reads afterwards. Whether data — or anything derived from
+// it, a count of it included — may be sent over the network is a permission
+// of its own, given separately from reading it.
+//
+// Visibility has a visibility: a thing may be findable in an index while
+// being unreadable, and a thing may say that even its existence is not to be
+// found. Indexes may be turned off, and then what they gave is gone.
+//
+// Permissions may be for this once, or while a condition holds — while the
+// application is running, say. A mouse or a keyboard someone else controls
+// is a thing that asks for one.
+//
+// Code that runs somewhere else runs as somebody. An application may run as
+// whoever wrote it, for the permissions that needs, and then `@me` is a
+// question: whose code is it, and did I lift it to my own permissions? What
+// is asked on the other device is that `@company` wants to run something
+// that originated from `@me` — and whether that origin is one name or a
+// chain of them.
+//
+// `@ether` is code like any other: it is allowed here, and not allowed
+// elsewhere, and what a local copy of a company's code may read on this disk
+// is given to it by name.
+//
+// Hosting. Rather than running the infrastructure, each person's cloud
+// account is held privately for them, with their credentials theirs and at
+// most the backups here. That needs two things from a provider: accounts
+// made for people without their own, and a third party allowed to commit a
+// limited amount to the bill so a free tier is possible. What is free lives
+// on an account that invoices directly; moving to a paid setup either shares
+// what was free or takes it over, and spending that the person cannot raise
+// themselves has to be a thing the provider supports. Providers are shown in
+// a random order. Until they integrate directly, this is OAuth. Smaller
+// hosts, themselves hosted on the larger ones, are hosts too.
+//
+// A machine may be given by its details and an ssh login: install there and
+// report back. Servers of that kind do not update themselves by default.
+//
+// Ownership of data by the person, by making version control where the
+// central platform is only an index, the way a name server is.
+//
+// Complicated access costs money, because answering it runs on the
+// provider's side.
+//
+// Finding things. Server discovery, and discovering the ways servers are
+// discovered, community-run. The last server logged out of is rejoined
+// automatically, per device, with an offer to go to where that device was;
+// others are joined from the menu, which remembers where this instance has
+// been, or where anyone has.
+//
+// What is kept on a persona: preferences, the fields they are interested in,
+// the knowledge trees already unlocked — and how much of that is generated
+// rather than answered.
+//
+// A stack is an arbitrary graph of a type, so a stack of keys or of
+// credentials is one. Whether a graph lets a cursor walk it to find what is
+// in it, or asks a persona to walk there themselves, is the graph's own
+// answer, and it is the difference between "what is in this room" and "what
+// in this room I can reach now". Navigating and storing things in any
+// structure is what the infrastructure is for.
+//
+// Filesystems may be virtual, made into the Ether; a thing may be
+// canonicalised as one, with fields delegated to files and directories —
+// what is `@me`'s under `@me.ray`, other things like stars elsewhere.
+//
+// Names. What is done about platforms that already have an `@ether` name
+// registered, and whether hardware addresses are reserved too. Separate
+// directories for names of different kinds — `orbitmines.com` beside
+// `@orbitmines` — mostly to keep what already exists working. Namespaces are
+// per project, which is per repository, and each project has its own
+// `.ether` holding its configuration.
+//
+// Events may be injected into somebody else's code by whoever is running it.
+//
+// In a repl, the setting that makes changes stay is the persona's; a repl
+// session may commit everything it changed into one named thing.
+//
+// Whether an environment variable is what it was at startup or what it is
+// now, and whether a static field is shared or is one per user.
+//
+// A screen, or a place, says what it is allowed to see — `@public` while it
+// is being streamed — and what is shown may be conditional on who is
+// looking: `if @public`, `elsif` somebody else.
+//
+// A link keeps a cache that whoever depends on it can publish, for when the
+// domain it points at stops answering; publishing something may ask for one,
+// so that what fails at runtime has somewhere to fall back to.
+//
+// Load balancing, from a provider or built in, is also how a new feature is
+// given to some of the traffic and not the rest.
+//
+// Whether what is private lives in a setup of its own, and what mixing it
+// with the rest costs when a repository has to be reached on more than one
+// machine.
+//
+// Configuration is `.cfg.ray`: `Cfg /file/path`, `Cfg @me/file`, `Cfg /File`
+// or `Cfg.File`, and a name with nothing above it is searched for wherever
+// it is. Configuration is code, so it runs. Variables written `&` are the
+// ones a context is allowed to change.
+//
+// Every place normalises differently: what a thing is represented as there
+// is that place's answer, not the thing's.
+//
+// Quests are side quests too: the competencies nobody expected to need, and
+// the reasons somebody does a thing because they want to.
+//
+// Movement through a graph may have to go around what is in it rather than
+// through it.
+//
+// One program, two frontends: what is run from the command line and what is
+// shown in an interface are the same code with another hook into it.

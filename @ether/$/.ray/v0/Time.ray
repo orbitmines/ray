@@ -367,3 +367,9 @@ Mars := class: Planet {
 //   Unit ~ years.name | "Martian `years.name`" -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step
 //   Unit ~ days.name | "Martian `days.name``" | "sol" "s"? -> 1 Earth.day 39 minutes 35.244 seconds
 // end
+
+// From the journal, not yet reached here (spec): a program that ends is not
+// only one that stops asking — every step has to take a finite time, so
+// termination is a temporal question, and the language has to be able to ask
+// it. Anything done to one thing may be collected into a function, and that
+// function drawn as an animation of itself.

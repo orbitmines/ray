@@ -429,3 +429,29 @@ Link.components.hierarchy &= Ray
 //TODO Path implements ~= ; / ~= ^/.@ meaning files beginning with /.@
 // .ray3/Ray.ray:
 //TODO Infinitely generates check or in a loop
+
+// From the journal, not yet reached here (spec):
+//
+// An object is a superposed Ray, so `Object[String]` is all of the rays in
+// it that end up strings. The question is what happens to structure that
+// defines steps before and after the ordinary getting and setting of a
+// field — whether `.field.next` is a ray because the return has structure of
+// its own — and that is the language written in itself.
+//
+// Many initial and many terminal, ternary and beyond.
+//
+// A key and a value where everything is delegated to the value, so `==`
+// compares values: a transparent pair.
+//
+// Instantiating a type by collapsing the possibilities it leaves open,
+// wave-function-collapse style.
+//
+// A component that must not replace a property but only what is inside it,
+// laid over what was there — and at which level that happens. Writing it out
+// is `property => property.components.last`; what is wanted is to say the
+// property maps, and an extension that merges components does it.
+//
+// Whether a default is stored with the data or only once it is changed, and
+// whether it follows the default when the default moves.
+//
+// Moving in one named dimension, `[y: 5]`.

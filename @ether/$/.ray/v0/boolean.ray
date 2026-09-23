@@ -51,10 +51,6 @@ exists (x) => (
   found
 )
 
-// The two bits, as the machine spells them.
-0 := false
-1 := true
-
 // From the drafts, not yet reached here (spec):
 // .ray2/_todo/ray.ray.txt/Ether/instance/utils/boolean.ray:
 // Allow false | true = Binary.digit.value

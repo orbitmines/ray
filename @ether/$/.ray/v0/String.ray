@@ -64,7 +64,7 @@ Character := class {
   // spec: blanks are the space and the controls 9..13 (tab, newline,
   // vertical tab, form feed, carriage return).
   blank => .is_ascii.and(.bit(one).not).and((.bit(two).and(.bit(three).not).and(.tail_value(four).is_zero)).or(.bit(two).not.and(.bit(three).not).and(eight < .tail_value(four)).and(.tail_value(four) < ten + four)))
-  is_underscore => .is_ascii.and(.bit(one).not).and(.bit(two)).and(.all_set(three))
+  is_underscore => .is_ascii.and(.bit(one)).and(.bit(two).not).and(.all_set(three))
   all_set (from: Number) => (
     verdict ^keyword := true
     this.octets.at(from) for { unless it.value { verdict = false } }
@@ -82,8 +82,8 @@ Character := class {
     }
     Character(octets: octets)
   )
-  upper => if .lower_case { .with_bit(two, false) } else { this }
-  lower => if .upper_case { .with_bit(two, true) } else { this }
+  upper => if .lower_case { .with_bit(two, 0) } else { this }
+  lower => if .upper_case { .with_bit(two, 1) } else { this }
   swapped => if .lower_case { .upper } elsif .upper_case { .lower } else { this }
 
   // Two characters are the same when their bits are.
@@ -92,7 +92,7 @@ Character := class {
     theirs ^keyword := other.octets.head
     same ^keyword := true
     while ((exists mine).and(exists theirs)) {
-      unless (mine.value.xnor(theirs.value)) { same = false }
+      unless (mine.value == theirs.value) { same = false }
       mine = mine.next
       theirs = theirs.next
     }
@@ -123,13 +123,13 @@ Character := class {
     payload := if (width == one) { seven } else { (width * five) + one }
     payload_bits := all_bits.at(((two * ten) + one) - payload)
     octets := chain None
-    if (width == one) { octets &= false } else {
+    if (width == one) { octets &= 0 } else {
       lead ^keyword := width
       while lead.nonzero {
-        octets &= true
+        octets &= 1
         lead = lead.pred
       }
-      octets &= false
+      octets &= 0
     }
     walker ^keyword := payload_bits
     take ^keyword := if (width == one) { seven } else { seven - width }
@@ -140,8 +140,8 @@ Character := class {
     }
     rest ^keyword := width.pred
     while rest.nonzero {
-      octets &= true
-      octets &= false
+      octets &= 1
+      octets &= 0
       take = six
       while take.nonzero {
         octets &= walker.value
@@ -154,9 +154,9 @@ Character := class {
   )
   // The Latin letters and digits, built from their bits: `A` is 010 00001,
   // `a` 011 00001, `0` 0011 0000, `a`..`f` continue the digits past nine.
-  latin_upper (index: Number) => Character.ascii(false, true, false, bits_of(index, five))
-  latin_lower (index: Number) => Character.ascii(false, true, true, bits_of(index, five))
-  decimal_digit (value: Number) => if (value < ten) { Character.ascii(false, false, true, Character.nibble(true, value)) } else { Character.ascii(false, true, true, Character.nibble(false, value - nine)) }
+  latin_upper (index: Number) => Character.ascii(0, 1, 0, bits_of(index, five))
+  latin_lower (index: Number) => Character.ascii(0, 1, 1, bits_of(index, five))
+  decimal_digit (value: Number) => if (value < ten) { Character.ascii(0, 0, 1, Character.nibble(1, value)) } else { Character.ascii(0, 1, 1, Character.nibble(0, value - nine)) }
   nibble (lead, value: Number) => (
     out := chain None
     out &= lead
@@ -504,7 +504,7 @@ bits_of (number, width) => (
   counter := chain None
   left ^keyword := width
   while left.nonzero {
-    counter &= false
+    counter &= 0
     left = left.pred
   }
   rest ^keyword := number
@@ -512,8 +512,8 @@ bits_of (number, width) => (
     digit ^keyword := counter.head
     carrying ^keyword := true
     while (carrying.and(exists digit)) {
-      if digit.value { digit.value = false } else {
-        digit.value = true
+      if digit.value { digit.value = 0 } else {
+        digit.value = 1
         carrying = false
       }
       digit = digit.next

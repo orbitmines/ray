@@ -79,6 +79,23 @@ Number := class: Ray {
 
   is_zero => .is_terminal
   nonzero => .is_zero.not
+  // A number answers a condition the way a bit does: nothing is nothing, and
+  // anything else is there. It is what lets `0` and `1` be the two bits and
+  // numbers at once.
+  holds => if .is_zero { None } else { global }
+  // spec: negating a number negates what it answers as a condition, so `0.not`
+  // holds and any other number's does not; the bitwise negation of a number
+  // waits on its width being known.
+  not => .is_zero
+  // A digit answers what a bit answers, so the two bases of the machine and
+  // the numbers they spell are one thing.
+  set => .is_zero.not
+  and (b) => .set.and(b)
+  or (b) => .set.or(b)
+  nand (b) => .set.nand(b)
+  nor (b) => .set.nor(b)
+  xor (b) => .set.xor(b)
+  xnor (b) => .set.xnor(b)
 
   // Walks along the chain rather than nesting one application per unit, so a
   // thousand is as cheap to reach as ten.
@@ -254,6 +271,10 @@ seven := six.succ
 eight := seven.succ
 nine  := eight.succ
 ten   := nine.succ
+// The two bits, as the machine spells them: the digits of the binary base,
+// which are the numbers they spell.
+0 := zero
+1 := one
 hundred  := ten * ten
 // A thousand is built when first asked for.
 thousand => hundred * ten

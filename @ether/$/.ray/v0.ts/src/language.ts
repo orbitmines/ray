@@ -545,7 +545,12 @@ export namespace Ray {
     static DEPTH = 512;
 
     program?: Program
+    // Whether this interpreter began the language rather than continuing one:
+    // what it may read in its first pass follows from that, not from whether
+    // the one before it is still held.
+    readonly began: boolean;
     constructor(public diagnostics: Diagnostics, public copy_of?: Interpreter) {
+      this.began = copy_of === undefined;
       this.GLOBAL = this.kernel();
     }
 
@@ -619,7 +624,7 @@ export namespace Ray {
       for (let pass = 0; pass < Interpreter.PASSES; pass++) {
         this.passing = pass;
         this.forwards = []; this.deferred = []; this.ran = new Set(); this.typings = new Map(); this.painting = []; this.definitions = []; this.touched = new WeakMap(); this.spelled = new Set(); this.claims.clear(); this.sites = new Map(); this.pending_rewrites = [];
-        this.marking = this.copy_of ? this.inherited() : Interpreter.marks(); this.referenced = new Map(); this.sited = new Map(); this.verbatim = new Map();
+        this.marking = this.copy_of !== undefined ? this.inherited() : pass === 0 && !this.began ? this.marking : Interpreter.marks(); this.referenced = new Map(); this.sited = new Map(); this.verbatim = new Map();
         srcs.forEach(src => this.diagnostics.forget(src));
         for (const src of srcs) { this._interpret(src); yield; }
         this.prune(inherited);
@@ -630,6 +635,10 @@ export namespace Ray {
         previous = signature;
       }
       this.analyze();
+      // What was cloned from is done with: holding it would hold every pass
+      // the language has been through.
+      this.copy_of = undefined;
+      this.seen = new Map();
       this.painted++;
       this.paints = this.painting;
       this.marks = this.marking;
@@ -2408,7 +2417,7 @@ export namespace Ray {
     private readings = new WeakMap<Node, Map<string, Node | null>>();
     private passing = 0;
     typed(type: string, span: Text.Node, closure: Node, opts: { read?: boolean } = {}): Node | null | undefined {
-      if (this.passing === 0 && this.copy_of === undefined) return undefined;
+      if (this.passing === 0 && this.began) return undefined;
       const reader = this.marked(closure, 'reader');
       if (reader === undefined) return undefined;
       const probing = this.probing, seeking = this.seeking;

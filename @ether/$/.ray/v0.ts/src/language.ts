@@ -1421,10 +1421,14 @@ export namespace Ray {
       if (args.length === 0) for (let k = 0; k < opts.params; k++) {
         const from = this.skip(cursor, i);
         if (from >= limit || text[from] === '\n') return;
-        // Hugging what it is read on does not make a rule hug what it reads:
-        // `name: a - b` reads the whole of `a - b`, `a.b` just `b`.
-        const hugged = opts.operand || (opts.tight && from === i);
-        const end = k < opts.params - 1 || hugged ? this.operand_end(cursor, from, frame) : this.line_end(cursor, from, frame);
+        // An argument written against what takes it is only that argument:
+        // `f(x) == y` hands `f` the `(x)`. Written after a space it is the
+        // whole of what follows: `name: a - b` reads all of `a - b`.
+        const hugged = opts.operand || from === i;
+        // An argument written against what takes it is only what it is written
+        // as: `f(x).y` hands `f` the `(x)`, and asks `.y` of the answer.
+        const claimed = from === i ? this.claim(cursor, from, frame) : from;
+        const end = claimed > from ? claimed : k < opts.params - 1 || hugged ? this.operand_end(cursor, from, frame) : this.line_end(cursor, from, frame);
         if (end <= from) return;
         // As with a capture, an argument is not a bare operator: `joined := x`
         // declares `joined`, it does not call a method of that name with `:=`.

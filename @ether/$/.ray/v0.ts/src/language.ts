@@ -426,6 +426,7 @@ export namespace Ray {
 
     // A name is what it is bound to, or the function defined under that name.
     own(key: string): Node | undefined { return this.methods?.get(key) ?? this.named?.get(key); }
+    outermost?: boolean
     named?: Map<string, Node>
     member(key: string): Node | undefined {
       const own = this.members?.get(key) ?? this.methods?.get(key);
@@ -462,14 +463,18 @@ export namespace Ray {
     }
     // Depth-first over the parent chain, entering what each scope is made of
     // and what it sees before its parent, without recursing on the call stack.
+    // The outermost scope is where the language itself is written, so it
+    // answers last: anything nearer, by any route, is nearer.
     *reading(seen: Set<Node>): Generator<Node> {
       const stack: { scope: Node | undefined; start: Node; k: number }[] = [];
+      let outermost: Node | undefined;
       if (!seen.has(this)) { seen.add(this); stack.push({ scope: this, start: this, k: -1 }); }
       while (stack.length > 0) {
         const top = stack[stack.length - 1];
         if (top.scope === undefined) { stack.pop(); continue; }
         if (top.k === -1) {
           if (top.scope !== top.start) { if (seen.has(top.scope)) { stack.pop(); continue; } seen.add(top.scope); }
+          if (top.scope.outermost && top.scope !== this) { outermost = top.scope; stack.pop(); continue; }
           yield top.scope;
           top.k = 0;
         }
@@ -483,6 +488,7 @@ export namespace Ray {
         }
         top.scope = top.scope.parent; top.k = -1;
       }
+      if (outermost !== undefined) yield outermost;
     }
     static heads = new Set<string>();
     set(key: Key, value: Node): Node {
@@ -567,6 +573,7 @@ export namespace Ray {
     private kernel(): Node {
       const GLOBAL = new Node(this.diagnostics);
       GLOBAL.key = 'GLOBAL';
+      GLOBAL.outermost = true;
       this.EXTERNAL = GLOBAL.method('external', ({ interpreter, args: [name], at, frame }) => interpreter.external(name.position!, at, frame), 1);
       this.EXTERNAL.pure = true;
       this.NONE = Object.assign(new Node(this.diagnostics), { none: true, key: 'None' });

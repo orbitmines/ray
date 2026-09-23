@@ -1,0 +1,22 @@
+// Types: what a value is built on, and where a type is written. Two things
+// written in one place are one thing, which is what tells one type from
+// another.
+
+mark ^keyword := external global
+
+TA := class { }
+TB := class: TA { }
+ta := TA()
+tb := TB()
+
+unless (exists ta.instance_of(TA)) { INFO@mark `TY1 an instance is not an instance of its class` }
+if (exists ta.instance_of(TB)) { INFO@mark `TY2 an instance is an instance of a class built on its own` }
+unless (exists tb.instance_of(TB)) { INFO@mark `TY3 an instance is not an instance of its own class` }
+unless (exists tb.instance_of(TA)) { INFO@mark `TY4 an instance is not an instance of what its class is built on` }
+unless (exists five.instance_of(Number)) { INFO@mark `TY5 five is not a Number` }
+if (exists five.instance_of(TA)) { INFO@mark `TY6 five is an instance of an unrelated class` }
+
+unless (exists (external where TA)) { INFO@mark `TY7 a class is written nowhere` }
+if (exists (external alike (external where TA) (external where TB))) { INFO@mark `TY8 two classes are written in one place` }
+TC := TA
+unless (exists (external alike (external where TA) (external where TC))) { INFO@mark `TY9 one class under two names is written twice` }

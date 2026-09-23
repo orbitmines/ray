@@ -2026,6 +2026,8 @@ export namespace Ray {
       const depth = this.entered.get(site) ?? 0;
       this.entered.set(site, depth + 1);
       const local = this.frame(frame, depth > 0 ? `${site}#${depth}` : site, impl.closure ?? this.GLOBAL);
+      // A frame is written where what made it is written.
+      local.position = at;
       local.given = new Set([...captures.keys(), ...(impl.params ?? []), ...(match.receiver !== undefined ? ['this'] : [])]);
       for (const [name, node] of captures) this.bind(local, name, node);
       impl.params?.forEach((param, k) => {
@@ -3084,6 +3086,15 @@ export namespace Ray {
       fs.writeFileSync(location, content);
       return this.NONE;
     }
+    // Where a value is written: the file it is in and where in it. Two things
+    // written in one place are one thing; a thing written nowhere has no
+    // location.
+    located(node: Node, at: Text.Node): Node {
+      const value = this.deref(node);
+      const position = value?.position ?? value?.body ?? value?.lazy?.span;
+      if (position === undefined || position.source.location === undefined) return this.NONE;
+      return this.literal_of(`${position.source.location}:${position.begin}`, at);
+    }
     inline(node: Node, frame: Node, opts: { compose?: boolean } = {}): Node | undefined {
       if (this.depth > Interpreter.DEPTH) throw new Recursion(node, node.position ?? this.statements[0]!);
       this.depth++;
@@ -3276,6 +3287,10 @@ export namespace Ray {
     'recur\\': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.RECUR },
     'label': { arity: 1, pure: true, fn: ({ interpreter, args: [name] }) => interpreter.labelled(name) },
     'base': { arity: 1, fn: ({ interpreter, args: [node] }) => { const target = interpreter.deref(node); if (target) interpreter.BASE = target; return target; } },
+    // Where a thing is written, and whether two texts are the same text: the
+    // machine answering about its own, as `bits` answers about its bytes.
+    'where': { arity: 1, fn: ({ interpreter, args: [node], at }) => interpreter.located(node, at) },
+    'alike': { arity: 2, fn: ({ interpreter, args: [left, right] }) => { const a = interpreter.deref(left) ?? left, b = interpreter.deref(right) ?? right; return a.none || b.none ? interpreter.NONE : interpreter.text(a) === interpreter.text(b) ? interpreter.GLOBAL : interpreter.NONE; } },
     'inline': { arity: 1, fn: ({ interpreter, frame, args: [node] }) => interpreter.inline(node, frame) },
     // What crosses from the machine into the language is a literal: `bits` reads
     // one as its bytes, and the rest are read that way language-side.

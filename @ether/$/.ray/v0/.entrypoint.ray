@@ -170,12 +170,14 @@ Node := base class {
   ? ^punctuation => this | None
   ?: ^punctuation (type) => this: (type?)
   // `x ==.instance_of type`, as presence: None is an instance of a type when
-  // None is among its components (`T?` is `T | None`). A primitive beneath
-  // `if` (the annotation and the pattern reader ask it), so it walks by goto.
-  // spec: for other values the hierarchy walk awaits an identity on types.
+  // None is among its components (`T?` is `T | None`), and anything else is
+  // an instance of what it is built on. A primitive beneath `if` (the
+  // annotation and the pattern reader ask it), so it walks by goto.
+  // Two things written in one place are one thing, which is what tells one
+  // type from another.
   instance_of (type) => (
     found ^keyword := None
-    goto yes if this
+    goto built if this
     goto no if type.instance
     goto scan if type.components
     goto no
@@ -190,9 +192,34 @@ Node := base class {
    skip\
     walker = walker.next
     goto step
+   built\
+    found = .built_on(type)
+    goto no
    yes\
     found = global
    no\
+
+    found
+  )
+  // Whether what this is built on reaches that type: what a thing is made of,
+  // and what that is made of in turn. Two things written in one place are one
+  // thing, which is what tells one type from another.
+  // spec: the draft's `class Location = Ray` (Entity.ray) is a location with a
+  // hierarchy — a parent and children, a host instance — and every Node holds
+  // one, written `@`. Here a location is where a thing is written, which the
+  // machine answers (`external where`), and the hierarchy awaits the world's
+  // locations. `location` is not a name on Node, because a field of that name
+  // is what a persona and an item hold.
+  built_on (type) => (
+    walker ^keyword := .components.hierarchy.head
+    found ^keyword := None
+    while (exists walker) {
+      if (exists (external alike (external where walker.value) (external where type))) { found = global }
+      unless (exists found) {
+        if (exists walker.value.built_on(type)) { found = global }
+      }
+      walker = walker.next
+    }
 
     found
   )

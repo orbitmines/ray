@@ -1454,3 +1454,39 @@ TODO ^debug (comment: String ^comment) => DEBUG@. comment
 //
 // Tests for the syntax itself, which change the external methods the grammar
 // is written with and then read something.
+
+// The draft's own project file (.ray2/.ray2.json) says what the language is,
+// setting by setting. What it asks for and what is here:
+//
+// Reading. The text is read left to right, a file at a time: `Node.ray` first
+// and then everything beside it, recursively, without reading that file
+// twice. Here the entrypoint is read first and the project names the rest.
+// The other direction is read too (`<-`), and mixing both in one expression
+// is still open above.
+//
+// Structure is indentation, lines, and a newline between statements. A token
+// runs until a space or a newline, and a word that is several words joined is
+// split where it can be. spec: the splitting of compound words is not here —
+// a word is what it spells.
+//
+// Brackets are `()`, `[]` and `{}`, and they nest inside themselves. A
+// comment runs from `//` to the end of the line.
+//
+// A name is bound with `=`, aliased with `|`, and may be used before it is
+// bound: what is unresolved is a forward reference. Scope is lexical and the
+// receiver is `this`.
+//
+// Evaluation is lazy and runs to a fixpoint — the draft allows ten rounds;
+// here the passes run until nothing changes.
+//
+// What binds tighter is what is written closer: precedence is positional and
+// what is left associates first, unless a rule says otherwise.
+//
+// A pattern binds with `{name: type}`, offers alternatives with `|`, and
+// takes its body after `=>`. A value is called by writing the argument beside
+// it; calling what is not callable is an error, and what a value does not
+// have itself it asks what it is made of.
+//
+// Diagnostics are collected rather than thrown, and each one says where it
+// is. spec: the draft also asks for a repl, stepping through a program and
+// browsing what it parsed to — that is the Ether's, not the language's.

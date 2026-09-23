@@ -1123,7 +1123,9 @@ export namespace Ray {
     missing(rule: Node, impl: Node, scope?: Node): Text.Node[] {
       const cached = this.readiness.get(impl);
       if (scope === undefined && cached && cached.version === this.version) return cached.missing;
-      const bound = new Set<string>(['this', ...(impl.params ?? []), ...rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece.name] : [])]);
+      // What the body declares, wherever it declares it, is the body's own —
+      // which is about what is reported; readiness is answered as before.
+      const bound = new Set<string>(['this', ...(impl.params ?? []), ...(scope === undefined ? [] : this.handed.get(rule) ?? []), ...rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece.name] : [])]);
       const frame = scope ?? impl.closure ?? this.GLOBAL;
       const heads = new Set<string>([this.RETURN, this.RECUR].flatMap(node => [node.key!, node.key!.replace(/\\$/, '')]));
       const scopes = new Set<Node>();

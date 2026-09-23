@@ -177,7 +177,7 @@ Node := base class {
   // type from another.
   instance_of (type) => (
     found ^keyword := None
-    goto built if this
+    goto mine if this
     goto no if type.instance
     goto scan if type.components
     goto no
@@ -192,7 +192,7 @@ Node := base class {
    skip\
     walker = walker.next
     goto step
-   built\
+   mine\
     found = .built_on(type)
     goto no
    yes\

@@ -12,6 +12,31 @@ Nameable := class {
 }
 Entity := class { }
 
+// `class Location = Ray` (draft: .ray2/_todo/.../Entity.ray): where a thing
+// is. A location sits in a hierarchy — what holds it, and what it holds — and
+// is hosted by an instance: a host machine and the instances it runs, a
+// directory and the directories in it, a window and the windows in it, a
+// region and the regions in it. spec: the draft's `[{field: *}]`, a child
+// reached by the field it is decorated with, awaits index rules on a class;
+// `host` is a Node until instances are here. Where a thing is *written* is
+// answered by the machine (`external where`), and is what tells one type from
+// another.
+Location := class: Ray {
+  parent?: Node
+  children: (chain None)
+  host?: Node
+
+  // What this location holds, holds it: a child says what it is in.
+  holds (child) => (
+    .children &= child
+    child.parent = this
+
+    child
+  )
+  // How deep this is: what holds it, and what holds that.
+  depth => if (exists .parent) { .parent.depth.succ } else { zero }
+}
+
 World := class: Nameable {
   prefix => `#`
   name: String

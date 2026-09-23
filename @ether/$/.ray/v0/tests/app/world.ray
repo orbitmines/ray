@@ -15,3 +15,11 @@ unless (Network.DomainName(text: String.of(`a.b`)).valid) { INFO@mark `WO7 the d
 unless (Keyboard.Key(name: String.of(`a`)).press.pressed) { INFO@mark `WO9 a pressed key is not pressed` }
 unless (Chat().say(wp, String.of(`hi`)).count == one) { INFO@mark `WO10 a said message is not in the chat` }
 unless (Proof.theorem(Proof.Proposition(holds: true), Proof(proposition: None, argument: Proof.Proposition(holds: true)))) { INFO@mark `WO11 the theorem does not hold` }
+
+// Locations: what holds what, and how deep that goes.
+here := Location(host: None)
+there := here.holds(Location(host: None))
+unless (here.depth == zero) { INFO@mark `LO1 a location nothing holds is not at zero` }
+unless (there.depth == one) { INFO@mark `LO2 a held location is not one deep` }
+unless (here.children.count == one) { INFO@mark `LO3 the holder does not hold one` }
+unless (exists there.parent) { INFO@mark `LO4 a held location has no parent` }

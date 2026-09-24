@@ -994,6 +994,10 @@ export namespace Ray {
             }
           }
           if (token) {
+            // What heads a rule is not a member name. If the rule could not be
+            // reached because the value is not there to reach it with, what is
+            // written is left unread and said so, rather than asked of nothing.
+            if (Node.heads.has(token) && !this.probing) break;
             const at = cursor.span(cursor.cursor, cursor.cursor + token.length - 1);
             cursor.advance(token.length);
             value = this.member(value!, token, at);

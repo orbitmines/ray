@@ -23,3 +23,33 @@ unless (here.depth == zero) { INFO@mark `LO1 a location nothing holds is not at 
 unless (there.depth == one) { INFO@mark `LO2 a held location is not one deep` }
 unless (here.children.count == one) { INFO@mark `LO3 the holder does not hold one` }
 unless (exists there.parent) { INFO@mark `LO4 a held location has no parent` }
+
+// Tasks, references, personas and repositories: what a class says it holds.
+wt := Task(name: String.of(`walk`), goal: None)
+unless (wt.interrupted.not) { INFO@mark `TA1 a new task is interrupted` }
+unless (wt.interrupt.interrupted) { INFO@mark `TA2 an interrupted task is not interrupted` }
+
+wr := Reference(title: String.of(`a`), author: None)
+unless (wr.draft) { INFO@mark `RE1 a new reference is no draft` }
+unless (wr.publish.draft.not) { INFO@mark `RE2 a published reference is still a draft` }
+
+wa := Avatar(persona: wp, platform: None)
+unless (wp.embody(wa).persona.name == String.of(`alice`)) { INFO@mark `PE1 an embodied avatar is not of its persona` }
+unless (wp.avatars.count == one) { INFO@mark `PE2 a persona has other than one avatar` }
+
+unless (Repository(world: wg).histories.count.is_zero) { INFO@mark `RP1 a new repository already has histories` }
+unless (Region(name: String.of(`north`)).name == String.of(`north`)) { INFO@mark `RG1 a region is not a world by another name` }
+unless (Instance(location: None).status == Status.online) { INFO@mark `IN1 a new instance is not online` }
+unless (here == here) { INFO@mark `LO5 a location is not itself` }
+
+// spec: three things a world asks for and does not get yet.
+// A class that is not built on `Ray` has no equality of its own, so
+// `wg == wg` is not true — what every ray is is where `Ray` says it, and
+// `World` is not one.
+// unless (wg == wg) { INFO@mark `WO12 a world is not itself` }
+// An `Item` built from only some of its fields is not there to be asked
+// about, though its methods answer; the same for a `Certificate`.
+// unless (exists Item(name: String.of(`lamp`), issuer: wg)) { INFO@mark `IT1 an item built from some of its fields is nothing` }
+// Every member of `Status` but the first is lost, so a persona is never
+// offline (see the enum rules).
+// unless (wp.status == Status.offline) { INFO@mark `PE3 a new persona is not offline` }

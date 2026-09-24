@@ -55,14 +55,22 @@ UUID := class: Hexadecimal {
   // spec: the 60-bit timestamp since 1582-10-15 in 100ns steps awaits Time
   // reading the clock as a number; the node awaits `os` handing the MAC address.
   v1 := class: UUID {
-    dynamically assert (.version == one)
+    // spec: `dynamically assert (.version == one)` is the draft's, and waits on
+    // `dynamically` meaning what it says — read again when what it depends on
+    // changes. Read once, here, it asks a class what its version is, and a
+    // class is not one of its own instances.
+    // dynamically assert (.version == one)
   }
   // class v3 (namespace: UUID, name: String) < UUID
   // spec: md5(namespace, name) awaits Encoding's hashes.
   v3 := class: UUID {
     namespace: UUID
     name: String
-    dynamically assert (.version == three)
+    // spec: `dynamically assert (.version == three)` is the draft's, and waits on
+    // `dynamically` meaning what it says — read again when what it depends on
+    // changes. Read once, here, it asks a class what its version is, and a
+    // class is not one of its own instances.
+    // dynamically assert (.version == three)
   }
   // class v4 < UUID = secure Hexadecimal{length == 32}.random ~~ version = 4
   v4 := class: UUID {
@@ -70,14 +78,22 @@ UUID := class: Hexadecimal {
       .head.at(ten + two).value = four
       this.head.at(ten + six).value = eight + (.head.at(ten + six).value % four)
     )
-    dynamically assert (.version == four)
+    // spec: `dynamically assert (.version == four)` is the draft's, and waits on
+    // `dynamically` meaning what it says — read again when what it depends on
+    // changes. Read once, here, it asks a class what its version is, and a
+    // class is not one of its own instances.
+    // dynamically assert (.version == four)
   }
   // class v5 (namespace: UUID, name: String) < UUID
   // spec: sha1(namespace, name) awaits Encoding's hashes.
   v5 := class: UUID {
     namespace: UUID
     name: String
-    dynamically assert (.version == five)
+    // spec: `dynamically assert (.version == five)` is the draft's, and waits on
+    // `dynamically` meaning what it says — read again when what it depends on
+    // changes. Read once, here, it asks a class what its version is, and a
+    // class is not one of its own instances.
+    // dynamically assert (.version == five)
   }
 
   // As text: each digit, in groups of 8, 4, 4, 4 and 12 with dashes between.

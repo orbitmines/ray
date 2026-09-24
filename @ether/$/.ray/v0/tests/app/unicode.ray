@@ -15,6 +15,5 @@ unless (Unicode.category(digit) == Unicode.GeneralCategory.number) { INFO@mark `
 space := String.of(` `).first
 unless (Unicode.category(space) == Unicode.GeneralCategory.separator) { INFO@mark `UN7 a space does not separate` }
 
-// spec: `letter` is the member `GeneralCategory` is written with, and an enum
-// written inside a class loses that one.
-// unless (exists Unicode.GeneralCategory.letter) { INFO@mark `UN8 there is no letter to be` }
+unless (exists Unicode.GeneralCategory.letter) { INFO@mark `UN8 there is no letter to be` }
+unless (Unicode.category(String.of(`a`).first) == Unicode.GeneralCategory.letter) { INFO@mark `UN9 a letter is not a letter` }

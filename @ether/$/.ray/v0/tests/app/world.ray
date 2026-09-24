@@ -53,6 +53,7 @@ unless (wi.move(here).location == here) { INFO@mark `IT3 a moved item is not whe
 wc := Certificate(issuer: wg, secret: None)
 unless (wi.certify(wc).certificate == wc) { INFO@mark `IT4 a certified item does not carry its certificate` }
 
-// spec: every member of `Status` but the first is lost, so a persona is never
-// offline (see the enum rules).
-// unless (wp.status == Status.offline) { INFO@mark `PE3 a new persona is not offline` }
+unless (wp.status == Status.offline) { INFO@mark `PE3 a new persona is not offline` }
+unless (exists Status.invisible) { INFO@mark `ST1 there is no being invisible` }
+unless (exists Accessor.Permission.public) { INFO@mark `AC1 there is no public permission` }
+if (Accessor.Permission.private == Accessor.Permission.public) { INFO@mark `AC2 private and public are the same` }

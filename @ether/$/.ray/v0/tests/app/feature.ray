@@ -15,8 +15,7 @@ unless (t.mark_applied.applied) { INFO@mark `FE6 a transaction does not remember
 unless (Proof.rfl(Proof.Proposition(holds: true))) { INFO@mark `FE7 what holds is not proved by itself` }
 if (Proof.rfl(Proof.Proposition(holds: false))) { INFO@mark `FE8 what does not hold is proved by itself` }
 
-// spec: `plus` is the member `Inverse` is written with, and an enum written
-// inside a class loses that one.
-// unless (exists Transaction.Inverse.plus) { INFO@mark `FE9a the inverses have no plus` }
+unless (exists Transaction.Inverse.plus) { INFO@mark `FE9a the inverses have no plus` }
+unless (String.of(Transaction.Inverse.plus.is) == String.of(`-`)) { INFO@mark `FE9b the inverse of plus is not minus` }
 unless (exists Transaction.Inverse.minus) { INFO@mark `FE9 the inverses have no minus` }
 unless (String.of(Transaction.Inverse.minus.is) == String.of(`+`)) { INFO@mark `FE10 the inverse of minus is not plus` }

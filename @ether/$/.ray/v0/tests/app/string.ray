@@ -73,3 +73,7 @@ unless (String.of(`f`).first.digit_value == (ten + five)) { INFO@mark `S42 f is 
 if (exists String.of(`-`).first.digit_value) { INFO@mark `S43 a dash has a digit value` }
 unless (String.of(`1a`).spells_in(ten + six)) { INFO@mark `S44 1a does not spell a hexadecimal number` }
 if (String.of(`1a`).spells_in(ten)) { INFO@mark `S45 1a spells a decimal number` }
+
+// The dash a text form is written with, which nothing said the value of.
+unless (ascii_dash == ((four * ten) + five)) { INFO@mark `S46 a dash is not forty-five` }
+unless (String.of(`a-b`).split(Character.of(ascii_dash)).count == two) { INFO@mark `S47 splitting on a dash does not give two parts` }

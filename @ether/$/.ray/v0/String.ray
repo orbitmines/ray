@@ -484,6 +484,7 @@ Chain.components.hierarchy &= class {
 
 // The Latin codepoints the classes above are cut at, built when first asked for.
 ascii_space => (three * ten) + two
+ascii_dash => (four * ten) + five
 ascii_dot => (four * ten) + six
 ascii_zero => (four * ten) + eight
 ascii_nine => ascii_zero + nine
@@ -541,6 +542,14 @@ number_of (bits) => (
 // spec: Regex, from the draft's `/{pattern}/{flags}`: only literal patterns
 // are matched (a pattern is a String and a match is containment); the flag
 // set is the draft's `i g u`; character classes await the Unicode tables.
+//
+// A matcher that reads the pattern character by character — `.` for any one,
+// `*` `+` `?` for how many of the one before, `^` and `$` for the ends — was
+// written and taken out again: `Regex.here(p.next, t.next)`, recursing twice
+// over a two-character pattern, exhausts eight gigabytes, while the same
+// recursion written over a plain chain (`K.step(link.next)`, three deep) costs
+// nothing. What differs is inside `here`, not the recursion; until that is
+// found a pattern is what it spells.
 Regex := class {
   Flag := enum ignore_case | global | unicode
   pattern: String

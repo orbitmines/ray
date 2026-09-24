@@ -45,10 +45,14 @@ unless (here == here) { INFO@mark `LO5 a location is not itself` }
 unless (wg == wg) { INFO@mark `WO12 a world is not itself` }
 if (wg == World(name: String.of(`other`))) { INFO@mark `WO13 two worlds are the same world` }
 
-// spec: two things a world asks for and does not get yet.
-// An `Item` built from only some of its fields is not there to be asked
-// about, though its methods answer; the same for a `Certificate`.
-// unless (exists Item(name: String.of(`lamp`), issuer: wg)) { INFO@mark `IT1 an item built from some of its fields is nothing` }
-// Every member of `Status` but the first is lost, so a persona is never
+// Items: what one is issued by, where it is, and what says so.
+wi := Item(name: String.of(`lamp`), issuer: wg)
+unless (wi.name == String.of(`lamp`)) { INFO@mark `IT1 an item lost its name` }
+unless (wi.issuer == wg) { INFO@mark `IT2 an item forgot who issued it` }
+unless (wi.move(here).location == here) { INFO@mark `IT3 a moved item is not where it was moved` }
+wc := Certificate(issuer: wg, secret: None)
+unless (wi.certify(wc).certificate == wc) { INFO@mark `IT4 a certified item does not carry its certificate` }
+
+// spec: every member of `Status` but the first is lost, so a persona is never
 // offline (see the enum rules).
 // unless (wp.status == Status.offline) { INFO@mark `PE3 a new persona is not offline` }

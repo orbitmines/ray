@@ -48,7 +48,7 @@ Number := class: Ray {
     counter := chain None
     counter &= zero
     rest ^keyword := this
-    while rest.nonzero {
+    while rest {
       digit ^keyword := counter.head
       carrying ^keyword := true
       while carrying {
@@ -77,12 +77,17 @@ Number := class: Ray {
   )
   pred => .next
 
-  is_zero => .is_terminal
-  nonzero => .is_zero.not
+  // Zero is the number nothing follows. Asked straight, rather than through
+  // what a ray calls its end and what a boolean calls its opposite: this is
+  // asked once for every step of every walk.
+  is_zero => (exists .next).not
+  nonzero => exists .next
   // A number answers a condition the way a bit does: nothing is nothing, and
   // anything else is there. It is what lets `0` and `1` be the two bits and
   // numbers at once.
-  holds => if .is_zero { None } else { global }
+  // A number holds what follows it: zero is followed by nothing, and every
+  // other number by the one below it. Asking a branch instead cost a branch.
+  holds => .next
   // spec: negating a number negates what it answers as a condition, so `0.not`
   // holds and any other number's does not; the bitwise negation of a number
   // waits on its width being known.
@@ -102,7 +107,7 @@ Number := class: Ray {
   + (other: Number) => (
     total := this
     left := other
-    while left.nonzero {
+    while left {
       total = total.succ
       left = left.pred
     }
@@ -123,7 +128,7 @@ Number := class: Ray {
   * (other: Number) => (
     multiplied := zero
     left := other
-    while left.nonzero {
+    while left {
       multiplied = multiplied + this
       left = left.pred
     }
@@ -170,7 +175,7 @@ Number := class: Ray {
   half => (
     count := zero
     rest := this
-    while rest.nonzero {
+    while rest {
       rest = rest.pred
       if rest.nonzero {
         rest = rest.pred
@@ -204,7 +209,7 @@ Number := class: Ray {
   pow (exponent: Number) => (
     power := one
     left := exponent
-    while left.nonzero {
+    while left {
       power = power * this
       left = left.pred
     }
@@ -216,7 +221,7 @@ Number := class: Ray {
   factorial => (
     raised := one
     left := this
-    while left.nonzero {
+    while left {
       raised = raised * left
       left = left.pred
     }
@@ -226,7 +231,7 @@ Number := class: Ray {
   gcd (other: Number) => (
     a := this
     b := other
-    while b.nonzero {
+    while b {
       rest := a % b
       a = b
       b = rest
@@ -241,7 +246,7 @@ Number := class: Ray {
   even => (
     parity := true
     rest := this
-    while rest.nonzero {
+    while rest {
       parity = parity.not
       rest = rest.pred
     }

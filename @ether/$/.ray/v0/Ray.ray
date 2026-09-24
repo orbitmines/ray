@@ -232,7 +232,7 @@ Ray := class: Iterable {
   at (index: Number) => (
     here := this
     left := index
-    while left.nonzero {
+    while left {
       here = here.next
       left = left.pred
     }

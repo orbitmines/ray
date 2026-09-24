@@ -72,7 +72,7 @@ Roman := class {
     hundreds := number / hundred
     below := number % hundred
     thousands ^keyword := hundreds / ten
-    while thousands.nonzero {
+    while thousands {
       out &= Roman.m_digit
       thousands = thousands.pred
     }
@@ -93,7 +93,7 @@ Roman := class {
     else {
       unless (count < five) { out &= five_digit }
       ones ^keyword := count % five
-      while ones.nonzero {
+      while ones {
         out &= one_digit
         ones = ones.pred
       }
@@ -114,7 +114,7 @@ Roman := class {
     hundreds := number / hundred
     below := number % hundred
     thousands ^keyword := hundreds / ten
-    while thousands.nonzero {
+    while thousands {
       out &= Roman.m_digit
       thousands = thousands.pred
     }
@@ -126,7 +126,7 @@ Roman := class {
   place_additive (out, count: Number, five_digit, one_digit) => (
     unless (count < five) { out &= five_digit }
     ones ^keyword := count % five
-    while ones.nonzero {
+    while ones {
       out &= one_digit
       ones = ones.pred
     }

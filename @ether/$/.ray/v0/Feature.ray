@@ -29,7 +29,7 @@ Random := class {
   bits (count: Number) => (
     drawn := chain None
     left ^keyword := count
-    while left.nonzero {
+    while left {
       drawn &= Random.bit
       left = left.pred
     }
@@ -40,7 +40,7 @@ Random := class {
   below (limit: Number) => (
     width ^keyword := zero
     rest ^keyword := limit
-    while rest.nonzero {
+    while rest {
       rest = rest.half
       width = width.succ
     }
@@ -52,7 +52,7 @@ Random := class {
   number (width: Number) => (
     total ^keyword := zero
     left ^keyword := width
-    while left.nonzero {
+    while left {
       total = total + total
       if Random.bit { total = total.succ }
       left = left.pred
@@ -72,7 +72,7 @@ Choice := class {
   choose_count (from, count: Number) => (
     picked := chain None
     left ^keyword := count
-    while left.nonzero {
+    while left {
       picked &= from.random
       left = left.pred
     }

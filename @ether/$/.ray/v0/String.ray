@@ -125,7 +125,7 @@ Character := class {
     octets := chain None
     if (width == one) { octets &= 0 } else {
       lead ^keyword := width
-      while lead.nonzero {
+      while lead {
         octets &= 1
         lead = lead.pred
       }
@@ -133,17 +133,17 @@ Character := class {
     }
     walker ^keyword := payload_bits
     take ^keyword := if (width == one) { seven } else { seven - width }
-    while take.nonzero {
+    while take {
       octets &= walker.value
       walker = walker.next
       take = take.pred
     }
     rest ^keyword := width.pred
-    while rest.nonzero {
+    while rest {
       octets &= 1
       octets &= 0
       take = six
-      while take.nonzero {
+      while take {
         octets &= walker.value
         walker = walker.next
         take = take.pred
@@ -176,7 +176,7 @@ Character := class {
     walker ^keyword := bits.head
     left ^keyword := count
     verdict ^keyword := true
-    while left.nonzero {
+    while left {
       if walker.value { verdict = false }
       walker = walker.next
       left = left.pred
@@ -379,7 +379,7 @@ String := class: Array {
   repeat (times: Number) => (
     out := chain None
     left ^keyword := times
-    while left.nonzero {
+    while left {
       .characters for { out &= it.value }
       left = left.pred
     }
@@ -439,9 +439,10 @@ String := class: Array {
     while (exists walker) {
       current := chain None
       lead := walker
-      width := if lead.value.not { one } elsif lead.next.next.value.not { two } elsif lead.next.next.next.value.not { three } else { four }
-      remaining ^keyword := eight * width
-      while remaining.nonzero {
+      // How many bits the character is written with, counted out rather than
+      // multiplied: a number is a walk, and this is asked once per character.
+      remaining ^keyword := if lead.value.not { eight } elsif lead.next.next.value.not { eight + eight } elsif lead.next.next.next.value.not { eight + eight + eight } else { eight + eight + eight + eight }
+      while remaining {
         current &= walker.value
         walker = walker.next
         remaining = remaining.pred
@@ -506,12 +507,12 @@ utf8_limit_three => two.pow(ten + six)
 bits_of (number, width) => (
   counter := chain None
   left ^keyword := width
-  while left.nonzero {
+  while left {
     counter &= 0
     left = left.pred
   }
   rest ^keyword := number
-  while rest.nonzero {
+  while rest {
     digit ^keyword := counter.head
     carrying ^keyword := true
     while (carrying.and(exists digit)) {
@@ -572,7 +573,7 @@ Number.components.hierarchy &= class {
     counter := chain None
     counter &= zero
     rest ^keyword := this
-    while rest.nonzero {
+    while rest {
       digit ^keyword := counter.head
       carrying ^keyword := true
       while carrying {

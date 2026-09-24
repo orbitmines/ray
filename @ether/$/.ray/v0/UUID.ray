@@ -37,10 +37,10 @@ UUID := class: Hexadecimal {
   drawn (count: Number) => (
     out := chain None
     left ^keyword := count
-    while left.nonzero {
+    while left {
       nibble ^keyword := zero
       bit ^keyword := four
-      while bit.nonzero {
+      while bit {
         nibble = nibble + nibble
         if (external random).holds { nibble = nibble.succ }
         bit = bit.pred
@@ -112,7 +112,7 @@ UUID := class: Hexadecimal {
     groups for {
       unless (it.value == eight) { out &= dash }
       left ^keyword := it.value
-      while left.nonzero {
+      while left {
         out &= Character.decimal_digit(walker.value)
         walker = walker.next
         left = left.pred

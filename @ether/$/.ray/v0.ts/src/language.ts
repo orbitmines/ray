@@ -2708,11 +2708,35 @@ export namespace Ray {
         return;
       }
     }
+    private prefixing?: { version: number; marks: Set<string> };
+    // What a word written straight after it belongs to: a rule that reads a
+    // word after one character reads it as that character's, not as a name of
+    // its own — `.name` is a member, `^name` a style.
+    get prefixes(): Set<string> {
+      if (this.prefixing?.version === this.version) return this.prefixing.marks;
+      const marks = new Set<string>();
+      const take = (rules: [Node, Node][]) => {
+        for (const [rule] of rules) {
+          const pieces = rule.pattern!;
+          const opening = pieces[0], after = pieces[1];
+          if (opening?.kind !== 'literal' || after?.kind !== 'capture' || !after.raw) continue;
+          const text = opening.text.trim();
+          if (text.length === 1 && !/[\p{L}\p{N}_]/u.test(text)) marks.add(text);
+        }
+      };
+      for (const scope of this.BASE === undefined ? [this.GLOBAL] : [this.GLOBAL, this.BASE]) {
+        const set = this.ruleset(scope);
+        take(set.operand);
+        take(set.receiver);
+      }
+      this.prefixing = { version: this.version, marks };
+      return marks;
+    }
     paint_words(span: Text.Node, scope: Node) {
       const text = span.source.value;
       for (const found of span.string.matchAll(/[\p{L}_][\p{L}\p{N}_-]*|[^\s\p{L}\p{N}_(){}\[\]`,.]+/gu)) {
         const at = span.begin + found.index!;
-        if (text[at - 1] === '.') continue;
+        if (this.prefixes.has(text[at - 1])) continue;
         const reference = this.reference(scope, found[0], span.span(at, at + found[0].length - 1));
         if (this.resolved(reference) !== undefined) this.paint_reference(reference, true);
       }
@@ -3007,7 +3031,7 @@ export namespace Ray {
       const definitions = new Set(declared.map(token => token.begin));
       for (const found of body.string.matchAll(/[\p{L}_][\p{L}\p{N}_-]*/gu)) {
         const at = body.begin + found.index!, word = found[0];
-        if (!outside(at) || text[at - 1] === '.' || text[at - 1] === '^' || definitions.has(at)) continue;
+        if (!outside(at) || this.prefixes.has(text[at - 1]) || definitions.has(at)) continue;
         const span = body.span(at, at + word.length - 1);
         if (scope.lookup(word) === undefined) { this.paint_rule(word, span, scope); continue; }
         this.paint_reference(this.reference(scope, word, span), true);

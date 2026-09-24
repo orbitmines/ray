@@ -1215,13 +1215,13 @@ export namespace Ray {
         const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, operand: opts.operand, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule), closure: impl.closure });
           if (!match) continue;
         const loose = pieces[0]?.kind === 'space';
-        if (best && best.match.spanned !== match.spanned) { if (match.spanned) continue; best = { rule, impl, match }; continue; }
         const own = match.pattern - match.begin, current = best ? best.match.pattern - best.match.begin : -1;
         const length = match.end - match.begin, total = best ? best.match.end - best.match.begin : -1;
         // A rule that only asks for a space where one already is stays behind
         // a rule that spells the same ground out, but never ahead of a longer
         // reading of it.
         const tie = best !== undefined && (best.rule.pattern![0]?.kind === 'space') !== loose ? (loose ? -1 : 1) : 0;
+        if (best && best.match.spanned !== match.spanned) { if (match.spanned) continue; best = { rule, impl, match }; continue; }
         if (own > current || (own === current && (length > total || (length === total && (tie > 0 || (tie === 0 && best!.impl.forward && !impl.forward)))))) best = { rule, impl, match };
       }
       return best;
@@ -1326,9 +1326,16 @@ export namespace Ray {
       let spanned = false, skipped = false;
       for (let p = 0; p < pieces.length; p++) {
         const piece = pieces[p];
+        // What a capture gave back is not a gap in the pattern: a capture that
+        // stops before the literal closing it leaves that space behind itself.
+        const gave = skipped;
         if (piece.kind !== 'space') skipped = false;
-        const from = p === 0 || (p === 1 && opts.leading) ? i : this.skip(cursor, i);
-        if (from > i && piece.kind !== 'space' && pieces[p - 1]?.kind !== 'space') spanned = true;
+        // What is taken as written is taken from where it starts: a raw capture
+        // neither skips the space before it nor gives back the space it ends
+        // on, so a written text that is only a space is that space.
+        const as_written = piece.kind === 'capture' && piece.raw && pieces[p - 1]?.kind === 'literal';
+        const from = p === 0 || (p === 1 && opts.leading) || as_written ? i : this.skip(cursor, i);
+        if (from > i && !gave && piece.kind !== 'space' && pieces[p - 1]?.kind !== 'space') spanned = true;
         switch (piece.kind) {
           case 'literal': {
             const word = /[\p{L}\p{N}_]/u;
@@ -1382,12 +1389,12 @@ export namespace Ray {
             else if (terminator?.kind === 'literal' && this.optional(pieces, literal_at) >= 0) {
               end = this.until(cursor, from, terminator.text, frame, piece.raw);
               if (end < 0) end = this.line_end(cursor, from, frame, piece.raw);
-              while (end > from && /[ \t]/.test(text[end - 1])) end--;
+              while (!as_written && end > from && /[ \t]/.test(text[end - 1])) { end--; skipped = true; }
             }
             else if (next?.kind === 'literal') {
               end = this.until(cursor, from, next.text, frame, piece.raw);
               if (end < 0 && this.optional(pieces, next_at) >= 0) end = this.line_end(cursor, from, frame, piece.raw);
-              while (end > from && /[ \t]/.test(text[end - 1])) end--;
+              while (!as_written && end > from && /[ \t]/.test(text[end - 1])) { end--; skipped = true; }
             }
             else if (next?.kind === 'newline') end = this.line_end(cursor, from, frame, piece.raw);
             else if (next?.kind === 'space') end = this.word_end(cursor, from, frame);
@@ -3278,12 +3285,17 @@ export namespace Ray {
     'declare': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at, { declare: true }) },
     // Whether a name is the scope's own (or already a value): what `:` types rather than declares.
     'own': { arity: 1, pure: true, fn: ({ interpreter, args: [node] }) => {
-      // The name as written, followed through what it is bound to while that is
-      // itself a name; the last name's scope decides.
+      // The name as written, followed through what it is bound to while that
+      // is itself a name.
+      const written = node.lazy?.frame;
       let cur: Node | undefined = node.lazy !== undefined ? interpreter.reference(node.lazy.frame, node.lazy.span.string.trim(), node.lazy.span) : node;
       for (let depth = 0; cur?.ref !== undefined && depth < 64; depth++) { const held = interpreter.bound(cur); if (held?.ref !== undefined) cur = held; else break; }
       if (cur === undefined || cur.unknown || cur.ref?.scope.unknown) return interpreter.NONE;
-      return cur.ref === undefined || cur.ref.scope.own(cur.ref.key) !== undefined || cur.ref.scope.members?.get(cur.ref.key) !== undefined ? interpreter.GLOBAL : interpreter.NONE;
+      // A name is held where it is written: what is only visible from further
+      // out is not this one's, so writing it down here writes a new name down.
+      // A name reached through another answers about where that one lives.
+      const scope = cur.ref === undefined ? undefined : written !== undefined && cur.ref.key === node.lazy?.span.string.trim() ? written : cur.ref.scope;
+      return scope === undefined || scope.own(cur.ref!.key) !== undefined || scope.members?.get(cur.ref!.key) !== undefined ? interpreter.GLOBAL : interpreter.NONE;
     } },
     'goto': { arity: 2, fn: ({ interpreter, frame, args: [label, condition] }) => interpreter.jump(label, condition, frame) },
     'none': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.NONE },

@@ -46,3 +46,14 @@ unless (exists Child(named: `q`).named) { INFO@mark `TY14 the parent's field can
 // one_holder := Holder()
 // one_holder.kept &= `x`
 // unless (Holder().kept.count.is_zero) { INFO@mark `TY15 two children share what their parent declared` }
+
+// A narrowed type is not just what it narrows: being one of a kind asks the
+// constraint as well as what the thing is built on.
+Small := Number{. < five}
+unless (exists three.instance_of(Small)) { INFO@mark `TY16 three is not one of the small` }
+if (exists seven.instance_of(Small)) { INFO@mark `TY17 seven is one of the small` }
+unless (exists three.instance_of(Number)) { INFO@mark `TY18 three is not a number` }
+// spec: a narrowing of a narrowing keeps only its own constraint, so
+// `Small{. < two}` admits three. One narrowing per type, as `<>` says above.
+// unless (exists one.instance_of(Small{. < two})) { INFO@mark `TY19 one is not tiny` }
+// if (exists three.instance_of(Small{. < two})) { INFO@mark `TY20 three is tiny` }

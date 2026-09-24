@@ -205,6 +205,10 @@ Node := base class {
     goto step
    mine\
     found = .built_on(type)
+    goto admitted if found
+    goto no
+   admitted\
+    found = type.admits(this).holds
     goto no
    yes\
     found = global
@@ -243,6 +247,10 @@ Node := base class {
   // `Type.verify(x)`: what a type asserts of a value typed by it; a narrowing
   // (`Type{predicate}`) asserts its predicate, after what it narrows asserts.
   verify (candidate) => candidate
+  // `Type.admits(x)`: the same thing asked rather than asserted, so that being
+  // one of a kind can be answered. A kind admits what it is made for; a
+  // narrowing admits what also satisfies it.
+  admits (candidate) => true
   // `Type{predicate}`: the type narrowed by a constraint; `values{predicate}`:
   // the values that satisfy it.
   {this}{`{`}{literal narrowing}{`}`} ^punctuation => (
@@ -267,6 +275,7 @@ Node := base class {
 
           candidate
         )
+        admits (candidate) => if (narrowed.admits(candidate)) { candidate.satisfies({ inline narrowing }) } else { false }
         if (exists this.instance) { selected.verify(this) }
       }
     }

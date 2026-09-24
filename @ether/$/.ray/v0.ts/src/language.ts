@@ -1207,18 +1207,17 @@ export namespace Ray {
           : this.candidates(receiver, frame);
       const ahead = cursor.source.value[this.skip(cursor, cursor.cursor)];
       for (const [rule, impl] of set) {
-        const pieces = rule.pattern!;
-        if (this.literal_rule(rule)) continue;
-        const head = pieces[pieces[0]?.kind === 'capture' ? 1 : 0];
-        if (head?.kind === 'literal' && ahead !== undefined && head.text[0] !== ' ' && head.text[0] !== ahead) continue;
+        const shape = this.shaped(rule);
+        if (shape.literal) continue;
+        if (shape.head !== undefined && ahead !== undefined && shape.head !== ahead) continue;
         if (opts.forwards && !impl.forward) continue;
-        if (pieces.some(piece => piece.kind === 'operator') && (this.rewriting.has(rule) || this.missing(rule, impl).length > 0)) continue;
-        const leading = pieces[0]?.kind === 'capture';
-        const first = pieces[leading ? 1 : 0];
-        if (!!opts.newline !== (first?.kind === 'newline')) continue;
+        if (!!opts.newline !== shape.newline) continue;
+        if (shape.operator && (this.rewriting.has(rule) || this.missing(rule, impl).length > 0)) continue;
+        const pieces = rule.pattern!;
+        const leading = shape.leading;
         const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, operand: opts.operand, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule), closure: impl.closure });
           if (!match) continue;
-        const loose = pieces[0]?.kind === 'space';
+        const loose = shape.loose;
         const own = match.pattern - match.begin, current = best ? best.match.pattern - best.match.begin : -1;
         const length = match.end - match.begin, total = best ? best.match.end - best.match.begin : -1;
         // A rule that only asks for a space where one already is stays behind
@@ -2470,6 +2469,27 @@ export namespace Ray {
       finally { this.probing = probing; this.seeking = seeking; }
     }
 
+    // What a rule's pattern says about where it could begin, read once: the
+    // same questions were asked of every rule at every position.
+    private rule_shape = new WeakMap<Node, { literal: boolean; head?: string; leading: boolean; newline: boolean; operator: boolean; loose: boolean }>();
+    shaped(rule: Node) {
+      let found = this.rule_shape.get(rule);
+      if (found !== undefined) return found;
+      const pieces = rule.pattern!;
+      const leading = pieces[0]?.kind === 'capture';
+      const first = pieces[leading ? 1 : 0];
+      const head = pieces[pieces[0]?.kind === 'capture' ? 1 : 0];
+      found = {
+        literal: pieces.length === 1 && pieces[0].kind === 'capture' && pieces[0].type !== undefined,
+        head: head?.kind === 'literal' && head.text[0] !== ' ' ? head.text[0] : undefined,
+        leading,
+        newline: first?.kind === 'newline',
+        operator: pieces.some(piece => piece.kind === 'operator'),
+        loose: pieces[0]?.kind === 'space',
+      };
+      this.rule_shape.set(rule, found);
+      return found;
+    }
     literal_rule(rule: Node): boolean {
       const pieces = rule.pattern!;
       return pieces.length === 1 && pieces[0].kind === 'capture' && pieces[0].type !== undefined;

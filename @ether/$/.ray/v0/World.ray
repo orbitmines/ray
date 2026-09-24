@@ -4,13 +4,15 @@
 // The draft's `Character` (the player) is named `Persona` here, because
 // `Character` is a text character (String.ray).
 
-Nameable := class {
+// Everything is a ray, and what a ray is is what tells one from another, so
+// the classes here are built on `Ray` rather than on nothing.
+Nameable := class: Ray {
   named (name: String) => (
     .name = name
     this
   )
 }
-Entity := class { }
+Entity := class: Ray { }
 
 // `class Location = Ray` (draft: .ray2/_todo/.../Entity.ray): where a thing
 // is. A location sits in a hierarchy — what holds it, and what it holds — and
@@ -100,7 +102,7 @@ Task := class: Quest {
 
 // `class Item`, `def Certificate`: spec: an item is issued by a world, sits at
 // a location, is obtained by a quest, and carries a certificate.
-Item := class {
+Item := class: Ray {
   name: String
   issuer: Node
   location: None
@@ -116,7 +118,7 @@ Item := class {
     this
   )
 }
-Certificate := class {
+Certificate := class: Ray {
   issuer: Node
   secret: Node
   issued_on: Time.now
@@ -126,7 +128,7 @@ Certificate := class {
 // `class History`, `Branch`, `Commit`, `Repository`: spec: a history is a chain
 // of commits in a repository (a world), each by a persona with a version id
 // (`Version = UUID.v1`, v4 here); a branch forks from a point.
-History := class {
+History := class: Ray {
   Commit := class {
     who: Node
     what: Node
@@ -147,21 +149,21 @@ History := class {
   fork => History.Branch(repository: .repository, commits: chain None, from: this)
   Branch := class { }
 }
-Repository := class {
+Repository := class: Ray {
   world: Node
   histories: (chain None)
 
 }
 
 // `class Accessor`: spec: the levels of the draft's modifiers.
-Accessor := class {
+Accessor := class: Ray {
   Permission := enum private | confidential | protected | public
   level: Node
 
 }
 
 // `class Reference`: spec: title, author, date, draft, link, notes.
-Reference := class {
+Reference := class: Ray {
   title: String
   author: Node
   date: Time.now
@@ -181,7 +183,7 @@ Reference := class {
 
 // The player side of `Character.ray`: `Instance`, `Status`, the persona and
 // its avatars, players, NPCs and organizations.
-Instance := class {
+Instance := class: Ray {
   location: Node
   status: Status.online
 

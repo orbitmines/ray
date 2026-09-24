@@ -42,11 +42,10 @@ unless (Region(name: String.of(`north`)).name == String.of(`north`)) { INFO@mark
 unless (Instance(location: None).status == Status.online) { INFO@mark `IN1 a new instance is not online` }
 unless (here == here) { INFO@mark `LO5 a location is not itself` }
 
-// spec: three things a world asks for and does not get yet.
-// A class that is not built on `Ray` has no equality of its own, so
-// `wg == wg` is not true — what every ray is is where `Ray` says it, and
-// `World` is not one.
-// unless (wg == wg) { INFO@mark `WO12 a world is not itself` }
+unless (wg == wg) { INFO@mark `WO12 a world is not itself` }
+if (wg == World(name: String.of(`other`))) { INFO@mark `WO13 two worlds are the same world` }
+
+// spec: two things a world asks for and does not get yet.
 // An `Item` built from only some of its fields is not there to be asked
 // about, though its methods answer; the same for a `Certificate`.
 // unless (exists Item(name: String.of(`lamp`), issuer: wg)) { INFO@mark `IT1 an item built from some of its fields is nothing` }

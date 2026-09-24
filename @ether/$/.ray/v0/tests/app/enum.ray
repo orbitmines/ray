@@ -9,15 +9,29 @@ Shape := enum circle (radius: Number) | square (side: Number) | point
 
 Modifier := enum static | readonly | this
 
-Colour.red.name
-Colour.blue.name
+mark ^keyword := external global
 
-Shape.circle.radius
-Shape.square.side
-Shape.point.name
+unless (exists Colour.red) { INFO@mark `EM1 the member an enum is written with is not there` }
+unless (exists Colour.blue) { INFO@mark `EM2 the last member is not there` }
+unless (exists Colour.red.name) { INFO@mark `EM3 a member does not know its name` }
+unless (Colour.red == Colour.red) { INFO@mark `EM4 a member is not itself` }
+if (Colour.red == Colour.blue) { INFO@mark `EM5 two members of one enum are the same` }
+unless (exists Colour.red.instance_of(Colour)) { INFO@mark `EM6 a member is not one of its enum` }
+unless (Colour.components.count == three) { INFO@mark `EM7 an enum of three has other than three members` }
 
-Modifier.static.name
-Modifier.this.name
+// Members need not have the same shape: each carries what it is written with.
+unless (exists Shape.circle.radius) { INFO@mark `EM8 a member does not carry its field` }
+unless (exists Shape.square.side) { INFO@mark `EM9 the second member does not carry its field` }
+if (exists Shape.point.radius) { INFO@mark `EM10 a member carries another's field` }
+unless (exists Shape.point.name) { INFO@mark `EM11 a member without fields has no name` }
+
+// A member may be named what the language names something else — `this` is
+// read as the member, not as the receiver.
+unless (exists Modifier.this.name) { INFO@mark `EM12 a member named this has no name` }
+// spec: a member named `static` has no name of its own. `static` is what a
+// rule body calls the class it is written in, and the member is read as that
+// instead — the same clash as a field named `forward` (Feature.ray says so).
+// unless (exists Modifier.static.name) { INFO@mark `EM13 a member named static has no name` }
 
 // Conditional goto is the only control flow the runtime provides: the jump
 // is taken when its condition has a value, and the statements it skips do

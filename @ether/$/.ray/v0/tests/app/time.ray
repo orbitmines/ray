@@ -1,0 +1,25 @@
+// Time: the units, and what a calendar says about a year. The numbers are
+// kept small, because a number here is walked.
+
+mark ^keyword := external global
+
+unless (Second.is_temporal) { INFO@mark `TI1 a second is not temporal` }
+unless (Hour.is_temporal) { INFO@mark `TI2 an hour is not temporal` }
+unless (Hour.base_unit == Second) { INFO@mark `TI3 an hour is not counted in seconds` }
+unless (Minute.base_unit == Second) { INFO@mark `TI4 a minute is not counted in seconds` }
+
+unless (Julian.hours_in_day == ((two * ten) + four)) { INFO@mark `TI5 a day is not twenty-four hours` }
+unless (Julian.minutes_in_hour == (six * ten)) { INFO@mark `TI6 an hour is not sixty minutes` }
+unless (Julian.seconds_in_minute == (six * ten)) { INFO@mark `TI7 a minute is not sixty seconds` }
+
+unless (Julian.is_leap_year(four)) { INFO@mark `TI8 the fourth year is not a leap year` }
+if (Julian.is_leap_year(five)) { INFO@mark `TI9 the fifth year is a leap year` }
+unless (Gregorian.is_leap_year(four)) { INFO@mark `TI10 the fourth year is not a leap year in the Gregorian` }
+if (Gregorian.is_leap_year(three)) { INFO@mark `TI11 the third year is a leap year in the Gregorian` }
+
+unless (Julian.months.count == (ten + two)) { INFO@mark `TI12 a year has other than twelve months` }
+unless (Julian.weekdays.count == seven) { INFO@mark `TI13 a week has other than seven days` }
+
+unless (seconds(five).is_temporal) { INFO@mark `TI14 five seconds is not temporal` }
+unless (seconds(five).amount == five) { INFO@mark `TI15 five seconds is not five of them` }
+unless (minutes(two).unit == Minute) { INFO@mark `TI16 two minutes are not minutes` }

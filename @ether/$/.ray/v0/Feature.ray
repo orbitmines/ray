@@ -23,7 +23,9 @@ IO := class {
 // `Node += random`, `Iterable += random`, `seed ()`: one bit from the machine
 // and what is built from it. spec: the generator cannot be seeded here.
 Random := class {
-  bit => (external random).holds
+  // The machine's own bit, read as the digit it spells: what it hands over is
+  // a literal, and a digit is a number that answers as a bit.
+  bit => if ((external random) == 1) { 1 } else { 0 }
   bits (count: Number) => (
     drawn := chain None
     left ^keyword := count

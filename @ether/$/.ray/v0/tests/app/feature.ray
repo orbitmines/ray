@@ -1,0 +1,21 @@
+// Features: what the machine hands over, what is chosen, what is proved, and
+// what a transaction remembers.
+
+mark ^keyword := external global
+
+unless (exists Random.bit) { INFO@mark `FE1 a bit from the machine is nothing` }
+unless (Random.bits(three).count == three) { INFO@mark `FE2 three bits are not three` }
+unless (exists Choice.coin) { INFO@mark `FE3 a coin comes up with nothing` }
+
+t := Transaction(forward: one, backward: two)
+unless (t.forward == one) { INFO@mark `FE4 a transaction forgot its forward` }
+unless (t.reversed.forward == two) { INFO@mark `FE5 a reversed transaction does not swap what it holds` }
+unless (t.mark_applied.applied) { INFO@mark `FE6 a transaction does not remember being applied` }
+
+unless (Proof.rfl(Proof.Proposition(holds: true))) { INFO@mark `FE7 what holds is not proved by itself` }
+if (Proof.rfl(Proof.Proposition(holds: false))) { INFO@mark `FE8 what does not hold is proved by itself` }
+
+// spec: `Transaction.Inverse` is an enum written inside a class, and the first
+// member of such an enum is lost, so `Inverse.plus` is not asked for here.
+unless (exists Transaction.Inverse.minus) { INFO@mark `FE9 the inverses have no minus` }
+unless (Transaction.Inverse.minus.is == `+`) { INFO@mark `FE10 the inverse of minus is not plus` }

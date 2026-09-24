@@ -1,0 +1,18 @@
+// Encodings: what is wrapped comes back where it may, and a digest is what it
+// says of itself.
+
+mark ^keyword := external global
+
+locked := Encoding.Encrypted(value: five, key: one)
+unless (locked.as(one) == five) { INFO@mark `EN1 what is locked does not open with its key` }
+if (exists locked.as(two)) { INFO@mark `EN2 it opens with the wrong key` }
+
+held := Encoding.Compressed(value: five, algorithm: Encoding.Algorithm.gzip)
+unless (held.as(None) == five) { INFO@mark `EN3 what is compressed does not come back` }
+unless (held.algorithm == Encoding.Algorithm.gzip) { INFO@mark `EN4 it forgot how it was compressed` }
+
+one_hash := Encoding.Hash(value: five, algorithm: Encoding.Algorithm.sha256)
+same_hash := Encoding.Hash(value: five, algorithm: Encoding.Algorithm.sha256)
+other_hash := Encoding.Hash(value: five, algorithm: Encoding.Algorithm.md5)
+unless (one_hash == same_hash) { INFO@mark `EN5 two like digests are not the same` }
+if (one_hash == other_hash) { INFO@mark `EN6 digests of different algorithms are the same` }

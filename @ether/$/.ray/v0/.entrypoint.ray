@@ -72,8 +72,14 @@ link (holds, before) => (
 
 // `class: Parent { body }`: a class beneath another; instances compose the
 // parent, and a value is verified against the parent's body before its own.
-// spec: the parent's body is not yet run per instance; its fields are inherited
-// as the parent static declared them.
+// spec: the parent's body is not run per instance. Its fields are inherited as
+// the parent static declared them, defaults and all, and may be given at the
+// call — but a field whose default is a thing rather than a value is the
+// *same* thing for every instance: two `class: Parent` instances share one
+// `kept: (chain None)`, where two instances of a class declaring it themselves
+// do not. The library declares such fields again in each subclass to avoid it.
+// What this waits on is the constructor running what the parent declared, in
+// the instance, before what the class itself declares.
 unordered class:{ }{parent}{ }{block} ^keyword => (class block): parent
 
 unordered class{ }{block} ^keyword => (

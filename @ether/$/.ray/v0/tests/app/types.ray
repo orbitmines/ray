@@ -20,3 +20,29 @@ unless (exists (external where TA)) { INFO@mark `TY7 a class is written nowhere`
 if (exists (external alike (external where TA) (external where TB))) { INFO@mark `TY8 two classes are written in one place` }
 TC := TA
 unless (exists (external alike (external where TA) (external where TC))) { INFO@mark `TY9 one class under two names is written twice` }
+
+// What a class built on another is made of: the parent's fields, defaults and
+// methods are the child's, and may be given where it is built.
+Parent := class {
+  named: `p`
+  flag: false
+  greet => .named
+}
+Child := class: Parent {
+  extra: `e`
+}
+kid := Child()
+unless (exists kid.extra) { INFO@mark `TY10 the child's own field is not there` }
+unless (exists kid.named) { INFO@mark `TY11 the parent's field is not there` }
+unless (exists kid.greet) { INFO@mark `TY12 the parent's method does not answer` }
+unless (kid.flag.not) { INFO@mark `TY13 the parent's default is not false` }
+unless (exists Child(named: `q`).named) { INFO@mark `TY14 the parent's field cannot be given` }
+
+// spec: a field the parent declares as a thing is one thing for every child
+// instance, because the parent's body is not run per instance (the entrypoint
+// says so where `class: parent` is written).
+// Held := class { kept: (chain None) }
+// Holder := class: Held { }
+// one_holder := Holder()
+// one_holder.kept &= `x`
+// unless (Holder().kept.count.is_zero) { INFO@mark `TY15 two children share what their parent declared` }

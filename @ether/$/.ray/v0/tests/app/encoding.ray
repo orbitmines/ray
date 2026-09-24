@@ -20,3 +20,19 @@ if (one_hash == other_hash) { INFO@mark `EN6 digests of different algorithms are
 // A digest is what was put in and how: change either and it is another.
 a_hash := Encoding.Hash(value: four, algorithm: Encoding.Algorithm.sha256)
 if (a_hash == Encoding.Hash(value: five, algorithm: Encoding.Algorithm.sha256)) { INFO@mark `EN7 digests of different values are the same` }
+
+// What is held under a key is read back where the key is, and nowhere else.
+locked := Encoding.Encrypted(value: five, key: three)
+unless (exists locked.as(three)) { INFO@mark `EN8 what is held is not read back where the key is` }
+if (exists locked.as(two)) { INFO@mark `EN9 it is read back where the key is not` }
+unless (locked.as(three) == five) { INFO@mark `EN10 what is read back is not what was put in` }
+// spec: a key written as a text cannot be matched, since a written literal has
+// no equality of its own (the entrypoint says so). The draft's key is a
+// location, which will compare by where it is.
+
+// What is compressed comes back, and remembers how it was packed.
+packed := Encoding.Compressed(value: five, algorithm: Encoding.Algorithm.gzip)
+unless (packed.as(None) == five) { INFO@mark `EN11 what was compressed does not come back` }
+unless (packed.algorithm == Encoding.Algorithm.gzip) { INFO@mark `EN12 it forgot how it was packed` }
+if (packed.algorithm == Encoding.Algorithm.sha1) { INFO@mark `EN13 it is packed every way at once` }
+unless (Encoding.Algorithm.components.count == nine) { INFO@mark `EN14 there are other than nine algorithms` }

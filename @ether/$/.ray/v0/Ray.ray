@@ -249,7 +249,13 @@ Ray := class: Iterable {
       mine = mine.next
       theirs = theirs.next
     }
-    mine.is_terminal.and(theirs.is_terminal)
+    // Walked together to their ends, two rays are the same; two that went
+    // nowhere at all are the same only when they say the same thing.
+    if (.is_terminal.and(other.is_terminal)) {
+      exists (external alike (this) (other))
+    } else {
+      mine.is_terminal.and(theirs.is_terminal)
+    }
   )
   != (other: Ray) => (this == other).not
 }

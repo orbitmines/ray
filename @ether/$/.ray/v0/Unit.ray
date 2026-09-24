@@ -39,6 +39,17 @@ Unit := class {
       offset: by
     )
   )
+  // One unit is another when it counts the same of the same thing: a base
+  // unit is what it is named, and a unit built on one is how many of that one
+  // it is.
+  == (other: Unit) => if (.is_base.xnor(other.is_base)) {
+    if .is_base {
+      exists (external alike (.name) (other.name))
+    } else {
+      (.ratio == other.ratio).and(.base == other.base)
+    }
+  } else { false }
+
   // `SI#.for FromUnit = FromUnit.magnitude …`: this unit with an SI prefix.
   prefixed (prefix: Prefix) => (
     parent := this

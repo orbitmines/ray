@@ -1,0 +1,38 @@
+// The suite says what is wrong by writing it `unless` a claim holds, so what
+// `unless` does is the one thing that cannot be taken on trust: a test that
+// never fires reports nothing and looks like a test that passed. Here the
+// firing is counted instead of reported, so the counts are the claim.
+
+mark ^keyword := external global
+
+fired ^keyword := zero
+unless (false) { fired = fired.succ }
+unless (one == two) { fired = fired.succ }
+unless (exists None) { fired = fired.succ }
+unless (fired == three) { INFO@mark `HO1 unless does not take the block when the condition does not hold` }
+
+held ^keyword := zero
+unless (true) { held = held.succ }
+unless (one == one) { held = held.succ }
+unless (exists mark) { held = held.succ }
+unless (held.is_zero) { INFO@mark `HO2 unless takes the block when the condition holds` }
+
+// spec: `unless` also takes the block when the condition cannot be read at
+// all, which is what a test wants — it is not claimed here, because writing an
+// unreadable condition down is an error the analysis reports.
+
+// And what the claims are made of: equality that says yes to everything, and a
+// written space that is nothing, both make a green suite out of nothing.
+// spec: the block is written `{}`, since an enum whose block is written
+// `{ }` or on one line loses the member it is written with.
+Side := enum near (of: `here`) | far (of: `there`) {}
+unless (Side.near == Side.near) { INFO@mark `HO3 a member is not itself` }
+if (Side.near == Side.far) { INFO@mark `HO4 two members of one enum are the same` }
+// A written text is compared through `String.of`, since a literal has no
+// equality of its own (the entrypoint says so where it would have gone).
+unless (String.of(Side.near.of) == String.of(`here`)) { INFO@mark `HO5 what a member holds is not what it was written as` }
+if (String.of(Side.near.of) == String.of(`there`)) { INFO@mark `HO6 a member holds what the other one does` }
+
+unless (String.of(` `).count == one) { INFO@mark `HO7 a written space is not one character` }
+unless (String.of(`  `).count == two) { INFO@mark `HO8 two written spaces are not two characters` }
+unless (String.of(` a `).count == three) { INFO@mark `HO9 a letter between spaces is not three characters` }

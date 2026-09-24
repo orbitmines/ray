@@ -101,15 +101,16 @@ Proof := class {
   assume (fact) => fact
 }
 
-// Reversible programs (`+!`, `program⁻¹`): spec: a transaction keeps the
-// forward and the backward step; `reversed` swaps them, and the table names
-// the inverse of each arithmetic operator.
+// Reversible programs (`+!`, `program⁻¹`): spec: a transaction keeps the step
+// each way; `reversed` swaps them, and the table names the inverse of each
+// arithmetic operator. The steps are `forwards` and `backwards`, since
+// `forward` is the language's own word for what is declared ahead of itself.
 Transaction := class {
-  forward: Node
-  backward: Node
+  forwards: Node
+  backwards: Node
   applied: false
 
-  reversed => Transaction(forward: .backward, backward: .forward, applied: .applied)
+  reversed => Transaction(forwards: .backwards, backwards: .forwards, applied: .applied)
   mark_applied => (
     .applied = true
     this

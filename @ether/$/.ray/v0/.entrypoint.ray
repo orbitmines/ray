@@ -330,6 +330,13 @@ Node := base class {
   {\n}.{literal property ^property} ^punctuation => this[property]
 
   [{property ^property}] ^punctuation => external get this property
+
+  // spec: a written literal has no equality of its own. Giving one to every
+  // node here does answer two written texts, but it also reads a written
+  // numeral as its text, so `4 == four` turns false: what a numeral is, is
+  // settled by the rule that reads it, and asking `==` of it first never lets
+  // that happen. Two literals are compared through `String.of` until a
+  // literal is a thing in itself.
  
   test5 => TODO
   test4 a => TODO // Doesnt work, since this is test4.a => TODO
@@ -406,7 +413,12 @@ if := class {
   )
 }
 
-unless{ }{cond}{ }{block} ^class => if cond.not block
+// What is written unless something is what is written when that something is
+// not taken: the branch not taken, asking the condition nothing that `if`
+// does not ask it itself. Asking `cond.not` instead lost every condition that
+// is not a boolean — `.not` was unresolved, the block never ran, and a test
+// that reports by `unless` reported nothing.
+unless{ }{cond}{ }{block} ^class => if cond { } else block
 
 while := class {
   { }{cond}{ }{block} ^class => (
@@ -480,6 +492,15 @@ unordered enum ^keyword => (
 
       this
     )
+
+    // One member is another when it is the same member: what a member is, is
+    // the name it is written under. What carries no name is what it is by
+    // where it is written.
+    == (other) => if ((exists .name).and(exists other.name)) {
+      exists (external alike (.name) (other.name))
+    } else {
+      exists (external alike (external where this) (external where other))
+    }
   }
 
   static ^enum

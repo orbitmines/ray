@@ -9,10 +9,10 @@ unless (Roman.from(ten + four).text == String.of(`XIV`)) { INFO@mark `RO3 fourte
 unless (Roman.from(three).text == String.of(`III`)) { INFO@mark `RO4 three is not written III` }
 unless (Roman.from(ten + ten).text == String.of(`XX`)) { INFO@mark `RO5 twenty is not written XX` }
 
-// spec: reading a numeral back waits on a field read through a branch: a
-// method whose body is `if … { A } else { B }` answers the branch, and asking
-// that branch for a field of what it holds finds nothing. `Roman.digit_of` is
-// written that way, so `as_number` reads no digits.
+// spec: reading a numeral back waits on `Roman.Digit`, an enum written inside
+// a class whose members carry fields: such an enum loses the member it is
+// written with, so `digit_of` answers nothing for `I` and `as_number` reads no
+// digits. The enum rules are what this waits on, not Roman.
 // unless (Roman(text: String.of(`IV`)).as_number == four) { INFO@mark `RO6 IV is not four` }
 // unless (Roman(text: String.of(`IX`)).as_number == nine) { INFO@mark `RO7 IX is not nine` }
 // unless (Roman(text: String.of(`XIV`)).as_number == (ten + four)) { INFO@mark `RO8 XIV is not fourteen` }

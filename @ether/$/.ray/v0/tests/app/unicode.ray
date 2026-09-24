@@ -15,8 +15,6 @@ unless (Unicode.category(digit) == Unicode.GeneralCategory.number) { INFO@mark `
 space := String.of(` `).first
 unless (Unicode.category(space) == Unicode.GeneralCategory.separator) { INFO@mark `UN7 a space does not separate` }
 
-// spec: `GeneralCategory.letter` is the first member of an enum written inside
-// a class, and the first member of such an enum is lost (see `roman.ray`), so
-// a letter has no kind and the comparison below holds only because both sides
-// are nothing. It is left here as the thing to come back to.
+// spec: `letter` is the member `GeneralCategory` is written with, and an enum
+// written inside a class loses that one.
 // unless (exists Unicode.GeneralCategory.letter) { INFO@mark `UN8 there is no letter to be` }

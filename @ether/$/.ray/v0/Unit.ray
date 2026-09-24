@@ -92,6 +92,11 @@ Quantity := class {
     )
   )
 
+  // A quantity is temporal when what it counts is, and how many seconds it is
+  // is itself read in seconds. What a second is is Time's to say.
+  is_temporal => .unit.is_temporal
+  as_seconds => (this as Second).amount
+
   == (other: Quantity) => (
     kind := .finer(other)
     (this as kind).amount == (other as kind).amount

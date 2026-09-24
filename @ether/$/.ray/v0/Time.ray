@@ -31,11 +31,8 @@ years (amount: Number) => amount of Year
 
 Unit.components.hierarchy &= class { is_temporal => (.base_unit == Second) }
 Unit.components.hierarchy &= class { base_unit => if .is_base { this } else { .base.base_unit } }
-Quantity.components.hierarchy &= class {
-  is_temporal => .unit.is_temporal
-  // spec: the draft's `12:00` and `12:00:00` are read by ISO_8601.time; `:`
-  // itself stays the annotation.
-}
+// spec: the draft's `12:00` and `12:00:00` are read by ISO_8601.time; `:`
+// itself stays the annotation.
 
 // The draft's Calendar: a chain of segments (a day, a month, a year) each a
 // duration; `is_recurring` when the segment cycles.
@@ -136,7 +133,6 @@ Time := class {
     seconds_tail => .digits.slice(.digits.count - (ten + two), .digits.count - nine).as_number of Second
   }
 }
-Quantity.components.hierarchy &= class { as_seconds => (this as Second).amount }
 
 // The draft's ISO 8601: `YYYY-MM-DD` and `hh:mm:ss`. spec: the date is read
 // into year, month and day; week dates, ordinal dates and offsets are

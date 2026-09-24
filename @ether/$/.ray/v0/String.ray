@@ -405,7 +405,9 @@ String := class: Array {
   // The number a string of decimal digits spells, and back.
   as_number => (
     total ^keyword := zero
-    this.characters for { total = (total * ten) + (it.value.codepoint - ascii_zero) }
+    // Where the digits start is one number, walked once, not once a digit.
+    zeroth ^keyword := ascii_zero
+    this.characters for { total = (total * ten) + (it.value.codepoint - zeroth) }
     total
   )
   is_numeric => .nonempty.and(.every { character.digit })

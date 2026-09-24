@@ -361,7 +361,6 @@ if := class {
   { }{cond}{ }{yes} ^class => (
     branch ^keyword := external .
     inline static
-    predicate := cond
     taken := None
 
     goto enter if cond.holds
@@ -379,8 +378,9 @@ if := class {
     branch ^keyword := external .
     inline this
     taken := .taken
-    predicate := cond
 
+    // What a branch already taken is written against is not read at all: the
+    // condition of every `elsif` after it costs nothing.
     goto skip if taken
     goto enter if cond.holds
     goto skip

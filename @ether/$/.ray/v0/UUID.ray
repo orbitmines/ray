@@ -100,6 +100,9 @@ UUID := class: Hexadecimal {
   as_string => (
     out := chain None
     walker ^keyword := .spelled.head
+    // The dash between the groups is one character, read once: a codepoint is
+    // a walk, and so is the character built from it.
+    dash ^keyword := Character.of(ascii_dash)
     groups := chain None
     groups &= eight
     groups &= four
@@ -107,7 +110,7 @@ UUID := class: Hexadecimal {
     groups &= four
     groups &= ten + two
     groups for {
-      unless (it.value == eight) { out &= Character.of(ascii_dash) }
+      unless (it.value == eight) { out &= dash }
       left ^keyword := it.value
       while left.nonzero {
         out &= Character.decimal_digit(walker.value)
@@ -122,9 +125,11 @@ UUID := class: Hexadecimal {
   // {uuid: UUID.String}: UUID => uuid — the text form read back.
   read (text: String) => (
     out := chain None
+    // The dash is read once, not once per character.
+    dash ^keyword := Character.of(ascii_dash)
     text.characters for {
       character := it.value
-      unless (character == Character.of(ascii_dash)) { out &= character.hexadecimal_digit }
+      unless (character == dash) { out &= character.hexadecimal_digit }
     }
     // dynamically < v1 if version == 1 …: what is read comes back as its version.
     read_version := out.head.at(ten + two).value

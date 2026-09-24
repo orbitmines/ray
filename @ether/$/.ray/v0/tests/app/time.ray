@@ -23,3 +23,9 @@ unless (Julian.weekdays.count == seven) { INFO@mark `TI13 a week has other than 
 unless (seconds(five).is_temporal) { INFO@mark `TI14 five seconds is not temporal` }
 unless (seconds(five).amount == five) { INFO@mark `TI15 five seconds is not five of them` }
 unless (minutes(two).unit == Minute) { INFO@mark `TI16 two minutes are not minutes` }
+
+// The century rule is the Gregorian's, and UTC is where the offsets start.
+if (Gregorian.is_leap_year(hundred)) { INFO@mark `TI17 a hundred is a leap year in the Gregorian` }
+unless (Julian.is_leap_year(hundred)) { INFO@mark `TI18 a hundred is not a leap year in the Julian` }
+unless (UTC.offset.is_zero) { INFO@mark `TI19 UTC is at some offset` }
+unless (exists Julian.months.head.value.place) { INFO@mark `TI20 the first month has no place` }

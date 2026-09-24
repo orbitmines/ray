@@ -36,3 +36,21 @@ unless (a.initial_boundary.is_initial) { INFO@mark `R12 initial boundary is not 
 unless (a.terminal_boundary.edge.is_terminal) { INFO@mark `R13 the edge of a terminal boundary is not terminal` }
 
 unless (a.acyclic) { INFO@mark `R14 a chain is not acyclic` }
+
+// Boundaries and edges: which end a boundary is, and which ends an edge has.
+start := Boundary.Initial()
+finish := Boundary.Terminal()
+unless (start.is_initial) { INFO@mark `R15 an initial boundary is not initial` }
+if (start.is_terminal) { INFO@mark `R16 an initial boundary is terminal` }
+unless (finish.is_terminal) { INFO@mark `R17 a terminal boundary is not terminal` }
+if (finish.is_initial) { INFO@mark `R18 a terminal boundary is initial` }
+span := Edge(from: start, to: finish)
+unless (exists span.from) { INFO@mark `R19 an edge forgot where it starts` }
+unless (exists span.to) { INFO@mark `R20 an edge forgot where it ends` }
+if (span.is_initial) { INFO@mark `R21 an edge that starts somewhere is initial` }
+if (span.is_terminal) { INFO@mark `R22 an edge that ends somewhere is terminal` }
+
+// What a structure allows.
+unless (Structure().is_valid) { INFO@mark `R23 a structure is not valid` }
+if (Structure().hyper_edges) { INFO@mark `R24 a plain structure has hyper edges` }
+unless (Hypergraph().hyper_edges) { INFO@mark `R25 a hypergraph has no hyper edges` }

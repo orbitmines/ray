@@ -125,7 +125,9 @@ Network := class {
   DomainName := class {
     text: String
 
-    valid => .text.count < two.pow(eight)
+    // The draft bounds a name from above (`String{length < 2^8}`); a name of
+    // nothing is not one, so it is bounded from below here too.
+    valid => .text.count.nonzero.and(.text.count < two.pow(eight))
   }
   Proxy := class {
     through (persona) => Network.Proxy(persona: persona)

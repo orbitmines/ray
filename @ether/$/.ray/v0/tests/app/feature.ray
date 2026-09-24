@@ -19,3 +19,13 @@ unless (exists Transaction.Inverse.plus) { INFO@mark `FE9a the inverses have no 
 unless (String.of(Transaction.Inverse.plus.is) == String.of(`-`)) { INFO@mark `FE9b the inverse of plus is not minus` }
 unless (exists Transaction.Inverse.minus) { INFO@mark `FE9 the inverses have no minus` }
 unless (String.of(Transaction.Inverse.minus.is) == String.of(`+`)) { INFO@mark `FE10 the inverse of minus is not plus` }
+
+// Keys: what a press and a release leave behind.
+fresh_key := Keyboard.Key(name: String.of(`a`))
+if (fresh_key.pressed) { INFO@mark `FE11 an untouched key is pressed` }
+if (fresh_key.toggled) { INFO@mark `FE12 an untouched key is toggled` }
+pushed_key := Keyboard.Key(name: String.of(`b`)).press
+unless (pushed_key.pressed) { INFO@mark `FE13 a pressed key is not pressed` }
+unless (pushed_key.toggled) { INFO@mark `FE14 a pressed key is not toggled` }
+if (pushed_key.release.pressed) { INFO@mark `FE15 a released key is still pressed` }
+unless (Keyboard(keys: (chain None)).add(fresh_key).keys.count == one) { INFO@mark `FE16 a keyboard given one key does not hold one` }

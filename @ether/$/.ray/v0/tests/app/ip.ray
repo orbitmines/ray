@@ -32,3 +32,11 @@ unless (wide.as_string == String.of(`1:0:0:0:0:0:0:2`)) { INFO@mark `IP7 the wid
 unless (wide.zeros.length == (four + two)) { INFO@mark `IP8 the run of zeros is not six long` }
 unless (wide.zeros.at == one) { INFO@mark `IP9 the run of zeros does not start at one` }
 unless (wide.compressed == String.of(`1::2`)) { INFO@mark `IP10 the zeros are not written as ::` }
+
+// An address read from its text, and told apart from another.
+written := IP(segments: IP.read(String.of(`1.2.3.4`), Character.of(ascii_dot), ten))
+unless (written.segment_count == four) { INFO@mark `IP20 an address read from text has other than four segments` }
+unless (written.segments.head.value == one) { INFO@mark `IP21 the first segment is not one` }
+unless (written.as_string == String.of(`1.2.3.4`)) { INFO@mark `IP22 an address does not read back as it was written` }
+unless (written == written) { INFO@mark `IP23 an address is not itself` }
+if (written == IP(segments: IP.read(String.of(`1.2.3.5`), Character.of(ascii_dot), ten))) { INFO@mark `IP24 two different addresses are the same` }

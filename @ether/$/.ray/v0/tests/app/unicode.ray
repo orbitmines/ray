@@ -17,3 +17,10 @@ unless (Unicode.category(space) == Unicode.GeneralCategory.separator) { INFO@mar
 
 unless (exists Unicode.GeneralCategory.letter) { INFO@mark `UN8 there is no letter to be` }
 unless (Unicode.category(String.of(`a`).first) == Unicode.GeneralCategory.letter) { INFO@mark `UN9 a letter is not a letter` }
+
+// What a character is a kind of, told apart from what it is not.
+letter := String.of(`a`).first
+if (Unicode.category(letter) == Unicode.GeneralCategory.number) { INFO@mark `UN10 a letter is a number` }
+if (Unicode.surrogate(ten)) { INFO@mark `UN11 ten is a surrogate` }
+if (Unicode.fits(ten, three)) { INFO@mark `UN12 ten fits in three bits` }
+unless (Unicode.UTF8.decode(Unicode.UTF8.encode(ten + five)) == (ten + five)) { INFO@mark `UN13 fifteen does not come back from UTF-8` }

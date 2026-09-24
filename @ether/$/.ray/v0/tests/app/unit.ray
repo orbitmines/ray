@@ -22,3 +22,10 @@ unless ((one of Byte) == (eight of Bit)) { INFO@mark `U8 a byte does not equal e
 unless (Prefix.deka.factor == ten) { INFO@mark `U9 deka is not ten` }
 
 unless ((Bit prefixed Prefix.deka).ratio == ten) { INFO@mark `U10 a prefixed unit did not take the prefix factor` }
+
+// Where a unit sits: a base unit is at nothing, and each one built on another
+// is a step further off.
+unless (Second.is_base) { INFO@mark `U11 a second is not a base unit` }
+if (Minute.is_base) { INFO@mark `U12 a minute is a base unit` }
+unless (Minute.rank == one) { INFO@mark `U13 a minute is not one step off its base` }
+unless (Hour.rank == two) { INFO@mark `U14 an hour is not two steps off its base` }

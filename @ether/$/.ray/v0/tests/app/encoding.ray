@@ -16,3 +16,7 @@ same_hash := Encoding.Hash(value: five, algorithm: Encoding.Algorithm.sha256)
 other_hash := Encoding.Hash(value: five, algorithm: Encoding.Algorithm.md5)
 unless (one_hash == same_hash) { INFO@mark `EN5 two like digests are not the same` }
 if (one_hash == other_hash) { INFO@mark `EN6 digests of different algorithms are the same` }
+
+// A digest is what was put in and how: change either and it is another.
+a_hash := Encoding.Hash(value: four, algorithm: Encoding.Algorithm.sha256)
+if (a_hash == Encoding.Hash(value: five, algorithm: Encoding.Algorithm.sha256)) { INFO@mark `EN7 digests of different values are the same` }

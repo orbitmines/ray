@@ -60,3 +60,13 @@ unless (0x1F == ((three * ten) + one)) { INFO@mark `N43 0x1F is not thirty-one` 
 unless (0b101 == five) { INFO@mark `N44 0b101 is not five` }
 if (exists Decimal.accepts(`4a`)) { INFO@mark `N45 4a is read as a decimal number` }
 unless (exists Hexadecimal.accepts(`4a`)) { INFO@mark `N46 4a is not read as a hexadecimal number` }
+
+// Signed numbers: what a sign does to size, order and arithmetic.
+unless (five.signed.negated.negative) { INFO@mark `N47 minus five is not negative` }
+unless (five.signed.negated.abs == five.signed) { INFO@mark `N48 the size of minus five is not five` }
+unless ((five.signed.negated + five.signed).is_zero) { INFO@mark `N49 minus five and five do not make nothing` }
+unless ((two.signed.negated * three.signed).negative) { INFO@mark `N50 minus two times three is not negative` }
+unless (three.signed.negated < two.signed.negated) { INFO@mark `N51 minus three is not less than minus two` }
+unless (two.signed < three.signed) { INFO@mark `N52 two is not less than three` }
+if (three.signed < two.signed) { INFO@mark `N53 three is less than two` }
+unless ((three.signed - five.signed).negative) { INFO@mark `N54 three less five is not negative` }

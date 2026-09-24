@@ -46,6 +46,7 @@ World := class: Nameable {
   personas: (chain None)
   items: (chain None)
   quests: (chain None)
+  reservations: (chain None)
 
   spawn (persona) => (
     .personas &= persona
@@ -61,9 +62,31 @@ World := class: Nameable {
   )
   // `shadowing?: World => @ether`: where a name falls back to.
   shadowing => None
-  // spec: reserving a name issues it within this world.
-  reserve (name: String) => World.Reservation(name: name, issuer: this)
-  Reservation := class { }
+  // Reserving a name issues it within this world, and the world keeps what it
+  // issued: a name already taken here is the reservation that took it, so
+  // reserving twice is reserving once.
+  reserve (name: String) => (
+    standing ^keyword := .reserved(name)
+    if (exists standing) { standing } else { .issue(name) }
+  )
+  // spec: what is added is read back off the chain, since a statement written
+  // on its own line beneath another cannot begin with `.` — the newline-member
+  // rule reads it as a member of what came before.
+  issue (name: String) => (.reservations &= World.Reservation(name: name, issuer: this)).tail.value
+  // Which reservation holds a name here, if any.
+  reserved (name: String) => (
+    holder ^keyword := None
+    walker ^keyword := .reservations.head
+    while (exists walker) {
+      if (walker.value.name == name) { holder = walker.value }
+      walker = walker.next
+    }
+    holder
+  )
+  Reservation := class: Ray {
+    name: String
+    issuer: Node
+  }
   population => .personas.count
 }
 Region := World
@@ -129,7 +152,7 @@ Certificate := class: Ray {
 // of commits in a repository (a world), each by a persona with a version id
 // (`Version = UUID.v1`, v4 here); a branch forks from a point.
 History := class: Ray {
-  Commit := class {
+  Commit := class: Ray {
     who: Node
     what: Node
     id: UUID.v4
@@ -147,7 +170,7 @@ History := class: Ray {
   count => .commits.count
   latest => .commits.tail.value
   fork => History.Branch(repository: .repository, commits: chain None, from: this)
-  Branch := class { }
+  Branch := class: Ray { }
 }
 Repository := class: Ray {
   world: Node

@@ -58,3 +58,18 @@ unless (wp.status == Status.offline) { INFO@mark `PE3 a new persona is not offli
 unless (exists Status.invisible) { INFO@mark `ST1 there is no being invisible` }
 unless (exists Accessor.Permission.public) { INFO@mark `AC1 there is no public permission` }
 if (Accessor.Permission.private == Accessor.Permission.public) { INFO@mark `AC2 private and public are the same` }
+
+// Reserving a name: the world issues it, keeps it, and answers the same
+// reservation to whoever asks for that name again.
+wr := wg.reserve(String.of(`alice`))
+unless (wr.name == String.of(`alice`)) { INFO@mark `RS1 a reservation does not hold the name it was made for` }
+unless (wr.issuer == wg) { INFO@mark `RS2 a reservation forgot which world issued it` }
+unless (wg.reservations.count == one) { INFO@mark `RS3 the world did not keep what it issued` }
+unless (wg.reserve(String.of(`alice`)) == wr) { INFO@mark `RS4 reserving a taken name issues a second one` }
+unless (wg.reservations.count == one) { INFO@mark `RS5 reserving twice kept two` }
+unless (wg.reserve(String.of(`bob`)).name == String.of(`bob`)) { INFO@mark `RS6 another name is not another reservation` }
+unless (wg.reservations.count == two) { INFO@mark `RS7 the world did not keep both` }
+unless (exists wg.reserved(String.of(`alice`))) { INFO@mark `RS8 a taken name does not read as taken` }
+if (exists wg.reserved(String.of(`carol`))) { INFO@mark `RS9 an untaken name reads as taken` }
+// A name is taken within a world and nowhere else.
+if (exists World(name: String.of(`elsewhere`)).reserved(String.of(`alice`))) { INFO@mark `RS10 a name reserved in one world is taken in another` }

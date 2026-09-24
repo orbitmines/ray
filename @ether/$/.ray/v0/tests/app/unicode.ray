@@ -1,0 +1,22 @@
+// Unicode: what fits in how many bits, what is a scalar, and what a character
+// is a kind of.
+
+mark ^keyword := external global
+
+unless (Unicode.fits(ten, ten + six)) { INFO@mark `UN1 ten does not fit in sixteen bits` }
+if (Unicode.fits((two * ten) + one, four)) { INFO@mark `UN2 twenty-one fits in four bits` }
+unless (Unicode.scalar(ten)) { INFO@mark `UN3 ten is not a scalar` }
+if (Unicode.surrogate(ten)) { INFO@mark `UN4 ten is a surrogate` }
+
+digit := String.of(`1`).first
+unless (exists Unicode.category(digit)) { INFO@mark `UN5 a digit has no kind` }
+unless (Unicode.category(digit) == Unicode.GeneralCategory.number) { INFO@mark `UN6 a digit is not a number` }
+
+space := String.of(` `).first
+unless (Unicode.category(space) == Unicode.GeneralCategory.separator) { INFO@mark `UN7 a space does not separate` }
+
+// spec: `GeneralCategory.letter` is the first member of an enum written inside
+// a class, and the first member of such an enum is lost (see `roman.ray`), so
+// a letter has no kind and the comparison below holds only because both sides
+// are nothing. It is left here as the thing to come back to.
+// unless (exists Unicode.GeneralCategory.letter) { INFO@mark `UN8 there is no letter to be` }

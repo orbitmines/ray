@@ -386,6 +386,11 @@ if := class {
     branch ^variable
   )
 
+  // A branch written on the next line is the same branch: what follows the
+  // newline is read on what came before it.
+  {\n}elsif{ }{cond}{ }{block} ^class => this elsif cond block
+  {\n}else{ }{block} ^class => this else block
+
   else{ }{block} ^class => (
     branch ^keyword := external .
     inline this

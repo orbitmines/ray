@@ -1,0 +1,23 @@
+// Roman numerals: what a number is written as, and what a numeral is worth.
+// The numbers are kept small, because a number here is walked.
+
+mark ^keyword := external global
+
+unless (Roman.from(four).text == String.of(`IV`)) { INFO@mark `RO1 four is not written IV` }
+unless (Roman.from(nine).text == String.of(`IX`)) { INFO@mark `RO2 nine is not written IX` }
+unless (Roman.from(ten + four).text == String.of(`XIV`)) { INFO@mark `RO3 fourteen is not written XIV` }
+unless (Roman.from(three).text == String.of(`III`)) { INFO@mark `RO4 three is not written III` }
+unless (Roman.from(ten + ten).text == String.of(`XX`)) { INFO@mark `RO5 twenty is not written XX` }
+
+// spec: reading a numeral back waits on a field read through a branch: a
+// method whose body is `if … { A } else { B }` answers the branch, and asking
+// that branch for a field of what it holds finds nothing. `Roman.digit_of` is
+// written that way, so `as_number` reads no digits.
+// unless (Roman(text: String.of(`IV`)).as_number == four) { INFO@mark `RO6 IV is not four` }
+// unless (Roman(text: String.of(`IX`)).as_number == nine) { INFO@mark `RO7 IX is not nine` }
+// unless (Roman(text: String.of(`XIV`)).as_number == (ten + four)) { INFO@mark `RO8 XIV is not fourteen` }
+// unless (Roman(text: String.of(`iv`)).as_number == four) { INFO@mark `RO9 iv in lower case is not four` }
+
+// The additive form writes fours as IIII.
+unless (Roman.additive(four).text == String.of(`IIII`)) { INFO@mark `RO10 four is not written IIII the additive way` }
+unless (Roman.additive(nine).text == String.of(`VIIII`)) { INFO@mark `RO11 nine is not written VIIII the additive way` }

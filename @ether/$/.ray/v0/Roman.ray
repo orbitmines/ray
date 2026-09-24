@@ -42,8 +42,15 @@ Roman := class {
     while (exists walker) {
       current := Roman.digit_of(walker.value).value
       following := if (exists walker.next) { Roman.digit_of(walker.next.value).value } else { zero }
-      if (current < following) { total = total - current } else { total = total + current }
-      walker = walker.next
+      // A digit smaller than the next is the difference between them, and the
+      // two are read as one; taking it away would floor at nothing.
+      if (current < following) {
+        total = total + (following - current)
+        walker = walker.next.next
+      } else {
+        total = total + current
+        walker = walker.next
+      }
     }
     total
   )
@@ -65,19 +72,31 @@ Roman := class {
     hundreds := number / hundred
     below := number % hundred
     thousands ^keyword := hundreds / ten
-    while thousands.nonzero { out &= Roman.m_digit; thousands = thousands.pred }
+    while thousands.nonzero {
+      out &= Roman.m_digit
+      thousands = thousands.pred
+    }
     Roman.place(out, hundreds % ten, Roman.m_digit, Roman.d_digit, Roman.c_digit)
     Roman.place(out, below / ten, Roman.c_digit, Roman.l_digit, Roman.x_digit)
     Roman.place(out, below % ten, Roman.x_digit, Roman.v_digit, Roman.i_digit)
     Roman(text: String(characters: out))
   )
   place (out, count: Number, ten_digit, five_digit, one_digit) => (
-    if (count == nine) { out &= one_digit; out &= ten_digit }
-    elsif (count == four) { out &= one_digit; out &= five_digit }
+    if (count == nine) {
+      out &= one_digit
+      out &= ten_digit
+    }
+    elsif (count == four) {
+      out &= one_digit
+      out &= five_digit
+    }
     else {
       unless (count < five) { out &= five_digit }
       ones ^keyword := count % five
-      while ones.nonzero { out &= one_digit; ones = ones.pred }
+      while ones.nonzero {
+        out &= one_digit
+        ones = ones.pred
+      }
     }
     out
   )
@@ -95,7 +114,10 @@ Roman := class {
     hundreds := number / hundred
     below := number % hundred
     thousands ^keyword := hundreds / ten
-    while thousands.nonzero { out &= Roman.m_digit; thousands = thousands.pred }
+    while thousands.nonzero {
+      out &= Roman.m_digit
+      thousands = thousands.pred
+    }
     Roman.place_additive(out, hundreds % ten, Roman.d_digit, Roman.c_digit)
     Roman.place_additive(out, below / ten, Roman.l_digit, Roman.x_digit)
     Roman.place_additive(out, below % ten, Roman.v_digit, Roman.i_digit)
@@ -104,7 +126,10 @@ Roman := class {
   place_additive (out, count: Number, five_digit, one_digit) => (
     unless (count < five) { out &= five_digit }
     ones ^keyword := count % five
-    while ones.nonzero { out &= one_digit; ones = ones.pred }
+    while ones.nonzero {
+      out &= one_digit
+      ones = ones.pred
+    }
     out
   )
 

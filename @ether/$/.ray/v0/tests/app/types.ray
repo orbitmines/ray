@@ -57,3 +57,10 @@ unless (exists three.instance_of(Number)) { INFO@mark `TY18 three is not a numbe
 // `Small{. < two}` admits three. One narrowing per type, as `<>` says above.
 // unless (exists one.instance_of(Small{. < two})) { INFO@mark `TY19 one is not tiny` }
 // if (exists three.instance_of(Small{. < two})) { INFO@mark `TY20 three is tiny` }
+
+// A type written as alternatives is any of them, which is what `Type?` spells.
+Either := Parent?
+unless (exists Child().instance_of(Either)) { INFO@mark `TY21 a child is not one of its parent or nothing` }
+unless (exists Parent().instance_of(Either)) { INFO@mark `TY22 a parent is not one of itself or nothing` }
+unless (exists None.instance_of(Either)) { INFO@mark `TY23 nothing is not one of a thing or nothing` }
+if (exists None.instance_of(Parent)) { INFO@mark `TY24 nothing is one of a thing` }

@@ -206,7 +206,20 @@ Node := base class {
    mine\
     found = .built_on(type)
     goto admitted if found
+    goto alternatives if type.components
     goto no
+   alternatives\
+    // A type written as alternatives (`A | None`, which `A?` spells) is any
+    // one of them: what is built on one of them is one of it.
+    other ^keyword := type.components.head
+   alternative\
+    goto try_alternative if other
+    goto no
+   try_alternative\
+    found = .built_on(other.value)
+    goto admitted if found
+    other = other.next
+    goto alternative
    admitted\
     found = type.admits(this).holds
     goto no

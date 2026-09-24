@@ -489,6 +489,7 @@ Chain.components.hierarchy &= class {
 ascii_space => (three * ten) + two
 ascii_dash => (four * ten) + five
 ascii_dot => (four * ten) + six
+ascii_colon => (five * ten) + eight
 ascii_zero => (four * ten) + eight
 ascii_nine => ascii_zero + nine
 ascii_upper_a => (six * ten) + five

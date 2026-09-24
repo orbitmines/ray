@@ -169,8 +169,6 @@ Month.components.hierarchy &= class {
     found
   )
 }
-ascii_dash => (four * ten) + five
-ascii_colon => (five * ten) + eight
 
 // Astronomy.ray: a planet names its years and days; Earth's are the
 // calendar's, Mars's are the sol. spec: a sol is 24h 39m 35.244s, kept to the

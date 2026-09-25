@@ -40,6 +40,11 @@ return{ }{value} ^keyword => (
   goto return\
 )
 
+// The colours a style may be written with, as the draft spells them.
+RGB := class {
+  Hexadecimal := class { }
+}
+
 ^: {
   {literal}: () => A
   {: LSP.SemanticToken.Type}: () => A

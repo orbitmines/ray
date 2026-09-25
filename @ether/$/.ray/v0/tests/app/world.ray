@@ -73,3 +73,31 @@ unless (exists wg.reserved(String.of(`alice`))) { INFO@mark `RS8 a taken name do
 if (exists wg.reserved(String.of(`carol`))) { INFO@mark `RS9 an untaken name reads as taken` }
 // A name is taken within a world and nowhere else.
 if (exists World(name: String.of(`elsewhere`)).reserved(String.of(`alice`))) { INFO@mark `RS10 a name reserved in one world is taken in another` }
+
+// A history keeps what was committed, in the order it was committed.
+repo := Repository(world: wg)
+past := History(repository: repo, commits: (chain None))
+unless (past.count.is_zero) { INFO@mark `HI1 a new history already holds commits` }
+past.commit(wp, String.of(`first`))
+unless (past.count == one) { INFO@mark `HI2 committing does not keep it` }
+past.commit(wp, String.of(`second`))
+unless (past.count == two) { INFO@mark `HI3 committing twice keeps other than two` }
+unless (past.latest.what == String.of(`second`)) { INFO@mark `HI4 the latest is not the last committed` }
+unless (past.latest.who == wp) { INFO@mark `HI5 a commit forgot who made it` }
+branched := past.fork
+unless (branched.count.is_zero) { INFO@mark `HI6 a fork starts with commits on it` }
+unless (branched.from == past) { INFO@mark `HI7 a fork forgot what it came from` }
+
+// What is written down about something read.
+cite := Reference(title: String.of(`on rays`), author: wp)
+unless (cite.draft) { INFO@mark `RF1 a new reference is not a draft` }
+unless (cite.publish.draft.not) { INFO@mark `RF2 publishing does not take it out of draft` }
+unless (cite.notes.count.is_zero) { INFO@mark `RF3 a new reference already has notes` }
+cite.note(String.of(`a note`))
+unless (cite.notes.count == one) { INFO@mark `RF4 a note is not kept` }
+unless (cite.title == String.of(`on rays`)) { INFO@mark `RF5 a reference forgot its title` }
+
+// Who may see what.
+unless (exists Accessor.Permission.confidential) { INFO@mark `AC3 there is no confidential permission` }
+unless (Accessor.Permission.components.count == four) { INFO@mark `AC4 there are other than four permissions` }
+unless (Accessor(level: Accessor.Permission.public).level == Accessor.Permission.public) { INFO@mark `AC5 an accessor forgot its level` }

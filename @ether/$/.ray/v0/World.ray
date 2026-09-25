@@ -164,13 +164,20 @@ History := class: Ray {
   from: None
 
   commit (who, what) => (
-    .commits &= History.Commit.of(who, what)
+    .commits &= History.Commit(who: who, what: what)
     this
   )
   count => .commits.count
   latest => .commits.tail.value
-  fork => History.Branch(repository: .repository, commits: chain None, from: this)
-  Branch := class: Ray { }
+  fork => History.Branch(repository: .repository, commits: (chain None), from: this)
+  // A branch is a history that came from another: the fields are declared
+  // again here, since what a parent declares as a thing is one thing for
+  // every child.
+  Branch := class: History {
+    repository: Node
+    commits: (chain None)
+    from: None
+  }
 }
 Repository := class: Ray {
   world: Node

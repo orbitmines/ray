@@ -419,6 +419,7 @@ export namespace Ray {
     constructor(public diagnostics: Diagnostics, public position?: Text.Node) {}
 
     get callable(): boolean { return this.fn !== undefined || this.params !== undefined; }
+    ruled?: boolean
     get rules(): Node[] { return this.methods ? [...this.methods.keys()].filter((x): x is Node => x instanceof Node) : []; }
 
     // A name is what it is bound to, or the function defined under that name.
@@ -490,6 +491,7 @@ export namespace Ray {
     static heads = new Set<string>();
     set(key: Key, value: Node): Node {
       (this.methods ??= new Map()).set(key, value);
+      if (key instanceof Node) this.ruled = true;
       if (key instanceof Node && !value.forward && key.pattern?.length === 1 && key.pattern[0].kind === 'literal') (this.named ??= new Map()).set(key.pattern[0].text.trim(), value);
       if (key instanceof Node) for (const piece of key.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) Node.heads.add(part);
       return value;
@@ -527,6 +529,7 @@ export namespace Ray {
       if (this.theme) copy.theme = new Map(this.theme);
       if (this.children) copy.children = new Map([...this.children].map(([key, child]) => [key, child.clone(seen)]));
       if (this.members) copy.members = new Map([...this.members].map(([key, child]) => [key, child.clone(seen)]));
+      if (this.ruled) copy.ruled = true;
       if (this.methods) {
         copy.methods = new Map();
         for (const [key, value] of this.methods)
@@ -693,7 +696,7 @@ export namespace Ray {
       // instance running its class), changes no cache: only a new one does.
       const fresh = this.fresh(key, value);
       // A frame whose rules were already looked up gains one: what was looked up is stale.
-      const stale = key instanceof Node && !frame.methods?.has(key) && (this.rulesets.has(frame) || this.dispatch.has(frame));
+      const stale = key instanceof Node && !frame.methods?.has(key) && (this.rulesets.has(frame) || this.dispatch.has(frame) || this.asked.has(frame));
       if ((fresh || stale) && (key instanceof Node || frame.methods?.get(key)?.forward || value.forward)) this.version++;
       if (key instanceof Node && value.body !== undefined && !value.forward) this.body_of(value.body);
       if (typeof key === 'string' && !frame.methods?.has(key)) this.name_of(frame, key);
@@ -1033,7 +1036,10 @@ export namespace Ray {
     }
 
     private rulesets = new WeakMap<Node, { version: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][] }>();
-    private dispatch = new WeakMap<Node, { version: number; chain: [Node, Node][]; rules: [Node, Node][] }>();
+    // What is composed of what changes without a rule being written, so what
+    // a receiver dispatches on is remembered against how often it has.
+    composing = 0;
+    private dispatch = new WeakMap<Node, { version: number; composing: number; chain: [Node, Node][]; rules: [Node, Node][] }>();
     ruleset(scope: Node): { operand: [Node, Node][]; receiver: [Node, Node][] } {
       const cached = this.rulesets.get(scope);
       if (cached && cached.version === this.version) return cached;
@@ -1049,8 +1055,21 @@ export namespace Ray {
       this.rulesets.set(scope, set);
       return set;
     }
+    // Frames whose rules were asked for without being read: they had none.
+    private asked = new WeakSet<Node>();
     private chains = new WeakMap<Node, { version: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][] }>();
     chain(frame: Node): { operand: [Node, Node][]; receiver: [Node, Node][] } {
+      // A frame that writes no rules of its own sees exactly what the frame
+      // above it sees. Frames are made fresh for every application, so asking
+      // the one that actually holds rules is what makes the answer reusable.
+      let held = frame, seen: Set<Node> | undefined;
+      while (held.ruled !== true && held.parent !== undefined) {
+        this.asked.add(held);
+        if (seen === undefined) seen = new Set([held]);
+        if (seen.has(held.parent)) break;
+        held = held.parent; seen.add(held);
+      }
+      if (held !== frame) return this.chain(held);
       const cached = this.chains.get(frame);
       if (cached && cached.version === this.version && cached.base === this.BASE) return cached;
       const scopes = new Set<Node>();
@@ -1108,20 +1127,20 @@ export namespace Ray {
       if (own.inlined === undefined) {
         if (!own.methods || itself) return chain;
         const cached = this.dispatch.get(own);
-        if (cached && cached.version === this.version && cached.chain === chain) return cached.rules;
+        if (cached && cached.version === this.version && cached.composing === this.composing && cached.chain === chain) return cached.rules;
         const rules = [...this.ruleset(own).receiver, ...chain];
-        this.dispatch.set(own, { version: this.version, chain, rules });
+        this.dispatch.set(own, { version: this.version, composing: this.composing, chain, rules });
         return rules;
       }
       if (!itself) {
         const held = this.dispatch.get(own);
-        if (held && held.version === this.version && held.chain === chain) return held.rules;
+        if (held && held.version === this.version && held.composing === this.composing && held.chain === chain) return held.rules;
       }
       const rules: [Node, Node][] = [];
       const seen = new Set<Node>();
       for (const from of own.composed(seen)) if (from.methods && !(itself && from === own)) rules.push(...this.ruleset(from).receiver);
       const dispatched = rules.length > 0 ? [...rules, ...chain] : chain;
-      if (!itself) this.dispatch.set(own, { version: this.version, chain, rules: dispatched });
+      if (!itself) this.dispatch.set(own, { version: this.version, composing: this.composing, chain, rules: dispatched });
       return dispatched;
     }
 
@@ -3238,7 +3257,7 @@ export namespace Ray {
       if (frame === from || frame === this.NONE || from === this.NONE) return;
       for (const scope of from.composed(new Set())) if (scope === frame) return;
       const inlined = (frame.inlined ??= []);
-      if (!inlined.includes(from)) inlined.push(from);
+      if (!inlined.includes(from)) { inlined.push(from); this.composing++; }
     }
     inner(span: Text.Node, frame: Node): Text.Node | undefined {
       const probe = this.cursor_of(span);

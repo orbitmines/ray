@@ -29,3 +29,36 @@ if (Gregorian.is_leap_year(hundred)) { INFO@mark `TI17 a hundred is a leap year 
 unless (Julian.is_leap_year(hundred)) { INFO@mark `TI18 a hundred is not a leap year in the Julian` }
 unless (UTC.offset.is_zero) { INFO@mark `TI19 UTC is at some offset` }
 unless (exists Julian.months.head.value.place) { INFO@mark `TI20 the first month has no place` }
+
+// Months: what each is named, how long it is, and where it sits. February is
+// the only one a leap year changes.
+february := Julian.months.head.next.value
+unless (february.place == two) { INFO@mark `TI21 the second month does not sit second` }
+unless (february.length == ((two * ten) + eight)) { INFO@mark `TI22 february is other than twenty-eight days` }
+unless (february.days_in(four, Julian) == ((two * ten) + nine)) { INFO@mark `TI23 february in a leap year is other than twenty-nine days` }
+unless (february.days_in(five, Julian) == ((two * ten) + eight)) { INFO@mark `TI24 february in a plain year is other than twenty-eight days` }
+january := Julian.months.head.value
+unless (january.place == one) { INFO@mark `TI25 the first month does not sit first` }
+unless (january.days_in(four, Julian) == ((three * ten) + one)) { INFO@mark `TI26 a leap year lengthens january` }
+unless (Julian.days_in_month(january, four) == ((three * ten) + one)) { INFO@mark `TI27 a calendar does not ask a month how long it is` }
+
+// Weekdays, in the order a week is walked.
+unless (Weekday.monday == Julian.weekdays.head.value) { INFO@mark `TI28 a week does not begin on monday` }
+unless (Weekday.sunday == Julian.weekdays.tail.value) { INFO@mark `TI29 a week does not end on sunday` }
+if (Weekday.monday == Weekday.tuesday) { INFO@mark `TI30 two weekdays are the same day` }
+
+// The units, and how they are counted in one another.
+unless (Minute.base == Second) { INFO@mark `TI31 a minute is not built on a second` }
+unless (Hour.base == Minute) { INFO@mark `TI32 an hour is not built on a minute` }
+unless (Day.base == Hour) { INFO@mark `TI33 a day is not built on an hour` }
+unless (Week.base == Day) { INFO@mark `TI34 a week is not built on a day` }
+unless (Minute.ratio == (six * ten)) { INFO@mark `TI35 a minute is other than sixty of what it is built on` }
+unless (Week.ratio == seven) { INFO@mark `TI36 a week is other than seven of what it is built on` }
+unless (Week.rank == four) { INFO@mark `TI37 a week is other than four steps off its base` }
+
+// The Gregorian differs from the Julian only at a century, and agrees again
+// at four hundred.
+unless (Gregorian.is_leap_year(four * hundred)) { INFO@mark `TI38 four hundred is not a leap year in the Gregorian` }
+unless (Julian.is_leap_year(four * hundred)) { INFO@mark `TI39 four hundred is not a leap year in the Julian` }
+unless (GMT.offset.is_zero) { INFO@mark `TI40 GMT is at some offset` }
+if (UTC.leap_seconds) { INFO@mark `TI41 UTC counts leap seconds` }

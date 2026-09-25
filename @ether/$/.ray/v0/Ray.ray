@@ -199,42 +199,6 @@ Iterable := class: Ordered {
 // A program is what it is written as: the statements, in the order they are
 // written on the page, each of them a program in turn. What order they *run*
 // in is another thing, and a goto is what says it.
-Program := class: Iterable {
-  // `Program{O: Compiler.default}`: the program read back with those rules in
-  // scope. `O` is what the optimizations are called where they are written
-  // short; a level is a set of rules and nothing more, so what is written
-  // stays what it is and the setting sits beside it.
-  optimizations => Compiler.none
-  O => .optimizations
-  {this}{`{`}{literal setting}{`}`} ^punctuation => class: this { inline setting }
-
-  // What it is written as: the statements, in the order they are written on
-  // the page. The engine hands over the first one and what is left of it; the
-  // chain that holds them is built here, and each of them is a program in
-  // turn, so what holds a program holds programs all the way down.
-  written => (
-    out := chain None
-    left ^keyword := this
-    one ^keyword := external first left
-    while (exists one) {
-      external extend one Program
-      out &= one
-      left = external rest left
-      one = external first left
-    }
-    out
-  )
-  entry => .written.entry
-  first => .written.first
-  last => .written.last
-  count => .written.count
-  empty => .count.is_zero
-  for (body) => (
-    .written for body
-    this
-  )
-}
-
 Ray := class: Iterable {
   entry => this
 

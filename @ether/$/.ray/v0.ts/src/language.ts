@@ -1088,7 +1088,7 @@ export namespace Ray {
     }
     // Frames whose rules were asked for without being read: they had none.
     private asked = new WeakSet<Node>();
-    private chains = new WeakMap<Node, { version: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][] }>();
+    private chains = new WeakMap<Node, { version: number; composing: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][] }>();
     // A frame that writes no rules of its own sees exactly what the frame
     // above it sees. Frames are made fresh for every application, so asking
     // the one that actually holds rules is what makes any answer reusable.
@@ -1106,9 +1106,16 @@ export namespace Ray {
       const held = this.rooted(frame);
       if (held !== frame) return this.chain(held);
       const cached = this.chains.get(frame);
-      if (cached && cached.version === this.version && cached.base === this.BASE) return cached;
+      // What a frame is made of can change after it was asked what it sees.
+      if (cached && cached.version === this.version && cached.composing === this.composing && cached.base === this.BASE) return cached;
       const scopes = new Set<Node>();
-      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.add(scope);
+      for (let scope: Node | undefined = frame; scope; scope = scope.parent) {
+        scopes.add(scope);
+        // What a frame is made of brings its rules with it, not only its
+        // names: a set of rules composed into a frame is what a level is, and
+        // reading something with a level in reach is what applying one means.
+        for (const held of scope.made_of ?? []) scopes.add(held);
+      }
       if (this.BASE) scopes.add(this.BASE);
       const operand: [Node, Node][] = [], receiver: [Node, Node][] = [];
       for (const scope of scopes) {
@@ -1117,7 +1124,7 @@ export namespace Ray {
         if (scope === this.GLOBAL || scope === this.BASE) receiver.push(...set.receiver);
         else receiver.push(...set.receiver.filter(([, impl]) => impl.forward !== undefined));
       }
-      const chain = { version: this.version, base: this.BASE, operand, receiver };
+      const chain = { version: this.version, composing: this.composing, base: this.BASE, operand, receiver };
       this.chains.set(frame, chain);
       return chain;
     }

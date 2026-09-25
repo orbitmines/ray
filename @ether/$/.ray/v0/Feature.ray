@@ -95,7 +95,9 @@ Proof := class {
   argument: Node
 
   holds => .argument.holds
-  theorem (proposition, proof) => if proof.holds { true } else { Quest.of(String.of(`prove`), proposition) }
+  // What is not proved is what there is to do: a theorem whose proof does not
+  // hold is a quest to prove it, built the way a quest is built.
+  theorem (proposition, proof) => if proof.holds { true } else { Quest(name: String.of(`prove`), goal: proposition) }
   by_contradiction (proposition, proof_of_negation) => proof_of_negation.holds.not
   rfl (proposition) => proposition.holds
   assume (fact) => fact

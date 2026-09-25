@@ -66,6 +66,11 @@ unless (Proof.assume(yes).holds) { INFO@mark `PF7 what is assumed is not what wa
 unless (Proof.by_contradiction(yes, no)) { INFO@mark `PF8 a proof of the negation failing does not prove it` }
 if (Proof.by_contradiction(no, yes)) { INFO@mark `PF9 a proof of the negation holding proves it anyway` }
 unless (Proof(proposition: yes, argument: yes).holds) { INFO@mark `PF10 a proof holds only if its argument does` }
+// What is proved is true; what is not is what there is to do.
+unless (Proof.theorem(yes, yes)) { INFO@mark `PF11 a theorem with a proof that holds is not true` }
+unless (exists Proof.theorem(yes, no).goal) { INFO@mark `PF12 a theorem without a proof is not something to do` }
+unless (Proof.theorem(yes, no).goal == yes) { INFO@mark `PF13 what there is to do is not proving the proposition` }
+if (Proof.theorem(yes, no).completed) { INFO@mark `PF14 what there is to do is already done` }
 
 // A step each way, and swapping them.
 step := Transaction(forwards: one, backwards: two)

@@ -428,13 +428,17 @@ export namespace Ray {
     named?: Map<string, Node>
     member(key: string): Node | undefined {
       const own = this.members?.get(key) ?? this.methods?.get(key);
-      if (own !== undefined || this.inlined === undefined) return own;
+      if (own !== undefined || (this.inlined === undefined && this.made_of === undefined)) return own;
       const seen = new Set<Node>();
       for (const scope of this.composed(seen)) {
         const found = scope.members?.get(key) ?? scope.methods?.get(key);
         if (found !== undefined) return found;
       }
     }
+    // What a node is made of, as against text inlined into it: a class
+    // composing another is made of it, and does not read the frame that one
+    // was written in.
+    made_of?: Node[]
     *composed(seen: Set<Node>): Generator<Node> {
       const stack: Node[] = [this];
       while (stack.length > 0) {
@@ -442,6 +446,7 @@ export namespace Ray {
         if (seen.has(scope)) continue;
         seen.add(scope);
         yield scope;
+        for (let k = (scope.made_of?.length ?? 0) - 1; k >= 0; k--) stack.push(scope.made_of![k]);
         for (let k = (scope.inlined?.length ?? 0) - 1; k >= 0; k--) stack.push(scope.inlined![k]);
       }
     }
@@ -450,7 +455,7 @@ export namespace Ray {
     // the names of where it was written before those around where it runs.
     lookup(key: string): Node | undefined {
       let links = false;
-      for (let scope: Node | undefined = this; scope && !links; scope = scope.parent) links = scope.inlined !== undefined || scope.sees !== undefined;
+      for (let scope: Node | undefined = this; scope && !links; scope = scope.parent) links = scope.inlined !== undefined || scope.made_of !== undefined || scope.sees !== undefined;
       if (!links) {
         for (let scope: Node | undefined = this; scope; scope = scope.parent) { const found = scope.own(key) ?? scope.members?.get(key); if (found !== undefined) return found; }
         return undefined;
@@ -464,7 +469,7 @@ export namespace Ray {
     // The outermost scope is where the language itself is written, so it
     // answers last: anything nearer, by any route, is nearer.
     *reading(seen: Set<Node>): Generator<Node> {
-      const stack: { scope: Node | undefined; start: Node; k: number }[] = [];
+      const stack: { scope: Node | undefined; start: Node; k: number; rooted?: boolean }[] = [];
       let outermost: Node | undefined;
       if (!seen.has(this)) { seen.add(this); stack.push({ scope: this, start: this, k: -1 }); }
       while (stack.length > 0) {
@@ -476,12 +481,16 @@ export namespace Ray {
           yield top.scope;
           top.k = 0;
         }
-        const inlined = top.scope.inlined, sees = top.scope.sees;
-        const composed = inlined?.length ?? 0, seeing = sees?.length ?? 0;
-        if (top.k < composed + seeing) {
-          const start = top.k < composed ? inlined![top.k] : sees![top.k - composed];
-          top.k++;
-          if (!seen.has(start)) { seen.add(start); stack.push({ scope: start, start, k: -1 }); }
+        const inlined = top.scope.inlined, made = top.scope.made_of, sees = top.rooted ? undefined : top.scope.sees;
+        const composed = inlined?.length ?? 0, of = made?.length ?? 0, seeing = sees?.length ?? 0;
+        if (top.k < composed + of + seeing) {
+          const k = top.k++;
+          const start = k < composed ? inlined![k] : k < composed + of ? made![k - composed] : sees![k - composed - of];
+          // What a scope is made of answers with its own names and with what
+          // it is itself made of, never with the frames it was written in or
+          // reads from: a class does not see another's locals.
+          const rooted = top.rooted === true || (k >= composed && k < composed + of);
+          if (!seen.has(start)) { seen.add(start); stack.push({ scope: start, start, k: -1, rooted }); }
           continue;
         }
         top.scope = top.scope.parent; top.k = -1;
@@ -519,6 +528,7 @@ export namespace Ray {
       copy.parent = this.parent?.clone(seen);
       copy.closure = this.closure?.clone(seen);
       copy.inlined = this.inlined?.map(x => x.clone(seen));
+      copy.made_of = this.made_of?.map(x => x.clone(seen));
       copy.sees = this.sees?.map(x => x.clone(seen));
       copy.value = this.value?.clone(seen);
       copy.applied = all(this.applied);
@@ -1098,7 +1108,7 @@ export namespace Ray {
       const cached = this.declarations.get(own);
       if (cached && cached.version === this.version) return cached.rules;
       const rules = new Set<Node>();
-      const sources = own.inlined === undefined ? [own] : [...own.composed(new Set())];
+      const sources = own.inlined === undefined && own.made_of === undefined ? [own] : [...own.composed(new Set())];
       for (const from of sources) if (!this.ambient(from) && from.methods) for (const key of from.methods.keys()) if (key instanceof Node) rules.add(key);
       this.declarations.set(own, { version: this.version, rules });
       return rules;
@@ -1110,7 +1120,7 @@ export namespace Ray {
     declares(receiver: Node | undefined, rule: Node): boolean {
       const own = receiver && this.resolved(receiver);
       if (!own || own.lazy) return false;
-      if (own.inlined === undefined) return !this.ambient(own) && (own.methods?.has(rule) ?? false);
+      if (own.inlined === undefined && own.made_of === undefined) return !this.ambient(own) && (own.methods?.has(rule) ?? false);
       for (const from of own.composed(new Set())) if (!this.ambient(from) && from.methods?.has(rule)) return true;
       return false;
     }
@@ -1125,10 +1135,10 @@ export namespace Ray {
         if (held?.lazy !== undefined && held.value === undefined && !held.lazy.raw && !this.probing) { this.diagnostics.muted(() => this.safely(() => this.deref(receiver, false))); own = this.resolved(receiver); }
         if (own === undefined) own = held?.declared;
       }
-      if (own !== undefined && own.declared !== undefined && own.methods === undefined && own.inlined === undefined) own = own.declared;
+      if (own !== undefined && own.declared !== undefined && own.methods === undefined && own.inlined === undefined && own.made_of === undefined) own = own.declared;
       if (!own || own.lazy) return chain;
       const itself = own === frame && !opts.self;
-      if (own.inlined === undefined) {
+      if (own.inlined === undefined && own.made_of === undefined) {
         if (!own.methods || itself) return chain;
         const cached = this.dispatch.get(own);
         if (cached && cached.version === this.version && cached.composing === this.composing && cached.chain === chain) return cached.rules;
@@ -3261,7 +3271,7 @@ export namespace Ray {
       if (target.none) { frame.none = true; return target; }
       // Composing reads from a value; only inlining runs a definition's body.
       if (target.body && !opts.compose) return this.safely(() => this.array(this.cursor_of(target.body), frame, true));
-      if ((target.methods || target.members) && !target.body) this.reads_from(frame, target);
+      if ((target.methods || target.members) && !target.body) this.reads_from(frame, target, opts.compose === true);
       return target;
     }
     // Text run here reads the names of where it was written, without this
@@ -3271,12 +3281,12 @@ export namespace Ray {
       const sees = (frame.sees ??= []);
       if (!sees.includes(from)) sees.push(from);
     }
-    reads_from(frame: Node, from: Node) {
+    reads_from(frame: Node, from: Node, composing = false) {
       // Nothing is made of nothing, and reads from nothing.
       if (frame === from || frame === this.NONE || from === this.NONE) return;
       for (const scope of from.composed(new Set())) if (scope === frame) return;
-      const inlined = (frame.inlined ??= []);
-      if (!inlined.includes(from)) { inlined.push(from); this.composing++; }
+      const held = composing ? (frame.made_of ??= []) : (frame.inlined ??= []);
+      if (!held.includes(from)) { held.push(from); this.composing++; }
     }
     inner(span: Text.Node, frame: Node): Text.Node | undefined {
       const probe = this.cursor_of(span);

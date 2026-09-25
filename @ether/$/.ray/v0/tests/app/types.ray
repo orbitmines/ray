@@ -53,10 +53,30 @@ Small := Number{. < five}
 unless (exists three.instance_of(Small)) { INFO@mark `TY16 three is not one of the small` }
 if (exists seven.instance_of(Small)) { INFO@mark `TY17 seven is one of the small` }
 unless (exists three.instance_of(Number)) { INFO@mark `TY18 three is not a number` }
-// spec: a narrowing of a narrowing keeps only its own constraint, so
-// `Small{. < two}` admits three. One narrowing per type, as `<>` says above.
-// unless (exists one.instance_of(Small{. < two})) { INFO@mark `TY19 one is not tiny` }
-// if (exists three.instance_of(Small{. < two})) { INFO@mark `TY20 three is tiny` }
+// A narrowing of a narrowing asks both: what the one it narrows admits, and
+// its own constraint.
+Tiny := Small{. < two}
+unless (exists one.instance_of(Tiny)) { INFO@mark `TY19 one is not tiny` }
+if (exists three.instance_of(Tiny)) { INFO@mark `TY20 three is tiny` }
+if (exists seven.instance_of(Tiny)) { INFO@mark `TY25 seven is tiny` }
+unless (Tiny.admits(one)) { INFO@mark `TY26 the tiny do not admit one` }
+if (Tiny.admits(three)) { INFO@mark `TY27 the tiny admit three` }
+
+// A class built inside a method answers with what that call wrote, and so
+// does a class built on it by another call: what a class is made of tells it
+// nothing about the frame that one was written in.
+Wrapping := class {
+  with (tag) => class: this {
+    says => tag
+  }
+}
+once := Wrapping.with(one)
+twice := once.with(two)
+thrice := twice.with(three)
+unless (once.says == one) { INFO@mark `TY28 the first wrapping says other than what it was written with` }
+unless (twice.says == two) { INFO@mark `TY29 a wrapping of a wrapping says its parent's` }
+unless (thrice.says == three) { INFO@mark `TY30 a third wrapping says an older one's` }
+unless (once.says == one) { INFO@mark `TY31 building on a class changed what it says` }
 
 // A type written as alternatives is any of them, which is what `Type?` spells.
 Either := Parent?

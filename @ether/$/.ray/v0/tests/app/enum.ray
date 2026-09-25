@@ -9,6 +9,21 @@ Shape := enum circle (radius: Number) | square (side: Number) | point
 
 Modifier := enum static | readonly | this
 
+// An enum whose members answer something of their own: the block is written
+// across lines, since `{ }` and a block on one line lose the member they are
+// written with.
+Level := enum low (rank: Number) | high (rank: Number) {
+  ranked => .rank
+  named => .name
+}
+
+// An enum written inside a class is the class's own.
+Holder := class {
+  Side := enum left | right {
+  }
+  side => Holder.Side.left
+}
+
 mark ^keyword := external global
 
 unless (exists Colour.red) { INFO@mark `EM1 the member an enum is written with is not there` }
@@ -32,6 +47,25 @@ unless (exists Modifier.this.name) { INFO@mark `EM12 a member named this has no 
 // rule body calls the class it is written in, and the member is read as that
 // instead — the same clash as a field named `forward` (Feature.ray says so).
 // unless (exists Modifier.static.name) { INFO@mark `EM13 a member named static has no name` }
+
+// What an enum is made of is its members, and nothing else is one of it.
+seen ^keyword := zero
+Colour.components for { seen = seen.succ }
+unless (seen == three) { INFO@mark `EM14 walking an enum does not reach its three members` }
+if (exists Shape.circle.instance_of(Colour)) { INFO@mark `EM15 a member is one of another enum` }
+unless (exists Shape.circle.instance_of(Shape)) { INFO@mark `EM16 a member is not one of its own enum` }
+
+// A member of an enum written with a block answers what the block says.
+unless (exists Level.low.ranked) { INFO@mark `EM17 a block over lines lost what it declares` }
+unless (exists Level.high.ranked) { INFO@mark `EM18 the last member gained nothing from the block` }
+unless (exists Level.low.named) { INFO@mark `EM19 a member written with a block has no name` }
+unless (Level.components.count == two) { INFO@mark `EM20 an enum of two written with a block has other than two members` }
+if (Level.low == Level.high) { INFO@mark `EM21 two members written with a block are the same` }
+
+// An enum written inside a class is reached through it.
+unless (exists Holder.Side.left) { INFO@mark `EM22 an enum inside a class has no members` }
+unless (Holder.Side.components.count == two) { INFO@mark `EM23 an enum inside a class lost a member` }
+unless (Holder().side == Holder.Side.left) { INFO@mark `EM24 an instance does not reach the enum its class writes` }
 
 // Conditional goto is the only control flow the runtime provides: the jump
 // is taken when its condition has a value, and the statements it skips do

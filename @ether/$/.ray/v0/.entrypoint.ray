@@ -16,7 +16,7 @@ None      ^keyword := external none
 `{literal string ^string}` ^string.punctuation => string
 //{literal comment?} ^comment => None
 
-{`{`}{expr}{`}`} ^punctuation => (
+{`{`}{expr ^block}{`}`} ^punctuation => (
   scope ^keyword := external .
   value := inline expr
   // A block is made of its value, and of None too: then it stands for nothing.

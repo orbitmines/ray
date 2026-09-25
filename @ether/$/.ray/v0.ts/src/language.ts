@@ -1180,7 +1180,7 @@ export namespace Ray {
           const head = previous !== undefined ? this.rule_head(previous, frame) : undefined;
           const raw = (previous !== undefined && frame.lookup(previous)?.reads !== undefined) || (head !== undefined && head.pattern!.some(piece => piece.kind === 'capture' && piece.raw));
           previous = word;
-          if (raw || text[at - 1] === '^' || bound.has(word) || seen.has(word)) continue;
+          if (raw || this.prefixes.has(text[at - 1]) || bound.has(word) || seen.has(word)) continue;
           if (given.some(([begin, end, names]) => at >= begin && at <= end && names.has(word))) continue;
           if (at > 0 && this.starts_rule(whole, at - 1, frame)) continue;
           if (skip.some(([begin, end]) => at >= begin && at <= end)) continue;
@@ -1206,10 +1206,9 @@ export namespace Ray {
           ? this.only(this.candidates(receiver, frame, { self: true }), false)
           : this.candidates(receiver, frame);
       const ahead = cursor.source.value[this.skip(cursor, cursor.cursor)];
-      for (const [rule, impl] of set) {
+      for (const [rule, impl] of ahead === undefined ? set : this.headed(set, ahead)) {
         const shape = this.shaped(rule);
-        if (shape.literal) continue;
-        if (shape.head !== undefined && ahead !== undefined && shape.head !== ahead) continue;
+        if (ahead === undefined && shape.literal) continue;
         if (opts.forwards && !impl.forward) continue;
         if (!!opts.newline !== shape.newline) continue;
         if (shape.operator && (this.rewriting.has(rule) || this.missing(rule, impl).length > 0)) continue;
@@ -1228,6 +1227,21 @@ export namespace Ray {
         if (own > current || (own === current && (length > total || (length === total && (tie > 0 || (tie === 0 && best!.impl.forward && !impl.forward)))))) best = { rule, impl, match };
       }
       return best;
+    }
+
+    // The rules a character could begin, kept per candidate set: the same
+    // question was asked of every rule at every position, and the answer only
+    // depends on the set and the character. Rules that begin with no literal
+    // are in every answer, in the order they were dispatched in.
+    private headings = new WeakMap<[Node, Node][], Map<string, [Node, Node][]>>();
+    headed(set: [Node, Node][], ahead: string): [Node, Node][] {
+      let held = this.headings.get(set);
+      if (held === undefined) this.headings.set(set, held = new Map());
+      let kept = held.get(ahead);
+      if (kept !== undefined) return kept;
+      kept = set.filter(([rule]) => { const shape = this.shaped(rule); return !shape.literal && (shape.head === undefined || shape.head === ahead); });
+      held.set(ahead, kept);
+      return kept;
     }
 
     private onlys = new WeakMap<[Node, Node][], [Node, Node][]>();
@@ -1256,6 +1270,25 @@ export namespace Ray {
           if (!inner.styles.some(style => style.string.replace(/^\^/, '').trim() === 'parameter')) continue;
           const from = open.text.trim(), to = close.text.trim();
           if (from.length > 0 && to.length > 0) return [from, to];
+        }
+      return undefined;
+    }
+    // What opens a block is whatever bracket rule holds a capture marked
+    // `^block`: a block is one thing, never a list of them, so an argument
+    // written as one is not split.
+    private scoped(frame: Node): string | undefined {
+      const scopes: Node[] = [];
+      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.push(scope);
+      if (this.BASE) scopes.push(this.BASE);
+      for (const scope of scopes)
+        for (const rule of scope.rules) {
+          const pieces = rule.pattern;
+          if (!pieces || pieces.length < 3) continue;
+          const open = pieces[0], inner = pieces[1];
+          if (open.kind !== 'literal' || inner.kind !== 'capture') continue;
+          if (!inner.styles.some(style => style.string.replace(/^\^/, '').trim() === 'block')) continue;
+          const from = open.text.trim();
+          if (from.length > 0) return from;
         }
       return undefined;
     }
@@ -2063,7 +2096,8 @@ export namespace Ray {
         if (span !== undefined) this.sees(local, frame);
         // An argument list is one argument per part: what the separator rule
         // spells splits it, outside any brackets. A block is not a list.
-        const between = span !== undefined && span.string.trimStart()[0] !== '{' ? this.marked(local, 'separator') : undefined;
+        const opens = this.scoped(local);
+        const between = span !== undefined && (opens === undefined || !span.string.trimStart().startsWith(opens)) ? this.marked(local, 'separator') : undefined;
         const nodes = span !== undefined ? (between !== undefined ? this.split(span, between) : [span]).map(part => this.lazy(part, local, piece.raw)) : [captures.get(piece.name)];
         for (const node of nodes) {
           if (node === undefined) continue;
@@ -2521,9 +2555,13 @@ export namespace Ray {
       if (name === undefined || this.resolved(this.reference(frame, name, token))?.fn !== Natives['^'].fn) return false;
       const rest = token.begin + name.length, text = token.source.value;
       if (rest > token.end) return true;
-      if (text[rest] === '{') return false;
+      // What a pattern groups with is what the grammar rule spells: a name
+      // followed by one of those marks is writing a pattern, not a style.
+      const marks = this.shape(frame)?.marks;
+      if (marks?.has(text[rest])) return false;
       const claimed = this.claim(probe, rest, frame);
-      return claimed > rest ? claimed === token.end + 1 : !/[{}]/.test(token.source.value.slice(rest, token.end + 1));
+      if (claimed > rest) return claimed === token.end + 1;
+      return ![...token.source.value.slice(rest, token.end + 1)].some(each => marks?.has(each) ?? false);
     }
     quiet = 0;
     style_of(token: Text.Node, frame: Node): Node | undefined {
@@ -2595,12 +2633,14 @@ export namespace Ray {
       const closure = impl.closure ?? frame;
       const styles = (item: Text.Node) => this.tokens(item, closure).filter(token => this.decorates(token, closure));
       const literal = (item: Text.Node) => this.chunks(item).some(token => /^`[^`]*`$/.test(token.string));
-      const shape: Shape = { text: [], groups: new Map(), arrow: impl.decorators ?? [], frame: closure };
+      const shape: Shape = { text: [], groups: new Map(), arrow: impl.decorators ?? [], frame: closure, marks: new Set() };
       for (const alternative of this.split(content.span(open + 1, close - 2), '|')) {
         const items = this.split(alternative, ',');
         if (items.length >= 3 && literal(items[0]) && literal(items[items.length - 1])) {
-          const opening = this.chunks(items[0]).find(token => /^`[^`]*`$/.test(token.string))!.string.slice(1, -1);
+          const spelled = (item: Text.Node) => this.chunks(item).find(token => /^`[^`]*`$/.test(token.string))!.string.slice(1, -1);
+          const opening = spelled(items[0]), closing = spelled(items[items.length - 1]);
           shape.groups.set(opening, { open: styles(items[0]), content: items.slice(1, -1).flatMap(styles), close: styles(items[items.length - 1]) });
+          shape.marks.add(opening); shape.marks.add(closing);
         } else shape.text = items.flatMap(styles);
       }
       return shape;
@@ -2669,7 +2709,9 @@ export namespace Ray {
           run = -1;
         };
         for (let j = chunk.begin; j < end;) {
-          if (text[j] === '{' || operators.has(j)) {
+          // What groups a pattern is what the grammar rule writes down: the
+          // openings it spells, and the operator groups already found.
+          if (shape?.groups.has(text[j]) || operators.has(j)) {
             flush(j);
             const close = this.group_end(text, j, end);
             const group = shape?.groups.get(text[j]);
@@ -3181,7 +3223,8 @@ export namespace Ray {
         const span = inner ?? target.lazy.span;
         // An argument list is one statement per argument: what the separator
         // rule spells splits it, outside any brackets. A block is not a list.
-        const between = target.lazy.span.string.trimStart()[0] === '{' ? undefined : this.marked(frame, 'separator');
+        const opens = this.scoped(frame);
+        const between = opens !== undefined && target.lazy.span.string.trimStart().startsWith(opens) ? undefined : this.marked(frame, 'separator');
         const parts = between !== undefined ? this.split(span, between) : [span];
         let last: Node | undefined;
         for (const part of parts) last = this.safely(() => this.array(this.cursor_of(part), frame, true));
@@ -3300,7 +3343,7 @@ export namespace Ray {
   };
 
   export type Group = { open: Text.Node[]; content: Text.Node[]; close: Text.Node[] };
-  export type Shape = { text: Text.Node[]; groups: Map<string, Group>; arrow: Text.Node[]; frame: Node };
+  export type Shape = { text: Text.Node[]; groups: Map<string, Group>; arrow: Text.Node[]; frame: Node; marks: Set<string> };
 
   export class Jump extends Error {
     site?: Text.Node

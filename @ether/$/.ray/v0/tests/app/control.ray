@@ -46,3 +46,82 @@ nothing_taken := if false { one } else { None }
 if (exists nothing_taken) { INFO@mark `an if whose taken branch is None is present` }
 something_taken := if true { one } else { None }
 unless (exists something_taken) { INFO@mark `an if whose taken branch is one is absent` }
+
+// Only the branch that is taken runs: what the others would have done is not
+// done, and a chain of branches runs exactly one of them.
+counted ^keyword := false
+taken_once ^keyword := if true { true } else {
+  counted = true
+  false
+}
+unless (taken_once) { INFO@mark `CF1 a taken branch did not answer` }
+if (counted) { INFO@mark `CF2 the branch nobody took ran anyway` }
+
+arms ^keyword := zero
+picked ^keyword := if false {
+  arms = arms.succ
+  one
+} elsif true {
+  arms = arms.succ
+  two
+} elsif true {
+  arms = arms.succ
+  three
+} else {
+  arms = arms.succ
+  four
+}
+unless (picked == two) { INFO@mark `CF3 the first holding arm is not what answered` }
+unless (arms == one) { INFO@mark `CF4 more than one arm of a chain ran` }
+
+// A branch is a block, so it answers what its last statement does. Statements
+// in a block are told apart by the lines they are written on.
+many ^keyword := if true {
+  one
+  two
+  three
+} else { None }
+unless (many == three) { INFO@mark `CF5 a branch does not answer its last statement` }
+
+// Branches nest, and the inner one is read where it is written.
+nested ^keyword := if true { if false { one } else { two } } else { three }
+unless (nested == two) { INFO@mark `CF6 a branch inside a branch is not read there` }
+
+// A condition is not only true and false: what is there holds, what is not
+// does not.
+held_something ^keyword := if one { true } else { false }
+unless (held_something) { INFO@mark `CF7 a number that is there does not hold` }
+held_nothing ^keyword := if None { true } else { false }
+if (held_nothing) { INFO@mark `CF8 nothing holds` }
+
+// `unless` takes the other side too.
+other_side ^keyword := unless true { one } else { two }
+unless (other_side == two) { INFO@mark `CF9 unless has no other side` }
+
+// A loop runs as many times as its condition holds.
+left ^keyword := three
+rounds ^keyword := zero
+while left {
+  rounds = rounds.succ
+  left = left.pred
+}
+unless (rounds == three) { INFO@mark `CF10 a loop ran other than three times` }
+unless (left.is_zero) { INFO@mark `CF11 a loop left its count behind` }
+
+// `do` runs once before it asks.
+asked ^keyword := zero
+do { asked = asked.succ } while false
+unless (asked == one) { INFO@mark `CF12 do ran other than once when it never holds` }
+
+// A loop inside a loop is its own count.
+outer ^keyword := two
+pairs ^keyword := zero
+while outer {
+  inner ^keyword := three
+  while inner {
+    pairs = pairs.succ
+    inner = inner.pred
+  }
+  outer = outer.pred
+}
+unless (pairs == (two * three)) { INFO@mark `CF13 a loop inside a loop does not multiply` }

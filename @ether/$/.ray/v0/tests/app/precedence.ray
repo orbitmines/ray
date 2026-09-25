@@ -1,0 +1,56 @@
+// What stands between two operands is written `[x]`, and a rule may ask for
+// two of them around a shared operand. The rule says which way they group, and
+// its body applies what it was handed: `[x]` is not a name for the operator,
+// it is the operator, written where the body writes it.
+
+mark ^keyword := external global
+
+// The language chains comparisons of its own: the entrypoint writes the rule
+// and `chainable` says which operators it takes. Written through, a comparison
+// says both of the comparisons it is written as, so a chain that breaks
+// anywhere is false.
+unless (one < two < three) { INFO@mark `PR3 one below two below three does not hold` }
+if (three < two < one) { INFO@mark `PR4 three below two below one holds` }
+if (one < three < two) { INFO@mark `PR5 a chain that breaks at the end holds` }
+if (two < one < three) { INFO@mark `PR6 a chain that breaks at the start holds` }
+// spec: a chain of three comparisons is not claimed — the rule takes two
+// operators around a shared operand, so `a < b < c < d` reads as
+// `(a < b and b < c) < d`, which compares a boolean with a number. The draft
+// reduces a whole run at once (.ray2/Grammar.ray:175-205); this reduces a pair.
+unless (three > two > one) { INFO@mark `PR16 three above two above one does not hold` }
+if (one > two > three) { INFO@mark `PR17 one above two above three holds` }
+// spec: `<=`, `>=` and `==` do not chain. Where an operator ends is read off
+// the methods of what is written to its left, and it comes back one character
+// long even where two are written, so `a <= b <= c` reads the `<` and leaves
+// the `=` unread — green, and two errors per chain.
+
+// And one written here, to show that a rule of this shape does what it says.
+// Which operators it will take is answered by a class, the way the type of a
+// capture is; it names its own captures, since a rule is told from another by
+// what it is called and an operator's filter is not part of that.
+minus ^keyword := class {
+  accepts (written) => if (exists (external alike (written) (`-`))) { written } else { None }
+}
+{start} [takes: minus] {once} [again: minus] {twice} => (start [takes] once) [again] twice
+unless ((ten - two - three) == five) { INFO@mark `PR1 ten less two less three is not five` }
+unless (((ten + ten) - four - six) == ten) { INFO@mark `PR2 twenty less four less six is not ten` }
+
+// What is written with one of them is untouched, and so is what the filter
+// does not take.
+unless ((one + two) == three) { INFO@mark `PR7 one and two is not three` }
+unless (one < two) { INFO@mark `PR8 one is not below two` }
+if (two < one) { INFO@mark `PR9 two is below one` }
+unless ((two * three) == six) { INFO@mark `PR10 an operator the rule does not ask for stopped working` }
+unless ((ten - two) == eight) { INFO@mark `PR11 one less on its own stopped working` }
+unless ((one + two + three) == six) { INFO@mark `PR12 three added is not six` }
+
+// spec: the two rules that group by precedence are written `=> body if
+// condition`, and a trailing `if` is not implemented. Written
+// `{a} if {cond} => if cond { a }` it answers the value where the condition
+// holds, and is not lazy — what stands to its left is the receiver, which has
+// already been read — so `two if false` is still two. Written
+// `{a}{ }if{ }{cond}` it does not match at all: a space written at the second
+// place of a pattern whose first is the receiver can never be matched, because
+// the space before the cursor has already been stepped over. Until they are
+// answered, two operators of different kinds group right to left, so
+// two times three and one is eight rather than seven.

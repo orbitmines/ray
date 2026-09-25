@@ -37,3 +37,13 @@ unless (exists taken.O) { INFO@mark `PG12 a program does not say which rules it 
 // program is run, and neither is running one of the statements it is written
 // as. What a program is *for* is being read back: `**` is asked for one at
 // every method definition, and what runs is the method.
+
+// spec: a program is not yet walkable as what it *does*, only as what it is
+// written as. The structure the drafts want is the conditional gotos as
+// conditional edges — a statement's next being where control goes rather than
+// what is written below it — and to build that view a statement has to be
+// recognisable as a jump. What a program hands over is its statements, each a
+// program in turn; there is no asking a statement what it is written as, nor
+// which rule read it, so nothing here can tell a `goto` from anything else.
+// That is the same want as applying a compiler level: both need the program
+// read back, not just held.

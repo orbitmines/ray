@@ -688,37 +688,123 @@ TRACE{`@` ^punctuation}{var} ^trace (comment: String ^comment) => report TRACE v
 // Merge into DEBUG with |
 TODO ^debug (comment: String ^comment) => DEBUG@. comment 
 
+// Which operators a rule will take is answered by a class, the way the type of
+// a capture is: `accepts` is asked what stands between the operands, and
+// answers it where it is one of these and nothing where it is not. Two written
+// texts are compared by asking the machine whether they are alike, since
+// String is written later than this.
+assigns ^keyword := class {
+  accepts (written) => (
+    held ^keyword := None
+    if (exists (external alike (written) (`=`))) { held = written }
+    if (exists (external alike (written) (`:=`))) { held = written }
+
+    held
+  )
+}
+separates ^keyword := class {
+  accepts (written) => if (exists (external alike (written) (`;`))) { written } else { None }
+}
+// What chains: a comparison written through says both of the comparisons it is
+// written as, so `a < b < c` is `a < b` and `b < c`.
+// spec: only the two written with one character are here. Where an operator
+// ends is read off the methods of what is written to its left, and there it
+// comes back one character long even where two of them are written — so a
+// chain of `<=` reads the `<` and leaves the `=` unread. `<=`, `>=`, `==` and
+// `!=` belong here once that is answered.
+chainable ^keyword := class {
+  accepts (written) => (
+    held ^keyword := None
+    if (exists (external alike (written) (`<`))) { held = written }
+    if (exists (external alike (written) (`>`))) { held = written }
+
+    held
+  )
+}
+
+// What separates two statements written on one line binds looser than what
+// assigns: `a = one ; b = two` is two statements, and without this it is one,
+// `a = (one ; b = two)`. This is the shape the three rules below are written
+// in; it is written out here for the one pair that is already known.
+// spec: what a rule is called does not say what its operators must be — two
+// rules of this shape whose captures are named the same are one rule, and the
+// one written later is the one that is kept. So each of these names its own,
+// until a rule's operator filters are part of what tells it from another.
+{first} [sets: assigns] {held} [ends: separates] {then} => (first [sets] held) [ends] then
+
 // Precedence: of two operators around a shared operand, the
 // tighter one groups first (precedence = declaration order).
-// spec: none of the three rules below reaches an expression yet, so
-// `two * three + one` is eight and `one < two < three` is false. What `[x]`
-// binds is written down now — it names what stands there, the way `{x}` names
-// what it holds — and four things are still in the way, each measured:
-//   · `.precedence` is answered by nothing. It is declaration order, which is
-//     where a rule is written; `external where` gives that as `file:offset`,
-//     and comparing two of those is comparing texts, which the entrypoint
-//     cannot do (String is written later).
-//   · `&`, `chainable`, `left-to-right` and `right-to-left` are unwritten, so
-//     `missing` holds both other rules back before they are ever tried.
-//   · `[x: chainable]` does not constrain what it matches — the word is read
-//     for what it says about unread names and nothing else — so a rule asking
-//     for a chainable operator would take any operator at all.
-//   · a capture standing for the receiver refuses a space before what follows
-//     unless a space is written in the pattern, and an operator is always
-//     written between spaces, so the match stops at the first piece.
+// spec: a rule of this shape now matches, and its body now applies what it was
+// handed. `tests/app/precedence.ray` writes one and it does what it says:
+//   {start} [takes: minus] {once} [again: minus] {twice} => (start [takes] once) [again] twice
+// makes `ten - two - three` five, which grouped the other way goes below zero.
+// Three things were in the way and all three are gone: a capture standing for
+// the receiver now reads the pattern for whether a space may stand there;
+// `[x: filter]` now asks the language what may stand between the operands, the
+// way `{x: Type}` asks what it may hold; and what stands between two operands
+// is read from the methods of what is written to its left, with a space around
+// it no longer counting as a space the pattern left out.
+//
+// The chaining rule below is live — `chainable` is written above and `&` in
+// boolean.ray — and these two are not. What holds them back is that rule:
+// it and these two are **one rule**, since an operator's filter is not part of
+// what a rule is called, and the one written last is the one kept. What they
+// want, then:
+//   · the guard. They are written `=> body if condition`, and one must apply
+//     where the other does not — but a trailing `if` is not implemented.
+//     Written `{a} if {cond} => if cond { a }` it answers the value where the
+//     condition holds, and is not lazy: what stands to its left is the
+//     receiver, which has already been read, so `two if false` is still two.
+//     And a guard that says whether the *rule* applies is a third thing
+//     again: both of these match, one would answer nothing, and of two
+//     patterns of the same length the first is taken.
+//   · `.precedence` is answered by nothing. It is declaration order. Three
+//     ways it could be: the machine answering whether one was declared after
+//     another; a chain of the operators written in tightness order, where
+//     `.precedence` is the place in it (there are about fifteen, so that
+//     number is small enough to walk); or a class per level, the way
+//     `tests/app/precedence.ray` writes `plus` and `less`.
+//   · their own names, so that they are rules of their own — and then the
+//     guard, since without it both of them match everything and the first of
+//     two patterns of the same length is the one taken.
+// `left-to-right` and `right-to-left`, which the rule after these wants, are
+// unwritten too; which operators point which way is the question there, not
+// how to write them. Until all of it is answered the language groups right to
+// left: two times three and one is eight, and `ten - two - three` is neither
+// five nor eleven.
 {a} [x] {b} [y] {c} => (a [x] b) [y] c if x.precedence >= y.precedence
 {a} [x] {b} [y] {c} => a [x] (b [y] c) if x.precedence < y.precedence
 
-// Pointing apart: both apply to the shared operand (Grammar.ray:189)
+// Pointing apart: both apply to the shared operand (Grammar.ray:189).
+// spec: the draft tells two things apart that read alike here. Left- and
+// right-*associative* is how a run of one operator groups; left-to-right and
+// right-to-left is which side an operator applies to, so that `a > String < b`
+// and `String < x > String` each say which of them the answer is. The draft
+// reduces a whole run at once — `[l [op] r][]`, the loosest operator picked by
+// its precedence, associativity as the tie-break, and an error where two of
+// equal precedence point apart — which wants a pattern over a list of them and
+// a `.precedence` to compare. Two at a time, as written here, is what this
+// reaches so far.
 {l} [x: right-to-left] {m} [y: left-to-right] {r} => l [x] m & m [y] r
 
-// spec: what chains was written here as a class whose `accepts` answers the
-// operators that do — `[x: chainable]` asks it now, the way `{x: Type}` asks
-// what it holds. Written, it costs a tenth of every run and the rule it is for
-// still never fires, so it is written down rather than kept: nothing reads an
-// operator out of a rule body yet, so `a [x] b` cannot apply what `[x]` names.
+// What chains is the class written above, and `[x: chainable]` asks it the way
+// `{x: Type}` asks what it holds. It does what it says: `one < two < three`
+// holds and every chain that breaks is false.
+//
+// It keeps the names `a`, `x`, `b`, `y`, `c` on purpose. A rule is told from
+// another by what it is called and nothing else — an operator's filter is not
+// part of that — so this rule and the two grouping rules above it are **one
+// rule**, and the one written last is the one that is kept. That is what holds
+// those two back: not `missing`, but being written before this one. Take these
+// names away and one of them is kept instead, and a rule that reads
+// `x.precedence` of a written text fires on every pair of operators there is,
+// so reading this file alone stops finishing. The `;` rule above names its own
+// captures for the same reason: so that it is a rule of its own.
+// Note the body: `a [x] b & b [y] c` reads as `a [x] (b & b [y] c)`, since `<`
+// takes the rest of the line — written `(a [x] b) & (b [y] c)` it says what it
+// means.
 // Chainable: a < b < c  =>  a < b & b < c
-{a} [x: chainable] {b} [y: chainable] {c} => a [x] b & b [y] c
+{a} [x: chainable] {b} [y: chainable] {c} => (a [x] b) & (b [y] c)
 
 // From the Node, Program and Grammar drafts, not yet reached here (spec):
 // .ray2/Node.ray:

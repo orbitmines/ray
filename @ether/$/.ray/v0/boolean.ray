@@ -19,6 +19,9 @@ boolean := enum false (holds: None) | true (holds: global) {
   xnor (b) => .xor(b).not
 
   ! => .not
+  // `&` is what the grammar's chaining rule writes between the two halves of
+  // `a < b < c`; it is `and` written the way that rule writes it.
+  & (b) => .and(b)
   && (b) => .and(b)
   || (b) => .or(b)
   !&& (b) => .nand(b)

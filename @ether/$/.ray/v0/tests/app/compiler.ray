@@ -49,3 +49,12 @@ Written := class {
 plain := Written.of({ five })
 unless (exists plain.O) { INFO@mark `CO24 a program does not say which rules it is read with` }
 unless (plain.written() == five) { INFO@mark `CO25 a program read as it is written does not answer it` }
+
+// spec: none of the claims above can tell whether a rewrite fired. A rewrite
+// that is sound answers what the code answered without it, so the only thing
+// that changes is what it costs — and a claim cannot read that. What they do
+// say is that the rules are sound, which is what an optimization is allowed
+// to be and nothing more. Telling that a level was applied at all wants a
+// level whose rules are deliberately not sound, and a program read with it;
+// what `Program{O: …}` still lacks is the reading — the setting sits on the
+// program and nothing consumes it yet.

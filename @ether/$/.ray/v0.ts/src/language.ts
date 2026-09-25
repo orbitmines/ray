@@ -1410,6 +1410,7 @@ export namespace Ray {
       let read: Map<string, Node> | undefined;
       const literals: [number, number, number][] = [];
       const juxtaposition = pieces[opts.leading ? 1 : 0]?.kind === 'space';
+      let operator_rules: [Node, Node][] | undefined;
       let spanned = false, skipped = false;
       for (let p = 0; p < pieces.length; p++) {
         const piece = pieces[p];
@@ -1422,7 +1423,10 @@ export namespace Ray {
         // on, so a written text that is only a space is that space.
         const as_written = piece.kind === 'capture' && piece.raw && pieces[p - 1]?.kind === 'literal';
         const from = p === 0 || (p === 1 && opts.leading) || as_written ? i : this.skip(cursor, i);
-        if (from > i && !gave && piece.kind !== 'space' && pieces[p - 1]?.kind !== 'space') spanned = true;
+        // What stands between two operands is written with a space on each side
+        // of it, and those spaces are not kept as pieces, so stepping over one
+        // is not stepping over anything the pattern left out.
+        if (from > i && !gave && piece.kind !== 'space' && piece.kind !== 'operator' && pieces[p - 1]?.kind !== 'space' && pieces[p - 1]?.kind !== 'operator') spanned = true;
         switch (piece.kind) {
           case 'literal': {
             const word = /[\p{L}\p{N}_]/u;
@@ -1446,7 +1450,11 @@ export namespace Ray {
           // written inside a group is: where the pattern says what it must be,
           // the language is asked, and it stands there only where it says so.
           case 'operator': {
-            const j = this.operator_end(cursor, from, frame);
+            // What stands between two operands is a method of what is written
+            // to the left of it: `a + b` asks what `a` is for a `+`. One set
+            // answers for every operator in a pattern, so `a [x] b [y] c`
+            // reads both of them the way `a` reads one.
+            const j = this.operator_end(cursor, from, frame, operator_rules ??= (opts.receiver !== undefined ? this.candidates(opts.receiver, frame) : this.chain(frame).receiver));
             if (j <= from) return;
             const written = cursor.span(from, j - 1);
             if (piece.filter !== undefined && this.typed(piece.filter, written, opts.closure ?? this.GLOBAL) === null) return;
@@ -1691,9 +1699,9 @@ export namespace Ray {
       }
       return false;
     }
-    operator_end(cursor: Text.Node, j: number, frame: Node): number {
+    operator_end(cursor: Text.Node, j: number, frame: Node, set?: [Node, Node][]): number {
       let end = j;
-      for (const [rule, impl] of this.chain(frame).receiver) {
+      for (const [rule, impl] of set ?? this.chain(frame).receiver) {
         const first = rule.pattern![0];
         if (impl.forward || first?.kind !== 'literal' || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
         const k = this.literal(cursor, j, first.text);
@@ -1971,7 +1979,15 @@ export namespace Ray {
           for (const s of scope.reading(new Set())) if (s.own(node.ref.key) !== undefined) { owner = s; break; }
           if (owner) scope = owner;
         }
-        if (result && !result.unknown && this.seeking === undefined) node.ref.member && scope.own(node.ref.key) === undefined ? this.attach(scope, node.ref.key, result) : this.bind(scope, node.ref.key, result);
+        // A name is written where it is read from. A scope reads a member of
+        // its own before a binding of the same name, so one that is already a
+        // member is written as one: a field given when its instance was built
+        // is a member, and assigning it otherwise left the member standing.
+        if (result && !result.unknown && this.seeking === undefined) {
+          const owned = scope.own(node.ref.key) !== undefined, held = scope.members?.has(node.ref.key) === true;
+          if (held || (node.ref.member && !owned)) this.attach(scope, node.ref.key, result);
+          if (owned || !node.ref.member) this.bind(scope, node.ref.key, result);
+        }
 
         for (let k = this.applying.length - 1; k >= 0; k--) {
           const applied = this.applying[k].receiver?.ref;
@@ -2201,10 +2217,28 @@ export namespace Ray {
         if (!impl.body) return undefined;
         const rewrites = rule.pattern!.some(piece => piece.kind === 'operator');
         if (rewrites) this.rewriting.add(rule);
-        try { return this.unalias(this.array(this.cursor_of(impl.body), local, false, impl.params !== undefined), local); }
+        // What `[x]` names is not a name but the operator itself, so a body
+        // that writes `a [x] b` writes what stands there: the operator is put
+        // where it is written, and the body is read as that. It is read this
+        // way only when the rule fires, and only where the body says `[x]`.
+        const body = rewrites ? this.written_with(impl.body, rule, match) : impl.body;
+        try { return this.unalias(this.array(this.cursor_of(body), local, false, impl.params !== undefined), local); }
         catch (jump) { if (impl.params === undefined && jump instanceof Jump && jump.kind === 'end' && (jump.site === undefined || Interpreter.within(jump.site, at) || Interpreter.within(jump.site, impl.body))) jump.site = at; throw jump; }
         finally { if (rewrites) this.rewriting.delete(rule); }
       } finally { this.applying.pop(); const held = this.entered.get(site) ?? 1; if (held <= 1) this.entered.delete(site); else this.entered.set(site, held - 1); }
+    }
+    // A body with the operators it was handed written into it.
+    private written_with(body: Text.Node, rule: Node, match: Match): Text.Node {
+      let text = body.string, written = false;
+      for (const piece of rule.pattern!) {
+        if (piece.kind !== 'operator') continue;
+        const stands = match.operators.get(piece.name);
+        const token = `[${piece.name}]`;
+        if (stands === undefined || !text.includes(token)) continue;
+        text = text.split(token).join(stands.string);
+        written = true;
+      }
+      return written ? Text.Node.string(text) : body;
     }
     static within(inner: Text.Node, outer: Text.Node): boolean { return inner.source === outer.source && inner.begin >= outer.begin && inner.end <= outer.end; }
     unalias(result: Node | undefined, local: Node): Node | undefined {

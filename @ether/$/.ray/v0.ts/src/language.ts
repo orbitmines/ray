@@ -671,9 +671,16 @@ export namespace Ray {
     // Whether anything in these sources was read before it was written: a
     // name with nothing behind it, or a `forward` nobody implemented.
     private unread(srcs: Text.Source[]): boolean {
+      const here = new Set(srcs.map(src => src.location));
       for (const src of srcs)
-        for (const entry of this.diagnostics.of(src))
-          if (entry.level === 'error' && /^Unresolved |declared with `forward`/.test(entry.message)) return true;
+        for (const entry of this.diagnostics.of(src)) {
+          if (entry.level !== 'error' || !/^Unresolved |declared with `forward`/.test(entry.message)) continue;
+          // A name left unread somewhere else is not read by reading these
+          // again: what is filed here but written there says nothing about
+          // whether this is settled.
+          if (entry.at !== undefined && !here.has(entry.at.source.location)) continue;
+          return true;
+        }
       return false;
     }
     feedback(src: Text.Source) {

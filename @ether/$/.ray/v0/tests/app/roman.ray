@@ -17,3 +17,27 @@ unless (Roman(text: String.of(`iv`)).as_number == four) { INFO@mark `RO9 iv in l
 // The additive form writes fours as IIII.
 unless (Roman.additive(four).text == String.of(`IIII`)) { INFO@mark `RO10 four is not written IIII the additive way` }
 unless (Roman.additive(nine).text == String.of(`VIIII`)) { INFO@mark `RO11 nine is not written VIIII the additive way` }
+
+// More of the small numbers. Which ones are asked about is a budget: every
+// numeral is read by walking the number it is worth, so `XL` costs forty
+// steps and a round trip costs them twice.
+unless (Roman.from(one).text == String.of(`I`)) { INFO@mark `RO14 one is not written I` }
+unless (Roman.from(five).text == String.of(`V`)) { INFO@mark `RO15 five is not written V` }
+unless (Roman.from(ten).text == String.of(`X`)) { INFO@mark `RO16 ten is not written X` }
+unless (Roman(text: String.of(`VII`)).as_number == seven) { INFO@mark `RO18 VII is not seven` }
+unless (Roman(text: Roman.from(seven).text).as_number == seven) { INFO@mark `RO12 seven does not come back from what it is written as` }
+
+// What a numeral is made of, and what it is not.
+unless (Roman(text: String.of(`XIV`)).is_valid) { INFO@mark `RO20 XIV is not written with roman digits` }
+if (Roman(text: String.of(`XQV`)).is_valid) { INFO@mark `RO21 XQV is written with roman digits` }
+
+// The additive form, told apart from the subtractive one.
+unless (Roman.additive(three).text == String.of(`III`)) { INFO@mark `RO24 three is written the same either way` }
+if (Roman.additive(four).text == Roman.from(four).text) { INFO@mark `RO25 the two forms write four the same` }
+
+// The twelfths a fraction sign spells. What `twelfths` reads is not asked
+// about here: it compares against the codepoints of · ∶ ∴ ∷ ⁙, and a number
+// is a walk, so the smallest of them costs a hundred and eighty-three steps
+// and the rest eight thousand each.
+unless (Roman.Fraction.semis == six) { INFO@mark `RO27 the semis is not six twelfths` }
+unless (Roman.Fraction.uncia == one) { INFO@mark `RO28 the uncia is not one twelfth` }

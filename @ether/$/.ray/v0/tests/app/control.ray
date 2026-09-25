@@ -116,8 +116,9 @@ unless (asked == one) { INFO@mark `CF12 do ran other than once when it never hol
 // A loop inside a loop is its own count.
 outer ^keyword := two
 pairs ^keyword := zero
+inner ^keyword := zero
 while outer {
-  inner ^keyword := three
+  inner = three
   while inner {
     pairs = pairs.succ
     inner = inner.pred

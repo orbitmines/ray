@@ -1,0 +1,4 @@
+// uses: what a project written against the language looks like, including
+// what it gets wrong. The names it leaves unread are the point, so they are
+// kept out of `app`, where anything left unread makes every test be read a
+// second time.

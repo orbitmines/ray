@@ -644,6 +644,12 @@ export namespace Ray {
         // Frames are fresh per application, so their numbers say nothing about
         // what was defined; the spelling does.
         const signature = [this.BASE?.key, ...this.definitions].join('\n').replace(/#\d+/g, '#');
+        // A pass is read again so that what was written after it was read can
+        // be read once more. Where nothing was left unread, reading it again
+        // answers the same, so once is enough. Only a project derived from
+        // another is settled this way: the language writes itself forwards,
+        // and settles by its signature repeating.
+        if (this.copy_of !== undefined && !this.unread(srcs)) break;
         if (signature === previous) break;
         previous = signature;
       }
@@ -661,6 +667,14 @@ export namespace Ray {
         if (before !== undefined && before !== src.value) this.reanchor(src.location, before, src.value);
         this.derived.set(src.location, src.value);
       }
+    }
+    // Whether anything in these sources was read before it was written: a
+    // name with nothing behind it, or a `forward` nobody implemented.
+    private unread(srcs: Text.Source[]): boolean {
+      for (const src of srcs)
+        for (const entry of this.diagnostics.of(src))
+          if (entry.level === 'error' && /^Unresolved |declared with `forward`/.test(entry.message)) return true;
+      return false;
     }
     feedback(src: Text.Source) {
       this.diagnostics.forget(src);
@@ -3695,6 +3709,9 @@ export class Diagnostics {
     for (const arr of this.items.values()) { for (const [, elements] of arr) { for (const element of elements) { if (filter ? filter(element) : true) yield element; } } }
   }
   *get(src: Text.Source): IterableIterator<Diagnostic> { for (const arr of this.items.get(src).values()) { yield* arr; } }
+  *of(src: Text.Source): IterableIterator<Diagnostic> {
+    for (const [key, arr] of this.items) { if (key !== src && key?.location !== src.location) continue; for (const [, elements] of arr) yield* elements; }
+  }
 
   is_visible(level: Diagnostic['level']): boolean { return DIAGNOSTIC_SEVERITY[level] >= DIAGNOSTIC_SEVERITY[this.level]; }
 

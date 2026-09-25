@@ -9,19 +9,29 @@
 // already become waits on the program being a thing the language can read
 // back, which is what `**` is for.
 
-// Nothing times something is nothing, and nothing added is what was already
-// there: the walk these would have cost is not walked.
-{a} + zero => a
-{a} - zero => a
-zero + {a} => a
-{a} * zero => zero
-zero * {a} => zero
-{a} * one => a
-one * {a} => a
-{a} / one => a
-// Twice is once and once again: a multiplication walks its right side, and an
-// addition walks it once.
-{a} * two => a + a
+// A level is which rules are in scope while a program is read back. That is
+// all an optimization setting is: the logic keeps the shape it was written in
+// and the reductions sit beside it, named, so a program can be read back the
+// other way — which is what decompiling a target into this stack asks for.
+Compiler := class {
+  // Read as it is written.
+  none := {
+  }
+  // Nothing times something is nothing, nothing added is what was already
+  // there, and twice is once and once again: the walks these would have cost
+  // are not walked.
+  default := {
+    {a} + zero => a
+    {a} - zero => a
+    zero + {a} => a
+    {a} * zero => zero
+    zero * {a} => zero
+    {a} * one => a
+    one * {a} => a
+    {a} / one => a
+    {a} * two => a + a
+  }
+}
 
 // spec: the rest of this file is what the drafts ask for and the language
 // cannot say yet. Each note is a target.

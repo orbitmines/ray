@@ -200,6 +200,14 @@ Iterable := class: Ordered {
 // written on the page, each of them a program in turn. What order they *run*
 // in is another thing, and a goto is what says it.
 Program := class: Iterable {
+  // `Program{O: Compiler.default}`: the program read back with those rules in
+  // scope. `O` is what the optimizations are called where they are written
+  // short; a level is a set of rules and nothing more, so what is written
+  // stays what it is and the setting sits beside it.
+  optimizations => Compiler.none
+  O => .optimizations
+  {this}{`{`}{literal setting}{`}`} ^punctuation => class: this { inline setting }
+
   entry => .written
   // spec: what follows a statement is written down by the engine and does not
   // read back — `.written` answers the first, and running it answers what it

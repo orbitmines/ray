@@ -1,6 +1,11 @@
 // The optimizations are rewrite rules, and a rewrite rule is a rule. What they
 // rewrite still has to answer what it answered before — that is the whole of
 // what an optimization is allowed to do.
+//
+// A level is which rules are in scope while a program is read back, and
+// nothing more: `Program{O: Compiler.default}` is the program read with those.
+// The logic keeps the shape it was written in and the setting sits beside it,
+// which is what lets a program be read back the other way.
 
 mark ^keyword := external global
 
@@ -28,3 +33,19 @@ unless ((six - two) == four) { INFO@mark `CO17 six less two is not four` }
 // is rewritten too where the name is what is written.
 none_at_all ^keyword := zero
 unless ((five + none_at_all) == five) { INFO@mark `CO18 five and a name holding nothing is not five` }
+
+// The levels: a set of rules, named, and a program that says which set it is
+// read with.
+unless (exists Compiler.none) { INFO@mark `CO19 there is no level that reads a program as it is written` }
+unless (exists Compiler.default) { INFO@mark `CO20 there is no default level` }
+Optimized := Program{O: Compiler.default}
+unless (exists Optimized) { INFO@mark `CO21 a program read with a level is nothing` }
+unless (exists Optimized.O) { INFO@mark `CO22 it does not say which rules it is read with` }
+unless (exists Optimized.optimizations) { INFO@mark `CO23 O is not what the optimizations are called` }
+
+Written := class {
+  of (code) => code**
+}
+plain := Written.of({ five })
+unless (exists plain.O) { INFO@mark `CO24 a program does not say which rules it is read with` }
+unless (plain.written() == five) { INFO@mark `CO25 a program read as it is written does not answer it` }

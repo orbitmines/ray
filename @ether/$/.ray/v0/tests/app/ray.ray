@@ -3,19 +3,24 @@ mark ^keyword := external global
 a := Ray()
 b := Ray(previous: a)
 
-unless (a.is_initial) { INFO@mark `a lone ray is not initial` }
+unless (a.is_initial) { INFO@mark `RR1 a lone ray is not initial` }
 
-unless (a.nonempty) { INFO@mark `a lone ray counts as empty` }
+unless (a.nonempty) { INFO@mark `RR2 a lone ray counts as empty` }
 
-if (b.is_initial) { INFO@mark `a linked ray reports initial` }
+if (b.is_initial) { INFO@mark `RR3 a linked ray reports initial` }
 
-unless (b.initial == a) { INFO@mark `the initial walk failed` }
+unless (b.initial == a) { INFO@mark `RR4 the initial walk failed` }
 
-unless (a.count == one) { INFO@mark `a lone ray does not count one` }
+unless (a.count == one) { INFO@mark `RR5 a lone ray does not count one` }
 
-unless (a.terminal == a) { INFO@mark `a lone ray is not its own terminal` }
+unless (a.terminal == a) { INFO@mark `RR6 a lone ray is not its own terminal` }
 
-unless ((b.min(b)) == b) { INFO@mark `Ordered.min did not reach Ray` }
+// The smaller of a ray and itself is that ray. `min` binds its answer before
+// handing it back: two rays are the same only when they are the same one, and
+// a branch holding a ray is not the ray it holds.
+unless ((b.min(b)) == b) { INFO@mark `RR7 the smaller of a ray and itself is not that ray` }
+unless ((b.max(b)) == b) { INFO@mark `RR8 the larger of a ray and itself is not that ray` }
+if ((if false { b } else { b }) == b) { INFO@mark `RR9 a branch holding a ray is that ray` }
 
 c := Ray(previous: b)
 // A ray's previous and next are its own: linking one way does not link back.

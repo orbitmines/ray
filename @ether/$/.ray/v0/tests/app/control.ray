@@ -5,47 +5,47 @@
 mark ^keyword := external global
 
 t := if true { true } else { false }
-unless (t) { INFO@mark `if-true did not take the then branch` }
+unless (t) { INFO@mark `CC1 if-true did not take the then branch` }
 
 f := if false { true } else { false }
-if (f) { INFO@mark `if-false took the then branch` }
+if (f) { INFO@mark `CC2 if-false took the then branch` }
 
 e := if false { true } elsif true { true } else { false }
-unless (e) { INFO@mark `elsif did not fire` }
+unless (e) { INFO@mark `CC3 elsif did not fire` }
 
 g := if false { true } elsif false { true } else { true }
-unless (g) { INFO@mark `else after elsif did not fire` }
+unless (g) { INFO@mark `CC4 else after elsif did not fire` }
 
 h := if true { true } elsif true { false } else { false }
-unless (h) { INFO@mark `a later branch overrode the first` }
+unless (h) { INFO@mark `CC5 a later branch overrode the first` }
 
 n := if false { true }
-if (n) { INFO@mark `a bare if with a false predicate is not None-like` }
+if (n) { INFO@mark `CC6 a bare if with a false predicate is not None-like` }
 
 u := unless false { true }
-unless (u) { INFO@mark `unless did not fire` }
+unless (u) { INFO@mark `CC7 unless did not fire` }
 
 flag ^keyword := true
 while flag { flag = false }
-if (flag) { INFO@mark `while did not run its body` }
+if (flag) { INFO@mark `CC8 while did not run its body` }
 
 never ^keyword := false
 ran ^keyword := false
 while never { ran = true }
-if (ran) { INFO@mark `while ran with a false predicate` }
+if (ran) { INFO@mark `CC9 while ran with a false predicate` }
 
 seen ^keyword := false
 do { seen = true } while false
-unless (seen) { INFO@mark `do-while did not run its body at least once` }
+unless (seen) { INFO@mark `CC10 do-while did not run its body at least once` }
 
 stop ^keyword := true
 do { stop = false } while stop
-if (stop) { INFO@mark `do-while did not stop` }
+if (stop) { INFO@mark `CC11 do-while did not stop` }
 
 nothing_taken := if false { one } else { None }
-if (exists nothing_taken) { INFO@mark `an if whose taken branch is None is present` }
+if (exists nothing_taken) { INFO@mark `CC12 an if whose taken branch is None is present` }
 something_taken := if true { one } else { None }
-unless (exists something_taken) { INFO@mark `an if whose taken branch is one is absent` }
+unless (exists something_taken) { INFO@mark `CC13 an if whose taken branch is one is absent` }
 
 // Only the branch that is taken runs: what the others would have done is not
 // done, and a chain of branches runs exactly one of them.

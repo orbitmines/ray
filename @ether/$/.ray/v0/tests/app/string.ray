@@ -77,3 +77,38 @@ if (String.of(`1a`).spells_in(ten)) { INFO@mark `S45 1a spells a decimal number`
 // The dash a text form is written with, which nothing said the value of.
 unless (ascii_dash == ((four * ten) + five)) { INFO@mark `S46 a dash is not forty-five` }
 unless (String.of(`a-b`).split(Character.of(ascii_dash)).count == two) { INFO@mark `S47 splitting on a dash does not give two parts` }
+
+// The cases a name is written in, and the ones that were not asked about yet.
+unless (String.of(`ab cd`).camel_case == String.of(`abCd`)) { INFO@mark `S48 camel_case is not the first word lower and the rest capitalised` }
+unless (String.of(`ab`).title_case == String.of(`Ab`)) { INFO@mark `S49 title_case does not capitalise` }
+unless (String.of(`Ab`).fold_case == String.of(`ab`)) { INFO@mark `S50 fold_case does not fold` }
+
+// English by its last letter only.
+unless (String.of(`cats`).singular == String.of(`cat`)) { INFO@mark `S51 the singular of cats is not cat` }
+unless (String.of(`cat`).singular == String.of(`cat`)) { INFO@mark `S52 the singular of cat is not cat` }
+unless (String.of(`cats`).plural == String.of(`cats`)) { INFO@mark `S53 the plural of cats is not cats` }
+
+// Turning a text around, and taking part of it.
+unless (String.of(`abc`).reversed == String.of(`cba`)) { INFO@mark `S54 abc reversed is not cba` }
+unless (String.of(`a`).reversed == String.of(`a`)) { INFO@mark `S55 one character reversed is not itself` }
+unless (String.of(`abc`).slice(zero, two) == String.of(`ab`)) { INFO@mark `S56 the first two of abc are not ab` }
+unless (String.of(`abc`).slice(one, three) == String.of(`bc`)) { INFO@mark `S57 the last two of abc are not bc` }
+unless (String.of(`abc`).slice(one, one).empty) { INFO@mark `S58 a slice of nothing is not empty` }
+
+// Where one text sits in another, and what joins two.
+unless (String.of(`abc`).index_of(String.of(`bc`)) == one) { INFO@mark `S59 bc does not sit one along in abc` }
+unless (String.of(`abc`).index_of(String.of(`a`)).is_zero) { INFO@mark `S60 a does not sit at the start of abc` }
+unless ((String.of(`ab`) + String.of(`c`)) == String.of(`abc`)) { INFO@mark `S61 ab and c do not make abc` }
+unless (String.of(`ab`).starts_with(String.of(`a`))) { INFO@mark `S62 ab does not start with a` }
+if (String.of(`ab`).starts_with(String.of(`b`))) { INFO@mark `S63 ab starts with b` }
+unless (String.of(`ab`).ends_with(String.of(`b`))) { INFO@mark `S64 ab does not end with b` }
+unless (String.joined(String.of(`a b`).words, None) == String.of(`ab`)) { INFO@mark `S65 joining a and b with nothing between is not ab` }
+
+// A number spelled in a base, and a text read back as one.
+unless (String.of(`f`).as_number_in(ten + six) == (ten + five)) { INFO@mark `S66 f is not fifteen in sixteen` }
+unless (String.of(`12`).as_number_in(ten) == (ten + two)) { INFO@mark `S67 12 is not twelve in ten` }
+unless ((ten + two).spelled_in(ten) == String.of(`12`)) { INFO@mark `S68 twelve is not spelled 12 in ten` }
+unless (five.spelled_in(two) == String.of(`101`)) { INFO@mark `S69 five is not spelled 101 in two` }
+
+// Lines are what a newline separates.
+unless (String.of(`ab`).lines.count == one) { INFO@mark `S70 a text without a newline is other than one line` }

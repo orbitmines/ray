@@ -29,11 +29,11 @@ unless ((two.max(five)) == five) { INFO@mark `N13 max failed` }
 // `pow` and `factorial` are asserted below, for small numbers: a number is a
 // walk, so what they answer has to be walked too.
 
-if (three.even) { INFO@mark `3 is even` }
+if (three.even) { INFO@mark `NN1 3 is even` }
 
 counter ^keyword := zero
 three times { counter = counter.succ }
-unless (counter == three) { INFO@mark `times did not run three times` }
+unless (counter == three) { INFO@mark `NN2 times did not run three times` }
 
 unless (Hexadecimal.radix == (ten + six)) { INFO@mark `N20 hexadecimal radix is not sixteen` }
 

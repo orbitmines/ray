@@ -15,8 +15,19 @@ Ordered := class {
   <= (other: Ordered) => other.<(this).not
   >= (other: Ordered) => .<(other).not
 
-  min (other: Ordered) => if (.<(other)) { this } else { other }
-  max (other: Ordered) => if (.<(other)) { other } else { this }
+  // The answer is bound before it is handed back, rather than being the
+  // branch that chose it: two rays are the same only when they are the same
+  // one, and a branch holding a ray is not the ray it holds.
+  min (other: Ordered) => (
+    smaller := other
+    if (.<(other)) { smaller = this }
+    smaller
+  )
+  max (other: Ordered) => (
+    larger := this
+    if (.<(other)) { larger = other }
+    larger
+  )
 }
 
 // class Ray < Iterable & Ordered

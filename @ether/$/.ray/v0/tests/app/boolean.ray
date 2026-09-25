@@ -3,34 +3,34 @@
 
 mark ^keyword := external global
 
-unless (true.nand(false)) { INFO@mark `nand(true,false) should be true` }
+unless (true.nand(false)) { INFO@mark `BB1 nand(true,false) should be true` }
 
-if (true.nand(true)) { INFO@mark `nand(true,true) should be false` }
+if (true.nand(true)) { INFO@mark `BB2 nand(true,true) should be false` }
 
-unless (false.nand(false)) { INFO@mark `nand(false,false) should be true` }
+unless (false.nand(false)) { INFO@mark `BB3 nand(false,false) should be true` }
 
-if (true.not) { INFO@mark `not(true) should be false` }
+if (true.not) { INFO@mark `BB4 not(true) should be false` }
 
-unless (false.not) { INFO@mark `not(false) should be true` }
+unless (false.not) { INFO@mark `BB5 not(false) should be true` }
 
-unless (true.and(true)) { INFO@mark `and(true,true) should be true` }
+unless (true.and(true)) { INFO@mark `BB6 and(true,true) should be true` }
 
-if (true.and(false)) { INFO@mark `and(true,false) should be false` }
+if (true.and(false)) { INFO@mark `BB7 and(true,false) should be false` }
 
-unless (true.or(false)) { INFO@mark `or(true,false) should be true` }
+unless (true.or(false)) { INFO@mark `BB8 or(true,false) should be true` }
 
-if (false.or(false)) { INFO@mark `or(false,false) should be false` }
+if (false.or(false)) { INFO@mark `BB9 or(false,false) should be false` }
 
-unless (true.xor(false)) { INFO@mark `xor(true,false) should be true` }
+unless (true.xor(false)) { INFO@mark `BB10 xor(true,false) should be true` }
 
-if (true.xor(true)) { INFO@mark `xor(true,true) should be false` }
+if (true.xor(true)) { INFO@mark `BB11 xor(true,true) should be false` }
 
-unless (true.xnor(true)) { INFO@mark `xnor(true,true) should be true` }
+unless (true.xnor(true)) { INFO@mark `BB12 xnor(true,true) should be true` }
 
-if (true.nor(false)) { INFO@mark `nor(true,false) should be false` }
-unless (!false) { INFO@mark `!false should be true` }
-if (!true) { INFO@mark `!true should be false` }
-unless (true && (!false)) { INFO@mark `true && !false should be true` }
+if (true.nor(false)) { INFO@mark `BB13 nor(true,false) should be false` }
+unless (!false) { INFO@mark `BB14 !false should be true` }
+if (!true) { INFO@mark `BB15 !true should be false` }
+unless (true && (!false)) { INFO@mark `BB16 true && !false should be true` }
 
 // The whole table, both ways round, since `nand` is the only primitive and
 // everything else is written from it.

@@ -36,3 +36,26 @@ unless (packed.as(None) == five) { INFO@mark `EN11 what was compressed does not 
 unless (packed.algorithm == Encoding.Algorithm.gzip) { INFO@mark `EN12 it forgot how it was packed` }
 if (packed.algorithm == Encoding.Algorithm.sha1) { INFO@mark `EN13 it is packed every way at once` }
 unless (Encoding.Algorithm.components.count == nine) { INFO@mark `EN14 there are other than nine algorithms` }
+
+// What is wrapped is wrapped, and what wraps it says nothing of the rest.
+nested := Encoding.Encrypted(value: Encoding.Compressed(value: five, algorithm: Encoding.Algorithm.gzip), key: one)
+unless (nested.as(one).as(None) == five) { INFO@mark `EN15 what is packed inside what is locked does not come back` }
+if (exists nested.as(two)) { INFO@mark `EN16 what is locked around a packed value opens with the wrong key` }
+
+// A digest says what it was made of and how, and nothing more.
+unless (Encoding.Hash(value: five, algorithm: Encoding.Algorithm.md5).value == five) { INFO@mark `EN17 a digest forgot what it was made of` }
+unless (Encoding.Hash(value: five, algorithm: Encoding.Algorithm.md5).algorithm == Encoding.Algorithm.md5) { INFO@mark `EN18 a digest forgot how` }
+if (Encoding.Algorithm.md5 == Encoding.Algorithm.sha1) { INFO@mark `EN19 two algorithms are the same` }
+unless (Encoding.Algorithm.md5 == Encoding.Algorithm.md5) { INFO@mark `EN20 an algorithm is not itself` }
+
+// A value held under nothing is held nowhere: `None == None` is not a key
+// matching a key, so nothing opens it.
+open_to_none := Encoding.Encrypted(value: five, key: None)
+if (exists open_to_none.as(None)) { INFO@mark `EN21 a value held under nothing comes back at nothing` }
+if (exists open_to_none.as(one)) { INFO@mark `EN22 a value held under nothing comes back anywhere` }
+
+// What is compressed comes back whatever is asked of it: the target says
+// where it goes, not whether it unpacks.
+anywhere := Encoding.Compressed(value: four, algorithm: Encoding.Algorithm.base64)
+unless (anywhere.as(one) == four) { INFO@mark `EN23 a packed value does not come back at a target` }
+unless (anywhere.as(None) == four) { INFO@mark `EN24 a packed value does not come back at nothing` }

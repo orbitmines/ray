@@ -8,3 +8,27 @@ uu_text := uu.as_string
 unless (uu_text.count == (three * ten) + six) { INFO@mark `UU4 v4 text is not 36 characters` }
 unless (uu_text.at(eight) == Character.of(ascii_dash)) { INFO@mark `UU5 no dash after eight digits` }
 unless (uu_text.at(ten + four) == Character.of(ascii_zero + four)) { INFO@mark `UU6 the version digit is not 4` }
+
+// A UUID is itself.
+unless (uu == uu) { INFO@mark `UU7 a uuid is not itself` }
+
+// The text form puts its dashes where RFC 4122 asks.
+unless (uu_text.at(ten + three) == Character.of(ascii_dash)) { INFO@mark `UU10 no dash after thirteen characters` }
+unless (uu_text.at((ten * two) - two) == Character.of(ascii_dash)) { INFO@mark `UU11 no dash after eighteen characters` }
+unless (uu_text.at((two * ten) + three) == Character.of(ascii_dash)) { INFO@mark `UU12 no dash after twenty-three characters` }
+
+// spec: two draws answer the same uuid. `spelled` is a field whose default is
+// a thing, and such a field is one thing for every instance of the class that
+// declares it — the same defect `types.ray` marks as TY15. Drawing is not the
+// problem: the digits are drawn once, at the class, and every `UUID.v4()`
+// hands back those.
+// other_uu := UUID.v4()
+// if (uu == other_uu) { INFO@mark `UU8 two drawn uuids are the same` }
+
+// spec: `UUID.read` answers a uuid of the right version, and not the one that
+// was written down: what it spells is neither the thirty-two digits of the
+// uuid nor the thirty-six characters of the text. Asserting it costs about
+// four minutes on its own, so it is written here rather than claimed.
+// read_back := UUID.read(uu_text)
+// unless (read_back == uu) { INFO@mark `UU13 a uuid written down does not read back as itself` }
+// unless (read_back.spelled.count == (three * ten) + two) { INFO@mark `UU15 what is read back has other than 32 digits` }

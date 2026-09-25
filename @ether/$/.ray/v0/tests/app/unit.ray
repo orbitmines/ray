@@ -29,3 +29,37 @@ unless (Second.is_base) { INFO@mark `U11 a second is not a base unit` }
 if (Minute.is_base) { INFO@mark `U12 a minute is a base unit` }
 unless (Minute.rank == one) { INFO@mark `U13 a minute is not one step off its base` }
 unless (Hour.rank == two) { INFO@mark `U14 an hour is not two steps off its base` }
+
+// A unit built on another counts how many of it, and a unit is what it counts
+// rather than what it is called.
+pair := Bit multiple two
+unless (pair.scale == two) { INFO@mark `U15 two bits do not scale to two` }
+if (pair.is_base) { INFO@mark `U16 a multiple of a unit is a base unit` }
+unless (pair.rank == one) { INFO@mark `U17 a multiple is not one step off its base` }
+unless (pair == (Bit multiple two)) { INFO@mark `U18 two like multiples are not the same unit` }
+if (pair == Byte) { INFO@mark `U19 two bits are a byte` }
+unless (Bit == Bit) { INFO@mark `U20 a bit is not itself` }
+if (Bit == Byte) { INFO@mark `U21 a bit is a byte` }
+
+// Arithmetic happens in the finer of the two units.
+unless (((two of Bit) + (three of Bit)).amount == five) { INFO@mark `U22 two bits and three bits are not five` }
+unless (((five of Bit) - (two of Bit)).amount == three) { INFO@mark `U23 five bits less two are not three` }
+unless (((one of Byte) + (one of Bit)).unit == Bit) { INFO@mark `U24 a sum is not in the finer unit` }
+unless (((one of Byte) + (one of Bit)).amount == nine) { INFO@mark `U25 a byte and a bit are not nine bits` }
+unless ((two of Bit) < (three of Bit)) { INFO@mark `U26 two bits are not fewer than three` }
+if ((three of Bit) < (two of Bit)) { INFO@mark `U27 three bits are fewer than two` }
+
+// Which of two units is the finer.
+unless ((one of Byte).finer(one of Bit) == Bit) { INFO@mark `U28 a bit is not finer than a byte` }
+unless ((one of Bit).finer(one of Byte) == Bit) { INFO@mark `U29 asking the other way round answers otherwise` }
+
+// Where a unit's zero sits, and a unit that shifts it.
+unless (Bit.shift.is_zero) { INFO@mark `U30 a unit with no offset sits somewhere else` }
+shifted_bit := Bit shifted three
+unless (shifted_bit.shift == three) { INFO@mark `U31 a shifted unit forgot its offset` }
+unless (shifted_bit.scale == one) { INFO@mark `U32 a shifted unit counts other than one of its base` }
+
+// Time's units are quantities like any other, and know they are of time.
+unless ((one of Minute).is_temporal) { INFO@mark `U33 a minute is not of time` }
+if ((one of Bit).is_temporal) { INFO@mark `U34 a bit is of time` }
+unless ((one of Minute).as_seconds == (six * ten)) { INFO@mark `U35 a minute is not sixty seconds` }

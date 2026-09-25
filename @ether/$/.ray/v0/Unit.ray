@@ -74,7 +74,7 @@ Quantity := class {
   // Arithmetic happens in the finer of the two units, so nothing is lost.
   // spec: on one base line the finer unit is the one fewer multiples up, so
   // no scale (which can be thousands) is built to decide.
-  finer (other: Quantity) => if (other.unit.rank < .unit.rank) { .unit } else { other.unit }
+  finer (other: Quantity) => if (other.unit.rank < .unit.rank) { other.unit } else { .unit }
   + (other: Quantity) => (
     kind := .finer(other)
     total := (this as kind).amount + (other as kind).amount

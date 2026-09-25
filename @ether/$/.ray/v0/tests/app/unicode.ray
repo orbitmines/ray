@@ -24,3 +24,25 @@ if (Unicode.category(letter) == Unicode.GeneralCategory.number) { INFO@mark `UN1
 if (Unicode.surrogate(ten)) { INFO@mark `UN11 ten is a surrogate` }
 if (Unicode.fits(ten, three)) { INFO@mark `UN12 ten fits in three bits` }
 unless (Unicode.UTF8.decode(Unicode.UTF8.encode(ten + five)) == (ten + five)) { INFO@mark `UN13 fifteen does not come back from UTF-8` }
+
+// UTF-32 is the codepoint written out in thirty-two bits, and reading it back
+// gives what was written. The codepoints asked about here are small on
+// purpose: a number is a walk, so a letter costs its ninety-seven steps and
+// a surrogate half its fifty-five thousand.
+unless (Unicode.UTF32.decode(Unicode.UTF32.encode(ten)) == ten) { INFO@mark `UN14 ten does not come back from UTF-32` }
+unless (Unicode.UTF32.decode(Unicode.UTF32.encode(zero)).is_zero) { INFO@mark `UN15 zero does not come back from UTF-32` }
+unless (Unicode.UTF16.decode(Unicode.UTF16.encode(ten)) == ten) { INFO@mark `UN16 ten does not come back from UTF-16` }
+
+
+// What fits in how many bits: a codepoint fits in as many bits as it takes,
+// and in any more, and in no fewer.
+unless (Unicode.fits(one, one)) { INFO@mark `UN18 one does not fit in one bit` }
+if (Unicode.fits(two, one)) { INFO@mark `UN19 two fits in one bit` }
+unless (Unicode.fits(two, two)) { INFO@mark `UN20 two does not fit in two bits` }
+unless (Unicode.fits(zero, one)) { INFO@mark `UN21 zero does not fit in one bit` }
+
+
+// The kinds a character is told apart from one another.
+if (Unicode.category(String.of(`1`).first) == Unicode.GeneralCategory.letter) { INFO@mark `UN26 a digit is a letter` }
+if (Unicode.category(String.of(` `).first) == Unicode.GeneralCategory.letter) { INFO@mark `UN27 a space is a letter` }
+unless (Unicode.GeneralCategory.components.count == six) { INFO@mark `UN29 there are other than six kinds` }

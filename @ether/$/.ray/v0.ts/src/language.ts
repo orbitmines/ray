@@ -1206,9 +1206,10 @@ export namespace Ray {
           ? this.only(this.candidates(receiver, frame, { self: true }), false)
           : this.candidates(receiver, frame);
       const ahead = cursor.source.value[this.skip(cursor, cursor.cursor)];
-      for (const [rule, impl] of ahead === undefined ? set : this.headed(set, ahead)) {
+      for (const [rule, impl] of set) {
         const shape = this.shaped(rule);
-        if (ahead === undefined && shape.literal) continue;
+        if (shape.literal) continue;
+        if (shape.head !== undefined && ahead !== undefined && shape.head !== ahead) continue;
         if (opts.forwards && !impl.forward) continue;
         if (!!opts.newline !== shape.newline) continue;
         if (shape.operator && (this.rewriting.has(rule) || this.missing(rule, impl).length > 0)) continue;
@@ -1227,21 +1228,6 @@ export namespace Ray {
         if (own > current || (own === current && (length > total || (length === total && (tie > 0 || (tie === 0 && best!.impl.forward && !impl.forward)))))) best = { rule, impl, match };
       }
       return best;
-    }
-
-    // The rules a character could begin, kept per candidate set: the same
-    // question was asked of every rule at every position, and the answer only
-    // depends on the set and the character. Rules that begin with no literal
-    // are in every answer, in the order they were dispatched in.
-    private headings = new WeakMap<[Node, Node][], Map<string, [Node, Node][]>>();
-    headed(set: [Node, Node][], ahead: string): [Node, Node][] {
-      let held = this.headings.get(set);
-      if (held === undefined) this.headings.set(set, held = new Map());
-      let kept = held.get(ahead);
-      if (kept !== undefined) return kept;
-      kept = set.filter(([rule]) => { const shape = this.shaped(rule); return !shape.literal && (shape.head === undefined || shape.head === ahead); });
-      held.set(ahead, kept);
-      return kept;
     }
 
     private onlys = new WeakMap<[Node, Node][], [Node, Node][]>();

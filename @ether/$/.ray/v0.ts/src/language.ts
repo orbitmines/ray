@@ -1435,7 +1435,16 @@ export namespace Ray {
           }
           case 'space': { const j = this.skip(cursor, i); if (j === i && i < limit && text[i] !== '\n' && !skipped && !(p === 0 && opts.owned && opts.spaced)) return; i = j; break; }
           case 'newline': { if (text[from] !== '\n') return; i = from + 1; break; }
-          case 'operator': { const j = this.operator_end(cursor, from, frame); if (j <= from) return; operators.set(piece.name, cursor.span(from, j - 1)); i = j; break; }
+          // What is written between two operands is read the way what is
+          // written inside a group is: where the pattern says what it must be,
+          // the language is asked, and it stands there only where it says so.
+          case 'operator': {
+            const j = this.operator_end(cursor, from, frame);
+            if (j <= from) return;
+            const written = cursor.span(from, j - 1);
+            if (piece.filter !== undefined && this.typed(piece.filter, written, opts.closure ?? this.GLOBAL) === null) return;
+            operators.set(piece.name, written); i = j; break;
+          }
           case 'capture': {
             // A capture that stands for the receiver, spelled right against
             // what follows, admits no space between them.

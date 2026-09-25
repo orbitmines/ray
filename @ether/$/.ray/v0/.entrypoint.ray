@@ -658,6 +658,11 @@ TODO ^debug (comment: String ^comment) => DEBUG@. comment
 // Pointing apart: both apply to the shared operand (Grammar.ray:189)
 {l} [x: right-to-left] {m} [y: left-to-right] {r} => l [x] m & m [y] r
 
+// spec: what chains was written here as a class whose `accepts` answers the
+// operators that do — `[x: chainable]` asks it now, the way `{x: Type}` asks
+// what it holds. Written, it costs a tenth of every run and the rule it is for
+// still never fires, so it is written down rather than kept: nothing reads an
+// operator out of a rule body yet, so `a [x] b` cannot apply what `[x]` names.
 // Chainable: a < b < c  =>  a < b & b < c
 {a} [x: chainable] {b} [y: chainable] {c} => a [x] b & b [y] c
 

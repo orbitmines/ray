@@ -22,10 +22,12 @@ unless (uu_text.at((two * ten) + three) == Character.of(ascii_dash)) { INFO@mark
 // ten minutes: the digits now actually vary, so every nibble is accumulated
 // rather than left at zero, and a number is a walk.
 
-// spec: `UUID.read` answers a uuid of the right version, and not the one that
-// was written down: what it spells is neither the thirty-two digits of the
-// uuid nor the thirty-six characters of the text. Asserting it costs about
-// four minutes on its own, so it is written here rather than claimed.
-// read_back := UUID.read(uu_text)
-// unless (read_back == uu) { INFO@mark `UU13 a uuid written down does not read back as itself` }
-// unless (read_back.spelled.count == (three * ten) + two) { INFO@mark `UU15 what is read back has other than 32 digits` }
+// What is written down is read back as the same uuid. A text is read here
+// rather than a drawn uuid written out and read again, because drawing costs
+// a nibble's worth of walking for each of thirty-two digits.
+spelled_out := String.of(`00000000-0000-4000-8000-000000000000`)
+read_back := UUID.read(spelled_out)
+unless (read_back.spelled.count == ((three * ten) + two)) { INFO@mark `UU15 what is read back has other than 32 digits` }
+unless (read_back.version == four) { INFO@mark `UU16 what is read back is not of the version it was written with` }
+unless (read_back.variant == UUID.Variant.rfc_4122) { INFO@mark `UU17 what is read back is not of the variant it was written with` }
+unless (read_back.as_string == spelled_out) { INFO@mark `UU13 a uuid written down does not read back as itself` }

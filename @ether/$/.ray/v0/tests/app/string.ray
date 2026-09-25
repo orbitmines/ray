@@ -112,3 +112,16 @@ unless (five.spelled_in(two) == String.of(`101`)) { INFO@mark `S69 five is not s
 
 // Lines are what a newline separates.
 unless (String.of(`ab`).lines.count == one) { INFO@mark `S70 a text without a newline is other than one line` }
+
+// Which characters are digits. Asking that the fifth bit be clear as well as
+// the four leading ones left out `8` and `9`, so neither was a digit and
+// nothing spelled with them was numeric.
+unless (String.of(`8`).first.digit) { INFO@mark `S71 8 is not a digit` }
+unless (String.of(`9`).first.digit) { INFO@mark `S72 9 is not a digit` }
+unless (String.of(`0`).first.digit) { INFO@mark `S73 0 is not a digit` }
+if (String.of(`:`).first.digit) { INFO@mark `S74 a colon is a digit` }
+if (String.of(`a`).first.digit) { INFO@mark `S75 a is a digit` }
+unless (String.of(`89`).is_numeric) { INFO@mark `S76 89 is not numeric` }
+unless (String.of(`89`).spells_in(ten)) { INFO@mark `S77 89 does not spell a number in ten` }
+unless (String.of(`89`).as_number == ((eight * ten) + nine)) { INFO@mark `S78 89 is not eighty-nine` }
+unless (String.of(`9`).first.digit_value == nine) { INFO@mark `S79 9 is not worth nine` }

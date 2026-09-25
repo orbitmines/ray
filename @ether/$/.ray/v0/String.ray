@@ -60,7 +60,10 @@ Character := class {
   lower_case => .is_ascii.and(.bit(one)).and(.bit(two)).and(.alphabetic_tail)
   upper_case => .is_ascii.and(.bit(one)).and(.bit(two).not).and(.alphabetic_tail)
   letter => .lower_case.or(.upper_case)
-  digit => .is_ascii.and(.bit(one).not).and(.bit(two)).and(.bit(three)).and(.bit(four).not).and(.tail_value(four) < ten)
+  // `0011xxxx with xxxx below ten`: the four leading bits say which sixteen
+  // codepoints these are, and what is left says which of them. Asking the
+  // fifth bit to be clear as well left out `8` and `9`.
+  digit => .is_ascii.and(.bit(one).not).and(.bit(two)).and(.bit(three)).and(.tail_value(four) < ten)
   // spec: blanks are the space and the controls 9..13 (tab, newline,
   // vertical tab, form feed, carriage return).
   blank => .is_ascii.and(.bit(one).not).and((.bit(two).and(.bit(three).not).and(.tail_value(four).is_zero)).or(.bit(two).not.and(.bit(three).not).and(eight < .tail_value(four)).and(.tail_value(four) < ten + four)))
@@ -332,26 +335,29 @@ String := class: Array {
     same.and((exists theirs).not)
   )
   ends_with (other: String) => .reversed.starts_with(other.reversed)
-  // Inside a `for` block `this` is the element, so the string is held first.
+  // Walked rather than read with `for`, so that `this` is the text throughout
+  // and the slice being asked about is a slice of it.
   contains (other: String) => (
-    text := this
     length := .count
     found ^keyword := false
     position ^keyword := zero
-    this.characters for {
-      if (text.slice(position, length).starts_with(other)) { found = true }
+    walker ^keyword := .characters.head
+    while (exists walker) {
+      if (.slice(position, length).starts_with(other)) { found = true }
       position = position.succ
+      walker = walker.next
     }
     found.or(other.empty)
   )
   index_of (other: String) => (
-    text := this
     length := .count
     found ^keyword := None
     position ^keyword := zero
-    this.characters for {
-      unless (exists found) { if (text.slice(position, length).starts_with(other)) { found = position } }
+    walker ^keyword := .characters.head
+    while (exists walker) {
+      unless (exists found) { if (.slice(position, length).starts_with(other)) { found = position } }
       position = position.succ
+      walker = walker.next
     }
     found
   )

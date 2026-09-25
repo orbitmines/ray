@@ -94,3 +94,17 @@ mixed &= one
 mixed &= None
 mixed &= two
 unless (mixed.count == three) { INFO@mark `R41 a chain does not keep what holds nothing` }
+
+// A walk reaches the end of a long chain. It is walked rather than asked to
+// walk the rest of itself, because a statement is only allowed so many nested
+// applications, and forty is past what the asking afforded.
+long_chain ^keyword := chain None
+to_add ^keyword := (four * ten)
+while to_add {
+  long_chain &= one
+  to_add = to_add.pred
+}
+unless (long_chain.count == (four * ten)) { INFO@mark `RR42 forty things kept do not count forty` }
+stepped ^keyword := zero
+long_chain for { stepped = stepped.succ }
+unless (stepped == (four * ten)) { INFO@mark `RR43 walking forty things does not reach forty` }

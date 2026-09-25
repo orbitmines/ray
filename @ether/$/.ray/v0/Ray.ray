@@ -233,10 +233,21 @@ Ray := class: Iterable {
     total
   )
 
+  // Walked rather than called again for each step: reading the rest of a ray
+  // by asking it to read itself nests one application per element, and a
+  // statement is only allowed so many, so a long ray was walked partway and
+  // said nothing about stopping.
   for (body) => (
     it ^keyword := this
-    inline body
-    unless .is_terminal { .next for body }
+    going ^keyword := true
+    while going {
+      inline body
+      // Where a ray ends is its own to say — a boundary ends where its edge
+      // is, not where its `next` runs out — so the walk asks it, as asking it
+      // to walk the rest of itself did.
+      going = it.is_terminal.not
+      if going { it = it.next }
+    }
     this
   )
 

@@ -54,3 +54,38 @@ if (span.is_terminal) { INFO@mark `R22 an edge that ends somewhere is terminal` 
 unless (Structure().is_valid) { INFO@mark `R23 a structure is not valid` }
 if (Structure().hyper_edges) { INFO@mark `R24 a plain structure has hyper edges` }
 unless (Hypergraph().hyper_edges) { INFO@mark `R25 a hypergraph has no hyper edges` }
+
+// A chain: what it holds, in the order it was given, and how it is walked.
+kept ^keyword := chain None
+unless (kept.count.is_zero) { INFO@mark `R26 a fresh chain counts other than zero` }
+unless (kept.empty) { INFO@mark `R27 a fresh chain is not empty` }
+if (exists kept.head) { INFO@mark `R28 a fresh chain has a head` }
+kept &= one
+unless (kept.count == one) { INFO@mark `R29 one thing kept does not count one` }
+unless (kept.nonempty) { INFO@mark `R30 a chain holding something is empty` }
+unless (kept.head.value == one) { INFO@mark `R31 the head does not hold what was given` }
+unless (kept.tail.value == one) { INFO@mark `R32 the tail does not hold the only thing` }
+kept &= two
+kept &= three
+unless (kept.count == three) { INFO@mark `R33 three things kept do not count three` }
+unless (kept.head.value == one) { INFO@mark `R34 the head is not the first thing given` }
+unless (kept.tail.value == three) { INFO@mark `R35 the tail is not the last thing given` }
+unless (kept.first.value == one) { INFO@mark `R36 the first is not the first thing given` }
+unless (kept.last.value == three) { INFO@mark `R37 the last is not the last thing given` }
+unless (kept.at(one).value == two) { INFO@mark `R38 the one after the first is not the second thing given` }
+
+walked ^keyword := zero
+total ^keyword := zero
+kept for {
+  walked = walked.succ
+  total = total + it.value
+}
+unless (walked == three) { INFO@mark `R39 walking a chain of three does not visit three` }
+unless (total == (three + three)) { INFO@mark `R40 walking a chain of one, two and three does not add to six` }
+
+// A chain of nothing holds nothing, and what holds nothing is dropped.
+mixed ^keyword := chain None
+mixed &= one
+mixed &= None
+mixed &= two
+unless (mixed.count == three) { INFO@mark `R41 a chain does not keep what holds nothing` }

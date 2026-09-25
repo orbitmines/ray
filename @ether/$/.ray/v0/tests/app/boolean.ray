@@ -31,3 +31,38 @@ if (true.nor(false)) { INFO@mark `nor(true,false) should be false` }
 unless (!false) { INFO@mark `!false should be true` }
 if (!true) { INFO@mark `!true should be false` }
 unless (true && (!false)) { INFO@mark `true && !false should be true` }
+
+// The whole table, both ways round, since `nand` is the only primitive and
+// everything else is written from it.
+if (false.nand(true).not) { INFO@mark `BO1 nand(false,true) should be true` }
+if (false.and(true)) { INFO@mark `BO2 and(false,true) should be false` }
+if (false.and(false)) { INFO@mark `BO3 and(false,false) should be false` }
+unless (false.or(true)) { INFO@mark `BO4 or(false,true) should be true` }
+unless (true.or(true)) { INFO@mark `BO5 or(true,true) should be true` }
+unless (false.xor(true)) { INFO@mark `BO6 xor(false,true) should be true` }
+if (false.xor(false)) { INFO@mark `BO7 xor(false,false) should be false` }
+unless (false.xnor(false)) { INFO@mark `BO8 xnor(false,false) should be true` }
+if (false.xnor(true)) { INFO@mark `BO9 xnor(false,true) should be false` }
+unless (false.nor(false)) { INFO@mark `BO10 nor(false,false) should be true` }
+if (false.nor(true)) { INFO@mark `BO11 nor(false,true) should be false` }
+if (true.nor(true)) { INFO@mark `BO12 nor(true,true) should be false` }
+
+// The spelled operators say what the named ones say.
+unless (true && true) { INFO@mark `BO13 true && true should be true` }
+if (false && true) { INFO@mark `BO14 false && true should be false` }
+unless (false || true) { INFO@mark `BO15 false || true should be true` }
+if (false || false) { INFO@mark `BO16 false || false should be false` }
+if (true !&& true) { INFO@mark `BO17 true !&& true should be false` }
+unless (false !|| false) { INFO@mark `BO18 false !|| false should be true` }
+unless (true x|| false) { INFO@mark `BO19 true x|| false should be true` }
+unless (true x!|| true) { INFO@mark `BO20 true x!|| true should be true` }
+
+// Negation is its own inverse, and a boolean is what it is.
+unless (true.not.not) { INFO@mark `BO21 not not true is not true` }
+if (false.not.not) { INFO@mark `BO22 not not false is true` }
+unless (true == true) { INFO@mark `BO23 true is not itself` }
+if (true == false) { INFO@mark `BO24 true is false` }
+unless (exists true) { INFO@mark `BO25 true is not there` }
+unless (exists false) { INFO@mark `BO26 false is not there` }
+if (exists None) { INFO@mark `BO27 nothing is there` }
+unless (exists (exists None).not) { INFO@mark `BO28 asking whether nothing is there answers nothing` }

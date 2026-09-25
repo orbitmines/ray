@@ -125,3 +125,122 @@ unless (String.of(`89`).is_numeric) { INFO@mark `S76 89 is not numeric` }
 unless (String.of(`89`).spells_in(ten)) { INFO@mark `S77 89 does not spell a number in ten` }
 unless (String.of(`89`).as_number == ((eight * ten) + nine)) { INFO@mark `S78 89 is not eighty-nine` }
 unless (String.of(`9`).first.digit_value == nine) { INFO@mark `S79 9 is not worth nine` }
+
+// Case, one character at a time. The two Latin cases differ in one bit, so
+// `upper` and `lower` clear and set it and leave everything else alone — a
+// character that is neither is itself in both.
+unless (String.of(`a`).first.upper == String.of(`A`).first) { INFO@mark `S80 a in upper case is not A` }
+unless (String.of(`Z`).first.lower == String.of(`z`).first) { INFO@mark `S81 Z in lower case is not z` }
+unless (String.of(`a`).first.lower == String.of(`a`).first) { INFO@mark `S82 a already in lower case is not itself` }
+unless (String.of(`7`).first.upper == String.of(`7`).first) { INFO@mark `S83 a digit in upper case is not itself` }
+unless (String.of(`a`).first.swapped == String.of(`A`).first) { INFO@mark `S84 a swapped is not A` }
+unless (String.of(`A`).first.swapped == String.of(`a`).first) { INFO@mark `S85 A swapped is not a` }
+unless (String.of(`7`).first.swapped == String.of(`7`).first) { INFO@mark `S86 a digit swapped is not itself` }
+
+// Which characters are which. A letter is either case; a word character is a
+// letter, a digit or an underscore; a blank is the space or one of the
+// controls around a newline.
+unless (String.of(`q`).first.letter) { INFO@mark `S87 q is not a letter` }
+unless (String.of(`Q`).first.letter) { INFO@mark `S88 Q is not a letter` }
+if (String.of(`7`).first.letter) { INFO@mark `S89 a digit is a letter` }
+if (String.of(`_`).first.letter) { INFO@mark `S90 an underscore is a letter` }
+unless (String.of(`_`).first.is_underscore) { INFO@mark `S91 an underscore is not one` }
+if (String.of(`a`).first.is_underscore) { INFO@mark `S92 a is an underscore` }
+unless (String.of(`_`).first.word) { INFO@mark `S93 an underscore is not a word character` }
+unless (String.of(`7`).first.word) { INFO@mark `S94 a digit is not a word character` }
+unless (String.of(`q`).first.word) { INFO@mark `S95 a letter is not a word character` }
+if (String.of(` `).first.word) { INFO@mark `S96 a space is a word character` }
+unless (String.of(` `).first.blank) { INFO@mark `S97 a space is not blank` }
+if (String.of(`a`).first.blank) { INFO@mark `S98 a is blank` }
+unless (Character.newline.blank) { INFO@mark `S99 a newline is not blank` }
+unless (Character.tab.blank) { INFO@mark `S100 a tab is not blank` }
+unless (Character.space == String.of(` `).first) { INFO@mark `S101 the space is not a written space` }
+unless (Character.underscore == String.of(`_`).first) { INFO@mark `S102 the underscore is not a written one` }
+unless (String.of(`a`).first.is_ascii) { INFO@mark `S103 a is not one byte` }
+
+// What a text is, counted and cut. `length` is `count` said the other way,
+// `at` reads one position, and `slice` the stretch between two.
+unless (String.of(`abc`).length == three) { INFO@mark `S104 abc is not three long` }
+unless (String.of(`abc`).at(one) == String.of(`b`).first) { INFO@mark `S105 the second of abc is not b` }
+unless (String.of(`abcde`).slice(one, four) == String.of(`bcd`)) { INFO@mark `S106 abcde from one to four is not bcd` }
+unless (String.of(`abc`).nonempty) { INFO@mark `S107 abc is empty` }
+if (String.of(``).nonempty) { INFO@mark `S108 nothing written is not empty` }
+unless (String.of(`abc`) != String.of(`abd`)) { INFO@mark `S109 two different texts are the same` }
+if (String.of(`abc`) != String.of(`abc`)) { INFO@mark `S110 a text is not itself` }
+
+// A block asked of every character, and of some.
+unless (String.of(`abc`).every { character.letter }) { INFO@mark `S111 abc is not all letters` }
+if (String.of(`ab3`).every { character.letter }) { INFO@mark `S112 ab3 is all letters` }
+unless (String.of(`ab3`).some { character.digit }) { INFO@mark `S113 ab3 holds no digit` }
+if (String.of(`abc`).some { character.digit }) { INFO@mark `S114 abc holds a digit` }
+unless (String.of(`abc`).transformed { character.upper } == String.of(`ABC`)) { INFO@mark `S115 abc made upper is not ABC` }
+
+// Case over a whole text, by each of its names.
+unless (String.of(`Ab`).lowercase == String.of(`ab`)) { INFO@mark `S116 lowercase is not lower_case` }
+unless (String.of(`Ab`).uppercase == String.of(`AB`)) { INFO@mark `S117 uppercase is not upper_case` }
+unless (String.of(`Ab`).swapcase == String.of(`aB`)) { INFO@mark `S118 swapcase is not swap_case` }
+unless (String.of(`ab cd`).titlecase == String.of(`Ab Cd`)) { INFO@mark `S119 titlecase is not title_case` }
+unless (String.of(`Ab`).foldcase == String.of(`ab`)) { INFO@mark `S120 foldcase is not fold_case` }
+unless (String.of(`ab cd`).camelCase == String.of(`abCd`)) { INFO@mark `S121 camelCase is not camel_case` }
+unless (String.of(`ab cd`).PascalCase == String.of(`AbCd`)) { INFO@mark `S122 PascalCase is not pascal_case` }
+unless (String.of(`ab cd`).snakecase == String.of(`ab_cd`)) { INFO@mark `S123 snakecase is not snake_case` }
+
+// The pieces a block cuts a text into, and the words it is written in.
+unless (String.of(`a-b`).split_by { character == String.of(`-`).first }.count == two) { INFO@mark `S124 a-b cut at the dash is other than two pieces` }
+unless (String.of(`ab cd`).words.count == two) { INFO@mark `S125 ab cd is other than two words` }
+unless (String.of(`ab_cd`).words.count == two) { INFO@mark `S126 ab_cd is other than two words` }
+
+// A pattern is what it spells, and reading a text with it is asking where
+// that spelling stands in it. Told to ignore case, both are folded first.
+plain_pattern := Regex(pattern: String.of(`bc`))
+unless (plain_pattern.matches(String.of(`abcd`))) { INFO@mark `S127 a pattern does not find what is written in the text` }
+if (plain_pattern.matches(String.of(`abd`))) { INFO@mark `S128 a pattern finds what is not there` }
+unless (plain_pattern.find(String.of(`abcd`)) == one) { INFO@mark `S129 what is found is not where it stands` }
+if (plain_pattern.ignoring_case) { INFO@mark `S130 a pattern ignores case it was not told to` }
+folded := Regex(pattern: String.of(`BC`)).with(Regex.Flag.ignore_case)
+unless (folded.ignoring_case) { INFO@mark `S131 a pattern told to ignore case does not` }
+unless (folded.matches(String.of(`abcd`))) { INFO@mark `S132 a pattern ignoring case does not find the other case` }
+if (Regex(pattern: String.of(`BC`)).matches(String.of(`abcd`))) { INFO@mark `S133 a pattern minding case finds the other case` }
+unless (folded.flags.count == one) { INFO@mark `S134 a pattern given one flag holds other than one` }
+
+// The Latin letters and digits, built from the bits that say which they are.
+unless (Character.latin_upper(one) == String.of(`A`).first) { INFO@mark `S135 the first upper letter is not A` }
+unless (Character.latin_lower(one) == String.of(`a`).first) { INFO@mark `S136 the first lower letter is not a` }
+unless (Character.latin_upper((two * ten) + six) == String.of(`Z`).first) { INFO@mark `S137 the twenty-sixth upper letter is not Z` }
+unless (Character.decimal_digit(zero) == String.of(`0`).first) { INFO@mark `S138 nothing is not written 0` }
+unless (Character.decimal_digit(seven) == String.of(`7`).first) { INFO@mark `S139 seven is not written 7` }
+unless (Character.decimal_digit(ten + one) == String.of(`b`).first) { INFO@mark `S140 eleven is not written b` }
+
+// What a number spells in ten, read off a counter one unit at a time.
+unless (seven.as_string == String.of(`7`)) { INFO@mark `S141 seven does not spell 7` }
+unless ((ten + two).as_string == String.of(`12`)) { INFO@mark `S142 twelve does not spell 12` }
+unless (zero.as_string == String.of(`0`)) { INFO@mark `S143 nothing does not spell 0` }
+
+// The characters the draft writes with an escape, and what a character says
+// about its own bits.
+unless (Character.null.codepoint.is_zero) { INFO@mark `S144 the null character is not nothing` }
+unless (Character.carriage.codepoint == (ten + three)) { INFO@mark `S145 the carriage return is not thirteen` }
+unless (String.of(`a`).first.is_scalar) { INFO@mark `S146 a is not a scalar` }
+unless (String.of(`A`).first.tail_value(three) == one) { INFO@mark `S147 what is left of A past three bits is not one` }
+unless (String.of(`A`).first.alphabetic_tail) { INFO@mark `S148 A does not end in a letter's bits` }
+if (String.of(`@`).first.alphabetic_tail) { INFO@mark `S149 the sign before A ends in a letter's bits` }
+unless (String.of(`_`).first.all_set(three)) { INFO@mark `S150 the underscore is not all ones past three bits` }
+unless (String.of(`a`).first.with_bit(two, 0) == String.of(`A`).first) { INFO@mark `S151 clearing the case bit of a does not give A` }
+
+// A chain of texts, each put in a case.
+cased ^keyword := chain None
+cased &= String.of(`AB`)
+cased &= String.of(`cd`)
+unless (cased.each_lower.head.value == String.of(`ab`)) { INFO@mark `S152 the first of them lowered is not ab` }
+unless (cased.each_title.head.value == String.of(`Ab`)) { INFO@mark `S153 the first of them titled is not Ab` }
+
+// The case names the drafts spell without the inner capital.
+unless (String.of(`ab cd`).camelcase == String.of(`abCd`)) { INFO@mark `S154 camelcase is not camel_case` }
+unless (String.of(`ab cd`).pascalcase == String.of(`AbCd`)) { INFO@mark `S155 pascalcase is not pascal_case` }
+
+// A character built from its bits, three leading ones and the rest.
+unless (Character.ascii(0, 1, 0, Character.nibble(0, one)) == String.of(`A`).first) { INFO@mark `S156 the bits of A do not spell A` }
+unless (Character.nibble(one, zero).count == five) { INFO@mark `S157 a nibble with a lead is other than five bits` }
+
+// Text read where a text is asked for.
+unless (String.accepts(`ab`) == String.of(`ab`)) { INFO@mark `S158 written text is not read as a string` }

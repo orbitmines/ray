@@ -40,3 +40,12 @@ unless (written.segments.head.value == one) { INFO@mark `IP21 the first segment 
 unless (written.as_string == String.of(`1.2.3.4`)) { INFO@mark `IP22 an address does not read back as it was written` }
 unless (written == written) { INFO@mark `IP23 an address is not itself` }
 if (written == IP(segments: IP.read(String.of(`1.2.3.5`), Character.of(ascii_dot), ten))) { INFO@mark `IP24 two different addresses are the same` }
+
+// What each kind of address is written with: how wide a segment is, what
+// stands between them, and the base they are written in.
+unless (IP.v4.segment_length == eight) { INFO@mark `IP25 a segment of the first kind is other than eight bits` }
+unless (IP.v6.segment_length == (ten + six)) { INFO@mark `IP26 a segment of the second kind is other than sixteen bits` }
+unless (IP.v4.base == ten) { INFO@mark `IP27 the first kind is not written in ten` }
+unless (IP.v6.base == (ten + six)) { INFO@mark `IP28 the second kind is not written in sixteen` }
+unless (IP.v4.separator == String.of(`.`).first) { INFO@mark `IP29 the first kind is not written with dots` }
+unless (IP.v6.separator == String.of(`:`).first) { INFO@mark `IP30 the second kind is not written with colons` }

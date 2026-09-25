@@ -93,3 +93,54 @@ plain_segment := Calendar.Segment(name: two, length: seconds(two))
 unless (recurring.is_recurring) { INFO@mark `TI57 a segment with a period does not recur` }
 if (plain_segment.is_recurring) { INFO@mark `TI58 a segment without a period recurs` }
 unless (recurring.epoch == one) { INFO@mark `TI59 a segment does not start at one` }
+
+// A month by the place it falls in, counted from zero, and back.
+unless (Month.at_index(zero) == Month.january) { INFO@mark `TI60 the month at the start of the year is not January` }
+unless (Month.at_index(two) == Month.march) { INFO@mark `TI61 the third month is not March` }
+unless (Month.january.index.is_zero) { INFO@mark `TI62 January does not fall at the start` }
+unless (Month.march.index == two) { INFO@mark `TI63 March is not two along` }
+if (Month.january == Month.march) { INFO@mark `TI64 two months are the same` }
+unless (Month.january != Month.march) { INFO@mark `TI65 two months are not different` }
+
+// A date written the way the standard writes it, read back into the three
+// numbers it is made of.
+written := ISO_8601.date(String.of(`3-2-7`))
+unless (written.year == three) { INFO@mark `TI66 the year written first is not read` }
+unless (written.month == Month.february) { INFO@mark `TI67 the second month written is not February` }
+unless (written.day == seven) { INFO@mark `TI68 the day written last is not read` }
+unless (written == ISO_8601.date(String.of(`3-2-7`))) { INFO@mark `TI69 a date is not itself` }
+if (written == ISO_8601.date(String.of(`3-2-8`))) { INFO@mark `TI70 two dates a day apart are the same` }
+unless (written.is_valid(Gregorian)) { INFO@mark `TI71 the seventh of February is not a day` }
+if (ISO_8601.date(String.of(`3-2-9`)).day_of_year(Gregorian) == written.day_of_year(Gregorian)) { INFO@mark `TI72 two days fall on the same day of the year` }
+
+// How long a year is, and how many weeks fit in it.
+unless (Gregorian.days_in_year(three) == ((three * hundred) + (six * ten) + five)) { INFO@mark `TI73 an ordinary year is not three hundred and sixty-five days` }
+unless (Gregorian.days_in_year(four) == ((three * hundred) + (six * ten) + six)) { INFO@mark `TI74 a leap year is not a day longer` }
+unless (Gregorian.weeks_in_year(three) == (five * ten) + two) { INFO@mark `TI75 a year is not fifty-two weeks` }
+
+// A time zone is the offset it keeps from the one everything is counted by.
+unless (UTC.offset.is_zero) { INFO@mark `TI76 the zone everything is counted by is offset` }
+unless (UTC.with_offset(seconds(three)).offset.as_seconds == three) { INFO@mark `TI77 a zone three seconds along is not` }
+unless (GMT.leap_seconds.not) { INFO@mark `TI78 the zone without leap seconds has them` }
+
+// Two calendars agreeing on a point, and a time carried across.
+agreed := Calendar.equivalent(here, Time(calendar: Gregorian, since_epoch: seconds(ten)))
+unless (agreed.convert(later).since_epoch.as_seconds == (ten + three)) { INFO@mark `TI79 three seconds past the agreed point is not three seconds past the other` }
+unless (agreed.convert(later).calendar == Gregorian) { INFO@mark `TI80 a time carried across keeps the calendar it came from` }
+
+// What a planet counts its years and days in.
+unless (Earth.calendar == Gregorian) { INFO@mark `TI81 Earth does not keep the calendar` }
+unless (Earth.years == Year) { INFO@mark `TI82 an Earth year is not a year` }
+unless (Earth.days == Day) { INFO@mark `TI83 an Earth day is not a day` }
+// spec: Mars's day and year are not claimed here: a sol is eighty-eight
+// thousand seconds, and comparing two units compares those ratios, which is
+// a walk that long.
+
+// What a calendar cuts the line into, and what a unit is written as.
+pieces ^keyword := chain None
+pieces &= Calendar.Segment(name: one, length: seconds(two))
+cut := Calendar(parts: pieces)
+unless (cut.segments.count == one) { INFO@mark `TI87 a calendar given one segment has other than one` }
+unless (Calendar().segments.empty) { INFO@mark `TI88 a calendar given none has some` }
+unless (String.of(Second.symbol) == String.of(`s`)) { INFO@mark `TI89 the second is not written s` }
+unless (String.of(Nanosecond.symbol) == String.of(`ns`)) { INFO@mark `TI90 the nanosecond is not written ns` }

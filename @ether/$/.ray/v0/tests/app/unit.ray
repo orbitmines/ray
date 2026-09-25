@@ -63,3 +63,9 @@ unless (shifted_bit.scale == one) { INFO@mark `U32 a shifted unit counts other t
 unless ((one of Minute).is_temporal) { INFO@mark `U33 a minute is not of time` }
 if ((one of Bit).is_temporal) { INFO@mark `U34 a bit is of time` }
 unless ((one of Minute).as_seconds == (six * ten)) { INFO@mark `U35 a minute is not sixty seconds` }
+
+// What a unit is called and what it is written as.
+unless (String.of(Bit.name) == String.of(`bit`)) { INFO@mark `U36 a bit is not called that` }
+unless (String.of(Bit.symbol) == String.of(`b`)) { INFO@mark `U37 a bit is not written b` }
+unless (String.of(Byte.name) == String.of(`byte`)) { INFO@mark `U38 a byte is not called that` }
+unless (String.of(Minute.base.name) == String.of(`second`)) { INFO@mark `U39 a minute is not built on the second` }

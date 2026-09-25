@@ -43,6 +43,8 @@ Calendar := class {
     epoch: one
     is_recurring => exists .period
   }
+  // What the calendar cuts the line into: nothing until it is given them.
+  parts: (chain None)
   segments => .parts
   // spec: `equivalence`: two calendars agree on a point; converting a time
   // keeps its structure since the epoch when both calendars share the same
@@ -54,8 +56,11 @@ Calendar := class {
   )
   Equivalence := class {
     convert (time: Time) => (
+      // How long it is past the point the two agree on, added to where that
+      // point is on the other calendar. Both are durations, so they are added
+      // as durations: a quantity and a number are not of the same kind.
       elapsed := time - .from
-      Time(calendar: .to.calendar, since_epoch: (.to.since_epoch + elapsed.as_seconds), epoch: .to.epoch)
+      Time(calendar: .to.calendar, since_epoch: (.to.since_epoch + elapsed), epoch: .to.epoch)
     )
   }
 }
@@ -95,7 +100,9 @@ Gregorian := class: Julian {
 // seconds are off (`GMT = UTC{leap_seconds == false}`); the tzdata table
 // waits on `io` and an unzip.
 UTC := class: Gregorian {
-  offset => zero
+  // What the zone is offset by is a field with nothing in it by default, not
+  // a method: a method answers zero whatever the zone was built with.
+  offset: zero
   with_offset (offset: Quantity) => UTC(offset: offset)
   leap_seconds => false
 }

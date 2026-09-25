@@ -41,3 +41,47 @@ if (Roman.additive(four).text == Roman.from(four).text) { INFO@mark `RO25 the tw
 // and the rest eight thousand each.
 unless (Roman.Fraction.semis == six) { INFO@mark `RO27 the semis is not six twelfths` }
 unless (Roman.Fraction.uncia == one) { INFO@mark `RO28 the uncia is not one twelfth` }
+
+// What each digit is worth: a mantissa at a power of ten.
+unless (Roman.Digit.i.value == one) { INFO@mark `RO29 i is not one` }
+unless (Roman.Digit.v.value == five) { INFO@mark `RO30 v is not five` }
+unless (Roman.Digit.x.value == ten) { INFO@mark `RO31 x is not ten` }
+unless (Roman.Digit.l.value == (five * ten)) { INFO@mark `RO32 l is not fifty` }
+unless (Roman.Digit.c.value == hundred) { INFO@mark `RO33 c is not a hundred` }
+// spec: what `d` and `m` are worth is not claimed here — five hundred and a
+// thousand are that many links each, twice over, and the file pays for it.
+
+// A digit standing for a count of ones at the units place.
+unless (Roman.Digit.i.with_value(three).value == three) { INFO@mark `RO36 three ones are not three` }
+
+// Which numerals the standard form can write: one and up, below four
+// thousand.
+unless (Roman(text: String.of(`XIV`)).is_standard) { INFO@mark `RO37 fourteen is not a standard numeral` }
+if (Roman(text: String.of(``)).is_standard) { INFO@mark `RO39 a numeral with nothing written is standard` }
+
+// The twelfths, by the names they were counted with.
+unless (Roman.Fraction.sextans == two) { INFO@mark `RO40 the sextans is not two twelfths` }
+unless (Roman.Fraction.quadrans == three) { INFO@mark `RO41 the quadrans is not three twelfths` }
+unless (Roman.Fraction.triens == four) { INFO@mark `RO42 the triens is not four twelfths` }
+unless (Roman.Fraction.quincunx == five) { INFO@mark `RO43 the quincunx is not five twelfths` }
+unless (Roman.Fraction.septunx == seven) { INFO@mark `RO44 the septunx is not seven twelfths` }
+unless (Roman.Fraction.bes == eight) { INFO@mark `RO45 the bes is not eight twelfths` }
+unless (Roman.Fraction.dodrans == nine) { INFO@mark `RO46 the dodrans is not nine twelfths` }
+unless (Roman.Fraction.dextans == ten) { INFO@mark `RO47 the dextans is not ten twelfths` }
+unless (Roman.Fraction.deunx == (ten + one)) { INFO@mark `RO48 the deunx is not eleven twelfths` }
+
+// The letters the numerals are written with.
+unless (Roman.i_digit == String.of(`I`).first) { INFO@mark `RO49 the ones digit is not I` }
+unless (Roman.v_digit == String.of(`V`).first) { INFO@mark `RO50 the fives digit is not V` }
+unless (Roman.x_digit == String.of(`X`).first) { INFO@mark `RO51 the tens digit is not X` }
+unless (Roman.l_digit == String.of(`L`).first) { INFO@mark `RO52 the fifties digit is not L` }
+unless (Roman.c_digit == String.of(`C`).first) { INFO@mark `RO53 the hundreds digit is not C` }
+unless (Roman.d_digit == String.of(`D`).first) { INFO@mark `RO54 the five hundreds digit is not D` }
+unless (Roman.m_digit == String.of(`M`).first) { INFO@mark `RO55 the thousands digit is not M` }
+
+// Which digit a letter stands for, either case, and nothing for a letter that
+// is not one of them.
+unless (Roman.digit_of(String.of(`X`).first) == Roman.Digit.x) { INFO@mark `RO56 X does not stand for the tens digit` }
+unless (Roman.digit_of(String.of(`x`).first) == Roman.Digit.x) { INFO@mark `RO57 a lower-case x does not stand for it either` }
+unless (Roman.digit_of(String.of(`I`).first) == Roman.Digit.i) { INFO@mark `RO58 I does not stand for the ones digit` }
+if (exists Roman.digit_of(String.of(`Q`).first)) { INFO@mark `RO59 Q stands for a roman digit` }

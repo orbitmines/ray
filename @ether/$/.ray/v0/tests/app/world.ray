@@ -131,3 +131,50 @@ present := Persona(name: String.of(`present`), presence: somewhere)
 unless (present.status_now == Status.online) { INFO@mark `PS2 someone somewhere is not as that place is` }
 if (present.status_now == Status.offline) { INFO@mark `PS3 someone somewhere is offline anyway` }
 unless (present.status == Status.offline) { INFO@mark `PS4 what they said they were is not what they said` }
+
+// What a world and a persona are written with in front of their names.
+unless (String.of(World(name: String.of(`w`)).prefix) == String.of(`#`)) { INFO@mark `WP1 a world is not written with a hash` }
+unless (String.of(Persona(name: String.of(`p`)).prefix) == String.of(`@`)) { INFO@mark `WP2 a persona is not written with an at sign` }
+
+// A name given to something is the name it answers to afterwards.
+renamed := Persona(name: String.of(`before`)).named(String.of(`after`))
+unless (renamed.name == String.of(`after`)) { INFO@mark `WP3 something named is not called that` }
+
+// What a world holds, and how many live in it.
+county := World(name: String.of(`county`))
+unless (county.population.is_zero) { INFO@mark `WP4 an empty world has someone in it` }
+county.spawn(Persona(name: String.of(`one`)))
+county.spawn(Persona(name: String.of(`two`)))
+unless (county.population == two) { INFO@mark `WP5 two who live there do not count two` }
+unless (county.items.empty) { INFO@mark `WP6 an empty world holds something` }
+county.add(Item(name: String.of(`lamp`), issuer: county))
+unless (county.items.count == one) { INFO@mark `WP7 what was added to a world is not there` }
+if (exists county.shadowing) { INFO@mark `WP8 a world falls back to another by itself` }
+
+// A name issued in a world is the reservation that took it, and reserving it
+// again is reserving it once.
+taken := county.issue(String.of(`a`))
+unless (taken.name == String.of(`a`)) { INFO@mark `WP9 what was issued does not hold the name` }
+unless (taken.issuer == county) { INFO@mark `WP10 what issued a name is not the world` }
+unless (county.reserve(String.of(`a`)) == taken) { INFO@mark `WP11 reserving a taken name takes it again` }
+
+// An item sits somewhere, is obtained by something, and carries what says so.
+lamp := Item(name: String.of(`lamp`), issuer: county)
+if (exists lamp.obtained_by) { INFO@mark `WP12 an item nobody has is had by something` }
+if (exists lamp.certificate) { INFO@mark `WP13 an item carries a certificate it was not given` }
+paper := Certificate(issuer: county, secret: one)
+unless (lamp.certify(paper).certificate == paper) { INFO@mark `WP14 what an item was given is not what it carries` }
+unless (exists paper.issued_on) { INFO@mark `WP15 a certificate says nothing about when it was issued` }
+
+// What is written down about something read elsewhere.
+cited := Reference(title: String.of(`a paper`), author: one)
+unless (cited.draft) { INFO@mark `WP16 something written down is not a draft to begin with` }
+unless (cited.publish.draft.not) { INFO@mark `WP17 something published is still a draft` }
+if (exists cited.link) { INFO@mark `WP18 a reference points somewhere it was not pointed` }
+unless (exists cited.date) { INFO@mark `WP19 a reference says nothing about when` }
+unless (cited.note(String.of(`read it`)).notes.count == one) { INFO@mark `WP20 a note taken is not kept` }
+
+// Who belongs to an organization.
+guild := Organization(name: String.of(`guild`))
+unless (guild.members.empty) { INFO@mark `WP21 an organization nobody joined has members` }
+unless (guild.status == Status.offline) { INFO@mark `WP22 an organization is not offline to begin with` }

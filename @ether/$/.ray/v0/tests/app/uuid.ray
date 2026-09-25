@@ -31,3 +31,18 @@ unless (read_back.spelled.count == ((three * ten) + two)) { INFO@mark `UU15 what
 unless (read_back.version == four) { INFO@mark `UU16 what is read back is not of the version it was written with` }
 unless (read_back.variant == UUID.Variant.rfc_4122) { INFO@mark `UU17 what is read back is not of the variant it was written with` }
 unless (read_back.as_string == spelled_out) { INFO@mark `UU13 a uuid written down does not read back as itself` }
+
+// What a digit written in sixteen is worth, either case.
+unless (String.of(`7`).first.hexadecimal_digit == seven) { INFO@mark `UU18 7 is not seven in sixteen` }
+unless (String.of(`a`).first.hexadecimal_digit == ten) { INFO@mark `UU19 a is not ten in sixteen` }
+unless (String.of(`F`).first.hexadecimal_digit == (ten + five)) { INFO@mark `UU20 F is not fifteen in sixteen` }
+
+// The other versions the draft names. spec: what makes each of them what it
+// is — a timestamp, an md5, an sha1 — waits on the clock and on the hashes,
+// so what is claimed here is that they are written down.
+unless (exists UUID.v1) { INFO@mark `UU21 the version built from a time is not there` }
+unless (exists UUID.v3) { INFO@mark `UU22 the version built from a namespace and a name is not there` }
+unless (exists UUID.v5) { INFO@mark `UU23 the other version built that way is not there` }
+// spec: building a `v3` or a `v5` is not claimed here — the `namespace: UUID`
+// field is typed, and asking whether a thirty-two digit uuid is one costs
+// more than the rest of the file.

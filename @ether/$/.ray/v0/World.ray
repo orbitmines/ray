@@ -64,10 +64,14 @@ World := class: Nameable {
   shadowing => None
   // Reserving a name issues it within this world, and the world keeps what it
   // issued: a name already taken here is the reservation that took it, so
-  // reserving twice is reserving once.
+  // reserving twice is reserving once. What is answered is bound first, since
+  // a branch holding a reservation is not that reservation, and which one it
+  // is is what tells two of them apart.
   reserve (name: String) => (
     standing ^keyword := .reserved(name)
-    if (exists standing) { standing } else { .issue(name) }
+    unless (exists standing) { standing = .issue(name) }
+
+    standing
   )
   // spec: what is added is read back off the chain, since a statement written
   // on its own line beneath another cannot begin with `.` — the newline-member

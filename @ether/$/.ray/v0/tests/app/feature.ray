@@ -121,3 +121,9 @@ unless (Choice.choose_count(bag, two).count == two) { INFO@mark `RN10 choosing t
 picked_one := bag.random.value
 unless ((picked_one == one).or((picked_one == two).or(picked_one == three))) { INFO@mark `RN11 what was chosen is not one of them` }
 unless (exists Choice.coin) { INFO@mark `RN12 a coin lands on neither side` }
+
+// What the machine says about itself, asked by name.
+unless (IO.os(`platform`).nonempty) { INFO@mark `IO3 the machine does not name its platform` }
+unless (IO.os(`architecture`) == IO.architecture) { INFO@mark `IO4 asking by name is not asking the other way` }
+// spec: reading and writing a location are not claimed here — a test that
+// writes a file leaves one behind, and what it would read is the host's.

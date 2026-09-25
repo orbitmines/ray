@@ -132,3 +132,44 @@ rounds_run ^keyword := zero
 rounds_seen ^keyword := zero
 three.rounds({ rounds_run = rounds_run.succ }, zero)
 unless (rounds_run == three) { INFO@mark `N91 three rounds are not three` }
+
+// A number stands for a bit: zero is clear, everything else set, and the
+// logic of booleans reads through that.
+if (zero.set) { INFO@mark `N92 zero is set` }
+unless (one.set) { INFO@mark `N93 one is not set` }
+unless (five.set) { INFO@mark `N94 five is not set` }
+unless (one.and(true)) { INFO@mark `N95 one and true is not true` }
+if (zero.and(true)) { INFO@mark `N96 zero and true is true` }
+unless (zero.or(true)) { INFO@mark `N97 zero or true is not true` }
+if (zero.or(false)) { INFO@mark `N98 zero or false is true` }
+unless (zero.nand(true)) { INFO@mark `N99 zero nand true is not true` }
+if (one.nand(true)) { INFO@mark `N100 one nand true is true` }
+unless (zero.nor(false)) { INFO@mark `N101 zero nor false is not true` }
+if (one.nor(false)) { INFO@mark `N102 one nor false is true` }
+unless (one.xor(false)) { INFO@mark `N103 one xor false is not true` }
+if (one.xor(true)) { INFO@mark `N104 one xor true is true` }
+unless (one.xnor(true)) { INFO@mark `N105 one xnor true is not true` }
+if (one.xnor(false)) { INFO@mark `N106 one xnor false is true` }
+
+// What a number holds and what comes before it.
+if (zero.nonzero) { INFO@mark `N107 zero is other than zero` }
+unless (three.nonzero) { INFO@mark `N108 three is zero` }
+unless (three.pred == two) { INFO@mark `N109 what comes before three is not two` }
+unless (three.pred.succ == three) { INFO@mark `N110 stepping back and forward does not come back` }
+unless (exists five.holds) { INFO@mark `N111 five holds nothing` }
+
+// A hundredth part. Fifty of them are half of one, which is zero among the
+// naturals — a hundred of them is one.
+unless (hundred.percent == one) { INFO@mark `N112 a hundred hundredths is not one` }
+unless ((two * hundred).percent == two) { INFO@mark `N113 two hundred hundredths is not two` }
+
+// Every real spelled here is a ratio of two numbers; none is not. It is the
+// real that says so, not the natural number it is written with.
+spelled_real := Number.Real(integer: five, fraction: zero)
+unless (spelled_real.rational) { INFO@mark `N114 a real is not rational` }
+if (spelled_real.irrational) { INFO@mark `N115 a real is irrational` }
+
+// The signed integer a natural number is, and the one below zero it negates
+// into.
+unless (five.signed.negative.not) { INFO@mark `N116 five as an integer is negative` }
+unless (five.negated.negative) { INFO@mark `N117 five negated is not negative` }

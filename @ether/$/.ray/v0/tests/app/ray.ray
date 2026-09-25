@@ -132,3 +132,59 @@ unless (threes.length == three) { INFO@mark `RR56 a chain is not as long as it c
 if (threes.undirected) { INFO@mark `RR57 a chain is undirected` }
 unless (threes.first.value == one) { INFO@mark `RR58 the first of a chain is not what was given first` }
 unless (threes.entry.value == one) { INFO@mark `RR59 what a chain is entered at is not its first` }
+
+// What a chain adds to and multiplies out to, written where `Iterable` is
+// written so that a chain of numbers actually has them.
+unless (threes.sum == six) { INFO@mark `RR60 one, two and three do not add to six` }
+unless (threes.product == six) { INFO@mark `RR61 one, two and three do not multiply to six` }
+unless (Σ threes == six) { INFO@mark `RR62 the sum sign does not add them` }
+unless (∏ threes == six) { INFO@mark `RR63 the product sign does not multiply them` }
+
+// The elements that hold something. A chain written with nothing in it holds
+// nothing, so nothing is what is left.
+sparse ^keyword := chain None
+sparse &= one
+sparse &= None
+sparse &= two
+unless (sparse.compact.count == two) { INFO@mark `RR65 what is left of a chain with a gap is other than two` }
+unless (threes.compact.count == three) { INFO@mark `RR66 a chain with no gaps loses something` }
+
+// A chain is its own path, so the paths through it are the chain.
+unless (threes.paths.count == three) { INFO@mark `RR67 the paths through a chain are not the chain` }
+
+// Everything a chain holds at once: the first, with each next pushed onto it.
+unless (exists threes.all) { INFO@mark `RR68 all of a chain is nothing` }
+
+// A chain filled with one thing holds that thing everywhere.
+filled ^keyword := chain None
+filled &= one
+filled &= two
+filled.fill(three)
+unless (filled every { it.value == three }) { INFO@mark `RR69 a filled chain does not hold what it was filled with` }
+
+// Which structures allow a ray to continue into more than one, and which
+// hold what a hyper edge needs.
+if (Structure().hyper_continuations) { INFO@mark `RR70 a plain structure branches` }
+unless (Graph().hyper_continuations) { INFO@mark `RR71 a graph does not branch` }
+unless (Forest().hyper_continuations) { INFO@mark `RR72 a forest does not branch` }
+if (Path().hyper_continuations) { INFO@mark `RR73 a path branches` }
+unless (Array().acyclic) { INFO@mark `RR74 an array comes back around` }
+
+// A ray at either end of what it is in.
+edges ^keyword := chain None
+edges &= one
+edges &= two
+unless (edges.head.is_first) { INFO@mark `RR75 the first of a chain is not first` }
+if (edges.head.is_last) { INFO@mark `RR76 the first of a chain of two is last` }
+unless (edges.tail.is_last) { INFO@mark `RR77 the last of a chain is not last` }
+
+// One way through a chain, so the two ways of walking it meet; depth-first
+// is the one taken unless another is asked for.
+unless (Traverser.default == Traverser.Order.depth_first) { INFO@mark `RR78 what a walk does by default is not depth-first` }
+if (Traverser.default == Traverser.Order.breadth_first) { INFO@mark `RR79 what a walk does by default is breadth-first` }
+walked ^keyword := zero
+Traverser.walk(threes, { walked = walked.succ })
+unless (walked == three) { INFO@mark `RR80 walking three things does not reach three` }
+
+// A chain points one way, and goes both ways along itself.
+if (threes.unidirectional) { INFO@mark `RR81 a chain points only one way` }

@@ -46,3 +46,17 @@ unless (Unicode.fits(zero, one)) { INFO@mark `UN21 zero does not fit in one bit`
 if (Unicode.category(String.of(`1`).first) == Unicode.GeneralCategory.letter) { INFO@mark `UN26 a digit is a letter` }
 if (Unicode.category(String.of(` `).first) == Unicode.GeneralCategory.letter) { INFO@mark `UN27 a space is a letter` }
 unless (Unicode.GeneralCategory.components.count == six) { INFO@mark `UN29 there are other than six kinds` }
+
+// The bits between two places of a chain of bits, counted from zero.
+eight_bits := bits_of(five, eight)
+unless (eight_bits.slice_bits(zero, four).count == four) { INFO@mark `UN30 four bits taken off eight are other than four` }
+unless (eight_bits.slice_bits(four, eight).count == four) { INFO@mark `UN31 the four bits after them are other than four` }
+unless (eight_bits.slice_bits(zero, eight).count == eight) { INFO@mark `UN32 all of eight bits are other than eight` }
+if (eight_bits.slice_bits(two, two).nonempty) { INFO@mark `UN33 the bits between a place and itself are something` }
+
+// spec: where the surrogates begin is not claimed here — D800 is fifty-five
+// thousand, and a number is a walk, so building it once costs more than the
+// whole file.
+
+// Where the tables are read from, when they are read.
+unless (Unicode.tables_at.starts_with(String.of(`https`))) { INFO@mark `UN36 the tables are not read over the web` }

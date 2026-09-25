@@ -2076,6 +2076,16 @@ export namespace Ray {
       const found = { rule, impl, match };
       const captures = new Map<string, Node>();
       rule.pattern!.forEach((piece, p) => {
+        // What stands between two operands is bound the way what stands
+        // inside a group is: `[x]` names what is written there, as `{x}` does.
+        if (piece.kind === 'operator') {
+          const written = match.operators.get(piece.name);
+          if (written === undefined) return;
+          const node = this.lazy(written, frame, false);
+          captures.set(piece.name, node);
+          if (!this.probing && !this.in_body(written)) this.deferred.push(node);
+          return;
+        }
         if (piece.kind !== 'capture') return;
         const span = match.captures.get(piece.name);
         const read = piece.raw || impl.forward ? undefined : match.read?.get(piece.name);

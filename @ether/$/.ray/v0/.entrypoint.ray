@@ -308,6 +308,12 @@ Node := base class {
 
     this
   )
+  // `a ; b`: what is written after is read where it is written, and is what
+  // the whole answers — the draft's `; (call) => call<local: &caller>()`
+  // (.ray3/Node.ray). This is what separates two statements written on one
+  // line: a newline separates them otherwise, and `,` is for where a list is
+  // meant rather than a second statement.
+  ; ^punctuation (x) => inline x
 
   &= ^punctuation (x) => (
     value := x
@@ -630,6 +636,22 @@ TODO ^debug (comment: String ^comment) => DEBUG@. comment
 
 // Precedence: of two operators around a shared operand, the
 // tighter one groups first (precedence = declaration order).
+// spec: none of the three rules below reaches an expression yet, so
+// `two * three + one` is eight and `one < two < three` is false. What `[x]`
+// binds is written down now — it names what stands there, the way `{x}` names
+// what it holds — and four things are still in the way, each measured:
+//   · `.precedence` is answered by nothing. It is declaration order, which is
+//     where a rule is written; `external where` gives that as `file:offset`,
+//     and comparing two of those is comparing texts, which the entrypoint
+//     cannot do (String is written later).
+//   · `&`, `chainable`, `left-to-right` and `right-to-left` are unwritten, so
+//     `missing` holds both other rules back before they are ever tried.
+//   · `[x: chainable]` does not constrain what it matches — the word is read
+//     for what it says about unread names and nothing else — so a rule asking
+//     for a chainable operator would take any operator at all.
+//   · a capture standing for the receiver refuses a space before what follows
+//     unless a space is written in the pattern, and an operator is always
+//     written between spaces, so the match stops at the first piece.
 {a} [x] {b} [y] {c} => (a [x] b) [y] c if x.precedence >= y.precedence
 {a} [x] {b} [y] {c} => a [x] (b [y] c) if x.precedence < y.precedence
 

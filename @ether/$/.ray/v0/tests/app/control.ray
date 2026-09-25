@@ -126,3 +126,15 @@ while outer {
   outer = outer.pred
 }
 unless (pairs == (two * three)) { INFO@mark `CF13 a loop inside a loop does not multiply` }
+
+// `;` is a method: what is written after it is read where it is written, and
+// is what the whole answers.
+unless (( one ; two ) == two) { INFO@mark `CF14 the semicolon does not answer what is written after it` }
+unless (( one ; two ; three ) == three) { INFO@mark `CF15 the last of three is not what the whole answers` }
+// spec: two statements on one line are what `;` is for, and two *assignments*
+// are not yet: `a = one ; b = two` is read as `a = (one ; b = two)`, because
+// `;` cannot bind looser than `=` until precedence is answered (the entrypoint
+// says what is in the way). Written with brackets it does what it says.
+semi_counted ^keyword := zero
+(semi_counted = one) ; (semi_counted = semi_counted.succ)
+unless (semi_counted == two) { INFO@mark `CF16 two bracketed statements on one line did not both run` }

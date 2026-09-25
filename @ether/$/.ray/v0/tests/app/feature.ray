@@ -52,3 +52,52 @@ while to_draw {
 unless ((ones + zeros) == (two * ten)) { INFO@mark `RN5 twenty draws are not twenty` }
 if (ones.is_zero) { INFO@mark `RN6 twenty draws were all nothing` }
 if (zeros.is_zero) { INFO@mark `RN7 twenty draws were all something` }
+
+// A proposition holds or it does not, and what says so is a proof.
+yes := Proof.Proposition(holds: true)
+no := Proof.Proposition(holds: false)
+unless (yes.holds) { INFO@mark `PF1 a proposition written as holding does not hold` }
+if (no.holds) { INFO@mark `PF2 a proposition written as not holding holds` }
+unless (yes.negated.holds.not) { INFO@mark `PF3 the negation of one that holds holds` }
+unless (no.negated.holds) { INFO@mark `PF4 the negation of one that does not hold does not hold` }
+unless (Proof.rfl(yes)) { INFO@mark `PF5 a proposition is not proof of itself` }
+if (Proof.rfl(no)) { INFO@mark `PF6 one that does not hold proves itself` }
+unless (Proof.assume(yes).holds) { INFO@mark `PF7 what is assumed is not what was assumed` }
+unless (Proof.by_contradiction(yes, no)) { INFO@mark `PF8 a proof of the negation failing does not prove it` }
+if (Proof.by_contradiction(no, yes)) { INFO@mark `PF9 a proof of the negation holding proves it anyway` }
+unless (Proof(proposition: yes, argument: yes).holds) { INFO@mark `PF10 a proof holds only if its argument does` }
+
+// A step each way, and swapping them.
+step := Transaction(forwards: one, backwards: two)
+unless (step.forwards == one) { INFO@mark `TR1 a transaction forgot which way it goes` }
+unless (step.reversed.forwards == two) { INFO@mark `TR2 reversing does not swap the two ways` }
+unless (step.reversed.backwards == one) { INFO@mark `TR3 reversing does not swap the other way` }
+if (step.applied) { INFO@mark `TR4 a new transaction is already applied` }
+unless (step.mark_applied.applied) { INFO@mark `TR5 marking it applied does not` }
+unless (step.reversed.reversed.forwards == one) { INFO@mark `TR6 reversing twice does not come back` }
+
+// A key is pressed and released; what it toggles stays.
+key := Keyboard.Key(name: one)
+if (key.pressed) { INFO@mark `KB1 a new key is already pressed` }
+if (key.toggled) { INFO@mark `KB2 a new key is already toggled` }
+unless (key.press.pressed) { INFO@mark `KB3 pressing a key does not press it` }
+unless (key.toggled) { INFO@mark `KB4 pressing a key does not toggle it` }
+unless (key.release.pressed.not) { INFO@mark `KB5 releasing a key does not release it` }
+unless (key.toggled) { INFO@mark `KB6 releasing a key untoggled it` }
+unless (key.press.toggled.not) { INFO@mark `KB7 pressing again does not toggle back` }
+board := Keyboard(keys: (chain None))
+unless (board.add(key).keys.count == one) { INFO@mark `KB8 a board with one key added does not hold one` }
+
+// A chat is a chain of messages, each from someone.
+room := Chat(messages: (chain None))
+unless (room.count.is_zero) { INFO@mark `CH1 a new chat already holds messages` }
+room.say(one, String.of(`hi`))
+unless (room.count == one) { INFO@mark `CH2 saying something does not keep it` }
+room.say(two, String.of(`ho`))
+unless (room.count == two) { INFO@mark `CH3 saying twice keeps other than two` }
+unless (room.messages.head.value.who == one) { INFO@mark `CH4 a message forgot who said it` }
+unless (room.messages.tail.value.text == String.of(`ho`)) { INFO@mark `CH5 a message forgot what was said` }
+
+// What the machine says about itself.
+unless (exists IO.platform) { INFO@mark `IO1 the machine does not say what it is` }
+unless (exists IO.architecture) { INFO@mark `IO2 the machine does not say what it is built on` }

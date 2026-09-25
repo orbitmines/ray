@@ -29,3 +29,26 @@ unless (pushed_key.pressed) { INFO@mark `FE13 a pressed key is not pressed` }
 unless (pushed_key.toggled) { INFO@mark `FE14 a pressed key is not toggled` }
 if (pushed_key.release.pressed) { INFO@mark `FE15 a released key is still pressed` }
 unless (Keyboard(keys: (chain None)).add(fresh_key).keys.count == one) { INFO@mark `FE16 a keyboard given one key does not hold one` }
+
+// The machine's own bit. It is handed over as presence, not as a written
+// digit, so it can be read at all; before that every bit was zero and every
+// uuid was the same one.
+drawn_bit := Random.bit
+unless ((drawn_bit == one).or(drawn_bit.is_zero)) { INFO@mark `RN1 a drawn bit is neither one nor zero` }
+unless (Random.bits(four).count == four) { INFO@mark `RN2 four drawn bits are not four` }
+unless (Random.number(three) < eight) { INFO@mark `RN3 three bits spell eight or more` }
+unless (Random.below(five) < five) { INFO@mark `RN4 a number below five is not below five` }
+
+// Twenty draws are not all the same. They could be — about twice in a
+// million — but every bit being the same is what a machine that hands over
+// nothing readable looks like, which is what this is here to catch.
+ones ^keyword := zero
+zeros ^keyword := zero
+to_draw ^keyword := (two * ten)
+while to_draw {
+  if (exists (external random)) { ones = ones.succ } else { zeros = zeros.succ }
+  to_draw = to_draw.pred
+}
+unless ((ones + zeros) == (two * ten)) { INFO@mark `RN5 twenty draws are not twenty` }
+if (ones.is_zero) { INFO@mark `RN6 twenty draws were all nothing` }
+if (zeros.is_zero) { INFO@mark `RN7 twenty draws were all something` }

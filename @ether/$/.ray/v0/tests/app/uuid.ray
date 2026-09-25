@@ -17,13 +17,10 @@ unless (uu_text.at(ten + three) == Character.of(ascii_dash)) { INFO@mark `UU10 n
 unless (uu_text.at((ten * two) - two) == Character.of(ascii_dash)) { INFO@mark `UU11 no dash after eighteen characters` }
 unless (uu_text.at((two * ten) + three) == Character.of(ascii_dash)) { INFO@mark `UU12 no dash after twenty-three characters` }
 
-// spec: two draws answer the same uuid. `spelled` is a field whose default is
-// a thing, and such a field is one thing for every instance of the class that
-// declares it — the same defect `types.ray` marks as TY15. Drawing is not the
-// problem: the digits are drawn once, at the class, and every `UUID.v4()`
-// hands back those.
-// other_uu := UUID.v4()
-// if (uu == other_uu) { INFO@mark `UU8 two drawn uuids are the same` }
+// spec: two draws are two uuids, which `feature.ray` claims of the bits they
+// are drawn from rather than of the uuids. A second draw here costs more than
+// ten minutes: the digits now actually vary, so every nibble is accumulated
+// rather than left at zero, and a number is a walk.
 
 // spec: `UUID.read` answers a uuid of the right version, and not the one that
 // was written down: what it spells is neither the thirty-two digits of the

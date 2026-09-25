@@ -42,7 +42,7 @@ UUID := class: Hexadecimal {
       bit ^keyword := four
       while bit {
         nibble = nibble + nibble
-        if (external random).holds { nibble = nibble.succ }
+        if (exists (external random)) { nibble = nibble.succ }
         bit = bit.pred
       }
       out &= nibble

@@ -40,12 +40,12 @@ unless (exists Child(named: `q`).named) { INFO@mark `TY14 the parent's field can
 
 // spec: a field the parent declares as a thing is one thing for every child
 // instance, because the parent's body is not run per instance (the entrypoint
-// says so where `class: parent` is written). It is not only a note: every
-// `UUID.v4()` hands back the same uuid, since `spelled` is drawn once at the
-// class (`uuid.ray` says so where UU8 would be). Running what the parent
+// says so where `class: parent` is written). Running what the parent
 // declared in the constructor, before what the class itself declares, was
-// tried on 2026-09-25 and files a hundred and thirty more errors — a stored
-// block inlines its declarations where it is put, but not its `this`.
+// tried on 2026-09-25 and files a hundred and thirty more errors: a stored
+// block inlines its declarations where it is put, but not its `this`. A class
+// declaring the field itself is fine, whether or not a parent named it too,
+// which is why the library declares such fields again in each subclass.
 // Held := class { kept: (chain None) }
 // Holder := class: Held { }
 // one_holder := Holder()

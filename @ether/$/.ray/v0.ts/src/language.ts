@@ -3437,7 +3437,10 @@ export namespace Ray {
     // one as its bytes, and the rest are read that way language-side.
     'bits': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => { for (const bit of [...new TextEncoder().encode(interpreter.text(node))].flatMap(byte => byte.toString(2).padStart(8, '0').split(''))) { const taken = interpreter.call(each, interpreter.lazy(Text.Node.string(bit), frame, false), at, frame); if (interpreter.deref(taken, false)?.none) break; } return interpreter.NONE; } },
     'time': { arity: 0, fn: ({ interpreter, at }) => interpreter.literal_of(String(process.hrtime.bigint()), at) },
-    'random': { arity: 0, fn: ({ interpreter, at }) => interpreter.literal_of(String(env.import<typeof import('crypto')>('crypto').randomInt(2)), at) },
+    // One bit from the machine, as this language spells a bit: it is there or
+    // it is not. Handed over as a written `0` or `1` it could not be read at
+    // all, since a written literal has no equality of its own.
+    'random': { arity: 0, fn: ({ interpreter }) => env.import<typeof import('crypto')>('crypto').randomInt(2) === 1 ? interpreter.GLOBAL : interpreter.NONE },
     'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => interpreter.io(interpreter.text(location), content.none ? undefined : interpreter.text(content), at) },
     'os': { arity: 1, fn: ({ interpreter, args: [name], at }) => { const key = interpreter.text(name); const value = key === 'platform' ? process.platform : key === 'architecture' ? process.arch : process.env[key]; return value === undefined ? interpreter.NONE : interpreter.literal_of(value, at); } },
     'extend': { arity: 2, fn: ({ interpreter, args: [target, node] }) => { const into = interpreter.deref(target); return into ? interpreter.inline(node, into, { compose: true }) : undefined; } },

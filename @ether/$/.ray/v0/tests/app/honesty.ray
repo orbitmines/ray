@@ -23,8 +23,13 @@ unless (held.is_zero) { INFO@mark `HO2 unless takes the block when the condition
 
 // And what the claims are made of: equality that says yes to everything, and a
 // written space that is nothing, both make a green suite out of nothing.
-// spec: the block is written `{}`, since an enum whose block is written
-// `{ }` or on one line loses the member it is written with.
+// spec: a block an enum is written with goes across lines, or is written
+// `{}` with nothing between the braces. Written `{ }`, or with anything on
+// the same line as the last member, the enum keeps only that last member and
+// the first one is gone — the `{fields}` capture of the member rules is an
+// expression, not a group, so it takes the rest of the line. Bounding it to
+// `({fields})` does give both members back, but then the block itself counts
+// as a third thing the enum is made of.
 Side := enum near (of: `here`) | far (of: `there`) {}
 unless (Side.near == Side.near) { INFO@mark `HO3 a member is not itself` }
 if (Side.near == Side.far) { INFO@mark `HO4 two members of one enum are the same` }

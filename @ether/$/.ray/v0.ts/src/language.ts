@@ -1298,18 +1298,20 @@ export namespace Ray {
     // defines a method says so by styling that capture `^parameter`, and the
     // entrypoint declares its shape up front with `forward`.
     private grouping(frame: Node): [string, string] | undefined {
-      return this.answered(frame, 'grouping', scopes => this.grouped_by(scopes));
+      return this.answered(frame, 'grouping', scopes => this.bracket_marked(scopes, 'parameter', true));
     }
-    private grouped_by(scopes: Node[]): [string, string] | undefined {
+    // The bracket rule whose capture is marked with a word: what it opens
+    // with, and what it closes with where the closing is asked for.
+    private bracket_marked(scopes: Node[], style: string, closed: boolean): [string, string] | undefined {
       for (const scope of scopes)
         for (const rule of scope.rules) {
           const pieces = rule.pattern;
           if (!pieces || pieces.length < 3) continue;
           const open = pieces[0], inner = pieces[1], close = pieces[2];
-          if (open.kind !== 'literal' || close.kind !== 'literal' || inner.kind !== 'capture') continue;
-          if (!inner.styles.some(style => style.string.replace(/^\^/, '').trim() === 'parameter')) continue;
-          const from = open.text.trim(), to = close.text.trim();
-          if (from.length > 0 && to.length > 0) return [from, to];
+          if (open.kind !== 'literal' || inner.kind !== 'capture' || (closed && close.kind !== 'literal')) continue;
+          if (!inner.styles.some(each => each.string.replace(/^\^/, '').trim() === style)) continue;
+          const from = open.text.trim(), to = closed && close.kind === 'literal' ? close.text.trim() : '';
+          if (from.length > 0 && (!closed || to.length > 0)) return [from, to];
         }
       return undefined;
     }
@@ -1317,20 +1319,7 @@ export namespace Ray {
     // `^block`: a block is one thing, never a list of them, so an argument
     // written as one is not split.
     private scoped(frame: Node): string | undefined {
-      return this.answered(frame, 'block', scopes => this.scoping(scopes));
-    }
-    private scoping(scopes: Node[]): string | undefined {
-      for (const scope of scopes)
-        for (const rule of scope.rules) {
-          const pieces = rule.pattern;
-          if (!pieces || pieces.length < 3) continue;
-          const open = pieces[0], inner = pieces[1];
-          if (open.kind !== 'literal' || inner.kind !== 'capture') continue;
-          if (!inner.styles.some(style => style.string.replace(/^\^/, '').trim() === 'block')) continue;
-          const from = open.text.trim();
-          if (from.length > 0) return from;
-        }
-      return undefined;
+      return this.answered(frame, 'block', scopes => this.bracket_marked(scopes, 'block', false)?.[0]);
     }
     // The rest of a parameter list the same way: which literal separates one
     // parameter from the next, and which one puts a type on it, is whatever the
@@ -3639,8 +3628,9 @@ export namespace Text {
       return this._newlines = arr;
     }
 
-    lineOf(position: Node): number {
-      const cursor = position.cursor ?? 0;
+    // How many newlines come before a place: the line it is on, and where the
+    // line it is on begins, are both read off that one count.
+    private preceding(cursor: number): number {
       const nls = this.newlines;
       let lo = 0, hi = nls.length;
       while (lo < hi) {
@@ -3648,19 +3638,14 @@ export namespace Text {
         if (nls[mid] < cursor) lo = mid + 1;
         else hi = mid;
       }
-      return lo + 1;
+      return lo;
     }
 
+    lineOf(position: Node): number { return this.preceding(position.cursor ?? 0) + 1; }
+
     colOf(position: Node): number {
-      const cursor = position.cursor ?? 0;
-      const nls = this.newlines;
-      let lo = 0, hi = nls.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >>> 1;
-        if (nls[mid] < cursor) lo = mid + 1;
-        else hi = mid;
-      }
-      return lo === 0 ? cursor + 1 : cursor - nls[lo - 1];
+      const cursor = position.cursor ?? 0, lo = this.preceding(cursor);
+      return lo === 0 ? cursor + 1 : cursor - this.newlines[lo - 1];
     }
 
     line(lineNo: number): Node {

@@ -62,3 +62,9 @@ unless (Gregorian.is_leap_year(four * hundred)) { INFO@mark `TI38 four hundred i
 unless (Julian.is_leap_year(four * hundred)) { INFO@mark `TI39 four hundred is not a leap year in the Julian` }
 unless (GMT.offset.is_zero) { INFO@mark `TI40 GMT is at some offset` }
 if (UTC.leap_seconds) { INFO@mark `TI41 UTC counts leap seconds` }
+
+// Where a day falls in its year: the months before it, and itself.
+unless (Julian.day_of_year(Julian.months.head.value, one, five) == one) { INFO@mark `TI42 the first of january is not the first day of the year` }
+unless (Julian.day_of_year(Julian.months.head.next.value, one, five) == ((three * ten) + two)) { INFO@mark `TI43 the first of february is not the thirty-second day` }
+unless (Julian.day_of_year(Julian.months.head.next.next.value, one, four) == ((six * ten) + one)) { INFO@mark `TI44 the first of march in a leap year is not the sixty-first day` }
+unless (Julian.day_of_year(Julian.months.head.next.next.value, one, five) == (six * ten)) { INFO@mark `TI45 the first of march in a plain year is not the sixtieth day` }

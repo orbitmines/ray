@@ -101,3 +101,23 @@ unless (cite.title == String.of(`on rays`)) { INFO@mark `RF5 a reference forgot 
 unless (exists Accessor.Permission.confidential) { INFO@mark `AC3 there is no confidential permission` }
 unless (Accessor.Permission.components.count == four) { INFO@mark `AC4 there are other than four permissions` }
 unless (Accessor(level: Accessor.Permission.public).level == Accessor.Permission.public) { INFO@mark `AC5 an accessor forgot its level` }
+
+// A quest is what there is to do: the steps it takes, and whether it is done.
+errand := Quest(name: String.of(`fetch`), goal: wi)
+if (errand.completed) { INFO@mark `QU1 a new quest is already done` }
+unless (errand.difficulty.is_zero) { INFO@mark `QU2 a quest with no steps is difficult` }
+errand.step(String.of(`go`))
+errand.step(String.of(`take`))
+unless (errand.difficulty == two) { INFO@mark `QU3 a quest of two steps is not two hard` }
+unless (errand.complete.completed) { INFO@mark `QU4 completing a quest does not` }
+unless (errand.goal == wi) { INFO@mark `QU5 a quest forgot what it is for` }
+// Posting answers the quest, the way spawning answers the persona.
+unless (wg.post(errand) == errand) { INFO@mark `QU6 posting a quest does not answer it` }
+unless (wg.quests.count == one) { INFO@mark `QU11 posting a quest does not put it in the world` }
+
+// A task is a quest that can be interrupted.
+job := Task(name: String.of(`carry`), goal: wi)
+if (job.interrupted) { INFO@mark `QU7 a new task is already interrupted` }
+unless (job.interrupt.interrupted) { INFO@mark `QU8 interrupting a task does not` }
+if (job.completed) { INFO@mark `QU9 an interrupted task is done` }
+unless (job.difficulty.is_zero) { INFO@mark `QU10 a task with no steps is difficult` }

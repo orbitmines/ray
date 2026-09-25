@@ -60,9 +60,9 @@ Random := class {
     total
   )
 }
-Iterable.components.hierarchy &= class {
-  random => .at(Random.below(.count))
-}
+// spec: one of a collection at random is written in Ray.ray, where `Iterable`
+// is written: a class gains nothing from a file read before the one that
+// writes it, and Feature.ray is read first.
 
 // `choose`: one of a collection, or several. spec: constraints on the choice
 // (`choose n: Nat`, `choose{unique}`, `choose 50%`) are the filters the

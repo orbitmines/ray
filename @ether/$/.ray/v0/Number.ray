@@ -474,21 +474,9 @@ Probability := Number{. < two}
 //     def `iterable: Applicable` = iterable.`method`
 //   end
 // end
-Iterable.components.hierarchy &= class {
-  sum => (
-    total ^keyword := zero
-    this for { total = total + it.value }
-    total
-  )
-  product => (
-    total ^keyword := one
-    this for { total = total * it.value }
-    total
-  )
-}
-Σ{ }{iterable} ^keyword => (iterable).sum
-∑{ }{iterable} ^keyword => (iterable).sum
-∏{ }{iterable} ^keyword => (iterable).product
+// spec: what a chain of numbers adds to and multiplies to is written in
+// Ray.ray, where `Iterable` is written: a class gains nothing from a file that
+// is read before the one that writes it, and Number.ray is read first.
 
 // def u`length: Decimal.Positive.String` = Binary.Positive{.length == length}
 // def i`length: Decimal.Positive.String` = Binary.Positive{.length == length}

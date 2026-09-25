@@ -108,3 +108,27 @@ unless (long_chain.count == (four * ten)) { INFO@mark `RR42 forty things kept do
 stepped ^keyword := zero
 long_chain for { stepped = stepped.succ }
 unless (stepped == (four * ten)) { INFO@mark `RR43 walking forty things does not reach forty` }
+
+// What holds for every element, and what holds for some.
+threes ^keyword := chain None
+threes &= one
+threes &= two
+threes &= three
+unless (threes every { it.value.nonzero }) { INFO@mark `RR44 not every one of one, two and three is something` }
+if (threes every { it.value == one }) { INFO@mark `RR45 every one of them is one` }
+unless (threes some { it.value == two }) { INFO@mark `RR46 none of them is two` }
+if (threes some { it.value == (three + three) }) { INFO@mark `RR47 one of them is six` }
+unless (threes.at(zero).value == one) { INFO@mark `RR48 the one at the start is not the first` }
+unless (threes.at(two).value == three) { INFO@mark `RR49 the one two along is not the third` }
+unless (threes.count == three) { INFO@mark `RR50 three things do not count three` }
+
+// What a chain says about itself.
+unless (threes.bounded) { INFO@mark `RR51 a chain of three is not bounded` }
+if (threes.unbounded) { INFO@mark `RR52 a chain of three is unbounded` }
+unless (threes.connected) { INFO@mark `RR53 a chain is not connected` }
+unless (threes.consistent) { INFO@mark `RR54 a chain is not consistent` }
+unless (threes.acyclic) { INFO@mark `RR55 a chain of three comes back around` }
+unless (threes.length == three) { INFO@mark `RR56 a chain is not as long as it counts` }
+if (threes.undirected) { INFO@mark `RR57 a chain is undirected` }
+unless (threes.first.value == one) { INFO@mark `RR58 the first of a chain is not what was given first` }
+unless (threes.entry.value == one) { INFO@mark `RR59 what a chain is entered at is not its first` }

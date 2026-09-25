@@ -103,3 +103,32 @@ unless (zero.factorial == one) { INFO@mark `N76 nothing factorial is not one` }
 unless (six.digits_in(ten).count == one) { INFO@mark `N77 six is spelled with other than one digit in ten` }
 unless (six.digits_in(two).count == three) { INFO@mark `N78 six is spelled with other than three digits in two` }
 unless (one.digits_in(two).count == one) { INFO@mark `N79 one is spelled with other than one digit in two` }
+
+// What a chain of numbers adds to, and what it multiplies to.
+counted ^keyword := chain None
+counted &= one
+counted &= two
+counted &= three
+unless (counted.sum == six) { INFO@mark `N80 one, two and three do not add to six` }
+unless (counted.product == six) { INFO@mark `N81 one, two and three do not multiply to six` }
+only_one ^keyword := chain None
+only_one &= five
+unless (only_one.sum == five) { INFO@mark `N82 one thing does not add to itself` }
+unless (only_one.product == five) { INFO@mark `N83 one thing does not multiply to itself` }
+
+// The digits a number is spelled with, read back as the number.
+unless (Number.from_digits(ten, counted) == ((hundred + (two * ten)) + three)) { INFO@mark `N84 one, two and three in ten do not spell a hundred and twenty-three` }
+unless (Number.from_digits(two, counted) == (ten + one)) { INFO@mark `N85 one, two and three in two do not spell eleven` }
+
+// What a number says about itself.
+unless (five.is_natural) { INFO@mark `N86 five is not a natural number` }
+unless (five.positive) { INFO@mark `N87 five is not positive` }
+if (five.negative) { INFO@mark `N88 five is negative` }
+unless (five.abs == five) { INFO@mark `N89 the size of five is not five` }
+if (exists five.sign) { INFO@mark `N90 a natural number has a sign` }
+
+// A block read once for each of them, told which round it is on.
+rounds_run ^keyword := zero
+rounds_seen ^keyword := zero
+three.rounds({ rounds_run = rounds_run.succ }, zero)
+unless (rounds_run == three) { INFO@mark `N91 three rounds are not three` }

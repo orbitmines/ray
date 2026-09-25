@@ -106,3 +106,18 @@ unless (room.messages.tail.value.text == String.of(`ho`)) { INFO@mark `CH5 a mes
 // What the machine says about itself.
 unless (exists IO.platform) { INFO@mark `IO1 the machine does not say what it is` }
 unless (exists IO.architecture) { INFO@mark `IO2 the machine does not say what it is built on` }
+
+// One of a collection, and several. Which one is the machine's to say; that
+// there is one, and that it is one of them, is not.
+bag := chain None
+bag &= one
+bag &= two
+bag &= three
+unless (exists bag.random) { INFO@mark `RN8 a collection does not answer one of itself` }
+unless (exists Choice.choose(bag)) { INFO@mark `RN9 choosing from a collection answers nothing` }
+unless (Choice.choose_count(bag, two).count == two) { INFO@mark `RN10 choosing two does not answer two` }
+// What `at`, `first` and `random` answer is the link, as everywhere else; what
+// it holds is its value.
+picked_one := bag.random.value
+unless ((picked_one == one).or((picked_one == two).or(picked_one == three))) { INFO@mark `RN11 what was chosen is not one of them` }
+unless (exists Choice.coin) { INFO@mark `RN12 a coin lands on neither side` }

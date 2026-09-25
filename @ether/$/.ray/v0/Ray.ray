@@ -199,6 +199,31 @@ Iterable := class: Ordered {
 // A program is what it is written as: the statements, in the order they are
 // written on the page, each of them a program in turn. What order they *run*
 // in is another thing, and a goto is what says it.
+// What a chain of numbers adds to, and what it multiplies to. Written here
+// rather than in Number.ray, which is read before this file: a class gains
+// nothing from a file read earlier than the one that writes it.
+Iterable.components.hierarchy &= class {
+  sum => (
+    total ^keyword := zero
+    this for { total = total + it.value }
+    total
+  )
+  product => (
+    total ^keyword := one
+    this for { total = total * it.value }
+    total
+  )
+}
+// One of a collection, at random. Written here for the same reason: what
+// `Random` is, is Feature.ray's to say, and a name settles wherever it is
+// written, but a class only gains from a file read after the one writing it.
+Iterable.components.hierarchy &= class {
+  random => .at(Random.below(.count))
+}
+Σ{ }{iterable} ^keyword => (iterable).sum
+∑{ }{iterable} ^keyword => (iterable).sum
+∏{ }{iterable} ^keyword => (iterable).product
+
 Ray := class: Iterable {
   entry => this
 

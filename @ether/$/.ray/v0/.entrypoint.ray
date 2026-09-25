@@ -143,6 +143,18 @@ Node := base class {
     def
   )
 
+  // Where an operator stands among the operators, in the order they were
+  // written down: the machine counts them out one at a time, so the number is
+  // the language's own. What was written later binds tighter. It is written
+  // here rather than where numbers are, since adding it to `Node` from another
+  // file leaves it nowhere at all.
+  precedence => (
+    total ^keyword := zero
+    external declared this { total = total.succ }
+
+    total
+  )
+
   -- ^punctuation (call) => call(this)
   
   = ^punctuation (x) => (
@@ -602,6 +614,10 @@ Program := class: Iterable {
     }
     out
   )
+  // What it is written as, as written: a statement can be read back rather
+  // than only held, which is what telling a jump from anything else wants, and
+  // what reading a program with a level's rules in scope wants.
+  text => external text this
   entry => .written.entry
   first => .written.first
   last => .written.last
@@ -773,14 +789,44 @@ chainable ^keyword := class {
 // left: two times three and one is eight, and `ten - two - three` is neither
 // five nor eleven.
 // spec: written as one rule rather than two, since two of this shape with the
-// same captures and no filter are one rule whatever their guards say. It is
-// kept out for now: declaration order is not precedence order. `.precedence`
-// counts where an operator was written down, and in the library `==` and `<`
-// are written after `*` and `+`, so a comparison binds tighter than a product
-// and `(two * three) == six` groups as `two * (three == six)`. Either the
-// operators are written down in the order they bind, or precedence is said
-// rather than counted.
-// {a} [x] {b} [y] {c} => if (x.precedence >= y.precedence) { (a [x] b) [y] c } else { a [x] (b [y] c) }
+// same captures and no filter are one rule whatever their guards say. Kept
+// out, for two reasons, both measured:
+//   · written without a filter it does not fire. Given a filter saying which
+//     operators it takes, a rule of this shape does what it says — that is
+//     what `tests/app/precedence.ray` claims, and `ten - two - three` is five
+//     there. Written `{a} [x] {b} [y] {c}`, taking whatever stands there, it
+//     never fires: `(a [x] b)` alone is not `ten - two`, and a guard that is
+//     plainly true changes nothing. That is the one thing left, and it is
+//     about matching, not about precedence.
+//
+//     Everything else it wanted is here. Its body binds what it answers
+//     rather than being the branch that chose it, which is what made it
+//     answer neither grouping. It is spelled `at_least` rather than `>=`,
+//     since a body that spells an operator is held back until that spelling
+//     is a name — which is what `missing` was doing to it all along. And the
+//     machine counts right: what an operator names is its own method, and how
+//     many were written before it is the count, so `:=` counts out nothing.
+//     What `[x]` hands the guard is still a name standing for something
+//     rather than that number, whether it is asked as `x.precedence` or given
+//     to a function.
+//     With all of that, four of six arithmetic claims hold with the rule on —
+//     `one + two * three` is seven and `one + two + three` is six — and the
+//     two that want the left pair taken first do not: `two * three + one` is
+//     not seven and `ten - two - three` is not five. The guard answers the
+//     same way whichever side is tighter, so what is left is why.
+//   · and the order it counts may not be the order they bind. In Number.ray
+//     `+`, `-`, `*` are written in that order, which is right, but the
+//     comparisons are written after them, which is not. A `forward` for each,
+//     ahead of everything, does register a rule with that head — but the
+//     order was unchanged.
+// Either the operators are written down in the order they bind, or precedence
+// is said rather than counted.
+// {a} [x] {b} [y] {c} => (
+//   held ^keyword := a [x] (b [y] c)
+//   if (x.precedence.at_least(y.precedence)) { held = (a [x] b) [y] c }
+//
+//   held
+// )
 
 // Pointing apart: both apply to the shared operand (Grammar.ray:189).
 // spec: the draft tells two things apart that read alike here. Left- and

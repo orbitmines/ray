@@ -44,8 +44,8 @@ unless ((two * three) == six) { INFO@mark `PR10 an operator the rule does not as
 unless ((ten - two) == eight) { INFO@mark `PR11 one less on its own stopped working` }
 unless ((one + two + three) == six) { INFO@mark `PR12 three added is not six` }
 
-// spec: the two rules that group by precedence are written `=> body if
-// condition`, and a trailing `if` is not implemented. Written
+// spec: the two rules that group by precedence are written with a trailing
+// `if`, and a trailing `if` is not implemented. Written
 // `{a} if {cond} => if cond { a }` it answers the value where the condition
 // holds, and is not lazy — what stands to its left is the receiver, which has
 // already been read — so `two if false` is still two. Written
@@ -54,3 +54,16 @@ unless ((one + two + three) == six) { INFO@mark `PR12 three added is not six` }
 // the space before the cursor has already been stepped over. Until they are
 // answered, two operators of different kinds group right to left, so
 // two times three and one is eight rather than seven.
+
+// spec: where an operator stands among the operators, in the order they were
+// written down, is answered by `precedence` on `Node` — the machine counts
+// them out and the language holds the number. Nothing is claimed about it
+// here: a written text is not how an operator reaches it (`` `+` ``.precedence
+// stands nowhere, and so does `` `*` ``), and the only thing that reaches it
+// as an operator is a rule of the shape above.
+//
+// That order is not the order they bind, which is what keeps the grouping rule
+// out. Either the operators are written down in the order they bind — a
+// `forward` for each, ahead of everything, does not do it, since a forward
+// declaration is not a rule with that head — or precedence is said rather than
+// counted.

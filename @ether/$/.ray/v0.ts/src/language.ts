@@ -1719,25 +1719,29 @@ export namespace Ray {
     // Where an operator stands among the operators, in the order they were
     // written down: what `precedence` counts out. The spellings are gathered
     // once per version, since the answer only changes when the rules do.
-    private ranking?: { version: number; order: Map<string, number> };
+    private ranking?: { version: number; order: string[] };
     operator_rank(node: Node): number {
       if (this.ranking?.version !== this.version) {
-        const at = new Map<string, string>();
+        const at: string[] = [];
         for (const scope of [this.GLOBAL, ...this.frames.values()])
           for (const rule of scope.rules) {
             const impl = scope.methods?.get(rule);
             const first = rule.pattern?.[0];
             if (impl === undefined || impl.forward || first?.kind !== 'literal' || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
-            const head = first.text.trim();
-            const where = rule.position === undefined ? '' : `${rule.position.source.location}:${String(rule.position.begin).padStart(9, '0')}`;
-            const held = at.get(head);
-            if (held === undefined || where < held) at.set(head, where);
+            if (rule.position === undefined) continue;
+            at.push(`${rule.position.source.location}:${String(rule.position.begin).padStart(9, '0')}`);
           }
-        const order = new Map<string, number>();
-        [...at].sort((one, other) => one[1] < other[1] ? -1 : one[1] > other[1] ? 1 : 0).forEach(([head], index) => order.set(head, index));
+        const order = at.sort();
         this.ranking = { version: this.version, order };
       }
-      return this.ranking.order.get(this.text(node).trim()) ?? 0;
+      // What the operator names is its own method, and where that was written
+      // down is the order asked for: how many were written before it.
+      const target = this.diagnostics.muted(() => this.safely(() => this.deref(node, false, false))) ?? node;
+      const where = target.position === undefined ? undefined : `${target.position.source.location}:${String(target.position.begin).padStart(9, '0')}`;
+      if (where === undefined) return 0;
+      let rank = 0;
+      while (rank < this.ranking.order.length && this.ranking.order[rank] < where) rank++;
+      return rank;
     }
     operator_end(cursor: Text.Node, j: number, frame: Node, set?: [Node, Node][]): number {
       let end = j;

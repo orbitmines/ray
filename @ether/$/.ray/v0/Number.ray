@@ -257,6 +257,10 @@ Number := class: Ray {
   // `Decimal.% => this / 100`: the fraction of a hundred this number is.
   percent => this / hundred
 
+  // Whether this is not below another, written as a word: a rule body that
+  // spells an operator is held back until that spelling is a name, and the
+  // rule that groups by precedence is written with this for that reason.
+  at_least (other: Number) => (this < other).not
   min (other: Number) => if (this < other) { this } else { other }
   max (other: Number) => if (this < other) { other } else { this }
 
@@ -590,17 +594,4 @@ digit_of (byte) => (
 // actually is — sixty-four bits, say — is other code than a number that is
 // only a number, and the two are equivalent exactly where the refinement
 // holds.
-
-// Where an operator stands among the operators, in the order they were
-// written down: the machine counts them out one at a time, so the number the
-// language holds is the language's own. What was written later binds tighter.
-Node.components.hierarchy &= class {
-  precedence => (
-    total ^keyword := zero
-    step (b) => (total = total.succ)
-    external declared this step
-
-    total
-  )
-}
 

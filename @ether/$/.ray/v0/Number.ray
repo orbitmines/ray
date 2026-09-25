@@ -590,3 +590,17 @@ digit_of (byte) => (
 // actually is — sixty-four bits, say — is other code than a number that is
 // only a number, and the two are equivalent exactly where the refinement
 // holds.
+
+// Where an operator stands among the operators, in the order they were
+// written down: the machine counts them out one at a time, so the number the
+// language holds is the language's own. What was written later binds tighter.
+Node.components.hierarchy &= class {
+  precedence => (
+    total ^keyword := zero
+    step (b) => (total = total.succ)
+    external declared this step
+
+    total
+  )
+}
+

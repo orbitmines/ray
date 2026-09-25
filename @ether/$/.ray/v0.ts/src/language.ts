@@ -991,7 +991,20 @@ export namespace Ray {
         const shorter = head !== undefined && this.longest(cursor, head[1], frame) > head[2] + 1;
         if ((!found || shorter) && value?.ref?.literal && this.seeking === undefined && this.bound(value) === undefined && this.diagnostics.muted(() => this.safely(() => this.deref(value, false))) !== undefined)
           found = this.best(value, cursor, frame, { spaced, operand, forwards: reads !== undefined }) ?? found;
-        if (found && (this.declares(value, found.rule) || (!(found.match.spanned && this.resolved(value)?.callable) && !(this.resolved(value)?.fn !== undefined && this.opens_call(found.rule))))) { value = this.fire(found, cursor, frame); continue; }
+        if (found && (this.declares(value, found.rule) || (!(found.match.spanned && this.resolved(value)?.callable) && !(this.resolved(value)?.fn !== undefined && this.opens_call(found.rule))))) {
+          const at = cursor.cursor;
+          const answered = this.fire(found, cursor, frame);
+          // A rule that answers nothing has not applied: what is written is
+          // read again with that rule left out, and only if nothing else
+          // stands there is the nothing the answer.
+          if (this.resolved(answered)?.none === true && found.rule.pattern!.some(piece => piece.kind === 'operator')) {
+            cursor.cursor = at;
+            const instead = this.best(value, cursor, frame, { spaced, operand, forwards: reads !== undefined, besides: found.rule });
+            if (instead) { value = this.fire(instead, cursor, frame); continue; }
+            cursor.cursor = at;
+          }
+          value = answered; continue;
+        }
 
         if (reads) { const at = cursor.cursor; value = this.call(value!, this.raw(cursor, reads), cursor.span(at, Math.max(at, cursor.cursor - 1)), frame); continue; }
 
@@ -1259,7 +1272,7 @@ export namespace Ray {
       return missing;
     }
 
-    best(receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean; self?: boolean; leading?: boolean }): Found | undefined {
+    best(receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean; self?: boolean; leading?: boolean; besides?: Node }): Found | undefined {
       let best: Found | undefined;
       const set = opts.leading
         ? this.only(this.chain(frame).receiver, true)
@@ -1268,12 +1281,16 @@ export namespace Ray {
           : this.candidates(receiver, frame);
       const ahead = cursor.source.value[this.skip(cursor, cursor.cursor)];
       for (const [rule, impl] of set) {
+        if (rule === opts.besides) continue;
         const shape = this.shaped(rule);
         if (shape.literal) continue;
         if (shape.head !== undefined && ahead !== undefined && shape.head !== ahead) continue;
         if (opts.forwards && !impl.forward) continue;
         if (!!opts.newline !== shape.newline) continue;
-        if (shape.operator && (this.rewriting.has(rule) || this.missing(rule, impl).length > 0)) continue;
+        // A rewrite's body is what it reduced to, and reducing it again is what
+        // two rules of this shape would do to each other, so while one is
+        // running none of them stands.
+        if (shape.operator && (this.rewriting.size > 0 || this.missing(rule, impl).length > 0)) continue;
         const pieces = rule.pattern!;
         const leading = shape.leading;
         const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, operand: opts.operand, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule), closure: impl.closure });
@@ -1699,11 +1716,37 @@ export namespace Ray {
       }
       return false;
     }
+    // Where an operator stands among the operators, in the order they were
+    // written down: what `precedence` counts out. The spellings are gathered
+    // once per version, since the answer only changes when the rules do.
+    private ranking?: { version: number; order: Map<string, number> };
+    operator_rank(node: Node): number {
+      if (this.ranking?.version !== this.version) {
+        const at = new Map<string, string>();
+        for (const scope of [this.GLOBAL, ...this.frames.values()])
+          for (const rule of scope.rules) {
+            const impl = scope.methods?.get(rule);
+            const first = rule.pattern?.[0];
+            if (impl === undefined || impl.forward || first?.kind !== 'literal' || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
+            const head = first.text.trim();
+            const where = rule.position === undefined ? '' : `${rule.position.source.location}:${String(rule.position.begin).padStart(9, '0')}`;
+            const held = at.get(head);
+            if (held === undefined || where < held) at.set(head, where);
+          }
+        const order = new Map<string, number>();
+        [...at].sort((one, other) => one[1] < other[1] ? -1 : one[1] > other[1] ? 1 : 0).forEach(([head], index) => order.set(head, index));
+        this.ranking = { version: this.version, order };
+      }
+      return this.ranking.order.get(this.text(node).trim()) ?? 0;
+    }
     operator_end(cursor: Text.Node, j: number, frame: Node, set?: [Node, Node][]): number {
       let end = j;
       for (const [rule, impl] of set ?? this.chain(frame).receiver) {
         const first = rule.pattern![0];
-        if (impl.forward || first?.kind !== 'literal' || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
+        // What stands between two operands takes the one on its right. `.` is
+        // written the same way and takes nothing, so it is not one of these,
+        // and a rule asking for two operators does not rewrite member access.
+        if (impl.forward || first?.kind !== 'literal' || (impl.params?.length ?? 0) === 0 || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
         const k = this.literal(cursor, j, first.text);
         if (k > end) end = k;
       }
@@ -3526,7 +3569,7 @@ export namespace Ray {
       case 'space': return '{ }';
       case 'newline': return '{\\n}';
       case 'capture': return `{${piece.raw ? 'literal ' : ''}${piece.name}${piece.type ? `: ${piece.type}` : ''}}`;
-      case 'operator': return `[${piece.name}]`;
+      case 'operator': return `[${piece.name}${piece.filter ? `: ${piece.filter}` : ''}]`;
     }
   };
 
@@ -3575,6 +3618,12 @@ export namespace Ray {
     'random': { arity: 0, fn: ({ interpreter }) => env.import<typeof import('crypto')>('crypto').randomInt(2) === 1 ? interpreter.GLOBAL : interpreter.NONE },
     // The first statement a program is written as, and what is left of it: the
     // chain that holds them is written in the language, not here.
+    // What a program is written as, as written: a statement can be read back
+    // rather than only held, so the language can tell one from another.
+    'text': { arity: 1, fn: ({ interpreter, args: [node], at }) => { const held = interpreter.deref(node); const span = held?.body ?? held?.lazy?.span ?? node.lazy?.span; return span === undefined ? interpreter.NONE : interpreter.literal_of(span.string, at); } },
+    // How far along an operator was written down, counted out one at a time so
+    // that the language builds the number itself.
+    'declared': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => { const rank = interpreter.operator_rank(node); for (let step = 0; step < rank; step++) { const taken = interpreter.call(each, interpreter.GLOBAL, at, frame); if (interpreter.deref(taken, false)?.none) break; } return interpreter.NONE; } },
     'first': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.first_statement(node) },
     'rest': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.rest_of(node) },
     'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => interpreter.io(interpreter.text(location), content.none ? undefined : interpreter.text(content), at) },

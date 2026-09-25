@@ -730,7 +730,7 @@ chainable ^keyword := class {
 // rules of this shape whose captures are named the same are one rule, and the
 // one written later is the one that is kept. So each of these names its own,
 // until a rule's operator filters are part of what tells it from another.
-{first} [sets: assigns] {held} [ends: separates] {then} => (first [sets] held) [ends] then
+{a} [x: assigns] {b} [y: separates] {c} => (a [x] b) [y] c
 
 // Precedence: of two operators around a shared operand, the
 // tighter one groups first (precedence = declaration order).
@@ -772,8 +772,15 @@ chainable ^keyword := class {
 // how to write them. Until all of it is answered the language groups right to
 // left: two times three and one is eight, and `ten - two - three` is neither
 // five nor eleven.
-{a} [x] {b} [y] {c} => (a [x] b) [y] c if x.precedence >= y.precedence
-{a} [x] {b} [y] {c} => a [x] (b [y] c) if x.precedence < y.precedence
+// spec: written as one rule rather than two, since two of this shape with the
+// same captures and no filter are one rule whatever their guards say. It is
+// kept out for now: declaration order is not precedence order. `.precedence`
+// counts where an operator was written down, and in the library `==` and `<`
+// are written after `*` and `+`, so a comparison binds tighter than a product
+// and `(two * three) == six` groups as `two * (three == six)`. Either the
+// operators are written down in the order they bind, or precedence is said
+// rather than counted.
+// {a} [x] {b} [y] {c} => if (x.precedence >= y.precedence) { (a [x] b) [y] c } else { a [x] (b [y] c) }
 
 // Pointing apart: both apply to the shared operand (Grammar.ray:189).
 // spec: the draft tells two things apart that read alike here. Left- and

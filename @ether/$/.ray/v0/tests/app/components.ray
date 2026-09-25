@@ -64,3 +64,37 @@ unless (exists k.head.next) { INFO@mark `C18 a hand-built chain is not linked fo
 unless (exists k.tail.previous) { INFO@mark `C19 a hand-built chain is not linked backward` }
 if (exists k.head.previous) { INFO@mark `C20 the head of a chain has a previous` }
 unless (k.count == two) { INFO@mark `C21 a chain of two does not count two` }
+
+// A class extended later reaches every instance built from it, which is what
+// referring to the class through the hierarchy is for.
+Late ^keyword := class { }
+built_before ^keyword := Late()
+Late.components.hierarchy &= class {
+  added => one
+}
+unless (built_before.added == one) { INFO@mark `C24 a class extended later does not reach an instance built before` }
+built_after ^keyword := Late()
+unless (built_after.added == one) { INFO@mark `C25 a class extended later does not reach an instance built after` }
+
+// What a class is made of, three deep.
+G1 ^keyword := class {
+  depth => one
+}
+G2 ^keyword := class: G1 {
+  depth => two
+}
+G3 ^keyword := class: G2 {
+  depth => three
+}
+unless (G3().depth == three) { INFO@mark `C26 the nearest class does not answer` }
+unless (G2().depth == two) { INFO@mark `C27 the middle class answers its parent's` }
+unless (G1().depth == one) { INFO@mark `C28 the first class answers something else` }
+unless (exists G3.super) { INFO@mark `C29 a class three deep has no super` }
+unless (G3.super.depth == two) { INFO@mark `C30 super does not reach the class it is built on` }
+
+// Superposing is a copy: what it is made of gains, and the left side does not.
+first ^keyword := A()
+second ^keyword := A()
+both ^keyword := first | second
+unless (both.components.count == two) { INFO@mark `C31 superposing two does not make two components` }
+unless (first.components.count.is_zero) { INFO@mark `C32 superposing changed the left side` }

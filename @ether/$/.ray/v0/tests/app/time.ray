@@ -68,3 +68,28 @@ unless (Julian.day_of_year(Julian.months.head.value, one, five) == one) { INFO@m
 unless (Julian.day_of_year(Julian.months.head.next.value, one, five) == ((three * ten) + two)) { INFO@mark `TI43 the first of february is not the thirty-second day` }
 unless (Julian.day_of_year(Julian.months.head.next.next.value, one, four) == ((six * ten) + one)) { INFO@mark `TI44 the first of march in a leap year is not the sixty-first day` }
 unless (Julian.day_of_year(Julian.months.head.next.next.value, one, five) == (six * ten)) { INFO@mark `TI45 the first of march in a plain year is not the sixtieth day` }
+
+// A time is how long since its epoch, in the calendar it is counted by.
+here := Time(calendar: Julian, since_epoch: seconds(five))
+later := Time(calendar: Julian, since_epoch: seconds(eight))
+unless (here == here) { INFO@mark `TI46 a time is not itself` }
+if (here == later) { INFO@mark `TI47 two times are the same` }
+unless (here < later) { INFO@mark `TI48 five seconds in is not before eight` }
+if (later < here) { INFO@mark `TI49 eight seconds in is before five` }
+unless ((later - here).as_seconds == three) { INFO@mark `TI50 the three seconds between them are not three` }
+unless ((here + seconds(three)) == later) { INFO@mark `TI51 five seconds on plus three is not eight` }
+unless (here.as(Gregorian).calendar == Gregorian) { INFO@mark `TI52 reading a time by another calendar does not` }
+unless (here.as(Gregorian) == here) { INFO@mark `TI53 the same moment read by another calendar is another moment` }
+unless (here.since_calendar_epoch.as_seconds == five) { INFO@mark `TI54 a time with no epoch of its own is not since its calendar's` }
+
+// A time counted from another time.
+since_then := Time(calendar: Julian, since_epoch: seconds(two), epoch: here)
+unless (since_then.since_calendar_epoch.as_seconds == seven) { INFO@mark `TI55 two seconds after five is not seven since the start` }
+unless (since_then < Time(calendar: Julian, since_epoch: seconds(eight))) { INFO@mark `TI56 seven is not before eight` }
+
+// What a segment of a calendar is.
+recurring := Calendar.Segment(name: one, length: seconds(two), period: seconds(two))
+plain_segment := Calendar.Segment(name: two, length: seconds(two))
+unless (recurring.is_recurring) { INFO@mark `TI57 a segment with a period does not recur` }
+if (plain_segment.is_recurring) { INFO@mark `TI58 a segment without a period recurs` }
+unless (recurring.epoch == one) { INFO@mark `TI59 a segment does not start at one` }

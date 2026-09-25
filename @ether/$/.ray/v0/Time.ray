@@ -114,7 +114,14 @@ Time := class {
   since_epoch: Quantity
   epoch?: Time
 
-  since_calendar_epoch => if (exists .epoch) { .since_epoch + .epoch.since_calendar_epoch } else { .since_epoch }
+  // The answer is bound before it is handed back: a branch holding a quantity
+  // is not that quantity, so comparing one with another compares the branches.
+  since_calendar_epoch => (
+    held ^keyword := .since_epoch
+    if (exists .epoch) { held = .since_epoch + .epoch.since_calendar_epoch }
+
+    held
+  )
   - (other: Time) => .since_calendar_epoch - other.since_calendar_epoch
   + (duration: Quantity) => Time(calendar: .calendar, since_epoch: .since_epoch + duration, epoch: .epoch)
   == (other: Time) => .since_calendar_epoch == other.since_calendar_epoch

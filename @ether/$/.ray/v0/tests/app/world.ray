@@ -121,3 +121,13 @@ if (job.interrupted) { INFO@mark `QU7 a new task is already interrupted` }
 unless (job.interrupt.interrupted) { INFO@mark `QU8 interrupting a task does not` }
 if (job.completed) { INFO@mark `QU9 an interrupted task is done` }
 unless (job.difficulty.is_zero) { INFO@mark `QU10 a task with no steps is difficult` }
+
+// Where someone is says how they are, and where they are not, what they said
+// they were.
+away := Persona(name: String.of(`away`))
+unless (away.status_now == Status.offline) { INFO@mark `PS1 someone with nowhere to be is not offline` }
+somewhere := Instance(location: here)
+present := Persona(name: String.of(`present`), presence: somewhere)
+unless (present.status_now == Status.online) { INFO@mark `PS2 someone somewhere is not as that place is` }
+if (present.status_now == Status.offline) { INFO@mark `PS3 someone somewhere is offline anyway` }
+unless (present.status == Status.offline) { INFO@mark `PS4 what they said they were is not what they said` }

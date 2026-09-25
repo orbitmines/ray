@@ -3352,10 +3352,22 @@ export namespace Ray {
     // any group. This is the order they are written in, not the order they
     // run in — a goto says that, and it is read off these.
     statements_of(span: Text.Node): Text.Node[] {
-      const text = span.source.value, end = span.end + 1, out: Text.Node[] = [];
+      let text = span.source.value, end = span.end + 1;
+      // A span that is one group all the way through is read as what the group
+      // holds: what is written between the brackets is the statements.
+      let from = span.begin;
+      while (from < end) {
+        let first = from; while (first < end && /\s/.test(text[first])) first++;
+        const close = this.group_end(text, first, end);
+        if (close <= first || close < end) break;
+        let last = close - 2; while (last > first && /\s/.test(text[last])) last--;
+        if (last <= first) break;
+        from = first + 1; end = last + 1; span = span.span(from, end - 1);
+      }
+      const out: Text.Node[] = [];
       let begin = -1;
       const close_at = (j: number) => { const k = this.group_end(text, j, end); return k > j ? k : -1; };
-      for (let j = span.begin; j < end;) {
+      for (let j = from; j < end;) {
         if (text[j] === '\n') {
           if (begin >= 0) { let last = j - 1; while (last >= begin && /\s/.test(text[last])) last--; if (last >= begin) out.push(span.span(begin, last)); }
           begin = -1; j++; continue;
@@ -3368,28 +3380,30 @@ export namespace Ray {
       if (begin >= 0) { let last = end - 1; while (last >= begin && /\s/.test(text[last])) last--; if (last >= begin) out.push(span.span(begin, last)); }
       return out;
     }
-    // A program is what it is written as, read off only when it is asked for:
-    // `**` is read at every method definition, and splitting a body there
-    // would be reading the whole library twice over.
+    // A program is a span of text and the frame it was written in. What it is
+    // written *as* is not built here: the first statement and what is left of
+    // it are handed over, and the chain that holds them is the language's own.
     private written_as(span: Text.Node, frame: Node): Node {
       const one = new Node(this.diagnostics, span);
       one.body = span; one.closure = frame; one.params = [];
-      let held: Node | undefined;
-      one.method('written', () => {
-        if (held !== undefined) return held;
-        // What follows one statement is asked of it, the way what it is
-        // written as is: a name a node merely holds is not found the way a
-        // method on it is.
-        const made = this.statements_of(span).map(each => this.written_as(each, frame));
-        made.forEach((statement, k) => {
-          const after = made[k + 1] ?? this.NONE, before = made[k - 1] ?? this.NONE;
-          statement.method('next', () => after, 0);
-          statement.method('previous', () => before, 0);
-        });
-        held = made[0];
-        return held ?? this.NONE;
-      }, 0);
       return one;
+    }
+    first_statement(node: Node): Node {
+      const program = this.deref(node);
+      const span = program?.body;
+      if (span === undefined) return this.NONE;
+      const [one] = this.statements_of(span);
+      return one === undefined ? this.NONE : this.written_as(one, program!.closure ?? this.GLOBAL);
+    }
+    rest_of(node: Node): Node {
+      const program = this.deref(node);
+      const span = program?.body;
+      if (span === undefined) return this.NONE;
+      const made = this.statements_of(span);
+      if (made.length <= 1) return this.NONE;
+      // From the second statement to where the last one ends: what closed the
+      // group is not a statement, and carrying it would make one of it.
+      return this.written_as(span.span(made[1].begin, made[made.length - 1].end), program!.closure ?? this.GLOBAL);
     }
     program_of(node: Node): Node | undefined {
       const target = this.peel(node);
@@ -3518,6 +3532,10 @@ export namespace Ray {
     // it is not. Handed over as a written `0` or `1` it could not be read at
     // all, since a written literal has no equality of its own.
     'random': { arity: 0, fn: ({ interpreter }) => env.import<typeof import('crypto')>('crypto').randomInt(2) === 1 ? interpreter.GLOBAL : interpreter.NONE },
+    // The first statement a program is written as, and what is left of it: the
+    // chain that holds them is written in the language, not here.
+    'first': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.first_statement(node) },
+    'rest': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.rest_of(node) },
     'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => interpreter.io(interpreter.text(location), content.none ? undefined : interpreter.text(content), at) },
     'os': { arity: 1, fn: ({ interpreter, args: [name], at }) => { const key = interpreter.text(name); const value = key === 'platform' ? process.platform : key === 'architecture' ? process.arch : process.env[key]; return value === undefined ? interpreter.NONE : interpreter.literal_of(value, at); } },
     'extend': { arity: 2, fn: ({ interpreter, args: [target, node] }) => { const into = interpreter.deref(target); return into ? interpreter.inline(node, into, { compose: true }) : undefined; } },

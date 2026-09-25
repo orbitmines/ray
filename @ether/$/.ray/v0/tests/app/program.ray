@@ -1,25 +1,39 @@
 // A program is what it is written as. `**` reads one off a block handed to a
 // rule, and what it reads is a program in turn — so what holds a program holds
 // programs all the way down.
+//
+// The engine hands over two things and no more: the first statement, and what
+// is left of the program after it. The chain that holds them is built in the
+// language, with the same `chain` and `&=` as everything else, so a program is
+// made of the language rather than of the engine.
 
 mark ^keyword := external global
 
-Reads ^keyword := class {
+Written ^keyword := class {
   of (code) => code**
 }
-taken ^keyword := Reads.of({
+taken ^keyword := Written.of({
   one
   two
   three
 })
 unless (exists taken) { INFO@mark `PG1 a block handed to a rule is not read as a program` }
-// spec: running the whole does not answer its last statement — what it is
-// made of answers, and running one of those does. Running the whole is what
-// `**` is asked for at every method definition, so it is the next thing.
 unless (exists taken.written) { INFO@mark `PG3 a program is not written as anything` }
-unless (taken.written() == one) { INFO@mark `PG4 the first thing it is written as does not answer one` }
-unless (exists taken.written.written) { INFO@mark `PG5 a statement is not a program in turn` }
+unless (taken.count == three) { INFO@mark `PG8 a program of three statements does not count three` }
+walked ^keyword := zero
+taken for { walked = walked.succ }
+unless (walked == three) { INFO@mark `PG9 walking a program of three does not visit three` }
+unless (exists taken.first.value.written) { INFO@mark `PG5 a statement is not a program in turn` }
+unless (taken.first.value.count == one) { INFO@mark `PG10 a statement is written as other than one thing` }
 
-// A program of one statement is written as that statement.
-alone ^keyword := Reads.of({ five })
-unless (alone.written() == five) { INFO@mark `PG7 what a program of one statement is written as does not answer it` }
+// A program of one statement is written as that one.
+alone ^keyword := Written.of({ five })
+unless (alone.count == one) { INFO@mark `PG11 a program of one statement counts other than one` }
+
+// What it is read with: a level is a set of rules, and a program says which.
+unless (exists taken.O) { INFO@mark `PG12 a program does not say which rules it is read with` }
+
+// spec: running a program does not answer what it says — `p()` is not how a
+// program is run, and neither is running one of the statements it is written
+// as. What a program is *for* is being read back: `**` is asked for one at
+// every method definition, and what runs is the method.

@@ -1058,10 +1058,10 @@ export namespace Ray {
     // Frames whose rules were asked for without being read: they had none.
     private asked = new WeakSet<Node>();
     private chains = new WeakMap<Node, { version: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][] }>();
-    chain(frame: Node): { operand: [Node, Node][]; receiver: [Node, Node][] } {
-      // A frame that writes no rules of its own sees exactly what the frame
-      // above it sees. Frames are made fresh for every application, so asking
-      // the one that actually holds rules is what makes the answer reusable.
+    // A frame that writes no rules of its own sees exactly what the frame
+    // above it sees. Frames are made fresh for every application, so asking
+    // the one that actually holds rules is what makes any answer reusable.
+    rooted(frame: Node): Node {
       let held = frame, seen: Set<Node> | undefined;
       while (held.ruled !== true && held.parent !== undefined) {
         this.asked.add(held);
@@ -1069,6 +1069,10 @@ export namespace Ray {
         if (seen.has(held.parent)) break;
         held = held.parent; seen.add(held);
       }
+      return held;
+    }
+    chain(frame: Node): { operand: [Node, Node][]; receiver: [Node, Node][] } {
+      const held = this.rooted(frame);
       if (held !== frame) return this.chain(held);
       const cached = this.chains.get(frame);
       if (cached && cached.version === this.version && cached.base === this.BASE) return cached;
@@ -1263,9 +1267,9 @@ export namespace Ray {
     // defines a method says so by styling that capture `^parameter`, and the
     // entrypoint declares its shape up front with `forward`.
     private grouping(frame: Node): [string, string] | undefined {
-      const scopes: Node[] = [];
-      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.push(scope);
-      if (this.BASE) scopes.push(this.BASE);
+      return this.answered(frame, 'grouping', scopes => this.grouped_by(scopes));
+    }
+    private grouped_by(scopes: Node[]): [string, string] | undefined {
       for (const scope of scopes)
         for (const rule of scope.rules) {
           const pieces = rule.pattern;
@@ -1282,9 +1286,9 @@ export namespace Ray {
     // `^block`: a block is one thing, never a list of them, so an argument
     // written as one is not split.
     private scoped(frame: Node): string | undefined {
-      const scopes: Node[] = [];
-      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.push(scope);
-      if (this.BASE) scopes.push(this.BASE);
+      return this.answered(frame, 'block', scopes => this.scoping(scopes));
+    }
+    private scoping(scopes: Node[]): string | undefined {
       for (const scope of scopes)
         for (const rule of scope.rules) {
           const pieces = rule.pattern;
@@ -1302,10 +1306,25 @@ export namespace Ray {
     // rules marked `^separator` and `^annotation` say. Rule styles are read off
     // the definition head before any parameter list is parsed, so this holds
     // while the entrypoint is still defining itself.
-    private marked(frame: Node, style: string): string | undefined {
+    // What the rules say about a spelling depends only on which rules are
+    // visible, so it is asked once of the frame that holds them.
+    private answers = new WeakMap<Node, { version: number; of: Map<string, string | [string, string] | undefined> }>();
+    private answered<T extends string | [string, string] | undefined>(frame: Node, key: string, ask: (scopes: Node[]) => T): T {
+      const root = this.rooted(frame);
+      let held = this.answers.get(root);
+      if (held === undefined || held.version !== this.version) this.answers.set(root, held = { version: this.version, of: new Map() });
+      if (held.of.has(key)) return held.of.get(key) as T;
       const scopes: Node[] = [];
-      for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.push(scope);
+      for (let scope: Node | undefined = root; scope; scope = scope.parent) scopes.push(scope);
       if (this.BASE) scopes.push(this.BASE);
+      const answer = ask(scopes);
+      held.of.set(key, answer);
+      return answer;
+    }
+    private marked(frame: Node, style: string): string | undefined {
+      return this.answered(frame, `marked ${style}`, scopes => this.marks_style(scopes, style));
+    }
+    private marks_style(scopes: Node[], style: string): string | undefined {
       for (const scope of scopes)
         for (const rule of scope.rules) {
           const pieces = rule.pattern;

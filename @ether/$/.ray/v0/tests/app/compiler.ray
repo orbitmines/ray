@@ -1,0 +1,30 @@
+// The optimizations are rewrite rules, and a rewrite rule is a rule. What they
+// rewrite still has to answer what it answered before — that is the whole of
+// what an optimization is allowed to do.
+
+mark ^keyword := external global
+
+unless ((five + zero) == five) { INFO@mark `CO1 five and nothing is not five` }
+unless ((zero + five) == five) { INFO@mark `CO2 nothing and five is not five` }
+unless ((five - zero) == five) { INFO@mark `CO3 five less nothing is not five` }
+unless ((five * zero).is_zero) { INFO@mark `CO4 five times nothing is not nothing` }
+unless ((zero * five).is_zero) { INFO@mark `CO5 nothing times five is not nothing` }
+unless ((five * one) == five) { INFO@mark `CO6 five once is not five` }
+unless ((one * five) == five) { INFO@mark `CO7 once five is not five` }
+unless ((five / one) == five) { INFO@mark `CO8 five shared once is not five` }
+unless ((five * two) == ten) { INFO@mark `CO9 five twice is not ten` }
+unless ((three * two) == six) { INFO@mark `CO10 three twice is not six` }
+unless ((zero * zero).is_zero) { INFO@mark `CO11 nothing times nothing is not nothing` }
+unless ((one * one) == one) { INFO@mark `CO12 once once is not one` }
+unless ((zero + zero).is_zero) { INFO@mark `CO13 nothing and nothing is not nothing` }
+
+// What is not written as one of those is untouched.
+unless ((five + two) == seven) { INFO@mark `CO14 five and two is not seven` }
+unless ((five * three) == (ten + five)) { INFO@mark `CO15 five three times is not fifteen` }
+unless ((six / two) == three) { INFO@mark `CO16 six shared in two is not three` }
+unless ((six - two) == four) { INFO@mark `CO17 six less two is not four` }
+
+// A rewrite is written about what is written, so a name holding the same value
+// is rewritten too where the name is what is written.
+none_at_all ^keyword := zero
+unless ((five + none_at_all) == five) { INFO@mark `CO18 five and a name holding nothing is not five` }

@@ -1439,7 +1439,15 @@ export namespace Ray {
           case 'capture': {
             // A capture that stands for the receiver, spelled right against
             // what follows, admits no space between them.
-            if (p === 0 && opts.leading && opts.receiver !== undefined) { if (opts.spaced && pieces[1]?.kind !== 'space') return; break; }
+            // A capture that stands for the receiver admits a space before
+            // what follows exactly where the pattern writes one: `{this}<x>`
+            // is spelled tight against what it takes, `{a} * one` is not.
+            if (p === 0 && opts.leading && opts.receiver !== undefined) {
+              const after = pieces[1];
+              const gap = after === undefined || after.kind === 'space' || after.kind === 'operator' || (after.kind === 'literal' && /^\s/.test(after.text));
+              if (opts.spaced && !gap) return;
+              break;
+            }
             let next_at = -1, upcoming_at = -1, literal_at = -1;
             for (let k = p + 1; k < pieces.length; k++) {
               const kind = pieces[k].kind;

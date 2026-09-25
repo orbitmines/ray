@@ -1,5 +1,30 @@
 // The compiler and its optimizations (draft: .ray2/Compiler/Optimizations.ray).
-// spec: nothing here runs yet; the interpreter walks. Each note is a target.
+// An optimization is a rewrite rule, and a rewrite rule is a rule: what is
+// written on the left is read as what is written on the right, which is the
+// same thing a method is. So they are written here, apart from the code they
+// are about, and taking this file away takes them away with it.
+//
+// What they can reach today is what is written down: `five * one` is rewritten
+// where it is written, not where it is computed. Rewriting what a program has
+// already become waits on the program being a thing the language can read
+// back, which is what `**` is for.
+
+// Nothing times something is nothing, and nothing added is what was already
+// there: the walk these would have cost is not walked.
+{a} + zero => a
+{a} - zero => a
+zero + {a} => a
+{a} * zero => zero
+zero * {a} => zero
+{a} * one => a
+one * {a} => a
+{a} / one => a
+// Twice is once and once again: a multiplication walks its right side, and an
+// addition walks it once.
+{a} * two => a + a
+
+// spec: the rest of this file is what the drafts ask for and the language
+// cannot say yet. Each note is a target.
 
 // From the draft:
 // .ray2/Compiler/Optimizations.ray:

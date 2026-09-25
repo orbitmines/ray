@@ -196,6 +196,40 @@ Iterable := class: Ordered {
   unidirectional => false
 }
 
+// A program is what it is written as: the statements, in the order they are
+// written on the page, each of them a program in turn. What order they *run*
+// in is another thing, and a goto is what says it.
+Program := class: Iterable {
+  entry => .written
+  // spec: what follows a statement is written down by the engine and does not
+  // read back — `.written` answers the first, and running it answers what it
+  // says, but asking that one what follows it gives a name with nothing behind
+  // it rather than the next statement. Until that reads back, a program is one
+  // statement deep: `count` and `for` below are written for the chain they
+  // will walk.
+  // Walked here rather than left to `Iterable`, since a statement is a
+  // program and not yet a ray: what links them is what is written next.
+  for (body) => (
+    it ^keyword := .written
+    while (exists it) {
+      inline body
+      it = it.next
+    }
+    this
+  )
+  count => (
+    total ^keyword := zero
+    walker ^keyword := .written
+    while (exists walker) {
+      total = total.succ
+      walker = walker.next
+    }
+    total
+  )
+  first => .written
+  empty => .count.is_zero
+}
+
 Ray := class: Iterable {
   entry => this
 

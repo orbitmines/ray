@@ -3348,14 +3348,54 @@ export namespace Ray {
       if (node) this.complain((level !== undefined ? levels[this.text(level)] : undefined) ?? 'error', comment ? this.text(comment) : '', node);
       return comment;
     }
+    // The statements a span is written as: what a newline separates, outside
+    // any group. This is the order they are written in, not the order they
+    // run in — a goto says that, and it is read off these.
+    statements_of(span: Text.Node): Text.Node[] {
+      const text = span.source.value, end = span.end + 1, out: Text.Node[] = [];
+      let begin = -1;
+      const close_at = (j: number) => { const k = this.group_end(text, j, end); return k > j ? k : -1; };
+      for (let j = span.begin; j < end;) {
+        if (text[j] === '\n') {
+          if (begin >= 0) { let last = j - 1; while (last >= begin && /\s/.test(text[last])) last--; if (last >= begin) out.push(span.span(begin, last)); }
+          begin = -1; j++; continue;
+        }
+        const grouped = close_at(j);
+        if (grouped > 0) { if (begin < 0) begin = j; j = grouped; continue; }
+        if (begin < 0 && !/\s/.test(text[j])) begin = j;
+        j++;
+      }
+      if (begin >= 0) { let last = end - 1; while (last >= begin && /\s/.test(text[last])) last--; if (last >= begin) out.push(span.span(begin, last)); }
+      return out;
+    }
+    // A program is what it is written as, read off only when it is asked for:
+    // `**` is read at every method definition, and splitting a body there
+    // would be reading the whole library twice over.
+    private written_as(span: Text.Node, frame: Node): Node {
+      const one = new Node(this.diagnostics, span);
+      one.body = span; one.closure = frame; one.params = [];
+      let held: Node | undefined;
+      one.method('written', () => {
+        if (held !== undefined) return held;
+        // What follows one statement is asked of it, the way what it is
+        // written as is: a name a node merely holds is not found the way a
+        // method on it is.
+        const made = this.statements_of(span).map(each => this.written_as(each, frame));
+        made.forEach((statement, k) => {
+          const after = made[k + 1] ?? this.NONE, before = made[k - 1] ?? this.NONE;
+          statement.method('next', () => after, 0);
+          statement.method('previous', () => before, 0);
+        });
+        held = made[0];
+        return held ?? this.NONE;
+      }, 0);
+      return one;
+    }
     program_of(node: Node): Node | undefined {
       const target = this.peel(node);
       if (!target?.lazy) return this.deref(node);
-      const program = new Node(this.diagnostics, target.lazy.span);
-      program.body = this.inner(target.lazy.span, target.lazy.frame) ?? target.lazy.span;
-      program.closure = target.lazy.frame;
-      program.params = [];
-      return program;
+      const inner = this.inner(target.lazy.span, target.lazy.frame) ?? target.lazy.span;
+      return this.written_as(inner, target.lazy.frame);
     }
 
     pending_rewrites: [Node, Node][] = [];

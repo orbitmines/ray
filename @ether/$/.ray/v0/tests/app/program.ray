@@ -1,0 +1,25 @@
+// A program is what it is written as. `**` reads one off a block handed to a
+// rule, and what it reads is a program in turn — so what holds a program holds
+// programs all the way down.
+
+mark ^keyword := external global
+
+Reads ^keyword := class {
+  of (code) => code**
+}
+taken ^keyword := Reads.of({
+  one
+  two
+  three
+})
+unless (exists taken) { INFO@mark `PG1 a block handed to a rule is not read as a program` }
+// spec: running the whole does not answer its last statement — what it is
+// made of answers, and running one of those does. Running the whole is what
+// `**` is asked for at every method definition, so it is the next thing.
+unless (exists taken.written) { INFO@mark `PG3 a program is not written as anything` }
+unless (taken.written() == one) { INFO@mark `PG4 the first thing it is written as does not answer one` }
+unless (exists taken.written.written) { INFO@mark `PG5 a statement is not a program in turn` }
+
+// A program of one statement is written as that statement.
+alone ^keyword := Reads.of({ five })
+unless (alone.written() == five) { INFO@mark `PG7 what a program of one statement is written as does not answer it` }

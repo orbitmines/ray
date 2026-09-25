@@ -320,6 +320,17 @@ Node := base class {
   // meant rather than a second statement.
   ; ^punctuation (x) => inline x
 
+  // `x**`: the program `x` is written as — the statements, in the order they
+  // are written. Each of them is a program too, so what holds a program holds
+  // programs all the way down. What a program *is* is Ray's to say, so both it
+  // and its statements are made of `Program` where that has been written.
+  ** ^punctuation => (
+    held ^keyword := external ** this
+    external extend held Program
+
+    held
+  )
+
   &= ^punctuation (x) => (
     value := x
     previous := this.tail

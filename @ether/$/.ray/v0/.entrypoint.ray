@@ -791,29 +791,24 @@ chainable ^keyword := class {
 // spec: written as one rule rather than two, since two of this shape with the
 // same captures and no filter are one rule whatever their guards say. Kept
 // out, for two reasons, both measured:
-//   · written without a filter it does not fire. Given a filter saying which
-//     operators it takes, a rule of this shape does what it says — that is
-//     what `tests/app/precedence.ray` claims, and `ten - two - three` is five
-//     there. Written `{a} [x] {b} [y] {c}`, taking whatever stands there, it
-//     never fires: `(a [x] b)` alone is not `ten - two`, and a guard that is
-//     plainly true changes nothing. That is the one thing left, and it is
-//     about matching, not about precedence.
+//   · what counts it out does not count past one. `external declared x { … }`
+//     written in the body with the capture itself reaches the right operator
+//     now — `x` is looked up before it is read, so `+` and `*` come back as
+//     themselves — and the machine knows where each stands: `+` is the
+//     seventy-ninth operator written down and `*` the eighty-first. But the
+//     block it is handed is run once however many times it is called, so
+//     every operator is reckoned to stand in the same place, and the rule
+//     always takes the left pair. That is why `two * three + one` is seven
+//     and `ten - two - three` is five with it on, while `one + two * three`
+//     is nine.
 //
-//     Everything else it wanted is here. Its body binds what it answers
-//     rather than being the branch that chose it, which is what made it
-//     answer neither grouping. It is spelled `at_least` rather than `>=`,
-//     since a body that spells an operator is held back until that spelling
-//     is a name — which is what `missing` was doing to it all along. And the
-//     machine counts right: what an operator names is its own method, and how
-//     many were written before it is the count, so `:=` counts out nothing.
-//     What `[x]` hands the guard is still a name standing for something
-//     rather than that number, whether it is asked as `x.precedence` or given
-//     to a function.
-//     With all of that, four of six arithmetic claims hold with the rule on —
-//     `one + two * three` is seven and `one + two + three` is six — and the
-//     two that want the left pair taken first do not: `two * three + one` is
-//     not seven and `ten - two - three` is not five. The guard answers the
-//     same way whichever side is tighter, so what is left is why.
+//     Fixed on the way here: a rule with an operator in its pattern could not
+//     declare a name in its body at all, which is what every earlier attempt
+//     ran into. A rule of that kind now waits on what its *pattern* asks for
+//     — the classes saying which operators it takes — and not on what its
+//     body writes down for itself, which `missing` had been counting as
+//     unread. `tests/app/rewrite.ray` claims it.
+//
 //   · and the order it counts may not be the order they bind. In Number.ray
 //     `+`, `-`, `*` are written in that order, which is right, but the
 //     comparisons are written after them, which is not. A `forward` for each,

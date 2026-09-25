@@ -1207,8 +1207,9 @@ export namespace Ray {
     // What every rule hands the text written for it, by the word it is spelled
     // with: gathered once a pass, where the definitions are all there.
     private hands = new Map<string, Set<string>>();
-    missing(rule: Node, impl: Node, scope?: Node): Text.Node[] {
-      const cached = this.readiness.get(impl);
+    private asking = new WeakMap<Node, { version: number; missing: Text.Node[] }>();
+    missing(rule: Node, impl: Node, scope?: Node, only: boolean = false): Text.Node[] {
+      const cached = only ? this.asking.get(impl) : this.readiness.get(impl);
       if (scope === undefined && cached && cached.version === this.version) return cached.missing;
       // What the body declares, wherever it declares it, is the body's own —
       // which is about what is reported; readiness is answered as before.
@@ -1263,12 +1264,12 @@ export namespace Ray {
           missing.push(span.span(at, at + word.length - 1));
         }
       };
-      if (impl.body) check(impl.body);
+      if (impl.body && !only) check(impl.body);
       for (const piece of rule.pattern!) if (piece.kind === 'operator' && piece.filter) {
         const group = piece.group, offset = group.string.indexOf(piece.filter);
         if (offset >= 0) check(group.span(group.begin + offset, group.begin + offset + piece.filter.length - 1));
       }
-      if (scope === undefined) this.readiness.set(impl, { version: this.version, missing });
+      if (scope === undefined) (only ? this.asking : this.readiness).set(impl, { version: this.version, missing });
       return missing;
     }
 
@@ -1290,7 +1291,10 @@ export namespace Ray {
         // A rewrite's body is what it reduced to, and reducing it again is what
         // two rules of this shape would do to each other, so while one is
         // running none of them stands.
-        if (shape.operator && (this.rewriting.size > 0 || this.missing(rule, impl).length > 0)) continue;
+        // A rule that asks for an operator waits on what its pattern asks for —
+        // the classes saying which operators it takes — and not on what its
+        // body writes down for itself.
+        if (shape.operator && (this.rewriting.size > 0 || this.missing(rule, impl, undefined, true).length > 0)) continue;
         const pieces = rule.pattern!;
         const leading = shape.leading;
         const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, operand: opts.operand, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule), closure: impl.closure });
@@ -1719,29 +1723,33 @@ export namespace Ray {
     // Where an operator stands among the operators, in the order they were
     // written down: what `precedence` counts out. The spellings are gathered
     // once per version, since the answer only changes when the rules do.
-    private ranking?: { version: number; order: string[] };
-    operator_rank(node: Node): number {
+    private ranking?: { version: number; order: Map<string, number> };
+    operator_rank(node: Node, frame?: Node): number {
       if (this.ranking?.version !== this.version) {
-        const at: string[] = [];
+        const at = new Map<string, string>();
         for (const scope of [this.GLOBAL, ...this.frames.values()])
           for (const rule of scope.rules) {
             const impl = scope.methods?.get(rule);
             const first = rule.pattern?.[0];
             if (impl === undefined || impl.forward || first?.kind !== 'literal' || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
             if (rule.position === undefined) continue;
-            at.push(`${rule.position.source.location}:${String(rule.position.begin).padStart(9, '0')}`);
+            const head = first.text.trim();
+            const where = `${rule.position.source.location}:${String(rule.position.begin).padStart(9, '0')}`;
+            const held = at.get(head);
+            if (held === undefined || where < held) at.set(head, where);
           }
-        const order = at.sort();
+        const order = new Map<string, number>();
+        [...at].sort((one, other) => one[1] < other[1] ? -1 : one[1] > other[1] ? 1 : 0).forEach(([head], index) => order.set(head, index));
         this.ranking = { version: this.version, order };
       }
-      // What the operator names is its own method, and where that was written
-      // down is the order asked for: how many were written before it.
-      const target = this.diagnostics.muted(() => this.safely(() => this.deref(node, false, false))) ?? node;
-      const where = target.position === undefined ? undefined : `${target.position.source.location}:${String(target.position.begin).padStart(9, '0')}`;
-      if (where === undefined) return 0;
-      let rank = 0;
-      while (rank < this.ranking.order.length && this.ranking.order[rank] < where) rank++;
-      return rank;
+      // What is written there, as written: asking what it evaluates to reads an
+      // operator as an expression, which it is not. What the body hands over is
+      // the capture's name, so what that names is looked up first.
+      const named = (node.lazy?.span.string ?? '').trim();
+      const held = named.length > 0 ? frame?.lookup(named) : undefined;
+      const target = held ?? node;
+      const written = (target.lazy?.span.string ?? this.text(target)).trim();
+      return this.ranking.order.get(written) ?? 0;
     }
     operator_end(cursor: Text.Node, j: number, frame: Node, set?: [Node, Node][]): number {
       let end = j;
@@ -3627,7 +3635,7 @@ export namespace Ray {
     'text': { arity: 1, fn: ({ interpreter, args: [node], at }) => { const held = interpreter.deref(node); const span = held?.body ?? held?.lazy?.span ?? node.lazy?.span; return span === undefined ? interpreter.NONE : interpreter.literal_of(span.string, at); } },
     // How far along an operator was written down, counted out one at a time so
     // that the language builds the number itself.
-    'declared': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => { const rank = interpreter.operator_rank(node); for (let step = 0; step < rank; step++) { const taken = interpreter.call(each, interpreter.GLOBAL, at, frame); if (interpreter.deref(taken, false)?.none) break; } return interpreter.NONE; } },
+    'declared': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => { const rank = interpreter.operator_rank(node, frame); for (let step = 0; step < rank; step++) interpreter.call(each, interpreter.GLOBAL, at, frame); return interpreter.NONE; } },
     'first': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.first_statement(node) },
     'rest': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.rest_of(node) },
     'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => interpreter.io(interpreter.text(location), content.none ? undefined : interpreter.text(content), at) },

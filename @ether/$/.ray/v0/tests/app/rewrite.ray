@@ -1,0 +1,19 @@
+// What a rule that asks for an operator may have in its body. The rule here
+// takes one `-` and answers something of its own, so that what the body does
+// can be seen at all.
+
+mark ^keyword := external global
+
+minus ^keyword := class {
+  accepts (written) => if (exists (external alike (written) (`-`))) { written } else { None }
+}
+// A body of statements, and a name of its own among them. A rule of this kind
+// waits on what its pattern asks for — the class saying which operators it
+// takes — and not on what its body writes down; before that, a body that
+// declared anything was held back and the rule never fired at all.
+{left} [sign: minus] {right} => (
+  held ^keyword := two
+  held.succ
+)
+unless ((ten - three) == three) { INFO@mark `RW1 a body that declares a name is not run` }
+unless ((one - one) == three) { INFO@mark `RW2 it answers the same wherever it stands` }

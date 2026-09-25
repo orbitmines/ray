@@ -26,8 +26,8 @@ unless (five.odd) { INFO@mark `N12 5 is not odd` }
 
 unless ((two.max(five)) == five) { INFO@mark `N13 max failed` }
 
-// `pow` and `factorial` are defined but not asserted yet: a recursive call
-// used as an argument does not resolve.
+// `pow` and `factorial` are asserted below, for small numbers: a number is a
+// walk, so what they answer has to be walked too.
 
 if (three.even) { INFO@mark `3 is even` }
 
@@ -70,3 +70,36 @@ unless (three.signed.negated < two.signed.negated) { INFO@mark `N51 minus three 
 unless (two.signed < three.signed) { INFO@mark `N52 two is not less than three` }
 if (three.signed < two.signed) { INFO@mark `N53 three is less than two` }
 unless ((three.signed - five.signed).negative) { INFO@mark `N54 three less five is not negative` }
+
+// What two numbers have in common, and what they make together.
+unless ((six.gcd(four)) == two) { INFO@mark `N55 the greatest common divisor of six and four is not two` }
+unless ((four.gcd(six)) == two) { INFO@mark `N56 asking the other way round answers otherwise` }
+unless ((five.gcd(three)) == one) { INFO@mark `N57 five and three share more than one` }
+unless ((two.lcm(three)) == six) { INFO@mark `N58 the least common multiple of two and three is not six` }
+unless (two.coprime(three)) { INFO@mark `N59 two and three are not coprime` }
+if (two.coprime(four)) { INFO@mark `N60 two and four are coprime` }
+unless (two.divides(six)) { INFO@mark `N61 two does not divide six` }
+if (four.divides(six)) { INFO@mark `N62 four divides six` }
+unless (one.divides(five)) { INFO@mark `N63 one does not divide five` }
+
+// Halving, the smaller of two, and a number multiplied by itself.
+unless (six.half == three) { INFO@mark `N64 half of six is not three` }
+unless (seven.half == three) { INFO@mark `N65 half of seven is not three` }
+unless (zero.half.is_zero) { INFO@mark `N66 half of nothing is not nothing` }
+unless ((two.min(five)) == two) { INFO@mark `N67 the smaller of two and five is not two` }
+unless ((five.min(two)) == two) { INFO@mark `N68 asking the smaller the other way round answers otherwise` }
+unless (three.squared == nine) { INFO@mark `N69 three by itself is not nine` }
+unless (one.squared == one) { INFO@mark `N70 one by itself is not one` }
+
+// Raising and the product of everything below.
+unless ((two.pow(three)) == eight) { INFO@mark `N71 two raised to three is not eight` }
+unless ((five.pow(one)) == five) { INFO@mark `N72 five raised to one is not five` }
+unless ((five.pow(zero)) == one) { INFO@mark `N73 five raised to nothing is not one` }
+unless (three.factorial == six) { INFO@mark `N74 three factorial is not six` }
+unless (one.factorial == one) { INFO@mark `N75 one factorial is not one` }
+unless (zero.factorial == one) { INFO@mark `N76 nothing factorial is not one` }
+
+// The digits a number is spelled with, in a base.
+unless (six.digits_in(ten).count == one) { INFO@mark `N77 six is spelled with other than one digit in ten` }
+unless (six.digits_in(two).count == three) { INFO@mark `N78 six is spelled with other than three digits in two` }
+unless (one.digits_in(two).count == one) { INFO@mark `N79 one is spelled with other than one digit in two` }

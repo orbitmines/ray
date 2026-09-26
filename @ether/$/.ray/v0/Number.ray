@@ -102,6 +102,27 @@ Number := class: Ray {
   xor (b) => .set.xor(b)
   xnor (b) => .set.xnor(b)
 
+  < (other: Number) => (
+    mine := this
+    theirs := other
+    while (mine.nonzero.and(theirs.nonzero)) {
+      mine = mine.pred
+      theirs = theirs.pred
+    }
+    mine.is_zero.and(theirs.nonzero)
+  )
+
+  == (other: Number) => (
+    mine := this
+    theirs := other
+    while (mine.nonzero.and(theirs.nonzero)) {
+      mine = mine.pred
+      theirs = theirs.pred
+    }
+    mine.is_zero.and(theirs.is_zero)
+  )
+  != (other: Number) => (this == other).not
+
   // Walks along the chain rather than nesting one application per unit, so a
   // thousand is as cheap to reach as ten.
   + (other: Number) => (
@@ -133,16 +154,6 @@ Number := class: Ray {
       left = left.pred
     }
     multiplied
-  )
-
-  < (other: Number) => (
-    mine := this
-    theirs := other
-    while (mine.nonzero.and(theirs.nonzero)) {
-      mine = mine.pred
-      theirs = theirs.pred
-    }
-    mine.is_zero.and(theirs.nonzero)
   )
 
   // Division walks the dividend once, with the divisor walked alongside it:
@@ -184,17 +195,6 @@ Number := class: Ray {
     }
     count
   )
-
-  == (other: Number) => (
-    mine := this
-    theirs := other
-    while (mine.nonzero.and(theirs.nonzero)) {
-      mine = mine.pred
-      theirs = theirs.pred
-    }
-    mine.is_zero.and(theirs.is_zero)
-  )
-  != (other: Number) => (this == other).not
 
   // `def times callback: () => *`, without the index the draft leaves open.
   // `def times callback: () => *`, with the index the draft leaves open as `it`:

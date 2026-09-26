@@ -41,12 +41,20 @@ unless ((two * three) == six) { INFO@mark `PR10 an operator the rule does not as
 unless ((ten - two) == eight) { INFO@mark `PR11 one less on its own stopped working` }
 unless ((one + two + three) == six) { INFO@mark `PR12 three added is not six` }
 
-// spec: grouping by precedence is not written. Everything it needs is here —
-// the shape matches, the body applies what it was handed, a body of this kind
-// may declare a name — except a way to ask which of two operators was written
-// down later. Until then two operators of different kinds group right to left,
-// so two times three and one is eight rather than seven.
-//
+// Two operators of different kinds group by where they are written: of `+`,
+// `-` and `*`, written in that order in Number, the later binds tighter, and
+// one written as often as the other groups to the left.
+unless ((two * three + one) == seven) { INFO@mark `PR23 two times three and one is not seven` }
+unless ((one + two * three) == seven) { INFO@mark `PR24 one and two times three is not seven` }
+unless ((ten / two / five) == one) { INFO@mark `PR25 ten shared twice is not one` }
+unless ((two * three * two) == (ten + two)) { INFO@mark `PR26 two times three times two is not twelve` }
+unless ((ten - four * two) == two) { INFO@mark `PR27 ten less four times two is not two` }
+unless (one + two < four) { INFO@mark `PR28 one and two is not below four` }
+if (four < one + two) { INFO@mark `PR29 four is below one and two` }
+unless (one + two == three) { INFO@mark `PR30 one and two is not three` }
+unless (three == one + two) { INFO@mark `PR31 three is not one and two` }
+if (two * three < five) { INFO@mark `PR32 two times three is below five` }
+
 // spec: a chain of three comparisons is not claimed — the rule takes two
 // operators around a shared operand, so `a < b < c < d` reads as
 // `(a < b and b < c) < d`, which compares a boolean with a number. The draft

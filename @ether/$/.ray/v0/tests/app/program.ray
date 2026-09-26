@@ -38,13 +38,6 @@ unless (exists taken.O) { INFO@mark `PG12 a program does not say which rules it 
 // as. What a program is *for* is being read back: `**` is asked for one at
 // every method definition, and what runs is the method.
 
-// A program says what it is written as, so what it holds can be read back and
-// not only walked. Compared by asking the machine whether two written texts
-// are alike, since String is not read here.
-unless (exists alone.text) { INFO@mark `PG13 a program does not say what it is written as` }
-unless (exists (external alike (taken.first.value.text) (taken.first.value.text))) { INFO@mark `PG14 what a statement is written as is not itself` }
-if (exists (external alike (taken.first.value.text) (taken.last.value.text))) { INFO@mark `PG15 two statements are written the same` }
-
 // spec: a program is not yet walkable as what it *does*, only as what it is
 // written as. The structure the drafts want is the conditional gotos as
 // conditional edges — a statement's next being where control goes rather than

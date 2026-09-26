@@ -1720,37 +1720,6 @@ export namespace Ray {
       }
       return false;
     }
-    // Where an operator stands among the operators, in the order they were
-    // written down: what `precedence` counts out. The spellings are gathered
-    // once per version, since the answer only changes when the rules do.
-    private ranking?: { version: number; order: Map<string, number> };
-    operator_rank(node: Node, frame?: Node): number {
-      if (this.ranking?.version !== this.version) {
-        const at = new Map<string, string>();
-        for (const scope of [this.GLOBAL, ...this.frames.values()])
-          for (const rule of scope.rules) {
-            const impl = scope.methods?.get(rule);
-            const first = rule.pattern?.[0];
-            if (impl === undefined || impl.forward || first?.kind !== 'literal' || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
-            if (rule.position === undefined) continue;
-            const head = first.text.trim();
-            const where = `${rule.position.source.location}:${String(rule.position.begin).padStart(9, '0')}`;
-            const held = at.get(head);
-            if (held === undefined || where < held) at.set(head, where);
-          }
-        const order = new Map<string, number>();
-        [...at].sort((one, other) => one[1] < other[1] ? -1 : one[1] > other[1] ? 1 : 0).forEach(([head], index) => order.set(head, index));
-        this.ranking = { version: this.version, order };
-      }
-      // What is written there, as written: asking what it evaluates to reads an
-      // operator as an expression, which it is not. What the body hands over is
-      // the capture's name, so what that names is looked up first.
-      const named = (node.lazy?.span.string ?? '').trim();
-      const held = named.length > 0 ? frame?.lookup(named) : undefined;
-      const target = held ?? node;
-      const written = (target.lazy?.span.string ?? this.text(target)).trim();
-      return this.ranking.order.get(written) ?? 0;
-    }
     operator_end(cursor: Text.Node, j: number, frame: Node, set?: [Node, Node][]): number {
       let end = j;
       for (const [rule, impl] of set ?? this.chain(frame).receiver) {
@@ -3630,12 +3599,6 @@ export namespace Ray {
     'random': { arity: 0, fn: ({ interpreter }) => env.import<typeof import('crypto')>('crypto').randomInt(2) === 1 ? interpreter.GLOBAL : interpreter.NONE },
     // The first statement a program is written as, and what is left of it: the
     // chain that holds them is written in the language, not here.
-    // What a program is written as, as written: a statement can be read back
-    // rather than only held, so the language can tell one from another.
-    'text': { arity: 1, fn: ({ interpreter, args: [node], at }) => { const held = interpreter.deref(node); const span = held?.body ?? held?.lazy?.span ?? node.lazy?.span; return span === undefined ? interpreter.NONE : interpreter.literal_of(span.string, at); } },
-    // How far along an operator was written down, counted out one at a time so
-    // that the language builds the number itself.
-    'declared': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => { const rank = interpreter.operator_rank(node, frame); for (let step = 0; step < rank; step++) interpreter.call(each, interpreter.GLOBAL, at, frame); return interpreter.NONE; } },
     'first': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.first_statement(node) },
     'rest': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.rest_of(node) },
     'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => interpreter.io(interpreter.text(location), content.none ? undefined : interpreter.text(content), at) },

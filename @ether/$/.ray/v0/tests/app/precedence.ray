@@ -13,21 +13,18 @@ unless (one < two < three) { INFO@mark `PR3 one below two below three does not h
 if (three < two < one) { INFO@mark `PR4 three below two below one holds` }
 if (one < three < two) { INFO@mark `PR5 a chain that breaks at the end holds` }
 if (two < one < three) { INFO@mark `PR6 a chain that breaks at the start holds` }
-// spec: a chain of three comparisons is not claimed — the rule takes two
-// operators around a shared operand, so `a < b < c < d` reads as
-// `(a < b and b < c) < d`, which compares a boolean with a number. The draft
-// reduces a whole run at once (.ray2/Grammar.ray:175-205); this reduces a pair.
 unless (three > two > one) { INFO@mark `PR16 three above two above one does not hold` }
 if (one > two > three) { INFO@mark `PR17 one above two above three holds` }
-// spec: `<=`, `>=` and `==` do not chain. Where an operator ends is read off
-// the methods of what is written to its left, and it comes back one character
-// long even where two are written, so `a <= b <= c` reads the `<` and leaves
-// the `=` unread — green, and two errors per chain.
+unless (one <= two <= three) { INFO@mark `PR18 a chain of at-mosts does not hold` }
+if (one <= three <= two) { INFO@mark `PR19 a chain of at-mosts that breaks holds` }
+unless (three >= two >= one) { INFO@mark `PR20 a chain of at-leasts does not hold` }
+unless (one == one == one) { INFO@mark `PR21 a chain of sames does not hold` }
+if (one == one == two) { INFO@mark `PR22 a chain of sames that breaks holds` }
 
 // And one written here, to show that a rule of this shape does what it says.
 // Which operators it will take is answered by a class, the way the type of a
 // capture is; it names its own captures, since a rule is told from another by
-// what it is called and an operator's filter is not part of that.
+// what it is called and an operator's filter is part of that.
 minus ^keyword := class {
   accepts (written) => if (exists (external alike (written) (`-`))) { written } else { None }
 }
@@ -44,26 +41,17 @@ unless ((two * three) == six) { INFO@mark `PR10 an operator the rule does not as
 unless ((ten - two) == eight) { INFO@mark `PR11 one less on its own stopped working` }
 unless ((one + two + three) == six) { INFO@mark `PR12 three added is not six` }
 
-// spec: the two rules that group by precedence are written with a trailing
-// `if`, and a trailing `if` is not implemented. Written
-// `{a} if {cond} => if cond { a }` it answers the value where the condition
-// holds, and is not lazy — what stands to its left is the receiver, which has
-// already been read — so `two if false` is still two. Written
-// `{a}{ }if{ }{cond}` it does not match at all: a space written at the second
-// place of a pattern whose first is the receiver can never be matched, because
-// the space before the cursor has already been stepped over. Until they are
-// answered, two operators of different kinds group right to left, so
-// two times three and one is eight rather than seven.
-
-// spec: where an operator stands among the operators, in the order they were
-// written down, is answered by `precedence` on `Node` — the machine counts
-// them out and the language holds the number. Nothing is claimed about it
-// here: a written text is not how an operator reaches it (`` `+` ``.precedence
-// stands nowhere, and so does `` `*` ``), and the only thing that reaches it
-// as an operator is a rule of the shape above.
+// spec: grouping by precedence is not written. Everything it needs is here —
+// the shape matches, the body applies what it was handed, a body of this kind
+// may declare a name — except a way to ask which of two operators was written
+// down later. Until then two operators of different kinds group right to left,
+// so two times three and one is eight rather than seven.
 //
-// That order is not the order they bind, which is what keeps the grouping rule
-// out. Either the operators are written down in the order they bind — a
-// `forward` for each, ahead of everything, does not do it, since a forward
-// declaration is not a rule with that head — or precedence is said rather than
-// counted.
+// spec: a chain of three comparisons is not claimed — the rule takes two
+// operators around a shared operand, so `a < b < c < d` reads as
+// `(a < b and b < c) < d`, which compares a boolean with a number. The draft
+// reduces a whole run at once (.ray2/Grammar.ray:175-205); this reduces a pair.
+//
+// spec: a chain written with an operator of two characters is read right and
+// reported wrong: four errors per chain, all `Unexpected =`. Nothing in the
+// library writes one, so it costs nothing there.

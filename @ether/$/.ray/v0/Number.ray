@@ -622,6 +622,15 @@ text_bits (text) => (
 )
 JumpRead ^keyword := class { }
 precedences ^keyword := chain None
+remembered (cache, place, spelled) => (
+  cached_at ^keyword := cache.head
+  entry_found ^keyword := None
+  while ((exists cached_at).and((exists entry_found).not)) {
+    if ((exists (external alike (cached_at.value.place) (place))).and(exists (external alike (cached_at.value.spelled) (spelled)))) { entry_found = cached_at.value }
+    cached_at = cached_at.next
+  }
+  entry_found
+)
 Program.components.hierarchy &= class {
   begins (statement, wanted) => (
     bit_at ^keyword := wanted.head
@@ -759,20 +768,14 @@ Program.components.hierarchy &= class {
   )
   precedence (spelled) => (
     place_of ^keyword := external where this
-    cached_at ^keyword := precedences.head
-    found ^keyword := None
-    known_yet ^keyword := false
-    while ((exists cached_at).and(known_yet.not)) {
-      if ((exists (external alike (cached_at.value.place) (place_of))).and(exists (external alike (cached_at.value.spelled) (spelled)))) {
-        if cached_at.value.ranked { found = cached_at.value.answer }
-        known_yet = true
-      }
-      cached_at = cached_at.next
+    kept_entry ^keyword := remembered(precedences, place_of, spelled)
+    unless (exists kept_entry) {
+      found_count ^keyword := .counted_to(spelled)
+      kept_entry = Precedence(place: place_of, spelled: spelled, answer: found_count, ranked: exists found_count)
+      precedences &= kept_entry
     }
-    unless known_yet {
-      found = .counted_to(spelled)
-      precedences &= Precedence(place: place_of, spelled: spelled, answer: found, ranked: exists found)
-    }
-    found
+    rank_known ^keyword := None
+    if kept_entry.ranked { rank_known = kept_entry.answer }
+    rank_known
   )
 }

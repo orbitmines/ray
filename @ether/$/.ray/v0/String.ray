@@ -607,7 +607,7 @@ Number.components.hierarchy &= class {
 // .ray2/Language/String/String.ray:
 // String newline, respect spaces after the first one, which we trim completely
 //TODO Get from &caller:
-//TODO as String needs context of where it is being placed, if it's in a .ts that's different from another language.
+//TODO as String needs context of where it is being rank_known, if it's in a .ts that's different from another language.
 //TODO String aware of styling?
 //TODO Include Char static, (is that the default), where it's that return[], for Superscript.
 //TODO Calling on string evaluates it as a variable name, then calls that program.
@@ -690,27 +690,36 @@ groups ^keyword := class {
 }
 
 Placement ^keyword := class { }
+placements ^keyword := chain None
 declared_in (holder, spelled) => (
-  to_visit ^keyword := chain None
-  to_visit &= holder
-  visiting ^keyword := to_visit.head
-  class_index ^keyword := zero
-  rank_found ^keyword := None
-  while ((exists visiting).and((exists rank_found).not)) {
-    in_class ^keyword := visiting.value
-    if (exists (external first in_class.written_as)) {
-      written_at ^keyword := in_class.written_as.precedence(spelled)
-      if (exists written_at) { rank_found = Placement(nth_class: class_index, written_at: written_at) }
+  place_of ^keyword := external where holder.written_as
+  kept_entry ^keyword := remembered(placements, place_of, spelled)
+  unless (exists kept_entry) {
+    to_visit ^keyword := chain None
+    to_visit &= holder
+    visiting ^keyword := to_visit.head
+    class_index ^keyword := zero
+    rank_found ^keyword := None
+    while ((exists visiting).and((exists rank_found).not)) {
+      in_class ^keyword := visiting.value
+      if (exists (external first in_class.written_as)) {
+        written_at ^keyword := in_class.written_as.precedence(spelled)
+        if (exists written_at) { rank_found = Placement(nth_class: class_index, written_at: written_at) }
+      }
+      further ^keyword := in_class.components.hierarchy.head
+      while (exists further) {
+        to_visit &= further.value
+        further = further.next
+      }
+      class_index = class_index.succ
+      visiting = visiting.next
     }
-    further ^keyword := in_class.components.hierarchy.head
-    while (exists further) {
-      to_visit &= further.value
-      further = further.next
-    }
-    class_index = class_index.succ
-    visiting = visiting.next
+    kept_entry = Precedence(place: place_of, spelled: spelled, answer: rank_found, ranked: exists rank_found)
+    placements &= kept_entry
   }
-  rank_found
+  rank_known ^keyword := None
+  if kept_entry.ranked { rank_known = kept_entry.answer }
+  rank_known
 )
 
 {a} [x: groups] {b} [y: groups] {c} => (

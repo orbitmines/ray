@@ -125,5 +125,11 @@ unless (exists Choice.coin) { INFO@mark `RN12 a coin lands on neither side` }
 // What the machine says about itself, asked by name.
 unless (IO.os(`platform`).nonempty) { INFO@mark `IO3 the machine does not name its platform` }
 unless (IO.os(`architecture`) == IO.architecture) { INFO@mark `IO4 asking by name is not asking the other way` }
-// spec: reading and writing a location are not claimed here — a test that
-// writes a file leaves one behind, and what it would read is the host's.
+// Reading a location answers what is written there and leaves it as it was:
+// the file this project is declared in is read twice.
+read_once := IO.read(`@ether/$/.ray/v0/tests/app/.project.ray`)
+read_twice := IO.read(`@ether/$/.ray/v0/tests/app/.project.ray`)
+unless (read_once.nonempty) { INFO@mark `IO5 a read answers nothing` }
+unless (read_once == read_twice) { INFO@mark `IO6 reading a file changed it` }
+// spec: writing a location is not claimed here — a test that writes a file
+// leaves one behind.

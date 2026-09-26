@@ -595,3 +595,172 @@ digit_of (byte) => (
 // only a number, and the two are equivalent exactly where the refinement
 // holds.
 
+Precedence ^keyword := class { }
+JumpRead ^keyword := class { }
+bit_set (b) => (
+  held ^keyword := false
+  if (inline b) { held = true }
+  held
+)
+precedences ^keyword := chain None
+Program.components.hierarchy &= class {
+  begins (statement, wanted) => (
+    bit_at ^keyword := wanted.head
+    compare_bit (b) => (
+      held_bit ^keyword := bit_at.value
+      bit_at = bit_at.next
+      external alike (held_bit) (inline b)
+    )
+    external bits statement compare_bit
+    (exists bit_at).not
+  )
+  text_bits (text) => (
+    kept_bits ^keyword := chain None
+    keep_text_bit (b) => (kept_bits &= (inline b))
+    external bits text keep_text_bit
+    kept_bits
+  )
+  spelled_bits (spelled) => (
+    wanted_bits ^keyword := .text_bits(spelled)
+    space_at ^keyword := .middle_byte(`x y`).head
+    while (exists space_at) {
+      wanted_bits &= space_at.value
+      space_at = space_at.next
+    }
+    wanted_bits &= (`end`)
+    wanted_bits
+  )
+  counted_to (spelled) => (
+    wanted_bits ^keyword := .spelled_bits(spelled)
+    written_before ^keyword := zero
+    found ^keyword := None
+    rest_after ^keyword := this
+    statement_at ^keyword := external first rest_after
+    while ((exists statement_at).and((exists found).not)) {
+      if (.begins(statement_at, wanted_bits)) { found = written_before }
+      written_before = written_before.succ
+      rest_after = external rest rest_after
+      statement_at = external first rest_after
+    }
+    found
+  )
+  written_with (spelled) => .begins(this, .spelled_bits(spelled))
+  is_jump => .written_with(`goto`)
+  bits_written => (
+    written_bits ^keyword := chain None
+    keep_written (b) => (written_bits &= (inline b))
+    external bits this keep_written
+    written_bits
+  )
+  middle_byte (around) => (
+    byte_at ^keyword := .text_bits(around).head.next.next.next.next.next.next.next.next
+    middle ^keyword := chain None
+    left_of_byte ^keyword := eight
+    while left_of_byte {
+      middle &= byte_at.value
+      byte_at = byte_at.next
+      left_of_byte = left_of_byte.pred
+    }
+    middle
+  )
+  same_bits (from, other) => (
+    bit_at ^keyword := from
+    other_at ^keyword := other.head
+    same_so_far ^keyword := true
+    while ((exists other_at).and(same_so_far)) {
+      unless (exists bit_at) { same_so_far = false }
+      if (exists bit_at) {
+        unless (exists (external alike (bit_at.value) (other_at.value))) { same_so_far = false }
+        bit_at = bit_at.next
+      }
+      other_at = other_at.next
+    }
+    same_so_far
+  )
+  is_label => (
+    written_bits ^keyword := .bits_written
+    last_byte ^keyword := written_bits.tail
+    back ^keyword := seven
+    while ((exists last_byte).and(back.nonzero)) {
+      last_byte = last_byte.previous
+      back = back.pred
+    }
+    (exists last_byte).and(.same_bits(last_byte, .middle_byte(`x\y`)))
+  )
+  jump_read => (
+    name_at ^keyword := .bits_written.head
+    goto_bits_left ^keyword := eight * five
+    while ((exists name_at).and(goto_bits_left.nonzero)) {
+      name_at = name_at.next
+      goto_bits_left = goto_bits_left.pred
+    }
+    name_bits ^keyword := chain None
+    space_byte ^keyword := .middle_byte(`x y`)
+    ended ^keyword := false
+    while ((exists name_at).and(ended.not)) {
+      if (.same_bits(name_at, space_byte)) { ended = true }
+      unless ended {
+        byte_left ^keyword := eight
+        while ((exists name_at).and(byte_left.nonzero)) {
+          name_bits &= name_at.value
+          name_at = name_at.next
+          byte_left = byte_left.pred
+        }
+      }
+    }
+    JumpRead(name_bits: name_bits, conditional: ended)
+  )
+  is_conditional => .is_jump.and(.jump_read.conditional)
+  flow => (
+    steps ^keyword := .written
+    flow_at ^keyword := steps.head
+    while (exists flow_at) {
+      flow_at.falls_through = true
+      if flow_at.value.is_jump {
+        landing ^keyword := .target_of(flow_at.value)
+        landing_at ^keyword := steps.head
+        while (exists landing_at) {
+          if (exists (external alike (external where landing_at.value) (external where landing))) { flow_at.jumps_to = landing_at }
+          landing_at = landing_at.next
+        }
+        flow_at.falls_through = flow_at.value.is_conditional
+      }
+      flow_at = flow_at.next
+    }
+    steps
+  )
+  target_of (jump) => (
+    wanted_name ^keyword := jump.jump_read.name_bits
+    landing ^keyword := None
+    rest_after ^keyword := this
+    statement_at ^keyword := external first rest_after
+    while ((exists statement_at).and((exists landing).not)) {
+      external extend statement_at Program
+      if statement_at.is_label {
+        label_bits ^keyword := statement_at.bits_written
+        if ((label_bits.count == (wanted_name.count + eight)).and(.same_bits(label_bits.head, wanted_name))) { landing = statement_at }
+      }
+      rest_after = external rest rest_after
+      statement_at = external first rest_after
+    }
+    landing
+  )
+  precedence (spelled) => (
+    place_of ^keyword := external where this
+    cached_at ^keyword := precedences.head
+    found ^keyword := None
+    known_yet ^keyword := false
+    while ((exists cached_at).and(known_yet.not)) {
+      if ((exists (external alike (cached_at.value.place) (place_of))).and(exists (external alike (cached_at.value.spelled) (spelled)))) {
+        if cached_at.value.ranked { found = cached_at.value.answer }
+        known_yet = true
+      }
+      cached_at = cached_at.next
+    }
+    unless known_yet {
+      found = .counted_to(spelled)
+      precedences &= Precedence(place: place_of, spelled: spelled, answer: found, ranked: exists found)
+    }
+    found
+  )
+}

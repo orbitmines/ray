@@ -38,12 +38,41 @@ unless (exists taken.O) { INFO@mark `PG12 a program does not say which rules it 
 // as. What a program is *for* is being read back: `**` is asked for one at
 // every method definition, and what runs is the method.
 
-// spec: a program is not yet walkable as what it *does*, only as what it is
-// written as. The structure the drafts want is the conditional gotos as
-// conditional edges — a statement's next being where control goes rather than
-// what is written below it — and to build that view a statement has to be
-// recognisable as a jump. What a program hands over is its statements, each a
-// program in turn; there is no asking a statement what it is written as, nor
-// which rule read it, so nothing here can tell a `goto` from anything else.
-// That is the same want as applying a compiler level: both need the program
-// read back, not just held.
+// A program is walkable as what it does as well as what it is written as:
+// `flow` is the statements in order, where a jump is also an edge to the
+// label it names, and goes on to what is written below it only when it has a
+// condition. A statement is told apart by reading it back as bits.
+// spec: that is the same want as applying a compiler level — the program read
+// back, not just held — and nothing applies one yet.
+
+// A statement is read back as what it is written as, so a jump can be told
+// from anything else, and where it lands can be found.
+jumping ^keyword := Written.of({
+  goto past if five
+  five
+ past\
+  six
+})
+landed ^keyword := jumping.written.head.next.next.value
+unless (jumping.first.value.is_jump) { INFO@mark `PG16 a goto is not read as a jump` }
+if (jumping.last.value.is_jump) { INFO@mark `PG17 a value is read as a jump` }
+if (taken.first.value.is_jump) { INFO@mark `PG18 a name is read as a jump` }
+unless (landed.is_label) { INFO@mark `PG19 a label is not read as one` }
+if (jumping.first.value.is_label) { INFO@mark `PG20 a jump is read as a label` }
+unless (jumping.first.value.is_conditional) { INFO@mark `PG21 a jump with a condition is not conditional` }
+unless (exists (external alike (external where jumping.target_of(jumping.first.value)) (external where landed))) { INFO@mark `PG22 a jump does not land on its label` }
+always ^keyword := Written.of({
+  goto away
+ away\
+})
+if (always.first.value.is_conditional) { INFO@mark `PG23 a jump without a condition is conditional` }
+if (exists jumping.target_of(always.first.value)) { INFO@mark `PG24 a jump lands on a label it does not name` }
+
+// As what it does: a jump is an edge to where it lands, and only a
+// conditional one also goes on to what is written below it.
+flowing ^keyword := jumping.flow
+unless (exists flowing.head.jumps_to) { INFO@mark `PG25 a jump is not an edge` }
+unless (exists (external alike (external where flowing.head.jumps_to.value) (external where landed))) { INFO@mark `PG26 a jump's edge does not reach its label` }
+unless flowing.head.falls_through { INFO@mark `PG27 a conditional jump does not go on below it` }
+unless flowing.head.next.falls_through { INFO@mark `PG28 a value does not go on below it` }
+if always.flow.head.falls_through { INFO@mark `PG29 a jump without a condition goes on below it` }

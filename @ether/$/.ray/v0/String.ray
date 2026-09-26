@@ -634,71 +634,6 @@ Number.components.hierarchy &= class {
 // A doubled `((` is one such symbol. Text may also say what language it is
 // written in, and be highlighted as that language rather than as a string.
 
-Precedence ^keyword := class { }
-bit_set (b) => (
-  held ^keyword := false
-  if (inline b) { held = true }
-  held
-)
-precedences ^keyword := chain None
-Program.components.hierarchy &= class {
-  begins (statement, wanted) => (
-    bit_at ^keyword := wanted.head
-    compare_bit (b) => (
-      held_bit ^keyword := bit_at.value
-      bit_at = bit_at.next
-      external alike (held_bit) (inline b)
-    )
-    external bits statement compare_bit
-    (exists bit_at).not
-  )
-  counted_to (spelled) => (
-    wanted_bits ^keyword := chain None
-    keep_bit (b) => (wanted_bits &= (inline b))
-    external bits spelled keep_bit
-    around_bits ^keyword := chain None
-    keep_around (b) => (around_bits &= (inline b))
-    external bits (`x y`) keep_around
-    space_at ^keyword := around_bits.head.next.next.next.next.next.next.next.next
-    left_of_space ^keyword := eight
-    while left_of_space {
-      wanted_bits &= space_at.value
-      space_at = space_at.next
-      left_of_space = left_of_space.pred
-    }
-    wanted_bits &= (`end`)
-    written_before ^keyword := zero
-    found ^keyword := None
-    rest_after ^keyword := this
-    statement_at ^keyword := external first rest_after
-    while ((exists (external where statement_at)).and((exists found).not)) {
-      if (.begins(statement_at, wanted_bits)) { found = written_before }
-      written_before = written_before.succ
-      rest_after = external rest rest_after
-      statement_at = external first rest_after
-    }
-    found
-  )
-  precedence (spelled) => (
-    place_of ^keyword := external where this
-    cached_at ^keyword := precedences.head
-    found ^keyword := None
-    known_yet ^keyword := false
-    while ((exists cached_at).and(known_yet.not)) {
-      if ((exists (external alike (cached_at.value.place) (place_of))).and(exists (external alike (cached_at.value.spelled) (spelled)))) {
-        if cached_at.value.ranked { found = cached_at.value.answer }
-        known_yet = true
-      }
-      cached_at = cached_at.next
-    }
-    unless known_yet {
-      found = .counted_to(spelled)
-      precedences &= Precedence(place: place_of, spelled: spelled, answer: found, ranked: exists found)
-    }
-    found
-  )
-}
-
 groups ^keyword := class {
   begins_a_word (written) => (
     spelled_bits ^keyword := chain None
@@ -764,7 +699,7 @@ declared_in (holder, spelled) => (
   rank_found ^keyword := None
   while ((exists visiting).and((exists rank_found).not)) {
     in_class ^keyword := visiting.value
-    if (exists (external where (external first in_class.written_as))) {
+    if (exists (external first in_class.written_as)) {
       written_at ^keyword := in_class.written_as.precedence(spelled)
       if (exists written_at) { rank_found = Placement(nth_class: class_index, written_at: written_at) }
     }

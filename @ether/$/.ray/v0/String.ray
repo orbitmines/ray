@@ -755,14 +755,40 @@ groups ^keyword := class {
   )
 }
 
+Placement ^keyword := class { }
+declared_in (holder, spelled) => (
+  to_visit ^keyword := chain None
+  to_visit &= holder
+  visiting ^keyword := to_visit.head
+  class_index ^keyword := zero
+  rank_found ^keyword := None
+  while ((exists visiting).and((exists rank_found).not)) {
+    in_class ^keyword := visiting.value
+    if (exists (external where (external first in_class.written_as))) {
+      written_at ^keyword := in_class.written_as.precedence(spelled)
+      if (exists written_at) { rank_found = Placement(nth_class: class_index, written_at: written_at) }
+    }
+    further ^keyword := in_class.components.hierarchy.head
+    while (exists further) {
+      to_visit &= further.value
+      further = further.next
+    }
+    class_index = class_index.succ
+    visiting = visiting.next
+  }
+  rank_found
+)
+
 {a} [x: groups] {b} [y: groups] {c} => (
   held ^keyword := None
   both_chain ^keyword := (exists chainable.accepts(`[x]`)).and(exists chainable.accepts(`[y]`))
-  if ((both_chain.not).and(exists (external where (external first a.written_as))).and(exists a.written_as.precedence)) {
-    rank_x ^keyword := a.written_as.precedence(`[x]`)
-    rank_y ^keyword := a.written_as.precedence(`[y]`)
-    if ((exists rank_x).and(exists rank_y)) {
-      if (rank_x.at_least(rank_y)) { held = (a [x] b) [y] c } else { held = a [x] (b [y] c) }
+  if ((both_chain.not).and(exists a.written_as.precedence)) {
+    place_x ^keyword := declared_in(a, `[x]`)
+    place_y ^keyword := declared_in(a, `[y]`)
+    if ((exists place_x).and(exists place_y)) {
+      left_first ^keyword := place_x.nth_class < place_y.nth_class
+      if (place_x.nth_class == place_y.nth_class) { left_first = place_x.written_at.at_least(place_y.written_at) }
+      if left_first { held = (a [x] b) [y] c } else { held = a [x] (b [y] c) }
     }
   }
   held

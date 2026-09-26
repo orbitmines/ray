@@ -749,11 +749,11 @@ chainable ^keyword := class {
 // It is written in String.ray, since the bits of a statement are read with
 // what numbers and booleans are: the rank of an operator is how many
 // statements its class is written as before its definition.
-// spec: an operator's rank is read in the class of what stands to its left,
-// so `a + b < c` compares `+` with a `<` of the same class; one inherited from
-// a parent is not ranked, and neither is one added with
-// `.components.hierarchy &=`, and where either is not ranked the pair is left
-// as it is read.
+// An operator is looked for in the class of what stands to its left and then
+// in what that class is built on: one found in a class built on another binds
+// tighter than one found in that other, and within one class the one written
+// later binds tighter.
+// spec: both are looked for from what stands to the left, not the right.
 // Number writes its comparisons before its arithmetic, so they bind loosest;
 // where both operators chain, the rule below takes them instead.
 //

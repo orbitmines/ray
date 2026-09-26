@@ -54,6 +54,7 @@ unless (Day.base == Hour) { INFO@mark `TI33 a day is not built on an hour` }
 unless (Week.base == Day) { INFO@mark `TI34 a week is not built on a day` }
 unless (Minute.ratio == (six * ten)) { INFO@mark `TI35 a minute is other than sixty of what it is built on` }
 unless (Week.ratio == seven) { INFO@mark `TI36 a week is other than seven of what it is built on` }
+unless (Day.ratio == ((two * ten) + four)) { INFO@mark `TI91 a day is other than twenty-four hours` }
 unless (Week.rank == four) { INFO@mark `TI37 a week is other than four steps off its base` }
 
 // The Gregorian differs from the Julian only at a century, and agrees again

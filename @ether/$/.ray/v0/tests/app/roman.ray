@@ -85,3 +85,7 @@ unless (Roman.digit_of(String.of(`X`).first) == Roman.Digit.x) { INFO@mark `RO56
 unless (Roman.digit_of(String.of(`x`).first) == Roman.Digit.x) { INFO@mark `RO57 a lower-case x does not stand for it either` }
 unless (Roman.digit_of(String.of(`I`).first) == Roman.Digit.i) { INFO@mark `RO58 I does not stand for the ones digit` }
 if (exists Roman.digit_of(String.of(`Q`).first)) { INFO@mark `RO59 Q stands for a roman digit` }
+
+// The vinculum's marks are written by their codepoints: seven hundred and
+// seventy-three is the combining overline.
+unless (Roman.Vinculum.overline.codepoint == ((seven * hundred) + (seven * ten) + three)) { INFO@mark `RO60 the overline is not U+0305` }

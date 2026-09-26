@@ -54,6 +54,9 @@ if (four < one + two) { INFO@mark `PR29 four is below one and two` }
 unless (one + two == three) { INFO@mark `PR30 one and two is not three` }
 unless (three == one + two) { INFO@mark `PR31 three is not one and two` }
 if (two * three < five) { INFO@mark `PR32 two times three is below five` }
+unless (one + two >= three) { INFO@mark `PR33 one and two is not at least three` }
+if (one + two > four) { INFO@mark `PR34 one and two is above four` }
+unless (four >= one + two) { INFO@mark `PR35 four is not at least one and two` }
 
 // spec: a chain of three comparisons is not claimed — the rule takes two
 // operators around a shared operand, so `a < b < c < d` reads as

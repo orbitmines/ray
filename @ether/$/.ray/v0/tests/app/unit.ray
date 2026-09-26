@@ -69,3 +69,7 @@ unless (String.of(Bit.name) == String.of(`bit`)) { INFO@mark `U36 a bit is not c
 unless (String.of(Bit.symbol) == String.of(`b`)) { INFO@mark `U37 a bit is not written b` }
 unless (String.of(Byte.name) == String.of(`byte`)) { INFO@mark `U38 a byte is not called that` }
 unless (String.of(Minute.base.name) == String.of(`second`)) { INFO@mark `U39 a minute is not built on the second` }
+
+// Quantities compare after they add.
+unless ((two of Second) + (three of Second) == (five of Second)) { INFO@mark `U40 two and three seconds is not five seconds` }
+if ((two of Second) + (three of Second) < (five of Second)) { INFO@mark `U41 two and three seconds is below five seconds` }

@@ -139,7 +139,11 @@ Iterable := class: Ordered {
   bounded => true
   unbounded => .bounded.not
 
-  count => if (exists .entry) { .entry.count } else { zero }
+  count => (
+    entries_counted := zero
+    if (exists .entry) { entries_counted = .entry.count }
+    entries_counted
+  )
 
   first => .entry.first
   last => .entry.last

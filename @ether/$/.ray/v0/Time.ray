@@ -69,7 +69,11 @@ Calendar := class {
 Weekday := enum monday | tuesday | wednesday | thursday | friday | saturday | sunday
 Month := enum january (length: (three * ten) + one, place: one) | february (length: (two * ten) + eight, place: two) | march (length: (three * ten) + one, place: three) | april (length: three * ten, place: four) | may (length: (three * ten) + one, place: five) | june (length: three * ten, place: six) | july (length: (three * ten) + one, place: seven) | august (length: (three * ten) + one, place: eight) | september (length: three * ten, place: nine) | october (length: (three * ten) + one, place: ten) | november (length: three * ten, place: ten + one) | december (length: (three * ten) + one, place: ten + two) {
   // February takes the leap day.
-  days_in (year: Number, calendar) => if ((.place == two).and(calendar.is_leap_year(year))) { .length.succ } else { .length }
+  days_in (year: Number, calendar) => (
+    month_days := .length
+    if ((.place == two).and(calendar.is_leap_year(year))) { month_days = .length.succ }
+    month_days
+  )
 }
 
 Julian := class {
@@ -129,10 +133,10 @@ Time := class {
 
     held
   )
-  - (other: Time) => .since_calendar_epoch - other.since_calendar_epoch
-  + (duration: Quantity) => Time(calendar: .calendar, since_epoch: .since_epoch + duration, epoch: .epoch)
   == (other: Time) => .since_calendar_epoch == other.since_calendar_epoch
   < (other: Time) => .since_calendar_epoch < other.since_calendar_epoch
+  + (duration: Quantity) => Time(calendar: .calendar, since_epoch: .since_epoch + duration, epoch: .epoch)
+  - (other: Time) => .since_calendar_epoch - other.since_calendar_epoch
   as (calendar) => Time(calendar: calendar, since_epoch: .since_epoch, epoch: .epoch)
 
   // spec: the clock's nanoseconds, kept as digits; `seconds_now` reads the

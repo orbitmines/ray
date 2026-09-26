@@ -36,7 +36,11 @@ Location := class: Ray {
     child
   )
   // How deep this is: what holds it, and what holds that.
-  depth => if (exists .parent) { .parent.depth.succ } else { zero }
+  depth => (
+    depth_below := zero
+    if (exists .parent) { depth_below = .parent.depth.succ }
+    depth_below
+  )
 }
 
 World := class: Nameable {

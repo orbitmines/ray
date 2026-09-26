@@ -9,15 +9,31 @@
 
 Unit := class {
   is_base => (exists .base).not
-  rank => if .is_base { zero } else { .base.rank.succ }
+  rank => (
+    rank_steps := zero
+    unless .is_base { rank_steps = .base.rank.succ }
+    rank_steps
+  )
 
   // How many of the base unit one of this unit is.
   // A prefixed unit's factor is its prefix's, read when asked.
-  ratio => if (exists .prefix) { .prefix.factor } else { .factor }
-  scale => if .is_base { one } else { .ratio * .base.scale }
+  ratio => (
+    ratio_times := .factor
+    if (exists .prefix) { ratio_times = .prefix.factor }
+    ratio_times
+  )
+  scale => (
+    scaled := one
+    unless .is_base { scaled = .ratio * .base.scale }
+    scaled
+  )
   // Where this unit's zero sits on the base unit's line (`def offset`); `as`
   // does not apply it yet.
-  shift => if (exists .offset) { .offset } else { zero }
+  shift => (
+    shifted_by := zero
+    if (exists .offset) { shifted_by = .offset }
+    shifted_by
+  )
 
   // Allow for syntax `year as ns`: one of this unit, expressed in another.
   as (other: Unit) => (one of this) as other
@@ -75,6 +91,14 @@ Quantity := class {
   // spec: on one base line the finer unit is the one fewer multiples up, so
   // no scale (which can be thousands) is built to decide.
   finer (other: Quantity) => if (other.unit.rank < .unit.rank) { other.unit } else { .unit }
+  == (other: Quantity) => (
+    kind := .finer(other)
+    (this as kind).amount == (other as kind).amount
+  )
+  < (other: Quantity) => (
+    kind := .finer(other)
+    (this as kind).amount < (other as kind).amount
+  )
   + (other: Quantity) => (
     kind := .finer(other)
     total := (this as kind).amount + (other as kind).amount
@@ -96,15 +120,6 @@ Quantity := class {
   // is itself read in seconds. What a second is is Time's to say.
   is_temporal => .unit.is_temporal
   as_seconds => (this as Second).amount
-
-  == (other: Quantity) => (
-    kind := .finer(other)
-    (this as kind).amount == (other as kind).amount
-  )
-  < (other: Quantity) => (
-    kind := .finer(other)
-    (this as kind).amount < (other as kind).amount
-  )
 }
 
 // Allow for syntax `1 of Byte`, `3 of Bit`: a number followed by a unit. The

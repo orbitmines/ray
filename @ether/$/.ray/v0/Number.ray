@@ -261,8 +261,16 @@ Number := class: Ray {
   // spells an operator is held back until that spelling is a name, and the
   // rule that groups by precedence is written with this for that reason.
   at_least (other: Number) => (this < other).not
-  min (other: Number) => if (this < other) { this } else { other }
-  max (other: Number) => if (this < other) { other } else { this }
+  min (other: Number) => (
+    smallest_of := other
+    if (this < other) { smallest_of = this }
+    smallest_of
+  )
+  max (other: Number) => (
+    most := this
+    if (this < other) { most = other }
+    most
+  )
 
   // `Nat | ℕ`: every number here is natural; the draft's `ℝ` and the base
   // towers wait on strings.
@@ -318,25 +326,12 @@ Number.Signed = class {
   positive => .negative.not
   is_zero => .integer.is_zero
 
-  - => .negated
-  negated => if .negative { Number.Signed(integer: .integer) } else { Number.Signed(sign: global, integer: .integer) }
+  negated => (
+    flipped := None
+    if .negative { flipped = Number.Signed(integer: .integer) } else { flipped = Number.Signed(sign: global, integer: .integer) }
+    flipped
+  )
   abs => Number.Signed(integer: .integer)
-
-  // Same signs add magnitudes; different signs subtract the smaller from the
-  // larger and keep its sign.
-  + (other: Number.Signed) => if (.negative.xnor(other.negative)) {
-    Number.Signed(sign: .sign, integer: .integer + other.integer)
-  } elsif (other.integer < .integer) {
-    Number.Signed(sign: .sign, integer: .integer - other.integer)
-  } else {
-    Number.Signed(sign: other.sign, integer: other.integer - .integer)
-  }
-  - (other: Number.Signed) => this + other.negated
-  * (other: Number.Signed) => if (.negative.xnor(other.negative)) {
-    Number.Signed(integer: .integer * other.integer)
-  } else {
-    Number.Signed(sign: global, integer: .integer * other.integer)
-  }
 
   == (other: Number.Signed) => (.negative.xnor(other.negative)).and(.integer == other.integer)
   < (other: Number.Signed) => if .negative {
@@ -344,6 +339,27 @@ Number.Signed = class {
   } else {
     if other.negative { false } else { .integer < other.integer }
   }
+
+  // Same signs add magnitudes; different signs subtract the smaller from the
+  // larger and keep its sign.
+  + (other: Number.Signed) => (
+    summed := None
+    if (.negative.xnor(other.negative)) {
+      summed = Number.Signed(sign: .sign, integer: .integer + other.integer)
+    } elsif (other.integer < .integer) {
+      summed = Number.Signed(sign: .sign, integer: .integer - other.integer)
+    } else {
+      summed = Number.Signed(sign: other.sign, integer: other.integer - .integer)
+    }
+    summed
+  )
+  - (other: Number.Signed) => this + other.negated
+  * (other: Number.Signed) => (
+    multiplied := None
+    if (.negative.xnor(other.negative)) { multiplied = Number.Signed(integer: .integer * other.integer) } else { multiplied = Number.Signed(sign: global, integer: .integer * other.integer) }
+    multiplied
+  )
+  - => .negated
 }
 
 // static class Real < integer: Base, ".", fraction: Base{unbounded}

@@ -173,3 +173,14 @@ if (spelled_real.irrational) { INFO@mark `N115 a real is irrational` }
 // into.
 unless (five.signed.negative.not) { INFO@mark `N116 five as an integer is negative` }
 unless (five.negated.negative) { INFO@mark `N117 five negated is not negative` }
+
+// A signed number groups like a natural one: its comparisons are written
+// before its arithmetic, and what it answers is bound, not a branch.
+unless (three.signed + two.signed == five.signed) { INFO@mark `N118 three and two signed is not five` }
+if (three.signed + two.signed < five.signed) { INFO@mark `N119 three and two signed is below five` }
+unless (two.negated + five.signed == three.signed) { INFO@mark `N120 minus two and five is not three` }
+unless ((two.negated * three.negated) == six.signed) { INFO@mark `N121 minus two times minus three is not six` }
+unless ((two.negated * three.signed) == six.negated) { INFO@mark `N122 minus two times three is not minus six` }
+unless (two.negated.negated == two.signed) { INFO@mark `N123 minus minus two is not two` }
+unless ((three.signed + five.negated) == two.negated) { INFO@mark `N124 three and minus five is not minus two` }
+unless ((two.min(three) * two + one) == five) { INFO@mark `N125 the smaller of two and three, doubled and one, is not five` }

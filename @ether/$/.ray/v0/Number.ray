@@ -596,12 +596,15 @@ digit_of (byte) => (
 // holds.
 
 Precedence ^keyword := class { }
-JumpRead ^keyword := class { }
-bit_set (b) => (
-  held ^keyword := false
-  if (inline b) { held = true }
-  held
+BitsRead ^keyword := class {
+  keep_read (b) => (this.read_bits &= (inline b))
+}
+text_bits (text) => (
+  reading ^keyword := BitsRead(read_bits: chain None)
+  external bits text reading.keep_read
+  reading.read_bits
 )
+JumpRead ^keyword := class { }
 precedences ^keyword := chain None
 Program.components.hierarchy &= class {
   begins (statement, wanted) => (
@@ -614,14 +617,8 @@ Program.components.hierarchy &= class {
     external bits statement compare_bit
     (exists bit_at).not
   )
-  text_bits (text) => (
-    kept_bits ^keyword := chain None
-    keep_text_bit (b) => (kept_bits &= (inline b))
-    external bits text keep_text_bit
-    kept_bits
-  )
   spelled_bits (spelled) => (
-    wanted_bits ^keyword := .text_bits(spelled)
+    wanted_bits ^keyword := text_bits(spelled)
     space_at ^keyword := .middle_byte(`x y`).head
     while (exists space_at) {
       wanted_bits &= space_at.value
@@ -647,13 +644,12 @@ Program.components.hierarchy &= class {
   written_with (spelled) => .begins(this, .spelled_bits(spelled))
   is_jump => .written_with(`goto`)
   bits_written => (
-    written_bits ^keyword := chain None
-    keep_written (b) => (written_bits &= (inline b))
-    external bits this keep_written
-    written_bits
+    reading ^keyword := BitsRead(read_bits: chain None)
+    external bits this reading.keep_read
+    reading.read_bits
   )
   middle_byte (around) => (
-    byte_at ^keyword := .text_bits(around).head.next.next.next.next.next.next.next.next
+    byte_at ^keyword := text_bits(around).head.next.next.next.next.next.next.next.next
     middle ^keyword := chain None
     left_of_byte ^keyword := eight
     while left_of_byte {

@@ -636,14 +636,13 @@ Number.components.hierarchy &= class {
 
 groups ^keyword := class {
   begins_a_word (written) => (
-    spelled_bits ^keyword := chain None
+    spelled_bits ^keyword := text_bits(written)
     unread ^keyword := eight
-    take_bit (b) => (
-      spelled_bits &= bit_set(b)
+    counted_bit ^keyword := spelled_bits.head
+    while ((exists counted_bit).and(unread.nonzero)) {
+      counted_bit = counted_bit.next
       unread = unread.pred
-      unread.holds
-    )
-    external bits written take_bit
+    }
     word ^keyword := false
     if unread.is_zero {
       head_bit ^keyword := spelled_bits.head

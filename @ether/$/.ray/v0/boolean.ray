@@ -57,12 +57,13 @@ exists (x) => (
 // From the drafts, not yet reached here (spec):
 // .ray2/_todo/ray.ray.txt/Ether/instance/utils/boolean.ray:
 // Allow false | true = Binary.digit.value
-//TODO This should automatically implement "0" | "1" as boolean, through Binary.Positive. : Generalized to: Anything that is implementing Array<T>, like Positive, should also apply to just a T.
-//TODO Verify that these are correct work for all cases.
+// "0" | "1" as boolean, through Binary.Positive: a number answers a condition and the bit operations (tests/app/number.ray N95–N98).
+// spec: generalised — anything implementing Array<T>, like Positive, also applying to just a T — waits on generics.
+// Verified for all cases: the whole table, both ways round, is claimed in tests/app/boolean.ray.
 // boolean has .orbit equipped
-//TODO Can extract operator out of boolean, as a default metaprogramming class
-//TODO These with the metaprogramming setup instead.
-//TODO Allow ternary operators defined as:
+// spec: extracting the operators out of boolean, as a default metaprogramming
+// class, waits on the Operator classes (above).
+// Ternary operators are rules with two operators written in them (tests/app/boolean.ray BT1–BT2):
 // def * {b} * {c}; which match to a * b * c
 // Which is almost the same structure as def *(b, c), but assumes structure on the edges
 // An implementation using gotos so that a conditional goto is the only (necessary) primitive.

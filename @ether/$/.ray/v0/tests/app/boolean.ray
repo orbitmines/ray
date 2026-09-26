@@ -66,3 +66,12 @@ unless (exists true) { INFO@mark `BO25 true is not there` }
 unless (exists false) { INFO@mark `BO26 false is not there` }
 if (exists None) { INFO@mark `BO27 nothing is there` }
 unless (exists (exists None).not) { INFO@mark `BO28 asking whether nothing is there answers nothing` }
+
+// A rule with two operators written in it is a ternary.
+{a} %% {b} ## {c} => (
+  chosen ^keyword := c
+  if a { chosen = b }
+  chosen
+)
+unless (true %% true ## false) { INFO@mark `BT1 a ternary does not take its first answer` }
+if (false %% true ## false) { INFO@mark `BT2 a ternary does not take its second answer` }

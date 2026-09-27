@@ -1,0 +1,97 @@
+// Running code: the machine is at an address, reads the instruction there,
+// and runs what it does — a goto program — over the state. Where that program
+// leaves for is where the machine goes next; where it runs to its end, the
+// machine goes on to the instruction that follows.
+//
+// Nothing here knows an instruction set. The fields an instruction was read
+// with are put in the state under their names before its program runs, as are
+// where it starts and where the next one does (`inst_start`, `inst_next`, as
+// SLEIGH calls them), so a program says `Named(name: `rd`)` for its operand.
+
+Run := class {
+  code: Node
+  // The address of the code's first byte, as wide as the machine's addresses.
+  base: Node
+
+  // Every instruction of the code with the address it sits at: each one
+  // takes up as many bytes as the word it is written as.
+  placed => (
+    out := chain None
+    address := .base
+    step := Bits.one_like(.base)
+    walker := .code.listing.head
+    while (exists walker) {
+      read := walker.value
+      out &= Placed(address: address, read: read)
+      unless (exists read.unread) {
+        spelled := read.written.bits.head
+        while (exists spelled) {
+          octet := eight_bits
+          while ((exists octet).and(exists spelled)) {
+            spelled = spelled.next
+            octet = octet.next
+          }
+          address = address + step
+        }
+      }
+      walker = walker.next
+    }
+    out
+  )
+  // The placed instruction at an address, and the one after it.
+  found_at (places, address) => (
+    landing := None
+    walker := places.head
+    while ((exists walker).and((exists landing).not)) {
+      if (walker.value.address == address) { landing = walker }
+      walker = walker.next
+    }
+    landing
+  )
+
+  // Run from `start` until the machine reaches `stop`, reaches an address
+  // with no instruction, or has taken as many steps as `limit` has links.
+  // What it answers is the address it stopped at.
+  run (state, start, stop, limit) => (
+    places := .placed
+    at := start
+    left := limit.bits.head
+    going := true
+    while going {
+      current := Run.found_at(places, at)
+      if (exists current) {
+        read := current.value.read
+        following := if (exists current.next) { current.next.value.address } else { None }
+        Run.bind(state, read, at, following)
+        program := read.encoding.semantics
+        leaving := if (exists program) { program.run(state) } else { None }
+        at = if (exists leaving) { leaving } else { following }
+      } else { going = false }
+      unless (exists at) { going = false }
+      if (exists at) {
+        if (at == stop) { going = false }
+      }
+      if (exists left) { left = left.next } else { going = false }
+    }
+    at
+  )
+  // The fields of an instruction, and where it starts and the next one does,
+  // put in the state for its program to read.
+  bind (state, read, start_address, next_address) => (
+    field_walker := read.encoding.fields.head
+    while (exists field_walker) {
+      field_name := field_walker.value.name
+      field_value := read.field(field_name)
+      state.put(field_name, field_value)
+      field_walker = field_walker.next
+    }
+    state.put(`inst_start`, start_address)
+    if (exists next_address) { state.put(`inst_next`, next_address) }
+    true
+  )
+}
+
+Placed := class {
+  address: Node
+  read: Node
+}

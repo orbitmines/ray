@@ -1,0 +1,1084 @@
+// SLEIGH, the language Ghidra describes processors in, read as what it is: a
+// language. A `.slaspec` (and the `.sinc` files it includes) is a file of it,
+// and the rules below are what its statements mean. What a statement defines
+// becomes a name here — a register, a field of an instruction token, a table
+// of constructors — so a pattern such as `(cc=1 & aaa=3) ... & OP1` is read
+// the way any expression is: `cc` is the field, `=` constrains it, `&` joins
+// two constraints, and `OP1` is the table whose constructors it takes.
+//
+// Numbers a description writes are machine values, so they are read as
+// `Bits`; the few that count something (a bit position, a width) are read as
+// counts, chains as long as the number, which are cheap at the sizes a token
+// has.
+//
+// A constructor's p-code is kept as it is written, and run when asked: over
+// registers that hold bits, with `if (condition) goto target` the one control
+// it has (`Sleigh.run`).
+//
+// spec: not read yet — what the preprocessor means (its lines are passed
+// over), `context` fields as context, `with` blocks, `build`, constraints
+// other than `=` and `!=`, displays of more than one word, and most of p-code:
+// memory, `goto` alone, `call`, `return`, bit ranges, and constants other than
+// hexadecimal, 0 and 1.
+
+mark ^keyword := external global
+
+// What has been read so far: in the order it is written.
+Sleigh := class {
+  endian: Node
+  alignment: Node
+  spaces: Node
+  registers: Node
+  tokens: Node
+  fields: Node
+  pcodeops: Node
+  macros: Node
+  tables: Node
+  instructions: Node
+
+  // The characters of a text, each the eight bits it is written with, most
+  // significant first.
+  characters (written) => (
+    out := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        out &= byte
+        byte = chain None
+      }
+    )
+    external bits written take
+    out
+  )
+  // A count: a chain as long as the number written in decimal.
+  counted (written) => (
+    total := chain None
+    character := Sleigh.characters(written).head
+    while (exists character) {
+      digit := Bits.nibble_of(character.value)
+      if (exists digit) {
+        tenfold := chain None
+        walker := total.head
+        while (exists walker) {
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          walker = walker.next
+        }
+        if digit.head.value { tenfold &= true }
+        if digit.head.next.value {
+          tenfold &= true
+          tenfold &= true
+        }
+        if digit.head.next.next.value {
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+        }
+        if digit.head.next.next.next.value {
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+          tenfold &= true
+        }
+        total = tenfold
+      }
+      character = character.next
+    }
+    total
+  )
+  // A machine value as it is written: `0x90` in hexadecimal, `0b0110` in
+  // binary, `12` in decimal, into bits, least significant first. `x` is
+  // 01111000 and `b` is 01100010: both 011, and then apart; a digit is 0011.
+  numeral (text) => Sleigh.glyph_number(Sleigh.characters(text))
+  // The same, from the characters it is written with.
+  glyph_number (glyphs) => (
+    second := glyphs.head.next
+    marked := false
+    sixteen := false
+    if (exists second) {
+      marked = second.value.head.next.value.and(second.value.head.next.next.value)
+      sixteen = marked.and(second.value.head.next.next.next.next.value)
+    }
+    out := chain None
+    if sixteen { out &= Sleigh.hexadecimal(second.next) } elsif marked { out &= Sleigh.binary(second.next) } else { out &= Sleigh.decimal(glyphs.head) }
+    out.head.value
+  )
+  // Hexadecimal digits, most significant first.
+  hexadecimal (from) => (
+    nibbles := chain None
+    walker := from
+    while (exists walker) {
+      nibbles &= Bits.nibble_of(walker.value)
+      walker = walker.next
+    }
+    out := chain None
+    back := nibbles.tail
+    while (exists back) {
+      Bits.joined(out, back.value)
+      back = back.previous
+    }
+    Bits(bits: out)
+  )
+  // Characters `0` and `1`, most significant first.
+  binary (from) => (
+    ordered := chain None
+    walker := from
+    while (exists walker) {
+      ordered &= walker.value.tail.value
+      walker = walker.next
+    }
+    out := chain None
+    back := ordered.tail
+    while (exists back) {
+      out &= back.value
+      back = back.previous
+    }
+    Bits(bits: out)
+  )
+  // Decimal digits, most significant first: each is ten times what came
+  // before it, and itself.
+  decimal (from) => (
+    total := Bits(bits: Bits.nibble_of(from.value))
+    walker := from.next
+    while (exists walker) {
+      digit := Bits(bits: Bits.nibble_of(walker.value))
+      room := Sleigh.widened(total, digit).under(digit.xor(digit))
+      twofold := Sleigh.raised(room)
+      eightfold := Sleigh.raised(Sleigh.raised(twofold))
+      total = Sleigh.sum(Sleigh.sum(eightfold, twofold), digit)
+      walker = walker.next
+    }
+    total
+  )
+  // A word one bit wider, moved up by one: twice what it was.
+  raised (word) => (
+    out := chain None
+    out &= false
+    Bits(bits: Bits.joined(out, word.bits))
+  )
+  // Two words of any widths added, as wide as the wider.
+  sum (one, other) => Sleigh.widened(one, other) + Sleigh.widened(other, one)
+  // The bits from `low` to `high` of a word `width` wide: where a field sits
+  // in its token.
+  span (low, high, width) => (
+    out := chain None
+    below := low.head
+    upto := high.head
+    past := false
+    walker := width.head
+    while (exists walker) {
+      inside := (exists below).not.and(past.not)
+      out &= inside
+      if (exists upto) { upto = upto.next } else { past = true }
+      if (exists below) { below = below.next }
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+  // A word as wide as another, or wider: what is missing above is not set.
+  widened (word, template) => (
+    out := chain None
+    mine := word.bits.head
+    theirs := template.bits.head
+    while ((exists mine).or(exists theirs)) {
+      if (exists mine) {
+        out &= mine.value
+        mine = mine.next
+      } else { out &= false }
+      if (exists theirs) { theirs = theirs.next }
+    }
+    Bits(bits: out)
+  )
+  // No bits set, as wide as a word.
+  cleared (word) => (
+    out := chain None
+    walker := word.bits.head
+    while (exists walker) {
+      out &= false
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+
+  // Two patterns that hold at once: every pair of their alternatives that
+  // does not fix one bit two ways, as one alternative.
+  both (lefts, rights) => (
+    out := chain None
+    left := lefts.head
+    while (exists left) {
+      right := rights.head
+      while (exists right) {
+        joined := Sleigh.joined(left.value, right.value)
+        if (exists joined) { out &= joined }
+        right = right.next
+      }
+      left = left.next
+    }
+    out
+  )
+  // One alternative that is both, or None where they fix a bit two ways. The
+  // four words are walked together once; what one of them does not reach is
+  // not set.
+  joined (one, other) => (
+    mask := chain None
+    match := chain None
+    clash := false
+    mine := one.mask.bits.head
+    theirs := other.mask.bits.head
+    fixed := one.match.bits.head
+    given := other.match.bits.head
+    while ((exists mine).or(exists theirs)) {
+      left := false
+      right := false
+      left_bit := false
+      right_bit := false
+      if (exists mine) {
+        left = mine.value
+        left_bit = fixed.value
+        mine = mine.next
+        fixed = fixed.next
+      }
+      if (exists theirs) {
+        right = theirs.value
+        right_bit = given.value
+        theirs = theirs.next
+        given = given.next
+      }
+      if (left.and(right).and(left_bit.xor(right_bit))) { clash = true }
+      mask &= left.or(right)
+      match &= left_bit.or(right_bit)
+    }
+    if clash { None } else {
+      Alternative(mask: Bits(bits: mask), match: Bits(bits: match), fields: Sleigh.appended(one.fields, other.fields), parts: Sleigh.appended(one.parts, other.parts))
+    }
+  )
+  // Either of two patterns: the alternatives of both.
+  either (lefts, rights) => Sleigh.appended(lefts, rights)
+  // One pattern and then another: the second is read in the bits after the
+  // first, so what it fixes and reads moves up past it.
+  then (lefts, rights) => (
+    out := chain None
+    left := lefts.head
+    while (exists left) {
+      right := rights.head
+      while (exists right) {
+        first := left.value
+        second := right.value
+        below := Sleigh.cleared(first.mask)
+        moved := chain None
+        walker := second.fields.head
+        while (exists walker) {
+          moved &= Field(name: walker.value.name, mask: below.under(walker.value.mask))
+          walker = walker.next
+        }
+        out &= Alternative(mask: first.mask.under(second.mask), match: first.match.under(second.match), fields: Sleigh.appended(first.fields, moved), parts: Sleigh.appended(first.parts, second.parts))
+        right = right.next
+      }
+      left = left.next
+    }
+    out
+  )
+  appended (first, second) => (
+    out := chain None
+    walker := first.head
+    while (exists walker) {
+      out &= walker.value
+      walker = walker.next
+    }
+    walker = second.head
+    while (exists walker) {
+      out &= walker.value
+      walker = walker.next
+    }
+    out
+  )
+
+  // Running p-code. What a varnode holds: bits are what they are, and a
+  // place is asked what it holds now.
+  now (given) => (
+    out := chain None
+    if (exists given.bits) { out &= given } else { out &= given.now }
+    out.head.value
+  )
+  // As many bits as some bytes written in decimal.
+  bytes_wide (written) => (
+    out := chain None
+    walker := Sleigh.counted(written).head
+    while (exists walker) {
+      out &= false
+      out &= false
+      out &= false
+      out &= false
+      out &= false
+      out &= false
+      out &= false
+      out &= false
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+  // A word cut or widened to exactly the width of another.
+  fitted (word, template) => (
+    out := chain None
+    mine := word.bits.head
+    theirs := template.bits.head
+    while (exists theirs) {
+      if (exists mine) {
+        out &= mine.value
+        mine = mine.next
+      } else { out &= false }
+      theirs = theirs.next
+    }
+    Bits(bits: out)
+  )
+  // What a varnode holds, as wide as another value: a signed field is
+  // widened with its sign, anything else with nothing.
+  extended (given, template) => (
+    held := Sleigh.now(given)
+    signed := false
+    unless (exists given.bits) { signed = given.signed }
+    fill := signed.and(held.high)
+    out := chain None
+    mine := held.bits.head
+    theirs := Sleigh.widened(held, template).bits.head
+    while (exists theirs) {
+      if (exists mine) {
+        out &= mine.value
+        mine = mine.next
+      } else { out &= fill }
+      theirs = theirs.next
+    }
+    Bits(bits: out)
+  )
+  plus (one, other) => (
+    wide := Sleigh.widened(Sleigh.now(one), Sleigh.now(other))
+    Sleigh.extended(one, wide) + Sleigh.extended(other, wide)
+  )
+  minus (one, other) => (
+    wide := Sleigh.widened(Sleigh.now(one), Sleigh.now(other))
+    Sleigh.extended(one, wide) - Sleigh.extended(other, wide)
+  )
+  // A comparison answers one bit.
+  truth (holds) => (
+    out := chain None
+    out &= holds
+    Bits(bits: out)
+  )
+  equal (one, other) => (
+    wide := Sleigh.widened(Sleigh.now(one), Sleigh.now(other))
+    Sleigh.truth(Sleigh.extended(one, wide).xor(Sleigh.extended(other, wide)).is_zero)
+  )
+  signed_less (one, other) => (
+    wide := Sleigh.widened(Sleigh.now(one), Sleigh.now(other))
+    Sleigh.truth(Sleigh.extended(one, wide).less(Sleigh.extended(other, wide)))
+  )
+  holds (given) => Sleigh.now(given).is_zero.not
+
+  // One instruction run: its constructor's p-code, over the machine, with
+  // the address of the instruction after it. What it answers is where the
+  // machine goes next: there, or where a `goto` in it went.
+  run (decoded, following) => (
+    step := Step(decoded: decoded, following: following, jumped: chain None)
+    machine.steps &= step
+    decoded.encoding.semantics.head.value.performed
+    out := chain None
+    if (exists step.jumped.head) { out &= step.jumped.tail.value } else { out &= following }
+    out.head.value
+  )
+  // The constructor of a table that the instruction being run was read with.
+  part_of (table) => (
+    found := None
+    walker := machine.decoded.encoding.semantics.head
+    while (exists walker) {
+      if (exists (external alike (external where walker.value.table) (external where table))) { found = walker.value }
+      walker = walker.next
+    }
+    found
+  )
+  // `if (condition) goto target`: the one control p-code has.
+  branch (condition, target) => (
+    if (Sleigh.holds(condition)) { machine.step.jumped &= Sleigh.address_of(target) }
+    true
+  )
+  address_of (target) => (
+    out := chain None
+    exported := target.exported
+    if exported.pointing { out &= exported.target } else { out &= Sleigh.now(exported) }
+    out.head.value
+  )
+
+  // The encodings of constructors, in the order they are written: one for
+  // every alternative a constructor's pattern has once the tables it names
+  // are read into it. Every field reaches across the whole word, so that
+  // writing it back keeps the rest.
+  encodings_of (constructors) => (
+    out := chain None
+    walker := constructors.head
+    while (exists walker) {
+      made := walker.value
+      alternative := made.alternatives.head
+      while (exists alternative) {
+        taken := alternative.value
+        fields := chain None
+        field := taken.fields.head
+        while (exists field) {
+          fields &= Field(name: field.value.name, mask: Sleigh.widened(field.value.mask, taken.mask))
+          field = field.next
+        }
+        out &= Encoding(mnemonic: made.mnemonic, mask: taken.mask, match: taken.match, fields: fields, semantics: taken.parts)
+        alternative = alternative.next
+      }
+      walker = walker.next
+    }
+    out
+  )
+  // The instructions spelled with one of some mnemonics, in the order they
+  // are written: `sleigh.spelled(chain of mnemonics)`.
+  spelled (mnemonics) => (
+    out := chain None
+    walker := .instructions.head
+    while (exists walker) {
+      asked := mnemonics.head
+      while (exists asked) {
+        if (exists (external alike (walker.value.mnemonic) (asked.value))) { out &= walker.value }
+        asked = asked.next
+      }
+      walker = walker.next
+    }
+    out
+  )
+  // How many bytes an encoding takes: its mask, eight bits at a time.
+  length_of (encoding) => (
+    out := chain None
+    walker := encoding.mask.bits.head
+    while (exists walker) {
+      out &= walker
+      walker = walker.next.next.next.next.next.next.next.next
+    }
+    out
+  )
+  // Bytes read one instruction after another, from the first: each word
+  // is as many bytes as the longest encoding could take, joined the way the
+  // description keeps them, and the next instruction starts where this one
+  // ends. What no encoding reads ends the reading.
+  disassembled (isa, bytes, longest) => (
+    out := chain None
+    at := bytes.head
+    while (exists at) {
+      word := at.value
+      ahead := at.next
+      counting := longest.head.next
+      while ((exists ahead).and(exists counting)) {
+        word = word.under(ahead.value)
+        ahead = ahead.next
+        counting = counting.next
+      }
+      found := isa.read(word)
+      if (exists found) {
+        out &= found
+        step := Sleigh.length_of(found.encoding).head
+        while (exists step) {
+          at = at.next
+          step = step.next
+        }
+      } else { at = None }
+    }
+    out
+  )
+  // An instruction set of constructors read.
+  isa (constructors) => ISA(name: None, endian: sleigh.endian, encodings: Sleigh.encodings_of(constructors))
+}
+sleigh ^keyword := Sleigh(endian: None, alignment: None, spaces: chain None, registers: chain None, tokens: chain None, fields: chain None, pcodeops: chain None, macros: chain None, tables: chain None, instructions: chain None)
+// Zero and one as bits, read once.
+zero_bits ^keyword := Sleigh.numeral(`0`)
+one_bits ^keyword := Sleigh.numeral(`1`)
+
+// One way a pattern is spelled: which bits are fixed (`mask`) and to what
+// (`match`), the operands read out of the rest (`fields`), and the
+// constructors it was made of (`parts`).
+Alternative := class {
+  mask: Node
+  match: Node
+  fields: Node
+  parts: Node
+}
+
+// A pattern: the ways it can be spelled. `&` is both at once, `|` either,
+// `;` one after the other, and `...` lets a pattern be shorter than what it is
+// joined with.
+Pattern := class {
+  held: Node
+  alternatives => .held
+  ; (other) => Pattern(held: Sleigh.then(.alternatives, other.alternatives))
+  | (other) => Pattern(held: Sleigh.either(.alternatives, other.alternatives))
+  & (other) => Pattern(held: Sleigh.both(.alternatives, other.alternatives))
+  ... ^punctuation => this
+  // `pattern [ name = value; ]`: what is set while the pattern is read, kept
+  // with it to be run when the constructor is. The name stands for what was
+  // set last, wherever the constructor's p-code uses it.
+  // spec: one `name = value;` per action.
+  { }[{ }{literal named}{ }={ }{given};{ }] ^punctuation => (
+    holder ^keyword := external .
+    act => (inline given)
+    global[named] = Setting(values: chain None)
+    Acting(held: .alternatives, action: holder, named: named)
+  )
+  setting => None
+
+  // What the operands of a pattern are while p-code runs: places that hold
+  // bits. `bits` is None, so that bits and places are told apart.
+  bits => None
+  signed => false
+  pointing => false
+  // The operators of p-code, and the ones whose right side is the digit 0 or
+  // 1, which is not a name (see the numbers at the end).
+  { }+{ }{other} ^punctuation => Sleigh.plus(this, other)
+  { }-{ }{other} ^punctuation => Sleigh.minus(this, other)
+  { }=={ }{other} ^punctuation => Sleigh.equal(this, other)
+  { }+{ }1 ^punctuation => Sleigh.plus(this, one_bits)
+  { }-{ }1 ^punctuation => Sleigh.minus(this, one_bits)
+  { }=={ }0 ^punctuation => Sleigh.equal(this, zero_bits)
+  { }=={ }1 ^punctuation => Sleigh.equal(this, one_bits)
+  { }s<{ }0 ^punctuation => Sleigh.signed_less(this, zero_bits)
+  { }s<{ }{other} ^punctuation => Sleigh.signed_less(this, other)
+}
+// `&` binds tighter than `|`, and `|` than `;`, so `bbb=5 & X; imm8` is
+// `(bbb=5 & X); imm8`. Two operators of a pattern are grouped here by what
+// they are; without it the second groups first.
+// spec: this is the language's own precedence (String.ray ranks operators by
+// where their class declares them) written out for three operators, since
+// that one needs Number.ray, and it reads three operands at a time: a run of
+// four such as `a & b & c; d` still groups its last two first.
+binds ^keyword := class {
+  accepts (written) => (
+    held ^keyword := None
+    if (exists (external alike (written) (`;`))) { held = written }
+    if (exists (external alike (written) (`|`))) { held = written }
+    if (exists (external alike (written) (`&`))) { held = written }
+    held
+  )
+  // Whether `first` binds at least as tightly as `second`.
+  first_binds (first, second) => (
+    looser ^keyword := (exists (external alike (first) (`;`))).and((exists (external alike (second) (`;`))).not)
+    if ((exists (external alike (first) (`|`))).and(exists (external alike (second) (`&`)))) { looser = true }
+    looser.not
+  )
+}
+{former} [first: binds] {middle} [second: binds] {latter} => (
+  held ^keyword := None
+  if (binds.first_binds(`[first]`, `[second]`)) { held = (former [first] middle) [second] latter } else { held = former [first] (middle [second] latter) }
+  held
+)
+// A `;` written against the operand before it is read as part of that
+// operand's word, and the rule above never sees it: `bbb=5 & X; imm8`.
+{leading} [joining: binds] {operand};{ }{rest} => Pattern(held: Sleigh.then((leading [joining] operand).alternatives, (rest).alternatives))
+
+// A pattern with what it sets while it is read.
+// The name it sets is looked up when it runs: a pattern may be read more than
+// once, and the name stands for the setting read last.
+Acting := class: Pattern {
+  held: Node
+  action: Node
+  named: Node
+  setting => this
+  run => (
+    result := Sleigh.now(.action.act)
+    place := global[.named]
+    held := place.values
+    held &= result
+    true
+  )
+}
+// A name an action sets: what it was set to last.
+Setting := class: Pattern {
+  values: Node
+  now => .values.tail.value
+}
+
+// What is written after a `#` is for the reader.
+#{literal comment} ^comment => None
+// spec: the preprocessor — `@include`, `@define`, `@if` … `@endif`, and
+// `$(NAME)` in what follows — is passed over, so both sides of an `@if` are
+// read, the later one last. Each is spelled out: `@` alone is how Ray writes
+// where a report is about (`INFO@mark`).
+@if{literal condition} ^comment => None
+@ifdef{literal condition} ^comment => None
+@ifndef{literal condition} ^comment => None
+@elif{literal condition} ^comment => None
+// `@else` and `@endif` stand alone on their lines: the capture after `@e`
+// is typed only so that it may follow the `e` with no space between.
+Directive ^keyword := class {
+  accepts (text) => text
+}
+@e{literal rest: Directive} ^comment => None
+@define{literal definition} ^comment => None
+@undef{literal definition} ^comment => None
+@include{literal file} ^comment => None
+
+define{ }endian={literal order}; ^keyword => (
+  sleigh.endian = order
+  true
+)
+define{ }alignment={literal alignment}; ^keyword => (
+  sleigh.alignment = alignment
+  true
+)
+
+// An address space: where varnodes live.
+Space := class {
+  name: Node
+  written: Node
+}
+define{ }space{ }{literal named}{ }{literal rest}; ^keyword => (
+  space := Space(name: named, written: rest)
+  sleigh.spaces &= space
+  global[named] = space
+  true
+)
+
+// Registers: names of places in the register space, each `size` bytes, the
+// first at `offset`. The names follow the definition one at a time. In a
+// pattern a register is spelled with no bits at all. While p-code runs it
+// holds bits, and every value it was given is kept, the last one last.
+Register := class: Pattern {
+  name: Node
+  offset: Node
+  size: Node
+  values: Node
+  empty => Sleigh.bytes_wide(.size)
+  now => (
+    out := chain None
+    if (exists .values.head) { out &= .values.tail.value } else { out &= .empty }
+    out.head.value
+  )
+  write (given) => (
+    .values &= Sleigh.fitted(Sleigh.now(given), .empty)
+    true
+  )
+  // `register = value;` in p-code: read up to its `;`, since Ray reads a
+  // `;` with nothing after it as a separator that loses what came before. A
+  // value written as a number is read from how it is written: a digit is not
+  // a name (see the numbers at the end), and the text of what is given is
+  // read without reading what it names.
+  // A rule of a class is asked of every receiver it could apply to, not only
+  // of registers: one written `{ }={ }1;` took `bbb=1;` in a pattern for an
+  // assignment. So the digits are read here, from the text.
+  // spec: a number is read only where it is the whole value.
+  { }={ }{given}; ^punctuation => (
+    glyphs := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        glyphs &= byte
+        byte = chain None
+      }
+      true
+    )
+    external bits given take
+    if (exists Bits.nibble_of(glyphs.head.value)) { .write(Sleigh.glyph_number(glyphs)) } else { .write(given) }
+  )
+
+  alternatives => (
+    out := chain None
+    out &= Alternative(mask: Bits(bits: chain None), match: Bits(bits: chain None), fields: chain None, parts: chain None)
+    out
+  )
+}
+Registers := class {
+  offset: Node
+  size: Node
+  { }{literal named} ^punctuation => (
+    at := .offset
+    bytes := .size
+    register := Register(name: named, offset: at, size: bytes, values: chain None)
+    sleigh.registers &= register
+    global[named] = register
+    this
+  )
+  // What ends a definition answers nothing more to read, so the line after it
+  // is not taken for more of it.
+  { }{`]`}; ^punctuation => true
+}
+define{ }register{ }offset={literal at}{ }size={literal bytes}{ }{`[`} ^keyword => Registers(offset: at, size: bytes)
+// A list of one register written over several lines: `[`, the name, `]`.
+// spec: a list of more than one written that way is not read: a rule on a
+// class that begins with a new line is asked of the class itself, and takes
+// the statement after the class for a register. Nor is a register defined
+// alone (`size=4 contextreg;`), which a `context` is cut from: a rule for it
+// reads `[ A X Y P ]` as one name too, and a typed capture that could tell
+// them apart is not asked on the first reading.
+define{ }register{ }offset={literal at}{ }size={literal bytes}{ }{`[`}{\n}{literal named}{\n}{`]`}; ^keyword => (
+  register := Register(name: named, offset: at, size: bytes, values: chain None)
+  sleigh.registers &= register
+  global[named] = register
+  true
+)
+
+// A token: a unit of instruction bits `size` wide, and the fields it is cut
+// into, one on each line after it, each a range of bit positions.
+Token := class {
+  name: Node
+  size: Node
+  width: Node
+}
+// A field of a token. Written alone in a pattern it is an operand: read, not
+// fixed. `field=value` fixes it.
+TokenField := class: Pattern {
+  name: Node
+  token: Node
+  mask: Node
+  attributes: Node
+  attached: Node
+  // While p-code runs: what the instruction being run holds in this field.
+  now => machine.decoded.field(.name)
+  signed => exists (external alike (.attributes) (`signed`))
+  alternatives => (
+    out := chain None
+    reading := chain None
+    reading &= Field(name: .name, mask: .mask)
+    nothing := Sleigh.cleared(.mask)
+    out &= Alternative(mask: nothing, match: nothing, fields: reading, parts: chain None)
+    out
+  )
+  ={literal written} ^punctuation => (
+    fixing := .mask
+    given := Sleigh.widened(Sleigh.numeral(written), fixing)
+    out := chain None
+    out &= Alternative(mask: fixing, match: Sleigh.cleared(fixing).deposit(fixing, given), fields: chain None, parts: chain None)
+    Pattern(held: out)
+  )
+  // `field!=value`: every other value the field can hold, one alternative
+  // each.
+  !={literal written} ^punctuation => (
+    fixing := .mask
+    unwanted := Sleigh.widened(Sleigh.numeral(written), fixing)
+    out := chain None
+    width := Sleigh.cleared(fixing).extract(fixing)
+    one := Sleigh.fitted(Bits.hex(`1`), width)
+    candidate := width
+    going := true
+    while going {
+      unless (candidate.xor(Sleigh.fitted(unwanted, width)).is_zero) {
+        out &= Alternative(mask: fixing, match: Sleigh.cleared(fixing).deposit(fixing, Sleigh.widened(candidate, fixing)), fields: chain None, parts: chain None)
+      }
+      candidate = candidate + one
+      if candidate.is_zero { going = false }
+    }
+    Pattern(held: out)
+  )
+}
+Tokens := class {
+  token: Node
+  cut (named, low, high, flags) => (
+    held := .token
+    made := TokenField(name: named, token: held, mask: Sleigh.span(Sleigh.counted(low), Sleigh.counted(high), held.width), attributes: flags, attached: chain None)
+    sleigh.fields &= made
+    global[named] = made
+    this
+  )
+  {\n}{literal named}{ }={ }({literal low},{literal high}) ^punctuation => .cut(named, low, high, None)
+  {\n}{\n}{literal named}{ }={ }({literal low},{literal high}) ^punctuation => .cut(named, low, high, None)
+  {\n}{literal named}{ }={ }({literal low},{literal high}){ }{literal flags} ^punctuation => .cut(named, low, high, flags)
+  {\n}{literal named}{ }=({literal low},{literal high}) ^punctuation => .cut(named, low, high, None)
+  {\n}; ^punctuation => true
+}
+// `define context contextreg`: fields of a register that says how the bits
+// that follow are to be read (ARM or Thumb, 16- or 32-bit addressing). They
+// are read here as a token as wide as the register.
+// spec: a pattern that constrains a context field is read as if it were
+// instruction bits; what the context holds is not yet part of decoding.
+define{ }context{ }{literal named} ^keyword => (
+  held := global[named]
+  made := Token(name: named, size: held.size, width: Sleigh.bytes_wide(held.size).bits)
+  Tokens(token: made)
+)
+define{ }token{ }{literal named}{ }({literal bits}) ^keyword => (
+  made := Token(name: named, size: bits, width: Sleigh.counted(bits))
+  sleigh.tokens &= made
+  global[named] = made
+  Tokens(token: made)
+)
+
+// `attach variables [ fields ] [ registers ]`: the value of each field names
+// one of the registers, in the order they are written; `_` is a value that
+// names none.
+Attaching := class {
+  fields: Node
+  registers: Node
+  switched: Node
+  { }{literal named} ^punctuation => (
+    naming := .registers
+    named_by := .fields
+    if (exists .switched.head) { naming &= global[named] } else { named_by &= global[named] }
+    this
+  )
+  { }{`]`}{ }{`[`} ^punctuation => (
+    .switched &= true
+    this
+  )
+  { }{`]`}; ^punctuation => (
+    naming := .registers
+    walker := .fields.head
+    while (exists walker) {
+      walker.value.attached &= naming
+      walker = walker.next
+    }
+    true
+  )
+}
+attach{ }variables{ }{`[`} ^keyword => Attaching(fields: chain None, registers: chain None, switched: chain None)
+
+// A p-code operation the description leaves to the one reading it.
+PcodeOp := class {
+  name: Node
+}
+define{ }pcodeop{ }{literal named}; ^keyword => (
+  op := PcodeOp(name: named)
+  sleigh.pcodeops &= op
+  global[named] = op
+  true
+)
+
+// A macro: p-code, written once and used in the semantics of many.
+Macro := class {
+  name: Node
+  parameters: Node
+  written: Node
+  // `name(argument)`: its p-code run with its parameter standing for what is
+  // given. spec: one parameter; `a, b` would be read as one.
+  ({given}) ^punctuation => .expanded(given)
+  ({given}); ^punctuation => .expanded(given)
+  expanded (given) => (
+    frame := .written
+    machine.arguments &= given
+    frame.perform
+    true
+  )
+}
+// The parameter is named where the macro is written, once, and stands for
+// the argument of the call being run: naming it anew at every call costs the
+// engine a reading of everything that saw the name.
+macro{ }{literal named}({literal taking}){ }{`{`}{doing}{`}`} ^keyword => (
+  place ^keyword := external .
+  place[taking] = Argument(held: None)
+  perform => (inline doing)
+  written := Macro(name: named, parameters: taking, written: place)
+  sleigh.macros &= written
+  global[named] = written
+  true
+)
+
+// A constructor: how one alternative of a table is displayed, the pattern of
+// bits it is spelled with, what it sets while being read (`action`), and what
+// it does (`semantics`, p-code). An instruction is a constructor of the table
+// with no name, written with a leading `:`.
+// Its pattern is read when it is first asked for, where it is written, so the
+// tables it names may be written after it; reading every pattern as it is
+// written costs more than the whole description is worth to read.
+Constructor := class {
+  table: Node
+  mnemonic: Node
+  display: Node
+  // Where it was written: `spell` there reads its pattern, and `perform`
+  // runs its p-code.
+  written: Node
+  cache: Node
+  // Its pattern, read the first time it is asked for.
+  spelling => (
+    held := .cache
+    frame := .written
+    unless (exists held.head) { held &= frame.spell }
+    held.head.value
+  )
+  action => .spelling.setting
+  // Its p-code run, after what its pattern sets: what it answers is what it
+  // exports.
+  performed => (
+    frame := .written
+    acting := .action
+    if (exists acting) { acting.run }
+    frame.perform
+  )
+  // Its alternatives, each knowing it was made of this constructor.
+  alternatives => (
+    out := chain None
+    walker := .spelling.alternatives.head
+    while (exists walker) {
+      parts := chain None
+      parts &= this
+      out &= Alternative(mask: walker.value.mask, match: walker.value.match, fields: walker.value.fields, parts: Sleigh.appended(parts, walker.value.parts))
+      walker = walker.next
+    }
+    out
+  )
+}
+// A table: its constructors, any one of which is how it is spelled. While
+// p-code runs it is what the constructor it was read with exports.
+Table := class: Pattern {
+  constructors: Node
+  exported => Sleigh.part_of(this).performed
+  now => Sleigh.now(.exported)
+  alternatives => (
+    out := chain None
+    walker := .constructors.head
+    while (exists walker) {
+      out = Sleigh.appended(out, walker.value.alternatives)
+      walker = walker.next
+    }
+    out
+  )
+}
+instruction ^keyword := Table(constructors: chain None)
+// An instruction constructor ends with a space: a rule that opens with a mark and
+// closes with one is taken for a bracket, and tried wherever that mark is
+// written — every `:` of every `*:1` in the p-code of every constructor.
+:{literal spelled}{ }{literal shown}is{ }{pattern}{`{`}{doing}{`}`}{ } ^keyword => (
+  place ^keyword := external .
+  spell => pattern
+  perform => (inline doing)
+  made := Constructor(table: instruction, mnemonic: spelled, display: shown, written: place, cache: chain None)
+  instruction.constructors &= made
+  sleigh.instructions &= made
+  true
+)
+// A constructor of a named table. The display is read as one word, so that a
+// line of Ray such as `bits: Node` is never taken for one: a table
+// constructor has `is` after its display. A capture that runs up to a literal
+// runs on past the end of the line when the literal is not on it, and
+// swallows the lines after it; a word does not. `(imm8),Y` is one word once
+// its opening parenthesis is read on its own, since a group is claimed whole.
+// The table is made where it is first written, under the name written.
+//
+// What follows `is` is read on what the line has read so far: a rule that
+// begins with a capture does not match once both the pattern and the p-code
+// after it are read as expressions rather than as text.
+Pending := class {
+  into: Node
+  display: Node
+  { }{pattern}{`{`}{doing}{`}`} ^punctuation => (
+    place ^keyword := external .
+      spell => pattern
+    perform => (inline doing)
+    held := .into
+    shown := .display
+    held.constructors &= Constructor(table: held, mnemonic: None, display: shown, written: place, cache: chain None)
+    true
+  )
+}
+{literal named}:{ }is ^keyword => (
+  unless (exists (external own named)) { external declare named (Table(constructors: chain None)) }
+  held := named
+  Pending(into: held, display: None)
+)
+{literal named}:{ }{literal shown}{ }is ^keyword => (
+  unless (exists (external own named)) { external declare named (Table(constructors: chain None)) }
+  held := named
+  Pending(into: held, display: shown)
+)
+{literal named}:{ }{`(`}{literal shown}{ }is ^keyword => (
+  unless (exists (external own named)) { external declare named (Table(constructors: chain None)) }
+  held := named
+  Pending(into: held, display: shown)
+)
+
+// Running p-code: the machine, and the p-code statements that are not
+// expressions of the operands above.
+
+// One instruction being run: what was read, where the one after it is, and
+// where a `goto` sent the machine instead.
+Step := class {
+  decoded: Node
+  following: Node
+  jumped: Node
+}
+// Every step run so far, the one running last.
+Machine := class {
+  steps: Node
+  arguments: Node
+  step => .steps.tail.value
+  decoded => .step.decoded
+}
+machine ^keyword := Machine(steps: chain None, arguments: chain None)
+
+// What a macro was called with, while its p-code runs.
+Argument := class: Pattern {
+  given => machine.arguments.tail.value
+  now => Sleigh.now(.given)
+  signed => .given.signed
+}
+
+// The address of the instruction after this one.
+InstNext := class: Pattern {
+  now => machine.step.following
+}
+inst_next ^keyword := InstNext(held: None)
+
+// A place in memory, `size` bytes at an address.
+// spec: memory is not held yet; only where it is is known.
+// A field is not seen past a method of the same name in the class it is built
+// on, so what Pattern answers for every place (`pointing`) and what a place in
+// memory holds (`target`) are named apart.
+Memory := class: Pattern {
+  size: Node
+  target: Node
+  pointing => true
+}
+*:{literal bytes}{ }{pointer} ^punctuation => (
+  held := Sleigh.now(pointer)
+  Memory(size: bytes, target: held)
+)
+
+// A p-code statement ends with `;`, which Ray reads as a separator with
+// nothing after it: the value before it would be lost. So the statements are
+// read up to their `;`.
+//
+// `register = value;` is a rule of `Register`. A local holds the value, not
+// the place it came from: `local name = value;` and `name:size = value;`
+// declare one.
+{target}:{literal size}{ }={ }{given}; ^punctuation => (
+  external declare target (Sleigh.now(given))
+  true
+)
+// `tmp:1 = value; export tmp;`, the way a table constructor most often says
+// what it stands for, read whole: a statement written after another on one
+// line is not read after a rule that took the first up to its `;`.
+{target}:{literal size}{ }={ }{given};{ }export{ }{exported}; ^punctuation => Sleigh.now(given)
+{target}:{literal size}{ }={ }{given};{ }export{ }*:{literal width}{ }{exported}; ^punctuation => (
+  held := Sleigh.now(given)
+  Memory(size: width, target: held)
+)
+local{ }{target}{ }={ }{given}; ^keyword => (
+  external declare target (Sleigh.now(given))
+  true
+)
+// What a table constructor stands for when it is used.
+export{ }{exported}; ^keyword => exported
+// The conditional goto. spec: `goto` alone is the language's own, which is
+// what `if` is built of, so SLEIGH's unconditional one is not read yet.
+if{ }({condition}){ }goto{ }{destination}; ^keyword => Sleigh.branch(condition, destination)
+
+// Numbers as p-code writes them: hexadecimal after `0x`, and the digits 0
+// and 1 where p-code writes them most, after `=`, `+`, `-`, `==` and `s<`.
+// A digit cannot be a name: the bits of every text are read by reading each
+// bit, `0` or `1`, as it is written, and a digit that named anything would
+// change what every text is made of.
+// spec: any other decimal constant in p-code is not read.
+SleighHexadecimal ^keyword := class {
+  accepts (text) => Sleigh.hexadecimal(Sleigh.characters(text).head)
+}
+0x{digits: SleighHexadecimal} ^number => digits

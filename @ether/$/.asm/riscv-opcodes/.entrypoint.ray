@@ -1,0 +1,392 @@
+// The RISC-V encodings as the RISC-V project keeps them: `riscv-opcodes`.
+//
+// Each file under `extensions/` (rv_i, rv_m, rv_c, …) is a list of
+// instructions, one to a line: the mnemonic, then what the instruction's word
+// is made of, in any order —
+//
+//   addi    rd rs1 imm12           14..12=0 6..2=0x04 1..0=3
+//
+// A name (`rd`, `imm12`) is an argument: a field whose bits `arg_lut.csv`
+// says, as `"rd", 11, 7`. A range with a value (`14..12=0`, `6..2=0x04`, and
+// `12=1` for one bit) is fixed: those bits of the word are always that value,
+// written in decimal or, after `0x`, in hexadecimal. Between them every bit of
+// the word is said once. `$pseudo_op rv_i::addi mv …` is another spelling of
+// an instruction already listed, and `#` begins a comment.
+//
+// These files are read here as they are written: the rules below are the
+// grammar they are written in, and what they build is an `ISA` of `Encoding`s
+// with a mask and a match, and a `Field` for every argument.
+
+mark ^keyword := external global
+
+#{literal comment} ^comment => None
+
+// The positions of the bits of a word, as the ranges spell them. A position is
+// never a number here: it is where its spelling stands in this row, least
+// significant first, and a range is read by walking the row.
+Position := class {
+  // What a range is written with, where it is a position: the spelling it is
+  // in the row, or None.
+  accepts (text) => places[text]
+}
+// Tables, each kept by the text it is looked up with: where each position is
+// in the row (`places`), the arguments by name (`Named`), the fields laid out
+// so far (`Laid`), the values read so far (`Read`), and where each span being
+// laid begins (`starts`).
+// spec: two instances of one class answer the same `[key]`, so each table is
+// a class of its own.
+Places := class { }
+places ^keyword := Places()
+Named := class { }
+Starts := class { }
+starts ^keyword := Starts()
+Laid := class { }
+Read := class { }
+positions ^keyword := chain None
+positions &= `0`
+places[`0`] = positions.tail.value
+positions &= `1`
+places[`1`] = positions.tail.value
+positions &= `2`
+places[`2`] = positions.tail.value
+positions &= `3`
+places[`3`] = positions.tail.value
+positions &= `4`
+places[`4`] = positions.tail.value
+positions &= `5`
+places[`5`] = positions.tail.value
+positions &= `6`
+places[`6`] = positions.tail.value
+positions &= `7`
+places[`7`] = positions.tail.value
+positions &= `8`
+places[`8`] = positions.tail.value
+positions &= `9`
+places[`9`] = positions.tail.value
+positions &= `10`
+places[`10`] = positions.tail.value
+positions &= `11`
+places[`11`] = positions.tail.value
+positions &= `12`
+places[`12`] = positions.tail.value
+positions &= `13`
+places[`13`] = positions.tail.value
+positions &= `14`
+places[`14`] = positions.tail.value
+positions &= `15`
+places[`15`] = positions.tail.value
+positions &= `16`
+places[`16`] = positions.tail.value
+positions &= `17`
+places[`17`] = positions.tail.value
+positions &= `18`
+places[`18`] = positions.tail.value
+positions &= `19`
+places[`19`] = positions.tail.value
+positions &= `20`
+places[`20`] = positions.tail.value
+positions &= `21`
+places[`21`] = positions.tail.value
+positions &= `22`
+places[`22`] = positions.tail.value
+positions &= `23`
+places[`23`] = positions.tail.value
+positions &= `24`
+places[`24`] = positions.tail.value
+positions &= `25`
+places[`25`] = positions.tail.value
+positions &= `26`
+places[`26`] = positions.tail.value
+positions &= `27`
+places[`27`] = positions.tail.value
+positions &= `28`
+places[`28`] = positions.tail.value
+positions &= `29`
+places[`29`] = positions.tail.value
+positions &= `30`
+places[`30`] = positions.tail.value
+positions &= `31`
+places[`31`] = positions.tail.value
+
+// Bits from `lo` up to `hi`, and what they are fixed to: `bits`, least
+// significant first, or None where they are a field's.
+Span := class {
+  lo: Node
+  hi: Node
+  bits: Node
+}
+
+// The bits a word is spelled with where some spans are laid over it: `mask`
+// where a span is, `match` what the spans fix them to.
+Layout := class {
+  mask: Node
+  match: Node
+}
+
+// One thing a line is made of: an argument by its name, or a range fixed to a
+// value written as text.
+Token := class {
+  name: Node
+  hi: Node
+  lo: Node
+  value: Node
+}
+
+// An argument, as `arg_lut.csv` lists it: its name and the bits it takes up.
+Argument := class {
+  name: Node
+  hi: Node
+  lo: Node
+}
+
+// A word on a line that `arg_lut.csv` lists: the name of an argument.
+Name := class {
+  accepts (text) => opcodes.named[text]
+}
+
+// One line of an extension: an instruction, or a pseudo-instruction spelling
+// one, and what it is made of.
+Line := class {
+  mnemonic: Node
+  pseudo: Node
+  tokens: Node
+}
+
+// A line as it is being read: what it is made of is read after the mnemonic,
+// a word at a time, each word taken on by one of these.
+Reading := class {
+  line: Node
+  { }{high: Position}..{low: Position}={literal valued} ^class => opcodes.fixed(this, high, low, valued)
+  { }{only: Position}={literal valued} ^class => opcodes.fixed(this, only, only, valued)
+  { }{argument: Name} ^class => opcodes.argued(this, argument)
+}
+
+// A line begins with its mnemonic, and is known to be one by what follows it:
+// an argument, or a range fixed to a value.
+{literal instruction}{ }{argument: Name} ^keyword => opcodes.argued(opcodes.begin(instruction, false), argument)
+{literal instruction}{ }{high: Position}..{low: Position}={literal valued} ^keyword => opcodes.fixed(opcodes.begin(instruction, false), high, low, valued)
+{literal instruction}{ }{only: Position}={literal valued} ^keyword => opcodes.fixed(opcodes.begin(instruction, false), only, only, valued)
+
+// `$pseudo_op rv_i::addi mv rd rs1 31..20=0 …`: `mv` is `addi` with some of
+// its arguments fixed.
+// spec: which instruction it spells (`rv_i::addi`) is read and not kept.
+$pseudo_op{ }{literal original}{ }{literal instruction}{ }{argument: Name} ^keyword => opcodes.argued(opcodes.begin(instruction, true), argument)
+$pseudo_op{ }{literal original}{ }{literal instruction}{ }{high: Position}..{low: Position}={literal valued} ^keyword => opcodes.fixed(opcodes.begin(instruction, true), high, low, valued)
+$pseudo_op{ }{literal original}{ }{literal instruction}{ }{only: Position}={literal valued} ^keyword => opcodes.fixed(opcodes.begin(instruction, true), only, only, valued)
+
+// `arg_lut.csv`: `"rd", 11, 7`.
+"{literal argument}",{ }{high: Position},{ }{low: Position} ^keyword => (
+  listed := Argument(name: argument, hi: high, lo: low)
+  opcodes.arguments &= listed
+  opcodes.named[argument] = listed
+  true
+)
+"{literal argument}",{ }{high: Position},{low: Position} ^keyword => (
+  listed := Argument(name: argument, hi: high, lo: low)
+  opcodes.arguments &= listed
+  opcodes.named[argument] = listed
+  true
+)
+
+// What has been read, and the instruction set it describes.
+Opcodes := class {
+  arguments: Node
+  named: Node
+  lines: Node
+  fields: Node
+  constants: Node
+
+  // A line, begun where its mnemonic is read.
+  begin (text, spelling) => (
+    made := Line(mnemonic: text, pseudo: spelling, tokens: chain None)
+    this.lines &= made
+    Reading(line: made)
+  )
+  // What a line is made of, taken on as it is read.
+  fixed (reading, high, low, valued) => (
+    reading.line.tokens &= Token(hi: high, lo: low, value: valued, name: None)
+    reading
+  )
+  argued (reading, argument) => (
+    reading.line.tokens &= Token(name: argument.name, hi: None, lo: None, value: None)
+    reading
+  )
+
+  // Spans laid over a word of as many bits as there are positions.
+  lay (spans) => (
+    marking := spans.head
+    while (exists marking) {
+      at := marking.value.lo
+      starts[at] = marking.value
+      marking = marking.next
+    }
+    masking := chain None
+    matching := chain None
+    current := None
+    feeding := None
+    place := positions.head
+    while (exists place) {
+      here := place.value
+      begun := starts[here]
+      if (exists begun) {
+        current = begun
+        feeding = begun.bits
+      }
+      if (exists current) {
+        masking &= true
+        if (exists feeding) {
+          matching &= feeding.value
+          feeding = feeding.next
+        } else { matching &= false }
+        if (exists (external alike (here) (current.hi))) { current = None }
+      } else {
+        masking &= false
+        matching &= false
+      }
+      place = place.next
+    }
+    marking = spans.head
+    while (exists marking) {
+      at := marking.value.lo
+      starts[at] = None
+      marking = marking.next
+    }
+    Layout(mask: Bits(bits: masking), match: Bits(bits: matching))
+  )
+
+  // A value as a range is fixed to: decimal, or hexadecimal after `0x`.
+  constant (given) => (
+    found := .constants[given]
+    unless (exists found) { found = .remembered(given) }
+    found
+  )
+  remembered (given) => (
+    read := Opcodes.number(given)
+    this.constants[given] = read
+    read
+  )
+  number (given) => (
+    hexadecimal := false
+    digits := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        nibble := Bits.nibble_of(byte)
+        if (exists nibble) { digits &= nibble } else { hexadecimal = true }
+        byte = chain None
+      }
+      true
+    )
+    external bits given take
+    if hexadecimal {
+      out := chain None
+      walker := digits.tail
+      while (exists walker) {
+        Bits.joined(out, walker.value)
+        walker = walker.previous
+      }
+      Bits(bits: out)
+    } else { Opcodes.decimal(digits) }
+  )
+  // Decimal digits, most significant first, as eight bits: each digit taken
+  // on after ten times what came before it.
+  // spec: eight bits hold every decimal value the extensions are written with
+  // (the largest is 52); a wider range would want a wider total.
+  decimal (digits) => (
+    total := Bits.hex(`00`)
+    walker := digits.head
+    while (exists walker) {
+      digit := Bits(bits: walker.value).under(Bits.hex(`0`))
+      eight := chain None
+      eight &= false
+      eight &= false
+      eight &= false
+      two := chain None
+      two &= false
+      total = (Bits(bits: Bits.joined(eight, total.bits)) + Bits(bits: Bits.joined(two, total.bits))) + digit
+      walker = walker.next
+    }
+    total
+  )
+
+  // An argument as the field it is in an encoding, laid out once.
+  field (argument) => (
+    key := argument.name
+    found := .fields[key]
+    unless (exists found) { found = .laid(argument) }
+    found
+  )
+  laid (argument) => (
+    spans := chain None
+    spans &= Span(lo: argument.lo, hi: argument.hi, bits: None)
+    laid_out := .lay(spans)
+    key := argument.name
+    made := Field(name: key, mask: laid_out.mask)
+    this.fields[key] = made
+    made
+  )
+
+  // A line as the encoding it describes.
+  encoding (line) => (
+    spans := chain None
+    taken := chain None
+    walker := line.tokens.head
+    while (exists walker) {
+      token := walker.value
+      if (exists token.name) {
+        key := token.name
+        taken &= .field(.named[key])
+      } else {
+        value_bits := .constant(token.value).bits.head
+        spans &= Span(lo: token.lo, hi: token.hi, bits: value_bits)
+      }
+      walker = walker.next
+    }
+    layout := .lay(spans)
+    Encoding(mnemonic: line.mnemonic, mask: layout.mask, match: layout.match, fields: taken, semantics: None)
+  )
+
+  // `ISA.read`, with an encoding given up on at the first fixed bit the word
+  // does not have: most encodings differ from a word in its lowest seven bits,
+  // so most are passed over after a few, where `Bits.fits` walks all of them
+  // three times.
+  // spec: this belongs in `Bits.fits`; it is here until that is changed.
+  read (isa, word) => (
+    found := None
+    walker := isa.encodings.head
+    while ((exists walker).and((exists found).not)) {
+      if (Opcodes.fits(word, walker.value.mask, walker.value.match)) { found = walker.value }
+      walker = walker.next
+    }
+    if (exists found) { Decoded(encoding: found, word: word) } else { None }
+  )
+  fits (word, mask, match) => (
+    fitting := true
+    mine := word.bits.head
+    masking := mask.bits.head
+    matching := match.bits.head
+    while ((exists mine).and(fitting)) {
+      if masking.value {
+        if (mine.value.xor(matching.value)) { fitting = false }
+      }
+      mine = mine.next
+      masking = masking.next
+      matching = matching.next
+    }
+    fitting
+  )
+
+  // The instructions read so far, as an instruction set. Pseudo-instructions
+  // are other spellings of these, and are not among them.
+  isa (called) => (
+    described := chain None
+    walker := .lines.head
+    while (exists walker) {
+      unless walker.value.pseudo { described &= .encoding(walker.value) }
+      walker = walker.next
+    }
+    ISA(name: called, endian: `little`, encodings: described)
+  )
+}
+opcodes ^keyword := Opcodes(arguments: chain None, named: Named(), lines: chain None, fields: Laid(), constants: Read())

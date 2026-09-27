@@ -1,0 +1,123 @@
+// x86-64 read by Intel's own patterns, and written back to the same bytes,
+// with the spelling each one was written with kept.
+//
+// The records are taken as they are from XED's xed-isa.txt: NOP, PUSH, POP,
+// MOV, ADD, SUB, CMP, XOR, JZ, JNZ, CALL, RET, JMP. The bytes are from
+// `objdump -d /bin/true` (GNU coreutils, x86-64), from 0x1480 on. About
+// 210 s: 22 s of it is reading the 20 records, most of the rest reading the
+// hexadecimal fixtures and trying forms in order.
+//
+// run: X=.ether/external/xed/datafiles W=.ether/asm/work/x86; mkdir -p $W; (echo 'INSTRUCTIONS()::'; sed -n '1890,1900p;2074,2083p;2470,2479p;2680,2692p;3925,3939p;4864,4878p;5243,5252p;6121,6132p;6304,6318p;6319,6333p;6795,6808p;7075,7085p;7086,7095p;7118,7127p;7128,7137p;7192,7203p;8353,8363p;8704,8715p;8728,8738p;10161,10173p' $X/xed-isa.txt) > $W/isa.xed; PROJECT=XED SPECS="$W/isa.xed" T=600 M=4000 .ether/asm/asm.sh x86 @ether/\$/.asm/XED/tests/x86.ray boolean.ray -- Bits.ray
+
+mark ^keyword := external global
+unless (exists INSTRUCTIONS) { INFO@mark `X0 xed-isa.txt was not read` }
+if (exists INSTRUCTIONS) { INFO@mark `X00 ok control: this file ran after the records were read` }
+
+// What was read.
+first_form ^keyword := xed.forms.head.value
+unless (exists (external alike (first_form.iclass) (`ADD`))) { INFO@mark `R1 the first record is not ADD 0x81` }
+unless (exists (external alike (first_form.first) (`0x81`))) { INFO@mark `R2 its pattern does not begin 0x81` }
+unless (first_form.tokens.head.value.is(`field`)) { INFO@mark `R3 MOD[0b11] is not read as a field` }
+unless (first_form.tokens.head.value.named(`MOD`)) { INFO@mark `R4 the field is not MOD` }
+unless (X86.same(first_form.tokens.head.value.fixed, Bits.hex(`3`))) { INFO@mark `R5 MOD[0b11] does not fix 11` }
+unless (first_form.tokens.head.next.value.is(`eq`)) { INFO@mark `R6 MOD=3 is not read as a condition` }
+
+// Real code, in order: call; cs nopw 0x0(%rax,%rax,1); nop.
+start ^keyword := Bits.hex_bytes(`e8dbfdffff 662e0f1f840000000000 90`)
+call ^keyword := X86.read(start.head)
+unless (exists (external alike (call.mnemonic) (`CALL_NEAR`))) { INFO@mark `A1 e8 is not read as CALL_NEAR` }
+unless (call.round_trips(start.head)) { INFO@mark `A2 the call is not written back as e8 db fd ff ff` }
+nopw ^keyword := X86.read(call.after)
+unless (exists (external alike (nopw.mnemonic) (`NOP`))) { INFO@mark `A3 0f 1f is not read as NOP` }
+unless (nopw.round_trips(call.after)) { INFO@mark `A4 the nopw is not written back byte for byte` }
+unless (X86.is_66(nopw.prefixes.head.value).and(exists nopw.prefixes.head.next)) { INFO@mark `A5 its prefixes are not 66 then another` }
+unless (exists nopw.field(`BASE`)) { INFO@mark `A6 its SIB byte is not kept` }
+unless (exists nopw.displacement.head.next.next.next) { INFO@mark `A7 its displacement is not kept as four bytes` }
+nop ^keyword := X86.read(nopw.after)
+unless (exists (external alike (nop.mnemonic) (`NOP`))) { INFO@mark `A8 90 is not read as NOP` }
+if (exists nop.after) { INFO@mark `A9 something is left after the nop` }
+
+// push rbp; mov rbp, rsp; push r14; push r13; push r12; push rbx;
+// sub rsp, 0x90; mov rax, fs:0x28; mov [rbp-0x28], rax; xor eax, eax;
+// cmp edi, 2; je.
+prologue ^keyword := Bits.hex_bytes(`55 4889e5 4156 4155 4154 53 4881ec90000000 64488b042528000000 488945d8 31c0 83ff02 7425`)
+expected ^keyword := chain None
+expected &= `PUSH`
+expected &= `MOV`
+expected &= `PUSH`
+expected &= `PUSH`
+expected &= `PUSH`
+expected &= `PUSH`
+expected &= `SUB`
+expected &= `MOV`
+expected &= `MOV`
+expected &= `XOR`
+expected &= `CMP`
+expected &= `JZ`
+Walk ^keyword := class {
+  read: Node
+  mnemonics: Node
+  trips: Node
+}
+walked ^keyword := Walk(read: false, mnemonics: true, trips: true)
+at ^keyword := prologue.head
+want ^keyword := expected.head
+while (exists at) {
+  one := X86.read(at)
+  if (exists one) {
+    unless (exists (external alike (one.mnemonic) (want.value))) { walked.mnemonics = false }
+    unless (one.round_trips(at)) { walked.trips = false }
+    at = one.after
+    want = want.next
+  } else {
+    walked.mnemonics = false
+    at = None
+  }
+}
+if (exists want) { INFO@mark `B1 the prologue is not read to its end` }
+unless walked.mnemonics { INFO@mark `B2 an instruction of the prologue is not the one objdump reads` }
+unless walked.trips { INFO@mark `B3 an instruction of the prologue is not written back as it was read` }
+
+// jne rel32; pop rbx; pop r12; pop r13; pop r14; pop rbp; ret.
+epilogue ^keyword := Bits.hex_bytes(`0f85e9010000 5b 415c 415d 415e 5d c3`)
+jnz ^keyword := X86.read(epilogue.head)
+unless (exists (external alike (jnz.mnemonic) (`JNZ`))) { INFO@mark `C1 0f 85 is not read as JNZ` }
+unless (exists jnz.immediate.head.next.next.next) { INFO@mark `C2 its displacement is not four bytes` }
+unless (jnz.round_trips(epilogue.head)) { INFO@mark `C3 the jnz is not written back` }
+pop ^keyword := X86.read(jnz.after)
+unless (exists (external alike (pop.mnemonic) (`POP`))) { INFO@mark `C4 5b is not read as POP` }
+pop12 ^keyword := X86.read(pop.after)
+unless (exists pop12.rex) { INFO@mark `C5 the REX of pop r12 is not kept` }
+unless (pop12.round_trips(pop.after)) { INFO@mark `C6 pop r12 is not written back as 41 5c` }
+ret ^keyword := X86.read(X86.read(X86.read(X86.read(pop12.after).after).after).after)
+unless (exists (external alike (ret.mnemonic) (`RET_NEAR`))) { INFO@mark `C7 c3 is not read as RET_NEAR` }
+
+// One instruction, three spellings: add eax, 1.
+five ^keyword := Bits.hex_bytes(`0501000000`)
+eightythree ^keyword := Bits.hex_bytes(`83c001`)
+eightyone ^keyword := Bits.hex_bytes(`81c001000000`)
+add5 ^keyword := X86.read(five.head)
+add83 ^keyword := X86.read(eightythree.head)
+add81 ^keyword := X86.read(eightyone.head)
+unless ((exists (external alike (add5.mnemonic) (`ADD`))).and(exists (external alike (add83.mnemonic) (`ADD`))).and(exists (external alike (add81.mnemonic) (`ADD`)))) { INFO@mark `D1 not all three are ADD` }
+unless (add5.round_trips(five.head).and(add83.round_trips(eightythree.head)).and(add81.round_trips(eightyone.head))) { INFO@mark `D2 not every spelling is written back as itself` }
+unless (X86.same(add5.immediate.head.value, add83.immediate.head.value)) { INFO@mark `D3 the immediates are not the same value` }
+// The same instruction, with the choice changed: what 83 c0 01 says, spelled
+// with the form 05 was read with, is 05 01 00 00 00.
+widened ^keyword := chain None
+widened &= add83.immediate.head.value
+widened &= Bits.hex(`00`)
+widened &= add83.immediate.head.value.xor(add83.immediate.head.value)
+widened &= add83.immediate.head.value.xor(add83.immediate.head.value)
+respelled ^keyword := X86Decoded(form: add5.form, prefixes: chain None, rex: None, values: chain None, displacement: None, immediate: widened, after: None)
+unless (X86.same_bytes(respelled.written, five)) { INFO@mark `D4 83 c0 01 respelled with the 05 form is not 05 01 00 00 00` }
+
+// What does nothing is kept: a REX with no bits, prefixes in the other order.
+rex_push ^keyword := Bits.hex_bytes(`4055`)
+pushed ^keyword := X86.read(rex_push.head)
+unless (exists (external alike (pushed.mnemonic) (`PUSH`))) { INFO@mark `E1 40 55 is not read as PUSH` }
+unless (pushed.round_trips(rex_push.head)) { INFO@mark `E2 40 55 is not written back with its empty REX` }
+swapped ^keyword := Bits.hex_bytes(`2e660f1f840000000000`)
+swapped_nop ^keyword := X86.read(swapped.head)
+unless (swapped_nop.round_trips(swapped.head)) { INFO@mark `E3 2e 66 0f 1f … is not written back in its own order` }
+if (X86.same_bytes(swapped_nop.written, X86.between(call.after, nopw.after))) { INFO@mark `E4 the two orders are written the same` }

@@ -1,0 +1,21 @@
+// The whole of Ghidra's 6502 description read as source: its registers, the
+// fields of its tokens as masks, its tables and instructions.
+//
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec .ether/asm/asm.sh sleigh-read @ether/$/.asm/SLEIGH/tests/read.ray boolean.ray -- Bits.ray ISA.ray
+
+if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
+unless (exists None) { INFO@mark `R0 control: this always fires` }
+unless (exists (external alike (sleigh.endian) (`little`))) { INFO@mark `R1 the endianness is not little` }
+unless (exists (external alike (X.name) (`X`))) { INFO@mark `R2 X is not a register` }
+unless (exists (external alike (SP.size) (`2`))) { INFO@mark `R3 SP is not two bytes` }
+unless (exists (external alike (C.offset) (`0x30`))) { INFO@mark `R4 C is not at 0x30` }
+unless (aaa.mask == Bits.hex(`e0`)) { INFO@mark `R5 aaa is not bits 5 to 7` }
+unless (imm16.mask == Bits.hex(`ffff`)) { INFO@mark `R6 imm16 is not sixteen bits` }
+unless (exists (external alike (rel.attributes) (`signed`))) { INFO@mark `R7 rel is not signed` }
+unless (exists (external alike (OP1.constructors.head.next.value.display) (`imm8`))) { INFO@mark `R8 the second OP1 is not zero page` }
+unless (exists (external alike (ADDRI.constructors.head.value.display) (`imm16)`))) { INFO@mark `R9 ADDRI is not read after its parenthesis` }
+unless (exists (external alike (sleigh.instructions.head.value.mnemonic) (`ADC`))) { INFO@mark `R10 the first instruction is not ADC` }
+unless (exists (external alike (sleigh.instructions.tail.value.mnemonic) (`TYA`))) { INFO@mark `R11 the last instruction is not TYA` }
+unless (exists (external alike (resultFlags.parameters) (`value`))) { INFO@mark `R12 resultFlags does not take value` }
+unless (exists readIRQ) { INFO@mark `R13 readIRQ is not a p-code operation` }
+if (exists OP2.constructors.head.next.next.next.next.next.next) { INFO@mark `R15 OP2 has more than six constructors` }

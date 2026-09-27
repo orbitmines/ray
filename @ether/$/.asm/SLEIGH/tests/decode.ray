@@ -1,0 +1,28 @@
+// Bytes of 6502 code read by the encodings Ghidra's description spells, and
+// written back to the bytes they were read from. Only the instructions asked
+// for have their patterns read.
+//
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=400 .ether/asm/asm.sh sleigh-decode @ether/$/.asm/SLEIGH/tests/decode.ray boolean.ray -- Bits.ray ISA.ray
+
+if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
+unless (exists None) { INFO@mark `D0 control: this always fires` }
+asked ^keyword := chain None
+asked &= `BCC`
+asked &= `LDA`
+isa ^keyword := Sleigh.isa(sleigh.spelled(asked))
+unless (exists isa.encodings.head.next.next.next.next.next.next.next.next) { INFO@mark `D1 BCC and LDA are fewer than nine encodings` }
+if (exists isa.encodings.head.next.next.next.next.next.next.next.next.next) { INFO@mark `D2 BCC and LDA are more than nine encodings` }
+branch ^keyword := isa.read(Bits.hex(`fe90`))
+unless (exists (external alike (branch.mnemonic) (`BCC`))) { INFO@mark `D3 90 is not read as BCC` }
+unless (branch.field(`rel`) == Bits.hex(`fe`)) { INFO@mark `D4 the offset of 90 fe is not fe` }
+unless (branch.written == Bits.hex(`fe90`)) { INFO@mark `D5 BCC is not written back as 90 fe` }
+load ^keyword := isa.read(Bits.hex(`05a9`))
+unless (exists (external alike (load.mnemonic) (`LDA`))) { INFO@mark `D6 a9 is not read as LDA` }
+unless (exists (external alike (load.encoding.semantics.tail.value.display) (`"#"imm8`))) { INFO@mark `D7 a9 is not LDA immediate` }
+unless (load.field(`imm8`) == Bits.hex(`05`)) { INFO@mark `D8 the immediate of a9 05 is not 05` }
+unless (load.written == Bits.hex(`05a9`)) { INFO@mark `D9 LDA is not written back as a9 05` }
+absolute ^keyword := isa.read(Bits.hex(`1234ad`))
+unless (exists (external alike (absolute.encoding.semantics.tail.value.display) (`imm16`))) { INFO@mark `D10 ad is not LDA absolute` }
+unless (absolute.field(`imm16`) == Bits.hex(`1234`)) { INFO@mark `D11 the address of ad 34 12 is not 1234` }
+unless (absolute.written == Bits.hex(`1234ad`)) { INFO@mark `D12 LDA is not written back as ad 34 12` }
+if (exists isa.read(Bits.hex(`00ea`))) { INFO@mark `D13 ea is read, and neither BCC nor LDA is ea` }

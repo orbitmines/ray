@@ -1,0 +1,36 @@
+// A copying loop in 6502 machine code read one instruction after another,
+// each as long as its encoding says, and each written back to its bytes.
+//
+//   a2 00      LDX #$00
+//   bd 00 02   LDA $0200,X
+//   9d 00 03   STA $0300,X
+//   e8         INX
+//   d0 f7      BNE (back to LDA)
+//   60         RTS
+//
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=600 .ether/asm/asm.sh sleigh-disassemble @ether/$/.asm/SLEIGH/tests/disassemble.ray boolean.ray -- Bits.ray ISA.ray
+
+if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
+unless (exists None) { INFO@mark `L0 control: this always fires` }
+asked ^keyword := chain None
+asked &= `LDX`
+asked &= `LDA`
+asked &= `STA`
+asked &= `INX`
+asked &= `BNE`
+asked &= `RTS`
+isa ^keyword := Sleigh.isa(sleigh.spelled(asked))
+code ^keyword := Bits.hex_bytes(`a200 bd0002 9d0003 e8 d0f7 60`)
+listing ^keyword := Sleigh.disassembled(isa, code, Sleigh.counted(`3`))
+opening ^keyword := listing.head
+unless (exists (external alike (opening.value.mnemonic) (`LDX`))) { INFO@mark `L1 the first is not LDX` }
+unless (exists (external alike (opening.next.value.mnemonic) (`LDA`))) { INFO@mark `L2 the second is not LDA` }
+unless (opening.next.value.field(`imm16`) == Bits.hex(`0200`)) { INFO@mark `L3 LDA does not read from 0200` }
+unless (exists (external alike (opening.next.value.encoding.semantics.tail.value.display) (`imm16,X`))) { INFO@mark `L4 LDA is not indexed by X` }
+unless (exists (external alike (opening.next.next.value.mnemonic) (`STA`))) { INFO@mark `L5 the third is not STA` }
+unless (exists (external alike (opening.next.next.next.value.mnemonic) (`INX`))) { INFO@mark `L6 the fourth is not INX` }
+unless (exists (external alike (opening.next.next.next.next.value.mnemonic) (`BNE`))) { INFO@mark `L7 the fifth is not BNE` }
+unless (opening.next.next.next.next.value.field(`rel`) == Bits.hex(`f7`)) { INFO@mark `L8 BNE does not go back nine` }
+unless (exists (external alike (listing.tail.value.mnemonic) (`RTS`))) { INFO@mark `L9 the last is not RTS` }
+if (exists opening.next.next.next.next.next.next) { INFO@mark `L10 more than six instructions` }
+unless (opening.next.next.value.written == Bits.hex(`03009d`)) { INFO@mark `L11 STA is not written back as 9d 00 03` }

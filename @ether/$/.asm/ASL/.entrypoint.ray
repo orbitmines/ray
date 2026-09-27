@@ -1,0 +1,363 @@
+// Arm's own description of A64, read as it is written.
+//
+// Arm publishes the architecture as XML (the "A64 ISA Data release"), one file
+// per instruction: a register diagram of the word — boxes of bits, each fixed
+// or belonging to a named field — the encodings that refine that diagram, and
+// the ASL pseudocode that says what the instruction does. The XML is read
+// here by the grammar of the XML itself: an element opens an object, each of
+// its attributes is a rule on that object, and closing it hands the object to
+// the reader. What comes out is the shape `ISA.ray` holds.
+//
+// spec: only the parts of an instruction file that say how it is spelled and
+// what it does are read (`<regdiagram>`, `<encoding>`, `<ps>`); the rest —
+// descriptions, explanations, alias tables — is left out of the slice rather
+// than read and thrown away. `tests/a64.ray` says how the slice is taken.
+// spec: the cells `(0)` and `(1)` (should be zero, should be one), `N`, `Z`,
+// and boxes with a `constraint` (`!= 000`) are not in the slice yet. A
+// should-be cell decodes either way and must still be written back as read,
+// so it wants to be a field of its own, not a fixed bit.
+// spec: pseudocode is held as the text Arm writes, entities (`&lt;`) and
+// links (`<a link=…>SP</a>`) included. Reading ASL itself is the next grammar.
+
+// A box of a diagram: a run of cells, most significant first, named when it
+// is a field. Each cell is fixed or free, and, if fixed, to one or zero: two
+// rows of booleans side by side.
+Regbox ^keyword := class {
+  name: Node
+  fixed: Node
+  values: Node
+  { }hibit="{literal given}" ^punctuation => this
+  { }width="{literal given}" ^punctuation => this
+  { }name="{literal given}" ^punctuation => (
+    this.name = given
+    this
+  )
+  { }usename="{literal given}" ^punctuation => this
+  { }settings="{literal given}" ^punctuation => this
+  { }psbits="{literal given}" ^punctuation => this
+  > ^punctuation => this
+}
+
+// A register diagram: the whole word, box after box from bit 31 down, and
+// what its bits say once it is closed — which are fixed and to what, and
+// where each field is.
+Regdiagram ^keyword := class {
+  fixed: Node
+  values: Node
+  boxes: Node
+  ends: Node
+  widths: Node
+  operation: Node
+  mask: Node
+  match: Node
+  fields: Node
+  { }form="{literal given}" ^punctuation => this
+  { }psname="{literal given}" ^punctuation => (
+    this.operation = arm.operation_named(given)
+    this
+  )
+  { }tworows="{literal given}" ^punctuation => this
+  > ^punctuation => this
+
+  // The cells are held most significant first, as they are drawn; a word is
+  // least significant first, so they are walked from the last one back. A
+  // field is where its box is: after the cell its box ends on come the bits
+  // below it, then the box, then everything drawn before it.
+  closed => (
+    this.mask = A64.reversed(.fixed)
+    this.match = A64.reversed(.values)
+    named := .boxes.head
+    ending := .ends.head
+    wide := .widths.head
+    while (exists named) {
+      within := chain None
+      walker := ending.value.next
+      while (exists walker) {
+        within &= false
+        walker = walker.next
+      }
+      walker = ending.value
+      across := wide.value.head
+      while (exists across) {
+        within &= true
+        walker = walker.previous
+        across = across.next
+      }
+      while (exists walker) {
+        within &= false
+        walker = walker.previous
+      }
+      this.fields &= Field(name: named.value, mask: Bits(bits: within))
+      named = named.next
+      ending = ending.next
+      wide = wide.next
+    }
+    this
+  )
+  field (wanted) => (
+    found := None
+    walker := .fields.head
+    while ((exists walker).and((exists found).not)) {
+      if (exists (external alike (walker.value.name) (wanted))) { found = walker.value }
+      walker = walker.next
+    }
+    found
+  )
+}
+
+// One encoding of a diagram. Its boxes say again, of a field of the diagram,
+// which of its bits this encoding fixes (`<c>1</c>`) and which it leaves as
+// the diagram has them (`<c/>`).
+Regencoding ^keyword := class {
+  title: Node
+  mnemonic: Node
+  mask: Node
+  match: Node
+  { }name="{literal given}" ^punctuation => (
+    this.title = given
+    this
+  )
+  { }oneofinclass="{literal given}" ^punctuation => this
+  { }oneof="{literal given}" ^punctuation => this
+  { }label="{literal given}" ^punctuation => this
+  { }bitdiffs="{literal given}" ^punctuation => this
+  > ^punctuation => this
+
+  // An encoding only fixes what its diagram leaves free, so what it fixes is
+  // added to the diagram's bits and nothing is taken away.
+  refined (field, box) => (
+    this.mask = .mask.or(arm.none.deposit(field.mask, A64.reversed(box.fixed)))
+    this.match = .match.or(arm.none.deposit(field.mask, A64.reversed(box.values)))
+    this
+  )
+}
+
+// Pseudocode, by the name of the diagram it belongs to and its section:
+// `Decode` beside the diagram, `Execute` (and `Postdecode`) once for the file.
+Operation ^keyword := class {
+  name: Node
+  sections: Node
+  section (wanted) => (
+    found := None
+    walker := .sections.head
+    while ((exists walker).and((exists found).not)) {
+      if (exists (external alike (walker.value.name) (wanted))) { found = walker.value.text }
+      walker = walker.next
+    }
+    found
+  )
+  decode => .section(`Decode`)
+  postdecode => .section(`Postdecode`)
+  execute => .section(`Execute`)
+}
+Section ^keyword := class {
+  name: Node
+  text: Node
+}
+Ps ^keyword := class {
+  { }name="{literal given}" ^punctuation => (
+    arm.operation = arm.operation_named(given)
+    this
+  )
+  { }sections="{literal given}" ^punctuation => this
+  { }secttype="{literal given}" ^punctuation => this
+  > ^punctuation => this
+}
+Pstext ^keyword := class {
+  section: Node
+  { }mayhavelinks="{literal given}" ^punctuation => this
+  { }section="{literal given}" ^punctuation => (
+    this.section = given
+    this
+  )
+  { }rep_section="{literal given}" ^punctuation => this
+  >{literal text}</pstext></ps> ^punctuation => (
+    arm.operation.sections &= Section(name: .section, text: text)
+    None
+  )
+}
+
+// What has been read so far, and what is being read.
+A64 ^keyword := class {
+  encodings: Node
+  titles: Node
+  operations: Node
+  diagram: Node
+  encoding: Node
+  box: Node
+  operation: Node
+  ten: Node
+  weights: Node
+  none: Node
+
+  // Rows to count cells with: one, two, four, eight, each twice the last.
+  doubled (row) => Bits.joined(Bits.joined(chain None, row), row)
+  rows => (
+    one := chain None
+    one &= true
+    out := chain None
+    out &= one
+    out &= A64.doubled(out.tail.value)
+    out &= A64.doubled(out.tail.value)
+    out &= A64.doubled(out.tail.value)
+    out
+  )
+
+  isa => ISA(name: `A64`, endian: `little`, encodings: .encodings)
+  // The encoding Arm names `title` (`ADD_64_addsub_imm`).
+  named (title) => (
+    found := None
+    walker := .titles.head
+    held := .encodings.head
+    while ((exists walker).and((exists found).not)) {
+      if (exists (external alike (walker.value) (title))) { found = held.value }
+      walker = walker.next
+      held = held.next
+    }
+    found
+  )
+  operation_named (name) => (
+    found := None
+    walker := .operations.head
+    while ((exists walker).and((exists found).not)) {
+      if (exists (external alike (walker.value.name) (name))) { found = walker.value }
+      walker = walker.next
+    }
+    unless (exists found) {
+      found = Operation(name: name, sections: chain None)
+      this.operations &= found
+    }
+    found
+  )
+
+  // A row of cells, most significant first, as the word it is: least
+  // significant first.
+  reversed (row) => (
+    out := chain None
+    walker := row.tail
+    while (exists walker) {
+      out &= walker.value
+      walker = walker.previous
+    }
+    Bits(bits: out)
+  )
+
+  cell (fixed, value) => (
+    this.box.fixed &= fixed
+    this.box.values &= value
+    None
+  )
+  // `<c colspan="12"/>`: that many free cells. The count is written in
+  // decimal. A decimal digit is written as the byte 0011 followed by its
+  // value in four bits, so each digit is those last four bits: each one set
+  // adds the row of cells it weighs (eight, four, two, one), and each digit
+  // before it has been ten times as many. No arithmetic on words, only rows
+  // being joined.
+  spread (count) => (
+    digits := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        digits &= byte.head.next.next.next.next
+        byte = chain None
+      }
+      true
+    )
+    external bits count take
+    tally := chain None
+    digit := digits.head
+    while (exists digit) {
+      grown := chain None
+      if (exists tally.head) {
+        round := .ten.head
+        while (exists round) {
+          Bits.joined(grown, tally)
+          round = round.next
+        }
+      }
+      set := digit.value
+      weight := .weights.tail
+      while (exists set) {
+        if set.value { Bits.joined(grown, weight.value) }
+        set = set.next
+        weight = weight.previous
+      }
+      tally = grown
+      digit = digit.next
+    }
+    walker := tally.head
+    while (exists walker) {
+      this.box.fixed &= false
+      this.box.values &= false
+      walker = walker.next
+    }
+    None
+  )
+
+  box_opened => (
+    this.box = Regbox(name: None, fixed: chain None, values: chain None)
+    this.box
+  )
+  // A box closes into the diagram, or, inside an encoding, refines the
+  // diagram's field of that name.
+  box_closed => (
+    if (exists .encoding) {
+      this.encoding.refined(.diagram.field(.box.name), .box)
+    } else {
+      Bits.joined(.diagram.fixed, .box.fixed)
+      Bits.joined(.diagram.values, .box.values)
+      if (exists .box.name) {
+        this.diagram.boxes &= .box.name
+        this.diagram.ends &= .diagram.fixed.tail
+        this.diagram.widths &= .box.fixed
+      }
+    }
+    None
+  )
+  diagram_opened => (
+    this.diagram = Regdiagram(fixed: chain None, values: chain None, boxes: chain None, ends: chain None, widths: chain None, operation: None, mask: None, match: None, fields: chain None)
+    this.diagram
+  )
+  encoding_opened => (
+    unless (exists .none) { this.none = .diagram.mask.xor(.diagram.mask) }
+    this.encoding = Regencoding(title: None, mnemonic: None, mask: .diagram.mask, match: .diagram.match)
+    this.encoding
+  )
+  encoding_closed => (
+    made := Encoding(mnemonic: .encoding.mnemonic, mask: .encoding.mask, match: .encoding.match, fields: .diagram.fields, semantics: .diagram.operation)
+    this.encodings &= made
+    this.titles &= .encoding.title
+    this.encoding = None
+    None
+  )
+}
+arm ^keyword := A64(encodings: chain None, titles: chain None, operations: chain None, diagram: None, encoding: None, box: None, operation: None, ten: None, weights: A64.rows, none: None)
+arm.ten = Bits.joined(Bits.joined(chain None, arm.weights.tail.value), arm.weights.head.next.value)
+
+<regdiagram ^keyword => arm.diagram_opened
+</regdiagram> ^keyword => (
+  arm.diagram.closed
+  None
+)
+<encoding ^keyword => arm.encoding_opened
+</encoding> ^keyword => arm.encoding_closed
+<box ^keyword => arm.box_opened
+</box> ^keyword => arm.box_closed
+<c>0</c> ^keyword => arm.cell(true, false)
+<c>1</c> ^keyword => arm.cell(true, true)
+<c>x</c> ^keyword => arm.cell(false, false)
+<c/> ^keyword => arm.cell(false, false)
+<c colspan="{literal count}"/> ^keyword => arm.spread(count)
+<docvars> ^keyword => None
+</docvars> ^keyword => None
+// Of the document variables only the mnemonic is read. Both rules take the
+// whole element; where both do, the one written last is the one that stands.
+<docvar key="{literal key}" value="{literal given}"/> ^keyword => None
+<docvar key="mnemonic" value="{literal given}"/> ^keyword => (
+  arm.encoding.mnemonic = given
+  None
+)
+<asmtemplate>{literal template}</asmtemplate> ^keyword => None
+<ps ^keyword => Ps()
+<pstext ^keyword => Pstext(section: None)

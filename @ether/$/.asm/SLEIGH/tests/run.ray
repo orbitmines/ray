@@ -1,0 +1,48 @@
+// 6502 instructions run: each one's p-code, as Ghidra's description writes
+// it, over registers that hold bits. What an instruction answers is where the
+// machine goes next — the one conditional goto, `if (C == 0) goto REL`, is
+// what makes it anywhere else.
+//
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=300 .ether/asm/asm.sh sleigh-run @ether/$/.asm/SLEIGH/tests/run.ray boolean.ray -- Bits.ray ISA.ray
+
+if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
+unless (exists None) { INFO@mark `X0 control: this always fires` }
+asked ^keyword := chain None
+asked &= `CLC`
+asked &= `SEC`
+asked &= `INX`
+asked &= `TAX`
+asked &= `LDA`
+asked &= `BCC`
+isa ^keyword := Sleigh.isa(sleigh.spelled(asked))
+
+C.write(Bits.hex(`01`))
+after_clc ^keyword := Sleigh.run(isa.read(Bits.hex(`18`)), Bits.hex(`0601`))
+unless (C.now == Bits.hex(`00`)) { INFO@mark `X1 CLC does not clear C` }
+unless (after_clc == Bits.hex(`0601`)) { INFO@mark `X2 CLC does not go on to the next instruction` }
+Sleigh.run(isa.read(Bits.hex(`38`)), Bits.hex(`0602`))
+unless (C.now == Bits.hex(`01`)) { INFO@mark `X3 SEC does not set C` }
+
+X.write(Bits.hex(`41`))
+Sleigh.run(isa.read(Bits.hex(`e8`)), Bits.hex(`0603`))
+unless (X.now == Bits.hex(`42`)) { INFO@mark `X4 INX does not make 42 of 41` }
+unless (Z.now == Bits.hex(`00`)) { INFO@mark `X5 INX of 41 sets Z` }
+unless (N.now == Bits.hex(`00`)) { INFO@mark `X6 INX of 41 sets N` }
+X.write(Bits.hex(`ff`))
+Sleigh.run(isa.read(Bits.hex(`e8`)), Bits.hex(`0604`))
+unless (X.now == Bits.hex(`00`)) { INFO@mark `X7 INX of ff does not wrap to 00` }
+unless (Z.now == Bits.hex(`01`)) { INFO@mark `X8 INX of ff does not set Z` }
+
+Sleigh.run(isa.read(Bits.hex(`80a9`)), Bits.hex(`0606`))
+unless (A.now == Bits.hex(`80`)) { INFO@mark `X9 LDA #$80 does not load 80` }
+unless (N.now == Bits.hex(`01`)) { INFO@mark `X10 LDA #$80 does not set N` }
+Sleigh.run(isa.read(Bits.hex(`aa`)), Bits.hex(`0607`))
+unless (X.now == Bits.hex(`80`)) { INFO@mark `X11 TAX does not copy 80` }
+
+C.write(Bits.hex(`00`))
+branched ^keyword := Sleigh.run(isa.read(Bits.hex(`fa90`)), Bits.hex(`0609`))
+unless (branched == Bits.hex(`0603`)) { INFO@mark `X12 BCC -6 with C clear does not go back to 0603` }
+C.write(Bits.hex(`01`))
+passed ^keyword := Sleigh.run(isa.read(Bits.hex(`fa90`)), Bits.hex(`0609`))
+unless (passed == Bits.hex(`0609`)) { INFO@mark `X13 BCC with C set does not go on` }
+unless (exists (external alike (machine.decoded.mnemonic) (`BCC`))) { INFO@mark `X14 the last step run is not BCC` }

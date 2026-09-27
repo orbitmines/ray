@@ -1,0 +1,71 @@
+// A64 words read by Arm's own register diagrams, and written back to the word they were read from.
+//
+// The spec is Arm's A64 ISA Data release, 2026-06 (XML), unpacked into `.ether/external/arm/`:
+//   curl -LO https://developer.arm.com/-/cdn-downloads/permalink/Exploration-Tools-A64-ISA/ISA_A64/ISA_A64_xml_A_profile-2026-06.tar.gz
+// It is read in slices: of each instruction's file, the `<regdiagram>`, `<encoding>` and `<ps>` lines, verbatim, named
+// `A64.<file>.xml` so that they are read before this file is:
+//   X=.ether/external/arm/ISA_A64_xml_A_profile-2026-06; S=.ether/asm/work/arm/slices; mkdir -p $S
+//   for f in add_addsub_imm movz b_uncond b_cond ret ldr_imm_gen; do awk '/<regdiagram /,/<\/regdiagram>/ {print; next} /<encoding /,/<\/encoding>/ {print; next} /<ps /,/<\/ps>/ {print}' $X/$f.xml > $S/A64.$f.xml; done
+// spec: `asm.sh` copies `tests/` into the project too, so this file is read twice there (and runs out of memory); until
+// it leaves `tests/` out, run it through a copy of the project holding only `.entrypoint.ray`.
+// run: S=.ether/asm/work/arm/slices; PROJECT=ASL SPECS="$S/A64.add_addsub_imm.xml $S/A64.movz.xml $S/A64.b_uncond.xml $S/A64.b_cond.xml $S/A64.ret.xml $S/A64.ldr_imm_gen.xml" T=500 M=4500 .ether/asm/asm.sh arm @ether/$/.asm/ASL/tests/a64.ray boolean.ray -- Bits.ray ISA.ray
+
+mark ^keyword := external global
+INFO@mark `A0 control: this always fires`
+
+a64 ^keyword := arm.isa
+unless (exists (arm.named(`ADD_64_addsub_imm`))) { INFO@mark `A1 ADD (immediate), 64-bit, is not read` }
+unless (exists (arm.named(`LDR_64_ldst_pos`))) { INFO@mark `A2 LDR (immediate), unsigned offset, is not read` }
+unless (exists (external alike (arm.named(`RET_64R_branch_reg`).mnemonic) (`RET`))) { INFO@mark `A3 RET is not named RET` }
+unless (arm.named(`ADD_64_addsub_imm`).mask == Bits.hex(`ff800000`)) { INFO@mark `A4 ADD 64-bit fixes other bits than ff800000` }
+unless (arm.named(`LDR_32_ldst_immpre`).match == Bits.hex(`b8400c00`)) { INFO@mark `A5 LDR 32-bit pre-index is not spelled b8400c00` }
+
+// add x0, x1, #1
+add_word ^keyword := Bits.hex(`91000420`)
+add ^keyword := a64.read(add_word)
+unless (exists (external alike (add.mnemonic) (`ADD`))) { INFO@mark `A6 91000420 is not ADD` }
+unless (add.field(`Rn`) == Bits.hex(`01`).extract(Bits.hex(`1f`))) { INFO@mark `A7 Rn is not x1` }
+unless (add.field(`imm12`) == Bits.hex(`001`).extract(Bits.hex(`fff`))) { INFO@mark `A8 imm12 is not 1` }
+unless (add.written == add_word) { INFO@mark `A9 91000420 is not written back` }
+
+// mov x0, #42, which is MOVZ
+movz_word ^keyword := Bits.hex(`d2800540`)
+movz ^keyword := a64.read(movz_word)
+unless (exists (external alike (movz.mnemonic) (`MOVZ`))) { INFO@mark `A10 d2800540 is not MOVZ` }
+unless (movz.field(`imm16`) == Bits.hex(`002a`)) { INFO@mark `A11 imm16 is not 42` }
+unless (movz.written == movz_word) { INFO@mark `A12 d2800540 is not written back` }
+
+// b #-4
+branch_word ^keyword := Bits.hex(`17ffffff`)
+branch ^keyword := a64.read(branch_word)
+unless (exists (external alike (branch.mnemonic) (`B`))) { INFO@mark `A13 17ffffff is not B` }
+unless (branch.written == branch_word) { INFO@mark `A14 17ffffff is not written back` }
+
+// b.eq #8
+beq_word ^keyword := Bits.hex(`54000040`)
+beq ^keyword := a64.read(beq_word)
+unless (beq.field(`cond`).is_zero) { INFO@mark `A15 54000040 is not B.cond with EQ` }
+unless (beq.written == beq_word) { INFO@mark `A16 54000040 is not written back` }
+
+// ret
+ret_word ^keyword := Bits.hex(`d65f03c0`)
+ret ^keyword := a64.read(ret_word)
+unless (exists (external alike (ret.mnemonic) (`RET`))) { INFO@mark `A17 d65f03c0 is not RET` }
+unless (ret.field(`Rn`) == Bits.hex(`1e`).extract(Bits.hex(`1f`))) { INFO@mark `A18 Rn is not x30` }
+unless (ret.written == ret_word) { INFO@mark `A19 d65f03c0 is not written back` }
+
+// ldr x0, [x1]
+ldr_word ^keyword := Bits.hex(`f9400020`)
+ldr ^keyword := a64.read(ldr_word)
+unless (exists (external alike (ldr.mnemonic) (`LDR`))) { INFO@mark `A20 f9400020 is not LDR` }
+unless (ldr.written == ldr_word) { INFO@mark `A21 f9400020 is not written back` }
+
+// Not one of these: udf #0.
+if (exists a64.read(Bits.hex(`00000000`))) { INFO@mark `A22 00000000 is read` }
+
+// What ADD (immediate) does, as Arm writes it: the decode beside its diagram, the execute once for the file, shared
+// by the 32-bit and 64-bit encodings.
+// Arm's text is not quoted here: it is Arm's, and stays in .ether/external.
+unless (exists add.encoding.semantics.decode) { INFO@mark `A23 the decode of ADD (immediate) is not kept` }
+unless (exists add.encoding.semantics.execute) { INFO@mark `A24 ADD (immediate) has no execute` }
+unless (exists (external alike (external where arm.named(`ADD_32_addsub_imm`).semantics) (external where add.encoding.semantics))) { INFO@mark `A25 ADD 32 and 64 do not share their pseudocode` }

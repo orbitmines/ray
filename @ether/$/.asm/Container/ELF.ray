@@ -1,0 +1,152 @@
+// An ELF file: the container Unix-likes load, as the System V ABI writes it
+// down. It begins with sixteen bytes that say how the rest is written — the
+// width of an address (32 or 64 bits) and the order of bytes in a field
+// (least or most significant first) — and every other field is read the way
+// they say. After the header come two tables: program headers (the segments,
+// where each piece of the file is loaded and whether it runs) and section
+// headers (what a linker sees). Whatever they do not cover is kept as it is.
+//
+// spec: string tables (section names), symbols, dynamic linking (what is
+// imported, what is relocated on load) and notes are structures inside the
+// segments and sections read here; they are read the same way, next.
+
+ELF := class {
+  file: Node
+  header: Node
+  segments: Node
+  sections: Node
+  pieces: Node
+  wide: Node
+  big: Node
+
+  // A file read as ELF.
+  read (given) => (
+    values := chain None
+    covered := chain None
+    past_ident := Layout.read(ELF.ident, given.head, false, values, covered)
+    is_wide := Layout.find(values, `EI_CLASS`) == Bits.hex(`02`)
+    is_big := Layout.find(values, `EI_DATA`) == Bits.hex(`02`)
+    past_header := Layout.read(ELF.header_slots(is_wide), past_ident, is_big, values, covered)
+    read_header := Layout.claimed(`header`, values, covered, past_header)
+    read_segments := Layout.table(Bytes.on(given.head, read_header.field(`e_phoff`), None), read_header.field(`e_phentsize`), read_header.field(`e_phnum`), ELF.program_slots(is_wide), is_big, `program header`)
+    read_sections := Layout.table(Bytes.on(given.head, read_header.field(`e_shoff`), None), read_header.field(`e_shentsize`), read_header.field(`e_shnum`), ELF.section_slots(is_wide), is_big, `section header`)
+    laid_out := Layout.pieces(given)
+    ELF(file: given, header: read_header, segments: read_segments, sections: read_sections, pieces: laid_out, wide: is_wide, big: is_big)
+  )
+  // The identification: four bytes `7f 45 4c 46` ("\x7fELF"), then the class
+  // (1: 32-bit, 2: 64-bit), the data encoding (1: little, 2: big endian),
+  // the version, the ABI and its version, and padding to sixteen bytes.
+  ident => (
+    slots := chain None
+    slots &= Slot(name: `EI_MAG`, size: Bytes.four)
+    slots &= Slot(name: `EI_CLASS`, size: Bytes.one)
+    slots &= Slot(name: `EI_DATA`, size: Bytes.one)
+    slots &= Slot(name: `EI_VERSION`, size: Bytes.one)
+    slots &= Slot(name: `EI_OSABI`, size: Bytes.one)
+    slots &= Slot(name: `EI_ABIVERSION`, size: Bytes.one)
+    slots &= Slot(name: `EI_PAD`, size: Bits.hex(`7`))
+    slots
+  )
+  // An address, or an offset into the file: four bytes or eight.
+  address (is_wide) => if is_wide { Bytes.eight } else { Bytes.four }
+  // The rest of the header, the same for both widths but for the width of
+  // the three addresses in it.
+  header_slots (is_wide) => (
+    slots := chain None
+    width := ELF.address(is_wide)
+    slots &= Slot(name: `e_type`, size: Bytes.two)
+    slots &= Slot(name: `e_machine`, size: Bytes.two)
+    slots &= Slot(name: `e_version`, size: Bytes.four)
+    slots &= Slot(name: `e_entry`, size: width)
+    slots &= Slot(name: `e_phoff`, size: width)
+    slots &= Slot(name: `e_shoff`, size: width)
+    slots &= Slot(name: `e_flags`, size: Bytes.four)
+    slots &= Slot(name: `e_ehsize`, size: Bytes.two)
+    slots &= Slot(name: `e_phentsize`, size: Bytes.two)
+    slots &= Slot(name: `e_phnum`, size: Bytes.two)
+    slots &= Slot(name: `e_shentsize`, size: Bytes.two)
+    slots &= Slot(name: `e_shnum`, size: Bytes.two)
+    slots &= Slot(name: `e_shstrndx`, size: Bytes.two)
+    slots
+  )
+  // A program header. The two widths put the flags in different places: a
+  // 64-bit one keeps them next to the type, so the eight-byte fields after
+  // them are aligned.
+  program_slots (is_wide) => (
+    slots := chain None
+    width := ELF.address(is_wide)
+    slots &= Slot(name: `p_type`, size: Bytes.four)
+    if is_wide { slots &= Slot(name: `p_flags`, size: Bytes.four) }
+    slots &= Slot(name: `p_offset`, size: width)
+    slots &= Slot(name: `p_vaddr`, size: width)
+    slots &= Slot(name: `p_paddr`, size: width)
+    slots &= Slot(name: `p_filesz`, size: width)
+    slots &= Slot(name: `p_memsz`, size: width)
+    unless is_wide { slots &= Slot(name: `p_flags`, size: Bytes.four) }
+    slots &= Slot(name: `p_align`, size: width)
+    slots
+  )
+  section_slots (is_wide) => (
+    slots := chain None
+    width := ELF.address(is_wide)
+    slots &= Slot(name: `sh_name`, size: Bytes.four)
+    slots &= Slot(name: `sh_type`, size: Bytes.four)
+    slots &= Slot(name: `sh_flags`, size: width)
+    slots &= Slot(name: `sh_addr`, size: width)
+    slots &= Slot(name: `sh_offset`, size: width)
+    slots &= Slot(name: `sh_size`, size: width)
+    slots &= Slot(name: `sh_link`, size: Bytes.four)
+    slots &= Slot(name: `sh_info`, size: Bytes.four)
+    slots &= Slot(name: `sh_addralign`, size: width)
+    slots &= Slot(name: `sh_entsize`, size: width)
+    slots
+  )
+
+  entry => .header.field(`e_entry`)
+  machine => .header.field(`e_machine`)
+
+  // What a segment holds in the file: `p_filesz` bytes from `p_offset`.
+  // (What it holds in memory beyond that, up to `p_memsz`, is zeros.)
+  held (segment) => (
+    start := Bytes.on(.file.head, segment.field(`p_offset`), None)
+    Bytes.taken(start, segment.field(`p_filesz`))
+  )
+  // Whether a segment is loaded (`PT_LOAD`, type 1) and runs (`PF_X`, the
+  // lowest bit of its flags).
+  runs (segment) => (
+    kind := segment.field(`p_type`)
+    (kind == Bits.hex(`00000001`)).and(segment.field(`p_flags`).low)
+  )
+  // The segment that is loaded, runs, and holds the entry point in what the
+  // file gives it; or None.
+  entered => (
+    found := None
+    looking := .segments.head
+    while ((exists looking).and((exists found).not)) {
+      segment := looking.value
+      if (.runs(segment)) {
+        distance := .entry - segment.field(`p_vaddr`)
+        if (distance.carry.and(distance.below(segment.field(`p_filesz`)))) { found = segment }
+      }
+      looking = looking.next
+    }
+    found
+  )
+  // The bytes the program begins with: from the entry point to the end of
+  // what the file gives the segment holding it, as a chain of bytes.
+  code => (
+    segment := .entered
+    if (exists segment) {
+      distance := .entry - segment.field(`p_vaddr`)
+      start := Bytes.on(.file.head, segment.field(`p_offset`), None)
+      at_entry := Bytes.on(start, distance, None)
+      rest_size := segment.field(`p_filesz`) - distance
+      Bytes.taken(at_entry, rest_size)
+    } else { None }
+  )
+
+  // The file written back out of what was read: the header and each table
+  // entry from their fields, in the order of bytes the file uses, and
+  // everything between them as it was.
+  written => Layout.written(.pieces)
+}

@@ -1,0 +1,46 @@
+// A file as a chain of bytes: written by hand, walked by offsets that are
+// bits, read into fields of either order of bytes, and laid out as what was
+// read so it is written back as it was.
+//
+// run: .ether/asm/asm.sh bytes @ether/$/.asm/Container/tests/bytes.ray boolean.ray -- Bits.ray Container/Bytes.ray
+
+mark ^keyword := external global
+unless true { INFO@mark `Y0 control: this file is not run` }
+file ^keyword := Bytes.hex(`0102 0304 z ff`)
+unless (file.head.value == Bits.hex(`01`)) { INFO@mark `Y1 the first byte is not 01` }
+unless (file.tail.value == Bits.hex(`ff`)) { INFO@mark `Y2 the last byte is not ff` }
+unless (file.head.next.next.next.next.value.is_zero) { INFO@mark `Y3 z is not a zero byte` }
+unless (exists file.head.next.next.next.next.next.next.next.next) { INFO@mark `Y4 fewer than nine bytes` }
+if (exists file.head.next.next.next.next.next.next.next.next.next) { INFO@mark `Y5 more than nine bytes` }
+unless (Bytes.same(Bytes.hex(`abcdef`), Bits.hex_bytes(`abcdef`))) { INFO@mark `Y6 abcdef is not read as Bits reads it` }
+if (Bytes.same(Bytes.hex(`0102`), Bytes.hex(`0103`))) { INFO@mark `Y7 0102 is the same as 0103` }
+if (Bytes.same(Bytes.hex(`0102`), Bytes.hex(`010203`))) { INFO@mark `Y8 0102 is the same as 010203` }
+unless (Bytes.on(file.head, Bits.hex(`3`), None).value == Bits.hex(`04`)) { INFO@mark `Y9 three bytes on is not 04` }
+if (exists Bytes.on(file.head, Bits.hex(`0100`), None)) { INFO@mark `Y10 there is something 256 bytes on` }
+pair ^keyword := Bytes.links(file.head.next, Bytes.two)
+unless (Bytes.word(pair, false) == Bits.hex(`0302`)) { INFO@mark `Y11 02 03 read little-endian is not 0302` }
+unless (Bytes.word(pair, true) == Bits.hex(`0203`)) { INFO@mark `Y12 02 03 read big-endian is not 0203` }
+unless (Bytes.same(Bytes.written(Bits.hex(`0302`), false, chain None), Bytes.hex(`0203`))) { INFO@mark `Y13 0302 written little-endian is not 02 03` }
+unless (Bytes.same(Bytes.written(Bits.hex(`0302`), true, chain None), Bytes.hex(`0302`))) { INFO@mark `Y14 0302 written big-endian is not 03 02` }
+Fixture := class {
+  slots => (
+    out := chain None
+    out &= Slot(name: `a`, size: Bytes.one)
+    out &= Slot(name: `b`, size: Bytes.two)
+    out
+  )
+  piece (bytes) => (
+    read_values := chain None
+    covered := chain None
+    past := Layout.read(Fixture.slots, bytes.head.next, true, read_values, covered)
+    Layout.claimed(`p`, read_values, covered, past)
+  )
+}
+laid ^keyword := Bytes.hex(`0102030405060708`)
+piece ^keyword := Fixture.piece(laid)
+unless (piece.field(`b`) == Bits.hex(`0304`)) { INFO@mark `Y15 b is not 0304` }
+unless (piece.after.value == Bits.hex(`05`)) { INFO@mark `Y16 what follows the piece is not 05` }
+pieces ^keyword := Layout.pieces(laid)
+unless (exists pieces.head.next.next) { INFO@mark `Y17 fewer than three pieces` }
+if (exists pieces.head.next.next.next) { INFO@mark `Y18 more than three pieces` }
+unless (Bytes.same(Layout.written(pieces), laid)) { INFO@mark `Y19 not written back identical` }

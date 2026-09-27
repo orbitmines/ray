@@ -1,0 +1,42 @@
+// A slice of Ghidra's Z80 description read by the same rules as the 6502:
+// another family's registers, tokens, attached registers, tables with
+// displays in quotes, patterns of several tokens and `!=`, and bytes of real
+// Z80 code read and written back.
+//
+// run: PROJECT=SLEIGH SPECS=@ether/$/.asm/SLEIGH/tests/z80.slice.slaspec T=600 .ether/asm/asm.sh sleigh-z80 @ether/$/.asm/SLEIGH/tests/z80.ray boolean.ray -- Bits.ray ISA.ray
+
+if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
+unless (exists None) { INFO@mark `Z0 control: this always fires` }
+unless (exists (external alike (HL.size) (`2`))) { INFO@mark `Z1 HL is not two bytes` }
+unless (op6_2.mask == Bits.hex(`c0`)) { INFO@mark `Z2 op6_2 is not bits 6 and 7` }
+unless (exists reg0_3.attached.head) { INFO@mark `Z3 reg0_3 names no registers` }
+unless (exists (external alike (cc.constructors.head.value.display) (`"NZ"`))) { INFO@mark `Z4 cc is not NZ first` }
+
+loads ^keyword := chain None
+loads &= `LD`
+ld ^keyword := Sleigh.isa(sleigh.spelled(loads))
+register_load ^keyword := ld.read(Bits.hex(`78`))
+unless (exists (external alike (register_load.mnemonic) (`LD`))) { INFO@mark `Z5 78 is not LD` }
+unless (register_load.field(`reg3_3`) == Bits.hex(`7`).extract(Bits.hex(`7`))) { INFO@mark `Z6 78 does not load register 7 (A)` }
+immediate_load ^keyword := ld.read(Bits.hex(`423e`))
+unless (immediate_load.field(`imm8`) == Bits.hex(`42`)) { INFO@mark `Z7 3e 42 does not load 42` }
+unless (immediate_load.written == Bits.hex(`423e`)) { INFO@mark `Z8 3e 42 is not written back` }
+indexed_load ^keyword := ld.read(Bits.hex(`057edd`))
+unless (exists (external alike (indexed_load.mnemonic) (`LD`))) { INFO@mark `Z9 dd 7e is not LD` }
+unless (indexed_load.field(`simm8`) == Bits.hex(`05`)) { INFO@mark `Z10 dd 7e 05 is not IX+5` }
+unless (indexed_load.written == Bits.hex(`057edd`)) { INFO@mark `Z11 dd 7e 05 is not written back` }
+if (exists ld.read(Bits.hex(`0576dd`))) { INFO@mark `Z12 dd 76 is read as LD, though bits3_3!=0x6 leaves it out` }
+
+jumps ^keyword := chain None
+jumps &= `JP`
+jumps &= `JR`
+jp ^keyword := Sleigh.isa(sleigh.spelled(jumps))
+absolute ^keyword := jp.read(Bits.hex(`1234c3`))
+unless (exists (external alike (absolute.mnemonic) (`JP`))) { INFO@mark `Z13 c3 is not JP` }
+unless (absolute.field(`imm16`) == Bits.hex(`1234`)) { INFO@mark `Z14 c3 34 12 does not go to 1234` }
+relative ^keyword := jp.read(Bits.hex(`fe20`))
+unless (exists (external alike (relative.mnemonic) (`JR`))) { INFO@mark `Z15 20 is not JR` }
+unless (exists (external alike (relative.encoding.semantics.head.next.value.display) (`"NZ"`))) { INFO@mark `Z16 20 is not JR NZ` }
+conditional ^keyword := jp.read(Bits.hex(`1234ca`))
+unless (exists (external alike (conditional.encoding.semantics.head.next.value.display) (`"Z"`))) { INFO@mark `Z17 ca is not JP Z` }
+unless (conditional.written == Bits.hex(`1234ca`)) { INFO@mark `Z18 ca 34 12 is not written back` }

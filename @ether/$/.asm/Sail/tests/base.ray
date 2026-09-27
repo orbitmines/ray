@@ -1,0 +1,40 @@
+// The base integer instructions given their meaning by the official Sail
+// model: the encodings are read from riscv-opcodes, the execute clauses of
+// `extensions/I/base_insts.sail` are read under the Sail grammar and attached
+// to them by mnemonic, and five words are run on the machine one after
+// another.
+//
+// run: mkdir -p .ether/asm/work/riscv/rv && echo > .ether/asm/work/riscv/rv/.project.ray && cat @ether/$/.asm/riscv-opcodes/.entrypoint.ray @ether/$/.asm/Sail/.entrypoint.ray > .ether/asm/work/riscv/rv/.entrypoint.ray && T=600 PROJECT=../../../.ether/asm/work/riscv/rv SPECS=".ether/asm/work/riscv/s/arg_lut_full.csv .ether/asm/work/riscv/s/opcodes_rv_i_small .ether/asm/work/riscv/s/opcodes_sail_base" .ether/asm/asm.sh sail @ether/$/.asm/Sail/tests/base.ray boolean.ray -- Bits.ray ISA.ray
+// The spec files: `arg_lut.csv`; the lui, beq, addi and add lines of
+// `extensions/rv_i`; and lines 16-43, 101-182 and 223-267 of `base_insts.sail`
+// (UTYPE, BTYPE, ITYPE, RTYPE), named to be read before `probe.ray`.
+// Names here must not be mnemonics: a line `addi …` is read as a use of a
+// name `addi` once there is one.
+
+INFO@mark `E0 control: this file is run`
+
+rv ^keyword := sail.attach(opcodes.isa(`rv_i`))
+
+word_addi ^keyword := opcodes.read(rv, Bits.hex(`00500093`))
+unless (exists (external alike (word_addi.encoding.semantics.shape) (`ITYPE`))) { INFO@mark `E1 addi is not an ITYPE` }
+sail.execute(word_addi)
+unless (machine.read(Bits.hex(`01`)) == Bits.hex(`00000005`)) { INFO@mark `E2 x1 is not 5 after addi x1, x0, 5` }
+
+word_add ^keyword := opcodes.read(rv, Bits.hex(`00108133`))
+unless (exists (external alike (word_add.encoding.semantics.operation) (`ADD`))) { INFO@mark `E3 add is not ADD` }
+sail.execute(word_add)
+unless (machine.read(Bits.hex(`02`)) == Bits.hex(`0000000a`)) { INFO@mark `E4 x2 is not 10 after add x2, x1, x1` }
+
+word_lui ^keyword := opcodes.read(rv, Bits.hex(`123451b7`))
+sail.execute(word_lui)
+unless (machine.read(Bits.hex(`03`)) == Bits.hex(`12345000`)) { INFO@mark `E5 x3 is not 12345000 after lui x3, 0x12345` }
+unless (machine.pc == Bits.hex(`0000000c`)) { INFO@mark `E6 pc is not c after three instructions` }
+
+word_beq ^keyword := opcodes.read(rv, Bits.hex(`00208463`))
+sail.execute(word_beq)
+unless (machine.pc == Bits.hex(`00000010`)) { INFO@mark `E7 beq x1, x2, 8 was taken though 5 is not 10` }
+
+word_back ^keyword := opcodes.read(rv, Bits.hex(`fe210ce3`))
+sail.execute(word_back)
+unless (machine.pc == Bits.hex(`00000008`)) { INFO@mark `E8 beq x2, x2, -8 did not go back to 8` }
+unless (machine.read(Bits.hex(`00`)).is_zero) { INFO@mark `E9 x0 is not zero` }

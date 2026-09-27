@@ -3,7 +3,7 @@
 // displays in quotes, patterns of several tokens and `!=`, and bytes of real
 // Z80 code read and written back.
 //
-// run: PROJECT=SLEIGH SPECS=@ether/$/.asm/SLEIGH/tests/z80.slice.slaspec T=600 .ether/asm/asm.sh sleigh-z80 @ether/$/.asm/SLEIGH/tests/z80.ray boolean.ray -- Bits.ray ISA.ray
+// run: PROJECT=SLEIGH SPECS=@ether/$/.asm/SLEIGH/tests/z80.slice.slaspec T=600 .ether/asm/asm.sh sleigh-z80 @ether/$/.asm/SLEIGH/tests/z80.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
 
 if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
 unless (exists None) { INFO@mark `Z0 control: this always fires` }
@@ -36,7 +36,7 @@ unless (exists (external alike (absolute.mnemonic) (`JP`))) { INFO@mark `Z13 c3 
 unless (absolute.field(`imm16`) == Bits.hex(`1234`)) { INFO@mark `Z14 c3 34 12 does not go to 1234` }
 relative ^keyword := jp.read(Bits.hex(`fe20`))
 unless (exists (external alike (relative.mnemonic) (`JR`))) { INFO@mark `Z15 20 is not JR` }
-unless (exists (external alike (relative.encoding.semantics.head.next.value.display) (`"NZ"`))) { INFO@mark `Z16 20 is not JR NZ` }
+unless (exists (external alike (relative.encoding.semantics.parts.head.next.value.display) (`"NZ"`))) { INFO@mark `Z16 20 is not JR NZ` }
 conditional ^keyword := jp.read(Bits.hex(`1234ca`))
-unless (exists (external alike (conditional.encoding.semantics.head.next.value.display) (`"Z"`))) { INFO@mark `Z17 ca is not JP Z` }
+unless (exists (external alike (conditional.encoding.semantics.parts.head.next.value.display) (`"Z"`))) { INFO@mark `Z17 ca is not JP Z` }
 unless (conditional.written == Bits.hex(`1234ca`)) { INFO@mark `Z18 ca 34 12 is not written back` }

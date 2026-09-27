@@ -1,9 +1,11 @@
 // 6502 instructions run: each one's p-code, as Ghidra's description writes
-// it, over registers that hold bits. What an instruction answers is where the
-// machine goes next — the one conditional goto, `if (C == 0) goto REL`, is
-// what makes it anywhere else.
+// it, translated once into a goto program (`Goto`: steps that set registers,
+// store bytes, and jump), and that program run over a machine's state. What
+// an instruction answers is where the machine goes next — the one
+// conditional goto, `if (C == 0) goto REL`, and the jumps that leave a
+// program (`call`, `return`) are what make it anywhere else.
 //
-// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=300 .ether/asm/asm.sh sleigh-run @ether/$/.asm/SLEIGH/tests/run.ray boolean.ray -- Bits.ray ISA.ray
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=900 M=5000 .ether/asm/asm.sh sleigh-run @ether/$/.asm/SLEIGH/tests/run.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
 
 if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
 unless (exists None) { INFO@mark `X0 control: this always fires` }
@@ -14,35 +16,77 @@ asked &= `INX`
 asked &= `TAX`
 asked &= `LDA`
 asked &= `BCC`
+asked &= `STA`
+asked &= `PHA`
+asked &= `PLA`
+asked &= `JSR`
+asked &= `RTS`
 isa ^keyword := Sleigh.isa(sleigh.spelled(asked))
+cpu ^keyword := State(registers: chain None, memory: chain None)
 
-C.write(Bits.hex(`01`))
-after_clc ^keyword := Sleigh.run(isa.read(Bits.hex(`18`)), Bits.hex(`0601`))
-unless (C.now == Bits.hex(`00`)) { INFO@mark `X1 CLC does not clear C` }
+cpu.put(`C`, Bits.hex(`01`))
+after_clc ^keyword := Sleigh.run(isa.read(Bits.hex(`18`)), Bits.hex(`0601`), cpu)
+unless (cpu.get(`C`) == Bits.hex(`00`)) { INFO@mark `X1 CLC does not clear C` }
 unless (after_clc == Bits.hex(`0601`)) { INFO@mark `X2 CLC does not go on to the next instruction` }
-Sleigh.run(isa.read(Bits.hex(`38`)), Bits.hex(`0602`))
-unless (C.now == Bits.hex(`01`)) { INFO@mark `X3 SEC does not set C` }
+Sleigh.run(isa.read(Bits.hex(`38`)), Bits.hex(`0602`), cpu)
+unless (cpu.get(`C`) == Bits.hex(`01`)) { INFO@mark `X3 SEC does not set C` }
 
-X.write(Bits.hex(`41`))
-Sleigh.run(isa.read(Bits.hex(`e8`)), Bits.hex(`0603`))
-unless (X.now == Bits.hex(`42`)) { INFO@mark `X4 INX does not make 42 of 41` }
-unless (Z.now == Bits.hex(`00`)) { INFO@mark `X5 INX of 41 sets Z` }
-unless (N.now == Bits.hex(`00`)) { INFO@mark `X6 INX of 41 sets N` }
-X.write(Bits.hex(`ff`))
-Sleigh.run(isa.read(Bits.hex(`e8`)), Bits.hex(`0604`))
-unless (X.now == Bits.hex(`00`)) { INFO@mark `X7 INX of ff does not wrap to 00` }
-unless (Z.now == Bits.hex(`01`)) { INFO@mark `X8 INX of ff does not set Z` }
+cpu.put(`X`, Bits.hex(`41`))
+inx ^keyword := isa.read(Bits.hex(`e8`))
+Sleigh.run(inx, Bits.hex(`0603`), cpu)
+unless (cpu.get(`X`) == Bits.hex(`42`)) { INFO@mark `X4 INX does not make 42 of 41` }
+unless (cpu.get(`Z`) == Bits.hex(`00`)) { INFO@mark `X5 INX of 41 sets Z` }
+unless (cpu.get(`N`) == Bits.hex(`00`)) { INFO@mark `X6 INX of 41 sets N` }
+cpu.put(`X`, Bits.hex(`ff`))
+Sleigh.run(inx, Bits.hex(`0604`), cpu)
+unless (cpu.get(`X`) == Bits.hex(`00`)) { INFO@mark `X7 INX of ff does not wrap to 00` }
+unless (cpu.get(`Z`) == Bits.hex(`01`)) { INFO@mark `X8 INX of ff does not set Z` }
+// INX is three steps: X set, and the two flags `resultFlags` sets.
+program ^keyword := inx.encoding.semantics.steps.head
+unless (exists program.next.next) { INFO@mark `X16 INX is fewer than three steps` }
+if (exists program.next.next.next) { INFO@mark `X17 INX is more than three steps` }
+unless (exists (external alike (program.value.place) (`X`))) { INFO@mark `X18 INX does not set X first` }
 
-Sleigh.run(isa.read(Bits.hex(`80a9`)), Bits.hex(`0606`))
-unless (A.now == Bits.hex(`80`)) { INFO@mark `X9 LDA #$80 does not load 80` }
-unless (N.now == Bits.hex(`01`)) { INFO@mark `X10 LDA #$80 does not set N` }
-Sleigh.run(isa.read(Bits.hex(`aa`)), Bits.hex(`0607`))
-unless (X.now == Bits.hex(`80`)) { INFO@mark `X11 TAX does not copy 80` }
+Sleigh.run(isa.read(Bits.hex(`80a9`)), Bits.hex(`0606`), cpu)
+unless (cpu.get(`A`) == Bits.hex(`80`)) { INFO@mark `X9 LDA #$80 does not load 80` }
+unless (cpu.get(`N`) == Bits.hex(`01`)) { INFO@mark `X10 LDA #$80 does not set N` }
+Sleigh.run(isa.read(Bits.hex(`aa`)), Bits.hex(`0607`), cpu)
+unless (cpu.get(`X`) == Bits.hex(`80`)) { INFO@mark `X11 TAX does not copy 80` }
 
-C.write(Bits.hex(`00`))
-branched ^keyword := Sleigh.run(isa.read(Bits.hex(`fa90`)), Bits.hex(`0609`))
+cpu.put(`C`, Bits.hex(`00`))
+branched ^keyword := Sleigh.run(isa.read(Bits.hex(`fa90`)), Bits.hex(`0609`), cpu)
 unless (branched == Bits.hex(`0603`)) { INFO@mark `X12 BCC -6 with C clear does not go back to 0603` }
-C.write(Bits.hex(`01`))
-passed ^keyword := Sleigh.run(isa.read(Bits.hex(`fa90`)), Bits.hex(`0609`))
+cpu.put(`C`, Bits.hex(`01`))
+passed ^keyword := Sleigh.run(isa.read(Bits.hex(`fa90`)), Bits.hex(`0609`), cpu)
 unless (passed == Bits.hex(`0609`)) { INFO@mark `X13 BCC with C set does not go on` }
-unless (exists (external alike (machine.decoded.mnemonic) (`BCC`))) { INFO@mark `X14 the last step run is not BCC` }
+
+// Memory: bytes stored and loaded by the address a subtable exports.
+Sleigh.run(isa.read(Bits.hex(`03008d`)), Bits.hex(`060c`), cpu)
+unless (cpu.load(Bits.hex(`0300`)) == Bits.hex(`80`)) { INFO@mark `M1 STA $0300 does not store 80` }
+cpu.store(Bits.hex(`0205`), Bits.hex(`5a`))
+cpu.put(`X`, Bits.hex(`05`))
+Sleigh.run(isa.read(Bits.hex(`0200bd`)), Bits.hex(`060f`), cpu)
+unless (cpu.get(`A`) == Bits.hex(`5a`)) { INFO@mark `M2 LDA $0200,X does not load 5a` }
+cpu.put(`SP`, Bits.hex(`01ff`))
+Sleigh.run(isa.read(Bits.hex(`48`)), Bits.hex(`0610`), cpu)
+unless (cpu.load(Bits.hex(`01ff`)) == Bits.hex(`5a`)) { INFO@mark `M3 PHA does not push 5a` }
+unless (cpu.get(`SP`) == Bits.hex(`01fe`)) { INFO@mark `M4 PHA does not move SP down` }
+cpu.put(`A`, Bits.hex(`00`))
+Sleigh.run(isa.read(Bits.hex(`68`)), Bits.hex(`0611`), cpu)
+unless (cpu.get(`A`) == Bits.hex(`5a`)) { INFO@mark `M5 PLA does not pull 5a` }
+unless (cpu.get(`SP`) == Bits.hex(`01ff`)) { INFO@mark `M6 PLA does not move SP up` }
+
+// A call and its return: two bytes on the stack, low one first.
+called ^keyword := Sleigh.run(isa.read(Bits.hex(`070020`)), Bits.hex(`0603`), cpu)
+unless (called == Bits.hex(`0700`)) { INFO@mark `J1 JSR $0700 does not go to 0700` }
+unless (cpu.get(`SP`) == Bits.hex(`01fd`)) { INFO@mark `J2 JSR does not move SP down two` }
+unless (cpu.load(Bits.hex(`01fe`)) == Bits.hex(`03`)) { INFO@mark `J3 JSR does not push 03 low` }
+unless (cpu.load(Bits.hex(`01ff`)) == Bits.hex(`06`)) { INFO@mark `J4 JSR does not push 06 high` }
+returned ^keyword := Sleigh.run(isa.read(Bits.hex(`60`)), Bits.hex(`0701`), cpu)
+unless (returned == Bits.hex(`0603`)) { INFO@mark `J5 RTS does not return to 0603` }
+unless (cpu.get(`SP`) == Bits.hex(`01ff`)) { INFO@mark `J6 RTS does not move SP back` }
+
+// spec: PHP and PLP are not run yet. `pushSR` translates to the right steps
+// (`ccr[7,1] = N` a masked write, `Deposited`), but its `*:1 (SP) = ccr;`
+// does not find `ccr`, a local declared by `local ccr:1 = 0xff;` in the same
+// body; `popSR`'s `N = ccr[7,1];` is not read (see `SleighRegister`).

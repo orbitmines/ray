@@ -1,0 +1,39 @@
+// What p-code needs of a goto program beyond what `Goto` holds: the operands
+// of the instruction being run, the address of the one after it, and a value
+// with some of its bits replaced. A constructor's p-code is translated once,
+// for an encoding, into a `Goto` over these and `Goto`'s own values; what
+// differs from one instruction to the next of that encoding is only what its
+// fields hold and where it is, and those are what the state it runs in is
+// asked.
+//
+// spec: these are proposals for `Goto.ray`, where every reader would share
+// them: Sail's and Arm's operands are fields of the instruction too.
+
+// The state an instruction's program runs in: the machine's, and the
+// instruction being run — what it was read as, and the address after it.
+Running := class: State {
+  registers: Node
+  memory: Node
+  decoded: Node
+  following: Node
+}
+
+// What a field of the instruction being run holds.
+Operand := class {
+  name: Node
+  value (state) => state.decoded.field(.name)
+}
+// The address of the instruction after the one being run: SLEIGH's
+// `inst_next`.
+Following := class {
+  name: Node
+  value (state) => state.following
+}
+// A value with the bits a mask sets replaced by another's: what writing to
+// part of a place, `ccr[7,1] = N`, leaves in it.
+Deposited := class {
+  of: Node
+  mask: Node
+  field: Node
+  value (state) => .of.value(state).deposit(.mask, .field.value(state))
+}

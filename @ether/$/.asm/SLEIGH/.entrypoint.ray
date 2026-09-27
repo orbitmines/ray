@@ -11,15 +11,19 @@
 // counts, chains as long as the number, which are cheap at the sizes a token
 // has.
 //
-// A constructor's p-code is kept as it is written, and run when asked: over
-// registers that hold bits, with `if (condition) goto target` the one control
-// it has (`Sleigh.run`).
+// A constructor's p-code is translated, once for each encoding it is part
+// of, into a goto program (`Goto`, with `PCode.ray`): registers and locals
+// are places of the state, memory is bytes, `if (condition) goto target` is
+// the one control, and `goto`, `call` and `return` leave the program for an
+// address (`Sleigh.program_of`). That program is what runs (`Sleigh.run`,
+// `Sleigh.executed`).
 //
 // spec: not read yet — what the preprocessor means (its lines are passed
 // over), `context` fields as context, `with` blocks, `build`, constraints
-// other than `=` and `!=`, displays of more than one word, and most of p-code:
-// memory, `goto` alone, `call`, `return`, bit ranges, and constants other than
-// hexadecimal, 0 and 1.
+// other than `=` and `!=`, displays of more than one word, macros of more
+// than one parameter, and of p-code: reading `x[low,size]` of a local,
+// `&`, `|`, `^`, `!`, shifts, `carry`, overlapping registers, and decimal
+// constants other than 0, 1 and 2.
 
 mark ^keyword := external global
 
@@ -28,6 +32,7 @@ Sleigh := class {
   endian: Node
   alignment: Node
   spaces: Node
+  address: Node
   registers: Node
   tokens: Node
   fields: Node
@@ -35,6 +40,7 @@ Sleigh := class {
   macros: Node
   tables: Node
   instructions: Node
+  locals: Node
 
   // The characters of a text, each the eight bits it is written with, most
   // significant first.
@@ -52,9 +58,11 @@ Sleigh := class {
     out
   )
   // A count: a chain as long as the number written in decimal.
-  counted (written) => (
+  counted (written) => Sleigh.counted_from(Sleigh.characters(written))
+  // The same, from the characters it is written with.
+  counted_from (glyphs) => (
     total := chain None
-    character := Sleigh.characters(written).head
+    character := glyphs.head
     while (exists character) {
       digit := Bits.nibble_of(character.value)
       if (exists digit) {
@@ -307,11 +315,15 @@ Sleigh := class {
     out
   )
 
-  // Running p-code. What a varnode holds: bits are what they are, and a
-  // place is asked what it holds now.
-  now (given) => (
+  // Translating p-code. A constructor's statements are read into steps of the
+  // program being made (`translating`), and its expressions into terms: a
+  // value of that program, as wide as p-code sizes it.
+  //
+  // What a varnode is as a term: a number is a constant, and fits whatever
+  // it meets; anything else is asked.
+  term (given) => (
     out := chain None
-    if (exists given.bits) { out &= given } else { out &= given.now }
+    if (exists given.bits) { out &= Term(of: Constant(bits: given), like: given, extended: false, loose: true) } else { out &= given.term }
     out.head.value
   )
   // As many bits as some bytes written in decimal.
@@ -345,80 +357,289 @@ Sleigh := class {
     }
     Bits(bits: out)
   )
-  // What a varnode holds, as wide as another value: a signed field is
-  // widened with its sign, anything else with nothing.
-  extended (given, template) => (
-    held := Sleigh.now(given)
-    signed := false
-    unless (exists given.bits) { signed = given.signed }
-    fill := signed.and(held.high)
-    out := chain None
-    mine := held.bits.head
-    theirs := Sleigh.widened(held, template).bits.head
-    while (exists theirs) {
-      if (exists mine) {
-        out &= mine.value
-        mine = mine.next
-      } else { out &= fill }
+  same_width (one, other) => (
+    mine := one.bits.head
+    theirs := other.bits.head
+    while ((exists mine).and(exists theirs)) {
+      mine = mine.next
       theirs = theirs.next
     }
-    Bits(bits: out)
+    (exists mine).not.and((exists theirs).not)
   )
-  plus (one, other) => (
-    wide := Sleigh.widened(Sleigh.now(one), Sleigh.now(other))
-    Sleigh.extended(one, wide) + Sleigh.extended(other, wide)
-  )
-  minus (one, other) => (
-    wide := Sleigh.widened(Sleigh.now(one), Sleigh.now(other))
-    Sleigh.extended(one, wide) - Sleigh.extended(other, wide)
-  )
-  // A comparison answers one bit.
-  truth (holds) => (
+  // A term's value as wide as a template: itself when it is already, a
+  // constant written that wide, or widened with its sign if it has one.
+  fit (given, width) => (
     out := chain None
-    out &= holds
-    Bits(bits: out)
-  )
-  equal (one, other) => (
-    wide := Sleigh.widened(Sleigh.now(one), Sleigh.now(other))
-    Sleigh.truth(Sleigh.extended(one, wide).xor(Sleigh.extended(other, wide)).is_zero)
-  )
-  signed_less (one, other) => (
-    wide := Sleigh.widened(Sleigh.now(one), Sleigh.now(other))
-    Sleigh.truth(Sleigh.extended(one, wide).less(Sleigh.extended(other, wide)))
-  )
-  holds (given) => Sleigh.now(given).is_zero.not
-
-  // One instruction run: its constructor's p-code, over the machine, with
-  // the address of the instruction after it. What it answers is where the
-  // machine goes next: there, or where a `goto` in it went.
-  run (decoded, following) => (
-    step := Step(decoded: decoded, following: following, jumped: chain None)
-    machine.steps &= step
-    decoded.encoding.semantics.head.value.performed
-    out := chain None
-    if (exists step.jumped.head) { out &= step.jumped.tail.value } else { out &= following }
+    if (Sleigh.same_width(given.like, width)) { out &= given.of } elsif given.loose { out &= Constant(bits: Sleigh.fitted(given.of.bits, width)) } else { out &= Widened(of: given.of, like: width, signed: given.extended) }
     out.head.value
   )
-  // The constructor of a table that the instruction being run was read with.
-  part_of (table) => (
+  // Two operands as p-code sizes them: a constant takes the size of what it
+  // meets, and otherwise both are as wide as the wider.
+  paired (one, other) => (
+    first := Sleigh.term(one)
+    second := Sleigh.term(other)
+    wide := chain None
+    if (first.loose.and(second.loose.not)) { wide &= second.like } elsif (second.loose.and(first.loose.not)) { wide &= first.like } else { wide &= Sleigh.widened(first.like, second.like) }
+    width := wide.head.value
+    Pair(left: Sleigh.fit(first, width), right: Sleigh.fit(second, width), like: width)
+  )
+  valued (value, width) => Term(of: value, like: width, extended: false, loose: false)
+  plus (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Sum(left: pair.left, right: pair.right), pair.like)
+  )
+  minus (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Difference(left: pair.left, right: pair.right), pair.like)
+  )
+  conjoined (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Both(left: pair.left, right: pair.right), pair.like)
+  )
+  disjoined (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Either(left: pair.left, right: pair.right), pair.like)
+  )
+  differing (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Differing(left: pair.left, right: pair.right), pair.like)
+  )
+  // A comparison answers one bit.
+  equal (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Equal(left: pair.left, right: pair.right), Bits.flag(false))
+  )
+  unequal (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Inverted(of: Equal(left: pair.left, right: pair.right)), Bits.flag(false))
+  )
+  signed_less (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Less(left: pair.left, right: pair.right), Bits.flag(false))
+  )
+  lower_than (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Below(left: pair.left, right: pair.right), Bits.flag(false))
+  )
+  // `a >= b`: `a` not below `b`.
+  at_least (one, other) => (
+    pair := Sleigh.paired(one, other)
+    Sleigh.valued(Inverted(of: Below(left: pair.left, right: pair.right)), Bits.flag(false))
+  )
+  shifted_left (one, count) => (
+    held := Sleigh.term(one)
+    Sleigh.valued(ShiftedLeft(of: held.of, by: Sleigh.term(count).of), held.like)
+  )
+  shifted_right (one, count) => (
+    held := Sleigh.term(one)
+    Sleigh.valued(ShiftedRight(of: held.of, by: Sleigh.term(count).of, arithmetic: false), held.like)
+  )
+  // `zext(x)`, `sext(x)`: as wide as what it meets, widened without or with
+  // its sign.
+  extension (given, signed) => (
+    held := Sleigh.term(given)
+    Term(of: held.of, like: held.like, extended: signed, loose: false)
+  )
+
+  // A step of the program being made.
+  emit (step) => (
+    held := translating.programs.tail.value.steps
+    held &= step
+    true
+  )
+  // A local declared: set to what it is given, as wide as its size or else
+  // as that.
+  // It is kept by the characters its name is written with, for the rules
+  // that have only the name: a local is declared as the constructor is
+  // translated, after the rules that would see it by its class are chosen.
+  declared (spot, width, given, spelling) => (
+    held := Sleigh.term(given)
+    wide := chain None
+    if (exists width) { wide &= width } else { wide &= held.like }
+    Sleigh.emit(Set(place: spot, to: Sleigh.fit(held, wide.head.value)))
+    made := Local(place: spot, like: wide.head.value)
+    known := sleigh.locals
+    known &= LocalName(spelled: spelling, held_local: made)
+    made
+  )
+  // The local declared last with a name, by the characters it is written
+  // with.
+  place_named (spelling) => (
     found := None
-    walker := machine.decoded.encoding.semantics.head
-    while (exists walker) {
-      if (exists (external alike (external where walker.value.table) (external where table))) { found = walker.value }
-      walker = walker.next
+    walker := sleigh.locals.tail
+    while ((exists walker).and((exists found).not)) {
+      if (Sleigh.same_text(walker.value.spelled, spelling)) { found = walker.value.held_local }
+      walker = walker.previous
     }
     found
   )
-  // `if (condition) goto target`: the one control p-code has.
-  branch (condition, target) => (
-    if (Sleigh.holds(condition)) { machine.step.jumped &= Sleigh.address_of(target) }
+  // The characters of a name a rule begins with: `bits` reads the text of
+  // what it is given, and a capture a rule begins with is given as the word
+  // it is bound to, unless it is read as a value first.
+  leading_characters (written) => (
+    out := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        out &= byte
+        byte = chain None
+      }
+    )
+    external bits (written) take
+    out
+  )
+  same_text (one, other) => (
+    same := true
+    mine := one.head
+    theirs := other.head
+    while ((exists mine).and(exists theirs).and(same)) {
+      bit := mine.value.head
+      given_bit := theirs.value.head
+      while (exists bit) {
+        if (bit.value.xor(given_bit.value)) { same = false }
+        bit = bit.next
+        given_bit = given_bit.next
+      }
+      mine = mine.next
+      theirs = theirs.next
+    }
+    same.and((exists mine).not).and((exists theirs).not)
+  )
+  // `place = value;`: a register or a local set.
+  set (named, width, given) => Sleigh.emit(Set(place: named, to: Sleigh.fit(Sleigh.term(given), width)))
+  // Memory is bytes: `*:n address` is n of them, the lowest at the address,
+  // as a little-endian description keeps them.
+  address_of (pointer) => Sleigh.fit(Sleigh.term(pointer), sleigh.address)
+  after (at, offset) => Sum(left: at, right: Constant(bits: Sleigh.fitted(offset, sleigh.address)))
+  loaded (at, size) => (
+    value := Loaded(address: at)
+    offset := Sleigh.fitted(one_bits, Bits.hex(`00`))
+    walker := Sleigh.counted(size).head.next
+    while (exists walker) {
+      value = Joined(high: Loaded(address: Sleigh.after(at, offset)), low: value)
+      offset = offset + Sleigh.fitted(one_bits, offset)
+      walker = walker.next
+    }
+    value
+  )
+  stored (at, size, given) => (
+    width := Sleigh.bytes_wide(size)
+    value := Sleigh.fit(Sleigh.term(given), width)
+    many := Sleigh.counted(size)
+    if (exists many.head.next) {
+      offset := Sleigh.fitted(zero_bits, Bits.hex(`00`))
+      byte := Sleigh.fitted(Bits.hex(`ff`), width)
+      walker := many.head
+      while (exists walker) {
+        Sleigh.emit(Stored(address: Sleigh.after(at, offset), to: Part(of: value, mask: byte)))
+        offset = offset + Sleigh.fitted(one_bits, offset)
+        byte = byte.doubled.doubled.doubled.doubled.doubled.doubled.doubled.doubled
+        walker = walker.next
+      }
+    } else { Sleigh.emit(Stored(address: at, to: value)) }
     true
   )
-  address_of (target) => (
+  // Where a `goto` goes: a place in memory is its address, anything else
+  // what it holds.
+  destination (given) => (
+    held := given.referent
     out := chain None
-    exported := target.exported
-    if exported.pointing { out &= exported.target } else { out &= Sleigh.now(exported) }
+    if held.pointing { out &= held.target } else { out &= Sleigh.address_of(held) }
     out.head.value
+  )
+  // `if (condition) goto target`: the one control p-code has. Leaving the
+  // program is a jump to an address.
+  branch (condition, aimed) => Sleigh.emit(Jump(when: Sleigh.term(condition).of, target: None, to: Sleigh.destination(aimed)))
+  jump (aimed) => Sleigh.emit(Jump(when: None, target: None, to: Sleigh.destination(aimed)))
+  jump_to (aimed) => Sleigh.emit(Jump(when: None, target: None, to: Sleigh.address_of(aimed)))
+
+  // The program of an encoding: what the constructors it is made of export,
+  // innermost first, as the description builds them before the instruction's
+  // own p-code; then that. Translated once, the first time it is asked for.
+  program_of (encoding) => (
+    held := encoding.semantics
+    unless (exists held.done.head) {
+      translating.programs &= held
+      walker := held.parts.tail
+      while (exists walker.previous) {
+        part := walker.value
+        exporting := part.performed
+        exported := part.table.exports
+        exported &= exporting
+        walker = walker.previous
+      }
+      held.parts.head.value.performed
+      held.done &= true
+    }
+    held
+  )
+  // What a table exports in the program being made: what the constructor of
+  // it translated last exports, since every part is translated before what
+  // is made of it. A table keeps it: tables made by one rule cannot be told
+  // apart by where they were made, nor by their names, which read as the
+  // tables they name.
+  export_of (wanted) => wanted.exports.tail.value
+  // One instruction run: its encoding's program, over a state, with the
+  // address of the instruction after it. What it answers is where the
+  // machine goes next: there, or where a jump in it left for.
+  run (decoded, following, state) => (
+    program := Sleigh.program_of(decoded.encoding)
+    left := program.run(Running(registers: state.registers, memory: state.memory, decoded: decoded, following: following))
+    out := chain None
+    if (exists left) { out &= left } else { out &= following }
+    out.head.value
+  )
+  // Instructions read from memory and run, one after another, from `start`
+  // until the machine goes to `stop`, or `most` of them have run: every
+  // instruction run, in order. What was read at an address is read there
+  // once.
+  // spec: code that writes over itself is run as it was first read.
+  executed (isa, state, start, stop, longest, most) => (
+    ran := chain None
+    seen := chain None
+    at := start
+    one := Sleigh.fitted(one_bits, sleigh.address)
+    left := most.head
+    while ((at == stop).not.and(exists left)) {
+      left = left.next
+      visit := None
+      walker := seen.head
+      while ((exists walker).and((exists visit).not)) {
+        if (walker.value.address == at) { visit = walker.value }
+        walker = walker.next
+      }
+      unless (exists visit) {
+        visit = Sleigh.fetched(isa, state, at, longest)
+        seen &= visit
+      }
+      ran &= visit.decoded
+      at = Sleigh.run(visit.decoded, visit.following, state)
+    }
+    ran
+  )
+  // The instruction at an address: as many bytes as the longest encoding
+  // could take, joined the way the description keeps them, read, and where
+  // the one after it is.
+  fetched (isa, state, at, longest) => (
+    one := Sleigh.fitted(one_bits, sleigh.address)
+    word := state.load(at)
+    ahead := at
+    counting := longest.head.next
+    while (exists counting) {
+      ahead = ahead + one
+      byte := state.load(ahead)
+      if (exists byte) { word = word.under(byte) }
+      counting = counting.next
+    }
+    reading := isa.read(word)
+    after_it := at
+    step := Sleigh.length_of(reading.encoding).head
+    while (exists step) {
+      after_it = after_it + one
+      step = step.next
+    }
+    Visit(address: at, decoded: reading, following: after_it)
   )
 
   // The encodings of constructors, in the order they are written: one for
@@ -439,7 +660,7 @@ Sleigh := class {
           fields &= Field(name: field.value.name, mask: Sleigh.widened(field.value.mask, taken.mask))
           field = field.next
         }
-        out &= Encoding(mnemonic: made.mnemonic, mask: taken.mask, match: taken.match, fields: fields, semantics: taken.parts)
+        out &= Encoding(mnemonic: made.mnemonic, mask: taken.mask, match: taken.match, fields: fields, semantics: Semantics(steps: chain None, parts: taken.parts, done: chain None))
         alternative = alternative.next
       }
       walker = walker.next
@@ -499,13 +720,35 @@ Sleigh := class {
     }
     out
   )
+  // Whether a character is a decimal digit: 0011 and then the digit. `A`
+  // is a hexadecimal digit, and a register.
+  is_decimal (glyph) => glyph.head.value.not.and(glyph.head.next.value.not).and(glyph.head.next.next.value).and(glyph.head.next.next.next.value)
+  // `x[low,size]`: the bits of a place from `low`, `size` of them, as a mask
+  // as wide as the place.
+  bit_range (low, size, width) => (
+    upto := chain None
+    walker := Sleigh.appended(low, size).head.next
+    while (exists walker) {
+      upto &= true
+      walker = walker.next
+    }
+    Sleigh.span(low, upto, width.bits)
+  )
+  range (place, first_bit, bit_count) => (
+    low_count := Sleigh.counted(first_bit)
+    size_count := Sleigh.counted(bit_count)
+    Range(of: place, low: low_count, size: size_count)
+  )
+  // A table, as it is first written.
+  table (named) => Table(name: named, exports: chain None, constructors: chain None)
   // An instruction set of constructors read.
   isa (constructors) => ISA(name: None, endian: sleigh.endian, encodings: Sleigh.encodings_of(constructors))
 }
-sleigh ^keyword := Sleigh(endian: None, alignment: None, spaces: chain None, registers: chain None, tokens: chain None, fields: chain None, pcodeops: chain None, macros: chain None, tables: chain None, instructions: chain None)
+sleigh ^keyword := Sleigh(endian: None, alignment: None, spaces: chain None, address: None, registers: chain None, tokens: chain None, fields: chain None, pcodeops: chain None, macros: chain None, tables: chain None, instructions: chain None, locals: chain None)
 // Zero and one as bits, read once.
 zero_bits ^keyword := Sleigh.numeral(`0`)
 one_bits ^keyword := Sleigh.numeral(`1`)
+two_bits ^keyword := Sleigh.numeral(`2`)
 
 // One way a pattern is spelled: which bits are fixed (`mask`) and to what
 // (`match`), the operands read out of the rest (`fields`), and the
@@ -534,27 +777,34 @@ Pattern := class {
   { }[{ }{literal named}{ }={ }{given};{ }] ^punctuation => (
     holder ^keyword := external .
     act => (inline given)
-    global[named] = Setting(values: chain None)
+    global[named] = Setting(place: named, likes: chain None)
     Acting(held: .alternatives, action: holder, named: named)
   )
   setting => None
 
-  // What the operands of a pattern are while p-code runs: places that hold
-  // bits. `bits` is None, so that bits and places are told apart.
+  // What the operands of a pattern are in p-code: places, which a term
+  // reads and an assignment writes. `bits` is None, so that numbers and
+  // places are told apart.
   bits => None
   signed => false
   pointing => false
-  // The operators of p-code, and the ones whose right side is the digit 0 or
-  // 1, which is not a name (see the numbers at the end).
+  // What it stands for where p-code names it: itself, but for a table.
+  referent => this
+  // The operators of p-code, and the ones whose right side is a digit, which
+  // is not a name (see the numbers at the end).
   { }+{ }{other} ^punctuation => Sleigh.plus(this, other)
   { }-{ }{other} ^punctuation => Sleigh.minus(this, other)
   { }=={ }{other} ^punctuation => Sleigh.equal(this, other)
   { }+{ }1 ^punctuation => Sleigh.plus(this, one_bits)
   { }-{ }1 ^punctuation => Sleigh.minus(this, one_bits)
+  { }-{ }2 ^punctuation => Sleigh.minus(this, two_bits)
   { }=={ }0 ^punctuation => Sleigh.equal(this, zero_bits)
   { }=={ }1 ^punctuation => Sleigh.equal(this, one_bits)
   { }s<{ }0 ^punctuation => Sleigh.signed_less(this, zero_bits)
   { }s<{ }{other} ^punctuation => Sleigh.signed_less(this, other)
+  // Written without spaces: `SP-1`, `SP-2`.
+  -1 ^punctuation => Sleigh.minus(this, one_bits)
+  -2 ^punctuation => Sleigh.minus(this, two_bits)
 }
 // `&` binds tighter than `|`, and `|` than `;`, so `bbb=5 & X; imm8` is
 // `(bbb=5 & X); imm8`. Two operators of a pattern are grouped here by what
@@ -588,25 +838,28 @@ binds ^keyword := class {
 {leading} [joining: binds] {operand};{ }{rest} => Pattern(held: Sleigh.then((leading [joining] operand).alternatives, (rest).alternatives))
 
 // A pattern with what it sets while it is read.
-// The name it sets is looked up when it runs: a pattern may be read more than
-// once, and the name stands for the setting read last.
+// The name it sets is looked up when it is translated: a pattern may be read
+// more than once, and the name stands for the setting read last.
 Acting := class: Pattern {
   held: Node
   action: Node
   named: Node
   setting => this
+  // Translated where the constructor is: the name set to what it is given.
   run => (
-    result := Sleigh.now(.action.act)
-    place := global[.named]
-    held := place.values
-    held &= result
-    true
+    named_place := global[.named]
+    given := Sleigh.term(.action.act)
+    widths := named_place.likes
+    widths &= given.like
+    Sleigh.emit(Set(place: .named, to: given.of))
   )
 }
-// A name an action sets: what it was set to last.
+// A name an action sets: a place of the program, as wide as what it was set
+// to.
 Setting := class: Pattern {
-  values: Node
-  now => .values.tail.value
+  place: Node
+  likes: Node
+  term => Term(of: Named(name: .place), like: .likes.tail.value, extended: false, loose: false)
 }
 
 // What is written after a `#` is for the reader.
@@ -649,26 +902,28 @@ define{ }space{ }{literal named}{ }{literal rest}; ^keyword => (
   global[named] = space
   true
 )
+// The default space is memory, and how many bytes it is addressed with is
+// how wide an address is.
+define{ }space{ }{literal named}{ }type={literal kind}{ }size={literal bytes}{ }default; ^keyword => (
+  space := Space(name: named, written: kind)
+  sleigh.spaces &= space
+  sleigh.address = Sleigh.bytes_wide(bytes)
+  global[named] = space
+  true
+)
 
 // Registers: names of places in the register space, each `size` bytes, the
 // first at `offset`. The names follow the definition one at a time. In a
-// pattern a register is spelled with no bits at all. While p-code runs it
-// holds bits, and every value it was given is kept, the last one last.
-Register := class: Pattern {
+// pattern a register is spelled with no bits at all; in p-code it is a named
+// place of the machine's state.
+// spec: registers that overlap (`S` is the low byte of `SP`) are places apart.
+SleighRegister := class: Pattern {
   name: Node
   offset: Node
   size: Node
-  values: Node
   empty => Sleigh.bytes_wide(.size)
-  now => (
-    out := chain None
-    if (exists .values.head) { out &= .values.tail.value } else { out &= .empty }
-    out.head.value
-  )
-  write (given) => (
-    .values &= Sleigh.fitted(Sleigh.now(given), .empty)
-    true
-  )
+  term => Term(of: Named(name: .name), like: .empty, extended: false, loose: false)
+  assigned (given) => Sleigh.set(.name, .empty, given)
   // `register = value;` in p-code: read up to its `;`, since Ray reads a
   // `;` with nothing after it as a separator that loses what came before. A
   // value written as a number is read from how it is written: a digit is not
@@ -677,7 +932,10 @@ Register := class: Pattern {
   // A rule of a class is asked of every receiver it could apply to, not only
   // of registers: one written `{ }={ }1;` took `bbb=1;` in a pattern for an
   // assignment. So the digits are read here, from the text.
-  // spec: a number is read only where it is the whole value.
+  // spec: a number is read only where it is the whole value. Nor is
+  // `N = ccr[7,1];`, some bits of a local, read yet: a rule for it runs its
+  // capture back over the statements before it, to the first `=`, and a
+  // typed capture that stops it costs passes that re-run what came before.
   { }={ }{given}; ^punctuation => (
     glyphs := chain None
     byte := chain None
@@ -690,8 +948,15 @@ Register := class: Pattern {
       true
     )
     external bits given take
-    if (exists Bits.nibble_of(glyphs.head.value)) { .write(Sleigh.glyph_number(glyphs)) } else { .write(given) }
+    if (Sleigh.is_decimal(glyphs.head.value)) { .assigned(Sleigh.glyph_number(glyphs)) } else { .assigned(given) }
   )
+  // `SP=SP-2;`, written without spaces. `={given};` would take a pattern's
+  // `op=0x8` and the p-code after it for an assignment.
+  ={literal operand}-2; ^punctuation => .assigned(Sleigh.minus(global[operand], two_bits))
+  // `SP = SP+1;`: `+` is a letter of a word, so `SP+1` is one word, and is
+  // read here as the register it begins with, and one.
+  // spec: only a register named before `+1`.
+  { }={ }{literal operand}+1; ^punctuation => .assigned(Sleigh.plus(global[operand], one_bits))
 
   alternatives => (
     out := chain None
@@ -705,7 +970,7 @@ Registers := class {
   { }{literal named} ^punctuation => (
     at := .offset
     bytes := .size
-    register := Register(name: named, offset: at, size: bytes, values: chain None)
+    register := SleighRegister(name: named, offset: at, size: bytes)
     sleigh.registers &= register
     global[named] = register
     this
@@ -723,7 +988,7 @@ define{ }register{ }offset={literal at}{ }size={literal bytes}{ }{`[`} ^keyword 
 // reads `[ A X Y P ]` as one name too, and a typed capture that could tell
 // them apart is not asked on the first reading.
 define{ }register{ }offset={literal at}{ }size={literal bytes}{ }{`[`}{\n}{literal named}{\n}{`]`}; ^keyword => (
-  register := Register(name: named, offset: at, size: bytes, values: chain None)
+  register := SleighRegister(name: named, offset: at, size: bytes)
   sleigh.registers &= register
   global[named] = register
   true
@@ -744,9 +1009,10 @@ TokenField := class: Pattern {
   mask: Node
   attributes: Node
   attached: Node
-  // While p-code runs: what the instruction being run holds in this field.
-  now => machine.decoded.field(.name)
   signed => exists (external alike (.attributes) (`signed`))
+  // In p-code: what the instruction being run holds in this field, as wide
+  // as the field, widened with its sign if it is signed.
+  term => Term(of: Operand(name: .name), like: Sleigh.cleared(.mask).extract(.mask), extended: .signed, loose: false)
   alternatives => (
     out := chain None
     reading := chain None
@@ -859,25 +1125,35 @@ Macro := class {
   name: Node
   parameters: Node
   written: Node
-  // `name(argument)`: its p-code run with its parameter standing for what is
-  // given. spec: one parameter; `a, b` would be read as one.
+  // `name(argument)`: its p-code translated with its parameter standing for
+  // what is given. spec: one parameter; `a, b` would be read as one.
   ({given}) ^punctuation => .expanded(given)
   ({given}); ^punctuation => .expanded(given)
+  () ^punctuation => .expanded(None)
+  (); ^punctuation => .expanded(None)
   expanded (given) => (
     frame := .written
-    machine.arguments &= given
+    expanding.arguments &= given
     frame.perform
     true
   )
 }
 // The parameter is named where the macro is written, once, and stands for
-// the argument of the call being run: naming it anew at every call costs the
-// engine a reading of everything that saw the name.
+// the argument of the call being translated: naming it anew at every call
+// costs the engine a reading of everything that saw the name.
 macro{ }{literal named}({literal taking}){ }{`{`}{doing}{`}`} ^keyword => (
   place ^keyword := external .
   place[taking] = Argument(held: None)
   perform => (inline doing)
   written := Macro(name: named, parameters: taking, written: place)
+  sleigh.macros &= written
+  global[named] = written
+  true
+)
+macro{ }{literal named}(){ }{`{`}{doing}{`}`} ^keyword => (
+  place ^keyword := external .
+  perform => (inline doing)
+  written := Macro(name: named, parameters: None, written: place)
   sleigh.macros &= written
   global[named] = written
   true
@@ -906,8 +1182,8 @@ Constructor := class {
     held.head.value
   )
   action => .spelling.setting
-  // Its p-code run, after what its pattern sets: what it answers is what it
-  // exports.
+  // Its p-code translated into the program being made, after what its
+  // pattern sets: what it answers is what it exports.
   performed => (
     frame := .written
     acting := .action
@@ -927,12 +1203,16 @@ Constructor := class {
     out
   )
 }
-// A table: its constructors, any one of which is how it is spelled. While
-// p-code runs it is what the constructor it was read with exports.
+// A table: its constructors, any one of which is how it is spelled. In p-code
+// it is what the constructor it was read with exports.
 Table := class: Pattern {
+  name: Node
+  exports: Node
   constructors: Node
-  exported => Sleigh.part_of(this).performed
-  now => Sleigh.now(.exported)
+  referent => Sleigh.export_of(this).referent
+  term => Sleigh.term(.referent)
+  assigned (given) => .referent.assigned(given)
+  { }={ }{given}; ^punctuation => .assigned(given)
   alternatives => (
     out := chain None
     walker := .constructors.head
@@ -943,7 +1223,7 @@ Table := class: Pattern {
     out
   )
 }
-instruction ^keyword := Table(constructors: chain None)
+instruction ^keyword := Table(name: `instruction`, exports: chain None, constructors: chain None)
 // An instruction constructor ends with a space: a rule that opens with a mark and
 // closes with one is taken for a bracket, and tried wherever that mark is
 // written — every `:` of every `*:1` in the p-code of every constructor.
@@ -981,55 +1261,87 @@ Pending := class {
   )
 }
 {literal named}:{ }is ^keyword => (
-  unless (exists (external own named)) { external declare named (Table(constructors: chain None)) }
+  unless (exists (external own named)) { external declare named (Sleigh.table(named)) }
   held := named
   Pending(into: held, display: None)
 )
 {literal named}:{ }{literal shown}{ }is ^keyword => (
-  unless (exists (external own named)) { external declare named (Table(constructors: chain None)) }
+  unless (exists (external own named)) { external declare named (Sleigh.table(named)) }
   held := named
   Pending(into: held, display: shown)
 )
 {literal named}:{ }{`(`}{literal shown}{ }is ^keyword => (
-  unless (exists (external own named)) { external declare named (Table(constructors: chain None)) }
+  unless (exists (external own named)) { external declare named (Sleigh.table(named)) }
   held := named
   Pending(into: held, display: shown)
 )
 
-// Running p-code: the machine, and the p-code statements that are not
-// expressions of the operands above.
+// Translating p-code: what is being made, and the p-code statements that are
+// not expressions of the operands above.
 
-// One instruction being run: what was read, where the one after it is, and
-// where a `goto` sent the machine instead.
-Step := class {
+// A value of the program being made, as p-code sizes it: `like` is a word as
+// wide, `extended` whether it widens with its sign, and `loose` whether it is
+// a constant, which takes the width of what it meets.
+Term := class: Pattern {
+  of: Node
+  like: Node
+  extended: Node
+  loose: Node
+  term => this
+}
+Pair := class {
+  left: Node
+  right: Node
+  like: Node
+}
+// What an encoding does: the program its p-code is translated into, the
+// constructors it was read with, and whether it has been translated yet.
+Semantics := class: Goto {
+  steps: Node
+  parts: Node
+  done: Node
+}
+// An instruction read at an address, and the address after it.
+Visit := class {
+  address: Node
   decoded: Node
   following: Node
-  jumped: Node
 }
-// Every step run so far, the one running last.
-Machine := class {
-  steps: Node
+// The programs translated so far, the one being made last.
+Translating := class {
+  programs: Node
+}
+translating ^keyword := Translating(programs: chain None)
+// What each macro was called with, the one being expanded last.
+Expanding := class {
   arguments: Node
-  step => .steps.tail.value
-  decoded => .step.decoded
 }
-machine ^keyword := Machine(steps: chain None, arguments: chain None)
+expanding ^keyword := Expanding(arguments: chain None)
 
-// What a macro was called with, while its p-code runs.
+// What a macro was called with, while its p-code is translated.
 Argument := class: Pattern {
-  given => machine.arguments.tail.value
-  now => Sleigh.now(.given)
-  signed => .given.signed
+  given => expanding.arguments.tail.value
+  term => Sleigh.term(.given)
+  referent => .given.referent
+  assigned (value) => .given.assigned(value)
 }
 
 // The address of the instruction after this one.
 InstNext := class: Pattern {
-  now => machine.step.following
+  term => Term(of: Following(name: `inst_next`), like: sleigh.address, extended: false, loose: false)
 }
 inst_next ^keyword := InstNext(held: None)
 
+// A local: a place of the program's own, named by where it is written, so
+// that two constructors' `tmp` are two places.
+Local := class: Pattern {
+  place: Node
+  like: Node
+  term => Term(of: Named(name: .place), like: .like, extended: false, loose: false)
+  assigned (given) => Sleigh.set(.place, .like, given)
+}
+
 // A place in memory, `size` bytes at an address.
-// spec: memory is not held yet; only where it is is known.
 // A field is not seen past a method of the same name in the class it is built
 // on, so what Pattern answers for every place (`pointing`) and what a place in
 // memory holds (`target`) are named apart.
@@ -1037,43 +1349,109 @@ Memory := class: Pattern {
   size: Node
   target: Node
   pointing => true
+  term => Term(of: Sleigh.loaded(.target, .size), like: Sleigh.bytes_wide(.size), extended: false, loose: false)
+  assigned (given) => Sleigh.stored(.target, .size, given)
+  ={ }{given}; ^punctuation => .assigned(given)
 }
-*:{literal bytes}{ }{pointer} ^punctuation => (
-  held := Sleigh.now(pointer)
-  Memory(size: bytes, target: held)
-)
+*:{literal bytes}{ }{pointer} ^punctuation => Memory(size: bytes, target: Sleigh.address_of(pointer))
+// `*:n (address) = value;`: the capture after `*:n` would take the
+// assignment for part of the address, so an address in parentheses is read
+// up to them. The rule ends with a space: one that opens with a mark and
+// closes with another is taken for a bracket.
+*:{literal bytes}{ }({pointer}){ } ^punctuation => Memory(size: bytes, target: Sleigh.address_of(pointer))
+
+// Some bits of a place, `x[low,size]`: read, they are those bits; written,
+// the place keeps the rest.
+Range := class: Pattern {
+  of: Node
+  low: Node
+  size: Node
+  whole => Sleigh.term(.of)
+  mask => Sleigh.bit_range(.low, .size, .whole.like)
+  term => (
+    selecting := .mask
+    Term(of: Part(of: .whole.of, mask: selecting), like: Sleigh.cleared(selecting).extract(selecting), extended: false, loose: false)
+  )
+  assigned (given) => (
+    whole_term := .whole
+    selecting := .mask
+    given_bits := Sleigh.fit(Sleigh.term(given), Sleigh.cleared(selecting).extract(selecting))
+    replaced := Term(of: Deposited(of: whole_term.of, mask: selecting, field: given_bits), like: whole_term.like, extended: false, loose: false)
+    whole_place := .of
+    whole_place.assigned(replaced)
+  )
+}
+
+// A local written to, found by its name: `tmp = tmp + zext(Y);`,
+// `ccr[7,1] = N;`.
+{literal target}{`[`}{literal first_bit},{literal bit_count}{`]`}{ }={ }{given}; ^punctuation => Sleigh.range(Sleigh.place_named(Sleigh.leading_characters(target)), first_bit, bit_count).assigned(given)
+// The characters of a local's name, and the local.
+LocalName := class {
+  spelled: Node
+  held_local: Node
+}
+
+// `zext(x)` and `sext(x)`.
+Extension := class {
+  signed: Node
+  ({given}) ^punctuation => Sleigh.extension(given, .signed)
+}
+zext ^keyword := Extension(signed: false)
+sext ^keyword := Extension(signed: true)
 
 // A p-code statement ends with `;`, which Ray reads as a separator with
 // nothing after it: the value before it would be lost. So the statements are
 // read up to their `;`.
 //
-// `register = value;` is a rule of `Register`. A local holds the value, not
-// the place it came from: `local name = value;` and `name:size = value;`
-// declare one.
-{target}:{literal size}{ }={ }{given}; ^punctuation => (
-  external declare target (Sleigh.now(given))
+// `register = value;` is a rule of `SleighRegister`. `local name = value;`
+// and `name:size = value;` declare a local, set to the value. A local is
+// named by where its size (or its name, after `local`) is written:
+// `external where` answers nothing for a capture a rule begins with.
+{literal target}:{literal size}{ }={ }{given}; ^punctuation => (
+  spot := external where size
+  spelling := Sleigh.leading_characters(target)
+  external declare target (Sleigh.declared(spot, Sleigh.bytes_wide(size), given, spelling))
   true
 )
 // `tmp:1 = value; export tmp;`, the way a table constructor most often says
 // what it stands for, read whole: a statement written after another on one
 // line is not read after a rule that took the first up to its `;`.
-{target}:{literal size}{ }={ }{given};{ }export{ }{exported}; ^punctuation => Sleigh.now(given)
-{target}:{literal size}{ }={ }{given};{ }export{ }*:{literal width}{ }{exported}; ^punctuation => (
-  held := Sleigh.now(given)
-  Memory(size: width, target: held)
+{literal target}:{literal size}{ }={ }{given};{ }export{ }{exported}; ^punctuation => (
+  spot := external where size
+  spelling := Sleigh.leading_characters(target)
+  Sleigh.declared(spot, Sleigh.bytes_wide(size), given, spelling)
 )
-local{ }{target}{ }={ }{given}; ^keyword => (
-  external declare target (Sleigh.now(given))
+{literal target}:{literal size}{ }={ }{given};{ }export{ }*:{literal width}{ }{exported}; ^punctuation => (
+  spot := external where size
+  spelling := Sleigh.leading_characters(target)
+  held := Sleigh.declared(spot, Sleigh.bytes_wide(size), given, spelling)
+  Memory(size: width, target: Sleigh.address_of(held))
+)
+local{ }{literal target}{ }={ }{given}; ^keyword => (
+  spot := external where target
+  spelling := Sleigh.characters(target)
+  external declare target (Sleigh.declared(spot, None, given, spelling))
+  true
+)
+local{ }{literal target}:{literal size}{ }={ }{given}; ^keyword => (
+  spot := external where target
+  spelling := Sleigh.characters(target)
+  external declare target (Sleigh.declared(spot, Sleigh.bytes_wide(size), given, spelling))
   true
 )
 // What a table constructor stands for when it is used.
 export{ }{exported}; ^keyword => exported
-// The conditional goto. spec: `goto` alone is the language's own, which is
-// what `if` is built of, so SLEIGH's unconditional one is not read yet.
-if{ }({condition}){ }goto{ }{destination}; ^keyword => Sleigh.branch(condition, destination)
+// The conditional goto, and the jumps that leave the program: for an address
+// (`goto` of a place in memory, `call`), or for what a place holds
+// (`goto [x]`, `return [x]`).
+if{ }({condition}){ }goto{ }{aim}; ^keyword => Sleigh.branch(condition, aim)
+goto{ }{aim}; ^keyword => Sleigh.jump(aim)
+goto{ }[{aim}]; ^keyword => Sleigh.jump_to(aim)
+call{ }{aim}; ^keyword => Sleigh.jump(aim)
+return{ }[{aim}]; ^keyword => Sleigh.jump_to(aim)
 
-// Numbers as p-code writes them: hexadecimal after `0x`, and the digits 0
-// and 1 where p-code writes them most, after `=`, `+`, `-`, `==` and `s<`.
+// Numbers as p-code writes them: hexadecimal after `0x`, and the digits 0, 1
+// and 2 where p-code writes them most, after `=`, `+`, `-`, `==` and `s<`.
 // A digit cannot be a name: the bits of every text are read by reading each
 // bit, `0` or `1`, as it is written, and a digit that named anything would
 // change what every text is made of.

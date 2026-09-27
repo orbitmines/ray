@@ -8,7 +8,7 @@
 //   d0 f7      BNE (back to LDA)
 //   60         RTS
 //
-// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=600 .ether/asm/asm.sh sleigh-disassemble @ether/$/.asm/SLEIGH/tests/disassemble.ray boolean.ray -- Bits.ray ISA.ray
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=600 .ether/asm/asm.sh sleigh-disassemble @ether/$/.asm/SLEIGH/tests/disassemble.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
 
 if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
 unless (exists None) { INFO@mark `L0 control: this always fires` }
@@ -26,7 +26,7 @@ opening ^keyword := listing.head
 unless (exists (external alike (opening.value.mnemonic) (`LDX`))) { INFO@mark `L1 the first is not LDX` }
 unless (exists (external alike (opening.next.value.mnemonic) (`LDA`))) { INFO@mark `L2 the second is not LDA` }
 unless (opening.next.value.field(`imm16`) == Bits.hex(`0200`)) { INFO@mark `L3 LDA does not read from 0200` }
-unless (exists (external alike (opening.next.value.encoding.semantics.tail.value.display) (`imm16,X`))) { INFO@mark `L4 LDA is not indexed by X` }
+unless (exists (external alike (opening.next.value.encoding.semantics.parts.tail.value.display) (`imm16,X`))) { INFO@mark `L4 LDA is not indexed by X` }
 unless (exists (external alike (opening.next.next.value.mnemonic) (`STA`))) { INFO@mark `L5 the third is not STA` }
 unless (exists (external alike (opening.next.next.next.value.mnemonic) (`INX`))) { INFO@mark `L6 the fourth is not INX` }
 unless (exists (external alike (opening.next.next.next.next.value.mnemonic) (`BNE`))) { INFO@mark `L7 the fifth is not BNE` }

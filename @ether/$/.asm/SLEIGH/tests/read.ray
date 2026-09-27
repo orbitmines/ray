@@ -1,7 +1,7 @@
 // The whole of Ghidra's 6502 description read as source: its registers, the
 // fields of its tokens as masks, its tables and instructions.
 //
-// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec .ether/asm/asm.sh sleigh-read @ether/$/.asm/SLEIGH/tests/read.ray boolean.ray -- Bits.ray ISA.ray
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec .ether/asm/asm.sh sleigh-read @ether/$/.asm/SLEIGH/tests/read.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
 
 if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
 unless (exists None) { INFO@mark `R0 control: this always fires` }

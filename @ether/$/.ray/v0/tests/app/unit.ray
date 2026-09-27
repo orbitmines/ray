@@ -73,3 +73,11 @@ unless (String.of(Minute.base.name) == String.of(`second`)) { INFO@mark `U39 a m
 // Quantities compare after they add.
 unless ((two of Second) + (three of Second) == (five of Second)) { INFO@mark `U40 two and three seconds is not five seconds` }
 if ((two of Second) + (three of Second) < (five of Second)) { INFO@mark `U41 two and three seconds is below five seconds` }
+
+// A number followed by a unit is that many of it, by the unit's name, its
+// plural or its symbol.
+unless ((two hours).unit == Hour) { INFO@mark `U42 two hours are not hours` }
+unless ((three s).unit == Second) { INFO@mark `U43 three s are not seconds` }
+unless ((1.5 days).amount == 1.5) { INFO@mark `U44 1.5 days is not one and a half of them` }
+unless (((1.5 days) as Hour).amount.integer == (three * ten) + six) { INFO@mark `U45 1.5 days is not 36 hours` }
+unless (((two hours) as Minute).amount == hundred + (two * ten)) { INFO@mark `U46 two hours are not 120 minutes` }

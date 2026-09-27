@@ -715,7 +715,7 @@ declared_in (holder, spelled) => (
       visiting = visiting.next
     }
     kept_entry = Precedence(place: place_of, spelled: spelled, answer: rank_found, ranked: exists rank_found)
-    placements &= kept_entry
+    if (exists rank_found) { placements &= kept_entry }
   }
   rank_known ^keyword := None
   if kept_entry.ranked { rank_known = kept_entry.answer }
@@ -731,7 +731,7 @@ declared_in (holder, spelled) => (
     if ((exists place_x).and(exists place_y)) {
       left_first ^keyword := place_x.nth_class < place_y.nth_class
       if (place_x.nth_class == place_y.nth_class) { left_first = place_x.written_at.at_least(place_y.written_at) }
-      if left_first { held = (a [x] b) [y] c } else { held = a [x] (b [y] c) }
+      if left_first { held = ((a [x] b) [y] c) } else { held = (a [x] (b [y] c)) }
     }
   }
   held

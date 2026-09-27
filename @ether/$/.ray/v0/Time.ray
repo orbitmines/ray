@@ -7,27 +7,15 @@
 // The temporal units, from the second up (`SI_Unit s "second"`, the Julian
 // table). spec: a year is 365 days; the quarter day of the Julian year and
 // the Gregorian months are the calendar's, not the unit's.
-Second := Unit(
-  name: `second`
-  symbol: `s`
-)
+Second := Unit().called(`second`, `seconds`, `s`)
 // spec: a nanosecond is its own base here: a thousand-million-fold second is
 // beyond a walk, so clock readings stay in nanoseconds until cut to seconds.
-Nanosecond := Unit(
-  name: `nanosecond`
-  symbol: `ns`
-)
-Minute := Second multiple (six * ten)
-Hour := Minute multiple (six * ten)
-Day := Hour multiple (two * ten + four)
-Week := Day multiple seven
+Nanosecond := Unit().called(`nanosecond`, `nanoseconds`, `ns`)
+Minute := (Second multiple (six * ten)).called(`minute`, `minutes`, `min`)
+Hour := (Minute multiple (six * ten)).called(`hour`, `hours`, `h`)
+Day := (Hour multiple (two * ten + four)).called(`day`, `days`, `d`)
+Week := (Day multiple seven).called(`week`, `weeks`, `wk`)
 Year => Day multiple ((three * hundred) + (six * ten) + five)
-seconds (amount: Number) => amount of Second
-minutes (amount: Number) => amount of Minute
-hours (amount: Number) => amount of Hour
-days (amount: Number) => amount of Day
-weeks (amount: Number) => amount of Week
-years (amount: Number) => amount of Year
 
 Unit.components.hierarchy &= class { is_temporal => (.base_unit == Second) }
 Unit.components.hierarchy &= class { base_unit => if .is_base { this } else { .base.base_unit } }
@@ -169,7 +157,7 @@ ISO_8601 := class {
     minute := parts.head.next.value.as_number
     second := if (exists parts.head.next.next) { parts.head.next.next.value.as_number } else { zero }
     // Kept in seconds: an hour of three thousand six hundred links is only built when asked for.
-    seconds((((hour * (six * ten)) + minute) * (six * ten)) + second)
+    ((((hour * (six * ten)) + minute) * (six * ten)) + second) of Second
   )
   Date := class {
     is_valid (calendar) => (zero < .day).and((.month.days_in(.year, calendar) < .day).not)

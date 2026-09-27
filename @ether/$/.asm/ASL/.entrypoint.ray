@@ -16,8 +16,10 @@
 // and boxes with a `constraint` (`!= 000`) are not in the slice yet. A
 // should-be cell decodes either way and must still be written back as read,
 // so it wants to be a field of its own, not a fixed bit.
-// spec: pseudocode is held as the text Arm writes, entities (`&lt;`) and
-// links (`<a link=…>SP</a>`) included. Reading ASL itself is the next grammar.
+// The pseudocode is read as the ASL it is (see "ASL, read as the language it
+// is" below): the slice gives it back as plain text, Arm's links taken off
+// and `&lt;` and the rest the characters again, and each section is kept as
+// the statements it is written as.
 
 // A box of a diagram: a run of cells, most significant first, named when it
 // is a field. Each cell is fixed or free, and, if fixed, to one or zero: two
@@ -133,10 +135,15 @@ Regencoding ^keyword := class {
 }
 
 // Pseudocode, by the name of the diagram it belongs to and its section:
-// `Decode` beside the diagram, `Execute` (and `Postdecode`) once for the file.
+// `Decode` beside the diagram, `Execute` (and `Postdecode`) once for the file,
+// in the pseudocode of the file's first diagram. What each section holds is
+// its statements, read by the grammar of ASL below.
 Operation ^keyword := class {
   name: Node
   sections: Node
+  // The operation of the file this one was read in whose pseudocode is
+  // `Execute` and `Postdecode`.
+  executing: Node
   section (wanted) => (
     found := None
     walker := .sections.head
@@ -147,8 +154,8 @@ Operation ^keyword := class {
     found
   )
   decode => .section(`Decode`)
-  postdecode => .section(`Postdecode`)
-  execute => .section(`Execute`)
+  postdecode => .executing.section(`Postdecode`)
+  execute => .executing.section(`Execute`)
 }
 Section ^keyword := class {
   name: Node
@@ -159,10 +166,14 @@ Ps ^keyword := class {
     arm.operation = arm.operation_named(given)
     this
   )
+  { }mylink="{literal given}" ^punctuation => this
+  { }enclabels="" ^punctuation => this
   { }sections="{literal given}" ^punctuation => this
   { }secttype="{literal given}" ^punctuation => this
   > ^punctuation => this
 }
+// A section's text begins on the line after its tag: what follows is ASL, and
+// each statement of it is kept, in order, in the section.
 Pstext ^keyword := class {
   section: Node
   { }mayhavelinks="{literal given}" ^punctuation => this
@@ -171,11 +182,28 @@ Pstext ^keyword := class {
     this
   )
   { }rep_section="{literal given}" ^punctuation => this
-  >{literal text}</pstext></ps> ^punctuation => (
-    arm.operation.sections &= Section(name: .section, text: text)
+  > ^punctuation => .begun
+  begun => (
+    statements := chain None
+    arm.operation.sections &= Section(name: .section, text: statements)
+    if (exists (external alike (.section) (`Execute`))) { arm.executed_by(arm.operation) }
+    asl.begin(statements)
+    None
+  )
+  // A section of the shared pseudocode: a function, whose signature says what
+  // its parameters are called.
+  >{literal aslcomments}func{ }{literal aslname}{`{`}{literal aslwidth}{`}`}({literal aslfirst}{ }:{ }{aslone},{ }{literal aslsecond}{ }:{ }{asltwo},{ }{literal aslthird}{ }:{ }{aslthree}){ }=>{ }({aslreturns}) ^punctuation => (
+    this.begun
+    asl.function(aslname, aslwidth, aslfirst, aslsecond, aslthird)
+    None
+  )
+  >{literal aslcomments}func{ }{literal aslname}({literal aslfirst}{ }:{ }{aslone}){ }=>{ }{literal aslreturns} ^punctuation => (
+    this.begun
+    asl.function(aslname, None, aslfirst, None, None)
     None
   )
 }
+</pstext></ps> ^keyword => asl.finish
 
 // What has been read so far, and what is being read.
 A64 ^keyword := class {
@@ -186,6 +214,7 @@ A64 ^keyword := class {
   encoding: Node
   box: Node
   operation: Node
+  waiting: Node
   ten: Node
   weights: Node
   none: Node
@@ -224,10 +253,21 @@ A64 ^keyword := class {
       walker = walker.next
     }
     unless (exists found) {
-      found = Operation(name: name, sections: chain None)
+      found = Operation(name: name, sections: chain None, executing: None)
       this.operations &= found
+      this.waiting &= found
     }
     found
+  )
+  // Every operation read since the last `Execute` is carried out by this one.
+  executed_by (executing) => (
+    walker := .waiting.head
+    while (exists walker) {
+      walker.value.executing = executing
+      walker = walker.next
+    }
+    this.waiting = chain None
+    true
   )
 
   // A row of cells, most significant first, as the word it is: least
@@ -325,14 +365,16 @@ A64 ^keyword := class {
     this.encoding
   )
   encoding_closed => (
-    made := Encoding(mnemonic: .encoding.mnemonic, mask: .encoding.mask, match: .encoding.match, fields: .diagram.fields, semantics: .diagram.operation)
+    meaning := Translated(operation: .diagram.operation, encoding: None, program: None)
+    made := Encoding(mnemonic: .encoding.mnemonic, mask: .encoding.mask, match: .encoding.match, fields: .diagram.fields, semantics: meaning)
+    meaning.encoding = made
     this.encodings &= made
     this.titles &= .encoding.title
     this.encoding = None
     None
   )
 }
-arm ^keyword := A64(encodings: chain None, titles: chain None, operations: chain None, diagram: None, encoding: None, box: None, operation: None, ten: None, weights: A64.rows, none: None)
+arm ^keyword := A64(encodings: chain None, titles: chain None, operations: chain None, diagram: None, encoding: None, box: None, operation: None, waiting: chain None, ten: None, weights: A64.rows, none: None)
 arm.ten = Bits.joined(Bits.joined(chain None, arm.weights.tail.value), arm.weights.head.next.value)
 
 <regdiagram ^keyword => arm.diagram_opened
@@ -361,3 +403,2016 @@ arm.ten = Bits.joined(Bits.joined(chain None, arm.weights.tail.value), arm.weigh
 <asmtemplate>{literal template}</asmtemplate> ^keyword => None
 <ps ^keyword => Ps()
 <pstext ^keyword => Pstext(section: None)
+
+// ASL, read as the language it is.
+//
+// The pseudocode of a section is read a statement at a time, as it is
+// written, and each statement is kept where it stands — in the section, or in
+// the block of the `if`, `case` or function it is written in — with the
+// expressions it is written with left unread. They are read when an encoding
+// is translated: its decode and its execute are run once, not over a machine
+// but over what can be known of an instruction of that encoding, and what
+// cannot be known until an instruction runs is written down as the goto
+// program that works it out (`Goto.ray`). That program is what the encoding
+// does.
+//
+// What is known: whatever the encoding fixes (its `sf`, `size`, one bit of
+// `hw`), numbers written in the text, and whatever is worked out of those —
+// `datasize`, `scale`, which `if` is taken, which arm of a `case`. What is not
+// known is the rest of the word, the registers, memory and the flags. An `if`
+// whose condition is not known is a conditional goto around its two blocks; a
+// `case` of an unknown subject is one per arm. Nothing else is control.
+//
+// The fields of an instruction are read as `Named(name: `Rd`)`: `Run.ray`
+// puts them in the state before the program runs. General-purpose registers
+// are a file, `X`, numbered by what the instruction says (`Filed`, `Refiled`),
+// the stack pointer is `SP`, the flags `PSTATE.N` `PSTATE.Z` `PSTATE.C`
+// `PSTATE.V` (named apart from fields: RET has a field `Z`), and the address of
+// the instruction is `inst_start`.
+//
+// spec: of the shared pseudocode, `AddWithCarry` and `ConditionHolds` are read
+// from Arm's text (`A64.shared.xml`); the accessors `X`, `SP`, `PC64`, `Mem`,
+// `BranchTo` and the primitives `UInt`, `SInt`, `ZeroExtend`, `SignExtend`,
+// `Zeros`, `IsZero`, `NOT`, `LSL` are written here as what they do. Reading the
+// accessors from Arm's text is next: they index `_R[[n]]`, which `Filed` is.
+// spec: operators are applied as the engine groups them, from the right, and
+// then regrouped by ASL's precedence (`Pseudocode.settle`); a parenthesised
+// group on the right of an operator cannot be told from an ungrouped one.
+
+// Numbers as long as the chain that counts them. What the translation counts —
+// widths, register numbers, shifts — is small, and a count is compared and
+// added by walking it; only what the machine holds is a word of bits.
+Count ^keyword := class {
+  // The number a word holds, unsigned, most significant bit first: each bit
+  // doubles what came before it and adds itself.
+  of_bits (word) => (
+    word_given := word
+    total := chain None
+    walker := word_given.bits.tail
+    while (exists walker) {
+      twice := chain None
+      Bits.joined(twice, total)
+      Bits.joined(twice, total)
+      if walker.value { twice &= false }
+      total = twice
+      walker = walker.previous
+    }
+    total
+  )
+  // As many as there are bits in a word.
+  length_of (word) => (
+    word_given := word
+    counted := chain None
+    walker := word_given.bits.head
+    while (exists walker) {
+      counted &= false
+      walker = walker.next
+    }
+    counted
+  )
+  plus (augend, addend) => (
+    augend_given := augend
+    addend_given := addend
+    summed := chain None
+    Bits.joined(summed, augend_given)
+    Bits.joined(summed, addend_given)
+    summed
+  )
+  // What is left of a count once another is taken from it; nothing when it is less.
+  less_by (whole, taken) => (
+    whole_given := whole
+    taken_given := taken
+    walker := whole_given.head
+    taking := taken_given.head
+    while ((exists walker).and(exists taking)) {
+      walker = walker.next
+      taking = taking.next
+    }
+    rest := chain None
+    while (exists walker) {
+      rest &= false
+      walker = walker.next
+    }
+    rest
+  )
+  same (former, latter) => (
+    former_given := former
+    latter_given := latter
+    mine := former_given.head
+    theirs := latter_given.head
+    while ((exists mine).and(exists theirs)) {
+      mine = mine.next
+      theirs = theirs.next
+    }
+    (exists mine).not.and((exists theirs).not)
+  )
+  at_least (former, latter) => (
+    former_given := former
+    latter_given := latter
+    mine := former_given.head
+    theirs := latter_given.head
+    while ((exists mine).and(exists theirs)) {
+      mine = mine.next
+      theirs = theirs.next
+    }
+    (exists theirs).not
+  )
+  larger (former, latter) => (
+    answer := None
+    if (Count.at_least(former, latter)) { answer = former } else { answer = latter }
+    answer
+  )
+  successor (counted) => (
+    counted_given := counted
+    grown := chain None
+    Bits.joined(grown, counted_given)
+    grown &= false
+    grown
+  )
+  // Doubled as many times as another count says.
+  doubled (counted, times) => (
+    counted_given := counted
+    times_given := times
+    grown := counted_given
+    walker := times_given.head
+    while (exists walker) {
+      twice := chain None
+      Bits.joined(twice, grown)
+      Bits.joined(twice, grown)
+      grown = twice
+      walker = walker.next
+    }
+    grown
+  )
+  // A word as wide as a count, all clear: what a width is written as.
+  // A count is a chain of clear bits, so it is the word it is as wide as.
+  template (counted) => Bits(bits: counted)
+  // A word as wide as `wide` with the bits from `low` up to and including
+  // `high` set: where a slice is.
+  span (low, high, wide) => (
+    low_given := low
+    high_given := high
+    wide_given := wide
+    marked := chain None
+    below := low_given.head
+    upto := high_given.head
+    past := false
+    walker := wide_given.head
+    while (exists walker) {
+      marked &= (exists below).not.and(past.not)
+      if (exists upto) { upto = upto.next } else { past = true }
+      if (exists below) { below = below.next }
+      walker = walker.next
+    }
+    Bits(bits: marked)
+  )
+  // Half a count, and whether it was odd.
+  halved (counted) => (
+    counted_given := counted
+    half := chain None
+    walker := counted_given.head
+    while (exists walker) {
+      if (exists walker.next) {
+        half &= false
+        walker = walker.next.next
+      } else { walker = None }
+    }
+    half
+  )
+  // The number a count is, in binary, as wide as `wide` says: each halving
+  // leaves a bit behind, the lowest first.
+  binary (counted, wide) => (
+    counted_given := counted
+    wide_given := wide
+    digits := chain None
+    rest := counted_given
+    while (exists rest.head) {
+      half := chain None
+      odd := false
+      walker := rest.head
+      while (exists walker) {
+        if (exists walker.next) {
+          half &= false
+          walker = walker.next.next
+        } else {
+          odd = true
+          walker = None
+        }
+      }
+      digits &= odd
+      rest = half
+    }
+    answer := Count.template(wide_given)
+    if (exists digits.head) { answer = Bits(bits: digits).widened(answer, false) }
+    answer
+  )
+  // How many bits a count needs, and one more, for the sign an integer has.
+  wide_for (counted) => (
+    counted_given := counted
+    needed := chain None
+    needed &= false
+    rest := counted_given
+    while (exists rest.head) {
+      needed &= false
+      rest = Count.halved(rest)
+    }
+    needed
+  )
+  // Whether eight bits, most significant first, are a decimal digit: 0011
+  // and then nine or less.
+  decimal_digit (byte) => (
+    held := byte
+    b3 := held.head.next.next.next.next
+    b2 := b3.next
+    b1 := b2.next
+    upper := held.head.value.not.and(held.head.next.value.not).and(held.head.next.next.value).and(held.head.next.next.next.value)
+    upper.and((b3.value.and(b2.value.or(b1.value))).not)
+  )
+  // Digits written in decimal.
+  of_decimal (written) => (
+    written_given := written
+    total := chain None
+    byte := chain None
+    reading := true
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        if (Count.decimal_digit(byte)) {
+          digit := Bits.nibble_of(byte)
+          tenfold := chain None
+          round := arm.ten.head
+          while (exists round) {
+            Bits.joined(tenfold, total)
+            round = round.next
+          }
+          Bits.joined(tenfold, Count.of_bits(Bits(bits: digit)))
+          total = tenfold
+        } else { reading = false }
+        byte = chain None
+      }
+      reading
+    )
+    external bits written_given take
+    total
+  )
+}
+
+// A word nothing is named by, written in decimal digits, is the number it is.
+// Except `0` and `1` alone: every reader of text reads a bit by reading `0` or
+// `1` as written (`external bits`), and a digit that read as a number would
+// change what every text is made of. ASL writes them where a rule reads them
+// (`N-1`, `x[0]`, `'1'`).
+AslNumber ^keyword := class {
+  accepts (text) => (
+    digits := true
+    bytes := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        unless (Count.decimal_digit(byte)) { digits = false }
+        bytes &= byte
+        byte = chain None
+      }
+      true
+    )
+    external bits text take
+    if (exists bytes.head) {
+      unless (exists bytes.head.next) {
+        if (bytes.head.value.tail.previous.previous.previous.value.not.and(bytes.head.value.tail.previous.previous.value.not).and(bytes.head.value.tail.previous.value.not)) { digits = false }
+      }
+    }
+    found := None
+    if digits { found = Term.integer(Count.of_decimal(text)) }
+    found
+  )
+}
+// A count written in decimal digits and nothing else: what `N-1` subtracts.
+AslCount ^keyword := class {
+  accepts (text) => (
+    digits := true
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        unless (Count.decimal_digit(byte)) { digits = false }
+        byte = chain None
+      }
+      true
+    )
+    external bits text take
+    found := None
+    if digits { found = Count.of_decimal(text) }
+    found
+  )
+}
+{digits: AslNumber ^number} ^number => digits
+
+// What an expression stands for while an encoding is translated: a value of
+// one of ASL's sorts — `integer`, `bits`, `boolean`, an enumeration's `enum`,
+// a `tuple` — that is either `certain`, and then `known`, or `live`: the goto
+// value that works it out when the instruction runs, `wide` bits wide. A value
+// read from somewhere that can be written to keeps where (`place`). A field
+// the encoding fixes some bits of knows those (`fixing`, `fixed_to`).
+// An operator written between two values is not applied where it is read but
+// kept (`pending`) until the whole expression is, so that it can be applied
+// in the order ASL's precedence says.
+Term ^keyword := class {
+  sort: Node
+  known: Node
+  live: Node
+  wide: Node
+  more: Node
+
+  certain => exists .known
+  place => (
+    answer := None
+    if (exists .more) { answer = .more.place } else { answer = None }
+    answer
+  )
+  fixing => (
+    answer := None
+    if (exists .more) { answer = .more.fixing } else { answer = None }
+    answer
+  )
+  fixed_to => (
+    answer := None
+    if (exists .more) { answer = .more.fixed_to } else { answer = None }
+    answer
+  )
+  slot => (
+    answer := None
+    if (exists .more) { answer = .more.slot } else { answer = None }
+    answer
+  )
+  base => (
+    answer := None
+    if (exists .more) { answer = .more.base } else { answer = None }
+    answer
+  )
+  offset => (
+    answer := None
+    if (exists .more) { answer = .more.offset } else { answer = None }
+    answer
+  )
+
+  == (other) => (
+    operand := asl.index(other)
+    Pending(sort: `pending`, op: `==`, left: this, right: operand)
+  )
+  != (other) => (
+    operand := asl.index(other)
+    Pending(sort: `pending`, op: `!=`, left: this, right: operand)
+  )
+  && (other) => (
+    operand := asl.index(other)
+    Pending(sort: `pending`, op: `&&`, left: this, right: operand)
+  )
+  || (other) => (
+    operand := asl.index(other)
+    Pending(sort: `pending`, op: `||`, left: this, right: operand)
+  )
+  << (other) => (
+    operand := asl.index(other)
+    Pending(sort: `pending`, op: `<<`, left: this, right: operand)
+  )
+  :: (other) => (
+    operand := asl.index(other)
+    Pending(sort: `pending`, op: `::`, left: this, right: operand)
+  )
+  + (other) => (
+    operand := asl.index(other)
+    Pending(sort: `pending`, op: `+`, left: this, right: operand)
+  )
+  - (other) => (
+    operand := asl.index(other)
+    Pending(sort: `pending`, op: `-`, left: this, right: operand)
+  )
+  // `N-1`, `pos+15`: a number written against what it is added to.
+  -{amount: AslCount} ^punctuation => asl.offset(this, amount, false)
+  +{amount: AslCount} ^punctuation => asl.offset(this, amount, true)
+  // `x[high:low]`, and `x[i]`, one bit. The low end is read as it is written,
+  // a number or a name (`AslNumber` reads no `0` or `1`).
+  // spec: a single bit is read where its index is written `0`, `1` or `N-1`;
+  // a rule `[{index}]` on a class is asked of every `[` and never finishes.
+  [{high}:{literal low}] ^punctuation => asl.slice(this, asl.index(high), asl.width_written(low))
+  [0] ^punctuation => asl.slice(this, Term.integer(chain None), Term.integer(chain None))
+  [1] ^punctuation => asl.slice(this, Term.integer(asl_numbers.one), Term.integer(asl_numbers.one))
+  [N-1] ^punctuation => asl.top_of(this)
+
+  integer (counted) => Term(sort: `integer`, known: counted, live: None, wide: None, more: None)
+  bits_of (word) => Term(sort: `bits`, known: word, live: None, wide: None, more: None)
+  truth (holds) => Term(sort: `boolean`, known: holds, live: None, wide: None, more: None)
+  named (written) => Term(sort: `enum`, known: written, live: None, wide: None, more: None)
+  live_as (sorted, computed, width) => Term(sort: sorted, known: None, live: computed, wide: width, more: None)
+  // The same value, now known to be held at `where`.
+  held_at (term, where) => (
+    held := term
+    held_where := where
+    held_sort := held.sort
+    held_known := held.known
+    held_live := held.live
+    held_wide := held.wide
+    held_fixing := held.fixing
+    held_fixed_to := held.fixed_to
+    held_slot := held.slot
+    held_more := Extra(place: held_where, fixing: held_fixing, fixed_to: held_fixed_to, slot: held_slot, base: None, offset: None)
+    Term(sort: held_sort, known: held_known, live: held_live, wide: held_wide, more: held_more)
+  )
+  is (term, sorted) => exists (external alike (term.sort) (sorted))
+}
+
+// What a value knows besides what it is: where it is held, which of its bits
+// an encoding fixes, and, for `pos+15`, what it is counted from.
+Extra ^keyword := class {
+  place: Node
+  fixing: Node
+  fixed_to: Node
+  slot: Node
+  base: Node
+  offset: Node
+}
+// An operator not applied yet, and a tuple (`(result, nzcv)`).
+Pending ^keyword := class {
+  sort: Node
+  op: Node
+  left: Node
+  right: Node
+  certain => false
+}
+Tuple ^keyword := class {
+  sort: Node
+  items: Node
+  certain => true
+}
+
+// Where a value can be written: a variable of the pseudocode (held in a
+// `slot` of the state once it is not known), a register of a file, the stack
+// pointer, a register of the machine by its name, or a slice of any of those.
+Place ^keyword := class {
+  sort: Node
+  name: Node
+  slot: Node
+  index: Node
+  wide: Node
+  of: Node
+  high: Node
+  low: Node
+}
+
+// A register of a file of registers, by its number: what ASL writes `_R[[n]]`.
+// The file is held in the state under its name, as a state of its own whose
+// memory is the registers; a register never written holds zero.
+// spec: a shared register-file value for `Goto.ray`.
+Filed ^keyword := class {
+  file: Node
+  index: Node
+  value (state) => (
+    registers := state.get(.file)
+    number := .index.value(state)
+    found := asl_numbers.zero_register
+    if (exists registers) {
+      held := registers.load(number)
+      if (exists held) { found = held }
+    }
+    found
+  )
+}
+Refiled ^keyword := class {
+  sets => true
+  file: Node
+  index: Node
+  to: Node
+  perform (state) => (
+    registers := state.get(.file)
+    unless (exists registers) {
+      built_1 := chain None
+      built_2 := chain None
+      registers = State(registers: built_1, memory: built_2)
+      state.put(.file, registers)
+    }
+    registers.store(.index.value(state), .to.value(state))
+  )
+}
+
+// A name no other name is: what a variable's slot and a label are called.
+Fresh ^keyword := class {
+  name => external time
+}
+
+// A statement as it is written: what kind it is, the names it is written with,
+// where its expressions are (`frame`, read when it runs), and the blocks it
+// holds — the `then` and `else` of an `if`, the arms of a `case`, the body of
+// a function.
+Statement ^keyword := class {
+  kind: Node
+  name: Node
+  type: Node
+  frame: Node
+  body: Node
+  otherwise: Node
+  parameters: Node
+}
+// A block being read, and the one it is written in. An `elsif` is an `if` in
+// the `else` of the one before it; the one `end;` closes them all.
+Open ^keyword := class {
+  statements: Node
+  statement: Node
+  outer: Node
+  chained: Node
+}
+// A variable while an encoding is translated: its name, and what it stood for
+// before, to be given back when the function it is local to returns.
+Binding ^keyword := class {
+  name: Node
+  term: Node
+  before: Node
+}
+Scope ^keyword := class {
+  bindings: Node
+  outer: Node
+}
+
+Pseudocode ^keyword := class {
+  open: Node
+  functions: Node
+  steps: Node
+  outermost: Node
+  assigned: Node
+  scope: Node
+  expected: Node
+  returned: Node
+  returning: Node
+
+  // Reading: statements kept in the block being read.
+  begin (statements) => (
+    statements_given := statements
+    this.open = Open(statements: statements_given, statement: None, outer: None, chained: None)
+    true
+  )
+  finish => (
+    this.open = None
+    None
+  )
+  record (kind, name, type, frame) => (
+    kind_given := kind
+    name_given := name
+    type_given := type
+    frame_given := frame
+    built_3 := chain None
+    built_4 := chain None
+    built_5 := chain None
+    made := Statement(kind: kind_given, name: name_given, type: type_given, frame: frame_given, body: built_3, otherwise: built_4, parameters: built_5)
+    held := .open.statements
+    held &= made
+    made
+  )
+  opened (kind, name, type, frame) => (
+    kind_given := kind
+    name_given := name
+    type_given := type
+    frame_given := frame
+    made := .record(kind_given, name_given, type_given, frame_given)
+    built_6 := made.body
+    built_7 := .open
+    this.open = Open(statements: built_6, statement: made, outer: built_7, chained: None)
+    made
+  )
+  otherwise => (
+    inner := .open.statement
+    built_8 := inner.otherwise
+    built_9 := .open.outer
+    built_10 := .open.chained
+    this.open = Open(statements: built_8, statement: inner, outer: built_9, chained: built_10)
+    true
+  )
+  otherwise_if (frame) => (
+    frame_given := frame
+    inner := .open.statement
+    built_11 := inner.otherwise
+    built_12 := .open.outer
+    built_13 := .open.chained
+    this.open = Open(statements: built_11, statement: inner, outer: built_12, chained: built_13)
+    made := .record(`if`, None, None, frame_given)
+    built_14 := made.body
+    built_15 := .open
+    this.open = Open(statements: built_14, statement: made, outer: built_15, chained: true)
+    made
+  )
+  close => (
+    closing := .open
+    this.open = .open.outer
+    if (exists closing.chained) { this.close }
+    true
+  )
+  function (named, width, first, second, third) => (
+    named_given := named
+    width_given := width
+    first_given := first
+    second_given := second
+    third_given := third
+    made := .opened(`func`, named_given, width_given, None)
+    if (exists first_given) { made.parameters &= first_given }
+    if (exists second_given) { made.parameters &= second_given }
+    if (exists third_given) { made.parameters &= third_given }
+    this.functions &= made
+    made
+  )
+
+  // Translating: the goto program an encoding is.
+  translate (encoding, operation) => (
+    encoding_given := encoding
+    operation_given := operation
+    this.steps = chain None
+    this.outermost = None
+    this.assigned = chain None
+    built_16 := chain None
+    this.scope = Scope(bindings: built_16, outer: None)
+    this.returning = false
+    this.returned = None
+    this.bind_fields(encoding_given)
+    this.run_block(operation_given.decode)
+    if (exists operation_given.postdecode) { this.run_block(operation_given.postdecode) }
+    this.run_block(operation_given.execute)
+    this.unbind(.scope)
+    built_17 := .steps
+    Goto(steps: built_17)
+  )
+  // What an instruction of an encoding is known to hold in each field: all
+  // of it where the encoding fixes every bit of it, otherwise the field, read
+  // from the state, and the bits of it that are fixed.
+  bind_fields (encoding) => (
+    encoding_given := encoding
+    walker := encoding_given.fields.head
+    while (exists walker) {
+      field := walker.value
+      fixing := encoding_given.mask.extract(field.mask)
+      fixed_to := encoding_given.match.extract(field.mask)
+      width := Count.length_of(fixing)
+      if (fixing.not.is_zero.not) {
+        built_20 := field.name
+        built_18 := Named(name: built_20)
+        built_21 := fixing
+        built_22 := fixed_to
+        built_19 := Extra(place: None, fixing: built_21, fixed_to: built_22, slot: None, base: None, offset: None)
+        this.bind(field.name, Term(sort: `bits`, known: None, live: built_18, wide: width, more: built_19))
+      } else { this.bind(field.name, Term.bits_of(fixed_to)) }
+      walker = walker.next
+    }
+    true
+  )
+
+  // Names. A name stands for a term by being bound to it, globally, so that
+  // the expressions of the pseudocode read it where they are written.
+  bound (name) => (
+    name_given := name
+    found := None
+    scoping := .scope
+    while ((exists scoping).and((exists found).not)) {
+      walker := scoping.bindings.tail
+      while ((exists walker).and((exists found).not)) {
+        if (exists (external alike (walker.value.name) (name_given))) { found = walker.value }
+        walker = walker.previous
+      }
+      scoping = scoping.outer
+    }
+    found
+  )
+  bind (name, term) => (
+    name_given := name
+    term_given := term
+    bound_name := name_given
+    bound_term := term_given
+    earlier := .bound(bound_name)
+    before := None
+    if (exists earlier) { before = earlier.term }
+    built_23 := before
+    this.scope.bindings &= Binding(name: bound_name, term: bound_term, before: built_23)
+    global[bound_name] = bound_term
+    true
+  )
+  // A scope that ends gives its names back what they stood for before it.
+  unbind (scoping) => (
+    scoping_given := scoping
+    walker := scoping_given.bindings.tail
+    while (exists walker) {
+      global[walker.value.name] = walker.value.before
+      walker = walker.previous
+    }
+    true
+  )
+
+  emit (step) => (
+    step_given := step
+    this.steps &= step_given
+    true
+  )
+
+  run_block (statements) => (
+    statements_given := statements
+    walker := statements_given.head
+    while ((exists walker).and(.returning.not)) {
+      this.run_statement(walker.value)
+      walker = walker.next
+    }
+    true
+  )
+  run_statement (statement) => (
+    statement_given := statement
+    kind := statement_given.kind
+    if (exists (external alike (kind) (`let`))) {
+      this.expected = .expected_of(statement_given)
+      hoisted_101 := .settle(statement_given.frame.asl_value)
+      this.let(statement_given.name, hoisted_101)
+    } elsif (exists (external alike (kind) (`var`))) {
+      this.expected = .expected_of(statement_given)
+      hoisted_102 := .settle(statement_given.frame.asl_value)
+      this.let(statement_given.name, hoisted_102)
+    } elsif (exists (external alike (kind) (`declare`))) {
+      hoisted_103 := .expected_of(statement_given)
+      declared_sort := `bits`
+      if (exists (external alike (statement_given.type) (`boolean`))) { declared_sort = `boolean` }
+      this.declare(statement_given.name, hoisted_103, declared_sort)
+    } elsif (exists (external alike (kind) (`assign`))) {
+      target := statement_given.frame.asl_target
+      this.expected = .width_of(target)
+      hoisted_104 := .settle(statement_given.frame.asl_value)
+      this.assign(target, hoisted_104)
+    } elsif (exists (external alike (kind) (`first`))) {
+      this.expected = None
+      given := .settle(statement_given.frame.asl_value)
+      hoisted_105 := .variable(statement_given.name)
+      this.assign(hoisted_105, given.items.head.value)
+    } elsif (exists (external alike (kind) (`pair`))) {
+      this.expected = None
+      given := .settle(statement_given.frame.asl_value)
+      hoisted_106 := .variable(statement_given.name)
+      this.assign(hoisted_106, given.items.head.value)
+      unless (exists (external alike (statement_given.type) (`-`))) { this.assign(.variable(statement_given.type), given.items.head.next.value) }
+    } elsif (exists (external alike (kind) (`flags`))) {
+      hoisted_107 := .settle(statement_given.frame.asl_value)
+      this.flags(hoisted_107)
+    } elsif (exists (external alike (kind) (`if`))) {
+      raw_condition := statement_given.frame.asl_condition
+      condition := .settle(raw_condition)
+      if (condition.certain) {
+        if condition.known { this.run_block(statement_given.body) } else { this.run_block(statement_given.otherwise) }
+      } else { this.branch(condition, statement_given.body, statement_given.otherwise) }
+    } elsif (exists (external alike (kind) (`case`))) {
+      hoisted_108 := .settle(statement_given.frame.asl_subject)
+      this.case_of(hoisted_108, statement_given.body)
+    } elsif (exists (external alike (kind) (`return`))) {
+      this.returned = .settle(statement_given.frame.asl_value)
+      this.returning = true
+    } elsif (exists (external alike (kind) (`call`))) {
+      statement_given.frame.asl_perform
+    }
+    true
+  )
+  // The width a declaration says its value is: `bits(N)` is N, `bit` one.
+  expected_of (statement) => (
+    statement_given := statement
+    wanted := None
+    if (exists statement_given.type) {
+      if (exists (external alike (statement_given.type) (`bit`))) { wanted = asl_numbers.one }
+      if (exists (external alike (statement_given.type) (`boolean`))) { wanted = asl_numbers.one }
+      if (exists (external alike (statement_given.type) (`bits(N)`))) {
+        written_width := .index(statement_given.frame.asl_width)
+        wanted = .settle(written_width).known
+      }
+    }
+    wanted
+  )
+
+  // Variables.
+  let (name, term) => (
+    name_given := name
+    term_given := term
+    naming := name_given
+    standing := term_given
+    if (Term.is(standing, `tuple`)) {
+      this.bind(naming, standing)
+    } elsif ((standing.certain).or(Term.is(standing, `enum`))) {
+      held_place := Place(sort: `variable`, name: naming, slot: None, index: None, wide: None, of: None, high: None, low: None)
+      held_term := Term.held_at(standing, held_place)
+      this.bind(naming, held_term)
+    } else {
+      slot := Fresh.name
+      hoisted_1 := .value_of(standing)
+      built_24 := slot
+      this.emit(Set(place: built_24, to: hoisted_1))
+      hoisted_2 := .width_of(standing)
+      built_25 := standing.sort
+      built_28 := slot
+      built_26 := Named(name: built_28)
+      built_31 := slot
+      built_29 := Place(sort: `variable`, name: naming, slot: built_31, index: None, wide: None, of: None, high: None, low: None)
+      built_30 := slot
+      built_27 := Extra(place: built_29, fixing: None, fixed_to: None, slot: built_30, base: None, offset: None)
+      this.bind(naming, Term(sort: built_25, known: None, live: built_26, wide: hoisted_2, more: built_27))
+    }
+    true
+  )
+  declare (name, width, sorted) => (
+    name_given := name
+    width_given := width
+    sort_given := sorted
+    naming := name_given
+    slot := Fresh.name
+    built_34 := slot
+    built_32 := Named(name: built_34)
+    built_37 := slot
+    built_35 := Place(sort: `variable`, name: naming, slot: built_37, index: None, wide: None, of: None, high: None, low: None)
+    built_36 := slot
+    built_33 := Extra(place: built_35, fixing: None, fixed_to: None, slot: built_36, base: None, offset: None)
+    this.bind(naming, Term(sort: sort_given, known: None, live: built_32, wide: width_given, more: built_33))
+    true
+  )
+  assign (target, term) => (
+    target_given := target
+    term_given := term
+    where := target_given.place
+    standing := term_given
+    sort := where.sort
+    if (exists (external alike (sort) (`variable`))) {
+      this.assign_variable(target_given, standing)
+    } elsif (exists (external alike (sort) (`register`))) {
+      skip := Fresh.name
+      built_39 := where.index
+      built_41 := asl_numbers.register_31
+      built_40 := Constant(bits: built_41)
+      built_38 := Equal(left: built_39, right: built_40)
+      this.emit(Jump(when: built_38, target: skip, to: None))
+      hoisted_3 := .value_at(standing, asl_numbers.sixty_four)
+      built_42 := where.name
+      built_43 := where.index
+      this.emit(Refiled(file: built_42, index: built_43, to: hoisted_3))
+      this.emit(Label(name: skip))
+    } elsif (exists (external alike (sort) (`machine`))) {
+      machine_value := None
+      if (exists where.wide) { machine_value = .value_at(standing, where.wide) } else { machine_value = .value_of(standing) }
+      built_44 := where.name
+      this.emit(Set(place: built_44, to: machine_value))
+    } elsif (exists (external alike (sort) (`slice`))) {
+      whole_target := where.of
+      redeposited := .deposited(whole_target, where.low, where.high, standing)
+      this.assign_variable(whole_target, redeposited)
+    }
+    true
+  )
+  assign_variable (target, term) => (
+    target_given := target
+    term_given := term
+    variable_place := target_given.place
+    variable_value := term_given
+    variable_name := variable_place.name
+    if ((exists .outermost).not.and(variable_value.certain)) {
+      this.bind(variable_name, Term.held_at(variable_value, variable_place))
+    } else {
+      variable_slot := variable_place.slot
+      unless (exists variable_slot) {
+        variable_slot = Fresh.name
+        if (target_given.certain) {
+          variable_earlier := .outermost
+          if (exists variable_earlier) {
+            earlier_value := .value_of(target_given)
+            variable_earlier &= Set(place: variable_slot, to: earlier_value)
+          }
+        }
+      }
+      hoisted_4 := .value_of(variable_value)
+      this.emit(Set(place: variable_slot, to: hoisted_4))
+      hoisted_5 := .width_of(target_given)
+      built_45 := target_given.sort
+      built_46 := Named(name: variable_slot)
+      built_48 := Place(sort: `variable`, name: variable_name, slot: variable_slot, index: None, wide: None, of: None, high: None, low: None)
+      built_47 := Extra(place: built_48, fixing: None, fixed_to: None, slot: variable_slot, base: None, offset: None)
+      variable_after := Term(sort: built_45, known: None, live: built_46, wide: hoisted_5, more: built_47)
+      this.bind(variable_name, variable_after)
+      if (exists .outermost) { this.assigned &= Binding(name: variable_name, term: variable_after, before: None) }
+    }
+    true
+  )
+  // A value with another written over some of its bits: what `x[h:l] = v`
+  // leaves in `x`. `low` may not be known; the width is `high` less `low`.
+  deposited (whole, low, high, term) => (
+    whole_given := whole
+    low_given := low
+    high_given := high
+    term_given := term
+    width := .width_of(whole_given)
+    hoisted_109 := .distance(high_given, low_given)
+    across := Count.successor(Count.less_by(hoisted_109, chain None))
+    ones := Count.template(across).not.widened(Count.template(width), false)
+    at := .value_at(low_given, Count.wide_for(width))
+    hoisted_6 := .value_at(term_given, width)
+    placed := ShiftedLeft(of: hoisted_6, by: at)
+    hoisted_7 := .value_of(whole_given)
+    built_51 := Constant(bits: ones)
+    built_50 := ShiftedLeft(of: built_51, by: at)
+    built_49 := Inverted(of: built_50)
+    kept := Both(left: hoisted_7, right: built_49)
+    built_52 := Either(left: kept, right: placed)
+    Term(sort: `bits`, known: None, live: built_52, wide: width, more: None)
+  )
+  // How far above `low` `high` is: both known, or `high` written as `low+k`.
+  distance (high, low) => (
+    high_given := high
+    low_given := low
+    answer := None
+    if ((high_given.certain).and(low_given.certain)) { answer = Count.less_by(high_given.known, low_given.known) } else { answer = high_given.offset }
+    answer
+  )
+
+  // An `if` whose condition is not known: a conditional goto to its `then`
+  // block, its `else` block, a goto past the `then` block.
+  branch (condition, yes, no) => (
+    condition_given := condition
+    yes_given := yes
+    no_given := no
+    outer := .steps
+    began := (exists .outermost).not
+    if began { this.outermost = outer }
+    yes_steps := chain None
+    this.steps = yes_steps
+    built_53 := chain None
+    built_54 := .scope
+    this.scope = Scope(bindings: built_53, outer: built_54)
+    this.run_block(yes_given)
+    this.unbind(.scope)
+    this.scope = .scope.outer
+    no_steps := chain None
+    this.steps = no_steps
+    built_55 := chain None
+    built_56 := .scope
+    this.scope = Scope(bindings: built_55, outer: built_56)
+    this.run_block(no_given)
+    this.unbind(.scope)
+    this.scope = .scope.outer
+    this.steps = outer
+    taken := Fresh.name
+    done := Fresh.name
+    hoisted_8 := .value_of(condition_given)
+    this.emit(Jump(when: hoisted_8, target: taken, to: None))
+    Bits.joined(outer, no_steps)
+    this.emit(Jump(when: None, target: done, to: None))
+    this.emit(Label(name: taken))
+    Bits.joined(outer, yes_steps)
+    this.emit(Label(name: done))
+    this.rebind_assigned
+    if began {
+      this.outermost = None
+      this.assigned = chain None
+    }
+    true
+  )
+  rebind_assigned => (
+    walker := .assigned.head
+    while (exists walker) {
+      this.bind(walker.value.name, walker.value.term)
+      walker = walker.next
+    }
+    true
+  )
+  // `case subject of when pattern => …`: the arm the subject is, when it is
+  // known; otherwise a conditional goto to each arm.
+  case_of (subject, arms) => (
+    subject_given := subject
+    arms_given := arms
+    if (subject_given.certain) {
+      picked := None
+      walker := arms_given.head
+      while ((exists walker).and((exists picked).not)) {
+        if (.apply(`==`, subject_given, Pseudocode.bitstring(walker.value.name)).known) { picked = walker.value }
+        walker = walker.next
+      }
+      if (exists picked) { this.run_block(picked.body) }
+    } else {
+      outer := .steps
+      began := (exists .outermost).not
+      if began { this.outermost = outer }
+      bodies := chain None
+      landings := chain None
+      walker := arms_given.head
+      while (exists walker) {
+        arm_steps := chain None
+        this.steps = arm_steps
+        built_57 := chain None
+        built_58 := .scope
+        this.scope = Scope(bindings: built_57, outer: built_58)
+        this.run_block(walker.value.body)
+        this.unbind(.scope)
+        this.scope = .scope.outer
+        bodies &= arm_steps
+        landings &= Fresh.name
+        walker = walker.next
+      }
+      this.steps = outer
+      done := Fresh.name
+      walker = arms_given.head
+      landing := landings.head
+      while (exists walker) {
+        hoisted_110 := .apply(`==`, subject_given, Pseudocode.bitstring(walker.value.name))
+        hoisted_9 := .value_of(hoisted_110)
+        built_59 := landing.value
+        this.emit(Jump(when: hoisted_9, target: built_59, to: None))
+        walker = walker.next
+        landing = landing.next
+      }
+      this.emit(Jump(when: None, target: done, to: None))
+      landing = landings.head
+      body := bodies.head
+      while (exists body) {
+        built_60 := landing.value
+        this.emit(Label(name: built_60))
+        Bits.joined(outer, body.value)
+        this.emit(Jump(when: None, target: done, to: None))
+        landing = landing.next
+        body = body.next
+      }
+      this.emit(Label(name: done))
+      this.rebind_assigned
+      if began {
+        this.outermost = None
+        this.assigned = chain None
+      }
+    }
+    true
+  )
+  // What a `when` is written with: bits (`'000'`) or an enumeration's name.
+  pattern (written) => (
+    written_given := written
+    quoted := false
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        quoted = byte.head.next.value.not
+        byte = None
+      }
+      exists byte
+    )
+    external bits written_given take
+    answer := None
+    if quoted { answer = Pseudocode.bitstring(written_given) } else { answer = Term.named(written_given) }
+    answer
+  )
+
+  // A function of the shared pseudocode, called: its parameters bound to
+  // what it is given, and its body run until it returns.
+  call (named, width, first, second, third) => (
+    named_given := named
+    width_given := width
+    first_given := first
+    second_given := second
+    third_given := third
+    found := None
+    walker := .functions.head
+    while ((exists walker).and((exists found).not)) {
+      if (exists (external alike (walker.value.name) (named_given))) { found = walker.value }
+      walker = walker.next
+    }
+    built_61 := chain None
+    built_62 := .scope
+    this.scope = Scope(bindings: built_61, outer: built_62)
+    if (exists width_given) { this.bind(found.type, width_given) }
+    parameter := found.parameters.head
+    if (exists parameter) {
+      this.bind(parameter.value, first_given)
+      parameter = parameter.next
+    }
+    if (exists parameter) {
+      this.bind(parameter.value, second_given)
+      parameter = parameter.next
+    }
+    if (exists parameter) {
+      this.bind(parameter.value, third_given)
+      parameter = parameter.next
+    }
+    this.returning = false
+    this.returned = None
+    this.run_block(found.body)
+    result := .returned
+    this.returning = false
+    this.unbind(.scope)
+    this.scope = .scope.outer
+    result
+  )
+
+  // Expressions: a pending operator applied, tightest first.
+  settle (term) => (
+    term_given := term
+    answer := term_given
+    if (Term.is(term_given, `pending`)) {
+      operands := chain None
+      operators := chain None
+      walker := term_given
+      while (Term.is(walker, `pending`)) {
+        operands &= walker.left
+        operators &= walker.op
+        walker = walker.right
+      }
+      operands &= walker
+      while (exists operators.head) {
+        tightest := chain None
+        position := chain None
+        scan := operators.head
+        best := operators.head.value
+        while (exists scan) {
+          if (Count.at_least(Pseudocode.rank(best), Pseudocode.rank(scan.value)).not) {
+            best = scan.value
+            tightest = position
+          }
+          position = Count.successor(position)
+          scan = scan.next
+        }
+        kept_operands := chain None
+        kept_operators := chain None
+        counting := chain None
+        operand := operands.head
+        operator := operators.head
+        while (exists operand) {
+          if (Count.same(counting, tightest)) {
+            applied := .apply(best, operand.value, operand.next.value)
+            kept_operands &= applied
+            operand = operand.next
+          } else {
+            kept_operands &= operand.value
+            if (exists operator) { kept_operators &= operator.value }
+          }
+          if (Count.same(counting, tightest).not) { counting = Count.successor(counting) } else { counting = Count.successor(counting) }
+          operand = operand.next
+          if (exists operator) { operator = operator.next }
+        }
+        operands = kept_operands
+        operators = kept_operators
+      }
+      answer = operands.head.value
+    }
+    answer
+  )
+  // How tightly an operator binds: `||` loosest, then `&&`, comparisons,
+  // `+` and `-`, shifts, and `::` tightest.
+  rank (written) => (
+    written_given := written
+    ranked := chain None
+    ranked &= true
+    unless (exists (external alike (written_given) (`||`))) { ranked &= true }
+    unless ((exists (external alike (written_given) (`||`))).or(exists (external alike (written_given) (`&&`)))) { ranked &= true }
+    if ((exists (external alike (written_given) (`+`))).or(exists (external alike (written_given) (`-`))).or(exists (external alike (written_given) (`<<`))).or(exists (external alike (written_given) (`::`)))) { ranked &= true }
+    if ((exists (external alike (written_given) (`<<`))).or(exists (external alike (written_given) (`::`)))) { ranked &= true }
+    if (exists (external alike (written_given) (`::`))) { ranked &= true }
+    ranked
+  )
+  apply (written, former, latter) => (
+    written_given := written
+    former_given := former
+    latter_given := latter
+    left_operand := former_given
+    right_operand := latter_given
+    answer := None
+    if (exists (external alike (written_given) (`==`))) { answer = .equal(left_operand, right_operand) } elsif (exists (external alike (written_given) (`!=`))) { answer = .negated(.equal(left_operand, right_operand)) } elsif (exists (external alike (written_given) (`&&`))) { answer = .both(left_operand, right_operand) } elsif (exists (external alike (written_given) (`||`))) { answer = .either(left_operand, right_operand) } elsif (exists (external alike (written_given) (`+`))) { answer = .added(left_operand, right_operand) } elsif (exists (external alike (written_given) (`-`))) { answer = .subtracted(left_operand, right_operand) } elsif (exists (external alike (written_given) (`<<`))) { answer = .shifted(left_operand, right_operand) } else { answer = .concatenated(left_operand, right_operand) }
+    answer
+  )
+
+  // How wide a term is, and its goto value as wide as it is or as `wide`.
+  width_of (term) => (
+    term_given := term
+    answer := None
+    if (term_given.certain) {
+      if (Term.is(term_given, `bits`)) { answer = Count.length_of(term_given.known) } elsif (Term.is(term_given, `integer`)) { answer = Count.wide_for(term_given.known) } else { answer = Count.successor(chain None) }
+    } else { answer = term_given.wide }
+    answer
+  )
+  value_of (term) => .value_at(term, .width_of(term))
+  value_at (term, wide) => (
+    term_given := term
+    wide_given := wide
+    answer := None
+    if (term_given.certain) {
+      if (Term.is(term_given, `integer`)) {
+        built_63 := Count.binary(term_given.known, wide_given)
+        answer = Constant(bits: built_63)
+      } elsif (Term.is(term_given, `boolean`)) {
+        built_64 := Bits.flag(term_given.known)
+        answer = Constant(bits: built_64)
+      } else {
+        built_1 := term_given.known.widened(Count.template(wide_given), false)
+        answer = Constant(bits: built_1)
+      }
+    } elsif (Count.same(term_given.wide, wide_given)) {
+      answer = term_given.live
+    } else {
+      built_2 := term_given.live
+      built_3 := Count.template(wide_given)
+      built_4 := Term.is(term_given, `integer`)
+      answer = Widened(of: built_2, like: built_3, signed: built_4)
+    }
+    answer
+  )
+  truthful (term) => (
+    answer := None
+    if (term.certain) { answer = term.known } else { answer = None }
+    answer
+  )
+
+  equal (one, other) => (
+    one_given := one
+    other_given := other
+    answer := None
+    if ((one_given.certain).and(other_given.certain)) {
+      if (Term.is(one_given, `integer`)) {
+        answer = Term.truth(Count.same(one_given.known, other_given.known))
+      } elsif (Term.is(one_given, `bits`)) {
+        answer = Term.truth(one_given.known == other_given.known)
+      } elsif (Term.is(one_given, `boolean`)) {
+        answer = Term.truth(one_given.known.xor(other_given.known).not)
+      } else { answer = Term.truth(exists (external alike (one_given.known) (other_given.known))) }
+    } elsif ((exists one_given.fixing).and(other_given.certain).and(one_given.fixing.not.is_zero)) {
+      answer = Term.truth(one_given.fixed_to == other_given.known)
+    } else {
+      hoisted_112 := .width_of(one_given)
+      hoisted_111 := .width_of(other_given)
+      width := Count.larger(hoisted_112, hoisted_111)
+      hoisted_11 := .value_at(one_given, width)
+      hoisted_10 := .value_at(other_given, width)
+      answer = Term.live_as(`boolean`, Equal(left: hoisted_11, right: hoisted_10), Count.successor(chain None))
+    }
+    answer
+  )
+  negated (term) => (
+    term_given := term
+    answer := None
+    if (term_given.certain) {
+      if (Term.is(term_given, `boolean`)) { answer = Term.truth(term_given.known.not) } else { answer = Term.bits_of(term_given.known.not) }
+    } else {
+      built_5 := term_given.live
+      answer = Term.live_as(term_given.sort, Inverted(of: built_5), term_given.wide)
+    }
+    answer
+  )
+  both (one, other) => (
+    one_given := one
+    other_given := other
+    answer := None
+    if (one_given.certain) {
+      if one_given.known { answer = other_given } else { answer = one_given }
+    } elsif (other_given.certain) {
+      if other_given.known { answer = one_given } else { answer = other_given }
+    } else {
+      built_6 := one_given.live
+      built_7 := other_given.live
+      answer = Term.live_as(`boolean`, Both(left: built_6, right: built_7), one_given.wide)
+    }
+    answer
+  )
+  either (one, other) => (
+    one_given := one
+    other_given := other
+    answer := None
+    if (one_given.certain) {
+      if one_given.known { answer = one_given } else { answer = other_given }
+    } elsif (other_given.certain) {
+      if other_given.known { answer = other_given } else { answer = one_given }
+    } else {
+      built_8 := one_given.live
+      built_9 := other_given.live
+      answer = Term.live_as(`boolean`, Either(left: built_8, right: built_9), one_given.wide)
+    }
+    answer
+  )
+  added (one, other) => (
+    one_given := one
+    other_given := other
+    answer := None
+    if ((one_given.certain).and(other_given.certain).and(Term.is(one_given, `integer`)).and(Term.is(other_given, `integer`))) {
+      answer = Term.integer(Count.plus(one_given.known, other_given.known))
+    } elsif ((one_given.certain).and(other_given.certain)) {
+      answer = Term.bits_of(one_given.known + other_given.known)
+    } elsif (Term.is(one_given, `integer`).and(Term.is(other_given, `integer`))) {
+      hoisted_114 := .width_of(one_given)
+      hoisted_113 := .width_of(other_given)
+      width := Count.successor(Count.larger(hoisted_114, hoisted_113))
+      hoisted_13 := .value_at(one_given, width)
+      hoisted_12 := .value_at(other_given, width)
+      answer = Term.live_as(`integer`, Sum(left: hoisted_13, right: hoisted_12), width)
+    } else {
+      width := None
+      if (Term.is(one_given, `bits`)) { width = .width_of(one_given) } else { width = .width_of(other_given) }
+      hoisted_15 := .value_at(one_given, width)
+      hoisted_14 := .value_at(other_given, width)
+      answer = Term.live_as(`bits`, Sum(left: hoisted_15, right: hoisted_14), width)
+    }
+    answer
+  )
+  subtracted (one, other) => (
+    one_given := one
+    other_given := other
+    answer := None
+    if ((one_given.certain).and(other_given.certain).and(Term.is(one_given, `integer`))) {
+      answer = Term.integer(Count.less_by(one_given.known, other_given.known))
+    } elsif (Term.is(one_given, `integer`)) {
+      hoisted_116 := .width_of(one_given)
+      hoisted_115 := .width_of(other_given)
+      width := Count.successor(Count.larger(hoisted_116, hoisted_115))
+      hoisted_17 := .value_at(one_given, width)
+      hoisted_16 := .value_at(other_given, width)
+      answer = Term.live_as(`integer`, Difference(left: hoisted_17, right: hoisted_16), width)
+    } else {
+      width := .width_of(one_given)
+      hoisted_19 := .value_at(one_given, width)
+      hoisted_18 := .value_at(other_given, width)
+      answer = Term.live_as(`bits`, Difference(left: hoisted_19, right: hoisted_18), width)
+    }
+    answer
+  )
+  // `x << n`, with `n` known.
+  shifted (one, other) => (
+    one_given := one
+    other_given := other
+    answer := None
+    if (one_given.certain) {
+      answer = Term.integer(Count.doubled(one_given.known, other_given.known))
+    } else {
+      hoisted_117 := .width_of(one_given)
+      width := Count.plus(hoisted_117, other_given.known)
+      hoisted_21 := .value_at(one_given, width)
+      hoisted_20 := .value_of(other_given)
+      answer = Term.live_as(one_given.sort, ShiftedLeft(of: hoisted_21, by: hoisted_20), width)
+    }
+    answer
+  )
+  concatenated (one, other) => (
+    one_given := one
+    other_given := other
+    answer := None
+    if ((one_given.certain).and(other_given.certain)) {
+      answer = Term.bits_of(other_given.known.under(one_given.known))
+    } else {
+      high_value := .value_of(one_given)
+      low_value := .value_of(other_given)
+      hoisted_119 := .width_of(one_given)
+      hoisted_118 := .width_of(other_given)
+      joined_width := Count.plus(hoisted_119, hoisted_118)
+      answer = Term.live_as(`bits`, Joined(high: high_value, low: low_value), joined_width)
+    }
+    answer
+  )
+  // `N-1`, `pos+15`.
+  offset (term, amount, up) => (
+    term_given := term
+    amount_given := amount
+    up_given := up
+    answer := None
+    if (term_given.certain) {
+      if up_given { answer = Term.integer(Count.plus(term_given.known, amount_given)) } else { answer = Term.integer(Count.less_by(term_given.known, amount_given)) }
+    } else {
+      moved := None
+      if up_given { moved = .added(term_given, Term.integer(amount_given)) } else { moved = .subtracted(term_given, Term.integer(amount_given)) }
+      built_65 := moved.live
+      built_66 := moved.wide
+      built_67 := Extra(place: None, fixing: None, fixed_to: None, slot: None, base: term_given, offset: amount_given)
+      answer = Term(sort: `integer`, known: None, live: built_65, wide: built_66, more: built_67)
+    }
+    answer
+  )
+  // `x[high:low]`: the bits from `low` up to `high`. Where `low` is not
+  // known the slice can only be written to.
+  // What is not a value of the pseudocode (a name not bound yet, where a
+  // statement is first read) is sliced into nothing.
+  slice (term, high, low) => (
+    term_given := term
+    answer := None
+    if (exists term_given.sort) { answer = .sliced(term_given, high, low) }
+    answer
+  )
+  sliced (term, high, low) => (
+    term_given := term
+    high_given := high
+    low_given := low
+    whole := .settle(term_given)
+    top := .settle(high_given)
+    bottom := .settle(low_given)
+    answer := None
+    if (bottom.certain) {
+      hoisted_120 := .width_of(whole)
+      width := Count.larger(hoisted_120, Count.successor(top.known))
+      mask := Count.span(bottom.known, top.known, width)
+      where := None
+      if (exists whole.place) { where = Place(sort: `slice`, name: None, slot: None, index: None, wide: None, of: whole, high: top, low: bottom) }
+      if (whole.certain) {
+        answer = Term.held_at(Term.bits_of(Pseudocode.binary_of(whole, width).extract(mask)), where)
+      } elsif ((exists whole.fixing).and(mask.and(whole.fixing.not.widened(mask, false)).is_zero)) {
+        answer = Term.held_at(Term.bits_of(whole.fixed_to.widened(mask, false).extract(mask)), where)
+      } else {
+        part_of := .value_at(whole, width)
+        built_71 := mask
+        built_68 := Part(of: part_of, mask: built_71)
+        built_69 := Count.length_of(mask.extract(mask))
+        built_70 := Extra(place: where, fixing: None, fixed_to: None, slot: None, base: None, offset: None)
+        answer = Term(sort: `bits`, known: None, live: built_68, wide: built_69, more: built_70)
+      }
+    } else {
+      built_11 := Place(sort: `slice`, name: None, slot: None, index: None, wide: None, of: whole, high: top, low: bottom)
+      built_10 := Extra(place: built_11, fixing: None, fixed_to: None, slot: None, base: None, offset: None)
+      answer = Term(sort: `bits`, known: None, live: None, wide: None, more: built_10)
+    }
+    answer
+  )
+  index (written) => (
+    held := written
+    answer := held
+    unless (exists held.sort) { answer = Term.integer(Count.of_decimal(held)) }
+    answer
+  )
+  top_of (term) => (
+    term_given := term
+    topmost := .settle(term_given)
+    hoisted_123 := .width_of(topmost)
+    top_bit := Count.less_by(hoisted_123, Count.successor(chain None))
+    this.slice(topmost, Term.integer(top_bit), Term.integer(top_bit))
+  )
+  binary_of (term, wide) => (
+    answer := None
+    if (Term.is(term, `integer`)) { answer = Count.binary(term.known, wide) } else { answer = term.known.widened(Count.template(wide), false) }
+    answer
+  )
+
+  bitstring (written) => (
+    written_given := written
+    digits := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        if (byte.head.next.value.not.and(byte.head.next.next.value).and(byte.head.next.next.next.value)) { digits &= byte.tail.value }
+        byte = chain None
+      }
+      true
+    )
+    external bits written_given take
+    reversed := chain None
+    walker := digits.tail
+    while (exists walker) {
+      reversed &= walker.value
+      walker = walker.previous
+    }
+    Term.bits_of(Bits(bits: reversed))
+  )
+
+  // A width as it is written in `bits(64)`, `X{datasize}(n)`: a number, or
+  // the name of one. Read from the text, since a number written alone in a
+  // statement's expression reads as nothing the first time that expression is
+  // read (spec: an engine issue, `ENGINE-ISSUES.md`).
+  width_written (written) => (
+    held := written
+    leading := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) { leading &= byte }
+      (exists leading.head).not
+    )
+    external bits held take
+    answer := None
+    if (exists leading.head) { answer = .width_read(held, leading.head.value) }
+    answer
+  )
+  width_read (written, first_byte) => (
+    held := written
+    answer := None
+    if (Count.decimal_digit(first_byte)) { answer = Term.integer(Count.of_decimal(held)) } else { answer = .term_named(held) }
+    answer
+  )
+  term_named (named) => (
+    found := .bound(named)
+    answer := None
+    if (exists found) { answer = found.term }
+    answer
+  )
+  // The width written in `F{N}(…)`, or, where `F{}(…)` leaves it out, the
+  // width of what the result is declared as.
+  width_given_or_expected (width) => (
+    wanted := .expected
+    if (exists width) {
+      written_width := .settle(.index(width))
+      if (exists written_width.known) { wanted = written_width.known }
+    }
+    wanted
+  )
+
+  // The primitives of ASL, as what they do.
+  unsigned (term) => (
+    term_given := term
+    whole := .settle(term_given)
+    answer := None
+    if (whole.certain) {
+      answer = Term.integer(Count.of_bits(whole.known))
+    } else {
+      hoisted_124 := .width_of(whole)
+      width := Count.successor(hoisted_124)
+      built_72 := whole.live
+      built_73 := Count.template(width)
+      answer = Term.live_as(`integer`, Widened(of: built_72, like: built_73, signed: false), width)
+    }
+    answer
+  )
+  signed (term) => (
+    term_given := term
+    whole := .settle(term_given)
+    hoisted_126 := .value_of(whole)
+    hoisted_125 := .width_of(whole)
+    Term.live_as(`integer`, hoisted_126, hoisted_125)
+  )
+  extended (term, width, extending) => (
+    term_given := term
+    width_given := width
+    extending_given := extending
+    whole := .settle(term_given)
+    wide := None
+    wide = .width_given_or_expected(width_given)
+    answer := None
+    if (whole.certain) {
+      answer = Term.bits_of(whole.known.widened(Count.template(wide), extending_given))
+    } else {
+      built_12 := whole.live
+      built_13 := Count.template(wide)
+      answer = Term.live_as(`bits`, Widened(of: built_12, like: built_13, signed: extending_given), wide)
+    }
+    answer
+  )
+  zeros (width) => (
+    width_given := width
+    wide := None
+    wide = .width_given_or_expected(width_given)
+    Term.bits_of(Count.template(wide))
+  )
+  is_zero (term) => (
+    term_given := term
+    whole := .settle(term_given)
+    answer := None
+    if (whole.certain) {
+      answer = Term.truth(whole.known.is_zero)
+    } else {
+      built_14 := whole.live
+      built_16 := Count.template(whole.wide)
+      built_15 := Constant(bits: built_16)
+      answer = Term.live_as(`boolean`, Equal(left: built_14, right: built_15), Count.successor(chain None))
+    }
+    answer
+  )
+  inverted (term) => .negated(.settle(term))
+  shifted_left (term, amount) => (
+    term_given := term
+    amount_given := amount
+    whole := .settle(term_given)
+    by := .settle(amount_given)
+    answer := None
+    if ((whole.certain).and(by.certain)) {
+      answer = Term.bits_of(whole.known.shifted_left(Count.binary(by.known, Count.wide_for(by.known))))
+    } else {
+      shifted_of := .value_of(whole)
+      shifted_by := .value_of(by)
+      shifted_width := .width_of(whole)
+      answer = Term.live_as(`bits`, ShiftedLeft(of: shifted_of, by: shifted_by), shifted_width)
+    }
+    answer
+  )
+  // `if c then a else b` in an expression: the one taken, when `c` is known;
+  // otherwise a slot that holds `a` unless a goto passes over `b` being put
+  // in it.
+  chosen (condition, yes, no) => (
+    condition_given := condition
+    yes_given := yes
+    no_given := no
+    deciding := .settle(condition_given)
+    answer := None
+    if (deciding.certain) {
+      if deciding.known { answer = .settle(yes_given) } else { answer = .settle(no_given) }
+    } else {
+      taken := .settle(yes_given)
+      other := .settle(no_given)
+      hoisted_128 := .width_of(taken)
+      hoisted_127 := .width_of(other)
+      width := Count.larger(hoisted_128, hoisted_127)
+      slot := Fresh.name
+      past := Fresh.name
+      hoisted_22 := .value_at(taken, width)
+      built_74 := slot
+      this.emit(Set(place: built_74, to: hoisted_22))
+      hoisted_23 := .value_of(deciding)
+      this.emit(Jump(when: hoisted_23, target: past, to: None))
+      hoisted_24 := .value_at(other, width)
+      built_75 := slot
+      this.emit(Set(place: built_75, to: hoisted_24))
+      this.emit(Label(name: past))
+      built_76 := taken.sort
+      built_79 := slot
+      built_77 := Named(name: built_79)
+      built_80 := slot
+      built_78 := Extra(place: None, fixing: None, fixed_to: None, slot: built_80, base: None, offset: None)
+      answer = Term(sort: built_76, known: None, live: built_77, wide: width, more: built_78)
+    }
+    answer
+  )
+  tuple (one, other) => (
+    one_given := one
+    other_given := other
+    held := chain None
+    first_item := .settle(one_given)
+    second_item := .settle(other_given)
+    held &= first_item
+    held &= second_item
+    Tuple(sort: `tuple`, items: held)
+  )
+
+  // What a name written as the target of an assignment stands for: the
+  // variable, or, where the pseudocode declares none, the register of the
+  // machine of that name (`BTypeNext`).
+  // A name written where a rule reads it as what it stands for is already
+  // the variable: the pseudocode's names are bound globally while it runs.
+  variable (named) => (
+    named_given := named
+    found := None
+    unless (exists named_given.sort) { found = .bound(named_given) }
+    answer := named_given
+    if (exists found) { answer = found.term } elsif ((exists named_given.sort).not) {
+      built_18 := Place(sort: `machine`, name: named_given, slot: None, index: None, wide: None, of: None, high: None, low: None)
+      built_17 := Extra(place: built_18, fixing: None, fixed_to: None, slot: None, base: None, offset: None)
+      answer = Term(sort: `bits`, known: None, live: None, wide: None, more: built_17)
+    }
+    answer
+  )
+
+  // The machine, as the accessors of the shared pseudocode say it is.
+  register (file, number, width) => (
+    file_given := file
+    number_given := number
+    width_given := width
+    wide := None
+    wide = .width_given_or_expected(width_given)
+    register_index := .settle(number_given)
+    five := asl_numbers.five
+    hoisted_129 := .width_of(register_index)
+    hoisted_25 := .value_at(register_index, Count.larger(hoisted_129, five))
+    built_81 := Count.template(five)
+    at := Widened(of: hoisted_25, like: built_81, signed: false)
+    built_85 := Filed(file: file_given, index: at)
+    built_86 := Count.template(wide)
+    built_82 := Widened(of: built_85, like: built_86, signed: false)
+    built_83 := wide
+    built_88 := wide
+    built_87 := Place(sort: `register`, name: file_given, slot: None, index: at, wide: built_88, of: None, high: None, low: None)
+    built_84 := Extra(place: built_87, fixing: None, fixed_to: None, slot: None, base: None, offset: None)
+    Term(sort: `bits`, known: None, live: built_82, wide: built_83, more: built_84)
+  )
+  machine (name, width) => (
+    name_given := name
+    width_given := width
+    wide := width_given
+    built_89 := Named(name: name_given)
+    built_90 := wide
+    built_93 := wide
+    built_92 := Place(sort: `machine`, name: name_given, slot: None, index: None, wide: built_93, of: None, high: None, low: None)
+    built_91 := Extra(place: built_92, fixing: None, fixed_to: None, slot: None, base: None, offset: None)
+    Term(sort: `bits`, known: None, live: built_89, wide: built_90, more: built_91)
+  )
+  stack_pointer (width) => (
+    width_given := width
+    wide := None
+    wide = .width_given_or_expected(width_given)
+    sixty_four := asl_numbers.sixty_four
+    built_97 := Named(name: `SP`)
+    built_98 := Count.template(wide)
+    built_94 := Widened(of: built_97, like: built_98, signed: false)
+    built_95 := wide
+    built_100 := sixty_four
+    built_99 := Place(sort: `machine`, name: `SP`, slot: None, index: None, wide: built_100, of: None, high: None, low: None)
+    built_96 := Extra(place: built_99, fixing: None, fixed_to: None, slot: None, base: None, offset: None)
+    Term(sort: `bits`, known: None, live: built_94, wide: built_95, more: built_96)
+  )
+  flag (name) => .machine(name, asl_numbers.one)
+  flags (term) => (
+    term_given := term
+    nzcv := .value_of(term_given)
+    built_102 := asl_numbers.flag_n
+    built_101 := Part(of: nzcv, mask: built_102)
+    this.emit(Set(place: `PSTATE.N`, to: built_101))
+    built_104 := asl_numbers.flag_z
+    built_103 := Part(of: nzcv, mask: built_104)
+    this.emit(Set(place: `PSTATE.Z`, to: built_103))
+    built_106 := asl_numbers.flag_c
+    built_105 := Part(of: nzcv, mask: built_106)
+    this.emit(Set(place: `PSTATE.C`, to: built_105))
+    built_108 := asl_numbers.flag_v
+    built_107 := Part(of: nzcv, mask: built_108)
+    this.emit(Set(place: `PSTATE.V`, to: built_107))
+    true
+  )
+  // Memory, a byte at a time, the lowest address lowest.
+  memory (address, width) => (
+    address_given := address
+    width_given := width
+    wide := .settle(width_given).known
+    hoisted_130 := .settle(address_given)
+    at := .value_of(hoisted_130)
+    gathered := None
+    further := asl_numbers.zero_register
+    counted := chain None
+    while (Count.at_least(counted, wide).not) {
+      built_110 := Constant(bits: further)
+      built_109 := Sum(left: at, right: built_110)
+      byte := Loaded(address: built_109)
+      if (exists gathered) { gathered = Joined(high: byte, low: gathered) } else { gathered = byte }
+      further = further + asl_numbers.one_register
+      counted = Count.plus(counted, asl_numbers.eight)
+    }
+    built_111 := wide
+    Term(sort: `bits`, known: None, live: gathered, wide: built_111, more: None)
+  )
+  branch_to (target) => (
+    target_given := target
+    hoisted_131 := .settle(target_given)
+    hoisted_26 := .value_of(hoisted_131)
+    this.emit(Jump(when: None, target: None, to: hoisted_26))
+    true
+  )
+  undefined => (
+    built_112 := Named(name: `undefined_instruction`)
+    this.emit(Jump(when: None, target: None, to: built_112))
+    true
+  )
+}
+// Numbers the translation uses often, read once.
+AslNumbers ^keyword := class {
+  five: Node
+  eight: Node
+  sixty_four: Node
+  one: Node
+  register_31: Node
+  zero_register: Node
+  one_register: Node
+  flag_n: Node
+  flag_z: Node
+  flag_c: Node
+  flag_v: Node
+}
+asl_numbers ^keyword := AslNumbers(five: Count.of_bits(Bits.hex(`05`)), eight: Count.of_bits(Bits.hex(`08`)), sixty_four: Count.of_bits(Bits.hex(`40`)), one: Count.of_bits(Bits.hex(`01`)), register_31: Bits.hex(`1f`).extract(Bits.hex(`1f`)), zero_register: Bits.hex(`0000000000000000`), one_register: Bits.hex(`0000000000000001`), flag_n: Bits.hex(`8`), flag_z: Bits.hex(`4`), flag_c: Bits.hex(`2`), flag_v: Bits.hex(`1`))
+asl ^keyword := Pseudocode(open: None, functions: chain None, steps: chain None, outermost: None, assigned: chain None, scope: None, expected: None, returned: None, returning: false)
+
+// What an encoding does: the goto program its pseudocode is translated into,
+// the first time it is asked for.
+Translated ^keyword := class {
+  operation: Node
+  encoding: Node
+  program: Node
+  translated => (
+    held := .program
+    unless (exists held) {
+      held = asl.translate(.encoding, .operation)
+      this.program = held
+    }
+    held
+  )
+  run (state) => (
+    running := .translated
+    running.run(state)
+  )
+}
+
+// The state of the machine the pseudocode names.
+Pstate ^keyword := class {
+  N => asl.flag(`PSTATE.N`)
+  Z => asl.flag(`PSTATE.Z`)
+  C => asl.flag(`PSTATE.C`)
+  V => asl.flag(`PSTATE.V`)
+  // spec: the machine runs at EL0, where a program runs.
+  EL => Term.named(`EL0`)
+}
+PSTATE ^keyword := Pstate()
+TRUE ^keyword := Term.truth(true)
+FALSE ^keyword := Term.truth(false)
+EL0 ^keyword := Term.named(`EL0`)
+
+// A name or a number, and nothing else: a raw capture runs on to the next
+// place its closing is written, past the end of its line, and a declaration
+// `var x : bits(N);` would take the line after `var y : bits(N) = …;` for its
+// own. A letter, a digit or `_` is what one is written with.
+AslWord ^keyword := class {
+  accepts (text) => (
+    plain := true
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        b6 := byte.head.next.value
+        b5 := byte.head.next.next.value
+        b4 := byte.head.next.next.next.value
+        b3 := byte.head.next.next.next.next.value
+        b2 := byte.head.next.next.next.next.next.value
+        b1 := byte.head.next.next.next.next.next.next.value
+        unless (b6.or(b5.and(b4).and((b3.and(b2.or(b1))).not))) { plain = false }
+        byte = chain None
+      }
+      plain
+    )
+    external bits text take
+    found := None
+    if plain { found = text }
+    found
+  )
+}
+
+// Statements. Each is kept, with its expressions unread, in the block it is
+// written in. A statement is read up to its `;`. Its names are not declared
+// where it is read: they are the pseudocode's, bound only while an encoding is
+// translated, so that a statement such as `result = !result;` is read by the
+// rules here and not by the language's own `=`.
+let{ }{literal aslname}{ }:{ }{literal asltype}{ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl.record(`let`, aslname, asltype, aslframe)
+)
+let{ }{literal aslname}{ }:{ }integer{`{`}{`}`}{ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl.record(`let`, aslname, None, aslframe)
+)
+let{ }{literal aslname}{ }:{ }bits({literal aslwidth}){ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl_width => asl.width_written(aslwidth)
+  asl.record(`let`, aslname, `bits(N)`, aslframe)
+)
+var{ }{literal aslname}{ }:{ }{literal asltype}{ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl.record(`var`, aslname, asltype, aslframe)
+)
+var{ }{literal aslname}{ }:{ }integer{`{`}{`}`}{ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl.record(`var`, aslname, None, aslframe)
+)
+var{ }{literal aslname}{ }:{ }bits({literal aslwidth}){ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl_width => asl.width_written(aslwidth)
+  asl.record(`var`, aslname, `bits(N)`, aslframe)
+)
+var{ }{literal aslname}{ }:{ }{literal asltype: AslWord}; ^keyword => asl.record(`declare`, aslname, asltype, None)
+var{ }{literal aslname}{ }:{ }bits({literal aslwidth: AslWord}); ^keyword => (
+  aslframe ^keyword := external .
+  asl_width => asl.width_written(aslwidth)
+  asl.record(`declare`, aslname, `bits(N)`, aslframe)
+)
+// A statement that begins with a mark and ends with one is taken for a
+// bracket and tried wherever that mark is written; one that ends with a space
+// is not.
+({literal aslname},{ }{literal aslsecond}){ }={ }{aslvalue};{ } ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl.record(`pair`, aslname, aslsecond, aslframe)
+)
+PSTATE.{`[`}N,Z,C,V{`]`}{ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl.record(`flags`, None, None, aslframe)
+)
+{literal aslname}{ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl_target => asl.variable(aslname)
+  asl.record(`assign`, None, None, aslframe)
+)
+{literal aslname}{`[`}{aslhigh}:{literal asllow}{`]`}{ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl_target => asl.slice(asl.variable(aslname), asl.index((inline aslhigh)), asl.width_written(asllow))
+  asl.record(`assign`, None, None, aslframe)
+)
+X{`{`}{literal aslwidth}{`}`}({aslnumber}){ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl_target => asl.register(`X`, (inline aslnumber), asl.width_written(aslwidth))
+  asl.record(`assign`, None, None, aslframe)
+)
+SP{`{`}{literal aslwidth}{`}`}(){ }={ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl_target => asl.stack_pointer(asl.width_written(aslwidth))
+  asl.record(`assign`, None, None, aslframe)
+)
+if{ }{aslcondition}then ^keyword => (
+  aslframe ^keyword := external .
+  asl_condition => (inline aslcondition)
+  asl.opened(`if`, None, None, aslframe)
+)
+if{ }{aslcondition}then{ }{aslbody};{ }end; ^keyword => (
+  aslframe ^keyword := external .
+  asl_condition => (inline aslcondition)
+  asl.opened(`if`, None, None, aslframe)
+  inline aslbody
+  asl.close
+)
+elsif{ }{aslcondition}then ^keyword => (
+  aslframe ^keyword := external .
+  asl_condition => (inline aslcondition)
+  asl.otherwise_if(aslframe)
+)
+else ^keyword => asl.otherwise
+end; ^keyword => asl.close
+case{ }{aslsubject}of ^keyword => (
+  aslframe ^keyword := external .
+  asl_subject => (inline aslsubject)
+  asl.opened(`case`, None, None, aslframe)
+)
+when{ }'{literal aslpattern}'{ }=>{aslbody} ^keyword => (
+  asl.opened(`when`, aslpattern, None, None)
+  inline aslbody
+  asl.close
+)
+return{ }{aslvalue}; ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => (inline aslvalue)
+  asl.record(`return`, None, None, aslframe)
+)
+// Of two rules that read a line alike, the one written later is the one that
+// stands.
+return{ }({aslfirst},{ }{aslsecond}); ^keyword => (
+  aslframe ^keyword := external .
+  asl_value => asl.tuple((inline aslfirst), (inline aslsecond))
+  asl.record(`return`, None, None, aslframe)
+)
+assert{ }{aslclaim}; ^keyword => None
+// A line with ` => ` in it is a rule of the language being defined, unless
+// the arrow is inside something claimed whole, the way a group is. This
+// claims an arm of a `case` whole; it is read only to hide the arrow. A
+// function's signature is read as the end of the line its section begins on
+// (`Pstext`), where no arrow is looked for.
+// spec: an arm whose pattern is not bits (`when Constraint_NOP => …`) is still
+// read as a rule the pseudocode defines, and is not an arm of its `case`.
+'{literal aslpattern}'{ }=>{ }{aslbody}; ^keyword => None
+begin ^keyword => None
+
+// Procedures of the machine, called as statements. Where a statement is
+// the whole of a one-line `if`, it is read without its `;`.
+BranchTo{`{`}{literal aslwidth}{`}`}({asltarget},{ }{aslkind},{ }{aslconditional}); ^keyword => (
+  aslframe ^keyword := external .
+  asl_perform => asl.branch_to((inline asltarget))
+  asl.record(`call`, None, None, aslframe)
+)
+BranchNotTaken({aslkind},{ }{aslconditional}); ^keyword => (
+  aslframe ^keyword := external .
+  asl_perform => true
+  asl.record(`call`, None, None, aslframe)
+)
+CheckSPAlignment(); ^keyword => (
+  aslframe ^keyword := external .
+  asl_perform => true
+  asl.record(`call`, None, None, aslframe)
+)
+EndOfDecode({aslreason}); ^keyword => (
+  aslframe ^keyword := external .
+  asl_perform => asl.undefined
+  asl.record(`call`, None, None, aslframe)
+)
+EndOfDecode({aslreason}) ^keyword => (
+  aslframe ^keyword := external .
+  asl_perform => asl.undefined
+  asl.record(`call`, None, None, aslframe)
+)
+SetCurrentGCSPointer({aslpointer}); ^keyword => (
+  aslframe ^keyword := external .
+  asl_perform => true
+  asl.record(`call`, None, None, aslframe)
+)
+
+// Expressions: literals, the primitives, the accessors, and the functions of
+// the shared pseudocode that are read.
+'{literal aslwritten}' ^string => Pseudocode.bitstring(aslwritten)
+!{asloperand} ^keyword => asl.inverted((asloperand))
+if{ }{aslcondition}then{ }{aslyes}else{ }{aslno} ^keyword => asl.chosen((aslcondition), (aslyes), (aslno))
+UInt({asloperand}) ^keyword => asl.unsigned((asloperand))
+SInt({asloperand}) ^keyword => asl.signed((asloperand))
+IsZero({asloperand}) ^keyword => asl.is_zero((asloperand))
+NOT({asloperand}) ^keyword => asl.inverted((asloperand))
+LSL({asloperand},{ }{aslamount}) ^keyword => asl.shifted_left((asloperand), (aslamount))
+ZeroExtend{`{`}{literal aslwidth}{`}`}({asloperand}) ^keyword => asl.extended((asloperand), asl.width_written(aslwidth), false)
+ZeroExtend{`{`}{`}`}({asloperand}) ^keyword => asl.extended((asloperand), None, false)
+SignExtend{`{`}{literal aslwidth}{`}`}({asloperand}) ^keyword => asl.extended((asloperand), asl.width_written(aslwidth), true)
+SignExtend{`{`}{`}`}({asloperand}) ^keyword => asl.extended((asloperand), None, true)
+Zeros{`{`}{literal aslwidth}{`}`} ^keyword => asl.zeros(asl.width_written(aslwidth))
+Zeros{`{`}{`}`} ^keyword => asl.zeros(None)
+X{`{`}{literal aslwidth}{`}`}({aslnumber}) ^keyword => asl.register(`X`, (aslnumber), asl.width_written(aslwidth))
+X{`{`}{`}`}({aslnumber}) ^keyword => asl.register(`X`, (aslnumber), None)
+SP{`{`}{literal aslwidth}{`}`}() ^keyword => asl.stack_pointer(asl.width_written(aslwidth))
+PC64() ^keyword => asl.machine(`inst_start`, asl_numbers.sixty_four)
+Mem{`{`}{literal aslwidth}{`}`}({asladdress},{ }{asldescriptor}) ^keyword => asl.memory((asladdress), asl.width_written(aslwidth))
+AddressAdd({asladdress},{ }{asloffset},{ }{asldescriptor}) ^keyword => asl.added(asl.settle((asladdress)), asl.settle((asloffset)))
+CreateAccDescGPR({asldescription}) ^keyword => Term.named(`AccessDescriptor`)
+IsFeatureImplemented({aslfeature}) ^keyword => FALSE
+GCSPCREnabled({aslfeature}) ^keyword => FALSE
+AddWithCarry{`{`}{literal aslwidth}{`}`}({aslone},{ }{asltwo},{ }{aslthree}) ^keyword => asl.call(`AddWithCarry`, asl.width_written(aslwidth), asl.settle((aslone)), asl.settle((asltwo)), asl.settle((aslthree)))
+ConditionHolds({aslone}) ^keyword => asl.call(`ConditionHolds`, None, asl.settle((aslone)), None, None)
+

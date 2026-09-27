@@ -1,0 +1,86 @@
+// What an A64 instruction does, as the goto program Arm's own pseudocode is translated into, run over a state.
+//
+// The encodings and their pseudocode are read from Arm's A64 XML (see `tests/a64.ray`), the shared function
+// `AddWithCarry` and `ConditionHolds` from `shared_pseudocode.xml`, both sliced by `@ether/$/.asm/ASL/slice.sh`:
+//   SHARED="AddWithCarry ConditionHolds" @ether/$/.asm/ASL/slice.sh
+// Arm's text is not quoted here: what is claimed is what the programs compute.
+// run: S=.ether/asm/work/arm/slices; PROJECT=ASL SPECS="$S/A64.shared.xml $S/A64.add_addsub_imm.xml $S/A64.movz.xml $S/A64.subs_addsub_imm.xml $S/A64.b_cond.xml" T=2400 M=8000 .ether/asm/asm.sh translate @ether/$/.asm/ASL/tests/translate.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
+
+mark ^keyword := external global
+INFO@mark `T0 control: this always fires`
+
+a64 ^keyword := arm.isa
+five_bits ^keyword := Bits.hex(`1f`)
+register_one ^keyword := Constant(bits: Bits.hex(`01`).extract(five_bits))
+register_two ^keyword := Constant(bits: Bits.hex(`02`).extract(five_bits))
+register_zero ^keyword := Constant(bits: Bits.hex(`00`).extract(five_bits))
+
+// add x0, x1, #1
+add64 ^keyword := a64.read(Bits.hex(`91000420`))
+add64_program ^keyword := add64.encoding.semantics.translated
+unless (exists add64_program.steps.head) { INFO@mark `T1 ADD (immediate) 64-bit translates to no steps` }
+machine ^keyword := State(registers: chain None, memory: chain None)
+Refiled(file: `X`, index: register_one, to: Constant(bits: Bits.hex(`0000000000000029`))).perform(machine)
+machine.put(`Rd`, add64.field(`Rd`))
+machine.put(`Rn`, add64.field(`Rn`))
+machine.put(`imm12`, add64.field(`imm12`))
+machine.put(`sh`, add64.field(`sh`))
+if (exists add64_program.run(machine)) { INFO@mark `T2 ADD leaves for an address` }
+unless (Filed(file: `X`, index: register_zero).value(machine) == Bits.hex(`000000000000002a`)) { INFO@mark `T3 add x0, x1, #1 with x1 = 41 does not give 42` }
+unless (Filed(file: `X`, index: register_one).value(machine) == Bits.hex(`0000000000000029`)) { INFO@mark `T4 add x0, x1, #1 changes x1` }
+
+// The same program, another instruction of its encoding: add x2, x1, #1, lsl #12
+shifted ^keyword := a64.read(Bits.hex(`91400422`))
+machine.put(`Rd`, shifted.field(`Rd`))
+machine.put(`Rn`, shifted.field(`Rn`))
+machine.put(`imm12`, shifted.field(`imm12`))
+machine.put(`sh`, shifted.field(`sh`))
+shifted.encoding.semantics.run(machine)
+unless (Filed(file: `X`, index: register_two).value(machine) == Bits.hex(`0000000000001029`)) { INFO@mark `T5 add x2, x1, #1, lsl #12 with x1 = 41 does not give 1029` }
+
+// add w0, w1, #1: 32 bits wide, and what is written is zero-extended.
+add32 ^keyword := a64.read(Bits.hex(`11000420`))
+Refiled(file: `X`, index: register_one, to: Constant(bits: Bits.hex(`ffffffff00000029`))).perform(machine)
+machine.put(`Rd`, add32.field(`Rd`))
+machine.put(`Rn`, add32.field(`Rn`))
+machine.put(`imm12`, add32.field(`imm12`))
+machine.put(`sh`, add32.field(`sh`))
+add32.encoding.semantics.run(machine)
+unless (Filed(file: `X`, index: register_zero).value(machine) == Bits.hex(`000000000000002a`)) { INFO@mark `T6 add w0, w1, #1 with x1 = ffffffff00000029 does not give 2a, zero-extended` }
+
+// Every field of an instruction put in the state, as `Run.ray` does before it runs one.
+Fields ^keyword := class {
+  put (machine_state, read) => (
+    held := read
+    walker := held.encoding.fields.head
+    while (exists walker) {
+      machine_state.put(walker.value.name, held.field(walker.value.name))
+      walker = walker.next
+    }
+    true
+  )
+}
+
+// movz x1, #5, lsl #16: sixteen bits put in a word of zeros at a place the instruction says.
+movz ^keyword := a64.read(Bits.hex(`d2a000a1`))
+Fields.put(machine, movz)
+movz.encoding.semantics.run(machine)
+unless (Filed(file: `X`, index: register_one).value(machine) == Bits.hex(`0000000000050000`)) { INFO@mark `T7 movz x1, #5, lsl #16 is not 50000` }
+
+// subs x1, x1, #1 of 1: nothing, and the flags say so.
+Refiled(file: `X`, index: register_one, to: Constant(bits: Bits.hex(`0000000000000001`))).perform(machine)
+subs ^keyword := a64.read(Bits.hex(`f1000421`))
+Fields.put(machine, subs)
+subs.encoding.semantics.run(machine)
+unless (Filed(file: `X`, index: register_one).value(machine).is_zero) { INFO@mark `T8 subs x1, x1, #1 of 1 is not 0` }
+unless (machine.get(`PSTATE.Z`).low) { INFO@mark `T9 subs to nothing does not set Z` }
+unless (machine.get(`PSTATE.C`).low) { INFO@mark `T10 subs 1 - 1 does not set C: nothing was borrowed` }
+if (machine.get(`PSTATE.N`).low) { INFO@mark `T11 subs to nothing sets N` }
+
+// b.ne #-8 at 10: not taken with Z set, and to 8 with Z clear.
+machine.put(`inst_start`, Bits.hex(`0000000000000010`))
+bne ^keyword := a64.read(Bits.hex(`54ffffc1`))
+Fields.put(machine, bne)
+if (exists bne.encoding.semantics.run(machine)) { INFO@mark `T12 b.ne is taken though Z is set` }
+machine.put(`PSTATE.Z`, Bits.flag(false))
+unless (bne.encoding.semantics.run(machine) == Bits.hex(`0000000000000008`)) { INFO@mark `T13 b.ne at 10 with Z clear does not leave for 8` }

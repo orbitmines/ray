@@ -5,10 +5,10 @@
 // It is read in slices: of each instruction's file, the `<regdiagram>`, `<encoding>` and `<ps>` lines, verbatim, named
 // `A64.<file>.xml` so that they are read before this file is:
 //   X=.ether/external/arm/ISA_A64_xml_A_profile-2026-06; S=.ether/asm/work/arm/slices; mkdir -p $S
-//   for f in add_addsub_imm movz b_uncond b_cond ret ldr_imm_gen; do awk '/<regdiagram /,/<\/regdiagram>/ {print; next} /<encoding /,/<\/encoding>/ {print; next} /<ps /,/<\/ps>/ {print}' $X/$f.xml > $S/A64.$f.xml; done
-// spec: `asm.sh` copies `tests/` into the project too, so this file is read twice there (and runs out of memory); until
-// it leaves `tests/` out, run it through a copy of the project holding only `.entrypoint.ray`.
-// run: S=.ether/asm/work/arm/slices; PROJECT=ASL SPECS="$S/A64.add_addsub_imm.xml $S/A64.movz.xml $S/A64.b_uncond.xml $S/A64.b_cond.xml $S/A64.ret.xml $S/A64.ldr_imm_gen.xml" T=500 M=4500 .ether/asm/asm.sh arm @ether/$/.asm/ASL/tests/a64.ray boolean.ray -- Bits.ray ISA.ray
+//   @ether/$/.asm/ASL/slice.sh add_addsub_imm movz b_uncond b_cond ret ldr_imm_gen
+// which keeps those lines verbatim except the pseudocode, which it gives back as the plain ASL it is (Arm's links
+// taken off, `&lt;` and the rest the characters again).
+// run: S=.ether/asm/work/arm/slices; PROJECT=ASL SPECS="$S/A64.add_addsub_imm.xml $S/A64.movz.xml $S/A64.b_uncond.xml $S/A64.b_cond.xml $S/A64.ret.xml $S/A64.ldr_imm_gen.xml" T=600 M=6000 .ether/asm/asm.sh arm @ether/$/.asm/ASL/tests/a64.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
 
 mark ^keyword := external global
 INFO@mark `A0 control: this always fires`
@@ -66,6 +66,7 @@ if (exists a64.read(Bits.hex(`00000000`))) { INFO@mark `A22 00000000 is read` }
 // What ADD (immediate) does, as Arm writes it: the decode beside its diagram, the execute once for the file, shared
 // by the 32-bit and 64-bit encodings.
 // Arm's text is not quoted here: it is Arm's, and stays in .ether/external.
-unless (exists add.encoding.semantics.decode) { INFO@mark `A23 the decode of ADD (immediate) is not kept` }
-unless (exists add.encoding.semantics.execute) { INFO@mark `A24 ADD (immediate) has no execute` }
-unless (exists (external alike (external where arm.named(`ADD_32_addsub_imm`).semantics) (external where add.encoding.semantics))) { INFO@mark `A25 ADD 32 and 64 do not share their pseudocode` }
+// Each is kept as the statements it is written as.
+unless (exists add.encoding.semantics.operation.decode.head) { INFO@mark `A23 the decode of ADD (immediate) is not kept` }
+unless (exists add.encoding.semantics.operation.execute.head) { INFO@mark `A24 ADD (immediate) has no execute` }
+unless (exists (external alike (external where arm.named(`ADD_32_addsub_imm`).semantics.operation) (external where add.encoding.semantics.operation))) { INFO@mark `A25 ADD 32 and 64 do not share their pseudocode` }

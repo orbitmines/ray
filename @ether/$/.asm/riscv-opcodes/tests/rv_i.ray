@@ -2,7 +2,7 @@
 // them and the table of what their arguments are, and words decoded with what
 // was read and written back.
 //
-// run: mkdir -p .ether/asm/work/riscv/ro && echo > .ether/asm/work/riscv/ro/.project.ray && cp @ether/$/.asm/riscv-opcodes/.entrypoint.ray .ether/asm/work/riscv/ro/ && T=600 PROJECT=../../../.ether/asm/work/riscv/ro SPECS=".ether/asm/work/riscv/s/arg_lut_full.csv .ether/asm/work/riscv/s/opcodes_rv_i_full" .ether/asm/asm.sh rv_i @ether/$/.asm/riscv-opcodes/tests/rv_i.ray boolean.ray -- Bits.ray ISA.ray
+// run: mkdir -p .ether/asm/work/riscv/ro && echo > .ether/asm/work/riscv/ro/.project.ray && cp @ether/$/.asm/riscv-opcodes/.entrypoint.ray .ether/asm/work/riscv/ro/ && T=600 PROJECT=../../../.ether/asm/work/riscv/ro SPECS=".ether/external/riscv-opcodes/arg_lut.csv .ether/external/riscv-opcodes/extensions/rv_i" .ether/asm/asm.sh rv_i @ether/$/.asm/riscv-opcodes/tests/rv_i.ray boolean.ray -- Bits.ray ISA.ray
 // The spec files are links to `arg_lut.csv` and `extensions/rv_i`, named so
 // that they are read in that order and before `probe.ray`. The grammar is run
 // from a copy of the entrypoint alone: `PROJECT=riscv-opcodes` would copy this

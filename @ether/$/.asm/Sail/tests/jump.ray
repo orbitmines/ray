@@ -1,0 +1,18 @@
+// jal over an instruction and jalr back through the register it linked, run by the translated JAL and JALR
+// clauses (JALR's from jalr_seq.sail).
+//
+// run: mkdir -p .ether/asm/work/sail-goto/proj && echo > .ether/asm/work/sail-goto/proj/.project.ray && cat @ether/$/.asm/riscv-opcodes/.entrypoint.ray @ether/$/.asm/Sail/.entrypoint.ray > .ether/asm/work/sail-goto/proj/.entrypoint.ray && T=900 M=6000 PROJECT=../../../.ether/asm/work/sail-goto/proj SPECS="@ether/$/.asm/Sail/tests/specs/args.csv @ether/$/.asm/Sail/tests/specs/rv_jump @ether/$/.asm/Sail/tests/specs/regs_x @ether/$/.asm/Sail/tests/specs/sail_jump" .ether/asm/asm.sh sail-jump @ether/$/.asm/Sail/tests/jump.ray boolean.ray -- Bits.ray ISA.ray Goto.ray Code.ray Run.ray
+
+mark ^keyword := external global
+INFO@mark `J0 control: this file is run`
+unless (exists sail.clauses[`JAL`]) { INFO@mark `J1 the JAL clause is not read` }
+rv ^keyword := sail.attach(opcodes.isa(`rv_i`))
+// jal x5, 8; addi x6, x0, 1; jalr x0, 0(x5)
+jumping ^keyword := Code(isa: rv, bytes: Bits.hex_bytes(`ef028000 13031000 67800200`), width: zero_word)
+hart ^keyword := State(registers: chain None, memory: chain None)
+stopped ^keyword := Run(code: jumping, base: zero_word).run(hart, zero_word, Bits.hex(`00000004`), Bits.hex(`f`))
+unless (stopped == Bits.hex(`00000004`)) { INFO@mark `J2 jalr does not come back to 4` }
+held_x5 ^keyword := hart.get(`x5`)
+unless (held_x5 == Bits.hex(`00000004`)) { INFO@mark `J3 jal does not link 4 into x5` }
+if (exists hart.get(`x6`)) { INFO@mark `J4 the addi jal jumps over was run` }
+unless (hart.get(`inst_start`) == Bits.hex(`00000008`)) { INFO@mark `J5 the last instruction run is not the jalr` }

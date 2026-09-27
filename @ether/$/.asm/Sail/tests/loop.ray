@@ -1,0 +1,21 @@
+// A loop summing one to five, decoded from the words llvm-mc writes for it and run by the goto programs
+// Sail's execute clauses of addi, add and bne are translated into.
+//
+// run: mkdir -p .ether/asm/work/sail-goto/proj && echo > .ether/asm/work/sail-goto/proj/.project.ray && cat @ether/$/.asm/riscv-opcodes/.entrypoint.ray @ether/$/.asm/Sail/.entrypoint.ray > .ether/asm/work/sail-goto/proj/.entrypoint.ray && T=1500 M=8000 PROJECT=../../../.ether/asm/work/sail-goto/proj SPECS="@ether/$/.asm/Sail/tests/specs/args.csv @ether/$/.asm/Sail/tests/specs/rv_loop @ether/$/.asm/Sail/tests/specs/regs_x @ether/$/.asm/Sail/tests/specs/sail_loop" .ether/asm/asm.sh sail-loop @ether/$/.asm/Sail/tests/loop.ray boolean.ray -- Bits.ray ISA.ray Goto.ray Code.ray Run.ray
+// Spec slices: the addi, add and bne lines of rv_i, and BTYPE, ITYPE and RTYPE of base_insts.sail.
+
+mark ^keyword := external global
+INFO@mark `L0 control: this file is run`
+unless (exists sail.clauses[`BTYPE`]) { INFO@mark `L1 the BTYPE clause is not read` }
+rv ^keyword := sail.attach(opcodes.isa(`rv_i`))
+// addi x1, x0, 0; addi x2, x0, 5; loop: add x1, x1, x2; addi x2, x2, -1; bne x2, x0, loop
+summing ^keyword := Code(isa: rv, bytes: Bits.hex_bytes(`93000000 13015000 b3802000 1301f1ff e31c01fe`), width: zero_word)
+hart ^keyword := State(registers: chain None, memory: chain None)
+runner ^keyword := Run(code: summing, base: zero_word)
+stopped ^keyword := runner.run(hart, zero_word, Bits.hex(`00000014`), Bits.hex(`ffffffff`))
+if (exists stopped) { INFO@mark `L2 the run went on past the last instruction` }
+unless (hart.get(`inst_start`) == Bits.hex(`00000010`)) { INFO@mark `L5 the last instruction run is not the bne at 10` }
+held_x1 ^keyword := hart.get(`x1`)
+unless (held_x1 == Bits.hex(`0000000f`)) { INFO@mark `L3 x1 is not 1 + 2 + 3 + 4 + 5` }
+held_x2 ^keyword := hart.get(`x2`)
+unless (held_x2.is_zero) { INFO@mark `L4 x2 is not counted down to zero` }

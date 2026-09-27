@@ -1,9 +1,7 @@
 // IP addresses (draft: .ray2/Test.ray). An address is its segments: four of
 // eight bits written in decimal with dots between them, or eight of sixteen
-// written in hexadecimal with colons. spec: the draft's arithmetic over a
-// whole address (`+ offset`), its CIDR ranges and the choices RFC 5952 asks
-// for are notes below; a number here is walked, so 2³² of them is not a thing
-// the language reaches.
+// written in hexadecimal with colons. An offset and a CIDR prefix are worked
+// on the address's bits, so an address is never walked as the number it is.
 
 // class IP < Location &+ (-1 <- . -> +1)
 // spec: `Location` and the line from one address to the next await World's
@@ -47,6 +45,81 @@ IP := class {
   )
 
   == (other: IP) => .as_string == other.as_string
+
+  // The address some bits spell, segment by segment, as the kind of address
+  // this is.
+  from_bits (address_bits) => (
+    out := chain None
+    bit_at ^keyword := address_bits.head
+    while (exists bit_at) {
+      segment_bits := chain None
+      left_in_segment ^keyword := .segment_length
+      while ((exists bit_at).and(left_in_segment.nonzero)) {
+        segment_bits &= bit_at.value
+        bit_at = bit_at.next
+        left_in_segment = left_in_segment.pred
+      }
+      out &= number_of(segment_bits)
+    }
+    this.components.hierarchy.head.value(segments: out)
+  )
+
+  // `+ offset` and `- offset`: `as Binary + offset`, added bit by bit with a
+  // carry, so an address is never walked as the number it is.
+  + (offset: Number) => .from_bits(IP.sum_of(.bits, bits_of(offset, .bit_count), false))
+  - (offset: Number) => .from_bits(IP.sum_of(.bits, IP.inverted(bits_of(offset, .bit_count)), true))
+
+  // Two chains of bits of one width, most significant first, added with a
+  // carry into the lowest bit; what carries out of the highest is dropped.
+  sum_of (left_bits, right_bits, carry_in) => (
+    reversed_bits := chain None
+    carry_on ^keyword := carry_in
+    left_at ^keyword := left_bits.tail
+    right_at ^keyword := right_bits.tail
+    while (exists left_at) {
+      ones_here ^keyword := zero
+      if left_at.value { ones_here = ones_here.succ }
+      if right_at.value { ones_here = ones_here.succ }
+      if carry_on { ones_here = ones_here.succ }
+      sum_bit ^keyword := 0
+      if ones_here.odd { sum_bit = 1 }
+      reversed_bits &= sum_bit
+      carry_on = one < ones_here
+      left_at = left_at.previous
+      right_at = right_at.previous
+    }
+    forwards := chain None
+    walker ^keyword := reversed_bits.tail
+    while (exists walker) {
+      forwards &= walker.value
+      walker = walker.previous
+    }
+    forwards
+  )
+  inverted (some_bits) => (
+    flipped := chain None
+    some_bits for {
+      flipped_bit ^keyword := 1
+      if it.value { flipped_bit = 0 }
+      flipped &= flipped_bit
+    }
+    flipped
+  )
+
+  // CIDR, `/ prefix_length`: every bit after the prefix cleared.
+  / (prefix_length: Number) => (
+    kept_bits ^keyword := prefix_length
+    cleared := chain None
+    bit_at ^keyword := .bits.head
+    while (exists bit_at) {
+      if kept_bits.is_zero { cleared &= 0 } else {
+        cleared &= bit_at.value
+        kept_bits = kept_bits.pred
+      }
+      bit_at = bit_at.next
+    }
+    this.from_bits(cleared)
+  )
 
   // The address read back from its text: each part is a number in the base.
   read (text: String, separator: Character, radix: Number) => (
@@ -153,7 +226,7 @@ IPv6 := IP.v6
 // }
 // + (offset: Number{-(as Binary) <= . <= ~!(as Binary)}): static => as Binary + offset
 // - (offset: Number{- ~!(as Binary) <= . <= as Binary}): static => as Binary - offset
-//TODO Range
+// Range: the network a prefix names is `/`, written above.
 // CIDR notation
 // / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => {
 //   return this if prefix_length == NUMBER_OF_BITS
@@ -172,7 +245,7 @@ IPv6 := IP.v6
 // When the length of the consecutive 16-bit 0 fields are equal, the first sequence of zero bits MUST be shortened. (https://datatracker.ietf.org/doc/html/rfc5952#section-4.2.3)
 // dynamically assert left ~= 0[] -- .length != number_of_compressed_segments if zero_compression
 // zeros = left, right ~= 0[] -- #{length == min() & leftmost} // TODO How to iterate over @ like min. and leftmost
-// return (<- zeros), "::", (zeros ->), ":", embedded_ipv4 //TODO Is <- an exclusive or inclusive?
+// return (<- zeros), "::", (zeros ->), ":", embedded_ipv4 // `compressed` above writes the run of zeros itself, exclusive of both sides.
 // embed_ipv4: static => {
 //   return this if embedded_ipv4
 //   segments[..-3], segments[-2..] as Binary as IPv4

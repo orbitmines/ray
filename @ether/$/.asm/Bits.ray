@@ -160,6 +160,13 @@ Bits := class {
     fitting
   )
 
+  // A word of one bit, from a boolean.
+  flag (holds) => (
+    out := chain None
+    out &= holds
+    Bits(bits: out)
+  )
+
   // This word, with another above it.
   under (higher) => Bits(bits: Bits.joined(Bits.joined(chain None, .bits), higher.bits))
   // What is held in one chain of bits, appended to another.

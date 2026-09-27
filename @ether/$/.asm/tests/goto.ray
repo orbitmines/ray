@@ -44,3 +44,14 @@ unless (machine.get(`X`).is_zero) { INFO@mark `G8 the loop does not count down t
 machine.store(Bits.hex(`0200`), Bits.hex(`2a`))
 unless (machine.load(Bits.hex(`0200`)) == Bits.hex(`2a`)) { INFO@mark `G9 a stored byte does not load back` }
 if (exists machine.load(Bits.hex(`0201`))) { INFO@mark `G10 an unwritten byte holds something` }
+
+// Widths, shifts, pieces.
+unless (Bits.hex(`80`).widened(Bits.hex(`0000`), true) == Bits.hex(`ff80`)) { INFO@mark `G11 80 sign-extended is not ff80` }
+unless (Bits.hex(`80`).widened(Bits.hex(`0000`), false) == Bits.hex(`0080`)) { INFO@mark `G12 80 zero-extended is not 0080` }
+unless (Bits.hex(`1234`).widened(Bits.hex(`00`), false) == Bits.hex(`34`)) { INFO@mark `G13 1234 cut to a byte is not 34` }
+unless (Bits.hex(`03`).shifted_left(Bits.hex(`2`)) == Bits.hex(`0c`)) { INFO@mark `G14 3 shifted left twice is not c` }
+unless (Bits.hex(`f0`).shifted_right(Bits.hex(`4`), true) == Bits.hex(`ff`)) { INFO@mark `G15 f0 shifted right arithmetically four is not ff` }
+unless (Bits.hex(`f0`).shifted_right(Bits.hex(`4`), false) == Bits.hex(`0f`)) { INFO@mark `G16 f0 shifted right four is not 0f` }
+piece ^keyword := Joined(high: Constant(bits: Bits.hex(`12`)), low: Constant(bits: Bits.hex(`34`)))
+unless (piece.value(machine) == Bits.hex(`1234`)) { INFO@mark `G17 12 above 34 is not 1234` }
+unless (Part(of: Constant(bits: Bits.hex(`1234`)), mask: Bits.hex(`ff00`)).value(machine) == Bits.hex(`12`)) { INFO@mark `G18 the high byte of 1234 is not 12` }

@@ -121,6 +121,39 @@ Less := class {
   value (state) => Bits.flag(.left.value(state).less(.right.value(state)))
 }
 
+// As wide as `like`: zero-extended, sign-extended when `signed`, or cut.
+Widened := class {
+  of: Node
+  like: Node
+  signed: Node
+  value (state) => .of.value(state).widened(.like, .signed)
+}
+ShiftedLeft := class {
+  of: Node
+  by: Node
+  value (state) => .of.value(state).shifted_left(.by.value(state))
+}
+ShiftedRight := class {
+  of: Node
+  by: Node
+  arithmetic: Node
+  value (state) => .of.value(state).shifted_right(.by.value(state), .arithmetic)
+}
+// `high` above `low`, as p-code's piece and Sail's `@` write it (`@` puts the
+// first above the second).
+Joined := class {
+  high: Node
+  low: Node
+  value (state) => .low.value(state).under(.high.value(state))
+}
+// The bits of a value where a mask is set, as p-code's subpiece and a slice
+// such as `imm[11..5]` take them.
+Part := class {
+  of: Node
+  mask: Node
+  value (state) => .of.value(state).extract(.mask)
+}
+
 // Steps.
 Set := class {
   sets => true

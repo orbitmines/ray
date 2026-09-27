@@ -160,6 +160,76 @@ Bits := class {
     fitting
   )
 
+  // Shifted one place: towards the high end with a zero coming in, or towards
+  // the low end with a zero, or the sign, coming in.
+  doubled => (
+    out := chain None
+    out &= false
+    walker := .bits.head
+    while (exists walker.next) {
+      out &= walker.value
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+  halved (arithmetic) => (
+    out := chain None
+    walker := .bits.head.next
+    while (exists walker) {
+      out &= walker.value
+      walker = walker.next
+    }
+    out &= arithmetic.and(.high)
+    Bits(bits: out)
+  )
+  // Shifted by as many places as `count` says: counted down a place at a time.
+  shifted_left (count) => (
+    out := this
+    left := count
+    while (left.is_zero.not) {
+      out = out.doubled
+      left = left - Bits.one_like(left)
+    }
+    out
+  )
+  shifted_right (count, arithmetic) => (
+    out := this
+    left := count
+    while (left.is_zero.not) {
+      out = out.halved(arithmetic)
+      left = left - Bits.one_like(left)
+    }
+    out
+  )
+  // One, as wide as another word.
+  one_like (other) => (
+    out := chain None
+    walker := other.bits.head
+    first := true
+    while (exists walker) {
+      out &= first
+      first = false
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+  // As wide as `template`: cut at its width, or filled up to it with zeros,
+  // or with copies of the sign when `signed`.
+  widened (template, signed) => (
+    out := chain None
+    mine := .bits.head
+    filling := signed.and(.high)
+    walker := template.bits.head
+    while (exists walker) {
+      if (exists mine) {
+        out &= mine.value
+        mine = mine.next
+      } else { out &= filling }
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+
   // A word of one bit, from a boolean.
   flag (holds) => (
     out := chain None

@@ -342,7 +342,14 @@ export namespace Ray {
       if (!this.default_language) return this.diagnostics.report({ level: 'fatal', message: "Expected to have recognized the string !language (the project defining the default language) on the first line in a .project.ray file, but it wasn't provided." });
 
       // All projects depend on the default language.
-      this.projects.filter(x => x.dependencies.length === 0).forEach(x => x.depend_on(this.default_language));
+      const languages = this.projects.filter(project => project.is_language);
+      const enclosing = (project: Project): Project | undefined => {
+        let best: Project | undefined;
+        for (const language of languages)
+          if (language !== project && project.directory.startsWith(`${language.directory}/`) && (best === undefined || language.directory.length > best.directory.length)) best = language;
+        return best;
+      };
+      this.projects.filter(x => x.dependencies.length === 0).forEach(x => { const language = enclosing(x) ?? (x.is_language ? undefined : this.default_language); if (language) x.depend_on(language); });
       for (const project of this.projects) project.interpreter.program = this;
     }
 
@@ -401,6 +408,7 @@ export namespace Ray {
     lazy?: { span: Text.Node; frame: Node; raw: boolean; probe?: boolean; thunk?: boolean; consumed?: boolean }
     value?: Node
     literal?: boolean
+    bytes?: Uint8Array
     unknown?: boolean
     none?: boolean
     marks?: Node[]
@@ -3315,11 +3323,21 @@ export namespace Ray {
       node.literal = true;
       return node;
     }
+    read_of(bytes: Uint8Array, at: Text.Node): Node {
+      const node = this.literal_of(new TextDecoder().decode(bytes), at);
+      node.bytes = bytes;
+      return node;
+    }
+    bytes_of(node: Node): Uint8Array {
+      const written = this.text(node);
+      const value = this.diagnostics.muted(() => this.safely(() => this.deref(node, false, false)));
+      return value?.bytes ?? new TextEncoder().encode(written);
+    }
     io(location: string, content: string | undefined, at: Text.Node): Node {
       const fs = env.fs;
-      if (location === 'stdin') return this.literal_of(fs.readFileSync(0, 'utf8'), at);
+      if (location === 'stdin') return this.read_of(fs.readFileSync(0), at);
       if (location === 'stdout' || location === 'stderr') { (location === 'stdout' ? process.stdout : process.stderr).write(content ?? ''); return this.NONE; }
-      if (content === undefined) return this.literal_of(fs.readFileSync(location, 'utf8'), at);
+      if (content === undefined) return this.read_of(fs.readFileSync(location), at);
       fs.writeFileSync(location, content);
       return this.NONE;
     }
@@ -3591,7 +3609,7 @@ export namespace Ray {
     'inline': { arity: 1, fn: ({ interpreter, frame, args: [node] }) => interpreter.inline(node, frame) },
     // What crosses from the machine into the language is a literal: `bits` reads
     // one as its bytes, and the rest are read that way language-side.
-    'bits': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => { for (const bit of [...new TextEncoder().encode(interpreter.text(node))].flatMap(byte => byte.toString(2).padStart(8, '0').split(''))) { const taken = interpreter.call(each, interpreter.lazy(Text.Node.string(bit), frame, false), at, frame); if (interpreter.deref(taken, false)?.none) break; } return interpreter.NONE; } },
+    'bits': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => { for (const bit of [...interpreter.bytes_of(node)].flatMap(byte => byte.toString(2).padStart(8, '0').split(''))) { const taken = interpreter.call(each, interpreter.lazy(Text.Node.string(bit), frame, false), at, frame); if (interpreter.deref(taken, false)?.none) break; } return interpreter.NONE; } },
     'time': { arity: 0, fn: ({ interpreter, at }) => interpreter.literal_of(String(process.hrtime.bigint()), at) },
     // One bit from the machine, as this language spells a bit: it is there or
     // it is not. Handed over as a written `0` or `1` it could not be read at
@@ -3601,7 +3619,7 @@ export namespace Ray {
     // chain that holds them is written in the language, not here.
     'first': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.first_statement(node) },
     'rest': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.rest_of(node) },
-    'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => interpreter.io(interpreter.text(location), content.none ? undefined : interpreter.text(content), at) },
+    'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => { const given = interpreter.diagnostics.muted(() => interpreter.safely(() => interpreter.deref(content, false))); return interpreter.io(interpreter.text(location), given === undefined || given.none ? undefined : interpreter.text(content), at); } },
     'os': { arity: 1, fn: ({ interpreter, args: [name], at }) => { const key = interpreter.text(name); const value = key === 'platform' ? process.platform : key === 'architecture' ? process.arch : process.env[key]; return value === undefined ? interpreter.NONE : interpreter.literal_of(value, at); } },
     'extend': { arity: 2, fn: ({ interpreter, args: [target, node] }) => { const into = interpreter.deref(target); return into ? interpreter.inline(node, into, { compose: true }) : undefined; } },
     'literal': { arity: 1, fn: ({ args: [node] }) => node },

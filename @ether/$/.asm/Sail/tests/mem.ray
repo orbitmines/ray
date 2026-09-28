@@ -14,9 +14,9 @@ stopped ^keyword := Run(code: storing, base: zero_word).run(hart, zero_word, Bit
 unless (hart.get(`inst_start`) == Bits.hex(`00000010`)) { INFO@mark `S2 the last instruction run is not the lb at 10` }
 unless (hart.load(Bits.hex(`00000040`)) == Bits.hex(`fe`)) { INFO@mark `S3 the lowest byte stored is not fe` }
 unless (hart.load(Bits.hex(`00000043`)) == Bits.hex(`ff`)) { INFO@mark `S4 the highest byte stored is not ff` }
-held_x3 ^keyword := hart.get(`x3`)
+held_x3 ^keyword := Files.read(hart, `x`, Bits.hex(`03`))
 unless (held_x3 == Bits.hex(`fffffffe`)) { INFO@mark `S5 lw does not load back fffffffe` }
-held_x4 ^keyword := hart.get(`x4`)
+held_x4 ^keyword := Files.read(hart, `x`, Bits.hex(`04`))
 unless (held_x4 == Bits.hex(`000000fe`)) { INFO@mark `S6 lbu does not load fe zero-extended` }
-held_x7 ^keyword := hart.get(`x7`)
+held_x7 ^keyword := Files.read(hart, `x`, Bits.hex(`07`))
 unless (held_x7 == Bits.hex(`fffffffe`)) { INFO@mark `S7 lb does not load fe sign-extended` }

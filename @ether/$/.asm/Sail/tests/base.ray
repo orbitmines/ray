@@ -22,11 +22,11 @@ rv ^keyword := sail.attach(opcodes.isa(`rv_i`))
 code_words ^keyword := Code(isa: rv, bytes: Bits.hex_bytes(`93005000 33811000 b7513412 63842000 e30c21fe`), width: zero_word)
 hart ^keyword := State(registers: chain None, memory: chain None)
 stopped ^keyword := Run(code: code_words, base: zero_word).run(hart, zero_word, Bits.hex(`ffffffff`), Bits.hex(`0`))
-held_x1 ^keyword := hart.get(`x1`)
+held_x1 ^keyword := Files.read(hart, `x`, Bits.hex(`01`))
 unless (held_x1 == Bits.hex(`00000005`)) { INFO@mark `E2 x1 is not 5 after addi x1, x0, 5` }
-held_x2 ^keyword := hart.get(`x2`)
+held_x2 ^keyword := Files.read(hart, `x`, Bits.hex(`02`))
 unless (held_x2 == Bits.hex(`0000000a`)) { INFO@mark `E4 x2 is not 10 after add x2, x1, x1` }
-held_x3 ^keyword := hart.get(`x3`)
+held_x3 ^keyword := Files.read(hart, `x`, Bits.hex(`03`))
 unless (held_x3 == Bits.hex(`12345000`)) { INFO@mark `E5 x3 is not 12345000 after lui x3, 0x12345` }
 unless (stopped == Bits.hex(`00000008`)) { INFO@mark `E8 after beq x1, x2, 8 and beq x2, x2, -8 the machine is not back at 8` }
-if (exists hart.get(`x0`)) { INFO@mark `E9 x0 holds something` }
+if (exists Files.read(hart, `x`, Bits.hex(`00`))) { INFO@mark `E9 x0 holds something` }

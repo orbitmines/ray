@@ -13,9 +13,20 @@ Run := class {
   // The address of the code's first byte, as wide as the machine's addresses.
   base: Node
 
-  // Every instruction of the code with the address it sits at: each one
-  // takes up as many bytes as the word it is written as.
+  // Every instruction of the code with the address it sits at, worked out
+  // once for this run and kept.
   placed => (
+    kept_places := .kept
+    unless (exists kept_places) { kept_places = Run.kept_for(this) }
+    kept_places
+  )
+  kept_for (running) => (
+    worked_out := running.placing
+    running.kept = worked_out
+    worked_out
+  )
+  // Each instruction takes up as many bytes as the word it is written as.
+  placing => (
     out := chain None
     address := .base
     step := Bits.one_like(.base)

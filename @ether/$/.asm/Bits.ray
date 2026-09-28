@@ -272,6 +272,34 @@ Bits := class {
     }
     Bits(bits: out)
   )
+  // The bytes a file holds, in the order it holds them, each a word of eight
+  // bits: what a container is read from.
+  file (path) => (
+    contents := external io path None
+    Bits.bytes_of(contents)
+  )
+  // The bytes a text is written with, as the machine hands them over: each one
+  // most significant bit first, kept least significant first.
+  bytes_of (contents) => (
+    bytes := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= exists (external alike (inline bit) (`1`))
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        lowest_first := chain None
+        walker := byte.tail
+        while (exists walker) {
+          lowest_first &= walker.value
+          walker = walker.previous
+        }
+        bytes &= Bits(bits: lowest_first)
+        byte = chain None
+      }
+      true
+    )
+    external bits contents take
+    bytes
+  )
   // The bytes a text written in hexadecimal spells, in the order they are
   // written: `7f454c46` is the four bytes an ELF file begins with.
   hex_bytes (written) => (

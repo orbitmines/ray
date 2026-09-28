@@ -24,8 +24,8 @@ machine ^keyword := State(registers: chain None, memory: chain None)
 runner ^keyword := Run(code: counting, base: Bits.hex(`0000000000001000`))
 stopped ^keyword := runner.run(machine, Bits.hex(`0000000000001000`), Bits.hex(`0000000000000000`), Bits.hex(`000000`))
 five_bits ^keyword := Bits.hex(`1f`)
-x0 ^keyword := Filed(file: `X`, index: Constant(bits: Bits.hex(`00`).extract(five_bits))).value(machine)
-x1 ^keyword := Filed(file: `X`, index: Constant(bits: Bits.hex(`01`).extract(five_bits))).value(machine)
+x0 ^keyword := InFile(file: `X`, index: Constant(bits: Bits.hex(`00`).extract(five_bits)), unset: asl_numbers.zero_register, fixed: None).value(machine)
+x1 ^keyword := InFile(file: `X`, index: Constant(bits: Bits.hex(`01`).extract(five_bits)), unset: asl_numbers.zero_register, fixed: None).value(machine)
 unless (x0 == Bits.hex(`0000000000000004`)) { INFO@mark `L2 x0 is not four after twice round the loop` }
 unless (x1.is_zero) { INFO@mark `L3 x1 is not counted down to nothing` }
 unless (machine.get(`PSTATE.Z`) == Bits.flag(true)) { INFO@mark `L4 the last subs does not leave Z set` }

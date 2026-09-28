@@ -20,14 +20,14 @@ add64 ^keyword := a64.read(Bits.hex(`91000420`))
 add64_program ^keyword := add64.encoding.semantics.translated
 unless (exists add64_program.steps.head) { INFO@mark `T1 ADD (immediate) 64-bit translates to no steps` }
 machine ^keyword := State(registers: chain None, memory: chain None)
-Refiled(file: `X`, index: register_one, to: Constant(bits: Bits.hex(`0000000000000029`))).perform(machine)
+IntoFile(file: `X`, index: register_one, to: Constant(bits: Bits.hex(`0000000000000029`)), fixed: None).perform(machine)
 machine.put(`Rd`, add64.field(`Rd`))
 machine.put(`Rn`, add64.field(`Rn`))
 machine.put(`imm12`, add64.field(`imm12`))
 machine.put(`sh`, add64.field(`sh`))
 if (exists add64_program.run(machine)) { INFO@mark `T2 ADD leaves for an address` }
-unless (Filed(file: `X`, index: register_zero).value(machine) == Bits.hex(`000000000000002a`)) { INFO@mark `T3 add x0, x1, #1 with x1 = 41 does not give 42` }
-unless (Filed(file: `X`, index: register_one).value(machine) == Bits.hex(`0000000000000029`)) { INFO@mark `T4 add x0, x1, #1 changes x1` }
+unless (InFile(file: `X`, index: register_zero, unset: asl_numbers.zero_register, fixed: None).value(machine) == Bits.hex(`000000000000002a`)) { INFO@mark `T3 add x0, x1, #1 with x1 = 41 does not give 42` }
+unless (InFile(file: `X`, index: register_one, unset: asl_numbers.zero_register, fixed: None).value(machine) == Bits.hex(`0000000000000029`)) { INFO@mark `T4 add x0, x1, #1 changes x1` }
 
 // The same program, another instruction of its encoding: add x2, x1, #1, lsl #12
 shifted ^keyword := a64.read(Bits.hex(`91400422`))
@@ -36,17 +36,17 @@ machine.put(`Rn`, shifted.field(`Rn`))
 machine.put(`imm12`, shifted.field(`imm12`))
 machine.put(`sh`, shifted.field(`sh`))
 shifted.encoding.semantics.run(machine)
-unless (Filed(file: `X`, index: register_two).value(machine) == Bits.hex(`0000000000001029`)) { INFO@mark `T5 add x2, x1, #1, lsl #12 with x1 = 41 does not give 1029` }
+unless (InFile(file: `X`, index: register_two, unset: asl_numbers.zero_register, fixed: None).value(machine) == Bits.hex(`0000000000001029`)) { INFO@mark `T5 add x2, x1, #1, lsl #12 with x1 = 41 does not give 1029` }
 
 // add w0, w1, #1: 32 bits wide, and what is written is zero-extended.
 add32 ^keyword := a64.read(Bits.hex(`11000420`))
-Refiled(file: `X`, index: register_one, to: Constant(bits: Bits.hex(`ffffffff00000029`))).perform(machine)
+IntoFile(file: `X`, index: register_one, to: Constant(bits: Bits.hex(`ffffffff00000029`)), fixed: None).perform(machine)
 machine.put(`Rd`, add32.field(`Rd`))
 machine.put(`Rn`, add32.field(`Rn`))
 machine.put(`imm12`, add32.field(`imm12`))
 machine.put(`sh`, add32.field(`sh`))
 add32.encoding.semantics.run(machine)
-unless (Filed(file: `X`, index: register_zero).value(machine) == Bits.hex(`000000000000002a`)) { INFO@mark `T6 add w0, w1, #1 with x1 = ffffffff00000029 does not give 2a, zero-extended` }
+unless (InFile(file: `X`, index: register_zero, unset: asl_numbers.zero_register, fixed: None).value(machine) == Bits.hex(`000000000000002a`)) { INFO@mark `T6 add w0, w1, #1 with x1 = ffffffff00000029 does not give 2a, zero-extended` }
 
 // Every field of an instruction put in the state, as `Run.ray` does before it runs one.
 Fields ^keyword := class {
@@ -65,14 +65,14 @@ Fields ^keyword := class {
 movz ^keyword := a64.read(Bits.hex(`d2a000a1`))
 Fields.put(machine, movz)
 movz.encoding.semantics.run(machine)
-unless (Filed(file: `X`, index: register_one).value(machine) == Bits.hex(`0000000000050000`)) { INFO@mark `T7 movz x1, #5, lsl #16 is not 50000` }
+unless (InFile(file: `X`, index: register_one, unset: asl_numbers.zero_register, fixed: None).value(machine) == Bits.hex(`0000000000050000`)) { INFO@mark `T7 movz x1, #5, lsl #16 is not 50000` }
 
 // subs x1, x1, #1 of 1: nothing, and the flags say so.
-Refiled(file: `X`, index: register_one, to: Constant(bits: Bits.hex(`0000000000000001`))).perform(machine)
+IntoFile(file: `X`, index: register_one, to: Constant(bits: Bits.hex(`0000000000000001`)), fixed: None).perform(machine)
 subs ^keyword := a64.read(Bits.hex(`f1000421`))
 Fields.put(machine, subs)
 subs.encoding.semantics.run(machine)
-unless (Filed(file: `X`, index: register_one).value(machine).is_zero) { INFO@mark `T8 subs x1, x1, #1 of 1 is not 0` }
+unless (InFile(file: `X`, index: register_one, unset: asl_numbers.zero_register, fixed: None).value(machine).is_zero) { INFO@mark `T8 subs x1, x1, #1 of 1 is not 0` }
 unless (machine.get(`PSTATE.Z`).low) { INFO@mark `T9 subs to nothing does not set Z` }
 unless (machine.get(`PSTATE.C`).low) { INFO@mark `T10 subs 1 - 1 does not set C: nothing was borrowed` }
 if (machine.get(`PSTATE.N`).low) { INFO@mark `T11 subs to nothing sets N` }

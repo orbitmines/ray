@@ -47,8 +47,7 @@
 // by hand here, each where its rule is, until those files are read as well.
 // What `X` is — a file of thirty-two registers whose first reads as zero and
 // keeps nothing written to it — is `rX`/`wX` in `core/regs.sail`, written by
-// hand as `InFile`/`IntoFile` below; the name each register is held by is
-// read from that file's `reg_arch_name_raw`.
+// hand as the shared `InFile`/`IntoFile` of `Goto.ray` with x0 fixed.
 //
 // The positions of the bits of a word (`positions`, `Position`) are the ones
 // the riscv-opcodes grammar writes; the two are read together, since what is
@@ -267,7 +266,7 @@ Sail := class {
   // An operator applied to a register of the file: `X_of` is the register
   // read, and `other` what it is applied with.
   operated (register, other, made) => (
-    X_of := InFile(index: register.goto)
+    X_of := InFile(file: `x`, index: register.goto, unset: zero_word, fixed: zero_word)
     Sail.valued(inline made)
   )
   // A value where nothing is known of it yet.
@@ -285,7 +284,7 @@ Sail := class {
   // or four, as `width_enc` in `core/types.sail` spells them), the first the
   // lowest.
   loaded (from_register, displacement, size) => (
-    from_address := Sum(left: InFile(index: from_register.goto), right: displacement.goto)
+    from_address := Sum(left: InFile(file: `x`, index: from_register.goto, unset: zero_word, fixed: zero_word), right: displacement.goto)
     count := Sail.bytes_of(size)
     gathered := Loaded(address: from_address)
     step := Bits.hex(`00000001`)
@@ -296,7 +295,7 @@ Sail := class {
     Sail.valued(gathered)
   )
   stored (from_register, displacement, size, written) => (
-    to_address := Sum(left: InFile(index: from_register.goto), right: displacement.goto)
+    to_address := Sum(left: InFile(file: `x`, index: from_register.goto, unset: zero_word, fixed: zero_word), right: displacement.goto)
     count := Sail.bytes_of(size)
     step := Bits.hex(`00000000`)
     byte_mask := Bits.hex(`000000ff`)
@@ -313,7 +312,7 @@ Sail := class {
   extended (unsigned, value) => Sail.valued(Widened(of: value.goto, like: zero_word, signed: unsigned.known.is_zero))
   // `X(rd) = value`.
   write (register, value) => (
-    sail.emit(IntoFile(index: register.goto, to: value.goto))
+    sail.emit(IntoFile(file: `x`, index: register.goto, to: value.goto, fixed: zero_word))
     retired
   )
 
@@ -423,24 +422,6 @@ retired ^keyword := Written(goto: None, known: None, leaving: None)
 // spec: `rX`/`wX` in `core/regs.sail`, by hand; a register file is a value
 // and a step the shared goto programs could hold themselves.
 zero_word ^keyword := Bits.hex(`00000000`)
-InFile := class {
-  index: Node
-  value (state) => (
-    number := .index.value(state)
-    if number.is_zero { zero_word } else { state.get(sail.register_name(number)) }
-  )
-}
-IntoFile := class {
-  sets => true
-  index: Node
-  to: Node
-  perform (state) => (
-    number := .index.value(state)
-    unless number.is_zero { state.put(sail.register_name(number), .to.value(state)) }
-    true
-  )
-}
-
 register{ }{literal name}{ }:{ }regtype ^keyword => sail.registered(name)
 
 // `union clause instruction = ITYPE : (…)`: an instruction of that shape.
@@ -643,7 +624,7 @@ X({register}){ }<_u{ }{other} ^keyword => sail.operated(register, other, { Below
 X({register}){ }>=_s{ }{other} ^keyword => sail.operated(register, other, { Inverted(of: Less(left: X_of, right: other.goto)) })
 X({register}){ }>=_u{ }{other} ^keyword => sail.operated(register, other, { Inverted(of: Below(left: X_of, right: other.goto)) })
 X({register}){ }={ }{value}; ^keyword => sail.write(register, value)
-X({register}) ^keyword => Sail.valued(InFile(index: register.goto))
+X({register}) ^keyword => Sail.valued(InFile(file: `x`, index: register.goto, unset: zero_word, fixed: zero_word))
 PC ^keyword => Sail.valued(Named(name: `inst_start`))
 if{ }{condition}{ }then{ }{yes}{ }else{ }{no} ^keyword => sail.branch(condition, yes, no)
 if{ }{condition}{\n}then{ }{yes}{\n}else{ }{no} ^keyword => sail.branch(condition, yes, no)

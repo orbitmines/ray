@@ -34,32 +34,143 @@ State := class {
     if (exists holding) { holding.bits = value } else { .registers &= Register(name: name, bits: value) }
     true
   )
-  byte_at (address) => (
-    found := None
-    walker := .memory.head
-    while ((exists walker).and((exists found).not)) {
-      if (walker.value.address == address) { found = walker.value }
+  // Memory is a tree on the bits of an address, lowest bit first: a load or a
+  // store walks one branch per bit rather than every cell written so far. It
+  // hangs off the chain the state was made with, so states that share that
+  // chain share their memory.
+  root => (
+    held_root := .memory.root
+    unless (exists held_root) { held_root = State.planted(.memory) }
+    held_root
+  )
+  planted (holder) => (
+    grown := Branch(zero: None, one: None, held: None)
+    holder.root = grown
+    grown
+  )
+  // The bits an address is walked by: up to its highest set bit. Above it the
+  // address is zeros however wide it is written, so a register numbered by a
+  // five-bit field and the same number written as a byte are one register.
+  trimmed (address) => (
+    kept := chain None
+    pending := chain None
+    walker := address.bits.head
+    while (exists walker) {
+      pending &= walker.value
+      if walker.value {
+        Bits.joined(kept, pending)
+        pending = chain None
+      }
       walker = walker.next
     }
-    found
+    kept
   )
   load (address) => (
-    cell := .byte_at(address)
-    if (exists cell) { cell.bits } else { None }
+    reached := .root
+    walker := State.trimmed(address).head
+    while ((exists walker).and(exists reached)) {
+      if walker.value { reached = reached.one } else { reached = reached.zero }
+      walker = walker.next
+    }
+    found := None
+    if (exists reached) { found = reached.held }
+    found
   )
   store (address, value) => (
-    cell := .byte_at(address)
-    if (exists cell) { cell.bits = value } else { .memory &= Cell(address: address, bits: value) }
+    reached := .root
+    walker := State.trimmed(address).head
+    while (exists walker) {
+      reached = State.grown(reached, walker.value)
+      walker = walker.next
+    }
+    reached.held = value
     true
   )
+  // The branch a bit leads to, grown where there was none.
+  grown (branching, going_one) => (
+    ahead := None
+    if going_one { ahead = branching.one } else { ahead = branching.zero }
+    unless (exists ahead) { ahead = State.sprouted(branching, going_one) }
+    ahead
+  )
+  sprouted (branching, going_one) => (
+    sprout := Branch(zero: None, one: None, held: None)
+    if going_one { branching.one = sprout } else { branching.zero = sprout }
+    sprout
+  )
+}
+Branch := class {
+  zero: Node
+  one: Node
+  held: Node
 }
 Register := class {
   name: Node
   bits: Node
 }
-Cell := class {
-  address: Node
-  bits: Node
+
+// A register of a file of registers, by its number: `X(rd)` in Sail, `X[n]`
+// in Arm's pseudocode. The file is held in the state under its name, as a
+// state of its own whose memory is the registers. A register never written
+// reads as `unset`; the one numbered `fixed`, if any, always reads as `unset`
+// and keeps nothing written to it (RISC-V's x0).
+InFile := class {
+  file: Node
+  index: Node
+  unset: Node
+  fixed: Node
+  value (state) => (
+    number := .index.value(state)
+    found := .unset
+    unless (Files.pinned(number, .fixed)) {
+      held := Files.of(state, .file).load(number)
+      if (exists held) { found = held }
+    }
+    found
+  )
+}
+IntoFile := class {
+  sets => true
+  file: Node
+  index: Node
+  to: Node
+  fixed: Node
+  perform (state) => (
+    number := .index.value(state)
+    unless (Files.pinned(number, .fixed)) { Files.of(state, .file).store(number, .to.value(state)) }
+    true
+  )
+}
+Files := class {
+  // The file a state holds under a name, made where there is none yet.
+  of (state, name) => (
+    registers := state.get(name)
+    unless (exists registers) { registers = Files.opened(state, name) }
+    registers
+  )
+  opened (state, name) => (
+    fresh_registers := chain None
+    fresh_memory := chain None
+    opened_file := State(registers: fresh_registers, memory: fresh_memory)
+    state.put(name, opened_file)
+    opened_file
+  )
+  pinned (number, fixed) => (
+    answer := false
+    if (exists fixed) {
+      number_bits := Bits(bits: State.trimmed(number))
+      fixed_bits := Bits(bits: State.trimmed(fixed))
+      answer = (number_bits == fixed_bits)
+    }
+    answer
+  )
+  // A register as a test reads it.
+  read (state, name, number) => (
+    registers := state.get(name)
+    found := None
+    if (exists registers) { found = registers.load(number) }
+    found
+  )
 }
 
 // Values. Each answers what it is in a state.

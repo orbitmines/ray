@@ -425,7 +425,7 @@ arm.ten = Bits.joined(Bits.joined(chain None, arm.weights.tail.value), arm.weigh
 //
 // The fields of an instruction are read as `Named(name: `Rd`)`: `Run.ray`
 // puts them in the state before the program runs. General-purpose registers
-// are a file, `X`, numbered by what the instruction says (`Filed`, `Refiled`),
+// are a file, `X`, numbered by what the instruction says (`Goto.ray`'s `InFile`, `IntoFile`),
 // the stack pointer is `SP`, the flags `PSTATE.N` `PSTATE.Z` `PSTATE.C`
 // `PSTATE.V` (named apart from fields: RET has a field `Z`), and the address of
 // the instruction is `inst_start`.
@@ -434,7 +434,7 @@ arm.ten = Bits.joined(Bits.joined(chain None, arm.weights.tail.value), arm.weigh
 // from Arm's text (`A64.shared.xml`); the accessors `X`, `SP`, `PC64`, `Mem`,
 // `BranchTo` and the primitives `UInt`, `SInt`, `ZeroExtend`, `SignExtend`,
 // `Zeros`, `IsZero`, `NOT`, `LSL` are written here as what they do. Reading the
-// accessors from Arm's text is next: they index `_R[[n]]`, which `Filed` is.
+// accessors from Arm's text is next: they index `_R[[n]]`, which `InFile` is.
 // spec: operators are applied as the engine groups them, from the right, and
 // then regrouped by ASL's precedence (`Pseudocode.settle`); a parenthesised
 // group on the right of an operator cannot be told from an ungrouped one.
@@ -860,41 +860,6 @@ Place ^keyword := class {
   low: Node
 }
 
-// A register of a file of registers, by its number: what ASL writes `_R[[n]]`.
-// The file is held in the state under its name, as a state of its own whose
-// memory is the registers; a register never written holds zero.
-// spec: a shared register-file value for `Goto.ray`.
-Filed ^keyword := class {
-  file: Node
-  index: Node
-  value (state) => (
-    registers := state.get(.file)
-    number := .index.value(state)
-    found := asl_numbers.zero_register
-    if (exists registers) {
-      held := registers.load(number)
-      if (exists held) { found = held }
-    }
-    found
-  )
-}
-Refiled ^keyword := class {
-  sets => true
-  file: Node
-  index: Node
-  to: Node
-  perform (state) => (
-    registers := state.get(.file)
-    unless (exists registers) {
-      built_1 := chain None
-      built_2 := chain None
-      registers = State(registers: built_1, memory: built_2)
-      state.put(.file, registers)
-    }
-    registers.store(.index.value(state), .to.value(state))
-  )
-}
-
 // A name no other name is: what a variable's slot and a label are called.
 Fresh ^keyword := class {
   name => external time
@@ -1246,7 +1211,7 @@ Pseudocode ^keyword := class {
       hoisted_3 := .value_at(standing, asl_numbers.sixty_four)
       built_42 := where.name
       built_43 := where.index
-      this.emit(Refiled(file: built_42, index: built_43, to: hoisted_3))
+      this.emit(IntoFile(file: built_42, index: built_43, to: hoisted_3, fixed: None))
       this.emit(Label(name: skip))
     } elsif (exists (external alike (sort) (`machine`))) {
       machine_value := None
@@ -2057,7 +2022,8 @@ Pseudocode ^keyword := class {
     hoisted_25 := .value_at(register_index, Count.larger(hoisted_129, five))
     built_81 := Count.template(five)
     at := Widened(of: hoisted_25, like: built_81, signed: false)
-    built_85 := Filed(file: file_given, index: at)
+    never_written := asl_numbers.zero_register
+    built_85 := InFile(file: file_given, index: at, unset: never_written, fixed: None)
     built_86 := Count.template(wide)
     built_82 := Widened(of: built_85, like: built_86, signed: false)
     built_83 := wide

@@ -323,13 +323,14 @@ X86 ^keyword := class {
 
   // How many bytes an immediate or branch displacement nonterminal takes,
   // as a chain with one link per byte.
-  // spec: the rows of SIMM8(), SIMMz(), BRDISP8(), BRDISP32(), BRDISPz() in
+  // spec: the rows of SIMM8(), UIMM8(), SIMMz(), BRDISP8(), BRDISP32(), BRDISPz() in
   // xed-immediates.txt (`EOSZ=2 UIMM0[i/32] | IMM_WIDTH=32`), with EOSZ from
   // OSZ_NONTERM() in xed-eOSZ.txt. Nonterminals that take no bytes (DF64(),
   // FORCE64(), BRANCH_HINT(), …) change only the state.
   immediate_width (named, prefixes, rex) => (
     width := chain None
     one := exists (external alike (named) (`SIMM8`))
+    if (exists (external alike (named) (`UIMM8`))) { one = true }
     if (exists (external alike (named) (`BRDISP8`))) { one = true }
     four := exists (external alike (named) (`BRDISP32`))
     if (exists (external alike (named) (`BRDISPz`))) { four = true }

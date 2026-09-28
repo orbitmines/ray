@@ -55,3 +55,22 @@ unless (Bits.hex(`f0`).shifted_right(Bits.hex(`4`), false) == Bits.hex(`0f`)) { 
 piece ^keyword := Joined(high: Constant(bits: Bits.hex(`12`)), low: Constant(bits: Bits.hex(`34`)))
 unless (piece.value(machine) == Bits.hex(`1234`)) { INFO@mark `G17 12 above 34 is not 1234` }
 unless (Part(of: Constant(bits: Bits.hex(`1234`)), mask: Bits.hex(`ff00`)).value(machine) == Bits.hex(`12`)) { INFO@mark `G18 the high byte of 1234 is not 12` }
+
+// Memory keyed by address bits: a wider spelling of the same address is the same place.
+machine.store(Bits.hex(`0300`), Bits.hex(`11`))
+machine.store(Bits.hex(`0301`), Bits.hex(`22`))
+unless (machine.load(Bits.hex(`0300`)) == Bits.hex(`11`)) { INFO@mark `G19 0300 does not hold 11` }
+unless (machine.load(Bits.hex(`00000301`)) == Bits.hex(`22`)) { INFO@mark `G20 0301 written wider does not hold 22` }
+unless (machine.load(Bits.hex(`0200`)) == Bits.hex(`2a`)) { INFO@mark `G21 0200 lost its byte to the later stores` }
+machine.store(Bits.hex(`0000`), Bits.hex(`33`))
+unless (machine.load(Bits.hex(`00`)) == Bits.hex(`33`)) { INFO@mark `G22 address nothing does not hold what was stored there` }
+
+// A file of registers, with x0 fixed.
+zero_x ^keyword := Bits.hex(`00000000`)
+into_x1 ^keyword := IntoFile(file: `x`, index: Constant(bits: Bits.hex(`01`).extract(Bits.hex(`1f`))), to: Constant(bits: Bits.hex(`00000005`)), fixed: zero_x)
+into_x1.perform(machine)
+IntoFile(file: `x`, index: Constant(bits: Bits.hex(`00`)), to: Constant(bits: Bits.hex(`00000009`)), fixed: zero_x).perform(machine)
+unless (InFile(file: `x`, index: Constant(bits: Bits.hex(`01`)), unset: zero_x, fixed: zero_x).value(machine) == Bits.hex(`00000005`)) { INFO@mark `G23 x1 does not hold 5` }
+unless (Files.read(machine, `x`, Bits.hex(`01`)) == Bits.hex(`00000005`)) { INFO@mark `G24 a test does not read x1 as 5` }
+unless (InFile(file: `x`, index: Constant(bits: Bits.hex(`00`)), unset: zero_x, fixed: zero_x).value(machine).is_zero) { INFO@mark `G25 x0 keeps what was written to it` }
+unless (InFile(file: `x`, index: Constant(bits: Bits.hex(`02`)), unset: zero_x, fixed: zero_x).value(machine).is_zero) { INFO@mark `G26 an unwritten register is not unset` }

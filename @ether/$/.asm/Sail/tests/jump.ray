@@ -12,7 +12,7 @@ jumping ^keyword := Code(isa: rv, bytes: Bits.hex_bytes(`ef028000 13031000 67800
 hart ^keyword := State(registers: chain None, memory: chain None)
 stopped ^keyword := Run(code: jumping, base: zero_word).run(hart, zero_word, Bits.hex(`00000004`), Bits.hex(`f`))
 unless (stopped == Bits.hex(`00000004`)) { INFO@mark `J2 jalr does not come back to 4` }
-held_x5 ^keyword := hart.get(`x5`)
+held_x5 ^keyword := Files.read(hart, `x`, Bits.hex(`05`))
 unless (held_x5 == Bits.hex(`00000004`)) { INFO@mark `J3 jal does not link 4 into x5` }
-if (exists hart.get(`x6`)) { INFO@mark `J4 the addi jal jumps over was run` }
+if (exists Files.read(hart, `x`, Bits.hex(`06`))) { INFO@mark `J4 the addi jal jumps over was run` }
 unless (hart.get(`inst_start`) == Bits.hex(`00000008`)) { INFO@mark `J5 the last instruction run is not the jalr` }

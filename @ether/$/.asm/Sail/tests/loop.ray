@@ -15,7 +15,7 @@ runner ^keyword := Run(code: summing, base: zero_word)
 stopped ^keyword := runner.run(hart, zero_word, Bits.hex(`00000014`), Bits.hex(`ffffffff`))
 if (exists stopped) { INFO@mark `L2 the run went on past the last instruction` }
 unless (hart.get(`inst_start`) == Bits.hex(`00000010`)) { INFO@mark `L5 the last instruction run is not the bne at 10` }
-held_x1 ^keyword := hart.get(`x1`)
+held_x1 ^keyword := Files.read(hart, `x`, Bits.hex(`01`))
 unless (held_x1 == Bits.hex(`0000000f`)) { INFO@mark `L3 x1 is not 1 + 2 + 3 + 4 + 5` }
-held_x2 ^keyword := hart.get(`x2`)
+held_x2 ^keyword := Files.read(hart, `x`, Bits.hex(`02`))
 unless (held_x2.is_zero) { INFO@mark `L4 x2 is not counted down to zero` }

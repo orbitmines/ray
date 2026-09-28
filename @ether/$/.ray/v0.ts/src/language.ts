@@ -656,7 +656,7 @@ export namespace Ray {
         this.prune(inherited);
         // Frames are fresh per application, so their numbers say nothing about
         // what was defined; the spelling does.
-        const signature = [this.BASE?.key, ...this.definitions].join('\n').replace(/#\d+/g, '#');
+        const signature = [this.BASE?.key, ...[...new Set(this.definitions.map(definition => definition.replace(/#\d+/g, '#')))].sort()].join('\n');
         // A pass is read again so that what was written after it was read can
         // be read once more. Where nothing was left unread, reading it again
         // answers the same, so once is enough. Only a project derived from
@@ -2486,7 +2486,7 @@ export namespace Ray {
       const impl = new Node(this.diagnostics, body ?? lhs);
       impl.body = body; impl.closure = frame; impl.params = params; impl.param_styles = param_styles; impl.modifiers = modifiers; impl.decorators = decorators;
       impl.param_types = param_types.length > 0 ? param_types : undefined;
-      if (!this.probing) { const fresh = this.spelled_before(impl); this.bind(frame, rule, impl); if (fresh) { this.definitions.push(key); this.sites.set(`rule::${key}`, lhs); } }
+      if (!this.probing) { const fresh = this.spelled_before(impl); this.bind(frame, rule, impl); this.definitions.push(key); if (fresh) this.sites.set(`rule::${key}`, lhs); }
       if (this.probing || (this.owns(lhs.source) && !this.in_body(lhs) && this.first_site(lhs))) {
         const scope = this.definition_scope(frame, rule, impl);
         this.paint_definition(pattern, decorators, scope, key, { arrow, params: param_names, types: param_types, styles: param_styles?.flat(), pieces });
@@ -2713,7 +2713,9 @@ export namespace Ray {
         const at = Text.Node.string(text);
         const literal = Object.assign(new Node(this.diagnostics, at), { literal: true });
         const match: Match = { ...this.trivial(resolved, at), args: [at], given: [literal] };
+        const recorded = this.definitions.length;
         const value = this.diagnostics.muted(() => this.safely(() => this.deref(this.apply({ rule: method[0], impl: method[1], match }, this.cursor_of(at), closure, at), false)));
+        this.definitions.length = recorded;
         const answer = value === undefined || value.none || value.unknown ? null : value;
         answers.set(text, answer);
         if (answer === null && place !== undefined && this.passing >= 2) { let kept = this.refusals.get(place); if (kept === undefined) this.refusals.set(place, kept = new Set()); kept.add(text); }

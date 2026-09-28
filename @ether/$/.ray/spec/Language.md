@@ -342,7 +342,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives what it is, where the draft writes it, and what it needs. Items already specified above are not repeated. **Q** marks the ones that need your decision before implementing.
 
 ### 10.1 Syntax and operators
-- `??` null-coalescing: `.ray3/Node.ray:213`. Library.
+- `??` null-coalescing: `.ray3/Node.ray:213`. **Done** (Node's `??`, before its postfix `?`; boolean.ray BN1–3).
 - **Decided:** `?` has three uses:
   - `T?` = `T | None` (postfix on a type, as in v0).
   - `c ? a : b` (the ternary, `.ray3/Node.ray:214`).

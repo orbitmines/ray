@@ -199,6 +199,11 @@ Node := base class {
   )
   // `field?: Type`: absent is None, present is typed.
   // `X?` is `X | None`; a field of such a type is None when absent.
+  ?? ^punctuation (other) => (
+    chosen ^keyword := this
+    unless (exists chosen) { chosen = other }
+    chosen
+  )
   ? ^punctuation => this | None
   ?: ^punctuation (type) => this: (type?)
   // `x ==.instance_of type`, as presence: None is an instance of a type when

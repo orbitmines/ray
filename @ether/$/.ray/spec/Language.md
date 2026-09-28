@@ -259,7 +259,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 > `<&VER..&VER> field`, `%1..5 field`, `field %1..5`; a keybinding to see all versions intermingled; support forward and backward compatibility if desired. Generate under/above a function which versions it applies to; migrations from many versions to a new one.
 
 - **Decided:** the suffix form, `field %1..5`, both on declarations (limits them to those versions) and at uses (selects them).
-- Proposal: a migration is a function `%4 -> %5 (old) => new` declared beside the thing it migrates.
+- **Decided:** a migration is a function `%4 -> %5 (old) => new`, for now declared beside the thing it migrates (declaring it elsewhere may come later). Migrations chain, so %1 reaches %5, and an inverse (§4.5) is the backward migration.
 
 ### 7.3 Errors carry their version — *IDE:432*
 > error[X] where X is the version the error type got introduced, plus a number.
@@ -269,7 +269,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 ### 7.4 Shipping the spec one depends on — *IDE:91*
 > Ship with the implementation of the language spec we depended on; if the interpreter doesn't support that version yet we can still run on older versions (forward compatibility).
 
-- Proposal: a package records `@ray %N` it was written against, and carries that version's `v0/*.ray` when the host interpreter lacks it.
+- **Decided:** a package records the `@ray %N` it was written against, and carries that version's `v0/*.ray` when the host interpreter lacks it.
 
 ### 7.5 The `ether` command — *IDE:99–141*
 > `ether @c++ %` lists versions; `ether @c++ @` lists locations (@clang/@linux/@apt | @clang/@windows); `ether @c++.ray @clang/@windows/@x86-64 %0.16.0`; `ether @c++ @local`; `ether clone|install|use [--global] @c++`; expects an `entrypoint.cli.ray`; `ether @ray […]`, `ray` maps to `ether @ray`. Layout `.ether/external/@/@clang/$/@windows/@x86-64/%/0.16.0`, the top-level `@clang` being the checked-out version, changed versions under `$/@<USER>%branch`. `.ray` reserved for the mapping `@ray/@c++`.
@@ -297,7 +297,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 ### 8.2 Who runs code — *IDE:311–313, 544–548, 623*
 > Different levels of trust: run code as its author (@player set), deny HTTP unless trusted, only certain domains, with/without data. No full write access to the drive, only specific folders; overridable only by changing configuration. "May not send any of this data or its derivatives over the network". Applications run as their creator; "@company wants to execute on your device, originating from @me".
 
-- Proposal:
+- **Decided:**
   - Every run has an `@actor` (who runs it) and an `@origin` (whose code it is).
   - A permission is a `.cfg.ray` rule over `(origin, capability, target)`: `@company may network @https://api.x.com`.
   - Data carries a mark saying its derivatives may not leave (`local`); the engine tracks it through composition, the way `listed_by_separator` is carried.
@@ -308,7 +308,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 - Proposal:
   - Visibility is a field of each item, `@public | @me | @<group>`, default inherited from the parent.
-  - Readable and findable are separate: `findable: @public, readable: @me`.
+  - Visibility is itself a value, so it has a visibility. The visibility's visibility is what makes an item *findable*: A can be `@private` while its visibility is `@public`, so others find that A exists but cannot read it.
 - **Decided:** an item inherits its parent's visibility. At the top it falls back to the default privacy policy, which is private.
 
 ## 9. Data and version control

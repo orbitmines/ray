@@ -100,3 +100,24 @@ unless (pointed.whole == two) { INFO@mark `TY32 a structure's first field is not
 unless (pointed.part == three) { INFO@mark `TY33 a structure's last field is not what it was built with` }
 unless (pointed.summed == five) { INFO@mark `TY34 a structure's body does not read its fields` }
 unless (exists (external alike (Pointed.positions.head.next.value) (`.`))) { INFO@mark `TY35 a structure does not keep what is written between its fields` }
+
+// Text is read by a structure the way it is written: each field by its type,
+// what stands between them as it is written.
+Ranged := class: low: Decimal, `-`, high: Decimal {
+  width => .high - .low
+}
+range_of{ }{written: Ranged} ^keyword => written
+ranged ^keyword := range_of 2-7
+unless (ranged.low == two) { INFO@mark `TY36 a structure read from text does not start at what is written first` }
+unless (ranged.high == seven) { INFO@mark `TY37 a structure read from text does not end at what is written last` }
+unless (ranged.width == five) { INFO@mark `TY38 a structure read from text is not built as one` }
+
+// What is written position by position, in brackets, is the structure a
+// name was declared as.
+positioned: Ranged = (four, `-`, nine)
+unless (positioned.width == five) { INFO@mark `TY39 positions given to a structure are not built as one` }
+misfit: Ranged = (four, `+`, nine)
+unless (exists (external alike (misfit.head.next.value) (`+`))) { INFO@mark `TY40 positions that do not fit a structure are taken as a structure` }
+// And what is written for it as text is read by that structure.
+spanned: Ranged = 3-8
+unless (spanned.width == five) { INFO@mark `TY41 text given to a structure is not read by it` }

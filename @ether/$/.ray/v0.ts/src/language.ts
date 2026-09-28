@@ -1506,10 +1506,28 @@ export namespace Ray {
       return pieces[close]?.kind === 'literal' ? close : k;
     }
     first_word_read(piece: Piece & { kind: 'capture' }, cursor: Text.Node, from: number, frame: Node, closure: Node): boolean {
+      if (this.structured(piece.type!, closure)) return true;
       const word = this.token_end(cursor, from, frame);
       return word > from && this.typed(piece.type!, cursor.span(from, word - 1), closure) !== null;
     }
+    private structures = new WeakMap<Node, { version: number; structured: boolean }>();
+    structured(type: string, closure: Node): boolean {
+      if (this.typings.get(closure)?.get(type) === undefined) this.typed(type, this.blank, closure, { read: false });
+      const resolved = this.typings.get(closure)?.get(type);
+      if (resolved === undefined || resolved === null || resolved === this.NONE) return false;
+      const known = this.structures.get(resolved);
+      if (known !== undefined && known.version === this.version) return known.structured;
+      const structured = this.structure_of(resolved, closure) !== undefined;
+      this.structures.set(resolved, { version: this.version, structured });
+      return structured;
+    }
     typed_end(piece: Piece & { kind: 'capture' }, cursor: Text.Node, from: number, end: number, frame: Node, closure: Node): { end: number; value?: Node } | undefined {
+      if (this.structured(piece.type!, closure)) {
+        const resolved = this.typings.get(closure)!.get(piece.type!)!;
+        const line = Math.max(end, this.line_end(cursor, from, frame));
+        const read = this.read_structured(resolved, cursor.span(from, line - 1), closure);
+        return read === undefined || read === null ? undefined : { end: from + read.end, value: read.value };
+      }
       const word = this.token_end(cursor, from, frame);
       if (word <= from || word > end) return undefined;
       const first = this.typed(piece.type!, cursor.span(from, word - 1), closure);
@@ -2063,6 +2081,74 @@ export namespace Ray {
         }
       }
     }
+    structure_of(type: Node, closure: Node): { pieces: Piece[]; closure: Node } | undefined {
+      const name = this.marked(closure, 'structure'), between = this.marked(closure, 'separator'), annotates = this.marked(closure, 'annotation');
+      if (name === undefined || between === undefined || annotates === undefined) return undefined;
+      const held = this.diagnostics.muted(() => this.safely(() => this.deref(this.get(type, this.literal_of(name, this.blank)), false)));
+      if (held?.body === undefined) return undefined;
+      const written = held.closure ?? closure, pieces: Piece[] = [];
+      for (const part of this.split(held.body, between)) {
+        const spelled = part.string.trim();
+        if (spelled.length === 0) continue;
+        const colon = spelled.indexOf(annotates);
+        if (colon > 0) { pieces.push({ kind: 'capture', name: spelled.slice(0, colon).trim(), raw: false, modifiers: [], styles: [], type: spelled.slice(colon + annotates.length).trim(), group: part }); continue; }
+        const value = this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(part), written), false)));
+        if (!value?.literal) return undefined;
+        pieces.push({ kind: 'literal', text: value.position!.string });
+      }
+      return pieces.some(piece => piece.kind === 'capture') ? { pieces, closure: written } : undefined;
+    }
+    read_structure(type: Node, span: Text.Node, closure: Node): Node | null | undefined {
+      const read = this.read_structured(type, span, closure);
+      if (read === undefined) return undefined;
+      if (read === null) return null;
+      return read.end === span.string.length ? read.value : null;
+    }
+    read_structured(type: Node, span: Text.Node, closure: Node): { end: number; value: Node } | null | undefined {
+      const structure = this.structure_of(type, closure);
+      if (structure === undefined) return undefined;
+      const brackets = this.grouping(closure), between = this.marked(closure, 'separator'), annotates = this.marked(closure, 'annotation');
+      if (brackets === undefined || between === undefined || annotates === undefined) return undefined;
+      const at = Text.Node.string(span.string), cursor = this.cursor_of(at);
+      const match = this.match(structure.pieces, cursor, structure.closure, { leading: false, tight: true, params: 0, closure: structure.closure });
+      if (match === undefined) return null;
+      const fields: [string, Node][] = [];
+      for (const piece of structure.pieces) {
+        if (piece.kind !== 'capture') continue;
+        const captured = match.captures.get(piece.name);
+        const value = match.read?.get(piece.name) ?? (captured === undefined ? undefined : this.typed(piece.type!, captured, structure.closure));
+        if (value === undefined || value === null) return null;
+        fields.push([piece.name, value]);
+      }
+      const value = this.construct(type, fields, closure);
+      return value === undefined ? null : { end: match.end - cursor.cursor, value };
+    }
+    construct(type: Node, fields: [string, Node][], closure: Node): Node | undefined {
+      const brackets = this.grouping(closure), between = this.marked(closure, 'separator'), annotates = this.marked(closure, 'annotation');
+      if (brackets === undefined || between === undefined || annotates === undefined) return undefined;
+      const frame = this.frame(this.GLOBAL, 'structure', this.GLOBAL);
+      const given = fields.map(([name, value], k) => { this.bind(frame, `_${k + 1}`, value); return `${name}${annotates} _${k + 1}`; });
+      this.bind(frame, '_0', type);
+      const built = Text.Node.string(`_0${brackets[0]}${given.join(`${between} `)}${brackets[1]}`);
+      const value = this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(built), frame, true), false)));
+      return value === undefined || value.none ? undefined : value;
+    }
+    built_from(type: Node, list: Node, closure: Node): Node | undefined {
+      const structure = this.structure_of(type, closure);
+      if (structure === undefined) return undefined;
+      const read = (of: Node, key: string) => { const held = of.own(key) ?? of.members?.get(key); return held === undefined ? undefined : this.diagnostics.muted(() => this.safely(() => this.deref(held, false))); };
+      let link = read(list, 'head');
+      const fields: [string, Node][] = [];
+      for (const piece of structure.pieces) {
+        if (link === undefined || link.none) return undefined;
+        const value = read(link, 'value');
+        if (piece.kind === 'capture') { if (value === undefined) return undefined; fields.push([piece.name, value]); }
+        else if (piece.kind === 'literal' && (!value?.literal || value.position!.string !== piece.text)) return undefined;
+        link = read(link, 'next');
+      }
+      if (link !== undefined && !link.none) return undefined;
+      return this.construct(type, fields, closure);
+    }
     trivial(receiver: Node, at: Text.Node): Match {
       return { begin: at.begin, end: at.end + 1, pattern: at.end + 1, spanned: false, literals: [], captures: new Map(), operators: new Map(), args: [], receiver, tight: true };
     }
@@ -2087,7 +2173,21 @@ export namespace Ray {
       }
       const thunk = value?.lazy !== undefined && value.value === undefined && !value.lazy.raw ? value : value !== undefined ? this.unforced(value) : undefined;
       const grouped = thunk?.lazy !== undefined && thunk.value === undefined && this.inner(thunk.lazy.span, thunk.lazy.frame) !== undefined;
-      const result = grouped ? thunk : this.deref(value);
+      let result: Node | undefined;
+      const text = !opts.declare && node.ref && value !== undefined && !grouped ? this.written(value) : undefined;
+      if (text?.lazy !== undefined && text.value === undefined && node.ref) {
+        const held = this.bound(node);
+        const current = held === undefined ? undefined : this.diagnostics.muted(() => this.safely(() => this.deref(held, false)));
+        const read = current === undefined || current.none ? undefined : this.read_structure(current, text.lazy.span, node.ref.scope);
+        if (read !== undefined && read !== null) { result = read; text.lazy.consumed = true; }
+      }
+      if (result === undefined) result = grouped ? thunk : this.deref(value);
+      const listed = !opts.declare && node.ref ? (grouped ? this.diagnostics.muted(() => this.safely(() => this.deref(value, false))) : result) : undefined;
+      if (listed?.listed_by_separator) {
+        const held = this.bound(node);
+        const current = held === undefined ? undefined : this.diagnostics.muted(() => this.safely(() => this.deref(held, false)));
+        if (current !== undefined && !current.none) { const built = this.built_from(current, listed, node.ref!.scope); if (built !== undefined) result = built; }
+      }
       if (node.ref) {
         const bound = this.bound(node);
         if (bound?.style !== undefined) { this.alias(bound.style, result); return result; }
@@ -2751,6 +2851,8 @@ export namespace Ray {
         const refused = place !== undefined ? this.refusals.get(place) : undefined;
         if (refused?.has(text)) { answers.set(text, null); return null; }
         if (opts.read === false) return undefined;
+        const structured = this.read_structure(resolved, span, closure);
+        if (structured !== undefined) { answers.set(text, structured); return structured; }
         const method = this.method_of(resolved, reader, { parameterised: true });
         if (!method) return undefined;
         answers.set(text, null);
@@ -3630,7 +3732,7 @@ export namespace Ray {
       // group is not a statement, and carrying it would make one of it.
       return this.written_as(span.span(made[1].begin, made[made.length - 1].end), program!.closure ?? this.GLOBAL);
     }
-    program_of(node: Node): Node | undefined {
+    written(node: Node): Node | undefined {
       let target: Node | undefined = node;
       for (let depth = 0; target !== undefined && depth < 64; depth++) {
         if (target.ref) { target = this.bound(target); continue; }
@@ -3642,6 +3744,10 @@ export namespace Ray {
         if (next === target) break;
         target = next;
       }
+      return target;
+    }
+    program_of(node: Node): Node | undefined {
+      const target = this.written(node);
       if (!target?.lazy || target.value !== undefined) return this.deref(node);
       target.lazy.consumed = true;
       const inner = this.inner(target.lazy.span, target.lazy.frame) ?? target.lazy.span;

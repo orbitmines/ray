@@ -75,6 +75,7 @@ link (holds, before) => (
 // What this waits on is the constructor running what the parent declared, in
 // the instance, before what the class itself declares.
 unordered class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
+  written_header ^keyword := external ** header
   shape ^keyword := header
   goto structured if (external alike (shape.listing) (global))
   made ^keyword := (class { inline members }): header
@@ -82,6 +83,8 @@ unordered class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
  structured\
   made = class {
     positions := (inline (external ** header))
+    written_structure := written_header
+    structure => .written_structure
     inline members
   }
  shaped\
@@ -273,6 +276,7 @@ Node := base class {
   // the text there, and the pattern holds only where that is not None. A type
   // that says nothing of reading takes the text as it is.
   accepts ^reader (text) => text
+  structure ^structure => None
   // Whether a block, read with this as `this`, holds.
   satisfies (predicate) => (inline predicate)
   // `Type.verify(x)`: what a type asserts of a value typed by it; a narrowing

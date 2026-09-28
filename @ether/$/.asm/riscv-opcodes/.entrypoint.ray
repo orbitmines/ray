@@ -31,8 +31,9 @@ Position := class {
 }
 // Tables, each kept by the text it is looked up with: where each position is
 // in the row (`position_at`), the arguments by name (`ArgumentTable`), the fields laid out
-// so far (`Laid`), the values read so far (`Read`), and where each span being
-// laid begins (`starts`).
+// so far (`Laid`), the values read so far (`Read`), where each span being
+// laid begins (`starts`), and whether a mnemonic is an instruction's
+// (`listing`).
 // spec: two instances of one class answer the same `[key]`, so each table is
 // a class of its own.
 Places := class { }
@@ -42,6 +43,8 @@ Starts := class { }
 starts ^keyword := Starts()
 Laid := class { }
 Read := class { }
+Listing := class { }
+listing ^keyword := Listing()
 positions ^keyword := chain None
 positions &= `0`
 position_at[`0`] = positions.tail.value
@@ -107,6 +110,18 @@ positions &= `30`
 position_at[`30`] = positions.tail.value
 positions &= `31`
 position_at[`31`] = positions.tail.value
+// No span begins anywhere yet. A table asked for a key it was never given
+// looks for a name spelled that way, which costs a tenth of a second and
+// files it as unresolved (ENGINE-ISSUES, "After 5399684"), so every position
+// is given one.
+// And a word of nothing but zeros: what a bit is where no span fixes it.
+nought ^keyword := chain None
+unstarted ^keyword := positions.head
+while (exists unstarted) {
+  starts[unstarted.value] = None
+  nought &= false
+  unstarted = unstarted.next
+}
 
 // Bits from `lo` up to `hi`, and what they are fixed to: `bits`, least
 // significant first, or None where they are a field's.
@@ -123,15 +138,6 @@ Layout := class {
   match: Node
 }
 
-// One thing a line is made of: an argument by its name, or a range fixed to a
-// value written as text.
-Token := class {
-  name: Node
-  hi: Node
-  lo: Node
-  value: Node
-}
-
 // An argument, as `arg_lut.csv` lists it: its name and the bits it takes up.
 Argument := class {
   name: Node
@@ -145,21 +151,28 @@ Name := class {
 }
 
 // One line of an extension: an instruction, or a pseudo-instruction spelling
-// one, and what it is made of.
+// one, and what it is made of: its arguments, in the order they are written,
+// and its ranges, each a `Span` fixed to a value still written as text.
+// What it is made of is read after the mnemonic, a word at a time, each word
+// taken on by one of the rules here.
+// (Taken on here, rather than handed to a method: a method given more than
+// one argument is given them composed with `,`, which costs about as much as
+// what it does with them.)
 Line := class {
   mnemonic: Node
   pseudo: Node
-  tokens: Node
-}
-
-// A line as it is being read: what it is made of is read after the mnemonic,
-// a word at a time, each word taken on by one of these.
-Reading := class {
-  line: Node
-  { }{high: Position}..{low: Position}={literal valued} ^class => opcodes.fixed(this, high, low, valued)
+  arguments: Node
+  ranges: Node
+  { }{high: Position}..{low: Position}={literal valued} ^class => (
+    this.ranges &= Span(lo: low, hi: high, bits: valued)
+    this
+  )
   // spec: one bit fixed (`12=1`, in `rv_c` and others) is not read: the
   // rule would read every `name = value` in the project as one (see below).
-  { }{argument: Name} ^class => opcodes.argued(this, argument)
+  { }{argument: Name} ^class => (
+    this.arguments &= argument
+    this
+  )
 }
 
 // A line begins with its mnemonic, and is known to be one by what follows it:
@@ -167,8 +180,16 @@ Reading := class {
 // fixed (`12=1`), and a rule for it would read any `name = value` written in
 // the project as one: the capture of a position is not asked what it holds
 // when a statement is first read.
-{literal instruction}{ }{argument: Name} ^keyword => opcodes.argued(opcodes.begin(instruction, None), argument)
-{literal instruction}{ }{high: Position}..{low: Position}={literal valued} ^keyword => opcodes.fixed(opcodes.begin(instruction, None), high, low, valued)
+{literal instruction}{ }{argument: Name} ^keyword => (
+  begun := opcodes.begin(instruction)
+  begun.arguments &= argument
+  begun
+)
+{literal instruction}{ }{high: Position}..{low: Position}={literal valued} ^keyword => (
+  begun := opcodes.begin(instruction)
+  begun.ranges &= Span(lo: low, hi: high, bits: valued)
+  begun
+)
 
 // `$pseudo_op rv_i::addi mv rd rs1 31..20=0 …`: `mv` is `addi` with some of
 // its arguments fixed. `$pseudo_op rv64_i::slli slli rd rs1 shamtw …` in
@@ -176,8 +197,16 @@ Reading := class {
 // wherever the one it spells is not.
 // spec: which extension the instruction it spells is in (`rv64_i`) is read
 // and not kept.
-$pseudo_op{ }{literal extension}::{literal original}{ }{literal instruction}{ }{argument: Name} ^keyword => opcodes.argued(opcodes.begin(instruction, original), argument)
-$pseudo_op{ }{literal extension}::{literal original}{ }{literal instruction}{ }{high: Position}..{low: Position}={literal valued} ^keyword => opcodes.fixed(opcodes.begin(instruction, original), high, low, valued)
+$pseudo_op{ }{literal extension}::{literal original}{ }{literal instruction}{ }{argument: Name} ^keyword => (
+  begun := opcodes.spelling(instruction, original)
+  begun.arguments &= argument
+  begun
+)
+$pseudo_op{ }{literal extension}::{literal original}{ }{literal instruction}{ }{high: Position}..{low: Position}={literal valued} ^keyword => (
+  begun := opcodes.spelling(instruction, original)
+  begun.ranges &= Span(lo: low, hi: high, bits: valued)
+  begun
+)
 
 // `arg_lut.csv`: `"rd", 11, 7`.
 "{literal argument}",{ }{high: Position},{ }{low: Position} ^keyword => (
@@ -201,24 +230,23 @@ Opcodes := class {
   fields: Node
   constants: Node
 
-  // A line, begun where its mnemonic is read; `spelling` is the mnemonic of
-  // the instruction a pseudo-instruction spells, or None.
-  begin (text, spelling) => (
-    made := Line(mnemonic: text, pseudo: spelling, tokens: chain None)
+  // A line, begun where its mnemonic is read: an instruction's, or a
+  // pseudo-instruction's with the mnemonic of the instruction it spells.
+  begin (text) => (
+    made := Line(mnemonic: text, pseudo: None, arguments: chain None, ranges: chain None)
     this.lines &= made
-    Reading(line: made)
+    made
   )
-  // What a line is made of, taken on as it is read.
-  fixed (reading, high, low, valued) => (
-    reading.line.tokens &= Token(hi: high, lo: low, value: valued, name: None)
-    reading
-  )
-  argued (reading, argument) => (
-    reading.line.tokens &= Token(name: argument.name, hi: None, lo: None, value: None)
-    reading
+  spelling (text, spelled) => (
+    made := Line(mnemonic: text, pseudo: spelled, arguments: chain None, ranges: chain None)
+    this.lines &= made
+    made
   )
 
-  // Spans laid over a word of as many bits as there are positions.
+  // Spans laid over a word of as many bits as there are positions: walking
+  // the positions, a span covers from where it begins to its highest, and
+  // feeds the bits of the value it is fixed to (zeros where it is a field's,
+  // or outside any span).
   lay (spans) => (
     marking := spans.head
     while (exists marking) {
@@ -228,26 +256,25 @@ Opcodes := class {
     }
     masking := chain None
     matching := chain None
-    current := None
-    feeding := None
+    covering := false
+    feeding := nought.head
+    ending := `-`
     place := positions.head
     while (exists place) {
       here := place.value
       begun := starts[here]
       if (exists begun) {
-        current = begun
-        feeding = begun.bits
+        covering = true
+        ending = begun.hi
+        fixed_to := begun.bits
+        if (exists fixed_to) { feeding = .constant(fixed_to).bits.head } else { feeding = nought.head }
       }
-      if (exists current) {
-        masking &= true
-        if (exists feeding) {
-          matching &= feeding.value
-          feeding = feeding.next
-        } else { matching &= false }
-        if (exists (external alike (here) (current.hi))) { current = None }
-      } else {
-        masking &= false
-        matching &= false
+      masking &= covering
+      matching &= feeding.value
+      feeding = feeding.next
+      if (exists (external alike (here) (ending))) {
+        covering = false
+        feeding = nought.head
       }
       place = place.next
     }
@@ -266,10 +293,17 @@ Opcodes := class {
     unless (exists found) { found = .remembered(given) }
     found
   )
+  // Kept with zeros above it, so that a span wider than what it is fixed to
+  // is fed zeros there.
   remembered (given) => (
     read := Opcodes.number(given)
-    this.constants[given] = read
-    read
+    padded := chain None
+    read_bits := read.bits
+    Bits.joined(padded, read_bits)
+    Bits.joined(padded, nought)
+    kept := Bits(bits: padded)
+    this.constants[given] = kept
+    kept
   )
   number (given) => (
     hexadecimal := false
@@ -299,18 +333,25 @@ Opcodes := class {
   // on after ten times what came before it.
   // spec: eight bits hold every decimal value the extensions are written with
   // (the largest is 52); a wider range would want a wider total.
+  // The first digit is the total so far as it is: ten times nothing is not
+  // worked out.
   decimal (digits) => (
-    total := Bits.hex(`00`)
+    total := None
     walker := digits.head
     while (exists walker) {
       digit := Bits(bits: walker.value).under(Bits.hex(`0`))
-      eight := chain None
-      eight &= false
-      eight &= false
-      eight &= false
-      two := chain None
-      two &= false
-      total = (Bits(bits: Bits.joined(eight, total.bits)) + Bits(bits: Bits.joined(two, total.bits))) + digit
+      if (exists total) {
+        eight := chain None
+        eight &= false
+        eight &= false
+        eight &= false
+        two := chain None
+        two &= false
+        total_bits := total.bits
+        Bits.joined(eight, total_bits)
+        Bits.joined(two, total_bits)
+        total = (Bits(bits: eight) + Bits(bits: two)) + digit
+      } else { total = digit }
       walker = walker.next
     }
     total
@@ -335,21 +376,15 @@ Opcodes := class {
 
   // A line as the encoding it describes.
   encoding (line) => (
-    spans := chain None
     taken := chain None
-    walker := line.tokens.head
+    walker := line.arguments.head
     while (exists walker) {
-      token := walker.value
-      if (exists token.name) {
-        key := token.name
-        taken &= .field(.named[key])
-      } else {
-        value_bits := .constant(token.value).bits.head
-        spans &= Span(lo: token.lo, hi: token.hi, bits: value_bits)
-      }
+      argument_read := walker.value
+      taken &= .field(argument_read)
       walker = walker.next
     }
-    layout := .lay(spans)
+    ranges_read := line.ranges
+    layout := .lay(ranges_read)
     Encoding(mnemonic: line.mnemonic, mask: layout.mask, match: layout.match, fields: taken, semantics: None)
   )
 
@@ -362,16 +397,17 @@ Opcodes := class {
     found := None
     walker := isa.encodings.head
     while ((exists walker).and((exists found).not)) {
-      if (Opcodes.fits(word, walker.value.mask, walker.value.match)) { found = walker.value }
+      trying := walker.value
+      if (Opcodes.fits(word, trying)) { found = trying }
       walker = walker.next
     }
     if (exists found) { Decoded(encoding: found, word: word) } else { None }
   )
-  fits (word, mask, match) => (
+  fits (word, encoded) => (
     fitting := true
     mine := word.bits.head
-    masking := mask.bits.head
-    matching := match.bits.head
+    masking := encoded.mask.bits.head
+    matching := encoded.match.bits.head
     while ((exists mine).and(fitting)) {
       if masking.value {
         if (mine.value.xor(matching.value)) { fitting = false }
@@ -385,29 +421,31 @@ Opcodes := class {
 
   // The instructions read so far, as an instruction set. Pseudo-instructions
   // are other spellings of these, and are not among them — unless what they
-  // spell is not read.
+  // spell is not read. What is listed is kept by mnemonic, every mnemonic a
+  // pseudo-instruction spells written down first.
   isa (called) => (
-    described := chain None
     walker := .lines.head
     while (exists walker) {
       spells := walker.value.pseudo
+      if (exists spells) { listing[spells] = false }
+      walker = walker.next
+    }
+    walker = .lines.head
+    while (exists walker) {
+      unless (exists walker.value.pseudo) { listing[walker.value.mnemonic] = true }
+      walker = walker.next
+    }
+    described := chain None
+    walker = .lines.head
+    while (exists walker) {
+      line_read := walker.value
+      spells := line_read.pseudo
       if (exists spells) {
-        unless (.listed(spells)) { described &= .encoding(walker.value) }
-      } else { described &= .encoding(walker.value) }
+        unless (listing[spells]) { described &= .encoding(line_read) }
+      } else { described &= .encoding(line_read) }
       walker = walker.next
     }
     ISA(name: called, endian: `little`, encodings: described)
-  )
-  listed (mnemonic) => (
-    found := false
-    looking := .lines.head
-    while (exists looking) {
-      unless (exists looking.value.pseudo) {
-        if (exists (external alike (looking.value.mnemonic) (mnemonic))) { found = true }
-      }
-      looking = looking.next
-    }
-    found
   )
 }
 opcodes ^keyword := Opcodes(arguments: chain None, named: ArgumentTable(), lines: chain None, fields: Laid(), constants: Read())

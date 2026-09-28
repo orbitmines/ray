@@ -59,6 +59,54 @@
 Widths := class { }
 widths ^keyword := Widths()
 
+// What the rules below read their captures as: these are here, before the
+// rules that name them, so that the first pass of the project finds them
+// (a name read before it is written has the project read once more).
+
+// The names an argument is written with.
+ArgumentName := class {
+  accepts (text) => argument_names[text]
+}
+ArgumentNames := class { }
+argument_names ^keyword := ArgumentNames()
+argument_names[`imm`] = `imm`
+argument_names[`rs1`] = `rs1`
+argument_names[`rs2`] = `rs2`
+argument_names[`rd`] = `rd`
+argument_names[`shamt`] = `shamt`
+argument_names[`is_unsigned`] = `is_unsigned`
+argument_names[`width`] = `width`
+// A mapping to bits, by its name: how many bits it maps to.
+Mapped := class {
+  accepts (text) => widths[text]
+}
+Hexadecimal := class {
+  accepts (text) => Bits.hex(text)
+}
+// Binary digits, most significant first: the last bit of each byte written.
+Binary := class {
+  accepts (text) => (
+    digits := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= (inline bit)
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        digits &= byte.tail.value
+        byte = chain None
+      }
+      true
+    )
+    external bits text take
+    out := chain None
+    walker := digits.tail
+    while (exists walker) {
+      out &= walker.value
+      walker = walker.previous
+    }
+    Bits(bits: out)
+  )
+}
+
 // `$[split op]`, `$[wavedrom "…"]`: attributes, which say nothing of meaning.
 $[{literal attribute}] ^comment => None
 
@@ -358,6 +406,7 @@ Sail := class {
     walking := positions.head
     while (exists walking) {
       from_here := walking.value
+      into[from_here] = None
       once := single[from_here]
       if (exists once) { into[from_here] = single[once] }
       walking = walking.next
@@ -483,6 +532,13 @@ when{ }{literal condition} ^keyword => None
 
 // The pieces of an encdec clause, one after another.
 // spec: an argument is known by the names the base instructions give it.
+// spec: what a capture reads as (`{name: ArgumentName}`) is asked of the word
+// it begins with, which runs on to the next space or bracket that opens a
+// rule, so it is not asked where a `)` or `]` ends it (`encdec_reg(rs2)`,
+// `imm[11]`): those are taken as written. `imm[9..4]` is also `imm[` a text
+// `]`, and the rule for a range is written after the one for a bit so that
+// it is the one read. The brackets are written `{`[`}` and `{`]`}`: a
+// pattern's `[…]` is an operator it is written with.
 Arrangement := class {
   shape: Node
   first: Node
@@ -491,14 +547,14 @@ Arrangement := class {
 
   { }{name: ArgumentName} ^class => sail.piece(this, `whole`, name, None, None)
   { }@{ }{name: ArgumentName} ^class => sail.piece(this, `whole`, name, None, None)
-  { }encdec_reg({name: ArgumentName}) ^class => sail.piece(this, `slice`, name, `0`, `4`)
-  { }@{ }encdec_reg({name: ArgumentName}) ^class => sail.piece(this, `slice`, name, `0`, `4`)
-  { }@{ }bool_bit({name: ArgumentName}) ^class => sail.piece(this, `slice`, name, `0`, `0`)
-  { }@{ }width_enc({name: ArgumentName}) ^class => sail.piece(this, `slice`, name, `0`, `1`)
-  { }{name: ArgumentName}[{high: Position}..{low: Position}] ^class => sail.piece(this, `slice`, name, low, high)
-  { }@{ }{name: ArgumentName}[{high: Position}..{low: Position}] ^class => sail.piece(this, `slice`, name, low, high)
-  { }{name: ArgumentName}[{only: Position}] ^class => sail.piece(this, `slice`, name, only, only)
-  { }@{ }{name: ArgumentName}[{only: Position}] ^class => sail.piece(this, `slice`, name, only, only)
+  { }encdec_reg({literal name}) ^class => sail.piece(this, `slice`, name, `0`, `4`)
+  { }@{ }encdec_reg({literal name}) ^class => sail.piece(this, `slice`, name, `0`, `4`)
+  { }@{ }bool_bit({literal name}) ^class => sail.piece(this, `slice`, name, `0`, `0`)
+  { }@{ }width_enc({literal name}) ^class => sail.piece(this, `slice`, name, `0`, `1`)
+  { }{name: ArgumentName}{`[`}{literal only}{`]`} ^class => sail.piece(this, `slice`, name, only, only)
+  { }@{ }{name: ArgumentName}{`[`}{literal only}{`]`} ^class => sail.piece(this, `slice`, name, only, only)
+  { }{name: ArgumentName}{`[`}{high: Position}..{literal low}{`]`} ^class => sail.piece(this, `slice`, name, low, high)
+  { }@{ }{name: ArgumentName}{`[`}{high: Position}..{literal low}{`]`} ^class => sail.piece(this, `slice`, name, low, high)
   { }0b{fixed: Binary} ^class => sail.piece(this, `bits`, None, fixed, None)
   { }@{ }0b{fixed: Binary} ^class => sail.piece(this, `bits`, None, fixed, None)
   { }@{ }{called: Mapped}(op) ^class => sail.piece(this, `skip`, None, called, None)
@@ -513,23 +569,6 @@ Piece := class {
   name: Node
   lo: Node
   hi: Node
-}
-// The names an argument is written with.
-ArgumentName := class {
-  accepts (text) => argument_names[text]
-}
-ArgumentNames := class { }
-argument_names ^keyword := ArgumentNames()
-argument_names[`imm`] = `imm`
-argument_names[`rs1`] = `rs1`
-argument_names[`rs2`] = `rs2`
-argument_names[`rd`] = `rd`
-argument_names[`shamt`] = `shamt`
-argument_names[`is_unsigned`] = `is_unsigned`
-argument_names[`width`] = `width`
-// A mapping to bits, by its name: how many bits it maps to.
-Mapped := class {
-  accepts (text) => widths[text]
 }
 
 // `function clause execute ITYPE(imm, rs1, rd, op) = { … }`: kept unread
@@ -566,12 +605,14 @@ match{ }op{ }{`{`}{arms}{`}`} ^keyword => (
 )
 // `match jump_to(target) { Retire_Success() => { … }, failure => failure }`:
 // the next address is set first, then what the arm for success does, and
-// then the program leaves.
+// then the program leaves. The arm answers the block it is written as, which
+// is only written until it is run here.
 match{ }jump_to({destination}){ }{`{`}{arms}{`}`} ^keyword => (
   sail.emit(Set(place: `inst_next`, to: destination.goto))
   here ^keyword := external .
   inline arms
-  here.Retire_Success()
+  succeeded := here.Retire_Success()
+  inline succeeded
   sail.emit(Jump(when: None, target: None, to: Named(name: `inst_next`)))
   retired
 )
@@ -581,7 +622,8 @@ match{ }jump_to([{destination}{ }with{ }0{ }={ }0b0]){ }{`{`}{arms}{`}`} ^keywor
   sail.emit(Set(place: `inst_next`, to: Both(left: destination.goto, right: Constant(bits: Bits.hex(`fffffffe`)))))
   here ^keyword := external .
   inline arms
-  here.Retire_Success()
+  succeeded := here.Retire_Success()
+  inline succeeded
   sail.emit(Jump(when: None, target: None, to: Named(name: `inst_next`)))
   retired
 )
@@ -645,32 +687,6 @@ RETIRE_SUCCESS ^keyword => retired
 0b{digits: Binary} ^keyword => Sail.constant(digits)
 {upper} @ {lower} ^keyword => Sail.valued(Joined(high: upper.goto, low: lower.goto))
 
-Hexadecimal := class {
-  accepts (text) => Bits.hex(text)
-}
-// Binary digits, most significant first: the last bit of each byte written.
-Binary := class {
-  accepts (text) => (
-    digits := chain None
-    byte := chain None
-    take (bit) => (
-      byte &= (inline bit)
-      if (exists byte.head.next.next.next.next.next.next.next) {
-        digits &= byte.tail.value
-        byte = chain None
-      }
-      true
-    )
-    external bits text take
-    out := chain None
-    walker := digits.tail
-    while (exists walker) {
-      out &= walker.value
-      walker = walker.previous
-    }
-    Bits(bits: out)
-  )
-}
 
 // The position after each position, and each bit of a word, by the position
 // it is at.
@@ -678,7 +694,15 @@ After := class { }
 position_after ^keyword := After()
 WordBits := class { }
 word_bits ^keyword := WordBits()
+// Every table asked by position has every position, None where it holds
+// nothing: a table asked for a key it was never given files that key as an
+// unresolved name.
 stepping ^keyword := positions.head
+while (exists stepping) {
+  position_after[stepping.value] = None
+  stepping = stepping.next
+}
+stepping = positions.head
 while (exists stepping.next) {
   step_from := stepping.value
   position_after[step_from] = stepping.next.value

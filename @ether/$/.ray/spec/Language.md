@@ -14,12 +14,15 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 - v0: text literals are backticks `` `…` `` only; `String.of(`…`)` builds a String of Characters. There is no `"…"` literal.
 - **Decided:** `"A"` (one character between double quotes) is a `Character`; `"AB"` is a `String`, because a String is an array of characters. `` `…` `` stays the raw written literal (what externals and patterns take).
+- **Done:** String.ray's `"{literal text}"` rule (string.ray DQ1–4). Interpolation (10.1) is not in it yet.
 
 ### 1.2 `[]` and `()` for arrays — *IDE:287*
 > [] and () are interchangeable for array creation?
 
 - v0: `(a, b)` and `[a, b]` both evaluate their inside; `,` composes one `Listed` value (a chain). So `(1, 2)` and `[1, 2]` already give the same list.
 - **Decided:** equal for lists. For a single element, `y := [x]` is a list holding `x`, and `y := (x)` is `x` (grouping only).
+- **Done:** `[x]` holds `x` unless `x` is already a list (ray.ray BR1–4).
+- **Decided:** `[x]` groups the way `(x)` does, except that it forces a list. So `[l]` for a list `l` is `l`. Unlike `( )`, brackets written inside brackets nest: `[[one, two]]` is a list holding the pair, while `((one, two))` is the pair. **Done** (`[[{inner}]]`, the longer rule).
 
 ### 1.3 `++` — *IDE:291*
 - Dropped (no longer applies).
@@ -345,10 +348,10 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - `??` null-coalescing: `.ray3/Node.ray:213`. **Done** (Node's `??`, before its postfix `?`; boolean.ray BN1–3).
 - **Decided:** `?` has three uses:
   - `T?` = `T | None` (postfix on a type, as in v0).
-  - `c ? a : b` (the ternary, `.ray3/Node.ray:214`).
+  - `c ? a : b` (the ternary, `.ray3/Node.ray:214`). **Done** (boolean.ray BT3–5). It needed the engine to stop counting the space written inside a literal (` ? `) as spanned, so the longer rule wins over Node's postfix `?`.
   - A bare `?` value is *unknown*, superposed by default (`.ray2/Node.ray:211`); also the "sorry" of proofs.
 - Postfix guards `x if cond`, `x unless cond`: `.ray3/Node.ray:129`. Needs `&caller` (10.3).
-- Compound assignment from any operator, `{op}=` (`+=`, `|=`), and `&=>` / `|=>` (superposing definitions): `.ray3/Node.ray:177–182`. Library.
+- Compound assignment from any operator, `{op}=` (`+=`, `|=`): **Done** as `{a} [x: compounds]{`=`} {b}` (number.ray N133–135). `compounds` refuses an operator whose `op=` is already a method of its own (`==`, `:=`, `!=`, `<=`, `>=`, `&=`); without that filter the rule read `a == b` as `a = (a = b)`. `&=>` / `|=>` (superposing definitions): `.ray3/Node.ray:177–182`. Library.
 - Edge-labelled composition `,<edge>`: `.ray3/Node.ray:91`, `.ray2/Character.ray:19`. Engine (the `,` list would carry edge data).
 - `.( expr )`, applying in context (`var.(condition ? == : <=)`): `.ray3/Node.ray:236`. Library.
 - A variable as an operator, `x {op} y` / `⸨op⸩`: `.ray2/Grammar.ray:418–458`. Syntax.
@@ -371,6 +374,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - Counted types `1 Object`, `a | an T`; array/repetition types `T[]`, `T+`, `T^n`, `Binary₈[]₄`: `.ray3/Node.ray:76–79, 179, 224`. Library.
 - `Option<T>`; None as false/0 (`as boolean`): `.ray3/Node.ray:239–246`. Library.
 - `Optional<T>`, `Required<T>`, `Query<T>`, and generic parameters on methods (`map <T>{…}`): `.ray2/_todo/ray.ray.txt/ray.ray:126`, `.ray2/Ray.ray:148`. Engine.
+- UUID is a structure (five `Hexadecimal.Digits` groups joined by `-`), so `x: UUID = 6ba7b810-9dad-11d1-80b4-00c04fd430c8` reads it (uuid.ray UU24–26). **Open:** hexadecimal letters written back out by `as_string` don't compare equal to the literal (a pre-existing bug; the tests only round-trip digits).
 - Structural `instance_of` / `isomorphic`: `.ray2/Node.ray:159–180`. Library.
 - `equivalent` / `equivalence (from) -> (to)`, derived isomorphisms: `.ray3/Node.ray:228`, `.ray2/Feature/Transaction.ray:11`. Engine; connects to §3.5.
 - `delegate in Number => object`: `.ray2/Node.ray:218`. Library.

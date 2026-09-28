@@ -464,6 +464,13 @@ String := class: Array {
   )
 }
 
+"{literal text ^string}" ^string.punctuation => (
+  written := String.of(text)
+  quoted ^keyword := written
+  unless (exists written.characters.head.next) { quoted = written.first }
+  quoted
+)
+
 // `Base.String => this as String`: a number spelled in a base, and a string
 // read back as the number its digits spell there. spec: a bare `spelled` would
 // shadow a field of that name on anything built on a number (UUID's digits).

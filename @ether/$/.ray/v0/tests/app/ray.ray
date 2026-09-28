@@ -188,3 +188,19 @@ unless (walked == three) { INFO@mark `RR80 walking three things does not reach t
 
 // A chain points one way, and goes both ways along itself.
 if (threes.unidirectional) { INFO@mark `RR81 a chain points only one way` }
+
+bracketed_one := [one]
+unless (bracketed_one.count == one) { INFO@mark `BR1 a bracketed one does not hold one element` }
+unless (bracketed_one.head.value == one) { INFO@mark `BR2 a bracketed one does not hold it` }
+bracketed_pair := [one, two]
+unless (bracketed_pair.count == two) { INFO@mark `BR3 a bracketed pair does not hold two` }
+grouped_one := (one)
+unless (grouped_one == one) { INFO@mark `BR4 a grouped one is not one` }
+bracketed_twice := [[one, two]]
+unless (bracketed_twice.count == one) { INFO@mark `BR5 a bracketed pair in brackets does not nest` }
+unless (bracketed_twice.head.value.count == two) { INFO@mark `BR6 the nested pair does not hold two` }
+bracketed_ones := [[one], [two]]
+unless (bracketed_ones.count == two) { INFO@mark `BR7 two bracketed ones in brackets are not two` }
+handed_pair := (one, two)
+unless ([handed_pair].count == two) { INFO@mark `BR8 a list handed to brackets is not itself` }
+unless (((one, two)).count == two) { INFO@mark `BR9 a grouped pair in parentheses nests` }

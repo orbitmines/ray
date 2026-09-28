@@ -18,7 +18,23 @@ None      ^keyword := external none
 
 {`{`}{expr ^block}{`}`} ^punctuation => external ** expr
 ({expr}) ^punctuation => expr
-[{expr}] ^punctuation => expr
+[{expr}] ^punctuation => (
+  listed ^keyword := expr
+  unless (exists (external alike (expr.listing) (global))) {
+    listed = chain None
+    listed.listing = global
+    external extend listed Listed
+    listed &= expr
+  }
+  listed
+)
+[[{inner}]] ^punctuation => (
+  nested ^keyword := chain None
+  nested.listing = global
+  external extend nested Listed
+  nested &= [inner]
+  nested
+)
 
 goto{ }{literal target ^label} ^class => external goto target global
 goto{ }{literal target ^label}{ }if{ }{condition} ^class => external goto target condition
@@ -534,6 +550,12 @@ while := class {
 
 do ^keyword := while
 
+{condition} ? {yes} : {no} => (
+  chosen ^keyword := no
+  if condition { chosen = yes }
+  chosen
+)
+
 // `dynamically x`: read now (spec: re-read when what it depends on changes).
 dynamically ^keyword (x) => (inline x)
 // `assert condition`: reported when it does not hold.
@@ -816,6 +838,21 @@ chainable ^keyword := class {
 // means.
 // Chainable: a < b < c  =>  a < b & b < c
 {a} [x: chainable] {b} [y: chainable] {c} => (a [x] b) & (b [y] c)
+
+compounds ^keyword := class {
+  accepts (written) => (
+    held ^keyword := written
+    if (exists (external alike (written) (`=`))) { held = None }
+    if (exists (external alike (written) (`:`))) { held = None }
+    if (exists (external alike (written) (`!`))) { held = None }
+    if (exists (external alike (written) (`<`))) { held = None }
+    if (exists (external alike (written) (`>`))) { held = None }
+    if (exists (external alike (written) (`&`))) { held = None }
+
+    held
+  )
+}
+{a} [x: compounds]{`=`} {b} => a = (a [x] b)
 
 // From the Node, Program and Grammar drafts, not yet reached here (spec):
 // .ray2/Node.ray:

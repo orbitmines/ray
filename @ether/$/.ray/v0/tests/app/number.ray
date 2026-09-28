@@ -195,3 +195,11 @@ unless (one_and_a_half == 1.5) { INFO@mark `N129 1.5 is not 1.5` }
 if (one_and_a_half == 1.50) { INFO@mark `N130 1.5 is written as 1.50` }
 unless ((one_and_a_half * four) == 6.0) { INFO@mark `N131 1.5 times four is not 6.0` }
 unless ((2.5 / two) == 1.2) { INFO@mark `N132 2.5 halved is not 1.2 to one place` }
+
+compounded := one
+compounded += two
+unless (compounded == three) { INFO@mark `N133 += does not add` }
+compounded -= one
+unless (compounded == two) { INFO@mark `N134 -= does not subtract` }
+compounded *= three
+unless (compounded == (three + three)) { INFO@mark `N135 *= does not multiply` }

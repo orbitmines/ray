@@ -244,3 +244,10 @@ unless (Character.nibble(one, zero).count == five) { INFO@mark `S157 a nibble wi
 
 // Text read where a text is asked for.
 unless (String.accepts(`ab`) == String.of(`ab`)) { INFO@mark `S158 written text is not read as a string` }
+
+quoted_pair := "AB"
+unless (quoted_pair == String.of(`AB`)) { INFO@mark `DQ1 "AB" is not the string AB` }
+quoted_one := "A"
+unless (quoted_one == String.of(`A`).first) { INFO@mark `DQ2 "A" is not the character A` }
+if (exists quoted_one.characters) { INFO@mark `DQ3 "A" is a string` }
+unless ("hello world".count == (ten + one)) { INFO@mark `DQ4 "hello world" does not hold eleven characters` }

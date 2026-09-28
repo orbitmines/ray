@@ -1561,7 +1561,8 @@ export namespace Ray {
         // What stands between two operands is written with a space on each side
         // of it, and those spaces are not kept as pieces, so stepping over one
         // is not stepping over anything the pattern left out.
-        if (from > i && !gave && piece.kind !== 'space' && piece.kind !== 'operator' && pieces[p - 1]?.kind !== 'space' && pieces[p - 1]?.kind !== 'operator') spanned = true;
+        const before = pieces[p - 1];
+        if (from > i && !gave && piece.kind !== 'space' && piece.kind !== 'operator' && before?.kind !== 'space' && before?.kind !== 'operator' && !(before?.kind === 'literal' && /\s$/.test(before.text))) spanned = true;
         switch (piece.kind) {
           case 'literal': {
             const word = /[\p{L}\p{N}_]/u;

@@ -80,3 +80,8 @@ unless (None ?? true) { INFO@mark `BN1 ?? does not fall back on nothing` }
 if (false ?? true) { INFO@mark `BN2 ?? replaces a value that is there` }
 maybe: boolean? = None
 unless (maybe ?? true) { INFO@mark `BN3 ?? does not fall back on an optional left empty` }
+
+unless (true ? true : false) { INFO@mark `BT3 c ? a : b does not take a when c holds` }
+if (false ? true : false) { INFO@mark `BT4 c ? a : b takes a when c does not hold` }
+held := false
+unless (held ? false : true) { INFO@mark `BT5 c ? a : b does not take b for a named c` }

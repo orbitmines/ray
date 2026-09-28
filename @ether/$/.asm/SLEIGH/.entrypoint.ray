@@ -53,6 +53,7 @@ Sleigh := class {
         out &= byte
         byte = chain None
       }
+      true
     )
     external bits written take
     out
@@ -223,20 +224,52 @@ Sleigh := class {
   )
 
   // Two patterns that hold at once: every pair of their alternatives that
-  // does not fix one bit two ways, as one alternative.
+  // does not fix one bit two ways, as one alternative. The second is read
+  // where the last token of the first begins: `a; b & c` is `a; (b & c)`.
   both (lefts, rights) => (
     out := chain None
     left := lefts.head
     while (exists left) {
-      right := rights.head
+      both_first := left.value
+      both_offset := both_first.start
+      moved_rights := rights
+      if (exists both_offset) { moved_rights = Sleigh.all_shifted(rights, both_offset) }
+      right := moved_rights.head
       while (exists right) {
-        joined := Sleigh.joined(left.value, right.value)
+        joined := Sleigh.joined(both_first, right.value)
         if (exists joined) { out &= joined }
         right = right.next
       }
       left = left.next
     }
     out
+  )
+  // Alternatives moved up past some bits, as many as `offset` is wide.
+  all_shifted (ways, offset) => (
+    shifted_ways := chain None
+    shifting_way := ways.head
+    while (exists shifting_way) {
+      shifted_ways &= Sleigh.shifted(shifting_way.value, offset)
+      shifting_way = shifting_way.next
+    }
+    shifted_ways
+  )
+  shifted (way, offset) => (
+    shifted_fields := Sleigh.moved_up(way.fields, offset)
+    shifted_start := offset
+    if (exists way.start) { shifted_start = offset.under(way.start) }
+    Alternative(mask: offset.under(way.mask), match: offset.under(way.match), fields: shifted_fields, parts: way.parts, start: shifted_start)
+  )
+  // Fields moved up past some bits.
+  moved_up (fields_before, offset) => (
+    moved_fields := chain None
+    shifting := fields_before.head
+    while (exists shifting) {
+      shifting_field := shifting.value
+      moved_fields &= Field(name: shifting_field.name, mask: offset.under(shifting_field.mask))
+      shifting = shifting.next
+    }
+    moved_fields
   )
   // One alternative that is both, or None where they fix a bit two ways. The
   // four words are walked together once; what one of them does not reach is
@@ -271,7 +304,7 @@ Sleigh := class {
       match &= left_bit.or(right_bit)
     }
     if clash { None } else {
-      Alternative(mask: Bits(bits: mask), match: Bits(bits: match), fields: Sleigh.appended(one.fields, other.fields), parts: Sleigh.appended(one.parts, other.parts))
+      Alternative(mask: Bits(bits: mask), match: Bits(bits: match), fields: Sleigh.appended(one.fields, other.fields), parts: Sleigh.appended(one.parts, other.parts), start: other.start)
     }
   )
   // Either of two patterns: the alternatives of both.
@@ -287,13 +320,10 @@ Sleigh := class {
         first := left.value
         second := right.value
         below := Sleigh.cleared(first.mask)
-        moved := chain None
-        walker := second.fields.head
-        while (exists walker) {
-          moved &= Field(name: walker.value.name, mask: below.under(walker.value.mask))
-          walker = walker.next
-        }
-        out &= Alternative(mask: first.mask.under(second.mask), match: first.match.under(second.match), fields: Sleigh.appended(first.fields, moved), parts: Sleigh.appended(first.parts, second.parts))
+        moved := Sleigh.moved_up(second.fields, below)
+        then_start := below
+        if (exists second.start) { then_start = below.under(second.start) }
+        out &= Alternative(mask: first.mask.under(second.mask), match: first.match.under(second.match), fields: Sleigh.appended(first.fields, moved), parts: Sleigh.appended(first.parts, second.parts), start: then_start)
         right = right.next
       }
       left = left.next
@@ -320,10 +350,11 @@ Sleigh := class {
   // value of that program, as wide as p-code sizes it.
   //
   // What a varnode is as a term: a number is a constant, and fits whatever
-  // it meets; anything else is asked.
+  // it meets; anything else is asked. `0` and `1` are names of the booleans
+  // (Bits.ray), so written alone they are read as those.
   term (given) => (
     out := chain None
-    if (exists given.bits) { out &= Term(of: Constant(bits: given), like: given, extended: false, loose: true) } else { out &= given.term }
+    if (exists (external alike (given) (false))) { out &= Term(of: Constant(bits: zero_bits), like: zero_bits, extended: false, loose: true) } elsif (exists (external alike (given) (true))) { out &= Term(of: Constant(bits: one_bits), like: one_bits, extended: false, loose: true) } elsif (exists given.bits) { out &= Term(of: Constant(bits: given), like: given, extended: false, loose: true) } else { out &= given.term }
     out.head.value
   )
   // As many bits as some bytes written in decimal.
@@ -475,7 +506,9 @@ Sleigh := class {
   )
   // The characters of a name a rule begins with: `bits` reads the text of
   // what it is given, and a capture a rule begins with is given as the word
-  // it is bound to, unless it is read as a value first.
+  // it is bound to, unless it is read as a value first. Not `(written)`: an
+  // argument in brackets is read as a value, to see whether it is a list,
+  // and the name a local is about to be declared by is not one yet.
   leading_characters (written) => (
     out := chain None
     byte := chain None
@@ -485,8 +518,9 @@ Sleigh := class {
         out &= byte
         byte = chain None
       }
+      true
     )
-    external bits (written) take
+    external bits written take
     out
   )
   same_text (one, other) => (
@@ -739,8 +773,36 @@ Sleigh := class {
     size_count := Sleigh.counted(bit_count)
     Range(of: place, low: low_count, size: size_count)
   )
+  // An alternative with the field it read last fixed to a value.
+  with_fixed (way, value) => (
+    fixed_field := way.fields.tail.value
+    fixed_mask := fixed_field.mask
+    fixed_given := Sleigh.widened(value, fixed_mask)
+    fixed_cleared := Sleigh.cleared(fixed_mask)
+    fixed_match := fixed_cleared.deposit(fixed_mask, fixed_given)
+    kept_fields := chain None
+    kept_walker := way.fields.head
+    while (exists kept_walker.next) {
+      kept_fields &= kept_walker.value
+      kept_walker = kept_walker.next
+    }
+    fixed_start := way.start
+    kept_mask := way.mask
+    kept_match := way.match
+    kept_parts := way.parts
+    kept_way := Alternative(mask: kept_mask, match: kept_match, fields: kept_fields, parts: kept_parts, start: fixed_start)
+    constraint := Alternative(mask: fixed_mask, match: fixed_match, fields: chain None, parts: chain None, start: fixed_start)
+    Sleigh.joined(kept_way, constraint)
+  )
   // A table, as it is first written.
   table (named) => Table(name: named, exports: chain None, constructors: chain None)
+  // The table a name holds already, or a new one: what is declared under it
+  // is read later, so it must not read the name itself.
+  table_kept (kept_table, spelled_table) => (
+    chosen_table := None
+    if (exists kept_table) { chosen_table = kept_table } else { chosen_table = Sleigh.table(spelled_table) }
+    chosen_table
+  )
   // An instruction set of constructors read.
   isa (constructors) => ISA(name: None, endian: sleigh.endian, encodings: Sleigh.encodings_of(constructors))
 }
@@ -751,13 +813,17 @@ one_bits ^keyword := Sleigh.numeral(`1`)
 two_bits ^keyword := Sleigh.numeral(`2`)
 
 // One way a pattern is spelled: which bits are fixed (`mask`) and to what
-// (`match`), the operands read out of the rest (`fields`), and the
-// constructors it was made of (`parts`).
+// (`match`), the operands read out of the rest (`fields`), the
+// constructors it was made of (`parts`), and where its last token begins
+// (`start`).
 Alternative := class {
   mask: Node
   match: Node
   fields: Node
   parts: Node
+  // Where the last token it reads begins: no bits, as many as the tokens
+  // before it; None at the first.
+  start: Node
 }
 
 // A pattern: the ways it can be spelled. `&` is both at once, `|` either,
@@ -766,10 +832,65 @@ Alternative := class {
 Pattern := class {
   held: Node
   alternatives => .held
-  ; (other) => Pattern(held: Sleigh.then(.alternatives, other.alternatives))
-  | (other) => Pattern(held: Sleigh.either(.alternatives, other.alternatives))
-  & (other) => Pattern(held: Sleigh.both(.alternatives, other.alternatives))
+  // The three are read one operand at a time, left to right; `&` reads its
+  // right side where the last token of its left side begins, so that
+  // `a; b & c` is `a; (b & c)`. A `;` is written against the operand before
+  // it, which would read it as its own: `a & b; c` is read whole.
+  ; (other) => .followed_by(other)
+  { }|{ }{other} ^punctuation => .either_with(other)
+  { }&{ }{other} ^punctuation => .both_with(other)
+  { }|{ }{other};{ }{rest} ^punctuation => (
+    either_first := .either_with(other)
+    either_first.followed_by(rest)
+  )
+  { }&{ }{other};{ }{rest} ^punctuation => (
+    both_first := .both_with(other)
+    both_first.followed_by(rest)
+  )
+  followed_by (other) => (
+    followed_ways := .alternatives
+    following_ways := other.alternatives
+    sequence_ways := Sleigh.then(followed_ways, following_ways)
+    Pattern(held: sequence_ways)
+  )
+  either_with (other) => (
+    either_ways := .alternatives
+    or_ways := other.alternatives
+    choice_ways := Sleigh.either(either_ways, or_ways)
+    Pattern(held: choice_ways)
+  )
+  both_with (other) => (
+    both_ways := .alternatives
+    and_ways := other.alternatives
+    joint_ways := Sleigh.both(both_ways, and_ways)
+    Pattern(held: joint_ways)
+  )
   ... ^punctuation => this
+  // `field=value` fixes the field read last. An operand is read up to the
+  // first operator the language knew before this one, `=` among them, so in
+  // `a; b=1` the `;` takes `b`, and `=1` then fixes it where it was moved.
+  ={literal written} ^punctuation => .fixed_to(written)
+  fixed_to (written) => (
+    fixed_ways := chain None
+    ways_before := .alternatives
+    last_read := ways_before.tail.value.fields.tail
+    fixing_value := Sleigh.numeral(written)
+    way_walker := ways_before.head
+    while (exists way_walker) {
+      fixing_way := way_walker.value
+      fixing_read := fixing_way.fields.tail
+      fixes := false
+      if ((exists fixing_read).and(exists last_read)) {
+        fixes = exists (external alike (fixing_read.value.name) (last_read.value.name))
+      }
+      if fixes {
+        fixed_way := Sleigh.with_fixed(fixing_way, fixing_value)
+        fixed_ways &= fixed_way
+      } else { fixed_ways &= fixing_way }
+      way_walker = way_walker.next
+    }
+    Pattern(held: fixed_ways)
+  )
   // `pattern [ name = value; ]`: what is set while the pattern is read, kept
   // with it to be run when the constructor is. The name stands for what was
   // set last, wherever the constructor's p-code uses it.
@@ -778,7 +899,8 @@ Pattern := class {
     holder ^keyword := external .
     act => (inline given)
     global[named] = Setting(place: named, likes: chain None)
-    Acting(held: .alternatives, action: holder, named: named)
+    acting_ways := .alternatives
+    Acting(held: acting_ways, action: holder, named: named)
   )
   setting => None
 
@@ -808,7 +930,9 @@ Pattern := class {
 }
 // `&` binds tighter than `|`, and `|` than `;`, so `bbb=5 & X; imm8` is
 // `(bbb=5 & X); imm8`. Two operators of a pattern are grouped here by what
-// they are; without it the second groups first.
+// they are. A typed capture is not asked on the first reading, so these are
+// read only when a description is read again; `Pattern` reads the same
+// grouping on the first. (Without them, reading a description costs more.)
 // spec: this is the language's own precedence (String.ray ranks operators by
 // where their class declares them) written out for three operators, since
 // that one needs Number.ray, and it reads three operands at a time: a run of
@@ -932,6 +1056,8 @@ SleighRegister := class: Pattern {
   // A rule of a class is asked of every receiver it could apply to, not only
   // of registers: one written `{ }={ }1;` took `bbb=1;` in a pattern for an
   // assignment. So the digits are read here, from the text.
+  // `0` and `1` are names of the booleans (Bits.ray): written alone, they are
+  // read as those, and their text is not theirs.
   // spec: a number is read only where it is the whole value. Nor is
   // `N = ccr[7,1];`, some bits of a local, read yet: a rule for it runs its
   // capture back over the statements before it, to the first `=`, and a
@@ -948,7 +1074,7 @@ SleighRegister := class: Pattern {
       true
     )
     external bits given take
-    if (Sleigh.is_decimal(glyphs.head.value)) { .assigned(Sleigh.glyph_number(glyphs)) } else { .assigned(given) }
+    if (exists (external alike (given) (false))) { .assigned(zero_bits) } elsif (exists (external alike (given) (true))) { .assigned(one_bits) } elsif (Sleigh.is_decimal(glyphs.head.value)) { .assigned(Sleigh.glyph_number(glyphs)) } else { .assigned(given) }
   )
   // `SP=SP-2;`, written without spaces. `={given};` would take a pattern's
   // `op=0x8` and the p-code after it for an assignment.
@@ -960,7 +1086,8 @@ SleighRegister := class: Pattern {
 
   alternatives => (
     out := chain None
-    out &= Alternative(mask: Bits(bits: chain None), match: Bits(bits: chain None), fields: chain None, parts: chain None)
+    no_bits := Bits(bits: chain None)
+    out &= Alternative(mask: no_bits, match: no_bits, fields: chain None, parts: chain None, start: None)
     out
   )
 }
@@ -1016,18 +1143,22 @@ TokenField := class: Pattern {
   alternatives => (
     out := chain None
     reading := chain None
-    reading &= Field(name: .name, mask: .mask)
-    nothing := Sleigh.cleared(.mask)
-    out &= Alternative(mask: nothing, match: nothing, fields: reading, parts: chain None)
+    reading_name := .name
+    reading_mask := .mask
+    reading &= Field(name: reading_name, mask: reading_mask)
+    nothing := Sleigh.cleared(reading_mask)
+    out &= Alternative(mask: nothing, match: nothing, fields: reading, parts: chain None, start: None)
     out
   )
-  ={literal written} ^punctuation => (
+  // `field=value` written on the field itself.
+  fixed_to (written) => (
     fixing := .mask
     given := Sleigh.widened(Sleigh.numeral(written), fixing)
     out := chain None
-    out &= Alternative(mask: fixing, match: Sleigh.cleared(fixing).deposit(fixing, given), fields: chain None, parts: chain None)
+    out &= Alternative(mask: fixing, match: Sleigh.cleared(fixing).deposit(fixing, given), fields: chain None, parts: chain None, start: None)
     Pattern(held: out)
   )
+
   // `field!=value`: every other value the field can hold, one alternative
   // each.
   !={literal written} ^punctuation => (
@@ -1038,9 +1169,13 @@ TokenField := class: Pattern {
     one := Sleigh.fitted(Bits.hex(`1`), width)
     candidate := width
     going := true
+    unwanted_fitted := Sleigh.fitted(unwanted, width)
+    fixing_cleared := Sleigh.cleared(fixing)
     while going {
-      unless (candidate.xor(Sleigh.fitted(unwanted, width)).is_zero) {
-        out &= Alternative(mask: fixing, match: Sleigh.cleared(fixing).deposit(fixing, Sleigh.widened(candidate, fixing)), fields: chain None, parts: chain None)
+      unless (candidate.xor(unwanted_fitted).is_zero) {
+        candidate_wide := Sleigh.widened(candidate, fixing)
+        candidate_match := fixing_cleared.deposit(fixing, candidate_wide)
+        out &= Alternative(mask: fixing, match: candidate_match, fields: chain None, parts: chain None, start: None)
       }
       candidate = candidate + one
       if candidate.is_zero { going = false }
@@ -1197,7 +1332,7 @@ Constructor := class {
     while (exists walker) {
       parts := chain None
       parts &= this
-      out &= Alternative(mask: walker.value.mask, match: walker.value.match, fields: walker.value.fields, parts: Sleigh.appended(parts, walker.value.parts))
+      out &= Alternative(mask: walker.value.mask, match: walker.value.match, fields: walker.value.fields, parts: Sleigh.appended(parts, walker.value.parts), start: walker.value.start)
       walker = walker.next
     }
     out
@@ -1242,7 +1377,9 @@ instruction ^keyword := Table(name: `instruction`, exports: chain None, construc
 // runs on past the end of the line when the literal is not on it, and
 // swallows the lines after it; a word does not. `(imm8),Y` is one word once
 // its opening parenthesis is read on its own, since a group is claimed whole.
-// The table is made where it is first written, under the name written.
+// The table is made where it is first written, under the name written. It is
+// declared outside any `{ }`: a block is a program of its own, and a name it
+// declares is its own.
 //
 // What follows `is` is read on what the line has read so far: a rule that
 // begins with a capture does not match once both the pattern and the p-code
@@ -1261,17 +1398,23 @@ Pending := class {
   )
 }
 {literal named}:{ }is ^keyword => (
-  unless (exists (external own named)) { external declare named (Sleigh.table(named)) }
+  existing_table := None
+  if (exists (external own named)) { existing_table = named }
+  external declare named (Sleigh.table_kept(existing_table, named))
   held := named
   Pending(into: held, display: None)
 )
 {literal named}:{ }{literal shown}{ }is ^keyword => (
-  unless (exists (external own named)) { external declare named (Sleigh.table(named)) }
+  existing_table := None
+  if (exists (external own named)) { existing_table = named }
+  external declare named (Sleigh.table_kept(existing_table, named))
   held := named
   Pending(into: held, display: shown)
 )
 {literal named}:{ }{`(`}{literal shown}{ }is ^keyword => (
-  unless (exists (external own named)) { external declare named (Sleigh.table(named)) }
+  existing_table := None
+  if (exists (external own named)) { existing_table = named }
+  external declare named (Sleigh.table_kept(existing_table, named))
   held := named
   Pending(into: held, display: shown)
 )

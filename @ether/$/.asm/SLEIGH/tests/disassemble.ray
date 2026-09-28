@@ -8,7 +8,7 @@
 //   d0 f7      BNE (back to LDA)
 //   60         RTS
 //
-// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=600 .ether/asm/asm.sh sleigh-disassemble @ether/$/.asm/SLEIGH/tests/disassemble.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=600 M=4500 .ether/asm/asm.sh sleigh-disassemble @ether/$/.asm/SLEIGH/tests/disassemble.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
 
 if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
 unless (exists None) { INFO@mark `L0 control: this always fires` }

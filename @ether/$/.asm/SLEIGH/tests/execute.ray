@@ -13,7 +13,7 @@
 // copies four bytes, not 256. Nineteen instructions run until the machine
 // is back at 0603.
 //
-// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=1500 M=8000 .ether/asm/asm.sh sleigh-execute @ether/$/.asm/SLEIGH/tests/execute.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=1500 M=9000 .ether/asm/asm.sh sleigh-execute @ether/$/.asm/SLEIGH/tests/execute.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
 
 if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
 unless (exists None) { INFO@mark `E1 control: this always fires` }
@@ -27,13 +27,17 @@ asked &= `BNE`
 asked &= `RTS`
 isa ^keyword := Sleigh.isa(sleigh.spelled(asked))
 cpu ^keyword := State(registers: chain None, memory: chain None)
-placed (at, written) => (
-  address := at
-  walker := Bits.hex_bytes(written).head
-  while (exists walker) {
-    cpu.store(address, walker.value)
-    address = address + Bits.hex(`0001`)
-    walker = walker.next
+// (What is handed to a method is named first: an argument is read where it
+// is used, inside the method.)
+placed (placing_start, placing_text) => (
+  placing_at := placing_start
+  placing_step := Bits.hex(`0001`)
+  placing_link := Bits.hex_bytes(placing_text).head
+  while (exists placing_link) {
+    placing_byte := placing_link.value
+    cpu.store(placing_at, placing_byte)
+    placing_at = placing_at + placing_step
+    placing_link = placing_link.next
   }
   true
 )
@@ -41,7 +45,11 @@ placed(Bits.hex(`0600`), `200007`)
 placed(Bits.hex(`0700`), `a2fc bd0002 9d0003 e8 d0f7 60`)
 placed(Bits.hex(`02fc`), `11223344`)
 cpu.put(`SP`, Bits.hex(`01ff`))
-ran ^keyword := Sleigh.executed(isa, cpu, Bits.hex(`0600`), Bits.hex(`0603`), Sleigh.counted(`3`), Sleigh.counted(`30`))
+entry_point ^keyword := Bits.hex(`0600`)
+return_point ^keyword := Bits.hex(`0603`)
+longest_bytes ^keyword := Sleigh.counted(`3`)
+most_steps ^keyword := Sleigh.counted(`30`)
+ran ^keyword := Sleigh.executed(isa, cpu, entry_point, return_point, longest_bytes, most_steps)
 
 unless (cpu.load(Bits.hex(`03fc`)) == Bits.hex(`11`)) { INFO@mark `E2 03fc is not 11` }
 unless (cpu.load(Bits.hex(`03fd`)) == Bits.hex(`22`)) { INFO@mark `E3 03fd is not 22` }

@@ -5,7 +5,7 @@
 // conditional goto, `if (C == 0) goto REL`, and the jumps that leave a
 // program (`call`, `return`) are what make it anywhere else.
 //
-// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=900 M=5000 .ether/asm/asm.sh sleigh-run @ether/$/.asm/SLEIGH/tests/run.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
+// run: PROJECT=SLEIGH SPECS=.ether/external/ghidra/Ghidra/Processors/6502/data/languages/6502.slaspec T=900 M=7000 .ether/asm/asm.sh sleigh-run @ether/$/.asm/SLEIGH/tests/run.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
 
 if (Bits.hex(`01`) == Bits.hex(`02`)) { INFO@mark `E0 equality control: 01 is read as 02` }
 unless (exists None) { INFO@mark `X0 control: this always fires` }

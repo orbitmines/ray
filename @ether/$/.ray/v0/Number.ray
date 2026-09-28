@@ -39,6 +39,7 @@
 // is Ray's structural walk over exactly that chain — and `> <= >= min max`
 // come from `Ordered` once `<` is given.
 Number := class: Ray {
+  .{fraction: Decimal.Digits ^number} ^punctuation => Number.Real(integer: this, fraction: fraction, radix: ten)
   succ => Number(next: this)
 
   // The digits of this number in a base, most significant first: a counter in
@@ -371,7 +372,41 @@ Number.Signed = class {
 // here is rational.
 Number.Real = class {
   integer: Number
-  fraction: Number
+  fraction: Node
+  radix: Number
+
+  places => .fraction.count
+  scale => .radix.pow(.places)
+  numerator => (.integer * .scale) + Number.from_digits(.radix, .fraction)
+  == (other: Number.Real) => (
+    same_digits ^keyword := (.integer == other.integer).and(.places == other.places)
+    mine ^keyword := .fraction.head
+    theirs ^keyword := other.fraction.head
+    while ((exists mine).and(same_digits)) {
+      unless (mine.value == theirs.value) { same_digits = false }
+      mine = mine.next
+      theirs = theirs.next
+    }
+    same_digits
+  )
+  * (other: Number) => Number.Real.written(.numerator * other, .places, .radix)
+  / (other: Number) => Number.Real.written(.numerator / other, .places, .radix)
+  as_number => .numerator / .scale
+
+  written (numerator, places, radix) => (
+    scale ^keyword := radix.pow(places)
+    digits_written ^keyword := chain None
+    unless places.is_zero {
+      below ^keyword := (numerator % scale).digits_in(radix)
+      missing ^keyword := places - below.count
+      while missing {
+        digits_written &= zero
+        missing = missing.pred
+      }
+      below for { digits_written &= it.value }
+    }
+    Number.Real(integer: numerator / scale, fraction: digits_written, radix: radix)
+  )
 
   Signed := class {
     sign?: Node
@@ -403,30 +438,14 @@ base{ }{literal name ^class}{ }{size} ^keyword => (
     // A number of this base is read from its text a byte at a time, and the
     // reading stops at the first byte that is no digit of this base.
     accepts (text) => (
-      total ^keyword := zero
-      read ^keyword := false
-      readable ^keyword := true
-      byte ^keyword := chain None
-      left ^keyword := eight
-      take (b) => (
-        byte &= (inline b)
-        left = left.pred
-        if left.is_zero {
-          digit := digit_of(byte)
-          if (exists digit) {
-            if (digit < radix) {
-              total = (total * radix) + digit
-              read = true
-            } else { readable = false }
-          } else { readable = false }
-          byte = chain None
-          left = eight
-        }
-        readable.holds
-      )
-      external bits text take
-      if (readable.and(read)) { total } else { None }
+      spelled_digits ^keyword := spelled_in(text, radix)
+      read_number ^keyword := None
+      if (exists spelled_digits) { read_number = Number.from_digits(radix, spelled_digits) }
+      read_number
     )
+    Digits := class {
+      accepts (text) => spelled_in(text, radix)
+    }
 
     // static class Signed < sign: "-"?, integer: Base
     // static class Real < integer: Base, ".", fraction: Base{unbounded}
@@ -531,6 +550,33 @@ digit_of (byte) => (
   }
   unless (amount < ten) { return None }
   amount
+)
+
+spelled_in (text, radix) => (
+  spelled_digits ^keyword := chain None
+  read ^keyword := false
+  readable ^keyword := true
+  byte ^keyword := chain None
+  left ^keyword := eight
+  take (b) => (
+    byte &= (inline b)
+    left = left.pred
+    if left.is_zero {
+      digit := digit_of(byte)
+      if (exists digit) {
+        if (digit < radix) {
+          spelled_digits &= digit
+          read = true
+        } else { readable = false }
+      } else { readable = false }
+      byte = chain None
+      left = eight
+    }
+    readable.holds
+  )
+  external bits text take
+  unless (readable.and(read)) { spelled_digits = None }
+  spelled_digits
 )
 
 // def `digits: Decimal.Positive.String` => Decimal.Positive = digits

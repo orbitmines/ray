@@ -7,8 +7,41 @@
 // the `1.0m` / `1 m` literal syntaxes wait on decimals, strings and larger
 // numbers.
 
+unless (exists (external own units)) { global[`units`] = chain None }
 Unit := class {
   is_base => (exists .base).not
+  called (singular, several, short) => (
+    this.name = singular
+    this.plural = several
+    this.symbol = short
+    units &= this
+    this
+  )
+  over (other: Unit) => (
+    walked ^keyword := this
+    times ^keyword := one
+    reached ^keyword := None
+    while ((exists walked).and((exists reached).not)) {
+      if (walked == other) { reached = times }
+      unless (exists reached) {
+        if walked.is_base { walked = None } else {
+          times = times * walked.ratio
+          walked = walked.base
+        }
+      }
+    }
+    reached
+  )
+  accepts (text) => (
+    found ^keyword := None
+    units for {
+      known := it.value
+      if (exists (external alike (known.name) (text))) { found = known }
+      if (exists (external alike (known.plural) (text))) { found = known }
+      if (exists (external alike (known.symbol) (text))) { found = known }
+    }
+    found
+  )
   rank => (
     rank_steps := zero
     unless .is_base { rank_steps = .base.rank.succ }
@@ -80,7 +113,12 @@ Quantity := class {
   // Arguments are read inside the new quantity, so what they need from this
   // one is read first.
   as (other: Unit) => (
-    converted := (.amount * .unit.scale) / other.scale
+    converted ^keyword := None
+    down ^keyword := .unit.over(other)
+    if (exists down) { converted = .amount * down } else {
+      up ^keyword := other.over(.unit)
+      if (exists up) { converted = .amount / up } else { converted = (.amount * .unit.scale) / other.scale }
+    }
     Quantity(
       amount: converted
       unit: other
@@ -126,6 +164,7 @@ Quantity := class {
 // draft's `1 Byte` and `1.0m` wait on the number literal itself. A number
 // takes this on as a class component, so every number already built reads it.
 Measured := class {
+  { }{unit: Unit ^unit} ^punctuation => this of unit
   of (measure) => (
     held := this
     kind := measure
@@ -136,6 +175,7 @@ Measured := class {
   )
 }
 Number.components.hierarchy &= Measured
+Number.Real.components.hierarchy &= Measured
 
 // def SI_Unit
 //   def `symbol: *` name: *
@@ -160,16 +200,8 @@ SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit(
 // A unit is named, has a symbol, and is either a base unit or `factor` of a
 // `base` unit. The fields are what a unit is built with; a spaced `:` takes
 // the rest of its line, so each field goes on a line of its own.
-Bit := Unit(
-  name: `bit`
-  symbol: `b`
-)
-Byte := Unit(
-  name: `byte`
-  symbol: `B`
-  base: Bit
-  factor: eight
-)
+Bit := Unit().called(`bit`, `bits`, `b`)
+Byte := Unit(base: Bit, factor: eight).called(`byte`, `bytes`, `B`)
 // Kilobyte | KB = 1000 * Byte, Kibibyte = 1024 * Byte
 Kilobyte := Byte prefixed Prefix.kilo
 Kibibyte => Byte multiple (two.pow(ten))

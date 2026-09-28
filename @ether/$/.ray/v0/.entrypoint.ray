@@ -16,18 +16,7 @@ None      ^keyword := external none
 `{literal string ^string}` ^string.punctuation => string
 //{literal comment?} ^comment => None
 
-{`{`}{expr ^block}{`}`} ^punctuation => (
-  scope ^keyword := external .
-  value := inline expr
-  // A block is made of its value, and of None too: then it stands for nothing.
-  goto block_composes if (external own value)
-  goto block_done
- block_composes\
-  external extend scope value
- block_done\
-
-  scope ^namespace
-)
+{`{`}{expr ^block}{`}`} ^punctuation => external ** expr
 ({expr}) ^punctuation => expr
 [{expr}] ^punctuation => expr
 
@@ -149,6 +138,14 @@ Node := base class {
     def
   )
 
+  // `a, b, c`: what is written, in order, as a list of it.
+  , ^punctuation (other) => (
+    listed ^keyword := chain None
+    external extend listed Listed
+    listed &= this
+    listed &= other
+    listed
+  )
   -- ^punctuation (call) => call(this)
   
   = ^punctuation (x) => (
@@ -411,6 +408,12 @@ Node.DEFINE_METHOD = `&=`
 Chain := class {
   entry => .head
 }
+Listed := class {
+  , ^punctuation (other) => (
+    this &= other
+    this
+  )
+}
 Link := class { }
 
 if := class {
@@ -423,8 +426,11 @@ if := class {
     goto skip
    enter\
     taken = global
-    result := (yes)
-    inline result
+    result := inline (external ** yes)
+    goto composes if (external own result)
+    goto skip
+   composes\
+    external extend branch result
    skip\
 
     branch ^variable
@@ -442,8 +448,11 @@ if := class {
     goto skip
    enter\
     taken = global
-    result := (block)
-    inline result
+    result := inline (external ** block)
+    goto composes if (external own result)
+    goto skip
+   composes\
+    external extend branch result
    skip\
 
     branch ^variable
@@ -461,8 +470,11 @@ if := class {
 
     goto skip if taken
     taken = global
-    result := (block)
-    inline result
+    result := inline (external ** block)
+    goto composes if (external own result)
+    goto skip
+   composes\
+    external extend branch result
    skip\
 
     branch ^variable
@@ -480,12 +492,13 @@ while := class {
   { }{cond}{ }{block} ^class => (
     loop ^keyword := external .
     inline static
+    written_block := external ** block
 
    again\
     goto more if cond.holds
     goto done
    more\
-    block
+    inline written_block
     goto again
    done\
 
@@ -493,7 +506,8 @@ while := class {
   )
 
   { }{block}{ }while{ }{cond} ^class => (
-    block
+    written_block := external ** block
+    inline written_block
 
     this cond block
   )

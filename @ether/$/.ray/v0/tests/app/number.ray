@@ -184,3 +184,14 @@ unless ((two.negated * three.signed) == six.negated) { INFO@mark `N122 minus two
 unless (two.negated.negated == two.signed) { INFO@mark `N123 minus minus two is not two` }
 unless ((three.signed + five.negated) == two.negated) { INFO@mark `N124 three and minus five is not minus two` }
 unless ((two.min(three) * two + one) == five) { INFO@mark `N125 the smaller of two and three, doubled and one, is not five` }
+
+// A real is written with a point: the digits after it are kept as written, so
+// two reals written differently are two different things.
+one_and_a_half ^keyword := 1.5
+unless (one_and_a_half.integer == one) { INFO@mark `N126 1.5 does not start at one` }
+unless (one_and_a_half.numerator == ten + five) { INFO@mark `N127 1.5 is not fifteen tenths` }
+unless (1.05.places == two) { INFO@mark `N128 1.05 does not keep its leading zero` }
+unless (one_and_a_half == 1.5) { INFO@mark `N129 1.5 is not 1.5` }
+if (one_and_a_half == 1.50) { INFO@mark `N130 1.5 is written as 1.50` }
+unless ((one_and_a_half * four) == 6.0) { INFO@mark `N131 1.5 times four is not 6.0` }
+unless ((2.5 / two) == 1.2) { INFO@mark `N132 2.5 halved is not 1.2 to one place` }

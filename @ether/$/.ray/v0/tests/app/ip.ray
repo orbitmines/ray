@@ -13,6 +13,9 @@ unless (address.segment_count == four) { INFO@mark `IP1 the address has other th
 unless (address.bit_count == (four * eight)) { INFO@mark `IP2 the address is not thirty-two bits` }
 unless (address.as_string == String.of(`1.0.0.12`)) { INFO@mark `IP3 the address does not write as 1.0.0.12` }
 unless (address.bits.count == (four * eight)) { INFO@mark `IP4 the address is not thirty-two bits long` }
+unless ((address / (two * ten + four)).as_string == String.of(`1.0.0.0`)) { INFO@mark `IP31 the network of 1.0.0.12/24 is not 1.0.0.0` }
+unless ((address + three).as_string == String.of(`1.0.0.15`)) { INFO@mark `IP32 three past 1.0.0.12 is not 1.0.0.15` }
+unless ((address - two).as_string == String.of(`1.0.0.10`)) { INFO@mark `IP33 two before 1.0.0.12 is not 1.0.0.10` }
 
 read_back := IPv4(segments: IP.read(String.of(`1.0.0.12`), Character.of(ascii_dot), ten))
 unless (read_back == address) { INFO@mark `IP5 the address read back is another one` }

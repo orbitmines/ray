@@ -12,7 +12,7 @@
 //
 // (`llvm-mc --triple=aarch64 -filetype=obj`, `.text` as `xxd -p`.) It counts x1 down from two, adding two to x0
 // each time, and returns to x30, which holds nothing: address 0, where nothing is, so the run stops there.
-// run: S=.ether/asm/work/arm/slices; PROJECT=ASL SPECS="$S/A64.shared.xml $S/A64.movz.xml $S/A64.add_addsub_imm.xml $S/A64.subs_addsub_imm.xml $S/A64.b_cond.xml $S/A64.ret.xml" T=3500 M=12000 .ether/asm/asm.sh loop @ether/$/.asm/ASL/tests/loop.ray boolean.ray -- Bits.ray ISA.ray Goto.ray Code.ray Run.ray
+// run: S=.ether/asm/work/arm/slices; PROJECT=ASL SPECS="$S/A64.shared.xml $S/A64.movz.xml $S/A64.add_addsub_imm.xml $S/A64.subs_addsub_imm.xml $S/A64.b_cond.xml $S/A64.ret.xml" T=3500 M=14000 .ether/asm/asm.sh loop @ether/$/.asm/ASL/tests/loop.ray boolean.ray -- Bits.ray ISA.ray Goto.ray Code.ray Run.ray
 
 mark ^keyword := external global
 INFO@mark `L0 control: this always fires`

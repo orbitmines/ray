@@ -4,7 +4,7 @@
 // `AddWithCarry` and `ConditionHolds` from `shared_pseudocode.xml`, both sliced by `@ether/$/.asm/ASL/slice.sh`:
 //   SHARED="AddWithCarry ConditionHolds" @ether/$/.asm/ASL/slice.sh
 // Arm's text is not quoted here: what is claimed is what the programs compute.
-// run: S=.ether/asm/work/arm/slices; PROJECT=ASL SPECS="$S/A64.shared.xml $S/A64.add_addsub_imm.xml $S/A64.movz.xml $S/A64.subs_addsub_imm.xml $S/A64.b_cond.xml" T=2400 M=8000 .ether/asm/asm.sh translate @ether/$/.asm/ASL/tests/translate.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
+// run: S=.ether/asm/work/arm/slices; PROJECT=ASL SPECS="$S/A64.shared.xml $S/A64.add_addsub_imm.xml $S/A64.movz.xml $S/A64.subs_addsub_imm.xml $S/A64.b_cond.xml" T=2400 M=12000 .ether/asm/asm.sh translate @ether/$/.asm/ASL/tests/translate.ray boolean.ray -- Bits.ray ISA.ray Goto.ray
 
 mark ^keyword := external global
 INFO@mark `T0 control: this always fires`

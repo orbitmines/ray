@@ -445,9 +445,10 @@ arm.ten = ten_row
 // `BranchTo` and the primitives `UInt`, `SInt`, `ZeroExtend`, `SignExtend`,
 // `Zeros`, `IsZero`, `NOT`, `LSL` are written here as what they do. Reading the
 // accessors from Arm's text is next: they index `_R[[n]]`, which `InFile` is.
-// spec: operators are applied as the engine groups them, from the right, and
-// then regrouped by ASL's precedence (`Pseudocode.settle`); a parenthesised
-// group on the right of an operator cannot be told from an ungrouped one.
+// spec: operators are kept in the order they are written, one operand after
+// another (see `Pending`), and then regrouped by ASL's precedence
+// (`Pseudocode.settle`); a parenthesised group cannot be told from an
+// ungrouped one.
 
 // Numbers as long as the chain that counts them. What the translation counts —
 // widths, register numbers, shifts — is small, and a count is compared and
@@ -719,6 +720,19 @@ AslCount ^keyword := class {
   )
 }
 {digits: AslNumber ^number} ^number => digits
+// A count with its sign written before it, `+15`, is that count. What this
+// rule is for is that `+` is written first in one: a name is then read up to
+// a `+`, so `pos+15` is `pos` and then `+15` on it (Term's own `+`), not a
+// name `pos+15` that nothing is called.
++{amount: AslCount} ^punctuation => Term.integer(amount)
+
+// `!=` spelled where every expression of the pseudocode is read, before any
+// operator of it. What an operator is given is read up to the next operator
+// spelled here before it; `=` is (the language's own), and without this it
+// would be found inside `!=`: `a == b && c != d` would give `==` the operand
+// `b && c !` and leave `= d` to be read as an assignment. Spelled here, the
+// operand ends before the `!`. Values of the pseudocode have their own `!=`.
+!= (other) => (this == other).not
 
 // What an expression stands for while an encoding is translated: a value of
 // one of ASL's sorts — `integer`, `bits`, `boolean`, an enumeration's `enum`,
@@ -801,16 +815,40 @@ Term ^keyword := class {
     Pending(sort: `pending`, op: `-`, left: this, right: operand)
   )
   // `N-1`, `pos+15`: a number written against what it is added to.
-  -{amount: AslCount} ^punctuation => asl.offset(this, amount, false)
-  +{amount: AslCount} ^punctuation => asl.offset(this, amount, true)
+  // What a rule hands on is named first: an argument is read where it is
+  // taken, and `this` there is whoever takes it.
+  -{amount: AslCount} ^punctuation => (
+    offset_from := this
+    asl.offset(offset_from, amount, false)
+  )
+  +{amount: AslCount} ^punctuation => (
+    offset_from := this
+    asl.offset(offset_from, amount, true)
+  )
   // `x[high:low]`, and `x[i]`, one bit. The low end is read as it is written,
   // a number or a name (`AslNumber` reads no `0` or `1`).
   // spec: a single bit is read where its index is written `0`, `1` or `N-1`;
   // a rule `[{index}]` on a class is asked of every `[` and never finishes.
-  [{high}:{literal low}] ^punctuation => asl.slice(this, asl.index(high), asl.width_written(low))
-  [0] ^punctuation => asl.slice(this, Term.integer(chain None), Term.integer(chain None))
-  [1] ^punctuation => asl.slice(this, Term.integer(asl_numbers.one), Term.integer(asl_numbers.one))
-  [N-1] ^punctuation => asl.top_of(this)
+  [{high}:{literal low}] ^punctuation => (
+    sliced_whole := this
+    sliced_high := asl.index(high)
+    sliced_low := asl.width_written(low)
+    asl.slice(sliced_whole, sliced_high, sliced_low)
+  )
+  [0] ^punctuation => (
+    sliced_whole := this
+    sliced_bit := Term.integer(chain None)
+    asl.slice(sliced_whole, sliced_bit, sliced_bit)
+  )
+  [1] ^punctuation => (
+    sliced_whole := this
+    sliced_bit := Term.integer(asl_numbers.one)
+    asl.slice(sliced_whole, sliced_bit, sliced_bit)
+  )
+  [N-1] ^punctuation => (
+    sliced_whole := this
+    asl.top_of(sliced_whole)
+  )
 
   integer (counted) => Term(sort: `integer`, known: counted, live: None, wide: None, more: None)
   bits_of (word) => Term(sort: `bits`, known: word, live: None, wide: None, more: None)
@@ -845,12 +883,51 @@ Extra ^keyword := class {
   offset: Node
 }
 // An operator not applied yet, and a tuple (`(result, nzcv)`).
+// An operator is not applied where it is read but kept, with what it is
+// written between, until the whole expression is read. What follows an
+// operator is read only up to the next operator the language knew before
+// this one (`&&` stops at an `==` the library spells), and that one is then
+// written on what was kept so far: it is kept after its last operand, so that
+// what is kept stays one operand, operator, operand … from the left, as
+// `settle` reads it.
 Pending ^keyword := class {
   sort: Node
   op: Node
   left: Node
   right: Node
   certain => false
+  == (other) => (
+    pending_chain := this
+    asl.continued(pending_chain, `==`, other)
+  )
+  != (other) => (
+    pending_chain := this
+    asl.continued(pending_chain, `!=`, other)
+  )
+  && (other) => (
+    pending_chain := this
+    asl.continued(pending_chain, `&&`, other)
+  )
+  || (other) => (
+    pending_chain := this
+    asl.continued(pending_chain, `||`, other)
+  )
+  << (other) => (
+    pending_chain := this
+    asl.continued(pending_chain, `<<`, other)
+  )
+  :: (other) => (
+    pending_chain := this
+    asl.continued(pending_chain, `::`, other)
+  )
+  + (other) => (
+    pending_chain := this
+    asl.continued(pending_chain, `+`, other)
+  )
+  - (other) => (
+    pending_chain := this
+    asl.continued(pending_chain, `-`, other)
+  )
 }
 Tuple ^keyword := class {
   sort: Node
@@ -1474,6 +1551,21 @@ Pseudocode ^keyword := class {
     this.unbind(.scope)
     this.scope = .scope.outer
     result
+  )
+
+  // `a op b` read so far, and `op2 c` written after it: `a op (b op2 c)`.
+  continued (pending, written, operand) => (
+    pending_given := pending
+    written_given := written
+    operand_given := .index(operand)
+    last := pending_given
+    last_right := last.right
+    while (Term.is(last_right, `pending`)) {
+      last = last_right
+      last_right = last.right
+    }
+    last.right = Pending(sort: `pending`, op: written_given, left: last_right, right: operand_given)
+    pending_given
   )
 
   // Expressions: a pending operator applied, tightest first.
@@ -2201,6 +2293,20 @@ AslWord ^keyword := class {
   )
 }
 
+// The `;` a statement ends on, and nothing after it. A width is read up to
+// the first `)`, so `var x : bits(N) = …;` is not a declaration of width
+// `N) = …`: what follows the `)` must be the `;` alone. The width itself
+// cannot be the capture that is checked: a capture's first word runs on
+// through the `)` against it, and is refused for being longer than the
+// capture.
+AslEnd ^keyword := class {
+  accepts (text) => (
+    found := None
+    if (exists (external alike (text) (`;`))) { found = text }
+    found
+  )
+}
+
 // Statements. Each is kept, with its expressions unread, in the block it is
 // written in. A statement is read up to its `;`. Its names are not declared
 // where it is read: they are the pseudocode's, bound only while an encoding is
@@ -2239,7 +2345,7 @@ var{ }{literal aslname}{ }:{ }bits({literal aslwidth}){ }={ }{aslvalue}; ^keywor
   asl.record(`var`, aslname, `bits(N)`, aslframe)
 )
 var{ }{literal aslname}{ }:{ }{literal asltype: AslWord}; ^keyword => asl.record(`declare`, aslname, asltype, None)
-var{ }{literal aslname}{ }:{ }bits({literal aslwidth: AslWord}); ^keyword => (
+var{ }{literal aslname}{ }:{ }bits({literal aslwidth}){literal aslend: AslEnd} ^keyword => (
   aslframe ^keyword := external .
   asl_width => asl.width_written(aslwidth)
   asl.record(`declare`, aslname, `bits(N)`, aslframe)

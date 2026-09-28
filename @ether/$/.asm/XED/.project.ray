@@ -1,0 +1,3 @@
+// XED: Intel's x86 encoding tables read as source (.entrypoint.ray holds the
+// grammar), and x86-64 decoded and written back with them. A plain project:
+// it depends on the @language project implicitly.

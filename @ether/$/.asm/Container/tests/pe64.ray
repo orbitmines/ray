@@ -1,0 +1,40 @@
+// A PE32+ program for x86-64 Windows: `xor eax, eax; ret`, in one section,
+// with nothing imported. 184 bytes, written by hand in the way tiny PEs are:
+// the PE header begins four bytes in, inside the DOS header, so the DOS
+// header's last field — where the PE header is — is also the optional
+// header's `SectionAlignment`, and both are 4. Sections are aligned in memory
+// as in the file, so an address in the image is an offset in the file. The
+// section is padded to the file's alignment of four. (`z` is four zero bytes.)
+//
+// The DOS header is read first, so it writes the bytes it shares with the
+// COFF and optional headers; those two are views over them, and what of them
+// lies past the DOS header is kept as bytes.
+//
+// run: .ether/asm/asm.sh pe64 @ether/$/.asm/Container/tests/pe64.ray boolean.ray -- Bits.ray Container/Bytes.ray Container/PE.ray
+
+mark ^keyword := external global
+unless true { INFO@mark `W0 control: this file is not run` }
+file ^keyword := Bytes.hex(`4d5a00005045000064860100zzz700022000b02000004000000zzb4000000b40
+000000000004001000000040000000400000006000000z06000000zb8000000b
+4000000z0300000000001000z00100000z00001000z00100000zzz2e74657874
+00000003000000b400000004000000b4000000zzz2000006031c0c300`)
+pe ^keyword := PE.read(file)
+unless (pe.dos.field(`e_magic`) == Bits.hex(`5a4d`)) { INFO@mark `W1 the file does not begin with MZ` }
+unless (pe.dos.field(`e_lfanew`) == Bits.hex(`00000004`)) { INFO@mark `W2 the PE header is not at 4` }
+unless (pe.coff.field(`Signature`) == Bits.hex(`00004550`)) { INFO@mark `W3 the signature is not PE` }
+unless pe.wide { INFO@mark `W4 not read as PE32+` }
+unless (pe.machine == Bits.hex(`8664`)) { INFO@mark `W5 the machine is not x86-64` }
+unless (pe.entry == Bits.hex(`000000b4`)) { INFO@mark `W6 the entry is not b4` }
+unless (pe.optional.field(`ImageBase`) == Bits.hex(`0000000140000000`)) { INFO@mark `W7 the image base is not 140000000` }
+unless (pe.optional.field(`SectionAlignment`) == pe.dos.field(`e_lfanew`)) { INFO@mark `W8 the alignment is not where the PE header is` }
+if (exists pe.directories.head) { INFO@mark `W9 a data directory` }
+unless (exists pe.sections.head) { INFO@mark `W10 no section` }
+if (exists pe.sections.head.next) { INFO@mark `W11 more than one section` }
+unless (pe.sections.head.value.field(`Name`) == Bits.hex(`000000747865742e`)) { INFO@mark `W12 the section is not .text` }
+unless pe.dos.owned { INFO@mark `W13 the DOS header does not write its bytes` }
+if pe.coff.owned { INFO@mark `W14 the COFF header writes bytes the DOS header does` }
+if pe.optional.owned { INFO@mark `W15 the optional header writes bytes the DOS header does` }
+unless (Bytes.same(pe.code, Bytes.hex(`31c0c3`))) { INFO@mark `W16 the code is not xor eax, eax; ret` }
+unless (exists pe.pieces.head.next.next.next) { INFO@mark `W17 fewer than four pieces` }
+if (exists pe.pieces.head.next.next.next.next) { INFO@mark `W18 more than four pieces` }
+unless (Bytes.same(pe.written, file)) { INFO@mark `W19 not written back identical` }

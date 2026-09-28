@@ -1,0 +1,253 @@
+// Intel's XED datafiles, as what they describe: each instruction with the
+// patterns it is spelled with. The files themselves are read by the rules in
+// `.entrypoint.ray`; what they say lands here.
+//
+// A pattern is a row of pieces, read left to right against the bytes of an
+// instruction:
+//   0x0F 0x85          bytes the instruction is spelled with
+//   0b0101_0 SRM[rrr]  a byte of which the pattern fixes the high five bits
+//                      and hands the low three to the field SRM
+//   MOD[mm] REG[0b000] the ModRM byte, field by field; `mm` is taken, `0b000`
+//                      is fixed
+//   MOD=3, MOD!=3      what a field must hold
+//   SIMMz() MODRM()    a nonterminal: a table of its own, which may take more
+//                      bytes (an immediate, a SIB byte, a displacement)
+//   mode64 nolock_prefix  a name for a condition on the state (xed-state-bits.txt)
+//
+// What is read is kept as it is written. What a piece means as bits is read
+// from its text only when a decoder first asks, and kept: the language reads
+// every file more than once, and reading text a bit at a time is the one
+// thing here that costs.
+
+// A field of the decoder's state, and how many bits it holds.
+XedField ^keyword := class {
+  name: Node
+  width: Node
+}
+
+// A nonterminal, by its name.
+// spec: its rows (`conditions | results`) are read by the language as
+// statements but not kept; what a decoder needs of them is written in X86.ray
+// beside the rows it stands for.
+XedNonterminal ^keyword := class {
+  name: Node
+}
+
+// One piece of a pattern. `kind` is `byte`, `field`, `eq`, `ne`,
+// `nonterminal` or `word`; `name` is the field, nonterminal or word it names
+// (for a byte, its hexadecimal digits); `value` is what is written after it:
+// `mm` or `0b000` in `REG[…]`, `3` in `MOD=3`. `known` and `kept` hold what
+// `fixed` read, once it has been asked.
+XedToken ^keyword := class {
+  kind: Node
+  name: Node
+  value: Node
+  known: Node
+  kept: Node
+
+  is (asked) => exists (external alike (.kind) (asked))
+  named (asked) => exists (external alike (.name) (asked))
+  // The bits it fixes, or None where it takes them (`RM[nnn]`).
+  fixed => (
+    unless .known {
+      found := None
+      if (.is(`byte`)) { found = Bits.hex(.name) }
+      if (.is(`field`)) { found = XedText.binary(.value) }
+      if (.is(`eq`).or(.is(`ne`))) { found = XedText.digit(.value) }
+      this.kept = found
+      this.known = true
+    }
+    this.kept
+  )
+}
+
+// One way an instruction is spelled: its first piece (`0x0F`, `0b0101_0`),
+// the pieces after it, and the operands as written.
+XedForm ^keyword := class {
+  instruction: Node
+  first: Node
+  operands: Node
+  tokens: Node
+  known: Node
+  kept: Node
+
+  iclass => .instruction.iclass
+  // The first piece as bits: eight for a byte, fewer for the high bits of
+  // one (`0b0101_0` is five).
+  lead => (
+    unless .known {
+      this.kept = XedText.leading(.first)
+      this.known = true
+    }
+    this.kept
+  )
+}
+
+// An instruction and its forms, in the order the record gives them.
+XedInstruction ^keyword := class {
+  iclass: Node
+  forms: Node
+}
+
+// What has been read.
+Xed ^keyword := class {
+  fields: Node
+  nonterminals: Node
+  instructions: Node
+  forms: Node
+  current: Node
+  form_read: Node
+  reading: Node
+
+  instruction (iclass) => (
+    made := XedInstruction(iclass: iclass, forms: chain None)
+    held := .instructions
+    held &= made
+    this.current = made
+    true
+  )
+  form (first) => (
+    made := XedForm(instruction: .current, first: first, operands: None, tokens: chain None, known: false, kept: None)
+    owned := .current.forms
+    owned &= made
+    everything := .forms
+    everything &= made
+    this.form_read = made
+    this.reading = true
+    true
+  )
+  // The operands close the pattern: what follows on their line is not read
+  // into it.
+  operands (written) => (
+    this.reading = false
+    this.form_read.operands = written
+    true
+  )
+  token (kind, named, written) => (
+    if .reading {
+      pieces := .form_read.tokens
+      pieces &= XedToken(kind: kind, name: named, value: written, known: false, kept: None)
+    }
+    true
+  )
+  word (spelled) => .token(`word`, spelled, None)
+}
+xed ^keyword := Xed(fields: chain None, nonterminals: chain None, instructions: chain None, forms: chain None, current: None, form_read: None, reading: false)
+
+// A hexadecimal byte as it is written in a pattern, after its `0x`: read as
+// the text it is; `XedToken.fixed` reads it as bits when asked.
+XedHex ^keyword := class {
+  accepts (text) => text
+}
+
+// Reading the few things in a pattern that are numbers, from their text, a
+// bit at a time, with as few questions asked of each character as tell them
+// apart. In a pattern a character is a digit (0011xxxx), a letter (01xxxxxx),
+// `_` (01011111) or a space (00100000).
+XedText ^keyword := class {
+  // The first piece of a pattern: `0x0F` as the byte it is, `0b0101_0` as
+  // the five bits it is, least significant first. The second character says
+  // which: `x` has its fourth bit set, `b` does not.
+  leading (written) => (
+    byte := chain None
+    count := chain None
+    digits := chain None
+    hex := false
+    take (bit) => (
+      byte &= (inline bit)
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        count &= true
+        if (exists count.head.next) {
+          if (exists count.head.next.next) {
+            unless (byte.head.next.value.and(byte.head.next.next.next.value)) { digits &= byte }
+          } else { hex = byte.head.next.next.next.next.value }
+        }
+        byte = chain None
+      }
+      true
+    )
+    external bits written take
+    if hex { XedText.hex_digits(digits) } else { XedText.binary_digits(digits) }
+  )
+  // Digits written most significant first, each a byte of text: the value
+  // of a binary digit is its last bit.
+  binary_digits (digits) => (
+    out := chain None
+    walker := digits.tail
+    while (exists walker) {
+      out &= walker.value.tail.value
+      walker = walker.previous
+    }
+    Bits(bits: out)
+  )
+  hex_digits (digits) => (
+    out := chain None
+    walker := digits.tail
+    while (exists walker) {
+      spelled_byte := walker.value
+      its_nibble := Bits.nibble_of(spelled_byte)
+      Bits.joined(out, its_nibble)
+      walker = walker.previous
+    }
+    Bits(bits: out)
+  )
+  // `0b000` as its bits; None for what is not written in binary (`mm`,
+  // `rrr`: a field taken, not fixed). A letter first means a name.
+  binary (written) => (
+    byte := chain None
+    count := chain None
+    digits := chain None
+    named := false
+    take (bit) => (
+      byte &= (inline bit)
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        count &= true
+        if (exists count.head.next) {
+          if (exists count.head.next.next) {
+            unless (byte.head.next.value) { digits &= byte }
+          }
+        } else { named = byte.head.next.value }
+        byte = chain None
+      }
+      named.not
+    )
+    external bits written take
+    if named { None } else { XedText.binary_digits(digits) }
+  )
+  // `3` as its bits: one decimal digit, as the four bits of its value.
+  // spec: numbers of more than one digit (`NEED_MEMDISP=32`) are not read.
+  digit (written) => (
+    byte := chain None
+    take (bit) => (
+      byte &= (inline bit)
+      true
+    )
+    external bits written take
+    Bits(bits: Bits.nibble_of(byte))
+  )
+}
+
+// A word of a pattern nothing names — `MOD` before `[mm]`, `SIMMz` before
+// `()` — is read as the text it is: that is how the name of a field or a
+// nonterminal arrives in the piece it names.
+XedWord ^keyword := class {
+  accepts (text) => text
+}
+
+// A word on its own is a condition on the state: `mode64`, `nolock_prefix`.
+// spec: xed-state-bits.txt declares every one (`mode64  MODE=2`). A condition
+// must do something each time it is read, to take its place in the pattern,
+// and neither a name declared by a rule nor a word read as its own text can:
+// the first is a value, and the second is read once and cached (making the
+// reader keep it instead reads `xed` itself as a word, without end). So the
+// ones these records use are written here.
+mode64 ^keyword => xed.word(`mode64`)
+not64 ^keyword => xed.word(`not64`)
+norex2_prefix ^keyword => xed.word(`norex2_prefix`)
+rex2_refining_prefix ^keyword => xed.word(`rex2_refining_prefix`)
+norexw_prefix ^keyword => xed.word(`norexw_prefix`)
+norexb_prefix ^keyword => xed.word(`norexb_prefix`)
+norexb4_prefix ^keyword => xed.word(`norexb4_prefix`)
+not_refining_f3 ^keyword => xed.word(`not_refining_f3`)
+lock_prefix ^keyword => xed.word(`lock_prefix`)
+nolock_prefix ^keyword => xed.word(`nolock_prefix`)

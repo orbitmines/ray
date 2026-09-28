@@ -1,0 +1,36 @@
+// A 64-bit Mach-O for x86-64: `xor eax, eax; ret` as `main`. 212 bytes,
+// written by hand: the header, a `__TEXT` segment holding the whole file
+// with one section, `__text`, and `LC_MAIN` saying where in the file the
+// program begins. (macOS itself asks for more before it runs one — a
+// `__PAGEZERO`, the dynamic linker, a signature — which are more load
+// commands of the same shape.) Every field is written least significant byte
+// first: the magic `feedfacf` is written `cffaedfe`. (`z` is four zero
+// bytes.)
+//
+// run: .ether/asm/asm.sh macho64 @ether/$/.asm/Container/tests/macho64.ray boolean.ray -- Bits.ray Container/Bytes.ray Container/MachO.ray
+
+mark ^keyword := external global
+unless true { INFO@mark `M0 control: this file is not run` }
+file ^keyword := Bytes.hex(`cffaedfe07000001030000000200000002000000b000000001000000z1900000
+0980000005f5f544558540000zzz0100000000100000zzzd4000000z05000000
+0500000001000000z5f5f746578740000zz5f5f544558540000zzd0000000010
+0000003000000zd0000000zzz00040080zzz2800008018000000d0000000zzz3
+1c0c300`)
+macho ^keyword := MachO.read(file)
+if macho.big { INFO@mark `M1 read as big endian` }
+unless macho.wide { INFO@mark `M2 not read as 64-bit` }
+unless (macho.header.field(`magic`) == Bits.hex(`feedfacf`)) { INFO@mark `M3 the magic is not feedfacf` }
+unless (macho.cpu == Bits.hex(`01000007`)) { INFO@mark `M4 the machine is not x86-64` }
+unless (exists macho.commands.head.next) { INFO@mark `M5 fewer than two commands` }
+if (exists macho.commands.head.next.next) { INFO@mark `M6 more than two commands` }
+segment ^keyword := macho.named(`LC_SEGMENT_64`)
+unless (exists segment) { INFO@mark `M7 no segment` }
+unless (segment.field(`segname`) == Bits.hex(`00000000000000000000545845545f5f`)) { INFO@mark `M8 the segment is not __TEXT` }
+unless (segment.field(`vmaddr`) == Bits.hex(`0000000100000000`)) { INFO@mark `M9 the segment is not loaded at 100000000` }
+unless (exists macho.sections.head) { INFO@mark `M10 no section` }
+if (exists macho.sections.head.next) { INFO@mark `M11 more than one section` }
+unless (macho.entry == Bits.hex(`00000000000000d0`)) { INFO@mark `M12 the program does not begin at d0` }
+unless (Bytes.same(macho.code, Bytes.hex(`31c0c3`))) { INFO@mark `M13 the code is not xor eax, eax; ret` }
+unless (exists macho.pieces.head.next.next.next.next) { INFO@mark `M14 fewer than five pieces` }
+if (exists macho.pieces.head.next.next.next.next.next) { INFO@mark `M15 more than five pieces` }
+unless (Bytes.same(macho.written, file)) { INFO@mark `M16 not written back identical` }

@@ -1,0 +1,80 @@
+// The language Intel's XED datafiles are written in, as grammar rules: a
+// file of it placed in this project is read as source, and what it describes
+// is held by `xed` (Xed.ray).
+//
+// Three kinds of file are read so far:
+//   xed-fields.txt       `NAME  SCALAR  type  width  ...`: a field of the
+//                        decoder's state, declared under its own name
+//   `NAME()::` tables    a nonterminal, declared under its own name, then its
+//                        rows (read, not yet kept: see Xed.ray)
+//   xed-isa.txt          `{ ICLASS : …  PATTERN : …  OPERANDS : … }` records
+//
+// A record is a `{ }` block, read as the statements in it, so each
+// `KEY : value` line is a statement of its own.
+// A capture at the end of a rule takes one word, so `PATTERN :` takes the
+// first piece of the pattern, and the pieces after it are read as statements
+// of their own, by the rules for pieces at the end of this file.
+
+#{literal comment?} ^comment => None
+
+// A field of the decoder's state: MOD, REG, RM, MODE, REXW, ...
+{literal name}{ }SCALAR{ }{literal kind}{ }{literal width}{ }{literal rest?} ^keyword => (
+  made := XedField(name: name, width: width)
+  external declare name made
+  xed.fields &= made
+  true
+)
+
+// A nonterminal: what follows is its table, one row per line.
+{literal nonterminal}()::{ } ^keyword => (
+  made := XedNonterminal(name: nonterminal)
+  external declare nonterminal made
+  xed.nonterminals &= made
+  true
+)
+
+// An instruction, and the patterns it is spelled with. One record can hold
+// several PATTERN/OPERANDS pairs; each pair is one form of the instruction.
+// spec: OPERANDS keeps its first operand only (`REG0=GPRv_B():w`); the rest
+// of its line is read, and passed over.
+ICLASS{ }:{ }{literal iclass} ^keyword => xed.instruction(iclass)
+// A block is a program, and a program written on its own is not run: a
+// record is, so the lines of a `{ }` that begins with its ICLASS are run
+// where the record is read.
+{`{`}{
+}ICLASS{ }:{ }{literal iclass}{
+}{record}{`}`} ^keyword => (
+  xed.instruction(iclass)
+  inline (external ** record)
+  true
+)
+PATTERN{ }:{ }{literal first?} ^keyword => xed.form(first)
+OPERANDS{ }:{ }{literal operands?} ^keyword => xed.operands(operands)
+
+// What a record says beside its spelling is passed over for now.
+IFORM{ }:{ }{literal value} ^keyword => true
+UNAME{ }:{ }{literal value} ^keyword => true
+CPL{ }:{ }{literal value} ^keyword => true
+CATEGORY{ }:{ }{literal value} ^keyword => true
+EXTENSION{ }:{ }{literal value} ^keyword => true
+ISA_SET{ }:{ }{literal value} ^keyword => true
+DISASM{ }:{ }{literal value} ^keyword => true
+DISASM_INTEL{ }:{ }{literal value} ^keyword => true
+DISASM_ATTSV{ }:{ }{literal value} ^keyword => true
+ATTRIBUTES{ }:{ }{literal value?} ^keyword => true
+FLAGS{ }:{ }{literal value?} ^keyword => true
+
+// The pieces of a pattern. Each is read in the order written, into the form
+// being read (only between a PATTERN and its OPERANDS): `0x85` is a byte,
+// `MOD[mm]` takes bits of the instruction into a field, `MOD=3` and `MOD!=3`
+// ask what a field holds, `SIMMz()` is a nonterminal applied, and a word on
+// its own (`mode64`, `nolock_prefix`) is a condition on the state (Xed.ray).
+// A word nothing names is read as its own text, which is how the name before
+// `[`, `=`, `!=` or `()` arrives, and what keeps the rest of a record's lines
+// (`REG0=GPRv_B():r`, `MUST [ of-mod … ]`) from being unresolved.
+0x{byte: XedHex} => xed.token(`byte`, byte, None)
+{literal name}[{literal value}] ^keyword => xed.token(`field`, name, value)
+{literal name}={literal value} ^keyword => xed.token(`eq`, name, value)
+{literal name}!={literal value} ^keyword => xed.token(`ne`, name, value)
+{literal name}() ^keyword => xed.token(`nonterminal`, name, None)
+{word: XedWord} => word

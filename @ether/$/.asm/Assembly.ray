@@ -1,0 +1,122 @@
+// Assembly, read as what it is: a program of conditional gotos over a state.
+//
+// spec: nothing in this file runs yet. The runtime reads `@ether/$/.ray/v0`
+// only, and what is written here waits on the language to be able to hold it.
+// Each note is a target; what turns out to belong to the language itself is
+// moved into `.ray` once it is needed there.
+
+// The only primitive is the conditional goto, so an instruction set is not a
+// primitive either: it is a description. Every instruction is a small program
+// over the machine's state — registers, flags, memory, the program counter —
+// and every one of them ends in a jump, conditional or not, to where the
+// program counter now points. An instruction set is those programs, and the
+// way each of them is spelled in bits.
+
+// A vendor's description is read the way a program is: as source, in its own
+// language, under grammar rules written for that language here. A `.slaspec`
+// is a file of the SLEIGH language as much as a `.ray` file is one of Ray's,
+// and the rules in `SLEIGH/.entrypoint.ray` are what it means. Reading the
+// same text a bit at a time from inside the language costs thousands of times
+// more; the reading belongs to the language's own reader.
+//
+// spec: the runtime reads `.ray` files only, so a description is handed over
+// as `<name>.slaspec.ray` — the two-language file the journal describes, the
+// outer extension the language it is written in, the inner one what reads it.
+// And a project depends only on the one `!language` today, so a description
+// sits in the same project as the grammar that reads it.
+
+// What reading an executable is, in the order it is done. Each step is a
+// program in turn, and each can be read back the other way.
+//
+//  1. Container. What the file is: ELF, PE/COFF, Mach-O, a.out, MZ, a raw
+//     image, a ROM. Which parts are loaded where, which are code, which are
+//     data, what is imported from outside and what is resolved on load.
+//     Nothing about the container is thrown away: its layout is a layer too.
+//
+//  2. Decode. Bits into instructions, by the spelling the instruction set
+//     gives. Which bytes are code is not decidable in general — data sits
+//     between code, x86 instructions overlap, code writes code — so decoding
+//     is driven by the flow (3), not by walking the bytes in order.
+//
+//  3. Flow. The instructions read as a `Program`: each one a statement, each
+//     jump an edge to where it lands, as `Program.flow` already reads a
+//     program written with `goto`. An indirect jump lands where the state
+//     says, which is what interpreting is for.
+//
+//  4. Interpret. Run it, concretely where that is allowed and abstractly where
+//     it is not (the levels of running in `.ray/v0/Compiler.ray`): what does
+//     an indirect jump reach, which bytes are ever executed, what is read from
+//     outside.
+//
+//  5. Decompile. Read the program back through levels of rewrite rules. A
+//     rule written for compiling, read right to left, is a rule for
+//     decompiling: `{a} * two => a + a` is also `a + a` read back as
+//     `a * two`. So what comes out is `Program{O: Compiler.X}` — the logic in
+//     the shape it means, and the optimizations that made it into what the
+//     file holds, named, beside it.
+//
+//  6. Emit. The same levels applied forward give back the file. That they
+//     give back *exactly* the file is what makes the reading honest.
+
+// Where each step lives:
+//
+//   Container/          ELF, PE/COFF and Mach-O, read and written back byte for
+//                       byte: what is not understood is kept as it lies
+//   SLEIGH/             Ghidra's descriptions read as source: 6502 decodes,
+//                       disassembles and runs its p-code; a slice of Z80 decodes
+//   riscv-opcodes/      the RISC-V encodings, as the RISC-V project keeps them
+//   Sail/               the official RISC-V model's `execute` clauses, run
+//   XED/                Intel's tables; x86 read and written back with the
+//                       spelling each instruction was chosen in kept
+//   ASL/                Arm's own A64 XML: encodings, and their pseudocode
+//   ISA.ray, Bits.ray   what every reader reads into
+//
+// spec: what comes next is one shape for all of them — an instruction of
+// several units (x86 bytes, Thumb and compressed RISC-V halfwords) read at a
+// place in a stream, in a mode; an encoding as a sequence of pieces (fixed
+// units, sub-encodings such as ModRM, pieces chosen by what was read); what an
+// instruction means kept apart from how it was spelled, so two spellings
+// compare equal as instructions and the choice between them is exactly what
+// the encoding level rewrites; and the machine state the semantics run over.
+
+// The layers, from the bottom:
+//
+//   bytes        what is in the file
+//   container    where each byte goes and why
+//   encoding     which spelling of an instruction was chosen (x86 has several
+//                for most), padding, alignment
+//   instructions what the machine is told
+//   flow         instructions as gotos over the state
+//   convention   calls, stacks, frames, registers as places for values
+//   values       what the registers and memory hold, as named things
+//   logic        what the program does, with none of the above
+//
+// Everything a layer does not say is said by the one below it. Editing the
+// logic re-derives the layers below, and what they held that still applies is
+// kept, the way a patch is kept on a new version: a small edit above is a
+// small edit below.
+
+// spec: sketches of what the classes are, in the shape the language writes
+// them. Names are placeholders until the language settles.
+//
+// Executable := class {
+//   container: Container
+//   isa: ISA
+//   program => .container.code.decoded(.isa).flow
+//   read_back (level) => Program{O: level}
+// }
+//
+// Container := class {
+//   // Where each piece is loaded, and what each piece is.
+//   pieces
+//   entry
+//   imports
+//   // What is left over once the pieces are read: kept, so the file comes
+//   // back as it was.
+//   rest
+// }
+
+// Out of the language index (`Ether/library/Index.ray`) and the journal in
+// `.ray/v0/Compiler.ray`: an executable is read for the items it holds, what
+// each can do and what each is for. That reading sits on top of this one;
+// this one only has to be exact.

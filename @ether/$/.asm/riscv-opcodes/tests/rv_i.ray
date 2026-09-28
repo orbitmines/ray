@@ -1,0 +1,45 @@
+// The base integer instructions, read from the RISC-V project's own table of
+// them and the table of what their arguments are, and words decoded with what
+// was read and written back.
+//
+// run: mkdir -p .ether/asm/work/riscv/ro && echo > .ether/asm/work/riscv/ro/.project.ray && cp @ether/$/.asm/riscv-opcodes/.entrypoint.ray .ether/asm/work/riscv/ro/ && T=600 M=4000 PROJECT=../../../.ether/asm/work/riscv/ro SPECS=".ether/external/riscv-opcodes/arg_lut.csv .ether/external/riscv-opcodes/extensions/rv_i" .ether/asm/asm.sh rv_i @ether/$/.asm/riscv-opcodes/tests/rv_i.ray boolean.ray -- Bits.ray ISA.ray
+// The spec files are links to `arg_lut.csv` and `extensions/rv_i`, named so
+// that they are read in that order and before `probe.ray`. The grammar is run
+// from a copy of the entrypoint alone: `PROJECT=riscv-opcodes` would copy this
+// file into the project as well, and it would run twice (~95 s and 2.9 GB
+// once).
+// Names here must not be mnemonics once a word is decoded with them (see
+// Sail/tests/base.ray): `rv` and the claims only.
+
+INFO@mark `O0 control: this file is run`
+
+unless (exists (external alike (opcodes.lines.head.value.mnemonic) (`lui`))) { INFO@mark `O1 the first line read is not lui` }
+unless (exists (external alike (opcodes.lines.tail.value.mnemonic) (`j`))) { INFO@mark `O2 the last line read is not j` }
+unless (exists (external alike (opcodes.named[`bimm12hi`].hi) (`31`))) { INFO@mark `O3 bimm12hi does not begin at 31` }
+
+rv ^keyword := opcodes.isa(`rv_i`)
+
+word_addi ^keyword := opcodes.read(rv, Bits.hex(`00500093`))
+unless (exists (external alike (word_addi.mnemonic) (`addi`))) { INFO@mark `O4 00500093 is not read as addi` }
+unless (word_addi.field(`rd`) == Bits.hex(`01`).extract(Bits.hex(`1f`))) { INFO@mark `O5 rd of addi x1, x0, 5 is not x1` }
+unless (word_addi.field(`rs1`).is_zero) { INFO@mark `O6 rs1 of addi x1, x0, 5 is not x0` }
+unless (word_addi.field(`imm12`) == Bits.hex(`005`)) { INFO@mark `O7 the immediate of addi x1, x0, 5 is not 5` }
+unless (word_addi.written == Bits.hex(`00500093`)) { INFO@mark `O8 addi written back is not 00500093` }
+
+word_lui ^keyword := opcodes.read(rv, Bits.hex(`12345037`))
+unless (exists (external alike (word_lui.mnemonic) (`lui`))) { INFO@mark `O9 12345037 is not read as lui` }
+unless (word_lui.field(`imm20`) == Bits.hex(`12345`)) { INFO@mark `O10 the immediate of lui is not 12345` }
+unless (word_lui.written == Bits.hex(`12345037`)) { INFO@mark `O11 lui written back is not 12345037` }
+
+word_beq ^keyword := opcodes.read(rv, Bits.hex(`00208463`))
+unless (exists (external alike (word_beq.mnemonic) (`beq`))) { INFO@mark `O12 00208463 is not read as beq` }
+unless (word_beq.field(`rs2`) == Bits.hex(`02`).extract(Bits.hex(`1f`))) { INFO@mark `O13 rs2 of beq x1, x2, 8 is not x2` }
+unless (word_beq.field(`bimm12lo`) == Bits.hex(`08`).extract(Bits.hex(`1f`))) { INFO@mark `O14 the low immediate of beq x1, x2, 8 is not 8` }
+unless (word_beq.written == Bits.hex(`00208463`)) { INFO@mark `O15 beq written back is not 00208463` }
+
+word_jal ^keyword := opcodes.read(rv, Bits.hex(`008000ef`))
+unless (exists (external alike (word_jal.mnemonic) (`jal`))) { INFO@mark `O16 008000ef is not read as jal` }
+unless (word_jal.field(`jimm20`) == Bits.hex(`00800`)) { INFO@mark `O17 the immediate of jal x1, 8 is not 00800` }
+unless (word_jal.written == Bits.hex(`008000ef`)) { INFO@mark `O18 jal written back is not 008000ef` }
+
+if (exists opcodes.read(rv, Bits.hex(`00000000`))) { INFO@mark `O19 the word of zeros is read as an instruction` }

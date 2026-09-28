@@ -1,0 +1,32 @@
+// The base integer instructions given their meaning by the official Sail
+// model: the encodings are read from riscv-opcodes, the execute clauses of
+// `extensions/I/base_insts.sail` are read under the Sail grammar and
+// translated, once for each encoding, into the goto programs that are its
+// semantics, and five words are run by those programs one after another.
+//
+// run: mkdir -p .ether/asm/work/sail-goto/proj && echo > .ether/asm/work/sail-goto/proj/.project.ray && cat @ether/$/.asm/riscv-opcodes/.entrypoint.ray @ether/$/.asm/Sail/.entrypoint.ray > .ether/asm/work/sail-goto/proj/.entrypoint.ray && T=900 M=4000 PROJECT=../../../.ether/asm/work/sail-goto/proj SPECS="@ether/$/.asm/Sail/tests/specs/args.csv @ether/$/.asm/Sail/tests/specs/rv_base @ether/$/.asm/Sail/tests/specs/regs_x @ether/$/.asm/Sail/tests/specs/sail_base" .ether/asm/asm.sh sail @ether/$/.asm/Sail/tests/base.ray boolean.ray -- Bits.ray ISA.ray Goto.ray Code.ray Run.ray
+// The spec files: the arguments of `arg_lut.csv` these use; the lui, beq,
+// addi and add lines of `extensions/rv_i`; the `register x1 : regtype` lines
+// of `core/regs.sail`; and the UTYPE, BTYPE, ITYPE and RTYPE parts of
+// `base_insts.sail` (the first RTYPE encdec clause only), named to be read
+// before the probe.
+// Names here must not be mnemonics: a line `addi …` is read as a use of a
+// name `addi` once there is one.
+
+mark ^keyword := external global
+INFO@mark `E0 control: this file is run`
+unless (exists sail.clauses[`ITYPE`]) { INFO@mark `E1 the ITYPE clause is not read` }
+
+rv ^keyword := sail.attach(opcodes.isa(`rv_i`))
+// addi x1, x0, 5; add x2, x1, x1; lui x3, 0x12345; beq x1, x2, 8; beq x2, x2, -8
+code_words ^keyword := Code(isa: rv, bytes: Bits.hex_bytes(`93005000 33811000 b7513412 63842000 e30c21fe`), width: zero_word)
+hart ^keyword := State(registers: chain None, memory: chain None)
+stopped ^keyword := Run(code: code_words, base: zero_word).run(hart, zero_word, Bits.hex(`ffffffff`), Bits.hex(`0`))
+held_x1 ^keyword := Files.read(hart, `x`, Bits.hex(`01`))
+unless (held_x1 == Bits.hex(`00000005`)) { INFO@mark `E2 x1 is not 5 after addi x1, x0, 5` }
+held_x2 ^keyword := Files.read(hart, `x`, Bits.hex(`02`))
+unless (held_x2 == Bits.hex(`0000000a`)) { INFO@mark `E4 x2 is not 10 after add x2, x1, x1` }
+held_x3 ^keyword := Files.read(hart, `x`, Bits.hex(`03`))
+unless (held_x3 == Bits.hex(`12345000`)) { INFO@mark `E5 x3 is not 12345000 after lui x3, 0x12345` }
+unless (stopped == Bits.hex(`00000008`)) { INFO@mark `E8 after beq x1, x2, 8 and beq x2, x2, -8 the machine is not back at 8` }
+if (exists Files.read(hart, `x`, Bits.hex(`00`))) { INFO@mark `E9 x0 holds something` }

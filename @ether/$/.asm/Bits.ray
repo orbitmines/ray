@@ -1,0 +1,372 @@
+// A machine word: bits in a row, least significant first, each one a boolean.
+//
+// A number in the language is a walk, so the numbers a machine holds cannot be
+// numbers here: `0x10000` would be sixty-five thousand steps. They are the
+// bits the machine holds instead, and everything done to them is done the way
+// the machine does it, a bit at a time, with nothing under it but `nand` —
+// which is a conditional goto.
+
+// A bit as the machine hands one over, `0` or `1`, is a boolean here.
+0 ^keyword := false
+1 ^keyword := true
+
+Bits := class {
+  bits: Node
+
+  low => .bits.head.value
+  high => .bits.tail.value
+
+  // Two words are walked side by side; what is asked of words of two widths
+  // is asked only as far as the shorter one reaches.
+  each (other, combine) => (
+    out := chain None
+    mine := .bits.head
+    theirs := other.bits.head
+    while ((exists mine).and(exists theirs)) {
+      left := mine.value
+      right := theirs.value
+      out &= (inline combine)
+      mine = mine.next
+      theirs = theirs.next
+    }
+    Bits(bits: out)
+  )
+  and (other) => .each(other, { left.and(right) })
+  or (other) => .each(other, { left.or(right) })
+  xor (other) => .each(other, { left.xor(right) })
+  not => (
+    out := chain None
+    walker := .bits.head
+    while (exists walker) {
+      out &= walker.value.not
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+
+  // A ripple of full adders, carried in from `carry`.
+  added (other, carry) => (
+    out := chain None
+    mine := .bits.head
+    theirs := other.bits.head
+    carried := carry
+    while ((exists mine).and(exists theirs)) {
+      half := mine.value.xor(theirs.value)
+      out &= half.xor(carried)
+      carried = (mine.value.and(theirs.value)).or(carried.and(half))
+      mine = mine.next
+      theirs = theirs.next
+    }
+    Bits(bits: out, carry: carried)
+  )
+  + (other) => .added(other, false)
+  - (other) => .added(other.not, true)
+  negated => .not.added(.xor(this), true)
+
+  is_zero => (
+    none_set := true
+    walker := .bits.head
+    while (exists walker) {
+      if walker.value { none_set = false }
+      walker = walker.next
+    }
+    none_set
+  )
+  // The same bits, and as many of them: a word cut short is not the word.
+  == (other) => (
+    same := true
+    mine := .bits.head
+    theirs := other.bits.head
+    while ((exists mine).and(exists theirs).and(same)) {
+      if (mine.value.xor(theirs.value)) { same = false }
+      mine = mine.next
+      theirs = theirs.next
+    }
+    same.and((exists mine).not).and((exists theirs).not)
+  )
+  != (other) => (this == other).not
+
+  // Unsigned: what is left over from the subtraction is whether it borrowed.
+  below (other) => (this - other).carry.not
+  // Signed: below, with the sign bits read the other way round.
+  less (other) => (
+    if (.high.xor(other.high)) { .high } else { .below(other) }
+  )
+
+  // The bits of this word where a mask is set, packed together, least
+  // significant first: how a field is read out of an instruction.
+  extract (mask) => (
+    out := chain None
+    mine := .bits.head
+    selecting := mask.bits.head
+    while ((exists mine).and(exists selecting)) {
+      if selecting.value { out &= mine.value }
+      mine = mine.next
+      selecting = selecting.next
+    }
+    Bits(bits: out)
+  )
+  // The other way round: the bits of a field put back where a mask is set,
+  // over this word, which holds everything else.
+  deposit (mask, field) => (
+    out := chain None
+    mine := .bits.head
+    selecting := mask.bits.head
+    giving := field.bits.head
+    while ((exists mine).and(exists selecting)) {
+      if selecting.value {
+        out &= giving.value
+        giving = giving.next
+      } else { out &= mine.value }
+      mine = mine.next
+      selecting = selecting.next
+    }
+    while (exists mine) {
+      out &= mine.value
+      mine = mine.next
+    }
+    Bits(bits: out)
+  )
+  // Whether this word has more bits set than another: the two are walked set
+  // bit by set bit, and whichever runs out first has fewer.
+  denser (other) => (
+    mine := Bits.set_from(.bits.head)
+    theirs := Bits.set_from(other.bits.head)
+    while ((exists mine).and(exists theirs)) {
+      mine = Bits.set_from(mine.next)
+      theirs = Bits.set_from(theirs.next)
+    }
+    (exists mine).and((exists theirs).not)
+  )
+  // The first set bit from here on, or None.
+  set_from (start) => (
+    landing := start
+    while ((exists landing).and(landing.value.not)) { landing = landing.next }
+    landing
+  )
+  // Whether this word is spelled the way an encoding fixes it: where the mask
+  // is set, the bits are those of `match`.
+  // Walked from the lowest bit, where words of two widths line up, and given
+  // up at the first fixed bit that differs: most encodings are not the one.
+  fits (mask, match) => (
+    fitting := true
+    mine := .bits.head
+    selecting := mask.bits.head
+    wanted := match.bits.head
+    while ((exists mine).and(exists selecting).and(fitting)) {
+      if selecting.value {
+        if (mine.value.xor(wanted.value)) { fitting = false }
+      }
+      mine = mine.next
+      selecting = selecting.next
+      wanted = wanted.next
+    }
+    fitting
+  )
+
+  // Shifted one place: towards the high end with a zero coming in, or towards
+  // the low end with a zero, or the sign, coming in.
+  doubled => (
+    out := chain None
+    out &= false
+    walker := .bits.head
+    while (exists walker.next) {
+      out &= walker.value
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+  halved (arithmetic) => (
+    out := chain None
+    walker := .bits.head.next
+    while (exists walker) {
+      out &= walker.value
+      walker = walker.next
+    }
+    out &= arithmetic.and(.high)
+    Bits(bits: out)
+  )
+  // Shifted by as many places as `count` says: counted down a place at a time.
+  shifted_left (count) => (
+    out := this
+    left := count
+    while (left.is_zero.not) {
+      out = out.doubled
+      left = left - Bits.one_like(left)
+    }
+    out
+  )
+  shifted_right (count, arithmetic) => (
+    out := this
+    left := count
+    while (left.is_zero.not) {
+      out = out.halved(arithmetic)
+      left = left - Bits.one_like(left)
+    }
+    out
+  )
+  // One, as wide as another word.
+  one_like (other) => (
+    out := chain None
+    walker := other.bits.head
+    first := true
+    while (exists walker) {
+      out &= first
+      first = false
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+  // As wide as `template`: cut at its width, or filled up to it with zeros,
+  // or with copies of the sign when `signed`.
+  widened (template, signed) => (
+    out := chain None
+    mine := .bits.head
+    filling := signed.and(.high)
+    walker := template.bits.head
+    while (exists walker) {
+      if (exists mine) {
+        out &= mine.value
+        mine = mine.next
+      } else { out &= filling }
+      walker = walker.next
+    }
+    Bits(bits: out)
+  )
+
+  // A word of one bit, from a boolean.
+  flag (holds) => (
+    out := chain None
+    out &= holds
+    Bits(bits: out)
+  )
+
+  // This word, with another above it.
+  under (higher) => (
+    lower_bits := .bits
+    higher_bits := higher.bits
+    both := chain None
+    Bits.joined(both, lower_bits)
+    Bits.joined(both, higher_bits)
+    Bits(bits: both)
+  )
+  // What is held in one chain of bits, appended to another.
+  // (Its own names are ones no caller passes: an argument is read where it
+  // is used, inside this.)
+  joined (into, from) => (
+    joining_link := from.head
+    while (exists joining_link) {
+      into &= joining_link.value
+      joining_link = joining_link.next
+    }
+    into
+  )
+
+  // A word read from text written in hexadecimal, most significant digit
+  // first, as it is written by hand and by `xxd -p`: `2a` is 00101010. What
+  // is not a hexadecimal digit — spaces, newlines — is passed over.
+  hex (written) => (
+    nibbles := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= (inline bit)
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        nibble := Bits.nibble_of(byte)
+        if (exists nibble) { nibbles &= nibble }
+        byte = chain None
+      }
+      true
+    )
+    external bits written take
+    out := chain None
+    walker := nibbles.tail
+    while (exists walker) {
+      Bits.joined(out, walker.value)
+      walker = walker.previous
+    }
+    Bits(bits: out)
+  )
+  // The bytes a file holds, in the order it holds them, each a word of eight
+  // bits: what a container is read from.
+  file (path) => (
+    contents := external io path None
+    Bits.bytes_of(contents)
+  )
+  // The bytes a text is written with, as the machine hands them over: each one
+  // most significant bit first, kept least significant first.
+  bytes_of (contents) => (
+    bytes := chain None
+    byte := chain None
+    take (bit) => (
+      byte &= (inline bit)
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        lowest_first := chain None
+        walker := byte.tail
+        while (exists walker) {
+          lowest_first &= walker.value
+          walker = walker.previous
+        }
+        bytes &= Bits(bits: lowest_first)
+        byte = chain None
+      }
+      true
+    )
+    external bits contents take
+    bytes
+  )
+  // The bytes a text written in hexadecimal spells, in the order they are
+  // written: `7f454c46` is the four bytes an ELF file begins with.
+  hex_bytes (written) => (
+    bytes := chain None
+    byte := chain None
+    held := None
+    take (bit) => (
+      byte &= (inline bit)
+      if (exists byte.head.next.next.next.next.next.next.next) {
+        nibble := Bits.nibble_of(byte)
+        if (exists nibble) {
+          if (exists held) {
+            byte_bits := chain None
+            Bits.joined(byte_bits, nibble)
+            Bits.joined(byte_bits, held)
+            bytes &= Bits(bits: byte_bits)
+            held = None
+          } else { held = nibble }
+        }
+        byte = chain None
+      }
+      true
+    )
+    external bits written take
+    bytes
+  )
+  // The four bits one written hexadecimal digit stands for, least significant
+  // first, out of the eight it is written with, most significant first. `0`
+  // to `9` are 0011 followed by the digit; `a` to `f`, and `A` to `F`, are
+  // 01x00 followed by one to six, and stand for that and nine more.
+  nibble_of (byte) => (
+    b7 := byte.head
+    b6 := b7.next
+    b5 := b6.next
+    b4 := b5.next
+    b3 := b4.next
+    b2 := b3.next
+    b1 := b2.next
+    b0 := b1.next
+    out := None
+    if (b7.value.not.and(b6.value.not).and(b5.value).and(b4.value)) {
+      out = chain None
+      out &= b0.value
+      out &= b1.value
+      out &= b2.value
+      out &= b3.value
+    } elsif (b7.value.not.and(b6.value).and(b4.value.not).and(b3.value.not).and(b2.value.or(b1.value).or(b0.value)).and((b2.value.and(b1.value).and(b0.value)).not)) {
+      out = chain None
+      out &= b0.value.not
+      out &= b1.value.xor(b0.value)
+      out &= b2.value.xor(b1.value.and(b0.value))
+      out &= true
+    }
+    out
+  )
+}

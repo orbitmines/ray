@@ -3408,13 +3408,34 @@ export namespace Ray {
     bytes_of(node: Node): Uint8Array {
       const written = this.text(node);
       const value = this.diagnostics.muted(() => this.safely(() => this.deref(node, false, false)));
-      return value?.bytes ?? new TextEncoder().encode(written);
+      if (value?.bytes !== undefined) return value.bytes;
+      const read = value === undefined || value.literal ? undefined : this.diagnostics.muted(() => this.safely(() => this.deref(node, false)));
+      const held = read !== undefined && !read.literal ? this.bits_held(read) : undefined;
+      if (held !== undefined) return held;
+      return new TextEncoder().encode(written);
+    }
+    spelling(node: Node): string {
+      return new TextDecoder().decode(this.bytes_of(node));
+    }
+    bits_held(value: Node): Uint8Array | undefined {
+      const read = (of: Node, key: string) => { const held = of.own(key) ?? of.members?.get(key); return held === undefined ? undefined : this.diagnostics.muted(() => this.safely(() => this.deref(held, false))); };
+      let link = read(value, 'head');
+      if (link === undefined || link.none) return undefined;
+      const bytes: number[] = [];
+      let byte = 0, count = 0;
+      while (link !== undefined && !link.none) {
+        const bit = read(link, 'value');
+        byte = byte * 2 + (bit === undefined || bit.none ? 0 : 1);
+        if (++count === 8) { bytes.push(byte); byte = 0; count = 0; }
+        link = read(link, 'next');
+      }
+      return count === 0 ? Uint8Array.from(bytes) : undefined;
     }
     io(location: string, content: string | undefined, at: Text.Node): Node {
       const fs = env.fs;
       if (location === 'stdin') return this.read_of(fs.readFileSync(0), at);
       if (location === 'stdout' || location === 'stderr') { (location === 'stdout' ? process.stdout : process.stderr).write(content ?? ''); return this.NONE; }
-      if (content === undefined) return this.read_of(fs.readFileSync(location), at);
+      if (content === undefined) return fs.existsSync(location) ? this.read_of(fs.readFileSync(location), at) : this.NONE;
       fs.writeFileSync(location, content);
       return this.NONE;
     }
@@ -3709,8 +3730,8 @@ export namespace Ray {
     // chain that holds them is written in the language, not here.
     'first': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.first_statement(node) },
     'rest': { arity: 1, fn: ({ interpreter, args: [node] }) => interpreter.rest_of(node) },
-    'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => { const given = interpreter.diagnostics.muted(() => interpreter.safely(() => interpreter.deref(content, false))); return interpreter.io(interpreter.text(location), given === undefined || given.none ? undefined : interpreter.text(content), at); } },
-    'os': { arity: 1, fn: ({ interpreter, args: [name], at }) => { const key = interpreter.text(name); const value = key === 'platform' ? process.platform : key === 'architecture' ? process.arch : process.env[key]; return value === undefined ? interpreter.NONE : interpreter.literal_of(value, at); } },
+    'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => { const given = interpreter.diagnostics.muted(() => interpreter.safely(() => interpreter.deref(content, false))); return interpreter.io(interpreter.spelling(location), given === undefined || given.none ? undefined : interpreter.spelling(content), at); } },
+    'os': { arity: 1, fn: ({ interpreter, args: [name], at }) => { const key = interpreter.spelling(name); const value = key === 'platform' ? process.platform : key === 'architecture' ? process.arch : process.env[key]; return value === undefined ? interpreter.NONE : interpreter.literal_of(value, at); } },
     'extend': { arity: 2, fn: ({ interpreter, args: [target, node] }) => { const into = interpreter.deref(target); return into ? interpreter.inline(node, into, { compose: true }) : undefined; } },
     'literal': { arity: 1, fn: ({ args: [node] }) => node },
     'unordered': { arity: 1, fn: ({ args: [node] }) => node },

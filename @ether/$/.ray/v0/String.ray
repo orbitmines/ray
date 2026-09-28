@@ -206,6 +206,11 @@ String := class: Array {
 
   first => .characters.head.value
   last => .characters.tail.value
+  bits => (
+    held_bits := chain None
+    this.characters for { it.value.octets for { held_bits &= it.value.holds } }
+    held_bits
+  )
 
   == (other: String) => (
     mine := .characters.head

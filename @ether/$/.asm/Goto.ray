@@ -270,13 +270,21 @@ Set := class {
   sets => true
   place: Node
   to: Node
-  perform (state) => state.put(.place, .to.value(state))
+  perform (state) => (
+    set_place := .place
+    set_value := .to.value(state)
+    state.put(set_place, set_value)
+  )
 }
 Stored := class {
   sets => true
   address: Node
   to: Node
-  perform (state) => state.store(.address.value(state), .to.value(state))
+  perform (state) => (
+    stored_at := .address.value(state)
+    stored_value := .to.value(state)
+    state.store(stored_at, stored_value)
+  )
 }
 // Where the program goes on to: `target` is a label's name, or else `to` a
 // value, which leaves the program for that address. With no `when`, always.

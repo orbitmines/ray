@@ -220,7 +220,12 @@ A64 ^keyword := class {
   none: Node
 
   // Rows to count cells with: one, two, four, eight, each twice the last.
-  doubled (row) => Bits.joined(Bits.joined(chain None, row), row)
+  doubled (row) => (
+    twice := chain None
+    Bits.joined(twice, row)
+    Bits.joined(twice, row)
+    twice
+  )
   rows => (
     one := chain None
     one &= true
@@ -297,7 +302,7 @@ A64 ^keyword := class {
     digits := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         digits &= byte.head.next.next.next.next
         byte = chain None
@@ -375,7 +380,12 @@ A64 ^keyword := class {
   )
 }
 arm ^keyword := A64(encodings: chain None, titles: chain None, operations: chain None, diagram: None, encoding: None, box: None, operation: None, waiting: chain None, ten: None, weights: A64.rows, none: None)
-arm.ten = Bits.joined(Bits.joined(chain None, arm.weights.tail.value), arm.weights.head.next.value)
+ten_low ^keyword := arm.weights.tail.value
+ten_high ^keyword := arm.weights.head.next.value
+ten_row ^keyword := chain None
+Bits.joined(ten_row, ten_low)
+Bits.joined(ten_row, ten_high)
+arm.ten = ten_row
 
 <regdiagram ^keyword => arm.diagram_opened
 </regdiagram> ^keyword => (
@@ -635,7 +645,7 @@ Count ^keyword := class {
     byte := chain None
     reading := true
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         if (Count.decimal_digit(byte)) {
           digit := Bits.nibble_of(byte)
@@ -645,7 +655,9 @@ Count ^keyword := class {
             Bits.joined(tenfold, total)
             round = round.next
           }
-          Bits.joined(tenfold, Count.of_bits(Bits(bits: digit)))
+          digit_word := Bits(bits: digit)
+          digit_count := Count.of_bits(digit_word)
+          Bits.joined(tenfold, digit_count)
           total = tenfold
         } else { reading = false }
         byte = chain None
@@ -668,7 +680,7 @@ AslNumber ^keyword := class {
     bytes := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         unless (Count.decimal_digit(byte)) { digits = false }
         bytes &= byte
@@ -693,7 +705,7 @@ AslCount ^keyword := class {
     digits := true
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         unless (Count.decimal_digit(byte)) { digits = false }
         byte = chain None
@@ -1410,7 +1422,7 @@ Pseudocode ^keyword := class {
     quoted := false
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         quoted = byte.head.next.value.not
         byte = None
@@ -1808,7 +1820,7 @@ Pseudocode ^keyword := class {
     digits := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         if (byte.head.next.value.not.and(byte.head.next.next.value).and(byte.head.next.next.next.value)) { digits &= byte.tail.value }
         byte = chain None
@@ -1834,7 +1846,7 @@ Pseudocode ^keyword := class {
     leading := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) { leading &= byte }
       (exists leading.head).not
     )
@@ -2169,7 +2181,7 @@ AslWord ^keyword := class {
     plain := true
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         b6 := byte.head.next.value
         b5 := byte.head.next.next.value

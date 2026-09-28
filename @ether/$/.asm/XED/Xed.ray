@@ -154,7 +154,7 @@ XedText ^keyword := class {
     digits := chain None
     hex := false
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         count &= true
         if (exists count.head.next) {
@@ -184,7 +184,9 @@ XedText ^keyword := class {
     out := chain None
     walker := digits.tail
     while (exists walker) {
-      Bits.joined(out, Bits.nibble_of(walker.value))
+      spelled_byte := walker.value
+      its_nibble := Bits.nibble_of(spelled_byte)
+      Bits.joined(out, its_nibble)
       walker = walker.previous
     }
     Bits(bits: out)
@@ -197,7 +199,7 @@ XedText ^keyword := class {
     digits := chain None
     named := false
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         count &= true
         if (exists count.head.next) {
@@ -217,7 +219,7 @@ XedText ^keyword := class {
   digit (written) => (
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       true
     )
     external bits written take

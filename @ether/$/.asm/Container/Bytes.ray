@@ -20,7 +20,7 @@ Bytes := class {
     zero := Bits.hex(`00`)
     text_bits := chain None
     take (bit) => (
-      text_bits &= exists (external alike (inline bit) (`1`))
+      text_bits &= (inline bit)
       true
     )
     external bits written take

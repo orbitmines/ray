@@ -6,6 +6,10 @@
 // the machine does it, a bit at a time, with nothing under it but `nand` —
 // which is a conditional goto.
 
+// A bit as the machine hands one over, `0` or `1`, is a boolean here.
+0 ^keyword := false
+1 ^keyword := true
+
 Bits := class {
   bits: Node
 
@@ -238,13 +242,22 @@ Bits := class {
   )
 
   // This word, with another above it.
-  under (higher) => Bits(bits: Bits.joined(Bits.joined(chain None, .bits), higher.bits))
+  under (higher) => (
+    lower_bits := .bits
+    higher_bits := higher.bits
+    both := chain None
+    Bits.joined(both, lower_bits)
+    Bits.joined(both, higher_bits)
+    Bits(bits: both)
+  )
   // What is held in one chain of bits, appended to another.
+  // (Its own names are ones no caller passes: an argument is read where it
+  // is used, inside this.)
   joined (into, from) => (
-    walker := from.head
-    while (exists walker) {
-      into &= walker.value
-      walker = walker.next
+    joining_link := from.head
+    while (exists joining_link) {
+      into &= joining_link.value
+      joining_link = joining_link.next
     }
     into
   )
@@ -256,12 +269,13 @@ Bits := class {
     nibbles := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         nibble := Bits.nibble_of(byte)
         if (exists nibble) { nibbles &= nibble }
         byte = chain None
       }
+      true
     )
     external bits written take
     out := chain None
@@ -284,7 +298,7 @@ Bits := class {
     bytes := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         lowest_first := chain None
         walker := byte.tail
@@ -307,17 +321,21 @@ Bits := class {
     byte := chain None
     held := None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         nibble := Bits.nibble_of(byte)
         if (exists nibble) {
           if (exists held) {
-            bytes &= Bits(bits: Bits.joined(Bits.joined(chain None, nibble), held))
+            byte_bits := chain None
+            Bits.joined(byte_bits, nibble)
+            Bits.joined(byte_bits, held)
+            bytes &= Bits(bits: byte_bits)
             held = None
           } else { held = nibble }
         }
         byte = chain None
       }
+      true
     )
     external bits written take
     bytes
@@ -335,18 +353,20 @@ Bits := class {
     b2 := b3.next
     b1 := b2.next
     b0 := b1.next
-    out := chain None
+    out := None
     if (b7.value.not.and(b6.value.not).and(b5.value).and(b4.value)) {
+      out = chain None
       out &= b0.value
       out &= b1.value
       out &= b2.value
       out &= b3.value
     } elsif (b7.value.not.and(b6.value).and(b4.value.not).and(b3.value.not).and(b2.value.or(b1.value).or(b0.value)).and((b2.value.and(b1.value).and(b0.value)).not)) {
+      out = chain None
       out &= b0.value.not
       out &= b1.value.xor(b0.value)
       out &= b2.value.xor(b1.value.and(b0.value))
       out &= true
-    } else { return None }
+    }
     out
   )
 }

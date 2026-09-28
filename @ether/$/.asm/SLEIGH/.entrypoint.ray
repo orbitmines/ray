@@ -48,7 +48,7 @@ Sleigh := class {
     out := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         out &= byte
         byte = chain None
@@ -480,7 +480,7 @@ Sleigh := class {
     out := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         out &= byte
         byte = chain None
@@ -940,7 +940,7 @@ SleighRegister := class: Pattern {
     glyphs := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         glyphs &= byte
         byte = chain None

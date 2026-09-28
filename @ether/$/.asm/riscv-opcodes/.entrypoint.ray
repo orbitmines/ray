@@ -276,7 +276,7 @@ Opcodes := class {
     digits := chain None
     byte := chain None
     take (bit) => (
-      byte &= exists (external alike (inline bit) (`1`))
+      byte &= (inline bit)
       if (exists byte.head.next.next.next.next.next.next.next) {
         nibble := Bits.nibble_of(byte)
         if (exists nibble) { digits &= nibble } else { hexadecimal = true }

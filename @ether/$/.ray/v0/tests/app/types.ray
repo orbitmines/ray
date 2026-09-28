@@ -89,3 +89,14 @@ unless (exists Child().instance_of(Either)) { INFO@mark `TY21 a child is not one
 unless (exists Parent().instance_of(Either)) { INFO@mark `TY22 a parent is not one of itself or nothing` }
 unless (exists None.instance_of(Either)) { INFO@mark `TY23 nothing is not one of a thing or nothing` }
 if (exists None.instance_of(Parent)) { INFO@mark `TY24 nothing is one of a thing` }
+
+// A class written as a structure: its header is what it is made of, in the
+// order it is written, and each named position is a field of that type.
+Pointed := class: whole: Number, `.`, part: Number {
+  summed => .whole + .part
+}
+pointed ^keyword := Pointed(whole: two, part: three)
+unless (pointed.whole == two) { INFO@mark `TY32 a structure's first field is not what it was built with` }
+unless (pointed.part == three) { INFO@mark `TY33 a structure's last field is not what it was built with` }
+unless (pointed.summed == five) { INFO@mark `TY34 a structure's body does not read its fields` }
+unless (exists (external alike (Pointed.positions.head.next.value) (`.`))) { INFO@mark `TY35 a structure does not keep what is written between its fields` }

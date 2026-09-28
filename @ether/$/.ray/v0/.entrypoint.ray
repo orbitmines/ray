@@ -74,9 +74,18 @@ link (holds, before) => (
 // do not. The library declares such fields again in each subclass to avoid it.
 // What this waits on is the constructor running what the parent declared, in
 // the instance, before what the class itself declares.
-unordered class:{ }{parent}{ }{block} ^keyword => (
-  made ^keyword := (class block): parent
-  made.written_body = external ** block
+unordered class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
+  shape ^keyword := header
+  goto structured if (external alike (shape.listing) (global))
+  made ^keyword := (class { inline members }): header
+  goto shaped
+ structured\
+  made = class {
+    positions := (inline (external ** header))
+    inline members
+  }
+ shaped\
+  made.written_body = external ** members
   made
 )
 
@@ -141,6 +150,7 @@ Node := base class {
   // `a, b, c`: what is written, in order, as a list of it.
   , ^punctuation (other) => (
     listed ^keyword := chain None
+    listed.listing = global
     external extend listed Listed
     listed &= this
     listed &= other

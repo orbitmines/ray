@@ -76,6 +76,7 @@ export namespace Ray {
   export class Project {
     source: Text.Source[] = []
     dependencies: Project[] = []
+    layered: Project[] = []
 
     interpreters: Map<Project, Interpreter> = new Map();
 
@@ -89,7 +90,16 @@ export namespace Ray {
     get entrypoints(): Text.Source[] { return this.source.filter(x => x.dir === this.directory && this.program.entrypoint(x)); }
     get order(): Text.Source[] {
       const entrypoints = this.entrypoints;
-      return [...entrypoints, ...this.source.filter(x => !x.is_dot_project && !x.is_entrypoint && !entrypoints.includes(x))];
+      return [...this.layered.flatMap(project => project.order), ...entrypoints, ...this.source.filter(x => !x.is_dot_project && !x.is_entrypoint && !entrypoints.includes(x))];
+    }
+    get declared(): string[] {
+      const { path } = env;
+      return this.dot_project.value.split('\n').filter(line => line.trimStart().startsWith('@')).flatMap(line => line.trim().split(/\s+/)).filter(word => word.startsWith('@') && word.length > 1).map(word => {
+        const spelled = word.slice(1);
+        if (spelled.startsWith('/')) return path.normalize(spelled);
+        if (spelled.startsWith('./') || spelled.startsWith('../')) return path.normalize(path.join(this.directory, spelled));
+        return path.normalize(path.join(env.root, word));
+      });
     }
 
     private claim_sources() {
@@ -122,11 +132,16 @@ export namespace Ray {
 
     get ordered(): Project[] {
       const out: Project[] = [];
-      const visit = (project: Project) => { if (out.includes(project)) return; project.dependencies.forEach(visit); out.push(project); };
+      const visit = (project: Project) => { if (out.includes(project)) return; project.dependencies.forEach(visit); project.layered.forEach(visit); out.push(project); };
       this.projects.forEach(visit);
       return out;
     }
 
+    project_at(directory: string): Project | undefined {
+      const { path } = env;
+      const wanted = path.resolve(env.root, directory);
+      return this.projects.find(project => path.resolve(env.root, project.directory) === wanted);
+    }
     project_of(src: Source): Project | undefined {
       let best: Project | undefined;
       for (const project of this.projects)
@@ -181,6 +196,12 @@ export namespace Ray {
     
     async exec(): Promise<Node> {
       await Promise.all(this.projects.flatMap(project => project.load()));
+      for (let round = 0; round < 16; round++) {
+        const missing = [...new Set(this.projects.flatMap(project => project.declared))].filter(directory => this.project_at(directory) === undefined && env.fs.existsSync(directory));
+        if (missing.length === 0) break;
+        for (const directory of missing) this.add(env.directory(directory, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
+        await Promise.all(this.projects.flatMap(project => project.load()));
+      }
       this.fill_default_dependencies();
 
       this.ordered.forEach(project => project.interpret())
@@ -349,7 +370,21 @@ export namespace Ray {
           if (language !== project && project.directory.startsWith(`${language.directory}/`) && (best === undefined || language.directory.length > best.directory.length)) best = language;
         return best;
       };
-      this.projects.filter(x => x.dependencies.length === 0).forEach(x => { const language = enclosing(x) ?? (x.is_language ? undefined : this.default_language); if (language) x.depend_on(language); });
+      const filling = new Set<Project>();
+      const fill = (x: Project) => {
+        if (filling.has(x) || x.dependencies.length > 0) return;
+        filling.add(x);
+        const declared: Project[] = [];
+        for (const directory of x.declared) {
+          const found = this.project_at(directory);
+          if (found === undefined) this.diagnostics.report({ level: 'error', message: `Expected a project at \`${directory}\`, which \`${x.dot_project.location}\` depends on, but there is none.` });
+          else if (found !== x && !declared.includes(found)) declared.push(found);
+        }
+        if (declared.length > 0) { declared.forEach(fill); x.depend_on(declared[0]); x.layered = declared.slice(1); return; }
+        const language = enclosing(x) ?? (x.is_language ? undefined : this.default_language);
+        if (language) { fill(language); x.depend_on(language); }
+      };
+      this.projects.forEach(fill);
       for (const project of this.projects) project.interpreter.program = this;
     }
 
@@ -574,7 +609,7 @@ export namespace Ray {
     readonly began: boolean;
     constructor(public diagnostics: Diagnostics, public copy_of?: Interpreter) {
       this.began = copy_of === undefined;
-      if (copy_of !== undefined) { this.readings = copy_of.readings; this.refusals = copy_of.refusals; }
+      if (copy_of !== undefined) { this.readings = copy_of.readings; this.refusals = copy_of.refusals; this.introductions = copy_of.introductions; }
       this.GLOBAL = this.kernel();
     }
 
@@ -1130,8 +1165,14 @@ export namespace Ray {
       return held;
     }
     read_order = new Map<string, number>();
+    introductions = new Map<string, Text.Node>();
+    introduced(rule: Node): Text.Node | undefined {
+      if (rule.pattern === undefined || rule.position === undefined) return rule.position;
+      const first = this.introductions.get(rule.pattern.map(describe).join(''));
+      return first !== undefined && this.earlier(first, rule.position) ? first : rule.position;
+    }
     earlier(one: Text.Node, other: Text.Node): boolean {
-      if (one.source === other.source) return one.begin <= other.begin;
+      if (one.source === other.source || (one.source.location !== undefined && one.source.location === other.source.location)) return one.begin <= other.begin;
       const a = one.source.location === undefined ? undefined : this.read_order.get(one.source.location);
       const b = other.source.location === undefined ? undefined : this.read_order.get(other.source.location);
       return a !== undefined && b !== undefined && a < b;
@@ -1352,7 +1393,7 @@ export namespace Ray {
         if (shape.operator && (this.rewriting.size > 0 || this.missing(rule, impl, undefined, true).length > 0)) continue;
         const pieces = rule.pattern!;
         const leading = shape.leading;
-        const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, operand: opts.operand, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule), closure: impl.closure, declared: rule.position });
+        const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, operand: opts.operand, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule), closure: impl.closure, declared: this.introduced(rule) });
           if (!match) continue;
         const loose = shape.loose;
         const own = match.pattern - match.begin, current = best ? best.match.pattern - best.match.begin : -1;
@@ -2483,6 +2524,9 @@ export namespace Ray {
       const key = `${frame.key}::${pieces.map(describe).join('')}${params ? `(${params.join(',')})` : ''}`;
       const rule = frame.rules.find(x => x.key === key) ?? Object.assign(new Node(this.diagnostics, lhs), { key });
       rule.pattern = pieces; rule.position = lhs;
+      const spelled = pieces.map(describe).join('');
+      const introduced = this.introductions.get(spelled);
+      if ((params?.length ?? 0) > 0 && (introduced === undefined || this.earlier(lhs, introduced))) this.introductions.set(spelled, lhs);
       const impl = new Node(this.diagnostics, body ?? lhs);
       impl.body = body; impl.closure = frame; impl.params = params; impl.param_styles = param_styles; impl.modifiers = modifiers; impl.decorators = decorators;
       impl.param_types = param_types.length > 0 ? param_types : undefined;

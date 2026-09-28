@@ -4,7 +4,7 @@
 // The records are taken as they are from XED's xed-isa.txt: NOP, PUSH, POP,
 // MOV, ADD, SUB, CMP, XOR, JZ, JNZ, CALL, RET, JMP. The bytes are from
 // `objdump -d /bin/true` (GNU coreutils, x86-64), from 0x1480 on. About
-// 210 s: 22 s of it is reading the 20 records, most of the rest reading the
+// 480 s: 45 s of it is reading the 20 records, most of the rest reading the
 // hexadecimal fixtures and trying forms in order.
 //
 // run: X=.ether/external/xed/datafiles W=.ether/asm/work/x86; mkdir -p $W; (echo 'INSTRUCTIONS()::'; sed -n '1890,1900p;2074,2083p;2470,2479p;2680,2692p;3925,3939p;4864,4878p;5243,5252p;6121,6132p;6304,6318p;6319,6333p;6795,6808p;7075,7085p;7086,7095p;7118,7127p;7128,7137p;7192,7203p;8353,8363p;8704,8715p;8728,8738p;10161,10173p' $X/xed-isa.txt) > $W/isa.xed; PROJECT=XED SPECS="$W/isa.xed" T=600 M=4000 .ether/asm/asm.sh x86 @ether/\$/.asm/XED/tests/x86.ray boolean.ray -- Bits.ray

@@ -9,8 +9,8 @@
 //                        rows (read, not yet kept: see Xed.ray)
 //   xed-isa.txt          `{ ICLASS : …  PATTERN : …  OPERANDS : … }` records
 //
-// A record is a `{ }` block, and a block is read by the language as the
-// statements in it, so each `KEY : value` line is a statement of its own.
+// A record is a `{ }` block, read as the statements in it, so each
+// `KEY : value` line is a statement of its own.
 // A capture at the end of a rule takes one word, so `PATTERN :` takes the
 // first piece of the pattern, and the pieces after it are read as statements
 // of their own, by the rules for pieces at the end of this file.
@@ -38,6 +38,16 @@
 // spec: OPERANDS keeps its first operand only (`REG0=GPRv_B():w`); the rest
 // of its line is read, and passed over.
 ICLASS{ }:{ }{literal iclass} ^keyword => xed.instruction(iclass)
+// A block is a program, and a program written on its own is not run: a
+// record is, so the lines of a `{ }` that begins with its ICLASS are run
+// where the record is read.
+{`{`}{
+}ICLASS{ }:{ }{literal iclass}{
+}{record}{`}`} ^keyword => (
+  xed.instruction(iclass)
+  inline (external ** record)
+  true
+)
 PATTERN{ }:{ }{literal first?} ^keyword => xed.form(first)
 OPERANDS{ }:{ }{literal operands?} ^keyword => xed.operands(operands)
 

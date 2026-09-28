@@ -133,3 +133,8 @@ unless (read_once.nonempty) { INFO@mark `IO5 a read answers nothing` }
 unless (read_once == read_twice) { INFO@mark `IO6 reading a file changed it` }
 // spec: writing a location is not claimed here — a test that writes a file
 // leaves one behind.
+
+// A location computed as a string reaches the machine as the bits it is
+// written with.
+read_by_bits := IO.read(String.of(`@ether/$/.ray/v0/tests/app/.project.ray`).bits)
+unless (read_by_bits == read_once) { INFO@mark `IO7 a location given as a string's bits is read as another place` }

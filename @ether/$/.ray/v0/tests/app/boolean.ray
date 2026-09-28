@@ -75,3 +75,8 @@ unless (exists (exists None).not) { INFO@mark `BO28 asking whether nothing is th
 )
 unless (true %% true ## false) { INFO@mark `BT1 a ternary does not take its first answer` }
 if (false %% true ## false) { INFO@mark `BT2 a ternary does not take its second answer` }
+
+unless (None ?? true) { INFO@mark `BN1 ?? does not fall back on nothing` }
+if (false ?? true) { INFO@mark `BN2 ?? replaces a value that is there` }
+maybe: boolean? = None
+unless (maybe ?? true) { INFO@mark `BN3 ?? does not fall back on an optional left empty` }

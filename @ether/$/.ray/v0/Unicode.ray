@@ -68,7 +68,7 @@ Unicode := class {
 
   // spec: the tables, fetched when read. Their location is the draft's.
   tables_at => String.of(`https://www.unicode.org/Public/UCD/latest/ucd/`)
-  table (name) => external io (.tables_at + name)
+  table (name) => external io (.tables_at + name).bits
 }
 
 // The bits between two positions of a chain of bits, counted from zero.

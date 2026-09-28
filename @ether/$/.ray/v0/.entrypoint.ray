@@ -74,9 +74,21 @@ link (holds, before) => (
 // do not. The library declares such fields again in each subclass to avoid it.
 // What this waits on is the constructor running what the parent declared, in
 // the instance, before what the class itself declares.
-unordered class:{ }{parent}{ }{block} ^keyword => (
-  made ^keyword := (class block): parent
-  made.written_body = external ** block
+unordered class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
+  written_header ^keyword := external ** header
+  shape ^keyword := header
+  goto structured if (external alike (shape.listing) (global))
+  made ^keyword := (class { inline members }): header
+  goto shaped
+ structured\
+  made = class {
+    positions := (inline (external ** header))
+    written_structure := written_header
+    structure => .written_structure
+    inline members
+  }
+ shaped\
+  made.written_body = external ** members
   made
 )
 
@@ -141,6 +153,7 @@ Node := base class {
   // `a, b, c`: what is written, in order, as a list of it.
   , ^punctuation (other) => (
     listed ^keyword := chain None
+    listed.listing = global
     external extend listed Listed
     listed &= this
     listed &= other
@@ -186,6 +199,11 @@ Node := base class {
   )
   // `field?: Type`: absent is None, present is typed.
   // `X?` is `X | None`; a field of such a type is None when absent.
+  ?? ^punctuation (other) => (
+    chosen ^keyword := this
+    unless (exists chosen) { chosen = other }
+    chosen
+  )
   ? ^punctuation => this | None
   ?: ^punctuation (type) => this: (type?)
   // `x ==.instance_of type`, as presence: None is an instance of a type when
@@ -263,6 +281,7 @@ Node := base class {
   // the text there, and the pattern holds only where that is not None. A type
   // that says nothing of reading takes the text as it is.
   accepts ^reader (text) => text
+  structure ^structure => None
   // Whether a block, read with this as `this`, holds.
   satisfies (predicate) => (inline predicate)
   // `Type.verify(x)`: what a type asserts of a value typed by it; a narrowing

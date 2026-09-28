@@ -21,7 +21,7 @@ Source: `private-journal/public/archive/projects/2030+? Project - Gamification.m
   - *Creation* = construct a value of a type. *Identification* = find which type/pattern a value is. *Optimization* = find an equivalent program (same inverse-checked behaviour) that is better on a measured resource.
   - A quest's **difficulty** is relative to a character: estimated from the skills (§3) of those who solved similar quests.
   - **Refinement** = a quest whose solution is a set of sub-quests (a program of quests); **progress** = the sub-quests solved, plus the current best and the current path (*G:232*).
-- **Q:** is "every problem is reachability" (*G:395–396*) the definition to build on, so a quest is literally `from: T, to: T{goal}`?
+- **Decided:** a quest is reachability: `from: T` to `T{goal}`, with a verifier.
 
 ## 2. Optimization as play — *G:199–247*
 > Systematically steering optimization. There's always an equivalence relationship. Reversibility at every step is key. Benchmark on a specific file vs a category; tradeoffs. Ditch a line of inquiry, go back — actually a 3D location? Locations map to kinds of algorithms; items mined there carry their history.
@@ -41,7 +41,7 @@ Source: `private-journal/public/archive/projects/2030+? Project - Gamification.m
   - `Avatar` — per world or group of worlds; a set of unlocked skills and paths traversed; can be copied and merged (components, L§1.5 `+`).
   - `Skill` — a class of quests (a type over quests). Proficiency = recent verified solutions in that class, decaying over time against a historic baseline (*G:377*).
   - Progress is awarded only for **verified** solutions whose effect is measured downstream (the solution is used, the benchmark moved) — this is the anti-gaming rule (*G:382–383*).
-- **Q:** should proficiency decay (*G:381*), or only be shown as "recent" vs "historic" without being lost?
+- **Decided:** proficiency decays. Unused, it is partially lost against the historic baseline.
 
 ## 4. Mana = capacity — *G:256–292*
 > Mana is processing power; things with more than one mana bar are several items each with one (network, disk). Copying is a spell that uses capacity (X GB/s write) and requires concentration; can be interrupted. Remote items are shown translucent; materialize/localize.
@@ -50,7 +50,7 @@ Source: `private-journal/public/archive/projects/2030+? Project - Gamification.m
   - **Mana** is a measured capacity of a resource (a `Quantity` with a rate unit, e.g. `GB/s`) — the unit registry already reads `1.5 GB/s`.
   - A **spell** is an IO operation (L§8.1: IO is what reaches an IO external) shown with its cost and progress; *concentration* = it holds the resource; an interrupt level decides what cancels it.
   - Presence is visible: in memory, on disk, remote — the same distinction as storage vs shape (L§9.1). *Materialize* = fetch into local storage.
-- **Q:** is mana only *real* capacity (CPU/GPU/disk/network of machines you connect), never an invented game currency? (*G:280, 256* suggest yes.)
+- **Decided:** mana is only real capacity: the CPU/GPU/disk/network of the machines you connect. It is never an invented currency.
 
 ## 5. Worlds, rooms, items — *G:173–197, 322–339, 352–356*
 > Every item being an inside room which describes it. UI layout just a place you can visit. Worlds connect arbitrarily. Universe determines global rules for each world; a world can change those rules. Desktop as a 3D room. Mix of text and visual where each makes sense.
@@ -61,7 +61,7 @@ Source: `private-journal/public/archive/projects/2030+? Project - Gamification.m
   - Names are optional (*G:173*): an item is identified by location/identity (L§9.1: identity is version-history id, not name).
   - The 3D coordinates of an item are modifiers in its text form (*G:175*).
   - "Certain regions dropping items is public" = visibility per location (L§8.3).
-- **Q:** is a world literally a `.project.ray` project with its own dependencies (L: dependencies layer only for that environment)?
+- **Decided:** a world is a `.project.ray` project. Its rules are its dependencies plus `with` overrides.
 
 ## 6. Onboarding — *G:46–80, 302–312*
 > Quick onboarding with [[R]]: language choice; "what're you here for" (Everything / Tools only); network mode (Go online / Pessimistically online / Invisible if possible / Prefer offline / Go offline); realistic vs voxel; arrival at Luna, Galaxy bases, check-in desk.
@@ -78,7 +78,7 @@ Source: `private-journal/public/archive/projects/2030+? Project - Gamification.m
 - Proposal (engine/infrastructure, later):
   - Each node holds a region and its HLC-stamped history (L§9.2); neighbours receive summaries whose detail falls with distance.
   - Presence delay (*hazy*) and invisibility (*veiled* = infinite delay) are visibility settings of the location stream (L§8.3).
-- **Q:** is this in scope for the first gamification milestone, or only after the IDE?
+- **Decided:** out of scope until after the IDE.
 
 ## 8. Guided navigation language — *G:150–151, 171–196*
 > Reformalize engineering, reverse-engineering, optimization and search into an intuitive language that guides exploration; whenever something can be brute-forced, it will be.

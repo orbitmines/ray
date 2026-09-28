@@ -142,7 +142,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - `Ball~default()` is the ordinary one. `Ball~profile()` and `Ball~"Profile Name"()` enter at that label; `Ball~5()` picks the fifth.
   - `Ball = Ball~profile` sets which one is the default; `with Ball = Ball~profile` does so only in a context.
   - `Node~method` names a method as a place, e.g. to insert something after it for precedence ordering.
-- **Open:** does `with X = …` (a change seen only in that context) belong to this section, or to the scoping rules?
+- `with X = …` is the general context override of §6.3; `with Ball = Ball~profile` is one use of it.
 
 ### 4.3 Calling what isn't there yet — *IDE:217*
 > Call something which isn't filled yet lazily, and assume it can only be put there after it's filled.
@@ -234,7 +234,15 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided:** a sublanguage is a Program level: a scope of rules without the IO externals and without unbounded loops.
   - A `!language` project configures which files are read in which sublanguage.
   - Such files are always named `FILE_NAME.[extension].ray`, e.g. `package.cfg.ray`.
-- **Open:** what `&` variables mean in the note (*IDE:696*).
+- **Decided:** the note's `&` variables (*IDE:696*) are context overrides, the `with` of §6.3: a configuration that changes a type's or a global's value only for that context.
+
+### 6.3 Context overrides — `with` / `assume`
+- **Decided:**
+  - `with Time.timezone = SOME_TIMEZONE` changes what functions answer for every call made in the running context, until the context is left. The scope is dynamic: the override follows calls, not only lexical nesting.
+  - `assume Time.timezone = …` is an alias of `with`.
+  - Since `with` takes a program, the block form works too: `with { Time.timezone = X }`.
+  - It is defined language-side, not in the engine.
+  - Other uses: `with Ball = Ball~profile` (§4.2), and `ClassA{filter}$ = DB` routing (§9.1).
 
 ---
 
@@ -315,6 +323,10 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided:** `Class$` is the spelling.
   - `$` on its own is *languages*: `$.ray` answers the Program that is the Ray programming language, and `$.cpp` / `$.c++` is C++.
   - This matches the repository layout (`@ether/$/.ray`).
+- **Decided:** where `Class$` stores is itself defined, and may differ by context.
+  - For example, the store may sit under the current user, with many instances kept like a database.
+  - Several databases: `ClassA{filter}$ = DB` sends the instances that pass the filter (for example those located inside `@user`) to that store. Stores are routed this way.
+  - A `persistent` value is kept in its class's `$`.
 
 ### 9.2 Version control — *IDE:412–420, 633–641, 732*
 > Hybrid logical clocks / CRDTs; your fork always accessible, can always push; apply a change to all stable versions (respecting their own changes); flag a change as the one that works; group changes; test my changes against the latest instead of merging the latest into mine; label functions inline in `.ray.txt` for non-Ether editors; notify when a monkey-patched function starts being used by a library, or when a renamed parameter breaks a partial call.
@@ -410,7 +422,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 
 ### 10.6 Features
 - `IO /path` syntax, lazy file programs, `.ray.txt` fallback, mirrors, `%=` shadowing: `.ray2/Feature/IO.ray:8–21`, `.ray2/_todo/…/entrypoint/entrypoint.ray:4–36`. Engine; connects to §6.1.
-- `persistent`: `.ray2/Feature/IO.ray:25` is a bare `persistent //TODO` after the IO namespace; `.ray2/_todo/…/UI/Geometry.ray:158` has `dynamically persistent`. **Q:** a modifier that stores a value across runs, i.e. in `Class$` (§9.1)?
+- `persistent`: `.ray2/Feature/IO.ray:25`, `.ray2/_todo/…/UI/Geometry.ray:158` (`dynamically persistent`). **Decided:** a persistent value is stored in its class's `$` (§9.1), whatever that is defined to be.
 - OS namespaces and per-OS files: `.ray2/_todo/…/os/*.ray.txt`. Library.
 - Network: protocol registry, URL grammar, ports, sockets, hosts files, CIDR, `Node.Remote`, proxying, handshakes, `< @https://…` imports: `.ray2/_todo/…/Network.ray`, `.ray2/Feature/Network/*.ray`. Library, plus engine for remote nodes.
 - Keyboard `pulsed`, `toggled`, `cycle`; UI interfaces, layout (Between/Center/Padding), bounding boxes, styling: `.ray2/Feature/UI/Keyboard.ray`, `.ray2/_todo/…/UI/*.ray`. Library plus the host.

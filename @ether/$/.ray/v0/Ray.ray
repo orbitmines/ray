@@ -206,6 +206,27 @@ Iterable := class: Ordered {
     turned
   )
 
+  // `sort (dimension) … ~every .previous <= . <= .next`, along `<`: the same
+  // elements, the smallest of what is left taken each time.
+  sort => (
+    left ^keyword := chain None
+    for { left &= it.value }
+    ordered ^keyword := chain None
+    smallest ^keyword := None
+    walker ^keyword := None
+    while left.nonempty {
+      smallest = left.head
+      walker = left.head.next
+      while (exists walker) {
+        if (walker.value < smallest.value) { smallest = walker }
+        walker = walker.next
+      }
+      ordered &= smallest.value
+      left.unlink(smallest)
+    }
+    ordered
+  )
+
   // `contains | includes <operator = ==>(x) some(operator(.)(x))`.
   contains (x) => (
     for { if (it.value == x) { return true } }
@@ -498,6 +519,36 @@ Traverser := class {
 // containers `class` builds before this file loads take both on here.
 Chain.components.hierarchy &= Array
 Link.components.hierarchy &= Ray
+// `push_back`, `push_front`, `pop_front => first.remove`, `pop_back =>
+// last.remove`: a chain gains or loses an end, and what is taken off is what
+// it held.
+Chain.components.hierarchy &= class {
+  push_back (x) => (this &= x)
+  push_front (x) => (
+    was_head ^keyword := this.head
+    added ^keyword := link x None
+    added.next = was_head
+    if (exists was_head) { was_head.previous = added } else { this.tail = added }
+    this.head = added
+    this
+  )
+  unlink (dropped) => (
+    held ^keyword := dropped
+    answer ^keyword := held.value
+    before ^keyword := held.previous
+    after ^keyword := held.next
+    if (exists before) { before.next = after } else { this.head = after }
+    if (exists after) { after.previous = before } else { this.tail = before }
+    answer
+  )
+  pop_front => (
+    taken ^keyword := None
+    if (exists this.head) { taken = this.unlink(this.head) }
+    taken
+  )
+  pop_back => (
+    taken ^keyword := None
+    if (exists this.tail) { taken = this.unlink(this.tail) }
 // A chain is made by `chain`, not by its class, so it holds no hierarchy of
 // its own: it is built on its class, and on what its class is built on.
 Chain.components.hierarchy &= class {

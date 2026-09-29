@@ -254,3 +254,26 @@ unless (exists counted.instance_of(Array)) { INFO@mark `IT28 a chain is not an a
 unless (exists counted.instance_of(Iterable)) { INFO@mark `IT29 a chain is not iterable` }
 unless (exists counted.head.instance_of(Ray)) { INFO@mark `IT30 a link is not a ray` }
 unless (exists 1.instance_of(Ray)) { INFO@mark `IT33 a number is not a ray` }
+
+// A chain gains and loses its ends, and is put in order.
+ends ^keyword := chain None
+ends &= 2
+ends.push_back(3)
+ends.push_front(1)
+unless (ends.count == 3) { INFO@mark `IT35 pushing onto both ends does not hold three` }
+unless (ends.head.value == 1) { INFO@mark `IT36 what was pushed in front is not first` }
+unless (ends.tail.value == 3) { INFO@mark `IT37 what was pushed at the back is not last` }
+unless (ends.pop_front == 1) { INFO@mark `IT38 popping the front does not give the first` }
+unless (ends.pop_back == 3) { INFO@mark `IT39 popping the back does not give the last` }
+unless (ends.count == 1) { INFO@mark `IT40 two popped off three do not leave one` }
+unless (ends.head.value == 2) { INFO@mark `IT41 what is left is not the middle` }
+unless (exists ends.head) { INFO@mark `IT42 the one left is not the head` }
+shuffled ^keyword := chain None
+shuffled &= 3
+shuffled &= 1
+shuffled &= 2
+put_in_order ^keyword := shuffled.sort
+unless (put_in_order.head.value == 1) { INFO@mark `IT43 sorted, the first is not the smallest` }
+unless (put_in_order.tail.value == 3) { INFO@mark `IT44 sorted, the last is not the largest` }
+unless (shuffled.count == 3) { INFO@mark `IT45 sorting took from what was sorted` }
+

@@ -465,6 +465,7 @@ export namespace Ray {
 
     get callable(): boolean { return this.fn !== undefined || this.params !== undefined; }
     ruled?: boolean
+    edits?: number
     get rules(): Node[] { return this.methods ? [...this.methods.keys()].filter((x): x is Node => x instanceof Node) : []; }
 
     // A name is what it is bound to, or the function defined under that name.
@@ -597,6 +598,9 @@ export namespace Ray {
 
   export type Match = { begin: number; end: number; pattern: number; spanned: boolean; literals: [number, number, number][]; captures: Map<string, Text.Node>; operators: Map<string, Text.Node>; args: Text.Node[]; receiver?: Node; tight: boolean; read?: Map<string, Node>; given?: (Node | undefined)[] }
   export type Found = { rule: Node; impl: Node; match: Match }
+  export type Head = { pattern: Text.Node[]; modifiers: Node[]; decorators: Text.Node[]; params?: string[]; param_styles?: Text.Node[][]; param_names: Text.Node[]; param_types: Text.Node[]; pieces: Piece[]; spelled: string; shared: { rule?: Node; body?: Text.Node } }
+  export type Rules = readonly (readonly [Node, Node][])[]
+  export function* each(rules: Rules): Generator<[Node, Node]> { for (const segment of rules) yield* segment; }
 
   export class Interpreter {
     static PASSES = 8;
@@ -688,6 +692,7 @@ export namespace Ray {
         for (const location of this.copy_of?.read_order.keys() ?? []) if (!this.read_order.has(location)) this.read_order.set(location, this.read_order.size);
         srcs.forEach(src => { if (src.location !== undefined && !this.read_order.has(src.location)) this.read_order.set(src.location, this.read_order.size); });
         for (const src of srcs) { this._interpret(src); yield; }
+        this.painting = this.unretired();
         this.prune(inherited);
         // Frames are fresh per application, so their numbers say nothing about
         // what was defined; the spelling does.
@@ -707,7 +712,7 @@ export namespace Ray {
       this.copy_of = undefined;
       this.seen = new Map();
       this.painted++;
-      this.paints = this.painting;
+      this.paints = this.painting = this.unretired();
       this.marks = this.marking;
       this.stale = new Map();
       for (const src of srcs) {
@@ -776,7 +781,9 @@ export namespace Ray {
       const fresh = this.fresh(key, value);
       // A frame whose rules were already looked up gains one: what was looked up is stale.
       const stale = key instanceof Node && !frame.methods?.has(key) && (this.rulesets.has(frame) || this.dispatch.has(frame) || this.asked.has(frame));
-      if ((fresh || stale) && (key instanceof Node || frame.methods?.get(key)?.forward || value.forward)) this.version++;
+      const ruling = key instanceof Node || frame.methods?.get(key)?.forward || value.forward;
+      if (fresh && ruling) this.version++;
+      else if (stale && ruling) frame.edits = (frame.edits ?? 0) + 1;
       if (key instanceof Node && value.body !== undefined && !value.forward) this.body_of(value.body);
       if (typeof key === 'string' && !frame.methods?.has(key)) this.name_of(frame, key);
       // The registry, and a site's memory of its frame, are of where rules live.
@@ -1128,14 +1135,23 @@ export namespace Ray {
       this.diagnostics.report({ level, message, node });
     }
 
-    private rulesets = new WeakMap<Node, { version: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][] }>();
+    private rulesets = new WeakMap<Node, { version: number; edits: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][]; forwarded: [Node, Node][] }>();
     // What is composed of what changes without a rule being written, so what
     // a receiver dispatches on is remembered against how often it has.
     composing = 0;
-    private dispatch = new WeakMap<Node, { version: number; composing: number; chain: [Node, Node][]; rules: [Node, Node][] }>();
-    ruleset(scope: Node): { operand: [Node, Node][]; receiver: [Node, Node][] } {
+    private dispatch = new WeakMap<Node, { version: number; composing: number; edits: number; chain: Rules; rules: Rules }>();
+    edited(scopes: Iterable<Node>): number { let edits = 0; for (const scope of scopes) edits += scope.edits ?? 0; return edits; }
+    *parents(frame: Node): Generator<Node> {
+      let depth = 0, seen: Set<Node> | undefined;
+      for (let scope: Node | undefined = frame; scope; scope = scope.parent) {
+        if (++depth > 64) { seen ??= new Set(); if (seen.has(scope)) return; seen.add(scope); }
+        yield scope;
+      }
+      if (this.BASE) yield this.BASE;
+    }
+    ruleset(scope: Node): { operand: [Node, Node][]; receiver: [Node, Node][]; forwarded: [Node, Node][] } {
       const cached = this.rulesets.get(scope);
-      if (cached && cached.version === this.version) return cached;
+      if (cached && cached.version === this.version && cached.edits === (scope.edits ?? 0)) return cached;
       const operand: [Node, Node][] = [], receiver: [Node, Node][] = [];
       for (const rule of scope.rules.reverse()) {
         const impl = scope.methods!.get(rule)!;
@@ -1144,13 +1160,13 @@ export namespace Ray {
         if (is_operand && !(impl.forward && impl.params)) operand.push([rule, impl]);
         if (!is_operand || impl.forward) receiver.push([rule, impl]);
       }
-      const set = { version: this.version, operand, receiver };
+      const set = { version: this.version, edits: scope.edits ?? 0, operand, receiver, forwarded: receiver.filter(([, impl]) => impl.forward !== undefined) };
       this.rulesets.set(scope, set);
       return set;
     }
     // Frames whose rules were asked for without being read: they had none.
     private asked = new WeakSet<Node>();
-    private chains = new WeakMap<Node, { version: number; composing: number; base?: Node; operand: [Node, Node][]; receiver: [Node, Node][] }>();
+    private chains = new WeakMap<Node, { version: number; composing: number; edits: number; scopes: Node[]; base?: Node; operand: Rules; receiver: Rules }>();
     // A frame that writes no rules of its own sees exactly what the frame
     // above it sees. Frames are made fresh for every application, so asking
     // the one that actually holds rules is what makes any answer reusable.
@@ -1177,13 +1193,13 @@ export namespace Ray {
       const b = other.source.location === undefined ? undefined : this.read_order.get(other.source.location);
       return a !== undefined && b !== undefined && a < b;
     }
-    private operator_rules = new WeakMap<[Node, Node][], { version: number; spelled: Map<string, [string, Text.Node][]> }>();
-    operators_of(frame: Node): Map<string, [string, Text.Node][]> {
-      const rules = this.chain(frame);
-      const cached = this.operator_rules.get(rules.receiver);
+    private operator_rules = new WeakMap<readonly [Node, Node][], { version: number; spelled: Map<string, [string, Text.Node][]> }>();
+    private operator_chains = new WeakMap<Rules, { version: number; spelled: Map<string, [string, Text.Node][]>[] }>();
+    operators_in(segment: readonly [Node, Node][]): Map<string, [string, Text.Node][]> {
+      const cached = this.operator_rules.get(segment);
       if (cached?.version === this.version) return cached.spelled;
       const spelled = new Map<string, [string, Text.Node][]>();
-      for (const [rule, impl] of [...rules.receiver, ...rules.operand]) {
+      for (const [rule, impl] of segment) {
         const pieces = rule.pattern;
         if (pieces?.length !== 1 || pieces[0].kind !== 'literal' || (impl.params?.length ?? 0) === 0 || rule.position === undefined) continue;
         const text = pieces[0].text.trim();
@@ -1192,7 +1208,15 @@ export namespace Ray {
         if (same === undefined) spelled.set(text[0], same = []);
         same.push([text, rule.position]);
       }
-      this.operator_rules.set(rules.receiver, { version: this.version, spelled });
+      this.operator_rules.set(segment, { version: this.version, spelled });
+      return spelled;
+    }
+    operators_of(frame: Node): Map<string, [string, Text.Node][]>[] {
+      const rules = this.chain(frame);
+      const cached = this.operator_chains.get(rules.receiver);
+      if (cached?.version === this.version) return cached.spelled;
+      const spelled = [...rules.receiver, ...rules.operand].map(segment => this.operators_in(segment)).filter(operators => operators.size > 0);
+      this.operator_chains.set(rules.receiver, { version: this.version, spelled });
       return spelled;
     }
     looser_end(cursor: Text.Node, from: number, end: number, frame: Node, declared: Text.Node): number {
@@ -1201,7 +1225,7 @@ export namespace Ray {
       while (j < end) {
         const claimed = this.claim(cursor, j, frame);
         if (claimed > j) { j = claimed; continue; }
-        for (const [spelling, position] of operators.get(text[j]) ?? []) {
+        for (const segment of operators) for (const [spelling, position] of segment.get(text[j]) ?? []) {
           if (!text.startsWith(spelling, j) || !this.earlier(position, declared)) continue;
           let k = j;
           while (k > from && /\s/.test(text[k - 1])) k--;
@@ -1211,12 +1235,12 @@ export namespace Ray {
       }
       return end;
     }
-    chain(frame: Node): { operand: [Node, Node][]; receiver: [Node, Node][] } {
+    chain(frame: Node): { operand: Rules; receiver: Rules } {
       const held = this.rooted(frame);
       if (held !== frame) return this.chain(held);
       const cached = this.chains.get(frame);
       // What a frame is made of can change after it was asked what it sees.
-      if (cached && cached.version === this.version && cached.composing === this.composing && cached.base === this.BASE) return cached;
+      if (cached && cached.version === this.version && cached.composing === this.composing && cached.base === this.BASE && cached.edits === this.edited(cached.scopes)) return cached;
       const scopes = new Set<Node>();
       for (let scope: Node | undefined = frame; scope; scope = scope.parent) {
         scopes.add(scope);
@@ -1226,28 +1250,29 @@ export namespace Ray {
         for (const held of scope.made_of ?? []) scopes.add(held);
       }
       if (this.BASE) scopes.add(this.BASE);
-      const operand: [Node, Node][] = [], receiver: [Node, Node][] = [];
+      const operand: [Node, Node][][] = [], receiver: [Node, Node][][] = [];
       for (const scope of scopes) {
         const set = this.ruleset(scope);
-        operand.push(...set.operand);
-        if (scope === this.GLOBAL || scope === this.BASE) receiver.push(...set.receiver);
-        else receiver.push(...set.receiver.filter(([, impl]) => impl.forward !== undefined));
+        if (set.operand.length > 0) operand.push(set.operand);
+        const seen = scope === this.GLOBAL || scope === this.BASE ? set.receiver : set.forwarded;
+        if (seen.length > 0) receiver.push(seen);
       }
-      const chain = { version: this.version, composing: this.composing, base: this.BASE, operand, receiver };
+      const chain = { version: this.version, composing: this.composing, edits: this.edited(scopes), scopes: [...scopes], base: this.BASE, operand, receiver };
       this.chains.set(frame, chain);
       return chain;
     }
-    private declarations = new WeakMap<Node, { version: number; rules: Set<Node> }>();
+    private declarations = new WeakMap<Node, { version: number; edits: number; rules: Set<Node> }>();
     private static nothing = new Set<Node>();
     declared(receiver: Node | undefined): Set<Node> {
       const own = receiver && this.resolved(receiver);
       if (!own || own.lazy) return Interpreter.nothing;
-      const cached = this.declarations.get(own);
-      if (cached && cached.version === this.version) return cached.rules;
-      const rules = new Set<Node>();
       const sources = own.inlined === undefined && own.made_of === undefined ? [own] : [...own.composed(new Set())];
+      const edits = this.edited(sources);
+      const cached = this.declarations.get(own);
+      if (cached && cached.version === this.version && cached.edits === edits) return cached.rules;
+      const rules = new Set<Node>();
       for (const from of sources) if (!this.ambient(from) && from.methods) for (const key of from.methods.keys()) if (key instanceof Node) rules.add(key);
-      this.declarations.set(own, { version: this.version, rules });
+      this.declarations.set(own, { version: this.version, edits, rules });
       return rules;
     }
     ambient(node: Node): boolean {
@@ -1262,7 +1287,7 @@ export namespace Ray {
       return false;
     }
     private reads = new WeakMap<Node, number>();
-    candidates(receiver: Node | undefined, frame: Node, opts: { self?: boolean } = {}): [Node, Node][] {
+    candidates(receiver: Node | undefined, frame: Node, opts: { self?: boolean } = {}): Rules {
       if (receiver === undefined) return this.chain(frame).operand;
       let own = this.resolved(receiver);
       const chain = this.chain(frame).receiver;
@@ -1278,20 +1303,21 @@ export namespace Ray {
       if (own.inlined === undefined && own.made_of === undefined) {
         if (!own.methods || itself) return chain;
         const cached = this.dispatch.get(own);
-        if (cached && cached.version === this.version && cached.composing === this.composing && cached.chain === chain) return cached.rules;
-        const rules = [...this.ruleset(own).receiver, ...chain];
-        this.dispatch.set(own, { version: this.version, composing: this.composing, chain, rules });
+        if (cached && cached.version === this.version && cached.composing === this.composing && cached.edits === (own.edits ?? 0) && cached.chain === chain) return cached.rules;
+        const rules = [this.ruleset(own).receiver, ...chain];
+        this.dispatch.set(own, { version: this.version, composing: this.composing, edits: own.edits ?? 0, chain, rules });
         return rules;
       }
+      const composed = [...own.composed(new Set())];
+      const edits = this.edited(composed);
       if (!itself) {
         const held = this.dispatch.get(own);
-        if (held && held.version === this.version && held.composing === this.composing && held.chain === chain) return held.rules;
+        if (held && held.version === this.version && held.composing === this.composing && held.edits === edits && held.chain === chain) return held.rules;
       }
-      const rules: [Node, Node][] = [];
-      const seen = new Set<Node>();
-      for (const from of own.composed(seen)) if (from.methods && !(itself && from === own)) rules.push(...this.ruleset(from).receiver);
+      const rules: [Node, Node][][] = [];
+      for (const from of composed) if (from.methods && !(itself && from === own)) { const held = this.ruleset(from).receiver; if (held.length > 0) rules.push(held); }
       const dispatched = rules.length > 0 ? [...rules, ...chain] : chain;
-      if (!itself) this.dispatch.set(own, { version: this.version, composing: this.composing, chain, rules: dispatched });
+      if (!itself) this.dispatch.set(own, { version: this.version, composing: this.composing, edits, chain, rules: dispatched });
       return dispatched;
     }
 
@@ -1377,7 +1403,7 @@ export namespace Ray {
           ? this.only(this.candidates(receiver, frame, { self: true }), false)
           : this.candidates(receiver, frame);
       const ahead = cursor.source.value[this.skip(cursor, cursor.cursor)];
-      for (const [rule, impl] of set) {
+      for (const segment of set) for (const [rule, impl] of segment) {
         if (rule === opts.besides) continue;
         const shape = this.shaped(rule);
         if (shape.literal) continue;
@@ -1408,14 +1434,23 @@ export namespace Ray {
       return best;
     }
 
-    private onlys = new WeakMap<[Node, Node][], [Node, Node][]>();
-    only(set: [Node, Node][], leading: boolean): [Node, Node][] {
-      let kept = this.onlys.get(set);
+    private onlys = [new WeakMap<Rules | readonly [Node, Node][], any>(), new WeakMap<Rules | readonly [Node, Node][], any>()];
+    only(set: Rules, leading: boolean): Rules {
+      const known = this.onlys[leading ? 1 : 0];
+      let kept: Rules | undefined = known.get(set);
       if (kept !== undefined) return kept;
-      kept = leading
-        ? set.filter(([rule]) => rule.pattern![0]?.kind === 'capture')
-        : set.filter(([rule]) => { const first = rule.pattern![0]; return first?.kind !== 'capture' || first.raw; });
-      this.onlys.set(set, kept);
+      const out: (readonly [Node, Node][])[] = [];
+      for (const segment of set) {
+        let held: readonly [Node, Node][] | undefined = known.get(segment);
+        if (held === undefined) {
+          held = leading
+            ? segment.filter(([rule]) => rule.pattern![0]?.kind === 'capture')
+            : segment.filter(([rule]) => { const first = rule.pattern![0]; return first?.kind !== 'capture' || first.raw; });
+          known.set(segment, held);
+        }
+        if (held.length > 0) out.push(held);
+      }
+      known.set(set, kept = out);
       return kept;
     }
     // Which brackets hold parameters is not the engine's to know: the rule that
@@ -1446,11 +1481,12 @@ export namespace Ray {
     // while the entrypoint is still defining itself.
     // What the rules say about a spelling depends only on which rules are
     // visible, so it is asked once of the frame that holds them.
-    private answers = new WeakMap<Node, { version: number; of: Map<string, string | [string, string] | undefined> }>();
+    private answers = new WeakMap<Node, { version: number; edits: number; of: Map<string, string | [string, string] | undefined> }>();
     private answered<T extends string | [string, string] | undefined>(frame: Node, key: string, ask: (scopes: Node[]) => T): T {
       const root = this.rooted(frame);
       let held = this.answers.get(root);
-      if (held === undefined || held.version !== this.version) this.answers.set(root, held = { version: this.version, of: new Map() });
+      const edits = this.edited(this.parents(root));
+      if (held === undefined || held.version !== this.version || held.edits !== edits) this.answers.set(root, held = { version: this.version, edits, of: new Map() });
       if (held.of.has(key)) return held.of.get(key) as T;
       const scopes: Node[] = [];
       for (let scope: Node | undefined = root; scope; scope = scope.parent) scopes.push(scope);
@@ -1545,7 +1581,7 @@ export namespace Ray {
       let read: Map<string, Node> | undefined;
       const literals: [number, number, number][] = [];
       const juxtaposition = pieces[opts.leading ? 1 : 0]?.kind === 'space';
-      let operator_rules: [Node, Node][] | undefined;
+      let operator_rules: Rules | undefined;
       let spanned = false, skipped = false;
       for (let p = 0; p < pieces.length; p++) {
         const piece = pieces[p];
@@ -1775,15 +1811,16 @@ export namespace Ray {
       while (j > start && (text[j - 1] === ' ' || text[j - 1] === '\t' || text[j - 1] === '\r')) j--;
       return j;
     }
-    private boundaries = new WeakMap<Node, { version: number; base?: Node; edges: Set<string> }>();
+    private boundaries = new WeakMap<Node, { version: number; base?: Node; edits: number; edges: Set<string> }>();
     edges(frame: Node): Set<string> {
       const cached = this.boundaries.get(frame);
-      if (cached && cached.version === this.version && cached.base === this.BASE) return cached.edges;
+      const edits = this.edited(this.parents(frame));
+      if (cached && cached.version === this.version && cached.base === this.BASE && cached.edits === edits) return cached.edges;
       const edges = new Set<string>();
       const add = (rule: Node) => { const first = rule.pattern!.find(x => x.kind !== 'capture'); if (first?.kind === 'literal' && !/[\p{L}\p{N}_]/u.test(first.text[0])) edges.add(first.text[0]); };
       for (let scope: Node | undefined = frame; scope; scope = scope.parent) scope.rules.forEach(add);
       this.BASE?.rules.forEach(add);
-      this.boundaries.set(frame, { version: this.version, base: this.BASE, edges });
+      this.boundaries.set(frame, { version: this.version, base: this.BASE, edits, edges });
       return edges;
     }
     token_end(cursor: Text.Node, j: number, frame: Node): number {
@@ -1825,7 +1862,7 @@ export namespace Ray {
     starts_rule(cursor: Text.Node, j: number, frame: Node): boolean {
       const chain = this.chain(frame);
       for (const set of [chain.receiver, chain.operand])
-        for (const [rule, impl] of set) {
+        for (const segment of set) for (const [rule, impl] of segment) {
           const first = rule.pattern![0];
           if (impl.forward || first?.kind !== 'literal') continue;
           if (this.begins(cursor, j, first.text)) return true;
@@ -1836,9 +1873,9 @@ export namespace Ray {
       }
       return false;
     }
-    operator_end(cursor: Text.Node, j: number, frame: Node, set?: [Node, Node][]): number {
+    operator_end(cursor: Text.Node, j: number, frame: Node, set?: Rules): number {
       let end = j;
-      for (const [rule, impl] of set ?? this.chain(frame).receiver) {
+      for (const segment of set ?? this.chain(frame).receiver) for (const [rule, impl] of segment) {
         const first = rule.pattern![0];
         // What stands between two operands takes the one on its right. `.` is
         // written the same way and takes nothing, so it is not one of these,
@@ -2343,7 +2380,7 @@ export namespace Ray {
         else if (span) { const node = this.lazy(span, frame, piece.raw); captures.set(piece.name, node); if (!piece.raw && !this.probing && !this.in_body(span)) this.deferred.push(node); }
         else if (p === 0 && match.receiver !== undefined) captures.set(piece.name, match.receiver);
       });
-      this.paint(at, undefined, frame, rule.key);
+      this.paint(at, undefined, frame, rule.key, { role: 'application' });
       this.paint_head(rule, match, cursor, frame);
       const styling = new Node(this.diagnostics);
       styling.parent = impl.closure ?? frame;
@@ -2357,19 +2394,17 @@ export namespace Ray {
         if (!span || span.empty()) continue;
         const location = span.source.location ?? '';
         let spans = this.verbatim.get(location);
-        if (!spans) this.verbatim.set(location, spans = []);
-        spans.push([span.begin, span.end]);
+        if (!spans) this.verbatim.set(location, spans = new Map());
+        if ((spans.get(span.begin) ?? -1) < span.end) spans.set(span.begin, span.end);
       }
-      const current = () => (impl.closure ?? this.GLOBAL).methods?.get(rule) ?? impl;
-      const styles = (p: number) => { const piece = rule.pattern![p]; return piece?.kind === 'capture' ? piece.styles : piece?.kind === 'literal' ? piece.styles ?? [] : []; };
-      for (const span of owned) this.paint(span, () => current().decorators ?? [], styling, rule.key, { head: heads.includes(span) });
-      for (const [p, b, e] of match.literals) this.paint(cursor.span(b, e), () => styles(p), styling, rule.key, { head: true });
+      for (const span of owned) this.paint(span, this.decorators_of(rule, impl), styling, rule.key, { head: heads.includes(span), role: 'decorators' });
+      for (const [p, b, e] of match.literals) this.paint(cursor.span(b, e), this.piece_styles(rule, p), styling, rule.key, { head: true, role: `literal ${p}` });
       rule.pattern!.forEach((piece, p) => {
         if (piece.kind !== 'capture') return;
         const span = match.captures.get(piece.name) ?? (p === 0 ? match.receiver?.position : undefined);
-        if (span) this.paint(span, () => styles(p), styling, rule.key);
+        if (span) this.paint(span, this.piece_styles(rule, p), styling, rule.key, { role: `capture ${p}` });
       });
-      match.args.forEach((span, k) => this.paint(span, () => current().param_styles?.[k] ?? [], styling, rule.key));
+      match.args.forEach((span, k) => this.paint(span, this.param_styles_of(rule, impl, k), styling, rule.key, { role: `argument ${k}` }));
       // Parameters are values, not blocks: reading them here is what lets a
       // method be called with its argument beside it rather than in brackets.
       let args = match.args.map((span, k) => { const given = match.given?.[k]; if (given !== undefined) return given; const node = this.lazy(span, frame, false); if (!this.probing && !this.in_body(span)) this.deferred.push(node); return node; });
@@ -2449,6 +2484,12 @@ export namespace Ray {
         catch (jump) { if (impl.params === undefined && jump instanceof Jump && jump.kind === 'end' && (jump.site === undefined || Interpreter.within(jump.site, at) || Interpreter.within(jump.site, impl.body))) jump.site = at; throw jump; }
         finally { if (rewrites) this.rewriting.delete(rule); }
       } finally { this.applying.pop(); const held = this.entered.get(site) ?? 1; if (held <= 1) this.entered.delete(site); else this.entered.set(site, held - 1); }
+    }
+    private current(rule: Node, impl: Node): Node { return (impl.closure ?? this.GLOBAL).methods?.get(rule) ?? impl; }
+    private decorators_of(rule: Node, impl: Node): () => Text.Node[] { return () => this.current(rule, impl).decorators ?? []; }
+    private param_styles_of(rule: Node, impl: Node, k: number): () => Text.Node[] { return () => this.current(rule, impl).param_styles?.[k] ?? []; }
+    private piece_styles(rule: Node, p: number): () => Text.Node[] {
+      return () => { const piece = rule.pattern![p]; return piece?.kind === 'capture' ? piece.styles : piece?.kind === 'literal' ? piece.styles ?? [] : []; };
     }
     // A body with the operators it was handed written into it.
     private written_with(body: Text.Node, rule: Node, match: Match): Text.Node {
@@ -2538,7 +2579,7 @@ export namespace Ray {
           const painted = span.span(span.begin, span.end);
           painted.of = key;
           painted.style = () => {
-            for (const [rule, impl] of [...this.chain(frame).receiver, ...this.chain(frame).operand]) {
+            for (const [rule, impl] of each([...this.chain(frame).receiver, ...this.chain(frame).operand])) {
               if (impl.forward || this.head(rule) !== head || !impl.decorators?.length) continue;
               return this.safely(() => this.style_of(impl.decorators![0], impl.closure ?? frame))?.style;
             }
@@ -2581,7 +2622,11 @@ export namespace Ray {
       return this.define(cursor.span(start, lhs_end - 1), body_end > body_start ? cursor.span(body_start, body_end - 1) : undefined, frame, cursor.span(arrow, arrow + 1));
     }
 
-    define(lhs: Text.Node, body: Text.Node | undefined, frame: Node, arrow?: Text.Node): Node {
+    private heads_read = new Map<string, { version: number; pass: number; base?: Node; head: Head }>();
+    read_head(lhs: Text.Node, frame: Node): Head {
+      const at = `${lhs.source.location}:${lhs.begin}:${lhs.end}`;
+      const known = this.heads_read.get(at);
+      if (known !== undefined && known.version === this.version && known.pass === this.passing && known.base === this.BASE) return known.head;
       const chunks = this.tokens(lhs, frame);
       const modifiers: Node[] = [], decorators: Text.Node[] = [], pattern: Text.Node[] = [];
       let params: string[] | undefined;
@@ -2621,11 +2666,18 @@ export namespace Ray {
         pattern.push(chunk);
       });
       const pieces = this.pieces(pattern, frame);
+      const head: Head = { pattern, modifiers, decorators, params, param_styles, param_names, param_types, pieces, spelled: pieces.map(describe).join(''), shared: {} };
+      this.heads_read.set(at, { version: this.version, pass: this.passing, base: this.BASE, head });
+      return head;
+    }
+    define(lhs: Text.Node, body: Text.Node | undefined, frame: Node, arrow?: Text.Node): Node {
+      const { pattern, modifiers, decorators, params, param_styles, param_names, param_types, pieces, spelled, shared } = this.read_head(lhs, frame);
       if (pieces.length === 0) { this.error('Expected a pattern before `=>`.', lhs); return new Node(this.diagnostics, lhs); }
-      const key = `${frame.key}::${pieces.map(describe).join('')}${params ? `(${params.join(',')})` : ''}`;
-      const rule = frame.rules.find(x => x.key === key) ?? Object.assign(new Node(this.diagnostics, lhs), { key });
+      const key = `${frame.key}::${spelled}${params ? `(${params.join(',')})` : ''}`;
+      const rule = frame.rules.find(x => x.key === key) ?? shared.rule ?? Object.assign(new Node(this.diagnostics, lhs), { key });
+      shared.rule ??= rule;
+      if (body !== undefined) { const held = shared.body; if (held !== undefined && held.source === body.source && held.begin === body.begin && held.end === body.end) body = held; else shared.body = body; }
       rule.pattern = pieces; rule.position = lhs;
-      const spelled = pieces.map(describe).join('');
       const introduced = this.introductions.get(spelled);
       if ((params?.length ?? 0) > 0 && (introduced === undefined || this.earlier(lhs, introduced))) this.introductions.set(spelled, lhs);
       const impl = new Node(this.diagnostics, body ?? lhs);
@@ -2900,7 +2952,7 @@ export namespace Ray {
       const ref = node.ref!, span = node.position;
       if (span === undefined) return undefined;
       if (ref.through !== undefined) return ref.through;
-      for (const [rule, impl] of this.chain(ref.scope).receiver) {
+      for (const [rule, impl] of each(this.chain(ref.scope).receiver)) {
         if (!this.literal_rule(rule)) continue;
         const piece = rule.pattern![0] as Piece & { kind: 'capture' };
         const value = this.typed(piece.type!, span, impl.closure ?? this.GLOBAL, opts);
@@ -2914,7 +2966,7 @@ export namespace Ray {
 
     decorates(token: Text.Node, frame: Node): boolean {
       const probe = this.cursor_of(token);
-      for (const [rule, impl] of this.candidates(undefined, frame)) {
+      for (const [rule, impl] of each(this.candidates(undefined, frame))) {
         if (!impl.forward || !rule.pattern!.some(x => x.kind === 'capture')) continue;
         const match = this.match(rule.pattern!, probe, frame, { leading: false, tight: true, params: 0, closure: impl.closure });
         if (match && !match.spanned && match.end >= probe.limit) return true;
@@ -2939,7 +2991,7 @@ export namespace Ray {
     }
     private style_at(token: Text.Node, frame: Node): Node | undefined {
       const probe = this.cursor_of(token);
-      for (const [rule, impl] of this.candidates(undefined, frame)) {
+      for (const [rule, impl] of each(this.candidates(undefined, frame))) {
         if (!impl.forward || !rule.pattern!.some(x => x.kind === 'capture')) continue;
         const match = this.match(rule.pattern!, probe, frame, { leading: false, tight: true, params: 0 });
         if (!match || match.spanned || match.end < probe.limit) continue;
@@ -2968,11 +3020,11 @@ export namespace Ray {
 
     forwarded(token: Text.Node, frame: Node): boolean {
       const probe = this.cursor_of(token);
-      return this.candidates(undefined, frame).some(([rule, impl]) => {
+      return this.candidates(undefined, frame).some(segment => segment.some(([rule, impl]) => {
         if (!impl.forward || !rule.pattern!.some(x => x.kind === 'capture')) return false;
         const match = this.match(rule.pattern!, probe, frame, { leading: false, tight: true, params: 0 });
         return match !== undefined && !match.spanned && match.end >= probe.limit;
-      });
+      }));
     }
     site(token: Text.Node, frame: Node) {
       if (!this.forwarded(token, frame)) return;
@@ -2983,7 +3035,7 @@ export namespace Ray {
     shape(frame: Node): Shape | undefined {
       if (this.shapes?.version === this.version && this.shapes.base === this.BASE) return this.shapes.shape;
       let shape: Shape | undefined;
-      for (const [rule, impl] of this.chain(frame).receiver) {
+      for (const [rule, impl] of each(this.chain(frame).receiver)) {
         let parsed = this.grammars.get(impl);
         if (parsed === undefined) this.grammars.set(impl, parsed = this.grammar(rule, impl, frame) ?? null);
         if (parsed) { shape = parsed; break; }
@@ -3115,13 +3167,13 @@ export namespace Ray {
     }
     rule_head(word: string, frame: Node): Node | undefined {
       const chain = this.chain(frame);
-      for (const [rule, impl] of [...chain.operand, ...chain.receiver]) if (!impl.forward && this.head(rule) === word) return rule;
+      for (const [rule, impl] of each([...chain.operand, ...chain.receiver])) if (!impl.forward && this.head(rule) === word) return rule;
     }
     paint_rule(word: string, span: Text.Node, scope: Node) {
       if (this.raw_argument(span, scope)) return;
       const spans = this.verbatim.get(span.source.location ?? '');
-      if (spans?.some(([begin, end]) => span.begin >= begin && span.end <= end)) return;
-      for (const [rule, impl] of [...this.chain(scope).operand, ...this.chain(scope).receiver]) {
+      if (spans !== undefined) for (const [begin, end] of spans) if (span.begin >= begin && span.end <= end) return;
+      for (const [rule, impl] of each([...this.chain(scope).operand, ...this.chain(scope).receiver])) {
         if (impl.forward || this.head(rule) !== word) continue;
         const painted = span.span(span.begin, span.end);
         painted.of = rule.key;
@@ -3355,7 +3407,7 @@ export namespace Ray {
       if (name !== undefined) this.paint_reference(this.reference(frame, name, token.span(token.begin, token.begin + name.length - 1)));
     }
     private referenced = new Map<string, Text.Node>();
-    private verbatim = new Map<string, [number, number][]>();
+    private verbatim = new Map<string, Map<number, number>>();
     paint_reference(reference: Node, lexical: boolean = false, definition: boolean = false) {
       const at = reference.position;
       if (!at || !this.owns(at.source)) return;
@@ -3467,11 +3519,12 @@ export namespace Ray {
         this.paint_reference(this.reference(scope, word, span), true);
       }
     }
-    paint(span: Text.Node, decorator: Text.Node | Node | undefined | (() => (Text.Node | Node)[]), frame: Node, of?: string, opts: { head?: boolean } = {}) {
+    paint(span: Text.Node, decorator: Text.Node | Node | undefined | (() => (Text.Node | Node)[]), frame: Node, of?: string, opts: { head?: boolean; role?: string } = {}) {
       if (!this.owns(span.source) || (!this.probing && this.in_body(span))) return;
       const painted = span.span(span.begin, span.end);
       painted.of = of;
       painted.head = opts.head;
+      painted.role = opts.role;
       if (decorator === undefined) { painted.style = ''; this.record(painted); return; }
       const resolve = (token: Text.Node | Node) => (token instanceof Node ? token : this.safely(() => this.style_of(token, frame)))?.style;
       painted.style = typeof decorator !== 'function' ? () => resolve(decorator) : () => {
@@ -3481,10 +3534,26 @@ export namespace Ray {
       };
       this.record(painted);
     }
+    private recorded?: { of: Text.Node[]; at: Map<string, Text.Node>; retired: Set<Text.Node> };
     record(painted: Text.Node) {
       if (this.quiet) return;
       painted.by = this.statements[0]?.source.location;
+      if (painted.role !== undefined) {
+        if (this.recorded?.of !== this.painting) this.recorded = { of: this.painting, at: new Map(), retired: new Set() };
+        const key = `${painted.source.location}:${painted.begin}:${painted.end}:${painted.head}:${painted.role}:${painted.of?.replace(/#\d+/g, '#')}`;
+        const before = this.recorded.at.get(key);
+        if (before !== undefined && before !== painted) { before.style = before.defines = undefined; this.recorded.retired.add(before); }
+        this.recorded.at.set(key, painted);
+        if (this.recorded.retired.size > 4096 && this.recorded.retired.size * 2 > this.painting.length) this.painting = this.unretired();
+      }
       this.painting.push(painted);
+    }
+    private unretired(): Text.Node[] {
+      const recorded = this.recorded;
+      if (recorded?.of !== this.painting || recorded.retired.size === 0) return this.painting;
+      const kept = this.painting.filter(painted => !recorded.retired.has(painted));
+      this.recorded = { of: kept, at: recorded.at, retired: new Set() };
+      return kept;
     }
 
     style(name: string): Node {
@@ -3931,7 +4000,8 @@ export namespace Text {
 
     cursor: number = 0;
     until?: number;
-    selection: number[] = [];
+    from?: number;
+    to?: number;
 
     color?: string
     style?: string | (() => string | undefined)
@@ -3939,11 +4009,12 @@ export namespace Text {
     by?: string
     defines?: string | (() => string | undefined)
     head?: boolean
+    role?: string
 
     span(begin: number, end: number) {
       const span = new Node(this.source);
       span.cursor = begin;
-      span.selection = [begin, end];
+      span.from = begin; span.to = end;
       span.expression = this.expression;
       return span;
     }
@@ -3956,25 +4027,21 @@ export namespace Text {
     at(literal: string) { return this.cursor + literal.length <= this.limit && this.source.value.startsWith(literal, this.cursor); }
     bounded(begin: number, until: number) {
       const cursor = this.copy();
-      cursor.cursor = begin; cursor.until = until; cursor.selection = [];
+      cursor.cursor = begin; cursor.until = until; cursor.from = cursor.to = undefined;
       return cursor;
     }
 
     get file(): string | undefined { return this.source.location; }
 
-    get begin() { return this.selection.length > 0 ? this.selection[0] : this.cursor; }
+    get begin() { return this.from ?? this.cursor; }
     set begin(location: number) {
-      if (this.selection.length > 0) { this.selection[0] = location; }
-      else { this.selection.push(location, this.cursor!); }
+      if (this.from === undefined) this.to = this.cursor;
+      this.from = location;
     }
-    get end() {
-      const len = this.selection.length;
-      return len > 0 ? this.selection[len - 1] : this.cursor;
-    }
+    get end() { return this.to ?? this.cursor; }
     set end(location: number) {
-      const len = this.selection.length;
-      if (len > 0) { this.selection[len - 1] = location; }
-      else { this.selection.push(this.cursor!, location); }
+      if (this.from === undefined) this.from = this.cursor;
+      this.to = location;
     }
 
     get line(): number {
@@ -3986,22 +4053,19 @@ export namespace Text {
       return 1;
     }
 
-    empty() { return this.selection.length === 0; }
+    empty() { return this.from === undefined; }
     get string() {
       return this.empty() ? '' : this.source.value.slice(this.begin!, this.end! + 1);
     }
 
     get ranges(): { begin: number; end: number }[] {
-      if (this.selection.length === 0) return [{ begin: this.cursor!, end: this.cursor! }];
-      const out: { begin: number; end: number }[] = [];
-      for (let i = 0; i < this.selection.length; i += 2) out.push({ begin: this.selection[i], end: this.selection[i + 1] });
-      return out;
+      return [{ begin: this.begin, end: this.end }];
     }
     get segments(): Text.Node[] {
       return this.ranges.map(r => {
         const n = new Node(this.source);
         n.color = this.color;
-        n.selection = [r.begin, r.end];
+        n.from = r.begin; n.to = r.end;
         return n;
       });
     }
@@ -4011,7 +4075,7 @@ export namespace Text {
       copy.cursor = this.cursor;
       copy.until = this.until;
       copy.expression = this.expression;
-      copy.selection = [...this.selection];
+      copy.from = this.from; copy.to = this.to;
       copy.color = this.color;
       copy.direction = this.direction;
       return copy;
@@ -4073,7 +4137,7 @@ export namespace Text {
       const begin = lineNo === 0 ? 0 : nls[lineNo - 1] + 1;
       const end = nls[lineNo] ?? this.value.length;
       const n = new Node(this);
-      if (end > begin) n.selection = [begin, end - 1];
+      if (end > begin) { n.from = begin; n.to = end - 1; }
       else n.cursor = begin;
       return n;
     }

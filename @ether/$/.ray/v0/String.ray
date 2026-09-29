@@ -9,26 +9,26 @@ Character := class {
   // How many bytes encode it: the leading ones of the first byte say so.
   width => (
     lead := .octets.head
-    if lead.value.not { one } elsif lead.next.next.value.not { two } elsif lead.next.next.next.value.not { three } else { four }
+    if lead.value.not { 1 } elsif lead.next.next.value.not { 2 } elsif lead.next.next.next.value.not { 3 } else { 4 }
   )
 
   // spec: the codepoint is decoded structurally: the payload bits of each
   // byte (7 for a single byte; 5/4/3 after a lead of 2/3/4 bytes; 6 for each
   // follower) are concatenated into a number.
   codepoint => (
-    total ^keyword := zero
+    total ^keyword := 0
     walker ^keyword := .octets.head
-    skip ^keyword := if (.width == one) { one } elsif (.width == two) { three } elsif (.width == three) { four } else { five }
-    position ^keyword := zero
+    skip ^keyword := if (.width == 1) { 1 } elsif (.width == 2) { 3 } elsif (.width == 3) { 4 } else { 5 }
+    position ^keyword := 0
     while (exists walker) {
       unless (position < skip) {
         total = total + total
         if walker.value { total = total.succ }
       }
       position = position.succ
-      if (position == eight) {
-        position = zero
-        skip = two
+      if (position == 8) {
+        position = 0
+        skip = 2
       }
       walker = walker.next
     }
@@ -46,7 +46,7 @@ Character := class {
   bit (index: Number) => .octets.at(index).value
   // The number the bits from a position onwards spell.
   tail_value (from: Number) => (
-    total ^keyword := zero
+    total ^keyword := 0
     this.octets.at(from) for {
       total = total + total
       if it.value { total = total.succ }
@@ -54,20 +54,20 @@ Character := class {
     total
   )
   alphabetic_tail => (
-    low := .tail_value(three)
-    (zero < low).and(low < (two * ten) + seven)
+    low := .tail_value(3)
+    (0 < low).and(low < 27)
   )
-  lower_case => .is_ascii.and(.bit(one)).and(.bit(two)).and(.alphabetic_tail)
-  upper_case => .is_ascii.and(.bit(one)).and(.bit(two).not).and(.alphabetic_tail)
+  lower_case => .is_ascii.and(.bit(1)).and(.bit(2)).and(.alphabetic_tail)
+  upper_case => .is_ascii.and(.bit(1)).and(.bit(2).not).and(.alphabetic_tail)
   letter => .lower_case.or(.upper_case)
   // `0011xxxx with xxxx below ten`: the four leading bits say which sixteen
   // codepoints these are, and what is left says which of them. Asking the
   // fifth bit to be clear as well left out `8` and `9`.
-  digit => .is_ascii.and(.bit(one).not).and(.bit(two)).and(.bit(three)).and(.tail_value(four) < ten)
+  digit => .is_ascii.and(.bit(1).not).and(.bit(2)).and(.bit(3)).and(.tail_value(4) < 10)
   // spec: blanks are the space and the controls 9..13 (tab, newline,
   // vertical tab, form feed, carriage return).
-  blank => .is_ascii.and(.bit(one).not).and((.bit(two).and(.bit(three).not).and(.tail_value(four).is_zero)).or(.bit(two).not.and(.bit(three).not).and(eight < .tail_value(four)).and(.tail_value(four) < ten + four)))
-  is_underscore => .is_ascii.and(.bit(one)).and(.bit(two).not).and(.all_set(three))
+  blank => .is_ascii.and(.bit(1).not).and((.bit(2).and(.bit(3).not).and(.tail_value(4).is_zero)).or(.bit(2).not.and(.bit(3).not).and(8 < .tail_value(4)).and(.tail_value(4) < 14)))
+  is_underscore => .is_ascii.and(.bit(1)).and(.bit(2).not).and(.all_set(3))
   all_set (from: Number) => (
     verdict ^keyword := true
     this.octets.at(from) for { unless it.value { verdict = false } }
@@ -78,15 +78,15 @@ Character := class {
   // Case: the Latin cases differ in one bit (0x20, the third).
   with_bit (index: Number, held) => (
     octets := chain None
-    position ^keyword := zero
+    position ^keyword := 0
     this.octets for {
       octets &= (if (position == index) { held } else { it.value })
       position = position.succ
     }
     Character(octets: octets)
   )
-  upper => if .lower_case { .with_bit(two, 0) } else { this }
-  lower => if .upper_case { .with_bit(two, 1) } else { this }
+  upper => if .lower_case { .with_bit(2, 0) } else { this }
+  lower => if .upper_case { .with_bit(2, 1) } else { this }
   swapped => if .lower_case { .upper } elsif .upper_case { .lower } else { this }
 
   // Two characters are the same when their bits are.
@@ -103,16 +103,16 @@ Character := class {
   )
 
   // The draft's `\0 \t \n \r` and the space, built when first asked for.
-  null => Character.of(zero)
-  tab => Character.of(nine)
-  newline => Character.of(ten)
-  carriage => Character.of(ten + three)
+  null => Character.of(0)
+  tab => Character.of(9)
+  newline => Character.of(10)
+  carriage => Character.of(13)
   space => Character.of(ascii_space)
   underscore => Character.of(ascii_underscore)
 
   // The value a character stands for as a digit: `0`..`9`, then `a`..`z`
   // (either case) from ten on; None for any other.
-  digit_value => if .digit { .tail_value(four) } elsif .letter { .lower.tail_value(three) + nine } else { None }
+  digit_value => if .digit { .tail_value(4) } elsif .letter { .lower.tail_value(3) + 9 } else { None }
 
   // spec: `Unicode.Scalar`'s assertion, as a question rather than a refusal.
   is_scalar => Unicode.scalar(.codepoint)
@@ -121,12 +121,12 @@ Character := class {
   // payload bits (7 in one byte; 5+6, 4+6+6, 3+6+6+6 for wider ones).
   of (codepoint) => (
     // The width follows from how many leading bits of the 21 are unset.
-    all_bits := bits_of(codepoint, (two * ten) + one)
-    width := if (Character.clear(all_bits, ten + four)) { one } elsif (Character.clear(all_bits, ten)) { two } elsif (Character.clear(all_bits, five)) { three } else { four }
-    payload := if (width == one) { seven } else { (width * five) + one }
-    payload_bits := all_bits.at(((two * ten) + one) - payload)
+    all_bits := bits_of(codepoint, 21)
+    width := if (Character.clear(all_bits, 14)) { 1 } elsif (Character.clear(all_bits, 10)) { 2 } elsif (Character.clear(all_bits, 5)) { 3 } else { 4 }
+    payload := if (width == 1) { 7 } else { (width * 5) + 1 }
+    payload_bits := all_bits.at(21 - payload)
     octets := chain None
-    if (width == one) { octets &= 0 } else {
+    if (width == 1) { octets &= 0 } else {
       lead ^keyword := width
       while lead {
         octets &= 1
@@ -135,7 +135,7 @@ Character := class {
       octets &= 0
     }
     walker ^keyword := payload_bits
-    take ^keyword := if (width == one) { seven } else { seven - width }
+    take ^keyword := if (width == 1) { 7 } else { 7 - width }
     while take {
       octets &= walker.value
       walker = walker.next
@@ -145,7 +145,7 @@ Character := class {
     while rest {
       octets &= 1
       octets &= 0
-      take = six
+      take = 6
       while take {
         octets &= walker.value
         walker = walker.next
@@ -157,13 +157,13 @@ Character := class {
   )
   // The Latin letters and digits, built from their bits: `A` is 010 00001,
   // `a` 011 00001, `0` 0011 0000, `a`..`f` continue the digits past nine.
-  latin_upper (index: Number) => Character.ascii(0, 1, 0, bits_of(index, five))
-  latin_lower (index: Number) => Character.ascii(0, 1, 1, bits_of(index, five))
-  decimal_digit (value: Number) => if (value < ten) { Character.ascii(0, 0, 1, Character.nibble(1, value)) } else { Character.ascii(0, 1, 1, Character.nibble(0, value - nine)) }
+  latin_upper (index: Number) => Character.ascii(0, 1, 0, bits_of(index, 5))
+  latin_lower (index: Number) => Character.ascii(0, 1, 1, bits_of(index, 5))
+  decimal_digit (value: Number) => if (value < 10) { Character.ascii(0, 0, 1, Character.nibble(1, value)) } else { Character.ascii(0, 1, 1, Character.nibble(0, value - 9)) }
   nibble (lead, value: Number) => (
     out := chain None
     out &= lead
-    bits_of(value, four) for { out &= it.value }
+    bits_of(value, 4) for { out &= it.value }
     out
   )
   ascii (first, second, third, rest) => (
@@ -298,7 +298,7 @@ String := class: Array {
   // spec: English by suffix only: `plural` appends `s` unless the word already
   // ends in one; `singular` strips one trailing `s`.
   plural => if (.ends_with(String.of(`s`))) { this } else { this + String.of(`s`) }
-  singular => if (.ends_with(String.of(`s`))) { .slice(zero, .count.pred) } else { this }
+  singular => if (.ends_with(String.of(`s`))) { .slice(0, .count.pred) } else { this }
 
   // The draft's `mirrored` (bidi): the characters in the other order.
   reversed => (
@@ -345,7 +345,7 @@ String := class: Array {
   contains (other: String) => (
     length := .count
     found ^keyword := false
-    position ^keyword := zero
+    position ^keyword := 0
     walker ^keyword := .characters.head
     while (exists walker) {
       if (.slice(position, length).starts_with(other)) { found = true }
@@ -357,7 +357,7 @@ String := class: Array {
   index_of (other: String) => (
     length := .count
     found ^keyword := None
-    position ^keyword := zero
+    position ^keyword := 0
     walker ^keyword := .characters.head
     while (exists walker) {
       unless (exists found) { if (.slice(position, length).starts_with(other)) { found = position } }
@@ -415,10 +415,10 @@ String := class: Array {
 
   // The number a string of decimal digits spells, and back.
   as_number => (
-    total ^keyword := zero
+    total ^keyword := 0
     // Where the digits start is one number, walked once, not once a digit.
     zeroth ^keyword := ascii_zero
-    this.characters for { total = (total * ten) + (it.value.codepoint - zeroth) }
+    this.characters for { total = (total * 10) + (it.value.codepoint - zeroth) }
     total
   )
   is_numeric => .nonempty.and(.every { character.digit })
@@ -452,7 +452,7 @@ String := class: Array {
       lead := walker
       // How many bits the character is written with, counted out rather than
       // multiplied: a number is a walk, and this is asked once per character.
-      remaining ^keyword := if lead.value.not { eight } elsif lead.next.next.value.not { eight + eight } elsif lead.next.next.next.value.not { eight + eight + eight } else { eight + eight + eight + eight }
+      remaining ^keyword := if lead.value.not { 8 } elsif lead.next.next.value.not { 16 } elsif lead.next.next.next.value.not { 24 } else { 32 }
       while remaining {
         current &= walker.value
         walker = walker.next
@@ -483,7 +483,7 @@ Number.components.hierarchy &= class {
 }
 String.components.hierarchy &= class {
   as_number_in (radix: Number) => (
-    total ^keyword := zero
+    total ^keyword := 0
     this.characters for { total = (total * radix) + it.value.digit_value }
     total
   )
@@ -504,21 +504,21 @@ Chain.components.hierarchy &= class {
 }
 
 // The Latin codepoints the classes above are cut at, built when first asked for.
-ascii_space => (three * ten) + two
-ascii_dash => (four * ten) + five
-ascii_dot => (four * ten) + six
-ascii_colon => (five * ten) + eight
-ascii_zero => (four * ten) + eight
-ascii_nine => ascii_zero + nine
-ascii_upper_a => (six * ten) + five
-ascii_upper_z => ascii_upper_a + (two * ten) + five
-ascii_underscore => ascii_upper_z + five
-ascii_a => (ten * nine) + seven
-ascii_z => ascii_a + (two * ten) + five
+ascii_space => 32
+ascii_dash => 45
+ascii_dot => 46
+ascii_colon => 58
+ascii_zero => 48
+ascii_nine => ascii_zero + 9
+ascii_upper_a => 65
+ascii_upper_z => ascii_upper_a + 25
+ascii_underscore => ascii_upper_z + 5
+ascii_a => 97
+ascii_z => ascii_a + 25
 case_gap => ascii_a - ascii_upper_a
-utf8_limit_one => two.pow(seven)
-utf8_limit_two => two.pow(ten + one)
-utf8_limit_three => two.pow(ten + six)
+utf8_limit_one => 128
+utf8_limit_two => 2048
+utf8_limit_three => 65536
 
 // A number as a chain of bits of a fixed width, most significant first: a
 // binary counter, least significant bit first, is stepped once per unit of
@@ -553,7 +553,7 @@ bits_of (number, width) => (
 )
 // The number a chain of bits spells, most significant first.
 number_of (bits) => (
-  total ^keyword := zero
+  total ^keyword := 0
   bits for {
     total = total + total
     if it.value { total = total.succ }
@@ -590,16 +590,16 @@ Regex := class {
 Number.components.hierarchy &= class {
   as_string => (
     counter := chain None
-    counter &= zero
+    counter &= 0
     rest ^keyword := this
     while rest {
       digit ^keyword := counter.head
       carrying ^keyword := true
       while carrying {
         digit.value = digit.value.succ
-        if (digit.value == ten) { digit.value = zero } else { carrying = false }
+        if (digit.value == 10) { digit.value = 0 } else { carrying = false }
         if carrying {
-          unless (exists digit.next) { counter &= zero }
+          unless (exists digit.next) { counter &= 0 }
           digit = digit.next
         }
       }

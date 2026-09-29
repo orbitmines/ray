@@ -11,7 +11,7 @@ if (b.is_initial) { INFO@mark `RR3 a linked ray reports initial` }
 
 unless (b.initial == a) { INFO@mark `RR4 the initial walk failed` }
 
-unless (a.count == one) { INFO@mark `RR5 a lone ray does not count one` }
+unless (a.count == 1) { INFO@mark `RR5 a lone ray does not count one` }
 
 unless (a.terminal == a) { INFO@mark `RR6 a lone ray is not its own terminal` }
 
@@ -26,11 +26,11 @@ c := Ray(previous: b)
 // A ray's previous and next are its own: linking one way does not link back.
 a.next = b
 b.next = c
-unless ((a.at(two)) == c) { INFO@mark `R8 at(2) did not reach the third ray` }
+unless ((a.at(2)) == c) { INFO@mark `R8 at(2) did not reach the third ray` }
 
-seen ^keyword := zero
+seen ^keyword := 0
 a for { seen = seen.succ }
-unless (seen == three) { INFO@mark `R9 for did not visit three rays` }
+unless (seen == 3) { INFO@mark `R9 for did not visit three rays` }
 
 unless (a every { it.nonempty }) { INFO@mark `R10 every failed` }
 
@@ -65,62 +65,62 @@ kept ^keyword := chain None
 unless (kept.count.is_zero) { INFO@mark `R26 a fresh chain counts other than zero` }
 unless (kept.empty) { INFO@mark `R27 a fresh chain is not empty` }
 if (exists kept.head) { INFO@mark `R28 a fresh chain has a head` }
-kept &= one
-unless (kept.count == one) { INFO@mark `R29 one thing kept does not count one` }
+kept &= 1
+unless (kept.count == 1) { INFO@mark `R29 one thing kept does not count one` }
 unless (kept.nonempty) { INFO@mark `R30 a chain holding something is empty` }
-unless (kept.head.value == one) { INFO@mark `R31 the head does not hold what was given` }
-unless (kept.tail.value == one) { INFO@mark `R32 the tail does not hold the only thing` }
-kept &= two
-kept &= three
-unless (kept.count == three) { INFO@mark `R33 three things kept do not count three` }
-unless (kept.head.value == one) { INFO@mark `R34 the head is not the first thing given` }
-unless (kept.tail.value == three) { INFO@mark `R35 the tail is not the last thing given` }
-unless (kept.first.value == one) { INFO@mark `R36 the first is not the first thing given` }
-unless (kept.last.value == three) { INFO@mark `R37 the last is not the last thing given` }
-unless (kept.at(one).value == two) { INFO@mark `R38 the one after the first is not the second thing given` }
+unless (kept.head.value == 1) { INFO@mark `R31 the head does not hold what was given` }
+unless (kept.tail.value == 1) { INFO@mark `R32 the tail does not hold the only thing` }
+kept &= 2
+kept &= 3
+unless (kept.count == 3) { INFO@mark `R33 three things kept do not count three` }
+unless (kept.head.value == 1) { INFO@mark `R34 the head is not the first thing given` }
+unless (kept.tail.value == 3) { INFO@mark `R35 the tail is not the last thing given` }
+unless (kept.first.value == 1) { INFO@mark `R36 the first is not the first thing given` }
+unless (kept.last.value == 3) { INFO@mark `R37 the last is not the last thing given` }
+unless (kept.at(1).value == 2) { INFO@mark `R38 the one after the first is not the second thing given` }
 
-walked ^keyword := zero
-total ^keyword := zero
+walked ^keyword := 0
+total ^keyword := 0
 kept for {
   walked = walked.succ
   total = total + it.value
 }
-unless (walked == three) { INFO@mark `R39 walking a chain of three does not visit three` }
-unless (total == (three + three)) { INFO@mark `R40 walking a chain of one, two and three does not add to six` }
+unless (walked == 3) { INFO@mark `R39 walking a chain of three does not visit three` }
+unless (total == (3 + 3)) { INFO@mark `R40 walking a chain of one, two and three does not add to six` }
 
 // A chain of nothing holds nothing, and what holds nothing is dropped.
 mixed ^keyword := chain None
-mixed &= one
+mixed &= 1
 mixed &= None
-mixed &= two
-unless (mixed.count == three) { INFO@mark `R41 a chain does not keep what holds nothing` }
+mixed &= 2
+unless (mixed.count == 3) { INFO@mark `R41 a chain does not keep what holds nothing` }
 
 // A walk reaches the end of a long chain. It is walked rather than asked to
 // walk the rest of itself, because a statement is only allowed so many nested
 // applications, and forty is past what the asking afforded.
 long_chain ^keyword := chain None
-to_add ^keyword := (four * ten)
+to_add ^keyword := 40
 while to_add {
-  long_chain &= one
+  long_chain &= 1
   to_add = to_add.pred
 }
-unless (long_chain.count == (four * ten)) { INFO@mark `RR42 forty things kept do not count forty` }
-stepped ^keyword := zero
+unless (long_chain.count == 40) { INFO@mark `RR42 forty things kept do not count forty` }
+stepped ^keyword := 0
 long_chain for { stepped = stepped.succ }
-unless (stepped == (four * ten)) { INFO@mark `RR43 walking forty things does not reach forty` }
+unless (stepped == 40) { INFO@mark `RR43 walking forty things does not reach forty` }
 
 // What holds for every element, and what holds for some.
 threes ^keyword := chain None
-threes &= one
-threes &= two
-threes &= three
+threes &= 1
+threes &= 2
+threes &= 3
 unless (threes every { it.value.nonzero }) { INFO@mark `RR44 not every one of one, two and three is something` }
-if (threes every { it.value == one }) { INFO@mark `RR45 every one of them is one` }
-unless (threes some { it.value == two }) { INFO@mark `RR46 none of them is two` }
-if (threes some { it.value == (three + three) }) { INFO@mark `RR47 one of them is six` }
-unless (threes.at(zero).value == one) { INFO@mark `RR48 the one at the start is not the first` }
-unless (threes.at(two).value == three) { INFO@mark `RR49 the one two along is not the third` }
-unless (threes.count == three) { INFO@mark `RR50 three things do not count three` }
+if (threes every { it.value == 1 }) { INFO@mark `RR45 every one of them is one` }
+unless (threes some { it.value == 2 }) { INFO@mark `RR46 none of them is two` }
+if (threes some { it.value == (3 + 3) }) { INFO@mark `RR47 one of them is six` }
+unless (threes.at(0).value == 1) { INFO@mark `RR48 the one at the start is not the first` }
+unless (threes.at(2).value == 3) { INFO@mark `RR49 the one two along is not the third` }
+unless (threes.count == 3) { INFO@mark `RR50 three things do not count three` }
 
 // What a chain says about itself.
 unless (threes.bounded) { INFO@mark `RR51 a chain of three is not bounded` }
@@ -128,39 +128,39 @@ if (threes.unbounded) { INFO@mark `RR52 a chain of three is unbounded` }
 unless (threes.connected) { INFO@mark `RR53 a chain is not connected` }
 unless (threes.consistent) { INFO@mark `RR54 a chain is not consistent` }
 unless (threes.acyclic) { INFO@mark `RR55 a chain of three comes back around` }
-unless (threes.length == three) { INFO@mark `RR56 a chain is not as long as it counts` }
+unless (threes.length == 3) { INFO@mark `RR56 a chain is not as long as it counts` }
 if (threes.undirected) { INFO@mark `RR57 a chain is undirected` }
-unless (threes.first.value == one) { INFO@mark `RR58 the first of a chain is not what was given first` }
-unless (threes.entry.value == one) { INFO@mark `RR59 what a chain is entered at is not its first` }
+unless (threes.first.value == 1) { INFO@mark `RR58 the first of a chain is not what was given first` }
+unless (threes.entry.value == 1) { INFO@mark `RR59 what a chain is entered at is not its first` }
 
 // What a chain adds to and multiplies out to, written where `Iterable` is
 // written so that a chain of numbers actually has them.
-unless (threes.sum == six) { INFO@mark `RR60 one, two and three do not add to six` }
-unless (threes.product == six) { INFO@mark `RR61 one, two and three do not multiply to six` }
-unless (Σ threes == six) { INFO@mark `RR62 the sum sign does not add them` }
-unless (∏ threes == six) { INFO@mark `RR63 the product sign does not multiply them` }
+unless (threes.sum == 6) { INFO@mark `RR60 one, two and three do not add to six` }
+unless (threes.product == 6) { INFO@mark `RR61 one, two and three do not multiply to six` }
+unless (Σ threes == 6) { INFO@mark `RR62 the sum sign does not add them` }
+unless (∏ threes == 6) { INFO@mark `RR63 the product sign does not multiply them` }
 
 // The elements that hold something. A chain written with nothing in it holds
 // nothing, so nothing is what is left.
 sparse ^keyword := chain None
-sparse &= one
+sparse &= 1
 sparse &= None
-sparse &= two
-unless (sparse.compact.count == two) { INFO@mark `RR65 what is left of a chain with a gap is other than two` }
-unless (threes.compact.count == three) { INFO@mark `RR66 a chain with no gaps loses something` }
+sparse &= 2
+unless (sparse.compact.count == 2) { INFO@mark `RR65 what is left of a chain with a gap is other than two` }
+unless (threes.compact.count == 3) { INFO@mark `RR66 a chain with no gaps loses something` }
 
 // A chain is its own path, so the paths through it are the chain.
-unless (threes.paths.count == three) { INFO@mark `RR67 the paths through a chain are not the chain` }
+unless (threes.paths.count == 3) { INFO@mark `RR67 the paths through a chain are not the chain` }
 
 // Everything a chain holds at once: the first, with each next pushed onto it.
 unless (exists threes.all) { INFO@mark `RR68 all of a chain is nothing` }
 
 // A chain filled with one thing holds that thing everywhere.
 filled ^keyword := chain None
-filled &= one
-filled &= two
-filled.fill(three)
-unless (filled every { it.value == three }) { INFO@mark `RR69 a filled chain does not hold what it was filled with` }
+filled &= 1
+filled &= 2
+filled.fill(3)
+unless (filled every { it.value == 3 }) { INFO@mark `RR69 a filled chain does not hold what it was filled with` }
 
 // Which structures allow a ray to continue into more than one, and which
 // hold what a hyper edge needs.
@@ -172,8 +172,8 @@ unless (Array().acyclic) { INFO@mark `RR74 an array comes back around` }
 
 // A ray at either end of what it is in.
 edges ^keyword := chain None
-edges &= one
-edges &= two
+edges &= 1
+edges &= 2
 unless (edges.head.is_first) { INFO@mark `RR75 the first of a chain is not first` }
 if (edges.head.is_last) { INFO@mark `RR76 the first of a chain of two is last` }
 unless (edges.tail.is_last) { INFO@mark `RR77 the last of a chain is not last` }
@@ -182,25 +182,25 @@ unless (edges.tail.is_last) { INFO@mark `RR77 the last of a chain is not last` }
 // is the one taken unless another is asked for.
 unless (Traverser.default == Traverser.Order.depth_first) { INFO@mark `RR78 what a walk does by default is not depth-first` }
 if (Traverser.default == Traverser.Order.breadth_first) { INFO@mark `RR79 what a walk does by default is breadth-first` }
-walked ^keyword := zero
+walked ^keyword := 0
 Traverser.walk(threes, { walked = walked.succ })
-unless (walked == three) { INFO@mark `RR80 walking three things does not reach three` }
+unless (walked == 3) { INFO@mark `RR80 walking three things does not reach three` }
 
 // A chain points one way, and goes both ways along itself.
 if (threes.unidirectional) { INFO@mark `RR81 a chain points only one way` }
 
-bracketed_one := [one]
-unless (bracketed_one.count == one) { INFO@mark `BR1 a bracketed one does not hold one element` }
-unless (bracketed_one.head.value == one) { INFO@mark `BR2 a bracketed one does not hold it` }
-bracketed_pair := [one, two]
-unless (bracketed_pair.count == two) { INFO@mark `BR3 a bracketed pair does not hold two` }
-grouped_one := (one)
-unless (grouped_one == one) { INFO@mark `BR4 a grouped one is not one` }
-bracketed_twice := [[one, two]]
-unless (bracketed_twice.count == one) { INFO@mark `BR5 a bracketed pair in brackets does not nest` }
-unless (bracketed_twice.head.value.count == two) { INFO@mark `BR6 the nested pair does not hold two` }
-bracketed_ones := [[one], [two]]
-unless (bracketed_ones.count == two) { INFO@mark `BR7 two bracketed ones in brackets are not two` }
-handed_pair := (one, two)
-unless ([handed_pair].count == two) { INFO@mark `BR8 a list handed to brackets is not itself` }
-unless (((one, two)).count == two) { INFO@mark `BR9 a grouped pair in parentheses nests` }
+bracketed_one := [1]
+unless (bracketed_one.count == 1) { INFO@mark `BR1 a bracketed one does not hold one element` }
+unless (bracketed_one.head.value == 1) { INFO@mark `BR2 a bracketed one does not hold it` }
+bracketed_pair := [1, 2]
+unless (bracketed_pair.count == 2) { INFO@mark `BR3 a bracketed pair does not hold two` }
+grouped_one := 1
+unless (grouped_one == 1) { INFO@mark `BR4 a grouped one is not one` }
+bracketed_twice := [[1, 2]]
+unless (bracketed_twice.count == 1) { INFO@mark `BR5 a bracketed pair in brackets does not nest` }
+unless (bracketed_twice.head.value.count == 2) { INFO@mark `BR6 the nested pair does not hold two` }
+bracketed_ones := [[1], [2]]
+unless (bracketed_ones.count == 2) { INFO@mark `BR7 two bracketed ones in brackets are not two` }
+handed_pair := (1, 2)
+unless ([handed_pair].count == 2) { INFO@mark `BR8 a list handed to brackets is not itself` }
+unless (((1, 2)).count == 2) { INFO@mark `BR9 a grouped pair in parentheses nests` }

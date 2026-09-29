@@ -37,7 +37,7 @@ Location := class: Ray {
   )
   // How deep this is: what holds it, and what holds that.
   depth => (
-    depth_below := zero
+    depth_below := 0
     if (exists .parent) { depth_below = .parent.depth.succ }
     depth_below
   )

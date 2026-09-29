@@ -5,15 +5,15 @@
 
 mark ^keyword := external global
 
-fired ^keyword := zero
+fired ^keyword := 0
 unless (false) { fired = fired.succ }
-unless (one == two) { fired = fired.succ }
+unless (1 == 2) { fired = fired.succ }
 unless (exists None) { fired = fired.succ }
-unless (fired == three) { INFO@mark `HO1 unless does not take the block when the condition does not hold` }
+unless (fired == 3) { INFO@mark `HO1 unless does not take the block when the condition does not hold` }
 
-held ^keyword := zero
+held ^keyword := 0
 unless (true) { held = held.succ }
-unless (one == one) { held = held.succ }
+unless (1 == 1) { held = held.succ }
 unless (exists mark) { held = held.succ }
 unless (held.is_zero) { INFO@mark `HO2 unless takes the block when the condition holds` }
 
@@ -38,6 +38,6 @@ if (Side.near == Side.far) { INFO@mark `HO4 two members of one enum are the same
 unless (String.of(Side.near.of) == String.of(`here`)) { INFO@mark `HO5 what a member holds is not what it was written as` }
 if (String.of(Side.near.of) == String.of(`there`)) { INFO@mark `HO6 a member holds what the other one does` }
 
-unless (String.of(` `).count == one) { INFO@mark `HO7 a written space is not one character` }
-unless (String.of(`  `).count == two) { INFO@mark `HO8 two written spaces are not two characters` }
-unless (String.of(` a `).count == three) { INFO@mark `HO9 a letter between spaces is not three characters` }
+unless (String.of(` `).count == 1) { INFO@mark `HO7 a written space is not one character` }
+unless (String.of(`  `).count == 2) { INFO@mark `HO8 two written spaces are not two characters` }
+unless (String.of(` a `).count == 3) { INFO@mark `HO9 a letter between spaces is not three characters` }

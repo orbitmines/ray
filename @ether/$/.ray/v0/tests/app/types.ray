@@ -13,8 +13,8 @@ unless (exists ta.instance_of(TA)) { INFO@mark `TY1 an instance is not an instan
 if (exists ta.instance_of(TB)) { INFO@mark `TY2 an instance is an instance of a class built on its own` }
 unless (exists tb.instance_of(TB)) { INFO@mark `TY3 an instance is not an instance of its own class` }
 unless (exists tb.instance_of(TA)) { INFO@mark `TY4 an instance is not an instance of what its class is built on` }
-unless (exists five.instance_of(Number)) { INFO@mark `TY5 five is not a Number` }
-if (exists five.instance_of(TA)) { INFO@mark `TY6 five is an instance of an unrelated class` }
+unless (exists 5.instance_of(Number)) { INFO@mark `TY5 five is not a Number` }
+if (exists 5.instance_of(TA)) { INFO@mark `TY6 five is an instance of an unrelated class` }
 
 unless (exists (external where TA)) { INFO@mark `TY7 a class is written nowhere` }
 if (exists (external alike (external where TA) (external where TB))) { INFO@mark `TY8 two classes are written in one place` }
@@ -54,18 +54,18 @@ unless (exists Child(named: `q`).named) { INFO@mark `TY14 the parent's field can
 
 // A narrowed type is not just what it narrows: being one of a kind asks the
 // constraint as well as what the thing is built on.
-Small := Number{. < five}
-unless (exists three.instance_of(Small)) { INFO@mark `TY16 three is not one of the small` }
-if (exists seven.instance_of(Small)) { INFO@mark `TY17 seven is one of the small` }
-unless (exists three.instance_of(Number)) { INFO@mark `TY18 three is not a number` }
+Small := Number{. < 5}
+unless (exists 3.instance_of(Small)) { INFO@mark `TY16 three is not one of the small` }
+if (exists 7.instance_of(Small)) { INFO@mark `TY17 seven is one of the small` }
+unless (exists 3.instance_of(Number)) { INFO@mark `TY18 three is not a number` }
 // A narrowing of a narrowing asks both: what the one it narrows admits, and
 // its own constraint.
-Tiny := Small{. < two}
-unless (exists one.instance_of(Tiny)) { INFO@mark `TY19 one is not tiny` }
-if (exists three.instance_of(Tiny)) { INFO@mark `TY20 three is tiny` }
-if (exists seven.instance_of(Tiny)) { INFO@mark `TY25 seven is tiny` }
-unless (Tiny.admits(one)) { INFO@mark `TY26 the tiny do not admit one` }
-if (Tiny.admits(three)) { INFO@mark `TY27 the tiny admit three` }
+Tiny := Small{. < 2}
+unless (exists 1.instance_of(Tiny)) { INFO@mark `TY19 one is not tiny` }
+if (exists 3.instance_of(Tiny)) { INFO@mark `TY20 three is tiny` }
+if (exists 7.instance_of(Tiny)) { INFO@mark `TY25 seven is tiny` }
+unless (Tiny.admits(1)) { INFO@mark `TY26 the tiny do not admit one` }
+if (Tiny.admits(3)) { INFO@mark `TY27 the tiny admit three` }
 
 // A class built inside a method answers with what that call wrote, and so
 // does a class built on it by another call: what a class is made of tells it
@@ -75,13 +75,13 @@ Wrapping := class {
     says => tag
   }
 }
-once := Wrapping.with(one)
-twice := once.with(two)
-thrice := twice.with(three)
-unless (once.says == one) { INFO@mark `TY28 the first wrapping says other than what it was written with` }
-unless (twice.says == two) { INFO@mark `TY29 a wrapping of a wrapping says its parent's` }
-unless (thrice.says == three) { INFO@mark `TY30 a third wrapping says an older one's` }
-unless (once.says == one) { INFO@mark `TY31 building on a class changed what it says` }
+once := Wrapping.with(1)
+twice := once.with(2)
+thrice := twice.with(3)
+unless (once.says == 1) { INFO@mark `TY28 the first wrapping says other than what it was written with` }
+unless (twice.says == 2) { INFO@mark `TY29 a wrapping of a wrapping says its parent's` }
+unless (thrice.says == 3) { INFO@mark `TY30 a third wrapping says an older one's` }
+unless (once.says == 1) { INFO@mark `TY31 building on a class changed what it says` }
 
 // A type written as alternatives is any of them, which is what `Type?` spells.
 Either := Parent?
@@ -95,10 +95,10 @@ if (exists None.instance_of(Parent)) { INFO@mark `TY24 nothing is one of a thing
 Pointed := class: whole: Number, `.`, part: Number {
   summed => .whole + .part
 }
-pointed ^keyword := Pointed(whole: two, part: three)
-unless (pointed.whole == two) { INFO@mark `TY32 a structure's first field is not what it was built with` }
-unless (pointed.part == three) { INFO@mark `TY33 a structure's last field is not what it was built with` }
-unless (pointed.summed == five) { INFO@mark `TY34 a structure's body does not read its fields` }
+pointed ^keyword := Pointed(whole: 2, part: 3)
+unless (pointed.whole == 2) { INFO@mark `TY32 a structure's first field is not what it was built with` }
+unless (pointed.part == 3) { INFO@mark `TY33 a structure's last field is not what it was built with` }
+unless (pointed.summed == 5) { INFO@mark `TY34 a structure's body does not read its fields` }
 unless (exists (external alike (Pointed.positions.head.next.value) (`.`))) { INFO@mark `TY35 a structure does not keep what is written between its fields` }
 
 // Text is read by a structure the way it is written: each field by its type,
@@ -108,16 +108,16 @@ Ranged := class: low: Decimal, `-`, high: Decimal {
 }
 range_of{ }{written: Ranged} ^keyword => written
 ranged ^keyword := range_of 2-7
-unless (ranged.low == two) { INFO@mark `TY36 a structure read from text does not start at what is written first` }
-unless (ranged.high == seven) { INFO@mark `TY37 a structure read from text does not end at what is written last` }
-unless (ranged.width == five) { INFO@mark `TY38 a structure read from text is not built as one` }
+unless (ranged.low == 2) { INFO@mark `TY36 a structure read from text does not start at what is written first` }
+unless (ranged.high == 7) { INFO@mark `TY37 a structure read from text does not end at what is written last` }
+unless (ranged.width == 5) { INFO@mark `TY38 a structure read from text is not built as one` }
 
 // What is written position by position, in brackets, is the structure a
 // name was declared as.
-positioned: Ranged = (four, `-`, nine)
-unless (positioned.width == five) { INFO@mark `TY39 positions given to a structure are not built as one` }
-misfit: Ranged = (four, `+`, nine)
+positioned: Ranged = (4, `-`, 9)
+unless (positioned.width == 5) { INFO@mark `TY39 positions given to a structure are not built as one` }
+misfit: Ranged = (4, `+`, 9)
 unless (exists (external alike (misfit.head.next.value) (`+`))) { INFO@mark `TY40 positions that do not fit a structure are taken as a structure` }
 // And what is written for it as text is read by that structure.
 spanned: Ranged = 3-8
-unless (spanned.width == five) { INFO@mark `TY41 text given to a structure is not read by it` }
+unless (spanned.width == 5) { INFO@mark `TY41 text given to a structure is not read by it` }

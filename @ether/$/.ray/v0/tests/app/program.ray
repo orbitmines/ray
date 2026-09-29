@@ -13,22 +13,22 @@ Written ^keyword := class {
   of (code) => code**
 }
 taken ^keyword := Written.of({
-  one
-  two
-  three
+  1
+  2
+  3
 })
 unless (exists taken) { INFO@mark `PG1 a block handed to a rule is not read as a program` }
 unless (exists taken.written) { INFO@mark `PG3 a program is not written as anything` }
-unless (taken.count == three) { INFO@mark `PG8 a program of three statements does not count three` }
-walked ^keyword := zero
+unless (taken.count == 3) { INFO@mark `PG8 a program of three statements does not count three` }
+walked ^keyword := 0
 taken for { walked = walked.succ }
-unless (walked == three) { INFO@mark `PG9 walking a program of three does not visit three` }
+unless (walked == 3) { INFO@mark `PG9 walking a program of three does not visit three` }
 unless (exists taken.first.value.written) { INFO@mark `PG5 a statement is not a program in turn` }
-unless (taken.first.value.count == one) { INFO@mark `PG10 a statement is written as other than one thing` }
+unless (taken.first.value.count == 1) { INFO@mark `PG10 a statement is written as other than one thing` }
 
 // A program of one statement is written as that one.
-alone ^keyword := Written.of({ five })
-unless (alone.count == one) { INFO@mark `PG11 a program of one statement counts other than one` }
+alone ^keyword := Written.of({ 5 })
+unless (alone.count == 1) { INFO@mark `PG11 a program of one statement counts other than one` }
 
 // What it is read with: a level is a set of rules, and a program says which.
 unless (exists taken.O) { INFO@mark `PG12 a program does not say which rules it is read with` }
@@ -48,10 +48,10 @@ unless (exists taken.O) { INFO@mark `PG12 a program does not say which rules it 
 // A statement is read back as what it is written as, so a jump can be told
 // from anything else, and where it lands can be found.
 jumping ^keyword := Written.of({
-  goto past if five
-  five
+  goto past if 5
+  5
  past\
-  six
+  6
 })
 landed ^keyword := jumping.written.head.next.next.value
 unless (jumping.first.value.is_jump) { INFO@mark `PG16 a goto is not read as a jump` }

@@ -3,59 +3,59 @@
 
 mark ^keyword := external global
 
-locked := Encoding.Encrypted(value: five, key: one)
-unless (locked.as(one) == five) { INFO@mark `EN1 what is locked does not open with its key` }
-if (exists locked.as(two)) { INFO@mark `EN2 it opens with the wrong key` }
+locked := Encoding.Encrypted(value: 5, key: 1)
+unless (locked.as(1) == 5) { INFO@mark `EN1 what is locked does not open with its key` }
+if (exists locked.as(2)) { INFO@mark `EN2 it opens with the wrong key` }
 
-held := Encoding.Compressed(value: five, algorithm: Encoding.Algorithm.gzip)
-unless (held.as(None) == five) { INFO@mark `EN3 what is compressed does not come back` }
+held := Encoding.Compressed(value: 5, algorithm: Encoding.Algorithm.gzip)
+unless (held.as(None) == 5) { INFO@mark `EN3 what is compressed does not come back` }
 unless (held.algorithm == Encoding.Algorithm.gzip) { INFO@mark `EN4 it forgot how it was compressed` }
 
-one_hash := Encoding.Hash(value: five, algorithm: Encoding.Algorithm.sha256)
-same_hash := Encoding.Hash(value: five, algorithm: Encoding.Algorithm.sha256)
-other_hash := Encoding.Hash(value: five, algorithm: Encoding.Algorithm.md5)
+one_hash := Encoding.Hash(value: 5, algorithm: Encoding.Algorithm.sha256)
+same_hash := Encoding.Hash(value: 5, algorithm: Encoding.Algorithm.sha256)
+other_hash := Encoding.Hash(value: 5, algorithm: Encoding.Algorithm.md5)
 unless (one_hash == same_hash) { INFO@mark `EN5 two like digests are not the same` }
 if (one_hash == other_hash) { INFO@mark `EN6 digests of different algorithms are the same` }
 
 // A digest is what was put in and how: change either and it is another.
-a_hash := Encoding.Hash(value: four, algorithm: Encoding.Algorithm.sha256)
-if (a_hash == Encoding.Hash(value: five, algorithm: Encoding.Algorithm.sha256)) { INFO@mark `EN7 digests of different values are the same` }
+a_hash := Encoding.Hash(value: 4, algorithm: Encoding.Algorithm.sha256)
+if (a_hash == Encoding.Hash(value: 5, algorithm: Encoding.Algorithm.sha256)) { INFO@mark `EN7 digests of different values are the same` }
 
 // What is held under a key is read back where the key is, and nowhere else.
-locked := Encoding.Encrypted(value: five, key: three)
-unless (exists locked.as(three)) { INFO@mark `EN8 what is held is not read back where the key is` }
-if (exists locked.as(two)) { INFO@mark `EN9 it is read back where the key is not` }
-unless (locked.as(three) == five) { INFO@mark `EN10 what is read back is not what was put in` }
+locked := Encoding.Encrypted(value: 5, key: 3)
+unless (exists locked.as(3)) { INFO@mark `EN8 what is held is not read back where the key is` }
+if (exists locked.as(2)) { INFO@mark `EN9 it is read back where the key is not` }
+unless (locked.as(3) == 5) { INFO@mark `EN10 what is read back is not what was put in` }
 // spec: a key written as a text cannot be matched, since a written literal has
 // no equality of its own (the entrypoint says so). The draft's key is a
 // location, which will compare by where it is.
 
 // What is compressed comes back, and remembers how it was packed.
-packed := Encoding.Compressed(value: five, algorithm: Encoding.Algorithm.gzip)
-unless (packed.as(None) == five) { INFO@mark `EN11 what was compressed does not come back` }
+packed := Encoding.Compressed(value: 5, algorithm: Encoding.Algorithm.gzip)
+unless (packed.as(None) == 5) { INFO@mark `EN11 what was compressed does not come back` }
 unless (packed.algorithm == Encoding.Algorithm.gzip) { INFO@mark `EN12 it forgot how it was packed` }
 if (packed.algorithm == Encoding.Algorithm.sha1) { INFO@mark `EN13 it is packed every way at once` }
-unless (Encoding.Algorithm.components.count == nine) { INFO@mark `EN14 there are other than nine algorithms` }
+unless (Encoding.Algorithm.components.count == 9) { INFO@mark `EN14 there are other than nine algorithms` }
 
 // What is wrapped is wrapped, and what wraps it says nothing of the rest.
-nested := Encoding.Encrypted(value: Encoding.Compressed(value: five, algorithm: Encoding.Algorithm.gzip), key: one)
-unless ((nested.as(one).as(None)) == five) { INFO@mark `EN15 what is packed inside what is locked does not come back` }
-if (exists nested.as(two)) { INFO@mark `EN16 what is locked around a packed value opens with the wrong key` }
+nested := Encoding.Encrypted(value: Encoding.Compressed(value: 5, algorithm: Encoding.Algorithm.gzip), key: 1)
+unless ((nested.as(1).as(None)) == 5) { INFO@mark `EN15 what is packed inside what is locked does not come back` }
+if (exists nested.as(2)) { INFO@mark `EN16 what is locked around a packed value opens with the wrong key` }
 
 // A digest says what it was made of and how, and nothing more.
-unless (Encoding.Hash(value: five, algorithm: Encoding.Algorithm.md5).value == five) { INFO@mark `EN17 a digest forgot what it was made of` }
-unless (Encoding.Hash(value: five, algorithm: Encoding.Algorithm.md5).algorithm == Encoding.Algorithm.md5) { INFO@mark `EN18 a digest forgot how` }
+unless (Encoding.Hash(value: 5, algorithm: Encoding.Algorithm.md5).value == 5) { INFO@mark `EN17 a digest forgot what it was made of` }
+unless (Encoding.Hash(value: 5, algorithm: Encoding.Algorithm.md5).algorithm == Encoding.Algorithm.md5) { INFO@mark `EN18 a digest forgot how` }
 if (Encoding.Algorithm.md5 == Encoding.Algorithm.sha1) { INFO@mark `EN19 two algorithms are the same` }
 unless (Encoding.Algorithm.md5 == Encoding.Algorithm.md5) { INFO@mark `EN20 an algorithm is not itself` }
 
 // A value held under nothing is held nowhere: `None == None` is not a key
 // matching a key, so nothing opens it.
-open_to_none := Encoding.Encrypted(value: five, key: None)
+open_to_none := Encoding.Encrypted(value: 5, key: None)
 if (exists open_to_none.as(None)) { INFO@mark `EN21 a value held under nothing comes back at nothing` }
-if (exists open_to_none.as(one)) { INFO@mark `EN22 a value held under nothing comes back anywhere` }
+if (exists open_to_none.as(1)) { INFO@mark `EN22 a value held under nothing comes back anywhere` }
 
 // What is compressed comes back whatever is asked of it: the target says
 // where it goes, not whether it unpacks.
-anywhere := Encoding.Compressed(value: four, algorithm: Encoding.Algorithm.base64)
-unless (anywhere.as(one) == four) { INFO@mark `EN23 a packed value does not come back at a target` }
-unless (anywhere.as(None) == four) { INFO@mark `EN24 a packed value does not come back at nothing` }
+anywhere := Encoding.Compressed(value: 4, algorithm: Encoding.Algorithm.base64)
+unless (anywhere.as(1) == 4) { INFO@mark `EN23 a packed value does not come back at a target` }
+unless (anywhere.as(None) == 4) { INFO@mark `EN24 a packed value does not come back at nothing` }

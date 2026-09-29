@@ -9,17 +9,17 @@ mark ^keyword := external global
 // and `chainable` says which operators it takes. Written through, a comparison
 // says both of the comparisons it is written as, so a chain that breaks
 // anywhere is false.
-unless (one < two < three) { INFO@mark `PR3 one below two below three does not hold` }
-if (three < two < one) { INFO@mark `PR4 three below two below one holds` }
-if (one < three < two) { INFO@mark `PR5 a chain that breaks at the end holds` }
-if (two < one < three) { INFO@mark `PR6 a chain that breaks at the start holds` }
-unless (three > two > one) { INFO@mark `PR16 three above two above one does not hold` }
-if (one > two > three) { INFO@mark `PR17 one above two above three holds` }
-unless (one <= two <= three) { INFO@mark `PR18 a chain of at-mosts does not hold` }
-if (one <= three <= two) { INFO@mark `PR19 a chain of at-mosts that breaks holds` }
-unless (three >= two >= one) { INFO@mark `PR20 a chain of at-leasts does not hold` }
-unless (one == one == one) { INFO@mark `PR21 a chain of sames does not hold` }
-if (one == one == two) { INFO@mark `PR22 a chain of sames that breaks holds` }
+unless (1 < 2 < 3) { INFO@mark `PR3 one below two below three does not hold` }
+if (3 < 2 < 1) { INFO@mark `PR4 three below two below one holds` }
+if (1 < 3 < 2) { INFO@mark `PR5 a chain that breaks at the end holds` }
+if (2 < 1 < 3) { INFO@mark `PR6 a chain that breaks at the start holds` }
+unless (3 > 2 > 1) { INFO@mark `PR16 three above two above one does not hold` }
+if (1 > 2 > 3) { INFO@mark `PR17 one above two above three holds` }
+unless (1 <= 2 <= 3) { INFO@mark `PR18 a chain of at-mosts does not hold` }
+if (1 <= 3 <= 2) { INFO@mark `PR19 a chain of at-mosts that breaks holds` }
+unless (3 >= 2 >= 1) { INFO@mark `PR20 a chain of at-leasts does not hold` }
+unless (1 == 1 == 1) { INFO@mark `PR21 a chain of sames does not hold` }
+if (1 == 1 == 2) { INFO@mark `PR22 a chain of sames that breaks holds` }
 
 // And one written here, to show that a rule of this shape does what it says.
 // Which operators it will take is answered by a class, the way the type of a
@@ -29,34 +29,34 @@ minus ^keyword := class {
   accepts (written) => if (exists (external alike (written) (`-`))) { written } else { None }
 }
 {start} [takes: minus] {once} [again: minus] {twice} => (start [takes] once) [again] twice
-unless ((ten - two - three) == five) { INFO@mark `PR1 ten less two less three is not five` }
-unless (((ten + ten) - four - six) == ten) { INFO@mark `PR2 twenty less four less six is not ten` }
+unless ((10 - 2 - 3) == 5) { INFO@mark `PR1 ten less two less three is not five` }
+unless (((10 + 10) - 4 - 6) == 10) { INFO@mark `PR2 twenty less four less six is not ten` }
 
 // What is written with one of them is untouched, and so is what the filter
 // does not take.
-unless ((one + two) == three) { INFO@mark `PR7 one and two is not three` }
-unless (one < two) { INFO@mark `PR8 one is not below two` }
-if (two < one) { INFO@mark `PR9 two is below one` }
-unless ((two * three) == six) { INFO@mark `PR10 an operator the rule does not ask for stopped working` }
-unless ((ten - two) == eight) { INFO@mark `PR11 one less on its own stopped working` }
-unless ((one + two + three) == six) { INFO@mark `PR12 three added is not six` }
+unless ((1 + 2) == 3) { INFO@mark `PR7 one and two is not three` }
+unless (1 < 2) { INFO@mark `PR8 one is not below two` }
+if (2 < 1) { INFO@mark `PR9 two is below one` }
+unless ((2 * 3) == 6) { INFO@mark `PR10 an operator the rule does not ask for stopped working` }
+unless ((10 - 2) == 8) { INFO@mark `PR11 one less on its own stopped working` }
+unless ((1 + 2 + 3) == 6) { INFO@mark `PR12 three added is not six` }
 
 // Two operators of different kinds group by where they are written: of `+`,
 // `-` and `*`, written in that order in Number, the later binds tighter, and
 // one written as often as the other groups to the left.
-unless ((two * three + one) == seven) { INFO@mark `PR23 two times three and one is not seven` }
-unless ((one + two * three) == seven) { INFO@mark `PR24 one and two times three is not seven` }
-unless ((ten / two / five) == one) { INFO@mark `PR25 ten shared twice is not one` }
-unless ((two * three * two) == (ten + two)) { INFO@mark `PR26 two times three times two is not twelve` }
-unless ((ten - four * two) == two) { INFO@mark `PR27 ten less four times two is not two` }
-unless (one + two < four) { INFO@mark `PR28 one and two is not below four` }
-if (four < one + two) { INFO@mark `PR29 four is below one and two` }
-unless (one + two == three) { INFO@mark `PR30 one and two is not three` }
-unless (three == one + two) { INFO@mark `PR31 three is not one and two` }
-if (two * three < five) { INFO@mark `PR32 two times three is below five` }
-unless (one + two >= three) { INFO@mark `PR33 one and two is not at least three` }
-if (one + two > four) { INFO@mark `PR34 one and two is above four` }
-unless (four >= one + two) { INFO@mark `PR35 four is not at least one and two` }
+unless ((2 * 3 + 1) == 7) { INFO@mark `PR23 two times three and one is not seven` }
+unless ((1 + 2 * 3) == 7) { INFO@mark `PR24 one and two times three is not seven` }
+unless ((10 / 2 / 5) == 1) { INFO@mark `PR25 ten shared twice is not one` }
+unless ((2 * 3 * 2) == 12) { INFO@mark `PR26 two times three times two is not twelve` }
+unless ((10 - 4 * 2) == 2) { INFO@mark `PR27 ten less four times two is not two` }
+unless (1 + 2 < 4) { INFO@mark `PR28 one and two is not below four` }
+if (4 < 1 + 2) { INFO@mark `PR29 four is below one and two` }
+unless (1 + 2 == 3) { INFO@mark `PR30 one and two is not three` }
+unless (3 == 1 + 2) { INFO@mark `PR31 three is not one and two` }
+if (2 * 3 < 5) { INFO@mark `PR32 two times three is below five` }
+unless (1 + 2 >= 3) { INFO@mark `PR33 one and two is not at least three` }
+if (1 + 2 > 4) { INFO@mark `PR34 one and two is above four` }
+unless (4 >= 1 + 2) { INFO@mark `PR35 four is not at least one and two` }
 
 // spec: a chain of three comparisons is not claimed — the rule takes two
 // operators around a shared operand, so `a < b < c < d` reads as

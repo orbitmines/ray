@@ -19,7 +19,7 @@ c := b.mk
 unless (exists a.components.hierarchy.tail.value) { INFO@mark `C1 an instance has no class component` }
 unless (exists c.components.hierarchy.head.value.mk) { INFO@mark `C2 the class component of an instance is not its class` }
 unless (exists a.components.hierarchy.owner) { INFO@mark `C3 a hierarchy does not know what it belongs to` }
-unless (a.components.hierarchy.count == one) { INFO@mark `C4 a plain instance has other than one class component` }
+unless (a.components.hierarchy.count == 1) { INFO@mark `C4 a plain instance has other than one class component` }
 
 R := class { }
 S := class: R { s => S(next: this) }
@@ -47,7 +47,7 @@ E := enum p | q | r
 unless (exists E.components.head.value.name) { INFO@mark `C9 the first enum member is not the first component` }
 unless (exists E.components.head.next.next.value.name) { INFO@mark `C10 enum components are not chained forward` }
 unless (exists E.components.tail.previous.previous.value.name) { INFO@mark `C11 enum components are not chained backward` }
-unless (E.components.count == three) { INFO@mark `C12 an enum of three has other than three components` }
+unless (E.components.count == 3) { INFO@mark `C12 an enum of three has other than three components` }
 unless (E.components.first.is_initial) { INFO@mark `C13 a chain is not an Iterable of Rays` }
 unless (exists E.components.last.value.name) { INFO@mark `C14 Iterable.last did not reach the last component` }
 
@@ -55,7 +55,7 @@ M := a | b
 unless (exists M.components.head.value.mk) { INFO@mark `C15 | did not superpose its left side` }
 unless (exists M.components.tail.value.mk) { INFO@mark `C16 | did not superpose its right side` }
 N := M | c
-unless (N.components.count == three) { INFO@mark `C17 | on a Many did not append` }
+unless (N.components.count == 3) { INFO@mark `C17 | on a Many did not append` }
 
 k := chain None
 k &= a
@@ -63,38 +63,38 @@ k &= b
 unless (exists k.head.next) { INFO@mark `C18 a hand-built chain is not linked forward` }
 unless (exists k.tail.previous) { INFO@mark `C19 a hand-built chain is not linked backward` }
 if (exists k.head.previous) { INFO@mark `C20 the head of a chain has a previous` }
-unless (k.count == two) { INFO@mark `C21 a chain of two does not count two` }
+unless (k.count == 2) { INFO@mark `C21 a chain of two does not count two` }
 
 // A class extended later reaches every instance built from it, which is what
 // referring to the class through the hierarchy is for.
 Late ^keyword := class { }
 built_before ^keyword := Late()
 Late.components.hierarchy &= class {
-  added => one
+  added => 1
 }
-unless (built_before.added == one) { INFO@mark `C24 a class extended later does not reach an instance built before` }
+unless (built_before.added == 1) { INFO@mark `C24 a class extended later does not reach an instance built before` }
 built_after ^keyword := Late()
-unless (built_after.added == one) { INFO@mark `C25 a class extended later does not reach an instance built after` }
+unless (built_after.added == 1) { INFO@mark `C25 a class extended later does not reach an instance built after` }
 
 // What a class is made of, three deep.
 G1 ^keyword := class {
-  depth => one
+  depth => 1
 }
 G2 ^keyword := class: G1 {
-  depth => two
+  depth => 2
 }
 G3 ^keyword := class: G2 {
-  depth => three
+  depth => 3
 }
-unless (G3().depth == three) { INFO@mark `C26 the nearest class does not answer` }
-unless (G2().depth == two) { INFO@mark `C27 the middle class answers its parent's` }
-unless (G1().depth == one) { INFO@mark `C28 the first class answers something else` }
+unless (G3().depth == 3) { INFO@mark `C26 the nearest class does not answer` }
+unless (G2().depth == 2) { INFO@mark `C27 the middle class answers its parent's` }
+unless (G1().depth == 1) { INFO@mark `C28 the first class answers something else` }
 unless (exists G3.super) { INFO@mark `C29 a class three deep has no super` }
-unless (G3.super.depth == two) { INFO@mark `C30 super does not reach the class it is built on` }
+unless (G3.super.depth == 2) { INFO@mark `C30 super does not reach the class it is built on` }
 
 // Superposing is a copy: what it is made of gains, and the left side does not.
 first ^keyword := A()
 second ^keyword := A()
 both ^keyword := first | second
-unless (both.components.count == two) { INFO@mark `C31 superposing two does not make two components` }
+unless (both.components.count == 2) { INFO@mark `C31 superposing two does not make two components` }
 unless (first.components.count.is_zero) { INFO@mark `C32 superposing changed the left side` }

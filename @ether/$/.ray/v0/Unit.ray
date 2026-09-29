@@ -19,7 +19,7 @@ Unit := class {
   )
   over (other: Unit) => (
     walked ^keyword := this
-    times ^keyword := one
+    times ^keyword := 1
     reached ^keyword := None
     while ((exists walked).and((exists reached).not)) {
       if (walked == other) { reached = times }
@@ -43,7 +43,7 @@ Unit := class {
     found
   )
   rank => (
-    rank_steps := zero
+    rank_steps := 0
     unless .is_base { rank_steps = .base.rank.succ }
     rank_steps
   )
@@ -56,20 +56,20 @@ Unit := class {
     ratio_times
   )
   scale => (
-    scaled := one
+    scaled := 1
     unless .is_base { scaled = .ratio * .base.scale }
     scaled
   )
   // Where this unit's zero sits on the base unit's line (`def offset`); `as`
   // does not apply it yet.
   shift => (
-    shifted_by := zero
+    shifted_by := 0
     if (exists .offset) { shifted_by = .offset }
     shifted_by
   )
 
   // Allow for syntax `year as ns`: one of this unit, expressed in another.
-  as (other: Unit) => (one of this) as other
+  as (other: Unit) => (1 of this) as other
 
   // `def multiple multiple: Number, ToUnit: Unit` and `def offset`: a unit
   // defined from this one.
@@ -84,7 +84,7 @@ Unit := class {
     parent := this
     Unit(
       base: parent
-      factor: one
+      factor: 1
       offset: by
     )
   )
@@ -186,8 +186,8 @@ Number.Real.components.hierarchy &= Measured
 // asks for it, so loading the table costs nothing. spec: the negative powers
 // (deci … quecto) wait on reals, the powers past kilo on numbers past a
 // thousand being cheap to walk; they are listed as the draft lists them.
-Prefix := enum deka (symbol: `da`, magnitude: one) | hecto (symbol: `h`, magnitude: two) | kilo (symbol: `k`, magnitude: three) | mega (symbol: `M`, magnitude: six) | giga (symbol: `G`, magnitude: nine) | tera (symbol: `T`, magnitude: ten + two) | peta (symbol: `P`, magnitude: ten + five) | exa (symbol: `E`, magnitude: ten + eight) | zetta (symbol: `Z`, magnitude: (two * ten) + one) | yotta (symbol: `Y`, magnitude: (two * ten) + four) | ronna (symbol: `R`, magnitude: (two * ten) + seven) | quetta (symbol: `Q`, magnitude: three * ten) {
-  factor => ten.pow(.magnitude)
+Prefix := enum deka (symbol: `da`, magnitude: 1) | hecto (symbol: `h`, magnitude: 2) | kilo (symbol: `k`, magnitude: 3) | mega (symbol: `M`, magnitude: 6) | giga (symbol: `G`, magnitude: 9) | tera (symbol: `T`, magnitude: 12) | peta (symbol: `P`, magnitude: 15) | exa (symbol: `E`, magnitude: 18) | zetta (symbol: `Z`, magnitude: 21) | yotta (symbol: `Y`, magnitude: 24) | ronna (symbol: `R`, magnitude: 27) | quetta (symbol: `Q`, magnitude: 30) {
+  factor => 10.pow(.magnitude)
 }
 // SI_Unit m "meter": a base unit with every prefix of the table.
 // spec: the prefixed units are built on demand, `unit prefixed Prefix.kilo`,
@@ -201,10 +201,10 @@ SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit(
 // `base` unit. The fields are what a unit is built with; a spaced `:` takes
 // the rest of its line, so each field goes on a line of its own.
 Bit := Unit().called(`bit`, `bits`, `b`)
-Byte := Unit(base: Bit, factor: eight).called(`byte`, `bytes`, `B`)
+Byte := Unit(base: Bit, factor: 8).called(`byte`, `bytes`, `B`)
 // Kilobyte | KB = 1000 * Byte, Kibibyte = 1024 * Byte
 Kilobyte := Byte prefixed Prefix.kilo
-Kibibyte => Byte multiple (two.pow(ten))
+Kibibyte => Byte multiple (1024)
 
 // From the drafts, not yet reached here (spec):
 // .ray2/_todo/ray.ray.txt/Ether/instance/utils/Unit.ray:

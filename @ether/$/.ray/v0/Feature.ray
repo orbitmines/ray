@@ -25,7 +25,7 @@ IO := class {
 Random := class {
   // The machine's own bit. It is handed over the way this language spells a
   // bit — there or not — so it is read by asking whether it is there.
-  bit => if (exists (external random)) { one } else { zero }
+  bit => if (exists (external random)) { 1 } else { 0 }
   bits (count: Number) => (
     drawn := chain None
     left ^keyword := count
@@ -38,7 +38,7 @@ Random := class {
   // A number below a limit: as many bits as the limit needs, drawn again
   // until the number they spell is small enough.
   below (limit: Number) => (
-    width ^keyword := zero
+    width ^keyword := 0
     rest ^keyword := limit
     while rest {
       rest = rest.half
@@ -50,7 +50,7 @@ Random := class {
   )
   // The number so many random bits spell, accumulated as they are drawn.
   number (width: Number) => (
-    total ^keyword := zero
+    total ^keyword := 0
     left ^keyword := width
     while left {
       total = total + total
@@ -129,7 +129,7 @@ Network := class {
 
     // The draft bounds a name from above (`String{length < 2^8}`); a name of
     // nothing is not one, so it is bounded from below here too.
-    valid => .text.count.nonzero.and(.text.count < two.pow(eight))
+    valid => .text.count.nonzero.and(.text.count < 256)
   }
   Proxy := class {
     through (persona) => Network.Proxy(persona: persona)

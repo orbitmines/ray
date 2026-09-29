@@ -42,9 +42,9 @@ stop ^keyword := true
 do { stop = false } while stop
 if (stop) { INFO@mark `CC11 do-while did not stop` }
 
-nothing_taken := if false { one } else { None }
+nothing_taken := if false { 1 } else { None }
 if (exists nothing_taken) { INFO@mark `CC12 an if whose taken branch is None is present` }
-something_taken := if true { one } else { None }
+something_taken := if true { 1 } else { None }
 unless (exists something_taken) { INFO@mark `CC13 an if whose taken branch is one is absent` }
 
 // Only the branch that is taken runs: what the others would have done is not
@@ -57,94 +57,94 @@ taken_once ^keyword := if true { true } else {
 unless (taken_once) { INFO@mark `CF1 a taken branch did not answer` }
 if (counted) { INFO@mark `CF2 the branch nobody took ran anyway` }
 
-arms ^keyword := zero
+arms ^keyword := 0
 picked ^keyword := if false {
   arms = arms.succ
-  one
+  1
 } elsif true {
   arms = arms.succ
-  two
+  2
 } elsif true {
   arms = arms.succ
-  three
+  3
 } else {
   arms = arms.succ
-  four
+  4
 }
-unless (picked == two) { INFO@mark `CF3 the first holding arm is not what answered` }
-unless (arms == one) { INFO@mark `CF4 more than one arm of a chain ran` }
+unless (picked == 2) { INFO@mark `CF3 the first holding arm is not what answered` }
+unless (arms == 1) { INFO@mark `CF4 more than one arm of a chain ran` }
 
 // A branch is a block, so it answers what its last statement does. Statements
 // in a block are told apart by the lines they are written on.
 many ^keyword := if true {
-  one
-  two
-  three
+  1
+  2
+  3
 } else { None }
-unless (many == three) { INFO@mark `CF5 a branch does not answer its last statement` }
+unless (many == 3) { INFO@mark `CF5 a branch does not answer its last statement` }
 
 // Branches nest, and the inner one is read where it is written.
-nested ^keyword := if true { if false { one } else { two } } else { three }
-unless (nested == two) { INFO@mark `CF6 a branch inside a branch is not read there` }
+nested ^keyword := if true { if false { 1 } else { 2 } } else { 3 }
+unless (nested == 2) { INFO@mark `CF6 a branch inside a branch is not read there` }
 
 // A condition is not only true and false: what is there holds, what is not
 // does not.
-held_something ^keyword := if one { true } else { false }
+held_something ^keyword := if 1 { true } else { false }
 unless (held_something) { INFO@mark `CF7 a number that is there does not hold` }
 held_nothing ^keyword := if None { true } else { false }
 if (held_nothing) { INFO@mark `CF8 nothing holds` }
 
 // `unless` takes the other side too.
-other_side ^keyword := unless true { one } else { two }
-unless (other_side == two) { INFO@mark `CF9 unless has no other side` }
+other_side ^keyword := unless true { 1 } else { 2 }
+unless (other_side == 2) { INFO@mark `CF9 unless has no other side` }
 
 // A loop runs as many times as its condition holds.
-left ^keyword := three
-rounds ^keyword := zero
+left ^keyword := 3
+rounds ^keyword := 0
 while left {
   rounds = rounds.succ
   left = left.pred
 }
-unless (rounds == three) { INFO@mark `CF10 a loop ran other than three times` }
+unless (rounds == 3) { INFO@mark `CF10 a loop ran other than three times` }
 unless (left.is_zero) { INFO@mark `CF11 a loop left its count behind` }
 
 // `do` runs once before it asks.
-asked ^keyword := zero
+asked ^keyword := 0
 do { asked = asked.succ } while false
-unless (asked == one) { INFO@mark `CF12 do ran other than once when it never holds` }
+unless (asked == 1) { INFO@mark `CF12 do ran other than once when it never holds` }
 
 // A loop inside a loop is its own count.
-outer ^keyword := two
-pairs ^keyword := zero
-inner ^keyword := zero
+outer ^keyword := 2
+pairs ^keyword := 0
+inner ^keyword := 0
 while outer {
-  inner = three
+  inner = 3
   while inner {
     pairs = pairs.succ
     inner = inner.pred
   }
   outer = outer.pred
 }
-unless (pairs == (two * three)) { INFO@mark `CF13 a loop inside a loop does not multiply` }
+unless (pairs == (2 * 3)) { INFO@mark `CF13 a loop inside a loop does not multiply` }
 
 // `;` is a method: what is written after it is read where it is written, and
 // is what the whole answers.
-unless (( one ; two ) == two) { INFO@mark `CF14 the semicolon does not answer what is written after it` }
-unless (( one ; two ; three ) == three) { INFO@mark `CF15 the last of three is not what the whole answers` }
+unless (( 1 ; 2 ) == 2) { INFO@mark `CF14 the semicolon does not answer what is written after it` }
+unless (( 1 ; 2 ; 3 ) == 3) { INFO@mark `CF15 the last of three is not what the whole answers` }
 // Two statements on one line are what `;` is for, and two assignments are two
 // statements: `;` binds looser than `=`, which the entrypoint says by asking
 // for both of them around a shared operand and grouping the assignment first.
-semi_counted ^keyword := zero
-(semi_counted = one) ; (semi_counted = semi_counted.succ)
-unless (semi_counted == two) { INFO@mark `CF16 two bracketed statements on one line did not both run` }
-stepped ^keyword := zero
-stepped = one ; stepped = stepped.succ
-unless (stepped == two) { INFO@mark `CF17 two assignments on one line did not both run` }
-here ^keyword := zero
-there ^keyword := zero
-here = one ; there = two
-unless (here == one) { INFO@mark `CF18 the first of two assignments on one line did not run` }
-unless (there == two) { INFO@mark `CF19 the second of two assignments on one line did not run` }
-declared ^keyword := zero
-declared := three ; declared = declared.succ
-unless (declared == four) { INFO@mark `CF20 a declaration and an assignment on one line did not both run` }
+semi_counted ^keyword := 0
+(semi_counted = 1) ; (semi_counted = semi_counted.succ)
+unless (semi_counted == 2) { INFO@mark `CF16 two bracketed statements on one line did not both run` }
+stepped ^keyword := 0
+stepped = 1 ; stepped = stepped.succ
+unless (stepped == 2) { INFO@mark `CF17 two assignments on one line did not both run` }
+here ^keyword := 0
+there ^keyword := 0
+here = 1 ; there = 2
+unless (here == 1) { INFO@mark `CF18 the first of two assignments on one line did not run` }
+unless (there == 2) { INFO@mark `CF19 the second of two assignments on one line did not run` }
+declared ^keyword := 0
+declared := 3 ; declared = declared.succ
+unless (declared == 4) { INFO@mark `CF20 a declaration and an assignment on one line did not both run` }

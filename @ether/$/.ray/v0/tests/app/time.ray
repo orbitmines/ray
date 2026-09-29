@@ -8,39 +8,39 @@ unless (Hour.is_temporal) { INFO@mark `TI2 an hour is not temporal` }
 unless (Hour.base_unit == Second) { INFO@mark `TI3 an hour is not counted in seconds` }
 unless (Minute.base_unit == Second) { INFO@mark `TI4 a minute is not counted in seconds` }
 
-unless (Julian.hours_in_day == ((two * ten) + four)) { INFO@mark `TI5 a day is not twenty-four hours` }
-unless (Julian.minutes_in_hour == (six * ten)) { INFO@mark `TI6 an hour is not sixty minutes` }
-unless (Julian.seconds_in_minute == (six * ten)) { INFO@mark `TI7 a minute is not sixty seconds` }
+unless (Julian.hours_in_day == 24) { INFO@mark `TI5 a day is not twenty-four hours` }
+unless (Julian.minutes_in_hour == 60) { INFO@mark `TI6 an hour is not sixty minutes` }
+unless (Julian.seconds_in_minute == 60) { INFO@mark `TI7 a minute is not sixty seconds` }
 
-unless (Julian.is_leap_year(four)) { INFO@mark `TI8 the fourth year is not a leap year` }
-if (Julian.is_leap_year(five)) { INFO@mark `TI9 the fifth year is a leap year` }
-unless (Gregorian.is_leap_year(four)) { INFO@mark `TI10 the fourth year is not a leap year in the Gregorian` }
-if (Gregorian.is_leap_year(three)) { INFO@mark `TI11 the third year is a leap year in the Gregorian` }
+unless (Julian.is_leap_year(4)) { INFO@mark `TI8 the fourth year is not a leap year` }
+if (Julian.is_leap_year(5)) { INFO@mark `TI9 the fifth year is a leap year` }
+unless (Gregorian.is_leap_year(4)) { INFO@mark `TI10 the fourth year is not a leap year in the Gregorian` }
+if (Gregorian.is_leap_year(3)) { INFO@mark `TI11 the third year is a leap year in the Gregorian` }
 
-unless (Julian.months.count == (ten + two)) { INFO@mark `TI12 a year has other than twelve months` }
-unless (Julian.weekdays.count == seven) { INFO@mark `TI13 a week has other than seven days` }
+unless (Julian.months.count == 12) { INFO@mark `TI12 a year has other than twelve months` }
+unless (Julian.weekdays.count == 7) { INFO@mark `TI13 a week has other than seven days` }
 
-unless ((five seconds).is_temporal) { INFO@mark `TI14 five seconds is not temporal` }
-unless ((five seconds).amount == five) { INFO@mark `TI15 five seconds is not five of them` }
-unless ((two minutes).unit == Minute) { INFO@mark `TI16 two minutes are not minutes` }
+unless ((5 seconds).is_temporal) { INFO@mark `TI14 five seconds is not temporal` }
+unless ((5 seconds).amount == 5) { INFO@mark `TI15 five seconds is not five of them` }
+unless ((2 minutes).unit == Minute) { INFO@mark `TI16 two minutes are not minutes` }
 
 // The century rule is the Gregorian's, and UTC is where the offsets start.
-if (Gregorian.is_leap_year(hundred)) { INFO@mark `TI17 a hundred is a leap year in the Gregorian` }
-unless (Julian.is_leap_year(hundred)) { INFO@mark `TI18 a hundred is not a leap year in the Julian` }
+if (Gregorian.is_leap_year(100)) { INFO@mark `TI17 a hundred is a leap year in the Gregorian` }
+unless (Julian.is_leap_year(100)) { INFO@mark `TI18 a hundred is not a leap year in the Julian` }
 unless (UTC.offset.is_zero) { INFO@mark `TI19 UTC is at some offset` }
 unless (exists Julian.months.head.value.place) { INFO@mark `TI20 the first month has no place` }
 
 // Months: what each is named, how long it is, and where it sits. February is
 // the only one a leap year changes.
 february := Julian.months.head.next.value
-unless (february.place == two) { INFO@mark `TI21 the second month does not sit second` }
-unless (february.length == ((two * ten) + eight)) { INFO@mark `TI22 february is other than twenty-eight days` }
-unless (february.days_in(four, Julian) == ((two * ten) + nine)) { INFO@mark `TI23 february in a leap year is other than twenty-nine days` }
-unless (february.days_in(five, Julian) == ((two * ten) + eight)) { INFO@mark `TI24 february in a plain year is other than twenty-eight days` }
+unless (february.place == 2) { INFO@mark `TI21 the second month does not sit second` }
+unless (february.length == 28) { INFO@mark `TI22 february is other than twenty-eight days` }
+unless (february.days_in(4, Julian) == 29) { INFO@mark `TI23 february in a leap year is other than twenty-nine days` }
+unless (february.days_in(5, Julian) == 28) { INFO@mark `TI24 february in a plain year is other than twenty-eight days` }
 january := Julian.months.head.value
-unless (january.place == one) { INFO@mark `TI25 the first month does not sit first` }
-unless (january.days_in(four, Julian) == ((three * ten) + one)) { INFO@mark `TI26 a leap year lengthens january` }
-unless (Julian.days_in_month(january, four) == ((three * ten) + one)) { INFO@mark `TI27 a calendar does not ask a month how long it is` }
+unless (january.place == 1) { INFO@mark `TI25 the first month does not sit first` }
+unless (january.days_in(4, Julian) == 31) { INFO@mark `TI26 a leap year lengthens january` }
+unless (Julian.days_in_month(january, 4) == 31) { INFO@mark `TI27 a calendar does not ask a month how long it is` }
 
 // Weekdays, in the order a week is walked.
 unless (Weekday.monday == Julian.weekdays.head.value) { INFO@mark `TI28 a week does not begin on monday` }
@@ -52,81 +52,81 @@ unless (Minute.base == Second) { INFO@mark `TI31 a minute is not built on a seco
 unless (Hour.base == Minute) { INFO@mark `TI32 an hour is not built on a minute` }
 unless (Day.base == Hour) { INFO@mark `TI33 a day is not built on an hour` }
 unless (Week.base == Day) { INFO@mark `TI34 a week is not built on a day` }
-unless (Minute.ratio == (six * ten)) { INFO@mark `TI35 a minute is other than sixty of what it is built on` }
-unless (Week.ratio == seven) { INFO@mark `TI36 a week is other than seven of what it is built on` }
-unless (Day.ratio == ((two * ten) + four)) { INFO@mark `TI91 a day is other than twenty-four hours` }
-unless (Week.rank == four) { INFO@mark `TI37 a week is other than four steps off its base` }
+unless (Minute.ratio == 60) { INFO@mark `TI35 a minute is other than sixty of what it is built on` }
+unless (Week.ratio == 7) { INFO@mark `TI36 a week is other than seven of what it is built on` }
+unless (Day.ratio == 24) { INFO@mark `TI91 a day is other than twenty-four hours` }
+unless (Week.rank == 4) { INFO@mark `TI37 a week is other than four steps off its base` }
 
 // The Gregorian differs from the Julian only at a century, and agrees again
 // at four hundred.
-unless (Gregorian.is_leap_year(four * hundred)) { INFO@mark `TI38 four hundred is not a leap year in the Gregorian` }
-unless (Julian.is_leap_year(four * hundred)) { INFO@mark `TI39 four hundred is not a leap year in the Julian` }
+unless (Gregorian.is_leap_year(400)) { INFO@mark `TI38 four hundred is not a leap year in the Gregorian` }
+unless (Julian.is_leap_year(400)) { INFO@mark `TI39 four hundred is not a leap year in the Julian` }
 unless (GMT.offset.is_zero) { INFO@mark `TI40 GMT is at some offset` }
 if (UTC.leap_seconds) { INFO@mark `TI41 UTC counts leap seconds` }
 
 // Where a day falls in its year: the months before it, and itself.
-unless (Julian.day_of_year(Julian.months.head.value, one, five) == one) { INFO@mark `TI42 the first of january is not the first day of the year` }
-unless (Julian.day_of_year(Julian.months.head.next.value, one, five) == ((three * ten) + two)) { INFO@mark `TI43 the first of february is not the thirty-second day` }
-unless (Julian.day_of_year(Julian.months.head.next.next.value, one, four) == ((six * ten) + one)) { INFO@mark `TI44 the first of march in a leap year is not the sixty-first day` }
-unless (Julian.day_of_year(Julian.months.head.next.next.value, one, five) == (six * ten)) { INFO@mark `TI45 the first of march in a plain year is not the sixtieth day` }
+unless (Julian.day_of_year(Julian.months.head.value, 1, 5) == 1) { INFO@mark `TI42 the first of january is not the first day of the year` }
+unless (Julian.day_of_year(Julian.months.head.next.value, 1, 5) == 32) { INFO@mark `TI43 the first of february is not the thirty-second day` }
+unless (Julian.day_of_year(Julian.months.head.next.next.value, 1, 4) == 61) { INFO@mark `TI44 the first of march in a leap year is not the sixty-first day` }
+unless (Julian.day_of_year(Julian.months.head.next.next.value, 1, 5) == 60) { INFO@mark `TI45 the first of march in a plain year is not the sixtieth day` }
 
 // A time is how long since its epoch, in the calendar it is counted by.
-here := Time(calendar: Julian, since_epoch: (five seconds))
-later := Time(calendar: Julian, since_epoch: (eight seconds))
+here := Time(calendar: Julian, since_epoch: (5 seconds))
+later := Time(calendar: Julian, since_epoch: (8 seconds))
 unless (here == here) { INFO@mark `TI46 a time is not itself` }
 if (here == later) { INFO@mark `TI47 two times are the same` }
 unless (here < later) { INFO@mark `TI48 five seconds in is not before eight` }
 if (later < here) { INFO@mark `TI49 eight seconds in is before five` }
-unless ((later - here).as_seconds == three) { INFO@mark `TI50 the three seconds between them are not three` }
-unless ((here + (three seconds)) == later) { INFO@mark `TI51 five seconds on plus three is not eight` }
+unless ((later - here).as_seconds == 3) { INFO@mark `TI50 the three seconds between them are not three` }
+unless ((here + (3 seconds)) == later) { INFO@mark `TI51 five seconds on plus three is not eight` }
 unless (here.as(Gregorian).calendar == Gregorian) { INFO@mark `TI52 reading a time by another calendar does not` }
 unless (here.as(Gregorian) == here) { INFO@mark `TI53 the same moment read by another calendar is another moment` }
-unless (here.since_calendar_epoch.as_seconds == five) { INFO@mark `TI54 a time with no epoch of its own is not since its calendar's` }
+unless (here.since_calendar_epoch.as_seconds == 5) { INFO@mark `TI54 a time with no epoch of its own is not since its calendar's` }
 
 // A time counted from another time.
-since_then := Time(calendar: Julian, since_epoch: (two seconds), epoch: here)
-unless (since_then.since_calendar_epoch.as_seconds == seven) { INFO@mark `TI55 two seconds after five is not seven since the start` }
-unless (since_then < Time(calendar: Julian, since_epoch: (eight seconds))) { INFO@mark `TI56 seven is not before eight` }
+since_then := Time(calendar: Julian, since_epoch: (2 seconds), epoch: here)
+unless (since_then.since_calendar_epoch.as_seconds == 7) { INFO@mark `TI55 two seconds after five is not seven since the start` }
+unless (since_then < Time(calendar: Julian, since_epoch: (8 seconds))) { INFO@mark `TI56 seven is not before eight` }
 
 // What a segment of a calendar is.
-recurring := Calendar.Segment(name: one, length: (two seconds), period: (two seconds))
-plain_segment := Calendar.Segment(name: two, length: (two seconds))
+recurring := Calendar.Segment(name: 1, length: (2 seconds), period: (2 seconds))
+plain_segment := Calendar.Segment(name: 2, length: (2 seconds))
 unless (recurring.is_recurring) { INFO@mark `TI57 a segment with a period does not recur` }
 if (plain_segment.is_recurring) { INFO@mark `TI58 a segment without a period recurs` }
-unless (recurring.epoch == one) { INFO@mark `TI59 a segment does not start at one` }
+unless (recurring.epoch == 1) { INFO@mark `TI59 a segment does not start at one` }
 
 // A month by the place it falls in, counted from zero, and back.
-unless (Month.at_index(zero) == Month.january) { INFO@mark `TI60 the month at the start of the year is not January` }
-unless (Month.at_index(two) == Month.march) { INFO@mark `TI61 the third month is not March` }
+unless (Month.at_index(0) == Month.january) { INFO@mark `TI60 the month at the start of the year is not January` }
+unless (Month.at_index(2) == Month.march) { INFO@mark `TI61 the third month is not March` }
 unless (Month.january.index.is_zero) { INFO@mark `TI62 January does not fall at the start` }
-unless (Month.march.index == two) { INFO@mark `TI63 March is not two along` }
+unless (Month.march.index == 2) { INFO@mark `TI63 March is not two along` }
 if (Month.january == Month.march) { INFO@mark `TI64 two months are the same` }
 unless (Month.january != Month.march) { INFO@mark `TI65 two months are not different` }
 
 // A date written the way the standard writes it, read back into the three
 // numbers it is made of.
 written := ISO_8601.date(String.of(`3-2-7`))
-unless (written.year == three) { INFO@mark `TI66 the year written first is not read` }
+unless (written.year == 3) { INFO@mark `TI66 the year written first is not read` }
 unless (written.month == Month.february) { INFO@mark `TI67 the second month written is not February` }
-unless (written.day == seven) { INFO@mark `TI68 the day written last is not read` }
+unless (written.day == 7) { INFO@mark `TI68 the day written last is not read` }
 unless (written == ISO_8601.date(String.of(`3-2-7`))) { INFO@mark `TI69 a date is not itself` }
 if (written == ISO_8601.date(String.of(`3-2-8`))) { INFO@mark `TI70 two dates a day apart are the same` }
 unless (written.is_valid(Gregorian)) { INFO@mark `TI71 the seventh of February is not a day` }
 if (ISO_8601.date(String.of(`3-2-9`)).day_of_year(Gregorian) == written.day_of_year(Gregorian)) { INFO@mark `TI72 two days fall on the same day of the year` }
 
 // How long a year is, and how many weeks fit in it.
-unless (Gregorian.days_in_year(three) == ((three * hundred) + (six * ten) + five)) { INFO@mark `TI73 an ordinary year is not three hundred and sixty-five days` }
-unless (Gregorian.days_in_year(four) == ((three * hundred) + (six * ten) + six)) { INFO@mark `TI74 a leap year is not a day longer` }
-unless (Gregorian.weeks_in_year(three) == (five * ten) + two) { INFO@mark `TI75 a year is not fifty-two weeks` }
+unless (Gregorian.days_in_year(3) == 365) { INFO@mark `TI73 an ordinary year is not three hundred and sixty-five days` }
+unless (Gregorian.days_in_year(4) == 366) { INFO@mark `TI74 a leap year is not a day longer` }
+unless (Gregorian.weeks_in_year(3) == 52) { INFO@mark `TI75 a year is not fifty-two weeks` }
 
 // A time zone is the offset it keeps from the one everything is counted by.
 unless (UTC.offset.is_zero) { INFO@mark `TI76 the zone everything is counted by is offset` }
-unless (UTC.with_offset((three seconds)).offset.as_seconds == three) { INFO@mark `TI77 a zone three seconds along is not` }
+unless (UTC.with_offset((3 seconds)).offset.as_seconds == 3) { INFO@mark `TI77 a zone three seconds along is not` }
 unless (GMT.leap_seconds.not) { INFO@mark `TI78 the zone without leap seconds has them` }
 
 // Two calendars agreeing on a point, and a time carried across.
-agreed := Calendar.equivalent(here, Time(calendar: Gregorian, since_epoch: (ten seconds)))
-unless (agreed.convert(later).since_epoch.as_seconds == (ten + three)) { INFO@mark `TI79 three seconds past the agreed point is not three seconds past the other` }
+agreed := Calendar.equivalent(here, Time(calendar: Gregorian, since_epoch: (10 seconds)))
+unless (agreed.convert(later).since_epoch.as_seconds == 13) { INFO@mark `TI79 three seconds past the agreed point is not three seconds past the other` }
 unless (agreed.convert(later).calendar == Gregorian) { INFO@mark `TI80 a time carried across keeps the calendar it came from` }
 
 // What a planet counts its years and days in.
@@ -139,9 +139,9 @@ unless (Earth.days == Day) { INFO@mark `TI83 an Earth day is not a day` }
 
 // What a calendar cuts the line into, and what a unit is written as.
 pieces ^keyword := chain None
-pieces &= Calendar.Segment(name: one, length: (two seconds))
+pieces &= Calendar.Segment(name: 1, length: (2 seconds))
 cut := Calendar(parts: pieces)
-unless (cut.segments.count == one) { INFO@mark `TI87 a calendar given one segment has other than one` }
+unless (cut.segments.count == 1) { INFO@mark `TI87 a calendar given one segment has other than one` }
 unless (Calendar().segments.empty) { INFO@mark `TI88 a calendar given none has some` }
 unless (String.of(Second.symbol) == String.of(`s`)) { INFO@mark `TI89 the second is not written s` }
 unless (String.of(Nanosecond.symbol) == String.of(`ns`)) { INFO@mark `TI90 the nanosecond is not written ns` }

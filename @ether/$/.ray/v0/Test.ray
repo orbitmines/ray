@@ -12,12 +12,12 @@ IP := class {
   // static NUMBER_OF_SEGMENTS: Decimal, static SEGMENT_LENGTH: Decimal
   // The counts belong to the kind of address; each kind says its own.
   segment_count => .segments.count
-  segment_length => eight
+  segment_length => 8
   // static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
   bit_count => .segment_count * .segment_length
   // The separator between segments, and the base they are written in.
   separator => Character.of(ascii_dot)
-  base => ten
+  base => 10
 
   // `as Binary`: the bits of every segment, most significant first.
   bits => (
@@ -77,14 +77,14 @@ IP := class {
     left_at ^keyword := left_bits.tail
     right_at ^keyword := right_bits.tail
     while (exists left_at) {
-      ones_here ^keyword := zero
+      ones_here ^keyword := 0
       if left_at.value { ones_here = ones_here.succ }
       if right_at.value { ones_here = ones_here.succ }
       if carry_on { ones_here = ones_here.succ }
       sum_bit ^keyword := 0
       if ones_here.odd { sum_bit = 1 }
       reversed_bits &= sum_bit
-      carry_on = one < ones_here
+      carry_on = 1 < ones_here
       left_at = left_at.previous
       right_at = right_at.previous
     }
@@ -132,12 +132,12 @@ IP := class {
 // static v4 := class: IP ({segments.join(".")}) => (NUMBER_OF_SEGMENTS = 4,
 // SEGMENT_LENGTH = 8, Segment: Decimal{< 2^8})
 IP.v4 = class: IP {
-  segment_length => eight
+  segment_length => 8
   separator => Character.of(ascii_dot)
-  base => ten
+  base => 10
 }
 // static Segment: Decimal{< 2^8}
-IP.v4.Segment = Number{. < two.pow(eight)}
+IP.v4.Segment = Number{. < 256}
 
 // static v6 := class: IP ((left: Segment[]).join(":")?, zero_compression: "::"
 // (? if !defined_segments.empty), (right: Segment[]).join(":")?, (":",
@@ -147,19 +147,19 @@ IP.v4.Segment = Number{. < two.pow(eight)}
 // v4 address; here an address is its eight segments, and `compressed` is where
 // the zeros it writes as `::` are chosen.
 IP.v6 = class: IP {
-  segment_length => ten + six
+  segment_length => 16
   separator => Character.of(ascii_colon)
-  base => ten + six
+  base => 16
 
   // number_of_compressed_segments => NUMBER_OF_SEGMENTS - defined_segments.length
   // The longest run of zero segments, as where it starts and how long it is.
   // RFC 5952 asks for the longest run, and the first of equal runs, which is
   // what taking a later run only when it is longer does.
   zeros => (
-    best_at ^keyword := zero
-    best_run ^keyword := zero
-    at ^keyword := zero
-    run ^keyword := zero
+    best_at ^keyword := 0
+    best_run ^keyword := 0
+    at ^keyword := 0
+    run ^keyword := 0
     walker ^keyword := .segments.head
     while (exists walker) {
       if walker.value.is_zero {
@@ -168,7 +168,7 @@ IP.v6 = class: IP {
           best_run = run
           best_at = at.succ - run
         }
-      } else { run = zero }
+      } else { run = 0 }
       at = at.succ
       walker = walker.next
     }
@@ -179,8 +179,8 @@ IP.v6 = class: IP {
   // The symbol is not used for a single zero field (RFC 5952 4.2.2).
   compressed => (
     found := .zeros
-    if (found.length < two) { .as_string } else {
-      before := .written(zero, found.at)
+    if (found.length < 2) { .as_string } else {
+      before := .written(0, found.at)
       after := .written(found.at + found.length, .segment_count)
       before + (String.of(`::`) + after)
     }
@@ -198,7 +198,7 @@ IP.v6 = class: IP {
   )
 }
 // static Segment: Hexadecimal{length <= 4}
-IP.v6.Segment = Number{. < two.pow(ten + six)}
+IP.v6.Segment = Number{. < 65536}
 
 // A run of alike entries in a chain: where it starts and how long it is.
 Chain.Run = class {

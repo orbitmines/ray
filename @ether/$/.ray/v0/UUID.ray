@@ -10,7 +10,7 @@ UUID := class: Hexadecimal {
   spelled: Node
 
   // version: Hexadecimal¹ => this[12]
-  version => .spelled.head.at(ten + two).value
+  version => .spelled.head.at(12).value
 
   // dynamically
   //   < v1 if version == 1
@@ -26,10 +26,10 @@ UUID := class: Hexadecimal {
   //   ⊢0 => Variant.RESERVED_NCS, 10₂ => Variant.RFC_4122, 110₂ => Variant.RESERVED_MICROSOFT, 111₂ => Variant.RESERVED_FUTURE
   // The variant is the leading bits of the seventeenth digit.
   variant => (
-    leading := .spelled.head.at(ten + six).value
-    if (leading < eight) { UUID.Variant.reserved_ncs }
-    elsif (leading < (ten + two)) { UUID.Variant.rfc_4122 }
-    elsif (leading < (ten + four)) { UUID.Variant.reserved_microsoft }
+    leading := .spelled.head.at(16).value
+    if (leading < 8) { UUID.Variant.reserved_ncs }
+    elsif (leading < 12) { UUID.Variant.rfc_4122 }
+    elsif (leading < 14) { UUID.Variant.reserved_microsoft }
     else { UUID.Variant.reserved_future }
   )
 
@@ -38,8 +38,8 @@ UUID := class: Hexadecimal {
     out := chain None
     left ^keyword := count
     while left {
-      nibble ^keyword := zero
-      bit ^keyword := four
+      nibble ^keyword := 0
+      bit ^keyword := 4
       while bit {
         nibble = nibble + nibble
         if (exists (external random)) { nibble = nibble.succ }
@@ -74,9 +74,9 @@ UUID := class: Hexadecimal {
   }
   // class v4 < UUID = secure Hexadecimal{length == 32}.random ~~ version = 4
   v4 := class: UUID {
-    spelled: UUID.drawn((three * ten) + two) ~~ (
-      .head.at(ten + two).value = four
-      this.head.at(ten + six).value = eight + (.head.at(ten + six).value % four)
+    spelled: UUID.drawn(32) ~~ (
+      .head.at(12).value = 4
+      this.head.at(16).value = 8 + (.head.at(16).value % 4)
     )
     // spec: `dynamically assert (.version == four)` is the draft's, and waits on
     // `dynamically` meaning what it says — read again when what it depends on
@@ -104,13 +104,13 @@ UUID := class: Hexadecimal {
     // a walk, and so is the character built from it.
     dash ^keyword := Character.of(ascii_dash)
     groups := chain None
-    groups &= eight
-    groups &= four
-    groups &= four
-    groups &= four
-    groups &= ten + two
+    groups &= 8
+    groups &= 4
+    groups &= 4
+    groups &= 4
+    groups &= 12
     groups for {
-      unless (it.value == eight) { out &= dash }
+      unless (it.value == 8) { out &= dash }
       left ^keyword := it.value
       while left {
         out &= Character.decimal_digit(walker.value)
@@ -132,11 +132,11 @@ UUID := class: Hexadecimal {
       unless (character == dash) { out &= character.hexadecimal_digit }
     }
     // dynamically < v1 if version == 1 …: what is read comes back as its version.
-    read_version := out.head.at(ten + two).value
-    if (read_version == one) { UUID.v1(spelled: out) }
-    elsif (read_version == three) { UUID.v3(spelled: out) }
-    elsif (read_version == four) { UUID.v4(spelled: out) }
-    elsif (read_version == five) { UUID.v5(spelled: out) }
+    read_version := out.head.at(12).value
+    if (read_version == 1) { UUID.v1(spelled: out) }
+    elsif (read_version == 3) { UUID.v3(spelled: out) }
+    elsif (read_version == 4) { UUID.v4(spelled: out) }
+    elsif (read_version == 5) { UUID.v5(spelled: out) }
     else { UUID(spelled: out) }
   )
 
@@ -154,7 +154,7 @@ UUID := class: Hexadecimal {
 
 // A character read as a hexadecimal digit: `0`..`9` then `a`..`f` (either case).
 Character.components.hierarchy &= class {
-  hexadecimal_digit => if .digit { .codepoint - ((four * ten) + eight) } else { .lower.codepoint - ((eight * ten) + seven) }
+  hexadecimal_digit => if .digit { .codepoint - 48 } else { .lower.codepoint - 87 }
 }
 
 // From the drafts, not yet reached here (spec):

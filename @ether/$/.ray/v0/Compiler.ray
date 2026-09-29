@@ -21,15 +21,15 @@ Compiler := class {
   // there, and twice is once and once again: the walks these would have cost
   // are not walked.
   default := {
-    {a} + zero => a
-    {a} - zero => a
-    zero + {a} => a
-    {a} * zero => zero
-    zero * {a} => zero
-    {a} * one => a
-    one * {a} => a
-    {a} / one => a
-    {a} * two => a + a
+    {a} + 0 => a
+    {a} - 0 => a
+    0 + {a} => a
+    {a} * 0 => 0
+    0 * {a} => 0
+    {a} * 1 => a
+    1 * {a} => a
+    {a} / 1 => a
+    {a} * 2 => a + a
   }
 }
 

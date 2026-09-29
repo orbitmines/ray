@@ -11,11 +11,11 @@ Second := Unit().called(`second`, `seconds`, `s`)
 // spec: a nanosecond is its own base here: a thousand-million-fold second is
 // beyond a walk, so clock readings stay in nanoseconds until cut to seconds.
 Nanosecond := Unit().called(`nanosecond`, `nanoseconds`, `ns`)
-Minute := (Second multiple (six * ten)).called(`minute`, `minutes`, `min`)
-Hour := (Minute multiple (six * ten)).called(`hour`, `hours`, `h`)
-Day := (Hour multiple (two * ten + four)).called(`day`, `days`, `d`)
-Week := (Day multiple seven).called(`week`, `weeks`, `wk`)
-Year => Day multiple ((three * hundred) + (six * ten) + five)
+Minute := (Second multiple (60)).called(`minute`, `minutes`, `min`)
+Hour := (Minute multiple (60)).called(`hour`, `hours`, `h`)
+Day := (Hour multiple 24).called(`day`, `days`, `d`)
+Week := (Day multiple 7).called(`week`, `weeks`, `wk`)
+Year => Day multiple 365
 
 Unit.components.hierarchy &= class { is_temporal => (.base_unit == Second) }
 Unit.components.hierarchy &= class { base_unit => if .is_base { this } else { .base.base_unit } }
@@ -28,7 +28,7 @@ Calendar := class {
   Segment := class {
     name: Node
     length: Node
-    epoch: one
+    epoch: 1
     is_recurring => exists .period
   }
   // What the calendar cuts the line into: nothing until it is given them.
@@ -55,23 +55,23 @@ Calendar := class {
 
 // The Gregorian/Julian tables of Astronomy.ray.
 Weekday := enum monday | tuesday | wednesday | thursday | friday | saturday | sunday
-Month := enum january (length: (three * ten) + one, place: one) | february (length: (two * ten) + eight, place: two) | march (length: (three * ten) + one, place: three) | april (length: three * ten, place: four) | may (length: (three * ten) + one, place: five) | june (length: three * ten, place: six) | july (length: (three * ten) + one, place: seven) | august (length: (three * ten) + one, place: eight) | september (length: three * ten, place: nine) | october (length: (three * ten) + one, place: ten) | november (length: three * ten, place: ten + one) | december (length: (three * ten) + one, place: ten + two) {
+Month := enum january (length: 31, place: 1) | february (length: 28, place: 2) | march (length: 31, place: 3) | april (length: 30, place: 4) | may (length: 31, place: 5) | june (length: 30, place: 6) | july (length: 31, place: 7) | august (length: 31, place: 8) | september (length: 30, place: 9) | october (length: 31, place: 10) | november (length: 30, place: 11) | december (length: 31, place: 12) {
   // February takes the leap day.
   days_in (year: Number, calendar) => (
     month_days := .length
-    if ((.place == two).and(calendar.is_leap_year(year))) { month_days = .length.succ }
+    if ((.place == 2).and(calendar.is_leap_year(year))) { month_days = .length.succ }
     month_days
   )
 }
 
 Julian := class {
-  is_leap_year (year: Number) => (year % four).is_zero
-  days_in_year (year: Number) => if (.is_leap_year(year)) { (three * hundred) + (six * ten) + six } else { (three * hundred) + (six * ten) + five }
+  is_leap_year (year: Number) => (year % 4).is_zero
+  days_in_year (year: Number) => if (.is_leap_year(year)) { 366 } else { 365 }
   days_in_month (month, year: Number) => month.days_in(year, this)
-  weeks_in_year (year: Number) => .days_in_year(year) / seven
-  hours_in_day => (two * ten) + four
-  minutes_in_hour => six * ten
-  seconds_in_minute => six * ten
+  weeks_in_year (year: Number) => .days_in_year(year) / 7
+  hours_in_day => 24
+  minutes_in_hour => 60
+  seconds_in_minute => 60
   months => Month.components
   weekdays => Weekday.components
   // The day of a year a date falls on, counted from one.
@@ -86,7 +86,7 @@ Julian := class {
 }
 Gregorian := class: Julian {
   // spec: the century rule only costs its four hundred for century years.
-  is_leap_year (year: Number) => if ((year % hundred).is_zero) { (year % (four * hundred)).is_zero } else { (year % four).is_zero }
+  is_leap_year (year: Number) => if ((year % 100).is_zero) { (year % 400).is_zero } else { (year % 4).is_zero }
 }
 // spec: UTC is Gregorian with an offset, `-12:00 <= offset <= 14:00`; leap
 // seconds are off (`GMT = UTC{leap_seconds == false}`); the tzdata table
@@ -94,7 +94,7 @@ Gregorian := class: Julian {
 UTC := class: Gregorian {
   // What the zone is offset by is a field with nothing in it by default, not
   // a method: a method answers zero whatever the zone was built with.
-  offset: zero
+  offset: 0
   with_offset (offset: Quantity) => UTC(offset: offset)
   leap_seconds => false
 }
@@ -134,9 +134,9 @@ Time := class {
   Clock := class {
     // The nanosecond digits, as text; the last three of them, and the last
     // three of the seconds, as numbers: what a walk can afford.
-    nanoseconds => .digits.slice(.digits.count - nine, .digits.count)
-    nanoseconds_tail => .digits.slice(.digits.count - three, .digits.count).as_number of Nanosecond
-    seconds_tail => .digits.slice(.digits.count - (ten + two), .digits.count - nine).as_number of Second
+    nanoseconds => .digits.slice(.digits.count - 9, .digits.count)
+    nanoseconds_tail => .digits.slice(.digits.count - 3, .digits.count).as_number of Nanosecond
+    seconds_tail => .digits.slice(.digits.count - 12, .digits.count - 9).as_number of Second
   }
 }
 
@@ -155,12 +155,12 @@ ISO_8601 := class {
     parts := text.split(Character.of(ascii_colon))
     hour := parts.head.value.as_number
     minute := parts.head.next.value.as_number
-    second := if (exists parts.head.next.next) { parts.head.next.next.value.as_number } else { zero }
+    second := if (exists parts.head.next.next) { parts.head.next.next.value.as_number } else { 0 }
     // Kept in seconds: an hour of three thousand six hundred links is only built when asked for.
-    ((((hour * (six * ten)) + minute) * (six * ten)) + second) of Second
+    ((((hour * 60) + minute) * 60) + second) of Second
   )
   Date := class {
-    is_valid (calendar) => (zero < .day).and((.month.days_in(.year, calendar) < .day).not)
+    is_valid (calendar) => (0 < .day).and((.month.days_in(.year, calendar) < .day).not)
     day_of_year (calendar) => calendar.day_of_year(.month, .day, .year)
     == (other) => (.year == other.year).and(.month == other.month).and(.day == other.day)
   }
@@ -185,8 +185,8 @@ Earth := class: Planet {
   days => Day
   calendar => Gregorian
 }
-Sol => Second multiple ((eight * ten * thousand) + (eight * thousand) + (seven * hundred) + (seven * ten) + five)
-MartianYear => Sol multiple ((six * hundred) + (six * ten) + eight)
+Sol => Second multiple 88775
+MartianYear => Sol multiple 668
 Mars := class: Planet {
   years => MartianYear
   days => Sol

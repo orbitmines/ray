@@ -140,7 +140,7 @@ Iterable := class: Ordered {
   unbounded => .bounded.not
 
   count => (
-    entries_counted := zero
+    entries_counted := 0
     if (exists .entry) { entries_counted = .entry.count }
     entries_counted
   )
@@ -208,12 +208,12 @@ Iterable := class: Ordered {
 // nothing from a file read earlier than the one that writes it.
 Iterable.components.hierarchy &= class {
   sum => (
-    total ^keyword := zero
+    total ^keyword := 0
     this for { total = total + it.value }
     total
   )
   product => (
-    total ^keyword := one
+    total ^keyword := 1
     this for { total = total * it.value }
     total
   )
@@ -256,7 +256,7 @@ Ray := class: Iterable {
   terminal_boundary => Boundary.Terminal(vertex: this)
 
   count => (
-    total := one
+    total := 1
     walker := this
     while walker.is_terminal.not {
       total = total.succ

@@ -521,7 +521,18 @@ if := class {
 // does not ask it itself. Asking `cond.not` instead lost every condition that
 // is not a boolean — `.not` was unresolved, the block never ran, and a test
 // that reports by `unless` reported nothing.
-unless{ }{cond}{ }{block} ^class => if cond { } else block
+unless{ }{cond}{ }{block} ^class => (
+  asked ^keyword := if cond { }
+  held ^keyword := asked.taken
+  answered ^keyword := asked else block
+  goto open if held
+  goto done
+ open\
+  answered.taken = None
+ done\
+
+  answered
+)
 
 while := class {
   { }{cond}{ }{block} ^class => (

@@ -204,3 +204,53 @@ unless (bracketed_ones.count == 2) { INFO@mark `BR7 two bracketed ones in bracke
 handed_pair := (1, 2)
 unless ([handed_pair].count == 2) { INFO@mark `BR8 a list handed to brackets is not itself` }
 unless (((1, 2)).count == 2) { INFO@mark `BR9 a grouped pair in parentheses nests` }
+
+// What a chain answers as a whole (the draft's Iterable): each element mapped,
+// the order turned, what it holds, each thing once, split in two or in runs,
+// and what two chains have in common.
+counted ^keyword := chain None
+counted &= 1
+counted &= 2
+counted &= 3
+doubled ^keyword := counted.map { it.value + it.value }
+unless (doubled.count == 3) { INFO@mark `IT2 mapping three things does not give three` }
+unless (doubled.head.value == 2) { INFO@mark `IT3 the first doubled is not two` }
+unless (doubled.tail.value == 6) { INFO@mark `IT4 the last doubled is not six` }
+turned ^keyword := counted.reverse
+unless (turned.head.value == 3) { INFO@mark `IT5 turned around, the first is not the last` }
+unless (turned.tail.value == 1) { INFO@mark `IT6 turned around, the last is not the first` }
+unless (turned.count == 3) { INFO@mark `IT7 turning a chain around loses something` }
+unless (counted.contains(2)) { INFO@mark `IT8 a chain does not contain what it was given` }
+if (counted.contains(5)) { INFO@mark `IT9 a chain contains what it was never given` }
+unless (counted.includes(3)) { INFO@mark `IT10 includes is not contains` }
+repeated ^keyword := chain None
+repeated &= 1
+repeated &= 2
+repeated &= 1
+unless (repeated.unique.count == 2) { INFO@mark `IT11 each thing once is not two` }
+unless (repeated.unique.tail.value == 2) { INFO@mark `IT12 each thing once is not in the order first seen` }
+halves ^keyword := counted.partition { it.value < 2 }
+unless (halves.count == 2) { INFO@mark `IT13 a partition is not in two` }
+unless (halves.head.value.count == 1) { INFO@mark `IT14 what holds is not only the one` }
+unless (halves.tail.value.count == 2) { INFO@mark `IT15 what is left is not the other two` }
+runs ^keyword := counted.chunk(2)
+unless (runs.count == 2) { INFO@mark `IT16 three in runs of two are not two runs` }
+unless (runs.head.value.count == 2) { INFO@mark `IT17 the first run is not two long` }
+unless (runs.tail.value.count == 1) { INFO@mark `IT18 the last run does not hold what is left` }
+unless (counted.batch(3).count == 1) { INFO@mark `IT19 a batch of all of it is not one` }
+flat ^keyword := runs.flatten
+unless (flat.count == 3) { INFO@mark `IT20 the runs flattened are not the three` }
+unless (flat.tail.value == 3) { INFO@mark `IT21 the runs flattened are out of order` }
+unless (counted.flatten.count == 3) { INFO@mark `IT22 flattening numbers splices what they are made of` }
+common ^keyword := counted.intersection(repeated)
+unless (common.count == 2) { INFO@mark `IT23 what both hold is not one and two` }
+if (counted.disjoint(repeated)) { INFO@mark `IT24 two chains with one in common are disjoint` }
+unless (doubled.disjoint(repeated).not) { INFO@mark `IT25 chains sharing a two are disjoint` }
+unless ((counted.symmetric_difference(repeated)).count == 1) { INFO@mark `IT26 what only one of them holds is not three alone` }
+
+// What a thing is an instance of: a chain is an array, and a number is not.
+unless (exists counted.instance_of(Chain)) { INFO@mark `IT27 a chain is not a chain` }
+unless (exists counted.instance_of(Array)) { INFO@mark `IT28 a chain is not an array` }
+unless (exists counted.instance_of(Iterable)) { INFO@mark `IT29 a chain is not iterable` }
+unless (exists counted.head.instance_of(Ray)) { INFO@mark `IT30 a link is not a ray` }
+unless (exists 1.instance_of(Ray)) { INFO@mark `IT33 a number is not a ray` }

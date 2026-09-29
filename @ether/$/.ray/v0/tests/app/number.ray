@@ -203,3 +203,30 @@ compounded -= 1
 unless (compounded == 2) { INFO@mark `N134 -= does not subtract` }
 compounded *= 3
 unless (compounded == (3 + 3)) { INFO@mark `N135 *= does not multiply` }
+
+// A number is iterable by the number line it is on: entered at its own place,
+// each step the number after it, with no end, so what walks it stops it.
+first_square_past (limit: Number) => (
+  3 for { if ((it.value * it.value) > limit) { return it.value } }
+)
+unless (first_square_past(10) == 4) { INFO@mark `NL1 the first square past ten is not four squared` }
+unless (first_square_past(30) == 6) { INFO@mark `NL2 the first square past thirty is not six squared` }
+unless ((2.at(3).value) == 5) { INFO@mark `NL3 three along from two is not five` }
+if 1.bounded { INFO@mark `NL4 a number is bounded` }
+unless 1.unbounded { INFO@mark `NL5 a number is not unbounded` }
+unless (4.entry.value == 4) { INFO@mark `NL6 a number is not entered at its own place` }
+unless (0.entry.is_initial) { INFO@mark `NL7 the line does not start at zero` }
+if (3.entry.is_initial) { INFO@mark `NL8 the line starts at three` }
+if (3.entry.is_terminal) { INFO@mark `NL9 the line ends` }
+unless (3.entry.previous.value == 2) { INFO@mark `NL10 before three is not two` }
+collect_three (from: Number) => (
+  steps ^keyword := chain None
+  from for {
+    steps &= it.value
+    if (steps.count == 3) { return steps }
+  }
+)
+three_on ^keyword := collect_three(5)
+unless (three_on.count == 3) { INFO@mark `NL11 three steps along the line are not three` }
+unless (three_on.tail.value == 7) { INFO@mark `NL12 the third step from five is not seven` }
+unless (5 some { it.value == 8 }) { INFO@mark `NL13 some did not reach eight` }

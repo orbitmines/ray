@@ -153,21 +153,21 @@ Iterable := class: Ordered {
 
   // `every (predicate) => map(predicate)~{== false}.empty`, `some => ~{predicate}.nonempty`:
   // the block is the predicate, read for each `it`.
+  // Each stops at the first element that decides it, so either can be asked
+  // of what has no end.
   every (predicate) => (
-    holds ^keyword := true
     for {
       verdict := inline predicate
-      unless verdict { holds = false }
+      unless verdict { return false }
     }
-    holds
+    true
   )
   some (predicate) => (
-    holds ^keyword := false
     for {
       verdict := inline predicate
-      if verdict { holds = true }
+      if verdict { return true }
     }
-    holds
+    false
   )
 
   // `all => reduce(|)`: every element superposed: the first, with each next
@@ -185,6 +185,111 @@ Iterable := class: Ordered {
 
   // `compact => this~{!=.instance_of None}`: the elements that hold something.
   compact => this{exists this}
+
+  // `map (map: (x): T)`: what the block answers for each `it`, in order.
+  map (mapping) => (
+    mapped ^keyword := chain None
+    for { mapped &= (inline mapping) }
+    mapped
+  )
+
+  // `reverse: static`: the same elements, the last first.
+  reverse => (
+    walked ^keyword := chain None
+    for { walked &= it.value }
+    turned ^keyword := chain None
+    back ^keyword := walked.tail
+    while (exists back) {
+      turned &= back.value
+      back = back.previous
+    }
+    turned
+  )
+
+  // `contains | includes <operator = ==>(x) some(operator(.)(x))`.
+  contains (x) => (
+    for { if (it.value == x) { return true } }
+    false
+  )
+  includes (x) => .contains(x)
+
+  // `unique`: each element once, where it first appears.
+  unique => (
+    kept ^keyword := chain None
+    for {
+      unless (kept.contains(it.value)) { kept &= it.value }
+    }
+    kept
+  )
+
+  // `partition (predicate)`: those the block holds for, then the rest.
+  partition (predicate) => (
+    held ^keyword := chain None
+    rest ^keyword := chain None
+    for {
+      verdict := inline predicate
+      if verdict { held &= it.value } else { rest &= it.value }
+    }
+    halves ^keyword := chain None
+    halves &= held
+    halves &= rest
+    halves
+  )
+
+  // `batch | chunk (size: Nat)`: the elements in runs of `size`, the last
+  // run holding what is left.
+  chunk (size: Number) => (
+    runs ^keyword := chain None
+    run ^keyword := chain None
+    left ^keyword := size
+    for {
+      run &= it.value
+      left = left.pred
+      if left.is_zero {
+        runs &= run
+        run = chain None
+        left = size
+      }
+    }
+    if run.nonempty { runs &= run }
+    runs
+  )
+  batch (size: Number) => .chunk(size)
+
+  // `.flatten = .reduce(push_back)`, one level: what an element holds is
+  // spliced in where the element was. Only a bounded array is: an unbounded
+  // one, a number say, has no end to splice up to.
+  flatten => (
+    flat ^keyword := chain None
+    for {
+      inner := it.value
+      spliced ^keyword := false
+      if (exists inner.instance_of(Array)) { spliced = inner.bounded }
+      if spliced { inner for { flat &= it.value } } else { flat &= inner }
+    }
+    flat
+  )
+
+  intersection (other) => (
+    both ^keyword := chain None
+    for {
+      if (other.contains(it.value)) { unless (both.contains(it.value)) { both &= it.value } }
+    }
+    both
+  )
+  disjoint (other) => .intersection(other).empty
+  // `xor | symmetric_difference`: what one of the two holds and the other doesn't.
+  symmetric_difference (other) => (
+    either ^keyword := chain None
+    for {
+      unless (other.contains(it.value)) { either &= it.value }
+    }
+    mine ^keyword := this
+    other for {
+      unless (mine.contains(it.value)) { either &= it.value }
+    }
+    either
+  )
 
   at (index: Number) => .entry.at(index)
 
@@ -270,7 +375,7 @@ Ray := class: Iterable {
   // statement is only allowed so many, so a long ray was walked partway and
   // said nothing about stopping.
   for (body) => (
-    it ^keyword := this
+    it ^keyword := .entry
     going ^keyword := true
     while going {
       inline body
@@ -284,7 +389,7 @@ Ray := class: Iterable {
   )
 
   at (index: Number) => (
-    here := this
+    here := .entry
     left := index
     while left {
       here = here.next
@@ -393,6 +498,22 @@ Traverser := class {
 // containers `class` builds before this file loads take both on here.
 Chain.components.hierarchy &= Array
 Link.components.hierarchy &= Ray
+// A chain is made by `chain`, not by its class, so it holds no hierarchy of
+// its own: it is built on its class, and on what its class is built on.
+Chain.components.hierarchy &= class {
+  built_on (type) => (
+    found ^keyword := Array.built_on(type)
+    if (exists (external alike (external where Chain) (external where type))) { found = global }
+    found
+  )
+}
+Link.components.hierarchy &= class {
+  built_on (type) => (
+    found ^keyword := Ray.built_on(type)
+    if (exists (external alike (external where Link) (external where type))) { found = global }
+    found
+  )
+}
 
 // From the drafts, not yet reached here (spec):
 // .ray2/Ray.ray:

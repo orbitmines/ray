@@ -14,7 +14,7 @@
 // Lean: On a 32-bit architecture, USize is equivalent to UInt32. On a 64-bit machine, it is equivalent to UInt64.
 //   -> How to conditionally get the architecture for this definition.
 
-//TODO Number equipped with default numberline, so number.for works. for Real, a step function needs to be defined
+// Number equipped with default numberline, so number.for works (`for` in Number). spec: for Real, a step function needs to be defined
 
 //TODO factorial!
 
@@ -41,6 +41,16 @@
 Number := class: Ray {
   .{fraction: Decimal.Digits ^number} ^punctuation => Number.Real(integer: this, fraction: fraction, radix: ten)
   succ => Number(next: this)
+
+  // What makes a number iterable is the number line it is on, not the chain
+  // it is held as: it is entered at its place on the line, and from there each
+  // step is the number after it, with no last one. A number is an unbounded
+  // array, and a walk along the line is ended by what walks it (`return`, the
+  // draft's `break`).
+  // spec: `count` of an unbounded walk is ∞, which waits on ∞ being written;
+  // until then it answers what the chain counts.
+  bounded => false
+  entry => Number.Line(value: this)
 
   // The digits of this number in a base, most significant first: a counter in
   // that base, least significant digit first, stepped once per unit and then
@@ -317,6 +327,16 @@ thousand => hundred * ten
 // same way. A number of a base holds the one number (its unary chain) and
 // reads it as digits; the digits' spellings wait on String.ray.
 // spec: `Digit` is the number below the radix, its spelling comes with String.
+
+// The number line: a place on it holds a number, the place after it holds
+// the number after that, and the place before it the one before. It starts at
+// zero and has no end.
+Number.Line = class: Ray {
+  value: Number
+  next => Number.Line(value: .value.succ)
+  previous => if .value.is_zero { None } else { Number.Line(value: .value.pred) }
+}
+
 // static class Signed < sign: "-"?, integer: Base
 // The sign is present exactly when the number is below zero.
 Number.Signed = class {

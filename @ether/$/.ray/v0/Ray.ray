@@ -540,6 +540,22 @@ Hierarchy := class: Ray {
   )
 }
 
+// `Loop = Array.Unbounded.orbit`: walked past its last, a chain comes back to
+// its first and before its first is its last, so a walk around it has no end
+// and comes back around. What walks it stops it (`return`).
+Loop := class: Ray {
+  around: Node
+  holding: Node
+
+  value => .holding.value
+  next => Loop(around: .around, holding: (.holding.next ?? .around.head))
+  previous => Loop(around: .around, holding: (.holding.previous ?? .around.tail))
+  is_initial => false
+  is_terminal => false
+  bounded => false
+  acyclic => false
+}
+
 // spec: the draft's Traverser: how `for` walks a structure. A chain has one
 // way through it, so depth-first and breadth-first meet; both are named so a
 // structure with branches can choose.
@@ -559,6 +575,7 @@ Link.components.hierarchy &= Ray
 // it held.
 Chain.components.hierarchy &= class {
   push_back (x) => (this &= x)
+  orbit => Loop(around: this, holding: this.head)
   push_front (x) => (
     was_head ^keyword := this.head
     added ^keyword := link x None

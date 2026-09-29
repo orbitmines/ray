@@ -302,3 +302,22 @@ unless (root_place.children.count == 1) { INFO@mark `IT51 what holds does not ho
 unless (inner_place.depth == 1) { INFO@mark `IT52 what is held once is not one deep` }
 unless (root_place.depth.is_zero) { INFO@mark `IT53 what holds everything is deeper than nothing` }
 
+// A chain walked in an orbit comes back to its first, and has no end.
+cycled ^keyword := chain None
+cycled &= 1
+cycled &= 2
+steps_round (around, wanted: Number) => (
+  seen ^keyword := chain None
+  around.orbit for {
+    seen &= it.value
+    if (seen.count == wanted) { return seen }
+  }
+)
+five_round ^keyword := steps_round(cycled, 5)
+unless (five_round.count == 5) { INFO@mark `IT54 five steps round an orbit are not five` }
+unless (five_round.tail.value == 1) { INFO@mark `IT55 the fifth step round two is not the first` }
+unless (five_round.at(3).value == 2) { INFO@mark `IT56 the fourth step round two is not the second` }
+if cycled.orbit.bounded { INFO@mark `IT57 an orbit is bounded` }
+if cycled.orbit.acyclic { INFO@mark `IT58 an orbit does not come back around` }
+unless (cycled.orbit.previous.value == 2) { INFO@mark `IT59 before the first of an orbit is not the last` }
+

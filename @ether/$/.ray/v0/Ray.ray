@@ -505,6 +505,41 @@ Array := class: Path {
   acyclic => true
 }
 
+// `class Set < Structure`, `normalizer = .unordered.unique`: what it holds,
+// each once, in no order that matters.
+Set := class: Structure {
+  elements: (chain None)
+  entry => .elements.unique.entry
+  add (x) => (
+    unless (this.elements.contains(x)) { this.elements &= x }
+    this
+  )
+  == (other: Set) => (.count == other.count).and(.every { other.contains(it.value) })
+  != (other: Set) => (this == other).not
+}
+
+// `parent | previous : static? <- hierarchy -> children | next : static?`: a
+// thing held by one and holding many. spec: `previous` and `next` as the
+// draft's other names wait on a ray continuing into more than one.
+Hierarchy := class: Ray {
+  parent?: Node
+  children: (chain None)
+
+  // What this holds, holds it: a child says what it is in.
+  holds (child) => (
+    this.children &= child
+    child.parent = this
+
+    child
+  )
+  // How deep this is: what holds it, and what holds that.
+  depth => (
+    depth_below := 0
+    if (exists .parent) { depth_below = .parent.depth.succ }
+    depth_below
+  )
+}
+
 // spec: the draft's Traverser: how `for` walks a structure. A chain has one
 // way through it, so depth-first and breadth-first meet; both are named so a
 // structure with branches can choose.

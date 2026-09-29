@@ -23,24 +23,10 @@ Entity := class: Ray { }
 // `host` is a Node until instances are here. Where a thing is *written* is
 // answered by the machine (`external where`), and is what tells one type from
 // another.
-Location := class: Ray {
+Location := class: Hierarchy {
   parent?: Node
   children: (chain None)
   host?: Node
-
-  // What this location holds, holds it: a child says what it is in.
-  holds (child) => (
-    .children &= child
-    child.parent = this
-
-    child
-  )
-  // How deep this is: what holds it, and what holds that.
-  depth => (
-    depth_below := 0
-    if (exists .parent) { depth_below = .parent.depth.succ }
-    depth_below
-  )
 }
 
 World := class: Nameable {

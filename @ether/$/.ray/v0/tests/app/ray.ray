@@ -277,3 +277,28 @@ unless (put_in_order.head.value == 1) { INFO@mark `IT43 sorted, the first is not
 unless (put_in_order.tail.value == 3) { INFO@mark `IT44 sorted, the last is not the largest` }
 unless (shuffled.count == 3) { INFO@mark `IT45 sorting took from what was sorted` }
 
+// A set holds each thing once, and two sets are the same when they hold the
+// same things, whatever order they were given in.
+held_once ^keyword := Set()
+held_once.add(1)
+held_once.add(2)
+held_once.add(1)
+unless (held_once.count == 2) { INFO@mark `IT46 a set holds one thing twice` }
+unless (held_once.contains(2)) { INFO@mark `IT47 a set does not hold what was added` }
+other_way ^keyword := Set()
+other_way.add(2)
+other_way.add(1)
+unless (held_once == other_way) { INFO@mark `IT48 two sets holding the same differ by order` }
+fewer ^keyword := Set()
+fewer.add(1)
+if (held_once == fewer) { INFO@mark `IT49 a set is the same as one holding less` }
+
+// What holds and what is held.
+root_place ^keyword := Hierarchy()
+inner_place ^keyword := Hierarchy()
+root_place.holds(inner_place)
+unless (inner_place.parent == root_place) { INFO@mark `IT50 what is held does not know what holds it` }
+unless (root_place.children.count == 1) { INFO@mark `IT51 what holds does not hold one` }
+unless (inner_place.depth == 1) { INFO@mark `IT52 what is held once is not one deep` }
+unless (root_place.depth.is_zero) { INFO@mark `IT53 what holds everything is deeper than nothing` }
+

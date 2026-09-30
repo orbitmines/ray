@@ -1211,12 +1211,15 @@ export namespace Ray {
     // above it sees. Frames are made fresh for every application, so asking
     // the one that actually holds rules is what makes any answer reusable.
     rooted(frame: Node): Node {
-      let held = frame, seen: Set<Node> | undefined;
+      let held = frame, depth = 0, seen: Set<Node> | undefined;
       while (held.ruled !== true && held.parent !== undefined) {
         this.asked.add(held);
-        if (seen === undefined) seen = new Set([held]);
-        if (seen.has(held.parent)) break;
-        held = held.parent; seen.add(held);
+        if (++depth > 64) {
+          if (seen === undefined) seen = new Set([held]);
+          if (seen.has(held.parent)) break;
+          seen.add(held.parent);
+        }
+        held = held.parent;
       }
       return held;
     }
@@ -1327,10 +1330,8 @@ export namespace Ray {
       return false;
     }
     private reads = new WeakMap<Node, number>();
-    candidates(receiver: Node | undefined, frame: Node, opts: { self?: boolean } = {}): Rules {
-      if (receiver === undefined) return this.chain(frame).operand;
+    owner_of(receiver: Node, frame: Node): Node | undefined {
       let own = this.resolved(receiver);
-      const chain = this.chain(frame).receiver;
       if (own === undefined && receiver.ref !== undefined) {
         // A parameter is a value: read it before looking for the rules of what it holds.
         const held = this.bound(receiver);
@@ -1338,8 +1339,15 @@ export namespace Ray {
         if (own === undefined) own = held?.declared;
       }
       if (own !== undefined && own.declared !== undefined && own.methods === undefined && own.inlined === undefined && own.made_of === undefined) own = own.declared;
-      if (!own || own.lazy) return chain;
+      if (!own || own.lazy) return undefined;
       if (own instanceof Count && own !== frame) own = own.template;
+      return own;
+    }
+    candidates(receiver: Node | undefined, frame: Node, opts: { self?: boolean } = {}, owner?: Node | null): Rules {
+      if (receiver === undefined) return this.chain(frame).operand;
+      const own = owner === undefined ? this.owner_of(receiver, frame) : owner ?? undefined;
+      const chain = this.chain(frame).receiver;
+      if (!own) return chain;
       const itself = own === frame && !opts.self;
       if (own.inlined === undefined && own.made_of === undefined) {
         if (!own.methods || itself) return chain;
@@ -1436,7 +1444,9 @@ export namespace Ray {
       return missing;
     }
 
-    private readings_at = new WeakMap<Rules, Map<string, { version: number; found: Found | undefined }>>();
+    private readings_by = new Map<string, { version: number; found: Found | undefined }>();
+    private text_ids = new Map<string, number>();
+    private text_id(text: string): number { let n = this.text_ids.get(text); if (n === undefined) this.text_ids.set(text, n = this.text_ids.size + 1); return n; }
     private numbered = new WeakMap<object, number>();
     private numbering = 0;
     private number_of(held: object | undefined): number {
@@ -1446,22 +1456,57 @@ export namespace Ray {
       return n;
     }
     best(receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean; self?: boolean; leading?: boolean; besides?: Node }): Found | undefined {
-      const set = opts.leading
-        ? this.only(this.chain(frame).receiver, true)
-        : opts.self
-          ? this.only(this.candidates(receiver, frame, { self: true }), false)
-          : this.candidates(receiver, frame);
+      const owner = opts.leading || receiver === undefined ? undefined : this.owner_of(receiver, frame);
       const own = receiver && this.resolved(receiver);
       const declaring = own instanceof Count ? own.template : own?.methods !== undefined || own?.made_of !== undefined || own?.inlined !== undefined ? own : undefined;
-      const key = `${this.number_of(cursor.source)}:${cursor.cursor}:${cursor.limit}:${opts.newline ? 1 : 0}${opts.spaced ? 1 : 0}${opts.operand ? 1 : 0}${opts.forwards ? 1 : 0}${opts.self ? 1 : 0}${opts.leading ? 1 : 0}:${this.number_of(opts.besides)}:${this.number_of(this.chain(frame))}:${this.number_of(declaring)}:${receiver === undefined ? 0 : 1}:${this.rewriting.size > 0 ? 1 : 0}`;
-      let known = this.readings_at.get(set);
-      if (known === undefined) this.readings_at.set(set, known = new Map());
-      const held = known.get(key);
-      if (held !== undefined && held.version === this.version) return held.found && { ...held.found, match: { ...held.found.match, receiver } };
-      const found = this.best_of(set, receiver, cursor, frame, opts);
-      if (found === undefined || found.match.read === undefined || found.match.read.size === 0) known.set(key, { version: this.version, found });
+      const key = `${this.text_id(cursor.source.value)}:${cursor.cursor}:${cursor.limit}:${opts.newline ? 1 : 0}${opts.spaced ? 1 : 0}${opts.operand ? 1 : 0}${opts.forwards ? 1 : 0}${opts.self ? 1 : 0}${opts.leading ? 1 : 0}:${this.number_of(opts.besides)}:${this.scope_key(frame)}:${owner === undefined ? '-' : this.owner_key(owner, frame, opts.self ?? false)}:${this.declared_key(declaring)}:${receiver === undefined ? 0 : 1}:${this.rewriting.size > 0 ? 1 : 0}`;
+      const held = this.readings_by.get(key);
+      if (held !== undefined && held.version === this.version) {
+        const answer = held.found && { ...held.found, match: { ...held.found.match, receiver } };
+        if (Interpreter.checking) this.check_reading(answer, receiver, cursor, frame, opts, owner);
+        return answer;
+      }
+      const found = this.best_of(this.candidate_set(receiver, frame, opts, owner), receiver, cursor, frame, opts);
+      if (found === undefined || found.match.read === undefined || found.match.read.size === 0) this.readings_by.set(key, { version: this.version, found });
       return found;
     }
+    static checking = process.env.RAY_CHECK === '1';
+    static mismatches = 0;
+    private candidate_set(receiver: Node | undefined, frame: Node, opts: { self?: boolean; leading?: boolean }, owner: Node | undefined): Rules {
+      return opts.leading
+        ? this.only(this.chain(frame).receiver, true)
+        : opts.self
+          ? this.only(this.candidates(receiver, frame, { self: true }, owner ?? null), false)
+          : this.candidates(receiver, frame, {}, owner ?? null);
+    }
+    private check_reading(answer: Found | undefined, receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean; self?: boolean; leading?: boolean; besides?: Node }, owner: Node | undefined) {
+      const at = cursor.cursor;
+      const live = this.best_of(this.candidate_set(receiver, frame, opts, owner), receiver, cursor, frame, opts);
+      cursor.cursor = at;
+      const same = (live === undefined) === (answer === undefined) && (live === undefined || (live.rule === answer!.rule && live.match.end === answer!.match.end));
+      if (!same && ++Interpreter.mismatches <= 20) console.error(`RAY_CHECK mismatch at ${cursor.source.location?.split('/').pop()}:${cursor.line} ${JSON.stringify(cursor.source.value.slice(at, at + 30))} cached=${answer?.rule.position?.string.slice(0, 30)} live=${live?.rule.position?.string.slice(0, 30)}`);
+    }
+    private scope_keys = new WeakMap<object, string>();
+    private scope_key(frame: Node): string {
+      const chain = this.chain(frame);
+      let key = this.scope_keys.get(chain);
+      if (key === undefined) this.scope_keys.set(chain, key = chain.operand.map(x => this.number_of(x)).join(',') + '|' + chain.receiver.map(x => this.number_of(x)).join(','));
+      return key;
+    }
+    private owner_keys = new WeakMap<Node, { version: number; edits: number; key: string }>();
+    private owner_key(own: Node, frame: Node, self: boolean): string {
+      if (own === frame && !self) return 'itself';
+      if (own.inlined === undefined && own.made_of === undefined) return own.methods ? `r${this.number_of(this.ruleset(own).receiver)}` : 'chain';
+      const composed = [...own.composed(new Set())];
+      const edits = this.edited(composed);
+      const held = this.owner_keys.get(own);
+      if (held !== undefined && held.version === this.version && held.edits === edits) return held.key;
+      const key = composed.filter(from => from.methods).map(from => this.ruleset(from).receiver).filter(held => held.length > 0).map(held => this.number_of(held)).join(',');
+      this.owner_keys.set(own, { version: this.version, edits, key });
+      return key;
+    }
+    private declared_keys = new WeakMap<Set<Node>, string>();
+    private declared_key(declaring: Node | undefined): string { if (declaring === undefined) return '0'; const rules = this.declared(declaring); let k = this.declared_keys.get(rules); if (k === undefined) this.declared_keys.set(rules, k = [...rules].map(r => this.number_of(r)).sort((x, y) => x - y).join(',')); return k; }
     private best_of(set: Rules, receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean; self?: boolean; leading?: boolean; besides?: Node }): Found | undefined {
       let best: Found | undefined;
       const ahead = cursor.source.value[this.skip(cursor, cursor.cursor)];
@@ -2747,6 +2792,108 @@ export namespace Ray {
       }
       return this.chain_of(points);
     }
+    private evaluated(text: string, bindings: Record<string, Node>): Node | undefined {
+      const frame = this.frame(this.GLOBAL, 'interpreted', this.GLOBAL);
+      for (const [name, value] of Object.entries(bindings)) this.bind(frame, name, value);
+      return this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(Text.Node.string(text)), frame), false)));
+    }
+    static fields = { direct: 0, evaluated: 0, differ: 0 };
+    private field(node: Node, key: string): Node | undefined {
+      const target = this.deref(node, false);
+      if (target === undefined) return undefined;
+      const held = target.members?.get(key) ?? target.own(key) ?? target.member(key);
+      const direct = held === undefined || held.body !== undefined || held.fn !== undefined || held.params !== undefined ? undefined : this.deref(held, false);
+      const found = direct ?? this.evaluated(`held.${key}`, { held: target });
+      if (direct !== undefined) Interpreter.fields.direct++; else Interpreter.fields.evaluated++;
+      if (Interpreter.checking && direct !== undefined) { const text = this.evaluated(`held.${key}`, { held: target }); if (text !== direct && ++Interpreter.fields.differ <= 10) console.error(`RAY_CHECK field ${key}: direct differs from evaluated`); }
+      return found;
+    }
+    private present(node: Node | undefined): node is Node { return node !== undefined && node !== this.NONE && !node.none && !node.unknown && !node.ref && !node.lazy && !this.placeholder_like(node); }
+    private placeholder_like(node: Node): boolean { return node.methods === undefined && node.members === undefined && node.inlined === undefined && node.made_of === undefined && node.fn === undefined && node.body === undefined && node.value === undefined && !node.literal && !(node instanceof Count); }
+    private elements(chain: Node): Node[] | undefined {
+      const out: Node[] = [];
+      const seen = new Set<Node>();
+      let at = this.field(chain, 'head');
+      while (this.present(at)) {
+        if (seen.has(at) || seen.size > 10000) return undefined;
+        seen.add(at);
+        const value = this.field(at, 'value');
+        if (this.present(value)) out.push(value);
+        at = this.field(at, 'next');
+      }
+      return out;
+    }
+    private classes_reached(node: Node, seen: Set<Node> = new Set()): Node[] {
+      if (seen.has(node)) return [];
+      seen.add(node);
+      const reached = [node];
+      const components = this.field(node, 'components');
+      const held = this.present(components) ? this.field(components, 'hierarchy') : undefined;
+      if (this.present(held)) for (const parent of this.elements(held) ?? []) reached.push(...this.classes_reached(parent, seen));
+      return reached;
+    }
+    private written_statements = new WeakMap<Text.Node, string[]>();
+    private statements_written(node: Node): string[] {
+      const written = this.evaluated('node.written_as', { node });
+      const span = this.present(written) ? written.body : undefined;
+      if (span === undefined) return [];
+      let known = this.written_statements.get(span);
+      if (known === undefined) this.written_statements.set(span, known = this.statements_of(span).map(statement => statement.string));
+      return known;
+    }
+    private static head_of_statement(statement: string): { head: string; ending?: string } {
+      const end = statement.search(/[ (:?]/);
+      return end < 0 ? { head: statement } : { head: statement.slice(0, end), ending: statement[end] };
+    }
+    private text_of(node: Node | undefined): string | undefined {
+      const held = node && this.deref(node, false);
+      if (held === undefined || held.none || held.unknown) return undefined;
+      return new TextDecoder().decode(this.bytes_of(held));
+    }
+    private placements = new Map<string, Node>();
+    private placed_pass = -1;
+    declared_in(holder: Node | undefined, spelled: Node | undefined): Node | undefined {
+      const held = holder && this.deref(holder, false), text = this.text_of(spelled);
+      if (!this.present(held) || text === undefined) return undefined;
+      const written = this.evaluated('held.written_as', { held });
+      const place = this.present(written) && written.body !== undefined ? `${written.body.source.location}:${written.body.begin}:${written.body.end}` : undefined;
+      if (this.placed_pass !== this.passing) { this.placements.clear(); this.placed_pass = this.passing; }
+      const key = place === undefined ? undefined : `${place}\u0000${text}`;
+      if (key !== undefined) { const kept = this.placements.get(key); if (kept !== undefined) return kept; }
+      const visit: Node[] = [held];
+      let answer: Node = this.NONE;
+      for (let k = 0; k < visit.length && k < 4096; k++) {
+        const statements = this.statements_written(visit[k]);
+        const at = statements.findIndex(statement => statement.startsWith(`${text} `) && statement.length > text.length + 1);
+        if (at >= 0) {
+          const nth = this.count_of(BigInt(k)), written_at = this.count_of(BigInt(at));
+          if (nth === undefined || written_at === undefined) return undefined;
+          answer = this.evaluated('Placement(nth_class: nth, written_at: written_at)', { nth, written_at }) ?? this.NONE;
+          break;
+        }
+        const components = this.field(visit[k], 'components');
+        const hierarchy = this.present(components) ? this.field(components, 'hierarchy') : undefined;
+        if (this.present(hierarchy)) visit.push(...(this.elements(hierarchy) ?? []));
+      }
+      if (key !== undefined && answer !== this.NONE) this.placements.set(key, answer);
+      return answer;
+    }
+    structurally(value: Node | undefined, type: Node | undefined): Node | undefined {
+      const held = value && this.deref(value, false), wanted = type && this.deref(type, false);
+      if (!this.present(held) || !this.present(wanted)) return undefined;
+      const required: string[] = [];
+      for (const kind of this.classes_reached(wanted)) {
+        for (const statement of this.statements_written(kind)) {
+          const { head, ending } = Interpreter.head_of_statement(statement);
+          if (ending === ':' || (ending !== undefined && statement.startsWith(`${head} => TODO`))) required.push(head);
+        }
+      }
+      const declaring = this.classes_reached(held).map(kind => this.statements_written(kind));
+      for (const head of required) {
+        if (!declaring.some(statements => statements.some(statement => statement.startsWith(`${head} `) || statement.startsWith(`${head}(`)))) return this.NONE;
+      }
+      return this.GLOBAL;
+    }
     counted_as(like: Count, n: bigint): Node {
       return n === 0n ? like.base : new Count(this.diagnostics, n, like.base, like.template, like.field);
     }
@@ -3093,13 +3240,12 @@ export namespace Ray {
       if (known === undefined) this.kinds.set(method, known = new Map());
       let answer = known.get(kind);
       if (answer === undefined) {
-        const frame = this.frame(this.GLOBAL, 'kind', this.GLOBAL);
-        this.bind(frame, 'method', method);
-        this.bind(frame, 'kind', kind);
         this.kinding++;
         try {
-          const found = this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(Text.Node.string('method.instance_of(kind)')), frame), false)));
-          known.set(kind, answer = found !== undefined && !found.none && !found.unknown);
+          const components = this.field(method, 'components');
+          const hierarchy = this.present(components) ? this.field(components, 'hierarchy') : undefined;
+          answer = this.present(hierarchy) && (this.elements(hierarchy) ?? []).some(parent => this.deref(parent, false) === kind);
+          known.set(kind, answer);
         } finally { this.kinding--; }
       }
       return answer;
@@ -3294,11 +3440,11 @@ export namespace Ray {
         if (!types) this.typings.set(closure, types = new Map());
         let resolved = types.get(type);
         if (resolved === null) return null;
-        if (resolved === this.NONE) return undefined;
+        if (resolved === this.NONE) return null;
         if (resolved === undefined) {
           types.set(type, null);
           resolved = this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(Text.Node.string(type)), closure), false)));
-          if (resolved === undefined || resolved.unknown || resolved.none) { types.set(type, this.NONE); return undefined; }
+          if (resolved === undefined || resolved.unknown || resolved.none) { types.set(type, this.NONE); return null; }
           types.set(type, resolved);
         }
         let answers = this.readings.get(resolved);
@@ -4335,6 +4481,8 @@ export namespace Ray {
     'unary_remainder': { arity: 1, fn: ({ interpreter, self, args, method, frame }) => interpreter.remainder(self, args, method, frame) },
     'utf8_points': { arity: 1, fn: ({ interpreter, words: [name], given }) => interpreter.utf8_points(given?.get(name!)) },
     'grammar_define': { arity: 1, fn: ({ interpreter, words: [head, body], given }) => interpreter.grammar_define(given?.get(head!), given?.get(body!)) },
+    'declared_in': { arity: 1, fn: ({ interpreter, words: [holder, spelled], given }) => interpreter.declared_in(given?.get(holder!), given?.get(spelled!)) },
+    'structurally': { arity: 1, fn: ({ interpreter, words: [type, value], given }) => interpreter.structurally(given?.get(value!), given?.get(type!)) },
   };
 
   export const Natives: Record<string, Native> = {

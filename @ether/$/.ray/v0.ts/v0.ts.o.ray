@@ -149,6 +149,44 @@ Compiler.default += {
     definition
   ) => external grammar_define
 
+  (
+    requirements_of({type}) for {`{`}
+      unless (declared_by({value}, it.value)) {`{`} return None {`}`}
+    {`}`}
+    global
+  ) => external structurally
+
+  (
+    place_of ^keyword := external where {holder}.written_as
+    kept_entry ^keyword := remembered(placements, place_of, {spelled})
+    unless (exists kept_entry) {`{`}
+      to_visit ^keyword := chain None
+      to_visit &= {holder}
+      visiting ^keyword := to_visit.head
+      class_index ^keyword := zero
+      rank_found ^keyword := None
+      while ((exists visiting).and((exists rank_found).not)) {`{`}
+        in_class ^keyword := visiting.value
+        if (exists (external first in_class.written_as)) {`{`}
+          written_at ^keyword := in_class.written_as.precedence({spelled})
+          if (exists written_at) {`{`} rank_found = Placement(nth_class: class_index, written_at: written_at) {`}`}
+        {`}`}
+        further ^keyword := in_class.components.hierarchy.head
+        while (exists further) {`{`}
+          to_visit &= further.value
+          further = further.next
+        {`}`}
+        class_index = class_index.succ
+        visiting = visiting.next
+      {`}`}
+      kept_entry = Precedence(place: place_of, spelled: {spelled}, answer: rank_found, ranked: exists rank_found)
+      if (exists rank_found) {`{`} placements &= kept_entry {`}`}
+    {`}`}
+    rank_known ^keyword := None
+    if kept_entry.ranked {`{`} rank_known = kept_entry.answer {`}`}
+    rank_known
+  ) => external declared_in
+
   // A member read on the receiver, a body that hands the receiver and its
   // argument to an external and answers the receiver, and a body that answers
   // what it was handed: the interpreter does these without a frame of their own.

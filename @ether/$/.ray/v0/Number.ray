@@ -340,13 +340,13 @@ base{ }{literal name ^class}{ }{size} ^keyword => (
     of_digits (spelled) => Number.from_digits(radix, spelled)
 
     accepts (text) => (
-      spelled_digits ^keyword := digits_spelled(text, radix)
+      spelled_digits ^keyword := digits_spelled(text, (size))
       read_number ^keyword := None
       if (exists spelled_digits) { read_number = Number.from_digits(radix, spelled_digits) }
       read_number
     )
     Digits := class {
-      accepts (text) => digits_spelled(text, radix)
+      accepts (text) => digits_spelled(text, (size))
     }
 
     Signed := class: Number.Signed { }
@@ -398,6 +398,7 @@ digit_of (point) => if ((47 < point).and(point < 58)) { point - 48 } elsif ((96 
 
 digits_spelled (text, radix) => (
   spelled ^keyword := chain None
+  read_any ^keyword := false
   byte ^keyword := 0
   left ^keyword := 8
   take (b) => (
@@ -406,16 +407,21 @@ digits_spelled (text, radix) => (
     left = left.pred
     if left.is_zero {
       digit := digit_of(byte)
-      if (exists digit) {
-        if (digit < radix) { spelled &= digit } else { spelled = None }
-      } else { spelled = None }
+      if (exists spelled) {
+        if (exists digit) {
+          if (digit < radix) {
+            spelled &= digit
+            read_any = true
+          } else { spelled = None }
+        } else { spelled = None }
+      }
       byte = 0
       left = 8
     }
     spelled
   )
   external bits text take
-  if (exists spelled) { if spelled.empty { spelled = None } }
+  unless read_any { spelled = None }
   spelled
 )
 

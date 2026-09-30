@@ -278,3 +278,6 @@ Answers from 2026-09-30.
   with `[]`, e.g. in `for`.
 - **G7.6** "Prefer this syntax" is a `suggest` equivalence per style (G7.1), configurable per person.
 - **Covered elsewhere:** G2.1 (Almanac A8: a space may replace `.`, and calls by juxtaposition).
+
+
+// Alias of ==.instance_of, is: "is"

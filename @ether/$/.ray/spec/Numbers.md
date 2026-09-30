@@ -159,3 +159,6 @@ Answers from 2026-09-30.
 - **N5.2** A boolean is a filter: a narrowing's body is a boolean (`xs{true}` keeps everything).
 - **N5.4** Rules with two operators (`def * {b} * {c}` matching `a * b * c`) are the general mechanism, as
   `?:` already is.
+
+
+Also: infinity symbol after array is an alias of .unbounded so 3[]∞ means unbounded number of 3's.

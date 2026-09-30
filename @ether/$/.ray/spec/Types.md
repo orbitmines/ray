@@ -224,3 +224,6 @@ Answers from 2026-09-30 (see also `Almanac.md`, which answers T2.1, T3.3, T3.9, 
 - **T7.5** No separate `==`: the conversion `&caller as Character` (the character at the top of the chain)
   makes `&caller == @me` hold through the equivalence graph (U9).
 - **Covered elsewhere:** T3.1 (L§2.2: per instance by default, `static` for shared), T3.7 (L§3.4 `references`).
+- **T3.15b (2026-09-30)** A class's structural definition sits in its header, beside what it is built on:
+  `UTF-8 := class: TF, sequence: ( prefix: 1[]{length == 0..4}, … )[] { as (== CodePoint[]) => … }`.
+  The pattern is what the type matches; the body holds its methods.

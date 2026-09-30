@@ -1,11 +1,3 @@
-// Features (drafts: .ray2/Feature/IO, Random, Choice, Proof, Transaction,
-// Network/Network, Network/HTTP, UI/Keyboard, UI/Chat). spec: each is the
-// draft's shape on the primitives the runtime offers (`io`, `random`, `os`);
-// what needs a host (proxies, key presses, a chat channel) is named and kept.
-
-// `File = Byte[]`, `confidential namespace IO`: reading and writing a
-// location. spec: a location is a literal path (or `stdin`); the instance
-// directory is where the program runs, and `os` names the host.
 IO := class {
   read (path) => (external io path None).as_string
   write (path, content) => external io path content
@@ -20,11 +12,8 @@ IO := class {
   }
 }
 
-// `Node += random`, `Iterable += random`, `seed ()`: one bit from the machine
-// and what is built from it. spec: the generator cannot be seeded here.
 Random := class {
-  // The machine's own bit. It is handed over the way this language spells a
-  // bit — there or not — so it is read by asking whether it is there.
+
   bit => if (exists (external random)) { 1 } else { 0 }
   bits (count: Number) => (
     drawn := chain None
@@ -35,8 +24,7 @@ Random := class {
     }
     drawn
   )
-  // A number below a limit: as many bits as the limit needs, drawn again
-  // until the number they spell is small enough.
+
   below (limit: Number) => (
     width ^keyword := 0
     rest ^keyword := limit
@@ -48,7 +36,7 @@ Random := class {
     while (drawn < limit).not { drawn = Random.number(width) }
     drawn
   )
-  // The number so many random bits spell, accumulated as they are drawn.
+
   number (width: Number) => (
     total ^keyword := 0
     left ^keyword := width
@@ -60,13 +48,7 @@ Random := class {
     total
   )
 }
-// spec: one of a collection at random is written in Ray.ray, where `Iterable`
-// is written: a class gains nothing from a file read before the one that
-// writes it, and Feature.ray is read first.
 
-// `choose`: one of a collection, or several. spec: constraints on the choice
-// (`choose n: Nat`, `choose{unique}`, `choose 50%`) are the filters the
-// caller applies before choosing.
 Choice := class {
   choose (from) => from.random
   choose_count (from, count: Number) => (
@@ -81,10 +63,6 @@ Choice := class {
   coin => Random.bit
 }
 
-// `Proposition < Quest{(): boolean}`, `Proof<proposition>`, `theorem`:
-// spec: a proposition holds or not; a proof is what says so; a theorem whose
-// proof fails becomes a quest to find one, and a contradiction proves the
-// negation.
 Proof := class {
   Proposition := class {
     holds: Node
@@ -95,18 +73,13 @@ Proof := class {
   argument: Node
 
   holds => .argument.holds
-  // What is not proved is what there is to do: a theorem whose proof does not
-  // hold is a quest to prove it, built the way a quest is built.
+
   theorem (proposition, proof) => if proof.holds { true } else { Quest(name: "prove", goal: proposition) }
   by_contradiction (proposition, proof_of_negation) => proof_of_negation.holds.not
   rfl (proposition) => proposition.holds
   assume (fact) => fact
 }
 
-// Reversible programs (`+!`, `program⁻¹`): spec: a transaction keeps the step
-// each way; `reversed` swaps them, and the table names the inverse of each
-// arithmetic operator. The steps are `forwards` and `backwards`, since
-// `forward` is the language's own word for what is declared ahead of itself.
 Transaction := class {
   forwards: Node
   backwards: Node
@@ -120,15 +93,10 @@ Transaction := class {
   Inverse := enum plus (of: `+`, is: `-`) | minus (of: `-`, is: `+`) | times (of: `*`, is: `/`) | over (of: `/`, is: `*`)
 }
 
-// `DomainName = String{length < 2^8}`, proxies, the protocol's version
-// handshake. spec: a proxy is a persona traffic goes through; the handshake
-// opens with the protocol version as a UUID.
 Network := class {
   DomainName := class {
     text: String
 
-    // The draft bounds a name from above (`String{length < 2^8}`); a name of
-    // nothing is not one, so it is bounded from below here too.
     valid => .text.count.nonzero.and(.text.count < 256)
   }
   Proxy := class {
@@ -139,15 +107,12 @@ Network := class {
     handshake (offered) => offered
   }
 }
-// spec: HTTP is a read of a location; the runtime's `io` reads files and
-// `stdin`, so a URL is fetched once the host offers a network.
+
 HTTP := class {
   get (url) => IO.read(url)
   Method := enum get | post | put | delete
 }
 
-// `class Key`, `class Keyboard`: spec: a key is pressed or not, may be toggled,
-// may cycle a collection; presses arrive from the host.
 Keyboard := class {
   Key := class {
     name: Node
@@ -173,8 +138,6 @@ Keyboard := class {
   )
 }
 
-// UI/Chat (empty draft): spec: a chat is a chain of messages, each from a
-// persona.
 Chat := class {
   messages: (chain None)
 
@@ -185,679 +148,3 @@ Chat := class {
   )
   count => .messages.count
 }
-
-// From the drafts, not yet reached here (spec):
-// .ray2/Feature/Choice.ray:
-// () on a type with constraints calls choose
-// How to say: Return of the given type, or a predicate when used in a filter
-//TODO How to say: .unordered, arbitrarily choose anything equivalent to
-// Chose uses === for checking equality. And only maps it once, then defers to the altered variable
-// Allow to be passed as a variable as any time, which takes on that type and says chosoe that type
-// No, this would be Number{choose}
-// As long as finitary #.count != ∞ 50%, what to do with
-// Allow 1/2 Number, then choose that type
-// Choose where the same value can be chosen more than once? Is that even useful? It might be for mapping filters
-// Only for finite number of objects.
-//TODO Choose with filter, alllow modifiers like unique somehow? or === for not the same var twice
-//TODO Dynamically with choose, means the choice can be changed dynamically too.
-// .ray2/Feature/IO.ray:
-// Shadowing is just components. with &+/+
-// Get a file relative to the Ether instance directory
-// - You're unable to leave by doing ".." on the top-level directory (only symlinks allow you to leave the default directory structure)
-//TODO Infer} TODO Default /path to object getters?
-//TODO Load a lazy program of the file, but if only = is used, we dont compile the actual read.
-//TODO Then things like IO /path as String, or as Expression
-//TODO How to say match to ... -> .[field] $, and then say:
-//TODO Trying first, {field}.ray.txt, then add 'field' directory if there, and if the .ray.txt isn't there fallback to 'field' as a file.
-// If exposed by the host, the OS' file system
-// - You can overwrite the default access by saying "confidential IO.os /some/path"
-//TODO Create a mirror @ location, and load from it it when?
-//TODO : Set actual directory vs the one we map to. Map both @player-name and @uuid, but actualize in @U/U/I/D
-// .ray2/Feature/Network/HTTP.ray:
-// Support < @https://orbitmines.com/
-// .ray2/Feature/Network/Network.ray:
-// Proxy all network traffic, or optionally: only grouped in the block after it., want to be able to configure both.
-//TODO On the receiving end: Difference proxies for different users, some way to do this mapping.
-// proxy @USERNAME // or some specific instance
-// proxy @ether, @USERNAME, @USERNAME2
-// Handshake such that the proxy does vs doesn't see traffic
-// @USERNAME.read proxy @USERNAME
-//TODO How to reroute all network traffic we're proxying
-// Ether Protocol starts with an unencrypted UUID of which version to use. Response is either fail or return which versions it supports, then switch to those versions on the other end.
-// .ray2/Feature/Proof.ray:
-// equational reasoning
-// Should also clear func(x) in scope
-// What about assumptions made outside the function
-//TODO In outside scope assumptions means something different than inside scope: outwide is all of the assumptions.
-// what about assumed if branches, how do proofs work which are delayed quests
-//TODO Expose variables in proposition to this context.
-//TODO All externally used variables are assumptions.
-//TODO Return false by default, which starts a quest
-// What about subproofs, any other quest matching this proof
-// theorem/lemma/example ; graph of theorems
-// Add lean library
-// Is there a way to intuitively change it if it's cleaner?
-//TODO In this case we dont want a quest to start if the proof is false.
-//TODO Maybe give negative proposition a name
-//TODO What do we want to do if proof fails, start quest (dont continue the program)
-//TODO All variables used in proof, get the additional type property of the proposition
-//TODO How to proof by contradiction
-// How does it differ from: (if 5 & 10, it's false & true, but only true succeeds
-// .ray2/Feature/Random.ray:
-//TODO Where is the probability stored
-// => is also valid syntax
-// .ray2/Feature/Transaction.ray:
-//TODO Or if dynamically the speculative if branch change, if resources are dedicated to that if branch.
-//TODO Could also automatically rollback previous changes of &=
-// equivalent to
-// Automatic isomorphism
-//TODO Still access the program used to fill the variable, then program⁻¹
-// Running function backwards, saying that
-// Need to account for the fact that the graph might've changed. Not just a simple .reverse
-//TODO What if changed in the meantime, need to record which version it was originally,
-// and how to revert if other changes have been made. ; We basically want to revert a specific commit.
-// How to say if this commit is available
-// inverse-1 notation used to go to the reverse direction of a method
-// .ray2/Feature/UI/Chat.ray:
-// Interface with the layout of some application, just like analysis of languages, at some point.
-
-// From the instance drafts (entrypoint, OS, UI symbols), not yet reached here (spec):
-// .ray2/_todo/ray.ray.txt/Ether/instance/entrypoint/entrypoint.ray:
-// // Set up the /instance folder.
-// // By default 'root', uses the same settings as any instance spawned by it.
-// // The two configurations can be split, by writing to /instance and / separately.
-// IO /instance %= /
-// IO /instance/entrypoint/entrypoint.`*` %= None
-//
-// //TODO Shadows should work so that the central ether server knows which version is used and can in turn shadow it also. If customized, upload the custom changes
-//
-// //TODO Also allow many simultaneous servers running besides the player.
-// //TODO Allow players who initially spawned the NPC to configure who has access.
-//
-// //TODO Get /instance configuration from the player who is spawning the entity.
-//
-// // Holds history of which entities logged in
-// localhost npcs: NPC?
-// localhost player: Player?
-//
-// return spawn(player) if player
-//
-// //TODO Generate new instance keypair for this new player
-//
-// //TODO Pass login (other or new player)/logout/swap_user to Player entrypoint
-// children.execute def login
-//   //TODO Login is different than spawning an instance with it. -> Login just means add to registry
-// end
-// children.execute def logout
-// end
-// children.execute def swap
-// end
-//
-//
-// uuid = UUID.v1()
-//
-// //TODO Default behavior of shadow, is if it's written to by another thing than INSTANCE, A new file is created for INSTANCE instead.
-// //TODO Shadow should use the versioned file of /, and if a change is commited that should be placed there, it's also applied on the shadowed item.
-// IO /.ether/@`uuid` %= /instance // TODO Shadow all the files in /instance
-// spawn(
-//   name: confidential.read none.write uuid
-//   IO./: host /@`uuid`
-//   //TODO You could make a case for saying an entity could spawn with a different OS after virtual machines are supported. With a default Ether instance installed if the OS is not Ether.
-//   //TODO For now, let root decide whether child instances have access to the host's OS. Defaulting to it having access.
-//   OS:
-//   Entity.spawn = login //TODO
-// )
-//
-// .ray2/_todo/ray.ray.txt/Ether/instance/entrypoint/entrypoint.player.ray:
-// < Player
-//
-// using .UI, <TODO Version>
-//
-// new_player = !player
-//
-// player ??= Player(
-//   name = 'Player One'
-//     issued_by: INSTANCE,
-//     certificate: //TODO Generate certificate
-//     visibility: "public"
-//   end,
-//   location = desktop.spawn_location#.random
-// ) //TODO Setting player should externally save it.
-// player.instance = INSTANCE
-//
-// new_player ? UI.Welcome : UI.World
-// .ray2/_todo/ray.ray.txt/Ether/instance/os/OS.ray.txt:
-// OperatingSystem = namespace OS
-//   = Location // OS has structured information on host/child OS's
-//
-//   name = external // Expect OS.name to be filled
-//
-// end
-// .ray2/_todo/ray.ray.txt/Ether/instance/os/Ether.ray.txt:
-// // Reserved for future use
-// return if OS.name != "Ether"
-// .ray2/_todo/ray.ray.txt/Ether/instance/os/Darwin.ray.txt:
-// return if OS.name != "Darwin"
-// .ray2/_todo/ray.ray.txt/Ether/instance/os/Linux.ray.txt:
-// return if OS.name != "Linux"
-// .ray2/_todo/ray.ray.txt/Ether/instance/os/Windows.ray.txt:
-// return if OS.name != "Windows"
-// .ray2/_todo/ray.ray.txt/Ether/instance/UI/symbols.ray:
-// //TODO Support latex-like support, more extensive than vscode but where does it define its setup?
-// // TODO VS-Default is?
-// // https://github.com/mathjax/MathJax-src/blob/master/ts/input/tex/base/BaseMappings.ts
-// // https://gist.github.com/jaantollander/b49132a36b035cdfe05345dd0c7edf0f
-// // https://github.com/YellPika/vscode-latex-input/blob/master/default-mappings.json
-//
-// .ray2/Feature/UI/Keyboard.ray:
-// class Key
-//
-//   pulsed (max: 20 / s, delay: 1 s)
-//
-//   toggled = false dynamically .next if this
-//   cycle (iterable: Iterable) => iterable.first.loop dynamically .next if this
-//
-//   as (=== boolean) // if pressed
-//
-// class Keyboard
-// .ray2/_todo/ray.ray.txt/Ether/instance/UI.ray:
-//TODO What would a good library for UI look like? Things like selecting an Entity Filter, should go into libraries and render that in a specific way if there's a equivalence for it to Entity code.
-// single UI
-//   single Welcome
-//     form
-//       global.entity.name: String
-//
-//   end
-//   single World
-//   end
-// end
-//
-// Probability{!= 1}
-//   {" "}{node: *} => //TODO How to say %, what to do in case of non-divisible
-// .ray2/_todo/ray.ray.txt/Ether/instance/UI/Geometry.ray:
-//TODO Translations to GLSL - Can those be inferred from the structure defined on the types? (Like https://iquilezles.org/articles/distfunctions/) Exact vs approximation equivalances how?
-//
-// How to mix discrete spaces and Spheres vs the euclidian one's.
-//
-//TODO Edges are decorated with length.
-//elementary_length <>
-//
-// All objects are contained in some space: World.
-//
-// Want to be able to import and use packages from other programming languages.
-//
-// World
-//   class Point < Ray
-//   class Object ({children = .()**,lines.reduce(,)}: (): * -- if : Hierarchy) < Iterable<Point>
-//
-// What if the object is a collection of Point structures
-//
-// You equip the world with a coordinate system, even if approximate
-//
-//TODO How to set scoped, that a point has a color for instance. ; which is an approximation, how to say it is
-//
-//
-//
-// class Path | Curve | Line = Array.Unbounded
-//   curvature
-//   static Straight = //"No curvature" is a bit ambiguous //TODO Makes assumption about local space
-// end
-//
-//TODO Unbounded/vs bounded loop
-// Loop = Array.Unbounded.loop(boundaries: false)
-//
-// Ball with padding is still a ball
-// Padding is just a hierarchical object, with boundary to the object, and its boundary, can have multiple padding wrappers.
-// Holes as negative components, but holes can also exist from the abstract description?
-//
-// Allow top.left.last go to the topmost/leftmost
-//
-// discretized 1 / m
-// Discretized single Infinite Ray
-// What to do with conflicting information at discretized points
-// If 2d is discretized should be renderable in pixels easily
-//
-// class Interface < world: World
-//   class Controller
-//     (x) => #.push_back(static(x))
-//
-//TODO With device ID check history for another with that id, reassign ID, if no new devices have claimed it.
-//
-//     #{id: Number.Nat} => #{.id == id}
-//
-//     id: Number.Nat
-//
-// associated with a character, so we can assign trust to that character.
-//     character: Character = @me // How does select get assigned, it's a guest not yet associated with this character, which is allowed to set the character to another, but not @me?
-//
-// Interface has a certain extent into a world
-//
-//
-// General surface area (whether input or not), Interface & World?
-//
-// class Window | Browser | Document | ?? < Interface & World //?
-//
-// Default behavior of superposed is to .map on the object's property, display all basically:
-// Otherwise, instead of .map it's a choose.
-//
-// @orbitmines.avatars.map => Link .location{: URL} => .platform.profile_picture
-// Should type-check and automatically filter by saying only avatars with an URL location because Link requires a value., since they are the only once which will succeed.
-//
-// class BoundingBox // What is bounding box in fractional dimensional
-//   width: x.length if ==.instance_of 1D
-//   height: y.length if ==.instance_of 2D
-//   depth: z.length if ==.instance_of 3D
-//
-// class StyleClass < Ball
-//   &+= Padding.Right(5m)
-//   padding.right = 5m
-//   radius = 1m
-//
-// How to say, this is default Ball.radius choose
-// Input Ball.radius
-// Rendering logic, might want to edit the current renderings already.
-// Input boolean
-// Checkbox
-//
-// namespace Keyboard < Interface.Controller
-//
-// Keyboard.#0.f2
-//
-// If Keyboard is Many, many keyboards
-//
-// Allow
-// ("String", something else, "String").italic
-//
-// class MyInterface < Interface
-//
-// Render logic/dynamics
-//   dynamically
-//
-// What if a plugin, not a website?
-// namespace Browser
-//   external? url: URL = URL()
-// Access the javascript context directly
-//   external? javascript
-//
-// Ball
-//   if choosing // This variable itself is being chosen
-//   if choosing radius // Some way of checking whether the function needed to run radius, is choose.
-//
-//
-// TODO How to alternative renderings, and how to choose between renderings
-// Ball => |
-// Ball
-//TODO What about constructor things which you always want to run?? Like <
-//   default_profile
-//
-//   profile\ | Center field: choose Number
-//   "Profile Name"\ |
-//     Center field: choose Number
-//   "Profile Name2"\
-//     | Center field: choose Number
-//   {variable_label: Number}\ | //TODO Allow variable labels
-//
-// How is this relevant to the different locations have different normalizers: this could be seen as, we're selecting a different default representation.
-// Ball = Ball~profile //Set default
-//TODO Want to be able to say, within context, spawn a new context and make variable changes to the std in that.
-// with Ball = Ball~profile //TODO What happens when a variable is some object is changed by this, only to this location should it be seen as that new value, outside of it it's still the other thing? ; what about successive changes to it, are they applied to both, or just this one???
-//
-// Ball~default()
-// Ball~profile().
-// Ball~"Profile Name"().
-// Ball~5().
-//
-// + padding + border &+ padding
-// Overflow .width?
-//
-//
-// (if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy (
-//       Keyboard.ctrl && Keyboard.shift => // Skip group & Expand selection
-//       Keyboard.ctrl => // Skip groups
-//       Keyboard.shift => // Expand selection
-//     ) -> (if Keyboard. ↓ | s .pulsed)
-//
-//
-// Choose with placeholder which is default, but gets reset on clicking on choose.
-//
-// Use return in the constructor for something, how to access it though ? - the rendering func.
-//
-// All events are instead dynamically on a variable, listening for change, so resize is dynamically width, height etc..
-//
-// What is the interpretation of multiple rendered values. "text in between" & "other text in between"
-//
-// Frontend code which targets libraries in HTML and other GUI libraries, what about 3D
-// Code in front on render
-//
-// How to get the Window
-//
-//
-// dynamically persistent
-//   if Keyboard.f2.toggled
-//     selection: Location =
-//
-//Which two spatial dimensions
-//
-//     (if Keyboard. ↑ | w .pulsed) <- selection. y ?? hierarchy
-//       (.[GROUPS LVL] if Keyboard.ctrl)
-//       (Keyboard.shift ? .move : .[EXPAND])
-//     -> (if Keyboard. ↓ | s .pulsed)
-//
-//     (if Keyboard. ← | a .pulsed) <- selection. x ?? hierarchy .move -> (if Keyboard. → | d .pulsed)
-//
-//
-//
-// Ball(radius: 10m) + Padding.Right(10m)
-//
-// Can also put the children on a newline
-//   Square
-//     Square, Square
-//
-// Code in front on render
-//   {dynamic_id}\ Ball(radius: 5m) + Padding(5m) + StyleClass + OtherStyleClass, "text in between" Ball()
-//     Center field: choose String, "text in between" & StyleClass, field2: Time = choose
-//     ball_id: choose Ball // choosing Ball.radius would be flagged too.
-//     Center.Horizontally []
-//     Between
-//       (A, B, C) * 1/12,
-//       7/12 * (D, E),
-//       4/12 * (F, G, H) // Use parenthesis for 'column' groups?, then fractions for defaulting to width in this case.
-//
-//
-//   id\ Ball(radius: choose? ?? 5m) // Choose + default
-//
-// Code in between Render
-//
-//   {Ball(radius: 1m)
-//     Ball(radius: 0.5m)
-//   }text in between
-//
-//   {Ball / radius: 1m ; center}
-//
-//   {Ball }
-//
-// Things like color are 'information of each point'. how does this get mapped.
-//
-// LocallyConnected // directionality are actually usual dimensions; no jumps between two different neighbourhoods
-//
-// How to say Smooth out of two components Ball - Square at its boundary for instance.
-//
-// class Ball
-//   Point
-//     radial_distance => to centre -- #.min.length
-//
-//   static Open => static{- surface}  // Excluding surface, and boundary should be moved.
-//   static Closed => Ball
-//
-// TODO Should this be the default on Iterable, always map methods to the
-// Ball.color, will go to point.color
-//   delegate in Point => this as Point
-//
-// outline, sphere, surface (area)
-//   boundary: Boundary{∙.radial_distance == radius}
-//   border | surface => boundary∙
-//   interior => this{not border}
-//
-//   centre: Point
-//   radius => surface.radial_distance //This is a circular definition, which is allowed, and expected to break for a valid object, either by setting boundary, or by setting radius, or by setting diameter
-//   diameter => radius * 2 // implements diameter =
-//
-//   sphere => outline
-//   dimensionality ()
-//Implementation even though there's a default value, how to reset to this implementation?
-//
-// {n: Decimal.Real}-Ball => Ball{dimensionality == n}
-// {n: Decimal}-Sphere => {n + 1}-Ball.surface // Does this generalize to Number?
-//
-// Circle = 2-Ball
-// Sphere = 2-Sphere
-//
-//TODO Needs like an example of 2D/3D world with yaw/pitch on location, stored as arcs in a continuous space then discretized by some things like elementary lengths and other things.
-//
-// class Circle
-//
-//TODO Things like approximate circles or discrete circles where not every.reduce(==)
-//TODO Circle with surface selected.
-//
-// end
-//TODO Things like volume, for the arbitrary space discrete vs infinite (needs to be evenly spaced out too when not having discrete effects)
-//
-// Square //TODO Makes assumption about the local space.
-// Plane // Square with no boundaries.
-//
-// Finite vs Infinite
-// dimensionality = 2 & dimensionality change at every point is constant.
-// every x goes to an x, every y goes to a y
-// Grid // TODO `x`D Grid, X x X Grid, (Allow Expression syntax to extent a whole statement like Number x/* Number)
-//TODO Euclidian space being a grid with infinite divisibility.
-//TODO Effective dimension vs actual dimension at each point.
-//
-//TODO Use Grid in torus/cylinder definition
-// Cylinder
-// Torus
-//
-//
-// Sphere //TODO How to say 2D Loop
-// Cube
-// COne
-//
-//
-// In the current group (hierarchy wise) or the entire "under" ignoring hierarchy
-// ->> means everthing to the right (<-ray).all
-//
-// class Object < Hierarchy
-//   boundary: Boundary
-//   border: // object on the boundary (inclusive)
-//
-//todo easilty add remove properties like center so dynamically .center if predicate, but compact
-//   Center<D =
-//     & .x if ==.instance_of 1D
-//     & .y if ==.instance_of 2D
-//     & .z if ==.instance_of 3D
-//   > = static{(<-D).length == (D->).length}
-//Todo how to not so verbosely do this, rhis syntax doesn't currently work
-//
-//Todo .under etc. needs to go to the boundary of this abstract object
-//
-// dimensionality Support for n-dimensional, with the same functions like padding etc..
-//
-// class 1D
-//   left: static <<- previous: static <- horizontal | x -> next: static ->> right: static
-// class 2D < 1D
-//   under | bottom : static <<- down: static <- vertical | y -> up: static ->> above | top : static
-// class 3D < 2D
-//   behind: static <<- backward: static <- depth | z -> forward: static ->> in_front: static
-// .ray2/_todo/ray.ray.txt/Ether/instance/UI/Player.ray:
-// class Telephone | Phone <
-// class Email <
-// .ray2/_todo/ray.ray.txt/Ether/instance/Network.ray:
-//TODO external fills things like Network.Host when spawning a child instance.
-//
-//TODO Eventual consistency support
-// Running an algorithm parallel on many machines
-//
-// For strreaming, a player has a particular location which is the streaming location , that is being broadcast.
-// TODO So watching a stream is simply following that location.
-//
-// Networking
-// - Managed items by another instance (mirrors)
-//
-// namespace Network
-//
-// ETHER
-//   class Protocol (name: String, default_port: Port) < name
-//     static#.push_back(this)
-//
-//   Protocol("ether", 37839)
-//   Protocol("http", 80)
-//   Protocol("https", 443)
-//   Protocol("ftp", 21)
-//
-//   DEFAULT_PORT: Port = Protocol{== "ether"}.default_port
-//
-// TODO Default port depending on the scheme
-//   class URL < scheme | protocol : Protocol = "ether", "://", user_info: (user: String, (":", password: String)?, "@")? {host = ip, port}: Socket.Address | (host: DomainName, (":", port: Port = protocol.default_port ?? DEFAULT_PORT)?), path: "/", String, query: "?", {params: {}; .for [key, value] => params[key] = value}: (key: String, "=", value: String)[], fragment: "#", String
-//
-//   Port = Decimal{< 2^16}
-//
-//   class Socket
-//     static class Address = (ip: IPv4) | ("[",(ip: IPv6),"]"), (":", port: Port = DEFAULT_PORT)?
-//       protocol //TODO
-//     end
-//   end
-//
-//TODO World names are instead used for /etc/hosts like behavior
-// Acts as a /etc/hosts
-//   Hosts: { {: Instance}: Instance } = {
-//TODO Or it's Character => Character instead (so we can also map @ether to @me)
-//TODO equivalence A => B
-//TODO A hostname without a space aren't by default reserved, but can be overwritten.
-//     confidential.write "localhost": "127.0.0.1" | "::1"
-//TODO external could fill these from /etc/hosts
-//TODO What about "ether".ignore_case => "ether.orbitmines.com"
-//   }
-//
-//   dynamically Hosts.for host, ip => equivalence host -> ip
-//
-//TODO Domainname:port castable to IP using nameservers.
-// end
-//
-// += Network
-//
-// Allow string CIDR notation
-// [IPv4, IPv6].for IP
-//   String{==.instance_of (ip: IP.String) + "/" + (prefix_length: Decimal{<= IP.NUMBER_OF_BITS}.String)}
-//     as :== IP = ip as IP / prefix_length
-//   end
-// end
-//
-//TODO Store history of DNS resolves, and then allow to use it if DNS doesnt resolve by checking whether the instance running match the public-key stored there.
-//
-// +Node
-//   static class Remote
-//TODO All object access go over network, and backup it in a local copy, what if that local copy is already defined somewhere?
-//Remote .location might not know about our copy, so how do we do remote_variable @ local
-//TODO Settings location to an instance, should say: anywhere in this instance, I don't know where. So if it's @ some_specific_location in local, it should still go to this method?
-//TODO What if the value is stored at a location, but we're looking for something which is at an unknown instance? But with particular structure?
-//
-// If we want the local reference to a particular value, we don't consult remote.
-//     @ instance: INSTANCE = instance[location]
-//   end
-// end
-// .ray2/_todo/ray.ray.txt/Ether/instance/Update.ray:
-//TODO How to add 'UPDATE' to quests
-// def UPDATE
-// TODO How to signal possible Merge conflicts
-//TODO THe setting =, should use 'this is where I am now', to only download the changes it needs.
-//   IO / = ETHER@ETHER/instance
-//
-// TODO How to reload files. Reload everything in memory if possible (needs to use new versions), what if there's a breaking change?
-// TODO -> Objects need a way to handle the on change of the object itself. Apply diffs like a field is renamed, but should keep same functionality etc.
-// end
-//
-//TODO Allow player to access root's UPDATE, but also update any manually edited files.
-
-// From the journal, not yet reached here (spec). What the editor and the
-// interfaces built on these features are for:
-//
-// A block of code collapses to a sentence of English saying what it does,
-// and the other way: written at the level of description that is preferred,
-// mathematical symbols or words, "there exists" or `#.some`. A selection is
-// operated on by naming what to do to it, in the language or in English.
-//
-// Highlighting says what calls a thing, not only the thing: red, green and
-// blue highlighted as red, green and blue.
-//
-// Ambiguity is resolved in the editor, and the resolution may be kept so it
-// is never asked again. If an isomorphism is already there and somebody is
-// writing it again, they are told.
-//
-// Tests collapse inline. Every function has a button that times it. A
-// version-control selector sits at each function in each class, and versions
-// may be shown intermingled — `%1..5 field`, `<&VER..&VER> field` — with a
-// key to walk them.
-//
-// Movement: up and down remember the column they left and go back to it
-// while nothing has moved sideways; end-of-line stays at the end of the line
-// while moving up and down; control with up and down moves the page by a
-// line. A goto in the editor brings its label back a space, and puts it back
-// when a type is written there instead. Inside a double `((` the editor asks
-// for `((` and a tab, because `<<` may mean a subexpression.
-//
-// Eye tracking chooses which of two places is the one being worked in: side
-// by side, whichever is looked at; overlaid, the one on top.
-//
-// Searching inside a thing, and again inside the result, drops what was
-// searched before and keeps the sequence as a program that can be undone —
-// which is how an executable or a codebase nobody wrote is explored.
-//
-// Text that is encrypted is edited as plain text and normalised back to
-// encrypted, with the password asked for when it is used. Custom symbols
-// extend the text as a type of their own, and paste as something that says
-// they are custom.
-//
-// An icon generates the same file in the other formats underneath it; a
-// status has one too. A chat may hold only what changed since it was last
-// seen. Any object may be rendered as a table, with preferences for how
-// kinds of things are drawn per person. A condition may be put on a source
-// file — that its classes are sorted, the way the language index is.
-//
-// A choice a persona makes carries the quest that explains why it is theirs
-// to make, and says whether its results are being kept for later.
-//
-// An interface finds the controls nothing is bound to and offers them.
-// Structures are bound to controls — this key does this, copy and paste are
-// a binding — and are imported by dragging or pasting them in. One key shows
-// something about everything at once: every orbit in the structure, drawn by
-// rolling a loop out into a line by varying the direction it is walked. A
-// slider moves the level of description over an existing reading of it. What
-// is ignored — where a structure came from, the embedding it is drawn in —
-// is dropped on purpose, which drives two structures towards the same point
-// so they can be compared.
-//
-// Drawing: put the graphs at the top with their lines invisible, draw them
-// on hover and dim what surrounds them; the minimap ignores the reference.
-// Dragging goes from one point of the background to another. If a mouse must
-// be used, it locks onto the structure nearest it. An interface that is not
-// a hundred percent wide is not a box: it is whatever shape fits the width
-// available at that height, and what does not fit wraps.
-//
-// Exploration: a thing that wanders — worlds, items, whatever there is — and
-// reminds, suggests and explores periodically, answering where has not been
-// looked, where could be looked, and where it was decided not to look but
-// looking is still wanted. Replay of what happened, in detail. Something
-// that works while nobody is: it says when it found something that matters
-// for an open question, it offers an answer to a function that is still
-// being written and says what would follow from it, and it starts on what
-// can be undone while the decision is still pending.
-//
-// Something may be included conditionally on whoever looks having access to
-// it — a video that is paid for shows only to those who paid — which is a
-// way around ownership in a structure, and obnoxious if used for the wrong
-// things.
-//
-// Proofs are a way of deciding what is worth pursuing: a search and a memory
-// of it. What they say about a space is in how the conclusion was reached as
-// much as in the conclusion, so the questions are how that is taken
-// advantage of, and what makes a proof different from an ordinary program. A
-// tactic expands into the proof it stands for and folds back while it is
-// unchanged. Tests are the same thing in a narrower case, so both are one
-// mechanism: a prover generates every boolean implementation there is.
-//
-// Complexity has two halves: what a thing costs to run in sequence, and what
-// it costs to run in parallel — the second is what a language far from ones
-// and zeros buys. They are forming the model and using it: induction, and
-// deduction. Robustness follows both, which makes two kinds of robustness.
-//
-// Applications install into the browser, for the desktop and for the phone.
-//
-// A beginner is given a whole setup and takes only the highlights out of it,
-// so the rest can be decoded afterwards.
-//
-// Colour is a filter across a frequency, so the difference between two of
-// them is one too.
-//
-// Modelling in two and three dimensions, generated rather than drawn.
-//
-// Interfaces from elsewhere plug into one modular system, which is what
-// makes an interface reprogrammable at all.

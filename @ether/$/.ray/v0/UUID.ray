@@ -1,30 +1,10 @@
-// A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
-// (draft: utils/UUID.ray)
-//
-// class UUID < Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-")
-// spec: `Hexadecimal³²` is the hexadecimal numbers of thirty-two spelled; a
-// UUID keeps those spelled as a chain rather than the number they spell, since
-// that number is a walk of 2¹²⁸ links. The dashes are where the text form
-// groups them: 8-4-4-4-12.
 UUID := class: Hexadecimal {
   spelled: Node
 
-  // version: Hexadecimal¹ => this[12]
   version => .spelled.head.at(12).value
 
-  // dynamically
-  //   < v1 if version == 1
-  //   < v3 if version == 3
-  //   < v4 if version == 4
-  //   < v5 if version == 5
-  // A UUID read from text comes back as its version's class (`read`); one
-  // built here is the class it is built as.
-
-  // class Variant = .RESERVED_NCS | .RFC_4122 | .RESERVED_MICROSOFT | .RESERVED_FUTURE
   Variant := enum reserved_ncs | rfc_4122 | reserved_microsoft | reserved_future
-  // variant as (=== Variant) => .match
-  //   ⊢0 => Variant.RESERVED_NCS, 10₂ => Variant.RFC_4122, 110₂ => Variant.RESERVED_MICROSOFT, 111₂ => Variant.RESERVED_FUTURE
-  // The variant is the leading bits of the seventeenth digit.
+
   variant => (
     leading := .spelled.head.at(16).value
     if (leading < 8) { UUID.Variant.reserved_ncs }
@@ -33,7 +13,6 @@ UUID := class: Hexadecimal {
     else { UUID.Variant.reserved_future }
   )
 
-  // secure Hexadecimal{length == 32}.random: so many random hexadecimal spelled.
   drawn (count: Number) => (
     out := chain None
     left ^keyword := count
@@ -51,57 +30,34 @@ UUID := class: Hexadecimal {
     out
   )
 
-  // class v1 < UUID ~ (time_low: Hexadecimal⁸, time_mid: Hexadecimal⁴, (version: Hexadecimal¹, time_high: Hexadecimal³), clock_seq, node: Hexadecimal¹² = @me.instance#.mac_address)
-  // spec: the 60-bit timestamp since 1582-10-15 in 100ns steps awaits Time
-  // reading the clock as a number; the node awaits `os` handing the MAC address.
   v1 := class: UUID {
-    // spec: `dynamically assert (.version == one)` is the draft's, and waits on
-    // `dynamically` meaning what it says — read again when what it depends on
-    // changes. Read once, here, it asks a class what its version is, and a
-    // class is not one of its own instances.
-    // dynamically assert (.version == one)
+
   }
-  // class v3 (namespace: UUID, name: String) < UUID
-  // spec: md5(namespace, name) awaits Encoding's hashes.
+
   v3 := class: UUID {
     namespace: UUID
     name: String
-    // spec: `dynamically assert (.version == three)` is the draft's, and waits on
-    // `dynamically` meaning what it says — read again when what it depends on
-    // changes. Read once, here, it asks a class what its version is, and a
-    // class is not one of its own instances.
-    // dynamically assert (.version == three)
+
   }
-  // class v4 < UUID = secure Hexadecimal{length == 32}.random ~~ version = 4
+
   v4 := class: UUID {
     spelled: UUID.drawn(32) ~~ (
       .head.at(12).value = 4
       this.head.at(16).value = 8 + (.head.at(16).value % 4)
     )
-    // spec: `dynamically assert (.version == four)` is the draft's, and waits on
-    // `dynamically` meaning what it says — read again when what it depends on
-    // changes. Read once, here, it asks a class what its version is, and a
-    // class is not one of its own instances.
-    // dynamically assert (.version == four)
+
   }
-  // class v5 (namespace: UUID, name: String) < UUID
-  // spec: sha1(namespace, name) awaits Encoding's hashes.
+
   v5 := class: UUID {
     namespace: UUID
     name: String
-    // spec: `dynamically assert (.version == five)` is the draft's, and waits on
-    // `dynamically` meaning what it says — read again when what it depends on
-    // changes. Read once, here, it asks a class what its version is, and a
-    // class is not one of its own instances.
-    // dynamically assert (.version == five)
+
   }
 
-  // As text: each digit, in groups of 8, 4, 4, 4 and 12 with dashes between.
   as_string => (
     out := chain None
     walker ^keyword := .spelled.head
-    // The dash between the groups is one character, read once: a codepoint is
-    // a walk, and so is the character built from it.
+
     dash ^keyword := U+002D
     groups := chain None
     groups &= 8
@@ -122,16 +78,15 @@ UUID := class: Hexadecimal {
   )
   chainable == (other: UUID) => .as_string == other.as_string
 
-  // {uuid: UUID.String}: UUID => uuid — the text form read back.
   read (text: String) => (
     out := chain None
-    // The dash is read once, not once per character.
+
     dash ^keyword := U+002D
     text for {
       character := it.value
       unless (character == dash) { out &= character.hexadecimal_digit }
     }
-    // dynamically < v1 if version == 1 …: what is read comes back as its version.
+
     read_version := out.head.at(12).value
     if (read_version == 1) { UUID.v1(spelled: out) }
     elsif (read_version == 3) { UUID.v3(spelled: out) }
@@ -140,10 +95,6 @@ UUID := class: Hexadecimal {
     else { UUID(spelled: out) }
   )
 
-  // namespace Namespace
-  //   DNS: UUID = 6ba7b810-9dad-11d1-80b4-00c04fd430c8 …
-  // spec: the texts, read with `UUID.read` when one is needed; reading all
-  // four on every pass is more than a pass affords.
   Namespace := class {
     DNS => "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
     URL => "6ba7b811-9dad-11d1-80b4-00c04fd430c8"
@@ -152,20 +103,6 @@ UUID := class: Hexadecimal {
   }
 }
 
-// A character read as a hexadecimal digit: `0`..`9` then `a`..`f` (either case).
 Character.components.hierarchy &= class {
   hexadecimal_digit => if .digit { .codepoint - 48 } else { .lower.codepoint - 87 }
 }
-
-// From the drafts, not yet reached here (spec):
-// .ray2/_todo/ray.ray.txt/Ether/instance/utils/UUID.ray:
-//TODO If OS allows custom UUID1 generation, overwrite with external
-//TODO This is not the right order, should be defined differently.
-// The timestamp is a 60-bit value (or Hexadecimal¹⁵) (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.4)
-// For UUID version 1, this is represented by Coordinated Universal Time (UTC) as a count of 100-nanosecond intervals since 00:00:00.00, 15 October 1582 (the date of Gregorian reform to the Christian calendar).
-// Make sure each call yields a unique value.
-//TODO ; Say I want a unique value, I dont care how you get it.
-//TODO What to do if it's larger than a 60-bit integer
-//TODO Compiler should be able to reverse time, if the other 3 are provided.
-//TODO How to say this is not the one used for converting from string, like a 'secondary' implementation -> Since now there's ambiguity
-//TODO Compiler should know it only needs to generate length == 31 here

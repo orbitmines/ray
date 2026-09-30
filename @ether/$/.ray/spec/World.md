@@ -158,3 +158,32 @@ Answers from 2026-09-30.
 - **W6.7** Streaming is kept (watching = following a player's streaming location), with networking.
 - **W6.8** Update (`IO / = ETHER@ETHER/instance`) is an ordinary assignment to a location with merge
   quests, built now in the networking project.
+- **Covered elsewhere:** W7.1–W7.14 (W7: the IDE backlog), W2.11 (Almanac A9).
+- **W1.3** A name not defined in a world falls back to the world's parent, then `@ether`, unless the world
+  explicitly maps it to None (which many platforms will).
+- **W1.5** `x.worlds`, `x.characters` iterate everything of that kind within x (`World$ @ x ->`). Databases
+  only optimize this; they add nothing else.
+- **W1.6** A world's dynamics are a component: `+ Dynamics`.
+- **W2.2/W2.3** Instance (a Location that is URL | DomainName | IP | Socket.Address, localhost locally) and
+  the MAC address (from an external, or random with the multicast bit) go into the networking project now.
+- **W2.5** Local co-op (several players on one machine) now, with the W2.4 sessions.
+- **W2.7** A sharded character is stored across locations (`@me @ @me.managed | @ether`, U7).
+- **W2.8** Remote execution as a character, and running code as a fresh unauthorised character, come with
+  the networking project.
+- **W2.10** Timed challenge messages (proving presence) are kept, with networking.
+- **W3.1** One history mechanism: `x%` for any value, HLC-stamped (L§9.2); definitions are its first
+  milestone.
+- **W3.5** Type conflicts between versions are merge conflicts, resolved by patches and migrations.
+- **W3.8** Squash, cherry-pick and "new repository from here" are all kept.
+- **W3.9** A silent generic type used in a function is remembered, and a diagnostic fires when a variable of
+  that name later appears.
+- **W4.3** The Item class now; how items are made and discovered, perspectives and minimaps, with Gamification.
+- **W5.1/W5.2** There is one permission: access to a method. `.read`/`.write`/`.execute` are sugar: write
+  is permission on `=`, execute on `()`, read on the structure or any other method. A block applies one
+  permission to everything in it (`@private { … }`).
+- **W5.4** Visibility is inherited by derivatives: data derived from `@local` data stays `@local` (L§8.2).
+- **W6.2** A distribution's probabilities live on the superposition's edges (U8); `seed` is a `with` setting
+  and `secure` names a cryptographic source.
+- **W6.9** An OS is a platform Language level (`Language.linux`, …), composed with the target; per-OS code
+  lives there, not in the default code.
+- **W6.11** Chat later.

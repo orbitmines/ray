@@ -161,7 +161,7 @@ Answers from 2026-09-30 (see also `Almanac.md`, which answers T2.1, T3.3, T3.9, 
   an error unless the missing methods are given.
 - **T3.6** Every instance is in its `Class$` by default, lazily: storage materialises only when
   `Class$` is used. This is the local store; another store is a location, e.g. `Class$ @ @remote`.
-  (`Class$ @remote` would mean something else.)
+  `Class$ @remote` is the same thing (corrected by R7.1).
 - **T3.13** Monkey-patching is component addition on the class: `X += { … }` (overriding),
   `X &+= { … }` (superposing). Only on a class, and it returns the class.
 - **T3.15** `single` is dropped: a class is already a namespace.
@@ -191,3 +191,36 @@ Answers from 2026-09-30 (see also `Almanac.md`, which answers T2.1, T3.3, T3.9, 
 - **T7.1** One location concept: a call frame, a thread, a host and a store are all locations. `=` writes
   at the current one, so a variable branches per location; `@` names the others (`var @ func`, Almanac A3).
 - **T7.2** `x @ Class` is the variable x in another class up the context chain (a class is a location).
+- **Covered elsewhere:** T3.3, T3.9 (Almanac A7), T8.1 (Almanac A1), T4.4 (Universal U9 `~=`), T6.5 (N1.9 isomorphisms).
+- **T1.4** None implements `location` and `=`: a None slot can be assigned, and it has a location.
+- **T1.5** Casting None to a class is disallowed; write `Item{}` with its fields `?`/None explicitly.
+- **T2.4** Class components can be removed with `-` (`x - Printable`), so a value can lose a type; this is
+  also how negative components (T4.2) work.
+- **T2.5** A component merged *into* a property is `&+` on the property (`x.style &+= {italic}`); `+=`
+  replaces.
+- **T2.6** No `in`: a cast (`(x as String).next`) or `x##` reads one component.
+- **T3.5** Changing a class later is live: dependents recompute (`dynamically`, P5.1), and a change that
+  breaks existing instances becomes a migration quest.
+- **T3.10** Every field is a constructor parameter; unset ones are `?` (T1.6).
+- **T3.11** `field?: Type` stays as shorthand for `field: Type?`.
+- **T3.14** Destructuring into statics is kept: `static { Rational, Irrational } = Real`, as with
+  `{ false, true } = boolean`.
+- **T4.2** A value missing a required method is not an instance (structural, T4.1); `T - method` is the
+  type that accepts it.
+- **T4.3** `x ==.instance_of (A | B)` holds if x is an instance of any of them; `A & B` needs both.
+- **T4.5** On a variable of unknown type, everything called on it becomes a requirement of its inferred
+  structural type.
+- **T4.7** Type relations are methods on types: `A.disjoint(B)`, `A.subtype_of(B)`, …
+- **T4.8** Both destructuring forms are kept (`Type = Var`, and the block form with `...` spread), and both
+  allow defaults to be set.
+- **T5.3** A generic defaults to the receiver's class: `static` in a return type (`reverse: static`).
+- **T6.1** Written literals compare with Ray's structural `==` once a literal is a value (a String).
+- **T6.3** `unique{expr}` is dropped.
+- **T7.3** `@` directions are on the current location's hierarchy: `@ <-` goes up the chain (callers,
+  parents), `@ ->` goes down (threads given to, children), and `@ loc { … }` runs a block at that location.
+- **T8.3** Only `#` enumerates a superposition's values; `.keys`/`.values` are for maps.
+- **T8.5/T8.6** `.properties.for` iterates an object's properties; the "events expanded automatically"
+  note is dropped.
+- **T7.5** No separate `==`: the conversion `&caller as Character` (the character at the top of the chain)
+  makes `&caller == @me` hold through the equivalence graph (U9).
+- **Covered elsewhere:** T3.1 (L§2.2: per instance by default, `static` for shared), T3.7 (L§3.4 `references`).

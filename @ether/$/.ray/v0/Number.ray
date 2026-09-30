@@ -1,60 +1,10 @@
-// Nat∞, N∞
-
-// +- / unicode +-/ -+
-
-// roman numerals
-
-//TODO Complex Numbers as &+ ?,
-// sqrt, Trigonometry,
-
-// Binary +=
-//   * |= (b: Number % mod 2 = 0) => this << (b / 2)
-//   << |= b = this.push_back(0[]{length == b}) //TODO Overflow for i64 is done how?
-
-// Lean: On a 32-bit architecture, USize is equivalent to UInt32. On a 64-bit machine, it is equivalent to UInt64.
-//   -> How to conditionally get the architecture for this definition.
-
-// Number equipped with default numberline, so number.for works (`for` in Number). spec: for Real, a step function needs to be defined
-
-//TODO factorial!
-
-//TODO Perhaps switch .Positive and Base, what do you call one with a sign though?
-//TODO Rename to .Signed
-
-//TODO Unit's like 1m are transfinite numbers in the sense that 1m > Infinity, but not Infinity m
-
-// "01101010" ~|| "10101000" & 0101010 ~|| 1010010 work
-//TODO Automatic equivalence between Real.Positive -> Real & Base -> Base.Signed
-
-// Binary{length == 1} == boolean
-
-// class Number
-//   Nat | ℕ <n> = Array{length == n}().last&&
-//   ℝ: Any Base ℝ
-// { ℕ, ℝ } = Number
-
-// What the language reaches today. A number is a Ray: the chain from it to its
-// terminal is its magnitude, zero is the terminal itself, and the successor of
-// n is a new entry whose `next` is n. `==` needs no definition of its own — it
-// is Ray's structural walk over exactly that chain — and `> <= >= min max`
-// come from `Ordered` once `<` is given.
 Number := class: Ray {
   .{fraction: Decimal.Digits ^number} ^punctuation => Number.Real(integer: this, fraction: fraction, radix: ten)
   succ => Number(next: this)
 
-  // What makes a number iterable is the number line it is on, not the chain
-  // it is held as: it is entered at its place on the line, and from there each
-  // step is the number after it, with no last one. A number is an unbounded
-  // array, and a walk along the line is ended by what walks it (`return`, the
-  // draft's `break`).
-  // spec: `count` of an unbounded walk is ∞, which waits on ∞ being written;
-  // until then it answers what the chain counts.
   bounded => false
   entry => Number.Line(value: this)
 
-  // The digits of this number in a base, most significant first: a counter in
-  // that base, least significant digit first, stepped once per unit and then
-  // read backwards.
   digits_in (radix: Number) => (
     counter := chain None
     counter &= zero
@@ -80,7 +30,7 @@ Number := class: Ray {
     }
     out
   )
-  // The number some digits spell in a base.
+
   from_digits (radix: Number, spelled) => (
     total ^keyword := zero
     spelled for { total = (total * radix) + it.value }
@@ -88,23 +38,13 @@ Number := class: Ray {
   )
   pred => .next
 
-  // Zero is the number nothing follows. Asked straight, rather than through
-  // what a ray calls its end and what a boolean calls its opposite: this is
-  // asked once for every step of every walk.
   is_zero => (exists .next).not
   nonzero => exists .next
-  // A number answers a condition the way a bit does: nothing is nothing, and
-  // anything else is there. It is what lets `0` and `1` be the two bits and
-  // numbers at once.
-  // A number holds what follows it: zero is followed by nothing, and every
-  // other number by the one below it. Asking a branch instead cost a branch.
+
   holds => .next
-  // spec: negating a number negates what it answers as a condition, so `0.not`
-  // holds and any other number's does not; the bitwise negation of a number
-  // waits on its width being known.
+
   not => .is_zero
-  // A digit answers what a bit answers, so the two bases of the machine and
-  // the numbers they spell are one thing.
+
   set => .is_zero.not
   and (b) => .set.and(b)
   or (b) => .set.or(b)
@@ -134,8 +74,6 @@ Number := class: Ray {
   )
   chainable != (other: Number) => (this == other).not
 
-  // Walks along the chain rather than nesting one application per unit, so a
-  // thousand is as cheap to reach as ten.
   compounds + (other: Number) => (
     total := this
     left := other
@@ -146,7 +84,6 @@ Number := class: Ray {
     total
   )
 
-  // Subtraction floors at zero; the negative half of the line is `Integer`.
   compounds - (other: Number) => (
     rest := this
     left := other
@@ -167,8 +104,6 @@ Number := class: Ray {
     multiplied
   )
 
-  // Division walks the dividend once, with the divisor walked alongside it:
-  // each time the divisor runs out one more is counted and it starts over.
   compounds / (other: Number) => (
     quotient := zero
     rest := this
@@ -193,7 +128,7 @@ Number := class: Ray {
     }
     if other.is_zero { this } else { other - step }
   )
-  // Half of this, walking two links at a time.
+
   half => (
     count := zero
     rest := this
@@ -207,9 +142,6 @@ Number := class: Ray {
     count
   )
 
-  // `def times callback: () => *`, without the index the draft leaves open.
-  // `def times callback: () => *`, with the index the draft leaves open as `it`:
-  // the block runs this many times and sees which round it is.
   times (block) => .rounds(block, zero)
   rounds (block, it: Number) => if .is_zero { this } else {
     inline block
@@ -228,7 +160,6 @@ Number := class: Ray {
   )
   squared => this * this
 
-  // `//TODO factorial!` above.
   factorial => (
     raised := one
     left := this
@@ -265,12 +196,8 @@ Number := class: Ray {
   )
   odd => .even.not
 
-  // `Decimal.% => this / 100`: the fraction of a hundred this number is.
   percent => this / hundred
 
-  // Whether this is not below another, written as a word: a rule body that
-  // spells an operator is held back until that spelling is a name, and the
-  // rule that groups by precedence is written with this for that reason.
   at_least (other: Number) => (this < other).not
   min (other: Number) => (
     smallest_of := other
@@ -283,8 +210,6 @@ Number := class: Ray {
     most
   )
 
-  // `Nat | ℕ`: every number here is natural; the draft's `ℝ` and the base
-  // towers wait on strings.
   is_natural => true
 }
 
@@ -299,46 +224,19 @@ seven := six.succ
 eight := seven.succ
 nine  := eight.succ
 ten   := nine.succ
-// The two bits, as the machine spells them: the digits of the binary base,
-// which are the numbers they spell.
+
 0 := zero
 1 := one
-// A hundred and a thousand are built when first asked for: a number is a
-// walk, so one written down is walked whether it is wanted or not.
+
 hundred  => ten * ten
 thousand => hundred * ten
 
-// class Number
-//   static Bases = { Binary: Digit = "0" | "1", …, Hexadecimal: Digit = Decimal | ("a" | "A")..("f" | "F") }
-// class Digit < String
-// dynamically (on Number.Bases).for name
-//   class[name] < Number, integer: Digit.value+
-//     static Digit = Number.Bases[name]
-//     static class Signed < sign: "-"?, integer: Base
-//     static class Real < integer: Base, ".", fraction: Base{unbounded}
-//       static class Signed < sign: "-"?, real: Real
-//       rational => fraction ==.instance_of (Base | Base[]{length == ∞})
-//       irrational => !rational
-//     Base{: 0+, number: Base} as (=== Base) number
-//
-// A base is allocated by `base Name radix`, which is what the draft's loop over
-// `Number.Bases` does for each entry: the table gains it, and the name becomes
-// the class of numbers read in that base. Any base can be allocated later the
-// same way. A number of a base holds the one number (its unary chain) and
-// reads it as digits; the digits' spellings wait on String.ray.
-// spec: `Digit` is the number below the radix, its spelling comes with String.
-
-// The number line: a place on it holds a number, the place after it holds
-// the number after that, and the place before it the one before. It starts at
-// zero and has no end.
 Number.Line = class: Ray {
   value: Number
   next => Number.Line(value: .value.succ)
   previous => if .value.is_zero { None } else { Number.Line(value: .value.pred) }
 }
 
-// static class Signed < sign: "-"?, integer: Base
-// The sign is present exactly when the number is below zero.
 Number.Signed = class {
   sign?: Node
   integer: Number
@@ -361,8 +259,6 @@ Number.Signed = class {
     if other.negative { false } else { .integer < other.integer }
   }
 
-  // Same signs add magnitudes; different signs subtract the smaller from the
-  // larger and keep its sign.
   compounds + (other: Number.Signed) => (
     summed := None
     if (.negative.xnor(other.negative)) {
@@ -383,13 +279,6 @@ Number.Signed = class {
   - => .negated
 }
 
-// static class Real < integer: Base, ".", fraction: Base{unbounded}
-//   static class Signed < sign: "-"?, real: Real
-//   rational => fraction ==.instance_of (Base | Base[]{length == ∞})
-//   irrational => !rational
-// spec: the fraction is the number its digits spell after the point; an
-// unbounded (repeating) fraction awaits infinite chains, so every real spelled
-// here is rational.
 Number.Real = class {
   integer: Number
   fraction: Node
@@ -445,18 +334,11 @@ base{ }{literal name ^class}{ }{size} ^keyword => (
     radix := (size)
     Digit := Number{. < radix}
 
-    // integer: Digit.value+ — the digits of a number in this base, most
-    // significant first.
     integer => .digits_in(radix)
     digits (n: Number) => n.digits_in(radix)
-    // The number some digits of this base spell.
-    of_digits (spelled) => Number.from_digits(radix, spelled)
-    // spec: the draft's `Base.String`, the strings that spell a number of this
-    // base, is `global.String{.spells_in(radix)}`; it is not named here, since
-    // a `String` of a base shadows the class for everything built on one.
 
-    // A number of this base is read from its text a byte at a time, and the
-    // reading stops at the first byte that is no digit of this base.
+    of_digits (spelled) => Number.from_digits(radix, spelled)
+
     accepts (text) => (
       spelled_digits ^keyword := digits_spelled(text, radix)
       read_number ^keyword := None
@@ -467,9 +349,6 @@ base{ }{literal name ^class}{ }{size} ^keyword => (
       accepts (text) => digits_spelled(text, radix)
     }
 
-    // static class Signed < sign: "-"?, integer: Base
-    // static class Real < integer: Base, ".", fraction: Base{unbounded}
-    // spec: the signed and real numbers of a base are Number's, read in it.
     Signed := class: Number.Signed { }
     Real := class: Number.Real { }
   }
@@ -495,20 +374,14 @@ base Tetradecimal (ten + four)
 base Pentadecimal (ten + five)
 base Hexadecimal (ten + six)
 
-// Decimal
-//   % => this / 100
 Decimal.components.hierarchy &= class {
   percent => this / hundred
 }
 
-// Every natural number is also the signed integer it is, in any base; the
-// decimal one is the draft's `Integer`.
 Number.components.hierarchy &= class {
   signed => Decimal.Signed(integer: this)
   as_integer => .signed
-  // `.sign` on all numbers, so that `x.sign` reads on any of them: a natural
-  // number has none (its sign is the empty string), is positive, is its own
-  // absolute value, and negates into the signed integer below zero.
+
   sign => None
   negative => false
   positive => true
@@ -516,39 +389,13 @@ Number.components.hierarchy &= class {
   negated => .signed.negated
 }
 
-// Probability = Number{0 <= . <= 1}
-// spec: a probability is a real between zero and one; until reals are read
-// from text it is the number itself, bounded above by one.
 Probability := Number{. < two}
 
-// {
-//   (Σ | ∑): sum -> +,
-//   ∏: product -> *
-// }.for symbol, method -> operation
-//   Applicable = Iterable<T: {`operation`(:T) => T}>
-//   +def Applicable
-//     def `method` = reduce(operation)
-//   end
-//   namespace `symbol`
-//     def `iterable: Applicable` = iterable.`method`
-//   end
-// end
-// spec: what a chain of numbers adds to and multiplies to is written in
-// Ray.ray, where `Iterable` is written: a class gains nothing from a file that
-// is read before the one that writes it, and Number.ray is read first.
-
-// def u`length: Decimal.Positive.String` = Binary.Positive{.length == length}
-// def i`length: Decimal.Positive.String` = Binary.Positive{.length == length}
-// spec: `u8`/`i8` await digits read from text; a width is a constraint on the
-// count of binary digits.
 u{ }{width} ^keyword => Binary{.integer.count < (width).succ}
 i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
 
-// The digit a codepoint spells: `0`..`9`, then `a`..`z` and `A`..`Z` from ten.
 digit_of (point) => if ((47 < point).and(point < 58)) { point - 48 } elsif ((96 < point).and(point < 123)) { point - 87 } elsif ((64 < point).and(point < 91)) { point - 55 } else { None }
 
-// The digits a text spells in a base, read a byte at a time; the reading
-// stops at the first byte that is no digit of the base.
 digits_spelled (text, radix) => (
   spelled ^keyword := chain None
   byte ^keyword := 0
@@ -572,83 +419,12 @@ digits_spelled (text, radix) => (
   spelled
 )
 
-// def `digits: Decimal.Positive.String` => Decimal.Positive = digits
-// A word nothing is named by, spelled in decimal digits, is the number it spells.
 {number: Decimal ^number} => number
-// def 0`"x" | "X"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
-// def 0`"b" | "B"``digits: Hexadecimal.Positive.String` => Hexadecimal.Positive = digits
+
 0x{number: Hexadecimal ^number} ^number => number
 0X{number: Hexadecimal ^number} ^number => number
 0b{number: Binary ^number} ^number => number
 0B{number: Binary ^number} ^number => number
-
-// Byte | B = Binary⁸
-// Kilobyte | KB = 1000 * Byte
-// spec: `Binary⁸` would be `u eight`; Byte lives in Unit.ray as the unit it
-// is, since reading a width off a number here is still too slow per pass.
-
-//TODO 1111₂⁸ x 1111₂⁸ subscript.
-//TODO 1⁽¹⁸⁸⁻⁰⁰⁾ superscript to ^ (number)
-// Allow (111₂)₂
-// `Base`
-//   v (base: Number): [RELEVANT BASE] =>
-//     assert this.every <= base
-//TODO We're also using subscript for length, so number should be not using v, but instead match to the whole string + subscript
-//TODO Override the ^/* behavior of the Number type to use the list variant instead.
-// static prefer{== BASE_TYPE} Iterable.(^ | *)
-// Node
-//   {expression: String.Superscript} => this ^ expression.decompose as Expression
-//   {expression: String.Subscript} => this v expression.decompose as Expression
-
-// ₂∫⁸()
-// lim(x -> ∞) ₂∫⁸() // Implemented as infinitesimal step, how to indicate to actually step?
-//TODO What is a limit actually, can we make that more general?
-// √4
-// ∛/∜ √(4 + 4)
-//TODO Infinity / ∞
-//TODO 1000 MB etc.. MiB ; how does that coincide with Unit, want Binary with some length to correspond to it?
-// Units override the X Node
-// 3.2 Kilobyte
-// Kibibyte etc.. too
-
-// From the drafts, not yet reached here (spec):
-// .ray2/_todo/ray.ray.txt/Ether/instance/utils/Number.ray:
-//TODO Addition/subtraction of this integer (addition is simple)
-//TODO : Strings as a definition depend on Number, circularity here.
-//TODO Support index?
-//TODO Because String has digit as String defined, any Array of digit Strings should automatically be defined, to as String too. with .map
-//TODO String as Binary.Positive = "0101010" = Digit.value[] = Positive
-//TODO : Binary.Positive as String; Automatic isomorphism
-//TODO Equip a default directionality. (Line: One with forward/backward from a specific point, but it isn't necessarily selected there.)
-//TODO Some for of this.toString which would be sign.toString, integer.toString which would use 'String'. But then for static, on the types.
-//TODO : Or can the compiler deduce the reversing stuff is not necessary?
-//TODO Should not always goto Decimal, should infer from context whether it is binary or not? How to do that; code it as a type?
-// Unknown digit representation for the specified base.
-//TODO Should only work for the base static case
-//TODO as Expression, should take the existing context which called this, and evaluate in that.
-//TODO This for binary
-//TODO : Possibly move these primitives to specific languages, and only work with arbitrary-length in the default case.
-//TODO : -b: Something uX might only implement b: uX, casts lose information and likely need to overflow
-//TODO Number arithmetic
-// - overflow, what to do? mod, or>?
-//TODO , Use Binary vs Binary.Positive
-//TODO Number arithmetic
-// Allows for the syntax 1 Object
-//TODO Generic Number interface which others should extend, things like >/< should come from another interface which is "NumberLine"
-//TODO Infinity is a looped integer. -infinity a .reverse"d loop. .reverse needs to be preserved for them to be differentiated?
-//TODO : external defines that Number > Number is done by some other operator, not looking through successors/predecessors.
-//TODO A variable like this shouldn't be loaded into local, loop-specific var Howto?
-// Allow syntax ∑ [1, 2, 3]
-// .ray3/primitive/Number.ray:
-//TODO .value to String
-//TODO Maybe with equivalent
-// Or repeating
-// Leading zeros are equivalent to the base number
-
-// From the journal, not yet reached here (spec): a number refined to what it
-// actually is — sixty-four bits, say — is other code than a number that is
-// only a number, and the two are equivalent exactly where the refinement
-// holds.
 
 Precedence ^keyword := class { }
 same_text (first_text, second_text) => (
@@ -682,8 +458,7 @@ remembered (cache, place, spelled) => (
   entry_found
 )
 Program.components.hierarchy &= class {
-  // A text begins with another where their codepoints are the same as far as
-  // the other goes; a None in the other stands for any one codepoint.
+
   begins (statement, wanted) => (
     point_at ^keyword := wanted.head
     code_points(statement) for {
@@ -695,7 +470,7 @@ Program.components.hierarchy &= class {
     }
     (exists point_at).not
   )
-  // What is spelled, a space, and at least one codepoint more.
+
   spelled_points (spelled) => (
     wanted ^keyword := code_points(spelled)
     wanted &= .middle_point(`x y`)
@@ -791,8 +566,7 @@ Program.components.hierarchy &= class {
     }
     landing
   )
-  // The codepoints that end the name a statement begins with: a space, `(`,
-  // `:` and `?`, read once.
+
   head_enders => (
     if head_ends.empty {
       head_ends &= .middle_point(`x y`)
@@ -802,7 +576,7 @@ Program.components.hierarchy &= class {
     }
     head_ends
   )
-  // The name a statement begins with, and the codepoint that ended it.
+
   head_read => (
     enders ^keyword := .head_enders
     head ^keyword := chain None
@@ -814,10 +588,7 @@ Program.components.hierarchy &= class {
     }
     HeadRead(points: head, ending: ending)
   )
-  // What a class body requires of anything that is one, by the codepoints of
-  // each name: a field written with its type and nothing more (`name: Type`),
-  // and what is left to be said (`name => TODO`). `name?: Type` may be
-  // absent, so it is not required.
+
   required_heads => (
     reading ^keyword := this
     enders ^keyword := .head_enders
@@ -835,8 +606,7 @@ Program.components.hierarchy &= class {
     }
     wanted
   )
-  // Whether a statement of this body gives the name spelled by `head`: one
-  // that begins with it and then a space or `(`.
+
   declares (head) => (
     reading ^keyword := this
     enders ^keyword := .head_enders
@@ -858,10 +628,6 @@ Program.components.hierarchy &= class {
   )
 }
 
-// What a type is, structurally: a value is one when it gives every name the
-// type requires. What is given is read off the classes a value is written
-// with, and what they are written with in turn; what is required, off the
-// type's own and those it is written with. Each class is read once.
 classes_of (type) => (
   unless (exists type.classes_read) {
     type.classes_read = chain None

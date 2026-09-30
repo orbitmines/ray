@@ -266,3 +266,15 @@ Answers from 2026-09-30.
 - **G3.6** Chained comparisons are joined with `&`, which collapses to `&&` on booleans.
 - **G3.10** Nothing extra: G2.13 covers `()` groups on the following line (a continuation line applies to
   the previous result).
+- **Covered elsewhere:** G1.6, G1.7 (L§5.6), G2.15 (L§10.1), G2.16 (G2.2), G2.17 (L§10.5).
+- **G1.5** No comment modifier: comments are `//` and nested `/* */` with Markdown (L§5.5), they attach to
+  a line by G1.4, and they never affect indentation.
+- **G2.4** "A defined name wins" is *not* a general rule; it holds only where decided (the `^` case of L§5.1).
+- **G4.3** Negation and look-around are narrowings on the capture (`{x: T{!= `=`}}`), with `⊢`/`⊣` anchors
+  for boundaries; look-behind reads `<-`.
+- **G7.5** Diagnostics suggest alternatives: a misspelled name may still be a Node, and a wrong-direction
+  operator (`x.∈`) suggests the other reading.
+- **G4.12** Positional helpers (`is_first`, `is_last`, `.index`) are always available to an element matched
+  with `[]`, e.g. in `for`.
+- **G7.6** "Prefer this syntax" is a `suggest` equivalence per style (G7.1), configurable per person.
+- **Covered elsewhere:** G2.1 (Almanac A8: a space may replace `.`, and calls by juxtaposition).

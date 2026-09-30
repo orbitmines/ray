@@ -155,3 +155,27 @@ Answers from 2026-09-30.
 - **R3.5** Graph rewriting (DPO, SPO), products (cartesian, tensor) and unions (plain, disjoint) are built
   now, on the rule machinery.
 - **R7.3** `loc[{name: "x"}]` selects the child whose `name` is x: a filter inside `[]` (A-C1).
+- **R1.5** Predicates on a superposition map over it: `(a | b).is_boundary` is
+  `a.is_boundary | b.is_boundary`, without collapsing the abstract interpretation.
+- **R1.6** With several Ray extensions equipped, `.next` follows the same rule as T8.2: `+` means the last
+  one wins, `&+` superposes.
+- **R1.7** `.value` is the vertex's content without its equipped structure (everything except the Rays at `#`).
+- **R1.8** Continuous (Real-indexed) structures come with Geometry.
+- **R2.4** `reduce` and `reduce_right` (reduce on the reversed ray), cancelling early with `return`, and
+  map + reduce together.
+- **R2.8** `.next` always returns an iterable with `#`: on a branching ray it is the superposition of the
+  next vertices.
+- **R3.9** A structure is repeated with `* n` (`"ab" * 3`, `[1, 2] * 3`); `String.repeat` becomes this.
+- **R3.11** Move operations stay: `x.move_after(y)` is a preserving remove (R3.1) plus `push_after`.
+- **R3.12** A path is a function, and locations match with `~=` like any structure
+  (`/ ~= ^/.@`: files beginning with `/.@`).
+- **R3.14** Any operation that compares (`contains`, `unique`, `sort`, …) takes the equivalence graph as
+  `<in: …>`, as `==` does (U9).
+- **R3.15** A path may cross versions of the graph (a path over history `%` is a path like any other), and
+  finding one can be a quest.
+- **R4.2** `5..10` as a type is `5..10.reduce(|)`.
+- **R5.1** Loop operations stay: `unrolled`, `unrolled_mod` (a loop remains between the first and last
+  instance), `instances`, `disallow_loops`. OR is parallel structure, AND is sequential.
+- **R7.1/R7.4** On Node, the location is `@`: `x@` is x's location, and `x @ loc` places or reads x at loc.
+  `x @remote` is x at that remote character, the same as `x @ @remote` (T3.6 corrected).
+- **Covered elsewhere:** R2.5 (Almanac A-C1: `{p}` / `xs[{p}]`; `~` only for entry points).

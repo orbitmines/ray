@@ -92,3 +92,11 @@ Source: `private-journal/public/archive/projects/2030+? Project - Gamification.m
 - How does resource gathering relate to the active quest? (*G:419–422*: a smithy that makes keys — a key pair is one item with two inside.)
 - What does maze navigation mean for finding new problems? (*G:423*)
 - What is gained in 3D, and what is lost (arbitrary name links)? (*G:180–183*)
+
+## 10. Paying for optimization (moved from `Program.md` P8.7, 2026-09-30) — **Proposed**
+
+- The saving is the gap between the projected use and the actual use. It is split between whoever
+  optimized and whoever benefits (half for a year, or with no end), and the same holds for contributions
+  measured by the cost they save.
+- This needs a baseline: how often it moves, how a change that makes something slower moves it back, how a
+  saving is attributed to the change that caused it, and how a deliberately bad baseline is kept from paying.

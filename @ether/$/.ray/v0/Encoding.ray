@@ -1,52 +1,21 @@
-// Encodings (draft: .ray2/Language/Encoding.ray). spec: skeletons — a hash, a
-// cipher or a compressor is a walk over bits that the language can express,
-// but each algorithm is its own project; here each names its algorithm and
-// keeps what it wraps, and `as` hands the wrapped value back.
-
 Encoding := class {
   Algorithm := enum sha1 | sha256 | sha512 | sha3 | md5 | blowfish | blake3 | base64 | gzip
 
-  // spec: an encrypted value is read back only at a location holding the key;
-  // without it, the draft spawns a quest. Here the key is the location itself.
   Encrypted := class {
     value: Node
     key: Node
     as (location) => if (location == .key) { .value } else { None }
   }
-  // spec: a digest; `of` keeps the algorithm and the text, the digest itself
-  // awaits the algorithm's bit walks.
+
   Hash := class {
     value: Node
     algorithm: Encoding.Algorithm
     chainable == (other: Encoding.Hash) => (.algorithm == other.algorithm).and(.value == other.value)
   }
-  // spec: a compressed value decompresses to what it wrapped.
+
   Compressed := class {
     value: Node
     algorithm: Encoding.Algorithm
     as (target) => .value
   }
 }
-
-// From the drafts, not yet reached here (spec):
-// .ray2/Language/Encoding.ray:
-// How to reference the channel the Instance communicates over?
-// Encrypted value vs encrypted channel
-// Which targets like (disk/mirror)
-// How to say don't evaluate encrypted value in-location, only read off to another location
-// Pub key associated with Instance, and one for the character (allowing you to host it)
-// Might not want to decode, in the case of homomorphic encryption
-// List of encryption algorithms
-//TODO All the different string encodings.
-//TODO Not having the encryption key spawns a quest, like a special throws>
-// .crypt[location (CURRENT)]
-// .ray2/Language/Binary/Base64.ray:
-//TODO
-
-// From the journal, not yet reached here (spec): the encodings a store
-// chooses between belong in the language index like any other implementation
-// — Fastlanes, adaptive lossless floating point, a fast static symbol table,
-// dictionary, bit-packed, run-end, PCodec, ZSTD, fused frame-of-reference,
-// run-length and delta. Which one fits is read off statistics of what is
-// being stored — smallest, largest, how many are missing, the sum — which
-// are kept for that reason and benchmarked.

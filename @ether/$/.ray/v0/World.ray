@@ -1,11 +1,3 @@
-// Worlds and what lives in them (drafts: .ray2/World, Quest, Entity, Item,
-// History, Accessor, Reference, Character). spec: names are Strings; a
-// world's `#` and a persona's `@` are their prefixes; lookups walk chains.
-// The draft's `Character` (the player) is named `Persona` here, because
-// `Character` is a text character (String.ray).
-
-// Everything is a ray, and what a ray is is what tells one from another, so
-// the classes here are built on `Ray` rather than on nothing.
 Nameable := class: Ray {
   named (name: String) => (
     .name = name
@@ -14,15 +6,6 @@ Nameable := class: Ray {
 }
 Entity := class: Ray { }
 
-// `class Location = Ray` (draft: .ray2/_todo/.../Entity.ray): where a thing
-// is. A location sits in a hierarchy — what holds it, and what it holds — and
-// is hosted by an instance: a host machine and the instances it runs, a
-// directory and the directories in it, a window and the windows in it, a
-// region and the regions in it. spec: the draft's `[{field: *}]`, a child
-// reached by the field it is decorated with, awaits index rules on a class;
-// `host` is a Node until instances are here. Where a thing is *written* is
-// answered by the machine (`external where`), and is what tells one type from
-// another.
 Location := class: Hierarchy {
   parent?: Node
   children: (chain None)
@@ -50,24 +33,18 @@ World := class: Nameable {
     .quests &= quest
     quest
   )
-  // `shadowing?: World => @ether`: where a name falls back to.
+
   shadowing => None
-  // Reserving a name issues it within this world, and the world keeps what it
-  // issued: a name already taken here is the reservation that took it, so
-  // reserving twice is reserving once. What is answered is bound first, since
-  // a branch holding a reservation is not that reservation, and which one it
-  // is is what tells two of them apart.
+
   reserve (name: String) => (
     standing ^keyword := .reserved(name)
     unless (exists standing) { standing = .issue(name) }
 
     standing
   )
-  // spec: what is added is read back off the chain, since a statement written
-  // on its own line beneath another cannot begin with `.` — the newline-member
-  // rule reads it as a member of what came before.
+
   issue (name: String) => (.reservations &= World.Reservation(name: name, issuer: this)).tail.value
-  // Which reservation holds a name here, if any.
+
   reserved (name: String) => (
     holder ^keyword := None
     walker ^keyword := .reservations.head
@@ -85,8 +62,6 @@ World := class: Nameable {
 }
 Region := World
 
-// `class Quest < Program & Nameable`, `class Task < Quest`: spec: a quest has a
-// goal, steps, and is completed when marked so; a task can be interrupted.
 Quest := class: Nameable {
   name: String
   goal: Node
@@ -117,8 +92,6 @@ Task := class: Quest {
   )
 }
 
-// `class Item`, `def Certificate`: spec: an item is issued by a world, sits at
-// a location, is obtained by a quest, and carries a certificate.
 Item := class: Ray {
   name: String
   issuer: Node
@@ -142,9 +115,6 @@ Certificate := class: Ray {
 
 }
 
-// `class History`, `Branch`, `Commit`, `Repository`: spec: a history is a chain
-// of commits in a repository (a world), each by a persona with a version id
-// (`Version = UUID.v1`, v4 here); a branch forks from a point.
 History := class: Ray {
   Commit := class: Ray {
     who: Node
@@ -164,9 +134,7 @@ History := class: Ray {
   count => .commits.count
   latest => .commits.tail.value
   fork => History.Branch(repository: .repository, commits: (chain None), from: this)
-  // A branch is a history that came from another: the fields are declared
-  // again here, since what a parent declares as a thing is one thing for
-  // every child.
+
   Branch := class: History {
     repository: Node
     commits: (chain None)
@@ -179,14 +147,12 @@ Repository := class: Ray {
 
 }
 
-// `class Accessor`: spec: the levels of the draft's modifiers.
 Accessor := class: Ray {
   Permission := enum private | confidential | protected | public
   level: Node
 
 }
 
-// `class Reference`: spec: title, author, date, draft, link, notes.
 Reference := class: Ray {
   title: String
   author: Node
@@ -205,8 +171,6 @@ Reference := class: Ray {
   )
 }
 
-// The player side of `Character.ray`: `Instance`, `Status`, the persona and
-// its avatars, players, NPCs and organizations.
 Instance := class: Ray {
   location: Node
   status: Status.online
@@ -256,463 +220,3 @@ Organization := class: Player {
   members: (chain None)
 
 }
-
-// From the drafts, not yet reached here (spec):
-// .ray2/Accessor.ray:
-//TODO Allow a block and put everything in that block as that permission
-// .ray2/Character.ray:
-//TODO selected on another instance (primary)
-//TODO the variant of selected on X, for my Y (mirror)
-//TODO Quests: When is the mirror synced to the client, when to download, how many levels deep etc..
-//TODO Location = IO /path
-//TODO How to access all instances/references of a particular type (whether on disk, or in memory)
-//TODO Location is in memory, and on disk, how to sync them
-//TODO Locally set to a different value than what the managed inventory says?> ever used?
-// location might be non-halting, not yet discovered locations which run this world/X.
-// Change access permissions of your mirror.
-// Speculatively merge a detected loop in the inventory, if not found, we recursively describe it: A.B.A.B.A.B...
-// Remote execution
-//TODO Default to program<&who = CHARACTER>() if passed by the character.
-//TODO What about read access to the libraries and new variables it makes; Need some way to say, it's running locally, and it doesn't need to be this character; that's the default privacy policy? So different than protected?
-//TODO The default REMOVE HISTORY AFTER X DAYS (30?) allows the character to do it, if it has been logged previously, so the execution script can be run as their character.
-// Run code as an unauthorized character -> by creating a new character and eval'ing code then
-//TODO .instance selected instance again
-// Online Offline
-// Hosted or broadcast
-// Allow other's to proxy through you, do things like @private.managed Proxy, only particular ones
-//TODO = Broadcast! Or some general way to remove a &/|.
-//TODO Only override the specific class it came from
-//TODO Invisible, is just offline read
-//TODO How to differentiate between the &who who set this variable vs, the one who gets it. -> how to say load the expression, not the value.
-//TODO Idle, DoNotDisturb, Busy etc.. for NPCs with more data, and players in general, extended status. status & extended
-//TODO Have a sharded character, if the ether central server doesnt allow storage beyond X, allow remote storage to be configured.
-// If blocks for which world to load it in, based on location, then .avatar with {location == ?}.avatar or default {?} to load all properties with unknowns
-//TODO Access permission filter
-// == Challenges with timed message to be decoded
-//TODO @me.choose different from choose
-// consistent is the field that referenced this, must reference back. with {?}, {avatar == this}
-// .ray2/History.ray:
-// Statements versioned too? That we can say, I only versioned/changed this particular statement
-// History of location: -  What if I wanted to know the history of where it came from? So from disk to instance (to memory) to instance ... , until it came to me. -> So the instance can choose whether to provide that information.
-//TODO Store whether a silent generic type was used for a particular function, then version control, alert there's then a new variable with that name, but keep using it as a generic type as long we have that information.
-//TODO Evaluation history is a .expand on a singular change/commit
-//TODO .expand Graph<Commit>.acyclic
-//TODO Needs a history conversion to something like git to support it, both ways.
-//TODO What if I set a variable with a history and I want to retain that history (and not the history of the variable it's set to)
-//TODO Or retain both?
-//TODO The .=(value) in history (encoded on the edge) carries with it the information of where it came from, with that history attached.
-// Default behavior for =, check histories and merge conflicts (quests)
-//TODO Uncommitted files, and staged changes, like those added with git add, are simply visibility set to local/private.
-//TODO Cherry-pick is a chain of commits apply to current branch
-//TODO -> SO YOU WANT TO ALLOW DIFFERENT STATES IN REPOSITORIES, BUT STILL ALLOW THEM TO WORK TOGETER. (mY LOCAL HISTORY IS DIFFERE4NT THAN YOURS, BUT STILL NBEEW UPDATES ARE PUSHED TO BOTH.),M SAY FOR WHEN I KNOW I SENT MY MESSAGE BEFORE/AFTER SOME OTHER MESSAGE, BUT YOURS WAS SENT AROUND THE SAME TIME. WE MIGHT NOT AGREE ON THE ORDER.
-//TODO How to store distributed approximations of some value, like a blooming filter for likes. How do I indicate I don't mind an approximate value.
-// You want the option to merge many in-sequence commits into a single one. Like we have
-// Could do "from this point" it's a new repository
-// If invariant, automatically resolve merge conflict by randomly choosing an order.
-// Type conflicts are merge conflicts, for example of distributed databases
-// Need to have a lower-bound against the upper-bound of repository: For instance not individual bits of characters in a string.
-// For the intermediate steps it'/s the reverse, more effective tos tore the lowerlevel, and generate the higher-level  Have the optmization decide what to do.
-//TODO World needs to reserve Hexadecimal{length == 12} => store in MACAddress
-//TODO The node which creates the uuid is a unique ID assigned to the user by the world
-//TODO Like Ray, Its Node & Version if there's overlap then we probably to x/value
-//TODO Not a branch of into many, require merge to be the branchpoint we use.
-//TODO Equip previous/.next branches
-//TODO Create new branch off beginning, add node in front if necessary with on the edge a connection to the two branches before there's a first version
-// Add other history to this one, whether to reshuffle changes?
-//TODO Repository needs to be a World, or part of a world to record changes -> used for generating UUIDs
-// A repository is an ordering of nested commits.
-//TODO String for instance, character-level is the lowest, it goes, otherwise every class is a repository
-// .ray2/Item.ray:
-// how it's made, how it's discovered, how it's constructed.
-// Items require Quests ; In order to find items you need quests.
-// Similar to function, who called?
-//TODO What is a perspective on an object?
-//TODO Minimaps/high-level overviews
-//TODO Should only be default, can be overwritten
-// .ray2/Quest.ray:
-// Require things like "I've communicated with these replica servers before making this calculating -> when strong consistency is required." -What if they're not online, like offline players storage etc.. (For certain things like calculating player statistics which are kept local only, it would be "make sure your instance checks in with out server before X time", and we'll consider your changes) - So these are quests to complete for the replica servers
-//TODO Certificates issued by a world for a quest.
-// Difficulty rating (might change at each step)
-// Effectiveness rating (effecting difficulty rating of other quests, compounded effect of future rewards)
-//TODO There could still be a continuation, how to know we're actually done
-// .ray2/Reference.ray:
-//TODO When ref on any character ref is a dummy allow "claim this authorship, set the character node to that player if granted"
-//TODO Published is who hosts this variable, originally designated to?
-//TODO Abstractly also contains information of 'pointer' like which page etc.
-//TODO as Renderable
-//TODO Should switch to a remote ref when communciated over network
-// .ray2/World.ray:
-// Location < World, as composition, not Location has world.
-//TODO Is it < Location, if we mark every location as World; or put that functionality on Location, which are part of a world.
-//TODO Dynamics, either on world, or separate composition
-// If a name isn't defined, it will fall back to this world
-// Shortcut for changing the name variable for all nameables
-//TODO Iterable through entire worldgrah, hierarchy and itself
-//TODO Not reserve but just setting the characters name
-//TODO equivalence A => B etc.. see /etc/hosts for additionial notes
-//TODO Allocate a name within your access, to another character. Say x@gmail.com allocated by Google (Issuer is @me, but it's for the world @ether)
-//TODO Set name for that character
-//TODO < World at many places in some structure, have the things like .worlds/ be iterating over that structure to anything that's in it.
-
-// From the procedural-generation draft, not yet reached here (spec):
-// .ray2/_todo/ray.ray.txt/ProceduralGeneration.ray:
-//
-// // Autogenerate possible semantics for placement descriptions
-// class Room
-//   4 Wall{a Door, 50% Window}
-//   1..3 Bookshelf{against a Wall, books: choose @me.FILE_SYSTEM} // against is the opposite of facing
-//   1..2 Computer{released: 1970..2000} // Specify what kind
-//   1 Console{released: 1980..2005}
-//   a Table{small, next to couch}
-//   couch: Couch | Chair
-//
-//
-// choose Room{4..5m x 5..7m} // .x on unit brings 2d.
-// .ray2/Entity.ray:
-// class Entity
-// end
-//
-// class Nameable
-//   static PREFIX
-//
-//   name
-//     issuer: World
-// end
-// .ray2/_todo/ray.ray.txt/Ether/instance/Entity.ray:
-//
-//TODO Define == on Entity/Instance as checking the public key associated with that entity. (What do you do at scale if this is compromised, how do you redistribute these - redistribute based on a version log of who had access before the breach or something?)
-//TODO Additionally, you dont want things like private servers being comprimised just because player's can now imitate that they should have access to 'private'. How do you account for that.
-//TODO Is it possible to have a different auth-key for each instance somehow?
-//
-// +def Node
-//TODO Location .inventory is just a location with string or other structures defined on the edge?
-//TODO Need the currently selected location for Many location
-//   @ | location: Location =
-//
-//   def @ location: Location = global[location]
-// end
-//
-// def Entity
-//TODO Selected is instance.#: Ray
-//
-// The known instances currently running this entity.
-//   def instance => Instance = location{==.instance_of Instance}
-//
-//   def `location: Location`
-// If location is remote, go to Node.Remote
-//   end
-//
-//   +def location
-// Indicates that the provided instance has its focus on this location.
-//     primary: instance?
-//   end
-//
-//
-//TODO If the return value is used, it waits (as a quest) on a response.
-//TODO With a logout delete_all, also schedule a notification that 'next x days' will delete your account from the central server. with an option to cancel (extra check somewhere to secure against suddenly changing time)
-//TODO == OR >=, or rather ~= (any part says delete_all) FUNC EQUIV ON DELETE_ALL.
-//TODO Immediately discard private keys, keep the rest of the data as a quest to delete.
-//TODO Default behavior when destroying history
-//   def logout(logout_instruction: () => *)
-//   end
-//
-//   def spawn(args: Entity) = external
-//
-//TODO An entity can hoist other entities,
-//TODO Local co-op many players (or many users on a single pc where that pc is the main entity), server running many players,
-//TODO For local coop, the 2nd player would need to set certain things to .host to let the host know about things.
-// end
-//
-//TODO If location is set to an instance, open a port there, and that is localhost.
-// class Instance < Location, URL | DomainName | IP | Socket.Address //TODO | DomainName add DomainName:Port string
-//TODO this value is different depending on your location -> It's localhost, locally, but set to a different ip in the network.
-//TODO Set this to the received IP dynamically.
-//
-//TODO Hierarchy = this
-//
-//TODO public.read pub_key
-//
-//TODO Overwrite in OS.
-//TODO In python uuid.py there's some OS specific implementations.
-// IEEE 802 MAC address
-//   confidential.read none.write mac_address: Binary⁴⁸ =
-// If an external doesn't overwrite, use RFC 4122's approach, generate a random mac_address with the 'first bit in the first octet' set to 1, which would never be used.
-// "This bit is the unicast/multicast bit, which will never be set in IEEE 802 addresses obtained from network cards." (https://datatracker.ietf.org/doc/html/rfc4122#section-4.5)
-//     secure Binary⁴⁷.random ~~ .[6].push_after(1)
-// end
-//
-//TODO Hierarchy.Path
-//
-// class Location = Ray
-//
-//TODO This is another type, what is a hierarchical Location called?
-// A location can be part of a hierarchy.
-// - In the case of an instance, this could be 'parent': host machine, 'children': child instances run by localhost. (or can be defined as some other network hierarchy)
-// - In the case of files, this could be parent and child directories.
-// - In the case of rendering languages, whether HTML or your screen recorder, this could be child/parent windows/blocks/...
-// - In the case of a world, if there exist (sub-)regions which act as 'more abstract' parent/'less abstract' child locations. //TODO This is the same as .expand sometimes?
-//   parent: static <- .hierarchy -> children: static //TODO I want rays here on .next not nodes, how to define.
-//
-//TODO the host: of the variable is the IP address, which should replace localhost. depending on how mirroring variables works.
-//
-// What instance is hosting this variable
-//   host: Instance = INSTANCE
-//
-//   [{field: *}] //TODO A child which is decorated with this field
-//
-//TODO A <.hierarchy B means A is being rendered inside B.
-// .hierarchy for .inventory, and rendering hierarchy //TODO What if has both
-// TODO If you do .hierarchy, its .hierarchy maps to itself (that way you can have location being .hierarchy by default
-// .hierarchy should still be location, but just another directionality equipped.
-//TODO Would be rendering a cursor for an IDE, which would be the location, but the top-level rendering location would be the IDE
-// end
-//
-// TODO .hierarchy instead of .inventory
-//
-//TODO Player UUID is Node: the player's pub key gen, then Timestamp, when joined.
-// =
-// .ray2/_todo/ray.ray.txt/Ether/instance/Access.ray:
-// Applications run some code as their application creator for permissions? When is @me used then? (for your own code, or if you lifted the code to your own permissions) Because if I want to execute on someone elses device it should probably say @company wants to execute on your device originating from @me; this originating from; would you want a chain of characters there? Or just a single
-//  Default ether code is just @ether too? But we say locally @ether has access, nonlocally they don't. ; Then allow/disallow derivatives of that data to go over the network. So separate permission for whether it and its derivatives can be communicated across the network; or specific derivatives like a count of something.
-// Then you give the local version of that @company access to certain information (on disk) or whatever.
-// If conditional on their thing running have a dynamically if on their
-//
-//TODO Default public.read doesn't allow access to **, but what would?
-//
-//TODO const is none.write recursively set the access-level too.
-//
-//TODO Make sure that specific entries in a # or array similarly have their visibility respected.
-//
-//TODO protected
-//
-//TODO           Note that the write permission is just a wrapper for execute, namely:
-// single Access
-//   READ = "read"
-//   WRITE = "write"
-//
-// Whether Node{} is allowed to execute on local instance.
-// If it has read access, it can read the function and execute it locally for them.
-//   EXECUTE = "execute"
-// end
-//
-//TODO This should be on instance, merge instance/player/entity?
-// +def Entity
-// Default Privacy Policy:
-// "private" is at least used for two cases:
-//   - People who don't have access to their own local machine.
-//   - People who want a backup of ALL their data.
-//     - For backups, you can use "private" & "encrypted" if you prefer to lock backed-up data behind an encryption scheme
-//       (this of course means it cannot be recovered by a central server in case of a loss of encryption keys)
-// Note that there are exceptions to the "public" policy:
-//   - Reading/Writing to locations which are explicitly set to something other than "public" like "default_privacy_policy" -> It's set as confidential.write.
-//   - Reading/Writing to Player.instance.private (Whether an instance is considered a privately-hosted one)
-//   - Reading "local"/"private" private encryption keys.
-//   - Writing to existing "local"/"private" private&public encryption keys. (You can write to new ones though)
-// Otherwise you can use/create policies like "private" & "managed" to indicate you only want to allow access to
-// your own managed servers which have access to the player. Or more creative things like being close to a player in a world.
-//   confidential.write default_privacy_policy
-//     Access.for ACCESS = `ACCESS`: Node{} = "localhost"
-//   end
-// end
-//
-// +def Node
-//   confidential.write access
-//     Access.for ACCESS = `ACCESS`: Node{} = location.parent?.access[ACCESS] ?? .default_privacy_policy[ACCESS]
-//   end
-// end
-//
-//TODO Only provide this method when accessed through location @private? *{location == @private} What if you use == like this, should it know the location that variable is in and check it?
-// Confidential, means we don't want it to be public, but we defer to "default_privacy_policy" whether this should be "localhost" or "private".
-// modifier confidential
-//   def as :== Node{}
-//     default_policy = .default_privacy_policy[this.access_fields]
-//
-// If default_policy is set to something like public, we instead do the most permissive, but private policy instead.
-//     return default_policy > "private" ? "private" & "managed" : default_policy
-//   end
-// end
-//
-// modifier none
-//   def as :== Node{} = false
-// end
-//const = none.write //TODO Might be confusing what in its children is considered const, so perhaps slightly change this.(If child has different permission it's not really const recursively)
-//
-// Acts as the usual programming language private/protected keyword; It is only accessible within the defined class.
-// modifier internal
-//   def as :== Node{} = Node{location.parent ==.instance_of class}{==.instance_of location.just parent.static}
-//TODO You want this to work for local contexts too, so cant rely just on class.
-// end
-//
-//TODO These inhereit from general "Property decorator" thing. ( How to access everything behind the property itselkf??)
-//TODO Rename to access modifier. {from some context/file window modifier}
-// class Modifier name: *
-//   modifier = this
-//   equivalence name -> modifier
-//
-//   def ()
-// TODO
-//   end
-//
-//   access_fields = Access.values
-//
-//   Access.for ACCESS = def `ACCESS` = access_fields = ACCESS
-//
-//   def as :== Node{}
-// end
-//
-//TODO General form of an annotation
-// def modifier
-//   def `*: name` = Modifier(name)
-// end
-// .ray2/_todo/ray.ray.txt/Ether/instance/Item.ray:
-// Item = +def Node
-//   name: String.NonEmpty = //TODO Default name service of objects
-//
-//   issued: Certificate
-// end
-//
-// class Certificate
-//   by: * = global //TODO Or caller
-//   on: Date? // TODO Can be a date range for validity period
-//
-//TODO Needs to cover bopth the distrubuted as central db case.
-// end
-// .ray2/_todo/ray.ray.txt/Ether/instance/entrypoint/Ether.ray:
-// < Entity
-//
-//
-//
-//
-//
-// Note that child instances are allowed to run on the same port as the host machine, but it's simply that it's using the
-// hosts' socket, and anything meant for the entity running on this Instance is delegated to it.
-// protected INSTANCE: Instance = "localhost:${DEFAULT_PORT}"
-// (<- INSTANCE) = (.HOST <- this).map(.CURRENT_INSTANCE) //TODO Should only be the CURRENT instances
-// Whether to broadcast your IP to peers, by default your IP is only exposed to the central Ether server.
-// protected BROADCAST_INSTANCE: boolean = false
-// dynamically location &= (BROADCAST_INSTANCE ? public.read : private.read) INSTANCE if !OFFLINE
-//TODO Socket connections should check where the request came from, if it's not in location, it's ignored since we're OFFLINE to them then.
-//
-// Whether to connect to the central Ether server or not.
-// protected OFFLINE: boolean = false
-// dynamically location &= public.read ETHER if !OFFLINE
-//
-// protected none.write ENTRYPOINT = /entrypoint/entrypoint //TODO Path type, cast from string allowed
-// IO.eval ENTRYPOINT
-
-// From the journal, not yet reached here (spec). Who may see what, where it
-// is hosted, and how anyone finds it:
-//
-// Visibility is a field's own. A thing may say its parent is not visible
-// while it is, or the other way around, and one of those is the default.
-// Whether a program may reach the network is the same kind of answer, not a
-// status somebody reads afterwards. Whether data — or anything derived from
-// it, a count of it included — may be sent over the network is a permission
-// of its own, given separately from reading it.
-//
-// Visibility has a visibility: a thing may be findable in an index while
-// being unreadable, and a thing may say that even its existence is not to be
-// found. Indexes may be turned off, and then what they gave is gone.
-//
-// Permissions may be for this once, or while a condition holds — while the
-// application is running, say. A mouse or a keyboard someone else controls
-// is a thing that asks for one.
-//
-// Code that runs somewhere else runs as somebody. An application may run as
-// whoever wrote it, for the permissions that needs, and then `@me` is a
-// question: whose code is it, and did I lift it to my own permissions? What
-// is asked on the other device is that `@company` wants to run something
-// that originated from `@me` — and whether that origin is one name or a
-// chain of them.
-//
-// `@ether` is code like any other: it is allowed here, and not allowed
-// elsewhere, and what a local copy of a company's code may read on this disk
-// is given to it by name.
-//
-// Hosting. Rather than running the infrastructure, each person's cloud
-// account is held privately for them, with their credentials theirs and at
-// most the backups here. That needs two things from a provider: accounts
-// made for people without their own, and a third party allowed to commit a
-// limited amount to the bill so a free tier is possible. What is free lives
-// on an account that invoices directly; moving to a paid setup either shares
-// what was free or takes it over, and spending that the person cannot raise
-// themselves has to be a thing the provider supports. Providers are shown in
-// a random order. Until they integrate directly, this is OAuth. Smaller
-// hosts, themselves hosted on the larger ones, are hosts too.
-//
-// A machine may be given by its details and an ssh login: install there and
-// report back. Servers of that kind do not update themselves by default.
-//
-// Ownership of data by the person, by making version control where the
-// central platform is only an index, the way a name server is.
-//
-// Complicated access costs money, because answering it runs on the
-// provider's side.
-//
-// Finding things. Server discovery, and discovering the ways servers are
-// discovered, community-run. The last server logged out of is rejoined
-// automatically, per device, with an offer to go to where that device was;
-// others are joined from the menu, which remembers where this instance has
-// been, or where anyone has.
-//
-// What is kept on a persona: preferences, the fields they are interested in,
-// the knowledge trees already unlocked — and how much of that is generated
-// rather than answered.
-//
-// A stack is an arbitrary graph of a type, so a stack of keys or of
-// credentials is one. Whether a graph lets a cursor walk it to find what is
-// in it, or asks a persona to walk there themselves, is the graph's own
-// answer, and it is the difference between "what is in this room" and "what
-// in this room I can reach now". Navigating and storing things in any
-// structure is what the infrastructure is for.
-//
-// Filesystems may be virtual, made into the Ether; a thing may be
-// canonicalised as one, with fields delegated to files and directories —
-// what is `@me`'s under `@me.ray`, other things like stars elsewhere.
-//
-// Names. What is done about platforms that already have an `@ether` name
-// registered, and whether hardware addresses are reserved too. Separate
-// directories for names of different kinds — `orbitmines.com` beside
-// `@orbitmines` — mostly to keep what already exists working. Namespaces are
-// per project, which is per repository, and each project has its own
-// `.ether` holding its configuration.
-//
-// Events may be injected into somebody else's code by whoever is running it.
-//
-// In a repl, the setting that makes changes stay is the persona's; a repl
-// session may commit everything it changed into one named thing.
-//
-// Whether an environment variable is what it was at startup or what it is
-// now, and whether a static field is shared or is one per user.
-//
-// A screen, or a place, says what it is allowed to see — `@public` while it
-// is being streamed — and what is shown may be conditional on who is
-// looking: `if @public`, `elsif` somebody else.
-//
-// A link keeps a cache that whoever depends on it can publish, for when the
-// domain it points at stops answering; publishing something may ask for one,
-// so that what fails at runtime has somewhere to fall back to.
-//
-// Load balancing, from a provider or built in, is also how a new feature is
-// given to some of the traffic and not the rest.
-//
-// Whether what is private lives in a setup of its own, and what mixing it
-// with the rest costs when a repository has to be reached on more than one
-// machine.
-//
-// Configuration is `.cfg.ray`: `Cfg /file/path`, `Cfg @me/file`, `Cfg /File`
-// or `Cfg.File`, and a name with nothing above it is searched for wherever
-// it is. Configuration is code, so it runs. Variables written `&` are the
-// ones a context is allowed to change.
-//
-// Every place normalises differently: what a thing is represented as there
-// is that place's answer, not the thing's.
-//
-// Quests are side quests too: the competencies nobody expected to need, and
-// the reasons somebody does a thing because they want to.
-//
-// Movement through a graph may have to go around what is in it rather than
-// through it.
-//
-// One program, two frontends: what is run from the command line and what is
-// shown in an interface are the same code with another hook into it.

@@ -223,15 +223,14 @@ entry stays as the record of the question, and this section overrides it.
 - **F-D7b.** The development runtime is the TS interpreter bundled for the browser, as the LSP
   bundle is.
 
-## Open, still to ask (added from the answers)
+## Answered later (2026-09-30)
 
-- **F-A5:** is the `x` in `@ /profiles/ x: Profile$` still needed now that fields are canonical (F-A2)?
-- **F-D9b:** the browser runtime and the DOM. Is the DOM reached over the same byte-stream
-  external (a protocol written in Ray), or through a second external? A new external needs the
-  user's say.
-- **F-D10b:** the TUI's keyboard hierarchy (F-A7): which keys, and whether the Keyboard draft's
-  `pulsed`/`toggled`/selection code is ported as written.
-- **F-P1:** which platform levels come first (e.g. xterm-256 + Windows Terminal + one browser),
-  and how capabilities are detected over the byte stream.
-- **F-S1:** the order of pages to port from the current Next.js site, and which of its React
-  components (buttons, header, paper layout) become the orbitmines.com library.
+- **F-A5** The route binding `x` is not needed: `/profiles/<name>` selects from `profiles` by its identity (F-A3).
+- **F-D9b** The browser runtime reaches the DOM over the same byte-stream external, through a protocol
+  written in Ray; the browser side is a small fixed host shim.
+- **F-D10b** TUI keys follow the Keyboard draft: ↑/w ↓/s ←/a →/d move (pulsed), ctrl skips groups, shift
+  expands the selection, enter activates, f2 toggles.
+- **F-P1** First platform levels: xterm-256color/truecolor (Linux, macOS), Windows Terminal, Chromium +
+  Firefox, and the TUI in the browser.
+- **F-S1** Port order: index → profiles → archive → Almanac. Components (download/login buttons, header,
+  paper layout) move into the orbitmines.com library as each page needs them.

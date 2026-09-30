@@ -16,8 +16,123 @@ Paths are relative to `@ether/$/.ray/` unless they say otherwise. `ep` = `v0/.en
    `project_handoff_0930.md`, `feedback_selective_test_runs.md`, `project_fast_probe_loop.md`.
 2. `spec/Language.md` from start to end. **Decided** is binding. **Proposed** is *not*
    decided: ask before implementing a Proposed item (see §2.3).
-3. `ep` in full (`.entrypoint.ray` — `*.ray` globs do not match it, so grep it by name).
-4. The draft you are porting, before you port it. Port in the draft's own style.
+3. The spec files written from every comment in the library, and from the Almanac and the
+   2025 article, each ending in a **Decided** section with the user's answers (2026-09-30).
+   They are binding the same way `Language.md` is, and where they conflict with it the later
+   answer wins (each file says so where it happens: e.g. T1.6 replaces L§4.3):
+   `Grammar.md` (G), `Types.md` (T), `Program.md` (P), `Ray.md` (R), `Numbers.md` (N),
+   `Text.md` (X), `World.md` (W), `Almanac.md` (A), `Universal.md` (U), `Frontend.md` (F).
+   Items listed above a Decided section but not answered are **Open**: ask before building them.
+4. `ep` in full (`.entrypoint.ray` — `*.ray` globs do not match it, so grep it by name).
+5. The draft you are porting, before you port it. Port in the draft's own style.
+
+## Status at the end of 2026-09-30 (read before §3)
+
+A session on 2026-09-30 did most of Phase 1 and part of Phase 2. **Nothing of it is committed.**
+The tree as it was before that session is on branch `wip-0929` (commit `d0ec60e`, not on
+`main`). Memory: `project_directives_0930.md`, `project_state_0930.md`.
+
+### Done in the working tree (verified only on small probes)
+
+- **Strings (Phase 2, directives of 2026-09-30).**
+  - `Character := class: Unicode.Scalar`: a character *is* its codepoint.
+  - `String := class: Array`: a string *is* its characters, and every method works on `this`.
+  - String defines none of `==`, `entry`, `count`, `length`, `first`, `every`, `some`, `at` or
+    `reverse`; it inherits them.
+  - `"…"` is always a String (one character too), through `Node.as_string`: literal → UTF-8 →
+    code points → `as_character` → chain `.as_string`.
+  - Characters are written with the draft's `U+XXXX`; a string's character is `"a".head.value`.
+  - `String.of`, `Character.of`, `.characters`, `.octets` bit helpers and the `ascii_*` names are
+    gone from library and tests (rewritten mechanically; review `tests/app/string.ray`).
+- **Unicode.ray in the draft's structure.**
+  - `CodePoint`, `Scalar` (the draft's assertion as a question), `TF`, and `UTF8`/`UTF16`/`UTF32`
+    below `TF`.
+  - `code_points (source)` is the UTF-8 walk. It is a plain function, not a method, so the digit
+    reader never goes through `.` member access.
+  - `U+{codepoint: Hexadecimal}` reads a character.
+- **Number.ray.**
+  - `digit_of (point)`, and `digits_spelled`, a byte reader that stops at the first non-digit.
+  - The Program read-back (`begins`, `head_read`, `required_heads`, `declares`, labels, jumps)
+    works on code points, not bits.
+  - `same_text` is `==` on code points.
+- **Equality.** The one structural `==` is on `Ray`: it walks both from `.entry` and compares what
+  each position holds with `==`. `Structure.components.hierarchy &= Ray` gives it to every
+  structure. Set's `==` is removed.
+- **Phase 1, modifiers.**
+  - GRAMMAR_RULE (`ep:160`) has a `.ray` body. Leading words that give `modify` are kinds and are
+    handed the definition. `external GRAMMAR_RULE rest body` registers the rest.
+  - The engine hands the head as a chain of pieces (`written`, plus `named` = the resolved global
+    value of a leading bare word, never a native).
+  - `Modifier`, `chainable` and `compounds` are defined right after the Node class.
+  - Comparisons are marked `chainable <`, arithmetic `compounds +`.
+  - The `accepts` operator classes and the `assigns`/`separates` rule are deleted. `;` is declared
+    before `=`, so `looser_end` separates `a = x ; b = y` by declaration order.
+  - The precedence rule in String.ray is filter-free: `{a} [x] {b} [y] {c}`.
+- **`ep` `:`** skips `verify` when what it types is a class (`goto done if this.written_body`), so
+  `class: Unicode.Scalar` no longer walks the narrowing's predicate on the class.
+- **Engine (all asked for or inside the approved interpreter-optimization table).**
+  - `defined_by_language`, `head_of`, `define_from` (the `GRAMMAR_RULE` native now takes 2
+    arguments), `of_kind` (the filter check: `method instance_of kind`, cached per method and
+    kind, non-reentrant).
+  - Typed reads are non-reentrant (`reading`), and language definitions are non-reentrant
+    (`defining`).
+  - The pass signature ignores frame ids and whitespace. It included the BASE frame id, so every
+    run took all 8 passes; it now settles in 3.
+  - `Interpreted` natives `utf8_points`, `grammar_define`, `unary_times`, `unary_divide` and
+    `unary_remainder`, with their entries in `v0.ts/v0.ts.o.ray`.
+
+### Harness facts learnt
+
+- `mini4.sh` now copies `v0.ts/v0.ts.o.ray` into the probe root (`OPT=0` to leave it out).
+  Before this, no probe ever had the interpreter's optimizations.
+- The optimizations only engage once `Compiler.default` is readable and `+=` composes, so a probe
+  that wants them must load `Compiler.ray`.
+- A probe that uses kinds, filters or `instance_of` must load `Number.ray` (`structurally`) and
+  `Unicode.ray` (`code_points`). With `boolean.ray` alone, those checks are meaningless.
+- `mkwd.sh OUT` (watchdog: the outermost and innermost rules every 10 s) and `mkdbg.sh OUT` (also
+  prints level/optimization/native counters) build instrumented engine copies:
+  `mini4.sh NAME OUT - probe.ray files…`.
+- Timings now: entrypoint + `boolean.ray` about 17 s (3 passes); the core library (boolean,
+  Compiler, Number, Ray, String, Unicode) was minutes before the last fixes and has not been
+  re-measured.
+
+### What is left, in order
+
+1. **Re-measure the core library** (probe `~/.cache/ray-scratch/probe_core.ray` with the six core
+   files) and **fix the structural `instance_of`**. It answered *yes* for every method (every
+   operator "chainable"/"compounds"), probably because `requirements_of` reads no requirements.
+   Probe `~/.cache/ray-scratch/probe_rb.ray` checks the read-back step by step (R1–R7). Until
+   this holds, `[x: chainable]` over-matches and `+=` composes only from pass 3.
+2. **Typed captures without `accepts`.** `{number: Decimal}`, `0x…`, `0b…`,
+   `.{fraction: Decimal.Digits}`, `U+…`, `{unit: Unit}` and the `^` colours still use the
+   `accepts ^reader` hook (`ep` Node, narrowings, Number bases, Unit). The direction is the
+   draft's: a capture typed by a String narrowing (`Decimal.Digits = String{.spells_in(radix)}`,
+   the draft's `Decimal.Positive.String`), checked with `instance_of`, with the body converting.
+   Ask the user how a written literal meets `instance_of` (the engine must hand it over somehow)
+   before changing `typed()`.
+3. **The full library, the World.ray pass-2 hang** (`Certificate` → `Time.now`; re-check, the
+   String rewrite changed `Time.now`), then the per-file runners and the whole suite. Then
+   **commit** in batches: String/Unicode; read-back; GRAMMAR_RULE and kinds; engine natives.
+4. **Remaining `==`** (Number, Signed, Real, Unit, Quantity, Time, Month, Date, UUID, IP,
+   Encoding.Hash, the enum member `==`). The directive is that only Ray defines `==`. For class
+   instances this needs a field-by-field structural walk, which needs the fields listed (the
+   draft's `external *`). **Ask before adding that external.** Number's `==` is the unary walk the
+   interpreter collapses; keep it until Ray's `==` can cover numbers.
+5. **UUID and IP in the drafts' structure.**
+   - UUID: `class UUID < Hexadecimal³²`, text 8-4-4-4-12, `version => this[12]`, `v4` random with
+     the version digit, `Namespace` constants as UUID literals, `{uuid: UUID.String}: UUID`. The
+     count natives now make a 128-bit number cheap, so a UUID can be the number the draft says.
+   - IP: the user's own v0-syntax rewrite in commit `7250308` (`git show 7250308:"@ether/\$/.ray/v0/Test.ray"`):
+     `static NUMBER_OF_SEGMENTS`, `Segment`, `segments: Segment[]{length == …}`,
+     `as (:== String)` with CIDR, `+`/`-` on `as Binary`, `v4`/`v6` headers with zero
+     compression and the RFC 5952 asserts.
+   - Port as close as the engine allows; mark what it can't take with `// spec:`.
+6. **Clean up this session's comments.** Some new explanatory comments were added in String.ray,
+   Unicode.ray and Number.ray; remove the ones that aren't draft citations.
+7. **`.length` vs `.count`.** `Iterable.length => .paths.count` counts paths. It should be the
+   longest path's count. Arrays keep length == count.
+
+---
 
 ## 1. Rules that are never broken
 
@@ -40,8 +155,8 @@ the work it saves.
 - **`^` is highlighting** (and, per L§5.1, exponentiation when a defined name is on the right).
 - **Prefer `.member` over `this.member`.** Beware a statement beginning with `.`: it continues
   the line above (L§5.4) and silently makes `&=` a no-op. Fold into one expression.
-- **Don't add explanatory comments. Don't delete commented-out draft code or TODOs** unless
-  you have implemented what they describe (then the draft comment goes, the code replaces it).
+- **No comments in the library.** On 2026-09-30 every comment was moved into the spec files and
+  removed from the `.ray` library. Don't add any back; record intent in `spec/*.md`.
 - **Don't rename existing names** (`a`, `b`, `c`, `x`, `y` stay). Grep before naming anything
   new: a method loses to a field of the same name.
 - **Commits:** short messages, the user's name only — no `Co-Authored-By`, no "Generated with",
@@ -74,7 +189,8 @@ Runners live in `~/.cache/ray-scratch/`.
 4. `split_p.sh` / `split_s.sh` / `split_x.sh` per test file. Once per batch.
 5. The whole suite: about once a day, not after each change.
 
-Keep numbers in tests small: a Number is a unary chain, and `hundred` is about the largest
+Keep numbers in tests small unless the probe loads `Compiler.ray` (so the interpreter's count
+natives engage): without them a Number is a unary chain, and `hundred` is about the largest
 worth writing. Kill stray runs by PID, never `pkill -f` a pattern that is in your own command.
 After a killed run, remove the leftover `v0.ts/src/language.<name>.ts`.
 
@@ -98,6 +214,9 @@ Record every answer in the spec file it belongs to (`Language.md` or `Frontend.m
 
 ### Phase 0: stabilise the working tree (first day)
 
+*Superseded by "Status at the end of 2026-09-30" above: batches A and B are inside that
+uncommitted work, and Phase 1 is mostly done there. What is left of Phase 0 is its item 2.*
+
 The tree holds uncommitted work handed over by the previous session (`project_handoff_0930.md`):
 batch A (structural `instance_of`) and batch B (`alike` removal), mixed into
 `language.ts`, `ep`, `Number.ray`, `Ray.ray`, `String.ray`, `tests/app/{program,types}.ray`.
@@ -113,6 +232,9 @@ batch A (structural `instance_of`) and batch B (`alike` removal), mixed into
 
 ### Phase 1: modifiers language-side (directive of 2026-09-29)
 
+*Mostly done (see the status section). `assigns`/`separates` were not needed: declaration order
+does it. Left: the structural `instance_of` behind the filters, and typed-capture `accepts`.*
+
 - `chainable`, `assigns`, `separates`, `compounds` become modifiers: methods that take the
   method definition, written at the method (`chainable >= …`), not lists of spellings.
   Marks: `ep:786`, `ep:811`, `ep:826`, `ep:831`.
@@ -122,6 +244,8 @@ batch A (structural `instance_of`) and batch B (`alike` removal), mixed into
 - Claims: `precedence.ray`, `rewrite.ray`, `number.ray` N133–135 must stay green.
 
 ### Phase 2: the drafts' own structure
+
+*String and Unicode/UTF-8 are done in the working tree; UUID and IP are not.*
 
 - `UUID.ray`, `ip.ray`/IP, UTF-8 in `Encoding.ray`/`Unicode.ray`: rewrite them in the drafts'
   structure (`.ray2/_todo/ray.ray.txt/Ether/instance/utils/UUID.ray`, `.ray2/Language/…`).
@@ -179,26 +303,32 @@ as settings of a run; `@actor`/`@origin` (whole chain); permissions as `.cfg.ray
 visibility inherited, private at the top. Sublanguages (L§6.2) as Program levels without the
 IO externals and unbounded loops; `FILE.[ext].ray` naming.
 
-### Phase 4: the rest of the comments in `v0`
+### Phase 4: the spec items (the library has no comments any more)
 
-Count before you start, and after each batch, and report the counts in the commit message
-body: `grep -c "spec:"` per file (about 99 marks: Number 11, Feature 11, String 11, ep 12,
-Time 10, UUID 9, World 8, Unicode 6, Roman 5, Encoding 4, boolean 3, Ray 3, Unit 3, Test 2,
-Compiler 1), about 620 `//TODO`, and the commented draft code.
+On 2026-09-30 every comment was removed from `v0/*.ray` and `v0/.entrypoint.ray`, after all of them
+were turned into spec items. The comments' old line numbers (`ep:123`, `Number:45`) cited in the spec
+files refer to commit `3f2c53c`: `git show 3f2c53c:'@ether/$/.ray/v0/<file>'` shows them.
+**Don't add comments back** (standing instruction); the spec files are where intent lives.
 
-Work in the buckets of `project_plan_all_comments.md`, which clear in bulk because each shares
-one blocker:
+Work in these buckets, which clear in bulk because each shares one blocker:
 1. Numbers counted, not walked (Number/Unit/Roman/Time/Compiler), via rewrites in
    `Compiler.ray` that a backend recognises by structure (`project_rewrites_optimization.md`).
 2. The Program read back (`**`) and Compiler levels (`Program{O: Compiler.default}`).
-3. The Ray/graph algebra in `Ray.ray` (L§10.4).
-4. The type system's remaining half (L§10.2).
-5. `io`, network, store (L§9, L§10.6). Engine- and external-heavy: ask first.
-6. The world (L§10.7).
+3. The Ray/graph algebra in `Ray.ray` (L§10.4, `Ray.md`).
+4. The type system's remaining half (L§10.2, `Types.md`).
+5. `io`, network, store (L§9, L§10.6, `World.md` W6). Engine- and external-heavy: ask first.
+6. The world (L§10.7, `World.md`).
 
-For each `//TODO` and each commented draft line, the outcome is one of: implemented, with a
-claim; or kept, with the reason it is out of reach written in `spec/Language.md` §10 (not in
-the code). Don't delete a draft comment you did not implement.
+Every comment is already mapped to an item in the G/T/P/R/N/X/W spec files, with its source line.
+Implement from the **Decided** answers there, not from the raw comment. Answers that change the
+code outright (do these as found, with claims):
+- T1.6: an unset field reads as the full type (`?`); this replaces L§4.3's error.
+- W1.1: rename `Persona` → `Character` and the text class `Character` → `Char`.
+- X6.1: rename `Test.ray` → `IP.ray`.
+- N1.1: `Decimal`, `Decimal.Signed`, `Decimal.Real` (no `.Positive`).
+- A-C1: `{p}` narrows the whole when it can, else filters entries (`xs[{p}]`); `~` is entry points only.
+- Networking (W6.6) and the frontend (F-D8b) are separate projects under `v0`.
+- G3.2: precedence stays pairwise.
 
 ### Phase 5: Gamification
 
@@ -210,6 +340,12 @@ a world is a `.project.ray`). The networked world graph (G§7) is out of scope.
 
 The 5 s suite budget and minimising `language.ts` come after the spec (direction of
 2026-09-28). Don't start them unless the user says so.
+
+
+### Phase 7: resource and memory management. Very last
+
+`Program.md` P8.17: resource accounting (storage, memory, time, the size of a Ray) and memory
+management, which the language doesn't have yet. After everything else, including Phase 6.
 
 ---
 

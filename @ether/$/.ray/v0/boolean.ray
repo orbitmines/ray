@@ -19,8 +19,7 @@ boolean := enum false (holds: None) | true (holds: global) {
   xnor (b) => .xor(b).not
 
   ! => .not
-  // `&` is what the grammar's chaining rule writes between the two halves of
-  // `a < b < c`; it is `and` written the way that rule writes it.
+
   & (b) => .and(b)
   && (b) => .and(b)
   || (b) => .or(b)
@@ -30,19 +29,11 @@ boolean := enum false (holds: None) | true (holds: global) {
   x!|| (b) => .xnor(b)
 }
 
-// !{.}: `!x` is `x.not`, written before what it negates.
 !{x} ^punctuation => (x).not
 
-// spec: the draft's Operator classes (Unary, Binary, read off a method's
-// parameter count) and its cast of a boolean to a filter wait on equality
-// between types.
-// { false, true } = boolean
 true := boolean.true
 false := boolean.false
 
-// The one place presence becomes a boolean: the runtime can branch on whether
-// a value is there at all, and `exists` is what turns that into `true`/`false`
-// so nothing above it needs a conditional goto.
 exists (x) => (
   goto some if x
   found := false
@@ -53,18 +44,3 @@ exists (x) => (
 
   found
 )
-
-// From the drafts, not yet reached here (spec):
-// .ray2/_todo/ray.ray.txt/Ether/instance/utils/boolean.ray:
-// Allow false | true = Binary.digit.value
-// "0" | "1" as boolean, through Binary.Positive: a number answers a condition and the bit operations (tests/app/number.ray N95–N98).
-// spec: generalised — anything implementing Array<T>, like Positive, also applying to just a T — waits on generics.
-// Verified for all cases: the whole table, both ways round, is claimed in tests/app/boolean.ray.
-// boolean has .orbit equipped
-// spec: extracting the operators out of boolean, as a default metaprogramming
-// class, waits on the Operator classes (above).
-// Ternary operators are rules with two operators written in them (tests/app/boolean.ray BT1–BT2):
-// def * {b} * {c}; which match to a * b * c
-// Which is almost the same structure as def *(b, c), but assumes structure on the edges
-// An implementation using gotos so that a conditional goto is the only (necessary) primitive.
-// Allow casts to filters

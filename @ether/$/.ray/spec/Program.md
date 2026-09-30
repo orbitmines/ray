@@ -231,3 +231,31 @@ Answers from 2026-09-30.
   structurally until hashes exist.
 - **P8.12** Whether something came from the standard library is read through its location, with no new
   keyword.
+- **P1.1** `Program` is a Ray whose vertices are statements (each itself a Program), with sequence and
+  conditional jumps as its edges.
+- **P1.4** A value's `**` is the part of the program that produced it (provenance).
+- **P1.7** A program written back to text includes its contexts, and prints references as locations with a
+  version (`@x %3`), or the latest with `dynamically`.
+- **P2.5** `do { … } while cond` is a body-first do-while; it replaces the alias `do ^keyword := while`
+  at `ep:606`.
+- **P4.4** `&#` is the current context's concurrent branches; the selected one is this branch.
+- **P5.2** A dynamic value can't trigger its own recompute; a self-trigger is a cycle diagnostic.
+- **P5.3** Parameterless functions are automatically dynamic (`area => width * height` is always current);
+  a stored variable isn't.
+- **P7.2** Each file extension is its own language (`$.uc`, `$.uci`, `$.upkg`).
+- **P7.3** "When is a mapping a language?" is left open, as a research question for the Library Project.
+- **P7.5** A language states its own assumptions (such as "a newline is a new statement") as rules in its
+  level: Ray's in `.entrypoint.ray`, another language's in its `$.x`.
+- **P8.4** Several implementations of one method are `|` alternatives (U1), and a Compiler level picks
+  between the requirement sets by tradeoff.
+- **P8.6** Caching rendered frontends against re-render cost, per client preference, is a UI level.
+- **P8.10** A refactor keeps meaning when the two programs are equal under intensional `==` on `**` (U9).
+- **P8.14** Media formats as optimizations of 2D/3D scenes over time are kept as a note for the later
+  rendering work.
+- **P8.15** In the UI project's HTML level, a field's type narrowing becomes the `<input>`'s attributes
+  (`maxlength` = `{.length <= 5}`, `required`, `readonly` = `none.write`, `step`, `min`/`max`), and back.
+- **P8.16** Programs are stored in history with their cached compiled form and run from the cache while
+  unchanged, as a Compiler level (with P8.11).
+- **P8.17** Resource accounting is a whole section of its own, done **last**: resource and memory
+  management, which the language doesn't have yet but will. (Also listed in `Plan.md`.)
+- **Covered elsewhere:** P8.1 (standing instruction: optimizations are rewrite rules as levels).

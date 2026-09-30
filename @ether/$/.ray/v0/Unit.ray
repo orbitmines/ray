@@ -1,12 +1,3 @@
-// From the draft at .ray2/_todo/ray.ray.txt/Ether/instance/utils/Unit.ray.
-// What the language reaches today: a unit is named, has a symbol, and is
-// either a base unit or a multiple of another unit; a quantity is a number
-// carrying a unit, and converting a quantity between two units of one kind
-// goes through their common base. The draft's SI prefix table, offset
-// conversions, normalizers (`10000000s as days hours minutes seconds`) and
-// the `1.0m` / `1 m` literal syntaxes wait on decimals, strings and larger
-// numbers.
-
 unless (exists (external own units)) { global[`units`] = chain None }
 Unit := class {
   is_base => (exists .base).not
@@ -48,8 +39,6 @@ Unit := class {
     rank_steps
   )
 
-  // How many of the base unit one of this unit is.
-  // A prefixed unit's factor is its prefix's, read when asked.
   ratio => (
     ratio_times := .factor
     if (exists .prefix) { ratio_times = .prefix.factor }
@@ -60,19 +49,15 @@ Unit := class {
     unless .is_base { scaled = .ratio * .base.scale }
     scaled
   )
-  // Where this unit's zero sits on the base unit's line (`def offset`); `as`
-  // does not apply it yet.
+
   shift => (
     shifted_by := 0
     if (exists .offset) { shifted_by = .offset }
     shifted_by
   )
 
-  // Allow for syntax `year as ns`: one of this unit, expressed in another.
   as (other: Unit) => (1 of this) as other
 
-  // `def multiple multiple: Number, ToUnit: Unit` and `def offset`: a unit
-  // defined from this one.
   multiple (times: Number) => (
     parent := this
     Unit(
@@ -88,9 +73,7 @@ Unit := class {
       offset: by
     )
   )
-  // One unit is another when it counts the same of the same thing: a base
-  // unit is what it is named, and a unit built on one is how many of that one
-  // it is.
+
   chainable == (other: Unit) => if (.is_base.xnor(other.is_base)) {
     if .is_base {
       exists (external alike (.name) (other.name))
@@ -99,7 +82,6 @@ Unit := class {
     }
   } else { false }
 
-  // `SI#.for FromUnit = FromUnit.magnitude …`: this unit with an SI prefix.
   prefixed (prefix: Prefix) => (
     parent := this
     Unit(
@@ -110,8 +92,7 @@ Unit := class {
 }
 
 Quantity := class {
-  // Arguments are read inside the new quantity, so what they need from this
-  // one is read first.
+
   as (other: Unit) => (
     converted ^keyword := None
     down ^keyword := .unit.over(other)
@@ -125,9 +106,6 @@ Quantity := class {
     )
   )
 
-  // Arithmetic happens in the finer of the two units, so nothing is lost.
-  // spec: on one base line the finer unit is the one fewer multiples up, so
-  // no scale (which can be thousands) is built to decide.
   finer (other: Quantity) => if (other.unit.rank < .unit.rank) { other.unit } else { .unit }
   chainable == (other: Quantity) => (
     kind := .finer(other)
@@ -154,15 +132,10 @@ Quantity := class {
     )
   )
 
-  // A quantity is temporal when what it counts is, and how many seconds it is
-  // is itself read in seconds. What a second is is Time's to say.
   is_temporal => .unit.is_temporal
   as_seconds => (this as Second).amount
 }
 
-// Allow for syntax `1 of Byte`, `3 of Bit`: a number followed by a unit. The
-// draft's `1 Byte` and `1.0m` wait on the number literal itself. A number
-// takes this on as a class component, so every number already built reads it.
 Measured := class {
   { }{unit: Unit ^unit} ^punctuation => this of unit
   of (measure) => (
@@ -177,67 +150,17 @@ Measured := class {
 Number.components.hierarchy &= Measured
 Number.Real.components.hierarchy &= Measured
 
-// def SI_Unit
-//   def `symbol: *` name: *
-//     def si_name(symbol_prefix, prefix) = symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
-//     private SI = { -30: si_name "q", "quecto" … 30: si_name "Q", "quetta" }
-//     SI#.for FromUnit = FromUnit.magnitude SI.magnitude - FromUnit.magnitude, SI
-// A prefix is its symbol and its power of ten; the number is built when a unit
-// asks for it, so loading the table costs nothing. spec: the negative powers
-// (deci … quecto) wait on reals, the powers past kilo on numbers past a
-// thousand being cheap to walk; they are listed as the draft lists them.
 Prefix := enum deka (symbol: `da`, magnitude: 1) | hecto (symbol: `h`, magnitude: 2) | kilo (symbol: `k`, magnitude: 3) | mega (symbol: `M`, magnitude: 6) | giga (symbol: `G`, magnitude: 9) | tera (symbol: `T`, magnitude: 12) | peta (symbol: `P`, magnitude: 15) | exa (symbol: `E`, magnitude: 18) | zetta (symbol: `Z`, magnitude: 21) | yotta (symbol: `Y`, magnitude: 24) | ronna (symbol: `R`, magnitude: 27) | quetta (symbol: `Q`, magnitude: 30) {
   factor => 10.pow(.magnitude)
 }
-// SI_Unit m "meter": a base unit with every prefix of the table.
-// spec: the prefixed units are built on demand, `unit prefixed Prefix.kilo`,
-// rather than all at once.
+
 SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit(
   name: name
   symbol: symbol
 )
 
-// A unit is named, has a symbol, and is either a base unit or `factor` of a
-// `base` unit. The fields are what a unit is built with; a spaced `:` takes
-// the rest of its line, so each field goes on a line of its own.
 Bit := Unit().called(`bit`, `bits`, `b`)
 Byte := Unit(base: Bit, factor: 8).called(`byte`, `bytes`, `B`)
-// Kilobyte | KB = 1000 * Byte, Kibibyte = 1024 * Byte
+
 Kilobyte := Byte prefixed Prefix.kilo
 Kibibyte => Byte multiple (1024)
-
-// From the drafts, not yet reached here (spec):
-// .ray2/_todo/ray.ray.txt/Ether/instance/utils/Unit.ray:
-//TODO Move to a geometry file?
-//TODO support other scientific units
-// Allow 1 / m, 1 per m 2/10m
-//TODO Implement number
-// Ensure that every part of a quantity like '1d 10h 10ms' is part of an equivalence class.
-// Require quantities are in order from largest -> smallest
-// Allow for syntax `1d 10h 10m 30s`
-// Allow for syntax `10000000s ~~ normalizer = days hours minutes seconds`
-// Allow for syntax `10000000s as days hours minutes seconds`
-// Allow for syntax `name`
-// Allow for 'var: Decimal.Positive, ns = 10 ns' syntax.
-//TODO Allow for duplicate names like 8m meaning meter and minute
-//TODO If base is string, initialize unit.
-//TODO String units like 3h 20s
-// There must be at least one unambiguous name defined
-// Stringify as an unambiguous name if not defined globally.
-// Allows syntax 1`name` (1m)
-// Allows syntax 1.0`name` (1.0m)
-//TODO Should overwrite Number.def`node: not String` since it's more specific
-// Allows syntax 1 `name` (1 m)
-// Allows syntax 1.`name` (1.m)
-// Allows syntax 1.0 `name` (1.0 m)
-// Allows syntax 1.0.`name` (1.0.m)
-//TODO This shouldn't be necessary the 'as' before should already do this.
-//TODO Automatically implement reverses of offset, multiple, magnitude, If reversible. Decimal.Positive => Decimal.Positive for instance is only reversible if the dynamically asserts holds of being divisble.
-// global.+def Quantity<To>{.unit == ToUnit}
-// def as :== FromUnit => Quantity<From>{unit == FromUnit} = convert.reverse(this)
-//TODO Support non-integer magnitude exponents for reals.
-//TODO These should automatically implement for Decimal, and Decimal.Real
-// Positive exponents we can always shift within Decimal.Positive
-// Otherwise check if we can divide by that exponent
-//TODO Should only implement method if this assert passes
-//TODO This is a decimal (`Base`) shift, when working with binary values you want to access them as binary if you want that shift.

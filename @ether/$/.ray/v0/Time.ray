@@ -1,15 +1,5 @@
-// Time (drafts: utils/Time.ray, utils/Astronomy.ray). A duration is a Quantity
-// of a temporal unit; a calendar cuts the line into segments; a time is a
-// duration since an epoch on a calendar. spec: the one clock the machine
-// offers is `time`, a count of nanoseconds as decimal digits; it is kept as a
-// string and only the tail that a walk can afford is read as a number.
-
-// The temporal units, from the second up (`SI_Unit s "second"`, the Julian
-// table). spec: a year is 365 days; the quarter day of the Julian year and
-// the Gregorian months are the calendar's, not the unit's.
 Second := Unit().called(`second`, `seconds`, `s`)
-// spec: a nanosecond is its own base here: a thousand-million-fold second is
-// beyond a walk, so clock readings stay in nanoseconds until cut to seconds.
+
 Nanosecond := Unit().called(`nanosecond`, `nanoseconds`, `ns`)
 Minute := (Second multiple (60)).called(`minute`, `minutes`, `min`)
 Hour := (Minute multiple (60)).called(`hour`, `hours`, `h`)
@@ -19,11 +9,7 @@ Year => Day multiple 365
 
 Unit.components.hierarchy &= class { is_temporal => (.base_unit == Second) }
 Unit.components.hierarchy &= class { base_unit => if .is_base { this } else { .base.base_unit } }
-// spec: the draft's `12:00` and `12:00:00` are read by ISO_8601.time; `:`
-// itself stays the annotation.
 
-// The draft's Calendar: a chain of segments (a day, a month, a year) each a
-// duration; `is_recurring` when the segment cycles.
 Calendar := class {
   Segment := class {
     name: Node
@@ -31,12 +17,10 @@ Calendar := class {
     epoch: 1
     is_recurring => exists .period
   }
-  // What the calendar cuts the line into: nothing until it is given them.
+
   parts: (chain None)
   segments => .parts
-  // spec: `equivalence`: two calendars agree on a point; converting a time
-  // keeps its structure since the epoch when both calendars share the same
-  // segments, and goes through seconds otherwise.
+
   equivalent (here: Time, there: Time) => (
     from := here
     to := there
@@ -44,19 +28,16 @@ Calendar := class {
   )
   Equivalence := class {
     convert (time: Time) => (
-      // How long it is past the point the two agree on, added to where that
-      // point is on the other calendar. Both are durations, so they are added
-      // as durations: a quantity and a number are not of the same kind.
+
       elapsed := time - .from
       Time(calendar: .to.calendar, since_epoch: (.to.since_epoch + elapsed), epoch: .to.epoch)
     )
   }
 }
 
-// The Gregorian/Julian tables of Astronomy.ray.
 Weekday := enum monday | tuesday | wednesday | thursday | friday | saturday | sunday
 Month := enum january (length: 31, place: 1) | february (length: 28, place: 2) | march (length: 31, place: 3) | april (length: 30, place: 4) | may (length: 31, place: 5) | june (length: 30, place: 6) | july (length: 31, place: 7) | august (length: 31, place: 8) | september (length: 30, place: 9) | october (length: 31, place: 10) | november (length: 30, place: 11) | december (length: 31, place: 12) {
-  // February takes the leap day.
+
   days_in (year: Number, calendar) => (
     month_days := .length
     if ((.place == 2).and(calendar.is_leap_year(year))) { month_days = .length.succ }
@@ -74,7 +55,7 @@ Julian := class {
   seconds_in_minute => 60
   months => Month.components
   weekdays => Weekday.components
-  // The day of a year a date falls on, counted from one.
+
   day_of_year (month, day: Number, year: Number) => (
     calendar := this
     total ^keyword := day
@@ -85,36 +66,29 @@ Julian := class {
   )
 }
 Gregorian := class: Julian {
-  // spec: the century rule only costs its four hundred for century years.
+
   is_leap_year (year: Number) => if ((year % 100).is_zero) { (year % 400).is_zero } else { (year % 4).is_zero }
 }
-// spec: UTC is Gregorian with an offset, `-12:00 <= offset <= 14:00`; leap
-// seconds are off (`GMT = UTC{leap_seconds == false}`); the tzdata table
-// waits on `io` and an unzip.
+
 UTC := class: Gregorian {
-  // What the zone is offset by is a field with nothing in it by default, not
-  // a method: a method answers zero whatever the zone was built with.
+
   offset: 0
   with_offset (offset: Quantity) => UTC(offset: offset)
   leap_seconds => false
 }
 GMT := UTC
 
-// A month's index counts from zero; its place from one.
 Month.components.hierarchy &= class {
   index => .place.pred
   chainable == (other) => .place == other.place
   chainable != (other) => (this == other).not
 }
 
-// A time: seconds since an epoch on a calendar. `now` reads the clock.
 Time := class {
   calendar: Node
   since_epoch: Quantity
   epoch?: Time
 
-  // The answer is bound before it is handed back: a branch holding a quantity
-  // is not that quantity, so comparing one with another compares the branches.
   since_calendar_epoch => (
     held ^keyword := .since_epoch
     if (exists .epoch) { held = .since_epoch + .epoch.since_calendar_epoch }
@@ -127,22 +101,15 @@ Time := class {
   compounds - (other: Time) => .since_calendar_epoch - other.since_calendar_epoch
   as (calendar) => Time(calendar: calendar, since_epoch: .since_epoch, epoch: .epoch)
 
-  // spec: the clock's nanoseconds, kept as digits; `seconds_now` reads the
-  // last nine digits off as nanoseconds and the ones before as seconds only
-  // as far as `as_number` walks — the tail of the string, not the whole.
   now => Time.Clock(digits: (external time).as_string)
   Clock := class {
-    // The nanosecond digits, as text; the last three of them, and the last
-    // three of the seconds, as numbers: what a walk can afford.
+
     nanoseconds => .digits.slice(.digits.count - 9, .digits.count)
     nanoseconds_tail => .digits.slice(.digits.count - 3, .digits.count).as_number of Nanosecond
     seconds_tail => .digits.slice(.digits.count - 12, .digits.count - 9).as_number of Second
   }
 }
 
-// The draft's ISO 8601: `YYYY-MM-DD` and `hh:mm:ss`. spec: the date is read
-// into year, month and day; week dates, ordinal dates and offsets are
-// recognised by shape only.
 ISO_8601 := class {
   date (text: String) => (
     parts := text.split(U+002D)
@@ -156,7 +123,7 @@ ISO_8601 := class {
     hour := parts.head.value.as_number
     minute := parts.head.next.value.as_number
     second := if (exists parts.head.next.next) { parts.head.next.next.value.as_number } else { 0 }
-    // Kept in seconds: an hour of three thousand six hundred links is only built when asked for.
+
     ((((hour * 60) + minute) * 60) + second) of Second
   )
   Date := class {
@@ -176,9 +143,6 @@ Month.components.hierarchy &= class {
   )
 }
 
-// Astronomy.ray: a planet names its years and days; Earth's are the
-// calendar's, Mars's are the sol. spec: a sol is 24h 39m 35.244s, kept to the
-// second; a Martian year is 668.5991 sols, kept to the sol.
 Planet := class { }
 Earth := class: Planet {
   years => Year
@@ -191,185 +155,3 @@ Mars := class: Planet {
   years => MartianYear
   days => Sol
 }
-
-// From the drafts, not yet reached here (spec):
-// .ray2/_todo/ray.ray.txt/Ether/instance/utils/Time.ray:
-//TODO Variable years/months/date
-//TODO Variable epoch
-//TODO Variable string representation
-//TODO Variable multiple in which time sec is stored.
-//TODO What different calendars are used here?
-//TODO Variable relativistic trajectory
-//TODO Date arithmetic, sleep delay, timezones
-//TODO Import tzdata using .unzip functionality, but for now just use a mirrored file directory until we support things like https://github.com/libarchive/libarchive
-//TODO Set this up when we have a working runtime to make testing easier
-//TODO Though can experiment with: "define a grammar"
-//TODO "h"/"hour" "week" "days"/"day/sol X - set epoch to 0 start of that" "years" "months" "Earth.years"/"Mars.years" (and some others for other time coordinate systems)
-//TODO Should overwrite for this case. How to indicate?
-// Allow '12:00' syntax.
-// Allow '12:00:00' syntax.
-//TODO Is this the right way to change caller?
-// SUBSEGMENTS AS MONTHS/WEEKS
-// This allows things like UTC which are only offset differences.
-//TODO How do you automatically reverse this?
-// Keep epoch-structure. So '25 Gregorian years' from '2001-01-01 Gregorian' is translated into 'X Julian years' from 'X Julian'.
-//TODO How does Lazy Evaluation work with Time.NOW, force evaluation there somehow?
-//TODO Allow : Time = 12:00 which defaults to setting day/year/month unknown, and stringify ignores it then and just returns 12:00 back
-//TODO .round(seconds)
-//TODO Allow calendar to be none? So it's just a Quantity.Temporal
-//TODO ? / Calendar# should default to all instances of Calendar
-// Only equivalent calendars can be compared
-// :Time = "2025-01-01", epoch: "2000-01-01" -> = 25.years
-//TODO Could put this in a keyword finite-self-ref or something
-//TODO Summing with different epochs, should start with the first, calculate properly. Can be negatives too here.
-// &Time.YEAR = .year since epoch=0, &Time.MONTH = .month since epoch=0 -> Effect + 1 month within this context
-//TODO Time syncing with servers
-//TODO Support ns if desired, so now as ns might call some different routine than just getting the date today.
-// YEAR = year, MONTH = month
-//TODO How to indicate the value is possibly up for correction (and how would you apply it?)
-//TODO Make sure superpositions are working for weeks and times
-//TODO Different format orders like YYYY- etc.. Www
-//TODO Extend ISO_8601 With additional things like name of timezone etc... what other extensions?
-//TODO Actually read through ISO 8601 and possibly correct
-//TODO This numbering might need to be implemented slightly differently.
-//TODO Context Time.MINUTE/or something should set this second as possible leap-second
-// enforces bounds
-//TODO The Quantity should be inferred from year/month etc.. values since they're defined on Time, somehow
-//TODO NTP Network time protocol. for OS.name == Ether
-//TODO In the case of a monotonic clock where the epoch=something like bootup time, and then time correction jumps, you'd want the time to jump with it. Or using NOW twice in a row, you'd want the diff to jump with the correction.
-// .ray2/_todo/ray.ray.txt/Ether/instance/utils/Astronomy.ray:
-//TODO Support more precise measurements of time.
-// TODO Calculate days based on spin, and years based on orbit
-// https://en.wikipedia.org/wiki/Sidereal_time
-// https://en.wikipedia.org/wiki/Universal_Time#Versions
-// https://en.wikipedia.org/wiki/Barycentric_Coordinate_Time / https://en.wikipedia.org/wiki/Barycentric_Dynamical_Time
-// https://en.wikipedia.org/wiki/Geocentric_Coordinate_Time
-// https://en.wikipedia.org/wiki/Terrestrial_Time
-// https://en.wikipedia.org/wiki/International_Atomic_Time
-//
-// class Planet
-//   `years.name`: Unit
-//   `days.name`: Unit
-// end
-//
-// namespace Earth < Planet
-//   Calendars.Gregorian.years.reexport
-//   Calendars.Gregorian.months.reexport
-//   Calendars.Gregorian.weeks.reexport
-//   Calendars.Gregorian.days.reexport
-//
-//   namespace Calendars
-//TODO Add other calendars:
-// https://en.wikipedia.org/wiki/Islamic_calendar
-// https://en.wikipedia.org/wiki/Hebrew_calendar
-// https://en.wikipedia.org/wiki/Coptic_calendar
-// https://en.wikipedia.org/wiki/Solar_Hijri_calendar
-// https://en.wikipedia.org/wiki/Bengali_calendar
-// What else?
-//TODO Are there any martian calendars yet?
-//
-//     namespace UTC Base: Calendar = Calendars.Gregorian, leap_seconds: boolean = false < Base
-//       offset: Quantity.Temporal{-12:00 <= . <= 14:00} = 00:00
-//
-//       def + offset: Quantity.Temporal{00:00 <= . <= 14:00 - this.offset} = UTC(Base, offset: this.offset + offset)
-//       def - offset: Quantity.Temporal{00:00 <= . <= 12:00 + this.offset} = UTC(Base, offset: this.offset - offset)
-//
-//static.# = UTC(Base, offset: offset.type) //TODO This should be the default.
-//
-//TODO Support leap_seconds = true from tzdata
-//
-//TODO Make sure this conversion works for leapseconds
-//       equivalence Time(static.#) -> - (.offset - (x: Time(static.#)).offset) ~~ .calendar = x.calendar
-//     end
-//     GMT = UTC{leap_seconds == false}
-//
-//     namespace Gregorian < Julian
-//       +def is_leap_year YEAR: Decimal = super() && (YEAR % 100 != 0 || YEAR % 400 == 0)
-//
-//       equivalence Time(Julian) = "1582-10-05" -> Time(Gregorian) = "1582-10-15"
-//     end
-//     namespace Julian < Calendar
-//
-//TODO Units should not rerun for Gregorian/UTC .
-//
-//       Unit ~ ("m" | "min") + symbol: true | "minute" ("s" + plural: true)?
-//         -> *(SECONDS_IN_MINUTE: 60) seconds //TODO UTC leapseconds should overwrite this
-//       Unit ~ "h" + symbol: true | "hour" ("s" + plural: true)?
-//         -> *(MINUTES_IN_HOUR: 60) minutes
-//       Day = Calendar.Segment ~ "d" + symbol: true | "day" ("s" + plural: true)?
-//         -> *(HOURS_IN_DAY: 24) hours
-//
-//         static EPOCH = 1
-//       end
-//       Unit ~ "w" + symbol: true | "week" ("s" + plural: true)?
-//         -> *Weekday#.count days
-//       Unit ~ "M" + symbol: true | "month" ("s" + plural: true)?
-//         -> x => x == 0 ? 0 days : x.sign (&Time.MONTH: Month)[x > 0 ? 0..(x - 1) : x..-1].sum
-//       Year = Calendar.Segment ~ "y" + symbol: true | "year" ("s" + plural: true)?
-//         -> *Month#.count months
-//
-//         static EPOCH = 1
-//       end
-//
-//       class Weekday < Calendar.Segment =
-//         Monday,
-//         Tuesday,
-//         Wednesday,
-//         Thursday,
-//         Friday,
-//         Saturday,
-//         Sunday
-//         -- .map(= 1 day)~.orbit
-//         -- .reduce(|)
-//
-//         static EPOCH = Monday
-//       end
-//
-//       class Month < Calendar.Segment =
-//         January = 31 days,
-//         February = is_leap_year(&Time.YEAR: year) ? 29 : 28 -- days,
-//         March = 31 days,
-//         April = 30 days,
-//         May = 31 days,
-//         June = 30 days,
-//         July = 31 days,
-//         August = 31 days,
-//         September = 30 days,
-//         October = 31 days,
-//         November = 30 days,
-//         December = 31 days
-//         -- ~.orbit(&Time.YEAR -= 1 <- -> &Time.YEAR += 1)
-//         -- .reduce(|)
-//
-//         static EPOCH = January
-//       end
-//
-//       def is_leap_year YEAR: Decimal = YEAR % 4 == 0
-//
-//TODO Compiler should be smart enough to not actually go through each iteration, but count the years which are leap years etc. to shortcut it.
-//
-// TODO How to say, possible a minute is 61 seconds if we have a discontinuous leap second
-//
-//     end
-//   end
-//
-// end
-// Earth.years.reexport
-// Earth.months.reexport
-// Earth.weeks.reexport
-// Earth.days.reexport
-// Earth.Calendars.Gregorian.hours.reexport
-// Earth.Calendars.Gregorian.minutes.reexport
-// { Weekday, Month } = Earth.Calendars.Gregorian
-// += Earth.Calendars
-//
-// namespace Mars < Planet
-//   Unit ~ years.name | "Martian `years.name`" -> *668.5991 sols //TODO Is there a notion of a martian leap year? - discrete step
-//   Unit ~ days.name | "Martian `days.name``" | "sol" "s"? -> 1 Earth.day 39 minutes 35.244 seconds
-// end
-
-// From the journal, not yet reached here (spec): a program that ends is not
-// only one that stops asking — every step has to take a finite time, so
-// termination is a temporal question, and the language has to be able to ask
-// it. Anything done to one thing may be collected into a function, and that
-// function drawn as an animation of itself.

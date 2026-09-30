@@ -1,12 +1,5 @@
-// Roman numerals (draft: .ray2/Roman.ray). A numeral is a String of digits;
-// its value is the subtractive sum of the draft's `as Decimal`. spec: the
-// digit table is the draft's, with the Unicode Number Forms as codepoints
-// built when first compared; the case is folded as the draft's `ignore_case`.
-
 Roman := class {
-  // The value of one digit, or None when the character is not one.
-  // A digit's value is its mantissa (one or five) at its power of ten, built
-  // only when a numeral asks for it.
+
   Digit := enum i (mantissa: 1, power: 0) | v (mantissa: 5, power: 0) | x (mantissa: 1, power: 1) | l (mantissa: 5, power: 1) | c (mantissa: 1, power: 2) | d (mantissa: 5, power: 2) | m (mantissa: 1, power: 3) {
     value => .mantissa * 10.pow(.power)
     with_value (amount: Number) => Roman.Digit.i(mantissa: amount, power: 0)
@@ -23,8 +16,7 @@ Roman := class {
     elsif (upper == U+004D) { Roman.Digit.m }
     else { None }
   )
-  // spec: the Unicode Number Forms block: Ⅰ..Ⅻ (1..12), Ⅼ Ⅽ Ⅾ Ⅿ, their
-  // lowercase twins sixteen further, and the late/early forms ↅ (6) and ↆ (50).
+
   number_form (codepoint) => (
     offset := (codepoint - number_forms_first) % 16
     if (offset < 12) { Roman.Digit.i.with_value(offset.succ) }
@@ -34,15 +26,13 @@ Roman := class {
     else { Roman.Digit.m }
   )
 
-  // `as Decimal`: a digit smaller than the next is subtracted.
   as_number => (
     total ^keyword := 0
     walker ^keyword := .text.head
     while (exists walker) {
       current := Roman.digit_of(walker.value).value
       following := if (exists walker.next) { Roman.digit_of(walker.next.value).value } else { 0 }
-      // A digit smaller than the next is the difference between them, and the
-      // two are read as one; taking it away would floor at nothing.
+
       if (current < following) {
         total = total + (following - current)
         walker = walker.next.next
@@ -56,16 +46,12 @@ Roman := class {
   text: String
 
   is_valid => .text.every { exists Roman.digit_of(it.value) }
-  // The draft's `Standard`: 1 <= value <= 3999.
+
   is_standard => (
     amount := .as_number
     (0 < amount).and((amount / 100) < 40)
   )
 
-  // A number written as a numeral: the count at each place is written by
-  // its subtractive pair, or its five and ones (the Standard form). The
-  // places are found by dividing by ten, hundred and ten again, so no number
-  // larger than the numeral itself is ever built.
   from (number: Number) => (
     out := chain None
     hundreds := number / 100
@@ -107,7 +93,6 @@ Roman := class {
   d_digit => U+0044
   m_digit => U+004D
 
-  // spec: the Additive form writes fours as IIII (no subtractive pairs).
   additive (number: Number) => (
     out := chain None
     hundreds := number / 100
@@ -132,19 +117,11 @@ Roman := class {
     out
   )
 
-  // spec: Vinculum — a digit followed by U+0305 (combining overline) counts a
-  // thousandfold, U+033F (double overline) a millionfold; the Apostrophus
-  // forms ↀ ↁ ↂ ↇ ↈ (U+2180..U+2188) are 1000, 5000, 10000, 50000, 100000
-  // and the composed CIↃ sequences spell the same values. They are read by
-  // `as_number` once the numeral's characters are grouped with their marks;
-  // that grouping waits on the Unicode combining classes (Unicode.ray).
   Vinculum := class {
     overline => U+0305
     double_overline => U+033F
   }
 
-  // spec: the base-twelve fractions, in twelfths: · ∶ ∴ ∷ ⁙ are 1..5, S is 6;
-  // the semuncia and smaller signs are below one twelfth and wait on ratios.
   Fraction := class {
     twelfths (text: String) => (
       total ^keyword := 0
@@ -179,35 +156,3 @@ ratio_sign => 8758
 therefore_sign => ratio_sign - 2
 proportion_sign => ratio_sign + 1
 five_dot_sign => 8289
-
-// From the drafts, not yet reached here (spec):
-// .ray2/Roman.ray:
-// Roman Numeral notation (https://en.wikipedia.org/wiki/Roman_numerals)
-// Unicode Roman Numeral block (U+2160–U+216F)
-// Precomposed (U+2161–U+216B)
-// Lowercase (U+2170–U+217F)
-// Archaic forms
-// U+2185 ROMAN NUMERAL SIX LATE FORM
-// U+2186 ROMAN NUMERAL FIFTY EARLY FORM
-// Additive — historical notation without subtractive pairs (IIII instead of IV)
-// Vinculum — combining overline multiplies by 1000 (https://en.wikipedia.org/wiki/Roman_numerals#Large_numbers)
-// U+0305 COMBINING OVERLINE
-// Apostrophus Unicode (U+2180–U+2188)
-// Double overline multiplies by 1,000,000
-// U+033F COMBINING DOUBLE OVERLINE
-// Apostrophus — composed CIↃ sequences (https://en.wikipedia.org/wiki/Roman_numerals#Apostrophus)
-// U+2183/U+2184 REVERSED C
-// U+2188 — CCCIↃↃↃ
-// Composed sequence forms
-// Fraction — Roman base-12 uncia system (https://en.wikipedia.org/wiki/Roman_numerals#Fractions)
-// U+00B7 MIDDLE DOT — uncia
-// U+2236 RATIO — sextans
-// U+2234 THEREFORE — quadrans
-// U+2237 PROPORTION — triens
-// U+2059 FIVE DOT PUNCTUATION — quincunx
-// U+2183 semuncia
-// U+10192 ROMAN SEMUNCIA SIGN
-// U+10193 ROMAN SEXTULA SIGN
-// U+10194 ROMAN DIMIDIA SEXTULA SIGN
-// U+10195 ROMAN SILIQUA SIGN
-// Named fractions (twelfths of an as)

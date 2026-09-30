@@ -103,3 +103,15 @@ Answers from 2026-09-30.
   the key; public keys per instance and character); the algorithms later.
 - **X1.5** `String[] as String` joins without a separator (`"ABC" == "A", "B", "C"`); `.join(sep)` adds one.
 - **X1.7** `as String` prints in the language of the file it is written in (`$.ext`, P7.1).
+- **Covered elsewhere:** X1.2 (F-C2), X1.9 (L§5.8), X2.1/X2.2 (X2), X5.1 (the directive to follow the draft), X5.4 (the open bug in L§10.2).
+- **X1.3** Case operations for all scripts (full folding, `ß` → `SS`) come with the Unicode tables
+  (CaseFolding read as a class pattern).
+- **X3.5** Scripts are Char narrowings from the tables: `Char.Latin`, `Char.Arabic`.
+- **X3.6** Endianness is a direction on the bytes: little-endian reads them right-to-left, and a single
+  byte is the same either way.
+- **X3.7** A pinned Unicode version is fetched once and never refetched (cached under `@ether`, X3.3);
+  `latest` refetches on an explicit update.
+- **X4.4** Storage encodings are deferred with X4.1; choosing them from statistics stays the store's rule.
+- **X6.2** `IP < Location &+ (-1 <- . -> +1)` as the draft has it: `ip + 1` is the next address.
+- **X6.4** IPv6 `as String` follows RFC 5952 as the draft writes it; the trailing `.super` is dropped.
+- **X6.5** CIDR strings read as `ip / prefix_length`: the IP pattern with an optional `/n`.

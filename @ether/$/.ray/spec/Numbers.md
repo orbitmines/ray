@@ -140,3 +140,22 @@ Answers from 2026-09-30.
 - **N4.9** Astronomy later; Mars's sol and year stay as they are.
 - **N4.10** A value that may be corrected carries an uncertainty: `now` is a distribution (U8) around the
   reading, and a correction narrows it.
+- **N1.3** Quantities don't compare with plain numbers: `1m > ∞` is a type error, not true.
+- **N1.5** `0.not` holds, any other number's `.not` doesn't; bitwise NOT waits on a known width (N1.7).
+- **N1.7** `u{n}` and `i{n}` are rules: `u8 = Binary⁸`, `i8 = Binary⁸.Signed`.
+- **N1.10** `Binary{length == 1}` and boolean are isomorphic (via `as` both ways, N1.9).
+- **N1.15** Leading zeros are equivalent (`007 == 7`); a fixed-width type keeps them when printing.
+- **N2.3** Rates are written `GB/s`, `1 / m` and `2/10m`; `per` is not used.
+- **N2.5/N2.6** All SI prefixes (q…Q), the binary prefixes (KiB, MiB, …) and the `1k`/`1M`/`1B` counts, now.
+- **N1.20** A refined number (64 bits, say) runs through a Language level that rewrites Number operations to
+  native ones when the type proves the width.
+- **N2.7** Unit conversions (offset, multiple, magnitude) are reversed automatically when reversible.
+- **N2.8** `Unit.ray` stays in the core library; Geometry depends on it.
+- **N4.8** When the clock is corrected, times read since jump with it; together with N4.10, the correction
+  narrows the uncertainty.
+- **N4.11** `.round(seconds)`, a Time with no calendar (just a temporal Quantity), and `Calendar#` for all
+  calendars are all kept.
+- **N4.12** Drawing a function as an animation of itself (its `**` history) is UI work, later.
+- **N5.2** A boolean is a filter: a narrowing's body is a boolean (`xs{true}` keeps everything).
+- **N5.4** Rules with two operators (`def * {b} * {c}` matching `a * b * c`) are the general mechanism, as
+  `?:` already is.

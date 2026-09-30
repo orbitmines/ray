@@ -105,14 +105,14 @@ unless (Month.january != Month.march) { INFO@mark `TI65 two months are not diffe
 
 // A date written the way the standard writes it, read back into the three
 // numbers it is made of.
-written := ISO_8601.date(String.of(`3-2-7`))
+written := ISO_8601.date("3-2-7")
 unless (written.year == 3) { INFO@mark `TI66 the year written first is not read` }
 unless (written.month == Month.february) { INFO@mark `TI67 the second month written is not February` }
 unless (written.day == 7) { INFO@mark `TI68 the day written last is not read` }
-unless (written == ISO_8601.date(String.of(`3-2-7`))) { INFO@mark `TI69 a date is not itself` }
-if (written == ISO_8601.date(String.of(`3-2-8`))) { INFO@mark `TI70 two dates a day apart are the same` }
+unless (written == ISO_8601.date("3-2-7")) { INFO@mark `TI69 a date is not itself` }
+if (written == ISO_8601.date("3-2-8")) { INFO@mark `TI70 two dates a day apart are the same` }
 unless (written.is_valid(Gregorian)) { INFO@mark `TI71 the seventh of February is not a day` }
-if (ISO_8601.date(String.of(`3-2-9`)).day_of_year(Gregorian) == written.day_of_year(Gregorian)) { INFO@mark `TI72 two days fall on the same day of the year` }
+if (ISO_8601.date("3-2-9").day_of_year(Gregorian) == written.day_of_year(Gregorian)) { INFO@mark `TI72 two days fall on the same day of the year` }
 
 // How long a year is, and how many weeks fit in it.
 unless (Gregorian.days_in_year(3) == 365) { INFO@mark `TI73 an ordinary year is not three hundred and sixty-five days` }
@@ -143,5 +143,5 @@ pieces &= Calendar.Segment(name: 1, length: (2 seconds))
 cut := Calendar(parts: pieces)
 unless (cut.segments.count == 1) { INFO@mark `TI87 a calendar given one segment has other than one` }
 unless (Calendar().segments.empty) { INFO@mark `TI88 a calendar given none has some` }
-unless (String.of(Second.symbol) == String.of(`s`)) { INFO@mark `TI89 the second is not written s` }
-unless (String.of(Nanosecond.symbol) == String.of(`ns`)) { INFO@mark `TI90 the nanosecond is not written ns` }
+unless (Second.symbol.as_string == "s") { INFO@mark `TI89 the second is not written s` }
+unless (Nanosecond.symbol.as_string == "ns") { INFO@mark `TI90 the nanosecond is not written ns` }

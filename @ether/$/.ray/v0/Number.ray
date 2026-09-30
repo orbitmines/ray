@@ -113,7 +113,7 @@ Number := class: Ray {
   xor (b) => .set.xor(b)
   xnor (b) => .set.xnor(b)
 
-  < (other: Number) => (
+  chainable < (other: Number) => (
     mine := this
     theirs := other
     while (mine.nonzero.and(theirs.nonzero)) {
@@ -123,7 +123,7 @@ Number := class: Ray {
     mine.is_zero.and(theirs.nonzero)
   )
 
-  == (other: Number) => (
+  chainable == (other: Number) => (
     mine := this
     theirs := other
     while (mine.nonzero.and(theirs.nonzero)) {
@@ -132,11 +132,11 @@ Number := class: Ray {
     }
     mine.is_zero.and(theirs.is_zero)
   )
-  != (other: Number) => (this == other).not
+  chainable != (other: Number) => (this == other).not
 
   // Walks along the chain rather than nesting one application per unit, so a
   // thousand is as cheap to reach as ten.
-  + (other: Number) => (
+  compounds + (other: Number) => (
     total := this
     left := other
     while left {
@@ -147,7 +147,7 @@ Number := class: Ray {
   )
 
   // Subtraction floors at zero; the negative half of the line is `Integer`.
-  - (other: Number) => (
+  compounds - (other: Number) => (
     rest := this
     left := other
     while (left.nonzero.and(rest.nonzero)) {
@@ -157,7 +157,7 @@ Number := class: Ray {
     rest
   )
 
-  * (other: Number) => (
+  compounds * (other: Number) => (
     multiplied := zero
     left := other
     while left {
@@ -169,7 +169,7 @@ Number := class: Ray {
 
   // Division walks the dividend once, with the divisor walked alongside it:
   // each time the divisor runs out one more is counted and it starts over.
-  / (other: Number) => (
+  compounds / (other: Number) => (
     quotient := zero
     rest := this
     step := other
@@ -183,7 +183,7 @@ Number := class: Ray {
     }
     quotient
   )
-  % (other: Number) => (
+  compounds % (other: Number) => (
     rest := this
     step := other
     while (rest.nonzero.and(other.nonzero)) {
@@ -354,8 +354,8 @@ Number.Signed = class {
   )
   abs => Number.Signed(integer: .integer)
 
-  == (other: Number.Signed) => (.negative.xnor(other.negative)).and(.integer == other.integer)
-  < (other: Number.Signed) => if .negative {
+  chainable == (other: Number.Signed) => (.negative.xnor(other.negative)).and(.integer == other.integer)
+  chainable < (other: Number.Signed) => if .negative {
     if other.negative { other.integer < .integer } else { true }
   } else {
     if other.negative { false } else { .integer < other.integer }
@@ -363,7 +363,7 @@ Number.Signed = class {
 
   // Same signs add magnitudes; different signs subtract the smaller from the
   // larger and keep its sign.
-  + (other: Number.Signed) => (
+  compounds + (other: Number.Signed) => (
     summed := None
     if (.negative.xnor(other.negative)) {
       summed = Number.Signed(sign: .sign, integer: .integer + other.integer)
@@ -374,8 +374,8 @@ Number.Signed = class {
     }
     summed
   )
-  - (other: Number.Signed) => this + other.negated
-  * (other: Number.Signed) => (
+  compounds - (other: Number.Signed) => this + other.negated
+  compounds * (other: Number.Signed) => (
     multiplied := None
     if (.negative.xnor(other.negative)) { multiplied = Number.Signed(integer: .integer * other.integer) } else { multiplied = Number.Signed(sign: global, integer: .integer * other.integer) }
     multiplied
@@ -398,7 +398,7 @@ Number.Real = class {
   places => .fraction.count
   scale => .radix.pow(.places)
   numerator => (.integer * .scale) + Number.from_digits(.radix, .fraction)
-  == (other: Number.Real) => (
+  chainable == (other: Number.Real) => (
     same_digits ^keyword := (.integer == other.integer).and(.places == other.places)
     mine ^keyword := .fraction.head
     theirs ^keyword := other.fraction.head
@@ -409,8 +409,8 @@ Number.Real = class {
     }
     same_digits
   )
-  * (other: Number) => Number.Real.written(.numerator * other, .places, .radix)
-  / (other: Number) => Number.Real.written(.numerator / other, .places, .radix)
+  compounds * (other: Number) => Number.Real.written(.numerator * other, .places, .radix)
+  compounds / (other: Number) => Number.Real.written(.numerator / other, .places, .radix)
   as_number => .numerator / .scale
 
   written (numerator, places, radix) => (
@@ -458,13 +458,13 @@ base{ }{literal name ^class}{ }{size} ^keyword => (
     // A number of this base is read from its text a byte at a time, and the
     // reading stops at the first byte that is no digit of this base.
     accepts (text) => (
-      spelled_digits ^keyword := spelled_in(text, radix)
+      spelled_digits ^keyword := digits_spelled(text, radix)
       read_number ^keyword := None
       if (exists spelled_digits) { read_number = Number.from_digits(radix, spelled_digits) }
       read_number
     )
     Digits := class {
-      accepts (text) => spelled_in(text, radix)
+      accepts (text) => digits_spelled(text, radix)
     }
 
     // static class Signed < sign: "-"?, integer: Base
@@ -544,59 +544,32 @@ Probability := Number{. < two}
 u{ }{width} ^keyword => Binary{.integer.count < (width).succ}
 i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
 
-// The digit an ASCII byte spells, its bits most significant first: `0`..`9`
-// are 0011 dddd, `a`..`z` and `A`..`Z` are 01c lllll and count from ten.
-digit_of (byte) => (
-  walker ^keyword := byte.head
-  if walker.value { return None }
-  walker = walker.next
-  letter ^keyword := walker.value
-  walker = walker.next
-  if letter { walker = walker.next } else {
-    unless walker.value { return None }
-    walker = walker.next
-    unless walker.value { return None }
-    walker = walker.next
-  }
-  amount ^keyword := zero
-  while (exists walker) {
-    amount = amount + amount
-    if walker.value { amount = amount.succ }
-    walker = walker.next
-  }
-  if letter {
-    if amount.is_zero { return None }
-    return (amount + nine)
-  }
-  unless (amount < ten) { return None }
-  amount
-)
+// The digit a codepoint spells: `0`..`9`, then `a`..`z` and `A`..`Z` from ten.
+digit_of (point) => if ((47 < point).and(point < 58)) { point - 48 } elsif ((96 < point).and(point < 123)) { point - 87 } elsif ((64 < point).and(point < 91)) { point - 55 } else { None }
 
-spelled_in (text, radix) => (
-  spelled_digits ^keyword := chain None
-  read ^keyword := false
-  readable ^keyword := true
-  byte ^keyword := chain None
-  left ^keyword := eight
+// The digits a text spells in a base, read a byte at a time; the reading
+// stops at the first byte that is no digit of the base.
+digits_spelled (text, radix) => (
+  spelled ^keyword := chain None
+  byte ^keyword := 0
+  left ^keyword := 8
   take (b) => (
-    byte &= (inline b)
+    byte = byte + byte
+    if (inline b) { byte = byte.succ }
     left = left.pred
     if left.is_zero {
       digit := digit_of(byte)
       if (exists digit) {
-        if (digit < radix) {
-          spelled_digits &= digit
-          read = true
-        } else { readable = false }
-      } else { readable = false }
-      byte = chain None
-      left = eight
+        if (digit < radix) { spelled &= digit } else { spelled = None }
+      } else { spelled = None }
+      byte = 0
+      left = 8
     }
-    readable.holds
+    spelled
   )
   external bits text take
-  unless (readable.and(read)) { spelled_digits = None }
-  spelled_digits
+  if (exists spelled) { if spelled.empty { spelled = None } }
+  spelled
 )
 
 // def `digits: Decimal.Positive.String` => Decimal.Positive = digits
@@ -678,124 +651,110 @@ spelled_in (text, radix) => (
 // holds.
 
 Precedence ^keyword := class { }
-BitsRead ^keyword := class {
-  keep_read (b) => (this.read_bits &= (inline b))
-}
-text_bits (text) => (
-  reading ^keyword := BitsRead(read_bits: chain None)
-  external bits text reading.keep_read
-  reading.read_bits
+same_text (first_text, second_text) => (
+  same ^keyword := false
+  if ((exists first_text).and(exists second_text)) { same = (code_points(first_text) == code_points(second_text)) }
+  same
 )
 JumpRead ^keyword := class { }
+HeadRead ^keyword := class { }
+head_ends ^keyword := chain None
+joined_points (first, then) => (
+  both ^keyword := chain None
+  first for { both &= it.value }
+  then for { both &= it.value }
+  both
+)
+with_point (points, point) => (
+  both ^keyword := chain None
+  points for { both &= it.value }
+  both &= point
+  both
+)
 precedences ^keyword := chain None
 remembered (cache, place, spelled) => (
   cached_at ^keyword := cache.head
   entry_found ^keyword := None
   while ((exists cached_at).and((exists entry_found).not)) {
-    if ((exists (external alike (cached_at.value.place) (place))).and(exists (external alike (cached_at.value.spelled) (spelled)))) { entry_found = cached_at.value }
+    if (same_text(cached_at.value.place, place)) { if (same_text(cached_at.value.spelled, spelled)) { entry_found = cached_at.value } }
     cached_at = cached_at.next
   }
   entry_found
 )
 Program.components.hierarchy &= class {
+  // A text begins with another where their codepoints are the same as far as
+  // the other goes; a None in the other stands for any one codepoint.
   begins (statement, wanted) => (
-    bit_at ^keyword := wanted.head
-    compare_bit (b) => (
-      held_bit ^keyword := bit_at.value
-      bit_at = bit_at.next
-      external alike (held_bit) (inline b)
-    )
-    external bits statement compare_bit
-    (exists bit_at).not
-  )
-  spelled_bits (spelled) => (
-    wanted_bits ^keyword := text_bits(spelled)
-    space_at ^keyword := .middle_byte(`x y`).head
-    while (exists space_at) {
-      wanted_bits &= space_at.value
-      space_at = space_at.next
+    point_at ^keyword := wanted.head
+    code_points(statement) for {
+      if (exists point_at) {
+        if (exists point_at.value) {
+          if (it.value == point_at.value) { point_at = point_at.next } else { return false }
+        } else { point_at = point_at.next }
+      }
     }
-    wanted_bits &= (`end`)
-    wanted_bits
+    (exists point_at).not
+  )
+  // What is spelled, a space, and at least one codepoint more.
+  spelled_points (spelled) => (
+    wanted ^keyword := code_points(spelled)
+    wanted &= .middle_point(`x y`)
+    wanted &= None
+    wanted
   )
   counted_to (spelled) => (
-    wanted_bits ^keyword := .spelled_bits(spelled)
+    wanted_points ^keyword := .spelled_points(spelled)
     written_before ^keyword := zero
     found ^keyword := None
     rest_after ^keyword := this
     statement_at ^keyword := external first rest_after
     while ((exists statement_at).and((exists found).not)) {
-      if (.begins(statement_at, wanted_bits)) { found = written_before }
+      if (.begins(statement_at, wanted_points)) { found = written_before }
       written_before = written_before.succ
       rest_after = external rest rest_after
       statement_at = external first rest_after
     }
     found
   )
-  written_with (spelled) => .begins(this, .spelled_bits(spelled))
+  written_with (spelled) => .begins(this, .spelled_points(spelled))
   is_jump => .written_with(`goto`)
-  bits_written => (
-    reading ^keyword := BitsRead(read_bits: chain None)
-    external bits this reading.keep_read
-    reading.read_bits
-  )
-  middle_byte (around) => (
-    byte_at ^keyword := text_bits(around).head.next.next.next.next.next.next.next.next
-    middle ^keyword := chain None
-    left_of_byte ^keyword := eight
-    while left_of_byte {
-      middle &= byte_at.value
-      byte_at = byte_at.next
-      left_of_byte = left_of_byte.pred
-    }
-    middle
-  )
-  same_bits (from, other) => (
-    bit_at ^keyword := from
+  middle_point (around) => code_points(around).head.next.value
+  same_points (from, other) => (
+    point_at ^keyword := from
     other_at ^keyword := other.head
     same_so_far ^keyword := true
     while ((exists other_at).and(same_so_far)) {
-      unless (exists bit_at) { same_so_far = false }
-      if (exists bit_at) {
-        unless (exists (external alike (bit_at.value) (other_at.value))) { same_so_far = false }
-        bit_at = bit_at.next
-      }
+      if (exists point_at) {
+        unless (point_at.value == other_at.value) { same_so_far = false }
+        point_at = point_at.next
+      } else { same_so_far = false }
       other_at = other_at.next
     }
     same_so_far
   )
   is_label => (
-    written_bits ^keyword := .bits_written
-    last_byte ^keyword := written_bits.tail
-    back ^keyword := seven
-    while ((exists last_byte).and(back.nonzero)) {
-      last_byte = last_byte.previous
-      back = back.pred
-    }
-    (exists last_byte).and(.same_bits(last_byte, .middle_byte(`x\y`)))
+    last ^keyword := code_points(this).tail
+    labelled ^keyword := false
+    if (exists last) { labelled = (last.value == .middle_point(`x\y`)) }
+    labelled
   )
   jump_read => (
-    name_at ^keyword := .bits_written.head
-    goto_bits_left ^keyword := eight * five
-    while ((exists name_at).and(goto_bits_left.nonzero)) {
+    name_at ^keyword := code_points(this).head
+    goto_left ^keyword := 5
+    while ((exists name_at).and(goto_left.nonzero)) {
       name_at = name_at.next
-      goto_bits_left = goto_bits_left.pred
+      goto_left = goto_left.pred
     }
-    name_bits ^keyword := chain None
-    space_byte ^keyword := .middle_byte(`x y`)
+    name_points ^keyword := chain None
+    space ^keyword := .middle_point(`x y`)
     ended ^keyword := false
     while ((exists name_at).and(ended.not)) {
-      if (.same_bits(name_at, space_byte)) { ended = true }
-      unless ended {
-        byte_left ^keyword := eight
-        while ((exists name_at).and(byte_left.nonzero)) {
-          name_bits &= name_at.value
-          name_at = name_at.next
-          byte_left = byte_left.pred
-        }
+      if (name_at.value == space) { ended = true } else {
+        name_points &= name_at.value
+        name_at = name_at.next
       }
     }
-    JumpRead(name_bits: name_bits, conditional: ended)
+    JumpRead(name_points: name_points, conditional: ended)
   )
   is_conditional => .is_jump.and(.jump_read.conditional)
   flow => (
@@ -807,7 +766,7 @@ Program.components.hierarchy &= class {
         landing ^keyword := .target_of(flow_at.value)
         landing_at ^keyword := steps.head
         while (exists landing_at) {
-          if (exists (external alike (external where landing_at.value) (external where landing))) { flow_at.jumps_to = landing_at }
+          if (same_text((external where landing_at.value), (external where landing))) { flow_at.jumps_to = landing_at }
           landing_at = landing_at.next
         }
         flow_at.falls_through = flow_at.value.is_conditional
@@ -817,20 +776,73 @@ Program.components.hierarchy &= class {
     steps
   )
   target_of (jump) => (
-    wanted_name ^keyword := jump.jump_read.name_bits
+    wanted_name ^keyword := jump.jump_read.name_points
     landing ^keyword := None
     rest_after ^keyword := this
     statement_at ^keyword := external first rest_after
     while ((exists statement_at).and((exists landing).not)) {
       external extend statement_at Program
       if statement_at.is_label {
-        label_bits ^keyword := statement_at.bits_written
-        if ((label_bits.count == (wanted_name.count + eight)).and(.same_bits(label_bits.head, wanted_name))) { landing = statement_at }
+        label_points ^keyword := code_points(statement_at)
+        if ((label_points.count == wanted_name.count.succ).and(.same_points(label_points.head, wanted_name))) { landing = statement_at }
       }
       rest_after = external rest rest_after
       statement_at = external first rest_after
     }
     landing
+  )
+  // The codepoints that end the name a statement begins with: a space, `(`,
+  // `:` and `?`, read once.
+  head_enders => (
+    if head_ends.empty {
+      head_ends &= .middle_point(`x y`)
+      head_ends &= .middle_point(`x(y`)
+      head_ends &= .middle_point(`x:y`)
+      head_ends &= .middle_point(`x?y`)
+    }
+    head_ends
+  )
+  // The name a statement begins with, and the codepoint that ended it.
+  head_read => (
+    enders ^keyword := .head_enders
+    head ^keyword := chain None
+    ending ^keyword := None
+    code_points(this) for {
+      unless (exists ending) {
+        if (enders.contains(it.value)) { ending = it.value } else { head &= it.value }
+      }
+    }
+    HeadRead(points: head, ending: ending)
+  )
+  // What a class body requires of anything that is one, by the codepoints of
+  // each name: a field written with its type and nothing more (`name: Type`),
+  // and what is left to be said (`name => TODO`). `name?: Type` may be
+  // absent, so it is not required.
+  required_heads => (
+    reading ^keyword := this
+    enders ^keyword := .head_enders
+    space ^keyword := enders.at(0).value
+    colon ^keyword := enders.at(2).value
+    left_to_say ^keyword := with_point(joined_points(with_point(chain None, space), code_points(`=>`)), space)
+    left_to_say = joined_points(left_to_say, code_points(`TODO`))
+    wanted ^keyword := chain None
+    statement_head ^keyword := None
+    reading.written for {
+      statement_head = it.value.head_read
+      if (exists statement_head.ending) {
+        if (statement_head.ending == colon) { wanted &= statement_head.points } elsif (reading.begins(it.value, joined_points(statement_head.points, left_to_say))) { wanted &= statement_head.points }
+      }
+    }
+    wanted
+  )
+  // Whether a statement of this body gives the name spelled by `head`: one
+  // that begins with it and then a space or `(`.
+  declares (head) => (
+    reading ^keyword := this
+    enders ^keyword := .head_enders
+    spaced ^keyword := with_point(head, enders.at(0).value)
+    opened ^keyword := with_point(head, enders.at(1).value)
+    reading.written some { (reading.begins(it.value, spaced)).or(reading.begins(it.value, opened)) }
   )
   precedence (spelled) => (
     place_of ^keyword := external where this
@@ -845,3 +857,48 @@ Program.components.hierarchy &= class {
     rank_known
   )
 }
+
+// What a type is, structurally: a value is one when it gives every name the
+// type requires. What is given is read off the classes a value is written
+// with, and what they are written with in turn; what is required, off the
+// type's own and those it is written with. Each class is read once.
+classes_of (type) => (
+  unless (exists type.classes_read) {
+    type.classes_read = chain None
+    reached ^keyword := chain None
+    reached &= type
+    held ^keyword := type.components.hierarchy
+    if (exists held) {
+      held for {
+        if (exists it.value) { classes_of(it.value) for { reached &= it.value } }
+      }
+    }
+    type.classes_read = reached
+  }
+  type.classes_read
+)
+requirements_of (type) => (
+  unless (exists type.requirements_read) {
+    wanted ^keyword := chain None
+    written ^keyword := None
+    classes_of(type) for {
+      written = it.value.written_as
+      if (exists written) { written.required_heads for { wanted &= it.value } }
+    }
+    type.requirements_read = wanted
+  }
+  type.requirements_read
+)
+declared_by (value, head) => (
+  written ^keyword := None
+  classes_of(value) some {
+    written = it.value.written_as
+    if (exists written) { written.declares(head) } else { false }
+  }
+)
+structurally (value, type) => (
+  requirements_of(type) for {
+    unless (declared_by(value, it.value)) { return None }
+  }
+  global
+)

@@ -7,9 +7,9 @@
 // location. spec: a location is a literal path (or `stdin`); the instance
 // directory is where the program runs, and `os` names the host.
 IO := class {
-  read (path) => String.of(external io path None)
+  read (path) => (external io path None).as_string
   write (path, content) => external io path content
-  os (name) => String.of(external os name)
+  os (name) => (external os name).as_string
   platform => IO.os(`platform`)
   architecture => IO.os(`architecture`)
   File := class {
@@ -97,7 +97,7 @@ Proof := class {
   holds => .argument.holds
   // What is not proved is what there is to do: a theorem whose proof does not
   // hold is a quest to prove it, built the way a quest is built.
-  theorem (proposition, proof) => if proof.holds { true } else { Quest(name: String.of(`prove`), goal: proposition) }
+  theorem (proposition, proof) => if proof.holds { true } else { Quest(name: "prove", goal: proposition) }
   by_contradiction (proposition, proof_of_negation) => proof_of_negation.holds.not
   rfl (proposition) => proposition.holds
   assume (fact) => fact

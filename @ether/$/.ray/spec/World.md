@@ -1,0 +1,160 @@
+# Ray — World, features and editor spec (from the comments in `World.ray` and `Feature.ray`)
+
+Status legend: **Decided** · **Open** · **See L§n / G§n**.
+IDs `W…`. Answers go under **Decided** at the end.
+
+---
+
+## W1. Names and worlds (*World:1–90, 344–380*)
+
+- **W1.1 Persona vs Character** — v0 renamed the draft's `Character` (the player) to `Persona`, because `Character` is a
+  text character. Open: keep `Persona`?
+- **W1.2 Location < World** — *World:345–346*: as composition, not "Location has world"; or every location is a World.
+- **W1.3 Name fallback** — a name not defined in a world falls back to it (then `@ether`).
+- **W1.4 Allocating names** — *World:353*: allocate a name within your access to another character (`x@gmail.com` allocated by
+  Google, issuer `@me`, for the world `@ether`).
+- **W1.5 Many worlds in a structure** — `< World` at many places; `.worlds`/`.characters` iterate that structure.
+- **W1.6 Dynamics** — on the world, or a separate composition.
+
+## W2. Entities, instances, personas (*World:208–260, 381–442; Feature:264–340*)
+
+- **W2.1 Entity identity** — `==` on Entity/Instance checks the public key. Compromised keys: redistribute by a version log of
+  who had access; private servers mustn't be compromised because players imitate access.
+- **W2.2 Instance** — `Instance < Location, URL | DomainName | IP | Socket.Address`; localhost locally, an IP elsewhere.
+- **W2.3 MAC address** — `confidential.read none.write mac_address: Binary⁴⁸`, from an external or random with the multicast bit.
+- **W2.4 Spawn/login/logout/swap** — the entrypoint drafts: `spawn(player)`, `login` adds to a registry; logout with
+  `delete_all` schedules deletion with a cancel window; discard private keys at once.
+- **W2.5 Local co-op** — one entity hosting others; the second player sets things on `.host`.
+- **W2.6 Status** — Online/Offline, Idle/DoNotDisturb/Busy, extended status; invisible = offline read.
+- **W2.7 Sharded character** — remote storage beyond what the central server allows.
+- **W2.8 Remote execution** — run code as a character; "run as an unauthorized character by creating a new one".
+- **W2.9 Mirrors** — selected on another instance (primary); a mirror of X for my Y; when a mirror syncs, how deep.
+- **W2.10 Timed challenges** — messages to be decoded as challenges.
+- **W2.11 `@me.choose`** — different from `choose`.
+
+## W3. History and version control (*World:145–180, 294–324*)
+
+- **W3.1 History = chain of commits** — each by a persona with a version id. L§9.2 decided HLC-stamped operations over
+  definitions with rename-preserving identity.
+- **W3.2 Git both ways** — a history conversion to git.
+- **W3.3 Staged = local visibility** — uncommitted and staged changes are visibility set to local/private.
+- **W3.4 Assignment carries history** — the `.=(value)` edge carries where the value came from; default `=` checks histories
+  and raises merge conflicts as quests; keep the variable's own history vs the value's.
+- **W3.5 Type conflicts are merge conflicts** — in distributed databases.
+- **W3.6 Granularity** — a lower bound for the repository (not individual bits of characters); "character level is the lowest
+  for String, otherwise every class is a repository".
+- **W3.7 Approximate values** — a Bloom-filter-like distributed approximation ("I don't mind an approximate value").
+- **W3.8 Squash, cherry-pick, new repository from here**.
+- **W3.9 Generic-type versioning** — *World:297*: store that a silent generic type was used; alert when a variable of that name
+  appears.
+
+## W4. Quests, items, references (*World:88–144, 186–206, 325–343*)
+
+- **W4.1 Quests** — goal, steps, completion; difficulty and effectiveness ratings; "there could still be a continuation, how to
+  know we're done". Gamification.md decided quests are reachability.
+- **W4.2 Consistency requirements** — *World:333*: "I've communicated with these replica servers before this calculation"
+  (strong consistency); offline players.
+- **W4.3 Items** — issued by a world, need quests to find; how it is made, discovered, constructed; perspective on an object;
+  minimaps.
+- **W4.4 References** — title, author, date, draft, link, notes; claim authorship of a dummy reference; published = who hosts it;
+  a pointer (page); `as Renderable`; a remote ref over the network.
+- **W4.5 Procedural generation** — `class Room { 4 Wall{a Door, 50% Window}, 1..3 Bookshelf{against a Wall} … }`,
+  `choose Room{4..5m x 5..7m}`: counted types, `a`/`an`, relational constraints (`against`, `next to`).
+
+## W5. Access (*World:182–188, 474–497; Accessor*)
+
+- **W5.1 Levels** — READ/WRITE/EXECUTE; `confidential`, `internal`, `public.read`, `none.write`; `default_privacy_policy`. L§8.3.
+- **W5.2 A block of permissions** — put everything in a block under one permission.
+- **W5.3 Access to `**`** — "Default `public.read` doesn't allow access to `**`, but what would?"
+- **W5.4 Derived data** — L§8.2 (`local` mark).
+
+## W6. Features (*Feature.ray*)
+
+- **W6.1 IO** — `File = Byte[]`; paths relative to the instance directory; `..` can't leave the top (only symlinks); lazy file
+  programs (only compiled if read); `{field}.ray.txt`, then a directory, then a file; `IO /path as String`; mirrors; `%=`
+  shadowing = components with `&+`/`+`. L§10.6. And F-D9 decided one byte-stream external.
+- **W6.2 Random** — `secure`, `seed`; where the probability is stored.
+- **W6.3 Choice** — `()` on a constrained type chooses; `Number{choose}`; `choose 50%`; `1/2 Number`; `choose{unique}`;
+  `dynamically` choose; `choose` uses `===` and maps once.
+- **W6.4 Proof** — equational reasoning; assumptions outside vs inside a function; externally used variables are assumptions;
+  a failed proof starts a quest (or not); sub-proofs; a Lean library; proof by contradiction; theorem/lemma/example graph.
+- **W6.5 Transaction** — revert a specific commit when the graph changed since; record the version; roll back `&=`.
+- **W6.6 Network** — protocols with default ports (ether 37839); URL grammar; `Port = Decimal{< 2^16}`; sockets; a hosts table as
+  equivalences (`"ether".ignore_case => "ether.orbitmines.com"`); DNS history checked against stored public keys;
+  `Node.Remote`; `< @https://…` imports; proxies (all traffic or a block; per user); the version handshake.
+- **W6.7 Streaming** — a player's streaming location; watching = following that location.
+- **W6.8 Update** — `IO / = ETHER@ETHER/instance`; merge conflicts; reload in memory with diffs (a renamed field keeps working).
+- **W6.9 OS** — `OS.name` from an external; per-OS files that `return if OS.name != "Linux"`.
+- **W6.10 Keyboard** — `pulsed (max: 20/s, delay: 1s)`, `toggled`, `cycle`, `as boolean` if pressed. Now also F-D10b.
+- **W6.11 Chat** — a chain of messages from personas; "only what changed since last seen".
+
+## W7. The editor (the journal part of Feature.ray, *Feature:760–863*)
+
+These are the Ether IDE's. Open: which of them belong in a spec now (vs later, with the IDE)?
+
+- **W7.1** Code ↔ English at a chosen level of description; operate on a selection by naming the operation.
+- **W7.2** Ambiguity resolved in the editor and remembered; warn when re-writing an existing isomorphism.
+- **W7.3** Tests collapse inline; a timing button per function; a version selector per function; versions intermingled.
+- **W7.4** Cursor movement rules (column memory, end-of-line stickiness, ctrl+up/down scrolls); goto labels outdented one space;
+  `((` asks for `((` + tab.
+- **W7.5** Eye tracking picks the active pane.
+- **W7.6** Search inside results as an undoable program.
+- **W7.7** Encrypted text edited as plain text; custom symbols.
+- **W7.8** Icons generating other formats; any object as a table; conditions on a source file (sorted classes).
+- **W7.9** Unbound controls offered; structures bound to controls; one key shows every orbit; a slider over levels of description.
+- **W7.10** Drawing graphs (lines invisible until hover); mouse locks to the nearest structure; a non-100%-wide interface isn't a
+  box but whatever shape fits.
+- **W7.11** An explorer that wanders, reminds, and works while nobody does; replay.
+- **W7.12** Conditional inclusion by access (paid videos).
+- **W7.13** Proofs and tests as one mechanism; tactics expand and fold.
+- **W7.14** Apps installed into the browser; beginner setups; colour as a frequency filter; generated 2D/3D modelling; modular
+  interfaces.
+
+---
+
+## Decided
+
+Answers from 2026-09-30.
+
+- **W1.1** Text characters are `Char`, and players/NPCs are `Character`. `Persona` is renamed back to
+  `Character`, and the text class `Character` becomes `Char`.
+- **W1.2** A World is a Location (composition): a location with rules, and any location can be made a world.
+- **W3.2** Git import/export, as a frontend with an inverse, is part of L§9.2's first milestone.
+- **W7** The editor notes are the IDE's backlog (2027); they are not implemented in v0.
+- **W2.1** `==` on characters and instances compares public keys, now. Key compromise and rotation later.
+- **W2.4** Spawning, login/logout/swap and deletion with a cancel window are implemented now, from the
+  entrypoint drafts.
+- **W6.4** An error that fails the program is, in general, a quest; a failing proof is one such case.
+- **W6.6** All of the networking now (protocols, URL grammar, hosts as equivalences, DNS history checked
+  against public keys, proxies, the version handshake), in a **separate project**, so it is isolated and
+  can be excluded.
+- **W6.1** IO is sandboxed: `IO /path` is inside the instance directory, `..` can't leave the top
+  (symlinks can), and the host filesystem is reached only via `confidential IO.os /path` when permitted.
+- **W6.1b** A path naming a field is looked up as `{field}.ray`, then a directory `{field}`, then a file.
+- **W3.3** Staged/uncommitted changes are visibility set to local/private; publishing raises visibility.
+- **W3.6** Every class is a repository; String's lowest level is the character.
+- **W4.5** Counted types (`4 Wall`, `1..3 Bookshelf`, `a Table`) now; spatial relations (`against`,
+  `next to`) as Geometry narrowings once `v0/Geometry/` exists.
+- **W5.3** Access to a value's program is `@public.read` on `**`: visibility is recursive.
+- **W6.10** The Keyboard API is the draft's (`pulsed (max: 20/s, delay: 1s)`, `toggled`, `cycle`,
+  `as boolean` when pressed), with keys as `dynamically` variables. It is also the TUI's input.
+- **W2.6** Status is one superposable enum: `@me.status = Online & Hosted & Idle`.
+- **W1.4** Allocating names now: `@google.@x = @someone`, where the issuer is whoever owns the namespace.
+- **W2.9** A mirror is the same variable at another location (`x @ @me.managed`); sync depth is a setting
+  of that location.
+- **W3.4** Assigning a value that has a history keeps both, linked: the `=` edge carries the value's
+  history, and conflicts become merge quests.
+- **W3.7** "An approximate value is fine" is an uncertainty type (`likes: ≈Number`, as N4.10); the store
+  picks an approximate encoding.
+- **W4.1** Quest difficulty and effectiveness ratings come with Gamification; quests are reachability now.
+- **W4.2** A consistency requirement is a narrowing on the read's location: `x @ {replicas.every(.synced)}`;
+  offline replicas make it a quest.
+- **W4.4** References port the site's `references.ts` fields into a class `Reference`; authors are
+  Characters (`@fadi`).
+- **W6.3** `()` on a constrained type chooses (`Number{> 5}()`), and `dynamically choose` may change later.
+- **W6.5** A transaction is a history branch: commit merges it and abort drops it. Reverting a change
+  applies its inverse to the current state (L§4.5).
+- **W6.4b** Propositions, proofs and theorems as quests now; Lean comes through the Ether Library.
+- **W6.7** Streaming is kept (watching = following a player's streaming location), with networking.
+- **W6.8** Update (`IO / = ETHER@ETHER/instance`) is an ordinary assignment to a location with merge
+  quests, built now in the networking project.

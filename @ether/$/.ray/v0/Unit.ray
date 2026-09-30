@@ -91,7 +91,7 @@ Unit := class {
   // One unit is another when it counts the same of the same thing: a base
   // unit is what it is named, and a unit built on one is how many of that one
   // it is.
-  == (other: Unit) => if (.is_base.xnor(other.is_base)) {
+  chainable == (other: Unit) => if (.is_base.xnor(other.is_base)) {
     if .is_base {
       exists (external alike (.name) (other.name))
     } else {
@@ -129,15 +129,15 @@ Quantity := class {
   // spec: on one base line the finer unit is the one fewer multiples up, so
   // no scale (which can be thousands) is built to decide.
   finer (other: Quantity) => if (other.unit.rank < .unit.rank) { other.unit } else { .unit }
-  == (other: Quantity) => (
+  chainable == (other: Quantity) => (
     kind := .finer(other)
     (this as kind).amount == (other as kind).amount
   )
-  < (other: Quantity) => (
+  chainable < (other: Quantity) => (
     kind := .finer(other)
     (this as kind).amount < (other as kind).amount
   )
-  + (other: Quantity) => (
+  compounds + (other: Quantity) => (
     kind := .finer(other)
     total := (this as kind).amount + (other as kind).amount
     Quantity(
@@ -145,7 +145,7 @@ Quantity := class {
       unit: kind
     )
   )
-  - (other: Quantity) => (
+  compounds - (other: Quantity) => (
     kind := .finer(other)
     difference := (this as kind).amount - (other as kind).amount
     Quantity(

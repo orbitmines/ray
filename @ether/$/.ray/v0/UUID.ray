@@ -102,7 +102,7 @@ UUID := class: Hexadecimal {
     walker ^keyword := .spelled.head
     // The dash between the groups is one character, read once: a codepoint is
     // a walk, and so is the character built from it.
-    dash ^keyword := Character.of(ascii_dash)
+    dash ^keyword := U+002D
     groups := chain None
     groups &= 8
     groups &= 4
@@ -118,16 +118,16 @@ UUID := class: Hexadecimal {
         left = left.pred
       }
     }
-    String(characters: out)
+    out.as_string
   )
-  == (other: UUID) => .as_string == other.as_string
+  chainable == (other: UUID) => .as_string == other.as_string
 
   // {uuid: UUID.String}: UUID => uuid — the text form read back.
   read (text: String) => (
     out := chain None
     // The dash is read once, not once per character.
-    dash ^keyword := Character.of(ascii_dash)
-    text.characters for {
+    dash ^keyword := U+002D
+    text for {
       character := it.value
       unless (character == dash) { out &= character.hexadecimal_digit }
     }
@@ -145,10 +145,10 @@ UUID := class: Hexadecimal {
   // spec: the texts, read with `UUID.read` when one is needed; reading all
   // four on every pass is more than a pass affords.
   Namespace := class {
-    DNS => String.of(`6ba7b810-9dad-11d1-80b4-00c04fd430c8`)
-    URL => String.of(`6ba7b811-9dad-11d1-80b4-00c04fd430c8`)
-    OID => String.of(`6ba7b812-9dad-11d1-80b4-00c04fd430c8`)
-    X500 => String.of(`6ba7b814-9dad-11d1-80b4-00c04fd430c8`)
+    DNS => "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+    URL => "6ba7b811-9dad-11d1-80b4-00c04fd430c8"
+    OID => "6ba7b812-9dad-11d1-80b4-00c04fd430c8"
+    X500 => "6ba7b814-9dad-11d1-80b4-00c04fd430c8"
   }
 }
 

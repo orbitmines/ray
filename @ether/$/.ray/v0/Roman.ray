@@ -11,17 +11,16 @@ Roman := class {
     value => .mantissa * 10.pow(.power)
     with_value (amount: Number) => Roman.Digit.i(mantissa: amount, power: 0)
   }
-  // A digit is told by its place in the alphabet (I=9, V=22, X=24, L=12, C=3, D=4, M=13).
   digit_of (character: Character) => (
-    place := character.upper.tail_value(3)
-    if (character.is_ascii.and(character.bit(1))).not { if (Unicode.fits(character.codepoint, 13)) { None } else { Roman.number_form(character.codepoint) } }
-    elsif (place == 9) { Roman.Digit.i }
-    elsif (place == 22) { Roman.Digit.v }
-    elsif (place == 24) { Roman.Digit.x }
-    elsif (place == 12) { Roman.Digit.l }
-    elsif (place == 3) { Roman.Digit.c }
-    elsif (place == 4) { Roman.Digit.d }
-    elsif (place == 13) { Roman.Digit.m }
+    upper := character.upper
+    if character.is_ascii.not { if (Unicode.fits(character, 13)) { None } else { Roman.number_form(character) } }
+    elsif (upper == U+0049) { Roman.Digit.i }
+    elsif (upper == U+0056) { Roman.Digit.v }
+    elsif (upper == U+0058) { Roman.Digit.x }
+    elsif (upper == U+004C) { Roman.Digit.l }
+    elsif (upper == U+0043) { Roman.Digit.c }
+    elsif (upper == U+0044) { Roman.Digit.d }
+    elsif (upper == U+004D) { Roman.Digit.m }
     else { None }
   )
   // spec: the Unicode Number Forms block: Ⅰ..Ⅻ (1..12), Ⅼ Ⅽ Ⅾ Ⅿ, their
@@ -38,7 +37,7 @@ Roman := class {
   // `as Decimal`: a digit smaller than the next is subtracted.
   as_number => (
     total ^keyword := 0
-    walker ^keyword := .text.characters.head
+    walker ^keyword := .text.head
     while (exists walker) {
       current := Roman.digit_of(walker.value).value
       following := if (exists walker.next) { Roman.digit_of(walker.next.value).value } else { 0 }
@@ -56,7 +55,7 @@ Roman := class {
   )
   text: String
 
-  is_valid => .text.every { exists Roman.digit_of(character) }
+  is_valid => .text.every { exists Roman.digit_of(it.value) }
   // The draft's `Standard`: 1 <= value <= 3999.
   is_standard => (
     amount := .as_number
@@ -79,7 +78,7 @@ Roman := class {
     Roman.place(out, hundreds % 10, Roman.m_digit, Roman.d_digit, Roman.c_digit)
     Roman.place(out, below / 10, Roman.c_digit, Roman.l_digit, Roman.x_digit)
     Roman.place(out, below % 10, Roman.x_digit, Roman.v_digit, Roman.i_digit)
-    Roman(text: String(characters: out))
+    Roman(text: out.as_string)
   )
   place (out, count: Number, ten_digit, five_digit, one_digit) => (
     if (count == 9) {
@@ -100,13 +99,13 @@ Roman := class {
     }
     out
   )
-  i_digit => Character.latin_upper(9)
-  v_digit => Character.latin_upper(22)
-  x_digit => Character.latin_upper(24)
-  l_digit => Character.latin_upper(12)
-  c_digit => Character.latin_upper(3)
-  d_digit => Character.latin_upper(4)
-  m_digit => Character.latin_upper(13)
+  i_digit => U+0049
+  v_digit => U+0056
+  x_digit => U+0058
+  l_digit => U+004C
+  c_digit => U+0043
+  d_digit => U+0044
+  m_digit => U+004D
 
   // spec: the Additive form writes fours as IIII (no subtractive pairs).
   additive (number: Number) => (
@@ -121,7 +120,7 @@ Roman := class {
     Roman.place_additive(out, hundreds % 10, Roman.d_digit, Roman.c_digit)
     Roman.place_additive(out, below / 10, Roman.l_digit, Roman.x_digit)
     Roman.place_additive(out, below % 10, Roman.v_digit, Roman.i_digit)
-    Roman(text: String(characters: out))
+    Roman(text: out.as_string)
   )
   place_additive (out, count: Number, five_digit, one_digit) => (
     unless (count < 5) { out &= five_digit }
@@ -140,8 +139,8 @@ Roman := class {
   // `as_number` once the numeral's characters are grouped with their marks;
   // that grouping waits on the Unicode combining classes (Unicode.ray).
   Vinculum := class {
-    overline => Character.of(773)
-    double_overline => Character.of(831)
+    overline => U+0305
+    double_overline => U+033F
   }
 
   // spec: the base-twelve fractions, in twelfths: · ∶ ∴ ∷ ⁙ are 1..5, S is 6;
@@ -149,14 +148,14 @@ Roman := class {
   Fraction := class {
     twelfths (text: String) => (
       total ^keyword := 0
-      text.characters for {
+      text for {
         point := it.value.codepoint
         if (point == middle_dot) { total = total.succ }
         elsif (point == ratio_sign) { total = total + 2 }
         elsif (point == therefore_sign) { total = total + 3 }
         elsif (point == proportion_sign) { total = total + 4 }
         elsif (point == five_dot_sign) { total = total + 5 }
-        elsif (point == ascii_upper_s) { total = total + 6 }
+        elsif (point == U+0053) { total = total + 6 }
       }
       total
     )
@@ -174,14 +173,6 @@ Roman := class {
   }
 }
 
-ascii_upper_c => ascii_upper_a + 2
-ascii_upper_d => ascii_upper_a + 3
-ascii_upper_i => ascii_upper_a + 8
-ascii_upper_l => ascii_upper_a + 11
-ascii_upper_m => ascii_upper_a + 12
-ascii_upper_s => ascii_upper_a + 18
-ascii_upper_v => ascii_upper_a + 21
-ascii_upper_x => ascii_upper_a + 23
 number_forms_first => 8544
 middle_dot => 183
 ratio_sign => 8758

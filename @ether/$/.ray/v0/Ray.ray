@@ -7,13 +7,13 @@
 // chain of bases until a class can name more than one, and the draft's unicode
 // aliases (⊢ ⊣ ∙ ⊙ ∃ ∀) wait on a way to spell them.
 Ordered := class {
-  < (other: Ordered) => TODO
+  chainable < (other: Ordered) => TODO
   // `.<(…)` rather than `<`: a juxtaposed call is dispatched on what the
   // parameter was declared to be, and here that is only `Ordered`, whose `<`
   // is the one being overridden.
-  > (other: Ordered) => other.<(this)
-  <= (other: Ordered) => other.<(this).not
-  >= (other: Ordered) => .<(other).not
+  chainable > (other: Ordered) => other.<(this)
+  chainable <= (other: Ordered) => other.<(this).not
+  chainable >= (other: Ordered) => .<(other).not
 
   // The answer is bound before it is handed back, rather than being the
   // branch that chose it: two rays are the same only when they are the same
@@ -422,22 +422,23 @@ Ray := class: Iterable {
   // A chain walked forward never returns to where it started.
   acyclic => .terminal.is_terminal
 
-  == (other: Ray) => (
-    mine := this
-    theirs := other
-    while (mine.is_terminal.not.and(theirs.is_terminal.not)) {
-      mine = mine.next
-      theirs = theirs.next
+  chainable == (other) => (
+    mine := .entry
+    theirs := other.entry
+    same := (exists mine).xnor(exists theirs)
+    while (same.and(exists mine)) {
+      if ((exists mine.value).or(exists theirs.value)) { same = (mine.value == theirs.value) }
+      if same {
+        same = mine.is_terminal.xnor(theirs.is_terminal)
+        if mine.is_terminal { mine = None } else {
+          mine = mine.next
+          theirs = theirs.next
+        }
+      }
     }
-    // Walked together to their ends, two rays are the same; two that went
-    // nowhere at all are the same only when they say the same thing.
-    if (.is_terminal.and(other.is_terminal)) {
-      exists (external alike (this) (other))
-    } else {
-      mine.is_terminal.and(theirs.is_terminal)
-    }
+    same
   )
-  != (other: Ray) => (this == other).not
+  chainable != (other) => (this == other).not
 }
 
 // A boundary is the ray a vertex shows to the edge it sits on; an edge is the
@@ -482,6 +483,7 @@ Structure := class: Iterable {
   hyper_edges => false
   is_valid => true
 }
+Structure.components.hierarchy &= Ray
 Hypergraph := class: Structure {
   hyper_edges => true
 }
@@ -514,8 +516,6 @@ Set := class: Structure {
     unless (this.elements.contains(x)) { this.elements &= x }
     this
   )
-  == (other: Set) => (.count == other.count).and(.every { other.contains(it.value) })
-  != (other: Set) => (this == other).not
 }
 
 // `parent | previous : static? <- hierarchy -> children | next : static?`: a
@@ -601,20 +601,7 @@ Chain.components.hierarchy &= class {
   pop_back => (
     taken ^keyword := None
     if (exists this.tail) { taken = this.unlink(this.tail) }
-// A chain is made by `chain`, not by its class, so it holds no hierarchy of
-// its own: it is built on its class, and on what its class is built on.
-Chain.components.hierarchy &= class {
-  built_on (type) => (
-    found ^keyword := Array.built_on(type)
-    if (exists (external alike (external where Chain) (external where type))) { found = global }
-    found
-  )
-}
-Link.components.hierarchy &= class {
-  built_on (type) => (
-    found ^keyword := Ray.built_on(type)
-    if (exists (external alike (external where Link) (external where type))) { found = global }
-    found
+    taken
   )
 }
 

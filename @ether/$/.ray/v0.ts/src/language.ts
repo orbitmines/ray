@@ -59,12 +59,19 @@ export namespace Ray {
   export function v0(diagnostics: Diagnostics) {
     return new Program(diagnostics)
       .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
-      .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
+      .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
+      .interpreting(optimizations());
   }
 
   export function lsp(diagnostics: Diagnostics) {
     return new Program(diagnostics)
-      .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
+      .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
+      .interpreting(optimizations());
+  }
+
+  export function optimizations(): Text.Source[] {
+    const location = `@ether/$/${EXTENSION}/v0.ts/v0.ts.o${EXTENSION}`;
+    return env.nodejs && env.fs.existsSync(env.path.join(env.root, location)) ? env.at(location) : [];
   }
 
   export function source(location: string, value: string): Text.Source {
@@ -90,8 +97,9 @@ export namespace Ray {
     get entrypoints(): Text.Source[] { return this.source.filter(x => x.dir === this.directory && this.program.entrypoint(x)); }
     get order(): Text.Source[] {
       const entrypoints = this.entrypoints;
-      return [...this.layered.flatMap(project => project.order), ...entrypoints, ...this.source.filter(x => !x.is_dot_project && !x.is_entrypoint && !entrypoints.includes(x))];
+      return [...this.layered.flatMap(project => project.order), this.dot_project, ...entrypoints, ...this.source.filter(x => !x.is_dot_project && !x.is_entrypoint && !entrypoints.includes(x)), ...this.interpreted];
     }
+    get interpreted(): Text.Source[] { return this.program.default_language === this ? this.program.interpreted : []; }
     get declared(): string[] {
       const { path } = env;
       return this.dot_project.value.split('\n').filter(line => line.trimStart().startsWith('@')).flatMap(line => line.trim().split(/\s+/)).filter(word => word.startsWith('@') && word.length > 1).map(word => {
@@ -103,7 +111,7 @@ export namespace Ray {
     }
 
     private claim_sources() {
-      const mine = new Set<string>([this.dot_project, ...this.source].map(src => src.location));
+      const mine = new Set<string>([this.dot_project, ...this.source, ...this.interpreted].map(src => src.location));
       this.interpreter.owns = src => mine.has(src.location);
     }
     interpret() { this.claim_sources(); this.interpreter.interpret(this.order) }
@@ -156,8 +164,14 @@ export namespace Ray {
     abstractly: boolean = false;
     abstract(abstractly?: boolean): this { this.abstractly = abstractly ?? true; return this; }
 
+    interpreted: Text.Source[] = [];
+    interpreting(srcs: Text.Source[]): this { this.interpreted.push(...srcs); return this; }
+    by_interpreter(src: Text.Source): boolean { return this.interpreted.some(x => x.location === src.location); }
+
     add(srcs: Text.Source[]): this {
       this.revision++;
+      const interpreted = srcs.filter(src => this.by_interpreter(src));
+      if (interpreted.length > 0) { this.interpreted = this.interpreted.map(x => interpreted.find(src => src.location === x.location) ?? x); srcs = srcs.filter(src => !interpreted.includes(src)); }
       const claims = [...this.projects.flatMap(project => project.source), ...srcs].filter(x => x.is_dot_project).map(x => x.dir);
       const project_directory_of = (src: Source): string => {
         let best: string | undefined;
@@ -195,7 +209,7 @@ export namespace Ray {
     }
     
     async exec(): Promise<Node> {
-      await Promise.all(this.projects.flatMap(project => project.load()));
+      await Promise.all([...this.projects.flatMap(project => project.load()), ...this.interpreted.map(src => src.load())]);
       for (let round = 0; round < 16; round++) {
         const missing = [...new Set(this.projects.flatMap(project => project.declared))].filter(directory => this.project_at(directory) === undefined && env.fs.existsSync(directory));
         if (missing.length === 0) break;
@@ -399,9 +413,9 @@ export namespace Ray {
   }
 
   export type Key = string | Node
-  export type Args = { interpreter: Interpreter; frame: Node; self?: Node; method: Node; args: Node[]; at: Text.Node }
+  export type Args = { interpreter: Interpreter; frame: Node; self?: Node; method: Node; args: Node[]; at: Text.Node; words?: string[]; given?: Map<string, Node> }
   export type Method = (args: Args) => Node | undefined;
-  export type Native = { arity: number; fn: Method; pure?: boolean }
+  export type Native = { arity: number; fn: Method; pure?: boolean; early?: boolean }
 
   export type Piece =
     | { kind: 'literal'; text: string; styles?: Text.Node[] }
@@ -465,7 +479,9 @@ export namespace Ray {
 
     get callable(): boolean { return this.fn !== undefined || this.params !== undefined; }
     ruled?: boolean
+    early?: boolean
     edits?: number
+    into?: Node
     get rules(): Node[] { return this.methods ? [...this.methods.keys()].filter((x): x is Node => x instanceof Node) : []; }
 
     // A name is what it is bound to, or the function defined under that name.
@@ -596,6 +612,19 @@ export namespace Ray {
     }
   }
 
+  export class Count extends Node {
+    constructor(diagnostics: Diagnostics, public count: bigint, public base: Node, public template: Node, public field: string) {
+      super(diagnostics);
+      this.made_of = [template];
+    }
+    succ(): Count { return new Count(this.diagnostics, this.count + 1n, this.base, this.template, this.field); }
+    private before?: Node;
+    member(key: string): Node | undefined {
+      if (key === this.field) return this.before ??= this.count > 1n ? new Count(this.diagnostics, this.count - 1n, this.base, this.template, this.field) : this.base;
+      return super.member(key);
+    }
+  }
+
   export type Match = { begin: number; end: number; pattern: number; spanned: boolean; literals: [number, number, number][]; captures: Map<string, Text.Node>; operators: Map<string, Text.Node>; args: Text.Node[]; receiver?: Node; tight: boolean; read?: Map<string, Node>; given?: (Node | undefined)[] }
   export type Found = { rule: Node; impl: Node; match: Match }
   export type Head = { pattern: Text.Node[]; modifiers: Node[]; decorators: Text.Node[]; params?: string[]; param_styles?: Text.Node[][]; param_names: Text.Node[]; param_types: Text.Node[]; pieces: Piece[]; spelled: string; shared: { rule?: Node; body?: Text.Node } }
@@ -613,7 +642,7 @@ export namespace Ray {
     readonly began: boolean;
     constructor(public diagnostics: Diagnostics, public copy_of?: Interpreter) {
       this.began = copy_of === undefined;
-      if (copy_of !== undefined) { this.readings = copy_of.readings; this.refusals = copy_of.refusals; this.introductions = copy_of.introductions; }
+      if (copy_of !== undefined) { this.readings = copy_of.readings; this.refusals = copy_of.refusals; this.introductions = copy_of.introductions; this.optimizations = copy_of.optimizations; }
       this.GLOBAL = this.kernel();
     }
 
@@ -691,12 +720,21 @@ export namespace Ray {
         srcs.forEach(src => this.diagnostics.forget(src));
         for (const location of this.copy_of?.read_order.keys() ?? []) if (!this.read_order.has(location)) this.read_order.set(location, this.read_order.size);
         srcs.forEach(src => { if (src.location !== undefined && !this.read_order.has(src.location)) this.read_order.set(src.location, this.read_order.size); });
-        for (const src of srcs) { this._interpret(src); yield; }
+        const interpreted = srcs.filter(src => this.program?.by_interpreter(src) ?? false);
+        let early = interpreted.length === 0;
+        const level = early ? undefined : this.reading_of('Compiler.default');
+        for (const [k, src] of srcs.entries()) {
+          if (early && interpreted.includes(src)) continue;
+          this._interpret(src);
+          if (!early && !interpreted.includes(src) && (this.reading_of('Compiler.default') ?? level) !== level) { early = true; for (const own of interpreted) this._interpret(own); this.settle_level(); }
+          if (src.is_dot_project || k === srcs.length - 1) this.settle_level();
+          yield;
+        }
         this.painting = this.unretired();
         this.prune(inherited);
         // Frames are fresh per application, so their numbers say nothing about
         // what was defined; the spelling does.
-        const signature = [this.BASE?.key, ...[...new Set(this.definitions.map(definition => definition.replace(/#\d+/g, '#')))].sort()].join('\n');
+        const signature = [this.BASE?.key?.replace(/#\d+/g, '#'), ...[...new Set(this.definitions.map(definition => definition.replace(/#\d+/g, '#').replace(/\s+/g, '')))].sort()].join('\n');
         // A pass is read again so that what was written after it was read can
         // be read once more. Where nothing was left unread, reading it again
         // answers the same, so once is enough. Only a project derived from
@@ -788,7 +826,9 @@ export namespace Ray {
       if (typeof key === 'string' && !frame.methods?.has(key)) this.name_of(frame, key);
       // The registry, and a site's memory of its frame, are of where rules live.
       if (fresh && key instanceof Node && frame.key !== undefined) { this.frames.set(frame.key, frame); if (frame.owner !== undefined && frame.site !== undefined) (frame.owner.children ??= new Map()).set(frame.site, frame); }
-      return frame.set(key, value);
+      const set = frame.set(key, value);
+      if (frame.into !== undefined && key instanceof Node) this.bind(frame.into, key, value);
+      return set;
     }
     version = 0;
     prune(inherited: Map<Node, Set<Key>>) {
@@ -1299,6 +1339,7 @@ export namespace Ray {
       }
       if (own !== undefined && own.declared !== undefined && own.methods === undefined && own.inlined === undefined && own.made_of === undefined) own = own.declared;
       if (!own || own.lazy) return chain;
+      if (own instanceof Count && own !== frame) own = own.template;
       const itself = own === frame && !opts.self;
       if (own.inlined === undefined && own.made_of === undefined) {
         if (!own.methods || itself) return chain;
@@ -1395,13 +1436,34 @@ export namespace Ray {
       return missing;
     }
 
+    private readings_at = new WeakMap<Rules, Map<string, { version: number; found: Found | undefined }>>();
+    private numbered = new WeakMap<object, number>();
+    private numbering = 0;
+    private number_of(held: object | undefined): number {
+      if (held === undefined) return 0;
+      let n = this.numbered.get(held);
+      if (n === undefined) this.numbered.set(held, n = ++this.numbering);
+      return n;
+    }
     best(receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean; self?: boolean; leading?: boolean; besides?: Node }): Found | undefined {
-      let best: Found | undefined;
       const set = opts.leading
         ? this.only(this.chain(frame).receiver, true)
         : opts.self
           ? this.only(this.candidates(receiver, frame, { self: true }), false)
           : this.candidates(receiver, frame);
+      const own = receiver && this.resolved(receiver);
+      const declaring = own instanceof Count ? own.template : own?.methods !== undefined || own?.made_of !== undefined || own?.inlined !== undefined ? own : undefined;
+      const key = `${this.number_of(cursor.source)}:${cursor.cursor}:${cursor.limit}:${opts.newline ? 1 : 0}${opts.spaced ? 1 : 0}${opts.operand ? 1 : 0}${opts.forwards ? 1 : 0}${opts.self ? 1 : 0}${opts.leading ? 1 : 0}:${this.number_of(opts.besides)}:${this.number_of(this.chain(frame))}:${this.number_of(declaring)}:${receiver === undefined ? 0 : 1}:${this.rewriting.size > 0 ? 1 : 0}`;
+      let known = this.readings_at.get(set);
+      if (known === undefined) this.readings_at.set(set, known = new Map());
+      const held = known.get(key);
+      if (held !== undefined && held.version === this.version) return held.found && { ...held.found, match: { ...held.found.match, receiver } };
+      const found = this.best_of(set, receiver, cursor, frame, opts);
+      if (found === undefined || found.match.read === undefined || found.match.read.size === 0) known.set(key, { version: this.version, found });
+      return found;
+    }
+    private best_of(set: Rules, receiver: Node | undefined, cursor: Text.Node, frame: Node, opts: { newline?: boolean; spaced: boolean; operand: boolean; forwards?: boolean; self?: boolean; leading?: boolean; besides?: Node }): Found | undefined {
+      let best: Found | undefined;
       const ahead = cursor.source.value[this.skip(cursor, cursor.cursor)];
       for (const segment of set) for (const [rule, impl] of segment) {
         if (rule === opts.besides) continue;
@@ -1629,7 +1691,7 @@ export namespace Ray {
             const j = this.operator_end(cursor, from, frame, operator_rules ??= (opts.receiver !== undefined ? this.candidates(opts.receiver, frame) : this.chain(frame).receiver));
             if (j <= from) return;
             const written = cursor.span(from, j - 1);
-            if (piece.filter !== undefined && this.typed(piece.filter, written, opts.closure ?? this.GLOBAL) === null) return;
+            if (piece.filter !== undefined && !this.of_kind(piece.filter, written, operator_rules, opts.closure ?? this.GLOBAL)) return;
             operators.set(piece.name, written); i = j; break;
           }
           case 'capture': {
@@ -2415,6 +2477,20 @@ export namespace Ray {
         return impl.forward && match.receiver !== undefined ? match.receiver : new Node(this.diagnostics, at);
       }
       if (impl.forward) return this.pass(found, captures, args, cursor, frame, at);
+      if (!impl.fn && impl.body !== undefined && this.optimizations !== undefined) {
+        const direct = this.optimized(impl.body, impl.closure ?? this.GLOBAL);
+        if (direct?.native.early) {
+          const given = new Map(captures);
+          const handed = impl.params !== undefined && impl.params.length > 1 && args.length === 1 ? this.positions(args[0], impl.params.length) : args;
+          impl.params?.forEach((name, k) => given.set(name, handed[k] ?? this.NONE));
+          let answered: Node | undefined;
+          this.applying.push({ rule, impl, receiver: match.receiver, local: frame });
+          try { answered = direct.native.fn!({ interpreter: this, frame, self: match.receiver, method: impl, args: [], at, words: direct.spans.map(span => span.string.trim()), given }); }
+          catch (jump) { if (impl.params === undefined && jump instanceof Jump && jump.kind === 'end' && (jump.site === undefined || Interpreter.within(jump.site, at) || Interpreter.within(jump.site, impl.body))) jump.site = at; throw jump; }
+          finally { this.applying.pop(); }
+          if (answered !== undefined) { this.ran.add(rule.key!); return answered; }
+        }
+      }
 
       // A call site keeps one frame, so a rule that reaches itself would share
       // that frame with the reading still in progress. Each re-entry gets its
@@ -2469,6 +2545,14 @@ export namespace Ray {
       try {
         if (impl.fn) return impl.fn({ interpreter: this, frame: local, self: match.receiver, method: impl, args: [...captures.values(), ...args], at });
         if (!impl.body) return undefined;
+        const optimized = this.optimizations === undefined ? undefined : this.optimized(impl.body, impl.closure ?? this.GLOBAL);
+        if (optimized !== undefined && !optimized.native.early) {
+          const words = optimized.spans.map(span => span.string.trim());
+          const given = new Map<string, Node>();
+          for (const word of words) { const held = local.own(word); if (held !== undefined) given.set(word, held); }
+          const answered = optimized.native.fn!({ interpreter: this, frame: local, self: match.receiver, method: impl, args: optimized.spans.map(span => this.lazy(span, local, false)), at, words, given });
+          if (answered !== undefined) return answered;
+        }
         const rewrites = rule.pattern!.some(piece => piece.kind === 'operator');
         if (rewrites) this.rewriting.add(rule);
         // What `[x]` names is not a name but the operator itself, so a body
@@ -2484,6 +2568,216 @@ export namespace Ray {
         catch (jump) { if (impl.params === undefined && jump instanceof Jump && jump.kind === 'end' && (jump.site === undefined || Interpreter.within(jump.site, at) || Interpreter.within(jump.site, impl.body))) jump.site = at; throw jump; }
         finally { if (rewrites) this.rewriting.delete(rule); }
       } finally { this.applying.pop(); const held = this.entered.get(site) ?? 1; if (held <= 1) this.entered.delete(site); else this.entered.set(site, held - 1); }
+    }
+    optimizations?: { level: Node; entries: { pieces: Piece[]; captures: string[]; repeats: string[][]; native: Node }[] };
+    reading_of(text: string): Node | undefined {
+      return this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(Text.Node.string(text)), this.GLOBAL), false)));
+    }
+    private levelled?: number;
+    settle_level() {
+      this.diagnostics.muted(() => this.safely(() => {
+        const ours = this.levelled === this.passing;
+        if ((ours || !(this.touched.get(this.GLOBAL)?.has('O') ?? false)) && this.deref(this.array(this.cursor_of(Text.Node.string('Compiler.default')), this.GLOBAL), false) !== undefined) {
+          this.array(this.cursor_of(Text.Node.string('O := Compiler.default')), this.GLOBAL);
+          this.levelled = this.passing;
+        }
+        const level = this.deref(this.reference(this.GLOBAL, 'O', this.blank), false);
+        if (level !== undefined && level !== this.optimizations?.level) this.optimize(level, this.GLOBAL);
+      }));
+    }
+    optimize(level: Node | undefined, frame: Node): Node | undefined {
+      const block = this.deref(level);
+      if (block === undefined) return undefined;
+      const scope = this.frame(frame, 'optimizations', frame);
+      this.inline(block, scope);
+      const entries: { pieces: Piece[]; captures: string[]; repeats: string[][]; native: Node }[] = [];
+      for (const rule of scope.rules) {
+        const impl = scope.methods!.get(rule)!;
+        const native = impl.body && this.deref(this.array(this.cursor_of(impl.body), scope), false);
+        if (native?.fn === undefined) continue;
+        const seen = new Map<string, string[]>();
+        const pieces = rule.pattern!.map(piece => {
+          if (piece.kind !== 'capture') return piece;
+          const named = seen.get(piece.name);
+          if (named === undefined) { seen.set(piece.name, [piece.name]); return piece; }
+          named.push(`${piece.name}#${named.length}`);
+          return { ...piece, name: named[named.length - 1] };
+        });
+        entries.push({ pieces, captures: [...seen.keys()], repeats: [...seen.values()].filter(names => names.length > 1), native });
+      }
+      this.optimizations = { level: block, entries };
+      return block;
+    }
+    private optimized_bodies = new WeakMap<Text.Node, { version: number; of: object; hit?: { native: Node; spans: Text.Node[] } }>();
+    optimized(body: Text.Node, closure: Node): { native: Node; spans: Text.Node[] } | undefined {
+      const level = this.optimizations!;
+      const known = this.optimized_bodies.get(body);
+      if (known !== undefined && known.version === this.version && known.of === level) return known.hit;
+      let hit: { native: Node; spans: Text.Node[] } | undefined;
+      const flat = this.flattened(body);
+      this.quiet++;
+      try {
+        for (const entry of level.entries) {
+          const cursor = this.cursor_of(flat);
+          const match = this.diagnostics.muted(() => this.safely(() => this.match(entry.pieces, cursor, closure, { leading: false, tight: true, params: 0 })));
+          if (!match || match.spanned || match.end < cursor.limit || entry.captures.some(name => !match.captures.has(name))) continue;
+          if (entry.repeats.some(names => names.some(name => match.captures.get(name)?.string.trim() !== match.captures.get(names[0])!.string.trim()))) continue;
+          hit = { native: entry.native, spans: entry.captures.map(name => match.captures.get(name)!) };
+          break;
+        }
+      } finally { this.quiet--; }
+      this.optimized_bodies.set(body, { version: this.version, of: level, hit });
+      return hit;
+    }
+    private flats = new WeakMap<Text.Node, Text.Node>();
+    flattened(body: Text.Node): Text.Node {
+      let flat = this.flats.get(body);
+      if (flat === undefined) this.flats.set(body, flat = Text.Node.string(body.string.replace(/(^|\s)\/\/[^\n]*/g, '$1').replace(/\s+/g, ' ').trim()));
+      return flat;
+    }
+    private templates = new WeakMap<Node, Node | null>();
+    template_of(type: Node, closure: Node): Node | undefined {
+      let held = this.templates.get(type);
+      if (held === undefined) this.templates.set(type, held = this.construct(type, [], closure) ?? null);
+      return held ?? undefined;
+    }
+    succeed(self: Node | undefined, type: Node, field: Node, method: Node, frame: Node): Node | undefined {
+      const name = field.lazy?.span.string.trim();
+      const receiver = self && this.deref(self, false);
+      const kind = this.deref(type, false);
+      if (!name || receiver === undefined || kind === undefined || method.body === undefined) return undefined;
+      const at = `${method.body.source.location}:${method.body.begin}:${method.body.end}`;
+      if (this.not_successors.has(at)) return undefined;
+      if (receiver instanceof Count && receiver.field === name && this.carries(receiver.template, method)) return receiver.succ();
+      const template = this.template_of(kind, frame);
+      if (template === undefined || !this.carries(template, method)) { this.not_successors.add(at); return undefined; }
+      if (receiver instanceof Count && receiver.field === name && this.carries(receiver.template, method)) return receiver.succ();
+      return new Count(this.diagnostics, 1n, receiver, template, name);
+    }
+    private not_successors = new Set<string>();
+    private carried = new WeakMap<Node, Set<string>>();
+    carries(template: Node, method: Node): boolean {
+      const at = (body: Text.Node) => `${body.source.location}:${body.begin}:${body.end}`;
+      let bodies = this.carried.get(template);
+      if (bodies === undefined) {
+        this.carried.set(template, bodies = new Set());
+        for (const impl of template.methods?.values() ?? []) if (impl.body !== undefined) bodies.add(at(impl.body));
+      }
+      return method.body !== undefined && bodies.has(at(method.body));
+    }
+    counted(value: Node | undefined, like: Count, method: Node): bigint | undefined {
+      let n = 0n;
+      for (let at = value && this.deref(value, false), walked = 0; at !== undefined && walked < 1 << 20; walked++) {
+        if (at instanceof Count) {
+          if (at.field !== like.field || !this.carries(at.template, method)) return undefined;
+          n += at.count; at = at.base; continue;
+        }
+        if (!this.carries(at, method)) return undefined;
+        const next = at.member(like.field);
+        if (next === undefined) return n;
+        const held = this.deref(next, false);
+        if (held === undefined || held.none) return n;
+        n++; at = held;
+      }
+      return undefined;
+    }
+    stepped(value: Node, like: Count, steps: bigint): Node {
+      let at = this.deref(value, false)!;
+      while (steps > 0n) {
+        if (at instanceof Count) {
+          if (at.count > steps) return new Count(this.diagnostics, at.count - steps, at.base, at.template, at.field);
+          steps -= at.count; at = this.deref(at.base, false)!; continue;
+        }
+        at = this.deref(at.member(like.field)!, false)!; steps--;
+      }
+      return at;
+    }
+    raised(value: Node, like: Count, steps: bigint): Node {
+      if (steps === 0n) return value;
+      const at = this.deref(value, false)!;
+      return at instanceof Count ? new Count(this.diagnostics, at.count + steps, at.base, at.template, at.field) : new Count(this.diagnostics, steps, at, like.template, like.field);
+    }
+    private operands(self: Node | undefined, other: Node, method: Node): { like: Count; a: bigint; b: bigint; mine: Node; theirs: Node } | undefined {
+      const mine = self && this.deref(self, false), theirs = this.deref(other, false);
+      if (mine === undefined || theirs === undefined) return undefined;
+      const like = mine instanceof Count ? mine : theirs instanceof Count ? theirs : undefined;
+      if (like === undefined || !this.carries(like.template, method)) return undefined;
+      const a = this.counted(mine, like, method), b = this.counted(theirs, like, method);
+      return a === undefined || b === undefined ? undefined : { like, a, b, mine, theirs };
+    }
+    onto(self: Node | undefined, [total, left, other, result]: Node[], method: Node, frame: Node): Node | undefined {
+      const held = this.operands(self, other, method);
+      if (held === undefined) return undefined;
+      this.bind(frame, total.lazy!.span.string.trim(), this.raised(held.mine, held.like, held.b));
+      this.bind(frame, left.lazy!.span.string.trim(), this.stepped(held.theirs, held.like, held.b));
+      return this.force(result);
+    }
+    down(self: Node | undefined, [mine, theirs, other, result]: Node[], method: Node, frame: Node): Node | undefined {
+      const held = this.operands(self, other, method);
+      if (held === undefined) return undefined;
+      const steps = held.a < held.b ? held.a : held.b;
+      this.bind(frame, mine.lazy!.span.string.trim(), this.stepped(held.mine, held.like, steps));
+      this.bind(frame, theirs.lazy!.span.string.trim(), this.stepped(held.theirs, held.like, steps));
+      return this.force(result);
+    }
+    private unit?: { version: number; one?: Count };
+    count_of(n: bigint): Node | undefined {
+      if (this.unit?.version !== this.version) { const one = this.reading_of('1'); this.unit = { version: this.version, one: one instanceof Count ? one : undefined }; }
+      const one = this.unit.one;
+      if (one === undefined) return undefined;
+      return n === 0n ? one.base : new Count(this.diagnostics, n, one.base, one.template, one.field);
+    }
+    chain_of(values: Node[]): Node | undefined {
+      const frame = this.frame(this.GLOBAL, 'chain_of', this.GLOBAL);
+      const held = this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(Text.Node.string('chain None')), frame), false)));
+      if (held === undefined) return undefined;
+      this.bind(frame, 'held', held);
+      const append = Text.Node.string('held &= next');
+      for (const value of values) { this.bind(frame, 'next', value); this.array(this.cursor_of(append), frame); }
+      return held;
+    }
+    utf8_points(source: Node | undefined): Node | undefined {
+      const held = source && this.deref(source, false);
+      if (held === undefined || held.own('head') !== undefined || held.members?.get('head') !== undefined) return undefined;
+      const points: Node[] = [];
+      for (const character of new TextDecoder().decode(this.bytes_of(held))) {
+        const point = this.count_of(BigInt(character.codePointAt(0)!));
+        if (point === undefined) return undefined;
+        points.push(point);
+      }
+      return this.chain_of(points);
+    }
+    counted_as(like: Count, n: bigint): Node {
+      return n === 0n ? like.base : new Count(this.diagnostics, n, like.base, like.template, like.field);
+    }
+    times(self: Node | undefined, [product, left, other, result]: Node[], method: Node, frame: Node): Node | undefined {
+      const held = this.operands(self, other, method);
+      if (held === undefined) return undefined;
+      this.bind(frame, product.lazy!.span.string.trim(), this.counted_as(held.like, held.a * held.b));
+      this.bind(frame, left.lazy!.span.string.trim(), this.counted_as(held.like, 0n));
+      return this.force(result);
+    }
+    divide(self: Node | undefined, [quotient, rest, step, other, result]: Node[], method: Node, frame: Node): Node | undefined {
+      const held = this.operands(self, other, method);
+      if (held === undefined) return undefined;
+      const { a, b } = held;
+      this.bind(frame, quotient.lazy!.span.string.trim(), this.counted_as(held.like, b === 0n ? 0n : a / b));
+      this.bind(frame, rest.lazy!.span.string.trim(), this.counted_as(held.like, b === 0n ? a : 0n));
+      this.bind(frame, step.lazy!.span.string.trim(), this.counted_as(held.like, b === 0n || a % b === 0n ? b : b - a % b));
+      return this.force(result);
+    }
+    remainder(self: Node | undefined, [rest, step, other, result]: Node[], method: Node, frame: Node): Node | undefined {
+      const held = this.operands(self, other, method);
+      if (held === undefined) return undefined;
+      const { a, b } = held;
+      this.bind(frame, rest.lazy!.span.string.trim(), this.counted_as(held.like, b === 0n ? a : 0n));
+      this.bind(frame, step.lazy!.span.string.trim(), this.counted_as(held.like, b === 0n || a % b === 0n ? b : b - a % b));
+      return this.force(result);
+    }
+    precede(self: Node | undefined, field: Node): Node | undefined {
+      const name = field.lazy?.span.string.trim();
+      const receiver = self && this.deref(self, false);
+      return receiver instanceof Count && receiver.field === name ? receiver.member(name) : undefined;
     }
     private current(rule: Node, impl: Node): Node { return (impl.closure ?? this.GLOBAL).methods?.get(rule) ?? impl; }
     private decorators_of(rule: Node, impl: Node): () => Text.Node[] { return () => this.current(rule, impl).decorators ?? []; }
@@ -2552,11 +2846,11 @@ export namespace Ray {
     external(name: Text.Node, at: Text.Node, frame: Node): Node | undefined {
       const key = name.string;
       this.paint_reference(this.reference(frame, 'external', name), true);
-      const native = this.program?.EXTERNALS[key] ?? Natives[key];
+      const native = this.program?.EXTERNALS[key] ?? Natives[key] ?? (this.program?.by_interpreter(name.source) ? Interpreted[key] : undefined);
       if (!native) { this.error(`Expected method \`${key}\` to be externally defined by the runtime, but it wasn't.`, name); return undefined; }
       if (native.arity === 0) return native.fn({ interpreter: this, frame, args: [], method: this.EXTERNAL, at });
       const node = new Node(this.diagnostics, name);
-      node.fn = native.fn; node.arity = native.arity; node.pure = native.pure;
+      node.fn = native.fn; node.arity = native.arity; node.pure = native.pure; node.early = native.early;
       return node;
     }
 
@@ -2619,7 +2913,87 @@ export namespace Ray {
       const body_end = this.line_end(cursor, body_start, frame);
       cursor.cursor = body_end;
       if (lhs_end <= start) { this.error('Expected a pattern before `=>`.', cursor.span(arrow, arrow + 1)); return new Node(this.diagnostics); }
-      return this.define(cursor.span(start, lhs_end - 1), body_end > body_start ? cursor.span(body_start, body_end - 1) : undefined, frame, cursor.span(arrow, arrow + 1));
+      const lhs = cursor.span(start, lhs_end - 1), body = body_end > body_start ? cursor.span(body_start, body_end - 1) : undefined, arrowed = cursor.span(arrow, arrow + 1);
+      return this.defined_by_language(lhs, body, frame, arrowed) ?? this.define(lhs, body, frame, arrowed);
+    }
+    grammar_of(frame: Node): Found | undefined {
+      for (const [rule, impl] of each(this.chain(frame).receiver)) {
+        const first = rule.pattern![0];
+        if (!impl.forward && first?.kind === 'capture' && impl.body !== undefined && impl.body.string.trim() !== 'external GRAMMAR_RULE' && impl.body.string.includes('external GRAMMAR_RULE'))
+          return { rule, impl, match: undefined! };
+      }
+      return undefined;
+    }
+    private pieces_of = new WeakMap<Node, { span: Text.Node; frame: Node; arrow: Text.Node; chunks: Text.Node[] }>();
+    head_of(lhs: Text.Node, frame: Node, arrow: Text.Node): Node | undefined {
+      const chunks = this.tokens(lhs, frame);
+      return this.chain_of(chunks.map((chunk, k) => {
+        const piece = new Node(this.diagnostics, chunk);
+        piece.set('written', this.lazy(chunk, frame, true));
+        const named = k < chunks.length - 1 && /^[\p{L}_]/u.test(chunk.string) ? this.resolved(this.reference(this.GLOBAL, chunk.string, chunk)) : undefined;
+        if (named !== undefined && named.fn === undefined) piece.set('named', named);
+        this.pieces_of.set(piece, { span: chunk, frame, arrow, chunks });
+        return piece;
+      }));
+    }
+    private defining = 0;
+    defined_by_language(lhs: Text.Node, body: Text.Node | undefined, frame: Node, arrow: Text.Node): Node | undefined {
+      if (this.probing || this.defining > 0) return undefined;
+      const grammar = this.grammar_of(frame);
+      if (grammar === undefined) return undefined;
+      const head = this.head_of(lhs, frame, arrow);
+      if (head === undefined) return undefined;
+      const captured = grammar.rule.pattern!.filter(piece => piece.kind === 'capture');
+      if (captured.length < 2) return undefined;
+      const read = new Map<string, Node>([[captured[0].name, head], [captured[captured.length - 1].name, body !== undefined ? this.lazy(body, frame, true) : this.NONE]]);
+      const match: Match = { begin: lhs.begin, end: lhs.end + 1, pattern: lhs.end + 1, spanned: false, literals: [], captures: new Map(), operators: new Map(), args: [], tight: true, read };
+      this.defining++;
+      try {
+        const answered = this.diagnostics.muted(() => this.safely(() => this.deref(this.apply({ rule: grammar.rule, impl: grammar.impl, match }, this.cursor_of(lhs), frame, lhs), false)));
+        return answered === undefined || answered.none ? undefined : answered;
+      } finally { this.defining--; }
+    }
+    grammar_define(head: Node | undefined, body: Node | undefined): Node | undefined {
+      const held = head && this.deref(head, false);
+      if (held === undefined) return undefined;
+      const links: Node[] = [];
+      for (let link = this.deref(held.member('head'), false); link !== undefined && !link.none && links.length < 4096; link = this.deref(link.member('next'), false)) links.push(link);
+      const kinds: Node[] = [];
+      for (const link of links.slice(0, -1)) {
+        const named = this.deref(link.member('value'), false)?.own('named');
+        const kind = named && this.diagnostics.muted(() => this.safely(() => this.deref(named, false)));
+        if (kind === undefined || this.method_of(kind, 'modify', { parameterised: true }) === undefined) break;
+        kinds.push(kind);
+      }
+      if (links.length === 0) return undefined;
+      const definition = this.define_from(links[kinds.length], body);
+      if (definition === undefined) return undefined;
+      for (const kind of kinds) {
+        const frame = this.frame(this.GLOBAL, 'kind', this.GLOBAL);
+        this.bind(frame, 'kind', kind);
+        this.bind(frame, 'definition', definition);
+        this.diagnostics.muted(() => this.safely(() => this.array(this.cursor_of(Text.Node.string('kind.modify(definition)')), frame)));
+      }
+      return definition;
+    }
+    define_from(from: Node | undefined, body: Node | undefined): Node | undefined {
+      const spans: Text.Node[] = [];
+      let info: { span: Text.Node; frame: Node; arrow: Text.Node; chunks: Text.Node[] } | undefined;
+      for (let link = from && this.deref(from, false), depth = 0; link !== undefined && !link.none && depth < 4096; depth++) {
+        const piece = this.deref(link.member('value'), false);
+        const held = piece && this.pieces_of.get(piece);
+        if (held === undefined) return undefined;
+        info ??= held;
+        spans.push(held.span);
+        link = this.deref(link.member('next'), false);
+      }
+      if (info === undefined) return undefined;
+      const lhs = spans[0].span(spans[0].begin, spans[spans.length - 1].end);
+      const written = body && this.deref(body, false);
+      const text = written === undefined || written.none ? undefined : written.position;
+      if (this.owns(lhs.source) && !this.in_body(lhs))
+        for (const chunk of info.chunks) if (chunk.begin < lhs.begin) this.paint_reference(this.reference(info.frame, chunk.string, chunk));
+      return this.define(lhs, text, info.frame, info.arrow);
     }
 
     private heads_read = new Map<string, { version: number; pass: number; base?: Node; head: Head }>();
@@ -2700,6 +3074,36 @@ export namespace Ray {
       return impl;
     }
 
+    private kinds = new WeakMap<Node, Map<Node, boolean>>();
+    private kinding = 0;
+    of_kind(filter: string, written: Text.Node, rules: Rules, closure: Node): boolean {
+      if (this.kinding > 0) return false;
+      const text = written.string.trim();
+      let method: Node | undefined;
+      for (const [rule, impl] of each(rules)) {
+        const first = rule.pattern![0];
+        if (impl.forward || first?.kind !== 'literal' || first.text !== text || (impl.params?.length ?? 0) === 0 || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
+        method = impl;
+        break;
+      }
+      if (method === undefined) return false;
+      const kind = this.diagnostics.muted(() => this.safely(() => this.deref(this.reference(closure, filter, written), false)));
+      if (kind === undefined || kind.none) return false;
+      let known = this.kinds.get(method);
+      if (known === undefined) this.kinds.set(method, known = new Map());
+      let answer = known.get(kind);
+      if (answer === undefined) {
+        const frame = this.frame(this.GLOBAL, 'kind', this.GLOBAL);
+        this.bind(frame, 'method', method);
+        this.bind(frame, 'kind', kind);
+        this.kinding++;
+        try {
+          const found = this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(Text.Node.string('method.instance_of(kind)')), frame), false)));
+          known.set(kind, answer = found !== undefined && !found.none && !found.unknown);
+        } finally { this.kinding--; }
+      }
+      return answer;
+    }
     modifier(chunk: Text.Node, frame: Node): Node | undefined {
       const bound = this.resolved(this.reference(frame, chunk.string, chunk));
       if ((bound?.fn || bound?.forward) && bound !== this.EXTERNAL && bound !== this.FORWARD) return bound;
@@ -2871,8 +3275,10 @@ export namespace Ray {
     readings = new WeakMap<Node, Map<string, Node | null>>();
     refusals = new Map<string, Set<string>>();
     private passing = 0;
+    private reading = 0;
     typed(type: string, span: Text.Node, closure: Node, opts: { read?: boolean } = {}): Node | null | undefined {
       if (this.passing === 0 && this.began) return null;
+      if (this.reading > 0) return null;
       const known_type = this.typings.get(closure)?.get(type);
       if (known_type === null) return null;
       if (known_type !== undefined && known_type !== this.NONE) {
@@ -2913,7 +3319,10 @@ export namespace Ray {
         const literal = Object.assign(new Node(this.diagnostics, at), { literal: true });
         const match: Match = { ...this.trivial(resolved, at), args: [at], given: [literal] };
         const recorded = this.definitions.length;
-        const value = this.diagnostics.muted(() => this.safely(() => this.deref(this.apply({ rule: method[0], impl: method[1], match }, this.cursor_of(at), closure, at), false)));
+        this.reading++;
+        let value: Node | undefined;
+        try { value = this.diagnostics.muted(() => this.safely(() => this.deref(this.apply({ rule: method[0], impl: method[1], match }, this.cursor_of(at), closure, at), false))); }
+        finally { this.reading--; }
         this.definitions.length = recorded;
         const answer = value === undefined || value.none || value.unknown ? null : value;
         answers.set(text, answer);
@@ -3045,7 +3454,7 @@ export namespace Ray {
     }
     grammar(rule: Node, impl: Node, frame: Node): Shape | undefined {
       const first = rule.pattern![0];
-      if (impl.forward || first?.kind !== 'capture' || impl.body?.string.trim() !== 'external GRAMMAR_RULE') return undefined;
+      if (impl.forward || first?.kind !== 'capture' || !(impl.body?.string.includes('external GRAMMAR_RULE') ?? false)) return undefined;
       const content = first.group, text = content.source.value;
       const open = text.indexOf('(', content.begin);
       if (open < 0 || open > content.end) return undefined;
@@ -3378,7 +3787,10 @@ export namespace Ray {
       }
       if (!definition) {
         const value = this.resolved(node);
-        for (const entry of [...((value && this.marks.values.get(value))?.values() ?? [])].reverse()) {
+        let under = value;
+        while (under instanceof Count) under = this.resolved(under.base);
+        const marked = value && (under !== value && under !== undefined ? this.marks.values.get(under) : this.marks.values.get(value));
+        for (const entry of [...(marked?.values() ?? [])].reverse()) {
           if (entry.except?.some(([owner, name]) => owner === scope && name === key)) continue;
           const mark = this.live(entry);
           if (mark) return mark;
@@ -3706,6 +4118,7 @@ export namespace Ray {
       const scope = this.frame(frame, 'block', this.GLOBAL);
       if (written !== undefined) this.sees(scope, written);
       this.sees(scope, frame);
+      scope.into = frame;
       return this.safely(() => this.array(this.cursor_of(body), scope, true));
     }
     // Text run here reads the names of where it was written, without this
@@ -3904,10 +4317,30 @@ export namespace Ray {
   };
 
   const identity: Native = { arity: 1, fn: ({ args: [node] }) => node };
+  export const Interpreted: Record<string, Native> = {
+    'unary_succ': { arity: 1, fn: ({ interpreter, self, args: [type, field], method, frame }) => interpreter.succeed(self, type, field, method, frame) },
+    'unary_pred': { arity: 1, fn: ({ interpreter, self, args: [field] }) => interpreter.precede(self, field) },
+    'direct_pass': { arity: 1, fn: ({ interpreter, words: [name], given }) => { const held = given?.get(name!); return held === undefined ? undefined : interpreter.settle(held, false) ?? interpreter.NONE; } },
+    'direct_member': { arity: 1, fn: ({ interpreter, self, words: [name], given }) => { const key = given?.get(name!); return key !== undefined && self !== undefined ? interpreter.settle(interpreter.settle(interpreter.get(self, key), false), false) ?? interpreter.NONE : undefined; } },
+    'direct_effect': { arity: 1, fn: ({ interpreter, frame, self, method, at, words: [effect, name], given }) => {
+      const native = Natives[effect!], value = given?.get(name!);
+      if (native === undefined || native.arity !== 2 || self === undefined || value === undefined) return undefined;
+      native.fn({ interpreter, frame, args: [self, value], method, at });
+      return interpreter.settle(self, false) ?? interpreter.NONE;
+    } },
+    'unary_onto': { arity: 1, fn: ({ interpreter, self, args, method, frame }) => interpreter.onto(self, args, method, frame) },
+    'unary_down': { arity: 1, fn: ({ interpreter, self, args, method, frame }) => interpreter.down(self, args, method, frame) },
+    'unary_times': { arity: 1, fn: ({ interpreter, self, args, method, frame }) => interpreter.times(self, args, method, frame) },
+    'unary_divide': { arity: 1, fn: ({ interpreter, self, args, method, frame }) => interpreter.divide(self, args, method, frame) },
+    'unary_remainder': { arity: 1, fn: ({ interpreter, self, args, method, frame }) => interpreter.remainder(self, args, method, frame) },
+    'utf8_points': { arity: 1, fn: ({ interpreter, words: [name], given }) => interpreter.utf8_points(given?.get(name!)) },
+    'grammar_define': { arity: 1, fn: ({ interpreter, words: [head, body], given }) => interpreter.grammar_define(given?.get(head!), given?.get(body!)) },
+  };
+
   export const Natives: Record<string, Native> = {
     'external': { arity: 0, fn: ({ interpreter }) => interpreter.EXTERNAL },
     'forward': { arity: 0, fn: ({ interpreter }) => interpreter.FORWARD },
-    'GRAMMAR_RULE': { arity: 0, fn: ({ interpreter, at }) => Object.assign(new Node(interpreter.diagnostics, at), { key: 'GRAMMAR_RULE' }) },
+    'GRAMMAR_RULE': { arity: 2, fn: ({ interpreter, args: [head, body] }) => interpreter.define_from(head, body) },
     '.': { arity: 0, fn: ({ frame }) => frame },
     'global': { arity: 0, fn: ({ interpreter }) => interpreter.GLOBAL },
     'get': { arity: 2, pure: true, fn: ({ interpreter, args: [node, key] }) => interpreter.get(node, key) },

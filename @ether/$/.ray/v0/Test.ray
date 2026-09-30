@@ -16,7 +16,7 @@ IP := class {
   // static NUMBER_OF_BITS = NUMBER_OF_SEGMENTS * SEGMENT_LENGTH
   bit_count => .segment_count * .segment_length
   // The separator between segments, and the base they are written in.
-  separator => Character.of(ascii_dot)
+  separator => U+002E
   base => 10
 
   // `as Binary`: the bits of every segment, most significant first.
@@ -44,7 +44,7 @@ IP := class {
     String.joined(parts, .separator)
   )
 
-  == (other: IP) => .as_string == other.as_string
+  chainable == (other: IP) => .as_string == other.as_string
 
   // The address some bits spell, segment by segment, as the kind of address
   // this is.
@@ -66,8 +66,8 @@ IP := class {
 
   // `+ offset` and `- offset`: `as Binary + offset`, added bit by bit with a
   // carry, so an address is never walked as the number it is.
-  + (offset: Number) => .from_bits(IP.sum_of(.bits, bits_of(offset, .bit_count), false))
-  - (offset: Number) => .from_bits(IP.sum_of(.bits, IP.inverted(bits_of(offset, .bit_count)), true))
+  compounds + (offset: Number) => .from_bits(IP.sum_of(.bits, bits_of(offset, .bit_count), false))
+  compounds - (offset: Number) => .from_bits(IP.sum_of(.bits, IP.inverted(bits_of(offset, .bit_count)), true))
 
   // Two chains of bits of one width, most significant first, added with a
   // carry into the lowest bit; what carries out of the highest is dropped.
@@ -107,7 +107,7 @@ IP := class {
   )
 
   // CIDR, `/ prefix_length`: every bit after the prefix cleared.
-  / (prefix_length: Number) => (
+  compounds / (prefix_length: Number) => (
     kept_bits ^keyword := prefix_length
     cleared := chain None
     bit_at ^keyword := .bits.head
@@ -133,7 +133,7 @@ IP := class {
 // SEGMENT_LENGTH = 8, Segment: Decimal{< 2^8})
 IP.v4 = class: IP {
   segment_length => 8
-  separator => Character.of(ascii_dot)
+  separator => U+002E
   base => 10
 }
 // static Segment: Decimal{< 2^8}
@@ -148,7 +148,7 @@ IP.v4.Segment = Number{. < 256}
 // the zeros it writes as `::` are chosen.
 IP.v6 = class: IP {
   segment_length => 16
-  separator => Character.of(ascii_colon)
+  separator => U+003A
   base => 16
 
   // number_of_compressed_segments => NUMBER_OF_SEGMENTS - defined_segments.length
@@ -182,7 +182,7 @@ IP.v6 = class: IP {
     if (found.length < 2) { .as_string } else {
       before := .written(0, found.at)
       after := .written(found.at + found.length, .segment_count)
-      before + (String.of(`::`) + after)
+      before + ("::" + after)
     }
   )
   // The segments from one place up to another, with colons between them.

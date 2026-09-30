@@ -103,8 +103,8 @@ GMT := UTC
 // A month's index counts from zero; its place from one.
 Month.components.hierarchy &= class {
   index => .place.pred
-  == (other) => .place == other.place
-  != (other) => (this == other).not
+  chainable == (other) => .place == other.place
+  chainable != (other) => (this == other).not
 }
 
 // A time: seconds since an epoch on a calendar. `now` reads the clock.
@@ -121,16 +121,16 @@ Time := class {
 
     held
   )
-  == (other: Time) => .since_calendar_epoch == other.since_calendar_epoch
-  < (other: Time) => .since_calendar_epoch < other.since_calendar_epoch
-  + (duration: Quantity) => Time(calendar: .calendar, since_epoch: .since_epoch + duration, epoch: .epoch)
-  - (other: Time) => .since_calendar_epoch - other.since_calendar_epoch
+  chainable == (other: Time) => .since_calendar_epoch == other.since_calendar_epoch
+  chainable < (other: Time) => .since_calendar_epoch < other.since_calendar_epoch
+  compounds + (duration: Quantity) => Time(calendar: .calendar, since_epoch: .since_epoch + duration, epoch: .epoch)
+  compounds - (other: Time) => .since_calendar_epoch - other.since_calendar_epoch
   as (calendar) => Time(calendar: calendar, since_epoch: .since_epoch, epoch: .epoch)
 
   // spec: the clock's nanoseconds, kept as digits; `seconds_now` reads the
   // last nine digits off as nanoseconds and the ones before as seconds only
   // as far as `as_number` walks — the tail of the string, not the whole.
-  now => Time.Clock(digits: String.of(external time))
+  now => Time.Clock(digits: (external time).as_string)
   Clock := class {
     // The nanosecond digits, as text; the last three of them, and the last
     // three of the seconds, as numbers: what a walk can afford.
@@ -145,14 +145,14 @@ Time := class {
 // recognised by shape only.
 ISO_8601 := class {
   date (text: String) => (
-    parts := text.split(Character.of(ascii_dash))
+    parts := text.split(U+002D)
     year := parts.head.value.as_number
     month := Month.at_index(parts.head.next.value.as_number.pred)
     day := parts.head.next.next.value.as_number
     ISO_8601.Date(year: year, month: month, day: day)
   )
   time (text: String) => (
-    parts := text.split(Character.of(ascii_colon))
+    parts := text.split(U+003A)
     hour := parts.head.value.as_number
     minute := parts.head.next.value.as_number
     second := if (exists parts.head.next.next) { parts.head.next.next.value.as_number } else { 0 }
@@ -162,7 +162,7 @@ ISO_8601 := class {
   Date := class {
     is_valid (calendar) => (0 < .day).and((.month.days_in(.year, calendar) < .day).not)
     day_of_year (calendar) => calendar.day_of_year(.month, .day, .year)
-    == (other) => (.year == other.year).and(.month == other.month).and(.day == other.day)
+    chainable == (other) => (.year == other.year).and(.month == other.month).and(.day == other.day)
   }
 }
 Month.components.hierarchy &= class {

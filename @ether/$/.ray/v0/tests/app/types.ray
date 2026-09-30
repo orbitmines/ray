@@ -10,16 +10,29 @@ ta := TA()
 tb := TB()
 
 unless (exists ta.instance_of(TA)) { INFO@mark `TY1 an instance is not an instance of its class` }
-if (exists ta.instance_of(TB)) { INFO@mark `TY2 an instance is an instance of a class built on its own` }
+// What a class is written under does not decide what is one of it: a class
+// that requires nothing is anything's.
+unless (exists ta.instance_of(TB)) { INFO@mark `TY2 an instance is not one of a class that requires nothing` }
 unless (exists tb.instance_of(TB)) { INFO@mark `TY3 an instance is not an instance of its own class` }
 unless (exists tb.instance_of(TA)) { INFO@mark `TY4 an instance is not an instance of what its class is built on` }
 unless (exists 5.instance_of(Number)) { INFO@mark `TY5 five is not a Number` }
-if (exists 5.instance_of(TA)) { INFO@mark `TY6 five is an instance of an unrelated class` }
+unless (exists 5.instance_of(TA)) { INFO@mark `TY6 five is not one of a class that requires nothing` }
+
+// A class requires the fields it writes with their type; what gives each of
+// them is one of it, whatever it is written under.
+Needs := class { amount: Number }
+Gives := class { amount => 1 }
+Lacks := class { other => 1 }
+unless (exists Gives().instance_of(Needs)) { INFO@mark `TY60 what gives every required name is not one` }
+if (exists Lacks().instance_of(Needs)) { INFO@mark `TY61 what lacks a required name is one` }
+if (exists 5.instance_of(Needs)) { INFO@mark `TY62 a number gives a name it does not have` }
+unless (exists 1.instance_of(Array)) { INFO@mark `TY63 a number is not an array` }
+if (exists Lacks().instance_of(Array)) { INFO@mark `TY64 what is entered nowhere is an array` }
 
 unless (exists (external where TA)) { INFO@mark `TY7 a class is written nowhere` }
-if (exists (external alike (external where TA) (external where TB))) { INFO@mark `TY8 two classes are written in one place` }
+if (same_text((external where TA), (external where TB))) { INFO@mark `TY8 two classes are written in one place` }
 TC := TA
-unless (exists (external alike (external where TA) (external where TC))) { INFO@mark `TY9 one class under two names is written twice` }
+unless (same_text((external where TA), (external where TC))) { INFO@mark `TY9 one class under two names is written twice` }
 
 // What a class built on another is made of: the parent's fields, defaults and
 // methods are the child's, and may be given where it is built.
@@ -99,7 +112,7 @@ pointed ^keyword := Pointed(whole: 2, part: 3)
 unless (pointed.whole == 2) { INFO@mark `TY32 a structure's first field is not what it was built with` }
 unless (pointed.part == 3) { INFO@mark `TY33 a structure's last field is not what it was built with` }
 unless (pointed.summed == 5) { INFO@mark `TY34 a structure's body does not read its fields` }
-unless (exists (external alike (Pointed.positions.head.next.value) (`.`))) { INFO@mark `TY35 a structure does not keep what is written between its fields` }
+unless (same_text((Pointed.positions.head.next.value), (`.`))) { INFO@mark `TY35 a structure does not keep what is written between its fields` }
 
 // Text is read by a structure the way it is written: each field by its type,
 // what stands between them as it is written.
@@ -117,7 +130,7 @@ unless (ranged.width == 5) { INFO@mark `TY38 a structure read from text is not b
 positioned: Ranged = (4, `-`, 9)
 unless (positioned.width == 5) { INFO@mark `TY39 positions given to a structure are not built as one` }
 misfit: Ranged = (4, `+`, 9)
-unless (exists (external alike (misfit.head.next.value) (`+`))) { INFO@mark `TY40 positions that do not fit a structure are taken as a structure` }
+unless (same_text((misfit.head.next.value), (`+`))) { INFO@mark `TY40 positions that do not fit a structure are taken as a structure` }
 // And what is written for it as text is read by that structure.
 spanned: Ranged = 3-8
 unless (spanned.width == 5) { INFO@mark `TY41 text given to a structure is not read by it` }

@@ -35,9 +35,9 @@ unless (Side.near == Side.near) { INFO@mark `HO3 a member is not itself` }
 if (Side.near == Side.far) { INFO@mark `HO4 two members of one enum are the same` }
 // A written text is compared through `String.of`, since a literal has no
 // equality of its own (the entrypoint says so where it would have gone).
-unless (String.of(Side.near.of) == String.of(`here`)) { INFO@mark `HO5 what a member holds is not what it was written as` }
-if (String.of(Side.near.of) == String.of(`there`)) { INFO@mark `HO6 a member holds what the other one does` }
+unless (Side.near.of.as_string == "here") { INFO@mark `HO5 what a member holds is not what it was written as` }
+if (Side.near.of.as_string == "there") { INFO@mark `HO6 a member holds what the other one does` }
 
-unless (String.of(` `).count == 1) { INFO@mark `HO7 a written space is not one character` }
-unless (String.of(`  `).count == 2) { INFO@mark `HO8 two written spaces are not two characters` }
-unless (String.of(` a `).count == 3) { INFO@mark `HO9 a letter between spaces is not three characters` }
+unless (" ".count == 1) { INFO@mark `HO7 a written space is not one character` }
+unless ("  ".count == 2) { INFO@mark `HO8 two written spaces are not two characters` }
+unless (" a ".count == 3) { INFO@mark `HO9 a letter between spaces is not three characters` }

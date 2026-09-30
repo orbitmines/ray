@@ -11,13 +11,13 @@ parts &= 12
 address := IPv4(segments: parts)
 unless (address.segment_count == 4) { INFO@mark `IP1 the address has other than four segments` }
 unless (address.bit_count == (4 * 8)) { INFO@mark `IP2 the address is not thirty-two bits` }
-unless (address.as_string == String.of(`1.0.0.12`)) { INFO@mark `IP3 the address does not write as 1.0.0.12` }
+unless (address.as_string == "1.0.0.12") { INFO@mark `IP3 the address does not write as 1.0.0.12` }
 unless (address.bits.count == (4 * 8)) { INFO@mark `IP4 the address is not thirty-two bits long` }
-unless ((address / (2 * 10 + 4)).as_string == String.of(`1.0.0.0`)) { INFO@mark `IP31 the network of 1.0.0.12/24 is not 1.0.0.0` }
-unless ((address + 3).as_string == String.of(`1.0.0.15`)) { INFO@mark `IP32 three past 1.0.0.12 is not 1.0.0.15` }
-unless ((address - 2).as_string == String.of(`1.0.0.10`)) { INFO@mark `IP33 two before 1.0.0.12 is not 1.0.0.10` }
+unless ((address / (2 * 10 + 4)).as_string == "1.0.0.0") { INFO@mark `IP31 the network of 1.0.0.12/24 is not 1.0.0.0` }
+unless ((address + 3).as_string == "1.0.0.15") { INFO@mark `IP32 three past 1.0.0.12 is not 1.0.0.15` }
+unless ((address - 2).as_string == "1.0.0.10") { INFO@mark `IP33 two before 1.0.0.12 is not 1.0.0.10` }
 
-read_back := IPv4(segments: IP.read(String.of(`1.0.0.12`), Character.of(ascii_dot), 10))
+read_back := IPv4(segments: IP.read("1.0.0.12", U+002E, 10))
 unless (read_back == address) { INFO@mark `IP5 the address read back is another one` }
 
 sides := chain None
@@ -31,18 +31,18 @@ sides &= 0
 sides &= 2
 wide := IPv6(segments: sides)
 unless (wide.segment_count == 8) { INFO@mark `IP6 the wide address has other than eight segments` }
-unless (wide.as_string == String.of(`1:0:0:0:0:0:0:2`)) { INFO@mark `IP7 the wide address writes wrong in full` }
+unless (wide.as_string == "1:0:0:0:0:0:0:2") { INFO@mark `IP7 the wide address writes wrong in full` }
 unless (wide.zeros.length == (4 + 2)) { INFO@mark `IP8 the run of zeros is not six long` }
 unless (wide.zeros.at == 1) { INFO@mark `IP9 the run of zeros does not start at one` }
-unless (wide.compressed == String.of(`1::2`)) { INFO@mark `IP10 the zeros are not written as ::` }
+unless (wide.compressed == "1::2") { INFO@mark `IP10 the zeros are not written as ::` }
 
 // An address read from its text, and told apart from another.
-written := IP(segments: IP.read(String.of(`1.2.3.4`), Character.of(ascii_dot), 10))
+written := IP(segments: IP.read("1.2.3.4", U+002E, 10))
 unless (written.segment_count == 4) { INFO@mark `IP20 an address read from text has other than four segments` }
 unless (written.segments.head.value == 1) { INFO@mark `IP21 the first segment is not one` }
-unless (written.as_string == String.of(`1.2.3.4`)) { INFO@mark `IP22 an address does not read back as it was written` }
+unless (written.as_string == "1.2.3.4") { INFO@mark `IP22 an address does not read back as it was written` }
 unless (written == written) { INFO@mark `IP23 an address is not itself` }
-if (written == IP(segments: IP.read(String.of(`1.2.3.5`), Character.of(ascii_dot), 10))) { INFO@mark `IP24 two different addresses are the same` }
+if (written == IP(segments: IP.read("1.2.3.5", U+002E, 10))) { INFO@mark `IP24 two different addresses are the same` }
 
 // What each kind of address is written with: how wide a segment is, what
 // stands between them, and the base they are written in.
@@ -50,5 +50,5 @@ unless (IP.v4.segment_length == 8) { INFO@mark `IP25 a segment of the first kind
 unless (IP.v6.segment_length == 16) { INFO@mark `IP26 a segment of the second kind is other than sixteen bits` }
 unless (IP.v4.base == 10) { INFO@mark `IP27 the first kind is not written in ten` }
 unless (IP.v6.base == 16) { INFO@mark `IP28 the second kind is not written in sixteen` }
-unless (IP.v4.separator == String.of(`.`).first) { INFO@mark `IP29 the first kind is not written with dots` }
-unless (IP.v6.separator == String.of(`:`).first) { INFO@mark `IP30 the second kind is not written with colons` }
+unless (IP.v4.separator == ".".head.value) { INFO@mark `IP29 the first kind is not written with dots` }
+unless (IP.v6.separator == ":".head.value) { INFO@mark `IP30 the second kind is not written with colons` }

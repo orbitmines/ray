@@ -3,36 +3,36 @@
 
 mark ^keyword := external global
 
-unless (Roman.from(4).text == String.of(`IV`)) { INFO@mark `RO1 four is not written IV` }
-unless (Roman.from(9).text == String.of(`IX`)) { INFO@mark `RO2 nine is not written IX` }
-unless (Roman.from(14).text == String.of(`XIV`)) { INFO@mark `RO3 fourteen is not written XIV` }
-unless (Roman.from(3).text == String.of(`III`)) { INFO@mark `RO4 three is not written III` }
-unless (Roman.from(20).text == String.of(`XX`)) { INFO@mark `RO5 twenty is not written XX` }
+unless (Roman.from(4).text == "IV") { INFO@mark `RO1 four is not written IV` }
+unless (Roman.from(9).text == "IX") { INFO@mark `RO2 nine is not written IX` }
+unless (Roman.from(14).text == "XIV") { INFO@mark `RO3 fourteen is not written XIV` }
+unless (Roman.from(3).text == "III") { INFO@mark `RO4 three is not written III` }
+unless (Roman.from(20).text == "XX") { INFO@mark `RO5 twenty is not written XX` }
 
-unless (Roman(text: String.of(`IV`)).as_number == 4) { INFO@mark `RO6 IV is not four` }
-unless (Roman(text: String.of(`IX`)).as_number == 9) { INFO@mark `RO7 IX is not nine` }
-unless (Roman(text: String.of(`XIV`)).as_number == 14) { INFO@mark `RO8 XIV is not fourteen` }
-unless (Roman(text: String.of(`iv`)).as_number == 4) { INFO@mark `RO9 iv in lower case is not four` }
+unless (Roman(text: "IV").as_number == 4) { INFO@mark `RO6 IV is not four` }
+unless (Roman(text: "IX").as_number == 9) { INFO@mark `RO7 IX is not nine` }
+unless (Roman(text: "XIV").as_number == 14) { INFO@mark `RO8 XIV is not fourteen` }
+unless (Roman(text: "iv").as_number == 4) { INFO@mark `RO9 iv in lower case is not four` }
 
 // The additive form writes fours as IIII.
-unless (Roman.additive(4).text == String.of(`IIII`)) { INFO@mark `RO10 four is not written IIII the additive way` }
-unless (Roman.additive(9).text == String.of(`VIIII`)) { INFO@mark `RO11 nine is not written VIIII the additive way` }
+unless (Roman.additive(4).text == "IIII") { INFO@mark `RO10 four is not written IIII the additive way` }
+unless (Roman.additive(9).text == "VIIII") { INFO@mark `RO11 nine is not written VIIII the additive way` }
 
 // More of the small numbers. Which ones are asked about is a budget: every
 // numeral is read by walking the number it is worth, so `XL` costs forty
 // steps and a round trip costs them twice.
-unless (Roman.from(1).text == String.of(`I`)) { INFO@mark `RO14 one is not written I` }
-unless (Roman.from(5).text == String.of(`V`)) { INFO@mark `RO15 five is not written V` }
-unless (Roman.from(10).text == String.of(`X`)) { INFO@mark `RO16 ten is not written X` }
-unless (Roman(text: String.of(`VII`)).as_number == 7) { INFO@mark `RO18 VII is not seven` }
+unless (Roman.from(1).text == "I") { INFO@mark `RO14 one is not written I` }
+unless (Roman.from(5).text == "V") { INFO@mark `RO15 five is not written V` }
+unless (Roman.from(10).text == "X") { INFO@mark `RO16 ten is not written X` }
+unless (Roman(text: "VII").as_number == 7) { INFO@mark `RO18 VII is not seven` }
 unless (Roman(text: Roman.from(7).text).as_number == 7) { INFO@mark `RO12 seven does not come back from what it is written as` }
 
 // What a numeral is made of, and what it is not.
-unless (Roman(text: String.of(`XIV`)).is_valid) { INFO@mark `RO20 XIV is not written with roman digits` }
-if (Roman(text: String.of(`XQV`)).is_valid) { INFO@mark `RO21 XQV is written with roman digits` }
+unless (Roman(text: "XIV").is_valid) { INFO@mark `RO20 XIV is not written with roman digits` }
+if (Roman(text: "XQV").is_valid) { INFO@mark `RO21 XQV is written with roman digits` }
 
 // The additive form, told apart from the subtractive one.
-unless (Roman.additive(3).text == String.of(`III`)) { INFO@mark `RO24 three is written the same either way` }
+unless (Roman.additive(3).text == "III") { INFO@mark `RO24 three is written the same either way` }
 if (Roman.additive(4).text == Roman.from(4).text) { INFO@mark `RO25 the two forms write four the same` }
 
 // The twelfths a fraction sign spells. What `twelfths` reads is not asked
@@ -56,8 +56,8 @@ unless (Roman.Digit.i.with_value(3).value == 3) { INFO@mark `RO36 three ones are
 
 // Which numerals the standard form can write: one and up, below four
 // thousand.
-unless (Roman(text: String.of(`XIV`)).is_standard) { INFO@mark `RO37 fourteen is not a standard numeral` }
-if (Roman(text: String.of(``)).is_standard) { INFO@mark `RO39 a numeral with nothing written is standard` }
+unless (Roman(text: "XIV").is_standard) { INFO@mark `RO37 fourteen is not a standard numeral` }
+if (Roman(text: "").is_standard) { INFO@mark `RO39 a numeral with nothing written is standard` }
 
 // The twelfths, by the names they were counted with.
 unless (Roman.Fraction.sextans == 2) { INFO@mark `RO40 the sextans is not two twelfths` }
@@ -71,20 +71,20 @@ unless (Roman.Fraction.dextans == 10) { INFO@mark `RO47 the dextans is not ten t
 unless (Roman.Fraction.deunx == 11) { INFO@mark `RO48 the deunx is not eleven twelfths` }
 
 // The letters the numerals are written with.
-unless (Roman.i_digit == String.of(`I`).first) { INFO@mark `RO49 the ones digit is not I` }
-unless (Roman.v_digit == String.of(`V`).first) { INFO@mark `RO50 the fives digit is not V` }
-unless (Roman.x_digit == String.of(`X`).first) { INFO@mark `RO51 the tens digit is not X` }
-unless (Roman.l_digit == String.of(`L`).first) { INFO@mark `RO52 the fifties digit is not L` }
-unless (Roman.c_digit == String.of(`C`).first) { INFO@mark `RO53 the hundreds digit is not C` }
-unless (Roman.d_digit == String.of(`D`).first) { INFO@mark `RO54 the five hundreds digit is not D` }
-unless (Roman.m_digit == String.of(`M`).first) { INFO@mark `RO55 the thousands digit is not M` }
+unless (Roman.i_digit == "I".head.value) { INFO@mark `RO49 the ones digit is not I` }
+unless (Roman.v_digit == "V".head.value) { INFO@mark `RO50 the fives digit is not V` }
+unless (Roman.x_digit == "X".head.value) { INFO@mark `RO51 the tens digit is not X` }
+unless (Roman.l_digit == "L".head.value) { INFO@mark `RO52 the fifties digit is not L` }
+unless (Roman.c_digit == "C".head.value) { INFO@mark `RO53 the hundreds digit is not C` }
+unless (Roman.d_digit == "D".head.value) { INFO@mark `RO54 the five hundreds digit is not D` }
+unless (Roman.m_digit == "M".head.value) { INFO@mark `RO55 the thousands digit is not M` }
 
 // Which digit a letter stands for, either case, and nothing for a letter that
 // is not one of them.
-unless (Roman.digit_of(String.of(`X`).first) == Roman.Digit.x) { INFO@mark `RO56 X does not stand for the tens digit` }
-unless (Roman.digit_of(String.of(`x`).first) == Roman.Digit.x) { INFO@mark `RO57 a lower-case x does not stand for it either` }
-unless (Roman.digit_of(String.of(`I`).first) == Roman.Digit.i) { INFO@mark `RO58 I does not stand for the ones digit` }
-if (exists Roman.digit_of(String.of(`Q`).first)) { INFO@mark `RO59 Q stands for a roman digit` }
+unless (Roman.digit_of("X".head.value) == Roman.Digit.x) { INFO@mark `RO56 X does not stand for the tens digit` }
+unless (Roman.digit_of("x".head.value) == Roman.Digit.x) { INFO@mark `RO57 a lower-case x does not stand for it either` }
+unless (Roman.digit_of("I".head.value) == Roman.Digit.i) { INFO@mark `RO58 I does not stand for the ones digit` }
+if (exists Roman.digit_of("Q".head.value)) { INFO@mark `RO59 Q stands for a roman digit` }
 
 // The vinculum's marks are written by their codepoints: seven hundred and
 // seventy-three is the combining overline.

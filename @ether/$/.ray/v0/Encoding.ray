@@ -18,7 +18,7 @@ Encoding := class {
   Hash := class {
     value: Node
     algorithm: Encoding.Algorithm
-    == (other: Encoding.Hash) => (.algorithm == other.algorithm).and(.value == other.value)
+    chainable == (other: Encoding.Hash) => (.algorithm == other.algorithm).and(.value == other.value)
   }
   // spec: a compressed value decompresses to what it wrapped.
   Compressed := class {

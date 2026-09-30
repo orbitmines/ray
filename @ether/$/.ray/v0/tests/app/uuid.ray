@@ -6,16 +6,16 @@ unless (uu.version == 4) { INFO@mark `UU2 v4 version is not 4` }
 unless (uu.variant == UUID.Variant.rfc_4122) { INFO@mark `UU3 v4 variant is not RFC 4122` }
 uu_text := uu.as_string
 unless (uu_text.count == 36) { INFO@mark `UU4 v4 text is not 36 characters` }
-unless (uu_text.at(8) == Character.of(ascii_dash)) { INFO@mark `UU5 no dash after eight digits` }
-unless (uu_text.at(14) == Character.of(ascii_zero + 4)) { INFO@mark `UU6 the version digit is not 4` }
+unless (uu_text.at(8) == U+002D) { INFO@mark `UU5 no dash after eight digits` }
+unless (uu_text.at(14) == U+0034) { INFO@mark `UU6 the version digit is not 4` }
 
 // A UUID is itself.
 unless (uu == uu) { INFO@mark `UU7 a uuid is not itself` }
 
 // The text form puts its dashes where RFC 4122 asks.
-unless (uu_text.at(13) == Character.of(ascii_dash)) { INFO@mark `UU10 no dash after thirteen characters` }
-unless (uu_text.at(18) == Character.of(ascii_dash)) { INFO@mark `UU11 no dash after eighteen characters` }
-unless (uu_text.at(23) == Character.of(ascii_dash)) { INFO@mark `UU12 no dash after twenty-three characters` }
+unless (uu_text.at(13) == U+002D) { INFO@mark `UU10 no dash after thirteen characters` }
+unless (uu_text.at(18) == U+002D) { INFO@mark `UU11 no dash after eighteen characters` }
+unless (uu_text.at(23) == U+002D) { INFO@mark `UU12 no dash after twenty-three characters` }
 
 // spec: two draws are two uuids, which `feature.ray` claims of the bits they
 // are drawn from rather than of the uuids. A second draw here costs more than
@@ -25,7 +25,7 @@ unless (uu_text.at(23) == Character.of(ascii_dash)) { INFO@mark `UU12 no dash af
 // What is written down is read back as the same uuid. A text is read here
 // rather than a drawn uuid written out and read again, because drawing costs
 // a nibble's worth of walking for each of thirty-two digits.
-spelled_out := String.of(`00000000-0000-4000-8000-000000000000`)
+spelled_out := "00000000-0000-4000-8000-000000000000"
 read_back := UUID.read(spelled_out)
 unless (read_back.spelled.count == 32) { INFO@mark `UU15 what is read back has other than 32 digits` }
 unless (read_back.version == 4) { INFO@mark `UU16 what is read back is not of the version it was written with` }
@@ -33,9 +33,9 @@ unless (read_back.variant == UUID.Variant.rfc_4122) { INFO@mark `UU17 what is re
 unless (read_back.as_string == spelled_out) { INFO@mark `UU13 a uuid written down does not read back as itself` }
 
 // What a digit written in sixteen is worth, either case.
-unless (String.of(`7`).first.hexadecimal_digit == 7) { INFO@mark `UU18 7 is not seven in sixteen` }
-unless (String.of(`a`).first.hexadecimal_digit == 10) { INFO@mark `UU19 a is not ten in sixteen` }
-unless (String.of(`F`).first.hexadecimal_digit == 15) { INFO@mark `UU20 F is not fifteen in sixteen` }
+unless ("7".head.value.hexadecimal_digit == 7) { INFO@mark `UU18 7 is not seven in sixteen` }
+unless ("a".head.value.hexadecimal_digit == 10) { INFO@mark `UU19 a is not ten in sixteen` }
+unless ("F".head.value.hexadecimal_digit == 15) { INFO@mark `UU20 F is not fifteen in sixteen` }
 
 // The other versions the draft names. spec: what makes each of them what it
 // is — a timestamp, an md5, an sha1 — waits on the clock and on the hashes,

@@ -8,18 +8,18 @@ if (Unicode.fits(21, 4)) { INFO@mark `UN2 twenty-one fits in four bits` }
 unless (Unicode.scalar(10)) { INFO@mark `UN3 ten is not a scalar` }
 if (Unicode.surrogate(10)) { INFO@mark `UN4 ten is a surrogate` }
 
-digit := String.of(`1`).first
+digit := "1".head.value
 unless (exists Unicode.category(digit)) { INFO@mark `UN5 a digit has no kind` }
 unless (Unicode.category(digit) == Unicode.GeneralCategory.number) { INFO@mark `UN6 a digit is not a number` }
 
-space := String.of(` `).first
+space := " ".head.value
 unless (Unicode.category(space) == Unicode.GeneralCategory.separator) { INFO@mark `UN7 a space does not separate` }
 
 unless (exists Unicode.GeneralCategory.letter) { INFO@mark `UN8 there is no letter to be` }
-unless (Unicode.category(String.of(`a`).first) == Unicode.GeneralCategory.letter) { INFO@mark `UN9 a letter is not a letter` }
+unless (Unicode.category("a".head.value) == Unicode.GeneralCategory.letter) { INFO@mark `UN9 a letter is not a letter` }
 
 // What a character is a kind of, told apart from what it is not.
-letter := String.of(`a`).first
+letter := "a".head.value
 if (Unicode.category(letter) == Unicode.GeneralCategory.number) { INFO@mark `UN10 a letter is a number` }
 if (Unicode.surrogate(10)) { INFO@mark `UN11 ten is a surrogate` }
 if (Unicode.fits(10, 3)) { INFO@mark `UN12 ten fits in three bits` }
@@ -43,8 +43,8 @@ unless (Unicode.fits(0, 1)) { INFO@mark `UN21 zero does not fit in one bit` }
 
 
 // The kinds a character is told apart from one another.
-if (Unicode.category(String.of(`1`).first) == Unicode.GeneralCategory.letter) { INFO@mark `UN26 a digit is a letter` }
-if (Unicode.category(String.of(` `).first) == Unicode.GeneralCategory.letter) { INFO@mark `UN27 a space is a letter` }
+if (Unicode.category("1".head.value) == Unicode.GeneralCategory.letter) { INFO@mark `UN26 a digit is a letter` }
+if (Unicode.category(" ".head.value) == Unicode.GeneralCategory.letter) { INFO@mark `UN27 a space is a letter` }
 unless (Unicode.GeneralCategory.components.count == 6) { INFO@mark `UN29 there are other than six kinds` }
 
 // The bits between two places of a chain of bits, counted from zero.
@@ -59,4 +59,4 @@ if (eight_bits.slice_bits(2, 2).nonempty) { INFO@mark `UN33 the bits between a p
 // whole file.
 
 // Where the tables are read from, when they are read.
-unless (Unicode.tables_at.starts_with(String.of(`https`))) { INFO@mark `UN36 the tables are not read over the web` }
+unless (Unicode.tables_at.starts_with("https")) { INFO@mark `UN36 the tables are not read over the web` }

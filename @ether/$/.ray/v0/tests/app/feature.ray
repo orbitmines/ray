@@ -16,15 +16,15 @@ unless (Proof.rfl(Proof.Proposition(holds: true))) { INFO@mark `FE7 what holds i
 if (Proof.rfl(Proof.Proposition(holds: false))) { INFO@mark `FE8 what does not hold is proved by itself` }
 
 unless (exists Transaction.Inverse.plus) { INFO@mark `FE9a the inverses have no plus` }
-unless (String.of(Transaction.Inverse.plus.is) == String.of(`-`)) { INFO@mark `FE9b the inverse of plus is not minus` }
+unless (Transaction.Inverse.plus.is.as_string == "-") { INFO@mark `FE9b the inverse of plus is not minus` }
 unless (exists Transaction.Inverse.minus) { INFO@mark `FE9 the inverses have no minus` }
-unless (String.of(Transaction.Inverse.minus.is) == String.of(`+`)) { INFO@mark `FE10 the inverse of minus is not plus` }
+unless (Transaction.Inverse.minus.is.as_string == "+") { INFO@mark `FE10 the inverse of minus is not plus` }
 
 // Keys: what a press and a release leave behind.
-fresh_key := Keyboard.Key(name: String.of(`a`))
+fresh_key := Keyboard.Key(name: "a")
 if (fresh_key.pressed) { INFO@mark `FE11 an untouched key is pressed` }
 if (fresh_key.toggled) { INFO@mark `FE12 an untouched key is toggled` }
-pushed_key := Keyboard.Key(name: String.of(`b`)).press
+pushed_key := Keyboard.Key(name: "b").press
 unless (pushed_key.pressed) { INFO@mark `FE13 a pressed key is not pressed` }
 unless (pushed_key.toggled) { INFO@mark `FE14 a pressed key is not toggled` }
 if (pushed_key.release.pressed) { INFO@mark `FE15 a released key is still pressed` }
@@ -96,12 +96,12 @@ unless (board.add(key).keys.count == 1) { INFO@mark `KB8 a board with one key ad
 // A chat is a chain of messages, each from someone.
 room := Chat(messages: (chain None))
 unless (room.count.is_zero) { INFO@mark `CH1 a new chat already holds messages` }
-room.say(1, String.of(`hi`))
+room.say(1, "hi")
 unless (room.count == 1) { INFO@mark `CH2 saying something does not keep it` }
-room.say(2, String.of(`ho`))
+room.say(2, "ho")
 unless (room.count == 2) { INFO@mark `CH3 saying twice keeps other than two` }
 unless (room.messages.head.value.who == 1) { INFO@mark `CH4 a message forgot who said it` }
-unless (room.messages.tail.value.text == String.of(`ho`)) { INFO@mark `CH5 a message forgot what was said` }
+unless (room.messages.tail.value.text == "ho") { INFO@mark `CH5 a message forgot what was said` }
 
 // What the machine says about itself.
 unless (exists IO.platform) { INFO@mark `IO1 the machine does not say what it is` }
@@ -136,5 +136,5 @@ unless (read_once == read_twice) { INFO@mark `IO6 reading a file changed it` }
 
 // A location computed as a string reaches the machine as the bits it is
 // written with.
-read_by_bits := IO.read(String.of(`@ether/$/.ray/v0/tests/app/.project.ray`).bits)
+read_by_bits := IO.read("@ether/$/.ray/v0/tests/app/.project.ray".bits)
 unless (read_by_bits == read_once) { INFO@mark `IO7 a location given as a string's bits is read as another place` }

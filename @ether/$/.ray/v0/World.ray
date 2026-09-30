@@ -352,7 +352,7 @@ Organization := class: Player {
 //TODO equivalence A => B etc.. see /etc/hosts for additionial notes
 //TODO Allocate a name within your access, to another character. Say x@gmail.com allocated by Google (Issuer is @me, but it's for the world @ether)
 //TODO Set name for that character
-//TODO < World at many places in some structure, have the things like .worlds/.characters be iterating over that structure to anything that's in it.
+//TODO < World at many places in some structure, have the things like .worlds/ be iterating over that structure to anything that's in it.
 
 // From the procedural-generation draft, not yet reached here (spec):
 // .ray2/_todo/ray.ray.txt/ProceduralGeneration.ray:

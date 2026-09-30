@@ -3,18 +3,18 @@
 
 mark ^keyword := external global
 
-wg := World(name: String.of(`genesis`))
-wp := wg.spawn(Player(name: String.of(`alice`)))
-unless (wp.name == String.of(`alice`)) { INFO@mark `WO1 spawned player lost its name` }
+wg := World(name: "genesis")
+wp := wg.spawn(Player(name: "alice"))
+unless (wp.name == "alice") { INFO@mark `WO1 spawned player lost its name` }
 unless (wg.personas.count == 1) { INFO@mark `WO2 world has other than one persona` }
-wq := Quest(name: String.of(`find`), goal: None)
+wq := Quest(name: "find", goal: None)
 unless (wq.done.not) { INFO@mark `WO3 a new quest is done` }
 wh := History(repository: wg)
-unless (wh.commit(wp, String.of(`hello`)).count == 1) { INFO@mark `WO4 a commit did not add to the history` }
-unless (Network.DomainName(text: String.of(`a.b`)).valid) { INFO@mark `WO7 the domain name a.b is not valid` }
-if (Network.DomainName(text: String.of(``)).valid) { INFO@mark `WO8 a name of nothing is a valid domain name` }
-unless (Keyboard.Key(name: String.of(`a`)).press.pressed) { INFO@mark `WO9 a pressed key is not pressed` }
-unless (Chat().say(wp, String.of(`hi`)).count == 1) { INFO@mark `WO10 a said message is not in the chat` }
+unless (wh.commit(wp, "hello").count == 1) { INFO@mark `WO4 a commit did not add to the history` }
+unless (Network.DomainName(text: "a.b").valid) { INFO@mark `WO7 the domain name a.b is not valid` }
+if (Network.DomainName(text: "").valid) { INFO@mark `WO8 a name of nothing is a valid domain name` }
+unless (Keyboard.Key(name: "a").press.pressed) { INFO@mark `WO9 a pressed key is not pressed` }
+unless (Chat().say(wp, "hi").count == 1) { INFO@mark `WO10 a said message is not in the chat` }
 unless (Proof.theorem(Proof.Proposition(holds: true), Proof(proposition: None, argument: Proof.Proposition(holds: true)))) { INFO@mark `WO11 the theorem does not hold` }
 
 // Locations: what holds what, and how deep that goes.
@@ -26,29 +26,29 @@ unless (here.children.count == 1) { INFO@mark `LO3 the holder does not hold one`
 unless (exists there.parent) { INFO@mark `LO4 a held location has no parent` }
 
 // Tasks, references, personas and repositories: what a class says it holds.
-wt := Task(name: String.of(`walk`), goal: None)
+wt := Task(name: "walk", goal: None)
 unless (wt.interrupted.not) { INFO@mark `TA1 a new task is interrupted` }
 unless (wt.interrupt.interrupted) { INFO@mark `TA2 an interrupted task is not interrupted` }
 
-wr := Reference(title: String.of(`a`), author: None)
+wr := Reference(title: "a", author: None)
 unless (wr.draft) { INFO@mark `RE1 a new reference is no draft` }
 unless (wr.publish.draft.not) { INFO@mark `RE2 a published reference is still a draft` }
 
 wa := Avatar(persona: wp, platform: None)
-unless (wp.embody(wa).persona.name == String.of(`alice`)) { INFO@mark `PE1 an embodied avatar is not of its persona` }
+unless (wp.embody(wa).persona.name == "alice") { INFO@mark `PE1 an embodied avatar is not of its persona` }
 unless (wp.avatars.count == 1) { INFO@mark `PE2 a persona has other than one avatar` }
 
 unless (Repository(world: wg).histories.count.is_zero) { INFO@mark `RP1 a new repository already has histories` }
-unless (Region(name: String.of(`north`)).name == String.of(`north`)) { INFO@mark `RG1 a region is not a world by another name` }
+unless (Region(name: "north").name == "north") { INFO@mark `RG1 a region is not a world by another name` }
 unless (Instance(location: None).status == Status.online) { INFO@mark `IN1 a new instance is not online` }
 unless (here == here) { INFO@mark `LO5 a location is not itself` }
 
 unless (wg == wg) { INFO@mark `WO12 a world is not itself` }
-if (wg == World(name: String.of(`other`))) { INFO@mark `WO13 two worlds are the same world` }
+if (wg == World(name: "other")) { INFO@mark `WO13 two worlds are the same world` }
 
 // Items: what one is issued by, where it is, and what says so.
-wi := Item(name: String.of(`lamp`), issuer: wg)
-unless (wi.name == String.of(`lamp`)) { INFO@mark `IT1 an item lost its name` }
+wi := Item(name: "lamp", issuer: wg)
+unless (wi.name == "lamp") { INFO@mark `IT1 an item lost its name` }
 unless (wi.issuer == wg) { INFO@mark `IT2 an item forgot who issued it` }
 unless (wi.move(here).location == here) { INFO@mark `IT3 a moved item is not where it was moved` }
 wc := Certificate(issuer: wg, secret: None)
@@ -61,41 +61,41 @@ if (Accessor.Permission.private == Accessor.Permission.public) { INFO@mark `AC2 
 
 // Reserving a name: the world issues it, keeps it, and answers the same
 // reservation to whoever asks for that name again.
-wr := wg.reserve(String.of(`alice`))
-unless (wr.name == String.of(`alice`)) { INFO@mark `RS1 a reservation does not hold the name it was made for` }
+wr := wg.reserve("alice")
+unless (wr.name == "alice") { INFO@mark `RS1 a reservation does not hold the name it was made for` }
 unless (wr.issuer == wg) { INFO@mark `RS2 a reservation forgot which world issued it` }
 unless (wg.reservations.count == 1) { INFO@mark `RS3 the world did not keep what it issued` }
-unless (wg.reserve(String.of(`alice`)) == wr) { INFO@mark `RS4 reserving a taken name issues a second one` }
+unless (wg.reserve("alice") == wr) { INFO@mark `RS4 reserving a taken name issues a second one` }
 unless (wg.reservations.count == 1) { INFO@mark `RS5 reserving twice kept two` }
-unless (wg.reserve(String.of(`bob`)).name == String.of(`bob`)) { INFO@mark `RS6 another name is not another reservation` }
+unless (wg.reserve("bob").name == "bob") { INFO@mark `RS6 another name is not another reservation` }
 unless (wg.reservations.count == 2) { INFO@mark `RS7 the world did not keep both` }
-unless (exists wg.reserved(String.of(`alice`))) { INFO@mark `RS8 a taken name does not read as taken` }
-if (exists wg.reserved(String.of(`carol`))) { INFO@mark `RS9 an untaken name reads as taken` }
+unless (exists wg.reserved("alice")) { INFO@mark `RS8 a taken name does not read as taken` }
+if (exists wg.reserved("carol")) { INFO@mark `RS9 an untaken name reads as taken` }
 // A name is taken within a world and nowhere else.
-if (exists World(name: String.of(`elsewhere`)).reserved(String.of(`alice`))) { INFO@mark `RS10 a name reserved in one world is taken in another` }
+if (exists World(name: "elsewhere").reserved("alice")) { INFO@mark `RS10 a name reserved in one world is taken in another` }
 
 // A history keeps what was committed, in the order it was committed.
 repo := Repository(world: wg)
 past := History(repository: repo, commits: (chain None))
 unless (past.count.is_zero) { INFO@mark `HI1 a new history already holds commits` }
-past.commit(wp, String.of(`first`))
+past.commit(wp, "first")
 unless (past.count == 1) { INFO@mark `HI2 committing does not keep it` }
-past.commit(wp, String.of(`second`))
+past.commit(wp, "second")
 unless (past.count == 2) { INFO@mark `HI3 committing twice keeps other than two` }
-unless (past.latest.what == String.of(`second`)) { INFO@mark `HI4 the latest is not the last committed` }
+unless (past.latest.what == "second") { INFO@mark `HI4 the latest is not the last committed` }
 unless (past.latest.who == wp) { INFO@mark `HI5 a commit forgot who made it` }
 branched := past.fork
 unless (branched.count.is_zero) { INFO@mark `HI6 a fork starts with commits on it` }
 unless (branched.from == past) { INFO@mark `HI7 a fork forgot what it came from` }
 
 // What is written down about something read.
-cite := Reference(title: String.of(`on rays`), author: wp)
+cite := Reference(title: "on rays", author: wp)
 unless (cite.draft) { INFO@mark `RF1 a new reference is not a draft` }
 unless (cite.publish.draft.not) { INFO@mark `RF2 publishing does not take it out of draft` }
 unless (cite.notes.count.is_zero) { INFO@mark `RF3 a new reference already has notes` }
-cite.note(String.of(`a note`))
+cite.note("a note")
 unless (cite.notes.count == 1) { INFO@mark `RF4 a note is not kept` }
-unless (cite.title == String.of(`on rays`)) { INFO@mark `RF5 a reference forgot its title` }
+unless (cite.title == "on rays") { INFO@mark `RF5 a reference forgot its title` }
 
 // Who may see what.
 unless (exists Accessor.Permission.confidential) { INFO@mark `AC3 there is no confidential permission` }
@@ -103,11 +103,11 @@ unless (Accessor.Permission.components.count == 4) { INFO@mark `AC4 there are ot
 unless (Accessor(level: Accessor.Permission.public).level == Accessor.Permission.public) { INFO@mark `AC5 an accessor forgot its level` }
 
 // A quest is what there is to do: the steps it takes, and whether it is done.
-errand := Quest(name: String.of(`fetch`), goal: wi)
+errand := Quest(name: "fetch", goal: wi)
 if (errand.completed) { INFO@mark `QU1 a new quest is already done` }
 unless (errand.difficulty.is_zero) { INFO@mark `QU2 a quest with no steps is difficult` }
-errand.step(String.of(`go`))
-errand.step(String.of(`take`))
+errand.step("go")
+errand.step("take")
 unless (errand.difficulty == 2) { INFO@mark `QU3 a quest of two steps is not two hard` }
 unless (errand.complete.completed) { INFO@mark `QU4 completing a quest does not` }
 unless (errand.goal == wi) { INFO@mark `QU5 a quest forgot what it is for` }
@@ -116,7 +116,7 @@ unless (wg.post(errand) == errand) { INFO@mark `QU6 posting a quest does not ans
 unless (wg.quests.count == 1) { INFO@mark `QU11 posting a quest does not put it in the world` }
 
 // A task is a quest that can be interrupted.
-job := Task(name: String.of(`carry`), goal: wi)
+job := Task(name: "carry", goal: wi)
 if (job.interrupted) { INFO@mark `QU7 a new task is already interrupted` }
 unless (job.interrupt.interrupted) { INFO@mark `QU8 interrupting a task does not` }
 if (job.completed) { INFO@mark `QU9 an interrupted task is done` }
@@ -124,42 +124,42 @@ unless (job.difficulty.is_zero) { INFO@mark `QU10 a task with no steps is diffic
 
 // Where someone is says how they are, and where they are not, what they said
 // they were.
-away := Persona(name: String.of(`away`))
+away := Persona(name: "away")
 unless (away.status_now == Status.offline) { INFO@mark `PS1 someone with nowhere to be is not offline` }
 somewhere := Instance(location: here)
-present := Persona(name: String.of(`present`), presence: somewhere)
+present := Persona(name: "present", presence: somewhere)
 unless (present.status_now == Status.online) { INFO@mark `PS2 someone somewhere is not as that place is` }
 if (present.status_now == Status.offline) { INFO@mark `PS3 someone somewhere is offline anyway` }
 unless (present.status == Status.offline) { INFO@mark `PS4 what they said they were is not what they said` }
 
 // What a world and a persona are written with in front of their names.
-unless (String.of(World(name: String.of(`w`)).prefix) == String.of(`#`)) { INFO@mark `WP1 a world is not written with a hash` }
-unless (String.of(Persona(name: String.of(`p`)).prefix) == String.of(`@`)) { INFO@mark `WP2 a persona is not written with an at sign` }
+unless ((World(name: "w").prefix).as_string == "#") { INFO@mark `WP1 a world is not written with a hash` }
+unless ((Persona(name: "p").prefix).as_string == "@") { INFO@mark `WP2 a persona is not written with an at sign` }
 
 // A name given to something is the name it answers to afterwards.
-renamed := Persona(name: String.of(`before`)).named(String.of(`after`))
-unless (renamed.name == String.of(`after`)) { INFO@mark `WP3 something named is not called that` }
+renamed := Persona(name: "before").named("after")
+unless (renamed.name == "after") { INFO@mark `WP3 something named is not called that` }
 
 // What a world holds, and how many live in it.
-county := World(name: String.of(`county`))
+county := World(name: "county")
 unless (county.population.is_zero) { INFO@mark `WP4 an empty world has someone in it` }
-county.spawn(Persona(name: String.of(`one`)))
-county.spawn(Persona(name: String.of(`two`)))
+county.spawn(Persona(name: "one"))
+county.spawn(Persona(name: "two"))
 unless (county.population == 2) { INFO@mark `WP5 two who live there do not count two` }
 unless (county.items.empty) { INFO@mark `WP6 an empty world holds something` }
-county.add(Item(name: String.of(`lamp`), issuer: county))
+county.add(Item(name: "lamp", issuer: county))
 unless (county.items.count == 1) { INFO@mark `WP7 what was added to a world is not there` }
 if (exists county.shadowing) { INFO@mark `WP8 a world falls back to another by itself` }
 
 // A name issued in a world is the reservation that took it, and reserving it
 // again is reserving it once.
-taken := county.issue(String.of(`a`))
-unless (taken.name == String.of(`a`)) { INFO@mark `WP9 what was issued does not hold the name` }
+taken := county.issue("a")
+unless (taken.name == "a") { INFO@mark `WP9 what was issued does not hold the name` }
 unless (taken.issuer == county) { INFO@mark `WP10 what issued a name is not the world` }
-unless (county.reserve(String.of(`a`)) == taken) { INFO@mark `WP11 reserving a taken name takes it again` }
+unless (county.reserve("a") == taken) { INFO@mark `WP11 reserving a taken name takes it again` }
 
 // An item sits somewhere, is obtained by something, and carries what says so.
-lamp := Item(name: String.of(`lamp`), issuer: county)
+lamp := Item(name: "lamp", issuer: county)
 if (exists lamp.obtained_by) { INFO@mark `WP12 an item nobody has is had by something` }
 if (exists lamp.certificate) { INFO@mark `WP13 an item carries a certificate it was not given` }
 paper := Certificate(issuer: county, secret: 1)
@@ -167,14 +167,14 @@ unless (lamp.certify(paper).certificate == paper) { INFO@mark `WP14 what an item
 unless (exists paper.issued_on) { INFO@mark `WP15 a certificate says nothing about when it was issued` }
 
 // What is written down about something read elsewhere.
-cited := Reference(title: String.of(`a paper`), author: 1)
+cited := Reference(title: "a paper", author: 1)
 unless (cited.draft) { INFO@mark `WP16 something written down is not a draft to begin with` }
 unless (cited.publish.draft.not) { INFO@mark `WP17 something published is still a draft` }
 if (exists cited.link) { INFO@mark `WP18 a reference points somewhere it was not pointed` }
 unless (exists cited.date) { INFO@mark `WP19 a reference says nothing about when` }
-unless (cited.note(String.of(`read it`)).notes.count == 1) { INFO@mark `WP20 a note taken is not kept` }
+unless (cited.note("read it").notes.count == 1) { INFO@mark `WP20 a note taken is not kept` }
 
 // Who belongs to an organization.
-guild := Organization(name: String.of(`guild`))
+guild := Organization(name: "guild")
 unless (guild.members.empty) { INFO@mark `WP21 an organization nobody joined has members` }
 unless (guild.status == Status.offline) { INFO@mark `WP22 an organization is not offline to begin with` }

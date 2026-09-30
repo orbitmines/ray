@@ -1,195 +1,66 @@
-// Strings, structurally: a string is a chain of characters, a character is a
-// chain of bits (its UTF-8 bytes), and its codepoint is the Number those bits
-// spell. The one bridge from the machine is `bits`, which hands a literal's
-// bytes to the language one bit at a time. (Drafts: .ray2/Language/String,
-// Character.ray, Unicode.ray; .ray3/Node.ray's `{string: String}`.)
+// Strings (drafts: .ray2/Language/String/String.ray, Unicode.ray; .ray3/Node.ray's
+// `{string: String}`). A string is its characters, a character is the
+// codepoint it is, and what is written between quotes is read as UTF-8 into
+// codepoints (Unicode.ray). The one bridge from the machine is `bits`, which
+// hands a literal's bytes to the language one bit at a time.
 
-// One UTF-8 encoded character: its bits, most significant first.
-Character := class {
-  // How many bytes encode it: the leading ones of the first byte say so.
-  width => (
-    lead := .octets.head
-    if lead.value.not { 1 } elsif lead.next.next.value.not { 2 } elsif lead.next.next.next.value.not { 3 } else { 4 }
-  )
+// class Char < Unicode.Scalar: a character is the codepoint it is.
+Character := class: Unicode.Scalar {
+  codepoint => this
 
-  // spec: the codepoint is decoded structurally: the payload bits of each
-  // byte (7 for a single byte; 5/4/3 after a lead of 2/3/4 bytes; 6 for each
-  // follower) are concatenated into a number.
-  codepoint => (
-    total ^keyword := 0
-    walker ^keyword := .octets.head
-    skip ^keyword := if (.width == 1) { 1 } elsif (.width == 2) { 3 } elsif (.width == 3) { 4 } else { 5 }
-    position ^keyword := 0
-    while (exists walker) {
-      unless (position < skip) {
-        total = total + total
-        if walker.value { total = total.succ }
-      }
-      position = position.succ
-      if (position == 8) {
-        position = 0
-        skip = 2
-      }
-      walker = walker.next
-    }
-    total
-  )
+  // How many bytes UTF-8 writes it in.
+  width => if (this < 128) { 1 } elsif (this < 2048) { 2 } elsif (this < 65536) { 3 } else { 4 }
+  octets => Unicode.UTF8.encode(this)
 
-  != (other: Character) => (this == other).not
-
-  // ASCII classes of the draft's `Char.Letter`/`\d`/`\s`, read off the bits
-  // of a one-byte character: letters are 010xxxxx (upper) and 011xxxxx
-  // (lower) with xxxxx from 1 to 26, digits 0011xxxx with xxxx below ten.
+  // Letter: Char = "a".."z" | "A".."Z", and `\d`, `\s`, `\w`.
   // spec: only the Latin letters and digits until the Unicode tables are read
-  // in (Unicode.ray).
-  is_ascii => .octets.head.value.not
-  bit (index: Number) => .octets.at(index).value
-  // The number the bits from a position onwards spell.
-  tail_value (from: Number) => (
-    total ^keyword := 0
-    this.octets.at(from) for {
-      total = total + total
-      if it.value { total = total.succ }
-    }
-    total
-  )
-  alphabetic_tail => (
-    low := .tail_value(3)
-    (0 < low).and(low < 27)
-  )
-  lower_case => .is_ascii.and(.bit(1)).and(.bit(2)).and(.alphabetic_tail)
-  upper_case => .is_ascii.and(.bit(1)).and(.bit(2).not).and(.alphabetic_tail)
+  // in (Unicode.ray); blanks are the space and the controls 9..13 (tab,
+  // newline, vertical tab, form feed, carriage return).
+  is_ascii => this < 128
+  lower_case => (96 < this).and(this < 123)
+  upper_case => (64 < this).and(this < 91)
   letter => .lower_case.or(.upper_case)
-  // `0011xxxx with xxxx below ten`: the four leading bits say which sixteen
-  // codepoints these are, and what is left says which of them. Asking the
-  // fifth bit to be clear as well left out `8` and `9`.
-  digit => .is_ascii.and(.bit(1).not).and(.bit(2)).and(.bit(3)).and(.tail_value(4) < 10)
-  // spec: blanks are the space and the controls 9..13 (tab, newline,
-  // vertical tab, form feed, carriage return).
-  blank => .is_ascii.and(.bit(1).not).and((.bit(2).and(.bit(3).not).and(.tail_value(4).is_zero)).or(.bit(2).not.and(.bit(3).not).and(8 < .tail_value(4)).and(.tail_value(4) < 14)))
-  is_underscore => .is_ascii.and(.bit(1)).and(.bit(2).not).and(.all_set(3))
-  all_set (from: Number) => (
-    verdict ^keyword := true
-    this.octets.at(from) for { unless it.value { verdict = false } }
-    verdict
-  )
+  digit => (47 < this).and(this < 58)
+  blank => (this == 32).or((8 < this).and(this < 14))
+  is_underscore => this == 95
   word => .letter.or(.digit).or(.is_underscore)
 
-  // Case: the Latin cases differ in one bit (0x20, the third).
-  with_bit (index: Number, held) => (
-    octets := chain None
-    position ^keyword := 0
-    this.octets for {
-      octets &= (if (position == index) { held } else { it.value })
-      position = position.succ
-    }
-    Character(octets: octets)
-  )
-  upper => if .lower_case { .with_bit(2, 0) } else { this }
-  lower => if .upper_case { .with_bit(2, 1) } else { this }
+  // The Latin cases are thirty-two apart.
+  upper => if .lower_case { (this - 32).as_character } else { this }
+  lower => if .upper_case { (this + 32).as_character } else { this }
   swapped => if .lower_case { .upper } elsif .upper_case { .lower } else { this }
-
-  // Two characters are the same when their bits are.
-  == (other: Character) => (
-    mine ^keyword := .octets.head
-    theirs ^keyword := other.octets.head
-    same ^keyword := true
-    while ((exists mine).and(exists theirs)) {
-      unless (mine.value == theirs.value) { same = false }
-      mine = mine.next
-      theirs = theirs.next
-    }
-    same.and((exists mine).not).and((exists theirs).not)
-  )
-
-  // The draft's `\0 \t \n \r` and the space, built when first asked for.
-  null => Character.of(0)
-  tab => Character.of(9)
-  newline => Character.of(10)
-  carriage => Character.of(13)
-  space => Character.of(ascii_space)
-  underscore => Character.of(ascii_underscore)
 
   // The value a character stands for as a digit: `0`..`9`, then `a`..`z`
   // (either case) from ten on; None for any other.
-  digit_value => if .digit { .tail_value(4) } elsif .letter { .lower.tail_value(3) + 9 } else { None }
+  digit_value => digit_of(this)
 
   // spec: `Unicode.Scalar`'s assertion, as a question rather than a refusal.
-  is_scalar => Unicode.scalar(.codepoint)
+  is_scalar => Unicode.scalar(this)
 
-  // A character from its codepoint: the UTF-8 bytes are built back from the
-  // payload bits (7 in one byte; 5+6, 4+6+6, 3+6+6+6 for wider ones).
-  of (codepoint) => (
-    // The width follows from how many leading bits of the 21 are unset.
-    all_bits := bits_of(codepoint, 21)
-    width := if (Character.clear(all_bits, 14)) { 1 } elsif (Character.clear(all_bits, 10)) { 2 } elsif (Character.clear(all_bits, 5)) { 3 } else { 4 }
-    payload := if (width == 1) { 7 } else { (width * 5) + 1 }
-    payload_bits := all_bits.at(21 - payload)
-    octets := chain None
-    if (width == 1) { octets &= 0 } else {
-      lead ^keyword := width
-      while lead {
-        octets &= 1
-        lead = lead.pred
-      }
-      octets &= 0
-    }
-    walker ^keyword := payload_bits
-    take ^keyword := if (width == 1) { 7 } else { 7 - width }
-    while take {
-      octets &= walker.value
-      walker = walker.next
-      take = take.pred
-    }
-    rest ^keyword := width.pred
-    while rest {
-      octets &= 1
-      octets &= 0
-      take = 6
-      while take {
-        octets &= walker.value
-        walker = walker.next
-        take = take.pred
-      }
-      rest = rest.pred
-    }
-    Character(octets: octets)
-  )
-  // The Latin letters and digits, built from their bits: `A` is 010 00001,
-  // `a` 011 00001, `0` 0011 0000, `a`..`f` continue the digits past nine.
-  latin_upper (index: Number) => Character.ascii(0, 1, 0, bits_of(index, 5))
-  latin_lower (index: Number) => Character.ascii(0, 1, 1, bits_of(index, 5))
-  decimal_digit (value: Number) => if (value < 10) { Character.ascii(0, 0, 1, Character.nibble(1, value)) } else { Character.ascii(0, 1, 1, Character.nibble(0, value - 9)) }
-  nibble (lead, value: Number) => (
-    out := chain None
-    out &= lead
-    bits_of(value, 4) for { out &= it.value }
-    out
-  )
-  ascii (first, second, third, rest) => (
-    octets := chain None
-    octets &= first
-    octets &= second
-    octets &= third
-    rest for { octets &= it.value }
-    Character(octets: octets)
-  )
-  // Whether the first so many bits of a chain are all unset.
-  clear (bits, count: Number) => (
-    walker ^keyword := bits.head
-    left ^keyword := count
-    verdict ^keyword := true
-    while left {
-      if walker.value { verdict = false }
-      walker = walker.next
-      left = left.pred
-    }
-    verdict
+  // \0 = U+0000, \t = U+0009, \n = U+000A, \r = U+000D
+  null => U+0000
+  tab => U+0009
+  newline => U+000A
+  carriage => U+000D
+  space => U+0020
+  underscore => U+005F
+
+  // The Latin letters and digits, counted from one and from zero.
+  latin_upper (index: Number) => (64 + index).as_character
+  latin_lower (index: Number) => (96 + index).as_character
+  decimal_digit (value: Number) => if (value < 10) { (48 + value).as_character } else { (87 + value).as_character }
+}
+
+// A number read as the character whose codepoint it is. A new one is made, so
+// that the number itself does not become a character wherever it is written.
+Number.components.hierarchy &= class {
+  as_character => (
+    held ^keyword := 0 + this
+    external extend held Character
+    held
   )
 }
 
-// Letter: Char = "a".."z" | "A".."Z"; Symbol: Char = Unicode.GeneralCategory.(Punctuation | .Symbol)
-// \d = Unicode.GeneralCategory.Decimal_Number, \s = Space_Separator | \t, \w
 // The classes of characters, as narrowings of Character, made once here rather
 // than in the body (which every character runs). spec: Symbol and the
 // non-Latin letters wait on the Unicode tables.
@@ -198,75 +69,33 @@ Character.Digit = Character{.digit}
 Character.Blank = Character{.blank}
 Character.Word = Character{.word}
 
-// class String < Char[]: a string is the array of its characters.
+// class String < Char[]: a string is the array of its characters. What an
+// array is and does — its entry, how many it holds, what is first, whether
+// two are the same — it is as an array, so none of that is written here.
 String := class: Array {
-  count => .characters.count
-  length => .count
-  empty => .count.is_zero
-
-  first => .characters.head.value
-  last => .characters.tail.value
+  // Its UTF-8 bytes, bit by bit.
   bits => (
     held_bits := chain None
-    this.characters for { it.value.octets for { held_bits &= it.value.holds } }
+    this for { it.value.octets for { held_bits &= it.value.holds } }
     held_bits
   )
 
-  == (other: String) => (
-    mine := .characters.head
-    theirs := other.characters.head
-    same ^keyword := true
-    while ((exists mine).and(exists theirs)) {
-      unless (mine.value == theirs.value) { same = false }
-      mine = mine.next
-      theirs = theirs.next
-    }
-    same.and((exists mine).not.and((exists theirs).not))
-  )
-  != (other: String) => (this == other).not
-
-  // Every character, one at a time, as `character`; the block's value is collected.
-  // (The block's name must not be `body`: inside `for`, that is the loop's own.)
-  transformed (mapping) => (
-    out := chain None
-    this.characters for {
-      character ^keyword := it.value
-      out &= (inline mapping)
-    }
-    String(characters: out)
-  )
-  // Whether a block holds for every character / some character.
-  every (predicate) => (
-    verdict ^keyword := true
-    this.characters for {
-      character ^keyword := it.value
-      unless (inline predicate) { verdict = false }
-    }
-    verdict
-  )
-  some (predicate) => (
-    verdict ^keyword := false
-    this.characters for {
-      character ^keyword := it.value
-      if (inline predicate) { verdict = true }
-    }
-    verdict
-  )
-
-  // The draft's cases. spec: `title_case` capitalises the first letter of each
-  // word, `swap_case` flips each; `fold_case` is `lower_case` (Latin only).
-  lower_case => .transformed { character.lower }
-  upper_case => .transformed { character.upper }
-  swap_case => .transformed { character.swapped }
+  // lower_case | lowercase, upper_case | uppercase, title_case | titlecase,
+  // swap_case | swapcase, fold_case | foldcase.
+  // spec: `title_case` capitalises the first letter of each word, `swap_case`
+  // flips each; `fold_case` is `lower_case` (Latin only).
+  lower_case => .map { it.value.lower }.as_string
+  upper_case => .map { it.value.upper }.as_string
+  swap_case => .map { it.value.swapped }.as_string
   fold_case => .lower_case
   title_case => (
+    out := chain None
     at_start ^keyword := true
-    out := .transformed {
-      changed := if at_start { character.upper } else { character.lower }
-      at_start = character.blank
-      changed
+    this for {
+      out &= (if at_start { it.value.upper } else { it.value.lower })
+      at_start = it.value.blank
     }
-    out
+    out.as_string
   )
   lowercase => .lower_case
   uppercase => .upper_case
@@ -274,11 +103,13 @@ String := class: Array {
   titlecase => .title_case
   foldcase => .fold_case
 
+  // snake_case | snakecase, camel_case | camelcase | camelCase,
+  // pascal_case | pascalcase | PascalCase.
   // spec: words are the runs between blanks or underscores; `snake_case`
   // joins them with `_` in lower case, `camel_case` capitalises all but the
   // first, `pascal_case` all of them.
   words => .split_by { character.blank.or(character.is_underscore) }
-  snake_case => String.joined(.words.each_lower, Character.of(ascii_underscore))
+  snake_case => String.joined(.words.each_lower, "_")
   camel_case => (
     parts := chain None
     at_start ^keyword := true
@@ -297,40 +128,28 @@ String := class: Array {
 
   // spec: English by suffix only: `plural` appends `s` unless the word already
   // ends in one; `singular` strips one trailing `s`.
-  plural => if (.ends_with(String.of(`s`))) { this } else { this + String.of(`s`) }
-  singular => if (.ends_with(String.of(`s`))) { .slice(0, .count.pred) } else { this }
+  plural => if (.tail.value == "s") { this } else { this + "s" }
+  singular => if (.tail.value == "s") { .slice(0, .count.pred) } else { this }
 
-  // The draft's `mirrored` (bidi): the characters in the other order.
-  reversed => (
-    out := chain None
-    walker ^keyword := .characters.tail
-    while (exists walker) {
-      out &= walker.value
-      walker = walker.previous
-    }
-    String(characters: out)
-  )
-  mirrored => .reversed
-
-  // The character at a position, counted from zero.
-  at (index) => .characters.at(index).value
+  // mirrored (bidi): the characters in the other order.
+  mirrored => .reverse.as_string
 
   // The characters from one position up to (not including) another.
   slice (from, to) => (
     out := chain None
-    walker ^keyword := .characters.at(from)
+    walker ^keyword := .at(from)
     left ^keyword := to - from
     while (left.nonzero.and(exists walker)) {
       out &= walker.value
       walker = walker.next
       left = left.pred
     }
-    String(characters: out)
+    out.as_string
   )
 
   starts_with (other: String) => (
-    mine ^keyword := .characters.head
-    theirs ^keyword := other.characters.head
+    mine ^keyword := .head
+    theirs ^keyword := other.head
     same ^keyword := true
     while ((exists theirs).and(exists mine)) {
       unless (mine.value == theirs.value) { same = false }
@@ -339,14 +158,14 @@ String := class: Array {
     }
     same.and((exists theirs).not)
   )
-  ends_with (other: String) => .reversed.starts_with(other.reversed)
+  ends_with (other: String) => .mirrored.starts_with(other.mirrored)
   // Walked rather than read with `for`, so that `this` is the text throughout
   // and the slice being asked about is a slice of it.
   contains (other: String) => (
     length := .count
     found ^keyword := false
     position ^keyword := 0
-    walker ^keyword := .characters.head
+    walker ^keyword := .head
     while (exists walker) {
       if (.slice(position, length).starts_with(other)) { found = true }
       position = position.succ
@@ -358,7 +177,7 @@ String := class: Array {
     length := .count
     found ^keyword := None
     position ^keyword := 0
-    walker ^keyword := .characters.head
+    walker ^keyword := .head
     while (exists walker) {
       unless (exists found) { if (.slice(position, length).starts_with(other)) { found = position } }
       position = position.succ
@@ -371,16 +190,16 @@ String := class: Array {
   split_by (predicate) => (
     pieces := chain None
     current ^keyword := chain None
-    this.characters for {
+    this for {
       character ^keyword := it.value
       if (inline predicate) {
-        pieces &= String(characters: current)
+        pieces &= current.as_string
         current = chain None
       } else {
         current &= character
       }
     }
-    pieces &= String(characters: current)
+    pieces &= current.as_string
     pieces
   )
   split (separator: Character) => .split_by { character == separator }
@@ -391,134 +210,81 @@ String := class: Array {
     out := chain None
     left ^keyword := times
     while left {
-      .characters for { out &= it.value }
+      this for { out &= it.value }
       left = left.pred
     }
-    String(characters: out)
+    out.as_string
   )
 
-  // The draft's `String[].as String = reduce(,)`: the pieces of a chain, with a separator between.
+  // String[] as String = reduce(,): the pieces of a chain, with a separator between.
   joined (parts, separator) => (
     out := chain None
     at_start ^keyword := true
     parts for {
       unless at_start { if (exists separator) { out &= separator } }
-      it.value.characters for { out &= it.value }
+      it.value for { out &= it.value }
       at_start = false
     }
-    String(characters: out)
+    out.as_string
   )
 
   // Whether this spells a number in a base: its characters are all digits
   // below the radix.
-  spells_in (radix: Number) => .nonempty.and(.every { if (exists character.digit_value) { character.digit_value < radix } else { false } })
+  spells_in (radix: Number) => .nonempty.and(.every { if (exists it.value.digit_value) { it.value.digit_value < radix } else { false } })
 
-  // The number a string of decimal digits spells, and back.
-  as_number => (
+  // The number a string of decimal digits spells.
+  as_number => .as_number_in(10)
+  as_number_in (radix: Number) => (
     total ^keyword := 0
-    // Where the digits start is one number, walked once, not once a digit.
-    zeroth ^keyword := ascii_zero
-    this.characters for { total = (total * 10) + (it.value.codepoint - zeroth) }
+    this for { total = (total * radix) + it.value.digit_value }
     total
   )
-  is_numeric => .nonempty.and(.every { character.digit })
-  nonempty => .empty.not
+  is_numeric => .nonempty.and(.every { it.value.digit })
 
   // spec: `()` on a string evaluates it as the name of a variable; that needs
   // names to be read from strings, which the runtime does not offer yet.
 
-  // Concatenation: the other string's characters follow this string's.
-  + (other: String) => (
+  // Concatenation: the other string's characters follow this string's; a
+  // character follows as itself.
+  compounds + (other) => (
     joined := chain None
-    this.characters for { joined &= it.value }
-    other.characters for { joined &= it.value }
-    String(characters: joined)
-  )
-
-  // Text is read as a string.
-  accepts (text) => String.of(text)
-
-  // A string from a literal: its bytes are read bit by bit, and cut into
-  // characters by the width each lead byte announces.
-  of (text) => (
-    collected := chain None
-    take (b) => (collected &= (inline b))
-    external bits text take
-
-    characters := chain None
-    walker ^keyword := collected.head
-    while (exists walker) {
-      current := chain None
-      lead := walker
-      // How many bits the character is written with, counted out rather than
-      // multiplied: a number is a walk, and this is asked once per character.
-      remaining ^keyword := if lead.value.not { 8 } elsif lead.next.next.value.not { 16 } elsif lead.next.next.next.value.not { 24 } else { 32 }
-      while remaining {
-        current &= walker.value
-        walker = walker.next
-        remaining = remaining.pred
-      }
-      characters &= Character(octets: current)
-    }
-    String(characters: characters, collected: collected)
+    this for { joined &= it.value }
+    if (exists other.codepoint) { joined &= other } else { other for { joined &= it.value } }
+    joined.as_string
   )
 }
 
-"{literal text ^string}" ^string.punctuation => (
-  written := String.of(text)
-  quoted ^keyword := written
-  unless (exists written.characters.head.next) { quoted = written.first }
-  quoted
-)
+// A chain of characters is the string it spells.
+Chain.components.hierarchy &= class {
+  as_string => (
+    held ^keyword := this
+    external extend held String
+    held
+  )
+}
+
+// What is written is read as the string its UTF-8 spells.
+Node.components.hierarchy &= class {
+  as_string => (
+    encoded ^keyword := this
+    external extend encoded Unicode.UTF8
+    encoded.as_code_points.map { it.value.as_character }.as_string
+  )
+}
+"{literal text ^string}" ^string.punctuation => text.as_string
 
 // `Base.String => this as String`: a number spelled in a base, and a string
 // read back as the number its digits spell there. spec: a bare `spelled` would
 // shadow a field of that name on anything built on a number (UUID's digits).
 Number.components.hierarchy &= class {
-  spelled_in (radix: Number) => (
-    out := chain None
-    this.digits_in(radix) for { out &= Character.decimal_digit(it.value) }
-    String(characters: out)
-  )
-}
-String.components.hierarchy &= class {
-  as_number_in (radix: Number) => (
-    total ^keyword := 0
-    this.characters for { total = (total * radix) + it.value.digit_value }
-    total
-  )
+  spelled_in (radix: Number) => .digits_in(radix).map { Character.decimal_digit(it.value) }.as_string
 }
 
 // The pieces of a chain of strings, each in a case.
 Chain.components.hierarchy &= class {
-  each_lower => (
-    out := chain None
-    this for { out &= it.value.lower_case }
-    out
-  )
-  each_title => (
-    out := chain None
-    this for { out &= it.value.title_case }
-    out
-  )
+  each_lower => .map { it.value.lower_case }
+  each_title => .map { it.value.title_case }
 }
-
-// The Latin codepoints the classes above are cut at, built when first asked for.
-ascii_space => 32
-ascii_dash => 45
-ascii_dot => 46
-ascii_colon => 58
-ascii_zero => 48
-ascii_nine => ascii_zero + 9
-ascii_upper_a => 65
-ascii_upper_z => ascii_upper_a + 25
-ascii_underscore => ascii_upper_z + 5
-ascii_a => 97
-ascii_z => ascii_a + 25
-case_gap => ascii_a - ascii_upper_a
-utf8_limit_one => 128
-utf8_limit_two => 2048
-utf8_limit_three => 65536
 
 // A number as a chain of bits of a fixed width, most significant first: a
 // binary counter, least significant bit first, is stepped once per unit of
@@ -561,6 +327,7 @@ number_of (bits) => (
   total
 )
 
+
 // spec: Regex, from the draft's `/{pattern}/{flags}`: only literal patterns
 // are matched (a pattern is a String and a match is containment); the flag
 // set is the draft's `i g u`; character classes await the Unicode tables.
@@ -584,6 +351,7 @@ Regex := class {
   matches (text: String) => if .ignoring_case { text.fold_case.contains(.pattern.fold_case) } else { text.contains(.pattern) }
   find (text: String) => if .ignoring_case { text.fold_case.index_of(.pattern.fold_case) } else { text.index_of(.pattern) }
 }
+
 
 // A number as its decimal digits: a decimal counter, least significant digit
 // first, is stepped once per unit and then read backwards.
@@ -611,9 +379,10 @@ Number.components.hierarchy &= class {
       forwards &= Character.decimal_digit(walker.value)
       walker = walker.previous
     }
-    String(characters: forwards)
+    forwards.as_string
   )
 }
+
 
 // From the drafts, not yet reached here (spec):
 // .ray2/Language/String/String.ray:
@@ -646,60 +415,6 @@ Number.components.hierarchy &= class {
 // A doubled `((` is one such symbol. Text may also say what language it is
 // written in, and be highlighted as that language rather than as a string.
 
-groups ^keyword := class {
-  begins_a_word (written) => (
-    spelled_bits ^keyword := text_bits(written)
-    unread ^keyword := eight
-    counted_bit ^keyword := spelled_bits.head
-    while ((exists counted_bit).and(unread.nonzero)) {
-      counted_bit = counted_bit.next
-      unread = unread.pred
-    }
-    word ^keyword := false
-    if unread.is_zero {
-      head_bit ^keyword := spelled_bits.head
-      low_bits ^keyword := head_bit.next.next.next
-      bit_three ^keyword := low_bits.value
-      bit_four ^keyword := low_bits.next.value
-      bit_five ^keyword := low_bits.next.next.value
-      bit_six ^keyword := low_bits.next.next.next.value
-      bit_seven ^keyword := low_bits.next.next.next.next.value
-      in_letters ^keyword := head_bit.value.not.and(head_bit.next.value)
-      under_row ^keyword := head_bit.next.next.value.not
-      low_empty ^keyword := bit_three.or(bit_four).or(bit_five).or(bit_six).or(bit_seven).not
-      low_past ^keyword := bit_three.and(bit_four).and(bit_five.or(bit_six.and(bit_seven)))
-      low_full ^keyword := bit_three.and(bit_four).and(bit_five).and(bit_six).and(bit_seven)
-      word = in_letters.and(low_empty.not).and(low_past.not.or(under_row.and(low_full)))
-    }
-    word
-  )
-  grouping := chain None
-  apart := chain None
-  accepts (written) => (
-    held ^keyword := None
-    known_yet ^keyword := false
-    cached_at ^keyword := groups.grouping.head
-    while ((exists cached_at).and(known_yet.not)) {
-      if (exists (external alike (cached_at.value) (written))) {
-        held = written
-        known_yet = true
-      }
-      cached_at = cached_at.next
-    }
-    cached_at = groups.apart.head
-    while ((exists cached_at).and(known_yet.not)) {
-      if (exists (external alike (cached_at.value) (written))) { known_yet = true }
-      cached_at = cached_at.next
-    }
-    unless known_yet {
-      unless (groups.begins_a_word(written)) { held = written }
-      if (exists assigns.accepts(written)) { held = None }
-      if (exists separates.accepts(written)) { held = None }
-      if (exists held) { groups.grouping &= written } else { groups.apart &= written }
-    }
-    held
-  )
-}
 
 Placement ^keyword := class { }
 placements ^keyword := chain None
@@ -734,10 +449,9 @@ declared_in (holder, spelled) => (
   rank_known
 )
 
-{a} [x: groups] {b} [y: groups] {c} => (
+{a} [x] {b} [y] {c} => (
   held ^keyword := None
-  both_chain ^keyword := (exists chainable.accepts(`[x]`)).and(exists chainable.accepts(`[y]`))
-  if ((both_chain.not).and(exists a.written_as.precedence)) {
+  if (exists a.written_as.precedence) {
     place_x ^keyword := declared_in(a, `[x]`)
     place_y ^keyword := declared_in(a, `[y]`)
     if ((exists place_x).and(exists place_y)) {

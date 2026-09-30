@@ -1,0 +1,156 @@
+// The v0.ts interpreter's own optimizations: what it recognizes in the
+// language and holds with its own primitives. It adds to `Compiler.default`,
+// so whatever reads the default level reads this interpreter's too. The
+// externals used here exist for this file only: the language never sees them.
+Compiler.default += {
+  // A class whose instance is made from one field holding the one before it
+  // is a count: the interpreter holds it as a number of its own.
+  {C}({field}: this) => external unary_succ
+  .{field} => external unary_pred
+
+  // Walking one count onto another, a step at a time: the interpreter takes
+  // all the steps at once, then answers what the body answers.
+  (
+    {total} := this
+    {left} := {other}
+    while {left} {`{`}
+      {total} = {total}.succ
+      {left} = {left}.pred
+    {`}`}
+    {result}
+  ) => external unary_onto
+
+  // Walking two counts down together while both last.
+  (
+    {mine} := this
+    {theirs} := {other}
+    while ({mine}.nonzero.and({theirs}.nonzero)) {`{`}
+      {mine} = {mine}.pred
+      {theirs} = {theirs}.pred
+    {`}`}
+    {result}
+  ) => external unary_down
+  (
+    {mine} := this
+    {theirs} := {other}
+    while ({theirs}.nonzero.and({mine}.nonzero)) {`{`}
+      {mine} = {mine}.pred
+      {theirs} = {theirs}.pred
+    {`}`}
+    {result}
+  ) => external unary_down
+
+
+  (
+    {product} := zero
+    {left} := {other}
+    while {left} {`{`}
+      {product} = {product} + this
+      {left} = {left}.pred
+    {`}`}
+    {result}
+  ) => external unary_times
+  (
+    {quotient} := zero
+    {rest} := this
+    {step} := {other}
+    while ({rest}.nonzero.and({other}.nonzero)) {`{`}
+      {rest} = {rest}.pred
+      {step} = {step}.pred
+      if {step}.is_zero {`{`}
+        {quotient} = {quotient}.succ
+        {step} = {other}
+      {`}`}
+    {`}`}
+    {result}
+  ) => external unary_divide
+  (
+    {rest} := this
+    {step} := {other}
+    while ({rest}.nonzero.and({other}.nonzero)) {`{`}
+      {rest} = {rest}.pred
+      {step} = {step}.pred
+      if {step}.is_zero {`{`} {step} = {other} {`}`}
+    {`}`}
+    {result}
+  ) => external unary_remainder
+  (
+    points := chain None
+    point := 0
+    ones := 0
+    counting := true
+    leading := true
+    skip := 0
+    position := 0
+    following := 0
+    take (b) => (
+      bit := inline b
+      if counting {`{`}
+        if bit {`{`} ones = ones.succ {`}`} else {`{`} counting = false {`}`}
+      {`}`} elsif skip.nonzero {`{`} skip = skip.pred {`}`} else {`{`}
+        point = point + point
+        if bit {`{`} point = point.succ {`}`}
+      {`}`}
+      position = position.succ
+      if (position == 8) {`{`}
+        position = 0
+        if leading {`{`}
+          following = if ones.is_zero {`{`} 0 {`}`} else {`{`} ones.pred {`}`}
+        {`}`} else {`{`} following = following.pred {`}`}
+        if following.is_zero {`{`}
+          points &= point
+          point = 0
+          ones = 0
+          counting = true
+          leading = true
+        {`}`} else {`{`}
+          leading = false
+          counting = false
+          skip = 2
+        {`}`}
+      {`}`}
+      points
+    )
+    if (exists {source}.head) {`{`} {source} for {`{`} take(it.value) {`}`} {`}`} else {`{`} external bits {source} take {`}`}
+    points
+  ) => external utf8_points
+
+  (
+    rest := {head}.head
+    leading\
+    goto named if rest.next
+    goto defining
+    named\
+    goto asked if rest.value.named
+    goto defining
+    asked\
+    goto kind if rest.value.named.modify
+    goto defining
+    kind\
+    rest = rest.next
+    goto leading
+    defining\
+    definition := external GRAMMAR_RULE rest {body}
+    rest = {head}.head
+    modifying\
+    goto more if rest.next
+    goto defined
+    more\
+    goto again if rest.value.named
+    goto defined
+    again\
+    goto modify if rest.value.named.modify
+    goto defined
+    modify\
+    rest.value.named.modify(definition)
+    rest = rest.next
+    goto modifying
+    defined\
+    definition
+  ) => external grammar_define
+
+  // A member read on the receiver, a body that hands the receiver and its
+  // argument to an external and answers the receiver, and a body that answers
+  // what it was handed: the interpreter does these without a frame of their own.
+  {given} => external direct_pass
+}

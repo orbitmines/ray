@@ -16,13 +16,16 @@ None      ^keyword := external none
 `{literal string ^string}` ^string.punctuation => string
 //{literal comment?} ^comment => None
 
-{`{`}{expr ^block}{`}`} ^punctuation => external ** expr
+{`{`}{expr ^block}{`}`} ^punctuation => (
+  held := external ** expr
+  external extend held Program
+  held
+)
 ({expr}) ^punctuation => expr
 [{expr}] ^punctuation => (
   listed ^keyword := expr
-  unless (exists (external alike (expr.listing) (global))) {
+  unless (exists expr.listing) {
     listed = chain None
-    listed.listing = global
     external extend listed Listed
     listed &= expr
   }
@@ -30,7 +33,6 @@ None      ^keyword := external none
 )
 [[{inner}]] ^punctuation => (
   nested ^keyword := chain None
-  nested.listing = global
   external extend nested Listed
   nested &= [inner]
   nested
@@ -93,7 +95,7 @@ link (holds, before) => (
 unordered class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
   written_header ^keyword := external ** header
   shape ^keyword := header
-  goto structured if (external alike (shape.listing) (global))
+  goto structured if shape.listing
   made ^keyword := (class { inline members }): header
   goto shaped
  structured\
@@ -114,6 +116,8 @@ unordered class{ }{block} ^keyword => (
   static.components = chain None
   static.components.hierarchy = chain static
   static.written_body = external ** block
+  static.classes_read = None
+  static.requirements_read = None
   written_as ^keyword => static.written_body**
   super ^keyword => (
     parent := static.components.hierarchy.tail.value
@@ -153,9 +157,49 @@ unordered base{ }class{ }{body} ^keyword => (
 
 Node := base class {
 
-  {(String ^function | `{`, expr ^parameter, `}` | `[`, operator ^operator, `]`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
+  {(String ^function | `{`, expr ^parameter, `}` | `[`, operator ^operator, `]`)[] head}{ }=>{body} ^punctuation => (
+    rest := head.head
+   leading\
+    goto named if rest.next
+    goto defining
+   named\
+    goto asked if rest.value.named
+    goto defining
+   asked\
+    goto kind if rest.value.named.modify
+    goto defining
+   kind\
+    rest = rest.next
+    goto leading
+   defining\
+    definition := external GRAMMAR_RULE rest body
+    rest = head.head
+   modifying\
+    goto more if rest.next
+    goto defined
+   more\
+    goto again if rest.value.named
+    goto defined
+   again\
+    goto modify if rest.value.named.modify
+    goto defined
+   modify\
+    rest.value.named.modify(definition)
+    rest = rest.next
+    goto modifying
+   defined\
+
+    definition
+  )
 
   , ^punctuation ^separator => this
+  // `a ; b`: what is written after is read where it is written, and is what
+  // the whole answers — the draft's `; (call) => call<local: &caller>()`
+  // (.ray3/Node.ray). This is what separates two statements written on one
+  // line: a newline separates them otherwise, and `,` is for where a list is
+  // meant rather than a second statement.
+  ; ^punctuation (x) => inline x
+  listing => None
   // Function definition
   static DEFINE_METHOD = `=`
   // `(args) => body`: a function; the body comes only after `=>`, so
@@ -169,7 +213,6 @@ Node := base class {
   // `a, b, c`: what is written, in order, as a list of it.
   , ^punctuation (other) => (
     listed ^keyword := chain None
-    listed.listing = global
     external extend listed Listed
     listed &= this
     listed &= other
@@ -207,6 +250,7 @@ Node := base class {
     // value is not the place a field's type is written down.
     goto held if this.instance
     this.components.hierarchy &= type
+    goto done if this.written_body
    held\
     type.verify(this)
    done\
@@ -224,10 +268,10 @@ Node := base class {
   ?: ^punctuation (type) => this: (type?)
   // `x ==.instance_of type`, as presence: None is an instance of a type when
   // None is among its components (`T?` is `T | None`), and anything else is
-  // an instance of what it is built on. A primitive beneath `if` (the
-  // annotation and the pattern reader ask it), so it walks by goto.
-  // Two things written in one place are one thing, which is what tells one
-  // type from another.
+  // an instance of a type when it has its structure — it gives every name the
+  // type requires — and the type admits it. What a class is written under
+  // does not decide it. A primitive beneath `if` (the annotation and the
+  // pattern reader ask it), so it walks by goto.
   instance_of (type) => (
     found ^keyword := None
     goto mine if this
@@ -246,19 +290,19 @@ Node := base class {
     walker = walker.next
     goto step
    mine\
-    found = .built_on(type)
+    found = structurally(this, type)
     goto admitted if found
     goto alternatives if type.components
     goto no
    alternatives\
     // A type written as alternatives (`A | None`, which `A?` spells) is any
-    // one of them: what is built on one of them is one of it.
+    // one of them: what has the structure of one of them is one of it.
     other ^keyword := type.components.head
    alternative\
     goto try_alternative if other
     goto no
    try_alternative\
-    found = .built_on(other.value)
+    found = structurally(this, other.value)
     goto admitted if found
     other = other.next
     goto alternative
@@ -271,28 +315,12 @@ Node := base class {
 
     found
   )
-  // Whether what this is built on reaches that type: what a thing is made of,
-  // and what that is made of in turn. Two things written in one place are one
-  // thing, which is what tells one type from another.
   // spec: the draft's `class Location = Ray` (Entity.ray) is a location with a
   // hierarchy — a parent and children, a host instance — and every Node holds
   // one, written `@`. Here a location is where a thing is written, which the
   // machine answers (`external where`), and the hierarchy awaits the world's
   // locations. `location` is not a name on Node, because a field of that name
   // is what a persona and an item hold.
-  built_on (type) => (
-    walker ^keyword := .components.hierarchy.head
-    found ^keyword := None
-    while (exists walker) {
-      if (exists (external alike (external where walker.value) (external where type))) { found = global }
-      unless (exists found) {
-        if (exists walker.value.built_on(type)) { found = global }
-      }
-      walker = walker.next
-    }
-
-    found
-  )
   // `{name: Type}` in a pattern: the capture is what its type reads out of
   // the text there, and the pattern holds only where that is not None. A type
   // that says nothing of reading takes the text as it is.
@@ -351,12 +379,6 @@ Node := base class {
 
     this
   )
-  // `a ; b`: what is written after is read where it is written, and is what
-  // the whole answers — the draft's `; (call) => call<local: &caller>()`
-  // (.ray3/Node.ray). This is what separates two statements written on one
-  // line: a newline separates them otherwise, and `,` is for where a list is
-  // meant rather than a second statement.
-  ; ^punctuation (x) => inline x
 
   // `x**`: the program `x` is written as — the statements, in the order they
   // are written. Each of them is a program too, so what holds a program holds
@@ -440,10 +462,32 @@ Node := base class {
 // Set the actual method used for function definitions.
 Node.DEFINE_METHOD = `&=`
 
+Modifier := class {
+  kind => TODO
+  modify (definition) => (
+    unless (exists definition.components) {
+      definition.components = chain None
+      definition.components.hierarchy = chain None
+    }
+    definition.components.hierarchy &= this
+    definition
+  )
+}
+chainable ^keyword := class: Modifier {
+  chains => TODO
+}
+compounds ^keyword := class: Modifier {
+  compounds => TODO
+}
+
+
 Chain := class {
   entry => .head
 }
+// What `,` built is a list: it says so by what it is made of, and anything
+// else says it is not one.
 Listed := class {
+  listing => global
   , ^punctuation (other) => (
     this &= other
     this
@@ -618,11 +662,15 @@ unordered enum ^keyword => (
     // One member is another when it is the same member: what a member is, is
     // the name it is written under. What carries no name is what it is by
     // where it is written.
-    == (other) => if ((exists .name).and(exists other.name)) {
-      exists (external alike (.name) (other.name))
-    } else {
-      exists (external alike (external where this) (external where other))
-    }
+    chainable == (other) => (
+      same ^keyword := false
+      if ((exists .name).and(exists other.name)) {
+        same = same_text(.name, other.name)
+      } else {
+        same = same_text((external where this), (external where other))
+      }
+      same
+    )
   }
 
   static ^enum
@@ -654,7 +702,7 @@ Program := class: Iterable {
   // scope. `O` is what the optimizations are called where they are written
   // short; a level is a set of rules and nothing more, so what is written
   // stays what it is and the setting sits beside it.
-  optimizations => Compiler.none
+  optimizations => global.O
   O => .optimizations
   {this}{`{`}{literal setting}{`}`} ^punctuation => class: this { inline setting }
 
@@ -682,6 +730,15 @@ Program := class: Iterable {
   for (body) => (
     .written for body
     this
+  )
+
+  // `a + b`: a program whose statements are a's, then b's.
+  compounds + (addend) => (
+    augend ^keyword := this
+    {
+      inline augend
+      inline addend
+    }
   )
 
   // `func(args)`
@@ -760,56 +817,6 @@ TRACE{`@` ^punctuation}{var} ^trace (comment: String ^comment) => report TRACE v
 // Merge into DEBUG with |
 TODO ^debug (comment: String ^comment) => DEBUG@. comment 
 
-// Which operators a rule will take is answered by a class, the way the type of
-// a capture is: `accepts` is asked what stands between the operands, and
-// answers it where it is one of these and nothing where it is not. Two written
-// texts are compared by asking the machine whether they are alike, since
-// String is written later than this.
-assigns ^keyword := class {
-  accepts (written) => (
-    held ^keyword := None
-    if (exists (external alike (written) (`=`))) { held = written }
-    if (exists (external alike (written) (`:=`))) { held = written }
-
-    held
-  )
-}
-separates ^keyword := class {
-  accepts (written) => if (exists (external alike (written) (`;`))) { written } else { None }
-}
-// What chains: a comparison written through says both of the comparisons it is
-// written as, so `a < b < c` is `a < b` and `b < c`.
-// spec: this wants to be said where the methods are written — `chainable >=`,
-// a kind a method is of — and not here. Written that way today the declaration
-// is lost instead: `chainable >= (other: Ordered) => …` leaves `>=` answering
-// wrongly, the same way any word written before a declaration does unless it
-// is one the machine offers. And a rule asking `[x: chainable]` asks it of the
-// text that stands there, not of the method that text names, so a kind a
-// method is of could not be seen from here even if the word stuck.
-chainable ^keyword := class {
-  accepts (written) => (
-    held ^keyword := None
-    if (exists (external alike (written) (`<`))) { held = written }
-    if (exists (external alike (written) (`>`))) { held = written }
-    if (exists (external alike (written) (`<=`))) { held = written }
-    if (exists (external alike (written) (`>=`))) { held = written }
-    if (exists (external alike (written) (`==`))) { held = written }
-    if (exists (external alike (written) (`!=`))) { held = written }
-
-    held
-  )
-}
-
-// What separates two statements written on one line binds looser than what
-// assigns: `a = one ; b = two` is two statements, and without this it is one,
-// `a = (one ; b = two)`. This is the shape the three rules below are written
-// in; it is written out here for the one pair that is already known.
-// spec: what a rule is called does not say what its operators must be — two
-// rules of this shape whose captures are named the same are one rule, and the
-// one written later is the one that is kept. So each of these names its own,
-// until a rule's operator filters are part of what tells it from another.
-{a} [x: assigns] {b} [y: separates] {c} => (a [x] b) [y] c
-
 // Precedence: of two operators around a shared operand, the
 // tighter one groups first (precedence = declaration order).
 // It is written in String.ray, since the bits of a statement are read with
@@ -850,19 +857,6 @@ chainable ^keyword := class {
 // Chainable: a < b < c  =>  a < b & b < c
 {a} [x: chainable] {b} [y: chainable] {c} => (a [x] b) & (b [y] c)
 
-compounds ^keyword := class {
-  accepts (written) => (
-    held ^keyword := written
-    if (exists (external alike (written) (`=`))) { held = None }
-    if (exists (external alike (written) (`:`))) { held = None }
-    if (exists (external alike (written) (`!`))) { held = None }
-    if (exists (external alike (written) (`<`))) { held = None }
-    if (exists (external alike (written) (`>`))) { held = None }
-    if (exists (external alike (written) (`&`))) { held = None }
-
-    held
-  )
-}
 {a} [x: compounds]{`=`} {b} => a = (a [x] b)
 
 // From the Node, Program and Grammar drafts, not yet reached here (spec):

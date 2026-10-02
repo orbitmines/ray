@@ -17,10 +17,10 @@ unless (a.terminal == a) { INFO@mark `RR6 a lone ray is not its own terminal` }
 
 // The smaller of a ray and itself is that ray. `min` binds its answer before
 // handing it back: two rays are the same only when they are the same one, and
-// a branch holding a ray is not the ray it holds.
+// an if/else answers the ray its taken block holds.
 unless ((b.min(b)) == b) { INFO@mark `RR7 the smaller of a ray and itself is not that ray` }
 unless ((b.max(b)) == b) { INFO@mark `RR8 the larger of a ray and itself is not that ray` }
-if ((if false { b } else { b }) == b) { INFO@mark `RR9 a branch holding a ray is that ray` }
+unless ((if false { b } else { b }) == b) { INFO@mark `RR9 an if/else holding a ray is not that ray` }
 
 c := Ray(previous: b)
 // A ray's previous and next are its own: linking one way does not link back.

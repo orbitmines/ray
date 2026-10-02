@@ -44,12 +44,12 @@ unless (exists loud.polite) { INFO@mark `C22 super.greeting did not run the pare
 unless (exists loud.super.twice) { INFO@mark `C23 super reaches the parent's other methods` }
 
 E := enum p | q | r
-unless (exists E.components.head.value.name) { INFO@mark `C9 the first enum member is not the first component` }
-unless (exists E.components.head.next.next.value.name) { INFO@mark `C10 enum components are not chained forward` }
-unless (exists E.components.tail.previous.previous.value.name) { INFO@mark `C11 enum components are not chained backward` }
+unless (exists E.components.head.value) { INFO@mark `C9 the first enum member is not the first component` }
+unless (exists E.components.head.next.next.value) { INFO@mark `C10 enum components are not chained forward` }
+unless (exists E.components.tail.previous.previous.value) { INFO@mark `C11 enum components are not chained backward` }
 unless (E.components.count == 3) { INFO@mark `C12 an enum of three has other than three components` }
 unless (E.components.first.is_initial) { INFO@mark `C13 a chain is not an Iterable of Rays` }
-unless (exists E.components.last.value.name) { INFO@mark `C14 Iterable.last did not reach the last component` }
+unless (exists E.components.last.value) { INFO@mark `C14 Iterable.last did not reach the last component` }
 
 M := a | b
 unless (exists M.components.head.value.mk) { INFO@mark `C15 | did not superpose its left side` }

@@ -532,7 +532,7 @@ enum ^keyword => (
 
   static := class {
     {literal member ^enumMember} ^punctuation => (
-      entry := this(name: member)
+      entry := this()
       this[member] = entry ^enumMember
       this.components &= entry
 
@@ -540,7 +540,6 @@ enum ^keyword => (
     )
     {literal member ^enumMember}{ }{fields ^property} ^punctuation => (
       entry := this(
-        name: member
         inline fields
       )
       this[member] = entry ^enumMember
@@ -549,7 +548,7 @@ enum ^keyword => (
       this
     )
     |{ }{literal member ^enumMember} ^punctuation => (
-      entry := this(name: member)
+      entry := this()
       this[member] = entry ^enumMember
       this.components &= entry
 
@@ -557,7 +556,6 @@ enum ^keyword => (
     )
     |{ }{literal member ^enumMember}{ }{fields ^property} ^punctuation => (
       entry := this(
-        name: member
         inline fields
       )
       this[member] = entry ^enumMember
@@ -566,15 +564,7 @@ enum ^keyword => (
       this
     )
 
-    chainable == (other) => (
-      same ^keyword := false
-      if ((exists .name).and(exists other.name)) {
-        same = same_text(.name, other.name)
-      } else {
-        same = same_text((external where this), (external where other))
-      }
-      same
-    )
+    chainable == (other) => same_text((external where this), (external where other))
   }
 
   static ^enum
@@ -586,10 +576,8 @@ enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?} {`{`
   inline block
 
   entry := static(
-    name: member
     inline fields
   )
-  entry.name = member
   static[member] = entry ^enumMember
   static.components &= entry
   inline rest

@@ -331,7 +331,7 @@ export class Interpreter {
     let previous: string | undefined, older: string | undefined;
     for (let pass = 0; pass < Interpreter.PASSES; pass++) {
       this.passing = pass;
-      this.ran = new Set(); this.definitions = []; this.touched = new WeakMap(); this.spelled = new Set(); this.claims.clear(); this.pending_rewrites = [];
+      this.ran = new Set(); this.definitions = []; this.touched = new WeakMap(); this.spelled = new Set(); this.claims.clear();
       Node.heads.clear();
       if (this.copy_of !== undefined) for (const frame of [this.GLOBAL, ...this.frames.values(), ...(this.BASE?.composed(new Set()) ?? [])])
         for (const [key, value] of frame.methods ?? []) if (key instanceof Node && !value.operation) for (const piece of key.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) Node.heads.add(part);
@@ -798,13 +798,18 @@ export class Interpreter {
     const b = other.source.location === undefined ? undefined : this.read_order.get(other.source.location);
     return a !== undefined && b !== undefined && a < b;
   }
+  // What takes the one thing written after it: a spelling followed by a single capture.
+  takes(rule: Node, impl: Node): string | undefined {
+    const pieces = rule.pattern;
+    if (pieces?.[0]?.kind !== 'literal' || rule.position === undefined) return undefined;
+    const one = pieces.length === 2 ? pieces[1].kind === 'capture' : pieces.length === 1 && (impl.params?.length ?? 0) > 0;
+    return one ? pieces[0].text.trim() : undefined;
+  }
   operators_in(segment: readonly [Node, Node][]): Map<string, [string, Text.Node][]> {
     const spelled = new Map<string, [string, Text.Node][]>();
     for (const [rule, impl] of segment) {
-      const pieces = rule.pattern;
-      if (pieces?.length !== 1 || pieces[0].kind !== 'literal' || (impl.params?.length ?? 0) === 0 || rule.position === undefined) continue;
-      const text = pieces[0].text.trim();
-      if (text.length === 0 || Interpreter.word.test(text[0])) continue;
+      const text = this.takes(rule, impl);
+      if (text === undefined || text.length === 0 || Interpreter.word.test(text[0])) continue;
       let same = spelled.get(text[0]);
       if (same === undefined) spelled.set(text[0], same = []);
       same.push([text, rule.position]);
@@ -1314,7 +1319,7 @@ export class Interpreter {
       // What stands between two operands takes the one on its right. `.` is
       // written the same way and takes nothing, so it is not one of these,
       // and a rule asking for two operators does not rewrite member access.
-      if (impl.forward || first?.kind !== 'literal' || (impl.params?.length ?? 0) === 0 || rule.pattern!.some(piece => piece.kind === 'operator')) continue;
+      if (impl.forward || first?.kind !== 'literal' || this.takes(rule, impl) === undefined) continue;
       const k = this.literal(cursor, j, first.text), edge = first.text.trim();
       if (k > end && !(Interpreter.word.test(edge[edge.length - 1] ?? '') && Interpreter.word.test(cursor.source.value[k] ?? ''))) end = k;
     }
@@ -2120,7 +2125,6 @@ export class Interpreter {
     else if (body !== undefined) impl.defines = this.calls_native(body, frame, Natives.rule);
     if (!this.probing) { const fresh = this.spelled_before(impl); this.bind(frame, rule, impl); this.definitions.push(key); if (fresh) this.site_at(`rule::${key}`, lhs); }
     if (this.probing) return impl;
-    if (pieces.some(piece => piece.kind === 'operator')) this.pending_rewrites.push([rule, impl]);
     return impl;
   }
 
@@ -2492,7 +2496,6 @@ export class Interpreter {
     return target;
   }
 
-  pending_rewrites: [Node, Node][] = [];
 }
 
 export type Mark<T> = { mark: T; by?: string; epoch: number; except?: [Node, string][] };

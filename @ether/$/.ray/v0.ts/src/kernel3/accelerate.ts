@@ -524,16 +524,7 @@ export class Accelerated extends Levelled {
   override operators_in(segment: readonly [Node, Node][]): Map<string, [string, Text.Node][]> {
     const cached = this.operator_rules.get(segment);
     if (cached?.version === this.version) return cached.spelled;
-    const spelled = new Map<string, [string, Text.Node][]>();
-    for (const [rule, impl] of segment) {
-      const pieces = rule.pattern;
-      if (pieces?.length !== 1 || pieces[0].kind !== 'literal' || (impl.params?.length ?? 0) === 0 || rule.position === undefined) continue;
-      const text = pieces[0].text.trim();
-      if (text.length === 0 || Interpreter.word.test(text[0])) continue;
-      let same = spelled.get(text[0]);
-      if (same === undefined) spelled.set(text[0], same = []);
-      same.push([text, rule.position]);
-    }
+    const spelled = super.operators_in(segment);
     this.operator_rules.set(segment, { version: this.version, spelled });
     return spelled;
   }

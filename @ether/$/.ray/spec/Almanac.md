@@ -134,6 +134,10 @@ Answers from 2026-09-30.
 - **A-C3** Without `+ Ray`, `.index` is the entry's own structure (a number's place on its line, a
   character's codepoint); with `+ Ray` it is the position in the list, counted from the origin.
   L§1.4 applies to the `+ Ray` case.
+- **A7 enums (2026-10-02)** An enum member has no `name` field: it is named by where it is written (its
+  location), and two members are equal only when they are the same one (`==` is `external where` of
+  each, `ep` enum member `==`). Both `X := enum a | b` (brace-less) and `enum a | b { … }` register their
+  members (`ep` `enum` rules). The `C(: String)` member with fields is unchanged.
 - **A-C5** `--` and `~~` as the Almanac says: `--` continues on the result of everything before it
   on the line (also after a newline, optionally with `if`); `~~` does the same but returns the
   original.

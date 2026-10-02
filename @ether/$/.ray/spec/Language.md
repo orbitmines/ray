@@ -21,8 +21,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 
 - v0: `(a, b)` and `[a, b]` both evaluate their inside; `,` composes one `Listed` value (a chain). So `(1, 2)` and `[1, 2]` already give the same list.
 - **Decided:** equal for lists. For a single element, `y := [x]` is a list holding `x`, and `y := (x)` is `x` (grouping only).
-- **Done:** `[x]` holds `x` unless `x` is already a list (ray.ray BR1–4).
-- **Decided:** `[x]` groups the way `(x)` does, except that it forces a list. So `[l]` for a list `l` is `l`. Unlike `( )`, brackets written inside brackets nest: `[[one, two]]` is a list holding the pair, while `((one, two))` is the pair. **Done** (`[[{inner}]]`, the longer rule).
+- **Decided (2026-10-02, replaces the earlier `[l]` is `l` and the `[[x]]` special form):** `[x]` always makes a new list holding `x` as its one element, a list included; there is no `[[x]]` form. Written lists flatten: `a, b, c` is one list, and a list value written first in a comma list is flattened into a *new* list, never mutated, so `lst, 5` is the elements of `lst` followed by `5`. To keep a list as one element, bracket it: `[lst], 5` is `(lst, 5)`. Mutating a reference is only ever done by an optimization, never by the language's semantics. **Done** (`ep` `[{expr}]`, `,`).
+- **Decided (2026-10-02):** for types only, repetition compresses: `"A", "B", "B"` as a type is `"A", "B"[]` (Almanac A6; T4.10).
 
 ### 1.3 `++` — *IDE:291*
 - Dropped (no longer applies).

@@ -224,6 +224,14 @@ Answers from 2026-09-30 (see also `Almanac.md`, which answers T2.1, T3.3, T3.9, 
 - **T7.5** No separate `==`: the conversion `&caller as Character` (the character at the top of the chain)
   makes `&caller == @me` hold through the equivalence graph (U9).
 - **Covered elsewhere:** T3.1 (L§2.2: per instance by default, `static` for shared), T3.7 (L§3.4 `references`).
+- **T4.10 (2026-10-02) Types are patterns, language-side.** `x: T` makes `T` readable at once (the
+  declaration confirms the value adheres to it). A type written with `|` reads as any of its
+  alternatives, one written with `,` reads its items in sequence, a written literal reads exactly
+  itself, and `T[]` (a method on Node; the draft's `Array<T>`) reads one or more `T`. For types only,
+  repetition compresses: `"A", "B", "B"` is `"A", "B"[]` (L§1.2). The engine knows nothing of `:`, `|`,
+  `,` or `[]`; it only reads text with the rules a type carries. (`ep` `:` and the helpers
+  `make_type_readable`, `reads_as`, `reads_in_sequence`, `repeated_reads`.)
+- **T6.7 (2026-10-02)** Enum members are compared by identity (where they are written); see Almanac A7.
 - **T3.15b (2026-09-30)** A class's structural definition sits in its header, beside what it is built on:
   `UTF-8 := class: TF, sequence: ( prefix: 1[]{length == 0..4}, … )[] { as (== CodePoint[]) => … }`.
   The pattern is what the type matches; the body holds its methods.

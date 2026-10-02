@@ -145,6 +145,11 @@ IDs `P…`. Answers go under **Decided** at the end.
 
 Answers from 2026-09-30.
 
+- **P2.8 (2026-10-02)** `if … { } else { }` answers what its taken block answers (the last value it
+  references), not a branch object. `elsif` continues the chain; `else` ends it and answers the chosen
+  value. `unless` is a branch of its own, so `unless … { } else { }` chains like `if`. (`ep` `if`,
+  `elsif`, `else`, `unless` classes.)
+
 - **P4.1** The concurrency set stays as the draft has it: `branch`, `sync`, `race`, `rush`, `defer`,
   `await`, each a class over Program like `if`/`while`.
 - **P4.2** Branches can be named (`A\ branch …`, a label). Sharing a variable between branches uses

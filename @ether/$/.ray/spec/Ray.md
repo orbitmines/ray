@@ -140,7 +140,8 @@ Answers from 2026-09-30.
 - **R3.6** `split` drops delimiters by default (`keep_delimiter = false`) and is a map that keeps the
   equipped structure.
 - **R3.8** Composing with `,`: an element of type `(previous: T): T` composes (`1, +2, +3`); a list that
-  isn't a Ray isn't flattened; `x: String[] = "a", Object, "b"` reads by type.
+  isn't a Ray isn't flattened; `x: String[] = "a", Object, "b"` reads by type. A list written first in a
+  comma list is flattened into a new list (`lst, 5`); `[lst], 5` keeps it as one element (L§1.2, 2026-10-02).
 - **R3.13** `.flatten` flattens fully by default; `.flatten(n)` flattens n levels.
 - **R4.3/R4.4** Ranges over graphs now as well: in a graph, `a..b` is all paths from a to b. Surfaces
   come with Geometry.

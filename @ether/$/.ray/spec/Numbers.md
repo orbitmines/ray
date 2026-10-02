@@ -81,12 +81,17 @@ IDs `N…`. Answers go under **Decided** at the end.
 - **N5.2 Casts to filters** — a boolean cast to a filter.
 - **N5.3 `boolean.orbit`** — boolean has an orbit equipped (true → false → true).
 - **N5.4 Ternary as a rule** — `def * {b} * {c}` matching `a * b * c`, "almost `def *(b, c)` but assumes structure on the edges".
+- **N5.5 Removing `exists`** — **Open** (2026-10-02): the remaining `exists` uses in `ep` and the library
+  (`unless (exists …)`, `while (exists …)`, …) are to go, per N5.6.
 
 ---
 
 ## Decided
 
 Answers from 2026-09-30.
+
+- **N5.6 (2026-10-02)** `exists` should not be needed: a value used as a condition evaluates as a boolean
+  by itself (truthiness), and a missing member reads as nothing (None, T1.2), which is false.
 
 - **N1.1** Names: `Decimal` (the naturals in that base), `Decimal.Signed`, `Decimal.Real`,
   `Decimal.Real.Signed`. No `.Positive`.

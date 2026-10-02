@@ -100,6 +100,9 @@ Answers are recorded under **Decided** at the end, by ID.
   prefer the attached (longer) reading.
 - **G3.10 A newline between `()` groups** — *Compiler:211*: "Newlines `() ()` should apply to
   each other, or pending operations should too."
+- **G3.11 A filter for one operator** — **Open** (2026-10-02, ask the user): with `accepts` removed, how
+  is a rule written that applies to one specific operator only (e.g. only `-`)? `tests/app/precedence.ray`
+  `minus` and `tests/app/rewrite.ray` `minus` still use `accepts`.
 
 ## G4. Patterns and rules (*ep:285–287, 1245–1255, 1301–1313, 1377–1382, 1748–1757*)
 

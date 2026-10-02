@@ -26,6 +26,19 @@ Paths are relative to `@ether/$/.ray/` unless they say otherwise. `ep` = `v0/.en
 4. `ep` in full (`.entrypoint.ray` — `*.ray` globs do not match it, so grep it by name).
 5. The draft you are porting, before you port it. Port in the draft's own style.
 
+## Direction from 2026-10-02 (read first; it comes before the 2026-09-30 status below)
+
+Decided on 2026-10-02 (recorded in L§1.2, T4.10, Almanac A7, P2.8, N5.6; open: N5.5, G3.11):
+
+1. **Rule heads read in the language.** Node's GRAMMAR_RULE head type
+   `` (String ^function | `{`, expr ^parameter, `}` | `[`, operator ^operator, `]`)[] `` (`ep:134`)
+   reads rule heads with the type machinery of T4.10. Then the engine's head parsing (`read_head`,
+   `pieces`, `tokens`, `grammar()`) is deleted; the engine keeps only the seed `=>` and
+   `external rule`.
+2. **Then compile.** A statement read once becomes a closure. Targets: the test suite in ~2 s,
+   boot in milliseconds.
+3. **Then the kernel goes to ~1000 lines**, with what it still does moved into `.ray`.
+
 ## Status at the end of 2026-09-30 (read before §3)
 
 A session on 2026-09-30 did most of Phase 1 and part of Phase 2. **Nothing of it is committed.**

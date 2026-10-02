@@ -167,6 +167,7 @@ Node := base class {
   )
   : ^punctuation ^annotation (type) => (
     goto typed if (external own this)
+    made_readable ^keyword := make_type_readable(type)
     goto absent if (None.instance_of(type))
     external declare this type
     goto done
@@ -329,7 +330,7 @@ Node := base class {
   | ^punctuation (other) => (
     superposed ^keyword := external .
     superposed.instance = None
-    superposed.superposes = global
+    superposed.superposes = true
     superposed.components = chain None
     external extend superposed this
     goto superpose_each if this.components.head
@@ -355,6 +356,12 @@ Node := base class {
   {\n}.{literal property ^property} ^punctuation => this[property]
 
   [{property ^property}] ^punctuation => external get this property
+  [] ^punctuation => (
+    repeated ^keyword := class: Array { }
+    repeated.repeats = this
+    repeated.repeating = true
+    repeated
+  )
 
  
   test5 => TODO
@@ -396,7 +403,7 @@ Chain := class {
 }
 
 Listed := class {
-  listing => global
+  listing => true
   , ^punctuation (other) => (
     joined ^keyword := chain None
     external extend joined Listed
@@ -513,6 +520,71 @@ while := class {
 }
 
 do ^keyword := while
+
+reads_as (rt_into, rt_alt) => (
+  rt_alt_type ^keyword := rt_alt
+  rt_reader ^keyword := external .
+  external define rt_reader `{read: rt_alt_type}` { read }
+  external extend rt_into rt_reader
+)
+reads_in_sequence (rt_into, rt_first, rt_second) => (
+  rt_first_type ^keyword := rt_first
+  rt_second_type ^keyword := rt_second
+  rt_reader ^keyword := external .
+  external define rt_reader `{rt_first: rt_first_type}{rt_second: rt_second_type}` {
+    rt_both := chain None
+    rt_both &= rt_first
+    rt_both &= rt_second
+    rt_both
+  }
+  external extend rt_into rt_reader
+)
+make_type_readable (rt_described) => (
+  if rt_described.reads_rules { return rt_described }
+  rt_described.reads_rules = true
+  if rt_described.superposes {
+    rt_alt_at ^keyword := rt_described.components.head
+    while rt_alt_at {
+      make_type_readable(rt_alt_at.value)
+      reads_as(rt_described, rt_alt_at.value)
+      rt_alt_at = rt_alt_at.next
+    }
+  } elsif rt_described.listing { sequence_reads([rt_described], rt_described.head) }
+  elsif rt_described.repeating { repeated_reads([rt_described], rt_described.repeats) }
+  rt_described
+)
+repeated_reads (rt_into, rt_item) => (
+  make_type_readable(rt_item)
+  rt_item_type ^keyword := rt_item
+  rt_self ^keyword := rt_into
+  rt_reader ^keyword := external .
+  external define rt_reader `{rt_one: rt_item_type}{rt_more: rt_self}` {
+    rt_all := chain None
+    rt_all &= rt_one
+    rt_more for { rt_all &= it.value }
+    rt_all
+  }
+  external define rt_reader `{rt_one: rt_item_type}` {
+    rt_all := chain None
+    rt_all &= rt_one
+    rt_all
+  }
+  external extend rt_into rt_reader
+)
+sequence_reads (rt_into, rt_link) => (
+  make_type_readable(rt_link.value)
+  rt_rest ^keyword := chain None
+  if rt_link.next {
+    external extend rt_rest Listed
+    rt_tail ^keyword := rt_link.next
+    while rt_tail {
+      rt_rest &= rt_tail.value
+      rt_tail = rt_tail.next
+    }
+    sequence_reads([rt_rest], rt_rest.head)
+    reads_in_sequence([rt_into], rt_link.value, rt_rest)
+  } else { reads_as([rt_into], rt_link.value) }
+)
 
 {condition} ? {yes} : {no} => (
   chosen ^keyword := no

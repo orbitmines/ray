@@ -85,3 +85,10 @@ unless (true ? true : false) { INFO@mark `BT3 c ? a : b does not take a when c h
 if (false ? true : false) { INFO@mark `BT4 c ? a : b takes a when c does not hold` }
 held := false
 unless (held ? false : true) { INFO@mark `BT5 c ? a : b does not take b for a named c` }
+
+unless (true.next == false) { INFO@mark `BOR1 true.next should be false` }
+unless (false.next == true) { INFO@mark `BOR2 false.next should be true` }
+unless (true.next.next == true) { INFO@mark `BOR3 true.next.next should be true` }
+unless (false.next.next == false) { INFO@mark `BOR4 false.next.next should be false` }
+unless (true.previous == false) { INFO@mark `BOR5 true.previous should be false` }
+unless (false.previous == true) { INFO@mark `BOR6 false.previous should be true` }

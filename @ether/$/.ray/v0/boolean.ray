@@ -20,6 +20,9 @@ boolean := enum false (holds: None) | true (holds: global) {
 
   ! => .not
 
+  next => .not
+  previous => .not
+
   & (b) => .and(b)
   && (b) => .and(b)
   || (b) => .or(b)

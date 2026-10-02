@@ -1028,7 +1028,8 @@ export class Interpreter {
       // reading of it.
       const tie = best !== undefined && (best.rule.pattern![0]?.kind === 'space') !== loose ? (loose ? -1 : 1) : 0;
       const sharper = best === undefined ? 0 : shape.filtered - this.shaped(best.rule).filtered;
-      if (length > total || (length === total && (sharper > 0 || (sharper === 0 && (own > current || tie > 0 || (tie === 0 && best!.impl.forward && !impl.forward)))))) best = { rule, impl, match };
+      const real = best !== undefined && !!best.impl.forward !== !!impl.forward ? (impl.forward ? -1 : 1) : 0;
+      if (real > 0 || (real === 0 && (length > total || (length === total && (sharper > 0 || (sharper === 0 && (own > current || tie > 0))))))) best = { rule, impl, match };
     }
     return best;
   }
@@ -1215,14 +1216,14 @@ export class Interpreter {
           if (upcoming?.kind === 'capture') end = piece.raw ? this.operand_end(cursor, from, frame, true) : piece.optional ? this.claim(cursor, from, frame) : this.operand_end(cursor, from, frame);
           else if (terminator?.kind === 'literal' && this.optional(pieces, literal_at) >= 0) {
             end = this.until(cursor, from, terminator.text, frame, piece.raw, opened === 0 && !enclosed);
-            if (end < 0) end = this.line_end(cursor, from, frame, piece.raw);
+            if (end < 0) end = this.line_end(cursor, from, frame, piece.raw, true);
             while (!as_written && end > from && /[ \t]/.test(text[end - 1])) { end--; skipped = true; }
           }
           else if (next?.kind === 'literal') {
             end = this.until(cursor, from, next.text, frame, piece.raw, opened === 0 && !enclosed);
             while (!as_written && end > from && /[ \t]/.test(text[end - 1])) { end--; skipped = true; }
           }
-          else if (next?.kind === 'newline') end = this.line_end(cursor, from, frame, piece.raw);
+          else if (next?.kind === 'newline') end = this.line_end(cursor, from, frame, piece.raw, true);
           else if (next?.kind === 'space' && pieces[next_at + 1]?.kind === 'literal') {
             end = this.until(cursor, from, (pieces[next_at + 1] as { text: string }).text, frame, piece.raw, opened === 0 && !enclosed);
             while (end > from && /[ \t]/.test(text[end - 1])) end--;
@@ -1230,7 +1231,7 @@ export class Interpreter {
           else if (next?.kind === 'space') end = this.word_end(cursor, from, frame);
           else if (next?.kind === 'operator') end = this.operand_end(cursor, from, frame);
           else if (next === undefined && p === pieces.length - 1) {
-            end = (piece.raw && opts.receiver !== undefined) || opts.tight || opts.params > 0 || pieces[p - 1]?.kind === 'space' ? this.operand_end(cursor, from, frame, piece.raw) : this.line_end(cursor, from, frame, piece.raw);
+            end = (piece.raw && opts.receiver !== undefined) || opts.tight || opts.params > 0 || pieces[p - 1]?.kind === 'space' ? this.operand_end(cursor, from, frame, piece.raw) : this.line_end(cursor, from, frame, piece.raw, true);
             end = Math.max(end, this.claim(cursor, from, frame));
           }
           else return;
@@ -1705,8 +1706,10 @@ export class Interpreter {
 
   // A rule spelled as a name and then one capture is that name, taking what it captures.
   spelled_after(target: Node, name: string): [Node, Node, string] | undefined {
-    const seen = new Set<Node>();
-    for (const from of [...target.composed(seen), ...(this.BASE?.composed(seen) ?? [])])
+    const seen = new Set<Node>(), scopes: Node[] = [];
+    for (let scope: Node | undefined = target; scope !== undefined && scope !== this.GLOBAL; scope = scope.parent) scopes.push(...scope.composed(seen));
+    scopes.push(...(this.BASE?.composed(seen) ?? []));
+    for (const from of scopes)
       for (const rule of from.rules) {
         const [head, held] = rule.pattern!;
         if (rule.pattern!.length !== 2 || head.kind !== 'literal' || held.kind !== 'capture' || head.text !== name) continue;
@@ -2775,6 +2778,7 @@ export class Interpreter {
     const named = !text && node.lazy !== undefined && !node.lazy.raw && node.value === undefined ? this.reference(node.lazy.frame, node.lazy.span.string.trim(), node.lazy.span) : node;
     const target = text ? node : this.unforced(named) ?? this.safely(() => this.peel(node));
     if (target?.lazy?.span.empty()) return undefined;
+    if (target?.lazy?.raw && opts.compose) return this.deref(target, false) ?? target;
     if (!target) { this.error(`Unresolved \`${this.text(node)}\`.`, node.position); return undefined; }
     if (target.lazy) {
       target.lazy.consumed = true;

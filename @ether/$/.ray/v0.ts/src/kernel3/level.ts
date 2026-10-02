@@ -1,9 +1,8 @@
 import { Text } from './text.ts';
-import { bytes_of, statements_of } from './natives.ts';
 import { Served } from './lsp.ts';
 import { Interpreter, Node, Count, type Piece, type Native, type Method, type Found, type Match, type Flow } from './interpreter.ts';
 
-export type Operation = { method: string; receiver?: Piece & { kind: 'capture' }; operand?: Piece & { kind: 'capture' }; given?: number; impl: Node; scope: Node; native?: Node };
+export type Operation = { method: string; receiver: Piece & { kind: 'capture' }; operand?: Piece & { kind: 'capture' }; impl: Node; scope: Node; native?: Node };
 
 // The interpreter's own level: rules about operations on values of a type,
 // `{a: T} op {b: T} => …`, answered by its primitives or by what the body
@@ -85,16 +84,6 @@ export class Levelled extends Served {
         if (native !== undefined && native === this.text_marker) this.text_rule = rule;
         continue;
       }
-      if (impl.body !== undefined && pieces[0]?.kind === 'literal' && pieces.length > 1 && pieces.slice(1).every(piece => piece.kind === 'capture' && piece.declared === undefined)) {
-        const head = this.name(this.cursor_of(impl.body), scope);
-        const native = head !== undefined && scope.lookup(head) === this.EXTERNAL ? this.deref(this.array(this.cursor_of(impl.body), scope), false) : undefined;
-        if (native?.fn === undefined) continue;
-        const method = pieces[0].text.trim();
-        let same = entries.get(method);
-        if (same === undefined) entries.set(method, same = []);
-        same.push({ method, given: pieces.length - 1, impl, scope, native });
-        continue;
-      }
       if (impl.body === undefined || pieces[0]?.kind !== 'capture' || pieces[0].declared === undefined || pieces[1]?.kind !== 'literal') continue;
       const operand = pieces[2]?.kind === 'capture' && pieces[2].declared !== undefined ? pieces[2] : undefined;
       if (pieces.length !== (operand === undefined ? 2 : 3)) continue;
@@ -121,19 +110,10 @@ export class Levelled extends Served {
     const entries = this.optimizations!.entries.get(pieces[0].text.trim());
     if (entries === undefined) return undefined;
     for (const entry of entries) {
-      if (entry.given !== undefined) {
-        if (impl.closure !== this.GLOBAL || (impl.params?.length ?? 0) !== entry.given || args.length !== entry.given) continue;
-        this.applying.push({ rule, impl, receiver, local: frame });
-        let answered: Node | undefined;
-        try { answered = entry.native!.fn!({ interpreter: this, frame, method: impl, args, at }); }
-        finally { this.applying.pop(); }
-        if (answered !== undefined) { this.ran.add(rule.key!); return answered; }
-        continue;
-      }
       if (receiver === undefined) continue;
       if ((entry.operand === undefined) !== ((impl.params?.length ?? 0) === 0) || (entry.operand !== undefined && impl.params!.length !== 1)) continue;
       const written = entry.native !== undefined && entry.receiver!.declared === this.text_kind && this.deref(receiver, false)?.literal === true;
-      const template = written ? null : this.template_for(entry.receiver!.declared!, entry.scope);
+      const template = written ? null : this.template_for(entry.receiver.declared!, entry.scope);
       if (!written && (template === undefined || (template !== null && !this.carries(template, impl, { own: true })) || (template === null && entry.native === undefined))) continue;
       const argument = args[0] ?? this.NONE;
       if (entry.operand !== undefined) {
@@ -148,8 +128,8 @@ export class Levelled extends Served {
           answered = entry.native.fn!({ interpreter: this, frame, self: receiver, method: impl, args: entry.operand === undefined ? [] : [argument], at, written, given: template === null ? new Map() : new Map([['template', template]]) });
         } else {
           const local = this.frame(frame, 'operation', entry.scope.parent ?? this.GLOBAL);
-          local.given = new Set([entry.receiver!.name, ...(entry.operand === undefined ? [] : [entry.operand.name])]);
-          this.bind(local, entry.receiver!.name, receiver!);
+          local.given = new Set([entry.receiver.name, ...(entry.operand === undefined ? [] : [entry.operand.name])]);
+          this.bind(local, entry.receiver.name, receiver!);
           if (entry.operand !== undefined) this.bind(local, entry.operand.name, argument);
           answered = this.unalias(this.array(this.cursor_of(entry.impl.body!), local, false, true), local);
         }
@@ -348,115 +328,10 @@ export class Levelled extends Served {
     for (const value of values) { this.bind(frame, 'next', value); this.diagnostics.muted(() => this.safely(() => this.array(this.cursor_of(append), frame))); }
     return held;
   }
-  holds_bit(value: Node): boolean | undefined {
-    if (value instanceof Count) return value.count > 0n;
-    if (value.none) return false;
-    if (value === this.unit()?.base) return false;
-    const numeral = this.numeral(value);
-    if (numeral !== undefined) return numeral > 0n;
-    const holds = this.field(value, 'holds');
-    if (holds !== undefined) return !holds.none;
-    const next = this.field(value, 'next');
-    return next !== undefined && !next.none;
-  }
-  bytes_of_bits(chain: Node): Uint8Array | undefined {
-    const bits = this.links(chain);
-    if (bits === undefined) return undefined;
-    if (bits.length % 8 !== 0) {
-      const pieces = bits.map(piece => bytes_of(this, piece));
-      const joined = new Uint8Array(pieces.reduce((n, piece) => n + piece.length, 0));
-      let at = 0;
-      for (const piece of pieces) { joined.set(piece, at); at += piece.length; }
-      return joined;
-    }
-    const bytes = new Uint8Array(bits.length / 8);
-    for (let i = 0; i < bits.length; i++) { const bit = this.holds_bit(bits[i]); if (bit === undefined) return undefined; if (bit) bytes[i >> 3] |= 1 << (7 - (i & 7)); }
-    return bytes;
-  }
-  code_points(source: Node | undefined): Node | undefined {
-    const held = source && this.deref(source, false);
-    if (held === undefined || held.none) return undefined;
-    const chained = held.own('head') !== undefined || held.members?.get('head') !== undefined;
-    const bytes = chained ? this.bytes_of_bits(held) : bytes_of(this, held);
-    if (bytes === undefined) return undefined;
-    const points: Node[] = [];
-    for (const character of new TextDecoder().decode(bytes)) {
-      const point = this.number(character.codePointAt(0)!);
-      if (point === undefined) return undefined;
-      points.push(point);
-    }
-    return this.chained(points);
-  }
   evaluated(text: string, bindings: Record<string, Node>): Node | undefined {
     const frame = this.frame(this.GLOBAL, 'evaluated', this.GLOBAL);
     for (const [name, value] of Object.entries(bindings)) this.bind(frame, name, value);
     return this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(Text.Node.string(text)), frame), false)));
-  }
-  protected own_field(of: Node, key: string): Node | undefined {
-    const held = of.member(key);
-    return held === undefined ? undefined : this.diagnostics.muted(() => this.safely(() => this.deref(held, false)));
-  }
-  protected classes_reached(node: Node, seen: Set<Node> = new Set()): Node[] {
-    if (seen.has(node)) return [];
-    seen.add(node);
-    const reached = [node];
-    const components = this.own_field(node, 'components');
-    const hierarchy = components === undefined || components.none ? undefined : this.own_field(components, 'hierarchy');
-    for (const parent of this.links(hierarchy) ?? []) if (!parent.none) reached.push(...this.classes_reached(parent, seen));
-    return reached;
-  }
-  protected statements_read = new WeakMap<Text.Node, string[]>();
-  protected statements_written(node: Node): string[] {
-    const written = this.evaluated('held.written_as', { held: node });
-    const span = written === undefined || written.none ? undefined : written.body;
-    if (span === undefined) return [];
-    let known = this.statements_read.get(span);
-    if (known === undefined) this.statements_read.set(span, known = statements_of(this, span).map(statement => statement.string));
-    return known;
-  }
-  protected placements = new Map<string, { pass: number; answer: Node }>();
-  declared_in(holder: Node | undefined, spelled: Node | undefined): Node | undefined {
-    const held = holder && this.deref(holder, false), named = spelled && this.deref(spelled, false);
-    if (held === undefined || named === undefined) return undefined;
-    if (held.none || named.none) return this.NONE;
-    const chained = named.own('head') !== undefined || named.members?.get('head') !== undefined;
-    const bytes = chained ? this.bytes_of_bits(named) : bytes_of(this, named);
-    if (bytes === undefined) return undefined;
-    const text = new TextDecoder().decode(bytes);
-    const written = this.evaluated('held.written_as', { held });
-    const key = written?.body === undefined ? undefined : `${written.body.source.location}:${written.body.begin}:${written.body.end}\u0000${text}`;
-    const kept = key === undefined ? undefined : this.placements.get(key);
-    if (kept !== undefined && kept.pass === this.passing) return kept.answer;
-    const visit: Node[] = [held];
-    const modifiers = (this.links(this.evaluated('Modifier.spellings', {})) ?? []).flatMap(link => { const written = this.deref(link, false); const bytes = written === undefined ? undefined : bytes_of(this, written); return bytes === undefined ? [] : [`${new TextDecoder().decode(bytes)} `]; });
-    const declares = (statement: string) => [text, ...modifiers.map(modifier => `${modifier}${text}`)].some(head => statement.startsWith(`${head} `) && statement.length > head.length + 1);
-    let answer: Node = this.NONE;
-    for (let k = 0; k < visit.length && k < 4096; k++) {
-      const at = this.statements_written(visit[k]).findIndex(declares);
-      if (at >= 0) {
-        const nth = this.number(k), written_at = this.number(at);
-        if (nth === undefined || written_at === undefined) return undefined;
-        answer = this.evaluated('Placement(nth_class: nth, written_at: written_at)', { nth, written_at }) ?? this.NONE;
-        break;
-      }
-      visit.push(...(this.links(this.evaluated('held.components.hierarchy', { held: visit[k] })) ?? []).filter(node => !node.none));
-    }
-    if (key !== undefined && answer !== this.NONE) this.placements.set(key, { pass: this.passing, answer });
-    return answer;
-  }
-  structurally(value: Node | undefined, type: Node | undefined): Node | undefined {
-    const held = value && this.deref(value, false), wanted = type && this.deref(type, false);
-    if (held === undefined || wanted === undefined || held.none || wanted.none) return undefined;
-    const required: string[] = [];
-    for (const kind of this.classes_reached(wanted)) for (const statement of this.statements_written(kind)) {
-      const end = statement.search(/[ (:?]/);
-      if (end < 0) continue;
-      const head = statement.slice(0, end);
-      if ((statement[end] === ':' && /^[\p{L}\p{N}_]/u.test(head)) || statement.startsWith(`${head} => TODO`)) required.push(head);
-    }
-    const declaring = this.classes_reached(held).map(kind => this.statements_written(kind));
-    for (const head of required) if (!declaring.some(statements => statements.some(statement => statement.startsWith(`${head} `) || statement.startsWith(`${head}(`) || statement.startsWith(`${head}:`)))) return this.NONE;
-    return this.GLOBAL;
   }
   protected readings_held = new Map<string, { version: number; node?: Node }>();
   read_once(text: string): Node | undefined {
@@ -482,7 +357,6 @@ export class Levelled extends Served {
     if (zero === undefined || zero.none) return undefined;
     return n === 0 ? zero : new Count(this.diagnostics, BigInt(n), zero, zero, 'next');
   }
-
 
   override *read_pass(srcs: Text.Source[]): Generator<void> {
     const interpreted = srcs.filter(src => this.program?.by_interpreter(src) ?? false);
@@ -577,16 +451,9 @@ Interpreted.js = {
     word: predicate(b => lower(b) || upper(b) || digit(b) || underscore(b)),
     digit_value: character((level, b) => digit(b) ? level.number(tail(b, 4)) : lower(b) || upper(b) ? level.number(tail(b, 3) + 9) : level.NONE),
   },
-  type: {
-    declared_in: { arity: 0, fn: ({ interpreter }) => interpreter.operator(({ interpreter, args: [holder, spelled] }) => (interpreter as Levelled).declared_in(holder, spelled)) },
-    structurally: { arity: 0, fn: ({ interpreter }) => interpreter.operator(({ interpreter, args: [value, type] }) => (interpreter as Levelled).structurally(value, type)) },
-  },
   flow: {
     label: { arity: 0, fn: ({ interpreter }) => (interpreter as unknown as Levelled).flow_markers.label ??= interpreter.operator((): Node | undefined => undefined) },
     jump: { arity: 0, fn: ({ interpreter }) => (interpreter as unknown as Levelled).flow_markers.jump ??= interpreter.operator((): Node | undefined => undefined) },
-  },
-  text: {
-    code_points: { arity: 0, fn: ({ interpreter }) => interpreter.operator(({ interpreter, args: [source] }) => (interpreter as Levelled).code_points(source)) },
   },
   string: {
     '==': string((level, a, b) => level.truth(a.length === b!.length && a.every((x, i) => same(x, b![i])))),

@@ -13,14 +13,12 @@ export namespace Global {
     abstract reload(): Promise<void>
 
     get dir() { return this.location.slice(0, this.location.lastIndexOf('/')); }
-    get path() { return this.location; }
     get name() { return this.location?.slice(this.location.lastIndexOf('/') + 1) ?? ''; }
     get is_dot_project() { return this.location?.endsWith(`/.project${EXTENSION}`) ?? false; }
     get is_entrypoint() { return this.location?.endsWith(`.entrypoint${EXTENSION}`) ?? false; }
   }
 }
 export type Source = Text.Source;
-export type Painted = Text.Node;
 
 export namespace Text {
   export function shift(before: string, after: string): { prefix: number; suffix: number; delta: number } {
@@ -61,10 +59,7 @@ export namespace Text {
     declare color?: string
     declare style?: string | (() => string | undefined)
     declare of?: string
-    declare by?: string
     declare defines?: string | (() => string | undefined)
-    declare head?: boolean
-    declare role?: string
 
     span(begin: number, end: number) {
       const span = new Node(this.source);
@@ -74,19 +69,16 @@ export namespace Text {
       return span;
     }
 
-    direction: -1 | 1 = 1
     get limit() { return this.until ?? this.source.value.length; }
     done() { return this.cursor >= this.limit; }
-    peek(offset: number = 0) { const i = this.cursor + offset * this.direction; return i >= 0 && i < this.limit ? this.source.value[i] : undefined; }
-    advance(n: number = 1) { this.cursor += n * this.direction; }
+    peek(offset: number = 0) { const i = this.cursor + offset; return i >= 0 && i < this.limit ? this.source.value[i] : undefined; }
+    advance(n: number = 1) { this.cursor += n; }
     at(literal: string) { return this.cursor + literal.length <= this.limit && this.source.value.startsWith(literal, this.cursor); }
     bounded(begin: number, until: number) {
       const cursor = this.copy();
       cursor.cursor = begin; cursor.until = until; cursor.from = cursor.to = undefined;
       return cursor;
     }
-
-    get file(): string | undefined { return this.source.location; }
 
     get begin() { return this.from ?? this.cursor; }
     set begin(location: number) {
@@ -113,18 +105,6 @@ export namespace Text {
       return this.empty() ? '' : this.source.value.slice(this.begin!, this.end! + 1);
     }
 
-    get ranges(): { begin: number; end: number }[] {
-      return [{ begin: this.begin, end: this.end }];
-    }
-    get segments(): Text.Node[] {
-      return this.ranges.map(r => {
-        const n = new Node(this.source);
-        n.color = this.color;
-        n.from = r.begin; n.to = r.end;
-        return n;
-      });
-    }
-
     copy() {
       const copy = new Node(this.source);
       copy.cursor = this.cursor;
@@ -132,14 +112,12 @@ export namespace Text {
       copy.expression = this.expression;
       copy.from = this.from; copy.to = this.to;
       copy.color = this.color;
-      copy.direction = this.direction;
       return copy;
     }
   }
   export class Source extends Global.Source {
     private _value: string; get value(): string { if (this._value === undefined) { throw new Error(`Source '${this.location ?? ''}' not loaded — call 'await source.load()' first.`); } return this._value; }
     set value(value: string) { this._value = value; this.expressions = new Map(); this._newlines = undefined; }
-    get text(): string { return this.value; }
     get loaded(): boolean { return this._value !== undefined; }
 
     async load(): Promise<void> {

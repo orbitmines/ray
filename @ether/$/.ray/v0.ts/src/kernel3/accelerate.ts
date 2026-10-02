@@ -7,8 +7,6 @@ import { Interpreter, Node, Jump, describe, type Key, type Rules, type Match, ty
 // shape of the rules in reach, and bodies and statements that need not be
 // read again. It answers what the interpreter would; it only reads less.
 export class Accelerated extends Levelled {
-  static checking = process.env.RAY_CHECK === '1';
-  static mismatches = 0;
   protected interned = new Map<string, number>();
   intern(key: string): number { let n = this.interned.get(key); if (n === undefined) this.interned.set(key, n = this.interned.size + 1); return n; }
   protected rule_ids = new WeakMap<Node, number>();
@@ -112,12 +110,6 @@ export class Accelerated extends Levelled {
       if (entry.chain !== chain) { if (env < 0) env = this.env_id(frame); if (entry.env !== env) continue; entry.chain = chain; }
       if (k > 0) { entries[k] = entries[0]; entries[0] = entry; }
       const answer: Found | undefined = entry.found && { rule: set[entry.found.segment][entry.found.index][0], impl: set[entry.found.segment][entry.found.index][1], match: { ...entry.found.match, receiver } };
-      if (Accelerated.checking) {
-        const start = cursor.cursor, live = this.best_of(set, receiver, cursor, frame, opts);
-        cursor.cursor = start;
-        const same = (live === undefined) === (answer === undefined) && (live === undefined || (live.rule === answer!.rule && live.match.end === answer!.match.end));
-        if (!same && ++Accelerated.mismatches <= 20) console.error(`RAY_CHECK mismatch at ${cursor.source.location?.split('/').pop()}:${cursor.line} ${JSON.stringify(cursor.source.value.slice(start, start + 30))} cached=${answer?.rule.position?.string.slice(0, 30)} live=${live?.rule.position?.string.slice(0, 30)}`);
-      }
       return answer;
     }
     const found = this.best_of(set, receiver, cursor, frame, opts);
@@ -414,35 +406,6 @@ export class Accelerated extends Levelled {
     this.frame_chains.set(frame, { epoch: this.scopes_epoch(), chain });
     return chain;
   }
-  protected override chain_of(frame: Node): { operand: Rules; receiver: Rules } {
-    const cached = this.chains.get(frame);
-    // What a frame is made of can change after it was asked what it sees.
-    if (cached && cached.epoch === this.scopes_epoch()) return cached;
-    const scopes = new Set<Node>();
-    for (let scope: Node | undefined = frame; scope; scope = scope.parent) {
-      scopes.add(scope);
-      // What a frame is made of brings its rules with it, not only its
-      // names: a set of rules composed into a frame is what a level is, and
-      // reading something with a level in reach is what applying one means.
-      for (const held of scope.made_of ?? []) scopes.add(held);
-    }
-    if (this.BASE && frame.levels === undefined) scopes.add(this.BASE);
-    const operand: [Node, Node][][] = [], receiver: [Node, Node][][] = [];
-    for (const level of (frame.levels ?? []).flatMap(type => [...type.composed(new Set())])) {
-      const set = this.ruleset(level), leading = set.receiver.filter(([rule]) => { const first = rule.pattern![0]; return first?.kind !== 'capture' || first.declared !== undefined; });
-      if (leading.length > 0) operand.push(leading);
-      if (set.receiver.length > 0) receiver.push(set.receiver);
-    }
-    for (const scope of scopes) {
-      const set = this.ruleset(scope);
-      if (set.operand.length > 0) operand.push(set.operand);
-      const seen = scope === this.GLOBAL || scope === this.BASE ? set.receiver : set.forwarded;
-      if (seen.length > 0) receiver.push(seen);
-    }
-    const chain = { epoch: this.scopes_epoch(), operand, receiver };
-    this.chains.set(frame, chain);
-    return chain;
-  }
   protected dispatch = new WeakMap<Node, { chain: Rules; of: unknown; rules: Rules }>();
   override dispatched(own: Node, chain: Rules, itself: boolean): Rules {
     const cached = itself ? undefined : this.dispatch.get(own);
@@ -471,53 +434,9 @@ export class Accelerated extends Levelled {
     this.boundaries.set(frame, { epoch: this.rules_epoch(), edges });
     return edges;
   }
-  methods_named(scope: Node): Map<string, [Node, Node][]> {
-    const held = this.method_index.get(scope), version = scope.rule_version ?? 0;
-    if (held !== undefined && held.version === version) return held.by;
-    const by = new Map<string, [Node, Node][]>();
-    for (const rule of scope.rules) {
-      const pieces = rule.pattern!;
-      if (pieces.length !== 1 || pieces[0].kind !== 'literal') continue;
-      const name = pieces[0].text.trim();
-      let same = by.get(name);
-      if (same === undefined) by.set(name, same = []);
-      same.push([rule, scope.methods!.get(rule)!]);
-    }
-    this.method_index.set(scope, { version, by });
-    return by;
-  }
-  longest(cursor: Text.Node, j: number, frame: Node): number {
-    // Every literal any rule spells, longest first — a rule on a type the
-    // receiver has is not in this frame's chain, but `.<=` still has to read
-    // `<=` rather than stop at the `=` that starts another rule.
-    if (this.spellings?.size !== Node.heads.size) {
-      const by = new Map<string, string[]>();
-      for (const head of [...Node.heads].filter(head => head.length > 1).sort((a, b) => b.length - a.length)) { let same = by.get(head[0]); if (same === undefined) by.set(head[0], same = []); same.push(head); }
-      this.spellings = { size: Node.heads.size, by };
-    }
-    const text = cursor.source.value, limit = cursor.limit;
-    for (const head of this.spellings.by.get(text[j]) ?? []) {
-      if (j + head.length > limit || !text.startsWith(head, j)) continue;
-      return j + head.length;
-    }
-    return j;
-  }
-  text(node: Node | undefined, depth: number = 0): string {
-    if (!node) return '';
-    const cached = this.texts.get(node);
-    if (cached?.version === this.version) return cached.text;
-    const text = this.texted(node, depth);
-    this.texts.set(node, { version: this.version, text });
-    return text;
-  }
   protected rulesets = new WeakMap<Node, { rules: number; operand: [Node, Node][]; receiver: [Node, Node][]; forwarded: [Node, Node][] }>();
-  protected chains = new WeakMap<Node, { epoch: number; operand: Rules; receiver: Rules }>();
   protected frame_chains = new WeakMap<Node, { epoch: number; chain: { operand: Rules; receiver: Rules } }>();
   protected boundaries = new WeakMap<Node, { epoch: number; edges: Set<string> }>();
-  protected answers = new WeakMap<Node, { epoch: number; of: Map<string, string | [string, string] | undefined> }>();
-  protected method_index = new WeakMap<Node, { version: number; by: Map<string, [Node, Node][]> }>();
-  protected spellings?: { size: number; by: Map<string, string[]> };
-  protected texts = new WeakMap<Node, { version: number; text: string }>();
   protected asked = new WeakSet<Node>();
   override stale_rules(frame: Node, key: Key): boolean { return key instanceof Node && !frame.methods?.has(key) && (this.rulesets.has(frame) || this.dispatch.has(frame) || this.asked.has(frame)); }
 
@@ -536,14 +455,8 @@ export class Accelerated extends Levelled {
     this.operator_chains.set(rules.receiver, { version: this.version, spelled });
     return spelled;
   }
-  override shaped(rule: Node) {
-    let found = this.rule_shape.get(rule);
-    if (found === undefined) this.rule_shape.set(rule, found = super.shaped(rule));
-    return found;
-  }
   protected operator_rules = new WeakMap<readonly [Node, Node][], { version: number; spelled: Map<string, [string, Text.Node][]> }>();
   protected operator_chains = new WeakMap<Rules, { version: number; spelled: Map<string, [string, Text.Node][]>[] }>();
-  protected rule_shape = new WeakMap<Node, ReturnType<Interpreter['shaped']>>();
 
   protected onlys = [new WeakMap<Rules | readonly [Node, Node][], any>(), new WeakMap<Rules | readonly [Node, Node][], any>()];
   override only(set: Rules, leading: boolean): Rules {

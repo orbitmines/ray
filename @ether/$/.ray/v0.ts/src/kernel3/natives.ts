@@ -30,8 +30,6 @@ export const Natives: Record<string, Native> = {
   } },
   'goto': { arity: 2, values: true, fn: ({ interpreter, frame, args: [label, condition] }) => interpreter.jump(label, condition, frame) },
   'none': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.NONE },
-  'return\\': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.RETURN },
-  'recur\\': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.RECUR },
   'label': { arity: 1, pure: true, values: true, fn: ({ interpreter, args: [name] }) => interpreter.labelled(name) },
   'base': { arity: 2, fn: ({ interpreter, args: [node, made] }) => { const target = interpreter.deref(node); if (target) { interpreter.BASE = target; interpreter.made = made; } return target; } },
   // Where a thing is written, and whether two texts are the same text: the
@@ -60,10 +58,6 @@ export const Natives: Record<string, Native> = {
   '^': { arity: 1, fn: ({ interpreter, args: [name] }) => interpreter.style(interpreter.text(interpreter.deref(name, false) ?? name)) },
   '**': { arity: 1, fn: ({ interpreter, args: [node] }) => program_of(interpreter, node) },
   '=': identity,
-  'left-to-right': identity,
-  'right-to-left': identity,
-  '</': identity,
-  'call': identity,
 };
 function read_of(interpreter: Interpreter, bytes: Uint8Array, at: Text.Node): Node {
   const node = interpreter.literal_of(new TextDecoder().decode(bytes), at);

@@ -710,7 +710,7 @@ Program := class: Iterable {
     }
   )
 
-  ({inline args}) => (
+  {this}({inline args}) => (
     local ^keyword = external .
     inline this
   )

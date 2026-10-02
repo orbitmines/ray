@@ -182,7 +182,7 @@ function rest_of(interpreter: Interpreter, node: Node): Node {
 }
 function program_of(interpreter: Interpreter, node: Node): Node | undefined {
   const target = interpreter.written(node);
-  if (!target?.lazy || target.value !== undefined) return interpreter.deref(node);
+  if (!target?.lazy) return interpreter.deref(node);
   target.lazy.consumed = true;
   const inner = interpreter.inner(target.lazy.span, target.lazy.frame) ?? target.lazy.span;
   const made = written_as(interpreter, inner, target.lazy.frame);

@@ -471,53 +471,10 @@ export class Accelerated extends Levelled {
     this.boundaries.set(frame, { epoch: this.rules_epoch(), edges });
     return edges;
   }
-  methods_named(scope: Node): Map<string, [Node, Node][]> {
-    const held = this.method_index.get(scope), version = scope.rule_version ?? 0;
-    if (held !== undefined && held.version === version) return held.by;
-    const by = new Map<string, [Node, Node][]>();
-    for (const rule of scope.rules) {
-      const pieces = rule.pattern!;
-      if (pieces.length !== 1 || pieces[0].kind !== 'literal') continue;
-      const name = pieces[0].text.trim();
-      let same = by.get(name);
-      if (same === undefined) by.set(name, same = []);
-      same.push([rule, scope.methods!.get(rule)!]);
-    }
-    this.method_index.set(scope, { version, by });
-    return by;
-  }
-  longest(cursor: Text.Node, j: number, frame: Node): number {
-    // Every literal any rule spells, longest first — a rule on a type the
-    // receiver has is not in this frame's chain, but `.<=` still has to read
-    // `<=` rather than stop at the `=` that starts another rule.
-    if (this.spellings?.size !== Node.heads.size) {
-      const by = new Map<string, string[]>();
-      for (const head of [...Node.heads].filter(head => head.length > 1).sort((a, b) => b.length - a.length)) { let same = by.get(head[0]); if (same === undefined) by.set(head[0], same = []); same.push(head); }
-      this.spellings = { size: Node.heads.size, by };
-    }
-    const text = cursor.source.value, limit = cursor.limit;
-    for (const head of this.spellings.by.get(text[j]) ?? []) {
-      if (j + head.length > limit || !text.startsWith(head, j)) continue;
-      return j + head.length;
-    }
-    return j;
-  }
-  text(node: Node | undefined, depth: number = 0): string {
-    if (!node) return '';
-    const cached = this.texts.get(node);
-    if (cached?.version === this.version) return cached.text;
-    const text = this.texted(node, depth);
-    this.texts.set(node, { version: this.version, text });
-    return text;
-  }
   protected rulesets = new WeakMap<Node, { rules: number; operand: [Node, Node][]; receiver: [Node, Node][]; forwarded: [Node, Node][] }>();
   protected chains = new WeakMap<Node, { epoch: number; operand: Rules; receiver: Rules }>();
   protected frame_chains = new WeakMap<Node, { epoch: number; chain: { operand: Rules; receiver: Rules } }>();
   protected boundaries = new WeakMap<Node, { epoch: number; edges: Set<string> }>();
-  protected answers = new WeakMap<Node, { epoch: number; of: Map<string, string | [string, string] | undefined> }>();
-  protected method_index = new WeakMap<Node, { version: number; by: Map<string, [Node, Node][]> }>();
-  protected spellings?: { size: number; by: Map<string, string[]> };
-  protected texts = new WeakMap<Node, { version: number; text: string }>();
   protected asked = new WeakSet<Node>();
   override stale_rules(frame: Node, key: Key): boolean { return key instanceof Node && !frame.methods?.has(key) && (this.rulesets.has(frame) || this.dispatch.has(frame) || this.asked.has(frame)); }
 
@@ -545,14 +502,8 @@ export class Accelerated extends Levelled {
     this.operator_chains.set(rules.receiver, { version: this.version, spelled });
     return spelled;
   }
-  override shaped(rule: Node) {
-    let found = this.rule_shape.get(rule);
-    if (found === undefined) this.rule_shape.set(rule, found = super.shaped(rule));
-    return found;
-  }
   protected operator_rules = new WeakMap<readonly [Node, Node][], { version: number; spelled: Map<string, [string, Text.Node][]> }>();
   protected operator_chains = new WeakMap<Rules, { version: number; spelled: Map<string, [string, Text.Node][]>[] }>();
-  protected rule_shape = new WeakMap<Node, ReturnType<Interpreter['shaped']>>();
 
   protected onlys = [new WeakMap<Rules | readonly [Node, Node][], any>(), new WeakMap<Rules | readonly [Node, Node][], any>()];
   override only(set: Rules, leading: boolean): Rules {

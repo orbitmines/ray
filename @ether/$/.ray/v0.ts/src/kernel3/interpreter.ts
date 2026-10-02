@@ -2655,6 +2655,7 @@ export class Interpreter {
       // Text that reads as a block is that block, inlined in turn.
       const held = last !== undefined ? this.resolved(last) ?? last : undefined;
       if (held?.written && !opts.compose) return this.run_block(held.body!, held.closure, frame);
+      if (opts.compose && held !== undefined && held !== target && held.lazy === undefined && (held.methods || held.members || held instanceof Count) && !held.body) this.reads_from(frame, held, true);
       return last;
     }
     if (target.theme) { this.theme = target; return target; }

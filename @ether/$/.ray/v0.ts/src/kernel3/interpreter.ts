@@ -72,7 +72,6 @@ export class Node {
   declare ruled?: boolean
   declare rule_version?: number
   declare rule_keys?: Map<string, Node>
-  declare apply_site?: { rule: Node; at: Text.Node; depth: number }
   declare edits?: number
   get rules(): Node[] { return this.methods ? [...this.methods.keys()].filter((x): x is Node => x instanceof Node) : []; }
 
@@ -2248,31 +2247,6 @@ export class Interpreter {
     }
     return end;
   }
-  chunks(span: Text.Node): Text.Node[] {
-    if (span.empty()) return [];
-    const text = span.source.value, end = span.end + 1, out: Text.Node[] = [];
-    for (let j = span.begin; j < end;) {
-      while (j < end && /\s/.test(text[j])) j++;
-      if (j >= end) break;
-      const start = j;
-      while (j < end && !/\s/.test(text[j])) { const close = this.group_end(text, j, end); j = close > j ? close : j + 1; }
-      out.push(span.span(start, j - 1));
-    }
-    return out;
-  }
-  tokens(span: Text.Node, frame: Node): Text.Node[] { return this.chunks(span); }
-  split(span: Text.Node, separator: string): Text.Node[] {
-    const text = span.source.value, parts: Text.Node[] = [];
-    let from = span.begin;
-    for (let j = span.begin; j <= span.end;) {
-      const skip = this.group_end(text, j, span.end + 1);
-      if (skip > j) { j = skip; continue; }
-      if (text[j] === separator) { if (j > from) parts.push(span.span(from, j - 1)); from = j + 1; }
-      j++;
-    }
-    if (span.end >= from) parts.push(span.span(from, span.end));
-    return parts;
-  }
 
   private passing = 0;
   literal_written(text: Node) {}
@@ -2369,34 +2343,6 @@ export class Interpreter {
     };
   }
 
-  rule_head(word: string, frame: Node): Node | undefined {
-    const chain = this.chain(frame);
-    for (const [rule, impl] of each([...chain.operand, ...chain.receiver])) if (!impl.forward && this.head(rule) === word) return rule;
-  }
-  private prefixing?: { version: number; marks: Set<string> };
-  // What a word written straight after it belongs to: a rule that reads a
-  // word after one character reads it as that character's, not as a name of
-  // its own — `.name` is a member, `^name` a style.
-  get prefixes(): Set<string> {
-    if (this.prefixing?.version === this.version) return this.prefixing.marks;
-    const marks = new Set<string>();
-    const take = (rules: [Node, Node][]) => {
-      for (const [rule] of rules) {
-        const pieces = rule.pattern!;
-        const opening = pieces[0], after = pieces[1];
-        if (opening?.kind !== 'literal' || after?.kind !== 'capture' || !after.raw) continue;
-        const text = opening.text.trim();
-        if (text.length === 1 && !/[\p{L}\p{N}_]/u.test(text)) marks.add(text);
-      }
-    };
-    for (const scope of this.BASE === undefined ? [this.GLOBAL] : [this.GLOBAL, this.BASE]) {
-      const set = this.ruleset(scope);
-      take(set.operand);
-      take(set.receiver);
-    }
-    this.prefixing = { version: this.version, marks };
-    return marks;
-  }
   protected blank = Text.Node.string('');
   owns: (src: Text.Source) => boolean = () => true;
   decorate(target: Node, style: Node): Node {
@@ -2450,25 +2396,6 @@ export class Interpreter {
     let low = 0, high = (spans.length >> 1) - 1, found = -1;
     while (low <= high) { const mid = (low + high) >> 1; if (spans[mid << 1] <= at.begin) { found = mid; low = mid + 1; } else high = mid - 1; }
     return found >= 0 && at.end <= spans[(found << 1) + 1];
-  }
-  excluded(span: Text.Node, frame: Node): [number, number][] {
-    const out: [number, number][] = [];
-    const cursor = this.cursor_of(span);
-    const text = span.source.value;
-    for (let j = span.begin; j <= span.end;) {
-      if (this.line_rule(cursor, j, frame)) {
-        let end = text.indexOf('\n', j);
-        if (end < 0 || end > span.end) end = span.end + 1;
-        out.push([j, end - 1]); j = end; continue;
-      }
-      const raw = this.layers.brackets.find(([rule]) => (rule.pattern![0] as { text: string }).text[0] === text[j] && rule.pattern!.some(piece => piece.kind === 'capture' && piece.raw));
-      if (raw) {
-        const match = this.match(raw[0].pattern!, cursor.bounded(j, span.end + 1), frame, { leading: false, tight: true, params: 0 });
-        if (match) { out.push([j, match.end - 1]); j = match.end; continue; }
-      }
-      j++;
-    }
-    return out;
   }
   probing = 0;
   // What the language server is told, and keeps: nothing, here.

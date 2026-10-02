@@ -5,7 +5,7 @@
 mark ^keyword := external global
 
 minus ^keyword := class {
-  accepts (written) => if (exists (external alike (written) (`-`))) { written } else { None }
+  accepts (written) => if ((external alike (written) (`-`))) { written } else { None }
 }
 // A body of statements, and a name of its own among them. A rule of this kind
 // waits on what its pattern asks for — the class saying which operators it

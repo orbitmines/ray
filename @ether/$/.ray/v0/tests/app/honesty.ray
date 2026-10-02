@@ -8,13 +8,13 @@ mark ^keyword := external global
 fired ^keyword := 0
 unless (false) { fired = fired.succ }
 unless (1 == 2) { fired = fired.succ }
-unless (exists None) { fired = fired.succ }
+unless (None) { fired = fired.succ }
 unless (fired == 3) { INFO@mark `HO1 unless does not take the block when the condition does not hold` }
 
 held ^keyword := 0
 unless (true) { held = held.succ }
 unless (1 == 1) { held = held.succ }
-unless (exists mark) { held = held.succ }
+unless (mark) { held = held.succ }
 unless (held.is_zero) { INFO@mark `HO2 unless takes the block when the condition holds` }
 
 // spec: `unless` also takes the block when the condition cannot be read at

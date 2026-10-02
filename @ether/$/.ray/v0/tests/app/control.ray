@@ -43,9 +43,9 @@ do { stop = false } while stop
 if (stop) { INFO@mark `CC11 do-while did not stop` }
 
 nothing_taken := if false { 1 } else { None }
-if (exists nothing_taken) { INFO@mark `CC12 an if whose taken branch is None is present` }
+if (nothing_taken) { INFO@mark `CC12 an if whose taken branch is None is present` }
 something_taken := if true { 1 } else { None }
-unless (exists something_taken) { INFO@mark `CC13 an if whose taken branch is one is absent` }
+unless (something_taken) { INFO@mark `CC13 an if whose taken branch is one is absent` }
 
 // Only the branch that is taken runs: what the others would have done is not
 // done, and a chain of branches runs exactly one of them.

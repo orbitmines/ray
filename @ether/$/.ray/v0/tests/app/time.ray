@@ -28,7 +28,7 @@ unless ((2 minutes).unit == Minute) { INFO@mark `TI16 two minutes are not minute
 if (Gregorian.is_leap_year(100)) { INFO@mark `TI17 a hundred is a leap year in the Gregorian` }
 unless (Julian.is_leap_year(100)) { INFO@mark `TI18 a hundred is not a leap year in the Julian` }
 unless (UTC.offset.is_zero) { INFO@mark `TI19 UTC is at some offset` }
-unless (exists Julian.months.head.value.place) { INFO@mark `TI20 the first month has no place` }
+unless (Julian.months.head.value.place) { INFO@mark `TI20 the first month has no place` }
 
 // Months: what each is named, how long it is, and where it sits. February is
 // the only one a leap year changes.

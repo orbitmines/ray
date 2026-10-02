@@ -11,6 +11,10 @@ export type Operation = { method: string; receiver?: Piece & { kind: 'capture' }
 // language has a `Compiler.default` to add to.
 export class Levelled extends Served {
   optimizations?: { level: Node; scope: Node; entries: Map<string, Operation[]> };
+  text_rule?: Node;
+  text_marker?: Node;
+  get text_kind(): Node | undefined { const piece = this.text_rule?.pattern?.[0]; return piece?.kind === 'capture' && piece.declared !== undefined && !piece.declared.unknown ? piece.declared : undefined; }
+  override literal_written(text: Node) { const kind = text.made_of === undefined ? this.text_kind : undefined; if (kind !== undefined) text.made_of = [kind]; }
   protected bypassed = new Set<Node>();
   reading_of(text: string): Node | undefined {
     return this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(Text.Node.string(text)), this.GLOBAL), false)));
@@ -37,9 +41,16 @@ export class Levelled extends Served {
     if (block.body !== undefined) this.diagnostics.muted(() => this.safely(() => this.array(this.cursor_of(this.inner(block.body!, scope) ?? block.body!), scope)));
     else this.inline(block, scope);
     const entries = new Map<string, Operation[]>();
+    this.text_rule = undefined;
     for (const rule of scope.rules) {
       const impl = scope.methods!.get(rule)!, pieces = rule.pattern!;
-      if (impl.body !== undefined && pieces[0]?.kind === 'literal' && pieces.length > 1 && pieces.slice(1).every(piece => piece.kind === 'capture' && piece.type === undefined)) {
+      if (impl.body !== undefined && pieces.length === 1 && pieces[0].kind === 'capture') {
+        const head = this.name(this.cursor_of(impl.body), scope);
+        const native = head !== undefined && scope.lookup(head) === this.EXTERNAL ? this.deref(this.array(this.cursor_of(impl.body), scope), false) : undefined;
+        if (native !== undefined && native === this.text_marker) this.text_rule = rule;
+        continue;
+      }
+      if (impl.body !== undefined && pieces[0]?.kind === 'literal' && pieces.length > 1 && pieces.slice(1).every(piece => piece.kind === 'capture' && piece.declared === undefined)) {
         const head = this.name(this.cursor_of(impl.body), scope);
         const native = head !== undefined && scope.lookup(head) === this.EXTERNAL ? this.deref(this.array(this.cursor_of(impl.body), scope), false) : undefined;
         if (native?.fn === undefined) continue;
@@ -49,8 +60,8 @@ export class Levelled extends Served {
         same.push({ method, given: pieces.length - 1, impl, scope, native });
         continue;
       }
-      if (impl.body === undefined || pieces[0]?.kind !== 'capture' || pieces[0].type === undefined || pieces[1]?.kind !== 'literal') continue;
-      const operand = pieces[2]?.kind === 'capture' && pieces[2].type !== undefined ? pieces[2] : undefined;
+      if (impl.body === undefined || pieces[0]?.kind !== 'capture' || pieces[0].declared === undefined || pieces[1]?.kind !== 'literal') continue;
+      const operand = pieces[2]?.kind === 'capture' && pieces[2].declared !== undefined ? pieces[2] : undefined;
       if (pieces.length !== (operand === undefined ? 2 : 3)) continue;
       const spelled = pieces[1].text.trim(), method = spelled.length > 1 && !Interpreter.word.test(spelled[0]) && Interpreter.word.test(spelled[1]) ? spelled.slice(1) : spelled;
       const head = this.name(this.cursor_of(impl.body), scope);
@@ -63,19 +74,12 @@ export class Levelled extends Served {
     this.optimizations = { level: block, scope, entries };
     return block;
   }
-  protected typed_as = new WeakMap<Node, Map<string, { version: number; template?: Node }>>();
-  template_for(type: string, declaration: string, scope: Node): Node | null | undefined {
-    let held = this.typed_as.get(scope);
-    if (held === undefined) this.typed_as.set(scope, held = new Map());
-    const known = held.get(type);
-    if (known !== undefined && known.version === this.version) return known.template;
-    const resolved = Interpreter.word.test(type[0]) && !type.includes('.') && scope.lookup(type) === undefined ? undefined : this.declared(declaration, scope);
-    if (resolved !== undefined && this.building.has(resolved)) return null;
-    const template = resolved === undefined || resolved.none ? undefined : this.template_of(resolved, scope);
-    held.set(type, { version: this.version, template });
-    return template;
+  template_for(type: Node, scope: Node): Node | null | undefined {
+    if (type.unknown || type.none) return undefined;
+    if (this.templating.has(type)) return null;
+    return this.template_of(type, scope);
   }
-  protected building = new Set<Node>();
+  protected templating = new Set<Node>();
   operation(rule: Node, impl: Node, receiver: Node | undefined, args: Node[], cursor: Text.Node, frame: Node, at: Text.Node, found: Found): Node | undefined {
     const pieces = rule.pattern!;
     if (pieces.length !== 1 || pieces[0].kind !== 'literal' || this.bypassed.has(impl)) return undefined;
@@ -93,8 +97,9 @@ export class Levelled extends Served {
       }
       if (receiver === undefined) continue;
       if ((entry.operand === undefined) !== ((impl.params?.length ?? 0) === 0) || (entry.operand !== undefined && impl.params!.length !== 1)) continue;
-      const template = this.template_for(entry.receiver!.type!, entry.receiver!.declaration!, entry.scope);
-      if (template === undefined || (template !== null && !this.carries(template, impl, { own: true })) || (template === null && entry.native === undefined)) continue;
+      const written = entry.native !== undefined && entry.receiver!.declared === this.text_kind && this.deref(receiver, false)?.literal === true;
+      const template = written ? null : this.template_for(entry.receiver!.declared!, entry.scope);
+      if (!written && (template === undefined || (template !== null && !this.carries(template, impl, { own: true })) || (template === null && entry.native === undefined))) continue;
       const argument = args[0] ?? this.NONE;
       if (entry.operand !== undefined) {
         const value = this.deref(argument, false);
@@ -123,9 +128,9 @@ export class Levelled extends Served {
   template_of(type: Node, closure: Node): Node | undefined {
     let held = this.templates.get(type);
     if (held === undefined) {
-      this.building.add(type);
+      this.templating.add(type);
       try { held = this.evaluated('made()', { made: type }) ?? null; }
-      finally { this.building.delete(type); }
+      finally { this.templating.delete(type); }
       this.templates.set(type, held);
     }
     return held ?? undefined;
@@ -291,6 +296,7 @@ export class Levelled extends Served {
   }
   characters(string: Node | undefined, method: Node): number[][] | undefined {
     const value = string && this.deref(string, false);
+    if (value?.literal && value.position !== undefined) return [...value.position.string].map(character => [...new TextEncoder().encode(character)]);
     if (value === undefined || !this.carries(value, method)) return undefined;
     const held = this.links(value);
     if (held === undefined) return undefined;
@@ -554,6 +560,7 @@ Interpreted.js = {
     ends_with: string((level, a, b) => level.truth(b!.length <= a.length && b!.every((x, i) => same(x, a[a.length - b!.length + i])))),
     contains: string((level, a, b) => level.truth(b!.length === 0 || index_of(a, b!) >= 0)),
     index_of: string((level, a, b) => { const i = a.length === 0 ? -1 : index_of(a, b!); return i < 0 ? level.NONE : level.number(i); }),
+    written: { arity: 0, fn: ({ interpreter }) => (interpreter as unknown as Levelled).text_marker ??= interpreter.operator((): Node | undefined => undefined) },
   },
 };
 export function interpreted(key: string): Native | undefined {

@@ -47,6 +47,7 @@ Character.Blank = Character{.blank}
 Character.Word = Character{.word}
 
 String := class: Array {
+  entry => if .head { .head } else { code_points(this).map { it.value.as_character }.entry }
 
   bits => (
     held_bits := chain None
@@ -100,7 +101,7 @@ String := class: Array {
     out := chain None
     walker ^keyword := .at(from)
     left ^keyword := to - from
-    while (left.nonzero.and(exists walker)) {
+    while (left.nonzero.and(walker)) {
       out &= walker.value
       walker = walker.next
       left = left.pred
@@ -112,12 +113,12 @@ String := class: Array {
     mine ^keyword := .head
     theirs ^keyword := other.head
     same ^keyword := true
-    while ((exists theirs).and(exists mine)) {
+    while ((theirs).and(mine)) {
       unless (mine.value == theirs.value) { same = false }
       mine = mine.next
       theirs = theirs.next
     }
-    same.and((exists theirs).not)
+    same.and((theirs).not)
   )
   ends_with (other: String) => .mirrored.starts_with(other.mirrored)
 
@@ -126,7 +127,7 @@ String := class: Array {
     found ^keyword := false
     position ^keyword := 0
     walker ^keyword := .head
-    while (exists walker) {
+    while (walker) {
       if (.slice(position, length).starts_with(other)) { found = true }
       position = position.succ
       walker = walker.next
@@ -138,8 +139,8 @@ String := class: Array {
     found ^keyword := None
     position ^keyword := 0
     walker ^keyword := .head
-    while (exists walker) {
-      unless (exists found) { if (.slice(position, length).starts_with(other)) { found = position } }
+    while (walker) {
+      unless (found) { if (.slice(position, length).starts_with(other)) { found = position } }
       position = position.succ
       walker = walker.next
     }
@@ -178,14 +179,14 @@ String := class: Array {
     out := chain None
     at_start ^keyword := true
     parts for {
-      unless at_start { if (exists separator.codepoint) { out &= separator } elsif (exists separator) { separator for { out &= it.value } } }
+      unless at_start { if (separator.codepoint) { out &= separator } elsif (separator) { separator for { out &= it.value } } }
       it.value for { out &= it.value }
       at_start = false
     }
     out.as_string
   )
 
-  spells_in (radix: Number) => .nonempty.and(.every { if (exists it.value.digit_value) { it.value.digit_value < radix } else { false } })
+  spells_in (radix: Number) => .nonempty.and(.every { if (it.value.digit_value) { it.value.digit_value < radix } else { false } })
 
   as_number => .as_number_in(10)
   as_number_in (radix: Number) => (
@@ -198,7 +199,7 @@ String := class: Array {
   compounds + (other) => (
     joined := chain None
     this for { joined &= it.value }
-    if (exists other.codepoint) { joined &= other } else { other for { joined &= it.value } }
+    if (other.codepoint) { joined &= other } else { other for { joined &= it.value } }
     joined.as_string
   )
 }
@@ -240,7 +241,7 @@ bits_of (number, width) => (
   while rest {
     digit ^keyword := counter.head
     carrying ^keyword := true
-    while (carrying.and(exists digit)) {
+    while (carrying.and(digit)) {
       if digit.value { digit.value = 0 } else {
         digit.value = 1
         carrying = false
@@ -251,7 +252,7 @@ bits_of (number, width) => (
   }
   forwards := chain None
   walker ^keyword := counter.tail
-  while (exists walker) {
+  while (walker) {
     forwards &= walker.value
     walker = walker.previous
   }
@@ -292,7 +293,7 @@ Number.components.hierarchy &= class {
         digit.value = digit.value.succ
         if (digit.value == 10) { digit.value = 0 } else { carrying = false }
         if carrying {
-          unless (exists digit.next) { counter &= 0 }
+          unless (digit.next) { counter &= 0 }
           digit = digit.next
         }
       }
@@ -300,7 +301,7 @@ Number.components.hierarchy &= class {
     }
     forwards := chain None
     walker ^keyword := counter.tail
-    while (exists walker) {
+    while (walker) {
       forwards &= Character.decimal_digit(walker.value)
       walker = walker.previous
     }
@@ -311,30 +312,30 @@ Number.components.hierarchy &= class {
 Placement ^keyword := class { }
 placements ^keyword := chain None
 declared_in (holder, spelled) => (
-  place_of ^keyword := external where holder.written_as
+  place_of ^keyword := external where holder.written_as.code
   kept_entry ^keyword := remembered(placements, place_of, spelled)
-  unless (exists kept_entry) {
+  unless (kept_entry) {
     to_visit ^keyword := chain None
     to_visit &= holder
     visiting ^keyword := to_visit.head
     class_index ^keyword := zero
     rank_found ^keyword := None
-    while ((exists visiting).and((exists rank_found).not)) {
+    while ((visiting).and((rank_found).not)) {
       in_class ^keyword := visiting.value
-      if (exists (external first in_class.written_as)) {
+      if ((external first in_class.written_as.code)) {
         written_at ^keyword := in_class.written_as.precedence(spelled)
-        if (exists written_at) { rank_found = Placement(nth_class: class_index, written_at: written_at) }
+        if (written_at) { rank_found = Placement(nth_class: class_index, written_at: written_at) }
       }
       further ^keyword := in_class.components.hierarchy.head
-      while (exists further) {
+      while (further) {
         to_visit &= further.value
         further = further.next
       }
       class_index = class_index.succ
       visiting = visiting.next
     }
-    kept_entry = Precedence(place: place_of, spelled: spelled, answer: rank_found, ranked: exists rank_found)
-    if (exists rank_found) { placements &= kept_entry }
+    kept_entry = Precedence(place: place_of, spelled: spelled, answer: rank_found, ranked: rank_found)
+    if (rank_found) { placements &= kept_entry }
   }
   rank_known ^keyword := None
   if kept_entry.ranked { rank_known = kept_entry.answer }
@@ -343,10 +344,10 @@ declared_in (holder, spelled) => (
 
 {a} [x] {b} [y] {c} => (
   held ^keyword := None
-  if (exists a.written_as.precedence) {
+  if (a.written_as.precedence) {
     place_x ^keyword := declared_in(a, `[x]`)
     place_y ^keyword := declared_in(a, `[y]`)
-    if ((exists place_x).and(exists place_y)) {
+    if ((place_x).and(place_y)) {
       left_first ^keyword := place_x.nth_class < place_y.nth_class
       if (place_x.nth_class == place_y.nth_class) { left_first = place_x.written_at.at_least(place_y.written_at) }
       if left_first { held = ((a [x] b) [y] c) } else { held = (a [x] (b [y] c)) }

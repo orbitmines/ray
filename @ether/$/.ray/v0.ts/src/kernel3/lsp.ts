@@ -1,6 +1,6 @@
 import { Text } from './text.ts';
 import { Analysed } from './analysis.ts';
-import { Node, type Piece, type Match, type Shape, type Group } from './interpreter.ts';
+import { Node, type Piece, type Match } from './interpreter.ts';
 
 export class Served extends Analysed {
   paints: Text.Node[] = [];
@@ -58,7 +58,7 @@ export class Served extends Analysed {
       if (this.diagnostics.muted(() => this.safely(() => this.resolved(reference))) !== undefined) this.paint_reference(reference, true);
     }
   }
-  paint_group(content: Text.Node, scope: Node, of: string, shape?: Shape, opts: { operator?: boolean; group?: Group } = {}) {
+  paint_group(content: Text.Node, scope: Node, of: string, opts: { operator?: boolean } = {}) {
     const tokens = this.tokens(content, scope);
     const decorators = tokens.filter(token => this.decorates(token, scope));
     const annotates = this.marked(scope, 'annotation'), opens = this.grouping(scope)?.[0];
@@ -84,7 +84,6 @@ export class Served extends Analysed {
         const reference = this.reference(scope, t, name);
         if (this.diagnostics.muted(() => this.safely(() => this.resolved(reference))) !== undefined) this.paint_reference(reference, true);
         else {
-          if (shape) for (const style of opts.group?.content ?? []) this.paint(name, this.styled(style, shape.frame), shape.frame, of, { lexical: true });
           for (const decorator of decorators) this.paint(name, this.styled(decorator, scope), scope, of, { lexical: true });
         }
       }
@@ -93,9 +92,7 @@ export class Served extends Analysed {
   }
   override paint_definition(chunks: Text.Node[], decorators: Text.Node[], scope: Node, of: string, opts: { arrow?: Text.Node; params?: Text.Node[]; types?: Text.Node[]; pieces?: Piece[] } = {}) {
     if (!this.program?.serving) return;
-    const shape = this.shape(scope.parent ?? scope);
     const paint = (span: Text.Node, style: Text.Node, frame: Node) => this.paint(span, this.styled(style, frame), frame, of, { lexical: true });
-    if (shape && opts.arrow) for (const style of shape.arrow) paint(opts.arrow, style, shape.frame);
     for (const name of opts.params ?? []) this.paint_reference(this.reference(scope, name.string, name), true);
     for (const type of opts.types ?? []) this.probe(type, scope, { report: true });
     const operators = new Set((opts.pieces ?? []).flatMap(piece => piece.kind === 'operator' ? [piece.group.begin] : []));
@@ -105,21 +102,15 @@ export class Served extends Analysed {
       const flush = (j: number) => {
         if (run < 0) return;
         const span = chunk.span(run, j - 1);
-        if (shape) for (const style of shape.text) paint(span, style, shape.frame);
         for (const decorator of decorators) paint(span, decorator, scope);
         this.paint_words(span, scope);
         run = -1;
       };
       for (let j = chunk.begin; j < end;) {
-        if (shape?.groups.has(text[j]) || operators.has(j)) {
+        if (operators.has(j)) {
           flush(j);
           const close = this.group_end(text, j, end);
-          const group = shape?.groups.get(text[j]);
-          if (shape && group) {
-            for (const style of group.open) paint(chunk.span(j, j), style, shape.frame);
-            for (const style of group.close) paint(chunk.span(close - 1, close - 1), style, shape.frame);
-          }
-          if (close - 2 >= j + 1) this.paint_group(chunk.span(j + 1, close - 2), scope, of, shape, { operator: operators.has(j), group });
+          if (close - 2 >= j + 1) this.paint_group(chunk.span(j + 1, close - 2), scope, of, { operator: true });
           j = close;
           continue;
         }
@@ -137,10 +128,9 @@ export class Served extends Analysed {
   override definition_scope(frame: Node, rule: Node, impl: Node): Node {
     const scope = super.definition_scope(frame, rule, impl);
     if (!this.program?.serving) return scope;
-    const shape = this.shape(frame);
-    const declare = (name: string, tokens: Text.Node[], group?: Group) => this.mark_name(scope, name, [this.fallback([...(group?.content ?? []).map(token => this.styled(token, shape!.frame)), ...tokens.map(token => this.styled(token, scope))])]);
-    for (const piece of rule.pattern!) if (piece.kind === 'capture' || piece.kind === 'operator') declare(piece.name, piece.kind === 'capture' ? piece.styles : [], shape?.groups.get(piece.kind === 'operator' ? '[' : '{'));
-    impl.params?.forEach((name, k) => declare(name, impl.param_styles?.[k] ?? [], shape?.groups.get('{')));
+    const declare = (name: string, tokens: Text.Node[]) => this.mark_name(scope, name, [this.fallback(tokens.map(token => this.styled(token, scope)))]);
+    for (const piece of rule.pattern!) if (piece.kind === 'capture' || piece.kind === 'operator') declare(piece.name, piece.kind === 'capture' ? piece.styles : []);
+    impl.params?.forEach((name, k) => declare(name, impl.param_styles?.[k] ?? []));
     return scope;
   }
   given = new WeakMap<Node, Map<string, Node>>();
@@ -202,6 +192,7 @@ export class Served extends Analysed {
     let marks = this.values.get(value);
     if (marks === undefined) this.values.set(value, marks = []);
     for (const style of styles) if (!marks.some(mark => mark.style === style.style)) marks.push(style);
+    if (value.literal && value.position !== undefined && styles.length > 0) this.paint(value.position, styles.at(-1), this.GLOBAL, undefined, { lexical: true });
   }
   override mark_name(scope: Node, key: string, styles: Node[]) {
     let names = this.names.get(scope);

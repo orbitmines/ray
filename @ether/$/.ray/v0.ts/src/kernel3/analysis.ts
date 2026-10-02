@@ -1,11 +1,10 @@
 import { Text } from './text.ts';
-import { Typed } from './typed.ts';
 import { Interpreter, Node, type Piece } from './interpreter.ts';
 
 // What is reported once everything is read: the names a body reads that
 // nothing names, rules that were never run looked at once, and `forward`s
 // nobody implemented.
-export class Analysed extends Typed {
+export class Analysed extends Interpreter {
   override analyzed(location?: string) {
     const here = (rule: Node) => location === undefined || rule.position?.source.location === location;
     this.hands = new Map();

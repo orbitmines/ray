@@ -29,6 +29,7 @@ Compiler.default = {
   {a: Character}.is_underscore => external js.character.is_underscore
   {a: Character}.word => external js.character.word
   {a: Character}.digit_value => external js.character.digit_value
+  {written: String} => external js.string.written
   {a: String} == {b: String} => external js.string.==
   {a: String}.count => external js.string.count
   {a: String}.length => external js.string.length

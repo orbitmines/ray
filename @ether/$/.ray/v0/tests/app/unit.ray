@@ -7,7 +7,7 @@ unless (Bit.is_base) { INFO@mark `U2 a bit is not a base unit` }
 unless (Byte.scale == 8) { INFO@mark `U3 a byte does not scale to eight bits` }
 
 q := 1 of Byte
-unless (exists q.unit.symbol) { INFO@mark `U4 a quantity lost its unit` }
+unless (q.unit.symbol) { INFO@mark `U4 a quantity lost its unit` }
 
 // A conversion multiplies and divides, and each of those nests about one
 // application of `if` per unit of the divisor; the interpreter allows 64

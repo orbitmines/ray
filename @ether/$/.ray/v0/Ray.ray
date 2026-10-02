@@ -29,14 +29,14 @@ Iterable := class: Ordered {
 
   count => (
     entries_counted := 0
-    if (exists .entry) { entries_counted = .entry.count }
+    if (.entry) { entries_counted = .entry.count }
     entries_counted
   )
 
   first => .entry.first
   last => .entry.last
 
-  for (body) => if (exists .entry) { .entry for body } else { this }
+  for (body) => if (.entry) { .entry for body } else { this }
 
   every (predicate) => (
     for {
@@ -56,14 +56,14 @@ Iterable := class: Ordered {
   all => (
     superposed ^keyword := None
     for {
-      if (exists superposed) { superposed = superposed | it.value } else { superposed = it.value }
+      if (superposed) { superposed = superposed | it.value } else { superposed = it.value }
     }
     superposed
   )
 
   fill (x) => for { it.value = x }
 
-  compact => this{exists this}
+  compact => this{this}
 
   map (mapping) => (
     mapped ^keyword := chain None
@@ -76,7 +76,7 @@ Iterable := class: Ordered {
     for { walked &= it.value }
     turned ^keyword := chain None
     back ^keyword := walked.tail
-    while (exists back) {
+    while (back) {
       turned &= back.value
       back = back.previous
     }
@@ -92,7 +92,7 @@ Iterable := class: Ordered {
     while left.nonempty {
       smallest = left.head
       walker = left.head.next
-      while (exists walker) {
+      while (walker) {
         if (walker.value < smallest.value) { smallest = walker }
         walker = walker.next
       }
@@ -152,7 +152,7 @@ Iterable := class: Ordered {
     for {
       inner := it.value
       spliced ^keyword := false
-      if (exists inner.instance_of(Array)) { spliced = inner.bounded }
+      if (inner.instance_of(Array)) { spliced = inner.bounded }
       if spliced { inner for { flat &= it.value } } else { flat &= inner }
     }
     flat
@@ -214,8 +214,8 @@ Iterable.components.hierarchy &= class {
 Ray := class: Iterable {
   entry => this
 
-  is_initial => (exists .previous).not
-  is_terminal => (exists .next).not
+  is_initial => (.previous).not
+  is_terminal => (.next).not
 
   is_first => .is_initial
   is_last => .is_terminal
@@ -276,9 +276,9 @@ Ray := class: Iterable {
     if other.orderless { return other == this }
     mine := .entry
     theirs := other.entry
-    same := (exists mine).xnor(exists theirs)
-    while (same.and(exists mine)) {
-      if ((exists mine.value).or(exists theirs.value)) { same = (mine.value == theirs.value) } else { same = same_text((external where mine), (external where theirs)) }
+    same := (mine).xnor(theirs)
+    while (same.and(mine)) {
+      if ((mine.value).or(theirs.value)) { same = (mine.value == theirs.value) } else { same = same_text((external where mine), (external where theirs)) }
       if same {
         same = mine.is_terminal.xnor(theirs.is_terminal)
         if mine.is_terminal { mine = None } else {
@@ -294,8 +294,8 @@ Ray := class: Iterable {
 
 Boundary := class: Ray {
 
-  is_initial => (exists .edge).not
-  is_terminal => (exists .edge).not
+  is_initial => (.edge).not
+  is_terminal => (.edge).not
 
   Initial := class: Boundary {
 
@@ -313,8 +313,8 @@ Boundary := class: Ray {
 
 Edge := class: Ray {
 
-  is_initial => (exists .from).not
-  is_terminal => (exists .to).not
+  is_initial => (.from).not
+  is_terminal => (.to).not
 
   initial => .from
   terminal => .to
@@ -372,7 +372,7 @@ Hierarchy := class: Ray {
 
   depth => (
     depth_below := 0
-    if (exists .parent) { depth_below = .parent.depth.succ }
+    if (.parent) { depth_below = .parent.depth.succ }
     depth_below
   )
 }
@@ -406,7 +406,7 @@ Chain.components.hierarchy &= class {
     was_head ^keyword := this.head
     added ^keyword := link x None
     added.next = was_head
-    if (exists was_head) { was_head.previous = added } else { this.tail = added }
+    if (was_head) { was_head.previous = added } else { this.tail = added }
     this.head = added
     this
   )
@@ -415,18 +415,18 @@ Chain.components.hierarchy &= class {
     answer ^keyword := held.value
     before ^keyword := held.previous
     after ^keyword := held.next
-    if (exists before) { before.next = after } else { this.head = after }
-    if (exists after) { after.previous = before } else { this.tail = before }
+    if (before) { before.next = after } else { this.head = after }
+    if (after) { after.previous = before } else { this.tail = before }
     answer
   )
   pop_front => (
     taken ^keyword := None
-    if (exists this.head) { taken = this.unlink(this.head) }
+    if (this.head) { taken = this.unlink(this.head) }
     taken
   )
   pop_back => (
     taken ^keyword := None
-    if (exists this.tail) { taken = this.unlink(this.tail) }
+    if (this.tail) { taken = this.unlink(this.tail) }
     taken
   )
 }

@@ -13,7 +13,7 @@ IP := class {
     out := chain None
     walker ^keyword := .segments.head
     length := .segment_length
-    while (exists walker) {
+    while (walker) {
       bits_of(walker.value, length) for { out &= it.value }
       walker = walker.next
     }
@@ -24,7 +24,7 @@ IP := class {
     parts := chain None
     walker ^keyword := .segments.head
     radix := .base
-    while (exists walker) {
+    while (walker) {
       parts &= walker.value.spelled_in(radix)
       walker = walker.next
     }
@@ -36,10 +36,10 @@ IP := class {
   from_bits (address_bits) => (
     out := chain None
     bit_at ^keyword := address_bits.head
-    while (exists bit_at) {
+    while (bit_at) {
       segment_bits := chain None
       left_in_segment ^keyword := .segment_length
-      while ((exists bit_at).and(left_in_segment.nonzero)) {
+      while ((bit_at).and(left_in_segment.nonzero)) {
         segment_bits &= bit_at.value
         bit_at = bit_at.next
         left_in_segment = left_in_segment.pred
@@ -57,7 +57,7 @@ IP := class {
     carry_on ^keyword := carry_in
     left_at ^keyword := left_bits.tail
     right_at ^keyword := right_bits.tail
-    while (exists left_at) {
+    while (left_at) {
       ones_here ^keyword := 0
       if left_at.value { ones_here = ones_here.succ }
       if right_at.value { ones_here = ones_here.succ }
@@ -71,7 +71,7 @@ IP := class {
     }
     forwards := chain None
     walker ^keyword := reversed_bits.tail
-    while (exists walker) {
+    while (walker) {
       forwards &= walker.value
       walker = walker.previous
     }
@@ -91,7 +91,7 @@ IP := class {
     kept_bits ^keyword := prefix_length
     cleared := chain None
     bit_at ^keyword := .bits.head
-    while (exists bit_at) {
+    while (bit_at) {
       if kept_bits.is_zero { cleared &= 0 } else {
         cleared &= bit_at.value
         kept_bits = kept_bits.pred
@@ -127,7 +127,7 @@ IP.v6 = class: IP {
     at ^keyword := 0
     run ^keyword := 0
     walker ^keyword := .segments.head
-    while (exists walker) {
+    while (walker) {
       if walker.value.is_zero {
         run = run.succ
         if (best_run < run) {

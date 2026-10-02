@@ -25,42 +25,42 @@ Holder := class {
 
 mark ^keyword := external global
 
-unless (exists Colour.red) { INFO@mark `EM1 the member an enum is written with is not there` }
-unless (exists Colour.blue) { INFO@mark `EM2 the last member is not there` }
+unless (Colour.red) { INFO@mark `EM1 the member an enum is written with is not there` }
+unless (Colour.blue) { INFO@mark `EM2 the last member is not there` }
 unless (Colour.red == Colour.red) { INFO@mark `EM4 a member is not itself` }
 if (Colour.red == Colour.blue) { INFO@mark `EM5 two members of one enum are the same` }
-unless (exists Colour.red.instance_of(Colour)) { INFO@mark `EM6 a member is not one of its enum` }
+unless (Colour.red.instance_of(Colour)) { INFO@mark `EM6 a member is not one of its enum` }
 unless (Colour.components.count == 3) { INFO@mark `EM7 an enum of three has other than three members` }
 
 // Members need not have the same shape: each carries what it is written with.
-unless (exists Shape.circle.radius) { INFO@mark `EM8 a member does not carry its field` }
-unless (exists Shape.square.side) { INFO@mark `EM9 the second member does not carry its field` }
-if (exists Shape.point.radius) { INFO@mark `EM10 a member carries another's field` }
-unless (exists Shape.point) { INFO@mark `EM11 a member without fields is not there` }
+unless (Shape.circle.radius) { INFO@mark `EM8 a member does not carry its field` }
+unless (Shape.square.side) { INFO@mark `EM9 the second member does not carry its field` }
+if (Shape.point.radius) { INFO@mark `EM10 a member carries another's field` }
+unless (Shape.point) { INFO@mark `EM11 a member without fields is not there` }
 
 // A member may be named what the language names something else — `this` is
 // read as the member, not as the receiver.
-unless (exists Modifier.this) { INFO@mark `EM12 a member named this is not there` }
+unless (Modifier.this) { INFO@mark `EM12 a member named this is not there` }
 // spec: a member named `static` is not there. `static` is what a
 // rule body calls the class it is written in, and the member is read as that
 // instead — the same clash as a field named `forward` (Feature.ray says so).
-// unless (exists Modifier.static) { INFO@mark `EM13 a member named static is not there` }
+// unless (Modifier.static) { INFO@mark `EM13 a member named static is not there` }
 
 // What an enum is made of is its members, and nothing else is one of it.
 seen ^keyword := 0
 Colour.components for { seen = seen.succ }
 unless (seen == 3) { INFO@mark `EM14 walking an enum does not reach its three members` }
-if (exists Shape.circle.instance_of(Colour)) { INFO@mark `EM15 a member is one of another enum` }
-unless (exists Shape.circle.instance_of(Shape)) { INFO@mark `EM16 a member is not one of its own enum` }
+if (Shape.circle.instance_of(Colour)) { INFO@mark `EM15 a member is one of another enum` }
+unless (Shape.circle.instance_of(Shape)) { INFO@mark `EM16 a member is not one of its own enum` }
 
 // A member of an enum written with a block answers what the block says.
-unless (exists Level.low.ranked) { INFO@mark `EM17 a block over lines lost what it declares` }
-unless (exists Level.high.ranked) { INFO@mark `EM18 the last member gained nothing from the block` }
+unless (Level.low.ranked) { INFO@mark `EM17 a block over lines lost what it declares` }
+unless (Level.high.ranked) { INFO@mark `EM18 the last member gained nothing from the block` }
 unless (Level.components.count == 2) { INFO@mark `EM20 an enum of two written with a block has other than two members` }
 if (Level.low == Level.high) { INFO@mark `EM21 two members written with a block are the same` }
 
 // An enum written inside a class is reached through it.
-unless (exists Holder.Side.left) { INFO@mark `EM22 an enum inside a class has no members` }
+unless (Holder.Side.left) { INFO@mark `EM22 an enum inside a class has no members` }
 unless (Holder.Side.components.count == 2) { INFO@mark `EM23 an enum inside a class lost a member` }
 unless (Holder().side == Holder.Side.left) { INFO@mark `EM24 an instance does not reach the enum its class writes` }
 

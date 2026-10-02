@@ -3,7 +3,7 @@ Calendar := class {
     name: Node
     length: Node
     epoch: 1
-    is_recurring => exists .period
+    is_recurring => .period
   }
 
   parts: (chain None)
@@ -80,7 +80,7 @@ Time := class {
 
   since_calendar_epoch => (
     held ^keyword := .since_epoch
-    if (exists .epoch) { held = .since_epoch + .epoch.since_calendar_epoch }
+    if (.epoch) { held = .since_epoch + .epoch.since_calendar_epoch }
 
     held
   )
@@ -111,7 +111,7 @@ ISO_8601 := class {
     parts := text.split(U+003A)
     hour := parts.head.value.as_number
     minute := parts.head.next.value.as_number
-    second := if (exists parts.head.next.next) { parts.head.next.next.value.as_number } else { 0 }
+    second := if (parts.head.next.next) { parts.head.next.next.value.as_number } else { 0 }
 
     ((((hour * 60) + minute) * 60) + second) of Second
   )

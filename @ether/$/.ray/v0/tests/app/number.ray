@@ -50,7 +50,7 @@ rounds_seen ^keyword := 0
 3 times { rounds_seen = rounds_seen + it }
 unless (rounds_seen == 3) { INFO@mark `N30 times does not hand its round as it` }
 unless 5.positive { INFO@mark `N31 a natural number is not positive` }
-if (exists 5.sign) { INFO@mark `N32 a natural number has a sign` }
+if (5.sign) { INFO@mark `N32 a natural number has a sign` }
 unless (5.negated.negative) { INFO@mark `N33 a negated natural number is not negative` }
 unless (5.abs == 5) { INFO@mark `N34 a natural number is not its own absolute value` }
 unless (42 == ((four * ten) + two)) { INFO@mark `N40 42 is not forty-two` }
@@ -58,8 +58,8 @@ unless ((3 + 4) == seven) { INFO@mark `N41 3 + 4 is not seven` }
 unless (7.succ == eight) { INFO@mark `N42 7.succ is not eight` }
 unless (0x1F == 31) { INFO@mark `N43 0x1F is not thirty-one` }
 unless (0b101 == 5) { INFO@mark `N44 0b101 is not five` }
-if (exists Decimal.accepts(`4a`)) { INFO@mark `N45 4a is read as a decimal number` }
-unless (exists Hexadecimal.accepts(`4a`)) { INFO@mark `N46 4a is not read as a hexadecimal number` }
+if (Decimal.accepts(`4a`)) { INFO@mark `N45 4a is read as a decimal number` }
+unless (Hexadecimal.accepts(`4a`)) { INFO@mark `N46 4a is not read as a hexadecimal number` }
 
 // Signed numbers: what a sign does to size, order and arithmetic.
 unless (5.signed.negated.negative) { INFO@mark `N47 minus five is not negative` }
@@ -125,7 +125,7 @@ unless (5.is_natural) { INFO@mark `N86 five is not a natural number` }
 unless (5.positive) { INFO@mark `N87 five is not positive` }
 if (5.negative) { INFO@mark `N88 five is negative` }
 unless (5.abs == 5) { INFO@mark `N89 the size of five is not five` }
-if (exists 5.sign) { INFO@mark `N90 a natural number has a sign` }
+if (5.sign) { INFO@mark `N90 a natural number has a sign` }
 
 // A block read once for each of them, told which round it is on.
 rounds_run ^keyword := 0
@@ -156,7 +156,7 @@ if (0.nonzero) { INFO@mark `N107 zero is other than zero` }
 unless (3.nonzero) { INFO@mark `N108 three is zero` }
 unless (3.pred == 2) { INFO@mark `N109 what comes before three is not two` }
 unless (3.pred.succ == 3) { INFO@mark `N110 stepping back and forward does not come back` }
-unless (exists 5.holds) { INFO@mark `N111 five holds nothing` }
+unless (5.holds) { INFO@mark `N111 five holds nothing` }
 
 // A hundredth part. Fifty of them are half of one, which is zero among the
 // naturals — a hundred of them is one.

@@ -17,13 +17,13 @@ taken ^keyword := Written.of({
   2
   3
 })
-unless (exists taken) { INFO@mark `PG1 a block handed to a rule is not read as a program` }
-unless (exists taken.written) { INFO@mark `PG3 a program is not written as anything` }
+unless (taken) { INFO@mark `PG1 a block handed to a rule is not read as a program` }
+unless (taken.written) { INFO@mark `PG3 a program is not written as anything` }
 unless (taken.count == 3) { INFO@mark `PG8 a program of three statements does not count three` }
 walked ^keyword := 0
 taken for { walked = walked.succ }
 unless (walked == 3) { INFO@mark `PG9 walking a program of three does not visit three` }
-unless (exists taken.first.value.written) { INFO@mark `PG5 a statement is not a program in turn` }
+unless (taken.first.value.written) { INFO@mark `PG5 a statement is not a program in turn` }
 unless (taken.first.value.count == 1) { INFO@mark `PG10 a statement is written as other than one thing` }
 
 // A program of one statement is written as that one.
@@ -31,7 +31,7 @@ alone ^keyword := Written.of({ 5 })
 unless (alone.count == 1) { INFO@mark `PG11 a program of one statement counts other than one` }
 
 // What it is read with: a level is a set of rules, and a program says which.
-unless (exists taken.O) { INFO@mark `PG12 a program does not say which rules it is read with` }
+unless (taken.O) { INFO@mark `PG12 a program does not say which rules it is read with` }
 
 // spec: running a program does not answer what it says — `p()` is not how a
 // program is run, and neither is running one of the statements it is written
@@ -66,12 +66,12 @@ always ^keyword := Written.of({
  away\
 })
 if (always.first.value.is_conditional) { INFO@mark `PG23 a jump without a condition is conditional` }
-if (exists jumping.target_of(always.first.value)) { INFO@mark `PG24 a jump lands on a label it does not name` }
+if (jumping.target_of(always.first.value)) { INFO@mark `PG24 a jump lands on a label it does not name` }
 
 // As what it does: a jump is an edge to where it lands, and only a
 // conditional one also goes on to what is written below it.
 flowing ^keyword := jumping.flow
-unless (exists flowing.head.jumps_to) { INFO@mark `PG25 a jump is not an edge` }
+unless (flowing.head.jumps_to) { INFO@mark `PG25 a jump is not an edge` }
 unless (same_text((external where flowing.head.jumps_to.value), (external where landed))) { INFO@mark `PG26 a jump's edge does not reach its label` }
 unless flowing.head.falls_through { INFO@mark `PG27 a conditional jump does not go on below it` }
 unless flowing.head.next.falls_through { INFO@mark `PG28 a value does not go on below it` }

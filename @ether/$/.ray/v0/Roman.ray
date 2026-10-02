@@ -29,9 +29,9 @@ Roman := class {
   as_number => (
     total ^keyword := 0
     walker ^keyword := .text.head
-    while (exists walker) {
+    while (walker) {
       current := Roman.digit_of(walker.value).value
-      following := if (exists walker.next) { Roman.digit_of(walker.next.value).value } else { 0 }
+      following := if (walker.next) { Roman.digit_of(walker.next.value).value } else { 0 }
 
       if (current < following) {
         total = total + (following - current)
@@ -45,7 +45,7 @@ Roman := class {
   )
   text: String
 
-  is_valid => .text.every { exists Roman.digit_of(it.value) }
+  is_valid => .text.every { Roman.digit_of(it.value) }
 
   is_standard => (
     amount := .as_number

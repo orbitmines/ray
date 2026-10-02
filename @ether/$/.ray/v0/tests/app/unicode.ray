@@ -9,13 +9,13 @@ unless (Unicode.scalar(10)) { INFO@mark `UN3 ten is not a scalar` }
 if (Unicode.surrogate(10)) { INFO@mark `UN4 ten is a surrogate` }
 
 digit := "1".head.value
-unless (exists Unicode.category(digit)) { INFO@mark `UN5 a digit has no kind` }
+unless (Unicode.category(digit)) { INFO@mark `UN5 a digit has no kind` }
 unless (Unicode.category(digit) == Unicode.GeneralCategory.number) { INFO@mark `UN6 a digit is not a number` }
 
 space := " ".head.value
 unless (Unicode.category(space) == Unicode.GeneralCategory.separator) { INFO@mark `UN7 a space does not separate` }
 
-unless (exists Unicode.GeneralCategory.letter) { INFO@mark `UN8 there is no letter to be` }
+unless (Unicode.GeneralCategory.letter) { INFO@mark `UN8 there is no letter to be` }
 unless (Unicode.category("a".head.value) == Unicode.GeneralCategory.letter) { INFO@mark `UN9 a letter is not a letter` }
 
 // What a character is a kind of, told apart from what it is not.

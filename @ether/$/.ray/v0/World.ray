@@ -38,7 +38,7 @@ World := class: Nameable {
 
   reserve (name: String) => (
     standing ^keyword := .reserved(name)
-    unless (exists standing) { standing = .issue(name) }
+    unless (standing) { standing = .issue(name) }
 
     standing
   )
@@ -48,7 +48,7 @@ World := class: Nameable {
   reserved (name: String) => (
     holder ^keyword := None
     walker ^keyword := .reservations.head
-    while (exists walker) {
+    while (walker) {
       if (walker.value.name == name) { holder = walker.value }
       walker = walker.next
     }
@@ -184,7 +184,7 @@ Persona := class: Nameable {
   presence: None
   status: Status.offline
 
-  status_now => if (exists .presence) { .presence.status } else { .status }
+  status_now => if (.presence) { .presence.status } else { .status }
   embody (avatar) => (
     .avatars &= avatar
     avatar

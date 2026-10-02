@@ -14,7 +14,7 @@ IO := class {
 
 Random := class {
 
-  bit => if (exists (external random)) { 1 } else { 0 }
+  bit => if ((external random)) { 1 } else { 0 }
   bits (count: Number) => (
     drawn := chain None
     left ^keyword := count

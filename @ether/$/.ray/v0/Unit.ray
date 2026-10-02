@@ -1,5 +1,5 @@
 Unit := class {
-  is_base => (exists .base).not
+  is_base => (.base).not
   base_unit => if .is_base { this } else { .base.base_unit }
   is_temporal => (.base_unit == Second)
   called (singular, several, short) => (
@@ -16,9 +16,9 @@ Unit := class {
     walked ^keyword := this
     times ^keyword := 1
     reached ^keyword := None
-    while ((exists walked).and((exists reached).not)) {
+    while ((walked).and((reached).not)) {
       if (walked == other) { reached = times }
-      unless (exists reached) {
+      unless (reached) {
         if walked.is_base { walked = None } else {
           times = times * walked.ratio
           walked = walked.base
@@ -35,7 +35,7 @@ Unit := class {
 
   ratio => (
     ratio_times := .factor
-    if (exists .prefix) { ratio_times = .prefix.factor }
+    if (.prefix) { ratio_times = .prefix.factor }
     ratio_times
   )
   scale => (
@@ -46,7 +46,7 @@ Unit := class {
 
   shift => (
     shifted_by := 0
-    if (exists .offset) { shifted_by = .offset }
+    if (.offset) { shifted_by = .offset }
     shifted_by
   )
 
@@ -70,7 +70,7 @@ Unit := class {
 
   chainable == (other: Unit) => if (.is_base.xnor(other.is_base)) {
     if .is_base {
-      exists (external alike (.name) (other.name))
+      same_text(.name, other.name)
     } else {
       (.ratio == other.ratio).and(.base == other.base)
     }
@@ -90,9 +90,9 @@ Quantity := class {
   as (other: Unit) => (
     converted ^keyword := None
     down ^keyword := .unit.over(other)
-    if (exists down) { converted = .amount * down } else {
+    if (down) { converted = .amount * down } else {
       up ^keyword := other.over(.unit)
-      if (exists up) { converted = .amount / up } else { converted = (.amount * .unit.scale) / other.scale }
+      if (up) { converted = .amount / up } else { converted = (.amount * .unit.scale) / other.scale }
     }
     Quantity(
       amount: converted

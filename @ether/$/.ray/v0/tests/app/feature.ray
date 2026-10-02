@@ -3,9 +3,9 @@
 
 mark ^keyword := external global
 
-unless (exists Random.bit) { INFO@mark `FE1 a bit from the machine is nothing` }
+unless (Random.bit) { INFO@mark `FE1 a bit from the machine is nothing` }
 unless (Random.bits(3).count == 3) { INFO@mark `FE2 three bits are not three` }
-unless (exists Choice.coin) { INFO@mark `FE3 a coin comes up with nothing` }
+unless (Choice.coin) { INFO@mark `FE3 a coin comes up with nothing` }
 
 t := Transaction(forwards: 1, backwards: 2)
 unless (t.forwards == 1) { INFO@mark `FE4 a transaction forgot the step it takes` }
@@ -15,9 +15,9 @@ unless (t.mark_applied.applied) { INFO@mark `FE6 a transaction does not remember
 unless (Proof.rfl(Proof.Proposition(holds: true))) { INFO@mark `FE7 what holds is not proved by itself` }
 if (Proof.rfl(Proof.Proposition(holds: false))) { INFO@mark `FE8 what does not hold is proved by itself` }
 
-unless (exists Transaction.Inverse.plus) { INFO@mark `FE9a the inverses have no plus` }
+unless (Transaction.Inverse.plus) { INFO@mark `FE9a the inverses have no plus` }
 unless (Transaction.Inverse.plus.is.as_string == "-") { INFO@mark `FE9b the inverse of plus is not minus` }
-unless (exists Transaction.Inverse.minus) { INFO@mark `FE9 the inverses have no minus` }
+unless (Transaction.Inverse.minus) { INFO@mark `FE9 the inverses have no minus` }
 unless (Transaction.Inverse.minus.is.as_string == "+") { INFO@mark `FE10 the inverse of minus is not plus` }
 
 // Keys: what a press and a release leave behind.
@@ -46,7 +46,7 @@ ones ^keyword := 0
 zeros ^keyword := 0
 to_draw ^keyword := 20
 while to_draw {
-  if (exists (external random)) { ones = ones.succ } else { zeros = zeros.succ }
+  if ((external random)) { ones = ones.succ } else { zeros = zeros.succ }
   to_draw = to_draw.pred
 }
 unless ((ones + zeros) == 20) { INFO@mark `RN5 twenty draws are not twenty` }
@@ -68,7 +68,7 @@ if (Proof.by_contradiction(no, yes)) { INFO@mark `PF9 a proof of the negation ho
 unless (Proof(proposition: yes, argument: yes).holds) { INFO@mark `PF10 a proof holds only if its argument does` }
 // What is proved is true; what is not is what there is to do.
 unless (Proof.theorem(yes, yes)) { INFO@mark `PF11 a theorem with a proof that holds is not true` }
-unless (exists Proof.theorem(yes, no).goal) { INFO@mark `PF12 a theorem without a proof is not something to do` }
+unless (Proof.theorem(yes, no).goal) { INFO@mark `PF12 a theorem without a proof is not something to do` }
 unless (Proof.theorem(yes, no).goal == yes) { INFO@mark `PF13 what there is to do is not proving the proposition` }
 if (Proof.theorem(yes, no).completed) { INFO@mark `PF14 what there is to do is already done` }
 
@@ -104,8 +104,8 @@ unless (room.messages.head.value.who == 1) { INFO@mark `CH4 a message forgot who
 unless (room.messages.tail.value.text == "ho") { INFO@mark `CH5 a message forgot what was said` }
 
 // What the machine says about itself.
-unless (exists IO.platform) { INFO@mark `IO1 the machine does not say what it is` }
-unless (exists IO.architecture) { INFO@mark `IO2 the machine does not say what it is built on` }
+unless (IO.platform) { INFO@mark `IO1 the machine does not say what it is` }
+unless (IO.architecture) { INFO@mark `IO2 the machine does not say what it is built on` }
 
 // One of a collection, and several. Which one is the machine's to say; that
 // there is one, and that it is one of them, is not.
@@ -113,14 +113,14 @@ bag := chain None
 bag &= 1
 bag &= 2
 bag &= 3
-unless (exists bag.random) { INFO@mark `RN8 a collection does not answer one of itself` }
-unless (exists Choice.choose(bag)) { INFO@mark `RN9 choosing from a collection answers nothing` }
+unless (bag.random) { INFO@mark `RN8 a collection does not answer one of itself` }
+unless (Choice.choose(bag)) { INFO@mark `RN9 choosing from a collection answers nothing` }
 unless (Choice.choose_count(bag, 2).count == 2) { INFO@mark `RN10 choosing two does not answer two` }
 // What `at`, `first` and `random` answer is the link, as everywhere else; what
 // it holds is its value.
 picked_one := bag.random.value
 unless ((picked_one == 1).or((picked_one == 2).or(picked_one == 3))) { INFO@mark `RN11 what was chosen is not one of them` }
-unless (exists Choice.coin) { INFO@mark `RN12 a coin lands on neither side` }
+unless (Choice.coin) { INFO@mark `RN12 a coin lands on neither side` }
 
 // What the machine says about itself, asked by name.
 unless (IO.os(`platform`).nonempty) { INFO@mark `IO3 the machine does not name its platform` }

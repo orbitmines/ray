@@ -40,9 +40,9 @@ unless ("F".head.value.hexadecimal_digit == 15) { INFO@mark `UU20 F is not fifte
 // The other versions the draft names. spec: what makes each of them what it
 // is — a timestamp, an md5, an sha1 — waits on the clock and on the hashes,
 // so what is claimed here is that they are written down.
-unless (exists UUID.v1) { INFO@mark `UU21 the version built from a time is not there` }
-unless (exists UUID.v3) { INFO@mark `UU22 the version built from a namespace and a name is not there` }
-unless (exists UUID.v5) { INFO@mark `UU23 the other version built that way is not there` }
+unless (UUID.v1) { INFO@mark `UU21 the version built from a time is not there` }
+unless (UUID.v3) { INFO@mark `UU22 the version built from a namespace and a name is not there` }
+unless (UUID.v5) { INFO@mark `UU23 the other version built that way is not there` }
 // spec: building a `v3` or a `v5` is not claimed here — the `namespace: UUID`
 // field is typed, and asking whether a thirty-two digit uuid is one costs
 // more than the rest of the file.

@@ -107,7 +107,7 @@ code_points (source) => (
     }
     points
   )
-  if (exists source.head) { source for { take(it.value) } } else { external bits source take }
+  if (source.head) { source for { take(it.value) } } else { external bits source take }
   points
 )
 
@@ -122,7 +122,7 @@ Chain.components.hierarchy &= class {
     out := chain None
     walker ^keyword := .at(from)
     left ^keyword := to - from
-    while (left.nonzero.and(exists walker)) {
+    while (left.nonzero.and(walker)) {
       out &= walker.value
       walker = walker.next
       left = left.pred

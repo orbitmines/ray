@@ -9,12 +9,11 @@ export const Natives: Record<string, Native> = {
   'forward': { arity: 0, fn: ({ interpreter }) => interpreter.FORWARD },
   'define': { arity: 3, fn: ({ interpreter, args: [scope, pattern, body], at }) => interpreter.define_in(scope, pattern, body, at) },
   'rule': { arity: 2, fn: ({ interpreter, frame, args: [pattern, body], at }) => interpreter.rule(pattern, body, at, frame) },
-  'GRAMMAR_RULE': { arity: 0, fn: ({ interpreter, at }) => Object.assign(new Node(interpreter.diagnostics, at), { key: 'GRAMMAR_RULE' }) },
   '.': { arity: 0, fn: ({ frame }) => frame },
   'global': { arity: 0, fn: ({ interpreter }) => interpreter.GLOBAL },
   'get': { arity: 2, pure: true, values: true, fn: ({ interpreter, args: [node, key] }) => interpreter.get(node, key) },
   'assign': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at) },
-  'declare': { arity: 2, fn: ({ interpreter, args: [slot, value], at }) => interpreter.assign(slot, value, at, { declare: true }) },
+  'declare': { arity: 2, fn: ({ interpreter, frame, args: [slot, value], at }) => interpreter.assign(slot, value, at, { declare: true, frame }) },
   // Whether a name is the scope's own (or already a value): what `:` types rather than declares.
   'own': { arity: 1, pure: true, fn: ({ interpreter, args: [node] }) => {
     // The name as written, followed through what it is bound to while that
@@ -34,11 +33,10 @@ export const Natives: Record<string, Native> = {
   'return\\': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.RETURN },
   'recur\\': { arity: 0, pure: true, fn: ({ interpreter }) => interpreter.RECUR },
   'label': { arity: 1, pure: true, values: true, fn: ({ interpreter, args: [name] }) => interpreter.labelled(name) },
-  'base': { arity: 1, fn: ({ interpreter, args: [node] }) => { const target = interpreter.deref(node); if (target) interpreter.BASE = target; return target; } },
+  'base': { arity: 2, fn: ({ interpreter, args: [node, made] }) => { const target = interpreter.deref(node); if (target) { interpreter.BASE = target; interpreter.made = made; } return target; } },
   // Where a thing is written, and whether two texts are the same text: the
   // machine answering about its own, as `bits` answers about its bytes.
   'where': { arity: 1, fn: ({ interpreter, args: [node], at }) => located(interpreter, node, at) },
-  'alike': { arity: 2, fn: ({ interpreter, args: [left, right] }) => { const a = interpreter.deref(left) ?? left, b = interpreter.deref(right) ?? right; return a.none || b.none ? interpreter.NONE : interpreter.text(a) === interpreter.text(b) ? interpreter.GLOBAL : interpreter.NONE; } },
   'inline': { arity: 1, fn: ({ interpreter, frame, args: [node] }) => interpreter.inline(node, frame) },
   // What crosses from the machine into the language is a literal: `bits` reads
   // one as its bytes, and the rest are read that way language-side.
@@ -55,7 +53,7 @@ export const Natives: Record<string, Native> = {
   'io': { arity: 2, fn: ({ interpreter, args: [location, content], at }) => { const given = interpreter.diagnostics.muted(() => interpreter.safely(() => interpreter.deref(content, false))); return io(interpreter, spelling(interpreter, location), given === undefined || given.none ? undefined : spelling(interpreter, content), at); } },
   'os': { arity: 1, fn: ({ interpreter, args: [name], at }) => { const key = spelling(interpreter, name); const value = key === 'platform' ? process.platform : key === 'architecture' ? process.arch : process.env[key]; return value === undefined ? interpreter.NONE : interpreter.literal_of(value, at); } },
   'extend': { arity: 2, fn: ({ interpreter, args: [target, node] }) => { const into = interpreter.deref(target); return into ? interpreter.inline(node, into, { compose: true }) : undefined; } },
-  'literal': { arity: 1, fn: ({ args: [node] }) => node },
+  'literal': { arity: 1, fn: ({ frame, args: [node] }) => { frame.quoted = true; return node; } },
   'unordered': { arity: 1, fn: ({ args: [node] }) => node },
   'theme': { arity: 2, fn: ({ interpreter, args: [name, block], at }) => theme_of(interpreter, name, block, at) },
   'report': { arity: 3, fn: ({ interpreter, args: [level, variable, comment], at }) => report(interpreter, level, variable, comment, at) },

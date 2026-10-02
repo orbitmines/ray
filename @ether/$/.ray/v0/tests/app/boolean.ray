@@ -62,10 +62,10 @@ unless (true.not.not) { INFO@mark `BO21 not not true is not true` }
 if (false.not.not) { INFO@mark `BO22 not not false is true` }
 unless (true == true) { INFO@mark `BO23 true is not itself` }
 if (true == false) { INFO@mark `BO24 true is false` }
-unless (exists true) { INFO@mark `BO25 true is not there` }
-unless (exists false) { INFO@mark `BO26 false is not there` }
-if (exists None) { INFO@mark `BO27 nothing is there` }
-unless (exists (exists None).not) { INFO@mark `BO28 asking whether nothing is there answers nothing` }
+unless (true) { INFO@mark `BO25 true is not there` }
+unless (false) { INFO@mark `BO26 false is not there` }
+if (None) { INFO@mark `BO27 nothing is there` }
+unless ((None).not) { INFO@mark `BO28 asking whether nothing is there answers nothing` }
 
 // A rule with two operators written in it is a ternary.
 {a} %% {b} ## {c} => (

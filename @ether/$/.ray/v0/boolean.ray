@@ -34,13 +34,3 @@ boolean := enum false (holds: None) | true (holds: global) {
 true := boolean.true
 false := boolean.false
 
-exists (x) => (
-  goto some if x
-  found := false
-  goto done
- some\
-  found := true
- done\
-
-  found
-)

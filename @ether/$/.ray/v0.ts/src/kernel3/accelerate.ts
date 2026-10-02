@@ -120,9 +120,8 @@ export class Accelerated extends Levelled {
       }
       return answer;
     }
-    const undecided = this.undecided;
     const found = this.best_of(set, receiver, cursor, frame, opts);
-    if ((found !== undefined && found.match.read !== undefined && found.match.read.size > 0) || this.undecided !== undecided) return found;
+    if (found !== undefined && found.match.read !== undefined && found.match.read.size > 0) return found;
     let where: { segment: number; index: number; match: Match } | undefined;
     if (found !== undefined) for (let k = 0; k < set.length && where === undefined; k++) { const index = set[k].findIndex(([rule]) => rule === found.rule); if (index >= 0) where = { segment: k, index, match: found.match }; }
     if (entries.length >= 16) entries.pop();
@@ -159,7 +158,7 @@ export class Accelerated extends Levelled {
   // values (`native`), or one group of a passing rule (`group`).
   protected body_plans = new WeakMap<Node, { stamp: number; plan: BodyPlan }>();
   body_plan(rule: Node, impl: Node): BodyPlan {
-    if (impl.body === undefined || impl.fn !== undefined || impl.forward !== undefined || rule.pattern!.some(piece => piece.kind === 'operator' || (piece.kind === 'capture' && piece.modifiers.length > 0))) return undefined;
+    if (impl.body === undefined || impl.fn !== undefined || impl.forward !== undefined || rule.pattern!.some(piece => piece.kind === 'operator' || (piece.kind === 'capture' && piece.runs))) return undefined;
     const closure = impl.closure ?? this.GLOBAL, stamp = this.stamp(closure), held = this.body_plans.get(impl);
     if (held !== undefined && held.stamp === stamp && (held.plan?.kind !== 'name' || held.plan.names === Node.named_keys.size)) return held.plan;
     const plan = this.plan_body(rule, impl, closure);
@@ -173,14 +172,14 @@ export class Accelerated extends Levelled {
     if (impl.params === undefined && word !== undefined) {
       if (this.line_rule(cursor, body.begin, closure, body.begin)) return undefined;
       if (handed.has(word)) return this.operand_length(cursor, closure) < word.length ? { kind: 'pass', word } : undefined;
-      if (word === 'this' || this.name(cursor, closure) !== word) return undefined;
+      if (this.name(cursor, closure) !== word) return undefined;
       return this.operand_length(cursor, closure) < word.length ? { kind: 'name', word, names: Node.named_keys.size } : undefined;
     }
     const head = this.name(cursor, closure);
     if (impl.params === undefined && !text.includes('\n') && head !== undefined && !handed.has(head) && closure.lookup(head) === this.EXTERNAL) {
       const plan = this.plan_external(cursor, closure, head);
       const native = plan === undefined ? undefined : this.program?.EXTERNALS[plan.token.string] ?? Natives[plan.token.string];
-      if (plan !== undefined && plan.end === body.end + 1 && native?.values === true && plan.args.length === native.arity && plan.args.every(span => /^[\p{L}_][\p{L}\p{N}_-]*$/u.test(span.string)))
+      if (plan !== undefined && plan.end === body.end + 1 && native?.values === true && plan.args.length === native.arity && plan.args.every(span => handed.has(span.string) || closure.lookup(span.string) !== undefined))
         return { kind: 'native', native, words: plan.args.map(span => span.string), spans: plan.args };
       return undefined;
     }
@@ -202,16 +201,18 @@ export class Accelerated extends Levelled {
     this.enter_frame(local, rule, at);
     local.position = at;
     if (captures !== undefined) {
-      local.given = new Set([...captures.keys(), ...(receiver !== undefined ? ['this'] : [])]);
+      local.given = new Set(captures.keys());
       for (const [name, node] of captures) this.bind(local, name, node);
-      if (receiver !== undefined) this.bind(local, 'this', receiver);
     }
+    local.applied_to = receiver;
+    const into = this.context_of(receiver);
+    if (into !== undefined) { this.construct(into); this.sees(local, into); }
     this.ran.add(rule.key!);
     this.applying.push({ rule, impl, receiver, local });
     return local;
   }
-  protected run_named(word: string, rule: Node, impl: Node, frame: Node, at: Text.Node): Node | undefined {
-    const local = this.frame_for(rule, impl, frame, at);
+  protected run_named(word: string, rule: Node, impl: Node, frame: Node, at: Text.Node, receiver?: Node): Node | undefined {
+    const local = this.frame_for(rule, impl, frame, at, undefined, receiver);
     try { return this.unalias(this.settle(this.reference(local, word, impl.body!), false), local); }
     catch (jump) { throw this.ends_at(jump, impl, at); }
     finally { this.applying.pop(); this.leave_frame(local); }
@@ -249,6 +250,7 @@ export class Accelerated extends Levelled {
           if (!functional || !(jump.site === undefined || Interpreter.within(jump.site, body))) throw jump;
           return jump.value;
         }
+        this.looped(local, jump.kind === 'begin' ? '' : jump.label, plan.at);
         this.again(local);
         if (jump.kind !== 'begin') throw jump;
       }
@@ -267,6 +269,7 @@ export class Accelerated extends Levelled {
         }
         catch (jump) {
           if (!(jump instanceof Jump) || this.seeking !== undefined || jump.kind === 'end') throw jump;
+          this.looped(held.lazy?.frame, jump.kind === 'begin' ? '' : jump.label, at);
           for (const node of bound) if (node.lazy) node.value = undefined;
           if (jump.kind === 'begin') continue;
           const body = impl.body!;
@@ -323,7 +326,7 @@ export class Accelerated extends Levelled {
       const from = cursor.cursor;
       if (this.best(probe, cursor, frame, { spaced: true, operand: false }) !== undefined) return undefined;
       const grouped = this.claim(cursor, from, frame);
-      const until = grouped > from ? grouped : this.operand_end(cursor, from, frame);
+      const until = this.reading_end(cursor, from, grouped > from ? grouped : this.operand_end(cursor, from, frame), frame);
       if (until <= from) return undefined;
       args.push(cursor.span(from, until - 1));
       cursor.cursor = until;
@@ -361,8 +364,8 @@ export class Accelerated extends Levelled {
     if (this.seeking !== undefined || args.length > 0) return undefined;
     const plan = this.body_plan(rule, impl);
     if (plan?.kind === 'pass' && captures.has(plan.word)) return { value: this.passed(rule, impl, captures.get(plan.word)!, [...captures.values(), ...(match.receiver !== undefined ? [match.receiver] : [])], at) };
-    if (plan?.kind === 'name' && (impl.closure ?? this.GLOBAL).lookup(plan.word) !== undefined) return { value: this.run_named(plan.word, rule, impl, frame, at) };
-    if (plan?.kind === 'native' && (match.receiver !== undefined || !plan.words.includes('this'))) return { value: this.run_native(plan, rule, impl, captures, match.receiver, frame, at) };
+    if (plan?.kind === 'name' && (impl.closure ?? this.GLOBAL).lookup(plan.word) !== undefined) return { value: this.run_named(plan.word, rule, impl, frame, at, match.receiver) };
+    if (plan?.kind === 'native') return { value: this.run_native(plan, rule, impl, captures, match.receiver, frame, at) };
     return undefined;
   }
   override read_body(rule: Node, impl: Node, body: Text.Node, local: Node, functional: boolean): Node | undefined {
@@ -429,7 +432,7 @@ export class Accelerated extends Levelled {
     if (this.BASE && frame.levels === undefined) scopes.add(this.BASE);
     const operand: [Node, Node][][] = [], receiver: [Node, Node][][] = [];
     for (const level of (frame.levels ?? []).flatMap(type => [...type.composed(new Set())])) {
-      const set = this.ruleset(level), leading = set.receiver.filter(([rule]) => { const first = rule.pattern![0]; return first?.kind !== 'capture' || first.type !== undefined; });
+      const set = this.ruleset(level), leading = set.receiver.filter(([rule]) => { const first = rule.pattern![0]; return first?.kind !== 'capture' || first.declared !== undefined; });
       if (leading.length > 0) operand.push(leading);
       if (set.receiver.length > 0) receiver.push(set.receiver);
     }

@@ -84,7 +84,7 @@ unless (Roman.m_digit == "M".head.value) { INFO@mark `RO55 the thousands digit i
 unless (Roman.digit_of("X".head.value) == Roman.Digit.x) { INFO@mark `RO56 X does not stand for the tens digit` }
 unless (Roman.digit_of("x".head.value) == Roman.Digit.x) { INFO@mark `RO57 a lower-case x does not stand for it either` }
 unless (Roman.digit_of("I".head.value) == Roman.Digit.i) { INFO@mark `RO58 I does not stand for the ones digit` }
-if (exists Roman.digit_of("Q".head.value)) { INFO@mark `RO59 Q stands for a roman digit` }
+if (Roman.digit_of("Q".head.value)) { INFO@mark `RO59 Q stands for a roman digit` }
 
 // The vinculum's marks are written by their codepoints: seven hundred and
 // seventy-three is the combining overline.

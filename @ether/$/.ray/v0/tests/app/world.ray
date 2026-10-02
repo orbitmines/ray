@@ -23,7 +23,7 @@ there := here.holds(Location(host: None))
 unless (here.depth == 0) { INFO@mark `LO1 a location nothing holds is not at zero` }
 unless (there.depth == 1) { INFO@mark `LO2 a held location is not one deep` }
 unless (here.children.count == 1) { INFO@mark `LO3 the holder does not hold one` }
-unless (exists there.parent) { INFO@mark `LO4 a held location has no parent` }
+unless (there.parent) { INFO@mark `LO4 a held location has no parent` }
 
 // Tasks, references, personas and repositories: what a class says it holds.
 wt := Task(name: "walk", goal: None)
@@ -55,8 +55,8 @@ wc := Certificate(issuer: wg, secret: None)
 unless (wi.certify(wc).certificate == wc) { INFO@mark `IT4 a certified item does not carry its certificate` }
 
 unless (wp.status == Status.offline) { INFO@mark `PE3 a new persona is not offline` }
-unless (exists Status.invisible) { INFO@mark `ST1 there is no being invisible` }
-unless (exists Accessor.Permission.public) { INFO@mark `AC1 there is no public permission` }
+unless (Status.invisible) { INFO@mark `ST1 there is no being invisible` }
+unless (Accessor.Permission.public) { INFO@mark `AC1 there is no public permission` }
 if (Accessor.Permission.private == Accessor.Permission.public) { INFO@mark `AC2 private and public are the same` }
 
 // Reserving a name: the world issues it, keeps it, and answers the same
@@ -69,10 +69,10 @@ unless (wg.reserve("alice") == wr) { INFO@mark `RS4 reserving a taken name issue
 unless (wg.reservations.count == 1) { INFO@mark `RS5 reserving twice kept two` }
 unless (wg.reserve("bob").name == "bob") { INFO@mark `RS6 another name is not another reservation` }
 unless (wg.reservations.count == 2) { INFO@mark `RS7 the world did not keep both` }
-unless (exists wg.reserved("alice")) { INFO@mark `RS8 a taken name does not read as taken` }
-if (exists wg.reserved("carol")) { INFO@mark `RS9 an untaken name reads as taken` }
+unless (wg.reserved("alice")) { INFO@mark `RS8 a taken name does not read as taken` }
+if (wg.reserved("carol")) { INFO@mark `RS9 an untaken name reads as taken` }
 // A name is taken within a world and nowhere else.
-if (exists World(name: "elsewhere").reserved("alice")) { INFO@mark `RS10 a name reserved in one world is taken in another` }
+if (World(name: "elsewhere").reserved("alice")) { INFO@mark `RS10 a name reserved in one world is taken in another` }
 
 // A history keeps what was committed, in the order it was committed.
 repo := Repository(world: wg)
@@ -98,7 +98,7 @@ unless (cite.notes.count == 1) { INFO@mark `RF4 a note is not kept` }
 unless (cite.title == "on rays") { INFO@mark `RF5 a reference forgot its title` }
 
 // Who may see what.
-unless (exists Accessor.Permission.confidential) { INFO@mark `AC3 there is no confidential permission` }
+unless (Accessor.Permission.confidential) { INFO@mark `AC3 there is no confidential permission` }
 unless (Accessor.Permission.components.count == 4) { INFO@mark `AC4 there are other than four permissions` }
 unless (Accessor(level: Accessor.Permission.public).level == Accessor.Permission.public) { INFO@mark `AC5 an accessor forgot its level` }
 
@@ -149,7 +149,7 @@ unless (county.population == 2) { INFO@mark `WP5 two who live there do not count
 unless (county.items.empty) { INFO@mark `WP6 an empty world holds something` }
 county.add(Item(name: "lamp", issuer: county))
 unless (county.items.count == 1) { INFO@mark `WP7 what was added to a world is not there` }
-if (exists county.shadowing) { INFO@mark `WP8 a world falls back to another by itself` }
+if (county.shadowing) { INFO@mark `WP8 a world falls back to another by itself` }
 
 // A name issued in a world is the reservation that took it, and reserving it
 // again is reserving it once.
@@ -160,18 +160,18 @@ unless (county.reserve("a") == taken) { INFO@mark `WP11 reserving a taken name t
 
 // An item sits somewhere, is obtained by something, and carries what says so.
 lamp := Item(name: "lamp", issuer: county)
-if (exists lamp.obtained_by) { INFO@mark `WP12 an item nobody has is had by something` }
-if (exists lamp.certificate) { INFO@mark `WP13 an item carries a certificate it was not given` }
+if (lamp.obtained_by) { INFO@mark `WP12 an item nobody has is had by something` }
+if (lamp.certificate) { INFO@mark `WP13 an item carries a certificate it was not given` }
 paper := Certificate(issuer: county, secret: 1)
 unless (lamp.certify(paper).certificate == paper) { INFO@mark `WP14 what an item was given is not what it carries` }
-unless (exists paper.issued_on) { INFO@mark `WP15 a certificate says nothing about when it was issued` }
+unless (paper.issued_on) { INFO@mark `WP15 a certificate says nothing about when it was issued` }
 
 // What is written down about something read elsewhere.
 cited := Reference(title: "a paper", author: 1)
 unless (cited.draft) { INFO@mark `WP16 something written down is not a draft to begin with` }
 unless (cited.publish.draft.not) { INFO@mark `WP17 something published is still a draft` }
-if (exists cited.link) { INFO@mark `WP18 a reference points somewhere it was not pointed` }
-unless (exists cited.date) { INFO@mark `WP19 a reference says nothing about when` }
+if (cited.link) { INFO@mark `WP18 a reference points somewhere it was not pointed` }
+unless (cited.date) { INFO@mark `WP19 a reference says nothing about when` }
 unless (cited.note("read it").notes.count == 1) { INFO@mark `WP20 a note taken is not kept` }
 
 // Who belongs to an organization.

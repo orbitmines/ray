@@ -50,8 +50,8 @@ if (start.is_terminal) { INFO@mark `R16 an initial boundary is terminal` }
 unless (finish.is_terminal) { INFO@mark `R17 a terminal boundary is not terminal` }
 if (finish.is_initial) { INFO@mark `R18 a terminal boundary is initial` }
 span := Edge(from: start, to: finish)
-unless (exists span.from) { INFO@mark `R19 an edge forgot where it starts` }
-unless (exists span.to) { INFO@mark `R20 an edge forgot where it ends` }
+unless (span.from) { INFO@mark `R19 an edge forgot where it starts` }
+unless (span.to) { INFO@mark `R20 an edge forgot where it ends` }
 if (span.is_initial) { INFO@mark `R21 an edge that starts somewhere is initial` }
 if (span.is_terminal) { INFO@mark `R22 an edge that ends somewhere is terminal` }
 
@@ -64,7 +64,7 @@ unless (Hypergraph().hyper_edges) { INFO@mark `R25 a hypergraph has no hyper edg
 kept ^keyword := chain None
 unless (kept.count.is_zero) { INFO@mark `R26 a fresh chain counts other than zero` }
 unless (kept.empty) { INFO@mark `R27 a fresh chain is not empty` }
-if (exists kept.head) { INFO@mark `R28 a fresh chain has a head` }
+if (kept.head) { INFO@mark `R28 a fresh chain has a head` }
 kept &= 1
 unless (kept.count == 1) { INFO@mark `R29 one thing kept does not count one` }
 unless (kept.nonempty) { INFO@mark `R30 a chain holding something is empty` }
@@ -153,7 +153,7 @@ unless (threes.compact.count == 3) { INFO@mark `RR66 a chain with no gaps loses 
 unless (threes.paths.count == 3) { INFO@mark `RR67 the paths through a chain are not the chain` }
 
 // Everything a chain holds at once: the first, with each next pushed onto it.
-unless (exists threes.all) { INFO@mark `RR68 all of a chain is nothing` }
+unless (threes.all) { INFO@mark `RR68 all of a chain is nothing` }
 
 // A chain filled with one thing holds that thing everywhere.
 filled ^keyword := chain None
@@ -250,11 +250,11 @@ unless (doubled.disjoint(repeated).not) { INFO@mark `IT25 chains sharing a two a
 unless ((counted.symmetric_difference(repeated)).count == 1) { INFO@mark `IT26 what only one of them holds is not three alone` }
 
 // What a thing is an instance of: a chain is an array, and a number is not.
-unless (exists counted.instance_of(Chain)) { INFO@mark `IT27 a chain is not a chain` }
-unless (exists counted.instance_of(Array)) { INFO@mark `IT28 a chain is not an array` }
-unless (exists counted.instance_of(Iterable)) { INFO@mark `IT29 a chain is not iterable` }
-unless (exists counted.head.instance_of(Ray)) { INFO@mark `IT30 a link is not a ray` }
-unless (exists 1.instance_of(Ray)) { INFO@mark `IT33 a number is not a ray` }
+unless (counted.instance_of(Chain)) { INFO@mark `IT27 a chain is not a chain` }
+unless (counted.instance_of(Array)) { INFO@mark `IT28 a chain is not an array` }
+unless (counted.instance_of(Iterable)) { INFO@mark `IT29 a chain is not iterable` }
+unless (counted.head.instance_of(Ray)) { INFO@mark `IT30 a link is not a ray` }
+unless (1.instance_of(Ray)) { INFO@mark `IT33 a number is not a ray` }
 
 // A chain gains and loses its ends, and is put in order.
 ends ^keyword := chain None
@@ -268,7 +268,7 @@ unless (ends.pop_front == 1) { INFO@mark `IT38 popping the front does not give t
 unless (ends.pop_back == 3) { INFO@mark `IT39 popping the back does not give the last` }
 unless (ends.count == 1) { INFO@mark `IT40 two popped off three do not leave one` }
 unless (ends.head.value == 2) { INFO@mark `IT41 what is left is not the middle` }
-unless (exists ends.head) { INFO@mark `IT42 the one left is not the head` }
+unless (ends.head) { INFO@mark `IT42 the one left is not the head` }
 shuffled ^keyword := chain None
 shuffled &= 3
 shuffled &= 1

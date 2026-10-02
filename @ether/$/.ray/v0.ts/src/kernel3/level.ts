@@ -411,10 +411,10 @@ export class Levelled extends Served {
       const end = statement.search(/[ (:?]/);
       if (end < 0) continue;
       const head = statement.slice(0, end);
-      if (statement[end] === ':' || statement.startsWith(`${head} => TODO`)) required.push(head);
+      if ((statement[end] === ':' && /^[\p{L}\p{N}_]/u.test(head)) || statement.startsWith(`${head} => TODO`)) required.push(head);
     }
     const declaring = this.classes_reached(held).map(kind => this.statements_written(kind));
-    for (const head of required) if (!declaring.some(statements => statements.some(statement => statement.startsWith(`${head} `) || statement.startsWith(`${head}(`)))) return this.NONE;
+    for (const head of required) if (!declaring.some(statements => statements.some(statement => statement.startsWith(`${head} `) || statement.startsWith(`${head}(`) || statement.startsWith(`${head}:`)))) return this.NONE;
     return this.GLOBAL;
   }
   protected readings_held = new Map<string, { version: number; node?: Node }>();

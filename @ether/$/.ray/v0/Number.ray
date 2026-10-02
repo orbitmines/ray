@@ -639,7 +639,7 @@ Program.components.hierarchy &= class {
     reading.written for {
       statement_head = it.value.head_read
       if (exists statement_head.ending) {
-        if (statement_head.ending == colon) { wanted &= statement_head.points } elsif (reading.begins(it.value, joined_points(statement_head.points, left_to_say))) { wanted &= statement_head.points }
+        if ((statement_head.ending == colon).and(statement_head.points.head.value.as_character.word)) { wanted &= statement_head.points } elsif (reading.begins(it.value, joined_points(statement_head.points, left_to_say))) { wanted &= statement_head.points }
       }
     }
     wanted
@@ -650,7 +650,8 @@ Program.components.hierarchy &= class {
     enders ^keyword := .head_enders
     spaced ^keyword := with_point(head, enders.at(0).value)
     opened ^keyword := with_point(head, enders.at(1).value)
-    reading.written some { (reading.begins(it.value, spaced)).or(reading.begins(it.value, opened)) }
+    typed ^keyword := with_point(head, enders.at(2).value)
+    reading.written some { (reading.begins(it.value, spaced)).or(reading.begins(it.value, opened)).or(reading.begins(it.value, typed)) }
   )
   precedence (spelled) => (
     place_of ^keyword := external where this

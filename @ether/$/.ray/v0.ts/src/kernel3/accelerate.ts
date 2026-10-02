@@ -7,8 +7,6 @@ import { Interpreter, Node, Jump, describe, type Key, type Rules, type Match, ty
 // shape of the rules in reach, and bodies and statements that need not be
 // read again. It answers what the interpreter would; it only reads less.
 export class Accelerated extends Levelled {
-  static checking = process.env.RAY_CHECK === '1';
-  static mismatches = 0;
   protected interned = new Map<string, number>();
   intern(key: string): number { let n = this.interned.get(key); if (n === undefined) this.interned.set(key, n = this.interned.size + 1); return n; }
   protected rule_ids = new WeakMap<Node, number>();
@@ -112,12 +110,6 @@ export class Accelerated extends Levelled {
       if (entry.chain !== chain) { if (env < 0) env = this.env_id(frame); if (entry.env !== env) continue; entry.chain = chain; }
       if (k > 0) { entries[k] = entries[0]; entries[0] = entry; }
       const answer: Found | undefined = entry.found && { rule: set[entry.found.segment][entry.found.index][0], impl: set[entry.found.segment][entry.found.index][1], match: { ...entry.found.match, receiver } };
-      if (Accelerated.checking) {
-        const start = cursor.cursor, live = this.best_of(set, receiver, cursor, frame, opts);
-        cursor.cursor = start;
-        const same = (live === undefined) === (answer === undefined) && (live === undefined || (live.rule === answer!.rule && live.match.end === answer!.match.end));
-        if (!same && ++Accelerated.mismatches <= 20) console.error(`RAY_CHECK mismatch at ${cursor.source.location?.split('/').pop()}:${cursor.line} ${JSON.stringify(cursor.source.value.slice(start, start + 30))} cached=${answer?.rule.position?.string.slice(0, 30)} live=${live?.rule.position?.string.slice(0, 30)}`);
-      }
       return answer;
     }
     const found = this.best_of(set, receiver, cursor, frame, opts);

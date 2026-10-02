@@ -198,7 +198,6 @@ export class Accelerated extends Levelled {
   // A frame for a body that is not read: where it was applied, and what it was handed.
   protected frame_for(rule: Node, impl: Node, frame: Node, at: Text.Node, captures?: Map<string, Node>, receiver?: Node): Node {
     const local = this.frame(frame, undefined, impl.closure ?? this.GLOBAL);
-    this.enter_frame(local, rule, at);
     local.position = at;
     if (captures !== undefined) {
       local.given = new Set(captures.keys());
@@ -215,7 +214,7 @@ export class Accelerated extends Levelled {
     const local = this.frame_for(rule, impl, frame, at, undefined, receiver);
     try { return this.unalias(this.settle(this.reference(local, word, impl.body!), false), local); }
     catch (jump) { throw this.ends_at(jump, impl, at); }
-    finally { this.applying.pop(); this.leave_frame(local); }
+    finally { this.applying.pop(); }
   }
   protected run_native(plan: BodyPlan & { kind: 'native' }, rule: Node, impl: Node, captures: Map<string, Node>, receiver: Node | undefined, frame: Node, at: Text.Node): Node | undefined {
     const local = this.frame_for(rule, impl, frame, at, captures, receiver);
@@ -234,7 +233,7 @@ export class Accelerated extends Levelled {
       }
     }
     catch (jump) { throw this.ends_at(jump, impl, at); }
-    finally { this.applying.pop(); this.leave_frame(local); }
+    finally { this.applying.pop(); }
   }
   protected run_grouped(plan: BodyPlan & { kind: 'group' }, impl: Node, local: Node, functional: boolean): Node | undefined {
     const body = impl.body!;

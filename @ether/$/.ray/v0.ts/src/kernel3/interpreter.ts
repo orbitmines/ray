@@ -361,7 +361,6 @@ export class Interpreter {
     // the language has been through.
     this.copy_of = undefined;
     this.seen = new Map();
-    this.derived_all(srcs);
   }
   // Whether anything in these sources was read before it was written: a
   // name with nothing behind it, or a `forward` nobody implemented.
@@ -412,7 +411,7 @@ export class Interpreter {
     else if (stale && ruling) { frame.edits = (frame.edits ?? 0) + 1; this.edit_count++; }
     if (key instanceof Node && value.body !== undefined && !value.forward) this.body_of(value.body);
     // The registry, and a site's memory of its frame, are of where rules live.
-    if (fresh && key instanceof Node && frame.key !== undefined) { this.frames.set(frame.key, frame); this.registered(frame); }
+    if (fresh && key instanceof Node && frame.key !== undefined) { this.frames.set(frame.key, frame); }
     return frame.set(key, value);
   }
   version = 0;
@@ -1868,7 +1867,6 @@ export class Interpreter {
     // that frame with the reading still in progress. Each re-entry gets its
     // own instead.
     const local = this.frame(frame, undefined, impl.closure ?? this.GLOBAL);
-    this.enter_frame(local, rule, at);
     // A frame is written where what made it is written.
     local.position = at;
     local.given = new Set([...captures.keys(), ...(impl.params ?? [])]);
@@ -1909,7 +1907,7 @@ export class Interpreter {
         throw this.ends_at(jump, impl, at);
       }
       finally { if (rewrites) this.rewriting.delete(rule); }
-    } finally { this.applying.pop(); this.leave_frame(local); }
+    } finally { this.applying.pop(); }
   }
   private label_spans = new WeakMap<Text.Source, Map<string, number[]>>();
   // Seeking a label runs a span again until the label is read, which it can
@@ -2402,14 +2400,9 @@ export class Interpreter {
   painted_application(rule: Node, impl: Node, match: Match, captures: Map<string, Node>, cursor: Text.Node, frame: Node, at: Text.Node) {}
   site_at(key: string, at?: Text.Node) {}
   stale_rules(frame: Node, key: Key): boolean { return false; }
-  registered(frame: Node) {}
-  enter_frame(frame: Node, rule: Node, at: Text.Node) {}
-  leave_frame(frame: Node) {}
   begin_pass(pass: number) {}
   end_pass() {}
-  derived_all(srcs: Text.Source[]) {}
   paint(span: Text.Node, style: Node | undefined, frame: Node, of?: string) {}
-  record(painted: Text.Node) {}
 
   style(name: string): Node {
     const node = new Node(this.diagnostics);

@@ -278,7 +278,7 @@ Ray := class: Iterable {
     theirs := other.entry
     same := (exists mine).xnor(exists theirs)
     while (same.and(exists mine)) {
-      if ((exists mine.value).or(exists theirs.value)) { same = (mine.value == theirs.value) }
+      if ((exists mine.value).or(exists theirs.value)) { same = (mine.value == theirs.value) } else { same = same_text((external where mine), (external where theirs)) }
       if same {
         same = mine.is_terminal.xnor(theirs.is_terminal)
         if mine.is_terminal { mine = None } else {

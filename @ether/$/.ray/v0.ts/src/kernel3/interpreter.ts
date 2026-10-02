@@ -93,14 +93,14 @@ export class Node {
   // was written in.
   declare made_of?: Node[]
   *composed(seen: Set<Node>): Generator<Node> {
-    const stack: Node[] = [this];
-    while (stack.length > 0) {
-      const scope = stack.pop()!;
+    const queue: Node[] = [this];
+    for (let k = 0; k < queue.length; k++) {
+      const scope = queue[k];
       if (seen.has(scope)) continue;
       seen.add(scope);
       yield scope;
-      for (let k = (scope.made_of?.length ?? 0) - 1; k >= 0; k--) stack.push(scope.made_of![k]);
-      for (let k = (scope.inlined?.length ?? 0) - 1; k >= 0; k--) stack.push(scope.inlined![k]);
+      if (scope.made_of) queue.push(...scope.made_of);
+      if (scope.inlined) queue.push(...scope.inlined);
     }
   }
   // A name is looked up in each scope, then in what that scope is made of

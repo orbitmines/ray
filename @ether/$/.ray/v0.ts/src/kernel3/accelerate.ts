@@ -428,8 +428,8 @@ export class Accelerated extends Levelled {
     }
     if (this.BASE && frame.levels === undefined) scopes.add(this.BASE);
     const operand: [Node, Node][][] = [], receiver: [Node, Node][][] = [];
-    for (const level of frame.levels ?? []) {
-      const set = this.ruleset(level), leading = set.receiver.filter(([rule]) => rule.pattern![0]?.kind !== 'capture');
+    for (const level of (frame.levels ?? []).flatMap(type => [...type.composed(new Set())])) {
+      const set = this.ruleset(level), leading = set.receiver.filter(([rule]) => { const first = rule.pattern![0]; return first?.kind !== 'capture' || first.type !== undefined; });
       if (leading.length > 0) operand.push(leading);
       if (set.receiver.length > 0) receiver.push(set.receiver);
     }

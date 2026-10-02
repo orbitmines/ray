@@ -282,6 +282,13 @@ export class Levelled extends Served {
     }
     return bytes;
   }
+  override text_of(value: Node): string | undefined {
+    const held = this.links(value);
+    if (held === undefined) return undefined;
+    const bytes: number[] = [];
+    for (const character of held) { const octets = this.octets(character); if (octets === undefined) return undefined; bytes.push(...octets); }
+    return new TextDecoder().decode(new Uint8Array(bytes));
+  }
   characters(string: Node | undefined, method: Node): number[][] | undefined {
     const value = string && this.deref(string, false);
     if (value === undefined || !this.carries(value, method)) return undefined;

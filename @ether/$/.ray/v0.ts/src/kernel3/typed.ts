@@ -39,7 +39,7 @@ export class Typed extends Interpreter {
       if (known !== undefined || answers.has(text)) return known ?? null;
       if (opts.read === false) return undefined;
       answers.set(text, null);
-      const ruled = this.read_by_rules(resolved, text);
+      const ruled = resolved.literal ? (resolved.position!.string === text ? resolved : null) : this.read_by_rules(resolved, text);
       if (ruled !== null) { answers.set(text, ruled); return ruled; }
       return null;
     }

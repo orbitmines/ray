@@ -799,8 +799,8 @@ export class Interpreter {
     const based = frame.levels === undefined ? this.based() : [];
     for (const base of based) scopes.add(base);
     const operand: [Node, Node][][] = [], receiver: [Node, Node][][] = [];
-    for (const level of frame.levels ?? []) {
-      const set = this.ruleset(level), leading = set.receiver.filter(([rule]) => rule.pattern![0]?.kind !== 'capture');
+    for (const level of (frame.levels ?? []).flatMap(type => [...type.composed(new Set())])) {
+      const set = this.ruleset(level), leading = set.receiver.filter(([rule]) => { const first = rule.pattern![0]; return first?.kind !== 'capture' || first.type !== undefined; });
       if (leading.length > 0) operand.push(leading);
       if (set.receiver.length > 0) receiver.push(set.receiver);
     }
@@ -2076,6 +2076,7 @@ export class Interpreter {
   }
 
 
+  text_of(value: Node): string | undefined { return undefined; }
   define_in(scope: Node, given: Node, held: Node, at: Text.Node): Node | undefined {
     const into = this.deref(scope, false);
     return into === undefined || into.none ? undefined : this.rule(given, held, at, into, true);
@@ -2091,7 +2092,8 @@ export class Interpreter {
     }
     const spelled = this.deref(given, false), body = this.written(held);
     const grouped = body?.lazy !== undefined ? this.inner(body.lazy.span, body.lazy.frame) : undefined;
-    const lhs = spelled?.literal ? spelled.position : undefined, written = grouped ?? body?.lazy?.span;
+    const text = spelled === undefined || spelled.none || spelled.literal ? undefined : this.text_of(spelled);
+    const lhs = spelled?.literal ? spelled.position : text !== undefined ? Text.Node.string(text) : undefined, written = grouped ?? body?.lazy?.span;
     if (lhs === undefined || written === undefined) return undefined;
     if (body?.lazy !== undefined) body.lazy.consumed = true;
     return this.define(lhs, written, calling, undefined, grouped !== undefined ? body!.lazy!.frame : undefined);

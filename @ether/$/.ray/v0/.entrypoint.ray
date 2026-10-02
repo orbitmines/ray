@@ -638,6 +638,7 @@ enum ^keyword => (
     )
 
     chainable == (other) => same_text((external where this), (external where other))
+    admits (candidate) => .components.contains(candidate)
   }
 
   static ^enum

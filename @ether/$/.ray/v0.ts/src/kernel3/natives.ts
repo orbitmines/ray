@@ -108,6 +108,7 @@ function io(interpreter: Interpreter, location: string, content: string | undefi
 }
 function located(interpreter: Interpreter, node: Node, at: Text.Node): Node {
   const value = interpreter.deref(node);
+  if (value?.key?.startsWith('#') && !value.literal) return interpreter.literal_of(value.key, at);
   const position = value?.position ?? value?.body ?? value?.lazy?.span;
   if (position === undefined || position.source.location === undefined) return interpreter.NONE;
   return interpreter.literal_of(`${position.source.location}:${position.begin}`, at);

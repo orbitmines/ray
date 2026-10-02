@@ -20,19 +20,10 @@ None      ^keyword := external none
 {`{`}{expr ^block}{`}`} ^punctuation => external ** expr
 ({expr}) ^punctuation => expr
 [{expr}] ^punctuation => (
-  listed ^keyword := expr
-  unless (exists expr.listing) {
-    listed = chain None
-    external extend listed Listed
-    listed &= expr
-  }
+  listed ^keyword := chain None
+  external extend listed Listed
+  listed &= expr
   listed
-)
-[[{inner}]] ^punctuation => (
-  nested ^keyword := chain None
-  external extend nested Listed
-  nested &= [inner]
-  nested
 )
 
 goto{ }{literal target ^label} ^class => external goto target global
@@ -407,8 +398,15 @@ Chain := class {
 Listed := class {
   listing => global
   , ^punctuation (other) => (
-    this &= other
-    this
+    joined ^keyword := chain None
+    external extend joined Listed
+    walker ^keyword := .head
+    while (exists walker) {
+      joined &= walker.value
+      walker = walker.next
+    }
+    joined &= other
+    joined
   )
 }
 Link := class { }
@@ -574,6 +572,20 @@ enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?} {`{`
   static ^keyword := external .
   inline enum
   inline block
+
+  entry := static(
+    inline fields
+  )
+  static[member] = entry ^enumMember
+  static.components &= entry
+  inline rest
+
+  static ^enum
+)
+
+enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?}{\n} ^keyword => (
+  static ^keyword := external .
+  inline enum
 
   entry := static(
     inline fields

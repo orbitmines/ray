@@ -32,6 +32,7 @@ export class Node {
   raw?: boolean
   stands?: Node
   receiver?: Node
+  given?: Set<string>
   constructor(at?: Text.Node) { this.at = at; }
   own(name: string): Node | undefined { return this.names?.get(name); }
   set(name: string, value: Node): Node { (this.names ??= new Map()).set(name, value); return value; }
@@ -100,8 +101,25 @@ export class Interpreter {
     if (!seen.has(this.GLOBAL)) { seen.add(this.GLOBAL); yield this.GLOBAL; for (const made of this.GLOBAL.with ?? []) yield* visit(made, false, this.GLOBAL); }
   }
   private naming?: { scope: Node; hole: Node; name?: string };
+  // What the base gave a value is seen from that value and from what is made of it, not from code written around it.
   lookup(frame: Node, name: string): Node | undefined {
-    for (const scope of this.scopes(frame)) { const found = scope.own(name); if (found !== undefined) return found; }
+    const seen = new Set<Node>();
+    const visit = (scope: Node | undefined, lexical: boolean, deep: boolean): Node | undefined => {
+      for (let at = scope; at !== undefined; at = deep ? at.parent : undefined) {
+        if (seen.has(at) || at === this.GLOBAL) { if (!deep) return; continue; }
+        seen.add(at);
+        const found = at.own(name);
+        if (found !== undefined && !(lexical && at.given?.has(name))) return found;
+        for (const made of at.with ?? []) { const held = visit(made, false, false); if (held !== undefined) return held; }
+        for (const sees of at.sees ?? []) { const held = visit(sees, true, true); if (held !== undefined) return held; }
+        lexical = true;
+      }
+    };
+    const found = visit(frame, false, true);
+    if (found !== undefined) return found;
+    const global = this.GLOBAL.own(name);
+    if (global !== undefined) return global;
+    for (const made of this.GLOBAL.with ?? []) { const held = visit(made, false, false); if (held !== undefined) return held; }
     if (this.naming !== undefined && this.naming.name === undefined && frame === this.naming.scope) { this.naming.name = name; return frame.set(name, this.naming.hole); }
   }
   holder(frame: Node, name: string): Node | undefined {
@@ -177,6 +195,7 @@ export class Interpreter {
       } catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
         const at = this.label_at(cursor, begin, jump.label, frame);
+        if (process.env.K4DECL) console.error('LANDED', jump.label, at === undefined ? 'not here' : cursor.span(at, at).line);
         if (at === undefined) { jump.value ??= last; throw jump; }
         if (jump.value !== undefined) last = jump.value;
         cursor.cursor = at;
@@ -435,9 +454,15 @@ export class Interpreter {
       local.parent = rule.closure;
       local.receiver = receiver;
       if (receiver !== undefined) {
-        const unbound = receiver.place !== undefined && this.bound(receiver) === undefined;
-        const context = unbound ? Object.assign(new Node(receiver.at), { stands: receiver }) : this.quietly(() => this.deref(receiver));
-        if (context !== undefined && !context.none) { this.construct(context); local.with = [context]; }
+        const value = this.quietly(() => this.deref(receiver));
+        if (value !== undefined && !value.none) this.construct(value);
+        if (receiver.place !== undefined) {
+          this.standing.add(receiver);
+          const context = Object.assign(new Node(receiver.at), { stands: receiver, with: value !== undefined && !value.none ? [value] : undefined });
+          this.construct(context);
+          local.with = [context];
+        }
+        else if (value !== undefined && !value.none) local.with = [value];
       }
       const args: Node[] = [];
       rule.pattern.forEach((piece, p) => {
@@ -476,8 +501,10 @@ export class Interpreter {
     this.constructed.add(value);
     const sees = value.sees;
     value.sees = [...(sees ?? []), made.in];
+    const before = new Set(value.names?.keys() ?? []);
     try { this.safely(() => this.read(this.cursor_of(this.inner(made.span) ?? made.span), value)); }
     finally { value.sees = sees; }
+    for (const key of value.names?.keys() ?? []) if (!before.has(key)) (value.given ??= new Set()).add(key);
   }
 
   // Values: a name is a place, read where it is bound; written code is read once, when asked for.
@@ -506,10 +533,11 @@ export class Interpreter {
     }
     return node;
   }
+  private standing = new WeakSet<Node>();
   // A value, or the place a name would be written to when nothing is written there yet.
   held(node: Node | undefined): Node | undefined {
     for (let depth = 0; node !== undefined && depth < 256; depth++) {
-      if (node.place !== undefined) { const bound = this.bound(node); if (bound === undefined) return node; node = bound; continue; }
+      if (node.place !== undefined) { if (this.standing.has(node)) return node; const bound = this.bound(node); if (bound === undefined) return node; node = bound; continue; }
       if (node.code !== undefined && !node.program) { node = this.force(node); continue; }
       return node;
     }
@@ -553,6 +581,7 @@ export class Interpreter {
     const held = this.held(value);
     if (held === undefined) return undefined;
     const scope = at.place.in;
+    if (process.env.K4DECL) console.error('DECLARE', at.place.name, 'in', JSON.stringify(scope.at?.string.slice(0, 25)), '=', held.place ? 'place ' + held.place.name : held.text ? 'text ' + held.at?.string : held === this.GLOBAL ? 'GLOBAL' : held.none ? 'None' : JSON.stringify(held.at?.string.slice(0, 25)));
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
     return held;

@@ -517,6 +517,7 @@ Interpreted.js = {
   character: {
     '==': character((level, a, b) => level.truth(same(a, b!))),
     width: character((level, b) => level.number(width(b))),
+    octets: character((level, b) => level.chained(b.flatMap(byte => [7, 6, 5, 4, 3, 2, 1, 0].map(shift => level.number((byte >> shift) & 1)!)))),
     codepoint: character((level, b) => level.number(codepoint(b))),
     is_ascii: predicate(ascii),
     lower_case: predicate(lower),

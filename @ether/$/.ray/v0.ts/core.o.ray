@@ -18,6 +18,7 @@ Compiler.default = {
   {a: Number} == {b: Number} => external js.number.==
   {a: Character} == {b: Character} => external js.character.==
   {a: Character}.width => external js.character.width
+  {a: Character}.octets => external js.character.octets
   {a: Character}.codepoint => external js.character.codepoint
   {a: Character}.is_ascii => external js.character.is_ascii
   {a: Character}.lower_case => external js.character.lower_case

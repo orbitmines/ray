@@ -416,12 +416,14 @@ if := class {
     branch ^keyword := external .
     inline static
     taken := None
+    answer := None
 
     goto enter if cond.holds
     goto skip
    enter\
     taken = global
     result := inline (external ** yes)
+    answer = result
     goto composes if (external own result)
     goto skip
    composes\
@@ -435,6 +437,7 @@ if := class {
     branch ^keyword := external .
     inline this
     taken := .taken
+    answer := .answer
 
     goto skip if taken
     goto enter if cond.holds
@@ -442,6 +445,7 @@ if := class {
    enter\
     taken = global
     result := inline (external ** block)
+    answer = result
     goto composes if (external own result)
     goto skip
    composes\
@@ -455,34 +459,32 @@ if := class {
   {\n}else{ }{block} ^class => this else block
 
   else{ }{block} ^class => (
-    branch ^keyword := external .
-    inline this
-    taken := .taken
+    chosen ^keyword := .answer
+    goto done if .taken
+    chosen = inline (external ** block)
+   done\
 
-    goto skip if taken
-    taken = global
-    result := inline (external ** block)
-    goto composes if (external own result)
-    goto skip
-   composes\
-    external extend branch result
-   skip\
-
-    branch ^variable
+    chosen
   )
 }
 
 unless{ }{cond}{ }{block} ^class => (
-  asked ^keyword := if cond { }
-  held ^keyword := asked.taken
-  answered ^keyword := asked else block
-  goto open if held
-  goto done
- open\
-  answered.taken = None
- done\
+  branch ^keyword := external .
+  inline if
+  taken := None
+  answer := None
 
-  answered
+  goto skip if cond.holds
+  taken = global
+  result := inline (external ** block)
+  answer = result
+  goto composes if (external own result)
+  goto skip
+ composes\
+  external extend branch result
+ skip\
+
+  branch ^variable
 )
 
 while := class {

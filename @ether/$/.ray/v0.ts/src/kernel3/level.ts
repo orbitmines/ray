@@ -1,7 +1,7 @@
 import { Text } from './text.ts';
 import { bytes_of, statements_of } from './natives.ts';
 import { Served } from './lsp.ts';
-import { Interpreter, Node, Count, type Piece, type Native, type Method, type Found, type Match } from './interpreter.ts';
+import { Interpreter, Node, Count, type Piece, type Native, type Method, type Found, type Match, type Flow } from './interpreter.ts';
 
 export type Operation = { method: string; receiver?: Piece & { kind: 'capture' }; operand?: Piece & { kind: 'capture' }; given?: number; impl: Node; scope: Node; native?: Node };
 
@@ -13,6 +13,29 @@ export class Levelled extends Served {
   optimizations?: { level: Node; scope: Node; entries: Map<string, Operation[]> };
   text_rule?: Node;
   text_marker?: Node;
+  flow_markers: { label?: Node; jump?: Node } = {};
+  flows: { pieces: Piece[]; kind: 'label' | 'jump' }[] = [];
+  private flow_plans = new WeakMap<Text.Source, Map<number, Flow | null>>();
+  override flow_at(cursor: Text.Node, frame: Node): Flow | undefined {
+    if (this.flows.length === 0 || this.probing) return undefined;
+    let plans = this.flow_plans.get(cursor.source);
+    if (plans === undefined) this.flow_plans.set(cursor.source, plans = new Map());
+    const at = cursor.cursor, known = plans.get(at);
+    if (known !== undefined) return known ?? undefined;
+    const end = this.line_end(cursor, at, frame);
+    let found: Flow | null = null;
+    for (const { pieces, kind } of this.flows) {
+      const match = this.diagnostics.muted(() => this.safely(() => this.match(pieces, this.cursor_of(cursor.span(at, end - 1)), this.GLOBAL, { leading: false, tight: false, params: 0 })));
+      if (match === undefined || match.end !== end) continue;
+      const spans = [...match.captures.values()];
+      if (spans.length === 0) continue;
+      const flow: Flow = { kind, end, label: spans[0], condition: spans[1] };
+      const rank = (f: Flow) => (f.kind === 'jump' ? 2 : 0) + (f.condition !== undefined ? 1 : 0);
+      if (found === null || rank(flow) > rank(found)) found = flow;
+    }
+    plans.set(at, found);
+    return found ?? undefined;
+  }
   get text_kind(): Node | undefined { const piece = this.text_rule?.pattern?.[0]; return piece?.kind === 'capture' && piece.declared !== undefined && !piece.declared.unknown ? piece.declared : undefined; }
   override literal_written(text: Node) { const kind = text.made_of === undefined ? this.text_kind : undefined; if (kind !== undefined) text.made_of = [kind]; }
   protected bypassed = new Set<Node>();
@@ -28,9 +51,13 @@ export class Levelled extends Served {
         this.levelled = this.passing;
       }
       const level = this.deref(this.reference(this.GLOBAL, 'O', this.blank), false);
-      if (level !== undefined && level !== this.optimizations?.level) this.optimize(level, this.GLOBAL);
+      const held = this.optimizations;
+      if (level === undefined || level === held?.level) return;
+      if (held !== undefined && this.same_level(level, held.level) && held.scope.parent === this.GLOBAL) { this.touched.set(held.scope, new Set(held.scope.methods?.keys() ?? [])); return; }
+      this.optimize(level, this.GLOBAL);
     }));
   }
+  same_level(level: Node, held: Node): boolean { return level.body !== undefined && level.body.source === held.body?.source && level.body.begin === held.body.begin && level.body.string === held.body.string; }
   // A level is rules about operations: `{a: T} op {b: T} => …` stands for
   // applying `op` to values of `T`, answered by the interpreter's own
   // primitive or by what the body rewrites it to.
@@ -42,8 +69,16 @@ export class Levelled extends Served {
     else this.inline(block, scope);
     const entries = new Map<string, Operation[]>();
     this.text_rule = undefined;
+    this.flows = [];
+    this.flow_plans = new WeakMap();
     for (const rule of scope.rules) {
       const impl = scope.methods!.get(rule)!, pieces = rule.pattern!;
+      if (impl.body !== undefined) {
+        const head = this.name(this.cursor_of(impl.body), scope);
+        const native = head !== undefined && scope.lookup(head) === this.EXTERNAL ? this.diagnostics.muted(() => this.safely(() => this.deref(this.array(this.cursor_of(impl.body!), scope), false))) : undefined;
+        const kind = native === undefined ? undefined : native === this.flow_markers.label ? 'label' : native === this.flow_markers.jump ? 'jump' : undefined;
+        if (kind !== undefined) { this.flows.push({ pieces, kind }); continue; }
+      }
       if (impl.body !== undefined && pieces.length === 1 && pieces[0].kind === 'capture') {
         const head = this.name(this.cursor_of(impl.body), scope);
         const native = head !== undefined && scope.lookup(head) === this.EXTERNAL ? this.deref(this.array(this.cursor_of(impl.body), scope), false) : undefined;
@@ -545,6 +580,10 @@ Interpreted.js = {
   type: {
     declared_in: { arity: 0, fn: ({ interpreter }) => interpreter.operator(({ interpreter, args: [holder, spelled] }) => (interpreter as Levelled).declared_in(holder, spelled)) },
     structurally: { arity: 0, fn: ({ interpreter }) => interpreter.operator(({ interpreter, args: [value, type] }) => (interpreter as Levelled).structurally(value, type)) },
+  },
+  flow: {
+    label: { arity: 0, fn: ({ interpreter }) => (interpreter as unknown as Levelled).flow_markers.label ??= interpreter.operator((): Node | undefined => undefined) },
+    jump: { arity: 0, fn: ({ interpreter }) => (interpreter as unknown as Levelled).flow_markers.jump ??= interpreter.operator((): Node | undefined => undefined) },
   },
   text: {
     code_points: { arity: 0, fn: ({ interpreter }) => interpreter.operator(({ interpreter, args: [source] }) => (interpreter as Levelled).code_points(source)) },

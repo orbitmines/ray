@@ -237,6 +237,7 @@ export type BodyPlan =
   | { kind: 'native'; native: Native; words: string[]; spans: Text.Node[] }
   | { kind: 'group'; rule: Node; impl: Node; inner: Text.Node; at: Text.Node }
   | undefined;
+export type Flow = { kind: 'label' | 'jump'; end: number; label: Text.Node; condition?: Text.Node };
 export type Match = { begin: number; end: number; pattern: number; literals: [number, number, number][]; captures: Map<string, Text.Node>; operators: Map<string, Text.Node>; args: Text.Node[]; receiver?: Node; tight: boolean; read?: Map<string, Node>; given?: (Node | undefined)[] }
 export type Found = { rule: Node; impl: Node; match: Match }
 export type Head = { pattern: Text.Node[]; decorators: Text.Node[]; params?: string[]; param_styles?: Text.Node[][]; param_names: Text.Node[]; param_types: Text.Node[]; pieces: Piece[]; spelled: string; shared: { rule?: Node; body?: Text.Node } }
@@ -490,7 +491,8 @@ export class Interpreter {
       if (cursor.done()) return last;
       const start = cursor.cursor;
       let value: Node | undefined;
-      try { value = this.expr(cursor, frame); }
+      const flow = this.flow_at(cursor, frame);
+      try { value = flow !== undefined ? this.run_flow(flow, cursor, frame) : this.expr(cursor, frame); }
       catch (jump) {
         if (jump instanceof Jump && jump.kind === 'end' && jump.value === undefined) jump.value = last;
         if (!(jump instanceof Jump) || this.seeking !== undefined) throw jump;
@@ -513,7 +515,7 @@ export class Interpreter {
           while (this.seeking !== undefined && !cursor.done()) {
             this.spaces(cursor, true); if (cursor.done()) break;
             const at = cursor.cursor;
-            this.safely(() => { const seen = this.expr(cursor, frame); if (seen !== undefined) this.settle(seen, false); });
+            this.safely(() => { const flow = this.flow_at(cursor, frame); const seen = flow !== undefined ? this.run_flow(flow, cursor, frame) : this.expr(cursor, frame); if (seen !== undefined) this.settle(seen, false); });
             if (cursor.cursor === at) cursor.advance();
             if (this.seeking === undefined && this.landed === at) this.landing(cursor.source).set(place, cursor.cursor);
           }
@@ -532,6 +534,14 @@ export class Interpreter {
       }
       if (cursor.cursor === start) cursor.advance();
     }
+  }
+  // A statement the level knows to be a label or a jump, read once where it is written.
+  flow_at(cursor: Text.Node, frame: Node): Flow | undefined { return undefined; }
+  run_flow(flow: Flow, cursor: Text.Node, frame: Node): Node | undefined {
+    cursor.cursor = flow.end;
+    const name = Object.assign(new Node(this.diagnostics, flow.label), { literal: true });
+    if (flow.kind === 'label') return this.labelled(name);
+    return this.jump(name, flow.condition !== undefined ? this.lazy(flow.condition, frame, false) : this.GLOBAL, frame);
   }
   settle(value: Node | undefined, report: boolean): Node | undefined {
     if (value?.ref && value.marks?.length) {
@@ -1950,6 +1960,7 @@ export class Interpreter {
     if (this.probing) {
       captures.forEach(node => { if (!node.lazy?.raw) this.force(node); });
       args.forEach(node => this.force(node));
+      if (match.receiver?.ref !== undefined) this.bound(match.receiver);
       if (impl.forward && match.receiver !== undefined) return match.receiver;
       return this.stand_in(at);
     }

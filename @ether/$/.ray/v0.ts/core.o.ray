@@ -1,4 +1,7 @@
 Compiler.default = {
+  {label}\ => external js.flow.label
+  goto {label} => external js.flow.jump
+  goto {label} if {condition} => external js.flow.jump
   {a} + 0 => a
   {a} - 0 => a
   0 + {a} => a

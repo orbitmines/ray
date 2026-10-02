@@ -84,8 +84,8 @@ export class Accelerated extends Levelled {
   protected epoch_n = 0;
   grammar_epoch(): number {
     const parts = this.epoch_parts, early = this.passing === 0 && this.began ? 0 : 1, base = this.BASE === undefined ? 0 : this.intern_node(this.BASE);
-    if (parts[0] !== this.bracketing || parts[1] !== Node.heads.size || parts[2] !== early || parts[3] !== base || parts[4] !== this.introductions.size) {
-      this.epoch_parts = [this.bracketing, Node.heads.size, early, base, this.introductions.size];
+    if (parts[0] !== this.bracketing || parts[1] !== Node.heads.size || parts[2] !== early || parts[3] !== base) {
+      this.epoch_parts = [this.bracketing, Node.heads.size, early, base];
       this.epoch_n = this.intern('e' + this.epoch_parts.join(':'));
     }
     return this.epoch_n;

@@ -36,7 +36,6 @@ export class Node {
   // or inlining a block would compose in whatever that block could see.
   declare sees?: Node[]
   declare declared?: Node
-  declare param_types?: Text.Node[]
   declare forward?: Text.Node
   declare defines?: boolean
   declare levels?: Node[]
@@ -234,7 +233,7 @@ export type BodyPlan =
 export type Flow = { kind: 'label' | 'jump'; end: number; label: Text.Node; condition?: Text.Node };
 export type Match = { begin: number; end: number; pattern: number; literals: [number, number, number][]; captures: Map<string, Text.Node>; operators: Map<string, Text.Node>; args: Text.Node[]; receiver?: Node; tight: boolean; read?: Map<string, Node>; given?: (Node | undefined)[] }
 export type Found = { rule: Node; impl: Node; match: Match }
-export type Head = { pattern: Text.Node[]; params?: string[]; param_names: Text.Node[]; param_types: Text.Node[]; pieces: Piece[]; spelled: string; shared: { rule?: Node; body?: Text.Node } }
+export type Head = { pattern: Text.Node[]; pieces: Piece[]; spelled: string; shared: { rule?: Node; body?: Text.Node } }
 export type Rules = readonly (readonly [Node, Node][])[]
 export function* each(rules: Rules): Generator<[Node, Node]> { for (const segment of rules) yield* segment; }
 
@@ -249,7 +248,6 @@ export class Interpreter {
   readonly began: boolean;
   constructor(public diagnostics: Diagnostics, public copy_of?: Interpreter) {
     this.began = copy_of === undefined;
-    if (copy_of !== undefined) { this.introductions = copy_of.introductions; }
     this.GLOBAL = this.kernel();
   }
 
@@ -794,12 +792,6 @@ export class Interpreter {
     return held;
   }
   read_order = new Map<string, number>();
-  introductions = new Map<string, Text.Node>();
-  introduced(rule: Node): Text.Node | undefined {
-    if (rule.pattern === undefined || rule.position === undefined) return rule.position;
-    const first = this.introductions.get(rule.pattern.map(describe).join(''));
-    return first !== undefined && this.earlier(first, rule.position) ? first : rule.position;
-  }
   earlier(one: Text.Node, other: Text.Node): boolean {
     if (one.source === other.source || (one.source.location !== undefined && one.source.location === other.source.location)) return one.begin <= other.begin;
     const a = one.source.location === undefined ? undefined : this.read_order.get(one.source.location);
@@ -962,7 +954,7 @@ export class Interpreter {
       if (shape.operator && (this.rewriting.size > 0 || !this.ready(rule, impl))) continue;
       const pieces = rule.pattern!;
       const leading = shape.leading;
-      const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, operand: opts.operand, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule), closure: impl.closure, declared: this.introduced(rule) });
+      const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, operand: opts.operand, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule), closure: impl.closure, declared: rule.position });
         if (!match) continue;
       const loose = shape.loose;
       const own = match.pattern - match.begin, current = best ? best.match.pattern - best.match.begin : -1;
@@ -1497,19 +1489,6 @@ export class Interpreter {
     if (target?.style !== undefined) return this.style(`${target.style}.${name}`);
     const method = target && this.method_of(target, name);
     if (method) return this.apply({ rule: method[0], impl: method[1], match: this.trivial(this.location(node), key.position ?? node.position!) }, this.cursor_of(key.position ?? node.position!), target, key.position ?? node.position!);
-    const parameterised = target && this.method_of(target, name, { parameterised: true });
-    if (parameterised) {
-      const [rule, impl] = parameterised;
-      const at = key.position ?? node.position!;
-      const bound = new Node(this.diagnostics, at);
-      bound.arity = impl.params!.length;
-      bound.fn = ({ interpreter, frame, args }) => {
-        if (args.length < impl.params!.length) return undefined;
-        const match = { ...interpreter.trivial(target, at), args: args.map(argument => argument.lazy?.span ?? argument.position ?? at), given: args.map(argument => argument.lazy !== undefined ? undefined : argument) };
-        return interpreter.apply({ rule, impl, match }, interpreter.cursor_of(at), frame, at);
-      };
-      return bound;
-    }
     const spelled = target && this.spelled_after(target, name);
     if (spelled) {
       const [rule, impl, capture] = spelled;
@@ -1555,13 +1534,13 @@ export class Interpreter {
   callable_of(target: Node | undefined): boolean {
     return target !== undefined && (target.callable || this.call_rule(target) !== undefined);
   }
-  method_of(target: Node, name: string, opts: { parameterised?: boolean } = {}): [Node, Node] | undefined {
+  method_of(target: Node, name: string): [Node, Node] | undefined {
     const seen = new Set<Node>();
     // What every node has is on the base after what this one is made of.
     for (const from of [...target.composed(seen), ...(this.BASE?.composed(seen) ?? [])]) {
       if (from.methods === undefined) continue;
       for (const [rule, impl] of this.methods_named(from).get(name) ?? []) {
-        if (impl.forward || (opts.parameterised ? !impl.params?.length : impl.params?.length)) continue;
+        if (impl.forward || impl.params?.length) continue;
         return [rule, impl];
       }
     }
@@ -1851,7 +1830,7 @@ export class Interpreter {
     this.painted_application(rule, impl, match, captures, cursor, frame, at);
     // Parameters are values, not blocks: reading them here is what lets a
     // method be called with its argument beside it rather than in brackets.
-    let args = match.args.map((span, k) => { const given = match.given?.[k]; if (given !== undefined) return given; return this.lazy(span, frame, false); });
+    const args = match.args.map((span, k) => { const given = match.given?.[k]; if (given !== undefined) return given; return this.lazy(span, frame, false); });
     if (this.probing) {
       captures.forEach(node => { if (!node.lazy?.raw) this.force(node); });
       args.forEach(node => this.force(node));
@@ -1869,19 +1848,8 @@ export class Interpreter {
     const local = this.frame(frame, undefined, impl.closure ?? this.GLOBAL);
     // A frame is written where what made it is written.
     local.position = at;
-    local.given = new Set([...captures.keys(), ...(impl.params ?? [])]);
+    local.given = new Set(captures.keys());
     for (const [name, node] of captures) this.bind(local, name, node);
-    if (impl.params !== undefined) while (args.length < impl.params.length) args.push(this.NONE);
-    impl.params?.forEach((param, k) => {
-      // What a parameter was declared to be is what its rules are, before
-      // anyone reads the argument itself.
-      const written = impl.param_types?.[k];
-      if (written !== undefined && args[k] !== undefined) {
-        const named = this.diagnostics.muted(() => this.safely(() => this.deref(this.reference(impl.closure ?? frame, written.string.trim(), written), false)));
-        if (named !== undefined) args[k].declared = named;
-      }
-      this.bind(local, param, args[k]);
-    });
     this.run_captures(rule, match, local, frame);
     local.applied_to = match.receiver;
     const into = this.context_of(match.receiver);
@@ -1899,7 +1867,7 @@ export class Interpreter {
       // way only when the rule fires, and only where the body says `[x]`.
       const body = rewrites ? this.written_with(impl.body, rule, match) : impl.body;
       try {
-        const answered = this.unalias(this.read_body(rule, impl, body, local, impl.params !== undefined), local);
+        const answered = this.unalias(this.read_body(rule, impl, body, local, false), local);
         return answered;
       }
       catch (jump) {
@@ -2104,7 +2072,7 @@ export class Interpreter {
     const at = `${lhs.source.location}:${lhs.begin}:${lhs.end}`, known = lhs.source.location === undefined ? undefined : this.heads_read.get(at);
     if (known !== undefined && known.pass === this.passing && known.frame === frame && known.head.pattern[0].string === lhs.string) return known.head;
     const pieces = this.pieces_of(lhs, frame, []);
-    const head: Head = { pattern: [lhs], param_names: [], param_types: [], pieces, spelled: pieces.map(describe).join(''), shared: known?.head.shared ?? {} };
+    const head: Head = { pattern: [lhs], pieces, spelled: pieces.map(describe).join(''), shared: known?.head.shared ?? {} };
     if (lhs.source.location !== undefined) this.heads_read.set(at, { pass: this.passing, frame, head });
     return head;
   }
@@ -2134,18 +2102,15 @@ export class Interpreter {
     return this.register(this.read_head(lhs, frame), lhs, body, frame, arrow, closure);
   }
   register(written: Head, lhs: Text.Node, body: Text.Node | undefined, frame: Node, arrow?: Text.Node, closure?: Node): Node {
-    const { pattern, params, param_names, param_types, pieces, spelled, shared } = written;
+    const { pattern, pieces, spelled, shared } = written;
     if (pieces.length === 0) { this.error('Expected a pattern before `=>`.', lhs); return new Node(this.diagnostics, lhs); }
-    const key = `${frame.key}::${spelled}${params ? `(${params.join(',')})` : ''}`;
+    const key = `${frame.key}::${spelled}`;
     const rule = this.rule_keyed(frame, key) ?? shared.rule ?? Object.assign(new Node(this.diagnostics, lhs), { key });
     shared.rule ??= rule;
     if (body !== undefined) { const held = shared.body; if (held !== undefined && held.source === body.source && held.begin === body.begin && held.end === body.end) body = held; else shared.body = body; }
     rule.pattern = pieces; rule.position = lhs;
-    const introduced = this.introductions.get(spelled);
-    if ((params?.length ?? 0) > 0 && (introduced === undefined || this.earlier(lhs, introduced))) this.introductions.set(spelled, lhs);
     const impl = new Node(this.diagnostics, body ?? lhs);
-    impl.body = body; impl.closure = closure ?? frame; impl.params = params;
-    impl.param_types = param_types.length > 0 ? param_types : undefined;
+    impl.body = body; impl.closure = closure ?? frame;
     const head = body === undefined ? undefined : this.name(this.cursor_of(body), frame);
     if (head !== undefined && frame.lookup(head) === this.EXTERNAL) {
       const token = this.cursor_of(body!); token.advance(head.length);

@@ -94,7 +94,7 @@ export class Levelled extends Served {
       if (receiver === undefined) continue;
       if ((entry.operand === undefined) !== ((impl.params?.length ?? 0) === 0) || (entry.operand !== undefined && impl.params!.length !== 1)) continue;
       const template = this.template_for(entry.receiver!.type!, entry.receiver!.declaration!, entry.scope);
-      if (template === undefined || (template !== null && !this.carries(template, impl)) || (template === null && entry.native === undefined)) continue;
+      if (template === undefined || (template !== null && !this.carries(template, impl, { own: true })) || (template === null && entry.native === undefined)) continue;
       const argument = args[0] ?? this.NONE;
       if (entry.operand !== undefined) {
         const value = this.deref(argument, false);
@@ -131,12 +131,14 @@ export class Levelled extends Served {
     return held ?? undefined;
   }
   protected carried = new WeakMap<Node, Set<string>>();
-  carries(template: Node, method: Node): boolean {
+  protected owned = new WeakMap<Node, Set<string>>();
+  carries(template: Node, method: Node, opts: { own?: boolean } = {}): boolean {
     const at = (body: Text.Node) => `${body.source.location}:${body.begin}:${body.end}`;
-    let bodies = this.carried.get(template);
+    const store = opts.own ? this.owned : this.carried;
+    let bodies = store.get(template);
     if (bodies === undefined) {
-      this.carried.set(template, bodies = new Set());
-      for (const from of template.composed(new Set())) for (const impl of from.methods?.values() ?? []) if (impl.body !== undefined) bodies.add(at(impl.body));
+      store.set(template, bodies = new Set());
+      for (const from of opts.own ? [template] : template.composed(new Set())) for (const impl of from.methods?.values() ?? []) if (impl.body !== undefined) bodies.add(at(impl.body));
     }
     return method.body !== undefined && bodies.has(at(method.body));
   }
@@ -278,7 +280,7 @@ export class Levelled extends Served {
   characters(string: Node | undefined, method: Node): number[][] | undefined {
     const value = string && this.deref(string, false);
     if (value === undefined || !this.carries(value, method)) return undefined;
-    const held = this.links(this.field(value, 'characters'));
+    const held = this.links(value);
     if (held === undefined) return undefined;
     const out: number[][] = [];
     for (const character of held) { const bytes = this.octets(character); if (bytes === undefined) return undefined; out.push(bytes); }

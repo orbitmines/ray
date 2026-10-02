@@ -91,8 +91,8 @@ String := class: Array {
   camelCase => .camel_case
   PascalCase => .pascal_case
 
-  plural => if (.tail.value == "s") { this } else { this + "s" }
-  singular => if (.tail.value == "s") { .slice(0, .count.pred) } else { this }
+  plural => if (.ends_with("s")) { this } else { this + "s" }
+  singular => if (.ends_with("s")) { .slice(0, .count.pred) } else { this }
 
   mirrored => .reverse.as_string
 
@@ -178,7 +178,7 @@ String := class: Array {
     out := chain None
     at_start ^keyword := true
     parts for {
-      unless at_start { if (exists separator) { out &= separator } }
+      unless at_start { if (exists separator) { separator for { out &= it.value } } }
       it.value for { out &= it.value }
       at_start = false
     }

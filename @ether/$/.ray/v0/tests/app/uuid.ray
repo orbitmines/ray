@@ -6,16 +6,16 @@ unless (uu.version == 4) { INFO@mark `UU2 v4 version is not 4` }
 unless (uu.variant == UUID.Variant.rfc_4122) { INFO@mark `UU3 v4 variant is not RFC 4122` }
 uu_text := uu.as_string
 unless (uu_text.count == 36) { INFO@mark `UU4 v4 text is not 36 characters` }
-unless (uu_text.at(8) == U+002D) { INFO@mark `UU5 no dash after eight digits` }
-unless (uu_text.at(14) == U+0034) { INFO@mark `UU6 the version digit is not 4` }
+unless (uu_text.at(8).value == U+002D) { INFO@mark `UU5 no dash after eight digits` }
+unless (uu_text.at(14).value == U+0034) { INFO@mark `UU6 the version digit is not 4` }
 
 // A UUID is itself.
 unless (uu == uu) { INFO@mark `UU7 a uuid is not itself` }
 
 // The text form puts its dashes where RFC 4122 asks.
-unless (uu_text.at(13) == U+002D) { INFO@mark `UU10 no dash after thirteen characters` }
-unless (uu_text.at(18) == U+002D) { INFO@mark `UU11 no dash after eighteen characters` }
-unless (uu_text.at(23) == U+002D) { INFO@mark `UU12 no dash after twenty-three characters` }
+unless (uu_text.at(13).value == U+002D) { INFO@mark `UU10 no dash after thirteen characters` }
+unless (uu_text.at(18).value == U+002D) { INFO@mark `UU11 no dash after eighteen characters` }
+unless (uu_text.at(23).value == U+002D) { INFO@mark `UU12 no dash after twenty-three characters` }
 
 // spec: two draws are two uuids, which `feature.ray` claims of the bits they
 // are drawn from rather than of the uuids. A second draw here costs more than

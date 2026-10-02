@@ -267,6 +267,8 @@ export class Levelled extends Served {
   }
   octets(character: Node | undefined): number[] | undefined {
     const value = character && this.deref(character, false);
+    const point = value === undefined ? undefined : value instanceof Count ? value.count : this.numeral(value);
+    if (point !== undefined && point <= 0x10ffffn) return [...new TextEncoder().encode(String.fromCodePoint(Number(point)))];
     const bits = value && this.links(this.field(value, 'octets'));
     if (bits === undefined || bits.length === 0 || bits.length % 8 !== 0) return undefined;
     const bytes: number[] = [];

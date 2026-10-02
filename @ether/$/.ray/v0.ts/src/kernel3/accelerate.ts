@@ -414,35 +414,6 @@ export class Accelerated extends Levelled {
     this.frame_chains.set(frame, { epoch: this.scopes_epoch(), chain });
     return chain;
   }
-  protected override chain_of(frame: Node): { operand: Rules; receiver: Rules } {
-    const cached = this.chains.get(frame);
-    // What a frame is made of can change after it was asked what it sees.
-    if (cached && cached.epoch === this.scopes_epoch()) return cached;
-    const scopes = new Set<Node>();
-    for (let scope: Node | undefined = frame; scope; scope = scope.parent) {
-      scopes.add(scope);
-      // What a frame is made of brings its rules with it, not only its
-      // names: a set of rules composed into a frame is what a level is, and
-      // reading something with a level in reach is what applying one means.
-      for (const held of scope.made_of ?? []) scopes.add(held);
-    }
-    if (this.BASE && frame.levels === undefined) scopes.add(this.BASE);
-    const operand: [Node, Node][][] = [], receiver: [Node, Node][][] = [];
-    for (const level of (frame.levels ?? []).flatMap(type => [...type.composed(new Set())])) {
-      const set = this.ruleset(level), leading = set.receiver.filter(([rule]) => { const first = rule.pattern![0]; return first?.kind !== 'capture' || first.declared !== undefined; });
-      if (leading.length > 0) operand.push(leading);
-      if (set.receiver.length > 0) receiver.push(set.receiver);
-    }
-    for (const scope of scopes) {
-      const set = this.ruleset(scope);
-      if (set.operand.length > 0) operand.push(set.operand);
-      const seen = scope === this.GLOBAL || scope === this.BASE ? set.receiver : set.forwarded;
-      if (seen.length > 0) receiver.push(seen);
-    }
-    const chain = { epoch: this.scopes_epoch(), operand, receiver };
-    this.chains.set(frame, chain);
-    return chain;
-  }
   protected dispatch = new WeakMap<Node, { chain: Rules; of: unknown; rules: Rules }>();
   override dispatched(own: Node, chain: Rules, itself: boolean): Rules {
     const cached = itself ? undefined : this.dispatch.get(own);
@@ -472,7 +443,6 @@ export class Accelerated extends Levelled {
     return edges;
   }
   protected rulesets = new WeakMap<Node, { rules: number; operand: [Node, Node][]; receiver: [Node, Node][]; forwarded: [Node, Node][] }>();
-  protected chains = new WeakMap<Node, { epoch: number; operand: Rules; receiver: Rules }>();
   protected frame_chains = new WeakMap<Node, { epoch: number; chain: { operand: Rules; receiver: Rules } }>();
   protected boundaries = new WeakMap<Node, { epoch: number; edges: Set<string> }>();
   protected asked = new WeakSet<Node>();

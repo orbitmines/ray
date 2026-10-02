@@ -222,7 +222,6 @@ Program := class {
 }
 
 Node := base class {
-  { }^{literal style} => this
 
   , => this
 

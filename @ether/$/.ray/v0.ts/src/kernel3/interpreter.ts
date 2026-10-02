@@ -342,7 +342,7 @@ export class Interpreter {
       this.passing = pass;
       this.forwards = []; this.deferred = []; this.ran = new Set(); this.definitions = []; this.touched = new WeakMap(); this.spelled = new Set(); this.claims.clear(); this.pending_rewrites = [];
       Node.heads.clear();
-      for (const frame of [this.GLOBAL, ...this.frames.values(), ...(this.BASE?.composed(new Set()) ?? [])])
+      if (this.copy_of !== undefined) for (const frame of [this.GLOBAL, ...this.frames.values(), ...(this.BASE?.composed(new Set()) ?? [])])
         for (const [key, value] of frame.methods ?? []) if (key instanceof Node && !value.operation) for (const piece of key.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) Node.heads.add(part);
       this.begin_pass(pass);
       this.sited = new Map();
@@ -1673,6 +1673,13 @@ export class Interpreter {
   gives(scope: Node, holder: Node, key: string): boolean {
     return holder === scope || (this.made_names.get(holder)?.has(key) ?? false);
   }
+  // What a rule answers when it is only looked at: something that can be read on, and called.
+  stand_in(at: Text.Node): Node {
+    const answer = new Node(this.diagnostics, at);
+    answer.arity = 1;
+    answer.fn = () => this.stand_in(at);
+    return answer;
+  }
   // What a rule applied to this runs inside: its place, or what unread code reads as.
   context_of(receiver: Node | undefined): Node | undefined {
     if (receiver === undefined) return undefined;
@@ -1940,7 +1947,8 @@ export class Interpreter {
     if (this.probing) {
       captures.forEach(node => { if (!node.lazy?.raw) this.force(node); });
       args.forEach(node => this.force(node));
-      return impl.forward && match.receiver !== undefined ? match.receiver : new Node(this.diagnostics, at);
+      if (impl.forward && match.receiver !== undefined) return match.receiver;
+      return this.stand_in(at);
     }
     if (impl.forward) return this.pass(found, captures, args, cursor, frame, at);
     const short = this.shortcut(found, captures, args, cursor, frame, at);

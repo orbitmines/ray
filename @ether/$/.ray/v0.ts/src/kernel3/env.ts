@@ -33,24 +33,9 @@ export class Version {
   get monthLetter(): string { return Version.MONTH_LETTERS[this.month - 1]; }
   private get tail(): string { return `${this.year}.${this.yearsSinceRelease}${this.monthLetter}.${this.index}`; }
 
-  /** `<major>.E<tail>` — the form `parse` reads back. */
+  /** `<major>.E<tail>` */
   toString(): string { return `${this.major}.${Version.letter}${this.tail}`; }
 
-  /** Semver `<major>.<minor>.<patch>`; with `scheme`, re-suffixed `-E<tail>`. */
-  toSemver(opts?: { scheme?: boolean }): string {
-    const base = `${this.major}.${this.yearsSinceRelease * 12 + this.month}.${this.index}`;
-    return opts?.scheme ? `${base}-${Version.letter}${this.tail}` : base;
-  }
-
-  static parse(version: string): Version {
-    const m = /^(\d+)\.E(\d+)\.(\d+)([A-L])\.(\d+)$/.exec(version.trim());
-    if (!m) throw new Error(`Version: cannot parse "${version}"`);
-    const [, major, year, yearsSinceRelease, monthLetter, index] = m;
-    return new Version(+major, +year, +yearsSinceRelease, Version.MONTH_LETTERS.indexOf(monthLetter) + 1, +index);
-  }
-  static tryParse(version: string): Version | null {
-    try { return Version.parse(version); } catch { return null; }
-  }
   static create(major: number, releaseDate: string, index: number): Version {
     const release = new Date(releaseDate);
     const now = new Date();
@@ -68,7 +53,6 @@ export class Version {
 
 export class env {
   static get nodejs(): boolean { return typeof process !== 'undefined' && (process as any).versions?.node; }
-  static get is_main_entrypoint() { return env.nodejs && process.argv[1] !== undefined && import.meta.url === env.url.pathToFileURL(process.argv[1]).href }
 
   static cli_args(spec: CLI.Spec = {}): CLI.Args {
     const args: string[] = [];
@@ -136,11 +120,6 @@ export class env {
       return env._manifest = manifest;
     }
     catch { return env._manifest = []; }
-  }
-
-  static variable(name: string): string | undefined {
-    const value = env.nodejs ? process.env[name] : (globalThis as any)[name];
-    return value === undefined || value === null ? undefined : String(value);
   }
 
   static file(location: string): Text.Source { return new Text.Source(location); }

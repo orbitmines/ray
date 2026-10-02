@@ -147,7 +147,7 @@ export class Levelled extends Served {
     const known = this.numerals.get(value);
     if (known !== undefined) return known ?? undefined;
     let answer: bigint | null = null;
-    const integer = value.members?.get('integer') ?? value.own('integer');
+    const integer = value.member('integer');
     const chain = integer && this.diagnostics.muted(() => this.safely(() => this.deref(integer, false)));
     const head = chain && !chain.none ? chain.members?.get('head') ?? chain.own('head') : undefined;
     if (head !== undefined) {
@@ -184,7 +184,7 @@ export class Levelled extends Served {
         if (total >= 0n) answer = total;
       }
     }
-    this.numerals.set(value, answer);
+    if (answer !== null) this.numerals.set(value, answer);
     return answer ?? undefined;
   }
   counted(value: Node | undefined, like: Count, method: Node): bigint | undefined {
@@ -262,6 +262,9 @@ export class Levelled extends Served {
   protected bit(value: Node): number | undefined {
     if (value instanceof Count) return value.count > 0n ? 1 : 0;
     if (value.none) return 0;
+    if (value === this.unit()?.base) return 0;
+    const numeral = this.numeral(value);
+    if (numeral !== undefined) return numeral > 0n ? 1 : 0;
     const next = this.field(value, 'next');
     return next === undefined || next.none ? 0 : 1;
   }
@@ -300,6 +303,9 @@ export class Levelled extends Served {
   holds_bit(value: Node): boolean | undefined {
     if (value instanceof Count) return value.count > 0n;
     if (value.none) return false;
+    if (value === this.unit()?.base) return false;
+    const numeral = this.numeral(value);
+    if (numeral !== undefined) return numeral > 0n;
     const holds = this.field(value, 'holds');
     if (holds !== undefined) return !holds.none;
     const next = this.field(value, 'next');

@@ -988,7 +988,7 @@ export class Interpreter {
   // Which brackets hold parameters is not the engine's to know: the rule that
   // defines a method says so by styling that capture `^parameter`, and the
   // entrypoint declares its shape up front with `forward`.
-  private grouping(frame: Node): [string, string] | undefined {
+  grouping(frame: Node): [string, string] | undefined {
     return this.answered(frame, 'grouping', scopes => this.bracket_marked(scopes, 'parameter', true));
   }
   // The bracket rule whose capture is marked with a word: what it opens
@@ -1019,7 +1019,7 @@ export class Interpreter {
     if (this.BASE) scopes.push(this.BASE);
     return ask(scopes);
   }
-  private marked(frame: Node, style: string): string | undefined {
+  marked(frame: Node, style: string): string | undefined {
     return this.answered(frame, `marked ${style}`, scopes => this.marks_style(scopes, style));
   }
   private marks_style(scopes: Node[], style: string): string | undefined {
@@ -2577,7 +2577,7 @@ export class Interpreter {
   begin_pass(pass: number) {}
   end_pass() {}
   derived_all(srcs: Text.Source[]) {}
-  paint(span: Text.Node, decorator: Text.Node | Node | undefined | (() => (Text.Node | Node)[]), frame: Node, of?: string, opts: { head?: boolean; role?: string } = {}) {}
+  paint(span: Text.Node, decorator: Text.Node | Node | undefined | (() => (Text.Node | Node)[]), frame: Node, of?: string, opts: { lexical?: boolean } = {}) {}
   record(painted: Text.Node) {}
 
   style(name: string): Node {

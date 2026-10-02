@@ -1,11 +1,15 @@
-unless (exists (external own units)) { global[`units`] = chain None }
 Unit := class {
   is_base => (exists .base).not
+  base_unit => if .is_base { this } else { .base.base_unit }
+  is_temporal => (.base_unit == Second)
   called (singular, several, short) => (
     this.name = singular
     this.plural = several
     this.symbol = short
-    units &= this
+    named ^keyword := this
+    external define Unit singular { named }
+    external define Unit several { named }
+    external define Unit short { named }
     this
   )
   over (other: Unit) => (
@@ -22,16 +26,6 @@ Unit := class {
       }
     }
     reached
-  )
-  accepts (text) => (
-    found ^keyword := None
-    units for {
-      known := it.value
-      if (exists (external alike (known.name) (text))) { found = known }
-      if (exists (external alike (known.plural) (text))) { found = known }
-      if (exists (external alike (known.symbol) (text))) { found = known }
-    }
-    found
   )
   rank => (
     rank_steps := 0
@@ -164,3 +158,11 @@ Byte := Unit(base: Bit, factor: 8).called(`byte`, `bytes`, `B`)
 
 Kilobyte := Byte prefixed Prefix.kilo
 Kibibyte => Byte multiple (1024)
+Second := Unit().called(`second`, `seconds`, `s`)
+
+Nanosecond := Unit().called(`nanosecond`, `nanoseconds`, `ns`)
+Minute := (Second multiple (60)).called(`minute`, `minutes`, `min`)
+Hour := (Minute multiple (60)).called(`hour`, `hours`, `h`)
+Day := (Hour multiple 24).called(`day`, `days`, `d`)
+Week := (Day multiple 7).called(`week`, `weeks`, `wk`)
+Year => Day multiple 365

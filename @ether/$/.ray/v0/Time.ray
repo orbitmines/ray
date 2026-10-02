@@ -1,15 +1,3 @@
-Second := Unit().called(`second`, `seconds`, `s`)
-
-Nanosecond := Unit().called(`nanosecond`, `nanoseconds`, `ns`)
-Minute := (Second multiple (60)).called(`minute`, `minutes`, `min`)
-Hour := (Minute multiple (60)).called(`hour`, `hours`, `h`)
-Day := (Hour multiple 24).called(`day`, `days`, `d`)
-Week := (Day multiple 7).called(`week`, `weeks`, `wk`)
-Year => Day multiple 365
-
-Unit.components.hierarchy &= class { is_temporal => (.base_unit == Second) }
-Unit.components.hierarchy &= class { base_unit => if .is_base { this } else { .base.base_unit } }
-
 Calendar := class {
   Segment := class {
     name: Node

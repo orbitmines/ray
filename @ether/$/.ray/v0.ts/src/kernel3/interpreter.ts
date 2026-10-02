@@ -306,7 +306,7 @@ export class Interpreter {
   *derive(srcs: Text.Source[]): Generator<void> {
     this.refresh();
     const inherited = new Map([this.GLOBAL, ...this.frames.values()].map(frame => [frame, new Set(frame.methods?.keys() ?? [])]));
-    let previous: string | undefined;
+    let previous: string | undefined, older: string | undefined;
     for (let pass = 0; pass < Interpreter.PASSES; pass++) {
       this.passing = pass;
       this.forwards = []; this.deferred = []; this.ran = new Set(); this.typings = new Map(); this.definitions = []; this.touched = new WeakMap(); this.spelled = new Set(); this.claims.clear(); this.pending_rewrites = [];
@@ -327,7 +327,8 @@ export class Interpreter {
       // another is settled this way: the language writes itself forwards,
       // and settles by its signature repeating.
       if (this.copy_of !== undefined && !this.unread(srcs)) break;
-      if (signature === previous) break;
+      if (signature === previous || signature === older) break;
+      older = previous;
       previous = signature;
     }
     this.analyze();

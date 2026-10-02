@@ -1,4 +1,4 @@
-# Ray — Text, Unicode, encodings, identifiers spec (from `String.ray`, `Unicode.ray`, `Encoding.ray`, `UUID.ray`, `Test.ray` (IP))
+# Ray — Text, Unicode, encodings, identifiers spec (from `String.ray`, `Unicode.ray`, `Encoding.ray`, `UUID.ray`, `IP.ray`)
 
 Status legend: **Decided** · **Open** · **See L§n**.
 IDs `X…`. Answers go under **Decided** at the end.
@@ -58,7 +58,7 @@ IDs `X…`. Answers go under **Decided** at the end.
 - **X5.3 A secondary implementation** — *UUID:170*: how to mark one that isn't used for reading from a string.
 - **X5.4 Hex-letter round trip** — L§10.2 open bug.
 
-## X6. IP (*Test.ray*)
+## X6. IP (*IP.ray*)
 
 - **X6.1 File name** — IP lives in `Test.ray` (the draft's name). Rename to `IP.ray`?
 - **X6.2 `IP < Location &+ (-1 <- . -> +1)`** — an address is a location on a line.

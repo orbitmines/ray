@@ -1,4 +1,5 @@
 {pattern} => {body} => external rule pattern body
+forward ;
 forward :=
 forward unordered
 forward ^{literal word ^ word}{ }

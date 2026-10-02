@@ -283,8 +283,6 @@ export class Interpreter {
   FORWARD: Node
 
   frames: Map<string, Node> = new Map();
-  forwards: Node[] = [];
-  deferred: Node[] = [];
   definitions: string[] = [];
 
   private kernel(): Node {
@@ -336,12 +334,11 @@ export class Interpreter {
     let previous: string | undefined, older: string | undefined;
     for (let pass = 0; pass < Interpreter.PASSES; pass++) {
       this.passing = pass;
-      this.forwards = []; this.deferred = []; this.ran = new Set(); this.definitions = []; this.touched = new WeakMap(); this.spelled = new Set(); this.claims.clear(); this.pending_rewrites = [];
+      this.ran = new Set(); this.definitions = []; this.touched = new WeakMap(); this.spelled = new Set(); this.claims.clear(); this.pending_rewrites = [];
       Node.heads.clear();
       if (this.copy_of !== undefined) for (const frame of [this.GLOBAL, ...this.frames.values(), ...(this.BASE?.composed(new Set()) ?? [])])
         for (const [key, value] of frame.methods ?? []) if (key instanceof Node && !value.operation) for (const piece of key.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) Node.heads.add(part);
       this.begin_pass(pass);
-      this.sited = new Map();
       srcs.forEach(src => this.diagnostics.forget(src));
       for (const location of this.copy_of?.read_order.keys() ?? []) if (!this.read_order.has(location)) this.read_order.set(location, this.read_order.size);
       srcs.forEach(src => { if (src.location !== undefined && !this.read_order.has(src.location)) this.read_order.set(src.location, this.read_order.size); });
@@ -361,7 +358,6 @@ export class Interpreter {
       older = previous;
       previous = signature;
     }
-    this.analyze();
     // What was cloned from is done with: holding it would hold every pass
     // the language has been through.
     this.copy_of = undefined;
@@ -909,78 +905,22 @@ export class Interpreter {
     return rules.length > 0 ? [...rules, ...chain] : chain;
   }
 
-  analyzing = false;
-  private typing = false;
   private rewriting = new Set<Node>();
-  private readiness = new WeakMap<Node, { version: number; missing: Text.Node[] }>();
-  private handed = new WeakMap<Node, Set<string>>();
-  // What every rule hands the text written for it, by the word it is spelled
-  // with: gathered once a pass, where the definitions are all there.
-  private hands = new Map<string, Set<string>>();
-  private asking = new WeakMap<Node, { version: number; missing: Text.Node[] }>();
-  missing(rule: Node, impl: Node, scope?: Node, only: boolean = false): Text.Node[] {
-    const cached = only ? this.asking.get(impl) : this.readiness.get(impl);
-    if (scope === undefined && cached && cached.version === this.version) return cached.missing;
-    // What the body declares, wherever it declares it, is the body's own —
-    // which is about what is reported; readiness is answered as before.
-    const bound = new Set<string>([...(impl.params ?? []), ...(scope === undefined ? [] : this.handed.get(rule) ?? []), ...rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece.name] : [])]);
-    const frame = scope ?? impl.closure ?? this.GLOBAL;
-    const heads = new Set<string>([this.RETURN, this.RECUR].flatMap(node => [node.key!, node.key!.replace(/\\$/, '')]));
-    const scopes = new Set<Node>();
-    for (let scope: Node | undefined = frame; scope; scope = scope.parent) scopes.add(scope);
-    if (this.BASE) scopes.add(this.BASE);
-    for (const scope of scopes)
-      for (const other of scope.rules)
-        for (const piece of other.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) heads.add(part);
-    for (const part of Node.heads) heads.add(part);
-    const missing: Text.Node[] = [], seen = new Set<string>();
-    const handed = (span: Text.Node): [number, number, Set<string>][] => {
-      const out: [number, number, Set<string>][] = [];
-      const text = span.source.value;
-      const cursor = this.cursor_of(span);
-      for (const found of span.string.matchAll(/[\p{L}_][\p{L}\p{N}_-]*/gu)) {
-        const at = span.begin + found.index!;
-        const names = this.hands.get(found[0]);
-        if (names === undefined || names.size === 0) continue;
-        // The text that follows the word is what the rule is handed.
-        for (const [bracket] of this.brackets(frame)) {
-          let j = at + found[0].length;
-          while (j <= span.end && /\s/.test(text[j])) j++;
-          const match = this.safely(() => this.match(bracket.pattern!, cursor.bounded(j, span.end + 1), frame, { leading: false, tight: true, params: 0 }));
-          if (match) { out.push([j, match.end - 1, names]); break; }
-        }
-      }
-      return out;
-    };
-    const check = (span: Text.Node) => {
-      // Only what is reported cares; readiness is answered as before.
-      const given = scope === undefined ? [] : handed(span);
-      const text = span.source.value;
-      const whole = new Text.Node(span.source);
-      const skip = this.safely(() => this.excluded(span, frame)) ?? [];
-      const pattern = /[\p{L}_][\p{L}\p{N}_-]*|[^\s\p{L}\p{N}_(){}\[\]`,.:]+/gu;
-      let previous: string | undefined;
-      for (const found of span.string.matchAll(pattern)) {
-        const word = found[0], at = span.begin + found.index!;
-        const head = previous !== undefined ? this.rule_head(previous, frame) : undefined;
-        const raw = (previous !== undefined && frame.lookup(previous)?.reads !== undefined) || (head !== undefined && head.pattern!.some(piece => piece.kind === 'capture' && piece.raw));
-        previous = word;
-        if (raw || this.prefixes.has(text[at - 1]) || bound.has(word) || seen.has(word)) continue;
-        if (given.some(([begin, end, names]) => at >= begin && at <= end && names.has(word))) continue;
-        if (at > 0 && this.starts_rule(whole, at - 1, frame)) continue;
-        if (skip.some(([begin, end]) => at >= begin && at <= end)) continue;
-        if (frame.lookup(word) !== undefined || heads.has(word)) continue;
-        seen.add(word);
-        missing.push(span.span(at, at + word.length - 1));
-      }
-    };
-    if (impl.body && !only) check(impl.body);
-    for (const piece of rule.pattern!) if (piece.kind === 'operator' && piece.filter) {
-      const group = piece.group, offset = group.string.indexOf(piece.filter);
-      if (offset >= 0) check(group.span(group.begin + offset, group.begin + offset + piece.filter.length - 1));
-    }
-    if (scope === undefined) (only ? this.asking : this.readiness).set(impl, { version: this.version, missing });
-    return missing;
+  // An operator rule is ready once every word its filters read is named.
+  private readiness = new WeakMap<Node, { version: number; ready: boolean }>();
+  ready(rule: Node, impl: Node): boolean {
+    const cached = this.readiness.get(impl);
+    if (cached && cached.version === this.version) return cached.ready;
+    const frame = impl.closure ?? this.GLOBAL;
+    const bound = new Set<string>(rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece.name] : []));
+    const heads = new Set<string>(Node.heads);
+    for (let scope: Node | undefined = frame; scope; scope = scope.parent)
+      for (const other of scope.rules) for (const piece of other.pattern ?? []) if (piece.kind === 'literal') for (const part of piece.text.trim().split(/\s+/)) if (part) heads.add(part);
+    let ready = true;
+    for (const piece of rule.pattern!) if (piece.kind === 'operator' && piece.filter)
+      for (const found of piece.filter.matchAll(/[\p{L}_][\p{L}\p{N}_-]*/gu)) if (!bound.has(found[0]) && !heads.has(found[0]) && frame.lookup(found[0]) === undefined) ready = false;
+    this.readiness.set(impl, { version: this.version, ready });
+    return ready;
   }
 
   // When what is known about the rules in reach has to be asked again: a
@@ -1021,7 +961,7 @@ export class Interpreter {
       // A rule that asks for an operator waits on what its pattern asks for —
       // the classes saying which operators it takes — and not on what its
       // body writes down for itself.
-      if (shape.operator && (this.rewriting.size > 0 || this.missing(rule, impl, undefined, true).length > 0)) continue;
+      if (shape.operator && (this.rewriting.size > 0 || !this.ready(rule, impl))) continue;
       const pieces = rule.pattern!;
       const leading = shape.leading;
       const match = this.match(pieces, cursor, frame, { receiver, leading, spaced: opts.spaced, operand: opts.operand, tight: opts.operand || (receiver !== undefined && !opts.spaced), params: impl.params?.length ?? 0, owned: pieces[0]?.kind === 'space' && this.declares(receiver, rule), closure: impl.closure, declared: this.introduced(rule) });
@@ -1502,7 +1442,7 @@ export class Interpreter {
         else { this.bind(node.ref!.scope, node.ref!.key, this.BASE); node = this.BASE; break; }
       }
       if (bound === undefined) {
-        if (report && !node.ref!.scope.unknown && !this.analyzing && !(node.ref!.member && this.probing)) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined;
+        if (report && !node.ref!.scope.unknown && !(node.ref!.member && this.probing)) this.error(`Unresolved \`${node.ref!.key}\`.`, node.position); return undefined;
       }
       node = bound;
     }
@@ -1750,15 +1690,9 @@ export class Interpreter {
         if (owned || !node.ref.member) this.bind(scope, node.ref.key, result);
       }
 
-      for (let k = this.applying.length - 1; k >= 0; k--) {
-        const applied = this.applying[k].receiver?.ref;
-        if (applied?.key !== node.ref.key || applied.scope !== node.ref.scope) continue;
-        this.binders.add(this.binder_of(this.applying[k].rule));
-        break;
-      }
       if (marks.length) this.mark_name(scope, node.ref.key, marks);
       // Definitions are what the source says, not what a body did at runtime.
-      if (this.probing > 0 || !this.in_body(at)) {
+      if (!this.in_body(at)) {
         this.definitions.push(`${scope.key}.${node.ref.key}`);
         this.site_at(`${scope === this.GLOBAL ? 'GLOBAL' : scope.key}::${node.ref.key}`);
       }
@@ -1913,22 +1847,17 @@ export class Interpreter {
       const span = match.captures.get(piece.name);
       const read = piece.raw || impl.forward ? undefined : match.read?.get(piece.name);
       if (read !== undefined) captures.set(piece.name, read);
-      else if (span) { const node = this.lazy(span, frame, piece.raw); captures.set(piece.name, node); if (!piece.raw && !this.probing && !this.in_body(span)) this.deferred.push(node); }
+      else if (span) { const node = this.lazy(span, frame, piece.raw); captures.set(piece.name, node); }
       else if (p === 0 && match.receiver !== undefined) captures.set(piece.name, match.receiver);
     });
     this.painted_application(rule, impl, match, captures, cursor, frame, at);
     // Parameters are values, not blocks: reading them here is what lets a
     // method be called with its argument beside it rather than in brackets.
-    let args = match.args.map((span, k) => { const given = match.given?.[k]; if (given !== undefined) return given; const node = this.lazy(span, frame, false); if (!this.probing && !this.in_body(span)) this.deferred.push(node); return node; });
-    if (!impl.forward) this.receives(rule, impl, match.receiver);
+    let args = match.args.map((span, k) => { const given = match.given?.[k]; if (given !== undefined) return given; return this.lazy(span, frame, false); });
     if (this.probing) {
       captures.forEach(node => { if (!node.lazy?.raw) this.force(node); });
       args.forEach(node => this.force(node));
       if (match.receiver?.ref !== undefined) this.bound(match.receiver);
-      const probing = this.probing;
-      this.probing = 0;
-      try { this.diagnostics.muted(() => this.run_captures(rule, match, this.frame(frame, undefined, impl.closure ?? this.GLOBAL), frame)); }
-      finally { this.probing = probing; }
       if (impl.forward && match.receiver !== undefined) return match.receiver;
       return this.stand_in(at);
     }
@@ -2092,7 +2021,6 @@ export class Interpreter {
       if (name !== undefined && !(frame.own(name) && !frame.own(name)!.forward)) this.bind(frame, name, impl);
     }
     this.bind(frame, rule, impl);
-    this.forwards.push(rule);
     this.definitions.push(key);
     return impl;
   }
@@ -2229,14 +2157,6 @@ export class Interpreter {
     }
     else if (body !== undefined) impl.defines = this.calls_native(body, frame, Natives.rule);
     if (!this.probing) { const fresh = this.spelled_before(impl); this.bind(frame, rule, impl); this.definitions.push(key); if (fresh) this.site_at(`rule::${key}`, lhs); }
-    if (this.probing || (this.owns(lhs.source) && !this.in_body(lhs) && this.first_site(lhs))) {
-      const scope = this.definition_scope(frame, rule, impl);
-      if (body) this.probe_body(body, scope);
-      // A body declares names for the text it is handed: a block written for
-      // this rule may use them, wherever that block is written.
-      const hands = new Set([...(scope.methods?.keys() ?? [])].filter((name): name is string => typeof name === 'string' && !scope.given?.has(name)));
-      if (hands.size > 0) this.handed.set(rule, hands);
-    }
     if (this.probing) return impl;
     if (pieces.some(piece => piece.kind === 'operator')) this.pending_rewrites.push([rule, impl]);
     return impl;
@@ -2449,57 +2369,6 @@ export class Interpreter {
     };
   }
 
-  decorates(token: Text.Node, frame: Node): boolean {
-    const probe = this.cursor_of(token);
-    for (const [rule, impl] of each(this.candidates(undefined, frame))) {
-      if (!impl.forward || !rule.pattern!.some(x => x.kind === 'capture')) continue;
-      const match = this.match(rule.pattern!, probe, frame, { leading: false, tight: true, params: 0, closure: impl.closure });
-      if (match && match.end >= probe.limit) return true;
-    }
-    const name = this.name(probe, frame);
-    if (name === undefined || this.resolved(this.reference(frame, name, token))?.fn !== Natives['^'].fn) return false;
-    const rest = token.begin + name.length;
-    if (rest > token.end) return true;
-    const claimed = this.claim(probe, rest, frame);
-    return claimed <= rest || claimed === token.end + 1;
-  }
-
-  private synthetic = new WeakSet<Node>();
-  private sited = new Map<string, string | undefined>();
-  first_site(at: Text.Node): boolean {
-    const key = `${at.source.location}:${at.begin}`;
-    if (this.sited.has(key)) return false;
-    this.sited.set(key, this.statements[0]?.source.location);
-    return true;
-  }
-  definition_scope(frame: Node, rule: Node, impl: Node): Node {
-    const scope = new Node(this.diagnostics);
-    scope.parent = frame;
-    scope.key = `${rule.key}#pattern`;
-    this.synthetic.add(scope);
-    const named = rule.pattern!.flatMap(piece => piece.kind === 'capture' || piece.kind === 'operator' ? [piece] : []);
-    for (const piece of named) this.site_at(`${scope.key}::${piece.name}`, piece.group);
-    scope.given = new Set([...(impl.params ?? []), ...named.map(piece => piece.name)]);
-    for (const name of scope.given) scope.set(name, this.placeholder());
-    // While the body is only being looked at, a parameter has no value yet,
-    // so it stands for whatever it was declared to be — otherwise the rules
-    // of its type are missing from exactly the reading that gets recorded.
-    if (!this.typing) {
-      this.typing = true;
-      try {
-        impl.params?.forEach((name, k) => {
-          const written = impl.param_types?.[k];
-          const held = written !== undefined ? scope.own(name) : undefined;
-          if (held === undefined) return;
-          const named = this.diagnostics.muted(() => this.safely(() => this.deref(this.reference(frame, written!.string.trim(), written!), false)));
-          if (named !== undefined) held.declared = named;
-        });
-      } finally { this.typing = false; }
-    }
-    return scope;
-  }
-  private blank = Text.Node.string('');
-  placeholder(): Node { return Object.assign(new Node(this.diagnostics, this.blank), { literal: true }); }
   rule_head(word: string, frame: Node): Node | undefined {
     const chain = this.chain(frame);
     for (const [rule, impl] of each([...chain.operand, ...chain.receiver])) if (!impl.forward && this.head(rule) === word) return rule;
@@ -2528,8 +2397,8 @@ export class Interpreter {
     this.prefixing = { version: this.version, marks };
     return marks;
   }
+  protected blank = Text.Node.string('');
   owns: (src: Text.Source) => boolean = () => true;
-  quiet = 0;
   decorate(target: Node, style: Node): Node {
     const reference = this.reference_of(target);
     if (reference.ref) {
@@ -2545,17 +2414,6 @@ export class Interpreter {
   mark_value(value: Node, styles: Node[], sources: Node[] = []) {}
   mark_name(scope: Node, key: string, styles: Node[]) {}
   style_of(value: Node): string | undefined { return undefined; }
-  receives(rule: Node, impl: Node, receiver: Node | undefined) {
-    const reference = receiver?.ref;
-    if (!reference) return;
-    if ((this.probing || this.analyzing) && !reference.own && this.scope_of(receiver!) === undefined) {
-      const named = rule.pattern![0];
-      if (!this.binders.has(this.binder_of(rule)) && !(named?.kind === 'capture' && named.raw)) this.error(`Unresolved \`${reference.key}\`.`, receiver!.position);
-      else if (this.synthetic.has(reference.scope)) reference.scope.set(reference.key, this.placeholder());
-    }
-  }
-  private binders = new Set<string>();
-  binder_of(rule: Node): string { const at = rule.position; return at ? `${at.source.location}:${at.begin}` : rule.key!; }
   private ran = new Set<string>();
   private applying: { rule: Node; impl?: Node; receiver?: Node; local?: Node }[] = [];
   scope_of(node: Node): Node | undefined {
@@ -2613,31 +2471,6 @@ export class Interpreter {
     return out;
   }
   probing = 0;
-  private probed = new Set<string>();
-  probe(span: Text.Node, scope: Node, opts: { report?: boolean } = {}) {
-    const key = `${span.source.location}:${span.begin}:${span.end}`;
-    if (this.probed.has(key) || this.probing > Interpreter.DEPTH) return;
-    this.probed.add(key);
-    this.probing++;
-    const run = () => this.safely(() => this.array(this.cursor_of(span), scope, opts.report, true));
-    try { opts.report ? run() : this.diagnostics.muted(run); }
-    finally { this.probing--; this.probed.delete(key); }
-  }
-  // A body is looked at once where it is defined: what it declares stands in
-  // its scope, and what it reads is reported where nothing names it.
-  probe_body(body: Text.Node, scope: Node) {
-    const frame = scope.parent!;
-    const inner = this.inner(body, frame) ?? body;
-    const text = inner.source.value;
-    for (let j = inner.begin; j <= inner.end;) {
-      let end = text.indexOf('\n', j);
-      if (end < 0 || end > inner.end + 1) end = inner.end + 1;
-      const chunks = end > j ? this.tokens(inner.span(j, end - 1), frame) : [];
-      if (chunks.length > 2 && /^[\p{L}_]/u.test(chunks[0].string) && this.decorates(chunks[1], frame) && !scope.own(chunks[0].string)) scope.set(chunks[0].string, this.placeholder());
-      j = end + 1;
-    }
-    this.probe(body, scope);
-  }
   // What the language server is told, and keeps: nothing, here.
   painted_application(rule: Node, impl: Node, match: Match, captures: Map<string, Node>, cursor: Text.Node, frame: Node, at: Text.Node) {}
   site_at(key: string, at?: Text.Node) {}
@@ -2775,12 +2608,6 @@ export class Interpreter {
   }
 
   pending_rewrites: [Node, Node][] = [];
-  analyze(location?: string) {
-    this.analyzing = true;
-    try { return this.analyzed(location); } finally { this.analyzing = false; }
-  }
-  // What is reported once the sources are read: nothing, here.
-  analyzed(location?: string) {}
 }
 
 export type Mark<T> = { mark: T; by?: string; epoch: number; except?: [Node, string][] };

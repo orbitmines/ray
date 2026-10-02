@@ -74,7 +74,7 @@ export class Accelerated extends Levelled {
     }
     if (held.operators.length > 0 && held.version !== this.version) {
       let bits = '';
-      for (const [rule, impl] of held.operators) bits += this.missing(rule, impl, undefined, true).length > 0 ? '1' : '0';
+      for (const [rule, impl] of held.operators) bits += this.ready(rule, impl) ? '0' : '1';
       held.version = this.version; held.waiting = bits;
     }
     return held;

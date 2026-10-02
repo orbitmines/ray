@@ -1,8 +1,7 @@
 import { Text } from './text.ts';
-import { Analysed } from './analysis.ts';
-import { Node, type Match } from './interpreter.ts';
+import { Interpreter, Node, type Match } from './interpreter.ts';
 
-export class Served extends Analysed {
+export class Served extends Interpreter {
   paints: Text.Node[] = [];
   painted = 0;
   sites: Map<string, Text.Node> = new Map();
@@ -90,7 +89,6 @@ export class Served extends Analysed {
     this.diagnostics.forget(src);
     this.paints = this.paints.filter(paint => paint.source.location !== src.location);
     this._interpret(src);
-    this.analyze(src.location);
     this.painted++;
   }
   async interpret_async(srcs: Text.Source[], alive: () => boolean): Promise<boolean> {

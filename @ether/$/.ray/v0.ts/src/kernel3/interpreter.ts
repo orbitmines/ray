@@ -10,10 +10,10 @@ export type Method = (args: Args) => Node | undefined;
 export type Native = { arity: number; fn: Method; pure?: boolean; values?: boolean; operation?: boolean }
 
 export type Piece =
-  | { kind: 'literal'; text: string; styles?: Text.Node[] }
+  | { kind: 'literal'; text: string }
   | { kind: 'space' }
   | { kind: 'newline'; group?: Text.Node }
-  | { kind: 'capture'; name: string; raw: boolean; optional?: boolean; runs: boolean; styles: Text.Node[]; declared?: Node; declaration?: string; group: Text.Node; within?: Node }
+  | { kind: 'capture'; name: string; raw: boolean; optional?: boolean; runs: boolean; declared?: Node; declaration?: string; group: Text.Node; within?: Node }
   | { kind: 'operator'; name: string; filter?: string; declaration?: string; group: Text.Node; content: Text.Node }
 
 export class Node {
@@ -27,7 +27,6 @@ export class Node {
 
   declare pattern?: Piece[]
   declare params?: string[]
-  declare listed_by_separator?: boolean
   declare written?: boolean
   declare body?: Text.Node
   declare closure?: Node
@@ -37,9 +36,6 @@ export class Node {
   // or inlining a block would compose in whatever that block could see.
   declare sees?: Node[]
   declare declared?: Node
-  declare styles?: Node[]
-  declare decorators?: Text.Node[]
-  declare param_styles?: Text.Node[][]
   declare param_types?: Text.Node[]
   declare forward?: Text.Node
   declare defines?: boolean
@@ -199,7 +195,6 @@ export class Node {
     copy.sees = this.sees?.map(x => x.clone(seen));
     copy.value = this.value?.clone(seen);
     copy.applied = all(this.applied);
-    copy.styles = all(this.styles);
     if (this.ref) copy.ref = { ...this.ref, scope: this.ref.scope.clone(seen), self: this.ref.self?.clone(seen), through: undefined };
     if (this.lazy) copy.lazy = { ...this.lazy, frame: this.lazy.frame.clone(seen) };
     if (this.theme) copy.theme = new Map(this.theme);
@@ -240,7 +235,7 @@ export type BodyPlan =
 export type Flow = { kind: 'label' | 'jump'; end: number; label: Text.Node; condition?: Text.Node };
 export type Match = { begin: number; end: number; pattern: number; literals: [number, number, number][]; captures: Map<string, Text.Node>; operators: Map<string, Text.Node>; args: Text.Node[]; receiver?: Node; tight: boolean; read?: Map<string, Node>; given?: (Node | undefined)[] }
 export type Found = { rule: Node; impl: Node; match: Match }
-export type Head = { pattern: Text.Node[]; decorators: Text.Node[]; params?: string[]; param_styles?: Text.Node[][]; param_names: Text.Node[]; param_types: Text.Node[]; pieces: Piece[]; spelled: string; shared: { rule?: Node; body?: Text.Node } }
+export type Head = { pattern: Text.Node[]; params?: string[]; param_names: Text.Node[]; param_types: Text.Node[]; pieces: Piece[]; spelled: string; shared: { rule?: Node; body?: Text.Node } }
 export type Rules = readonly (readonly [Node, Node][])[]
 export function* each(rules: Rules): Generator<[Node, Node]> { for (const segment of rules) yield* segment; }
 
@@ -545,10 +540,11 @@ export class Interpreter {
   }
   settle(value: Node | undefined, report: boolean): Node | undefined {
     if (value?.ref && value.marks?.length) {
-      const bound = this.resolved(value);
+      const held = this.bound(value);
+      const bound = held?.lazy !== undefined && held.value === undefined ? held : this.resolved(value);
       if (bound && !bound.ref) this.mark_value(bound, value.marks, [value]);
       const at = value.position;
-      if (at && !this.in_body(at)) this.paint_reference(this.reference(value.ref.scope, value.ref.key, at), true, true);
+      if (at) this.paint_reference(this.reference(value.ref.scope, value.ref.key, at));
     }
     let node = value;
     for (let depth = 0; node?.ref && depth < 64; depth++) node = this.bound(node);
@@ -1055,54 +1051,6 @@ export class Interpreter {
   // Which brackets hold parameters is not the engine's to know: the rule that
   // defines a method says so by styling that capture `^parameter`, and the
   // entrypoint declares its shape up front with `forward`.
-  grouping(frame: Node): [string, string] | undefined {
-    return this.answered(frame, 'grouping', scopes => this.bracket_marked(scopes, 'parameter', true));
-  }
-  // The bracket rule whose capture is marked with a word: what it opens
-  // with, and what it closes with where the closing is asked for.
-  private bracket_marked(scopes: Node[], style: string, closed: boolean): [string, string] | undefined {
-    for (const scope of scopes)
-      for (const rule of scope.rules) {
-        const pieces = rule.pattern;
-        if (!pieces || pieces.length < 3) continue;
-        const open = pieces[0], inner = pieces[1], close = pieces[2];
-        if (open.kind !== 'literal' || inner.kind !== 'capture' || (closed && close.kind !== 'literal')) continue;
-        if (!inner.styles.some(each => each.string.replace(/^\^/, '').trim() === style)) continue;
-        const from = open.text.trim(), to = closed && close.kind === 'literal' ? close.text.trim() : '';
-        if (from.length > 0 && (!closed || to.length > 0)) return [from, to];
-      }
-    return undefined;
-  }
-  // The rest of a parameter list the same way: which literal separates one
-  // parameter from the next, and which one puts a type on it, is whatever the
-  // rules marked `^separator` and `^annotation` say. Rule styles are read off
-  // the definition head before any parameter list is parsed, so this holds
-  // while the entrypoint is still defining itself.
-  // What the rules say about a spelling depends only on which rules are
-  // visible, so it is asked once of the frame that holds them.
-  answered<T extends string | [string, string] | undefined>(frame: Node, key: string, ask: (scopes: Node[]) => T): T {
-    const scopes: Node[] = [];
-    for (let scope: Node | undefined = this.rooted(frame); scope; scope = scope.parent) scopes.push(scope);
-    if (this.BASE) scopes.push(this.BASE);
-    return ask(scopes);
-  }
-  marked(frame: Node, style: string): string | undefined {
-    return this.answered(frame, `marked ${style}`, scopes => this.marks_style(scopes, style));
-  }
-  private marks_style(scopes: Node[], style: string): string | undefined {
-    for (const scope of scopes)
-      for (const rule of scope.rules) {
-        const pieces = rule.pattern;
-        if (!pieces || pieces.length !== 1 || pieces[0].kind !== 'literal') continue;
-        const impl = scope.methods?.get(rule);
-        if (!impl?.decorators?.some(each => each.string.replace(/^\^/, '').trim() === style)) continue;
-        const text = pieces[0].text.trim();
-        // A literal with a space in it is a rule whose own parameter list has
-        // not been taken apart yet; it cannot be what marks the spelling.
-        if (text.length > 0 && !/\s/.test(text)) return text;
-      }
-    return undefined;
-  }
   private words = new Map<string, string[]>();
   literal(cursor: Text.Node, j: number, literal: string): number {
     const text = cursor.source.value, limit = cursor.limit;
@@ -1808,8 +1756,7 @@ export class Interpreter {
         this.binders.add(this.binder_of(this.applying[k].rule));
         break;
       }
-      // A name mark colours what is painted, and bodies are only painted while probing.
-      if (marks.length && (this.probing > 0 || !this.in_body(at))) this.mark_name(scope, node.ref.key, marks);
+      if (marks.length) this.mark_name(scope, node.ref.key, marks);
       // Definitions are what the source says, not what a body did at runtime.
       if (this.probing > 0 || !this.in_body(at)) {
         this.definitions.push(`${scope.key}.${node.ref.key}`);
@@ -1844,7 +1791,7 @@ export class Interpreter {
     }
     const arity = target.fn ? (target.arity ?? 1) : Math.max(target.params?.length ?? 1, 1);
     const expected = arity - (target.applied?.length ?? 0);
-    const given = expected > 1 ? this.positions(arg, expected) : [arg];
+    const given = [arg];
     const applied = [...(target.applied ?? []), ...given];
     if (applied.length < arity) { const partial: Node = Object.assign(Object.create(Node.prototype), target); partial.applied = applied; return partial; }
     if (target.fn) return this.seeking !== undefined && !target.pure ? undefined : target.fn({ interpreter: this, frame, self: value, method: target, args: applied, at });
@@ -1869,6 +1816,23 @@ export class Interpreter {
   }
 
   private depth = 0;
+  run_captures(rule: Node, match: Match, local: Node, frame: Node) {
+    for (const piece of rule.pattern!) {
+      if (piece.kind !== 'capture' || !piece.runs) continue;
+      const span = match.captures.get(piece.name);
+      // The caller is in reach while the arguments are read, and no longer:
+      // what is built here is not made of where it was built.
+      const linked = span !== undefined && !(local.sees?.includes(frame) ?? false);
+      if (span !== undefined) this.sees(local, frame);
+      const held = local.own(piece.name);
+      if (span !== undefined) this.bind(local, piece.name, Object.assign(new Node(this.diagnostics, span), { literal: true }));
+      const before = new Set<Key>(local.methods?.keys() ?? []);
+      this.safely(() => this.array(this.cursor_of(piece.group), local));
+      for (const [key, value] of local.methods ?? []) if (typeof key === 'string' && !before.has(key)) this.attach(local, key, value);
+      if (held !== undefined) this.bind(local, piece.name, held);
+      if (linked && local.sees !== undefined) local.sees = local.sees.filter(x => x !== frame);
+    }
+  }
   fire(found: Found, cursor: Text.Node, frame: Node): Node | undefined {
     const { rule, impl, match } = found;
     const at = cursor.span(match.begin, match.end - 1);
@@ -1961,6 +1925,10 @@ export class Interpreter {
       captures.forEach(node => { if (!node.lazy?.raw) this.force(node); });
       args.forEach(node => this.force(node));
       if (match.receiver?.ref !== undefined) this.bound(match.receiver);
+      const probing = this.probing;
+      this.probing = 0;
+      try { this.diagnostics.muted(() => this.run_captures(rule, match, this.frame(frame, undefined, impl.closure ?? this.GLOBAL), frame)); }
+      finally { this.probing = probing; }
       if (impl.forward && match.receiver !== undefined) return match.receiver;
       return this.stand_in(at);
     }
@@ -1977,7 +1945,6 @@ export class Interpreter {
     local.position = at;
     local.given = new Set([...captures.keys(), ...(impl.params ?? [])]);
     for (const [name, node] of captures) this.bind(local, name, node);
-    if (impl.params !== undefined && impl.params.length > 1 && args.length === 1) args = this.positions(args[0], impl.params.length);
     if (impl.params !== undefined) while (args.length < impl.params.length) args.push(this.NONE);
     impl.params?.forEach((param, k) => {
       // What a parameter was declared to be is what its rules are, before
@@ -1989,21 +1956,7 @@ export class Interpreter {
       }
       this.bind(local, param, args[k]);
     });
-    for (const piece of rule.pattern!) {
-      if (piece.kind !== 'capture' || !piece.runs) continue;
-      const span = match.captures.get(piece.name);
-      // The caller is in reach while the arguments are read, and no longer:
-      // what is built here is not made of where it was built.
-      const linked = span !== undefined && !(local.sees?.includes(frame) ?? false);
-      if (span !== undefined) this.sees(local, frame);
-      const held = local.own(piece.name);
-      if (span !== undefined) this.bind(local, piece.name, this.lazy(span, local, piece.raw));
-      const before = new Set<Key>(local.methods?.keys() ?? []);
-      this.safely(() => this.array(this.cursor_of(piece.group), local));
-      for (const [key, value] of local.methods ?? []) if (typeof key === 'string' && !before.has(key)) this.attach(local, key, value);
-      if (held !== undefined) this.bind(local, piece.name, held);
-      if (linked && local.sees !== undefined) local.sees = local.sees.filter(x => x !== frame);
-    }
+    this.run_captures(rule, match, local, frame);
     local.applied_to = match.receiver;
     const into = this.context_of(match.receiver);
     if (into !== undefined) { this.construct(into); this.sees(local, into); }
@@ -2021,7 +1974,6 @@ export class Interpreter {
       const body = rewrites ? this.written_with(impl.body, rule, match) : impl.body;
       try {
         const answered = this.unalias(this.read_body(rule, impl, body, local, impl.params !== undefined), local);
-        this.listed(rule, impl, answered);
         return answered;
       }
       catch (jump) {
@@ -2046,11 +1998,6 @@ export class Interpreter {
     }
     for (const k of at) if (k >= begin && k < end) return true;
     return false;
-  }
-  protected listed(rule: Node, impl: Node, answered: Node | undefined) {
-    if (!this.lists(rule, impl)) return;
-    const value = this.deref(answered, false);
-    if (value !== undefined) value.listed_by_separator = true;
   }
   protected ends_at(jump: unknown, impl: Node, at: Text.Node): unknown {
     if (impl.params === undefined && jump instanceof Jump && jump.kind === 'end' && (jump.site === undefined || Interpreter.within(jump.site, at) || Interpreter.within(jump.site, impl.body!))) jump.site = at;
@@ -2123,7 +2070,6 @@ export class Interpreter {
 
   external(name: Text.Node, at: Text.Node, frame: Node): Node | undefined {
     const key = name.string;
-    this.paint_reference(this.reference(frame, 'external', name), true);
     const native = this.native(key, name);
     if (!native) { this.error(`Expected method \`${key}\` to be externally defined by the runtime, but it wasn't.`, name); return undefined; }
     if (native.arity === 0) return native.fn({ interpreter: this, frame, args: [], method: this.EXTERNAL, at });
@@ -2140,7 +2086,6 @@ export class Interpreter {
     const impl = new Node(this.diagnostics, pattern);
     impl.forward = pattern; impl.closure = frame;
     if (!pieces.some(x => x.kind === 'capture')) impl.params = ['argument'];
-    this.painted_forward(pattern, frame, rule, impl, pieces, key);
     if (this.probing) return impl;
     if (impl.params) {
       const name = this.head(rule);
@@ -2234,7 +2179,7 @@ export class Interpreter {
     const at = `${lhs.source.location}:${lhs.begin}:${lhs.end}`, known = lhs.source.location === undefined ? undefined : this.heads_read.get(at);
     if (known !== undefined && known.pass === this.passing && known.frame === frame && known.head.pattern[0].string === lhs.string) return known.head;
     const pieces = this.pieces_of(lhs, frame, []);
-    const head: Head = { pattern: [lhs], decorators: [], param_names: [], param_types: [], pieces, spelled: pieces.map(describe).join(''), shared: known?.head.shared ?? {} };
+    const head: Head = { pattern: [lhs], param_names: [], param_types: [], pieces, spelled: pieces.map(describe).join(''), shared: known?.head.shared ?? {} };
     if (lhs.source.location !== undefined) this.heads_read.set(at, { pass: this.passing, frame, head });
     return head;
   }
@@ -2264,7 +2209,7 @@ export class Interpreter {
     return this.register(this.read_head(lhs, frame), lhs, body, frame, arrow, closure);
   }
   register(written: Head, lhs: Text.Node, body: Text.Node | undefined, frame: Node, arrow?: Text.Node, closure?: Node): Node {
-    const { pattern, decorators, params, param_styles, param_names, param_types, pieces, spelled, shared } = written;
+    const { pattern, params, param_names, param_types, pieces, spelled, shared } = written;
     if (pieces.length === 0) { this.error('Expected a pattern before `=>`.', lhs); return new Node(this.diagnostics, lhs); }
     const key = `${frame.key}::${spelled}${params ? `(${params.join(',')})` : ''}`;
     const rule = this.rule_keyed(frame, key) ?? shared.rule ?? Object.assign(new Node(this.diagnostics, lhs), { key });
@@ -2274,7 +2219,7 @@ export class Interpreter {
     const introduced = this.introductions.get(spelled);
     if ((params?.length ?? 0) > 0 && (introduced === undefined || this.earlier(lhs, introduced))) this.introductions.set(spelled, lhs);
     const impl = new Node(this.diagnostics, body ?? lhs);
-    impl.body = body; impl.closure = closure ?? frame; impl.params = params; impl.param_styles = param_styles; impl.decorators = decorators;
+    impl.body = body; impl.closure = closure ?? frame; impl.params = params;
     impl.param_types = param_types.length > 0 ? param_types : undefined;
     const head = body === undefined ? undefined : this.name(this.cursor_of(body), frame);
     if (head !== undefined && frame.lookup(head) === this.EXTERNAL) {
@@ -2286,14 +2231,12 @@ export class Interpreter {
     if (!this.probing) { const fresh = this.spelled_before(impl); this.bind(frame, rule, impl); this.definitions.push(key); if (fresh) this.site_at(`rule::${key}`, lhs); }
     if (this.probing || (this.owns(lhs.source) && !this.in_body(lhs) && this.first_site(lhs))) {
       const scope = this.definition_scope(frame, rule, impl);
-      this.paint_definition(pattern, decorators, scope, key, { arrow, params: param_names, types: param_types, styles: param_styles?.flat(), pieces });
       if (body) this.probe_body(body, scope);
       // A body declares names for the text it is handed: a block written for
       // this rule may use them, wherever that block is written.
       const hands = new Set([...(scope.methods?.keys() ?? [])].filter((name): name is string => typeof name === 'string' && !scope.given?.has(name)));
       if (hands.size > 0) this.handed.set(rule, hands);
     }
-    if (body) this.mark_given(body, new Set([...(params ?? []), ...pieces.flatMap(piece => piece.kind === 'capture' ? [piece.name] : [])]), frame);
     if (this.probing) return impl;
     if (pieces.some(piece => piece.kind === 'operator')) this.pending_rewrites.push([rule, impl]);
     return impl;
@@ -2398,28 +2341,6 @@ export class Interpreter {
     return out;
   }
   tokens(span: Text.Node, frame: Node): Text.Node[] { return this.chunks(span); }
-  lists(rule: Node, impl: Node): boolean {
-    const separator = this.marked(impl.closure ?? this.GLOBAL, 'separator');
-    return separator !== undefined && (rule.pattern?.some(piece => piece.kind === 'literal' && piece.text.trim() === separator) ?? false) && (rule.pattern!.length > 1 || (impl.params?.length ?? 0) > 0);
-  }
-  positions(node: Node, count: number): Node[] {
-    if (node.lazy === undefined || this.inner(node.lazy.span, node.lazy.frame) === undefined) return [node];
-    const value = this.deref(node);
-    if (!value?.listed_by_separator) return [node];
-    const at = node.position ?? node.lazy.span;
-    const field = (of: Node, key: string) => of.own(key) ?? of.members?.get(key) ?? this.diagnostics.muted(() => this.safely(() => this.get(of, this.literal_of(key, at))));
-    const read = (of: Node | undefined, key: string) => { if (of === undefined) return undefined; const held = field(of, key); return held === undefined ? undefined : this.diagnostics.muted(() => this.safely(() => this.deref(held, false))); };
-    let link = read(value, 'head');
-    if (link === undefined || link.none) return [node];
-    const out: Node[] = [];
-    while (link !== undefined && !link.none && out.length < count) {
-      const slot = field(link, 'value');
-      const held = (slot?.ref !== undefined ? this.bound(slot) : slot) ?? read(link, 'value');
-      out.push(held ?? this.NONE);
-      link = read(link, 'next');
-    }
-    return out;
-  }
   split(span: Text.Node, separator: string): Text.Node[] {
     const text = span.source.value, parts: Text.Node[] = [];
     let from = span.begin;
@@ -2441,7 +2362,7 @@ export class Interpreter {
   // content declares the name with is what the captured text must be.
   capture(content: Text.Node, frame: Node, index: number): Piece {
     const written = content.string.trim();
-    const bare: Piece = { kind: 'capture', name: written, raw: false, runs: false, styles: [], group: content };
+    const bare: Piece = { kind: 'capture', name: written, raw: false, runs: false, group: content };
     if (/^[\p{L}_][\p{L}\p{N}_]*$/u.test(written)) return bare;
     if (written === '') return { kind: 'space' };
     let refusals = 0;
@@ -2477,8 +2398,8 @@ export class Interpreter {
       const answer = this.diagnostics.muted(() => this.safely(() => this.resolved(this.array(this.cursor_of(Text.Node.string('None.instance_of(held)')), asked))));
       optional = answer !== undefined && !answer.none;
     }
-    const runs = declared === undefined && seen.observed.some(word => word !== name);
-    return { kind: 'capture', name, raw: scope.quoted === true, optional, runs, styles: [], declared, within: frame, declaration: declared === undefined ? undefined : written, group: content };
+    const runs = declared === undefined && written !== name;
+    return { kind: 'capture', name, raw: scope.quoted === true, optional, runs, declared, within: frame, declaration: declared === undefined ? undefined : written, group: content };
   }
   // A capture's content, run with its name holding the text: an error means
   // the text does not hold.
@@ -2579,7 +2500,6 @@ export class Interpreter {
   }
   private blank = Text.Node.string('');
   placeholder(): Node { return Object.assign(new Node(this.diagnostics, this.blank), { literal: true }); }
-  paint_definition(chunks: Text.Node[], decorators: Text.Node[], scope: Node, of: string, opts: { arrow?: Text.Node; params?: Text.Node[]; types?: Text.Node[]; styles?: Text.Node[]; pieces?: Piece[] } = {}) {}
   rule_head(word: string, frame: Node): Node | undefined {
     const chain = this.chain(frame);
     for (const [rule, impl] of each([...chain.operand, ...chain.receiver])) if (!impl.forward && this.head(rule) === word) return rule;
@@ -2624,8 +2544,8 @@ export class Interpreter {
   }
   mark_value(value: Node, styles: Node[], sources: Node[] = []) {}
   mark_name(scope: Node, key: string, styles: Node[]) {}
+  style_of(value: Node): string | undefined { return undefined; }
   receives(rule: Node, impl: Node, receiver: Node | undefined) {
-    const closure = impl.closure ?? this.GLOBAL;
     const reference = receiver?.ref;
     if (!reference) return;
     if ((this.probing || this.analyzing) && !reference.own && this.scope_of(receiver!) === undefined) {
@@ -2633,22 +2553,17 @@ export class Interpreter {
       if (!this.binders.has(this.binder_of(rule)) && !(named?.kind === 'capture' && named.raw)) this.error(`Unresolved \`${reference.key}\`.`, receiver!.position);
       else if (this.synthetic.has(reference.scope)) reference.scope.set(reference.key, this.placeholder());
     }
-    // An instance mark colours what is painted, and bodies are only painted while probing.
-    if (closure !== this.GLOBAL && (this.probing > 0 || !this.in_body(receiver!.position ?? rule.position!))) this.mark_instance(receiver, closure);
   }
   private binders = new Set<string>();
   binder_of(rule: Node): string { const at = rule.position; return at ? `${at.source.location}:${at.begin}` : rule.key!; }
   private ran = new Set<string>();
   private applying: { rule: Node; impl?: Node; receiver?: Node; local?: Node }[] = [];
-  mark_instance(receiver: Node | undefined, closure: Node) {}
-  mark_given(body: Text.Node, given: Set<string>, frame: Node) {}
   scope_of(node: Node): Node | undefined {
     const { scope, key, own } = node.ref!;
     if (own) return scope;
     for (let current: Node | undefined = scope; current; current = current.parent) if (current.own(key) !== undefined || current.members?.get(key) !== undefined) return current;
   }
-  paint_head(rule: Node, match: Match, cursor: Text.Node, frame: Node) {}
-  paint_reference(reference: Node, lexical: boolean = false, definition: boolean = false) {}
+  paint_reference(reference: Node) {}
   private bodies = new Map<Text.Source, { seen: Set<number>; list: number[]; merged?: number[] }>();
   body_of(span: Text.Node) {
     let held = this.bodies.get(span.source);
@@ -2725,7 +2640,6 @@ export class Interpreter {
   }
   // What the language server is told, and keeps: nothing, here.
   painted_application(rule: Node, impl: Node, match: Match, captures: Map<string, Node>, cursor: Text.Node, frame: Node, at: Text.Node) {}
-  painted_forward(pattern: Text.Node, frame: Node, rule: Node, impl: Node, pieces: Piece[], key: string) {}
   site_at(key: string, at?: Text.Node) {}
   stale_rules(frame: Node, key: Key): boolean { return false; }
   registered(frame: Node) {}
@@ -2734,7 +2648,7 @@ export class Interpreter {
   begin_pass(pass: number) {}
   end_pass() {}
   derived_all(srcs: Text.Source[]) {}
-  paint(span: Text.Node, decorator: Text.Node | Node | undefined | (() => (Text.Node | Node)[]), frame: Node, of?: string, opts: { lexical?: boolean } = {}) {}
+  paint(span: Text.Node, style: Node | undefined, frame: Node, of?: string) {}
   record(painted: Text.Node) {}
 
   style(name: string): Node {

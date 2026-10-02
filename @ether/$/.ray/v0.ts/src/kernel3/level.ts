@@ -503,7 +503,7 @@ export class Levelled extends Served {
   override shortcut(found: Found, captures: Map<string, Node>, args: Node[], cursor: Text.Node, frame: Node, at: Text.Node): { value: Node | undefined } | undefined {
     const { rule, impl, match } = found;
     if (this.optimizations === undefined || impl.fn !== undefined || impl.body === undefined || this.seeking !== undefined) return undefined;
-    const answered = this.operation(rule, impl, match.receiver, impl.params !== undefined && impl.params.length > 1 && args.length === 1 ? this.positions(args[0], impl.params.length) : args, cursor, frame, at, found);
+    const answered = this.operation(rule, impl, match.receiver, args, cursor, frame, at, found);
     return answered === undefined ? undefined : { value: answered };
   }
 }

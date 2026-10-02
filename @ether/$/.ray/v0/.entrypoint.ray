@@ -5,42 +5,42 @@ forward :=
 {{expr}} => external ** expr
 
 external := external external
-global := external global
-unordered := external unordered
-inline := external inline
-literal := external literal
-theme := external theme
-report := external report
+forward ^{literal word}{ }
+^ := external ^
+global ^keyword := external global
+unordered ^keyword := external unordered
+inline ^keyword := external inline
+literal ^keyword := external literal
+theme ^keyword := external theme
+report ^keyword := external report
 forward := external forward
 None := external none
 
-forward ^{literal word}{ }
-^ := external ^
-^{ }{literal color} => external ^ color
-{pattern} ^{literal style} => {body} => external rule pattern body
-`{literal string}` => string
+^{ }{literal color ^ color} => ^(color)
+{pattern} ^{literal style} => {body} => ^(style)(external rule pattern body)
+`{literal string ^string}` ^string.punctuation => string
 \n => `
 `
-//{literal comment?} => None
+//{literal comment?} ^comment => None
 
-[{expr}] => (
+[{expr}] ^punctuation => (
   listed := chain None
   external extend listed Listed
   listed &= expr
   listed
 )
 
-goto {literal target} => external goto target global
-goto {literal target} if {condition} => external goto target condition
-{literal label}\ => external label label
+goto {literal target ^label} ^class => external goto target global
+goto {literal target ^label} if {condition} ^class => external goto target condition
+{literal label ^label}\ ^punctuation => external label label
 
-return {value} => (
+return {value} ^keyword => (
   value
   goto return\
 )
 
-chain {holder} => (
-  links := external .
+chain {holder} ^keyword => (
+  links ^keyword := external .
   instance := global
   owner := holder
   head := None
@@ -49,8 +49,8 @@ chain {holder} => (
   links
 )
 
-link {value} {previous} => (
-  entry := external .
+link {value} {previous} ^keyword => (
+  entry ^keyword := external .
   instance := global
   next := None
   external extend entry Link
@@ -105,7 +105,7 @@ base class {body} => (
   static
 )
 
-if := class {
+if ^keyword := class {
   { }{cond}{ }{yes} ^class => (
     branch ^keyword := external .
     inline static
@@ -181,7 +181,7 @@ unless{ }{cond}{ }{block} ^class => (
   branch ^variable
 )
 
-while := class {
+while ^keyword := class {
   { }{cond}{ }{block} ^class => (
     loop ^keyword := external .
     inline static
@@ -225,41 +225,43 @@ Node := base class {
 
   , => this
 
-  ;{x} => inline x
+  ;{x} ^punctuation => inline x
   listing => None
 
-  ({parameters}) => {block} => (
+  ({parameters ^parameter}) => {block} => (
     names := external ** parameters
     code := external ** block
+    this ^function
     external define this `{arguments}` {
       (inline names) := arguments
       inline code
     }
   )
-  ^{literal style} ({parameters}) => {block} => (
+  ^{literal style} ({parameters ^parameter}) => {block} => (
     names := external ** parameters
     code := external ** block
+    this ^function
     external define this `{arguments}` {
       (inline names) := arguments
       inline code
     }
   )
 
-  ,{other} => (
+  ,{other} ^punctuation => (
     listed := chain None
     external extend listed Listed
     listed &= this
     listed &= other
     listed
   )
-  --{call} => call(this)
+  --{call} ^punctuation => call(this)
   
-  ={x} => (
+  ={x} ^punctuation => (
     external assign this x
 
     this
   )
-  :={x} => (
+  :={x} ^punctuation => (
     goto existing if (external own this)
    declare\
     external declare this x
@@ -280,7 +282,7 @@ Node := base class {
    declared\
     this
   )
-  :{type} => (
+  :{type} ^punctuation => (
     if (external own this) {
       unless type.instance {
         if this {
@@ -299,13 +301,13 @@ Node := base class {
     this
   )
 
-  ??{other} => (
+  ??{other} ^punctuation => (
     chosen := this
     unless (chosen) { chosen = other }
     chosen
   )
   ? => this | None
-  ?:{type} => this: (type?)
+  ?:{type} ^punctuation => this: (type?)
 
   instance_of (type) => (
     found ^keyword := None
@@ -446,7 +448,7 @@ Node := base class {
 
   admits (candidate) => global
 
-  {this}{{literal narrowing}} => (
+  {this}{{literal narrowing}} ^punctuation => (
     narrowed ^keyword := this
     selected ^keyword := None
     if (narrowed.instance) {
@@ -476,13 +478,13 @@ Node := base class {
     selected
   )
 
-  {this}<{literal partial}> => (
+  {this}<{literal partial}> ^punctuation => (
     narrowed ^keyword := this
 
     class: narrowed { inline partial }
   )
 
-  ~~{x} => (
+  ~~{x} ^punctuation => (
     inline x
 
     this
@@ -490,7 +492,7 @@ Node := base class {
 
   ** => Program(code: (external ** this))
 
-  &={x} => (
+  &={x} ^punctuation => (
     previous := this.tail
     added := link x previous
     goto more if previous
@@ -510,7 +512,7 @@ Node := base class {
     this
   )
 
-  |{other} => (
+  |{other} ^punctuation => (
     superposed ^keyword := external .
     superposed.instance = None
     superposed.superposes = global
@@ -535,9 +537,9 @@ Node := base class {
   )
 
   . => this
-  .{literal property} => external get this property
+  .{literal property ^property} ^punctuation => external get this property
 
-  [{property}] => external get this property
+  [{property}] ^punctuation => external get this property
   [] => (
     item ^keyword := this
     repeated ^keyword := class: Array { }
@@ -752,7 +754,7 @@ matcher_of (pattern) => ((text, captured) => (
   read
 ))
 
-{condition} ? {yes} : {no} => (
+{condition} ? {yes} : {no} ^punctuation => (
   chosen ^keyword := no
   if condition { chosen = yes }
   chosen

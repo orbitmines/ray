@@ -57,7 +57,7 @@ export const Natives: Record<string, Native> = {
   'unordered': { arity: 1, fn: ({ args: [node] }) => node },
   'theme': { arity: 2, fn: ({ interpreter, args: [name, block], at }) => theme_of(interpreter, name, block, at) },
   'report': { arity: 3, fn: ({ interpreter, args: [level, variable, comment], at }) => report(interpreter, level, variable, comment, at) },
-  '^': { arity: 1, fn: ({ interpreter, args: [name] }) => interpreter.style(interpreter.text(name)) },
+  '^': { arity: 1, fn: ({ interpreter, args: [name] }) => interpreter.style(interpreter.text(interpreter.deref(name, false) ?? name)) },
   '**': { arity: 1, fn: ({ interpreter, args: [node] }) => program_of(interpreter, node) },
   '=': identity,
   'left-to-right': identity,

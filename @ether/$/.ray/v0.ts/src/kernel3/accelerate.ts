@@ -224,7 +224,6 @@ export class Accelerated extends Levelled {
         try {
           const args = plan.words.map((word, k) => this.reference(local, word, plan.spans[k]));
           const result = this.unalias(this.settle(plan.native.fn({ interpreter: this, frame: local, method: impl, args, at: plan.spans[plan.spans.length - 1] }), false), local);
-          this.listed(rule, impl, result);
           return result;
         }
         catch (jump) {
@@ -264,7 +263,6 @@ export class Accelerated extends Levelled {
       for (;;) {
         try {
           const answered = read();
-          this.listed(rule, impl, answered);
           return answered;
         }
         catch (jump) {
@@ -463,19 +461,6 @@ export class Accelerated extends Levelled {
     if (!itself) this.dispatch.set(own, { chain, of: epoch, rules: dispatched });
     return dispatched;
   }
-  protected answered<T extends string | [string, string] | undefined>(frame: Node, key: string, ask: (scopes: Node[]) => T): T {
-    const root = this.rooted(frame);
-    let held = this.answers.get(root);
-    const epoch = this.rules_epoch();
-    if (held === undefined || held.epoch !== epoch) this.answers.set(root, held = { epoch, of: new Map() });
-    if (held.of.has(key)) return held.of.get(key) as T;
-    const scopes: Node[] = [];
-    for (let scope: Node | undefined = root; scope; scope = scope.parent) scopes.push(scope);
-    if (this.BASE) scopes.push(this.BASE);
-    const answer = ask(scopes);
-    held.of.set(key, answer);
-    return answer;
-  }
   edges(frame: Node): Set<string> {
     const cached = this.boundaries.get(frame);
     const epoch = this.rules_epoch();
@@ -566,18 +551,9 @@ export class Accelerated extends Levelled {
     if (found === undefined) this.rule_shape.set(rule, found = super.shaped(rule));
     return found;
   }
-  override lists(rule: Node, impl: Node): boolean {
-    const known = this.listing.get(rule);
-    if (known !== undefined && known.version === this.version) return known.lists;
-    const separator = this.marked(impl.closure ?? this.GLOBAL, 'separator');
-    const lists = separator !== undefined && (rule.pattern?.some(piece => piece.kind === 'literal' && piece.text.trim() === separator) ?? false) && (rule.pattern!.length > 1 || (impl.params?.length ?? 0) > 0);
-    this.listing.set(rule, { version: this.version, lists });
-    return lists;
-  }
   protected operator_rules = new WeakMap<readonly [Node, Node][], { version: number; spelled: Map<string, [string, Text.Node][]> }>();
   protected operator_chains = new WeakMap<Rules, { version: number; spelled: Map<string, [string, Text.Node][]>[] }>();
   protected rule_shape = new WeakMap<Node, ReturnType<Interpreter['shaped']>>();
-  protected listing = new WeakMap<Node, { version: number; lists: boolean }>();
 
   protected onlys = [new WeakMap<Rules | readonly [Node, Node][], any>(), new WeakMap<Rules | readonly [Node, Node][], any>()];
   override only(set: Rules, leading: boolean): Rules {

@@ -256,7 +256,7 @@ export class Program {
           const at = rule.position!;
           out.set(rule.key!, {
             key: rule.key!, exists: true, disabled: false, pieces: rule.pattern!,
-            pattern: { text: at.string }, style: impl.decorators?.map(x => x.string).join(' '),
+            pattern: { text: at.string }, style: project.interpreter?.style_of(impl),
             body: impl.body ? { empty: impl.body.empty(), text: impl.body.string } : undefined,
             definitions: [{ at: { src: at.source, begin: at.begin, end: at.end + 1 }, seen: 'live' }],
           });

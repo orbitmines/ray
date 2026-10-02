@@ -28,12 +28,6 @@ export function optimizations(): Text.Source[] {
   return [];
 }
 
-export function source(location: string, value: string): Text.Source {
-  const src = new Text.Source();
-  src.location = location; src.value = value;
-  return src;
-}
-
 export class Project {
   source: Text.Source[] = []
   dependencies: Project[] = []

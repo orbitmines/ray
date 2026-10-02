@@ -178,7 +178,7 @@ String := class: Array {
     out := chain None
     at_start ^keyword := true
     parts for {
-      unless at_start { if (exists separator) { separator for { out &= it.value } } }
+      unless at_start { if (exists separator.codepoint) { out &= separator } elsif (exists separator) { separator for { out &= it.value } } }
       it.value for { out &= it.value }
       at_start = false
     }

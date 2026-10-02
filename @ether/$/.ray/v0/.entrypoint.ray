@@ -1,3 +1,4 @@
+{pattern} => {body} => external rule pattern body
 forward :=
 forward unordered
 forward ^{literal word ^ word}{ }
@@ -16,11 +17,7 @@ None      ^keyword := external none
 `{literal string ^string}` ^string.punctuation => string
 //{literal comment?} ^comment => None
 
-{`{`}{expr ^block}{`}`} ^punctuation => (
-  held := external ** expr
-  external extend held Program
-  held
-)
+{`{`}{expr ^block}{`}`} ^punctuation => external ** expr
 ({expr}) ^punctuation => expr
 [{expr}] ^punctuation => (
   listed ^keyword := expr
@@ -40,7 +37,7 @@ None      ^keyword := external none
 
 goto{ }{literal target ^label} ^class => external goto target global
 goto{ }{literal target ^label}{ }if{ }{condition} ^class => external goto target condition
-unordered {literal label ^label}\ ^punctuation => external label label
+{literal label ^label}\ ^punctuation => external label label
 
 return{ }{value} ^keyword => (
   value
@@ -56,7 +53,7 @@ RGB := class {
   {: LSP.SemanticToken.Type}: () => A
   #{: RGB.Hexadecimal}: () => A
 } ^punctuation := external ^
-^{ }{literal color: RGB.Hexadecimal ^ color} => external ^ color
+^{ }{literal color ^ color} => external ^ color
 
 chain (holder) => (
   links ^keyword := external .
@@ -80,7 +77,7 @@ link (holds, before) => (
   entry ^namespace
 )
 
-unordered class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
+class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
   written_header ^keyword := external ** header
   shape ^keyword := header
   goto structured if shape.listing
@@ -98,7 +95,7 @@ unordered class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
   made
 )
 
-unordered class{ }{block} ^keyword => (
+class{ }{block} ^keyword => (
   static ^keyword := external .
   static.instance = None
   static.components = chain None
@@ -133,7 +130,7 @@ unordered class{ }{block} ^keyword => (
   static ^class
 )
 
-unordered base{ }class{ }{body} ^keyword => (
+base{ }class{ }{body} ^keyword => (
   static := class { inline body }
 
   external base static
@@ -143,40 +140,7 @@ unordered base{ }class{ }{body} ^keyword => (
 
 Node := base class {
 
-  {(String ^function | `{`, expr ^parameter, `}` | `[`, operator ^operator, `]`)[] head}{ }=>{body} ^punctuation => (
-    rest := head.head
-   leading\
-    goto named if rest.next
-    goto defining
-   named\
-    goto asked if rest.value.named
-    goto defining
-   asked\
-    goto kind if rest.value.named.modify
-    goto defining
-   kind\
-    rest = rest.next
-    goto leading
-   defining\
-    definition := external GRAMMAR_RULE rest body
-    rest = head.head
-   modifying\
-    goto more if rest.next
-    goto defined
-   more\
-    goto again if rest.value.named
-    goto defined
-   again\
-    goto modify if rest.value.named.modify
-    goto defined
-   modify\
-    rest.value.named.modify(definition)
-    rest = rest.next
-    goto modifying
-   defined\
-
-    definition
-  )
+  {(String ^function | `{`, expr ^parameter, `}` | `[`, operator ^operator, `]`)[]}{ }=>{body} ^punctuation => external GRAMMAR_RULE
 
   , ^punctuation ^separator => this
 
@@ -227,9 +191,15 @@ Node := base class {
    holding\
 
     goto held if this.instance
+    goto composing if this.written_body
+    goto verified if (this.instance_of(type))
+    ERROR@this `is not of the type it is declared as`
+    goto done
+   composing\
     this.components.hierarchy &= type
-    goto done if this.written_body
+    goto done
    held\
+   verified\
     type.verify(this)
    done\
 
@@ -287,7 +257,6 @@ Node := base class {
     found
   )
 
-  accepts ^reader (text) => text
   structure ^structure => None
 
   satisfies (predicate) => (inline predicate)
@@ -369,6 +338,7 @@ Node := base class {
   | ^punctuation (other) => (
     superposed ^keyword := external .
     superposed.instance = None
+    superposed.superposes = global
     superposed.components = chain None
     external extend superposed this
     goto superpose_each if this.components.head
@@ -412,10 +382,8 @@ Node.DEFINE_METHOD = `&=`
 Modifier := class {
   kind => TODO
   modify (definition) => (
-    unless (exists definition.components) {
-      definition.components = chain None
-      definition.components.hierarchy = chain None
-    }
+    definition.components = chain None
+    definition.components.hierarchy = chain None
     definition.components.hierarchy &= this
     definition
   )
@@ -426,6 +394,11 @@ chainable ^keyword := class: Modifier {
 compounds ^keyword := class: Modifier {
   compounds => TODO
 }
+chainable {pattern} => {body} => chainable.modify(external rule pattern body)
+compounds {pattern} => {body} => compounds.modify(external rule pattern body)
+Modifier.spellings = chain None
+Modifier.spellings &= `chainable`
+Modifier.spellings &= `compounds`
 
 Chain := class {
   entry => .head
@@ -555,7 +528,7 @@ assert ^keyword (condition) => (
   condition
 )
 
-unordered enum ^keyword => (
+enum ^keyword => (
 
   static := class {
     {literal member ^enumMember} ^punctuation => (
@@ -607,7 +580,7 @@ unordered enum ^keyword => (
   static ^enum
 )
 
-unordered enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?}{ }{`{`}{block?}{`}`} ^keyword => (
+enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?} {`{`}{block}{`}`} ^keyword => (
   static ^keyword := external .
   inline enum
   inline block
@@ -648,7 +621,8 @@ Program := class: Iterable {
   count => .written.count
   empty => .count.is_zero
   for (body) => (
-    .written for body
+    statements ^keyword := .written
+    statements for body
     this
   )
 

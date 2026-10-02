@@ -1,5 +1,5 @@
 Number := class: Ray {
-  .{fraction: Decimal.Digits ^number} ^punctuation => Number.Real(integer: this, fraction: fraction, radix: ten)
+  .{fraction: Decimal.String ^number} ^punctuation => Number.Real(integer: this, fraction: digits_selected(fraction), radix: ten)
   succ => Number(next: this)
 
   bounded => false
@@ -329,50 +329,112 @@ Number.Real = class {
 }
 
 Number.Bases = chain None
-base{ }{literal name ^class}{ }{size} ^keyword => (
-  Number[name] = class: Number {
-    radix := (size)
-    Digit := Number{. < radix}
-
-    integer => .digits_in(radix)
-    digits (n: Number) => n.digits_in(radix)
-
-    of_digits (spelled) => Number.from_digits(radix, spelled)
-
-    accepts (text) => (
-      spelled_digits ^keyword := digits_spelled(text, (size))
-      read_number ^keyword := None
-      if (exists spelled_digits) { read_number = Number.from_digits(radix, spelled_digits) }
-      read_number
-    )
-    Digits := class {
-      accepts (text) => digits_spelled(text, (size))
-    }
-
-    Signed := class: Number.Signed { }
-    Real := class: Number.Real { }
+selected_digit (selection) => (
+  digit ^keyword := zero
+  before ^keyword := selection.previous
+  while (exists before) {
+    digit = digit.succ
+    before = before.previous
   }
-  global[name] = Number[name]
-  Number.Bases &= Number[name]
+  digit
+)
+digits_selected (selections) => (
+  digits ^keyword := chain None
+  walker ^keyword := selections.head
+  while (exists walker) {
+    digits &= selected_digit(walker.value)
+    walker = walker.next
+  }
+  digits
+)
+joined_selections (first, second) => (
+  both ^keyword := chain None
+  walker ^keyword := first.head
+  while (exists walker) {
+    both &= walker.value
+    walker = walker.next
+  }
+  walker = second.head
+  while (exists walker) {
+    both &= walker.value
+    walker = walker.next
+  }
+  both
+)
+spelling (scope, written, selected) => (
+  spelled ^keyword := written
+  external define scope spelled {
+    held := chain None
+    held &= selected
+    held
+  }
+)
+spellings_of (scope, link) => (
+  alternative ^keyword := None
+  if (exists link.value.superposes) { alternative = link.value.components.head } else { spelling(scope, link.value, link) }
+  while (exists alternative) {
+    spelling(scope, alternative.value, link)
+    alternative = alternative.next
+  }
+)
+base{ }{size} spelled {spellings} ^keyword => (
+  alternatives ^keyword := spellings
+  made ^keyword := class: Number {
+    integer: Node
+    next => (
+      copied ^keyword := chain None
+      walker ^keyword := .integer.head
+      while (exists walker) {
+        copied &= walker.value
+        walker = walker.next
+      }
+      at ^keyword := copied.tail
+      borrowing ^keyword := true
+      while (borrowing.and(exists at)) {
+        if (exists at.value.previous) {
+          at.value = at.value.previous
+          borrowing = false
+        } else {
+          at.value = alternatives.components.tail
+          at = at.previous
+        }
+      }
+      lowered ^keyword := None
+      unless borrowing { lowered = made(integer: copied) }
+      lowered
+    )
 
-  Number[name]
+  }
+  made.radix = (size)
+  made.Signed = class: Number.Signed { }
+  made.Real = class: Number.Real { }
+  spelled_as ^keyword := external .
+  made.String = spelled_as
+  walker ^keyword := alternatives.components.head
+  while (exists walker) {
+    spellings_of(spelled_as, walker)
+    walker = walker.next
+  }
+  external define spelled_as `{one: spelled_as}{more: spelled_as}` { joined_selections(one, more) }
+  Number.Bases &= made
+  made
 )
 
-base Binary two
-base Ternary three
-base Quaternary four
-base Quinary five
-base Senary six
-base Septenary seven
-base Octal eight
-base Nonary nine
-base Decimal ten
-base Undecimal ten.succ
-base Duodecimal (ten + two)
-base Tridecimal (ten + three)
-base Tetradecimal (ten + four)
-base Pentadecimal (ten + five)
-base Hexadecimal (ten + six)
+Binary := base two spelled `0` | `1`
+Ternary := base three spelled `0` | `1` | `2`
+Quaternary := base four spelled `0` | `1` | `2` | `3`
+Quinary := base five spelled `0` | `1` | `2` | `3` | `4`
+Senary := base six spelled `0` | `1` | `2` | `3` | `4` | `5`
+Septenary := base seven spelled `0` | `1` | `2` | `3` | `4` | `5` | `6`
+Octal := base eight spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7`
+Nonary := base nine spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8`
+Decimal := base ten spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9`
+Undecimal := base ten.succ spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`)
+Duodecimal := base (ten + two) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`)
+Tridecimal := base (ten + three) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`)
+Tetradecimal := base (ten + four) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`)
+Pentadecimal := base (ten + five) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`) | (`e` | `E`)
+Hexadecimal := base (ten + six) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`) | (`e` | `E`) | (`f` | `F`)
 
 Decimal.components.hierarchy &= class {
   percent => this / hundred
@@ -394,43 +456,12 @@ Probability := Number{. < two}
 u{ }{width} ^keyword => Binary{.integer.count < (width).succ}
 i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
 
-digit_of (point) => if ((47 < point).and(point < 58)) { point - 48 } elsif ((96 < point).and(point < 123)) { point - 87 } elsif ((64 < point).and(point < 91)) { point - 55 } else { None }
+{digits: Decimal.String ^number} => Decimal(integer: digits)
 
-digits_spelled (text, radix) => (
-  spelled ^keyword := chain None
-  read_any ^keyword := false
-  byte ^keyword := 0
-  left ^keyword := 8
-  take (b) => (
-    byte = byte + byte
-    if (inline b) { byte = byte.succ }
-    left = left.pred
-    if left.is_zero {
-      digit := digit_of(byte)
-      if (exists spelled) {
-        if (exists digit) {
-          if (digit < radix) {
-            spelled &= digit
-            read_any = true
-          } else { spelled = None }
-        } else { spelled = None }
-      }
-      byte = 0
-      left = 8
-    }
-    spelled
-  )
-  external bits text take
-  unless read_any { spelled = None }
-  spelled
-)
-
-{number: Decimal ^number} => number
-
-0x{number: Hexadecimal ^number} ^number => number
-0X{number: Hexadecimal ^number} ^number => number
-0b{number: Binary ^number} ^number => number
-0B{number: Binary ^number} ^number => number
+0x{digits: Hexadecimal.String ^number} ^number => Hexadecimal(integer: digits)
+0X{digits: Hexadecimal.String ^number} ^number => Hexadecimal(integer: digits)
+0b{digits: Binary.String ^number} ^number => Binary(integer: digits)
+0B{digits: Binary.String ^number} ^number => Binary(integer: digits)
 
 Precedence ^keyword := class { }
 same_text (first_text, second_text) => (
@@ -490,7 +521,7 @@ Program.components.hierarchy &= class {
     rest_after ^keyword := this
     statement_at ^keyword := external first rest_after
     while ((exists statement_at).and((exists found).not)) {
-      if (.begins(statement_at, wanted_points)) { found = written_before }
+      if (.begins(statement_at, wanted_points)) { found = written_before } elsif (.modified_begins(statement_at, wanted_points)) { found = written_before }
       written_before = written_before.succ
       rest_after = external rest rest_after
       statement_at = external first rest_after
@@ -498,6 +529,7 @@ Program.components.hierarchy &= class {
     found
   )
   written_with (spelled) => .begins(this, .spelled_points(spelled))
+  modified_begins (statement, wanted) => Modifier.spellings some { .begins(statement, joined_points(with_point(code_points(it.value), .middle_point(`x y`)), wanted)) }
   is_jump => .written_with(`goto`)
   middle_point (around) => code_points(around).head.next.value
   same_points (from, other) => (

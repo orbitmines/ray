@@ -1,0 +1,49 @@
+Compiler.default = {
+  {a} + 0 => a
+  {a} - 0 => a
+  0 + {a} => a
+  {a} * 0 => 0
+  0 * {a} => 0
+  {a} * 1 => a
+  1 * {a} => a
+  {a} / 1 => a
+  {a} * 2 => a + a
+  {a: Number}.succ => external js.number.succ
+  {a: Number} + {b: Number} => external js.number.+
+  {a: Number} - {b: Number} => external js.number.-
+  {a: Number} * {b: Number} => external js.number.*
+  {a: Number} / {b: Number} => external js.number./
+  {a: Number} % {b: Number} => external js.number.%
+  {a: Number} < {b: Number} => external js.number.<
+  {a: Number} == {b: Number} => external js.number.==
+  {a: Character} == {b: Character} => external js.character.==
+  {a: Character}.width => external js.character.width
+  {a: Character}.codepoint => external js.character.codepoint
+  {a: Character}.is_ascii => external js.character.is_ascii
+  {a: Character}.lower_case => external js.character.lower_case
+  {a: Character}.upper_case => external js.character.upper_case
+  {a: Character}.letter => external js.character.letter
+  {a: Character}.digit => external js.character.digit
+  {a: Character}.blank => external js.character.blank
+  {a: Character}.is_underscore => external js.character.is_underscore
+  {a: Character}.word => external js.character.word
+  {a: Character}.digit_value => external js.character.digit_value
+  {a: String} == {b: String} => external js.string.==
+  {a: String}.count => external js.string.count
+  {a: String}.length => external js.string.length
+  {a: String}.empty => external js.string.empty
+  {a: String}.nonempty => external js.string.nonempty
+  {a: String}.is_numeric => external js.string.is_numeric
+  {a: String}.starts_with {b: String} => external js.string.starts_with
+  {a: String}.ends_with {b: String} => external js.string.ends_with
+  {a: String}.contains {b: String} => external js.string.contains
+  {a: String}.index_of {b: String} => external js.string.index_of
+  code_points {source} => external js.text.code_points
+  structurally {value} {type} => external js.type.structurally
+  declared_in {holder} {spelled} => external js.type.declared_in
+  {a: Number}.pred => external js.number.pred
+  {a: Number}.holds => external js.number.pred
+  {a: Number}.is_zero => external js.number.is_zero
+  {a: Number}.nonzero => external js.number.nonzero
+  {a: Decimal}.next => external js.number.pred
+}

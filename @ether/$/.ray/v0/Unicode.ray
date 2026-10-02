@@ -115,7 +115,7 @@ Unicode.CodePoint = Hexadecimal{. < 16777216}
 
 Unicode.Scalar = Unicode.CodePoint{Unicode.scalar(this)}
 
-U+{codepoint: Hexadecimal ^number} ^number => codepoint.as_character
+U+{codepoint: Hexadecimal.String ^number} ^number => Hexadecimal(integer: codepoint).as_character
 
 Chain.components.hierarchy &= class {
   slice_bits (from, to) => (

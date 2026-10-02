@@ -311,7 +311,6 @@ export class Program {
         if (!resolved) continue;
         resolved.style = style;
         resolved.of = paint.of;
-        resolved.head = paint.head;
         const defines = typeof paint.defines === 'function' ? paint.defines() : paint.defines;
         resolved.defines = defines ?? (interpreter.sites.has(`theme::${style}`) && resolved.string === style ? `theme::${style}` : undefined);
         resolved.color = interpreter.color(style);

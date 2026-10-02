@@ -25,6 +25,7 @@ Iterable := class: Ordered {
 
   bounded => true
   unbounded => .bounded.not
+  orderless => false
 
   count => (
     entries_counted := 0
@@ -271,6 +272,8 @@ Ray := class: Iterable {
   acyclic => .terminal.is_terminal
 
   chainable == (other) => (
+    if .orderless { return (.count == other.count).and(.every { other.contains(it.value) }) }
+    if other.orderless { return other == this }
     mine := .entry
     theirs := other.entry
     same := (exists mine).xnor(exists theirs)
@@ -349,6 +352,7 @@ Array := class: Path {
 Set := class: Structure {
   elements: (chain None)
   entry => .elements.unique.entry
+  orderless => true
   add (x) => (
     unless (this.elements.contains(x)) { this.elements &= x }
     this

@@ -1065,7 +1065,6 @@ export class Interpreter {
     while (pieces[close]?.kind === 'space') close++;
     return pieces[close]?.kind === 'literal' ? close : k;
   }
-  structured(type: string, closure: Node): boolean { return false; }
   typed_end(piece: Piece & { kind: 'capture' }, cursor: Text.Node, from: number, end: number, frame: Node, closure: Node, split: boolean = false): { end: number; value?: Node } | undefined { return { end }; }
   match(pieces: Piece[], cursor: Text.Node, frame: Node, opts: { receiver?: Node; leading: boolean; tight: boolean; params: number; spaced?: boolean; owned?: boolean; operand?: boolean; closure?: Node; declared?: Text.Node }): Match | undefined {
     const text = cursor.source.value, limit = cursor.limit;
@@ -1577,9 +1576,6 @@ export class Interpreter {
     const held = frame.rule_keys?.get(key);
     return held !== undefined && frame.methods?.has(held) ? held : undefined;
   }
-  read_structure(type: Node, span: Text.Node, closure: Node): Node | null | undefined { return undefined; }
-  read_structured(type: Node, span: Text.Node, closure: Node): { end: number; value: Node } | null | undefined { return undefined; }
-  built_from(type: Node, list: Node, closure: Node): Node | undefined { return undefined; }
   trivial(receiver: Node, at: Text.Node): Match {
     return { begin: at.begin, end: at.end + 1, pattern: at.end + 1, literals: [], captures: new Map(), operators: new Map(), args: [], receiver, tight: true };
   }
@@ -1604,21 +1600,7 @@ export class Interpreter {
     }
     const thunk = value?.lazy !== undefined && value.value === undefined && !value.lazy.raw ? value : value !== undefined ? this.unforced(value) : undefined;
     const grouped = thunk?.lazy !== undefined && thunk.value === undefined && this.inner(thunk.lazy.span, thunk.lazy.frame) !== undefined;
-    let result: Node | undefined;
-    const text = !opts.declare && node.ref && value !== undefined && !grouped ? this.written(value) : undefined;
-    if (text?.lazy !== undefined && text.value === undefined && node.ref) {
-      const held = this.bound(node);
-      const current = held === undefined ? undefined : this.diagnostics.muted(() => this.safely(() => this.deref(held, false)));
-      const read = current === undefined || current.none ? undefined : this.read_structure(current, text.lazy.span, node.ref.scope);
-      if (read !== undefined && read !== null) { result = read; text.lazy.consumed = true; }
-    }
-    if (result === undefined) result = grouped ? thunk : this.deref(value);
-    const listed = !opts.declare && node.ref ? (grouped ? this.diagnostics.muted(() => this.safely(() => this.deref(value, false))) : result) : undefined;
-    if (listed?.listed_by_separator) {
-      const held = this.bound(node);
-      const current = held === undefined ? undefined : this.diagnostics.muted(() => this.safely(() => this.deref(held, false)));
-      if (current !== undefined && !current.none) { const built = this.built_from(current, listed, node.ref!.scope); if (built !== undefined) result = built; }
-    }
+    const result = grouped ? thunk : this.deref(value);
     if (node.ref) {
       const bound = this.bound(node);
       if (bound?.style !== undefined) { this.alias(bound.style, result); return result; }

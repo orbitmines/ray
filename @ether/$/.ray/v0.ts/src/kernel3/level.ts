@@ -124,7 +124,7 @@ export class Levelled extends Served {
     let held = this.templates.get(type);
     if (held === undefined) {
       this.building.add(type);
-      try { held = this.construct(type, [], closure) ?? null; }
+      try { held = this.evaluated('made()', { made: type }) ?? null; }
       finally { this.building.delete(type); }
       this.templates.set(type, held);
     }

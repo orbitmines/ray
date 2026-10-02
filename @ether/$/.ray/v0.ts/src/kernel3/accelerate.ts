@@ -563,16 +563,6 @@ export class Accelerated extends Levelled {
     if (found === undefined) this.rule_shape.set(rule, found = super.shaped(rule));
     return found;
   }
-  override structured(type: string, closure: Node): boolean {
-    if (this.typings.get(closure)?.get(type) === undefined) this.typed(type, this.blank, closure, { read: false });
-    const resolved = this.typings.get(closure)?.get(type);
-    if (resolved === undefined || resolved === null || resolved === this.NONE) return false;
-    const known = this.structures.get(resolved);
-    if (known !== undefined && known.version === this.version) return known.structured;
-    const structured = this.structure_of(resolved, closure) !== undefined;
-    this.structures.set(resolved, { version: this.version, structured });
-    return structured;
-  }
   override lists(rule: Node, impl: Node): boolean {
     const known = this.listing.get(rule);
     if (known !== undefined && known.version === this.version) return known.lists;
@@ -584,7 +574,6 @@ export class Accelerated extends Levelled {
   protected operator_rules = new WeakMap<readonly [Node, Node][], { version: number; spelled: Map<string, [string, Text.Node][]> }>();
   protected operator_chains = new WeakMap<Rules, { version: number; spelled: Map<string, [string, Text.Node][]>[] }>();
   protected rule_shape = new WeakMap<Node, ReturnType<Interpreter['shaped']>>();
-  protected structures = new WeakMap<Node, { version: number; structured: boolean }>();
   protected listing = new WeakMap<Node, { version: number; lists: boolean }>();
 
   protected onlys = [new WeakMap<Rules | readonly [Node, Node][], any>(), new WeakMap<Rules | readonly [Node, Node][], any>()];

@@ -1,0 +1,941 @@
+{pattern} => {body} => external rule pattern body
+({expr}) => expr
+{{expr}} => external ** expr
+{name} := {value} => external declare name value
+literal := external literal
+^ := external ^
+{target} ^{literal style}{ } => ^(style)(target)
+^{literal style}{ } => ^(style)
+global ^keyword := external global
+unordered ^keyword := external unordered
+inline ^keyword := external inline
+literal ^keyword := external literal
+theme ^keyword := external theme
+report ^keyword := external report
+forward := external forward
+None := external none
+
+^{ }{literal color ^ color} => ^(color)
+{pattern} ^{literal style} => {body} => ^(style)(external rule pattern body)
+`{literal string ^string}` ^string.punctuation => string
+\n => `
+`
+//{comment?} ^comment => None
+
+[{expr}] ^punctuation => (
+  listed := chain None
+  external extend listed Listed
+  listed &= expr
+  listed
+)
+
+goto {literal target ^label} ^class => external goto target global
+goto {literal target ^label} if {condition} ^class => external goto target condition
+{literal label ^label}\ ^punctuation => external label label
+
+return {value} ^keyword => (
+  value
+  goto return\
+)
+
+chain {holder} ^keyword => (
+  links ^keyword := external .
+  instance := global
+  owner := holder
+  head := None
+  tail := None
+  external extend links Chain
+  links
+)
+
+link {value} {previous} ^keyword => (
+  entry ^keyword := external .
+  instance := global
+  next := None
+  external extend entry Link
+  entry
+)
+
+class {block} => (
+  static := external .
+  static.instance = None
+  static.components = chain None
+  static.components.hierarchy = chain static
+  static.written_body = external ** block
+  static.classes_read = None
+  static.requirements_read = None
+  written_as => static.written_body**
+  super => (
+    parent := static.components.hierarchy.tail.value
+    instance := this
+    view := external .
+    external extend view parent
+    external extend view instance
+    view
+  )
+  inline block
+
+  ({args}) => (
+    static := this
+    this := external .
+    this.components = chain None
+    this.components.hierarchy = chain this
+    this.components.hierarchy &= static
+    this.instance = global
+    inline args
+    inline block
+    this
+  )
+
+  static
+)
+
+base class {body} => (
+  static := external .
+  static.instance = None
+  static.components = chain None
+  static.components.hierarchy = chain static
+  static.written_body = external ** body
+  written_as => static.written_body**
+  inline body
+  external base static {
+    external declare this external .
+  }
+  static
+)
+
+if ^keyword := class {
+  { }{cond}{ }{yes} ^class => (
+    branch ^keyword := external .
+    inline static
+    taken := None
+    answer := None
+
+    goto enter if cond
+    goto skip
+   enter\
+    taken = global
+    result := inline (external ** yes)
+    answer = result
+    goto composes if (external own result)
+    goto skip
+   composes\
+    external extend branch result
+   skip\
+
+    branch ^variable
+  )
+
+  elsif{ }{cond}{ }{block} ^class => (
+    branch ^keyword := external .
+    inline this
+    taken := .taken
+    answer := .answer
+
+    goto skip if taken
+    goto enter if cond
+    goto skip
+   enter\
+    taken = global
+    result := inline (external ** block)
+    answer = result
+    goto composes if (external own result)
+    goto skip
+   composes\
+    external extend branch result
+   skip\
+
+    branch ^variable
+  )
+
+  {\n}elsif{ }{cond}{ }{block} ^class => this elsif cond block
+  {\n}else{ }{block} ^class => this else block
+
+  else{ }{block} ^class => (
+    chosen ^keyword := .answer
+    goto done if .taken
+    chosen = inline (external ** block)
+   done\
+
+    chosen
+  )
+}
+
+unless{ }{cond}{ }{block} ^class => (
+  branch ^keyword := external .
+  inline if
+  taken := None
+  answer := None
+
+  goto skip if cond
+  taken = global
+  result := inline (external ** block)
+  answer = result
+  goto composes if (external own result)
+  goto skip
+ composes\
+  external extend branch result
+ skip\
+
+  branch ^variable
+)
+
+while ^keyword := class {
+  { }{cond}{ }{block} ^class => (
+    loop ^keyword := external .
+    inline static
+    written_block := external ** block
+
+   again\
+    goto more if cond
+    goto done
+   more\
+    inline written_block
+    goto again
+   done\
+
+    loop ^variable
+  )
+
+  { }{block}{ }while{ }{cond} ^class => (
+    written_block := external ** block
+    inline written_block
+
+    this cond block
+  )
+}
+
+do ^keyword := while
+
+Program := class {
+  ({arguments}) => (
+    goto run if (.parameters.not)
+    names := .parameters
+    (inline names) := arguments
+   run\
+    body := .code
+    inline body
+  )
+
+  { }{expr} => this(expr)
+}
+
+Node := base class {
+
+  , => this
+
+  ;{x} ^punctuation => inline x
+  listing => None
+
+  ({parameters ^parameter}) => {block} => (
+    names := external ** parameters
+    code := external ** block
+    this ^function
+    external define this `{arguments}` {
+      (inline names) := arguments
+      inline code
+    }
+  )
+  ^{literal style} ({parameters ^parameter}) => {block} => (
+    names := external ** parameters
+    code := external ** block
+    this ^function
+    external define this `{arguments}` {
+      (inline names) := arguments
+      inline code
+    }
+  )
+
+  ,{other} ^punctuation => (
+    listed := chain None
+    external extend listed Listed
+    listed &= this
+    listed &= other
+    listed
+  )
+  --{call} ^punctuation => call(this)
+  
+  ={x} ^punctuation => (
+    external assign this x
+
+    this
+  )
+  :={x} ^punctuation => (
+    goto existing if (external own this)
+   declare\
+    external declare this x
+    goto declared
+   existing\
+    goto declare if (x.head.not)
+    goto destructure if this.head
+    goto declare
+   destructure\
+    external declare name this.head
+    external declare value x.head
+   next\
+    goto declared if (name.not)
+    external declare name.value value.value
+    name = name.next
+    value = value.next
+    goto next
+   declared\
+    this
+  )
+  :{type} ^punctuation => (
+    if (external own this) {
+      unless type.instance {
+        if this {
+          if this.instance { type.verify(this) }
+          elsif this.written_body { this.components.hierarchy &= type }
+          elsif (this.instance_of(type)) {
+            if type.repeating { external assign this this.instance_of(type) }
+            type.verify(this)
+          }
+          else { ERROR@this `is not of the type it is declared as` }
+        }
+      }
+    } elsif (None.instance_of(type)) { external declare this None }
+    else { external declare this type }
+
+    this
+  )
+
+  ??{other} ^punctuation => (
+    chosen := this
+    unless (chosen) { chosen = other }
+    chosen
+  )
+  ? => this | None
+  ?:{type} ^punctuation => this: (type?)
+
+  instance_of (type) => (
+    found ^keyword := None
+    among ^keyword := None
+    if this.codepoint { among = type.superposes }
+    if this {
+      if type.repeating { found = read_whole(this, type) }
+      elsif type.listing { found = read_whole(this, type) }
+      elsif among {
+        alternative ^keyword := type.components.head
+        while alternative {
+          if alternative.value.superposes { if (this.instance_of(alternative.value)) { found = alternative } }
+          elsif (same_text(this, alternative.value)) { found = alternative }
+          if found { alternative = None } else { alternative = alternative.next }
+        }
+      } else {
+        found = .structurally(type)
+        unless found {
+          if type.components {
+            other ^keyword := type.components.head
+            while other {
+              found = .structurally(other.value)
+              if found { other = None } else { other = other.next }
+            }
+          }
+        }
+        if found { found = type.admits(this) }
+      }
+    } else {
+      unless type.instance {
+        if type.components {
+          walker ^keyword := type.components.head
+          while walker {
+            unless walker.value { found = global }
+            if found { walker = None } else { walker = walker.next }
+          }
+        }
+      }
+    }
+
+    found
+  )
+
+  classes => (
+    unless this.classes_read {
+      this.classes_read = chain None
+      reached ^keyword := chain None
+      reached &= this
+      parent ^keyword := this.components.hierarchy.head
+      while parent {
+        if parent.value {
+          inherited ^keyword := parent.value.classes.head
+          while inherited {
+            reached &= inherited.value
+            inherited = inherited.next
+          }
+        }
+        parent = parent.next
+      }
+      this.classes_read = reached
+    }
+    this.classes_read
+  )
+  requirements => (
+    unless this.requirements_read {
+      wanted ^keyword := chain None
+      held ^keyword := this.classes.head
+      while held {
+        written ^keyword := held.value.written_as
+        if written {
+          head ^keyword := written.required_heads.head
+          while head {
+            wanted &= head.value
+            head = head.next
+          }
+        }
+        held = held.next
+      }
+      this.requirements_read = wanted
+    }
+    this.requirements_read
+  )
+  declaring (head) => (
+    found ^keyword := None
+    held ^keyword := this.classes.head
+    while ((held).and((found).not)) {
+      written ^keyword := held.value.written_as
+      if written { found = written.declares(head) }
+      held = held.next
+    }
+    found
+  )
+  structurally (type) => (
+    holding ^keyword := global
+    wanted ^keyword := type.requirements.head
+    while ((wanted).and(holding)) {
+      unless (this.declaring(wanted.value)) { holding = None }
+      wanted = wanted.next
+    }
+    holding
+  )
+
+  not => (
+    answer ^keyword := global
+    goto held if this
+    goto done
+   held\
+    answer = None
+   done\
+
+    answer
+  )
+  and (b) => (
+    answer ^keyword := b
+    goto done if this
+    answer = this
+   done\
+
+    answer
+  )
+  or (b) => (
+    answer ^keyword := this
+    goto done if this
+    answer = b
+   done\
+
+    answer
+  )
+  nand (b) => .and(b).not
+  xor (b) => .or(b).and(.nand(b))
+  xnor (b) => .xor(b).not
+
+  structure => None
+
+  satisfies (predicate) => (inline predicate)
+
+  verify (candidate) => candidate
+
+  admits (candidate) => global
+
+  {this}{{literal narrowing}} ^punctuation => (
+    narrowed ^keyword := this
+    selected ^keyword := None
+    if (narrowed.instance) {
+      selected = chain None
+      narrowed for {
+        held := it.value
+        if (held.satisfies({ inline narrowing })) { selected &= held }
+      }
+    } else {
+      selected = class: narrowed {
+
+        accepts (text) => (
+          candidate := narrowed.accepts(text)
+          if (candidate) { if (candidate.satisfies({ inline narrowing })) { candidate } else { None } } else { None }
+        )
+        verify (candidate) => (
+          narrowed.verify(candidate)
+          unless (candidate.satisfies({ inline narrowing })) { ERROR@candidate `does not satisfy a constraint of its type` }
+
+          candidate
+        )
+        admits (candidate) => if (narrowed.admits(candidate)) { candidate.satisfies({ inline narrowing }) } else { None }
+        if (this.instance) { selected.verify(this) }
+      }
+    }
+
+    selected
+  )
+
+  {this}<{literal partial}> ^punctuation => (
+    narrowed ^keyword := this
+
+    class: narrowed { inline partial }
+  )
+
+  ~~{x} ^punctuation => (
+    inline x
+
+    this
+  )
+
+  ** => Program(code: (external ** this))
+
+  &={x} ^punctuation => (
+    previous := this.tail
+    added := link x previous
+    goto more if previous
+    this.head = added
+    goto linked
+   more\
+    previous.next = added
+   linked\
+    this.tail = added
+    goto owned if this.owner
+    goto done
+   owned\
+    holder := this.owner
+    external extend holder x
+   done\
+
+    this
+  )
+
+  |{other} ^punctuation => (
+    superposed ^keyword := external .
+    superposed.instance = None
+    superposed.superposes = global
+    superposed.components = chain None
+    external extend superposed this
+    goto superpose_each if this.components.head
+    superposed.components &= this
+    goto superpose_other
+   superpose_each\
+    alternative ^keyword := this.components.head
+   superpose_step\
+    goto superpose_copy if alternative
+    goto superpose_other
+   superpose_copy\
+    superposed.components &= alternative.value
+    alternative = alternative.next
+    goto superpose_step
+   superpose_other\
+    superposed.components &= other
+
+    superposed
+  )
+
+  . => this
+  .{literal property ^property} ^punctuation => external get this property
+
+  [{property}] ^punctuation => external get this property
+  [] => (
+    item ^keyword := this
+    repeated ^keyword := class: Array { }
+    repeated.repeats = item
+    repeated.repeating = global
+    repeated
+  )
+
+ 
+}
+
+Node.DEFINE_METHOD = `&=`
+
+class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
+  made ^keyword := class { inline members }
+  made: header
+  made
+)
+
+Modifier := class {
+  kind => TODO
+  modify (definition) => (
+    definition.components = chain None
+    definition.components.hierarchy = chain None
+    definition.components.hierarchy &= this
+    definition
+  )
+}
+chainable ^keyword := class: Modifier {
+  chains => TODO
+}
+compounds ^keyword := class: Modifier {
+  compounds => TODO
+}
+chainable {pattern} => {body} => chainable.modify(external rule pattern body)
+compounds {pattern} => {body} => compounds.modify(external rule pattern body)
+Modifier.spellings = chain None
+Modifier.spellings &= `chainable`
+Modifier.spellings &= `compounds`
+
+Chain := class {
+  entry => .head
+}
+
+Listed := class {
+  listing => global
+  , ^punctuation (other) => (
+    joined ^keyword := chain None
+    external extend joined Listed
+    walker ^keyword := .head
+    while (walker) {
+      joined &= walker.value
+      walker = walker.next
+    }
+    joined &= other
+    joined
+  )
+}
+Link := class { }
+
+Reading := class {
+  to: Node
+  value: Node
+}
+Chosen := class {
+  among: Node
+  value: Node
+  previous => .among.previous
+  next => .among.next
+}
+read_whole (text, type) => (
+  whole ^keyword := None
+  parts ^keyword := 0
+  readings_of(text, 0, type) for {
+    reading ^keyword := it.value
+    if (reading.to == text.count) {
+      counted ^keyword := 1
+      if reading.value.head { counted = reading.value.count }
+      if (parts < counted) {
+        whole = reading.value
+        parts = counted
+      }
+    }
+  }
+  whole
+)
+readings_of (text, from, type) => (
+  found ^keyword := chain None
+  if type.repeating {
+    readings_of(text, from, type.repeats) for {
+      first ^keyword := it.value
+      single ^keyword := chain None
+      single &= first.value
+      found &= Reading(to: first.to, value: single)
+      if (from < first.to) {
+        readings_of(text, first.to, type) for {
+          more ^keyword := chain None
+          more &= first.value
+          it.value.value for { more &= it.value }
+          found &= Reading(to: it.value.to, value: more)
+        }
+      }
+    }
+  } elsif type.listing {
+    reached ^keyword := chain None
+    reached &= Reading(to: from, value: chain None)
+    item ^keyword := type.head
+    while item {
+      further ^keyword := chain None
+      reached for {
+        so_far ^keyword := it.value
+        readings_of(text, so_far.to, item.value) for {
+          parts ^keyword := chain None
+          so_far.value for { parts &= it.value }
+          parts &= it.value.value
+          further &= Reading(to: it.value.to, value: parts)
+        }
+      }
+      reached = further
+      item = item.next
+    }
+    found = reached
+  } elsif type.superposes {
+    alternative ^keyword := type.components.head
+    while alternative {
+      among ^keyword := alternative
+      readings_of(text, from, alternative.value) for { found &= Reading(to: it.value.to, value: Chosen(among: among, value: it.value.value)) }
+      alternative = alternative.next
+    }
+  } elsif type.capturing {
+    readings_of(text, from, type.type) for { found &= Reading(to: it.value.to, value: Captured(name: type.name, value: it.value.value)) }
+  } elsif type.written_body {
+    to ^keyword := from.succ
+    while (to < text.count.succ) {
+      piece ^keyword := text.slice(from, to)
+      if (piece.instance_of(type)) { found &= Reading(to: to, value: piece) }
+      to = to.succ
+    }
+  } else {
+    to ^keyword := from + type.count
+    if (to < text.count.succ) {
+      piece ^keyword := text.slice(from, to)
+      if (same_text(piece, type)) { found &= Reading(to: to, value: piece) }
+    }
+  }
+  found
+)
+
+Capture := class {
+  name: Node
+  type: Node
+  capturing => true
+}
+Captured := class {
+  name: Node
+  value: Node
+  named => true
+}
+capture_of (content) => (
+  colon ^keyword := content.index_of(`:`)
+  named ^keyword := content
+  typed ^keyword := None
+  if colon {
+    named = content.slice(0, colon)
+    typed = content.slice(colon.succ, content.count)
+  }
+  name ^keyword := None
+  named.split(Character.space) for {
+    word ^keyword := it.value
+    unless ((word.empty).or(word.starts_with(`^`)).or(same_text(word, `literal`))) { name = word }
+  }
+  if (name.ends_with(`?`)) { name = name.slice(0, name.count.pred) }
+  type ^keyword := Node
+  if typed {
+    written ^keyword := None
+    styled ^keyword := false
+    typed.split(Character.space) for {
+      word ^keyword := it.value
+      if (word.starts_with(`^`)) { styled = true }
+      unless ((styled).or(word.empty)) { if written { written = written + ` ` + word } else { written = word } }
+    }
+    if written { type = inline (external ** written) }
+  }
+  Capture(name: name, type: type)
+)
+pattern_of (head) => (
+  pattern ^keyword := None
+  head for {
+    part ^keyword := it.value
+    item ^keyword := part.value
+    if part.among.previous { item = capture_of(part.value.head.next.value) }
+    if pattern { pattern = pattern, item } else { pattern = [item] }
+  }
+  pattern
+)
+matcher_of (pattern) => ((text, captured) => (
+  read ^keyword := None
+  reading ^keyword := None
+  parts ^keyword := 0
+  readings_of(text, 0, pattern) for {
+    if (parts < it.value.value.count) {
+      reading = it.value
+      parts = reading.value.count
+    }
+  }
+  if reading {
+    reading.value for {
+      if it.value.named { captured[it.value.name] = it.value.value }
+    }
+    read = text.slice(0, reading.to)
+  }
+  read
+))
+
+{condition} ? {yes} : {no} ^punctuation => (
+  chosen ^keyword := no
+  if condition { chosen = yes }
+  chosen
+)
+
+dynamically ^keyword (x) => (inline x)
+
+assert ^keyword (condition) => (
+  unless condition { ERROR@condition `assertion failed` }
+
+  condition
+)
+
+enum ^keyword => (
+
+  static := class {
+    {literal member ^enumMember} ^punctuation => (
+      entry := this()
+      this[member] = entry ^enumMember
+      this.components &= entry
+
+      this
+    )
+    {literal member ^enumMember}{ }{fields ^property} ^punctuation => (
+      entry := this(
+        inline fields
+      )
+      this[member] = entry ^enumMember
+      this.components &= entry
+
+      this
+    )
+    |{ }{literal member ^enumMember} ^punctuation => (
+      entry := this()
+      this[member] = entry ^enumMember
+      this.components &= entry
+
+      this
+    )
+    |{ }{literal member ^enumMember}{ }{fields ^property} ^punctuation => (
+      entry := this(
+        inline fields
+      )
+      this[member] = entry ^enumMember
+      this.components &= entry
+
+      this
+    )
+
+    chainable == (other) => same_text((external where this), (external where other))
+    admits (candidate) => .components.contains(candidate)
+  }
+
+  static ^enum
+)
+
+enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?} {`{`}{block}{`}`} ^keyword => (
+  static ^keyword := external .
+  inline enum
+  inline block
+
+  entry := static(
+    inline fields
+  )
+  static[member] = entry ^enumMember
+  static.components &= entry
+  inline rest
+
+  static ^enum
+)
+
+enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?}{\n} ^keyword => (
+  static ^keyword := external .
+  inline enum
+
+  entry := static(
+    inline fields
+  )
+  static[member] = entry ^enumMember
+  static.components &= entry
+  inline rest
+
+  static ^enum
+)
+
+Program.components.hierarchy &= class {
+  optimizations => global.O
+  O => .optimizations
+  {this}{`{`}{literal setting}{`}`} ^punctuation => class: this { inline setting }
+
+  written => (
+    out := chain None
+    left ^keyword := .code
+    one ^keyword := external first left
+    while (one) {
+      out &= Program(code: one)
+      left = external rest left
+      one = external first left
+    }
+    out
+  )
+  entry => .written.entry
+  first => .written.first
+  last => .written.last
+  count => .written.count
+  empty => .count.is_zero
+  for (body) => (
+    statements ^keyword := .written
+    statements for body
+    this
+  )
+
+  compounds + (addend) => (
+    augend ^keyword := .code
+    {
+      inline augend
+      inline addend.code
+    }
+  )
+}
+
+LSP := {
+  SemanticToken := class {
+    Type := enum namespace | type | class | enum | interface | struct | typeParameter | parameter | variable | property | enumMember | event | function | method | macro | keyword | modifier | comment | string | number | regexp | operator | decorator
+    Modifier := enum declaration | definition | readonly | static | deprecated | abstract | async | modification | documentation | defaultLibrary
+  }
+}
+
+DARK := theme `Ether.ray - Dark` {
+
+  ^U0 = ^ #F2F0FF
+  ^U1 = ^ #C4B9FE
+  ^U2 = ^ #9A86FD
+  ^U3 = ^ #6C6783
+  ^U4 = ^ #97A4BF
+
+  ^D0 = ^ #F59E47
+  ^D1 = ^ #EBAE6B
+  ^D2 = ^ #FFCC99
+  ^D3 = ^ #A18565
+  ^D4 = ^ #8F8881
+
+  ^external = ^D0
+  ^label = ^D3
+
+  ^namespace = ^type = ^class = ^enum = ^interface = ^struct = ^event = ^enumMember = ^U2
+  ^typeParameter = ^parameter = ^U0
+  ^variable = ^property = ^U1
+  ^function = ^method = ^decorator = ^U4 
+  ^macro = ^U2
+  ^keyword = ^modifier = ^comment = ^U3
+  ^string = ^number = ^regexp = ^D2
+  ^operator = ^U4
+
+  ^character = ^D3
+  ^punctuation = ^comment
+  ^string.punctuation = ^D3
+
+  ^fatal = ^error
+  ^error = ^ #CD5C5C
+  ^warn = ^ #CDCD5C
+  ^info = ^ #5C5CCD
+  ^debug = ^ #5CCD5C
+  ^trace = ^comment
+}
+inline DARK
+
+Diagnostic := class {
+  
+}
+
+FATAL{`@`}{var}{ }{comment ^comment} ^fatal => report FATAL var comment
+ERROR{`@`}{var}{ }{comment ^comment} ^error => report ERROR var comment
+ WARN{`@`}{var}{ }{comment ^comment} ^warn => report WARN var comment
+ INFO{`@`}{var}{ }{comment ^comment} ^info => report INFO var comment
+DEBUG{`@`}{var}{ }{comment ^comment} ^debug => report DEBUG var comment
+TRACE{`@`}{var}{ }{comment ^comment} ^trace => report TRACE var comment
+
+TODO{ }{comment ^comment} ^debug => DEBUG@. comment 
+
+{l} [x: right-to-left] {m} [y: left-to-right] {r} => l [x] m & m [y] r
+
+{a} [x: chainable] {b} [y: chainable] {c} => (a [x] b) & (b [y] c)
+
+{a} [x: compounds]{`=`} {b} => a = (a [x] b)

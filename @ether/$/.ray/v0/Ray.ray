@@ -18,7 +18,7 @@ Ordered := class {
 }
 
 Iterable := class: Ordered {
-  entry => None
+  entry => TODO
 
   empty => .count.is_zero
   nonempty => .empty.not

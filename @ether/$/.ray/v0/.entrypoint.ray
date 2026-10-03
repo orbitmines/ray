@@ -64,6 +64,7 @@ class {block} => (
   static.written_body = external ** block
   static.classes_read = None
   static.requirements_read = None
+  static.requirements_known = None
   written_as => static.written_body**
   super => (
     parent := static.components.hierarchy.tail.value
@@ -374,7 +375,7 @@ Node := base class {
     this.classes_read
   )
   requirements => (
-    unless this.requirements_read {
+    unless this.requirements_known {
       wanted ^keyword := chain None
       held ^keyword := this.classes.head
       while held {
@@ -389,6 +390,7 @@ Node := base class {
         held = held.next
       }
       this.requirements_read = wanted
+      this.requirements_known = global
     }
     this.requirements_read
   )

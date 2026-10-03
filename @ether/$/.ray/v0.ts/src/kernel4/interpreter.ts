@@ -676,7 +676,8 @@ export class Interpreter {
     const at = this.location(target);
     const held = this.deref(value);
     if (held === undefined) return undefined;
-    if (at?.place === undefined) {
+    const self = at?.place !== undefined && !at.place.member ? this.holder(at.place.in, at.place.name) : undefined;
+    if (at?.place === undefined || (self?.given?.has(at.place.name) && self.stands === undefined)) {
       const into = this.deref(target, false);
       if (into?.style !== undefined) { this.alias(into.style, held); return held; }
       this.error('Cannot assign here.', target.at);
@@ -790,9 +791,10 @@ export class Interpreter {
     this.trying = 0;
     let value: Node | undefined;
     const refused = this.diagnostics.refused;
+    this.unpainted++;
     try { value = this.quietly(() => this.safely(() => this.read(this.cursor_of(content), scope))); }
     catch (jump) { if (!(jump instanceof Jump)) throw jump; }
-    finally { this.naming = was; this.trying = trying; }
+    finally { this.naming = was; this.trying = trying; this.unpainted--; }
     const undecided = this.diagnostics.refused > refused;
     const name = scope.names === undefined ? undefined : [...scope.names].find(([, held]) => held === hole)?.[0];
     if (name === undefined) {
@@ -967,6 +969,7 @@ export class Interpreter {
   // Painting: what is read is painted by the marks on what it names, on its value, or on the rule that read it.
   serving = false
   paints: Text.Node[] = []
+  private unpainted = 0
   sites: Map<string, Text.Node> = new Map()
   painted_count = 0
   get painted() { return this.painted_count; }
@@ -977,7 +980,7 @@ export class Interpreter {
   begin_pass() { this.paints = []; this.sites = new Map(); }
   end_pass() { this.painted_count++; }
   paint(span: Text.Node | undefined, style: () => string | undefined) {
-    if (!this.program?.serving || span === undefined || span.source.location === undefined || !this.owns(span.source)) return;
+    if (!this.program?.serving || this.unpainted > 0 || span === undefined || span.source.location === undefined || !this.owns(span.source)) return;
     const painted = span.span(span.begin, span.end);
     painted.style = style;
     this.paints.push(painted);
@@ -991,8 +994,10 @@ export class Interpreter {
     if (style !== undefined) for (const [from, to] of found.literals) this.paint(at.span(from, to), () => style.style);
   }
   decorate(target: Node, style: Node): Node {
-    const rule = this.rules_by_value.get(target);
+    const held = target.place !== undefined || target.code !== undefined ? this.quietly(() => this.deref(target, false)) : target;
+    const rule = held === undefined ? undefined : this.rules_by_value.get(held);
     if (rule !== undefined) { rule.style = style; return target; }
+    if (target.place !== undefined && held?.text && held.at !== undefined) { this.paint(held.at, () => style.style); return target; }
     if (target.place !== undefined) { const marked = Object.assign(new Node(target.at), { place: target.place, marks: style }); this.paint(target.at, () => style.style); return marked; }
     if (target.code !== undefined && target.value === undefined) { this.paint(target.code.span, () => style.style); return target; }
     if (target.text) { this.paint(target.at, () => style.style); return target; }

@@ -41,6 +41,7 @@ export class Levelled extends Interpreter {
     return { arity: 0, fn: () => { const marker = new Node(at); this.markers.set(marker, key); return marker; } };
   }
   reads(src: Text.Source): boolean { return !this.program?.by_interpreter(src); }
+  clone_from(from: Interpreter) { super.clone_from(from); this.settle(); }
   saved_state(mine: Text.Source[]): Record<string, unknown> { return { ...super.saved_state(mine), level: this.level, markers: this.markers, levelled: this.levelled }; }
   restore_state(state: any, mine: Text.Source[]) { super.restore_state(state, mine); this.level = state.level; this.markers = state.markers; this.levelled = state.levelled; }
   after(src: Text.Source) {

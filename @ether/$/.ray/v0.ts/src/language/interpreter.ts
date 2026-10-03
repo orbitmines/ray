@@ -468,7 +468,7 @@ export class Interpreter {
       } catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
         const at = this.label_at(cursor, begin, jump.label, frame);
-        if (at === undefined) { jump.value ??= last; throw jump; }
+        if (at === undefined) { jump.value ??= this.held(last); throw jump; }
         if (jump.value !== undefined) last = jump.value;
         if (at < start) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
         cursor.cursor = at;
@@ -1800,20 +1800,19 @@ export class Interpreter {
       if (n === undefined) return undefined;
       const known = seen.get(n);
       if (known !== undefined) return known;
-      const copy = Object.assign(new Node(), n);
+      const copy = Object.assign(Object.create(Object.getPrototypeOf(n)), n) as Node;
       copy.scoped = copy.ruled = copy.shaped = copy.watchers = undefined;
       copy.constructed = undefined;
       copy.rule_of = copy.marked_value = undefined;
       copy.marked_names = undefined;
       seen.set(n, copy);
-      copy.parent = node(n.parent);
+      for (const [key, held] of Object.entries(copy)) if (held instanceof Node) (copy as any)[key] = node(held);
       if (n.with) copy.with = n.with.map(x => node(x)!);
       if (n.sees) copy.sees = n.sees.map(x => node(x)!);
       if (n.names) copy.names = new Map([...n.names].map(([k, v]) => [k, node(v)!]));
       if (n.rules) copy.rules = n.rules.map(rule);
       if (n.code) copy.code = { span: n.code.span, in: node(n.code.in)! };
       if (n.place) copy.place = { ...n.place, in: node(n.place.in)! };
-      if (n.value) copy.value = node(n.value);
       return copy;
     };
     const rule = (r: Rule): Rule => {

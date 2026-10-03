@@ -327,3 +327,30 @@ The only file shared across agents: A3 renames `Test.ray`, which C1 might edit i
 18. Still open in the spec, unchanged: G3.11 (a rule for one specific operator now that `accepts` is
     gone), N5.5 (removing the remaining `exists`), A-C4/U-C\* (answered), and X5.4 (the hex-letter
     round trip, an engine bug).
+
+---
+
+## 4. Status in the morning (2026-10-03)
+
+### Built by the agents (on `main`, reviewed)
+
+| Commit | Items | Checked |
+|---|---|---|
+| 5801ee1 | C1 `join`, `join(separator)` | no (String does not boot on kernel3) |
+| c1409ed | D1 binary prefixes, 20 named byte multiples | no (Number) |
+| 6d2feea | A2 `tests/app/grammar.ray`, A4 leading-zero claims, A5 postfix `!` on Number, A3 spec line | A2 on kernel3: GR2 and GR5 fail there; A4/A5 no |
+| b891348 | B1 `flatten`/`flatten(n)`, B2 `every` both ways, B3 `⊢ ⊣`, B4 `min`/`max`, B5 `* n` (`String.repeat` gone), C2 multiline dedent | no (Ray/String on kernel3) |
+| 719d651 | D4 `Time.round`, E1 `Reference` fields, E2 `Status` members, E3 Roman normalizer + `canonical`, E4 `Key` presses/cycle/holds | no (Number) |
+
+A1 was already done (08f9226). D2 and D3 were skipped: their probe gates need Unit to evaluate.
+Review fixes: SJ4 used `("a",)` (now `.words`), `Time.round` rounded the wrong way (fixed), comments removed from tests.
+
+### Questions the agents raised
+
+1. **A2 / G5.4**: should a rule written inside a body override an outer one through plain `=>`, or only through `&=>`? (GR2 assumes `=>`.)
+2. **`==` without brackets on booleans and enums**: `chainable == (other)` defines a rule that spells its brackets, so `true == false` is not read on either kernel. kernel3 misread it silently as `=` (so the BO23/BO24/BOR claims were vacuous); kernel4 reports `Unexpected == false`. Should `chainable {pattern}` read `(other)` as a parameter, like `name (params) =>` does?
+3. **C2**: every `"…"` literal now runs `.dedented` (splits into lines): a cost on every string literal. Keep it in the rule, or dedent only text that spans lines? Should whitespace-only interior lines be kept as written?
+4. **B3**: is a symbol (`⊢`) accepted as a method head and as a member after `.`? Unchecked.
+5. **D4**: rounding to a unit finer than the stored one keeps the amount. Convert instead?
+6. **E1**: `credit (author)` is the name for adding an author. OK?
+7. **E3**: `Roman.normalizer` is a mutable class-level field; nothing else in the library does that. OK until `with` exists?

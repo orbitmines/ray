@@ -73,6 +73,12 @@ export class Rule {
     this.heads ??= [pieces[0]?.kind === 'literal' ? pieces[0].text : undefined, pieces[0]?.kind === 'literal' ? pieces[0].text : pieces[0]?.kind === 'capture' && !this.implicit && pieces[1]?.kind === 'literal' ? pieces[1].text : undefined];
     return this.heads[receiving ? 1 : 0];
   }
+  private later?: string[];
+  spelled_within(text: string, from: number, limit: number): boolean {
+    this.later ??= this.pattern.slice(1).filter((piece): piece is Piece & { kind: 'literal' } => piece.kind === 'literal' && piece.text.trim() !== '').map(piece => piece.text.trim());
+    for (const literal of this.later) { const at = text.indexOf(literal, from); if (at < 0 || at + literal.length > limit) return false; }
+    return true;
+  }
   get operator(): string | undefined { const [first, second] = this.pattern; return this.pattern.length === 2 && first.kind === 'literal' && second.kind === 'capture' && !Interpreter.word.test(first.text[0] ?? 'a') ? first.text : undefined; }
 }
 
@@ -607,6 +613,7 @@ export class Interpreter {
       if (rule.at.source === cursor.source && rule.at.begin <= here && here <= rule.at.end) continue;
       const head = rule.head(receiving);
       if (head !== undefined && !text.startsWith(head, here) && !text.startsWith(head, after)) continue;
+      if (!rule.spelled_within(text, here, cursor.limit)) continue;
       const found = this.match(rule, cursor, frame, receiver);
       if (found === undefined) continue;
       const spelled = receiving && rule.pattern[rule.leading ? 1 : 0]?.kind === 'literal' ? 1 : 0;

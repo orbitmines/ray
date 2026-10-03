@@ -261,14 +261,17 @@ Node := base class {
     this
   )
   :={x} ^punctuation => (
-    goto existing if (external own this)
-   declare\
+    goto existing if external own this
     external declare this x
     goto declared
    existing\
-    goto declare if (x.head.not)
+    goto both if x.head
+    goto plain
+   both\
     goto destructure if this.head
-    goto declare
+   plain\
+    external declare this x
+    goto declared
    destructure\
     external declare name this.head
     external declare value x.head

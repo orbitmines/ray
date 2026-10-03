@@ -1269,7 +1269,7 @@ export class Interpreter {
     for (let depth = 0; depth < 64 && at !== undefined; depth++) {
       if (at.code !== undefined && !at.program) {
         const word = at.code.span.string.trim();
-        if (!/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word) && !/^[^\s\p{L}\p{N}_]+$/u.test(word)) { const read = this.force(at); if (read?.place === undefined) return at; at = read; continue; }
+        if (!/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word) && !/^[^\s\p{L}\p{N}_]+$/u.test(word)) { const read = this.force(at); if (read?.place === undefined && read?.code === undefined) return at; at = read; stood = false; continue; }
         at = this.place(at.code.in, at.code.span);
         continue;
       }

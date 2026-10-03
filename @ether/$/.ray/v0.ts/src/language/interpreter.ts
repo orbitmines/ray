@@ -1758,8 +1758,11 @@ export class Interpreter {
   done = new Set<Text.Source>();
   load(name: string): boolean {
     const eager = this.program?.eager !== undefined;
+    const named = this.pending.some(src => src.name === `${name}.ray`);
+    const reading = this.reading;
+    if (!named && reading !== undefined && new RegExp(`(^|[^\\p{L}\\p{N}_])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}_])`, 'u').test(reading.source.value.slice(reading.end + 1))) return false;
     while (this.pending.length > 0) {
-      const at = eager ? this.pending.findIndex(src => src.name === `${name}.ray`) : 0;
+      const at = eager || named ? this.pending.findIndex(src => src.name === `${name}.ray`) : 0;
       if (at < 0) return false;
       const [src] = this.pending.splice(at, 1);
       this.done.add(src);
@@ -2021,7 +2024,7 @@ export class Interpreter {
 
   // Diagnostics.
   error(message: string, at?: Text.Node) { this.complain('error', message, at); }
-  complain(level: Diagnostic['level'], message: string, at?: Text.Node) { this.diagnostics.report({ level, message, node: at, at }); }
+  complain(level: Diagnostic['level'], message: string, at?: Text.Node) { const owner = this.reading?.source; this.diagnostics.report({ level, message, node: at, at, owner: owner !== undefined && owner !== at?.source ? owner : undefined }); }
   quietly<T>(fn: () => T): T { return this.diagnostics.muted(fn); }
   safely<T>(fn: () => T): T | undefined {
     try { return fn(); }

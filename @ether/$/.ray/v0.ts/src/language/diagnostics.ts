@@ -7,6 +7,7 @@ export interface Diagnostic {
   node?: Text.Node;
   at?: Text.Node;
   message: string;
+  owner?: Text.Source;
 }
 
 const c = {
@@ -47,6 +48,7 @@ export class Diagnostics {
   forget(src: Text.Source | Iterable<Text.Source>) {
     if (Symbol.iterator in src) { for (const element of src) { this.forget(element) }; return; }
     for (const key of [...this.items.keys()]) if (key === src || key?.location === src.location) this.items.delete(key);
+    for (const by of this.items.values()) for (const [node, entries] of by) { const kept = entries.filter(entry => entry.owner === undefined || (entry.owner !== src && entry.owner.location !== src.location)); if (kept.length !== entries.length) { if (kept.length === 0) by.delete(node); else by.set(node, kept); } }
   }
 
   print() {

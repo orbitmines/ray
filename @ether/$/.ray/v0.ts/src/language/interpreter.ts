@@ -1083,7 +1083,7 @@ export class Interpreter {
       const args: Node[] = [];
       rule.pattern.forEach((piece, p) => {
         if (piece.kind !== 'capture') return;
-        const value = given?.has(piece.name) ? given.get(piece.name)! : p === 0 && receiver !== undefined && !rule.implicit ? receiver : captures.has(piece.name) ? (piece.raw ? this.literal(captures.get(piece.name)!) : this.lazy(captures.get(piece.name)!, frame)) : this.NONE;
+        const value = given?.has(piece.name) ? given.get(piece.name)! : p === 0 && receiver !== undefined && !rule.implicit ? receiver : captures.has(piece.name) ? (piece.raw ? this.literal(captures.get(piece.name)!) : (piece.typed ? this.holds(piece, captures.get(piece.name)!) : undefined) ?? this.lazy(captures.get(piece.name)!, frame)) : this.NONE;
         local.set(piece.name, value);
         args.push(value);
       });

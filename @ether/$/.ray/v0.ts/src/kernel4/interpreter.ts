@@ -678,6 +678,7 @@ export class Interpreter {
     if (scope.none) return held;
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
+    this.paint_place(at);
     return held;
   }
   assign(target: Node, value: Node | undefined): Node | undefined {
@@ -1006,6 +1007,7 @@ export class Interpreter {
     const rule = held === undefined ? undefined : this.rules_by_value.get(held);
     if (rule !== undefined) { rule.style = style; return target; }
     if (target.place !== undefined && held?.text && held.at !== undefined) { this.paint(held.at, () => style.style); return target; }
+    if (target.place !== undefined && held !== undefined && !held.none && held !== this.GLOBAL && !held.text) this.values_marked.set(held, style);
     if (target.place !== undefined) { const marked = Object.assign(new Node(target.at), { place: target.place, marks: style }); this.paint(target.at, () => style.style); return marked; }
     if (target.code !== undefined && target.value === undefined) { this.paint(target.code.span, () => style.style); return target; }
     if (target.text) { this.paint(target.at, () => style.style); return target; }

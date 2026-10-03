@@ -37,6 +37,7 @@ function engine_hash(): string | undefined {
   return engine = hash_of(files.map(file => `${path.relative(import.meta.dirname, file)}\n${fs.readFileSync(file, 'utf-8')}`).join('\0'));
 }
 
+const KEPT = 16;
 const SPAN = new Set(['source', 'expression', 'cursor', 'until', 'from', 'to']);
 const DROPPED = new Set(['scoped', 'ruled', 'shaped', 'watchers', 'watching', 'visited', 'layout']);
 let natives: Map<Native, string> | undefined;
@@ -229,6 +230,7 @@ export class Boot {
       const listed = this.index();
       listed.checkpoints = listed.checkpoints.filter(c => c.file !== file);
       listed.checkpoints.push({ phase, index, file, log: [...this.log], eager: [...this.eager] });
+      while (listed.checkpoints.length > KEPT) { const dropped = listed.checkpoints.shift()!; try { fs.unlinkSync(path.join(this.dir, dropped.file)); } catch {} }
       const listing = path.join(this.dir, `index.json.${process.pid}`);
       fs.writeFileSync(listing, JSON.stringify(listed));
       fs.renameSync(listing, path.join(this.dir, 'index.json'));

@@ -330,8 +330,9 @@ export class Interpreter {
         const firing = { depth: this.running.length, fires: [] as Match[] };
         this.firing.push(firing);
         let value: Node | undefined;
-        try { value = this.statement(cursor, frame); } finally { this.firing.pop(); }
-        if (steps !== undefined && firing.fires.length === 1) this.record(steps, start, cursor.cursor, firing.fires[0], heads!);
+        let thrown = true;
+        try { value = this.statement(cursor, frame); thrown = false; }
+        finally { this.firing.pop(); if (steps !== undefined && firing.fires.length === 1 && (thrown || cursor.cursor === firing.fires[0].end)) this.record(steps, start, firing.fires[0].end, firing.fires[0], heads!); }
         if (value !== undefined) last = value;
       } catch (jump) {
         if (!(jump instanceof Jump)) throw jump;

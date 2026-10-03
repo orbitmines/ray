@@ -118,3 +118,34 @@ So the unit of compilation is a **rule application**, not a statement:
 ## To do (decided 2026-10-03: not yet)
 
 - **Saved boot graph.** After a load, keep the read and compiled graph, keyed by source hashes. The next boot loads it and re-reads only sources whose text changed. This would bring entrypoint loading to ~ms, and the saved graph is the artifact a port would load. The user decided to push graph reduction within one load first.
+
+## Decided 2026-10-03: graph reduction is the evaluator core
+
+Measured on the entrypoint after the interpreter-level work (291 ms):
+
+- About 15k statement readings and 8k applications allocate ~124k value nodes and ~165k text spans or cursors.
+- Every guarded reuse of readings cost about what it saved (four attempts, reverted):
+  - its checks pay full price for the primitive operations (dereference chains, receiver rule lists);
+  - the entrypoint defines the language as it reads, so readings keep changing.
+
+So the evaluator is rewritten as a graph reducer. The reader (rule selection, `match`) stays.
+
+1. **Graph.** Reading a statement yields graph nodes that the source owns:
+   - `name` (a slot when the binding is static, else a lookup);
+   - `apply` (rule plus capture subgraphs);
+   - `native` (function plus argument nodes);
+   - `literal`, `jump`, `label`, `sequence`.
+
+   Spans are made once, when the graph is built, never per evaluation.
+2. **Captures are shared subgraphs**, reduced at most once per instantiation; this replaces per-capture lazy nodes and their re-reading.
+3. **Dispatch nodes.** Where the reading depended on a value's class, the node keeps a per-class cache (the subset of that class's rules that can begin there). On a miss it asks the reader for that one node and patches the graph.
+4. **Frames stay first-class** (`external .` returns one), but names whose binding the graph proves are read as slots, and a frame is made only where the body can observe it.
+5. **Validation** against the interpreter on the harness and the paint dumps, at every phase.
+
+Phases:
+
+1. Graph builder and reducer for rule bodies and captures. The interpreter stays the fallback per node.
+2. Slots and frame elision.
+3. Inline caches on dispatch nodes.
+4. o.ray natives attached to graph nodes.
+5. JS code generation from the graph.

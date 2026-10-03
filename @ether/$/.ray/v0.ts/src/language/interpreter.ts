@@ -45,6 +45,7 @@ export class Node {
   layout?: number
   visited?: number
   reached?: number
+  held_by?: number
   built?: Interpreter
   heading?: { rules: Rule[]; decided: object; heads: Rule[] }
   scoped?: { deps: Node[]; stamps: number[]; rules: Rule[] }
@@ -272,8 +273,30 @@ export class Interpreter {
     if (frame.own(name) !== undefined) return frame;
     for (const made of frame.on === undefined ? frame.with ?? [] : [frame.on, ...(frame.with ?? [])]) if (made.own(name) !== undefined && made.given?.has(name)) return made;
   }
+  private holding_seen = 0;
   holder(frame: Node, name: string, written?: Text.Node): Node | undefined {
-    for (const scope of this.scopes(frame, written)) if (scope.own(name) !== undefined) return scope;
+    const seen = ++this.holding_seen;
+    const found = this.holder_in(frame, true, this.GLOBAL, name, written, seen);
+    if (found !== undefined) return found;
+    if (this.GLOBAL.held_by === seen) return undefined;
+    this.GLOBAL.held_by = seen;
+    if (this.GLOBAL.own(name) !== undefined) return this.GLOBAL;
+    for (const made of this.GLOBAL.with ?? []) { const held = this.holder_in(made, false, this.GLOBAL, name, written, seen); if (held !== undefined) return held; }
+  }
+  private holder_in(scope: Node, deep: boolean, global: Node, name: string, written: Text.Node | undefined, seen: number): Node | undefined {
+    let later: Node[] | undefined;
+    for (let at: Node | undefined = scope; at !== undefined; at = deep ? at.parent : undefined) {
+      if (at.held_by === seen) { if (!deep) break; continue; }
+      if (at === global) break;
+      at.held_by = seen;
+      if (at.own(name) !== undefined) return at;
+      const sees = this.sees_of(at, written);
+      for (const other of sees) if (other.held_by !== seen && other.own(name) !== undefined) return other;
+      if (at.on !== undefined) { const held = this.holder_in(at.on, false, global, name, written, seen); if (held !== undefined) return held; }
+      if (at.with !== undefined) for (const made of at.with) { const held = this.holder_in(made, false, global, name, written, seen); if (held !== undefined) return held; }
+      if (deep && sees.length > 0) (later ??= []).push(...sees);
+    }
+    if (later !== undefined) for (const other of later) { const held = this.holder_in(other, true, global, name, written, seen); if (held !== undefined) return held; }
   }
   member(of: Node, name: string): Node | undefined {
     const own = of.own(name);
@@ -1775,7 +1798,7 @@ export class Interpreter {
       const known = seen.get(n);
       if (known !== undefined) return known;
       const copy = Object.assign(new Node(), n);
-      copy.scoped = copy.ruled = copy.shaped = copy.watchers = copy.built = copy.heading = undefined;
+      copy.scoped = copy.ruled = copy.shaped = copy.watchers = copy.built = copy.heading = copy.held_by = copy.reached = copy.visited = undefined;
       seen.set(n, copy);
       copy.parent = node(n.parent);
       if (n.with) copy.with = n.with.map(x => node(x)!);

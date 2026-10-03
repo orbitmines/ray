@@ -701,15 +701,56 @@ outnumbers (one, other) => (
 )
 read_whole (text, type) => (
   whole ^keyword := None
-  candidate ^keyword := readings_of(bits_of(text).head, type).head
-  while candidate {
-    reading ^keyword := candidate.value
-    unless reading.rest {
-      if whole {
-        if (outnumbers(reading.value, whole)) { whole = reading.value }
-      } else { whole = reading.value }
+  if type.repeating { whole = read_repeated(bits_of(text).head, type.repeats) } else {
+    candidate ^keyword := readings_of(bits_of(text).head, type).head
+    while candidate {
+      reading ^keyword := candidate.value
+      unless reading.rest {
+        if whole {
+          if (outnumbers(reading.value, whole)) { whole = reading.value }
+        } else { whole = reading.value }
+      }
+      candidate = candidate.next
     }
-    candidate = candidate.next
+  }
+  whole
+)
+read_repeated (start, element) => (
+  whole ^keyword := None
+  layer ^keyword := chain None
+  layer &= Reading(rest: start, value: chain None)
+  while layer.head {
+    reached ^keyword := chain None
+    state ^keyword := layer.head
+    while state {
+      reading ^keyword := state.value
+      steps ^keyword := readings_of(reading.rest, element).head
+      while steps {
+        step ^keyword := steps.value
+        unless (step.rest === reading.rest) {
+          seen ^keyword := None
+          known ^keyword := reached.head
+          while known {
+            if (known.value.rest === step.rest) { seen = global }
+            known = known.next
+          }
+          unless seen {
+            more ^keyword := chain None
+            part ^keyword := reading.value.head
+            while part {
+              more &= part.value
+              part = part.next
+            }
+            more &= step.value
+            reached &= Reading(rest: step.rest, value: more)
+            unless step.rest { whole = more }
+          }
+        }
+        steps = steps.next
+      }
+      state = state.next
+    }
+    layer = reached
   }
   whole
 )

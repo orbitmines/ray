@@ -46,6 +46,7 @@ export class Rule {
   id = ++Rule.count
   native?: string
   direct?: Text.Node[]
+  passes?: Text.Node
   style?: Node
   defines = false
   home?: Node
@@ -807,6 +808,16 @@ export class Interpreter {
       const short = this.operation(found, frame, at, given);
       if (short !== undefined) return short;
       this.paint_rule(found, at);
+      if (rule.passes !== undefined && !this.program?.serving && receiver === undefined && given === undefined) {
+        const local = new Node(at);
+        local.parent = rule.closure;
+        local.body = rule.body;
+        this.running[this.running.length - 1].local = local;
+        for (const other of rule.pattern) if (other.kind === 'capture') local.set(other.name, captures.has(other.name) ? (other.raw ? this.literal(captures.get(other.name)!) : this.lazy(captures.get(other.name)!, frame)) : this.NONE);
+        const passed = this.place(local, rule.passes);
+        this.deref(passed, false);
+        return passed;
+      }
       const local = new Node(at);
       this.running[this.running.length - 1].local = local;
       let site = at;
@@ -1077,6 +1088,7 @@ export class Interpreter {
         if (plain && native !== undefined && !native.raw && words.length === native.arity && words.length > 0) rule.direct = words;
       }
     }
+    if (body !== undefined && pieces[0]?.kind !== 'capture') { const inner = this.inner(body) ?? body, cursor = this.cursor_of(inner), from = this.spaces(cursor, inner.begin), to = this.token_end(cursor, from, closure); if (to > from && this.spaces(cursor, to) >= cursor.limit && pieces.some(piece => piece.kind === 'capture' && piece.name === inner.source.value.slice(from, to))) rule.passes = cursor.span(from, to - 1); }
     if (body !== undefined) for (const found of body.string.matchAll(/\bexternal\s+([^\s()]+)/g)) if (Natives[found[1]] === Natives.rule || Natives[found[1]] === Natives.define) rule.defines = true;
     this.add_rule(scope, rule);
     this.definitions.push(`${scope === this.GLOBAL ? 'GLOBAL' : ''}::${key}`);

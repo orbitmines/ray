@@ -17,7 +17,7 @@ export type Piece = (
   | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node; undecided?: boolean; decided?: number; type?: Node; operator?: boolean }
 ) & { tight?: boolean };
 
-export type NameGuard = Variant & { frame?: Node; parent?: Node; sees?: Node[]; self?: { rules: Rule[]; mine: Rule[]; on: Rule[] } };
+export type NameGuard = Variant & { frame?: Node; parent?: Node; sees?: Node[]; self?: { rules: Rule[]; mine: Rule[]; on: Rule[] }; declared?: number };
 export type Slot = { parent: Node; sees?: Node[]; holder?: Node; valid: boolean };
 export class Node {
   at?: Text.Node
@@ -49,6 +49,9 @@ export class Node {
   marked_value?: Node
   layout?: number
   visited?: number
+  reached?: number
+  held_by?: number
+  heading?: { rules: Rule[]; decided: object; heads: Rule[] }
   scoped?: { deps: Node[]; stamps: number[]; rules: Rule[] }
   ruled?: { base?: Node; deps: Node[]; stamps: number[]; rules: Rule[] }
   shaped?: { of: Rule[]; based: Set<Rule>; rules: Rule[]; mine: Rule[] }
@@ -83,6 +86,7 @@ export class Rule {
   guard?: { span: Text.Node; in: Node }
   // Written beside other definitions of the same name: its parameters choose between them.
   overloaded = false
+  fitting?: { declared: number; rules: number; found?: { names: string[]; refused: boolean; value?: Node }; by: Map<Node, { fit: boolean; on: Rule[] }> }
   get name(): string { return this.pattern.map(piece => piece.kind === 'literal' ? piece.text : piece.kind === 'gap' ? '{ }' : `{${piece.name}}`).join(''); }
   constructor(public pattern: Piece[], public closure: Node, public at: Text.Node, public key: string, public order: number, public body?: Text.Node, public fn?: Native) {}
   get leading(): boolean { return this.pattern[0]?.kind === 'capture'; }
@@ -221,6 +225,12 @@ export class Interpreter {
     let found: Node | undefined, visited: Node[];
     try {
       found = this.seek(parent, true, true, name, at, seen, sees);
+      if (found === undefined) {
+        this.collecting.push(this.GLOBAL);
+        found = this.GLOBAL.own(name);
+        if (found !== undefined) this.found_in = this.GLOBAL;
+        else for (const made of this.GLOBAL.with ?? []) { found = this.seek(made, false, false, name, at, seen); if (found !== undefined) break; }
+      }
     } finally { visited = this.collecting; this.collecting = collecting; }
     if (collecting !== undefined) collecting.push(...visited);
     const made: Slot = { parent, sees: sees.length === 0 ? undefined : [...sees], holder: found === undefined ? undefined : this.found_in, valid: true };
@@ -247,15 +257,19 @@ export class Interpreter {
     }
     if (later !== undefined) for (const sees of later) { const held = this.seek(sees, true, true, name, written, seen); if (held !== undefined) return held; }
   }
+  private reaching = 0;
+  private reach_stack: Node[] = [];
   reaches(frame: Node, target: Node): boolean {
-    const seen = new Set<Node>(), todo = [frame];
+    const seen = ++this.reaching, todo = this.reach_stack;
+    todo.length = 0;
+    todo.push(frame);
     while (todo.length > 0) {
       const at = todo.pop()!;
       if (at === target) return true;
-      if (seen.has(at) || at === this.GLOBAL) continue;
-      seen.add(at);
+      if (at.reached === seen || at === this.GLOBAL) continue;
+      at.reached = seen;
       if (at.parent) todo.push(at.parent);
-      if (at.sees) todo.push(...at.sees);
+      if (at.sees) for (const other of at.sees) todo.push(other);
     }
     return false;
   }
@@ -265,8 +279,30 @@ export class Interpreter {
     if (frame.own(name) !== undefined) return frame;
     for (const made of frame.on === undefined ? frame.with ?? [] : [frame.on, ...(frame.with ?? [])]) if (made.own(name) !== undefined && made.given?.has(name)) return made;
   }
+  private holding_seen = 0;
   holder(frame: Node, name: string, written?: Text.Node): Node | undefined {
-    for (const scope of this.scopes(frame, written)) if (scope.own(name) !== undefined) return scope;
+    const seen = ++this.holding_seen;
+    const found = this.holder_in(frame, true, this.GLOBAL, name, written, seen);
+    if (found !== undefined) return found;
+    if (this.GLOBAL.held_by === seen) return undefined;
+    this.GLOBAL.held_by = seen;
+    if (this.GLOBAL.own(name) !== undefined) return this.GLOBAL;
+    for (const made of this.GLOBAL.with ?? []) { const held = this.holder_in(made, false, this.GLOBAL, name, written, seen); if (held !== undefined) return held; }
+  }
+  private holder_in(scope: Node, deep: boolean, global: Node, name: string, written: Text.Node | undefined, seen: number): Node | undefined {
+    let later: Node[] | undefined;
+    for (let at: Node | undefined = scope; at !== undefined; at = deep ? at.parent : undefined) {
+      if (at.held_by === seen) { if (!deep) break; continue; }
+      if (at === global) break;
+      at.held_by = seen;
+      if (at.own(name) !== undefined) return at;
+      const sees = this.sees_of(at, written);
+      for (const other of sees) if (other.held_by !== seen && other.own(name) !== undefined) return other;
+      if (at.on !== undefined) { const held = this.holder_in(at.on, false, global, name, written, seen); if (held !== undefined) return held; }
+      if (at.with !== undefined) for (const made of at.with) { const held = this.holder_in(made, false, global, name, written, seen); if (held !== undefined) return held; }
+      if (deep && sees.length > 0) (later ??= []).push(...sees);
+    }
+    if (later !== undefined) for (const other of later) { const held = this.holder_in(other, true, global, name, written, seen); if (held !== undefined) return held; }
   }
   member(of: Node, name: string): Node | undefined {
     const own = of.own(name);
@@ -511,7 +547,8 @@ export class Interpreter {
   private blanks = new WeakMap<Text.Source, { text: string; next: Int32Array }>();
   blank(cursor: Text.Node) {
     const text = cursor.source.value;
-    let next = this.blanks.get(cursor.source)?.text === text ? this.blanks.get(cursor.source)!.next : undefined;
+    const cached = this.blanks.get(cursor.source);
+    let next = cached?.text === text ? cached.next : undefined;
     if (next === undefined) {
       next = new Int32Array(text.length + 1);
       next[text.length] = text.length;
@@ -646,15 +683,15 @@ export class Interpreter {
     if (held === undefined) { held = new Map(); for (const rule of rules) { const own = this.template_of(rule); const list = held.get(own); if (list === undefined) held.set(own, [rule]); else list.push(rule); } this.by_template.set(rules, held); }
     return held.get(template);
   }
-  candidates_for(role: 'none' | 'self' | 'value', template: { id: number }, frame: Node, receiver: Node | undefined): Rule[] {
-    const first = role === 'none' ? this.heads(frame) : this.owned(receiver!).rules;
+  candidates_for(role: 'none' | 'self' | 'value', template: { id: number }, frame: Node, receiver: Node | undefined, target?: [Node | undefined]): Rule[] {
+    const first = role === 'none' ? this.heads(frame) : (target !== undefined ? this.owned_target(target[0]) : this.owned(receiver!)).rules;
     const second = role === 'none' ? this.derived(this.rules_of(frame), 'after', this.keep_after) : this.leading_of(frame).rules;
     const one = this.in_list(first, template), two = this.in_list(second, template);
     return one === undefined ? two ?? [] : two === undefined ? one : [...one, ...two];
   }
   occurrence(rule: Rule, role: 'none' | 'self' | 'value', frame: Node, receiver: Node | undefined): number { return this.candidates_for(role, this.template_of(rule), frame, receiver).indexOf(rule); }
-  resolve(match: Match, role: 'none' | 'self' | 'value', occurrence: number, frame: Node, receiver: Node | undefined): Match | undefined {
-    const rule = this.candidates_for(role, this.template_of(match.rule), frame, receiver)[occurrence];
+  resolve(match: Match, role: 'none' | 'self' | 'value', occurrence: number, frame: Node, receiver: Node | undefined, target?: [Node | undefined]): Match | undefined {
+    const rule = this.candidates_for(role, this.template_of(match.rule), frame, receiver, target)[occurrence];
     if (rule === undefined) return undefined;
     return rule === match.rule && receiver === match.receiver ? match : { ...match, rule, receiver };
   }
@@ -673,15 +710,15 @@ export class Interpreter {
     if (this.naming !== undefined) return false;
     const self = this.holding_at(cursor.source, cursor.cursor)?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
     const guard = held?.guard;
-    if (guard !== undefined && guard.valid && Interpreter.same_frame(frame, guard)) {
+    if (guard !== undefined && guard.valid && (guard.declared === undefined || guard.declared === this.declared) && Interpreter.same_frame(frame, guard)) {
       if (self === undefined) { if (guard.self === undefined) return true; }
       else if (guard.self !== undefined) { const shape = this.shape(self); if (shape.rules === guard.self.rules && shape.mine === guard.self.mine && shape.on === guard.self.on) return true; }
     }
     const sensitive = this.sensitive;
     if (this.best(rules, cursor, frame) !== undefined) return false;
     if (self !== undefined && this.best_on(self, frame, cursor, true) !== undefined) return false;
-    if (held !== undefined && this.sensitive === sensitive) {
-      const made: NameGuard = { valid: true, events: [], frame: frame.rules?.length ? frame : undefined, parent: frame.parent, sees: frame.sees === undefined || frame.sees.length === 0 ? undefined : [...frame.sees], self: self === undefined ? undefined : this.shape(self) };
+    if (held !== undefined) {
+      const made: NameGuard = { declared: this.sensitive === sensitive ? undefined : this.declared, valid: true, events: [], frame: frame.rules?.length ? frame : undefined, parent: frame.parent, sees: frame.sees === undefined || frame.sees.length === 0 ? undefined : [...frame.sees], self: self === undefined ? undefined : this.shape(self) };
       if (held.guard !== undefined) held.guard.valid = false;
       held.guard = made;
       this.watch(made, frame, cursor, [cursor.cursor]);
@@ -738,8 +775,8 @@ export class Interpreter {
   owned(value: Node): { rules: Rule[]; mine: Rule[] } {
     return this.owned_target(value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value);
   }
-  shape(value: Node): { rules: Rule[]; mine: Rule[]; on: Rule[] } {
-    const target = value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value;
+  shape(value: Node): { rules: Rule[]; mine: Rule[]; on: Rule[] } { return this.shape_of(value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value); }
+  shape_of(target: Node | undefined): { rules: Rule[]; mine: Rule[]; on: Rule[] } {
     if (target === undefined || target.none || target === this.GLOBAL) { const owned = this.owned_target(target); return { rules: owned.rules, mine: owned.mine, on: Interpreter.receiving_any }; }
     const on = this.rules_on(target), based = this.based(), held = target.shaped;
     if (held !== undefined && held.of === on && held.based === based) return { rules: held.rules, mine: held.mine, on };
@@ -1054,20 +1091,26 @@ export class Interpreter {
   }
 
   // Applying: a frame where the rule was written, made of what it is applied to, holding what it was handed.
-  heads(frame: Node): Rule[] { return this.derived(this.rules_of(frame), 'heads', this.keep_heads, this.decisions()); }
+  heads(frame: Node): Rule[] {
+    const rules = this.rules_of(frame), decided = this.decisions(), held = frame.heading;
+    if (held !== undefined && held.rules === rules && held.decided === decided) return held.heads;
+    const heads = this.derived(rules, 'heads', this.keep_heads, decided);
+    frame.heading = { rules, decided, heads };
+    return heads;
+  }
   readonly keep_after = (all: Rule[]) => all.filter(rule => !rule.leading && rule.home === this.GLOBAL);
   private readonly keep_heads = (all: Rule[]) => all.filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines);
   private readonly keep_owned = (all: Rule[]) => all.filter(rule => rule.pattern[0]?.kind !== 'gap' && !rule.implicit);
   private readonly keep_leading = (all: Rule[]) => all.filter(rule => rule.leading && !rule.implicit);
   private readonly keep_mine = (all: Rule[]) => { const based = this.based(); return all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL); };
   private readonly keep_own = (all: Rule[]) => { const openers = this.openers_now(); return all.filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && openers.has(rule.pattern[0].text))); };
-  fire(found: Match, cursor: Text.Node, frame: Node): Node | undefined {
+  fire(found: Match, cursor: Text.Node, frame: Node, target?: [Node | undefined], at?: Text.Node): Node | undefined {
     const firing = this.firing[this.firing.length - 1];
     if (firing !== undefined && firing.depth === this.running.length) firing.fires.push(found);
     cursor.cursor = found.end;
-    return this.apply(found, frame, cursor.span(found.begin, found.end - 1));
+    return this.apply(found, frame, at ?? cursor.span(found.begin, found.end - 1), undefined, target);
   }
-  apply(found: Match, frame: Node, at: Text.Node, given?: Map<string, Node>): Node | undefined {
+  apply(found: Match, frame: Node, at: Text.Node, given?: Map<string, Node>, target?: [Node | undefined]): Node | undefined {
     const { rule, captures, receiver } = found;
     if (++this.depth > Interpreter.DEPTH) { this.depth = 0; throw new Recursion(at); }
     try {
@@ -1075,6 +1118,10 @@ export class Interpreter {
       const short = this.operation(found, frame, at, given);
       if (short !== undefined) return short;
       this.paint_rule(found, at);
+      if (rule.native === 'get' && rule.direct !== undefined && receiver?.place !== undefined && given === undefined && !this.program?.serving) {
+        const member = this.member_of(rule, captures, receiver);
+        if (member !== undefined) return member;
+      }
       if (rule.passes !== undefined && !this.painting(at.source) && receiver === undefined && given === undefined) {
         const name = rule.passes.string, piece = rule.pattern.find(other => other.kind === 'capture' && other.name === name) as (Piece & { kind: 'capture' }) | undefined;
         const span = captures.get(name);
@@ -1095,10 +1142,12 @@ export class Interpreter {
       local.parent = rule.closure;
       local.body = rule.body;
       if (receiver !== undefined) {
-        const value = this.deref(receiver, false);
+        const value = target !== undefined ? target[0] : this.deref(receiver, false);
         if (receiver.place === undefined && value !== undefined && !value.none) this.construct(value);
         if (receiver.place !== undefined) {
-          const context = Object.assign(new Node(receiver.at), { stands: receiver, with: value !== undefined && !value.none ? [value] : undefined });
+          const context = new Node(receiver.at);
+          context.stands = receiver;
+          if (value !== undefined && !value.none) context.with = [value];
           this.construct(context);
           local.on = context;
         }
@@ -1196,7 +1245,7 @@ export class Interpreter {
     const template = this.template;
     if (fresh && template !== undefined && !this.painting(this.made!.code!.span.source) && template.made === this.made && template.base === this.BASE && template.stands === (value.stands !== undefined) && template.seen >= 2) {
       for (const [name, held] of template.names) value.set(name, held === 'self' ? value : value.stands!);
-      if (template.names.length > 0) { value.given = new Set(template.names.map(([name]) => name)); for (const [name] of template.names) this.given_names.add(name); }
+      if (template.names.length > 0) { value.given = template.given ??= new Set(template.names.map(([name]) => name)); for (const [name] of template.names) this.given_names.add(name); }
       Interpreter.touch(value);
       return;
     }
@@ -1217,12 +1266,12 @@ export class Interpreter {
       this.template = quiet ? { made: this.made, base: this.BASE, stands: value.stands !== undefined, names: names as [string, 'self' | 'stands'][], seen: same ? this.template!.seen + 1 : 1 } : undefined;
     }
   }
-  private template?: { made?: Node; base?: Node; stands: boolean; names: [string, 'self' | 'stands'][]; seen: number };
+  private template?: { made?: Node; base?: Node; stands: boolean; names: [string, 'self' | 'stands'][]; seen: number; given?: Set<string> };
 
   // Values: a name is a place, read where it is bound; written code is read once, when asked for.
-  place(frame: Node, at: Text.Node): Node { return Object.assign(new Node(at), { place: { in: frame, name: at.string } }); }
-  lazy(span: Text.Node, frame: Node): Node { return Object.assign(new Node(span), { code: { span, in: frame } }); }
-  literal(span: Text.Node): Node { return Object.assign(new Node(span), { text: true }); }
+  place(frame: Node, at: Text.Node): Node { const node = new Node(at); node.place = { in: frame, name: at.string }; return node; }
+  lazy(span: Text.Node, frame: Node): Node { const node = new Node(span); node.code = { span, in: frame }; return node; }
+  literal(span: Text.Node): Node { const node = new Node(span); node.text = true; return node; }
   literal_of(string: string, at?: Text.Node): Node { const node = this.literal(Text.Node.string(string)); if (at !== undefined) node.at = Object.assign(Text.Node.string(string), {}); return node; }
   bound(node: Node): Node | undefined {
     const { in: scope, name, member } = node.place!;
@@ -1262,11 +1311,25 @@ export class Interpreter {
   force(node: Node): Node | undefined {
     if (node.value !== undefined) return node.value;
     const { span, in: frame } = node.code!;
-    node.value = this.read(this.cursor_of(span), frame);
+    node.value = this.word_of(span, frame) ?? this.read(this.cursor_of(span), frame);
     this.forced.push(node);
     return node.value;
   }
   forced: Node[] = []
+  private words = new WeakMap<Text.Node, { cursor: Text.Node; guard?: NameGuard } | null>();
+  word_of(span: Text.Node, frame: Node): Node | undefined {
+    if (frame === this.GLOBAL || this.naming !== undefined) return undefined;
+    let held = this.words.get(span);
+    if (held === undefined) this.words.set(span, held = /^\s*[\p{L}_][\p{L}\p{N}_-]*\s*$/u.test(span.string) ? { cursor: this.cursor_of(span) } : null);
+    if (held === null || this.painting(span.source)) return undefined;
+    const cursor = held.cursor;
+    cursor.cursor = span.begin;
+    this.blank(cursor);
+    const begin = cursor.cursor;
+    if (!this.only_a_name(cursor, frame, this.heads(frame), held)) return undefined;
+    const word = (held as { word?: Text.Node }).word ??= this.stable(cursor.span(begin, this.token(cursor, begin) - 1));
+    return this.place(frame, word);
+  }
   text(node: Node | undefined): string {
     if (node === undefined) return '';
     if (node === this.probe?.node && !this.probe.reading) this.probe.other = true;
@@ -1325,6 +1388,20 @@ export class Interpreter {
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
     return held;
+  }
+  // `this.name` where the name is no method of the value: the member place, without the frame `get` would be read in.
+  member_of(rule: Rule, captures: Map<string, Text.Node>, receiver: Node): Node | undefined {
+    const [self, property] = rule.direct!;
+    if (self.string !== 'this') return undefined;
+    const piece = rule.pattern.find(other => other.kind === 'capture' && other.name === property.string) as (Piece & { kind: 'capture' }) | undefined;
+    const span = captures.get(property.string);
+    if (piece === undefined || !piece.raw || span === undefined) return undefined;
+    const target = this.deref(receiver);
+    if (target === undefined) return undefined;
+    const name = span.string;
+    if (target.style !== undefined) return undefined;
+    for (const rule of this.rules_on(target)) if (rule.pattern[0]?.kind === 'literal' && rule.pattern[0].text === name && (rule.pattern.length === 1 || (rule.pattern.length === 2 && rule.pattern[1].kind === 'capture'))) return undefined;
+    return Object.assign(new Node(span), { place: { in: target, name, member: true } });
   }
   get(node: Node, key: Node): Node | undefined {
     const target = this.deref(node);
@@ -1512,11 +1589,18 @@ export class Interpreter {
     };
     const present = (read: { refused: boolean; value?: Node }) => !read.refused && read.value !== undefined && !read.value.none;
     const argument = this.lazy(span, frame);
-    const found = reading(scratch());
+    let memo = rule.fitting;
+    if (memo === undefined || memo.declared !== this.declared || memo.rules !== this.rules_version) memo = rule.fitting = { declared: this.declared, rules: this.rules_version, by: new Map() };
+    const found = memo.found ??= reading(scratch());
     if (found.names.length === 1 && pattern.string.trim() === found.names[0]) return true;
     if (found.names.length > 1) return !found.refused;
-    if (found.names.length === 1) return present(reading(scratch(), argument));
-    return present(reading(scratch(), undefined, argument));
+    const value = this.quietly(() => this.deref(argument, false));
+    const on = value === undefined ? undefined : this.rules_on(value);
+    const known = value === undefined ? undefined : memo.by.get(value);
+    if (known !== undefined && known.on === on) return known.fit;
+    const fit = found.names.length === 1 ? present(reading(scratch(), argument)) : present(reading(scratch(), undefined, argument));
+    if (value !== undefined && rule.fitting === memo && memo.declared === this.declared && memo.rules === this.rules_version && this.rules_on(value) === on) memo.by.set(value, { fit, on: on! });
+    return fit;
   }
   // What stands between two operands: the longest spelling that begins a rule taking one operand, on the left operand or in reach.
   filtered = new Map<string, { declared: number; fits: boolean; settled: boolean; missing: Set<string> }>();
@@ -1688,18 +1772,24 @@ export class Interpreter {
   }
 
   native(key: string, at?: Text.Node): Native | undefined { return Natives[key]; }
+  private natives_at = new WeakMap<Text.Node, { key: string; native?: Native; node?: Node }>();
   external(name: Node | undefined, frame: Node): Node | undefined {
     if (name === undefined) return undefined;
+    const site = name.at, cached = site === undefined || name.place !== undefined || name.code !== undefined ? undefined : this.natives_at.get(site);
+    if (cached !== undefined && cached.key === this.text(name)) {
+      if (cached.node !== undefined) return cached.node;
+      if (cached.native !== undefined && cached.native.arity === 0) return cached.native.fn({ interpreter: this, frame, args: [], at: site! });
+    }
     const key = this.text(name), native = this.native(key, name.at);
     if (native === undefined) { this.error(`Expected method \`${key}\` to be externally defined by the runtime, but it wasn't.`, name.at); return undefined; }
-    if (native.arity === 0) return native.fn({ interpreter: this, frame, args: [], at: name.at! });
-    const site = name.at;
+    if (native.arity === 0) { if (site !== undefined && name.place === undefined && name.code === undefined) this.natives_at.set(site, { key, native }); return native.fn({ interpreter: this, frame, args: [], at: name.at! }); }
     if (site === undefined) return Object.assign(new Node(site), { fn: native });
     let by = this.externals.get(site.source);
     if (by === undefined) this.externals.set(site.source, by = new Map());
     const key_at = `${site.begin}:${site.end}:${key}`;
     let node = by.get(key_at);
     if (node === undefined) by.set(key_at, node = Object.assign(new Node(site), { fn: native }));
+    if (name.place === undefined && name.code === undefined) this.natives_at.set(site, { key, native, node });
     return node;
   }
 
@@ -1813,7 +1903,7 @@ export class Interpreter {
       const known = seen.get(n);
       if (known !== undefined) return known;
       const copy = Object.assign(new Node(), n);
-      copy.scoped = copy.ruled = copy.shaped = copy.watchers = undefined;
+      copy.scoped = copy.ruled = copy.shaped = copy.watchers = copy.heading = copy.held_by = copy.reached = copy.visited = undefined;
       copy.constructed = undefined;
       copy.rule_of = copy.marked_value = undefined;
       copy.marked_names = undefined;
@@ -1833,6 +1923,7 @@ export class Interpreter {
       if (known !== undefined) return known;
       const copy = Object.assign(Object.create(Rule.prototype), r) as Rule;
       copy.id = ++Rule.count;
+      copy.fitting = undefined;
       copy.value_node = undefined;
       rules.set(r, copy);
       copy.closure = node(r.closure)!;

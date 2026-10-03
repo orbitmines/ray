@@ -428,11 +428,6 @@ i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
 0B{digits: Binary.String ^number} ^number => Binary(integer: digits)
 
 Precedence ^keyword := class { }
-same_text (first_text, second_text) => (
-  same ^keyword := false
-  if ((first_text).and(second_text)) { same = (first_text == second_text) }
-  same
-)
 JumpRead ^keyword := class { }
 HeadRead ^keyword := class { }
 head_ends ^keyword := chain None

@@ -99,14 +99,17 @@ export class Interpreter {
   *scopes(from: Node): Generator<Node> {
     const seen = new Set<Node>();
     const visit = function* (scope: Node, deep: boolean, global: Node): Generator<Node> {
+      const later: Node[] = [];
       for (let at: Node | undefined = scope; at !== undefined; at = deep ? at.parent : undefined) {
-        if (seen.has(at)) { if (!deep) return; continue; }
-        if (at === global) return;
+        if (seen.has(at)) { if (!deep) break; continue; }
+        if (at === global) break;
         seen.add(at);
         yield at;
-        for (const sees of at.sees ?? []) yield* visit(sees, true, global);
+        for (const sees of at.sees ?? []) if (!seen.has(sees)) yield sees;
         for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) yield* visit(made, false, global);
+        if (deep) later.push(...(at.sees ?? []));
       }
+      for (const sees of later) yield* visit(sees, true, global);
     };
     yield* visit(from, true, this.GLOBAL);
     if (!seen.has(this.GLOBAL)) { seen.add(this.GLOBAL); yield this.GLOBAL; for (const made of this.GLOBAL.with ?? []) yield* visit(made, false, this.GLOBAL); }
@@ -123,16 +126,18 @@ export class Interpreter {
     }
     const seen = new Set<Node>();
     const visit = (scope: Node | undefined, lexical: boolean, deep: boolean): Node | undefined => {
+      const later: Node[] = [];
       for (let at = scope; at !== undefined; at = deep ? at.parent : undefined) {
-        if (seen.has(at) || at === this.GLOBAL) { if (!deep) return; continue; }
+        if (seen.has(at) || at === this.GLOBAL) { if (!deep) break; continue; }
         seen.add(at);
         const found = at.own(name);
         if (found !== undefined && !(lexical && at.given?.has(name))) return found;
         for (const sees of at.sees ?? []) { const written = sees.own(name); if (written !== undefined && !sees.given?.has(name) && !seen.has(sees)) return written; }
         for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) { const held = visit(made, false, false); if (held !== undefined) return held; }
-        for (const sees of at.sees ?? []) { const held = visit(sees, true, true); if (held !== undefined) return held; }
+        if (deep) later.push(...(at.sees ?? []));
         lexical = true;
       }
+      for (const sees of later) { const held = visit(sees, true, true); if (held !== undefined) return held; }
     };
     const found = visit(frame, false, true);
     if (found !== undefined) return found;
@@ -450,6 +455,7 @@ export class Interpreter {
       }
       else if (piece.raw) end = receiver !== undefined || next !== undefined ? this.token_end(cursor, from, frame) : this.unspaced(cursor, from);
       else if (next !== undefined || before?.kind === 'gap') end = this.operand_end(cursor, from, frame);
+      else if (piece.tight && from === i && this.claim(cursor, from, frame) > from) end = this.claim(cursor, from, frame);
       else end = this.trailing_end(cursor, from, frame, rule);
       let last = end;
       if (!exact) while (last > from && /\s/.test(text[last - 1])) last--;
@@ -484,7 +490,7 @@ export class Interpreter {
     if (Interpreter.run(literal[literal.length - 1]) && Interpreter.run(text[at + literal.length] ?? ' ')) return false;
     return true;
   }
-  static run(character: string): boolean { return !/[\s\p{L}\p{N}_(){}\[\]`,"']/u.test(character); }
+  static run(character: string): boolean { return !/[\s\p{L}\p{N}_(){}\[\]`"']/u.test(character); }
   // Where a capture ends: at the literal after it, at the end of one operand, or before what binds looser.
   first(cursor: Text.Node, from: number, literal: string, frame: Node, raw: boolean, enclosed: boolean): number {
     const text = cursor.source.value;
@@ -525,7 +531,7 @@ export class Interpreter {
   trailing_end(cursor: Text.Node, j: number, frame: Node, rule: Rule): number {
     const text = cursor.source.value, looser = this.looser(frame, rule);
     while (j < cursor.limit && text[j] !== '\n') {
-      if (j > 0 && /\s/.test(text[j - 1]) && looser.some(spelling => this.spelled(cursor, j, spelling))) {
+      if (looser.some(spelling => this.spelled(cursor, j, spelling) && ((j > 0 && /\s/.test(text[j - 1])) || /\s/.test(text[j + spelling.length] ?? '')))) {
         let k = j; while (k > 0 && /\s/.test(text[k - 1])) k--;
         return k;
       }
@@ -535,7 +541,7 @@ export class Interpreter {
     return j;
   }
   looser(frame: Node, rule: Rule): string[] {
-    const out: string[] = [];
+    const out: string[] = rule.operator === undefined ? [] : [rule.operator];
     for (const other of this.rules_of(frame)) { const spelling = other.operator; if (spelling !== undefined && other.order < rule.order) out.push(spelling); }
     if (this.BASE !== undefined) for (const other of this.rules_on(this.BASE)) { const spelling = other.operator; if (spelling !== undefined && other.order < rule.order) out.push(spelling); }
     return out;
@@ -562,7 +568,7 @@ export class Interpreter {
     const text = cursor.source.value;
     if (j >= cursor.limit) return j;
     if (Interpreter.word.test(text[j])) { while (j < cursor.limit && (Interpreter.word.test(text[j]) || (text[j] === '-' && Interpreter.word.test(text[j + 1] ?? '')))) j++; return j; }
-    while (j < cursor.limit && !/[\s\p{L}\p{N}_(){}\[\]`,]/u.test(text[j])) j++;
+    while (j < cursor.limit && !/[\s\p{L}\p{N}_(){}\[\]`]/u.test(text[j])) j++;
     return j;
   }
 
@@ -571,7 +577,7 @@ export class Interpreter {
     cursor.cursor = found.end;
     return this.apply(found, frame, cursor.span(found.begin, found.end - 1));
   }
-  apply(found: Match, frame: Node, at: Text.Node): Node | undefined {
+  apply(found: Match, frame: Node, at: Text.Node, given?: Map<string, Node>): Node | undefined {
     const { rule, captures, receiver } = found;
     if (++this.depth > Interpreter.DEPTH) { this.depth = 0; throw new Recursion(at); }
     try {
@@ -598,7 +604,7 @@ export class Interpreter {
       const args: Node[] = [];
       rule.pattern.forEach((piece, p) => {
         if (piece.kind !== 'capture') return;
-        const value = p === 0 && receiver !== undefined && !rule.implicit ? receiver : captures.has(piece.name) ? (piece.raw ? this.literal(captures.get(piece.name)!) : this.lazy(captures.get(piece.name)!, frame)) : this.NONE;
+        const value = given?.has(piece.name) ? given.get(piece.name)! : p === 0 && receiver !== undefined && !rule.implicit ? receiver : captures.has(piece.name) ? (piece.raw ? this.literal(captures.get(piece.name)!) : this.lazy(captures.get(piece.name)!, frame)) : this.NONE;
         local.set(piece.name, value);
         args.push(value);
       });
@@ -677,6 +683,8 @@ export class Interpreter {
         const bound = this.bound(node);
         if (bound === undefined) {
           if (node.place.member) return this.NONE;
+          const method = this.method_named(node.place.in, node.place.name, node.at);
+          if (method !== undefined) return method;
           if (this.load(node.place.name)) continue;
           this.missing?.add(node.place.name);
           if (report) this.error(`Unresolved \`${node.place.name}\`.`, node.at);
@@ -1054,6 +1062,12 @@ export class Interpreter {
     return rule === undefined ? undefined : this.rule_value(rule);
   }
   private rule_values = new WeakMap<Rule, Node>();
+  method_named(frame: Node, name: string, at?: Text.Node): Node | undefined {
+    const rule = this.rules_of(frame).find(rule => rule.pattern.length === 2 && rule.pattern[0].kind === 'literal' && rule.pattern[0].text === name && rule.pattern[1].kind === 'capture');
+    if (rule === undefined) return undefined;
+    const capture = (rule.pattern[1] as { name: string }).name;
+    return Object.assign(new Node(at), { fn: { arity: 1, fn: ({ interpreter, args: [argument], at: where }: Args) => interpreter.apply({ rule, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [] }, frame, where, new Map([[capture, argument ?? interpreter.NONE]])) } });
+  }
   rule_value(rule: Rule): Node {
     let node = this.rule_values.get(rule);
     if (node === undefined) { node = new Node(rule.at); this.rule_values.set(rule, node); this.rules_by_value.set(node, rule); }

@@ -34,7 +34,7 @@ export const Natives: Record<string, Native> = {
   'bits': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => {
     for (const bit of [...bytes_of(interpreter, node)].flatMap(byte => byte.toString(2).padStart(8, '0').split(''))) {
       const call = interpreter.deref(each);
-      const taken = call?.fn?.fn({ interpreter, frame, args: [interpreter.literal_of(bit)], at });
+      const taken = call?.fn?.fn({ interpreter, frame, args: [bit === '1' ? interpreter.GLOBAL : interpreter.NONE], at });
       if (interpreter.deref(taken, false)?.none) break;
     }
     return interpreter.NONE;
@@ -153,7 +153,7 @@ function program_of(interpreter: Interpreter, node: Node): Node | undefined {
     if (target.program) return target;
     if (target.code !== undefined) {
       const word = target.code.span.string.trim();
-      if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) { const held = interpreter.lookup(target.code.in, word); if (held !== undefined) { target = held; continue; } }
+      if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) { const held = interpreter.lookup(target.code.in, word); if (held !== undefined && (held.program || held.code !== undefined || held.place !== undefined)) { target = held; continue; } }
       return program(interpreter, interpreter.inner(target.code.span) ?? target.code.span, target.code.in);
     }
     if (target.place !== undefined) { target = interpreter.bound(target); continue; }

@@ -520,7 +520,8 @@ Node := base class {
 
   &={x} ^punctuation => (
     previous := this.tail
-    added := link x previous
+    adding := x
+    added := link adding previous
     goto more if previous
     this.head = added
     goto linked
@@ -641,7 +642,7 @@ Listed := class {
 Link := class { }
 
 Reading := class {
-  to: Node
+  rest: Node
   value: Node
 }
 Chosen := class {
@@ -650,53 +651,112 @@ Chosen := class {
   previous => .among.previous
   next => .among.next
 }
+bits_of (text) => (
+  held ^keyword := chain None
+  take (bit) => (
+    held &= bit
+    global
+  )
+  external bits text take
+  held
+)
+prefix_of (at, spelling) => (
+  prefix ^keyword := None
+  walker ^keyword := bits_of(spelling).head
+  matching ^keyword := global
+  while ((walker).and(matching)) {
+    unless at { matching = None }
+    if matching {
+      unless (walker.value.xnor(at.value)) { matching = None }
+      at = at.next
+    }
+    walker = walker.next
+  }
+  if matching { prefix = Reading(rest: at, value: spelling) }
+  prefix
+)
+same_text (first_text, second_text) => (
+  same ^keyword := false
+  if ((first_text).and(second_text)) {
+    matched ^keyword := prefix_of(bits_of(first_text).head, second_text)
+    if matched { unless matched.rest { same = true } }
+  }
+  same
+)
+outnumbers (one, other) => (
+  mine ^keyword := chain None
+  theirs ^keyword := chain None
+  if one.head { mine = one } else { mine &= one }
+  if other.head { theirs = other } else { theirs &= other }
+  a ^keyword := mine.head
+  b ^keyword := theirs.head
+  while ((a).and(b)) {
+    a = a.next
+    b = b.next
+  }
+  a
+)
 read_whole (text, type) => (
   whole ^keyword := None
-  parts ^keyword := 0
-  readings_of(text, 0, type) for {
-    reading ^keyword := it.value
-    if (reading.to == text.count) {
-      counted ^keyword := 1
-      if reading.value.head { counted = reading.value.count }
-      if (parts < counted) {
-        whole = reading.value
-        parts = counted
-      }
+  candidate ^keyword := readings_of(bits_of(text).head, type).head
+  while candidate {
+    reading ^keyword := candidate.value
+    unless reading.rest {
+      if whole {
+        if (outnumbers(reading.value, whole)) { whole = reading.value }
+      } else { whole = reading.value }
     }
+    candidate = candidate.next
   }
   whole
 )
-readings_of (text, from, type) => (
+readings_of (rest, type) => (
   found ^keyword := chain None
   if type.repeating {
-    readings_of(text, from, type.repeats) for {
-      first ^keyword := it.value
+    firsts ^keyword := readings_of(rest, type.repeats).head
+    while firsts {
+      first ^keyword := firsts.value
       single ^keyword := chain None
       single &= first.value
-      found &= Reading(to: first.to, value: single)
-      if (from < first.to) {
-        readings_of(text, first.to, type) for {
+      found &= Reading(rest: first.rest, value: single)
+      unless (first.rest === rest) {
+        others ^keyword := readings_of(first.rest, type).head
+        while others {
           more ^keyword := chain None
           more &= first.value
-          it.value.value for { more &= it.value }
-          found &= Reading(to: it.value.to, value: more)
+          part ^keyword := others.value.value.head
+          while part {
+            more &= part.value
+            part = part.next
+          }
+          found &= Reading(rest: others.value.rest, value: more)
+          others = others.next
         }
       }
+      firsts = firsts.next
     }
   } elsif type.listing {
     reached ^keyword := chain None
-    reached &= Reading(to: from, value: chain None)
+    reached &= Reading(rest: rest, value: chain None)
     item ^keyword := type.head
     while item {
       further ^keyword := chain None
-      reached for {
-        so_far ^keyword := it.value
-        readings_of(text, so_far.to, item.value) for {
+      so_far_at ^keyword := reached.head
+      while so_far_at {
+        so_far ^keyword := so_far_at.value
+        nexts ^keyword := readings_of(so_far.rest, item.value).head
+        while nexts {
           parts ^keyword := chain None
-          so_far.value for { parts &= it.value }
-          parts &= it.value.value
-          further &= Reading(to: it.value.to, value: parts)
+          part ^keyword := so_far.value.head
+          while part {
+            parts &= part.value
+            part = part.next
+          }
+          parts &= nexts.value.value
+          further &= Reading(rest: nexts.value.rest, value: parts)
+          nexts = nexts.next
         }
+        so_far_at = so_far_at.next
       }
       reached = further
       item = item.next
@@ -706,24 +766,36 @@ readings_of (text, from, type) => (
     alternative ^keyword := type.components.head
     while alternative {
       among ^keyword := alternative
-      readings_of(text, from, alternative.value) for { found &= Reading(to: it.value.to, value: Chosen(among: among, value: it.value.value)) }
+      alternatives ^keyword := readings_of(rest, alternative.value).head
+      while alternatives {
+        found &= Reading(rest: alternatives.value.rest, value: Chosen(among: among, value: alternatives.value.value))
+        alternatives = alternatives.next
+      }
       alternative = alternative.next
     }
   } elsif type.capturing {
-    readings_of(text, from, type.type) for { found &= Reading(to: it.value.to, value: Captured(name: type.name, value: it.value.value)) }
+    captures ^keyword := readings_of(rest, type.type).head
+    while captures {
+      found &= Reading(rest: captures.value.rest, value: Captured(name: type.name, value: captures.value.value))
+      captures = captures.next
+    }
   } elsif type.written_body {
-    to ^keyword := from.succ
-    while (to < text.count.succ) {
-      piece ^keyword := text.slice(from, to)
-      if (piece.instance_of(type)) { found &= Reading(to: to, value: piece) }
-      to = to.succ
+    piece ^keyword := chain None
+    at ^keyword := rest
+    while at {
+      piece &= at.value
+      at = at.next
+      copied ^keyword := chain None
+      bit_at ^keyword := piece.head
+      while bit_at {
+        copied &= bit_at.value
+        bit_at = bit_at.next
+      }
+      if (copied.instance_of(type)) { found &= Reading(rest: at, value: copied) }
     }
   } else {
-    to ^keyword := from + type.count
-    if (to < text.count.succ) {
-      piece ^keyword := text.slice(from, to)
-      if (same_text(piece, type)) { found &= Reading(to: to, value: piece) }
-    }
+    matched ^keyword := prefix_of(rest, type)
+    if matched { found &= matched }
   }
   found
 )
@@ -778,18 +850,25 @@ pattern_of (head) => (
 matcher_of (pattern) => ((text, captured) => (
   read ^keyword := None
   reading ^keyword := None
-  parts ^keyword := 0
-  readings_of(text, 0, pattern) for {
-    if (parts < it.value.value.count) {
-      reading = it.value
-      parts = reading.value.count
-    }
+  start ^keyword := bits_of(text).head
+  readings_of(start, pattern) for {
+    if reading {
+      if (outnumbers(it.value.value, reading.value)) { reading = it.value }
+    } else { reading = it.value }
   }
   if reading {
     reading.value for {
       if it.value.named { captured[it.value.name] = it.value.value }
     }
-    read = text.slice(0, reading.to)
+    read = chain None
+    walker ^keyword := start
+    until_rest ^keyword := global
+    while ((walker).and(until_rest)) {
+      if (walker === reading.rest) { until_rest = None } else {
+        read &= walker.value
+        walker = walker.next
+      }
+    }
   }
   read
 ))

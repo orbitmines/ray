@@ -1,12 +1,11 @@
 {pattern} => {body} => external rule pattern body
-forward ;
-forward :=
 ({expr}) => expr
 {{expr}} => external ** expr
-
-external := external external
-forward ^{literal word}{ }
+{name} := {value} => external declare name value
+literal := external literal
 ^ := external ^
+{target} ^{literal style}{ } => ^(style)(target)
+^{literal style}{ } => ^(style)
 global ^keyword := external global
 unordered ^keyword := external unordered
 inline ^keyword := external inline
@@ -21,7 +20,7 @@ None := external none
 `{literal string ^string}` ^string.punctuation => string
 \n => `
 `
-//{literal comment?} ^comment => None
+//{comment?} ^comment => None
 
 [{expr}] ^punctuation => (
   listed := chain None

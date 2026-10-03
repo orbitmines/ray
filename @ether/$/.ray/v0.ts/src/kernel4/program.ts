@@ -3,20 +3,21 @@ import { Natives } from './natives.ts';
 import { env } from './env.ts';
 import { Diagnostics } from './diagnostics.ts';
 import { Interpreter, Node, type Piece, type Native } from './interpreter.ts';
+import { Levelled } from './level.ts';
 
 
 export function v0(diagnostics: Diagnostics) {
   return new Program(diagnostics)
     .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
     .add(env.directory(`@ether/$/${EXTENSION}/tests`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
-    .interpreting([]);
+    .interpreting(optimizations());
 }
 
 export function lsp(diagnostics: Diagnostics) {
   return new Program(diagnostics)
     .serve()
     .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
-    .interpreting([]);
+    .interpreting(optimizations());
 }
 
 export function optimizations(): Text.Source[] {
@@ -131,7 +132,7 @@ export class Program {
       const directory = project_directory_of(src);
       let project = this.projects.find(project => project.directory === directory);
       if (!project) {
-        const interpreter = new Interpreter(this.diagnostics);
+        const interpreter = new Levelled(this.diagnostics);
         this.projects.push(project = new Project(this, src.is_dot_project ? src : ((directory: string): Text.Source => {
           const dot = new Text.Source();
           dot.location = `${directory}/.project${EXTENSION}`;

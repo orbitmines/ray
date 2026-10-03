@@ -19,7 +19,7 @@ export const Natives: Record<string, Native> = {
     const at = interpreter.location(node);
     if (at?.place === undefined) return interpreter.NONE;
     const held = at.place.member ? at.place.in.own(at.place.name) : at.place.in.own(at.place.name);
-    return held !== undefined ? interpreter.GLOBAL : interpreter.NONE;
+    return held !== undefined && !interpreter.hole(held) ? interpreter.GLOBAL : interpreter.NONE;
   } },
   'goto': { arity: 2, fn: ({ interpreter, args: [label, condition] }) => {
     const met = interpreter.deref(condition, false);

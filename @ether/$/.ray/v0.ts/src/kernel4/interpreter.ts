@@ -9,7 +9,7 @@ export type Native = { arity: number; fn: (args: Args) => Node | undefined; raw?
 export type Piece = (
   | { kind: 'literal'; text: string }
   | { kind: 'gap' }
-  | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node; undecided?: boolean; decided?: number }
+  | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node; undecided?: boolean; decided?: number; type?: Node }
 ) & { tight?: boolean };
 
 export class Node {
@@ -72,6 +72,7 @@ export class Interpreter {
   owns: (src: Text.Source) => boolean = () => true;
   copy_of?: Interpreter
   version = 0
+  declared = 0
   private order = 0
   private depth = 0
   reading?: Text.Node
@@ -103,6 +104,7 @@ export class Interpreter {
     if (!seen.has(this.GLOBAL)) { seen.add(this.GLOBAL); yield this.GLOBAL; for (const made of this.GLOBAL.with ?? []) yield* visit(made, false, this.GLOBAL); }
   }
   private naming?: { scope: Node; hole: Node; name?: string };
+  hole(node: Node): boolean { return this.naming?.hole === node; }
   private trying = 0;
   tried<T>(fn: () => T): T { this.trying++; try { return fn(); } finally { this.trying--; } }
   // What the base gave a value is seen from that value and from what is made of it, not from code written around it.
@@ -161,7 +163,7 @@ export class Interpreter {
       if (own !== undefined) return own;
       for (const made of node.with ?? []) { const found = visit(made); if (found !== undefined) return found; }
     };
-    return visit(of) ?? (this.BASE !== undefined && of !== this.BASE ? visit(this.BASE) : undefined);
+    return visit(of);
   }
 
   // Rules in reach: the scope chain's, and for a value, what it and the base are made of.
@@ -340,7 +342,7 @@ export class Interpreter {
       const from = this.spaces(cursor, cursor.cursor);
       if (from >= cursor.limit || cursor.source.value[from] === '\n') break;
       const claimed = this.claim(cursor, from, frame);
-      let end = native.raw && k === 0 ? this.token(cursor, from) : claimed > from ? claimed : this.operand_end(cursor, from, frame);
+      let end = native.raw && k === 0 ? this.name_end(cursor, from) : claimed > from ? claimed : this.operand_end(cursor, from, frame);
       if (!(native.raw && k === 0) && end > from && /^[\p{L}_][\p{L}\p{N}_-]*$/u.test(cursor.source.value.slice(from, end)) && this.tried(() => this.lookup(frame, cursor.source.value.slice(from, end)))?.fn?.raw) { const after = this.spaces(cursor, end); const token = this.token(cursor, after); if (token > after) end = token; }
       if (end <= from) break;
       const span = cursor.span(from, end - 1);
@@ -409,7 +411,7 @@ export class Interpreter {
       if (!exact) while (last > from && /\s/.test(text[last - 1])) last--;
       const span = cursor.span(from, last - 1);
       if (last <= from) { if (!piece.optional && !enclosed && opened === 0) return; captures.set(piece.name, span); i = end; continue; }
-      if (piece.undecided && piece.decided !== this.version) this.decide(piece);
+      if (piece.undecided && piece.decided !== this.declared) this.decide(piece);
       if (piece.undecided) return;
       if (piece.typed && this.holds(piece, span) === undefined) return;
       captures.set(piece.name, span);
@@ -460,6 +462,7 @@ export class Interpreter {
     }
     return found;
   }
+  name_end(cursor: Text.Node, j: number): number { const text = cursor.source.value; while (j < cursor.limit && !/\s/.test(text[j]) && !this.closes(text[j])) j++; return j; }
   unspaced(cursor: Text.Node, j: number): number { const text = cursor.source.value; while (j < cursor.limit && !/\s/.test(text[j])) j++; return j; }
   operand_end(cursor: Text.Node, j: number, frame: Node): number {
     const text = cursor.source.value;
@@ -528,6 +531,8 @@ export class Interpreter {
     if (++this.depth > Interpreter.DEPTH) { this.depth = 0; throw new Recursion(at); }
     try {
       this.running.push({ found, at });
+      const short = this.operation(found, frame, at);
+      if (short !== undefined) return short;
       this.paint_rule(found, at);
       const local = new Node(at);
       this.running[this.running.length - 1].local = local;
@@ -568,6 +573,7 @@ export class Interpreter {
     } finally { this.depth--; this.running.pop(); }
   }
   running: Running[] = []
+  static same(one: Text.Node | undefined, other: Text.Node): boolean { return one !== undefined && one.source === other.source && one.begin === other.begin && one.end === other.end; }
   static within(inner: Text.Node, outer: Text.Node): boolean { return inner.source === outer.source && inner.begin >= outer.begin && inner.end <= outer.end; }
   // What a capture says besides its name runs on the text it took.
   run_content(piece: Piece & { kind: 'capture' }, span: Text.Node, local: Node) {
@@ -683,6 +689,7 @@ export class Interpreter {
     if (held === undefined) return undefined;
     const scope = at.place.in;
     if (scope.none) return held;
+    if (scope === this.GLOBAL && scope.own(at.place.name) === undefined) this.declared++;
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
     this.paint_place(at);
@@ -754,6 +761,9 @@ export class Interpreter {
 
   // Definitions: a head read by its brackets — text, `{ }` for a space, `{x}` capturing x.
   define(head: Text.Node, body: Text.Node | undefined, scope: Node, closure: Node = scope): Rule | undefined {
+    const site = head.source.location !== undefined ? head : this.running[this.running.length - 1]?.at;
+    const made = site === undefined || scope === this.GLOBAL ? undefined : this.rules_on(scope).find(rule => !this.based().has(rule) && rule.at.string === head.string && Interpreter.same(rule.at.source.location !== undefined ? rule.at : rule.lexical, site));
+    if (made !== undefined) return made;
     const pieces = this.pieces(head, closure);
     if (pieces.length === 0) { this.error('Expected a pattern before `=>`.', head); return; }
     const key = pieces.map(piece => piece.kind === 'literal' ? piece.text : piece.kind === 'gap' ? '{ }' : `{${piece.name}}`).join('');
@@ -803,7 +813,8 @@ export class Interpreter {
     scope.parent = frame;
     const hole = Object.assign(new Node(content), { text: true });
     const was = this.naming, trying = this.trying;
-    this.naming = { scope, hole };
+    const naming: { scope: Node; hole: Node; name?: string } = { scope, hole };
+    this.naming = naming;
     this.trying = 0;
     let value: Node | undefined;
     const refused = this.diagnostics.refused;
@@ -812,7 +823,7 @@ export class Interpreter {
     catch (jump) { if (!(jump instanceof Jump)) throw jump; }
     finally { this.naming = was; this.trying = trying; this.unpainted--; }
     const undecided = this.diagnostics.refused > refused;
-    const name = scope.names === undefined ? undefined : [...scope.names].find(([, held]) => held === hole)?.[0];
+    const name = naming.name;
     if (name === undefined) {
       const held = value === undefined ? undefined : this.quietly(() => this.deref(value));
       if (held?.text && held.at !== undefined) { const spelled = held.at.string; if (spelled.trim() === '' && !spelled.includes('\n')) return { kind: 'gap' }; return { kind: 'literal', text: spelled.includes('\n') && spelled.trim() === '' ? '\n' : spelled }; }
@@ -820,15 +831,19 @@ export class Interpreter {
     }
     const typed = scope.own(name) !== hole && scope.own(name) !== undefined;
     const optional = /\?/.test(written.replace(/`[^`]*`/g, '')) && !typed;
-    return { kind: 'capture', name, raw: scope.raw === true, typed, optional, content, within: frame, undecided: undecided && !typed };
+    return { kind: 'capture', name, raw: scope.raw === true, typed, optional, content, within: frame, undecided: undecided && !typed, decided: this.declared, type: typed ? scope.own(name) : undefined };
   }
   decide(piece: Piece & { kind: 'capture' }) {
-    const again = this.capture(piece.content!, piece.within!);
+    if (this.checking.has(piece)) return;
+    this.checking.add(piece);
+    let again: Piece;
+    try { again = this.capture(piece.content!, piece.within!); } finally { this.checking.delete(piece); }
     if (again.kind !== 'capture') { piece.undecided = false; return; }
     piece.typed = again.typed;
+    piece.type = again.type;
     piece.optional = again.optional;
     piece.undecided = again.undecided;
-    piece.decided = this.version;
+    piece.decided = this.declared;
   }
   group_end(text: string, j: number, end: number): number {
     const pairs: Record<string, string> = { '{': '}', '(': ')', '[': ']' };
@@ -900,9 +915,10 @@ export class Interpreter {
   }
   rules_by_value = new WeakMap<Node, Rule>();
 
+  native(key: string, at?: Text.Node): Native | undefined { return Natives[key]; }
   external(name: Node | undefined, frame: Node): Node | undefined {
     if (name === undefined) return undefined;
-    const key = this.text(name), native = Natives[key];
+    const key = this.text(name), native = this.native(key, name.at);
     if (native === undefined) { this.error(`Expected method \`${key}\` to be externally defined by the runtime, but it wasn't.`, name.at); return undefined; }
     const node = Object.assign(new Node(name.at), { fn: native });
     if (native.arity === 0) return native.fn({ interpreter: this, frame, args: [], at: name.at! });
@@ -916,10 +932,11 @@ export class Interpreter {
     const derived = this.copy_of !== undefined;
     if (this.copy_of !== undefined) { this.clone_from(this.copy_of); this.copy_of = undefined; }
     this.begin_pass();
-    const mine = srcs.filter(src => !derived || this.owns(src));
+    const mine = srcs.filter(src => (!derived || this.owns(src)) && this.reads(src));
     for (const src of mine) {
       this.read_source(src);
       if (src.is_entrypoint) this.read_source(src);
+      this.after(src);
       yield;
     }
     for (const src of mine) {
@@ -943,7 +960,10 @@ export class Interpreter {
     return true;
   }
   feedback(src: Text.Source) { this.read_source(src); this.painted_count++; }
-  copy(): Interpreter { const copy = new Interpreter(this.diagnostics); copy.copy_of = this; return copy; }
+  operation(found: Match, frame: Node, at: Text.Node): Node | undefined { return undefined; }
+  after(src: Text.Source) {}
+  reads(src: Text.Source): boolean { return true; }
+  copy(): Interpreter { const copy = new (this.constructor as typeof Interpreter)(this.diagnostics); copy.copy_of = this; return copy; }
   clone_from(from: Interpreter) {
     const seen = new Map<Node, Node>();
     const rules = new Map<Rule, Rule>();

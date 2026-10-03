@@ -26,7 +26,8 @@ export const Natives: Record<string, Native> = {
     const met = interpreter.quietly(() => interpreter.deref(condition, false));
     if (met === undefined || met.none) return undefined;
     if (process.env.K4JUMP) { const g = globalThis as any; g.jumps = (g.jumps ?? 0) + 1; if ((g.jumps > Number(process.env.K4JUMP) && g.jumps < Number(process.env.K4JUMP) + 12) || (process.env.K4JUMPEVERY && g.jumps % Number(process.env.K4JUMPEVERY) === 0)) { const c = interpreter.written(condition); console.error('JUMP', interpreter.text(interpreter.deref(label, false) ?? label), 'cond', JSON.stringify(c?.code?.span.string.slice(0, 60)), c?.code?.span.line, interpreter.text(met), met.place ? 'place' : met.text ? 'text' : met === interpreter.GLOBAL ? 'GLOBAL' : 'value'); } }
-    throw new Jump(interpreter.text(interpreter.deref(label, false) ?? label));
+    const spelled = interpreter.deref(label, false) ?? label;
+    throw Object.assign(new Jump(interpreter.text(spelled)), { site: spelled.at, spelled: true });
   } },
   'label': { arity: 1, fn: () => undefined },
   'base': { arity: 2, fn: ({ interpreter, args: [node, made] }) => { const target = interpreter.deref(node); if (target) { interpreter.BASE = target; interpreter.made = made; interpreter.version++; } return target; } },

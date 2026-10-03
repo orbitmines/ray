@@ -45,6 +45,7 @@ export class Rule {
   style?: Node
   defines = false
   home?: Node
+  lexical?: Text.Node
   constructor(public pattern: Piece[], public closure: Node, public at: Text.Node, public key: string, public order: number, public body?: Text.Node, public fn?: Native) {}
   get leading(): boolean { return this.pattern[0]?.kind === 'capture'; }
   get enclosed(): boolean { const first = this.pattern[0], last = this.pattern[this.pattern.length - 1]; return this.pattern.length >= 3 && first.kind === 'literal' && last.kind === 'literal' && !Interpreter.word.test(first.text[0] ?? 'a'); }
@@ -54,7 +55,7 @@ export class Rule {
 
 export type Match = { rule: Rule; begin: number; end: number; reach: number; captures: Map<string, Text.Node>; literals: [number, number][]; receiver?: Node };
 
-export class Jump { constructor(public label: string, public value?: Node) {} }
+export class Jump { site?: Text.Node; spelled = false; constructor(public label: string, public value?: Node) {} }
 export class Recursion { constructor(public at: Text.Node) {} }
 
 export class Interpreter {
@@ -114,6 +115,7 @@ export class Interpreter {
         seen.add(at);
         const found = at.own(name);
         if (found !== undefined && !((lexical || depth > 1) && at.given?.has(name))) return found;
+        for (const sees of at.sees ?? []) { const written = sees.own(name); if (written !== undefined && !sees.given?.has(name) && !seen.has(sees)) return written; }
         for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) { const held = visit(made, false, false, depth + 1); if (held !== undefined) return held; }
         for (const sees of at.sees ?? []) { const held = visit(sees, true, true, 0); if (held !== undefined) return held; }
         lexical = true;
@@ -175,7 +177,7 @@ export class Interpreter {
     if (held?.version === this.version) return held.rules;
     const rules: Rule[] = [], seen = new Set<Node>();
     const visit = (node: Node) => {
-      if (seen.has(node)) return;
+      if (seen.has(node) || node === this.GLOBAL) return;
       seen.add(node);
       if (node.rules) for (let k = node.rules.length - 1; k >= 0; k--) rules.push(node.rules[k]);
       for (const made of node.with ?? []) visit(made);
@@ -196,11 +198,11 @@ export class Interpreter {
 
   // Reading: statements, one after another; a jump carries on at the statement its label is.
   read(cursor: Text.Node, frame: Node): Node | undefined {
-    const begin = cursor.cursor;
+    const begin = cursor.cursor, mark = this.forced.length;
     let last: Node | undefined;
     while (true) {
       this.blank(cursor);
-      if (cursor.done()) return last;
+      if (cursor.done()) { if (this.running.length === 0) this.forced.length = Math.min(this.forced.length, mark); return last; }
       const start = cursor.cursor;
       if (process.env.K4MAX && ++this.statements > Number(process.env.K4MAX)) { console.error('WATCHDOG', (cursor.source.location ?? '').split('/').pop(), cursor.span(start, start).line, JSON.stringify(cursor.source.value.slice(start, start + 60)), this.reading?.line, (this.applying ?? []).length, (this.applying ?? []).slice(0, 30).join(' | ')); if (this.statements > Number(process.env.K4MAX) + 40) process.exit(3); }
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
@@ -213,6 +215,7 @@ export class Interpreter {
         if (process.env.K4DECL) console.error('LANDED', jump.label, at === undefined ? 'not here' : cursor.span(at, at).line);
         if (at === undefined) { jump.value ??= last; throw jump; }
         if (jump.value !== undefined) last = jump.value;
+        if (at < start) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
         cursor.cursor = at;
         continue;
       }
@@ -248,7 +251,7 @@ export class Interpreter {
         cursor.cursor = this.spaces(cursor, cursor.cursor);
         if (cursor.done() || text[cursor.cursor] === '\n') break;
         const start = cursor.cursor;
-        const found = this.best(this.rules_of(frame).filter(rule => !rule.leading || rule.defines), cursor, frame);
+        const found = this.best(this.rules_of(frame).filter(rule => (!rule.leading && rule.home === this.GLOBAL) || rule.defines), cursor, frame);
         const name = this.token(cursor, start);
         let named: Match | undefined, place: Node | undefined;
         if (name > start) {
@@ -256,9 +259,13 @@ export class Interpreter {
           const probe = cursor.bounded(name, cursor.limit);
           named = this.tried(() => this.best(this.receiving(place, frame), probe, frame, place));
         }
-        const self = this.receiver_of(frame) ?? (frame === this.GLOBAL ? undefined : frame);
+        const self = this.receiver_of(cursor.span(start, start)) ?? (frame === this.GLOBAL ? undefined : frame);
         const own = self === undefined ? undefined : this.best(this.receiving(self, frame).filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && this.opens(rule.pattern[0].text))), cursor, frame, self);
         if (process.env.K4STMT && text.startsWith(process.env.K4STMT, start)) console.error('STMT', JSON.stringify(text.slice(start, start + 30)), 'found', found?.rule.key, found?.end, 'named', named?.rule.key, named?.end, 'name', name, 'own', own?.rule.key, own?.end, 'self', self ? this.text(self) : '', 'rules', this.rules_of(frame).length, this.rules_of(frame).filter(r => r.key.startsWith('goto')).map(r => r.key + '=' + this.match(r, cursor, frame)?.end));
+        const spelled = name > start && !Interpreter.word.test(text[start]) && !named?.rule.defines && !found?.rule.defines;
+        if (spelled && process.env.K4SP) console.error('SP', JSON.stringify(text.slice(start, start + 40)), cursor.span(start,start).line, own?.rule.key, own?.end, found?.rule.key, found?.end, named?.rule.key, named?.end);
+        if (spelled && own !== undefined && own.rule.pattern[0]?.kind === 'literal') { value = this.fire(own, cursor, frame); continue; }
+        if (spelled && found !== undefined && found.rule.pattern[0]?.kind === 'literal') { value = this.fire(found, cursor, frame); continue; }
         if (own !== undefined && (own.end > Math.max(found?.end ?? start, named?.end ?? name) || (found?.rule === own.rule && own.end === found.end && own.end > (named?.end ?? name)))) { value = this.fire(own, cursor, frame); continue; }
         if (found !== undefined && (name <= start || found.end > (named?.end ?? name) || (named === undefined && found.end >= name) || (named !== undefined && found.end === named.end && found.reach > named.reach) || (found.rule.defines && !named?.rule.defines && found.end >= named!.end))) { value = this.fire(found, cursor, frame); continue; }
         if (place === undefined) break;
@@ -271,6 +278,7 @@ export class Interpreter {
       if (reader?.fn !== undefined && reader.fn.arity > 0 && !reader.fn.raw && cursor.cursor < cursor.limit && this.claim(cursor, cursor.cursor, frame) > cursor.cursor) { value = this.call(reader, cursor, frame); continue; }
       if (reader?.fn?.raw) { const at = this.spaces(cursor, cursor.cursor); if (at < cursor.limit && text[at] !== '\n') { cursor.cursor = at; value = this.call(reader, cursor, frame); continue; } }
       const found = this.best(this.receiving(value, frame), cursor, frame, value);
+      if (process.env.K4RECV && found === undefined) { const t = this.quietly(() => this.deref(value)); console.error('RECV', JSON.stringify(text.slice(cursor.cursor, cursor.cursor + 20)), 'value', this.text(value), 'deref', t === this.GLOBAL ? 'GLOBAL' : t?.at?.string.slice(0, 30), 'rules', this.receiving(value, frame).map(r => r.key).filter(k => /else/.test(k)).join(',')); }
       if (found !== undefined) { value = this.fire(found, cursor, frame); continue; }
       const at = this.spaces(cursor, cursor.cursor);
       if (at >= cursor.limit || text[at] === '\n') break;
@@ -280,7 +288,7 @@ export class Interpreter {
         value = this.call(target, cursor, frame);
         continue;
       }
-      const after = this.best(this.rules_of(frame).filter(rule => !rule.leading), cursor.bounded(at, cursor.limit), frame);
+      const after = this.best(this.rules_of(frame).filter(rule => !rule.leading && rule.home === this.GLOBAL), cursor.bounded(at, cursor.limit), frame);
       if (after !== undefined) { cursor.cursor = at; this.fire(after, cursor, frame); continue; }
       const end = this.statement_end(cursor, at, frame);
       this.error(`Unexpected \`${text.slice(at, end)}\`.`, cursor.span(at, Math.max(at, end - 1)));
@@ -289,11 +297,10 @@ export class Interpreter {
     }
     return value;
   }
-  receiver_of(frame: Node, seen: Set<Node> = new Set()): Node | undefined {
-    for (let at: Node | undefined = frame; at !== undefined && !seen.has(at); at = at.parent) {
-      seen.add(at);
-      for (const sees of at.sees ?? []) { const lexical = this.receiver_of(sees, seen); if (lexical !== undefined) return lexical; }
-      if (at.receiver !== undefined) return at.receiver;
+  receiver_of(at: Text.Node): Node | undefined {
+    for (let k = this.running.length - 1; k >= 0; k--) {
+      const { rule, receiver } = this.running[k];
+      if ((rule.body !== undefined && Interpreter.within(at, rule.body)) || (rule.lexical !== undefined && Interpreter.within(at, rule.lexical))) return receiver;
     }
   }
   receiving(value: Node, frame: Node): Rule[] {
@@ -337,6 +344,7 @@ export class Interpreter {
     let i = cursor.cursor, reach = 0;
     const captures = new Map<string, Text.Node>(), literals: [number, number][] = [];
     const enclosed = rule.enclosed;
+    let opened = 0;
     for (let p = 0; p < pieces.length; p++) {
       const piece = pieces[p];
       if (piece.kind === 'literal') {
@@ -345,6 +353,7 @@ export class Interpreter {
         if (!this.spelled(cursor, from, piece.text)) return;
         literals.push([from, from + piece.text.length - 1]);
         reach += piece.text.length;
+        if (this.opens(piece.text)) opened++; else if (opened > 0 && this.closes(piece.text)) opened--;
         i = from + piece.text.length;
         continue;
       }
@@ -360,7 +369,7 @@ export class Interpreter {
       const from = exact ? i : this.spaces(cursor, i);
       let end: number;
       if (next?.kind === 'literal') {
-        end = p === 0 ? this.last(cursor, from, next.text, frame, piece.raw, enclosed) : this.first(cursor, from, next.text, frame, piece.raw, enclosed);
+        end = p === 0 ? this.last(cursor, from, next.text, frame, piece.raw, enclosed || opened > 0) : this.first(cursor, from, next.text, frame, piece.raw, enclosed || opened > 0);
         if (end < 0) return;
       }
       else if (piece.raw) end = receiver !== undefined || next !== undefined ? this.token_end(cursor, from, frame) : this.unspaced(cursor, from);
@@ -378,6 +387,11 @@ export class Interpreter {
     return { rule, begin: cursor.cursor, end: i, reach, captures, literals, receiver };
   }
   private openers?: { version: number; spelled: Set<string> };
+  private closers?: { version: number; spelled: Set<string> };
+  closes(literal: string): boolean {
+    if (this.closers?.version !== this.version) this.closers = { version: this.version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[rule.pattern.length - 1] as { text: string }).text)) };
+    return this.closers.spelled.has(literal);
+  }
   opens(literal: string): boolean {
     if (this.openers?.version !== this.version) this.openers = { version: this.version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[0] as { text: string }).text)) };
     return this.openers.spelled.has(literal);
@@ -477,6 +491,8 @@ export class Interpreter {
     try {
       if (process.env.K4OVER) (this.applying ??= []).push(rule.key + ' ' + JSON.stringify([...captures].map(([k, v]) => k + '=' + v.string.slice(0, 30))) + (receiver ? ' recv=' + this.text(receiver) + (receiver.place ? ' held-in=' + JSON.stringify(this.holder(receiver.place.in, receiver.place.name)?.at?.string.slice(0, 40)) + ' frame=' + JSON.stringify(receiver.place.in.at?.string.slice(0, 30)) : '') : '') + ' @' + at.line);
       if (process.env.K4TRACE) console.error('APPLY', rule.key, JSON.stringify([...captures].map(([k, v]) => [k, v.string])), receiver ? 'recv:' + this.text(receiver) : '');
+      this.at_stack.push(at);
+      this.running.push(found);
       this.paint_rule(found, at);
       const local = new Node(at);
       local.parent = rule.closure;
@@ -501,10 +517,23 @@ export class Interpreter {
       for (const piece of rule.pattern) if (piece.kind === 'capture' && piece.content !== undefined && captures.has(piece.name)) this.run_content(piece, captures.get(piece.name)!, local);
       if (rule.fn !== undefined) return rule.fn.fn({ interpreter: this, frame: local, args, at, self: receiver });
       if (rule.body === undefined) return undefined;
-      return this.read(this.cursor_of(this.inner(rule.body) ?? rule.body), local);
-    } finally { this.depth--; if (process.env.K4OVER) this.applying!.pop(); }
+      try { return this.read(this.cursor_of(this.inner(rule.body) ?? rule.body), local); }
+      catch (jump) {
+        if (!(jump instanceof Jump)) throw jump;
+        if (process.env.K4RET) console.error("RET", rule.key, jump.label, jump.spelled, JSON.stringify(jump.site?.string), jump.site?.line, JSON.stringify(rule.body.string.slice(0, 40)), rule.body.line);
+        if (jump.site !== undefined && (Interpreter.within(jump.site, rule.body) || (rule.lexical !== undefined && Interpreter.within(jump.site, rule.lexical)))) {
+          if (!jump.spelled) return jump.value;
+          jump.spelled = false;
+          jump.site = at;
+        }
+        throw jump;
+      }
+    } finally { this.depth--; this.at_stack.pop(); this.running.pop(); if (process.env.K4OVER) this.applying!.pop(); }
   }
   applying?: string[]
+  at_stack: Text.Node[] = []
+  running: Match[] = []
+  static within(inner: Text.Node, outer: Text.Node): boolean { return inner.source === outer.source && inner.begin >= outer.begin && inner.end <= outer.end; }
   // What a capture says besides its name runs on the text it took.
   run_content(piece: Piece & { kind: 'capture' }, span: Text.Node, local: Node) {
     const scope = new Node(span);
@@ -572,8 +601,11 @@ export class Interpreter {
   force(node: Node): Node | undefined {
     if (node.value !== undefined) return node.value;
     const { span, in: frame } = node.code!;
-    return node.value = this.read(this.cursor_of(span), frame);
+    node.value = this.read(this.cursor_of(span), frame);
+    this.forced.push(node);
+    return node.value;
   }
+  forced: Node[] = []
   text(node: Node | undefined): string {
     if (node === undefined) return '';
     if (node.style !== undefined) return node.style;
@@ -799,11 +831,13 @@ export class Interpreter {
     if (place?.place !== undefined && !place.place.member) {
       const head = Object.assign(Text.Node.string(place.place.name + spelled), {});
       const rule = this.define(head, this.inner(written) ?? written, place.place.in, body.code?.in ?? place.place.in);
+      if (rule !== undefined) rule.lexical = this.at_stack[this.at_stack.length - 1];
       return rule === undefined ? undefined : this.rule_value(rule);
     }
     const into = this.deref(scope, false);
     if (into === undefined || into.none) return undefined;
     const rule = this.define(Text.Node.string(spelled), this.inner(written) ?? written, into, body.code?.in ?? into);
+    if (rule !== undefined) rule.lexical = this.at_stack[this.at_stack.length - 1];
     return rule === undefined ? undefined : this.rule_value(rule);
   }
   private rule_values = new WeakMap<Rule, Node>();

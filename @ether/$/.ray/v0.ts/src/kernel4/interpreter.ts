@@ -269,7 +269,7 @@ export class Interpreter {
           named = this.tried(() => this.best(this.receiving(place, frame), probe, frame, place));
         }
         const self = this.holding(cursor.span(start, start))?.found.receiver ?? (frame === this.GLOBAL ? undefined : frame);
-        const own = self === undefined ? undefined : this.best(this.receiving(self, frame).filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && this.opens(rule.pattern[0].text))), cursor, frame, self);
+        const own = self === undefined ? undefined : this.best_on(self, frame, cursor, rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && this.opens(rule.pattern[0].text)));
         const spelled = name > start && !Interpreter.word.test(text[start]) && !named?.rule.defines && !found?.rule.defines;
         if (spelled && own !== undefined && own.rule.pattern[0]?.kind === 'literal') { value = this.fire(own, cursor, frame); continue; }
         if (spelled && found !== undefined && found.rule.pattern[0]?.kind === 'literal') { value = this.fire(found, cursor, frame); continue; }
@@ -285,7 +285,7 @@ export class Interpreter {
       const reader = this.deref(value, false);
       if (reader?.fn !== undefined && reader.fn.arity > 0 && !reader.fn.raw && cursor.cursor < cursor.limit && this.claim(cursor, cursor.cursor, frame) > cursor.cursor) { value = this.call(reader, cursor, frame); continue; }
       if (reader?.fn?.raw) { const at = this.spaces(cursor, cursor.cursor); if (at < cursor.limit && text[at] !== '\n') { cursor.cursor = at; value = this.call(reader, cursor, frame); continue; } }
-      const found = this.best(this.receiving(value, frame), cursor, frame, value);
+      const found = this.best_on(value, frame, cursor);
       if (found !== undefined) { value = this.fire(found, cursor, frame); continue; }
       const at = this.spaces(cursor, cursor.cursor);
       if (at >= cursor.limit || text[at] === '\n') break;
@@ -309,6 +309,16 @@ export class Interpreter {
       const { rule } = this.running[k].found;
       if ((rule.body !== undefined && Interpreter.within(at, rule.body)) || (rule.lexical !== undefined && Interpreter.within(at, rule.lexical))) return this.running[k];
     }
+  }
+  // What a value's own class says is read before what every value says.
+  best_on(value: Node, frame: Node, cursor: Text.Node, keep: (rule: Rule) => boolean = () => true): Match | undefined {
+    const rules = this.receiving(value, frame).filter(keep), based = this.based();
+    return this.best(rules.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), cursor, frame, value) ?? this.best(rules, cursor, frame, value);
+  }
+  private base_set?: { version: number; rules: Set<Rule> };
+  based(): Set<Rule> {
+    if (this.base_set?.version !== this.version) this.base_set = { version: this.version, rules: new Set(this.BASE === undefined ? [] : this.rules_on(this.BASE)) };
+    return this.base_set.rules;
   }
   receiving(value: Node, frame: Node): Rule[] {
     const target = value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value;
@@ -473,8 +483,6 @@ export class Interpreter {
     const out: string[] = [];
     for (const other of this.rules_of(frame)) { const spelling = other.operator; if (spelling !== undefined && other.order < rule.order) out.push(spelling); }
     if (this.BASE !== undefined) for (const other of this.rules_on(this.BASE)) { const spelling = other.operator; if (spelling !== undefined && other.order < rule.order) out.push(spelling); }
-    const own = rule.pattern[0];
-    if (own?.kind === 'literal' && Interpreter.run(own.text[0])) out.push(own.text);
     return out;
   }
   // A bracket is any rule written between two literals: what it encloses is skipped over as one.
@@ -579,7 +587,7 @@ export class Interpreter {
   private constructed = new WeakSet<Node>();
   construct(value: Node) {
     const made = this.made?.code;
-    if (made === undefined || this.constructed.has(value) || value.text || value.fn !== undefined || value.style !== undefined || value.code !== undefined || value.place !== undefined) return;
+    if (made === undefined || this.constructed.has(value) || value.text || (value.fn !== undefined && value.style === undefined) || value.code !== undefined || value.place !== undefined) return;
     this.constructed.add(value);
     const sees = value.sees;
     value.sees = [...(sees ?? []), made.in];

@@ -40,7 +40,7 @@ export namespace Text {
 
     constructor(public source: Text.Source) { super(); }
 
-    declare expression: Node
+    expression: Node = undefined as unknown as Node
     begin_expression() {
       const expressions = this.source.expressions;
       let expression = expressions.get(this.cursor);
@@ -52,9 +52,9 @@ export namespace Text {
     }
 
     cursor: number = 0;
-    declare until?: number;
-    declare from?: number;
-    declare to?: number;
+    until?: number = undefined;
+    from?: number = undefined;
+    to?: number = undefined;
 
     declare color?: string
     declare style?: string | (() => string | undefined)

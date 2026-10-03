@@ -44,6 +44,9 @@ export class Node {
   given?: Set<string>
   layout?: number
   visited?: number
+  reached?: number
+  built?: Interpreter
+  heading?: { rules: Rule[]; decided: object; heads: Rule[] }
   scoped?: { deps: Node[]; stamps: number[]; rules: Rule[] }
   ruled?: { base?: Node; deps: Node[]; stamps: number[]; rules: Rule[] }
   shaped?: { of: Rule[]; based: Set<Rule>; rules: Rule[]; mine: Rule[] }
@@ -247,15 +250,19 @@ export class Interpreter {
     }
     if (later !== undefined) for (const sees of later) { const held = this.seek(sees, true, true, name, written, seen); if (held !== undefined) return held; }
   }
+  private reaching = 0;
+  private reach_stack: Node[] = [];
   reaches(frame: Node, target: Node): boolean {
-    const seen = new Set<Node>(), todo = [frame];
+    const seen = ++this.reaching, todo = this.reach_stack;
+    todo.length = 0;
+    todo.push(frame);
     while (todo.length > 0) {
       const at = todo.pop()!;
       if (at === target) return true;
-      if (seen.has(at) || at === this.GLOBAL) continue;
-      seen.add(at);
+      if (at.reached === seen || at === this.GLOBAL) continue;
+      at.reached = seen;
       if (at.parent) todo.push(at.parent);
-      if (at.sees) todo.push(...at.sees);
+      if (at.sees) for (const other of at.sees) todo.push(other);
     }
     return false;
   }
@@ -508,7 +515,8 @@ export class Interpreter {
   private blanks = new WeakMap<Text.Source, { text: string; next: Int32Array }>();
   blank(cursor: Text.Node) {
     const text = cursor.source.value;
-    let next = this.blanks.get(cursor.source)?.text === text ? this.blanks.get(cursor.source)!.next : undefined;
+    const cached = this.blanks.get(cursor.source);
+    let next = cached?.text === text ? cached.next : undefined;
     if (next === undefined) {
       next = new Int32Array(text.length + 1);
       next[text.length] = text.length;
@@ -1036,7 +1044,13 @@ export class Interpreter {
   }
 
   // Applying: a frame where the rule was written, made of what it is applied to, holding what it was handed.
-  heads(frame: Node): Rule[] { return this.derived(this.rules_of(frame), 'heads', this.keep_heads, this.decisions()); }
+  heads(frame: Node): Rule[] {
+    const rules = this.rules_of(frame), decided = this.decisions(), held = frame.heading;
+    if (held !== undefined && held.rules === rules && held.decided === decided) return held.heads;
+    const heads = this.derived(rules, 'heads', this.keep_heads, decided);
+    frame.heading = { rules, decided, heads };
+    return heads;
+  }
   readonly keep_after = (all: Rule[]) => all.filter(rule => !rule.leading && rule.home === this.GLOBAL);
   private readonly keep_heads = (all: Rule[]) => all.filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines);
   private readonly keep_owned = (all: Rule[]) => all.filter(rule => rule.pattern[0]?.kind !== 'gap' && !rule.implicit);
@@ -1080,7 +1094,9 @@ export class Interpreter {
         const value = target !== undefined ? target[0] : this.deref(receiver, false);
         if (receiver.place === undefined && value !== undefined && !value.none) this.construct(value);
         if (receiver.place !== undefined) {
-          const context = Object.assign(new Node(receiver.at), { stands: receiver, with: value !== undefined && !value.none ? [value] : undefined });
+          const context = new Node(receiver.at);
+          context.stands = receiver;
+          if (value !== undefined && !value.none) context.with = [value];
           this.construct(context);
           local.on = context;
         }
@@ -1170,16 +1186,15 @@ export class Interpreter {
     return failed ? undefined : value;
   }
   // The base's constructor runs once for every value made in reach of it.
-  private constructed = new WeakSet<Node>();
   construct(value: Node) {
     const made = this.made?.code;
-    if (made === undefined || this.constructed.has(value) || value.text || (value.fn !== undefined && value.style === undefined) || value.code !== undefined || value.place !== undefined) return;
-    this.constructed.add(value);
+    if (made === undefined || value.built === this || value.text || (value.fn !== undefined && value.style === undefined) || value.code !== undefined || value.place !== undefined) return;
+    value.built = this;
     const fresh = value.names === undefined && value.sees === undefined && value.rules === undefined;
     const template = this.template;
     if (fresh && template !== undefined && !this.painting(this.made!.code!.span.source) && template.made === this.made && template.base === this.BASE && template.stands === (value.stands !== undefined) && template.seen >= 2) {
       for (const [name, held] of template.names) value.set(name, held === 'self' ? value : value.stands!);
-      if (template.names.length > 0) { value.given = new Set(template.names.map(([name]) => name)); for (const [name] of template.names) this.given_names.add(name); }
+      if (template.names.length > 0) { value.given = template.given ??= new Set(template.names.map(([name]) => name)); for (const [name] of template.names) this.given_names.add(name); }
       Interpreter.touch(value);
       return;
     }
@@ -1200,12 +1215,12 @@ export class Interpreter {
       this.template = quiet ? { made: this.made, base: this.BASE, stands: value.stands !== undefined, names: names as [string, 'self' | 'stands'][], seen: same ? this.template!.seen + 1 : 1 } : undefined;
     }
   }
-  private template?: { made?: Node; base?: Node; stands: boolean; names: [string, 'self' | 'stands'][]; seen: number };
+  private template?: { made?: Node; base?: Node; stands: boolean; names: [string, 'self' | 'stands'][]; seen: number; given?: Set<string> };
 
   // Values: a name is a place, read where it is bound; written code is read once, when asked for.
-  place(frame: Node, at: Text.Node): Node { return Object.assign(new Node(at), { place: { in: frame, name: at.string } }); }
-  lazy(span: Text.Node, frame: Node): Node { return Object.assign(new Node(span), { code: { span, in: frame } }); }
-  literal(span: Text.Node): Node { return Object.assign(new Node(span), { text: true }); }
+  place(frame: Node, at: Text.Node): Node { const node = new Node(at); node.place = { in: frame, name: at.string }; return node; }
+  lazy(span: Text.Node, frame: Node): Node { const node = new Node(span); node.code = { span, in: frame }; return node; }
+  literal(span: Text.Node): Node { const node = new Node(span); node.text = true; return node; }
   literal_of(string: string, at?: Text.Node): Node { const node = this.literal(Text.Node.string(string)); if (at !== undefined) node.at = Object.assign(Text.Node.string(string), {}); return node; }
   bound(node: Node): Node | undefined {
     const { in: scope, name, member } = node.place!;
@@ -1245,11 +1260,25 @@ export class Interpreter {
   force(node: Node): Node | undefined {
     if (node.value !== undefined) return node.value;
     const { span, in: frame } = node.code!;
-    node.value = this.read(this.cursor_of(span), frame);
+    node.value = this.word_of(span, frame) ?? this.read(this.cursor_of(span), frame);
     this.forced.push(node);
     return node.value;
   }
   forced: Node[] = []
+  private words = new WeakMap<Text.Node, { cursor: Text.Node; guard?: NameGuard } | null>();
+  word_of(span: Text.Node, frame: Node): Node | undefined {
+    if (frame === this.GLOBAL || this.naming !== undefined) return undefined;
+    let held = this.words.get(span);
+    if (held === undefined) this.words.set(span, held = /^\s*[\p{L}_][\p{L}\p{N}_-]*\s*$/u.test(span.string) ? { cursor: this.cursor_of(span) } : null);
+    if (held === null || this.painting(span.source)) return undefined;
+    const cursor = held.cursor;
+    cursor.cursor = span.begin;
+    this.blank(cursor);
+    const begin = cursor.cursor;
+    if (!this.only_a_name(cursor, frame, this.heads(frame), held)) return undefined;
+    const word = (held as { word?: Text.Node }).word ??= this.stable(cursor.span(begin, this.token(cursor, begin) - 1));
+    return this.place(frame, word);
+  }
   text(node: Node | undefined): string {
     if (node === undefined) return '';
     if (node === this.probe?.node && !this.probe.reading) this.probe.other = true;
@@ -1654,18 +1683,24 @@ export class Interpreter {
   rules_by_value = new WeakMap<Node, Rule>();
 
   native(key: string, at?: Text.Node): Native | undefined { return Natives[key]; }
+  private natives_at = new WeakMap<Text.Node, { key: string; native?: Native; node?: Node }>();
   external(name: Node | undefined, frame: Node): Node | undefined {
     if (name === undefined) return undefined;
+    const site = name.at, cached = site === undefined || name.place !== undefined || name.code !== undefined ? undefined : this.natives_at.get(site);
+    if (cached !== undefined && cached.key === this.text(name)) {
+      if (cached.node !== undefined) return cached.node;
+      if (cached.native !== undefined && cached.native.arity === 0) return cached.native.fn({ interpreter: this, frame, args: [], at: site! });
+    }
     const key = this.text(name), native = this.native(key, name.at);
     if (native === undefined) { this.error(`Expected method \`${key}\` to be externally defined by the runtime, but it wasn't.`, name.at); return undefined; }
-    if (native.arity === 0) return native.fn({ interpreter: this, frame, args: [], at: name.at! });
-    const site = name.at;
+    if (native.arity === 0) { if (site !== undefined && name.place === undefined && name.code === undefined) this.natives_at.set(site, { key, native }); return native.fn({ interpreter: this, frame, args: [], at: name.at! }); }
     if (site === undefined) return Object.assign(new Node(site), { fn: native });
     let by = this.externals.get(site.source);
     if (by === undefined) this.externals.set(site.source, by = new Map());
     const key_at = `${site.begin}:${site.end}:${key}`;
     let node = by.get(key_at);
     if (node === undefined) by.set(key_at, node = Object.assign(new Node(site), { fn: native }));
+    if (name.place === undefined && name.code === undefined) this.natives_at.set(site, { key, native, node });
     return node;
   }
 
@@ -1740,7 +1775,7 @@ export class Interpreter {
       const known = seen.get(n);
       if (known !== undefined) return known;
       const copy = Object.assign(new Node(), n);
-      copy.scoped = copy.ruled = copy.shaped = copy.watchers = undefined;
+      copy.scoped = copy.ruled = copy.shaped = copy.watchers = copy.built = copy.heading = undefined;
       seen.set(n, copy);
       copy.parent = node(n.parent);
       if (n.with) copy.with = n.with.map(x => node(x)!);

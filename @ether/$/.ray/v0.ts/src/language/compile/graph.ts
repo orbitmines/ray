@@ -141,7 +141,7 @@ function compile(events: Event[]): Compiled {
         out.push(`if (!heads_like(it, frame, ${k(event)})) ${miss()}`);
         break;
       case 'named': case 'whole': {
-        out.push(`{ const at = it.place(frame, ${k(undefined)} ??= it.stable(cursor.span(start, ${event.end - 1}))); if (!it.tried(() => { const s = it.shape(at); return it.print(s.rules) === ${k(event.owned)} && it.print(s.on) === ${k(event.on)}; })) ${miss()} ${event.k === 'named' ? 'place = at;' : 'if (place === undefined) place = at;'} }`);
+        out.push(`{ const at = ${k(undefined)} ??= it.stable(cursor.span(start, ${event.end - 1})); if (!it.tried(() => { const s = it.shape_of(it.deref_name(frame, at)); return it.print(s.rules) === ${k(event.owned)} && it.print(s.on) === ${k(event.on)}; })) ${miss()} ${event.k === 'named' ? 'place = at;' : 'if (place === undefined) place = at;'} }`);
         break;
       }
       case 'self':
@@ -160,7 +160,7 @@ function compile(events: Event[]): Compiled {
         break;
       }
       case 'place':
-        out.push(`{ const at = place !== undefined && place.at.end === ${event.end - 1} ? place : it.place(frame, ${k(undefined)} ??= it.stable(cursor.span(start, ${event.end - 1}))); it.paint_place(at); cursor.cursor = ${event.end}; value = at; tv = undefined; }`);
+        out.push(`{ const at = it.place(frame, place !== undefined && place.end === ${event.end - 1} ? place : ${k(undefined)} ??= it.stable(cursor.span(start, ${event.end - 1}))); it.paint_place(at); cursor.cursor = ${event.end}; value = at; tv = undefined; }`);
         acted = true;
         break;
       case 'break': out.push('return { value };'); returned = true; break;

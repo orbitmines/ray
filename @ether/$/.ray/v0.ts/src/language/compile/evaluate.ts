@@ -14,7 +14,7 @@ export function evaluate(it: Interpreter, statement: Statement, cursor: Text.Nod
       return met !== undefined && !met.none ? { jump: { label: code.label, site: code.site } } : {};
     }
     case 'natives': {
-      let target = it.deref(it.place(frame, (code as { stable?: Text.Node }).stable ??= it.stable(code.head)), false), value: Node | undefined;
+      let target = it.deref_name(frame, (code as { stable?: Text.Node }).stable ??= it.stable(code.head)), value: Node | undefined;
       if (target !== code.value) return undefined;
       for (const call of code.calls) {
         if (target?.fn !== call.native) return undefined;

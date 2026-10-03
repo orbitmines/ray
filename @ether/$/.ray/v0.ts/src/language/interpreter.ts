@@ -1320,6 +1320,15 @@ export class Interpreter {
     const { in: scope, name, member } = node.place!;
     return member ? this.member(scope, name) : this.lookup(scope, name, node.at);
   }
+  // What a place for this name would dereference to, without making the place.
+  deref_name(frame: Node, at: Text.Node): Node | undefined {
+    const name = at.string, bound = this.lookup(frame, name, at);
+    if (bound !== undefined) return this.deref(bound, false);
+    const method = this.method_named(frame, name, at);
+    if (method !== undefined) return method;
+    this.missing?.add(name);
+    return undefined;
+  }
   deref(node: Node | undefined, report: boolean = true): Node | undefined {
     for (let depth = 0; node !== undefined && depth < 256; depth++) {
       if (node.place !== undefined) {

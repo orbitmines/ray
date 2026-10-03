@@ -1,4 +1,7 @@
 import { Text } from './text.ts';
+import type { Called, Unit } from './compile/ir.ts';
+import { applied, called } from './compile/record.ts';
+import { evaluate } from './compile/evaluate.ts';
 import { Diagnostics, type Diagnostic } from './diagnostics.ts';
 import { Natives } from './natives.ts';
 import type { Program } from './program.ts';
@@ -98,8 +101,6 @@ export class Heads {
   }
 }
 
-export type Called = { native: Native; spans: Text.Node[]; end: number };
-export type Step = { end: number; heads: Rule[]; label?: string; site?: Text.Node; condition?: Text.Node; head?: { word: Text.Node; value: Node }; calls?: Called[] };
 export type Running ={ found: Match; at: Text.Node; local?: Node };
 export type Match = { rule: Rule; begin: number; end: number; reach: number; captures: Map<string, Text.Node>; literals: [number, number][]; receiver?: Node };
 
@@ -299,20 +300,20 @@ export class Interpreter {
   }
 
   // Reading: statements, one after another; a jump carries on at the statement its label is.
-  private flows = new WeakMap<Text.Source, { epoch: object; by: Map<number, Map<number, Step>> }>();
-  flow(cursor: Text.Node): Map<number, Step> {
+  private units = new WeakMap<Text.Source, { epoch: object; by: Map<number, Unit> }>();
+  unit_of(cursor: Text.Node): Unit {
     const epoch = this.reading_epoch();
-    let held = this.flows.get(cursor.source);
-    if (held === undefined || held.epoch !== epoch) this.flows.set(cursor.source, held = { epoch, by: new Map() });
+    let held = this.units.get(cursor.source);
+    if (held === undefined || held.epoch !== epoch) this.units.set(cursor.source, held = { epoch, by: new Map() });
     const span = cursor.cursor * 65536 + (cursor.limit - cursor.cursor);
-    let steps = held.by.get(span);
-    if (steps === undefined) held.by.set(span, steps = new Map());
-    return steps;
+    let unit = held.by.get(span);
+    if (unit === undefined) held.by.set(span, unit = new Map());
+    return unit;
   }
   firing: { depth: number; fires: Match[]; calls: Called[] }[] = [];
   read(cursor: Text.Node, frame: Node): Node | undefined {
     const begin = cursor.cursor, mark = this.forced.length;
-    const steps = this.program?.serving ? undefined : this.flow(cursor);
+    const unit = this.program?.serving ? undefined : this.unit_of(cursor);
     let last: Node | undefined;
     while (true) {
       this.blank(cursor);
@@ -320,25 +321,10 @@ export class Interpreter {
       const start = cursor.cursor;
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
       try {
-        const step = steps?.get(start), heads = steps === undefined ? undefined : this.heads(frame);
-        if (step !== undefined && step.heads === heads && step.calls !== undefined) {
-          let target = this.deref(this.place(frame, step.head!.word), false), value: Node | undefined, replayed = target === step.head!.value;
-          for (const called of step.calls) {
-            if (!replayed) break;
-            if (target?.fn !== called.native) { replayed = false; break; }
-            const args = called.spans.map((span, k) => k === 0 && called.native.raw ? this.literal(span) : this.lazy(span, frame));
-            value = called.native.fn({ interpreter: this, frame, args, at: cursor.span(called.end, called.end) });
-            target = value === undefined ? undefined : this.deref(value, false);
-          }
-          if (replayed) { cursor.cursor = step.end; if (value !== undefined) last = value; continue; }
-        }
-        if (step !== undefined && step.heads === heads && step.calls === undefined) {
-          cursor.cursor = step.end;
-          if (step.label !== undefined) {
-            const met = step.condition === undefined ? this.GLOBAL : this.deref(this.lazy(step.condition, frame), false);
-            if (met !== undefined && !met.none) throw Object.assign(new Jump(step.label), { site: step.site, spelled: true });
-          }
-          continue;
+        const rules = unit === undefined ? undefined : this.heads(frame), compiled = unit?.get(start);
+        if (compiled !== undefined && compiled.rules === rules) {
+          const ran = evaluate(this, compiled, cursor, frame);
+          if (ran !== undefined) { cursor.cursor = compiled.end; if (ran.value !== undefined) last = ran.value; continue; }
         }
         const firing = { depth: this.running.length, fires: [] as Match[], calls: [] as Called[] };
         this.firing.push(firing);
@@ -347,11 +333,8 @@ export class Interpreter {
         try { value = this.statement(cursor, frame); thrown = false; }
         finally {
           this.firing.pop();
-          if (steps !== undefined && firing.fires.length === 1 && (thrown || cursor.cursor === firing.fires[0].end)) this.record(steps, start, firing.fires[0].end, firing.fires[0], heads!);
-          if (steps !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length > 0 && firing.calls[firing.calls.length - 1].end === cursor.cursor) {
-            const word = cursor.span(start, this.token(cursor, start) - 1), value = this.quietly(() => this.deref(this.place(frame, word), false));
-            if (value !== undefined && value.fn === firing.calls[0].native) steps.set(start, { end: cursor.cursor, heads: heads!, head: { word, value }, calls: firing.calls });
-          }
+          if (unit !== undefined && firing.fires.length === 1 && (thrown || cursor.cursor === firing.fires[0].end)) applied(this, unit, start, firing.fires[0], rules!);
+          if (unit !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length > 0 && firing.calls[firing.calls.length - 1].end === cursor.cursor) called(this, unit, start, cursor.cursor, firing.calls, rules!, cursor.span(start, this.token(cursor, start) - 1), frame);
         }
         if (value !== undefined) last = value;
       } catch (jump) {
@@ -781,19 +764,6 @@ export class Interpreter {
 
   // Applying: a frame where the rule was written, made of what it is applied to, holding what it was handed.
   heads(frame: Node): Rule[] { return this.derived(this.rules_of(frame), 'heads', all => all.filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines), this.decisions()); }
-  record(steps: Map<number, Step>, start: number, end: number, found: Match, heads: Rule[]) {
-    const { rule, captures } = found;
-    if (rule.direct === undefined) return;
-    if (rule.native === 'label') { steps.set(start, { end, heads }); return; }
-    if (found.begin !== start || found.receiver !== undefined || rule.native !== 'goto' || rule.direct.length !== 2) return;
-    const [target, condition] = rule.direct.map(word => word.string);
-    const site = captures.get(target);
-    if (site === undefined || !rule.pattern.some(piece => piece.kind === 'capture' && piece.name === target && piece.raw)) return;
-    const given = captures.get(condition);
-    if (given === undefined && rule.pattern.some(piece => piece.kind === 'capture' && piece.name === condition)) return;
-    if (given === undefined && this.quietly(() => this.deref(this.lazy(rule.direct![1], rule.closure), false)) !== this.GLOBAL) return;
-    steps.set(start, { end, heads, label: site.string, site, condition: given });
-  }
   fire(found: Match, cursor: Text.Node, frame: Node): Node | undefined {
     const firing = this.firing[this.firing.length - 1];
     if (firing !== undefined && firing.depth === this.running.length) firing.fires.push(found);

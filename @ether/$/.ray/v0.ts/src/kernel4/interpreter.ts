@@ -134,28 +134,31 @@ export class Interpreter {
       const local = this.holding(at)?.local;
       if (local?.on?.given?.has(name) && this.reaches(frame, local)) return local.on.own(name);
     }
-    const seen = new Set<Node>(), written = at;
-    const sees_of = (scope: Node): Node[] => written !== undefined && scope.body !== undefined && Interpreter.within(written, scope.body) ? [] : scope.sees ?? [];
-    const visit = (scope: Node | undefined, lexical: boolean, deep: boolean): Node | undefined => {
-      const later: Node[] = [];
-      for (let at = scope; at !== undefined; at = deep ? at.parent : undefined) {
-        if (seen.has(at) || at === this.GLOBAL) { if (!deep) break; continue; }
-        seen.add(at);
-        const found = at.own(name);
-        if (found !== undefined && !(lexical && at.given?.has(name))) return found;
-        for (const sees of sees_of(at)) { const held = sees.own(name); if (held !== undefined && !sees.given?.has(name) && !seen.has(sees)) return held; }
-        for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) { const held = visit(made, false, false); if (held !== undefined) return held; }
-        if (deep) later.push(...sees_of(at));
-        lexical = true;
-      }
-      for (const sees of later) { const held = visit(sees, true, true); if (held !== undefined) return held; }
-    };
-    const found = visit(frame, false, true);
+    const seen = new Set<Node>();
+    const found = this.seek(frame, false, true, name, at, seen);
     if (found !== undefined) return found;
     const global = this.GLOBAL.own(name);
     if (global !== undefined) return global;
-    for (const made of this.GLOBAL.with ?? []) { const held = visit(made, false, false); if (held !== undefined) return held; }
+    for (const made of this.GLOBAL.with ?? []) { const held = this.seek(made, false, false, name, at, seen); if (held !== undefined) return held; }
     if (this.naming !== undefined && (this.naming.name === undefined || this.naming.names !== undefined) && frame === this.naming.scope && (this.naming.names === undefined ? this.trying === 0 : Interpreter.word.test(name[0]))) { const first = this.naming.names?.length === 0 ? this.naming.first : undefined; this.naming.name ??= name; this.naming.names?.push(name); return frame.set(name, first ?? this.naming.hole); }
+  }
+  private static nowhere: Node[] = [];
+  sees_of(scope: Node, written: Text.Node | undefined): Node[] { return written !== undefined && scope.body !== undefined && Interpreter.within(written, scope.body) ? Interpreter.nowhere : scope.sees ?? Interpreter.nowhere; }
+  seek(scope: Node | undefined, lexical: boolean, deep: boolean, name: string, written: Text.Node | undefined, seen: Set<Node>): Node | undefined {
+    let later: Node[] | undefined;
+    for (let at = scope; at !== undefined; at = deep ? at.parent : undefined) {
+      if (seen.has(at) || at === this.GLOBAL) { if (!deep) break; continue; }
+      seen.add(at);
+      const found = at.own(name);
+      if (found !== undefined && !(lexical && at.given?.has(name))) return found;
+      const sees = this.sees_of(at, written);
+      for (const other of sees) { const held = other.own(name); if (held !== undefined && !other.given?.has(name) && !seen.has(other)) return held; }
+      if (at.on !== undefined) { const held = this.seek(at.on, false, false, name, written, seen); if (held !== undefined) return held; }
+      if (at.with !== undefined) for (const made of at.with) { const held = this.seek(made, false, false, name, written, seen); if (held !== undefined) return held; }
+      if (deep && sees.length > 0) (later ??= []).push(...sees);
+      lexical = true;
+    }
+    if (later !== undefined) for (const sees of later) { const held = this.seek(sees, true, true, name, written, seen); if (held !== undefined) return held; }
   }
   reaches(frame: Node, target: Node): boolean {
     const seen = new Set<Node>(), todo = [frame];
@@ -409,16 +412,19 @@ export class Interpreter {
 
   // Matching: the longest reading wins, then the one that spells more, then the one met first.
   best(rules: Rule[], cursor: Text.Node, frame: Node, receiver?: Node, quiet: boolean = false): Match | undefined {
-    let best: Match | undefined;
-    const text = cursor.source.value, here = cursor.cursor, after = this.spaces(cursor, here);
+    return quiet ? this.quietly(() => this.best_of(rules, cursor, frame, receiver)) : this.best_of(rules, cursor, frame, receiver);
+  }
+  best_of(rules: Rule[], cursor: Text.Node, frame: Node, receiver?: Node): Match | undefined {
+    let best: Match | undefined, best_spelled = 0;
+    const text = cursor.source.value, here = cursor.cursor, after = this.spaces(cursor, here), receiving = receiver !== undefined;
     for (const rule of rules) {
-      if (rule.at.source === cursor.source && rule.at.begin <= cursor.cursor && cursor.cursor <= rule.at.end) continue;
-      const head = rule.head(receiver !== undefined);
+      if (rule.at.source === cursor.source && rule.at.begin <= here && here <= rule.at.end) continue;
+      const head = rule.head(receiving);
       if (head !== undefined && !text.startsWith(head, here) && !text.startsWith(head, after)) continue;
-      const found = quiet ? this.quietly(() => this.match(rule, cursor, frame, receiver)) : this.match(rule, cursor, frame, receiver);
+      const found = this.match(rule, cursor, frame, receiver);
       if (found === undefined) continue;
-      const spelled = (m: Match) => receiver !== undefined && m.rule.pattern[m.rule.leading ? 1 : 0]?.kind === 'literal' ? 1 : 0;
-      if (best === undefined || (spelled(found) - spelled(best) || found.end - best.end || Number(found.rule.defines) - Number(best.rule.defines) || found.reach - best.reach) > 0) best = found;
+      const spelled = receiving && rule.pattern[rule.leading ? 1 : 0]?.kind === 'literal' ? 1 : 0;
+      if (best === undefined || (spelled - best_spelled || found.end - best.end || Number(rule.defines) - Number(best.rule.defines) || found.reach - best.reach) > 0) { best = found; best_spelled = spelled; }
     }
     return best;
   }
@@ -987,19 +993,24 @@ export class Interpreter {
     const text = cursor.source.value;
     if (!Interpreter.run(text[j] ?? ' ')) return undefined;
     const held = receiver === undefined ? undefined : this.quietly(() => this.deref(receiver, false));
-    const operators = (of: Node, rules: () => Rule[]): Rule[] => {
-      const known = this.spellings.get(of);
-      if (known?.version === this.version) return known.operators;
-      const found = rules().filter(rule => { const [first, second] = rule.pattern; return rule.pattern.length === 2 && first.kind === 'literal' && second.kind === 'capture' && Interpreter.run(first.text[0]); });
-      this.spellings.set(of, { version: this.version, operators: found });
-      return found;
-    };
     let best: { text: string; rule: Rule } | undefined;
-    for (const rule of [...(held === undefined || held.none ? [] : operators(held, () => this.rules_on(held))), ...operators(frame, () => [...this.rules_of(frame), ...this.based()])]) {
+    if (held !== undefined && !held.none) best = this.longest_operator(this.operators(held, false), text, j, best);
+    return this.longest_operator(this.operators(frame, true), text, j, best);
+  }
+  longest_operator(rules: Rule[], text: string, j: number, best: { text: string; rule: Rule } | undefined): { text: string; rule: Rule } | undefined {
+    for (const rule of rules) {
       const first = rule.pattern[0] as { text: string };
       if (text.startsWith(first.text, j) && (best === undefined || first.text.length > best.text.length)) best = { text: first.text, rule };
     }
     return best;
+  }
+  operators(of: Node, scope: boolean): Rule[] {
+    const known = this.spellings.get(of);
+    if (known?.version === this.version) return known.operators;
+    const rules = scope ? [...this.rules_of(of), ...this.based()] : this.rules_on(of);
+    const found = rules.filter(rule => { const [first, second] = rule.pattern; return rule.pattern.length === 2 && first.kind === 'literal' && second.kind === 'capture' && Interpreter.run(first.text[0]); });
+    this.spellings.set(of, { version: this.version, operators: found });
+    return found;
   }
   // An operator's filter is asked of the method it names.
   operator_fits(piece: Piece & { kind: 'capture' }, spelled: { text: string; rule: Rule }): boolean {

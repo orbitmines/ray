@@ -742,35 +742,64 @@ literal_bits_of (type) => (
   }
   type.literal_bits
 )
+spelled_node ^keyword => (
+  node ^keyword := external .
+  ends := None
+  zero := None
+  one := None
+  node
+)
+spelled_tree_of (type) => (
+  unless type.spelled_tree_known {
+    type.spelled_tree = None
+    spellings ^keyword := literal_bits_of(type)
+    if spellings {
+      root ^keyword := spelled_node
+      spelling ^keyword := spellings.head
+      while spelling {
+        at ^keyword := root
+        bit ^keyword := spelling.value.head
+        while bit {
+          if bit.value {
+            unless at.one { at.one = spelled_node }
+            at = at.one
+          } else {
+            unless at.zero { at.zero = spelled_node }
+            at = at.zero
+          }
+          bit = bit.next
+        }
+        unless (at === root) { at.ends = global }
+        spelling = spelling.next
+      }
+      type.spelled_tree = root
+    }
+    type.spelled_tree_known = global
+  }
+  type.spelled_tree
+)
 could_read_repeated (text, element) => (
   possible ^keyword := global
   if element.superposes {
-    spellings ^keyword := literal_bits_of(element)
-    if spellings {
+    root ^keyword := spelled_tree_of(element)
+    if root {
       active ^keyword := chain None
-      spelling ^keyword := spellings.head
-      while spelling {
-        if spelling.value.head { active &= spelling.value.head }
-        spelling = spelling.next
-      }
+      active &= root
       completed ^keyword := None
       step (bit) => (
         reached ^keyword := chain None
         done ^keyword := None
         at ^keyword := active.head
         while at {
-          if (at.value.value === bit) {
-            if at.value.next { reached &= at.value.next } else { done = global }
+          next_node ^keyword := None
+          if bit { next_node = at.value.one } else { next_node = at.value.zero }
+          if next_node {
+            reached &= next_node
+            if next_node.ends { done = global }
           }
           at = at.next
         }
-        if done {
-          restart ^keyword := spellings.head
-          while restart {
-            if restart.value.head { reached &= restart.value.head }
-            restart = restart.next
-          }
-        }
+        if done { reached &= root }
         completed = done
         active = reached
         reached.head

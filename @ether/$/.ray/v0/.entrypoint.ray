@@ -1247,7 +1247,7 @@ boolean := enum false (holds: None) | true (holds: global) {
     goto second if .holds
     return true
    second\
-    goto no if b.holds
+    goto no if (b as boolean).holds
     return true
    no\
 

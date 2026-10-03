@@ -92,6 +92,23 @@ The recorder generalizes this:
 - **Evaluator** (`compile/evaluate.ts`): a loop over blocks. It is the reference and must give the interpreter's exact diagnostics and values.
 - **JS** (`compile/js.ts`): generates `function (rt, frame, …)` with registers as JS locals, natives as direct calls through `rt.natives`, and guards as `if (…) return rt.deopt(pc)`.
 
+## What was measured (2026-10-03)
+
+- Entrypoint load: 800 → ~300 ms with:
+  - `:=`'s short path;
+  - cached readings;
+  - control flow and native chains replayed per unit;
+  - pass-through rules.
+- Replaying a statement's *reading* (keeping the interpreter's frames, lookups and dereferences) gains nothing. The guards cost what selection costs, because both pay for name resolution, receiver rule lists and the running stack. Tried three times; reverted each time.
+- 50 ms means ~1.5 µs per statement for ~20k statements and ~8k applications per load. A frame walk, a dereference chain or a frame allocation already costs that.
+
+So the unit of compilation is a **rule application**, not a statement:
+
+1. **Trace.** An application is recorded whole for the *shapes* of its receiver and captures (their rule lists): every decision, native call and frame the body can observe.
+2. **IR.** Names resolve to slots where the body proves where they are held (its frame, its captures, its `:=` locals). Applications of static rules are inlined. Dispatch becomes one shape check.
+3. **Runtime representation.** Frames and lazy values are made only where code can observe them: `external .`, a capture passed on unforced, a name looked up from elsewhere.
+4. **Deopt.** A failed shape check runs that application in the interpreter and records another variant.
+
 ## Constraints
 
 - No language vocabulary in TS: guards and passes talk about rules, places, frames and natives only.

@@ -97,6 +97,7 @@ export class Heads {
   }
 }
 
+export type Step = { end: number; heads: Rule[]; label?: string; site?: Text.Node; condition?: Text.Node };
 export type Running ={ found: Match; at: Text.Node; local?: Node };
 export type Match = { rule: Rule; begin: number; end: number; reach: number; captures: Map<string, Text.Node>; literals: [number, number][]; receiver?: Node };
 
@@ -296,8 +297,20 @@ export class Interpreter {
   }
 
   // Reading: statements, one after another; a jump carries on at the statement its label is.
+  private flows = new WeakMap<Text.Source, { epoch: object; by: Map<number, Map<number, Step>> }>();
+  flow(cursor: Text.Node): Map<number, Step> {
+    const epoch = this.reading_epoch();
+    let held = this.flows.get(cursor.source);
+    if (held === undefined || held.epoch !== epoch) this.flows.set(cursor.source, held = { epoch, by: new Map() });
+    const span = cursor.cursor * 65536 + (cursor.limit - cursor.cursor);
+    let steps = held.by.get(span);
+    if (steps === undefined) held.by.set(span, steps = new Map());
+    return steps;
+  }
+  firing: { depth: number; fires: Match[] }[] = [];
   read(cursor: Text.Node, frame: Node): Node | undefined {
     const begin = cursor.cursor, mark = this.forced.length;
+    const steps = this.program?.serving ? undefined : this.flow(cursor);
     let last: Node | undefined;
     while (true) {
       this.blank(cursor);
@@ -305,7 +318,20 @@ export class Interpreter {
       const start = cursor.cursor;
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
       try {
-        const value = this.statement(cursor, frame);
+        const step = steps?.get(start), heads = steps === undefined ? undefined : this.heads(frame);
+        if (step !== undefined && step.heads === heads) {
+          cursor.cursor = step.end;
+          if (step.label !== undefined) {
+            const met = step.condition === undefined ? this.GLOBAL : this.deref(this.lazy(step.condition, frame), false);
+            if (met !== undefined && !met.none) throw Object.assign(new Jump(step.label), { site: step.site, spelled: true });
+          }
+          continue;
+        }
+        const firing = { depth: this.running.length, fires: [] as Match[] };
+        this.firing.push(firing);
+        let value: Node | undefined;
+        try { value = this.statement(cursor, frame); } finally { this.firing.pop(); }
+        if (steps !== undefined && firing.fires.length === 1) this.record(steps, start, cursor.cursor, firing.fires[0], heads!);
         if (value !== undefined) last = value;
       } catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
@@ -362,7 +388,7 @@ export class Interpreter {
         cursor.cursor = this.spaces(cursor, cursor.cursor);
         if (cursor.done() || text[cursor.cursor] === '\n') break;
         const start = cursor.cursor;
-        const found = this.best(this.derived(this.rules_of(frame), 'heads', all => all.filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines), this.decisions()), cursor, frame);
+        const found = this.best(this.heads(frame), cursor, frame);
         let name = this.token(cursor, start);
         let named: Match | undefined, place: Node | undefined;
         if (name > start) {
@@ -731,7 +757,23 @@ export class Interpreter {
   }
 
   // Applying: a frame where the rule was written, made of what it is applied to, holding what it was handed.
+  heads(frame: Node): Rule[] { return this.derived(this.rules_of(frame), 'heads', all => all.filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines), this.decisions()); }
+  record(steps: Map<number, Step>, start: number, end: number, found: Match, heads: Rule[]) {
+    const { rule, captures } = found;
+    if (rule.direct === undefined) return;
+    if (rule.native === 'label') { steps.set(start, { end, heads }); return; }
+    if (found.begin !== start || found.receiver !== undefined || rule.native !== 'goto' || rule.direct.length !== 2) return;
+    const [target, condition] = rule.direct.map(word => word.string);
+    const site = captures.get(target);
+    if (site === undefined || !rule.pattern.some(piece => piece.kind === 'capture' && piece.name === target && piece.raw)) return;
+    const given = captures.get(condition);
+    if (given === undefined && rule.pattern.some(piece => piece.kind === 'capture' && piece.name === condition)) return;
+    if (given === undefined && this.quietly(() => this.deref(this.lazy(rule.direct![1], rule.closure), false)) !== this.GLOBAL) return;
+    steps.set(start, { end, heads, label: site.string, site, condition: given });
+  }
   fire(found: Match, cursor: Text.Node, frame: Node): Node | undefined {
+    const firing = this.firing[this.firing.length - 1];
+    if (firing !== undefined && firing.depth === this.running.length) firing.fires.push(found);
     cursor.cursor = found.end;
     return this.apply(found, frame, cursor.span(found.begin, found.end - 1));
   }

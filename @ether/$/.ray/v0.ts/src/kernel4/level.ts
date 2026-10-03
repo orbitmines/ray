@@ -1,9 +1,10 @@
 import { Text } from './text.ts';
 import { Interpreter, Node, type Rule, type Match, type Native, type Piece } from './interpreter.ts';
+import { bytes_of } from './natives.ts';
 
 type Capture = Piece & { kind: 'capture' };
-type Entry = { method: string; receiver: Capture; operand?: Capture; rule: Rule; native?: string };
-type Operand = { self: Node; other?: Node; rule: Rule; written: () => Node | undefined };
+type Entry = { method: string; receiver?: Capture; operand?: Capture; rule: Rule; native?: string };
+type Operand = { self?: Node; other?: Node; rule: Rule; written: () => Node | undefined };
 type Operation = (level: Levelled, operand: Operand) => Node | undefined;
 
 // A number the interpreter holds as a count: `count` links of `field` above `base`, made like `template`.
@@ -62,6 +63,15 @@ export class Levelled extends Interpreter {
         if (held !== undefined && this.markers.get(held) === 'js.string.written') written = pieces[0];
         continue;
       }
+      if (pieces.length === 2 && pieces[0].kind === 'literal' && pieces[1].kind === 'capture' && rule.body !== undefined) {
+        const answer = this.quietly(() => this.safely(() => this.read(this.cursor_of(rule.body!), scope)));
+        const held = answer === undefined ? undefined : this.quietly(() => this.deref(answer, false));
+        const native = held === undefined ? undefined : this.markers.get(held);
+        if (native === undefined || !(native in Operations)) continue;
+        const method = pieces[0].text.trim();
+        entries.set(method, [...(entries.get(method) ?? []), { method, operand: pieces[1], rule, native }]);
+        continue;
+      }
       const [receiver, spelled, operand] = pieces;
       if (receiver?.kind !== 'capture' || spelled?.kind !== 'literal' || rule.body === undefined) continue;
       if (pieces.length !== (operand === undefined ? 2 : 3) || (operand !== undefined && operand.kind !== 'capture')) continue;
@@ -88,15 +98,30 @@ export class Levelled extends Interpreter {
   }
   carries(value: Node, rule: Rule): boolean { return this.rules_on(value instanceof Count ? value.template : value).includes(rule); }
 
-  operation(found: Match, frame: Node, at: Text.Node): Node | undefined {
+  operation(found: Match, frame: Node, at: Text.Node, given?: Map<string, Node>): Node | undefined {
     const { rule, receiver, captures } = found;
-    if (this.level === undefined || rule.body === undefined || receiver === undefined || this.bypassing.has(rule)) return undefined;
+    if (this.level === undefined || rule.body === undefined || this.bypassing.has(rule)) return undefined;
     const first = rule.pattern[0];
     if (first?.kind !== 'literal') return undefined;
     const entries = this.level.entries.get(first.text.trim());
     if (entries === undefined) return undefined;
     const taking = rule.pattern.find((piece): piece is Capture => piece.kind === 'capture');
+    if (receiver === undefined) {
+      if (rule.home !== this.GLOBAL || taking === undefined || rule.pattern.length !== 2) return undefined;
+      const span = captures.get(taking.name);
+      const other = given?.get(taking.name) ?? (span === undefined ? undefined : this.lazy(span, frame));
+      const value = other === undefined ? undefined : this.deref(other, false);
+      if (value === undefined || value.none) return undefined;
+      for (const entry of entries) {
+        if (entry.receiver !== undefined || entry.native === undefined) continue;
+        const written = () => { this.bypassing.add(rule); try { return this.apply(found, frame, at, given); } finally { this.bypassing.delete(rule); } };
+        const answered = Operations[entry.native](this, { other: value, rule, written });
+        if (answered !== undefined) return answered;
+      }
+      return undefined;
+    }
     for (const entry of entries) {
+      if (entry.receiver === undefined) continue;
       if ((entry.operand !== undefined) !== (taking !== undefined)) continue;
       const type = this.type_of(entry.receiver);
       if (type === undefined || !this.rules_on(type).includes(rule)) continue;
@@ -336,6 +361,25 @@ export const Operations: Record<string, Operation> = {
   'js.string.starts_with': string((level, a, b) => level.truth(b!.length <= a.length && b!.every((x, i) => same(x, a[i])))),
   'js.string.ends_with': string((level, a, b) => level.truth(b!.length <= a.length && b!.every((x, i) => same(x, a[a.length - b!.length + i])))),
   'js.string.contains': string((level, a, b) => level.truth(b!.length === 0 || index_of(a, b!) >= 0)),
+  'js.string.bits': (level, { other }) => {
+    if (other === undefined) return undefined;
+    const chain = new Node(other.at);
+    chain.set('instance', level.GLOBAL);
+    chain.set('owner', level.NONE);
+    let head: Node | undefined, previous: Node | undefined;
+    for (const byte of bytes_of(level, other)) for (let k = 7; k >= 0; k--) {
+      const link = new Node(other.at);
+      link.set('instance', level.GLOBAL);
+      link.set('value', (byte >> k) & 1 ? level.GLOBAL : level.NONE);
+      link.set('previous', previous ?? level.NONE);
+      link.set('next', level.NONE);
+      if (previous === undefined) head = link; else previous.set('next', link);
+      previous = link;
+    }
+    chain.set('head', head ?? level.NONE);
+    chain.set('tail', previous ?? level.NONE);
+    return chain;
+  },
   'js.string.slice': (level, { self, other }) => {
     const mine = level.characters(self), bounds = other === undefined ? undefined : level.links(other);
     if (mine === undefined || bounds === undefined || bounds.length !== 2) return undefined;

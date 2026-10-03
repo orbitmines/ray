@@ -585,7 +585,7 @@ export class Interpreter {
     if (++this.depth > Interpreter.DEPTH) { this.depth = 0; throw new Recursion(at); }
     try {
       this.running.push({ found, at });
-      const short = this.operation(found, frame, at);
+      const short = this.operation(found, frame, at, given);
       if (short !== undefined) return short;
       this.paint_rule(found, at);
       const local = new Node(at);
@@ -689,7 +689,7 @@ export class Interpreter {
           if (node.place.member) return this.NONE;
           const method = this.method_named(node.place.in, node.place.name, node.at);
           if (method !== undefined) return method;
-          if (this.load(node.place.name)) continue;
+          if (report && this.load(node.place.name)) continue;
           this.missing?.add(node.place.name);
           if (report) this.error(`Unresolved \`${node.place.name}\`.`, node.at);
           return undefined;
@@ -1144,7 +1144,7 @@ export class Interpreter {
     return true;
   }
   feedback(src: Text.Source) { this.read_source(src); this.painted_count++; }
-  operation(found: Match, frame: Node, at: Text.Node): Node | undefined { return undefined; }
+  operation(found: Match, frame: Node, at: Text.Node, given?: Map<string, Node>): Node | undefined { return undefined; }
   after(src: Text.Source) {}
   reads(src: Text.Source): boolean { return true; }
   copy(): Interpreter { const copy = new (this.constructor as typeof Interpreter)(this.diagnostics); copy.copy_of = this; return copy; }

@@ -116,24 +116,23 @@ export class Interpreter {
       }
     }
     const seen = new Set<Node>();
-    const visit = (scope: Node | undefined, lexical: boolean, deep: boolean, depth: number): Node | undefined => {
+    const visit = (scope: Node | undefined, lexical: boolean, deep: boolean): Node | undefined => {
       for (let at = scope; at !== undefined; at = deep ? at.parent : undefined) {
         if (seen.has(at) || at === this.GLOBAL) { if (!deep) return; continue; }
         seen.add(at);
         const found = at.own(name);
-        if (found !== undefined && !((lexical || depth > 1) && at.given?.has(name))) return found;
+        if (found !== undefined && !(lexical && at.given?.has(name))) return found;
         for (const sees of at.sees ?? []) { const written = sees.own(name); if (written !== undefined && !sees.given?.has(name) && !seen.has(sees)) return written; }
-        for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) { const held = visit(made, false, false, depth + 1); if (held !== undefined) return held; }
-        for (const sees of at.sees ?? []) { const held = visit(sees, true, true, 0); if (held !== undefined) return held; }
+        for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) { const held = visit(made, false, false); if (held !== undefined) return held; }
+        for (const sees of at.sees ?? []) { const held = visit(sees, true, true); if (held !== undefined) return held; }
         lexical = true;
-        depth = 0;
       }
     };
-    const found = visit(frame, false, true, 0);
+    const found = visit(frame, false, true);
     if (found !== undefined) return found;
     const global = this.GLOBAL.own(name);
     if (global !== undefined) return global;
-    for (const made of this.GLOBAL.with ?? []) { const held = visit(made, false, false, 1); if (held !== undefined) return held; }
+    for (const made of this.GLOBAL.with ?? []) { const held = visit(made, false, false); if (held !== undefined) return held; }
     if (this.naming !== undefined && this.naming.name === undefined && frame === this.naming.scope && this.trying === 0) { this.naming.name = name; return frame.set(name, this.naming.hole); }
   }
   reaches(frame: Node, target: Node): boolean {

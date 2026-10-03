@@ -297,7 +297,7 @@ export class Interpreter {
         value = place;
         continue;
       }
-      const reader = this.quietly(() => this.deref(value));
+      const reader = this.deref(value, false);
       if (reader?.fn !== undefined && reader.fn.arity > 0 && !reader.fn.raw && cursor.cursor < cursor.limit && this.claim(cursor, cursor.cursor, frame) > cursor.cursor) { value = this.call(reader, cursor, frame); continue; }
       if (reader?.fn?.raw) { const at = this.spaces(cursor, cursor.cursor); if (at < cursor.limit && text[at] !== '\n') { cursor.cursor = at; value = this.call(reader, cursor, frame); continue; } }
       const found = this.best(this.receiving(value, frame), cursor, frame, value);
@@ -327,7 +327,7 @@ export class Interpreter {
     }
   }
   receiving(value: Node, frame: Node): Rule[] {
-    const target = value.place !== undefined || value.code !== undefined ? this.quietly(() => this.deref(value)) : value;
+    const target = value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value;
     const own = (target !== undefined && !target.none && target !== this.GLOBAL ? this.rules_on(target) : this.BASE !== undefined ? this.rules_on(this.BASE) : []).filter(rule => rule.pattern[0]?.kind !== 'gap' || rule.home === target);
     return [...own, ...this.rules_of(frame).filter(rule => rule.leading && !rule.implicit)];
   }
@@ -424,8 +424,11 @@ export class Interpreter {
     if (at + literal.length > cursor.limit || !text.startsWith(literal, at)) return false;
     if (Interpreter.word.test(literal[0]) && at > 0 && Interpreter.word.test(text[at - 1])) return false;
     if (Interpreter.word.test(literal[literal.length - 1]) && Interpreter.word.test(text[at + literal.length] ?? '')) return false;
+    if (Interpreter.run(literal[0]) && at > 0 && Interpreter.run(text[at - 1])) return false;
+    if (Interpreter.run(literal[literal.length - 1]) && Interpreter.run(text[at + literal.length] ?? ' ')) return false;
     return true;
   }
+  static run(character: string): boolean { return !/[\s\p{L}\p{N}_(){}\[\]`,"']/u.test(character); }
   // Where a capture ends: at the literal after it, at the end of one operand, or before what binds looser.
   first(cursor: Text.Node, from: number, literal: string, frame: Node, raw: boolean, enclosed: boolean): number {
     const text = cursor.source.value;
@@ -522,7 +525,7 @@ export class Interpreter {
       local.parent = rule.closure;
       local.receiver = receiver;
       if (receiver !== undefined) {
-        const value = this.quietly(() => this.deref(receiver));
+        const value = this.deref(receiver, false);
         if (receiver.place === undefined && value !== undefined && !value.none) this.construct(value);
         if (receiver.place !== undefined) {
           const context = Object.assign(new Node(receiver.at), { stands: receiver, with: value !== undefined && !value.none ? [value] : undefined });
@@ -720,7 +723,7 @@ export class Interpreter {
         if (target.code.span.empty() || word === '') return undefined;
         if (!(frame.sees ??= []).includes(target.code.in) && frame !== target.code.in) frame.sees.unshift(target.code.in);
         const last = this.read(this.cursor_of(this.inner(target.code.span) ?? target.code.span), frame);
-        const held = last === undefined ? undefined : this.quietly(() => this.deref(last));
+        const held = last === undefined ? undefined : this.deref(last, false);
         if (held?.program && !compose) return this.inline(held, frame);
         if (compose && held !== undefined && !held.text && !held.none && held.code === undefined && held !== frame) { (frame.with ??= []).push(held); this.version++; }
         return last;
@@ -888,9 +891,10 @@ export class Interpreter {
   definitions: string[] = [];
   interpret(srcs: Text.Source[]) { for (const _ of this.derive(srcs)); }
   *derive(srcs: Text.Source[]): Generator<void> {
+    const derived = this.copy_of !== undefined;
     if (this.copy_of !== undefined) { this.clone_from(this.copy_of); this.copy_of = undefined; }
     this.begin_pass();
-    const mine = srcs.filter(src => this.owns(src) || this.copy_of === undefined);
+    const mine = srcs.filter(src => !derived || this.owns(src));
     for (const src of mine) {
       this.read_source(src);
       if (src.is_entrypoint) this.read_source(src);
@@ -938,6 +942,7 @@ export class Interpreter {
       const copy = Object.assign(Object.create(Rule.prototype), r) as Rule;
       rules.set(r, copy);
       copy.closure = node(r.closure)!;
+      copy.home = node(r.home);
       return copy;
     };
     this.GLOBAL = node(from.GLOBAL)!;

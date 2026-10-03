@@ -23,7 +23,7 @@ export const Natives: Record<string, Native> = {
     return held !== undefined ? interpreter.GLOBAL : interpreter.NONE;
   } },
   'goto': { arity: 2, fn: ({ interpreter, args: [label, condition] }) => {
-    const met = interpreter.quietly(() => interpreter.deref(condition, false));
+    const met = interpreter.deref(condition, false);
     if (met === undefined || met.none) return undefined;
     if (process.env.K4JUMP) { const g = globalThis as any; g.jumps = (g.jumps ?? 0) + 1; if ((g.jumps > Number(process.env.K4JUMP) && g.jumps < Number(process.env.K4JUMP) + 12) || (process.env.K4JUMPEVERY && g.jumps % Number(process.env.K4JUMPEVERY) === 0)) { const c = interpreter.written(condition); console.error('JUMP', interpreter.text(interpreter.deref(label, false) ?? label), 'cond', JSON.stringify(c?.code?.span.string.slice(0, 60)), c?.code?.span.line, interpreter.text(met), met.place ? 'place' : met.text ? 'text' : met === interpreter.GLOBAL ? 'GLOBAL' : 'value'); } }
     const spelled = interpreter.deref(label, false) ?? label;
@@ -100,7 +100,7 @@ function located(interpreter: Interpreter, node: Node, at: Text.Node): Node {
 function report(interpreter: Interpreter, level: Node | undefined, variable: Node | undefined, comment: Node | undefined, at: Text.Node): Node | undefined {
   const levels: Record<string, Diagnostic['level']> = { FATAL: 'fatal', ERROR: 'error', WARN: 'warning', INFO: 'info', DEBUG: 'debug', TRACE: 'trace' };
   const target = variable && interpreter.quietly(() => interpreter.deref(variable, false));
-  const node = target?.at ?? variable?.at ?? comment?.at ?? at;
+  const node = interpreter.written(variable)?.code?.span ?? target?.at ?? variable?.at ?? comment?.at ?? at;
   const said = comment && (interpreter.quietly(() => interpreter.deref(comment, false)) ?? comment);
   interpreter.complain((level !== undefined ? levels[interpreter.text(interpreter.deref(level, false) ?? level)] : undefined) ?? 'error', said ? interpreter.text(said) : '', node);
   return comment;

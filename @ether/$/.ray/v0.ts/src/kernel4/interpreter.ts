@@ -225,10 +225,11 @@ export class Interpreter {
   }
 
   // Rules in reach: the scope chain's, and for a value, what it and the base are made of.
-  private rule_sets = new WeakMap<Node, { version: number; rules: Rule[] }>();
+  private rule_sets = new WeakMap<Node, { version: number; scope: number; rules: Rule[] }>();
+  scope_version = 0;
   rules_of(frame: Node): Rule[] {
     const held = this.rule_sets.get(frame);
-    if (held?.version === this.version) return held.rules;
+    if (held?.version === this.version && held.scope === this.scope_version) return held.rules;
     const rules: Rule[] = [], seen = new Set<Node>();
     const visit = (scope: Node | undefined) => {
       for (let at = scope; at !== undefined && !seen.has(at); at = at.parent) {
@@ -239,7 +240,7 @@ export class Interpreter {
     };
     visit(frame);
     const shared = this.canonical(rules);
-    this.rule_sets.set(frame, { version: this.version, rules: shared });
+    this.rule_sets.set(frame, { version: this.version, scope: this.scope_version, rules: shared });
     return shared;
   }
   private decided_at?: { declared: number };
@@ -740,9 +741,13 @@ export class Interpreter {
     return j;
   }
   looser(frame: Node, rule: Rule): string[] {
+    const latest = new Map<string, Rule>();
+    const visit = (rules: Rule[]) => { for (const other of rules) if (other.operator !== undefined && (latest.get(other.key)?.order ?? -1) < other.order) latest.set(other.key, other); };
+    visit(this.rules_of(frame));
+    if (this.BASE !== undefined) visit(this.rules_on(this.BASE));
+    const order = Math.max(rule.order, latest.get(rule.key)?.order ?? -1);
     const out: string[] = rule.operator === undefined ? [] : [rule.operator];
-    for (const other of this.rules_of(frame)) { const spelling = other.operator; if (spelling !== undefined && other.order < rule.order) out.push(spelling); }
-    if (this.BASE !== undefined) for (const other of this.rules_on(this.BASE)) { const spelling = other.operator; if (spelling !== undefined && other.order < rule.order) out.push(spelling); }
+    for (const other of latest.values()) if (other.order < order) out.push(other.operator!);
     return out;
   }
   // A bracket is any rule written between two literals: what it encloses is skipped over as one.
@@ -877,9 +882,10 @@ export class Interpreter {
     this.constructed.add(value);
     const sees = value.sees;
     value.sees = [...(sees ?? []), made.in];
+    this.scope_version++;
     const before = new Set(value.names?.keys() ?? []);
     try { this.safely(() => this.read(this.cursor_of(this.inner(made.span) ?? made.span), value)); }
-    finally { value.sees = sees; }
+    finally { value.sees = sees; this.scope_version++; }
     for (const key of value.names?.keys() ?? []) if (!before.has(key)) (value.given ??= new Set()).add(key);
   }
 
@@ -1022,7 +1028,7 @@ export class Interpreter {
         const word = target.code.span.string.trim();
         if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) { const held = this.lookup(target.code.in, word, target.code.span); if (held !== undefined) { target = held; continue; } const read = this.force(target); if (read === undefined) return undefined; target = read; continue; }
         if (target.code.span.empty() || word === '') return undefined;
-        if (!(frame.sees ??= []).includes(target.code.in) && frame !== target.code.in) frame.sees.unshift(target.code.in);
+        if (!(frame.sees ??= []).includes(target.code.in) && frame !== target.code.in) { frame.sees.unshift(target.code.in); this.scope_version++; }
         const last = this.read(this.cursor_of(this.inner(target.code.span) ?? target.code.span), frame);
         const held = last === undefined ? undefined : this.deref(last, false);
         if (held?.program && !compose) return this.inline(held, frame);
@@ -1031,7 +1037,7 @@ export class Interpreter {
       }
       if (target.place !== undefined) { target = this.bound(target); continue; }
       if (target.program) {
-        if (!(frame.sees ??= []).includes(target.code!.in) && frame !== target.code!.in) frame.sees.unshift(target.code!.in);
+        if (!(frame.sees ??= []).includes(target.code!.in) && frame !== target.code!.in) { frame.sees.unshift(target.code!.in); this.scope_version++; }
         return this.read(this.cursor_of(target.code!.span), frame);
       }
       if (target.text) return compose || target.at === undefined || target.at.empty() ? target : this.read(this.cursor_of(target.at), frame);

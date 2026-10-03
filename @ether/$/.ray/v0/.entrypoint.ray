@@ -573,8 +573,22 @@ chainable ^keyword := class: Modifier {
 compounds ^keyword := class: Modifier {
   compounds => TODO
 }
-chainable {pattern} => {body} => chainable.modify(external rule pattern body)
-compounds {pattern} => {body} => compounds.modify(external rule pattern body)
+chainable {head} ({parameters ^parameter}) => {block} => (
+  names := external ** parameters
+  code := external ** block
+  chainable.modify(external define head `{arguments}` {
+    (inline names) := arguments
+    inline code
+  })
+)
+compounds {head} ({parameters ^parameter}) => {block} => (
+  names := external ** parameters
+  code := external ** block
+  compounds.modify(external define head `{arguments}` {
+    (inline names) := arguments
+    inline code
+  })
+)
 Modifier.spellings = chain None
 Modifier.spellings &= `chainable`
 Modifier.spellings &= `compounds`

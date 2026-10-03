@@ -39,5 +39,4 @@ Compiler.default = {
   {a: Number}.holds => external js.number.pred
   {a: Number}.is_zero => external js.number.is_zero
   {a: Number}.nonzero => external js.number.nonzero
-  {a: Decimal}.next => external js.number.pred
 }

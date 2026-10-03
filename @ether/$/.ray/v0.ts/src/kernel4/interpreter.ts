@@ -654,7 +654,7 @@ export class Interpreter {
       }
       if (at.place === undefined) return at;
       let holder = at.place.member ? at.place.in : this.near_holder(at.place.in, at.place.name);
-      if (holder !== undefined && holder !== at.place.in && holder.given?.has(at.place.name)) for (const sees of at.place.in.sees ?? []) { const lexical = this.near_holder(sees, at.place.name); if (lexical?.given?.has(at.place.name)) { holder = lexical; break; } }
+      if (holder !== undefined && holder !== at.place.in && holder.given?.has(at.place.name) && at.at !== undefined) { const local = this.holding(at.at)?.local; if (local?.on?.given?.has(at.place.name) && this.reaches(at.place.in, local)) holder = local.on; }
       if (holder?.stands !== undefined && holder.given?.has(at.place.name)) { if (stood) return at; stood = true; at = holder.stands; continue; }
       const held = holder?.own(at.place.name);
       if (held === undefined || (held.place === undefined && held.code === undefined) || held.program) return at;

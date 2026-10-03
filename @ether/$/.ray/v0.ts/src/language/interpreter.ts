@@ -912,7 +912,14 @@ export class Interpreter {
       if (last <= from) { if (!piece.optional && !enclosed && opened === 0) return; captures.set(piece.name, span); i = end; continue; }
       if (piece.undecided && piece.decided !== this.declared) this.decide(piece);
       if (piece.undecided) return;
-      if (piece.typed && this.holds(piece, span) === undefined) return;
+      if (piece.typed && this.holds(piece, span) === undefined) {
+        if (next !== undefined) return;
+        const shorter = this.held_within(cursor, piece, from, last, frame);
+        if (shorter === undefined) return;
+        captures.set(piece.name, cursor.span(from, shorter - 1));
+        i = shorter;
+        continue;
+      }
       captures.set(piece.name, span);
       i = end;
     }
@@ -962,6 +969,11 @@ export class Interpreter {
       j = k > j ? k : j + 1;
     }
     return found;
+  }
+  held_within(cursor: Text.Node, piece: Piece & { kind: 'capture' }, from: number, last: number, frame: Node): number | undefined {
+    const ends: number[] = [];
+    for (let j = from; j < last;) { const k = Math.max(this.claim(cursor, j, frame), this.token(cursor, j)); j = k > j ? k : j + 1; if (j < last && !/\s/.test(cursor.source.value[j - 1])) ends.push(j); }
+    for (let e = ends.length - 1; e >= 0; e--) if (this.holds(piece, cursor.span(from, ends[e] - 1)) !== undefined) return ends[e];
   }
   name_end(cursor: Text.Node, j: number): number { const text = cursor.source.value; while (j < cursor.limit && !/\s/.test(text[j]) && !this.closes(text[j])) j++; return j; }
   unspaced(cursor: Text.Node, j: number): number { const text = cursor.source.value; while (j < cursor.limit && !/\s/.test(text[j])) j++; return j; }

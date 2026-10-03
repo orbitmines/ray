@@ -78,12 +78,12 @@ class {block} => (
 
   ({args}) => (
     static := this
+    inline args
     this := external .
     this.components = chain None
     this.components.hierarchy = chain this
     this.components.hierarchy &= static
     this.instance = global
-    inline args
     inline block
     this
   )
@@ -229,21 +229,21 @@ Node := base class {
   listing => None
 
   ({parameters ^parameter}) => {block} => (
-    names := external ** parameters
-    code := external ** block
+    method_parameters := external ** parameters
+    method_body := external ** block
     this ^function
     external define this `{arguments}` {
-      (inline names) := arguments
-      inline code
+      (inline method_parameters) := arguments
+      inline method_body
     } parameters
   )
   ^{literal style} ({parameters ^parameter}) => {block} => (
-    names := external ** parameters
-    code := external ** block
+    method_parameters := external ** parameters
+    method_body := external ** block
     this ^function
     external define this `{arguments}` {
-      (inline names) := arguments
-      inline code
+      (inline method_parameters) := arguments
+      inline method_body
     } parameters
   )
 
@@ -607,19 +607,19 @@ compounds ^keyword := class: Modifier {
   compounds => TODO
 }
 chainable {head} ({parameters ^parameter}) => {block} => (
-  names := external ** parameters
-  code := external ** block
+  method_parameters := external ** parameters
+  method_body := external ** block
   chainable.modify(external define head `{arguments}` {
-    (inline names) := arguments
-    inline code
+    (inline method_parameters) := arguments
+    inline method_body
   } parameters)
 )
 compounds {head} ({parameters ^parameter}) => {block} => (
-  names := external ** parameters
-  code := external ** block
+  method_parameters := external ** parameters
+  method_body := external ** block
   compounds.modify(external define head `{arguments}` {
-    (inline names) := arguments
-    inline code
+    (inline method_parameters) := arguments
+    inline method_body
   } parameters)
 )
 Modifier.spellings = chain None

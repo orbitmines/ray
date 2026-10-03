@@ -252,6 +252,7 @@ export class Diagnostics {
 
   private silent = 0;
   muted<T>(fn: () => T): T { this.silent++; try { return fn(); } finally { this.silent--; } }
+  unmuted<T>(fn: () => T): T { const silent = this.silent; this.silent = 0; try { return fn(); } finally { this.silent = silent; } }
 
   refused = 0;
   report(entry: Diagnostic) {

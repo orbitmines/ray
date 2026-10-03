@@ -48,6 +48,8 @@ export class Rule {
   implicit = false
   constructor(public pattern: Piece[], public closure: Node, public at: Text.Node, public key: string, public order: number, public body?: Text.Node, public fn?: Native) {}
   get leading(): boolean { return this.pattern[0]?.kind === 'capture'; }
+  // A leading capture with a type is a pattern over text.
+  get reads(): boolean { const first = this.pattern[0]; return first?.kind === 'capture' && (first.typed || first.undecided === true); }
   get enclosed(): boolean { const first = this.pattern[0], last = this.pattern[this.pattern.length - 1]; return this.pattern.length >= 3 && first.kind === 'literal' && last.kind === 'literal' && !Interpreter.word.test(first.text[0] ?? 'a'); }
   // A spelling that takes the one thing written after it.
   get operator(): string | undefined { const [first, second] = this.pattern; return this.pattern.length === 2 && first.kind === 'literal' && second.kind === 'capture' && !Interpreter.word.test(first.text[0] ?? 'a') ? first.text : undefined; }
@@ -262,7 +264,7 @@ export class Interpreter {
         cursor.cursor = this.spaces(cursor, cursor.cursor);
         if (cursor.done() || text[cursor.cursor] === '\n') break;
         const start = cursor.cursor;
-        const found = this.best(this.rules_of(frame).filter(rule => (!rule.leading && rule.home === this.GLOBAL) || rule.defines), cursor, frame);
+        const found = this.best(this.rules_of(frame).filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines), cursor, frame);
         let name = this.token(cursor, start);
         let named: Match | undefined, place: Node | undefined;
         if (name > start) {
@@ -583,10 +585,15 @@ export class Interpreter {
     this.quietly(() => this.safely(() => this.read(this.cursor_of(piece.content!), scope)));
   }
   private checking = new Set<Piece>();
+  private held_texts = new WeakMap<Piece, Map<string, { declared: number; value: Node | undefined }>>();
   holds(piece: Piece & { kind: 'capture' }, span: Text.Node): Node | undefined {
     if (this.checking.has(piece)) return undefined;
+    let known = this.held_texts.get(piece);
+    if (known === undefined) this.held_texts.set(piece, known = new Map());
+    const text = span.string, held = known.get(text);
+    if (held !== undefined && held.declared === this.declared) return held.value;
     this.checking.add(piece);
-    try { return this.checked(piece, span); } finally { this.checking.delete(piece); }
+    try { const value = this.checked(piece, span); known.set(text, { declared: this.declared, value }); return value; } finally { this.checking.delete(piece); }
   }
   checked(piece: Piece & { kind: 'capture' }, span: Text.Node): Node | undefined {
     const scope = new Node(span);
@@ -625,6 +632,7 @@ export class Interpreter {
         const bound = this.bound(node);
         if (bound === undefined) {
           if (node.place.member) return this.NONE;
+          if (this.load(node.place.name)) continue;
           if (report) this.error(`Unresolved \`${node.place.name}\`.`, node.at);
           return undefined;
         }
@@ -933,9 +941,14 @@ export class Interpreter {
     if (this.copy_of !== undefined) { this.clone_from(this.copy_of); this.copy_of = undefined; }
     this.begin_pass();
     const mine = srcs.filter(src => (!derived || this.owns(src)) && this.reads(src));
+    this.pending = [];
+    this.done = new Set();
     for (const src of mine) {
+      if (this.done.has(src)) continue;
+      this.done.add(src);
+      this.pending = this.pending.filter(other => other !== src);
       this.read_source(src);
-      if (src.is_entrypoint) this.read_source(src);
+      if (src.is_entrypoint) { this.read_source(src); if (!derived) this.pending = mine.filter(other => !other.is_entrypoint && !this.done.has(other)); }
       this.after(src);
       yield;
     }
@@ -945,6 +958,21 @@ export class Interpreter {
       yield;
     }
     this.end_pass();
+  }
+  // A name nothing has written yet is looked for in the files not read so far, in their order.
+  pending: Text.Source[] = [];
+  done = new Set<Text.Source>();
+  load(name: string): boolean {
+    while (this.pending.length > 0) {
+      const src = this.pending.shift()!;
+      this.done.add(src);
+      const depth = this.depth, running = this.running, reading = this.reading;
+      this.depth = 0; this.running = [];
+      try { this.diagnostics.unmuted(() => this.read_source(src)); this.after(src); }
+      finally { this.depth = depth; this.running = running; this.reading = reading; }
+      if (this.GLOBAL.own(name) !== undefined) return true;
+    }
+    return false;
   }
   read_source(src: Text.Source) {
     this.diagnostics.forget(src);

@@ -409,6 +409,27 @@ Node := base class {
     holding
   )
 
+  === (other) => (
+    answer ^keyword := None
+    goto marking if this
+    goto done if other
+    answer = global
+    goto done
+   marking\
+    marker ^keyword := external .
+    marker.probe = global
+    this.identical = marker
+    goto owned if (external own other.identical)
+    goto cleared
+   owned\
+    answer = other.identical.probe
+   cleared\
+    marker.probe = None
+   done\
+
+    answer
+  )
+
   not => (
     answer ^keyword := global
     goto held if this

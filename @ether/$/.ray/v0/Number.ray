@@ -1,6 +1,37 @@
 Number := class: Ray {
   .{fraction: Decimal.String ^number} ^punctuation => Number.Real(integer: this, fraction: digits_selected(fraction), radix: ten)
   succ => Number(next: this)
+  ..<{last} ^punctuation => (
+    stepped ^keyword := chain None
+    at ^keyword := this
+    if (last < this) {
+      while (last < at) {
+        stepped &= at
+        at = at.pred
+      }
+    } else {
+      while (at < last) {
+        stepped &= at
+        at = at.succ
+      }
+    }
+    stepped
+  )
+  ..{last} ^punctuation => (
+    upto ^keyword := last
+    onward ^keyword := None
+    if (last.head) {
+      upto = last.head.value
+      onward = last.head.next
+    }
+    stepped ^keyword := this..<upto
+    stepped &= upto
+    while (onward) {
+      stepped &= onward.value
+      onward = onward.next
+    }
+    stepped
+  )
 
   bounded => false
   entry => Number.Line(value: this)

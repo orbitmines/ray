@@ -479,8 +479,8 @@ export class Interpreter {
     const on = this.owned(value), leading = this.leading_of(frame);
     if (!own) return this.best(this.joined(on.mine, leading.mine), cursor, frame, value) ?? this.best(this.joined(on.rules, leading.rules), cursor, frame, value);
     const based = this.based(), openers = this.openers_now();
-    const rules = this.derived(this.joined(on.rules, leading.rules), 'own', all => all.filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && openers.has(rule.pattern[0].text))), openers);
-    return this.best(this.derived(rules, 'own mine', all => all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), based), cursor, frame, value) ?? this.best(rules, cursor, frame, value);
+    const rules = this.derived(this.joined(on.rules, leading.rules), 'own', this.keep_own, openers);
+    return this.best(this.derived(rules, 'own mine', this.keep_mine, based), cursor, frame, value) ?? this.best(rules, cursor, frame, value);
   }
   receiving(value: Node, frame: Node): Rule[] { return this.joined(this.owned(value).rules, this.leading_of(frame).rules); }
   private derivations = new WeakMap<Rule[], Map<string, { on?: object; rules: Rule[] }>>();
@@ -518,21 +518,21 @@ export class Interpreter {
     if (key === undefined) return Interpreter.owned_by_nothing;
     const based = this.based();
     if (target !== undefined && target !== this.GLOBAL && !target.rules?.length) {
-      const rules = this.derived(this.rules_on(key), 'owned', all => all.filter(rule => rule.pattern[0]?.kind !== 'gap' && !rule.implicit));
-      return { rules, mine: this.derived(rules, 'mine', all => all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), based) };
+      const rules = this.derived(this.rules_on(key), 'owned', this.keep_owned);
+      return { rules, mine: this.derived(rules, 'mine', this.keep_mine, based) };
     }
     const held = this.owned_sets.get(key);
     if (held?.version === this.version) return held;
     const rules = this.canonical(this.rules_on(key).filter(rule => (rule.pattern[0]?.kind !== 'gap' && !rule.implicit) || rule.home === target));
-    const made = { version: this.version, rules, mine: this.derived(rules, 'mine', all => all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), based) };
+    const made = { version: this.version, rules, mine: this.derived(rules, 'mine', this.keep_mine, based) };
     this.owned_sets.set(key, made);
     return made;
   }
   static owned_by_nothing = { rules: [] as Rule[], mine: [] as Rule[] };
   leading_of(frame: Node): { rules: Rule[]; mine: Rule[] } {
     const based = this.based();
-    const rules = this.derived(this.rules_of(frame), 'leading', all => all.filter(rule => rule.leading && !rule.implicit));
-    return { rules, mine: this.derived(rules, 'mine', all => all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), based) };
+    const rules = this.derived(this.rules_of(frame), 'leading', this.keep_leading);
+    return { rules, mine: this.derived(rules, 'mine', this.keep_mine, based) };
   }
   // A native taking arguments takes the operands written after it, read when it asks.
   call(target: Node, cursor: Text.Node, frame: Node): Node | undefined {
@@ -798,7 +798,12 @@ export class Interpreter {
   }
 
   // Applying: a frame where the rule was written, made of what it is applied to, holding what it was handed.
-  heads(frame: Node): Rule[] { return this.derived(this.rules_of(frame), 'heads', all => all.filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines), this.decisions()); }
+  heads(frame: Node): Rule[] { return this.derived(this.rules_of(frame), 'heads', this.keep_heads, this.decisions()); }
+  private readonly keep_heads = (all: Rule[]) => all.filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines);
+  private readonly keep_owned = (all: Rule[]) => all.filter(rule => rule.pattern[0]?.kind !== 'gap' && !rule.implicit);
+  private readonly keep_leading = (all: Rule[]) => all.filter(rule => rule.leading && !rule.implicit);
+  private readonly keep_mine = (all: Rule[]) => { const based = this.based(); return all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL); };
+  private readonly keep_own = (all: Rule[]) => { const openers = this.openers_now(); return all.filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && openers.has(rule.pattern[0].text))); };
   fire(found: Match, cursor: Text.Node, frame: Node): Node | undefined {
     const firing = this.firing[this.firing.length - 1];
     if (firing !== undefined && firing.depth === this.running.length) firing.fires.push(found);

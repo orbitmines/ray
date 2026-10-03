@@ -149,3 +149,20 @@ Phases:
 3. Inline caches on dispatch nodes.
 4. o.ray natives attached to graph nodes.
 5. JS code generation from the graph.
+
+## Core design: frames and name access (2026-10-03)
+
+Every name access in kernel4 goes through a small set of operations. The new core gives each a slot-aware form; the dynamic form stays as the fallback.
+
+| Operation | Today | Core |
+|---|---|---|
+| `seek`/`lookup` (resolve a name from a frame) | walks frames: own names, writing frames (`sees`), receiver/composition, parents, deeper `sees` | a name node caches the *holder* of its binding plus a validity stamp (frames on the path unchanged); a hit is one slot read |
+| `holder`/`near_holder` (where an assignment writes) | same walk via `scopes()` | the same cached holder |
+| `declare` (`:=`) / `assign` (`=`) | `frame.set(name, value)` in the holder | a slot write; declaring a new name bumps that frame's layout version, and any cached holder below it revalidates |
+| `location` (the place a value stands for) | follows places through bindings | unchanged in meaning; reads slots |
+| `member` (`.x`) | `get` native, member place | unchanged; the value's own names are a frame too |
+| `apply` captures | `local.set(capture, lazy(span, frame))` | captures are graph nodes shared per instantiation; the frame holds them in fixed slots by the rule's capture order |
+| `construct` | re-reads the base constructor text for every new value | the base constructor is a compiled template |
+| typed checks (`holds`, `capture`) | read the capture content in a scratch scope | unchanged (rare) |
+
+The layout version per frame replaces the global `version`/`scope_version` counters for name resolution. Today any composition anywhere invalidates every cached rule list and name; in the core only changes on the resolution path do.

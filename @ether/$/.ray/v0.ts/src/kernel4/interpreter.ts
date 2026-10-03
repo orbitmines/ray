@@ -628,15 +628,15 @@ export class Interpreter {
     this.quietly(() => this.safely(() => this.read(this.cursor_of(piece.content!), scope)));
   }
   private checking = new Set<Piece>();
-  private held_texts = new WeakMap<Piece, Map<string, { declared: number; value: Node | undefined }>>();
+  held_texts = new Map<string, { declared: number; value: Node | undefined; missing: Set<string> }>();
   holds(piece: Piece & { kind: 'capture' }, span: Text.Node): Node | undefined {
     if (this.checking.has(piece)) return undefined;
-    let known = this.held_texts.get(piece);
-    if (known === undefined) this.held_texts.set(piece, known = new Map());
-    const text = span.string, held = known.get(text);
-    if (held !== undefined && held.declared === this.declared) return held.value;
+    const known = this.held_texts, text = `${piece.content?.source.location ?? piece.content?.string}:${piece.content?.begin}|${span.string}`, held = known.get(text);
+    if (held !== undefined && (held.declared === this.declared || ![...held.missing].some(name => this.GLOBAL.own(name) !== undefined))) return held.value;
     this.checking.add(piece);
-    try { const value = this.checked(piece, span); known.set(text, { declared: this.declared, value }); return value; } finally { this.checking.delete(piece); }
+    const missing = this.missing;
+    this.missing = new Set();
+    try { const value = this.checked(piece, span); known.set(text, { declared: this.declared, value, missing: this.missing }); return value; } finally { this.checking.delete(piece); this.missing = missing; }
   }
   checked(piece: Piece & { kind: 'capture' }, span: Text.Node): Node | undefined {
     const scope = new Node(span);
@@ -1166,6 +1166,7 @@ export class Interpreter {
     this.made = node(from.made);
     this.theme = node(from.theme);
     this.filtered = new Map(from.filtered);
+    this.held_texts = new Map([...from.held_texts].filter(([, held]) => held.value === undefined));
     this.order = from.order;
     this.version++;
   }

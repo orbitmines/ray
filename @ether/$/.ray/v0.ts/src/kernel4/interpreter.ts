@@ -54,6 +54,7 @@ export class Rule {
   get operator(): string | undefined { const [first, second] = this.pattern; return this.pattern.length === 2 && first.kind === 'literal' && second.kind === 'capture' && !Interpreter.word.test(first.text[0] ?? 'a') ? first.text : undefined; }
 }
 
+export type Running = { found: Match; at: Text.Node; local?: Node };
 export type Match = { rule: Rule; begin: number; end: number; reach: number; captures: Map<string, Text.Node>; literals: [number, number][]; receiver?: Node };
 
 export class Jump { site?: Text.Node; spelled = false; constructor(public label: string, public value?: Node) {} }
@@ -108,12 +109,8 @@ export class Interpreter {
   // What the base gave a value is seen from that value and from what is made of it, not from code written around it.
   lookup(frame: Node, name: string, at?: Text.Node): Node | undefined {
     if (at !== undefined && !this.written_in(frame, name)) {
-      for (let k = this.running.length - 1; k >= 0; k--) {
-        const { found: { rule }, local } = this.running[k];
-        if (!((rule.body !== undefined && Interpreter.within(at, rule.body)) || (rule.lexical !== undefined && Interpreter.within(at, rule.lexical)))) continue;
-        if (local?.on?.given?.has(name) && this.reaches(frame, local)) return local.on.own(name);
-        break;
-      }
+      const local = this.holding(at)?.local;
+      if (local?.on?.given?.has(name) && this.reaches(frame, local)) return local.on.own(name);
     }
     const seen = new Set<Node>();
     const visit = (scope: Node | undefined, lexical: boolean, deep: boolean): Node | undefined => {
@@ -272,7 +269,7 @@ export class Interpreter {
           const probe = cursor.bounded(name, cursor.limit);
           named = this.tried(() => this.best(this.receiving(place, frame), probe, frame, place));
         }
-        const self = this.receiver_of(cursor.span(start, start)) ?? (frame === this.GLOBAL ? undefined : frame);
+        const self = this.holding(cursor.span(start, start))?.found.receiver ?? (frame === this.GLOBAL ? undefined : frame);
         const own = self === undefined ? undefined : this.best(this.receiving(self, frame).filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && this.opens(rule.pattern[0].text))), cursor, frame, self);
         const spelled = name > start && !Interpreter.word.test(text[start]) && !named?.rule.defines && !found?.rule.defines;
         if (spelled && own !== undefined && own.rule.pattern[0]?.kind === 'literal') { value = this.fire(own, cursor, frame); continue; }
@@ -308,10 +305,10 @@ export class Interpreter {
     }
     return value;
   }
-  receiver_of(at: Text.Node): Node | undefined {
+  holding(at: Text.Node): Running | undefined {
     for (let k = this.running.length - 1; k >= 0; k--) {
-      const { rule, receiver } = this.running[k].found;
-      if ((rule.body !== undefined && Interpreter.within(at, rule.body)) || (rule.lexical !== undefined && Interpreter.within(at, rule.lexical))) return receiver;
+      const { rule } = this.running[k].found;
+      if ((rule.body !== undefined && Interpreter.within(at, rule.body)) || (rule.lexical !== undefined && Interpreter.within(at, rule.lexical))) return this.running[k];
     }
   }
   receiving(value: Node, frame: Node): Rule[] {
@@ -516,13 +513,12 @@ export class Interpreter {
     const { rule, captures, receiver } = found;
     if (++this.depth > Interpreter.DEPTH) { this.depth = 0; throw new Recursion(at); }
     try {
-      this.at_stack.push(at);
-      this.running.push({ found });
+      this.running.push({ found, at });
       this.paint_rule(found, at);
       const local = new Node(at);
       this.running[this.running.length - 1].local = local;
       let site = at;
-      for (let k = this.running.length - 2; k >= 0; k--) { const body = this.running[k].found.rule.body; if (body !== undefined && Interpreter.within(site, body)) site = this.at_stack[k]; }
+      for (let k = this.running.length - 2; k >= 0; k--) { const body = this.running[k].found.rule.body; if (body !== undefined && Interpreter.within(site, body)) site = this.running[k].at; }
       if (site !== at) local.site = site;
       local.parent = rule.closure;
       local.receiver = receiver;
@@ -556,10 +552,9 @@ export class Interpreter {
         }
         throw jump;
       }
-    } finally { this.depth--; this.at_stack.pop(); this.running.pop(); }
+    } finally { this.depth--; this.running.pop(); }
   }
-  at_stack: Text.Node[] = []
-  running: { found: Match; local?: Node }[] = []
+  running: Running[] = []
   static within(inner: Text.Node, outer: Text.Node): boolean { return inner.source === outer.source && inner.begin >= outer.begin && inner.end <= outer.end; }
   // What a capture says besides its name runs on the text it took.
   run_content(piece: Piece & { kind: 'capture' }, span: Text.Node, local: Node) {
@@ -872,13 +867,13 @@ export class Interpreter {
     if (place?.place !== undefined && !place.place.member) {
       const head = Object.assign(Text.Node.string(place.place.name + spelled), {});
       const rule = this.define(head, this.inner(written) ?? written, place.place.in, body.code?.in ?? place.place.in);
-      if (rule !== undefined) rule.lexical = this.at_stack[this.at_stack.length - 1];
+      if (rule !== undefined) rule.lexical = this.running[this.running.length - 1]?.at;
       return rule === undefined ? undefined : this.rule_value(rule);
     }
     const into = this.deref(scope, false);
     if (into === undefined || into.none) return undefined;
     const rule = this.define(Text.Node.string(spelled), this.inner(written) ?? written, into, body.code?.in ?? into);
-    if (rule !== undefined) rule.lexical = this.at_stack[this.at_stack.length - 1];
+    if (rule !== undefined) rule.lexical = this.running[this.running.length - 1]?.at;
     return rule === undefined ? undefined : this.rule_value(rule);
   }
   private rule_values = new WeakMap<Rule, Node>();

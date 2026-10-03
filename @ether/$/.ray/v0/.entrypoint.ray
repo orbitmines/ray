@@ -656,7 +656,7 @@ Chosen := class {
   previous => .among.previous
   next => .among.next
 }
-bits_of (text) => (
+text_bits (text) => (
   held ^keyword := chain None
   take (bit) => (
     held &= bit
@@ -683,7 +683,7 @@ prefix_of (at, spelling) => (
 same_text (first_text, second_text) => (
   same ^keyword := false
   if ((first_text).and(second_text)) {
-    matched ^keyword := prefix_of(bits_of(first_text).head, second_text)
+    matched ^keyword := prefix_of(text_bits(first_text).head, second_text)
     if matched { unless matched.rest { same = true } }
   }
   same
@@ -709,11 +709,11 @@ read_whole (text, type) => (
     if (tree) {
       ends ^keyword := spelled_ends(text, tree)
       if (ends) {
-        if type.repeats.spelled_unique { whole = spelled_reading(ends) } else { whole = read_repeated(bits_of(text).head, type.repeats) }
+        if type.repeats.spelled_unique { whole = spelled_reading(ends) } else { whole = read_repeated(text_bits(text).head, type.repeats) }
       }
-    } else { whole = read_repeated(bits_of(text).head, type.repeats) }
+    } else { whole = read_repeated(text_bits(text).head, type.repeats) }
   } else {
-    candidate ^keyword := readings_of(bits_of(text).head, type).head
+    candidate ^keyword := readings_of(text_bits(text).head, type).head
     while candidate {
       reading ^keyword := candidate.value
       unless reading.rest {
@@ -742,7 +742,7 @@ spelled_tree_of (type) => (
     plain ^keyword := global
     insert (kind, path) => (
       at ^keyword := root
-      bit ^keyword := bits_of(kind).head
+      bit ^keyword := text_bits(kind).head
       while bit {
         if at.ends { type.spelled_unique = None }
         if bit.value {
@@ -1013,7 +1013,7 @@ pattern_of (head) => (
 matcher_of (pattern) => ((text, captured) => (
   read ^keyword := None
   reading ^keyword := None
-  start ^keyword := bits_of(text).head
+  start ^keyword := text_bits(text).head
   readings_of(start, pattern) for {
     if reading {
       if (outnumbers(it.value.value, reading.value)) { reading = it.value }

@@ -130,7 +130,7 @@ function evaluate(it: Interpreter, events: Event[], cursor: Text.Node, frame: No
 function compile(events: Event[]): Compiled {
   const C: unknown[] = [];
   const k = (x: unknown) => { C.push(x); return `C[${C.length - 1}]`; };
-  const out: string[] = ['const start = cursor.cursor; let value, self, place, shape, reader, target;'];
+  const out: string[] = ['const start = cursor.cursor; let value, self, place, shape, reader, target, tv, ts;'];
   let acted = false, returned = false;
   const miss = () => acted ? 'return { diverged: value };' : "return 'missed';";
   for (const event of events) {
@@ -147,31 +147,33 @@ function compile(events: Event[]): Compiled {
       case 'self':
         out.push(`self = it.holding_at(cursor.source, start)?.found.receiver ?? (frame === it.GLOBAL || frame.bare ? undefined : frame);`);
         if (event.mine === undefined) out.push(`if (self !== undefined) ${miss()}`);
-        else out.push(`if (self === undefined) ${miss()} shape = it.shape(self); if (it.print(shape.mine) !== ${k(event.mine)} || it.print(shape.rules) !== ${k(event.rules)} || it.print(shape.on) !== ${k(event.on)}) ${miss()}`);
+        else out.push(`if (self === undefined) ${miss()} ts = [self.place !== undefined || self.code !== undefined ? it.deref(self, false) : self]; shape = it.shape_of(ts[0]); if (it.print(shape.mine) !== ${k(event.mine)} || it.print(shape.rules) !== ${k(event.rules)} || it.print(shape.on) !== ${k(event.on)}) ${miss()}`);
         break;
       case 'declared': out.push(`if (it.declared !== ${event.declared}) ${miss()}`); break;
       case 'unbound': out.push(`if ((it.quietly(() => it.lookup(frame, ${JSON.stringify(event.name)})) === undefined) !== ${event.unbound}) ${miss()}`); break;
       case 'fire': {
         const match = k(event.match);
-        out.push(`{ const m = it.resolve(${match}, '${event.receiver}', ${event.occurrence}, frame, ${event.receiver === 'self' ? 'self' : event.receiver === 'value' ? 'value' : 'undefined'}); if (m === undefined) ${miss()} ${event.at !== undefined ? `cursor.cursor = ${event.at}; it.fire(m, cursor, frame);` : 'value = it.fire(m, cursor, frame);'} }`);
+        const t = event.receiver === 'self' ? 'ts' : event.receiver === 'value' ? '(tv ??= [it.deref(value, false)])' : 'undefined';
+        const span = `(${k(undefined)} ??= cursor.span(${event.match.begin}, ${event.match.end - 1}))`;
+        out.push(`{ const m = it.resolve(${match}, '${event.receiver}', ${event.occurrence}, frame, ${event.receiver === 'self' ? 'self' : event.receiver === 'value' ? 'value' : 'undefined'}, ${t}); if (m === undefined) ${miss()} ${event.at !== undefined ? `cursor.cursor = ${event.at}; it.fire(m, cursor, frame, ${t}, ${span});` : `value = it.fire(m, cursor, frame, ${t}, ${span}); tv = undefined;`} }`);
         acted = true;
         break;
       }
       case 'place':
-        out.push(`{ const at = place !== undefined && place.at.end === ${event.end - 1} ? place : it.place(frame, ${k(undefined)} ??= it.stable(cursor.span(start, ${event.end - 1}))); it.paint_place(at); cursor.cursor = ${event.end}; value = at; }`);
+        out.push(`{ const at = place !== undefined && place.at.end === ${event.end - 1} ? place : it.place(frame, ${k(undefined)} ??= it.stable(cursor.span(start, ${event.end - 1}))); it.paint_place(at); cursor.cursor = ${event.end}; value = at; tv = undefined; }`);
         acted = true;
         break;
       case 'break': out.push('return { value };'); returned = true; break;
       case 'call': case 'raw':
-        out.push(`reader = it.deref(value, false); if (reader?.fn !== ${k(event.fn)}) ${miss()}`);
+        out.push(`reader = (tv ??= [it.deref(value, false)])[0]; if (reader?.fn !== ${k(event.fn)}) ${miss()}`);
         acted = true;
-        out.push(`${event.k === 'raw' ? 'cursor.cursor = it.spaces(cursor, cursor.cursor); ' : ''}value = it.call(reader, cursor, frame);`);
+        out.push(`${event.k === 'raw' ? 'cursor.cursor = it.spaces(cursor, cursor.cursor); ' : ''}value = it.call(reader, cursor, frame); tv = undefined;`);
         break;
-      case 'reader': out.push(`reader = it.deref(value, false); if (reader?.fn !== ${k(event.fn)}) ${miss()}`); break;
-      case 'on': out.push(`shape = it.shape(value); if (it.print(shape.mine) !== ${k(event.mine)} || it.print(shape.rules) !== ${k(event.rules)} || it.print(shape.on) !== ${k(event.on)}) ${miss()}`); break;
+      case 'reader': out.push(`reader = (tv ??= [it.deref(value, false)])[0]; if (reader?.fn !== ${k(event.fn)}) ${miss()}`); break;
+      case 'on': out.push(`shape = it.shape_of((tv ??= [it.deref(value, false)])[0]); if (it.print(shape.mine) !== ${k(event.mine)} || it.print(shape.rules) !== ${k(event.rules)} || it.print(shape.on) !== ${k(event.on)}) ${miss()}`); break;
       case 'target':
         out.push(`target = it.deref(value); if (target?.fn !== ${k(event.fn)}) ${miss()}`);
-        if (event.fn !== undefined && event.fn.arity > 0) { out.push('cursor.cursor = it.spaces(cursor, cursor.cursor); value = it.call(target, cursor, frame);'); acted = true; }
+        if (event.fn !== undefined && event.fn.arity > 0) { out.push('cursor.cursor = it.spaces(cursor, cursor.cursor); value = it.call(target, cursor, frame); tv = undefined;'); acted = true; }
         break;
       case 'unexpected':
         out.push('{ const at = it.spaces(cursor, cursor.cursor), end = it.statement_end(cursor, at, frame); it.error(`Unexpected \\`${cursor.source.value.slice(at, end)}\\`.`, cursor.span(at, Math.max(at, end - 1))); cursor.cursor = end; return { value }; }');

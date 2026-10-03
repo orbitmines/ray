@@ -354,3 +354,28 @@ Review fixes: SJ4 used `("a",)` (now `.words`), `Time.round` rounded the wrong w
 5. **D4**: rounding to a unit finer than the stored one keeps the amount. Convert instead?
 6. **E1**: `credit (author)` is the name for adding an author. OK?
 7. **E3**: `Roman.normalizer` is a mutable class-level field; nothing else in the library does that. OK until `with` exists?
+
+### kernel4 (switched: e8921c6)
+
+- Equal or better than kernel3 everywhere both can run: probes 43/45 (the two differences are kernel3
+  bugs), the regression set 41/41, `tests/app/boolean.ray` the same INFO set, and on `enum.ray`,
+  `grammar.ray` and `types.ray` kernel4 passes claims kernel3 fails (EM8/9/14/17/18/22, GR2/GR5, TY1–TY6)
+  without failing any it passes. kernel4 boots `Ray.ray` (kernel3 cannot). Painting: same palette,
+  320 vs 317 painted lines on entrypoint+boolean.
+- interpreter.ts ~1060 lines, natives.ts ~165. kernel3 reads its own `kernel3/entrypoint.ray`.
+
+### Questions from the engine side
+
+8. **`if (false)` / `while flag { flag = false }`**: a condition tests presence, and `false` is an enum
+   entry, so it is present. `control.ray` never ends on either kernel (CC8's loop). Should conditions ask
+   something of the value (`holds`), or should `false` be absent?
+9. **Number.ray**: `zero := Number()` (line 217) runs before `Decimal` (line 395) and `required_heads`
+   (line 593) exist, so `.{fraction: Decimal.String}` cannot check its type and every text passes
+   (structural typing with no requirements admits anything). kernel4 now refuses a typed capture it
+   cannot decide yet, but String's requirements are still empty at that point. Reorder Number.ray, or is
+   this the types-as-patterns step (Plan.md)? Booting it also needs the native level (unary arithmetic
+   alone takes over 10 minutes).
+10. **`x|| (b) =>` / `x!|| (b) =>`** (boolean.ray): a name made of a letter and an operator. kernel4 reads
+    the name as `x`, so these two define rules that spell `(b)` literally (`true x|| true` is wrong).
+    Reading `x||` as one name would also make `3!` one name. Rename them, or should a definition's head
+    be read up to its brackets?

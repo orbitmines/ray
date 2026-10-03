@@ -70,7 +70,32 @@ export class Rule {
   get operator(): string | undefined { const [first, second] = this.pattern; return this.pattern.length === 2 && first.kind === 'literal' && second.kind === 'capture' && !Interpreter.word.test(first.text[0] ?? 'a') ? first.text : undefined; }
 }
 
-export type Running = { found: Match; at: Text.Node; local?: Node };
+export class Heads {
+  private by = new Map<string, number[]>();
+  private open: number[] = [];
+  private cached = new Map<string, number[]>();
+  constructor(rules: Rule[], receiving: boolean) {
+    rules.forEach((rule, k) => {
+      const head = rule.head(receiving);
+      if (head === undefined || head === '') this.open.push(k);
+      else { const first = head[0]; const list = this.by.get(first); if (list === undefined) this.by.set(first, [k]); else list.push(k); }
+    });
+  }
+  at(here: string, after: string): number[] {
+    const key = here + after;
+    let held = this.cached.get(key);
+    if (held === undefined) {
+      const found = new Set<number>(this.open);
+      for (const k of this.by.get(here) ?? []) found.add(k);
+      if (after !== '') for (const k of this.by.get(after) ?? []) found.add(k);
+      held = [...found].sort((a, b) => a - b);
+      this.cached.set(key, held);
+    }
+    return held;
+  }
+}
+
+export type Running ={ found: Match; at: Text.Node; local?: Node };
 export type Match = { rule: Rule; begin: number; end: number; reach: number; captures: Map<string, Text.Node>; literals: [number, number][]; receiver?: Node };
 
 export class Jump { site?: Text.Node; spelled = false; constructor(public label: string, public value?: Node) {} }
@@ -207,11 +232,35 @@ export class Interpreter {
       }
     };
     visit(frame);
-    this.rule_sets.set(frame, { version: this.version, rules });
+    const shared = this.canonical(rules);
+    this.rule_sets.set(frame, { version: this.version, rules: shared });
+    return shared;
+  }
+  private decided_at?: { declared: number };
+  decisions(): object {
+    if (this.decided_at?.declared !== this.declared) this.decided_at = { declared: this.declared };
+    return this.decided_at;
+  }
+  private rule_ids = new WeakMap<Rule, number>();
+  rule_id(rule: Rule): number {
+    let held = this.rule_ids.get(rule);
+    if (held === undefined) this.rule_ids.set(rule, held = this.rule_ids_given++);
+    return held;
+  }
+  private rule_ids_given = 0;
+  private canonicals = new Map<string, Rule[]>();
+  canonical(rules: Rule[]): Rule[] {
+    let key = '';
+    for (const rule of rules) key += this.rule_id(rule) + ',';
+    const held = this.canonicals.get(key);
+    if (held !== undefined) return held;
+    this.canonicals.set(key, rules);
     return rules;
   }
   private value_sets = new WeakMap<Node, { version: number; rules: Rule[] }>();
-  rules_on(value: Node): Rule[] {
+  rules_on(value: Node): Rule[] { return this.rules_made(value); }
+  rules_made(value: Node): Rule[] {
+    if (value !== this.BASE && value !== this.GLOBAL && !value.rules?.length && value.with?.length === 1 && value.with[0] !== value) return this.rules_made(value.with[0]);
     const held = this.value_sets.get(value);
     if (held?.version === this.version) return held.rules;
     const rules: Rule[] = [], seen = new Set<Node>();
@@ -223,8 +272,9 @@ export class Interpreter {
     };
     visit(value);
     if (this.BASE !== undefined) visit(this.BASE);
-    this.value_sets.set(value, { version: this.version, rules });
-    return rules;
+    const shared = this.canonical(rules);
+    this.value_sets.set(value, { version: this.version, rules: shared });
+    return shared;
   }
   private named = new Map<string, Rule[]>();
   add_rule(scope: Node, rule: Rule) {
@@ -274,7 +324,7 @@ export class Interpreter {
       while (j < cursor.limit && /\s/.test(text[j])) j++;
       if (j >= cursor.limit) return;
       const probe = cursor.bounded(j, cursor.limit);
-      const found = this.best(this.rules_of(frame).filter(rule => rule.native === 'label'), probe, frame, undefined, true);
+      const found = this.best(this.derived(this.rules_of(frame), 'label', all => all.filter(rule => rule.native === 'label')), probe, frame, undefined, true);
       if (found?.rule.native === 'label' && [...found.captures.values()][0]?.string.trim() === label) return j;
       j = this.statement_end(cursor, j, frame);
       if (text[j] === '\n') j++;
@@ -297,7 +347,7 @@ export class Interpreter {
         cursor.cursor = this.spaces(cursor, cursor.cursor);
         if (cursor.done() || text[cursor.cursor] === '\n') break;
         const start = cursor.cursor;
-        const found = this.best(this.rules_of(frame).filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines), cursor, frame);
+        const found = this.best(this.derived(this.rules_of(frame), 'heads', all => all.filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines), this.decisions()), cursor, frame);
         let name = this.token(cursor, start);
         let named: Match | undefined, place: Node | undefined;
         if (name > start) {
@@ -313,7 +363,7 @@ export class Interpreter {
           if (defined?.rule.defines) { place = whole; named = defined; name = head; }
         }
         const self = this.holding(cursor.span(start, start))?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
-        const own = self === undefined ? undefined : this.best_on(self, frame, cursor, rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && this.opens(rule.pattern[0].text)));
+        const own = self === undefined ? undefined : this.best_on(self, frame, cursor, true);
         const spelled = name > start && !Interpreter.word.test(text[start]) && !named?.rule.defines && !found?.rule.defines;
         if (spelled && own !== undefined && own.rule.pattern[0]?.kind === 'literal') { value = this.fire(own, cursor, frame); continue; }
         if (spelled && found !== undefined && found.rule.pattern[0]?.kind === 'literal') { value = this.fire(found, cursor, frame); continue; }
@@ -339,7 +389,7 @@ export class Interpreter {
         value = this.call(target, cursor, frame);
         continue;
       }
-      const after = this.best(this.rules_of(frame).filter(rule => !rule.leading && rule.home === this.GLOBAL), cursor.bounded(at, cursor.limit), frame);
+      const after = this.best(this.derived(this.rules_of(frame), 'after', all => all.filter(rule => !rule.leading && rule.home === this.GLOBAL)), cursor.bounded(at, cursor.limit), frame);
       if (after !== undefined) { cursor.cursor = at; this.fire(after, cursor, frame); continue; }
       const end = this.statement_end(cursor, at, frame);
       this.error(`Unexpected \`${text.slice(at, end)}\`.`, cursor.span(at, Math.max(at, end - 1)));
@@ -355,16 +405,39 @@ export class Interpreter {
     }
   }
   // What a value's own class says is read before what every value says.
-  best_on(value: Node, frame: Node, cursor: Text.Node, keep?: (rule: Rule) => boolean): Match | undefined {
+  best_on(value: Node, frame: Node, cursor: Text.Node, own: boolean = false): Match | undefined {
     const on = this.owned(value), leading = this.leading_of(frame);
-    if (keep === undefined) return this.best([...on.mine, ...leading.mine], cursor, frame, value) ?? this.best([...on.rules, ...leading.rules], cursor, frame, value);
-    const rules = [...on.rules, ...leading.rules].filter(keep), based = this.based();
-    return this.best(rules.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), cursor, frame, value) ?? this.best(rules, cursor, frame, value);
+    if (!own) return this.best(this.joined(on.mine, leading.mine), cursor, frame, value) ?? this.best(this.joined(on.rules, leading.rules), cursor, frame, value);
+    const based = this.based(), openers = this.openers_now();
+    const rules = this.derived(this.joined(on.rules, leading.rules), 'own', all => all.filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && openers.has(rule.pattern[0].text))), openers);
+    return this.best(this.derived(rules, 'own mine', all => all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), based), cursor, frame, value) ?? this.best(rules, cursor, frame, value);
   }
-  receiving(value: Node, frame: Node): Rule[] { return [...this.owned(value).rules, ...this.leading_of(frame).rules]; }
-  private base_set?: { version: number; rules: Set<Rule> };
+  receiving(value: Node, frame: Node): Rule[] { return this.joined(this.owned(value).rules, this.leading_of(frame).rules); }
+  private derivations = new WeakMap<Rule[], Map<string, { on?: object; rules: Rule[] }>>();
+  derived(rules: Rule[], tag: string, make: (rules: Rule[]) => Rule[], on?: object): Rule[] {
+    let table = this.derivations.get(rules);
+    if (table === undefined) this.derivations.set(rules, table = new Map());
+    const held = table.get(tag);
+    if (held !== undefined && held.on === on) return held.rules;
+    const made = this.canonical(make(rules));
+    table.set(tag, { on, rules: made });
+    return made;
+  }
+  private pairs = new WeakMap<Rule[], WeakMap<Rule[], Rule[]>>();
+  joined(first: Rule[], second: Rule[]): Rule[] {
+    if (first.length === 0) return second;
+    if (second.length === 0) return first;
+    let inner = this.pairs.get(first);
+    if (inner === undefined) this.pairs.set(first, inner = new WeakMap());
+    let held = inner.get(second);
+    if (held === undefined) inner.set(second, held = this.canonical([...first, ...second]));
+    return held;
+  }
+  private base_set?: { version: number; of?: Rule[]; rules: Set<Rule> };
   based(): Set<Rule> {
-    if (this.base_set?.version !== this.version) this.base_set = { version: this.version, rules: new Set(this.BASE === undefined ? [] : this.rules_on(this.BASE)) };
+    if (this.base_set?.version === this.version) return this.base_set.rules;
+    const of = this.BASE === undefined ? undefined : this.rules_on(this.BASE);
+    this.base_set = { version: this.version, of, rules: this.base_set !== undefined && this.base_set.of === of ? this.base_set.rules : new Set(of ?? []) };
     return this.base_set.rules;
   }
   // The rules a value answers to itself, and of those the ones its own class (not the base) says.
@@ -372,24 +445,24 @@ export class Interpreter {
   owned(value: Node): { rules: Rule[]; mine: Rule[] } {
     const target = value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value;
     const key = target === undefined || target === this.GLOBAL ? this.BASE : target;
-    if (key === undefined) return { rules: [], mine: [] };
+    if (key === undefined) return Interpreter.owned_by_nothing;
+    const based = this.based();
+    if (target !== undefined && target !== this.GLOBAL && !target.rules?.length) {
+      const rules = this.derived(this.rules_on(key), 'owned', all => all.filter(rule => rule.pattern[0]?.kind !== 'gap' && !rule.implicit));
+      return { rules, mine: this.derived(rules, 'mine', all => all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), based) };
+    }
     const held = this.owned_sets.get(key);
     if (held?.version === this.version) return held;
-    const based = this.based();
-    const rules = this.rules_on(key).filter(rule => (rule.pattern[0]?.kind !== 'gap' && !rule.implicit) || rule.home === target);
-    const made = { version: this.version, rules, mine: rules.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL) };
+    const rules = this.canonical(this.rules_on(key).filter(rule => (rule.pattern[0]?.kind !== 'gap' && !rule.implicit) || rule.home === target));
+    const made = { version: this.version, rules, mine: this.derived(rules, 'mine', all => all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), based) };
     this.owned_sets.set(key, made);
     return made;
   }
-  private leading_sets = new WeakMap<Node, { version: number; rules: Rule[]; mine: Rule[] }>();
+  static owned_by_nothing = { rules: [] as Rule[], mine: [] as Rule[] };
   leading_of(frame: Node): { rules: Rule[]; mine: Rule[] } {
-    const held = this.leading_sets.get(frame);
-    if (held?.version === this.version) return held;
     const based = this.based();
-    const rules = this.rules_of(frame).filter(rule => rule.leading && !rule.implicit);
-    const made = { version: this.version, rules, mine: rules.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL) };
-    this.leading_sets.set(frame, made);
-    return made;
+    const rules = this.derived(this.rules_of(frame), 'leading', all => all.filter(rule => rule.leading && !rule.implicit));
+    return { rules, mine: this.derived(rules, 'mine', all => all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), based) };
   }
   // A native taking arguments takes the operands written after it, read when it asks.
   call(target: Node, cursor: Text.Node, frame: Node): Node | undefined {
@@ -414,10 +487,18 @@ export class Interpreter {
   best(rules: Rule[], cursor: Text.Node, frame: Node, receiver?: Node, quiet: boolean = false): Match | undefined {
     return quiet ? this.quietly(() => this.best_of(rules, cursor, frame, receiver)) : this.best_of(rules, cursor, frame, receiver);
   }
+  private indices = new WeakMap<Rule[], [Heads | undefined, Heads | undefined]>();
+  index_of(rules: Rule[], receiving: boolean): Heads {
+    let held = this.indices.get(rules);
+    if (held === undefined) this.indices.set(rules, held = [undefined, undefined]);
+    return held[receiving ? 1 : 0] ??= new Heads(rules, receiving);
+  }
   best_of(rules: Rule[], cursor: Text.Node, frame: Node, receiver?: Node): Match | undefined {
     let best: Match | undefined, best_spelled = 0;
     const text = cursor.source.value, here = cursor.cursor, after = this.spaces(cursor, here), receiving = receiver !== undefined;
-    for (const rule of rules) {
+    const index = this.index_of(rules, receiving);
+    for (const k of index.at(text[here] ?? '', after === here ? '' : text[after] ?? '')) {
+      const rule = rules[k];
       if (rule.at.source === cursor.source && rule.at.begin <= here && here <= rule.at.end) continue;
       const head = rule.head(receiving);
       if (head !== undefined && !text.startsWith(head, here) && !text.startsWith(head, after)) continue;
@@ -498,9 +579,10 @@ export class Interpreter {
     if (this.closers?.version !== this.rules_version) this.closers = { version: this.rules_version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[rule.pattern.length - 1] as { text: string }).text)) };
     return this.closers.spelled.has(literal);
   }
-  opens(literal: string): boolean {
+  opens(literal: string): boolean { return this.openers_now().has(literal); }
+  openers_now(): Set<string> {
     if (this.openers?.version !== this.rules_version) this.openers = { version: this.rules_version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[0] as { text: string }).text)) };
-    return this.openers.spelled.has(literal);
+    return this.openers.spelled;
   }
   spelled(cursor: Text.Node, at: number, literal: string, joined: boolean = false): boolean {
     const text = cursor.source.value;

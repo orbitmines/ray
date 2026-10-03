@@ -1156,17 +1156,25 @@ export class Interpreter {
     this.diagnostics.refused = refused;
     return { fits, settled };
   }
+  private static opening = new Set(['{', '(', '[']);
+  private static closing = new Set(['}', ')', ']']);
+  private groups = new Map<string, Map<number, number>>();
   group_end(text: string, j: number, end: number): number {
-    const pairs: Record<string, string> = { '{': '}', '(': ')', '[': ']' };
-    const close = pairs[text[j]];
-    if (close === undefined) return j;
+    if (!Interpreter.opening.has(text[j])) return j;
+    let held = this.groups.get(text);
+    if (held === undefined) this.groups.set(text, held = new Map());
+    let close = held.get(j);
+    if (close === undefined) { close = this.group_close(text, j); held.set(j, close); }
+    return close >= 0 && close <= end ? close : j;
+  }
+  group_close(text: string, j: number): number {
     let depth = 0;
-    for (let k = j; k < end; k++) {
-      if (text[k] === '`') { const q = text.indexOf('`', k + 1); if (q < 0 || q >= end) return j; k = q; continue; }
-      if (pairs[text[k]] !== undefined) depth++;
-      else if (Object.values(pairs).includes(text[k])) { depth--; if (depth === 0) return k + 1; }
+    for (let k = j; k < text.length; k++) {
+      if (text[k] === '`') { const q = text.indexOf('`', k + 1); if (q < 0) return -1; k = q; continue; }
+      if (Interpreter.opening.has(text[k])) depth++;
+      else if (Interpreter.closing.has(text[k])) { depth--; if (depth === 0) return k + 1; }
     }
-    return j;
+    return -1;
   }
   // What a group encloses, when it encloses all of the span.
   inner(span: Text.Node): Text.Node | undefined {

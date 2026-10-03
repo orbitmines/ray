@@ -31,6 +31,11 @@ export class Levelled extends Interpreter {
   native(key: string, at?: Text.Node): Native | undefined {
     const own = super.native(key, at);
     if (own !== undefined || at === undefined || !this.program?.by_interpreter(at.source) || !(key in Operations || key.startsWith('js.'))) return own;
+    return this.rebuild(['marker', key, at]);
+  }
+  made_native(recipe: unknown[]): Native {
+    if (recipe[0] !== 'marker') return super.made_native(recipe);
+    const key = recipe[1] as string, at = recipe[2] as Text.Node;
     return { arity: 0, fn: () => { const marker = new Node(at); this.markers.set(marker, key); return marker; } };
   }
   reads(src: Text.Source): boolean { return !this.program?.by_interpreter(src); }

@@ -5,7 +5,7 @@ import { Interpreter, Node, Jump, type Native, type Diagnostic } from './interpr
 // What the runtime gives the language: each `external NAME` is one of these.
 const identity: Native = { arity: 1, fn: ({ args: [node] }) => node };
 export const Natives: Record<string, Native> = {
-  'forward': { arity: 0, fn: (): Node => Object.assign(new Node(), { fn: { arity: 1, raw: true, fn: (): Node | undefined => undefined } }) },
+  'forward': { arity: 0, fn: ({ interpreter }): Node => Object.assign(new Node(), { fn: interpreter.rebuild(['forward']) }) },
   'define': { arity: 4, fn: ({ interpreter, args: [scope, pattern, body, parameters], at }) => interpreter.define_in(scope, pattern, body, at, parameters) },
   'rule': { arity: 2, fn: ({ interpreter, frame, args: [pattern, body], at }) => interpreter.rule_from(pattern, body, at, frame) },
   '.': { arity: 0, fn: ({ frame }) => frame.stands ?? frame },

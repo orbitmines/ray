@@ -580,7 +580,7 @@ export class Interpreter {
         local.set(piece.name, value);
         args.push(value);
       });
-      for (const piece of rule.pattern) if (piece.kind === 'capture' && piece.content !== undefined && captures.has(piece.name)) this.run_content(piece, captures.get(piece.name)!, local);
+      if (this.program?.serving) for (const piece of rule.pattern) if (piece.kind === 'capture' && piece.content !== undefined && captures.has(piece.name)) this.run_content(piece, captures.get(piece.name)!, local);
       if (rule.fn !== undefined) return rule.fn.fn({ interpreter: this, frame: local, args, at, self: receiver });
       if (rule.body === undefined) return undefined;
       try { return this.read(this.cursor_of(this.inner(rule.body) ?? rule.body), local); }

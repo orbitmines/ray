@@ -32,7 +32,6 @@ export class Node {
   raw?: boolean
   stands?: Node
   site?: Text.Node
-  receiver?: Node
   on?: Node
   given?: Set<string>
   constructor(at?: Text.Node) { this.at = at; }
@@ -521,7 +520,6 @@ export class Interpreter {
       for (let k = this.running.length - 2; k >= 0; k--) { const body = this.running[k].found.rule.body; if (body !== undefined && Interpreter.within(site, body)) site = this.running[k].at; }
       if (site !== at) local.site = site;
       local.parent = rule.closure;
-      local.receiver = receiver;
       if (receiver !== undefined) {
         const value = this.deref(receiver, false);
         if (receiver.place === undefined && value !== undefined && !value.none) this.construct(value);

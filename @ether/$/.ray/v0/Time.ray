@@ -52,7 +52,7 @@ Julian := class {
     }
     total
   )
-  chainable == (other) => same_text((external where this), (external where other))
+  chainable == (other) => this === other
 }
 Gregorian := class: Julian {
 

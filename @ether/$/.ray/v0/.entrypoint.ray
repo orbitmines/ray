@@ -111,7 +111,7 @@ if ^keyword := class {
     taken := None
     answer := None
 
-    goto enter if cond
+    goto enter if (cond as boolean).holds
     goto skip
    enter\
     taken = global
@@ -133,7 +133,7 @@ if ^keyword := class {
     answer := .answer
 
     goto skip if taken
-    goto enter if cond
+    goto enter if (cond as boolean).holds
     goto skip
    enter\
     taken = global
@@ -167,7 +167,7 @@ unless{ }{cond}{ }{block} ^class => (
   taken := None
   answer := None
 
-  goto skip if cond
+  goto skip if (cond as boolean).holds
   taken = global
   result := inline (external ** block)
   answer = result
@@ -187,7 +187,7 @@ while ^keyword := class {
     written_block := external ** block
 
    again\
-    goto more if cond
+    goto more if (cond as boolean).holds
     goto done
    more\
     inline written_block
@@ -302,7 +302,7 @@ Node := base class {
 
   ??{other} ^punctuation => (
     chosen := this
-    unless (chosen) { chosen = other }
+    if (chosen === None) { chosen = other }
     chosen
   )
   ? => this | None
@@ -844,7 +844,7 @@ enum ^keyword => (
       this
     )
 
-    chainable == (other) => same_text((external where this), (external where other))
+    chainable == (other) => this === other
     admits (candidate) => .components.contains(candidate)
   }
 
@@ -980,3 +980,49 @@ TODO{ }{comment ^comment} ^debug => DEBUG@. comment
 {a} [x: chainable] {b} [y: chainable] {c} => (a[x] b) & (b[y] c)
 
 {a} [x: compounds]{`=`} {b} => a = (a[x] b)
+
+None += {
+  as (=== boolean) => false
+}
+
+boolean := enum false (holds: None) | true (holds: global) {
+  nand (b) => (
+    goto second if .holds
+    return true
+   second\
+    goto no if b.holds
+    return true
+   no\
+
+    return false
+  )
+
+  not => .nand(this)
+
+  and (b) => .nand(b).not
+  or (b) => .not.nand(b.not)
+  nor (b) => .or(b).not
+  xor (b) => .or(b).and(.nand(b))
+  xnor (b) => .xor(b).not
+
+  ! => .not
+
+  as (=== boolean) => this
+
+  next => .not
+  previous => .not
+
+  & (b) => .and(b)
+  && (b) => .and(b)
+  || (b) => .or(b)
+  !&& (b) => .nand(b)
+  !|| (b) => .nor(b)
+  x|| (b) => .xor(b)
+  x!|| (b) => .xnor(b)
+}
+
+!{x} ^punctuation => (x).not
+
+true := boolean.true
+false := boolean.false
+

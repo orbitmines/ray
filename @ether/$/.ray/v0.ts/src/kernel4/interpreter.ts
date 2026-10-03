@@ -336,7 +336,7 @@ export class Interpreter {
   }
   receiving(value: Node, frame: Node): Rule[] {
     const target = value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value;
-    const own = (target !== undefined && target !== this.GLOBAL ? this.rules_on(target) : this.BASE !== undefined ? this.rules_on(this.BASE) : []).filter(rule => rule.pattern[0]?.kind !== 'gap' || rule.home === target);
+    const own = (target !== undefined && target !== this.GLOBAL ? this.rules_on(target) : this.BASE !== undefined ? this.rules_on(this.BASE) : []).filter(rule => (rule.pattern[0]?.kind !== 'gap' && !rule.implicit) || rule.home === target);
     return [...own, ...this.rules_of(frame).filter(rule => rule.leading && !rule.implicit)];
   }
   // A native taking arguments takes the operands written after it, read when it asks.
@@ -1124,6 +1124,7 @@ export class Interpreter {
       rules.set(r, copy);
       copy.closure = node(r.closure)!;
       copy.home = node(r.home);
+      if (r.guard !== undefined) copy.guard = { span: r.guard.span, in: node(r.guard.in)! };
       return copy;
     };
     this.GLOBAL = node(from.GLOBAL)!;

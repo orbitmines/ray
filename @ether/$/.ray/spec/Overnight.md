@@ -386,3 +386,12 @@ Review fixes: SJ4 used `("a",)` (now `.words`), `Time.round` rounded the wrong w
     writes one alias per line. Which spelling marks `={x}` (and later `^` on Number) as right-to-left:
     a `right-to-left` modifier before the head like direction.ray's `external right-to-left test-right`, or
     something else?
+    **Answered (2026-10-03):** `=` is an ordinary left-to-right method; nothing to declare. `^` as power
+    is the one that should be declared `right-to-left`.
+
+### Answers 2026-10-03 afternoon
+
+- **X1.5/X1.6:** one `as (type)` method dispatched by the type (`x as String`, `x as boolean`, Unit's
+  `as (other: Unit)`); the `.as_string` calls are renamed.
+- **W2.6:** Node gets a language-side `&`: holds both at once (Almanac A1). boolean keeps its own `&`.
+- **N1.14:** `3 !` with a space is allowed too: it is ordinary method application.

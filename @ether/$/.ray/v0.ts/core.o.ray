@@ -35,7 +35,6 @@ Compiler.default = {
   {a: String}.contains {b: String} => external js.string.contains
   {a: String}.index_of {b: String} => external js.string.index_of
   {a: String}.slice {b} => external js.string.slice
-  bits_of {text} => external js.string.bits
   {a: Number}.pred => external js.number.pred
   {a: Number}.holds => external js.number.pred
   {a: Number}.is_zero => external js.number.is_zero

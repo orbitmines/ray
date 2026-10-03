@@ -384,21 +384,21 @@ base{ }{size} spelled {spellings} ^keyword => (
   made
 )
 
-Binary := base two spelled `0` | `1`
-Ternary := base three spelled `0` | `1` | `2`
-Quaternary := base four spelled `0` | `1` | `2` | `3`
-Quinary := base five spelled `0` | `1` | `2` | `3` | `4`
-Senary := base six spelled `0` | `1` | `2` | `3` | `4` | `5`
-Septenary := base seven spelled `0` | `1` | `2` | `3` | `4` | `5` | `6`
-Octal := base eight spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7`
-Nonary := base nine spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8`
-Decimal := base ten spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9`
-Undecimal := base ten.succ spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`)
-Duodecimal := base (ten + two) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`)
-Tridecimal := base (ten + three) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`)
-Tetradecimal := base (ten + four) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`)
-Pentadecimal := base (ten + five) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`) | (`e` | `E`)
-Hexadecimal := base (ten + six) spelled `0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`) | (`e` | `E`) | (`f` | `F`)
+Binary := base two spelled (`0` | `1`)
+Ternary := base three spelled (`0` | `1` | `2`)
+Quaternary := base four spelled (`0` | `1` | `2` | `3`)
+Quinary := base five spelled (`0` | `1` | `2` | `3` | `4`)
+Senary := base six spelled (`0` | `1` | `2` | `3` | `4` | `5`)
+Septenary := base seven spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6`)
+Octal := base eight spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7`)
+Nonary := base nine spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8`)
+Decimal := base ten spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9`)
+Undecimal := base ten.succ spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`))
+Duodecimal := base (ten + two) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`))
+Tridecimal := base (ten + three) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`))
+Tetradecimal := base (ten + four) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`))
+Pentadecimal := base (ten + five) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`) | (`e` | `E`))
+Hexadecimal := base (ten + six) spelled (`0` | `1` | `2` | `3` | `4` | `5` | `6` | `7` | `8` | `9` | (`a` | `A`) | (`b` | `B`) | (`c` | `C`) | (`d` | `D`) | (`e` | `E`) | (`f` | `F`))
 
 Decimal.components.hierarchy &= class {
   percent => this / hundred

@@ -671,7 +671,7 @@ prefix_of (at, spelling) => (
   compare (bit) => (
     unless at { matching = None }
     if matching {
-      unless (bit.xnor(at.value)) { matching = None }
+      unless (bit === at.value) { matching = None }
       at = at.next
     }
     matching

@@ -335,19 +335,41 @@ export class Interpreter {
     }
   }
   // What a value's own class says is read before what every value says.
-  best_on(value: Node, frame: Node, cursor: Text.Node, keep: (rule: Rule) => boolean = () => true): Match | undefined {
-    const rules = this.receiving(value, frame).filter(keep), based = this.based();
+  best_on(value: Node, frame: Node, cursor: Text.Node, keep?: (rule: Rule) => boolean): Match | undefined {
+    const on = this.owned(value), leading = this.leading_of(frame);
+    if (keep === undefined) return this.best([...on.mine, ...leading.mine], cursor, frame, value) ?? this.best([...on.rules, ...leading.rules], cursor, frame, value);
+    const rules = [...on.rules, ...leading.rules].filter(keep), based = this.based();
     return this.best(rules.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL), cursor, frame, value) ?? this.best(rules, cursor, frame, value);
   }
+  receiving(value: Node, frame: Node): Rule[] { return [...this.owned(value).rules, ...this.leading_of(frame).rules]; }
   private base_set?: { version: number; rules: Set<Rule> };
   based(): Set<Rule> {
     if (this.base_set?.version !== this.version) this.base_set = { version: this.version, rules: new Set(this.BASE === undefined ? [] : this.rules_on(this.BASE)) };
     return this.base_set.rules;
   }
-  receiving(value: Node, frame: Node): Rule[] {
+  // The rules a value answers to itself, and of those the ones its own class (not the base) says.
+  private owned_sets = new WeakMap<Node, { version: number; rules: Rule[]; mine: Rule[] }>();
+  owned(value: Node): { rules: Rule[]; mine: Rule[] } {
     const target = value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value;
-    const own = (target !== undefined && target !== this.GLOBAL ? this.rules_on(target) : this.BASE !== undefined ? this.rules_on(this.BASE) : []).filter(rule => (rule.pattern[0]?.kind !== 'gap' && !rule.implicit) || rule.home === target);
-    return [...own, ...this.rules_of(frame).filter(rule => rule.leading && !rule.implicit)];
+    const key = target === undefined || target === this.GLOBAL ? this.BASE : target;
+    if (key === undefined) return { rules: [], mine: [] };
+    const held = this.owned_sets.get(key);
+    if (held?.version === this.version) return held;
+    const based = this.based();
+    const rules = this.rules_on(key).filter(rule => (rule.pattern[0]?.kind !== 'gap' && !rule.implicit) || rule.home === target);
+    const made = { version: this.version, rules, mine: rules.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL) };
+    this.owned_sets.set(key, made);
+    return made;
+  }
+  private leading_sets = new WeakMap<Node, { version: number; rules: Rule[]; mine: Rule[] }>();
+  leading_of(frame: Node): { rules: Rule[]; mine: Rule[] } {
+    const held = this.leading_sets.get(frame);
+    if (held?.version === this.version) return held;
+    const based = this.based();
+    const rules = this.rules_of(frame).filter(rule => rule.leading && !rule.implicit);
+    const made = { version: this.version, rules, mine: rules.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL) };
+    this.leading_sets.set(frame, made);
+    return made;
   }
   // A native taking arguments takes the operands written after it, read when it asks.
   call(target: Node, cursor: Text.Node, frame: Node): Node | undefined {

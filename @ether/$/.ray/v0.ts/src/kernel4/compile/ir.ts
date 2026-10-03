@@ -1,7 +1,7 @@
 import type { Text } from '../text.ts';
 import type { Node, Rule, Native } from '../interpreter.ts';
 
-export type Called = { native: Native; spans: Text.Node[]; end: number };
+export type Called = { native: Native; spans: Text.Node[]; end: number; at: Text.Node };
 export type Instruction =
   | { op: 'label'; name: string }
   | { op: 'jump'; label: string; site: Text.Node; condition?: Text.Node }

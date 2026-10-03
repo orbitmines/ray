@@ -418,7 +418,7 @@ export class Interpreter {
           const defined = this.tried(() => this.best(this.receiving(whole, frame), cursor.bounded(head, cursor.limit), frame, whole));
           if (defined?.rule.defines) { place = whole; named = defined; name = head; }
         }
-        const self = this.holding(cursor.span(start, start))?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
+        const self = this.holding_at(cursor.source, start)?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
         const own = self === undefined ? undefined : this.best_on(self, frame, cursor, true);
         const spelled = name > start && !Interpreter.word.test(text[start]) && !named?.rule.defines && !found?.rule.defines;
         if (spelled && own !== undefined && own.rule.pattern[0]?.kind === 'literal') { value = this.fire(own, cursor, frame); continue; }
@@ -453,6 +453,14 @@ export class Interpreter {
       break;
     }
     return value;
+  }
+  private externals = new WeakMap<Text.Source, Map<string, Node>>();
+  holding_at(source: Text.Source, at: number): Running | undefined {
+    for (let k = this.running.length - 1; k >= 0; k--) {
+      const { rule } = this.running[k].found;
+      const body = rule.body, lexical = rule.lexical;
+      if ((body !== undefined && body.source === source && body.begin <= at && at <= body.end) || (lexical !== undefined && lexical.source === source && lexical.begin <= at && at <= lexical.end)) return this.running[k];
+    }
   }
   holding(at: Text.Node): Running | undefined {
     for (let k = this.running.length - 1; k >= 0; k--) {
@@ -537,7 +545,7 @@ export class Interpreter {
     }
     const at = cursor.span(cursor.cursor, cursor.cursor);
     const firing = this.firing[this.firing.length - 1];
-    if (firing !== undefined && firing.depth === this.running.length) firing.calls.push({ native, spans: args.map(arg => arg.code?.span ?? arg.at!), end: cursor.cursor });
+    if (firing !== undefined && firing.depth === this.running.length) firing.calls.push({ native, spans: args.map(arg => arg.code?.span ?? arg.at!), end: cursor.cursor, at });
     return native.fn({ interpreter: this, frame, args, at });
   }
 
@@ -765,11 +773,10 @@ export class Interpreter {
     const known = held.at.get(j);
     if (known !== undefined && known <= cursor.limit) return known;
     held.at.set(j, j);
-    let end = j;
-    const probe = cursor.bounded(j, cursor.limit);
+    let end = j, probe: Text.Node | undefined;
     for (const rule of brackets) {
       if (!cursor.source.value.startsWith((rule.pattern[0] as { text: string }).text, j)) continue;
-      const found = this.match(rule, probe, this.GLOBAL);
+      const found = this.match(rule, probe ??= cursor.bounded(j, cursor.limit), this.GLOBAL);
       if (found !== undefined && found.end > end) end = found.end;
     }
     held.at.set(j, end);
@@ -1343,8 +1350,14 @@ export class Interpreter {
     if (name === undefined) return undefined;
     const key = this.text(name), native = this.native(key, name.at);
     if (native === undefined) { this.error(`Expected method \`${key}\` to be externally defined by the runtime, but it wasn't.`, name.at); return undefined; }
-    const node = Object.assign(new Node(name.at), { fn: native });
     if (native.arity === 0) return native.fn({ interpreter: this, frame, args: [], at: name.at! });
+    const site = name.at;
+    if (site === undefined) return Object.assign(new Node(site), { fn: native });
+    let by = this.externals.get(site.source);
+    if (by === undefined) this.externals.set(site.source, by = new Map());
+    const key_at = `${site.begin}:${site.end}:${key}`;
+    let node = by.get(key_at);
+    if (node === undefined) by.set(key_at, node = Object.assign(new Node(site), { fn: native }));
     return node;
   }
 

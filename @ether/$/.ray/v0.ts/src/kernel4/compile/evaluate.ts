@@ -18,7 +18,7 @@ export function evaluate(it: Interpreter, statement: Statement, cursor: Text.Nod
       for (const call of code.calls) {
         if (target?.fn !== call.native) return undefined;
         const args = call.spans.map((span, k) => k === 0 && call.native.raw ? it.literal(span) : it.lazy(span, frame));
-        value = call.native.fn({ interpreter: it, frame, args, at: cursor.span(call.end, call.end) });
+        value = call.native.fn({ interpreter: it, frame, args, at: call.at });
         target = value === undefined ? undefined : it.deref(value, false);
       }
       return { value };

@@ -138,3 +138,22 @@ unless (read_once == read_twice) { INFO@mark `IO6 reading a file changed it` }
 // written with.
 read_by_bits := IO.read("@ether/$/.ray/v0/.project.ray".bits)
 unless (read_by_bits == read_once) { INFO@mark `IO7 a location given as a string's bits is read as another place` }
+
+tapped := Keyboard.Key(name: 2)
+unless (tapped.presses.is_zero) { INFO@mark `KB9 an untouched key has been pressed` }
+tapped.press
+unless (tapped.presses == 1) { INFO@mark `KB10 a press is not counted` }
+tapped.release
+tapped.press
+unless (tapped.presses == 2) { INFO@mark `KB11 two presses are not counted two` }
+options := (chain None)
+options &= 10
+options &= 20
+options &= 30
+unless (Keyboard.Key(name: 3).cycle(options).value == 10) { INFO@mark `KB12 a key never pressed does not answer the first entry` }
+unless (Keyboard.Key(name: 4).press.cycle(options).value == 20) { INFO@mark `KB13 one press does not answer the second entry` }
+unless (tapped.cycle(options).value == 30) { INFO@mark `KB14 two presses do not answer the third entry` }
+unless (tapped.press.cycle(options).value == 10) { INFO@mark `KB15 three presses do not come back to the first entry` }
+held_key := Keyboard.Key(name: 5).press
+unless (held_key) { INFO@mark `KB16 a pressed key does not hold as a condition` }
+if (held_key.release) { INFO@mark `KB17 a released key holds as a condition` }

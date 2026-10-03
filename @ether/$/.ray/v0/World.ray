@@ -154,19 +154,33 @@ Accessor := class: Ray {
 }
 
 Reference := class: Ray {
+  Note := class: Ray {
+    date: Time.now
+    text: String
+  }
   title: String
-  author: Node
+  subtitle: None
   date: Time.now
   draft: true
-  notes: (chain None)
+  organizations: (chain None)
+  authors: (chain None)
+  published: (chain None)
+  year: None
   link: None
+  pointer: None
+  external: None
+  notes: (chain None)
 
   publish => (
     .draft = false
     this
   )
+  credit (author) => (
+    .authors &= author
+    this
+  )
   note (text: String) => (
-    .notes &= text
+    .notes &= Reference.Note(text: text)
     this
   )
 }
@@ -176,7 +190,7 @@ Instance := class: Ray {
   status: Status.online
 
 }
-Status := enum online | offline | hosted | broadcast | proxy | invisible
+Status := enum online | offline | hosted | broadcast | proxy | invisible | idle | do_not_disturb | busy
 Persona := class: Nameable {
   prefix => `@`
   name: String

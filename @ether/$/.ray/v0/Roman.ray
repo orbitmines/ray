@@ -52,7 +52,13 @@ Roman := class {
     (0 < amount).and((amount / 100) < 40)
   )
 
-  from (number: Number) => (
+  Normalizer := enum standard | additive
+  normalizer: Roman.Normalizer.standard
+
+  from (number: Number) => if (Roman.normalizer == Roman.Normalizer.additive) { Roman.additive(number) } else { Roman.subtractive(number) }
+  canonical => Roman.from(.as_number)
+
+  subtractive (number: Number) => (
     out := chain None
     hundreds := number / 100
     below := number % 100

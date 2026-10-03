@@ -118,17 +118,20 @@ Keyboard := class {
     name: Node
     pressed: false
     toggled: false
+    presses: 0
 
     press => (
       .pressed = true
       this.toggled = .toggled.not
+      this.presses = .presses.succ
       this
     )
     release => (
       .pressed = false
       this
     )
-    cycle (iterable) => iterable.first
+    cycle (iterable) => iterable.at(.presses % iterable.count)
+    holds => .pressed
   }
   keys: (chain None)
 

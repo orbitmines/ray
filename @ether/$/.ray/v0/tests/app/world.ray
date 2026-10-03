@@ -30,7 +30,7 @@ wt := Task(name: "walk", goal: None)
 unless (wt.interrupted.not) { INFO@mark `TA1 a new task is interrupted` }
 unless (wt.interrupt.interrupted) { INFO@mark `TA2 an interrupted task is not interrupted` }
 
-wr := Reference(title: "a", author: None)
+wr := Reference(title: "a")
 unless (wr.draft) { INFO@mark `RE1 a new reference is no draft` }
 unless (wr.publish.draft.not) { INFO@mark `RE2 a published reference is still a draft` }
 
@@ -89,7 +89,7 @@ unless (branched.count.is_zero) { INFO@mark `HI6 a fork starts with commits on i
 unless (branched.from == past) { INFO@mark `HI7 a fork forgot what it came from` }
 
 // What is written down about something read.
-cite := Reference(title: "on rays", author: wp)
+cite := Reference(title: "on rays").credit(wp)
 unless (cite.draft) { INFO@mark `RF1 a new reference is not a draft` }
 unless (cite.publish.draft.not) { INFO@mark `RF2 publishing does not take it out of draft` }
 unless (cite.notes.count.is_zero) { INFO@mark `RF3 a new reference already has notes` }
@@ -167,7 +167,7 @@ unless (lamp.certify(paper).certificate == paper) { INFO@mark `WP14 what an item
 unless (paper.issued_on) { INFO@mark `WP15 a certificate says nothing about when it was issued` }
 
 // What is written down about something read elsewhere.
-cited := Reference(title: "a paper", author: 1)
+cited := Reference(title: "a paper").credit(1)
 unless (cited.draft) { INFO@mark `WP16 something written down is not a draft to begin with` }
 unless (cited.publish.draft.not) { INFO@mark `WP17 something published is still a draft` }
 if (cited.link) { INFO@mark `WP18 a reference points somewhere it was not pointed` }
@@ -178,3 +178,24 @@ unless (cited.note("read it").notes.count == 1) { INFO@mark `WP20 a note taken i
 guild := Organization(name: "guild")
 unless (guild.members.empty) { INFO@mark `WP21 an organization nobody joined has members` }
 unless (guild.status == Status.offline) { INFO@mark `WP22 an organization is not offline to begin with` }
+
+sited := Reference(title: "t", subtitle: "s", year: "2025", link: "https://a.b", pointer: "p")
+unless (sited.subtitle == "s") { INFO@mark `WR1 a reference forgot its subtitle` }
+unless (sited.year == "2025") { INFO@mark `WR2 a reference forgot its year` }
+unless (sited.link == "https://a.b") { INFO@mark `WR3 a reference forgot its link` }
+unless (sited.pointer == "p") { INFO@mark `WR4 a reference forgot its pointer` }
+unless (Reference(title: "t").authors.count.is_zero) { INFO@mark `WR5 a new reference already has authors` }
+unless (Reference(title: "t").organizations.count.is_zero) { INFO@mark `WR6 a new reference already has organizations` }
+unless (Reference(title: "t").published.count.is_zero) { INFO@mark `WR7 a new reference is already published somewhere` }
+unless (sited.credit(wp).authors.count == 1) { INFO@mark `WR8 an author credited is not kept` }
+unless (sited.authors.head.value == wp) { INFO@mark `WR9 the author kept is not the one credited` }
+unless (Reference(title: "t").note("n").notes.head.value.text == "n") { INFO@mark `WR10 a note forgot its text` }
+unless (Reference(title: "t").note("n").notes.head.value.date) { INFO@mark `WR11 a note says nothing about when` }
+if (Reference(title: "t").external) { INFO@mark `WR12 a new reference has an external it was not given` }
+
+unless (Status.idle) { INFO@mark `ST2 there is no being idle` }
+unless (Status.do_not_disturb) { INFO@mark `ST3 there is no being do not disturb` }
+unless (Status.busy) { INFO@mark `ST4 there is no being busy` }
+if (Status.idle == Status.busy) { INFO@mark `ST5 idle and busy are the same` }
+unless (Status.components.count == 9) { INFO@mark `ST6 there are other than nine statuses` }
+unless (Persona(name: "p", status: Status.busy).status == Status.busy) { INFO@mark `ST7 a persona forgot being busy` }

@@ -145,3 +145,13 @@ unless (cut.segments.count == 1) { INFO@mark `TI87 a calendar given one segment 
 unless (Calendar().segments.empty) { INFO@mark `TI88 a calendar given none has some` }
 unless (Second.symbol.as_string == "s") { INFO@mark `TI89 the second is not written s` }
 unless (Nanosecond.symbol.as_string == "ns") { INFO@mark `TI90 the nanosecond is not written ns` }
+
+rounded := Time(calendar: Julian, since_epoch: (80 seconds)).round(Minute)
+unless (rounded.since_epoch.amount == 60) { INFO@mark `TRO1 eighty seconds do not round down to a minute` }
+unless (Time(calendar: Julian, since_epoch: (95 seconds)).round(Minute).since_epoch.amount == 120) { INFO@mark `TRO2 ninety-five seconds do not round up to two minutes` }
+unless (rounded.calendar == Julian) { INFO@mark `TRO3 rounding lost the calendar` }
+unless (rounded.since_epoch.unit == Second) { INFO@mark `TRO4 rounding changed the unit it counts in` }
+unless (Time(calendar: Julian, since_epoch: (120 seconds)).round(Minute) == Time(calendar: Julian, since_epoch: (120 seconds))) { INFO@mark `TRO5 a whole multiple moved when rounded` }
+unless (Time(calendar: Julian, since_epoch: (90 seconds)).round(Minute).since_epoch.amount == 120) { INFO@mark `TRO6 half a minute does not round up` }
+epoched := Time(calendar: Julian, since_epoch: (80 seconds), epoch: here).round(Minute)
+unless (epoched.epoch == here) { INFO@mark `TRO7 rounding lost the epoch` }

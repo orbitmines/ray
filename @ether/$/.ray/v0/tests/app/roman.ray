@@ -89,3 +89,20 @@ if (Roman.digit_of("Q".head.value)) { INFO@mark `RO59 Q stands for a roman digit
 // The vinculum's marks are written by their codepoints: seven hundred and
 // seventy-three is the combining overline.
 unless (Roman.Vinculum.overline.codepoint == 773) { INFO@mark `RO60 the overline is not U+0305` }
+
+unless (Roman(text: "IIII").as_number == 4) { INFO@mark `RO61 IIII is not read as four` }
+unless (Roman(text: "IV").as_number == Roman(text: "IIII").as_number) { INFO@mark `RO62 the two ways of writing four are not the same number` }
+unless (Roman(text: "IIII").canonical.text == "IV") { INFO@mark `RO63 IIII does not normalize to IV` }
+unless (Roman(text: "IV").canonical.text == "IV") { INFO@mark `RO64 IV moved when normalized` }
+unless (Roman.normalizer == Roman.Normalizer.standard) { INFO@mark `RO65 the normalizer is not the standard form to begin with` }
+counted ^keyword := 1
+while (counted < 21) {
+  unless (Roman.from(counted).canonical.as_number == counted) { INFO@mark `RO66 a number does not come back from its canonical form` }
+  unless (Roman.additive(counted).canonical.text == Roman.from(counted).text) { INFO@mark `RO67 an additive numeral does not normalize to the standard one` }
+  counted = counted.succ
+}
+Roman.normalizer = Roman.Normalizer.additive
+unless (Roman.from(4).text == "IIII") { INFO@mark `RO68 four is not written IIII once the normalizer is additive` }
+unless (Roman(text: "IV").canonical.text == "IIII") { INFO@mark `RO69 the canonical form does not follow the normalizer` }
+Roman.normalizer = Roman.Normalizer.standard
+unless (Roman.from(4).text == "IV") { INFO@mark `RO70 four is not written IV once the normalizer is standard again` }

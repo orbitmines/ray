@@ -1434,8 +1434,8 @@ export class Interpreter {
   }
 
   // Definitions: a head read by its brackets — text, `{ }` for a space, `{x}` capturing x.
-  define(head: Text.Node, body: Text.Node | undefined, scope: Node, closure: Node = scope, guard?: { span: Text.Node; in: Node }): Rule | undefined {
-    const site = head.source.location !== undefined ? head : this.running[this.running.length - 1]?.at;
+  define(head: Text.Node, body: Text.Node | undefined, scope: Node, closure: Node = scope, guard?: { span: Text.Node; in: Node }, written?: Text.Node): Rule | undefined {
+    const site = head.source.location !== undefined ? head : written ?? this.running[this.running.length - 1]?.at;
     const made = site === undefined || scope === this.GLOBAL ? undefined : this.rules_on(scope).find(rule => !this.based().has(rule) && rule.at.string === head.string && Interpreter.same(rule.at.source.location !== undefined ? rule.at : rule.lexical, site));
     if (made !== undefined) return made;
     const pieces = this.pieces_of(head, closure);
@@ -1707,14 +1707,16 @@ export class Interpreter {
     if (written === undefined) return undefined;
     if (place?.place !== undefined && !place.place.member) {
       const head = Object.assign(Text.Node.string(place.place.name + spelled), {});
-      const rule = this.define(head, this.inner(written) ?? written, place.place.in, body.code?.in ?? place.place.in, guard);
-      if (rule !== undefined) rule.lexical = this.writing(at);
+      const lexical = this.writing(at);
+      const rule = this.define(head, this.inner(written) ?? written, place.place.in, body.code?.in ?? place.place.in, guard, lexical);
+      if (rule !== undefined) rule.lexical = lexical;
       return rule === undefined ? undefined : this.rule_value(rule);
     }
     const into = this.deref(scope, false);
     if (into === undefined || into.none) return undefined;
-    const rule = this.define(Text.Node.string(spelled), this.inner(written) ?? written, into, body.code?.in ?? into, guard);
-    if (rule !== undefined) rule.lexical = this.writing(at);
+    const lexical = this.writing(at);
+    const rule = this.define(Text.Node.string(spelled), this.inner(written) ?? written, into, body.code?.in ?? into, guard, lexical);
+    if (rule !== undefined) rule.lexical = lexical;
     return rule === undefined ? undefined : this.rule_value(rule);
   }
   private methods = new WeakMap<Rule[], Map<string, Rule>>();

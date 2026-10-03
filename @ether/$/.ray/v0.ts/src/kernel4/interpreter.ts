@@ -508,11 +508,14 @@ export class Interpreter {
   private readings = new WeakMap<Text.Source, { epoch: object; by: Map<number, WeakMap<Rule[], WeakMap<Rule[], Map<Rule[] | null, Match | null>>>> }>();
   private static receiving_any: Rule[] = [];
   volatile = 0;
-  private epoch_at?: { rules: number; declared: number; base?: Node };
+  private epoch_at?: { rules: number; version: number; declared: number; base?: Node; global: Rule[]; based: Rule[]; token: object };
   reading_epoch(): object {
     const held = this.epoch_at;
-    if (held !== undefined && held.rules === this.rules_version && held.declared === this.declared && held.base === this.BASE) return held;
-    return this.epoch_at = { rules: this.rules_version, declared: this.declared, base: this.BASE };
+    if (held !== undefined && held.rules === this.rules_version && held.version === this.version && held.declared === this.declared && held.base === this.BASE) return held.token;
+    const global = this.rules_of(this.GLOBAL), based = this.BASE === undefined ? Interpreter.receiving_any : this.rules_on(this.BASE);
+    const token = held !== undefined && held.global === global && held.based === based && held.declared === this.declared && held.base === this.BASE ? held.token : {};
+    this.epoch_at = { rules: this.rules_version, version: this.version, declared: this.declared, base: this.BASE, global, based, token };
+    return token;
   }
   receiver_rules(receiver: Node): Rule[] {
     const held = this.quietly(() => this.deref(receiver, false));

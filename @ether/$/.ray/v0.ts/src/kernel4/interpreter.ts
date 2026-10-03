@@ -843,7 +843,7 @@ export class Interpreter {
       if (this.program?.serving) for (const piece of rule.pattern) if (piece.kind === 'capture' && piece.content !== undefined && captures.has(piece.name)) this.run_content(piece, captures.get(piece.name)!, local);
       if (rule.fn !== undefined) return rule.fn.fn({ interpreter: this, frame: local, args, at, self: receiver });
       if (rule.body === undefined) return undefined;
-      if (rule.direct !== undefined) return Natives[rule.native!].fn({ interpreter: this, frame: local, args: rule.direct.map(word => this.place(local, word)), at: rule.body.span(rule.body.end, rule.body.end) });
+      if (rule.direct !== undefined) return Natives[rule.native!].fn({ interpreter: this, frame: local, args: rule.direct.map(word => this.program?.serving ? this.lazy(word, local) : this.place(local, word)), at: rule.body.span(rule.body.end, rule.body.end) });
       try { return this.read(this.cursor_of(this.inner(rule.body) ?? rule.body), local); }
       catch (jump) {
         if (!(jump instanceof Jump)) throw jump;

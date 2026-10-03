@@ -97,7 +97,8 @@ export class Heads {
   }
 }
 
-export type Step = { end: number; heads: Rule[]; label?: string; site?: Text.Node; condition?: Text.Node };
+export type Called = { native: Native; spans: Text.Node[]; end: number };
+export type Step = { end: number; heads: Rule[]; label?: string; site?: Text.Node; condition?: Text.Node; head?: { word: Text.Node; value: Node }; calls?: Called[] };
 export type Running ={ found: Match; at: Text.Node; local?: Node };
 export type Match = { rule: Rule; begin: number; end: number; reach: number; captures: Map<string, Text.Node>; literals: [number, number][]; receiver?: Node };
 
@@ -307,7 +308,7 @@ export class Interpreter {
     if (steps === undefined) held.by.set(span, steps = new Map());
     return steps;
   }
-  firing: { depth: number; fires: Match[] }[] = [];
+  firing: { depth: number; fires: Match[]; calls: Called[] }[] = [];
   read(cursor: Text.Node, frame: Node): Node | undefined {
     const begin = cursor.cursor, mark = this.forced.length;
     const steps = this.program?.serving ? undefined : this.flow(cursor);
@@ -319,7 +320,18 @@ export class Interpreter {
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
       try {
         const step = steps?.get(start), heads = steps === undefined ? undefined : this.heads(frame);
-        if (step !== undefined && step.heads === heads) {
+        if (step !== undefined && step.heads === heads && step.calls !== undefined) {
+          let target = this.deref(this.place(frame, step.head!.word), false), value: Node | undefined, replayed = target === step.head!.value;
+          for (const called of step.calls) {
+            if (!replayed) break;
+            if (target?.fn !== called.native) { replayed = false; break; }
+            const args = called.spans.map((span, k) => k === 0 && called.native.raw ? this.literal(span) : this.lazy(span, frame));
+            value = called.native.fn({ interpreter: this, frame, args, at: cursor.span(called.end, called.end) });
+            target = value === undefined ? undefined : this.deref(value, false);
+          }
+          if (replayed) { cursor.cursor = step.end; if (value !== undefined) last = value; continue; }
+        }
+        if (step !== undefined && step.heads === heads && step.calls === undefined) {
           cursor.cursor = step.end;
           if (step.label !== undefined) {
             const met = step.condition === undefined ? this.GLOBAL : this.deref(this.lazy(step.condition, frame), false);
@@ -327,12 +339,19 @@ export class Interpreter {
           }
           continue;
         }
-        const firing = { depth: this.running.length, fires: [] as Match[] };
+        const firing = { depth: this.running.length, fires: [] as Match[], calls: [] as Called[] };
         this.firing.push(firing);
         let value: Node | undefined;
         let thrown = true;
         try { value = this.statement(cursor, frame); thrown = false; }
-        finally { this.firing.pop(); if (steps !== undefined && firing.fires.length === 1 && (thrown || cursor.cursor === firing.fires[0].end)) this.record(steps, start, firing.fires[0].end, firing.fires[0], heads!); }
+        finally {
+          this.firing.pop();
+          if (steps !== undefined && firing.fires.length === 1 && (thrown || cursor.cursor === firing.fires[0].end)) this.record(steps, start, firing.fires[0].end, firing.fires[0], heads!);
+          if (steps !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length > 0 && firing.calls[firing.calls.length - 1].end === cursor.cursor) {
+            const word = cursor.span(start, this.token(cursor, start) - 1), value = this.quietly(() => this.deref(this.place(frame, word), false));
+            if (value !== undefined && value.fn === firing.calls[0].native) steps.set(start, { end: cursor.cursor, heads: heads!, head: { word, value }, calls: firing.calls });
+          }
+        }
         if (value !== undefined) last = value;
       } catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
@@ -522,6 +541,8 @@ export class Interpreter {
       cursor.cursor = end;
     }
     const at = cursor.span(cursor.cursor, cursor.cursor);
+    const firing = this.firing[this.firing.length - 1];
+    if (firing !== undefined && firing.depth === this.running.length) firing.calls.push({ native, spans: args.map(arg => arg.code?.span ?? arg.at!), end: cursor.cursor });
     return native.fn({ interpreter: this, frame, args, at });
   }
 

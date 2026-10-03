@@ -38,7 +38,6 @@ export class Node {
   constructor(at?: Text.Node) { this.at = at; }
   own(name: string): Node | undefined { return this.names?.get(name); }
   set(name: string, value: Node): Node { (this.names ??= new Map()).set(name, value); return value; }
-  get callable(): boolean { return this.fn !== undefined; }
 }
 
 export class Rule {
@@ -130,10 +129,7 @@ export class Interpreter {
         depth = 0;
       }
     };
-    let found = visit(frame, false, true, 0);
-    if (found !== undefined && frame.sees !== undefined && this.given_name(frame, name)) {
-      for (const sees of frame.sees) { const lexical = this.lookup(sees, name); if (lexical !== undefined) { found = lexical; break; } }
-    }
+    const found = visit(frame, false, true, 0);
     if (found !== undefined) return found;
     const global = this.GLOBAL.own(name);
     if (global !== undefined) return global;
@@ -153,7 +149,6 @@ export class Interpreter {
     return false;
   }
   written_in(frame: Node, name: string): boolean { return (frame.own(name) !== undefined && !frame.given?.has(name)) || (frame.sees ?? []).some(sees => sees.own(name) !== undefined && !sees.given?.has(name)); }
-  given_name(frame: Node, name: string): boolean { const holder = this.near_holder(frame, name); return holder !== undefined && holder !== frame && holder.given?.has(name) === true; }
   // Where a frame holds a name itself or through what it is made of: where a declaration may follow it.
   near_holder(frame: Node, name: string): Node | undefined {
     if (frame.own(name) !== undefined) return frame;

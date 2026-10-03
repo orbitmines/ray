@@ -81,3 +81,18 @@ unless ((3 s).unit == Second) { INFO@mark `U43 three s are not seconds` }
 unless ((1.5 days).amount == 1.5) { INFO@mark `U44 1.5 days is not one and a half of them` }
 unless (((1.5 days) as Hour).amount.integer == 36) { INFO@mark `U45 1.5 days is not 36 hours` }
 unless (((2 hours) as Minute).amount == 120) { INFO@mark `U46 two hours are not 120 minutes` }
+
+unless (Kibibyte.ratio == 1024) { INFO@mark `UB1 a kibibyte is not 1024 of what it is built on` }
+unless (Kilobyte.ratio == 1000) { INFO@mark `UB2 a kilobyte is not a thousand of what it is built on` }
+unless ((1 of Kibibyte) == (1024 of Byte)) { INFO@mark `UB3 a kibibyte is not 1024 bytes` }
+unless ((1 of Kilobyte) == (1000 of Byte)) { INFO@mark `UB4 a kilobyte is not 1000 bytes` }
+unless (Kibibyte != Kilobyte) { INFO@mark `UB5 a kibibyte is a kilobyte` }
+unless (BinaryPrefix.kibi.factor == 1024) { INFO@mark `UB6 kibi is not 1024` }
+unless (BinaryPrefix.mebi.factor == 1048576) { INFO@mark `UB7 mebi is not 1024 squared` }
+unless (Kibibyte.base == Byte) { INFO@mark `UB8 a kibibyte is not built on a byte` }
+unless (Kilobyte.base == Byte) { INFO@mark `UB9 a kilobyte is not built on a byte` }
+unless (Kibibyte.symbol.as_string == "KiB") { INFO@mark `UB10 a kibibyte is not written KiB` }
+unless (Kilobyte.symbol.as_string == "KB") { INFO@mark `UB11 a kilobyte is not written KB` }
+unless ((2 kibibytes).unit == Kibibyte) { INFO@mark `UB12 two kibibytes are not kibibytes` }
+unless ((3 KB).unit == Kilobyte) { INFO@mark `UB13 three KB are not kilobytes` }
+unless ((1 KiB).unit == Kibibyte) { INFO@mark `UB14 one KiB is not a kibibyte` }

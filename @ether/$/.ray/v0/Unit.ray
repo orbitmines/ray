@@ -76,7 +76,7 @@ Unit := class {
     }
   } else { false }
 
-  prefixed (prefix: Prefix) => (
+  prefixed (prefix) => (
     parent := this
     Unit(
       base: parent
@@ -148,6 +148,10 @@ Prefix := enum deka (symbol: `da`, magnitude: 1) | hecto (symbol: `h`, magnitude
   factor => 10.pow(.magnitude)
 }
 
+BinaryPrefix := enum kibi (symbol: `Ki`, power: 1) | mebi (symbol: `Mi`, power: 2) | gibi (symbol: `Gi`, power: 3) | tebi (symbol: `Ti`, power: 4) | pebi (symbol: `Pi`, power: 5) | exbi (symbol: `Ei`, power: 6) | zebi (symbol: `Zi`, power: 7) | yobi (symbol: `Yi`, power: 8) | robi (symbol: `Ri`, power: 9) | quebi (symbol: `Qi`, power: 10) {
+  factor => 1024.pow(.power)
+}
+
 SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit(
   name: name
   symbol: symbol
@@ -156,8 +160,28 @@ SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit(
 Bit := Unit().called(`bit`, `bits`, `b`)
 Byte := Unit(base: Bit, factor: 8).called(`byte`, `bytes`, `B`)
 
-Kilobyte := Byte prefixed Prefix.kilo
-Kibibyte => Byte multiple (1024)
+Kilobyte := (Byte prefixed Prefix.kilo).called(`kilobyte`, `kilobytes`, `KB`)
+Megabyte := (Byte prefixed Prefix.mega).called(`megabyte`, `megabytes`, `MB`)
+Gigabyte := (Byte prefixed Prefix.giga).called(`gigabyte`, `gigabytes`, `GB`)
+Terabyte := (Byte prefixed Prefix.tera).called(`terabyte`, `terabytes`, `TB`)
+Petabyte := (Byte prefixed Prefix.peta).called(`petabyte`, `petabytes`, `PB`)
+Exabyte := (Byte prefixed Prefix.exa).called(`exabyte`, `exabytes`, `EB`)
+Zettabyte := (Byte prefixed Prefix.zetta).called(`zettabyte`, `zettabytes`, `ZB`)
+Yottabyte := (Byte prefixed Prefix.yotta).called(`yottabyte`, `yottabytes`, `YB`)
+Ronnabyte := (Byte prefixed Prefix.ronna).called(`ronnabyte`, `ronnabytes`, `RB`)
+Quettabyte := (Byte prefixed Prefix.quetta).called(`quettabyte`, `quettabytes`, `QB`)
+
+Kibibyte := (Byte prefixed BinaryPrefix.kibi).called(`kibibyte`, `kibibytes`, `KiB`)
+Mebibyte := (Byte prefixed BinaryPrefix.mebi).called(`mebibyte`, `mebibytes`, `MiB`)
+Gibibyte := (Byte prefixed BinaryPrefix.gibi).called(`gibibyte`, `gibibytes`, `GiB`)
+Tebibyte := (Byte prefixed BinaryPrefix.tebi).called(`tebibyte`, `tebibytes`, `TiB`)
+Pebibyte := (Byte prefixed BinaryPrefix.pebi).called(`pebibyte`, `pebibytes`, `PiB`)
+Exbibyte := (Byte prefixed BinaryPrefix.exbi).called(`exbibyte`, `exbibytes`, `EiB`)
+Zebibyte := (Byte prefixed BinaryPrefix.zebi).called(`zebibyte`, `zebibytes`, `ZiB`)
+Yobibyte := (Byte prefixed BinaryPrefix.yobi).called(`yobibyte`, `yobibytes`, `YiB`)
+Robibyte := (Byte prefixed BinaryPrefix.robi).called(`robibyte`, `robibytes`, `RiB`)
+Quebibyte := (Byte prefixed BinaryPrefix.quebi).called(`quebibyte`, `quebibytes`, `QiB`)
+
 Second := Unit().called(`second`, `seconds`, `s`)
 
 Nanosecond := Unit().called(`nanosecond`, `nanoseconds`, `ns`)

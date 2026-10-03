@@ -665,16 +665,16 @@ bits_of (text) => (
 )
 prefix_of (at, spelling) => (
   prefix ^keyword := None
-  walker ^keyword := bits_of(spelling).head
   matching ^keyword := global
-  while ((walker).and(matching)) {
+  compare (bit) => (
     unless at { matching = None }
     if matching {
-      unless (walker.value.xnor(at.value)) { matching = None }
+      unless (bit.xnor(at.value)) { matching = None }
       at = at.next
     }
-    walker = walker.next
-  }
+    matching
+  )
+  external bits spelling compare
   if matching { prefix = Reading(rest: at, value: spelling) }
   prefix
 )

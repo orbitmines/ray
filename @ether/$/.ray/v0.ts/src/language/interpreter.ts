@@ -16,7 +16,7 @@ export type Piece = (
   | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node; undecided?: boolean; decided?: number; type?: Node; operator?: boolean }
 ) & { tight?: boolean };
 
-export type NameGuard = Variant & { frame?: Node; parent?: Node; sees?: Node[]; self?: { rules: Rule[]; mine: Rule[]; on: Rule[] } };
+export type NameGuard = Variant & { frame?: Node; parent?: Node; sees?: Node[]; self?: { rules: Rule[]; mine: Rule[]; on: Rule[] }; declared?: number };
 export type Slot = { parent: Node; sees?: Node[]; holder?: Node; valid: boolean };
 export class Node {
   at?: Text.Node
@@ -698,15 +698,15 @@ export class Interpreter {
     if (this.naming !== undefined) return false;
     const self = this.holding_at(cursor.source, cursor.cursor)?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
     const guard = held?.guard;
-    if (guard !== undefined && guard.valid && Interpreter.same_frame(frame, guard)) {
+    if (guard !== undefined && guard.valid && (guard.declared === undefined || guard.declared === this.declared) && Interpreter.same_frame(frame, guard)) {
       if (self === undefined) { if (guard.self === undefined) return true; }
       else if (guard.self !== undefined) { const shape = this.shape(self); if (shape.rules === guard.self.rules && shape.mine === guard.self.mine && shape.on === guard.self.on) return true; }
     }
     const sensitive = this.sensitive;
     if (this.best(rules, cursor, frame) !== undefined) return false;
     if (self !== undefined && this.best_on(self, frame, cursor, true) !== undefined) return false;
-    if (held !== undefined && this.sensitive === sensitive) {
-      const made: NameGuard = { valid: true, events: [], frame: frame.rules?.length ? frame : undefined, parent: frame.parent, sees: frame.sees === undefined || frame.sees.length === 0 ? undefined : [...frame.sees], self: self === undefined ? undefined : this.shape(self) };
+    if (held !== undefined) {
+      const made: NameGuard = { declared: this.sensitive === sensitive ? undefined : this.declared, valid: true, events: [], frame: frame.rules?.length ? frame : undefined, parent: frame.parent, sees: frame.sees === undefined || frame.sees.length === 0 ? undefined : [...frame.sees], self: self === undefined ? undefined : this.shape(self) };
       if (held.guard !== undefined) held.guard.valid = false;
       held.guard = made;
       this.watch(made, frame, cursor, [cursor.cursor]);

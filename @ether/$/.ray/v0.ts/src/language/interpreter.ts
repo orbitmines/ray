@@ -3,6 +3,7 @@ import type { Called, Unit } from './compile/ir.ts';
 import { applied, called, named } from './compile/record.ts';
 import { type Event, type Replayed, type Variant, replay } from './compile/graph.ts';
 import { evaluate } from './compile/evaluate.ts';
+import { Boot } from './boot.ts';
 import { Diagnostics, type Diagnostic } from './diagnostics.ts';
 import { Natives } from './natives.ts';
 import type { Program } from './program.ts';
@@ -1695,21 +1696,56 @@ export class Interpreter {
     this.pending = [];
     this.done = new Set();
     const eager = this.program?.eager;
-    for (const src of mine) {
-      if (this.done.has(src) || (eager !== undefined && !src.is_entrypoint && !eager(src))) continue;
-      this.done.add(src);
-      this.pending = this.pending.filter(other => other !== src);
-      this.read_source(src);
-      if (src.is_entrypoint) { this.read_source(src); if (!derived) this.pending = mine.filter(other => !other.is_entrypoint && !this.done.has(other)); }
-      this.after(src);
-      yield;
-    }
-    for (const src of mine) {
-      if (src.is_entrypoint || !this.done.has(src) || ![...this.diagnostics.of(src)].some(entry => entry.message.startsWith('Unresolved'))) continue;
-      this.read_source(src);
-      yield;
-    }
+    const boot = derived ? undefined : Boot.of(this, mine);
+    this.boot = boot;
+    const resume = boot?.restore() ?? { phase: 0, index: -1 };
+    try {
+      for (let index = 0; index < mine.length; index++) {
+        const src = mine[index];
+        if (resume.phase > 0 || index <= resume.index) continue;
+        if (this.done.has(src)) continue;
+        const reads = src.is_entrypoint || eager === undefined || eager(src);
+        boot?.decided(src, reads);
+        if (!reads) continue;
+        this.done.add(src);
+        this.pending = this.pending.filter(other => other !== src);
+        this.read_source(src);
+        if (src.is_entrypoint) { this.read_source(src); if (!derived) this.pending = mine.filter(other => !other.is_entrypoint && !this.done.has(other)); }
+        this.after(src);
+        boot?.save(0, index);
+        yield;
+      }
+      for (let index = 0; index < mine.length; index++) {
+        const src = mine[index];
+        if (resume.phase > 1 || (resume.phase === 1 && index <= resume.index)) continue;
+        if (src.is_entrypoint || !this.done.has(src) || ![...this.diagnostics.of(src)].some(entry => entry.message.startsWith('Unresolved'))) continue;
+        this.read_source(src);
+        boot?.save(1, index);
+        yield;
+      }
+    } finally { this.boot = undefined; }
     this.end_pass();
+  }
+  boot?: Boot;
+  saved_state(mine: Text.Source[]): Record<string, unknown> {
+    const externals = new Map<Text.Source, Map<string, Node>>();
+    for (const src of mine) { const held = this.externals.get(src); if (held !== undefined) externals.set(src, held); }
+    return {
+      GLOBAL: this.GLOBAL, NONE: this.NONE, EXTERNAL: this.EXTERNAL, BASE: this.BASE, made: this.made, theme: this.theme,
+      version: this.version, declared: this.declared, rules_version: this.rules_version, order: this.order, rules: Rule.count,
+      definitions: this.definitions, given_names: this.given_names, held_texts: this.held_texts, filtered: this.filtered, rejected: this.rejected,
+      named: this.named, templates: this.templates, template: this.template, pending: this.pending, done: [...this.done], externals,
+      diagnostics: this.diagnostics.items,
+    };
+  }
+  restore_state(state: any, mine: Text.Source[]) {
+    this.GLOBAL = state.GLOBAL; this.NONE = state.NONE; this.EXTERNAL = state.EXTERNAL; this.BASE = state.BASE; this.made = state.made; this.theme = state.theme;
+    this.version = state.version + 1; this.declared = state.declared; this.rules_version = state.rules_version + 1; this.order = state.order;
+    Rule.count = Math.max(Rule.count, state.rules);
+    this.definitions = state.definitions; this.given_names = state.given_names; this.held_texts = state.held_texts; this.filtered = state.filtered; this.rejected = state.rejected;
+    this.named = state.named; this.templates = state.templates; this.template = state.template; this.pending = state.pending; this.done = new Set(state.done);
+    for (const [src, held] of state.externals as Map<Text.Source, Map<string, Node>>) this.externals.set(src, held);
+    for (const [src, held] of state.diagnostics as Map<Text.Source | undefined, Map<Text.Node | undefined, Diagnostic[]>>) this.diagnostics.items.set(src, held);
   }
   // A name nothing has written yet is looked for in the files not read so far, in their order.
   pending: Text.Source[] = [];
@@ -1730,6 +1766,7 @@ export class Interpreter {
     return false;
   }
   read_source(src: Text.Source) {
+    this.boot?.read(src);
     this.diagnostics.forget(src);
     try { this.safely(() => this.read(new Text.Node(src), this.GLOBAL)); }
     catch (jump) { if (!(jump instanceof Jump)) throw jump; this.error(`No \`${jump.label}\` to jump to.`); }

@@ -703,7 +703,9 @@ outnumbers (one, other) => (
 )
 read_whole (text, type) => (
   whole ^keyword := None
-  if type.repeating { whole = read_repeated(bits_of(text).head, type.repeats) } else {
+  if type.repeating {
+    if (could_read_repeated(text, type.repeats)) { whole = read_repeated(bits_of(text).head, type.repeats) }
+  } else {
     candidate ^keyword := readings_of(bits_of(text).head, type).head
     while candidate {
       reading ^keyword := candidate.value
@@ -716,6 +718,69 @@ read_whole (text, type) => (
     }
   }
   whole
+)
+literal_bits_of (type) => (
+  unless type.literal_bits_known {
+    spellings ^keyword := chain None
+    plain ^keyword := global
+    gather (kind) => (
+      if kind.superposes {
+        alternative ^keyword := kind.components.head
+        while alternative {
+          gather(alternative.value)
+          alternative = alternative.next
+        }
+      } elsif kind.repeating { plain = None }
+      elsif kind.listing { plain = None }
+      elsif kind.capturing { plain = None }
+      elsif kind.written_body { plain = None }
+      else { spellings &= bits_of(kind) }
+    )
+    gather(type)
+    if plain { type.literal_bits = spellings } else { type.literal_bits = None }
+    type.literal_bits_known = global
+  }
+  type.literal_bits
+)
+could_read_repeated (text, element) => (
+  possible ^keyword := global
+  if element.superposes {
+    spellings ^keyword := literal_bits_of(element)
+    if spellings {
+      active ^keyword := chain None
+      spelling ^keyword := spellings.head
+      while spelling {
+        if spelling.value.head { active &= spelling.value.head }
+        spelling = spelling.next
+      }
+      completed ^keyword := None
+      step (bit) => (
+        reached ^keyword := chain None
+        done ^keyword := None
+        at ^keyword := active.head
+        while at {
+          if (at.value.value === bit) {
+            if at.value.next { reached &= at.value.next } else { done = global }
+          }
+          at = at.next
+        }
+        if done {
+          restart ^keyword := spellings.head
+          while restart {
+            if restart.value.head { reached &= restart.value.head }
+            restart = restart.next
+          }
+        }
+        completed = done
+        active = reached
+        reached.head
+      )
+      external bits text step
+      unless active.head { completed = None }
+      possible = completed
+    }
+  }
+  possible
 )
 read_repeated (start, element) => (
   whole ^keyword := None

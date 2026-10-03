@@ -261,12 +261,19 @@ export class Interpreter {
         if (cursor.done() || text[cursor.cursor] === '\n') break;
         const start = cursor.cursor;
         const found = this.best(this.rules_of(frame).filter(rule => (!rule.leading && rule.home === this.GLOBAL) || rule.defines), cursor, frame);
-        const name = this.token(cursor, start);
+        let name = this.token(cursor, start);
         let named: Match | undefined, place: Node | undefined;
         if (name > start) {
           place = this.place(frame, cursor.span(start, name - 1));
           const probe = cursor.bounded(name, cursor.limit);
           named = this.tried(() => this.best(this.receiving(place, frame), probe, frame, place));
+        }
+        let head = start;
+        while (head < cursor.limit && !/\s/.test(text[head]) && this.claim(cursor, head, frame) === head) head++;
+        if (head > name && name > start) {
+          const whole = this.place(frame, cursor.span(start, head - 1));
+          const defined = this.tried(() => this.best(this.receiving(whole, frame), cursor.bounded(head, cursor.limit), frame, whole));
+          if (defined?.rule.defines) { place = whole; named = defined; name = head; }
         }
         const self = this.holding(cursor.span(start, start))?.found.receiver ?? (frame === this.GLOBAL ? undefined : frame);
         const own = self === undefined ? undefined : this.best_on(self, frame, cursor, rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && this.opens(rule.pattern[0].text)));

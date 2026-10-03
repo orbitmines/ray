@@ -704,7 +704,14 @@ outnumbers (one, other) => (
 read_whole (text, type) => (
   whole ^keyword := None
   if type.repeating {
-    if (could_read_repeated(text, type.repeats)) { whole = read_repeated(bits_of(text).head, type.repeats) }
+    tree ^keyword := None
+    if type.repeats.superposes { tree = spelled_tree_of(type.repeats) }
+    if (tree) {
+      ends ^keyword := spelled_ends(text, tree)
+      if (ends) {
+        if type.repeats.spelled_unique { whole = spelled_reading(ends) } else { whole = read_repeated(bits_of(text).head, type.repeats) }
+      }
+    } else { whole = read_repeated(bits_of(text).head, type.repeats) }
   } else {
     candidate ^keyword := readings_of(bits_of(text).head, type).head
     while candidate {
@@ -719,32 +726,10 @@ read_whole (text, type) => (
   }
   whole
 )
-literal_bits_of (type) => (
-  unless type.literal_bits_known {
-    spellings ^keyword := chain None
-    plain ^keyword := global
-    gather (kind) => (
-      if kind.superposes {
-        alternative ^keyword := kind.components.head
-        while alternative {
-          gather(alternative.value)
-          alternative = alternative.next
-        }
-      } elsif kind.repeating { plain = None }
-      elsif kind.listing { plain = None }
-      elsif kind.capturing { plain = None }
-      elsif kind.written_body { plain = None }
-      else { spellings &= bits_of(kind) }
-    )
-    gather(type)
-    if plain { type.literal_bits = spellings } else { type.literal_bits = None }
-    type.literal_bits_known = global
-  }
-  type.literal_bits
-)
 spelled_node ^keyword => (
   node ^keyword := external .
   ends := None
+  path := None
   zero := None
   one := None
   node
@@ -752,64 +737,102 @@ spelled_node ^keyword => (
 spelled_tree_of (type) => (
   unless type.spelled_tree_known {
     type.spelled_tree = None
-    spellings ^keyword := literal_bits_of(type)
-    if spellings {
-      root ^keyword := spelled_node
-      spelling ^keyword := spellings.head
-      while spelling {
-        at ^keyword := root
-        bit ^keyword := spelling.value.head
-        while bit {
-          if bit.value {
-            unless at.one { at.one = spelled_node }
-            at = at.one
-          } else {
-            unless at.zero { at.zero = spelled_node }
-            at = at.zero
-          }
-          bit = bit.next
+    type.spelled_unique = global
+    root ^keyword := spelled_node
+    plain ^keyword := global
+    insert (kind, path) => (
+      at ^keyword := root
+      bit ^keyword := bits_of(kind).head
+      while bit {
+        if at.ends { type.spelled_unique = None }
+        if bit.value {
+          unless at.one { at.one = spelled_node }
+          at = at.one
+        } else {
+          unless at.zero { at.zero = spelled_node }
+          at = at.zero
         }
-        unless (at === root) { at.ends = global }
-        spelling = spelling.next
+        bit = bit.next
       }
-      type.spelled_tree = root
-    }
+      unless (at === root) {
+        if at.ends { type.spelled_unique = None }
+        if at.zero { type.spelled_unique = None }
+        if at.one { type.spelled_unique = None }
+        at.ends = global
+        at.path = path
+      }
+    )
+    gather (kind, path) => (
+      if kind.superposes {
+        alternative ^keyword := kind.components.head
+        while alternative {
+          deeper ^keyword := chain None
+          step ^keyword := path.head
+          while step {
+            deeper &= step.value
+            step = step.next
+          }
+          deeper &= alternative
+          gather(alternative.value, deeper)
+          alternative = alternative.next
+        }
+      } elsif kind.repeating { plain = None }
+      elsif kind.listing { plain = None }
+      elsif kind.capturing { plain = None }
+      elsif kind.written_body { plain = None }
+      else { insert(kind, path) }
+    )
+    gather(type, chain None)
+    if plain { type.spelled_tree = root }
     type.spelled_tree_known = global
   }
   type.spelled_tree
 )
-could_read_repeated (text, element) => (
-  possible ^keyword := global
-  if element.superposes {
-    root ^keyword := spelled_tree_of(element)
-    if root {
-      active ^keyword := chain None
-      active &= root
-      completed ^keyword := None
-      step (bit) => (
-        reached ^keyword := chain None
-        done ^keyword := None
-        at ^keyword := active.head
-        while at {
-          next_node ^keyword := None
-          if bit { next_node = at.value.one } else { next_node = at.value.zero }
-          if next_node {
-            reached &= next_node
-            if next_node.ends { done = global }
-          }
-          at = at.next
+spelled_ends (text, root) => (
+  active ^keyword := chain None
+  active &= root
+  ended ^keyword := chain None
+  completed ^keyword := None
+  step (bit) => (
+    reached ^keyword := chain None
+    done ^keyword := None
+    at ^keyword := active.head
+    while at {
+      next_node ^keyword := None
+      if bit { next_node = at.value.one } else { next_node = at.value.zero }
+      if next_node {
+        reached &= next_node
+        if next_node.ends {
+          done = global
+          ended &= next_node
         }
-        if done { reached &= root }
-        completed = done
-        active = reached
-        reached.head
-      )
-      external bits text step
-      unless active.head { completed = None }
-      possible = completed
+      }
+      at = at.next
     }
+    if done { reached &= root }
+    completed = done
+    active = reached
+    reached.head
+  )
+  external bits text step
+  unless active.head { completed = None }
+  unless completed { ended = None }
+  ended
+)
+spelled_reading (ends) => (
+  whole ^keyword := chain None
+  ended ^keyword := ends.head
+  while ended {
+    among ^keyword := ended.value.path.tail
+    value ^keyword := among.value.value
+    while among {
+      value = Chosen(among: among.value, value: value)
+      among = among.previous
+    }
+    whole &= value
+    ended = ended.next
   }
-  possible
+  whole
 )
 read_repeated (start, element) => (
   whole ^keyword := None

@@ -230,3 +230,12 @@ three_on ^keyword := collect_three(5)
 unless (three_on.count == 3) { INFO@mark `NL11 three steps along the line are not three` }
 unless (three_on.tail.value == 7) { INFO@mark `NL12 the third step from five is not seven` }
 unless (5 some { it.value == 8 }) { INFO@mark `NL13 some did not reach eight` }
+
+unless (007 == 7) { INFO@mark `N136 007 is not seven` }
+unless (00 == 0) { INFO@mark `N137 00 is not zero` }
+unless (0x00ff == 0xff) { INFO@mark `N138 0x00ff is not 0xff` }
+
+unless (3! == 6) { INFO@mark `N139 3! is not six` }
+unless (0! == 1) { INFO@mark `N140 0! is not one` }
+unless (3 != 4) { INFO@mark `N141 3 != 4 is not read as not-equal` }
+if (3 != 3) { INFO@mark `N142 3 != 3 is read as not-equal and holds` }

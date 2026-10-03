@@ -60,7 +60,7 @@ IDs `X…`. Answers go under **Decided** at the end.
 
 ## X6. IP (*IP.ray*)
 
-- **X6.1 File name** — IP lives in `Test.ray` (the draft's name). Rename to `IP.ray`?
+- **X6.1 File name** — IP lives in `IP.ray` (the draft's name was `Test.ray`).
 - **X6.2 `IP < Location &+ (-1 <- . -> +1)`** — an address is a location on a line.
 - **X6.3 v6 constructor** — the draft reads both sides of `::` and an embedded v4; v0 stores eight segments. Directive: follow
   the draft.

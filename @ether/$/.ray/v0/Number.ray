@@ -169,6 +169,7 @@ Number := class: Ray {
     }
     raised
   )
+  ! => .factorial
 
   gcd (other: Number) => (
     a := this

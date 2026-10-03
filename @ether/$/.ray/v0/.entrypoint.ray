@@ -1019,13 +1019,28 @@ DARK := theme `Ether.ray - Dark` {
   ^external = ^D0
   ^label = ^D3
 
-  ^namespace = ^type = ^class = ^enum = ^interface = ^struct = ^event = ^enumMember = ^U2
-  ^typeParameter = ^parameter = ^U0
-  ^variable = ^property = ^U1
-  ^function = ^method = ^decorator = ^U4 
+  ^namespace = ^U2
+  ^type = ^U2
+  ^class = ^U2
+  ^enum = ^U2
+  ^interface = ^U2
+  ^struct = ^U2
+  ^event = ^U2
+  ^enumMember = ^U2
+  ^typeParameter = ^U0
+  ^parameter = ^U0
+  ^variable = ^U1
+  ^property = ^U1
+  ^function = ^U4
+  ^method = ^U4
+  ^decorator = ^U4
   ^macro = ^U2
-  ^keyword = ^modifier = ^comment = ^U3
-  ^string = ^number = ^regexp = ^D2
+  ^keyword = ^U3
+  ^modifier = ^U3
+  ^comment = ^U3
+  ^string = ^D2
+  ^number = ^D2
+  ^regexp = ^D2
   ^operator = ^U4
 
   ^character = ^D3

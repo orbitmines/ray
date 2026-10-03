@@ -379,3 +379,10 @@ Review fixes: SJ4 used `("a",)` (now `.words`), `Time.round` rounded the wrong w
     the name as `x`, so these two define rules that spell `(b)` literally (`true x|| true` is wrong).
     Reading `x||` as one name would also make `3!` one name. Rename them, or should a definition's head
     be read up to its brackets?
+11. **How does `=` declare right-to-left?** A run of one operator now groups left (G3.3: `a, b, c` is
+    `(a, b), c`, which is what Listed's `,` and `|` were written for; 3+-argument calls and 3+-element lists
+    were silently wrong before). L§5.1/G3.3 say an operator that groups right is *declared* right-to-left,
+    but nothing in the entrypoint can say that yet, so `^a = ^b = ^U2` would group left. The theme now
+    writes one alias per line. Which spelling marks `={x}` (and later `^` on Number) as right-to-left:
+    a `right-to-left` modifier before the head like direction.ray's `external right-to-left test-right`, or
+    something else?

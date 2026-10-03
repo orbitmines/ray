@@ -320,16 +320,30 @@ export class Interpreter {
     }
   }
   label_at(cursor: Text.Node, begin: number, label: string, frame: Node): number | undefined {
-    const text = cursor.source.value;
+    const labels = this.derived(this.rules_of(frame), 'label', all => all.filter(rule => rule.native === 'label'));
+    const epoch = this.reading_epoch();
+    let held = this.label_sets.get(cursor.source);
+    if (held === undefined || held.epoch !== epoch) this.label_sets.set(cursor.source, held = { epoch, by: new Map() });
+    const span = begin * 65536 + (cursor.limit - begin);
+    let by_list = held.by.get(span);
+    if (by_list === undefined) held.by.set(span, by_list = new WeakMap());
+    let found = by_list.get(labels);
+    if (found === undefined) { found = this.labels_in(cursor, begin, frame, labels); by_list.set(labels, found); }
+    return found.get(label);
+  }
+  private label_sets = new WeakMap<Text.Source, { epoch: object; by: Map<number, WeakMap<Rule[], Map<string, number>>> }>();
+  labels_in(cursor: Text.Node, begin: number, frame: Node, labels: Rule[]): Map<string, number> {
+    const text = cursor.source.value, out = new Map<string, number>();
     for (let j = begin; j < cursor.limit;) {
       while (j < cursor.limit && /\s/.test(text[j])) j++;
-      if (j >= cursor.limit) return;
+      if (j >= cursor.limit) break;
       const probe = cursor.bounded(j, cursor.limit);
-      const found = this.best(this.derived(this.rules_of(frame), 'label', all => all.filter(rule => rule.native === 'label')), probe, frame, undefined, true);
-      if (found?.rule.native === 'label' && [...found.captures.values()][0]?.string.trim() === label) return j;
+      const found = this.best(labels, probe, frame, undefined, true);
+      if (found?.rule.native === 'label') { const name = [...found.captures.values()][0]?.string.trim(); if (name !== undefined && !out.has(name)) out.set(name, j); }
       j = this.statement_end(cursor, j, frame);
       if (text[j] === '\n') j++;
     }
+    return out;
   }
   statement_end(cursor: Text.Node, j: number, frame: Node): number {
     const text = cursor.source.value;

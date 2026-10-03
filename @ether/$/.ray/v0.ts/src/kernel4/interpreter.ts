@@ -666,6 +666,7 @@ export class Interpreter {
     if (held === undefined) return undefined;
     const scope = at.place.in;
     if (process.env.K4DECL) console.error('DECLARE', at.place.name, 'in', JSON.stringify(scope.at?.string.slice(0, 25)), '=', held.place ? 'place ' + held.place.name : held.text ? 'text ' + held.at?.string : held === this.GLOBAL ? 'GLOBAL' : held.none ? 'None' : JSON.stringify(held.at?.string.slice(0, 25)));
+    if (scope.none) return held;
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
     return held;
@@ -683,6 +684,7 @@ export class Interpreter {
     }
     const scope = at.place.member ? (this.deref(at.place.in) ?? at.place.in) : this.holder(at.place.in, at.place.name) ?? at.place.in;
     if (process.env.K4DECL) console.error('ASSIGNS', at.place.name, at.place.member ? 'member' : '', 'in', JSON.stringify(scope.at?.string.slice(0, 25)), '=', JSON.stringify(held.at?.string.slice(0, 25)));
+    if (scope.none) return held;
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
     return held;

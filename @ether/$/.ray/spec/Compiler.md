@@ -166,3 +166,30 @@ Every name access in kernel4 goes through a small set of operations. The new cor
 | typed checks (`holds`, `capture`) | read the capture content in a scratch scope | unchanged (rare) |
 
 The layout version per frame replaces the global `version`/`scope_version` counters for name resolution. Today any composition anywhere invalidates every cached rule list and name; in the core only changes on the resolution path do.
+
+## Built: the graph core (2026-10-03 evening)
+
+Built in a scratch copy of kernel4, all phases. The harness and the paint dumps are identical.
+
+1. **Graph.** Every statement read in a span becomes a node: a list of variants recorded from the interpreter's own decisions. A variant records:
+   - the inputs its reading depended on: the frame's shape, the rule lists of the receiver and of the name it starts with, whether a name was bound, and `declared` (only when a typed or undecided check took part);
+   - the actions it took: fire, place, call, step.
+
+   Recording starts at a statement's third reading.
+2. **Invalidation is pushed, not pulled.** A variant watches the scope nodes its frame's rules come from, by the head characters at its decision positions. Adding a rule notifies only the variants whose positions it could begin at; a new `sees` notifies the frame's watchers. Replay checks only the per-value shapes. (This is what the five earlier replays lacked: they re-derived rule lists on every check.)
+3. **Inline caches on values.** A value's rule lists are cached on the node itself, valid while the node layouts it depends on are unchanged (per-node `layout` stamps replace the global counters).
+4. **Slots.** A lookup from an application's frame checks that frame live, and keeps where the rest of the walk found the name, keyed by the site. Nodes on the walk watch that name and invalidate the slot when they gain it or change shape.
+5. **Level entries on rules.** The level's entries that apply to a rule are kept on the rule.
+6. **JS code generation.** A variant that has run 16 times is compiled with `new Function` into straight-line checks and actions.
+7. **Constructor template.** The base constructor's effect on a fresh value is replayed as name writes once two runs agree, and only when every write went to the value itself.
+
+Measured on the pinned library (min/median of 7–9 runs):
+
+| | kernel4 | graph core |
+|---|---|---|
+| entrypoint load | 269 ms | 266 ms |
+| a 30-statement body run 100× | 159 ms | 62 ms |
+| `` `abc` `` rejected as a decimal string | ~260 ms | ~130 ms |
+| `` `123` `` read as a decimal string | 1.5–1.8 s | ~0.9 s |
+
+What is left is the applications themselves, ~3–4 µs each: a frame, lazies for captures, places, dereferencing. An `if` is still ~43 applications. The next step is compiling whole applications: inlining nested rule bodies, and eliding frames that nothing observes.

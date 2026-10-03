@@ -1,4 +1,5 @@
-import type { Painted } from '../language.ts';
+import type { Text } from '../language/text.ts';
+type Painted = Text.Node;
 
 // The modifiers the LSP standardizes — a style's dotted tail
 // (`variable.readonly`) maps onto these bits.

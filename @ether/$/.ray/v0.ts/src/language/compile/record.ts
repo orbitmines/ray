@@ -1,5 +1,5 @@
 import type { Text } from '../text.ts';
-import type { Interpreter, Match, Rule } from '../interpreter.ts';
+import type { Interpreter, Match, Node, Rule } from '../interpreter.ts';
 import type { Called, Unit } from './ir.ts';
 
 export function applied(it: Interpreter, unit: Unit, start: number, found: Match, rules: Rule[]) {
@@ -25,4 +25,11 @@ export function applied(it: Interpreter, unit: Unit, start: number, found: Match
 export function called(it: Interpreter, unit: Unit, start: number, end: number, calls: Called[], rules: Rule[], head: Text.Node, frame: import('../interpreter.ts').Node) {
   const value = it.quietly(() => it.deref(it.place(frame, head), false));
   if (value !== undefined && value.fn === calls[0].native) unit.statements.set(start, { end, rules, code: { op: 'natives', head, value, calls } });
+}
+
+export function named(it: Interpreter, unit: Unit, start: number, end: number, value: Node | undefined, rules: Rule[], cursor: Text.Node) {
+  const place = value?.place;
+  if (place === undefined || place.member || value!.at?.begin !== start || value!.at.end !== end - 1) return;
+  if (!/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(cursor.source.value.slice(start, end))) return;
+  unit.statements.set(start, { end, rules, code: { op: 'name' } });
 }

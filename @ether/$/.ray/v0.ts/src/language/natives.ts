@@ -32,7 +32,13 @@ export const Natives: Record<string, Native> = {
   'where': { arity: 1, fn: ({ interpreter, args: [node], at }) => located(interpreter, node, at) },
   'inline': { arity: 1, fn: ({ interpreter, frame, args: [node] }) => interpreter.inline(node, frame) },
   'bits': { arity: 2, fn: ({ interpreter, frame, args: [node, each], at }) => {
-    for (const bit of [...bytes_of(interpreter, node)].flatMap(byte => byte.toString(2).padStart(8, '0').split(''))) {
+    const probe = interpreter.probe, probed = probe !== undefined && interpreter.quietly(() => interpreter.deref(node, false)) === probe.node;
+    if (probed) probe!.reading = true;
+    let bytes: Uint8Array;
+    try { bytes = bytes_of(interpreter, node); } finally { if (probed) probe!.reading = false; }
+    let count = 0;
+    for (const bit of [...bytes].flatMap(byte => byte.toString(2).padStart(8, '0').split(''))) {
+      if (probed && ++count > probe!.bits) probe!.bits = count;
       const call = interpreter.deref(each);
       const taken = call?.fn?.fn({ interpreter, frame, args: [bit === '1' ? interpreter.GLOBAL : interpreter.NONE], at });
       if (interpreter.deref(taken, false)?.none) break;

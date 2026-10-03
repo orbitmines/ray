@@ -1,5 +1,6 @@
-import type { Ray, Painted } from '../language.ts';
-type Program = Ray.Program;
+import type { Program } from '../language/program.ts';
+import type { Text } from '../language/text.ts';
+type Painted = Text.Node;
 
 // LSP features, as queries over the program's public surface — the grammar's
 // rules and definition sites, and the painted spans (the grammar's own
@@ -70,11 +71,11 @@ export function lexical(program: Program): { scopeName: string; patterns: object
 export function symbols(program: Program, path: string): { name: string; begin: number; end: number; rule: boolean }[] {
   const out: { name: string; begin: number; end: number; rule: boolean }[] = [];
   for (const [key, site] of program.engine.sites())
-    if (site.src.path === path && site.end)
+    if (site.src.location === path && site.end)
       out.push({ name: key.replace('::', '.'), begin: site.begin, end: site.end, rule: false });
   for (const rule of program.engine.rules.values())
     for (const d of rule.definitions)
-      if (d.at.src?.path === path && d.seen === 'live')
+      if (d.at.src?.location === path && d.seen === 'live')
         out.push({ name: rule.pattern.text.trim().slice(0, 48), begin: d.at.begin, end: d.at.end, rule: true });
   return out.sort((a, b) => a.begin - b.begin);
 }
@@ -113,7 +114,7 @@ export function rule_references(program: Program, key: string): Span[] {
 }
 
 const text_of = (program: Program, path: string): string | undefined =>
-  program.sources.find(s => s.path === path)?.text;
+  program.sources.find(s => s.location === path)?.value;
 
 // The innermost painted span at a position that satisfies `pick`.
 function innermost(program: Program, path: string, offset: number, pick: (s: Painted) => boolean): Painted | undefined {
@@ -130,21 +131,21 @@ export function definition(program: Program, path: string, offset: number): Span
   const bound = innermost(program, path, offset, s => s.defines !== undefined);
   if (bound) {
     const site = program.engine.site(bound.defines as string);
-    return site?.src.path !== undefined ? [{ path: site.src.path, begin: site.begin, end: site.end }] : [];
+    return site?.src.location !== undefined ? [{ path: site.src.location, begin: site.begin, end: site.end }] : [];
   }
   const out: Span[] = [];
-  const key = innermost(program, path, offset, s => s.head === true && s.of !== undefined)?.of;
+  const key = innermost(program, path, offset, s => s.of !== undefined)?.of;
   const claimed = key !== undefined ? program.engine.rules.get(key) : undefined;
   if (claimed) {
     for (const o of claimed.definitions)
-      if (o.at.src?.path !== undefined) out.push({ path: o.at.src.path, begin: o.at.begin, end: o.at.end });
+      if (o.at.src?.location !== undefined) out.push({ path: o.at.src.location, begin: o.at.begin, end: o.at.end });
     if (out.length) return out;
   }
   for (const rule of program.engine.rules.values())
     for (const d of rule.definitions)
-      if (d.at.src?.path === path && d.at.begin <= offset && offset < d.at.end) {
+      if (d.at.src?.location === path && d.at.begin <= offset && offset < d.at.end) {
         for (const o of rule.definitions)
-          if (o.at.src?.path !== undefined) out.push({ path: o.at.src.path, begin: o.at.begin, end: o.at.end });
+          if (o.at.src?.location !== undefined) out.push({ path: o.at.src.location, begin: o.at.begin, end: o.at.end });
         return out;
       }
   return out;
@@ -169,9 +170,9 @@ export function references(program: Program, path: string, offset: number): Span
   }
   for (const [key, rule] of program.engine.rules)
     for (const d of rule.definitions)
-      if (d.at.src?.path === path && d.at.begin <= offset && offset < d.at.end)
+      if (d.at.src?.location === path && d.at.begin <= offset && offset < d.at.end)
         return rule_references(program, key);
-  const key = innermost(program, path, offset, s => s.head === true && s.of !== undefined)?.of;
+  const key = innermost(program, path, offset, s => s.of !== undefined)?.of;
   return key !== undefined ? rule_references(program, key) : [];
 }
 
@@ -189,7 +190,7 @@ export function hover(program: Program, path: string, offset: number): string | 
   if (claimed) return about(claimed);
   for (const rule of program.engine.rules.values())
     for (const d of rule.definitions)
-      if (d.at.src?.path === path && d.at.begin <= offset && offset < d.at.end)
+      if (d.at.src?.location === path && d.at.begin <= offset && offset < d.at.end)
         return about(rule);
   const text = text_of(program, path);
   const w = text !== undefined ? word_at(program, path, offset) : undefined;
@@ -197,7 +198,7 @@ export function hover(program: Program, path: string, offset: number): string | 
   const word = text.slice(w.begin!, w.end! + 1);
   for (const [key, site] of program.engine.sites())
     if (site.end && key.slice(key.indexOf('::') + 2) === word)
-      return `\`\`\`ray\n${site.src.text.slice(site.begin, site.end).split('\n')[0]}\n\`\`\`\n\non \`${key.slice(0, key.indexOf('::'))}\``;
+      return `\`\`\`ray\n${site.src.value.slice(site.begin, site.end).split('\n')[0]}\n\`\`\`\n\non \`${key.slice(0, key.indexOf('::'))}\``;
   return undefined;
 }
 

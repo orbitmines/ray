@@ -255,7 +255,9 @@ export class Diagnostics {
   unmuted<T>(fn: () => T): T { const silent = this.silent; this.silent = 0; try { return fn(); } finally { this.silent = silent; } }
 
   refused = 0;
+  reports = 0;
   report(entry: Diagnostic) {
+    this.reports++;
     if (this.silent > 0 && (entry.level === 'error' || entry.level === 'fatal')) this.refused++;
     if (this.silent > 0 || !this.is_visible(entry.level)) return;
     

@@ -3,7 +3,9 @@ import {
   DiagnosticSeverity,
   Range,
 } from 'vscode-languageserver/node';
-import { env, type Diagnostic, type Text } from '../language.ts';
+import { env } from '../language/env.ts';
+import type { Diagnostic } from '../language/diagnostics.ts';
+import type { Text } from '../language/text.ts';
 
 /** Map our six-level severity onto LSP's four. Trace/debug fold into Hint. */
 const SEVERITY: Record<Diagnostic['level'], DiagnosticSeverity> = {
@@ -51,8 +53,8 @@ export function toLsp(diag: Diagnostic, uriFile: string | undefined): LspDiagnos
   if (diag.level === 'trace' || diag.level === 'debug') return null;
 
   const node = diag.node;
-  if (!node?.file) return null;
-  if (uriFile && node.file !== uriFile) return null;
+  if (!node?.source?.location) return null;
+  if (uriFile && node.source.location !== uriFile) return null;
 
   return {
     severity: SEVERITY[diag.level],

@@ -10,7 +10,9 @@ import {
   type InitializeResult,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { Ray, type Source } from '../language.ts';
+import { Ray } from '../language.ts';
+import type { Program } from '../language/program.ts';
+import type { Source } from '../language/text.ts';
 import { toLsp } from './diagnostics.ts';
 import { encode, offset_at, position_of, runs, MODIFIERS } from './semantics.ts';
 import * as features from './features.ts';
@@ -27,7 +29,7 @@ import * as features from './features.ts';
  * whenever any file's diagnostics are fresh; we publish straight out of the
  * per-file index on `log.diagnostics.items`.
  */
-export async function start(program: Ray.Program): Promise<void> {
+export async function start(program: Program): Promise<void> {
   await program.abstract().exec();
   // the legend: whatever groups the language declared on H — fixed for the
   // session once capabilities go out
@@ -55,11 +57,11 @@ export async function start(program: Ray.Program): Promise<void> {
   // the first, then re-arm.
   let repainted: ReturnType<typeof setTimeout> | undefined;
   program.reloaded = (src: Source): void => {
-    if (src.path === undefined) return;
-    const uri = uris.get(src.path) ?? String(pathToFileURL(src.path));
+    if (src.location === undefined) return;
+    const uri = uris.get(src.location) ?? String(pathToFileURL(src.location));
     const bucket = program.diagnostics.items.get(src as any);
     const diagnostics = (bucket ? [...bucket.values()].flat() : [])
-      .map(d => toLsp(d, src.path!))
+      .map(d => toLsp(d, src.location!))
       .filter((d): d is NonNullable<typeof d> => d !== null);
     connection.sendDiagnostics({ uri, diagnostics });
     if (!repainted) repainted = setTimeout(() => { repainted = undefined; connection.languages.semanticTokens.refresh(); publish(); }, 30);
@@ -71,8 +73,8 @@ export async function start(program: Ray.Program): Promise<void> {
   // `documents` carries each open document's styled runs.
   const theme = (uri: string) => {
     const path = uriToFile(uri);
-    const src = program.sources.find(s => s.path === path);
-    return src ? { uri, version: documents.get(uri)?.version, ranges: runs(src.text, program.highlighting.get(path) ?? []) } : undefined;
+    const src = program.sources.find(s => s.location === path);
+    return src ? { uri, version: documents.get(uri)?.version, ranges: runs(src.value, program.highlighting.get(path) ?? []) } : undefined;
   };
   const payload = (uris: string[]) => {
     const docs = uris.map(theme).filter((d): d is NonNullable<ReturnType<typeof theme>> => d !== undefined);
@@ -123,61 +125,61 @@ export async function start(program: Ray.Program): Promise<void> {
   // every feature reads the same two things: a source's text and positions
   const source = (uri: string): Source | undefined => {
     const path = uriToFile(uri);
-    return program.sources.find(s => s.path === path);
+    return program.sources.find(s => s.location === path);
   };
   const where = (uri: string, position: { line: number; character: number }): { src: Source; offset: number } | undefined => {
     const src = source(uri);
-    return src && { src, offset: offset_at(src.text, position.line, position.character) };
+    return src && { src, offset: offset_at(src.value, position.line, position.character) };
   };
   const range = (text: string, begin: number, end: number) => ({ start: position_of(text, begin), end: position_of(text, end) });
   const locate = (span: features.Span) => {
-    const text = program.sources.find(s => s.path === span.path)?.text ?? '';
+    const text = program.sources.find(s => s.location === span.path)?.value ?? '';
     return { uri: uris.get(span.path) ?? String(pathToFileURL(span.path)), range: range(text, span.begin, span.end) };
   };
 
   connection.onFoldingRanges(params => {
     const src = source(params.textDocument.uri);
     if (!src) return [];
-    return features.foldings(src.text, features.configuration(program).comments?.lineComment)
+    return features.foldings(src.value, features.configuration(program).comments?.lineComment)
       .map(f => ({ startLine: f.start, endLine: f.end }));
   });
 
   connection.onDocumentSymbol(params => {
     const src = source(params.textDocument.uri);
-    if (!src?.path) return [];
-    return features.symbols(program, src.path).map(s => ({
+    if (!src?.location) return [];
+    return features.symbols(program, src.location).map(s => ({
       name: s.name || '…',
       kind: s.rule ? 12 /* Function */ : 7 /* Property */,
-      range: range(src.text, s.begin, s.end),
-      selectionRange: range(src.text, s.begin, Math.min(s.end, line_end(src.text, s.begin))),
+      range: range(src.value, s.begin, s.end),
+      selectionRange: range(src.value, s.begin, Math.min(s.end, line_end(src.value, s.begin))),
     }));
   });
 
   connection.onDefinition(params => {
     const at = where(params.textDocument.uri, params.position);
-    if (!at?.src.path) return [];
-    return features.definition(program, at.src.path, at.offset).map(locate);
+    if (!at?.src.location) return [];
+    return features.definition(program, at.src.location, at.offset).map(locate);
   });
 
   connection.onReferences(params => {
     const at = where(params.textDocument.uri, params.position);
-    if (!at?.src.path) return [];
-    return features.references(program, at.src.path, at.offset).map(locate);
+    if (!at?.src.location) return [];
+    return features.references(program, at.src.location, at.offset).map(locate);
   });
 
   connection.onDocumentHighlight(params => {
     const at = where(params.textDocument.uri, params.position);
-    if (!at?.src.path) return [];
-    return features.references(program, at.src.path, at.offset)
-      .filter(s => s.path === at.src.path)
-      .map(s => ({ range: range(at.src.text, s.begin, s.end) }));
+    if (!at?.src.location) return [];
+    return features.references(program, at.src.location, at.offset)
+      .filter(s => s.path === at.src.location)
+      .map(s => ({ range: range(at.src.value, s.begin, s.end) }));
   });
 
   connection.onRenameRequest(params => {
     const at = where(params.textDocument.uri, params.position);
-    if (!at?.src.path) return null;
+    if (!at?.src.location) return null;
     const changes: Record<string, { range: ReturnType<typeof range>; newText: string }[]> = {};
-    for (const s of features.references(program, at.src.path, at.offset)) {
+    for (const s of features.references(program, at.src.location, at.offset)) {
       const loc = locate(s);
       (changes[loc.uri] ??= []).push({ range: loc.range, newText: params.newName });
     }
@@ -186,8 +188,8 @@ export async function start(program: Ray.Program): Promise<void> {
 
   connection.onHover(params => {
     const at = where(params.textDocument.uri, params.position);
-    if (!at?.src.path) return null;
-    const contents = features.hover(program, at.src.path, at.offset);
+    if (!at?.src.location) return null;
+    const contents = features.hover(program, at.src.location, at.offset);
     return contents !== undefined ? { contents: { kind: 'markdown', value: contents } } : null;
   });
 
@@ -195,11 +197,11 @@ export async function start(program: Ray.Program): Promise<void> {
     const src = source(params.textDocument.uri);
     if (!src) return [];
     return params.positions.map(position => {
-      const offset = offset_at(src.text, position.line, position.character);
-      const chain = features.selections(src.text, offset, src.path ? features.word_at(program, src.path, offset) : undefined);
+      const offset = offset_at(src.value, position.line, position.character);
+      const chain = features.selections(src.value, offset, src.location ? features.word_at(program, src.location, offset) : undefined);
       let parent: any;
-      for (const s of chain.reverse()) parent = { range: range(src.text, s.begin, s.end), parent };
-      return parent ?? { range: range(src.text, offset, offset) };
+      for (const s of chain.reverse()) parent = { range: range(src.value, s.begin, s.end), parent };
+      return parent ?? { range: range(src.value, offset, offset) };
     });
   });
 
@@ -207,7 +209,7 @@ export async function start(program: Ray.Program): Promise<void> {
     const at = where(params.textDocument.uri, params.position);
     if (!at) return [];
     // after `H.` (or any chain dot): the groups; otherwise everything defined
-    const dotted = at.src.text[at.offset - 1] === '.';
+    const dotted = at.src.value[at.offset - 1] === '.';
     if (dotted) return program.groups.map(g => ({ label: g, kind: 20 /* EnumMember */ }));
     const names = new Set<string>();
     for (const [key] of program.engine.sites()) names.add(key.slice(key.indexOf('::') + 2));
@@ -223,25 +225,25 @@ export async function start(program: Ray.Program): Promise<void> {
   // passes derive next to the diagnostics)
   const tokens = (uri: string, range?: [number, number]): { data: number[] } => {
     const path = uriToFile(uri);
-    let src = program.sources.find(s => s.path === path);
+    let src = program.sources.find(s => s.location === path);
     // the client auto-requests tokens on open, which can beat the didOpen that
     // loads the file — so if it isn't painted yet, load it from the open
     // document and paint it now (direct feedback is synchronous), no white flash
     if (!src) {
       const doc = documents.get(uri);
-      if (doc) { program.reload(Ray.source(path, doc.getText())); src = program.sources.find(s => s.path === path); }
+      if (doc) { program.reload(Ray.source(path, doc.getText())); src = program.sources.find(s => s.location === path); }
     }
     if (!src) return { data: [] };
-    return { data: encode(src.text, program.highlighting.get(path) ?? [], groups, range) };
+    return { data: encode(src.value, program.highlighting.get(path) ?? [], groups, range) };
   };
   connection.languages.semanticTokens.on(params => tokens(params.textDocument.uri));
   connection.languages.semanticTokens.onRange(params => {
     const path = uriToFile(params.textDocument.uri);
-    const src = program.sources.find(s => s.path === path);
+    const src = program.sources.find(s => s.location === path);
     if (!src) return { data: [] };
     return tokens(params.textDocument.uri, [
-      offset_at(src.text, params.range.start.line, params.range.start.character),
-      offset_at(src.text, params.range.end.line, params.range.end.character),
+      offset_at(src.value, params.range.start.line, params.range.start.character),
+      offset_at(src.value, params.range.end.line, params.range.end.character),
     ]);
   });
 

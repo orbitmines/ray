@@ -88,6 +88,15 @@ export class Levelled extends Interpreter {
   }
   carries(value: Node, rule: Rule): boolean { return this.rules_on(value instanceof Count ? value.template : value).includes(rule); }
 
+  private applicable = new WeakMap<Rule, { entries: unknown[]; ons: (Rule[] | undefined)[]; found: any[] }>();
+  entries_for(rule: Rule, entries: any[], taking: boolean): any[] {
+    const held = this.applicable.get(rule);
+    const ons = entries.map(entry => { const type = this.type_of(entry.receiver); return type === undefined ? undefined : this.rules_on(type); });
+    if (held !== undefined && held.entries === entries && held.ons.length === ons.length && held.ons.every((on, k) => on === ons[k])) return held.found;
+    const found = entries.filter((entry, k) => (entry.operand !== undefined) === taking && ons[k] !== undefined && ons[k]!.includes(rule));
+    this.applicable.set(rule, { entries, ons, found });
+    return found;
+  }
   operation(found: Match, frame: Node, at: Text.Node): Node | undefined {
     const { rule, receiver, captures } = found;
     if (this.level === undefined || rule.body === undefined || receiver === undefined || this.bypassing.has(rule)) return undefined;
@@ -96,10 +105,7 @@ export class Levelled extends Interpreter {
     const entries = this.level.entries.get(first.text.trim());
     if (entries === undefined) return undefined;
     const taking = rule.pattern.find((piece): piece is Capture => piece.kind === 'capture');
-    for (const entry of entries) {
-      if ((entry.operand !== undefined) !== (taking !== undefined)) continue;
-      const type = this.type_of(entry.receiver);
-      if (type === undefined || !this.rules_on(type).includes(rule)) continue;
+    for (const entry of this.entries_for(rule, entries, taking !== undefined)) {
       const self = this.deref(receiver, false);
       if (self === undefined || self.none || !this.carries(self, rule)) continue;
       let other: Node | undefined;

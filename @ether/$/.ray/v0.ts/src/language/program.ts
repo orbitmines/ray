@@ -13,11 +13,18 @@ export function v0(diagnostics: Diagnostics) {
     .interpreting(optimizations());
 }
 
+export function source(location: string, value: string): Text.Source {
+  const src = new Text.Source();
+  src.location = location;
+  src.value = value;
+  return src;
+}
 export function lsp(diagnostics: Diagnostics) {
-  return new Program(diagnostics)
+  const program = new Program(diagnostics)
     .serve()
-    .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
-    .interpreting(optimizations());
+    .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
+  program.eager = src => program.active.has(src.location);
+  return program;
 }
 
 export function optimizations(): Text.Source[] {
@@ -222,6 +229,7 @@ export class Program {
 
   reloaded: (src: Text.Source) => void = () => {};
   active: Set<string> = new Set();
+  eager?: (src: Text.Source) => boolean;
   roots: string[] = [];
   reroot(roots: string[]) { this.roots = roots; }
   get sources(): Text.Source[] { return [...new Set(this.projects.flatMap(project => [project.dot_project, ...project.source]))]; }

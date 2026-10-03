@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { Ray, Diagnostics } from '../language.ts';
+import { Ray } from '../language.ts';
+import { Diagnostics } from '../language/diagnostics.ts';
 import { start } from './server.ts';
 
 start(Ray.lsp(new Diagnostics()));

@@ -751,18 +751,24 @@ export class Interpreter {
     return out;
   }
   // A bracket is any rule written between two literals: what it encloses is skipped over as one.
-  private claims = new WeakMap<Text.Source, { version: number; at: Map<number, number> }>();
+  private claims = new WeakMap<Text.Source, { brackets: Rule[]; at: Map<number, number> }>();
+  private bracket_set?: { version: number; rules: Rule[] };
+  brackets(): Rule[] {
+    if (this.bracket_set?.version !== this.rules_version) this.bracket_set = { version: this.rules_version, rules: this.canonical(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed)) };
+    return this.bracket_set.rules;
+  }
   rules_version = 0;
   claim(cursor: Text.Node, j: number, frame: Node): number {
+    const brackets = this.brackets();
     let held = this.claims.get(cursor.source);
-    if (held === undefined || held.version !== this.rules_version) this.claims.set(cursor.source, held = { version: this.rules_version, at: new Map() });
+    if (held === undefined || held.brackets !== brackets) this.claims.set(cursor.source, held = { brackets, at: new Map() });
     const known = held.at.get(j);
     if (known !== undefined && known <= cursor.limit) return known;
     held.at.set(j, j);
     let end = j;
     const probe = cursor.bounded(j, cursor.limit);
-    for (const rule of this.rules_of(this.GLOBAL)) {
-      if (!rule.enclosed || !cursor.source.value.startsWith((rule.pattern[0] as { text: string }).text, j)) continue;
+    for (const rule of brackets) {
+      if (!cursor.source.value.startsWith((rule.pattern[0] as { text: string }).text, j)) continue;
       const found = this.match(rule, probe, this.GLOBAL);
       if (found !== undefined && found.end > end) end = found.end;
     }

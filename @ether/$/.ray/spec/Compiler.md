@@ -114,3 +114,7 @@ So the unit of compilation is a **rule application**, not a statement:
 - No language vocabulary in TS: guards and passes talk about rules, places, frames and natives only.
 - The level (o.ray) maps operation patterns to natives. To the compiler, a level entry is just a `native` instruction behind a guard.
 - Painting: units compiled while serving (painting) aren't used; the interpreter paints.
+
+## To do (decided 2026-10-03: not yet)
+
+- **Saved boot graph.** After a load, keep the read and compiled graph, keyed by source hashes. The next boot loads it and re-reads only sources whose text changed. This would bring entrypoint loading to ~ms, and the saved graph is the artifact a port would load. The user decided to push graph reduction within one load first.

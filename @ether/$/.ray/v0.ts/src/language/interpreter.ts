@@ -86,6 +86,7 @@ export class Rule {
   guard?: { span: Text.Node; in: Node }
   // Written beside other definitions of the same name: its parameters choose between them.
   overloaded = false
+  fitting?: { declared: number; rules: number; found?: { names: string[]; refused: boolean; value?: Node }; by: Map<Node, { fit: boolean; on: Rule[] }> }
   get name(): string { return this.pattern.map(piece => piece.kind === 'literal' ? piece.text : piece.kind === 'gap' ? '{ }' : `{${piece.name}}`).join(''); }
   constructor(public pattern: Piece[], public closure: Node, public at: Text.Node, public key: string, public order: number, public body?: Text.Node, public fn?: Native) {}
   get leading(): boolean { return this.pattern[0]?.kind === 'capture'; }
@@ -1105,6 +1106,10 @@ export class Interpreter {
       const short = this.operation(found, frame, at, given);
       if (short !== undefined) return short;
       this.paint_rule(found, at);
+      if (rule.native === 'get' && rule.direct !== undefined && receiver?.place !== undefined && given === undefined && !this.program?.serving) {
+        const member = this.member_of(rule, captures, receiver);
+        if (member !== undefined) return member;
+      }
       if (rule.passes !== undefined && !this.painting(at.source) && receiver === undefined && given === undefined) {
         const name = rule.passes.string, piece = rule.pattern.find(other => other.kind === 'capture' && other.name === name) as (Piece & { kind: 'capture' }) | undefined;
         const span = captures.get(name);
@@ -1372,6 +1377,20 @@ export class Interpreter {
     this.marked_place(at, scope);
     return held;
   }
+  // `this.name` where the name is no method of the value: the member place, without the frame `get` would be read in.
+  member_of(rule: Rule, captures: Map<string, Text.Node>, receiver: Node): Node | undefined {
+    const [self, property] = rule.direct!;
+    if (self.string !== 'this') return undefined;
+    const piece = rule.pattern.find(other => other.kind === 'capture' && other.name === property.string) as (Piece & { kind: 'capture' }) | undefined;
+    const span = captures.get(property.string);
+    if (piece === undefined || !piece.raw || span === undefined) return undefined;
+    const target = this.deref(receiver);
+    if (target === undefined) return undefined;
+    const name = span.string;
+    if (target.style !== undefined) return undefined;
+    for (const rule of this.rules_on(target)) if (rule.pattern[0]?.kind === 'literal' && rule.pattern[0].text === name && (rule.pattern.length === 1 || (rule.pattern.length === 2 && rule.pattern[1].kind === 'capture'))) return undefined;
+    return Object.assign(new Node(span), { place: { in: target, name, member: true } });
+  }
   get(node: Node, key: Node): Node | undefined {
     const target = this.deref(node);
     if (target === undefined) return undefined;
@@ -1558,11 +1577,18 @@ export class Interpreter {
     };
     const present = (read: { refused: boolean; value?: Node }) => !read.refused && read.value !== undefined && !read.value.none;
     const argument = this.lazy(span, frame);
-    const found = reading(scratch());
+    let memo = rule.fitting;
+    if (memo === undefined || memo.declared !== this.declared || memo.rules !== this.rules_version) memo = rule.fitting = { declared: this.declared, rules: this.rules_version, by: new Map() };
+    const found = memo.found ??= reading(scratch());
     if (found.names.length === 1 && pattern.string.trim() === found.names[0]) return true;
     if (found.names.length > 1) return !found.refused;
-    if (found.names.length === 1) return present(reading(scratch(), argument));
-    return present(reading(scratch(), undefined, argument));
+    const value = this.quietly(() => this.deref(argument, false));
+    const on = value === undefined ? undefined : this.rules_on(value);
+    const known = value === undefined ? undefined : memo.by.get(value);
+    if (known !== undefined && known.on === on) return known.fit;
+    const fit = found.names.length === 1 ? present(reading(scratch(), argument)) : present(reading(scratch(), undefined, argument));
+    if (value !== undefined && rule.fitting === memo && memo.declared === this.declared && memo.rules === this.rules_version && this.rules_on(value) === on) memo.by.set(value, { fit, on: on! });
+    return fit;
   }
   // What stands between two operands: the longest spelling that begins a rule taking one operand, on the left operand or in reach.
   filtered = new Map<string, { declared: number; fits: boolean; settled: boolean; missing: Set<string> }>();
@@ -1885,6 +1911,7 @@ export class Interpreter {
       if (known !== undefined) return known;
       const copy = Object.assign(Object.create(Rule.prototype), r) as Rule;
       copy.id = ++Rule.count;
+      copy.fitting = undefined;
       copy.value_node = undefined;
       rules.set(r, copy);
       copy.closure = node(r.closure)!;

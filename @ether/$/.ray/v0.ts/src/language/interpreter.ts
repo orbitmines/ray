@@ -1610,6 +1610,9 @@ export class Interpreter {
     const rule = this.define(head, written, pattern.code?.in ?? pattern.place?.in ?? frame);
     return rule === undefined ? undefined : this.rule_value(rule);
   }
+  writing(site: Text.Node): Text.Node | undefined {
+    return this.holding(site)?.at ?? this.running[this.running.length - 1]?.at;
+  }
   define_in(scope: Node, tail: Node, body: Node, at: Text.Node, parameters?: Node): Node | undefined {
     const pattern = parameters === undefined ? undefined : this.written(parameters);
     const guard = pattern?.code === undefined ? undefined : { span: this.inner(pattern.code.span) ?? pattern.code.span, in: pattern.code.in };
@@ -1621,13 +1624,13 @@ export class Interpreter {
     if (place?.place !== undefined && !place.place.member) {
       const head = Object.assign(Text.Node.string(place.place.name + spelled), {});
       const rule = this.define(head, this.inner(written) ?? written, place.place.in, body.code?.in ?? place.place.in, guard);
-      if (rule !== undefined) rule.lexical = this.running[this.running.length - 1]?.at;
+      if (rule !== undefined) rule.lexical = this.writing(at);
       return rule === undefined ? undefined : this.rule_value(rule);
     }
     const into = this.deref(scope, false);
     if (into === undefined || into.none) return undefined;
     const rule = this.define(Text.Node.string(spelled), this.inner(written) ?? written, into, body.code?.in ?? into, guard);
-    if (rule !== undefined) rule.lexical = this.running[this.running.length - 1]?.at;
+    if (rule !== undefined) rule.lexical = this.writing(at);
     return rule === undefined ? undefined : this.rule_value(rule);
   }
   private methods = new WeakMap<Rule[], Map<string, Rule>>();

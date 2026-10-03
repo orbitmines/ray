@@ -46,6 +46,7 @@ export class Rule {
   defines = false
   home?: Node
   lexical?: Text.Node
+  implicit = false
   constructor(public pattern: Piece[], public closure: Node, public at: Text.Node, public key: string, public order: number, public body?: Text.Node, public fn?: Native) {}
   get leading(): boolean { return this.pattern[0]?.kind === 'capture'; }
   get enclosed(): boolean { const first = this.pattern[0], last = this.pattern[this.pattern.length - 1]; return this.pattern.length >= 3 && first.kind === 'literal' && last.kind === 'literal' && !Interpreter.word.test(first.text[0] ?? 'a'); }
@@ -211,6 +212,7 @@ export class Interpreter {
   add_rule(scope: Node, rule: Rule) {
     const rules = (scope.rules ??= []);
     rule.home = scope;
+    rule.implicit = scope !== this.GLOBAL && rule.leading && (rule.pattern.length === 1 || rule.pattern[1].kind === 'gap');
     const same = rules.findIndex(other => other.key === rule.key);
     if (same >= 0) { rule.order = rules[same].order; rules.splice(same, 1); }
     rules.push(rule);
@@ -327,7 +329,7 @@ export class Interpreter {
   receiving(value: Node, frame: Node): Rule[] {
     const target = value.place !== undefined || value.code !== undefined ? this.quietly(() => this.deref(value)) : value;
     const own = (target !== undefined && !target.none && target !== this.GLOBAL ? this.rules_on(target) : this.BASE !== undefined ? this.rules_on(this.BASE) : []).filter(rule => rule.pattern[0]?.kind !== 'gap' || rule.home === target);
-    return [...own, ...this.rules_of(frame).filter(rule => rule.leading)];
+    return [...own, ...this.rules_of(frame).filter(rule => rule.leading && !rule.implicit)];
   }
   // A native taking arguments takes the operands written after it, read when it asks.
   call(target: Node, cursor: Text.Node, frame: Node): Node | undefined {
@@ -384,7 +386,7 @@ export class Interpreter {
         i = j;
         continue;
       }
-      if (p === 0 && receiver !== undefined) { if (pieces[1]?.tight && /\s/.test(text[i] ?? '')) return; continue; }
+      if (p === 0 && receiver !== undefined && !rule.implicit) { if (pieces[1]?.tight && /\s/.test(text[i] ?? '')) return; continue; }
       const next = pieces[p + 1], before = pieces[p - 1];
       const exact = piece.raw && piece.exact === true && next?.kind === 'literal';
       const from = exact ? i : this.spaces(cursor, i);
@@ -532,7 +534,7 @@ export class Interpreter {
       const args: Node[] = [];
       rule.pattern.forEach((piece, p) => {
         if (piece.kind !== 'capture') return;
-        const value = p === 0 && receiver !== undefined ? receiver : captures.has(piece.name) ? (piece.raw ? this.literal(captures.get(piece.name)!) : this.lazy(captures.get(piece.name)!, frame)) : this.NONE;
+        const value = p === 0 && receiver !== undefined && !rule.implicit ? receiver : captures.has(piece.name) ? (piece.raw ? this.literal(captures.get(piece.name)!) : this.lazy(captures.get(piece.name)!, frame)) : this.NONE;
         local.set(piece.name, value);
         args.push(value);
       });

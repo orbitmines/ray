@@ -32,6 +32,7 @@ export class Node {
   raw?: boolean
   stands?: Node
   site?: Text.Node
+  body?: Text.Node
   bare?: boolean
   on?: Node
   given?: Set<string>
@@ -96,8 +97,9 @@ export class Interpreter {
   }
 
   // Lookup: a scope's own names, then what it sees (and what those see), then what it is made of, then its parent. The outermost answers last.
-  *scopes(from: Node): Generator<Node> {
+  *scopes(from: Node, written?: Text.Node): Generator<Node> {
     const seen = new Set<Node>();
+    const sees_of = (scope: Node): Node[] => written !== undefined && scope.body !== undefined && Interpreter.within(written, scope.body) ? [] : scope.sees ?? [];
     const visit = function* (scope: Node, deep: boolean, global: Node): Generator<Node> {
       const later: Node[] = [];
       for (let at: Node | undefined = scope; at !== undefined; at = deep ? at.parent : undefined) {
@@ -105,9 +107,9 @@ export class Interpreter {
         if (at === global) break;
         seen.add(at);
         yield at;
-        for (const sees of at.sees ?? []) if (!seen.has(sees)) yield sees;
+        for (const sees of sees_of(at)) if (!seen.has(sees)) yield sees;
         for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) yield* visit(made, false, global);
-        if (deep) later.push(...(at.sees ?? []));
+        if (deep) later.push(...sees_of(at));
       }
       for (const sees of later) yield* visit(sees, true, global);
     };
@@ -124,7 +126,8 @@ export class Interpreter {
       const local = this.holding(at)?.local;
       if (local?.on?.given?.has(name) && this.reaches(frame, local)) return local.on.own(name);
     }
-    const seen = new Set<Node>();
+    const seen = new Set<Node>(), written = at;
+    const sees_of = (scope: Node): Node[] => written !== undefined && scope.body !== undefined && Interpreter.within(written, scope.body) ? [] : scope.sees ?? [];
     const visit = (scope: Node | undefined, lexical: boolean, deep: boolean): Node | undefined => {
       const later: Node[] = [];
       for (let at = scope; at !== undefined; at = deep ? at.parent : undefined) {
@@ -132,9 +135,9 @@ export class Interpreter {
         seen.add(at);
         const found = at.own(name);
         if (found !== undefined && !(lexical && at.given?.has(name))) return found;
-        for (const sees of at.sees ?? []) { const written = sees.own(name); if (written !== undefined && !sees.given?.has(name) && !seen.has(sees)) return written; }
+        for (const sees of sees_of(at)) { const held = sees.own(name); if (held !== undefined && !sees.given?.has(name) && !seen.has(sees)) return held; }
         for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) { const held = visit(made, false, false); if (held !== undefined) return held; }
-        if (deep) later.push(...(at.sees ?? []));
+        if (deep) later.push(...sees_of(at));
         lexical = true;
       }
       for (const sees of later) { const held = visit(sees, true, true); if (held !== undefined) return held; }
@@ -164,8 +167,8 @@ export class Interpreter {
     if (frame.own(name) !== undefined) return frame;
     for (const made of frame.on === undefined ? frame.with ?? [] : [frame.on, ...(frame.with ?? [])]) if (made.own(name) !== undefined && made.given?.has(name)) return made;
   }
-  holder(frame: Node, name: string): Node | undefined {
-    for (const scope of this.scopes(frame)) if (scope.own(name) !== undefined) return scope;
+  holder(frame: Node, name: string, written?: Text.Node): Node | undefined {
+    for (const scope of this.scopes(frame, written)) if (scope.own(name) !== undefined) return scope;
   }
   member(of: Node, name: string): Node | undefined {
     const seen = new Set<Node>();
@@ -591,6 +594,7 @@ export class Interpreter {
       for (let k = this.running.length - 2; k >= 0; k--) { const body = this.running[k].found.rule.body; if (body !== undefined && Interpreter.within(site, body)) site = this.running[k].at; }
       if (site !== at) local.site = site;
       local.parent = rule.closure;
+      local.body = rule.body;
       if (receiver !== undefined) {
         const value = this.deref(receiver, false);
         if (receiver.place === undefined && value !== undefined && !value.none) this.construct(value);
@@ -768,7 +772,7 @@ export class Interpreter {
       this.error('Cannot assign here.', target.at);
       return held;
     }
-    const scope = at.place.member ? (this.deref(at.place.in) ?? at.place.in) : this.holder(at.place.in, at.place.name) ?? at.place.in;
+    const scope = at.place.member ? (this.deref(at.place.in) ?? at.place.in) : this.holder(at.place.in, at.place.name, at.at) ?? at.place.in;
     if (scope.none) return held;
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
@@ -805,7 +809,7 @@ export class Interpreter {
     for (let depth = 0; depth < 64 && target !== undefined; depth++) {
       if (target.code !== undefined && !target.program) {
         const word = target.code.span.string.trim();
-        if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) { const held = this.lookup(target.code.in, word); if (held !== undefined) { target = held; continue; } const read = this.force(target); if (read === undefined) return undefined; target = read; continue; }
+        if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) { const held = this.lookup(target.code.in, word, target.code.span); if (held !== undefined) { target = held; continue; } const read = this.force(target); if (read === undefined) return undefined; target = read; continue; }
         if (target.code.span.empty() || word === '') return undefined;
         if (!(frame.sees ??= []).includes(target.code.in) && frame !== target.code.in) frame.sees.unshift(target.code.in);
         const last = this.read(this.cursor_of(this.inner(target.code.span) ?? target.code.span), frame);

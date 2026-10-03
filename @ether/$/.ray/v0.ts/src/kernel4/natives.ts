@@ -153,7 +153,7 @@ function program_of(interpreter: Interpreter, node: Node): Node | undefined {
     if (target.program) return target;
     if (target.code !== undefined) {
       const word = target.code.span.string.trim();
-      if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) { const held = interpreter.lookup(target.code.in, word); if (held !== undefined && (held.program || held.code !== undefined || held.place !== undefined)) { target = held; continue; } }
+      if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) { const held = interpreter.lookup(target.code.in, word, target.code.span); if (held !== undefined && (held.program || held.code !== undefined || held.place !== undefined)) { target = held; continue; } }
       return program(interpreter, interpreter.inner(target.code.span) ?? target.code.span, target.code.in);
     }
     if (target.place !== undefined) { target = interpreter.bound(target); continue; }

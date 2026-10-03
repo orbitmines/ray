@@ -54,7 +54,7 @@ export class Node {
   heading?: { rules: Rule[]; decided: object; heads: Rule[] }
   scoped?: { deps: Node[]; stamps: number[]; rules: Rule[] }
   ruled?: { base?: Node; deps: Node[]; stamps: number[]; rules: Rule[] }
-  shaped?: { of: Rule[]; based: Set<Rule>; rules: Rule[]; mine: Rule[] }
+  shaped?: { of: Rule[]; based: Set<Rule>; shape: { rules: Rule[]; mine: Rule[]; on: Rule[] } }
   watchers?: Map<string, Variant[]>
   constructor(at?: Text.Node) { this.at = at; }
   own(name: string): Node | undefined { return this.names?.get(name); }
@@ -328,9 +328,7 @@ export class Interpreter {
   watch(variant: Variant, frame: Node, cursor: Text.Node, positions: number[]) {
     const text = cursor.source.value, chars = new Set<string>();
     for (const at of positions) { chars.add(text[at] ?? ''); chars.add(text[this.spaces(cursor, at)] ?? ''); }
-    this.rules_of(frame);
-    let scoped = frame; while (scoped.scoped === undefined && scoped.parent !== undefined && scoped.parent !== scoped) scoped = scoped.parent;
-    const nodes = [...(scoped.scoped?.deps ?? [])];
+    const nodes = [...this.deps_of(frame)];
     if (this.BASE !== undefined) { this.rules_made(this.BASE); nodes.push(...(this.BASE.ruled?.deps ?? [])); }
     for (const node of nodes) {
       const watchers = (node.watchers ??= new Map());
@@ -349,6 +347,7 @@ export class Interpreter {
   }
   rules_of(frame: Node): Rule[] {
     if (frame.parent !== undefined && frame.parent !== frame && !frame.rules?.length && !frame.sees?.length) return this.rules_of(frame.parent);
+    if (frame.parent !== undefined && frame.parent !== frame && !frame.rules?.length && frame.sees?.length === 1 && frame.sees[0] !== frame) return this.rules_seen(frame.parent, frame.sees[0]);
     const held = frame.scoped;
     if (Interpreter.current(held)) return held!.rules;
     const rules: Rule[] = [], seen = new Set<Node>(), deps: Node[] = [], stamps: number[] = [];
@@ -363,6 +362,38 @@ export class Interpreter {
     visit(frame);
     const shared = this.canonical(rules);
     frame.scoped = { deps, stamps, rules: shared };
+    return shared;
+  }
+  deps_of(frame: Node): Node[] {
+    this.rules_of(frame);
+    let at = frame;
+    while (true) {
+      if (at.parent !== undefined && at.parent !== at && !at.rules?.length && !at.sees?.length) { at = at.parent; continue; }
+      if (at.parent !== undefined && at.parent !== at && !at.rules?.length && at.sees?.length === 1 && at.sees[0] !== at) return this.seen_rules.get(at.parent)?.get(at.sees[0])?.deps ?? [];
+      if (at.scoped === undefined && at.parent !== undefined && at.parent !== at) { at = at.parent; continue; }
+      return at.scoped?.deps ?? [];
+    }
+  }
+  private seen_rules = new WeakMap<Node, WeakMap<Node, { deps: Node[]; stamps: number[]; rules: Rule[] }>>();
+  // A frame holding nothing of its own that sees one other frame: what it reaches is that frame's then its parent's, the same for every such frame.
+  rules_seen(parent: Node, sees: Node): Rule[] {
+    let by = this.seen_rules.get(parent);
+    if (by === undefined) this.seen_rules.set(parent, by = new WeakMap());
+    const held = by.get(sees);
+    if (Interpreter.current(held)) return held!.rules;
+    const rules: Rule[] = [], seen = new Set<Node>(), deps: Node[] = [], stamps: number[] = [];
+    const visit = (scope: Node | undefined) => {
+      for (let at = scope; at !== undefined && !seen.has(at); at = at.parent) {
+        seen.add(at);
+        deps.push(at); stamps.push(at.layout ?? 0);
+        if (at.rules) for (let k = at.rules.length - 1; k >= 0; k--) rules.push(at.rules[k]);
+        for (const other of at.sees ?? []) visit(other);
+      }
+    };
+    visit(sees);
+    visit(parent);
+    const shared = this.canonical(rules);
+    by.set(sees, { deps, stamps, rules: shared });
     return shared;
   }
   private decided_at?: { declared: number };
@@ -388,6 +419,7 @@ export class Interpreter {
   rules_on(value: Node): Rule[] { return this.rules_made(value); }
   rules_made(value: Node): Rule[] {
     if (value !== this.BASE && value !== this.GLOBAL && !value.rules?.length && value.with?.length === 1 && value.with[0] !== value) return this.rules_made(value.with[0]);
+    if (value !== this.BASE && value !== this.GLOBAL && !value.rules?.length && !value.with?.length && this.BASE !== undefined) return this.rules_made(this.BASE);
     const held = value.ruled;
     if (held?.base === this.BASE && Interpreter.current(held)) return held!.rules;
     const rules: Rule[] = [], seen = new Set<Node>(), deps: Node[] = [], stamps: number[] = [];
@@ -777,12 +809,20 @@ export class Interpreter {
   }
   shape(value: Node): { rules: Rule[]; mine: Rule[]; on: Rule[] } { return this.shape_of(value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value); }
   shape_of(target: Node | undefined): { rules: Rule[]; mine: Rule[]; on: Rule[] } {
-    if (target === undefined || target.none || target === this.GLOBAL) { const owned = this.owned_target(target); return { rules: owned.rules, mine: owned.mine, on: Interpreter.receiving_any }; }
+    if (target === undefined || target.none || target === this.GLOBAL) { const owned = this.owned_target(target); return this.shape_from(owned, Interpreter.receiving_any); }
     const on = this.rules_on(target), based = this.based(), held = target.shaped;
-    if (held !== undefined && held.of === on && held.based === based) return { rules: held.rules, mine: held.mine, on };
-    const owned = this.owned_target(target);
-    target.shaped = { of: on, based, rules: owned.rules, mine: owned.mine };
-    return { rules: owned.rules, mine: owned.mine, on };
+    if (held !== undefined && held.of === on && held.based === based) return held.shape;
+    const shape = this.shape_from(this.owned_target(target), on);
+    target.shaped = { of: on, based, shape };
+    return shape;
+  }
+  private shapes = new WeakMap<{ rules: Rule[]; mine: Rule[] }, WeakMap<Rule[], { rules: Rule[]; mine: Rule[]; on: Rule[] }>>();
+  shape_from(owned: { rules: Rule[]; mine: Rule[] }, on: Rule[]): { rules: Rule[]; mine: Rule[]; on: Rule[] } {
+    let by = this.shapes.get(owned);
+    if (by === undefined) this.shapes.set(owned, by = new WeakMap());
+    let shape = by.get(on);
+    if (shape === undefined) by.set(on, shape = { rules: owned.rules, mine: owned.mine, on });
+    return shape;
   }
   owned_target(target: Node | undefined): { rules: Rule[]; mine: Rule[] } {
     const key = target === undefined || target === this.GLOBAL ? this.BASE : target;
@@ -790,7 +830,7 @@ export class Interpreter {
     const based = this.based();
     if (target !== undefined && target !== this.GLOBAL && !target.rules?.length) {
       const rules = this.derived(this.rules_on(key), 'owned', this.keep_owned);
-      return { rules, mine: this.derived(rules, 'mine', this.keep_mine, based) };
+      return this.paired(rules, this.derived(rules, 'mine', this.keep_mine, based));
     }
     const held = this.owned_sets.get(key), of = this.rules_on(key);
     if (held?.of === of && held.based === based && held.target === target) return held;
@@ -803,7 +843,15 @@ export class Interpreter {
   leading_of(frame: Node): { rules: Rule[]; mine: Rule[] } {
     const based = this.based();
     const rules = this.derived(this.rules_of(frame), 'leading', this.keep_leading);
-    return { rules, mine: this.derived(rules, 'mine', this.keep_mine, based) };
+    return this.paired(rules, this.derived(rules, 'mine', this.keep_mine, based));
+  }
+  private pairs_of = new WeakMap<Rule[], WeakMap<Rule[], { rules: Rule[]; mine: Rule[] }>>();
+  paired(rules: Rule[], mine: Rule[]): { rules: Rule[]; mine: Rule[] } {
+    let by = this.pairs_of.get(rules);
+    if (by === undefined) this.pairs_of.set(rules, by = new WeakMap());
+    let pair = by.get(mine);
+    if (pair === undefined) by.set(mine, pair = { rules, mine });
+    return pair;
   }
   // A native taking arguments takes the operands written after it, read when it asks.
   call(target: Node, cursor: Text.Node, frame: Node): Node | undefined {
@@ -841,7 +889,7 @@ export class Interpreter {
     if (by_receiver === undefined) by_scope.set(scope, by_receiver = new Map());
     const on = receiver === undefined ? null : this.operates(rules) ? this.receiver_rules(receiver) : Interpreter.receiving_any;
     const known = by_receiver.get(on);
-    if (known !== undefined) { if (known.sensitive) this.sensitive++; return known.found === null ? undefined : { ...known.found, receiver }; }
+    if (known !== undefined) { if (known.sensitive) this.sensitive++; return known.found === null ? undefined : known.found.receiver === receiver ? known.found : { ...known.found, receiver }; }
     const volatile = this.volatile, sensitive = this.sensitive;
     const found = quiet ? this.quietly(() => this.best_of(rules, cursor, frame, receiver)) : this.best_of(rules, cursor, frame, receiver);
     if (this.volatile === volatile && this.readings.get(cursor.source) === at) by_receiver.set(on, { found: found === undefined ? null : found, sensitive: this.sensitive !== sensitive });
@@ -1395,18 +1443,33 @@ export class Interpreter {
     if (target === undefined) return undefined;
     const name = span.string;
     if (target.style !== undefined) return undefined;
-    for (const rule of this.rules_on(target)) if (rule.pattern[0]?.kind === 'literal' && rule.pattern[0].text === name && (rule.pattern.length === 1 || (rule.pattern.length === 2 && rule.pattern[1].kind === 'capture'))) return undefined;
+    if (this.members_of(this.rules_on(target)).has(name)) return undefined;
     return Object.assign(new Node(span), { place: { in: target, name, member: true } });
+  }
+  private member_index = new WeakMap<Rule[], Map<string, { plain?: Rule; taking: Rule[] }>>();
+  members_of(rules: Rule[]): Map<string, { plain?: Rule; taking: Rule[] }> {
+    let index = this.member_index.get(rules);
+    if (index !== undefined) return index;
+    index = new Map();
+    for (const rule of rules) {
+      const [first, second] = rule.pattern;
+      if (first?.kind !== 'literal' || rule.pattern.length > 2 || (second !== undefined && second.kind !== 'capture')) continue;
+      let entry = index.get(first.text);
+      if (entry === undefined) index.set(first.text, entry = { taking: [] });
+      if (second === undefined) entry.plain ??= rule; else entry.taking.push(rule);
+    }
+    this.member_index.set(rules, index);
+    return index;
   }
   get(node: Node, key: Node): Node | undefined {
     const target = this.deref(node);
     if (target === undefined) return undefined;
     const name = this.text(key);
     if (target.style !== undefined) return this.style(`${target.style}.${name}`);
-    const rules = this.rules_on(target);
-    const plain = rules.find(rule => rule.pattern.length === 1 && rule.pattern[0].kind === 'literal' && rule.pattern[0].text === name);
+    const entry = this.members_of(this.rules_on(target)).get(name);
+    const plain = entry?.plain;
     if (plain !== undefined) return this.apply({ rule: plain, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [], receiver: this.location(node) ?? node }, target, key.at ?? node.at!);
-    const taking = rules.filter(rule => rule.pattern.length === 2 && rule.pattern[0].kind === 'literal' && rule.pattern[0].text === name && rule.pattern[1].kind === 'capture');
+    const taking = entry?.taking ?? [];
     if (taking.length > 0) {
       return Object.assign(new Node(key.at), { fn: this.rebuild(['taking', this.location(node) ?? node, taking]) });
     }

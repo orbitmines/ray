@@ -91,7 +91,7 @@ function io(interpreter: Interpreter, location: string, content: string | undefi
 }
 function located(interpreter: Interpreter, node: Node, at: Text.Node): Node {
   const value = interpreter.deref(node);
-  const position = value?.code?.span ?? value?.at;
+  const position = value?.site ?? value?.code?.span ?? value?.at;
   if (position === undefined || position.source.location === undefined) return interpreter.NONE;
   return interpreter.literal_of(`${position.source.location}:${position.begin}`, at);
 }

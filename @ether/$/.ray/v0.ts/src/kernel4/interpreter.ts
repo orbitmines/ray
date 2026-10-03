@@ -31,6 +31,7 @@ export class Node {
   bytes?: Uint8Array
   raw?: boolean
   stands?: Node
+  site?: Text.Node
   receiver?: Node
   on?: Node
   given?: Set<string>
@@ -526,6 +527,9 @@ export class Interpreter {
       this.paint_rule(found, at);
       const local = new Node(at);
       this.running[this.running.length - 1].local = local;
+      let site = at;
+      for (let k = this.running.length - 2; k >= 0; k--) { const body = this.running[k].found.rule.body; if (body !== undefined && Interpreter.within(site, body)) site = this.at_stack[k]; }
+      if (site !== at) local.site = site;
       local.parent = rule.closure;
       local.receiver = receiver;
       if (receiver !== undefined) {

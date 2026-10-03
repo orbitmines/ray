@@ -49,6 +49,9 @@ export class Rule {
   implicit = false
   // What the captured values must fit: a method's parameter pattern.
   guard?: { span: Text.Node; in: Node }
+  // Written beside other definitions of the same name: its parameters choose between them.
+  overloaded = false
+  get name(): string { return this.pattern.map(piece => piece.kind === 'literal' ? piece.text : piece.kind === 'gap' ? '{ }' : `{${piece.name}}`).join(''); }
   constructor(public pattern: Piece[], public closure: Node, public at: Text.Node, public key: string, public order: number, public body?: Text.Node, public fn?: Native) {}
   get leading(): boolean { return this.pattern[0]?.kind === 'capture'; }
   // A leading capture with a type is a pattern over text.
@@ -204,10 +207,17 @@ export class Interpreter {
     this.value_sets.set(value, { version: this.version, rules });
     return rules;
   }
+  private named = new Map<string, Rule[]>();
   add_rule(scope: Node, rule: Rule) {
     const rules = (scope.rules ??= []);
     rule.home = scope;
     rule.implicit = scope !== this.GLOBAL && rule.leading && (rule.pattern.length === 1 || rule.pattern[1].kind === 'gap');
+    if (rule.guard !== undefined) {
+      const named = this.named.get(rule.name) ?? [];
+      named.push(rule);
+      this.named.set(rule.name, named);
+      if (named.some(other => other.key !== rule.key)) for (const other of named) other.overloaded = true;
+    }
     const same = rules.findIndex(other => other.key === rule.key);
     if (same >= 0) { rule.order = rules[same].order; rules.splice(same, 1); }
     rules.push(rule);
@@ -430,7 +440,7 @@ export class Interpreter {
       i = end;
     }
     if (i === cursor.cursor) return;
-    if (rule.guard !== undefined && !this.fits(rule, captures, frame)) return;
+    if (rule.guard !== undefined && rule.overloaded && !this.fits(rule, captures, frame)) return;
     return { rule, begin: cursor.cursor, end: i, reach, captures, literals, receiver };
   }
   private openers?: { version: number; spelled: Set<string> };
@@ -750,7 +760,7 @@ export class Interpreter {
         const span = argument.code?.span ?? argument.at ?? at, frame = argument.code?.in ?? interpreter.GLOBAL;
         for (const rule of taking) {
           const captures = new Map([[(rule.pattern[1] as { name: string }).name, span]]);
-          if (rule.guard !== undefined && !interpreter.fits(rule, captures, frame)) continue;
+          if (rule.guard !== undefined && rule.overloaded && !interpreter.fits(rule, captures, frame)) continue;
           return interpreter.apply({ rule, begin: 0, end: 0, reach: 0, captures, literals: [], receiver }, frame, at);
         }
         return undefined;

@@ -1753,6 +1753,7 @@ export class Interpreter {
       copy.id = ++Rule.count;
       rules.set(r, copy);
       copy.closure = node(r.closure)!;
+      copy.pattern = r.pattern.map(piece => piece.kind === 'capture' && (piece.within !== undefined || piece.type !== undefined) ? { ...piece, within: node(piece.within), type: node(piece.type) } : piece);
       copy.home = node(r.home);
       if (r.guard !== undefined) copy.guard = { span: r.guard.span, in: node(r.guard.in)! };
       return copy;

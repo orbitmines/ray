@@ -9,7 +9,7 @@ export type Native = { arity: number; fn: (args: Args) => Node | undefined; raw?
 export type Piece = (
   | { kind: 'literal'; text: string }
   | { kind: 'gap' }
-  | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node }
+  | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node; undecided?: boolean; decided?: number }
 ) & { tight?: boolean };
 
 export class Node {
@@ -382,7 +382,8 @@ export class Interpreter {
       }
       if (piece.kind === 'gap') {
         const j = this.spaces(cursor, i);
-        if (j === i && i < cursor.limit && !/\s/.test(text[i])) return;
+        const elided = p >= 2 && pieces[p - 1].kind === 'capture' && pieces[p - 2].kind === 'gap' && captures.get((pieces[p - 1] as { name: string }).name)?.string === '';
+        if (j === i && i < cursor.limit && !/\s/.test(text[i]) && !elided) return;
         i = j;
         continue;
       }
@@ -391,7 +392,12 @@ export class Interpreter {
       const exact = piece.raw && piece.exact === true && next?.kind === 'literal';
       const from = exact ? i : this.spaces(cursor, i);
       let end: number;
-      if (next?.kind === 'literal') {
+      const beyond = p > 0 && piece.raw && next?.kind === 'gap' ? pieces[p + 2] : undefined;
+      if (beyond?.kind === 'literal') {
+        end = this.first(cursor, from, beyond.text, frame, piece.raw, enclosed || opened > 0);
+        if (end < 0) return;
+      }
+      else if (next?.kind === 'literal') {
         end = p === 0 ? this.last(cursor, from, next.text, frame, piece.raw, enclosed || opened > 0) : this.first(cursor, from, next.text, frame, piece.raw, enclosed || opened > 0);
         if (end < 0) return;
       }
@@ -401,7 +407,9 @@ export class Interpreter {
       let last = end;
       if (!exact) while (last > from && /\s/.test(text[last - 1])) last--;
       const span = cursor.span(from, last - 1);
-      if (last <= from) { if (!piece.optional && !enclosed) return; captures.set(piece.name, span); i = end; continue; }
+      if (last <= from) { if (!piece.optional && !enclosed && opened === 0) return; captures.set(piece.name, span); i = end; continue; }
+      if (piece.undecided && piece.decided !== this.version) this.decide(piece);
+      if (piece.undecided) return;
       if (piece.typed && this.holds(piece, span) === undefined) return;
       captures.set(piece.name, span);
       i = end;
@@ -454,6 +462,9 @@ export class Interpreter {
   unspaced(cursor: Text.Node, j: number): number { const text = cursor.source.value; while (j < cursor.limit && !/\s/.test(text[j])) j++; return j; }
   operand_end(cursor: Text.Node, j: number, frame: Node): number {
     const text = cursor.source.value;
+    let run = j;
+    while (run < cursor.limit && Interpreter.run(text[run])) run++;
+    if (run > j && (run >= cursor.limit || /\s/.test(text[run]))) return j;
     while (j < cursor.limit && !/\s/.test(text[j])) { const k = this.claim(cursor, j, frame); j = k > j ? k : j + 1; }
     return j;
   }
@@ -478,6 +489,8 @@ export class Interpreter {
     const out: string[] = [];
     for (const other of this.rules_of(frame)) { const spelling = other.operator; if (spelling !== undefined && other.order < rule.order) out.push(spelling); }
     if (this.BASE !== undefined) for (const other of this.rules_on(this.BASE)) { const spelling = other.operator; if (spelling !== undefined && other.order < rule.order) out.push(spelling); }
+    const own = rule.pattern[0];
+    if (own?.kind === 'literal' && Interpreter.run(own.text[0])) out.push(own.text);
     return out;
   }
   // A bracket is any rule written between two literals: what it encloses is skipped over as one.
@@ -795,9 +808,11 @@ export class Interpreter {
     this.naming = { scope, hole };
     this.trying = 0;
     let value: Node | undefined;
+    const refused = this.diagnostics.refused;
     try { value = this.quietly(() => this.safely(() => this.read(this.cursor_of(content), scope))); }
     catch (jump) { if (!(jump instanceof Jump)) throw jump; }
     finally { this.naming = was; this.trying = trying; }
+    const undecided = this.diagnostics.refused > refused;
     const name = scope.names === undefined ? undefined : [...scope.names].find(([, held]) => held === hole)?.[0];
     if (name === undefined) {
       const held = value === undefined ? undefined : this.quietly(() => this.deref(value));
@@ -806,7 +821,15 @@ export class Interpreter {
     }
     const typed = scope.own(name) !== hole && scope.own(name) !== undefined;
     const optional = /\?/.test(written.replace(/`[^`]*`/g, '')) && !typed;
-    return { kind: 'capture', name, raw: scope.raw === true, typed, optional, content, within: frame };
+    return { kind: 'capture', name, raw: scope.raw === true, typed, optional, content, within: frame, undecided: undecided && !typed };
+  }
+  decide(piece: Piece & { kind: 'capture' }) {
+    const again = this.capture(piece.content!, piece.within!);
+    if (again.kind !== 'capture') { piece.undecided = false; return; }
+    piece.typed = again.typed;
+    piece.optional = again.optional;
+    piece.undecided = again.undecided;
+    piece.decided = this.version;
   }
   group_end(text: string, j: number, end: number): number {
     const pairs: Record<string, string> = { '{': '}', '(': ')', '[': ']' };
@@ -898,6 +921,11 @@ export class Interpreter {
     for (const src of mine) {
       this.read_source(src);
       if (src.is_entrypoint) this.read_source(src);
+      yield;
+    }
+    for (const src of mine) {
+      if (src.is_entrypoint || ![...this.diagnostics.of(src)].some(entry => entry.message.startsWith('Unresolved'))) continue;
+      this.read_source(src);
       yield;
     }
     this.end_pass();

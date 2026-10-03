@@ -1,5 +1,6 @@
 import { Text } from './text.ts';
 import { Interpreter, Node, type Rule, type Match, type Native, type Piece } from './interpreter.ts';
+import { kept } from './boot.ts';
 
 type Capture = Piece & { kind: 'capture' };
 type Entry = { method: string; receiver: Capture; operand?: Capture; rule: Rule; native?: string };
@@ -19,6 +20,7 @@ export class Count extends Node {
     return super.own(name);
   }
 }
+kept(Count);
 
 // The interpreter's own level: rules about operations on values of a type, `{a: T} op {b: T} => external js.…`,
 // read from the interpreter's file once the language has a `Compiler.default` for it to add to.
@@ -31,9 +33,16 @@ export class Levelled extends Interpreter {
   native(key: string, at?: Text.Node): Native | undefined {
     const own = super.native(key, at);
     if (own !== undefined || at === undefined || !this.program?.by_interpreter(at.source) || !(key in Operations || key.startsWith('js.'))) return own;
+    return this.rebuild(['marker', key, at]);
+  }
+  made_native(recipe: unknown[]): Native {
+    if (recipe[0] !== 'marker') return super.made_native(recipe);
+    const key = recipe[1] as string, at = recipe[2] as Text.Node;
     return { arity: 0, fn: () => { const marker = new Node(at); this.markers.set(marker, key); return marker; } };
   }
   reads(src: Text.Source): boolean { return !this.program?.by_interpreter(src); }
+  saved_state(mine: Text.Source[]): Record<string, unknown> { return { ...super.saved_state(mine), level: this.level, markers: this.markers, levelled: this.levelled }; }
+  restore_state(state: any, mine: Text.Source[]) { super.restore_state(state, mine); this.level = state.level; this.markers = state.markers; this.levelled = state.levelled; }
   after(src: Text.Source) {
     if (this.levelled || this.default_level() === undefined) { if (this.level === undefined) this.settle(); return; }
     this.levelled = true;

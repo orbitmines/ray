@@ -3,13 +3,14 @@ import type { Called, Unit } from './compile/ir.ts';
 import { applied, called, named } from './compile/record.ts';
 import { type Event, type Replayed, type Variant, replay } from './compile/graph.ts';
 import { evaluate } from './compile/evaluate.ts';
+import { Boot } from './boot.ts';
 import { Diagnostics, type Diagnostic } from './diagnostics.ts';
 import { Natives } from './natives.ts';
 import type { Program } from './program.ts';
 
 export type { Diagnostic };
 export type Args = { interpreter: Interpreter; frame: Node; args: Node[]; at: Text.Node; self?: Node };
-export type Native = { arity: number; fn: (args: Args) => Node | undefined; raw?: boolean };
+export type Native = { arity: number; fn: (args: Args) => Node | undefined; raw?: boolean; recipe?: unknown[] };
 export type Piece = (
   | { kind: 'literal'; text: string }
   | { kind: 'gap' }
@@ -42,6 +43,10 @@ export class Node {
   bare?: boolean
   on?: Node
   given?: Set<string>
+  constructed?: boolean
+  rule_of?: Rule
+  marked_names?: Map<string, Node>
+  marked_value?: Node
   layout?: number
   visited?: number
   scoped?: { deps: Node[]; stamps: number[]; rules: Rule[] }
@@ -73,6 +78,7 @@ export class Rule {
   lexical?: Text.Node
   implicit = false
   template?: { id: number }
+  value_node?: Node
   // What the captured values must fit: a method's parameter pattern.
   guard?: { span: Text.Node; in: Node }
   // Written beside other definitions of the same name: its parameters choose between them.
@@ -152,7 +158,7 @@ export class Interpreter {
   constructor(public diagnostics: Diagnostics) {
     this.GLOBAL = new Node();
     this.NONE = Object.assign(new Node(), { none: true });
-    this.EXTERNAL = this.GLOBAL.set('external', Object.assign(new Node(), { fn: { arity: 1, raw: true, fn: ({ interpreter, frame, args: [name] }: Args) => interpreter.external(name, frame) } }));
+    this.EXTERNAL = this.GLOBAL.set('external', Object.assign(new Node(), { fn: this.rebuild(['external']) }));
     const seed = new Rule([{ kind: 'capture', name: 'pattern', raw: false, typed: false, optional: false }, { kind: 'literal', text: '=>' }, { kind: 'capture', name: 'body', raw: false, typed: false, optional: false }], this.GLOBAL, Text.Node.string('{pattern} => {body}'), '', this.order++, undefined, Natives.rule);
     seed.native = 'rule';
     seed.defines = true;
@@ -1167,11 +1173,10 @@ export class Interpreter {
     return failed ? undefined : value;
   }
   // The base's constructor runs once for every value made in reach of it.
-  private constructed = new WeakSet<Node>();
   construct(value: Node) {
     const made = this.made?.code;
-    if (made === undefined || this.constructed.has(value) || value.text || (value.fn !== undefined && value.style === undefined) || value.code !== undefined || value.place !== undefined) return;
-    this.constructed.add(value);
+    if (made === undefined || value.constructed || value.text || (value.fn !== undefined && value.style === undefined) || value.code !== undefined || value.place !== undefined) return;
+    value.constructed = true;
     const fresh = value.names === undefined && value.sees === undefined && value.rules === undefined;
     const template = this.template;
     if (fresh && template !== undefined && !this.painting(this.made!.code!.span.source) && template.made === this.made && template.base === this.BASE && template.stands === (value.stands !== undefined) && template.seen >= 2) {
@@ -1316,17 +1321,7 @@ export class Interpreter {
     if (plain !== undefined) return this.apply({ rule: plain, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [], receiver: this.location(node) ?? node }, target, key.at ?? node.at!);
     const taking = rules.filter(rule => rule.pattern.length === 2 && rule.pattern[0].kind === 'literal' && rule.pattern[0].text === name && rule.pattern[1].kind === 'capture');
     if (taking.length > 0) {
-      const receiver = this.location(node) ?? node;
-      return Object.assign(new Node(key.at), { fn: { arity: 1, fn: ({ interpreter, args: [argument], at }: Args) => {
-        if (argument === undefined) return undefined;
-        const span = argument.code?.span ?? argument.at ?? at, frame = argument.code?.in ?? interpreter.GLOBAL;
-        for (const rule of taking) {
-          const captures = new Map([[(rule.pattern[1] as { name: string }).name, span]]);
-          if (rule.guard !== undefined && rule.overloaded && !interpreter.fits(rule, captures, frame)) continue;
-          return interpreter.apply({ rule, begin: 0, end: 0, reach: 0, captures, literals: [], receiver }, frame, at);
-        }
-        return undefined;
-      } } });
+      return Object.assign(new Node(key.at), { fn: this.rebuild(['taking', this.location(node) ?? node, taking]) });
     }
     const place = Object.assign(new Node(key.at), { place: { in: target, name, member: true } });
     if (key.at !== undefined) this.paint_place(place);
@@ -1632,7 +1627,6 @@ export class Interpreter {
     if (rule !== undefined) rule.lexical = this.running[this.running.length - 1]?.at;
     return rule === undefined ? undefined : this.rule_value(rule);
   }
-  private rule_values = new WeakMap<Rule, Node>();
   private methods = new WeakMap<Rule[], Map<string, Rule>>();
   method_named(frame: Node, name: string, at?: Text.Node): Node | undefined {
     const rules = this.rules_of(frame);
@@ -1640,15 +1634,43 @@ export class Interpreter {
     if (index === undefined) { index = new Map(); for (const rule of rules) if (rule.pattern.length === 2 && rule.pattern[0].kind === 'literal' && rule.pattern[1].kind === 'capture' && !index.has(rule.pattern[0].text)) index.set(rule.pattern[0].text, rule); this.methods.set(rules, index); }
     const rule = index.get(name);
     if (rule === undefined) return undefined;
-    const capture = (rule.pattern[1] as { name: string }).name;
-    return Object.assign(new Node(at), { fn: { arity: 1, fn: ({ interpreter, args: [argument], at: where }: Args) => interpreter.apply({ rule, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [] }, frame, where, new Map([[capture, argument ?? interpreter.NONE]])) } });
+    return Object.assign(new Node(at), { fn: this.rebuild(['method', rule, frame]) });
+  }
+  rebuild(recipe: unknown[]): Native {
+    const made = this.made_native(recipe);
+    made.recipe = recipe;
+    return made;
+  }
+  made_native(recipe: unknown[]): Native {
+    switch (recipe[0]) {
+      case 'external': return { arity: 1, raw: true, fn: ({ interpreter, frame, args: [name] }: Args) => interpreter.external(name, frame) };
+      case 'forward': return { arity: 1, raw: true, fn: (): Node | undefined => undefined };
+      case 'style': { const node = recipe[1] as Node; return { arity: 1, fn: ({ interpreter, args: [target] }: Args) => target === undefined ? undefined : interpreter.decorate(target.code !== undefined && !target.program && interpreter.location(target)?.place !== undefined ? interpreter.location(target)! : target, node) }; }
+      case 'method': {
+        const rule = recipe[1] as Rule, frame = recipe[2] as Node, capture = (rule.pattern[1] as { name: string }).name;
+        return { arity: 1, fn: ({ interpreter, args: [argument], at: where }: Args) => interpreter.apply({ rule, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [] }, frame, where, new Map([[capture, argument ?? interpreter.NONE]])) };
+      }
+      case 'taking': {
+        const receiver = recipe[1] as Node, taking = recipe[2] as Rule[];
+        return { arity: 1, fn: ({ interpreter, args: [argument], at }: Args) => {
+          if (argument === undefined) return undefined;
+          const span = argument.code?.span ?? argument.at ?? at, frame = argument.code?.in ?? interpreter.GLOBAL;
+          for (const rule of taking) {
+            const captures = new Map([[(rule.pattern[1] as { name: string }).name, span]]);
+            if (rule.guard !== undefined && rule.overloaded && !interpreter.fits(rule, captures, frame)) continue;
+            return interpreter.apply({ rule, begin: 0, end: 0, reach: 0, captures, literals: [], receiver }, frame, at);
+          }
+          return undefined;
+        } };
+      }
+    }
+    throw new Error(`No native is made from ${String(recipe[0])}.`);
   }
   rule_value(rule: Rule): Node {
-    let node = this.rule_values.get(rule);
-    if (node === undefined) { node = new Node(rule.at); this.rule_values.set(rule, node); this.rules_by_value.set(node, rule); }
+    let node = rule.value_node;
+    if (node === undefined) { node = new Node(rule.at); rule.value_node = node; node.rule_of = rule; }
     return node;
   }
-  rules_by_value = new WeakMap<Node, Rule>();
 
   native(key: string, at?: Text.Node): Native | undefined { return Natives[key]; }
   external(name: Node | undefined, frame: Node): Node | undefined {
@@ -1677,21 +1699,56 @@ export class Interpreter {
     this.pending = [];
     this.done = new Set();
     const eager = this.program?.eager;
-    for (const src of mine) {
-      if (this.done.has(src) || (eager !== undefined && !src.is_entrypoint && !eager(src))) continue;
-      this.done.add(src);
-      this.pending = this.pending.filter(other => other !== src);
-      this.read_source(src);
-      if (src.is_entrypoint) { this.read_source(src); if (!derived) this.pending = mine.filter(other => !other.is_entrypoint && !this.done.has(other)); }
-      this.after(src);
-      yield;
-    }
-    for (const src of mine) {
-      if (src.is_entrypoint || !this.done.has(src) || ![...this.diagnostics.of(src)].some(entry => entry.message.startsWith('Unresolved'))) continue;
-      this.read_source(src);
-      yield;
-    }
+    const boot = derived ? undefined : Boot.of(this, mine);
+    this.boot = boot;
+    const resume = boot?.restore() ?? { phase: 0, index: -1 };
+    try {
+      for (let index = 0; index < mine.length; index++) {
+        const src = mine[index];
+        if (resume.phase > 0 || index <= resume.index) continue;
+        if (this.done.has(src)) continue;
+        const reads = src.is_entrypoint || eager === undefined || eager(src);
+        boot?.decided(src, reads);
+        if (!reads) continue;
+        this.done.add(src);
+        this.pending = this.pending.filter(other => other !== src);
+        this.read_source(src);
+        if (src.is_entrypoint) { this.read_source(src); if (!derived) this.pending = mine.filter(other => !other.is_entrypoint && !this.done.has(other)); }
+        this.after(src);
+        boot?.save(0, index);
+        yield;
+      }
+      for (let index = 0; index < mine.length; index++) {
+        const src = mine[index];
+        if (resume.phase > 1 || (resume.phase === 1 && index <= resume.index)) continue;
+        if (src.is_entrypoint || !this.done.has(src) || ![...this.diagnostics.of(src)].some(entry => entry.message.startsWith('Unresolved'))) continue;
+        this.read_source(src);
+        boot?.save(1, index);
+        yield;
+      }
+    } finally { this.boot = undefined; }
     this.end_pass();
+  }
+  boot?: Boot;
+  saved_state(mine: Text.Source[]): Record<string, unknown> {
+    const externals = new Map<Text.Source, Map<string, Node>>();
+    for (const src of mine) { const held = this.externals.get(src); if (held !== undefined) externals.set(src, held); }
+    return {
+      GLOBAL: this.GLOBAL, NONE: this.NONE, EXTERNAL: this.EXTERNAL, BASE: this.BASE, made: this.made, theme: this.theme,
+      version: this.version, declared: this.declared, rules_version: this.rules_version, order: this.order, rules: Rule.count,
+      definitions: this.definitions, given_names: this.given_names, held_texts: this.held_texts, filtered: this.filtered, rejected: this.rejected,
+      named: this.named, templates: this.templates, template: this.template, pending: this.pending, done: [...this.done], externals,
+      diagnostics: this.diagnostics.items,
+    };
+  }
+  restore_state(state: any, mine: Text.Source[]) {
+    this.GLOBAL = state.GLOBAL; this.NONE = state.NONE; this.EXTERNAL = state.EXTERNAL; this.BASE = state.BASE; this.made = state.made; this.theme = state.theme;
+    this.version = state.version + 1; this.declared = state.declared; this.rules_version = state.rules_version + 1; this.order = state.order;
+    Rule.count = Math.max(Rule.count, state.rules);
+    this.definitions = state.definitions; this.given_names = state.given_names; this.held_texts = state.held_texts; this.filtered = state.filtered; this.rejected = state.rejected;
+    this.named = state.named; this.templates = state.templates; this.template = state.template; this.pending = state.pending; this.done = new Set(state.done);
+    for (const [src, held] of state.externals as Map<Text.Source, Map<string, Node>>) this.externals.set(src, held);
+    for (const [src, held] of state.diagnostics as Map<Text.Source | undefined, Map<Text.Node | undefined, Diagnostic[]>>) this.diagnostics.items.set(src, held);
   }
   // A name nothing has written yet is looked for in the files not read so far, in their order.
   pending: Text.Source[] = [];
@@ -1712,6 +1769,7 @@ export class Interpreter {
     return false;
   }
   read_source(src: Text.Source) {
+    this.boot?.read(src);
     this.diagnostics.forget(src);
     try { this.safely(() => this.read(new Text.Node(src), this.GLOBAL)); }
     catch (jump) { if (!(jump instanceof Jump)) throw jump; this.error(`No \`${jump.label}\` to jump to.`); }
@@ -1738,6 +1796,9 @@ export class Interpreter {
       if (known !== undefined) return known;
       const copy = Object.assign(new Node(), n);
       copy.scoped = copy.ruled = copy.shaped = copy.watchers = undefined;
+      copy.constructed = undefined;
+      copy.rule_of = copy.marked_value = undefined;
+      copy.marked_names = undefined;
       seen.set(n, copy);
       copy.parent = node(n.parent);
       if (n.with) copy.with = n.with.map(x => node(x)!);
@@ -1754,6 +1815,7 @@ export class Interpreter {
       if (known !== undefined) return known;
       const copy = Object.assign(Object.create(Rule.prototype), r) as Rule;
       copy.id = ++Rule.count;
+      copy.value_node = undefined;
       rules.set(r, copy);
       copy.closure = node(r.closure)!;
       copy.pattern = r.pattern.map(piece => piece.kind === 'capture' && (piece.within !== undefined || piece.type !== undefined) ? { ...piece, within: node(piece.within), type: node(piece.type) } : piece);
@@ -1785,8 +1847,6 @@ export class Interpreter {
   get painted() { return this.painted_count; }
   theme?: Node
   building?: Node
-  private names_marked = new WeakMap<Node, Map<string, Node>>();
-  private values_marked = new WeakMap<Node, Node>();
   begin_pass() { this.paints = []; this.sites = new Map(); this.read_at = new Map(); this.bodies = new Set(); }
   end_pass() { this.dry_paint(); this.bodies = new Set(); this.painted_count++; }
   read_at = new Map<Text.Source, Set<number>>();
@@ -1852,7 +1912,7 @@ export class Interpreter {
   }
   paint_place(place: Node) {
     if (!this.program?.serving) return;
-    this.paint(place.at, () => { const marks = (place as { marks?: Node }).marks; if (marks) return marks.style; const scope = place.place!.member ? place.place!.in : this.holder(place.place!.in, place.place!.name); const named = scope && this.names_marked.get(scope)?.get(place.place!.name); if (named) return named.style; const bound = scope?.own(place.place!.name); if (bound === undefined) return undefined; if (bound.code !== undefined || bound.place !== undefined) return scope !== this.GLOBAL && scope!.body !== undefined ? 'parameter' : 'variable'; const marked = this.values_marked.get(bound)?.style; if (marked !== undefined) return marked; return bound.fn !== undefined || this.rules_by_value.has(bound) ? 'function' : 'variable'; });
+    this.paint(place.at, () => { const marks = (place as { marks?: Node }).marks; if (marks) return marks.style; const scope = place.place!.member ? place.place!.in : this.holder(place.place!.in, place.place!.name); const named = scope && scope?.marked_names?.get(place.place!.name); if (named) return named.style; const bound = scope?.own(place.place!.name); if (bound === undefined) return undefined; if (bound.code !== undefined || bound.place !== undefined) return scope !== this.GLOBAL && scope!.body !== undefined ? 'parameter' : 'variable'; const marked = bound.marked_value?.style; if (marked !== undefined) return marked; return bound.fn !== undefined || bound.rule_of !== undefined ? 'function' : 'variable'; });
   }
   paint_rule(found: Match, at: Text.Node) {
     const style = found.rule.style;
@@ -1860,14 +1920,14 @@ export class Interpreter {
   }
   decorate(target: Node, style: Node): Node {
     const held = target.place !== undefined || target.code !== undefined ? this.quietly(() => this.deref(target, false)) : target;
-    const rule = held === undefined ? undefined : this.rules_by_value.get(held);
+    const rule = held?.rule_of;
     if (rule !== undefined) { rule.style = style; this.paint_head(rule, style); return target; }
     if (target.place !== undefined && held?.text && held.at !== undefined) { this.paint(held.at, () => style.style); return target; }
-    if (target.place !== undefined && held !== undefined && !held.none && held !== this.GLOBAL && !held.text) this.values_marked.set(held, style);
+    if (target.place !== undefined && held !== undefined && !held.none && held !== this.GLOBAL && !held.text) held.marked_value = style;
     if (target.place !== undefined) { const marked = Object.assign(new Node(target.at), { place: target.place, marks: style }); this.paint(target.at, () => style.style); return marked; }
     if (target.code !== undefined && target.value === undefined) { this.paint(target.code.span, () => style.style); return target; }
     if (target.text) { this.paint(target.at, () => style.style); return target; }
-    this.values_marked.set(target, style);
+    target.marked_value = style;
     return target;
   }
   paint_head(rule: Rule, style: Node | undefined) {
@@ -1892,14 +1952,12 @@ export class Interpreter {
   marked_place(at: Node, scope: Node) {
     const marks = (at as { marks?: Node }).marks;
     if (marks === undefined) return;
-    let names = this.names_marked.get(scope);
-    if (names === undefined) this.names_marked.set(scope, names = new Map());
-    names.set(at.place!.name, marks);
+    (scope.marked_names ??= new Map()).set(at.place!.name, marks);
   }
   style(name: string): Node {
     const node = new Node();
     node.style = name;
-    node.fn = { arity: 1, fn: ({ interpreter, args: [target] }: Args) => target === undefined ? undefined : interpreter.decorate(target.code !== undefined && !target.program && interpreter.location(target)?.place !== undefined ? interpreter.location(target)! : target, node) };
+    node.fn = this.rebuild(['style', node]);
     return node;
   }
   alias(name: string, value: Node) {

@@ -178,6 +178,7 @@ String := class: Array {
     rows := .lines
     total := rows.count
     if (total == 1) { return this }
+    unless (rows.head.value.empty) { return this }
     row_number ^keyword := 0
     kept ^keyword := chain None
     rows for {

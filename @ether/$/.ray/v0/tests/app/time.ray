@@ -155,3 +155,6 @@ unless (Time(calendar: Julian, since_epoch: (120 seconds)).round(Minute) == Time
 unless (Time(calendar: Julian, since_epoch: (90 seconds)).round(Minute).since_epoch.amount == 120) { INFO@mark `TRO6 half a minute does not round up` }
 epoched := Time(calendar: Julian, since_epoch: (80 seconds), epoch: here).round(Minute)
 unless (epoched.epoch == here) { INFO@mark `TRO7 rounding lost the epoch` }
+finer := Time(calendar: Julian, since_epoch: (2 minutes)).round(Second)
+unless (finer.since_epoch.unit == Second) { INFO@mark `TRO8 rounding to a finer unit did not convert to it` }
+unless (finer.since_epoch.amount == 120) { INFO@mark `TRO9 two minutes rounded to seconds are not 120 seconds` }

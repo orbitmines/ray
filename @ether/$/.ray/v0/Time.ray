@@ -92,10 +92,13 @@ Time := class {
   round (measure: Unit) => (
     held ^keyword := .since_epoch
     step ^keyword := ((1 of measure) as held.unit).amount
+    if step.is_zero {
+      held = held as measure
+      step = 1
+    }
     rest ^keyword := held.amount % step
     kept ^keyword := held.amount - rest
     unless ((rest + rest) < step) { kept = kept + step }
-    if step.is_zero { kept = held.amount }
     Time(calendar: .calendar, since_epoch: Quantity(amount: kept, unit: held.unit), epoch: .epoch)
   )
 

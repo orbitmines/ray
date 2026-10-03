@@ -175,10 +175,6 @@ Reference := class: Ray {
     .draft = false
     this
   )
-  credit (author) => (
-    .authors &= author
-    this
-  )
   note (text: String) => (
     .notes &= Reference.Note(text: text)
     this

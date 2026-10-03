@@ -89,7 +89,8 @@ unless (branched.count.is_zero) { INFO@mark `HI6 a fork starts with commits on i
 unless (branched.from == past) { INFO@mark `HI7 a fork forgot what it came from` }
 
 // What is written down about something read.
-cite := Reference(title: "on rays").credit(wp)
+cite := Reference(title: "on rays")
+cite.authors &= wp
 unless (cite.draft) { INFO@mark `RF1 a new reference is not a draft` }
 unless (cite.publish.draft.not) { INFO@mark `RF2 publishing does not take it out of draft` }
 unless (cite.notes.count.is_zero) { INFO@mark `RF3 a new reference already has notes` }
@@ -167,7 +168,8 @@ unless (lamp.certify(paper).certificate == paper) { INFO@mark `WP14 what an item
 unless (paper.issued_on) { INFO@mark `WP15 a certificate says nothing about when it was issued` }
 
 // What is written down about something read elsewhere.
-cited := Reference(title: "a paper").credit(1)
+cited := Reference(title: "a paper")
+cited.authors &= 1
 unless (cited.draft) { INFO@mark `WP16 something written down is not a draft to begin with` }
 unless (cited.publish.draft.not) { INFO@mark `WP17 something published is still a draft` }
 if (cited.link) { INFO@mark `WP18 a reference points somewhere it was not pointed` }
@@ -187,8 +189,9 @@ unless (sited.pointer == "p") { INFO@mark `WR4 a reference forgot its pointer` }
 unless (Reference(title: "t").authors.count.is_zero) { INFO@mark `WR5 a new reference already has authors` }
 unless (Reference(title: "t").organizations.count.is_zero) { INFO@mark `WR6 a new reference already has organizations` }
 unless (Reference(title: "t").published.count.is_zero) { INFO@mark `WR7 a new reference is already published somewhere` }
-unless (sited.credit(wp).authors.count == 1) { INFO@mark `WR8 an author credited is not kept` }
-unless (sited.authors.head.value == wp) { INFO@mark `WR9 the author kept is not the one credited` }
+sited.authors &= wp
+unless (sited.authors.count == 1) { INFO@mark `WR8 an author added is not kept` }
+unless (sited.authors.head.value == wp) { INFO@mark `WR9 the author kept is not the one added` }
 unless (Reference(title: "t").note("n").notes.head.value.text == "n") { INFO@mark `WR10 a note forgot its text` }
 unless (Reference(title: "t").note("n").notes.head.value.date) { INFO@mark `WR11 a note says nothing about when` }
 if (Reference(title: "t").external) { INFO@mark `WR12 a new reference has an external it was not given` }

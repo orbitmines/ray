@@ -42,6 +42,8 @@ export class Node {
 }
 
 export class Rule {
+  static count = 0
+  id = ++Rule.count
   native?: string
   direct?: Text.Node[]
   style?: Node
@@ -241,20 +243,19 @@ export class Interpreter {
     if (this.decided_at?.declared !== this.declared) this.decided_at = { declared: this.declared };
     return this.decided_at;
   }
-  private rule_ids = new WeakMap<Rule, number>();
-  rule_id(rule: Rule): number {
-    let held = this.rule_ids.get(rule);
-    if (held === undefined) this.rule_ids.set(rule, held = this.rule_ids_given++);
-    return held;
-  }
-  private rule_ids_given = 0;
-  private canonicals = new Map<string, Rule[]>();
+  private canonicals = new Map<number, Rule[][]>();
   canonical(rules: Rule[]): Rule[] {
-    let key = '';
-    for (const rule of rules) key += this.rule_id(rule) + ',';
-    const held = this.canonicals.get(key);
-    if (held !== undefined) return held;
-    this.canonicals.set(key, rules);
+    let hash = rules.length;
+    for (const rule of rules) hash = (Math.imul(hash, 31) + rule.id) | 0;
+    const bucket = this.canonicals.get(hash);
+    if (bucket === undefined) { this.canonicals.set(hash, [rules]); return rules; }
+    for (const held of bucket) {
+      if (held.length !== rules.length) continue;
+      let same = true;
+      for (let k = 0; same && k < rules.length; k++) same = held[k] === rules[k];
+      if (same) return held;
+    }
+    bucket.push(rules);
     return rules;
   }
   private value_sets = new WeakMap<Node, { version: number; rules: Rule[] }>();
@@ -485,7 +486,43 @@ export class Interpreter {
 
   // Matching: the longest reading wins, then the one that spells more, then the one met first.
   best(rules: Rule[], cursor: Text.Node, frame: Node, receiver?: Node, quiet: boolean = false): Match | undefined {
-    return quiet ? this.quietly(() => this.best_of(rules, cursor, frame, receiver)) : this.best_of(rules, cursor, frame, receiver);
+    const epoch = this.reading_epoch();
+    let at = this.readings.get(cursor.source);
+    if (at === undefined || at.epoch !== epoch) this.readings.set(cursor.source, at = { epoch, by: new Map() });
+    const position = cursor.cursor * 65536 + (cursor.limit - cursor.cursor);
+    let by_rules = at.by.get(position);
+    if (by_rules === undefined) at.by.set(position, by_rules = new WeakMap());
+    let by_scope = by_rules.get(rules);
+    if (by_scope === undefined) by_rules.set(rules, by_scope = new WeakMap());
+    const scope = this.rules_of(frame);
+    let by_receiver = by_scope.get(scope);
+    if (by_receiver === undefined) by_scope.set(scope, by_receiver = new Map());
+    const on = receiver === undefined ? null : this.operates(rules) ? this.receiver_rules(receiver) : Interpreter.receiving_any;
+    const known = by_receiver.get(on);
+    if (known !== undefined) return known === null ? undefined : { ...known, receiver };
+    const volatile = this.volatile;
+    const found = quiet ? this.quietly(() => this.best_of(rules, cursor, frame, receiver)) : this.best_of(rules, cursor, frame, receiver);
+    if (this.volatile === volatile && this.readings.get(cursor.source) === at) by_receiver.set(on, found === undefined ? null : found);
+    return found;
+  }
+  private readings = new WeakMap<Text.Source, { epoch: object; by: Map<number, WeakMap<Rule[], WeakMap<Rule[], Map<Rule[] | null, Match | null>>>> }>();
+  private static receiving_any: Rule[] = [];
+  volatile = 0;
+  private epoch_at?: { rules: number; declared: number; base?: Node };
+  reading_epoch(): object {
+    const held = this.epoch_at;
+    if (held !== undefined && held.rules === this.rules_version && held.declared === this.declared && held.base === this.BASE) return held;
+    return this.epoch_at = { rules: this.rules_version, declared: this.declared, base: this.BASE };
+  }
+  receiver_rules(receiver: Node): Rule[] {
+    const held = this.quietly(() => this.deref(receiver, false));
+    return held === undefined || held.none ? Interpreter.receiving_any : this.rules_on(held);
+  }
+  private operating = new WeakMap<Rule[], boolean>();
+  operates(rules: Rule[]): boolean {
+    let held = this.operating.get(rules);
+    if (held === undefined) { held = rules.some(rule => rule.pattern.some(piece => piece.kind === 'capture' && piece.operator)); this.operating.set(rules, held); }
+    return held;
   }
   private indices = new WeakMap<Rule[], [Heads | undefined, Heads | undefined]>();
   index_of(rules: Rule[], receiving: boolean): Heads {
@@ -1041,6 +1078,7 @@ export class Interpreter {
   }
   // A parameter pattern fits what was captured: one free name is the argument, several are a list, none continues from the argument.
   fits(rule: Rule, captures: Map<string, Text.Node>, frame: Node): boolean {
+    this.volatile++;
     const piece = rule.pattern.find((p): p is Piece & { kind: 'capture' } => p.kind === 'capture');
     const span = piece === undefined ? undefined : captures.get(piece.name);
     if (span === undefined || rule.guard === undefined) return true;
@@ -1288,6 +1326,7 @@ export class Interpreter {
       const known = rules.get(r);
       if (known !== undefined) return known;
       const copy = Object.assign(Object.create(Rule.prototype), r) as Rule;
+      copy.id = ++Rule.count;
       rules.set(r, copy);
       copy.closure = node(r.closure)!;
       copy.home = node(r.home);

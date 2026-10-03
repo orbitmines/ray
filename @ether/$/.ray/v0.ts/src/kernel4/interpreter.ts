@@ -9,7 +9,7 @@ export type Native = { arity: number; fn: (args: Args) => Node | undefined; raw?
 export type Piece = (
   | { kind: 'literal'; text: string }
   | { kind: 'gap' }
-  | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node; undecided?: boolean; decided?: number; type?: Node }
+  | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node; undecided?: boolean; decided?: number; type?: Node; operator?: boolean }
 ) & { tight?: boolean };
 
 export class Node {
@@ -336,7 +336,7 @@ export class Interpreter {
   }
   receiving(value: Node, frame: Node): Rule[] {
     const target = value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value;
-    const own = (target !== undefined && !target.none && target !== this.GLOBAL ? this.rules_on(target) : this.BASE !== undefined ? this.rules_on(this.BASE) : []).filter(rule => rule.pattern[0]?.kind !== 'gap' || rule.home === target);
+    const own = (target !== undefined && target !== this.GLOBAL ? this.rules_on(target) : this.BASE !== undefined ? this.rules_on(this.BASE) : []).filter(rule => rule.pattern[0]?.kind !== 'gap' || rule.home === target);
     return [...own, ...this.rules_of(frame).filter(rule => rule.leading && !rule.implicit)];
   }
   // A native taking arguments takes the operands written after it, read when it asks.
@@ -381,7 +381,7 @@ export class Interpreter {
       if (piece.kind === 'literal') {
         const after_line = p > 0 && pieces[p - 1].kind === 'literal' && (pieces[p - 1] as { text: string }).text.endsWith('\n');
         const from = (piece.tight && !after_line) || (p === 0 && receiver !== undefined && !rule.defines && this.opens(piece.text)) ? i : this.spaces(cursor, i);
-        if (!this.spelled(cursor, from, piece.text)) return;
+        if (!this.spelled(cursor, from, piece.text, piece.tight === true && p > 0 && from === i)) return;
         literals.push([from, from + piece.text.length - 1]);
         reach += piece.text.length;
         if (this.opens(piece.text)) opened++; else if (opened > 0 && this.closes(piece.text)) opened--;
@@ -393,6 +393,13 @@ export class Interpreter {
         const elided = p >= 2 && pieces[p - 1].kind === 'capture' && pieces[p - 2].kind === 'gap' && captures.get((pieces[p - 1] as { name: string }).name)?.string === '';
         if (j === i && i < cursor.limit && !/\s/.test(text[i]) && !elided) return;
         i = j;
+        continue;
+      }
+      if (piece.operator) {
+        const from = this.spaces(cursor, i), spelled = this.operator_at(cursor, from, frame, receiver);
+        if (spelled === undefined || (piece.content !== undefined && !this.operator_fits(piece, spelled))) return;
+        captures.set(piece.name, cursor.span(from, from + spelled.text.length - 1));
+        i = from + spelled.text.length;
         continue;
       }
       if (p === 0 && receiver !== undefined && !rule.implicit) { if (pieces[1]?.tight && /\s/.test(text[i] ?? '')) return; continue; }
@@ -436,12 +443,12 @@ export class Interpreter {
     if (this.openers?.version !== this.version) this.openers = { version: this.version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[0] as { text: string }).text)) };
     return this.openers.spelled.has(literal);
   }
-  spelled(cursor: Text.Node, at: number, literal: string): boolean {
+  spelled(cursor: Text.Node, at: number, literal: string, joined: boolean = false): boolean {
     const text = cursor.source.value;
     if (at + literal.length > cursor.limit || !text.startsWith(literal, at)) return false;
     if (Interpreter.word.test(literal[0]) && at > 0 && Interpreter.word.test(text[at - 1])) return false;
     if (Interpreter.word.test(literal[literal.length - 1]) && Interpreter.word.test(text[at + literal.length] ?? '')) return false;
-    if (Interpreter.run(literal[0]) && at > 0 && Interpreter.run(text[at - 1])) return false;
+    if (!joined && Interpreter.run(literal[0]) && at > 0 && Interpreter.run(text[at - 1])) return false;
     if (Interpreter.run(literal[literal.length - 1]) && Interpreter.run(text[at + literal.length] ?? ' ')) return false;
     return true;
   }
@@ -605,7 +612,9 @@ export class Interpreter {
     scope.set(piece.name, this.literal(span));
     const refused = this.diagnostics.refused;
     const value = this.quietly(() => this.safely(() => this.read(this.cursor_of(piece.content!), scope)));
-    return this.diagnostics.refused > refused || value === undefined || this.deref(value)?.none ? undefined : value;
+    const failed = this.diagnostics.refused > refused || value === undefined || this.quietly(() => this.deref(value))?.none;
+    this.diagnostics.refused = refused;
+    return failed ? undefined : value;
   }
   // The base's constructor runs once for every value made in reach of it.
   private constructed = new WeakSet<Node>();
@@ -637,6 +646,7 @@ export class Interpreter {
         if (bound === undefined) {
           if (node.place.member) return this.NONE;
           if (this.load(node.place.name)) continue;
+          this.missing?.add(node.place.name);
           if (report) this.error(`Unresolved \`${node.place.name}\`.`, node.at);
           return undefined;
         }
@@ -804,6 +814,15 @@ export class Interpreter {
     const words = (from: number, to: number) => { for (const found of text.slice(from, to).matchAll(/\S+/g)) add({ kind: 'literal', text: found[0] }, from + found.index!); };
     let j = span.begin, run = j;
     while (j < end) {
+      const shut = text[j] === '[' ? text.indexOf(']', j) : -1;
+      const inner = shut > j && shut < end ? text.slice(j + 1, shut) : '';
+      if (Interpreter.word.test(inner.trim()[0] ?? '') && !inner.includes('{')) {
+        words(run, j);
+        const piece = this.capture(span.span(j + 1, shut - 1), frame);
+        if (piece.kind === 'capture') add({ ...piece, raw: true, operator: true }, j);
+        j = run = shut + 1;
+        continue;
+      }
       const close = text[j] === '{' ? this.group_end(text, j, end) : j;
       if (close <= j) { j++; continue; }
       words(run, j);
@@ -841,6 +860,7 @@ export class Interpreter {
     catch (jump) { if (!(jump instanceof Jump)) throw jump; }
     finally { this.naming = was; this.trying = trying; this.unpainted--; }
     const undecided = this.diagnostics.refused > refused;
+    this.diagnostics.refused = refused;
     const name = naming.name;
     if (name === undefined) {
       const held = value === undefined ? undefined : this.quietly(() => this.deref(value));
@@ -879,7 +899,9 @@ export class Interpreter {
       try { value = this.quietly(() => this.safely(() => { const read = from === undefined ? this.read(this.cursor_of(pattern), scope) : this.statement(this.cursor_of(pattern), scope, from); return read === undefined ? undefined : this.deref(read, false) ?? read; })); }
       catch (jump) { if (!(jump instanceof Jump)) throw jump; }
       finally { this.naming = was; this.trying = trying; }
-      return { names: naming.names!, refused: this.diagnostics.refused > before, value };
+      const failed = this.diagnostics.refused > before;
+      this.diagnostics.refused = before;
+      return { names: naming.names!, refused: failed, value };
     };
     const present = (read: { refused: boolean; value?: Node }) => !read.refused && read.value !== undefined && !read.value.none;
     const argument = this.lazy(span, frame);
@@ -888,6 +910,52 @@ export class Interpreter {
     if (found.names.length > 1) return !found.refused;
     if (found.names.length === 1) return present(reading(scratch(), argument));
     return present(reading(scratch(), undefined, argument));
+  }
+  // What stands between two operands: the longest spelling that begins a rule taking one operand, on the left operand or in reach.
+  filtered = new Map<string, { declared: number; fits: boolean; settled: boolean; missing: Set<string> }>();
+  missing?: Set<string>;
+  private spellings = new WeakMap<Node, { version: number; operators: Rule[] }>();
+  operator_at(cursor: Text.Node, j: number, frame: Node, receiver?: Node): { text: string; rule: Rule } | undefined {
+    const text = cursor.source.value;
+    if (!Interpreter.run(text[j] ?? ' ')) return undefined;
+    const held = receiver === undefined ? undefined : this.quietly(() => this.deref(receiver, false));
+    const operators = (of: Node, rules: () => Rule[]): Rule[] => {
+      const known = this.spellings.get(of);
+      if (known?.version === this.version) return known.operators;
+      const found = rules().filter(rule => { const [first, second] = rule.pattern; return rule.pattern.length === 2 && first.kind === 'literal' && second.kind === 'capture' && Interpreter.run(first.text[0]); });
+      this.spellings.set(of, { version: this.version, operators: found });
+      return found;
+    };
+    let best: { text: string; rule: Rule } | undefined;
+    for (const rule of [...(held === undefined || held.none ? [] : operators(held, () => this.rules_on(held))), ...operators(frame, () => [...this.rules_of(frame), ...this.based()])]) {
+      const first = rule.pattern[0] as { text: string };
+      if (text.startsWith(first.text, j) && (best === undefined || first.text.length > best.text.length)) best = { text: first.text, rule };
+    }
+    return best;
+  }
+  // An operator's filter is asked of the method it names.
+  operator_fits(piece: Piece & { kind: 'capture' }, spelled: { text: string; rule: Rule }): boolean {
+    const site = (at: Text.Node | undefined) => at === undefined ? '' : `${at.source.location ?? at.string}:${at.begin}`;
+    const key = `${site(piece.content)}|${spelled.rule.key}|${site(spelled.rule.at.source.location !== undefined ? spelled.rule.at : spelled.rule.lexical)}`;
+    const known = this.filtered;
+    const held = known.get(key);
+    if (held !== undefined && (held.settled || held.declared === this.declared || ![...held.missing].some(name => this.GLOBAL.own(name) !== undefined))) return held.fits;
+    if (this.checking.has(piece)) return false;
+    this.checking.add(piece);
+    const missing = this.missing;
+    this.missing = new Set();
+    try { const { fits, settled } = this.operator_checked(piece, spelled); known.set(key, { declared: this.declared, fits, settled, missing: this.missing }); return fits; } finally { this.checking.delete(piece); this.missing = missing; }
+  }
+  operator_checked(piece: Piece & { kind: 'capture' }, spelled: { text: string; rule: Rule }): { fits: boolean; settled: boolean } {
+    const scope = new Node(piece.content);
+    scope.parent = piece.within ?? this.GLOBAL;
+    scope.set(piece.name, this.rule_value(spelled.rule));
+    const refused = this.diagnostics.refused;
+    const value = this.quietly(() => this.safely(() => this.read(this.cursor_of(piece.content!), scope)));
+    const settled = this.diagnostics.refused === refused;
+    const fits = settled && value !== undefined && !this.quietly(() => this.deref(value, false))?.none;
+    this.diagnostics.refused = refused;
+    return { fits, settled };
   }
   group_end(text: string, j: number, end: number): number {
     const pairs: Record<string, string> = { '{': '}', '(': ')', '[': ']' };
@@ -1064,6 +1132,7 @@ export class Interpreter {
     this.BASE = node(from.BASE);
     this.made = node(from.made);
     this.theme = node(from.theme);
+    this.filtered = new Map(from.filtered);
     this.order = from.order;
     this.version++;
   }

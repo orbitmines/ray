@@ -409,6 +409,12 @@ Node := base class {
     holding
   )
 
+  compounds + (component) => (
+    external extend this component
+    this
+  )
+  as (=== boolean) => true
+
   === (other) => (
     answer ^keyword := None
     goto marking if this
@@ -969,8 +975,8 @@ TRACE{`@`}{var}{ }{comment ^comment} ^trace => report TRACE var comment
 
 TODO{ }{comment ^comment} ^debug => DEBUG@. comment 
 
-{l} [x: right-to-left] {m} [y: left-to-right] {r} => l [x] m & m [y] r
+{l} [x: right-to-left] {m} [y: left-to-right] {r} => l[x] m & m[y] r
 
-{a} [x: chainable] {b} [y: chainable] {c} => (a [x] b) & (b [y] c)
+{a} [x: chainable] {b} [y: chainable] {c} => (a[x] b) & (b[y] c)
 
-{a} [x: compounds]{`=`} {b} => a = (a [x] b)
+{a} [x: compounds]{`=`} {b} => a = (a[x] b)

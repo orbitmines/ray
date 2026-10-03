@@ -386,7 +386,7 @@ declared_in (holder, spelled) => (
     if ((place_x).and(place_y)) {
       left_first ^keyword := place_x.nth_class < place_y.nth_class
       if (place_x.nth_class == place_y.nth_class) { left_first = place_x.written_at.at_least(place_y.written_at) }
-      if left_first { held = ((a [x] b) [y] c) } else { held = (a [x] (b [y] c)) }
+      if left_first { held = ((a[x] b)[y] c) } else { held = (a[x] (b[y] c)) }
     }
   }
   held

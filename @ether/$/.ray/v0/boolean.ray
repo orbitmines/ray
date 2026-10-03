@@ -20,6 +20,8 @@ boolean := enum false (holds: None) | true (holds: global) {
 
   ! => .not
 
+  as (=== boolean) => this
+
   next => .not
   previous => .not
 
@@ -37,3 +39,7 @@ boolean := enum false (holds: None) | true (holds: global) {
 true := boolean.true
 false := boolean.false
 
+
+None += {
+  as (=== boolean) => false
+}

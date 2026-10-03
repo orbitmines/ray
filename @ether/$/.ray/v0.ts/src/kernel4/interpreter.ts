@@ -61,6 +61,12 @@ export class Rule {
   private enclosing?: boolean;
   get enclosed(): boolean { if (this.enclosing === undefined) { const first = this.pattern[0], last = this.pattern[this.pattern.length - 1]; this.enclosing = this.pattern.length >= 3 && first.kind === 'literal' && last.kind === 'literal' && !Interpreter.word.test(first.text[0] ?? 'a'); } return this.enclosing; }
   // A spelling that takes the one thing written after it.
+  private heads?: [string | undefined, string | undefined];
+  head(receiving: boolean): string | undefined {
+    const pieces = this.pattern;
+    this.heads ??= [pieces[0]?.kind === 'literal' ? pieces[0].text : undefined, pieces[0]?.kind === 'literal' ? pieces[0].text : pieces[0]?.kind === 'capture' && !this.implicit && pieces[1]?.kind === 'literal' ? pieces[1].text : undefined];
+    return this.heads[receiving ? 1 : 0];
+  }
   get operator(): string | undefined { const [first, second] = this.pattern; return this.pattern.length === 2 && first.kind === 'literal' && second.kind === 'capture' && !Interpreter.word.test(first.text[0] ?? 'a') ? first.text : undefined; }
 }
 
@@ -404,8 +410,11 @@ export class Interpreter {
   // Matching: the longest reading wins, then the one that spells more, then the one met first.
   best(rules: Rule[], cursor: Text.Node, frame: Node, receiver?: Node, quiet: boolean = false): Match | undefined {
     let best: Match | undefined;
+    const text = cursor.source.value, here = cursor.cursor, after = this.spaces(cursor, here);
     for (const rule of rules) {
       if (rule.at.source === cursor.source && rule.at.begin <= cursor.cursor && cursor.cursor <= rule.at.end) continue;
+      const head = rule.head(receiver !== undefined);
+      if (head !== undefined && !text.startsWith(head, here) && !text.startsWith(head, after)) continue;
       const found = quiet ? this.quietly(() => this.match(rule, cursor, frame, receiver)) : this.match(rule, cursor, frame, receiver);
       if (found === undefined) continue;
       const spelled = (m: Match) => receiver !== undefined && m.rule.pattern[m.rule.leading ? 1 : 0]?.kind === 'literal' ? 1 : 0;

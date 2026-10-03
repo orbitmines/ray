@@ -141,7 +141,7 @@ export class Levelled extends Interpreter {
   private numerals = new WeakMap<Node, bigint | null>();
   field(of: Node | undefined, key: string): Node | undefined {
     if (of === undefined || of.none) return undefined;
-    const held = this.member(of, key);
+    const held = this.member(of, key) ?? this.quietly(() => this.safely(() => this.get(of, this.literal_of(key))));
     return held === undefined ? undefined : this.quietly(() => this.safely(() => this.deref(held, false)));
   }
   links(chain: Node | undefined): Node[] | undefined {

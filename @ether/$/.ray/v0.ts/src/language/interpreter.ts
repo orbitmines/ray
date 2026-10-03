@@ -364,6 +364,8 @@ export class Interpreter {
   }
   private named = new Map<string, Rule[]>();
   add_rule(scope: Node, rule: Rule) {
+    if (this.program?.serving && rule.body !== undefined && this.painting(rule.body.source)) this.bodies.add(rule);
+    if (this.program?.serving && this.painting(rule.at.source)) this.paint_head(rule, rule.style);
     const rules = (scope.rules ??= []);
     rule.home = scope;
     rule.implicit = scope !== this.GLOBAL && rule.leading && (rule.pattern.length === 1 || rule.pattern[1].kind === 'gap');
@@ -412,6 +414,7 @@ export class Interpreter {
       this.blank(cursor);
       if (cursor.done()) { if (this.running.length === 0) this.forced.length = Math.min(this.forced.length, mark); return last; }
       const start = cursor.cursor;
+      if (painting) { let read = this.read_at.get(cursor.source); if (read === undefined) this.read_at.set(cursor.source, read = new Set()); read.add(start); }
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
       try {
         const compiled = unit?.statements.get(start);
@@ -1784,8 +1787,63 @@ export class Interpreter {
   building?: Node
   private names_marked = new WeakMap<Node, Map<string, Node>>();
   private values_marked = new WeakMap<Node, Node>();
-  begin_pass() { this.paints = []; this.sites = new Map(); }
-  end_pass() { this.painted_count++; }
+  begin_pass() { this.paints = []; this.sites = new Map(); this.read_at = new Map(); this.bodies = new Set(); }
+  end_pass() { this.dry_paint(); this.bodies = new Set(); this.painted_count++; }
+  read_at = new Map<Text.Source, Set<number>>();
+  bodies = new Set<Rule>();
+  dry_paint() {
+    const done = new Set<string>();
+    for (const rule of this.bodies) {
+      const key = `${rule.body!.source.location}:${rule.body!.begin}`;
+      if (done.has(key)) continue;
+      done.add(key);
+      const frame = new Node(rule.body);
+      frame.parent = rule.closure;
+      this.quietly(() => this.safely(() => this.dry(this.cursor_of(this.inner(rule.body!) ?? rule.body!), frame, 0)));
+    }
+    for (const source of this.read_at.keys()) {
+      if (!this.painting(source)) continue;
+      const cursor = new Text.Node(source);
+      cursor.end = source.value.length - 1;
+      this.quietly(() => this.safely(() => this.dry(cursor, this.GLOBAL, 0)));
+    }
+  }
+  dry_match(found: Match, cursor: Text.Node, frame: Node, depth: number, painted: boolean = true) {
+    if (painted) this.paint_rule(found, cursor.span(found.begin, found.end - 1));
+    for (const piece of found.rule.pattern) {
+      if (piece.kind !== 'capture' || !found.captures.has(piece.name)) continue;
+      const span = found.captures.get(piece.name)!;
+      if (span.end < span.begin) continue;
+      if (piece.content !== undefined && painted) this.run_content(piece, span, frame);
+      if (!piece.raw && !piece.operator) this.dry(this.cursor_of(span), frame, depth + 1);
+    }
+  }
+  dry(cursor: Text.Node, frame: Node, depth: number) {
+    const read = this.read_at.get(cursor.source), text = cursor.source.value;
+    if (depth > 32) return;
+    for (this.blank(cursor); !cursor.done(); this.blank(cursor)) {
+      const start = cursor.cursor, end = this.statement_end(cursor, start, frame);
+      const found = this.tried(() => this.best(this.heads(frame), cursor, frame, undefined, true));
+      const painted = !read?.has(start);
+      let receiver: Node | undefined;
+      if (found !== undefined) { this.dry_match(found, cursor, frame, depth, painted); cursor.cursor = found.end; }
+      else {
+        const name = this.token(cursor, start);
+        if (name > start && Interpreter.word.test(text[start])) {
+          receiver = this.place(frame, cursor.span(start, name - 1));
+          if (painted) { if (this.quietly(() => this.lookup(frame, receiver!.place!.name)) === undefined) this.paint(receiver.at, () => 'variable'); else this.paint_place(receiver); }
+          cursor.cursor = name;
+        }
+      }
+      for (let steps = 0; receiver !== undefined && steps < 16 && !cursor.done() && cursor.cursor < end; steps++) {
+        const step = this.tried(() => this.best_on(receiver!, frame, cursor));
+        if (step === undefined || step.end <= cursor.cursor) break;
+        this.dry_match(step, cursor, frame, depth, painted);
+        cursor.cursor = step.end;
+      }
+      cursor.cursor = Math.max(end, start + 1);
+    }
+  }
   paint(span: Text.Node | undefined, style: () => string | undefined) {
     if (!this.program?.serving || this.unpainted > 0 || span === undefined || span.source.location === undefined || !this.owns(span.source) || !this.painting(span.source)) return;
     const painted = span.span(span.begin, span.end);
@@ -1794,7 +1852,7 @@ export class Interpreter {
   }
   paint_place(place: Node) {
     if (!this.program?.serving) return;
-    this.paint(place.at, () => { const marks = (place as { marks?: Node }).marks; if (marks) return marks.style; const scope = place.place!.member ? place.place!.in : this.holder(place.place!.in, place.place!.name); const named = scope && this.names_marked.get(scope)?.get(place.place!.name); if (named) return named.style; const value = this.quietly(() => this.deref(place, false)); return value && this.values_marked.get(value)?.style; });
+    this.paint(place.at, () => { const marks = (place as { marks?: Node }).marks; if (marks) return marks.style; const scope = place.place!.member ? place.place!.in : this.holder(place.place!.in, place.place!.name); const named = scope && this.names_marked.get(scope)?.get(place.place!.name); if (named) return named.style; const bound = scope?.own(place.place!.name); if (bound === undefined) return undefined; if (bound.code !== undefined || bound.place !== undefined) return scope !== this.GLOBAL && scope!.body !== undefined ? 'parameter' : 'variable'; const marked = this.values_marked.get(bound)?.style; if (marked !== undefined) return marked; return bound.fn !== undefined || this.rules_by_value.has(bound) ? 'function' : 'variable'; });
   }
   paint_rule(found: Match, at: Text.Node) {
     const style = found.rule.style;
@@ -1803,7 +1861,7 @@ export class Interpreter {
   decorate(target: Node, style: Node): Node {
     const held = target.place !== undefined || target.code !== undefined ? this.quietly(() => this.deref(target, false)) : target;
     const rule = held === undefined ? undefined : this.rules_by_value.get(held);
-    if (rule !== undefined) { rule.style = style; return target; }
+    if (rule !== undefined) { rule.style = style; this.paint_head(rule, style); return target; }
     if (target.place !== undefined && held?.text && held.at !== undefined) { this.paint(held.at, () => style.style); return target; }
     if (target.place !== undefined && held !== undefined && !held.none && held !== this.GLOBAL && !held.text) this.values_marked.set(held, style);
     if (target.place !== undefined) { const marked = Object.assign(new Node(target.at), { place: target.place, marks: style }); this.paint(target.at, () => style.style); return marked; }
@@ -1811,6 +1869,25 @@ export class Interpreter {
     if (target.text) { this.paint(target.at, () => style.style); return target; }
     this.values_marked.set(target, style);
     return target;
+  }
+  paint_head(rule: Rule, style: Node | undefined) {
+    const text = rule.at.source.value;
+    let from = rule.at.begin;
+    for (const piece of rule.pattern) {
+      if (piece.kind === 'capture') {
+        if (piece.content !== undefined || piece.operator) continue;
+        const at = text.indexOf(`{${piece.name}}`, from);
+        if (at < 0 || at > rule.at.end) continue;
+        this.paint(rule.at.span(at + 1, at + piece.name.length), () => 'parameter');
+        from = at + piece.name.length + 2;
+        continue;
+      }
+      if (piece.kind !== 'literal' || piece.text.trim() === '' || style === undefined) continue;
+      const at = text.indexOf(piece.text, from);
+      if (at < 0 || at > rule.at.end) return;
+      this.paint(rule.at.span(at, at + piece.text.length - 1), () => style.style);
+      from = at + piece.text.length;
+    }
   }
   marked_place(at: Node, scope: Node) {
     const marks = (at as { marks?: Node }).marks;

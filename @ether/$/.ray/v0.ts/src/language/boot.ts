@@ -27,7 +27,7 @@ export function source_hash(src: Text.Source): string {
 }
 
 let engine: string | undefined | null;
-function engine_hash(): string | undefined {
+export function engine_hash(): string | undefined {
   if (engine !== undefined) return engine ?? undefined;
   if (typeof import.meta.dirname !== 'string') { engine = null; return undefined; }
   const { fs, path } = env;

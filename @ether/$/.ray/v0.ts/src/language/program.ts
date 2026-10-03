@@ -4,6 +4,7 @@ import { env } from './env.ts';
 import { Diagnostics } from './diagnostics.ts';
 import { Interpreter, Node, type Piece, type Native } from './interpreter.ts';
 import { Levelled } from './level.ts';
+import { Paints } from './paints.ts';
 
 
 export function v0(diagnostics: Diagnostics) {
@@ -220,7 +221,7 @@ export class Program {
         touched.add(project);
         project.source.forEach(src => this.reloaded(src));
       }
-      if (this.pending.size === 0) this.settled();
+      if (this.pending.size === 0) { this.persist_paints(); this.settled(); }
     } finally {
       this.running = false;
       if (this.rerun) { this.rerun = false; this.timer = setTimeout(() => void this.derive(), 0); }
@@ -321,8 +322,37 @@ export class Program {
         list.push(resolved);
       }
     }
+    if (this.serving && this.eager !== undefined) for (const src of this.sources) {
+      if (!src.loaded || (out.has(src.location) && this.complete.get(src.location) === src.value)) continue;
+      const cached = this.paint_cache.cached(src);
+      if (cached !== undefined) out.set(src.location, cached.map(paint => { const shown = paint.span(paint.begin, paint.end); shown.style = paint.style; shown.of = paint.of; shown.defines = paint.defines; shown.color = this.color(paint.style as string); return shown; }));
+    }
     this.highlights = { stamp, map: out };
     return out;
+  }
+  complete = new Map<string, string>();
+  paint_cache = new Paints(() => this.sources.filter(src => !src.location?.includes('/tests/')));
+  async paint_all() {
+    for (const src of this.sources) {
+      if (!src.loaded || src.is_dot_project || this.active.has(src.location) || this.paint_cache.cached(src) !== undefined) continue;
+      const interpreter = this.project_of(src)?.interpreter;
+      if (interpreter === undefined) continue;
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      this.active.add(src.location);
+      try {
+        const cursor = new Text.Node(src);
+        cursor.end = src.value.length - 1;
+        interpreter.quietly(() => interpreter.safely(() => interpreter.dry(cursor, interpreter.GLOBAL, 0)));
+        this.revision++;
+        this.paint_cache.save(src, this.highlighting.get(src.location) ?? []);
+      } finally { this.active.delete(src.location); this.revision++; }
+    }
+  }
+  persist_paints() {
+    if (!this.serving || this.eager === undefined) return;
+    const map = this.highlighting;
+    for (const src of this.sources) if (this.active.has(src.location) && src.loaded) { this.paint_cache.save(src, map.get(src.location) ?? []); this.complete.set(src.location, src.value); }
+    this.revision++;
   }
   painted(src: Text.Source): Text.Node[] { return this.highlighting.get(src.location) ?? []; }
   palette(): Map<string, string> { return this.default_language?.interpreter?.colors() ?? new Map(); }

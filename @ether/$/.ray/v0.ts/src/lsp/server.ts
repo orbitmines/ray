@@ -31,6 +31,7 @@ import * as features from './features.ts';
  */
 export async function start(program: Program): Promise<void> {
   await program.abstract().exec();
+  void program.paint_all();
   // the legend: whatever groups the language declared on H — fixed for the
   // session once capabilities go out
   const groups = program.groups;

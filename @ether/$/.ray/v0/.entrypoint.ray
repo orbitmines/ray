@@ -234,7 +234,7 @@ Node := base class {
     external define this `{arguments}` {
       (inline names) := arguments
       inline code
-    }
+    } parameters
   )
   ^{literal style} ({parameters ^parameter}) => {block} => (
     names := external ** parameters
@@ -243,7 +243,7 @@ Node := base class {
     external define this `{arguments}` {
       (inline names) := arguments
       inline code
-    }
+    } parameters
   )
 
   ,{other} ^punctuation => (
@@ -600,7 +600,7 @@ chainable {head} ({parameters ^parameter}) => {block} => (
   chainable.modify(external define head `{arguments}` {
     (inline names) := arguments
     inline code
-  })
+  } parameters)
 )
 compounds {head} ({parameters ^parameter}) => {block} => (
   names := external ** parameters
@@ -608,7 +608,7 @@ compounds {head} ({parameters ^parameter}) => {block} => (
   compounds.modify(external define head `{arguments}` {
     (inline names) := arguments
     inline code
-  })
+  } parameters)
 )
 Modifier.spellings = chain None
 Modifier.spellings &= `chainable`

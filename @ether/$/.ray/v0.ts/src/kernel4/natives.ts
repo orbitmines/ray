@@ -6,7 +6,7 @@ import { Interpreter, Node, Jump, type Native, type Diagnostic } from './interpr
 const identity: Native = { arity: 1, fn: ({ args: [node] }) => node };
 export const Natives: Record<string, Native> = {
   'forward': { arity: 0, fn: (): Node => Object.assign(new Node(), { fn: { arity: 1, raw: true, fn: (): Node | undefined => undefined } }) },
-  'define': { arity: 3, fn: ({ interpreter, args: [scope, pattern, body], at }) => interpreter.define_in(scope, pattern, body, at) },
+  'define': { arity: 4, fn: ({ interpreter, args: [scope, pattern, body, parameters], at }) => interpreter.define_in(scope, pattern, body, at, parameters) },
   'rule': { arity: 2, fn: ({ interpreter, frame, args: [pattern, body], at }) => interpreter.rule_from(pattern, body, at, frame) },
   '.': { arity: 0, fn: ({ frame }) => frame.stands ?? frame },
   'global': { arity: 0, fn: ({ interpreter }) => interpreter.GLOBAL },

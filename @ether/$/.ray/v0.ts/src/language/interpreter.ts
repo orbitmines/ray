@@ -135,7 +135,7 @@ export class Heads {
   }
 }
 
-export type Running ={ found: Match; at: Text.Node; local?: Node };
+export type Running ={ found: Match; at: Text.Node; local?: Node; site?: Text.Node };
 export type Match = { rule: Rule; begin: number; end: number; reach: number; captures: Map<string, Text.Node>; literals: [number, number][]; receiver?: Node };
 
 export class Jump { site?: Text.Node; spelled = false; constructor(public label: string, public value?: Node) {} }
@@ -1124,8 +1124,7 @@ export class Interpreter {
       }
       const local = new Node(at);
       this.running[this.running.length - 1].local = local;
-      let site = at;
-      for (let k = this.running.length - 2; k >= 0; k--) { const body = this.running[k].found.rule.body; if (body !== undefined && Interpreter.within(site, body)) site = this.running[k].at; }
+      const site = this.site_at(this.running.length - 1);
       if (site !== at) local.site = site;
       local.parent = rule.closure;
       local.body = rule.body;
@@ -1165,6 +1164,14 @@ export class Interpreter {
     } finally { this.depth--; this.running.pop(); }
   }
   running: Running[] = []
+  // Where an application stands in written code: the call site of each rule whose body it is inside.
+  site_at(top: number): Text.Node {
+    const entry = this.running[top];
+    if (entry.site !== undefined) return entry.site;
+    let site = entry.at;
+    for (let k = top - 1; k >= 0; k--) { const body = this.running[k].found.rule.body; if (body !== undefined && Interpreter.within(entry.at, body)) { site = this.site_at(k); break; } }
+    return entry.site = site;
+  }
   static same(one: Text.Node | undefined, other: Text.Node): boolean { return one !== undefined && one.source === other.source && one.begin === other.begin && one.end === other.end; }
   static within(inner: Text.Node, outer: Text.Node): boolean { return inner.source === outer.source && inner.begin >= outer.begin && inner.end <= outer.end; }
   // What a capture says besides its name runs on the text it took.

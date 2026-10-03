@@ -24,7 +24,7 @@ export function evaluate(it: Interpreter, statement: Statement, cursor: Text.Nod
       return { value };
     }
     case 'name': {
-      return it.only_a_name(cursor, frame, statement.rules, statement as { guard?: import('../interpreter.ts').NameGuard }) ? { value: it.place(frame, cursor.span(cursor.cursor, statement.end - 1)) } : undefined;
+      return it.only_a_name(cursor, frame, statement.rules, statement as { guard?: import('../interpreter.ts').NameGuard }) ? { value: it.place(frame, (statement as { span?: Text.Node }).span ??= it.stable(cursor.span(cursor.cursor, statement.end - 1))) } : undefined;
     }
   }
 }

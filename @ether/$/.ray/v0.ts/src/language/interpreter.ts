@@ -215,6 +215,12 @@ export class Interpreter {
     let found: Node | undefined, visited: Node[];
     try {
       found = this.seek(parent, true, true, name, at, seen, sees);
+      if (found === undefined) {
+        this.collecting.push(this.GLOBAL);
+        found = this.GLOBAL.own(name);
+        if (found !== undefined) this.found_in = this.GLOBAL;
+        else for (const made of this.GLOBAL.with ?? []) { found = this.seek(made, false, false, name, at, seen); if (found !== undefined) break; }
+      }
     } finally { visited = this.collecting; this.collecting = collecting; }
     if (collecting !== undefined) collecting.push(...visited);
     const made: Slot = { parent, sees: sees.length === 0 ? undefined : [...sees], holder: found === undefined ? undefined : this.found_in, valid: true };
@@ -634,15 +640,15 @@ export class Interpreter {
     if (held === undefined) { held = new Map(); for (const rule of rules) { const own = this.template_of(rule); const list = held.get(own); if (list === undefined) held.set(own, [rule]); else list.push(rule); } this.by_template.set(rules, held); }
     return held.get(template);
   }
-  candidates_for(role: 'none' | 'self' | 'value', template: { id: number }, frame: Node, receiver: Node | undefined): Rule[] {
-    const first = role === 'none' ? this.heads(frame) : this.owned(receiver!).rules;
+  candidates_for(role: 'none' | 'self' | 'value', template: { id: number }, frame: Node, receiver: Node | undefined, target?: [Node | undefined]): Rule[] {
+    const first = role === 'none' ? this.heads(frame) : (target !== undefined ? this.owned_target(target[0]) : this.owned(receiver!)).rules;
     const second = role === 'none' ? this.derived(this.rules_of(frame), 'after', this.keep_after) : this.leading_of(frame).rules;
     const one = this.in_list(first, template), two = this.in_list(second, template);
     return one === undefined ? two ?? [] : two === undefined ? one : [...one, ...two];
   }
   occurrence(rule: Rule, role: 'none' | 'self' | 'value', frame: Node, receiver: Node | undefined): number { return this.candidates_for(role, this.template_of(rule), frame, receiver).indexOf(rule); }
-  resolve(match: Match, role: 'none' | 'self' | 'value', occurrence: number, frame: Node, receiver: Node | undefined): Match | undefined {
-    const rule = this.candidates_for(role, this.template_of(match.rule), frame, receiver)[occurrence];
+  resolve(match: Match, role: 'none' | 'self' | 'value', occurrence: number, frame: Node, receiver: Node | undefined, target?: [Node | undefined]): Match | undefined {
+    const rule = this.candidates_for(role, this.template_of(match.rule), frame, receiver, target)[occurrence];
     if (rule === undefined) return undefined;
     return rule === match.rule && receiver === match.receiver ? match : { ...match, rule, receiver };
   }
@@ -726,8 +732,8 @@ export class Interpreter {
   owned(value: Node): { rules: Rule[]; mine: Rule[] } {
     return this.owned_target(value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value);
   }
-  shape(value: Node): { rules: Rule[]; mine: Rule[]; on: Rule[] } {
-    const target = value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value;
+  shape(value: Node): { rules: Rule[]; mine: Rule[]; on: Rule[] } { return this.shape_of(value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value); }
+  shape_of(target: Node | undefined): { rules: Rule[]; mine: Rule[]; on: Rule[] } {
     if (target === undefined || target.none || target === this.GLOBAL) { const owned = this.owned_target(target); return { rules: owned.rules, mine: owned.mine, on: Interpreter.receiving_any }; }
     const on = this.rules_on(target), based = this.based(), held = target.shaped;
     if (held !== undefined && held.of === on && held.based === based) return { rules: held.rules, mine: held.mine, on };
@@ -1037,13 +1043,13 @@ export class Interpreter {
   private readonly keep_leading = (all: Rule[]) => all.filter(rule => rule.leading && !rule.implicit);
   private readonly keep_mine = (all: Rule[]) => { const based = this.based(); return all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL); };
   private readonly keep_own = (all: Rule[]) => { const openers = this.openers_now(); return all.filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && openers.has(rule.pattern[0].text))); };
-  fire(found: Match, cursor: Text.Node, frame: Node): Node | undefined {
+  fire(found: Match, cursor: Text.Node, frame: Node, target?: [Node | undefined], at?: Text.Node): Node | undefined {
     const firing = this.firing[this.firing.length - 1];
     if (firing !== undefined && firing.depth === this.running.length) firing.fires.push(found);
     cursor.cursor = found.end;
-    return this.apply(found, frame, cursor.span(found.begin, found.end - 1));
+    return this.apply(found, frame, at ?? cursor.span(found.begin, found.end - 1), undefined, target);
   }
-  apply(found: Match, frame: Node, at: Text.Node, given?: Map<string, Node>): Node | undefined {
+  apply(found: Match, frame: Node, at: Text.Node, given?: Map<string, Node>, target?: [Node | undefined]): Node | undefined {
     const { rule, captures, receiver } = found;
     if (++this.depth > Interpreter.DEPTH) { this.depth = 0; throw new Recursion(at); }
     try {
@@ -1071,7 +1077,7 @@ export class Interpreter {
       local.parent = rule.closure;
       local.body = rule.body;
       if (receiver !== undefined) {
-        const value = this.deref(receiver, false);
+        const value = target !== undefined ? target[0] : this.deref(receiver, false);
         if (receiver.place === undefined && value !== undefined && !value.none) this.construct(value);
         if (receiver.place !== undefined) {
           const context = Object.assign(new Node(receiver.at), { stands: receiver, with: value !== undefined && !value.none ? [value] : undefined });

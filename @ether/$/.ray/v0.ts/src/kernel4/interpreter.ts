@@ -61,7 +61,7 @@ export class Recursion { constructor(public at: Text.Node) {} }
 
 export class Interpreter {
   static word = /[\p{L}\p{N}_]/u;
-  static DEPTH = Number(process.env.K4DEPTH ?? 400);
+  static DEPTH = 400;
 
   GLOBAL: Node
   NONE: Node
@@ -75,7 +75,6 @@ export class Interpreter {
   private order = 0
   private depth = 0
   reading?: Text.Node
-  statements = 0
 
   constructor(public diagnostics: Diagnostics) {
     this.GLOBAL = new Node();
@@ -116,7 +115,6 @@ export class Interpreter {
         break;
       }
     }
-    if (process.env.K4LOOPS) { const g = globalThis as any; g.lk = (g.lk ?? 0) + 1; if (g.lk === Number(process.env.K4LOOPS)) { console.error('LOOKUPS', name, new Error().stack!.split('\n').slice(2, 30).map(l => l.trim().split(' ')[1]).join(' ')); } }
     const seen = new Set<Node>();
     const visit = (scope: Node | undefined, lexical: boolean, deep: boolean, depth: number): Node | undefined => {
       for (let at = scope; at !== undefined; at = deep ? at.parent : undefined) {
@@ -135,7 +133,6 @@ export class Interpreter {
     if (found !== undefined && frame.sees !== undefined && this.given_name(frame, name)) {
       for (const sees of frame.sees) { const lexical = this.lookup(sees, name); if (lexical !== undefined) { found = lexical; break; } }
     }
-    if (process.env.K4LOOK && name === process.env.K4LOOK) console.error('LOOK', name, 'from', JSON.stringify(frame.at?.string.slice(0, 20)), '->', JSON.stringify(found?.at?.string.slice(0, 30)), found?.place ? 'place' : '', [...seen].map(s => JSON.stringify(s.at?.string.slice(0, 12)) + (s.stands ? '(stands)' : '') + (s.own(name) ? '*' : '')).join(' '));
     if (found !== undefined) return found;
     const global = this.GLOBAL.own(name);
     if (global !== undefined) return global;
@@ -227,7 +224,6 @@ export class Interpreter {
       this.blank(cursor);
       if (cursor.done()) { if (this.running.length === 0) this.forced.length = Math.min(this.forced.length, mark); return last; }
       const start = cursor.cursor;
-      if (process.env.K4MAX && ++this.statements > Number(process.env.K4MAX)) { console.error('WATCHDOG', (cursor.source.location ?? '').split('/').pop(), cursor.span(start, start).line, JSON.stringify(cursor.source.value.slice(start, start + 60)), this.reading?.line, (this.applying ?? []).length, (this.applying ?? []).slice(0, 30).join(' | ')); if (this.statements > Number(process.env.K4MAX) + 40) process.exit(3); }
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
       try {
         const value = this.statement(cursor, frame);
@@ -235,7 +231,6 @@ export class Interpreter {
       } catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
         const at = this.label_at(cursor, begin, jump.label, frame);
-        if (process.env.K4DECL) console.error('LANDED', jump.label, at === undefined ? 'not here' : cursor.span(at, at).line);
         if (at === undefined) { jump.value ??= last; throw jump; }
         if (jump.value !== undefined) last = jump.value;
         if (at < start) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
@@ -284,9 +279,7 @@ export class Interpreter {
         }
         const self = this.receiver_of(cursor.span(start, start)) ?? (frame === this.GLOBAL ? undefined : frame);
         const own = self === undefined ? undefined : this.best(this.receiving(self, frame).filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && this.opens(rule.pattern[0].text))), cursor, frame, self);
-        if (process.env.K4STMT && text.startsWith(process.env.K4STMT, start)) console.error('STMT', JSON.stringify(text.slice(start, start + 30)), 'found', found?.rule.key, found?.end, 'named', named?.rule.key, named?.end, 'name', name, 'own', own?.rule.key, own?.end, 'self', self ? this.text(self) : '', 'rules', this.rules_of(frame).length, this.rules_of(frame).filter(r => r.key.startsWith('goto')).map(r => r.key + '=' + this.match(r, cursor, frame)?.end));
         const spelled = name > start && !Interpreter.word.test(text[start]) && !named?.rule.defines && !found?.rule.defines;
-        if (spelled && process.env.K4SP) console.error('SP', JSON.stringify(text.slice(start, start + 40)), cursor.span(start,start).line, own?.rule.key, own?.end, found?.rule.key, found?.end, named?.rule.key, named?.end);
         if (spelled && own !== undefined && own.rule.pattern[0]?.kind === 'literal') { value = this.fire(own, cursor, frame); continue; }
         if (spelled && found !== undefined && found.rule.pattern[0]?.kind === 'literal') { value = this.fire(found, cursor, frame); continue; }
         if (own !== undefined && (own.end > Math.max(found?.end ?? start, named?.end ?? name) || (found?.rule === own.rule && own.end === found.end && own.end > (named?.end ?? name)))) { value = this.fire(own, cursor, frame); continue; }
@@ -301,7 +294,6 @@ export class Interpreter {
       if (reader?.fn !== undefined && reader.fn.arity > 0 && !reader.fn.raw && cursor.cursor < cursor.limit && this.claim(cursor, cursor.cursor, frame) > cursor.cursor) { value = this.call(reader, cursor, frame); continue; }
       if (reader?.fn?.raw) { const at = this.spaces(cursor, cursor.cursor); if (at < cursor.limit && text[at] !== '\n') { cursor.cursor = at; value = this.call(reader, cursor, frame); continue; } }
       const found = this.best(this.receiving(value, frame), cursor, frame, value);
-      if (process.env.K4RECV && found === undefined) { const t = this.quietly(() => this.deref(value)); console.error('RECV', JSON.stringify(text.slice(cursor.cursor, cursor.cursor + 20)), 'value', this.text(value), 'deref', t === this.GLOBAL ? 'GLOBAL' : t?.at?.string.slice(0, 30), 'rules', this.receiving(value, frame).map(r => r.key).filter(k => /else/.test(k)).join(',')); }
       if (found !== undefined) { value = this.fire(found, cursor, frame); continue; }
       const at = this.spaces(cursor, cursor.cursor);
       if (at >= cursor.limit || text[at] === '\n') break;
@@ -526,10 +518,8 @@ export class Interpreter {
   }
   apply(found: Match, frame: Node, at: Text.Node): Node | undefined {
     const { rule, captures, receiver } = found;
-    if (++this.depth > Interpreter.DEPTH) { if (process.env.K4OVER) console.error('DEEP', (this.applying ?? []).slice(0, 40).join(' | ')); this.depth = 0; throw new Recursion(at); }
+    if (++this.depth > Interpreter.DEPTH) { this.depth = 0; throw new Recursion(at); }
     try {
-      if (process.env.K4OVER) (this.applying ??= []).push(rule.key + ' ' + JSON.stringify([...captures].map(([k, v]) => k + '=' + v.string.slice(0, 30))) + (receiver ? ' recv=' + this.text(receiver) + (receiver.place ? ' held-in=' + JSON.stringify(this.holder(receiver.place.in, receiver.place.name)?.at?.string.slice(0, 40)) + ' frame=' + JSON.stringify(receiver.place.in.at?.string.slice(0, 30)) : '') : '') + ' @' + at.line);
-      if (process.env.K4TRACE) console.error('APPLY', rule.key, JSON.stringify([...captures].map(([k, v]) => [k, v.string])), receiver ? 'recv:' + this.text(receiver) : '');
       this.at_stack.push(at);
       this.running.push({ found });
       this.paint_rule(found, at);
@@ -560,7 +550,6 @@ export class Interpreter {
       try { return this.read(this.cursor_of(this.inner(rule.body) ?? rule.body), local); }
       catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
-        if (process.env.K4RET) console.error("RET", rule.key, jump.label, jump.spelled, JSON.stringify(jump.site?.string), jump.site?.line, JSON.stringify(rule.body.string.slice(0, 40)), rule.body.line);
         if (jump.site !== undefined && (Interpreter.within(jump.site, rule.body) || (rule.lexical !== undefined && Interpreter.within(jump.site, rule.lexical)))) {
           if (!jump.spelled) return jump.value;
           jump.spelled = false;
@@ -568,9 +557,8 @@ export class Interpreter {
         }
         throw jump;
       }
-    } finally { this.depth--; this.at_stack.pop(); this.running.pop(); if (process.env.K4OVER) this.applying!.pop(); }
+    } finally { this.depth--; this.at_stack.pop(); this.running.pop(); }
   }
-  applying?: string[]
   at_stack: Text.Node[] = []
   running: { found: Match; local?: Node }[] = []
   static within(inner: Text.Node, outer: Text.Node): boolean { return inner.source === outer.source && inner.begin >= outer.begin && inner.end <= outer.end; }
@@ -581,7 +569,13 @@ export class Interpreter {
     scope.set(piece.name, this.literal(span));
     this.quietly(() => this.safely(() => this.read(this.cursor_of(piece.content!), scope)));
   }
+  private checking = new Set<Piece>();
   holds(piece: Piece & { kind: 'capture' }, span: Text.Node): Node | undefined {
+    if (this.checking.has(piece)) return undefined;
+    this.checking.add(piece);
+    try { return this.checked(piece, span); } finally { this.checking.delete(piece); }
+  }
+  checked(piece: Piece & { kind: 'capture' }, span: Text.Node): Node | undefined {
     const scope = new Node(span);
     scope.parent = piece.within ?? this.GLOBAL;
     scope.set(piece.name, this.literal(span));
@@ -681,7 +675,6 @@ export class Interpreter {
     const held = this.held(value, frame?.stands);
     if (held === undefined) return undefined;
     const scope = at.place.in;
-    if (process.env.K4DECL) console.error('DECLARE', at.place.name, 'in', JSON.stringify(scope.at?.string.slice(0, 25)), '=', held.place ? 'place ' + held.place.name : held.text ? 'text ' + held.at?.string : held === this.GLOBAL ? 'GLOBAL' : held.none ? 'None' : JSON.stringify(held.at?.string.slice(0, 25)));
     if (scope.none) return held;
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
@@ -689,7 +682,6 @@ export class Interpreter {
   }
   assign(target: Node, value: Node | undefined): Node | undefined {
     const at = this.location(target);
-    if (process.env.K4TRACE) console.error('ASSIGN', this.text(target), at?.place ? at.place.name + (at.place.member ? '(member)' : '') : at ? Object.entries(at).filter(([, v]) => v !== undefined).map(([k]) => k).join(',') : 'none');
     const held = this.deref(value);
     if (held === undefined) return undefined;
     if (at?.place === undefined) {
@@ -699,7 +691,6 @@ export class Interpreter {
       return held;
     }
     const scope = at.place.member ? (this.deref(at.place.in) ?? at.place.in) : this.holder(at.place.in, at.place.name) ?? at.place.in;
-    if (process.env.K4DECL) console.error('ASSIGNS', at.place.name, at.place.member ? 'member' : '', 'in', JSON.stringify(scope.at?.string.slice(0, 25)), '=', JSON.stringify(held.at?.string.slice(0, 25)));
     if (scope.none) return held;
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
@@ -709,7 +700,6 @@ export class Interpreter {
     const target = this.deref(node);
     if (target === undefined) return undefined;
     const name = this.text(key);
-    if (process.env.K4GET) console.error('GET', name, 'of', this.text(node), '->', JSON.stringify(target.at?.string.slice(0, 30)), target === this.GLOBAL ? 'GLOBAL' : '', 'has', target.own(name) !== undefined);
     if (target.style !== undefined) return this.style(`${target.style}.${name}`);
     const rules = this.rules_on(target);
     const plain = rules.find(rule => rule.pattern.length === 1 && rule.pattern[0].kind === 'literal' && rule.pattern[0].text === name);
@@ -766,7 +756,6 @@ export class Interpreter {
         rule.native = body.source.value.slice(this.spaces(this.cursor_of(body), word), name);
       }
     }
-    if (process.env.K4DEF) console.error('DEFINE', key, scope === this.GLOBAL ? 'GLOBAL' : scope.at?.string.slice(0, 30));
     if (body !== undefined) for (const found of body.string.matchAll(/\bexternal\s+([^\s()]+)/g)) if (Natives[found[1]] === Natives.rule || Natives[found[1]] === Natives.define) rule.defines = true;
     this.add_rule(scope, rule);
     this.definitions.push(`${scope === this.GLOBAL ? 'GLOBAL' : ''}::${key}`);
@@ -1061,15 +1050,13 @@ export class Interpreter {
   *definitions_of(): Generator<[Rule, Rule]> { for (const scope of this.scopes(this.GLOBAL)) for (const rule of scope.rules ?? []) yield [rule, rule]; }
 
   // Diagnostics.
-  error(message: string, at?: Text.Node) { if (process.env.K4ERR && message.includes(process.env.K4ERR)) console.error('ERR', message, at?.line, new Error().stack!.split('\n').slice(2, 14).map(l => l.trim().split(' ')[1]).join(' ')); this.complain('error', message, at); }
+  error(message: string, at?: Text.Node) { this.complain('error', message, at); }
   complain(level: Diagnostic['level'], message: string, at?: Text.Node) { this.diagnostics.report({ level, message, node: at, at }); }
   quietly<T>(fn: () => T): T { return this.diagnostics.muted(fn); }
   safely<T>(fn: () => T): T | undefined {
     try { return fn(); }
     catch (e) {
       if (e instanceof Recursion) { this.error('This keeps applying itself.', e.at); return undefined; }
-      if (e instanceof RangeError && process.env.K4OVER) { console.error('RULES', (this.applying ?? []).slice(-40).join(' | ')); }
-      if (e instanceof RangeError && process.env.K4OVER) console.error('OVERFLOW', String(e.stack).split('\n').slice(1, 40).map(l => l.trim().split(' ')[1]).join(' '));
       if (e instanceof RangeError) { this.error('This statement nests deeper than the runtime can follow.', this.reading); return undefined; }
       throw e;
     }

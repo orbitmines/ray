@@ -19,13 +19,11 @@ export const Natives: Record<string, Native> = {
     const at = interpreter.location(node);
     if (at?.place === undefined) return interpreter.NONE;
     const held = at.place.member ? at.place.in.own(at.place.name) : at.place.in.own(at.place.name);
-    if (process.env.K4OWN) console.error('OWN', at.place.name, at.place.member ? 'member' : '', JSON.stringify(at.place.in.at?.string.slice(0, 20)), held !== undefined);
     return held !== undefined ? interpreter.GLOBAL : interpreter.NONE;
   } },
   'goto': { arity: 2, fn: ({ interpreter, args: [label, condition] }) => {
     const met = interpreter.deref(condition, false);
     if (met === undefined || met.none) return undefined;
-    if (process.env.K4JUMP) { const g = globalThis as any; g.jumps = (g.jumps ?? 0) + 1; if ((g.jumps > Number(process.env.K4JUMP) && g.jumps < Number(process.env.K4JUMP) + 12) || (process.env.K4JUMPEVERY && g.jumps % Number(process.env.K4JUMPEVERY) === 0)) { const c = interpreter.written(condition); console.error('JUMP', interpreter.text(interpreter.deref(label, false) ?? label), 'cond', JSON.stringify(c?.code?.span.string.slice(0, 60)), c?.code?.span.line, interpreter.text(met), met.place ? 'place' : met.text ? 'text' : met === interpreter.GLOBAL ? 'GLOBAL' : 'value'); } }
     const spelled = interpreter.deref(label, false) ?? label;
     throw Object.assign(new Jump(interpreter.text(spelled)), { site: spelled.at, spelled: true });
   } },

@@ -36,7 +36,21 @@ unless (a every { it.nonempty }) { INFO@mark `R10 every failed` }
 
 unless (a some { it.is_terminal }) { INFO@mark `R11 some failed` }
 
+unless (b every { it.nonempty }) { INFO@mark `RV1 every from the middle of a ray is not true of what holds everywhere` }
+if (b every { it.is_terminal.not }) { INFO@mark `RV2 every from the middle of a ray misses the end after it` }
+if (b every { it.is_initial.not }) { INFO@mark `RV3 every from the middle of a ray misses the start before it` }
+if (c every { it.is_initial.not }) { INFO@mark `RV4 every from the end of a ray misses the start` }
+unless (a every { it.nonempty }) { INFO@mark `RV5 every from the start of a ray is not true of what holds everywhere` }
+unless (a.every { it.is_initial.or(it.is_terminal).or(it == b) }) { INFO@mark `RV6 every does not reach the three rays of a ray entered at its start` }
+
 unless (a.initial_boundary.is_initial) { INFO@mark `R12 initial boundary is not initial` }
+
+unless (b.⊢ == a) { INFO@mark `RA1 ⊢ of a ray is not its initial` }
+unless (b.⊣ == c) { INFO@mark `RA2 ⊣ of a ray is not its terminal` }
+unless (a.⊢ == a) { INFO@mark `RA3 ⊢ of the first of a ray is not itself` }
+unless (c.⊣ == c) { INFO@mark `RA4 ⊣ of the last of a ray is not itself` }
+unless (b.⊢ == b.initial) { INFO@mark `RA5 ⊢ is not initial` }
+unless (b.⊣ == b.terminal) { INFO@mark `RA6 ⊣ is not terminal` }
 
 unless (a.terminal_boundary.edge.is_terminal) { INFO@mark `R13 the edge of a terminal boundary is not terminal` }
 
@@ -243,6 +257,55 @@ flat ^keyword := runs.flatten
 unless (flat.count == 3) { INFO@mark `IT20 the runs flattened are not the three` }
 unless (flat.tail.value == 3) { INFO@mark `IT21 the runs flattened are out of order` }
 unless (counted.flatten.count == 3) { INFO@mark `IT22 flattening numbers splices what they are made of` }
+leaf ^keyword := chain None
+leaf &= 3
+middle ^keyword := chain None
+middle &= 2
+middle &= leaf
+nest ^keyword := chain None
+nest &= 1
+nest &= middle
+nested ^keyword := chain None
+nested &= nest
+deep ^keyword := nested.flatten
+unless (deep.count == 3) { INFO@mark `RL1 flattening three levels does not leave the three` }
+unless (deep.head.value == 1) { INFO@mark `RL2 the first of the fully flattened is not one` }
+unless (deep.tail.value == 3) { INFO@mark `RL3 the last of the fully flattened is not three` }
+once ^keyword := nested.flatten(1)
+unless (once.count == 2) { INFO@mark `RL4 flatten one level does not leave one and the rest` }
+unless (once.tail.value.count == 2) { INFO@mark `RL5 flatten one level flattens further than one` }
+twice ^keyword := nested.flatten(2)
+unless (twice.count == 3) { INFO@mark `RL6 flatten two levels does not leave one, two and what is left` }
+unless (twice.tail.value.count == 1) { INFO@mark `RL7 flatten two levels does not leave the third level unspliced` }
+unless (nested.flatten(0).count == 1) { INFO@mark `RL8 flatten none changes the count` }
+unless (counted.flatten(3).count == 3) { INFO@mark `RL9 flatten levels on numbers splices what they are made of` }
+jumbled ^keyword := chain None
+jumbled &= 3
+jumbled &= 1
+jumbled &= 2
+unless (jumbled.min == 1) { INFO@mark `RM1 the smallest of three, one and two is not one` }
+unless (jumbled.max == 3) { INFO@mark `RM2 the largest of three, one and two is not three` }
+unless (counted.min == 1) { INFO@mark `RM3 the smallest of one, two and three is not one` }
+unless (counted.max == 3) { INFO@mark `RM4 the largest of one, two and three is not three` }
+zero_first ^keyword := chain None
+zero_first &= 0
+zero_first &= 5
+unless (zero_first.min.is_zero) { INFO@mark `RM5 the smallest of zero and five is not zero` }
+unless (zero_first.max == 5) { INFO@mark `RM6 the largest of zero and five is not five` }
+unless (repeated.min == 1) { INFO@mark `RM7 the smallest with a repeat is not one` }
+unless (5.min(3) == 3) { INFO@mark `RM8 the smaller of five and three is not three` }
+unless (5.max(3) == 5) { INFO@mark `RM9 the larger of five and three is not five` }
+twice_counted ^keyword := counted * 2
+unless (twice_counted.count == 6) { INFO@mark `RX1 a chain of three twice is not six` }
+unless (twice_counted.head.value == 1) { INFO@mark `RX2 the repeated chain does not start with the first` }
+unless (twice_counted.tail.value == 3) { INFO@mark `RX3 the repeated chain does not end with the last` }
+unless (twice_counted.at(3).value == 1) { INFO@mark `RX4 the repeated chain does not start over after three` }
+unless ((counted * 0).empty) { INFO@mark `RX5 a chain none times is not empty` }
+unless ((counted * 1).count == 3) { INFO@mark `RX6 a chain once is not itself` }
+unless (counted.count == 3) { INFO@mark `RX7 repeating a chain changed it` }
+unless (("ab" * 3) == "ababab") { INFO@mark `RX8 ab three times is not ababab` }
+unless (("ab" * 0).empty) { INFO@mark `RX9 ab none times is not empty` }
+unless ((2 * 3) == 6) { INFO@mark `RX10 two times three is not six` }
 common ^keyword := counted.intersection(repeated)
 unless (common.count == 2) { INFO@mark `IT23 what both hold is not one and two` }
 if (counted.disjoint(repeated)) { INFO@mark `IT24 two chains with one in common are disjoint` }

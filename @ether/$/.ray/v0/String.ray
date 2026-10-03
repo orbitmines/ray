@@ -165,14 +165,47 @@ String := class: Array {
   split (separator: Character) => .split_by { character == separator }
   lines => .split(Character.newline)
 
-  repeat (times: Number) => (
-    out := chain None
-    left ^keyword := times
-    while left {
-      this for { out &= it.value }
-      left = left.pred
+  blank_line => .every { it.value.blank }
+  indentation => (
+    margin ^keyword := 0
+    counting ^keyword := true
+    this for {
+      if (counting.and(it.value.blank)) { margin = margin.succ } else { counting = false }
     }
-    out.as_string
+    margin
+  )
+  dedented => (
+    rows := .lines
+    total := rows.count
+    if (total == 1) { return this }
+    row_number ^keyword := 0
+    kept ^keyword := chain None
+    rows for {
+      dropped ^keyword := false
+      if (row_number.is_zero) { dropped = it.value.blank_line }
+      if (row_number == total.pred) { if (it.value.blank_line) { dropped = true } }
+      unless dropped { kept &= it.value }
+      row_number = row_number.succ
+    }
+    least ^keyword := 0
+    seeded ^keyword := false
+    kept for {
+      unless it.value.blank_line {
+        if seeded { if (it.value.indentation < least) { least = it.value.indentation } } else { least = it.value.indentation }
+        seeded = true
+      }
+    }
+    out ^keyword := chain None
+    kept for {
+      if it.value.blank_line { out &= "" } else { out &= it.value.slice(least, it.value.count) }
+    }
+    String.joined(out, Character.newline)
+  )
+
+  compounds * (times: Number) => (
+    held := chain None
+    this for { held &= it.value }
+    (held * times).as_string
   )
 
   joined (parts, separator) => (
@@ -219,7 +252,7 @@ Node.components.hierarchy &= class {
     encoded.as_code_points.map { it.value.as_character }.as_string
   )
 }
-"{literal text ^string}" ^string.punctuation => text.as_string
+"{literal text ^string}" ^string.punctuation => text.as_string.dedented
 
 Number.components.hierarchy &= class {
   spelled_in (radix: Number) => .digits_in(radix).map { Character.decimal_digit(it.value) }.as_string

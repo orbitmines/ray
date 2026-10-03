@@ -59,7 +59,7 @@ unless (Unicode.UTF16.encode(97).count == 16) { INFO@mark `W12 UTF16 of a is not
 unless (Unicode.UTF32.decode(Unicode.UTF32.encode(10)) == 10) { INFO@mark `W13 UTF32 round trip failed` }
 unless (Unicode.category(manual) == Unicode.GeneralCategory.letter) { INFO@mark `W14 a is not a letter` }
 unless (Regex(pattern: "b").matches(ab)) { INFO@mark `W15 regex b did not match ab` }
-unless ("x".repeat(3) == "xxx") { INFO@mark `W16 repeat failed` }
+unless (("x" * 3) == "xxx") { INFO@mark `W16 repeat failed` }
 unless (Unicode.scalar(10)) { INFO@mark `W17 ten is not a scalar` }
 
 letters := "ab1"{.letter}
@@ -246,3 +246,36 @@ quoted_one := "A"
 unless (quoted_one.head.value == U+0041) { INFO@mark `DQ2 the character of "A" is not A` }
 unless (quoted_one.count == 1) { INFO@mark `DQ3 "A" is not a string of one` }
 unless ("hello world".count == 11) { INFO@mark `DQ4 "hello world" does not hold eleven characters` }
+
+block_text := "
+    one
+      two
+    three
+"
+unless (block_text.lines.count == 3) { INFO@mark `SM1 a block of three lines with a blank first and last is not three lines` }
+unless (block_text.lines.head.value == "one") { INFO@mark `SM2 the least-indented line of a block keeps no indentation` }
+unless (block_text.lines.head.next.value == "  two") { INFO@mark `SM3 a line indented further keeps the difference` }
+unless (block_text.lines.tail.value == "three") { INFO@mark `SM4 the last line of a block is not three` }
+
+started_text := "a
+    b"
+unless (started_text.lines.tail.value == "    b") { INFO@mark `SM5 a line with content on the opening line holds the least indentation at nothing` }
+
+lone_indented := "  x"
+unless (lone_indented == "  x") { INFO@mark `SM6 a text on one line lost its indentation` }
+
+gapped_text := "
+  a
+
+  b
+"
+unless (gapped_text.lines.count == 3) { INFO@mark `SM7 a blank line between two is not kept` }
+unless (gapped_text.lines.head.next.value.empty) { INFO@mark `SM8 the blank line between two is not empty` }
+
+doubled_gap := "
+
+  a
+"
+unless (doubled_gap.lines.count == 2) { INFO@mark `SM9 only one blank line after the opening quote is dropped` }
+unless (doubled_gap.lines.head.value.empty) { INFO@mark `SM10 the second blank line after the opening quote is not kept` }
+unless (doubled_gap.lines.tail.value == "a") { INFO@mark `SM11 the line after the blank lines keeps its indentation` }

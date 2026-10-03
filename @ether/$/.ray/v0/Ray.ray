@@ -61,6 +61,35 @@ Iterable := class: Ordered {
     superposed
   )
 
+  min => (
+    smallest ^keyword := None
+    at_start ^keyword := true
+    for {
+      if at_start { smallest = it.value } elsif (it.value < smallest) { smallest = it.value }
+      at_start = false
+    }
+    smallest
+  )
+  max => (
+    largest ^keyword := None
+    at_start ^keyword := true
+    for {
+      if at_start { largest = it.value } elsif (largest < it.value) { largest = it.value }
+      at_start = false
+    }
+    largest
+  )
+
+  compounds * (times: Number) => (
+    out ^keyword := chain None
+    left ^keyword := times
+    while left {
+      for { out &= it.value }
+      left = left.pred
+    }
+    out
+  )
+
   fill (x) => for { it.value = x }
 
   compact => this{this}
@@ -153,7 +182,18 @@ Iterable := class: Ordered {
       inner := it.value
       spliced ^keyword := false
       if (inner.instance_of(Array)) { spliced = inner.bounded }
-      if spliced { inner for { flat &= it.value } } else { flat &= inner }
+      if spliced { inner.flatten for { flat &= it.value } } else { flat &= inner }
+    }
+    flat
+  )
+  flatten (levels: Number) => (
+    flat ^keyword := chain None
+    for {
+      inner := it.value
+      spliced ^keyword := false
+      if (inner.instance_of(Array)) { spliced = inner.bounded }
+      if levels.is_zero { spliced = false }
+      if spliced { inner.flatten(levels.pred) for { flat &= it.value } } else { flat &= inner }
     }
     flat
   )
@@ -234,6 +274,9 @@ Ray := class: Iterable {
   first => .initial
   last => .terminal
 
+  ⊢ => .initial
+  ⊣ => .terminal
+
   initial_boundary => Boundary.Initial(vertex: this)
   terminal_boundary => Boundary.Terminal(vertex: this)
 
@@ -270,6 +313,14 @@ Ray := class: Iterable {
   )
 
   acyclic => .terminal.is_terminal
+
+  every (predicate) => (
+    .initial for {
+      verdict := inline predicate
+      unless verdict { return false }
+    }
+    true
+  )
 
   chainable == (other) => (
     if .orderless { return (.count == other.count).and(.every { other.contains(it.value) }) }

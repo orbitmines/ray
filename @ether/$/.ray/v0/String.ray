@@ -226,6 +226,8 @@ Number.components.hierarchy &= class {
 }
 
 Chain.components.hierarchy &= class {
+  join => String.joined(this, None)
+  join (separator) => String.joined(this, separator)
   each_lower => .map { it.value.lower_case }
   each_title => .map { it.value.title_case }
 }

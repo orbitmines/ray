@@ -100,6 +100,14 @@ if ("ab".starts_with("b")) { INFO@mark `S63 ab starts with b` }
 unless ("ab".ends_with("b")) { INFO@mark `S64 ab does not end with b` }
 unless (String.joined("a b".words, None) == "ab") { INFO@mark `S65 joining a and b with nothing between is not ab` }
 
+unless (("a", "b", "c").join == "abc") { INFO@mark `SJ1 joining a, b and c with nothing between is not abc` }
+unless (("a", "b", "c").join("-") == "a-b-c") { INFO@mark `SJ2 joining a, b and c with a dash is not a-b-c` }
+unless (("a", "b").join(", ") == "a, b") { INFO@mark `SJ3 joining a and b with a comma and space is not a, b` }
+unless ("a".words.join("-") == "a") { INFO@mark `SJ4 joining one element with a dash is not that element` }
+unless ("a b c".words.join == "abc") { INFO@mark `SJ5 joining the words of a b c is not abc` }
+unless ("a b c".words.join("_") == "a_b_c") { INFO@mark `SJ6 joining the words of a b c with an underscore is not a_b_c` }
+unless ("".words.join("-").empty) { INFO@mark `SJ7 joining no words is not empty` }
+
 // A number spelled in a base, and a text read back as one.
 unless ("f".as_number_in(16) == 15) { INFO@mark `S66 f is not fifteen in sixteen` }
 unless ("12".as_number_in(10) == 12) { INFO@mark `S67 12 is not twelve in ten` }

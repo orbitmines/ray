@@ -699,60 +699,17 @@ outnumbers (one, other) => (
   }
   a
 )
-byte_of (text) => (
-  held ^keyword := chain None
-  left ^keyword := bits_of(`a`).head
-  take (bit) => (
-    held &= bit
-    left = left.next
-    left
-  )
-  external bits text take
-  held
-)
-same_byte (one, other) => (
-  alike ^keyword := global
-  while ((one).and(other)) {
-    unless (one.value.xnor(other.value)) { alike = None }
-    one = one.next
-    other = other.next
-  }
-  if one { alike = None }
-  if other { alike = None }
-  alike
-)
-could_start (text, type) => (
-  possible ^keyword := global
-  alternative ^keyword := None
-  first ^keyword := None
-  kind ^keyword := None
-  if type.repeating {
-    if type.repeats.superposes {
-      possible = None
-      first = byte_of(text).head
-      alternative = type.repeats.components.head
-      while alternative {
-        kind = alternative.value
-        if ((kind.superposes).or(kind.repeating).or(kind.listing).or(kind.capturing).or(kind.written_body)) { possible = global } elsif (same_byte(first, byte_of(kind).head)) { possible = global }
-        alternative = alternative.next
-      }
-    }
-  }
-  possible
-)
 read_whole (text, type) => (
   whole ^keyword := None
-  if (could_start(text, type)) {
-    candidate ^keyword := readings_of(bits_of(text).head, type).head
-    while candidate {
-      reading ^keyword := candidate.value
-      unless reading.rest {
-        if whole {
-          if (outnumbers(reading.value, whole)) { whole = reading.value }
-        } else { whole = reading.value }
-      }
-      candidate = candidate.next
+  candidate ^keyword := readings_of(bits_of(text).head, type).head
+  while candidate {
+    reading ^keyword := candidate.value
+    unless reading.rest {
+      if whole {
+        if (outnumbers(reading.value, whole)) { whole = reading.value }
+      } else { whole = reading.value }
     }
+    candidate = candidate.next
   }
   whole
 )

@@ -32,6 +32,7 @@ export class Node {
   raw?: boolean
   stands?: Node
   receiver?: Node
+  on?: Node
   given?: Set<string>
   constructor(at?: Text.Node) { this.at = at; }
   own(name: string): Node | undefined { return this.names?.get(name); }
@@ -94,33 +95,47 @@ export class Interpreter {
         seen.add(at);
         yield at;
         for (const sees of at.sees ?? []) yield* visit(sees, true, global);
-        for (const made of at.with ?? []) yield* visit(made, false, global);
+        for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) yield* visit(made, false, global);
       }
     };
     yield* visit(from, true, this.GLOBAL);
     if (!seen.has(this.GLOBAL)) { seen.add(this.GLOBAL); yield this.GLOBAL; for (const made of this.GLOBAL.with ?? []) yield* visit(made, false, this.GLOBAL); }
   }
   private naming?: { scope: Node; hole: Node; name?: string };
+  private trying = 0;
+  tried<T>(fn: () => T): T { this.trying++; try { return fn(); } finally { this.trying--; } }
   // What the base gave a value is seen from that value and from what is made of it, not from code written around it.
   lookup(frame: Node, name: string): Node | undefined {
+    if (process.env.K4LOOPS) { const g = globalThis as any; g.lk = (g.lk ?? 0) + 1; if (g.lk === Number(process.env.K4LOOPS)) { console.error('LOOKUPS', name, new Error().stack!.split('\n').slice(2, 30).map(l => l.trim().split(' ')[1]).join(' ')); } }
     const seen = new Set<Node>();
-    const visit = (scope: Node | undefined, lexical: boolean, deep: boolean): Node | undefined => {
+    const visit = (scope: Node | undefined, lexical: boolean, deep: boolean, depth: number): Node | undefined => {
       for (let at = scope; at !== undefined; at = deep ? at.parent : undefined) {
         if (seen.has(at) || at === this.GLOBAL) { if (!deep) return; continue; }
         seen.add(at);
         const found = at.own(name);
-        if (found !== undefined && !(lexical && at.given?.has(name))) return found;
-        for (const made of at.with ?? []) { const held = visit(made, false, false); if (held !== undefined) return held; }
-        for (const sees of at.sees ?? []) { const held = visit(sees, true, true); if (held !== undefined) return held; }
+        if (found !== undefined && !((lexical || depth > 1) && at.given?.has(name))) return found;
+        for (const made of at.on === undefined ? at.with ?? [] : [at.on, ...(at.with ?? [])]) { const held = visit(made, false, false, depth + 1); if (held !== undefined) return held; }
+        for (const sees of at.sees ?? []) { const held = visit(sees, true, true, 0); if (held !== undefined) return held; }
         lexical = true;
+        depth = 0;
       }
     };
-    const found = visit(frame, false, true);
+    let found = visit(frame, false, true, 0);
+    if (found !== undefined && frame.sees !== undefined && this.given_name(frame, name)) {
+      for (const sees of frame.sees) { const lexical = this.lookup(sees, name); if (lexical !== undefined) { found = lexical; break; } }
+    }
+    if (process.env.K4LOOK && name === process.env.K4LOOK) console.error('LOOK', name, 'from', JSON.stringify(frame.at?.string.slice(0, 20)), '->', JSON.stringify(found?.at?.string.slice(0, 30)), found?.place ? 'place' : '', [...seen].map(s => JSON.stringify(s.at?.string.slice(0, 12)) + (s.stands ? '(stands)' : '') + (s.own(name) ? '*' : '')).join(' '));
     if (found !== undefined) return found;
     const global = this.GLOBAL.own(name);
     if (global !== undefined) return global;
-    for (const made of this.GLOBAL.with ?? []) { const held = visit(made, false, false); if (held !== undefined) return held; }
-    if (this.naming !== undefined && this.naming.name === undefined && frame === this.naming.scope) { this.naming.name = name; return frame.set(name, this.naming.hole); }
+    for (const made of this.GLOBAL.with ?? []) { const held = visit(made, false, false, 1); if (held !== undefined) return held; }
+    if (this.naming !== undefined && this.naming.name === undefined && frame === this.naming.scope && this.trying === 0) { this.naming.name = name; return frame.set(name, this.naming.hole); }
+  }
+  given_name(frame: Node, name: string): boolean { const holder = this.near_holder(frame, name); return holder !== undefined && holder !== frame && holder.given?.has(name) === true; }
+  // Where a frame holds a name itself or through what it is made of: where a declaration may follow it.
+  near_holder(frame: Node, name: string): Node | undefined {
+    if (frame.own(name) !== undefined) return frame;
+    for (const made of frame.on === undefined ? frame.with ?? [] : [frame.on, ...(frame.with ?? [])]) if (made.own(name) !== undefined && made.given?.has(name)) return made;
   }
   holder(frame: Node, name: string): Node | undefined {
     for (const scope of this.scopes(frame)) if (scope.own(name) !== undefined) return scope;
@@ -187,7 +202,7 @@ export class Interpreter {
       this.blank(cursor);
       if (cursor.done()) return last;
       const start = cursor.cursor;
-      if (process.env.K4MAX && ++this.statements > Number(process.env.K4MAX)) { console.error('WATCHDOG', (cursor.source.location ?? '').split('/').pop(), cursor.span(start, start).line, JSON.stringify(cursor.source.value.slice(start, start + 60)), this.reading?.line); if (this.statements > Number(process.env.K4MAX) + 40) process.exit(3); }
+      if (process.env.K4MAX && ++this.statements > Number(process.env.K4MAX)) { console.error('WATCHDOG', (cursor.source.location ?? '').split('/').pop(), cursor.span(start, start).line, JSON.stringify(cursor.source.value.slice(start, start + 60)), this.reading?.line, (this.applying ?? []).length, (this.applying ?? []).slice(0, 30).join(' | ')); if (this.statements > Number(process.env.K4MAX) + 40) process.exit(3); }
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
       try {
         const value = this.statement(cursor, frame);
@@ -239,11 +254,12 @@ export class Interpreter {
         if (name > start) {
           place = this.place(frame, cursor.span(start, name - 1));
           const probe = cursor.bounded(name, cursor.limit);
-          named = this.best(this.receiving(place, frame), probe, frame, place);
+          named = this.tried(() => this.best(this.receiving(place, frame), probe, frame, place));
         }
-        const self = this.receiver_of(frame);
-        const own = self === undefined ? undefined : this.best(this.receiving(self, frame).filter(rule => !rule.leading), cursor, frame, self);
-        if (own !== undefined && own.end > Math.max(found?.end ?? start, named?.end ?? name)) { value = this.fire(own, cursor, frame); continue; }
+        const self = this.receiver_of(frame) ?? (frame === this.GLOBAL ? undefined : frame);
+        const own = self === undefined ? undefined : this.best(this.receiving(self, frame).filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && this.opens(rule.pattern[0].text))), cursor, frame, self);
+        if (process.env.K4STMT && text.startsWith(process.env.K4STMT, start)) console.error('STMT', JSON.stringify(text.slice(start, start + 30)), 'found', found?.rule.key, found?.end, 'named', named?.rule.key, named?.end, 'name', name, 'own', own?.rule.key, own?.end, 'self', self ? this.text(self) : '', 'rules', this.rules_of(frame).length, this.rules_of(frame).filter(r => r.key.startsWith('goto')).map(r => r.key + '=' + this.match(r, cursor, frame)?.end));
+        if (own !== undefined && (own.end > Math.max(found?.end ?? start, named?.end ?? name) || (found?.rule === own.rule && own.end === found.end && own.end > (named?.end ?? name)))) { value = this.fire(own, cursor, frame); continue; }
         if (found !== undefined && (name <= start || found.end > (named?.end ?? name) || (named === undefined && found.end >= name) || (named !== undefined && found.end === named.end && found.reach > named.reach) || (found.rule.defines && !named?.rule.defines && found.end >= named!.end))) { value = this.fire(found, cursor, frame); continue; }
         if (place === undefined) break;
         this.paint_place(place);
@@ -252,6 +268,7 @@ export class Interpreter {
         continue;
       }
       const reader = this.quietly(() => this.deref(value));
+      if (reader?.fn !== undefined && reader.fn.arity > 0 && !reader.fn.raw && cursor.cursor < cursor.limit && this.claim(cursor, cursor.cursor, frame) > cursor.cursor) { value = this.call(reader, cursor, frame); continue; }
       if (reader?.fn?.raw) { const at = this.spaces(cursor, cursor.cursor); if (at < cursor.limit && text[at] !== '\n') { cursor.cursor = at; value = this.call(reader, cursor, frame); continue; } }
       const found = this.best(this.receiving(value, frame), cursor, frame, value);
       if (found !== undefined) { value = this.fire(found, cursor, frame); continue; }
@@ -272,7 +289,13 @@ export class Interpreter {
     }
     return value;
   }
-  receiver_of(frame: Node): Node | undefined { for (let at: Node | undefined = frame; at !== undefined; at = at.parent) { if (at.receiver !== undefined) return at.receiver; for (const sees of at.sees ?? []) if (sees.receiver !== undefined) return sees.receiver; } }
+  receiver_of(frame: Node, seen: Set<Node> = new Set()): Node | undefined {
+    for (let at: Node | undefined = frame; at !== undefined && !seen.has(at); at = at.parent) {
+      seen.add(at);
+      for (const sees of at.sees ?? []) { const lexical = this.receiver_of(sees, seen); if (lexical !== undefined) return lexical; }
+      if (at.receiver !== undefined) return at.receiver;
+    }
+  }
   receiving(value: Node, frame: Node): Rule[] {
     const target = value.place !== undefined || value.code !== undefined ? this.quietly(() => this.deref(value)) : value;
     const own = (target !== undefined && !target.none && target !== this.GLOBAL ? this.rules_on(target) : this.BASE !== undefined ? this.rules_on(this.BASE) : []).filter(rule => rule.pattern[0]?.kind !== 'gap' || rule.home === target);
@@ -287,7 +310,7 @@ export class Interpreter {
       if (from >= cursor.limit || cursor.source.value[from] === '\n') break;
       const claimed = this.claim(cursor, from, frame);
       let end = native.raw && k === 0 ? this.token(cursor, from) : claimed > from ? claimed : this.operand_end(cursor, from, frame);
-      if (!(native.raw && k === 0) && end > from && this.lookup(frame, cursor.source.value.slice(from, end))?.fn?.raw) { const after = this.spaces(cursor, end); const token = this.token(cursor, after); if (token > after) end = token; }
+      if (!(native.raw && k === 0) && end > from && /^[\p{L}_][\p{L}\p{N}_-]*$/u.test(cursor.source.value.slice(from, end)) && this.tried(() => this.lookup(frame, cursor.source.value.slice(from, end)))?.fn?.raw) { const after = this.spaces(cursor, end); const token = this.token(cursor, after); if (token > after) end = token; }
       if (end <= from) break;
       const span = cursor.span(from, end - 1);
       args.push(native.raw && k === 0 ? this.literal(span) : this.lazy(span, frame));
@@ -317,7 +340,8 @@ export class Interpreter {
     for (let p = 0; p < pieces.length; p++) {
       const piece = pieces[p];
       if (piece.kind === 'literal') {
-        const from = piece.tight || (p === 0 && receiver !== undefined && !rule.defines && this.opens(piece.text)) ? i : this.spaces(cursor, i);
+        const after_line = p > 0 && pieces[p - 1].kind === 'literal' && (pieces[p - 1] as { text: string }).text.endsWith('\n');
+        const from = (piece.tight && !after_line) || (p === 0 && receiver !== undefined && !rule.defines && this.opens(piece.text)) ? i : this.spaces(cursor, i);
         if (!this.spelled(cursor, from, piece.text)) return;
         literals.push([from, from + piece.text.length - 1]);
         reach += piece.text.length;
@@ -353,7 +377,11 @@ export class Interpreter {
     if (i === cursor.cursor) return;
     return { rule, begin: cursor.cursor, end: i, reach, captures, literals, receiver };
   }
-  opens(literal: string): boolean { return this.rules_of(this.GLOBAL).some(rule => rule.enclosed && (rule.pattern[0] as { text: string }).text === literal); }
+  private openers?: { version: number; spelled: Set<string> };
+  opens(literal: string): boolean {
+    if (this.openers?.version !== this.version) this.openers = { version: this.version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[0] as { text: string }).text)) };
+    return this.openers.spelled.has(literal);
+  }
   spelled(cursor: Text.Node, at: number, literal: string): boolean {
     const text = cursor.source.value;
     if (at + literal.length > cursor.limit || !text.startsWith(literal, at)) return false;
@@ -455,14 +483,13 @@ export class Interpreter {
       local.receiver = receiver;
       if (receiver !== undefined) {
         const value = this.quietly(() => this.deref(receiver));
-        if (value !== undefined && !value.none) this.construct(value);
+        if (receiver.place === undefined && value !== undefined && !value.none) this.construct(value);
         if (receiver.place !== undefined) {
-          this.standing.add(receiver);
           const context = Object.assign(new Node(receiver.at), { stands: receiver, with: value !== undefined && !value.none ? [value] : undefined });
           this.construct(context);
-          local.with = [context];
+          local.on = context;
         }
-        else if (value !== undefined && !value.none) local.with = [value];
+        else if (value !== undefined && !value.none) local.on = value;
       }
       const args: Node[] = [];
       rule.pattern.forEach((piece, p) => {
@@ -533,11 +560,10 @@ export class Interpreter {
     }
     return node;
   }
-  private standing = new WeakSet<Node>();
   // A value, or the place a name would be written to when nothing is written there yet.
   held(node: Node | undefined): Node | undefined {
     for (let depth = 0; node !== undefined && depth < 256; depth++) {
-      if (node.place !== undefined) { if (this.standing.has(node)) return node; const bound = this.bound(node); if (bound === undefined) return node; node = bound; continue; }
+      if (node.place !== undefined) { const bound = this.bound(node); if (bound === undefined) return node; node = bound; continue; }
       if (node.code !== undefined && !node.program) { node = this.force(node); continue; }
       return node;
     }
@@ -546,8 +572,6 @@ export class Interpreter {
   force(node: Node): Node | undefined {
     if (node.value !== undefined) return node.value;
     const { span, in: frame } = node.code!;
-    const word = span.string.trim();
-    if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) return node.value = this.place(frame, span);
     return node.value = this.read(this.cursor_of(span), frame);
   }
   text(node: Node | undefined): string {
@@ -559,7 +583,7 @@ export class Interpreter {
   }
   // Where a name is written down: through the names it was handed, to the place they name.
   location(node: Node): Node | undefined {
-    let at: Node | undefined = node;
+    let at: Node | undefined = node, stood = false;
     for (let depth = 0; depth < 64 && at !== undefined; depth++) {
       if (at.code !== undefined && !at.program) {
         const word = at.code.span.string.trim();
@@ -568,7 +592,10 @@ export class Interpreter {
         continue;
       }
       if (at.place === undefined) return at;
-      const held = at.place.member ? at.place.in.own(at.place.name) : this.lookup(at.place.in, at.place.name);
+      let holder = at.place.member ? at.place.in : this.near_holder(at.place.in, at.place.name);
+      if (holder !== undefined && holder !== at.place.in && holder.given?.has(at.place.name)) for (const sees of at.place.in.sees ?? []) { const lexical = this.near_holder(sees, at.place.name); if (lexical?.given?.has(at.place.name)) { holder = lexical; break; } }
+      if (holder?.stands !== undefined && holder.given?.has(at.place.name)) { if (stood) return at; stood = true; at = holder.stands; continue; }
+      const held = holder?.own(at.place.name);
       if (held === undefined || (held.place === undefined && held.code === undefined) || held.program) return at;
       if (held.code !== undefined && held.value !== undefined && held.value.place === undefined) return at;
       at = held;
@@ -598,6 +625,7 @@ export class Interpreter {
       return held;
     }
     const scope = at.place.member ? (this.deref(at.place.in) ?? at.place.in) : this.holder(at.place.in, at.place.name) ?? at.place.in;
+    if (process.env.K4DECL) console.error('ASSIGNS', at.place.name, at.place.member ? 'member' : '', 'in', JSON.stringify(scope.at?.string.slice(0, 25)), '=', JSON.stringify(held.at?.string.slice(0, 25)));
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
     return held;
@@ -606,6 +634,7 @@ export class Interpreter {
     const target = this.deref(node);
     if (target === undefined) return undefined;
     const name = this.text(key);
+    if (process.env.K4GET) console.error('GET', name, 'of', this.text(node), '->', JSON.stringify(target.at?.string.slice(0, 30)), target === this.GLOBAL ? 'GLOBAL' : '', 'has', target.own(name) !== undefined);
     if (target.style !== undefined) return this.style(`${target.style}.${name}`);
     const rules = this.rules_on(target);
     const plain = rules.find(rule => rule.pattern.length === 1 && rule.pattern[0].kind === 'literal' && rule.pattern[0].text === name);
@@ -628,13 +657,13 @@ export class Interpreter {
     for (let depth = 0; depth < 64 && target !== undefined; depth++) {
       if (target.code !== undefined && !target.program) {
         const word = target.code.span.string.trim();
-        if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) { target = this.lookup(target.code.in, word) ?? this.deref(target); continue; }
+        if (/^[\p{L}_][\p{L}\p{N}_-]*$/u.test(word)) { const held = this.lookup(target.code.in, word); if (held !== undefined) { target = held; continue; } const read = this.force(target); if (read === undefined) return undefined; target = read; continue; }
         if (target.code.span.empty() || word === '') return undefined;
         if (!(frame.sees ??= []).includes(target.code.in) && frame !== target.code.in) frame.sees.unshift(target.code.in);
         const last = this.read(this.cursor_of(this.inner(target.code.span) ?? target.code.span), frame);
         const held = last === undefined ? undefined : this.quietly(() => this.deref(last));
         if (held?.program && !compose) return this.inline(held, frame);
-        if (compose && held !== undefined && !held.text && !held.none && held.code === undefined && held !== frame) (frame.with ??= []).push(held);
+        if (compose && held !== undefined && !held.text && !held.none && held.code === undefined && held !== frame) { (frame.with ??= []).push(held); this.version++; }
         return last;
       }
       if (target.place !== undefined) { target = this.bound(target); continue; }
@@ -642,8 +671,8 @@ export class Interpreter {
         if (!(frame.sees ??= []).includes(target.code!.in) && frame !== target.code!.in) frame.sees.unshift(target.code!.in);
         return this.read(this.cursor_of(target.code!.span), frame);
       }
-      if (target.text && compose) return target;
-      if (target !== frame && !target.none && !(frame.with ??= []).includes(target)) frame.with.push(target);
+      if (target.text) return compose || target.at === undefined || target.at.empty() ? target : this.read(this.cursor_of(target.at), frame);
+      if (target !== frame && !target.none && !(frame.with ??= []).includes(target)) { frame.with.push(target); this.version++; }
       return target;
     }
     return target;
@@ -700,11 +729,13 @@ export class Interpreter {
     const scope = new Node(content);
     scope.parent = frame;
     const hole = Object.assign(new Node(content), { text: true });
-    const was = this.naming;
+    const was = this.naming, trying = this.trying;
     this.naming = { scope, hole };
+    this.trying = 0;
     let value: Node | undefined;
     try { value = this.quietly(() => this.safely(() => this.read(this.cursor_of(content), scope))); }
-    finally { this.naming = was; }
+    catch (jump) { if (!(jump instanceof Jump)) throw jump; }
+    finally { this.naming = was; this.trying = trying; }
     const name = scope.names === undefined ? undefined : [...scope.names].find(([, held]) => held === hole)?.[0];
     if (name === undefined) {
       const held = value === undefined ? undefined : this.quietly(() => this.deref(value));

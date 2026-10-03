@@ -1,0 +1,45 @@
+c3 := chain None
+c3 &= None
+c3 &= global
+c3.head.value
+c3.tail.value
+C1 := class { zz => global }
+C1.zz
+C1.instance
+q5 := Q2(z: global)
+q5.z
+q5.n(None)
+q5.o(global)
+E9 := enum a | b
+E9.a
+E9.b
+E8 := enum c (k: global) | d (k: None)
+E8.c.k
+E8.d.k
+B9 := enum f9 (holds: None) | t9 (holds: global) { nn9 => global }
+B9.f9.holds
+B9.t9.holds
+B9.t9.nn9
+true
+false
+true.holds
+false.holds
+false.not.holds
+true.not.holds
+(true.and(false)).holds
+(false.or(true)).holds
+tq (v) => v
+tq(global)
+tq(None)
+yy := global
+if (yy) { yy = None } else { yy = global }
+yy
+zz := None
+if (zz) { zz = None } else { zz = global }
+zz
+ww := global
+while (ww) { ww = None }
+ww
+z9 := (None, global)
+z9.head.value
+z9.tail.value

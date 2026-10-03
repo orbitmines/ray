@@ -43,6 +43,7 @@ export class Node {
 
 export class Rule {
   native?: string
+  direct?: Text.Node[]
   style?: Node
   defines = false
   home?: Node
@@ -57,7 +58,8 @@ export class Rule {
   get leading(): boolean { return this.pattern[0]?.kind === 'capture'; }
   // A leading capture with a type is a pattern over text.
   get reads(): boolean { const first = this.pattern[0]; return first?.kind === 'capture' && (first.typed || first.undecided === true); }
-  get enclosed(): boolean { const first = this.pattern[0], last = this.pattern[this.pattern.length - 1]; return this.pattern.length >= 3 && first.kind === 'literal' && last.kind === 'literal' && !Interpreter.word.test(first.text[0] ?? 'a'); }
+  private enclosing?: boolean;
+  get enclosed(): boolean { if (this.enclosing === undefined) { const first = this.pattern[0], last = this.pattern[this.pattern.length - 1]; this.enclosing = this.pattern.length >= 3 && first.kind === 'literal' && last.kind === 'literal' && !Interpreter.word.test(first.text[0] ?? 'a'); } return this.enclosing; }
   // A spelling that takes the one thing written after it.
   get operator(): string | undefined { const [first, second] = this.pattern; return this.pattern.length === 2 && first.kind === 'literal' && second.kind === 'capture' && !Interpreter.word.test(first.text[0] ?? 'a') ? first.text : undefined; }
 }
@@ -230,6 +232,7 @@ export class Interpreter {
     if (same >= 0) { rule.order = rules[same].order; rules.splice(same, 1); }
     rules.push(rule);
     this.version++;
+    this.rules_version++;
   }
 
   // Reading: statements, one after another; a jump carries on at the statement its label is.
@@ -477,11 +480,11 @@ export class Interpreter {
   private openers?: { version: number; spelled: Set<string> };
   private closers?: { version: number; spelled: Set<string> };
   closes(literal: string): boolean {
-    if (this.closers?.version !== this.version) this.closers = { version: this.version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[rule.pattern.length - 1] as { text: string }).text)) };
+    if (this.closers?.version !== this.rules_version) this.closers = { version: this.rules_version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[rule.pattern.length - 1] as { text: string }).text)) };
     return this.closers.spelled.has(literal);
   }
   opens(literal: string): boolean {
-    if (this.openers?.version !== this.version) this.openers = { version: this.version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[0] as { text: string }).text)) };
+    if (this.openers?.version !== this.rules_version) this.openers = { version: this.rules_version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[0] as { text: string }).text)) };
     return this.openers.spelled.has(literal);
   }
   spelled(cursor: Text.Node, at: number, literal: string, joined: boolean = false): boolean {
@@ -551,9 +554,10 @@ export class Interpreter {
   }
   // A bracket is any rule written between two literals: what it encloses is skipped over as one.
   private claims = new WeakMap<Text.Source, { version: number; at: Map<number, number> }>();
+  rules_version = 0;
   claim(cursor: Text.Node, j: number, frame: Node): number {
     let held = this.claims.get(cursor.source);
-    if (held === undefined || held.version !== this.version) this.claims.set(cursor.source, held = { version: this.version, at: new Map() });
+    if (held === undefined || held.version !== this.rules_version) this.claims.set(cursor.source, held = { version: this.rules_version, at: new Map() });
     const known = held.at.get(j);
     if (known !== undefined && known <= cursor.limit) return known;
     held.at.set(j, j);
@@ -615,6 +619,7 @@ export class Interpreter {
       if (this.program?.serving) for (const piece of rule.pattern) if (piece.kind === 'capture' && piece.content !== undefined && captures.has(piece.name)) this.run_content(piece, captures.get(piece.name)!, local);
       if (rule.fn !== undefined) return rule.fn.fn({ interpreter: this, frame: local, args, at, self: receiver });
       if (rule.body === undefined) return undefined;
+      if (rule.direct !== undefined) return Natives[rule.native!].fn({ interpreter: this, frame: local, args: rule.direct.map(word => this.lazy(word, local)), at: rule.body.span(rule.body.end, rule.body.end) });
       try { return this.read(this.cursor_of(this.inner(rule.body) ?? rule.body), local); }
       catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
@@ -845,6 +850,16 @@ export class Interpreter {
       if (word > body.begin && body.source.value.slice(body.begin, word) === 'external' && this.lookup(closure, 'external') === this.EXTERNAL) {
         const name = this.token_end(this.cursor_of(body), this.spaces(this.cursor_of(body), word), closure);
         rule.native = body.source.value.slice(this.spaces(this.cursor_of(body), word), name);
+        const native = Natives[rule.native], cursor = this.cursor_of(body), words: Text.Node[] = [];
+        let at = name, plain = true;
+        while (plain) {
+          const from = this.spaces(cursor, at);
+          if (from >= cursor.limit) break;
+          const to = this.token_end(cursor, from, closure);
+          if (to === from) plain = false;
+          else { words.push(cursor.span(from, to - 1)); at = to; }
+        }
+        if (plain && native !== undefined && !native.raw && words.length === native.arity && words.length > 0) rule.direct = words;
       }
     }
     if (body !== undefined) for (const found of body.string.matchAll(/\bexternal\s+([^\s()]+)/g)) if (Natives[found[1]] === Natives.rule || Natives[found[1]] === Natives.define) rule.defines = true;
@@ -1187,6 +1202,7 @@ export class Interpreter {
     this.held_texts = new Map([...from.held_texts].filter(([, held]) => held.value === undefined));
     this.order = from.order;
     this.version++;
+    this.rules_version++;
   }
 
   // Painting: what is read is painted by the marks on what it names, on its value, or on the rule that read it.

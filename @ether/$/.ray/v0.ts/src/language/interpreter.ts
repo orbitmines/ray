@@ -1847,9 +1847,10 @@ export class Interpreter {
   get painted() { return this.painted_count; }
   theme?: Node
   building?: Node
-  begin_pass() { this.paints = []; this.sites = new Map(); this.read_at = new Map(); this.bodies = new Set(); }
+  begin_pass() { this.paints = []; this.sites = new Map(); this.read_at = new Map(); this.bodies = new Set(); this.dried = new Map(); this.dry_painted = new Map(); this.paint_index = new Map(); }
   end_pass() { this.dry_paint(); this.bodies = new Set(); this.painted_count++; }
   read_at = new Map<Text.Source, Set<number>>();
+  private paint_index = new Map<Text.Source, Map<number, number>>();
   bodies = new Set<Rule>();
   dry_paint() {
     const done = new Set<string>();
@@ -1869,7 +1870,7 @@ export class Interpreter {
     }
   }
   dry_match(found: Match, cursor: Text.Node, frame: Node, depth: number, painted: boolean = true) {
-    if (painted) this.paint_rule(found, cursor.span(found.begin, found.end - 1));
+    if (painted && found.rule.style !== undefined) { const style = found.rule.style, at = cursor.span(found.begin, found.end - 1); for (const [from, to] of found.literals) this.dry_paint_span(at.span(from, to), () => style.style); }
     for (const piece of found.rule.pattern) {
       if (piece.kind !== 'capture' || !found.captures.has(piece.name)) continue;
       const span = found.captures.get(piece.name)!;
@@ -1878,9 +1879,24 @@ export class Interpreter {
       if (!piece.raw && !piece.operator) this.dry(this.cursor_of(span), frame, depth + 1);
     }
   }
+  private dried = new Map<Text.Source, Set<number>>();
+  private dry_painted = new Map<Text.Source, Set<number>>();
+  dry_paint_span(span: Text.Node, style: () => string | undefined) {
+    let held = this.dry_painted.get(span.source);
+    if (held === undefined) this.dry_painted.set(span.source, held = new Set());
+    const key = span.begin * 65536 + (span.end - span.begin);
+    if (held.has(key)) return;
+    held.add(key);
+    this.paint(span, style);
+  }
   dry(cursor: Text.Node, frame: Node, depth: number) {
     const read = this.read_at.get(cursor.source), text = cursor.source.value;
     if (depth > 32) return;
+    let dried = this.dried.get(cursor.source);
+    if (dried === undefined) this.dried.set(cursor.source, dried = new Set());
+    const key = cursor.cursor * 65536 + (cursor.limit - cursor.cursor);
+    if (dried.has(key)) return;
+    dried.add(key);
     for (this.blank(cursor); !cursor.done(); this.blank(cursor)) {
       const start = cursor.cursor, end = this.statement_end(cursor, start, frame);
       const found = this.tried(() => this.best(this.heads(frame), cursor, frame, undefined, true));
@@ -1891,7 +1907,7 @@ export class Interpreter {
         const name = this.token(cursor, start);
         if (name > start && Interpreter.word.test(text[start])) {
           receiver = this.place(frame, cursor.span(start, name - 1));
-          if (painted) { if (this.quietly(() => this.lookup(frame, receiver!.place!.name)) === undefined) this.paint(receiver.at, () => 'variable'); else this.paint_place(receiver); }
+          if (painted) { if (this.quietly(() => this.lookup(frame, receiver!.place!.name)) === undefined) this.dry_paint_span(receiver.at!, () => 'variable'); else { const place = receiver; this.dry_paint_span(receiver.at!, () => this.place_style(place)); } }
           cursor.cursor = name;
         }
       }
@@ -1908,12 +1924,23 @@ export class Interpreter {
     if (!this.program?.serving || this.unpainted > 0 || span === undefined || span.source.location === undefined || !this.owns(span.source) || !this.painting(span.source)) return;
     const painted = span.span(span.begin, span.end);
     painted.style = style;
+    let index = this.paint_index.get(span.source);
+    if (index === undefined) this.paint_index.set(span.source, index = new Map());
+    const key = span.begin * 65536 + (span.end - span.begin), at = index.get(key);
+    if (at !== undefined) {
+      const previous = this.paints[at], before = previous.style as (() => string | undefined) | undefined, depth = ((previous as { depth?: number }).depth ?? 0) + 1;
+      if (before !== undefined && depth <= 4) { painted.style = () => style() ?? before(); (painted as { depth?: number }).depth = depth; }
+      this.paints[at] = painted;
+      return;
+    }
+    index.set(key, this.paints.length);
     this.paints.push(painted);
   }
   paint_place(place: Node) {
     if (!this.program?.serving) return;
-    this.paint(place.at, () => { const marks = (place as { marks?: Node }).marks; if (marks) return marks.style; const scope = place.place!.member ? place.place!.in : this.holder(place.place!.in, place.place!.name); const named = scope && scope?.marked_names?.get(place.place!.name); if (named) return named.style; const bound = scope?.own(place.place!.name); if (bound === undefined) return undefined; if (bound.code !== undefined || bound.place !== undefined) return scope !== this.GLOBAL && scope!.body !== undefined ? 'parameter' : 'variable'; const marked = bound.marked_value?.style; if (marked !== undefined) return marked; return bound.fn !== undefined || bound.rule_of !== undefined ? 'function' : 'variable'; });
+    this.paint(place.at, () => this.place_style(place));
   }
+  place_style(place: Node): string | undefined { const marks = (place as { marks?: Node }).marks; if (marks) return marks.style; const scope = place.place!.member ? place.place!.in : this.holder(place.place!.in, place.place!.name); const named = scope && scope?.marked_names?.get(place.place!.name); if (named) return named.style; if (place.place!.member) return undefined; const bound = scope?.own(place.place!.name); if (bound === undefined) return undefined; const local = scope !== this.GLOBAL && scope!.body !== undefined; if (bound.code !== undefined || bound.place !== undefined) return local ? 'parameter' : 'variable'; const marked = local ? undefined : bound.marked_value?.style; if (marked !== undefined) return marked; return bound.fn !== undefined || bound.rule_of !== undefined ? 'function' : 'variable'; }
   paint_rule(found: Match, at: Text.Node) {
     const style = found.rule.style;
     if (style !== undefined) for (const [from, to] of found.literals) this.paint(at.span(from, to), () => style.style);

@@ -1066,7 +1066,7 @@ export class Interpreter {
     const site = head.source.location !== undefined ? head : this.running[this.running.length - 1]?.at;
     const made = site === undefined || scope === this.GLOBAL ? undefined : this.rules_on(scope).find(rule => !this.based().has(rule) && rule.at.string === head.string && Interpreter.same(rule.at.source.location !== undefined ? rule.at : rule.lexical, site));
     if (made !== undefined) return made;
-    const pieces = this.pieces(head, closure);
+    const pieces = this.pieces_of(head, closure);
     if (pieces.length === 0) { this.error('Expected a pattern before `=>`.', head); return; }
     const key = pieces.map(piece => piece.kind === 'literal' ? piece.text : piece.kind === 'gap' ? '{ }' : `{${piece.name}}`).join('') + (guard === undefined || guard.span.string.trim() === '' ? '' : `(${guard.span.string.trim()})`);
     const rule = new Rule(pieces, closure, head, key, this.order++, body);
@@ -1093,6 +1093,17 @@ export class Interpreter {
     this.add_rule(scope, rule);
     this.definitions.push(`${scope === this.GLOBAL ? 'GLOBAL' : ''}::${key}`);
     return rule;
+  }
+  private parsed = new WeakMap<Text.Source, Map<number, WeakMap<Node, Piece[]>>>();
+  pieces_of(head: Text.Node, closure: Node): Piece[] {
+    let by = this.parsed.get(head.source);
+    if (by === undefined) this.parsed.set(head.source, by = new Map());
+    const span = head.begin * 65536 + (head.end - head.begin);
+    let held = by.get(span);
+    if (held === undefined) by.set(span, held = new WeakMap());
+    let pieces = held.get(closure);
+    if (pieces === undefined) { pieces = this.pieces(head, closure); held.set(closure, pieces); }
+    return pieces;
   }
   pieces(span: Text.Node, frame: Node): Piece[] {
     const text = span.source.value, end = span.end + 1, out: Piece[] = [];

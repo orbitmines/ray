@@ -39,7 +39,7 @@ export function engine_hash(): string | undefined {
 
 const KEPT = 16;
 const SPAN = new Set(['source', 'expression', 'cursor', 'until', 'from', 'to']);
-const DROPPED = new Set(['scoped', 'ruled', 'shaped', 'watchers', 'watching', 'visited', 'layout']);
+const DROPPED = new Set(['scoped', 'ruled', 'shaped', 'watchers', 'watching', 'visited', 'layout', 'heading', 'held_by', 'reached']);
 let natives: Map<Native, string> | undefined;
 function native_name(native: Native): string | undefined {
   if (natives === undefined) { natives = new Map(); for (const [name, held] of Object.entries(Natives)) if (!natives.has(held)) natives.set(held, name); }

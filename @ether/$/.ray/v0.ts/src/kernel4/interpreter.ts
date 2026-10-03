@@ -283,7 +283,8 @@ export class Interpreter {
         if (spelled && own !== undefined && own.rule.pattern[0]?.kind === 'literal') { value = this.fire(own, cursor, frame); continue; }
         if (spelled && found !== undefined && found.rule.pattern[0]?.kind === 'literal') { value = this.fire(found, cursor, frame); continue; }
         if (own !== undefined && (own.end > Math.max(found?.end ?? start, named?.end ?? name) || (found?.rule === own.rule && own.end === found.end && own.end > (named?.end ?? name)))) { value = this.fire(own, cursor, frame); continue; }
-        if (found !== undefined && (name <= start || found.end > (named?.end ?? name) || (named === undefined && found.end >= name) || (named !== undefined && found.end === named.end && found.reach > named.reach) || (found.rule.defines && !named?.rule.defines && found.end >= named!.end))) { value = this.fire(found, cursor, frame); continue; }
+        const unbound = place !== undefined && found !== undefined && found.end >= name && !named?.rule.leading && !named?.rule.defines && this.quietly(() => this.lookup(frame, place!.place!.name)) === undefined;
+        if (found !== undefined && (unbound || name <= start || found.end > (named?.end ?? name) || (named === undefined && found.end >= name) || (named !== undefined && found.end === named.end && found.reach > named.reach) || (found.rule.defines && !named?.rule.defines && found.end >= named!.end))) { value = this.fire(found, cursor, frame); continue; }
         if (place === undefined) break;
         this.paint_place(place);
         cursor.cursor = name;

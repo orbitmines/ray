@@ -430,7 +430,7 @@ i{ }{width} ^keyword => Binary.Signed{.integer.integer.count < (width).succ}
 Precedence ^keyword := class { }
 same_text (first_text, second_text) => (
   same ^keyword := false
-  if ((first_text).and(second_text)) { same = (code_points(first_text) == code_points(second_text)) }
+  if ((first_text).and(second_text)) { same = (first_text == second_text) }
   same
 )
 JumpRead ^keyword := class { }

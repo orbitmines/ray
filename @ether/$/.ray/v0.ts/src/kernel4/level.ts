@@ -23,7 +23,7 @@ export class Count extends Node {
 // The interpreter's own level: rules about operations on values of a type, `{a: T} op {b: T} => external js.…`,
 // read from the interpreter's file once the language has a `Compiler.default` for it to add to.
 export class Levelled extends Interpreter {
-  level?: { source: Node; entries: Map<string, Entry[]> };
+  level?: { source: Node; entries: Map<string, Entry[]>; written?: Capture };
   private markers = new Map<Node, string>();
   private bypassing = new Set<Rule>();
   private levelled = false;
@@ -53,8 +53,15 @@ export class Levelled extends Interpreter {
     scope.parent = this.GLOBAL;
     this.quietly(() => this.safely(() => this.inline(block, scope)));
     const entries = new Map<string, Entry[]>();
+    let written: Capture | undefined;
     for (const rule of scope.rules ?? []) {
       const pieces = rule.pattern.filter(piece => piece.kind !== 'gap');
+      if (pieces.length === 1 && pieces[0].kind === 'capture' && rule.body !== undefined) {
+        const answer = this.quietly(() => this.safely(() => this.read(this.cursor_of(rule.body!), scope)));
+        const held = answer === undefined ? undefined : this.quietly(() => this.deref(answer, false));
+        if (held !== undefined && this.markers.get(held) === 'js.string.written') written = pieces[0];
+        continue;
+      }
       const [receiver, spelled, operand] = pieces;
       if (receiver?.kind !== 'capture' || spelled?.kind !== 'literal' || rule.body === undefined) continue;
       if (pieces.length !== (operand === undefined ? 2 : 3) || (operand !== undefined && operand.kind !== 'capture')) continue;
@@ -66,13 +73,18 @@ export class Levelled extends Interpreter {
       const entry: Entry = { method, receiver, operand: operand as Capture | undefined, rule, native };
       entries.set(method, [...(entries.get(method) ?? []), entry]);
     }
-    this.level = { source: block, entries };
+    this.level = { source: block, entries, written };
   }
   type_of(piece: Capture): Node | undefined {
     if (piece.undecided && piece.decided !== this.declared) this.decide(piece);
     if (!piece.typed || piece.type === undefined) return undefined;
     const type = this.quietly(() => this.deref(piece.type, false));
     return type === undefined || type.none ? undefined : type;
+  }
+  // Written text is of the kind the level names for it: it answers what that kind answers.
+  rules_on(value: Node): Rule[] {
+    const kind = value.text && this.level?.written !== undefined ? this.type_of(this.level.written) : undefined;
+    return kind === undefined ? super.rules_on(value) : super.rules_on(kind);
   }
   carries(value: Node, rule: Rule): boolean { return this.rules_on(value instanceof Count ? value.template : value).includes(rule); }
 
@@ -87,14 +99,14 @@ export class Levelled extends Interpreter {
     for (const entry of entries) {
       if ((entry.operand !== undefined) !== (taking !== undefined)) continue;
       const type = this.type_of(entry.receiver);
-      if (type === undefined || rule.home !== type) continue;
+      if (type === undefined || !this.rules_on(type).includes(rule)) continue;
       const self = this.deref(receiver, false);
       if (self === undefined || self.none || !this.carries(self, rule)) continue;
       let other: Node | undefined;
       if (taking !== undefined) {
         const span = captures.get(taking.name);
         other = span === undefined ? undefined : this.deref(this.lazy(span, frame), false);
-        if (other === undefined || other.none || !this.carries(other, rule)) continue;
+        if (other === undefined || other.none || (entry.operand!.typed && !this.carries(other, rule))) continue;
       }
       const written = () => { this.bypassing.add(rule); try { return this.apply(found, frame, at); } finally { this.bypassing.delete(rule); } };
       const answered = entry.native !== undefined ? Operations[entry.native](this, { self, other, rule, written }) : this.rewritten(entry, self, other);
@@ -156,16 +168,16 @@ export class Levelled extends Interpreter {
     this.numerals.set(value, answer);
     return answer ?? undefined;
   }
-  counted(value: Node | undefined, like: Count, rule: Rule): bigint | undefined {
+  counted(value: Node | undefined, like: Count, rule?: Rule): bigint | undefined {
     let n = 0n;
     for (let at = value, walked = 0; at !== undefined && walked < 1 << 20; walked++) {
       if (at instanceof Count) {
-        if (at.field !== like.field || !this.carries(at, rule)) return undefined;
+        if (at.field !== like.field || (rule !== undefined && !this.carries(at, rule))) return undefined;
         n += at.count; at = at.base; continue;
       }
       const held = this.numeral(at);
       if (held !== undefined) return n + held;
-      if (!this.carries(at, rule)) return undefined;
+      if (rule !== undefined && !this.carries(at, rule)) return undefined;
       const next = this.field(at, like.field);
       if (next === undefined || next.none) return n;
       n++; at = next;
@@ -324,5 +336,14 @@ export const Operations: Record<string, Operation> = {
   'js.string.starts_with': string((level, a, b) => level.truth(b!.length <= a.length && b!.every((x, i) => same(x, a[i])))),
   'js.string.ends_with': string((level, a, b) => level.truth(b!.length <= a.length && b!.every((x, i) => same(x, a[a.length - b!.length + i])))),
   'js.string.contains': string((level, a, b) => level.truth(b!.length === 0 || index_of(a, b!) >= 0)),
+  'js.string.slice': (level, { self, other }) => {
+    const mine = level.characters(self), bounds = other === undefined ? undefined : level.links(other);
+    if (mine === undefined || bounds === undefined || bounds.length !== 2) return undefined;
+    const like = level.unit();
+    const [from, to] = bounds.map(bound => like === undefined ? level.numeral(bound) : level.counted(bound, like, undefined));
+    if (from === undefined || to === undefined) return undefined;
+    const text = mine.slice(Number(from), Number(to)).map(bytes => new TextDecoder().decode(new Uint8Array(bytes))).join('');
+    return level.literal_of(text);
+  },
   'js.string.index_of': string((level, a, b) => { const i = a.length === 0 ? -1 : index_of(a, b!); return i < 0 ? level.NONE : level.number(i); }),
 };

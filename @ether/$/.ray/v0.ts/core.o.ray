@@ -34,6 +34,7 @@ Compiler.default = {
   {a: String}.ends_with {b: String} => external js.string.ends_with
   {a: String}.contains {b: String} => external js.string.contains
   {a: String}.index_of {b: String} => external js.string.index_of
+  {a: String}.slice {b} => external js.string.slice
   {a: Number}.pred => external js.number.pred
   {a: Number}.holds => external js.number.pred
   {a: Number}.is_zero => external js.number.is_zero

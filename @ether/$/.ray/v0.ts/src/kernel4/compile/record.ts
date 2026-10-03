@@ -5,7 +5,13 @@ import type { Called, Unit } from './ir.ts';
 export function applied(it: Interpreter, unit: Unit, start: number, found: Match, rules: Rule[]) {
   const { rule, captures } = found;
   if (rule.direct === undefined) return;
-  if (rule.native === 'label') { unit.set(start, { end: found.end, rules, code: { op: 'pass' } }); return; }
+  if (rule.native === 'label') {
+    const name = rule.direct.length !== 1 ? undefined : captures.get(rule.direct[0].string)?.string ?? found.receiver?.place?.name;
+    if (name === undefined) return;
+    unit.statements.set(start, { end: found.end, rules, code: { op: 'label', name } });
+    if (!unit.labels.has(name)) unit.labels.set(name, start);
+    return;
+  }
   if (found.begin !== start || found.receiver !== undefined || rule.native !== 'goto' || rule.direct.length !== 2) return;
   const [target, condition] = rule.direct.map(word => word.string);
   const site = captures.get(target);
@@ -13,10 +19,10 @@ export function applied(it: Interpreter, unit: Unit, start: number, found: Match
   const given = captures.get(condition);
   if (given === undefined && rule.pattern.some(piece => piece.kind === 'capture' && piece.name === condition)) return;
   if (given === undefined && it.quietly(() => it.deref(it.lazy(rule.direct![1], rule.closure), false)) !== it.GLOBAL) return;
-  unit.set(start, { end: found.end, rules, code: { op: 'jump', label: site.string, site, condition: given } });
+  unit.statements.set(start, { end: found.end, rules, code: { op: 'jump', label: site.string, site, condition: given } });
 }
 
 export function called(it: Interpreter, unit: Unit, start: number, end: number, calls: Called[], rules: Rule[], head: Text.Node, frame: import('../interpreter.ts').Node) {
   const value = it.quietly(() => it.deref(it.place(frame, head), false));
-  if (value !== undefined && value.fn === calls[0].native) unit.set(start, { end, rules, code: { op: 'natives', head, value, calls } });
+  if (value !== undefined && value.fn === calls[0].native) unit.statements.set(start, { end, rules, code: { op: 'natives', head, value, calls } });
 }

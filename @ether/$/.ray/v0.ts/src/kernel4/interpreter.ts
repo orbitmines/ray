@@ -307,7 +307,7 @@ export class Interpreter {
     if (held === undefined || held.epoch !== epoch) this.units.set(cursor.source, held = { epoch, by: new Map() });
     const span = cursor.cursor * 65536 + (cursor.limit - cursor.cursor);
     let unit = held.by.get(span);
-    if (unit === undefined) held.by.set(span, unit = new Map());
+    if (unit === undefined) held.by.set(span, unit = { statements: new Map(), labels: new Map() });
     return unit;
   }
   firing: { depth: number; fires: Match[]; calls: Called[] }[] = [];
@@ -321,10 +321,20 @@ export class Interpreter {
       const start = cursor.cursor;
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
       try {
-        const rules = unit === undefined ? undefined : this.heads(frame), compiled = unit?.get(start);
+        const rules = unit === undefined ? undefined : this.heads(frame), compiled = unit?.statements.get(start);
         if (compiled !== undefined && compiled.rules === rules) {
           const ran = evaluate(this, compiled, cursor, frame);
-          if (ran !== undefined) { cursor.cursor = compiled.end; if (ran.value !== undefined) last = ran.value; continue; }
+          if (ran !== undefined) {
+            cursor.cursor = compiled.end;
+            if (ran.value !== undefined) last = ran.value;
+            if (ran.jump !== undefined) {
+              const at = this.label_at(cursor, begin, ran.jump.label, frame);
+              if (at === undefined) throw Object.assign(new Jump(ran.jump.label), { site: ran.jump.site, spelled: true });
+              if (at < start) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
+              cursor.cursor = at;
+            }
+            continue;
+          }
         }
         const firing = { depth: this.running.length, fires: [] as Match[], calls: [] as Called[] };
         this.firing.push(firing);

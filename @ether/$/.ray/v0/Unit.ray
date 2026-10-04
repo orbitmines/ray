@@ -7,6 +7,7 @@ Unit := class {
     this.plural = several
     this.symbol = short
     named ^keyword := this
+    Unit.known &= named
     external define Unit singular { named }
     external define Unit several { named }
     external define Unit short { named }
@@ -77,6 +78,26 @@ Unit := class {
   } else { false }
   chainable != (other: Unit) => (this == other).not
 
+  admits (candidate) => (
+    admitted ^keyword := (candidate.base === None).not
+    unless admitted { admitted = (candidate.name === None).not }
+    unless admitted { admitted = (Unit.named(candidate) === None).not }
+    admitted
+  )
+  named (spelled) => (
+    found ^keyword := None
+    Unit.known for {
+      unless found { if (it.value.spelled_as(spelled)) { found = it.value } }
+    }
+    found
+  )
+  spelled_as (spelled) => (.name == spelled).or(.plural == spelled).or(.symbol == spelled)
+  read (spelled) => (
+    reading ^keyword := spelled
+    unless (spelled.base).or(spelled.name) { reading = Unit.named(spelled) }
+    reading
+  )
+
   prefixed (prefix) => (
     parent := this
     Unit(
@@ -132,7 +153,7 @@ Quantity := class {
 }
 
 Measured := class {
-  { }{unit: Unit ^unit} ^punctuation => this of unit
+  { }{unit: Unit ^unit} ^punctuation => this of Unit.read(unit)
   of (measure) => (
     held := this
     kind := measure
@@ -157,6 +178,8 @@ SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit(
   name: name
   symbol: symbol
 )
+
+Unit.known = chain None
 
 Bit := Unit().called(`bit`, `bits`, `b`)
 Byte := Unit(base: Bit, factor: 8).called(`byte`, `bytes`, `B`)

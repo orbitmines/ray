@@ -1277,12 +1277,7 @@ export class Interpreter {
     const span = rule.inner_body ??= this.inner(rule.body!) ?? rule.body!;
     const cursor = this.cursor_of(span);
     if (this.painting(span.source) || !Interpreter.reducing || ++rule.applications < 4) return this.read(cursor, local);
-    let body = rule.reduced;
-    if (body === undefined || (body.steps > 0 && body.unit.statements.size !== body.known)) {
-      const unit = this.unit_of(cursor), graph = this.graph_of(cursor);
-      body = rule.reduced = reduce(this, span, unit, graph);
-      body.known = unit.statements.size;
-    }
+    const body = rule.reduced ??= reduce(this, span, this.unit_of(cursor), this.graph_of(cursor));
     return run(this, body, cursor, local);
   }
   unforce(mark: number) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }

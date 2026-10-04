@@ -17,7 +17,7 @@ export type Event =
 
 export type Variant = { events: Event[]; valid: boolean; runs?: number; compiled?: Compiled };
 export type Replayed = { value: Node | undefined } | { diverged: Node | undefined } | 'missed';
-type Compiled = (it: Interpreter, cursor: Text.Node, frame: Node) => Replayed;
+export type Compiled = (it: Interpreter, cursor: Text.Node, frame: Node) => Replayed;
 
 export function replay(it: Interpreter, variant: Variant, cursor: Text.Node, frame: Node): Replayed {
   if (variant.compiled !== undefined) return variant.compiled(it, cursor, frame);

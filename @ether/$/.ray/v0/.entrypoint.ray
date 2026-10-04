@@ -255,19 +255,19 @@ left-to-right ^keyword := class: Modifier {
 }
 chainable {head} ({parameters ^parameter}) => {block} => (
   names := external ** parameters
-  code := external ** block
+  method_written := external ** block
   defined ^keyword := external define head `{arguments}` {
     (inline names) := arguments
-    inline code
+    inline method_written
   } parameters
   chainable.modify(defined)
 )
 compounds {head} ({parameters ^parameter}) => {block} => (
   names := external ** parameters
-  code := external ** block
+  method_written := external ** block
   defined ^keyword := external define head `{arguments}` {
     (inline names) := arguments
-    inline code
+    inline method_written
   } parameters
   compounds.modify(defined)
 )
@@ -284,20 +284,20 @@ Node := base class {
 
   ({parameters ^parameter}) => {block} => (
     names := external ** parameters
-    code := external ** block
+    method_written := external ** block
     this ^function
     external define this `{arguments}` {
       (inline names) := arguments
-      inline code
+      inline method_written
     } parameters
   )
   ^{literal style} ({parameters ^parameter}) => {block} => (
     names := external ** parameters
-    code := external ** block
+    method_written := external ** block
     this ^function
     external define this `{arguments}` {
       (inline names) := arguments
-      inline code
+      inline method_written
     } parameters
   )
 
@@ -1307,8 +1307,7 @@ enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?}{\n} 
 )
 
 Program.components.hierarchy &= class {
-  optimizations => global.O
-  O => .optimizations
+  optimizations => .O
   {this}{`{`}{literal setting}{`}`} ^punctuation => class: this { inline setting }
 
   written => (

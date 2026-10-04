@@ -53,7 +53,7 @@ Iterable := class: Ordered {
 
   .reduce(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => (
     names ^keyword := external ** accumulator
-    code ^keyword := external ** step
+    step_written ^keyword := external ** step
     accumulated ^keyword := None
     started ^keyword := false
     for {
@@ -62,7 +62,7 @@ Iterable := class: Ordered {
         entering.target = it.value
         external define entering.target `reduce_step{arguments}` {
           (inline names) := arguments
-          inline code
+          inline step_written
         } accumulator
         accumulated = entering.target.reduce_step(accumulated)
       } else {
@@ -85,14 +85,14 @@ Iterable := class: Ordered {
   )
   .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => (
     names ^keyword := external ** accumulator
-    code ^keyword := external ** step
+    step_written ^keyword := external ** step
     accumulated ^keyword := initial
     for {
       entering ^keyword := chain None
       entering.target = it.value
       external define entering.target `reduce_step{arguments}` {
         (inline names) := arguments
-        inline code
+        inline step_written
       } accumulator
       accumulated = entering.target.reduce_step(accumulated)
     }

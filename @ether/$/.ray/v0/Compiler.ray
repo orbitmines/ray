@@ -15,3 +15,7 @@ Compiler := class {
     {a} * 2 => a + a
   }
 }
+
+Program.components.hierarchy &= class {
+  O := Compiler.none
+}

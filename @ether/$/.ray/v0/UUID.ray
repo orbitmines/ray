@@ -30,12 +30,6 @@ UUID := class: Hexadecimal {
     out
   )
 
-  versioned (digits, version: Number) => (
-    digits.head.at(12).value = version
-    digits.head.at(16).value = 8 + (digits.head.at(16).value % 4)
-    digits
-  )
-
   as_string => (
     out := chain None
     walker ^keyword := .spelled.head
@@ -94,7 +88,10 @@ UUID.v3 = class: UUID {
 }
 
 UUID.v4 = class: UUID {
-  spelled: UUID.versioned(UUID.drawn(32), 4)
+  spelled: UUID.drawn(32) ~~ (
+    .head.at(12).value = 4
+    .head.at(16).value = 8 + (.head.at(16).value % 4)
+  )
 }
 
 UUID.v5 = class: UUID {

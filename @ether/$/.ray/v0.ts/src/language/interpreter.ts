@@ -1639,7 +1639,10 @@ export class Interpreter {
       if (first?.kind !== 'literal' || rule.pattern.length > 2 || (second !== undefined && second.kind !== 'capture')) continue;
       let entry = index.get(first.text);
       if (entry === undefined) index.set(first.text, entry = { taking: [] });
-      if (second === undefined) entry.plain ??= rule; else { if (entry.plain === undefined && entry.taking.length === 0) entry.nearer = true; entry.taking.push(rule); }
+      if (second === undefined) {
+        if (entry.plain === undefined && entry.nearer && entry.taking[0].home === rule.home) entry.nearer = false;
+        entry.plain ??= rule;
+      } else { if (entry.plain === undefined && entry.taking.length === 0) entry.nearer = true; entry.taking.push(rule); }
     }
     this.member_index.set(rules, index);
     return index;

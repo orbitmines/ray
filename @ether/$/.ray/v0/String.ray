@@ -247,11 +247,7 @@ Chain.components.hierarchy &= class {
 }
 
 Node.components.hierarchy &= class {
-  as_string => (
-    encoded ^keyword := this
-    external extend encoded Unicode.UTF8
-    encoded.as_code_points.map { it.value.as_character }.as_string
-  )
+  as_string => code_points(this).map { it.value.as_character }.as_string
 }
 "{literal text ^string}" ^string.punctuation => code_points(text).map { it.value.as_character }.as_string.dedented
 

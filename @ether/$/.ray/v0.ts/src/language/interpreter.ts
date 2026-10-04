@@ -1616,8 +1616,8 @@ export class Interpreter {
     if (this.members_of(this.rules_on(target)).has(name)) return undefined;
     return Object.assign(new Node(span), { place: { in: target, name, member: true } });
   }
-  private member_index = new WeakMap<Rule[], Map<string, { plain?: Rule; taking: Rule[] }>>();
-  members_of(rules: Rule[]): Map<string, { plain?: Rule; taking: Rule[] }> {
+  private member_index = new WeakMap<Rule[], Map<string, { plain?: Rule; taking: Rule[]; nearer?: boolean }>>();
+  members_of(rules: Rule[]): Map<string, { plain?: Rule; taking: Rule[]; nearer?: boolean }> {
     let index = this.member_index.get(rules);
     if (index !== undefined) return index;
     index = new Map();
@@ -1626,7 +1626,7 @@ export class Interpreter {
       if (first?.kind !== 'literal' || rule.pattern.length > 2 || (second !== undefined && second.kind !== 'capture')) continue;
       let entry = index.get(first.text);
       if (entry === undefined) index.set(first.text, entry = { taking: [] });
-      if (second === undefined) entry.plain ??= rule; else entry.taking.push(rule);
+      if (second === undefined) entry.plain ??= rule; else { if (entry.plain === undefined && entry.taking.length === 0) entry.nearer = true; entry.taking.push(rule); }
     }
     this.member_index.set(rules, index);
     return index;
@@ -1637,7 +1637,7 @@ export class Interpreter {
     const name = this.text(key);
     if (target.style !== undefined) return this.style(`${target.style}.${name}`);
     const entry = this.members_of(this.rules_on(target)).get(name);
-    const plain = entry?.plain;
+    const plain = entry?.nearer ? undefined : entry?.plain;
     if (plain !== undefined) return this.apply({ rule: plain, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [], receiver: this.location(node) ?? node }, target, key.at ?? node.at!);
     const taking = entry?.taking ?? [];
     if (taking.length > 0) {

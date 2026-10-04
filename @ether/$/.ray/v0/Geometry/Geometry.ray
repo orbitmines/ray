@@ -183,7 +183,6 @@ middle ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `y`,
 p {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount, y: amount), sides: Geometry.Side.all)
 pl {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.left)
 pr {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.right)
-m {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount, y: amount), sides: Geometry.Side.all, from: Geometry.Spacing.From.shape)
 mx {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.horizontal, from: Geometry.Spacing.From.shape)
 my {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.vertical, from: Geometry.Spacing.From.shape)
 ml {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.left, from: Geometry.Spacing.From.shape)

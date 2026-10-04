@@ -1689,7 +1689,7 @@ export class Interpreter {
         return this.read(this.cursor_of(target.code!.span), frame);
       }
       if (target.text) { if (target === this.probe?.node) this.probe.other = true; return compose || target.at === undefined || target.at.empty() ? target : this.read(this.cursor_of(target.at), frame); }
-      if (target !== frame && !target.none && !(frame.with ??= []).includes(target)) { if (compose) frame.with.unshift(target); else frame.with.push(target); Interpreter.touch(frame); this.version++; }
+      if (target !== frame && !target.none && !(frame.with ??= []).includes(target)) { frame.with.push(target); Interpreter.touch(frame); this.version++; }
       return target;
     }
     return target;

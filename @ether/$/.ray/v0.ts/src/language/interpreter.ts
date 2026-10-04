@@ -533,6 +533,8 @@ export class Interpreter {
     }
     const same = rules.findIndex(other => other.key === rule.key);
     if (same >= 0) { rule.order = rules[same].order; rules.splice(same, 1); }
+    const written_at = rule.at.source.location === undefined ? undefined : `${rule.at.source.location}:${rule.at.begin}:${rule.at.end}`;
+    if (written_at !== undefined) { const first = this.written_orders.get(written_at); if (first !== undefined && first < rule.order) rule.order = first; else this.written_orders.set(written_at, rule.order); }
     const spelled = rule.operator;
     if (spelled !== undefined && (this.operators_written.get(rule.key)?.order ?? Infinity) > rule.order) { this.operators_written.set(rule.key, { order: rule.order, operator: spelled }); this.loosers = new WeakMap(); }
     rules.push(rule);
@@ -1189,9 +1191,9 @@ export class Interpreter {
     return j;
   }
   trailing_end(cursor: Text.Node, j: number, frame: Node, rule: Rule): number {
-    const text = cursor.source.value, looser = this.looser(frame, rule);
+    const text = cursor.source.value, looser = this.looser(frame, rule), start = j;
     while (j < cursor.limit && text[j] !== '\n') {
-      if (looser.some(spelling => this.spelled(cursor, j, spelling) && /\s/.test(text[j + spelling.length] ?? '\n'))) {
+      if (j > start && looser.some(spelling => this.spelled(cursor, j, spelling) && /\s/.test(text[j + spelling.length] ?? '\n'))) {
         let k = j; while (k > 0 && /\s/.test(text[k - 1])) k--;
         return k;
       }
@@ -1202,6 +1204,7 @@ export class Interpreter {
   }
   private loosers = new WeakMap<Rule[], WeakMap<Rule[], Map<Rule, string[]>>>();
   operators_written = new Map<string, { order: number; operator: string }>();
+  written_orders = new Map<string, number>();
   looser(frame: Node, rule: Rule): string[] {
     const scope = this.rules_of(frame), based = this.BASE === undefined ? Interpreter.receiving_any : this.rules_on(this.BASE);
     let by_base = this.loosers.get(scope);
@@ -2071,7 +2074,7 @@ export class Interpreter {
       GLOBAL: this.GLOBAL, NONE: this.NONE, EXTERNAL: this.EXTERNAL, BASE: this.BASE, made: this.made, theme: this.theme,
       version: this.version, declared: this.declared, rules_version: this.rules_version, order: this.order, rules: Rule.count,
       definitions: this.definitions, given_names: this.given_names, held_texts: this.held_texts, filtered: this.filtered, rejected: this.rejected,
-      named: this.named, templates: this.templates, template: this.template, pending: this.pending, done: [...this.done], externals, operators_written: this.operators_written,
+      named: this.named, templates: this.templates, template: this.template, pending: this.pending, done: [...this.done], externals, operators_written: this.operators_written, written_orders: this.written_orders,
       diagnostics: this.diagnostics.items,
     };
   }
@@ -2080,7 +2083,7 @@ export class Interpreter {
     this.version = state.version + 1; this.declared = state.declared; Interpreter.declarations = Math.max(Interpreter.declarations, state.declared); this.rules_version = state.rules_version + 1; this.order = state.order;
     Rule.count = Math.max(Rule.count, state.rules);
     this.definitions = state.definitions; this.given_names = state.given_names; this.held_texts = state.held_texts; this.filtered = state.filtered; this.rejected = state.rejected;
-    this.named = state.named; this.templates = state.templates; this.template = state.template; this.pending = state.pending; this.done = new Set(state.done); this.operators_written = state.operators_written ?? new Map();
+    this.named = state.named; this.templates = state.templates; this.template = state.template; this.pending = state.pending; this.done = new Set(state.done); this.operators_written = state.operators_written ?? new Map(); this.written_orders = state.written_orders ?? new Map();
     for (const [src, held] of state.externals as Map<Text.Source, Map<string, Node>>) this.externals.set(src, held);
     for (const [src, held] of state.diagnostics as Map<Text.Source | undefined, Map<Text.Node | undefined, Diagnostic[]>>) this.diagnostics.items.set(src, held);
   }
@@ -2179,6 +2182,7 @@ export class Interpreter {
     this.theme = node(from.theme);
     this.filtered = new Map(from.filtered);
     this.operators_written = new Map(from.operators_written);
+    this.written_orders = new Map(from.written_orders);
     this.held_texts = new Map([...from.held_texts].filter(([, held]) => held.value === undefined));
     this.order = from.order;
     this.given_names = new Set(from.given_names);

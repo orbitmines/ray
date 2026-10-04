@@ -217,7 +217,11 @@ History := class: Ray {
     this
   )
   stage (who, what) => .commit(who, what)
-  published => .commits.filter { it.value.staged.not }
+  published => (
+    shown := chain None
+    .commits for { unless it.value.staged { shown &= it.value } }
+    shown
+  )
   publish => (
     .commits for { it.value.publish }
     this

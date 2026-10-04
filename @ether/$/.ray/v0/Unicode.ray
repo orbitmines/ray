@@ -1,7 +1,7 @@
 Unicode := class {
 
   scalar (codepoint: Number) => (codepoint < 1114112).and(Unicode.surrogate(codepoint).not)
-  surrogate (codepoint: Number) => (55295 < codepoint).and(codepoint < 57344)
+  surrogate (codepoint: Number) => (codepoint < 57344).and(codepoint.at_least(Unicode.surrogate_first))
 
   fits (codepoint: Number, width: Number) => codepoint < (2).pow(width)
   surrogate_first => 55296
@@ -48,15 +48,15 @@ Unicode := class {
     unit => 65536
     encode (codepoint: Number) => if (Unicode.fits(codepoint, 16)) { bits_of(codepoint, 16) } else {
       shifted := codepoint - .unit
-      pair := bits_of(surrogate_first + (shifted / 1024), 16)
-      bits_of(surrogate_first + 1024 + (shifted % 1024), 16) for { pair &= it.value }
+      pair := bits_of(Unicode.surrogate_first + (shifted / 1024), 16)
+      bits_of(Unicode.surrogate_first + 1024 + (shifted % 1024), 16) for { pair &= it.value }
       pair
     }
     decode (bits) => (
       high := number_of(bits.slice_bits(0, 16))
       if (Unicode.surrogate(high)) {
         low := number_of(bits.slice_bits(16, 32))
-        this.unit + ((high - surrogate_first) * 1024) + (low - (surrogate_first + 1024))
+        .unit + ((high - Unicode.surrogate_first) * 1024) + (low - (Unicode.surrogate_first + 1024))
       } else { high }
     )
   }
@@ -107,7 +107,7 @@ code_points (source) => (
     }
     points
   )
-  if (source.head) { source for { take(it.value) } } else { external bits source take }
+  if (source.head) { source for { take(it.value.holds) } } else { external bits source take }
   points
 )
 

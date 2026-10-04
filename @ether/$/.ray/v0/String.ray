@@ -5,11 +5,11 @@ Character := class: Unicode.Scalar {
   octets => Unicode.UTF8.encode(this)
 
   is_ascii => this < 128
-  lower_case => (96 < this).and(this < 123)
-  upper_case => (64 < this).and(this < 91)
+  lower_case => .at_least(97).and(this < 123)
+  upper_case => .at_least(65).and(this < 91)
   letter => .lower_case.or(.upper_case)
-  digit => (47 < this).and(this < 58)
-  blank => (this == 32).or((8 < this).and(this < 14))
+  digit => .at_least(48).and(this < 58)
+  blank => (this == 32).or(.at_least(9).and(this < 14))
   is_underscore => this == 95
   word => .letter.or(.digit).or(.is_underscore)
 
@@ -267,39 +267,24 @@ Chain.components.hierarchy &= class {
 }
 
 bits_of (number, width) => (
-  counter := chain None
-  left ^keyword := width
-  while left {
-    counter &= 0
-    left = left.pred
-  }
+  bits := chain None
   rest ^keyword := number
-  while rest {
-    digit ^keyword := counter.head
-    carrying ^keyword := true
-    while (carrying.and(digit)) {
-      if digit.value { digit.value = 0 } else {
-        digit.value = 1
-        carrying = false
-      }
-      digit = digit.next
+  place ^keyword := (2).pow(width)
+  while (1 < place) {
+    place = place / 2
+    if (rest < place) { bits &= 0 } else {
+      bits &= 1
+      rest = rest - place
     }
-    rest = rest.pred
   }
-  forwards := chain None
-  walker ^keyword := counter.tail
-  while (walker) {
-    forwards &= walker.value
-    walker = walker.previous
-  }
-  forwards
+  bits
 )
 
 number_of (bits) => (
   total ^keyword := 0
   bits for {
     total = total + total
-    if it.value { total = total.succ }
+    if it.value.holds { total = total.succ }
   }
   total
 )

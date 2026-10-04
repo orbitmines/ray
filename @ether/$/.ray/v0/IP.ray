@@ -33,6 +33,18 @@ IP := class {
 
   chainable == (other: IP) => .as_string == other.as_string
 
+  next => this + 1
+  previous => this - 1
+
+  parse (text: String) => (
+    slash := text.index_of("/")
+    written ^keyword := text
+    unless (slash === None) { written = text.slice(0, slash) }
+    address ^keyword := None
+    if (written.contains(":")) { address = IP.v6.parse(written) } else { address = IP.v4(segments: IP.read(written, U+002E, 10)) }
+    if (slash === None) { address } else { address / text.slice(slash + 1, text.count).as_number }
+  )
+
   from_bits (address_bits) => (
     out := chain None
     bit_at ^keyword := address_bits.head
@@ -117,9 +129,86 @@ IP.v4 = class: IP {
 IP.v4.Segment = Number{. < 256}
 
 IP.v6 = class: IP {
+  segments: Node
+  left: None
+  right: None
+  embedded: None
+
   segment_length => 16
   separator => U+003A
   base => 16
+
+  parse (text: String) => (
+    gap := text.index_of("::")
+    if (gap === None) {
+      read_left := IP.v6.groups(text)
+      IP.v6(segments: read_left.groups, left: read_left.groups, embedded: read_left.embedded)
+    } else {
+      read_left := IP.v6.groups(text.slice(0, gap))
+      read_right := IP.v6.groups(text.slice(gap + 2, text.count))
+      filled := chain None
+      read_left.groups for { filled &= it.value }
+      missing ^keyword := 8 - (read_left.groups.count + read_right.groups.count)
+      while missing.nonzero {
+        filled &= 0
+        missing = missing.pred
+      }
+      read_right.groups for { filled &= it.value }
+      IP.v6(segments: filled, left: read_left.groups, right: read_right.groups, embedded: read_right.embedded)
+    }
+  )
+
+  groups (text: String) => (
+    read := chain None
+    inside ^keyword := None
+    if text.nonempty {
+      text.split(U+003A) for {
+        piece := it.value
+        if (piece.contains(".")) {
+          inside = IP.v4(segments: IP.read(piece, U+002E, 10))
+          quad := inside.segments
+          read &= (quad.at(0).value * 256) + quad.at(1).value
+          read &= (quad.at(2).value * 256) + quad.at(3).value
+        } else { read &= piece.as_number_in(16) }
+      }
+    }
+    IP.v6.Groups(groups: read, embedded: inside)
+  )
+
+  full => .written(0, .segment_count)
+
+  mapped => (
+    first_five_zero ^keyword := true
+    at ^keyword := 0
+    while (at < 5) {
+      unless .segments.at(at).value.is_zero { first_five_zero = false }
+      at = at.succ
+    }
+    first_five_zero.and(.segments.at(5).value == 65535)
+  )
+  translated => (
+    rest_zero ^keyword := true
+    at ^keyword := 2
+    while (at < 6) {
+      unless .segments.at(at).value.is_zero { rest_zero = false }
+      at = at.succ
+    }
+    (.segments.at(0).value == 100).and(.segments.at(1).value == 65435).and(rest_zero)
+  )
+  tail_v4 => (
+    quad := chain None
+    quad &= .segments.at(6).value / 256
+    quad &= .segments.at(6).value % 256
+    quad &= .segments.at(7).value / 256
+    quad &= .segments.at(7).value % 256
+    IP.v4(segments: quad)
+  )
+
+  as_string => (
+    if .mapped { "::ffff:" + .tail_v4.as_string }
+    elsif .translated { "64:ff9b::" + .tail_v4.as_string }
+    else { .compressed }
+  )
 
   zeros => (
     best_at ^keyword := 0
@@ -143,7 +232,7 @@ IP.v6 = class: IP {
 
   compressed => (
     found := .zeros
-    if (found.length < 2) { .as_string } else {
+    if (found.length < 2) { .full } else {
       before := .written(0, found.at)
       after := .written(found.at + found.length, .segment_count)
       before + ("::" + after)
@@ -163,6 +252,11 @@ IP.v6 = class: IP {
 }
 
 IP.v6.Segment = Number{. < 65536}
+
+IP.v6.Groups = class {
+  groups: Node
+  embedded: None
+}
 
 Chain.Run = class {
   at: Number

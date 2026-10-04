@@ -19,14 +19,14 @@ World := class: Nameable {
   children: (chain None)
   host?: Node
   worlds: (chain None)
-  personas: (chain None)
+  characters: (chain None)
   items: (chain None)
   quests: (chain None)
   reservations: (chain None)
 
-  spawn (persona) => (
-    .personas &= persona
-    persona
+  spawn (character) => (
+    .characters &= character
+    character
   )
   add (item) => (
     .items &= item
@@ -61,7 +61,7 @@ World := class: Nameable {
     name: String
     issuer: Node
   }
-  population => .personas.count
+  population => .characters.count
 }
 World.components.hierarchy &= Location
 Region := World
@@ -205,7 +205,7 @@ Character := class: Nameable {
   )
 }
 Avatar := class: Character {
-  persona: Node
+  character: Node
   platform: Node
   avatars: (chain None)
   presence: None

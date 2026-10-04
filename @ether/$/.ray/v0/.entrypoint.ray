@@ -1561,6 +1561,8 @@ false := boolean.false
 
 {l} [x: right-to-left] {m} [y: left-to-right] {r} => l[x] m & m[y] r
 
+{base} [x: right-to-left] {middle_operand} [y: right-to-left] {top} => base[x] (middle_operand[y] top)
+
 {left} [x: left-to-right] {middle} [y: right-to-left] {right} => (
   ERROR@middle `mixes directions around one operand; use parentheses`
   None

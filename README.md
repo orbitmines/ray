@@ -44,6 +44,12 @@ On Windows (PowerShell or cmd):
 powershell -c "irm https://ether.orbitmines.com/install.ps1 | iex"
 ```
 
+Or with npm ([Node.js](https://nodejs.org) 20.11 or later):
+
+```shell
+npm install -g @orbitmines/ether.ray
+```
+
 This installs `ether` (and `ray`, `orbitmines`) into `~/.ether/bin` and adds it to your PATH; `install.sh --uninstall` (or `install.ps1 -Uninstall`) removes it again.
 
 - You can also install language support for [IntelliJ](https://plugins.jetbrains.com/plugin/29452-ether) / [VS Code](https://marketplace.visualstudio.com/items?itemName=orbitmines.ether-ray) (find it in their respective marketplaces under the name 'Ether.ray')
@@ -62,9 +68,13 @@ There are several alternative ways of installing Ray & Ether:
   cd ray && ./install.sh --compile
   ```
   
-  ```shell
-  ether
-  ```
+---
+
+## Running Ether.ray
+
+```shell
+ether
+```
 
 ---
 

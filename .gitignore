@@ -9,3 +9,5 @@
 /**/.*.ts
 /@ether/$/.ray/v0.ts/src/language.*.ts
 /@ether/$/.ray/v0.ts/src/kernel.*/
+/@ether/$/.ray/v0.ts/dist/
+/@ether/$/.ray/v0.ts/@ether/

@@ -1,7 +1,7 @@
 # Installs Ether (`ether`, with the aliases `ray` and `orbitmines`) for the current user, from PowerShell or cmd.
 #
 #   powershell -c "irm https://ether.orbitmines.com/install.ps1 | iex"      the latest release, for this platform
-#   & ([scriptblock]::Create((irm https://ether.orbitmines.com/install.ps1))) -Version 0.1.1
+#   & ([scriptblock]::Create((irm https://ether.orbitmines.com/install.ps1))) -Version 0.1.1-E2027.0A.1
 #   .\install.ps1 -Compile                                                  compiled from this checkout (needs Deno)
 #
 # Windows PowerShell 5.1 and PowerShell 7 (also on macOS and Linux). In bash, use install.sh.

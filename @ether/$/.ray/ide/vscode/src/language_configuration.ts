@@ -7,7 +7,7 @@ import type { LanguageClient } from 'vscode-languageclient/node';
 
 /**
  * Wire shape that lands from the LSP's `ether/languageConfiguration` request.
- * Mirrors `EditorLanguageConfiguration` from @orbitmines/ray. We keep the type
+ * Mirrors `EditorLanguageConfiguration` from @orbitmines/ether.ray. We keep the type
  * loose here so a server-side change doesn't strand a stale extension.
  */
 export interface WireConfiguration {

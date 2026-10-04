@@ -1,8 +1,10 @@
 name: Release
 
-# Every push to main builds Ether for every platform, installs it on each with install.sh and install.ps1, and, when
-# the version in kernel3/language.ts has no release yet, publishes one (v<version>, the latest) with the archives,
-# their SHA256SUMS and both installers. Pull requests build and verify only.
+# Every push to main builds Ether for every platform, installs it on each with install.sh and install.ps1, packs the npm
+# package (@orbitmines/ether.ray) and installs that on each with npm; when the version in kernel3/language.ts has no
+# release yet, it publishes one (v<version>, the latest: the archives, their SHA256SUMS, both installers) and the npm
+# package (with NPM_TOKEN, or as a trusted publisher when the NPM_TRUSTED_PUBLISHING variable is true). Pull requests
+# build and verify only.
 
 on:
   push:
@@ -12,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -24,7 +27,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       release: ${{ steps.version.outputs.release }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: denoland/setup-deno@v2
         with:
@@ -49,7 +52,7 @@ jobs:
           cp install.sh install.ps1 dist/
           ls -la dist && cat dist/SHA256SUMS
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -63,7 +66,7 @@ jobs:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist
@@ -108,12 +111,103 @@ jobs:
           if ($LASTEXITCODE) { exit 1 }
           .\dist\install.ps1 -Uninstall
 
+  npm:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: pack @orbitmines/ether.ray (its prepack, scripts/bundle.mjs, bundles kernel3/language.ts and the .ray files)
+        working-directory: "@ether/$/.ray/v0.ts"
+        run: |
+          npm ci
+          npm version --no-git-tag-version --allow-same-version "${{ needs.build.outputs.version }}"
+          mkdir -p "$GITHUB_WORKSPACE/out" && npm pack --pack-destination "$GITHUB_WORKSPACE/out"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm
+          path: out/
+          if-no-files-found: error
+
+  verify-npm:
+    needs: npm
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm
+          path: out
+      - name: npm install -g, and each command knows its name
+        shell: bash
+        run: |
+          npm install -g ./out/*.tgz
+          for command in ether ray orbitmines; do
+            echo "$command: $("$command" --version)"
+            "$command" --help | grep -q "Usage: $command " || { echo "$command doesn't know it's $command"; exit 1; }
+          done
+      - name: The same from cmd
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          ray --help | findstr /C:"Usage: ray " || exit /b 1
+          orbitmines --help | findstr /C:"Usage: orbitmines " || exit /b 1
+      - name: The same from PowerShell
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          foreach ($command in 'ether', 'ray', 'orbitmines') {
+            if (-not (& $command --help | Select-String -SimpleMatch "Usage: $command ")) { throw "$command doesn't know it's $command" }
+          }
+
+  publish-npm:
+    needs: [build, verify, verify-npm]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.build.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      HAS_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+      TRUSTED: ${{ vars.NPM_TRUSTED_PUBLISHING == 'true' }}
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: npm new enough to publish as a trusted publisher (11.5.1 or later)
+        run: npm install -g npm@latest
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm
+          path: out
+      - name: publish to npm (@orbitmines/ether.ray), as a trusted publisher
+        if: env.TRUSTED == 'true'
+        run: if npm view "@orbitmines/ether.ray@$VERSION" version >/dev/null 2>&1; then echo "@orbitmines/ether.ray@$VERSION is on npm already"; else npm publish ./out/*.tgz --access public --provenance --tag latest; fi
+      - name: publish to npm (@orbitmines/ether.ray), with a token
+        if: env.TRUSTED != 'true' && env.HAS_TOKEN == 'true'
+        run: if npm view "@orbitmines/ether.ray@$VERSION" version >/dev/null 2>&1; then echo "@orbitmines/ether.ray@$VERSION is on npm already"; else npm publish ./out/*.tgz --access public --provenance --tag latest; fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: neither is set up
+        if: env.TRUSTED != 'true' && env.HAS_TOKEN != 'true'
+        run: echo "::warning::Not published to npm - set the NPM_TOKEN secret, or the NPM_TRUSTED_PUBLISHING variable once npm trusts this workflow."
+
   release:
     needs: [build, verify]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.build.outputs.release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist

@@ -55,7 +55,7 @@
     "publish": "npx --yes @vscode/vsce publish --pre-release --no-dependencies"
   },
   "dependencies": {
-    "@orbitmines/ray": "file:../../v0.ts",
+    "@orbitmines/ether.ray": "file:../../v0.ts",
     "tsx": "^4.21.0",
     "vscode-languageclient": "^9.0.1"
   },

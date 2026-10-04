@@ -1,4 +1,5 @@
 import { readdirSync, mkdirSync, copyFileSync, rmSync, writeFileSync } from 'fs';
+import { build } from 'esbuild';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -31,3 +32,16 @@ const manifest = [];
 })(SRC, '');
 
 writeFileSync('src/bundled.ts', `export const manifest: string[] = ${JSON.stringify(manifest)};\n`);
+
+// The language (kernel3/language.ts), bundled for Node: what the package's bin/ scripts run.
+rmSync('dist', { recursive: true, force: true });
+await build({
+  entryPoints: ['src/kernel3/language.ts'],
+  outfile: 'dist/language.js',
+  bundle: true,
+  format: 'esm',
+  platform: 'node',
+  target: 'node20',
+  banner: { js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);" },
+  logLevel: 'warning',
+});

@@ -945,11 +945,23 @@ export class Interpreter {
       else end = this.trailing_end(cursor, from, frame, rule);
       let last = end;
       if (!exact) while (last > from && /\s/.test(text[last - 1])) last--;
-      const span = cursor.span(from, last - 1);
+      let span = cursor.span(from, last - 1);
       if (last <= from) { if (!piece.optional && !enclosed && opened === 0) return; captures.set(piece.name, span); i = end; continue; }
       if (piece.undecided && piece.decided !== this.declared) this.decide(piece);
       if (piece.undecided) return;
-      if (piece.typed && this.holds(piece, span) === undefined) return;
+      if (piece.typed && this.holds(piece, span) === undefined) {
+        if (next !== undefined) return;
+        let held: Text.Node | undefined;
+        for (let k = last - 1; k > from && held === undefined; k--) {
+          if (!/\s/.test(text[k]) || /\s/.test(text[k - 1])) continue;
+          let shorter = k; while (shorter > from && /\s/.test(text[shorter - 1])) shorter--;
+          if (shorter <= from) break;
+          const candidate = cursor.span(from, shorter - 1);
+          if (this.holds(piece, candidate) !== undefined) { held = candidate; end = shorter; }
+        }
+        if (held === undefined) return;
+        span = held;
+      }
       captures.set(piece.name, span);
       i = end;
     }

@@ -24,9 +24,10 @@ Version := class: Ray {
 
   resolved (revisions) => (
     chosen ^keyword := this
+    wanted := .number
     if .latest {
       revisions for {
-        if (it.value.number == .number) {
+        if (it.value.number == wanted) {
           if ((chosen.revision === None).or(chosen.revision < it.value.revision)) { chosen = it.value }
         }
       }
@@ -67,7 +68,8 @@ Versioned := class: Ray {
   at (version: Version) => if (.visible_at(version)) { .value } else { None }
   selected (range) => (
     found ^keyword := chain None
-    range.versions for { if (.visible_at(it.value)) { found &= .value } }
+    held := this
+    range.versions for { if (held.visible_at(it.value)) { found &= held.value } }
     found
   )
 }
@@ -232,7 +234,8 @@ Operation := class: Ray {
 History.components.hierarchy &= class {
   clock => (
     found ^keyword := None
-    History.clocks for { if (it.value.node === .repository) { found = it.value } }
+    owner := .repository
+    History.clocks for { if (it.value.node === owner) { found = it.value } }
     if (found === None) {
       found = HybridClock(node: .repository)
       History.clocks &= found
@@ -287,7 +290,8 @@ History.components.hierarchy &= class {
   )
   named (name: String) => (
     found ^keyword := None
-    .definitions for { if (.name_of(it.value) == name) { found = it.value } }
+    history := this
+    .definitions for { if (history.name_of(it.value) == name) { found = it.value } }
     found
   )
   definitions => (

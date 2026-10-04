@@ -94,7 +94,7 @@ export class Levelled extends Interpreter {
   // Written text is of the kind the level names for it: it answers what that kind answers.
   rules_on(value: Node): Rule[] {
     const kind = value.text && this.level?.written !== undefined ? this.type_of(this.level.written) : undefined;
-    return kind === undefined ? super.rules_on(value) : super.rules_on(kind);
+    return kind === undefined ? super.rules_on(value) : value.with === undefined ? super.rules_on(kind) : this.joined(super.rules_on(value), super.rules_on(kind));
   }
   carries(value: Node, rule: Rule): boolean { return this.rules_on(value instanceof Count ? value.template : value).includes(rule); }
 

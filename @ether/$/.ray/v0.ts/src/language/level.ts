@@ -250,7 +250,7 @@ export class Levelled extends Interpreter {
     if (self instanceof Count && this.carries(self, rule)) return self.succ();
     const answer = written(), made = answer === undefined ? undefined : this.deref(answer, false);
     if (made === undefined || made instanceof Count || !this.carries(made, rule)) return answer ?? this.NONE;
-    for (const key of made.names?.keys() ?? []) {
+    for (const key of made.name_keys()) {
       if (made.own(key)?.code !== undefined || this.field(made, key) !== self) continue;
       return new Count(1n, self, made, key);
     }

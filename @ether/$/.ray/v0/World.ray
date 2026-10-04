@@ -15,6 +15,9 @@ Location := class: Hierarchy {
 World := class: Nameable {
   prefix => `#`
   name: String
+  parent?: Node
+  children: (chain None)
+  host?: Node
   worlds: (chain None)
   personas: (chain None)
   items: (chain None)
@@ -60,6 +63,7 @@ World := class: Nameable {
   }
   population => .personas.count
 }
+World.components.hierarchy &= Location
 Region := World
 
 Quest := class: Nameable {
@@ -168,7 +172,7 @@ Reference := class: Ray {
   year: None
   link: None
   pointer: None
-  external: None
+  remote: None
   notes: (chain None)
 
   publish => (

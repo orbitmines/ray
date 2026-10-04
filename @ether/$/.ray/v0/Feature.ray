@@ -7,7 +7,15 @@ IO := class {
     path.split(U+002F) for {
       part := it.value
       if (part == "..") {
-        if kept.nonempty { kept = kept.slice(0, kept.count.pred) }
+        if kept.nonempty {
+          shorter := chain None
+          left ^keyword := kept.count.pred
+          kept for {
+            if left.nonzero { shorter &= it.value }
+            left = left.pred
+          }
+          kept = shorter
+        }
       } elsif ((part == ".").or(part.empty).not) { kept &= part }
     }
     IO.root + ("/" + kept.join("/"))
@@ -34,6 +42,8 @@ IO := class {
 }
 
 Random := class {
+  seeded (seed: Number) => Random.Seeded(state: seed)
+  secure => Random
 
   bit => if ((external random)) { 1 } else { 0 }
   bits (count: Number) => (
@@ -89,8 +99,6 @@ Random.Seeded = class {
     total
   )
 }
-Random.seeded = (seed: Number) => Random.Seeded(state: seed)
-Random.secure = Random
 
 Counted := class {
   count: Node

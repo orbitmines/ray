@@ -181,6 +181,7 @@ export class Levelled extends Interpreter {
   links(chain: Node | undefined): Node[] | undefined {
     if (chain === undefined || chain.none) return undefined;
     const out: Node[] = [];
+    if (this.member(chain, 'head') === undefined) return undefined;
     for (let link = this.field(chain, 'head'), walked = 0; link !== undefined && !link.none && walked < 1 << 20; link = this.field(link, 'next'), walked++) {
       const value = this.field(link, 'value');
       if (value === undefined) return undefined;

@@ -194,7 +194,8 @@ export class Interpreter {
   owns: (src: Text.Source) => boolean = () => true;
   copy_of?: Interpreter
   version = 0
-  declared = 0
+  static declarations = 0;
+  declared = ++Interpreter.declarations
   private order = 0
   private depth = 0
   reading?: Text.Node
@@ -1190,7 +1191,7 @@ export class Interpreter {
   trailing_end(cursor: Text.Node, j: number, frame: Node, rule: Rule): number {
     const text = cursor.source.value, looser = this.looser(frame, rule);
     while (j < cursor.limit && text[j] !== '\n') {
-      if (looser.some(spelling => this.spelled(cursor, j, spelling) && ((j > 0 && /\s/.test(text[j - 1])) || /\s/.test(text[j + spelling.length] ?? '')))) {
+      if (looser.some(spelling => this.spelled(cursor, j, spelling) && /\s/.test(text[j + spelling.length] ?? '\n'))) {
         let k = j; while (k > 0 && /\s/.test(text[k - 1])) k--;
         return k;
       }
@@ -1215,6 +1216,22 @@ export class Interpreter {
     const latest = new Map<string, Rule>();
     for (const rules of [scope, based]) for (const other of rules) if (other.operator !== undefined && (latest.get(other.key)?.order ?? -1) < other.order) latest.set(other.key, other);
     const order = Math.max(rule.order, latest.get(rule.key)?.order ?? -1);
+    if (rule.operator !== undefined) {
+      const first = new Map<string, number>();
+      for (const written of this.operators_written.values()) if ((first.get(written.operator) ?? Infinity) > written.order) first.set(written.operator, written.order);
+      const local = new Map<string, number>();
+      for (const other of rule.home?.rules ?? []) if (other.operator !== undefined && (local.get(other.operator) ?? Infinity) > other.order) local.set(other.operator, other.order);
+      const mine = first.get(rule.operator), here = local.get(rule.operator) ?? rule.order;
+      if (mine !== undefined) {
+        const out = [rule.operator];
+        for (const operator of new Set([...first.keys(), ...local.keys()])) {
+          if (out.includes(operator)) continue;
+          const looser = local.has(operator) ? local.get(operator)! < here : first.get(operator)! < mine;
+          if (looser) out.push(operator);
+        }
+        return out;
+      }
+    }
     const out: string[] = rule.operator === undefined ? [] : [rule.operator];
     for (const other of latest.values()) if (other.order < order) out.push(other.operator!);
     for (const [key, written] of this.operators_written) if (!latest.has(key) && written.order < order && !out.includes(written.operator)) out.push(written.operator);
@@ -1558,7 +1575,7 @@ export class Interpreter {
     if (held === undefined) return undefined;
     const scope = at.place.in;
     if (scope.none) return held;
-    if (scope === this.GLOBAL && scope.own(at.place.name) === undefined) this.declared++;
+    if (scope === this.GLOBAL && scope.own(at.place.name) === undefined) this.declared = ++Interpreter.declarations;
     scope.set(at.place.name, held);
     this.marked_place(at, scope);
     this.paint_place(at);
@@ -2060,7 +2077,7 @@ export class Interpreter {
   }
   restore_state(state: any, mine: Text.Source[]) {
     this.GLOBAL = state.GLOBAL; Node.globals.add(this.GLOBAL); Node.complete = false; this.NONE = state.NONE; this.EXTERNAL = state.EXTERNAL; this.BASE = state.BASE; this.made = state.made; this.theme = state.theme;
-    this.version = state.version + 1; this.declared = state.declared; this.rules_version = state.rules_version + 1; this.order = state.order;
+    this.version = state.version + 1; this.declared = state.declared; Interpreter.declarations = Math.max(Interpreter.declarations, state.declared); this.rules_version = state.rules_version + 1; this.order = state.order;
     Rule.count = Math.max(Rule.count, state.rules);
     this.definitions = state.definitions; this.given_names = state.given_names; this.held_texts = state.held_texts; this.filtered = state.filtered; this.rejected = state.rejected;
     this.named = state.named; this.templates = state.templates; this.template = state.template; this.pending = state.pending; this.done = new Set(state.done); this.operators_written = state.operators_written ?? new Map();

@@ -38,6 +38,11 @@ export class Diagnostics {
     for (const [key, arr] of this.items) { if (key !== src && key?.location !== src.location) continue; for (const [, elements] of arr) yield* elements; }
   }
 
+  files(owner: Text.Source): boolean {
+    for (const by of this.items.values()) for (const [, entries] of by) for (const entry of entries) if (entry.owner === owner || (entry.owner !== undefined && entry.owner.location === owner.location)) return true;
+    return false;
+  }
+
   is_visible(level: Diagnostic['level']): boolean { return DIAGNOSTIC_SEVERITY[level] >= DIAGNOSTIC_SEVERITY[this.level]; }
 
   get empty() { return [...this.items.keys()].length === 0 }

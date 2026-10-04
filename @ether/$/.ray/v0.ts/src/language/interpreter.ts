@@ -293,13 +293,50 @@ export class Interpreter {
       const found = at.own(name);
       if (found !== undefined && !(lexical && at.given?.has(name))) { this.found_in = at; return found; }
       const sees = this.sees_of(at, written);
-      for (const other of sees) { this.collecting?.push(other); const held = other.own(name); if (held !== undefined && !other.given?.has(name) && other.visited !== seen) { this.found_in = other; return held; } }
+      if (sees.length > 0) { const held = this.seen_own(sees, name, written, seen); if (held !== undefined) return held; }
       if (at.on !== undefined) { const held = this.seek(at.on, false, false, name, written, seen); if (held !== undefined) return held; }
       if (at.with !== undefined) for (const made of at.with) { const held = this.seek(made, false, false, name, written, seen); if (held !== undefined) return held; }
       if (deep && sees.length > 0) (later ??= []).push(...sees);
       lexical = true;
     }
     if (later !== undefined) for (const sees of later) { const held = this.seek(sees, true, true, name, written, seen); if (held !== undefined) return held; }
+  }
+  // What a frame sees, and what those see in turn: the frames its code was written in, nearest first.
+  seen_own(sees: Node[], name: string, written: Text.Node | undefined, seen: number): Node | undefined {
+    let deeper: Node[] | undefined, walked: Set<Node> | undefined;
+    for (const other of sees) {
+      this.collecting?.push(other);
+      const held = other.own(name);
+      if (held !== undefined && !other.given?.has(name) && other.visited !== seen) { this.found_in = other; return held; }
+      const further = this.sees_of(other, written);
+      if (further.length > 0) (deeper ??= []).push(...further);
+    }
+    while (deeper !== undefined && deeper.length > 0) {
+      walked ??= new Set(sees);
+      const next: Node[] = [];
+      for (const other of deeper) {
+        if (walked.has(other)) continue;
+        walked.add(other);
+        this.collecting?.push(other);
+        const held = other.own(name);
+        if (held !== undefined && !other.given?.has(name) && other.visited !== seen) { this.found_in = other; return held; }
+        next.push(...this.sees_of(other, written));
+      }
+      deeper = next;
+    }
+  }
+  private seen_holder(sees: Node[], name: string, written: Text.Node | undefined, seen: number): Node | undefined {
+    const walked = new Set<Node>();
+    for (let level = sees; level.length > 0;) {
+      const next: Node[] = [];
+      for (const other of level) {
+        if (walked.has(other)) continue;
+        walked.add(other);
+        if (other.held_by !== seen && other.own(name) !== undefined) return other;
+        next.push(...this.sees_of(other, written));
+      }
+      level = next;
+    }
   }
   private reaching = 0;
   private reach_stack: Node[] = [];
@@ -341,7 +378,7 @@ export class Interpreter {
       at.held_by = seen;
       if (at.own(name) !== undefined) return at;
       const sees = this.sees_of(at, written);
-      for (const other of sees) if (other.held_by !== seen && other.own(name) !== undefined) return other;
+      if (sees.length > 0) { const other = this.seen_holder(sees, name, written, seen); if (other !== undefined) return other; }
       if (at.on !== undefined) { const held = this.holder_in(at.on, false, global, name, written, seen); if (held !== undefined) return held; }
       if (at.with !== undefined) for (const made of at.with) { const held = this.holder_in(made, false, global, name, written, seen); if (held !== undefined) return held; }
       if (deep && sees.length > 0) (later ??= []).push(...sees);
@@ -2001,7 +2038,7 @@ export class Interpreter {
       for (let index = 0; index < mine.length; index++) {
         const src = mine[index];
         if (resume.phase > 1 || (resume.phase === 1 && index <= resume.index)) continue;
-        if (src.is_entrypoint || !this.done.has(src) || ![...this.diagnostics.of(src)].some(entry => entry.message.startsWith('Unresolved'))) continue;
+        if (src.is_entrypoint || !this.done.has(src) || (![...this.diagnostics.of(src)].some(entry => entry.message.startsWith('Unresolved')) && !this.diagnostics.files(src))) continue;
         this.read_source(src);
         boot?.save(1, index);
         yield;

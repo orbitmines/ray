@@ -43,6 +43,17 @@ export class Levelled extends Interpreter {
   reads(src: Text.Source): boolean { return !this.program?.by_interpreter(src); }
   saved_state(mine: Text.Source[]): Record<string, unknown> { return { ...super.saved_state(mine), level: this.level, markers: this.markers, levelled: this.levelled }; }
   restore_state(state: any, mine: Text.Source[]) { super.restore_state(state, mine); this.level = state.level; this.markers = state.markers; this.levelled = state.levelled; }
+  clone_from(from: Interpreter) {
+    const mapped = super.clone_from(from);
+    if (!(from instanceof Levelled) || from.level === undefined) return mapped;
+    const piece = (capture: Capture | undefined): Capture | undefined => capture === undefined ? undefined : { ...capture, within: mapped.node(capture.within), type: mapped.node(capture.type) };
+    const entries = new Map<string, Entry[]>();
+    for (const [method, list] of from.level.entries) entries.set(method, list.map(entry => ({ ...entry, receiver: piece(entry.receiver)!, operand: piece(entry.operand), rule: mapped.rule(entry.rule) })));
+    this.level = { source: mapped.node(from.level.source)!, entries, written: piece(from.level.written) };
+    this.levelled = from.levelled;
+    for (const [marker, key] of from.markers) this.markers.set(mapped.node(marker)!, key);
+    return mapped;
+  }
   after(src: Text.Source) {
     if (this.levelled || this.default_level() === undefined) { if (this.level === undefined) this.settle(); return; }
     this.levelled = true;

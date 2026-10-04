@@ -1895,14 +1895,14 @@ export class Interpreter {
   after(src: Text.Source) {}
   reads(src: Text.Source): boolean { return true; }
   copy(): Interpreter { const copy = new (this.constructor as typeof Interpreter)(this.diagnostics); copy.copy_of = this; return copy; }
-  clone_from(from: Interpreter) {
+  clone_from(from: Interpreter): { node: (n: Node | undefined) => Node | undefined; rule: (r: Rule) => Rule } {
     const seen = new Map<Node, Node>();
     const rules = new Map<Rule, Rule>();
     const node = (n: Node | undefined): Node | undefined => {
       if (n === undefined) return undefined;
       const known = seen.get(n);
       if (known !== undefined) return known;
-      const copy = Object.assign(new Node(), n);
+      const copy = Object.assign(Object.create(Object.getPrototypeOf(n)) as Node, n);
       copy.scoped = copy.ruled = copy.shaped = copy.watchers = copy.heading = copy.held_by = copy.reached = copy.visited = undefined;
       copy.constructed = undefined;
       copy.rule_of = copy.marked_value = undefined;
@@ -1916,6 +1916,7 @@ export class Interpreter {
       if (n.code) copy.code = { span: n.code.span, in: node(n.code.in)! };
       if (n.place) copy.place = { ...n.place, in: node(n.place.in)! };
       if (n.value) copy.value = node(n.value);
+      for (const key of Object.keys(copy) as (keyof Node)[]) if (key !== 'parent' && key !== 'value' && copy[key] instanceof Node) (copy as any)[key] = node(n[key] as Node);
       return copy;
     };
     const rule = (r: Rule): Rule => {
@@ -1944,6 +1945,7 @@ export class Interpreter {
     this.given_names = new Set(from.given_names);
     this.version++;
     this.rules_version++;
+    return { node, rule };
   }
 
   // Painting: what is read is painted by the marks on what it names, on its value, or on the rule that read it.

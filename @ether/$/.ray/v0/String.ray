@@ -37,6 +37,7 @@ Number.components.hierarchy &= class {
   as_character => (
     held ^keyword := 0 + this
     external extend held Character
+    held.components.hierarchy &= Character
     held
   )
 }

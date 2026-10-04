@@ -412,7 +412,7 @@ Node := base class {
   )
 
   classes => (
-    unless this.classes_read {
+    unless ((external own this.classes_read).and(this.classes_read)) {
       this.classes_read = chain None
       reached ^keyword := chain None
       reached &= this

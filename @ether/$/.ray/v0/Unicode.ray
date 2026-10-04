@@ -141,12 +141,12 @@ Unicode := class {
     covers (codepoint: Number) => codepoint.at_least(.first).and(codepoint < .last.succ)
 
     read (line: String) => (
-      fields := line.split(U+003B)
-      span := fields.head.value.trimmed
+      columns := line.split(U+003B)
+      span := columns.head.value.trimmed
       first_written := span.before("..")
       last_written ^keyword := span.after("..")
       if last_written.empty { last_written = first_written }
-      Unicode.Range(first: first_written.as_number_in(16), last: last_written.as_number_in(16), value: fields.head.next.value.trimmed)
+      Unicode.Range(first: first_written.as_number_in(16), last: last_written.as_number_in(16), value: columns.head.next.value.trimmed)
     )
   }
 
@@ -158,10 +158,10 @@ Unicode := class {
     covers (codepoint: Number) => codepoint == .code
 
     read (line: String) => (
-      fields := line.split(U+003B)
+      columns := line.split(U+003B)
       points := chain None
-      fields.at(2).value.trimmed.split(U+0020) for { if it.value.nonempty { points &= it.value.as_number_in(16).as_character } }
-      Unicode.Folding(code: fields.head.value.trimmed.as_number_in(16), status: fields.at(1).value.trimmed, mapping: points.as(String))
+      columns.at(2).value.trimmed.split(U+0020) for { if it.value.nonempty { points &= it.value.as_number_in(16).as_character } }
+      Unicode.Folding(code: columns.head.value.trimmed.as_number_in(16), status: columns.at(1).value.trimmed, mapping: points.as(String))
     )
   }
 

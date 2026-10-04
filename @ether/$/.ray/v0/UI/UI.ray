@@ -117,7 +117,7 @@ Render := class {
       if (bytes === None) { return this }
       written := bytes.as_string
       if (written == U+000D.as_string) { .activate }
-      elsif (written == Terminal.escape("OQ").slice(1, 4)) { .toggled = .toggled.not }
+      elsif (written == (U+001B.as_string + "OQ")) { .toggled = .toggled.not }
       elsif (written == "q") { .running = false }
       elsif (written.starts_with(Terminal.escape("1;5"))) { .skip(Terminal.decode(Terminal.escape(written.slice(written.count.pred, written.count)))) }
       elsif (written.starts_with(Terminal.escape("1;2"))) { .expand(Terminal.decode(Terminal.escape(written.slice(written.count.pred, written.count)))) }

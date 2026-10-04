@@ -41,6 +41,8 @@ export class Node {
   bytes?: Uint8Array
   raw?: boolean
   stands?: Node
+  unset?: boolean
+  of?: Node
   site?: Text.Node
   body?: Text.Node
   bare?: boolean
@@ -252,6 +254,11 @@ export class Interpreter {
     for (const made of this.GLOBAL.with ?? []) { const held = this.seek(made, false, false, name, at, seen); if (held !== undefined) return held; }
     if (this.pending.length > 0 && this.pending.some(src => src.name === `${name}.ray`) && this.load(name)) return this.GLOBAL.own(name);
     if (this.naming !== undefined && (this.naming.name === undefined || this.naming.names !== undefined) && frame === this.naming.scope && (this.naming.names === undefined ? this.trying === 0 : Interpreter.word.test(name[0]))) { const first = this.naming.names?.length === 0 ? this.naming.first : undefined; this.naming.name ??= name; this.naming.names?.push(name); return frame.set(name, first ?? this.naming.hole); }
+  }
+  static same_name(one: Node, other: Node | undefined): boolean {
+    if (other === undefined) return false;
+    if (one.place !== undefined && other.place !== undefined) return !one.place.member && !other.place.member && one.place.in === other.place.in && one.place.name === other.place.name;
+    return one.code !== undefined && other.code !== undefined && !one.program && !other.program && one.code.in === other.code.in && one.code.span.string.trim() === other.code.span.string.trim();
   }
   static nowhere: Node[] = [];
   sees_of(scope: Node, written: Text.Node | undefined): Node[] { return written !== undefined && scope.body !== undefined && Interpreter.within(written, scope.body) ? Interpreter.nowhere : scope.sees ?? Interpreter.nowhere; }
@@ -1503,6 +1510,7 @@ export class Interpreter {
         continue;
       }
       if (node.code !== undefined && !node.program) { node = this.force(node); continue; }
+      if (node.unset && node.of !== undefined) { node = node.of; continue; }
       return node;
     }
     return node;
@@ -1511,7 +1519,7 @@ export class Interpreter {
   held(node: Node | undefined, stands?: Node): Node | undefined {
     for (let depth = 0; node !== undefined && depth < 256; depth++) {
       if (node === stands) return node;
-      if (node.place !== undefined) { const bound = this.bound(node); if (bound === undefined) return node; node = bound; continue; }
+      if (node.place !== undefined) { const bound = this.bound(node); if (bound === undefined || bound.unset) return node; node = bound; continue; }
       if (node.code !== undefined && !node.program) { node = this.force(node); continue; }
       return node;
     }
@@ -1575,10 +1583,14 @@ export class Interpreter {
   declare(target: Node, value: Node | undefined, frame?: Node): Node | undefined {
     const at = this.location(target);
     if (at?.place === undefined) { this.error('Cannot declare `' + this.text(at ?? target) + '` here.', target.at); return value; }
-    const held = this.held(value, frame?.stands);
+    let held = this.held(value, frame?.stands);
     if (held === undefined) return undefined;
     const scope = at.place.in;
     if (scope.none) return held;
+    if (Interpreter.same_name(target, value)) {
+      const before = scope.own(at.place.name);
+      held = Object.assign(new Node(at.at), { unset: true, of: before?.unset ? before.of : before });
+    }
     if (scope === this.GLOBAL && scope.own(at.place.name) === undefined) this.declared = ++Interpreter.declarations;
     scope.set(at.place.name, held);
     this.marked_place(at, scope);

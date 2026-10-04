@@ -51,6 +51,54 @@ Iterable := class: Ordered {
     false
   )
 
+  .reduce(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => (
+    names ^keyword := external ** accumulator
+    code ^keyword := external ** step
+    accumulated ^keyword := None
+    started ^keyword := false
+    for {
+      if started {
+        entering ^keyword := chain None
+        entering.target = it.value
+        external define entering.target `reduce_step{arguments}` {
+          (inline names) := arguments
+          inline code
+        } accumulator
+        accumulated = entering.target.reduce_step(accumulated)
+      } else {
+        accumulated = it.value
+        started = true
+      }
+    }
+    accumulated
+  )
+  .reduce({literal operator ^operator}) ^punctuation => (
+    accumulated ^keyword := None
+    started ^keyword := false
+    for {
+      if started { accumulated = accumulated[operator] it.value } else {
+        accumulated = it.value
+        started = true
+      }
+    }
+    accumulated
+  )
+  .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => (
+    names ^keyword := external ** accumulator
+    code ^keyword := external ** step
+    accumulated ^keyword := initial
+    for {
+      entering ^keyword := chain None
+      entering.target = it.value
+      external define entering.target `reduce_step{arguments}` {
+        (inline names) := arguments
+        inline code
+      } accumulator
+      accumulated = entering.target.reduce_step(accumulated)
+    }
+    accumulated
+  )
+
   all => (
     superposed ^keyword := None
     for {

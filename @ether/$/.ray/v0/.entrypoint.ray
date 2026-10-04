@@ -164,6 +164,8 @@ if ^keyword := class {
 
     chosen
   )
+
+  as (=== boolean) => (.answer as boolean)
 }
 
 unless{ }{cond}{ }{block} ^class => (
@@ -346,7 +348,10 @@ Node := base class {
         }
       }
     } elsif (None.instance_of(type)) { external declare this None }
-    else { external declare this type }
+    else {
+      external declare this type
+      if type.written_body { external declare this this }
+    }
 
     this
   )
@@ -587,7 +592,13 @@ Node := base class {
   )
 
   ~~{x} ^punctuation => (
-    inline x
+    closure ^keyword := external ** x
+    entering ^keyword := chain None
+    entering.target = this
+    external define entering.target `closure_entered` {
+      inline closure
+    } None
+    entering.target.closure_entered
 
     this
   )

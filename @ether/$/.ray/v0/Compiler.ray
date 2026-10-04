@@ -31,7 +31,7 @@ Compiler := class {
   }
 
   logic := {
-    {a}.not.not => a.as_boolean
+    {a}.not.not => (a as boolean)
     {a}.and({a}) => a
     {a}.or({a}) => a
   }

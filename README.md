@@ -33,6 +33,7 @@ This thing is, in essence, a programming language (Ray) and an IDE (Ether), whic
 </div>
 
 ## Local setup
+*(untested on Mac/Windows)*
 
 ```shell
 curl -fsSL https://ether.orbitmines.com/install.sh | bash

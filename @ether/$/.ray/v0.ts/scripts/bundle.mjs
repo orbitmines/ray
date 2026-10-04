@@ -1,4 +1,4 @@
-import { readdirSync, mkdirSync, copyFileSync, rmSync, writeFileSync } from 'fs';
+import { readdirSync, readFileSync, mkdirSync, copyFileSync, rmSync, writeFileSync } from 'fs';
 import { build } from 'esbuild';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -16,7 +16,7 @@ const DEST = '@ether/$/.ray';  // where the published package expects the defini
 const skip = (name) => name === 'ide' || (name.startsWith('v') && name.includes('.'));
 
 rmSync(DEST, { recursive: true, force: true });
-const manifest = [];
+const sources = {};
 (function walk(dir, rel) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.isDirectory()) {
@@ -26,14 +26,14 @@ const manifest = [];
       const r = rel ? `${rel}/${e.name}` : e.name;
       mkdirSync(dirname(join(DEST, r)), { recursive: true });
       copyFileSync(join(dir, e.name), join(DEST, r));
-      manifest.push(`${DEST}/${r}`);
+      sources[`${DEST}/${r}`] = readFileSync(join(dir, e.name), 'utf8');
     }
   }
 })(SRC, '');
 
 for (const file of ['README.md', 'LICENSE']) copyFileSync(join('../../../..', file), file);
 
-writeFileSync('src/bundled.ts', `export const manifest: string[] = ${JSON.stringify(manifest)};\n`);
+writeFileSync('src/bundled.ts', `export const sources: Record<string, string> = ${JSON.stringify(sources)};\nexport const manifest: string[] = Object.keys(sources);\n`);
 
 // The language (kernel3/language.ts), bundled for Node: what the package's bin/ scripts run.
 rmSync('dist', { recursive: true, force: true });

@@ -29,7 +29,7 @@ Usage: install.sh [options]
   (no options)             Download the latest release for this platform and install it.
   --compile [target]       Compile from this checkout (needs Deno) instead. Without a target, or with
                            \`native\`, for this platform, and installed. With a target, or \`all\`, only built.
-  --output <dir>           Where --compile <target>|all puts the archives (default: ./dist).
+  --output <dir>           Where --compile <target>|all puts the builds (.tar.gz; a plain .exe for Windows) (default: ./dist).
   --from <url|dir>         Install from these release files instead of GitHub's latest release.
   --version <version>      Install this release (e.g. 0.1.1-E2027.0A.1) instead of the latest.
   --home <dir>             Install into <dir>/bin (default: \$ETHER_HOME or ~/.ether).
@@ -73,7 +73,7 @@ target() {
 
 windows() { case "$1" in *windows*) return 0 ;; *) return 1 ;; esac; }
 executable() { if windows "$1"; then echo "$2.exe"; else echo "$2"; fi; }
-archive() { if windows "$1"; then echo "$NAME-$1.zip"; else echo "$NAME-$1.tar.gz"; fi; }
+archive() { if windows "$1"; then echo "$NAME-$1.exe"; else echo "$NAME-$1.tar.gz"; fi; }
 
 # ---------------------------------------------------------------------------- tools
 
@@ -95,20 +95,14 @@ native_path() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; els
 unpack() {
   case "$1" in
     *.tar.gz) tar -xzf "$1" -C "$2" ;;
-    *.zip)
-      if command -v unzip >/dev/null 2>&1; then unzip -oq "$1" -d "$2"
-      elif command -v powershell.exe >/dev/null 2>&1; then powershell.exe -NoProfile -Command "Expand-Archive -Force -LiteralPath '$(native_path "$1")' -DestinationPath '$(native_path "$2")'"
-      elif command -v python3 >/dev/null 2>&1; then python3 -m zipfile -e "$1" "$2"
-      else fail "no tool to unpack a .zip (unzip, powershell or python3)"; fi ;;
+    *.exe) cp "$1" "$2/$NAME.exe" ;;
   esac
 }
 
 pack() { # pack <dir> <file> <archive>
   case "$3" in
     *.tar.gz) tar -czf "$3" -C "$1" "$2" ;;
-    *.zip)
-      if command -v zip >/dev/null 2>&1; then (cd "$1" && zip -q "$(cd "$(dirname "$3")" && pwd)/$(basename "$3")" "$2")
-      else (cd "$1" && python3 -m zipfile -c "$(cd "$(dirname "$3")" && pwd)/$(basename "$3")" "$2"); fi ;;
+    *.exe) cp "$1/$2" "$3" ;;
   esac
 }
 
@@ -155,7 +149,7 @@ build() { # build <targets> <output>: an archive per target and their SHA256SUMS
     rm -rf "$work"
     say "  $output/$file"
   done
-  (cd "$output" && for file in "$NAME"-*.tar.gz "$NAME"-*.zip; do [ -f "$file" ] && echo "$(sha256 "$file")  $file"; done > SHA256SUMS) || true
+  (cd "$output" && for file in "$NAME"-*.tar.gz "$NAME"-*.exe; do [ -f "$file" ] && echo "$(sha256 "$file")  $file"; done > SHA256SUMS) || true
 }
 
 # ---------------------------------------------------------------------------- installing

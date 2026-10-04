@@ -50,7 +50,7 @@ function Get-Target {
 }
 
 function Get-Executable([string] $target, [string] $name) { if ($target -like '*windows*') { "$name.exe" } else { $name } }
-function Get-Archive([string] $target) { if ($target -like '*windows*') { "$Name-$target.zip" } else { "$Name-$target.tar.gz" } }
+function Get-Archive([string] $target) { if ($target -like '*windows*') { "$Name-$target.exe" } else { "$Name-$target.tar.gz" } }
 
 function Get-ReleaseFile([string] $source, [string] $file, [string] $dir) {
   $destination = Join-Path $dir $file
@@ -84,7 +84,7 @@ function Get-Release([string] $source, [string] $target) {
   } else {
     Write-Warning "No SHA256SUMS next to $file; not verified."
   }
-  if ($file -like '*.zip') { Expand-Archive -Force -LiteralPath (Join-Path $work $file) -DestinationPath $work }
+  if ($file -like '*.exe') { Move-Item -Force -LiteralPath (Join-Path $work $file) -Destination (Join-Path $work (Get-Executable $target $Name)) }
   else { tar -xzf (Join-Path $work $file) -C $work; if ($LASTEXITCODE -ne 0) { throw "Couldn't unpack $file" } }
   $work
 }

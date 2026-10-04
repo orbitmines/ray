@@ -44,11 +44,31 @@ export class Levelled extends Interpreter {
   reads(src: Text.Source): boolean { return !this.program?.by_interpreter(src); }
   saved_state(mine: Text.Source[]): Record<string, unknown> { return { ...super.saved_state(mine), level: this.level, markers: this.markers, levelled: this.levelled }; }
   restore_state(state: any, mine: Text.Source[]) { super.restore_state(state, mine); this.level = state.level; this.markers = state.markers; this.levelled = state.levelled; }
+  clone_from(from: Interpreter) {
+    const mapped = super.clone_from(from);
+    if (!(from instanceof Levelled) || from.level === undefined) return mapped;
+    const piece = (capture: Capture | undefined): Capture | undefined => capture === undefined ? undefined : { ...capture, within: mapped.node(capture.within), type: mapped.node(capture.type) };
+    const entries = new Map<string, Entry[]>();
+    for (const [method, list] of from.level.entries) entries.set(method, list.map(entry => ({ ...entry, receiver: piece(entry.receiver)!, operand: piece(entry.operand), rule: mapped.rule(entry.rule) })));
+    this.level = { source: mapped.node(from.level.source)!, entries, written: piece(from.level.written) };
+    this.levelled = from.levelled;
+    for (const [marker, key] of from.markers) this.markers.set(mapped.node(marker)!, key);
+    return mapped;
+  }
   after(src: Text.Source) {
     if (this.levelled || this.default_level() === undefined) { if (this.level === undefined) this.settle(); return; }
     this.levelled = true;
     for (const own of this.program?.interpreted ?? []) if (this.owns(own)) this.read_source(own);
     this.settle();
+  }
+  private settling?: Text.Node;
+  private level_sites = new Map<string, Rule>();
+  private level_source?: Text.Source;
+  level_site(rule: Rule): string | undefined { return this.settling !== undefined && Interpreter.within(rule.at, this.settling) ? `${rule.at.begin}:${rule.at.end}` : undefined; }
+  add_rule(scope: Node, rule: Rule) {
+    const site = this.level_site(rule);
+    if (site !== undefined) this.level_sites.set(site, rule);
+    super.add_rule(scope, rule);
   }
   default_level(): Node | undefined {
     const compiler = this.quietly(() => this.deref(this.lookup(this.GLOBAL, 'Compiler'), false));
@@ -61,10 +81,16 @@ export class Levelled extends Interpreter {
     if (block === undefined || block === this.level?.source) return;
     const scope = new Node();
     scope.parent = this.GLOBAL;
-    this.quietly(() => this.safely(() => this.inline(block, scope)));
+    const span = block.code?.span ?? block.at;
+    if (span?.source !== this.level_source) { this.level_sites = new Map(); this.level_source = span?.source; }
+    this.settling = span;
+    try {
+      this.quietly(() => this.safely(() => this.inline(block, scope)));
+      for (const rule of scope.rules ?? []) { const site = this.level_site(rule); if (site !== undefined) this.level_sites.set(site, rule); }
+    } finally { this.settling = undefined; }
     const entries = new Map<string, Entry[]>();
     let written: Capture | undefined;
-    for (const rule of scope.rules ?? []) {
+    for (const rule of span === undefined ? scope.rules ?? [] : this.level_sites.values()) {
       const pieces = rule.pattern.filter(piece => piece.kind !== 'gap');
       if (pieces.length === 1 && pieces[0].kind === 'capture' && rule.body !== undefined) {
         const answer = this.quietly(() => this.safely(() => this.read(this.cursor_of(rule.body!), scope)));
@@ -96,14 +122,21 @@ export class Levelled extends Interpreter {
     const kind = value.text && this.level?.written !== undefined ? this.type_of(this.level.written) : undefined;
     return kind === undefined ? super.rules_on(value) : super.rules_on(kind);
   }
-  carries(value: Node, rule: Rule): boolean { return this.rules_on(value instanceof Count ? value.template : value).includes(rule); }
+  carries(value: Node, rule: Rule): boolean { return this.among(this.rules_on(value instanceof Count ? value.template : value), rule); }
+  private written_ids = new WeakMap<Rule[], Set<object>>();
+  among(rules: Rule[], rule: Rule): boolean {
+    if (rules.includes(rule)) return true;
+    let ids = this.written_ids.get(rules);
+    if (ids === undefined) this.written_ids.set(rules, ids = new Set(rules.map(other => this.template_of(other))));
+    return ids.has(this.template_of(rule));
+  }
 
   private applicable = new WeakMap<Rule, { entries: unknown[]; ons: (Rule[] | undefined)[]; found: any[] }>();
   entries_for(rule: Rule, entries: any[], taking: boolean): any[] {
     const held = this.applicable.get(rule);
     const ons = entries.map(entry => { const type = this.type_of(entry.receiver); return type === undefined ? undefined : this.rules_on(type); });
     if (held !== undefined && held.entries === entries && held.ons.length === ons.length && held.ons.every((on, k) => on === ons[k])) return held.found;
-    const found = entries.filter((entry, k) => (entry.operand !== undefined) === taking && ons[k] !== undefined && ons[k]!.includes(rule));
+    const found = entries.filter((entry, k) => (entry.operand !== undefined) === taking && ons[k] !== undefined && this.among(ons[k]!, rule));
     this.applicable.set(rule, { entries, ons, found });
     return found;
   }
@@ -200,7 +233,11 @@ export class Levelled extends Interpreter {
     }
     return undefined;
   }
-  counted_as(like: Count, n: bigint): Node { return n === 0n ? like.base : new Count(n, like.base, like.template, like.field); }
+  counted_as(like: Count, n: bigint): Node {
+    const below = this.counted(like.base, like) ?? 0n;
+    if (n < below) return n === 0n ? this.number(0) ?? like.base : new Count(n, this.number(0) ?? like.base, like.template, like.field);
+    return n === below ? like.base : new Count(n - below, like.base, like.template, like.field);
+  }
   unit(): Count | undefined { const one = this.number(1); return one instanceof Count ? one : undefined; }
   number(n: number | bigint): Node | undefined {
     const zero = this.quietly(() => this.deref(this.lookup(this.GLOBAL, 'zero'), false));
@@ -214,7 +251,7 @@ export class Levelled extends Interpreter {
     const answer = written(), made = answer === undefined ? undefined : this.deref(answer, false);
     if (made === undefined || made instanceof Count || !this.carries(made, rule)) return answer ?? this.NONE;
     for (const key of made.names?.keys() ?? []) {
-      if (this.field(made, key) !== self) continue;
+      if (made.own(key)?.code !== undefined || this.field(made, key) !== self) continue;
       return new Count(1n, self, made, key);
     }
     return answer ?? this.NONE;

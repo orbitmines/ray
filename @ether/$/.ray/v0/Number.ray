@@ -1,6 +1,12 @@
 Number := class: Ray {
-  .{fraction: Decimal.String ^number} ^punctuation => Number.Real(integer: this, fraction: digits_selected(fraction), radix: ten)
-  succ => Number(next: this)
+  .{fraction: Decimal.String ^number} ^punctuation => (
+    whole_part ^keyword := this
+    Number.Real(integer: whole_part, fraction: digits_selected(fraction), radix: ten)
+  )
+  succ => (
+    succeeded ^keyword := this
+    Number(next: succeeded)
+  )
   ..<{last} ^punctuation => (
     stepped ^keyword := chain None
     at ^keyword := this
@@ -34,7 +40,10 @@ Number := class: Ray {
   )
 
   bounded => false
-  entry => Number.Line(value: this)
+  entry => (
+    lined ^keyword := this
+    Number.Line(value: lined)
+  )
 
   digits_in (radix: Number) => (
     counter := chain None
@@ -69,14 +78,15 @@ Number := class: Ray {
   )
   pred => .next
 
-  is_zero => (.next as boolean).not
-  nonzero => .next
+  is_zero => ((.next === None) as boolean)
+  nonzero => .is_zero.not
 
   holds => .next
 
   not => .is_zero
 
   set => .is_zero.not
+  as (=== boolean) => .set
   and (b) => .set.and(b)
   or (b) => .set.or(b)
   nand (b) => .set.nand(b)
@@ -173,11 +183,11 @@ Number := class: Ray {
     count
   )
 
-  times (block) => .rounds(block, zero)
-  rounds (block, it: Number) => if .is_zero { this } else {
-    inline block
+  times (action) => .rounds(action, zero)
+  rounds (action, it: Number) => if .is_zero { this } else {
+    inline action
 
-    this.next.rounds(block, it.succ)
+    this.next.rounds(action, it.succ)
   }
 
   pow (exponent: Number) => (
@@ -265,24 +275,34 @@ thousand => hundred * ten
 
 Number.Line = class: Ray {
   value: Number
-  next => Number.Line(value: .value.succ)
-  previous => if .value.is_zero { None } else { Number.Line(value: .value.pred) }
+  next => (
+    after ^keyword := .value.succ
+    Number.Line(value: after)
+  )
+  previous => if .value.is_zero { None } else {
+    before ^keyword := .value.pred
+    Number.Line(value: before)
+  }
 }
 
 Number.Signed = class {
   sign?: Node
   integer: Number
 
-  negative => .sign
+  negative => (.sign as boolean)
   positive => .negative.not
   is_zero => .integer.is_zero
 
   negated => (
     flipped := None
-    if .negative { flipped = Number.Signed(integer: .integer) } else { flipped = Number.Signed(sign: global, integer: .integer) }
+    magnitude ^keyword := .integer
+    if .negative { flipped = Number.Signed(integer: magnitude) } else { flipped = Number.Signed(sign: global, integer: magnitude) }
     flipped
   )
-  abs => Number.Signed(integer: .integer)
+  abs => (
+    magnitude ^keyword := .integer
+    Number.Signed(integer: magnitude)
+  )
 
   chainable == (other: Number.Signed) => (.negative.xnor(other.negative)).and(.integer == other.integer)
   chainable < (other: Number.Signed) => if .negative {
@@ -293,19 +313,22 @@ Number.Signed = class {
 
   compounds + (other: Number.Signed) => (
     summed := None
+    own_sign ^keyword := .sign
+    magnitude ^keyword := .integer
     if (.negative.xnor(other.negative)) {
-      summed = Number.Signed(sign: .sign, integer: .integer + other.integer)
-    } elsif (other.integer < .integer) {
-      summed = Number.Signed(sign: .sign, integer: .integer - other.integer)
+      summed = Number.Signed(sign: own_sign, integer: magnitude + other.integer)
+    } elsif (other.integer < magnitude) {
+      summed = Number.Signed(sign: own_sign, integer: magnitude - other.integer)
     } else {
-      summed = Number.Signed(sign: other.sign, integer: other.integer - .integer)
+      summed = Number.Signed(sign: other.sign, integer: other.integer - magnitude)
     }
     summed
   )
   compounds - (other: Number.Signed) => this + other.negated
   compounds * (other: Number.Signed) => (
     multiplied := None
-    if (.negative.xnor(other.negative)) { multiplied = Number.Signed(integer: .integer * other.integer) } else { multiplied = Number.Signed(sign: global, integer: .integer * other.integer) }
+    product ^keyword := .integer * other.integer
+    if (.negative.xnor(other.negative)) { multiplied = Number.Signed(integer: product) } else { multiplied = Number.Signed(sign: global, integer: product) }
     multiplied
   )
   - => .negated
@@ -436,7 +459,10 @@ Decimal.components.hierarchy &= class {
 }
 
 Number.components.hierarchy &= class {
-  signed => Decimal.Signed(integer: this)
+  signed => (
+    unsigned ^keyword := this
+    Decimal.Signed(integer: unsigned)
+  )
   as_integer => .signed
 
   sign => None
@@ -650,9 +676,7 @@ Program.components.hierarchy &= class {
       kept_entry = Precedence(place: place_of, spelled: spelled, answer: found_count, ranked: found_count)
       precedences &= kept_entry
     }
-    rank_known ^keyword := None
-    if kept_entry.ranked { rank_known = kept_entry.answer }
-    rank_known
+    kept_entry.answer
   )
 }
 

@@ -80,12 +80,12 @@ class {block} => (
 
   ({args}) => (
     static := this
+    inline args
     this := external .
     this.components = chain None
     this.components.hierarchy = chain this
     this.components.hierarchy &= static
     this.instance = global
-    inline args
     inline block
     this
   )

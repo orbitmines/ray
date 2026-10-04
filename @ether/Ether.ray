@@ -1,27 +1,29 @@
 < Character
 
-@ether => "ether.orbitmines.com:37839"
+@ether => @`ether.orbitmines.com:37839`
 
+// from the computers perspective it has a root setup where it is @me, and @player is the player, and @me in a player session is themselves, and @me.device
 @me | @private => global
 @everyone => characters
 @here => characters//TODO Online
 
-@local
-  @local => @me.//TODO CURRENT .instance
-@guests.read
-  @host => // (<- INSTANCE.hierarchy).reduce(|)
-@host.read
-  @guests => // (INSTANCE.hierarchy ->).reduce(|)
+@local { @local => @me.//TODO CURRENT .instance }
+@guests.read { @host => // (<- INSTANCE.hierarchy).reduce(|) }
+@host.read { @guests => // (INSTANCE.hierarchy ->).reduce(|) }
 
+// execute elsewhere func@local()
+// @local~{} execute a block elsewhere, generalization of ~, instead of at a location a block execute at that location @local~label{} for executing after a label
+
+@anonymous => ?
 @public => @ether.@everyone | Instance
 @npc | @npcs => @public{: NPC}
-@player | @players => @public{: Player}
-@localhost => "127.0.0.1" | "::1"
+@players => @public{: Player}
+@localhost => @`127.0.0.1` | @::1
 @localnetwork =>
   // https://datatracker.ietf.org/doc/html/rfc1918#section-3
-  "10.0.0.0/8" | "172.16.0.0/12" | "192.168.0.0/16"
+  @`10.0.0.0/8` | @`172.16.0.0/12` | @`192.168.0.0/16`
   // https://datatracker.ietf.org/doc/html/rfc4193#section-8
-  | "fc00::/7"
+  | @`fc00::/7`
 @{instance: Instance} => instance.canonical //Should also reserve CIDR notation
 
 (@ | #){: UUID}
@@ -29,3 +31,6 @@
 reservable_names: String.NonEmpty{length < 2^8}{every != "\n" | "\t"}
 
 @guests.read HOST: Character?
+
+Character has a method called .public_key which is a filter on names @me.name{matching public key pattern}
+// We have a public key for general communication without  ahandshake, one for communication/logging in on another machine (like @ether) which is visibility that service,

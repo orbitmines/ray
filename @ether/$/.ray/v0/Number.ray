@@ -596,7 +596,7 @@ Program.components.hierarchy &= class {
         landing ^keyword := .target_of(flow_at.value)
         landing_at ^keyword := steps.head
         while (landing_at) {
-          if (same_text((external where landing_at.value), (external where landing))) { flow_at.jumps_to = landing_at }
+          if (same_text((external where landing_at.value.code), (external where landing))) { flow_at.jumps_to = landing_at }
           landing_at = landing_at.next
         }
         flow_at.falls_through = flow_at.value.is_conditional

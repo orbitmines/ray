@@ -23,6 +23,8 @@ Everything written after 2026-10-04 ~21:00 is unverified. Whether the library st
 - **M3 roman.ray** runs out of memory with the full library; the RO66/67 loop alone takes ~300 s.
 - **M4 feature.ray** `IO.read("…".bits)` costs ~2.7 s per character; program.ray times out.
 
+- **M5 The whole library runs out of memory on honesty.ray** since the write-only round: clean at b395897 (agent B's branch), 8 GB OOM at 1fecf3d. The cause is in d5c83fb..1fecf3d (Text/World/Feature/Game/network/Geometry/UI). Suspects: top-level statements run at load (`World.ether = World(…)`, `Network.Hosts.equate(…)`, `Render.style(…)`, `Choice.chosen = …`, `UUID.v1.latest = 0`), class-body values built at load (`Unicode.EastAsianWidth := Unicode.Table(…)`), and field defaults naming their own class (`Onboarding.Purpose.everything` inside Onboarding). Bisect with whole-library honesty.ray runs at each merge.
+
 ## Tools and harness
 - **T1 The harness misses enum member counts.** Breaking every enum's `components.count` left hall.sh "same". Add `Status.components.count == 9`.
 - **T2 Reduced-library probes read characters wrongly.** With only Compiler/Ray/Number/String/Unicode, `U+0061 == U+000A` and every `"…"` is empty. Use the whole library.

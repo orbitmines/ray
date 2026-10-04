@@ -46,3 +46,14 @@ unless (UUID.v5) { INFO@mark `UU23 the other version built that way is not there
 // spec: building a `v3` or a `v5` is not claimed here — the `namespace: UUID`
 // field is typed, and asking whether a thirty-two digit uuid is one costs
 // more than the rest of the file.
+
+// A version 1 identifier: when it was made, counted in hundreds of
+// nanoseconds since the Gregorian reform, and never the same twice.
+made_first := UUID.v1.generate
+made_second := UUID.v1.generate
+unless (made_first.version == 1) { INFO@mark `UU30 a generated version 1 identifier is not version 1` }
+if (made_first == made_second) { INFO@mark `UU31 two version 1 identifiers made one after the other are the same` }
+unless (made_first.time < made_second.time) { INFO@mark `UU32 the later identifier is not later` }
+unless (made_first.variant == UUID.Variant.rfc_4122) { INFO@mark `UU33 a generated identifier is not of the RFC 4122 variant` }
+unless (UUID.Namespace.DNS.version == 1) { INFO@mark `UU34 the DNS namespace is not a version 1 identifier` }
+unless (UUID.Namespace.DNS.as_string == "6ba7b810-9dad-11d1-80b4-00c04fd430c8") { INFO@mark `UU35 the DNS namespace does not write as itself` }

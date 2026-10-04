@@ -61,7 +61,16 @@ Choice := class {
     picked
   )
   coin => Random.bit
+
+  unique (from) => (
+    picked ^keyword := Choice.choose(from)
+    while (Choice.chosen.contains(picked)) { picked = Choice.choose(from) }
+    Choice.chosen &= picked
+    picked
+  )
 }
+
+Choice.chosen = chain None
 
 Proof := class {
   Proposition := class {

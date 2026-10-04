@@ -6,12 +6,87 @@ Render := class {
     link: None
   }
 
+  styles: (chain None)
+  style (name, css: String, ansi: String) => (
+    Render.styles &= Render.Style(name: name, css: css, ansi: ansi)
+    name
+  )
+  styled_as (name) => (
+    found ^keyword := None
+    Render.styles for { if (it.value.name == name) { found = it.value } }
+    found
+  )
+  Style := class {
+    name: Node
+    css: String
+    ansi: String
+  }
+
+  Image := class {
+    location: Node
+    alt: ""
+  }
+  Video := class {
+    location: Node
+  }
+  Input := class {
+    value: ""
+    focused: false
+    placeholder: ""
+
+    typed (text: String) => (
+      .value = .value + text
+      this
+    )
+    focus => (
+      .focused = true
+      this
+    )
+  }
+  Head := class {
+    title: ""
+    description: ""
+    image: None
+    url: None
+    kind: "website"
+
+    as (=== String) => (
+      written := chain None
+      written &= "<title>" + (Render.HTML.escaped(.title) + "</title>")
+      written &= "<meta name=\"description\" content=\"" + (Render.HTML.escaped(.description) + "\">")
+      written &= "<meta property=\"og:title\" content=\"" + (Render.HTML.escaped(.title) + "\">")
+      written &= "<meta property=\"og:description\" content=\"" + (Render.HTML.escaped(.description) + "\">")
+      written &= "<meta property=\"og:type\" content=\"" + (.kind + "\">")
+      unless (.image === None) { written &= "<meta property=\"og:image\" content=\"" + (.image.as(String) + "\">") }
+      unless (.url === None) { written &= "<meta property=\"og:url\" content=\"" + (.url.as(String) + "\">") }
+      written &= "<script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"WebPage\",\"name\":\"" + (Render.HTML.escaped(.title) + "\"}</script>")
+      written.join
+    )
+  }
+
+  image_extensions => ("png", "jpg", "jpeg", "gif", "svg", "webp")
+  video_extensions => ("mp4", "webm")
+
   boxed (value) => (
     if (value.instance_of(String)) { Render.Box(value: value, text: value) }
+    elsif (value.instance_of(Render.Image)) { Render.Box(value: value, link: value.location, text: value.alt, style: Render.tagged(`img`)) }
+    elsif (value.instance_of(Render.Video)) { Render.Box(value: value, link: value.location, style: Render.tagged(`video`)) }
+    elsif (value.instance_of(Render.Input)) { Render.Box(value: value, text: value.value, style: Render.tagged(`input`)) }
+    elsif (value.location) {
+      extension := value.location.as(String).after(".")
+      if (Render.image_extensions.contains(extension)) { Render.boxed(Render.Image(location: value.location)) }
+      elsif (Render.video_extensions.contains(extension)) { Render.boxed(Render.Video(location: value.location)) }
+      else { Render.Box(value: value, text: value.as(String), link: value.location) }
+    }
     elsif (value.rendering) { Render.boxed(value.rendering) }
     elsif (value.instance_of(Geometry.Shape)) { Render.Box(value: value, children: value.children) }
-    elsif (value.location) { Render.Box(value: value, text: value.location.as(String), link: value.location) }
     else { Render.fields(value) }
+  )
+
+  tagged (tag) => (
+    one := chain None
+    one &= tag
+    one
   )
 
   fields (value) => (
@@ -70,7 +145,10 @@ Render := class {
       box.style for { rules &= Render.HTML.style_rule(it.value) }
       rules.join(";")
     )
-    style_rule (style) => if (style == `italic`) { "font-style:italic" } elsif (style == `bold`) { "font-weight:bold" } else { "" }
+    style_rule (style) => (
+      found := Render.styled_as(style)
+      if (found === None) { "" } else { found.css }
+    )
     escaped (text: String) => text.map { if (it.value == U+003C) { "&lt;" } elsif (it.value == U+003E) { "&gt;" } elsif (it.value == U+0026) { "&amp;" } else { it.value.as(String) } }.join
   }
 
@@ -92,8 +170,8 @@ Render := class {
     styled (box) => (
       opened ^keyword := ""
       box.style for {
-        if (it.value == `italic`) { opened = opened + Terminal.escape("3m") }
-        if (it.value == `bold`) { opened = opened + Terminal.escape("1m") }
+        found := Render.styled_as(it.value)
+        unless (found === None) { opened = opened + Terminal.escape(found.ansi) }
       }
       if (opened.empty) { box.text } else { opened + (box.text + Terminal.escape("0m")) }
     )
@@ -188,6 +266,9 @@ Render := class {
 Terminal := class {
   Kind := enum xterm_256 | truecolor | windows_terminal | browser
 
+  os => OS.name
+  width => .size
+
   kind: Terminal.Kind.truecolor
   raw: false
 
@@ -220,6 +301,8 @@ Browser := class {
   Kind := enum chromium | firefox
   kind: Browser.Kind.chromium
   runtime: false
+  width: 1240
+  os: OS.Name.unknown
 
   send (message) => external io `dom` (message)
   received => external io `dom` None
@@ -279,6 +362,20 @@ Site := class {
   routes: (chain None)
   index: None
 
+  of (value) => (
+    made := Site(index: value)
+    value.fields for {
+      held := it.value
+      if (held.value.location) { made.route(held.value.location.as(String), held.value) }
+    }
+    made
+  )
+  section (book, slug: String) => (
+    found ^keyword := None
+    book.sections for { if (it.value.slug == slug) { found = it.value } }
+    if (found === None) { book } else { found }
+  )
+
   route (path: String, field) => (
     .routes &= Site.Route(path: path, field: field)
     this
@@ -290,7 +387,7 @@ Site := class {
       held := it.value
       if (path.starts_with(held.path)) {
         rest := path.slice(held.path.count, path.count)
-        if rest.empty { found = held.field } else { found = Site.select(held.field, rest) }
+        if rest.empty { found = held.field } elsif (held.field.sections) { found = Site.section(held.field, rest) } else { found = Site.select(held.field, rest) }
       }
     }
     if (found === None) { .index } else { found }
@@ -320,3 +417,12 @@ String.components.hierarchy &= class {
   italic => .styled(`italic`)
   bold => .styled(`bold`)
 }
+
+Render.styles = chain None
+Render.style(`italic`, "font-style:italic", "3m")
+Render.style(`bold`, "font-weight:bold", "1m")
+Render.style(`muted`, "opacity:0.6", "2m")
+Render.style(`disabled`, "opacity:0.4", "2m")
+Render.style(`h1`, "font-size:2em;font-weight:bold", "1m")
+Render.style(`h2`, "font-size:1.5em;font-weight:bold", "1m")
+Render.style(`h3`, "font-size:1.17em;font-weight:bold", "1m")

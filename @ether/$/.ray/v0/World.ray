@@ -338,6 +338,15 @@ Accessor := class: Ray {
   }
 }
 
+Platform := class: Ray {
+  name: String
+  prefix: String
+  icon: None
+
+  location_of (handle: String) => .prefix + handle
+  avatar (handle: String, character) => Avatar(character: character, platform: this, handle: handle, location: .location_of(handle))
+}
+
 Reference := class: Ray {
   Note := class: Ray {
     date: Time.now
@@ -355,6 +364,12 @@ Reference := class: Ray {
   pointer: None
   remote: None
   notes: (chain None)
+  external: None
+  journal: None
+  volume: None
+  pages: None
+  doi: None
+  publisher: None
 
   publish => (
     .draft = false
@@ -438,6 +453,12 @@ Character := class: Nameable {
   status: Status.offline
   key: None
 
+  first_name: None
+  last_name: None
+  email: None
+  profile_picture: None
+  profile: None
+  full_name => if (.first_name === None) { .name } else { .first_name + (" " + .last_name) }
   status_now => if (.presence) { .presence.status } else { .status }
   statuses: (chain None)
   also (status) => (
@@ -455,6 +476,8 @@ Character := class: Nameable {
 Avatar := class: Character {
   character: Node
   platform: Node
+  location: None
+  handle: None
   avatars: (chain None)
   presence: None
   status: Status.offline
@@ -491,6 +514,8 @@ NPC := class: Character {
 }
 Organization := class: Player {
   name: String
+  logo: None
+  website: None
   avatars: (chain None)
   presence: None
   status: Status.offline

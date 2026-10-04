@@ -156,7 +156,9 @@ Terminal := class {
     .raw = true
     Terminal.emit(Terminal.escape("?1049h"))
   )
-  emit (text) => TODO
+  emit (text) => external io `@stream/stdout` (text)
+  read => external io `@stream/stdin` None
+  size => (external io `@stream/size` None).as_string
   decode (bytes) => (
     if (bytes == Terminal.escape("A")) { Keyboard.Direction.up }
     elsif (bytes == Terminal.escape("B")) { Keyboard.Direction.down }
@@ -177,7 +179,8 @@ Browser := class {
   kind: Browser.Kind.chromium
   runtime: false
 
-  send (message) => Terminal.emit(message)
+  send (message) => external io `@stream/dom` (message)
+  received => external io `@stream/dom` None
   page (value) => Render.HTML().render(value)
 }
 

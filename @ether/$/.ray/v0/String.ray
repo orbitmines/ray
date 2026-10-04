@@ -58,7 +58,7 @@ String := class: Array {
   lower_case => .map { it.value.lower }.as_string
   upper_case => .map { it.value.upper }.as_string
   swap_case => .map { it.value.swapped }.as_string
-  fold_case => .lower_case
+  fold_case => .map { Unicode.folded(it.value) }.join
   title_case => (
     out := chain None
     at_start ^keyword := true
@@ -96,6 +96,22 @@ String := class: Array {
   singular => if (.ends_with("s")) { .slice(0, .count.pred) } else { this }
 
   mirrored => .reverse.as_string
+
+  trimmed => (
+    start ^keyword := 0
+    finish ^keyword := .count
+    while ((start < finish).and(.at(start).value.blank)) { start = start.succ }
+    while ((start < finish).and(.at(finish.pred).value.blank)) { finish = finish.pred }
+    .slice(start, finish)
+  )
+  before (other: String) => (
+    found := .index_of(other)
+    if (found === None) { this } else { .slice(0, found) }
+  )
+  after (other: String) => (
+    found := .index_of(other)
+    if (found === None) { "" } else { .slice(found + other.count, .count) }
+  )
 
   slice (from, to) => (
     out := chain None
@@ -348,3 +364,30 @@ declared_in (holder, spelled) => (
   }
   held
 )
+
+Char.components.hierarchy &= class {
+  as_string => (
+    one := chain None
+    one &= this
+    one.as_string
+  )
+  east_asian_width => (
+    found := Unicode.EastAsianWidth.at(.codepoint)
+    if (found === None) { "N" } else { found.value }
+  )
+  columns => if ((.east_asian_width == "W").or(.east_asian_width == "F")) { 2 } else { 1 }
+  script => (
+    found := Unicode.Scripts.at(.codepoint)
+    if (found === None) { "Unknown" } else { found.value }
+  )
+  block => (
+    found := Unicode.Blocks.at(.codepoint)
+    if (found === None) { "No_Block" } else { found.value }
+  )
+}
+
+Char.Latin = Char{.script == "Latin"}
+Char.Arabic = Char{.script == "Arabic"}
+Char.Greek = Char{.script == "Greek"}
+Char.Cyrillic = Char{.script == "Cyrillic"}
+Char.Han = Char{.script == "Han"}

@@ -60,3 +60,16 @@ if (eight_bits.slice_bits(2, 2).nonempty) { INFO@mark `UN33 the bits between a p
 
 // Where the tables are read from, when they are read.
 unless (Unicode.tables_at.starts_with("https")) { INFO@mark `UN36 the tables are not read over the web` }
+
+// The tables, read from unicode.org once per version and kept under @ether:
+// how wide a character is, which script it is written in, and how it folds.
+unless (Unicode.version == 15) { INFO@mark `UN40 the Unicode version is not fifteen` }
+unless (U+4E00.columns == 2) { INFO@mark `UN41 a Han character does not take two columns` }
+unless (U+0061.columns == 1) { INFO@mark `UN42 a Latin letter does not take one column` }
+unless (U+0061.script == "Latin") { INFO@mark `UN43 a is not Latin` }
+unless (U+0627.script == "Arabic") { INFO@mark `UN44 alef is not Arabic` }
+unless (U+0061.instance_of(Char.Latin)) { INFO@mark `UN45 a is not a Latin character` }
+if (U+0627.instance_of(Char.Latin)) { INFO@mark `UN46 alef is a Latin character` }
+unless ("Straße".fold_case == "strasse") { INFO@mark `UN47 sharp s does not fold to ss` }
+unless (Unicode.ordered(Unicode.UTF16.encode(97), Unicode.Endianness.little) == bits_of(97 * 256, 16)) { INFO@mark `UN48 little-endian does not read the bytes right to left` }
+unless (Unicode.ordered(bits_of(97, 8), Unicode.Endianness.little) == bits_of(97, 8)) { INFO@mark `UN49 a single byte is not the same either way` }

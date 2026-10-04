@@ -19,7 +19,7 @@ export type Piece = (
   | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node; undecided?: boolean; decided?: number; type?: Node; operator?: boolean }
 ) & { tight?: boolean };
 
-export type NameGuard = Variant & { frame?: Node; parent?: Node; sees?: Node[]; self?: { rules: Rule[]; mine: Rule[]; on: Rule[] }; declared?: number };
+export type NameGuard = Variant & { own?: object; parent?: Node; sees?: Node[]; self?: { rules: object; mine: object; on: object }; declared?: number };
 export type Slot = { parent: Node; sees?: Node[]; holder?: Node; valid: boolean };
 export class Node {
   at?: Text.Node
@@ -762,33 +762,52 @@ export class Interpreter {
     for (let n = 0; n < a.length; n++) if (!Interpreter.like(a[n], b[n], depth - 1, it)) return false;
     return true;
   }
-  only_a_name(cursor: Text.Node, frame: Node, rules: Rule[], held?: { guard?: NameGuard }): boolean {
+  only_a_name(cursor: Text.Node, frame: Node, rules: Rule[], held?: { guard?: NameGuard; guards?: NameGuard[] }): boolean {
     if (this.naming !== undefined) return false;
     const self = this.holding_at(cursor.source, cursor.cursor)?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
-    const guard = held?.guard;
-    if (guard !== undefined && guard.valid && (guard.declared === undefined || guard.declared === this.declared) && Interpreter.same_frame(frame, guard)) {
-      if (self === undefined) { if (guard.self === undefined) return true; }
-      else if (guard.self !== undefined) { const shape = this.shape(self); if (shape.rules === guard.self.rules && shape.mine === guard.self.mine && shape.on === guard.self.on) return true; }
+    let shape: { rules: Rule[]; mine: Rule[]; on: Rule[] } | undefined;
+    for (const guard of held?.guards ?? Interpreter.no_guards) {
+      if (!guard.valid || (guard.declared !== undefined && guard.declared !== this.declared) || !this.same_frame(frame, guard)) continue;
+      if (self === undefined) { if (guard.self === undefined) return true; continue; }
+      if (guard.self === undefined) continue;
+      shape ??= this.shape(self);
+      if (this.print(shape.rules) === guard.self.rules && this.print(shape.mine) === guard.self.mine && this.print(shape.on) === guard.self.on) return true;
     }
     const sensitive = this.sensitive;
     if (this.best(rules, cursor, frame) !== undefined) return false;
     if (self !== undefined && this.best_on(self, frame, cursor, true) !== undefined) return false;
     if (held !== undefined) {
-      const made: NameGuard = { declared: this.sensitive === sensitive ? undefined : this.declared, valid: true, events: [], frame: frame.rules?.length ? frame : undefined, parent: frame.parent, sees: frame.sees === undefined || frame.sees.length === 0 ? undefined : [...frame.sees], self: self === undefined ? undefined : this.shape(self) };
-      if (held.guard !== undefined) held.guard.valid = false;
-      held.guard = made;
+      const shape = self === undefined ? undefined : this.shape(self);
+      const made: NameGuard = { declared: this.sensitive === sensitive ? undefined : this.declared, valid: true, events: [], own: frame.rules?.length ? this.own_print(frame) : undefined, parent: frame.parent, sees: frame.sees === undefined || frame.sees.length === 0 ? undefined : [...frame.sees], self: shape === undefined ? undefined : { rules: this.print(shape.rules), mine: this.print(shape.mine), on: this.print(shape.on) } };
+      const guards = (held.guards = (held.guards ?? []).filter(guard => guard.valid));
+      if (guards.length >= 8) guards.shift()!.valid = false;
+      guards.push(made);
       this.watch(made, frame, cursor, [cursor.cursor]);
     }
     return true;
   }
-  static same_frame(frame: Node, shape: { frame?: Node; parent?: Node; sees?: Node[] }): boolean {
-    if (shape.frame !== undefined) return frame === shape.frame;
-    if (frame.parent !== shape.parent || frame.rules?.length) return false;
+  static no_guards: NameGuard[] = [];
+  // A frame like the one a guard was made in: the same parent and seen frames, and its own rules written alike.
+  same_frame(frame: Node, shape: { own?: object; parent?: Node; sees?: Node[] }): boolean {
+    if (frame.parent !== shape.parent) return false;
+    if (shape.own !== undefined ? !frame.rules?.length || this.own_print(frame) !== shape.own : frame.rules?.length) return false;
     const sees = frame.sees, expected = shape.sees;
     if (expected === undefined) return sees === undefined || sees.length === 0;
     if (sees === undefined || sees.length !== expected.length) return false;
     for (let n = 0; n < sees.length; n++) if (sees[n] !== expected[n]) return false;
     return true;
+  }
+  private own_prints = new WeakMap<Node, { layout: number; print: object }>();
+  own_print(frame: Node): object {
+    const held = this.own_prints.get(frame), layout = frame.layout ?? 0;
+    if (held !== undefined && held.layout === layout) return held.print;
+    const ids: number[] = [];
+    for (const rule of frame.rules ?? []) ids.push(this.template_of(rule).id);
+    const key = ids.join(',');
+    let print = this.printed.get(key);
+    if (print === undefined) this.printed.set(key, print = {});
+    this.own_prints.set(frame, { layout, print });
+    return print;
   }
   // What a value's own class says is read before what every value says.
   best_on(value: Node, frame: Node, cursor: Text.Node, own: boolean = false): Match | undefined {

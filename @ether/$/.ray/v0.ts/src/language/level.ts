@@ -55,11 +55,16 @@ export class Levelled extends Interpreter {
     for (const [marker, key] of from.markers) this.markers.set(mapped.node(marker)!, key);
     return mapped;
   }
+  private levelling = false;
   after(src: Text.Source) {
-    if (this.levelled || this.default_level() === undefined) { if (this.level === undefined) this.settle(); return; }
-    this.levelled = true;
-    for (const own of this.program?.interpreted ?? []) if (this.owns(own)) this.read_source(own);
-    this.settle();
+    if (this.levelling) return;
+    this.levelling = true;
+    try {
+      if (this.levelled || this.default_level() === undefined) { if (this.level === undefined) this.settle(); return; }
+      this.levelled = true;
+      for (const own of this.program?.interpreted ?? []) if (this.owns(own)) this.read_source(own);
+      this.settle();
+    } finally { this.levelling = false; }
   }
   private settling?: Text.Node;
   private level_sites = new Map<string, Rule>();

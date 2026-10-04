@@ -185,7 +185,8 @@ Instance.components.hierarchy &= class {
     written := external os `mac_address`
     if written { written } else {
       octets := Random.number(48)
-      octets - (octets % 1099511627776 % 2) + 1099511627776
+      multicast := (octets / 1099511627776) % 2
+      octets + ((1 - multicast) * 1099511627776)
     }
   )
 }

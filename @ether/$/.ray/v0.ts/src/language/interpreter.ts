@@ -789,12 +789,12 @@ export class Interpreter {
   static no_guards: NameGuard[] = [];
   // A frame like the one a guard was made in: the same parent and seen frames, and its own rules written alike.
   same_frame(frame: Node, shape: { own?: object; parent?: Node; sees?: Node[] }): boolean {
-    if (frame.parent !== shape.parent) return false;
+    if (frame.parent !== shape.parent && !this.like(frame.parent, shape.parent)) return false;
     if (shape.own !== undefined ? !frame.rules?.length || this.own_print(frame) !== shape.own : frame.rules?.length) return false;
     const sees = frame.sees, expected = shape.sees;
     if (expected === undefined) return sees === undefined || sees.length === 0;
     if (sees === undefined || sees.length !== expected.length) return false;
-    for (let n = 0; n < sees.length; n++) if (sees[n] !== expected[n]) return false;
+    for (let n = 0; n < sees.length; n++) if (sees[n] !== expected[n] && !this.like(sees[n], expected[n])) return false;
     return true;
   }
   private own_prints = new WeakMap<Node, { layout: number; print: object }>();

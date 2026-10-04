@@ -2013,7 +2013,7 @@ export class Interpreter {
       for (let index = 0; index < mine.length; index++) {
         const src = mine[index];
         if (resume.phase > 1 || (resume.phase === 1 && index <= resume.index)) continue;
-        if (src.is_entrypoint || !this.done.has(src) || ![...this.diagnostics.of(src)].some(entry => entry.message.startsWith('Unresolved'))) continue;
+        if (src.is_entrypoint || !this.done.has(src) || (![...this.diagnostics.of(src)].some(entry => entry.message.startsWith('Unresolved')) && !this.diagnostics.files(src))) continue;
         this.read_source(src);
         boot?.save(1, index);
         yield;

@@ -99,6 +99,8 @@ base class {body} => (
   static.components = chain None
   static.components.hierarchy = chain static
   static.written_body = external ** body
+  static.requirements_read = chain None
+  static.requirements_known = global
   written_as => static.written_body**
   inline body
   external base static {
@@ -354,7 +356,7 @@ Node := base class {
     if (chosen === None) { chosen = other }
     chosen
   )
-  ? => this | None
+  ? => None | this
   ?:{type} ^punctuation => this: (type?)
 
   instance_of (type) => (
@@ -389,7 +391,7 @@ Node := base class {
         if type.components {
           walker ^keyword := type.components.head
           while walker {
-            unless walker.value { found = global }
+            if (walker.value === None) { found = global }
             if found { walker = None } else { walker = walker.next }
           }
         }
@@ -406,7 +408,7 @@ Node := base class {
       reached &= this
       parent ^keyword := this.components.hierarchy.head
       while parent {
-        if parent.value {
+        unless (parent.value === None) {
           inherited ^keyword := parent.value.classes.head
           while inherited {
             reached &= inherited.value
@@ -467,8 +469,15 @@ Node := base class {
     found
   )
   structurally (type) => (
+    made_by ^keyword := None
+    held ^keyword := this.classes.head
+    while ((held).and((made_by).not)) {
+      if (held.value === type) { made_by = global }
+      held = held.next
+    }
     holding ^keyword := global
-    wanted ^keyword := type.requirements.head
+    wanted ^keyword := None
+    unless made_by { wanted = type.requirements.head }
     while ((wanted).and(holding)) {
       unless (this.declaring(wanted.value)) { holding = None }
       wanted = wanted.next
@@ -608,10 +617,10 @@ Node := base class {
 
   |{other} ^punctuation => (
     superposed ^keyword := external .
+    external extend superposed this
     superposed.instance = None
     superposed.superposes = global
     superposed.components = chain None
-    external extend superposed this
     goto superpose_each if this.components.head
     superposed.components &= this
     goto superpose_other
@@ -910,6 +919,10 @@ head_of (statement) => (
             if first_bit { word_start = global } elsif second_bit { word_start = global }
             if start_at { if start_at.ends { word_start = None } }
             start_at = None
+            unless word_start {
+              reading = None
+              going = None
+            }
           }
           byte_from = head_at
           stop_at = stops

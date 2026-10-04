@@ -250,6 +250,7 @@ export class Interpreter {
     const global = this.GLOBAL.own(name);
     if (global !== undefined) return global;
     for (const made of this.GLOBAL.with ?? []) { const held = this.seek(made, false, false, name, at, seen); if (held !== undefined) return held; }
+    if (this.pending.length > 0 && this.pending.some(src => src.name === `${name}.ray`) && this.load(name)) return this.GLOBAL.own(name);
     if (this.naming !== undefined && (this.naming.name === undefined || this.naming.names !== undefined) && frame === this.naming.scope && (this.naming.names === undefined ? this.trying === 0 : Interpreter.word.test(name[0]))) { const first = this.naming.names?.length === 0 ? this.naming.first : undefined; this.naming.name ??= name; this.naming.names?.push(name); return frame.set(name, first ?? this.naming.hole); }
   }
   static nowhere: Node[] = [];

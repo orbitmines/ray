@@ -143,8 +143,8 @@ pieces &= Calendar.Segment(name: 1, length: (2 seconds))
 cut := Calendar(parts: pieces)
 unless (cut.segments.count == 1) { INFO@mark `TI87 a calendar given one segment has other than one` }
 unless (Calendar().segments.empty) { INFO@mark `TI88 a calendar given none has some` }
-unless (Second.symbol.as_string == "s") { INFO@mark `TI89 the second is not written s` }
-unless (Nanosecond.symbol.as_string == "ns") { INFO@mark `TI90 the nanosecond is not written ns` }
+unless (Second.symbol.as(String) == "s") { INFO@mark `TI89 the second is not written s` }
+unless (Nanosecond.symbol.as(String) == "ns") { INFO@mark `TI90 the nanosecond is not written ns` }
 
 rounded := Time(calendar: Julian, since_epoch: (80 seconds)).round(Minute)
 unless (rounded.since_epoch.amount == 60) { INFO@mark `TRO1 eighty seconds do not round down to a minute` }

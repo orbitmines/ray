@@ -86,7 +86,7 @@ Number := class: Ray {
   not => .is_zero
 
   set => .is_zero.not
-  as (=== boolean) => .set
+  as (=== boolean) => (.instance.not as boolean).or(.set)
   and (b) => .set.and(b)
   or (b) => .set.or(b)
   nand (b) => .set.nand(b)
@@ -597,7 +597,7 @@ Program.components.hierarchy &= class {
         landing ^keyword := .target_of(flow_at.value)
         landing_at ^keyword := steps.head
         while (landing_at) {
-          if (same_text((external where landing_at.value), (external where landing))) { flow_at.jumps_to = landing_at }
+          if (same_text((external where landing_at.value.code), (external where landing))) { flow_at.jumps_to = landing_at }
           landing_at = landing_at.next
         }
         flow_at.falls_through = flow_at.value.is_conditional

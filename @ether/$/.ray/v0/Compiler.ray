@@ -13,5 +13,45 @@ Compiler := class {
     1 * {a} => a
     {a} / 1 => a
     {a} * 2 => a + a
+    {a}.unique.unique => a.unique
+    {a}.reverse.reverse => a
+    {a}.compact.compact => a.compact
+    {a}.flatten.flatten => a.flatten
+    {a}.sort.sort => a.sort
   }
+
+  folding := {
+    {a} + 0 => a
+    0 + {a} => a
+    {a} * 1 => a
+    1 * {a} => a
+  }
+
+  memoised := {
+  }
+
+  logic := {
+    {a}.not.not => (a as boolean)
+    {a}.and({a}) => a
+    {a}.or({a}) => a
+  }
+
+  levels => (
+    known ^keyword := chain None
+    known &= Compiler.none
+    known &= Compiler.default
+    known &= Compiler.folding
+    known &= Compiler.memoised
+    known &= Compiler.logic
+    known
+  )
+}
+
+Debug := class {
+  timed := {
+  }
+}
+
+Program.components.hierarchy &= class {
+  O := Compiler.none
 }

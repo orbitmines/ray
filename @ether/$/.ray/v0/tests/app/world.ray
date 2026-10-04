@@ -141,8 +141,8 @@ if (present.status_now == Status.offline) { INFO@mark `PS3 someone somewhere is 
 unless (present.status == Status.offline) { INFO@mark `PS4 what they said they were is not what they said` }
 
 // What a world and a character are written with in front of their names.
-unless ((World(name: "w").prefix).as_string == "#") { INFO@mark `WP1 a world is not written with a hash` }
-unless ((Character(name: "p").prefix).as_string == "@") { INFO@mark `WP2 a character is not written with an at sign` }
+unless ((World(name: "w").prefix).as(String) == "#") { INFO@mark `WP1 a world is not written with a hash` }
+unless ((Character(name: "p").prefix).as(String) == "@") { INFO@mark `WP2 a character is not written with an at sign` }
 
 // A name given to something is the name it answers to afterwards.
 renamed := Character(name: "before").named("after")

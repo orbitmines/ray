@@ -102,8 +102,8 @@ Unicode := class {
     version: Unicode.version
     latest: false
 
-    source => "https://www.unicode.org/Public/" + (.version.as_string + (".0.0/ucd/" + .name))
-    cached => "@ether/@https/www.unicode.org/Public/" + (.version.as_string + ("/" + .name))
+    source => "https://www.unicode.org/Public/" + (.version.as(String) + (".0.0/ucd/" + .name))
+    cached => "@ether/@https/www.unicode.org/Public/" + (.version.as(String) + ("/" + .name))
 
     text => (
       held ^keyword := IO.read(.cached)
@@ -161,7 +161,7 @@ Unicode := class {
       fields := line.split(U+003B)
       points := chain None
       fields.at(2).value.trimmed.split(U+0020) for { if it.value.nonempty { points &= it.value.as_number_in(16).as_character } }
-      Unicode.Folding(code: fields.head.value.trimmed.as_number_in(16), status: fields.at(1).value.trimmed, mapping: points.as_string)
+      Unicode.Folding(code: fields.head.value.trimmed.as_number_in(16), status: fields.at(1).value.trimmed, mapping: points.as(String))
     )
   }
 
@@ -178,7 +178,7 @@ Unicode := class {
         if ((held.status == "C").or(held.status == "F")) { found = held.mapping }
       }
     }
-    if (found === None) { character.as_string } else { found }
+    if (found === None) { character.as(String) } else { found }
   )
 }
 

@@ -99,7 +99,7 @@ Roman := class {
     Roman.place(out, hundreds % 10, Roman.m_digit, Roman.d_digit, Roman.c_digit)
     Roman.place(out, below / 10, Roman.c_digit, Roman.l_digit, Roman.x_digit)
     Roman.place(out, below % 10, Roman.x_digit, Roman.v_digit, Roman.i_digit)
-    Roman(text: out.as_string)
+    Roman(text: out.as(String))
   )
   place (out, count: Number, ten_digit, five_digit, one_digit) => (
     if (count == 9) {
@@ -140,7 +140,7 @@ Roman := class {
     Roman.place_additive(out, hundreds % 10, Roman.d_digit, Roman.c_digit)
     Roman.place_additive(out, below / 10, Roman.l_digit, Roman.x_digit)
     Roman.place_additive(out, below % 10, Roman.v_digit, Roman.i_digit)
-    Roman(text: out.as_string)
+    Roman(text: out.as(String))
   )
   place_additive (out, count: Number, five_digit, one_digit) => (
     unless (count < 5) { out &= five_digit }

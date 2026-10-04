@@ -1,4 +1,6 @@
 {pattern} => {body} => external rule pattern body
+//{comment?} => None
+;{statement} => statement
 ({expr}) => expr
 {{expr}} => external ** expr
 {name} := {value} => external declare name value
@@ -120,7 +122,8 @@ if ^keyword := class {
     goto skip
    enter\
     taken = global
-    result := inline (external ** yes)
+    result := None
+    external declare result (inline (external ** yes))
     answer = result
     goto composes if (external own result)
     goto skip
@@ -142,7 +145,8 @@ if ^keyword := class {
     goto skip
    enter\
     taken = global
-    result := inline (external ** block)
+    result := None
+    external declare result (inline (external ** block))
     answer = result
     goto composes if (external own result)
     goto skip
@@ -176,7 +180,8 @@ unless{ }{cond}{ }{block} ^class => (
 
   goto skip if (cond as boolean).holds
   taken = global
-  result := inline (external ** block)
+  result := None
+  external declare result (inline (external ** block))
   answer = result
   goto composes if (external own result)
   goto skip
@@ -189,7 +194,7 @@ unless{ }{cond}{ }{block} ^class => (
 
 while ^keyword := class {
   { }{cond}{ }{block} ^class => (
-    loop ^keyword := external .
+    looping ^keyword := external .
     inline static
     written_block := external ** block
 
@@ -201,7 +206,7 @@ while ^keyword := class {
     goto again
    done\
 
-    loop ^variable
+    looping ^variable
   )
 
   { }{block}{ }while{ }{cond} ^class => (
@@ -212,7 +217,13 @@ while ^keyword := class {
   )
 }
 
-do ^keyword := while
+do{ }{block}{ }while{ }{cond} ^class => (
+  first_round := external ** block
+  inline first_round
+  while cond block
+)
+
+loop{ }{block} ^class => while true block
 
 Program := class {
   ({arguments}) => (
@@ -249,50 +260,76 @@ left-to-right ^keyword := class: Modifier {
   reads_left_to_right => TODO
 }
 chainable {head} ({parameters ^parameter}) => {block} => (
-  names := external ** parameters
-  code := external ** block
+  method_parameters := external ** parameters
+  method_written := external ** block
   defined ^keyword := external define head `{arguments}` {
-    (inline names) := arguments
-    inline code
+    (inline method_parameters) := arguments
+    inline method_parameters
+    inline method_written
   } parameters
   chainable.modify(defined)
 )
 compounds {head} ({parameters ^parameter}) => {block} => (
-  names := external ** parameters
-  code := external ** block
+  method_parameters := external ** parameters
+  method_written := external ** block
   defined ^keyword := external define head `{arguments}` {
-    (inline names) := arguments
-    inline code
+    (inline method_parameters) := arguments
+    inline method_parameters
+    inline method_written
   } parameters
   compounds.modify(defined)
+)
+right-to-left {head} ({parameters ^parameter}) => {block} => (
+  method_parameters := external ** parameters
+  method_written := external ** block
+  defined ^keyword := external define head `{arguments}` {
+    (inline method_parameters) := arguments
+    inline method_parameters
+    inline method_written
+  } parameters
+  right-to-left.modify(defined)
+)
+left-to-right {head} ({parameters ^parameter}) => {block} => (
+  method_parameters := external ** parameters
+  method_written := external ** block
+  defined ^keyword := external define head `{arguments}` {
+    (inline method_parameters) := arguments
+    inline method_parameters
+    inline method_written
+  } parameters
+  left-to-right.modify(defined)
 )
 Modifier.spellings = chain None
 Modifier.spellings &= `chainable`
 Modifier.spellings &= `compounds`
+Modifier.spellings &= `right-to-left`
+Modifier.spellings &= `left-to-right`
 
 Node := base class {
 
   , => this
 
-  ;{x} ^punctuation => inline x
+  ;{x} ^punctuation => x
   listing => None
 
   ({parameters ^parameter}) => {block} => (
-    names := external ** parameters
-    code := external ** block
+    method_parameters := external ** parameters
+    method_written := external ** block
     this ^function
     external define this `{arguments}` {
-      (inline names) := arguments
-      inline code
+      (inline method_parameters) := arguments
+      inline method_parameters
+      inline method_written
     } parameters
   )
   ^{literal style} ({parameters ^parameter}) => {block} => (
-    names := external ** parameters
-    code := external ** block
+    method_parameters := external ** parameters
+    method_written := external ** block
     this ^function
     external define this `{arguments}` {
-      (inline names) := arguments
-      inline code
+      (inline method_parameters) := arguments
+      inline method_parameters
+      inline method_written
     } parameters
   )
 
@@ -337,9 +374,12 @@ Node := base class {
   :{type} ^punctuation => (
     if (external own this) {
       unless type.instance {
-        if this {
-          if this.instance { type.verify(this) }
-          elsif this.written_body { this.components.hierarchy &= type }
+        unless (this === None) {
+          if this.instance {
+            unless (this.instance_of(type)) { ERROR@this `is not of the type it is declared as` }
+            type.verify(this)
+          }
+          elsif this.written_body { unless ((this === type).or(this.subtype_of(type))) { ERROR@this `is not of the type it is declared as` } }
           elsif (this.instance_of(type)) {
             if type.repeating { external assign this this.instance_of(type) }
             type.verify(this)
@@ -368,7 +408,7 @@ Node := base class {
     found ^keyword := None
     among ^keyword := None
     if this.codepoint { among = type.superposes }
-    if this {
+    unless (this === None) {
       if type.repeating { found = read_whole(this, type) }
       elsif type.listing { found = read_whole(this, type) }
       elsif among {
@@ -407,7 +447,7 @@ Node := base class {
   )
 
   classes => (
-    unless this.classes_read {
+    unless ((external own this.classes_read).and(this.classes_read)) {
       this.classes_read = chain None
       reached ^keyword := chain None
       reached &= this
@@ -494,6 +534,73 @@ Node := base class {
     external extend this component
     this
   )
+  compounds - (component) => (
+    remaining ^keyword := chain this
+    walker ^keyword := this.components.hierarchy.head
+    while walker {
+      unless (walker.value === component) { remaining &= walker.value }
+      walker = walker.next
+    }
+    this.components.hierarchy = remaining
+    this.classes_read = None
+    this
+  )
+
+  subtype_of (other) => (
+    found ^keyword := None
+    held ^keyword := this.classes.head
+    while ((held).and((found).not)) {
+      if (held.value === other) { found = global }
+      held = held.next
+    }
+    found
+  )
+  supertype_of (other) => other.subtype_of(this)
+
+  is_abstract => (
+    missing ^keyword := None
+    head ^keyword := this.heads_written.head
+    while ((head).and((missing).not)) {
+      if head.value.is_required { missing = global }
+      head = head.next
+    }
+    missing
+  )
+
+  fields => (
+    found ^keyword := chain None
+    holder ^keyword := this
+    colon ^keyword := code_points(`x:y`).head.next.value
+    held ^keyword := this.classes.head
+    while held {
+      if held.value.written_body {
+        statements ^keyword := Program(code: held.value.written_body).written
+        statements for {
+          read ^keyword := it.value.head_read
+          if (read.ending) {
+            if (read.ending == colon) {
+              named ^keyword := read.points.map { it.value.as_character }.as(String)
+              found &= Field(name: named, value: (external get holder named))
+            }
+          }
+        }
+      }
+      held = held.next
+    }
+    found
+  )
+
+  as (=== String) => (
+    shown ^keyword := chain None
+    .fields for { shown &= it.value.name + ": " + it.value.value.as(String) }
+    String.joined(shown, ", ")
+  )
+
+  canonical => (
+    normal ^keyword := this
+    if (this.normalizer) { normal = this.normalizer(this) }
+    normal
+  )
   as (=== boolean) => true
 
   === (other) => (
@@ -549,7 +656,14 @@ Node := base class {
 
   structure => None
 
-  satisfies (predicate) => (inline predicate)
+  satisfies (predicate) => (
+    holding ^keyword := chain None
+    holding.target = this
+    external define holding.target `constrained` {
+      inline predicate
+    } None
+    holding.target.constrained
+  )
 
   verify (candidate) => candidate
 
@@ -557,27 +671,30 @@ Node := base class {
 
   {this}{{literal narrowing}} ^punctuation => (
     narrowed ^keyword := this
+    closure ^keyword := { inline narrowing }
     selected ^keyword := None
     if (narrowed.instance) {
       selected = chain None
       narrowed for {
         held := it.value
-        if (held.satisfies({ inline narrowing })) { selected &= held }
+        if (held.satisfies(closure)) { selected &= held }
       }
     } else {
       selected = class: narrowed {
+        constraint := closure
+        narrows := narrowed
 
         accepts (text) => (
-          candidate := narrowed.accepts(text)
-          if (candidate) { if (candidate.satisfies({ inline narrowing })) { candidate } else { None } } else { None }
+          candidate := this.narrows.accepts(text)
+          if (candidate) { if (candidate.satisfies(this.constraint)) { candidate } else { None } } else { None }
         )
         verify (candidate) => (
-          narrowed.verify(candidate)
-          unless (candidate.satisfies({ inline narrowing })) { ERROR@candidate `does not satisfy a constraint of its type` }
+          this.narrows.verify(candidate)
+          unless (candidate.satisfies(this.constraint)) { ERROR@candidate `does not satisfy a constraint of its type` }
 
           candidate
         )
-        admits (candidate) => if (narrowed.admits(candidate)) { candidate.satisfies({ inline narrowing }) } else { None }
+        admits (candidate) => if (this.narrows.admits(candidate)) { candidate.satisfies(this.constraint) } else { None }
         if (this.instance) { selected.verify(this) }
       }
     }
@@ -702,6 +819,10 @@ Link := class { }
 
 Reading := class {
   rest: Node
+  value: Node
+}
+Field := class {
+  name: Node
   value: Node
 }
 Chosen := class {
@@ -1298,8 +1419,7 @@ enum{ }{literal member ^enumMember}{ }{fields? ^property}{ }{literal rest?}{\n} 
 )
 
 Program.components.hierarchy &= class {
-  optimizations => global.O
-  O => .optimizations
+  optimizations => .O
   {this}{`{`}{literal setting}{`}`} ^punctuation => class: this { inline setting }
 
   written => (
@@ -1323,6 +1443,35 @@ Program.components.hierarchy &= class {
     statements for body
     this
   )
+
+  variables => (
+    names ^keyword := chain None
+    statements ^keyword := .written
+    statements for {
+      read ^keyword := head_of(it.value.code)
+      if read.is_declared { names &= read.spelled }
+    }
+    names
+  )
+  usages (name) => (
+    used ^keyword := chain None
+    statements ^keyword := .written
+    statements for {
+      if (it.value.mentions(name)) { used &= it.value }
+    }
+    used
+  )
+  mentions (name) => (
+    wanted ^keyword := code_points(name)
+    found ^keyword := false
+    remaining ^keyword := code_points(.code)
+    while ((remaining.nonempty).and(found.not)) {
+      if (remaining.head.value == wanted.head.value) { found = .same_points(remaining.head, wanted) }
+      remaining.pop_front
+    }
+    found
+  )
+  is_terminal => .written.empty
 
   compounds + (addend) => (
     augend ^keyword := .code
@@ -1450,6 +1599,13 @@ false := boolean.false
 
 {l} [x: right-to-left] {m} [y: left-to-right] {r} => l[x] m & m[y] r
 
-{a} [x: chainable] {b} [y: chainable] {c} => (a[x] b) & (b[y] c)
+{base} [x: right-to-left] {middle_operand} [y: right-to-left] {top} => base[x] (middle_operand[y] top)
+
+{left} [x: left-to-right] {middle} [y: right-to-left] {right} => (
+  ERROR@middle `mixes directions around one operand; use parentheses`
+  None
+)
+
+{first} [x: chainable] {shared} [y: chainable] {last} => (first[x] shared) & (shared[y] last)
 
 {a} [x: compounds]{`=`} {b} => a = (a[x] b)

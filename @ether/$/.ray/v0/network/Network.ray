@@ -45,7 +45,7 @@ Network.components.hierarchy &= class {
       if port_written.nonempty { chosen_port = port_written.as_number } elsif (found_protocol === None) { chosen_port = None } else { chosen_port = found_protocol.port }
       Network.URL(protocol: found_protocol, host: Network.Hosts.resolved(host_written), port: chosen_port, path: path_written.before("?"), query: path_written.after("?"))
     )
-    as_string => .protocol.name + ("://" + (.host.text + (":" + (.port.as_string + ("/" + .path)))))
+    as (=== String) => .protocol.name + ("://" + (.host.text + (":" + (.port.as(String) + ("/" + .path)))))
   }
 
   Socket := class {

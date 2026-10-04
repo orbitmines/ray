@@ -724,7 +724,7 @@ export class Interpreter {
           const defined = this.tried(() => { const receiving = this.receiving(whole, frame); if (trace !== undefined) { const shape = this.shape(whole); trace.push({ k: 'whole', end: head, owned: this.print(shape.rules), on: this.print(shape.on) }); positions!.push(head); } return this.best(receiving, cursor.bounded(head, cursor.limit), frame, whole); });
           if (defined?.rule.defines) { place = whole; named = defined; name = head; }
         }
-        const self = this.holding_at(cursor.source, start)?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
+        const self = (this.holding_at(cursor.source, start) ?? this.applying(frame))?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
         if (trace !== undefined) { const shape = self === undefined ? undefined : this.shape(self); trace.push(shape === undefined ? { k: 'self' } : { k: 'self', mine: this.print(shape.mine), rules: this.print(shape.rules), on: this.print(shape.on) }); }
         const own = self === undefined ? undefined : this.best_on(self, frame, cursor, true);
         const spelled = name > start && !Interpreter.word.test(text[start]) && !named?.rule.defines && !found?.rule.defines;
@@ -751,7 +751,9 @@ export class Interpreter {
       trace?.push({ k: 'reader', fn: reader?.fn });
       const lists = this.on_lists(value, frame);
       if (trace !== undefined) { const shape = this.shape(value); trace.push({ k: 'on', mine: this.print(shape.mine), rules: this.print(shape.rules), on: this.print(shape.on) }); positions!.push(cursor.cursor); }
-      const found = this.best(lists.mine, cursor, frame, value) ?? this.best(lists.rules, cursor, frame, value);
+      const mine = this.best(lists.mine, cursor, frame, value);
+      const reaching = mine === undefined ? undefined : this.best(this.operating_of(frame), cursor, frame, value);
+      const found = reaching !== undefined && reaching.end > mine!.end ? reaching : mine ?? this.best(lists.rules, cursor, frame, value);
       if (found !== undefined) { if (trace !== undefined) { if (this.sensitive !== basis) trace.push({ k: 'declared', declared: this.declared }); trace.push({ k: 'fire', match: found, receiver: 'value', occurrence: this.occurrence(found.rule, 'value', frame, value) }); } value = this.fire(found, cursor, frame); continue; }
       const at = this.spaces(cursor, cursor.cursor);
       if (at >= cursor.limit || text[at] === '\n') { if (trace !== undefined) { if (this.sensitive !== basis) trace.push({ k: 'declared', declared: this.declared }); trace.push({ k: 'break' }); } break; }
@@ -786,6 +788,9 @@ export class Interpreter {
       const body = rule.body, lexical = rule.lexical;
       if ((body !== undefined && body.source === source && body.begin <= at && at <= body.end) || (lexical !== undefined && lexical.source === source && lexical.begin <= at && at <= lexical.end)) return this.running[k];
     }
+  }
+  applying(frame: Node): Running | undefined {
+    for (let k = this.running.length - 1; k >= 0; k--) if (this.running[k].local === frame) return this.running[k];
   }
   holding(at: Text.Node): Running | undefined {
     for (let k = this.running.length - 1; k >= 0; k--) {
@@ -964,6 +969,8 @@ export class Interpreter {
     return made;
   }
   static owned_by_nothing = { rules: [] as Rule[], mine: [] as Rule[] };
+  private readonly keep_operating = (all: Rule[]) => all.filter(rule => rule.leading && !rule.implicit && rule.pattern[1]?.kind === 'capture' && rule.pattern[1].operator === true && rule.pattern[1].content !== undefined);
+  operating_of(frame: Node): Rule[] { return this.derived(this.rules_of(frame), 'operating', this.keep_operating); }
   leading_of(frame: Node): { rules: Rule[]; mine: Rule[] } {
     const based = this.based();
     const rules = this.derived(this.rules_of(frame), 'leading', this.keep_leading);
@@ -1680,7 +1687,7 @@ export class Interpreter {
         if (!(frame.sees ??= []).includes(target.code.in) && frame !== target.code.in) { frame.sees.unshift(target.code.in); Interpreter.touch(frame); this.notify(frame); }
         const last = this.read(this.cursor_of(this.inner(target.code.span) ?? target.code.span), frame);
         const held = last === undefined ? undefined : this.deref(last, false);
-        if (held?.program && !compose) return this.inline(held, frame);
+        if (held?.program && !compose && last!.place === undefined) return this.inline(held, frame);
         if (compose && held !== undefined && !held.text && !held.none && held.code === undefined && held !== frame) { (frame.with ??= []).push(held); Interpreter.touch(frame); this.version++; }
         return last;
       }
@@ -1700,7 +1707,7 @@ export class Interpreter {
   define(head: Text.Node, body: Text.Node | undefined, scope: Node, closure: Node = scope, guard?: { span: Text.Node; in: Node }, written?: Text.Node): Rule | undefined {
     const site = head.source.location !== undefined ? head : written ?? this.running[this.running.length - 1]?.at;
     const made = site === undefined || scope === this.GLOBAL ? undefined : this.rules_on(scope).find(rule => !this.based().has(rule) && rule.at.string === head.string && Interpreter.same(rule.at.source.location !== undefined ? rule.at : rule.lexical, site));
-    if (made !== undefined) return made;
+    if (made !== undefined) { if (made.home === scope && made.closure !== closure) { made.closure = closure; Interpreter.touch(scope); this.version++; } return made; }
     const pieces = this.pieces_of(head, closure);
     if (pieces.length === 0) { this.error('Expected a pattern before `=>`.', head); return; }
     const key = pieces.map(piece => piece.kind === 'literal' ? piece.text : piece.kind === 'gap' ? '{ }' : `{${piece.name}}`).join('') + (guard === undefined || guard.span.string.trim() === '' ? '' : `(${guard.span.string.trim()})`);

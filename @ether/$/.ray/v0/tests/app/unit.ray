@@ -65,10 +65,10 @@ if ((1 bit).is_temporal) { INFO@mark `U34 a bit is of time` }
 unless ((1 minute).as_seconds == 60) { INFO@mark `U35 a minute is not sixty seconds` }
 
 // What a unit is called and what it is written as.
-unless (Bit.name.as_string == "bit") { INFO@mark `U36 a bit is not called that` }
-unless (Bit.symbol.as_string == "b") { INFO@mark `U37 a bit is not written b` }
-unless (Byte.name.as_string == "byte") { INFO@mark `U38 a byte is not called that` }
-unless (Minute.base.name.as_string == "second") { INFO@mark `U39 a minute is not built on the second` }
+unless (Bit.name.as(String) == "bit") { INFO@mark `U36 a bit is not called that` }
+unless (Bit.symbol.as(String) == "b") { INFO@mark `U37 a bit is not written b` }
+unless (Byte.name.as(String) == "byte") { INFO@mark `U38 a byte is not called that` }
+unless (Minute.base.name.as(String) == "second") { INFO@mark `U39 a minute is not built on the second` }
 
 // Quantities compare after they add.
 unless ((2 seconds) + (3 seconds) == (5 seconds)) { INFO@mark `U40 two and three seconds is not five seconds` }
@@ -91,8 +91,8 @@ unless (BinaryPrefix.kibi.factor == 1024) { INFO@mark `UB6 kibi is not 1024` }
 unless (BinaryPrefix.mebi.factor == 1048576) { INFO@mark `UB7 mebi is not 1024 squared` }
 unless (Kibibyte.base == Byte) { INFO@mark `UB8 a kibibyte is not built on a byte` }
 unless (Kilobyte.base == Byte) { INFO@mark `UB9 a kilobyte is not built on a byte` }
-unless (Kibibyte.symbol.as_string == "KiB") { INFO@mark `UB10 a kibibyte is not written KiB` }
-unless (Kilobyte.symbol.as_string == "KB") { INFO@mark `UB11 a kilobyte is not written KB` }
+unless (Kibibyte.symbol.as(String) == "KiB") { INFO@mark `UB10 a kibibyte is not written KiB` }
+unless (Kilobyte.symbol.as(String) == "KB") { INFO@mark `UB11 a kilobyte is not written KB` }
 unless ((2 kibibytes).unit == Kibibyte) { INFO@mark `UB12 two kibibytes are not kibibytes` }
 unless ((3 KB).unit == Kilobyte) { INFO@mark `UB13 three KB are not kilobytes` }
 unless ((1 KiB).unit == Kibibyte) { INFO@mark `UB14 one KiB is not a kibibyte` }

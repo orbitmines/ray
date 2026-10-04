@@ -53,7 +53,7 @@ Iterable := class: Ordered {
 
   .reduce(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => (
     names ^keyword := external ** accumulator
-    code ^keyword := external ** step
+    step_written ^keyword := external ** step
     accumulated ^keyword := None
     started ^keyword := false
     for {
@@ -62,7 +62,7 @@ Iterable := class: Ordered {
         entering.target = it.value
         external define entering.target `reduce_step{arguments}` {
           (inline names) := arguments
-          inline code
+          inline step_written
         } accumulator
         accumulated = entering.target.reduce_step(accumulated)
       } else {
@@ -85,14 +85,14 @@ Iterable := class: Ordered {
   )
   .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => (
     names ^keyword := external ** accumulator
-    code ^keyword := external ** step
+    step_written ^keyword := external ** step
     accumulated ^keyword := initial
     for {
       entering ^keyword := chain None
       entering.target = it.value
       external define entering.target `reduce_step{arguments}` {
         (inline names) := arguments
-        inline code
+        inline step_written
       } accumulator
       accumulated = entering.target.reduce_step(accumulated)
     }
@@ -336,6 +336,25 @@ Ray := class: Iterable {
   ⊢ => .initial
   ⊣ => .terminal
 
+  is_boundary => .is_initial.or(.is_terminal)
+
+  expand => (
+    unfolded ^keyword := chain None
+    .initial for { unfolded &= it }
+    unfolded
+  )
+
+  path_to (other) => this..other
+
+  complement => (
+    selected ^keyword := this
+    outside ^keyword := chain None
+    .initial for {
+      unless (it === selected) { outside &= it }
+    }
+    outside
+  )
+
   initial_boundary => Boundary.Initial(vertex: this)
   terminal_boundary => Boundary.Terminal(vertex: this)
 
@@ -402,6 +421,9 @@ Ray := class: Iterable {
 }
 
 Boundary := class: Ray {
+
+  ∙ => .vertex
+  ⊙ => .edge
 
   is_initial => (.edge).not
   is_terminal => (.edge).not
@@ -497,12 +519,55 @@ Loop := class: Ray {
   is_terminal => false
   bounded => false
   acyclic => false
+
+  unrolled => .around
+  instances (times: Number) => .around * times
+  unrolled_mod => (
+    opened ^keyword := chain None
+    .around for { opened &= it.value }
+    opened &= Loop(around: .around, holding: .around.head)
+    opened
+  )
+  disallow_loops => .around
 }
 
 Traverser := class {
   Order := enum depth_first | breadth_first
   default => Traverser.Order.depth_first
   walk (entry, body) => entry for body
+
+  DepthFirst := class {
+    walk (entry, body) => (
+      pending ^keyword := chain None
+      pending &= entry
+      seen ^keyword := chain None
+      while pending.nonempty {
+        it ^keyword := pending.pop_back
+        unless (seen.contains(it)) {
+          seen &= it
+          inline body
+          if it.is_terminal.not { pending &= it.next }
+        }
+      }
+      entry
+    )
+  }
+  BreadthFirst := class {
+    walk (entry, body) => (
+      pending ^keyword := chain None
+      pending &= entry
+      seen ^keyword := chain None
+      while pending.nonempty {
+        it ^keyword := pending.pop_front
+        unless (seen.contains(it)) {
+          seen &= it
+          inline body
+          if it.is_terminal.not { pending &= it.next }
+        }
+      }
+      entry
+    )
+  }
 }
 
 Chain.components.hierarchy &= Array
@@ -538,4 +603,166 @@ Chain.components.hierarchy &= class {
     if (this.tail) { taken = this.unlink(this.tail) }
     taken
   )
+  link_of (x) => (
+    found ^keyword := None
+    walker ^keyword := this.head
+    while ((walker).and((found).not)) {
+      if (walker.value == x) { found = walker }
+      walker = walker.next
+    }
+    found
+  )
+  remove (x) => (
+    held ^keyword := this.link_of(x)
+    if (held) { this.unlink(held) }
+    this
+  )
+  push_after (at, x) => (
+    added ^keyword := link x at
+    following ^keyword := at.next
+    added.next = following
+    at.next = added
+    if (following) { following.previous = added } else { this.tail = added }
+    this
+  )
+  push_before (at, x) => (
+    preceding ^keyword := at.previous
+    if (preceding) { this.push_after(preceding, x) } else { this.push_front(x) }
+    this
+  )
+  move_after (x, target) => (
+    this.remove(x)
+    this.push_after(this.link_of(target), x)
+  )
+  move_before (x, target) => (
+    this.remove(x)
+    this.push_before(this.link_of(target), x)
+  )
+}
+
+Iterable.components.hierarchy &= class {
+  split (delimiter) => (
+    pieces ^keyword := chain None
+    current ^keyword := chain None
+    for {
+      if (it.value == delimiter) {
+        pieces &= current
+        current = chain None
+      } else { current &= it.value }
+    }
+    pieces &= current
+    pieces
+  )
+
+  .reduce_right({literal operator ^operator}) ^punctuation => (
+    reversed ^keyword := .reverse
+    accumulated ^keyword := None
+    started ^keyword := false
+    reversed for {
+      if started { accumulated = accumulated[operator] it.value } else {
+        accumulated = it.value
+        started = true
+      }
+    }
+    accumulated
+  )
+  .reduce_right(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => (
+    names ^keyword := external ** accumulator
+    step_written ^keyword := external ** step
+    reversed ^keyword := .reverse
+    accumulated ^keyword := None
+    started ^keyword := false
+    reversed for {
+      if started {
+        entering ^keyword := chain None
+        entering.target = it.value
+        external define entering.target `reduce_step{arguments}` {
+          (inline names) := arguments
+          inline step_written
+        } accumulator
+        accumulated = entering.target.reduce_step(accumulated)
+      } else {
+        accumulated = it.value
+        started = true
+      }
+    }
+    accumulated
+  )
+  .reduce_right({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => (
+    names ^keyword := external ** accumulator
+    step_written ^keyword := external ** step
+    reversed ^keyword := .reverse
+    accumulated ^keyword := initial
+    reversed for {
+      entering ^keyword := chain None
+      entering.target = it.value
+      external define entering.target `reduce_step{arguments}` {
+        (inline names) := arguments
+        inline step_written
+      } accumulator
+      accumulated = entering.target.reduce_step(accumulated)
+    }
+    accumulated
+  )
+
+  enumerate => (
+    numbered ^keyword := chain None
+    index ^keyword := 0
+    for {
+      pair ^keyword := chain None
+      pair &= index
+      pair &= it.value
+      numbered &= pair
+      index = index.succ
+    }
+    numbered
+  )
+
+  zip (other) => (
+    zipped ^keyword := chain None
+    theirs ^keyword := other.entry
+    for {
+      if (theirs) {
+        pair ^keyword := chain None
+        pair &= it.value
+        pair &= theirs.value
+        zipped &= pair
+        if theirs.is_terminal { theirs = None } else { theirs = theirs.next }
+      }
+    }
+    zipped
+  )
+
+  join (separator) => (
+    joined ^keyword := chain None
+    started ^keyword := false
+    for {
+      if started { joined &= separator }
+      joined &= it.value
+      started = true
+    }
+    joined
+  )
+
+  filter (predicate) => (
+    kept ^keyword := chain None
+    for {
+      if (inline predicate) { kept &= it.value }
+    }
+    kept
+  )
+
+  remove (x) => (
+    kept ^keyword := chain None
+    for {
+      unless (it.value == x) { kept &= it.value }
+    }
+    kept
+  )
+
+  canonical => .unique
+}
+
+Set.components.hierarchy &= class {
+  canonical => .elements.unique
 }

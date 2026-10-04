@@ -10,7 +10,7 @@ Render := class {
     if (value.instance_of(String)) { Render.Box(value: value, text: value) }
     elsif (value.rendering) { Render.boxed(value.rendering) }
     elsif (value.instance_of(Geometry.Shape)) { Render.Box(value: value, children: value.children) }
-    elsif (value.location) { Render.Box(value: value, text: value.location.as_string, link: value.location) }
+    elsif (value.location) { Render.Box(value: value, text: value.location.as(String), link: value.location) }
     else { Render.fields(value) }
   )
 
@@ -60,18 +60,18 @@ Render := class {
     )
     attributes (box) => (
       written ^keyword := " style=\"" + (Render.HTML.css(box) + "\"")
-      unless (box.link === None) { written = written + (" href=\"" + (box.link.as_string + "\"")) }
+      unless (box.link === None) { written = written + (" href=\"" + (box.link.as(String) + "\"")) }
       written
     )
     css (box) => (
       rules := chain None
       if (box.flow == Geometry.Flow.inline) { rules &= "display:flex" }
-      rules &= "width:" + (box.size.x.as_string + "px")
+      rules &= "width:" + (box.size.x.as(String) + "px")
       box.style for { rules &= Render.HTML.style_rule(it.value) }
       rules.join(";")
     )
     style_rule (style) => if (style == `italic`) { "font-style:italic" } elsif (style == `bold`) { "font-weight:bold" } else { "" }
-    escaped (text: String) => text.map { if (it.value == U+003C) { "&lt;" } elsif (it.value == U+003E) { "&gt;" } elsif (it.value == U+0026) { "&amp;" } else { it.value.as_string } }.join
+    escaped (text: String) => text.map { if (it.value == U+003C) { "&lt;" } elsif (it.value == U+003E) { "&gt;" } elsif (it.value == U+0026) { "&amp;" } else { it.value.as(String) } }.join
   }
 
   TUI := class: Render.Level {
@@ -82,7 +82,7 @@ Render := class {
     written (box) => (
       lines := chain None
       Render.TUI.draw(box, lines)
-      lines.join(Char.newline.as_string)
+      lines.join(Char.newline.as(String))
     )
     draw (box, lines) => (
       unless (box.text === None) { lines &= Render.TUI.styled(box) }
@@ -166,13 +166,13 @@ Render := class {
         while (column < columns) {
           pixel := .pixels.at((row * .width) + (column * step)).value
           shade := (pixel.luminance * (Render.Image.ramp.count.pred)) / 255
-          line &= Terminal.coloured(Render.Image.ramp.at(shade).value.as_string, pixel)
+          line &= Terminal.coloured(Render.Image.ramp.at(shade).value.as(String), pixel)
           column = column.succ
         }
         rows &= line.join
         row = row + (step * 2)
       }
-      rows.join(Char.newline.as_string)
+      rows.join(Char.newline.as(String))
     )
   }
 
@@ -191,8 +191,8 @@ Terminal := class {
   kind: Terminal.Kind.truecolor
   raw: false
 
-  escape (code: String) => U+001B.as_string + ("[" + code)
-  coloured (text: String, pixel) => Terminal.escape("38;2;" + (pixel.red.as_string + (";" + (pixel.green.as_string + (";" + (pixel.blue.as_string + "m")))))) + (text + Terminal.escape("0m"))
+  escape (code: String) => U+001B.as(String) + ("[" + code)
+  coloured (text: String, pixel) => Terminal.escape("38;2;" + (pixel.red.as(String) + (";" + (pixel.green.as(String) + (";" + (pixel.blue.as(String) + "m")))))) + (text + Terminal.escape("0m"))
   clear => Terminal.escape("2J") + Terminal.escape("H")
   raw_mode => (
     .raw = true

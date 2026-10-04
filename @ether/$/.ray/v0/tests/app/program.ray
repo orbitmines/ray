@@ -60,7 +60,7 @@ if (taken.first.value.is_jump) { INFO@mark `PG18 a name is read as a jump` }
 unless (landed.is_label) { INFO@mark `PG19 a label is not read as one` }
 if (jumping.first.value.is_label) { INFO@mark `PG20 a jump is read as a label` }
 unless (jumping.first.value.is_conditional) { INFO@mark `PG21 a jump with a condition is not conditional` }
-unless (same_text((external where jumping.target_of(jumping.first.value)), (external where landed))) { INFO@mark `PG22 a jump does not land on its label` }
+unless (same_text((external where jumping.target_of(jumping.first.value)), (external where landed.code))) { INFO@mark `PG22 a jump does not land on its label` }
 always ^keyword := Written.of({
   goto away
  away\
@@ -72,7 +72,7 @@ if (jumping.target_of(always.first.value)) { INFO@mark `PG24 a jump lands on a l
 // conditional one also goes on to what is written below it.
 flowing ^keyword := jumping.flow
 unless (flowing.head.jumps_to) { INFO@mark `PG25 a jump is not an edge` }
-unless (same_text((external where flowing.head.jumps_to.value), (external where landed))) { INFO@mark `PG26 a jump's edge does not reach its label` }
+unless (same_text((external where flowing.head.jumps_to.value.code), (external where landed.code))) { INFO@mark `PG26 a jump's edge does not reach its label` }
 unless flowing.head.falls_through { INFO@mark `PG27 a conditional jump does not go on below it` }
 unless flowing.head.next.falls_through { INFO@mark `PG28 a value does not go on below it` }
 if always.flow.head.falls_through { INFO@mark `PG29 a jump without a condition goes on below it` }

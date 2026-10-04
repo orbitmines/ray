@@ -376,7 +376,8 @@ Node := base class {
       unless type.instance {
         unless (this === None) {
           if this.instance {
-            if (this.instance_of(type)) { type.verify(this) } else { ERROR@this `is not of the type it is declared as` }
+            unless (this.instance_of(type)) { ERROR@this `is not of the type it is declared as` }
+            type.verify(this)
           }
           elsif this.written_body { unless ((this === type).or(this.subtype_of(type))) { ERROR@this `is not of the type it is declared as` } }
           elsif (this.instance_of(type)) {

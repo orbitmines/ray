@@ -394,3 +394,6 @@ unless ((3..1).head.next.value == 2) { INFO@mark `RQ6 three down to one does not
 unless ((0..2..1).count == 4) { INFO@mark `RQ7 zero to two through to one is not four steps` }
 unless ((0..2..1).tail.value == 1) { INFO@mark `RQ8 zero to two through to one does not end at one` }
 unless ((2..<2).empty) { INFO@mark `RQ9 two up to two holds something` }
+unless ((a..c).head.next.value === b) { INFO@mark `RQ10 the path from the first ray to the third does not pass the second` }
+unless ((a..c).tail.value === c) { INFO@mark `RQ11 the path from the first ray to the third does not end there` }
+if (c..a) { INFO@mark `RQ12 a path runs against the direction of its rays` }

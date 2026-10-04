@@ -274,6 +274,19 @@ Ray := class: Iterable {
   first => .initial
   last => .terminal
 
+  ..{last} ^punctuation => (
+    stepped ^keyword := chain None
+    at ^keyword := this
+    while (at) {
+      stepped &= at
+      if (at === last) { at = None } else {
+        at = at.next
+        unless at { stepped = None }
+      }
+    }
+    stepped
+  )
+
   ⊢ => .initial
   ⊣ => .terminal
 

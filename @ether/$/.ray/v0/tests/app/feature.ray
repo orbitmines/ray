@@ -157,3 +157,4 @@ unless (tapped.press.cycle(options).value == 10) { INFO@mark `KB15 three presses
 held_key := Keyboard.Key(name: 5).press
 unless (held_key) { INFO@mark `KB16 a pressed key does not hold as a condition` }
 if (held_key.release) { INFO@mark `KB17 a released key holds as a condition` }
+if (Keyboard.Key(name: 6)) { INFO@mark `KB18 a key nobody pressed holds as a condition` }

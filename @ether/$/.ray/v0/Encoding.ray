@@ -4,7 +4,7 @@ Encoding := class {
   Encrypted := class {
     value: Node
     key: Node
-    as (location) => if (location == .key) { .value } else { None }
+    as (location) => if (.key === None) { None } elsif (location == .key) { .value } else { None }
   }
 
   Hash := class {

@@ -684,6 +684,8 @@ Node.DEFINE_METHOD = `&=`
 
 external extend None {
   as (=== boolean) => false
+  == (other) => other === None
+  != (other) => (other === None).not
 }
 
 class:{ }{header}{`{`}{members?}{`}`} ^keyword => (

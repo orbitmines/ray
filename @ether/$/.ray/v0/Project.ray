@@ -92,8 +92,8 @@ Project := class: Location {
     if (wanted === None) { false } else { host_versions.some { it.value == wanted }.not }
   )
   carry (files) => (
-    kept := .carried
-    files for { kept &= it.value }
+    project := this
+    files for { project.carried &= it.value }
     this
   )
 

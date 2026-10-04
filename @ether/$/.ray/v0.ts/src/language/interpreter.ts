@@ -723,7 +723,7 @@ export class Interpreter {
           const defined = this.tried(() => { const receiving = this.receiving(whole, frame); if (trace !== undefined) { const shape = this.shape(whole); trace.push({ k: 'whole', end: head, owned: this.print(shape.rules), on: this.print(shape.on) }); positions!.push(head); } return this.best(receiving, cursor.bounded(head, cursor.limit), frame, whole); });
           if (defined?.rule.defines) { place = whole; named = defined; name = head; }
         }
-        const self = this.holding_at(cursor.source, start)?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
+        const self = (this.holding_at(cursor.source, start) ?? this.applying(frame))?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
         if (trace !== undefined) { const shape = self === undefined ? undefined : this.shape(self); trace.push(shape === undefined ? { k: 'self' } : { k: 'self', mine: this.print(shape.mine), rules: this.print(shape.rules), on: this.print(shape.on) }); }
         const own = self === undefined ? undefined : this.best_on(self, frame, cursor, true);
         const spelled = name > start && !Interpreter.word.test(text[start]) && !named?.rule.defines && !found?.rule.defines;
@@ -785,6 +785,9 @@ export class Interpreter {
       const body = rule.body, lexical = rule.lexical;
       if ((body !== undefined && body.source === source && body.begin <= at && at <= body.end) || (lexical !== undefined && lexical.source === source && lexical.begin <= at && at <= lexical.end)) return this.running[k];
     }
+  }
+  applying(frame: Node): Running | undefined {
+    for (let k = this.running.length - 1; k >= 0; k--) if (this.running[k].local === frame) return this.running[k];
   }
   holding(at: Text.Node): Running | undefined {
     for (let k = this.running.length - 1; k >= 0; k--) {
@@ -1690,7 +1693,7 @@ export class Interpreter {
   define(head: Text.Node, body: Text.Node | undefined, scope: Node, closure: Node = scope, guard?: { span: Text.Node; in: Node }, written?: Text.Node): Rule | undefined {
     const site = head.source.location !== undefined ? head : written ?? this.running[this.running.length - 1]?.at;
     const made = site === undefined || scope === this.GLOBAL ? undefined : this.rules_on(scope).find(rule => !this.based().has(rule) && rule.at.string === head.string && Interpreter.same(rule.at.source.location !== undefined ? rule.at : rule.lexical, site));
-    if (made !== undefined) return made;
+    if (made !== undefined) { if (made.home === scope && made.closure !== closure) { made.closure = closure; Interpreter.touch(scope); this.version++; } return made; }
     const pieces = this.pieces_of(head, closure);
     if (pieces.length === 0) { this.error('Expected a pattern before `=>`.', head); return; }
     const key = pieces.map(piece => piece.kind === 'literal' ? piece.text : piece.kind === 'gap' ? '{ }' : `{${piece.name}}`).join('') + (guard === undefined || guard.span.string.trim() === '' ? '' : `(${guard.span.string.trim()})`);

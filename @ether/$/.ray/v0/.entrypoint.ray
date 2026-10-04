@@ -120,7 +120,8 @@ if ^keyword := class {
     goto skip
    enter\
     taken = global
-    result := inline (external ** yes)
+    result := None
+    external declare result (inline (external ** yes))
     answer = result
     goto composes if (external own result)
     goto skip
@@ -142,7 +143,8 @@ if ^keyword := class {
     goto skip
    enter\
     taken = global
-    result := inline (external ** block)
+    result := None
+    external declare result (inline (external ** block))
     answer = result
     goto composes if (external own result)
     goto skip
@@ -176,7 +178,8 @@ unless{ }{cond}{ }{block} ^class => (
 
   goto skip if (cond as boolean).holds
   taken = global
-  result := inline (external ** block)
+  result := None
+  external declare result (inline (external ** block))
   answer = result
   goto composes if (external own result)
   goto skip
@@ -549,7 +552,14 @@ Node := base class {
 
   structure => None
 
-  satisfies (predicate) => (inline predicate)
+  satisfies (predicate) => (
+    holding ^keyword := chain None
+    holding.target = this
+    external define holding.target `constrained` {
+      inline predicate
+    } None
+    holding.target.constrained
+  )
 
   verify (candidate) => candidate
 
@@ -557,27 +567,30 @@ Node := base class {
 
   {this}{{literal narrowing}} ^punctuation => (
     narrowed ^keyword := this
+    closure ^keyword := { inline narrowing }
     selected ^keyword := None
     if (narrowed.instance) {
       selected = chain None
       narrowed for {
         held := it.value
-        if (held.satisfies({ inline narrowing })) { selected &= held }
+        if (held.satisfies(closure)) { selected &= held }
       }
     } else {
       selected = class: narrowed {
+        constraint := closure
+        narrows := narrowed
 
         accepts (text) => (
-          candidate := narrowed.accepts(text)
-          if (candidate) { if (candidate.satisfies({ inline narrowing })) { candidate } else { None } } else { None }
+          candidate := this.narrows.accepts(text)
+          if (candidate) { if (candidate.satisfies(this.constraint)) { candidate } else { None } } else { None }
         )
         verify (candidate) => (
-          narrowed.verify(candidate)
-          unless (candidate.satisfies({ inline narrowing })) { ERROR@candidate `does not satisfy a constraint of its type` }
+          this.narrows.verify(candidate)
+          unless (candidate.satisfies(this.constraint)) { ERROR@candidate `does not satisfy a constraint of its type` }
 
           candidate
         )
-        admits (candidate) => if (narrowed.admits(candidate)) { candidate.satisfies({ inline narrowing }) } else { None }
+        admits (candidate) => if (this.narrows.admits(candidate)) { candidate.satisfies(this.constraint) } else { None }
         if (this.instance) { selected.verify(this) }
       }
     }

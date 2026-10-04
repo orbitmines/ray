@@ -38,6 +38,14 @@ This thing is, in essence, a programming language (Ray) and an IDE (Ether), whic
 curl -fsSL https://ether.orbitmines.com/install.sh | bash
 ```
 
+On Windows (PowerShell or cmd):
+
+```shell
+powershell -c "irm https://ether.orbitmines.com/install.ps1 | iex"
+```
+
+This installs `ether` (and `ray`, `orbitmines`) into `~/.ether/bin` and adds it to your PATH; `install.sh --uninstall` (or `install.ps1 -Uninstall`) removes it again.
+
 - You can also install language support for [IntelliJ](https://plugins.jetbrains.com/plugin/29452-ether) / [VS Code](https://marketplace.visualstudio.com/items?itemName=orbitmines.ether-ray) (find it in their respective marketplaces under the name 'Ether.ray')
 
 

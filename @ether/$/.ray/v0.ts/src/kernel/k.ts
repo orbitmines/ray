@@ -8,7 +8,8 @@ import { JUMP, IF, RETURN, CALL, ARGS, BLOCK, CELL, NATIVE, NONE, GLOBAL, aritie
 //     return fib(n - 1) + fib(n - 2)
 //   )
 //
-// Statements: `x := e`, `x = e`, `e`, `if e { … } elsif e { … } else { … }`, `while e { … }`, `goto L`, `goto L if e`, `L\`, `return e`.
+// Statements: `x := e`, `x = e`, `e`, `if e { … } elsif e { … } else { … }`, `while e { … }`, `xs for x => { … }`, `goto L`, `goto L if e`, `L\`, `return e`.
+// `xs for x => { … }` walks what `each_first(xs)` starts and `each_next(xs, at)` continues until NIL, `x` being `each_value(xs, at)`.
 // Expressions: numbers, `None`, `global`, "strings" (interned), names (cells, or a function as a value), `f(args)`, `external name args…`,
 // `… catch e { … }` after a call statement: what the call throws lands in `e` and the block runs instead.
 // `!e`, `-e`, `* / %`, `+ -`, `< <= > >= == !=`, `and`, `or` (the last two do not read their right side when the left decides).
@@ -24,6 +25,7 @@ type Stmt =
   | { kind: 'store'; target: Expr & { kind: 'load' }; value: Expr }
   | { kind: 'if'; cond: Expr; then: Stmt[]; else: Stmt[] }
   | { kind: 'while'; cond: Expr; body: Stmt[] }
+  | { kind: 'for'; of: Expr; name: string; body: Stmt[] }
   | { kind: 'goto'; label: string; cond?: Expr }
   | { kind: 'label'; name: string }
   | { kind: 'return'; value?: Expr; more?: Expr[] }
@@ -44,7 +46,7 @@ export function parse(source: string, records: Records = new Map()): Fn[] {
   const peek = () => t[i], next = () => t[i++];
   const expect = (x: string) => { if (t[i] !== x) throw new Error(`expected ${x} at token ${i} (${t[i]}), after ${t.slice(Math.max(0, i - 12), i).join(' ')}`); i++; };
   const lines = () => { while (t[i] === '\n' || t[i] === ';') i++; };
-  const ends = (x: string | undefined) => x === undefined || x === '\n' || x === ';' || x === ')' || x === ']' || x === ',' || x === '{' || x === '}' || x === 'if' || x === '=' || x === 'catch' || binary[x] !== undefined;
+  const ends = (x: string | undefined) => x === undefined || x === '\n' || x === ';' || x === ')' || x === ']' || x === ',' || x === '{' || x === '}' || x === 'if' || x === '=' || x === 'catch' || x === 'for' || binary[x] !== undefined;
   const atom = (): Expr => {
     let e = primary();
     for (;;) {
@@ -127,6 +129,7 @@ export function parse(source: string, records: Records = new Map()): Fn[] {
     if (x.endsWith('\\')) { next(); return { kind: 'label', name: x.slice(0, -1) }; }
     if (t[i + 1] === ':=' || t[i + 1] === '=') { next(); next(); const value = expr(); return { kind: 'set', name: x, value, caught: caught() }; }
     const value = expr();
+    if (peek() === 'for') { next(); const name = next(); expect('=>'); return { kind: 'for', of: value, name, body: block() }; }
     if (peek() === '=' && value.kind === 'load') { next(); return { kind: 'store', target: value, value: expr() }; }
     return { kind: 'do', value, caught: caught() };
   };
@@ -154,18 +157,19 @@ export function parse(source: string, records: Records = new Map()): Fn[] {
   return out;
 }
 
-export type Program = { graph: Graph; blocks: Map<string, number>; natives: Native[]; names: string[]; catches: Catches; arity: Map<number, number>; fields: Map<string, number> };
+export type Program = { graph: Graph; blocks: Map<string, number>; natives: Native[]; names: string[]; catches: Catches; arity: Map<number, number>; fields: Map<string, number>; records: Records };
 
 // Compiles functions to blocks: one cell per parameter, local and temporary; statements chained through `next`.
-export function compile(source: string, natives: Record<string, Native>, opts: { graph?: Graph; intern?: (s: string) => number; catches?: Catches; constants?: Record<string, number> } = {}): Program {
+export function compile(source: string, natives: Record<string, Native>, opts: { graph?: Graph; intern?: (s: string) => number; catches?: Catches; constants?: Record<string, number>; laid?: (fields: Map<string, number>, records: Records) => void } = {}): Program {
   const catches: Catches = opts.catches ?? new Map(), constants = opts.constants ?? {};
   const records: Records = new Map(), fields = new Map<string, number>();
   const fns = parse(source, records);
   for (const [record, names] of records) names.forEach((field, k) => { if (fields.has(field)) throw new Error(`field ${field} of ${record} is already a field`); fields.set(field, k); });
+  opts.laid?.(fields, records);
   const table = Object.values(natives), index = new Map(Object.keys(natives).map((name, k) => [name, k]));
   const g = opts.graph ?? new Graph(arities(table), 1 << 12);
   const names: string[] = [];
-  const intern = opts.intern ?? ((s: string) => { let k = names.indexOf(s); if (k < 0) { k = names.length; names.push(s); } return k; });
+  const intern = opts.intern ?? ((s: string) => { let k = names.indexOf(s); if (k < 0) { k = names.length; names.push(s); } return edge(k, INT); });
   const blocks = new Map<string, number>(), arity = new Map<number, number>();
   const twice = fns.filter((fn, k) => fns.findIndex(other => other.name === fn.name) !== k).map(fn => fn.name);
   if (twice.length > 0) throw new Error(`defined twice: ${twice.join(", ")}`);
@@ -178,7 +182,7 @@ export function compile(source: string, natives: Record<string, Native>, opts: {
     const cells = new Map<string, number>(), order: number[] = [];
     const cell = (name: string) => { let c = cells.get(name); if (c === undefined) { c = (g.make(CELL, NONE) & ~7) | SLOT; cells.set(name, c); order.push(c); } return c; };
     for (const p of fn.params) cell(p);
-    let temps = 0;
+    let temps = 0, loops = 0;
     const labels = new Map<string, number>(), fixups: [number, string][] = [];
     let first = 0, tail = 0;
     const emit = (node: number) => { if (first === 0) first = node; if (tail !== 0) link(tail, node); tail = g.tag(node) === JUMP || g.tag(node) === RETURN ? 0 : node; return node; };
@@ -188,7 +192,7 @@ export function compile(source: string, natives: Record<string, Native>, opts: {
       if (e.kind === 'int') return edge(e.value, INT);
       if (e.kind === 'none') return NONE;
       if (e.kind === 'true') return GLOBAL;
-      if (e.kind === 'string') return edge(intern(e.value), INT);
+      if (e.kind === 'string') return intern(e.value);
       if (e.kind === 'name') return cells.has(e.name) ? cell(e.name) : blocks.has(e.name) ? blocks.get(e.name)! : records.has(e.name) ? edge(records.get(e.name)!.length, INT) : constants[e.name] ?? cell(e.name);
       const dst = cell(`$${temps++}`);
       into(e, dst);
@@ -285,6 +289,17 @@ export function compile(source: string, natives: Record<string, Native>, opts: {
         pending.push(...exits);
         return;
       }
+      if (s.kind === 'for') {
+        const n = loops++, xs = `$xs${n}`, at = `$at${n}`, name = (x: string): Expr => ({ kind: 'name', name: x });
+        statement({ kind: 'set', name: xs, value: s.of });
+        statement({ kind: 'set', name: at, value: { kind: 'call', name: 'each_first', args: [name(xs)] } });
+        statement({ kind: 'while', cond: { kind: 'call', name: 'ne', args: [name(at), name('NIL')] }, body: [
+          { kind: 'set', name: s.name, value: { kind: 'call', name: 'each_value', args: [name(xs), name(at)] } },
+          ...s.body,
+          { kind: 'set', name: at, value: { kind: 'call', name: 'each_next', args: [name(xs), name(at)] } },
+        ] });
+        return;
+      }
       const top = place(nop());
       const c = value(s.cond), branch = place(g.make(IF, c, 0, 0));
       const start = nop();
@@ -306,5 +321,5 @@ export function compile(source: string, natives: Record<string, Native>, opts: {
     g.heap[(b >> 3) * 4 + 1] = list(order);
     g.heap[(b >> 3) * 4 + 2] = first;
   }
-  return { graph: g, blocks, natives: table, names, catches, arity, fields };
+  return { graph: g, blocks, natives: table, names, catches, arity, fields, records };
 }

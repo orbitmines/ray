@@ -52,6 +52,7 @@ Unit := class {
   )
 
   as (other: Unit) => (1 of this) as other
+  as (=== boolean) => true
 
   multiple (times: Number) => (
     parent := this
@@ -121,6 +122,7 @@ Quantity := class {
       unit: other
     )
   )
+  as (=== boolean) => true
 
   finer (other: Quantity) => if (other.unit.rank < .unit.rank) { other.unit } else { .unit }
   chainable == (other: Quantity) => (

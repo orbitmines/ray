@@ -535,7 +535,7 @@ export class Interpreter {
       if (cursor.done()) { if (this.running.length === 0) this.forced.length = Math.min(this.forced.length, mark); return last; }
       const start = cursor.cursor;
       if (painting) { let read = this.read_at.get(cursor.source); if (read === undefined) this.read_at.set(cursor.source, read = new Set()); read.add(start); }
-      if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
+      if (frame === this.GLOBAL) { this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1); if (this.in_progress.has(cursor.source)) this.in_progress.set(cursor.source, this.reading); }
       try {
         const ran = this.step(cursor, frame, start, graph, unit);
         if (ran.value !== undefined) last = ran.value;
@@ -2037,7 +2037,8 @@ export class Interpreter {
     const eager = this.program?.eager !== undefined;
     const named = this.pending.some(src => src.name === `${name}.ray`);
     const reading = this.reading;
-    if (!named && reading !== undefined && new RegExp(`(^|[^\\p{L}\\p{N}_])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}_])`, 'u').test(reading.source.value.slice(reading.end + 1))) return false;
+    const written = new RegExp(`(^|[^\\p{L}\\p{N}_])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}_])`, 'u');
+    if (!named && [reading, ...this.in_progress.values()].some(at => at !== undefined && written.test(at.source.value.slice(at.end + 1)))) return false;
     while (this.pending.length > 0) {
       const at = eager || named ? this.pending.findIndex(src => src.name === `${name}.ray`) : 0;
       if (at < 0) return false;
@@ -2054,9 +2055,13 @@ export class Interpreter {
   read_source(src: Text.Source) {
     this.boot?.read(src);
     this.diagnostics.forget(src);
+    const outer = this.in_progress.has(src);
+    if (!outer) this.in_progress.set(src, undefined);
     try { this.safely(() => this.read(new Text.Node(src), this.GLOBAL)); }
     catch (jump) { if (!(jump instanceof Jump)) throw jump; this.error(`No \`${jump.label}\` to jump to.`); }
+    finally { if (!outer) this.in_progress.delete(src); }
   }
+  private in_progress = new Map<Text.Source, Text.Node | undefined>();
   async interpret_async(srcs: Text.Source[], alive: () => boolean): Promise<boolean> {
     const run = this.derive(srcs);
     for (let step = run.next(); !step.done; step = run.next()) {

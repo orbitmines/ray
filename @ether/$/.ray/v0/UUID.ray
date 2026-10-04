@@ -30,29 +30,11 @@ UUID := class: Hexadecimal {
     out
   )
 
-  v1 := class: UUID {
-
-  }
-
-  v3 := class: UUID {
-    namespace: UUID
-    name: String
-
-  }
-
-  v4 := class: UUID {
-    spelled: UUID.drawn(32) ~~ (
-      .head.at(12).value = 4
-      this.head.at(16).value = 8 + (.head.at(16).value % 4)
-    )
-
-  }
-
-  v5 := class: UUID {
-    namespace: UUID
-    name: String
-
-  }
+  versioned (digits, version: Number) => (
+    digits.head.at(12).value = version
+    digits.head.at(16).value = 8 + (digits.head.at(16).value % 4)
+    digits
+  )
 
   as_string => (
     out := chain None
@@ -101,6 +83,23 @@ UUID := class: Hexadecimal {
     OID => "6ba7b812-9dad-11d1-80b4-00c04fd430c8"
     X500 => "6ba7b814-9dad-11d1-80b4-00c04fd430c8"
   }
+}
+
+UUID.v1 = class: UUID {
+}
+
+UUID.v3 = class: UUID {
+  namespace: UUID
+  name: String
+}
+
+UUID.v4 = class: UUID {
+  spelled: UUID.versioned(UUID.drawn(32), 4)
+}
+
+UUID.v5 = class: UUID {
+  namespace: UUID
+  name: String
 }
 
 Character.components.hierarchy &= class {

@@ -1,6 +1,9 @@
 Number := class: Ray {
   .{fraction: Decimal.String ^number} ^punctuation => Number.Real(integer: this, fraction: digits_selected(fraction), radix: ten)
-  succ => Number(next: this)
+  succ => (
+    previous ^keyword := this
+    Number(next: previous)
+  )
 
   bounded => false
   entry => Number.Line(value: this)
@@ -152,7 +155,7 @@ Number := class: Ray {
   pow (exponent: Number) => (
     power := one
     left := exponent
-    while left {
+    while left.nonzero {
       power = power * this
       left = left.pred
     }
@@ -163,7 +166,7 @@ Number := class: Ray {
   factorial => (
     raised := one
     left := this
-    while left {
+    while left.nonzero {
       raised = raised * left
       left = left.pred
     }

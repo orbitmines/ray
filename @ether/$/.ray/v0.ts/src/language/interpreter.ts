@@ -953,7 +953,7 @@ export class Interpreter {
         if (next !== undefined) return;
         let held: Text.Node | undefined;
         for (let k = last - 1; k > from && held === undefined; k--) {
-          if (!/\s/.test(text[k]) || /\s/.test(text[k - 1])) continue;
+          if (/\s/.test(text[k - 1]) || (!/\s/.test(text[k]) && Interpreter.word.test(text[k]) === Interpreter.word.test(text[k - 1]))) continue;
           let shorter = k; while (shorter > from && /\s/.test(text[shorter - 1])) shorter--;
           if (shorter <= from) break;
           const candidate = cursor.span(from, shorter - 1);

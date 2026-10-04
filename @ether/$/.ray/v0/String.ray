@@ -303,31 +303,7 @@ Regex := class {
 }
 
 Number.components.hierarchy &= class {
-  as_string => (
-    counter := chain None
-    counter &= 0
-    rest ^keyword := this
-    while rest {
-      digit ^keyword := counter.head
-      carrying ^keyword := true
-      while carrying {
-        digit.value = digit.value.succ
-        if (digit.value == 10) { digit.value = 0 } else { carrying = false }
-        if carrying {
-          unless (digit.next) { counter &= 0 }
-          digit = digit.next
-        }
-      }
-      rest = rest.pred
-    }
-    forwards := chain None
-    walker ^keyword := counter.tail
-    while (walker) {
-      forwards &= Character.decimal_digit(walker.value)
-      walker = walker.previous
-    }
-    forwards.as_string
-  )
+  as_string => .spelled_in(10)
 }
 
 Placement ^keyword := class { }

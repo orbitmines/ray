@@ -12,7 +12,7 @@ Number := class: Ray {
     counter := chain None
     counter &= zero
     rest ^keyword := this
-    while rest {
+    while rest.nonzero {
       digit ^keyword := counter.head
       carrying ^keyword := true
       while carrying {

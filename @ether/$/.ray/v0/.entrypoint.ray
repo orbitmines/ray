@@ -194,7 +194,7 @@ unless{ }{cond}{ }{block} ^class => (
 
 while ^keyword := class {
   { }{cond}{ }{block} ^class => (
-    loop ^keyword := external .
+    looping ^keyword := external .
     inline static
     written_block := external ** block
 
@@ -206,7 +206,7 @@ while ^keyword := class {
     goto again
    done\
 
-    loop ^variable
+    looping ^variable
   )
 
   { }{block}{ }while{ }{cond} ^class => (
@@ -217,7 +217,13 @@ while ^keyword := class {
   )
 }
 
-do ^keyword := while
+do{ }{block}{ }while{ }{cond} ^class => (
+  first_round := external ** block
+  inline first_round
+  while cond block
+)
+
+loop{ }{block} ^class => while true block
 
 Program := class {
   ({arguments}) => (
@@ -498,6 +504,44 @@ Node := base class {
   compounds + (component) => (
     external extend this component
     this
+  )
+  compounds - (component) => (
+    remaining ^keyword := chain this
+    walker ^keyword := this.components.hierarchy.head
+    while walker {
+      unless (walker.value === component) { remaining &= walker.value }
+      walker = walker.next
+    }
+    this.components.hierarchy = remaining
+    this.classes_read = None
+    this
+  )
+
+  subtype_of (other) => (
+    found ^keyword := None
+    held ^keyword := this.classes.head
+    while ((held).and((found).not)) {
+      if (held.value === other) { found = global }
+      held = held.next
+    }
+    found
+  )
+  supertype_of (other) => other.subtype_of(this)
+
+  is_abstract => (
+    missing ^keyword := None
+    head ^keyword := this.heads_written.head
+    while ((head).and((missing).not)) {
+      if head.value.is_required { missing = global }
+      head = head.next
+    }
+    missing
+  )
+
+  canonical => (
+    normal ^keyword := this
+    if (this.normalizer) { normal = this.normalizer(this) }
+    normal
   )
   as (=== boolean) => true
 
@@ -1333,6 +1377,35 @@ Program.components.hierarchy &= class {
     statements for body
     this
   )
+
+  variables => (
+    names ^keyword := chain None
+    statements ^keyword := .written
+    statements for {
+      read ^keyword := head_of(it.value.code)
+      if read.is_declared { names &= read.spelled }
+    }
+    names
+  )
+  usages (name) => (
+    used ^keyword := chain None
+    statements ^keyword := .written
+    statements for {
+      if (it.value.mentions(name)) { used &= it.value }
+    }
+    used
+  )
+  mentions (name) => (
+    wanted ^keyword := code_points(name)
+    found ^keyword := false
+    remaining ^keyword := code_points(.code)
+    while ((remaining.nonempty).and(found.not)) {
+      if (remaining.head.value == wanted.head.value) { found = .same_points(remaining.head, wanted) }
+      remaining.pop_front
+    }
+    found
+  )
+  is_terminal => .written.empty
 
   compounds + (addend) => (
     augend ^keyword := .code

@@ -1442,11 +1442,15 @@ export class Interpreter {
     return node.value;
   }
   forced: Node[] = []
-  private words = new WeakMap<Text.Node, { cursor: Text.Node; guard?: NameGuard } | null>();
+  private words = new WeakMap<Text.Source, { value: string; by: Map<number, { cursor: Text.Node; guard?: NameGuard } | null> }>();
   word_of(span: Text.Node, frame: Node): Node | undefined {
     if (frame === this.GLOBAL || this.naming !== undefined) return undefined;
-    let held = this.words.get(span);
-    if (held === undefined) this.words.set(span, held = /^\s*[\p{L}_][\p{L}\p{N}_-]*\s*$/u.test(span.string) ? { cursor: this.cursor_of(span) } : null);
+    const source = span.source, value = source.value;
+    let at = this.words.get(source);
+    if (at === undefined || at.value !== value) this.words.set(source, at = { value, by: new Map() });
+    const key = span.begin * 65536 + (span.end - span.begin);
+    let held = at.by.get(key);
+    if (held === undefined) at.by.set(key, held = /^\s*[\p{L}_][\p{L}\p{N}_-]*\s*$/u.test(span.string) ? { cursor: this.cursor_of(span) } : null);
     if (held === null || this.painting(span.source)) return undefined;
     const cursor = held.cursor;
     cursor.cursor = span.begin;

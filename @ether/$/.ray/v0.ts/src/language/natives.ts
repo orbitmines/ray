@@ -68,7 +68,7 @@ function read_of(interpreter: Interpreter, bytes: Uint8Array): Node {
 export function bytes_of(interpreter: Interpreter, node: Node): Uint8Array {
   const value = interpreter.quietly(() => interpreter.deref(node, false));
   if (value?.bytes !== undefined) return value.bytes;
-  const held = value !== undefined && !value.text ? bits_held(interpreter, value) : undefined;
+  const held = value !== undefined && !value.text && !value.program ? bits_held(interpreter, value) : undefined;
   if (held !== undefined) return held;
   return new TextEncoder().encode(interpreter.text(value ?? node));
 }

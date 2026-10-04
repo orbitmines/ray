@@ -65,6 +65,8 @@ class {block} => (
   static.classes_read = None
   static.requirements_read = None
   static.requirements_known = None
+  static.heads_read = None
+  static.heads_known = None
   written_as => static.written_body**
   super => (
     parent := static.components.hierarchy.tail.value
@@ -221,6 +223,49 @@ Program := class {
   { }{expr} => this(expr)
 }
 
+Modifier := class {
+  kind => TODO
+  modify (definition) => (
+    definition.components = chain None
+    definition.components.hierarchy = chain None
+    definition.components.hierarchy &= this
+    definition
+  )
+}
+chainable ^keyword := class: Modifier {
+  chains => TODO
+}
+compounds ^keyword := class: Modifier {
+  compounds => TODO
+}
+right-to-left ^keyword := class: Modifier {
+  reads_right_to_left => TODO
+}
+left-to-right ^keyword := class: Modifier {
+  reads_left_to_right => TODO
+}
+chainable {head} ({parameters ^parameter}) => {block} => (
+  names := external ** parameters
+  code := external ** block
+  defined ^keyword := external define head `{arguments}` {
+    (inline names) := arguments
+    inline code
+  } parameters
+  chainable.modify(defined)
+)
+compounds {head} ({parameters ^parameter}) => {block} => (
+  names := external ** parameters
+  code := external ** block
+  defined ^keyword := external define head `{arguments}` {
+    (inline names) := arguments
+    inline code
+  } parameters
+  compounds.modify(defined)
+)
+Modifier.spellings = chain None
+Modifier.spellings &= `chainable`
+Modifier.spellings &= `compounds`
+
 Node := base class {
 
   , => this
@@ -374,18 +419,32 @@ Node := base class {
     }
     this.classes_read
   )
+  heads_written => (
+    unless this.heads_known {
+      read ^keyword := chain None
+      if this.written_body {
+        left ^keyword := this.written_body
+        one ^keyword := external first left
+        while one {
+          read &= head_of(one)
+          left = external rest left
+          one = external first left
+        }
+      }
+      this.heads_read = read
+      this.heads_known = global
+    }
+    this.heads_read
+  )
   requirements => (
     unless this.requirements_known {
       wanted ^keyword := chain None
       held ^keyword := this.classes.head
       while held {
-        written ^keyword := held.value.written_as
-        if written {
-          head ^keyword := written.required_heads.head
-          while head {
-            wanted &= head.value
-            head = head.next
-          }
+        head ^keyword := held.value.heads_written.head
+        while head {
+          if head.value.is_required { wanted &= head.value.spelled }
+          head = head.next
         }
         held = held.next
       }
@@ -394,12 +453,15 @@ Node := base class {
     }
     this.requirements_read
   )
-  declaring (head) => (
+  declaring (wanted_head) => (
     found ^keyword := None
     held ^keyword := this.classes.head
     while ((held).and((found).not)) {
-      written ^keyword := held.value.written_as
-      if written { found = written.declares(head) }
+      head ^keyword := held.value.heads_written.head
+      while ((head).and((found).not)) {
+        if head.value.is_declared { if (head.value.spelled === wanted_head) { found = global } }
+        head = head.next
+      }
       held = held.next
     }
     found
@@ -585,46 +647,16 @@ Node := base class {
 
 Node.DEFINE_METHOD = `&=`
 
+external extend None {
+  as (=== boolean) => false
+}
+
 class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
   made ^keyword := class { inline members }
-  made: header
+  made.written_body = external ** members
+  made.components.hierarchy &= header
   made
 )
-
-Modifier := class {
-  kind => TODO
-  modify (definition) => (
-    definition.components = chain None
-    definition.components.hierarchy = chain None
-    definition.components.hierarchy &= this
-    definition
-  )
-}
-chainable ^keyword := class: Modifier {
-  chains => TODO
-}
-compounds ^keyword := class: Modifier {
-  compounds => TODO
-}
-chainable {head} ({parameters ^parameter}) => {block} => (
-  names := external ** parameters
-  code := external ** block
-  chainable.modify(external define head `{arguments}` {
-    (inline names) := arguments
-    inline code
-  } parameters)
-)
-compounds {head} ({parameters ^parameter}) => {block} => (
-  names := external ** parameters
-  code := external ** block
-  compounds.modify(external define head `{arguments}` {
-    (inline names) := arguments
-    inline code
-  } parameters)
-)
-Modifier.spellings = chain None
-Modifier.spellings &= `chainable`
-Modifier.spellings &= `compounds`
 
 Chain := class {
   entry => .head
@@ -688,10 +720,10 @@ same_text (first_text, second_text) => (
   }
   same
 )
-outnumbers (one, other) => (
+outnumbers (first_reading, other) => (
   mine ^keyword := chain None
   theirs ^keyword := chain None
-  if one.head { mine = one } else { mine &= one }
+  if first_reading.head { mine = first_reading } else { mine &= first_reading }
   if other.head { theirs = other } else { theirs &= other }
   a ^keyword := mine.head
   b ^keyword := theirs.head
@@ -787,6 +819,119 @@ spelled_tree_of (type) => (
     type.spelled_tree_known = global
   }
   type.spelled_tree
+)
+head_stops ^keyword := ` ` | `(` | `:` | `?`
+not_word_starts ^keyword := `{` | `[` | `^` | `@`
+heads_root ^keyword => (
+  unless global.heads_trie { global.heads_trie = spelled_node }
+  global.heads_trie
+)
+bits_onto (held, text) => (
+  part ^keyword := text_bits(text).head
+  while part {
+    held &= part.value
+    part = part.next
+  }
+  held
+)
+todo_held ^keyword := chain None
+todo_bits ^keyword => (
+  unless todo_held.head { bits_onto(bits_onto(bits_onto(todo_held, `=`), `>`), ` TODO`) }
+  todo_held
+)
+byte_steps ^keyword := chain None
+byte_steps &= global
+byte_steps &= global
+byte_steps &= global
+byte_steps &= global
+byte_steps &= global
+byte_steps &= global
+byte_steps &= global
+byte_steps &= global
+written_head ^keyword => (
+  node ^keyword := external .
+  spelled := None
+  stop := None
+  is_required := None
+  is_declared := None
+  node
+)
+head_of (statement) => (
+  read ^keyword := written_head
+  stops ^keyword := spelled_tree_of(head_stops)
+  starts ^keyword := spelled_tree_of(not_word_starts)
+  head_at ^keyword := heads_root
+  byte_from ^keyword := heads_root
+  stop_at ^keyword := stops
+  start_at ^keyword := starts
+  first_bit ^keyword := None
+  second_bit ^keyword := None
+  bits_seen ^keyword := None
+  second_seen ^keyword := None
+  word_start ^keyword := None
+  first_done ^keyword := None
+  step_at ^keyword := byte_steps.head
+  todo_at ^keyword := None
+  reading ^keyword := global
+  take (bit) => (
+    going := global
+    if reading {
+      if bit {
+        unless head_at.one { head_at.one = spelled_node }
+        head_at = head_at.one
+        if stop_at { stop_at = stop_at.one }
+        if start_at { start_at = start_at.one }
+      } else {
+        unless head_at.zero { head_at.zero = spelled_node }
+        head_at = head_at.zero
+        if stop_at { stop_at = stop_at.zero }
+        if start_at { start_at = start_at.zero }
+      }
+      unless first_done {
+        if bits_seen {
+          unless second_seen {
+            second_bit = bit
+            second_seen = global
+          }
+        } else {
+          first_bit = bit
+          bits_seen = global
+        }
+      }
+      step_at = step_at.next
+      unless step_at {
+        if stop_at { if stop_at.ends { read.stop = stop_at.path.head.value } }
+        if read.stop {
+          reading = None
+          if (read.stop === head_stops.components.head) { todo_at = todo_bits.head } else { going = None }
+        } else {
+          unless first_done {
+            first_done = global
+            if first_bit { word_start = global } elsif second_bit { word_start = global }
+            if start_at { if start_at.ends { word_start = None } }
+            start_at = None
+          }
+          byte_from = head_at
+          stop_at = stops
+          step_at = byte_steps.head
+        }
+      }
+    } else {
+      if (bit === todo_at.value) { todo_at = todo_at.next } else { going = None }
+      unless todo_at {
+        read.is_required = global
+        going = None
+      }
+    }
+    going
+  )
+  external bits statement take
+  read.spelled = byte_from
+  if read.stop {
+    unless (read.stop === head_stops.components.tail) { read.is_declared = global }
+    if (read.stop === head_stops.components.head.next.next) { if word_start { read.is_required = global } }
+  }
+  read
 )
 spelled_ends (text, root) => (
   active ^keyword := chain None
@@ -1232,16 +1377,6 @@ TRACE{`@`}{var}{ }{comment ^comment} ^trace => report TRACE var comment
 
 TODO{ }{comment ^comment} ^debug => DEBUG@. comment 
 
-{l} [x: right-to-left] {m} [y: left-to-right] {r} => l[x] m & m[y] r
-
-{a} [x: chainable] {b} [y: chainable] {c} => (a[x] b) & (b[y] c)
-
-{a} [x: compounds]{`=`} {b} => a = (a[x] b)
-
-None += {
-  as (=== boolean) => false
-}
-
 boolean := enum false (holds: None) | true (holds: global) {
   nand (b) => (
     goto second if .holds
@@ -1283,3 +1418,8 @@ boolean := enum false (holds: None) | true (holds: global) {
 true := boolean.true
 false := boolean.false
 
+{l} [x: right-to-left] {m} [y: left-to-right] {r} => l[x] m & m[y] r
+
+{a} [x: chainable] {b} [y: chainable] {c} => (a[x] b) & (b[y] c)
+
+{a} [x: compounds]{`=`} {b} => a = (a[x] b)

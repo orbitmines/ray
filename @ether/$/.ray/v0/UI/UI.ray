@@ -115,9 +115,9 @@ Render := class {
     )
     key (bytes) => (
       if (bytes === None) { return this }
-      written := bytes.as_string
-      if (written == U+000D.as_string) { .activate }
-      elsif (written == (U+001B.as_string + "OQ")) { .toggled = .toggled.not }
+      written := bytes.as(String)
+      if (written == U+000D.as(String)) { .activate }
+      elsif (written == (U+001B.as(String) + "OQ")) { .toggled = .toggled.not }
       elsif (written == "q") { .running = false }
       elsif (written.starts_with(Terminal.escape("1;5"))) { .skip(Terminal.decode(Terminal.escape(written.slice(written.count.pred, written.count)))) }
       elsif (written.starts_with(Terminal.escape("1;2"))) { .expand(Terminal.decode(Terminal.escape(written.slice(written.count.pred, written.count)))) }
@@ -200,7 +200,7 @@ Terminal := class {
   )
   emit (text) => external io `stdout` (text)
   read => external io `stdin` None
-  size => (external os `COLUMNS`).as_string.as_number
+  size => (external os `COLUMNS`).as(String).as_number
   decode (bytes) => (
     if (bytes == Terminal.escape("A")) { Keyboard.Direction.up }
     elsif (bytes == Terminal.escape("B")) { Keyboard.Direction.down }
@@ -231,17 +231,17 @@ Browser := class {
       .next_id = .next_id.succ
       .next_id
     )
-    line (parts) => parts.join(" ") + Char.newline.as_string
+    line (parts) => parts.join(" ") + Char.newline.as(String)
     create (tag: String) => (
       id := .made
-      Browser.send(.line([("create", id.as_string, tag)]))
+      Browser.send(.line([("create", id.as(String), tag)]))
       id
     )
-    text (id, content: String) => Browser.send(.line([("text", id.as_string, content.escaped_line)]))
-    style (id, css: String) => Browser.send(.line([("style", id.as_string, css.escaped_line)]))
-    attribute (id, name: String, value: String) => Browser.send(.line([("attribute", id.as_string, name, value.escaped_line)]))
-    append (parent, child) => Browser.send(.line([("append", parent.as_string, child.as_string)]))
-    listen (id, kind: String) => Browser.send(.line([("listen", id.as_string, kind)]))
+    text (id, content: String) => Browser.send(.line([("text", id.as(String), content.escaped_line)]))
+    style (id, css: String) => Browser.send(.line([("style", id.as(String), css.escaped_line)]))
+    attribute (id, name: String, value: String) => Browser.send(.line([("attribute", id.as(String), name, value.escaped_line)]))
+    append (parent, child) => Browser.send(.line([("append", parent.as(String), child.as(String))]))
+    listen (id, kind: String) => Browser.send(.line([("listen", id.as(String), kind)]))
     clear => Browser.send(.line([("clear")]))
 
     mounted (box) => (
@@ -250,7 +250,7 @@ Browser := class {
       id := .create(tag)
       .style(id, Render.HTML.css(box))
       unless (box.text === None) { .text(id, box.text) }
-      unless (box.link === None) { .attribute(id, "href", box.link.as_string) }
+      unless (box.link === None) { .attribute(id, "href", box.link.as(String)) }
       box.children for { .append(id, .mounted(it.value)) }
       id
     )
@@ -263,7 +263,7 @@ Browser := class {
     event => (
       written := Browser.received
       if (written === None) { None } else {
-        parts := written.as_string.trimmed.split(U+0020)
+        parts := written.as(String).trimmed.split(U+0020)
         Browser.Event(id: parts.at(0).value.as_number, kind: parts.at(1).value)
       }
     )
@@ -311,7 +311,7 @@ Site := class {
 }
 
 String.components.hierarchy &= class {
-  escaped_line => .map { if (it.value == U+000A) { "\\n" } elsif (it.value == U+005C) { "\\\\" } else { it.value.as_string } }.join
+  escaped_line => .map { if (it.value == U+000A) { "\\n" } elsif (it.value == U+005C) { "\\\\" } else { it.value.as(String) } }.join
   styled (style) => (
     styles := chain None
     styles &= style

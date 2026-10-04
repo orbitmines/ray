@@ -120,7 +120,7 @@ String := class: Array {
               digits &= walker.value
               walker = walker.next
             }
-            out &= digits.as_string.as_number_in(16).as_character
+            out &= digits.as(String).as_number_in(16).as_character
           } else {
             out &= held
             out &= marked
@@ -132,7 +132,7 @@ String := class: Array {
       } else { out &= held }
       if walker { walker = walker.next }
     }
-    out.as_string
+    out.as(String)
   )
   trimmed => (
     start ^keyword := 0

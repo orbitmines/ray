@@ -219,7 +219,7 @@ IP.v6 = class: IP {
   checked => dynamically (assert .valid)
 
   compress_zeros => if .zero_compression { this } else { IP.v6.parse(.compressed) }
-  embed_ipv4 => if (.embedded === None) { IP.v6.parse(.compressed_before_v4 + .tail_v4.as_string) } else { this }
+  embed_ipv4 => if (.embedded === None) { IP.v6.parse(.compressed_before_v4 + .tail_v4.as(String)) } else { this }
   compressed_before_v4 => (
     first_six := chain None
     left_to_take ^keyword := 6
@@ -231,7 +231,7 @@ IP.v6 = class: IP {
     written := leading.compressed
     if (written.ends_with(":")) { written } else { written + ":" }
   )
-  lowercase => .as_string.lower_case
+  lowercase => .as(String).lower_case
 
   mapped => (
     first_five_zero ^keyword := true

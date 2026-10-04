@@ -35,9 +35,9 @@ Version := class: Ray {
     chosen
   )
 
-  as_string => (
-    written ^keyword := "%" + .number.as_string
-    unless .latest { written = written + ("'" + .revision.as_string) }
+  as (=== String) => (
+    written ^keyword := "%" + .number.as(String)
+    unless .latest { written = written + ("'" + .revision.as(String)) }
     written
   )
 
@@ -55,7 +55,7 @@ Version := class: Ray {
       }
       listed
     )
-    as_string => .first.as_string + (".." + .last.number.as_string)
+    as (=== String) => .first.as(String) + (".." + .last.number.as(String))
   }
 }
 
@@ -161,12 +161,12 @@ Stamp := class: Ray {
     earlier ^keyword := .wall < other.wall
     if (.wall == other.wall) {
       earlier = .logical < other.logical
-      if (.logical == other.logical) { earlier = .node.as_string < other.node.as_string }
+      if (.logical == other.logical) { earlier = .node.as(String) < other.node.as(String) }
     }
     earlier
   )
   later (other: Stamp) => if (this < other) { other } else { this }
-  as_string => .wall.as_string + ("." + (.logical.as_string + ("@" + .node.as_string)))
+  as (=== String) => .wall.as(String) + ("." + (.logical.as(String) + ("@" + .node.as(String))))
 }
 
 HybridClock := class: Ray {
@@ -334,7 +334,7 @@ Git := class: Ray {
     }
     converted
   )
-  message_of (what) => if (what.instance_of(Operation)) { what.definition.name } else { what.as_string }
+  message_of (what) => if (what.instance_of(Operation)) { what.definition.name } else { what.as(String) }
 
   as_history (repository) => (
     rebuilt := History(repository: repository, commits: (chain None), from: None)
@@ -342,10 +342,10 @@ Git := class: Ray {
     rebuilt
   )
 
-  as_string => (
+  as (=== String) => (
     written ^keyword := ""
     .commits for {
-      written = written + ("commit " + (it.value.id.as_string + ("\nAuthor: " + (it.value.author.as_string + ("\nDate: " + (it.value.date.as_string + ("\n\n    " + (it.value.message + "\n\n"))))))))
+      written = written + ("commit " + (it.value.id.as(String) + ("\nAuthor: " + (it.value.author.as(String) + ("\nDate: " + (it.value.date.as(String) + ("\n\n    " + (it.value.message + "\n\n"))))))))
     }
     written
   )

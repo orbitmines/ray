@@ -141,6 +141,61 @@ Choice := class {
 
 Choice.chosen = chain None
 
+Distribution := class {
+  outcomes: (chain None)
+  optional: false
+
+  weighted (weight, value) => (
+    .outcomes &= Distribution.Outcome(weight: weight, value: value)
+    this
+  )
+  uniform (values) => (
+    made := Distribution()
+    values for { made.weighted(1, it.value) }
+    made
+  )
+  total => (
+    summed ^keyword := 0
+    .outcomes for { summed = summed + it.value.weight }
+    summed
+  )
+  realised => (
+    drawn := Random.below(1000000)
+    scaled_total := .total
+    reached ^keyword := 0
+    picked ^keyword := None
+    .outcomes for {
+      reached = reached + it.value.weight
+      if (picked === None) { if (drawn < ((reached * 1000000) / scaled_total)) { picked = it.value.value } }
+    }
+    picked
+  )
+  share (fraction, values) => Distribution.uniform(values).realised_many(fraction)
+  realised_many (fraction) => (
+    kept := chain None
+    .outcomes for { if (Random.below(1000000) < (fraction * 1000000)) { kept &= it.value.value } }
+    kept
+  )
+  Outcome := class {
+    weight: Node
+    value: Node
+  }
+}
+
+Assumption := class {
+  fact: Node
+  verified: false
+
+  assume (fact) => Assumption(fact: fact)
+  holds => true
+  quest => Quest(name: "verify the assumption", goal: .fact)
+  verify (actual) => (
+    .verified = actual == .fact
+    .verified
+  )
+  rolled_back => .verified.not
+}
+
 Proof := class {
   Proposition := class {
     holds: Node

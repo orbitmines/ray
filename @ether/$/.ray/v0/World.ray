@@ -307,7 +307,7 @@ Repository := class: Ray {
 }
 
 Accessor := class: Ray {
-  Permission := enum private | confidential | protected | public | local
+  Permission := enum private | confidential | protected | public | local | localhost | managed
   level: Node
   methods: (chain None)
 
@@ -325,6 +325,8 @@ Accessor := class: Ray {
     values
   )
   derived (from) => if (from.access) { from.access } else { this }
+  default_policy => Accessor(level: Accessor.Permission.local)
+  confidential => Accessor.default_policy
 
   Consistency := class: Ray {
     replicas: (chain None)
@@ -466,6 +468,21 @@ NPC := class: Character {
   avatars: (chain None)
   presence: None
   status: Status.hosted
+  quests: (chain None)
+  mode: NPC.Mode.until_resolved
+
+  Mode := enum until_resolved | waiting | stopping
+  take (quest) => (
+    .quests &= quest
+    this
+  )
+  open_quests => (
+    left := chain None
+    .quests for { unless it.value.completed { left &= it.value } }
+    left
+  )
+  running => if (.mode == NPC.Mode.waiting) { true } elsif (.mode == NPC.Mode.until_resolved) { .open_quests.nonempty } else { false }
+  failed (error) => .take(Quest(name: "fix", goal: error))
 
 }
 Organization := class: Player {

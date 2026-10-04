@@ -59,3 +59,12 @@ if (open_to_none.as(1)) { INFO@mark `EN22 a value held under nothing comes back 
 anywhere := Encoding.Compressed(value: 4, algorithm: Encoding.Algorithm.base64)
 unless (anywhere.as(1) == 4) { INFO@mark `EN23 a packed value does not come back at a target` }
 unless (anywhere.as(None) == 4) { INFO@mark `EN24 a packed value does not come back at nothing` }
+
+// A value opens where its key is held: at an instance or a character holding
+// it, and without it there is a quest to find the key.
+keyed_place := Instance(location: None, key: 7)
+held_there := Encoding.Encrypted(value: 5, key: 7)
+unless (held_there.as(keyed_place) == 5) { INFO@mark `EN30 a value does not open at an instance holding its key` }
+if (held_there.as(Instance(location: None, key: 8))) { INFO@mark `EN31 a value opens at an instance holding another key` }
+unless (held_there.opened(Instance(location: None)).instance_of(Quest)) { INFO@mark `EN32 a value opened without its key does not ask to find it` }
+unless (held_there.as(Character(name: "k", key: 7)) == 5) { INFO@mark `EN33 a value does not open for a character holding its key` }

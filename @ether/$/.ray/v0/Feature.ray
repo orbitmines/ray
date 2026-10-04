@@ -1,6 +1,35 @@
 IO := class {
-  read (path) => (external io path None).as_string
-  write (path, content) => external io path content
+  root => "instance"
+  permitted: false
+
+  inside (path) => (
+    kept := chain None
+    path.split(U+002F) for {
+      part := it.value
+      if (part == "..") {
+        if kept.nonempty {
+          shorter := chain None
+          left ^keyword := kept.count.pred
+          kept for {
+            if left.nonzero { shorter &= it.value }
+            left = left.pred
+          }
+          kept = shorter
+        }
+      } elsif ((part == ".").or(part.empty).not) { kept &= part }
+    }
+    IO.root + ("/" + kept.join("/"))
+  )
+  read (path) => (external io (IO.inside(path)) None).as_string
+  write (path, content) => external io (IO.inside(path)) content
+  host (path) => if IO.permitted { (external io path None).as_string } else { Quest(name: "ask for the host's files", goal: path) }
+  field (name: String) => (
+    as_program := IO.read(name + ".ray")
+    if as_program.nonempty { as_program } else {
+      as_directory := IO.read(name + "/")
+      if as_directory.nonempty { as_directory } else { IO.read(name) }
+    }
+  )
   os (name) => (external os name).as_string
   platform => IO.os(`platform`)
   architecture => IO.os(`architecture`)
@@ -13,6 +42,8 @@ IO := class {
 }
 
 Random := class {
+  seeded (seed: Number) => Random.Seeded(state: seed)
+  secure => Random
 
   bit => if ((external random)) { 1 } else { 0 }
   bits (count: Number) => (
@@ -49,6 +80,44 @@ Random := class {
   )
 }
 
+Random.Seeded = class {
+  state: Node
+
+  next => (
+    .state = ((.state * 1664525) + 1013904223) % 4294967296
+    .state
+  )
+  bit => if ((.next / 2147483648) == 1) { 1 } else { 0 }
+  number (width: Number) => (
+    total ^keyword := 0
+    left ^keyword := width
+    while left {
+      total = total + total
+      if (.bit == 1) { total = total.succ }
+      left = left.pred
+    }
+    total
+  )
+}
+
+Counted := class {
+  count: Node
+  kind: Node
+
+  least => if (.count.instance_of(Number)) { .count } else { .count.first }
+  most => if (.count.instance_of(Number)) { .count } else { .count.last }
+  chosen_count => .least + Random.below((.most - .least).succ)
+  choose => (
+    made := chain None
+    left ^keyword := .chosen_count
+    while left {
+      made &= .kind()
+      left = left.pred
+    }
+    made
+  )
+}
+
 Choice := class {
   choose (from) => from.random
   choose_count (from, count: Number) => (
@@ -61,6 +130,70 @@ Choice := class {
     picked
   )
   coin => Random.bit
+
+  unique (from) => (
+    picked ^keyword := Choice.choose(from)
+    while (Choice.chosen.contains(picked)) { picked = Choice.choose(from) }
+    Choice.chosen &= picked
+    picked
+  )
+}
+
+Choice.chosen = chain None
+
+Distribution := class {
+  outcomes: (chain None)
+  optional: false
+
+  weighted (weight, value) => (
+    .outcomes &= Distribution.Outcome(weight: weight, value: value)
+    this
+  )
+  uniform (values) => (
+    made := Distribution()
+    values for { made.weighted(1, it.value) }
+    made
+  )
+  total => (
+    summed ^keyword := 0
+    .outcomes for { summed = summed + it.value.weight }
+    summed
+  )
+  realised => (
+    drawn := Random.below(1000000)
+    scaled_total := .total
+    reached ^keyword := 0
+    picked ^keyword := None
+    .outcomes for {
+      reached = reached + it.value.weight
+      if (picked === None) { if (drawn < ((reached * 1000000) / scaled_total)) { picked = it.value.value } }
+    }
+    picked
+  )
+  share (fraction, values) => Distribution.uniform(values).realised_many(fraction)
+  realised_many (fraction) => (
+    kept := chain None
+    .outcomes for { if (Random.below(1000000) < (fraction * 1000000)) { kept &= it.value.value } }
+    kept
+  )
+  Outcome := class {
+    weight: Node
+    value: Node
+  }
+}
+
+Assumption := class {
+  fact: Node
+  verified: false
+
+  assume (fact) => Assumption(fact: fact)
+  holds => true
+  quest => Quest(name: "verify the assumption", goal: .fact)
+  verify (actual) => (
+    .verified = actual == .fact
+    .verified
+  )
+  rolled_back => .verified.not
 }
 
 Proof := class {
@@ -75,6 +208,9 @@ Proof := class {
   holds => .argument.holds
 
   theorem (proposition, proof) => if proof.holds { true } else { Quest(name: "prove", goal: proposition) }
+  lemma (proposition, proof) => Proof.theorem(proposition, proof)
+  example (proposition, proof) => Proof.theorem(proposition, proof)
+  failed (error) => Quest(name: "fix", goal: error)
   by_contradiction (proposition, proof_of_negation) => proof_of_negation.holds.not
   rfl (proposition) => proposition.holds
   assume (fact) => fact
@@ -84,6 +220,23 @@ Transaction := class {
   forwards: Node
   backwards: Node
   applied: false
+  history: None
+  branch: None
+
+  begin (history) => Transaction(forwards: None, backwards: None, history: history, branch: history.fork)
+  record (who, change, inverse) => (
+    .branch.commits &= History.Commit(who: who, what: change, inverse: inverse)
+    this
+  )
+  commit => (
+    .history.merge(.branch)
+    .applied = true
+    this
+  )
+  abort => (
+    .branch = None
+    this
+  )
 
   reversed => Transaction(forwards: .backwards, backwards: .forwards, applied: .applied)
   mark_applied => (
@@ -100,7 +253,7 @@ Network := class {
     valid => .text.count.nonzero.and(.text.count < 256)
   }
   Proxy := class {
-    through (persona) => Network.Proxy(persona: persona)
+    through (character) => Network.Proxy(character: character)
   }
   Protocol := class {
     version => UUID.Namespace.dns
@@ -113,14 +266,35 @@ HTTP := class {
   Method := enum get | post | put | delete
 }
 
+OS := class {
+  Name := enum linux | macos | windows | ether | unknown
+  name => (
+    written := IO.platform
+    if (written == "linux") { OS.Name.linux }
+    elsif (written == "darwin") { OS.Name.macos }
+    elsif (written == "win32") { OS.Name.windows }
+    else { OS.Name.unknown }
+  )
+}
+
 Keyboard := class {
   Key := class {
     name: Node
     pressed: false
     toggled: false
     presses: 0
+    pressed_at: (chain None)
+
+    pulsed (max, delay) => (
+      times := .pressed_at
+      if times.empty { false } else {
+        held_for := Time.now - times.head.value
+        if (held_for < delay) { times.count == 1 } else { true }
+      }
+    )
 
     press => (
+      .pressed_at &= Time.now
       .pressed = true
       this.toggled = .toggled.not
       this.presses = .presses.succ

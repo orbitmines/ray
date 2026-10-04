@@ -1,4 +1,4 @@
-Character := class: Unicode.Scalar {
+Char := class: Unicode.Scalar {
   codepoint => this
 
   width => if (this < 128) { 1 } elsif (this < 2048) { 2 } elsif (this < 65536) { 3 } else { 4 }
@@ -36,16 +36,16 @@ Character := class: Unicode.Scalar {
 Number.components.hierarchy &= class {
   as_character => (
     held ^keyword := 0 + this
-    external extend held Character
-    held.components.hierarchy &= Character
+    external extend held Char
+    held.components.hierarchy &= Char
     held
   )
 }
 
-Character.Letter = Character{.letter}
-Character.Digit = Character{.digit}
-Character.Blank = Character{.blank}
-Character.Word = Character{.word}
+Char.Letter = Char{.letter}
+Char.Digit = Char{.digit}
+Char.Blank = Char{.blank}
+Char.Word = Char{.word}
 
 String := class: Array {
   entry => if .head { .head } else { code_points(this).map { it.value.as_character }.entry }
@@ -59,7 +59,7 @@ String := class: Array {
   lower_case => .map { it.value.lower }.as_string
   upper_case => .map { it.value.upper }.as_string
   swap_case => .map { it.value.swapped }.as_string
-  fold_case => .lower_case
+  fold_case => .map { Unicode.folded(it.value) }.join
   title_case => (
     out := chain None
     at_start ^keyword := true
@@ -97,6 +97,22 @@ String := class: Array {
   singular => if (.ends_with("s")) { .slice(0, .count.pred) } else { this }
 
   mirrored => .reverse.as_string
+
+  trimmed => (
+    start ^keyword := 0
+    finish ^keyword := .count
+    while ((start < finish).and(.at(start).value.blank)) { start = start.succ }
+    while ((start < finish).and(.at(finish.pred).value.blank)) { finish = finish.pred }
+    .slice(start, finish)
+  )
+  before (other: String) => (
+    found := .index_of(other)
+    if (found === None) { this } else { .slice(0, found) }
+  )
+  after (other: String) => (
+    found := .index_of(other)
+    if (found === None) { "" } else { .slice(found + other.count, .count) }
+  )
 
   slice (from, to) => (
     out := chain None
@@ -163,8 +179,8 @@ String := class: Array {
     pieces &= current.as_string
     pieces
   )
-  split (separator: Character) => .split_by { character == separator }
-  lines => .split(Character.newline)
+  split (separator: Char) => .split_by { character == separator }
+  lines => .split(Char.newline)
 
   blank_line => .every { it.value.blank }
   indentation => (
@@ -201,7 +217,7 @@ String := class: Array {
     kept for {
       if it.value.blank_line { out &= "" } else { out &= it.value.slice(least, it.value.count) }
     }
-    String.joined(out, Character.newline)
+    String.joined(out, Char.newline)
   )
 
   compounds * (times: Number) => (
@@ -253,7 +269,7 @@ Node.components.hierarchy &= class {
 "{literal text ^string}" ^string.punctuation => code_points(text).map { it.value.as_character }.as_string.dedented
 
 Number.components.hierarchy &= class {
-  spelled_in (radix: Number) => .digits_in(radix).map { Character.decimal_digit(it.value) }.as_string
+  spelled_in (radix: Number) => .digits_in(radix).map { Char.decimal_digit(it.value) }.as_string
 }
 
 Chain.components.hierarchy &= class {
@@ -349,3 +365,50 @@ declared_in (holder, spelled) => (
   }
   held
 )
+
+Char.components.hierarchy &= class {
+  as_string => (
+    one := chain None
+    one &= this
+    one.as_string
+  )
+  east_asian_width => (
+    found := Unicode.EastAsianWidth.at(.codepoint)
+    if (found === None) { "N" } else { found.value }
+  )
+  columns => if ((.east_asian_width == "W").or(.east_asian_width == "F")) { 2 } else { 1 }
+  script => (
+    found := Unicode.Scripts.at(.codepoint)
+    if (found === None) { "Unknown" } else { found.value }
+  )
+  block => (
+    found := Unicode.Blocks.at(.codepoint)
+    if (found === None) { "No_Block" } else { found.value }
+  )
+}
+
+Char.Latin = Char{.script == "Latin"}
+Char.Arabic = Char{.script == "Arabic"}
+Char.Greek = Char{.script == "Greek"}
+Char.Cyrillic = Char{.script == "Cyrillic"}
+Char.Han = Char{.script == "Han"}
+
+String.components.hierarchy &= class {
+  padded (width: Number) => (
+    held ^keyword := this
+    while (held.count < width) { held = "0" + held }
+    held
+  )
+  bitwise_width (other: String) => .count.max(other.count)
+  ~&& (other: String) => (.as_number_in(2) ~&& other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~|| (other: String) => (.as_number_in(2) ~|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~x|| (other: String) => (.as_number_in(2) ~x|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~!&& (other: String) => (.as_number_in(2) ~!&& other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~!|| (other: String) => (.as_number_in(2) ~!|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~x!|| (other: String) => (.as_number_in(2) ~x!|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~! => (.as_number_in(2) ~! .count).spelled_in(2).padded(.count)
+}
+
+Number.components.hierarchy &= class {
+  spelled_padded (radix: Number, width: Number) => .spelled_in(radix).padded(width)
+}

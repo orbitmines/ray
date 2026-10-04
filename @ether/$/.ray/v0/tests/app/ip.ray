@@ -31,7 +31,7 @@ sides &= 0
 sides &= 2
 wide := IPv6(segments: sides)
 unless (wide.segment_count == 8) { INFO@mark `IP6 the wide address has other than eight segments` }
-unless (wide.as_string == "1:0:0:0:0:0:0:2") { INFO@mark `IP7 the wide address writes wrong in full` }
+unless (wide.full == "1:0:0:0:0:0:0:2") { INFO@mark `IP7 the wide address writes wrong in full` }
 unless (wide.zeros.length == (4 + 2)) { INFO@mark `IP8 the run of zeros is not six long` }
 unless (wide.zeros.at == 1) { INFO@mark `IP9 the run of zeros does not start at one` }
 unless (wide.compressed == "1::2") { INFO@mark `IP10 the zeros are not written as ::` }
@@ -52,3 +52,14 @@ unless (IP.v4.base == 10) { INFO@mark `IP27 the first kind is not written in ten
 unless (IP.v6.base == 16) { INFO@mark `IP28 the second kind is not written in sixteen` }
 unless (IP.v4.separator == ".".head.value) { INFO@mark `IP29 the first kind is not written with dots` }
 unless (IP.v6.separator == ":".head.value) { INFO@mark `IP30 the second kind is not written with colons` }
+
+// An address read from text in any of its forms, a prefix after a slash, and
+// the address after it.
+unless (IP.parse("10.0.0.5/8").as_string == "10.0.0.0") { INFO@mark `IP40 a prefix after a slash does not give the network` }
+unless (IP.parse("1::2").as_string == "1::2") { INFO@mark `IP41 a compressed wide address does not read back as itself` }
+unless (IP.parse("1::2").left.count == 1) { INFO@mark `IP42 what is left of :: is not kept as read` }
+unless (IP.parse("::ffff:1.2.3.4").as_string == "::ffff:1.2.3.4") { INFO@mark `IP43 a mapped address is not written with its four parts` }
+unless (IP.parse("64:ff9b::1.2.3.4").as_string == "64:ff9b::1.2.3.4") { INFO@mark `IP44 a translated address is not written with its four parts` }
+unless (IP.parse("::ffff:1.2.3.4").embedded.as_string == "1.2.3.4") { INFO@mark `IP45 the embedded address is not kept` }
+unless (IP.parse("1.0.0.1").next.as_string == "1.0.0.2") { INFO@mark `IP46 the address after 1.0.0.1 is not 1.0.0.2` }
+unless (IP.parse("1.0.0.1").previous.as_string == "1.0.0.0") { INFO@mark `IP47 the address before 1.0.0.1 is not 1.0.0.0` }

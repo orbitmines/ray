@@ -45,7 +45,7 @@ UUID := class: Hexadecimal {
       unless (it.value == 8) { out &= dash }
       left ^keyword := it.value
       while left {
-        out &= Character.decimal_digit(walker.value)
+        out &= Char.decimal_digit(walker.value)
         walker = walker.next
         left = left.pred
       }
@@ -71,16 +71,89 @@ UUID := class: Hexadecimal {
     else { UUID(spelled: out) }
   )
 
+  nibbles_of (number: Number, count: Number) => (
+    reversed := chain None
+    rest ^keyword := number
+    left ^keyword := count
+    while left {
+      reversed &= rest % 16
+      rest = rest / 16
+      left = left.pred
+    }
+    out := chain None
+    walker ^keyword := reversed.tail
+    while (walker) {
+      out &= walker.value
+      walker = walker.previous
+    }
+    out
+  )
+
   Namespace := class {
-    DNS => "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
-    URL => "6ba7b811-9dad-11d1-80b4-00c04fd430c8"
-    OID => "6ba7b812-9dad-11d1-80b4-00c04fd430c8"
-    X500 => "6ba7b814-9dad-11d1-80b4-00c04fd430c8"
+    DNS => UUID.read("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+    URL => UUID.read("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
+    OID => UUID.read("6ba7b812-9dad-11d1-80b4-00c04fd430c8")
+    X500 => UUID.read("6ba7b814-9dad-11d1-80b4-00c04fd430c8")
   }
 }
 
 UUID.v1 = class: UUID {
+  gregorian_offset => 122192928000000000
+
+  time => (
+    spelled_time := chain None
+    at ^keyword := 13
+    while (at < 16) {
+      spelled_time &= .spelled.head.at(at).value
+      at = at.succ
+    }
+    at = 8
+    while (at < 12) {
+      spelled_time &= .spelled.head.at(at).value
+      at = at.succ
+    }
+    at = 0
+    while (at < 8) {
+      spelled_time &= .spelled.head.at(at).value
+      at = at.succ
+    }
+    Number.from_digits(16, spelled_time)
+  )
+
+  clock_sequence => (((.spelled.head.at(16).value % 4) * 4096) + (.spelled.head.at(17).value * 256) + (.spelled.head.at(18).value * 16)) + .spelled.head.at(19).value
+
+  node => (
+    spelled_node := chain None
+    at ^keyword := 20
+    while (at < 32) {
+      spelled_node &= .spelled.head.at(at).value
+      at = at.succ
+    }
+    Number.from_digits(16, spelled_node)
+  )
+
+  ticks => ((external time).as_string.as_number / 100) + UUID.v1.gregorian_offset
+
+  generate => (
+    stamp ^keyword := UUID.v1.ticks
+    if (stamp < UUID.v1.latest.succ) { stamp = UUID.v1.latest.succ }
+    UUID.v1.latest = stamp
+    written := chain None
+    UUID.nibbles_of(stamp % 4294967296, 8) for { written &= it.value }
+    UUID.nibbles_of((stamp / 4294967296) % 65536, 4) for { written &= it.value }
+    written &= 1
+    UUID.nibbles_of(stamp / 281474976710656, 3) for { written &= it.value }
+    sequence := Random.number(14)
+    written &= 8 + (sequence / 4096)
+    UUID.nibbles_of(sequence % 4096, 3) for { written &= it.value }
+    node_digits := UUID.nibbles_of(Random.number(48), 12)
+    node_digits.head.next.value = node_digits.head.next.value - (node_digits.head.next.value % 2) + 1
+    node_digits for { written &= it.value }
+    UUID.v1(spelled: written)
+  )
 }
+
+UUID.v1.latest = 0
 
 UUID.v3 = class: UUID {
   namespace: UUID
@@ -99,6 +172,6 @@ UUID.v5 = class: UUID {
   name: String
 }
 
-Character.components.hierarchy &= class {
+Char.components.hierarchy &= class {
   hexadecimal_digit => if .digit { .codepoint - 48 } else { .lower.codepoint - 87 }
 }

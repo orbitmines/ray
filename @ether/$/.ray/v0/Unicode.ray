@@ -7,7 +7,7 @@ Unicode := class {
   surrogate_first => 55296
 
   GeneralCategory := enum letter | number | punctuation | symbol | separator | other
-  category (character: Character) => (
+  category (character: Char) => (
     if character.letter { Unicode.GeneralCategory.letter }
     elsif character.digit { Unicode.GeneralCategory.number }
     elsif character.blank { Unicode.GeneralCategory.separator }
@@ -68,6 +68,118 @@ Unicode := class {
 
   tables_at => "https://www.unicode.org/Public/UCD/latest/ucd/"
   table (name) => external io (.tables_at + name).bits
+
+  version := 15
+
+  Endianness := enum little | big
+
+  ordered (bits, order) => (
+    if (order == Unicode.Endianness.big) { return bits }
+    units := chain None
+    unit ^keyword := chain None
+    left ^keyword := 8
+    bits for {
+      unit &= it.value
+      left = left.pred
+      if left.is_zero {
+        units &= unit
+        unit = chain None
+        left = 8
+      }
+    }
+    out := chain None
+    walker ^keyword := units.tail
+    while (walker) {
+      walker.value for { out &= it.value }
+      walker = walker.previous
+    }
+    out
+  )
+
+  Table := class {
+    name: String
+    row: Node
+    version: Unicode.version
+    latest: false
+
+    source => "https://www.unicode.org/Public/" + (.version.as_string + (".0.0/ucd/" + .name))
+    cached => "@ether/@https/www.unicode.org/Public/" + (.version.as_string + ("/" + .name))
+
+    text => (
+      held ^keyword := IO.read(.cached)
+      if (held.empty.or(.latest)) {
+        held = IO.read(.source)
+        IO.write(.cached, held)
+      }
+      held
+    )
+
+    rows => (
+      read := chain None
+      reader := .row
+      .text.lines for {
+        line := it.value.before("#").trimmed
+        if line.nonempty { read &= reader.read(line) }
+      }
+      read
+    )
+
+    at (codepoint: Number) => (
+      found ^keyword := None
+      .rows for {
+        if (found === None) { if (it.value.covers(codepoint)) { found = it.value } }
+      }
+      found
+    )
+  }
+
+  Range := class {
+    first: Number
+    last: Number
+    value: Node
+
+    covers (codepoint: Number) => codepoint.at_least(.first).and(codepoint < .last.succ)
+
+    read (line: String) => (
+      fields := line.split(U+003B)
+      span := fields.head.value.trimmed
+      first_written := span.before("..")
+      last_written ^keyword := span.after("..")
+      if last_written.empty { last_written = first_written }
+      Unicode.Range(first: first_written.as_number_in(16), last: last_written.as_number_in(16), value: fields.head.next.value.trimmed)
+    )
+  }
+
+  Folding := class {
+    code: Number
+    status: String
+    mapping: Node
+
+    covers (codepoint: Number) => codepoint == .code
+
+    read (line: String) => (
+      fields := line.split(U+003B)
+      points := chain None
+      fields.at(2).value.trimmed.split(U+0020) for { if it.value.nonempty { points &= it.value.as_number_in(16).as_character } }
+      Unicode.Folding(code: fields.head.value.trimmed.as_number_in(16), status: fields.at(1).value.trimmed, mapping: points.as_string)
+    )
+  }
+
+  EastAsianWidth := Unicode.Table(name: "EastAsianWidth.txt", row: Unicode.Range)
+  Scripts := Unicode.Table(name: "Scripts.txt", row: Unicode.Range)
+  Blocks := Unicode.Table(name: "Blocks.txt", row: Unicode.Range)
+  CaseFolding := Unicode.Table(name: "CaseFolding.txt", row: Unicode.Folding)
+
+  folded (character) => (
+    found ^keyword := None
+    Unicode.CaseFolding.rows for {
+      held := it.value
+      if (held.code == character.codepoint) {
+        if ((held.status == "C").or(held.status == "F")) { found = held.mapping }
+      }
+    }
+    if (found === None) { character.as_string } else { found }
+  )
 }
 
 code_points (source) => (
@@ -130,3 +242,4 @@ Chain.components.hierarchy &= class {
     out
   )
 }
+

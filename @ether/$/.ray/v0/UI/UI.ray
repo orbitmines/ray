@@ -1,0 +1,227 @@
+Render := class {
+  Box := class: Geometry.Box {
+    value: Node
+    text: None
+    style: (chain None)
+    link: None
+  }
+
+  boxed (value) => (
+    if (value.instance_of(String)) { Render.Box(value: value, text: value) }
+    elsif (value.rendering) { Render.boxed(value.rendering) }
+    elsif (value.instance_of(Geometry.Shape)) { Render.Box(value: value, children: value.children) }
+    elsif (value.location) { Render.Box(value: value, text: value.location.as_string, link: value.location) }
+    else { Render.fields(value) }
+  )
+
+  fields (value) => (
+    table := Render.Box(value: value, flow: Geometry.Flow.vertical)
+    value.fields for {
+      row := Render.Box(value: it.value, flow: Geometry.Flow.inline)
+      row.holding(Render.Box(value: it.value.name, text: it.value.name))
+      row.holding(Render.boxed(it.value.value))
+      table.holding(row)
+    }
+    table
+  )
+
+  superposed (value, choosing) => if choosing { Render.boxed(value.random) } else {
+    all := Render.Box(value: value, flow: Geometry.Flow.inline)
+    value.components for { all.holding(Render.boxed(it.value)) }
+    all
+  }
+
+  Level := class {
+    name: String
+    width: 80
+    platform: None
+
+    render (value) => (
+      box := Render.boxed(value)
+      Geometry.Solver(available: .width).solve(box)
+      .written(box)
+    )
+    written (box) => TODO
+  }
+
+  HTML := class: Render.Level {
+    name: "html"
+    width: 1240
+
+    written (box) => (
+      inside := chain None
+      box.children for { inside &= .written(it.value) }
+      tag ^keyword := "div"
+      unless (box.link === None) { tag = "a" }
+      opened := "<" + (tag + (Render.HTML.attributes(box) + ">"))
+      shown ^keyword := ""
+      unless (box.text === None) { shown = Render.HTML.escaped(box.text) }
+      opened + (shown + (inside.join + ("</" + (tag + ">"))))
+    )
+    attributes (box) => (
+      written ^keyword := " style=\"" + (Render.HTML.css(box) + "\"")
+      unless (box.link === None) { written = written + (" href=\"" + (box.link.as_string + "\"")) }
+      written
+    )
+    css (box) => (
+      rules := chain None
+      if (box.flow == Geometry.Flow.inline) { rules &= "display:flex" }
+      rules &= "width:" + (box.size.x.as_string + "px")
+      box.style for { rules &= Render.HTML.style_rule(it.value) }
+      rules.join(";")
+    )
+    style_rule (style) => if (style == `italic`) { "font-style:italic" } elsif (style == `bold`) { "font-weight:bold" } else { "" }
+    escaped (text: String) => text.map { if (it.value == U+003C) { "&lt;" } elsif (it.value == U+003E) { "&gt;" } elsif (it.value == U+0026) { "&amp;" } else { it.value.as_string } }.join
+  }
+
+  TUI := class: Render.Level {
+    name: "tui"
+    width: 80
+    selection: None
+
+    written (box) => (
+      lines := chain None
+      Render.TUI.draw(box, lines)
+      lines.join(Char.newline.as_string)
+    )
+    draw (box, lines) => (
+      unless (box.text === None) { lines &= Render.TUI.styled(box) }
+      box.children for { Render.TUI.draw(it.value, lines) }
+      lines
+    )
+    styled (box) => (
+      opened ^keyword := ""
+      box.style for {
+        if (it.value == `italic`) { opened = opened + Terminal.escape("3m") }
+        if (it.value == `bold`) { opened = opened + Terminal.escape("1m") }
+      }
+      if (opened.empty) { box.text } else { opened + (box.text + Terminal.escape("0m")) }
+    )
+
+    move (direction) => (
+      if (.selection === None) { return this }
+      if (direction == Keyboard.Direction.down) { if .selection.children.nonempty { .selection = .selection.children.head.value } }
+      elsif (direction == Keyboard.Direction.up) { if .selection.parent { .selection = .selection.parent } }
+      elsif (direction == Keyboard.Direction.right) { if .selection.next { .selection = .selection.next } }
+      elsif (direction == Keyboard.Direction.left) { if .selection.previous { .selection = .selection.previous } }
+      this
+    )
+  }
+
+  Image := class {
+    pixels: Node
+    width: Node
+    height: Node
+
+    ramp => " .:-=+*#%@"
+    sampled (columns: Number) => (
+      rows := chain None
+      step := .width / columns
+      row ^keyword := 0
+      while (row < .height) {
+        line := chain None
+        column ^keyword := 0
+        while (column < columns) {
+          pixel := .pixels.at((row * .width) + (column * step)).value
+          shade := (pixel.luminance * (Render.Image.ramp.count.pred)) / 255
+          line &= Terminal.coloured(Render.Image.ramp.at(shade).value.as_string, pixel)
+          column = column.succ
+        }
+        rows &= line.join
+        row = row + (step * 2)
+      }
+      rows.join(Char.newline.as_string)
+    )
+  }
+
+  Pixel := class {
+    red: 0
+    green: 0
+    blue: 0
+
+    luminance => ((.red * 299) + (.green * 587) + (.blue * 114)) / 1000
+  }
+}
+
+Terminal := class {
+  Kind := enum xterm_256 | truecolor | windows_terminal | browser
+
+  kind: Terminal.Kind.truecolor
+  raw: false
+
+  escape (code: String) => U+001B.as_string + ("[" + code)
+  coloured (text: String, pixel) => Terminal.escape("38;2;" + (pixel.red.as_string + (";" + (pixel.green.as_string + (";" + (pixel.blue.as_string + "m")))))) + (text + Terminal.escape("0m"))
+  clear => Terminal.escape("2J") + Terminal.escape("H")
+  raw_mode => (
+    .raw = true
+    Terminal.emit(Terminal.escape("?1049h"))
+  )
+  emit (text) => TODO
+  decode (bytes) => (
+    if (bytes == Terminal.escape("A")) { Keyboard.Direction.up }
+    elsif (bytes == Terminal.escape("B")) { Keyboard.Direction.down }
+    elsif (bytes == Terminal.escape("C")) { Keyboard.Direction.right }
+    elsif (bytes == Terminal.escape("D")) { Keyboard.Direction.left }
+    elsif (bytes == "w") { Keyboard.Direction.up }
+    elsif (bytes == "s") { Keyboard.Direction.down }
+    elsif (bytes == "a") { Keyboard.Direction.left }
+    elsif (bytes == "d") { Keyboard.Direction.right }
+    else { None }
+  )
+}
+
+Keyboard.Direction = enum up | down | left | right
+
+Browser := class {
+  Kind := enum chromium | firefox
+  kind: Browser.Kind.chromium
+  runtime: false
+
+  send (message) => Terminal.emit(message)
+  page (value) => Render.HTML().render(value)
+}
+
+Site := class {
+  routes: (chain None)
+  index: None
+
+  route (path: String, field) => (
+    .routes &= Site.Route(path: path, field: field)
+    this
+  )
+  at (path: String) => (
+    if ((path == "/").or(path.empty)) { return .index }
+    found ^keyword := None
+    .routes for {
+      held := it.value
+      if (path.starts_with(held.path)) {
+        rest := path.slice(held.path.count, path.count)
+        if rest.empty { found = held.field } else { found = Site.select(held.field, rest) }
+      }
+    }
+    if (found === None) { .index } else { found }
+  )
+  select (values, identity: String) => (
+    matching := chain None
+    values for { if (it.value.name == identity) { matching &= it.value } }
+    if (matching.count == 1) { matching.head.value } else { Site.Chooser(options: matching) }
+  )
+  Route := class {
+    path: String
+    field: Node
+  }
+  Chooser := class {
+    options: Node
+    preferred => .options.head.value
+  }
+}
+
+String.components.hierarchy &= class {
+  styled (style) => (
+    styles := chain None
+    styles &= style
+    Render.Box(value: this, text: this, style: styles)
+  )
+  italic => .styled(`italic`)
+  bold => .styled(`bold`)
+}

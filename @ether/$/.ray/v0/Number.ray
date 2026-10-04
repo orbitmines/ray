@@ -380,7 +380,7 @@ Number.Real = class {
     negative => .sign
   }
 
-  rational => true
+  rational => (.fraction.nonrepeating).not
   irrational => .rational.not
 }
 
@@ -681,3 +681,115 @@ Program.components.hierarchy &= class {
   )
 }
 
+
+Number.components.hierarchy &= class {
+  mod (modulus: Number) => this % modulus
+  saturate (limit: Number) => .min(limit)
+
+  v (radix: Number) => Number.from_digits(radix, .digits_in(ten))
+
+  root (degree: Number) => (
+    rooted ^keyword := zero
+    while (rooted.succ.pow(degree) < this.succ) { rooted = rooted.succ }
+    rooted
+  )
+  root_of (degree: Number) => (
+    whole ^keyword := .root(degree)
+    held ^keyword := this
+    reached ^keyword := whole
+    if (whole.pow(degree) == this) { reached = whole } else { reached = Number.Real(integer: whole, fraction: Number.RootDigits(radicand: held, degree: degree, place: zero), radix: ten) }
+    reached
+  )
+
+  bit_pairs (other: Number) => (
+    mine ^keyword := .digits_in(two).tail
+    theirs ^keyword := other.digits_in(two).tail
+    pairs ^keyword := chain None
+    while ((mine).or(theirs)) {
+      left_bit ^keyword := false
+      right_bit ^keyword := false
+      if (mine) {
+        left_bit = mine.value.set
+        mine = mine.previous
+      }
+      if (theirs) {
+        right_bit = theirs.value.set
+        theirs = theirs.previous
+      }
+      pairs &= Number.BitPair(left: left_bit, right: right_bit)
+    }
+    pairs
+  )
+  from_bits (bits) => (
+    total ^keyword := zero
+    walker ^keyword := bits.tail
+    while (walker) {
+      total = total + total
+      if (walker.value) { total = total.succ }
+      walker = walker.previous
+    }
+    total
+  )
+  ~&& (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.and(it.value.right) })
+  ~|| (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.or(it.value.right) })
+  ~x|| (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.xor(it.value.right) })
+  ~!&& (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.nand(it.value.right) })
+  ~!|| (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.nor(it.value.right) })
+  ~x!|| (other: Number) => .from_bits(.bit_pairs(other).map { it.value.left.xnor(it.value.right) })
+  ~! (width: Number) => (
+    flipped ^keyword := zero
+    place ^keyword := one
+    left ^keyword := width
+    rest ^keyword := this
+    while left {
+      unless (rest % two).nonzero { flipped = flipped + place }
+      rest = rest / two
+      place = place + place
+      left = left.pred
+    }
+    flipped
+  )
+}
+
+Number.BitPair = class {
+  left: Node
+  right: Node
+}
+
+Number.RootDigits = class: Ray {
+  radicand: Number
+  degree: Number
+  place: Number
+
+  bounded => false
+  nonrepeating => true
+  value => (
+    shifted ^keyword := .radicand * ten.pow(.degree * .place.succ)
+    shifted.root(.degree) % ten
+  )
+  next => (
+    held_radicand ^keyword := .radicand
+    held_degree ^keyword := .degree
+    after ^keyword := .place.succ
+    Number.RootDigits(radicand: held_radicand, degree: held_degree, place: after)
+  )
+}
+
+boolean.components.hierarchy &= class {
+  as (=== Binary) => if (.holds) { 0b1 } else { 0b0 }
+}
+
+USize => (u8 | u16 | u32 | u64)
+
+√{radicand} ^punctuation => radicand.root_of(2)
+∛{radicand} ^punctuation => radicand.root_of(3)
+∜{radicand} ^punctuation => radicand.root_of(4)
+∑{ }{summed} ^punctuation => summed.sum
+Σ{ }{summed} ^punctuation => summed.sum
+∏{ }{multiplied} ^punctuation => multiplied.product
+
+∞ => zero.entry.terminal
+
+Iterable.components.hierarchy &= class {
+  ∞ => .unbounded
+}

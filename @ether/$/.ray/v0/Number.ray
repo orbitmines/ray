@@ -357,19 +357,20 @@ Number.Real = class {
   compounds / (other: Number) => Number.Real.written(.numerator / other, .places, .radix)
   as_number => .numerator / .scale
 
-  written (numerator, places, radix) => (
-    scale ^keyword := radix.pow(places)
+  written (counted, shown, base) => (
+    unit ^keyword := base.pow(shown)
     digits_written ^keyword := chain None
-    unless places.is_zero {
-      below ^keyword := (numerator % scale).digits_in(radix)
-      missing ^keyword := places - below.count
+    unless shown.is_zero {
+      below ^keyword := (counted % unit).digits_in(base)
+      missing ^keyword := shown - below.count
       while missing {
         digits_written &= zero
         missing = missing.pred
       }
       below for { digits_written &= it.value }
     }
-    Number.Real(integer: numerator / scale, fraction: digits_written, radix: radix)
+    whole ^keyword := counted / unit
+    Number.Real(integer: whole, fraction: digits_written, radix: base)
   )
 
   Signed := class {

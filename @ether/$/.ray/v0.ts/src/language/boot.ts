@@ -159,6 +159,50 @@ function decode(root: unknown, sources: Map<string, Text.Source>, it: Interprete
   return top;
 }
 
+// A kept state as one table of shallow records that name each other by index, so no reading or writing of it goes deeper than one record.
+function flat(root: unknown): unknown {
+  const index = new Map<object, number>(), table: unknown[] = [], queue: object[] = [];
+  const ref = (value: unknown): unknown => {
+    if (value === undefined) return { '?': 0 };
+    if (typeof value === 'bigint') return { n: String(value) };
+    if (typeof value === 'number' && !Number.isFinite(value)) return { x: String(value) };
+    if (value === null || typeof value !== 'object') return value;
+    let at = index.get(value);
+    if (at === undefined) { at = table.length; index.set(value, at); table.push(undefined); queue.push(value); }
+    return { '@': at };
+  };
+  const top = ref(root);
+  for (let k = 0; k < queue.length; k++) {
+    const value = queue[k] as any;
+    let record: unknown;
+    if (value instanceof Uint8Array) record = { u: Buffer.from(value).toString('base64') };
+    else if (value instanceof Map) record = { m: [...value].map(([key, held]) => [ref(key), ref(held)]) };
+    else if (value instanceof Set) record = { s: [...value].map(ref) };
+    else if (Array.isArray(value)) record = { a: value.map(ref) };
+    else { const fields: Record<string, unknown> = {}; for (const key of Object.keys(value)) fields[key] = ref(value[key]); record = { o: fields }; }
+    table[k] = record;
+  }
+  return { t: table, r: top };
+}
+function unflat(kept: any): unknown {
+  const table: any[] = kept.t, made: unknown[] = table.map(record => record.u !== undefined ? new Uint8Array(Buffer.from(record.u, 'base64')) : record.m !== undefined ? new Map() : record.s !== undefined ? new Set() : record.a !== undefined ? [] : {});
+  const of = (value: any): unknown => {
+    if (value === null || typeof value !== 'object') return value;
+    if (value['@'] !== undefined) return made[value['@']];
+    if (value['?'] !== undefined) return undefined;
+    if (value.n !== undefined) return BigInt(value.n);
+    return Number(value.x);
+  };
+  for (let k = 0; k < table.length; k++) {
+    const record = table[k], into = made[k] as any;
+    if (record.m !== undefined) for (const [key, held] of record.m) into.set(of(key), of(held));
+    else if (record.s !== undefined) for (const held of record.s) into.add(of(held));
+    else if (record.a !== undefined) for (const held of record.a) into.push(of(held));
+    else if (record.o !== undefined) for (const key of Object.keys(record.o)) into[key] = of(record.o[key]);
+  }
+  return of(kept.r);
+}
+
 export class Boot {
   private dir: string;
   private log: [string, string][] = [];
@@ -204,7 +248,7 @@ export class Boot {
     for (const checkpoint of checkpoints) {
       if (!this.valid(checkpoint)) continue;
       let state: any;
-      try { state = decode(env.import<typeof import('v8')>('v8').deserialize(env.fs.readFileSync(env.path.join(this.dir, checkpoint.file))), this.sources, this.it); }
+      try { const t0 = performance.now(); const bytes = env.fs.readFileSync(env.path.join(this.dir, checkpoint.file)); const t1 = performance.now(); const raw = JSON.parse(bytes.toString('utf-8')); const t2 = performance.now(); const graph = unflat(raw); const t3 = performance.now(); state = decode(graph, this.sources, this.it); note('restore read', Math.round(t1 - t0), 'deserialize', Math.round(t2 - t1), 'unflat', Math.round(t3 - t2), 'decode', Math.round(performance.now() - t3), 'bytes', bytes.length, 'records', raw.t.length); }
       catch (error) { note('not restored', error); continue; }
       this.it.restore_state(state, this.mine);
       this.log = [...checkpoint.log];
@@ -219,7 +263,7 @@ export class Boot {
     if (this.tainted || this.saved.has(file)) return;
     this.saved.add(file);
     let bytes: Buffer;
-    try { bytes = env.import<typeof import('v8')>('v8').serialize(encode(this.it.saved_state(this.mine), this.sources)); }
+    try { bytes = Buffer.from(JSON.stringify(flat(encode(this.it.saved_state(this.mine), this.sources))), 'utf-8'); }
     catch (error) { note('not saved', error); this.tainted = true; return; }
     const { fs, path } = env;
     try {

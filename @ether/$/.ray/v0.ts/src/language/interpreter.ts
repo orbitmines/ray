@@ -26,7 +26,8 @@ export class Node {
   parent?: Node
   with?: Node[]
   sees?: Node[]
-  names?: Map<string, Node>
+  // A few names are kept side by side as name, value, name, value; many in a map.
+  names?: Map<string, Node> | (string | Node)[]
   rules?: Rule[]
   code?: { span: Text.Node; in: Node }
   value?: Node
@@ -59,7 +60,29 @@ export class Node {
   shaped?: { of: Rule[]; based: Set<Rule>; shape: { rules: Rule[]; mine: Rule[]; on: Rule[] } }
   watchers?: Map<string, Variant[]>
   constructor(at?: Text.Node) { this.at = at; }
-  own(name: string): Node | undefined { return this.names?.get(name); }
+  own(name: string): Node | undefined {
+    const names = this.names;
+    if (names === undefined) return undefined;
+    if (!Array.isArray(names)) return names.get(name);
+    for (let k = 0; k < names.length; k += 2) if (names[k] === name) return names[k + 1] as Node;
+    return undefined;
+  }
+  name_keys(): string[] {
+    const names = this.names;
+    if (names === undefined) return [];
+    if (!Array.isArray(names)) return [...names.keys()];
+    const keys: string[] = [];
+    for (let k = 0; k < names.length; k += 2) keys.push(names[k] as string);
+    return keys;
+  }
+  name_entries(): [string, Node][] {
+    const names = this.names;
+    if (names === undefined) return [];
+    if (!Array.isArray(names)) return [...names.entries()];
+    const entries: [string, Node][] = [];
+    for (let k = 0; k < names.length; k += 2) entries.push([names[k] as string, names[k + 1] as Node]);
+    return entries;
+  }
   watching?: Map<string, Slot[]>
   static sets = 0;
   // Every name some scope other than a global one has held: a name outside it is found in the global scope or nowhere.
@@ -69,9 +92,16 @@ export class Node {
   set(name: string, value: Node): Node {
     Node.sets++;
     if (!Node.globals.has(this)) Node.scoped.add(name);
-    const names = (this.names ??= new Map());
-    if (this.watching !== undefined && !names.has(name)) { const slots = this.watching.get(name); if (slots !== undefined) { for (const slot of slots) slot.valid = false; this.watching.delete(name); } }
-    names.set(name, value);
+    if (this.watching !== undefined && this.own(name) === undefined) { const slots = this.watching.get(name); if (slots !== undefined) { for (const slot of slots) slot.valid = false; this.watching.delete(name); } }
+    const names = this.names;
+    if (names === undefined) { this.names = [name, value]; return value; }
+    if (!Array.isArray(names)) { names.set(name, value); return value; }
+    for (let k = 0; k < names.length; k += 2) if (names[k] === name) { names[k + 1] = value; return value; }
+    if (names.length < 16) { names.push(name, value); return value; }
+    const map = new Map<string, Node>();
+    for (let k = 0; k < names.length; k += 2) map.set(names[k] as string, names[k + 1] as Node);
+    map.set(name, value);
+    this.names = map;
     return value;
   }
 }
@@ -1314,12 +1344,7 @@ export class Interpreter {
     const span = rule.inner_body ??= this.inner(rule.body!) ?? rule.body!;
     const cursor = this.cursor_of(span);
     if (this.painting(span.source) || !Interpreter.reducing || ++rule.applications < 4) return this.read(cursor, local);
-    let body = rule.reduced;
-    if (body === undefined || (body.steps > 0 && body.unit.statements.size !== body.known)) {
-      const unit = this.unit_of(cursor), graph = this.graph_of(cursor);
-      body = rule.reduced = reduce(this, span, unit, graph);
-      body.known = unit.statements.size;
-    }
+    const body = rule.reduced ??= reduce(this, span, this.unit_of(cursor), this.graph_of(cursor));
     return run(this, body, cursor, local);
   }
   unforce(mark: number) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
@@ -1408,13 +1433,13 @@ export class Interpreter {
     value.sees = [...(sees ?? []), made.in];
     Interpreter.touch(value);
     this.notify(value);
-    const before = new Set(value.names?.keys() ?? []);
+    const before = new Set(value.name_keys());
     try { this.safely(() => this.read(this.cursor_of(this.inner(made.span) ?? made.span), value)); }
     finally { value.sees = sees; Interpreter.touch(value); this.notify(value); }
-    for (const key of value.names?.keys() ?? []) if (!before.has(key)) { (value.given ??= new Set()).add(key); this.given_names.add(key); }
+    for (const key of value.name_keys()) if (!before.has(key)) { (value.given ??= new Set()).add(key); this.given_names.add(key); }
     Interpreter.touch(value);
     if (counts !== undefined) {
-      const names: [string, 'self' | 'stands' | undefined][] = [...(value.names ?? new Map<string, Node>()).entries()].map(([name, held]) => [name, held === value ? 'self' : held === value.stands && held !== undefined ? 'stands' : undefined]);
+      const names: [string, 'self' | 'stands' | undefined][] = value.name_entries().map(([name, held]) => [name, held === value ? 'self' : held === value.stands && held !== undefined ? 'stands' : undefined]);
       const quiet = names.every(([, held]) => held !== undefined) && counts[0] === this.diagnostics.reports && counts[1] === this.rules_version && counts[2] === this.declared && counts[3] === this.version && Node.sets - counts[4] === names.length && value.sees === undefined && value.rules === undefined;
       const same = quiet && this.template !== undefined && this.template.stands === (value.stands !== undefined) && this.template.made === this.made && this.template.base === this.BASE && this.template.names.length === names.length && this.template.names.every(([name, held], k) => names[k][0] === name && names[k][1] === held);
       this.template = quiet ? { made: this.made, base: this.BASE, stands: value.stands !== undefined, names: names as [string, 'self' | 'stands'][], seen: same ? this.template!.seen + 1 : 1 } : undefined;
@@ -2098,7 +2123,7 @@ export class Interpreter {
       copy.parent = node(n.parent);
       if (n.with) copy.with = n.with.map(x => node(x)!);
       if (n.sees) copy.sees = n.sees.map(x => node(x)!);
-      if (n.names) copy.names = new Map([...n.names].map(([k, v]) => [k, node(v)!]));
+      if (n.names) copy.names = Array.isArray(n.names) ? n.names.map((held, k) => k % 2 === 0 ? held : node(held as Node)!) : new Map([...n.names].map(([k, v]) => [k, node(v)!]));
       if (n.rules) copy.rules = n.rules.map(rule);
       if (n.code) copy.code = { span: n.code.span, in: node(n.code.in)! };
       if (n.place) copy.place = { ...n.place, in: node(n.place.in)! };

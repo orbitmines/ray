@@ -1,0 +1,5 @@
+i := 0
+again\
+i = i + 1
+goto again if (i < 5)
+i

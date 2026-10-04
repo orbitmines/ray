@@ -29,6 +29,7 @@ export interface Boot {
 
 const RAY_REPO_MARKER = path.join('@ether', '$', '.ray');
 const RAY_LSP_ENTRY   = path.join('@ether', '$', '.ray', 'v0.ts', 'src', 'lsp', 'index.ts');
+const RAY_DAEMON_ENTRY = path.join('@ether', '$', '.ray', 'v0.ts', 'src', 'kernel4', 'language.ts');
 
 /**
  * Walk up from `start` looking for the marker that identifies a checkout of
@@ -71,7 +72,8 @@ function nodeImportTsxArgs(tsxDir: string, entry: string): string[] {
 function repoBoot(repoRoot: string): Boot {
   const tsxPkg = require.resolve('tsx/package.json', { paths: [path.join(repoRoot, '@ether', '$', '.ray', 'v0.ts'), repoRoot] });
   const tsxDir = path.dirname(tsxPkg);
-  const entry  = path.join(repoRoot, RAY_LSP_ENTRY);
+  const daemon = workspace.getConfiguration('ether').get<string>('server', 'daemon') === 'daemon' && fs.existsSync(path.join(repoRoot, RAY_DAEMON_ENTRY));
+  const entry  = path.join(repoRoot, daemon ? RAY_DAEMON_ENTRY : RAY_LSP_ENTRY);
 
   if (!fs.existsSync(tsxDir)) throw new Error(`tsx not found near ${repoRoot} — run \`npm install\` in @ether/$/.ray/v0.ts.`);
   if (!fs.existsSync(entry))  throw new Error(`Language server entry not found at ${entry}.`);
@@ -82,23 +84,22 @@ function repoBoot(repoRoot: string): Boot {
   const repoEnv = { ...process.env, TSX_CACHE_DIRECTORY: '/dev/null' };
   const run = {
     command: process.execPath,
-    args: nodeImportTsxArgs(tsxDir, entry),
+    args: [...nodeImportTsxArgs(tsxDir, entry), ...(daemon ? ['--lsp'] : [])],
     transport: TransportKind.stdio,
     options: { cwd: repoRoot, env: repoEnv },
   };
   return {
     mode: 'repo',
-    description: `repo (${repoRoot})`,
+    description: daemon ? `repo (${repoRoot}), served by the kernel4 daemon` : `repo (${repoRoot})`,
     server: { run, debug: { ...run, options: { ...run.options, env: { ...repoEnv, DEBUG: '1' } } } },
   };
 }
 
 /**
  * If `ray` is on PATH and its `--version` parses under any registered scheme,
- * return a boot config that spawns `ray lsp`. The ray executable bundles the
- * language server; `lsp` is the subcommand that flips it into LSP mode over
- * stdio. We do NOT validate the subcommand here; `LanguageClient` will
- * surface a startup error if the installed binary doesn't support it.
+ * return a boot config that spawns `ray --lsp`. The ray executable bundles the
+ * language server; `--lsp` is the option that flips it into LSP mode over
+ * stdio. It is only used when its `--help` lists `--lsp`.
  */
 function installedBoot(): Boot | null {
   let bin: string;
@@ -123,11 +124,11 @@ function installedBoot(): Boot | null {
   try {
     help = cp.execFileSync(bin, ['--help'], { encoding: 'utf-8' });
   } catch { return null; }
-  if (!/\blsp\b/.test(help)) return null;
+  if (!/--lsp\b/.test(help)) return null;
 
   const run = {
     command: bin,
-    args: ['lsp'],
+    args: ['--lsp'],
     transport: TransportKind.stdio,
   };
   return {

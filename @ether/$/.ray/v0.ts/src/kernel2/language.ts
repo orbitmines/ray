@@ -22,6 +22,17 @@ export const config = {
     segment: 64 * 1024 ** 2,
     memory: 64 * 1024 ** 2,
   },
+  memory: {
+    shared: true,
+    words: 1 << 24,
+    arena: 1 << 19,
+    processes: 16,
+    queue: 1 << 14,
+    ring: 1 << 10,
+    quantum: 10_000,
+    slice: 10,
+    gpu: 64,
+  },
   frame: 64 * 1024,
 };
 
@@ -69,10 +80,12 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
     if (exit !== undefined) { process.exitCode = exit; return; }
   }
   if (detached) throw new Error(`${NAME}'s daemon couldn't be started on '${socket}'.`);
-  process.exitCode = await run(new Project(), [args, kwargs], {
-    out: text => drained(process.stdout, process.stdout.write(text)),
-    err: text => drained(process.stderr, process.stderr.write(text)),
+  const jobs = new Jobs(env.host);
+  process.exitCode = await jobs.run([args, kwargs], {
+    out: data => drained(process.stdout, process.stdout.write(data)),
+    err: data => drained(process.stderr, process.stderr.write(data)),
   });
+  jobs.close();
 }
 
 export interface IO { out(data: string | Uint8Array): Promise<void>; err(data: string | Uint8Array): Promise<void>; }
@@ -84,14 +97,6 @@ export function drained(stream: NodeJS.EventEmitter & { destroyed?: boolean }, w
     stream.on('drain', done);
     stream.on('close', done);
   });
-}
-
-export async function run(program: Project, [args, kwargs]: CLI.Args, io: IO): Promise<number> {
-  const diagnostics = new Diagnostics();
-  await Ray.v0(diagnostics).abstract(!!kwargs.abstract).add(args.flatMap(x => program.at(x))).exec()
-
-  await diagnostics.print(io);
-  return diagnostics.has_errors ? 1 : 0;
 }
 
 async function daemon(socket: string) {
@@ -152,10 +157,9 @@ export class Jobs {
   readonly ephemeral = new Memory();
   private readonly jobs = new Map<number, Jobs.Job>();
   private readonly waiting: Jobs.Job[] = [];
-  private readonly spare = new Map<Thread, ReturnType<typeof setTimeout>>();
-  private readonly dead = new WeakSet<Thread>();
   private running = 0;
   private ticker?: ReturnType<typeof setInterval>;
+  private shared?: Environment;
 
   constructor(readonly host: Host, private readonly events: { busy?(): void; idle?(): void } = {}) {
     host.store.recover();
@@ -166,6 +170,7 @@ export class Jobs {
 
   private store(meta: Daemon.Meta): Store { return meta.ephemeral ? this.ephemeral : this.host.store; }
   private live(): Daemon.Meta[] { return [...this.jobs.values()].filter(job => !job.meta.ephemeral).map(job => job.meta); }
+  private environment(): Environment { return config.memory.shared ? this.shared ??= new Environment(this.host) : new Environment(this.host); }
 
   submit(request: Daemon.Run, options: { owner?: Jobs.Send; viewer?: Jobs.Send } = {}): Daemon.Meta {
     const meta: Daemon.Meta = {
@@ -220,7 +225,15 @@ export class Jobs {
 
   unwatch(id: number, send: Jobs.Send): void { this.jobs.get(id)?.viewers.delete(send); }
 
-  list(): Daemon.Meta[] { return [...this.host.store.all(), ...this.ephemeral.all()]; }
+  list(): Daemon.Meta[] {
+    const live = new Map([...this.jobs.values()].map(job => [job.meta.id, { ...job.meta, steps: job.project.steps, memory: job.project.memory }]));
+    return [...this.host.store.all(), ...this.ephemeral.all()].map(meta => live.get(meta.id) ?? meta);
+  }
+
+  close(): void {
+    this.shared?.stop();
+    this.shared = undefined;
+  }
 
   private flush(job: Jobs.Job): void {
     if (this.store(job.meta).stopping(job.meta.id)) job.project.stop();
@@ -244,52 +257,38 @@ export class Jobs {
     for (const send of [job.owner, ...job.viewers]) send?.(Daemon.Frame.EXIT, String(exit));
     this.jobs.delete(job.meta.id);
     if (job.meta.ephemeral) this.ephemeral.remove(job.meta.id);
-    if (job.thread !== undefined) {
-      this.running--;
-      const thread = job.thread;
-      if (!this.dead.has(thread)) this.spare.set(thread, setTimeout(() => { this.spare.delete(thread); thread.terminate(); }, config.daemon.worker_idle));
-    }
+    if (job.meta.began !== undefined) this.running--;
+    if (job.environment !== undefined && job.environment !== this.shared) job.environment.stop();
     this.host.store.retain(this.live());
     this.schedule();
     if (!this.active) this.events.idle?.();
   }
 
-  private spawn(): Thread {
-    let thread: Thread;
-    thread = this.host.spawn({
-      message: (message: Daemon.Message) => {
-        const job = this.jobs.get(message.job);
-        if (job === undefined) return;
-        if ('exit' in message) return this.finish(job, message.exit);
-        this.output(job, message.type, message.data).then(() => thread.post({ ack: message.ack }));
-      },
-      exit: failure => {
-        this.dead.add(thread);
-        clearTimeout(this.spare.get(thread));
-        this.spare.delete(thread);
-        for (const job of this.jobs.values()) if (job.thread === thread && job.meta.exit === undefined) {
-          this.output(job, Daemon.Frame.ERR, failure || `${NAME}'s worker for job ${job.meta.id} exited.\n`);
-          this.finish(job, 1);
-        }
-      },
+  private start(job: Jobs.Job): void {
+    let program: Program;
+    try { program = Program.compile(job.project, job.request.argv[0]); }
+    catch (e) { this.output(job, Daemon.Frame.ERR, `${(e as Error).message}\n`); return this.finish(job, 1); }
+    const environment = job.environment = this.environment();
+    environment.start(program, 'main', job.project, {
+      out: text => { this.output(job, Daemon.Frame.OUT, text); },
+      err: text => { this.output(job, Daemon.Frame.ERR, text); },
+    }).then(result => {
+      if (result.status === 'done' && result.shown !== '') this.output(job, Daemon.Frame.OUT, `=> ${result.shown}\n`);
+      this.finish(job, result.status === 'done' ? 0 : result.status === 'cancelled' ? 130 : 1);
+    }, error => {
+      this.output(job, Daemon.Frame.ERR, `${(error as Error).stack ?? error}\n`);
+      this.finish(job, 1);
     });
-    return thread;
-  }
-
-  private acquire(): Thread {
-    for (const [thread, expiry] of this.spare) { clearTimeout(expiry); this.spare.delete(thread); return thread; }
-    return this.spawn();
   }
 
   private schedule(): void {
-    while (this.running < Math.max(1, this.host.threads) && this.waiting.length > 0) {
+    while (this.running < config.memory.processes && this.waiting.length > 0) {
       const job = this.waiting.shift()!;
       if (job.project.stopped || this.store(job.meta).stopping(job.meta.id)) { job.project.stop(); this.finish(job, 130); continue; }
       this.running++;
       job.meta.began = Date.now();
       this.store(job.meta).save(job.meta);
-      job.thread = this.acquire();
-      job.thread.post({ job: job.meta.id, request: job.request, shared: job.project.shared });
+      this.start(job);
     }
     if (this.jobs.size > 0) this.ticker ??= setInterval(() => {
       if (this.jobs.size === 0) { clearInterval(this.ticker); this.ticker = undefined; return; }
@@ -300,7 +299,7 @@ export class Jobs {
 
 export namespace Jobs {
   export type Send = (type: Daemon.Frame, payload?: string | Uint8Array) => Promise<void>;
-  export type Job = { meta: Daemon.Meta; request: Daemon.Run; project: Project; log: Log; thread?: Thread; owner?: Send; viewers: Set<Send> };
+  export type Job = { meta: Daemon.Meta; request: Daemon.Run; project: Project; log: Log; environment?: Environment; owner?: Send; viewers: Set<Send> };
 
   const encoder = new TextEncoder(), decoder = new TextDecoder();
   export function bytes(data: string | Uint8Array): Uint8Array { return typeof data === 'string' ? encoder.encode(data) : data; }
@@ -309,12 +308,13 @@ export namespace Jobs {
 
 export interface Port { post(message: unknown): void; listen(handler: (message: any) => void): void; }
 export interface Thread { post(message: unknown): void; terminate(): void; }
-export interface Listener { message(message: Daemon.Message): void; exit(failure: string): void; }
+export interface Listener { message(message: { process: number; error: string }): void; exit(failure: string): void; }
 
 export interface Host {
   readonly pid: number;
   readonly threads: number;
   readonly store: Store;
+  memory(words: number): Int32Array;
   spawn(listener: Listener): Thread;
 }
 
@@ -324,6 +324,7 @@ export namespace Host {
       pid: process.pid,
       threads: env.os.availableParallelism?.() ?? env.os.cpus().length,
       store: new Disk(),
+      memory: words => new Int32Array(new SharedArrayBuffer(4 * words)),
       spawn(listener) {
         const file = env.url.fileURLToPath(import.meta.url), typescript = (globalThis as any).Deno === undefined && /\.[cm]?ts$/.test(file);
         const worker = new env.worker_threads.Worker(file, {
@@ -345,20 +346,14 @@ export namespace Host {
       pid: 0,
       threads: isolated ? (globalThis as any).navigator?.hardwareConcurrency ?? 2 : 0,
       store: new Memory(),
+      memory: words => new Int32Array(isolated ? new SharedArrayBuffer(4 * words) : new ArrayBuffer(4 * words)),
       spawn(listener) {
-        if (!isolated) return local(listener);
         const worker = new Worker(import.meta.url, { type: 'module', name: `${NAME} worker` });
         worker.onmessage = event => listener.message(event.data);
         worker.onerror = event => { event.preventDefault(); worker.terminate(); listener.exit(`${event.message}\n`); };
         return { post: message => worker.postMessage(message), terminate: () => worker.terminate() };
       },
     };
-  }
-
-  export function local(listener: Listener): Thread {
-    let handler: ((message: any) => void) | undefined;
-    Daemon.worker({ post: message => queueMicrotask(() => listener.message(message as Daemon.Message)), listen: listen => { handler = listen; } });
-    return { post: message => queueMicrotask(() => handler?.(message)), terminate: () => {} };
   }
 }
 
@@ -650,7 +645,6 @@ export namespace Daemon {
   export type Run = { kind: 'run'; argv: CLI.Args; command: string[]; cwd: string; variables: Record<string, string | undefined>; build: string; detached: boolean; attach: boolean; ephemeral: boolean };
   export type Request = Run | { kind: 'ephemeral' } | { kind: 'stop'; job: number };
   export enum Frame { REQUEST, OUT, ERR, EXIT, STALE, ACCEPTED }
-  export type Message = { job: number; type: Frame.OUT | Frame.ERR; data: string | Uint8Array; ack: number } | { job: number; exit: number };
   export type Meta = {
     id: number; command: string[]; cwd: string; daemon: number; created: number; began?: number; ended?: number; exit?: number; stopped?: boolean; lost?: boolean; ephemeral?: boolean;
     steps: number; memory: number; written: number; size: number; first: number; last: number;
@@ -666,24 +660,8 @@ export namespace Daemon {
   export function active(meta: Meta, store: Store = env.host.store): boolean { return ['queued', 'running', 'stopping'].includes(state(meta, store)); }
 
   export function worker(port: Port): void {
-    const waiting = new Map<number, () => void>();
-    let acks = 0;
-    const post = (job: number, type: Frame.OUT | Frame.ERR, data: string | Uint8Array) => new Promise<void>(resolve => {
-      const ack = ++acks;
-      waiting.set(ack, resolve);
-      port.post({ job, type, data, ack } satisfies Message);
-    });
-    port.listen(async (message: { ack: number } | { job: number; request: Run; shared: ArrayBufferLike }) => {
-      if ('ack' in message) { waiting.get(message.ack)?.(); waiting.delete(message.ack); return; }
-      const { job, request, shared } = message;
-      let exit = 1;
-      try {
-        exit = await run(new Project(request.cwd, request.variables, shared), request.argv, { out: data => post(job, Frame.OUT, data), err: data => post(job, Frame.ERR, data) });
-      } catch (e) {
-        await post(job, Frame.ERR, `${(e as Error).stack ?? e}\n`);
-      }
-      port.post({ job, exit } satisfies Message);
-    });
+    port.listen(({ memory, layout, id }: { memory: SharedArrayBuffer; layout: Layout.Plan; id: number }) =>
+      Workers.work(new Int32Array(memory), layout, id, (process, error) => port.post({ process, error })));
   }
 
   export function job(value: string | true | (string | true)[], args: string[]): number | undefined {
@@ -1154,35 +1132,32 @@ export class env {
 
 }
 
-if (env.worker) Daemon.worker(env.port);
-else if (env.scope === 'daemon') Browser.serve(env.port);
-else if (env.scope === 'shared') Browser.shared();
-else if (env.is_main_entrypoint) main();
-
-enum Op { GOTO,  }
-
 export class Project {
   private _cwd?: string;
+  private environment?: Environment;
+  private process = -1;
+  private stopping = false;
+  private counters = { steps: 0, memory: 0, cursors: 0 };
 
-  private readonly flags: Int32Array;
-  private readonly counters: Float64Array;
+  constructor(public readonly from: string = env.nodejs ? process.cwd() : '', public readonly variables: Record<string, string | undefined> = env.nodejs ? { ...process.env } : {}) {}
 
-  constructor(public readonly from: string = env.nodejs ? process.cwd() : '', public readonly variables: Record<string, string | undefined> = env.nodejs ? { ...process.env } : {}, public readonly shared: ArrayBufferLike = Project.shared()) {
-    this.flags = new Int32Array(shared, 0, 1);
-    this.counters = new Float64Array(shared, 8, 3);
+  bind(environment: Environment, process: number): void {
+    this.environment = environment;
+    this.process = process;
+    if (this.stopping) environment.cancel(process);
+  }
+  unbind(counters: { steps: number; memory: number; cursors: number }): void {
+    this.counters = counters;
+    this.environment = undefined;
+    this.process = -1;
   }
 
-  static shared(): ArrayBufferLike { return typeof SharedArrayBuffer === 'undefined' ? new ArrayBuffer(32) : new SharedArrayBuffer(32); }
+  get stopped(): boolean { return this.stopping; }
+  stop(): void { this.stopping = true; this.environment?.cancel(this.process); }
 
-  get stopped(): boolean { return Atomics.load(this.flags, 0) === 1; }
-  stop(): void { Atomics.store(this.flags, 0, 1); }
-
-  get steps(): number { return this.counters[0]; }
-  set steps(steps: number) { this.counters[0] = steps; }
-  get memory(): number { return this.counters[1]; }
-  set memory(bytes: number) { this.counters[1] = bytes; }
-  get cursors(): number { return this.counters[2]; }
-  set cursors(cursors: number) { this.counters[2] = cursors; }
+  get steps(): number { return this.environment ? this.environment.m[this.process + Layout.STEPS] : this.counters.steps; }
+  get memory(): number { return this.environment ? 4 * (this.environment.m[this.process + Layout.NEXT] - this.environment.m[this.process + Layout.ARENA]) : this.counters.memory; }
+  get cursors(): number { return this.environment ? this.environment.m[this.process + Layout.LIVE] : this.counters.cursors; }
 
   get cwd(): string { return this._cwd ??= env.root(this.from); }
 
@@ -1232,7 +1207,834 @@ export class Project {
 
 }
 
-export class Program {
-  graph: Uint32Array
-  
+export namespace Word {
+  export const INT = 0, REF = 1, SPECIAL = 2;
+
+  export const int = (n: number) => n << 2;
+  export const integer = (w: number) => w >> 2;
+  export const ref = (address: number) => (address << 2) | REF;
+  export const address = (w: number) => w >> 2;
+  export const kind = (w: number) => w & 3;
+
+  export const NOTHING = (0 << 2) | SPECIAL;
+  export const UNRESOLVED = (1 << 2) | SPECIAL;
+
+  export const truthy = (w: number) => w !== int(0) && w !== NOTHING;
 }
+
+export namespace Layout {
+  export const WAKE = 0, SERVE = 1, HEAP = 2, STOP = 3, CONTROL = 8;
+  export const TOP = 0, BOTTOM = 1, SLOTS = 2, CURSOR = 4;
+  export const HEAD = 0, TAIL = 1;
+  export const CODE = 0, PROCESS = 1, PC = 2, STATE = 3, DST = 4, ARGC = 5, GENERATION_OF = 6, ARGS = 7, MAX_ARGS = 4, REQUEST = ARGS + MAX_ARGS;
+  export const STATUS = 0, LIVE = 1, RESULT = 2, ARENA = 3, NEXT = 4, END = 5, STEPS = 6, GENERATION = 7, PROCESS_SIZE = 8;
+  export const FREE = 0, RUNNING = 1, CANCELLED = 2, DONE = 3;
+  export const FINISHED = -1, EACH_CALL = -2;
+
+  export type Plan = {
+    words: number; workers: number; queue: number; ring: number; processes: number;
+    injection: number; queues: number[]; rings: number[]; epochs: number; table: number; heap: number;
+  };
+
+  export function plan(options: { workers: number; words: number }): Plan {
+    const { queue, ring, processes } = config.memory;
+    let at = CONTROL;
+    const injection = at; at += SLOTS + CURSOR * queue;
+    const queues: number[] = [];
+    for (let w = 0; w < options.workers; w++) { queues.push(at); at += SLOTS + CURSOR * queue; }
+    const rings: number[] = [];
+    for (let w = 0; w < options.workers; w++) { rings.push(at); at += 2 + ring * REQUEST; }
+    const epochs = at; at += options.workers;
+    const table = at; at += processes * PROCESS_SIZE;
+    if (at >= options.words) throw new Error('memory too small for its layout');
+    return { words: options.words, workers: options.workers, queue, ring, processes, injection, queues, rings, epochs, table, heap: at };
+  }
+
+  export const process_at = (plan: Plan, id: number) => plan.table + id * PROCESS_SIZE;
+
+  export function alloc(m: Int32Array, process: number, words: number): number {
+    const at = Atomics.add(m, process + NEXT, words);
+    if (at + words > m[process + END]) throw new Error(`process arena full (${m[process + END] - m[process + ARENA]} words)`);
+    return at;
+  }
+
+  export function heap(m: Int32Array, words: number): number {
+    const at = m[HEAP];
+    if (at + words > m.length) throw new Error('memory full');
+    m[HEAP] = at + words;
+    return at;
+  }
+}
+
+const L = Layout;
+
+export namespace Queue {
+  export function add(m: Int32Array, q: number, capacity: number, pc: number, state: number, process: number, generation: number) {
+    const b = m[q + L.BOTTOM], t = Atomics.load(m, q + L.TOP);
+    if (b - t >= capacity) throw new Error('cursor queue full');
+    const at = q + L.SLOTS + L.CURSOR * (b % capacity);
+    m[at] = pc; m[at + 1] = state; m[at + 2] = process; m[at + 3] = generation;
+    Atomics.store(m, q + L.BOTTOM, b + 1);
+  }
+
+  export function take(m: Int32Array, q: number, capacity: number, got: Int32Array): boolean {
+    const b = Atomics.sub(m, q + L.BOTTOM, 1) - 1;
+    const t = Atomics.load(m, q + L.TOP);
+    if (t > b) { Atomics.store(m, q + L.BOTTOM, t); return false; }
+    const at = q + L.SLOTS + L.CURSOR * (b % capacity);
+    got.set(m.subarray(at, at + L.CURSOR));
+    if (t === b) {
+      const won = Atomics.compareExchange(m, q + L.TOP, t, t + 1) === t;
+      Atomics.store(m, q + L.BOTTOM, t + 1);
+      return won;
+    }
+    return true;
+  }
+
+  export function steal(m: Int32Array, q: number, capacity: number, got: Int32Array): boolean {
+    const t = Atomics.load(m, q + L.TOP), b = Atomics.load(m, q + L.BOTTOM);
+    if (t >= b) return false;
+    const at = q + L.SLOTS + L.CURSOR * (t % capacity);
+    const cursor = m.slice(at, at + L.CURSOR);
+    if (Atomics.compareExchange(m, q + L.TOP, t, t + 1) !== t) return false;
+    got.set(cursor);
+    return true;
+  }
+}
+
+export class Program {
+  constructor(readonly key: string, readonly image: Int32Array, readonly regions: Map<string, number>) {}
+
+  static compile(project: Project, files: string[]): Program {
+    const text = files.map(file => {
+      const location = project.location(file);
+      if (!location.endsWith('.k2')) throw new Error(`'${file}': ${NAME} has no front end for this kind of file yet; Program.compile is where one goes (only .k2 assembly is read).`);
+      return project.read(location);
+    }).join('\n');
+    const built = Program.assemble(text);
+    return new Program(Program.hash(text), built.image, built.regions);
+  }
+
+  static hash(text: string): string {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+    return (h >>> 0).toString(16).padStart(8, '0') + text.length.toString(16);
+  }
+}
+
+export namespace Program {
+  export const MAGIC = 0x4b32, LENGTH = 1, REGIONS = 2, TABLE = 3;
+  export const N = 0, E = 1, X = 2, ENTRIES = 3;
+
+  export const JUMP = 1, IF = 2, FORK = 3, JOIN = 4, ENTER = 5, EXIT = 6, SET = 7,
+    ADD = 8, SUB = 9, MUL = 10, LT = 11, EQ = 12, SUPERPOSE = 13, SYS = 14, EACH = 15;
+
+  export const PRINT = 1;
+
+  export function size(m: Int32Array, pc: number): number {
+    switch (m[pc]) {
+      case JUMP: case JOIN: return 2;
+      case IF: return 5;
+      case FORK: return 3 + m[pc + 1];
+      case ENTER: { const ins = m[pc + 2], argc = m[pc + 3 + ins], outs = m[pc + 4 + ins + argc]; return 5 + ins + argc + 2 * outs; }
+      case EXIT: case SET: return 3;
+      case ADD: case SUB: case MUL: case LT: case EQ: case SUPERPOSE: return 4;
+      case SYS: return 4 + m[pc + 3];
+      case EACH: return 4;
+    }
+    throw new Error(`not an instruction: ${m[pc]} at ${pc}`);
+  }
+
+  export const region_at = (image: Int32Array, index: number) => image[TABLE + index];
+
+  export type Word = number | { label: string } | { region: string } | { constant: number };
+
+  export class Region {
+    code: Word[] = [];
+    labels = new Map<string, number>();
+    entries: string[] = [];
+    constructor(public name: string, public cells: number, public exits: number) {}
+    entry(label: string) { this.entries.push(label); return this; }
+    label(name: string) { this.labels.set(name, this.code.length); return this; }
+    op(...words: Word[]) { this.code.push(...words); return this; }
+  }
+
+  export class Assembler {
+    regions: Region[] = [];
+
+    region(name: string, cells: number, exits = 1) { const r = new Region(name, cells, exits); this.regions.push(r); return r; }
+
+    int(n: number): Word { return { constant: Word.int(n) }; }
+
+    build(): { image: Int32Array; regions: Map<string, number> } {
+      const index = new Map(this.regions.map((r, i) => [r.name, i]));
+      const constants = new Map<number, number>();
+      let at = TABLE + this.regions.length;
+      for (const r of this.regions) for (const w of r.code) if (typeof w === 'object' && 'constant' in w && !constants.has(w.constant)) constants.set(w.constant, at++);
+      const starts: number[] = [];
+      for (const r of this.regions) { starts.push(at); at += ENTRIES + r.entries.length + r.code.length; }
+      const image = new Int32Array(at);
+      image[0] = MAGIC; image[LENGTH] = at; image[REGIONS] = this.regions.length;
+      this.regions.forEach((_, i) => image[TABLE + i] = starts[i]);
+      for (const [value, address] of constants) image[address] = value;
+      this.regions.forEach((r, i) => {
+        const base = starts[i], code = base + ENTRIES + r.entries.length;
+        const label = (name: string) => { const pc = r.labels.get(name); if (pc === undefined) throw new Error(`no label ${name} in ${r.name}`); return code + pc; };
+        image[base + N] = r.cells; image[base + E] = r.entries.length; image[base + X] = r.exits;
+        r.entries.forEach((l, k) => image[base + ENTRIES + k] = label(l));
+        r.code.forEach((w, k) => {
+          image[code + k] = typeof w === 'number' ? w
+            : 'label' in w ? label(w.label)
+            : 'region' in w ? (index.get(w.region) ?? (() => { throw new Error(`no region ${w.region}`); })())
+            : -constants.get(w.constant)! - 1;
+        });
+      });
+      return { image, regions: index };
+    }
+  }
+
+  const binary: Record<string, number> = { add: ADD, sub: SUB, mul: MUL, lt: LT, eq: EQ, superpose: SUPERPOSE };
+
+  export function assemble(text: string): { image: Int32Array; regions: Map<string, number> } {
+    const a = new Assembler();
+    let r: Region | undefined;
+    const operand = (s: string): Word => {
+      if (s.startsWith('c')) return Number(s.slice(1));
+      if (s.startsWith('#')) return a.int(Number(s.slice(1)));
+      throw new Error(`not an operand: ${s}`);
+    };
+    const cell = (s: string) => s === '-' ? -1 : Number(s.slice(1));
+    const label = (s: string): Word => s === '-' ? -1 : { label: s };
+    const option = (parts: string[], key: string) => (parts.find(p => p.startsWith(key + '='))?.slice(key.length + 1) ?? '').split(',').filter(x => x !== '');
+
+    text.split('\n').forEach((line, n) => {
+      const words = line.replace(/;.*/, '').trim().split(/\s+/).filter(w => w !== '');
+      if (words.length === 0) return;
+      const [op, ...rest] = words;
+      try {
+        if (op === 'region') { r = a.region(rest[0], Number(option(rest, 'cells')[0] ?? 0), Number(option(rest, 'exits')[0] ?? 1)); return; }
+        if (r === undefined) throw new Error('outside a region');
+        if (op.endsWith(':')) { r.label(op.slice(0, -1)); return; }
+        if (op === 'entry') { r.entry(rest[0]); return; }
+        if (op === 'jump') { r.op(JUMP, label(rest[0])); return; }
+        if (op === 'if') { r.op(IF, operand(rest[0]), label(rest[1]), label(rest[2]), label(rest[3] ?? '-')); return; }
+        if (op === 'fork') { const targets = rest[0].split(','); r.op(FORK, targets.length, ...targets.map(label), label(rest[1] ?? '-')); return; }
+        if (op === 'join') { r.op(JOIN, label(rest[0])); return; }
+        if (op === 'exit') { r.op(EXIT, Number(rest[0]), operand(rest[1])); return; }
+        if (op === 'set') { r.op(SET, cell(rest[0]), operand(rest[1])); return; }
+        if (op in binary) { r.op(binary[op], cell(rest[0]), operand(rest[1]), operand(rest[2])); return; }
+        if (op === 'print') { r.op(SYS, -1, PRINT, 1, operand(rest[0])); return; }
+        if (op === 'each') { r.op(EACH, cell(rest[0]), { region: rest[1] }, operand(rest[2])); return; }
+        if (op === 'enter') {
+          const ins = option(rest, 'in').map(Number), args = option(rest, 'args').map(operand);
+          const outs = option(rest, 'out').map(o => o.split(':'));
+          r.op(ENTER, { region: rest[0] }, ins.length, ...ins, args.length, ...args, outs.length, ...outs.flatMap(([l, c]) => [label(l), cell(c ?? '-')]));
+          return;
+        }
+        throw new Error(`unknown instruction ${op}`);
+      } catch (e) {
+        throw new Error(`line ${n + 1}: ${(e as Error).message}`);
+      }
+    });
+    return a.build();
+  }
+}
+
+const { int, kind, address, ref, REF, NOTHING, UNRESOLVED, truthy } = Word;
+const { JUMP, IF, FORK, JOIN, ENTER, EXIT, SET, ADD, SUB, MUL, LT, EQ, SUPERPOSE, SYS, EACH } = Program;
+
+const BASE = 0, REGION = 1, ACT = 2, GROUP = 3, SOURCES = 4, OWNER = 5, GEN = 6, SH = 7;
+const PENDING = 0, PARENT = 1, SITE = 2, LOG = 3, AH = 4, MAX_LOG = 256;
+const REMAINING = 0, ARRIVED = 1, AFTER = 2, OUTER = 3, GH = 4, MAX_GROUP = 64;
+const GONE = 0, YIELDED = 1, PARKED = 2;
+
+export class Machine {
+  pc = 0;
+  state = 0;
+
+  constructor(public m: Int32Array, public layout: Layout.Plan, public queue: number, public ring: number) {}
+
+  spawn(pc: number, state: number) {
+    Queue.add(this.m, this.queue, this.layout.queue, pc, state, this.m[state + OWNER], this.m[state + GEN]);
+    Atomics.add(this.m, L.WAKE, 1);
+    Atomics.notify(this.m, L.WAKE, 1);
+  }
+
+  get(state: number, o: number): number {
+    const m = this.m;
+    if (o < 0) return m[m[state + BASE] - o - 1];
+    const at = state + SH + o;
+    if (m[at] === UNRESOLVED) m[at] = this.resolve(state, o);
+    return m[at];
+  }
+
+  set(state: number, o: number, v: number) { if (o >= 0) this.m[state + SH + o] = v; }
+
+  resolve(state: number, k: number): number {
+    const m = this.m, sources = m[state + SOURCES], values: number[] = [];
+    for (let i = 0; i < m[sources]; i++) {
+      const v = this.get(m[sources + 1 + i], k);
+      if (v !== NOTHING) values.push(v);
+    }
+    return this.superpose(m[state + OWNER], values);
+  }
+
+  components(v: number): number[] {
+    if (kind(v) !== REF) return [v];
+    const at = address(v), n = this.m[at];
+    return Array.from(this.m.subarray(at + 1, at + 1 + n));
+  }
+
+  superpose(process: number, values: number[]): number {
+    const all: number[] = [];
+    for (const v of values) for (const c of this.components(v)) if (!all.includes(c)) all.push(c);
+    if (all.length === 0) return NOTHING;
+    if (all.length === 1) return all[0];
+    const at = L.alloc(this.m, process, 1 + all.length);
+    this.m[at] = all.length;
+    this.m.set(all, at + 1);
+    return ref(at);
+  }
+
+  region_of(base: number, index: number) { return base + this.m[base + Program.TABLE + index]; }
+
+  make_state(process: number, base: number, region: number, act: number): number {
+    const m = this.m, n = m[region + Program.N], s = L.alloc(m, process, SH + n);
+    m[s + BASE] = base; m[s + REGION] = region; m[s + ACT] = act; m[s + GROUP] = 0; m[s + SOURCES] = 0; m[s + OWNER] = process; m[s + GEN] = m[process + L.GENERATION];
+    m.fill(NOTHING, s + SH, s + SH + n);
+    return s;
+  }
+
+  copy(state: number): number {
+    const m = this.m, n = m[m[state + REGION] + Program.N];
+    const s = this.make_state(m[state + OWNER], m[state + BASE], m[state + REGION], m[state + ACT]);
+    m[s + GROUP] = m[state + GROUP];
+    for (let k = 0; k < n; k++) m[s + SH + k] = this.get(state, k);
+    return s;
+  }
+
+  activation(process: number, parent: number, site: number): number {
+    const a = L.alloc(this.m, process, AH + 2 * MAX_LOG);
+    this.m[a + PENDING] = 0; this.m[a + PARENT] = parent; this.m[a + SITE] = site; this.m[a + LOG] = 0;
+    return a;
+  }
+
+  fork(state: number, targets: number[], next: number): number {
+    const m = this.m, g = L.alloc(m, m[state + OWNER], GH + MAX_GROUP);
+    m[g + REMAINING] = targets.length; m[g + ARRIVED] = 0; m[g + AFTER] = next; m[g + OUTER] = m[state + GROUP];
+    Atomics.add(m, m[state + ACT] + PENDING, targets.length - 1);
+    for (let i = targets.length - 1; i >= 1; i--) { const s = this.copy(state); m[s + GROUP] = g; this.spawn(targets[i], s); }
+    m[state + GROUP] = g;
+    return targets[0];
+  }
+
+  arrive(state: number): number {
+    const m = this.m, g = m[state + GROUP];
+    if (g === 0) return state;
+    const i = Atomics.add(m, g + ARRIVED, 1);
+    if (i >= MAX_GROUP) throw new Error('too many branches at one join');
+    Atomics.store(m, g + GH + i, state);
+    if (Atomics.sub(m, g + REMAINING, 1) !== 1) return 0;
+    return this.merge(g);
+  }
+
+  leave(state: number) {
+    const m = this.m;
+    for (let g = m[state + GROUP]; g !== 0; g = m[g + OUTER]) {
+      if (Atomics.sub(m, g + REMAINING, 1) !== 1) return;
+      if (Atomics.load(m, g + ARRIVED) > 0) { const merged = this.merge(g); this.spawn(m[g + AFTER], merged); return; }
+    }
+  }
+
+  merge(g: number): number {
+    const m = this.m, n = Atomics.load(m, g + ARRIVED), first = m[g + GH];
+    Atomics.sub(m, m[first + ACT] + PENDING, n - 1);
+    if (n === 1) { m[first + GROUP] = m[g + OUTER]; return first; }
+    const s = this.make_state(m[first + OWNER], m[first + BASE], m[first + REGION], m[first + ACT]);
+    const sources = L.alloc(m, m[first + OWNER], 1 + n);
+    m[sources] = n;
+    for (let i = 0; i < n; i++) m[sources + 1 + i] = m[g + GH + i];
+    m[s + SOURCES] = sources; m[s + GROUP] = m[g + OUTER];
+    m.fill(UNRESOLVED, s + SH, s + SH + m[m[first + REGION] + Program.N]);
+    return s;
+  }
+
+  enter(state: number, site: number): number {
+    const m = this.m, base = m[state + BASE], process = m[state + OWNER];
+    const callee = this.region_of(base, m[site + 1]), ins = m[site + 2], argc = m[site + 3 + ins];
+    const act = this.activation(process, state, site), s = this.make_state(process, base, callee, act);
+    for (let k = 0; k < argc; k++) this.set(s, k, this.get(state, m[site + 4 + ins + k]));
+    m[act + PENDING] = ins;
+    for (let i = ins - 1; i >= 1; i--) this.spawn(base + m[callee + Program.ENTRIES + m[site + 3 + i]], this.copy(s));
+    this.state = s;
+    return base + m[callee + Program.ENTRIES + m[site + 3]];
+  }
+
+  exit(state: number, k: number, v: number) {
+    const m = this.m, act = m[state + ACT], i = Atomics.add(m, act + LOG, 1);
+    if (i >= MAX_LOG) throw new Error('too many exits from one activation');
+    m[act + AH + 2 * i] = k; m[act + AH + 2 * i + 1] = v;
+    this.end(state);
+  }
+
+  end(state: number) {
+    this.leave(state);
+    const act = this.m[state + ACT];
+    if (Atomics.sub(this.m, act + PENDING, 1) === 1) this.collapse(act, this.m[state + GEN]);
+  }
+
+  collapse(act: number, generation: number) {
+    const m = this.m, parent = m[act + PARENT], site = m[act + SITE], n = m[act + LOG];
+    const reached = new Map<number, number[]>();
+    for (let i = 0; i < n; i++) { const k = m[act + AH + 2 * i]; (reached.get(k) ?? reached.set(k, []).get(k)!).push(m[act + AH + 2 * i + 1]); }
+    if (parent === 0) { this.finished(act, generation, [...reached.values()].flat()); return; }
+    const base = m[parent + BASE], ins = m[site + 2], argc = m[site + 3 + ins], outs = m[site + 4 + ins + argc], table = site + 5 + ins + argc;
+    const taken = [...reached.keys()].filter(k => k < outs).sort((a, b) => a - b);
+    if (taken.length === 0) { this.end(parent); return; }
+    Atomics.add(m, m[parent + ACT] + PENDING, taken.length - 1);
+    if (m[parent + GROUP] !== 0) Atomics.add(m, m[parent + GROUP] + REMAINING, taken.length - 1);
+    taken.forEach((k, i) => {
+      const s = i === 0 ? parent : this.copy(parent);
+      this.set(s, m[table + 2 * k + 1], this.superpose(m[parent + OWNER], reached.get(k)!));
+      this.spawn(base + m[table + 2 * k], s);
+    });
+  }
+
+  finished(act: number, generation: number, values: number[]) {
+    const m = this.m, process = m[act + SITE];
+    m[process + L.RESULT] = this.superpose(process, values);
+    this.request(L.FINISHED, process, 0, 0, -1, [], generation);
+  }
+
+  request(code: number, process: number, pc: number, state: number, dst: number, args: number[], generation = this.m[state + GEN]) {
+    const m = this.m, ring = this.ring, tail = m[ring + L.TAIL];
+    while (tail - Atomics.load(m, ring + L.HEAD) >= this.layout.ring) Atomics.wait(m, L.SERVE, Atomics.load(m, L.SERVE), 1);
+    const at = ring + 2 + (tail % this.layout.ring) * L.REQUEST;
+    m[at + L.CODE] = code; m[at + L.PROCESS] = process; m[at + L.PC] = pc; m[at + L.STATE] = state; m[at + L.DST] = dst; m[at + L.ARGC] = args.length; m[at + L.GENERATION_OF] = generation;
+    for (let i = 0; i < Math.min(args.length, L.MAX_ARGS); i++) m[at + L.ARGS + i] = args[i];
+    Atomics.store(m, ring + L.TAIL, tail + 1);
+    Atomics.add(m, L.SERVE, 1);
+    Atomics.notify(m, L.SERVE);
+  }
+
+  binary(process: number, op: number, a: number, b: number): number {
+    const f = (x: number, y: number) => x === NOTHING || y === NOTHING ? NOTHING
+      : op === ADD ? x + y : op === SUB ? x - y : op === MUL ? int((x >> 2) * (y >> 2)) : op === LT ? int(x < y ? 1 : 0) : int(x === y ? 1 : 0);
+    if (kind(a) !== REF && kind(b) !== REF) return f(a, b);
+    const out: number[] = [];
+    for (const x of this.components(a)) for (const y of this.components(b)) out.push(f(x, y));
+    return this.superpose(process, out);
+  }
+
+  run(pc: number, state: number, budget: number): number {
+    const m = this.m, process = m[state + OWNER], start = budget;
+    const counted = (result: number) => { Atomics.add(m, process + L.STEPS, start - budget + (result === YIELDED ? 0 : 1)); return result; };
+    for (; budget > 0; budget--) {
+      const base = m[state + BASE];
+      switch (m[pc]) {
+        case JUMP: pc = base + m[pc + 1]; continue;
+        case IF: {
+          const c = this.get(state, m[pc + 1]), ways = new Set(this.components(c).map(truthy));
+          if (ways.size === 1) { pc = base + m[pc + (ways.has(true) ? 2 : 3)]; continue; }
+          pc = this.fork(state, [base + m[pc + 2], base + m[pc + 3]], base + m[pc + 4]);
+          continue;
+        }
+        case FORK: {
+          const n = m[pc + 1], targets = Array.from({ length: n }, (_, i) => base + m[pc + 2 + i]);
+          pc = this.fork(state, targets, base + m[pc + 2 + n]);
+          continue;
+        }
+        case JOIN: {
+          const merged = this.arrive(state);
+          if (merged === 0) return counted(GONE);
+          state = merged; pc = base + m[pc + 1];
+          continue;
+        }
+        case ENTER: pc = this.enter(state, pc); state = this.state; continue;
+        case EXIT: this.exit(state, m[pc + 1], this.get(state, m[pc + 2])); return counted(GONE);
+        case SET: this.set(state, m[pc + 1], this.get(state, m[pc + 2])); pc += 3; continue;
+        case ADD: case SUB: case MUL: case LT: case EQ:
+          this.set(state, m[pc + 1], this.binary(m[state + OWNER], m[pc], this.get(state, m[pc + 2]), this.get(state, m[pc + 3]))); pc += 4; continue;
+        case SUPERPOSE: this.set(state, m[pc + 1], this.superpose(m[state + OWNER], [this.get(state, m[pc + 2]), this.get(state, m[pc + 3])])); pc += 4; continue;
+        case SYS: {
+          const argc = m[pc + 3], args = Array.from({ length: argc }, (_, i) => this.get(state, m[pc + 4 + i]));
+          this.request(m[pc + 2], m[state + OWNER], pc + Program.size(m, pc), state, m[pc + 1], args);
+          return counted(PARKED);
+        }
+        case EACH:
+          this.request(L.EACH_CALL, m[state + OWNER], pc + 4, state, m[pc + 1], [this.region_of(base, m[pc + 2]), this.get(state, m[pc + 3])]);
+          return counted(PARKED);
+        default: throw new Error(`not an instruction: ${m[pc]} at ${pc}`);
+      }
+    }
+    this.pc = pc; this.state = state;
+    return counted(YIELDED);
+  }
+}
+
+export namespace Workers {
+  export type Report = (process: number, error: string) => void;
+
+  export function work(m: Int32Array, layout: Layout.Plan, id: number, report: Report) {
+    const machine = new Machine(m, layout, layout.queues[id], layout.rings[id]), got = new Int32Array(L.CURSOR);
+    const others = layout.queues.filter((_, w) => w !== id), epoch = layout.epochs + id;
+    for (let count = 0; ; count++) {
+      if (Atomics.load(m, L.STOP) !== 0) return;
+      const awake = Atomics.load(m, L.WAKE);
+      const found = Queue.take(m, layout.queues[id], layout.queue, got) || Queue.steal(m, layout.injection, layout.queue, got) || others.some(q => Queue.steal(m, q, layout.queue, got));
+      if (!found) { Atomics.wait(m, L.WAKE, awake, 1000); continue; }
+      Atomics.store(m, epoch, (count << 1) | 1);
+      cursor(machine, got, layout.queues[id], report);
+      Atomics.store(m, epoch, (count + 1) << 1);
+    }
+  }
+
+  export function pump(machine: Machine, until: number, serve: () => void, report: Report): boolean {
+    const { m, layout } = machine, got = new Int32Array(L.CURSOR);
+    while (Queue.take(m, machine.queue, layout.queue, got)) {
+      cursor(machine, got, machine.queue, report);
+      serve();
+      if (performance.now() >= until) return true;
+    }
+    serve();
+    return false;
+  }
+
+  function cursor(machine: Machine, [pc, state, process, generation]: Int32Array, queue: number, report: Report) {
+    const m = machine.m;
+    if (m[process + L.STATUS] !== L.RUNNING || m[process + L.GENERATION] !== generation) return;
+    try {
+      if (machine.run(pc, state, config.memory.quantum) === YIELDED) Queue.add(m, queue, machine.layout.queue, machine.pc, machine.state, process, generation);
+    } catch (e) {
+      report(process, `${(e as Error).stack ?? e}\n`);
+    }
+  }
+}
+
+export namespace Lanes {
+  export const MAX_CELLS = 32, BUDGET = 1 << 20;
+
+  const operations = new Set([JUMP, IF, EXIT, SET, ADD, SUB, MUL, LT, EQ]);
+
+  export function eligible(image: Int32Array, region: number): boolean {
+    if (image[region + Program.N] > MAX_CELLS) return false;
+    const seen = new Set<number>(), todo = [image[region + Program.ENTRIES]];
+    while (todo.length > 0) {
+      const pc = todo.pop()!;
+      if (seen.has(pc)) continue;
+      seen.add(pc);
+      const op = image[pc];
+      if (!operations.has(op)) return false;
+      if (op === JUMP) todo.push(image[pc + 1]);
+      else if (op === IF) todo.push(image[pc + 2], image[pc + 3]);
+      else if (op !== EXIT) todo.push(pc + Program.size(image, pc));
+    }
+    return true;
+  }
+
+  export function run(image: Int32Array, region: number, inputs: Int32Array): Int32Array {
+    const out = new Int32Array(2 * inputs.length), cells = new Int32Array(MAX_CELLS);
+    for (let lane = 0; lane < inputs.length; lane++) {
+      cells.fill(NOTHING); cells[0] = inputs[lane];
+      const get = (o: number) => o < 0 ? image[-o - 1] : cells[o];
+      let pc = image[region + Program.ENTRIES];
+      out[2 * lane] = -1;
+      for (let step = 0; step < BUDGET; step++) {
+        const op = image[pc];
+        if (op === JUMP) { pc = image[pc + 1]; continue; }
+        if (op === IF) { pc = truthy(get(image[pc + 1])) ? image[pc + 2] : image[pc + 3]; continue; }
+        if (op === EXIT) { out[2 * lane] = image[pc + 1]; out[2 * lane + 1] = get(image[pc + 2]); break; }
+        if (op === SET) { cells[image[pc + 1]] = get(image[pc + 2]); pc += 3; continue; }
+        const a = get(image[pc + 2]), b = get(image[pc + 3]);
+        cells[image[pc + 1]] = op === ADD ? a + b : op === SUB ? a - b : op === MUL ? int((a >> 2) * (b >> 2)) : op === LT ? int(a < b ? 1 : 0) : int(a === b ? 1 : 0);
+        pc += 4;
+      }
+    }
+    return out;
+  }
+
+  export const shader = /* wgsl */ `
+struct Params { region: i32, lanes: i32, budget: i32, unused: i32 }
+
+@group(0) @binding(0) var<storage, read> image: array<i32>;
+@group(0) @binding(1) var<storage, read> inputs: array<i32>;
+@group(0) @binding(2) var<storage, read_write> outputs: array<i32>;
+@group(0) @binding(3) var<uniform> params: Params;
+
+var<private> cells: array<i32, 32>;
+
+fn operand(o: i32) -> i32 {
+  if (o < 0) { return image[-o - 1]; }
+  return cells[o];
+}
+
+fn truthy(w: i32) -> bool { return w != 0 && w != 2; }
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+  let lane = i32(id.x);
+  if (lane >= params.lanes) { return; }
+  for (var k = 0; k < 32; k++) { cells[k] = 2; }
+  cells[0] = inputs[lane];
+  var pc = image[params.region + 3];
+  outputs[2 * lane] = -1;
+  for (var step = 0; step < params.budget; step++) {
+    let op = image[pc];
+    switch op {
+      case 1: { pc = image[pc + 1]; }
+      case 2: { if (truthy(operand(image[pc + 1]))) { pc = image[pc + 2]; } else { pc = image[pc + 3]; } }
+      case 6: { outputs[2 * lane] = image[pc + 1]; outputs[2 * lane + 1] = operand(image[pc + 2]); return; }
+      case 7: { cells[image[pc + 1]] = operand(image[pc + 2]); pc += 3; }
+      case 8: { cells[image[pc + 1]] = operand(image[pc + 2]) + operand(image[pc + 3]); pc += 4; }
+      case 9: { cells[image[pc + 1]] = operand(image[pc + 2]) - operand(image[pc + 3]); pc += 4; }
+      case 10: { cells[image[pc + 1]] = ((operand(image[pc + 2]) >> 2u) * (operand(image[pc + 3]) >> 2u)) << 2u; pc += 4; }
+      case 11: { cells[image[pc + 1]] = select(0, 4, operand(image[pc + 2]) < operand(image[pc + 3])); pc += 4; }
+      case 12: { cells[image[pc + 1]] = select(0, 4, operand(image[pc + 2]) == operand(image[pc + 3])); pc += 4; }
+      default: { outputs[2 * lane] = -2; return; }
+    }
+  }
+}
+`;
+}
+
+export class Gpu {
+  private images = new Map<Int32Array, any>();
+
+  private constructor(private device: any, private pipeline: any) {}
+
+  static async create(): Promise<Gpu | undefined> {
+    const gpu = (globalThis as any).navigator?.gpu;
+    const adapter = await gpu?.requestAdapter();
+    if (adapter === undefined || adapter === null) return undefined;
+    const device = await adapter.requestDevice();
+    const module = device.createShaderModule({ code: Lanes.shader });
+    const errors = (await module.getCompilationInfo()).messages.filter((m: any) => m.type === 'error');
+    if (errors.length > 0) throw new Error('lanes shader: ' + errors.map((m: any) => `${m.lineNum}: ${m.message}`).join('; '));
+    const pipeline = device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'main' } });
+    return new Gpu(device, pipeline);
+  }
+
+  private buffer(data: Int32Array, usage: number) {
+    const b = this.device.createBuffer({ size: Math.max(16, data.byteLength), usage, mappedAtCreation: true });
+    new Int32Array(b.getMappedRange()).set(data);
+    b.unmap();
+    return b;
+  }
+
+  async lanes(image: Int32Array, region: number, inputs: Int32Array): Promise<Int32Array> {
+    const d = this.device, U = (globalThis as any).GPUBufferUsage;
+    let program = this.images.get(image);
+    if (program === undefined) this.images.set(image, program = this.buffer(image, U.STORAGE));
+    const input = this.buffer(inputs, U.STORAGE);
+    const bytes = 8 * inputs.length;
+    const output = d.createBuffer({ size: bytes, usage: U.STORAGE | U.COPY_SRC });
+    const read = d.createBuffer({ size: bytes, usage: U.MAP_READ | U.COPY_DST });
+    const params = this.buffer(new Int32Array([region, inputs.length, Lanes.BUDGET, 0]), U.UNIFORM);
+    const group = d.createBindGroup({ layout: this.pipeline.getBindGroupLayout(0), entries: [program, input, output, params].map((buffer, binding) => ({ binding, resource: { buffer } })) });
+    const encoder = d.createCommandEncoder(), pass = encoder.beginComputePass();
+    pass.setPipeline(this.pipeline); pass.setBindGroup(0, group);
+    pass.dispatchWorkgroups(Math.ceil(inputs.length / 64));
+    pass.end();
+    encoder.copyBufferToBuffer(output, 0, read, 0, bytes);
+    d.queue.submit([encoder.finish()]);
+    await read.mapAsync((globalThis as any).GPUMapMode.READ);
+    const out = new Int32Array(read.getMappedRange().slice(0));
+    read.unmap();
+    for (const b of [input, output, read, params]) b.destroy();
+    return out;
+  }
+}
+
+export class Environment {
+  readonly m: Int32Array;
+  readonly layout: Layout.Plan;
+  readonly machine: Machine;
+  private readonly bases = new Map<string, { program: Program; base: number }>();
+  private readonly running = new Map<number, { project: Project; io: Environment.IO; resolve: (result: Environment.Result) => void; arena: number }>();
+  private readonly arenas: number[] = [];
+  private readonly retiring: { process: number; arena: number; epochs: number[] }[] = [];
+  private readonly threads: Thread[] = [];
+  private serving = false;
+  private gpu?: Promise<Gpu | undefined>;
+
+  constructor(readonly host: Host) {
+    this.m = host.memory(config.memory.words);
+    this.layout = Layout.plan({ workers: Math.max(1, host.threads), words: config.memory.words });
+    this.m[L.HEAP] = this.layout.heap;
+    this.machine = new Machine(this.m, this.layout, this.layout.injection, this.layout.rings[0]);
+  }
+
+  private workers(): void {
+    while (this.threads.length < this.host.threads) {
+      const id = this.threads.length;
+      const thread = this.host.spawn({
+        message: ({ process, error }) => this.fail(process, error),
+        exit: failure => { for (const process of [...this.running.keys()]) this.fail(process, failure || `${NAME}'s worker ${id} exited.\n`); },
+      });
+      thread.post({ memory: this.m.buffer, layout: this.layout, id });
+      this.threads.push(thread);
+    }
+  }
+
+  load(program: Program): number {
+    const known = this.bases.get(program.key);
+    if (known !== undefined) return known.base;
+    const base = L.heap(this.m, program.image.length);
+    this.m.set(program.image, base);
+    this.bases.set(program.key, { program, base });
+    return base;
+  }
+
+  start(program: Program, region: string, project: Project, io: Environment.IO): Promise<Environment.Result> {
+    this.release();
+    const m = this.m, slot = [...Array(this.layout.processes).keys()].find(i => m[L.process_at(this.layout, i) + L.STATUS] === L.FREE);
+    if (slot === undefined) throw new Error('no free process');
+    const index = program.regions.get(region);
+    if (index === undefined) throw new Error(`no region ${region}`);
+    this.workers();
+    const base = this.load(program), process = L.process_at(this.layout, slot), arena = this.arenas.pop() ?? L.heap(m, config.memory.arena);
+    m[process + L.GENERATION]++;
+    m[process + L.STATUS] = L.RUNNING; m[process + L.LIVE] = 0; m[process + L.RESULT] = NOTHING; m[process + L.STEPS] = 0;
+    m[process + L.ARENA] = arena; m[process + L.NEXT] = arena; m[process + L.END] = arena + config.memory.arena;
+    const at = base + Program.region_at(program.image, index);
+    const act = this.machine.activation(process, 0, process), state = this.machine.make_state(process, base, at, act);
+    const entries = m[at + Program.E];
+    m[act + PENDING] = entries;
+    const done = new Promise<Environment.Result>(resolve => this.running.set(process, { project, io, resolve, arena }));
+    project.bind(this, process);
+    for (let e = 0; e < entries; e++) this.ready(base + m[at + Program.ENTRIES + e], e === 0 ? state : this.machine.copy(state));
+    this.serve();
+    return done;
+  }
+
+  cancel(process: number): void {
+    if (!this.running.has(process)) return;
+    this.m[process + L.STATUS] = L.CANCELLED;
+    this.finish(process, 'cancelled', []);
+  }
+
+  private fail(process: number, error: string): void {
+    const running = this.running.get(process);
+    if (running === undefined) return;
+    running.io.err(error);
+    this.m[process + L.STATUS] = L.CANCELLED;
+    this.finish(process, 'failed', []);
+  }
+
+  private finish(process: number, status: Environment.Result['status'], values: number[]): void {
+    const running = this.running.get(process);
+    if (running === undefined) return;
+    const m = this.m, counters = { steps: m[process + L.STEPS], memory: 4 * (m[process + L.NEXT] - m[process + L.ARENA]), cursors: 0 };
+    const shown = values.map(v => this.show(v)).join(' | ');
+    this.running.delete(process);
+    m[process + L.STATUS] = L.DONE;
+    this.retiring.push({ process, arena: running.arena, epochs: this.threads.map((_, id) => Atomics.load(m, this.layout.epochs + id)) });
+    this.release();
+    running.project.unbind(counters);
+    running.resolve({ status, values, shown, ...counters });
+  }
+
+  private release(): void {
+    const m = this.m;
+    for (let i = this.retiring.length - 1; i >= 0; i--) {
+      const { process, arena, epochs } = this.retiring[i];
+      const quiet = epochs.every((seen, id) => { const now = Atomics.load(m, this.layout.epochs + id); return now !== seen || (now & 1) === 0; });
+      if (!quiet) continue;
+      this.retiring.splice(i, 1);
+      this.arenas.push(arena);
+      m[process + L.STATUS] = L.FREE;
+    }
+  }
+
+  private ready(pc: number, state: number): void {
+    Queue.add(this.m, this.layout.injection, this.layout.queue, pc, state, this.m[state + OWNER], this.m[state + GEN]);
+    Atomics.add(this.m, L.WAKE, 1);
+    Atomics.notify(this.m, L.WAKE);
+  }
+
+  private async serve(): Promise<void> {
+    if (this.serving) return;
+    this.serving = true;
+    const report: Workers.Report = (process, error) => this.fail(process, error);
+    while (this.running.size > 0) {
+      if (this.host.threads === 0) {
+        const busy = Workers.pump(this.machine, performance.now() + config.memory.slice, () => this.answer(), report);
+        await new Promise(resolve => setTimeout(resolve, busy ? 0 : 1));
+        continue;
+      }
+      const seen = Atomics.load(this.m, L.SERVE);
+      this.answer();
+      this.release();
+      if (this.running.size > 0) await this.idle(seen);
+    }
+    this.serving = false;
+  }
+
+  private async idle(seen: number): Promise<void> {
+    const wait = (Atomics as any).waitAsync;
+    const result = wait !== undefined && typeof SharedArrayBuffer !== 'undefined' && this.m.buffer instanceof SharedArrayBuffer ? wait(this.m, L.SERVE, seen, 100) : { async: true, value: undefined };
+    if (!result.async) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([result.value, new Promise(resolve => timer = setTimeout(resolve, result.value === undefined ? 1 : 100))]);
+    clearTimeout(timer);
+  }
+
+  private answer(): void {
+    const m = this.m;
+    for (const ring of this.layout.rings) {
+      for (let head = m[ring + L.HEAD]; head < Atomics.load(m, ring + L.TAIL); head++) {
+        const at = ring + 2 + (head % this.layout.ring) * L.REQUEST, code = m[at + L.CODE], process = m[at + L.PROCESS];
+        const args = Array.from(m.subarray(at + L.ARGS, at + L.ARGS + m[at + L.ARGC]));
+        const pc = m[at + L.PC], state = m[at + L.STATE], dst = m[at + L.DST], current = m[at + L.GENERATION_OF] === m[process + L.GENERATION];
+        Atomics.store(m, ring + L.HEAD, head + 1);
+        if (!current) continue;
+        if (code === L.FINISHED) { if (this.running.has(process)) this.finish(process, 'done', this.machine.components(m[process + L.RESULT])); continue; }
+        if (m[process + L.STATUS] !== L.RUNNING) continue;
+        if (code === Program.PRINT) { this.running.get(process)?.io.out(this.show(args[0]) + '\n'); this.resume(pc, state, dst, args[0]); continue; }
+        if (code === L.EACH_CALL) { this.each(process, m[at + L.GENERATION_OF], pc, state, dst, args[0], args[1]); continue; }
+        this.fail(process, `unknown system call ${code}\n`);
+      }
+    }
+  }
+
+  private resume(pc: number, state: number, dst: number, value: number): void {
+    if (dst >= 0) this.m[state + SH + dst] = value;
+    this.ready(pc, state);
+  }
+
+  private async each(process: number, generation: number, pc: number, state: number, dst: number, region: number, value: number): Promise<void> {
+    const loaded = [...this.bases.values()].find(({ program, base }) => region >= base && region < base + program.image.length);
+    if (loaded === undefined) return this.fail(process, `each: no program holds region ${region}\n`);
+    const inputs = Int32Array.from(this.machine.components(value)), at = region - loaded.base;
+    if (!Lanes.eligible(loaded.program.image, at)) return this.fail(process, 'each: the region does not run as lanes (calls, forks or system calls)\n');
+    const gpu = inputs.length >= config.memory.gpu ? await (this.gpu ??= Gpu.create().catch((): undefined => undefined)) : undefined;
+    const out = gpu !== undefined ? await gpu.lanes(loaded.program.image, at, inputs) : Lanes.run(loaded.program.image, at, inputs);
+    if (this.m[process + L.STATUS] !== L.RUNNING || this.m[process + L.GENERATION] !== generation) return;
+    const values: number[] = [];
+    for (let lane = 0; lane < inputs.length; lane++) if (out[2 * lane] >= 0) values.push(out[2 * lane + 1]);
+    this.resume(pc, state, dst, this.machine.superpose(process, values));
+    this.serve();
+  }
+
+  show(v: number): string {
+    if (kind(v) === REF) return this.machine.components(v).map(c => this.show(c)).join(' | ');
+    if (kind(v) === Word.SPECIAL) return v === NOTHING ? 'nothing' : 'unresolved';
+    return String(Word.integer(v));
+  }
+
+  stop(): void {
+    Atomics.store(this.m, L.STOP, 1);
+    Atomics.notify(this.m, L.WAKE);
+    for (const thread of this.threads) thread.terminate();
+  }
+}
+
+export namespace Environment {
+  export type IO = { out(text: string): void; err(text: string): void };
+  export type Result = { status: 'done' | 'cancelled' | 'failed'; values: number[]; shown: string; steps: number; memory: number; cursors: number };
+}
+
+if (env.worker) Daemon.worker(env.port);
+else if (env.scope === 'daemon') Browser.serve(env.port);
+else if (env.scope === 'shared') Browser.shared();
+else if (env.is_main_entrypoint) main();

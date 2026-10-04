@@ -8,7 +8,7 @@ import {
   FileChangeType,
   type InitializeParams,
   type InitializeResult,
-} from 'vscode-languageserver/node';
+} from 'vscode-languageserver/node.js';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Ray } from '../language.ts';
 import type { Program } from '../language/program.ts';
@@ -29,14 +29,13 @@ import * as features from './features.ts';
  * whenever any file's diagnostics are fresh; we publish straight out of the
  * per-file index on `log.diagnostics.items`.
  */
-export async function start(program: Program): Promise<void> {
+export async function start(program: Program, io?: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream }, options: { paint?: boolean } = {}): Promise<void> {
   await program.abstract().exec();
-  void program.paint_all();
   // the legend: whatever groups the language declared on H — fixed for the
   // session once capabilities go out
   const groups = program.groups;
 
-  const connection = createConnection(ProposedFeatures.all);
+  const connection = io === undefined ? createConnection(ProposedFeatures.all) : createConnection(ProposedFeatures.all, io.input, io.output);
   const documents = new TextDocuments(TextDocument);
 
   const uriToFile = (uri: string): string => {
@@ -300,5 +299,6 @@ export async function start(program: Program): Promise<void> {
   });
 
   documents.listen(connection);
+  if (options.paint !== false) connection.onInitialized(() => { void program.paint_all(); });
   connection.listen();
 }

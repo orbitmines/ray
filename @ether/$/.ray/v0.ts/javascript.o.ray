@@ -1,0 +1,21 @@
+Compiler.javascript := {
+  if {cond} {yes} => javascript if ({cond}) { {yes} }
+  while {cond} {block} => javascript while ({cond}) { {block} }
+  ({cond} as boolean).holds => javascript ({cond})
+  {name} := {value} => javascript {name} = {value};
+  {name} = {value} => javascript {name} = {value};
+  ({expr}) => javascript ({expr})
+  {a} + {b} => javascript ({a} + {b})
+  {a} - {b} => javascript ({a} - {b})
+  {a} * {b} => javascript ({a} * {b})
+  {a} / {b} => javascript ({a} / {b})
+  {a} % {b} => javascript ({a} % {b})
+  {a} < {b} => javascript ({a} < {b})
+  {a} > {b} => javascript ({a} > {b})
+  {a} <= {b} => javascript ({a} <= {b})
+  {a} >= {b} => javascript ({a} >= {b})
+  {a} == {b} => javascript ({a} === {b})
+  {a} != {b} => javascript ({a} !== {b})
+}
+
+javascript {literal code} ^keyword => external javascript code

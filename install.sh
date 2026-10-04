@@ -17,7 +17,8 @@ NAME="ether"
 ALIASES="ray orbitmines"
 TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-msvc"
 ENTRY='@ether/$/.ray/v0.ts/src/kernel3/language.ts'
-INCLUDES=('LICENSE' '@ether/$/.ray/v0')
+CONFIG='@ether/$/.ray/v0.ts/deno.npm.json'
+INCLUDES=('LICENSE' '@ether/$/.ray/v0' '@ether/$/.ray/v0.ts/javascript.o.ray')
 MARKER="# Added by the Ether installer"
 
 usage() {
@@ -133,7 +134,7 @@ compile() { # compile <target> <dir>: the executable for <target> in <dir>
   need_deno
   for i in "${INCLUDES[@]}"; do includes+=(--include "$i"); done
   say "Compiling $NAME for $1 ..."
-  (cd "$root" && deno compile -A --no-check --no-config --quiet "${includes[@]}" --target "$1" --output "$2/$(executable "$1" "$NAME")" "$ENTRY") \
+  (cd "$root" && deno compile -A --no-check --config "$CONFIG" --quiet "${includes[@]}" --target "$1" --output "$2/$(executable "$1" "$NAME")" "$ENTRY") \
     || fail "compiling for $1 failed"
 }
 

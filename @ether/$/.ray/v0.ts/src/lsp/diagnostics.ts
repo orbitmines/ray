@@ -2,7 +2,7 @@ import {
   Diagnostic as LspDiagnostic,
   DiagnosticSeverity,
   Range,
-} from 'vscode-languageserver/node';
+} from 'vscode-languageserver/node.js';
 import { env } from '../language/env.ts';
 import type { Diagnostic } from '../language/diagnostics.ts';
 import type { Text } from '../language/text.ts';

@@ -27,7 +27,8 @@ $Repository = if ($env:ETHER_REPOSITORY) { $env:ETHER_REPOSITORY } else { 'orbit
 $Name = 'ether'
 $Aliases = @('ray', 'orbitmines')
 $Entry = '@ether/$/.ray/v0.ts/src/kernel3/language.ts'
-$Includes = @('LICENSE', '@ether/$/.ray/v0')
+$Config = '@ether/$/.ray/v0.ts/deno.npm.json'
+$Includes = @('LICENSE', '@ether/$/.ray/v0', '@ether/$/.ray/v0.ts/javascript.o.ray')
 $Marker = '# Added by the Ether installer'
 
 if ($Help) {
@@ -94,7 +95,7 @@ function Invoke-Compile([string] $target) {
   if (-not $root -or -not (Test-Path -LiteralPath (Join-Path $root $Entry))) { throw "-Compile needs a checkout of $Repository (run .\install.ps1 from inside it)" }
   if (-not (Get-Command deno -ErrorAction SilentlyContinue)) { throw "-Compile needs Deno (https://deno.com): irm https://deno.land/install.ps1 | iex" }
   $work = New-TemporaryDirectory
-  $arguments = @('compile', '-A', '--no-check', '--no-config', '--quiet') + ($Includes | ForEach-Object { '--include', $_ }) + @('--target', $target, '--output', (Join-Path $work (Get-Executable $target $Name)), $Entry)
+  $arguments = @('compile', '-A', '--no-check', '--config', $Config, '--quiet') + ($Includes | ForEach-Object { '--include', $_ }) + @('--target', $target, '--output', (Join-Path $work (Get-Executable $target $Name)), $Entry)
   Write-Host "Compiling $Name for $target ..."
   Push-Location $root
   try { & deno @arguments; if ($LASTEXITCODE -ne 0) { throw "Compiling for $target failed" } } finally { Pop-Location }

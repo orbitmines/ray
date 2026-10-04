@@ -37,6 +37,7 @@ const cli: CLI.Spec = {
   rm:       { value: true, optional: true, description: 'Remove a finished job and its output (all finished jobs without an id).' },
   // TODO --ephemeral: the client's command line is still visible to the same user in `ps` while it runs; the daemon's (and its workers') memory can be swapped to disk (no mlock/VirtualLock);
   //      ephemeral jobs of a daemon that was replaced by a newer build can't be listed or stopped any more (its socket is gone); environment variables are never persisted, which a future `continue` would need to revisit.
+  lsp:      { description: 'Serve the language server (LSP) over stdio, through the daemon.' },
   ephemeral: {           description:`Keep nothing on disk: the output is only streamed, and the job's record is removed when it ends.` },
 };
 
@@ -46,6 +47,7 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
 
   const socket = typeof kwargs.daemon === 'string' ? kwargs.daemon : env.nodejs ? env.socket : '';
   const detached = kwargs.daemon !== undefined && args.length > 0;
+  if (kwargs.lsp) { const code = await Daemon.lsp(socket); process.stdout.write('', () => process.exit(code)); return; }
   if (kwargs.list) { process.stdout.write(await Daemon.list(socket)); return; }
   if (kwargs.attach && !detached) { process.exitCode = await Daemon.attach(Daemon.job(kwargs.attach, args), socket); return; }
   if (kwargs.stop) {
@@ -86,12 +88,29 @@ export function drained(stream: NodeJS.EventEmitter & { destroyed?: boolean }, w
   });
 }
 
-export async function run(program: Project, [args, kwargs]: CLI.Args, io: IO): Promise<number> {
-  const diagnostics = new Diagnostics();
-  await Ray.v0(diagnostics).abstract(!!kwargs.abstract).add(args.flatMap(x => program.at(x))).exec()
-
-  await diagnostics.print(io);
-  return diagnostics.has_errors ? 1 : 0;
+export async function run(project: Project, [args, kwargs]: CLI.Args, io: IO): Promise<number> {
+  const translator = await Translator.shared();
+  let exit = 0;
+  for (const file of args) {
+    let translated: ReturnType<Translator['translate']>;
+    try { translated = translator.translate(project.read(project.location(file))); }
+    catch (e) { await io.err(`${file}: ${(e as Error).message}\n`); exit = 1; continue; }
+    if (kwargs.debug) await io.err([
+      `--- ${file}: expanded (${translated.ins.length})`, shown(translated.ins, translator, '  '),
+      `--- reduced (${translated.reduced.length})`, shown(translated.reduced, translator, '  '),
+      `--- structured`, shown(translated.structured, translator, '  '),
+      `--- javascript`, translated.js, '',
+    ].join('\n'));
+    try {
+      const value = new Function('$tick', translated.js)(() => { project.steps++; return project.stopped; });
+      if (project.stopped) return 130;
+      if (value !== undefined) await io.out(`=> ${value}\n`);
+    } catch (e) {
+      await io.err(`${(e as Error).stack ?? e}\n`);
+      exit = 1;
+    }
+  }
+  return exit;
 }
 
 async function daemon(socket: string) {
@@ -103,8 +122,8 @@ async function daemon(socket: string) {
   process.title = `${NAME.toLowerCase()} --daemon`;
   process.chdir(env.path.parse(process.cwd()).root);
 
-  let timer: ReturnType<typeof setTimeout> | undefined, retired = false;
-  const settle = () => { if (retired && !jobs.active) process.exit(0); };
+  let timer: ReturnType<typeof setTimeout> | undefined, retired = false, sessions = 0;
+  const settle = () => { if (retired && !jobs.active && sessions === 0) process.exit(0); };
   const retire = () => {
     if (retired) return;
     retired = true;
@@ -115,18 +134,50 @@ async function daemon(socket: string) {
   };
   const jobs = new Jobs(env.host, {
     busy: () => clearTimeout(timer),
-    idle: () => { clearTimeout(timer); timer = setTimeout(retire, config.daemon.idle); settle(); },
+    idle: () => { clearTimeout(timer); if (sessions === 0) timer = setTimeout(retire, config.daemon.idle); settle(); },
   });
+
+  let painter: import('worker_threads').Worker | undefined;
+  const lsp = (connection: import('net').Socket, send: Jobs.Send) => {
+    sessions++;
+    clearTimeout(timer);
+    if (painter === undefined) {
+      painter = env.thread({ paint: true });
+      painter.on('error', () => {}).on('exit', () => { painter = undefined; });
+    }
+    const worker = env.thread({ lsp: true });
+    let asked: number | undefined;
+    worker.on('message', (message: Uint8Array | { exit: number }) => {
+      if (message instanceof Uint8Array) send(Daemon.Frame.LSP, message);
+      else { asked = message.exit; worker.terminate(); }
+    });
+    worker.on('error', error => { send(Daemon.Frame.ERR, `${error.stack ?? error}\n`); });
+    worker.on('exit', code => {
+      sessions--;
+      send(Daemon.Frame.EXIT, String(asked ?? code)).then(() => connection.end());
+      if (!jobs.active && sessions === 0) { timer = setTimeout(retire, config.daemon.idle); settle(); }
+    });
+    connection.on('close', () => { worker.terminate(); });
+    send(Daemon.Frame.ACCEPTED);
+    return worker;
+  };
 
   const server = net.createServer(connection => {
     const owned = new Set<number>(), watching = new Set<number>();
+    let session: import('worker_threads').Worker | undefined;
     const send: Jobs.Send = (type, payload = '') => connection.destroyed ? Promise.resolve() : drained(connection, Daemon.write(connection, type, payload));
     connection.on('error', () => {}).on('close', () => {
       for (const id of owned) jobs.disown(id);
       for (const id of watching) jobs.unwatch(id, send);
     }).on('data', Daemon.frames((type, payload) => {
+      if (type === Daemon.Frame.LSP) return void session?.postMessage(payload);
       if (type !== Daemon.Frame.REQUEST) return;
       const request: Daemon.Request = JSON.parse(payload.toString());
+      if (request.kind === 'lsp') {
+        if (retired || request.build !== build) { send(Daemon.Frame.STALE); return retire(); }
+        session = lsp(connection, send);
+        return;
+      }
       if (request.kind === 'ephemeral') {
         send(Daemon.Frame.OUT, JSON.stringify(jobs.ephemeral.all()));
         return void send(Daemon.Frame.EXIT, '0');
@@ -325,11 +376,7 @@ export namespace Host {
       threads: env.os.availableParallelism?.() ?? env.os.cpus().length,
       store: new Disk(),
       spawn(listener) {
-        const file = env.url.fileURLToPath(import.meta.url), typescript = (globalThis as any).Deno === undefined && /\.[cm]?ts$/.test(file);
-        const worker = new env.worker_threads.Worker(file, {
-          workerData: { daemon: NAME },
-          execArgv: typescript ? [...process.execArgv, '--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : undefined,
-        });
+        const worker = env.thread();
         let failure = '';
         worker.on('message', message => listener.message(message));
         worker.on('error', error => { failure = `${error.stack ?? error}\n`; });
@@ -648,8 +695,32 @@ export class Disk implements Store {
 
 export namespace Daemon {
   export type Run = { kind: 'run'; argv: CLI.Args; command: string[]; cwd: string; variables: Record<string, string | undefined>; build: string; detached: boolean; attach: boolean; ephemeral: boolean };
-  export type Request = Run | { kind: 'ephemeral' } | { kind: 'stop'; job: number };
-  export enum Frame { REQUEST, OUT, ERR, EXIT, STALE, ACCEPTED }
+  export type Request = Run | { kind: 'ephemeral' } | { kind: 'stop'; job: number } | { kind: 'lsp'; build: string };
+  export enum Frame { REQUEST, OUT, ERR, EXIT, STALE, ACCEPTED, LSP }
+
+  export async function lsp(socket: string): Promise<number> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const connection = await start(socket).catch((): undefined => undefined);
+      if (connection === undefined) break;
+      const exit = await new Promise<number | undefined>(resolve => {
+        process.stdin.pause();
+        connection.on('error', () => resolve(1)).once('close', () => resolve(1)).on('data', frames((type, payload) => {
+          if (type === Frame.STALE) { connection.destroy(); resolve(undefined); }
+          if (type === Frame.ACCEPTED) {
+            process.stdin.on('data', chunk => write(connection, Frame.LSP, chunk)).on('end', () => connection.end());
+            process.stdin.resume();
+          }
+          if (type === Frame.LSP) process.stdout.write(payload);
+          if (type === Frame.ERR) process.stderr.write(payload);
+          if (type === Frame.EXIT) { process.stdin.destroy(); connection.end(); resolve(Number(payload.toString())); }
+        }));
+        write(connection, Frame.REQUEST, JSON.stringify({ kind: 'lsp', build: env.build } satisfies Request));
+      });
+      if (exit !== undefined) return exit;
+    }
+    process.stderr.write(`${NAME}'s daemon couldn't be started on '${socket}'.\n`);
+    return 1;
+  }
   export type Message = { job: number; type: Frame.OUT | Frame.ERR; data: string | Uint8Array; ack: number } | { job: number; exit: number };
   export type Meta = {
     id: number; command: string[]; cwd: string; daemon: number; created: number; began?: number; ended?: number; exit?: number; stopped?: boolean; lost?: boolean; ephemeral?: boolean;
@@ -822,6 +893,11 @@ export namespace Daemon {
     return location === home || location.startsWith(home + env.path.sep) ? '~' + location.slice(home.length) : location;
   }
 
+  export function deno_config(): string[] {
+    const file = env.url.fileURLToPath(new URL('../../deno.npm.json', import.meta.url));
+    return env.fs.existsSync(file) ? ['--config', file] : ['--no-config'];
+  }
+
   export function pipe(socket: string): boolean { return /^\\\\[.?]\\pipe\\/i.test(socket); }
 
   export function connect(socket: string = env.socket): Promise<import('net').Socket> {
@@ -876,7 +952,7 @@ export namespace Daemon {
     const deno = (globalThis as any).Deno;
     if (deno !== undefined) return deno.mainModule.includes('/deno-compile-')
       ? [deno.execPath(), [`--daemon=${socket}`]]
-      : [deno.execPath(), ['run', '-A', '--no-config', env.url.fileURLToPath(deno.mainModule), `--daemon=${socket}`]];
+      : [deno.execPath(), ['run', '-A', ...Daemon.deno_config(), env.url.fileURLToPath(deno.mainModule), `--daemon=${socket}`]];
     return [process.execPath, [...process.execArgv, process.argv[1], `--daemon=${socket}`]];
   }
 
@@ -1064,6 +1140,14 @@ export class env {
   static get child_process(): typeof import('child_process') { return env._child_process ??= env.import('child_process', env._child_process); }
   static get worker_threads(): typeof import('worker_threads') { return env._worker_threads ??= env.import('worker_threads', env._worker_threads); }
 
+  static thread(data: object = {}): import('worker_threads').Worker {
+    const file = env.url.fileURLToPath(import.meta.url), typescript = (globalThis as any).Deno === undefined && /\.[cm]?ts$/.test(file);
+    return new env.worker_threads.Worker(file, {
+      workerData: { daemon: NAME, ...data },
+      execArgv: typescript ? [...process.execArgv, '--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : undefined,
+    });
+  }
+
   static get worker(): boolean {
     if (env.nodejs) return !env.worker_threads.isMainThread && env.worker_threads.workerData?.daemon === NAME;
     return env.scope === 'worker';
@@ -1154,10 +1238,6 @@ export class env {
 
 }
 
-if (env.worker) Daemon.worker(env.port);
-else if (env.scope === 'daemon') Browser.serve(env.port);
-else if (env.scope === 'shared') Browser.shared();
-else if (env.is_main_entrypoint) main();
 
 enum Op { GOTO,  }
 
@@ -1232,7 +1312,431 @@ export class Project {
 
 }
 
+export namespace Lsp {
+  export async function worker(): Promise<void> {
+    const parent = env.worker_threads.parentPort!, stream = env.import<typeof import('stream')>('stream');
+    process.exit = ((code?: number) => { parent.postMessage({ exit: code ?? 0 }); }) as typeof process.exit;
+    const input = new stream.PassThrough();
+    parent.on('message', (chunk: Uint8Array) => input.write(Buffer.from(chunk)));
+    const output = new stream.Writable({ write(chunk, _, done) { parent.postMessage(chunk); done(); } });
+    const [{ Ray }, { Diagnostics }, { start }] = await Promise.all([import('../language.ts'), import('../language/diagnostics.ts'), import('../lsp/server.ts')]);
+    await start(Ray.lsp(new Diagnostics()), { input, output }, { paint: false });
+  }
+
+  export async function paint(): Promise<void> {
+    const [{ Ray }, { Diagnostics }] = await Promise.all([import('../language.ts'), import('../language/diagnostics.ts')]);
+    const program = Ray.lsp(new Diagnostics());
+    await program.abstract().exec();
+    await program.paint_all();
+    process.exit(0);
+  }
+}
+
+export namespace Engine {
+  export let modules: any;
+  export async function load(): Promise<void> {
+    if (modules !== undefined) return;
+    const [program, environment, diagnostics, interpreter, text, natives] = await Promise.all([
+      import('../language/program.ts'), import('../language/env.ts'), import('../language/diagnostics.ts'),
+      import('../language/interpreter.ts'), import('../language/text.ts'), import('../language/natives.ts'),
+    ]);
+    modules = { Program: program.Program, env: environment.env, Diagnostics: diagnostics.Diagnostics, Node: interpreter.Node, Text: text.Text, statements_of: natives.statements_of };
+  }
+}
+
+export type Expr =
+  | { k: 'var'; name: string }
+  | { k: 'const'; value: string }
+  | { k: 'hole'; name: string }
+  | { k: 'op'; rule: any; name: string; args: Record<string, Expr> };
+
+export type Ins =
+  | { k: 'label'; name: string }
+  | { k: 'jump'; to: string; cond?: Expr }
+  | { k: 'set'; name: string; value: Expr; declares: boolean }
+  | { k: 'effect'; value: Expr }
+  | { k: 'value'; value: Expr }
+  | { k: 'hole'; name: string; into?: string }
+  | { k: 'struct'; rule: any; head: string; exprs: Record<string, Expr>; blocks: Record<string, Ins[]> };
+
+type Hole = { kind: 'expr' | 'block'; text?: any; ctx?: Ctx };
+type Ctx = { frame: any; holes: Map<string, Hole>; prefix: string; labels: Map<string, string>; env: Map<string, Expr>; user: boolean };
+
+const key = (x: unknown) => JSON.stringify(x, (k, v) => k === 'rule' ? (v?.name ?? v) : v);
+const PURE = new Set(['.', '**', 'own', 'inline', 'member', 'as', 'holds']);
+
+export class Translator {
+  it: any; jt: any; level: any[] = []; program: any; counter = 0;
+  shapes = new Map<string, { rule: any; head: string; ins: Ins[] }>();
+
+  private static booted?: Promise<Translator>;
+  static shared(): Promise<Translator> { return Translator.booted ??= Translator.boot(); }
+
+  static async boot(): Promise<Translator> {
+    await Engine.load();
+    const { Program, env, Diagnostics, Node } = Engine.modules;
+    const t = new Translator(), diagnostics = new Diagnostics();
+    const at = (x: string) => env.at(x);
+    t.program = new Program(diagnostics).add([...at('@ether/$/.ray/v0/.project.ray'), ...at('@ether/$/.ray/v0/.entrypoint.ray'), ...at('@ether/$/.ray/v0/Compiler.ray'), ...at('@ether/$/.ray/v0.ts/javascript.o.ray')]);
+    await t.program.exec();
+    t.it = t.program.default_language.interpreter;
+    t.jt = t.program.projects.find((p: any) => p.source.some((x: any) => x.location.endsWith('javascript.o.ray'))).interpreter;
+    const jt = t.jt, compiler = jt.quietly(() => jt.deref(jt.lookup(jt.GLOBAL, 'Compiler'), false));
+    const block = jt.quietly(() => jt.deref(jt.member(compiler, 'javascript'), false));
+    const scope = new Node(); scope.parent = jt.GLOBAL;
+    jt.quietly(() => jt.safely(() => jt.inline(block, scope)));
+    t.level = scope.rules ?? [];
+    t.derive();
+    return t;
+  }
+
+  javascript(rule: any): string { return rule.body.string.replace(/^javascript\s+/, ''); }
+  head(rule: any): string | undefined { const p = rule.pattern.find((x: any) => x.kind !== 'gap'); return p?.kind === 'literal' ? p.text.trim() : undefined; }
+  equivalence(head: string): any { return this.level.find(r => this.head(r) === head); }
+
+  span(text: string): any { return Engine.modules.Text.Node.string(text); }
+
+  // ---------------------------------------------------------------- expanding a program into the goto graph
+  control(stmt: any, frame: any): { m: any; head: string } | undefined {
+    const it = this.it, cursor = it.cursor_of(stmt), start = it.spaces(cursor, cursor.cursor);
+    const name = it.token(cursor, start);
+    if (name <= start) return undefined;
+    const head = cursor.source.value.slice(start, name);
+    const cls = it.quietly(() => it.deref(it.lookup(it.GLOBAL, head), false));
+    if (cls === undefined || !it.rules_on(cls).some((r: any) => r.body && r.home === cls)) return undefined;
+    const place = it.place(frame, cursor.span(start, name - 1));
+    const m = it.quietly(() => it.best(it.receiving(place, frame), cursor.bounded(name, cursor.limit), frame, place, true));
+    return m?.rule?.body ? { m, head } : undefined;
+  }
+
+  block(span: any, ctx: Ctx): Ins[] {
+    const out: Ins[] = [];
+    const inner = this.it.inner(span) ?? span;
+    for (const stmt of Engine.modules.statements_of(this.it, inner)) out.push(...this.statement(stmt, ctx));
+    return out;
+  }
+
+  statement(stmt: any, ctx: Ctx): Ins[] {
+    const it = this.it, text: string = stmt.string.trim();
+    const control = this.control(stmt, ctx.frame);
+    if (control !== undefined) return this.inline(control.m, control.head, ctx);
+    const labels = it.rules_of(ctx.frame).filter((r: any) => r.native === 'label');
+    const label = it.quietly(() => it.best(labels, it.cursor_of(stmt), ctx.frame, undefined, true));
+    if (label !== undefined && label.end >= stmt.end) return [{ k: 'label', name: this.label(label.captures.get('label').string.trim(), ctx) }];
+    const found = it.quietly(() => it.best(it.heads(ctx.frame), it.cursor_of(stmt), ctx.frame, undefined, true));
+    const native = found?.rule?.native;
+    const cap = (name: string) => found.captures.get(name)?.string.trim();
+    if (native === 'label') return [{ k: 'label', name: this.label(cap('label'), ctx) }];
+    if (native === 'goto') return [{ k: 'jump', to: this.label(cap('target'), ctx), ...(found.captures.has('condition') ? { cond: this.expr(cap('condition'), ctx) } : {}) }];
+    if (found?.rule?.name === '{name}:={value}' || /^[\w.]+(\s+\^\S+)*\s*:=/.test(text)) {
+      const [, name, value] = text.match(/^([\w.]+)(?:\s+\^\S+)*\s*:=\s*([\s\S]*)$/)!;
+      return this.assign(name, value, ctx, true);
+    }
+    const plain = text.match(/^([\w.]+)\s*=\s*([\s\S]*)$/);
+    if (plain) return this.assign(plain[1], plain[2], ctx, false);
+    const external = text.match(/^external\s+declare\s+(\w+)\s+\(?inline\s+\(external\s+\*\*\s+(\w+)\)\)?$/);
+    if (external) { const hole = this.blockHole(external[2], ctx); if (hole) return [...hole.map(h => h.k === 'hole' ? { ...h, into: this.local(external[1], ctx) } : h)]; }
+    const inline = text.match(/^inline\s+(\w+)$/);
+    if (inline) { const hole = this.blockHole(inline[1], ctx); return hole ?? [{ k: 'effect', value: { k: 'op', rule: undefined, name: 'inline', args: { a: this.expr(inline[1], ctx) } } }]; }
+    const ext = text.match(/^external\s+(\S+)\s*(.*)$/);
+    if (ext) return [{ k: 'effect', value: this.native(ext[1], ext[2], ctx) }];
+    return [{ k: 'value', value: this.expr(text.replace(/\s+\^\S+$/, ''), ctx) }];
+  }
+
+  assign(name: string, value: string, ctx: Ctx, declares: boolean): Ins[] {
+    const v = value.trim(), program = v.match(/^external\s+\*\*\s+(\w+)$/);
+    if (program && ctx.holes.get(program[1])?.kind === 'block') { ctx.env.set(name, { k: 'hole', name: program[1] }); return []; }
+    const inlined = v.match(/^inline\s+\(external\s+\*\*\s+(\w+)\)$/);
+    if (inlined) { const hole = this.blockHole(inlined[1], ctx); if (hole) return hole.map(h => h.k === 'hole' ? { ...h, into: this.local(name, ctx) } : h); }
+    return [{ k: 'set', name: this.local(name, ctx), value: this.expr(v.replace(/\s+\^\S+$/, ''), ctx), declares }];
+  }
+
+  blockHole(name: string, ctx: Ctx): Ins[] | undefined {
+    const bound = ctx.env.get(name), key = bound?.k === 'hole' ? bound.name : name, hole = ctx.holes.get(key);
+    if (hole?.kind !== 'block') return undefined;
+    if (hole.ctx === undefined) return [{ k: 'hole', name: key }];
+    return this.block(hole.text, hole.ctx);
+  }
+
+  local(name: string, ctx: Ctx): string { return ctx.user ? name : `${ctx.prefix}${name.replace(/^\./, '')}`; }
+  label(name: string, ctx: Ctx): string { if (!ctx.labels.has(name)) ctx.labels.set(name, `${ctx.prefix}${name}`); return ctx.labels.get(name)!; }
+
+  inline(m: any, head: string, outer: Ctx): Ins[] {
+    const holes = new Map<string, Hole>();
+    for (const [name, span] of m.captures) holes.set(name, { kind: /^\s*\{/.test(span.string) && name !== 'cond' ? 'block' : 'expr', text: span, ctx: outer });
+    const ctx = this.context(m.rule, holes);
+    const out = this.block(m.rule.body, ctx);
+    return out;
+  }
+
+  context(rule: any, holes: Map<string, Hole>): Ctx {
+    const frame = new Engine.modules.Node(); frame.parent = rule.closure ?? this.it.GLOBAL;
+    return { frame, holes, prefix: `$${++this.counter}_`, labels: new Map(), env: new Map(), user: false };
+  }
+
+  native(name: string, rest: string, ctx: Ctx): Expr {
+    const words = rest.trim() === '' ? [] : rest.trim().split(/\s+(?![^(]*\))/);
+    const args: Record<string, Expr> = {};
+    words.forEach((w, i) => args[String.fromCharCode(97 + i)] = this.expr(w, ctx));
+    return { k: 'op', rule: undefined, name, args };
+  }
+
+  expr(source: string, ctx: Ctx): Expr {
+    let text = source.trim();
+    const hole = ctx.holes.get(text);
+    if (hole?.kind === 'expr') return hole.ctx === undefined ? { k: 'hole', name: text } : this.expr(hole.text.string, hole.ctx);
+    if (/^-?\d+(\.\d+)?$/.test(text)) return { k: 'const', value: text };
+    if (text === 'None' || text === 'global' || text === 'true' || text === 'false') return { k: 'const', value: text };
+    const ext = text.match(/^external\s+(\S+)\s*(.*)$/);
+    if (ext) return this.native(ext[1], ext[2], ctx);
+    if (/^\.\w+$/.test(text)) return { k: 'var', name: this.local(text, ctx) };
+    if (/^\w+$/.test(text)) return ctx.env.get(text) ?? { k: 'var', name: this.local(text, ctx) };
+    const span = this.span(text), it = this.jt;
+    const m = it.quietly(() => it.best(this.level, it.cursor_of(span), it.GLOBAL, undefined, true));
+    if (m !== undefined && m.end >= text.length) {
+      const args: Record<string, Expr> = {};
+      for (const [name, s] of m.captures) args[name] = this.expr(s.string, ctx);
+      return { k: 'op', rule: m.rule, name: m.rule.name, args };
+    }
+    return { k: 'op', rule: undefined, name: text, args: {} };
+  }
+
+  // ---------------------------------------------------------------- reducing
+  reduce(ins: Ins[], keep: Set<string> = new Set()): Ins[] {
+    for (let changed = true; changed;) {
+      changed = false;
+      const before = key(ins);
+      ins = this.pass(ins, keep);
+      if (key(ins) !== before) changed = true;
+    }
+    return ins;
+  }
+
+  reads(ins: Ins[]): Map<string, number> {
+    const n = new Map<string, number>(), add = (e?: Expr) => { if (!e) return; if (e.k === 'var') n.set(e.name, (n.get(e.name) ?? 0) + 1); if (e.k === 'op') for (const a of Object.values(e.args)) add(a); };
+    const walk = (xs: Ins[]) => { for (const i of xs) { if (i.k === 'jump') add(i.cond); if (i.k === 'set' || i.k === 'effect' || i.k === 'value') add(i.value); if (i.k === 'struct') { Object.values(i.exprs).forEach(add); Object.values(i.blocks).forEach(walk); } } };
+    walk(ins);
+    return n;
+  }
+
+  pure(e?: Expr): boolean { return e === undefined || e.k !== 'op' || ((e.rule !== undefined || PURE.has(e.name)) && Object.values(e.args).every(a => this.pure(a))); }
+
+  pass(ins: Ins[], keep: Set<string>): Ins[] {
+    const reads = this.reads(ins), out: Ins[] = [];
+    const objects = new Set(ins.filter(i => i.k === 'set' && i.value.k === 'op' && i.value.name === '.').map(i => (i as any).name));
+    const escapes = new Set<string>();
+    const uses = (e: Expr | undefined, inside: boolean) => { if (!e) return; if (e.k === 'var' && !inside) escapes.add(e.name); if (e.k === 'op') { const extend = e.name === 'extend'; Object.entries(e.args).forEach(([key, a]) => uses(a, inside || (extend && key === 'a') || e.name === 'own' || e.name === 'inline')); } };
+    for (const i of ins) { if (i.k === 'jump') uses(i.cond, false); if (i.k === 'set') uses(i.value, false); if (i.k === 'effect') uses(i.value, false); if (i.k === 'value') uses(i.value, false); }
+    const targets = new Map<string, number>();
+    for (const i of ins) if (i.k === 'jump') targets.set(i.to, (targets.get(i.to) ?? 0) + 1);
+    const alias = new Map<string, string>();
+    for (let k = 0; k < ins.length; k++) {
+      const i = ins[k];
+      if (i.k === 'label') { let j = k + 1; while (j < ins.length && ins[j].k === 'label') { alias.set((ins[j] as any).name, i.name); j++; } }
+    }
+    const resolve = (l: string) => { while (alias.has(l)) l = alias.get(l)!; return l; };
+    let unreachable = false;
+    for (let k = 0; k < ins.length; k++) {
+      const i = ins[k];
+      if (i.k === 'label') { if (alias.has(i.name)) continue; unreachable = false; if (![...targets.keys()].some(t => resolve(t) === i.name) && !keep.has(i.name)) continue; out.push(i); continue; }
+      if (unreachable) continue;
+      if (i.k === 'set' && !i.name.match(/^[a-z]/i) && (reads.get(i.name) ?? 0) === 0 && this.pure(i.value)) continue;
+      if (i.k === 'set' && objects.has(i.name) && !escapes.has(i.name) && !i.name.match(/^[a-z]/i)) continue;
+      if (i.k === 'effect' && i.value.k === 'op' && i.value.name === 'extend' && i.value.args.a?.k === 'var' && objects.has(i.value.args.a.name) && !escapes.has(i.value.args.a.name)) continue;
+      if (i.k === 'effect' && this.pure(i.value)) continue;
+      if (i.k === 'value' && k < ins.length - 1 && this.pure(i.value)) continue;
+      if (i.k === 'value' && !keep.has('$value') && this.pure(i.value)) continue;
+      if (i.k === 'hole' && i.into !== undefined && (reads.get(i.into) ?? 0) === 0) { out.push({ k: 'hole', name: i.name }); continue; }
+      if (i.k === 'jump') {
+        let to = resolve(i.to);
+        const at = ins.findIndex(x => x.k === 'label' && resolve(x.name) === to);
+        let n = at + 1; while (n < ins.length && ins[n].k === 'label') n++;
+        if (at >= 0 && n < ins.length && ins[n].k === 'jump' && (ins[n] as any).cond === undefined && resolve((ins[n] as any).to) !== to) to = resolve((ins[n] as any).to);
+        let next = k + 1; while (next < ins.length && ins[next].k === 'label' && resolve((ins[next] as any).name) !== to) next++;
+        const falls = next < ins.length && ins[next].k === 'label' && resolve((ins[next] as any).name) === to && ins.slice(k + 1, next).every(x => x.k === 'label');
+        if (falls && this.pure(i.cond)) continue;
+        if (i.cond !== undefined && k + 1 < ins.length && ins[k + 1].k === 'jump' && (ins[k + 1] as any).cond === undefined && resolve((ins[k + 1] as any).to) === to && this.pure(i.cond)) continue;
+        out.push({ ...i, to });
+        if (i.cond === undefined) unreachable = true;
+        continue;
+      }
+      out.push(i);
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- the way back: shapes derived from the definitions
+  derive() {
+    for (const head of ['if', 'while']) {
+      const cls = this.it.deref(this.it.lookup(this.it.GLOBAL, head), false);
+      const rule = (cls.rules ?? []).find((r: any) => r.body && r.pattern.filter((p: any) => p.kind === 'capture').length === 2 && r.pattern[0]?.kind === 'gap');
+      const names = rule.pattern.filter((p: any) => p.kind === 'capture').map((p: any) => p.name);
+      const holes = new Map<string, Hole>(names.map((n: string, i: number) => [n, { kind: i === 0 ? 'expr' : 'block' } as Hole]));
+      const ins = this.reduce(this.block(rule.body, this.context(rule, holes)));
+      this.shapes.set(head, { rule, head, ins });
+    }
+  }
+
+  structure(ins: Ins[]): Ins[] {
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const shape of this.shapes.values()) {
+        for (let p = 0; p < ins.length && !changed; p++) {
+          const found = this.fit(shape.ins, ins, p);
+          if (found === undefined) continue;
+          const blocks: Record<string, Ins[]> = {};
+          for (const [name, region] of Object.entries(found.blocks)) blocks[name] = this.structure(region);
+          ins = [...ins.slice(0, p), { k: 'struct', rule: shape.rule, head: shape.head, exprs: found.exprs, blocks }, ...ins.slice(found.end)];
+          changed = true;
+        }
+      }
+    }
+    return ins;
+  }
+
+  fit(shape: Ins[], ins: Ins[], p: number): { end: number; exprs: Record<string, Expr>; blocks: Record<string, Ins[]> } | undefined {
+    const labels = new Map<string, string>(), exprs: Record<string, Expr> = {}, blocks: Record<string, Ins[]> = {};
+    const same = (a: Expr | undefined, b: Expr | undefined): boolean => {
+      if (a === undefined || b === undefined) return a === b;
+      if (a.k === 'hole') { if (exprs[a.name] !== undefined) return key(exprs[a.name]) === key(b); exprs[a.name] = b; return true; }
+      if (a.k !== b.k) return false;
+      if (a.k === 'op' && b.k === 'op') return a.name === b.name && Object.keys(a.args).every(key => same(a.args[key], b.args[key]));
+      return key(a) === key(b);
+    };
+    const label = (s: string, q: string) => { if (labels.has(s)) return labels.get(s) === q; if ([...labels.values()].includes(q)) return false; labels.set(s, q); return true; };
+    const go = (s: number, q: number): number | undefined => {
+      if (s === shape.length) return q;
+      const a = shape[s];
+      if (a.k === 'hole') {
+        for (let e = q; e <= ins.length; e++) {
+          const saved = new Map(labels), savedExprs = { ...exprs };
+          const end = go(s + 1, e);
+          if (end !== undefined && this.closed(ins.slice(q, e))) { blocks[a.name] = ins.slice(q, e); return end; }
+          labels.clear(); saved.forEach((v, k) => labels.set(k, v)); Object.keys(exprs).forEach(k => delete exprs[k]); Object.assign(exprs, savedExprs);
+        }
+        return undefined;
+      }
+      const b = ins[q];
+      if (b === undefined || a.k !== b.k) return undefined;
+      if (a.k === 'label' && b.k === 'label') return label(a.name, b.name) ? go(s + 1, q + 1) : undefined;
+      if (a.k === 'jump' && b.k === 'jump') return label(a.to, b.to) && same(a.cond, b.cond) ? go(s + 1, q + 1) : undefined;
+      return key(a) === key(b) ? go(s + 1, q + 1) : undefined;
+    };
+    const end = go(0, p);
+    if (end === undefined) return undefined;
+    const window = ins.slice(p, end), outside = [...ins.slice(0, p), ...ins.slice(end)];
+    for (const l of labels.values()) if (this.targets(outside).has(l)) return undefined;
+    return { end, exprs, blocks };
+  }
+
+  targets(ins: Ins[]): Set<string> {
+    const s = new Set<string>();
+    const walk = (xs: Ins[]) => { for (const i of xs) { if (i.k === 'jump') s.add(i.to); if (i.k === 'struct') Object.values(i.blocks).forEach(walk); } };
+    walk(ins);
+    return s;
+  }
+
+  closed(region: Ins[]): boolean {
+    const own = new Set(region.filter(i => i.k === 'label').map(i => (i as any).name));
+    for (const t of this.targets(region)) if (!own.has(t)) return false;
+    return true;
+  }
+
+  // ---------------------------------------------------------------- printing JavaScript through the equivalences
+  print(ins: Ins[], indent = '  '): string[] {
+    const out: string[] = [];
+    for (const i of ins) {
+      if (i.k === 'struct') {
+        const rule = this.equivalence(i.head), names = i.rule.pattern.filter((p: any) => p.kind === 'capture').map((p: any) => p.name);
+        let js = this.javascript(rule);
+        const levelNames = rule.pattern.filter((p: any) => p.kind === 'capture').map((p: any) => p.name);
+        levelNames.forEach((ln: string, n: number) => {
+          const own = names[n], value = i.exprs[own] !== undefined ? this.js(i.exprs[own]) : `\n${this.print(i.blocks[own] ?? [], indent + '  ').join('\n')}\n${indent}`;
+          js = js.split(`{${ln}}`).join(i.exprs[own] === undefined && this.loops(i) ? `\n${indent}  if ($tick()) return;${value}` : value);
+        });
+        out.push(indent + js.split('{ \n').join('{\n').split(`\n${indent} }`).join(`\n${indent}}`));
+      }
+      else if (i.k === 'set') out.push(indent + this.template('{name}={value}', { name: i.name, value: this.js(i.value) }));
+      else if (i.k === 'effect') out.push(indent + this.js(i.value) + ';');
+      else if (i.k === 'value') out.push(indent + `return ${this.js(i.value)};`);
+      else if (i.k === 'label') out.push(`${indent}/* ${i.name}: */`);
+      else if (i.k === 'jump') out.push(`${indent}/* goto ${i.to}${i.cond ? ' if ' + this.js(i.cond) : ''} */`);
+      else if (i.k === 'hole') out.push(`${indent}/* ${i.name} */`);
+    }
+    return out;
+  }
+
+  template(name: string, values: Record<string, string>): string {
+    const rule = this.level.find(r => r.name === name);
+    let js = this.javascript(rule);
+    for (const [k, v] of Object.entries(values)) js = js.split(`{${k}}`).join(v);
+    return js;
+  }
+
+  js(e: Expr): string {
+    if (e.k === 'var') return e.name.replace(/[^\w$]/g, '_');
+    if (e.k === 'const') return e.value === 'None' ? 'undefined' : e.value === 'global' ? 'true' : e.value;
+    if (e.k === 'hole') return `/*${e.name}*/`;
+    if (e.rule === undefined) return `/* ${e.name}(${Object.values(e.args).map(a => this.js(a)).join(', ')}) */`;
+    let js = this.javascript(e.rule);
+    for (const [k, a] of Object.entries(e.args)) js = js.split(`{${k}}`).join(this.js(a));
+    return js;
+  }
+
+  dispatch(ins: Ins[]): string[] {
+    const cases = new Map<string, number>();
+    for (const i of ins) if (i.k === 'label') cases.set(i.name, cases.size + 1);
+    const out = ['let pc = 0;', 'for (;;) switch (pc) {', '  case 0:'];
+    let back = false;
+    for (const i of ins) {
+      if (i.k === 'label') out.push(`  case ${cases.get(i.name)}:`);
+      else if (i.k === 'jump') out.push(`    ${i.cond === undefined ? '' : `if (${this.js(i.cond)}) `}{ if ($tick()) return; pc = ${cases.get(i.to)}; continue; }`);
+      else out.push(...this.print([i], '    '));
+    }
+    out.push('    return;', '}');
+    return out;
+  }
+
+  loops(i: Ins & { k: 'struct' }): boolean {
+    const shape = this.shapes.get(i.head)!.ins, at = new Map(shape.map((x, n) => [x.k === 'label' ? x.name : '', n]));
+    return shape.some((x, n) => x.k === 'jump' && (at.get(x.to) ?? n + 1) <= n);
+  }
+
+  unstructured(ins: Ins[]): boolean { return ins.some(i => i.k === 'label' || i.k === 'jump' || (i.k === 'struct' && Object.values(i.blocks).some(b => this.unstructured(b)))); }
+
+  translate(text: string): { ins: Ins[]; reduced: Ins[]; structured: Ins[]; js: string } {
+    const src = this.span(text);
+    const ctx: Ctx = { frame: this.it.GLOBAL, holes: new Map(), prefix: '', labels: new Map(), env: new Map(), user: true };
+    const ins = [];
+    for (const stmt of Engine.modules.statements_of(this.it, src)) ins.push(...this.statement(stmt, ctx));
+    const reduced = this.reduce(ins, new Set(['$value']));
+    const structured = this.structure(reduced);
+    const vars = new Set<string>();
+    const walk = (xs: Ins[]) => { for (const i of xs) { if (i.k === 'set') vars.add(i.name); if (i.k === 'struct') Object.values(i.blocks).forEach(walk); } };
+    walk(structured);
+    const body = this.unstructured(structured) ? this.dispatch(reduced) : this.print(structured, '');
+    const js = `${vars.size ? `let ${[...vars].join(', ')};\n` : ''}${body.join('\n')}`;
+    return { ins, reduced, structured, js };
+  }
+}
+
+export const shown = (ins: Ins[], t: Translator, indent = ''): string => ins.map(i =>
+  i.k === 'label' ? `${indent}${i.name}\\` :
+  i.k === 'jump' ? `${indent}goto ${i.to}${i.cond ? ' if ' + t.js(i.cond) : ''}` :
+  i.k === 'set' ? `${indent}${i.name} := ${t.js(i.value)}` :
+  i.k === 'effect' ? `${indent}${t.js(i.value)}` :
+  i.k === 'value' ? `${indent}=> ${t.js(i.value)}` :
+  i.k === 'hole' ? `${indent}<${i.name}${i.into ? ' into ' + i.into : ''}>` :
+  `${indent}${i.head} ${Object.entries(i.exprs).map(([k, v]) => `${k}=${t.js(v)}`).join(' ')} {\n${Object.values(i.blocks).map(b => shown(b, t, indent + '  ')).join('\n')}\n${indent}}`).join('\n');
+
 export class Program {
   graph: Uint32Array
   
 }
+
+if (env.worker && env.worker_threads.workerData?.lsp) Lsp.worker();
+else if (env.worker && env.worker_threads.workerData?.paint) Lsp.paint();
+else if (env.worker) Daemon.worker(env.port);
+else if (env.scope === 'daemon') Browser.serve(env.port);
+else if (env.scope === 'shared') Browser.shared();
+else if (env.is_main_entrypoint) main();

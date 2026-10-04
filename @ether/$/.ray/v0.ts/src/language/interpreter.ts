@@ -1654,8 +1654,14 @@ export class Interpreter {
     if (target.style !== undefined) return this.style(`${target.style}.${name}`);
     const entry = this.members_of(this.rules_on(target)).get(name);
     const plain = entry?.nearer ? undefined : entry?.plain;
-    if (plain !== undefined) return this.apply({ rule: plain, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [], receiver: this.location(node) ?? node }, target, key.at ?? node.at!);
     const taking = entry?.taking ?? [];
+    if (plain !== undefined) {
+      const value = this.apply({ rule: plain, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [], receiver: this.location(node) ?? node }, target, key.at ?? node.at!);
+      if (taking.length === 0 || value === undefined) return value;
+      const held = this.deref(value, false);
+      if (held === undefined || held.none) return value;
+      return Object.assign(new Node(key.at), { with: [held], fn: this.rebuild(['taking', this.location(node) ?? node, taking]) });
+    }
     if (taking.length > 0) {
       return Object.assign(new Node(key.at), { fn: this.rebuild(['taking', this.location(node) ?? node, taking]) });
     }

@@ -325,7 +325,7 @@ Accessor := class: Ray {
     values
   )
   derived (from) => if (from.access) { from.access } else { this }
-  default_policy => Accessor(level: Accessor.Permission.local)
+  default_policy => Accessor(level: Visibility.default_privacy_policy)
   confidential => Accessor.default_policy
 
   Consistency := class: Ray {
@@ -385,7 +385,7 @@ Instance := class: Ray {
     .registry = kept
     if delete_all {
       character.key = None
-      .deletions &= Instance.Deletion(character: character, due: Time.now + (30 of Day))
+      .deletions &= Instance.Deletion(character: character, due: Time.now + 30 days)
     }
     character
   )

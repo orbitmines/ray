@@ -1,5 +1,9 @@
 Visibility := class: Ray {
-  default_privacy_policy => Accessor.Permission.private
+  default_privacy_policy => Visibility.policy
+  set_policy (level) => (
+    Visibility.policy = level
+    level
+  )
 
   of (item) => (
     found ^keyword := None
@@ -15,7 +19,7 @@ Visibility := class: Ray {
     if (level == Accessor.Permission.localhost) { rank = 1 }
     elsif (level == Accessor.Permission.managed) { rank = 2 }
     elsif (level == Accessor.Permission.private) { rank = 3 }
-    elsif (level == Accessor.Permission.confidential) { rank = 3 }
+    elsif (level == Accessor.Permission.confidential) { rank = Visibility.openness(Visibility.default_privacy_policy) }
     elsif (level == Accessor.Permission.protected) { rank = 4 }
     elsif (level == Accessor.Permission.public) { rank = 5 }
     rank
@@ -28,10 +32,7 @@ Visibility := class: Ray {
     chosen ?? Visibility.default_privacy_policy
   )
 
-  confidential => (
-    policy := Visibility.default_privacy_policy
-    if (Visibility.openness(Accessor.Permission.private) < Visibility.openness(policy)) { Accessor.Permission.managed } else { policy }
-  )
+  confidential => Visibility.default_privacy_policy
 
   derived (sources) => (
     levels := chain None
@@ -52,6 +53,8 @@ Visibility := class: Ray {
     if (level == Accessor.Permission.public) { true } else { who.permissions.contains(level) }
   )
 }
+
+Visibility.policy = Accessor.Permission.local
 
 Capability := enum network | read | write | execute | io | os | random | time
 

@@ -6,18 +6,18 @@ unless (Bit.is_base) { INFO@mark `U2 a bit is not a base unit` }
 
 unless (Byte.scale == 8) { INFO@mark `U3 a byte does not scale to eight bits` }
 
-q := 1 of Byte
+q := 1 byte
 unless (q.unit.symbol) { INFO@mark `U4 a quantity lost its unit` }
 
 // A conversion multiplies and divides, and each of those nests about one
 // application of `if` per unit of the divisor; the interpreter allows 64
 // nested applications per statement, so only the conversions that divide by
 // the larger factor are asserted here (`one of Byte as Bit` is 8 / 1).
-eight_bits := 8 of Bit
+eight_bits := 8 bits
 bytes := eight_bits as Byte
 unless (bytes.amount == 1) { INFO@mark `U6 eight bits are not one byte` }
 
-unless ((1 of Byte) == (8 of Bit)) { INFO@mark `U8 a byte does not equal eight bits` }
+unless ((1 byte) == (8 bits)) { INFO@mark `U8 a byte does not equal eight bits` }
 
 unless (Prefix.deka.factor == 10) { INFO@mark `U9 deka is not ten` }
 
@@ -42,16 +42,16 @@ unless (Bit == Bit) { INFO@mark `U20 a bit is not itself` }
 if (Bit == Byte) { INFO@mark `U21 a bit is a byte` }
 
 // Arithmetic happens in the finer of the two units.
-unless (((2 of Bit) + (3 of Bit)).amount == 5) { INFO@mark `U22 two bits and three bits are not five` }
-unless (((5 of Bit) - (2 of Bit)).amount == 3) { INFO@mark `U23 five bits less two are not three` }
-unless (((1 of Byte) + (1 of Bit)).unit == Bit) { INFO@mark `U24 a sum is not in the finer unit` }
-unless (((1 of Byte) + (1 of Bit)).amount == 9) { INFO@mark `U25 a byte and a bit are not nine bits` }
-unless ((2 of Bit) < (3 of Bit)) { INFO@mark `U26 two bits are not fewer than three` }
-if ((3 of Bit) < (2 of Bit)) { INFO@mark `U27 three bits are fewer than two` }
+unless (((2 bits) + (3 bits)).amount == 5) { INFO@mark `U22 two bits and three bits are not five` }
+unless (((5 bits) - (2 bits)).amount == 3) { INFO@mark `U23 five bits less two are not three` }
+unless (((1 byte) + (1 bit)).unit == Bit) { INFO@mark `U24 a sum is not in the finer unit` }
+unless (((1 byte) + (1 bit)).amount == 9) { INFO@mark `U25 a byte and a bit are not nine bits` }
+unless ((2 bits) < (3 bits)) { INFO@mark `U26 two bits are not fewer than three` }
+if ((3 bits) < (2 bits)) { INFO@mark `U27 three bits are fewer than two` }
 
 // Which of two units is the finer.
-unless ((1 of Byte).finer(1 of Bit) == Bit) { INFO@mark `U28 a bit is not finer than a byte` }
-unless ((1 of Bit).finer(1 of Byte) == Bit) { INFO@mark `U29 asking the other way round answers otherwise` }
+unless ((1 byte).finer(1 bit) == Bit) { INFO@mark `U28 a bit is not finer than a byte` }
+unless ((1 bit).finer(1 byte) == Bit) { INFO@mark `U29 asking the other way round answers otherwise` }
 
 // Where a unit's zero sits, and a unit that shifts it.
 unless (Bit.shift.is_zero) { INFO@mark `U30 a unit with no offset sits somewhere else` }
@@ -60,9 +60,9 @@ unless (shifted_bit.shift == 3) { INFO@mark `U31 a shifted unit forgot its offse
 unless (shifted_bit.scale == 1) { INFO@mark `U32 a shifted unit counts other than one of its base` }
 
 // Time's units are quantities like any other, and know they are of time.
-unless ((1 of Minute).is_temporal) { INFO@mark `U33 a minute is not of time` }
-if ((1 of Bit).is_temporal) { INFO@mark `U34 a bit is of time` }
-unless ((1 of Minute).as_seconds == 60) { INFO@mark `U35 a minute is not sixty seconds` }
+unless ((1 minute).is_temporal) { INFO@mark `U33 a minute is not of time` }
+if ((1 bit).is_temporal) { INFO@mark `U34 a bit is of time` }
+unless ((1 minute).as_seconds == 60) { INFO@mark `U35 a minute is not sixty seconds` }
 
 // What a unit is called and what it is written as.
 unless (Bit.name.as_string == "bit") { INFO@mark `U36 a bit is not called that` }
@@ -71,8 +71,8 @@ unless (Byte.name.as_string == "byte") { INFO@mark `U38 a byte is not called tha
 unless (Minute.base.name.as_string == "second") { INFO@mark `U39 a minute is not built on the second` }
 
 // Quantities compare after they add.
-unless ((2 of Second) + (3 of Second) == (5 of Second)) { INFO@mark `U40 two and three seconds is not five seconds` }
-if ((2 of Second) + (3 of Second) < (5 of Second)) { INFO@mark `U41 two and three seconds is below five seconds` }
+unless ((2 seconds) + (3 seconds) == (5 seconds)) { INFO@mark `U40 two and three seconds is not five seconds` }
+if ((2 seconds) + (3 seconds) < (5 seconds)) { INFO@mark `U41 two and three seconds is below five seconds` }
 
 // A number followed by a unit is that many of it, by the unit's name, its
 // plural or its symbol.
@@ -84,8 +84,8 @@ unless (((2 hours) as Minute).amount == 120) { INFO@mark `U46 two hours are not 
 
 unless (Kibibyte.ratio == 1024) { INFO@mark `UB1 a kibibyte is not 1024 of what it is built on` }
 unless (Kilobyte.ratio == 1000) { INFO@mark `UB2 a kilobyte is not a thousand of what it is built on` }
-unless ((1 of Kibibyte) == (1024 of Byte)) { INFO@mark `UB3 a kibibyte is not 1024 bytes` }
-unless ((1 of Kilobyte) == (1000 of Byte)) { INFO@mark `UB4 a kilobyte is not 1000 bytes` }
+unless ((1 kibibyte) == (1024 bytes)) { INFO@mark `UB3 a kibibyte is not 1024 bytes` }
+unless ((1 kilobyte) == (1000 bytes)) { INFO@mark `UB4 a kilobyte is not 1000 bytes` }
 unless (Kibibyte != Kilobyte) { INFO@mark `UB5 a kibibyte is a kilobyte` }
 unless (BinaryPrefix.kibi.factor == 1024) { INFO@mark `UB6 kibi is not 1024` }
 unless (BinaryPrefix.mebi.factor == 1048576) { INFO@mark `UB7 mebi is not 1024 squared` }

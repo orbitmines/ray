@@ -19,14 +19,14 @@ World := class: Nameable {
   children: (chain None)
   host?: Node
   worlds: (chain None)
-  personas: (chain None)
+  characters: (chain None)
   items: (chain None)
   quests: (chain None)
   reservations: (chain None)
 
-  spawn (persona) => (
-    .personas &= persona
-    persona
+  spawn (character) => (
+    .characters &= character
+    character
   )
   add (item) => (
     .items &= item
@@ -61,7 +61,7 @@ World := class: Nameable {
     name: String
     issuer: Node
   }
-  population => .personas.count
+  population => .characters.count
 }
 World.components.hierarchy &= Location
 Region := World
@@ -191,7 +191,7 @@ Instance := class: Ray {
 
 }
 Status := enum online | offline | hosted | broadcast | proxy | invisible | idle | do_not_disturb | busy
-Persona := class: Nameable {
+Character := class: Nameable {
   prefix => `@`
   name: String
   avatars: (chain None)
@@ -204,22 +204,22 @@ Persona := class: Nameable {
     avatar
   )
 }
-Avatar := class: Persona {
-  persona: Node
+Avatar := class: Character {
+  character: Node
   platform: Node
   avatars: (chain None)
   presence: None
   status: Status.offline
 
 }
-Player := class: Persona {
+Player := class: Character {
   name: String
   avatars: (chain None)
   presence: None
   status: Status.offline
 
 }
-NPC := class: Persona {
+NPC := class: Character {
   name: String
   avatars: (chain None)
   presence: None

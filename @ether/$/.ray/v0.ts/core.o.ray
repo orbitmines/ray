@@ -10,19 +10,19 @@ Compiler.default = {
   {a: Number} % {b: Number} => external js.number.%
   {a: Number} < {b: Number} => external js.number.<
   {a: Number} == {b: Number} => external js.number.==
-  {a: Character} == {b: Character} => external js.character.==
-  {a: Character}.width => external js.character.width
-  {a: Character}.octets => external js.character.octets
-  {a: Character}.codepoint => external js.character.codepoint
-  {a: Character}.is_ascii => external js.character.is_ascii
-  {a: Character}.lower_case => external js.character.lower_case
-  {a: Character}.upper_case => external js.character.upper_case
-  {a: Character}.letter => external js.character.letter
-  {a: Character}.digit => external js.character.digit
-  {a: Character}.blank => external js.character.blank
-  {a: Character}.is_underscore => external js.character.is_underscore
-  {a: Character}.word => external js.character.word
-  {a: Character}.digit_value => external js.character.digit_value
+  {a: Char} == {b: Char} => external js.character.==
+  {a: Char}.width => external js.character.width
+  {a: Char}.octets => external js.character.octets
+  {a: Char}.codepoint => external js.character.codepoint
+  {a: Char}.is_ascii => external js.character.is_ascii
+  {a: Char}.lower_case => external js.character.lower_case
+  {a: Char}.upper_case => external js.character.upper_case
+  {a: Char}.letter => external js.character.letter
+  {a: Char}.digit => external js.character.digit
+  {a: Char}.blank => external js.character.blank
+  {a: Char}.is_underscore => external js.character.is_underscore
+  {a: Char}.word => external js.character.word
+  {a: Char}.digit_value => external js.character.digit_value
   {written: String} => external js.string.written
   {a: String} == {b: String} => external js.string.==
   {a: String}.count => external js.string.count

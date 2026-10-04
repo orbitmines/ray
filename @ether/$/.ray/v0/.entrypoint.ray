@@ -669,6 +669,8 @@ Node.DEFINE_METHOD = `&=`
 
 external extend None {
   as (=== boolean) => false
+  == (other) => other === None
+  != (other) => (other === None).not
 }
 
 class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
@@ -1151,7 +1153,7 @@ capture_of (content) => (
     typed = content.slice(colon.succ, content.count)
   }
   name ^keyword := None
-  named.split(Character.space) for {
+  named.split(Char.space) for {
     word ^keyword := it.value
     unless ((word.empty).or(word.starts_with(`^`)).or(same_text(word, `literal`))) { name = word }
   }
@@ -1160,7 +1162,7 @@ capture_of (content) => (
   if typed {
     written ^keyword := None
     styled ^keyword := false
-    typed.split(Character.space) for {
+    typed.split(Char.space) for {
       word ^keyword := it.value
       if (word.starts_with(`^`)) { styled = true }
       unless ((styled).or(word.empty)) { if written { written = written + ` ` + word } else { written = word } }

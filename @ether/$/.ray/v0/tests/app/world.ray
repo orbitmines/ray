@@ -1,4 +1,4 @@
-// Worlds, personas, quests, histories and the features: built by their
+// Worlds, characters, quests, histories and the features: built by their
 // constructors from the fields their classes declare.
 
 mark ^keyword := external global
@@ -6,7 +6,7 @@ mark ^keyword := external global
 wg := World(name: "genesis")
 wp := wg.spawn(Player(name: "alice"))
 unless (wp.name == "alice") { INFO@mark `WO1 spawned player lost its name` }
-unless (wg.personas.count == 1) { INFO@mark `WO2 world has other than one persona` }
+unless (wg.characters.count == 1) { INFO@mark `WO2 world has other than one character` }
 wq := Quest(name: "find", goal: None)
 unless (wq.done.not) { INFO@mark `WO3 a new quest is done` }
 wh := History(repository: wg)
@@ -25,7 +25,7 @@ unless (there.depth == 1) { INFO@mark `LO2 a held location is not one deep` }
 unless (here.children.count == 1) { INFO@mark `LO3 the holder does not hold one` }
 unless (there.parent) { INFO@mark `LO4 a held location has no parent` }
 
-// Tasks, references, personas and repositories: what a class says it holds.
+// Tasks, references, characters and repositories: what a class says it holds.
 wt := Task(name: "walk", goal: None)
 unless (wt.interrupted.not) { INFO@mark `TA1 a new task is interrupted` }
 unless (wt.interrupt.interrupted) { INFO@mark `TA2 an interrupted task is not interrupted` }
@@ -34,9 +34,9 @@ wr := Reference(title: "a")
 unless (wr.draft) { INFO@mark `RE1 a new reference is no draft` }
 unless (wr.publish.draft.not) { INFO@mark `RE2 a published reference is still a draft` }
 
-wa := Avatar(persona: wp, platform: None)
-unless (wp.embody(wa).persona.name == "alice") { INFO@mark `PE1 an embodied avatar is not of its persona` }
-unless (wp.avatars.count == 1) { INFO@mark `PE2 a persona has other than one avatar` }
+wa := Avatar(character: wp, platform: None)
+unless (wp.embody(wa).character.name == "alice") { INFO@mark `PE1 an embodied avatar is not of its character` }
+unless (wp.avatars.count == 1) { INFO@mark `PE2 a character has other than one avatar` }
 
 unless (Repository(world: wg).histories.count.is_zero) { INFO@mark `RP1 a new repository already has histories` }
 unless (Region(name: "north").name == "north") { INFO@mark `RG1 a region is not a world by another name` }
@@ -61,7 +61,7 @@ unless (wi.move(here).location == here) { INFO@mark `IT3 a moved item is not whe
 wc := Certificate(issuer: wg, secret: None)
 unless (wi.certify(wc).certificate == wc) { INFO@mark `IT4 a certified item does not carry its certificate` }
 
-unless (wp.status == Status.offline) { INFO@mark `PE3 a new persona is not offline` }
+unless (wp.status == Status.offline) { INFO@mark `PE3 a new character is not offline` }
 unless (Status.invisible) { INFO@mark `ST1 there is no being invisible` }
 unless (Accessor.Permission.public) { INFO@mark `AC1 there is no public permission` }
 if (Accessor.Permission.private == Accessor.Permission.public) { INFO@mark `AC2 private and public are the same` }
@@ -119,7 +119,7 @@ errand.step("take")
 unless (errand.difficulty == 2) { INFO@mark `QU3 a quest of two steps is not two hard` }
 unless (errand.complete.completed) { INFO@mark `QU4 completing a quest does not` }
 unless (errand.goal == wi) { INFO@mark `QU5 a quest forgot what it is for` }
-// Posting answers the quest, the way spawning answers the persona.
+// Posting answers the quest, the way spawning answers the character.
 unless (wg.post(errand) == errand) { INFO@mark `QU6 posting a quest does not answer it` }
 unless (wg.quests.count == 1) { INFO@mark `QU11 posting a quest does not put it in the world` }
 
@@ -132,27 +132,27 @@ unless (job.difficulty.is_zero) { INFO@mark `QU10 a task with no steps is diffic
 
 // Where someone is says how they are, and where they are not, what they said
 // they were.
-away := Persona(name: "away")
+away := Character(name: "away")
 unless (away.status_now == Status.offline) { INFO@mark `PS1 someone with nowhere to be is not offline` }
 somewhere := Instance(location: here)
-present := Persona(name: "present", presence: somewhere)
+present := Character(name: "present", presence: somewhere)
 unless (present.status_now == Status.online) { INFO@mark `PS2 someone somewhere is not as that place is` }
 if (present.status_now == Status.offline) { INFO@mark `PS3 someone somewhere is offline anyway` }
 unless (present.status == Status.offline) { INFO@mark `PS4 what they said they were is not what they said` }
 
-// What a world and a persona are written with in front of their names.
+// What a world and a character are written with in front of their names.
 unless ((World(name: "w").prefix).as_string == "#") { INFO@mark `WP1 a world is not written with a hash` }
-unless ((Persona(name: "p").prefix).as_string == "@") { INFO@mark `WP2 a persona is not written with an at sign` }
+unless ((Character(name: "p").prefix).as_string == "@") { INFO@mark `WP2 a character is not written with an at sign` }
 
 // A name given to something is the name it answers to afterwards.
-renamed := Persona(name: "before").named("after")
+renamed := Character(name: "before").named("after")
 unless (renamed.name == "after") { INFO@mark `WP3 something named is not called that` }
 
 // What a world holds, and how many live in it.
 county := World(name: "county")
 unless (county.population.is_zero) { INFO@mark `WP4 an empty world has someone in it` }
-county.spawn(Persona(name: "one"))
-county.spawn(Persona(name: "two"))
+county.spawn(Character(name: "one"))
+county.spawn(Character(name: "two"))
 unless (county.population == 2) { INFO@mark `WP5 two who live there do not count two` }
 unless (county.items.empty) { INFO@mark `WP6 an empty world holds something` }
 county.add(Item(name: "lamp", issuer: county))
@@ -208,4 +208,4 @@ unless (Status.do_not_disturb) { INFO@mark `ST3 there is no being do not disturb
 unless (Status.busy) { INFO@mark `ST4 there is no being busy` }
 if (Status.idle == Status.busy) { INFO@mark `ST5 idle and busy are the same` }
 unless (Status.components.count == 9) { INFO@mark `ST6 there are other than nine statuses` }
-unless (Persona(name: "p", status: Status.busy).status == Status.busy) { INFO@mark `ST7 a persona forgot being busy` }
+unless (Character(name: "p", status: Status.busy).status == Status.busy) { INFO@mark `ST7 a character forgot being busy` }

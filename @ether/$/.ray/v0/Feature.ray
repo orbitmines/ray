@@ -100,7 +100,7 @@ Network := class {
     valid => .text.count.nonzero.and(.text.count < 256)
   }
   Proxy := class {
-    through (persona) => Network.Proxy(persona: persona)
+    through (character) => Network.Proxy(character: character)
   }
   Protocol := class {
     version => UUID.Namespace.dns

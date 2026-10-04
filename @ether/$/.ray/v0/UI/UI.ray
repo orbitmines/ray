@@ -52,7 +52,7 @@ Render := class {
       inside := chain None
       box.children for { inside &= .written(it.value) }
       tag ^keyword := "div"
-      if (box.link === None) { } else { tag = "a" }
+      unless (box.link === None) { tag = "a" }
       opened := "<" + (tag + (Render.HTML.attributes(box) + ">"))
       shown ^keyword := ""
       unless (box.text === None) { shown = Render.HTML.escaped(box.text) }
@@ -217,6 +217,11 @@ Site := class {
 }
 
 String.components.hierarchy &= class {
-  italic => Render.Box(value: this, text: this, style: (chain `italic`))
-  bold => Render.Box(value: this, text: this, style: (chain `bold`))
+  styled (style) => (
+    styles := chain None
+    styles &= style
+    Render.Box(value: this, text: this, style: styles)
+  )
+  italic => .styled(`italic`)
+  bold => .styled(`bold`)
 }

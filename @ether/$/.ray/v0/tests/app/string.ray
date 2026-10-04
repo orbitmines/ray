@@ -156,10 +156,10 @@ unless ("q".head.value.word) { INFO@mark `S95 a letter is not a word character` 
 if (" ".head.value.word) { INFO@mark `S96 a space is a word character` }
 unless (" ".head.value.blank) { INFO@mark `S97 a space is not blank` }
 if ("a".head.value.blank) { INFO@mark `S98 a is blank` }
-unless (Character.newline.blank) { INFO@mark `S99 a newline is not blank` }
-unless (Character.tab.blank) { INFO@mark `S100 a tab is not blank` }
-unless (Character.space == " ".head.value) { INFO@mark `S101 the space is not a written space` }
-unless (Character.underscore == "_".head.value) { INFO@mark `S102 the underscore is not a written one` }
+unless (Char.newline.blank) { INFO@mark `S99 a newline is not blank` }
+unless (Char.tab.blank) { INFO@mark `S100 a tab is not blank` }
+unless (Char.space == " ".head.value) { INFO@mark `S101 the space is not a written space` }
+unless (Char.underscore == "_".head.value) { INFO@mark `S102 the underscore is not a written one` }
 unless ("a".head.value.is_ascii) { INFO@mark `S103 a is not one byte` }
 
 // What a text is, counted and cut. `length` is `count` said the other way,
@@ -208,12 +208,12 @@ if (Regex(pattern: "BC").matches("abcd")) { INFO@mark `S133 a pattern minding ca
 unless (folded.flags.count == 1) { INFO@mark `S134 a pattern given one flag holds other than one` }
 
 // The Latin letters and digits, built from the bits that say which they are.
-unless (Character.latin_upper(1) == "A".head.value) { INFO@mark `S135 the first upper letter is not A` }
-unless (Character.latin_lower(1) == "a".head.value) { INFO@mark `S136 the first lower letter is not a` }
-unless (Character.latin_upper(26) == "Z".head.value) { INFO@mark `S137 the twenty-sixth upper letter is not Z` }
-unless (Character.decimal_digit(0) == "0".head.value) { INFO@mark `S138 nothing is not written 0` }
-unless (Character.decimal_digit(7) == "7".head.value) { INFO@mark `S139 seven is not written 7` }
-unless (Character.decimal_digit(11) == "b".head.value) { INFO@mark `S140 eleven is not written b` }
+unless (Char.latin_upper(1) == "A".head.value) { INFO@mark `S135 the first upper letter is not A` }
+unless (Char.latin_lower(1) == "a".head.value) { INFO@mark `S136 the first lower letter is not a` }
+unless (Char.latin_upper(26) == "Z".head.value) { INFO@mark `S137 the twenty-sixth upper letter is not Z` }
+unless (Char.decimal_digit(0) == "0".head.value) { INFO@mark `S138 nothing is not written 0` }
+unless (Char.decimal_digit(7) == "7".head.value) { INFO@mark `S139 seven is not written 7` }
+unless (Char.decimal_digit(11) == "b".head.value) { INFO@mark `S140 eleven is not written b` }
 
 // What a number spells in ten, read off a counter one unit at a time.
 unless (7.as_string == "7") { INFO@mark `S141 seven does not spell 7` }
@@ -222,8 +222,8 @@ unless (0.as_string == "0") { INFO@mark `S143 nothing does not spell 0` }
 
 // The characters the draft writes with an escape, and what a character says
 // about its own bits.
-unless (Character.null.codepoint.is_zero) { INFO@mark `S144 the null character is not nothing` }
-unless (Character.carriage.codepoint == 13) { INFO@mark `S145 the carriage return is not thirteen` }
+unless (Char.null.codepoint.is_zero) { INFO@mark `S144 the null character is not nothing` }
+unless (Char.carriage.codepoint == 13) { INFO@mark `S145 the carriage return is not thirteen` }
 unless ("a".head.value.is_scalar) { INFO@mark `S146 a is not a scalar` }
 
 // A chain of texts, each put in a case.

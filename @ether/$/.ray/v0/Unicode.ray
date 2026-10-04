@@ -7,7 +7,7 @@ Unicode := class {
   surrogate_first => 55296
 
   GeneralCategory := enum letter | number | punctuation | symbol | separator | other
-  category (character: Character) => (
+  category (character: Char) => (
     if character.letter { Unicode.GeneralCategory.letter }
     elsif character.digit { Unicode.GeneralCategory.number }
     elsif character.blank { Unicode.GeneralCategory.separator }

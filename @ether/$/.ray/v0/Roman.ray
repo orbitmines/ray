@@ -4,7 +4,7 @@ Roman := class {
     value => .mantissa * 10.pow(.power)
     with_value (amount: Number) => Roman.Digit.i(mantissa: amount, power: 0)
   }
-  digit_of (character: Character) => (
+  digit_of (character: Char) => (
     upper := character.upper
     if character.is_ascii.not { if (Unicode.fits(character, 13)) { None } else { Roman.number_form(character) } }
     elsif (upper == U+0049) { Roman.Digit.i }

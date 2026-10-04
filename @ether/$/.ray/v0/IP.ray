@@ -101,7 +101,7 @@ IP := class {
     this.from_bits(cleared)
   )
 
-  read (text: String, separator: Character, radix: Number) => (
+  read (text: String, separator: Char, radix: Number) => (
     out := chain None
     text.split(separator) for { out &= it.value.as_number_in(radix) }
     out

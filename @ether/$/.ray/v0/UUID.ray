@@ -45,7 +45,7 @@ UUID := class: Hexadecimal {
       unless (it.value == 8) { out &= dash }
       left ^keyword := it.value
       while left {
-        out &= Character.decimal_digit(walker.value)
+        out &= Char.decimal_digit(walker.value)
         walker = walker.next
         left = left.pred
       }
@@ -99,6 +99,6 @@ UUID.v5 = class: UUID {
   name: String
 }
 
-Character.components.hierarchy &= class {
+Char.components.hierarchy &= class {
   hexadecimal_digit => if .digit { .codepoint - 48 } else { .lower.codepoint - 87 }
 }

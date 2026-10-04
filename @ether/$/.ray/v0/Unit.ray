@@ -7,9 +7,12 @@ Unit := class {
     this.plural = several
     this.symbol = short
     named ^keyword := this
-    external define Unit singular { named }
-    external define Unit several { named }
-    external define Unit short { named }
+    Unit.known &= named
+    this
+  )
+  also_called (spelled) => (
+    unless (.aliases) { this.aliases = chain None }
+    .aliases &= spelled
     this
   )
   over (other: Unit) => (
@@ -49,8 +52,11 @@ Unit := class {
     if (.offset) { shifted_by = .offset }
     shifted_by
   )
+  zero_point => if .is_base { 0 } else { (.shift * .base.scale) + .base.zero_point }
+  shifts => .zero_point.nonzero
 
   as (other: Unit) => (1 of this) as other
+  as (=== boolean) => true
 
   multiple (times: Number) => (
     parent := this
@@ -75,6 +81,82 @@ Unit := class {
       (.ratio == other.ratio).and(.base == other.base)
     }
   } else { false }
+  chainable != (other: Unit) => (this == other).not
+
+  admits (candidate) => (
+    admitted ^keyword := (candidate.base === None).not
+    unless admitted { admitted = (candidate.name === None).not }
+    unless admitted { admitted = (Unit.named(candidate) === None).not }
+    admitted
+  )
+  named (spelled) => (
+    found ^keyword := None
+    Unit.known for {
+      if (it.value.spelled_as(spelled)) {
+        if found { found = found | it.value } else { found = it.value }
+      }
+    }
+    unless found { found = Unit.prefixed_named(spelled) }
+    unless found { found = Unit.rate_named(spelled) }
+    found
+  )
+  spelled_as (spelled) => (
+    spelled_so ^keyword := (.name == spelled).or(.plural == spelled).or(.symbol == spelled)
+    unless spelled_so { if (.aliases) { spelled_so = .aliases some { it.value == spelled } } }
+    spelled_so
+  )
+  prefixed_named (spelled) => (
+    found ^keyword := None
+    Prefix.components for {
+      unless found { found = Unit.with_prefix(spelled, it.value) }
+    }
+    BinaryPrefix.components for {
+      unless found { found = Unit.with_prefix(spelled, it.value) }
+    }
+    found
+  )
+  with_prefix (spelled, prefix) => (
+    found ^keyword := None
+    if (spelled.starts_with(prefix.symbol)) {
+      rest ^keyword := spelled.slice(prefix.symbol.count, spelled.count)
+      if (rest.nonempty) {
+        unprefixed ^keyword := Unit.named(rest)
+        if unprefixed { found = unprefixed prefixed prefix }
+      }
+    }
+    unless found {
+      if (spelled.starts_with(prefix.word)) {
+        rest ^keyword := spelled.slice(prefix.word.count, spelled.count)
+        if (rest.nonempty) {
+          unprefixed ^keyword := Unit.named(rest)
+          if unprefixed { found = unprefixed prefixed prefix }
+        }
+      }
+    }
+    found
+  )
+  rate_named (spelled) => (
+    found ^keyword := None
+    slash ^keyword := spelled.index_of("/")
+    if slash {
+      above ^keyword := Unit.named(spelled.slice(0, slash))
+      below ^keyword := Unit.named(spelled.slice(slash.succ, spelled.count))
+      if (above).and(below) { found = above / below }
+    }
+    found
+  )
+  as_string => if (.name) { .name } else { .symbol }
+
+  compounds / (other: Unit) => (
+    above ^keyword := this
+    below ^keyword := other
+    Rate(numerator: above, denominator: below)
+  )
+  read (spelled) => (
+    reading ^keyword := spelled
+    unless (spelled.base).or(spelled.name) { reading = Unit.named(spelled) }
+    reading
+  )
 
   prefixed (prefix) => (
     parent := this
@@ -85,20 +167,44 @@ Unit := class {
   )
 }
 
+Rate := class: Unit {
+  numerator: Unit
+  denominator: Unit
+
+  is_base => .numerator.is_base.and(.denominator.is_base)
+  base_unit => (
+    above ^keyword := .numerator.base_unit
+    below ^keyword := .denominator.base_unit
+    Rate(numerator: above, denominator: below)
+  )
+  scale => .numerator.scale / .denominator.scale
+  rank => .numerator.rank + .denominator.rank
+  over (other: Unit) => None
+  name => .numerator.name + " per " + .denominator.name
+  symbol => .numerator.symbol + "/" + .denominator.symbol
+  is_temporal => false
+  chainable == (other: Unit) => (.numerator == other.numerator).and(.denominator == other.denominator)
+}
+
 Quantity := class {
 
   as (other: Unit) => (
     converted ^keyword := None
-    down ^keyword := .unit.over(other)
-    if (down) { converted = .amount * down } else {
-      up ^keyword := other.over(.unit)
-      if (up) { converted = .amount / up } else { converted = (.amount * .unit.scale) / other.scale }
+    if (.unit.shifts.or(other.shifts)) {
+      converted = (((.amount * .unit.scale) + .unit.zero_point) - other.zero_point) / other.scale
+    } else {
+      down ^keyword := .unit.over(other)
+      if (down) { converted = .amount * down } else {
+        up ^keyword := other.over(.unit)
+        if (up) { converted = .amount / up } else { converted = (.amount * .unit.scale) / other.scale }
+      }
     }
     Quantity(
       amount: converted
       unit: other
     )
   )
+  as (=== boolean) => true
 
   finer (other: Quantity) => if (other.unit.rank < .unit.rank) { other.unit } else { .unit }
   chainable == (other: Quantity) => (
@@ -126,12 +232,89 @@ Quantity := class {
     )
   )
 
+  chainable < (other: Number) => ERROR@this `a quantity does not compare with a plain number`
+  chainable > (other: Number) => ERROR@this `a quantity does not compare with a plain number`
+  chainable > (other: Quantity) => other < this
+
+  compounds / (other: Unit) => (
+    held ^keyword := .amount
+    per ^keyword := .unit / other
+    Quantity(amount: held, unit: per)
+  )
+  compounds / (other: Quantity) => (
+    held ^keyword := .amount / other.amount
+    per ^keyword := .unit / other.unit
+    Quantity(amount: held, unit: per)
+  )
+  compounds * (times: Number) => (
+    held ^keyword := .amount * times
+    kind ^keyword := .unit
+    Quantity(amount: held, unit: kind)
+  )
+
+  { }{rest: Quantity ^unit} ^punctuation => .followed_by(Quantity.read(rest))
+  followed_by (rest: Quantity) => (
+    joined ^keyword := None
+    if (rest.unit.scale < .unit.scale) {
+      joined = this + rest
+      joined.parts = chain None
+      if (.parts) { .parts for { joined.parts &= it.value } } else { joined.parts &= this }
+      joined.parts &= rest
+    } else { ERROR@rest `quantities written side by side go from the largest unit to the smallest` }
+    joined
+  )
+  admits (candidate) => (
+    admitted ^keyword := (candidate.unit === None).not
+    unless admitted { admitted = (Quantity.read(candidate) === None).not }
+    admitted
+  )
+  read (spelled) => (
+    found ^keyword := None
+    if ((spelled.unit === None).not) { found = spelled } else {
+      digits_end ^keyword := 0
+      counting ^keyword := true
+      spelled for {
+        if (counting.and(it.value.digit)) { digits_end = digits_end.succ } else { counting = false }
+      }
+      if (digits_end.nonzero.and(digits_end < spelled.count)) {
+        kind ^keyword := Unit.named(spelled.slice(digits_end, spelled.count))
+        if kind { found = spelled.slice(0, digits_end).as_number of kind }
+      }
+    }
+    found
+  )
+
+  broken_into (units) => (
+    pieces ^keyword := chain None
+    left ^keyword := this
+    walker ^keyword := units.head
+    while walker {
+      kind ^keyword := walker.value
+      whole ^keyword := (left as kind).amount
+      if walker.next {
+        piece ^keyword := Quantity(amount: whole, unit: kind)
+        pieces &= piece
+        left = left - piece
+      } else { pieces &= (left as kind) }
+      walker = walker.next
+    }
+    pieces
+  )
+
   is_temporal => .unit.is_temporal
   as_seconds => (this as Second).amount
+  as_string => .amount.as_string + " " + .unit.as_string
 }
 
 Measured := class {
-  { }{unit: Unit ^unit} ^punctuation => this of unit
+  { }{unit: Unit ^unit} ^punctuation => this of Unit.read(unit)
+  {unit: Unit ^unit} ^punctuation => this of Unit.read(unit)
+  years => this of Year
+  compounds / (other: Unit) => (
+    held ^keyword := this
+    per ^keyword := Unit.one / other
+    Quantity(amount: held, unit: per)
+  )
   of (measure) => (
     held := this
     kind := measure
@@ -144,18 +327,17 @@ Measured := class {
 Number.components.hierarchy &= Measured
 Number.Real.components.hierarchy &= Measured
 
-Prefix := enum deka (symbol: `da`, magnitude: 1) | hecto (symbol: `h`, magnitude: 2) | kilo (symbol: `k`, magnitude: 3) | mega (symbol: `M`, magnitude: 6) | giga (symbol: `G`, magnitude: 9) | tera (symbol: `T`, magnitude: 12) | peta (symbol: `P`, magnitude: 15) | exa (symbol: `E`, magnitude: 18) | zetta (symbol: `Z`, magnitude: 21) | yotta (symbol: `Y`, magnitude: 24) | ronna (symbol: `R`, magnitude: 27) | quetta (symbol: `Q`, magnitude: 30) {
-  factor => 10.pow(.magnitude)
+Prefix := enum deka (symbol: `da`, word: `deka`, magnitude: 1) | hecto (symbol: `h`, word: `hecto`, magnitude: 2) | kilo (symbol: `k`, word: `kilo`, magnitude: 3) | mega (symbol: `M`, word: `mega`, magnitude: 6) | giga (symbol: `G`, word: `giga`, magnitude: 9) | tera (symbol: `T`, word: `tera`, magnitude: 12) | peta (symbol: `P`, word: `peta`, magnitude: 15) | exa (symbol: `E`, word: `exa`, magnitude: 18) | zetta (symbol: `Z`, word: `zetta`, magnitude: 21) | yotta (symbol: `Y`, word: `yotta`, magnitude: 24) | ronna (symbol: `R`, word: `ronna`, magnitude: 27) | quetta (symbol: `Q`, word: `quetta`, magnitude: 30) | deci (symbol: `d`, word: `deci`, places: 1) | centi (symbol: `c`, word: `centi`, places: 2) | milli (symbol: `m`, word: `milli`, places: 3) | micro (symbol: `µ`, word: `micro`, places: 6) | nano (symbol: `n`, word: `nano`, places: 9) | pico (symbol: `p`, word: `pico`, places: 12) | femto (symbol: `f`, word: `femto`, places: 15) | atto (symbol: `a`, word: `atto`, places: 18) | zepto (symbol: `z`, word: `zepto`, places: 21) | yocto (symbol: `y`, word: `yocto`, places: 24) | ronto (symbol: `r`, word: `ronto`, places: 27) | quecto (symbol: `q`, word: `quecto`, places: 30) {
+  factor => if (.places) { Number.Real.written(1, .places, ten) } else { 10.pow(.magnitude) }
 }
 
-BinaryPrefix := enum kibi (symbol: `Ki`, power: 1) | mebi (symbol: `Mi`, power: 2) | gibi (symbol: `Gi`, power: 3) | tebi (symbol: `Ti`, power: 4) | pebi (symbol: `Pi`, power: 5) | exbi (symbol: `Ei`, power: 6) | zebi (symbol: `Zi`, power: 7) | yobi (symbol: `Yi`, power: 8) | robi (symbol: `Ri`, power: 9) | quebi (symbol: `Qi`, power: 10) {
+BinaryPrefix := enum kibi (symbol: `Ki`, word: `kibi`, power: 1) | mebi (symbol: `Mi`, word: `mebi`, power: 2) | gibi (symbol: `Gi`, word: `gibi`, power: 3) | tebi (symbol: `Ti`, word: `tebi`, power: 4) | pebi (symbol: `Pi`, word: `pebi`, power: 5) | exbi (symbol: `Ei`, word: `exbi`, power: 6) | zebi (symbol: `Zi`, word: `zebi`, power: 7) | yobi (symbol: `Yi`, word: `yobi`, power: 8) | robi (symbol: `Ri`, word: `robi`, power: 9) | quebi (symbol: `Qi`, word: `quebi`, power: 10) {
   factor => 1024.pow(.power)
 }
 
-SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit(
-  name: name
-  symbol: symbol
-)
+SI_Unit{ }{literal symbol}{ }{literal name} ^keyword => Unit().called(name, name.plural, symbol)
+
+Unit.known = chain None
 
 Bit := Unit().called(`bit`, `bits`, `b`)
 Byte := Unit(base: Bit, factor: 8).called(`byte`, `bytes`, `B`)
@@ -189,4 +371,44 @@ Minute := (Second multiple (60)).called(`minute`, `minutes`, `min`)
 Hour := (Minute multiple (60)).called(`hour`, `hours`, `h`)
 Day := (Hour multiple 24).called(`day`, `days`, `d`)
 Week := (Day multiple 7).called(`week`, `weeks`, `wk`)
-Year => Day multiple 365
+Year := (Day multiple 365).called(`year`, `years`, `y`)
+
+Minute.also_called(`m`)
+
+Meter := SI_Unit m meter
+Gram := SI_Unit g gram
+Kilogram := (Gram prefixed Prefix.kilo).called(`kilogram`, `kilograms`, `kg`)
+Ampere := SI_Unit A ampere
+Kelvin := SI_Unit K kelvin
+Mole := SI_Unit mol mole
+Candela := SI_Unit cd candela
+Celsius := (Kelvin shifted 273).called(`celsius`, `celsius`, `°C`)
+
+Unit.one = Unit().called(`one`, `ones`, `1`)
+
+Imaginary := Unit().called(`imaginary`, `imaginary`, `i`)
+Complex := class {
+  real: Node
+  imaginary: Node
+
+  compounds + (other: Complex) => (
+    summed_real ^keyword := .real + other.real
+    summed_imaginary ^keyword := .imaginary + other.imaginary
+    Complex(real: summed_real, imaginary: summed_imaginary)
+  )
+  compounds * (other: Complex) => (
+    product_real ^keyword := (.real * other.real) - (.imaginary * other.imaginary)
+    product_imaginary ^keyword := (.real * other.imaginary) + (.imaginary * other.real)
+    Complex(real: product_real, imaginary: product_imaginary)
+  )
+  chainable == (other: Complex) => (.real == other.real).and(.imaginary == other.imaginary)
+  conjugate => (
+    kept ^keyword := .real
+    flipped ^keyword := .imaginary.negated
+    Complex(real: kept, imaginary: flipped)
+  )
+}
+Quantity.components.hierarchy &= class {
+  compounds + (other: Number) => if (.unit == Imaginary) { Complex(real: other, imaginary: .amount) } else { ERROR@other `a quantity does not add to a plain number` }
+  as_complex => if (.unit == Imaginary) { Complex(real: 0, imaginary: .amount) } else { None }
+}

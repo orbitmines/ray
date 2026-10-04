@@ -6,7 +6,11 @@ Roman := class {
   }
   digit_of (character: Char) => (
     upper := character.upper
-    if character.is_ascii.not { if (Unicode.fits(character, 13)) { None } else { Roman.number_form(character) } }
+    if character.is_ascii.not {
+      if (Unicode.fits(character, 13)) { None }
+      elsif (character < 8576) { Roman.number_form(character) }
+      else { Roman.apostrophus_form(character) }
+    }
     elsif (upper == U+0049) { Roman.Digit.i }
     elsif (upper == U+0056) { Roman.Digit.v }
     elsif (upper == U+0058) { Roman.Digit.x }
@@ -26,19 +30,43 @@ Roman := class {
     else { Roman.Digit.m }
   )
 
+  apostrophus_form (codepoint) => (
+    offset := codepoint - 8576
+    if (offset == 0) { Roman.Digit.m }
+    elsif (offset == 1) { Roman.Digit.i.with_value(5000) }
+    elsif (offset == 2) { Roman.Digit.i.with_value(10000) }
+    elsif (offset == 5) { Roman.Digit.i.with_value(6) }
+    elsif (offset == 6) { Roman.Digit.l }
+    elsif (offset == 7) { Roman.Digit.i.with_value(50000) }
+    elsif (offset == 8) { Roman.Digit.i.with_value(100000) }
+    else { None }
+  )
+
+  marked (walker) => if (walker.next) { (walker.next.value == Roman.Vinculum.overline).or(walker.next.value == Roman.Vinculum.double_overline) } else { false }
+  after (walker) => if (Roman.marked(walker)) { walker.next.next } else { walker.next }
+  worth (walker) => (
+    held ^keyword := Roman.digit_of(walker.value).value
+    if (walker.next) {
+      if (walker.next.value == Roman.Vinculum.overline) { held = held * 1000 }
+      elsif (walker.next.value == Roman.Vinculum.double_overline) { held = held * 1000000 }
+    }
+    held
+  )
+
   as_number => (
     total ^keyword := 0
     walker ^keyword := .text.head
     while (walker) {
-      current := Roman.digit_of(walker.value).value
-      following := if (walker.next) { Roman.digit_of(walker.next.value).value } else { 0 }
+      current := Roman.worth(walker)
+      following_at ^keyword := Roman.after(walker)
+      following := if (following_at) { Roman.worth(following_at) } else { 0 }
 
       if (current < following) {
         total = total + (following - current)
-        walker = walker.next.next
+        walker = Roman.after(following_at)
       } else {
         total = total + current
-        walker = walker.next
+        walker = following_at
       }
     }
     total
@@ -51,6 +79,7 @@ Roman := class {
     amount := .as_number
     (0 < amount).and((amount / 100) < 40)
   )
+  Standard => Roman{.is_standard}
 
   Normalizer := enum standard | additive
   normalizer: Roman.Normalizer.standard
@@ -142,6 +171,22 @@ Roman := class {
       }
       total
     )
+    sub_uncia (point) => (
+      held ^keyword := 0
+      if (point == 8579) { held = 72 }
+      elsif (point == 65938) { held = 72 }
+      elsif (point == 65939) { held = 24 }
+      elsif (point == 65940) { held = 12 }
+      elsif (point == 65941) { held = 1 }
+      held
+    )
+    parts_of_1728 (text: String) => (
+      total ^keyword := Roman.Fraction.twelfths(text) * 144
+      text for { total = total + Roman.Fraction.sub_uncia(it.value.codepoint) }
+      total
+    )
+    as_real (text: String) => Number.Real.written((Roman.Fraction.parts_of_1728(text) * 1000) / 1728, 3, ten)
+
     uncia => 1
     sextans => 2
     quadrans => 3

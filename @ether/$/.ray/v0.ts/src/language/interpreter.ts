@@ -134,6 +134,7 @@ export class Rule {
   get leading(): boolean { return this.pattern[0]?.kind === 'capture'; }
   // A leading capture with a type is a pattern over text.
   get reads(): boolean { const first = this.pattern[0]; return first?.kind === 'capture' && (first.typed || first.undecided === true); }
+  get loose(): boolean { const second = this.pattern[1]; return this.pattern[0]?.kind === 'gap' && !(second?.kind === 'capture' && (second.typed || second.undecided === true)); }
   private enclosing?: boolean;
   get enclosed(): boolean { if (this.enclosing === undefined) { const first = this.pattern[0], last = this.pattern[this.pattern.length - 1]; this.enclosing = this.pattern.length >= 3 && first.kind === 'literal' && last.kind === 'literal' && !Interpreter.word.test(first.text[0] ?? 'a'); } return this.enclosing; }
   // A spelling that takes the one thing written after it.
@@ -957,7 +958,7 @@ export class Interpreter {
     }
     const held = this.owned_sets.get(key), of = this.rules_on(key);
     if (held?.of === of && held.based === based && held.target === target) return held;
-    const rules = this.canonical(of.filter(rule => (rule.pattern[0]?.kind !== 'gap' && !rule.implicit) || rule.home === target));
+    const rules = this.canonical(of.filter(rule => (!rule.loose && !rule.implicit) || rule.home === target));
     const made = { of, based, target, rules, mine: this.derived(rules, 'mine', this.keep_mine, based) };
     this.owned_sets.set(key, made);
     return made;
@@ -1290,7 +1291,7 @@ export class Interpreter {
   }
   readonly keep_after = (all: Rule[]) => all.filter(rule => !rule.leading && rule.home === this.GLOBAL);
   private readonly keep_heads = (all: Rule[]) => all.filter(rule => ((!rule.leading || rule.reads) && rule.home === this.GLOBAL) || rule.defines);
-  private readonly keep_owned = (all: Rule[]) => all.filter(rule => rule.pattern[0]?.kind !== 'gap' && !rule.implicit);
+  private readonly keep_owned = (all: Rule[]) => all.filter(rule => !rule.loose && !rule.implicit);
   private readonly keep_leading = (all: Rule[]) => all.filter(rule => rule.leading && !rule.implicit);
   private readonly keep_mine = (all: Rule[]) => { const based = this.based(); return all.filter(rule => !based.has(rule) && rule.home !== this.GLOBAL); };
   private readonly keep_own = (all: Rule[]) => { const openers = this.openers_now(); return all.filter(rule => !rule.leading && !(rule.pattern[0]?.kind === 'literal' && openers.has(rule.pattern[0].text))); };
@@ -1332,7 +1333,7 @@ export class Interpreter {
       local.body = rule.body;
       if (receiver !== undefined) {
         const value = target !== undefined ? target[0] : this.deref(receiver, false);
-        const stands = receiver.place !== undefined || value?.text === true;
+        const stands = receiver.place !== undefined || value?.text === true || value?.code !== undefined;
         if (!stands && value !== undefined && !value.none) this.construct(value);
         if (stands) {
           const context = new Node(receiver.at);

@@ -750,7 +750,9 @@ export class Interpreter {
       trace?.push({ k: 'reader', fn: reader?.fn });
       const lists = this.on_lists(value, frame);
       if (trace !== undefined) { const shape = this.shape(value); trace.push({ k: 'on', mine: this.print(shape.mine), rules: this.print(shape.rules), on: this.print(shape.on) }); positions!.push(cursor.cursor); }
-      const found = this.best(lists.mine, cursor, frame, value) ?? this.best(lists.rules, cursor, frame, value);
+      const mine = this.best(lists.mine, cursor, frame, value);
+      const reaching = mine === undefined ? undefined : this.best(this.operating_of(frame), cursor, frame, value);
+      const found = reaching !== undefined && reaching.end > mine!.end ? reaching : mine ?? this.best(lists.rules, cursor, frame, value);
       if (found !== undefined) { if (trace !== undefined) { if (this.sensitive !== basis) trace.push({ k: 'declared', declared: this.declared }); trace.push({ k: 'fire', match: found, receiver: 'value', occurrence: this.occurrence(found.rule, 'value', frame, value) }); } value = this.fire(found, cursor, frame); continue; }
       const at = this.spaces(cursor, cursor.cursor);
       if (at >= cursor.limit || text[at] === '\n') { if (trace !== undefined) { if (this.sensitive !== basis) trace.push({ k: 'declared', declared: this.declared }); trace.push({ k: 'break' }); } break; }
@@ -966,6 +968,8 @@ export class Interpreter {
     return made;
   }
   static owned_by_nothing = { rules: [] as Rule[], mine: [] as Rule[] };
+  private readonly keep_operating = (all: Rule[]) => all.filter(rule => rule.leading && !rule.implicit && rule.pattern[1]?.kind === 'capture' && rule.pattern[1].operator === true && rule.pattern[1].content !== undefined);
+  operating_of(frame: Node): Rule[] { return this.derived(this.rules_of(frame), 'operating', this.keep_operating); }
   leading_of(frame: Node): { rules: Rule[]; mine: Rule[] } {
     const based = this.based();
     const rules = this.derived(this.rules_of(frame), 'leading', this.keep_leading);

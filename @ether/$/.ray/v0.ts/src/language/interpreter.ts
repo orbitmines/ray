@@ -1215,6 +1215,16 @@ export class Interpreter {
     const latest = new Map<string, Rule>();
     for (const rules of [scope, based]) for (const other of rules) if (other.operator !== undefined && (latest.get(other.key)?.order ?? -1) < other.order) latest.set(other.key, other);
     const order = Math.max(rule.order, latest.get(rule.key)?.order ?? -1);
+    if (rule.operator !== undefined) {
+      const first = new Map<string, number>();
+      for (const written of this.operators_written.values()) if ((first.get(written.operator) ?? Infinity) > written.order) first.set(written.operator, written.order);
+      const mine = first.get(rule.operator);
+      if (mine !== undefined) {
+        const out = [rule.operator];
+        for (const [operator, at] of first) if (at < mine && !out.includes(operator)) out.push(operator);
+        return out;
+      }
+    }
     const out: string[] = rule.operator === undefined ? [] : [rule.operator];
     for (const other of latest.values()) if (other.order < order) out.push(other.operator!);
     for (const [key, written] of this.operators_written) if (!latest.has(key) && written.order < order && !out.includes(written.operator)) out.push(written.operator);

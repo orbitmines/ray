@@ -397,3 +397,28 @@ unless ((2..<2).empty) { INFO@mark `RQ9 two up to two holds something` }
 unless ((a..c).head.next.value === b) { INFO@mark `RQ10 the path from the first ray to the third does not pass the second` }
 unless ((a..c).tail.value === c) { INFO@mark `RQ11 the path from the first ray to the third does not end there` }
 if (c..a) { INFO@mark `RQ12 a path runs against the direction of its rays` }
+
+// Reducing: the block is a closure whose one parameter is the accumulator,
+// `.` is the element it is given, and a lone operator is applied between them.
+reduced ^keyword := chain None
+reduced &= 1
+reduced &= 2
+reduced &= 3
+unless (reduced.reduce((acc) => acc + .) == 6) { INFO@mark `RD1 one, two, three summed through the accumulator are not six` }
+unless (reduced.reduce(acc = 0 => acc + 1) == 3) { INFO@mark `RD2 counting from a given start does not reach three` }
+unless (reduced.reduce(acc = 10 => acc + .) == 16) { INFO@mark `RD3 a given start is not where the sum begins` }
+unless (reduced.reduce(+) == 6) { INFO@mark `RD4 a lone operator does not reduce` }
+unless (reduced.reduce(*) == 6) { INFO@mark `RD5 a product through a lone operator is not six` }
+if ((chain None).reduce(+)) { INFO@mark `RD6 reducing nothing answers something` }
+
+// `~~` runs its block as a closure on the value and answers the value.
+closed ^keyword := chain None
+closed &= 1
+closed &= 2
+kept ^keyword := closed ~~ (
+  .head.value = 5
+  .tail.value = 6
+)
+unless (kept === closed) { INFO@mark `RD7 ~~ does not answer the value it was given` }
+unless (closed.head.value == 5) { INFO@mark `RD8 . inside ~~ is not the value` }
+unless (closed.tail.value == 6) { INFO@mark `RD9 the second line of a ~~ block did not run on the value` }

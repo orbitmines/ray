@@ -1,7 +1,7 @@
 export const NAME = 'Ether' as const
 export const version:
   [major: number, releaseDate: string, index: number] =
-  [0, '2027-01-01', 1];
+  [0, '2027-01-01', 2];
 
 const cli: CLI.Spec = {
   help:     { alias: 'h', description: 'Print this help and exit.' },

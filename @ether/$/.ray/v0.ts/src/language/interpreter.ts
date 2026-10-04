@@ -1816,6 +1816,10 @@ export class Interpreter {
     piece.decided = this.declared;
   }
   // A parameter pattern fits what was captured: one free name is the argument, several are a list, none continues from the argument.
+  untyped(rule: Rule): boolean {
+    const found = rule.fitting?.found;
+    return rule.guard === undefined || found === undefined || (found.names.length === 1 && rule.guard.span.string.trim() === found.names[0]);
+  }
   fits(rule: Rule, captures: Map<string, Text.Node>, frame: Node): boolean {
     this.sensitive++;
     this.volatile++;
@@ -2011,12 +2015,14 @@ export class Interpreter {
         return { arity: 1, fn: ({ interpreter, args: [argument], at }: Args) => {
           if (argument === undefined) return undefined;
           const span = argument.code?.span ?? argument.at ?? at, frame = argument.code?.in ?? interpreter.GLOBAL;
+          let chosen: { rule: Rule; captures: Map<string, Text.Node> } | undefined;
           for (const rule of taking) {
             const captures = new Map([[(rule.pattern[1] as { name: string }).name, span]]);
             if (rule.guard !== undefined && rule.overloaded && !interpreter.fits(rule, captures, frame)) continue;
-            return interpreter.apply({ rule, begin: 0, end: 0, reach: 0, captures, literals: [], receiver }, frame, at);
+            if (chosen === undefined) chosen = { rule, captures };
+            if (!interpreter.untyped(rule)) { chosen = { rule, captures }; break; }
           }
-          return undefined;
+          return chosen === undefined ? undefined : interpreter.apply({ rule: chosen.rule, begin: 0, end: 0, reach: 0, captures: chosen.captures, literals: [], receiver }, frame, at);
         } };
       }
     }

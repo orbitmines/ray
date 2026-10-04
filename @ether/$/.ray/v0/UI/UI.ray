@@ -98,6 +98,48 @@ Render := class {
       if (opened.empty) { box.text } else { opened + (box.text + Terminal.escape("0m")) }
     )
 
+    expanded: (chain None)
+    toggled: false
+    running: false
+
+    run (value) => (
+      .running = true
+      Terminal.raw_mode
+      box := Render.boxed(value)
+      .selection = box
+      while .running {
+        Terminal.emit(Terminal.clear + .render(value))
+        .key(Terminal.read)
+      }
+      this
+    )
+    key (bytes) => (
+      if (bytes === None) { return this }
+      written := bytes.as_string
+      if (written == U+000D.as_string) { .activate }
+      elsif (written == Terminal.escape("OQ").slice(1, 4)) { .toggled = .toggled.not }
+      elsif (written == "q") { .running = false }
+      elsif (written.starts_with(Terminal.escape("1;5"))) { .skip(Terminal.decode(Terminal.escape(written.slice(written.count.pred, written.count)))) }
+      elsif (written.starts_with(Terminal.escape("1;2"))) { .expand(Terminal.decode(Terminal.escape(written.slice(written.count.pred, written.count)))) }
+      else {
+        direction := Terminal.decode(written)
+        unless (direction === None) { .move(direction) }
+      }
+      this
+    )
+    activate => if (.selection.value.activate) { .selection.value.activate } else { this }
+    skip (direction) => (
+      start := .selection
+      .move(direction)
+      while ((.selection.parent === start.parent).not.and((.selection === start).not)) { .move(direction) }
+      this
+    )
+    expand (direction) => (
+      .expanded &= .selection
+      .move(direction)
+      .expanded &= .selection
+      this
+    )
     move (direction) => (
       if (.selection === None) { return this }
       if (direction == Keyboard.Direction.down) { if .selection.children.nonempty { .selection = .selection.children.head.value } }

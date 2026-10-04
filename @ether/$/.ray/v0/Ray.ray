@@ -267,8 +267,15 @@ Iterable := class: Ordered {
 
   at (index: Number) => .entry.at(index)
 
-  paths => this
-  length => .paths.count
+  paths => [this]
+  length => (
+    longest ^keyword := 0
+    .paths for {
+      measured ^keyword := it.value.count
+      if (longest < measured) { longest = measured }
+    }
+    longest
+  )
 
   connected => true
   consistent => true
@@ -337,6 +344,16 @@ Ray := class: Iterable {
   ⊣ => .terminal
 
   is_boundary => .is_initial.or(.is_terminal)
+
+  index => (
+    position ^keyword := 0
+    walker ^keyword := this
+    while walker.is_initial.not {
+      position = position.succ
+      walker = walker.previous
+    }
+    position
+  )
 
   expand => (
     unfolded ^keyword := chain None

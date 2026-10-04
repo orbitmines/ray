@@ -1628,8 +1628,8 @@ export class Interpreter {
     if (this.members_of(this.rules_on(target)).has(name)) return undefined;
     return Object.assign(new Node(span), { place: { in: target, name, member: true } });
   }
-  private member_index = new WeakMap<Rule[], Map<string, { plain?: Rule; taking: Rule[] }>>();
-  members_of(rules: Rule[]): Map<string, { plain?: Rule; taking: Rule[] }> {
+  private member_index = new WeakMap<Rule[], Map<string, { plain?: Rule; taking: Rule[]; nearer?: boolean }>>();
+  members_of(rules: Rule[]): Map<string, { plain?: Rule; taking: Rule[]; nearer?: boolean }> {
     let index = this.member_index.get(rules);
     if (index !== undefined) return index;
     index = new Map();
@@ -1638,7 +1638,7 @@ export class Interpreter {
       if (first?.kind !== 'literal' || rule.pattern.length > 2 || (second !== undefined && second.kind !== 'capture')) continue;
       let entry = index.get(first.text);
       if (entry === undefined) index.set(first.text, entry = { taking: [] });
-      if (second === undefined) entry.plain ??= rule; else entry.taking.push(rule);
+      if (second === undefined) entry.plain ??= rule; else { if (entry.plain === undefined && entry.taking.length === 0) entry.nearer = true; entry.taking.push(rule); }
     }
     this.member_index.set(rules, index);
     return index;
@@ -1649,7 +1649,7 @@ export class Interpreter {
     const name = this.text(key);
     if (target.style !== undefined) return this.style(`${target.style}.${name}`);
     const entry = this.members_of(this.rules_on(target)).get(name);
-    const plain = entry?.plain;
+    const plain = entry?.nearer ? undefined : entry?.plain;
     if (plain !== undefined) return this.apply({ rule: plain, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [], receiver: this.location(node) ?? node }, target, key.at ?? node.at!);
     const taking = entry?.taking ?? [];
     if (taking.length > 0) {
@@ -1843,7 +1843,7 @@ export class Interpreter {
     return fit;
   }
   // What stands between two operands: the longest spelling that begins a rule taking one operand, on the left operand or in reach.
-  filtered = new Map<string, { declared: number; fits: boolean; missing: Set<string> }>();
+  filtered = new Map<string, { declared: number; fits: boolean; missing: Set<string>; settled?: boolean; written?: number }>();
   missing?: Set<string>;
   private spellings = new WeakMap<Node, { version: number; operators: Rule[] }>();
   operator_at(cursor: Text.Node, j: number, frame: Node, receiver?: Node): { text: string; rule: Rule } | undefined {
@@ -1871,17 +1871,19 @@ export class Interpreter {
   }
   // An operator's filter is asked of the method it names.
   static site(at: Text.Node | undefined): string { return at === undefined ? '' : `${at.source.location ?? at.string}:${at.begin}`; }
+  static named_count(node: Node): number { const names = node.names; return names === undefined ? 0 : Array.isArray(names) ? names.length : names.size; }
   operator_fits(piece: Piece & { kind: 'capture' }, spelled: { text: string; rule: Rule }): boolean {
     this.sensitive++;
     const key = `${Interpreter.site(piece.content)}|${spelled.rule.key}|${Interpreter.site(spelled.rule.at.source.location !== undefined ? spelled.rule.at : spelled.rule.lexical)}`;
     const known = this.filtered;
     const held = known.get(key);
-    if (held !== undefined && (held.declared === this.declared || ![...held.missing].some(name => this.GLOBAL.own(name) !== undefined))) return held.fits;
+    const written = Interpreter.named_count(this.rule_value(spelled.rule));
+    if (held !== undefined && (held.declared === this.declared || ((held.settled || held.written === written) && ![...held.missing].some(name => this.GLOBAL.own(name) !== undefined)))) return held.fits;
     if (this.checking.has(piece)) return false;
     this.checking.add(piece);
     const missing = this.missing;
     this.missing = new Set();
-    try { const { fits } = this.operator_checked(piece, spelled); known.set(key, { declared: this.declared, fits, missing: this.missing }); return fits; } finally { this.checking.delete(piece); this.missing = missing; }
+    try { const { fits, settled } = this.operator_checked(piece, spelled); known.set(key, { declared: this.declared, fits, missing: this.missing, settled, written }); return fits; } finally { this.checking.delete(piece); this.missing = missing; }
   }
   operator_checked(piece: Piece & { kind: 'capture' }, spelled: { text: string; rule: Rule }): { fits: boolean; settled: boolean } {
     const scope = new Node(piece.content);

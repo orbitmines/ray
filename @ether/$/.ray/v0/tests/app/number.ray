@@ -58,8 +58,8 @@ unless ((3 + 4) == seven) { INFO@mark `N41 3 + 4 is not seven` }
 unless (7.succ == eight) { INFO@mark `N42 7.succ is not eight` }
 unless (0x1F == 31) { INFO@mark `N43 0x1F is not thirty-one` }
 unless (0b101 == 5) { INFO@mark `N44 0b101 is not five` }
-if (Decimal.accepts(`4a`)) { INFO@mark `N45 4a is read as a decimal number` }
-unless (Hexadecimal.accepts(`4a`)) { INFO@mark `N46 4a is not read as a hexadecimal number` }
+if (`4a`.instance_of(Decimal.String)) { INFO@mark `N45 4a is read as a decimal number` }
+unless (`4a`.instance_of(Hexadecimal.String)) { INFO@mark `N46 4a is not read as a hexadecimal number` }
 
 // Signed numbers: what a sign does to size, order and arithmetic.
 unless (5.signed.negated.negative) { INFO@mark `N47 minus five is not negative` }

@@ -1,18 +1,18 @@
 Ordered := class {
   chainable < (other: Ordered) => TODO
 
-  chainable > (other: Ordered) => other.<(this)
-  chainable <= (other: Ordered) => other.<(this).not
-  chainable >= (other: Ordered) => .<(other).not
+  chainable > (other: Ordered) => other < this
+  chainable <= (other: Ordered) => (other < this).not
+  chainable >= (other: Ordered) => (this < other).not
 
   min (other: Ordered) => (
     smaller := other
-    if (.<(other)) { smaller = this }
+    if (this < other) { smaller = this }
     smaller
   )
   max (other: Ordered) => (
     larger := this
-    if (.<(other)) { larger = other }
+    if (this < other) { larger = other }
     larger
   )
 }

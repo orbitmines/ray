@@ -449,3 +449,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - Matching over a variable's uses, `where` side conditions: `.ray2/Node.ray:5`, `.ray2/Grammar.ray:147`. Engine.
 - Dead code, goto→if, the classic passes (SSA, folding, CSE, LICM), `optimize` / `minimize` / `prefer` / `allow capability`: `.ray2/Compiler/Optimizations.ray`. Library on Compiler levels.
 - Timers inserted between statements; `Program >>` stepping; extensional `==` on Programs; racing superposed implementations; resource accounting: `.ray2/Compiler/Optimizations.ray:34`, `.ray2/Program.ray:116–510`. Engine.
+
+### Answer 2026-10-04 evening (L§8.3, U6)
+- The top-level default privacy policy is `local`. `confidential` means "the default privacy policy", so it is `local` until someone sets their policy, e.g. to `@private` (which includes the @ether server), and then `confidential` follows it.
+- **Grants (2026-10-04 evening):** the U6 modifier prefix. `@company.execute deploy`, `@company.read @company.execute report`, `@me.managed.write settings`, and the same on member paths (`@company.read instance.field`, `@me.status`). `.read`/`.write`/`.execute` are W5.1's one permission: write is access to `=`, execute to `()`, read to the structure or any other method; `.on(method)` names any other method.

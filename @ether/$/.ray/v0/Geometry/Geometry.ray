@@ -96,7 +96,7 @@ Geometry := class {
       fits
     )
   }
-  Align := enum start | center | end | between
+  Align := enum start | center | end | between | middle
 
   Breakpoint := class {
     width: Node
@@ -167,10 +167,10 @@ Geometry := class {
   }
 }
 
-center ^keyword {block} => Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.center)
-right ^keyword {block} => Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.end)
-left ^keyword {block} => Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.start)
-between ^keyword {block} => Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.between)
+center ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.center)).holding(inline block)
+right ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.end)).holding(inline block)
+left ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.start)).holding(inline block)
+between ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.between)).holding(inline block)
 
 px {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.horizontal)
 py {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.vertical)
@@ -178,3 +178,18 @@ pt {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amou
 pb {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.bottom)
 mt {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.top, from: Geometry.Spacing.From.shape)
 mb {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.bottom, from: Geometry.Spacing.From.shape)
+middle ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `y`, align: Geometry.Align.middle)).holding(inline block)
+
+p {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount, y: amount), sides: Geometry.Side.all)
+pl {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.left)
+pr {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.right)
+mx {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.horizontal, from: Geometry.Spacing.From.shape)
+my {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.vertical, from: Geometry.Spacing.From.shape)
+ml {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.left, from: Geometry.Spacing.From.shape)
+mr {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.right, from: Geometry.Spacing.From.shape)
+
+xs {share} ^keyword => Geometry.Breakpoint(width: 0, share: share)
+sm {share} ^keyword => Geometry.Breakpoint(width: 576, share: share)
+md {share} ^keyword => Geometry.Breakpoint(width: 768, share: share)
+lg {share} ^keyword => Geometry.Breakpoint(width: 992, share: share)
+xl {share} ^keyword => Geometry.Breakpoint(width: 1200, share: share)

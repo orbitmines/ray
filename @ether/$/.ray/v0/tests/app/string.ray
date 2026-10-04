@@ -279,3 +279,11 @@ doubled_gap := "
 unless (doubled_gap.lines.count == 2) { INFO@mark `SM9 only one blank line after the opening quote is dropped` }
 unless (doubled_gap.lines.head.value.empty) { INFO@mark `SM10 the second blank line after the opening quote is not kept` }
 unless (doubled_gap.lines.tail.value == "a") { INFO@mark `SM11 the line after the blank lines keeps its indentation` }
+
+// Escapes in a written string: a backslash and a letter, or a code point in
+// braces.
+unless ("a\tb".count == 3) { INFO@mark `SE1 a tab escape is not one character` }
+unless ("a\tb".at(1).value == U+0009) { INFO@mark `SE2 a tab escape is not a tab` }
+unless ("\x{41}" == "A") { INFO@mark `SE3 a hexadecimal escape is not its character` }
+unless ("\u{00E9}".head.value == U+00E9) { INFO@mark `SE4 a four-digit escape is not its character` }
+unless ("a\\b".count == 3) { INFO@mark `SE5 an escaped backslash is not one character` }

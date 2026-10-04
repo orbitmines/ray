@@ -141,3 +141,4 @@ Answers from 2026-09-30.
 - **A-C5** `--` and `~~` as the Almanac says: `--` continues on the result of everything before it
   on the line (also after a newline, optionally with `if`); `~~` does the same but returns the
   original.
+- **A-C3 (updated 2026-10-04, from the current Almanac):** `.index` is the position by default (`["A", "B", "C"].map(entry => entry.index)` is `[0, 1, 2]`); `entry: - Ray` excludes the Ray, and `.index` is then the entry's own (a character's code point, a number's value). This reverses the 2026-09-30 answer's `+ Ray`.

@@ -190,6 +190,7 @@ Number := class: Ray {
     this.next.rounds(action, it.succ)
   }
 
+  right-to-left compounds ^ (exponent: Number) => .pow(exponent)
   pow (exponent: Number) => (
     power := one
     left := exponent

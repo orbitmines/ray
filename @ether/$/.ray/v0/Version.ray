@@ -1,0 +1,352 @@
+Version := class: Ray {
+  number: Number
+  revision: None
+
+  latest => .revision === None
+  revised (revision: Number) => Version(number: .number, revision: revision)
+  unrevised => Version(number: .number)
+  breaks_freely => .number == 0
+
+  chainable == (other: Version) => (.number == other.number).and(.revision == other.revision)
+  chainable < (other: Version) => (
+    earlier ^keyword := .number < other.number
+    if (.number == other.number) {
+      if (.revision === None) { earlier = false }
+      elsif (other.revision === None) { earlier = true }
+      else { earlier = .revision < other.revision }
+    }
+    earlier
+  )
+
+  through (last: Version) => Version.Range(first: this, last: last)
+  next => Version(number: .number.succ)
+  previous => Version(number: .number.pred)
+
+  resolved (revisions) => (
+    chosen ^keyword := this
+    wanted := .number
+    if .latest {
+      revisions for {
+        if (it.value.number == wanted) {
+          if ((chosen.revision === None).or(chosen.revision < it.value.revision)) { chosen = it.value }
+        }
+      }
+    }
+    chosen
+  )
+
+  as (=== String) => (
+    written ^keyword := "%" + .number.as(String)
+    unless .latest { written = written + ("'" + .revision.as(String)) }
+    written
+  )
+
+  Range := class: Ray {
+    first: Version
+    last: Version
+
+    includes (version: Version) => (version.number < .first.number).not.and((.last.number < version.number).not)
+    versions => (
+      listed := chain None
+      at ^keyword := .first.number
+      while ((.last.number < at).not) {
+        listed &= Version(number: at)
+        at = at.succ
+      }
+      listed
+    )
+    as (=== String) => .first.as(String) + (".." + .last.number.as(String))
+  }
+}
+
+Versioned := class: Ray {
+  name: String
+  range: Node
+  value: Node
+
+  visible_at (version: Version) => if (.range === None) { true } else { .range.includes(version) }
+  at (version: Version) => if (.visible_at(version)) { .value } else { None }
+  selected (range) => (
+    found ^keyword := chain None
+    held := this
+    range.versions for { if (held.visible_at(it.value)) { found &= held.value } }
+    found
+  )
+}
+
+Migration := class: Ray {
+  from: Version
+  to: Version
+  body: Node
+  inverse: None
+
+  run (old) => .body(old)
+  forward => .from.number < .to.number
+  backward => if (.inverse === None) { Quest(name: "derive the inverse of a migration", goal: this) } else { Migration(from: .to, to: .from, body: .inverse, inverse: .body) }
+
+  declare (migration) => (
+    Migration.declared &= migration
+    migration
+  )
+  stepping_from (version: Version) => (
+    found ^keyword := None
+    Migration.declared for {
+      if (found === None) {
+        if (it.value.from.number == version.number) { found = it.value }
+      }
+    }
+    found
+  )
+  stepping_to (version: Version) => (
+    found ^keyword := None
+    Migration.declared for {
+      if (found === None) {
+        if (it.value.to.number == version.number) { found = it.value }
+      }
+    }
+    found
+  )
+
+  path (from: Version, to: Version) => (
+    steps := chain None
+    at ^keyword := from
+    stuck ^keyword := false
+    if (from.number < to.number) {
+      while ((at.number == to.number).not.and(stuck.not)) {
+        step ^keyword := Migration.stepping_from(at)
+        if (step === None) { stuck = true } else {
+          steps &= step
+          at = step.to
+        }
+      }
+    } else {
+      while ((at.number == to.number).not.and(stuck.not)) {
+        step ^keyword := Migration.stepping_to(at)
+        if (step === None) { stuck = true } else {
+          steps &= step.backward
+          at = step.from
+        }
+      }
+    }
+    if stuck { None } else { steps }
+  )
+
+  migrate (old, from: Version, to: Version) => (
+    steps := Migration.path(from, to)
+    if (steps === None) { Quest(name: "migrate", goal: Migration.Pending(value: old, from: from, to: to)) } else {
+      held ^keyword := old
+      steps for {
+        if (it.value.instance_of(Quest)) { held = it.value } else { held = it.value.run(held) }
+      }
+      held
+    }
+  )
+
+  Pending := class: Ray {
+    value: Node
+    from: Version
+    to: Version
+  }
+}
+
+Migration.declared = chain None
+
+Stamp := class: Ray {
+  wall: Number
+  logical: 0
+  node: Node
+
+  chainable == (other: Stamp) => (.wall == other.wall).and(.logical == other.logical).and(.node == other.node)
+  chainable < (other: Stamp) => (
+    earlier ^keyword := .wall < other.wall
+    if (.wall == other.wall) {
+      earlier = .logical < other.logical
+      if (.logical == other.logical) { earlier = .node.as(String) < other.node.as(String) }
+    }
+    earlier
+  )
+  later (other: Stamp) => if (this < other) { other } else { this }
+  as (=== String) => .wall.as(String) + ("." + (.logical.as(String) + ("@" + .node.as(String))))
+}
+
+HybridClock := class: Ray {
+  node: Node
+  wall: 0
+  logical: 0
+
+  physical => UUID.v1.ticks
+
+  now => (
+    measured := HybridClock.physical
+    if (.wall < measured) {
+      .wall = measured
+      .logical = 0
+    } else { .logical = .logical.succ }
+    Stamp(wall: .wall, logical: .logical, node: .node)
+  )
+
+  receive (remote: Stamp) => (
+    measured := HybridClock.physical
+    kept_wall := .wall
+    highest ^keyword := measured
+    if (highest < kept_wall) { highest = kept_wall }
+    if (highest < remote.wall) { highest = remote.wall }
+    if ((highest == kept_wall).and(highest == remote.wall)) {
+      larger ^keyword := .logical
+      if (larger < remote.logical) { larger = remote.logical }
+      .logical = larger.succ
+    } elsif (highest == kept_wall) { .logical = .logical.succ }
+    elsif (highest == remote.wall) { .logical = remote.logical.succ }
+    else { .logical = 0 }
+    .wall = highest
+    Stamp(wall: .wall, logical: .logical, node: .node)
+  )
+}
+
+Definition := class: Ray {
+  id: UUID.v1.generate
+  name: String
+  holder: None
+
+  chainable == (other: Definition) => .id == other.id
+}
+
+Operation := class: Ray {
+  Kind := enum define | change | rename | remove
+
+  kind: Node
+  definition: Definition
+  stamp: Stamp
+  who: Node
+  before: None
+  after: None
+
+  inverse => (
+    undone ^keyword := .kind
+    if (.kind == Operation.Kind.define) { undone = Operation.Kind.remove }
+    elsif (.kind == Operation.Kind.remove) { undone = Operation.Kind.define }
+    Operation(kind: undone, definition: .definition, stamp: .stamp, who: .who, before: .after, after: .before)
+  )
+  touches (definition: Definition) => .definition == definition
+  matches (current) => if (.before === None) { true } else { .before == current }
+}
+
+History.components.hierarchy &= class {
+  clock => (
+    found ^keyword := None
+    owner := .repository
+    History.clocks for { if (it.value.node === owner) { found = it.value } }
+    if (found === None) {
+      found = HybridClock(node: .repository)
+      History.clocks &= found
+    }
+    found
+  )
+
+  operate (who, kind, definition, before, after) => (
+    stamped := Operation(kind: kind, definition: definition, stamp: .clock.now, who: who, before: before, after: after)
+    .commit(who, stamped)
+    stamped
+  )
+  define (who, definition, code) => .operate(who, Operation.Kind.define, definition, None, code)
+  change (who, definition, code) => .operate(who, Operation.Kind.change, definition, .code_of(definition), code)
+  rename (who, definition, name: String) => .operate(who, Operation.Kind.rename, definition, .name_of(definition), name)
+  remove (who, definition) => .operate(who, Operation.Kind.remove, definition, .code_of(definition), None)
+
+  operations => (
+    found := chain None
+    .commits for { if (it.value.what.instance_of(Operation)) { found &= it.value.what } }
+    found
+  )
+  operations_on (definition: Definition) => (
+    found := chain None
+    .operations for { if (it.value.touches(definition)) { found &= it.value } }
+    found
+  )
+  ordered => .operations.sort
+
+  latest_of (definition: Definition, kinds) => (
+    chosen ^keyword := None
+    .operations_on(definition) for {
+      if (kinds.contains(it.value.kind)) {
+        if ((chosen === None).or(chosen.stamp < it.value.stamp)) { chosen = it.value }
+      }
+    }
+    chosen
+  )
+  code_of (definition: Definition) => (
+    kinds := chain None
+    kinds &= Operation.Kind.define
+    kinds &= Operation.Kind.change
+    kinds &= Operation.Kind.remove
+    found := .latest_of(definition, kinds)
+    if (found === None) { None } else { found.after }
+  )
+  name_of (definition: Definition) => (
+    kinds := chain None
+    kinds &= Operation.Kind.rename
+    found := .latest_of(definition, kinds)
+    if (found === None) { definition.name } else { found.after }
+  )
+  named (name: String) => (
+    found ^keyword := None
+    history := this
+    .definitions for { if (history.name_of(it.value) == name) { found = it.value } }
+    found
+  )
+  definitions => (
+    found := chain None
+    .operations for { unless (found.contains(it.value.definition)) { found &= it.value.definition } }
+    found
+  )
+
+  received (stamp: Stamp) => .clock.receive(stamp)
+  view (filter) => (
+    shown := History(repository: .repository, commits: (chain None), from: this)
+    .commits for { if (filter(it.value)) { shown.commits &= it.value } }
+    shown
+  )
+  undo (operation: Operation) => .commit(operation.who, operation.inverse)
+
+  as_git => Git.from(this)
+}
+
+History.clocks = chain None
+
+Git := class: Ray {
+  Commit := class: Ray {
+    id: Node
+    parent: None
+    author: Node
+    date: Node
+    message: String
+    change: Node
+  }
+  commits: (chain None)
+
+  from (history) => (
+    converted := Git(commits: (chain None))
+    parent ^keyword := None
+    history.commits for {
+      made := Git.Commit(id: it.value.id, parent: parent, author: it.value.who, date: it.value.when, message: Git.message_of(it.value.what), change: it.value.what)
+      converted.commits &= made
+      parent = made
+    }
+    converted
+  )
+  message_of (what) => if (what.instance_of(Operation)) { what.definition.name } else { what.as(String) }
+
+  as_history (repository) => (
+    rebuilt := History(repository: repository, commits: (chain None), from: None)
+    .commits for { rebuilt.commits &= History.Commit(who: it.value.author, what: it.value.change, id: it.value.id, when: it.value.date) }
+    rebuilt
+  )
+
+  as (=== String) => (
+    written ^keyword := ""
+    .commits for {
+      written = written + ("commit " + (it.value.id.as(String) + ("\nAuthor: " + (it.value.author.as(String) + ("\nDate: " + (it.value.date.as(String) + ("\n\n    " + (it.value.message + "\n\n"))))))))
+    }
+    written
+  )
+}

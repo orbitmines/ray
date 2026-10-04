@@ -55,7 +55,7 @@ Unit := class {
   zero_point => if .is_base { 0 } else { (.shift * .base.scale) + .base.zero_point }
   shifts => .zero_point.nonzero
 
-  as (other: Unit) => (1 of this) as other
+  as (other: Unit) => Quantity(amount: 1, unit: this) as other
   as (=== boolean) => true
 
   multiple (times: Number) => (
@@ -278,7 +278,7 @@ Quantity := class {
       }
       if (digits_end.nonzero.and(digits_end < spelled.count)) {
         kind ^keyword := Unit.named(spelled.slice(digits_end, spelled.count))
-        if kind { found = spelled.slice(0, digits_end).as_number of kind }
+        if kind { found = Quantity(amount: spelled.slice(0, digits_end).as_number, unit: kind) }
       }
     }
     found
@@ -307,21 +307,13 @@ Quantity := class {
 }
 
 Measured := class {
-  { }{unit: Unit ^unit} ^punctuation => this of Unit.read(unit)
-  {unit: Unit ^unit} ^punctuation => this of Unit.read(unit)
-  years => this of Year
+  { }{unit: Unit ^unit} ^punctuation => Quantity(amount: this, unit: Unit.read(unit))
+  {unit: Unit ^unit} ^punctuation => Quantity(amount: this, unit: Unit.read(unit))
+  .{unit: Unit ^unit} ^punctuation => Quantity(amount: this, unit: Unit.read(unit))
   compounds / (other: Unit) => (
     held ^keyword := this
     per ^keyword := Unit.one / other
     Quantity(amount: held, unit: per)
-  )
-  of (measure) => (
-    held := this
-    kind := measure
-    Quantity(
-      amount: held
-      unit: kind
-    )
   )
 }
 Number.components.hierarchy &= Measured

@@ -6,12 +6,87 @@ Render := class {
     link: None
   }
 
+  styles: (chain None)
+  style (name, css: String, ansi: String) => (
+    Render.styles &= Render.Style(name: name, css: css, ansi: ansi)
+    name
+  )
+  styled_as (name) => (
+    found ^keyword := None
+    Render.styles for { if (it.value.name == name) { found = it.value } }
+    found
+  )
+  Style := class {
+    name: Node
+    css: String
+    ansi: String
+  }
+
+  Image := class {
+    location: Node
+    alt: ""
+  }
+  Video := class {
+    location: Node
+  }
+  Input := class {
+    value: ""
+    focused: false
+    placeholder: ""
+
+    typed (text: String) => (
+      .value = .value + text
+      this
+    )
+    focus => (
+      .focused = true
+      this
+    )
+  }
+  Head := class {
+    title: ""
+    description: ""
+    image: None
+    url: None
+    kind: "website"
+
+    as (=== String) => (
+      written := chain None
+      written &= "<title>" + (Render.HTML.escaped(.title) + "</title>")
+      written &= "<meta name=\"description\" content=\"" + (Render.HTML.escaped(.description) + "\">")
+      written &= "<meta property=\"og:title\" content=\"" + (Render.HTML.escaped(.title) + "\">")
+      written &= "<meta property=\"og:description\" content=\"" + (Render.HTML.escaped(.description) + "\">")
+      written &= "<meta property=\"og:type\" content=\"" + (.kind + "\">")
+      unless (.image === None) { written &= "<meta property=\"og:image\" content=\"" + (.image.as(String) + "\">") }
+      unless (.url === None) { written &= "<meta property=\"og:url\" content=\"" + (.url.as(String) + "\">") }
+      written &= "<script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"WebPage\",\"name\":\"" + (Render.HTML.escaped(.title) + "\"}</script>")
+      written.join
+    )
+  }
+
+  image_extensions => ("png", "jpg", "jpeg", "gif", "svg", "webp")
+  video_extensions => ("mp4", "webm")
+
   boxed (value) => (
     if (value.instance_of(String)) { Render.Box(value: value, text: value) }
+    elsif (value.instance_of(Render.Image)) { Render.Box(value: value, link: value.location, text: value.alt, style: Render.tagged(`img`)) }
+    elsif (value.instance_of(Render.Video)) { Render.Box(value: value, link: value.location, style: Render.tagged(`video`)) }
+    elsif (value.instance_of(Render.Input)) { Render.Box(value: value, text: value.value, style: Render.tagged(`input`)) }
+    elsif (value.location) {
+      extension := value.location.as(String).after(".")
+      if (Render.image_extensions.contains(extension)) { Render.boxed(Render.Image(location: value.location)) }
+      elsif (Render.video_extensions.contains(extension)) { Render.boxed(Render.Video(location: value.location)) }
+      else { Render.Box(value: value, text: value.as(String), link: value.location) }
+    }
     elsif (value.rendering) { Render.boxed(value.rendering) }
     elsif (value.instance_of(Geometry.Shape)) { Render.Box(value: value, children: value.children) }
-    elsif (value.location) { Render.Box(value: value, text: value.location.as(String), link: value.location) }
     else { Render.fields(value) }
+  )
+
+  tagged (tag) => (
+    one := chain None
+    one &= tag
+    one
   )
 
   fields (value) => (
@@ -70,7 +145,10 @@ Render := class {
       box.style for { rules &= Render.HTML.style_rule(it.value) }
       rules.join(";")
     )
-    style_rule (style) => if (style == `italic`) { "font-style:italic" } elsif (style == `bold`) { "font-weight:bold" } else { "" }
+    style_rule (style) => (
+      found := Render.styled_as(style)
+      if (found === None) { "" } else { found.css }
+    )
     escaped (text: String) => text.map { if (it.value == U+003C) { "&lt;" } elsif (it.value == U+003E) { "&gt;" } elsif (it.value == U+0026) { "&amp;" } else { it.value.as(String) } }.join
   }
 
@@ -92,12 +170,54 @@ Render := class {
     styled (box) => (
       opened ^keyword := ""
       box.style for {
-        if (it.value == `italic`) { opened = opened + Terminal.escape("3m") }
-        if (it.value == `bold`) { opened = opened + Terminal.escape("1m") }
+        found := Render.styled_as(it.value)
+        unless (found === None) { opened = opened + Terminal.escape(found.ansi) }
       }
       if (opened.empty) { box.text } else { opened + (box.text + Terminal.escape("0m")) }
     )
 
+    expanded: (chain None)
+    toggled: false
+    running: false
+
+    run (value) => (
+      .running = true
+      Terminal.raw_mode
+      box := Render.boxed(value)
+      .selection = box
+      while .running {
+        Terminal.emit(Terminal.clear + .render(value))
+        .key(Terminal.read)
+      }
+      this
+    )
+    key (bytes) => (
+      if (bytes === None) { return this }
+      written := bytes.as(String)
+      if (written == U+000D.as(String)) { .activate }
+      elsif (written == (U+001B.as(String) + "OQ")) { .toggled = .toggled.not }
+      elsif (written == "q") { .running = false }
+      elsif (written.starts_with(Terminal.escape("1;5"))) { .skip(Terminal.decode(Terminal.escape(written.slice(written.count.pred, written.count)))) }
+      elsif (written.starts_with(Terminal.escape("1;2"))) { .expand(Terminal.decode(Terminal.escape(written.slice(written.count.pred, written.count)))) }
+      else {
+        direction := Terminal.decode(written)
+        unless (direction === None) { .move(direction) }
+      }
+      this
+    )
+    activate => if (.selection.value.activate) { .selection.value.activate } else { this }
+    skip (direction) => (
+      start := .selection
+      .move(direction)
+      while ((.selection.parent === start.parent).not.and((.selection === start).not)) { .move(direction) }
+      this
+    )
+    expand (direction) => (
+      .expanded &= .selection
+      .move(direction)
+      .expanded &= .selection
+      this
+    )
     move (direction) => (
       if (.selection === None) { return this }
       if (direction == Keyboard.Direction.down) { if .selection.children.nonempty { .selection = .selection.children.head.value } }
@@ -146,6 +266,9 @@ Render := class {
 Terminal := class {
   Kind := enum xterm_256 | truecolor | windows_terminal | browser
 
+  os => OS.name
+  width => .size
+
   kind: Terminal.Kind.truecolor
   raw: false
 
@@ -156,7 +279,9 @@ Terminal := class {
     .raw = true
     Terminal.emit(Terminal.escape("?1049h"))
   )
-  emit (text) => TODO
+  emit (text) => external io `stdout` (text)
+  read => external io `stdin` None
+  size => (external os `COLUMNS`).as(String).as_number
   decode (bytes) => (
     if (bytes == Terminal.escape("A")) { Keyboard.Direction.up }
     elsif (bytes == Terminal.escape("B")) { Keyboard.Direction.down }
@@ -176,14 +301,80 @@ Browser := class {
   Kind := enum chromium | firefox
   kind: Browser.Kind.chromium
   runtime: false
+  width: 1240
+  os: OS.Name.unknown
 
-  send (message) => Terminal.emit(message)
+  send (message) => external io `dom` (message)
+  received => external io `dom` None
+
+  Dom := class {
+    next_id: 0
+
+    made => (
+      .next_id = .next_id.succ
+      .next_id
+    )
+    line (parts) => parts.join(" ") + Char.newline.as(String)
+    create (tag: String) => (
+      id := .made
+      Browser.send(.line([("create", id.as(String), tag)]))
+      id
+    )
+    text (id, content: String) => Browser.send(.line([("text", id.as(String), content.escaped_line)]))
+    style (id, css: String) => Browser.send(.line([("style", id.as(String), css.escaped_line)]))
+    attribute (id, name: String, value: String) => Browser.send(.line([("attribute", id.as(String), name, value.escaped_line)]))
+    append (parent, child) => Browser.send(.line([("append", parent.as(String), child.as(String))]))
+    listen (id, kind: String) => Browser.send(.line([("listen", id.as(String), kind)]))
+    clear => Browser.send(.line([("clear")]))
+
+    mounted (box) => (
+      tag ^keyword := "div"
+      unless (box.link === None) { tag = "a" }
+      id := .create(tag)
+      .style(id, Render.HTML.css(box))
+      unless (box.text === None) { .text(id, box.text) }
+      unless (box.link === None) { .attribute(id, "href", box.link.as(String)) }
+      box.children for { .append(id, .mounted(it.value)) }
+      id
+    )
+    render (value) => (
+      .clear
+      box := Render.boxed(value)
+      Geometry.Solver(available: 1240).solve(box)
+      .append(0, .mounted(box))
+    )
+    event => (
+      written := Browser.received
+      if (written === None) { None } else {
+        parts := written.as(String).trimmed.split(U+0020)
+        Browser.Event(id: parts.at(0).value.as_number, kind: parts.at(1).value)
+      }
+    )
+  }
+  Event := class {
+    id: Node
+    kind: String
+  }
   page (value) => Render.HTML().render(value)
 }
 
 Site := class {
   routes: (chain None)
   index: None
+
+  of (value) => (
+    made := Site(index: value)
+    value.fields for {
+      held := it.value
+      if (held.value.location) { made.route(held.value.location.as(String), held.value) }
+    }
+    made
+  )
+  section (book, slug: String) => (
+    found ^keyword := None
+    book.sections for { if (it.value.slug == slug) { found = it.value } }
+    if (found === None) { book } else { found }
+  )
 
   route (path: String, field) => (
     .routes &= Site.Route(path: path, field: field)
@@ -196,7 +387,7 @@ Site := class {
       held := it.value
       if (path.starts_with(held.path)) {
         rest := path.slice(held.path.count, path.count)
-        if rest.empty { found = held.field } else { found = Site.select(held.field, rest) }
+        if rest.empty { found = held.field } elsif (held.field.sections) { found = Site.section(held.field, rest) } else { found = Site.select(held.field, rest) }
       }
     }
     if (found === None) { .index } else { found }
@@ -217,6 +408,7 @@ Site := class {
 }
 
 String.components.hierarchy &= class {
+  escaped_line => .map { if (it.value == U+000A) { "\\n" } elsif (it.value == U+005C) { "\\\\" } else { it.value.as(String) } }.join
   styled (style) => (
     styles := chain None
     styles &= style
@@ -225,3 +417,12 @@ String.components.hierarchy &= class {
   italic => .styled(`italic`)
   bold => .styled(`bold`)
 }
+
+Render.styles = chain None
+Render.style(`italic`, "font-style:italic", "3m")
+Render.style(`bold`, "font-weight:bold", "1m")
+Render.style(`muted`, "opacity:0.6", "2m")
+Render.style(`disabled`, "opacity:0.4", "2m")
+Render.style(`h1`, "font-size:2em;font-weight:bold", "1m")
+Render.style(`h2`, "font-size:1.5em;font-weight:bold", "1m")
+Render.style(`h3`, "font-size:1.17em;font-weight:bold", "1m")

@@ -1,0 +1,148 @@
+Store := class: Location {
+  name: String
+  parent?: Node
+  children: (chain None)
+  host?: Node
+  records: (chain None)
+
+  record_of (instance) => (
+    found ^keyword := None
+    .records for { if (it.value.instance === instance) { found = it.value } }
+    found
+  )
+  put (instance) => (
+    if (.record_of(instance) === None) { .records &= Store.Record(instance: instance, assigned: (chain None)) }
+    instance
+  )
+  holds (instance) => (.record_of(instance) === None).not
+  remove (instance) => (
+    kept := chain None
+    .records for { unless (it.value.instance === instance) { kept &= it.value } }
+    .records = kept
+    instance
+  )
+
+  assign (instance, field: Definition, value) => (
+    .put(instance)
+    .record_of(instance).assigned &= Store.Field(definition: field, value: value)
+    value
+  )
+  assigned (instance, field: Definition) => (
+    found := chain None
+    record := .record_of(instance)
+    unless (record === None) {
+      record.assigned for { if (it.value.definition == field) { found &= it.value } }
+    }
+    found
+  )
+  read (instance, field: Definition, default) => (
+    written := .assigned(instance, field)
+    if written.empty { default } else { written.tail.value.value }
+  )
+  follows_default (instance, field: Definition) => .assigned(instance, field).empty
+
+  all => (
+    found := chain None
+    .records for { found &= it.value.instance }
+    found
+  )
+  matching (filter) => (
+    found := chain None
+    .records for { if (filter(it.value.instance)) { found &= it.value.instance } }
+    found
+  )
+
+  Record := class: Ray {
+    instance: Node
+    assigned: (chain None)
+  }
+  Field := class: Ray {
+    definition: Definition
+    value: Node
+  }
+
+  Route := class: Ray {
+    type: Node
+    filter: None
+    store: Node
+
+    takes (instance) => (
+      taken ^keyword := instance.instance_of(.type)
+      if (taken.and((.filter === None).not)) { taken = .filter(instance) }
+      taken
+    )
+  }
+
+  route (type, filter, store) => (
+    Store.routes &= Store.Route(type: type, filter: filter, store: store)
+    store
+  )
+  routed (instance) => (
+    chosen ^keyword := None
+    Store.routes for {
+      if (chosen === None) {
+        if (it.value.takes(instance)) { chosen = it.value.store }
+      }
+    }
+    chosen ?? Store.default
+  )
+  stores_of (type) => (
+    found := chain None
+    Store.routes for {
+      if (it.value.type === type) {
+        unless (found.contains(it.value.store)) { found &= it.value.store }
+      }
+    }
+    unless (found.contains(Store.default)) { found &= Store.default }
+    found
+  )
+
+  keep (instance) => Store.routed(instance).put(instance)
+  constructed (instance) => (
+    Store.materialised for {
+      if (instance.instance_of(it.value)) { Store.keep(instance) }
+    }
+    instance
+  )
+
+  of (type) => (
+    unless (Store.materialised.contains(type)) { Store.materialised &= type }
+    Store.View(type: type, at: None)
+  )
+
+  View := class: Ray {
+    type: Node
+    at: None
+
+    stores => (
+      chosen := chain None
+      place := .at
+      Store.stores_of(.type) for {
+        if ((place === None).or(it.value === place)) { chosen &= it.value }
+      }
+      chosen
+    )
+    all => (
+      found := chain None
+      kind := .type
+      .stores for {
+        it.value.all for { if (it.value.instance_of(kind)) { found &= it.value } }
+      }
+      found
+    )
+    matching (filter) => (
+      found := chain None
+      .all for { if (filter(it.value)) { found &= it.value } }
+      found
+    )
+    located (store) => Store.View(type: .type, at: store)
+    count => .all.count
+    entry => .all.entry
+  }
+}
+
+Store.routes = chain None
+Store.materialised = chain None
+Store.default = Store(name: "local")
+
+persistent (value) => Store.keep(value)

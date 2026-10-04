@@ -1,0 +1,136 @@
+Project := class: Location {
+  name: String
+  parent?: Node
+  children: (chain None)
+  host?: Node
+  dependencies: (chain None)
+  written_against: None
+  carried: (chain None)
+  readings: (chain None)
+  overrides: (chain None)
+  definitions: (chain None)
+
+  Form := enum relative | upward | absolute | user | remote
+
+  Dependency := class: Ray {
+    location: String
+    form: Node
+    version: None
+    project: None
+
+    read (line: String) => (
+      written ^keyword := line.after("@")
+      pinned ^keyword := None
+      if (written.contains(" %")) {
+        pinned = Version(number: written.after(" %").as_number)
+        written = written.before(" %")
+      }
+      kind ^keyword := Project.Form.user
+      if (written.starts_with("./")) { kind = Project.Form.relative }
+      elsif (written.starts_with("../")) { kind = Project.Form.upward }
+      elsif (written.starts_with("/")) { kind = Project.Form.absolute }
+      elsif (written.contains("://")) { kind = Project.Form.remote }
+      Project.Dependency(location: written, form: kind, version: pinned)
+    )
+  }
+
+  depend (line: String) => (
+    .dependencies &= Project.Dependency.read(line)
+    this
+  )
+
+  define (name: String, value) => (
+    if (.defined_here(name) === None) {
+      .definitions &= Project.Definition(name: name, value: value)
+    } else { ERROR@name `two definitions with the same name in one project` }
+    value
+  )
+  defined_here (name: String) => (
+    found ^keyword := None
+    .definitions for { if (it.value.name == name) { found = it.value } }
+    found
+  )
+  Definition := class: Ray {
+    name: String
+    value: Node
+  }
+
+  lookup (name: String) => (
+    found ^keyword := .nearest(name)
+    if (found === None) {
+      .dependencies for {
+        if (found === None) {
+          unless (it.value.project === None) { found = it.value.project.nearest(name) }
+        }
+      }
+    }
+    if (found === None) { World.ether.lookup(name) } else { found.value }
+  )
+  nearest (name: String) => (
+    found ^keyword := .defined_here(name)
+    if (found === None) {
+      .children for {
+        if (found === None) {
+          if (it.value.instance_of(Project)) { found = it.value.defined_here(name) }
+        }
+      }
+    }
+    if (found === None) {
+      if .parent {
+        if (.parent.instance_of(Project)) { found = .parent.nearest(name) }
+      }
+    }
+    found
+  )
+
+  write_against (version: Version) => (
+    .written_against = version
+    this
+  )
+  carries (host_versions) => (
+    wanted := .written_against
+    if (wanted === None) { false } else { host_versions.some { it.value == wanted }.not }
+  )
+  carry (files) => (
+    project := this
+    files for { project.carried &= it.value }
+    this
+  )
+
+  Reading := class: Ray {
+    pattern: String
+    language: Node
+
+    covers (file_name: String) => if (.pattern.starts_with("*")) { file_name.ends_with(.pattern.after("*")) } else { file_name == .pattern }
+  }
+  reads (pattern: String, language) => (
+    .readings &= Project.Reading(pattern: pattern, language: language)
+    this
+  )
+  language_of (file_name: String) => (
+    chosen ^keyword := None
+    .readings for {
+      if (chosen === None) {
+        if (it.value.covers(file_name)) { chosen = it.value.language }
+      }
+    }
+    chosen ?? Language.for_file(file_name)
+  )
+
+  override (setting) => (
+    .overrides &= setting
+    this
+  )
+}
+
+Layout := class: Ray {
+  root => ".ether/external/@"
+
+  checked_out (name: String) => Layout.root + ("/@" + name)
+  path (name: String, locations, version: String) => (
+    written ^keyword := Layout.checked_out(name) + "/$"
+    locations for { written = written + ("/@" + it.value) }
+    written + ("/%/" + version)
+  )
+  changed (name: String, user: String, branch: String) => Layout.checked_out(name) + ("/$/@" + (user + ("%" + branch)))
+}

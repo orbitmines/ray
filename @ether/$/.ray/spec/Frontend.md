@@ -234,3 +234,14 @@ entry stays as the record of the question, and this section overrides it.
   Firefox, and the TUI in the browser.
 - **F-S1** Port order: index → profiles → archive → Almanac. Components (download/login buttons, header,
   paper layout) move into the orbitmines.com library as each page needs them.
+
+## Answers 2026-10-04 night (site port questions)
+- Classes are written `Article := class: Reference { … }`, never `class Article …`. A class's content (its block's lines) is read as its children: that is the point.
+- A bare URL after `@` reads until whitespace, so a comma after it needs a space (` , `). Acceptable.
+- `\` is the escape character in strings (`\"`, `\{`).
+- `with X = Y { … }` works. `X = Y { … }` extends the class Y with those values.
+- `a, b if c` is `a, (b if c)`: no brackets needed.
+- `.@{handle}` works (an avatar on a platform).
+- `.index` is available by default (the position); `- Ray` excludes the Ray, so `.index` is the entry's own index (see the Almanac).
+- `Reference~simple(…)` is right for alternative renderings.
+- Authors are written `@name`. `@ether` is the Ether organization (they are the same thing). Names are reserved and mapped ignoring case.

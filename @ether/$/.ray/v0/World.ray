@@ -309,23 +309,26 @@ Repository := class: Ray {
 Accessor := class: Ray {
   Permission := enum private | confidential | protected | public | local | localhost | managed
   level: Node
-  methods: (chain None)
+  any: true
+  method: None
 
-  read => Accessor(level: .level, methods: (chain None)).on(`read`)
-  write => Accessor(level: .level, methods: (chain None)).on(`=`)
-  execute => Accessor(level: .level, methods: (chain None)).on(`()`)
-  on (method) => (
-    .methods &= method
-    this
+  read => Accessor(level: .level, any: false)
+  write => Accessor(level: .level, any: false, method: `=`)
+  execute => Accessor(level: .level, any: false, method: `()`)
+  on (method) => Accessor(level: .level, any: false, method: method)
+  covers (method) => if .any { true } elsif (.method === None) { (method == `=`).not.and((method == `()`).not) } else { method == .method }
+
+  { }{target} ^punctuation => (
+    target.access = this
+    target
   )
-  covers (method) => .methods.empty.or(.methods.contains(method))
   allows (who, method) => if (.covers(method).not) { true } elsif (.level == Accessor.Permission.public) { true } else { who.permissions.contains(.level) }
   block (values) => (
     values for { it.value.access = this }
     values
   )
   derived (from) => if (from.access) { from.access } else { this }
-  default_policy => Accessor(level: Accessor.Permission.local)
+  default_policy => Accessor(level: Visibility.default_privacy_policy)
   confidential => Accessor.default_policy
 
   Consistency := class: Ray {
@@ -333,6 +336,15 @@ Accessor := class: Ray {
 
     read (value) => if (.replicas.every { it.value.synced }) { value } else { Quest(name: "wait for the replicas", goal: value) }
   }
+}
+
+Platform := class: Ray {
+  name: String
+  prefix: String
+  icon: None
+
+  location_of (handle: String) => .prefix + handle
+  avatar (handle: String, character) => Avatar(character: character, platform: this, handle: handle, location: .location_of(handle))
 }
 
 Reference := class: Ray {
@@ -352,6 +364,12 @@ Reference := class: Ray {
   pointer: None
   remote: None
   notes: (chain None)
+  external: None
+  journal: None
+  volume: None
+  pages: None
+  doi: None
+  publisher: None
 
   publish => (
     .draft = false
@@ -385,7 +403,7 @@ Instance := class: Ray {
     .registry = kept
     if delete_all {
       character.key = None
-      .deletions &= Instance.Deletion(character: character, due: Time.now + (30 of Day))
+      .deletions &= Instance.Deletion(character: character, due: Time.now + 30 days)
     }
     character
   )
@@ -435,6 +453,12 @@ Character := class: Nameable {
   status: Status.offline
   key: None
 
+  first_name: None
+  last_name: None
+  email: None
+  profile_picture: None
+  profile: None
+  full_name => if (.first_name === None) { .name } else { .first_name + (" " + .last_name) }
   status_now => if (.presence) { .presence.status } else { .status }
   statuses: (chain None)
   also (status) => (
@@ -443,6 +467,7 @@ Character := class: Nameable {
   )
   is (status) => (.status == status).or(.statuses.contains(status))
   chainable == (other) => if (.key === None) { this === other } else { .key == other.key }
+  choose (kind) => Quest(name: "choose", goal: kind, solved_by: this)
   embody (avatar) => (
     .avatars &= avatar
     avatar
@@ -451,6 +476,8 @@ Character := class: Nameable {
 Avatar := class: Character {
   character: Node
   platform: Node
+  location: None
+  handle: None
   avatars: (chain None)
   presence: None
   status: Status.offline
@@ -487,6 +514,8 @@ NPC := class: Character {
 }
 Organization := class: Player {
   name: String
+  logo: None
+  website: None
   avatars: (chain None)
   presence: None
   status: Status.offline

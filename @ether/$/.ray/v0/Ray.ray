@@ -344,7 +344,6 @@ Ray := class: Iterable {
     unfolded
   )
 
-  path_to (other) => this..other
 
   complement => (
     selected ^keyword := this

@@ -167,3 +167,7 @@ Answers from 2026-09-30.
 
 
 Also: infinity symbol after array is an alias of .unbounded so 3[]∞ means unbounded number of 3's.
+### Answers 2026-10-04 evening
+- **N2.1** `of` is gone (`1 of m` was never kept). Quantities are written `1m`, `1 m`, or as rates `1 / m`; library code builds computed ones with `Quantity(amount:, unit:)`.
+- **N2.1b** Units are reachable as members: `25.years`, `(30).days` (`.{unit: Unit}` on numbers).
+- **N1.12** `^` as power overrides the style marker on numbers (`right-to-left compounds ^`). Styling may get another spelling later.

@@ -78,8 +78,8 @@ Gregorian := class: Julian {
   is_leap_year (year: Number) => if ((year % 100).is_zero) { (year % 400).is_zero } else { (year % 4).is_zero }
 
   reform => (
-    last_julian ^keyword := Time(calendar: Julian, since_epoch: (Julian.days_before(1582, Month.october, 4) of Day))
-    first_gregorian ^keyword := Time(calendar: Gregorian, since_epoch: (Gregorian.days_before(1582, Month.october, 15) of Day))
+    last_julian ^keyword := Time(calendar: Julian, since_epoch: Quantity(amount: Julian.days_before(1582, Month.october, 4), unit: Day))
+    first_gregorian ^keyword := Time(calendar: Gregorian, since_epoch: Quantity(amount: Gregorian.days_before(1582, Month.october, 15), unit: Day))
     Calendar.equivalent(last_julian, first_gregorian)
   )
 }
@@ -150,11 +150,11 @@ Time := class {
   )
   Clock := class {
 
-    elapsed => .digits.as_number of Nanosecond
-    resolution => 1 of Nanosecond
+    elapsed => Quantity(amount: .digits.as_number, unit: Nanosecond)
+    resolution => 1 ns
     nanoseconds => .digits.slice(.digits.count - 9, .digits.count)
-    nanoseconds_tail => .digits.slice(.digits.count - 3, .digits.count).as_number of Nanosecond
-    seconds_tail => .digits.slice(.digits.count - 12, .digits.count - 9).as_number of Second
+    nanoseconds_tail => Quantity(amount: .digits.slice(.digits.count - 3, .digits.count).as_number, unit: Nanosecond)
+    seconds_tail => Quantity(amount: .digits.slice(.digits.count - 12, .digits.count - 9).as_number, unit: Second)
   }
 }
 
@@ -172,10 +172,10 @@ ISO_8601 := class {
     minute := parts.head.next.value.as_number
     second := if (parts.head.next.next) { parts.head.next.next.value.as_number } else { 0 }
 
-    ((((hour * 60) + minute) * 60) + second) of Second
+    Quantity(amount: (((hour * 60) + minute) * 60) + second, unit: Second)
   )
   Date := class {
-    as_time (calendar) => Time(calendar: calendar, since_epoch: (calendar.days_before(.year, .month, .day) of Day))
+    as_time (calendar) => Time(calendar: calendar, since_epoch: Quantity(amount: calendar.days_before(.year, .month, .day), unit: Day))
     years_since (other) => (
       whole ^keyword := .year - other.year
       if ((.month.place < other.month.place).or((.month == other.month).and(.day < other.day))) { whole = whole.pred }
@@ -253,7 +253,7 @@ TimeZone := class {
   zones => `/usr/share/zoneinfo`
   read (zone_name: String) => (
     data ^keyword := IO.read(TimeZone.zones + "/" + zone_name)
-    TimeZone(name: zone_name, offset: (0 of Second), data: data)
+    TimeZone(name: zone_name, offset: 0 s, data: data)
   )
 }
 

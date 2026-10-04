@@ -128,12 +128,16 @@ export class Levelled extends Interpreter {
     return kind === undefined ? super.rules_on(value) : super.rules_on(kind);
   }
   carries(value: Node, rule: Rule): boolean { return this.among(this.rules_on(value instanceof Count ? value.template : value), rule); }
-  private written_ids = new WeakMap<Rule[], Set<object>>();
+  private written_ids = new WeakMap<Rule[], Set<string>>();
+  written_site(rule: Rule): string {
+    const at = rule.at.source.location !== undefined ? rule.at : rule.lexical ?? rule.at;
+    return `${at.source.location ?? ''}:${at.begin}:${at.end}:${rule.key}`;
+  }
   among(rules: Rule[], rule: Rule): boolean {
     if (rules.includes(rule)) return true;
     let ids = this.written_ids.get(rules);
-    if (ids === undefined) this.written_ids.set(rules, ids = new Set(rules.map(other => this.template_of(other))));
-    return ids.has(this.template_of(rule));
+    if (ids === undefined) this.written_ids.set(rules, ids = new Set(rules.map(other => this.written_site(other))));
+    return ids.has(this.written_site(rule));
   }
 
   private applicable = new WeakMap<Rule, { entries: unknown[]; ons: (Rule[] | undefined)[]; found: any[] }>();

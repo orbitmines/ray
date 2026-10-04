@@ -1680,7 +1680,7 @@ export class Interpreter {
         if (!(frame.sees ??= []).includes(target.code.in) && frame !== target.code.in) { frame.sees.unshift(target.code.in); Interpreter.touch(frame); this.notify(frame); }
         const last = this.read(this.cursor_of(this.inner(target.code.span) ?? target.code.span), frame);
         const held = last === undefined ? undefined : this.deref(last, false);
-        if (held?.program && !compose) return this.inline(held, frame);
+        if (held?.program && !compose && last!.place === undefined) return this.inline(held, frame);
         if (compose && held !== undefined && !held.text && !held.none && held.code === undefined && held !== frame) { (frame.with ??= []).push(held); Interpreter.touch(frame); this.version++; }
         return last;
       }

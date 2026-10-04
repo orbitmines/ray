@@ -75,6 +75,7 @@ Unit := class {
       (.ratio == other.ratio).and(.base == other.base)
     }
   } else { false }
+  chainable != (other: Unit) => (this == other).not
 
   prefixed (prefix) => (
     parent := this

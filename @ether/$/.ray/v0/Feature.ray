@@ -1,6 +1,27 @@
 IO := class {
-  read (path) => (external io path None).as_string
-  write (path, content) => external io path content
+  root => "instance"
+  permitted: false
+
+  inside (path) => (
+    kept := chain None
+    path.split(U+002F) for {
+      part := it.value
+      if (part == "..") {
+        if kept.nonempty { kept = kept.slice(0, kept.count.pred) }
+      } elsif ((part == ".").or(part.empty).not) { kept &= part }
+    }
+    IO.root + ("/" + kept.join("/"))
+  )
+  read (path) => (external io (IO.inside(path)) None).as_string
+  write (path, content) => external io (IO.inside(path)) content
+  host (path) => if IO.permitted { (external io path None).as_string } else { Quest(name: "ask for the host's files", goal: path) }
+  field (name: String) => (
+    as_program := IO.read(name + ".ray")
+    if as_program.nonempty { as_program } else {
+      as_directory := IO.read(name + "/")
+      if as_directory.nonempty { as_directory } else { IO.read(name) }
+    }
+  )
   os (name) => (external os name).as_string
   platform => IO.os(`platform`)
   architecture => IO.os(`architecture`)
@@ -49,6 +70,46 @@ Random := class {
   )
 }
 
+Random.Seeded = class {
+  state: Node
+
+  next => (
+    .state = ((.state * 1664525) + 1013904223) % 4294967296
+    .state
+  )
+  bit => if ((.next / 2147483648) == 1) { 1 } else { 0 }
+  number (width: Number) => (
+    total ^keyword := 0
+    left ^keyword := width
+    while left {
+      total = total + total
+      if (.bit == 1) { total = total.succ }
+      left = left.pred
+    }
+    total
+  )
+}
+Random.seeded = (seed: Number) => Random.Seeded(state: seed)
+Random.secure = Random
+
+Counted := class {
+  count: Node
+  kind: Node
+
+  least => if (.count.instance_of(Number)) { .count } else { .count.first }
+  most => if (.count.instance_of(Number)) { .count } else { .count.last }
+  chosen_count => .least + Random.below((.most - .least).succ)
+  choose => (
+    made := chain None
+    left ^keyword := .chosen_count
+    while left {
+      made &= .kind()
+      left = left.pred
+    }
+    made
+  )
+}
+
 Choice := class {
   choose (from) => from.random
   choose_count (from, count: Number) => (
@@ -84,6 +145,9 @@ Proof := class {
   holds => .argument.holds
 
   theorem (proposition, proof) => if proof.holds { true } else { Quest(name: "prove", goal: proposition) }
+  lemma (proposition, proof) => Proof.theorem(proposition, proof)
+  example (proposition, proof) => Proof.theorem(proposition, proof)
+  failed (error) => Quest(name: "fix", goal: error)
   by_contradiction (proposition, proof_of_negation) => proof_of_negation.holds.not
   rfl (proposition) => proposition.holds
   assume (fact) => fact
@@ -93,6 +157,23 @@ Transaction := class {
   forwards: Node
   backwards: Node
   applied: false
+  history: None
+  branch: None
+
+  begin (history) => Transaction(forwards: None, backwards: None, history: history, branch: history.fork)
+  record (who, change, inverse) => (
+    .branch.commits &= History.Commit(who: who, what: change, inverse: inverse)
+    this
+  )
+  commit => (
+    .history.merge(.branch)
+    .applied = true
+    this
+  )
+  abort => (
+    .branch = None
+    this
+  )
 
   reversed => Transaction(forwards: .backwards, backwards: .forwards, applied: .applied)
   mark_applied => (
@@ -122,14 +203,35 @@ HTTP := class {
   Method := enum get | post | put | delete
 }
 
+OS := class {
+  Name := enum linux | macos | windows | ether | unknown
+  name => (
+    written := IO.platform
+    if (written == "linux") { OS.Name.linux }
+    elsif (written == "darwin") { OS.Name.macos }
+    elsif (written == "win32") { OS.Name.windows }
+    else { OS.Name.unknown }
+  )
+}
+
 Keyboard := class {
   Key := class {
     name: Node
     pressed: false
     toggled: false
     presses: 0
+    pressed_at: (chain None)
+
+    pulsed (max, delay) => (
+      times := .pressed_at
+      if times.empty { false } else {
+        held_for := Time.now - times.head.value
+        if (held_for < delay) { times.count == 1 } else { true }
+      }
+    )
 
     press => (
+      .pressed_at &= Time.now
       .pressed = true
       this.toggled = .toggled.not
       this.presses = .presses.succ

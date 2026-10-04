@@ -186,7 +186,10 @@ export class Levelled extends Interpreter {
   }
   counted(value: Node | undefined, like: Count, rule?: Rule): bigint | undefined {
     let n = 0n;
+    const walked_through = new Set<Node>();
     for (let at = value, walked = 0; at !== undefined && walked < 1 << 20; walked++) {
+      if (walked_through.has(at)) return undefined;
+      walked_through.add(at);
       if (at instanceof Count) {
         if (at.field !== like.field || (rule !== undefined && !this.carries(at, rule))) return undefined;
         n += at.count; at = at.base; continue;
@@ -200,7 +203,11 @@ export class Levelled extends Interpreter {
     }
     return undefined;
   }
-  counted_as(like: Count, n: bigint): Node { return n === 0n ? like.base : new Count(n, like.base, like.template, like.field); }
+  counted_as(like: Count, n: bigint): Node {
+    const below = this.counted(like.base, like);
+    if (below === undefined || n < below) return this.number(n) ?? like.base;
+    return n === below ? like.base : new Count(n - below, like.base, like.template, like.field);
+  }
   unit(): Count | undefined { const one = this.number(1); return one instanceof Count ? one : undefined; }
   number(n: number | bigint): Node | undefined {
     const zero = this.quietly(() => this.deref(this.lookup(this.GLOBAL, 'zero'), false));
@@ -213,7 +220,8 @@ export class Levelled extends Interpreter {
     if (self instanceof Count && this.carries(self, rule)) return self.succ();
     const answer = written(), made = answer === undefined ? undefined : this.deref(answer, false);
     if (made === undefined || made instanceof Count || !this.carries(made, rule)) return answer ?? this.NONE;
-    for (const key of made.names?.keys() ?? []) {
+    const unit = this.unit()?.field;
+    for (const key of [...(made.names?.keys() ?? [])].sort((a, b) => Number(b === unit) - Number(a === unit))) {
       if (this.field(made, key) !== self) continue;
       return new Count(1n, self, made, key);
     }

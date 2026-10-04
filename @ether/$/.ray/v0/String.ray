@@ -253,7 +253,7 @@ Node.components.hierarchy &= class {
     encoded.as_code_points.map { it.value.as_character }.as_string
   )
 }
-"{literal text ^string}" ^string.punctuation => text.as_string.dedented
+"{literal text ^string}" ^string.punctuation => code_points(text).map { it.value.as_character }.as_string.dedented
 
 Number.components.hierarchy &= class {
   spelled_in (radix: Number) => .digits_in(radix).map { Character.decimal_digit(it.value) }.as_string

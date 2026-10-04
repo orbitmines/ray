@@ -14,6 +14,7 @@ Everything written after 2026-10-04 ~21:00 is unverified. Whether the library st
 - **B9 A function returning a local returns a reference into its finished frame.**
 - **B10 Glued unit literals never apply.** `1m` as `{unit: Unit}`: a class rule that starts with a capture only applies to its own class.
 - **B11 `as (other: Unit)` with a class argument** goes through `:`'s `hierarchy &= type` branch, so `Hour as boolean` makes boolean a Unit.
+- **B13 An escaped quote ends a string literal.** `"a\"b"`: the raw `"{literal text}"` capture stops at the first `"`, so `String.unescaped` never sees `\"`.
 - **B12 Regex recursion** exhausts 8 GB on a two-character pattern (X2.2).
 
 ## Memory and time

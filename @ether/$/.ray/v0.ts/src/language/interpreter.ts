@@ -2,8 +2,10 @@ import { Text } from './text.ts';
 import type { Called, Unit } from './compile/ir.ts';
 import { applied, called, named } from './compile/record.ts';
 import { type Event, type Replayed, type Variant, replay } from './compile/graph.ts';
-import { evaluate } from './compile/evaluate.ts';
+import { evaluate, type Ran } from './compile/evaluate.ts';
+import { reduce, run, type Body } from './compile/body.ts';
 import { Boot } from './boot.ts';
+import { env } from './env.ts';
 import { Diagnostics, type Diagnostic } from './diagnostics.ts';
 import { Natives } from './natives.ts';
 import type { Program } from './program.ts';
@@ -17,7 +19,7 @@ export type Piece = (
   | { kind: 'capture'; name: string; raw: boolean; typed: boolean; optional: boolean; exact?: boolean; content?: Text.Node; within?: Node; undecided?: boolean; decided?: number; type?: Node; operator?: boolean }
 ) & { tight?: boolean };
 
-export type NameGuard = Variant & { frame?: Node; parent?: Node; sees?: Node[]; self?: { rules: Rule[]; mine: Rule[]; on: Rule[] }; declared?: number };
+export type NameGuard = Variant & { own?: object; parent?: Node; sees?: Node[]; self?: { rules: object; mine: object; on: object }; declared?: number };
 export type Slot = { parent: Node; sees?: Node[]; holder?: Node; valid: boolean };
 export class Node {
   at?: Text.Node
@@ -54,14 +56,19 @@ export class Node {
   heading?: { rules: Rule[]; decided: object; heads: Rule[] }
   scoped?: { deps: Node[]; stamps: number[]; rules: Rule[] }
   ruled?: { base?: Node; deps: Node[]; stamps: number[]; rules: Rule[] }
-  shaped?: { of: Rule[]; based: Set<Rule>; rules: Rule[]; mine: Rule[] }
+  shaped?: { of: Rule[]; based: Set<Rule>; shape: { rules: Rule[]; mine: Rule[]; on: Rule[] } }
   watchers?: Map<string, Variant[]>
   constructor(at?: Text.Node) { this.at = at; }
   own(name: string): Node | undefined { return this.names?.get(name); }
   watching?: Map<string, Slot[]>
   static sets = 0;
+  // Every name some scope other than a global one has held: a name outside it is found in the global scope or nowhere.
+  static scoped = new Set<string>();
+  static globals = new WeakSet<Node>();
+  static complete = true;
   set(name: string, value: Node): Node {
     Node.sets++;
+    if (!Node.globals.has(this)) Node.scoped.add(name);
     const names = (this.names ??= new Map());
     if (this.watching !== undefined && !names.has(name)) { const slots = this.watching.get(name); if (slots !== undefined) { for (const slot of slots) slot.valid = false; this.watching.delete(name); } }
     names.set(name, value);
@@ -86,6 +93,9 @@ export class Rule {
   guard?: { span: Text.Node; in: Node }
   // Written beside other definitions of the same name: its parameters choose between them.
   overloaded = false
+  inner_body?: Text.Node
+  reduced?: Body
+  applications = 0
   fitting?: { declared: number; rules: number; found?: { names: string[]; refused: boolean; value?: Node }; by: Map<Node, { fit: boolean; on: Rule[] }> }
   get name(): string { return this.pattern.map(piece => piece.kind === 'literal' ? piece.text : piece.kind === 'gap' ? '{ }' : `{${piece.name}}`).join(''); }
   constructor(public pattern: Piece[], public closure: Node, public at: Text.Node, public key: string, public order: number, public body?: Text.Node, public fn?: Native) {}
@@ -135,7 +145,7 @@ export class Heads {
   }
 }
 
-export type Running ={ found: Match; at: Text.Node; local?: Node };
+export type Running ={ found: Match; at: Text.Node; local?: Node; site?: Text.Node };
 export type Match = { rule: Rule; begin: number; end: number; reach: number; captures: Map<string, Text.Node>; literals: [number, number][]; receiver?: Node };
 
 export class Jump { site?: Text.Node; spelled = false; constructor(public label: string, public value?: Node) {} }
@@ -161,6 +171,7 @@ export class Interpreter {
 
   constructor(public diagnostics: Diagnostics) {
     this.GLOBAL = new Node();
+    Node.globals.add(this.GLOBAL);
     this.NONE = Object.assign(new Node(), { none: true });
     this.EXTERNAL = this.GLOBAL.set('external', Object.assign(new Node(), { fn: this.rebuild(['external']) }));
     const seed = new Rule([{ kind: 'capture', name: 'pattern', raw: false, typed: false, optional: false }, { kind: 'literal', text: '=>' }, { kind: 'capture', name: 'body', raw: false, typed: false, optional: false }], this.GLOBAL, Text.Node.string('{pattern} => {body}'), '', this.order++, undefined, Natives.rule);
@@ -189,6 +200,8 @@ export class Interpreter {
     yield* visit(from, true, this.GLOBAL);
     if (!seen.has(this.GLOBAL)) { seen.add(this.GLOBAL); yield this.GLOBAL; for (const made of this.GLOBAL.with ?? []) yield* visit(made, false, this.GLOBAL); }
   }
+  // An interpreter that is no copy reaches no global scope but its own.
+  single = true;
   private naming?: { scope: Node; hole: Node; name?: string; names?: string[]; first?: Node };
   hole(node: Node): boolean { return this.naming?.hole === node; }
   private trying = 0;
@@ -199,6 +212,7 @@ export class Interpreter {
       const local = this.holding(at)?.local;
       if (local?.on?.given?.has(name) && this.reaches(frame, local)) return local.on.own(name);
     }
+    if (this.single && Node.complete && !Node.scoped.has(name)) { const global = this.GLOBAL.own(name); if (global !== undefined) return global; }
     const seen = ++this.visits;
     const found = at !== undefined && frame.parent !== undefined && frame !== this.GLOBAL && this.stable_sites.has(at) ? this.seek(frame, false, false, name, at, seen) ?? this.slotted(frame.parent, this.sees_of(frame, at), name, at, seen) : this.seek(frame, false, true, name, at, seen);
     if (found !== undefined) return found;
@@ -328,9 +342,7 @@ export class Interpreter {
   watch(variant: Variant, frame: Node, cursor: Text.Node, positions: number[]) {
     const text = cursor.source.value, chars = new Set<string>();
     for (const at of positions) { chars.add(text[at] ?? ''); chars.add(text[this.spaces(cursor, at)] ?? ''); }
-    this.rules_of(frame);
-    let scoped = frame; while (scoped.scoped === undefined && scoped.parent !== undefined && scoped.parent !== scoped) scoped = scoped.parent;
-    const nodes = [...(scoped.scoped?.deps ?? [])];
+    const nodes = [...this.deps_of(frame)];
     if (this.BASE !== undefined) { this.rules_made(this.BASE); nodes.push(...(this.BASE.ruled?.deps ?? [])); }
     for (const node of nodes) {
       const watchers = (node.watchers ??= new Map());
@@ -349,6 +361,7 @@ export class Interpreter {
   }
   rules_of(frame: Node): Rule[] {
     if (frame.parent !== undefined && frame.parent !== frame && !frame.rules?.length && !frame.sees?.length) return this.rules_of(frame.parent);
+    if (frame.parent !== undefined && frame.parent !== frame && !frame.rules?.length && frame.sees?.length === 1 && frame.sees[0] !== frame) return this.rules_seen(frame.parent, frame.sees[0]);
     const held = frame.scoped;
     if (Interpreter.current(held)) return held!.rules;
     const rules: Rule[] = [], seen = new Set<Node>(), deps: Node[] = [], stamps: number[] = [];
@@ -363,6 +376,38 @@ export class Interpreter {
     visit(frame);
     const shared = this.canonical(rules);
     frame.scoped = { deps, stamps, rules: shared };
+    return shared;
+  }
+  deps_of(frame: Node): Node[] {
+    this.rules_of(frame);
+    let at = frame;
+    while (true) {
+      if (at.parent !== undefined && at.parent !== at && !at.rules?.length && !at.sees?.length) { at = at.parent; continue; }
+      if (at.parent !== undefined && at.parent !== at && !at.rules?.length && at.sees?.length === 1 && at.sees[0] !== at) return this.seen_rules.get(at.parent)?.get(at.sees[0])?.deps ?? [];
+      if (at.scoped === undefined && at.parent !== undefined && at.parent !== at) { at = at.parent; continue; }
+      return at.scoped?.deps ?? [];
+    }
+  }
+  private seen_rules = new WeakMap<Node, WeakMap<Node, { deps: Node[]; stamps: number[]; rules: Rule[] }>>();
+  // A frame holding nothing of its own that sees one other frame: what it reaches is that frame's then its parent's, the same for every such frame.
+  rules_seen(parent: Node, sees: Node): Rule[] {
+    let by = this.seen_rules.get(parent);
+    if (by === undefined) this.seen_rules.set(parent, by = new WeakMap());
+    const held = by.get(sees);
+    if (Interpreter.current(held)) return held!.rules;
+    const rules: Rule[] = [], seen = new Set<Node>(), deps: Node[] = [], stamps: number[] = [];
+    const visit = (scope: Node | undefined) => {
+      for (let at = scope; at !== undefined && !seen.has(at); at = at.parent) {
+        seen.add(at);
+        deps.push(at); stamps.push(at.layout ?? 0);
+        if (at.rules) for (let k = at.rules.length - 1; k >= 0; k--) rules.push(at.rules[k]);
+        for (const other of at.sees ?? []) visit(other);
+      }
+    };
+    visit(sees);
+    visit(parent);
+    const shared = this.canonical(rules);
+    by.set(sees, { deps, stamps, rules: shared });
     return shared;
   }
   private decided_at?: { declared: number };
@@ -388,6 +433,7 @@ export class Interpreter {
   rules_on(value: Node): Rule[] { return this.rules_made(value); }
   rules_made(value: Node): Rule[] {
     if (value !== this.BASE && value !== this.GLOBAL && !value.rules?.length && value.with?.length === 1 && value.with[0] !== value) return this.rules_made(value.with[0]);
+    if (value !== this.BASE && value !== this.GLOBAL && !value.rules?.length && !value.with?.length && this.BASE !== undefined) return this.rules_made(this.BASE);
     const held = value.ruled;
     if (held?.base === this.BASE && Interpreter.current(held)) return held!.rules;
     const rules: Rule[] = [], seen = new Set<Node>(), deps: Node[] = [], stamps: number[] = [];
@@ -446,12 +492,12 @@ export class Interpreter {
     if (graph === undefined) by.set(span, graph = new Map());
     return graph;
   }
-  read(cursor: Text.Node, frame: Node): Node | undefined {
-    const begin = cursor.cursor, mark = this.forced.length;
+  read(cursor: Text.Node, frame: Node): Node | undefined { return this.read_on(cursor, frame, cursor.cursor, this.forced.length, undefined); }
+  // Reading on from where the cursor is, in a span that began at `begin`: what a compiled body hands back to when it cannot go on.
+  read_on(cursor: Text.Node, frame: Node, begin: number, mark: number, last: Node | undefined): Node | undefined {
     const painting = this.painting(cursor.source);
-    const graph = painting ? undefined : this.graph_of(cursor);
-    const unit = painting ? undefined : this.unit_of(cursor);
-    let last: Node | undefined;
+    const graph = painting ? undefined : this.graph_of(cursor.cursor === begin ? cursor : this.spanned(cursor, begin));
+    const unit = painting ? undefined : this.unit_of(cursor.cursor === begin ? cursor : this.spanned(cursor, begin));
     while (true) {
       this.blank(cursor);
       if (cursor.done()) { if (this.running.length === 0) this.forced.length = Math.min(this.forced.length, mark); return last; }
@@ -459,48 +505,15 @@ export class Interpreter {
       if (painting) { let read = this.read_at.get(cursor.source); if (read === undefined) this.read_at.set(cursor.source, read = new Set()); read.add(start); }
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
       try {
-        const compiled = unit?.statements.get(start);
-        let rules = compiled === undefined ? undefined : this.heads(frame);
-        if (compiled !== undefined && (compiled.rules === rules || this.print(compiled.rules) === this.print(rules!))) {
-          const ran = evaluate(this, compiled, cursor, frame);
-          if (ran !== undefined) {
-            cursor.cursor = compiled.end;
-            if (ran.value !== undefined) last = ran.value;
-            if (ran.jump !== undefined) {
-              const at = this.label_at(cursor, begin, ran.jump.label, frame);
-              if (at === undefined) throw Object.assign(new Jump(ran.jump.label), { site: ran.jump.site, spelled: true });
-              if (at < start) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
-              cursor.cursor = at;
-            }
-            continue;
-          }
+        const ran = this.step(cursor, frame, start, graph, unit);
+        if (ran.value !== undefined) last = ran.value;
+        if (ran.jump !== undefined) {
+          const at = this.label_at(cursor, begin, ran.jump.label, frame);
+          if (at === undefined) throw Object.assign(new Jump(ran.jump.label), { site: ran.jump.site, spelled: true });
+          if (at < start) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
+          cursor.cursor = at;
+          continue;
         }
-        let seen = graph?.get(start);
-        if (seen !== undefined && seen.length > 0) {
-          const variants = seen;
-          let ran: Replayed = 'missed';
-          for (const variant of variants) { if (!variant.valid) continue; cursor.cursor = start; ran = replay(this, variant, cursor, frame); if (ran !== 'missed') break; }
-          if (ran !== 'missed' && 'diverged' in ran) { const value = this.statement(cursor, frame, ran.diverged); if (value !== undefined) last = value; }
-          else if (ran !== 'missed') { if (ran.value !== undefined) last = ran.value; }
-          if (ran !== 'missed') { if (cursor.cursor === start) cursor.advance(); continue; }
-          cursor.cursor = start;
-        }
-        const firing = { depth: this.running.length, fires: [] as Match[], calls: [] as Called[] };
-        this.firing.push(firing);
-        let value: Node | undefined;
-        let thrown = true;
-        if (graph !== undefined && seen === undefined) graph.set(start, seen = Object.assign([], { visits: 0 }));
-        if (unit !== undefined && rules === undefined) rules = this.heads(frame);
-        const trace: Event[] | undefined = seen !== undefined && ++(seen as Variant[] & { visits: number }).visits >= 3 && this.naming === undefined ? [] : undefined, volatile = this.volatile, positions: number[] = [];
-        try { value = this.statement(cursor, frame, undefined, trace, positions); thrown = false; }
-        finally {
-          this.firing.pop();
-          if (trace !== undefined && trace.length > 0 && this.volatile === volatile && this.naming === undefined && (!thrown || trace[trace.length - 1].k === 'fire')) { const held = Object.assign((graph!.get(start) ?? []).filter(variant => variant.valid), { visits: (seen as Variant[] & { visits: number }).visits }); if (held.length >= 8) held.shift()!.valid = false; const variant = { events: trace, valid: true }; held.push(variant); graph!.set(start, held); this.watch(variant, frame, cursor, positions); }
-          if (unit !== undefined && firing.fires.length === 1 && (thrown || cursor.cursor === firing.fires[0].end)) applied(this, unit, start, firing.fires[0], rules!);
-          if (unit !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length === 0 && this.naming === undefined) named(this, unit, start, cursor.cursor, value, rules!, cursor);
-          if (unit !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length > 0 && firing.calls[firing.calls.length - 1].end === cursor.cursor) called(this, unit, start, cursor.cursor, firing.calls, rules!, cursor.span(start, this.token(cursor, start) - 1), frame);
-        }
-        if (value !== undefined) last = value;
       } catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
         const at = this.label_at(cursor, begin, jump.label, frame);
@@ -512,6 +525,49 @@ export class Interpreter {
       }
       if (cursor.cursor === start) cursor.advance();
     }
+  }
+  private spans_at = new WeakMap<Text.Source, Map<number, Text.Node>>();
+  spanned(cursor: Text.Node, begin: number): Text.Node {
+    let by = this.spans_at.get(cursor.source);
+    if (by === undefined) this.spans_at.set(cursor.source, by = new Map());
+    const key = begin * 65536 + (cursor.limit - begin);
+    let held = by.get(key);
+    if (held === undefined) { held = cursor.bounded(begin, cursor.limit); by.set(key, held); }
+    return held;
+  }
+  // One statement at `start`: its recorded unit, else a recorded variant, else read and recorded. A jump it makes is handed back.
+  step(cursor: Text.Node, frame: Node, start: number, graph: Map<number, Variant[]> | undefined, unit: Unit | undefined): Ran {
+    const compiled = unit?.statements.get(start);
+    let rules = compiled === undefined ? undefined : this.heads(frame);
+    if (compiled !== undefined && (compiled.rules === rules || this.print(compiled.rules) === this.print(rules!))) {
+      const ran = evaluate(this, compiled, cursor, frame);
+      if (ran !== undefined) { cursor.cursor = compiled.end; return ran; }
+    }
+    let seen = graph?.get(start);
+    if (seen !== undefined && seen.length > 0) {
+      let ran: Replayed = 'missed';
+      for (const variant of seen) { if (!variant.valid) continue; cursor.cursor = start; ran = replay(this, variant, cursor, frame); if (ran !== 'missed') break; }
+      if (ran !== 'missed' && 'diverged' in ran) { const value = this.statement(cursor, frame, ran.diverged); if (cursor.cursor === start) cursor.advance(); return { value }; }
+      if (ran !== 'missed') { if (cursor.cursor === start) cursor.advance(); return { value: ran.value }; }
+      cursor.cursor = start;
+    }
+    const firing = { depth: this.running.length, fires: [] as Match[], calls: [] as Called[] };
+    this.firing.push(firing);
+    let value: Node | undefined;
+    let thrown = true;
+    if (graph !== undefined && seen === undefined) graph.set(start, seen = Object.assign([], { visits: 0 }));
+    if (unit !== undefined && rules === undefined) rules = this.heads(frame);
+    const trace: Event[] | undefined = seen !== undefined && ++(seen as Variant[] & { visits: number }).visits >= 3 && this.naming === undefined ? [] : undefined, volatile = this.volatile, positions: number[] = [];
+    try { value = this.statement(cursor, frame, undefined, trace, positions); thrown = false; }
+    finally {
+      this.firing.pop();
+      if (trace !== undefined && trace.length > 0 && this.volatile === volatile && this.naming === undefined && (!thrown || trace[trace.length - 1].k === 'fire')) { const held = Object.assign((graph!.get(start) ?? []).filter(variant => variant.valid), { visits: (seen as Variant[] & { visits: number }).visits }); if (held.length >= 8) held.shift()!.valid = false; const variant = { events: trace, valid: true }; held.push(variant); graph!.set(start, held); this.watch(variant, frame, cursor, positions); }
+      if (unit !== undefined && firing.fires.length === 1 && (thrown || cursor.cursor === firing.fires[0].end)) applied(this, unit, start, firing.fires[0], rules!);
+      if (unit !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length === 0 && this.naming === undefined) named(this, unit, start, cursor.cursor, value, rules!, cursor);
+      if (unit !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length > 0 && firing.calls[firing.calls.length - 1].end === cursor.cursor) called(this, unit, start, cursor.cursor, firing.calls, rules!, cursor.span(start, this.token(cursor, start) - 1), frame);
+    }
+    if (cursor.cursor === start) cursor.advance();
+    return { value };
   }
   label_at(cursor: Text.Node, begin: number, label: string, frame: Node): number | undefined {
     const labels = this.derived(this.rules_of(frame), 'label', all => all.filter(rule => rule.native === 'label'));
@@ -706,33 +762,52 @@ export class Interpreter {
     for (let n = 0; n < a.length; n++) if (!Interpreter.like(a[n], b[n], depth - 1, it)) return false;
     return true;
   }
-  only_a_name(cursor: Text.Node, frame: Node, rules: Rule[], held?: { guard?: NameGuard }): boolean {
+  only_a_name(cursor: Text.Node, frame: Node, rules: Rule[], held?: { guard?: NameGuard; guards?: NameGuard[] }): boolean {
     if (this.naming !== undefined) return false;
     const self = this.holding_at(cursor.source, cursor.cursor)?.found.receiver ?? (frame === this.GLOBAL || frame.bare ? undefined : frame);
-    const guard = held?.guard;
-    if (guard !== undefined && guard.valid && (guard.declared === undefined || guard.declared === this.declared) && Interpreter.same_frame(frame, guard)) {
-      if (self === undefined) { if (guard.self === undefined) return true; }
-      else if (guard.self !== undefined) { const shape = this.shape(self); if (shape.rules === guard.self.rules && shape.mine === guard.self.mine && shape.on === guard.self.on) return true; }
+    let shape: { rules: Rule[]; mine: Rule[]; on: Rule[] } | undefined;
+    for (const guard of held?.guards ?? Interpreter.no_guards) {
+      if (!guard.valid || (guard.declared !== undefined && guard.declared !== this.declared) || !this.same_frame(frame, guard)) continue;
+      if (self === undefined) { if (guard.self === undefined) return true; continue; }
+      if (guard.self === undefined) continue;
+      shape ??= this.shape(self);
+      if (this.print(shape.rules) === guard.self.rules && this.print(shape.mine) === guard.self.mine && this.print(shape.on) === guard.self.on) return true;
     }
     const sensitive = this.sensitive;
     if (this.best(rules, cursor, frame) !== undefined) return false;
     if (self !== undefined && this.best_on(self, frame, cursor, true) !== undefined) return false;
     if (held !== undefined) {
-      const made: NameGuard = { declared: this.sensitive === sensitive ? undefined : this.declared, valid: true, events: [], frame: frame.rules?.length ? frame : undefined, parent: frame.parent, sees: frame.sees === undefined || frame.sees.length === 0 ? undefined : [...frame.sees], self: self === undefined ? undefined : this.shape(self) };
-      if (held.guard !== undefined) held.guard.valid = false;
-      held.guard = made;
+      const shape = self === undefined ? undefined : this.shape(self);
+      const made: NameGuard = { declared: this.sensitive === sensitive ? undefined : this.declared, valid: true, events: [], own: frame.rules?.length ? this.own_print(frame) : undefined, parent: frame.parent, sees: frame.sees === undefined || frame.sees.length === 0 ? undefined : [...frame.sees], self: shape === undefined ? undefined : { rules: this.print(shape.rules), mine: this.print(shape.mine), on: this.print(shape.on) } };
+      const guards = (held.guards = (held.guards ?? []).filter(guard => guard.valid));
+      if (guards.length >= 8) guards.shift()!.valid = false;
+      guards.push(made);
       this.watch(made, frame, cursor, [cursor.cursor]);
     }
     return true;
   }
-  static same_frame(frame: Node, shape: { frame?: Node; parent?: Node; sees?: Node[] }): boolean {
-    if (shape.frame !== undefined) return frame === shape.frame;
-    if (frame.parent !== shape.parent || frame.rules?.length) return false;
+  static no_guards: NameGuard[] = [];
+  // A frame like the one a guard was made in: the same parent and seen frames, and its own rules written alike.
+  same_frame(frame: Node, shape: { own?: object; parent?: Node; sees?: Node[] }): boolean {
+    if (frame.parent !== shape.parent && !this.like(frame.parent, shape.parent)) return false;
+    if (shape.own !== undefined ? !frame.rules?.length || this.own_print(frame) !== shape.own : frame.rules?.length) return false;
     const sees = frame.sees, expected = shape.sees;
     if (expected === undefined) return sees === undefined || sees.length === 0;
     if (sees === undefined || sees.length !== expected.length) return false;
-    for (let n = 0; n < sees.length; n++) if (sees[n] !== expected[n]) return false;
+    for (let n = 0; n < sees.length; n++) if (sees[n] !== expected[n] && !this.like(sees[n], expected[n])) return false;
     return true;
+  }
+  private own_prints = new WeakMap<Node, { layout: number; print: object }>();
+  own_print(frame: Node): object {
+    const held = this.own_prints.get(frame), layout = frame.layout ?? 0;
+    if (held !== undefined && held.layout === layout) return held.print;
+    const ids: number[] = [];
+    for (const rule of frame.rules ?? []) ids.push(this.template_of(rule).id);
+    const key = ids.join(',');
+    let print = this.printed.get(key);
+    if (print === undefined) this.printed.set(key, print = {});
+    this.own_prints.set(frame, { layout, print });
+    return print;
   }
   // What a value's own class says is read before what every value says.
   best_on(value: Node, frame: Node, cursor: Text.Node, own: boolean = false): Match | undefined {
@@ -777,12 +852,20 @@ export class Interpreter {
   }
   shape(value: Node): { rules: Rule[]; mine: Rule[]; on: Rule[] } { return this.shape_of(value.place !== undefined || value.code !== undefined ? this.deref(value, false) : value); }
   shape_of(target: Node | undefined): { rules: Rule[]; mine: Rule[]; on: Rule[] } {
-    if (target === undefined || target.none || target === this.GLOBAL) { const owned = this.owned_target(target); return { rules: owned.rules, mine: owned.mine, on: Interpreter.receiving_any }; }
+    if (target === undefined || target.none || target === this.GLOBAL) { const owned = this.owned_target(target); return this.shape_from(owned, Interpreter.receiving_any); }
     const on = this.rules_on(target), based = this.based(), held = target.shaped;
-    if (held !== undefined && held.of === on && held.based === based) return { rules: held.rules, mine: held.mine, on };
-    const owned = this.owned_target(target);
-    target.shaped = { of: on, based, rules: owned.rules, mine: owned.mine };
-    return { rules: owned.rules, mine: owned.mine, on };
+    if (held !== undefined && held.of === on && held.based === based) return held.shape;
+    const shape = this.shape_from(this.owned_target(target), on);
+    target.shaped = { of: on, based, shape };
+    return shape;
+  }
+  private shapes = new WeakMap<{ rules: Rule[]; mine: Rule[] }, WeakMap<Rule[], { rules: Rule[]; mine: Rule[]; on: Rule[] }>>();
+  shape_from(owned: { rules: Rule[]; mine: Rule[] }, on: Rule[]): { rules: Rule[]; mine: Rule[]; on: Rule[] } {
+    let by = this.shapes.get(owned);
+    if (by === undefined) this.shapes.set(owned, by = new WeakMap());
+    let shape = by.get(on);
+    if (shape === undefined) by.set(on, shape = { rules: owned.rules, mine: owned.mine, on });
+    return shape;
   }
   owned_target(target: Node | undefined): { rules: Rule[]; mine: Rule[] } {
     const key = target === undefined || target === this.GLOBAL ? this.BASE : target;
@@ -790,7 +873,7 @@ export class Interpreter {
     const based = this.based();
     if (target !== undefined && target !== this.GLOBAL && !target.rules?.length) {
       const rules = this.derived(this.rules_on(key), 'owned', this.keep_owned);
-      return { rules, mine: this.derived(rules, 'mine', this.keep_mine, based) };
+      return this.paired(rules, this.derived(rules, 'mine', this.keep_mine, based));
     }
     const held = this.owned_sets.get(key), of = this.rules_on(key);
     if (held?.of === of && held.based === based && held.target === target) return held;
@@ -803,7 +886,15 @@ export class Interpreter {
   leading_of(frame: Node): { rules: Rule[]; mine: Rule[] } {
     const based = this.based();
     const rules = this.derived(this.rules_of(frame), 'leading', this.keep_leading);
-    return { rules, mine: this.derived(rules, 'mine', this.keep_mine, based) };
+    return this.paired(rules, this.derived(rules, 'mine', this.keep_mine, based));
+  }
+  private pairs_of = new WeakMap<Rule[], WeakMap<Rule[], { rules: Rule[]; mine: Rule[] }>>();
+  paired(rules: Rule[], mine: Rule[]): { rules: Rule[]; mine: Rule[] } {
+    let by = this.pairs_of.get(rules);
+    if (by === undefined) this.pairs_of.set(rules, by = new WeakMap());
+    let pair = by.get(mine);
+    if (pair === undefined) by.set(mine, pair = { rules, mine });
+    return pair;
   }
   // A native taking arguments takes the operands written after it, read when it asks.
   call(target: Node, cursor: Text.Node, frame: Node): Node | undefined {
@@ -841,7 +932,7 @@ export class Interpreter {
     if (by_receiver === undefined) by_scope.set(scope, by_receiver = new Map());
     const on = receiver === undefined ? null : this.operates(rules) ? this.receiver_rules(receiver) : Interpreter.receiving_any;
     const known = by_receiver.get(on);
-    if (known !== undefined) { if (known.sensitive) this.sensitive++; return known.found === null ? undefined : { ...known.found, receiver }; }
+    if (known !== undefined) { if (known.sensitive) this.sensitive++; return known.found === null ? undefined : known.found.receiver === receiver ? known.found : { ...known.found, receiver }; }
     const volatile = this.volatile, sensitive = this.sensitive;
     const found = quiet ? this.quietly(() => this.best_of(rules, cursor, frame, receiver)) : this.best_of(rules, cursor, frame, receiver);
     if (this.volatile === volatile && this.readings.get(cursor.source) === at) by_receiver.set(on, { found: found === undefined ? null : found, sensitive: this.sensitive !== sensitive });
@@ -1136,8 +1227,7 @@ export class Interpreter {
       }
       const local = new Node(at);
       this.running[this.running.length - 1].local = local;
-      let site = at;
-      for (let k = this.running.length - 2; k >= 0; k--) { const body = this.running[k].found.rule.body; if (body !== undefined && Interpreter.within(site, body)) site = this.running[k].at; }
+      const site = this.site_at(this.running.length - 1);
       if (site !== at) local.site = site;
       local.parent = rule.closure;
       local.body = rule.body;
@@ -1164,7 +1254,7 @@ export class Interpreter {
       if (rule.fn !== undefined) return rule.fn.fn({ interpreter: this, frame: local, args, at, self: receiver });
       if (rule.body === undefined) return undefined;
       if (rule.direct !== undefined) return Natives[rule.native!].fn({ interpreter: this, frame: local, args: rule.direct.map(word => this.painting(word.source) ? this.lazy(word, local) : this.place(local, word)), at: rule.body.span(rule.body.end, rule.body.end) });
-      try { return this.read(this.cursor_of(this.inner(rule.body) ?? rule.body), local); }
+      try { return this.run_body(rule, local); }
       catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
         if (jump.site !== undefined && (Interpreter.within(jump.site, rule.body) || (rule.lexical !== undefined && Interpreter.within(jump.site, rule.lexical)))) {
@@ -1177,6 +1267,29 @@ export class Interpreter {
     } finally { this.depth--; this.running.pop(); }
   }
   running: Running[] = []
+  static reducing = env.nodejs && process.env.RAY_REDUCE === 'on';
+  // A body is read until it has been applied a few times, then run from its reduction.
+  run_body(rule: Rule, local: Node): Node | undefined {
+    const span = rule.inner_body ??= this.inner(rule.body!) ?? rule.body!;
+    const cursor = this.cursor_of(span);
+    if (this.painting(span.source) || !Interpreter.reducing || ++rule.applications < 4) return this.read(cursor, local);
+    let body = rule.reduced;
+    if (body === undefined || (body.steps > 0 && body.unit.statements.size !== body.known)) {
+      const unit = this.unit_of(cursor), graph = this.graph_of(cursor);
+      body = rule.reduced = reduce(this, span, unit, graph);
+      body.known = unit.statements.size;
+    }
+    return run(this, body, cursor, local);
+  }
+  unforce(mark: number) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
+  // Where an application stands in written code: the call site of each rule whose body it is inside.
+  site_at(top: number): Text.Node {
+    const entry = this.running[top];
+    if (entry.site !== undefined) return entry.site;
+    let site = entry.at;
+    for (let k = top - 1; k >= 0; k--) { const body = this.running[k].found.rule.body; if (body !== undefined && Interpreter.within(entry.at, body)) { site = this.site_at(k); break; } }
+    return entry.site = site;
+  }
   static same(one: Text.Node | undefined, other: Text.Node): boolean { return one !== undefined && one.source === other.source && one.begin === other.begin && one.end === other.end; }
   static within(inner: Text.Node, outer: Text.Node): boolean { return inner.source === outer.source && inner.begin >= outer.begin && inner.end <= outer.end; }
   // What a capture says besides its name runs on the text it took.
@@ -1276,6 +1389,15 @@ export class Interpreter {
   bound(node: Node): Node | undefined {
     const { in: scope, name, member } = node.place!;
     return member ? this.member(scope, name) : this.lookup(scope, name, node.at);
+  }
+  // What a place for this name would dereference to, without making the place.
+  deref_name(frame: Node, at: Text.Node): Node | undefined {
+    const name = at.string, bound = this.lookup(frame, name, at);
+    if (bound !== undefined) return this.deref(bound, false);
+    const method = this.method_named(frame, name, at);
+    if (method !== undefined) return method;
+    this.missing?.add(name);
+    return undefined;
   }
   deref(node: Node | undefined, report: boolean = true): Node | undefined {
     for (let depth = 0; node !== undefined && depth < 256; depth++) {
@@ -1400,18 +1522,33 @@ export class Interpreter {
     if (target === undefined) return undefined;
     const name = span.string;
     if (target.style !== undefined) return undefined;
-    for (const rule of this.rules_on(target)) if (rule.pattern[0]?.kind === 'literal' && rule.pattern[0].text === name && (rule.pattern.length === 1 || (rule.pattern.length === 2 && rule.pattern[1].kind === 'capture'))) return undefined;
+    if (this.members_of(this.rules_on(target)).has(name)) return undefined;
     return Object.assign(new Node(span), { place: { in: target, name, member: true } });
+  }
+  private member_index = new WeakMap<Rule[], Map<string, { plain?: Rule; taking: Rule[] }>>();
+  members_of(rules: Rule[]): Map<string, { plain?: Rule; taking: Rule[] }> {
+    let index = this.member_index.get(rules);
+    if (index !== undefined) return index;
+    index = new Map();
+    for (const rule of rules) {
+      const [first, second] = rule.pattern;
+      if (first?.kind !== 'literal' || rule.pattern.length > 2 || (second !== undefined && second.kind !== 'capture')) continue;
+      let entry = index.get(first.text);
+      if (entry === undefined) index.set(first.text, entry = { taking: [] });
+      if (second === undefined) entry.plain ??= rule; else entry.taking.push(rule);
+    }
+    this.member_index.set(rules, index);
+    return index;
   }
   get(node: Node, key: Node): Node | undefined {
     const target = this.deref(node);
     if (target === undefined) return undefined;
     const name = this.text(key);
     if (target.style !== undefined) return this.style(`${target.style}.${name}`);
-    const rules = this.rules_on(target);
-    const plain = rules.find(rule => rule.pattern.length === 1 && rule.pattern[0].kind === 'literal' && rule.pattern[0].text === name);
+    const entry = this.members_of(this.rules_on(target)).get(name);
+    const plain = entry?.plain;
     if (plain !== undefined) return this.apply({ rule: plain, begin: 0, end: 0, reach: 0, captures: new Map(), literals: [], receiver: this.location(node) ?? node }, target, key.at ?? node.at!);
-    const taking = rules.filter(rule => rule.pattern.length === 2 && rule.pattern[0].kind === 'literal' && rule.pattern[0].text === name && rule.pattern[1].kind === 'capture');
+    const taking = entry?.taking ?? [];
     if (taking.length > 0) {
       return Object.assign(new Node(key.at), { fn: this.rebuild(['taking', this.location(node) ?? node, taking]) });
     }
@@ -1446,8 +1583,8 @@ export class Interpreter {
   }
 
   // Definitions: a head read by its brackets — text, `{ }` for a space, `{x}` capturing x.
-  define(head: Text.Node, body: Text.Node | undefined, scope: Node, closure: Node = scope, guard?: { span: Text.Node; in: Node }): Rule | undefined {
-    const site = head.source.location !== undefined ? head : this.running[this.running.length - 1]?.at;
+  define(head: Text.Node, body: Text.Node | undefined, scope: Node, closure: Node = scope, guard?: { span: Text.Node; in: Node }, written?: Text.Node): Rule | undefined {
+    const site = head.source.location !== undefined ? head : written ?? this.running[this.running.length - 1]?.at;
     const made = site === undefined || scope === this.GLOBAL ? undefined : this.rules_on(scope).find(rule => !this.based().has(rule) && rule.at.string === head.string && Interpreter.same(rule.at.source.location !== undefined ? rule.at : rule.lexical, site));
     if (made !== undefined) return made;
     const pieces = this.pieces_of(head, closure);
@@ -1706,6 +1843,9 @@ export class Interpreter {
     const rule = this.define(head, written, pattern.code?.in ?? pattern.place?.in ?? frame);
     return rule === undefined ? undefined : this.rule_value(rule);
   }
+  writing(site: Text.Node): Text.Node | undefined {
+    return this.holding(site)?.at ?? this.running[this.running.length - 1]?.at;
+  }
   define_in(scope: Node, tail: Node, body: Node, at: Text.Node, parameters?: Node): Node | undefined {
     const pattern = parameters === undefined ? undefined : this.written(parameters);
     const guard = pattern?.code === undefined ? undefined : { span: this.inner(pattern.code.span) ?? pattern.code.span, in: pattern.code.in };
@@ -1716,14 +1856,16 @@ export class Interpreter {
     if (written === undefined) return undefined;
     if (place?.place !== undefined && !place.place.member) {
       const head = Object.assign(Text.Node.string(place.place.name + spelled), {});
-      const rule = this.define(head, this.inner(written) ?? written, place.place.in, body.code?.in ?? place.place.in, guard);
-      if (rule !== undefined) rule.lexical = this.running[this.running.length - 1]?.at;
+      const lexical = this.writing(at);
+      const rule = this.define(head, this.inner(written) ?? written, place.place.in, body.code?.in ?? place.place.in, guard, lexical);
+      if (rule !== undefined) rule.lexical = lexical;
       return rule === undefined ? undefined : this.rule_value(rule);
     }
     const into = this.deref(scope, false);
     if (into === undefined || into.none) return undefined;
-    const rule = this.define(Text.Node.string(spelled), this.inner(written) ?? written, into, body.code?.in ?? into, guard);
-    if (rule !== undefined) rule.lexical = this.running[this.running.length - 1]?.at;
+    const lexical = this.writing(at);
+    const rule = this.define(Text.Node.string(spelled), this.inner(written) ?? written, into, body.code?.in ?? into, guard, lexical);
+    if (rule !== undefined) rule.lexical = lexical;
     return rule === undefined ? undefined : this.rule_value(rule);
   }
   private methods = new WeakMap<Rule[], Map<string, Rule>>();
@@ -1847,7 +1989,7 @@ export class Interpreter {
     };
   }
   restore_state(state: any, mine: Text.Source[]) {
-    this.GLOBAL = state.GLOBAL; this.NONE = state.NONE; this.EXTERNAL = state.EXTERNAL; this.BASE = state.BASE; this.made = state.made; this.theme = state.theme;
+    this.GLOBAL = state.GLOBAL; Node.globals.add(this.GLOBAL); Node.complete = false; this.NONE = state.NONE; this.EXTERNAL = state.EXTERNAL; this.BASE = state.BASE; this.made = state.made; this.theme = state.theme;
     this.version = state.version + 1; this.declared = state.declared; this.rules_version = state.rules_version + 1; this.order = state.order;
     Rule.count = Math.max(Rule.count, state.rules);
     this.definitions = state.definitions; this.given_names = state.given_names; this.held_texts = state.held_texts; this.filtered = state.filtered; this.rejected = state.rejected;
@@ -1923,6 +2065,7 @@ export class Interpreter {
       const copy = Object.assign(Object.create(Rule.prototype), r) as Rule;
       copy.id = ++Rule.count;
       copy.fitting = undefined;
+      copy.reduced = undefined;
       copy.value_node = undefined;
       rules.set(r, copy);
       copy.closure = node(r.closure)!;
@@ -1932,6 +2075,8 @@ export class Interpreter {
       return copy;
     };
     this.GLOBAL = node(from.GLOBAL)!;
+    Node.globals.add(this.GLOBAL);
+    this.single = false;
     this.NONE = node(from.NONE)!;
     this.EXTERNAL = node(from.EXTERNAL)!;
     this.BASE = node(from.BASE);

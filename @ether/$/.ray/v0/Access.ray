@@ -1,0 +1,191 @@
+Visibility := class: Ray {
+  default_privacy_policy => Accessor.Permission.private
+
+  of (item) => (
+    found ^keyword := None
+    walker ^keyword := item
+    while ((found === None).and((walker === None).not)) {
+      if (walker.access) { found = walker.access.level } else { walker = walker.parent }
+    }
+    found ?? Visibility.default_privacy_policy
+  )
+
+  openness (level) => (
+    rank ^keyword := 0
+    if (level == Accessor.Permission.localhost) { rank = 1 }
+    elsif (level == Accessor.Permission.managed) { rank = 2 }
+    elsif (level == Accessor.Permission.private) { rank = 3 }
+    elsif (level == Accessor.Permission.confidential) { rank = 3 }
+    elsif (level == Accessor.Permission.protected) { rank = 4 }
+    elsif (level == Accessor.Permission.public) { rank = 5 }
+    rank
+  )
+  narrowest (levels) => (
+    chosen ^keyword := None
+    levels for {
+      if ((chosen === None).or(Visibility.openness(it.value) < Visibility.openness(chosen))) { chosen = it.value }
+    }
+    chosen ?? Visibility.default_privacy_policy
+  )
+
+  confidential => (
+    policy := Visibility.default_privacy_policy
+    if (Visibility.openness(Accessor.Permission.private) < Visibility.openness(policy)) { Accessor.Permission.managed } else { policy }
+  )
+
+  derived (sources) => (
+    levels := chain None
+    sources for { levels &= Visibility.of(it.value) }
+    Visibility.narrowest(levels)
+  )
+  mark (value, sources) => (
+    value.access = Accessor(level: Visibility.derived(sources), methods: (chain None))
+    value
+  )
+  local (value) => (
+    value.access = Accessor(level: Accessor.Permission.local, methods: (chain None))
+    value
+  )
+  may_leave (value) => (Visibility.of(value) == Accessor.Permission.local).not
+  readable (item, who) => (
+    level := Visibility.of(item)
+    if (level == Accessor.Permission.public) { true } else { who.permissions.contains(level) }
+  )
+}
+
+Capability := enum network | read | write | execute | io | os | random | time
+
+Grant := class: Ray {
+  origin: Node
+  capability: Node
+  target: None
+
+  covers (origin, capability, target) => (
+    covered ^keyword := (.origin == origin).and(.capability == capability)
+    if (covered.and((.target === None).not)) { covered = .target == target }
+    covered
+  )
+}
+
+Permissions := class: Ray {
+  grants: (chain None)
+
+  grant (origin, capability, target) => (
+    .grants &= Grant(origin: origin, capability: capability, target: target)
+    this
+  )
+  allows (origin, capability, target) => .grants.some { it.value.covers(origin, capability, target) }
+}
+
+Permissions.current = Permissions()
+
+{origin} may {literal capability} {target} => Permissions.current.grant(origin, Capability[capability], target)
+
+Run := class: Ray {
+  Mode := enum full | abstract | refused
+
+  actor: Node
+  origin: (chain None)
+  settings: None
+
+  originating (character) => (
+    longer := chain None
+    .origin for { longer &= it.value }
+    longer &= character
+    Run(actor: .actor, origin: longer, settings: .settings)
+  )
+  hops => (
+    every_hop := chain None
+    .origin for { every_hop &= it.value }
+    unless (every_hop.contains(.actor)) { every_hop &= .actor }
+    every_hop
+  )
+  may (capability, target) => .hops.every { Permissions.current.allows(it.value, capability, target) }
+  ask (capability, target) => if (.may(capability, target)) { true } else { Quest(name: .prompt, goal: Grant(origin: .origin.head.value, capability: capability, target: target)) }
+
+  called (character) => character.prefix + character.name
+  prompt => (
+    wanting := .origin.head
+    written ^keyword := Run.called(wanting.value) + " wants to run this"
+    rest ^keyword := wanting.next
+    if rest { written = written + ", originating from " }
+    while rest {
+      written = written + Run.called(rest.value)
+      rest = rest.next
+      if rest { written = written + " <- " }
+    }
+    written
+  )
+
+  mode (method) => if (.settings === None) { Run.Settings().mode(method) } else { .settings.mode(method) }
+
+  Settings := class: Ray {
+    speculated: (chain None)
+    refused: (chain None)
+
+    speculate (place) => (
+      .speculated &= place
+      this
+    )
+    refuse (place) => (
+      .refused &= place
+      this
+    )
+    mode (method) => (
+      if (.refused.contains(method)) { Run.Mode.refused }
+      elsif (Effects.io(method).not) { Run.Mode.full }
+      elsif (.speculated.contains(method)) { Run.Mode.full }
+      else { Run.Mode.abstract }
+    )
+  }
+}
+
+Effects := class: Ray {
+  Source := enum io | os | random | time | network
+
+  source_of (called) => (
+    found ^keyword := None
+    if (called.is_external) {
+      spelled := called.external_name
+      if (spelled == "io") { found = Effects.Source.io }
+      elsif (spelled == "os") { found = Effects.Source.os }
+      elsif (spelled == "random") { found = Effects.Source.random }
+      elsif (spelled == "time") { found = Effects.Source.time }
+    }
+    found
+  )
+
+  of (program) => (
+    reached := chain None
+    visited := chain None
+    waiting := chain None
+    waiting &= program
+    walker ^keyword := waiting.head
+    while walker {
+      current := walker.value
+      unless (visited.contains(current)) {
+        visited &= current
+        current.calls for {
+          source := Effects.source_of(it.value)
+          if (source === None) { waiting &= it.value** } else {
+            unless (reached.contains(source)) { reached &= source }
+          }
+        }
+      }
+      walker = walker.next
+    }
+    reached
+  )
+
+  io (method) => Effects.of(method**).some { (it.value == Effects.Source.io).or(it.value == Effects.Source.os).or(it.value == Effects.Source.network) }
+  pure (method) => Effects.of(method**).empty
+  deterministic (method) => Effects.of(method**).every { (it.value == Effects.Source.random).or(it.value == Effects.Source.time).or(it.value == Effects.Source.io).not }
+  nondeterministic (method) => Effects.deterministic(method).not
+  initializer (method) => method**.calls.every { (it.value.is_external).and((it.value.external_name == "declare").or(it.value.external_name == "assign")) }
+
+  asserted (method, claim) => (
+    holds := (claim == `pure`).and(Effects.pure(method)).or((claim == `deterministic`).and(Effects.deterministic(method))).or((claim == `nondeterministic`).and(Effects.nondeterministic(method)))
+    unless holds { ERROR@method `this method is not what it is marked as` }
+    holds
+  )
+}

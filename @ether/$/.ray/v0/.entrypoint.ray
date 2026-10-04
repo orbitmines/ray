@@ -1,4 +1,6 @@
 {pattern} => {body} => external rule pattern body
+//{comment?} => None
+;{statement} => statement
 ({expr}) => expr
 {{expr}} => external ** expr
 {name} := {value} => external declare name value
@@ -277,7 +279,7 @@ Node := base class {
 
   , => this
 
-  ;{x} ^punctuation => inline x
+  ;{x} ^punctuation => x
   listing => None
 
   ({parameters ^parameter}) => {block} => (

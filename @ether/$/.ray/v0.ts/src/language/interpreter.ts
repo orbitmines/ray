@@ -2,8 +2,10 @@ import { Text } from './text.ts';
 import type { Called, Unit } from './compile/ir.ts';
 import { applied, called, named } from './compile/record.ts';
 import { type Event, type Replayed, type Variant, replay } from './compile/graph.ts';
-import { evaluate } from './compile/evaluate.ts';
+import { evaluate, type Ran } from './compile/evaluate.ts';
+import { reduce, run, type Body } from './compile/body.ts';
 import { Boot } from './boot.ts';
+import { env } from './env.ts';
 import { Diagnostics, type Diagnostic } from './diagnostics.ts';
 import { Natives } from './natives.ts';
 import type { Program } from './program.ts';
@@ -91,6 +93,9 @@ export class Rule {
   guard?: { span: Text.Node; in: Node }
   // Written beside other definitions of the same name: its parameters choose between them.
   overloaded = false
+  inner_body?: Text.Node
+  reduced?: Body
+  applications = 0
   fitting?: { declared: number; rules: number; found?: { names: string[]; refused: boolean; value?: Node }; by: Map<Node, { fit: boolean; on: Rule[] }> }
   get name(): string { return this.pattern.map(piece => piece.kind === 'literal' ? piece.text : piece.kind === 'gap' ? '{ }' : `{${piece.name}}`).join(''); }
   constructor(public pattern: Piece[], public closure: Node, public at: Text.Node, public key: string, public order: number, public body?: Text.Node, public fn?: Native) {}
@@ -487,12 +492,12 @@ export class Interpreter {
     if (graph === undefined) by.set(span, graph = new Map());
     return graph;
   }
-  read(cursor: Text.Node, frame: Node): Node | undefined {
-    const begin = cursor.cursor, mark = this.forced.length;
+  read(cursor: Text.Node, frame: Node): Node | undefined { return this.read_on(cursor, frame, cursor.cursor, this.forced.length, undefined); }
+  // Reading on from where the cursor is, in a span that began at `begin`: what a compiled body hands back to when it cannot go on.
+  read_on(cursor: Text.Node, frame: Node, begin: number, mark: number, last: Node | undefined): Node | undefined {
     const painting = this.painting(cursor.source);
-    const graph = painting ? undefined : this.graph_of(cursor);
-    const unit = painting ? undefined : this.unit_of(cursor);
-    let last: Node | undefined;
+    const graph = painting ? undefined : this.graph_of(cursor.cursor === begin ? cursor : this.spanned(cursor, begin));
+    const unit = painting ? undefined : this.unit_of(cursor.cursor === begin ? cursor : this.spanned(cursor, begin));
     while (true) {
       this.blank(cursor);
       if (cursor.done()) { if (this.running.length === 0) this.forced.length = Math.min(this.forced.length, mark); return last; }
@@ -500,48 +505,15 @@ export class Interpreter {
       if (painting) { let read = this.read_at.get(cursor.source); if (read === undefined) this.read_at.set(cursor.source, read = new Set()); read.add(start); }
       if (frame === this.GLOBAL) this.reading = cursor.span(start, this.statement_end(cursor, start, frame) - 1);
       try {
-        const compiled = unit?.statements.get(start);
-        let rules = compiled === undefined ? undefined : this.heads(frame);
-        if (compiled !== undefined && (compiled.rules === rules || this.print(compiled.rules) === this.print(rules!))) {
-          const ran = evaluate(this, compiled, cursor, frame);
-          if (ran !== undefined) {
-            cursor.cursor = compiled.end;
-            if (ran.value !== undefined) last = ran.value;
-            if (ran.jump !== undefined) {
-              const at = this.label_at(cursor, begin, ran.jump.label, frame);
-              if (at === undefined) throw Object.assign(new Jump(ran.jump.label), { site: ran.jump.site, spelled: true });
-              if (at < start) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
-              cursor.cursor = at;
-            }
-            continue;
-          }
+        const ran = this.step(cursor, frame, start, graph, unit);
+        if (ran.value !== undefined) last = ran.value;
+        if (ran.jump !== undefined) {
+          const at = this.label_at(cursor, begin, ran.jump.label, frame);
+          if (at === undefined) throw Object.assign(new Jump(ran.jump.label), { site: ran.jump.site, spelled: true });
+          if (at < start) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
+          cursor.cursor = at;
+          continue;
         }
-        let seen = graph?.get(start);
-        if (seen !== undefined && seen.length > 0) {
-          const variants = seen;
-          let ran: Replayed = 'missed';
-          for (const variant of variants) { if (!variant.valid) continue; cursor.cursor = start; ran = replay(this, variant, cursor, frame); if (ran !== 'missed') break; }
-          if (ran !== 'missed' && 'diverged' in ran) { const value = this.statement(cursor, frame, ran.diverged); if (value !== undefined) last = value; }
-          else if (ran !== 'missed') { if (ran.value !== undefined) last = ran.value; }
-          if (ran !== 'missed') { if (cursor.cursor === start) cursor.advance(); continue; }
-          cursor.cursor = start;
-        }
-        const firing = { depth: this.running.length, fires: [] as Match[], calls: [] as Called[] };
-        this.firing.push(firing);
-        let value: Node | undefined;
-        let thrown = true;
-        if (graph !== undefined && seen === undefined) graph.set(start, seen = Object.assign([], { visits: 0 }));
-        if (unit !== undefined && rules === undefined) rules = this.heads(frame);
-        const trace: Event[] | undefined = seen !== undefined && ++(seen as Variant[] & { visits: number }).visits >= 3 && this.naming === undefined ? [] : undefined, volatile = this.volatile, positions: number[] = [];
-        try { value = this.statement(cursor, frame, undefined, trace, positions); thrown = false; }
-        finally {
-          this.firing.pop();
-          if (trace !== undefined && trace.length > 0 && this.volatile === volatile && this.naming === undefined && (!thrown || trace[trace.length - 1].k === 'fire')) { const held = Object.assign((graph!.get(start) ?? []).filter(variant => variant.valid), { visits: (seen as Variant[] & { visits: number }).visits }); if (held.length >= 8) held.shift()!.valid = false; const variant = { events: trace, valid: true }; held.push(variant); graph!.set(start, held); this.watch(variant, frame, cursor, positions); }
-          if (unit !== undefined && firing.fires.length === 1 && (thrown || cursor.cursor === firing.fires[0].end)) applied(this, unit, start, firing.fires[0], rules!);
-          if (unit !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length === 0 && this.naming === undefined) named(this, unit, start, cursor.cursor, value, rules!, cursor);
-          if (unit !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length > 0 && firing.calls[firing.calls.length - 1].end === cursor.cursor) called(this, unit, start, cursor.cursor, firing.calls, rules!, cursor.span(start, this.token(cursor, start) - 1), frame);
-        }
-        if (value !== undefined) last = value;
       } catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
         const at = this.label_at(cursor, begin, jump.label, frame);
@@ -553,6 +525,49 @@ export class Interpreter {
       }
       if (cursor.cursor === start) cursor.advance();
     }
+  }
+  private spans_at = new WeakMap<Text.Source, Map<number, Text.Node>>();
+  spanned(cursor: Text.Node, begin: number): Text.Node {
+    let by = this.spans_at.get(cursor.source);
+    if (by === undefined) this.spans_at.set(cursor.source, by = new Map());
+    const key = begin * 65536 + (cursor.limit - begin);
+    let held = by.get(key);
+    if (held === undefined) { held = cursor.bounded(begin, cursor.limit); by.set(key, held); }
+    return held;
+  }
+  // One statement at `start`: its recorded unit, else a recorded variant, else read and recorded. A jump it makes is handed back.
+  step(cursor: Text.Node, frame: Node, start: number, graph: Map<number, Variant[]> | undefined, unit: Unit | undefined): Ran {
+    const compiled = unit?.statements.get(start);
+    let rules = compiled === undefined ? undefined : this.heads(frame);
+    if (compiled !== undefined && (compiled.rules === rules || this.print(compiled.rules) === this.print(rules!))) {
+      const ran = evaluate(this, compiled, cursor, frame);
+      if (ran !== undefined) { cursor.cursor = compiled.end; return ran; }
+    }
+    let seen = graph?.get(start);
+    if (seen !== undefined && seen.length > 0) {
+      let ran: Replayed = 'missed';
+      for (const variant of seen) { if (!variant.valid) continue; cursor.cursor = start; ran = replay(this, variant, cursor, frame); if (ran !== 'missed') break; }
+      if (ran !== 'missed' && 'diverged' in ran) { const value = this.statement(cursor, frame, ran.diverged); if (cursor.cursor === start) cursor.advance(); return { value }; }
+      if (ran !== 'missed') { if (cursor.cursor === start) cursor.advance(); return { value: ran.value }; }
+      cursor.cursor = start;
+    }
+    const firing = { depth: this.running.length, fires: [] as Match[], calls: [] as Called[] };
+    this.firing.push(firing);
+    let value: Node | undefined;
+    let thrown = true;
+    if (graph !== undefined && seen === undefined) graph.set(start, seen = Object.assign([], { visits: 0 }));
+    if (unit !== undefined && rules === undefined) rules = this.heads(frame);
+    const trace: Event[] | undefined = seen !== undefined && ++(seen as Variant[] & { visits: number }).visits >= 3 && this.naming === undefined ? [] : undefined, volatile = this.volatile, positions: number[] = [];
+    try { value = this.statement(cursor, frame, undefined, trace, positions); thrown = false; }
+    finally {
+      this.firing.pop();
+      if (trace !== undefined && trace.length > 0 && this.volatile === volatile && this.naming === undefined && (!thrown || trace[trace.length - 1].k === 'fire')) { const held = Object.assign((graph!.get(start) ?? []).filter(variant => variant.valid), { visits: (seen as Variant[] & { visits: number }).visits }); if (held.length >= 8) held.shift()!.valid = false; const variant = { events: trace, valid: true }; held.push(variant); graph!.set(start, held); this.watch(variant, frame, cursor, positions); }
+      if (unit !== undefined && firing.fires.length === 1 && (thrown || cursor.cursor === firing.fires[0].end)) applied(this, unit, start, firing.fires[0], rules!);
+      if (unit !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length === 0 && this.naming === undefined) named(this, unit, start, cursor.cursor, value, rules!, cursor);
+      if (unit !== undefined && !thrown && firing.fires.length === 0 && firing.calls.length > 0 && firing.calls[firing.calls.length - 1].end === cursor.cursor) called(this, unit, start, cursor.cursor, firing.calls, rules!, cursor.span(start, this.token(cursor, start) - 1), frame);
+    }
+    if (cursor.cursor === start) cursor.advance();
+    return { value };
   }
   label_at(cursor: Text.Node, begin: number, label: string, frame: Node): number | undefined {
     const labels = this.derived(this.rules_of(frame), 'label', all => all.filter(rule => rule.native === 'label'));
@@ -1208,7 +1223,7 @@ export class Interpreter {
       if (rule.fn !== undefined) return rule.fn.fn({ interpreter: this, frame: local, args, at, self: receiver });
       if (rule.body === undefined) return undefined;
       if (rule.direct !== undefined) return Natives[rule.native!].fn({ interpreter: this, frame: local, args: rule.direct.map(word => this.painting(word.source) ? this.lazy(word, local) : this.place(local, word)), at: rule.body.span(rule.body.end, rule.body.end) });
-      try { return this.read(this.cursor_of(this.inner(rule.body) ?? rule.body), local); }
+      try { return this.run_body(rule, local); }
       catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
         if (jump.site !== undefined && (Interpreter.within(jump.site, rule.body) || (rule.lexical !== undefined && Interpreter.within(jump.site, rule.lexical)))) {
@@ -1221,6 +1236,21 @@ export class Interpreter {
     } finally { this.depth--; this.running.pop(); }
   }
   running: Running[] = []
+  static reducing = env.nodejs && process.env.RAY_REDUCE === 'on';
+  // A body is read until it has been applied a few times, then run from its reduction.
+  run_body(rule: Rule, local: Node): Node | undefined {
+    const span = rule.inner_body ??= this.inner(rule.body!) ?? rule.body!;
+    const cursor = this.cursor_of(span);
+    if (this.painting(span.source) || !Interpreter.reducing || ++rule.applications < 4) return this.read(cursor, local);
+    let body = rule.reduced;
+    if (body === undefined || (body.steps > 0 && body.unit.statements.size !== body.known)) {
+      const unit = this.unit_of(cursor), graph = this.graph_of(cursor);
+      body = rule.reduced = reduce(this, span, unit, graph);
+      body.known = unit.statements.size;
+    }
+    return run(this, body, cursor, local);
+  }
+  unforce(mark: number) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
   // Where an application stands in written code: the call site of each rule whose body it is inside.
   site_at(top: number): Text.Node {
     const entry = this.running[top];
@@ -2000,6 +2030,7 @@ export class Interpreter {
       const copy = Object.assign(Object.create(Rule.prototype), r) as Rule;
       copy.id = ++Rule.count;
       copy.fitting = undefined;
+      copy.reduced = undefined;
       copy.value_node = undefined;
       rules.set(r, copy);
       copy.closure = node(r.closure)!;

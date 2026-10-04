@@ -132,6 +132,7 @@ Keyboard := class {
     )
     cycle (iterable) => iterable.at(.presses % iterable.count)
     holds => .pressed
+    as (=== boolean) => .pressed
   }
   keys: (chain None)
 

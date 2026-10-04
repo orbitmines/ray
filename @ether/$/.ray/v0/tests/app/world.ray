@@ -43,6 +43,13 @@ unless (Region(name: "north").name == "north") { INFO@mark `RG1 a region is not 
 unless (Instance(location: None).status == Status.online) { INFO@mark `IN1 a new instance is not online` }
 unless (here == here) { INFO@mark `LO5 a location is not itself` }
 
+// A world is a location: what holds places, and is held.
+realm := World(name: "realm")
+held := realm.holds(Location(host: None))
+unless (held.parent === realm) { INFO@mark `WL1 a place a world holds does not have the world as its parent` }
+unless (realm.children.head.value === held) { INFO@mark `WL2 a world does not hold the place it took` }
+unless (realm.instance_of(Location)) { INFO@mark `WL3 a world is not a location` }
+
 unless (wg == wg) { INFO@mark `WO12 a world is not itself` }
 if (wg == World(name: "other")) { INFO@mark `WO13 two worlds are the same world` }
 
@@ -194,7 +201,7 @@ unless (sited.authors.count == 1) { INFO@mark `WR8 an author added is not kept` 
 unless (sited.authors.head.value == wp) { INFO@mark `WR9 the author kept is not the one added` }
 unless (Reference(title: "t").note("n").notes.head.value.text == "n") { INFO@mark `WR10 a note forgot its text` }
 unless (Reference(title: "t").note("n").notes.head.value.date) { INFO@mark `WR11 a note says nothing about when` }
-if (Reference(title: "t").external) { INFO@mark `WR12 a new reference has an external it was not given` }
+if (Reference(title: "t").remote) { INFO@mark `WR12 a new reference has a remote it was not given` }
 
 unless (Status.idle) { INFO@mark `ST2 there is no being idle` }
 unless (Status.do_not_disturb) { INFO@mark `ST3 there is no being do not disturb` }

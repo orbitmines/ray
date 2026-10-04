@@ -981,13 +981,13 @@ spelled_reading (ends) => (
   whole ^keyword := chain None
   ended ^keyword := ends.head
   while ended {
-    among ^keyword := ended.value.path.tail
-    value ^keyword := among.value.value
-    while among {
-      value = Chosen(among: among.value, value: value)
-      among = among.previous
+    step ^keyword := ended.value.path.tail
+    chosen ^keyword := step.value.value
+    while step {
+      chosen = Chosen(among: step.value, value: chosen)
+      step = step.previous
     }
-    whole &= value
+    whole &= chosen
     ended = ended.next
   }
   whole
@@ -1058,7 +1058,8 @@ readings_of (rest, type) => (
     }
   } elsif type.listing {
     reached ^keyword := chain None
-    reached &= Reading(rest: rest, value: chain None)
+    listed_from ^keyword := rest
+    reached &= Reading(rest: listed_from, value: chain None)
     item ^keyword := type.head
     while item {
       further ^keyword := chain None
@@ -1086,10 +1087,9 @@ readings_of (rest, type) => (
   } elsif type.superposes {
     alternative ^keyword := type.components.head
     while alternative {
-      among ^keyword := alternative
       alternatives ^keyword := readings_of(rest, alternative.value).head
       while alternatives {
-        found &= Reading(rest: alternatives.value.rest, value: Chosen(among: among, value: alternatives.value.value))
+        found &= Reading(rest: alternatives.value.rest, value: Chosen(among: alternative, value: alternatives.value.value))
         alternatives = alternatives.next
       }
       alternative = alternative.next

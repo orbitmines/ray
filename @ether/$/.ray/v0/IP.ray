@@ -5,6 +5,8 @@ IP := class {
   segment_length => 8
 
   bit_count => .segment_count * .segment_length
+  number_of_segments => .segment_count
+  number_of_bits => .bit_count
 
   separator => U+002E
   base => 10
@@ -176,6 +178,54 @@ IP.v6 = class: IP {
   )
 
   full => .written(0, .segment_count)
+
+  zero_compression => (.left === None).not.and(.right === None).not
+  defined_segments => (
+    defined := chain None
+    unless (.left === None) { .left for { defined &= it.value } }
+    unless (.right === None) { .right for { defined &= it.value } }
+    defined
+  )
+  number_of_compressed_segments => if .zero_compression { 8 - .defined_segments.count } else { 0 }
+
+  leading_zeros (some) => (
+    counted ^keyword := 0
+    stopped ^keyword := false
+    some for {
+      unless stopped { if it.value.is_zero { counted = counted.succ } else { stopped = true } }
+    }
+    counted
+  )
+  longest_zeros (some) => (
+    best ^keyword := 0
+    run ^keyword := 0
+    some for {
+      if it.value.is_zero {
+        run = run.succ
+        if (best < run) { best = run }
+      } else { run = 0 }
+    }
+    best
+  )
+  valid => (
+    holds ^keyword := true
+    if .zero_compression {
+      unless (.defined_segments.count < 7) { holds = false }
+      if (.number_of_compressed_segments < .longest_zeros(.defined_segments)) { holds = false }
+      if (.longest_zeros(.left) == .number_of_compressed_segments) { holds = false }
+    } else { unless (.segments.count == 8) { holds = false } }
+    holds
+  )
+  checked => dynamically (assert .valid)
+
+  compress_zeros => if .zero_compression { this } else { IP.v6.parse(.compressed) }
+  embed_ipv4 => if (.embedded === None) { IP.v6.parse(.compressed_before_v4 + .tail_v4.as_string) } else { this }
+  compressed_before_v4 => (
+    leading := IP.v6(segments: .segments.slice(0, 6))
+    written := leading.compressed
+    if (written.ends_with(":")) { written } else { written + ":" }
+  )
+  lowercase => .as_string.lower_case
 
   mapped => (
     first_five_zero ^keyword := true

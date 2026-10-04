@@ -200,6 +200,7 @@ Number := class: Ray {
     power
   )
   squared => this * this
+  right-to-left ^ (exponent: Number) => .pow(exponent)
 
   factorial => (
     raised := one

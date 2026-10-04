@@ -279,9 +279,31 @@ compounds {head} ({parameters ^parameter}) => {block} => (
   } parameters
   compounds.modify(defined)
 )
+right-to-left {head} ({parameters ^parameter}) => {block} => (
+  method_parameters := external ** parameters
+  method_written := external ** block
+  defined ^keyword := external define head `{arguments}` {
+    (inline method_parameters) := arguments
+    inline method_parameters
+    inline method_written
+  } parameters
+  right-to-left.modify(defined)
+)
+left-to-right {head} ({parameters ^parameter}) => {block} => (
+  method_parameters := external ** parameters
+  method_written := external ** block
+  defined ^keyword := external define head `{arguments}` {
+    (inline method_parameters) := arguments
+    inline method_parameters
+    inline method_written
+  } parameters
+  left-to-right.modify(defined)
+)
 Modifier.spellings = chain None
 Modifier.spellings &= `chainable`
 Modifier.spellings &= `compounds`
+Modifier.spellings &= `right-to-left`
+Modifier.spellings &= `left-to-right`
 
 Node := base class {
 

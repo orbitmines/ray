@@ -26,6 +26,9 @@ Everything written after 2026-10-04 ~21:00 is unverified. Whether the library st
 
 - **B21 An anonymous function `(x) => x + 1` is not a value.** `{pattern} => {body}` reads `(x)` as a rule head instead; it collides with `({expr}) => expr` and a class's `({args})`. The user: it should just work.
 
+- **B22 Longer filtered rules beat a value's own operator in general** (agent B's 1dd1bdd). Per the user this is what `chainable` is for: only rules over `chainable` operators should read past a value's own method. Narrow it, language-side through the modifier rather than in the engine.
+- **B23 `&@` is not readable yet.** Access.ray's `Run` has `chain`/`first`/`last`; the `&@` spelling (the run's call chain, `&@.last` the actor, `&@.first` the origin) needs the `&` context prefix (U4) to reach it.
+
 ## Memory and time
 - **M1 string.ray** runs out of the 8 GB heap around line 104 when run whole; every chunk passes on its own (except S40). The heap grows across the file.
 - **M2 world.ray** lines 122–201 run out of memory even in 40-line chunks.

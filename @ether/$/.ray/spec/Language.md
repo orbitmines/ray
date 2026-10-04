@@ -462,3 +462,8 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - **`with` / `assume`.** Both work and do the same thing; each environment prefers one for what it means.
 - **`@actor` / `@origin`.** Not settled: the user leans to the last of the call chain (`&@.last`); a proposal is pending.
 - **Anonymous functions.** `(x) => …` as a value should just work; that it doesn't is a bug (Bugs.md).
+
+### Answers 2026-10-05, second round
+- **G3.11.** There is no `accepts` and no `alike`. A rule for one operator writes it in the pattern (`{a} - {b} => …`); kinds of operators are what modifiers such as `chainable` say about methods.
+- **`&@`.** The call chain of a run (whose origin chain L§8 keeps): `&@.last` is who runs it now, `&@.first` who started it.
+- **Which reading wins.** A longer rule over operators wins over a value's own operator method only where the operators are `chainable`: that is what `chainable` is for. It is not a general rule.

@@ -4,14 +4,11 @@
 
 mark ^keyword := external global
 
-minus ^keyword := class {
-  accepts (written) => if ((external alike (written) (`-`))) { written } else { None }
-}
 // A body of statements, and a name of its own among them. A rule of this kind
 // waits on what its pattern asks for — the class saying which operators it
 // takes — and not on what its body writes down; before that, a body that
 // declared anything was held back and the rule never fired at all.
-{left} [sign: minus] {right} => (
+{left} - {right} => (
   held ^keyword := 2
   held.succ
 )

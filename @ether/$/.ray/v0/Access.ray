@@ -107,6 +107,9 @@ Run := class: Ray {
     longer &= character
     Run(actor: .actor, origin: longer, settings: .settings)
   )
+  chain => .hops
+  first => .hops.head.value
+  last => .hops.tail.value
   hops => (
     every_hop := chain None
     .origin for { every_hop &= it.value }

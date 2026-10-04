@@ -671,10 +671,6 @@ Node := base class {
         constraint := closure
         narrows := narrowed
 
-        accepts (text) => (
-          candidate := this.narrows.accepts(text)
-          if (candidate) { if (candidate.satisfies(this.constraint)) { candidate } else { None } } else { None }
-        )
         verify (candidate) => (
           this.narrows.verify(candidate)
           unless (candidate.satisfies(this.constraint)) { ERROR@candidate `does not satisfy a constraint of its type` }

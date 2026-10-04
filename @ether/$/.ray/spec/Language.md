@@ -453,3 +453,12 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 ### Answer 2026-10-04 evening (L§8.3, U6)
 - The top-level default privacy policy is `local`. `confidential` means "the default privacy policy", so it is `local` until someone sets their policy, e.g. to `@private` (which includes the @ether server), and then `confidential` follows it.
 - **Grants (2026-10-04 evening):** the U6 modifier prefix. `@company.execute deploy`, `@company.read @company.execute report`, `@me.managed.write settings`, and the same on member paths (`@company.read instance.field`, `@me.status`). `.read`/`.write`/`.execute` are W5.1's one permission: write is access to `=`, execute to `()`, read to the structure or any other method; `.on(method)` names any other method.
+
+### Answers 2026-10-05 (agent B's questions)
+- **`as String`.** The canonical form is `x as String`; `.as(String)` works too and is what the library uses where it chains.
+- **`%`.** On numbers, `%` is modulo. Otherwise it is the version: `x%`, `%3'2`, `<-%`. Only when what follows is a number does it read as modulo, so `field %1..5` is modulo; version ranges are written `%[1..5]` (or `%.1`).
+- **`$`.** `$` alone is error handling; `$some.name` / `$.ext` is a language or format.
+- **Regex literal.** `/…/flags` (e.g. `/a+/i`): the flags at the end make it the longest match, so it does not clash with `/`.
+- **`with` / `assume`.** Both work and do the same thing; each environment prefers one for what it means.
+- **`@actor` / `@origin`.** Not settled: the user leans to the last of the call chain (`&@.last`); a proposal is pending.
+- **Anonymous functions.** `(x) => …` as a value should just work; that it doesn't is a bug (Bugs.md).

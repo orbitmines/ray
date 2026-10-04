@@ -24,6 +24,8 @@ Everything written after 2026-10-04 ~21:00 is unverified. Whether the library st
 - **B20 main at 1fecf3d runs out of 8 GB on honesty.ray with the whole library**; b395897 (before that merge) is clean.
 - **B12 Regex recursion** exhausts 8 GB on a two-character pattern (X2.2).
 
+- **B21 An anonymous function `(x) => x + 1` is not a value.** `{pattern} => {body}` reads `(x)` as a rule head instead; it collides with `({expr}) => expr` and a class's `({args})`. The user: it should just work.
+
 ## Memory and time
 - **M1 string.ray** runs out of the 8 GB heap around line 104 when run whole; every chunk passes on its own (except S40). The heap grows across the file.
 - **M2 world.ray** lines 122–201 run out of memory even in 40-line chunks.

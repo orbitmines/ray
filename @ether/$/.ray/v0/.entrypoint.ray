@@ -1255,7 +1255,11 @@ enum ^keyword => (
       this
     )
 
-    chainable == (candidate) => this === candidate
+    chainable == (candidate) => (
+      same ^keyword := this === candidate
+      unless same { same = same_text((external where this), (external where candidate)) }
+      same
+    )
     admits (candidate) => .components.contains(candidate)
   }
 

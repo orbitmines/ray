@@ -56,15 +56,22 @@ export class Levelled extends Interpreter {
     const block = held === undefined ? undefined : this.quietly(() => this.deref(held, false));
     return block === undefined || block.none ? undefined : block;
   }
+  private settling?: { scope: Node; defined: Rule[] };
+  add_rule(scope: Node, rule: Rule) {
+    if (this.settling?.scope === scope) this.settling.defined.push(rule);
+    super.add_rule(scope, rule);
+  }
   settle() {
     const block = this.default_level();
     if (block === undefined || block === this.level?.source) return;
     const scope = new Node();
     scope.parent = this.GLOBAL;
-    this.quietly(() => this.safely(() => this.inline(block, scope)));
+    const defined: Rule[] = [];
+    this.settling = { scope, defined };
+    try { this.quietly(() => this.safely(() => this.inline(block, scope))); } finally { this.settling = undefined; }
     const entries = new Map<string, Entry[]>();
     let written: Capture | undefined;
-    for (const rule of scope.rules ?? []) {
+    for (const rule of defined) {
       const pieces = rule.pattern.filter(piece => piece.kind !== 'gap');
       if (pieces.length === 1 && pieces[0].kind === 'capture' && rule.body !== undefined) {
         const answer = this.quietly(() => this.safely(() => this.read(this.cursor_of(rule.body!), scope)));
@@ -96,14 +103,30 @@ export class Levelled extends Interpreter {
     const kind = value.text && this.level?.written !== undefined ? this.type_of(this.level.written) : undefined;
     return kind === undefined ? super.rules_on(value) : value.with === undefined ? super.rules_on(kind) : this.joined(super.rules_on(value), super.rules_on(kind));
   }
-  carries(value: Node, rule: Rule): boolean { return this.rules_on(value instanceof Count ? value.template : value).includes(rule); }
+  carries(value: Node, rule: Rule): boolean { return this.rules_on(value).includes(rule); }
+  private sets = new WeakMap<Rule[], Set<Rule>>();
+  private covering = new WeakMap<Rule[], WeakMap<Rule[], boolean>>();
+  of_kind(value: Node, type: Node | undefined): boolean {
+    if (type === undefined) return true;
+    const mine = this.rules_on(value), wanted = this.rules_on(type);
+    let by = this.covering.get(mine);
+    if (by === undefined) this.covering.set(mine, by = new WeakMap());
+    let held = by.get(wanted);
+    if (held === undefined) {
+      let set = this.sets.get(mine);
+      if (set === undefined) this.sets.set(mine, set = new Set(mine));
+      held = wanted.every(rule => set!.has(rule));
+      by.set(wanted, held);
+    }
+    return held;
+  }
 
   private applicable = new WeakMap<Rule, { entries: unknown[]; ons: (Rule[] | undefined)[]; found: any[] }>();
   entries_for(rule: Rule, entries: any[], taking: boolean): any[] {
     const held = this.applicable.get(rule);
     const ons = entries.map(entry => { const type = this.type_of(entry.receiver); return type === undefined ? undefined : this.rules_on(type); });
     if (held !== undefined && held.entries === entries && held.ons.length === ons.length && held.ons.every((on, k) => on === ons[k])) return held.found;
-    const found = entries.filter((entry, k) => (entry.operand !== undefined) === taking && ons[k] !== undefined && ons[k]!.includes(rule));
+    const found = entries.filter((entry, k) => (entry.operand !== undefined) === taking && ons[k] !== undefined);
     this.applicable.set(rule, { entries, ons, found });
     return found;
   }
@@ -117,12 +140,12 @@ export class Levelled extends Interpreter {
     const taking = rule.pattern.find((piece): piece is Capture => piece.kind === 'capture');
     for (const entry of this.entries_for(rule, entries, taking !== undefined)) {
       const self = this.deref(receiver, false);
-      if (self === undefined || self.none || !this.carries(self, rule)) continue;
+      if (self === undefined || self.none || !this.carries(self, rule) || !this.of_kind(self, this.type_of(entry.receiver))) continue;
       let other: Node | undefined;
       if (taking !== undefined) {
         const span = captures.get(taking.name);
         other = span === undefined ? undefined : this.deref(this.lazy(span, frame), false);
-        if (other === undefined || other.none || (entry.operand!.typed && !this.carries(other, rule))) continue;
+        if (other === undefined || other.none || (entry.operand!.typed && (!this.carries(other, rule) || !this.of_kind(other, this.type_of(entry.operand!))))) continue;
       }
       const written = () => { this.bypassing.add(rule); try { return this.apply(found, frame, at); } finally { this.bypassing.delete(rule); } };
       const answered = entry.native !== undefined ? Operations[entry.native](this, { self, other, rule, written }) : this.rewritten(entry, self, other);

@@ -904,7 +904,7 @@ export class Interpreter {
       if (piece.kind === 'literal') {
         const after_line = p > 0 && pieces[p - 1].kind === 'literal' && (pieces[p - 1] as { text: string }).text.endsWith('\n');
         const from = (piece.tight && !after_line) || (p === 0 && receiver !== undefined && !rule.defines && this.opens(piece.text)) ? i : this.spaces(cursor, i);
-        if (!this.spelled(cursor, from, piece.text, piece.tight === true && p > 0 && from === i)) return;
+        if (!this.spelled(cursor, from, piece.text, piece.tight === true && p > 0 && from === i, pieces[p + 1]?.kind === 'capture' && pieces[p + 1].tight === true && (pieces[p + 1] as { typed?: boolean }).typed === true)) return;
         literals.push([from, from + piece.text.length - 1]);
         reach += piece.text.length;
         if (this.opens(piece.text)) opened++; else if (opened > 0 && this.closes(piece.text)) opened--;
@@ -975,13 +975,13 @@ export class Interpreter {
     if (this.openers?.version !== this.rules_version) this.openers = { version: this.rules_version, spelled: new Set(this.rules_of(this.GLOBAL).filter(rule => rule.enclosed).map(rule => (rule.pattern[0] as { text: string }).text)) };
     return this.openers.spelled;
   }
-  spelled(cursor: Text.Node, at: number, literal: string, joined: boolean = false): boolean {
+  spelled(cursor: Text.Node, at: number, literal: string, joined: boolean = false, followed: boolean = false): boolean {
     const text = cursor.source.value;
     if (at + literal.length > cursor.limit || !text.startsWith(literal, at)) return false;
     if (Interpreter.word.test(literal[0]) && at > 0 && Interpreter.word.test(text[at - 1])) return false;
-    if (Interpreter.word.test(literal[literal.length - 1]) && Interpreter.word.test(text[at + literal.length] ?? '')) return false;
+    if (!followed && Interpreter.word.test(literal[literal.length - 1]) && Interpreter.word.test(text[at + literal.length] ?? '')) return false;
     if (!joined && Interpreter.run(literal[0]) && at > 0 && Interpreter.run(text[at - 1])) return false;
-    if (Interpreter.run(literal[literal.length - 1]) && Interpreter.run(text[at + literal.length] ?? ' ')) return false;
+    if (!followed && Interpreter.run(literal[literal.length - 1]) && Interpreter.run(text[at + literal.length] ?? ' ')) return false;
     return true;
   }
   static run(character: string): boolean { return !/[\s\p{L}\p{N}_(){}\[\]`"']/u.test(character); }

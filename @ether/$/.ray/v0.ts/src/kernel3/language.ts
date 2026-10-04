@@ -1,7 +1,7 @@
 export const NAME = 'Ether' as const
 export const version:
   [major: number, releaseDate: string, index: number] =
-  [0, '2027-01-01', 1];
+  [0, '2027-01-01', 2];
 
 const cli: CLI.Spec = {
   help:     { alias: 'h', description: 'Print this help and exit.' },
@@ -11,7 +11,7 @@ const cli: CLI.Spec = {
   daemon:   { alias: 'D', value: () => env.socket, optional: true, description: `Run as the background daemon, on a socket` },
 };
 
-async function main([args, kwargs]: CLI.Args = CLI.args()) {
+export async function main([args, kwargs]: CLI.Args = CLI.args()) {
   if (kwargs.daemon) return await daemon(env.secure(kwargs.daemon as string));
   if (kwargs.version) return console.log(env.version.toString());
   if ((args.length === 0 && !kwargs.abstract) || kwargs.help) { console.log(CLI.help()); return; }
@@ -44,7 +44,7 @@ export namespace CLI {
     const rows: [string, string][] = Object.entries(spec).map(([name, opt]) =>
       [`  ${opt.alias ? `-${opt.alias}, ` : '    '}--${name}${opt.value ? opt.optional ? '[=<value>]' : ' <value>' : ''}`, (opt.description ?? '') + CLI.fallback(opt)]);
     const width = Math.max(0, ... rows.map(([flags]) => flags.length));
-    return [`${NAME} ${env.version.toString()}`, 'Options:', ...rows.map(([flags, d]) => d ? `${flags.padEnd(width)}  ${d}` : flags)].join('\n');
+    return [`${NAME} ${env.version.toString()}`, `Usage: ${env.command.toLowerCase()} [options] [files...]`, 'Options:', ...rows.map(([flags, d]) => d ? `${flags.padEnd(width)}  ${d}` : flags)].join('\n');
   }
 
   export function args(spec: CLI.Spec = cli): CLI.Args {
@@ -205,7 +205,6 @@ export class env {
   static get socket(): string {
     if (env._socket) return env._socket;
     if (!env.nodejs) throw new Error(`The ${NAME} daemon's socket only exists on a system (Node.js, Deno), not in a browser.`);
-    if (process.env.ETHER_SOCKET) return env._socket = process.env.ETHER_SOCKET;
     const { os, path } = env, user = os.userInfo();
     if (process.platform === 'win32') return env._socket = `\\\\.\\pipe\\ether-${user.username}`;
     const dir = process.env.XDG_RUNTIME_DIR || path.join(os.tmpdir(), `ether-${user.uid}`);
@@ -213,12 +212,22 @@ export class env {
   }
 
   static secure(socket: string): string {
-    if (socket !== env.socket || process.env.ETHER_SOCKET || process.platform === 'win32') return socket;
-    const { fs, path } = env, dir = path.dirname(socket);
+    if (/^\\\\[.?]\\pipe\\/i.test(socket)) return socket;
+    const { fs, path } = env;
+    socket = path.resolve(socket);
+    const dir = path.dirname(socket);
+    if (process.platform === 'win32') { fs.mkdirSync(dir, { recursive: true }); return socket; }
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const stat = fs.lstatSync(dir);
-    if (!stat.isDirectory() || stat.uid !== process.getuid!() || (stat.mode & 0o077) !== 0)
-      throw new Error(`'${dir}' isn't a directory private to you (owned by you, mode 700); refusing to put the ${NAME} socket there.`);
+    const stat = fs.lstatSync(dir), uid = process.getuid!();
+    if (socket === env.socket) {
+      if (!stat.isDirectory() || stat.uid !== uid || (stat.mode & 0o077) !== 0)
+        throw new Error(`'${dir}' isn't a directory private to you (owned by you, mode 700); refusing to put the ${NAME} socket there.`);
+    } else if ((stat.mode & 0o022) !== 0) {
+      console.warn(`warning: '${dir}' is writable by other users; the ${NAME} socket is only as safe as its own permissions there.`);
+    }
+    const existing = fs.lstatSync(socket, { throwIfNoEntry: false });
+    if (existing !== undefined && (existing.isSymbolicLink() || !existing.isSocket() || existing.uid !== uid))
+      throw new Error(`'${socket}' is already there and isn't a socket of yours; refusing to replace it.`);
     return socket;
   }
 
@@ -232,10 +241,9 @@ export class env {
     let dir = process.cwd();
     while (!fs.existsSync(language_dir(dir)) && path.dirname(dir) !== dir) dir = path.dirname(dir);
     if (fs.existsSync(language_dir(dir))) return env._root = dir;
-    // Production: package ships @ether/$/.ray inside its tarball — root sits one dir up from src/.
-    dir = path.resolve(import.meta.dirname, '..', '..'); if (fs.existsSync(language_dir(dir))) return env._root = dir;
-    // Development: src lives at <repo>/@ether/$/.ray/v0.ts/src — repo root is five dirs up.
-    dir = path.resolve(import.meta.dirname, '..', '..', '..', '..', '..', '..'); if (fs.existsSync(language_dir(dir))) return env._root = dir;
+    dir = import.meta.dirname;
+    while (!fs.existsSync(language_dir(dir)) && path.dirname(dir) !== dir) dir = path.dirname(dir);
+    if (fs.existsSync(language_dir(dir))) return env._root = dir;
 
     throw new Error(`Couldn't find a language definition on your system. Expected one in the hierarchy of your CWD, in the package (production), or in the repository (development). Signature is a '${root.join('/')}' directory.`)
   }

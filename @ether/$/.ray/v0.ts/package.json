@@ -1,21 +1,29 @@
 {
-  "name": "@orbitmines/ray",
-  "version": "0.0.1-E2027.0D.1",
+  "name": "@orbitmines/ether.ray",
+  "description": "Ether.ray: the Ray programming language & Ether (`ether`, `ray`, `orbitmines`)",
+  "version": "0.1.1-E2027.0A.1",
   "private": false,
+  "license": "MIT",
   "repository": "https://github.com/orbitmines/ray",
   "type": "module",
-  "main": "./index.ts",
+  "main": "./dist/language.js",
   "bin": {
-    "ray-language-server": "./src/lsp/index.ts"
+    "ether": "./bin/ether.js",
+    "ray": "./bin/ray.js",
+    "orbitmines": "./bin/orbitmines.js"
   },
   "exports": {
-    ".": "./index.ts"
+    ".": "./dist/language.js",
+    "./package.json": "./package.json"
   },
   "files": [
-    "index.ts",
-    "src",
+    "bin",
+    "dist",
     "@ether/$/.ray"
   ],
+  "engines": {
+    "node": ">=20.11"
+  },
   "dependencies": {
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.12"
@@ -23,6 +31,7 @@
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^25.6.0",
+    "esbuild": "^0.27.3",
     "jest": "^30.3.0",
     "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
@@ -38,7 +47,7 @@
     "ray": "tsx src/ray.ts",
     "language-server": "tsx src/lsp/index.ts",
     "prepack": "node scripts/bundle.mjs",
-    "postpack": "node -e \"const f=require('fs');process.chdir(require('path').dirname(process.env.npm_package_json));f.rmSync('@ether',{recursive:true,force:true});f.writeFileSync('src/bundled.ts','export const manifest: string[] = [];\\n');\""
+    "postpack": "node -e \"const f=require('fs');process.chdir(require('path').dirname(process.env.npm_package_json));f.rmSync('@ether',{recursive:true,force:true});f.rmSync('dist',{recursive:true,force:true});f.rmSync('README.md',{force:true});f.rmSync('LICENSE',{force:true});f.writeFileSync('src/bundled.ts','export const manifest: string[] = [];\\n');\""
   },
   "jest": {
     "preset": "ts-jest",

@@ -81,7 +81,7 @@ Number := class: Ray {
   is_zero => ((.next === None) as boolean)
   nonzero => .is_zero.not
 
-  holds => .next
+  holds => .nonzero
 
   not => .is_zero
 

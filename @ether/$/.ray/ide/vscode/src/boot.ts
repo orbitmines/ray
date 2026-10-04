@@ -2,7 +2,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { workspace } from 'vscode';
-import { Version } from '@orbitmines/ray';
 
 import type { ServerOptions } from 'vscode-languageclient/node';
 import { TransportKind } from 'vscode-languageclient/node';
@@ -17,7 +16,7 @@ import { TransportKind } from 'vscode-languageclient/node';
  *                   definition is what powers the editor.
  *   2. `installed`— The host has a `ray` executable on PATH whose `--version`
  *                   parses under Ether's version scheme. Use it.
- *   3. `bundled`  — Fall back to the @orbitmines/ray module bundled with the
+ *   3. `bundled`  — Fall back to the @orbitmines/ether.ray module bundled with the
  *                   extension itself.
  */
 export type BootMode = 'repo' | 'installed' | 'bundled';
@@ -116,9 +115,15 @@ function installedBoot(): Boot | null {
   } catch { return null; }
 
   // `ray --version` may print "ray 0.E2026.0D.0" — pick the first whitespace-
-  // separated token that parses as a Version.
-  const version = raw.split(/\s+/).map(t => Version.tryParse(t)).find(v => v !== null) ?? null;
+  // separated token in Ether's version scheme.
+  const version = raw.split(/\s+/).find(t => /^\d+\.E\d{4}\.\d+[A-L]\.\d+$/.test(t));
   if (!version) return null;
+
+  let help: string;
+  try {
+    help = cp.execFileSync(bin, ['--help'], { encoding: 'utf-8' });
+  } catch { return null; }
+  if (!/\blsp\b/.test(help)) return null;
 
   const run = {
     command: bin,
@@ -127,16 +132,16 @@ function installedBoot(): Boot | null {
   };
   return {
     mode: 'installed',
-    description: `installed ray ${version.toString()} (${bin})`,
+    description: `installed ray ${version} (${bin})`,
     server: { run, debug: run },
   };
 }
 
-/** Last-resort: the @orbitmines/ray module shipped with the extension. */
+/** Last-resort: the @orbitmines/ether.ray module shipped with the extension. */
 function bundledBoot(extensionPath: string): Boot {
   const tsxPkg = require.resolve('tsx/package.json', { paths: [extensionPath] });
   const tsxDir = path.dirname(tsxPkg);
-  const rayPkg = require.resolve('@orbitmines/ray/package.json', { paths: [extensionPath] });
+  const rayPkg = require.resolve('@orbitmines/ether.ray/package.json', { paths: [extensionPath] });
   const entry  = path.join(path.dirname(rayPkg), 'src', 'lsp', 'index.ts');
 
   if (!fs.existsSync(tsxDir)) throw new Error(`tsx not found near ${extensionPath}`);
@@ -149,7 +154,7 @@ function bundledBoot(extensionPath: string): Boot {
   };
   return {
     mode: 'bundled',
-    description: `bundled @orbitmines/ray`,
+    description: `bundled @orbitmines/ether.ray`,
     server: { run, debug: { ...run, options: { env: { ...process.env, DEBUG: '1' } } } },
   };
 }

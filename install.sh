@@ -31,7 +31,7 @@ Usage: install.sh [options]
                            \`native\`, for this platform, and installed. With a target, or \`all\`, only built.
   --output <dir>           Where --compile <target>|all puts the archives (default: ./dist).
   --from <url|dir>         Install from these release files instead of GitHub's latest release.
-  --version <version>      Install this release (e.g. 0.1.1) instead of the latest.
+  --version <version>      Install this release (e.g. 0.1.1-E2027.0A.1) instead of the latest.
   --home <dir>             Install into <dir>/bin (default: \$ETHER_HOME or ~/.ether).
   --no-modify-path         Don't add the install directory to PATH.
   --uninstall              Remove what the installer added.
@@ -130,7 +130,7 @@ need_deno() {
 print_version() {
   local root; root="$(checkout)"
   need_deno
-  deno eval --no-config "const { env } = await import('file://$root/$ENTRY'); console.log(env.version.toSemver())"
+  deno eval --no-config "const { env } = await import('file://$root/$ENTRY'); console.log(env.version.toSemver({ scheme: true }))"
 }
 
 compile() { # compile <target> <dir>: the executable for <target> in <dir>

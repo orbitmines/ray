@@ -144,6 +144,27 @@ Quest := class: Nameable {
   goal: Node
   steps: (chain None)
   done: false
+  from: None
+  verifier: None
+  best: None
+  path: (chain None)
+  solved_by: None
+
+  reached (value) => if (.verifier === None) { value.instance_of(.goal) } else { .verifier(value) }
+  attempt (value, character) => (
+    .path &= value
+    if (.reached(value)) {
+      .best = value
+      .solved_by = character
+      .complete
+    } else { this }
+  )
+  refined => .steps.every { it.value.instance_of(Quest) }
+  progress => (
+    solved ^keyword := 0
+    .steps for { if (it.value.instance_of(Quest)) { if it.value.completed { solved = solved.succ } } }
+    solved
+  )
 
   step (description) => (
     .steps &= description

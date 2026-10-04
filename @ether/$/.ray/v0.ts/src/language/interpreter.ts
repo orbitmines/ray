@@ -519,7 +519,7 @@ export class Interpreter {
       } catch (jump) {
         if (!(jump instanceof Jump)) throw jump;
         const at = this.label_at(cursor, begin, jump.label, frame);
-        if (at === undefined) { jump.value ??= last; throw jump; }
+        if (at === undefined) { jump.value ??= this.held(last); throw jump; }
         if (jump.value !== undefined) last = jump.value;
         if (at < start) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
         cursor.cursor = at;
@@ -1038,7 +1038,7 @@ export class Interpreter {
       else end = this.trailing_end(cursor, from, frame, rule);
       let last = end;
       if (!exact) while (last > from && /\s/.test(text[last - 1])) last--;
-      const span = cursor.span(from, last - 1);
+      let span = cursor.span(from, last - 1);
       if (last <= from) { if (!piece.optional && !enclosed && opened === 0) return; captures.set(piece.name, span); i = end; continue; }
       if (piece.undecided && piece.decided !== this.declared) this.decide(piece);
       if (piece.undecided) return;

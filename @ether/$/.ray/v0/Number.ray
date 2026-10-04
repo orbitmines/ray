@@ -49,7 +49,7 @@ Number := class: Ray {
     counter := chain None
     counter &= zero
     rest ^keyword := this
-    while rest {
+    while rest.nonzero {
       digit ^keyword := counter.head
       carrying ^keyword := true
       while carrying {
@@ -193,7 +193,7 @@ Number := class: Ray {
   pow (exponent: Number) => (
     power := one
     left := exponent
-    while left {
+    while left.nonzero {
       power = power * this
       left = left.pred
     }
@@ -204,7 +204,7 @@ Number := class: Ray {
   factorial => (
     raised := one
     left := this
-    while left {
+    while left.nonzero {
       raised = raised * left
       left = left.pred
     }

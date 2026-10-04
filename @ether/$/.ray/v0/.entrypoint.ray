@@ -1231,7 +1231,7 @@ enum ^keyword => (
       this
     )
 
-    chainable == (other) => this === other
+    chainable == (candidate) => this === candidate
     admits (candidate) => .components.contains(candidate)
   }
 

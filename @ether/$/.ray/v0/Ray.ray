@@ -40,15 +40,13 @@ Iterable := class: Ordered {
 
   every (predicate) => (
     for {
-      verdict := inline predicate
-      unless verdict { return false }
+      unless (inline predicate) { return false }
     }
     true
   )
   some (predicate) => (
     for {
-      verdict := inline predicate
-      if verdict { return true }
+      if (inline predicate) { return true }
     }
     false
   )
@@ -83,7 +81,7 @@ Iterable := class: Ordered {
   compounds * (times: Number) => (
     out ^keyword := chain None
     left ^keyword := times
-    while left {
+    while left.nonzero {
       for { out &= it.value }
       left = left.pred
     }
@@ -318,7 +316,7 @@ Ray := class: Iterable {
   at (index: Number) => (
     here := .entry
     left := index
-    while left {
+    while left.nonzero {
       here = here.next
       left = left.pred
     }
@@ -329,8 +327,7 @@ Ray := class: Iterable {
 
   every (predicate) => (
     .initial for {
-      verdict := inline predicate
-      unless verdict { return false }
+      unless (inline predicate) { return false }
     }
     true
   )

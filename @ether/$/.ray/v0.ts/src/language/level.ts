@@ -140,18 +140,18 @@ export class Levelled extends Interpreter {
     return ids.has(this.written_site(rule));
   }
 
-  dispatches(rules: Rule[], rule: Rule): boolean {
-    const named = (of: Rule) => { const first = of.pattern[0]; return first?.kind === 'literal' ? first.text.trim() : undefined; };
-    const name = named(rule);
-    const nearest = name === undefined ? undefined : rules.find(other => named(other) === name && other.pattern.length === rule.pattern.length);
-    return nearest !== undefined && this.among([nearest], rule);
+  nearest(rules: Rule[], rule: Rule): boolean {
+    const spelled = (of: Rule) => of.pattern.map(piece => piece.kind === 'literal' ? piece.text.trim() : '{}').join(' ');
+    const method = spelled(rule), first = rules.find(other => spelled(other) === method);
+    return first !== undefined && (first === rule || this.written_site(first) === this.written_site(rule));
   }
+
   private applicable = new WeakMap<Rule, { entries: unknown[]; ons: (Rule[] | undefined)[]; found: any[] }>();
   entries_for(rule: Rule, entries: any[], taking: boolean): any[] {
     const held = this.applicable.get(rule);
     const ons = entries.map(entry => { const type = this.type_of(entry.receiver); return type === undefined ? undefined : this.rules_on(type); });
     if (held !== undefined && held.entries === entries && held.ons.length === ons.length && held.ons.every((on, k) => on === ons[k])) return held.found;
-    const found = entries.filter((entry, k) => (entry.operand !== undefined) === taking && ons[k] !== undefined && this.dispatches(ons[k]!, rule));
+    const found = entries.filter((entry, k) => (entry.operand !== undefined) === taking && ons[k] !== undefined && this.nearest(ons[k]!, rule));
     this.applicable.set(rule, { entries, ons, found });
     return found;
   }

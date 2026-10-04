@@ -1,0 +1,23 @@
+; `each`: a region on every component of a superposition, as lanes (on the GPU when there is one).
+region main cells=3 exits=1
+  entry start
+start:
+  set c0 #0
+  set c1 #0
+loop:
+  lt c2 c1 #100
+  if c2 more done -
+more:
+  superpose c0 c0 c1
+  add c1 c1 #1
+  jump loop
+done:
+  each c2 square c0
+  print c2
+  exit 0 c2
+
+region square cells=2 exits=1
+  entry go
+go:
+  mul c1 c0 c0
+  exit 0 c1

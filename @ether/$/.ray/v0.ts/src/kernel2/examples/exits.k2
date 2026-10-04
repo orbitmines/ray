@@ -1,0 +1,23 @@
+; A superposed value decides a branch both ways: the callee leaves through both of its exits,
+; and the caller goes on at both places.
+region main cells=3 exits=1
+  entry start
+start:
+  superpose c0 #-5 #7
+  enter sign in=0 args=c0 out=negative:c1,positive:c1
+negative:
+  print c1
+  exit 0 #-1
+positive:
+  print c1
+  exit 0 #1
+
+region sign cells=2 exits=2
+  entry start
+start:
+  lt c1 c0 #0
+  if c1 below above -
+below:
+  exit 0 c0
+above:
+  exit 1 c0

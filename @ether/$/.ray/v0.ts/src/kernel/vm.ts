@@ -1,6 +1,6 @@
 import { Graph, INT, SLOT, CONST, edge } from './kernel.ts';
 
-export const JUMP = 1, IF = 2, RETURN = 3, CALL = 4, ARGS = 5, BLOCK = 6, CELL = 7, OBJ = 8, PROP = 9, NATIVE = 64;
+export const JUMP = 1, IF = 2, RETURN = 3, CALL = 4, ARGS = 5, BLOCK = 6, CELL = 7, OBJ = 8, PROP = 9, RECORD = 63, NATIVE = 64;
 
 export const NONE = edge(0, CONST), GLOBAL = edge(1, CONST), ONE = INT;
 export const int = (n: number) => edge(n, INT);
@@ -29,7 +29,7 @@ export const basics: Record<string, Native> = {
 // The graph the program's values are: nodes [tag, a, b, c]; a child that is no node is 0.
 export const graph: Record<string, Native> = {
   node_make: (m: Machine, tag: number, a: number, b: number, c: number) => m.graph.make(tag >> 3, a, b, c),
-  node_tag: (m: Machine, e: number) => (e & 7) === 0 && e !== 0 ? (m.graph.heap[(e >> 3) * 4] << 3) | ONE : -7,
+  node_tag: (m: Machine, e: number) => (e & 7) === 0 && e !== 0 && m.graph.heap[(e >> 3) * 4] !== RECORD ? (m.graph.heap[(e >> 3) * 4] << 3) | ONE : -7,
   node_child: (m: Machine, e: number, i: number) => m.graph.heap[(e >> 3) * 4 + 1 + (i >> 3)],
   node_set: (m: Machine, e: number, i: number, v: number) => { m.graph.heap[(e >> 3) * 4 + 1 + (i >> 3)] = v; return NONE; },
   node_index: (m: Machine, e: number) => ((e >> 3) << 3) | ONE,
@@ -44,13 +44,14 @@ export const raising: Record<string, Native> = {
   forget: (m: Machine, e: number) => { m.thrown[e >> 3] = undefined; return NONE; },
 };
 
-// Memory the program lays its records out in: addresses are ints, words hold edges.
+// Records are graph nodes too: a node of n children, read and written by index.
 export const memory: Record<string, Native> = {
   result_put: (m: Machine, k: number, v: number) => { m.R[k >> 3] = v; return NONE; },
   result_get: (m: Machine, k: number) => m.R[k >> 3],
-  alloc: (m: Machine, n: number) => (m.alloc(n >> 3) << 3) | ONE,
-  load: (m: Machine, p: number, k: number) => m.H[(p >> 3) + (k >> 3)],
-  store: (m: Machine, p: number, k: number, v: number) => { m.H[(p >> 3) + (k >> 3)] = v; return NONE; },
+  make: (m: Machine, n: number) => m.graph.wide(RECORD, n >> 3),
+  node: (m: Machine, tag: number, n: number) => m.graph.wide(tag >> 3, n >> 3),
+  load: (m: Machine, p: number, k: number) => m.graph.heap[(p >> 3) * 4 + 1 + (k >> 3)],
+  store: (m: Machine, p: number, k: number, v: number) => { m.graph.heap[(p >> 3) * 4 + 1 + (k >> 3)] = v; return NONE; },
 };
 
 export const objects: Native[] = [
@@ -59,6 +60,35 @@ export const objects: Native[] = [
   (m: Machine, o: number, k: number, v: number) => { m.assign(o, k, v); return NONE; },
   (m: Machine, o: number, k: number) => m.property(o, k) === 0 ? NONE : GLOBAL,
 ];
+
+// What the natives that need no machine do, written out as JavaScript over operands that are expressions: the machine's
+// dispatch and the JavaScript backend both put them in place instead of calling them.
+const N = NONE, G = GLOBAL;
+export const forms = new Map<Native, (a: string[]) => string>([
+  [basics.mov, ([a]) => a],
+  [basics.add, ([a, b]) => `(${a} + ${b} - 1)`],
+  [basics.sub, ([a, b]) => `(${a} - ${b} + 1)`],
+  [basics.lt, ([a, b]) => `(${a} < ${b} ? ${G} : ${N})`],
+  [basics.le, ([a, b]) => `(${a} <= ${b} ? ${G} : ${N})`],
+  [basics.gt, ([a, b]) => `(${a} > ${b} ? ${G} : ${N})`],
+  [basics.ge, ([a, b]) => `(${a} >= ${b} ? ${G} : ${N})`],
+  [basics.eq, ([a, b]) => `(${a} === ${b} ? ${G} : ${N})`],
+  [basics.ne, ([a, b]) => `(${a} !== ${b} ? ${G} : ${N})`],
+  [basics.not, ([a]) => `(${a} === ${N} ? ${G} : ${N})`],
+  [basics.has, ([a, b]) => `(((${a} >> 3) & (${b} >> 3)) !== 0 ? ${G} : ${N})`],
+  [basics.max, ([a, b]) => `(${a} > ${b} ? ${a} : ${b})`],
+  [basics.hash, ([a]) => `((((Math.imul(${a}, 0x9e3779b1) >>> 7) & 0xffffff) << 3) | 1)`],
+  [basics.mod, ([a, b]) => `((((${a} >> 3) % (${b} >> 3)) << 3) | 1)`],
+  [basics.mul, ([a, b]) => `((((${a} >> 3) * (${b} >> 3)) << 3) | 1)`],
+  [memory.result_put, ([k, v]) => `(M.R[${k} >> 3] = ${v}, ${N})`],
+  [memory.result_get, ([k]) => `M.R[${k} >> 3]`],
+  [graph.node_tag, ([e]) => `(M.Q.on ? M.Q.tg(${e}) : (${e} & 7) === 0 && ${e} !== 0 && M.graph.heap[(${e} >> 3) * 4] !== ${RECORD} ? (M.graph.heap[(${e} >> 3) * 4] << 3) | 1 : -7)`],
+  [graph.node_child, ([e, i]) => `(M.Q.on ? M.Q.rd(${e}, ${i} >> 3) : M.graph.heap[(${e} >> 3) * 4 + 1 + (${i} >> 3)])`],
+  [graph.node_set, ([e, i, v]) => `(M.Q.st(${e}, ${i} >> 3, ${v}), ${N})`],
+  [graph.node_index, ([e]) => `(((${e} >> 3) << 3) | 1)`],
+  [memory.load, ([p, k]) => `(M.Q.on ? M.Q.rd(${p}, ${k} >> 3) : M.graph.heap[(${p} >> 3) * 4 + 1 + (${k} >> 3)])`],
+  [memory.store, ([p, k, v]) => `(M.Q.st(${p}, ${k} >> 3, ${v}), ${N})`],
+]);
 
 export function arities(natives: Native[]): Uint8Array {
   const a = new Uint8Array(NATIVE + natives.length);
@@ -142,9 +172,10 @@ function generate(natives: Native[]): Run {
     for (let k = 0; k < n; k++) m[e + 4 + k] = ${value};
   }`;
   const cases = natives.map((fn, i) => {
-    const n = fn.length - 1;
-    if (fn === basics.mov) return `case ${OP_NATIVE + i}: r = m[m[pc + 2]]; pc += 3; break;`;
-    return `case ${OP_NATIVE + i}: r = n${i}(M${Array.from({ length: n }, (_, k) => `, m[m[pc + ${2 + k}]]`).join('')}); pc += ${2 + n}; break;`;
+    const n = fn.length - 1, operands = Array.from({ length: n }, (_, k) => `m[m[pc + ${2 + k}]]`), form = forms.get(fn);
+    const value = form !== undefined ? form(operands) : `n${i}(M${operands.map(x => ', ' + x).join('')})`;
+    const after = form !== undefined ? '' : ' saved = M.saved; m = M.memory;';
+    return `case ${OP_NATIVE + i}: { const r = ${value}; const d = m[pc + 1]; if (d !== 0) m[d] = r; pc = m[pc + ${2 + n}];${after} continue; }`;
   });
   return new Function('N', `
     ${natives.map((_, i) => `const n${i} = N[${i}];`).join(' ')}
@@ -159,8 +190,7 @@ function generate(natives: Native[]): Run {
       for (;;) {
         try {
           for (;;) {
-            const at = pc;
-            let r = 0;
+            M.sp = sp;
             switch (m[pc]) {
               case ${OP_JUMP}: pc = m[pc + 1]; continue;
               case ${OP_IF}: pc = m[m[pc + 1]] !== ${NONE} ? m[pc + 2] : m[pc + 3]; continue;
@@ -180,17 +210,9 @@ function generate(natives: Native[]): Run {
                 pc = m[call + 4 + m[call + 3]];
                 continue;
               }
-              default:
-                M.sp = sp;
-                switch (m[pc]) {
-                  ${cases.join('\n                  ')}
-                  default: throw new Error('not an instruction: ' + m[pc] + ' at ' + pc);
-                }
-                saved = M.saved; m = M.memory;
+              ${cases.join('\n              ')}
+              default: throw new Error('not an instruction: ' + m[pc] + ' at ' + pc);
             }
-            const d = m[at + 1];
-            if (d !== 0) m[d] = r;
-            pc = m[pc];
           }
         } catch (thrown) {
           m = M.memory; saved = M.saved;
@@ -216,10 +238,9 @@ export class Machine {
   handlers: Map<number, [number, number]>;
   catches: Catches = new Map();
   thrown: unknown[] = [];
-  H = new Int32Array(1 << 16);
   R = new Int32Array(64);
-  top = 8;
-  alloc(n: number): number { const at = this.top; this.top += n; if (this.top > this.H.length) { let size = this.H.length * 2; while (size < this.top) size *= 2; const h = new Int32Array(size); h.set(this.H); this.H = h; } return at; }
+  // What the machine learns while running (reduce.ts): set by whoever lays the program out.
+  Q: any = { on: false, st: (p: number, k: number, v: number) => { this.graph.heap[(p >> 3) * 4 + 1 + k] = v; return 0; } };
   compiled?: Map<number, (M: Machine, ...args: number[]) => number>;
   arity?: Map<number, number>;
   private starts?: number[];

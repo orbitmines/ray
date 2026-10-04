@@ -8,6 +8,8 @@ const FREE = 0;
 
 export class Graph {
   heap: Int32Array;
+  // Per word: whether a rule learned at run time depends on it (reduce.ts).
+  watched: Uint8Array;
   top = 1;
   free = 0;
   arity: Uint8Array;
@@ -15,6 +17,14 @@ export class Graph {
   constructor(arity: Uint8Array, capacity = 1024) {
     this.arity = arity;
     this.heap = new Int32Array(capacity * 4);
+    this.watched = new Uint8Array(capacity * 4);
+  }
+
+  private grow(words: number) {
+    let size = this.heap.length * 2;
+    while (size < words) size *= 2;
+    const h = new Int32Array(size); h.set(this.heap); this.heap = h;
+    const w = new Uint8Array(size); w.set(this.watched); this.watched = w;
   }
 
   make(tag: number, a = 0, b = 0, c = 0): number {
@@ -22,10 +32,19 @@ export class Graph {
     if (id !== 0) this.free = this.heap[id * 4 + 1];
     else {
       id = this.top++;
-      if (id * 4 >= this.heap.length) { const h = new Int32Array(this.heap.length * 2); h.set(this.heap); this.heap = h; }
+      if (id * 4 + 4 > this.heap.length) this.grow(id * 4 + 4);
     }
     const h = this.heap, p = id * 4;
     h[p] = tag; h[p + 1] = a; h[p + 2] = b; h[p + 3] = c;
+    return node(id);
+  }
+
+  // A node of n children laid out over consecutive slots: child k is at the same place as in a node of three.
+  wide(tag: number, n: number): number {
+    const id = this.top, slots = (n + 4) >> 2;
+    this.top += slots;
+    if (this.top * 4 > this.heap.length) this.grow(this.top * 4);
+    this.heap[id * 4] = tag;
     return node(id);
   }
 
@@ -46,7 +65,7 @@ export class Graph {
   }
 }
 
-export type Rule = { lhs: number; rhs: number; fn?: undefined } | { lhs: number; rhs?: undefined; fn: (g: Graph, caps: number[]) => number | undefined };
+export type Rule = { lhs: number; rhs: number; fn?: undefined } | { lhs: number; rhs?: undefined; fn: (g: Graph, caps: number[], node: number) => number | undefined };
 
 export class Rewriter {
   patterns: Graph;
@@ -97,7 +116,7 @@ export class Rewriter {
       this.bound.length = 0;
       if (!this.match(g, rule.lhs, e)) continue;
       if (rule.fn === undefined) return this.build(g, rule.rhs);
-      const made = rule.fn(g, this.caps);
+      const made = rule.fn(g, this.caps, e);
       if (made !== undefined) return made;
     }
     return undefined;

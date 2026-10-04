@@ -525,6 +525,8 @@ Node := base class {
     external extend this component
     this
   )
+  {this}$ ^punctuation => Store.of(this)
+
   compounds - (component) => (
     remaining ^keyword := chain this
     walker ^keyword := this.components.hierarchy.head
@@ -809,6 +811,23 @@ Reading := class {
 Field := class {
   name: Node
   value: Node
+}
+Call := class {
+  statement: Node
+  is_external => .statement.written_with(`external`)
+  external_name => (
+    named ^keyword := chain None
+    space ^keyword := code_points(`x y`).head.next.value
+    skipped ^keyword := 9
+    ended ^keyword := false
+    code_points(.statement.code) for {
+      if skipped.nonzero { skipped = skipped.pred } elsif ended.not {
+        if (it.value == space) { ended = true } else { named &= it.value }
+      }
+    }
+    named.map { it.value.as_character }.as(String)
+  )
+  ** => .statement
 }
 Chosen := class {
   among: Node
@@ -1457,6 +1476,12 @@ Program.components.hierarchy &= class {
     found
   )
   is_terminal => .written.empty
+  calls => (
+    found ^keyword := chain None
+    statements ^keyword := .written
+    statements for { found &= Call(statement: it.value) }
+    found
+  )
 
   compounds + (addend) => (
     augend ^keyword := .code
@@ -1594,3 +1619,25 @@ false := boolean.false
 {first} [x: chainable] {shared} [y: chainable] {last} => (first[x] shared) & (shared[y] last)
 
 {a} [x: compounds]{`=`} {b} => a = (a[x] b)
+
+{guarded} if {condition} => (
+  kept ^keyword := None
+  if condition { kept = guarded }
+  kept
+)
+{guarded} unless {condition} => (
+  kept ^keyword := guarded
+  if condition { kept = None }
+  kept
+)
+
+%{from} -> %{to} ({parameters ^parameter}) => {block} ^keyword => (
+  method_parameters := external ** parameters
+  method_written := external ** block
+  made ^keyword := Migration(from: Version(number: from), to: Version(number: to))
+  external define made `body{arguments}` {
+    (inline method_parameters) := arguments
+    inline method_written
+  } parameters
+  Migration.declare(made)
+)

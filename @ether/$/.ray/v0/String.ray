@@ -348,3 +348,23 @@ declared_in (holder, spelled) => (
   }
   held
 )
+
+String.components.hierarchy &= class {
+  padded (width: Number) => (
+    held ^keyword := this
+    while (held.count < width) { held = "0" + held }
+    held
+  )
+  bitwise_width (other: String) => .count.max(other.count)
+  ~&& (other: String) => (.as_number_in(2) ~&& other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~|| (other: String) => (.as_number_in(2) ~|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~x|| (other: String) => (.as_number_in(2) ~x|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~!&& (other: String) => (.as_number_in(2) ~!&& other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~!|| (other: String) => (.as_number_in(2) ~!|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~x!|| (other: String) => (.as_number_in(2) ~x!|| other.as_number_in(2)).spelled_in(2).padded(.bitwise_width(other))
+  ~! => (.as_number_in(2) ~! .count).spelled_in(2).padded(.count)
+}
+
+Number.components.hierarchy &= class {
+  spelled_padded (radix: Number, width: Number) => .spelled_in(radix).padded(width)
+}

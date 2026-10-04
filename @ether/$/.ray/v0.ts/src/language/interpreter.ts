@@ -1332,8 +1332,9 @@ export class Interpreter {
       local.body = rule.body;
       if (receiver !== undefined) {
         const value = target !== undefined ? target[0] : this.deref(receiver, false);
-        if (receiver.place === undefined && value !== undefined && !value.none) this.construct(value);
-        if (receiver.place !== undefined) {
+        const stands = receiver.place !== undefined || value?.text === true;
+        if (!stands && value !== undefined && !value.none) this.construct(value);
+        if (stands) {
           const context = new Node(receiver.at);
           context.stands = receiver;
           if (value !== undefined && !value.none) context.with = [value];

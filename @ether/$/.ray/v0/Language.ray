@@ -1,0 +1,134 @@
+Language := class: Ray {
+  extensions: Node
+  location: (chain None)
+  level: None
+  reader: None
+  writer: None
+  of: None
+  version: None
+  versions: (chain None)
+  implementations: (chain None)
+  targets: (chain None)
+
+  names (extension) => .extensions == extension
+
+  read (text) => (
+    beneath ^keyword := text
+    unless (.of === None) { beneath = .of.read(text) }
+    if (.reader === None) { Quest(name: "a reader for the language", goal: this) } else { .reader(beneath) }
+  )
+  write (value) => (
+    if (.writer === None) { Quest(name: "a writer for the language", goal: this) } else {
+      written ^keyword := .writer(value)
+      unless (.of === None) { written = .of.write(written) }
+      written
+    }
+  )
+
+  target (language) => (
+    .targets &= language
+    this
+  )
+  targeting (language) => .targets.contains(language)
+  implement (implementation) => (
+    .implementations &= implementation
+    this
+  )
+  versioned (language) => (
+    .versions &= language
+    this
+  )
+  backwards_compatible => (
+    current := this
+    .versions.every { if (it.value.version < current.version) { it.value.targeting(current) } else { true } }
+  )
+  forwards_compatible => (
+    current := this
+    .versions.every { if (current.version < it.value.version) { it.value.targeting(current) } else { true } }
+  )
+
+  register (language) => (
+    Language.known &= language
+    language
+  )
+  named (extension) => (
+    found ^keyword := None
+    Language.known for {
+      if (found === None) {
+        if (it.value.names(extension)) { found = it.value }
+      }
+    }
+    found
+  )
+  over (outer, base) => Language(extensions: outer.extensions, location: outer.location, level: outer.level, reader: outer.reader, writer: outer.writer, of: base)
+
+  parts_of (file_name: String) => file_name.split(U+002E)
+  for_file (file_name: String) => (
+    parts := Language.parts_of(file_name)
+    last := "." + parts.tail.value
+    chosen ^keyword := Language.named(last)
+    if ((last == ".ray").and(2 < parts.count)) {
+      inner := Language.named("." + parts.tail.previous.value)
+      unless (inner === None) { chosen = Language.over(inner, Language.ray) }
+    }
+    chosen
+  )
+
+  ray => Language.named(".ray")
+
+  Implementation := class: Ray {
+    language: Node
+    written_in: Node
+    location: Node
+
+    source => IO.read(.location)
+    reader => .written_in.read(.source)
+    setup => (
+      .language.implement(this)
+      if (.language.reader === None) { .language.reader = .reader }
+      .language
+    )
+  }
+
+  Sublanguage := class: Language {
+    extensions: Node
+    of: Node
+    excluded: (chain None)
+    terminating: true
+
+    admits (program) => (
+      left_out := .excluded
+      clean := Effects.of(program).every { left_out.contains(it.value).not }
+      if .terminating { clean.and(program.instance_of(Terminating)) } else { clean }
+    )
+    read (text) => (
+      program := .of.read(text)
+      if (.admits(program)) { program } else { ERROR@text `this file is written in a sublanguage that does not permit what it does` }
+    )
+  }
+}
+
+Language.known = chain None
+
+Library := class: Language { }
+
+Tool := class: Ray {
+  location: (chain None)
+}
+
+Language.register(Language(".ray", level: Compiler.default))
+
+cfg_excluded := chain None
+cfg_excluded &= Effects.Source.io
+cfg_excluded &= Effects.Source.os
+cfg_excluded &= Effects.Source.random
+cfg_excluded &= Effects.Source.time
+cfg_excluded &= Effects.Source.network
+Language.cfg = Language.register(Language.Sublanguage(extensions: ".cfg", of: Language.ray, excluded: cfg_excluded, terminating: true))
+
+Language.regex = Language.register(Language(".regex"))
+
+Regex.components.hierarchy &= class {
+  language => Language.regex
+  compiled => Language.regex.read(.pattern)
+}

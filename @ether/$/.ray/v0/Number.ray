@@ -606,6 +606,21 @@ Program.components.hierarchy &= class {
     }
     steps
   )
+  jumps_backward => (
+    steps ^keyword := .flow
+    passed ^keyword := chain None
+    backward ^keyword := false
+    steps for {
+      passed &= it
+      if it.jumps_to {
+        landing ^keyword := it.jumps_to
+        passed for { if (it.value === landing) { backward = true } }
+      }
+    }
+    backward
+  )
+  terminating => .jumps_backward.not
+
   target_of (jump) => (
     wanted_name ^keyword := jump.jump_read.name_points
     landing ^keyword := None
@@ -793,4 +808,12 @@ USize => (u8 | u16 | u32 | u64)
 
 Iterable.components.hierarchy &= class {
   ∞ => .unbounded
+}
+
+Terminating := class: Program {
+  admits (candidate) => candidate.terminating
+  verify (candidate) => (
+    unless candidate.terminating { ERROR@candidate `may not terminate` }
+    candidate
+  )
 }

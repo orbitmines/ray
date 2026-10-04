@@ -97,6 +97,42 @@ String := class: Array {
 
   mirrored => .reverse.as_string
 
+  unescaped => (
+    out := chain None
+    walker ^keyword := .head
+    while (walker) {
+      held := walker.value
+      if ((held == U+005C).and(walker.next)) {
+        marked := walker.next.value
+        walker = walker.next
+        if (marked == U+0030) { out &= U+0000 }
+        elsif (marked == U+0074) { out &= U+0009 }
+        elsif (marked == U+006E) { out &= U+000A }
+        elsif (marked == U+0072) { out &= U+000D }
+        elsif (marked == U+005C) { out &= U+005C }
+        elsif (marked == U+0022) { out &= U+0022 }
+        elsif (((marked == U+0078).or(marked == U+0075).or(marked == U+0055)).and(walker.next)) {
+          if (walker.next.value == U+007B) {
+            digits := chain None
+            walker = walker.next.next
+            while ((walker).and(walker.value != U+007D)) {
+              digits &= walker.value
+              walker = walker.next
+            }
+            out &= digits.as_string.as_number_in(16).as_character
+          } else {
+            out &= held
+            out &= marked
+          }
+        } else {
+          out &= held
+          out &= marked
+        }
+      } else { out &= held }
+      if walker { walker = walker.next }
+    }
+    out.as_string
+  )
   trimmed => (
     start ^keyword := 0
     finish ^keyword := .count
@@ -265,7 +301,7 @@ Chain.components.hierarchy &= class {
 Node.components.hierarchy &= class {
   as_string => code_points(this).map { it.value.as_character }.as_string
 }
-"{literal text ^string}" ^string.punctuation => code_points(text).map { it.value.as_character }.as_string.dedented
+"{literal text ^string}" ^string.punctuation => code_points(text).map { it.value.as_character }.as_string.dedented.unescaped
 
 Number.components.hierarchy &= class {
   spelled_in (radix: Number) => .digits_in(radix).map { Char.decimal_digit(it.value) }.as_string

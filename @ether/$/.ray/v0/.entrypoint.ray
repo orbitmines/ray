@@ -1458,6 +1458,6 @@ false := boolean.false
 
 {l} [x: right-to-left] {m} [y: left-to-right] {r} => l[x] m & m[y] r
 
-{a} [x: chainable] {b} [y: chainable] {c} => (a[x] b) & (b[y] c)
+{first} [x: chainable] {shared} [y: chainable] {last} => (first[x] shared) & (shared[y] last)
 
 {a} [x: compounds]{`=`} {b} => a = (a[x] b)

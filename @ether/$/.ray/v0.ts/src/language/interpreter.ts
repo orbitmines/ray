@@ -60,8 +60,13 @@ export class Node {
   own(name: string): Node | undefined { return this.names?.get(name); }
   watching?: Map<string, Slot[]>
   static sets = 0;
+  // Every name some scope other than a global one has held: a name outside it is found in the global scope or nowhere.
+  static scoped = new Set<string>();
+  static globals = new WeakSet<Node>();
+  static complete = true;
   set(name: string, value: Node): Node {
     Node.sets++;
+    if (!Node.globals.has(this)) Node.scoped.add(name);
     const names = (this.names ??= new Map());
     if (this.watching !== undefined && !names.has(name)) { const slots = this.watching.get(name); if (slots !== undefined) { for (const slot of slots) slot.valid = false; this.watching.delete(name); } }
     names.set(name, value);
@@ -161,6 +166,7 @@ export class Interpreter {
 
   constructor(public diagnostics: Diagnostics) {
     this.GLOBAL = new Node();
+    Node.globals.add(this.GLOBAL);
     this.NONE = Object.assign(new Node(), { none: true });
     this.EXTERNAL = this.GLOBAL.set('external', Object.assign(new Node(), { fn: this.rebuild(['external']) }));
     const seed = new Rule([{ kind: 'capture', name: 'pattern', raw: false, typed: false, optional: false }, { kind: 'literal', text: '=>' }, { kind: 'capture', name: 'body', raw: false, typed: false, optional: false }], this.GLOBAL, Text.Node.string('{pattern} => {body}'), '', this.order++, undefined, Natives.rule);
@@ -189,6 +195,8 @@ export class Interpreter {
     yield* visit(from, true, this.GLOBAL);
     if (!seen.has(this.GLOBAL)) { seen.add(this.GLOBAL); yield this.GLOBAL; for (const made of this.GLOBAL.with ?? []) yield* visit(made, false, this.GLOBAL); }
   }
+  // An interpreter that is no copy reaches no global scope but its own.
+  single = true;
   private naming?: { scope: Node; hole: Node; name?: string; names?: string[]; first?: Node };
   hole(node: Node): boolean { return this.naming?.hole === node; }
   private trying = 0;
@@ -199,6 +207,7 @@ export class Interpreter {
       const local = this.holding(at)?.local;
       if (local?.on?.given?.has(name) && this.reaches(frame, local)) return local.on.own(name);
     }
+    if (this.single && Node.complete && !Node.scoped.has(name)) { const global = this.GLOBAL.own(name); if (global !== undefined) return global; }
     const seen = ++this.visits;
     const found = at !== undefined && frame.parent !== undefined && frame !== this.GLOBAL && this.stable_sites.has(at) ? this.seek(frame, false, false, name, at, seen) ?? this.slotted(frame.parent, this.sees_of(frame, at), name, at, seen) : this.seek(frame, false, true, name, at, seen);
     if (found !== undefined) return found;
@@ -1914,7 +1923,7 @@ export class Interpreter {
     };
   }
   restore_state(state: any, mine: Text.Source[]) {
-    this.GLOBAL = state.GLOBAL; this.NONE = state.NONE; this.EXTERNAL = state.EXTERNAL; this.BASE = state.BASE; this.made = state.made; this.theme = state.theme;
+    this.GLOBAL = state.GLOBAL; Node.globals.add(this.GLOBAL); Node.complete = false; this.NONE = state.NONE; this.EXTERNAL = state.EXTERNAL; this.BASE = state.BASE; this.made = state.made; this.theme = state.theme;
     this.version = state.version + 1; this.declared = state.declared; this.rules_version = state.rules_version + 1; this.order = state.order;
     Rule.count = Math.max(Rule.count, state.rules);
     this.definitions = state.definitions; this.given_names = state.given_names; this.held_texts = state.held_texts; this.filtered = state.filtered; this.rejected = state.rejected;
@@ -2000,6 +2009,8 @@ export class Interpreter {
       return copy;
     };
     this.GLOBAL = node(from.GLOBAL)!;
+    Node.globals.add(this.GLOBAL);
+    this.single = false;
     this.NONE = node(from.NONE)!;
     this.EXTERNAL = node(from.EXTERNAL)!;
     this.BASE = node(from.BASE);

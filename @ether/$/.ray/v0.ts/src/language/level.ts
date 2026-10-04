@@ -12,6 +12,7 @@ export class Count extends Node {
   private before?: Node;
   constructor(public count: bigint, public base: Node, public template: Node, public field: string) {
     super(template.at);
+    Node.scoped.add(field);
     this.with = [template];
   }
   succ(): Count { return new Count(this.count + 1n, this.base, this.template, this.field); }

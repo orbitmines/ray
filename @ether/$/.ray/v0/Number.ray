@@ -86,7 +86,7 @@ Number := class: Ray {
   not => .is_zero
 
   set => .is_zero.not
-  as (=== boolean) => .set
+  as (=== boolean) => (.instance.not as boolean).or(.set)
   and (b) => .set.and(b)
   or (b) => .set.or(b)
   nand (b) => .set.nand(b)

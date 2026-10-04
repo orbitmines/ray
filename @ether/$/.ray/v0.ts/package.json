@@ -3,6 +3,7 @@
   "description": "Ether.ray: the Ray programming language & Ether (`ether`, `ray`, `orbitmines`)",
   "version": "0.1.1-E2027.0A.1",
   "private": false,
+  "license": "MIT",
   "repository": "https://github.com/orbitmines/ray",
   "type": "module",
   "main": "./dist/language.js",
@@ -46,7 +47,7 @@
     "ray": "tsx src/ray.ts",
     "language-server": "tsx src/lsp/index.ts",
     "prepack": "node scripts/bundle.mjs",
-    "postpack": "node -e \"const f=require('fs');process.chdir(require('path').dirname(process.env.npm_package_json));f.rmSync('@ether',{recursive:true,force:true});f.rmSync('dist',{recursive:true,force:true});f.writeFileSync('src/bundled.ts','export const manifest: string[] = [];\\n');\""
+    "postpack": "node -e \"const f=require('fs');process.chdir(require('path').dirname(process.env.npm_package_json));f.rmSync('@ether',{recursive:true,force:true});f.rmSync('dist',{recursive:true,force:true});f.rmSync('README.md',{force:true});f.rmSync('LICENSE',{force:true});f.writeFileSync('src/bundled.ts','export const manifest: string[] = [];\\n');\""
   },
   "jest": {
     "preset": "ts-jest",

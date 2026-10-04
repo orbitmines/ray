@@ -31,6 +31,8 @@ const manifest = [];
   }
 })(SRC, '');
 
+for (const file of ['README.md', 'LICENSE']) copyFileSync(join('../../../..', file), file);
+
 writeFileSync('src/bundled.ts', `export const manifest: string[] = ${JSON.stringify(manifest)};\n`);
 
 // The language (kernel3/language.ts), bundled for Node: what the package's bin/ scripts run.

@@ -1190,9 +1190,9 @@ export class Interpreter {
     return j;
   }
   trailing_end(cursor: Text.Node, j: number, frame: Node, rule: Rule): number {
-    const text = cursor.source.value, looser = this.looser(frame, rule);
+    const text = cursor.source.value, looser = this.looser(frame, rule), start = j;
     while (j < cursor.limit && text[j] !== '\n') {
-      if (looser.some(spelling => this.spelled(cursor, j, spelling) && ((j > 0 && /\s/.test(text[j - 1])) || /\s/.test(text[j + spelling.length] ?? '')))) {
+      if (j > start && looser.some(spelling => this.spelled(cursor, j, spelling) && ((j > 0 && /\s/.test(text[j - 1])) || /\s/.test(text[j + spelling.length] ?? '')))) {
         let k = j; while (k > 0 && /\s/.test(text[k - 1])) k--;
         return k;
       }

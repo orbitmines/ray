@@ -309,16 +309,19 @@ Repository := class: Ray {
 Accessor := class: Ray {
   Permission := enum private | confidential | protected | public | local | localhost | managed
   level: Node
-  methods: (chain None)
+  any: true
+  method: None
 
-  read => Accessor(level: .level, methods: (chain None)).on(`read`)
-  write => Accessor(level: .level, methods: (chain None)).on(`=`)
-  execute => Accessor(level: .level, methods: (chain None)).on(`()`)
-  on (method) => (
-    .methods &= method
-    this
+  read => Accessor(level: .level, any: false)
+  write => Accessor(level: .level, any: false, method: `=`)
+  execute => Accessor(level: .level, any: false, method: `()`)
+  on (method) => Accessor(level: .level, any: false, method: method)
+  covers (method) => if .any { true } elsif (.method === None) { (method == `=`).not.and((method == `()`).not) } else { method == .method }
+
+  { }{target} ^punctuation => (
+    target.access = this
+    target
   )
-  covers (method) => .methods.empty.or(.methods.contains(method))
   allows (who, method) => if (.covers(method).not) { true } elsif (.level == Accessor.Permission.public) { true } else { who.permissions.contains(.level) }
   block (values) => (
     values for { it.value.access = this }

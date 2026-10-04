@@ -56,33 +56,43 @@ Visibility := class: Ray {
 
 Visibility.policy = Accessor.Permission.local
 
-Capability := enum network | read | write | execute | io | os | random | time
+Capability := enum network | io | os | random | time
+
+Access := class: Ray {
+  who: Node
+  method: None
+
+  reading => .method === None
+  allows_method (method) => if .reading { (method == `=`).not.and((method == `()`).not) } else { method == .method }
+
+  { }{target} ^punctuation => Permissions.current.grant(this, target)
+}
 
 Grant := class: Ray {
-  origin: Node
-  capability: Node
-  target: None
+  access: Node
+  target: Node
 
-  covers (origin, capability, target) => (
-    covered ^keyword := (.origin == origin).and(.capability == capability)
-    if (covered.and((.target === None).not)) { covered = .target == target }
-    covered
-  )
+  covers (who, method, target) => (.access.who == who).and(.access.allows_method(method)).and(.target === target)
 }
 
 Permissions := class: Ray {
   grants: (chain None)
 
-  grant (origin, capability, target) => (
-    .grants &= Grant(origin: origin, capability: capability, target: target)
-    this
+  grant (access, target) => (
+    .grants &= Grant(access: access, target: target)
+    target
   )
-  allows (origin, capability, target) => .grants.some { it.value.covers(origin, capability, target) }
+  allows (who, method, target) => .grants.some { it.value.covers(who, method, target) }
 }
 
 Permissions.current = Permissions()
 
-{origin} may {literal capability} {target} => Permissions.current.grant(origin, Capability[capability], target)
+Character.components.hierarchy &= class {
+  read => Access(who: this)
+  write => Access(who: this, method: `=`)
+  execute => Access(who: this, method: `()`)
+  on (method) => Access(who: this, method: method)
+}
 
 Run := class: Ray {
   Mode := enum full | abstract | refused
@@ -103,8 +113,8 @@ Run := class: Ray {
     unless (every_hop.contains(.actor)) { every_hop &= .actor }
     every_hop
   )
-  may (capability, target) => .hops.every { Permissions.current.allows(it.value, capability, target) }
-  ask (capability, target) => if (.may(capability, target)) { true } else { Quest(name: .prompt, goal: Grant(origin: .origin.head.value, capability: capability, target: target)) }
+  may (method, target) => .hops.every { Permissions.current.allows(it.value, method, target) }
+  ask (method, target) => if (.may(method, target)) { true } else { Quest(name: .prompt, goal: Grant(access: Access(who: .origin.head.value, method: method), target: target)) }
 
   called (character) => character.prefix + character.name
   prompt => (

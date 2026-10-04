@@ -1,4 +1,4 @@
-Character := class: Unicode.Scalar {
+Char := class: Unicode.Scalar {
   codepoint => this
 
   width => if (this < 128) { 1 } elsif (this < 2048) { 2 } elsif (this < 65536) { 3 } else { 4 }
@@ -36,15 +36,15 @@ Character := class: Unicode.Scalar {
 Number.components.hierarchy &= class {
   as_character => (
     held ^keyword := 0 + this
-    external extend held Character
+    external extend held Char
     held
   )
 }
 
-Character.Letter = Character{.letter}
-Character.Digit = Character{.digit}
-Character.Blank = Character{.blank}
-Character.Word = Character{.word}
+Char.Letter = Char{.letter}
+Char.Digit = Char{.digit}
+Char.Blank = Char{.blank}
+Char.Word = Char{.word}
 
 String := class: Array {
   entry => if .head { .head } else { code_points(this).map { it.value.as_character }.entry }
@@ -162,8 +162,8 @@ String := class: Array {
     pieces &= current.as_string
     pieces
   )
-  split (separator: Character) => .split_by { character == separator }
-  lines => .split(Character.newline)
+  split (separator: Char) => .split_by { character == separator }
+  lines => .split(Char.newline)
 
   blank_line => .every { it.value.blank }
   indentation => (
@@ -200,7 +200,7 @@ String := class: Array {
     kept for {
       if it.value.blank_line { out &= "" } else { out &= it.value.slice(least, it.value.count) }
     }
-    String.joined(out, Character.newline)
+    String.joined(out, Char.newline)
   )
 
   compounds * (times: Number) => (
@@ -252,7 +252,7 @@ Node.components.hierarchy &= class {
 "{literal text ^string}" ^string.punctuation => code_points(text).map { it.value.as_character }.as_string.dedented
 
 Number.components.hierarchy &= class {
-  spelled_in (radix: Number) => .digits_in(radix).map { Character.decimal_digit(it.value) }.as_string
+  spelled_in (radix: Number) => .digits_in(radix).map { Char.decimal_digit(it.value) }.as_string
 }
 
 Chain.components.hierarchy &= class {

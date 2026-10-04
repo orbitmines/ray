@@ -132,27 +132,27 @@ unless (job.difficulty.is_zero) { INFO@mark `QU10 a task with no steps is diffic
 
 // Where someone is says how they are, and where they are not, what they said
 // they were.
-away := Persona(name: "away")
+away := Character(name: "away")
 unless (away.status_now == Status.offline) { INFO@mark `PS1 someone with nowhere to be is not offline` }
 somewhere := Instance(location: here)
-present := Persona(name: "present", presence: somewhere)
+present := Character(name: "present", presence: somewhere)
 unless (present.status_now == Status.online) { INFO@mark `PS2 someone somewhere is not as that place is` }
 if (present.status_now == Status.offline) { INFO@mark `PS3 someone somewhere is offline anyway` }
 unless (present.status == Status.offline) { INFO@mark `PS4 what they said they were is not what they said` }
 
 // What a world and a persona are written with in front of their names.
 unless ((World(name: "w").prefix).as_string == "#") { INFO@mark `WP1 a world is not written with a hash` }
-unless ((Persona(name: "p").prefix).as_string == "@") { INFO@mark `WP2 a persona is not written with an at sign` }
+unless ((Character(name: "p").prefix).as_string == "@") { INFO@mark `WP2 a persona is not written with an at sign` }
 
 // A name given to something is the name it answers to afterwards.
-renamed := Persona(name: "before").named("after")
+renamed := Character(name: "before").named("after")
 unless (renamed.name == "after") { INFO@mark `WP3 something named is not called that` }
 
 // What a world holds, and how many live in it.
 county := World(name: "county")
 unless (county.population.is_zero) { INFO@mark `WP4 an empty world has someone in it` }
-county.spawn(Persona(name: "one"))
-county.spawn(Persona(name: "two"))
+county.spawn(Character(name: "one"))
+county.spawn(Character(name: "two"))
 unless (county.population == 2) { INFO@mark `WP5 two who live there do not count two` }
 unless (county.items.empty) { INFO@mark `WP6 an empty world holds something` }
 county.add(Item(name: "lamp", issuer: county))
@@ -208,4 +208,4 @@ unless (Status.do_not_disturb) { INFO@mark `ST3 there is no being do not disturb
 unless (Status.busy) { INFO@mark `ST4 there is no being busy` }
 if (Status.idle == Status.busy) { INFO@mark `ST5 idle and busy are the same` }
 unless (Status.components.count == 9) { INFO@mark `ST6 there are other than nine statuses` }
-unless (Persona(name: "p", status: Status.busy).status == Status.busy) { INFO@mark `ST7 a persona forgot being busy` }
+unless (Character(name: "p", status: Status.busy).status == Status.busy) { INFO@mark `ST7 a persona forgot being busy` }

@@ -191,7 +191,7 @@ Instance := class: Ray {
 
 }
 Status := enum online | offline | hosted | broadcast | proxy | invisible | idle | do_not_disturb | busy
-Persona := class: Nameable {
+Character := class: Nameable {
   prefix => `@`
   name: String
   avatars: (chain None)
@@ -204,7 +204,7 @@ Persona := class: Nameable {
     avatar
   )
 }
-Avatar := class: Persona {
+Avatar := class: Character {
   persona: Node
   platform: Node
   avatars: (chain None)
@@ -212,14 +212,14 @@ Avatar := class: Persona {
   status: Status.offline
 
 }
-Player := class: Persona {
+Player := class: Character {
   name: String
   avatars: (chain None)
   presence: None
   status: Status.offline
 
 }
-NPC := class: Persona {
+NPC := class: Character {
   name: String
   avatars: (chain None)
   presence: None

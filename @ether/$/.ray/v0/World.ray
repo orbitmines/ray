@@ -446,6 +446,7 @@ Character := class: Nameable {
   )
   is (status) => (.status == status).or(.statuses.contains(status))
   chainable == (other) => if (.key === None) { this === other } else { .key == other.key }
+  choose (kind) => Quest(name: "choose", goal: kind, solved_by: this)
   embody (avatar) => (
     .avatars &= avatar
     avatar

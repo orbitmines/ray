@@ -131,6 +131,81 @@ Choice := class {
   )
   coin => Random.bit
 
+  identities (values) => (
+    groups := chain None
+    values for {
+      held := it.value
+      found ^keyword := None
+      groups for { if (it.value.head.value === held) { found = it.value } }
+      if (found === None) {
+        fresh := chain None
+        fresh &= held
+        groups &= fresh
+      }
+    }
+    groups
+  )
+  subsets (values, count: Number) => (
+    if count.is_zero {
+      none_chosen := chain None
+      none_chosen &= chain None
+      return none_chosen
+    }
+    if values.empty { return chain None }
+    first := values.head.value
+    rest := chain None
+    walker ^keyword := values.head.next
+    while (walker) {
+      rest &= walker.value
+      walker = walker.next
+    }
+    found := chain None
+    Choice.subsets(rest, count.pred) for {
+      with_first := chain None
+      with_first &= first
+      it.value for { with_first &= it.value }
+      found &= with_first
+    }
+    Choice.subsets(rest, count) for { found &= it.value }
+    found
+  )
+  mapped (values, count: Number, step) => (
+    every_way := chain None
+    Choice.subsets(Choice.identities(values), count) for {
+      chosen := it.value
+      changed := chain None
+      values for {
+        held := it.value
+        picked ^keyword := false
+        chosen for { if (it.value.head.value === held) { picked = true } }
+        if picked { changed &= step(held) } else { changed &= held }
+      }
+      every_way &= changed
+    }
+    Distribution.uniform(every_way)
+  )
+  orderings (values) => (
+    if (values.count < 2) {
+      single := chain None
+      single &= values
+      return single
+    }
+    found := chain None
+    values for {
+      held := it.value
+      rest := chain None
+      values for { unless (it.value === held) { rest &= it.value } }
+      Choice.orderings(rest) for {
+        ordered := chain None
+        ordered &= held
+        it.value for { ordered &= it.value }
+        found &= ordered
+      }
+    }
+    found
+  )
+  unordered (values) => Distribution.uniform(Choice.orderings(values)).realised
+
   unique (from) => (
     picked ^keyword := Choice.choose(from)
     while (Choice.chosen.contains(picked)) { picked = Choice.choose(from) }

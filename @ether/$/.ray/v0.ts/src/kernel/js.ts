@@ -1,5 +1,5 @@
 import { Graph, SLOT } from './kernel.ts';
-import { JUMP, IF, RETURN, CALL, ARGS, NATIVE, NONE, GLOBAL, basics, memory, graph, type Native, type Catches } from './vm.ts';
+import { JUMP, IF, RETURN, CALL, ARGS, NATIVE, NONE, GLOBAL, forms, type Native, type Catches } from './vm.ts';
 
 export type Compiled = Map<number, (M: unknown, ...args: number[]) => number>;
 
@@ -8,31 +8,8 @@ export function javascript(g: Graph, blocks: Map<string, number>, natives: Nativ
   const h = g.heap, N = NONE, G = GLOBAL;
   const list = (l: number) => { const xs: number[] = []; for (; l !== 0 && h[(l >> 3) * 4] === ARGS; l = h[(l >> 3) * 4 + 2]) xs.push(h[(l >> 3) * 4 + 1]); return xs; };
   const tag = (e: number) => h[(e >> 3) * 4], child = (e: number, i: number) => h[(e >> 3) * 4 + 1 + i];
-  const inline = new Map<Native, (a: string[]) => string>([
-    [basics.mov, ([a]) => a],
-    [basics.add, ([a, b]) => `(${a} + ${b} - 1)`],
-    [basics.sub, ([a, b]) => `(${a} - ${b} + 1)`],
-    [basics.lt, ([a, b]) => `(${a} < ${b} ? ${G} : ${N})`],
-    [basics.le, ([a, b]) => `(${a} <= ${b} ? ${G} : ${N})`],
-    [basics.gt, ([a, b]) => `(${a} > ${b} ? ${G} : ${N})`],
-    [basics.ge, ([a, b]) => `(${a} >= ${b} ? ${G} : ${N})`],
-    [basics.eq, ([a, b]) => `(${a} === ${b} ? ${G} : ${N})`],
-    [basics.ne, ([a, b]) => `(${a} !== ${b} ? ${G} : ${N})`],
-    [basics.not, ([a]) => `(${a} === ${N} ? ${G} : ${N})`],
-    [basics.has, ([a, b]) => `(((${a} >> 3) & (${b} >> 3)) !== 0 ? ${G} : ${N})`],
-    [basics.max, ([a, b]) => `(${a} > ${b} ? ${a} : ${b})`],
-    [basics.hash, ([a]) => `((((Math.imul(${a}, 0x9e3779b1) >>> 7) & 0xffffff) << 3) | 1)`],
-    [basics.mod, ([a, b]) => `((((${a} >> 3) % (${b} >> 3)) << 3) | 1)`],
-    [basics.mul, ([a, b]) => `((((${a} >> 3) * (${b} >> 3)) << 3) | 1)`],
-    [memory.result_put, ([k, v]) => `(M.R[${k} >> 3] = ${v}, ${N})`],
-    [memory.result_get, ([k]) => `M.R[${k} >> 3]`],
-    [graph.node_tag, ([e]) => `((${e} & 7) === 0 && ${e} !== 0 ? (M.graph.heap[(${e} >> 3) * 4] << 3) | 1 : -7)`],
-    [graph.node_child, ([e, i]) => `M.graph.heap[(${e} >> 3) * 4 + 1 + (${i} >> 3)]`],
-    [graph.node_set, ([e, i, v]) => `(M.graph.heap[(${e} >> 3) * 4 + 1 + (${i} >> 3)] = ${v}, ${N})`],
-    [graph.node_index, ([e]) => `(((${e} >> 3) << 3) | 1)`],
-    [memory.load, ([p, k]) => `M.H[(${p} >> 3) + (${k} >> 3)]`],
-    [memory.store, ([p, k, v]) => `(M.H[(${p} >> 3) + (${k} >> 3)] = ${v}, ${N})`],
-  ]);
+  const inline = forms;
+
   const name = new Map<number, string>();
   let k = 0;
   for (const b of blocks.values()) name.set(b, `f${k++}`);
@@ -93,13 +70,29 @@ export function javascript(g: Graph, blocks: Map<string, number>, natives: Nativ
     };
     for (const e of labels) if (!done.has(e)) chain(e);
     const locals = cells.slice(params).map((_, i) => `c${params + i} = ${N}`);
+    const at = name.get(b)!.slice(1), ps = cells.slice(0, params).map((_, i) => `c${i}`), passed = ps.map(x => ', ' + x).join('');
     fns.push(`// ${title}
-function ${name.get(b)}(M${cells.slice(0, params).map((_, i) => `, c${i}`).join('')}) {
+function p${at}(M${passed}) {
   ${locals.length > 0 ? `let ${locals.join(', ')};` : ''}
+  ${process.env.KCOUNT ? `globalThis.__C[${JSON.stringify(title)}] = (globalThis.__C[${JSON.stringify(title)}] ?? 0) + 1;` : ''}
   let pc = 0;
   for (;;) switch (pc) {
 ${out.join('\n')}
   }
+}
+function f${at}(M${passed}) {
+  const Q = M.Q;
+  if (Q.state === undefined || Q.state[${at}] !== 0) return p${at}(M${passed});
+  const A = Q.args;${ps.map((x, i) => ` A[${i}] = ${x};`).join('')}
+  const h = Q.reduce(${at}, ${params});
+  if (h !== undefined) {
+    if (Q.check) { const R = Array.from(M.R.subarray(1, 4)), w = p${at}(M${passed}); if (w !== h || R.some((x, i) => i < Q.results[${at}] && x !== M.R[i + 1])) Q.mismatch(${at}, [${ps.join(', ')}], h, w, R, Array.from(M.R.subarray(1, 4))); }
+    return h;
+  }
+  const l = Q.learn(${at}, ${params});
+  let v;
+  try { v = p${at}(M${passed}); } catch (x) { Q.failed(l); throw x; }
+  return Q.learned(l, v);
 }`);
   }
   const source = `${natives.map((_, i) => `const n${i} = N[${i}];`).join('\n')}
@@ -107,6 +100,7 @@ ${[...outside].map(b => `const e${b >> 3} = X.get(${b});`).join('\n')}
 ${fns.join('\n')}
 return [${[...blocks.values()].map(b => name.get(b)).join(', ')}];`;
   if (process.env.KJS) (process.getBuiltinModule('fs') as typeof import('fs'))[existing.size === 0 ? 'writeFileSync' : 'appendFileSync'](process.env.KJS, source);
+  if (process.env.KCOUNT && !(globalThis as any).__C) { (globalThis as any).__C = {}; process.on('exit', () => { const c = (globalThis as any).__C; console.error(Object.entries(c).sort((a: any, b: any) => b[1] - a[1]).slice(0, Number(process.env.KCOUNT)).map(([k, v]) => `${v}\t${k}`).join('\n')); }); }
   const made = new Function('N', 'X', source)(natives, existing) as ((M: unknown, ...args: number[]) => number)[];
   const compiled: Compiled = new Map();
   [...blocks.values()].forEach((b, i) => compiled.set(b, made[i]));

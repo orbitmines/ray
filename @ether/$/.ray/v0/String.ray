@@ -17,7 +17,7 @@ Character := class: Unicode.Scalar {
   lower => if .upper_case { (this + 32).as_character } else { this }
   swapped => if .lower_case { .upper } elsif .upper_case { .lower } else { this }
 
-  digit_value => digit_of(this)
+  digit_value => if .digit { this - 48 } elsif .lower_case { this - 87 } elsif .upper_case { this - 55 } else { None }
 
   is_scalar => Unicode.scalar(this)
 
@@ -256,8 +256,8 @@ Number.components.hierarchy &= class {
 }
 
 Chain.components.hierarchy &= class {
-  join => String.joined(this, None)
-  join (separator) => String.joined(this, separator)
+  join => String.joined([this], None)
+  join (separator) => String.joined([this], separator)
   each_lower => .map { it.value.lower_case }
   each_title => .map { it.value.title_case }
 }

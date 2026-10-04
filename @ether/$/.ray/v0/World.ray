@@ -60,8 +60,81 @@ World := class: Nameable {
   Reservation := class: Ray {
     name: String
     issuer: Node
+    holder: None
   }
   population => .characters.count
+
+  names: (chain None)
+  dynamics: (chain None)
+
+  define (name: String, value) => (
+    .names &= World.Name(name: name, value: value, unset: false)
+    value
+  )
+  unset (name: String) => (
+    .names &= World.Name(name: name, value: None, unset: true)
+    None
+  )
+  lookup (name: String) => (
+    found ^keyword := None
+    .names for { if (it.value.name == name) { found = it.value } }
+    if (found === None) {
+      if .parent { .parent.lookup(name) }
+      elsif (this === World.ether) { None }
+      else { World.ether.lookup(name) }
+    } else { found.value }
+  )
+  Name := class: Ray {
+    name: String
+    value: Node
+    unset: false
+  }
+
+  allocate (name: String, holder) => (
+    standing := .reserve(name)
+    standing.holder = holder
+    standing
+  )
+  allocated (name: String) => (
+    standing := .reserved(name)
+    if (standing === None) { None } else { standing.holder }
+  )
+
+  within_worlds => (
+    found := chain None
+    .worlds for {
+      found &= it.value
+      it.value.within_worlds for { found &= it.value }
+    }
+    .children for {
+      if (it.value.instance_of(World)) {
+        found &= it.value
+        it.value.within_worlds for { found &= it.value }
+      }
+    }
+    found
+  )
+  within_characters => (
+    found := chain None
+    .characters for { found &= it.value }
+    .within_worlds for { it.value.characters for { found &= it.value } }
+    found
+  )
+
+  compounds + (dynamic) => (
+    .dynamics &= dynamic
+    this
+  )
+  tick => (
+    .dynamics for { it.value.step(this) }
+    this
+  )
+}
+
+World.ether = World(name: "ether")
+
+Dynamics := class: Ray {
+  step (world) => world
 }
 World.components.hierarchy &= Location
 Region := World
@@ -125,16 +198,73 @@ History := class: Ray {
     what: Node
     id: UUID.v4
     when: Time.now
+    visibility: Accessor.Permission.private
+    inverse: None
 
+    publish => (
+      .visibility = Accessor.Permission.public
+      this
+    )
+    staged => .visibility == Accessor.Permission.private
   }
   repository: Node
   commits: (chain None)
   from: None
+  generics: (chain None)
 
   commit (who, what) => (
     .commits &= History.Commit(who: who, what: what)
     this
   )
+  stage (who, what) => .commit(who, what)
+  published => .commits.filter { it.value.staged.not }
+  publish => (
+    .commits for { it.value.publish }
+    this
+  )
+
+  squash (who) => (
+    joined := chain None
+    .commits for { joined &= it.value.what }
+    History(repository: .repository, commits: (chain None), from: .from).commit(who, joined)
+  )
+  cherry_pick (commit) => (
+    .commits &= History.Commit(who: commit.who, what: commit.what, inverse: commit.inverse)
+    this
+  )
+  from_here (commit) => (
+    kept := History(repository: .repository, commits: (chain None), from: None)
+    reached ^keyword := false
+    .commits for {
+      unless reached { kept.cherry_pick(it.value) }
+      if (it.value === commit) { reached = true }
+    }
+    kept
+  )
+  revert (commit) => if (commit.inverse === None) { Quest(name: "revert", goal: commit) } else { .commit(commit.who, commit.inverse) }
+
+  merge (other) => (
+    conflicts := chain None
+    other.commits for {
+      theirs := it.value
+      .commits for { if ((it.value.what == theirs.what).not.and(it.value.when == theirs.when)) { conflicts &= Quest(name: "merge", goal: theirs) } }
+      .cherry_pick(theirs)
+    }
+    conflicts
+  )
+
+  remember_generic (name: String) => (
+    .generics &= name
+    this
+  )
+  appears (name: String) => if (.generics.contains(name)) { INFO@name `a variable is named like a generic type used silently before` } else { None }
+
+  Assignment := class: Ray {
+    value: Node
+    history: None
+    previous: None
+  }
+  assigned (value, history) => History.Assignment(value: value, history: history, previous: .latest)
   count => .commits.count
   latest => .commits.tail.value
   fork => History.Branch(repository: .repository, commits: (chain None), from: this)
@@ -152,9 +282,30 @@ Repository := class: Ray {
 }
 
 Accessor := class: Ray {
-  Permission := enum private | confidential | protected | public
+  Permission := enum private | confidential | protected | public | local
   level: Node
+  methods: (chain None)
 
+  read => Accessor(level: .level, methods: (chain None)).on(`read`)
+  write => Accessor(level: .level, methods: (chain None)).on(`=`)
+  execute => Accessor(level: .level, methods: (chain None)).on(`()`)
+  on (method) => (
+    .methods &= method
+    this
+  )
+  covers (method) => .methods.empty.or(.methods.contains(method))
+  allows (who, method) => if (.covers(method).not) { true } elsif (.level == Accessor.Permission.public) { true } else { who.permissions.contains(.level) }
+  block (values) => (
+    values for { it.value.access = this }
+    values
+  )
+  derived (from) => if (from.access) { from.access } else { this }
+
+  Consistency := class: Ray {
+    replicas: (chain None)
+
+    read (value) => if (.replicas.every { it.value.synced }) { value } else { Quest(name: "wait for the replicas", goal: value) }
+  }
 }
 
 Reference := class: Ray {
@@ -189,6 +340,63 @@ Instance := class: Ray {
   location: Node
   status: Status.online
   key: None
+  registry: (chain None)
+  hosted: (chain None)
+  deletions: (chain None)
+  host: None
+
+  chainable == (other) => if (.key === None) { this === other } else { .key == other.key }
+
+  login (character) => (
+    .registry &= character
+    character
+  )
+  logged_in (character) => .registry.contains(character)
+  logout (character, delete_all) => (
+    kept := chain None
+    .registry for { unless (it.value === character) { kept &= it.value } }
+    .registry = kept
+    if delete_all {
+      character.key = None
+      .deletions &= Instance.Deletion(character: character, due: Time.now + (30 of Day))
+    }
+    character
+  )
+  swap (from, to) => (
+    .logout(from, false)
+    .login(to)
+  )
+  spawn (character) => .login(character)
+
+  host_for (character) => (
+    .hosted &= character
+    character.presence = this
+    character
+  )
+
+  mirror (value, depth) => Instance.Mirror(value: value, location: this, depth: depth)
+
+  Deletion := class: Quest {
+    character: Node
+    due: Node
+    name: "delete"
+    goal: Node
+    cancelled: false
+
+    cancel => (
+      .cancelled = true
+      this
+    )
+    pending => .cancelled.not.and(.completed.not)
+  }
+
+  Mirror := class: Ray {
+    value: Node
+    location: Node
+    depth: 1
+
+    synced => .location.registry.nonempty
+  }
 
 }
 Status := enum online | offline | hosted | broadcast | proxy | invisible | idle | do_not_disturb | busy
@@ -201,6 +409,13 @@ Character := class: Nameable {
   key: None
 
   status_now => if (.presence) { .presence.status } else { .status }
+  statuses: (chain None)
+  also (status) => (
+    .statuses &= status
+    this
+  )
+  is (status) => (.status == status).or(.statuses.contains(status))
+  chainable == (other) => if (.key === None) { this === other } else { .key == other.key }
   embody (avatar) => (
     .avatars &= avatar
     avatar

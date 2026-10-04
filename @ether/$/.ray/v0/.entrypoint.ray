@@ -348,7 +348,10 @@ Node := base class {
         }
       }
     } elsif (None.instance_of(type)) { external declare this None }
-    else { external declare this type }
+    else {
+      external declare this type
+      if type.written_body { external declare this this }
+    }
 
     this
   )

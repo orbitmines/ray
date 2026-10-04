@@ -1864,7 +1864,7 @@ export class Interpreter {
     const key = `${Interpreter.site(piece.content)}|${spelled.rule.key}|${Interpreter.site(spelled.rule.at.source.location !== undefined ? spelled.rule.at : spelled.rule.lexical)}`;
     const known = this.filtered;
     const held = known.get(key);
-    if (held !== undefined && (held.declared === this.declared || ![...held.missing].some(name => this.GLOBAL.own(name) !== undefined))) return held.fits;
+    if (held !== undefined && (held.declared === this.declared || (held.fits && ![...held.missing].some(name => this.GLOBAL.own(name) !== undefined)))) return held.fits;
     if (this.checking.has(piece)) return false;
     this.checking.add(piece);
     const missing = this.missing;

@@ -188,6 +188,7 @@ Reference := class: Ray {
 Instance := class: Ray {
   location: Node
   status: Status.online
+  key: None
 
 }
 Status := enum online | offline | hosted | broadcast | proxy | invisible | idle | do_not_disturb | busy
@@ -197,6 +198,7 @@ Character := class: Nameable {
   avatars: (chain None)
   presence: None
   status: Status.offline
+  key: None
 
   status_now => if (.presence) { .presence.status } else { .status }
   embody (avatar) => (

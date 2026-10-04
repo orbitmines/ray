@@ -4,7 +4,10 @@ Encoding := class {
   Encrypted := class {
     value: Node
     key: Node
-    as (location) => if (.key === None) { None } elsif (location == .key) { .value } else { None }
+    holds_key (location) => if (location == .key) { true } elsif (location === None) { false } elsif (location.key === None) { false } else { location.key == .key }
+    as (location) => if (.key === None) { None } elsif (.holds_key(location)) { .value } else { None }
+    opened (location) => if (.holds_key(location)) { .value } else { Quest(name: "find the key", goal: this) }
+    read_off (location) => if (.holds_key(location)) { Encoding.Encrypted(value: .value, key: location.key) } else { None }
   }
 
   Hash := class {

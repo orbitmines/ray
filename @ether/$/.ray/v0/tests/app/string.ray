@@ -177,7 +177,7 @@ unless ("abc".every { it.value.letter }) { INFO@mark `S111 abc is not all letter
 if ("ab3".every { it.value.letter }) { INFO@mark `S112 ab3 is all letters` }
 unless ("ab3".some { it.value.digit }) { INFO@mark `S113 ab3 holds no digit` }
 if ("abc".some { it.value.digit }) { INFO@mark `S114 abc holds a digit` }
-unless ("abc".map { it.value.upper }.as_string == "ABC") { INFO@mark `S115 abc made upper is not ABC` }
+unless ("abc".map { it.value.upper }.as(String) == "ABC") { INFO@mark `S115 abc made upper is not ABC` }
 
 // Case over a whole text, by each of its names.
 unless ("Ab".lowercase == "ab") { INFO@mark `S116 lowercase is not lower_case` }
@@ -216,9 +216,9 @@ unless (Char.decimal_digit(7) == "7".head.value) { INFO@mark `S139 seven is not 
 unless (Char.decimal_digit(11) == "b".head.value) { INFO@mark `S140 eleven is not written b` }
 
 // What a number spells in ten, read off a counter one unit at a time.
-unless (7.as_string == "7") { INFO@mark `S141 seven does not spell 7` }
-unless (12.as_string == "12") { INFO@mark `S142 twelve does not spell 12` }
-unless (0.as_string == "0") { INFO@mark `S143 nothing does not spell 0` }
+unless (7.as(String) == "7") { INFO@mark `S141 seven does not spell 7` }
+unless (12.as(String) == "12") { INFO@mark `S142 twelve does not spell 12` }
+unless (0.as(String) == "0") { INFO@mark `S143 nothing does not spell 0` }
 
 // The characters the draft writes with an escape, and what a character says
 // about its own bits.
@@ -238,7 +238,7 @@ unless ("ab cd".camelcase == "abCd") { INFO@mark `S154 camelcase is not camel_ca
 unless ("ab cd".pascalcase == "AbCd") { INFO@mark `S155 pascalcase is not pascal_case` }
 
 // Text read where a text is asked for.
-unless (`ab`.as_string == "ab") { INFO@mark `S158 written text is not read as a string` }
+unless (`ab`.as(String) == "ab") { INFO@mark `S158 written text is not read as a string` }
 
 quoted_pair := "AB"
 unless (quoted_pair == "AB") { INFO@mark `DQ1 "AB" is not the string AB` }

@@ -567,6 +567,35 @@ Node := base class {
     missing
   )
 
+  fields => (
+    found ^keyword := chain None
+    holder ^keyword := this
+    colon ^keyword := code_points(`x:y`).head.next.value
+    held ^keyword := this.classes.head
+    while held {
+      if held.value.written_body {
+        statements ^keyword := Program(code: held.value.written_body).written
+        statements for {
+          read ^keyword := it.value.head_read
+          if (read.ending) {
+            if (read.ending == colon) {
+              named ^keyword := read.points.map { it.value.as_character }.as(String)
+              found &= Field(name: named, value: (external get holder named))
+            }
+          }
+        }
+      }
+      held = held.next
+    }
+    found
+  )
+
+  as (=== String) => (
+    shown ^keyword := chain None
+    .fields for { shown &= it.value.name + ": " + it.value.value.as(String) }
+    String.joined(shown, ", ")
+  )
+
   canonical => (
     normal ^keyword := this
     if (this.normalizer) { normal = this.normalizer(this) }
@@ -790,6 +819,10 @@ Link := class { }
 
 Reading := class {
   rest: Node
+  value: Node
+}
+Field := class {
+  name: Node
   value: Node
 }
 Chosen := class {

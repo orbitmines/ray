@@ -20,7 +20,7 @@ IP := class {
     out
   )
 
-  as_string => (
+  as (=== String) => (
     parts := chain None
     walker ^keyword := .segments.head
     radix := .base
@@ -31,7 +31,7 @@ IP := class {
     String.joined(parts, .separator)
   )
 
-  chainable == (other: IP) => .as_string == other.as_string
+  chainable == (other: IP) => .as(String) == other.as(String)
 
   next => this + 1
   previous => this - 1
@@ -204,9 +204,9 @@ IP.v6 = class: IP {
     IP.v4(segments: quad)
   )
 
-  as_string => (
-    if .mapped { "::ffff:" + .tail_v4.as_string }
-    elsif .translated { "64:ff9b::" + .tail_v4.as_string }
+  as (=== String) => (
+    if .mapped { "::ffff:" + .tail_v4.as(String) }
+    elsif .translated { "64:ff9b::" + .tail_v4.as(String) }
     else { .compressed }
   )
 

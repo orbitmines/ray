@@ -56,9 +56,9 @@ String := class: Array {
     held_bits
   )
 
-  lower_case => .map { it.value.lower }.as_string
-  upper_case => .map { it.value.upper }.as_string
-  swap_case => .map { it.value.swapped }.as_string
+  lower_case => .map { it.value.lower }.as(String)
+  upper_case => .map { it.value.upper }.as(String)
+  swap_case => .map { it.value.swapped }.as(String)
   fold_case => .map { Unicode.folded(it.value) }.join
   title_case => (
     out := chain None
@@ -67,7 +67,7 @@ String := class: Array {
       out &= (if at_start { it.value.upper } else { it.value.lower })
       at_start = it.value.blank
     }
-    out.as_string
+    out.as(String)
   )
   lowercase => .lower_case
   uppercase => .upper_case
@@ -96,7 +96,7 @@ String := class: Array {
   plural => if (.ends_with("s")) { this } else { this + "s" }
   singular => if (.ends_with("s")) { .slice(0, .count.pred) } else { this }
 
-  mirrored => .reverse.as_string
+  mirrored => .reverse.as(String)
 
   trimmed => (
     start ^keyword := 0
@@ -123,7 +123,7 @@ String := class: Array {
       walker = walker.next
       left = left.pred
     }
-    out.as_string
+    out.as(String)
   )
 
   starts_with (other: String) => (
@@ -170,13 +170,13 @@ String := class: Array {
     this for {
       character ^keyword := it.value
       if (inline predicate) {
-        pieces &= current.as_string
+        pieces &= current.as(String)
         current = chain None
       } else {
         current &= character
       }
     }
-    pieces &= current.as_string
+    pieces &= current.as(String)
     pieces
   )
   split (separator: Char) => .split_by { character == separator }
@@ -223,7 +223,7 @@ String := class: Array {
   compounds * (times: Number) => (
     held := chain None
     this for { held &= it.value }
-    (held * times).as_string
+    (held * times).as(String)
   )
 
   joined (parts, separator) => (
@@ -234,7 +234,7 @@ String := class: Array {
       it.value for { out &= it.value }
       at_start = false
     }
-    out.as_string
+    out.as(String)
   )
 
   spells_in (radix: Number) => .nonempty.and(.every { if (it.value.digit_value) { it.value.digit_value < radix } else { false } })
@@ -251,12 +251,12 @@ String := class: Array {
     joined := chain None
     this for { joined &= it.value }
     if (other.codepoint) { joined &= other } else { other for { joined &= it.value } }
-    joined.as_string
+    joined.as(String)
   )
 }
 
 Chain.components.hierarchy &= class {
-  as_string => (
+  as (=== String) => (
     held ^keyword := this
     external extend held String
     held
@@ -264,12 +264,12 @@ Chain.components.hierarchy &= class {
 }
 
 Node.components.hierarchy &= class {
-  as_string => code_points(this).map { it.value.as_character }.as_string
+  as (=== String) => code_points(this).map { it.value.as_character }.as(String)
 }
-"{literal text ^string}" ^string.punctuation => code_points(text).map { it.value.as_character }.as_string.dedented
+"{literal text ^string}" ^string.punctuation => code_points(text).map { it.value.as_character }.as(String).dedented
 
 Number.components.hierarchy &= class {
-  spelled_in (radix: Number) => .digits_in(radix).map { Char.decimal_digit(it.value) }.as_string
+  spelled_in (radix: Number) => .digits_in(radix).map { Char.decimal_digit(it.value) }.as(String)
 }
 
 Chain.components.hierarchy &= class {
@@ -316,7 +316,7 @@ Regex := class {
 }
 
 Number.components.hierarchy &= class {
-  as_string => .spelled_in(10)
+  as (=== String) => .spelled_in(10)
 }
 
 Placement ^keyword := class { }
@@ -367,10 +367,10 @@ declared_in (holder, spelled) => (
 )
 
 Char.components.hierarchy &= class {
-  as_string => (
+  as (=== String) => (
     one := chain None
     one &= this
-    one.as_string
+    one.as(String)
   )
   east_asian_width => (
     found := Unicode.EastAsianWidth.at(.codepoint)

@@ -20,9 +20,9 @@ IO := class {
     }
     IO.root + ("/" + kept.join("/"))
   )
-  read (path) => (external io (IO.inside(path)) None).as_string
+  read (path) => (external io (IO.inside(path)) None).as(String)
   write (path, content) => external io (IO.inside(path)) content
-  host (path) => if IO.permitted { (external io path None).as_string } else { Quest(name: "ask for the host's files", goal: path) }
+  host (path) => if IO.permitted { (external io path None).as(String) } else { Quest(name: "ask for the host's files", goal: path) }
   field (name: String) => (
     as_program := IO.read(name + ".ray")
     if as_program.nonempty { as_program } else {
@@ -30,7 +30,7 @@ IO := class {
       if as_directory.nonempty { as_directory } else { IO.read(name) }
     }
   )
-  os (name) => (external os name).as_string
+  os (name) => (external os name).as(String)
   platform => IO.os(`platform`)
   architecture => IO.os(`architecture`)
   File := class {

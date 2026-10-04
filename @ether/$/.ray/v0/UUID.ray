@@ -30,7 +30,7 @@ UUID := class: Hexadecimal {
     out
   )
 
-  as_string => (
+  as (=== String) => (
     out := chain None
     walker ^keyword := .spelled.head
 
@@ -50,9 +50,9 @@ UUID := class: Hexadecimal {
         left = left.pred
       }
     }
-    out.as_string
+    out.as(String)
   )
-  chainable == (other: UUID) => .as_string == other.as_string
+  chainable == (other: UUID) => .as(String) == other.as(String)
 
   read (text: String) => (
     out := chain None
@@ -132,7 +132,7 @@ UUID.v1 = class: UUID {
     Number.from_digits(16, spelled_node)
   )
 
-  ticks => ((external time).as_string.as_number / 100) + UUID.v1.gregorian_offset
+  ticks => ((external time).as(String).as_number / 100) + UUID.v1.gregorian_offset
 
   generate => (
     stamp ^keyword := UUID.v1.ticks

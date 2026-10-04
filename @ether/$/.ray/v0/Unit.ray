@@ -145,7 +145,7 @@ Unit := class {
     }
     found
   )
-  as_string => if (.name) { .name } else { .symbol }
+  as (=== String) => if (.name) { .name } else { .symbol }
 
   compounds / (other: Unit) => (
     above ^keyword := this
@@ -303,7 +303,7 @@ Quantity := class {
 
   is_temporal => .unit.is_temporal
   as_seconds => (this as Second).amount
-  as_string => .amount.as_string + " " + .unit.as_string
+  as (=== String) => .amount.as(String) + " " + .unit.as(String)
 }
 
 Measured := class {

@@ -145,7 +145,7 @@ Time := class {
   years_since (other: Time) => ((this - other) as Year).amount
 
   now => (
-    clock ^keyword := Time.Clock(digits: (external time).as_string)
+    clock ^keyword := Time.Clock(digits: (external time).as(String))
     Time(calendar: UTC, since_epoch: clock.elapsed, uncertainty: clock.resolution)
   )
   Clock := class {
@@ -209,8 +209,8 @@ Time.OfDay = class {
     held_minute ^keyword := .minute
     Time.OfDay(hour: held_hour, minute: held_minute, second: Decimal(integer: seconds))
   )
-  two_digits (value: Number) => if (value < 10) { "0" + value.as_string } else { value.as_string }
-  as_string => if (.second.is_zero) { .two_digits(.hour) + ":" + .two_digits(.minute) } else { .two_digits(.hour) + ":" + .two_digits(.minute) + ":" + .two_digits(.second) }
+  two_digits (value: Number) => if (value < 10) { "0" + value.as(String) } else { value.as(String) }
+  as (=== String) => if (.second.is_zero) { .two_digits(.hour) + ":" + .two_digits(.minute) } else { .two_digits(.hour) + ":" + .two_digits(.minute) + ":" + .two_digits(.second) }
   chainable == (other: Time.OfDay) => .as_seconds == other.as_seconds
 }
 Number.components.hierarchy &= class {

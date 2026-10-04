@@ -221,7 +221,13 @@ IP.v6 = class: IP {
   compress_zeros => if .zero_compression { this } else { IP.v6.parse(.compressed) }
   embed_ipv4 => if (.embedded === None) { IP.v6.parse(.compressed_before_v4 + .tail_v4.as_string) } else { this }
   compressed_before_v4 => (
-    leading := IP.v6(segments: .segments.slice(0, 6))
+    first_six := chain None
+    left_to_take ^keyword := 6
+    .segments for {
+      if left_to_take.nonzero { first_six &= it.value }
+      left_to_take = left_to_take.pred
+    }
+    leading := IP.v6(segments: first_six)
     written := leading.compressed
     if (written.ends_with(":")) { written } else { written + ":" }
   )

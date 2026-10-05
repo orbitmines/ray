@@ -83,7 +83,7 @@ Language.Direct := class: Language {
   Glyph := class = outlines: Geometry.Outline[], advance: Number, units: Number
 
   OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Char⁴, checksum: U32, offset: U32, size: U32)[]{length == count}, *) {
-    static language = Language.register(Language(".otf" | ".ttf", reader: (bits) => bits as OpenType))
+    static language = Language.register(Language(".otf" | ".ttf", level: { {font: OpenType} => font }))
     static U8 = Binary⁸
     static U16 = Binary¹⁶
     static U32 = Binary³²

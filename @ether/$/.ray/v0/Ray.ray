@@ -1,695 +1,242 @@
-Ordered := class {
-  chainable < (other: Ordered) => TODO
+-> (): Ray => next: () => Ray(next: next())
+<- (): Ray => previous: () => Ray(previous: previous())
+<--> (): Ray => (<-) &+ (->)
 
-  chainable > (other: Ordered) => other < this
-  chainable <= (other: Ordered) => (other < this).not
-  chainable >= (other: Ordered) => (this < other).not
-
-  min (other: Ordered) => (
-    smaller := other
-    if (this < other) { smaller = this }
-    smaller
-  )
-  max (other: Ordered) => (
-    larger := this
-    if (this < other) { larger = other }
-    larger
-  )
+Ordered<T = static> := class {
+  < (b: T) => TODO
+  > (b: T) => b < this
+  <= (b: T) => this == b || this < b
+  >= (b: T) => this == b || this > b
+  min (b: T) => this <= b ? this : b
+  max (b: T) => this >= b ? this : b
 }
 
-Iterable := class: Ordered {
-  entry => TODO
+Iterable<Vertex: Ray = Ray> := class: Ordered {
+  entry: Vertex? => TODO
 
-  empty => .count.is_zero
-  nonempty => .empty.not
+  dynamically assert count < ∞ if bounded: boolean = true
 
-  bounded => true
-  unbounded => .bounded.not
+  empty => count == 0
+  nonempty => !empty
+  unbounded => !bounded
   orderless => false
 
-  count => (
-    entries_counted := 0
-    if (.entry) { entries_counted = .entry.count }
-    entries_counted
-  )
+  connected => all.every(a => all.every(b => a.to(b)))
+  consistent => all.every(.next?.previous == . && .previous?.next == .)
+  acyclic => !all.some(.next** contains .)
+  undirected => all.every(.initial === .terminal)
+  unidirectional => all.every(!.previous)
 
-  first => .entry.first
-  last => .entry.last
+  compact => this{!=.instance_of None}
 
-  for (body) => if (.entry) { .entry for body } else { this }
+  static boundary := class {
+    () => boundary.initial | boundary.terminal
+    initial: Boundary => (⊢all{is_initial}){⊙.is_initial}
+    terminal: Boundary => (all{is_terminal}⊣){⊙.is_terminal}
+  }
 
-  every (predicate) => (
-    for {
-      unless (inline predicate) { return false }
-    }
-    true
-  )
-  some (predicate) => (
-    for {
-      if (inline predicate) { return true }
-    }
-    false
-  )
+  first => all{is_first}
+  last => all{is_last}
 
-  .reduce(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => .reduced_by(Program(code: (external ** step), parameters: (external ** accumulator)))
-  .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => .reduced_from(initial, Program(code: (external ** step), parameters: (external ** accumulator)))
-  .reduce({literal operator ^operator}) ^punctuation => .reduce((accumulated) => accumulated[operator] .)
-  .reduce_right(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => .reverse.reduced_by(Program(code: (external ** step), parameters: (external ** accumulator)))
-  .reduce_right({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => .reverse.reduced_from(initial, Program(code: (external ** step), parameters: (external ** accumulator)))
-  .reduce_right({literal operator ^operator}) ^punctuation => .reverse.reduce((accumulated) => accumulated[operator] .)
+  for <traverse: Traverser = Traverser.default>(yield: (x: Vertex): *) => traverse<.yield: yield<local: &caller, break: return>>(entry) if entry
 
-  reduced_by (stepping) => (
-    accumulated ^keyword := None
-    started ^keyword := false
-    for {
-      if started { accumulated = stepping.entered(it.value, accumulated) } else {
-        accumulated = it.value
-        started = true
-      }
-    }
-    accumulated
-  )
-  reduced_from (seed, stepping) => (
-    accumulated ^keyword := seed
-    for { accumulated = stepping.entered(it.value, accumulated) }
-    accumulated
-  )
+  every (predicate: (x: Vertex): boolean) => map(predicate){== false}.empty
+  some (predicate: (x: Vertex): boolean) => this{predicate}.nonempty
+  filter (predicate: (x: Vertex): boolean) => this{predicate}
 
-  all => .reduce(|)
+  // `reduce((acc) => …)` seeds with the first element, `reduce(acc = 0 => …)` with what it is given; `.` is the element (R2.4).
+  .reduce(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => rest.reduced(first, Program(code: (external ** step), parameters: (external ** accumulator)))
+  .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => reduced(initial, Program(code: (external ** step), parameters: (external ** accumulator)))
+  .reduce({literal operator ^operator}) ^punctuation => .reduce((acc) => acc[operator] .)
+  reduce_right | fold_right | foldr => reverse.reduce
+  reduced (seed, step: Program) => empty ? seed : rest.reduced(step.entered(first, seed), step)
 
-  min => (
-    smallest ^keyword := None
-    at_start ^keyword := true
-    for {
-      if at_start { smallest = it.value } elsif (it.value < smallest) { smallest = it.value }
-      at_start = false
-    }
-    smallest
-  )
-  max => (
-    largest ^keyword := None
-    at_start ^keyword := true
-    for {
-      if at_start { largest = it.value } elsif (largest < it.value) { largest = it.value }
-      at_start = false
-    }
-    largest
-  )
+  all => reduce(|)
+  sum => reduce(total = 0 => total + .)
+  product => reduce(total = 1 => total * .)
+  min => reduce((acc) => acc < . ? acc : .)
+  max => reduce((acc) => acc > . ? acc : .)
+  count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
+  length => paths.length
+  paths: Path{.bounded: bounded} => [this]
 
-  compounds * (times: Number) => (
-    out ^keyword := chain None
-    left ^keyword := times
-    while left.nonzero {
-      for { out &= it.value }
-      left = left.pred
-    }
-    out
-  )
+  rest => entry?.next ?? []
+  map (mapping: (x: Vertex): *) => empty ? [] : mapping(first), rest.map(mapping)
+  reverse => empty ? [] : rest.reverse, first
+  sort => empty ? [] : rest{< first}.sort, first, rest{>= first}.sort
+  sorted (key) => sort_by(key)
+  sort_by (key) => empty ? [] : rest{key(.) < key(first)}.sort_by(key), first, rest{key(.) >= key(first)}.sort_by(key)
+  unique => empty ? [] : first, rest{!= first}.unique
+  unordered => choose Iterable{.every(this.contains(.)) && .count == count}
 
-  fill (x) => for { it.value = x }
+  contains | includes <operator: (x: Vertex): (b: Vertex): boolean = ==>(x: Vertex) => some(operator(.)(x))
+  partition (predicate) => this{predicate}, this{!predicate(.)}
+  batch | chunk (size: Number) => empty ? [] : [this[..size]], this[size..].chunk(size)
+  flatten => reduce(acc = [] => acc, .)
+  flatten (levels: Number) => levels == 0 ? this : map(. ==.instance_of Iterable ? .flatten(levels - 1) : [.]).flatten
+  intersection (other: Iterable) => this{other.contains(.)}
+  disjoint (other: Iterable) => intersection(other).empty
+  xor | symmetric_difference (other: Iterable) => this{!other.contains(.)}, other{!this.contains(.)}
+  split (delimiter) => this ~= (*, delimiter)[] -- #.join(*)
+  enumerate => map((x) => (index: x.index, value: x))
+  zip (other: Iterable) => empty || other.empty ? [] : (first, other.first), rest.zip(other.rest)
+  join (separator) => reduce((acc) => acc, separator, .)
+  random => this[Random.below(count)]
+  fill (x) => all = x
 
-  compact => this{this}
+  // `Binary₈[]₄`: compose the structure `count` times.
+  * (count: Number) => count == 0 ? [] : this, this * (count - 1)
+  ^ (count: Number) => this{.count == .count ? .count * count : count}
 
-  map (mapping) => (
-    mapped ^keyword := chain None
-    for { mapped &= (inline mapping) }
-    mapped
-  )
+  + (at: Integer) => this[at]
+  - (at: Integer) => this[-at]
+  ± | +- | -+ (at: Integer) => this[at] | this[-at]
+  [at: Integer] => at == 0 ? entry : at > 0 ? rest[at - 1] : reverse[-at - 1]
+  [range: Range] => range.map(this[.])
 
-  reverse => (
-    walked ^keyword := chain None
-    for { walked &= it.value }
-    turned ^keyword := chain None
-    back ^keyword := walked.tail
-    while (back) {
-      turned &= back.value
-      back = back.previous
-    }
-    turned
-  )
+  // `x: String[] = "String", Object, "String", Object`
+  as (: Iterable<R: ?>) => this{==.instance_of R}
 
-  sort => (
-    left ^keyword := chain None
-    for { left &= it.value }
-    ordered ^keyword := chain None
-    smallest ^keyword := None
-    walker ^keyword := None
-    while left.nonempty {
-      smallest = left.head
-      walker = left.head.next
-      while (walker) {
-        if (walker.value < smallest.value) { smallest = walker }
-        walker = walker.next
-      }
-      ordered &= smallest.value
-      left.unlink(smallest)
-    }
-    ordered
-  )
-
-  contains (x) => (
-    for { if (it.value == x) { return true } }
-    false
-  )
-  includes (x) => .contains(x)
-
-  unique => (
-    kept ^keyword := chain None
-    for {
-      unless (kept.contains(it.value)) { kept &= it.value }
-    }
-    kept
-  )
-
-  partition (predicate) => (
-    held ^keyword := chain None
-    rest ^keyword := chain None
-    for {
-      verdict := inline predicate
-      if verdict { held &= it.value } else { rest &= it.value }
-    }
-    halves ^keyword := chain None
-    halves &= held
-    halves &= rest
-    halves
-  )
-
-  chunk (size: Number) => (
-    runs ^keyword := chain None
-    run ^keyword := chain None
-    left ^keyword := size
-    for {
-      run &= it.value
-      left = left.pred
-      if left.is_zero {
-        runs &= run
-        run = chain None
-        left = size
-      }
-    }
-    if run.nonempty { runs &= run }
-    runs
-  )
-  batch (size: Number) => .chunk(size)
-
-  flatten => (
-    flat ^keyword := chain None
-    for {
-      inner := it.value
-      spliced ^keyword := false
-      if (inner.instance_of(Array)) { spliced = inner.bounded }
-      if spliced { inner.flatten for { flat &= it.value } } else { flat &= inner }
-    }
-    flat
-  )
-  flatten (levels: Number) => (
-    flat ^keyword := chain None
-    for {
-      inner := it.value
-      spliced ^keyword := false
-      if (inner.instance_of(Array)) { spliced = inner.bounded }
-      if levels.is_zero { spliced = false }
-      if spliced { inner.flatten(levels.pred) for { flat &= it.value } } else { flat &= inner }
-    }
-    flat
-  )
-
-  intersection (other) => (
-    both ^keyword := chain None
-    for {
-      if (other.contains(it.value)) { unless (both.contains(it.value)) { both &= it.value } }
-    }
-    both
-  )
-  disjoint (other) => .intersection(other).empty
-
-  symmetric_difference (other) => (
-    either ^keyword := chain None
-    for {
-      unless (other.contains(it.value)) { either &= it.value }
-    }
-    mine ^keyword := this
-    other for {
-      unless (mine.contains(it.value)) { either &= it.value }
-    }
-    either
-  )
-
-  at (index: Number) => .entry.at(index)
-
-  paths => [this]
-  length => (
-    longest ^keyword := 0
-    .paths for {
-      measured ^keyword := it.value.count
-      if (longest < measured) { longest = measured }
-    }
-    longest
-  )
-
-  connected => true
-  consistent => true
-  acyclic => .entry.acyclic
-  undirected => false
-  unidirectional => false
+  == (other: Iterable) => orderless || other.orderless
+    ? count == other.count && every(other.contains(.))
+    : empty ? other.empty : other.nonempty && first == other.first && rest == other.rest
 }
 
-Iterable.components.hierarchy &= class {
-  sum => .reduce(total = 0 => total + .)
-  product => .reduce(total = 1 => total * .)
-}
+Ray := class: Iterable & Ordered {
+  initial | (internal right-to-left ⊢) : Boundary = Boundary.Initial(∙: this)
+  terminal | (internal ⊣) : Boundary = Boundary.Terminal(∙: this)
 
-Iterable.components.hierarchy &= class {
-  random => .at(Random.below(.count))
-}
-Σ{ }{iterable} ^keyword => (iterable).sum
-∑{ }{iterable} ^keyword => (iterable).sum
-∏{ }{iterable} ^keyword => (iterable).product
+  is_initial => !previous
+  is_terminal => !next
+  is_first => is_initial
+  is_last => is_terminal
+  is_boundary => is_initial || is_terminal
 
-Ray := class: Iterable {
   entry => this
+  first => is_initial ? this : previous.first
+  last => is_terminal ? this : next.last
+  index => is_initial ? 0 : previous.index + 1
+  count => is_terminal ? 1 : next.count + 1
 
-  is_initial => (.previous).not
-  is_terminal => (.next).not
+  .. (last: Ray) => this === last ? [this] : next ? this, next..last : None
 
-  is_first => .is_initial
-  is_last => .is_terminal
-
-  initial => (
-    walker := this
-    while walker.is_initial.not { walker = walker.previous }
-    walker
-  )
-  terminal => (
-    walker := this
-    while walker.is_terminal.not { walker = walker.next }
-    walker
-  )
-
-  first => .initial
-  last => .terminal
-
-  ..{last} ^punctuation => (
-    stepped ^keyword := chain None
-    at ^keyword := this
-    while (at) {
-      stepped &= at
-      if (at === last) { at = None } else {
-        at = at.next
-        unless at { stepped = None }
-      }
-    }
-    stepped
-  )
-
-  ⊢ => .initial
-  ⊣ => .terminal
-
-  is_boundary => .is_initial.or(.is_terminal)
-
-  index => (
-    position ^keyword := 0
-    walker ^keyword := this
-    while walker.is_initial.not {
-      position = position.succ
-      walker = walker.previous
-    }
-    position
-  )
-
-  expand => (
-    unfolded ^keyword := chain None
-    .initial for { unfolded &= it }
-    unfolded
-  )
-
-
-  complement => (
-    selected ^keyword := this
-    outside ^keyword := chain None
-    .initial for {
-      unless (it === selected) { outside &= it }
-    }
-    outside
-  )
-
-  initial_boundary => Boundary.Initial(vertex: this)
-  terminal_boundary => Boundary.Terminal(vertex: this)
-
-  count => (
-    total := 1
-    walker := this
-    while walker.is_terminal.not {
-      total = total.succ
-      walker = walker.next
-    }
-    total
-  )
-
-  for (body) => (
-    it ^keyword := .entry
-    going ^keyword := true
-    while going {
-      inline body
-
-      going = it.is_terminal.not
-      if going { it = it.next }
-    }
-    this
-  )
-
-  at (index: Number) => (
-    here := .entry
-    left := index
-    while left.nonzero {
-      here = here.next
-      left = left.pred
-    }
-    here
-  )
-
-  acyclic => .terminal.is_terminal
-
-  every (predicate) => (
-    .initial for {
-      unless (inline predicate) { return false }
-    }
-    true
-  )
-
-  chainable == (other) => (
-    if .orderless { return (.count == other.count).and(.every { other.contains(it.value) }) }
-    if other.orderless { return other == this }
-    mine := .entry
-    theirs := other.entry
-    same := (mine).xnor(theirs)
-    while (same.and(mine)) {
-      if ((mine.value).or(theirs.value)) { same = (mine.value == theirs.value) } else { same = same_text((external where mine), (external where theirs)) }
-      if same {
-        same = mine.is_terminal.xnor(theirs.is_terminal)
-        if mine.is_terminal { mine = None } else {
-          mine = mine.next
-          theirs = theirs.next
-        }
-      }
-    }
-    same
-  )
-  chainable != (other) => (this == other).not
+  expand => first..last
+  // The whole context except this value: the complement with the context as the universal set (R3.7).
+  complement => expand{!== this}
 }
 
 Boundary := class: Ray {
+  vertex | (internal bidirectional ∙) : Ray
+  edge | (internal bidirectional ⊙) : Edge
 
-  ∙ => .vertex
-  ⊙ => .edge
+  is_initial => !edge
+  is_terminal => !edge
 
-  is_initial => (.edge).not
-  is_terminal => (.edge).not
-
-  Initial := class: Boundary {
-
-    edge => Edge(to: this)
-    is_initial => true
-    is_terminal => false
+  static Initial := class: Boundary {
+    ⊙ = Edge(x.terminal: this)
   }
-  Terminal := class: Boundary {
-
-    edge => Edge(from: this)
-    is_initial => false
-    is_terminal => true
+  static Terminal := class: Boundary {
+    ⊙ = Edge(x.initial: this)
   }
 }
 
 Edge := class: Ray {
+  value | (internal x) : {
+    initial | (internal right-to-left ⊣) : Boundary?
+    terminal | (internal ⊢) : Boundary?
+  }
 
-  is_initial => (.from).not
-  is_terminal => (.to).not
-
-  initial => .from
-  terminal => .to
+  is_initial => x.initial == None
+  is_terminal => x.terminal == None
 }
 
-Structure := class: Iterable {
-  hyper_continuations => false
-  hyper_edges => false
-  is_valid => true
+// `with Traverser.default = BreadthFirst`
+Traverser := class: <yield: (x: Ray): None>(entry: Ray): None {
+  static default = DepthFirst
+
+  static DepthFirst: Traverser = (entry: Ray) => {
+    yield entry
+    entry.next?.for<DepthFirst>(yield)
+  }
+  static BreadthFirst: Traverser = (entry: Ray) => {
+    level = [entry]
+    while level.nonempty {
+      level.for yield
+      level = level.map(.next){!= None}
+    }
+  }
 }
-Structure.components.hierarchy &= Ray
+
+Structure := class: Iterable<Ray{
+  initial & terminal : (1 unless HyperContinuations) Vertex.Boundary
+}> {
+  Vertex.Boundary = Boundary{
+    ∙: (1 unless HyperEdges) Vertex
+    ⊙: (1 unless HyperEdges) Edge{
+      initial & terminal : (1 unless HyperEdges) Vertex.Boundary
+    }
+  }
+  internal static HyperContinuations: boolean
+  internal static HyperEdges: boolean = false
+}
+
 Hypergraph := class: Structure {
-  hyper_edges => true
+  HyperEdges = true
 }
 Graph := class: Structure {
-  hyper_continuations => true
+  HyperContinuations = true
 }
-Forest := class: Structure {
-  hyper_continuations => true
-  is_valid => .acyclic.and(.consistent)
+Forest := class: Structure{acyclic & consistent} {
+  Vertex = Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
+  HyperContinuations = true
 }
-Tree := class: Forest {
-  is_valid => .acyclic.and(.consistent).and(.connected)
-}
-Path := class: Structure {
-  is_valid => .consistent.and(.connected)
+Tree := class: Forest{connected}
+Path := class: Structure{consistent & connected} {
+  HyperContinuations = false
+
   paths => this
-
-  length => if .acyclic { .count } else { None }
+  length => acyclic ? count : ∞
 }
-Array := class: Path {
-  acyclic => true
-}
-
+Array := class: Path{acyclic}
 Set := class: Structure {
-  elements: (chain None)
-  entry => .elements.unique.entry
   orderless => true
-  add (x) => (
-    unless (this.elements.contains(x)) { this.elements &= x }
-    this
-  )
+  normalizer = .unordered.unique
 }
 
 Hierarchy := class: Ray {
-  parent?: Node
-  children: (chain None)
+  parent | previous : static? <- hierarchy -> children | next : static?
 
-  holds (child) => (
-    this.children &= child
-    child.parent = this
-
-    child
-  )
-
-  depth => (
-    depth_below := 0
-    if (.parent) { depth_below = .parent.depth.succ }
-    depth_below
-  )
+  holds (child) => children.some(== child || .holds(child))
+  depth => parent ? parent.depth + 1 : 0
 }
 
-Loop := class: Ray {
-  around: Node
-  holding: Node
-
-  value => .holding.value
-  next => Loop(around: .around, holding: (.holding.next ?? .around.head))
-  previous => Loop(around: .around, holding: (.holding.previous ?? .around.tail))
+// A loop goes around what it is made of: `Array.unbounded.orbit` (R5.1).
+Loop := Array.Unbounded.orbit
+Iterable &+= {
+  orbit | loop => Loop(around: this, at: first)
+}
+Loop &+= {
+  next => Loop(around, at: at.next ?? around.first)
+  previous => Loop(around, at: at.previous ?? around.last)
   is_initial => false
   is_terminal => false
   bounded => false
   acyclic => false
 
-  unrolled => .around
-  instances (times: Number) => .around * times
-  unrolled_mod => (
-    opened ^keyword := chain None
-    .around for { opened &= it.value }
-    opened &= Loop(around: .around, holding: .around.head)
-    opened
-  )
-  disallow_loops => .around
+  unrolled => around
+  instances (times: Number) => around * times
+  unrolled_mod => around[at.index..], around[..at.index]
+  disallow_loops => around
 }
 
-Traverser := class {
-  Order := enum depth_first | breadth_first
-  default => Traverser.Order.depth_first
-  walk (entry, body) => entry for body
-
-  DepthFirst := class {
-    walk (entry, body) => (
-      pending ^keyword := chain None
-      pending &= entry
-      seen ^keyword := chain None
-      while pending.nonempty {
-        it ^keyword := pending.pop_back
-        unless (seen.contains(it)) {
-          seen &= it
-          inline body
-          if it.is_terminal.not { pending &= it.next }
-        }
-      }
-      entry
-    )
-  }
-  BreadthFirst := class {
-    walk (entry, body) => (
-      pending ^keyword := chain None
-      pending &= entry
-      seen ^keyword := chain None
-      while pending.nonempty {
-        it ^keyword := pending.pop_front
-        unless (seen.contains(it)) {
-          seen &= it
-          inline body
-          if it.is_terminal.not { pending &= it.next }
-        }
-      }
-      entry
-    )
-  }
-}
-
-Chain.components.hierarchy &= Array
-Link.components.hierarchy &= Ray
-
-Chain.components.hierarchy &= class {
-  push_back (x) => (this &= x)
-  orbit => Loop(around: this, holding: this.head)
-  push_front (x) => (
-    was_head ^keyword := this.head
-    added ^keyword := link x None
-    added.next = was_head
-    if (was_head) { was_head.previous = added } else { this.tail = added }
-    this.head = added
-    this
-  )
-  unlink (dropped) => (
-    held ^keyword := dropped
-    answer ^keyword := held.value
-    before ^keyword := held.previous
-    after ^keyword := held.next
-    if (before) { before.next = after } else { this.head = after }
-    if (after) { after.previous = before } else { this.tail = before }
-    answer
-  )
-  pop_front => (
-    taken ^keyword := None
-    if (this.head) { taken = this.unlink(this.head) }
-    taken
-  )
-  pop_back => (
-    taken ^keyword := None
-    if (this.tail) { taken = this.unlink(this.tail) }
-    taken
-  )
-  link_of (x) => (
-    found ^keyword := None
-    walker ^keyword := this.head
-    while ((walker).and((found).not)) {
-      if (walker.value == x) { found = walker }
-      walker = walker.next
-    }
-    found
-  )
-  remove (x) => (
-    held ^keyword := this.link_of(x)
-    if (held) { this.unlink(held) }
-    this
-  )
-  push_after (at, x) => (
-    added ^keyword := link x at
-    following ^keyword := at.next
-    added.next = following
-    at.next = added
-    if (following) { following.previous = added } else { this.tail = added }
-    this
-  )
-  push_before (at, x) => (
-    preceding ^keyword := at.previous
-    if (preceding) { this.push_after(preceding, x) } else { this.push_front(x) }
-    this
-  )
-  move_after (x, target) => (
-    this.remove(x)
-    this.push_after(this.link_of(target), x)
-  )
-  move_before (x, target) => (
-    this.remove(x)
-    this.push_before(this.link_of(target), x)
-  )
-}
-
-Iterable.components.hierarchy &= class {
-  split (delimiter) => (
-    pieces ^keyword := chain None
-    current ^keyword := chain None
-    for {
-      if (it.value == delimiter) {
-        pieces &= current
-        current = chain None
-      } else { current &= it.value }
-    }
-    pieces &= current
-    pieces
-  )
-
-  enumerate => (
-    numbered ^keyword := chain None
-    index ^keyword := 0
-    for {
-      pair ^keyword := chain None
-      pair &= index
-      pair &= it.value
-      numbered &= pair
-      index = index.succ
-    }
-    numbered
-  )
-
-  zip (other) => (
-    zipped ^keyword := chain None
-    theirs ^keyword := other.entry
-    for {
-      if (theirs) {
-        pair ^keyword := chain None
-        pair &= it.value
-        pair &= theirs.value
-        zipped &= pair
-        if theirs.is_terminal { theirs = None } else { theirs = theirs.next }
-      }
-    }
-    zipped
-  )
-
-  join (separator) => (
-    joined ^keyword := chain None
-    started ^keyword := false
-    for {
-      if started { joined &= separator }
-      joined &= it.value
-      started = true
-    }
-    joined
-  )
-
-  filter (predicate) => (
-    kept ^keyword := chain None
-    for {
-      if (inline predicate) { kept &= it.value }
-    }
-    kept
-  )
-
-  remove (x) => (
-    kept ^keyword := chain None
-    for {
-      unless (it.value == x) { kept &= it.value }
-    }
-    kept
-  )
-
-  canonical => .unique
-}
-
-Set.components.hierarchy &= class {
-  canonical => .elements.unique
+Array &+= {
+  push_back | push (x) => this, x
+  push_front (x) => x, this
+  pop_front => first.remove
+  pop_back => last.remove
+  remove (x) => this{!= x}
+  push_after (at, x) => this[..at.index + 1], x, this[at.index + 1..]
+  push_before (at, x) => this[..at.index], x, this[at.index..]
+  move_after (x, target) => remove(x).push_after(target, x)
+  move_before (x, target) => remove(x).push_before(target, x)
 }

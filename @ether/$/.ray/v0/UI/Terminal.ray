@@ -22,7 +22,7 @@ TUI := class {
   Paint := (shape: Geometry.Shape, grid: Grid) => grid -- shape.match
     // Glyphs by their columns: wide characters take two cells (X3.4).
     Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(column = 0 => {
-      grid.put(cells(shape.position) + Geometry.Vector(column, row), Cell(., shape.fill as Geometry.Color, bold: shape.font.weight >= 600, italic: shape.font.style == italic))
+      grid.put(cells(shape.position) + Geometry.Vector(column, row), Cell(., foreground: shape.color as Geometry.Color, background: shape.fill as Geometry.Color, bold: shape.font.weight >= 600, italic: shape.font.style == italic))
       column + .columns
     }))
     // An image is sampled into coloured characters (F-C1); a terminal that shows pixels gets them through its own level.
@@ -57,9 +57,14 @@ TUI := class {
     from = cells(shape.position)
     to = cells(shape.position + shape.size) - Geometry.Vector(1, 1)
     style = Cell(foreground: shape.stroke.paint as Geometry.Color)
-    (from.x + 1..<to.x).for(x => grid.put(Geometry.Vector(x, from.y), style ~~ .glyph = "─") -- grid.put(Geometry.Vector(x, to.y), style ~~ .glyph = "─"))
-    (from.y + 1..<to.y).for(y => grid.put(Geometry.Vector(from.x, y), style ~~ .glyph = "│") -- grid.put(Geometry.Vector(to.x, y), style ~~ .glyph = "│"))
-    [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].for((at, i) => grid.put(at, style ~~ .glyph = corners[i]))
+    sides = shape.stroke.sides
+    // A stroke on one side only: an underline in a terminal is the underline attribute of the cells above it.
+    (from.x..to.x).for(x => grid.cells[to.y][x] ~~ .underline = true) if sides == bottom
+    (from.x + 1..<to.x).for(x => grid.put(Geometry.Vector(x, from.y), style ~~ .glyph = "─")) if sides ==.instance_of (all | top | horizontal)
+    (from.x + 1..<to.x).for(x => grid.put(Geometry.Vector(x, to.y), style ~~ .glyph = "─")) if sides ==.instance_of (all | horizontal)
+    (from.y + 1..<to.y).for(y => grid.put(Geometry.Vector(from.x, y), style ~~ .glyph = "│")) if sides ==.instance_of (all | left | vertical)
+    (from.y + 1..<to.y).for(y => grid.put(Geometry.Vector(to.x, y), style ~~ .glyph = "│")) if sides ==.instance_of (all | right | vertical)
+    [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].for((at, i) => grid.put(at, style ~~ .glyph = corners[i])) if sides == all
   }
   Scrollbar := (shape: Geometry.Shape, grid: Grid) => cells(shape.size).y -- (0..<.).for(y => grid.put(cells(shape.position) + Geometry.Vector(cells(shape.size).x - 1, y), Cell(y == shape.scrolled.y * . / shape.content_height ? "┃" : "│")))
   Focus := (shape: Geometry.Shape, grid: Grid) => Area(shape).for(grid.cells[.y][.x] ~~ .underline = true)

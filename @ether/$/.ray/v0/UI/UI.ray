@@ -5,7 +5,7 @@ UI := class {
   // as what its extension reads to; anything else renders its fields as a table; a superposition shows all, or one when choosing (F-D4, F-C1b, F-C3).
   Scene := {
     {text: String} => Geometry.Text(text)
-    {styled: String ^{style}} => Geometry.Text(styled, font: Theme.font(style), fill: Theme.color(style))
+    {styled: String ^{style}} => Geometry.Text(styled) + Theme[style]
     {location: Location{.extension ==.instance_of Image.extensions}} => Geometry.Image(location, alt: location.name)
     {location: Location{.extension ==.instance_of Video.extensions}} => Geometry.Video(location)
     {location: Location{.extension ==.instance_of Audio.extensions}} => Geometry.Audio(location)
@@ -173,18 +173,18 @@ UI := class {
   }
 
   // Styles are highlighting: `^italic` on text is the same style the editor shows (F-C2).
+  // A style is a partial shape, a name with the fields it sets; styling is adding it, and the later style overrides (T2.1 `+`).
   Theme := class {
-    styles: (name: String, font: Geometry.Font?, color: Geometry.Color?)[] = [
-      ("italic", Geometry.Font(style: italic), None),
-      ("bold", Geometry.Font(weight: 700), None),
-      ("muted", None, Geometry.Color(128, 128, 128)),
-      ("disabled", None, Geometry.Color(160, 160, 160)),
-      ("h1", Geometry.Font(size: 2em, weight: 700), None),
-      ("h2", Geometry.Font(size: 1.5em, weight: 700), None),
-      ("h3", Geometry.Font(size: 1.17em, weight: 700), None)
+    styles: (name: String, *)[] = [
+      ("italic", font: Geometry.Font(style: italic)),
+      ("bold", font: Geometry.Font(weight: 700)),
+      ("muted", color: Geometry.Color(128, 128, 128)),
+      ("disabled", color: Geometry.Color(160, 160, 160)),
+      ("h1", font: Geometry.Font(size: 2em, weight: 700)),
+      ("h2", font: Geometry.Font(size: 1.5em, weight: 700)),
+      ("h3", font: Geometry.Font(size: 1.17em, weight: 700))
     ]
-    font (style: String) => styles{.name == style}.first?.font ?? Geometry.Font()
-    color (style: String) => styles{.name == style}.first?.color
+    [name: String] => styles{.name == name}.last - name ?? ()
   }
 
   // Running a page: the level's runtime reads the devices, re-solves what changed and writes the frame, until it stops (F-D10).

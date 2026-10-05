@@ -132,7 +132,7 @@ Web := class {
       ),
       shape.spacing.map((.from == border ? "padding" : "margin") + Sides[.sides], .amount.y as px, "px ", .amount.x as px, "px"),
       ("background", Paint(shape.fill)) if shape.fill,
-      ("border", shape.stroke.width as px, "px ", shape.stroke.dash.empty ? "solid" : "dashed", " ", Paint(shape.stroke.paint)) if shape.stroke,
+      ("border" + Sides[shape.stroke.sides], shape.stroke.width as px, "px ", shape.stroke.dash.empty ? "solid" : "dashed", " ", Paint(shape.stroke.paint)) if shape.stroke,
       ("border-radius", shape.radius.map(. as px, "px").join(" ")) if shape.radius != [0],
       ("transform", "matrix3d(", shape.transform.matrix.transposed.flatten.join(","), ")") if shape.transform != Geometry.Transform(),
       ("overflow", shape.overflow == scroll ? "auto" : shape.overflow as String),
@@ -144,7 +144,8 @@ Web := class {
         Geometry.Blur => ("filter", "blur(", .radius as px, "px)")
         Geometry.Filter => ("filter", .kind as String, "(", .amount, ")")
       ),
-      (("font-family", shape.font.family.join(",")), ("font-size", shape.font.size as String), ("font-weight", shape.font.weight), ("font-style", shape.font.style as String), ("line-height", shape.font.line_height), ("text-align", shape.align as String), ("text-overflow", shape.overflow as String)) if shape ==.instance_of Geometry.Text,
+      (("font-family", shape.font.family.join(",")), ("font-size", shape.font.size as String), ("font-weight", shape.font.weight), ("font-style", shape.font.style as String), ("line-height", shape.font.line_height), ("text-align", shape.align as String), ("text-overflow", shape.overflow as String),
+        ("color", Paint(shape.color)) if shape.color, ("text-transform", { upper: "uppercase", lower: "lowercase", title: "capitalize" }[shape.font.case]) if shape.font.case != none, ("letter-spacing", shape.font.tracking as px, "px") if shape.font.tracking != 0) if shape ==.instance_of Geometry.Text,
       ("object-fit", shape.fit as String) if shape ==.instance_of Geometry.Image,
       ("cursor", "pointer") if shape.activate
     ]),

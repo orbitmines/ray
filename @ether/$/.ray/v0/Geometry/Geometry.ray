@@ -38,7 +38,8 @@ Geometry := class {
     at (position: Probability) => stops.zip(stops.rest){.0.at <= position <= .1.at}.first -- .0.color.mix(.1.color, (position - .0.at) / (.1.at - .0.at))
   }
   Pattern := class = shape: Shape, repeat: Vector
-  Stroke := class = paint: Paint, width: Length = 1px, dash: Length[] = [], cap: butt | round | square = butt, join: miter | round | bevel = miter
+  // A stroke may run along only some sides: an underline is a stroke on the bottom.
+  Stroke := class = paint: Paint, width: Length = 1px, sides: Side = all, dash: Length[] = [], cap: butt | round | square = butt, join: miter | round | bevel = miter
 
   // Effects on a shape and what it holds.
   Effect := Opacity | Shadow | Blur | Blend | Filter
@@ -49,9 +50,15 @@ Geometry := class {
   Filter := class = kind: brightness | contrast | grayscale | invert | saturate | sepia | hue, amount: Number
 
   // Text is a shape: runs of glyphs in a font, laid out in lines.
-  Font := class = family: String[] = ["sans-serif"], size: Length = 1em, weight: Number{100 <= . <= 900} = 400, style: normal | italic = normal, line_height: Number = 1.2, features: String[] = []
-  Text := class: Shape = text: String, font: Font = Font(), align: start | center | end | justify = start, wrap: normal | none | anywhere = normal, overflow: clip | ellipsis = clip, direction: left-to-right | right-to-left = left-to-right {
-    lines (width: Length) => wrap == none ? text.lines : text.lines.map(.words.reduce(acc = [""] => acc.last.width(font) + .width(font) <= width ? (acc[..-1], acc.last + " " + .) : (acc, .))).flatten
+  Font := class = family: String[] = ["sans-serif"], size: Length = 1em, weight: Number{100 <= . <= 900} = 400, style: normal | italic = normal, line_height: Number = 1.2, case: none | upper | lower | title = none, tracking: Length = 0, features: String[] = []
+  // A text's colour is its glyphs'; its fill is behind them, like any shape's.
+  Text := class: Shape = text: String, font: Font = Font(), color: Paint?, align: start | center | end | justify = start, wrap: normal | none | anywhere = normal, overflow: clip | ellipsis = clip, direction: left-to-right | right-to-left = left-to-right {
+    shown => font.case.match
+      upper => text.upper_case
+      lower => text.lower_case
+      title => text.title_case
+      * => text
+    lines (width: Length) => wrap == none ? shown.lines : shown.lines.map(.words.reduce(acc = [""] => acc.last.width(font) + .width(font) <= width ? (acc[..-1], acc.last + " " + .) : (acc, .))).flatten
   }
 
   // Media are shapes too: their content comes from a location.

@@ -11,7 +11,7 @@ Direct := class {
     shape.match
       // Glyphs are outlines from the font file, filled like any other shape.
       Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(pen = 0 =>
-        Font(shape.font).glyph(.) -- Filled(.outline, raster, placed * Geometry.Transform.translate(Geometry.Vector(pen, row * shape.font.size * shape.font.line_height)) * Geometry.Transform.scale(Geometry.Vector(shape.font.size / .units, shape.font.size / .units)), shape.fill ?? Geometry.Color(0, 0, 0)) -- pen + .advance * shape.font.size / .units
+        Font(shape.font).glyph(.) -- Filled(.outline, raster, placed * Geometry.Transform.translate(Geometry.Vector(pen, row * shape.font.size * shape.font.line_height)) * Geometry.Transform.scale(Geometry.Vector(shape.font.size / .units, shape.font.size / .units)), shape.color ?? Geometry.Color(0, 0, 0)) -- pen + .advance * shape.font.size / .units
       ))
       Geometry.Image => (IO.read(shape.source) as Geometry.Raster) -- (0..<shape.size.y as px).for(y => (0..<shape.size.x as px).for(x => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, ..at(x * ..width / shape.size.x, y * ..height / shape.size.y))))
       Geometry.Canvas => shape.draws().for(Rasterise(., raster, placed))

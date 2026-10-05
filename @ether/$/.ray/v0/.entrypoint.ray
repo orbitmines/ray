@@ -2,7 +2,11 @@
 //{comment?} => None
 ;{statement} => statement
 ({expr}) => expr
-{{expr}} => external ** expr
+{{expr}} => (
+  made := external ** expr
+  external extend made Program
+  made
+)
 {name} := {value} => external declare name value
 literal := external literal
 ^ := external ^
@@ -215,13 +219,13 @@ while ^keyword := class {
     inline static
     written_block := external ** block
 
-   continue\
+   loop_continue\
     goto more if (cond as boolean).holds
-    goto break
+    goto loop_break
    more\
     inline written_block
-    goto continue
-   break\
+    goto loop_continue
+   loop_break\
 
     looping ^variable
   )
@@ -241,16 +245,16 @@ do{ }{block}{ }while{ }{cond} ^class => (
 )
 
 loop{ }{block} ^class => while true block
-break ^keyword => goto break
+break ^keyword => goto loop_break
 recur({given}) ^keyword => (
   arguments = given
-  goto recur
+  goto method_recur
 )
-recur ^keyword => goto recur
-continue ^keyword => goto continue
+recur ^keyword => goto method_recur
+continue ^keyword => goto loop_continue
 
 Program := class {
-  ({arguments}) => if .instance { .entered(.context, arguments) } else { .construct(arguments) }
+  ({arguments}) => if .instance { .entered(.context, arguments) } else { .construct(external ** arguments) }
 
   { }{expr} => this(expr)
 
@@ -261,7 +265,10 @@ Program := class {
     entering.target = element
     entered_value := None
     if (closure_parameters.not) {
-      external define entering.target `closure_entered` { inline closure_code } None
+      external define entering.target `closure_entered` {
+        this := element
+        (inline closure_code)
+      } None
       entered_value = entering.target.closure_entered
     } else {
       external define entering.target `closure_applied{arguments}` {
@@ -273,6 +280,14 @@ Program := class {
     entered_value
   )
 }
+
+class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
+  made := class { inline members }
+  made.written_body = external ** members
+  made.components.hierarchy &= header
+  external extend made header
+  made
+)
 
 Modifier := class {
   kind => TODO
@@ -299,12 +314,12 @@ right-to-left {head} | {alias} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   external define alias `{arguments}` {
-   recur\
+   method_recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
   defined := external define head `{arguments}` {
-   recur\
+   method_recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -314,7 +329,7 @@ chainable {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   defined := external define head `{arguments}` {
-   recur\
+   method_recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -324,7 +339,7 @@ compounds {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   defined := external define head `{arguments}` {
-   recur\
+   method_recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -334,7 +349,7 @@ right-to-left {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   defined := external define head `{arguments}` {
-   recur\
+   method_recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -344,17 +359,17 @@ left-to-right {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   defined := external define head `{arguments}` {
-   recur\
+   method_recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
   left-to-right.modify(defined)
 )
-right-to-left {head} => {body} => right-to-left.modify(external rule head body)
 right-to-left {head} | {alias} => {body} => (
   external rule alias body
   right-to-left.modify(external rule head body)
 )
+right-to-left {head} => {body} => right-to-left.modify(external rule head body)
 Modifier.spellings = chain None
 Modifier.spellings &= `chainable`
 Modifier.spellings &= `compounds`
@@ -388,7 +403,7 @@ Node := base class {
     method_written := external ** block
     this ^function
     external define this `{arguments}` {
-     recur\
+     method_recur\
       (inline method_parameters) := arguments
       inline method_written
     } parameters
@@ -398,7 +413,7 @@ Node := base class {
     method_written := external ** block
     this ^function
     external define this `{arguments}` {
-     recur\
+     method_recur\
       (inline method_parameters) := arguments
       inline method_written
     } parameters
@@ -892,10 +907,10 @@ Node := base class {
     marked
   )
 
-  right-to-left ! => .not
 }
 
 Node.DEFINE_METHOD = `&=`
+!{x} ^punctuation => (x).not
 * := Node
 
 external extend None {
@@ -903,13 +918,6 @@ external extend None {
   == (other) => other === None
   != (other) => (other === None).not
 }
-
-class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
-  made := class { inline members }
-  made.written_body = external ** members
-  made.components.hierarchy &= header
-  made
-)
 
 extended_by (onto, walker) => (
   while walker {
@@ -1695,6 +1703,7 @@ class:{ }{parent} = {header}{ }{`{`}{members?}{`}`} ^keyword => (
     inline members
   }
   made.components.hierarchy &= parent
+  external extend made parent
   made.header = external ** header
   made
 )
@@ -1703,6 +1712,7 @@ class:{ }{parent} = {header}{\n} ^keyword => (
     inline header
   }
   made.components.hierarchy &= parent
+  external extend made parent
   made.header = external ** header
   made
 )
@@ -1712,6 +1722,7 @@ class:{ }{parent} ({header}) => {`{`}{members?}{`}`} ^keyword => (
     inline members
   }
   made.components.hierarchy &= parent
+  external extend made parent
   made.header = external ** header
   made
 )
@@ -1721,6 +1732,7 @@ class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => (
     inline members
   }
   made.components.hierarchy &= parent
+  external extend made parent
   made.header = external ** header
   made
 )
@@ -1729,7 +1741,7 @@ static ({parameters ^parameter}) {`=>`} {block} ^keyword => (
   method_parameters := external ** parameters
   method_written := external ** block
   external define this `{arguments}` {
-   recur\
+   method_recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -1751,7 +1763,7 @@ static{ }{head} ({parameters ^parameter}) => {block} ^keyword => (
   method_parameters := external ** parameters
   method_written := external ** block
   external define head `{arguments}` {
-   recur\
+   method_recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -1761,10 +1773,10 @@ static{ }{head} => {block} ^keyword => (
 )
 Modifier.spellings &= `static`
 
-{condition} ? {yes} : {no} ^punctuation => (
-  chosen := no
-  if condition { chosen = yes }
-  chosen
+{condition} ? {if_true} : {if_false} ^punctuation => (
+  picked := if_false
+  if condition { picked = if_true }
+  picked
 )
 
 dynamically ^keyword (x) => (inline x)
@@ -2024,6 +2036,7 @@ DEBUG{ }{comment ^comment} ^debug => DEBUG@* comment
 TRACE{ }{comment ^comment} ^trace => TRACE@* comment
 
 TODO{ }{comment ^comment} ^debug => DEBUG@. comment 
+TODO ^debug => None
 
 boolean := enum false (holds: None) | true (holds: global) {
   nand (b) => (.holds && (b as boolean).holds) ? false : true
@@ -2037,7 +2050,6 @@ boolean := enum false (holds: None) | true (holds: global) {
   xnor (b) => .xor(b).not
 
   as (=== boolean) => this
-  as (=== Binary) => this ? 1₂ : 0₂
 
   next => .not
   previous => .not
@@ -2053,21 +2065,6 @@ boolean := enum false (holds: None) | true (holds: global) {
 
 true := boolean.true
 false := boolean.false
-
-{l} [x: right-to-left] {m} [y: left-to-right] {r} => l[x] m & m[y] r
-
-{base} [x: right-to-left] {middle_operand} [y: right-to-left] {top} => base[x] (middle_operand[y] top)
-
-{left} [x: left-to-right] {middle} [y: right-to-left] {right} => (
-  ERROR `mixes directions around one operand; use parentheses`
-  None
-)
-
-[x: right-to-left] {operand} [y: left-to-right] {rest} => ([x] operand)[y] rest
-
-{first} [x: chainable] {shared} [y: chainable] {last} => (first[x] shared) & (shared[y] last)
-
-{a} [x: compounds]{`=`} {b} => a = (a[x] b)
 
 {guarded} if {condition} => (
   kept := None

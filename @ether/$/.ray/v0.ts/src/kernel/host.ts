@@ -18,7 +18,7 @@ export type Diagnostic = { level: string; message: string; at?: Span; top?: { sr
 const classes = new Uint8Array(65536);
 for (let code = 0; code < 65536; code++) {
   const c = String.fromCharCode(code);
-  classes[code] = (/[\p{L}\p{N}_]/u.test(c) ? 1 : 0) | (/\s/.test(c) ? 2 : 0) | (!/[\s\p{L}\p{N}_(){}\[\]`"']/u.test(c) ? 4 : 0) | (!/[\s\p{L}\p{N}_(){}\[\]`]/u.test(c) ? 8 : 0) | (/\p{L}/u.test(c) ? 16 : 0);
+  classes[code] = (/[\p{L}\p{N}_]/u.test(c) ? 1 : 0) | (/\s/.test(c) ? 2 : 0) | (!/[\s\p{L}\p{N}_(){}\[\]`"',;]/u.test(c) ? 4 : 0) | (!/[\s\p{L}\p{N}_(){}\[\]`]/u.test(c) ? 8 : 0) | (/\p{L}/u.test(c) ? 16 : 0);
 }
 
 export class Reader {

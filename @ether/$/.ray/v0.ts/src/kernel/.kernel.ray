@@ -325,6 +325,7 @@ capturing (rule, caps, p, src, i, limit, frame, receiving, opened) => (
   }
   if piece.undecided and piece.decided != ROOT.declared { decide(rule, p) }
   if piece.undecided { return -1 }
+  if next == 0 and !raw and !inside and piece.typed and pieces[p + 1].tight and space(src, end - 1) { return -1 }
   if piece.typed and holds(rule, p, src, from, stop - 1) == UNDEF {
     shorter := next >= 0 ? -1 : held_from(rule, p, src, from, from, stop, limit)
     if shorter >= 0 { cap(caps, p, from, shorter) }
@@ -365,9 +366,10 @@ operand_end (src, j, limit) => (
 // The end of a capture that runs on: before an operator that binds looser than the rule, or the end of the line.
 trailing_end (src, j, limit, frame, rule) => (
   spellings := looser(frame, rule)
+  from := j
   while j < limit and !newline(src, j) {
     spellings for spelling => {
-      if spelled(src, j, spelling, None, None, limit) and (space(src, j - 1) or space(src, j + spelling.length)) {
+      if j > from and spelled(src, j, spelling, None, None, limit) and (space(src, j - 1) or space(src, j + spelling.length)) {
         while j > 0 and space(src, j - 1) { j = j - 1 }
         return j
       }
@@ -383,7 +385,7 @@ looser_within (src, from, to, frame, rule) => (
   j := from
   while j < to {
     spellings for spelling => {
-      if spelled(src, j, spelling, None, None, to) and (space(src, j - 1) or space(src, j + spelling.length)) { return global }
+      if j > from and spelled(src, j, spelling, None, None, to) and (space(src, j - 1) or space(src, j + spelling.length)) { return global }
     }
     j = skip(src, j, to, None)
   }
@@ -1499,6 +1501,7 @@ capture (src, b, e, frame) => (
   to := trimmed_end(src, b, e)
   if from > to { return Piece(kind: 1) }
   if identifier(src, from, to + 1) { return piece_capture(text_id(src, from, to + 1)) }
+  if src.chars[to] == '?' and identifier(src, from, to) { return Piece(kind: 2, name: text_id(src, from, to), optional: global) }
   scope := scope_in(frame, src, b, e)
   hole := literal(src, b, e)
   state := naming_open(scope, hole, None, UNDEF)
@@ -1635,7 +1638,8 @@ operator_checked (piece, op) => (
   scope := scope_in(piece_within(piece), piece.content_src, piece.content_begin, piece.content_end)
   set_name(scope, piece.name, rule_value(op))
   value, refused, mark := quiet_read(piece.content_src, piece.content_begin, piece.content_end, scope)
-  fits := !refused and value != UNDEF and quiet_deref(value) != None
+  held := value == UNDEF ? UNDEF : quiet_deref(value)
+  fits := !refused and held != UNDEF and held != None
   ROOT.refused = mark
   return fits
 )
@@ -1811,7 +1815,12 @@ literal (src, b, e) => placed_at(value(TEXT, NIL, NIL, NIL), src, b, e)
 place_of (frame, src, b, end) => placed_at(value(PLACE, frame, text_id(src, b, end), 0), src, b, end - 1)
 fn_value (f, src, b, e) => ( node := value(FN, NIL, NIL, NIL); node.fn = f; if src >= 0 { placed_at(node, src, b, e) }; return node )
 style (name) => ( f := fn_make(2, 1, None); node := fn_value(f, -1, 0, 0); f.self = node; node.style = name; return node )
-rule_value (rule) => ( node := value(RULEV, NIL, NIL, NIL); node.rule = rule; return placed_at(node, rule.rule_at_src, rule.rule_at_begin, rule.rule_at_end) )
+rule_value (rule) => (
+  if rule.rule_held != UNDEF { return rule.rule_held }
+  node := value(RULEV, NIL, NIL, NIL); node.rule = rule
+  rule.rule_held = placed_at(node, rule.rule_at_src, rule.rule_at_begin, rule.rule_at_end)
+  return rule.rule_held
+)
 
 is_code (v) => node_tag(v) == CODE
 is_place (v) => node_tag(v) == PLACE
@@ -2006,7 +2015,7 @@ code_names (node) => (
 // ---------------------------------------------------------------- rules: a pattern of pieces, where it was written, what it does
 // Piece kinds: 0 a literal, 1 a gap, 2 a capture. A span that is not there has src -1.
 Piece := class { kind, text: -1, tight: None, name: -1, piece_raw: None, typed: None, optional: None, exact: None, content_src: -1, content_begin: 0, content_end: 0, within: UNDEF, operator: None, undecided: None, decided: -1, type: UNDEF, checking: None }
-Rule := class { pieces, size, closure, rule_at_src, rule_at_begin, rule_at_end, key, pattern_name, order, rule_body_src, rule_body_begin, rule_body_end, rule_fn: -1, guard_src: -1, guard_begin, guard_end, guard_in, overloaded: None, native: -1, defines: None, home: UNDEF, lexical_src: -1, lexical_begin, lexical_end, position, rule_style }
+Rule := class { pieces, size, closure, rule_at_src, rule_at_begin, rule_at_end, key, pattern_name, order, rule_body_src, rule_body_begin, rule_body_end, rule_fn: -1, guard_src: -1, guard_begin, guard_end, guard_in, overloaded: None, native: -1, defines: None, home: UNDEF, lexical_src: -1, lexical_begin, lexical_end, position, rule_style, rule_held: UNDEF }
 
 piece_literal (text) => Piece(kind: 0, text: text)
 piece_capture (name) => Piece(kind: 2, name: name)
@@ -2148,7 +2157,7 @@ add_rule (scope, rule) => (
     if rule_count(other) == 2 and other.pieces[0].kind == 0 and other.pieces[1].kind == 2 {
       list_push(index.methods, other)
       if other.pieces[0].text.length > 0 and is_run(other.pieces[0].text.chars[0]) { list_push(index.ops, other) }
-    }
+    } elsif rule_count(other) == 1 and other.pieces[0].kind == 0 and other.pieces[0].text.length > 0 and is_run(other.pieces[0].text.chars[0]) { list_push(index.ops, other) }
   }
   open, by := heads_of(rules, None)
   index.open = open; index.by = by
@@ -2264,7 +2273,7 @@ native_fn (name) => name.native == NIL ? -1 : name.native
 natives_table () => (
   native("rule", 2); native("define", 4); native(".", 0); native("global", 0); native("none", 0); native("declare", 2); native("literal", 1)
   native("unordered", 1); native("forward", 0); native("^", 1); native("inline", 1); native("extend", 2); native("get", 2); native("assign", 2)
-  native("own", 1); native("goto", 2); native("label", 1); native("base", 2); native("theme", 2); native("report", 3); native("**", 1); native("=", 1); native("bits", 2); native("first", 1); native("rest", 1)
+  native("own", 1); native("goto", 2); native("label", 1); native("base", 2); native("theme", 2); native("report", 3); native("**", 1); native("=", 1); native("bits", 2); native("first", 1); native("rest", 1); native("before", 2); native("after", 2)
   ROOT.external = fn_value(fn_make(4, 1, global), -1, 0, 0)
   set_name(global(), "external", ROOT.external)
 )
@@ -2346,6 +2355,8 @@ external_call (name, n, a0, a1, a2, a3, frame, src, b, e) => (
   if name == "bits" { return text_bits(x, y, frame, src, b, e) }
   if name == "first" { return program_part(x, global) }
   if name == "rest" { return program_part(x, None) }
+  if name == "before" { return program_split(x, y, global) }
+  if name == "after" { return program_split(x, y, None) }
   unported(name)
 )
 // `first program`, `rest program`: a program's first statement, and the statements after it (None when there are none).
@@ -2368,6 +2379,35 @@ program_part (x, first) => (
   rest := code(s, k, e, code_frame(held))
   rest.program = global
   return rest
+)
+// `before program separator`, `after program separator`: the program up to the first separator written outside brackets, and
+// after it (None when the separator is not there).
+program_split (x, sep, before) => (
+  held := deref(x, None)
+  if held == UNDEF or !is_code(held) { return None }
+  spelled := quiet_deref(sep)
+  lit := text_of_node(spelled == UNDEF ? sep : spelled)
+  s, b, e := span_inner(at_src(held), at_begin(held), at_end(held))
+  j := blank_end(s, b, e + 1)
+  while j <= e {
+    if spelled(s, j, lit, None, None, e + 1) {
+      if before {
+        last := j - 1
+        while last > b and space(s, last) { last = last - 1 }
+        if last < blank_end(s, b, e + 1) { return None }
+        part := code(s, blank_end(s, b, e + 1), last, code_frame(held))
+        part.program = global
+        return part
+      }
+      k := blank_end(s, j + lit.length, e + 1)
+      if k > e { return None }
+      rest := code(s, k, e, code_frame(held))
+      rest.program = global
+      return rest
+    }
+    j = skip(s, j, e + 1, None)
+  }
+  return None
 )
 // `bits text each`: the bits of the text's UTF-8 bytes, the highest first, handed to `each` as global or None until it answers None.
 text_bits (x, each, frame, src, b, e) => (

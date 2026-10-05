@@ -50,3 +50,69 @@ right-to-left with | assume (settings: Program) => {
 }
 
 Terminating := Program{terminating}
+
+Keyed := class = key: *, value: * {
+  as (=== String) => value as String
+}
+
+Program &+= {
+  items => (
+    found := chain None
+    external extend found Listed
+    left := this
+    statement := external first left
+    while statement {
+      rest := statement
+      while rest {
+        item := external before rest `,`
+        if item { found &= item } else { found &= rest }
+        rest = external after rest `,`
+      }
+      left = external rest left
+      statement = external first left
+    }
+    found
+  )
+  entries => (
+    found := chain None
+    external extend found Listed
+    walker := .items.head
+    while walker {
+      item := walker.value
+      written_key := external before item `:`
+      written_value := external after item `:`
+      typed_value := external after written_value ` = `
+      if typed_value { written_value = typed_value }
+      found &= Keyed(key: written_key, value: inline written_value)
+      walker = walker.next
+    }
+    found
+  )
+  keys => (
+    found := chain None
+    external extend found Listed
+    walker := .entries.head
+    while walker {
+      found &= walker.value.key
+      walker = walker.next
+    }
+    found
+  )
+  [{key}] ^punctuation => (
+    found := None
+    walker := .entries.head
+    while walker {
+      if (same_text(walker.value.key, key)) { found = walker.value.value }
+      walker = walker.next
+    }
+    found
+  )
+  for (body) => (
+    walker := .keys.head
+    while walker {
+      body(walker.value)
+      walker = walker.next
+    }
+    this
+  )
+}

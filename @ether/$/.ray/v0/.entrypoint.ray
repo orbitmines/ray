@@ -1261,7 +1261,7 @@ matcher_of (pattern) => ((text, captured) => (
 ))
 
 {condition} ? {yes} : {no} ^punctuation => (
-  chosen ^keyword := no
+  chosen := no
   if condition { chosen = yes }
   chosen
 )
@@ -1311,9 +1311,7 @@ enum ^keyword => (
     )
 
     chainable == (candidate) => (
-      same ^keyword := this === candidate
-      unless same { same = same_text((external where this), (external where candidate)) }
-      same
+      (this === candidate) || same_text((external where this), (external where candidate))
     )
     admits (candidate) => .components.contains(candidate)
   }
@@ -1322,7 +1320,7 @@ enum ^keyword => (
 )
 
 enum{ }{literal member ^enumMember}{ }{given_fields? ^property}{ }{literal rest?} {`{`}{block}{`}`} ^keyword => (
-  static ^keyword := external .
+  static := external .
   inline enum
   inline block
 
@@ -1337,7 +1335,7 @@ enum{ }{literal member ^enumMember}{ }{given_fields? ^property}{ }{literal rest?
 )
 
 enum{ }{literal member ^enumMember}{ }{given_fields? ^property}{ }{literal rest?}{\n} ^keyword => (
-  static ^keyword := external .
+  static := external .
   inline enum
 
   entry := static(
@@ -1356,8 +1354,8 @@ Program.components.hierarchy &= class {
 
   written => (
     out := chain None
-    left ^keyword := .code
-    one ^keyword := external first left
+    left := .code
+    one := external first left
     while (one) {
       out &= Program(code: one)
       left = external rest left
@@ -1371,33 +1369,33 @@ Program.components.hierarchy &= class {
   count => .written.count
   empty => .count.is_zero
   for (body) => (
-    statements ^keyword := .written
+    statements := .written
     statements for body
     this
   )
 
   variables => (
-    names ^keyword := chain None
-    statements ^keyword := .written
+    names := chain None
+    statements := .written
     statements for {
-      read ^keyword := head_of(it.value.code)
+      read := head_of(it.value.code)
       if read.is_declared { names &= read.spelled }
     }
     names
   )
   usages (name) => (
-    used ^keyword := chain None
-    statements ^keyword := .written
+    used := chain None
+    statements := .written
     statements for {
       if (it.value.mentions(name)) { used &= it.value }
     }
     used
   )
   mentions (name) => (
-    wanted ^keyword := code_points(name)
-    found ^keyword := false
-    remaining ^keyword := code_points(.code)
-    while ((remaining.nonempty).and(found.not)) {
+    wanted := code_points(name)
+    found := false
+    remaining := code_points(.code)
+    while (remaining.nonempty && !found) {
       if (remaining.head.value == wanted.head.value) { found = .same_points(remaining.head, wanted) }
       remaining.pop_front
     }
@@ -1405,14 +1403,14 @@ Program.components.hierarchy &= class {
   )
   is_terminal => .written.empty
   calls => (
-    found ^keyword := chain None
-    statements ^keyword := .written
+    found := chain None
+    statements := .written
     statements for { found &= Call(statement: it.value) }
     found
   )
 
   compounds + (addend) => (
-    augend ^keyword := .code
+    augend := .code
     {
       inline augend
       inline addend.code
@@ -1495,16 +1493,7 @@ TRACE{`@`}{var}{ }{comment ^comment} ^trace => report TRACE var comment
 TODO{ }{comment ^comment} ^debug => DEBUG@. comment 
 
 boolean := enum false (holds: None) | true (holds: global) {
-  nand (b) => (
-    goto second if .holds
-    return true
-   second\
-    goto no if (b as boolean).holds
-    return true
-   no\
-
-    return false
-  )
+  nand (b) => (.holds && (b as boolean).holds) ? false : true
 
   not => .nand(this)
 
@@ -1530,8 +1519,6 @@ boolean := enum false (holds: None) | true (holds: global) {
   x!|| (b) => .xnor(b)
 }
 
-!{x} ^punctuation => (x).not
-
 true := boolean.true
 false := boolean.false
 
@@ -1549,12 +1536,12 @@ false := boolean.false
 {a} [x: compounds]{`=`} {b} => a = (a[x] b)
 
 {guarded} if {condition} => (
-  kept ^keyword := None
+  kept := None
   if condition { kept = guarded }
   kept
 )
 {guarded} unless {condition} => (
-  kept ^keyword := guarded
+  kept := guarded
   if condition { kept = None }
   kept
 )

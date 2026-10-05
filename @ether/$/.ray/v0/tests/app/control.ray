@@ -106,7 +106,7 @@ unless pairs == 6 { INFO@mark `CF13 a loop inside a loop does not multiply` }
 
 times_ran := 0
 3.times { times_ran += 1 }
-unless times_ran == 3 { INFO@mark `TM1 three times is not three` }
+unless times_ran == 3 { INFO@mark `NTM1 three times is not three` }
 
 // `;`
 unless (1 ; 2) == 2 { INFO@mark `CF14 the semicolon does not answer what is written after it` }

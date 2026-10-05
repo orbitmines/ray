@@ -55,14 +55,14 @@ if wg == World(name: "other") { INFO@mark `WO13 two worlds are the same world` }
 
 // Items: what one is issued by, where it is, and what says so.
 wi := Item(name: "lamp", issuer: wg)
-unless wi.name == "lamp" { INFO@mark `IT1 an item lost its name` }
-unless wi.issuer == wg { INFO@mark `IT2 an item forgot who issued it` }
-unless wi.move(here).location == here { INFO@mark `IT3 a moved item is not where it was moved` }
+unless wi.name == "lamp" { INFO@mark `ITM1 an item lost its name` }
+unless wi.issuer == wg { INFO@mark `ITM2 an item forgot who issued it` }
+unless wi.move(here).location == here { INFO@mark `ITM3 a moved item is not where it was moved` }
 wc := Certificate(issuer: wg, secret: None)
-unless wi.certify(wc).certificate == wc { INFO@mark `IT4 a certified item does not carry its certificate` }
+unless wi.certify(wc).certificate == wc { INFO@mark `ITM4 a certified item does not carry its certificate` }
 
 unless wp.status == Status.offline { INFO@mark `PE3 a new character is not offline` }
-unless Status.invisible { INFO@mark `ST1 there is no being invisible` }
+unless Status.invisible { INFO@mark `STS1 there is no being invisible` }
 unless Accessor.Permission.public { INFO@mark `AC1 there is no public permission` }
 if Accessor.Permission.private == Accessor.Permission.public { INFO@mark `AC2 private and public are the same` }
 
@@ -204,12 +204,12 @@ unless Reference(title: "t").note("n").notes.first.text == "n" { INFO@mark `WR10
 unless Reference(title: "t").note("n").notes.first.date { INFO@mark `WR11 a note says nothing about when` }
 if Reference(title: "t").remote { INFO@mark `WR12 a new reference has a remote it was not given` }
 
-unless Status.idle { INFO@mark `ST2 there is no being idle` }
-unless Status.do_not_disturb { INFO@mark `ST3 there is no being do not disturb` }
-unless Status.busy { INFO@mark `ST4 there is no being busy` }
-if Status.idle == Status.busy { INFO@mark `ST5 idle and busy are the same` }
-unless Status#.count == 9 { INFO@mark `ST6 there are other than nine statuses` }
-unless Character(name: "p", status: Status.busy).status == Status.busy { INFO@mark `ST7 a character forgot being busy` }
+unless Status.idle { INFO@mark `STS2 there is no being idle` }
+unless Status.do_not_disturb { INFO@mark `STS3 there is no being do not disturb` }
+unless Status.busy { INFO@mark `STS4 there is no being busy` }
+if Status.idle == Status.busy { INFO@mark `STS5 idle and busy are the same` }
+unless Status#.count == 9 { INFO@mark `STS6 there are other than nine statuses` }
+unless Character(name: "p", status: Status.busy).status == Status.busy { INFO@mark `STS7 a character forgot being busy` }
 
 looked := World(name: "looked")
 looked.spawn(Character(name: "Fadi"))

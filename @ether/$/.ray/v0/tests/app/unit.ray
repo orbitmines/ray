@@ -1,7 +1,7 @@
 mark ^keyword := external global
 
 unless 1B == 8b { INFO@mark `U8 a byte does not equal eight bits` }
-unless 8 bits as byte == 1 byte { INFO@mark `U6 eight bits are not one byte` }
+unless 8 bits as byte == 1 byte { INFO@mark `UB6 eight bits are not one byte` }
 unless 1 byte as bit == 8 bits { INFO@mark `U3 a byte does not convert to eight bits` }
 unless 1dab == 10b { INFO@mark `U10 a deka-bit is not ten bits` }
 

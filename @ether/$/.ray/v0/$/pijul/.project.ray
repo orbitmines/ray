@@ -1,5 +1,5 @@
-@ether/$/blake3
-@ether/$/base32
-@ether/$/zstd
-@ether/$/bincode
-@ether/$/json
+@blake3
+@base32
+@zstd
+@bincode
+@json

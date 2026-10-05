@@ -5,9 +5,9 @@ Project := class: Location {
     name => location ~= "://" ? location.split("/").last as String : location.after("/")
 
     project: Project? => Program(code: ("@", location)){O: {
-      @ether/$/{language: Written} => Language.project(language)
       @ether/{bundled_path: Written} => Project.known(Language.ray.bundled(bundled_path) ?? Network.fetch(@ether, bundled_path, version) as Project)
       @{scheme: Char.Word[]}://{remainder: Written} => Project.known(Network.fetch((scheme + "://" + remainder) as Location, "", version) as Project)
+      @{name: (Char.Word | "-" | "+")[]{Language.project(.) != None}} => Language.project(name)
       @{local_path: Written} => Project.known(IO.read(local_path) as Project)
     }}() ?? alternatives.map(.project).first(. != None)
   }

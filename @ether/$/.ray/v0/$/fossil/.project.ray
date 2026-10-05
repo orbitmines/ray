@@ -1,4 +1,4 @@
-@ether/$/sha3
-@ether/$/md5
-@ether/$/zlib
-@ether/$/sqlite
+@sha3
+@md5
+@zlib
+@sqlite

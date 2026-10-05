@@ -302,6 +302,24 @@ left-to-right {head} ({parameters ^parameter}) => {block} => (
   } parameters
   left-to-right.modify(defined)
 )
+right-to-left {head} | {alias} ({parameters ^parameter}) => {block} => (
+  method_parameters := external ** parameters
+  method_written := external ** block
+  external define alias `{arguments}` {
+    (inline method_parameters) := arguments
+    inline method_written
+  } parameters
+  defined := external define head `{arguments}` {
+    (inline method_parameters) := arguments
+    inline method_written
+  } parameters
+  right-to-left.modify(defined)
+)
+right-to-left {head} => {body} => right-to-left.modify(external rule head body)
+right-to-left {head} | {alias} => {body} => (
+  external rule alias body
+  right-to-left.modify(external rule head body)
+)
 Modifier.spellings = chain None
 Modifier.spellings &= `chainable`
 Modifier.spellings &= `compounds`
@@ -312,7 +330,7 @@ Node := base class {
 
   , => this
 
-  ;{x} ^punctuation => x
+  ; ^punctuation (x) => x
   listing => None
 
   ({parameters ^parameter}) => {block} => (
@@ -334,7 +352,7 @@ Node := base class {
     } parameters
   )
 
-  ,{other} ^punctuation => (
+  , ^punctuation (other) => (
     listed := chain None
     external extend listed Listed
     listed &= this
@@ -372,13 +390,13 @@ Node := base class {
     this
   )
 
-  ??{other} ^punctuation => (
+  ?? ^punctuation (other) => (
     chosen := this
     if (chosen === None) { chosen = other }
     chosen
   )
   ? => None | this
-  ?:{type} ^punctuation => this: (type?)
+  ?: ^punctuation (type) => this: (type?)
 
   compounds + (component) => (
     external extend this component
@@ -711,7 +729,7 @@ Node := base class {
     this
   )
 
-  |{other} ^punctuation => (
+  | ^punctuation (other) => (
     superposed := external .
     external extend superposed this
     superposed.instance = None
@@ -734,6 +752,14 @@ Node := base class {
     repeated.repeating = global
     repeated
   )
+
+  ++ => (
+    copy := external .
+    external extend copy this
+    copy
+  )
+
+  right-to-left ! => .not
 }
 
 Node.DEFINE_METHOD = `&=`
@@ -743,8 +769,6 @@ external extend None {
   == (other) => other === None
   != (other) => (other === None).not
 }
-
-!{x} ^punctuation => (x).not
 
 class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
   made := class { inline members }
@@ -1534,6 +1558,8 @@ false := boolean.false
   ERROR@middle `mixes directions around one operand; use parentheses`
   None
 )
+
+[x: right-to-left] {operand} [y: left-to-right] {rest} => ([x] operand)[y] rest
 
 {first} [x: chainable] {shared} [y: chainable] {last} => (first[x] shared) & (shared[y] last)
 

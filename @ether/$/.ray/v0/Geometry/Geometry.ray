@@ -114,8 +114,8 @@ Geometry := class {
     static inset (kind: fixed | absolute, length: Length = 0) => Position(kind, length, length, length, length)
     flowing => kind ==.instance_of (flow | sticky)
   }
-  Edges := class = top: Length = 0, right: Length = 0, bottom: Length = 0, left: Length = 0 {
-    static (spacings: Spacing[]) as (=== Edges) => Edges(spacings.top.sum ?? 0, spacings.right.sum ?? 0, spacings.bottom.sum ?? 0, spacings.left.sum ?? 0)
+  Edges := class = top: Length = 0px, right: Length = 0px, bottom: Length = 0px, left: Length = 0px {
+    static (spacings: Spacing[]) as (=== Edges) => Edges(spacings.top.sum ?? 0px, spacings.right.sum ?? 0px, spacings.bottom.sum ?? 0px, spacings.left.sum ?? 0px)
     total => Vector(left + right, top + bottom)
     start => Vector(left, top)
   }
@@ -152,11 +152,17 @@ Geometry := class {
 
   Spacing := class = amount: Vector = Vector(), from: From = border, sides: Side = all {
     static From := enum border | shape
-    top => sides ==.instance_of (all | top | vertical) ? amount.y : 0
-    bottom => sides ==.instance_of (all | bottom | vertical) ? amount.y : 0
-    left => sides ==.instance_of (all | left | horizontal) ? amount.x : 0
-    right => sides ==.instance_of (all | right | horizontal) ? amount.x : 0
+    top => sides ==.instance_of (all | top | vertical) ? Pixels(amount.y) : 0px
+    bottom => sides ==.instance_of (all | bottom | vertical) ? Pixels(amount.y) : 0px
+    left => sides ==.instance_of (all | left | horizontal) ? Pixels(amount.x) : 0px
+    right => sides ==.instance_of (all | right | horizontal) ? Pixels(amount.x) : 0px
   }
+  Pixels := (length: Length | Number) => length ==.instance_of Number ? length * 1px
+    : length.quantities.map((quantity, unit) => unit.symbol.match
+      "em" | "rem" => quantity * 16px
+      "pt" => quantity * 4 / 3 * 1px
+      * => quantity * 1px
+    ).sum
   Constraint := class = dimension: "x" | "y" | "z", least: Length?, most: Length?, share: (Number | Interpolated | Steps | Breakpoint[])?, align: Align?, aspect: Number?, columns: Number?, wrap: boolean = false {
     admits (length: Length) => (least == None || least <= length) && (most == None || length <= most)
   }
@@ -185,8 +191,7 @@ Geometry := class {
       "%" => against * length.amount / 100
       "vw" => available.x * length.amount / 100
       "vh" => available.y * length.amount / 100
-      "em" | "rem" => length.amount * 16px
-      * => length
+      * => Pixels(length)
     fraction (share, width: Length) => share.match
       Interpolated | Steps => share.at(width)
       Breakpoint[] => (share as Steps).at(width)
@@ -274,11 +279,6 @@ Node &+= {
   right-to-left left ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: start)], children: [this])
   right-to-left between ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: between)], children: [this])
   right-to-left middle ^keyword => Geometry.Box(constraints: [Geometry.Constraint("y", align: middle)], children: [this])
-}
-
-[p: all, px: horizontal, py: vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => {
-  `word` {amount: Number} ^keyword => Geometry.Spacing(amount: Vector(amount if side != vertical, amount if side != horizontal), sides: side)
-  `word.replace("p", "m")` {amount: Number} ^keyword => Geometry.Spacing(amount: Vector(amount if side != vertical, amount if side != horizontal), sides: side, from: shape)
 }
 
 Number &+= {

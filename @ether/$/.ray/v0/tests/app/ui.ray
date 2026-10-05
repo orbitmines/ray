@@ -161,3 +161,11 @@ with UI.scene = Geometry.Box(children: [drawer]) {
 }
 UI.Overlay(closes: drawer).activate
 if drawer.open { INFO@mark `UI120 activating a drawer's overlay does not close it` }
+
+unless (pt 5).top == 10px { INFO@mark `UI121 pt 5 is not five steps of the default spacing` }
+with UI.Theme.spacing = 4px {
+  unless (p 2).left == 8px && (p 2).top == 8px { INFO@mark `UI122 the shorthands do not follow the theme's spacing` }
+}
+unless (mt -60px).top == -60px { INFO@mark `UI123 a length given to a shorthand is scaled` }
+unless (px 3).top == 0px && (px 3).left == 6px { INFO@mark `UI124 px spaces the top` }
+unless Language.Web.Rules(Geometry.Box(spacing: [pt 5, pt 5])).first.declarations.contains(("padding-top", (20px).amount, "px")) { INFO@mark `UI125 two spacings on one side are not added in CSS` }

@@ -243,6 +243,8 @@ UI := class {
   }
 
   Theme := class {
+    static spacing: Geometry.Length = 0.125rem
+    static scaled (amount: Number | Geometry.Length) => amount ==.instance_of Number ? spacing * amount : amount
     static styles: (name: String, *)[] = [
       ("italic", font: Geometry.Font(style: italic)),
       ("bold", font: Geometry.Font(weight: 700)),
@@ -267,3 +269,7 @@ UI := class {
   }
 }
 
+[p: all, px: horizontal, py: vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => {
+  `word` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side))
+  `word.replace("p", "m")` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side, from: shape))
+}

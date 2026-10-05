@@ -18,6 +18,7 @@ Language.Direct := class: Language {
         }))
       }
       UI.Input => Rasterise(Geometry.Box(origin: shape.origin, size: shape.size, fill: shape.fill, stroke: shape.stroke, radius: shape.radius, effects: shape.effects), raster, outer) -- Rasterise(shape.face, raster, outer)
+      Geometry.Image{fill} => (IO.read(shape.source) as Geometry.Raster) -- (0..<shape.size.y as px).for(y => (0..<shape.size.x as px).for(x => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, ((shape.fill as Geometry.Color) ?? Geometry.Color(0, 0, 0)) ~~ .alpha *= ..at(x * ..width / shape.size.x, y * ..height / shape.size.y).alpha)))
       Geometry.Image => (IO.read(shape.source) as Geometry.Raster) -- (0..<shape.size.y as px).for(y => (0..<shape.size.x as px).for(x => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, ..at(x * ..width / shape.size.x, y * ..height / shape.size.y))))
       Geometry.Canvas => shape.draws().for(Rasterise(., raster, placed))
       * => {

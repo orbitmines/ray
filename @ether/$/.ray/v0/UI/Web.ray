@@ -85,6 +85,7 @@ Language.Web := class: Language {
     {link: UI.Link} => HTML.Element("a", [("id", link.id), ("class", link.styles.join(" ")) if link.styles.nonempty, ("href", link.to as String), ("target", "_blank") if link.window == new, ("rel", "noopener noreferrer") if link.window == new], link.children)
     {text: Geometry.Text{role == heading}} => HTML.Element("h" + Heading.level(text), [("id", text.id), ("class", text.styles.join(" ")) if text.styles.nonempty], Pieces(text))
     {text: Geometry.Text} => HTML.Element(text.wrap == none ? "span" : "p", [("id", text.id), ("class", text.styles.join(" ")) if text.styles.nonempty, ("dir", text.direction == right-to-left ? "rtl" : "ltr")], Pieces(text))
+    {image: Geometry.Image{fill}} => HTML.Element("span", [("id", image.id), ("class", image.styles.join(" ")) if image.styles.nonempty, ("role", "img"), ("aria-label", image.alt)])
     {image: Geometry.Image} => HTML.Element("img", [("id", image.id), ("class", image.styles.join(" ")) if image.styles.nonempty, ("src", image.source as String), ("alt", image.alt), ("loading", "lazy")])
     {video: Geometry.Video} => HTML.Element("video", [("id", video.id), ("class", video.styles.join(" ")) if video.styles.nonempty, ("src", video.source as String), ("controls", "") if video.controls, ("muted", "") if video.muted, ("loop", "") if video.looping])
     {audio: Geometry.Audio} => HTML.Element("audio", [("id", audio.id), ("class", audio.styles.join(" ")) if audio.styles.nonempty, ("src", audio.source as String), ("controls", "")])
@@ -203,6 +204,7 @@ Language.Web := class: Language {
       Typeface(shape.font) if shape.font,
       (("text-align", shape.align as String), ("text-overflow", shape.overflow as String), ("white-space", WhiteSpace[shape.white_space]), ("overflow-wrap", "anywhere") if shape.wrap == anywhere) if shape ==.instance_of Geometry.Text,
       ("object-fit", shape.fit as String) if shape ==.instance_of Geometry.Image,
+      (("display", "inline-block"), ("mask", Mask(shape)), ("-webkit-mask", Mask(shape))) if shape ==.instance_of Geometry.Image && shape.fill,
       ("transition", "all ", shape.transition.duration as ms, "ms ", Timing(shape.transition.easing)) if shape.transition,
       ("cursor", shape.cursor != default ? shape.cursor as String : "pointer") if shape.cursor != default || shape.activate,
       ("touch-action", (shape.touch as String).replace("_", "-")) if shape.touch != auto,
@@ -230,7 +232,9 @@ Language.Web := class: Language {
   Timing := (easing: Geometry.Easing) => easing === Geometry.linear ? "linear" : easing === Geometry.ease_in ? "ease-in" : easing === Geometry.ease_out ? "ease-out" : "ease"
   Styling := (name: String) => Rules(Geometry.Box()).first.declarations -- (plain => Rules(Geometry.Box().styled(name)).first.declarations{!plain.contains(.)})
   Sides = { all: "", top: "-top", bottom: "-bottom", left: "-left", right: "-right", horizontal: "-inline", vertical: "-block" }
+  Mask := (image: Geometry.Image) => "url(\"", image.source as String, "\") center/", image.fit == fill ? "100% 100%" : image.fit as String, " no-repeat"
   Paint := (paint: Geometry.Paint) => paint.match
+    Geometry.Inherited => "currentColor"
     Geometry.Color => "rgba(", paint.red, ",", paint.green, ",", paint.blue, ",", paint.alpha, ")"
     Geometry.Gradient => paint.kind as String, "-gradient(", (paint.angle, "turn,") if paint.kind == linear, paint.stops.map(Paint(.color), " ", .at * 100, "%").join(","), ")"
     Geometry.Pattern => "url(#", paint.shape.id, ")"

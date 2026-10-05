@@ -27,6 +27,7 @@ Language.TUI := class: Language {
         column + lines[row][.].columns
       }))
     }
+    Geometry.Image{fill} => Area(shape).for(at => grid.put(at, Picture(shape.source).tinted(at - At(shape), cells(shape.size), shape.fill as Geometry.Color)))
     Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - At(shape), cells(shape.size))))
     Geometry.Canvas => shape.draws{O: Language.Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..<at.y * 4 + 4].map(.[at.x * 2..<at.x * 2 + 2])))))
     UI.Link => Box(shape, grid) -- Area(shape).for(grid.cells[.y][.x] ~~ .link = shape.to)
@@ -67,7 +68,9 @@ Language.TUI := class: Language {
   Picture := class = source: Location {
     static ramp = " .:-=+*#%@"
     pixels => IO.read(source) as Geometry.Raster
-    sampled (at: Geometry.Vector, of: Geometry.Vector) => pixels.at(at.x * pixels.width / of.x, at.y * pixels.height / of.y) -- Cell(ramp[.luminance * (ramp.length - 1) / 255], foreground: .)
+    pixel (at: Geometry.Vector, of: Geometry.Vector) => pixels.at(at.x * pixels.width / of.x, at.y * pixels.height / of.y)
+    sampled (at: Geometry.Vector, of: Geometry.Vector) => pixel(at, of) -- Cell(ramp[.luminance * (ramp.length - 1) / 255], foreground: .)
+    tinted (at: Geometry.Vector, of: Geometry.Vector, ink: Geometry.Color?) => pixel(at, of) -- Cell(ramp[.alpha * (ramp.length - 1)], foreground: ink)
   }
 
   ANSI := class = previous: Grid?, title: String? {

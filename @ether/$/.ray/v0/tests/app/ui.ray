@@ -207,3 +207,12 @@ with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
 unless Language.Web.Pieces(runs_text).first.tag == "span" { INFO@mark `UI145 a painted run is not a span on the web` }
 unless UI.Theme.painted("default", "keyword") == "#6C6783" as Geometry.Color { INFO@mark `UI146 a highlighting style has no colour in the default palette` }
 unless UI.Theme.painted("default", "muted") == UI.Theme["muted"].color { INFO@mark `UI147 a page style is not a highlighting style` }
+
+unless currentColor ==.instance_of Geometry.Inherited { INFO@mark `UI148 currentColor is not an inherited paint` }
+icon := Geometry.Image(@./icons/link.svg, fill: currentColor)
+unless Program(code: { icon }){O: Language.Web.HTML.level}().body.children.first.tag == "span" { INFO@mark `UI149 a filled SVG is not a masked element on the web` }
+unless Language.Web.Rules(icon).first.declarations.some(.0 == "mask") { INFO@mark `UI150 a filled SVG has no mask` }
+unless Language.Web.Paint(currentColor) == "currentColor" { INFO@mark `UI151 currentColor is not written as currentColor` }
+tinted_icon := Geometry.Image(@./icons/link.svg, fill: currentColor)
+solver.solve(Geometry.Box(color: red, children: [tinted_icon]))
+unless tinted_icon.fill == red { INFO@mark `UI152 an icon filled with currentColor does not take the colour around it` }

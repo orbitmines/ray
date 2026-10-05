@@ -224,6 +224,7 @@ Geometry := class {
     cascade (shape: Shape, above: (font: Font?, color: Paint?) = (None, None)) => shape -- {
       font = above.font && font ? above.font.merged(font) : font ?? above.font
       color = color ==.instance_of Inherited || color == None ? above.color : color
+      fill = fill ==.instance_of Inherited ? above.color ?? fill : fill
       children.for(cascade(., (font, color)))
     }
     solve (shape: Shape) => place(cascade(shape), Vector(), available.x) -- (scene => scene.expand{.position.kind == anchored}.for(positioned(., .parent_in(scene))) -- stuck(scene))
@@ -331,6 +332,8 @@ Geometry := class {
   ease_in: Easing = (t) => t * t
   ease_out: Easing = (t) => t * (2 - t)
 }
+
+currentColor := Geometry.Inherited()
 
 Node &+= {
   right-to-left center ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: center)], children: [this])

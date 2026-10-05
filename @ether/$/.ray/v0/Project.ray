@@ -1,136 +1,46 @@
-Project := class: Location {
-  name: String
-  parent?: Node
-  children: (chain None)
-  host?: Node
-  dependencies: (chain None)
-  written_against: None
-  carried: (chain None)
-  readings: (chain None)
-  overrides: (chain None)
-  definitions: (chain None)
+// A project: one name per project, dependency lines, lookup through dependencies to @ether (P8.8, F-C8).
+Project := class: Location = name: String, parent: Project?, children: Location[] = [], host: *?, dependencies: Dependency[] = [], written_against: Version?, carried: *[] = [], readings: Reading[] = [], overrides: *[] = [], definitions: Definition[] = [] {
+  static Form := enum relative | upward | absolute | user | remote
 
-  Form := enum relative | upward | absolute | user | remote
-
-  Dependency := class: Ray {
-    location: String
-    form: Node
-    version: None
-    project: None
-
-    read (line: String) => (
-      written ^keyword := line.after("@")
-      pinned ^keyword := None
-      if (written.contains(" %")) {
-        pinned = written.after(" ") as Version
-        written = written.before(" %")
-      }
-      kind ^keyword := Project.Form.user
-      if (written.starts_with("./")) { kind = Project.Form.relative }
-      elsif (written.starts_with("../")) { kind = Project.Form.upward }
-      elsif (written.starts_with("/")) { kind = Project.Form.absolute }
-      elsif (written.contains("://")) { kind = Project.Form.remote }
-      Project.Dependency(location: written, form: kind, version: pinned)
-    )
+  // `@./sibling %3`, `@../up`, `@/absolute`, `@user`, `@https://…`
+  static Dependency := class ("@", location: (!" ")[], (" ", version: Version)?) => {
+    form: Form => location ~= ⊢"./" ? relative
+      : location ~= ⊢"../" ? upward
+      : location ~= ⊢"/" ? absolute
+      : location ~= "://" ? remote
+      : user
+    project: Project?
   }
+  depend (line: String) => dependencies.push(line as Dependency) -- this
 
-  depend (line: String) => (
-    .dependencies &= Project.Dependency.read(line)
-    this
-  )
+  static Definition := class = name: String, value: *
+  define (name: String, value) => defined_here(name)
+    ? ERROR@name `two definitions with the same name in one project`
+    : definitions.push Definition(name, value) -- value
+  defined_here (name: String) => definitions{.name == name}.last
 
-  define (name: String, value) => (
-    if (.defined_here(name) === None) {
-      .definitions &= Project.Definition(name: name, value: value)
-    } else { ERROR@name `two definitions with the same name in one project` }
-    value
-  )
-  defined_here (name: String) => (
-    found ^keyword := None
-    .definitions for { if (it.value.name == name) { found = it.value } }
-    found
-  )
-  Definition := class: Ray {
-    name: String
-    value: Node
+  // The nearest definition: here, a child project, then up the parents; then the dependencies, then @ether.
+  nearest (name: String) => defined_here(name) ?? children{==.instance_of Project}.defined_here(name).first ?? parent?.nearest(name)
+  lookup (name: String) => (nearest(name) ?? dependencies.project.nearest(name).first)?.value ?? World.ether.lookup(name)
+
+  // The @ray %N a package was written against; files carried for hosts on another version (L7.5).
+  write_against (version: Version) => (written_against = version) -- this
+  carries (host_versions: Version[]) => written_against && !host_versions.contains(written_against)
+  carry (files: *[]) => carried.push files -- this
+
+  static Reading := class = pattern: String, language: Language {
+    covers (file_name: String) => pattern ~= ⊢"*" ? file_name ~= pattern[1..] ⊣ : file_name == pattern
   }
+  reads (pattern: String, language: Language) => readings.push Reading(pattern, language) -- this
+  language_of (file_name: String) => readings{.covers(file_name)}.first?.language ?? Language.for_file(file_name)
 
-  lookup (name: String) => (
-    found ^keyword := .nearest(name)
-    if (found === None) {
-      .dependencies for {
-        if (found === None) {
-          unless (it.value.project === None) { found = it.value.project.nearest(name) }
-        }
-      }
-    }
-    if (found === None) { World.ether.lookup(name) } else { found.value }
-  )
-  nearest (name: String) => (
-    found ^keyword := .defined_here(name)
-    if (found === None) {
-      .children for {
-        if (found === None) {
-          if (it.value.instance_of(Project)) { found = it.value.defined_here(name) }
-        }
-      }
-    }
-    if (found === None) {
-      if .parent {
-        if (.parent.instance_of(Project)) { found = .parent.nearest(name) }
-      }
-    }
-    found
-  )
-
-  write_against (version: Version) => (
-    .written_against = version
-    this
-  )
-  carries (host_versions) => (
-    wanted := .written_against
-    if (wanted === None) { false } else { host_versions.some { it.value == wanted }.not }
-  )
-  carry (files) => (
-    project := this
-    files for { project.carried &= it.value }
-    this
-  )
-
-  Reading := class: Ray {
-    pattern: String
-    language: Node
-
-    covers (file_name: String) => if (.pattern.starts_with("*")) { file_name.ends_with(.pattern.after("*")) } else { file_name == .pattern }
-  }
-  reads (pattern: String, language) => (
-    .readings &= Project.Reading(pattern: pattern, language: language)
-    this
-  )
-  language_of (file_name: String) => (
-    chosen ^keyword := None
-    .readings for {
-      if (chosen === None) {
-        if (it.value.covers(file_name)) { chosen = it.value.language }
-      }
-    }
-    chosen ?? Language.for_file(file_name)
-  )
-
-  override (setting) => (
-    .overrides &= setting
-    this
-  )
+  override (setting) => overrides.push setting -- this
 }
 
-Layout := class: Ray {
-  root => ".ether/external/@"
-
-  checked_out (name: String) => Layout.root + ("/@" + name)
-  path (name: String, locations, version: String) => (
-    written ^keyword := Layout.checked_out(name) + "/$"
-    locations for { written = written + ("/@" + it.value) }
-    written + ("/%/" + version)
-  )
-  changed (name: String, user: String, branch: String) => Layout.checked_out(name) + ("/$/@" + (user + ("%" + branch)))
+// The external layout: `.ether/external/@name/$/@location/%/version` (L6.2)
+Layout := namespace {
+  root = ".ether/external/@"
+  checked_out (name: String) => root, "/@", name
+  path (name: String, locations: String[], version: String) => checked_out(name), "/$", locations.map("/@", .), "/%/", version
+  changed (name: String, user: String, branch: String) => checked_out(name), "/$/@", user, "%", branch
 }

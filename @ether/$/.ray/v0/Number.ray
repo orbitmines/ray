@@ -104,6 +104,7 @@ dynamically Number.Bases.for name => {
   global[name] := class: Number = integer: Base.Digit[]{length >= 1} {
     static Digit = Base
     static radix = Base#.count
+    static ^ (width: Number) => static{.integer.length == width}
     String => this as String
 
     as Number => integer.map(as Decimal) as radix
@@ -146,9 +147,28 @@ dynamically Number.Bases.for name => {
   Base{: 0+, number: Base} as (=== Base) => number
 }
 
-Decimal &+= {
-  % => this / 100
-}
+// `5..` steps on from five, `..5` comes down to five, `..<5` to just before it (R4.1, A2).
+({from: Number}..) ^punctuation => from -> 1
+{from: Number}..{\n} ^punctuation => from -> 1
+..{to: Number} ^punctuation => -1 <- to
+..<{to: Number} ^punctuation => -1 <- (to - 1)
+
+// `1/3` written together is the fraction itself, its digits repeating; `50%` is a half, and `x % y` stays modulo (N1.4, A2, A5).
+{numerator: Decimal.String}/{denominator: Decimal.String} ^number => Decimal.Real(integer: numerator as Decimal, fraction: []) / (denominator as Decimal)
+{amount: Decimal}%{\n} ^number => Decimal.Real(integer: amount, fraction: []) / 100
+({amount: Decimal}%) ^number => Decimal.Real(integer: amount, fraction: []) / 100
+{amount: Decimal}%,{rest} ^number => Decimal.Real(integer: amount, fraction: []) / 100, rest
+{amount: Decimal}% {of} ^number => (Decimal.Real(integer: amount, fraction: []) / 100) of
+
+// `Binary³²` is `Binary^32`, `10₂` is ten read in base two, `Binary₂` two long; on a base type `^` is its length (N1.12, A5).
+superscripts := "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"
+subscripts := "₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"
+Superscript := "⁰" | "¹" | "²" | "³" | "⁴" | "⁵" | "⁶" | "⁷" | "⁸" | "⁹"
+Subscript := "₀" | "₁" | "₂" | "₃" | "₄" | "₅" | "₆" | "₇" | "₈" | "₉"
+written_small (digits, among) => digits.reduce(acc = 0 => acc * 10 + among.index_of(.))
+{digits: Decimal.String}{radix: Subscript[]} ^number => digits as written_small(radix, subscripts)
+{base}{power: Superscript[]} ^number => base ^ written_small(power, superscripts)
+{type}{length: Subscript[]} ^number => type ^ written_small(length, subscripts)
 
 {digits: Decimal.String} => Decimal(integer: digits)
 -{number: Decimal} => Decimal.Signed(sign: "-", integer: number)

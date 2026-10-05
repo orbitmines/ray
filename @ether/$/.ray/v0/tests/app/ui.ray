@@ -289,3 +289,17 @@ unless timer_fired { INFO@mark `UI178 after fires late` }
 if Program(code: { timer_fired = false }).after(1 h).ready { INFO@mark `UI179 after fires early` }
 unless Program(code: { fired_count = 0 }).after(6 s) === Program(code: { fired_count = 0 }).after(6 s) { INFO@mark `UI180 a timer asked for again in the same frame restarts` }
 unless ({ timer_fired = true } after 6 s) ==.instance_of UI.Timer { INFO@mark `UI181 x after 6 s is not a timer` }
+
+video := Geometry.Frame(@https://www.youtube.com/watch?v=O6v_gzlI1kY, title: "OrbitMines")
+unless video.embedded == "https://www.youtube.com/embed/O6v_gzlI1kY" { INFO@mark `UI182 a YouTube link is not embedded as its player` }
+unless Program(code: { video }){O: Language.Web.HTML.level}().body.children.first.tag == "iframe" { INFO@mark `UI183 an embedded frame is not an iframe on the web` }
+solver.solve(Geometry.Box(children: [video]))
+unless video.size.y == video.size.x * 9 / 16 { INFO@mark `UI184 an embedded video is not 16:9` }
+with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  Geometry.Solver(available: UI.Viewport.size).solve(Geometry.Box(children: [video]))
+  unless Program(code: { video }){O: Language.TUI.Cells}().cells[1].some(.link == video.source) { INFO@mark `UI185 an embedded frame is not a link in the terminal` }
+}
+with UI.Viewport.size = Geometry.Vector(64px, 36px) {
+  Geometry.Solver(available: UI.Viewport.size).solve(Geometry.Box(children: [video]))
+  unless Program(code: { video }){O: Language.Direct}().at(1, 1).alpha > 0 { INFO@mark `UI186 an embedded frame leaves no placeholder in a raster` }
+}

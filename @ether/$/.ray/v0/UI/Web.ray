@@ -91,6 +91,7 @@ Language.Web := class: Language {
     {image: Geometry.Image} => HTML.Element("img", [("id", image.id), ("class", image.styles.join(" ")) if image.styles.nonempty, ("src", image.source as String), ("alt", image.alt), ("loading", "lazy")])
     {video: Geometry.Video} => HTML.Element("video", [("id", video.id), ("class", video.styles.join(" ")) if video.styles.nonempty, ("src", video.source as String), ("controls", "") if video.controls, ("muted", "") if video.muted, ("loop", "") if video.looping])
     {audio: Geometry.Audio} => HTML.Element("audio", [("id", audio.id), ("class", audio.styles.join(" ")) if audio.styles.nonempty, ("src", audio.source as String), ("controls", "")])
+    {frame: Geometry.Frame} => HTML.Element("iframe", [("id", frame.id), ("class", frame.styles.join(" ")) if frame.styles.nonempty, ("src", frame.embedded as String), ("title", frame.title), ("allow", frame.allow.join("; ")), ("allowfullscreen", ""), ("loading", "lazy"), ("referrerpolicy", "strict-origin-when-cross-origin")])
     {canvas: Geometry.Canvas} => HTML.Element("canvas", [("id", canvas.id), ("class", canvas.styles.join(" ")) if canvas.styles.nonempty, ("width", canvas.size.x as px), ("height", canvas.size.y as px)])
     {outline: Geometry.Outline | Geometry.Polygon | Geometry.Ball} => Svg(outline)
     {form: UI.Form} => HTML.Element("form", [("id", form.id), ("class", form.styles.join(" ")) if form.styles.nonempty], form.inputs)
@@ -206,6 +207,7 @@ Language.Web := class: Language {
       Typeface(shape.font) if shape.font,
       (("text-align", shape.align as String), ("text-overflow", shape.overflow as String), ("white-space", WhiteSpace[shape.white_space]), ("overflow-wrap", "anywhere") if shape.wrap == anywhere) if shape ==.instance_of Geometry.Text,
       ("object-fit", shape.fit as String) if shape ==.instance_of Geometry.Image,
+      (("border", "0"), ("aspect-ratio", "16/9"), ("width", "100%")) if shape ==.instance_of Geometry.Frame,
       (("display", "inline-block"), ("mask", Mask(shape)), ("-webkit-mask", Mask(shape))) if shape ==.instance_of Geometry.Image && shape.fill,
       ("transition", "all ", shape.transition.duration as ms, "ms ", Timing(shape.transition.easing)) if shape.transition,
       ("cursor", shape.cursor != default ? shape.cursor as String : "pointer") if shape.cursor != default || shape.activate,

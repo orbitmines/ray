@@ -30,6 +30,9 @@ Language.TUI := class: Language {
     Geometry.Image{fill} => Area(shape).for(at => grid.put(at, Picture(shape.source).tinted(at - At(shape), cells(shape.size), shape.fill as Geometry.Color)))
     Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - At(shape), cells(shape.size))))
     Geometry.Canvas => shape.draws{O: Language.Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..<at.y * 4 + 4].map(.[at.x * 2..<at.x * 2 + 2])))))
+    Geometry.Frame => Paint(UI.Link(to: shape.source, window: new, origin: shape.origin, size: shape.size, stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
+      Geometry.Text("▶ " + (shape.title.empty ? shape.source as String : shape.title), origin: shape.origin + Geometry.Vector(px_per_cell.x, px_per_cell.y), size: shape.size - px_per_cell * 2)
+    ]), grid)
     UI.Link => Box(shape, grid) -- Area(shape).for(grid.cells[.y][.x] ~~ .link = shape.to)
     UI.Input => Box(shape, grid) -- Paint(shape.face, grid) -- At(shape.face) -- (from => (UI.Selection.range.from..<UI.Selection.range.to).for(i => grid.cells[from.y][from.x + i] ~~ .reverse = true) if UI.Selection.range?.shape === shape)
     * => Box(shape, grid)

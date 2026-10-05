@@ -22,6 +22,9 @@ Language.Direct := class: Language {
       Geometry.Image{fill} => (IO.read(shape.source) as Geometry.Raster) -- (0..<shape.size.y as px).for(y => (0..<shape.size.x as px).for(x => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, ((shape.fill as Geometry.Color) ?? Geometry.Color(0, 0, 0)) ~~ .alpha *= ..at(x * ..width / shape.size.x, y * ..height / shape.size.y).alpha)))
       Geometry.Image => (IO.read(shape.source) as Geometry.Raster) -- (0..<shape.size.y as px).for(y => (0..<shape.size.x as px).for(x => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, ..at(x * ..width / shape.size.x, y * ..height / shape.size.y))))
       Geometry.Canvas => shape.draws().for(Rasterise(., raster, placed))
+      Geometry.Frame => Rasterise(Geometry.Box(origin: shape.origin, size: shape.size, fill: Geometry.Color(17, 20, 24), stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
+        Geometry.Text("▶ " + (shape.title.empty ? shape.source as String : shape.title), origin: shape.origin + shape.size * (1 / 2) - Geometry.Vector(0, 8px), size: shape.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
+      ]), raster, outer)
       * => {
         inside = (0..<shape.size.y as px).map(y => (0..<shape.size.x as px){shape.contains(Geometry.Vector(., y))}.map(x => (x, y))).flatten
         inside.for((x, y) => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, Fill(shape.fill, x, y) ~~ .alpha *= Opacity(shape.effects))) if shape.fill

@@ -109,5 +109,6 @@ Number &+= {
   : a [x] (b [y] c)
 
 // An anonymous function is a value: a parameter list has no `{`, so a rule head like `({expr})` still reads as a rule (B21).
+// Called, its `.` stays the context it is written in; only what enters an element (`~~`, reduce, narrowings) rebinds `.`.
 Parameters := String{!.contains("{")}
-({parameters: Parameters}) => {block} => Program(code: (external ** block), parameters: (external ** parameters))
+({parameters: Parameters}) => {block} => Program(code: (external ** block), parameters: (external ** parameters), context: this)

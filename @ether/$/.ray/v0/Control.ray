@@ -27,10 +27,10 @@ Program &+= {
   running => Running(program: this)
   & => running.&
   expand => written
-  concurrently => written.map(Running(program: .))
+  concurrently => written.map(. ==.instance_of Running ? . : Running(program: .))
 }
 
-// Each statement of the block is a branch, stepped in turn (P4.1, P4.2).
+// Each statement of the block is a branch, as if written in `branch { }`; writing it explicitly is allowed (P4.1, P4.2).
 branch{ }{block} ^class => Running(program: Program(code: external ** block)) -- Running.branches.push(.)
 sync{ }{block} ^class => Program(code: external ** block).concurrently -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
 race{ }{block} ^class => Program(code: external ** block).concurrently
@@ -59,7 +59,7 @@ Node &+= {
 
 {call} $ ^punctuation => call
 {call} $ {fallback} ^punctuation => call.recoverable ? fallback : call
-{call} $ return {fallback} ^punctuation => call.recoverable ? return fallback : call
+{call} $ return {fallback} ^punctuation => call.recoverable ? &caller.return(fallback) : call
 {call} $ {{handler}} ^punctuation => call.recoverable ? call.satisfies({ inline handler }) : call
 {call} $ ERROR[{kind}] {message} ^punctuation => call.recoverable ? Error(kind, message, cause: call) : call
 {call} $? ^punctuation => call.recoverable ? None : call

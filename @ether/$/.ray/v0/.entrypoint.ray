@@ -79,9 +79,10 @@ class {block} => (
     external extend view instance
     view
   )
+  ({args}) => .construct(args)
   inline block
 
-  ({args}) => (
+  construct (args) => (
     static := this
     inline args
     this := external .
@@ -228,7 +229,7 @@ do{ }{block}{ }while{ }{cond} ^class => (
 loop{ }{block} ^class => while true block
 
 Program := class {
-  ({arguments}) => .entered(arguments, arguments)
+  ({arguments}) => if .instance { .entered(.context, arguments) } else { .construct(arguments) }
 
   { }{expr} => this(expr)
 

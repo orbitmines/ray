@@ -306,6 +306,11 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A permission is a `.cfg.ray` rule over `(origin, capability, target)`: `@company may network @https://api.x.com`.
   - Data carries a mark saying its derivatives may not leave (`local`); the engine tracks it through composition, the way `listed_by_separator` is carried.
 - **Decided:** the origin is the whole chain (company ← me ← library). Permissions see every hop, and a prompt says "@company wants to run this, originating from @me".
+- **Decided (2026-10-06):** running as a character is `@name { … }`, or `@<uuid> { … }` with the character's UUID.
+  - The block runs with `&caller` set to that character, so `@me` inside it is that character.
+  - It works only when the character is here: logged in or hosted on the local instance. Otherwise it is an error.
+  - `@me { … }` runs as whoever `@me` already is.
+  - It replaces the draft's `&caller = <uuid>;`, and every `.%` line is written with it (§9.2).
 
 ### 8.3 Visibility — *IDE:31, 70, 195, 226, 245*
 > visibility and contract (license); visibility of visibility (can find it in the index but not access it); how to say the parent shouldn't be visible but I should be readable, or the other way — which is the default; @public for streaming.
@@ -340,6 +345,64 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - "Apply to every version" re-runs the operation on each version where its precondition (the code it touched) still matches.
   - Notifications are diagnostics raised when a definition you override gains new callers.
 - **Decided:** the first milestone is operations over definitions (functions/fields), HLC-stamped, where a rename keeps identity.
+- **Decided (2026-10-06):** there is one API, `History`: a Ray of commits. Every tool talks to it.
+  - Commits are stamped by a hybrid logical clock (`Stamp`).
+  - A commit's value is an `Operation(kind, definition, stamp, who, before, after)`, a group of them, or a plain value.
+  - A `Definition`'s UUID keeps its identity across renames.
+  - A history's value is its ancestry folded in stamp order.
+- **Decided (2026-10-06):** a backend is a Language (`Backend: Language`). Its `level` reads into a `History`, and its `written` writes one out.
+  - The backends are Git, Mercurial, Fossil, Pijul, Subversion, and our own `Ray.history` (`.%`).
+  - Git is just one compile target:
+    - cloning is `Git.read(@https://…)`;
+    - pushing is `history as Git` (or `Git.push(history, remote)`);
+    - converting is reading as one backend and writing as another (`Mercurial.write(Git.read(@./repo))`).
+  - Routing uses §9.1's syntax: `History{location ∈ @me}$ = Ray.history | Git`. A superposition stores in each of them.
+- **Decided (2026-10-06):** each backend declares its fidelity, `lossless | snapshot`.
+  - `Ray.history` and Pijul are lossless; Git, Mercurial, Fossil and Subversion are snapshot backends.
+  - Writing to a snapshot backend:
+    - A commit's operations become one tree. Each definition is a `.ray` file written by the Ray writer, and the tree is a Hierarchy.
+    - Parents become the commit's `previous`, the author is `who`, and the date is `when`.
+    - The commit's `.%` line is kept beside the commit, so reading our own repository back is exact. Each backend has its own place for it:
+      - Git: notes under `refs/notes/ray`;
+      - Mercurial: the changeset extra `ray`;
+      - Fossil: a `T +ray` control artifact;
+      - Subversion: the revision property `ray:line`.
+  - Reading a foreign repository infers operations by a structural diff of each tree against its first parent.
+    - A rename comes from the backend's own record where it has one: Mercurial's copy metadata, Fossil's `F` old name, Subversion's copyfrom.
+    - Otherwise it comes from line similarity of at least 50%.
+    - A tie is `Quest("rename")`.
+- **Decided (2026-10-06):** the `.%` format.
+  - The stored form is the program. The working directory holds the resulting value, as in git.
+  - A line is `UUID\ <stamp> @<who> { … }`. The body is the operation as code applied to `.`, the value before.
+    - The parent is left out when it is the line above.
+    - A fork names its one parent: `UUID\ A <stamp> @<who> { … }`.
+    - A merge names both: `UUID\ A & B <stamp> @<who> { … }`.
+  - A body:
+    - define or change: the definition's value as Ray code;
+    - rename: `. named "new"`;
+    - remove: `None`.
+    - A line for a whole project writes each part as `.[d] := (…)` (define) or `.[d] = .[d] -- (…)` (everything else).
+  - Checking out is running the file up to a label. Committing appends one line and reads nothing back.
+  - A label inside a body points at an intermediate result.
+  - `.%/index.ray` maps names to UUIDs, one `name: UUID` per line. It is append-only: the last line for a name wins, and `None` removes it.
+  - The writer escapes newlines in strings, so a line that starts `UUID\` is always a commit.
+  - Any labelled Ray program is a history (`program as History`), and `x.history` is the in-memory view of the same file.
+- **Decided (2026-10-06):** the backend, the storage granularity and the caches are Compiler levels. They are a choice of format, not fixed layout. `Compiler.stored` composes them and every backend read and write uses it.
+  - `formats` reads a superposed store from its lossless member, and answers a checkout from a snapshot backend's tree.
+  - `per_object`: canonically a repository is one file, `.%/<id>.ray`.
+    - Past 1 MiB it is split into one file per object.
+    - The project's lines then become pins, `.[d] = d%[C]`.
+  - `cached` writes `<id>.ray.txt` with `label\ value`, every 64th commit and at the head. A checkout starts from the nearest cached ancestor.
+  - `delta` writes a change as `. edited(from, to, "text")` when that is shorter.
+  - The backends' own levels: `Git.packed` (packs with offset deltas), `Mercurial.deltas`, `Fossil.deltas`, `Pijul.stored` (the zstd change file).
+- **Decided (2026-10-06):** distribution.
+  - Stamps give one global order.
+  - The STD's and the players' histories are separate commit Rays. `History.global(histories)` joins them under one commit, ordered by stamp.
+  - `x%[label]` pins a version.
+  - A STD bug fix is an operation with `substitutes: <old label>`.
+    - A pin resolved for a line stamped after the fix gets the fix.
+    - A line stamped before the fix replays as recorded, and its caches stay.
+  - Concurrent operations that give one definition different results are `Quest("merge")`.
 
 ## 10. From the drafts (`.ray2`, `.ray3`) — what v0 doesn't have yet
 

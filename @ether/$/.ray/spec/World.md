@@ -203,3 +203,21 @@ Answers from 2026-10-05.
   already types (through `#.count`), chosen like any type.
   Rendering a superposition goes the same way. The computer's `choose` is defined once, on its device; an
   instance flattens its device into itself.
+
+Answers from 2026-10-06.
+
+- **W3.10** There is one history API, `History`. Git and every other backend read into it and write out of it (L§9.2).
+  W3.2's "frontend with an inverse" is a backend Language, with a `level` (read) and a `written` (write).
+- **W3.11** The backends are Git, Mercurial, Fossil, Pijul and Subversion, plus our own `Ray.history` (`.%`).
+  Each says whether it is `lossless` or `snapshot`. A snapshot backend keeps the operations beside its commits, so
+  our own repositories read back exactly. Foreign ones are read by diffing trees, and a rename that cannot be decided
+  is a quest.
+- **W3.12** A `.%` history is a program, and its working directory holds the value. A commit is one appended line:
+  `UUID\ [parents] <stamp> @<who> { … }`. `.%/index.ray` maps names to UUIDs, and caches are optimisation levels.
+- **W3.13** Which backend is used, whether a history is stored per object or per project, and the caches are all
+  Compiler levels (`Compiler.stored`).
+- **W3.14** The STD's and the players' histories are separate. They are joined into one global order by stamp, and
+  `global%[version]` pins a version. A STD fix substitutes for the version it fixes in everything written after the
+  fix; what was written before it replays as recorded.
+- **W2.8b** `@character { … }` runs a block as that character when the character is here (L§8.2). It is how a
+  `.%` line says who made the commit.

@@ -77,7 +77,7 @@ String := class: Char[] {
   singular => ends_with("s") ? this[..-1] : this
 
   mirrored => <-#.mirrored as String
-  * (count: Number) => count == 0 ? "" : this, this * (count - 1)
+  compounds * (count: Number) => count == 0 ? "" : this, this * (count - 1)
 
   trimmed => this{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}
   trimmed (characters: Char[]) => this{!(⊢ characters[] | characters[] ⊣)}

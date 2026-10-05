@@ -99,7 +99,7 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
     `" ", name: unit as String`: Quantity => this, unit
   }
   // `GB/s`
-  / (other: Unit) => Rate(numerator: this, denominator: other)
+  compounds / (other: Unit) => Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static
 
   chainable == (other: Unit) => this === other || name == other.name

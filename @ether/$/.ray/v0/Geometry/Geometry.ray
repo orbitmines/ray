@@ -5,9 +5,9 @@ Curve | Line := Array{unbounded}
 Geometry := class {
   // A position or a size in any number of dimensions; lengths are Unit.ray quantities (F-B5).
   Vector := class = x: Length = 0, y: Length = 0, z: Length = 0 {
-    + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)
-    - (other: Vector) => Vector(x - other.x, y - other.y, z - other.z)
-    * (factor: Number) => Vector(x * factor, y * factor, z * factor)
+    compounds + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)
+    compounds - (other: Vector) => Vector(x - other.x, y - other.y, z - other.z)
+    compounds * (factor: Number) => Vector(x * factor, y * factor, z * factor)
     length => √(x ^ 2 + y ^ 2 + z ^ 2)
     dimensions => [x, y, z]
   }

@@ -13,10 +13,10 @@ IP := class: Location &+ (-1 <- . -> +1) {
   full: String => segments.map(as String).join(static == v4 ? "." : ":")
   chainable == (other: IP) => as Binary == other as Binary && prefix == other.prefix
 
-  + (offset: Number{-(as Binary) <= . <= ~!(as Binary)}): static => as Binary + offset
-  - (offset: Number{- ~!(as Binary) <= . <= as Binary}): static => as Binary - offset
+  compounds + (offset: Number{-(as Binary) <= . <= ~!(as Binary)}): static => as Binary + offset
+  compounds - (offset: Number{- ~!(as Binary) <= . <= as Binary}): static => as Binary - offset
 
-  / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => {
+  compounds / (prefix_length: Number{0 <= . <= NUMBER_OF_BITS}): static => {
     binary_form = as Binary
     binary_form[prefix_length..] = 0
     (binary_form as static) ~~ .prefix = prefix_length

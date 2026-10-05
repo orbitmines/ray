@@ -217,7 +217,7 @@ Instance := class: Location {
   hosted: Character[] = []
   deletions: Deletion[] = []
 
-  == (other) => key ? key == other.key : this === other
+  chainable == (other) => key ? key == other.key : this === other
 
   login (character: Character) => registry.push character -- character
   logged_in (character: Character) => registry.contains(character)
@@ -275,7 +275,7 @@ Character := class: Entity + Nameable {
   also (status: Status): static => this ~~ statuses.push status
   is (status: Status) => this.status == status || statuses.contains(status)
 
-  == (other) => key ? key == other.key : this === other
+  chainable == (other) => key ? key == other.key : this === other
 
   choose (kind) => Quest(name: "choose", goal: kind, solved_by: this)
   embody (avatar: Avatar) => avatars.push avatar -- avatar

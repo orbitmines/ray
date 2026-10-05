@@ -89,6 +89,6 @@ String.components.hierarchy &= class {
   squeeze => .as(Chain).squeeze.as(String)
 }
 
-Time.Date.components.hierarchy &= class {
-  long => .month.as(String).title_case + (" " + (.day.as(String) + (", " + .year.as(String))))
+ISO_8601 &+= {
+  long => month, " ", day_of_month, ", ", year
 }

@@ -35,7 +35,7 @@ UUID := class: Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-") {
     (time_high, time_mid, time_low) = time: Binary⁶⁰
 
     generate\
-      time = Time.NOW(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor
+      time = Time.now(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor
       version = 1
       variant = 10₂
       (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random

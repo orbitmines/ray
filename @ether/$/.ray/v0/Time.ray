@@ -1,271 +1,164 @@
+Unit &+= {
+  static Temporal = second
+}
+Quantity &+= {
+  static Temporal = Quantity{unit == Unit.Temporal}
+}
+
+// `12:00`
+Decimal.Positive &+= {
+  : (mm: Decimal.Positive{length == 2}) => this hours mm minutes
+}
+// `12:00:00`
+`(* hours)? * minutes` &+= {
+  : (ss: Decimal.Positive{length == 2}) => this ss seconds
+}
+
 Calendar := class {
-  Segment := class {
-    name: Node
-    length: Node
-    epoch: 1
-    is_recurring => .period
+  static Segment := class {
+    static ~(convert: base ... -> last): Calendar.Segment => caller.global.Unit ~ convert
+
+    static EPOCH: (period: #, elapsed: Node{0 <= . < period}?)? | Number = 0
+
+    is_recurring => this ==.instance_of Ray && this.length#.some(== ∞)
+
+    dynamically assert #.every(==.instance_of Quantity.Temporal)
   }
 
-  parts: (chain None)
-  segments => .parts
+  static segments = static*{==.instance_of Segment}
+  protected static TimeDefinition = Time{(-> .epoch).every(.calendar == calendar)}
+  static equivalence (from: TimeDefinition) -> (to: TimeDefinition{calendar == this}) => {
+    // Only offset differences, like UTC.
+    within_same_calendar_system = from.calendar.static == to.calendar.static
 
-  all => (
-    known ^keyword := chain None
-    known &= Julian
-    known &= Gregorian
-    known &= UTC
-    known
-  )
-
-  equivalent (here: Time, there: Time) => (
-    from := here
-    to := there
-    Calendar.Equivalence(from: from, to: to)
-  )
-  Equivalence := class {
-    convert (time: Time) => (
-
-      elapsed := time - .from
-      Time(calendar: .to.calendar, since_epoch: (.to.since_epoch + elapsed), epoch: .to.epoch)
-    )
+    Time{calendar == from.calendar} &+= {
+      as (:== to.calendar) => {
+        // Keep the epoch structure: '25 Gregorian years' from '2001-01-01 Gregorian' is 'X Julian years' from 'X Julian' (N4.5).
+        if epoch != 0 {
+          Time(to.calendar, epoch: epoch as to.calendar) = this (as <= Unit.Temporal if !within_same_calendar_system)
+        } else {
+          Time(to.calendar) = to + (this - from) (as <= Unit.Temporal if !within_same_calendar_system)
+        }
+      }
+    }
   }
 }
 
-Weekday := enum monday | tuesday | wednesday | thursday | friday | saturday | sunday
-Month := enum january (length: 31, place: 1) | february (length: 28, place: 2) | march (length: 31, place: 3) | april (length: 30, place: 4) | may (length: 31, place: 5) | june (length: 30, place: 6) | july (length: 31, place: 7) | august (length: 31, place: 8) | september (length: 30, place: 9) | october (length: 31, place: 10) | november (length: 30, place: 11) | december (length: 31, place: 12) {
+Weekday := enum Monday | Tuesday | Wednesday | Thursday | Friday | Saturday | Sunday
+Month := enum January | February | March | April | May | June | July | August | September | October | November | December
 
-  days_in (year: Number, calendar) => (
-    month_days := .length
-    if ((.place == 2).and(calendar.is_leap_year(year))) { month_days = .length.succ }
-    month_days
-  )
+Julian := class: Calendar {
+  static year = Calendar.Segment ~ (day -> 365 | 366 if is_leap_year)
+  static month = Calendar.Segment ~ Month#[
+    31, 28 | 29 if year.is_leap_year, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+  ] days
+  static week = Calendar.Segment ~ Weekday#.length days
+  static day = Calendar.Segment ~ 24 hours
+  static hour = Calendar.Segment ~ 60 minutes
+  static minute = Calendar.Segment ~ 60 seconds | 61 seconds if LeapSeconds.at(this)
+
+  is_leap_year => year % 4 == 0
 }
 
-Julian := class {
-  is_leap_year (year: Number) => (year % 4).is_zero
-  days_in_year (year: Number) => if (.is_leap_year(year)) { 366 } else { 365 }
-  days_in_month (month, year: Number) => month.days_in(year, this)
-  weeks_in_year (year: Number) => .days_in_year(year) / 7
-  hours_in_day => 24
-  minutes_in_hour => 60
-  seconds_in_minute => 60
-  months => Month.components
-  weekdays => Weekday.components
-
-  days_before_year (year: Number) => (
-    total ^keyword := 0
-    counted_year ^keyword := 1
-    while (counted_year < year) {
-      total = total + .days_in_year(counted_year)
-      counted_year = counted_year.succ
-    }
-    total
-  )
-  days_before (year: Number, month, day: Number) => .days_before_year(year) + .day_of_year(month, day, year).pred
-
-  day_of_year (month, day: Number, year: Number) => (
-    calendar := this
-    total ^keyword := day
-    Month.components for {
-      if (it.value.place < month.place) { total = total + it.value.days_in(year, calendar) }
-    }
-    total
-  )
-  chainable == (other) => this === other
-}
 Gregorian := class: Julian {
+  is_leap_year => year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 
-  is_leap_year (year: Number) => if ((year % 100).is_zero) { (year % 400).is_zero } else { (year % 4).is_zero }
-
-  reform => (
-    last_julian ^keyword := Time(calendar: Julian, since_epoch: Quantity(amount: Julian.days_before(1582, Month.october, 4), unit: Day))
-    first_gregorian ^keyword := Time(calendar: Gregorian, since_epoch: Quantity(amount: Gregorian.days_before(1582, Month.october, 15), unit: Day))
-    Calendar.equivalent(last_julian, first_gregorian)
-  )
+  // The reform: the day after 1582-10-04 Julian is 1582-10-15 Gregorian.
+  equivalence "1582-10-04" as Julian -> "1582-10-15"
 }
 
-UTC := class: Gregorian {
-
-  offset: 0
-  with_offset (offset: Quantity) => UTC(offset: offset)
-  leap_seconds => false
+UTC := class: Gregorian (offset: Quantity.Temporal = 0) {
+  equivalence 0 -> offset
 }
 GMT := UTC
 
-Month.components.hierarchy &= class {
-  index => .place.pred
-  chainable == (other) => .place == other.place
-  chainable != (other) => (this == other).not
-}
-
-Time := class {
-  calendar: Node
-  since_epoch: Quantity
-  epoch?: Time
-
-  since_calendar_epoch => (
-    held ^keyword := .since_epoch
-    if (.epoch) { held = .since_epoch + .epoch.since_calendar_epoch }
-
-    held
-  )
-  chainable == (other: Time) => .since_calendar_epoch == other.since_calendar_epoch
-  chainable < (other: Time) => .since_calendar_epoch < other.since_calendar_epoch
-  compounds + (duration: Quantity) => Time(calendar: .calendar, since_epoch: .since_epoch + duration, epoch: .epoch)
-  compounds - (other: Time) => .since_calendar_epoch - other.since_calendar_epoch
-  as (counted_by) => (
-    kept_epoch ^keyword := None
-    if (.epoch) { kept_epoch = .epoch.as(counted_by) }
-    Time(calendar: counted_by, since_epoch: .since_epoch, epoch: kept_epoch)
-  )
-  as (=== boolean) => true
-  round (measure: Unit) => (
-    held ^keyword := .since_epoch
-    step ^keyword := ((1 of measure) as held.unit).amount
-    if step.is_zero {
-      held = held as measure
-      step = 1
-    }
-    rest ^keyword := held.amount % step
-    kept ^keyword := held.amount - rest
-    unless ((rest + rest) < step) { kept = kept + step }
-    Time(calendar: .calendar, since_epoch: Quantity(amount: kept, unit: held.unit), epoch: .epoch)
-  )
-
-  YEAR := None
-  MONTH := None
-
-  uncertainty: Quantity?
-  corrected (by: Quantity, within: Quantity) => (
-    moved ^keyword := .since_epoch + by
-    Time(calendar: .calendar, since_epoch: moved, epoch: .epoch, uncertainty: within)
-  )
-
-  since (other: Time) => this - other
-  years_since (other: Time) => ((this - other) as Year).amount
-
-  now => (
-    clock ^keyword := Time.Clock(digits: (external time).as(String))
-    Time(calendar: UTC, since_epoch: clock.elapsed, uncertainty: clock.resolution)
-  )
-  Clock := class {
-
-    elapsed => Quantity(amount: .digits.as_number, unit: Nanosecond)
-    resolution => 1 ns
-    nanoseconds => .digits.slice(.digits.count - 9, .digits.count)
-    nanoseconds_tail => Quantity(amount: .digits.slice(.digits.count - 3, .digits.count).as_number, unit: Nanosecond)
-    seconds_tail => Quantity(amount: .digits.slice(.digits.count - 12, .digits.count - 9).as_number, unit: Second)
+Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
+  // Only equivalent calendars can be compared. `:Time = "2025-01-01", epoch: "2000-01-01"` is `25.years` (N4.5).
+  epoch: Time{== calendar} = 0
+  = (x) => {
+    this -= x
+    super(x)
   }
+  dynamically assert (this -> .epoch).length != ∞
+
+  since_calendar_epoch: Time => (this -> .epoch as calendar if .epoch != 0).sum
+
+  as (:== calendar) => this
+
+  // `Time.YEAR`, `Time.MONTH` are context values: `with Time.MONTH = February { 1.months }` (N4.4).
+  calendar.segments.for segment => dynamically Time.`segment.name.upper_case` = since_calendar_epoch.`segment.name`
+  calendar.segments.for segment => `segment.name` => segment.is_recurring ? recur(epoch) : since_calendar_epoch as segment
+
+  round (unit: Unit.Temporal) => (this as unit).round as Time
+
+  // `now` is a distribution around the clock's reading; a correction narrows it, and times read since jump with it (N4.8, N4.10).
+  static now: Time = nondeterministic (external time) ns ± (external time).resolution
+  dynamically {
+    .calendar.segments.for segment => `segment.name.upper_case` = `segment.name`
+  } = now
 }
+{ now } = Time
 
-ISO_8601 := class {
-  date (text: String) => (
-    parts := text.split(U+002D)
-    year := parts.head.value.as_number
-    month := Month.at_index(parts.head.next.value.as_number.pred)
-    day := parts.head.next.next.value.as_number
-    ISO_8601.Date(year: year, month: month, day: day)
-  )
-  time (text: String) => (
-    parts := text.split(U+003A)
-    hour := parts.head.value.as_number
-    minute := parts.head.next.value.as_number
-    second := if (parts.head.next.next) { parts.head.next.next.value.as_number } else { 0 }
-
-    Quantity(amount: (((hour * 60) + minute) * 60) + second, unit: Second)
-  )
-  Date := class {
-    as_time (calendar) => Time(calendar: calendar, since_epoch: Quantity(amount: calendar.days_before(.year, .month, .day), unit: Day))
-    years_since (other) => (
-      whole ^keyword := .year - other.year
-      if ((.month.place < other.month.place).or((.month == other.month).and(.day < other.day))) { whole = whole.pred }
-      whole
+// ISO 8601 (https://en.wikipedia.org/wiki/ISO_8601)
+ISO_8601 := class: Time{calendar ==.instance_of UTC.static} (
+  date: (
+    year: Decimal,
+    semicolons: "-"?,
+    (
+      month = Month#[1 - month_of_year: Decimal.Positive{length == 2}{1 <= . <= Month#.count}],
+      semicolons: "-"?,
+      day_of_month: Decimal.Positive{length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month}
+    ) | (
+      day_of_year: Decimal.Positive{1 <= . <= (year as days ~= (days_in_year: *) days).days_in_year}
+    ) | (
+      "W",
+      week_of_year: Decimal.Positive{1 <= . <= (year as weeks ~= (weeks_in_year: *) weeks).weeks_in_year},
+      (
+        "-",
+        weekday: Weekday#[1 - day_of_week: Decimal.Positive{1 <= . <= Weekday#.count}]
+      )?
     )
-    is_valid (calendar) => (0 < .day).and((.month.days_in(.year, calendar) < .day).not)
-    day_of_year (calendar) => calendar.day_of_year(.month, .day, .year)
-    chainable == (other) => (.year == other.year).and(.month == other.month).and(.day == other.day)
-  }
-}
-Month.components.hierarchy &= class {
-  at_index (index: Number) => (
-    wanted := index.succ
-    found ^keyword := None
-    Month.components for {
-      if (it.value.place == wanted) { found = it.value }
-    }
-    found
-  )
+  )?,
+  time: (
+    "T" if date || !semicolons,
+    hour_of_day: Decimal.Positive{length == 2}{< calendar.day.hours},
+    semicolons: ":"?,
+    minute_of_hour: Decimal.Positive{length == 2}{< calendar.hour.minutes},
+    semicolons: ":"?,
+    second_of_minute: Decimal.Positive{length == 2}{< calendar.minute.seconds},
+    "Z" | offset: (
+      offset_operator: "+" | "-",
+      offset_hours: Decimal.Positive,
+      ":",
+      offset_minutes: Decimal.Positive
+    )
+  )?
+) => {
+  calendar += offset_operator offset_hours:offset_minutes
+
+  dynamically assert semicolons if offset
+  dynamically assert date | time
+  // `12:00` is on every day: the date is unknown, and printing leaves it out (N4.3).
+  date ?= ?
 }
 
-Time.OfDay = class {
-  hour: Number
-  minute: Number
-  second: Number
-
-  date => None
-  as_seconds => (((.hour * 60) + .minute) * 60) + .second
-  :{seconds: Decimal.String ^number} ^punctuation => (
-    held_hour ^keyword := .hour
-    held_minute ^keyword := .minute
-    Time.OfDay(hour: held_hour, minute: held_minute, second: Decimal(integer: seconds))
-  )
-  two_digits (value: Number) => if (value < 10) { "0" + value.as(String) } else { value.as(String) }
-  as (=== String) => if (.second.is_zero) { .two_digits(.hour) + ":" + .two_digits(.minute) } else { .two_digits(.hour) + ":" + .two_digits(.minute) + ":" + .two_digits(.second) }
-  chainable == (other: Time.OfDay) => .as_seconds == other.as_seconds
-}
-Number.components.hierarchy &= class {
-  :{minutes: Decimal.String ^number} ^punctuation => (
-    held_hour ^keyword := this
-    Time.OfDay(hour: held_hour, minute: Decimal(integer: minutes), second: 0)
-  )
+// Leap seconds and time zones are read from the system's tz data through io (N4.6, N4.7).
+LeapSeconds := class = IO.read("/usr/share/zoneinfo/leap-seconds.list").lines{!.empty && !.starts_with("#")}
+  .map(.split("\t").0 as Decimal seconds as Time(epoch: "1900-01-01"))
+{
+  at (minute: Time) => this.contains(minute.round(minute) + 1 minute)
 }
 
-MonthUnit := class: Unit {
-  base => Day
-  ratio => if (Time.MONTH) { Time.MONTH.days_in(Time.YEAR, Gregorian) } else { 30 }
-  factor => .ratio
-}
-Month.span = MonthUnit().called(`month`, `months`, `mo`)
-
-LeapSeconds := class {
-  path => `/usr/share/zoneinfo/leap-seconds.list`
-  entries => (
-    read ^keyword := chain None
-    IO.read(.path).lines for {
-      unless ((it.value.empty).or(it.value.starts_with("#"))) { read &= it.value.split(Char.tab).head.value.as_number }
-    }
-    read
-  )
-  minute_length (time: Time) => (
-    length ^keyword := 60
-    ending ^keyword := (time.round(Minute).since_calendar_epoch as Second).amount + 60
-    LeapSeconds.entries for {
-      if (it.value == ending) { length = 61 }
-    }
-    length
-  )
+TimeZone := class (name: String) {
+  data => IO.read("/usr/share/zoneinfo/" + name)
 }
 
-TimeZone := class {
-  name: String
-  offset: Quantity
+Planet := class {
+  years: Unit.Temporal
+  days: Unit.Temporal
+}
+Earth := Planet(years: year, days: day)
 
-  zones => `/usr/share/zoneinfo`
-  read (zone_name: String) => (
-    data ^keyword := IO.read(TimeZone.zones + "/" + zone_name)
-    TimeZone(name: zone_name, offset: 0 s, data: data)
-  )
-}
-
-Planet := class { }
-Earth := class: Planet {
-  years => Year
-  days => Day
-  calendar => Gregorian
-}
-Sol => Second multiple 88775
-MartianYear => Sol multiple 668
-Mars := class: Planet {
-  years => MartianYear
-  days => Sol
-}
+Unit(name: "sol").multiple 88775, second
+Unit(name: "martian year").multiple 668, sol
+Mars := Planet(years: martian year, days: sol)

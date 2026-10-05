@@ -4,7 +4,7 @@ name: Release
 # package (@orbitmines/ether.ray) and installs that on each with npm; when the version in kernel3/language.ts has no
 # release yet, it publishes one (v<version>, the latest: the archives, their SHA256SUMS, both installers) and the npm
 # package (with NPM_TOKEN, or as a trusted publisher when the NPM_TRUSTED_PUBLISHING variable is true), and the VS Code
-# extension (Ether.ray, orbitmines.ether-ray) to the Visual Studio Marketplace (VSCE_PAT, or Microsoft Entra ID when the
+# extension (Ether.ray, orbitmines.ether-ray, with the language bundled: its server, kernel and library under server/) to the Visual Studio Marketplace (VSCE_PAT, or Microsoft Entra ID when the
 # AZURE_CLIENT_ID/AZURE_TENANT_ID variables are set) and to Open VSX (OVSX_PAT). Pull requests build and verify only.
 
 on:
@@ -223,6 +223,11 @@ jobs:
           npm version --no-git-tag-version --allow-same-version "${VERSION%%-*}"
           mkdir -p "$GITHUB_WORKSPACE/vsix"
           npx --yes @vscode/vsce package --no-dependencies --out "$GITHUB_WORKSPACE/vsix/ether-ray-${VERSION}.vsix"
+      - name: the bundled language answers on its own (server/lsp.mjs with server/v0, outside the repository)
+        run: |
+          probe="$RUNNER_TEMP/probe" && mkdir -p "$probe"
+          cp -r "@ether/\$/.ray/ide/vscode/server" "$probe/"
+          node "@ether/\$/.ray/ide/vscode/scripts/probe.mjs" "$probe"
       - uses: actions/upload-artifact@v7
         with:
           name: vsix

@@ -3,6 +3,7 @@ src/**
 **/tsconfig.json
 **/*.map
 **/*.ts
+scripts/**
 esbuild.config.mjs
 .gitignore
 .env

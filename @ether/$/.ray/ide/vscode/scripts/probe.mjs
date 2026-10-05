@@ -1,0 +1,10 @@
+import { spawn } from 'child_process';
+const dir = process.argv[2];
+const child = spawn('node', [dir + '/server/lsp.mjs', '--stdio'], { env: { ...process.env, RAY_LIBRARY: dir + '/server/v0' }, cwd: dir + '/server' });
+const send = (m) => { const b = JSON.stringify(m); child.stdin.write(`Content-Length: ${Buffer.byteLength(b)}\r\n\r\n${b}`); };
+let out = '';
+child.stdout.on('data', d => { out += d; if (out.includes('"capabilities"')) { console.log('INITIALIZE OK:', out.slice(out.indexOf('{'), out.indexOf('{') + 200)); child.kill(); process.exit(0); } });
+child.stderr.on('data', d => process.stderr.write(d));
+child.on('exit', c => { console.log('exited', c, out.slice(0, 300)); process.exit(1); });
+send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { processId: process.pid, rootUri: null, capabilities: {} } });
+setTimeout(() => { console.log('TIMEOUT', out.slice(0, 300)); child.kill(); process.exit(1); }, 30000);

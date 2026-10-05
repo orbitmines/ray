@@ -16,8 +16,8 @@ import { TransportKind } from 'vscode-languageclient/node';
  *                   definition is what powers the editor.
  *   2. `installed`— The host has a `ray` executable on PATH whose `--version`
  *                   parses under Ether's version scheme. Use it.
- *   3. `bundled`  — Fall back to the @orbitmines/ether.ray module bundled with the
- *                   extension itself.
+ *   3. `bundled`  — Fall back to the language bundled with the extension itself:
+ *                   its server, kernel and library under `server/`.
  */
 export type BootMode = 'repo' | 'installed' | 'bundled';
 
@@ -138,25 +138,39 @@ function installedBoot(): Boot | null {
   };
 }
 
-/** Last-resort: the @orbitmines/ether.ray module shipped with the extension. */
+/**
+ * Node 22 or later to run the bundled server with: a `node` on PATH when it is new enough, otherwise VS Code's own
+ * runtime (run as plain Node).
+ */
+function nodeRuntime(): { command: string, env: NodeJS.ProcessEnv } {
+  try {
+    const version = cp.execFileSync('node', ['--version'], { encoding: 'utf-8' }).trim();
+    if (Number(version.replace(/^v/, '').split('.')[0]) >= 22) return { command: 'node', env: {} };
+  } catch { /* no node on PATH */ }
+  return { command: process.execPath, env: { ELECTRON_RUN_AS_NODE: '1' } };
+}
+
+/**
+ * Last-resort: the language shipped inside the extension — the language server bundled as `server/lsp.mjs`, its
+ * kernel (`server/.kernel.ray`) and the library (`server/v0`), given to it as RAY_LIBRARY.
+ */
 function bundledBoot(extensionPath: string): Boot {
-  const tsxPkg = require.resolve('tsx/package.json', { paths: [extensionPath] });
-  const tsxDir = path.dirname(tsxPkg);
-  const rayPkg = require.resolve('@orbitmines/ether.ray/package.json', { paths: [extensionPath] });
-  const entry  = path.join(path.dirname(rayPkg), 'src', 'lsp', 'index.ts');
+  const entry = path.join(extensionPath, 'server', 'lsp.mjs');
+  const library = path.join(extensionPath, 'server', 'v0');
+  if (!fs.existsSync(entry)) throw new Error(`Bundled Ray language server not found at ${entry}`);
 
-  if (!fs.existsSync(tsxDir)) throw new Error(`tsx not found near ${extensionPath}`);
-  if (!fs.existsSync(entry))  throw new Error(`Bundled Ray LSP entry not found at ${entry}`);
-
+  const runtime = nodeRuntime();
+  const env = { ...process.env, ...runtime.env, RAY_LIBRARY: library };
   const run = {
-    command: process.execPath,
-    args: nodeImportTsxArgs(tsxDir, entry),
+    command: runtime.command,
+    args: [entry, '--stdio'],
     transport: TransportKind.stdio,
+    options: { cwd: path.dirname(entry), env },
   };
   return {
     mode: 'bundled',
-    description: `bundled @orbitmines/ether.ray`,
-    server: { run, debug: { ...run, options: { env: { ...process.env, DEBUG: '1' } } } },
+    description: `bundled language (${path.join(extensionPath, 'server')})`,
+    server: { run, debug: { ...run, options: { ...run.options, env: { ...env, DEBUG: '1' } } } },
   };
 }
 

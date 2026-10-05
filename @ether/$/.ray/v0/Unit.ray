@@ -20,8 +20,27 @@ Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Uni
     quantities ~~ .(greater_than ? last : first) += converted_quantities as converted_to
   }
 
+  unit => quantities.last.unit
+  amount => quantities.last.quantity
+  in (target: Unit) => quantities.map(part => (Quantity(quantities: [part]) as target).amount).sum
+  finer (other: Quantity) => Quantity(quantities: [(1, unit)]).in(other.unit) >= 1 ? other.unit : unit
+
+  chainable == (other: Quantity) => in(finer(other)) == other.in(finer(other))
+  chainable < (other: Quantity) => in(finer(other)) < other.in(finer(other))
+  chainable > (other: Quantity) => other < this
+  chainable < (other: Number) => ERROR@this `a quantity does not compare with a plain number`
+  chainable > (other: Number) => ERROR@this `a quantity does not compare with a plain number`
+  compounds + (other: Quantity) => Quantity(quantities: [(in(finer(other)) + other.in(finer(other)), finer(other))])
+  compounds - (other: Quantity) => Quantity(quantities: [(in(finer(other)) - other.in(finer(other)), finer(other))])
+  compounds * (times: Number) => Quantity(quantities: quantities.map((quantity, unit) => (quantity * times, unit)))
+  compounds * (per: Quantity) => unit ==.instance_of Unit.Rate ? Quantity(quantities: [(amount * per.in(unit.denominator), unit.numerator)])
+    : ERROR@this `a quantity is multiplied by another only as a rate by what it is per`
+  ± | +- (uncertainty: Quantity) => this - uncertainty | this + uncertainty
+
+  as (:== String) => quantities.map((quantity, unit) => (quantity as String) + " " + (unit as String)).join(" ")
+
   // Rates: `GB/s`, `1 / m`, `2/10m` (N2.3)
-  / (unit: Unit) => quantities.quantity, quantities.unit / unit
+  compounds / (unit: Unit) => Quantity(quantities: quantities.map((quantity, from) => (quantity, from / unit)))
 
   static Temporal = Quantity{unit == Unit.Temporal}
 }
@@ -37,6 +56,11 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
       }
       result
     }
+  }
+
+  static Rate := class: Unit = numerator: Unit, denominator: Unit {
+    name => numerator.name + "/" + denominator.name
+    chainable == (other: Rate) => numerator == other.numerator && denominator == other.denominator
   }
 
   (static.# ??= []).push this
@@ -69,13 +93,16 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   Decimal.Real &+= {
     `" "?, name: unit as String`: Quantity => this, unit
   }
-  // `25.years`, `(30).days` (N2.1b)
+  // `25.years`, `(30).days`, `x minutes` (N2.1b)
   Number &+= {
     .`name: unit as String`: Quantity => this, unit
+    `" ", name: unit as String`: Quantity => this, unit
   }
   // `GB/s`
-  / (other: Unit) => Unit(name: name + "/" + other.name, symbol: symbol)
+  / (other: Unit) => Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static
+
+  chainable == (other: Unit) => this === other || name == other.name
 
   // Reversed automatically when the conversion is (N2.7).
   convert (convert: (From < Number) => To < Number, ToUnit: Unit) => {
@@ -85,8 +112,8 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
       as (:== ToUnit): Quantity<To>{unit == ToUnit} => convert(this)
     }
     global.Quantity<To>{.unit == ToUnit} &+= {
-      as (:== FromUnit): Quantity<From>{unit == FromUnit} => convert.reverse(this)
-    } if convert.reverse
+      as (:== FromUnit): Quantity<From>{unit == FromUnit} => convert⁻¹(this)
+    } if convert⁻¹
   }
 
   offset (offset: Number, ToUnit: Unit) => convert (x: Number) => x + offset, ToUnit
@@ -170,12 +197,13 @@ SI_Unit b "bit"
 SI_Unit B "byte"
 Binary_Unit B "byte"
 byte.multiple 8, bit
+Unit(name: "KB" + symbol: true).multiple 1000, byte
 
-Unit(name: "minute", symbol: "min" | "m").multiple 60, second
-Unit(name: "hour", symbol: "h").multiple 60, minute
-Unit(name: "day", symbol: "d").multiple 24, hour
-Unit(name: "week", symbol: "wk").multiple 7, day
-Unit(name: "year", symbol: "y").multiple 365, day
+Unit(name: "minute" ("s" + plural: true)?, symbol: "min" | "m").multiple 60, second
+Unit(name: "hour" ("s" + plural: true)?, symbol: "h").multiple 60, minute
+Unit(name: "day" ("s" + plural: true)?, symbol: "d").multiple 24, hour
+Unit(name: "week" ("s" + plural: true)?, symbol: "wk").multiple 7, day
+Unit(name: "year" ("s" + plural: true)?, symbol: "y").multiple 365, day
 
 Unit(name: "celsius", symbol: "°C").offset 273.15, kelvin
 
@@ -188,3 +216,10 @@ Unit(name: "billion", symbol: "B").multiple 10^9, Unit.None
 Unit(name: "imaginary", symbol: "i")
 Complex := Real + Imaginary
 Imaginary := Quantity{unit == i}
+Complex &+= {
+  real => this as Real
+  imaginary => (this as Imaginary).amount
+  chainable == (other: Complex) => real == other.real && imaginary == other.imaginary
+  compounds * (other: Complex) => (real * other.real - imaginary * other.imaginary) + ((real * other.imaginary + imaginary * other.real) i)
+  conjugate => real + (imaginary.negated i)
+}

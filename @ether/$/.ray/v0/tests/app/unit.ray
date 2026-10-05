@@ -23,6 +23,14 @@ unless bit as String == "bit" { INFO@mark `U36 a bit is not called that` }
 unless 2 hours as String == "2 hours" { INFO@mark `U42 two hours are not written so` }
 unless 3 s == 3 seconds { INFO@mark `U43 three s are not seconds` }
 unless 25.years == 25 years { INFO@mark `U49 a unit is not reachable as a member` }
+held_minutes := 3
+unless held_minutes minutes == 180 s { INFO@mark `U54 a number held in a variable does not take a unit after it` }
+unless 2 minutes > 90 s { INFO@mark `U55 two minutes are not more than ninety seconds` }
+unless 1 week == 7 days { INFO@mark `U56 a week is not seven days` }
+unless 1 year == 365 days { INFO@mark `U57 a year is not 365 days` }
+unless minute == minute { INFO@mark `U58 a unit is not itself` }
+if minute == hour { INFO@mark `U59 a minute is an hour` }
+unless (GB/s) as String == "GB/s" { INFO@mark `U60 a rate is not named by its two units` }
 unless 8m == 8 meter | 8 minute { INFO@mark `U50 an ambiguous unit does not superpose` }
 
 unless 1 KiB == 1024 B { INFO@mark `UB3 a kibibyte is not 1024 bytes` }

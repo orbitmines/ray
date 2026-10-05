@@ -73,10 +73,11 @@
     "compile": "node esbuild.config.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc -p . --noEmit",
-    "vscode:prepublish": "npm run compile && npm run server",
-    "build": "npx --yes @vscode/vsce package --no-dependencies",
-    "publish": "npx --yes @vscode/vsce publish --pre-release --no-dependencies",
-    "server": "node scripts/server.mjs"
+    "vscode:prepublish": "npm run compile && npm run server && npm run readme",
+    "build": "npx --yes @vscode/vsce package --no-dependencies --baseContentUrl https://github.com/orbitmines/ray/blob/main --baseImagesUrl https://raw.githubusercontent.com/orbitmines/ray/main",
+    "publish": "npx --yes @vscode/vsce publish --pre-release --no-dependencies --baseContentUrl https://github.com/orbitmines/ray/blob/main --baseImagesUrl https://raw.githubusercontent.com/orbitmines/ray/main",
+    "server": "node scripts/server.mjs",
+    "readme": "node scripts/readme.mjs"
   },
   "dependencies": {
     "@orbitmines/ether.ray": "file:../../v0.ts",

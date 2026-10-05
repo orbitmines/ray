@@ -324,7 +324,7 @@ capturing (rule, caps, p, src, i, limit, frame, receiving, opened) => (
     cap(caps, p, from, stop)
     return end
   }
-  if piece.undecided and piece.decided != ROOT.declared { decide(rule, p) }
+  if piece.undecided and piece.decided != ROOT.declared { if piece.missing == None or missing_declared(piece.missing) { decide(rule, p) } else { piece.decided = ROOT.declared } }
   if piece.undecided { return -1 }
   if next == 0 and !raw and !inside and piece.typed and pieces[p + 1].tight and space(src, end - 1) { return -1 }
   if piece.typed and holds(rule, p, src, from, stop - 1) == UNDEF {
@@ -490,8 +490,8 @@ reach_mix (walk, at, seen, r) => (
   walk_mark(at, seen)
   if r.observe and !at.observed { at.observed = global }
   if at.index != None {
-    r.h = hash(r.h + at.index.shape)
-    r.g = hash(r.g + at.index.shape * 31 + 17)
+    r.h = hash(r.h + index_of(at).shape)
+    r.g = hash(r.g + index_of(at).shape * 31 + 17)
     if r.count == r.want { r.node = at }
     if at == r.find { r.found = r.count }
     r.count = r.count + 1
@@ -515,7 +515,7 @@ best_in (src, pos, limit, frame, receiving, receiver, w1, r1, f1, w2, r2, f2, ta
     if kept.limit == limit and kept.flags == flags and kept.a == a and kept.b == b and kept.c == d and kept.d == e and still(kept) {
       if kept.seg == 0 { return None, kept.end, kept.reach }
       at := kept.seg == 1 ? reach(w1, r1, target, kept.ord, -1).node : reach(w2, r2, target, kept.ord, -1).node
-      chosen := at.index.all[kept.at]
+      chosen := index_of(at).all[kept.at]
       recall(chosen, src, pos, limit, frame, receiver, kept.caps, kept.end)
       return chosen, kept.end, kept.reach
     }
@@ -565,7 +565,7 @@ choose (c, walk, root) => (
 choose_from (c, walk, at, seen) => (
   if (walk == 0 and at == -1) or marked(at, seen) or (walk == 1 and at == global()) { return None }
   mark(at, seen)
-  if at.index != None { choose_rules(c, at.index) }
+  if at.index != None { choose_rules(c, index_of(at)) }
   if walk == 1 { with_of(at) for x => { choose_from(c, walk, x, seen) }; return None }
   sees_of(at) for x => { choose_from(c, walk, x, seen) }
   choose_from(c, walk, parent(at), seen)
@@ -1342,7 +1342,7 @@ inline (node, frame, compose) => (
 method_in (at, name, seen) => (
   while at != -1 and !walk_marked(at, seen) {
     walk_mark(at, seen)
-    if at.index != None { at.index.methods for rule => { if rule.pieces[0].text == name { return rule } } }
+    if at.index != None { index_of(at).methods for rule => { if rule.pieces[0].text == name { return rule } } }
     sees_of(at) for x => { found := method_in(x, name, seen); if found != -1 { return found } }
     at = parent(at)
   }
@@ -1430,7 +1430,24 @@ holds (rule, p, src, b, e) => (
   kept := text.held
   while kept != NIL and !(kept.src == piece.content_src and kept.begin == piece.content_begin) { kept = kept.next }
   if kept != NIL and still(kept) { return kept.value }
-  missing, value := checking(piece, 1, rule, p, src, b, e)
+  outer := ROOT.fuel
+  allowed := outer < 5000 ? outer : 5000
+  ROOT.fuel = allowed
+  m0 := ROOT.missing
+  m0_id := ROOT.missing_id
+  missing, value := checking(piece, 1, rule, p, src, b, e) catch err {
+    ROOT.fuel = outer - (allowed - ROOT.fuel)
+    if !is_exhausted(err) or allowed < 5000 { rethrow(err) }
+    forget(err)
+    ROOT.missing = m0
+    ROOT.missing_id = m0_id
+    piece.checking = None
+    missing = list_new()
+    value = UNDEF
+    goto charged
+  }
+  ROOT.fuel = outer - (allowed - ROOT.fuel)
+  charged\
   if kept == NIL { kept = Held(src: piece.content_src, begin: piece.content_begin, next: text.held); text.held = kept }
   kept.declared = ROOT.declared; kept.value = value; kept.missing = missing
   return value
@@ -1500,7 +1517,7 @@ decide (rule, p) => (
   piece.checking = global
   again := capture(piece.content_src, piece.content_begin, piece.content_end, piece_within(piece)) always { piece.checking = None }
   if again.kind != 2 { piece.undecided = None; return None }
-  piece.typed = again.typed; piece.type = again.type; piece.optional = again.optional; piece.undecided = again.undecided; piece.decided = ROOT.declared
+  piece.typed = again.typed; piece.type = again.type; piece.optional = again.optional; piece.undecided = again.undecided; piece.decided = ROOT.declared; piece.missing = again.missing
 )
 // A capture's content is read with nothing bound; the first name it asks for is the capture's name, what was bound to it its type.
 capture (src, b, e, frame) => (
@@ -1513,11 +1530,12 @@ capture (src, b, e, frame) => (
   hole := literal(src, b, e)
   state := naming_open(scope, hole, None, UNDEF)
   mark := ROOT.refused
+  outer, outer_id := missing_open()
   silent(1)
   value := read(src, b, e, scope) catch err {
     silent(-1)
     if is_recursion(err) { silent(1); recursion_error(err); silent(-1) } else {
-      if !is_jump(err) { naming_close(state); rethrow(err) }
+      if !is_jump(err) { naming_close(state); missing_close(outer, outer_id); rethrow(err) }
       forget(err)
     }
     silent(1)
@@ -1525,12 +1543,13 @@ capture (src, b, e, frame) => (
   }
   silent(-1)
   naming_close(state)
+  missing := missing_close(outer, outer_id)
   undecided := ROOT.refused > mark
   ROOT.refused = mark
   if state.name != -1 {
     bound := own(scope, state.name)
     typed := bound != hole and bound != UNDEF
-    return Piece(kind: 2, name: state.name, piece_raw: scope.raw, typed: typed, optional: !typed and optional_mark(src, b, e), content_src: src, content_begin: b, content_end: e, within: frame, undecided: undecided and !typed, decided: ROOT.declared, type: typed ? bound : UNDEF)
+    return Piece(kind: 2, name: state.name, piece_raw: scope.raw, typed: typed, optional: !typed and optional_mark(src, b, e), content_src: src, content_begin: b, content_end: e, within: frame, undecided: undecided and !typed, decided: ROOT.declared, type: typed ? bound : UNDEF, missing: list_len(missing) > 0 ? missing : None)
   }
   held := value == UNDEF ? UNDEF : silently(value, global)
   if held != UNDEF and is_text(held) {
@@ -1612,7 +1631,7 @@ operator_at (src, j, limit, frame, receiving, receiver) => (
 // The longest operator (`op {x}`, op an operator) spelled at j among a scope's rules, met from its latest rule on; an earlier one wins a tie.
 longest_operator (node, src, j, best) => (
   if node.index == None { return best }
-  node.index.ops for rule => {
+  index_of(node).ops for rule => {
     if starts(src, j, rule.pieces[0].text) and (best == -1 or rule.pieces[0].text.length > best.pieces[0].text.length) { best = rule }
   }
   return best
@@ -2021,7 +2040,7 @@ code_names (node) => (
 
 // ---------------------------------------------------------------- rules: a pattern of pieces, where it was written, what it does
 // Piece kinds: 0 a literal, 1 a gap, 2 a capture. A span that is not there has src -1.
-Piece := class { kind, text: -1, tight: None, name: -1, piece_raw: None, typed: None, optional: None, exact: None, content_src: -1, content_begin: 0, content_end: 0, within: UNDEF, operator: None, undecided: None, decided: -1, type: UNDEF, checking: None }
+Piece := class { kind, text: -1, tight: None, name: -1, piece_raw: None, typed: None, optional: None, exact: None, content_src: -1, content_begin: 0, content_end: 0, within: UNDEF, operator: None, undecided: None, decided: -1, type: UNDEF, checking: None, missing: None }
 Rule := class { pieces, size, closure, rule_at_src, rule_at_begin, rule_at_end, key, pattern_name, order, rule_body_src, rule_body_begin, rule_body_end, rule_fn: -1, guard_src: -1, guard_begin, guard_end, guard_in, overloaded: None, native: -1, defines: None, home: UNDEF, lexical_src: -1, lexical_begin, lexical_end, position, rule_style, rule_held: UNDEF }
 
 piece_literal (text) => Piece(kind: 0, text: text)
@@ -2117,7 +2136,7 @@ seed_rule (src) => (
 // ---------------------------------------------------------------- a rule takes its place in a scope
 // The rules written on a scope, latest first; one rule per key. A scope's index: its rules by the first character their head reads
 // (open: no head), plainly and on a receiver; its operators `op {x}` and methods `name {x}`; its shape (where its rules were written).
-Index := class { open, by, open_r, by_r, ops, shape, all, methods }
+Index := class { open, by, open_r, by_r, ops, shape, all, methods, stale: None, of: UNDEF }
 Bucket := class { char, bucket_rules: list_new(), next }
 
 add_rule (scope, rule) => (
@@ -2154,7 +2173,15 @@ add_rule (scope, rule) => (
   list_unshift(rules, rule)
   ROOT.rules_version = ROOT.rules_version + 1
   if rule_enclosed(rule) { ROOT.brackets_changes = ROOT.brackets_changes + 1 }
-  index := Index(all: make(list_len(rules)), shape: 5, ops: list_new(), methods: list_new())
+  if scope.index == None { scope.index = Index(of: scope) }
+  scope.index.stale = global
+  touched(scope)
+)
+index_of (scope) => (
+  index := scope.index
+  if index == None or !index.stale { return index }
+  rules := scope.rules
+  index.all = make(list_len(rules)); index.shape = 5; index.ops = list_new(); index.methods = list_new(); index.stale = None
   k := list_len(rules)
   rules for other => {
     k = k - 1
@@ -2170,8 +2197,7 @@ add_rule (scope, rule) => (
   index.open = open; index.by = by
   open, by := heads_of(rules, global)
   index.open_r = open; index.by_r = by
-  scope.index = index
-  touched(scope)
+  return index
 )
 
 heads_of (latest, receiving) => (
@@ -2342,7 +2368,10 @@ external_call (name, n, a0, a1, a2, a3, frame, src, b, e) => (
     at := location(x)
     if at == UNDEF or !is_place(at) { return None }
     held = own(place_scope(at), place_name(at))
-    return held != UNDEF and !(ROOT.naming != None and held == ROOT.naming.hole)
+    if held == UNDEF { return None }
+    n := ROOT.naming
+    while n != None and n != NIL { if held == n.hole { return None }; n = n.was }
+    return global
   }
   if name == "goto" {
     met := deref(y, None)

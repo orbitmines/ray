@@ -149,19 +149,26 @@ unless raced == 1 { INFO@mark `CR2 race is not won by the first to finish` }
 waited := branch { 3 }
 unless await waited == 3 { INFO@mark `CR3 awaiting a branch does not answer what it did` }
 
-// Errors
-failing := Error(kind: 1, message: "no")
+// Errors: a value carries its diagnostics, and its type does not see them
+failing := (0).diagnosed(ERROR[1] "no")
 unless failing $ 5 == 5 { INFO@mark `ER1 a default does not stand in for an error` }
 unless 7 $ 5 == 7 { INFO@mark `ER2 a default replaced what did not fail` }
 unless failing $? === None { INFO@mark `ER3 an optional error is not None` }
 unless failing $? 6 == 6 { INFO@mark `ER4 an optional error does not fall back` }
 unless failing $ { .message } == "no" { INFO@mark `ER5 the handler does not see the error as its receiver` }
-fatal_one := Error(kind: 1, message: "stop", fatal: true)
+fatal_one := (0).diagnosed(FATAL[1] "stop")
 unless (fatal_one $ 5).erred { INFO@mark `ER6 a default caught a fatal error` }
 unless fatal_one $?! === None { INFO@mark `ER7 the catch-all did not catch a fatal error` }
-unless (failing $ ERROR[2] "wrapped").cause === failing { INFO@mark `ER8 a wrapped error forgot its cause` }
-unless (failing & fatal_one).causes.count == 2 { INFO@mark `ER9 an error joined with another does not keep both` }
-if failing { INFO@mark `ER10 an error holds as a condition` }
+unless (failing $ ERROR[2] "wrapped").diagnostics.last.cause === failing.diagnostics.last { INFO@mark `ER8 a wrapped error forgot its cause` }
+unless failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2 { INFO@mark `ER9 a value given a second diagnostic does not keep both` }
+unless failing ==.instance_of Number { INFO@mark `ER10 a value that erred is no longer of its type` }
+unless failing == 0 { INFO@mark `ER11 a value that erred is not equal to itself without the error` }
+if (0).erred { INFO@mark `ER12 a value nobody filed a diagnostic on erred` }
+returning := () => {
+  failing $ return 9
+  1
+}
+unless returning() == 9 { INFO@mark `ER13 $ return did not return from the function` }
 
 asserted := dynamically assert {
   true
@@ -171,9 +178,9 @@ unless asserted { INFO@mark `DY1 a dynamic assert of holding conditions fails` }
 
 // A setting changed for a block is back once the block is left
 Setting := class { static level = 1 }
-unless (with Setting.level = 2 { Setting.level }) == 2 { INFO@mark `WI1 a setting is not seen inside the block it is given for` }
+unless (with (Setting.level = 2) { Setting.level }) == 2 { INFO@mark `WI1 a setting is not seen inside the block it is given for` }
 unless Setting.level == 1 { INFO@mark `WI2 a setting outlived its block` }
-unless (assume Setting.level = 3 { Setting.level }) == 3 { INFO@mark `WI3 assume is not with` }
+unless (assume (Setting.level = 3) { Setting.level }) == 3 { INFO@mark `WI3 assume is not with` }
 
 if Never.admits(5) { INFO@mark `NV1 something is of the type that never returns` }
 

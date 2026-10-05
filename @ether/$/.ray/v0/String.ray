@@ -98,16 +98,6 @@ String[] &+= {
   join (separator: String) => this.reduce (acc, current) => acc, separator, current
 }
 
-// Every value prints in the language of the file it is written in (X1.6, X1.7).
-* &+= {
-  as (:== String) => $.ext.print(this)
-}
-
-Number &+= {
-  as (base: Number.Base) as String => digits(base).map(Char.digit) as String
-  as String => this as 10 as String
-}
-
 // Precedence is the order rules are declared in, deduced from where they are written (G1.2).
 {a} [x] {b} [y] {c} => a.written_as.precedence(x) >= a.written_as.precedence(y)
   ? (a [x] b) [y] c

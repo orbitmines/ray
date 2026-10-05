@@ -10,11 +10,45 @@ Node &+= {
 
   properties => fields
 
-  // `f⁻¹`, `f^-1`, `!f`; `! forward backward` declares two as each other's inverse (L§4.5).
+  // Every value prints in the language of the file it is written in (X1.6, X1.7).
+  as (:== String) => $.ext.print(this)
+
+  // `f⁻¹`, `f^-1`, `f!`; `! forward backward` declares two as each other's inverse (L§4.5).
   inverse: Node?
   ⁻¹ | ^-1 | ! => inverse
   reversible => inverse
   inverted_by (backward) => (inverse = backward) -- backward.inverse = this -- this
+
+  right-to-left await => Running.until(() => this && (this !=.instance_of Running || is_terminal))
+    -- this ==.instance_of Running ? results.last : this
+  right-to-left pending => await this
+
+  right-to-left never => Never -- ERROR@this `happened, and was said never to` if this
+
+  chosen_within (width) => components.random
+  right-to-left choose => chosen_within(1)
+  right-to-left choose (count: Number) => count.times.map(chosen_within(1))
+
+  right-to-left persistent => Store.keep(this)
+
+  // A value carries the diagnostics filed on it; `$` reads them (P6.1).
+  diagnostics = []
+  diagnosed (diagnostic: Diagnostic) => this++ ~~ .diagnostics = diagnostics.push(diagnostic)
+  erred => diagnostics.nonempty
+  recoverable => erred && !diagnostics.some(.fatal)
+
+  $ => instance ? this : Store.of(this)
+  $ (fallback) => recoverable ? fallback : this
+  $ (raised: Diagnostic) => recoverable ? diagnosed(raised ~~ .cause = diagnostics.last) : this
+  $ (handler: Program) => recoverable ? handler.entered(diagnostics.last, None) : this
+  $ return {fallback} ^punctuation => recoverable ? &caller.return(fallback) : this
+  $? => recoverable ? None : this
+  $? (fallback) => $? ?? fallback
+  $! => erred ? FATAL@this `an error escalated to fatal` : this
+  $?! => erred ? None : this
+  $?! (handler: Program) => erred ? handler.entered(diagnostics.last, None) : this
+  {\n}${kind} {handled} ^punctuation => recoverable && diagnostics.last.kind ==.instance_of kind ? handled : this
+  {\n}${kind} | ${other} {handled} ^punctuation => recoverable && diagnostics.last.kind ==.instance_of (kind | other) ? handled : this
 }
 
 !{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)

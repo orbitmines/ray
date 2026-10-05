@@ -8,8 +8,7 @@ Access := class = who: *?, method: *? {
 }
 
 Accessor := class = level: Permission, method: *?, any = true {
-  static Permission := enum private (at: @private) | confidential | protected | public (at: @public) | local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed)
-  Permission &+= {
+  static Permission := enum private (at: @private) | confidential | protected | public (at: @public) | local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) {
     reaches (who) => this == confidential ? Visibility.policy.reaches(who) : at && who ==.instance_of at
   }
 
@@ -67,13 +66,6 @@ Permissions := class = grants: Grant[] = [] {
     target
   }
   allows (who: Character, method, target) => grants.some(.covers(who, method, target))
-}
-
-Character &+= {
-  read => Access(this)
-  write => on(`=`)
-  execute => on(`()`)
-  on (method) => Access(this, method)
 }
 
 Run := class = actor: Character?, origin: Character[] = [], settings: Settings? {

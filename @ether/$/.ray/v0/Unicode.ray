@@ -43,16 +43,14 @@ Unicode := namespace %17 {
     rows.for category => static `category.name` = Scalar{Data[.].general_category ~= ⊢(category.short_name == "LC" ? "Lu" | "Ll" | "Lt" : category.short_name)}
   }
 
+  // Endianness is a direction on the bytes: little-endian reads them right-to-left, a single byte is the same either way (X3.6).
+  static Endianness := enum BE | LE
+  static endianness: Endianness = BE
+
   // A transformation format: code units of one width (https://www.unicode.org/versions/latest/core-spec/chapter-3/#G25549)
   static TF | TransformationFormat := class: CodeUnit[]{length == 1..(32 / CodeUnit.length)} {
     static CodeUnit: Binary
     as (:== CodePoint[]): CodePoint[]
-  }
-
-  // Endianness is a direction on the bytes: little-endian reads them right-to-left, a single byte is the same either way (X3.6).
-  static Endianness := enum BE | LE
-  static endianness: Endianness = BE
-  TF &+= {
     bytes => endianness == LE ? <-(this as Byte[]) : this as Byte[]
   }
 

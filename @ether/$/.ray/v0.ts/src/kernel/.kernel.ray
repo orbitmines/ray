@@ -2007,9 +2007,31 @@ construct (value) => (
 )
 
 // Walks mark what they met: in a list, or (a walk that reads nothing and starts no other walk) on the values themselves.
-stamp () => list_new()
-marked (node, seen) => node in seen
-mark (node, seen) => list_push(seen, node)
+Seen := class { table, cap, size: 0 }
+stamp () => Seen(table: make(16), cap: 16)
+marked (node, seen) => (
+  t := seen.table
+  k := hash(node) % seen.cap
+  while t[k] != NIL { if t[k] == node { return global }; k = (k + 1) % seen.cap }
+  return None
+)
+mark (node, seen) => (
+  if seen.size * 2 >= seen.cap { seen_grow(seen) }
+  t := seen.table
+  k := hash(node) % seen.cap
+  while t[k] != NIL { if t[k] == node { return None }; k = (k + 1) % seen.cap }
+  t[k] = node
+  seen.size = seen.size + 1
+)
+seen_grow (seen) => (
+  old := seen.table
+  n := seen.cap
+  seen.cap = n * 2
+  seen.table = make(n * 2)
+  seen.size = 0
+  k := 0
+  while k < n { if old[k] != NIL { mark(old[k], seen) }; k = k + 1 }
+)
 // Lookups never run anything, so one mark per value serves them all (`find`, `reaches`).
 find_stamp () => ( ROOT.find_epoch = ROOT.find_epoch + 1; return ROOT.find_epoch )
 found_marked (node, seen) => side_of(node) != ROOT.blank and node.found_seen == seen

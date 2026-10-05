@@ -211,13 +211,13 @@ while ^keyword := class {
     inline static
     written_block := external ** block
 
-   again\
+   continue\
     goto more if (cond as boolean).holds
-    goto done
+    goto break
    more\
     inline written_block
-    goto again
-   done\
+    goto continue
+   break\
 
     looping ^variable
   )
@@ -237,6 +237,14 @@ do{ }{block}{ }while{ }{cond} ^class => (
 )
 
 loop{ }{block} ^class => while true block
+// `break`/`continue` leave or repeat a loop; `recur(args)` re-enters the method with other arguments, `recur` with the same (P2.1, P2.4).
+break ^keyword => goto break
+recur({given}) ^keyword => (
+  arguments = given
+  goto recur
+)
+recur ^keyword => goto recur
+continue ^keyword => goto continue
 
 Program := class {
   ({arguments}) => if .instance { .entered(.context, arguments) } else { .construct(arguments) }
@@ -280,6 +288,7 @@ chainable {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   defined := external define head `{arguments}` {
+   recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -289,6 +298,7 @@ compounds {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   defined := external define head `{arguments}` {
+   recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -298,6 +308,7 @@ right-to-left {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   defined := external define head `{arguments}` {
+   recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -307,6 +318,7 @@ left-to-right {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   defined := external define head `{arguments}` {
+   recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -316,10 +328,12 @@ right-to-left {head} | {alias} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
   external define alias `{arguments}` {
+   recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
   defined := external define head `{arguments}` {
+   recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -364,6 +378,7 @@ Node := base class {
     method_written := external ** block
     this ^function
     external define this `{arguments}` {
+     recur\
       (inline method_parameters) := arguments
       inline method_written
     } parameters
@@ -373,6 +388,7 @@ Node := base class {
     method_written := external ** block
     this ^function
     external define this `{arguments}` {
+     recur\
       (inline method_parameters) := arguments
       inline method_written
     } parameters
@@ -380,9 +396,20 @@ Node := base class {
 
   , ^punctuation (other) => (
     listed := chain None
+    goto branching if other.superposes
     external extend listed Listed
     listed &= this
+    goto continued if other.continues
     listed &= other
+    goto done
+   continued\
+    listed &= other(this)
+    goto done
+   branching\
+    first := this
+    listed = other.each((one) => first, one)
+   done\
+    listed
   )
 
   ={x} ^punctuation => (
@@ -687,7 +714,12 @@ Node := base class {
     made
   )
 
-  satisfies (predicate) => Program(code: (external ** predicate)).entered(this, None)
+  satisfies (predicate) => (
+    answer := Program(code: (external ** predicate)).entered(this, None)
+    if answer.continues { answer = answer(this) }
+    if answer.superposed { answer = answer.holds_for(this) }
+    answer
+  )
 
   verify (candidate) => candidate
 
@@ -697,7 +729,13 @@ Node := base class {
     narrowed := this
     closure := { inline narrowing }
     selected := None
-    if (narrowed.instance) {
+    if (narrowed.superposes && narrowed.components.head.value.instance) {
+      alternative := narrowed.components.head
+      while alternative {
+        if (alternative.value.satisfies(closure)) { if selected { selected = selected | alternative.value } else { selected = alternative.value } }
+        alternative = alternative.next
+      }
+    } elsif (narrowed.instance) {
       selected = chain None
       narrowed for {
         held := it.value
@@ -762,12 +800,14 @@ Node := base class {
 
   | ^punctuation (other) => (
     superposed := external .
+    goto valued if this.instance
     external extend superposed this
+   valued\
     superposed.instance = None
     superposed.superposes = global
     superposed.components = chain None
     if this.components.head { extended_by(superposed.components, this.components.head) } else { superposed.components &= this }
-    superposed.components &= other
+    if other.continues { superposed.components &= other(superposed.components.tail.value) } else { superposed.components &= other }
 
     superposed
   )
@@ -830,9 +870,20 @@ Listed := class {
   listing => global
   , ^punctuation (other) => (
     joined := chain None
+    goto branching if other.superposes
     external extend joined Listed
     extended_by(joined, this.head)
+    goto continued if other.continues
     joined &= other
+    goto done
+   continued\
+    joined &= other(this.tail.value)
+    goto done
+   branching\
+    before := this
+    joined = other.each((one) => before, one)
+   done\
+    joined
   )
 }
 Link := class { }
@@ -1496,6 +1547,7 @@ static{ }{head} ({parameters ^parameter}) => {block} ^keyword => (
   method_parameters := external ** parameters
   method_written := external ** block
   external define head `{arguments}` {
+   recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters
@@ -1517,6 +1569,7 @@ static ({parameters ^parameter}) => {block} ^keyword => (
   method_parameters := external ** parameters
   method_written := external ** block
   external define static `{arguments}` {
+   recur\
     (inline method_parameters) := arguments
     inline method_written
   } parameters

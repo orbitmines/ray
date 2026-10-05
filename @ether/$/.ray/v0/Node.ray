@@ -51,3 +51,203 @@ Node &+= {
 }
 
 !{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)
+
+// `x#` is what x may be: a superposition's values, an enum's members, else x alone; a member asked of them is asked of each (A1, T2.3, T8.3).
+Possibilities := class = values: Iterable {
+  entry => values.entry
+  .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : Possibilities(values: values.map(external get . property))
+}
+Possibilities.components.hierarchy &= Iterable
+Node &+= {
+  # => Possibilities(values: superposes ? components : conjoined.count > 1 ? conjoined : (!instance && components.head) ? components : [this])
+  // Each value of a superposition remembers the call it came from: `x := f(1) | g(2)`, `x#.origin`, `x#{.origin == f}` (U1).
+  origin: Node?
+}
+#{value} ^punctuation => value#
+
+// `A &+ B`, `A |+ B`: both components at once, superposed with `&` or `|` where `+` would let B override A (T2.1, A1).
+Composed := class = parts: Node[], joining: Program {
+  .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : parts.map(external get . property).reduce((acc) => joining(acc, .))
+}
+Node &+= {
+  &+ (other) => Composed(parts: [this, other], joining: (a, b) => a & b) ~~ .components.hierarchy &= this ~~ .components.hierarchy &= other
+  |+ (other) => Composed(parts: [this, other], joining: (a, b) => a | b) ~~ .components.hierarchy &= this ~~ .components.hierarchy &= other
+}
+
+// What is done with a superposition is done with each of its values: `(1 & 2) + 1 == 2 & 3`, `f(1 | 2) == f(1) | f(2)` (A1, U1).
+// Each value keeps the values it was made from, so `result{x == true}` keeps what `x` being true makes of it.
+Node &+= {
+  superposed => superposes || conjoined.count > 1
+  alternatives => superposes ? components : conjoined
+  sources: Node?
+  each (step: Program) => superposes
+    ? alternatives.map(one => step(one).branched(one, this)).reduce(|)
+    : conjoined.count > 1 ? conjoined.map(one => step(one).branched(one, this)).reduce(&) : step(this)
+  branched (from, whole) => this++ ~~ (.sources = [(whole: whole, part: from)], from.sources ?? []) ~~ (.origin = from.origin ?? from)
+  agrees (other) => !sources || !other.sources || sources.every(mine => other.sources{.whole === mine.whole}.every(.part === mine.part))
+  holds_for (branch) => superposed ? alternatives.some(alternative => alternative.agrees(branch) && alternative) : this
+}
+Superposed := Node{.superposed}
+{a: Superposed} [x] {b} => a.each(one => one[x] b)
+{a} [x] {b: Superposed} => b.each(one => a[x] one)
+{f}({argument: Superposed}) => argument.each(one => f(one))
+
+// `+1`, `*10`, `< 10`: an operator missing its left side is a function of it; `(*)`, `.map(!)`, `.map(&&)` name the operator itself (A1, A2).
+Section := class = operator: String, operand: Node? {
+  continues => true
+  (subject, other?) => operand != None ? (external get subject operator)(operand)
+    : other != None ? (external get subject operator)(other)
+    : (external get subject operator)
+}
+Operator := "!" | "&&" | "||" | "!&&" | "!||" | "x||" | "x!||" | "+" | "-" | "/" | "%" | "^" | "==" | "!=" | "<" | ">" | "<=" | ">="
+({operator: Operator}) ^operator => Section(operator)
+(*) ^operator => Section("*")
+{operator: Operator} ^operator => Section(operator)
++{operand} ^operator => Section("+", operand)
+*{operand} ^operator => Section("*", operand)
+/{operand} ^operator => Section("/", operand)
+%{operand} ^operator => Section("%", operand)
+=={operand} ^operator => Section("==", operand)
+!={operand} ^operator => Section("!=", operand)
+<{operand} ^operator => Section("<", operand)
+>{operand} ^operator => Section(">", operand)
+<={operand} ^operator => Section("<=", operand)
+>={operand} ^operator => Section(">=", operand)
+&&{operand} ^operator => Section("&&", operand)
+||{operand} ^operator => Section("||", operand)
+
+// `x.match` then one arm per line: a type, a literal, a section or a pattern, `*` for anything else (A7).
+Node &+= {
+  .match{\n}{arms} ^punctuation => matched(external ** arms)
+  matched (arms) => Program(code: arms).written.map(.code ~= (pattern: *, " => ", value: *)){
+    .pattern == "*" || this.answers_arm(Program(code: external ** .pattern).entered(this, None))
+  }.first -- . ? Program(code: external ** .value).entered(this, None) : None
+  answers_arm (arm) => arm ==.instance_of Section ? arm(this)
+    : arm ==.instance_of Anchored ? this ~= arm
+    : this ==.instance_of arm || this == arm
+}
+
+// `.( … )` reads its expression among the members of what is before it: `GeneralCategory.(Punctuation | Symbol)` (A8, L§10.1).
+Node &+= {
+  .({expr}) ^punctuation => Program(code: (external ** expr)).entered(this, None)
+}
+
+// Labels in a class body are its entries: `X~card(…)`, `X~"Name"()`, `X~5()`, `X~default` (L§4.2).
+Node &+= {
+  entries => written_body ? Program(code: written_body).written{.is_label} : []
+  entry_at (label) => label ==.instance_of Number ? entries[label - 1] : entries{.code == label + "\"}.first
+  ~default => this
+  ~{literal label ^label} ^punctuation => Entry(of: this, at: entry_at(label))
+  ~"{label}" ^punctuation => Entry(of: this, at: entry_at(label))
+  ~{index: Decimal.String} ^punctuation => Entry(of: this, at: entry_at(index as Decimal))
+}
+Entry := class = of: Node, at: Program? {
+  following => Program(code: of.written_body).written -- .[.index_of(at) + 1..]
+  ({args}) => of.construct(args) ~~ following.for(statement => statement.entered(., None))
+}
+
+// `x @ location` is x where that location is (A3, T7.1): `var @ &caller = …`, `"A1" @ @me.managed`.
+Node &+= {
+  @{ }{location} ^punctuation => Placed(value: this, location: location)
+  placed (variable, written) => this[variable] = written
+}
+Placed := class = value: Node, location: Node {
+  = (written) => location.placed(value, written) -- this
+  .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : external get value property
+}
+
+// `?` alone is unknown: every value of what it stands for; `x ?= y` gives x a value only while it has none (T1.6, L§10.1).
+? ^keyword => Unknown()
+Unknown := class {
+  # => Possibilities(values: [])
+  random => chosen_within(1)
+  admits (candidate) => true
+}
+{target} ?= {value} ^punctuation => target = target ?? value
+
+// `x is T` is `x ==.instance_of T`: `"A", "A", "A" is "A"[]` (A5).
+Node &+= {
+  is (type) => .instance_of(type)
+}
+
+// `x ~= pattern` reads the pattern somewhere in x and answers that reading; `⊢` holds it to the start, `⊣` to the end (U9, T4.4, G4.3, R1.1).
+Node &+= {
+  ~= (pattern) => read_within(this, pattern)
+  !~= (pattern) => !(this ~= pattern)
+  right-to-left ⊢ => Anchored(pattern: this, at_start: true)
+  ⊣ => Anchored(pattern: this, at_end: true)
+}
+Anchored := class = pattern: Node, at_start: boolean = false, at_end: boolean = false {
+  ⊣ => Anchored(pattern, at_start, at_end: true)
+}
+read_within (text, pattern) => (
+  found := None
+  if pattern.superposes {
+    alternative := pattern.components.head
+    while (alternative && found.not) {
+      found = read_within(text, alternative.value)
+      alternative = alternative.next
+    }
+  } else {
+    at_start := pattern ==.instance_of Anchored && pattern.at_start
+    at_end := pattern ==.instance_of Anchored && pattern.at_end
+    wanted := pattern ==.instance_of Anchored ? pattern.pattern : pattern
+    start := text_bits(text).head
+    index := 0
+    searching := global
+    while (searching && found.not) {
+      candidate := readings_of(start, wanted).head
+      while (candidate && found.not) {
+        unless (at_end && candidate.value.rest) { found = candidate.value ~~ .index = index }
+        candidate = candidate.next
+      }
+      if (at_start || !start) { searching = None } else {
+        byte := byte_steps.head
+        while (byte && start) {
+          start = start.next
+          byte = byte.next
+        }
+        index = index.succ
+      }
+    }
+  }
+  found
+)
+
+// `T+` is one or more of T (`Digit+`, `0+`) (T4.10).
+{type}+{ } ^punctuation => type[]
+{type}+, {rest} ^punctuation => type[], rest
+
+// `internal` is seen in its own file and class only, `protected` by what is built on it; `trivially` is what needs no running to know (T3.16, G6.2).
+Node &+= {
+  right-to-left internal => this ~~ .access = Accessor(Accessor.Permission.local)
+  right-to-left protected => this ~~ .access = Accessor(Accessor.Permission.protected)
+  right-to-left trivially => instance ? this : ?
+}
+
+// `∀ x ∈ xs: p`, `∃ x ∈ xs: p`, `∃ x: T p`, `x ∈ T`, `x ∉ T`, `T ∋ x` (R1.1, L§10.2).
+∀{ }{name} ∈ {domain}: {predicate} ^keyword => domain.every(Program(code: external ** predicate, parameters: external ** name))
+∃{ }{name} ∈ {domain}: {predicate} ^keyword => domain.some(Program(code: external ** predicate, parameters: external ** name))
+∃{ }{name}: {type} {predicate} ^keyword => type#.some(Program(code: external ** predicate, parameters: external ** name))
+∄{ }{name}: {type} {predicate} ^keyword => !type#.some(Program(code: external ** predicate, parameters: external ** name))
+Node &+= {
+  ∈ (type) => .instance_of(type) || (type.contains && type.contains(this))
+  ∉ (type) => !(this ∈ type)
+  ∋ (element) => element ∈ this
+  ∌ (element) => element ∉ this
+}
+
+// `print(x)` writes x as text to the standard output (Almanac §0.3).
+print (x) => IO.output(x as String) -- x
+
+// A call superposed with another keeps where it came from: `(f(1) | g(2))#.origin == f(1), g(2)` (U1).
+Origin := class = method: Node, arguments: Node {
+  == (other) => other === method || (other ==.instance_of Origin && other.method === method && other.arguments == arguments)
+}
+{f}({a}) | {g}({b}) ^punctuation => (f(a)++ ~~ .origin = Origin(f, a)) | (g(b)++ ~~ .origin = Origin(g, b))
+{f}({a}) | {rest} ^punctuation => (f(a)++ ~~ .origin = Origin(f, a)) | rest
+{rest} | {g}({b}) ^punctuation => rest | (g(b)++ ~~ .origin = Origin(g, b))
+
+// `&` is the context being run and `&name` a member of it: `&caller`, `&entrypoint` (U4, P1.3).
+& ^keyword => external .
+&{literal member ^variable} ^keyword => external get (external .) member

@@ -8,6 +8,7 @@ IO := class {
   }
   read (path) => (external io inside(path) None) as String
   write (path, content) => external io inside(path) content
+  output (text: String) => external io `/dev/stdout` text
   host (path) => permitted ? (external io path None) as String : Quest(name: "ask for the host's files", goal: path)
   field (name: String) => (name + ".ray", name + "/", name).map(read(.)).first(.nonempty) ?? ""
 

@@ -26,6 +26,13 @@ Running := class = program: Program, at: Program?, started: boolean = false, res
 // `dynamically x = …` re-evaluates when what it depends on changes (P5.1, P5.3).
 dynamically {name} = {value} ^keyword => external rule name value
 dynamically {name} := {value} ^keyword => external rule name value
+// `dynamically x` is x read again whenever it is read; `dynamically if c { … }` runs again whenever c changes (P5.1).
+dynamically if{ }{cond}{ }{block} ^keyword => Dynamic(program: () => if cond block)
+dynamically{ }{value} ^keyword => Dynamic(program: Program(code: external ** value))
+Dynamic := class = program: Program {
+  .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : external get program() property
+  as (=== boolean) => program() as boolean
+}
 // Every failing condition is reported together (P5.6).
 dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR@. `assertion failed`) -- .empty
 

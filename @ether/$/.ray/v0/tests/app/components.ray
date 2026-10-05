@@ -72,3 +72,38 @@ unless G2().depth == 2 { INFO@mark `C27 the middle class answers its parent's` }
 unless G1().depth == 1 { INFO@mark `C28 the first class answers something else` }
 unless G3.super { INFO@mark `C29 a class three deep has no super` }
 unless G3.super.depth == 2 { INFO@mark `C30 super does not reach the class it is built on` }
+
+// `#` is what a value may be (A1, T2.3)
+unless boolean#.count == 2 { INFO@mark `HS1 boolean does not have two possible values` }
+unless (1 | 2 | 3)#.count == 3 { INFO@mark `HS2 a superposition of three does not have three possible values` }
+unless 5#.count == 1 { INFO@mark `HS3 a single value has other than one possible value` }
+unless (1 | 2)#.contains((1 | 2)#.random) { INFO@mark `HS4 a random possible value is not one of them` }
+unless (1 | 2)#.succ.contains(3) { INFO@mark `HS5 a member asked of the possible values is not asked of each` }
+unless #(1 | 2) == (1 | 2)# { INFO@mark `HS6 #x is not x#` }
+
+// `&+` and `|+` superpose components; `+` lets the right one override (T2.1, A1)
+unless (true &+ "A").next == false & "B" { INFO@mark `SP1 &+ does not answer with both components` }
+unless (true |+ "A").next == false | "B" { INFO@mark `SP2 |+ does not answer with either component` }
+
+// What is done with a superposition is done with each value (A1, U1)
+unless (1 & 2) + 1 == 2 & 3 { INFO@mark `SP3 an operator does not carry through &` }
+unless (1 | 2) + 1 == 2 | 3 { INFO@mark `SP4 an operator does not carry through |` }
+unless 10 - (1 | 2) == 9 | 8 { INFO@mark `SP5 a superposition on the right does not carry` }
+incremented (a) => a + 1
+unless incremented(1 & 2) == 2 & 3 { INFO@mark `SP6 a call does not carry through &` }
+unless incremented(1 | 2) == 2 | 3 { INFO@mark `SP7 a call does not carry through |` }
+
+// A superposed element makes branches: one path through each value (U1)
+branched := [1, "2a" | "2b", 3]
+unless branched#.count == 2 { INFO@mark `SP8 a superposed element in a list does not make two paths` }
+unless branched#.some(== [1, "2b", 3]) { INFO@mark `SP9 a path through the second value is missing` }
+
+// Each value remembers where it came from; fixing a source refines what depends on it (U1)
+doubled (a) => a * 2
+tripled (a) => a * 3
+traced := doubled(1) | tripled(2)
+unless traced#.origin.contains(doubled) { INFO@mark `SP10 a superposed call does not remember what it came from` }
+unless traced#{.origin == tripled}.first == 6 { INFO@mark `SP11 a value is not selected by its origin` }
+chosen := 1 | 2
+result := chosen + 10
+unless result{chosen == 2} == 12 { INFO@mark `SP12 fixing a source does not refine what depends on it` }

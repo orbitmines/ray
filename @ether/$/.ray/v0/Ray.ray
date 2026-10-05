@@ -51,61 +51,31 @@ Iterable := class: Ordered {
     false
   )
 
-  .reduce(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => (
-    names ^keyword := external ** accumulator
-    step_written ^keyword := external ** step
+  .reduce(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => .reduced_by(Program(code: (external ** step), parameters: (external ** accumulator)))
+  .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => .reduced_from(initial, Program(code: (external ** step), parameters: (external ** accumulator)))
+  .reduce({literal operator ^operator}) ^punctuation => .reduce((accumulated) => accumulated[operator] .)
+  .reduce_right(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => .reverse.reduced_by(Program(code: (external ** step), parameters: (external ** accumulator)))
+  .reduce_right({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => .reverse.reduced_from(initial, Program(code: (external ** step), parameters: (external ** accumulator)))
+  .reduce_right({literal operator ^operator}) ^punctuation => .reverse.reduce((accumulated) => accumulated[operator] .)
+
+  reduced_by (stepping) => (
     accumulated ^keyword := None
     started ^keyword := false
     for {
-      if started {
-        entering ^keyword := chain None
-        entering.target = it.value
-        external define entering.target `reduce_step{arguments}` {
-          (inline names) := arguments
-          inline step_written
-        } accumulator
-        accumulated = entering.target.reduce_step(accumulated)
-      } else {
+      if started { accumulated = stepping.entered(it.value, accumulated) } else {
         accumulated = it.value
         started = true
       }
     }
     accumulated
   )
-  .reduce({literal operator ^operator}) ^punctuation => (
-    accumulated ^keyword := None
-    started ^keyword := false
-    for {
-      if started { accumulated = accumulated[operator] it.value } else {
-        accumulated = it.value
-        started = true
-      }
-    }
-    accumulated
-  )
-  .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => (
-    names ^keyword := external ** accumulator
-    step_written ^keyword := external ** step
-    accumulated ^keyword := initial
-    for {
-      entering ^keyword := chain None
-      entering.target = it.value
-      external define entering.target `reduce_step{arguments}` {
-        (inline names) := arguments
-        inline step_written
-      } accumulator
-      accumulated = entering.target.reduce_step(accumulated)
-    }
+  reduced_from (seed, stepping) => (
+    accumulated ^keyword := seed
+    for { accumulated = stepping.entered(it.value, accumulated) }
     accumulated
   )
 
-  all => (
-    superposed ^keyword := None
-    for {
-      if (superposed) { superposed = superposed | it.value } else { superposed = it.value }
-    }
-    superposed
-  )
+  all => .reduce(|)
 
   min => (
     smallest ^keyword := None
@@ -285,16 +255,8 @@ Iterable := class: Ordered {
 }
 
 Iterable.components.hierarchy &= class {
-  sum => (
-    total ^keyword := 0
-    this for { total = total + it.value }
-    total
-  )
-  product => (
-    total ^keyword := 1
-    this for { total = total * it.value }
-    total
-  )
+  sum => .reduce(total = 0 => total + .)
+  product => .reduce(total = 1 => total * .)
 }
 
 Iterable.components.hierarchy &= class {
@@ -668,57 +630,6 @@ Iterable.components.hierarchy &= class {
     }
     pieces &= current
     pieces
-  )
-
-  .reduce_right({literal operator ^operator}) ^punctuation => (
-    reversed ^keyword := .reverse
-    accumulated ^keyword := None
-    started ^keyword := false
-    reversed for {
-      if started { accumulated = accumulated[operator] it.value } else {
-        accumulated = it.value
-        started = true
-      }
-    }
-    accumulated
-  )
-  .reduce_right(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => (
-    names ^keyword := external ** accumulator
-    step_written ^keyword := external ** step
-    reversed ^keyword := .reverse
-    accumulated ^keyword := None
-    started ^keyword := false
-    reversed for {
-      if started {
-        entering ^keyword := chain None
-        entering.target = it.value
-        external define entering.target `reduce_step{arguments}` {
-          (inline names) := arguments
-          inline step_written
-        } accumulator
-        accumulated = entering.target.reduce_step(accumulated)
-      } else {
-        accumulated = it.value
-        started = true
-      }
-    }
-    accumulated
-  )
-  .reduce_right({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => (
-    names ^keyword := external ** accumulator
-    step_written ^keyword := external ** step
-    reversed ^keyword := .reverse
-    accumulated ^keyword := initial
-    reversed for {
-      entering ^keyword := chain None
-      entering.target = it.value
-      external define entering.target `reduce_step{arguments}` {
-        (inline names) := arguments
-        inline step_written
-      } accumulator
-      accumulated = entering.target.reduce_step(accumulated)
-    }
-    accumulated
   )
 
   enumerate => (

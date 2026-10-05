@@ -111,3 +111,7 @@ Number &+= {
 {a} [x] {b} [y] {c} => a.written_as.precedence(x) >= a.written_as.precedence(y)
   ? (a [x] b) [y] c
   : a [x] (b [y] c)
+
+// An anonymous function is a value: a parameter list has no `{`, so a rule head like `({expr})` still reads as a rule (B21).
+Parameters := String{!.contains("{")}
+({parameters: Parameters}) => {block} => Program(code: (external ** block), parameters: (external ** parameters))

@@ -120,7 +120,7 @@ UI := class {
     history: Location[] = []
     at: Location => history.last ?? "/"
     go (to: Location) => history.push to
-    back => history.pop_back
+    back => history.pop_back -- at
     title: String = ""
     icon: Location?
     description: String = ""

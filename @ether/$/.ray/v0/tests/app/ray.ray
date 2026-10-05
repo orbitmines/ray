@@ -150,12 +150,12 @@ unless nested.flatten(2).last == [3] { INFO@mark `RL7 flatten two levels does no
 unless nested.flatten(0).count == 1 { INFO@mark `RL8 flatten none changes the count` }
 unless threes.flatten(3).count == 3 { INFO@mark `RL9 flatten levels on numbers splices what they are made of` }
 
-unless [3, 1, 2].min == 1 { INFO@mark `RM1 the smallest of three, one and two is not one` }
-unless [3, 1, 2].max == 3 { INFO@mark `RM2 the largest of three, one and two is not three` }
-unless threes.min == 1 { INFO@mark `RM3 the smallest of one, two and three is not one` }
-unless threes.max == 3 { INFO@mark `RM4 the largest of one, two and three is not three` }
-unless [0, 5].min.is_zero { INFO@mark `RM5 the smallest of zero and five is not zero` }
-unless [0, 5].max == 5 { INFO@mark `RM6 the largest of zero and five is not five` }
+unless [3, 1, 2].min == 1 { INFO@mark `MIN1 the smallest of three, one and two is not one` }
+unless [3, 1, 2].max == 3 { INFO@mark `MIN2 the largest of three, one and two is not three` }
+unless threes.min == 1 { INFO@mark `MIN3 the smallest of one, two and three is not one` }
+unless threes.max == 3 { INFO@mark `MIN4 the largest of one, two and three is not three` }
+unless [0, 5].min.is_zero { INFO@mark `MIN5 the smallest of zero and five is not zero` }
+unless [0, 5].max == 5 { INFO@mark `MIN6 the largest of zero and five is not five` }
 unless repeated.min == 1 { INFO@mark `RM7 the smallest with a repeat is not one` }
 unless 5.min(3) == 3 { INFO@mark `RM8 the smaller of five and three is not three` }
 unless 5.max(3) == 5 { INFO@mark `RM9 the larger of five and three is not five` }
@@ -190,9 +190,24 @@ ends := [2].push_back(3).push_front(1)
 unless ends == [1, 2, 3] { INFO@mark `IT35 pushing onto both ends does not give one, two and three` }
 unless ends.first == 1 { INFO@mark `IT36 what was pushed in front is not first` }
 unless ends.last == 3 { INFO@mark `IT37 what was pushed at the back is not last` }
-unless ends.remove(1) == [2, 3] { INFO@mark `IT38 removing the first does not leave the other two` }
-unless ends.remove(3) == [1, 2] { INFO@mark `IT39 removing the last does not leave the other two` }
-unless ends.remove(1).remove(3) == [2] { INFO@mark `IT41 what is left is not the middle` }
+unless ends.pop_front == 1 { INFO@mark `IT38 popping the front does not give the first` }
+unless ends.pop_back == 3 { INFO@mark `IT39 popping the back does not give the last` }
+unless ends.count == 1 { INFO@mark `IT40 two popped off three do not leave one` }
+unless ends.first == 2 { INFO@mark `IT41 what is left is not the middle` }
+unless ends == [2] { INFO@mark `IT42 the one left is not all there is` }
+unless [1, 2, 3].remove(1) == [2, 3] { INFO@mark `IT69 removing the first does not leave the other two` }
+unless [1, 2, 3].remove(3) == [1, 2] { INFO@mark `IT70 removing the last does not leave the other two` }
+unless [1, 2, 3].remove(1).remove(3) == [2] { INFO@mark `IT71 removing both ends does not leave the middle` }
+
+walked := 0
+a.for(x => walked += 1)
+unless walked == 3 { INFO@mark `R39 walking a ray of three does not visit three` }
+total := 0
+[1, 2, 3].for(x => total += x)
+unless total == 6 { INFO@mark `R40 walking one, two and three does not add to six` }
+reached := 0
+threes.for<Traverser.BreadthFirst>(x => reached += 1)
+unless reached == 3 { INFO@mark `RR80 walking three things breadth-first does not reach three` }
 unless [3, 1, 2].sort == [1, 2, 3] { INFO@mark `IT43 sorted, three, one and two are not one, two and three` }
 unless [3, 1, 2].sort.last == 3 { INFO@mark `IT44 sorted, the last is not the largest` }
 unless [3, 1, 2].sort_by(10 - .) == [3, 2, 1] { INFO@mark `IT67 sorted by what they are short of ten, they are not largest first` }

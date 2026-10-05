@@ -21,9 +21,9 @@ World := class: Location + Nameable {
   quests: Quest[] = []
   dynamics: Dynamics[] = []
 
-  spawn (character: Character) => characters.push character
-  add (item: Item) => items.push item
-  post (quest: Quest) => quests.push quest
+  spawn (character: Character) => characters.push character -- character
+  add (item: Item) => items.push item -- item
+  post (quest: Quest) => quests.push quest -- quest
   population => characters.count
 
   within_worlds: World[] => (worlds, children{==.instance_of World}).flat_map((., .within_worlds))
@@ -33,7 +33,7 @@ World := class: Location + Nameable {
   static Name := class = name: String, value: *?
   names: Name[] = []
 
-  define (name: String, value) => names.push(Name(name, value)).value
+  define (name: String, value) => names.push(Name(name, value)) -- value
   unset (name: String) => define(name, None)
   lookup (name: String) => {
     return defined.value if defined = names{.name == name}.last
@@ -55,7 +55,7 @@ World := class: Location + Nameable {
   reservations: Reservation[] = []
 
   reserved (name: String) => reservations{.name.fold_case == name.fold_case}.first
-  issue (name: reservable_names) => reservations.push Reservation(name, issuer: this)
+  issue (name: reservable_names) => Reservation(name, issuer: this) ~~ reservations.push(.)
   reserve (name: reservable_names) => reserved(name) ?? issue(name)
   allocate (name: reservable_names, holder) => reserve(name) ~~ .holder = holder
   allocated (name: String) => reserved(name)?.holder
@@ -151,7 +151,7 @@ History := class = repository: *?, commits: Commit[] = [], from: History? {
   appears (name: String) => INFO@name `a variable is named like a generic type used silently before` if generics.contains(name)
 
   static clocks: HybridClock[] = []
-  clock => History.clocks{node === repository}.first ?? (History.clocks.push HybridClock(node: repository))
+  clock => History.clocks{node === repository}.first ?? (HybridClock(node: repository) ~~ History.clocks.push(.))
 
   operate (who, kind, definition, before, after) => Operation(kind, definition, clock.now, who, before, after) -- commit(who, .)
   define (who, definition, code) => operate(who, Operation.Kind.define, definition, None, code)
@@ -219,7 +219,7 @@ Instance := class: Location {
 
   == (other) => key ? key == other.key : this === other
 
-  login (character: Character) => registry.push character
+  login (character: Character) => registry.push character -- character
   logged_in (character: Character) => registry.contains(character)
   logout (character: Character, delete_all = false) => {
     registry = registry{!== character}
@@ -235,7 +235,7 @@ Instance := class: Location {
   }
   spawn (character: Character) => login(character)
 
-  host_for (character: Character) => hosted.push(character) ~~ .presence = this
+  host_for (character: Character) => character ~~ hosted.push(.) ~~ .presence = this
   mirror (value, depth = 1) => Mirror(value, location: this, depth)
 
   static Deletion := class: Quest (character: Character, due: Time) {
@@ -278,7 +278,7 @@ Character := class: Entity + Nameable {
   == (other) => key ? key == other.key : this === other
 
   choose (kind) => Quest(name: "choose", goal: kind, solved_by: this)
-  embody (avatar: Avatar) => avatars.push avatar
+  embody (avatar: Avatar) => avatars.push avatar -- avatar
 
   read => Access(this)
   write => on(`=`)

@@ -38,7 +38,7 @@ Network &+= {
     static Equivalence := class = name: String, host: String
     equivalences: Equivalence[] = []
 
-    equate (name: String, host: String) => equivalences.push(Equivalence(name.fold_case, host)).host
+    equate (name: String, host: String) => equivalences.push(Equivalence(name.fold_case, host)) -- host
     resolved (name: String) => DomainName(equivalences{.name == name.fold_case}.last?.host ?? name)
   }
 
@@ -46,7 +46,7 @@ Network &+= {
     static Record := class = name: String, address: *, key: *, when: Time = Time.now
     history: Record[] = []
 
-    record (name: String, address, key) => history.push(Record(name, address, key)).address
+    record (name: String, address, key) => history.push(Record(name, address, key)) -- address
     trusted (name: String, address, key) => (history{.name == name}.last?.key ?? key) == key
   }
 

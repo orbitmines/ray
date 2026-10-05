@@ -54,7 +54,7 @@ Choice := class {
   coin => Random.bit
   unique (from) => {
     picked = choose(from)
-    chosen.contains(picked) ? unique(from) : chosen.push picked
+    chosen.contains(picked) ? unique(from) : chosen.push picked -- picked
   }
 
   identities (values) => values.unique(===)

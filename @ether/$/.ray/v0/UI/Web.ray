@@ -12,7 +12,7 @@ Language.Web := class: Language {
     Document := class = head: Element[], body: Element, language: String = "en"
 
     Page := class = shape: Geometry.Shape
-    Head := class
+    Head := class = page: *
     Meta := class = name: String, content: *
     Named := class = shape: Geometry.Shape
     Described := class = shape: Geometry.Shape
@@ -25,6 +25,7 @@ Language.Web := class: Language {
 
     Escapes = { "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }
     escaped (text: String) => #text.map(Escapes[.] ?? .) as String
+    tags (page) => [[(name: "og:title", content: page.title), (name: "og:description", content: page.description), (name: "og:image", content: page.image as String) if page.image]{!(page.meta ?? []).name.contains(.name)}, page.meta ?? []].flatten(1){.content != None}
 
     Name = (Char.Letter, (Char.Word | "-" | ":" | ".")[])
     Entities = { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
@@ -52,17 +53,17 @@ Language.Web := class: Language {
     }
 
     rules := CSS.values + {
-      {page: HTML.Page} => Document(head: [Head()], body: @html <body>{page.shape}</body>)
-      {head: Head} => @html {
-        <title>{UI.Navigation.title}</title>
-        <meta name="description" content={UI.Navigation.description} />
-        {UI.Navigation.tags.map(Meta(.name, .content))}
-        {Meta("theme-color", CSS.Paint(UI.Navigation.theme)) if UI.Navigation.theme}
-        {[("canonical", UI.Navigation.canonical), ("icon", UI.Navigation.icon), ("apple-touch-icon", UI.Navigation.apple_icon), ("manifest", UI.Navigation.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
-        {UI.Navigation.structured.map(entry => @html <script type="application/ld+json">{Raw(JSON.write(JSON.Linked(entry, context: "https://schema.org")))}</script>)}
+      {page: HTML.Page} => Document(head: [Head(UI.page)], body: @html <body>{page.shape}</body>)
+      {head: Head} => head.page -- (page => @html {
+        <title>{page.title ?? ""}</title>
+        <meta name="description" content={page.description ?? ""} />
+        {tags(page).map(Meta(.name, .content))}
+        {Meta("theme-color", CSS.Paint(page.theme)) if page.theme}
+        {[("canonical", page.canonical), ("icon", page.icon), ("apple-touch-icon", page.apple_icon), ("manifest", page.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
+        {(page.structured ?? []).map(entry => @html <script type="application/ld+json">{Raw(JSON.write(JSON.Linked(entry, context: "https://schema.org")))}</script>)}
         <link rel="stylesheet" href="style.css" />
         <script src="app.js" defer />
-      }
+      })
       {meta: Meta{name ~= ("og:" | "article:" | "fb:", *)}} => @html <meta property={meta.name} content={meta.content} />
       {meta: Meta} => @html <meta name={meta.name} content={meta.content} />
 
@@ -467,6 +468,7 @@ Language.Web := class: Language {
     Typed := class = shape: Geometry.Shape
     Drawing := class = shape: Geometry.Shape
     Popping := class = shape: Geometry.Shape, scene: Geometry.Shape
+    Scrolling := class = shape: Geometry.Shape
 
     expressions := {
       {a} + {b} => @js {a} + {b}
@@ -486,47 +488,42 @@ Language.Web := class: Language {
         Prelude(),
         Devices(),
         page.shape.expand.map(shape => shape.dynamics.map(Updated(shape, .))),
-        UI.Watch.all{!.due}.map(watch => @js ray.subscribe({watch.watched.program.reads}, () => { {watch.action{O: expressions}()} })),
-        UI.Watch.all{.due && !.last}.map(timer => @js setTimeout(() => { {timer.action{O: expressions}()} }, {(timer.due - Time.now) as ms})),
+        UI.Watch.all.map(watch => @js ray.subscribe({watch.watched.reads}, () => { {watch.action{O: expressions}()} })),
         page.shape.expand.map(Mirrored(.)),
         page.shape.expand{.focusable}.map(shape => @js document.getElementById({shape.id}).addEventListener("click", (event) => ray.activate({shape.id}))),
         page.shape.expand.map(Typed(.)),
         page.shape.expand.map(Drawing(.)),
-        page.shape.expand.map(Popping(., page.shape))
+        page.shape.expand.map(Popping(., page.shape)),
+        page.shape.expand.map(Scrolling(.))
       ])
       {prelude: Prelude} => @js function effect(reads, body) { ray.subscribe(reads, body); body() }
       {devices: Devices} => @js {
-        ray.set("UI.Platform.handheld", /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer:coarse)").matches && !matchMedia("(pointer:fine)").matches || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
-        {[("pointerdown", "down"), ("pointermove", "moved"), ("pointerup", "up"), ("pointercancel", "up")].map((name, method) => @js window.addEventListener({name}, (event) => ray.call("UI.Pointer.{method}", ray.pointer(event), event.timeStamp)))}
-        window.addEventListener("wheel", (event) => ray.set("UI.Pointer.wheel", event.deltaY))
+        ray.set("@me/device/handheld", /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer:coarse)").matches && !matchMedia("(pointer:fine)").matches || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+        {["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel"].map(name => @js window.addEventListener({name}, (event) => ray.point(event)))}
         {["keydown", "keyup"].map(name => @js window.addEventListener({name}, (event) => ray.key(event)))}
-        window.addEventListener("focusin", (event) => ray.set("UI.Focus.current", event.target.id))
-        window.addEventListener("resize", (event) => ray.set("UI.Viewport.size", ray.size()))
-        window.addEventListener("popstate", (event) => ray.set("UI.Navigation.history", location.pathname))
-        window.addEventListener("paste", (event) => ray.set("UI.Clipboard.content", event.clipboardData.getData("text")))
-        window.addEventListener("drop", (event) => ray.set("UI.Drag.dropped", event.dataTransfer.files))
-        window.addEventListener("compositionupdate", (event) => ray.set("UI.Devices.composing", event.data))
-        window.addEventListener("deviceorientation", (event) => ray.set("UI.Devices.orientation", ray.orientation(event)))
+        window.addEventListener("focusin", (event) => ray.set("UI.focus", event.target.id))
+        window.addEventListener("resize", (event) => ray.set("UI.scene.size", ray.size()))
+        window.addEventListener("popstate", (event) => ray.set("UI.at", location.pathname))
+        window.addEventListener("paste", (event) => ray.set("@me/device/clipboard", event.clipboardData.getData("text")))
+        window.addEventListener("dragstart", (event) => ray.set(event.target.id + ".dragged", true))
+        window.addEventListener("dragend", (event) => ray.set(event.target.id + ".dragged", false))
+        window.addEventListener("drop", (event) => ray.set(event.target.id + ".dropped", event.dataTransfer.files))
+        window.addEventListener("compositionupdate", (event) => ray.call("UI.focus.content.composed", event.data))
+        window.addEventListener("deviceorientation", (event) => ray.set("@me/device/orientation", ray.orientation(event)))
+        window.addEventListener("devicemotion", (event) => ray.set("@me/device/motion", ray.motion(event)))
         window.addEventListener("gamepadconnected", (event) => ray.poll_gamepads())
-        window.matchMedia("(prefers-reduced-motion:reduce)").addEventListener("change", (event) => ray.set("UI.Viewport.preferences.reduced_motion", event.matches))
-        effect(["UI.Navigation.history"], () => history.pushState(null, "", ray.get("UI.Navigation.at")))
-        effect(["UI.Navigation.title"], () => document.title = ray.get("UI.Navigation.title"))
-        window.addEventListener("scroll", (event) => ray.set("UI.Viewport.scrolled", window.scrollY))
-        effect(["UI.Viewport.scrolled"], () => {
-          const y = ray.get("UI.Viewport.scrolled")
-          if (Math.abs(scrollY - y) > 1) scrollTo(0, y)
+        window.matchMedia("(prefers-reduced-motion:reduce)").addEventListener("change", (event) => ray.set("@me/device/preferences.reduced_motion", event.matches))
+        window.matchMedia("(prefers-color-scheme:dark)").addEventListener("change", (event) => ray.set("@me/device/preferences.dark", event.matches))
+        effect(["UI.at"], () => history.pushState(null, "", ray.get("UI.at")))
+        effect(["UI.page.title"], () => document.title = ray.get("UI.page.title"))
+        window.addEventListener("scroll", (event) => ray.set("UI.scene.scrolled.y", window.scrollY))
+        effect(["UI.scene.scrolled"], () => {
+          const y = ray.get("UI.scene.scrolled.y")
+          if (Math.abs(scrollY - y) > 1) scrollTo(\{top: y, behavior: ray.get("UI.scene.scrolling") ? "smooth" : "auto"})
         })
-        effect(["UI.Viewport.revealing"], () => {
-          const r = ray.get("UI.Viewport.revealing")
-          const e = r && document.getElementById(r.shape.id)
-          if (e) {
-            if (r.within || !r.offset) e.scrollIntoView(\{block: r.align, behavior: r.smooth ? "smooth" : "auto"})
-            else scrollTo(\{top: e.getBoundingClientRect().top + scrollY + r.offset, behavior: r.smooth ? "smooth" : "auto"})
-          }
-        })
-        effect(["UI.Selection.range"], () => {
-          const r = ray.get("UI.Selection.range")
-          const e = r && (document.getElementById(r.shape.id + "-text") || document.getElementById(r.shape.id))
+        effect(["UI.selection"], () => ray.get("UI.selection").forEach((s) => {
+          const r = s.text.marks.find((m) => m.style === "selected")
+          const e = r && (document.getElementById(s.id + "-text") || document.getElementById(s.id))
           if (e) {
             if (e.setSelectionRange) {
               e.focus()
@@ -538,12 +535,13 @@ Language.Web := class: Language {
               getSelection().addRange(g)
             }
           }
-        })
-        effect(["UI.Viewport.locking"], () => document.documentElement.classList.toggle("locked", ray.get("UI.Viewport.locking")))
-        effect(["UI.Platform.notifications"], () => new Notification(ray.get("UI.Platform.notifications.last.title")))
-        effect(["UI.Platform.fullscreen"], () => document.documentElement.requestFullscreen())
-        effect(["UI.Platform.printing"], () => window.print())
-        effect(["UI.Clipboard.content"], () => navigator.clipboard.writeText(ray.get("UI.Clipboard.content")))
+        }))
+        effect(["UI.locked"], () => document.documentElement.classList.toggle("locked", ray.get("UI.locked")))
+        effect(["@me/device/notification"], () => new Notification(ray.get("@me/device/notification.title"), \{body: ray.get("@me/device/notification.body")}))
+        effect(["@me/device/fullscreen"], () => document.documentElement.requestFullscreen())
+        effect(["@me/device/printing"], () => window.print())
+        effect(["@me/device/clipboard"], () => navigator.clipboard.writeText(ray.get("@me/device/clipboard")))
+        effect(["@me/device/opened"], () => open(ray.get("@me/device/opened"), "_blank", "noopener"))
       }
       {updated: Updated{dynamic.target == "class"}} => @js effect({updated.dynamic.reads}, () => document.getElementById({updated.shape.id}).className = {updated.dynamic.compiled{O: expressions}()})
       {updated: Updated} => @js effect({updated.dynamic.reads}, () => { {updated.dynamic.compiled{O: expressions}()} })
@@ -553,12 +551,14 @@ Language.Web := class: Language {
       {typed: Typed} => []
       {drawing: Drawing{shape.content is Program}} => @js effect({drawing.shape.content.reads}, () => ray.draw({drawing.shape.id}, {drawing.shape.content.rendered(Language.Direct.level)}))
       {drawing: Drawing} => []
-      {popping: Popping{shape is UI.Popover && shape.trigger != always}} => popping.shape.anchor_in(popping.scene).id -- (anchor => [
+      {popping: Popping{shape is UI.Popover}} => popping.shape.anchor_in(popping.scene).id -- (anchor => [
         ["pointerenter", "focusin"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({popping.shape.id}).showPopover())),
         ["pointerleave", "focusout"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({popping.shape.id}).hidePopover()))
       ])
       {popping: Popping{shape.position.kind == anchored && shape.visible}} => @js document.getElementById({popping.shape.id}).showPopover()
       {popping: Popping} => []
+      {scrolling: Scrolling{shape.overflow == scroll}} => scrolling.shape.id -- (id => @js effect([{id + ".scrolled"}], () => document.getElementById({id}).scrollTo(\{top: ray.get({id + ".scrolled.y"}), behavior: ray.get({id + ".scrolling"}) ? "smooth" : "auto"})))
+      {scrolling: Scrolling} => []
     }
 
     written := JSON.written + {
@@ -600,7 +600,7 @@ Language.Web := class: Language {
       (path: "style.css", content: CSS.Page(solved.shape)),
       (path: "app.js", content: JS.Page(solved.shape)),
       solved.shape.expand{.content is Location && .content.media}.map((path: .content.name, content: .content)),
-      [UI.Navigation.icon, UI.Navigation.apple_icon, UI.Navigation.manifest]{!= None}.map((path: .name, content: .))
+      [UI.page?.icon, UI.page?.apple_icon, UI.page?.manifest]{!= None}.map((path: .name, content: .))
     ].flatten)
   }
   level := Geometry.Solving + packaged + HTML.rules + CSS.rules + JS.rules
@@ -630,13 +630,14 @@ Language.Web := class: Language {
 
     Id = Char{!= " "}[]
     Event := class = id: String {
-      shape => UI.scene?.expand{.id == id}.first
+      shape => UI.scene.expand{.id == id}.first
     }
     Click := class: Event (id: Id, " click")
     Input := class: Event (id: Id, " input ", value: *)
     Focus := class: Event (id: Id, " focus")
     Scroll := class: Event (id: Id, " scroll ", y: Decimal)
-    Pointer := class: Event (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?) => {
+    Pointer := class: Event (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?, (" ", device: "mouse" | "pen" | "touch", " ", number: Decimal)?) => {
+      pointed => UI.pointed(device ?? "mouse", number ?? 0)
       position => Geometry.Vector(x * 1px, y * 1px)
       time => stamp ? stamp * 1 ms : Time.now
     }
@@ -646,11 +647,11 @@ Language.Web := class: Language {
     applied := {
       {click: Click} => click.shape?.activate
       {input: Input} => input.shape?.content.set(input.value)
-      {focus: Focus} => UI.Focus.current = focus.shape
-      {scroll: Scroll} => UI.Viewport.scrolled = scroll.y * 1px
-      {pointer: Pointer{kind == "pointerdown"}} => UI.Pointer.down(pointer.position, time: pointer.time)
-      {pointer: Pointer{kind == "pointermove"}} => UI.Pointer.moved(pointer.position, pointer.time)
-      {pointer: Pointer} => UI.Pointer.up(pointer.position, pointer.time)
+      {focus: Focus} => UI.focus = focus.shape
+      {scroll: Scroll} => UI.scene.scrolled = Geometry.Vector(0, scroll.y * 1px)
+      {pointer: Pointer{kind == "pointerdown"}} => pointer.pointed.to(pointer.position, pressing: [0], time: pointer.time)
+      {pointer: Pointer{kind == "pointermove"}} => pointer.pointed.to(pointer.position, time: pointer.time)
+      {pointer: Pointer} => pointer.pointed.to(pointer.position, pressing: [], time: pointer.time)
       {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- Keyboard.press(keystroke.key, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
       {keystroke: Keystroke} => Keyboard.release(keystroke.key)
       {size: Size{shape}} => size.shape.size = Geometry.Vector(size.width * 1px, size.height * 1px)
@@ -662,8 +663,8 @@ Language.Web := class: Language {
     start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
     stop => None
     write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as CSS.language])) if package.sheet)
-      -- send(line(["lock", UI.Viewport.locking as String]))
-      -- UI.Viewport.revealing && send(line(["reveal", UI.Viewport.revealing.shape.id, UI.Viewport.revealing.align as String, UI.Viewport.revealing.smooth as String])) -- (UI.Viewport.revealing = None)
+      -- send(line(["lock", UI.locked as String]))
+      -- send(line(["scroll", "window", (UI.scene.scrolled.y as px) as String, (UI.scene.scrolling != None) as String]))
     read => dispatched(received)
     copy (text: String) => send(line(["clipboard", text.escaped_line]))
     open (to: Location) => send(line(["open", (to as String).escaped_line]))

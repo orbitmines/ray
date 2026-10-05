@@ -15,7 +15,7 @@ Language.Direct := class: Language {
   Shown := class = draw: Draw
 
   rules := {
-    {solved: Geometry.Solved} => Drawing(Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px), [solved.shape, solved.shape.lifted].flatten.map(Draw(., Geometry.Transform.translate(Geometry.Vector(0, -solved.scrolled)))))
+    {solved: Geometry.Solved} => Drawing(Geometry.Raster(UI.scene.size.x as px, UI.scene.size.y as px), [solved.shape, solved.shape.lifted].flatten.map(Draw(., Geometry.Transform.translate(Geometry.Vector(0, -solved.scrolled)))))
     {drawing: Drawing{ops.flatten.every(. is Program)}} => drawing.raster ~~ drawing.ops.flatten
 
     {draw: Draw{shape.content is Choice}} => [
@@ -41,7 +41,7 @@ Language.Direct := class: Language {
         height = typeface.size * typeface.line_height
         glyph = Font(typeface).glyph(lines[row][.])
         (pen: placed.pen + glyph.advance * typeface.size / glyph.units, ops: [placed.ops,
-          Draw(Geometry.Box(origin: Geometry.Vector(placed.pen, row * height), size: Geometry.Vector(typeface.size * 0.6, height), fill: Geometry.Color(51, 144, 255, 0.4)), draw.placed) if UI.Selection.selects(text, starts[row] + .),
+          Draw(Geometry.Box(origin: Geometry.Vector(placed.pen, row * height), size: Geometry.Vector(typeface.size * 0.6, height), fill: look.fill), draw.placed) if look.styles.contains("selected"),
           Outlined(glyph.outlines, draw.placed * Geometry.Transform.translate(Geometry.Vector(placed.pen, row * height)) * Geometry.Transform.scale(Geometry.Vector(typeface.size / glyph.units, typeface.size / glyph.units)), look.color ?? Geometry.Color(0, 0, 0))
         ].flatten)
       }).ops).flatten
@@ -146,8 +146,8 @@ Language.Direct := class: Language {
   }
 
   Display := class = target: Location, title: String = "" {
-    write (raster: Geometry.Raster) => (title = UI.Navigation.title) -- IO.write(target, raster)
-    open (to: Location) => UI.Platform.launch(to)
+    write (raster: Geometry.Raster) => (title = UI.page?.title ?? "") -- IO.write(target, raster)
+    open (to: Location) => OS.launch(to)
     read => Language.Web.DOM.dispatched(external io `window` None)
   }
 }

@@ -138,6 +138,24 @@ OS := class {
   static Name := enum linux | macos | windows | ether | unknown
 
   name => { "linux": Name.linux, "darwin": Name.macos, "win32": Name.windows }[IO.platform] ?? Name.unknown
+  static launch (location: Location) => external os `open` (location as String)
+}
+
+Device := class {
+  static Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
+
+  capabilities: Capability?
+  handheld = false
+  clipboard: String | Location = ""
+  pads: (buttons: boolean[], axes: Number[])?
+  orientation: Geometry.Vector?
+  motion: Geometry.Vector?
+  geolocation: (latitude: Number, longitude: Number, accuracy: Geometry.Length)?
+  preferences: (reduced_motion: boolean, dark: boolean, contrast: more | less | normal, focused: boolean) = (false, false, normal, true)
+  notification: (title: String, body: String)?
+  fullscreen = false
+  printing = false
+  opened: Location?
 }
 
 Keyboard := class = keys: Key[] = [] {

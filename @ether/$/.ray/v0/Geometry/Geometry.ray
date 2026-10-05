@@ -77,7 +77,7 @@ Geometry := class {
     overflow: visible | clip | scroll = visible, scrollbar: shown | hidden = shown, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
     cursor: default | pointer | text | grab | grabbing | move | wait | none = default, touch: auto | none | pan_x | pan_y = auto,
     transition: Transition?, animations: Animation[] = [], dynamics: Dynamic[] = [], styles: String[] = [],
-    content: * = None, location: Location?, palette: String?,
+    content: * = None, location: Location?, palette: *?,
     align: (start | center | end | justify)?, wrap: (normal | none | anywhere)?, white_space: (normal | nowrap | pre | pre_wrap | pre_line)?,
     truncate: (clip | ellipsis)?, direction: (left-to-right | right-to-left)? {
     static made = 0
@@ -114,7 +114,8 @@ Geometry := class {
     in_place => children{.position.kind is (flow | sticky | absolute)}
     lifted => expand{.position.kind is (fixed | anchored) && .visible}.sort_by(.layer)
     moved (by: Vector) => (origin = origin + by) -- children.for(.moved(by)) -- this
-    at (point: Vector) => visible ? [children.sort_by(-.layer).map(.at(point)).flatten, this if contains(transform.inverse.applied(point - origin))] : []
+    at (point: Vector) => visible ? [children.sort_by(-.layer).map(.at(point)).flatten, this if covers(point)] : []
+    covers (point: Vector) => contains(transform.inverse.applied(point - origin))
     contains (point: Vector) => 0 <= point.x <= size.x && 0 <= point.y <= size.y
     intrinsic (width: Length) => content is String ? typeface.size * typeface.line_height * lines(width).count : 0
     anchor_in (scene: Shape) => position.anchor ?? parent_in(scene)

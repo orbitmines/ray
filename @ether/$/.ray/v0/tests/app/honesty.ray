@@ -1,43 +1,25 @@
-// The suite says what is wrong by writing it `unless` a claim holds, so what
-// `unless` does is the one thing that cannot be taken on trust: a test that
-// never fires reports nothing and looks like a test that passed. Here the
-// firing is counted instead of reported, so the counts are the claim.
+// What `unless` does cannot be taken on trust: here its firing is counted, not reported.
 
 mark ^keyword := external global
 
-fired ^keyword := 0
-unless (false) { fired = fired.succ }
-unless (1 == 2) { fired = fired.succ }
-unless (None) { fired = fired.succ }
-unless (fired == 3) { INFO@mark `HO1 unless does not take the block when the condition does not hold` }
+fired := 0
+unless false { fired += 1 }
+unless 1 == 2 { fired += 1 }
+unless None { fired += 1 }
+unless fired == 3 { INFO@mark `HO1 unless does not take the block when the condition does not hold` }
 
-held ^keyword := 0
-unless (true) { held = held.succ }
-unless (1 == 1) { held = held.succ }
-unless (mark) { held = held.succ }
-unless (held.is_zero) { INFO@mark `HO2 unless takes the block when the condition holds` }
+held := 0
+unless true { held += 1 }
+unless 1 == 1 { held += 1 }
+unless mark { held += 1 }
+unless held == 0 { INFO@mark `HO2 unless takes the block when the condition holds` }
 
-// spec: `unless` also takes the block when the condition cannot be read at
-// all, which is what a test wants — it is not claimed here, because writing an
-// unreadable condition down is an error the analysis reports.
+Side := enum near (of: "here") | far (of: "there") {}
+unless Side.near == Side.near { INFO@mark `HO3 a member is not itself` }
+if Side.near == Side.far { INFO@mark `HO4 two members of one enum are the same` }
+unless Side.near.of == "here" { INFO@mark `HO5 what a member holds is not what it was written as` }
+if Side.near.of == "there" { INFO@mark `HO6 a member holds what the other one does` }
 
-// And what the claims are made of: equality that says yes to everything, and a
-// written space that is nothing, both make a green suite out of nothing.
-// spec: a block an enum is written with goes across lines, or is written
-// `{}` with nothing between the braces. Written `{ }`, or with anything on
-// the same line as the last member, the enum keeps only that last member and
-// the first one is gone — the `{fields}` capture of the member rules is an
-// expression, not a group, so it takes the rest of the line. Bounding it to
-// `({fields})` does give both members back, but then the block itself counts
-// as a third thing the enum is made of.
-Side := enum near (of: `here`) | far (of: `there`) {}
-unless (Side.near == Side.near) { INFO@mark `HO3 a member is not itself` }
-if (Side.near == Side.far) { INFO@mark `HO4 two members of one enum are the same` }
-// A written text is compared through `String.of`, since a literal has no
-// equality of its own (the entrypoint says so where it would have gone).
-unless (Side.near.of.as(String) == "here") { INFO@mark `HO5 what a member holds is not what it was written as` }
-if (Side.near.of.as(String) == "there") { INFO@mark `HO6 a member holds what the other one does` }
-
-unless (" ".count == 1) { INFO@mark `HO7 a written space is not one character` }
-unless ("  ".count == 2) { INFO@mark `HO8 two written spaces are not two characters` }
-unless (" a ".count == 3) { INFO@mark `HO9 a letter between spaces is not three characters` }
+unless " ".length == 1 { INFO@mark `HO7 a written space is not one character` }
+unless "  ".length == 2 { INFO@mark `HO8 two written spaces are not two characters` }
+unless " a ".length == 3 { INFO@mark `HO9 a letter between spaces is not three characters` }

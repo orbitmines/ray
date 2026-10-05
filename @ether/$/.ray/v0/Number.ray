@@ -671,7 +671,7 @@ Program.components.hierarchy &= class {
     reading.written for {
       statement_head = it.value.head_read
       if (statement_head.ending) {
-        if ((statement_head.ending == colon).and(statement_head.points.head.value.as_character.word)) { wanted &= statement_head.points } elsif (reading.begins(it.value, joined_points(statement_head.points, left_to_say))) { wanted &= statement_head.points }
+        if ((statement_head.ending == colon).and(statement_head.points.head.value.instance_of(Char.Word))) { wanted &= statement_head.points } elsif (reading.begins(it.value, joined_points(statement_head.points, left_to_say))) { wanted &= statement_head.points }
       }
     }
     wanted

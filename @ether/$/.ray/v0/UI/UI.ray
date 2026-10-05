@@ -160,7 +160,7 @@ Render := class {
     written (box) => (
       lines := chain None
       Render.TUI.draw(box, lines)
-      lines.join(Char.newline.as(String))
+      lines.join("\n")
     )
     draw (box, lines) => (
       unless (box.text === None) { lines &= Render.TUI.styled(box) }
@@ -250,7 +250,7 @@ Render := class {
         rows &= line.join
         row = row + (step * 2)
       }
-      rows.join(Char.newline.as(String))
+      rows.join("\n")
     )
   }
 
@@ -281,7 +281,7 @@ Terminal := class {
   )
   emit (text) => external io `stdout` (text)
   read => external io `stdin` None
-  size => (external os `COLUMNS`).as(String).as_number
+  size => (external os `COLUMNS`).as(String) as Decimal
   decode (bytes) => (
     if (bytes == Terminal.escape("A")) { Keyboard.Direction.up }
     elsif (bytes == Terminal.escape("B")) { Keyboard.Direction.down }
@@ -314,7 +314,7 @@ Browser := class {
       .next_id = .next_id.succ
       .next_id
     )
-    line (parts) => parts.join(" ") + Char.newline.as(String)
+    line (parts) => parts.join(" ") + "\n"
     create (tag: String) => (
       id := .made
       Browser.send(.line([("create", id.as(String), tag)]))
@@ -346,8 +346,8 @@ Browser := class {
     event => (
       written := Browser.received
       if (written === None) { None } else {
-        parts := written.as(String).trimmed.split(U+0020)
-        Browser.Event(id: parts.at(0).value.as_number, kind: parts.at(1).value)
+        parts := written.as(String).trimmed.split(" ")
+        Browser.Event(id: parts[0] as Decimal, kind: parts[1])
       }
     )
   }

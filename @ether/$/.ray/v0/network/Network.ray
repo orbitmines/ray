@@ -5,7 +5,7 @@ Network &+= {
     name: String
     port: Port
 
-    static ether = Protocol("ether", 37839)
+    static ether = Protocol("ether", @ether.address.port)
     static https = Protocol("https", 443)
     static http = Protocol("http", 80)
     static ssh = Protocol("ssh", 22)
@@ -31,7 +31,7 @@ Network &+= {
   }
 
   static Socket := namespace {
-    static Address := class = host: *, port: Port
+    static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => { }
   }
 
   static Hosts := namespace {
@@ -101,12 +101,13 @@ Network &+= {
 }
 
 Instance &+= {
-  address: (Network.URL | Network.DomainName | IP | Network.Socket.Address)?
-  localhost => "localhost"
+  address: (Network.URL | Network.Socket.Address | IP | Network.DomainName)?
 
-  seen_from (other: Instance) => other === this ? localhost : address
+  seen_from (other: Instance) => other === this ? @localhost : address
+  local => address ==.instance_of @localnetwork
+  canonical: static => Instance(location, address: address as String as address.static)
   // No MAC address: a random one with the multicast bit set (https://datatracker.ietf.org/doc/html/rfc4122#section-4.5)
   mac_address: Binary⁴⁸ => (external os `mac_address`) ?? (Binary⁴⁸.random ~~ .[7] = 1)
 }
 
-Network.Hosts.equate("ether", "ether.orbitmines.com")
+{address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => Instance(location: address, address)

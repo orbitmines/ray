@@ -99,7 +99,7 @@ String[] &+= {
 }
 
 Number &+= {
-  as (base: Number.Base) as String => digits(base).map(as Char) as String
+  as (base: Number.Base) as String => digits(base).map(Char.digit) as String
   as String => this as 10 as String
 }
 

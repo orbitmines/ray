@@ -158,9 +158,9 @@ unless ("abcd" ~= "bc").index == 1 { INFO@mark `S129 what is found is not where 
 unless "abcd".ignore_case ~= "BC" { INFO@mark `S132 a pattern ignoring case does not find the other case` }
 if "abcd" ~= "BC" { INFO@mark `S133 a pattern minding case finds the other case` }
 
-unless 0 as Char == "0"[0] { INFO@mark `S138 nothing is not written 0` }
-unless 7 as Char == "7"[0] { INFO@mark `S139 seven is not written 7` }
-unless 11 as Char == "b"[0] { INFO@mark `S140 eleven is not written b` }
+unless Char.digit(0) == "0"[0] { INFO@mark `S138 nothing is not written 0` }
+unless Char.digit(7) == "7"[0] { INFO@mark `S139 seven is not written 7` }
+unless Char.digit(11) == "b"[0] { INFO@mark `S140 eleven is not written b` }
 
 unless 7 as String == "7" { INFO@mark `S141 seven does not spell 7` }
 unless 12 as String == "12" { INFO@mark `S142 twelve does not spell 12` }

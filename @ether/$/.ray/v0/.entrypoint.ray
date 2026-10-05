@@ -758,6 +758,13 @@ Node := base class {
     copy
   )
 
+  diagnostics = None
+  diagnosed (diagnostic) => (
+    unless this.diagnostics { this.diagnostics = chain None }
+    this.diagnostics &= diagnostic
+    this
+  )
+
   right-to-left ! => .not
 }
 

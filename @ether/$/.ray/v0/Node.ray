@@ -32,9 +32,8 @@ Node &+= {
   right-to-left persistent => Store.keep(this)
 
   // A value carries the diagnostics filed on it; `$` reads them (P6.1).
-  diagnostics = []
-  diagnosed (diagnostic: Diagnostic) => this++ ~~ .diagnostics = diagnostics.push(diagnostic)
-  erred => diagnostics.nonempty
+  // `diagnostics` and `diagnosed` are the entrypoint's: ERROR@ files on the value itself, from boot on.
+  erred => diagnostics?.nonempty ?? false
   recoverable => erred && !diagnostics.some(.fatal)
 
   $ => instance ? this : Store.of(this)

@@ -50,7 +50,7 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   }
 
   static None = Unit(global.None)
-  static Temporal = second
+  static Temporal => second
 
   // `year as ns`
   as (:== Quantity) => 1, this

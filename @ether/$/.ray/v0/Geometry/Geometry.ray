@@ -40,8 +40,7 @@ Geometry := class {
     static sin (turn: Number) => (0..10).map(k => (k.even ? 1 : -1) * (τ * turn) ^ (2 * k + 1) / (2 * k + 1)!).sum
   }
 
-  Color := class = red: Number{0 <= . <= 255}, green: Number{0 <= . <= 255}, blue: Number{0 <= . <= 255}, alpha: Probability = 1 {
-    static ("#", hex: Hexadecimal{length == 6 | 8}) as (=== Color) => Color(hex[..<2] as 16, hex[2..<4] as 16, hex[4..<6] as 16, (hex[6..<8] as 16 ?? 255) / 255)
+  Color := class ("#", red: Hexadecimal², green: Hexadecimal², blue: Hexadecimal², (alpha: Probability = 1) = (Hexadecimal² / 255)?) {
     luminance => (red * 299 + green * 587 + blue * 114) / 1000
     over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
     mix (other: Color, by: Probability) => Color(red + (other.red - red) * by, green + (other.green - green) * by, blue + (other.blue - blue) * by, alpha + (other.alpha - alpha) * by)
@@ -174,12 +173,7 @@ Geometry := class {
     left => sides is (all | left | horizontal) ? Pixels(amount.x) : 0px
     right => sides is (all | right | horizontal) ? Pixels(amount.x) : 0px
   }
-  Pixels := (length: Length | Number) => length is Number ? length * 1px
-    : length.quantities.map((quantity, unit) => unit.symbol.match
-      "em" | "rem" => quantity * 16px
-      "pt" => quantity * 4 / 3 * 1px
-      * => quantity * 1px
-    ).sum
+  Pixels := (length: Length | Number) => length is Number ? length * 1px : length as px
   Constraint := class = dimension: "x" | "y" | "z", least: Length?, most: Length?, share: (Number | Interpolated | Steps | Breakpoint[])?, align: Align?, aspect: Number?, columns: Number?, wrap: boolean = false {
     admits (length: Length) => (least == None || least <= length) && (most == None || length <= most)
     responsive => share is (Interpolated | Steps | Breakpoint[])
@@ -206,11 +200,7 @@ Geometry := class {
   related (item, relation, other) => Placed(item, relation, other)
 
   Solver := class = available: Vector, scrolled: Length = 0 {
-    resolved (length: Length?, against: Length) => length == None ? None : length.unit.symbol.match
-      "%" => against * length.amount / 100
-      "vw" => available.x * length.amount / 100
-      "vh" => available.y * length.amount / 100
-      * => Pixels(length)
+    resolved (length: Length?, against: Length) => length == None ? None : Compiler.reduced(Relative(length, against, available), Solving)
     fraction (share, width: Length) => share.match
       Interpolated | Steps => share.at(width)
       Breakpoint[] => (share as Steps).at(width)
@@ -288,8 +278,13 @@ Geometry := class {
 
   Unsolved := class = shape: Shape, available: Vector, scrolled: Length = 0
   Solved := class = shape: Shape, scrolled: Length = 0
+  Relative := class = length: Length, against: Length, available: Vector
   Solving := {
     {unsolved: Unsolved} => Solved(Solver(available: unsolved.available, scrolled: unsolved.scrolled).solve(unsolved.shape), unsolved.scrolled)
+    {relative: Relative{length.unit == %}} => relative.against * relative.length.amount / 100
+    {relative: Relative{length.unit == vw}} => relative.available.x * relative.length.amount / 100
+    {relative: Relative{length.unit == vh}} => relative.available.y * relative.length.amount / 100
+    {relative: Relative} => Pixels(relative.length)
   }
 
   Transition := class = duration: Quantity.Temporal, easing: Easing = ease
@@ -366,8 +361,8 @@ Number &+= {
 
 Unit(name: "pixel", symbol: "px")
 Unit(name: "point", symbol: "pt").multiple 4 / 3, px
-Unit(name: "em")
-Unit(name: "rem")
+Unit(name: "em").multiple 16, px
+Unit(name: "rem").multiple 16, px
 Unit(name: "viewport width", symbol: "vw")
 Unit(name: "viewport height", symbol: "vh")
 Unit(name: "cell")

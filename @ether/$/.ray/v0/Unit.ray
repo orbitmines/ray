@@ -1,4 +1,4 @@
-Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Unit.None)[]{length > 0} {
+Quantity<Base = Number> := class ((quantities: (quantity: Base, (" ", (unit: Unit = Unit.None) = (unit as String){quantity == 1 ? singular : plural || singular})?)[]{length > 0}).join(" ")) {
   dynamically assert quantities.every _, unit => unit == quantities.0.unit
   dynamically assert quantities.unit as quantities.0.unit[] -- .sorted(>)
 
@@ -31,8 +31,6 @@ Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Uni
   compounds * (per: Quantity) => unit is Unit.Rate ? Quantity(quantities: [(amount * per.in(unit.denominator), unit.numerator)])
     : ERROR `a quantity is multiplied by another only as a rate by what it is per`
   ± | +- (uncertainty: Quantity) => this - uncertainty | this + uncertainty
-
-  as (=== String) => quantities.map((quantity, unit) => (quantity as String) + " " + (unit as String)).join(" ")
 
   compounds / (unit: Unit) => Quantity(quantities: quantities.map((quantity, from) => (quantity, from / unit)))
 

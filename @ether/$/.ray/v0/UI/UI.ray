@@ -13,7 +13,16 @@ UI := class {
     {location: Location} => location.placed(Geometry.Box(content: location as String, location: location))
     {drawer: Drawer} => Geometry.Box(layer: drawer.layer, children: drawer.shown)
     {shape: Geometry.Shape} => shape
-    {chosen: Choice} => chosen as Input
+    {chosen: Choice{type is String{secret}}} => Secret(chosen)
+    {chosen: Choice{type is String{multiline}}} => TextArea(chosen)
+    {chosen: Choice{type is String}} => TextField(chosen)
+    {chosen: Choice{type is boolean}} => Checkbox(chosen)
+    {chosen: Choice{type is Number{least, most}}} => Slider(chosen)
+    {chosen: Choice{type is Number}} => NumberField(chosen)
+    {chosen: Choice{type is Time}} => DateField(chosen)
+    {chosen: Choice{type is Geometry.Color}} => ColorField(chosen)
+    {chosen: Choice{type is Location}} => FileField(chosen)
+    {chosen: Choice} => Select(chosen, options: chosen.type#)
     {superposed: |} => UI.choosing ? superposed.random : Geometry.Box(flow: inline, children: superposed.components)
     {lines: \n} => Geometry.Box(flow: vertical, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
@@ -30,8 +39,21 @@ UI := class {
   Drawing := {
     {page: Page} => Drawn(page.program{O: Scene}(), page.before)
   }
+  Unstyled := class = shape: Geometry.Shape
+  Styled := class = shape: Geometry.Shape, style: String, fresh: boolean = false
+  Setting := class = shape: Geometry.Shape, field: *
   Theming := {
-    {drawn: Drawn} => Themed(Theme.applied(drawn.shape), drawn.before)
+    {drawn: Drawn} => Themed(Compiler.reduced(Unstyled(drawn.shape), Theming), drawn.before)
+    {unstyled: Unstyled} => unstyled.shape -- (shape => Compiler.reduced([
+      Theme.kinds{shape is .kind}.map(Styled(shape, .style, fresh: true)),
+      shape.content.whole_marks{!shape.styles.contains(.style)}.map(Styled(shape, .style)) if shape.content is String,
+      shape.children.map(Unstyled(.))
+    ], Theming)) -- unstyled.shape
+    {styled: Styled{fresh}} => styled.shape.styles -- (own => (styled.shape.styles = []) -- [Styled(styled.shape, styled.style), own.map(Styled(styled.shape, .))])
+    {styled: Styled} => (styled.shape.styles.push styled.style) -- Theme[styled.style].fields{.name != "name"}.map(Setting(styled.shape, .))
+    {setting: Setting{field.name == "font"}} => setting.shape.font = setting.shape.font ? setting.shape.font.merged(setting.field.value) : setting.field.value
+    {setting: Setting{field.name is ("spacing" | "constraints" | "effects")}} => setting.field.value.map(setting.shape + .)
+    {setting: Setting} => setting.shape.`setting.field.name` = setting.field.value
   }
   Transitions := {
     {themed: Themed} => Geometry.Unsolved(themed.shape.transitioned_from(themed.before), Viewport.size, Viewport.scrolled)
@@ -41,7 +63,53 @@ UI := class {
     {solved: Geometry.Solved} => Screen([solved.shape, solved.shape.lifted].flatten, solved.scrolled)
   }
 
-  Image := Language.register(Language(".png" | ".jpg" | ".jpeg" | ".gif" | ".svg" | ".webp" | ".avif", reader: (bytes) => bytes as Geometry.Raster))
+  Deflate := Language.register(Language(".deflate"))
+  Zlib := class (method: Byte, flags: Byte, deflated: Byte[], adler: Binary³²) {
+    inflated: Byte[] => Deflate.read(deflated)
+  }
+  PNG := class (
+    137, 80, 78, 71, 13, 10, 26, 10,
+    header: Chunk{type == "IHDR"},
+    chunks: Chunk{type != "IEND"}[],
+    Chunk{type == "IEND"}
+  ) {
+    static Chunk := class (size: Binary³², type: Char⁴, data: Byte[]{length == size}, crc: Binary³²)
+    static Header := class (width: Binary³², height: Binary³², depth: Byte, color: Byte, compression: Byte{. == 0}, filter: Byte{. == 0}, interlace: Byte{. == 0})
+    static Scanline := class (filter: Byte, bytes: Byte[])
+    static Prediction := class = filter: Byte, left: Byte = 0, up: Byte = 0, corner: Byte = 0
+    static Predicting := {
+      {prediction: Prediction{filter == 0}} => 0
+      {prediction: Prediction{filter == 1}} => prediction.left
+      {prediction: Prediction{filter == 2}} => prediction.up
+      {prediction: Prediction{filter == 3}} => (prediction.left + prediction.up) / 2 -- .floor
+      {prediction: Prediction{filter == 4}} => (prediction.left + prediction.up - prediction.corner) -- (estimate => [prediction.left, prediction.up, prediction.corner].min_by(guess => (estimate - guess) max (guess - estimate)))
+    }
+    static Pixel := class = png: PNG, samples: Number[] {
+      channels => samples.map(. * 255 / (2 ^ png.ihdr.depth - 1))
+    }
+    static Coloring := {
+      {pixel: Pixel{png.ihdr.color == 0}} => pixel.channels -- Geometry.Color(.0, .0, .0)
+      {pixel: Pixel{png.ihdr.color == 2}} => pixel.channels -- Geometry.Color(.0, .1, .2)
+      {pixel: Pixel{png.ihdr.color == 3}} => pixel.png.palette[pixel.samples.0] ~~ .alpha = (pixel.png.transparency[pixel.samples.0] ?? 255) / 255
+      {pixel: Pixel{png.ihdr.color == 4}} => pixel.channels -- Geometry.Color(.0, .0, .0, .1 / 255)
+      {pixel: Pixel{png.ihdr.color == 6}} => pixel.channels -- Geometry.Color(.0, .1, .2, .3 / 255)
+    }
+    ihdr => header.data as Header
+    channels => [1, 0, 3, 1, 2, 0, 4][ihdr.color]
+    stride => (ihdr.depth * channels + 7) / 8 -- .floor
+    span => (ihdr.width * ihdr.depth * channels + 7) / 8 -- .floor
+    palette => chunks{.type == "PLTE"}.first?.data.chunk(3).map(Geometry.Color(.0, .1, .2)) ?? []
+    transparency => chunks{.type == "tRNS"}.first?.data ?? []
+    scanlines => (chunks{.type == "IDAT"}.data.flatten as Zlib).inflated.chunk(span + 1).map(. as Scanline)
+    unfiltered (line: Scanline, above: Byte[]) => line.bytes.enumerate.reduce(acc = [] => [acc, (.value + Compiler.reduced(Prediction(line.filter,
+      .index >= stride ? acc[.index - stride] : 0, above[.index] ?? 0, .index >= stride ? above[.index - stride] ?? 0 : 0), Predicting)) % 256].flatten)
+    rows => scanlines.reduce(acc = [] => [acc, [unfiltered(., acc.last ?? [])]].flatten(1))
+    raster => Geometry.Raster(ihdr.width, ihdr.height, rows.map(row => (row as Binary{length == ihdr.depth}[])[..<ihdr.width * channels].chunk(channels)
+      .map(Compiler.reduced(Pixel(this, .), Coloring))).flatten)
+  }
+  Image := Language.register(Language(".png" | ".jpg" | ".jpeg" | ".gif" | ".svg" | ".webp" | ".avif", level: {
+    {png: PNG} => png.raster
+  }))
   Video := Language.register(Language(".mp4" | ".webm" | ".ogv"))
   Audio := Language.register(Language(".mp3" | ".ogg" | ".wav" | ".flac"))
 
@@ -55,17 +123,7 @@ UI := class {
   }
 
   Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", placeholder_color: Geometry.Paint?, disabled: boolean = false {
-    static (choosing: Choice) as (=== Input) => choosing.type.match
-      String{secret} => Secret(choosing)
-      String{multiline} => TextArea(choosing)
-      String => TextField(choosing)
-      boolean => Checkbox(choosing)
-      Number{least, most} => Slider(choosing)
-      Number => NumberField(choosing)
-      Time => DateField(choosing)
-      Geometry.Color => ColorField(choosing)
-      Location => FileField(choosing)
-      * => Select(choosing, options: choosing.type#)
+    static (choosing: Choice) as (=== Input) => Compiler.reduced(choosing, Scene)
     typed (text: String) => (value = value, text) -- this
     set (text: String) => (value = text) -- this
     erased => (value = value[..<-1]) -- this
@@ -101,7 +159,7 @@ UI := class {
     text_shown => "‹ ", value as String, " ›"
   }
   Form := class: Geometry.Box = value: * {
-    inputs => value.fields{.value is Choice}.map(.value as Input)
+    inputs => value.fields{.value is Choice}.map(Compiler.reduced(.value, Scene))
     submitted => dynamically inputs.every(.value) && Keyboard.enter.pulsed
   }
 
@@ -235,14 +293,10 @@ UI := class {
     defaults => [("og:title", title), ("og:description", description), ("og:image", image as String) if image]
     tags => [defaults{!meta.name.contains(.name)}, meta].flatten{.content != None}
   }
-  Query := class = text: String = "" {
-    static encoded (text: String) => #text.map(. is (Char.Letter | Char.Digit) || "-_.~".contains(.) ? . : .bytes.map("%" + (. as 16 as String).upper_case).join("")) as String
-    static decoded (text: String) => text.replace("+", " ").split("%") -- (.first, .rest.map(((.[..<2] as 16) as Char) + .[2..])).join("")
-    static written (pairs: (name: String, value: String)[]) => pairs.map(encoded(.name) + "=" + encoded(.value)).join("&")
-    pairs => text.split("&"){.nonempty}.map(. ~= (name: (!"=")[], ("=", value: *)?) -- (name: decoded(.name), value: decoded(.value ?? "")))
-    merged (changes) => Query(written([pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten))
-    as (=== String) => text.empty ? "" : "?" + text
-    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name}.last?.value
+  Query := class ((pairs: (name: Encoded, ("=", value: Encoded)?)[]).join("&")) {
+    static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal²)[]{length > 0} as Unicode.UTF-8)[])
+    merged (changes) => Query(pairs: [pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten)
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name}.last?.value ?? ""
   }
   Location &+= {
     window: same | new = same
@@ -260,11 +314,19 @@ UI := class {
     language => extension ? Language.named("." + extension) : None
     media => language === Image || language === Video || language === Audio
     pixels => language.read(IO.read(this))
-    video_site => (written ~= (*, ("youtube.com/watch?v=" | "youtu.be/" | "youtube.com/embed/"), id: (!"&" && !"?")[], *))?.id
-    embedded => video_site ? @https://www.youtube.com/embed/ video_site : this
+    static VideoId := (!"&" && !"?" && !"#")[]
+    static Rest := (("&" | "?" | "#"), *)?
+    static Embedding := {
+      @https://youtu.be/{id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
+      @https://youtube.com/watch?v={id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
+      @https://www.youtube.com/watch?v={id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
+      @https://www.youtube.com/embed/{id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
+    }
+    embedded => Compiler.reduced(this, Embedding)
+    video_site => embedded !== this
     placed (shape: Geometry.Shape) => components.for(shape + .) -- ((shape + Geometry.Constraint("x", aspect: 16 / 9)) if video_site) -- shape
-    query => Query(parts.query ?? "")
-    with (changes) => copied(parts.path + (query.merged(changes) as String))
+    query => (parts.query ?? "") as Query
+    with (changes) => query.merged(changes) -- (merged => copied(merged.pairs.empty ? parts.path : parts.path + "?" + (merged as String)))
     + (suffix: String) => copied(written + suffix)
     narrowed (narrowing: Program) => copied(written) -- (copy => narrowing{O: Geometry.Narrowing}().for(component => component is Geometry.Field ? component.applied(copy) : copy.components.push component) -- copy)
     {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
@@ -276,12 +338,19 @@ UI := class {
     }
     static (value) as (=== Site) => Site(index: value) ~~ value.fields{.value.location}.for(field => .route(field.value.location as String, field.value))
     route (path: String, field) => routes.push Route(path, field) -- this
-    at (path: String) => path == "/" || path.empty ? index
-      : routes{path ~= ⊢.path}.last -- (rest = path[.path.length..]) -- rest.empty ? .field : .field.sections ? section(.field, rest) : select(.field, rest, index)
-      ?? index
+    static Visit := class = site: Site, path: String {
+      route => site.routes{path ~= ⊢.path}.last
+      rest => path[route.path.length..]
+      field => route.field
+    }
+    static Routing := {
+      {visit: Visit{path == "/" || path.empty || !route}} => visit.site.index
+      {visit: Visit{rest.empty}} => visit.field
+      {visit: Visit{field.sections}} => visit.field.sections{.slug == visit.rest}.first ?? visit.field
+      {visit: Visit} => visit.field{.name == visit.rest} -- .count == 1 ? .first : .empty ? visit.site.index : Chooser(options: .)
+    }
+    at (path: String) => Compiler.reduced(Visit(this, path), Routing)
     rendering => at(Navigation.at as String)
-    static section (book, slug: String) => book.sections{.slug == slug}.first ?? book
-    static select (values, identity: String, otherwise = None) => values{.name == identity} -- .count == 1 ? .first : .empty ? otherwise : Chooser(options: .)
   }
 
   Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
@@ -340,12 +409,7 @@ UI := class {
       : this is Geometry.Box && activate ? Role.button
       : Role.region
     label => content is Location ? content.alt ?? content.name : children{.content is String}.content.join(" ")
-    styled (name: String) => (styles.push name) -- Theme[name].fields{.name != "name"}.for(field => field.name.match
-      "font" => font = font ? font.merged(field.value) : field.value
-      "spacing" | "constraints" | "effects" => field.value.for(component => this + component)
-      * => this.`field.name` = field.value
-    ) -- this
-    restyled (name: String) => styles -- (own => (styles = []) -- styled(name) -- own.for(styled(.))) -- this
+    styled (name: String) => Compiler.reduced(Styled(this, name), UI.Theming) -- this
     styled_by (expression: Program) => styled(expression() as String) -- dynamics.push Geometry.Dynamic(reads: expression.reads, compiled: expression, target: "class") -- this
     transitioned_from (before: Geometry.Shape?) => (before?.expand ?? []).zip(expand){.1.transition && .0.shown_transform != .1.transform}.for((was, now) =>
       now.animations.push Geometry.Animation(from: was.shown_transform, to: now.transform, duration: now.transition.duration, easing: now.transition.easing, property: "transform")
@@ -357,14 +421,7 @@ UI := class {
     static scaled (amount: Number | Geometry.Length) => amount is Number ? spacing * amount : amount
     static kinds: (kind: *, style: String)[] = []
     static default (kind, style: String) => kinds.push (kind, style) -- kind
-    static applied (scene: Geometry.Shape) => scene.expand.for(shape => kinds{shape is .kind}.for(shape.restyled(.style))
-      -- (shape.content is String ? shape.content.whole_marks{!shape.styles.contains(.style)}.for(shape.styled(.style)) : None)) -- scene
-    static palettes: (name: String, colors: (style: String, color: Geometry.Color)[])[] = [("default", [
-      ("keyword", "#6C6783" as Geometry.Color), ("comment", "#6C6783" as Geometry.Color), ("string", "#FFCC99" as Geometry.Color), ("number", "#FFCC99" as Geometry.Color),
-      ("class", "#9A86FD" as Geometry.Color), ("type", "#9A86FD" as Geometry.Color), ("variable", "#C4B9FE" as Geometry.Color), ("property", "#C4B9FE" as Geometry.Color),
-      ("parameter", "#F2F0FF" as Geometry.Color), ("function", "#97A4BF" as Geometry.Color), ("method", "#97A4BF" as Geometry.Color), ("operator", "#97A4BF" as Geometry.Color),
-      ("punctuation", "#6C6783" as Geometry.Color), ("label", "#A18565" as Geometry.Color), ("external", "#F59E47" as Geometry.Color), ("error", "#CD5C5C" as Geometry.Color)
-    ])]
+    static palettes: (name: String, colors: (style: String, color: Geometry.Color)[])[] = [("default", DARK.map((style, paint) => (style, paint as Geometry.Color)))]
     static painted (palette: String, style: String) => palettes{.name == palette}.last?.colors{style == .style || style.starts_with(.style + ".")}.last?.color ?? Theme[style].color
     static face (shape: Geometry.Shape, index: Number) => (shape.content is String ? shape.content.marks{.from <= index < .to} : []).reduce(acc = (font: shape.typeface, color: shape.color, fill: shape.fill, styles: []) => (
       font: Theme[.style].font ? acc.font.merged(Theme[.style].font) : acc.font,

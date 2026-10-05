@@ -11,7 +11,7 @@ Location := class: Hierarchy {
   host: *?
 }
 
-World := class: Location &+ Nameable {
+World := class: Location + Nameable {
   static PREFIX = "#"
   static ether = World(name: "ether", host: @ether)
 
@@ -38,6 +38,17 @@ World := class: Location &+ Nameable {
   lookup (name: String) => {
     return defined.value if defined = names{.name == name}.last
     (shadowing ?? parent ?? (World.ether if this !== World.ether))?.lookup(name)
+  }
+
+  // `#name` / `@name` per Nameable class, its plural as a collection, falling back to @ether (L§10.7).
+  class{>.instance_of Nameable}#.for class => {
+    `class.name.plural`: class[] => (this, within_worlds){class == Character || class == World ? .`class.name.plural` : .children{==.instance_of class}}.flatten
+      -- .unique(.name.ignore_case if .name ==.instance_of String)
+    {class.PREFIX}{name: reservable_names} => this[class.name.plural]{.name.ignore_case == name.ignore_case}.first
+      ?? (shadowing ?? World.ether)[class.PREFIX, name] if class.PREFIX
+  }
+  class{>.instance_of Character}#.for class => {
+    `class.name.plural`: class[] => characters{==.instance_of class}
   }
 
   static Reservation := class = name: reservable_names, issuer: World, holder: *?
@@ -218,7 +229,7 @@ Instance := class: Location {
 
 Status := enum online | offline | hosted | broadcast | proxy | invisible | idle | do_not_disturb | busy
 
-Character := class: Entity &+ Nameable {
+Character := class: Entity + Nameable {
   static PREFIX = "@"
 
   avatars: Avatar[] = []

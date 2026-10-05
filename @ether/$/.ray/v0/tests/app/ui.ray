@@ -7,9 +7,9 @@ page := Program(code: {
   @https://orbitmines.com
 })
 scene := page{O: UI.Scene}()
-unless scene.children.first is Geometry.Text { INFO@mark `UI1 a string does not become text` }
+unless scene.children.first.content is String { INFO@mark `UI1 a string does not become text` }
 unless scene.children.first.role == UI.Role.heading { INFO@mark `UI2 a heading style does not give a heading` }
-unless scene.children.last is UI.Link { INFO@mark `UI3 a location does not become a link` }
+unless scene.children.last.location == @https://orbitmines.com { INFO@mark `UI3 a location does not become a link` }
 unless scene.flow == vertical { INFO@mark `UI4 lines do not stack` }
 unless Program(code: { "a", "b" }){O: UI.Scene}().flow == inline { INFO@mark `UI5 a comma does not flow inline` }
 
@@ -76,7 +76,7 @@ unless (@https://orbitmines.com).window == same { INFO@mark `UI81 a location ope
 away_html := Program(code: { away }).rendered(Language.Web.HTML.level)
 unless away_html.body.children.first.attributes{.name == "target"}.first?.value == "_blank" { INFO@mark `UI82 a link to a new window has no target=_blank` }
 unless away_html.body.children.first.attributes{.name == "rel"}.first?.value == "noopener noreferrer" { INFO@mark `UI83 a link to a new window does not drop the opener` }
-UI.Link(to: away, window: new).activate
+Geometry.Box(location: away).activate
 unless UI.Platform.opened.last == away { INFO@mark `UI84 activating a new-window link does not open it` }
 if UI.Navigation.at == away { INFO@mark `UI85 activating a new-window link navigates the page itself` }
 
@@ -174,12 +174,12 @@ unless css_rules(Geometry.Box(spacing: [pt 5, pt 5])).first.declarations.contain
 narrowed_box := Geometry.Box(){width <= 1240px & height == 120px, overflow == clip}
 unless narrowed_box.constraints.some(.dimension == "x" && .most == 1240px) && narrowed_box.constraints.some(.dimension == "y" && .least == 120px) { INFO@mark `UI126 a narrowing on a shape is not its constraints` }
 unless narrowed_box.overflow == clip { INFO@mark `UI127 a narrowing does not set a shape's field` }
-unless Geometry.Text("a"){font_size == 18px}.font.size == 18px { INFO@mark `UI128 font_size does not size the text` }
-inner_text := Geometry.Text("a")
+unless Geometry.Box(content: "a"){font_size == 18px}.font.size == 18px { INFO@mark `UI128 font_size does not size the text` }
+inner_text := Geometry.Box(content: "a")
 solver.solve(Geometry.Box(children: [inner_text]){font_size == 18px})
 unless inner_text.font.size == 18px { INFO@mark `UI129 a box's font_size does not reach the text it holds` }
 unless Geometry.Box(){gap == 6px}.gap == Geometry.Vector(6px, 6px) { INFO@mark `UI130 gap is not narrowed` }
-unless Geometry.Text("a  b").shown == ["a b"] && Geometry.Text("a  b"){white_space == pre}.shown == ["a  b"] { INFO@mark `UI131 white_space does not decide whether spaces collapse` }
+unless Geometry.Box(content: "a  b").shown_lines == ["a b"] && Geometry.Box(content: "a  b"){white_space == pre}.shown_lines == ["a  b"] { INFO@mark `UI131 white_space does not decide whether spaces collapse` }
 unless Geometry.Box(){min_height == 22px}.constraints.some(.dimension == "y" && .least == 22px) { INFO@mark `UI132 min_height is not a least height` }
 unless Geometry.Box(){transform == translate(x: 10px)}.transform == Geometry.Transform.translate(Geometry.Vector(10px)) { INFO@mark `UI133 transform == translate(…) does not move the shape` }
 unless Geometry.Box(){animated == 0.4 s ease}.transition.duration == 0.4 s { INFO@mark `UI134 animated does not give the shape a transition` }
@@ -188,33 +188,36 @@ dynamic_style := Program(code: { "x" ^{1 < 2 ? "muted" : "none"} }){O: UI.Scene}
 unless dynamic_style.styles.contains("muted") { INFO@mark `UI136 a dynamic style is not applied` }
 unless dynamic_style.dynamics.some(.target == "class") { INFO@mark `UI137 a dynamic style is not kept for the levels to recompute` }
 unless css_rules(dynamic_style).some(.selector == "#" + dynamic_style.id + ".muted") { INFO@mark `UI138 the web level has no rule for a style a dynamic style can switch to` }
-styled_link := UI.Link(to: @/x)
-with UI.Theme.kinds = [(UI.Link, "muted")] {
+styled_link := Geometry.Box(location: @/x)
+with UI.Theme.kinds = [(Geometry.Shape{location}, "muted")] {
   UI.Theme.applied(Geometry.Box(children: [styled_link]))
   unless styled_link.styles.contains("muted") && styled_link.color == UI.Theme["muted"].color { INFO@mark `UI139 a kind's default style is not applied` }
 }
 search_field := UI.TextField(chosen: Choice(type: String), value: "", placeholder: "Search", placeholder_color: Geometry.Color(1, 2, 3))
-unless search_field.face.text == "Search" && search_field.face.color == Geometry.Color(1, 2, 3) { INFO@mark `UI140 an empty field does not show its placeholder in its colour` }
+unless search_field.face.content == "Search" && search_field.face.color == Geometry.Color(1, 2, 3) { INFO@mark `UI140 an empty field does not show its placeholder in its colour` }
 unless css_rules(search_field).some(.selector == "#" + search_field.id + "::placeholder") { INFO@mark `UI141 the placeholder colour is not CSS` }
 code_area := UI.TextArea(chosen: Choice(type: String{multiline}), value: "x := 1", language: ".ray")
-unless code_area.face.runs.nonempty { INFO@mark `UI142 a text area in a language is not painted` }
+unless code_area.face.content.marks.nonempty && code_area.face.content == "x := 1" { INFO@mark `UI142 a text area in a language is not painted` }
 unless Program(code: { code_area }).rendered(Language.Web.HTML.level).body.children.first.children.first.tag == "pre" { INFO@mark `UI143 a painted text area has no painted layer under it` }
 red := Geometry.Color(255, 0, 0)
-runs_text := Geometry.Text("ab", runs: [Geometry.Text.Run(0, 1, color: red)], size: Geometry.Vector(16px, 16px))
-with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
-  runs_grid := Program(code: { runs_text }).rendered(Language.TUI.Cells)
-  unless runs_grid.cells[0][0].foreground == red && runs_grid.cells[0][1].foreground != red { INFO@mark `UI144 a painted run does not colour its cells only` }
+runs_text := Geometry.Box(content: "ab".marked("red", 0, 1), size: Geometry.Vector(16px, 16px))
+with UI.Theme.palettes = [("default", [("red", red)])] {
+  with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+    runs_grid := Program(code: { runs_text }).rendered(Language.TUI.Cells)
+    unless runs_grid.cells[0][0].foreground == red && runs_grid.cells[0][1].foreground != red { INFO@mark `UI144 a painted run does not colour its cells only` }
+  }
+  runs_html := Compiler.reduced(Language.Web.HTML.Spans(runs_text), Language.Web.HTML.rules)
+  unless runs_html.first.tag == "span" && runs_html.first.attributes.contains(("class", "red")) { INFO@mark `UI145 a painted run is not a span on the web` }
 }
-unless Compiler.reduced(Language.Web.HTML.Pieces(runs_text), Language.Web.HTML.rules).first.tag == "span" { INFO@mark `UI145 a painted run is not a span on the web` }
 unless UI.Theme.painted("default", "keyword") == "#6C6783" as Geometry.Color { INFO@mark `UI146 a highlighting style has no colour in the default palette` }
 unless UI.Theme.painted("default", "muted") == UI.Theme["muted"].color { INFO@mark `UI147 a page style is not a highlighting style` }
 
 unless currentColor is Geometry.Inherited { INFO@mark `UI148 currentColor is not an inherited paint` }
-icon := Geometry.Image(@./icons/link.svg, fill: currentColor)
+icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
 unless Program(code: { icon }).rendered(Language.Web.HTML.level).body.children.first.tag == "span" { INFO@mark `UI149 a filled SVG is not a masked element on the web` }
 unless css_rules(icon).first.declarations.some(.0 == "mask") { INFO@mark `UI150 a filled SVG has no mask` }
 unless Compiler.reduced(Language.Web.CSS.Paint(currentColor), Language.Web.CSS.values) == "currentColor" { INFO@mark `UI151 currentColor is not written as currentColor` }
-tinted_icon := Geometry.Image(@./icons/link.svg, fill: currentColor)
+tinted_icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
 solver.solve(Geometry.Box(color: red, children: [tinted_icon]))
 unless tinted_icon.fill == red { INFO@mark `UI152 an icon filled with currentColor does not take the colour around it` }
 
@@ -260,7 +263,7 @@ unless ("\e[<0;3;4M" as Language.TUI.Mouse).position == Geometry.Vector(16px, 48
 selected_field := UI.TextField(chosen: Choice(type: String), value: "hello")
 UI.Selection.whole(selected_field)
 unless UI.Selection.range.to == 5 && UI.Selection.text == "hello" { INFO@mark `UI171 selecting a field whole does not select its text` }
-selected_text := Geometry.Text("ab", size: Geometry.Vector(16px, 16px))
+selected_text := Geometry.Box(content: "ab", size: Geometry.Vector(16px, 16px))
 UI.Selection.whole(selected_text)
 with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   unless Program(code: { selected_text }).rendered(Language.TUI.Cells).cells[0][1].reverse { INFO@mark `UI172 selected text is not shown reversed in the terminal` }
@@ -292,14 +295,15 @@ if Program(code: { timer_fired = false }).after(1 h).ready { INFO@mark `UI179 af
 unless Program(code: { fired_count = 0 }).after(6 s) === Program(code: { fired_count = 0 }).after(6 s) { INFO@mark `UI180 a timer asked for again in the same frame restarts` }
 unless ({ timer_fired = true } after 6 s) is UI.Timer { INFO@mark `UI181 x after 6 s is not a timer` }
 
-video := Geometry.Frame(@https://www.youtube.com/watch?v=O6v_gzlI1kY, title: "OrbitMines")
-unless video.embedded == "https://www.youtube.com/embed/O6v_gzlI1kY" { INFO@mark `UI182 a YouTube link is not embedded as its player` }
+watched := (@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}
+video := Program(code: { watched }){O: UI.Scene}()
+unless video.content === watched && video.content.embedded == "https://www.youtube.com/embed/O6v_gzlI1kY" { INFO@mark `UI182 a YouTube link is not embedded as its player` }
 unless Program(code: { video }).rendered(Language.Web.HTML.level).body.children.first.tag == "iframe" { INFO@mark `UI183 an embedded frame is not an iframe on the web` }
 solver.solve(Geometry.Box(children: [video]))
 unless video.size.y == video.size.x * 9 / 16 { INFO@mark `UI184 an embedded video is not 16:9` }
 with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   Geometry.Solver(available: UI.Viewport.size).solve(Geometry.Box(children: [video]))
-  unless Program(code: { video }).rendered(Language.TUI.Cells).cells[1].some(.link == video.source) { INFO@mark `UI185 an embedded frame is not a link in the terminal` }
+  unless Program(code: { video }).rendered(Language.TUI.Cells).cells[1].some(.link == video.content) { INFO@mark `UI185 an embedded frame is not a link in the terminal` }
 }
 with UI.Viewport.size = Geometry.Vector(64px, 36px) {
   Geometry.Solver(available: UI.Viewport.size).solve(Geometry.Box(children: [video]))
@@ -374,3 +378,27 @@ unless js_block.count == 2 && (js_block.last as Language.Web.JS.language) == "g(
 unless (@js {who} + 1) is Language.Web.JS.Operation { INFO@mark `UI220 a hole right after @js is read as a block` }
 unless [@html { <br /> }, 2].count == 2 { INFO@mark `UI221 an html block does not stop at its closing brace` }
 unless (@html { }).empty { INFO@mark `UI222 an empty block is not empty` }
+
+logo := (@./logo.png){alt: "logo", width <= 400px}
+logo_shape := Program(code: { logo }){O: UI.Scene}()
+unless logo_shape.content === logo && logo_shape.role == UI.Role.image { INFO@mark `UI223 an image location is not shown as itself` }
+unless logo.language === UI.Image && (@./clip.mp4).language === UI.Video && (@./song.mp3).language === UI.Audio { INFO@mark `UI224 a location's extension does not name its format` }
+unless (@https://orbitmines.com/a.png?v=2).extension == "png" { INFO@mark `UI225 a query is read as part of the extension` }
+logo_html := Program(code: { logo }).rendered(Language.Web.HTML.level).body.children.first
+unless logo_html.tag == "img" && logo_html.attributes.contains(("src", "./logo.png")) && logo_html.attributes.contains(("alt", "logo")) { INFO@mark `UI226 an image location is not an img with its alt` }
+unless logo_shape.constraints.some(.dimension == "x" && .most == 400px) { INFO@mark `UI227 a narrowing on a location does not constrain where it is shown` }
+unless Program(code: { @./clip.mp4 }).rendered(Language.Web.HTML.level).body.children.first.tag == "video" { INFO@mark `UI228 a video location is not a video element` }
+unless Program(code: { @./song.mp3 }).rendered(Language.Web.HTML.level).body.children.first.tag == "audio" { INFO@mark `UI229 an audio location is not an audio element` }
+placed_text := Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}()
+unless placed_text.content == "Ray" && placed_text.location == @https://orbitmines.com && placed_text.role == UI.Role.link { INFO@mark `UI230 a value placed at a location is not a link to it` }
+unless Program(code: { "Ray" @ (@https://orbitmines.com) }).rendered(Language.Web.HTML.level).body.children.first.tag == "a" { INFO@mark `UI231 a value placed at a location is not an a on the web` }
+heading := Program(code: { "Ray" ^h1 }){O: UI.Scene}()
+unless heading.content == "Ray" && heading.content.marks.some(.style == "h1") { INFO@mark `UI232 a style is not kept on the string it marks` }
+highlighted := "x := 1".highlighted(".ray")
+unless highlighted == "x := 1" && highlighted.partial_marks.nonempty { INFO@mark `UI233 a highlighted string is not the same string with marks` }
+italic_text := Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px))
+with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  italic_grid := Program(code: { italic_text }).rendered(Language.TUI.Cells)
+  unless italic_grid.cells[0][1].italic && !italic_grid.cells[0][0].italic { INFO@mark `UI234 a style on part of a string is not on its cells only` }
+}
+unless UI.Theme.face(italic_text, 1).font.style == italic && UI.Theme.face(italic_text, 0).font.style == normal { INFO@mark `UI235 a string's styles are not read per character` }

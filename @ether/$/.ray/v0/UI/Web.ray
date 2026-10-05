@@ -16,9 +16,10 @@ Language.Web := class: Language {
     Named := class = shape: Geometry.Shape
     Described := class = shape: Geometry.Shape
     Entry := class = input: UI.Input
-    Pieces := class = text: Geometry.Text
-    Piece := class = text: String, run: Geometry.Text.Run?
-    Inline := class = run: Geometry.Text.Run
+    Inner := class = shape: Geometry.Shape
+    Spans := class = shape: Geometry.Shape
+    Span := class = text: String, from: Number, shape: Geometry.Shape
+    Inline := class = face: *, shape: Geometry.Shape
     Path := class = segment: *
 
     Escapes = { "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }
@@ -72,18 +73,18 @@ Language.Web := class: Language {
       {meta: Meta{name ~= ("og:" | "article:" | "fb:", *)}} => @html <meta property={meta.name} content={meta.content} />
       {meta: Meta} => @html <meta name={meta.name} content={meta.content} />
 
-      {link: UI.Link} => @html <a {Named(link)} href={link.to as String} target={"_blank" if link.window == new} rel={"noopener noreferrer" if link.window == new}>{link.children}</a>
-      {text: Geometry.Text{role == heading && font.size >= 2em}} => @html <h1 {Named(text)}>{Pieces(text)}</h1>
-      {text: Geometry.Text{role == heading && font.size >= 1.5em}} => @html <h2 {Named(text)}>{Pieces(text)}</h2>
-      {text: Geometry.Text{role == heading}} => @html <h3 {Named(text)}>{Pieces(text)}</h3>
-      {text: Geometry.Text{wrap == none}} => @html <span {Named(text)} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{Pieces(text)}</span>
-      {text: Geometry.Text} => @html <p {Named(text)} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{Pieces(text)}</p>
-      {image: Geometry.Image{fill}} => @html <span {Named(image)} role="img" aria-label={image.alt} />
-      {image: Geometry.Image} => @html <img {Named(image)} src={image.source as String} alt={image.alt} loading="lazy" />
-      {video: Geometry.Video} => @html <video {Named(video)} src={video.source as String} controls={video.controls} muted={video.muted} loop={video.looping} />
-      {audio: Geometry.Audio} => @html <audio {Named(audio)} src={audio.source as String} controls />
-      {frame: Geometry.Frame} => @html <iframe {Named(frame)} src={frame.embedded as String} title={frame.title} allow={frame.allow.join("; ")} allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
-      {canvas: Geometry.Canvas} => @html <canvas {Named(canvas)} width={canvas.size.x as px} height={canvas.size.y as px} />
+      {link: Geometry.Shape{location}} => @html <a {Named(link)} href={link.location as String} target={"_blank" if link.location.window == new} rel={"noopener noreferrer" if link.location.window == new}>{Inner(link)}</a>
+      {text: Geometry.Shape{content is String && role == heading && font.size >= 2em}} => @html <h1 {Named(text)}>{Spans(text)}</h1>
+      {text: Geometry.Shape{content is String && role == heading && font.size >= 1.5em}} => @html <h2 {Named(text)}>{Spans(text)}</h2>
+      {text: Geometry.Shape{content is String && role == heading}} => @html <h3 {Named(text)}>{Spans(text)}</h3>
+      {text: Geometry.Shape{content is String && wrap == none}} => @html <span {Named(text)} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{Spans(text)}</span>
+      {text: Geometry.Shape{content is String}} => @html <p {Named(text)} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{Spans(text)}</p>
+      {image: Geometry.Shape{content is Location && content.language === UI.Image && fill}} => @html <span {Named(image)} role="img" aria-label={image.label} />
+      {image: Geometry.Shape{content is Location && content.language === UI.Image}} => @html <img {Named(image)} src={image.content as String} alt={image.label} loading="lazy" />
+      {video: Geometry.Shape{content is Location && content.language === UI.Video}} => @html <video {Named(video)} src={video.content as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
+      {audio: Geometry.Shape{content is Location && content.language === UI.Audio}} => @html <audio {Named(audio)} src={audio.content as String} controls />
+      {frame: Geometry.Shape{content is Location && content.video_site}} => @html <iframe {Named(frame)} src={frame.content.embedded as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
+      {canvas: Geometry.Shape{content is Program}} => @html <canvas {Named(canvas)} width={canvas.size.x as px} height={canvas.size.y as px} />
       {ball: Geometry.Ball} => @html <svg {Named(ball)} viewBox="0 0 {ball.size.x as px} {ball.size.y as px}">
         <ellipse cx="50%" cy="50%" rx="50%" ry="50%" />
       </svg>
@@ -108,7 +109,7 @@ Language.Web := class: Language {
       {input: UI.Checkbox} => @html <input {Named(input)} type="checkbox" {Entry(input)} />
       {input: UI.Slider} => @html <input {Named(input)} type="range" {Entry(input)} min={input.chosen.type.least as String} max={input.chosen.type.most as String} />
       {input: UI.TextArea{language}} => @html <div id={input.id} class={["painted", input.styles].flatten.join(" ")}>
-        <pre id="{input.id}-paint" aria-hidden="true">{Pieces(input.face)}</pre>
+        <pre id="{input.id}-paint" aria-hidden="true">{Spans(input.face)}</pre>
         <textarea id="{input.id}-text" placeholder={input.placeholder} spellcheck="false">{input.empty ? "" : input.value as String}</textarea>
       </div>
       {input: UI.TextArea} => @html <textarea {Named(input)} placeholder={input.placeholder}>{input.empty ? "" : input.value as String}</textarea>
@@ -123,11 +124,18 @@ Language.Web := class: Language {
       {named: Named} => [("id", named.shape.id), ("class", named.shape.styles.join(" ")) if named.shape.styles.nonempty]
       {described: Described} => [("role", described.shape.role as String), ("aria-label", described.shape.label) if described.shape.label, ("popover", "manual") if described.shape.position.kind == anchored]
       {entry: Entry} => [("placeholder", entry.input.placeholder), ("disabled", "") if entry.input.disabled]
-      {pieces: Pieces{text.runs.empty}} => Text(pieces.text.text)
-      {pieces: Pieces} => pieces.text.pieces.map(Piece(.text, .run))
-      {piece: Piece{run}} => @html <span style={Inline(piece.run)}>{piece.text}</span>
-      {piece: Piece} => Text(piece.text)
-      {inline: Inline} => inline.run -- (run => [("color:", CSS.Paint(run.color), ";") if run.color, ("background:", CSS.Paint(run.fill), ";") if run.fill, ("font-weight:", run.font.weight, ";") if run.font, ("font-style:", run.font.style as String, ";") if run.font])
+      {inner: Inner{shape.content is String}} => [Spans(inner.shape), inner.shape.children]
+      {inner: Inner} => inner.shape.children
+      {spans: Spans{shape.content.partial_marks.empty}} => Text(spans.shape.content)
+      {spans: Spans} => spans.shape.content.pieces.map(Span(.text, .from, spans.shape))
+      {span: Span} => span.shape.content.partial_marks{.from <= span.from < .to}.style -- (styles => styles.empty ? Text(span.text)
+        : @html <span class={styles.join(" ")} style={Inline(UI.Theme.face(span.shape, span.from), span.shape)}>{span.text}</span>)
+      {inline: Inline} => inline.face -- (face => [
+        ("color:", CSS.Paint(face.color), ";") if face.color && face.color != inline.shape.color,
+        ("background:", CSS.Paint(face.fill), ";") if face.fill && face.fill != inline.shape.fill,
+        ("font-weight:", face.font.weight, ";") if face.font.weight != inline.shape.typeface.weight,
+        ("font-style:", face.font.style as String, ";") if face.font.style != inline.shape.typeface.style
+      ])
     }
 
     written := {
@@ -170,7 +178,7 @@ Language.Web := class: Language {
     Measure := class = length: Geometry.Length
     Typeface := class = font: Geometry.Font
     Timing := class = easing: Geometry.Easing
-    Mask := class = image: Geometry.Image
+    Mask := class = shape: Geometry.Shape
 
     WhiteSpace = { normal: "normal", nowrap: "nowrap", pre: "pre", pre_wrap: "pre-wrap", pre_line: "pre-line" }
     Sides = { all: "", top: "-top", bottom: "-bottom", left: "-left", right: "-right", horizontal: "-inline", vertical: "-block" }
@@ -251,6 +259,10 @@ Language.Web := class: Language {
           {shape.effects.map(Effected(.))}
           color: {Paint(shape.color) if shape.color};
           {Typeface(shape.font) if shape.font}
+          text-align: {(shape.align as String) if shape.align};
+          text-overflow: {(shape.truncate as String) if shape.truncate};
+          white-space: {WhiteSpace[shape.white_space ?? pre_line] if shape.white_space || shape.content is String};
+          overflow-wrap: {"anywhere" if shape.wrap == anywhere};
           {Specific(shape)}
           transition: {("all ", shape.transition.duration as ms, "ms ", Timing(shape.transition.easing)) if shape.transition};
           cursor: {(shape.cursor != default ? shape.cursor as String : "pointer") if shape.cursor != default || shape.activate};
@@ -315,14 +327,11 @@ Language.Web := class: Language {
         letter-spacing: {Measure(font.tracking) if font.tracking != 0};
       })
 
-      {specific: Specific{shape is Geometry.Text}} => specific.shape -- (text => @css {
-        text-align: {text.align as String}; text-overflow: {text.overflow as String}; white-space: {WhiteSpace[text.white_space]}; overflow-wrap: {"anywhere" if text.wrap == anywhere};
+      {specific: Specific{shape.content is Location && shape.content.language === UI.Image && shape.fill}} => specific.shape -- (image => @css {
+        object-fit: {image.content.fit as String}; display: inline-block; mask: {Mask(image)}; -webkit-mask: {Mask(image)};
       })
-      {specific: Specific{shape is Geometry.Image && shape.fill}} => specific.shape -- (image => @css {
-        object-fit: {image.fit as String}; display: inline-block; mask: {Mask(image)}; -webkit-mask: {Mask(image)};
-      })
-      {specific: Specific{shape is Geometry.Image}} => @css { object-fit: {specific.shape.fit as String}; }
-      {specific: Specific{shape is Geometry.Frame}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
+      {specific: Specific{shape.content is Location && shape.content.language === UI.Image}} => @css { object-fit: {specific.shape.content.fit as String}; }
+      {specific: Specific{shape.content is Location && shape.content.video_site}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
       {specific: Specific} => []
 
       {placeholder: Placeholder{shape is UI.Input && shape.placeholder_color}} => @css #{placeholder.shape.id}::placeholder { color: {Paint(placeholder.shape.placeholder_color)}; }
@@ -344,8 +353,8 @@ Language.Web := class: Language {
       {timing: Timing{easing === Geometry.ease_out}} => "ease-out"
       {timing: Timing} => "ease"
 
-      {mask: Mask{image.fit == fill}} => "url(\"", mask.image.source as String, "\") center/100% 100% no-repeat"
-      {mask: Mask} => "url(\"", mask.image.source as String, "\") center/", mask.image.fit as String, " no-repeat"
+      {mask: Mask{shape.content.fit == fill}} => "url(\"", mask.shape.content as String, "\") center/100% 100% no-repeat"
+      {mask: Mask} => "url(\"", mask.shape.content as String, "\") center/", mask.shape.content.fit as String, " no-repeat"
     }
 
     written := {
@@ -606,7 +615,7 @@ Language.Web := class: Language {
       {mirrored: Mirrored} => []
       {typed: Typed{shape is UI.Input}} => @js document.getElementById({typed.shape.id}).addEventListener("input", (event) => ray.set({typed.shape.id}, event.target.value))
       {typed: Typed} => []
-      {drawing: Drawing{shape is Geometry.Canvas}} => @js effect({drawing.shape.draws.reads}, () => ray.draw({drawing.shape.id}, {drawing.shape.draws.rendered(Language.Direct.level)}))
+      {drawing: Drawing{shape.content is Program}} => @js effect({drawing.shape.content.reads}, () => ray.draw({drawing.shape.id}, {drawing.shape.content.rendered(Language.Direct.level)}))
       {drawing: Drawing} => []
       {popping: Popping{shape is UI.Popover && shape.trigger != always}} => popping.shape.anchor_in(popping.scene).id -- (anchor => [
         ["pointerenter", "focusin"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({popping.shape.id}).showPopover())),
@@ -653,7 +662,7 @@ Language.Web := class: Language {
       (path: "index.html", content: HTML.Page(solved.shape)),
       (path: "style.css", content: CSS.Page(solved.shape)),
       (path: "app.js", content: JS.Page(solved.shape)),
-      solved.shape.expand{. is (Geometry.Image | Geometry.Video | Geometry.Audio)}.map((path: .source.name, content: .source)),
+      solved.shape.expand{.content is Location && .content.media}.map((path: .content.name, content: .content)),
       [UI.Navigation.icon, UI.Navigation.apple_icon, UI.Navigation.manifest]{!= None}.map((path: .name, content: .))
     ].flatten)
   }

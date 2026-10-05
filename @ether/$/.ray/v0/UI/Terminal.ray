@@ -51,32 +51,12 @@ Language.TUI := class: Language {
   Shade := class = paint: Paint, effect: Geometry.Effect
   Scrollbar := class = paint: Paint
   Selected := class = paint: Paint
+  Shown := class = paint: Paint
 
   rules := {
     {screen: UI.Screen} => Painting(Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y), screen.layers.map(Paint(., screen.scrolled)))
     {painting: Painting{writes.flatten.every(. is Write)}} => painting.writes.flatten.for(.onto(painting.grid)) -- painting.grid
 
-    {paint: Paint{shape is Geometry.Text}} => {
-      text = paint.shape
-      lines = text.lines(text.size.x)
-      starts = text.starts(text.size.x)
-      (0..<lines.count).map(row => (0..<lines[row].length).reduce(placed = (column: 0, puts: []) => {
-        run = text.run_at(starts[row] + .)
-        face = run?.font ?? text.font
-        (column: placed.column + lines[row][.].columns, puts: [placed.puts, Put(paint.at + Geometry.Vector(placed.column, row), Cell(lines[row][.],
-          foreground: (run?.color ?? text.color) as Geometry.Color, background: (run?.fill ?? text.fill) as Geometry.Color,
-          bold: face.weight >= 600, italic: face.style == italic, reverse: UI.Selection.selects(text, starts[row] + .)))].flatten)
-      }).puts).flatten
-    }
-    {paint: Paint{shape is Geometry.Image && shape.fill}} => paint.area.map(Put(., Picture(paint.shape.source).tinted(. - paint.at, paint.size, paint.shape.fill as Geometry.Color)))
-    {paint: Paint{shape is Geometry.Image}} => paint.area.map(Put(., Picture(paint.shape.source).sampled(. - paint.at, paint.size)))
-    {paint: Paint{shape is Geometry.Canvas}} => paint.shape.draws.rendered(Language.Direct.level).rows -- (rows => paint.area.map(at => (at - paint.at) -- (dot =>
-      Put(at, Cell(braille(rows[dot.y * 4..<dot.y * 4 + 4].map(.[dot.x * 2..<dot.x * 2 + 2].map(.alpha > 0)))))
-    )))
-    {paint: Paint{shape is Geometry.Frame}} => paint.inside(UI.Link(to: paint.shape.source, window: new, origin: paint.shape.origin, size: paint.shape.size, stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
-      Geometry.Text("▶ " + (paint.shape.title.empty ? paint.shape.source as String : paint.shape.title), origin: paint.shape.origin + px_per_cell, size: paint.shape.size - px_per_cell * 2)
-    ]))
-    {paint: Paint{shape is UI.Link}} => [Boxed(paint), paint.area.map(Linked(., paint.shape.to))]
     {paint: Paint{shape is UI.Input}} => [Boxed(paint), paint.inside(paint.shape.face), Selected(paint)]
     {paint: Paint} => Boxed(paint)
 
@@ -84,10 +64,34 @@ Language.TUI := class: Language {
       Filled(paint),
       Border(paint) if paint.shape.stroke,
       paint.shape.effects.map(Shade(paint, .)),
+      Shown(paint) if paint.shape.content,
       paint.shape.in_place.sort_by(.layer).map(paint.inside(.)) if paint.shape.visible,
       Scrollbar(paint) if paint.shape.overflow == scroll,
-      paint.area.map(Underlined(.)) if UI.Focus.current === paint.shape
+      paint.area.map(Underlined(.)) if UI.Focus.current === paint.shape,
+      paint.area.map(Linked(., paint.shape.location)) if paint.shape.location
     ])
+    {shown: Shown{paint.shape.content is String}} => {
+      paint = shown.paint
+      text = paint.shape
+      lines = text.lines(text.size.x)
+      starts = text.starts(text.size.x)
+      (0..<lines.count).map(row => (0..<lines[row].length).reduce(placed = (column: 0, puts: []) => {
+        look = UI.Theme.face(text, starts[row] + .)
+        (column: placed.column + lines[row][.].columns, puts: [placed.puts, Put(paint.at + Geometry.Vector(placed.column, row), Cell(lines[row][.],
+          foreground: look.color as Geometry.Color, background: look.fill as Geometry.Color,
+          bold: look.font.weight >= 600, italic: look.font.style == italic, reverse: UI.Selection.selects(text, starts[row] + .)))].flatten)
+      }).puts).flatten
+    }
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === UI.Image && paint.shape.fill}} => shown.paint -- (paint => paint.area.map(Put(., tinted(paint.shape.content, . - paint.at, paint.size, paint.shape.fill as Geometry.Color))))
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === UI.Image}} => shown.paint -- (paint => paint.area.map(Put(., sampled(paint.shape.content, . - paint.at, paint.size))))
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.video_site}} => shown.paint -- (paint => paint.inside(Geometry.Box(location: Location(written: paint.shape.content.written, window: new), origin: paint.shape.origin, size: paint.shape.size, stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
+      Geometry.Box(content: "▶ " + (paint.shape.content.alt ?? paint.shape.content as String), origin: paint.shape.origin + px_per_cell, size: paint.shape.size - px_per_cell * 2)
+    ])))
+    {shown: Shown{paint.shape.content is Program}} => shown.paint -- (paint => paint.shape.content.rendered(Language.Direct.level).rows -- (rows => paint.area.map(at => (at - paint.at) -- (dot =>
+      Put(at, Cell(braille(rows[dot.y * 4..<dot.y * 4 + 4].map(.[dot.x * 2..<dot.x * 2 + 2].map(.alpha > 0)))))
+    ))))
+    {shown: Shown} => []
+    {filled: Filled{paint.shape.content is Location}} => []
     {filled: Filled{paint.shape.fill is Geometry.Color}} => filled.paint.area.map(Background(., filled.paint.shape.fill))
     {filled: Filled{paint.shape.fill is Geometry.Gradient}} => filled.paint.area.map(Background(., filled.paint.shape.fill.at(.x / UI.Viewport.size.x * px_per_cell.x)))
     {filled: Filled} => []
@@ -122,13 +126,10 @@ Language.TUI := class: Language {
   level := Cells
 
   static braille (dots: boolean[][]) => (0x2800 + [[0, 3], [1, 4], [2, 5], [6, 7]].zip(dots).map((bits, row) => row.zip(bits).map((on, bit) => on ? 2 ^ bit : 0).sum).sum) as Char
-  Picture := class = source: Location {
-    static ramp = " .:-=+*#%@"
-    pixels => IO.read(source) as Geometry.Raster
-    pixel (at: Geometry.Vector, of: Geometry.Vector) => pixels.at(at.x * pixels.width / of.x, at.y * pixels.height / of.y)
-    sampled (at: Geometry.Vector, of: Geometry.Vector) => pixel(at, of) -- Cell(ramp[.luminance * (ramp.length - 1) / 255], foreground: .)
-    tinted (at: Geometry.Vector, of: Geometry.Vector, ink: Geometry.Color?) => pixel(at, of) -- Cell(ramp[.alpha * (ramp.length - 1)], foreground: ink)
-  }
+  static ramp = " .:-=+*#%@"
+  static pixel (image: Location, at: Geometry.Vector, of: Geometry.Vector) => image.pixels -- (pixels => pixels.at(at.x * pixels.width / of.x, at.y * pixels.height / of.y))
+  static sampled (image: Location, at: Geometry.Vector, of: Geometry.Vector) => pixel(image, at, of) -- Cell(ramp[.luminance * (ramp.length - 1) / 255], foreground: .)
+  static tinted (image: Location, at: Geometry.Vector, of: Geometry.Vector, ink: Geometry.Color?) => pixel(image, at, of) -- Cell(ramp[.alpha * (ramp.length - 1)], foreground: ink)
 
   ANSI := class {
     Frame := class = changes: (at: Geometry.Vector, cell: Cell)[], title: String?, graphics: Graphic[] = []
@@ -178,10 +179,10 @@ Language.TUI := class: Language {
     {start: ANSI.Start} => Terminal.entering, "\e[?9001h", Terminal.clearing
   }
   Kitty := {
-    {paint: Paint{shape is Geometry.Image}} => Graphic(paint.at, ("\e_Ga=T,f=100;", Base64.encoded(IO.File(paint.shape.source as String).bytes), "\e\\"))
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === UI.Image}} => Graphic(shown.paint.at, ("\e_Ga=T,f=100;", Base64.encoded(IO.File(shown.paint.shape.content as String).bytes), "\e\\"))
   }
   Sixel := {
-    {paint: Paint{shape is Geometry.Image}} => Graphic(paint.at, ("\eP0;0;0q", sixel(IO.read(paint.shape.source) as Geometry.Raster), "\e\\"))
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === UI.Image}} => Graphic(shown.paint.at, ("\eP0;0;0q", sixel(shown.paint.shape.content.pixels), "\e\\"))
   }
   static sixel (raster: Geometry.Raster) => raster.pixels.unique.enumerate -- (palette => (
     palette.map("#", .index, ";2;", .value.red * 100 / 255, ";", .value.green * 100 / 255, ";", .value.blue * 100 / 255),

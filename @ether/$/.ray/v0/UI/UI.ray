@@ -2,18 +2,15 @@ UI := class {
   choosing: boolean = false
 
   Scene := {
-    {text: String} => Geometry.Text(text)
-    {painted: Painted} => Geometry.Text(painted.text, white_space: pre, runs: painted.runs)
-    {styled: String ^{{literal expression}}} => Geometry.Text(styled).styled_by(Program(code: external ** expression))
+    {text: String} => Geometry.Box(content: text, location: text.location)
+    {styled: String ^{{literal expression}}} => Geometry.Box(content: styled, location: styled.location).styled_by(Program(code: external ** expression))
     {styled: Geometry.Shape ^{{literal expression}}} => styled.styled_by(Program(code: external ** expression))
-    {styled: String ^{style}} => Geometry.Text(styled).styled(style)
+    {styled: String ^{style}} => Geometry.Box(content: styled.marked(style), location: styled.location)
     {styled: Geometry.Shape ^{style}} => styled.styled(style)
     {{literal narrowing}} {narrowed: Geometry.Shape} => narrowed.narrowed(Program(code: external ** narrowing))
-    {{literal narrowing}} {narrowed: String} => Geometry.Text(narrowed).narrowed(Program(code: external ** narrowing))
-    {location: Location{.extension is Image.extensions}} => Geometry.Image(location, alt: location.name)
-    {location: Location{.extension is Video.extensions}} => Geometry.Video(location)
-    {location: Location{.extension is Audio.extensions}} => Geometry.Audio(location)
-    {location: Location} => Link(to: location, window: location.window, children: [Geometry.Text(location as String)])
+    {{literal narrowing}} {narrowed: String} => Geometry.Box(content: narrowed, location: narrowed.location).narrowed(Program(code: external ** narrowing))
+    {location: Location{.media || .video_site}} => location.placed(Geometry.Box(content: location))
+    {location: Location} => location.placed(Geometry.Box(content: location as String, location: location))
     {drawer: Drawer} => Geometry.Box(layer: drawer.layer, children: drawer.shown)
     {shape: Geometry.Shape} => shape
     {chosen: Choice} => chosen as Input
@@ -44,18 +41,9 @@ UI := class {
     {solved: Geometry.Solved} => Screen([solved.shape, solved.shape.lifted].flatten, solved.scrolled)
   }
 
-  Painted := class = text: String, spans: (from: Number, to: Number, style: String)[] = [], palette: String = "default" {
-    runs => spans.map(Geometry.Text.Run(.from, .to, color: Theme.painted(palette, .style), font: Theme[.style].font))
-  }
-
-  Image := class { extensions = "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "avif" }
-  Video := class { extensions = "mp4" | "webm" | "ogv" }
-  Audio := class { extensions = "mp3" | "ogg" | "wav" | "flac" }
-
-  Link := class: Geometry.Box = to: Location, window: same | new = same {
-    role => Role.link
-    activate => window == new ? Platform.open(to) : Navigation.go(to)
-  }
+  Image := Language.register(Language(".png" | ".jpg" | ".jpeg" | ".gif" | ".svg" | ".webp" | ".avif", reader: (bytes) => bytes as Geometry.Raster))
+  Video := Language.register(Language(".mp4" | ".webm" | ".ogv"))
+  Audio := Language.register(Language(".mp3" | ".ogg" | ".wav" | ".flac"))
 
   Interactive := class = shape: Geometry.Shape {
     hovered => Pointer.position.some(scene.at(.).contains(shape))
@@ -85,15 +73,14 @@ UI := class {
     role => Role.input
     text_shown => empty ? placeholder : value as String
     wrapping => nowrap
-    runs_shown => []
-    face => Geometry.Text(text_shown, origin: origin + padding.start, size: size - padding.total, font: font ?? Geometry.Font(), color: empty ? placeholder_color ?? Theme["muted"].color : color,
-      white_space: wrapping, runs: runs_shown)
+    marked_text => text_shown
+    face => Geometry.Box(content: marked_text, origin: origin + padding.start, size: size - padding.total, font: font ?? Geometry.Font(), color: empty ? placeholder_color ?? Theme["muted"].color : color,
+      white_space: wrapping, palette: palette)
   }
   TextField := class: Input
-  TextArea := class: Input = language: Language | String | None = None, palette: String = "default" {
-    painted => language && !empty ? (value as String).highlighted(language, palette) : None
+  TextArea := class: Input = language: Language | String | None = None {
     wrapping => pre_wrap
-    runs_shown => !empty && painted ? painted.runs : []
+    marked_text => language && !empty ? (value as String).highlighted(language) : text_shown
   }
   Secret := class: Input {
     text_shown => "•" * (value as String).length
@@ -171,9 +158,9 @@ UI := class {
     shapes: Geometry.Shape[] = []
     expanded: Geometry.Shape[] = []
     range: (shape: Geometry.Shape, from: Number, to: Number)?
-    text: String => range ? Content(range.shape)[range.from..<range.to] : shapes{. is Geometry.Text}.text.join("")
+    text: String => range ? Content(range.shape)[range.from..<range.to] : shapes{.content is String}.content.join("")
     current => shapes.last ?? scene
-    static Content := (shape: Geometry.Shape) => shape is Input ? (shape.empty ? "" : shape.value as String) : shape.texts.text.join("")
+    static Content := (shape: Geometry.Shape) => shape is Input ? (shape.empty ? "" : shape.value as String) : shape.texts.content.join("")
     static shaped (target) => target is Geometry.Shape ? target : scene?.expand{. is Input && .chosen === target}.first
     whole (target) => shaped(target) -- (shape => (range = (shape, 0, Content(shape).length)) -- (shapes = [shape])) if shaped(target)
     selects (shape: Geometry.Shape, index: Number) => range && range.shape === shape && range.from <= index < range.to
@@ -259,13 +246,27 @@ UI := class {
   }
   Location &+= {
     window: same | new = same
+    alt: String?
+    fit: contain | cover | fill | none = contain
+    controls: boolean = true
+    muted: boolean = false
+    looping: boolean = false
+    components: *[] = []
     parts => written ~= (path: (!"?")[], ("?", query: *)?)
-    path => Location(written: parts.path, window: window)
+    copied (written: String) => Location(written: written, window: window, alt: alt, fit: fit, controls: controls, muted: muted, looping: looping, components: components)
+    path => copied(parts.path)
     segments => parts.path.split("/"){.nonempty}
+    extension => (parts.path ~= (*, ".", last: Char.Word[]) ⊣)?.last
+    language => extension ? Language.named("." + extension) : None
+    media => language === Image || language === Video || language === Audio
+    pixels => language.read(IO.read(this))
+    video_site => (written ~= (*, ("youtube.com/watch?v=" | "youtu.be/" | "youtube.com/embed/"), id: (!"&" && !"?")[], *))?.id
+    embedded => video_site ? @https://www.youtube.com/embed/ video_site : this
+    placed (shape: Geometry.Shape) => components.for(shape + .) -- ((shape + Geometry.Constraint("x", aspect: 16 / 9)) if video_site) -- shape
     query => Query(parts.query ?? "")
-    with (changes) => Location(written: parts.path + (query.merged(changes) as String), window: window)
-    + (suffix: String) => Location(written: written + suffix, window: window)
-    narrowed (narrowing: Program) => Location(written: written, window: window) -- (copy => narrowing{O: Geometry.Settings}().for(.applied(copy)) -- copy)
+    with (changes) => copied(parts.path + (query.merged(changes) as String))
+    + (suffix: String) => copied(written + suffix)
+    narrowed (narrowing: Program) => copied(written) -- (copy => narrowing{O: Geometry.Narrowing}().for(component => component is Geometry.Field ? component.applied(copy) : copy.components.push component) -- copy)
     {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
   }
   Site := class = index: *?, routes: Route[] = [] {
@@ -330,14 +331,18 @@ UI := class {
   Role := enum heading | link | button | input | image | list | table | region | text
   Geometry.Shape &+= {
     interaction => Interactive(this)
-    focusable => this is Link || this is Input || activate
-    activate => None
-    role => Role.region
-    label => this is Geometry.Image ? alt : children{. is Geometry.Text}.text.join(" ")
+    focusable => location || this is Input || activate
+    activate => location ? (location.window == new ? Platform.open(location) : Navigation.go(location)) : None
+    role => location ? Role.link
+      : content is String ? (Theme.face(this, 0).font.weight >= 600 ? Role.heading : Role.text)
+      : content is Location && content.language === Image ? Role.image
+      : this is Geometry.Box && flow == grid ? Role.table
+      : this is Geometry.Box && activate ? Role.button
+      : Role.region
+    label => content is Location ? content.alt ?? content.name : children{.content is String}.content.join(" ")
     styled (name: String) => (styles.push name) -- Theme[name].fields{.name != "name"}.for(field => field.name.match
       "font" => font = font ? font.merged(field.value) : field.value
       "spacing" | "constraints" | "effects" => field.value.for(component => this + component)
-      "wrap" | "white_space" | "align" => texts.for(.`field.name` = field.value)
       * => this.`field.name` = field.value
     ) -- this
     restyled (name: String) => styles -- (own => (styles = []) -- styled(name) -- own.for(styled(.))) -- this
@@ -346,22 +351,14 @@ UI := class {
       now.animations.push Geometry.Animation(from: was.shown_transform, to: now.transform, duration: now.transition.duration, easing: now.transition.easing, property: "transform")
     ) -- this
   }
-  Geometry.Box &+= {
-    role => flow == grid ? Role.table : activate ? Role.button : Role.region
-  }
-  Geometry.Image &+= {
-    role => Role.image
-  }
-  Geometry.Text &+= {
-    role => font.weight >= 600 ? Role.heading : Role.text
-  }
 
   Theme := class {
     static spacing: Geometry.Length = 0.125rem
     static scaled (amount: Number | Geometry.Length) => amount is Number ? spacing * amount : amount
     static kinds: (kind: *, style: String)[] = []
     static default (kind, style: String) => kinds.push (kind, style) -- kind
-    static applied (scene: Geometry.Shape) => scene.expand.for(shape => kinds{shape is .kind}.for(shape.restyled(.style))) -- scene
+    static applied (scene: Geometry.Shape) => scene.expand.for(shape => kinds{shape is .kind}.for(shape.restyled(.style))
+      -- (shape.content is String ? shape.content.whole_marks{!shape.styles.contains(.style)}.for(shape.styled(.style)) : None)) -- scene
     static palettes: (name: String, colors: (style: String, color: Geometry.Color)[])[] = [("default", [
       ("keyword", "#6C6783" as Geometry.Color), ("comment", "#6C6783" as Geometry.Color), ("string", "#FFCC99" as Geometry.Color), ("number", "#FFCC99" as Geometry.Color),
       ("class", "#9A86FD" as Geometry.Color), ("type", "#9A86FD" as Geometry.Color), ("variable", "#C4B9FE" as Geometry.Color), ("property", "#C4B9FE" as Geometry.Color),
@@ -369,6 +366,12 @@ UI := class {
       ("punctuation", "#6C6783" as Geometry.Color), ("label", "#A18565" as Geometry.Color), ("external", "#F59E47" as Geometry.Color), ("error", "#CD5C5C" as Geometry.Color)
     ])]
     static painted (palette: String, style: String) => palettes{.name == palette}.last?.colors{style == .style || style.starts_with(.style + ".")}.last?.color ?? Theme[style].color
+    static face (shape: Geometry.Shape, index: Number) => (shape.content is String ? shape.content.marks{.from <= index < .to} : []).reduce(acc = (font: shape.typeface, color: shape.color, fill: shape.fill, styles: []) => (
+      font: Theme[.style].font ? acc.font.merged(Theme[.style].font) : acc.font,
+      color: painted(shape.palette ?? "default", .style) ?? acc.color,
+      fill: Theme[.style].fill ?? acc.fill,
+      styles: [acc.styles, [.style]].flatten(1)
+    ))
     static styles: (name: String, *)[] = [
       ("italic", font: Geometry.Font(style: italic)),
       ("bold", font: Geometry.Font(weight: 700)),
@@ -376,12 +379,19 @@ UI := class {
       ("disabled", color: Geometry.Color(160, 160, 160)),
       ("h1", font: Geometry.Font(size: 2em, weight: 700)),
       ("h2", font: Geometry.Font(size: 1.5em, weight: 700)),
-      ("h3", font: Geometry.Font(size: 1.17em, weight: 700))
+      ("h3", font: Geometry.Font(size: 1.17em, weight: 700)),
+      ("code", white_space: pre)
     ]
     static [name: String] => styles{.name == name}.last - name ?? ()
   }
   String &+= {
-    highlighted (language: Language | String, palette: String = "default") => Painted(this, (language is String ? Language.named("." + language) : language).painted(this), palette)
+    marks: (from: Number, to: Number, style: String)[] = []
+    location: Location?
+    marked (style: String, from: Number = 0, to: Number = length) => this ~~ .marks = [marks, [(from, to, style)]].flatten(1)
+    whole_marks => marks{.from <= 0 && .to >= length}
+    partial_marks => marks{!(.from <= 0 && .to >= length)}
+    pieces => [0, partial_marks.map(.from, .to).flatten, length].flatten.unique.sort -- .zip(.rest).map((from, to) => (text: this[from..<to], from: from))
+    highlighted (language: Language | String) => (language is String ? Language.named(language.starts_with(".") ? language : "." + language) : language).painted(this).reduce(acc = marked("code") => acc.marked(.style, .from, .to))
   }
 
   Watch := class = watched: Dynamic, action: Program, becoming: *?, last: *?, seen: Number = Runtime.frames {
@@ -417,6 +427,8 @@ UI := class {
       -- (Runtime.frames += 1) -- (Watch.all = Watch.all{.seen >= Runtime.frames - 1}) -- (Timer.all = Timer.all{.seen >= Runtime.frames - 1 && !.fired})
   }
 }
+
+{value} @ {location: Location} ^keyword => value ~~ .location = location
 
 [p: all, px: horizontal, py: vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => {
   `word` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side))

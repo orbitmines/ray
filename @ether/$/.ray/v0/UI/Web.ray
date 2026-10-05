@@ -16,7 +16,7 @@ Language.Web := class: Language {
     Meta := class = name: String, content: *
     Named := class = shape: Geometry.Shape
     Described := class = shape: Geometry.Shape
-    Entry := class = input: UI.Input
+    Entry := class = chosen: Choice
     Inner := class = shape: Geometry.Shape
     Spans := class = shape: Geometry.Shape
     Span := class = text: String, from: Number, shape: Geometry.Shape
@@ -67,15 +67,15 @@ Language.Web := class: Language {
       {meta: Meta} => @html <meta name={meta.name} content={meta.content} />
 
       {link: Geometry.Shape{location}} => @html <a {Named(link)} href={link.location as String} target={"_blank" if link.location.window == new} rel={"noopener noreferrer" if link.location.window == new}>{Inner(link)}</a>
-      {text: Geometry.Shape{content is String && role == heading && font.size >= 2em}} => @html <h1 {Named(text)}>{Spans(text)}</h1>
-      {text: Geometry.Shape{content is String && role == heading && font.size >= 1.5em}} => @html <h2 {Named(text)}>{Spans(text)}</h2>
-      {text: Geometry.Shape{content is String && role == heading}} => @html <h3 {Named(text)}>{Spans(text)}</h3>
+      {text: Geometry.Shape{content is String && typeface.weight >= 600 && typeface.size >= 2em}} => @html <h1 {Named(text)}>{Spans(text)}</h1>
+      {text: Geometry.Shape{content is String && typeface.weight >= 600 && typeface.size >= 1.5em}} => @html <h2 {Named(text)}>{Spans(text)}</h2>
+      {text: Geometry.Shape{content is String && typeface.weight >= 600}} => @html <h3 {Named(text)}>{Spans(text)}</h3>
       {text: Geometry.Shape{content is String && wrap == none}} => @html <span {Named(text)} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{Spans(text)}</span>
       {text: Geometry.Shape{content is String}} => @html <p {Named(text)} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{Spans(text)}</p>
-      {image: Geometry.Shape{content is Location && content.language === UI.Image && fill}} => @html <span {Named(image)} role="img" aria-label={image.label} />
-      {image: Geometry.Shape{content is Location && content.language === UI.Image}} => @html <img {Named(image)} src={image.content as String} alt={image.label} loading="lazy" />
-      {video: Geometry.Shape{content is Location && content.language === UI.Video}} => @html <video {Named(video)} src={video.content as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
-      {audio: Geometry.Shape{content is Location && content.language === UI.Audio}} => @html <audio {Named(audio)} src={audio.content as String} controls />
+      {image: Geometry.Shape{content is Location && content.language === Language.Image && fill}} => @html <span {Named(image)} role="img" aria-label={image.label} />
+      {image: Geometry.Shape{content is Location && content.language === Language.Image}} => @html <img {Named(image)} src={image.content as String} alt={image.label} loading="lazy" />
+      {video: Geometry.Shape{content is Location && content.language === Language.Video}} => @html <video {Named(video)} src={video.content as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
+      {audio: Geometry.Shape{content is Location && content.language === Language.Audio}} => @html <audio {Named(audio)} src={audio.content as String} controls />
       {frame: Geometry.Shape{content is Location && content.video_site}} => @html <iframe {Named(frame)} src={frame.content.embedded as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
       {canvas: Geometry.Shape{content is Program}} => @html <canvas {Named(canvas)} width={canvas.size.x as px} height={canvas.size.y as px} />
       {ball: Geometry.Ball} => @html <svg {Named(ball)} viewBox="0 0 {ball.size.x as px} {ball.size.y as px}">
@@ -92,31 +92,23 @@ Language.Web := class: Language {
       {path: Path{segment is Geometry.Arc}} => path.segment -- (" A", .radius.x, " ", .radius.y, " ", .rotation, " ", .large ? 1 : 0, " ", .sweep ? 1 : 0, " ", .to.x, " ", .to.y)
       {path: Path} => " L", path.segment.x, " ", path.segment.y
 
-      {form: UI.Form} => @html <form {Named(form)}>{form.inputs}</form>
-      {input: UI.TextField} => @html <input {Named(input)} type="text" {Entry(input)} />
-      {input: UI.Secret} => @html <input {Named(input)} type="password" {Entry(input)} />
-      {input: UI.NumberField} => @html <input {Named(input)} type="number" {Entry(input)} />
-      {input: UI.DateField} => @html <input {Named(input)} type="datetime-local" {Entry(input)} />
-      {input: UI.ColorField} => @html <input {Named(input)} type="color" {Entry(input)} />
-      {input: UI.FileField} => @html <input {Named(input)} type="file" {Entry(input)} />
-      {input: UI.Checkbox} => @html <input {Named(input)} type="checkbox" {Entry(input)} />
-      {input: UI.Slider} => @html <input {Named(input)} type="range" {Entry(input)} min={input.chosen.type.least as String} max={input.chosen.type.most as String} />
-      {input: UI.TextArea{language}} => @html <div id={input.id} class={["painted", input.styles].flatten.join(" ")}>
-        <pre id="{input.id}-paint" aria-hidden="true">{Spans(input.face)}</pre>
-        <textarea id="{input.id}-text" placeholder={input.placeholder} spellcheck="false">{input.empty ? "" : input.value as String}</textarea>
+      {form: Geometry.Shape{children.some(.content is Choice)}} => @html <form {Named(form)}>{form.children}</form>
+      {field: Geometry.Shape{content is Choice{type is String{multiline} && language}}} => @html <div id={field.id} class={["painted", field.styles].flatten.join(" ")}>
+        <pre id="{field.id}-paint" aria-hidden="true">{Spans(field.face)}</pre>
+        <textarea id="{field.id}-text" placeholder={field.content.placeholder} spellcheck="false">{field.content.empty ? "" : field.content.value as String}</textarea>
       </div>
-      {input: UI.TextArea} => @html <textarea {Named(input)} placeholder={input.placeholder}>{input.empty ? "" : input.value as String}</textarea>
-      {input: UI.Select} => @html <select {Named(input)}>{input.options.map(@html <option value={. as String}>{. as String}</option>)}</select>
+      {field: Geometry.Shape{content is Choice{type is String{multiline}}}} => @html <textarea {Named(field)} {Entry(field.content)}>{field.content.empty ? "" : field.content.value as String}</textarea>
+      {field: Geometry.Shape{content is Choice{listed}}} => @html <select {Named(field)}>{field.content.options.map(@html <option value={. as String}>{. as String}</option>)}</select>
+      {field: Geometry.Shape{content is Choice}} => @html <input {Named(field)} type={Compiler.reduced(field.content, kinds)} {Entry(field.content)} />
 
       {box: Geometry.Shape{activate}} => @html <button {Named(box)} {Described(box)}>{box.children}</button>
-      {box: Geometry.Shape{role == table}} => @html <table {Named(box)} {Described(box)}>{box.children}</table>
-      {box: Geometry.Shape{role == list}} => @html <ul {Named(box)} {Described(box)}>{box.children}</ul>
-      {box: Geometry.Shape{role == region}} => @html <section {Named(box)} {Described(box)}>{box.children}</section>
-      {box: Geometry.Shape} => @html <div {Named(box)} {Described(box)}>{box.children}</div>
+      {box: Geometry.Shape{flow == grid}} => @html <table {Named(box)} {Described(box)}>{box.children}</table>
+      {box: Geometry.Shape} => @html <section {Named(box)} {Described(box)}>{box.children}</section>
 
       {named: Named} => [("id", named.shape.id), ("class", named.shape.styles.join(" ")) if named.shape.styles.nonempty]
-      {described: Described} => [("role", described.shape.role as String), ("aria-label", described.shape.label) if described.shape.label, ("popover", "manual") if described.shape.position.kind == anchored]
-      {entry: Entry} => [("placeholder", entry.input.placeholder), ("disabled", "") if entry.input.disabled]
+      {described: Described} => [("aria-label", described.shape.label) if described.shape.label, ("popover", "manual") if described.shape.position.kind == anchored]
+      {entry: Entry} => entry.chosen -- (chosen => [("placeholder", chosen.placeholder), ("disabled", "") if chosen.disabled,
+        ("min", chosen.type.least as String) if chosen.type is Number{least, most}, ("max", chosen.type.most as String) if chosen.type is Number{least, most}])
       {inner: Inner{shape.content is String}} => [Spans(inner.shape), inner.shape.children]
       {inner: Inner} => inner.shape.children
       {spans: Spans{shape.content.partial_marks.empty}} => Text(spans.shape.content)
@@ -131,6 +123,17 @@ Language.Web := class: Language {
       ])
     }
 
+    kinds := {
+      {chosen: Choice{type is String{secret}}} => "password"
+      {chosen: Choice{type is boolean}} => "checkbox"
+      {chosen: Choice{type is Number{least, most}}} => "range"
+      {chosen: Choice{type is Number}} => "number"
+      {chosen: Choice{type is Time}} => "datetime-local"
+      {chosen: Choice{type is Geometry.Color}} => "color"
+      {chosen: Choice{type is Location}} => "file"
+      {chosen: Choice} => "text"
+    }
+
     written := {
       {document: Document} => "<!doctype html><html lang=\"", document.language, "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">", document.head, "</head>", document.body, "</html>"
       {element: Element{void}} => "<", element.tag, element.attributes.map(" ", .name, "=\"", escaped(.value as String), "\""), ">"
@@ -141,7 +144,7 @@ Language.Web := class: Language {
     }
     language = Language.register(Language(".html", level: syntax, written: written))
 
-    level := UI.Rendering + {
+    level := Geometry.Solving + {
       {solved: Geometry.Solved} => Page(solved.shape)
     } + rules
   }
@@ -305,14 +308,14 @@ Language.Web := class: Language {
         letter-spacing: {Measure(font.tracking) if font.tracking != 0};
       })
 
-      {specific: Specific{shape.content is Location && shape.content.language === UI.Image && shape.fill}} => specific.shape -- (image => @css {
+      {specific: Specific{shape.content is Location && shape.content.language === Language.Image && shape.fill}} => specific.shape -- (image => @css {
         object-fit: {image.content.fit as String}; display: inline-block; mask: {Mask(image)}; -webkit-mask: {Mask(image)};
       })
-      {specific: Specific{shape.content is Location && shape.content.language === UI.Image}} => @css { object-fit: {specific.shape.content.fit as String}; }
+      {specific: Specific{shape.content is Location && shape.content.language === Language.Image}} => @css { object-fit: {specific.shape.content.fit as String}; }
       {specific: Specific{shape.content is Location && shape.content.video_site}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
       {specific: Specific} => []
 
-      {placeholder: Placeholder{shape is UI.Input && shape.placeholder_color}} => @css #{placeholder.shape.id}::placeholder { color: {Paint(placeholder.shape.placeholder_color)}; }
+      {placeholder: Placeholder{shape.content is Choice && shape.content.placeholder_color}} => @css #{placeholder.shape.id}::placeholder { color: {Paint(placeholder.shape.content.placeholder_color)}; }
       {placeholder: Placeholder} => []
 
       {switchable: Switchable{shape.dynamics.some(.target == "class")}} => UI.Theme.styles.map(style => @css #{switchable.shape.id}.{style.name} { {Styling(style.name)} })
@@ -344,7 +347,7 @@ Language.Web := class: Language {
     }
     language = Language.register(Language(".css", level: syntax, written: written))
 
-    level := UI.Rendering + {
+    level := Geometry.Solving + {
       {solved: Geometry.Solved} => Page(solved.shape)
     } + rules
   }
@@ -483,8 +486,8 @@ Language.Web := class: Language {
         Prelude(),
         Devices(),
         page.shape.expand.map(shape => shape.dynamics.map(Updated(shape, .))),
-        UI.Watch.all.map(watch => @js ray.subscribe({watch.watched.program.reads}, () => { {watch.action{O: expressions}()} })),
-        UI.Timer.all{!.fired}.map(timer => @js setTimeout(() => { {timer.action{O: expressions}()} }, {(timer.due - Time.now) as ms})),
+        UI.Watch.all{!.due}.map(watch => @js ray.subscribe({watch.watched.program.reads}, () => { {watch.action{O: expressions}()} })),
+        UI.Watch.all{.due && !.last}.map(timer => @js setTimeout(() => { {timer.action{O: expressions}()} }, {(timer.due - Time.now) as ms})),
         page.shape.expand.map(Mirrored(.)),
         page.shape.expand{.focusable}.map(shape => @js document.getElementById({shape.id}).addEventListener("click", (event) => ray.activate({shape.id}))),
         page.shape.expand.map(Typed(.)),
@@ -502,8 +505,8 @@ Language.Web := class: Language {
         window.addEventListener("popstate", (event) => ray.set("UI.Navigation.history", location.pathname))
         window.addEventListener("paste", (event) => ray.set("UI.Clipboard.content", event.clipboardData.getData("text")))
         window.addEventListener("drop", (event) => ray.set("UI.Drag.dropped", event.dataTransfer.files))
-        window.addEventListener("compositionupdate", (event) => ray.set("UI.Composition.text", event.data))
-        window.addEventListener("deviceorientation", (event) => ray.set("UI.Sensors.orientation", ray.orientation(event)))
+        window.addEventListener("compositionupdate", (event) => ray.set("UI.Devices.composing", event.data))
+        window.addEventListener("deviceorientation", (event) => ray.set("UI.Devices.orientation", ray.orientation(event)))
         window.addEventListener("gamepadconnected", (event) => ray.poll_gamepads())
         window.matchMedia("(prefers-reduced-motion:reduce)").addEventListener("change", (event) => ray.set("UI.Viewport.preferences.reduced_motion", event.matches))
         effect(["UI.Navigation.history"], () => history.pushState(null, "", ray.get("UI.Navigation.at")))
@@ -544,9 +547,9 @@ Language.Web := class: Language {
       }
       {updated: Updated{dynamic.target == "class"}} => @js effect({updated.dynamic.reads}, () => document.getElementById({updated.shape.id}).className = {updated.dynamic.compiled{O: expressions}()})
       {updated: Updated} => @js effect({updated.dynamic.reads}, () => { {updated.dynamic.compiled{O: expressions}()} })
-      {mirrored: Mirrored{shape is UI.TextArea && shape.language}} => @js document.getElementById("{mirrored.shape.id}-text").addEventListener("input", (event) => document.getElementById("{mirrored.shape.id}-paint").textContent = event.target.value)
+      {mirrored: Mirrored{shape.content is Choice && shape.content.language}} => @js document.getElementById("{mirrored.shape.id}-text").addEventListener("input", (event) => document.getElementById("{mirrored.shape.id}-paint").textContent = event.target.value)
       {mirrored: Mirrored} => []
-      {typed: Typed{shape is UI.Input}} => @js document.getElementById({typed.shape.id}).addEventListener("input", (event) => ray.set({typed.shape.id}, event.target.value))
+      {typed: Typed{shape.content is Choice}} => @js document.getElementById({typed.shape.id}).addEventListener("input", (event) => ray.set({typed.shape.id}, event.target.value))
       {typed: Typed} => []
       {drawing: Drawing{shape.content is Program}} => @js effect({drawing.shape.content.reads}, () => ray.draw({drawing.shape.id}, {drawing.shape.content.rendered(Language.Direct.level)}))
       {drawing: Drawing} => []
@@ -581,7 +584,7 @@ Language.Web := class: Language {
     }
     language = Language.register(Language(".js", level: syntax, written: written))
 
-    level := UI.Rendering + {
+    level := Geometry.Solving + {
       {solved: Geometry.Solved} => Page(solved.shape)
     } + rules
   }
@@ -600,7 +603,7 @@ Language.Web := class: Language {
       [UI.Navigation.icon, UI.Navigation.apple_icon, UI.Navigation.manifest]{!= None}.map((path: .name, content: .))
     ].flatten)
   }
-  level := UI.Rendering + packaged + HTML.rules + CSS.rules + JS.rules
+  level := Geometry.Solving + packaged + HTML.rules + CSS.rules + JS.rules
 
   DOM := class {
     send (message) => external io `dom` (message)
@@ -642,14 +645,14 @@ Language.Web := class: Language {
     Inbound := Click | Input | Focus | Scroll | Pointer | Keystroke | Size
     applied := {
       {click: Click} => click.shape?.activate
-      {input: Input} => input.shape?.set(input.value)
+      {input: Input} => input.shape?.content.set(input.value)
       {focus: Focus} => UI.Focus.current = focus.shape
       {scroll: Scroll} => UI.Viewport.scrolled = scroll.y * 1px
       {pointer: Pointer{kind == "pointerdown"}} => UI.Pointer.down(pointer.position, time: pointer.time)
       {pointer: Pointer{kind == "pointermove"}} => UI.Pointer.moved(pointer.position, pointer.time)
       {pointer: Pointer} => UI.Pointer.up(pointer.position, pointer.time)
-      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- UI.Keyboard.press(keystroke.key, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
-      {keystroke: Keystroke} => UI.Keyboard.release(keystroke.key)
+      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- Keyboard.press(keystroke.key, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
+      {keystroke: Keystroke} => Keyboard.release(keystroke.key)
       {size: Size{shape}} => size.shape.size = Geometry.Vector(size.width * 1px, size.height * 1px)
       {size: Size} => None
     }

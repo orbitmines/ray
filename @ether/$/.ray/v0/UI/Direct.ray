@@ -15,10 +15,10 @@ Language.Direct := class: Language {
   Shown := class = draw: Draw
 
   rules := {
-    {screen: UI.Screen} => Drawing(Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px), screen.layers.map(Draw(., screen.offset)))
+    {solved: Geometry.Solved} => Drawing(Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px), [solved.shape, solved.shape.lifted].flatten.map(Draw(., Geometry.Transform.translate(Geometry.Vector(0, -solved.scrolled)))))
     {drawing: Drawing{ops.flatten.every(. is Program)}} => drawing.raster ~~ drawing.ops.flatten
 
-    {draw: Draw{shape is UI.Input}} => [
+    {draw: Draw{shape.content is Choice}} => [
       Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: draw.shape.fill, stroke: draw.shape.stroke, radius: draw.shape.radius, effects: draw.shape.effects), draw.outer),
       Draw(draw.shape.face, draw.outer)
     ]
@@ -46,10 +46,10 @@ Language.Direct := class: Language {
         ].flatten)
       }).ops).flatten
     }
-    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === UI.Image && draw.shape.fill}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
+    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === Language.Image && draw.shape.fill}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
       draw.placed.applied(Geometry.Vector(x, y)) -- (at => { .put(at.x, at.y, ((draw.shape.fill as Geometry.Color) ?? Geometry.Color(0, 0, 0)).faded(raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y).alpha)) })
     )))
-    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === UI.Image}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
+    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === Language.Image}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
       draw.placed.applied(Geometry.Vector(x, y)) -- (at => { .put(at.x, at.y, raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y)) })
     )))
     {shown: Shown{draw.shape.content is Location && draw.shape.content.video_site}} => shown.draw -- (draw => Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: Geometry.Color(17, 20, 24), stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
@@ -71,7 +71,7 @@ Language.Direct := class: Language {
       (0..<(b - a).length as px).map(step => a + (b - a) * (step / (b - a).length) -- (point => (-(stroked.stroke.width / 2)..stroked.stroke.width / 2).map(w => (at: Geometry.Vector(point.x + w, point.y), sample: point))))
     ).flatten, stroked.stroke.paint))
   }
-  level := UI.Rendering + UI.Scrolling + rules
+  level := Geometry.Solving + rules
 
   Font := class = font: Geometry.Font {
     file => font.family.map(Fonts.located(.)).first

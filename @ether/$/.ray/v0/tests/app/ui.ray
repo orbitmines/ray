@@ -8,7 +8,7 @@ page := Program(code: {
 })
 scene := page{O: UI.Scene}()
 unless scene.children.first.content is String { INFO@mark `UI1 a string does not become text` }
-unless scene.children.first.role == UI.Role.heading { INFO@mark `UI2 a heading style does not give a heading` }
+unless UI.Theme.face(scene.children.first, 0).font.weight >= 600 { INFO@mark `UI2 a heading style does not give a heading` }
 unless scene.children.last.location == @https://orbitmines.com { INFO@mark `UI3 a location does not become a link` }
 unless scene.flow == vertical { INFO@mark `UI4 lines do not stack` }
 unless Program(code: { "a", "b" }){O: UI.Scene}().flow == inline { INFO@mark `UI5 a comma does not flow inline` }
@@ -39,7 +39,7 @@ unless ("\e[<0;3;4M" as Language.TUI.Mouse).x == 3 { INFO@mark `UI36 a mouse rep
 
 dot := Geometry.Box(size: Geometry.Vector(2px, 2px), fill: Geometry.Color(255, 0, 0))
 with UI.Viewport.size = Geometry.Vector(4px, 4px) {
-  raster := Compiler.reduced(UI.Screen([dot]), Language.Direct.rules)
+  raster := Compiler.reduced(Geometry.Solved(dot), Language.Direct.rules)
   unless raster.at(0, 0) == Geometry.Color(255, 0, 0) { INFO@mark `UI40 a filled box is not drawn` }
   unless raster.at(3, 3).alpha == 0 { INFO@mark `UI41 outside the box was drawn` }
 }
@@ -51,9 +51,10 @@ unless (Geometry.Transform.translate(Geometry.Vector(1, 2)) * Geometry.Transform
 unless (6/12).md.width == 768px { INFO@mark `UI53 md is not the 768px breakpoint` }
 unless ((6/12).md -> (12/12).xs).at(768px) == 6/12 { INFO@mark `UI54 an interpolated share is not its breakpoint's at the breakpoint` }
 
-unless Compiler.reduced(Choice(type: boolean), UI.Scene) is UI.Checkbox { INFO@mark `UI60 choosing a boolean is not a checkbox` }
-unless Compiler.reduced(Choice(type: String), UI.Scene) is UI.TextField { INFO@mark `UI61 choosing a string is not a text field` }
-unless Compiler.reduced(Choice(type: Number{0 <= . <= 10}), UI.Scene) is UI.Slider { INFO@mark `UI62 choosing a bounded number is not a slider` }
+chosen_input := (choice) => Program(code: { choice }).rendered(Language.Web.HTML.level).body.children.first
+unless chosen_input(Choice(type: boolean)).attributes.contains(("type", "checkbox")) { INFO@mark `UI60 choosing a boolean is not a checkbox` }
+unless chosen_input(Choice(type: String)).attributes.contains(("type", "text")) { INFO@mark `UI61 choosing a string is not a text field` }
+unless chosen_input(Choice(type: Number{0 <= . <= 10})).attributes.contains(("type", "range")) { INFO@mark `UI62 choosing a bounded number is not a slider` }
 UI.Navigation.go(@https://orbitmines.com/profiles)
 unless UI.Navigation.at == @https://orbitmines.com/profiles { INFO@mark `UI63 navigating does not change where the user is` }
 UI.Navigation.back
@@ -190,13 +191,13 @@ unless dynamic_style.dynamics.some(.target == "class") { INFO@mark `UI137 a dyna
 unless css_rules(dynamic_style).some(.selector == "#" + dynamic_style.id + ".muted") { INFO@mark `UI138 the web level has no rule for a style a dynamic style can switch to` }
 styled_link := Geometry.Box(location: @/x)
 with UI.Theme.kinds = [(Geometry.Shape{location}, "muted")] {
-  Compiler.reduced(UI.Unstyled(Geometry.Box(children: [styled_link])), UI.Theming)
+  Geometry.Box(children: [styled_link]).themed
   unless styled_link.styles.contains("muted") && styled_link.color == UI.Theme["muted"].color { INFO@mark `UI139 a kind's default style is not applied` }
 }
-search_field := UI.TextField(chosen: Choice(type: String), value: "", placeholder: "Search", placeholder_color: Geometry.Color(1, 2, 3))
+search_field := Geometry.Box(content: Choice(type: String, value: "", placeholder: "Search", placeholder_color: Geometry.Color(1, 2, 3)))
 unless search_field.face.content == "Search" && search_field.face.color == Geometry.Color(1, 2, 3) { INFO@mark `UI140 an empty field does not show its placeholder in its colour` }
 unless css_rules(search_field).some(.selector == "#" + search_field.id + "::placeholder") { INFO@mark `UI141 the placeholder colour is not CSS` }
-code_area := UI.TextArea(chosen: Choice(type: String{multiline}), value: "x := 1", language: ".ray")
+code_area := Geometry.Box(content: Choice(type: String{multiline}, value: "x := 1", language: ".ray"))
 unless code_area.face.content.marks.nonempty && code_area.face.content == "x := 1" { INFO@mark `UI142 a text area in a language is not painted` }
 unless Program(code: { code_area }).rendered(Language.Web.HTML.level).body.children.first.children.first.tag == "pre" { INFO@mark `UI143 a painted text area has no painted layer under it` }
 red := Geometry.Color(255, 0, 0)
@@ -237,19 +238,19 @@ with UI.Viewport.size = Geometry.Vector(1000px, 800px) {
 scroller := Geometry.Box(origin: Geometry.Vector(0, 0px), size: Geometry.Vector(100px, 200px), overflow: scroll)
 UI.Viewport.reveal(revealed, within: scroller)
 unless scroller.scrolled.y == 1000px { INFO@mark `UI158 revealing within a container does not scroll the container` }
-unless UI.Viewport.height(revealed) == 100px { INFO@mark `UI159 a shape's height cannot be measured` }
+unless revealed.size.y == 100px { INFO@mark `UI159 a shape's height cannot be measured` }
 scrolled_child := Geometry.Box(constraints: [tall(10px)])
 solver.solve(Geometry.Box(scrolled: Geometry.Vector(0, 50px), overflow: scroll, children: [scrolled_child]))
 unless scrolled_child.origin.y == -50px { INFO@mark `UI160 a scrolled container does not move what it holds` }
 web_devices := Compiler.reduced(Language.Web.JS.Devices(), Language.Web.JS.rules)
 unless web_devices.some(. is Language.Web.JS.Listen && .event == "scroll") { INFO@mark `UI161 the web does not report the page scroll` }
 
-UI.Keyboard.press("f", control: true)
-unless UI.Keyboard.pressed("f", modifier: control | meta) { INFO@mark `UI162 ctrl+f is not read as ctrl or cmd + f` }
-if UI.Keyboard.pressed("f", modifier: alt) { INFO@mark `UI163 ctrl+f is read as alt+f` }
-UI.Keyboard.release("f")
-if UI.Keyboard.pressed("f") { INFO@mark `UI164 a released key stays pressed` }
-unless UI.Keyboard.tab === Keyboard.tab && UI.Keyboard.enter === Keyboard.enter { INFO@mark `UI165 UI.Keyboard does not share Feature's keys` }
+Keyboard.press("f", control: true)
+unless Keyboard.pressed("f", modifier: control | meta) { INFO@mark `UI162 ctrl+f is not read as ctrl or cmd + f` }
+if Keyboard.pressed("f", modifier: alt) { INFO@mark `UI163 ctrl+f is read as alt+f` }
+Keyboard.release("f")
+if Keyboard.pressed("f") { INFO@mark `UI164 a released key stays pressed` }
+unless Keyboard.named("Tab") === Keyboard.tab && Keyboard.named("Enter") === Keyboard.enter { INFO@mark `UI165 a key the UI names is not Feature's key` }
 control_f := (6 as Char as String) as Language.TUI.Key
 unless control_f.control && control_f.name.name == "f" { INFO@mark `UI166 ctrl+f in the terminal is not f with control` }
 unless ("\ef" as Language.TUI.Key).alt == "f" { INFO@mark `UI167 alt+f in the terminal is not read` }
@@ -260,7 +261,7 @@ unless UI.Pointer.velocity.x == -2px { INFO@mark `UI168 pointer velocity is not 
 UI.Pointer.up(Geometry.Vector(100px, 0px), swipe_start + 300 ms)
 unless UI.Pointer.swipe.distance.x == -100px && UI.Pointer.swipe.duration == 300 ms { INFO@mark `UI169 a press, move and release is not a swipe` }
 unless ("\e[<0;3;4M" as Language.TUI.Mouse).position == Geometry.Vector(16px, 48px) { INFO@mark `UI170 a mouse report is not a position on the page` }
-selected_field := UI.TextField(chosen: Choice(type: String), value: "hello")
+selected_field := Geometry.Box(content: Choice(type: String, value: "hello"))
 UI.Selection.whole(selected_field)
 unless UI.Selection.range.to == 5 && UI.Selection.text == "hello" { INFO@mark `UI171 selecting a field whole does not select its text` }
 selected_text := Geometry.Box(content: "ab", size: Geometry.Vector(16px, 16px))
@@ -289,11 +290,11 @@ becoming.fired
 unless became_count == 1 { INFO@mark `UI177 when … becomes fires on another value` }
 timer_fired := false
 timer := Program(code: { timer_fired = true }).after(0 s)
-timer.fire
+timer.fired
 unless timer_fired { INFO@mark `UI178 after fires late` }
 if Program(code: { timer_fired = false }).after(1 h).ready { INFO@mark `UI179 after fires early` }
 unless Program(code: { fired_count = 0 }).after(6 s) === Program(code: { fired_count = 0 }).after(6 s) { INFO@mark `UI180 a timer asked for again in the same frame restarts` }
-unless ({ timer_fired = true } after 6 s) is UI.Timer { INFO@mark `UI181 x after 6 s is not a timer` }
+unless ({ timer_fired = true } after 6 s) is UI.Watch { INFO@mark `UI181 x after 6 s is not a timer` }
 
 watched := (@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}
 video := Program(code: { watched }){O: UI.Scene}()
@@ -310,10 +311,10 @@ with UI.Viewport.size = Geometry.Vector(64px, 36px) {
   unless Program(code: { video }).rendered(Language.Direct.level).at(1, 1).alpha > 0 { INFO@mark `UI186 an embedded frame leaves no placeholder in a raster` }
 }
 
-site := UI.Site(index: "home", routes: [UI.Site.Route("/@", [(name: "fadi"), (name: "ether")])])
+site := UI.Site(index: "home", routes: [("/@", [(name: "fadi"), (name: "ether")])])
 unless site.at("/@nobody") == "home" { INFO@mark `UI187 a path nothing matches is not the index` }
 unless site.at("/@fadi").name == "fadi" { INFO@mark `UI188 a path matching one value is not that value` }
-unless (UI.Site(index: None).route("/x/", [(name: "a"), (name: "a")])).at("/x/a") is UI.Site.Chooser { INFO@mark `UI189 two matches are not a chooser` }
+unless (UI.Site(index: None).route("/x/", [(name: "a"), (name: "a")])).at("/x/a") is Choice { INFO@mark `UI189 two matches are not a chooser` }
 
 who := "Ray"
 by_hand := Language.Web.HTML.Element("p", [("class", "note")], [Language.Web.HTML.Text("hi")])
@@ -389,8 +390,8 @@ unless (Language.Web.JS.Module(js_commented) as Language.Web.JS.language) == "/*
 
 logo := (@./logo.png){alt: "logo", width <= 400px}
 logo_shape := Program(code: { logo }){O: UI.Scene}()
-unless logo_shape.content === logo && logo_shape.role == UI.Role.image { INFO@mark `UI223 an image location is not shown as itself` }
-unless logo.language === UI.Image && (@./clip.mp4).language === UI.Video && (@./song.mp3).language === UI.Audio { INFO@mark `UI224 a location's extension does not name its format` }
+unless logo_shape.content === logo && logo_shape.content.language === Language.Image { INFO@mark `UI223 an image location is not shown as itself` }
+unless logo.language === Language.Image && (@./clip.mp4).language === Language.Video && (@./song.mp3).language === Language.Audio { INFO@mark `UI224 a location's extension does not name its format` }
 unless (@https://orbitmines.com/a.png?v=2).extension == "png" { INFO@mark `UI225 a query is read as part of the extension` }
 logo_html := Program(code: { logo }).rendered(Language.Web.HTML.level).body.children.first
 unless logo_html.tag == "img" && logo_html.attributes.contains(("src", "./logo.png")) && logo_html.attributes.contains(("alt", "logo")) { INFO@mark `UI226 an image location is not an img with its alt` }
@@ -398,7 +399,7 @@ unless logo_shape.constraints.some(.dimension == "x" && .most == 400px) { INFO@m
 unless Program(code: { @./clip.mp4 }).rendered(Language.Web.HTML.level).body.children.first.tag == "video" { INFO@mark `UI228 a video location is not a video element` }
 unless Program(code: { @./song.mp3 }).rendered(Language.Web.HTML.level).body.children.first.tag == "audio" { INFO@mark `UI229 an audio location is not an audio element` }
 placed_text := Program(code: { "Ray" @ (@https://orbitmines.com) }){O: UI.Scene}()
-unless placed_text.content == "Ray" && placed_text.location == @https://orbitmines.com && placed_text.role == UI.Role.link { INFO@mark `UI230 a value placed at a location is not a link to it` }
+unless placed_text.content == "Ray" && placed_text.location == @https://orbitmines.com { INFO@mark `UI230 a value placed at a location is not a link to it` }
 unless Program(code: { "Ray" @ (@https://orbitmines.com) }).rendered(Language.Web.HTML.level).body.children.first.tag == "a" { INFO@mark `UI231 a value placed at a location is not an a on the web` }
 heading := Program(code: { "Ray" ^h1 }){O: UI.Scene}()
 unless heading.content == "Ray" && heading.content.marks.some(.style == "h1") { INFO@mark `UI232 a style is not kept on the string it marks` }

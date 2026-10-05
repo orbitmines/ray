@@ -142,8 +142,9 @@ OS := class {
 
 Keyboard := class = keys: Key[] = [] {
   static Direction := enum up | down | left | right
+  static Modifier := enum shift | control | alt | meta
 
-  static Key := class = name: *, code: Number?, shift = false, control = false {
+  static Key := class = name: *, code: Number?, shift = false, control = false, alt = false, meta = false {
     pressed = false
     toggled = false
     presses = 0
@@ -159,6 +160,11 @@ Keyboard := class = keys: Key[] = [] {
       .presses += 1
     )
     release: static => this ~~ .pressed = false
+    holding (modifier: Modifier) => modifier.match
+      shift => shift
+      control => control
+      alt => alt
+      meta => meta
 
     cycle (iterable) => iterable[presses % iterable.count]
     holds => pressed
@@ -174,7 +180,9 @@ Keyboard := class = keys: Key[] = [] {
   static held: Key[] = [f2, enter, tab, escape]
   static named (name) => name is Key ? name : held{.name == name}.first ?? (Key(name) ~~ held.push(.))
   static key (code: Number) => held{.code == code}.first ?? (Key(name: code as Char as String, code) ~~ held.push(.))
-  static press (name, shift = false, control = false) => named(name) ~~ (.shift = shift) ~~ (.control = control) -- .press
+  static press (name, shift = false, control = false, alt = false, meta = false) => named(name) ~~ (.shift = shift) ~~ (.control = control) ~~ (.alt = alt) ~~ (.meta = meta) -- .press
+  static release (name) => named(name).release
+  static pressed (name, modifier: Modifier? = None) => named(name) -- (key => key.pressed && (modifier == None || modifier#.some(key.holding(.))))
 }
 
 Chat := class = messages: Message[] = [] {

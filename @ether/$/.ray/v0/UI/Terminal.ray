@@ -37,10 +37,10 @@ Language.TUI := class: Language {
   Shown := class = paint: Paint
 
   rules := {
-    {screen: UI.Screen} => Painting(Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y), screen.layers.map(Paint(., screen.scrolled)))
+    {solved: Geometry.Solved} => Painting(Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y), [solved.shape, solved.shape.lifted].flatten.map(Paint(., solved.scrolled)))
     {painting: Painting{writes.flatten.every(. is Program)}} => painting.grid ~~ painting.writes.flatten
 
-    {paint: Paint{shape is UI.Input}} => [Boxed(paint), paint.inside(paint.shape.face), Selected(paint)]
+    {paint: Paint{shape.content is Choice}} => [Boxed(paint), paint.inside(paint.shape.face), Selected(paint)]
     {paint: Paint} => Boxed(paint)
 
     {boxed: Boxed} => boxed.paint -- (paint => [
@@ -67,8 +67,8 @@ Language.TUI := class: Language {
         (column: placed.column + lines[row][.].columns, writes: [placed.writes, { .put(at, written) }].flatten)
       }).writes).flatten
     }
-    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === UI.Image && paint.shape.fill}} => shown.paint -- (paint => paint.area.map(at => { .put(at, tinted(paint.shape.content, at - paint.at, paint.size, paint.shape.fill as Geometry.Color)) }))
-    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === UI.Image}} => shown.paint -- (paint => paint.area.map(at => { .put(at, sampled(paint.shape.content, at - paint.at, paint.size)) }))
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image && paint.shape.fill}} => shown.paint -- (paint => paint.area.map(at => { .put(at, tinted(paint.shape.content, at - paint.at, paint.size, paint.shape.fill as Geometry.Color)) }))
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => shown.paint -- (paint => paint.area.map(at => { .put(at, sampled(paint.shape.content, at - paint.at, paint.size)) }))
     {shown: Shown{paint.shape.content is Location && paint.shape.content.video_site}} => shown.paint -- (paint => paint.inside(Geometry.Box(location: Location(written: paint.shape.content.written, window: new), origin: paint.shape.origin, size: paint.shape.size, stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
       Geometry.Box(content: "▶ " + (paint.shape.content.alt ?? paint.shape.content as String), origin: paint.shape.origin + px_per_cell, size: paint.shape.size - px_per_cell * 2)
     ])))
@@ -107,7 +107,7 @@ Language.TUI := class: Language {
     )
     {selected: Selected} => []
   }
-  Cells := UI.Rendering + UI.Scrolling + rules
+  Cells := Geometry.Solving + rules
   level := Cells
 
   static braille (dots: boolean[][]) => (0x2800 + [[0, 3], [1, 4], [2, 5], [6, 7]].zip(dots).map((bits, row) => row.zip(bits).map((on, bit) => on ? 2 ^ bit : 0).sum).sum) as Char
@@ -164,10 +164,10 @@ Language.TUI := class: Language {
     {start: ANSI.Start} => Terminal.entering, "\e[?9001h", Terminal.clearing
   }
   Kitty := {
-    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === UI.Image}} => { .graphic(shown.paint.at, ("\e_Ga=T,f=100;", Base64.encoded(IO.File(shown.paint.shape.content as String).bytes), "\e\\")) }
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => { .graphic(shown.paint.at, ("\e_Ga=T,f=100;", Base64.encoded(IO.File(shown.paint.shape.content as String).bytes), "\e\\")) }
   }
   Sixel := {
-    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === UI.Image}} => { .graphic(shown.paint.at, ("\eP0;0;0q", sixel(shown.paint.shape.content.pixels), "\e\\")) }
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => { .graphic(shown.paint.at, ("\eP0;0;0q", sixel(shown.paint.shape.content.pixels), "\e\\")) }
   }
   static sixel (raster: Geometry.Raster) => raster.pixels.unique.enumerate -- (palette => (
     palette.map("#", .index, ";2;", .value.red * 100 / 255, ";", .value.green * 100 / 255, ";", .value.blue * 100 / 255),
@@ -211,12 +211,12 @@ Language.TUI := class: Language {
   }
 
   applied := {
-    {key: Key} => UI.Keyboard.press(key.name, key.shift, key.control, key.alt != None) -- Pressed(key)
+    {key: Key} => Keyboard.press(key.name, key.shift, key.control, key.alt != None) -- Pressed(key)
     {pressed: Pressed{key.page}} => UI.Viewport.scroll((pressed.key.page == "5" ? -1 : 1) * UI.Viewport.size.y)
     {pressed: Pressed{key.name is Keyboard.Direction && key.control}} => UI.Selection.skip(pressed.key.name)
     {pressed: Pressed{key.name is Keyboard.Direction && key.shift}} => UI.Selection.expand(pressed.key.name)
     {pressed: Pressed{key.name is Keyboard.Direction}} => UI.Selection.move(pressed.key.name)
-    {pressed: Pressed{key.name == Keyboard.tab && key.shift}} => UI.Focus.current = UI.Focus.previous(UI.scene)
+    {pressed: Pressed{key.name == Keyboard.tab && key.shift}} => UI.Focus.current = UI.Focus.next(UI.scene, -1)
     {pressed: Pressed{key.name == Keyboard.tab}} => UI.Focus.current = UI.Focus.next(UI.scene)
     {pressed: Pressed{key.name == Keyboard.enter}} => (UI.Focus.current ?? UI.Selection.current)?.activate
     {pressed: Pressed{key.code == "q"}} => UI.Runtime.current?.stop
@@ -225,7 +225,7 @@ Language.TUI := class: Language {
     {mouse: Mouse{state == "m"}} => UI.Pointer.up(mouse.position)
     {mouse: Mouse{button >= 32}} => UI.Pointer.moved(mouse.position)
     {mouse: Mouse} => UI.Pointer.down(mouse.position)
-    {paste: Paste} => (UI.Clipboard.content = paste.text) -- UI.Focus.current?.typed(paste.text)
+    {paste: Paste} => (UI.Clipboard.content = paste.text) -- UI.Focus.current?.content.typed(paste.text)
     {focus: FocusChange} => UI.Viewport.preferences ~~ .focused = focus.state == "I"
     {resize: Resize} => UI.Viewport.size = Geometry.Vector(Terminal.size.x * px_per_cell.x, Terminal.size.y * px_per_cell.y)
   }

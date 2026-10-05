@@ -85,6 +85,8 @@ String := class: Char[] {
   as Decimal => this as 10
 
   + (other: String) => this, other
+  find_all (pattern: String) => (this ~= pattern)#.index
+  trim (characters: String) => trimmed(characters)
 }
 
 // `String[] as String` joins without a separator, `.join(sep)` with one (X1.5).

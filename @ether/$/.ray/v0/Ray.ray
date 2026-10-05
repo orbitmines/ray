@@ -83,6 +83,11 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   join (separator) => reduce((acc) => acc, separator, .)
   random => this[Random.below(count)]
   fill (x) => all = x
+  take (count: Number) => this[..count]
+  find (predicate) => this{predicate}.first
+  find_all (predicate) => this{predicate}
+  shuffled => empty ? [] : (picked = random), this{!== picked}.shuffled
+  squeeze => this{. != .previous}
 
   // `Binary₈[]₄`: compose the structure `count` times.
   * (count: Number) => count == 0 ? [] : this, this * (count - 1)
@@ -123,6 +128,34 @@ Ray := class: Iterable & Ordered {
   expand => first..last
   // The whole context except this value: the complement with the context as the universal set (R3.7).
   complement => expand{!== this}
+
+  continuations => [next]{!= None}
+  reachable => this, continuations.map(.reachable).flatten -- .unique
+
+  // All paths, or a quest when there is none (R3.4).
+  path_to | between (target, trail = []) => this === target ? [[trail, this]]
+    : continuations{!trail.contains(.)}.map(.path_to(target, [trail, this])).flatten(1)
+    -- . ?? Quest(name: "find a path", goal: target)
+  shortest_path_to (target) => path_to(target).min(.count)
+
+  complement (selection) => reachable{!selection.contains(.)}
+
+  // Removing a vertex: preserving joins its neighbours, severing leaves them apart (R3.1, R3.11).
+  remove_preserving => {
+    previous?.next = next
+    next?.previous = previous
+    next, previous = None
+  } -- this
+  sever => {
+    previous?.next = None
+    next?.previous = None
+    next, previous = None
+  } -- this
+  move_after (other) => remove_preserving -- {
+    (next, previous) = (other.next, other)
+    other.next?.previous = this
+    other.next = this
+  }
 }
 
 Boundary := class: Ray {
@@ -189,6 +222,42 @@ Hypergraph := class: Structure {
 }
 Graph := class: Structure {
   HyperContinuations = true
+
+  static Simple := class: Graph = vertices: *[] = [], edges: Edge[] = [] {
+    static Edge := class = from: *, to: *
+
+    vertex (value) => vertices.contains(value) ? value : vertices.push(value)
+    connect (from, to) => { vertex(from); vertex(to); edges.push Edge(from, to) } -- this
+    connected (from, to) => edges.some(.from == from && .to == to)
+    outgoing (vertex) => edges{.from == vertex}.to
+
+    // Products and unions (R4.3)
+    cartesian (other: Simple) => Simple(
+      vertices: vertices * other.vertices,
+      edges: (edges * other.vertices).map((e, v) => Edge((e.from, v), (e.to, v))), (vertices * other.edges).map((v, e) => Edge((v, e.from), (v, e.to)))
+    )
+    tensor (other: Simple) => Simple(vertices: vertices * other.vertices, edges: (edges * other.edges).map((a, b) => Edge((a.from, b.from), (a.to, b.to))))
+    union (other: Simple) => Simple(vertices: (vertices, other.vertices).unique, edges: (edges, other.edges).unique)
+    disjoint_union (other: Simple) => Simple(
+      vertices: vertices.map((0, .)), other.vertices.map((1, .)),
+      edges: edges.map(Edge((0, .from), (0, .to))), other.edges.map(Edge((1, .from), (1, .to)))
+    )
+
+    without (vertex) => Simple(vertices: vertices{!= vertex}, edges: edges{.from != vertex && .to != vertex})
+    dangling (vertex, kept) => edges.some((.from == vertex || .to == vertex) && !(kept.contains(.from) && kept.contains(.to)))
+
+    // Double- and single-pushout rewriting (R3.11)
+    static Rule := class = left: Simple, interface: Simple, right: Simple, single_pushout: boolean = false {
+      deleted => left.vertices{!interface.vertices.contains(.)}
+      added => right.vertices{!interface.vertices.contains(.)}
+
+      applies (host: Simple) => left.vertices.every(host.vertices.contains(.))
+        && (single_pushout || !deleted.some(host.dangling(., host.vertices{!deleted.contains(.)}, left.vertices)))
+      apply (host: Simple) => applies(host)
+        ? deleted.reduce(acc = host => acc.without(.)) -- added.for(.vertex) -- right.edges{!.connected(.from, .to)}.for(.connect(.from, .to))
+        : Quest(name: "rewrite", goal: host)
+    }
+  }
 }
 Forest := class: Structure{acyclic & consistent} {
   Vertex = Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}

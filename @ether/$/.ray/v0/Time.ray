@@ -135,6 +135,7 @@ ISO_8601 := class: Time{calendar ==.instance_of UTC.static} (
   )?
 ) => {
   calendar += offset_operator offset_hours:offset_minutes
+  long => month, " ", day_of_month, ", ", year
 
   dynamically assert semicolons if offset
   dynamically assert date | time

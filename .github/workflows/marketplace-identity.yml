@@ -1,0 +1,30 @@
+name: Marketplace identity
+
+# Run by hand once: signs in as the Microsoft Entra app (AZURE_CLIENT_ID / AZURE_TENANT_ID, trusted through its
+# federated credential for this repository's main branch) and prints its Azure DevOps profile ID. The Visual Studio
+# Marketplace adds a publisher member only by that profile ID, and only the identity itself can read it.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: the Azure DevOps profile ID to add as a member of the orbitmines publisher
+        run: |
+          profile="$(az rest --url https://app.vssps.visualstudio.com/_apis/profile/profiles/me --resource 499b84ac-1321-427f-aa17-267ca6975798)"
+          echo "$profile"
+          id="$(echo "$profile" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+          echo "::notice title=Azure DevOps profile ID::$id"
+          echo "### Azure DevOps profile ID: \`$id\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Add it at https://marketplace.visualstudio.com/manage/publishers/orbitmines → Members → Add, role Contributor." >> "$GITHUB_STEP_SUMMARY"

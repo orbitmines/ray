@@ -23,6 +23,7 @@ None := external none
 \n => `
 `
 //{comment?} ^comment => None
+/*{comment?}*/ ^comment => None
 
 [{expr}] ^punctuation => (
   listed := chain None
@@ -89,6 +90,7 @@ class {block} => (
     this.components.hierarchy &= static
     this.instance = global
     inline block
+    if static.is_abstract { ERROR@this `constructs a class that leaves a method unwritten` }
     this
   )
 

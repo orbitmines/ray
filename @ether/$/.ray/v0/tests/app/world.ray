@@ -215,4 +215,7 @@ looked := World(name: "looked")
 looked.spawn(Character(name: "Fadi"))
 unless looked@fadi == looked.characters.first { INFO@mark `LK1 @name does not find a character ignoring case` }
 unless looked.characters.count == 1 { INFO@mark `LK2 the plural is not the collection of that class` }
-unless looked#looked == looked || looked#looked == None { INFO@mark `LK3 #name does not look up worlds` }
+inner := World(name: "inner")
+looked.worlds.push inner
+unless looked#INNER == inner { INFO@mark `LK3 #name does not find a world ignoring case` }
+unless looked@nobody == World.ether@nobody { INFO@mark `LK4 a name not defined here does not fall back to @ether` }

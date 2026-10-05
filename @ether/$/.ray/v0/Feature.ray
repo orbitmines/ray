@@ -143,6 +143,9 @@ Network := class {
     static version => UUID.Namespace.DNS
     static handshake (offered) => offered
   }
+
+  // What another instance serves at a path, at a version when one is asked for; kept locally once fetched (X3.3).
+  static fetch (from: Location, path: String, version: Version?) => IO.read(from / path, version) ?? HTTP.get(from / path + (("%", version.number) if version))
 }
 
 HTTP := class {

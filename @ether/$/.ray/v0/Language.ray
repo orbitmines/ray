@@ -1,13 +1,10 @@
-Language := class = extensions: String | String[], location: Location[] = [], level: Compiler?, written: Compiler?, of: Language?, version: Version?, versions: Language[] = [], implementations: Implementation[] = [], targets: Language[] = [] {
-  static known: Language[] = []
-  static register (language: Language) => known.push language -- language
-  static named (extension: String) => known{.names(extension)}.first
+Language := class: Ray = extensions: String, location: Location[] = [], level: Compiler?, written: Compiler?, of: Language?, version: Version?, implementations: Implementation[] = [], targets: Language[] = [] {
+  static named (extension: String) => Language#{.names(extension)}.first
   static over (outer: Language, base: Language) => Language(outer.extensions, location: outer.location, level: base.level + outer.level, written: base.written + outer.written, of: base, version: outer.version)
 
   static for_file (file_name: String) => file_name ~= (*, ".", inner: Char.Word[], ".ray") ⊣
     ? (named("." + inner) ? over(named("." + inner), ray) : ray)
     : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣)?.last) ?? ray
-  static ray => named(".ray")
 
   static Writing := class = value: *
   static unwrapped := {
@@ -21,42 +18,30 @@ Language := class = extensions: String | String[], location: Location[] = [], le
     {writing: Writing} => "(", writing.value.fields.map((", " if .index > 0), .name, ": ", Writing(.value)), ")"
   }
 
-  names (extension: String) => extensions == extension
+  names (extension: String) => extensions# ∋ extension
   bundled (path: String) => location.map(. / path){IO.read(. / ".project.ray")}.first as Project
 
-  read (text) => level ? Compiler.reduced(text, level) : Quest(name: "a reader for the language", goal: this)
+  admits (program) => true
+  read (text) => level
+    ? Compiler.reduced(text, level) -- (admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`)
+    : Quest(name: "a reader for the language", goal: this)
   write (value) => written ? Compiler.reduced(Writing(value), unwrapped + written) as String : Quest(name: "a writer for the language", goal: this)
 
-  target (language: Language) => targets.push language -- this
-  targeting (language: Language) => targets.contains(language)
-  implement (implementation: Implementation) => implementations.push implementation -- this
-  versioned (language: Language) => versions.push language -- this
-  backwards_compatible => versions{.version < version}.every(.targeting(this))
-  forwards_compatible => versions{.version > version}.every(.targeting(this))
+  targeting (language: Language) => targets ∋ language
+  backwards_compatible => previous**.every(.targeting(this))
+  forwards_compatible => next**.every(.targeting(this))
 
   static Implementation := class = language: Language, written_in: Language, location: Location {
     source => IO.read(location)
     level => written_in.read(source)
-    setup => language.implement(this) -- language.level ??= level -- language
+    setup => language ~~ .implementations.push this ~~ .level ??= level
   }
 
-  static Sublanguage := class: Language = excluded: Effects.Source[] = [], terminating: boolean = true {
-    admits (program: Program) => !Effects.of(program).some(excluded.contains(.)) && (!terminating || program is Terminating)
-    read (text) => of.read(text) -- admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`
-  }
+  static ray := Language(".ray", level: Compiler.default, written: ray_written)
+  static cfg := Language(".cfg", level: ray.level, written: ray.written, of: ray){admits Program{Pure & Terminating}}
+  static regex := Language(".regex")
 }
 
-Library := class: Language
-Tool := class = location: Location[] = []
-
-Language.register(Language(".ray", level: Compiler.default, written: Language.ray_written))
-Language.cfg = Language.register(Language.Sublanguage(extensions: ".cfg", of: Language.ray, excluded: [io, os, random, time, network] as Effects.Source[]))
-Language.regex = Language.register(Language(".regex"))
-
-Regex := class (pattern: String) => {
-  language => Language.regex
-  compiled => language.read(pattern)
-  matches (text: String) => text ~= compiled
-  find (text: String) => (text ~= compiled)?.index
-  ignoring_case => Regex(pattern.fold_case)
+Node &+= {
+  as (language: Language) => language.write(this)
 }

@@ -60,10 +60,8 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   right-to-left ∏ | product => reduce(total = 1 => total * .)
   min => reduce((acc) => acc < . ? acc : .)
   max => reduce((acc) => acc > . ? acc : .)
-  min (key: Program | Section) => reduce((acc) => key(acc) <= key(.) ? acc : .)
-  max (key: Program | Section) => reduce((acc) => key(acc) >= key(.) ? acc : .)
-  min_by (key) => min(key)
-  max_by (key) => max(key)
+  min | min_by (key: Program | Section) => reduce((acc) => key(acc) <= key(.) ? acc : .)
+  max | max_by (key: Program | Section) => reduce((acc) => key(acc) >= key(.) ? acc : .)
   count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
   length => paths.map(.count).max
   paths: Path{.bounded: bounded} => [this]
@@ -73,10 +71,8 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   map {selection} (mapping: (x: Vertex): *) => (selected = this[{selection}]) -- map(x => selected.contains(x) ? mapping(x) : x)
   reverse => empty ? [] : rest.reverse, first
   sort => empty ? [] : rest{< first}.sort, first, rest{>= first}.sort
-  sorted (key) => sort_by(key)
-  sort_by (key) => empty ? [] : rest{key(.) < key(first)}.sort_by(key), first, rest{key(.) >= key(first)}.sort_by(key)
+  sort_by | sorted (key) => empty ? [] : rest{key(.) < key(first)}.sort_by(key), first, rest{key(.) >= key(first)}.sort_by(key)
   unique => empty ? [] : first, rest{!= first}.unique
-  unordered => choose Iterable{.every(this.contains(.)) && .count == count}
 
   contains | includes <operator: (x: Vertex): (b: Vertex): boolean = ==>(x: Vertex) => some(operator(.)(x))
   partition (predicate) => [this[{predicate}]], [this[{!predicate(.)}]]
@@ -93,13 +89,15 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   zip (other: Iterable) => empty || other.empty ? [] : [(first, other.first)], rest.zip(other.rest)
   pairs (other: Iterable) => map(a => other.map(b => (a, b))).flatten(1)
   join (separator) => reduce((acc) => acc, separator, .)
-  random => this[Random.below(count)]
+  random => drawn(Random.below(map(.weight ?? 1).sum))
+  drawn (at: Number) => at < (first.weight ?? 1) ? first : rest.drawn(at - (first.weight ?? 1))
+  subsets (size: Number) => size == 0 ? [[]] : empty ? [] : rest.subsets(size - 1).map([first, .]), rest.subsets(size)
+  orderings => count < 2 ? [this] : map(held => this{!== held}.orderings.map([held, .])).flatten(1)
+  shuffled => orderings.random
   fill (x) => all = x
   take (count: Number) => this[..<count]
   find (predicate) => this[{predicate}].first
   index_of (x, at = 0) => empty ? None : first == x ? at : rest.index_of(x, at + 1)
-  find_all (predicate) => this[{predicate}]
-  shuffled => empty ? [] : (picked = random), this[{!== picked}].shuffled
   squeeze => this[{. != .previous}]
   padded (width: Number, with = 0) => [with] * (width - length), this
 
@@ -176,7 +174,7 @@ Ray := class: Iterable & Ordered {
 
   complement (selection) => reachable{!selection.contains(.)}
 
-  remove_preserving => {
+  remove | remove_preserving => {
     previous?.next = next
     next?.previous = previous
     next, previous = None
@@ -186,7 +184,7 @@ Ray := class: Iterable & Ordered {
     next?.previous = None
     next, previous = None
   } -- this
-  move_after (other) => remove_preserving -- {
+  move_after (other) => remove -- {
     (next, previous) = (other.next, other)
     other.next?.previous = this
     other.next = this
@@ -220,28 +218,18 @@ Edge := class: Ray {
 
   is_initial => x.initial == None
   is_terminal => x.terminal == None
+
+  from => x.initial?.∙
+  to => x.terminal?.∙
+  static between (from, to) => Edge(x: (initial: from.terminal, terminal: to.initial))
 }
 
 Traverser := class: <yield: (x: Ray): None>(entry: Ray): None {
-  static default = DepthFirst
-
-  static DepthFirst: Traverser = (entry: Ray) => {
+  static walk (take: .pop_back | .pop_front): Traverser = (entry: Ray) => {
     seen = []
     pending = [entry]
     while pending.nonempty {
-      at = pending.pop_back
-      unless seen.some(. === at) {
-        seen.push(at)
-        yield at
-        at.continuations.reverse.for(pending.push(.))
-      }
-    }
-  }
-  static BreadthFirst: Traverser = (entry: Ray) => {
-    seen = []
-    pending = [entry]
-    while pending.nonempty {
-      at = pending.pop_front
+      at = take(pending)
       unless seen.some(. === at) {
         seen.push(at)
         yield at
@@ -249,6 +237,9 @@ Traverser := class: <yield: (x: Ray): None>(entry: Ray): None {
       }
     }
   }
+  static DepthFirst = walk(.pop_back)
+  static BreadthFirst = walk(.pop_front)
+  static default = DepthFirst
 }
 
 Structure := class: Iterable<Ray{
@@ -271,22 +262,20 @@ Graph := class: Structure {
   HyperContinuations = true
 
   static Simple := class: Graph = vertices: *[] = [], edges: Edge[] = [] {
-    static Edge := class = from: *, to: *
-
     vertex (value) => (vertices.push(value) unless vertices.contains(value)) -- value
-    connect (from, to) => { vertex(from); vertex(to); edges.push Edge(from, to) } -- this
+    connect (from, to) => { vertex(from); vertex(to); edges.push Edge.between(from, to) } -- this
     connected (from, to) => edges.some(.from == from && .to == to)
     outgoing (vertex) => edges{.from == vertex}.to
 
     cartesian (other: Simple) => Simple(
       vertices: vertices.pairs(other.vertices),
-      edges: edges.pairs(other.vertices).map((e, v) => Edge((e.from, v), (e.to, v))), vertices.pairs(other.edges).map((v, e) => Edge((v, e.from), (v, e.to)))
+      edges: edges.pairs(other.vertices).map((e, v) => Edge.between((e.from, v), (e.to, v))), vertices.pairs(other.edges).map((v, e) => Edge.between((v, e.from), (v, e.to)))
     )
-    tensor (other: Simple) => Simple(vertices: vertices.pairs(other.vertices), edges: edges.pairs(other.edges).map((a, b) => Edge((a.from, b.from), (a.to, b.to))))
+    tensor (other: Simple) => Simple(vertices: vertices.pairs(other.vertices), edges: edges.pairs(other.edges).map((a, b) => Edge.between((a.from, b.from), (a.to, b.to))))
     union (other: Simple) => Simple(vertices: (vertices, other.vertices).unique, edges: (edges, other.edges).unique)
     disjoint_union (other: Simple) => Simple(
       vertices: vertices.map((0, .)), other.vertices.map((1, .)),
-      edges: edges.map(Edge((0, .from), (0, .to))), other.edges.map(Edge((1, .from), (1, .to)))
+      edges: edges.map(Edge.between((0, .from), (0, .to))), other.edges.map(Edge.between((1, .from), (1, .to)))
     )
 
     without (vertex) => Simple(vertices: vertices{!= vertex}, edges: edges{.from != vertex && .to != vertex})
@@ -323,13 +312,9 @@ Array := class: Path{acyclic} {
     head = added
   } -- this
   link_of (x, at = head) => !at ? None : at.value == x ? at : link_of(x, at.next)
-  unlink (held) => {
-    if held.previous { held.previous.next = held.next } else { head = held.next }
-    if held.next { held.next.previous = held.previous } else { tail = held.previous }
-  } -- held.value
-  pop_front => head ? unlink(head) : None
-  pop_back => tail ? unlink(tail) : None
-  remove (x) => (unlink(link_of(x)) if link_of(x)) -- this
+  pop_front => head?.remove.value
+  pop_back => tail?.remove.value
+  remove (x) => link_of(x)?.remove -- this
   push_after (at, x) => {
     held = link_of(at)
     added = link x held
@@ -338,15 +323,13 @@ Array := class: Path{acyclic} {
     held.next = added
   } -- this
   push_before (at, x) => link_of(at)?.previous ? push_after(link_of(at).previous.value, x) : push_front(x)
-  move_after (x, target) => remove(x).push_after(target, x)
-  move_before (x, target) => remove(x).push_before(target, x)
 }
 Chain.components.hierarchy &= Array
 Link.components.hierarchy &= Ray
 
 Set := class: Structure {
   orderless => true
-  normalizer = .unordered.unique
+  normalizer = .shuffled.unique
   add (x) => (push(x) unless contains(x)) -- this
 }
 

@@ -68,8 +68,8 @@ second_box := Geometry.Box()
 if first_box.id == second_box.id { INFO@mark `UI68 two shapes share an id` }
 unless first_box.id == first_box.id { INFO@mark `UI69 a shape's id changes` }
 unless Geometry.Box(children: [first_box]).expand.count == 2 { INFO@mark `UI70 a box holding one shape does not expand to two` }
-unless Base64.encoded("Man".bytes) == "TWFu" { INFO@mark `UI71 Man is not TWFu in Base64` }
-unless Base64.encoded("Ma".bytes) == "TWE=" { INFO@mark `UI72 Ma is not padded to TWE=` }
+unless "Man".bytes as Base64 as String == "TWFu" { INFO@mark `UI71 Man is not TWFu in Base64` }
+unless "Ma".bytes as Base64 as String == "TWE=" { INFO@mark `UI72 Ma is not padded to TWE=` }
 
 away := @https://orbitmines.com{window == new}
 unless away.window == new { INFO@mark `UI80 a location narrowed to a new window does not open one` }

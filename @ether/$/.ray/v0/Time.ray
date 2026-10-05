@@ -2,8 +2,8 @@
 {hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{length == 2}}: Quantity.Temporal => hh_mm ss seconds
 
 Calendar := class {
-  static Segment := class {
-    static (convert: base ... -> last): Calendar.Segment => &caller.global.Unit(convert)
+  static Segment := class: Unit = length: * {
+    static (unit: Unit, length): Calendar.Segment => unit++ ~~ .length = length
 
     static EPOCH: (period: #, elapsed: Node{0 <= . < period}?)? | Number = 1
 
@@ -36,23 +36,23 @@ Month &+= {
 }
 
 Julian := class: Calendar {
-  static year = Calendar.Segment(day -> 365 | 366 if is_leap_year)
-  static month = Calendar.Segment(Month#[
-    31, 28 | 29 if year.is_leap_year, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
+  static year = Calendar.Segment(global.year, day -> 365 | 366 if is_leap_year)
+  static month = Calendar.Segment(global.month, Month#[
+    31, 28 | 29 if is_leap_year, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
   ] days)
-  static week = Calendar.Segment(Weekday#.length days)
-  static day = Calendar.Segment(24 hours)
-  static hour = Calendar.Segment(60 minutes)
-  static minute = Calendar.Segment(60 seconds | 61 seconds if LeapSeconds.at(this))
+  static week = Calendar.Segment(global.week, Weekday#.length days)
+  static day = Calendar.Segment(global.day, 24 hours)
+  static hour = Calendar.Segment(global.hour, 60 minutes)
+  static minute = Calendar.Segment(global.minute, 60 seconds | 61 seconds if LeapSeconds.at(this))
 
   is_leap_year => year % 4 == 0
 
-  days_in (month: Month) => [31, is_leap_year ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][Month#.index_of(month)]
+  days_in (month: Month) => static.month.length[month.index] in day
   days_in_year => is_leap_year ? 366 : 365
   weeks_in_year => days_in_year / 7
   days_before (month: Month) => Month#[..<Month#.index_of(month)].map(days_in).sum
   days_before_year => 365 * (year - 1) + (year - 1) / 4
-  weekday_of (day_of_year: Number) => Weekday#[(days_before_year + day_of_year - 1) % 7]
+  weekday_of (day_of_year: Number) => Weekday#.loop + (days_before_year + day_of_year - 1)
 }
 
 Gregorian := class: Julian {
@@ -153,16 +153,15 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   date_known => date != ?
   of_day: Quantity.Temporal => (hour_of_day ?? 0) hours + (minute_of_hour ?? 0) minutes + (second_of_minute ?? 0) seconds
   as (=== Time) => Time(calendar) = (in_year.days_before_year + day_of_year - 1) days + of_day
-  as_time => this as Time
-  chainable == (other: ISO_8601) => date_known && other.date_known ? as_time == other.as_time : of_day == other.of_day
-  chainable < (other: ISO_8601) => date_known && other.date_known ? as_time < other.as_time : of_day < other.of_day
+  chainable == (other: ISO_8601) => date_known && other.date_known ? this as Time == other as Time : of_day == other.of_day
+  chainable < (other: ISO_8601) => date_known && other.date_known ? this as Time < other as Time : of_day < other.of_day
 
   dynamically assert semicolons if offset
   dynamically assert date | time
   date ?= ?
 }
 
-LeapSeconds := class = (IO.read("/usr/share/zoneinfo/leap-seconds.list") as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
+LeapSeconds := class = (@/usr/share/zoneinfo/leap-seconds.list as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
   .map(.seconds seconds as Time(epoch: "1900-01-01"))
 {
   at (minute: Time) => this.contains(minute.round(minute) + 1 minute)
@@ -191,7 +190,7 @@ TZif := class = (
 }
 
 TimeZone := class (name: String) {
-  data: TZif => IO.File("/usr/share/zoneinfo/" + name).bytes as TZif
+  data: TZif => (@/usr/share/zoneinfo/{name}).bytes as TZif
 }
 
 Planet := class {

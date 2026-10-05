@@ -31,7 +31,6 @@ Unicode := class {
   )>
   static UpperCase = Data.rows{.upper_case}.map(.range.from: .upper_case)
   static LowerCase = Data.rows{.lower_case}.map(.range.from: .lower_case)
-  static Lowercase = Scalar{Data[.].general_category == "Ll"}
 
   Scripts.rows.value.unique.for script => static Char.`script` = Char{.script == script}
 
@@ -40,10 +39,10 @@ Unicode := class {
   }
 
   static Endianness := enum BE | LE
-  static endianness: Endianness = BE
 
   static TF | TransformationFormat := class: CodeUnit[]{length == 1..(32 / CodeUnit.length)} {
     static CodeUnit: Binary
+    endianness: Endianness = BE
     static Decoding := {
       {unit: UTF-16.Unit{prefix}} => unit.U0 + 1, unit.U1, unit.U2
       {unit} => unit.U0, unit.U1, unit.U2, unit.U3

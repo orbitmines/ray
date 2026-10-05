@@ -94,18 +94,7 @@ Operator := "!" | "&&" | "||" | "!&&" | "!||" | "x||" | "x!||" | "+" | "-" | "/"
 ({operator: Operator}) ^operator => Section(operator)
 (*) ^operator => Section("*")
 {operator: Operator} ^operator => Section(operator)
-+{operand} ^operator => Section("+", operand)
-*{operand} ^operator => Section("*", operand)
-/{operand} ^operator => Section("/", operand)
-%{operand} ^operator => Section("%", operand)
-=={operand} ^operator => Section("==", operand)
-!={operand} ^operator => Section("!=", operand)
-<{operand} ^operator => Section("<", operand)
->{operand} ^operator => Section(">", operand)
-<={operand} ^operator => Section("<=", operand)
->={operand} ^operator => Section(">=", operand)
-&&{operand} ^operator => Section("&&", operand)
-||{operand} ^operator => Section("||", operand)
+{operator: Operator{!= "-" && != "!" && != "^"} | "*"}{operand} ^operator => Section(operator, operand)
 
 Node &+= {
   .match{\n}{arms} ^punctuation => Compiler.reduced(this, Program(code: external ** arms) as Compiler)
@@ -131,12 +120,9 @@ Entry := class = of: Node, at: Program? {
   ({args}) => of.construct(args) ~~ following.for(statement => statement.entered(., None))
 }
 
-Node &+= {
-  @{ }{location} ^punctuation => Placed(value: this, location: location)
-  placed (variable, written) => this[variable] = written
-}
+{value} @ {location} ^keyword => Placed(value, location)
 Placed := class = value: Node, location: Node {
-  = (written) => location.placed(value, written) -- this
+  = (written) => (location[value] = written) -- this
   .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : external get value property
 }
 

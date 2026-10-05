@@ -40,9 +40,8 @@ Number := class: Ray {
   odd => !even
   half => this / 2
   squared => this ^ 2
-  min (other: Number) => this < other ? this : other
-  max (other: Number) => this < other ? other : this
-  saturate (limit: Number) => min(limit)
+  cos => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k) / (2 * k)!).sum
+  sin => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k + 1) / (2 * k + 1)!).sum
 
   .. (last: Number) => this == last ? [this] : this, (this < last ? succ : pred)..last
   ..< (last: Number) => this == last ? [] : this, (this < last ? succ : pred)..<last
@@ -171,16 +170,13 @@ dynamically Number.Bases.for name => {
   Base{: 0+, number: Base} as (=== Base) => number
 }
 
-({from: Number}..) ^punctuation => from -> 1
-{from: Number}..{\n} ^punctuation => from -> 1
+Ending := \n | ")" | ","
+{from: Number}..{followed_by: ⊢Ending} ^punctuation => from -> 1
 ..{to: Number} ^punctuation => -1 <- to
 ..<{to: Number} ^punctuation => -1 <- (to - 1)
 
 {numerator: Decimal.String}/{denominator: Decimal.String} ^number => Decimal.Real(integer: numerator as Decimal, fraction: []) / (denominator as Decimal)
-{amount: Decimal}%{\n} ^number => Decimal.Real(integer: amount, fraction: []) / 100
-({amount: Decimal}%) ^number => Decimal.Real(integer: amount, fraction: []) / 100
-{amount: Decimal}%,{rest} ^number => Decimal.Real(integer: amount, fraction: []) / 100, rest
-{amount: Decimal}% {of} ^number => (Decimal.Real(integer: amount, fraction: []) / 100) of
+{amount: Decimal}%{followed_by: ⊢(Ending | " ")} ^number => Decimal.Real(integer: amount, fraction: []) / 100
 
 {digits: Decimal.String}{radix: Subscript.String} ^number => Number.numeral(Subscript(integer: radix))(integer: digits)
 {base}{power: Superscript.String} ^number => base ^ Superscript(integer: power)
@@ -196,6 +192,28 @@ u{width: Decimal} => Binary{length <= width}
 i{width: Decimal} => Binary{length <= width}.Signed
 USize = u8 | u16 | u32 | u64
 Byte = Binary⁸
+
+Matrix := Number[][]
+Matrix &+= {
+  transposed => (0..<first.count).map(j => map(.[j]))
+  compounds * (other: Matrix) => map(row => other.transposed.map(column => row.zip(column).map(*).sum))
+  compounds * (factor: Number) => map(row => row.map(. * factor))
+  compounds + (other: Matrix) => zip(other).map((a, b) => a.zip(b).map(+))
+  compounds - (other: Matrix) => zip(other).map((a, b) => a.zip(b).map(-))
+  minor (i: Number, j: Number) => (0..<count){!= i}.map(r => (0..<count){!= j}.map(c => this[r][c]))
+  determinant => count == 1 ? this[0][0] : (0..<count).map(j => (j.even ? 1 : -1) * this[0][j] * minor(0, j).determinant).sum
+  inverse => (0..<count).map(i => (0..<count).map(j => ((i + j).even ? 1 : -1) * minor(j, i).determinant / determinant))
+}
+
+τ := 6.283185307179586
+Unit(name: "turn" ("s" + plural: true)?)
+Unit(name: "radian" ("s" + plural: true)?, symbol: "rad").multiple 1 / τ, turn
+Unit(name: "degree" ("s" + plural: true)?, symbol: "deg" | "°").multiple 1 / 360, turn
+Angle := Quantity{unit is (turn | radian | degree)}
+Angle &+= {
+  cos => in(radian).cos
+  sin => in(radian).sin
+}
 
 boolean &+= {
   as (=== Binary) => this ? 1₂ : 0₂

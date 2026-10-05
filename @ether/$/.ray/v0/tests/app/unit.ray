@@ -34,8 +34,8 @@ unless (GB/s) as String == "GB/s" { INFO@mark `U60 a rate is not named by its tw
 unless 8m == 8 meter | 8 minute { INFO@mark `U50 an ambiguous unit does not superpose` }
 
 unless 1 KiB == 1024 B { INFO@mark `UB3 a kibibyte is not 1024 bytes` }
-unless 1 KB == 1000 B { INFO@mark `UB4 a kilobyte is not 1000 bytes` }
-if 1 KiB == 1 KB { INFO@mark `UB5 a kibibyte is a kilobyte` }
+unless 1 kB == 1000 B { INFO@mark `UB4 a kilobyte is not 1000 bytes` }
+if 1 KiB == 1 kB { INFO@mark `UB5 a kibibyte is a kilobyte` }
 unless 1 MiB == 1024 KiB { INFO@mark `UB7 mebi is not 1024 kibi` }
 unless kibibyte as String == "kibibyte" { INFO@mark `UB10 a kibibyte is not called that` }
 unless 2 KiB as String == "2 kibibytes" { INFO@mark `UB12 two kibibytes are not kibibytes` }

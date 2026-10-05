@@ -123,7 +123,7 @@ Language.TUI := class: Language {
     written := {
       {start: ANSI.Start} => Terminal.entering, Terminal.clearing
       {stop: ANSI.Stop} => Terminal.restoring
-      {copy: ANSI.Copy} => "\e]52;c;", Base64.encoded(copy.text.bytes), "\a"
+      {copy: ANSI.Copy} => "\e]52;c;", copy.text.bytes as Base64 as String, "\a"
       {frame: ANSI.Frame} => [
         Title(frame.title) if frame.title,
         frame.changes.map((at, cell) => [Move(at), Style(cell), Hyperlink(cell), cell.glyph]),
@@ -158,7 +158,7 @@ Language.TUI := class: Language {
     {start: ANSI.Start} => Terminal.entering, "\e[?9001h", Terminal.clearing
   }
   Kitty := {
-    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => { .graphic(shown.paint.at, ("\e_Ga=T,f=100;", Base64.encoded(IO.File(shown.paint.shape.content as String).bytes), "\e\\")) }
+    {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => { .graphic(shown.paint.at, ("\e_Ga=T,f=100;", IO.File(shown.paint.shape.content as String).bytes as Base64 as String, "\e\\")) }
   }
   Sixel := {
     {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => { .graphic(shown.paint.at, ("\eP0;0;0q", sixel(shown.paint.shape.content.pixels), "\e\\")) }
@@ -236,5 +236,3 @@ Terminal := class {
   clear => emit(clearing)
   restore => emit(restoring)
 }
-
-Language.register(Language.TUI)

@@ -59,31 +59,18 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
 
   &caller[name] = this if name
 
-  reexport => {
-    &caller[name] = this
-    defined_globally = true if &caller == global
-  }
-
   static None = Unit(global.None)
   static Temporal => second
 
   as (=== Quantity) => 1, this
   as (other: . is Unit) => this as Quantity as other
 
-  protected defined_globally = &caller == global
   dynamically assert this as String? != None
   as (=== String?) => name
-    -- #.remove(Unit#{!= this}.name) if defined_globally
 
-  protected unit = this
-  global.`digits: Decimal.String, " "?, name: unit as String`: Quantity => digits, unit
-  Decimal.Real &+= {
-    `" "?, name: unit as String`: Quantity => this, unit
-  }
-  Number &+= {
-    .`name: unit as String`: Quantity => this, unit
-    `" ", name: unit as String`: Quantity => this, unit
-  }
+  static spelled (written: String) => Unit#{(. as String?)# ∋ written}.reduce(|)
+  static Spelling := String{Unit.spelled(.)}
+
   compounds / (other: Unit) => Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static
 
@@ -114,56 +101,58 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   }
 }
 
+{amount: Number | Decimal.Real}{" "?}{written: Unit.Spelling}: Quantity => amount, Unit.spelled(written)
+
+si_name (symbol, name, symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
+
 SI_Unit {symbol: *} {name: *} => {
-  si_name (symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
   private SI = {
-    -30: si_name "q", "quecto"
-    -27: si_name "r", "ronto"
-    -24: si_name "y", "yocto"
-    -21: si_name "z", "zepto"
-    -18: si_name "a", "atto"
-    -15: si_name "f", "femto"
-    -12: si_name "p", "pico"
-    -9: si_name "n", "nano"
-    -6: si_name "µ", "micro"
-    -3: si_name "m", "milli"
-    -2: si_name "c", "centi"
-    -1: si_name "d", "deci"
-    0: si_name "", ""
-    1: si_name "da", "deka"
-    2: si_name "h", "hecto"
-    3: si_name "k", "kilo"
-    6: si_name "M", "mega"
-    9: si_name "G", "giga"
-    12: si_name "T", "tera"
-    15: si_name "P", "peta"
-    18: si_name "E", "exa"
-    21: si_name "Z", "zetta"
-    24: si_name "Y", "yotta"
-    27: si_name "R", "ronna"
-    30: si_name "Q", "quetta"
+    -30: "q", "quecto"
+    -27: "r", "ronto"
+    -24: "y", "yocto"
+    -21: "z", "zepto"
+    -18: "a", "atto"
+    -15: "f", "femto"
+    -12: "p", "pico"
+    -9: "n", "nano"
+    -6: "µ", "micro"
+    -3: "m", "milli"
+    -2: "c", "centi"
+    -1: "d", "deci"
+    0: "", ""
+    1: "da", "deka"
+    2: "h", "hecto"
+    3: "k", "kilo"
+    6: "M", "mega"
+    9: "G", "giga"
+    12: "T", "tera"
+    15: "P", "peta"
+    18: "E", "exa"
+    21: "Z", "zetta"
+    24: "Y", "yotta"
+    27: "R", "ronna"
+    30: "Q", "quetta"
   }
-    .map(magnitude, name => Unit(name: magnitude: magnitude))
+    .map((magnitude, prefixes) => Unit(name: si_name(symbol, name, ...prefixes), magnitude: magnitude))
     .reduce(|)
 
   SI#.for FromUnit => FromUnit.magnitude SI.magnitude - FromUnit.magnitude, SI
 }
 
 Binary_Unit {symbol: *} {name: *} => {
-  si_name (symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
   private IEC = {
-    1: si_name "Ki", "kibi"
-    2: si_name "Mi", "mebi"
-    3: si_name "Gi", "gibi"
-    4: si_name "Ti", "tebi"
-    5: si_name "Pi", "pebi"
-    6: si_name "Ei", "exbi"
-    7: si_name "Zi", "zebi"
-    8: si_name "Yi", "yobi"
-    9: si_name "Ri", "robi"
-    10: si_name "Qi", "quebi"
+    1: "Ki", "kibi"
+    2: "Mi", "mebi"
+    3: "Gi", "gibi"
+    4: "Ti", "tebi"
+    5: "Pi", "pebi"
+    6: "Ei", "exbi"
+    7: "Zi", "zebi"
+    8: "Yi", "yobi"
+    9: "Ri", "robi"
+    10: "Qi", "quebi"
   }
-    .map(power, name => Unit(name: power: power))
+    .map((power, prefixes) => Unit(name: si_name(symbol, name, ...prefixes), power: power))
     .reduce(|)
 
   IEC#.for FromUnit => FromUnit.multiple 1024^FromUnit.power, global[name]
@@ -181,7 +170,6 @@ SI_Unit b "bit"
 SI_Unit B "byte"
 Binary_Unit B "byte"
 byte.multiple 8, bit
-Unit(name: "KB" + symbol: true).multiple 1000, byte
 
 Unit(name: "minute" ("s" + plural: true)?, symbol: "min" | "m").multiple 60, second
 Unit(name: "hour" ("s" + plural: true)?, symbol: "h").multiple 60, minute

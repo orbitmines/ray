@@ -2,12 +2,6 @@
 UUID := class: Hexadecimal³² (Hexadecimal⁸, "-", Hexadecimal⁴, "-", Hexadecimal⁴, "-", Hexadecimal⁴, "-", Hexadecimal¹²) {
   version: Hexadecimal¹ => this[12]
 
-  dynamically
-    < v1 if version == 1
-    < v3 if version == 3
-    < v4 if version == 4
-    < v5 if version == 5
-
   static Variant := enum RESERVED_NCS | RFC_4122 | RESERVED_MICROSOFT | RESERVED_FUTURE
   variant: ⊢11₂ ? Binary³ : Binary₂ => this[16] as Binary
   variant as (=== Variant) => .match
@@ -16,7 +10,7 @@ UUID := class: Hexadecimal³² (Hexadecimal⁸, "-", Hexadecimal⁴, "-", Hexade
     110₂ => Variant.RESERVED_MICROSOFT
     111₂ => Variant.RESERVED_FUTURE
 
-  static v1 := class: UUID (
+  static v1 := class: UUID{version == 1} (
     (
       time_low: Hexadecimal⁸, "-",
       time_mid: Hexadecimal⁴, "-",
@@ -35,29 +29,27 @@ UUID := class: Hexadecimal³² (Hexadecimal⁸, "-", Hexadecimal⁴, "-", Hexade
 
     chosen_within (width) => ~generate()
 
-    static last_time = 0
+    static clock = HybridClock(node: "UUID.v1")
     generate\
-      time = (Time.now(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor) max (last_time + 1)
-      last_time = time
+      stamp = clock.now
+      time = stamp.wall + 0x01B21DD213814000
       version = 1
       variant = 10₂
-      (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random
+      (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random + stamp.logical
       node = @me?.instance?.mac_address ?? (Hexadecimal¹².random ~~ .[1] |= 1)
   }
 
-  static v3 := class: UUID {
+  static v3 := class: UUID{version == 3} {
     namespace: UUID
     name: String
-    dynamically assert version == 3
   }
-  static v4 := class: UUID = secure Hexadecimal{length == 32}.random ~~ (
+  static v4 := class: UUID{version == 4} = secure Hexadecimal{length == 32}.random ~~ (
     .version = 4
     .variant = 10₂
   )
-  static v5 := class: UUID {
+  static v5 := class: UUID{version == 5} {
     namespace: UUID
     name: String
-    dynamically assert version == 5
   }
 
   static Namespace := class {

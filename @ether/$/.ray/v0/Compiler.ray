@@ -2,23 +2,6 @@ Compiler := class {
   none := {
   }
 
-  default := {
-    {a} + 0 => a
-    {a} - 0 => a
-    0 + {a} => a
-    {a} * 0 => 0
-    0 * {a} => 0
-    {a} * 1 => a
-    1 * {a} => a
-    {a} / 1 => a
-    {a} * 2 => a + a
-    {a}.unique.unique => a.unique
-    {a}.reverse.reverse => a
-    {a}.compact.compact => a.compact
-    {a}.flatten.flatten => a.flatten
-    {a}.sort.sort => a.sort
-  }
-
   folding := {
     {a} + 0 => a
     0 + {a} => a
@@ -26,7 +9,16 @@ Compiler := class {
     1 * {a} => a
   }
 
-  memoised := {
+  default := folding + {
+    {a} - 0 => a
+    {a} * 0 => 0
+    0 * {a} => 0
+    {a} / 1 => a
+    {a}.unique.unique => a.unique
+    {a}.reverse.reverse => a
+    {a}.compact.compact => a.compact
+    {a}.flatten.flatten => a.flatten
+    {a}.sort.sort => a.sort
   }
 
   logic := {
@@ -35,14 +27,9 @@ Compiler := class {
     {a} || {a} => a
   }
 
-  levels => [none, default, folding, memoised, logic]
+  levels => [none, default, folding, logic]
 
   static reduced (value, level) => Program(code: { value }){O: level}()
-}
-
-Debug := class {
-  timed := {
-  }
 }
 
 Program &+= {

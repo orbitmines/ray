@@ -41,12 +41,7 @@ dynamically Escape.for spelling => global[spelling] := Compiler.reduced(spelling
 \s = Unicode.GeneralCategory.Space_Separator | \t
 \S = !\s
 \R = Unicode.GeneralCategory.Line_Separator
-\x{codepoint: Hexadecimal{length == 2}}: Char => codepoint
-\u{codepoint: Hexadecimal{length == 4}}: Char => codepoint
-\U{codepoint: Hexadecimal{length == 6}}: Char => codepoint
-\x{`{`}{codepoint: Hexadecimal{length == 1..6}}{`}`}: Char => codepoint
-\u{`{`}{codepoint: Hexadecimal{length == 1..6}}{`}`}: Char => codepoint
-\U{`{`}{codepoint: Hexadecimal{length == 1..6}}{`}`}: Char => codepoint
+\{prefix: "x" | "u" | "U"}{codepoint: Hexadecimal{length == (x: 2, u: 4, U: 6)[prefix]} | ("{", codepoint: Hexadecimal{length == 1..6}, "}")}: Char => codepoint
 \d = Unicode.GeneralCategory.Decimal_Number
 \D = !\d
 \w = Char.Word
@@ -94,7 +89,6 @@ String := class: Char[] {
   contains (other: String) => this ~= other
   index_of (other: String) => (this ~= other)?.index
 
-  split (separator: Char | String) => this ~= (*, separator)[] -- #.join(*)
   lines => split(\n)
   indentation => (this ~= ⊢ " "[]).length
   common_indentation => lines{!.trimmed.empty}.map(.indentation).min ?? 0
@@ -102,7 +96,6 @@ String := class: Char[] {
   literal_dedented => lines.count == 1 || !lines.first.trimmed.empty ? this
     : (lines[1..] -- (.last.trimmed.empty ? .[..<-1] : .)).join(\n).dedented
 
-  slice (from: Number, to: Number) => this[from..<to]
   replace (old: String, new: String) => split(old).join(new)
   escaped_line => #.map(Compiler.reduced(., Escape⁻¹)) as String
 
@@ -112,14 +105,10 @@ String := class: Char[] {
   compounds + (other: String) => this, other
   bytes => (this as Unicode.UTF-8).bytes
   find_all (pattern: String) => (this ~= pattern)#.index
-  italic => this ^italic
-  bold => this ^bold
-  trim (characters: String) => trimmed(characters)
 }
 
 String[] &+= {
   as (=== String) => this.reduce(,)
-  join (separator: String) => this.reduce (acc, current) => acc, separator, current
 }
 
 String{length == 1} as Char => first

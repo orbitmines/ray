@@ -33,7 +33,7 @@ unless 5 + none_at_all == 5 { INFO@mark `CO18 five and a name holding nothing is
 // A level is which rules are in scope while a program is read back
 unless Compiler.none { INFO@mark `CO19 there is no level that reads a program as it is written` }
 unless Compiler.default { INFO@mark `CO20 there is no default level` }
-unless Compiler.levels.count == 5 { INFO@mark `CO32 there are other than five levels` }
+unless Compiler.levels.count == 4 { INFO@mark `CO32 there are other than four levels` }
 Optimized := Program{O: Compiler.default}
 unless Optimized { INFO@mark `CO21 a program read with a level is nothing` }
 unless Optimized.O == Compiler.default { INFO@mark `CO22 it does not say which rules it is read with` }

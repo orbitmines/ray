@@ -1,31 +1,27 @@
-Access := class = who: *?, method: *?, filter: Program? {
-  static reads (method) => method != `=` && method != `()`
+Access := class = who: *?, method: `=` | `()` | * = *, filter: Program? {
+  static Reading := *{. != `=` && . != `()`}
 
-  reading => !method
-  allows_method (called) => reading ? reads(called) : called == method
+  allows (called) => called ∈ method
 
   { }{target} ^punctuation => Permissions.current.grant(this, target)
 }
 
-{who}{{literal filter}}.read ^keyword => Access(who, filter: Program(code: (external ** filter)))
+{who}{{literal filter}}.read ^keyword => Access(who, method: Access.Reading, filter: Program(code: (external ** filter)))
 {who}{{literal filter}}.write ^keyword => Access(who, method: `=`, filter: Program(code: (external ** filter)))
 {who}{{literal filter}}.execute ^keyword => Access(who, method: `()`, filter: Program(code: (external ** filter)))
 
-Accessor := class = level: Permission, method: *?, any = true {
-  static Permission := enum private (at: @private) | confidential | protected | public (at: @public) | local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) {
+Accessor := Access{who is Accessor.Permission} {
+  static Permission := enum local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) | private (at: @private) | confidential | protected | public (at: @public) {
+    resolved => this == confidential ? Visibility.policy : this
+    chainable < (other: Permission) => resolved.index < other.resolved.index
     reaches (who) => this == public || (this == confidential ? Visibility.policy.reaches(who) : at && who is at)
   }
 
-  static default_policy => Accessor(Visibility.default_privacy_policy)
-  static confidential => default_policy
+  read => Accessor(who, method: Access.Reading)
+  write => Accessor(who, method: `=`)
+  execute => Accessor(who, method: `()`)
 
-  read => Accessor(level, any: false)
-  write => on(`=`)
-  execute => on(`()`)
-  on (method) => Accessor(level, method, any: false)
-
-  covers (called) => any || Access(method: method).allows_method(called)
-  allows (who: Character, called) => !covers(called) || level.reaches(who) || who.permissions.contains(level)
+  allows (who: Character, called) => !(called ∈ method) || this.who.reaches(who) || who.permissions.contains(this.who)
 
   { }{target} ^punctuation => target ~~ .access = this
   block (values: *[]) => values ~~ #.access = this
@@ -39,36 +35,26 @@ Accessor := class = level: Permission, method: *?, any = true {
 Visibility := class {
   policy = Accessor.Permission.local
 
-  default_privacy_policy => policy
-  confidential => policy
-  set_policy (level: Accessor.Permission) => policy = level
-
-  of (item) => item ? item.access?.level ?? of(item.parent) : policy
-  openness (level: Accessor.Permission) => level == Accessor.Permission.confidential
-    ? openness(policy)
-    : Accessor.Permission.(local, localhost, managed, private, protected, public).index_of(level)
-  narrowest (levels: Accessor.Permission[]) => levels.min(openness(.)) ?? policy
+  of (item) => item ? item.access?.who ?? of(item.parent) : policy
+  narrowest (levels: Accessor.Permission[]) => levels.min ?? policy
   derived (sources) => narrowest(sources.map(of(.)))
 
   mark (value, sources) => value ~~ .access = Accessor(derived(sources))
-  local (value) => value ~~ .access = Accessor(Accessor.Permission.local)
   may_leave (value) => of(value) != Accessor.Permission.local
-  readable (item, who: Character) => of(item).reaches(who) || who.permissions.contains(of(item))
 }
 
-Grant := class = access: Access, target: *, uses: Number = 0 {
-  covers (who: Character, method, target) => (access.who == who || who is access.who) && access.allows_method(method) && this.target === target
+Grant := class = access: Access, target: * {
+  uses => Permissions.current.allowed.history{=== this}.count
+  covers (who: Character, method, target) => (access.who == who || who is access.who) && access.allows(method) && this.target === target
     && (!access.filter || access.filter.entered(this, None))
 }
 
 Permissions := class = grants: Grant[] = [] {
   static current = Permissions()
+  allowed: Grant?
 
-  grant (access: Access, target) => {
-    grants.push Grant(access, target)
-    target
-  }
-  allows (who: Character, method, target) => grants{.covers(who, method, target)}.first ~~ (.uses += 1 if .)
+  grant (access: Access, target) => grants.push Grant(access, target) -- target
+  allows (who: Character, method, target) => grants{.covers(who, method, target)}.first ~~ (allowed = . if .)
 }
 
 Run := class = actor: Character?, origin: Character[] = [], settings: Settings? {
@@ -77,8 +63,6 @@ Run := class = actor: Character?, origin: Character[] = [], settings: Settings? 
 
   originating (character: Character) => Run(actor, origin: (origin, character), settings)
   hops | chain => origin.contains(actor) ? origin : (origin, actor)
-  first => hops.first
-  last => hops.last
 
   may (method, target) => hops.every(Permissions.current.allows(., method, target))
   ask (method, target) => may(method, target) ? true : Quest(name: prompt, goal: Grant(Access(origin.first, method), target))
@@ -93,7 +77,7 @@ Run := class = actor: Character?, origin: Character[] = [], settings: Settings? 
     speculate (place): static => this ~~ speculated.push place
     refuse (place): static => this ~~ refused.push place
     mode (method) => refused.contains(method) ? Mode.refused
-      : !Effects.io(method) || speculated.contains(method) ? Mode.full
+      : !(method** is Effecting) || speculated.contains(method) ? Mode.full
       : Mode.abstract
   }
 }
@@ -103,28 +87,21 @@ Run := class = actor: Character?, origin: Character[] = [], settings: Settings? 
 Effects := class {
   static Source := enum io | os | random | time | network
 
-  source_of (called) => called.is_external ? {
-    "io": Source.io, "os": Source.os, "random": Source.random, "time": Source.time, "network": Source.network
-  }[called.external_name] : None
-
-  of (program, visited: *[] = []) => {
-    return [] if visited.contains(program)
-    visited.push program
-    reached = program.calls.reduce([]) (sources, called) => sources, source_of(called) ?? of(called**, visited)
-    reached.unique
+  static Calls := class: Ray = at: Program {
+    value => at
+    continuations => at.calls{!.is_external}.map(Calls(at: .**))
   }
 
-  io (method) => of(method**).some([Source.io, Source.os, Source.network].contains(.))
-  pure (method) => of(method**).empty
-  deterministic (method) => of(method**).every(![Source.random, Source.time, Source.io].contains(.))
-  nondeterministic (method) => !deterministic(method)
-  initializer (method) => method**.calls.every(.is_external && (.external_name == "declare" || .external_name == "assign"))
+  static of (program: Program) => Calls(at: program).reachable
+    .map(.at.calls{.is_external}.map(Source[.external_name])).flatten.compact.unique
+}
 
-  asserted (method, claim) => {
-    holds = claim == `pure` && pure(method)
-      || claim == `deterministic` && deterministic(method)
-      || claim == `nondeterministic` && nondeterministic(method)
-    ERROR `this method is not what it is marked as` unless holds
-    holds
-  }
+Pure := Program{Effects.of(.).empty}
+Deterministic := Program{!Effects.of(.).some(. is (Effects.Source.random | Effects.Source.time | Effects.Source.io))}
+Nondeterministic := Program{!(. is Deterministic)}
+Effecting := Program{Effects.of(.).some(. is (Effects.Source.io | Effects.Source.os | Effects.Source.network))}
+Initializer := Program{.calls.every(.is_external && .external_name is ("declare" | "assign"))}
+
+[pure: Pure, deterministic: Deterministic, nondeterministic: Nondeterministic].for (word, claim) => {
+  right-to-left `word` {method} ^keyword => method -- (ERROR `this method is not what it is marked as` unless method** is claim)
 }

@@ -217,8 +217,6 @@ UI := class {
   }
 }
 
-{value} @ {location: Location} ^keyword => value ~~ .location = location
-
 [p: all, px: horizontal, py: vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => {
   `word` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side))
   `word.replace("p", "m")` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side, from: shape))
@@ -245,7 +243,7 @@ after {delay: Quantity.Temporal} {{action}} ^keyword => Program(code: external *
 
 Language.Image := class: Language {
   static extensions = ".png" | ".jpg" | ".jpeg" | ".gif" | ".svg" | ".webp" | ".avif"
-  Deflate := Language.register(Language(".deflate"))
+  Deflate := Language(".deflate")
   Zlib := class (method: Byte, flags: Byte, deflated: Byte[], adler: Binary³²) {
     inflated: Byte[] => Deflate.read(deflated)
   }
@@ -293,8 +291,5 @@ Language.Image := class: Language {
     {png: PNG} => png.raster
   }
 }
-Language.register(Language.Image)
 Language.Video := class: Language { static extensions = ".mp4" | ".webm" | ".ogv" }
-Language.register(Language.Video)
 Language.Audio := class: Language { static extensions = ".mp3" | ".ogg" | ".wav" | ".flac" }
-Language.register(Language.Audio)

@@ -1,26 +1,29 @@
 Encoding := class {
-  Algorithm := enum sha1 | sha256 | sha512 | sha3 | md5 | blowfish | blake3 | base64 | gzip
+  Algorithm := enum sha1 | sha256 | sha512 | sha3 | md5 | blowfish | blake3 | base64 | gzip {
+    extensions => "." + name
+    read (encoded) => this is Digest ? ERROR `a digest is written and never read back` : encoded.value
+    write (value) => this is Digest ? Hash(value, algorithm: this) : Packed(value, algorithm: this)
+  }
+  Algorithm.components.hierarchy &= Language
+  Digest := Algorithm{. is (sha1 | sha256 | sha512 | sha3 | md5 | blake3)}
 
-  Encrypted<T> := class = value: T, key: Key? {
-    holds_key (holder) => key && holder?.key == key
-    as (holder) => value if holds_key(holder)
-    opened (holder) => holds_key(holder) ? value : Quest(name: "find the key", goal: this)
-    read_off (holder) => Encrypted(value, key: holder.key) if holds_key(holder)
+  Packed := class = value: *, algorithm: Algorithm {
+    as (target) => algorithm.read(this)
   }
 
-  Hash := class = value: *, algorithm: Algorithm {
+  Hash := class = value: *, algorithm: Digest {
     chainable == (other: Hash) => algorithm == other.algorithm && value == other.value
   }
-  Compressed := class = value: *, algorithm: Algorithm {
-    packed => algorithm == Algorithm.base64 ? Base64.encoded((value as String).bytes) : value
-    as (target) => value
-    static unpacked (text: String) => Compressed(value: (text as Base64).bytes as String, algorithm: Algorithm.base64)
+
+  Encrypted<T> := class = value: T, key: Key? {
+    opened (holder) => key && holder?.key == key ? value : Quest(name: "find the key", goal: this)
   }
 }
+Gzip := Encoding.Algorithm.gzip
 
 Base64 := class = (sextets: (Binary⁶ as Alphabet)[], "="[]{length == (4 - sextets.count % 4) % 4}) {
   static Alphabet = ("A".."Z", "a".."z", "0".."9", "+", "/") as String
 
   bytes: Byte[] => sextets.map(.integer).flatten.chunk(8){.count == 8}.map(Binary(integer: .))
-  static encoded (bytes: Byte[]) => Base64(sextets: bytes.map(.integer).flatten.chunk(6).map(Binary(integer: (., ["0"] * (6 - .count))))) as String
+  static (bytes: Byte[]) as (=== Base64) => Base64(sextets: bytes.map(.integer).flatten.chunk(6).map(Binary(integer: (., ["0"] * (6 - .count)))))
 }

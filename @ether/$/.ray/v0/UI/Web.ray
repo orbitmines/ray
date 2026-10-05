@@ -143,7 +143,7 @@ Language.Web := class: Language {
       {raw: Raw} => raw.text
       {comment: Comment} => "<!--", comment.text, "-->"
     }
-    language = Language.register(Language(".html", level: syntax, written: written))
+    language = Language(".html", level: syntax, written: written)
 
     level := Geometry.Solving + {
       {solved: Geometry.Solved} => Page(solved.shape)
@@ -346,7 +346,7 @@ Language.Web := class: Language {
       {keyframes: Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations.map(. is Comment ? . : (.0, ":", .[1..], ";")), "}"), "}"
       {comment: Comment} => "/*", comment.text, "*/"
     }
-    language = Language.register(Language(".css", level: syntax, written: written))
+    language = Language(".css", level: syntax, written: written)
 
     level := Geometry.Solving + {
       {solved: Geometry.Solved} => Page(solved.shape)
@@ -582,7 +582,7 @@ Language.Web := class: Language {
       {literal: Literal} => JSON.Value(literal.value)
       {found: ById} => "document.getElementById(", JSON.Value(found.id), ")"
     }
-    language = Language.register(Language(".js", level: syntax, written: written))
+    language = Language(".js", level: syntax, written: written)
 
     level := Geometry.Solving + {
       {solved: Geometry.Solved} => Page(solved.shape)
@@ -676,4 +676,3 @@ Language.Web := class: Language {
     {rule: CSS.Rule{declarations.some(.0 == "backdrop-filter") && !declarations.some(.0 == "-webkit-backdrop-filter")}} => CSS.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)
   }
 }
-Language.register(Language.Web)

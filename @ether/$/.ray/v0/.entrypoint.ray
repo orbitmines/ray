@@ -630,9 +630,9 @@ Node := base class {
       if held.value.written_body {
         statements := Program(code: held.value.written_body).written
         statements for {
-          read := it.value.head_read
+          read := head_read(it.value.code)
           if (read.ending && (read.ending == colon)) {
-            named := read.points.as(String)
+            named := text_of(read.points)
             found &= Field(name: named, value: (external get holder named))
           }
         }
@@ -831,7 +831,7 @@ Captured := class {
 }
 Call := class {
   statement: Node
-  is_external => .statement.written_with(`external`)
+  is_external => prefix_of(text_bits(.statement.code).head, `external `)
   external_name => (
     named := chain None
     space := code_points(`x y`).head.next.value
@@ -842,7 +842,7 @@ Call := class {
         if (it.value == space) { ended = true } else { named &= it.value }
       }
     }
-    named.as(String)
+    text_of(named)
   )
   ** => .statement
 }
@@ -857,6 +857,77 @@ text_bits (text) => (
   held
 )
 bits_onto (held, text) => extended_by(held, text_bits(text).head)
+code_points (source) => (
+  points := chain None
+  point := 0
+  ones := 0
+  counting := true
+  leading := true
+  skip := 0
+  position := 0
+  following := 0
+  take (bit) => (
+    if counting {
+      if bit { ones = ones.succ } else { counting = false }
+    } elsif skip.nonzero { skip = skip.pred } else {
+      point = point + point
+      if bit { point = point.succ }
+    }
+    position = position.succ
+    if (position == 8) {
+      position = 0
+      if leading {
+        if ones.is_zero { following = 0 } else { following = ones.pred }
+      } else { following = following.pred }
+      if following.is_zero {
+        points &= point
+        point = 0
+        ones = 0
+        counting = true
+        leading = true
+      } else {
+        leading = false
+        counting = false
+        skip = 2
+      }
+    }
+    global
+  )
+  external bits source take
+  points
+)
+character_of (point) => (
+  held := 0 + point
+  external extend held Char
+  held.components.hierarchy &= Char
+  held
+)
+text_of (points) => (
+  held := chain None
+  points for { held &= character_of(it.value) }
+  external extend held String
+  held
+)
+HeadRead := class {
+  points: Node
+  ending: Node
+}
+head_read (code) => (
+  enders := code_points(`x (:?`).head.next
+  points := chain None
+  ending := None
+  code_points(code) for {
+    unless ending {
+      ender := enders
+      while (ender && ending.not) {
+        if (ender.value == it.value) { ending = ender.value }
+        ender = ender.next
+      }
+      unless ending { points &= it.value }
+    }
+  }
+  HeadRead(points: points, ending: ending)
+)
 prefix_of (at, spelling) => (
   prefix := None
   matching := global
@@ -1235,30 +1306,56 @@ readings_of (rest, type) => (
 )
 
 capture_of (content) => (
-  colon := content.index_of(`:`)
-  named := content
-  typed := None
-  if colon {
-    named = content.slice(0, colon)
-    typed = content.slice(colon.succ, content.count)
+  space := code_points(`x y`).head.next.value
+  colon := code_points(`x:y`).head.next.value
+  caret := code_points(`x^y`).head.next.value
+  question := code_points(`x?y`).head.next.value
+  named := chain None
+  typed := chain None
+  word := chain None
+  typing := None
+  flush (into) => (
+    if word.head { into &= word }
+    word = chain None
+    into
+  )
+  code_points(content) for {
+    if typing {
+      if (it.value == space) { flush(typed) } else { word &= it.value }
+    } elsif (it.value == colon) {
+      flush(named)
+      typing = global
+    } elsif (it.value == space) { flush(named) } else { word &= it.value }
   }
+  if typing { flush(typed) } else { flush(named) }
   name := None
-  named.split(` `) for {
-    word := it.value
-    unless (word.empty || word.starts_with(`^`) || same_text(word, `literal`)) { name = word }
+  named for {
+    spelled := it.value
+    unless ((spelled.head.value == caret) || same_text(text_of(spelled), `literal`)) { name = spelled }
   }
-  if (name.ends_with(`?`)) { name = name.slice(0, name.count.pred) }
-  type := Node
-  if typed {
-    written := None
-    styled := false
-    typed.split(` `) for {
-      word := it.value
-      if (word.starts_with(`^`)) { styled = true }
-      unless (styled || word.empty) { if written { written = written + ` ` + word } else { written = word } }
+  if name {
+    if (name.tail.value == question) {
+      kept := chain None
+      at := name.head
+      while at.next {
+        kept &= at.value
+        at = at.next
+      }
+      name = kept
     }
-    if written { type = inline (external ** written) }
+    name = text_of(name)
   }
+  type := Node
+  written := chain None
+  styled := None
+  typed for {
+    if (it.value.head.value == caret) { styled = global }
+    unless styled {
+      if written.head { written &= space }
+      extended_by(written, it.value.head)
+    }
+  }
+  if written.head { type = inline (external ** text_of(written)) }
   Capture(name: name, type: type)
 )
 pattern_of (head) => (
@@ -1426,12 +1523,15 @@ Program.components.hierarchy &= class {
     used
   )
   mentions (name) => (
-    wanted := code_points(name)
-    found := false
-    remaining := code_points(.code)
-    while (remaining.nonempty && !found) {
-      if (remaining.head.value == wanted.head.value) { found = .same_points(remaining.head, wanted) }
-      remaining.pop_front
+    found := None
+    at := text_bits(.code).head
+    while (at && found.not) {
+      found = prefix_of(at, name)
+      step := byte_steps.head
+      while (step && at) {
+        at = at.next
+        step = step.next
+      }
     }
     found
   )

@@ -210,3 +210,9 @@ unless Status.busy { INFO@mark `ST4 there is no being busy` }
 if Status.idle == Status.busy { INFO@mark `ST5 idle and busy are the same` }
 unless Status#.count == 9 { INFO@mark `ST6 there are other than nine statuses` }
 unless Character(name: "p", status: Status.busy).status == Status.busy { INFO@mark `ST7 a character forgot being busy` }
+
+looked := World(name: "looked")
+looked.spawn(Character(name: "Fadi"))
+unless looked@fadi == looked.characters.first { INFO@mark `LK1 @name does not find a character ignoring case` }
+unless looked.characters.count == 1 { INFO@mark `LK2 the plural is not the collection of that class` }
+unless looked#looked == looked || looked#looked == None { INFO@mark `LK3 #name does not look up worlds` }

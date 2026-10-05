@@ -100,19 +100,24 @@ export function javascript(g: Graph, blocks: Map<string, number>, natives: Nativ
       const nodes: number[] = [], seen2 = new Set<number>(), todo2 = [start];
       while (todo2.length > 0) { const x = todo2.pop()!; if (x === 0 || seen2.has(x)) continue; seen2.add(x); nodes.push(x); todo2.push(...succ(x)); }
       const after = (x: number) => { const t = tag(x), next = t === RETURN ? [] : t === JUMP ? [child(x, 0)] : t === IF ? [child(x, 1), child(x, 2)] : [child(x, 2)]; const c = catches.get(x); const all = c !== undefined ? [...next, c.handler] : next; return all.map(y => y === 0 ? -1 : y).concat(all.length === 0 ? [-1] : []); };
-      const pdom = new Map<number, Set<number>>([[-1, new Set([-1])]]);
-      const every = new Set<number>([-1, ...nodes]);
-      for (const x of nodes) pdom.set(x, new Set(every));
+      // Immediate post-dominators as dominators of the reversed graph from the end (Cooper, Harvey, Kennedy).
+      const preds = new Map<number, number[]>([[-1, []]]);
+      for (const x of nodes) preds.set(x, []);
+      for (const x of nodes) for (const y of after(x)) (preds.get(y) ?? preds.set(y, []).get(y)!).push(x);
+      const order = new Map<number, number>(), post: number[] = [];
+      { const seen3 = new Set<number>([-1]), stack3: [number, number][] = [[-1, 0]]; while (stack3.length > 0) { const top = stack3[stack3.length - 1], list3 = preds.get(top[0]) ?? []; if (top[1] < list3.length) { const y = list3[top[1]++]; if (!seen3.has(y)) { seen3.add(y); stack3.push([y, 0]); } } else { order.set(top[0], post.length); post.push(top[0]); stack3.pop(); } } }
+      const idom = new Map<number, number>([[-1, -1]]);
+      const intersect = (a: number, b: number) => { while (a !== b) { while (order.get(a)! < order.get(b)!) a = idom.get(a)!; while (order.get(b)! < order.get(a)!) b = idom.get(b)!; } return a; };
       for (let changed = true; changed;) {
         changed = false;
-        for (const x of nodes) {
-          let common: Set<number> | undefined;
-          for (const y of after(x)) { const p = pdom.get(y)!; common = common === undefined ? new Set(p) : new Set([...common].filter(z => p.has(z))); }
-          const next = new Set(common ?? []); next.add(x);
-          if (next.size !== pdom.get(x)!.size) { pdom.set(x, next); changed = true; }
+        for (let k = post.length - 2; k >= 0; k--) {
+          const x = post[k];
+          let best: number | undefined;
+          for (const y of after(x)) if (idom.has(y)) best = best === undefined ? y : intersect(y, best);
+          if (best !== undefined && idom.get(x) !== best) { idom.set(x, best); changed = true; }
         }
       }
-      for (const x of nodes) { let best = -1, size = -1; for (const p of pdom.get(x)!) if (p !== x && pdom.get(p)!.size > size) { size = pdom.get(p)!.size; best = p; } meet.set(x, best); }
+      for (const x of nodes) meet.set(x, idom.get(x) ?? -1);
     }
     let budget = 600, flags = 0;
     const across = (t: number, stack: number[]): string | undefined => {

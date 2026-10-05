@@ -3,31 +3,38 @@ import * as path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createConnection, TextDocuments, ProposedFeatures, TextDocumentSyncKind, type InitializeResult } from 'vscode-languageserver/node.js';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
 import { encode, position_of, runs, MODIFIERS } from '../lsp/semantics.ts';
 
-// The language server over the kernel's reader: the entrypoint is read when it starts, an open document is read (and painted)
-// whenever it changes, and the rest of the library is read a statement at a time in between, after which open documents are read again.
+// The language server over the kernel's reader, in two readers. The editor's paints every edit at once: only the statements it
+// touched, matched dry against the entrypoint, the rest keeps its paints. A worker's reads: the library a statement at a time, and
+// each document once typing stops (again when the library is all read); what it read replaces the editor's paints and diagnostics.
 
 const TYPES = ['namespace', 'type', 'class', 'enum', 'interface', 'struct', 'typeParameter', 'parameter', 'variable', 'property', 'enumMember', 'event', 'function', 'method', 'macro', 'keyword', 'modifier', 'comment', 'string', 'number', 'regexp', 'operator', 'decorator'];
 const SEVERITY: Record<string, 1 | 2 | 3 | 4> = { fatal: 1, error: 1, warning: 2, info: 3, debug: 4, trace: 4 };
+const LIBRARY = process.env.RAY_LIBRARY ? path.resolve(process.env.RAY_LIBRARY) : path.resolve(import.meta.dirname, '../../../v0'), ENTRYPOINT = path.join(LIBRARY, '.entrypoint.ray');
 
-export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream }): Promise<void> {
+type Check = { uri: string; file: string; text: string; version: number };
+type Checked = { uri: string; version: number; paints: { begin: number; end: number; style: string }[]; diagnostics: { level: string; message: string; begin: number; end: number }[] };
+
+async function reader(read_entrypoint = true) {
   process.env.KOPT ??= 'off';
   process.env.KLEARN ??= 'off';
   const { Reader } = await import('./host.ts');
-  const library = path.resolve(import.meta.dirname, '../../../v0');
-  const entrypoint = path.join(library, '.entrypoint.ray');
   const r = new Reader();
   r.active = new Set<number>();
   r.serve(true);
+  if (!read_entrypoint) return r;
+  const text = fs.readFileSync(ENTRYPOINT, 'utf8'), src = r.source(ENTRYPOINT, text);
+  r.read_all(src, text.length);
+  r.settle(src, text.length, true);
+  return r;
+}
 
-  const read_whole = (file: string, text: string): number => {
-    const src = r.source(file, text);
-    try { r.safely(() => r.read(r.span(src, 0, text.length - 1), r.GLOBAL)); } catch { r.kernel('recover'); }
-    return src;
-  };
-  const entry_text = fs.readFileSync(entrypoint, 'utf8');
-  read_whole(entrypoint, entry_text);
+export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.WritableStream }): Promise<void> {
+  const r = await reader();
+  const worker = new Worker(new URL(import.meta.url), { workerData: { ray_reader: true }, execArgv: [...process.execArgv.filter(flag => !flag.startsWith('--stack-size')), ...(import.meta.url.endsWith('.ts') ? ['--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : [])], resourceLimits: { stackSizeMb: 256 } });
+  worker.unref();
 
   const connection = io === undefined ? createConnection(ProposedFeatures.all) : createConnection(ProposedFeatures.all, io.input, io.output);
   const documents = new TextDocuments(TextDocument);
@@ -35,68 +42,33 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
   const open = new Map<string, { src: number; text: string; version: number }>();
   const later = new Map<string, ReturnType<typeof setTimeout>>();
 
-  const palette = theme(entry_text);
+  const palette = theme(fs.readFileSync(ENTRYPOINT, 'utf8'));
   const payload = (uris: string[]) => ({
     styles: Object.fromEntries([...palette].map(([name, color]) => [name, { color }])),
     documents: uris.flatMap(uri => { const doc = open.get(uri); return doc ? [{ uri, version: doc.version, ranges: runs(doc.text, r.painted(doc.src) as any) }] : []; }),
   });
+  const repaint = (uri: string) => { connection.languages.semanticTokens.refresh(); connection.sendNotification('ether/theme', payload([uri])); };
 
-  const check = (uri: string, text: string, version: number): void => {
-    const file = file_of(uri), before = open.get(uri);
-    if (before !== undefined) r.drop(before.src);
-    const t = performance.now();
-    const src = r.source(file, text);
-    r.active!.add(src);
-    try { r.safely(() => r.read(r.span(src, 0, text.length - 1), r.GLOBAL)); } catch { r.kernel('recover'); }
-    try { r.safely(() => r.dry(src)); } catch { r.kernel('recover'); }
-    open.set(uri, { src, text, version });
-    const diagnostics = r.diagnostics_of(src).map((d: any) => ({
-      severity: SEVERITY[d.level] ?? (1 as const),
-      range: { start: position_of(text, d.at.begin), end: position_of(text, d.at.end + 1) },
-      message: d.message,
-      source: 'ray',
-    }));
-    connection.sendDiagnostics({ uri, diagnostics });
-    connection.languages.semanticTokens.refresh();
-    connection.sendNotification('ether/theme', payload([uri]));
-    if (process.env.KLSP_LOG) connection.console.log(`read ${path.basename(file)} in ${Math.round(performance.now() - t)} ms`);
-  };
+  worker.on('message', (m: Checked) => {
+    const doc = open.get(m.uri);
+    if (doc === undefined || doc.version !== m.version) return;
+    r.adopt(doc.src, m.paints);
+    connection.sendDiagnostics({ uri: m.uri, diagnostics: m.diagnostics.map(d => ({ severity: SEVERITY[d.level] ?? (1 as const), range: { start: position_of(doc.text, d.begin), end: position_of(doc.text, d.end + 1) }, message: d.message, source: 'ray' })) });
+    repaint(m.uri);
+  });
 
-  // While typing a document is painted dry (its rules matched against what is known, nothing run); it is read once typing stops.
-  const sketch = (uri: string, text: string, version: number): void => {
+  const sketch = (uri: string, text: string, version: number, delay = Number(process.env.KLSP_DELAY ?? 300)): void => {
     const file = file_of(uri), before = open.get(uri);
     const t = performance.now();
     const src = r.source(file, text);
     r.active!.add(src);
-    try { r.safely(() => r.dry(src)); } catch { r.kernel('recover'); }
+    try { r.safely(() => before === undefined ? r.dry(src) : r.redry(before.src, src, before.text, text)); } catch { r.kernel('recover'); }
     if (before !== undefined) r.drop(before.src);
     open.set(uri, { src, text, version });
-    connection.languages.semanticTokens.refresh();
-    connection.sendNotification('ether/theme', payload([uri]));
+    repaint(uri);
     if (process.env.KLSP_LOG) connection.console.log(`painted ${path.basename(file)} in ${Math.round(performance.now() - t)} ms`);
     clearTimeout(later.get(uri));
-    later.set(uri, setTimeout(() => { later.delete(uri); const live = documents.get(uri); if (live) check(uri, live.getText(), live.version); }, Number(process.env.KLSP_DELAY ?? 300)));
-  };
-
-  // The library, a statement at a time between messages; open documents are read again once it is all read.
-  const pending = fs.readdirSync(library).filter(f => f.endsWith('.ray') && !f.startsWith('.')).sort().map(f => path.join(library, f));
-  let reading: { src: number; pos: number; end: number } | undefined;
-  const step = (): void => {
-    const deadline = performance.now() + 8;
-    while (performance.now() < deadline) {
-      if (reading === undefined) {
-        const file = pending.shift();
-        if (file === undefined) {
-          for (const [uri, doc] of open) { const text = documents.get(uri)?.getText() ?? doc.text; check(uri, text, doc.version); }
-          return;
-        }
-        const text = fs.readFileSync(file, 'utf8');
-        reading = { src: r.source(file, text), pos: 0, end: text.length };
-      }
-      try { reading.pos = r.safely(() => r.step(reading!.src, reading!.pos, reading!.end)) ?? reading.end; } catch { r.kernel('recover'); reading.pos = reading.end; }
-      if (reading.pos >= reading.end) reading = undefined;
-    }
-    setImmediate(step);
+    later.set(uri, setTimeout(() => { later.delete(uri); const doc = open.get(uri); if (doc) worker.postMessage({ uri, file, text: doc.text, version: doc.version } satisfies Check); }, delay));
   };
 
   connection.onInitialize((): InitializeResult => ({
@@ -106,11 +78,11 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
     },
     serverInfo: { name: 'ray-kernel-language-server' },
   }));
-  connection.onInitialized(() => { if (process.env.KLSP_LIBRARY !== 'off') setImmediate(step); });
+  connection.onInitialized(() => { if (process.env.KLSP_LIBRARY !== 'off') worker.postMessage({ library: true }); });
 
   const tokens = (uri: string, range?: [number, number]): { data: number[] } => {
     let doc = open.get(uri);
-    if (doc === undefined) { const live = documents.get(uri); if (live) { check(uri, live.getText(), live.version); doc = open.get(uri); } }
+    if (doc === undefined) { const live = documents.get(uri); if (live) { sketch(uri, live.getText(), live.version, 0); doc = open.get(uri); } }
     if (doc === undefined) return { data: [] };
     return { data: encode(doc.text, r.painted(doc.src) as any, TYPES, range) };
   };
@@ -124,12 +96,74 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
   connection.onRequest('ether/theme', (params: { uris?: string[] }) => payload(params?.uris ?? []));
   connection.onRequest('ether/initialFiles', (): null => null);
 
-  documents.onDidOpen(e => check(e.document.uri, e.document.getText(), e.document.version));
-  documents.onDidChangeContent(e => { if (open.has(e.document.uri)) sketch(e.document.uri, e.document.getText(), e.document.version); else check(e.document.uri, e.document.getText(), e.document.version); });
-  documents.onDidClose(e => { const doc = open.get(e.document.uri); if (doc) { r.drop(doc.src); open.delete(e.document.uri); } });
+  documents.onDidOpen(e => sketch(e.document.uri, e.document.getText(), e.document.version, 0));
+  documents.onDidChangeContent(e => sketch(e.document.uri, e.document.getText(), e.document.version, open.has(e.document.uri) ? undefined : 0));
+  documents.onDidClose(e => { worker.postMessage({ close: e.document.uri }); const doc = open.get(e.document.uri); if (doc) { r.drop(doc.src); open.delete(e.document.uri); } });
 
   documents.listen(connection);
   connection.listen();
+}
+
+// The worker: one statement at a time, a document asked for before the library, a newer text of a document in place of the older.
+// The entrypoint is the language: a text of it is read by a reader of its own.
+async function read_in_worker() {
+  const library_reader = await reader(), { Reader } = await import('./host.ts');
+  const fresh = (): typeof library_reader => { const r = new Reader(); r.active = new Set<number>(); r.serve(true); return r; };
+  const port = parentPort!;
+  const docs = new Map<string, Check>(), asked: string[] = [];
+  const library: string[] = [];
+  let reading: { check?: Check; r: Awaited<ReturnType<typeof reader>>; src: number; pos: number; text: string; before?: ReturnType<Awaited<ReturnType<typeof reader>>['snapshot']> } | undefined, parked: typeof reading, busy = false;
+  const done = (x: NonNullable<typeof reading>) => { if (x.before !== undefined) x.r.restore(x.before); else x.r.drop(x.src); };
+  const work = (): void => {
+    const deadline = performance.now() + 20;
+    while (performance.now() < deadline) {
+      if (reading?.check !== undefined && docs.get(reading.check.uri) !== reading.check) { done(reading); reading = undefined; }
+      if (reading !== undefined && reading.check === undefined && asked.length > 0) { parked = reading; reading = undefined; }
+      if (reading === undefined && asked.length === 0 && parked !== undefined) { reading = parked; parked = undefined; }
+      if (reading === undefined) {
+        const uri = asked.shift();
+        if (uri !== undefined) {
+          const check = docs.get(uri);
+          if (check === undefined) continue;
+          const r = check.file === ENTRYPOINT ? fresh() : library_reader, before = r === library_reader ? r.snapshot() : undefined;
+          const src = r.source(check.file, check.text);
+          r.active!.add(src);
+          reading = { check, r, src, pos: 0, text: check.text, before };
+        } else {
+          const file = library.shift();
+          if (process.env.KLSP_TRACE) process.stderr.write(`worker: library ${file}\n`);
+          if (file === undefined) { busy = false; return; }
+          const text = fs.readFileSync(file, 'utf8');
+          reading = { r: library_reader, src: library_reader.source(file, text), pos: 0, text };
+        }
+      }
+      const { src, text, r } = reading;
+      r.serve(reading.check !== undefined);
+      const at = reading.pos, t0 = performance.now();
+      try { reading.pos = r.safely(() => r.step(src, reading!.pos, text.length)) ?? text.length; } catch { r.kernel('recover'); reading.pos = text.length; }
+      if (process.env.KLSP_TRACE && performance.now() - t0 > Number(process.env.KLSP_TRACE_MS ?? 200)) process.stderr.write(`worker: ${Math.round(performance.now() - t0)} ms at ${path.basename(reading?.check?.file ?? '')}${reading?.check ? '' : 'library'} ${at} ${JSON.stringify(text.slice(at, at + 50))}\n`);
+      if (reading.pos < text.length) continue;
+      if (reading.check !== undefined && r !== library_reader) r.settle(src, text.length, true);
+      if (reading.check === undefined && library.length === 0) for (const uri of docs.keys()) if (!asked.includes(uri)) asked.push(uri);
+      const check = reading.check, finished = reading;
+      reading = undefined;
+      if (check === undefined) continue;
+      const d0 = performance.now();
+      try { r.safely(() => r.dry(src)); } catch { r.kernel('recover'); }
+      if (process.env.KLSP_TRACE) process.stderr.write(`worker: checked ${path.basename(check.file)} v${check.version}, dry ${Math.round(performance.now() - d0)} ms\n`);
+      port.postMessage({ uri: check.uri, version: check.version, paints: r.painted(src), diagnostics: r.diagnostics_of(src).map((d: any) => ({ level: d.level, message: d.message, begin: d.at.begin, end: d.at.end })) } satisfies Checked);
+      done(finished);
+    }
+    setImmediate(work);
+  };
+  const kick = () => { if (!busy) { busy = true; setImmediate(work); } };
+  port.on('message', (m: Check | { close: string } | { library: true }) => {
+    if ('close' in m) { docs.delete(m.close); return; }
+    if ('library' in m) { library.push(...fs.readdirSync(LIBRARY).filter(f => f.endsWith('.ray') && !f.startsWith('.')).sort().map(f => path.join(LIBRARY, f))); kick(); return; }
+    docs.set(m.uri, m);
+    if (!asked.includes(m.uri)) asked.push(m.uri);
+    kick();
+  });
 }
 
 // The colors of the language's theme, as its entrypoint writes them: `^name = ^ #RRGGBB` or `^name = ^other`.
@@ -155,4 +189,5 @@ function theme(text: string): Map<string, string> {
   return out;
 }
 
-if (import.meta.url === String(pathToFileURL(process.argv[1] ?? '')) && process.argv.includes('--stdio')) void start();
+if (!isMainThread && workerData?.ray_reader) void read_in_worker();
+else if (import.meta.url === String(pathToFileURL(process.argv[1] ?? '')) && process.argv.includes('--stdio')) void start();

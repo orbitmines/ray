@@ -4,17 +4,17 @@
 // flags; None and global are no and yes; UNDEF is nothing.
 
 // ---------------------------------------------------------------- the root
-Root := { global, blank, none_side, global_side, undef_side, spellings, base, made, order, declared, silent, refused, trying, depth, running, claiming, forced, naming, diagnostics, definitions, missing, written_keys, external, rules_version, brackets_version, brackets_list, brackets_firsts, unsure, level, epoch, walker, no_more, fuel, budget, chosen_caps, recent, recent_at, serving, bodies, shape_version, stating, stating_src, unplanned }
+Root := { global, blank, none_side, global_side, undef_side, spellings, base, made, order, declared, silent, refused, trying, depth, running, claiming, forced, naming, diagnostics, definitions, missing, written_keys, external, rules_version, brackets_version, brackets_changes, brackets_list, brackets_firsts, unsure, level, epoch, walker, find_epoch, missing_id, missing_epoch, no_more, fuel, budget, chosen_caps, recent, recent_at, serving, bodies, shape_version, stating, stating_src, unplanned, tracing, top_src, top_at }
 
 boot () => (
   ROOT.spellings = make(Name); ROOT.spellings.length = 0
   ROOT.no_more = Extra()
   ROOT.blank = value(SCOPE, NIL, NIL, NIL); ROOT.none_side = value(SCOPE, NIL, NIL, NIL); ROOT.global_side = value(SCOPE, NIL, NIL, NIL)
   ROOT.undef_side = value(SCOPE, NIL, NIL, NIL); ROOT.global = value(SCOPE, NIL, NIL, NIL)
-  ROOT.base = UNDEF; ROOT.made = UNDEF; ROOT.order = 0; ROOT.rules_version = 0; ROOT.brackets_version = -1; ROOT.brackets_list = NIL; ROOT.declared = 0
+  ROOT.base = UNDEF; ROOT.made = UNDEF; ROOT.order = 0; ROOT.rules_version = 0; ROOT.brackets_version = -1; ROOT.brackets_changes = 0; ROOT.brackets_list = NIL; ROOT.declared = 0
   ROOT.forced = list_new(); ROOT.diagnostics = list_new(); ROOT.definitions = list_new(); ROOT.written_keys = list_new(); ROOT.bodies = list_new()
   settle()
-  ROOT.level = 0; ROOT.epoch = 0; ROOT.serving = None
+  ROOT.level = 0; ROOT.epoch = 0; ROOT.find_epoch = 0; ROOT.missing_id = 0; ROOT.missing_epoch = 0; ROOT.serving = None; ROOT.tracing = None; ROOT.top_src = -1; ROOT.top_at = -1
   ROOT.recent = make(64); ROOT.recent_at = 0; ROOT.walker = make(Reach)
   ROOT.budget = 300000; ROOT.fuel = ROOT.budget; ROOT.shape_version = 0; ROOT.stating = -1; ROOT.stating_src = -1; ROOT.unplanned = None
 )
@@ -55,7 +55,7 @@ array_of (l) => ( a := make(list_len(l)); k := 0; l for x => { a[k] = x; k = k +
 
 // ---------------------------------------------------------------- text: a source's characters
 // Character classes: 1 word, 2 space, 4 run (an operator character), 8 run between tokens, 16 letter.
-Source := class { chars, length, located, claims, memo, labels, plans, compiled }
+Source := class { chars, length, located, claims, memo, labels, plans, compiled, ids, defines, orders }
 
 lay (chars, n, located) => Source(chars: chars, length: n, located: located)
 located (src) => src.located
@@ -130,18 +130,21 @@ span_inner (src, b, e) => (
 // ---------------------------------------------------------------- names: one node per spelling, each a step from the spelling one character shorter
 // What is known about a spelling: rules guarded under the pattern (named), the earliest operator written under the key (written_order,
 // written_operator), the native of that name, what a typed capture's text read as (held), what an operator filter said (filtered).
-Name := class { chars, length, char, children, sibling, named, written_order, written_operator, native, held, filtered, holder, prop, bit }
+Name := class { chars, length, char, children, sibling, named, written_order, written_operator, native, held, filtered, holder, prop, bit, missing_mark: 0 }
 
 intern (chars, from, n) => (
   name := ROOT.spellings
   k := 0
+  copy := NIL
   while k < n {
     child := name.children
     while child != NIL and child.char != chars[from + k] { child = child.sibling }
     if child == NIL {
-      copy := make(k + 1)
-      j := 0
-      while j <= k { copy[j] = chars[from + j]; j = j + 1 }
+      if copy == NIL {
+        copy = make(n)
+        j := 0
+        while j < n { copy[j] = chars[from + j]; j = j + 1 }
+      }
       child = Name(chars: copy, length: k + 1, char: chars[from + k], sibling: name.children)
       name.children = child
     }
@@ -159,7 +162,15 @@ name_adopt (name) => (
   parent.children = name
   return name
 )
-text_id (src, b, e) => intern(src.chars, b, e - b)
+text_id (src, b, e) => (
+  if b < 0 or b >= src.length { return intern(src.chars, b, e - b) }
+  if src.ids == NIL { src.ids = make(src.length) }
+  n := src.ids[b]
+  if n != NIL and n.length == e - b { return n }
+  n = intern(src.chars, b, e - b)
+  src.ids[b] = n
+  return n
+)
 lit_ends_line (lit) => lit.length > 0 and lit.chars[lit.length - 1] == '\n'
 first_word_is (lit) => lit.length > 0 and is_word(lit.chars[0])
 text_add (out, name) => ( k := 0; while k < name.length { list_push(out, name.chars[k]); k = k + 1 } )
@@ -292,6 +303,7 @@ capturing (rule, caps, p, src, i, limit, frame, receiving, opened) => (
     end := first(src, from, pieces[p + 2].text, limit, raw, inside)
   } elsif next == 0 {
     end = p == 0 ? last(src, from, pieces[p + 1].text, limit, raw, inside) : first(src, from, pieces[p + 1].text, limit, raw, inside)
+    if end > from and p > 0 and !raw and !inside and looser_within(src, from, end, frame, rule) { end = -1 }
   } elsif raw {
     end = receiving or next >= 0 ? token_end(src, from, limit) : from
     if !(receiving or next >= 0) { while end < limit and !space(src, end) { end = end + 1 } }
@@ -361,6 +373,19 @@ trailing_end (src, j, limit, frame, rule) => (
     j = skip(src, j, limit, None)
   }
   return j
+)
+// Whether a looser operator is spelled between from and to (outside brackets): a capture in the middle of a rule stops at one.
+looser_within (src, from, to, frame, rule) => (
+  spellings := looser(frame, rule)
+  if list_len(spellings) == 0 { return None }
+  j := from
+  while j < to {
+    spellings for spelling => {
+      if spelled(src, j, spelling, None, None, to) and (space(src, j - 1) or space(src, j + spelling.length)) { return global }
+    }
+    j = skip(src, j, to, None)
+  }
+  return None
 )
 // The operators that bind looser than a rule: the latest of each spelling in reach written before it, and those written anywhere before it.
 looser (frame, rule) => (
@@ -448,6 +473,7 @@ reach (walk, root, target, want, find) => (
   return r
 )
 // A change to what a scope reaches: kept walks that met it are walked again.
+rebracket (node) => ( if side_of(node) != ROOT.blank and node.bracketed == ROOT.brackets_version { ROOT.brackets_changes = ROOT.brackets_changes + 1 } )
 touched (node) => ( if side_of(node) != ROOT.blank and node.observed { ROOT.shape_version = ROOT.shape_version + 1 } )
 reach_mix (walk, at, seen, r) => (
   if (walk == 0 and at == -1) or walk_marked(at, seen) or (walk == 1 and at == global()) { return None }
@@ -504,11 +530,9 @@ best_in (src, pos, limit, frame, receiving, receiver, w1, r1, f1, w2, r2, f2, ta
 )
 // A choice made while recording the names it found missing (it is to be made again once one of them is declared).
 tracking_choice (src, pos, limit, frame, receiving, receiver, w1, r1, f1, w2, r2, f2, target) => (
-  outer := ROOT.missing
-  ROOT.missing = list_new()
-  best, end, reach := choosing(src, pos, limit, frame, receiving, receiver, w1, r1, f1, w2, r2, f2, target) catch err { ROOT.unsure = global; ROOT.missing = outer; rethrow(err) }
-  missing := ROOT.missing
-  ROOT.missing = outer
+  outer, outer_id := missing_open()
+  best, end, reach := choosing(src, pos, limit, frame, receiving, receiver, w1, r1, f1, w2, r2, f2, target) catch err { ROOT.unsure = global; missing_close(outer, outer_id); rethrow(err) }
+  missing := missing_close(outer, outer_id)
   depends(missing)
   return missing, best, end, reach
 )
@@ -538,6 +562,7 @@ choose_from (c, walk, at, seen) => (
 )
 consider (c, rule) => (
   if rule.rule_at_src == c.src and rule.rule_at_begin <= c.pos and c.pos <= rule.rule_at_end { return None }
+  if rule.rule_at_src == c.src and rule.rule_at_begin > c.pos and c.src.defines != NIL and c.src.defines[c.pos] != NIL { return None }
   head := rule_head(rule, c.receiving)
   if head != -1 and head.length > 0 and !starts(c.src, c.pos, head) and !starts(c.src, c.after, head) { return None }
   end, reach, caps := match(rule, c.src, c.pos, c.limit, c.frame, c.receiving, c.receiver)
@@ -570,7 +595,6 @@ better (rule, end, reach, spelled, best, best_end, best_reach, best_spelled) => 
 // ---------------------------------------------------------------- statements: read one after another; a jump lands on its label
 // `read` takes the span [begin, end]. What reads nothing answers UNDEF; a step that ends the statement answers BREAK.
 read (src, begin, end, frame) => (
-  ROOT.fuel = ROOT.fuel - 1
   if ROOT.level > 0 and (ROOT.fuel < 0 or heavy()) { exhausted(src, begin, end) }
   ROOT.level = ROOT.level + 1
   value := reading(src, begin, end + 1, frame) always { ROOT.level = ROOT.level - 1 }
@@ -584,9 +608,9 @@ reading (src, begin, limit, frame) => (
   if src.compiled == NIL { src.compiled = make(src.length + 1) }
   c := src.compiled[begin]
   if c == NIL or c.limit != limit { c = Compiled(limit: limit); src.compiled[begin] = c }
-  if c.block != NIL { return run_body(c.block, frame, src, limit, begin, mark) }
+  if c.block != NIL { return run_body(c.block, frame, src, limit, begin, mark, c) }
   c.reads = c.reads + 1
-  if c.reads == 8 or c.reads == 64 { c.block = compile_body(src, begin, limit) }
+  if c.reads == 64 { c.block = compile_body(src, begin, limit) }
   return read_on(src, begin, limit, frame, begin, mark, UNDEF)
 )
 // What a compiled body asks of the reader.
@@ -614,6 +638,10 @@ jumped (e, src, limit, begin, frame, mark, last, start) => (
 )
 body_done (mark, last) => ( if ROOT.running == None { forced_cut(mark) }; return last )
 plan_at (src, pos) => src.plans == NIL ? NIL : src.plans[pos]
+declared_is (d) => ROOT.declared == d
+external_is (frame) => lookup(frame, "external", -1, 0, 0) == ROOT.external
+self_at (src, pos, frame) => self_key(self_of(src, pos, frame))
+code_met (src, b, e, frame) => ( met := deref(code(src, b, e, frame), None); return met != UNDEF and met != None )
 read_on (src, pos, limit, frame, begin, mark, last) => (
   while global {
     if ROOT.level == 1 { collect(src, frame, last, mark); ROOT.fuel = ROOT.budget }
@@ -893,6 +921,7 @@ apply (rule, receiving, receiver, caps, frame, src, begin, end, given, given_val
   if ROOT.depth > 400 { ROOT.depth = 0; recursion(src, begin, end) }
   ROOT.fuel = ROOT.fuel - 1
   if ROOT.fuel < 0 or heavy() { ROOT.depth = ROOT.depth - 1; exhausted(src, begin, end) }
+  if ROOT.tracing { traced(rule, src, begin, end) }
   if ROOT.serving { paint_rule(rule, caps, src, begin) }
   r := Run(run_rule: rule, receiving: receiving, receiver: receiver, src: src, begin: begin, end: end, next: ROOT.running)
   ROOT.running = r
@@ -1023,10 +1052,10 @@ lookup (frame, name, wsrc, wb, we) => (
 // A name and what holds it: up from a frame, then the global scope and what it was made with. Strictly, names given to a
 // value at its construction are not seen from inside it.
 find (frame, name, wsrc, wb, we, strict) => (
-  seen := stamp()
+  seen := find_stamp()
   found, holder := seek(frame, None, global, name, wsrc, wb, we, seen, strict)
-  if found != UNDEF or marked(global(), seen) { return found, holder }
-  mark(global(), seen)
+  if found != UNDEF or found_marked(global(), seen) { return found, holder }
+  found_mark(global(), seen)
   found = own(global(), name)
   if found != UNDEF { return found, global() }
   with_of(global()) for x => {
@@ -1038,21 +1067,21 @@ find (frame, name, wsrc, wb, we, strict) => (
 // Up a scope's parents, what each holds, what it sees, what it runs on and what it was made with; then what the scopes
 // on the way see, read as written there.
 seek (scope, lexical, deep, name, wsrc, wb, we, seen, strict) => (
-  pass := deep ? stamp() : 0
+  pass := NIL
   at := scope
   while at != -1 {
-    if marked(at, seen) or at == global() {
+    if found_marked(at, seen) or at == global() {
       if !deep { return UNDEF, None }
       goto onward
     }
-    mark(at, seen)
+    found_mark(at, seen)
     found := own(at, name)
     if found != UNDEF and !(strict and lexical and given(at, name)) { return found, at }
     shown := sees_shown(at, wsrc, wb, we)
     if shown {
       sees_of(at) for other => {
         found = own(other, name)
-        if found != UNDEF and !(strict and given(other, name)) and !marked(other, seen) { return found, other }
+        if found != UNDEF and !(strict and given(other, name)) and !found_marked(other, seen) { return found, other }
       }
     }
     if at.on != UNDEF {
@@ -1064,14 +1093,18 @@ seek (scope, lexical, deep, name, wsrc, wb, we, seen, strict) => (
       if found != UNDEF { return found, holder }
     }
     if !deep { return UNDEF, None }
-    if shown and list_len(sees_of(at)) > 0 { mark(at, pass) }
+    if shown and list_len(sees_of(at)) > 0 {
+      if pass == NIL { pass = list_new() }
+      list_push(pass, at)
+    }
     lexical = global
     onward\
     at = parent(at)
   }
+  if pass == NIL { return UNDEF, None }
   at = scope
   while at != -1 {
-    if marked(at, pass) {
+    if at in pass {
       sees_of(at) for x => {
         found, holder := seek(x, global, global, name, wsrc, wb, we, seen, strict)
         if found != UNDEF { return found, holder }
@@ -1086,11 +1119,11 @@ written_in (frame, name) => (
   sees_of(frame) for other => { if own(other, name) != UNDEF and !given(other, name) { return global } }
   return None
 )
-reaches (frame, target) => reaches_from(frame, target, stamp())
+reaches (frame, target) => reaches_from(frame, target, find_stamp())
 reaches_from (at, target, seen) => (
   if at == target { return global }
-  if marked(at, seen) or at == global() { return None }
-  mark(at, seen)
+  if found_marked(at, seen) or at == global() { return None }
+  found_mark(at, seen)
   sees_of(at) for x => { if reaches_from(x, target, seen) { return global } }
   return parent(at) != -1 and reaches_from(parent(at), target, seen)
 )
@@ -1108,7 +1141,7 @@ follow (node, report, stands, keep) => (
         if place_member(node) { return None }
         rule := method_in(place_scope(node), place_name(node), walk_stamp())
         if rule != -1 { return fn_value(method_fn_id(rule, place_scope(node), rule.pieces[1].name), at_src(node), at_begin(node), at_end(node)) }
-        if ROOT.missing != None and !(place_name(node) in ROOT.missing) { list_push(ROOT.missing, place_name(node)) }
+        missing_add(place_name(node))
         if report { error_on(said("Unresolved `", place_name(node), "`."), node) }
         return UNDEF
       }
@@ -1403,11 +1436,9 @@ holds_read (rule, p, src, b, e) => (
 // text hold (typed capture); 2: does the operator fit (operator filter).
 checking (piece, kind, a, b, c, d, e) => (
   piece.checking = global
-  outer := ROOT.missing
-  ROOT.missing = list_new()
+  outer, outer_id := missing_open()
   value := checked(kind, a, b, c, d, e) always { piece.checking = None }
-  missing := ROOT.missing
-  ROOT.missing = outer
+  missing := missing_close(outer, outer_id)
   depends(missing)
   return missing, value
 )
@@ -1428,7 +1459,11 @@ quiet_read (src, b, e, scope) => (
   return value, ROOT.refused > mark, mark
 )
 // What was read while a name was missing is read again once it is declared: whatever kept it keeps those names too.
-depends (missing) => ( if ROOT.missing != None { missing for name => { if !(name in ROOT.missing) { list_push(ROOT.missing, name) } } } )
+depends (missing) => ( if ROOT.missing != None { missing for name => { missing_add(name) } } )
+// The names found missing are recorded per choice, each record nested in the one around it; a name is marked with the record it is in.
+missing_open () => ( outer := ROOT.missing; outer_id := ROOT.missing_id; ROOT.missing_epoch = ROOT.missing_epoch + 1; ROOT.missing_id = ROOT.missing_epoch; ROOT.missing = list_new(); return outer, outer_id )
+missing_close (outer, outer_id) => ( missing := ROOT.missing; ROOT.missing = outer; ROOT.missing_id = outer_id; return missing )
+missing_add (name) => ( if ROOT.missing != None and name.missing_mark != ROOT.missing_id { name.missing_mark = ROOT.missing_id; list_push(ROOT.missing, name) } )
 // Whether what was kept still holds: nothing it found missing has been declared since.
 still (kept) => (
   if kept.declared != ROOT.declared and missing_declared(kept.missing) { return None }
@@ -1747,8 +1782,8 @@ define_in (scope, tail, body, src, b, e, parameters) => (
 // A value is its three children, then: the scope its names live in (for a value that is not a scope), where it was written,
 // what it sees, what it was made with, and the rest (Extra, made when first written): what it runs on and stands for, the body
 // it reads, its marks, and what it is (a function, a style, a rule, a program).
-Value := class { node_a, node_b, node_c, names: None, at_src: -1, at_begin: 0, at_end: 0, sees: None, with: None, rules: None, index: None, seen, more }
-Value.Extra := class { constructed: None, on: UNDEF, stands: UNDEF, body_src: -1, body_begin: 0, body_end: 0, bare: None, raw: None, given: None, fn: -1, style: -1, rule: -1, program: None, marks: None, marked: None, marked_names: None, observed: None, rh0, rg0, rv0: -1, rh1, rg1, rv1: -1 }
+Value := class { node_a, node_b, node_c, names: None, at_src: -1, at_begin: 0, at_end: 0, sees: None, with: None, rules: None, index: None, seen, found_seen, more }
+Value.Extra := class { constructed: None, on: UNDEF, stands: UNDEF, body_src: -1, body_begin: 0, body_end: 0, bare: None, raw: None, given: None, fn: -1, style: -1, rule: -1, program: None, marks: None, marked: None, marked_names: None, observed: None, rh0, rg0, rv0: -1, rh1, rg1, rv1: -1, bracketed: -1, name_table: NIL, name_cap: 0, name_count: 0, name_last: NIL }
 
 value (tag, a, b, c) => Value(tag, node_a: a, node_b: b, node_c: c)
 more (s) => ( if s.more == NIL { s.more = Extra() }; return s.more )
@@ -1802,6 +1837,7 @@ sees_add (frame, scope) => (
   list_unshift(frame.sees, scope)
   touched(frame)
   ROOT.rules_version = ROOT.rules_version + 1
+  rebracket(frame)
 )
 with_push (frame, v, unique) => (
   if frame.with == None { frame.with = list_new() }
@@ -1825,27 +1861,57 @@ own (node, name) => (
   if e == None { return UNDEF }
   if name.holder == e { return node_child(name.prop, 1) }
   if e.node_c == NIL or !has(e.node_c, name_bit(name)) { return UNDEF }
-  p := node_child(e, 0)
-  while p != NIL {
-    if node_child(p, 0) == name { name.holder = e; name.prop = p; return node_child(p, 1) }
-    p = node_child(p, 2)
+  p := prop_of(e, name)
+  if p == NIL { return UNDEF }
+  name.holder = e
+  name.prop = p
+  return node_child(p, 1)
+)
+// A scope with many names keeps them in a table too, by the name's hash.
+prop_of (e, name) => (
+  t := e.name_table
+  if t != NIL {
+    cap := e.name_cap
+    k := hash(name) % cap
+    while t[k] != NIL { if node_child(t[k], 0) == name { return t[k] }; k = (k + 1) % cap }
+    return NIL
   }
-  return UNDEF
+  p := node_child(e, 0)
+  while p != NIL { if node_child(p, 0) == name { return p }; p = node_child(p, 2) }
+  return NIL
+)
+table_put (t, cap, p) => ( k := hash(node_child(p, 0)) % cap; while t[k] != NIL { k = (k + 1) % cap }; t[k] = p )
+table_build (e, cap) => (
+  t := make(cap)
+  n := 0
+  last := NIL
+  p := node_child(e, 0)
+  while p != NIL { table_put(t, cap, p); n = n + 1; last = p; p = node_child(p, 2) }
+  e.name_table = t; e.name_cap = cap; e.name_count = n; e.name_last = last
 )
 set_name (node, name, value) => (
   e := holder_of(node, global)
   if e == None { unported("names on None") }
   if name.holder == e { node_set(name.prop, 1, value); return value }
-  p := node_child(e, 0)
-  last := NIL
-  while p != NIL {
-    if node_child(p, 0) == name { node_set(p, 1, value); return value }
-    last = p
-    p = node_child(p, 2)
+  bits := e.node_c == NIL ? 0 : e.node_c
+  if has(bits, name_bit(name)) {
+    p := prop_of(e, name)
+    if p != NIL { node_set(p, 1, value); return value }
   }
   made := node_make(PROP, name, value, NIL)
-  if last == NIL { node_set(e, 0, made) } else { node_set(last, 2, made) }
-  bits := e.node_c == NIL ? 0 : e.node_c
+  if e.name_table != NIL {
+    node_set(e.name_last, 2, made)
+    e.name_last = made
+    e.name_count = e.name_count + 1
+    if e.name_count * 2 >= e.name_cap { table_build(e, e.name_cap * 2) } else { table_put(e.name_table, e.name_cap, made) }
+  } else {
+    n := 0
+    last := NIL
+    p := node_child(e, 0)
+    while p != NIL { n = n + 1; last = p; p = node_child(p, 2) }
+    if last == NIL { node_set(e, 0, made) } else { node_set(last, 2, made) }
+    if n >= 15 { table_build(e, 64) }
+  }
   if !has(bits, name_bit(name)) { e.node_c = bits + name_bit(name) }
   name.holder = e
   name.prop = made
@@ -1870,12 +1936,14 @@ construct (value) => (
   s.sees = seeing
   touched(value)
   ROOT.rules_version = ROOT.rules_version + 1
+  rebracket(value)
   before := names_count(value)
   bs, bb, be := span_inner(at_src(made), at_begin(made), at_end(made))
   read(bs, bb, be, value) catch e {
     s.sees = sees
     touched(value)
     ROOT.rules_version = ROOT.rules_version + 1
+    rebracket(value)
     if !is_recursion(e) { rethrow(e) }
     recursion_error(e)
     goto given
@@ -1883,6 +1951,7 @@ construct (value) => (
   s.sees = sees
   touched(value)
   ROOT.rules_version = ROOT.rules_version + 1
+  rebracket(value)
   given\
   if !s.constructed or holder_of(value, None) == None { return None }
   p := node_child(holder_of(value, None), 0)
@@ -1901,6 +1970,10 @@ construct (value) => (
 stamp () => list_new()
 marked (node, seen) => node in seen
 mark (node, seen) => list_push(seen, node)
+// Lookups never run anything, so one mark per value serves them all (`find`, `reaches`).
+find_stamp () => ( ROOT.find_epoch = ROOT.find_epoch + 1; return ROOT.find_epoch )
+found_marked (node, seen) => side_of(node) != ROOT.blank and node.found_seen == seen
+found_mark (node, seen) => ( if side_of(node) != ROOT.blank { node.found_seen = seen } )
 walk_stamp () => ( ROOT.epoch = ROOT.epoch + 1; return ROOT.epoch )
 walk_marked (node, seen) => side_of(node) != ROOT.blank and node.seen == seen
 walk_mark (node, seen) => ( if side_of(node) != ROOT.blank { node.seen = seen } )
@@ -1968,6 +2041,10 @@ rule_make (pieces, closure, hs, hb, he, bs, bb, be, gs, gb, ge, gin) => (
   name := pattern_name(pieces)
   rule := Rule(pieces: array_of(pieces), size: list_len(pieces), closure: closure, rule_at_src: hs, rule_at_begin: hb, rule_at_end: he, pattern_name: name, key: name, order: ROOT.order, rule_body_src: bs, rule_body_begin: bb, rule_body_end: be)
   ROOT.order = ROOT.order + 1
+  if hs != -1 and hs != None {
+    if hs.orders == NIL { hs.orders = make(hs.length + 1) }
+    if hs.orders[hb] == NIL { hs.orders[hb] = rule.order + 1 } else { rule.order = hs.orders[hb] - 1 }
+  }
   if gs >= 0 and trimmed_begin(gs, gb, ge) <= trimmed_end(gs, gb, ge) {
     out := list_new()
     text_add(out, name)
@@ -2025,6 +2102,11 @@ Index := class { open, by, open_r, by_r, ops, shape, all, methods }
 Bucket := class { char, bucket_rules: list_new(), next }
 
 add_rule (scope, rule) => (
+  at := rule.rule_at_src
+  if at != -1 and at != None {
+    if at.defines == NIL { at.defines = make(at.length + 1) }
+    at.defines[rule.rule_at_begin] = global
+  }
   if ROOT.serving {
     paint_head(rule, rule.rule_style)
     if rule.rule_body_src >= 0 and paints(rule.rule_body_src) { list_push(ROOT.bodies, rule) }
@@ -2052,6 +2134,7 @@ add_rule (scope, rule) => (
   }
   list_unshift(rules, rule)
   ROOT.rules_version = ROOT.rules_version + 1
+  if rule_enclosed(rule) { ROOT.brackets_changes = ROOT.brackets_changes + 1 }
   index := Index(all: make(list_len(rules)), shape: 5, ops: list_new(), methods: list_new())
   k := list_len(rules)
   rules for other => {
@@ -2115,7 +2198,7 @@ rules_of (node) => node.rules
 
 // The brackets in reach of the global scope, kept until its rules change; their first characters are marked (32) in the classes.
 brackets () => (
-  if ROOT.brackets_version == ROOT.rules_version { return ROOT.brackets_list }
+  if ROOT.brackets_version == ROOT.brackets_changes { return ROOT.brackets_list }
   if ROOT.brackets_firsts != NIL and ROOT.brackets_firsts != None { ROOT.brackets_firsts for c => { CLASSES[c] = CLASSES[c] - 32 } }
   out := list_new()
   brackets_in(global(), out, walk_stamp())
@@ -2124,7 +2207,7 @@ brackets () => (
     text := rule.pieces[0].text
     if text.length > 0 and !(text.chars[0] in firsts) { list_push(firsts, text.chars[0]); CLASSES[text.chars[0]] = CLASSES[text.chars[0]] + 32 }
   }
-  ROOT.brackets_list = out; ROOT.brackets_firsts = firsts; ROOT.brackets_version = ROOT.rules_version
+  ROOT.brackets_list = out; ROOT.brackets_firsts = firsts; ROOT.brackets_version = ROOT.brackets_changes
   return out
 )
 // Whether a bracket could open at j: its first character is one some bracket rule starts with.
@@ -2132,6 +2215,7 @@ may_open (src, j) => ( if j < 0 or j >= src.length { return None }; brackets(); 
 brackets_in (at, out, seen) => (
   if at == -1 or walk_marked(at, seen) { return None }
   walk_mark(at, seen)
+  if side_of(at) != ROOT.blank { at.bracketed = ROOT.brackets_changes }
   rules_of(at) for rule => { if rule_enclosed(rule) { list_push(out, rule) } }
   sees_of(at) for x => { brackets_in(x, out, seen) }
   brackets_in(parent(at), out, seen)
@@ -2150,15 +2234,16 @@ homes_from (node, seen) => (
 )
 
 // ---------------------------------------------------------------- what reading says: diagnostics, each a level, a message and where
-Diagnostic := class { level, message, src, begin, end }
+Diagnostic := class { level, message, src, begin, end, top_src: -1, top_at: -1, during: None }
 
 complain (level, message, src, b, e) => (
   if ROOT.silent > 0 and (level == "error" or level == "fatal") { ROOT.refused = ROOT.refused + 1 }
   if ROOT.silent > 0 { return None }
   ROOT.diagnostics for d => { if d.level == level and d.message == message and d.begin == b and d.src == src { return None } }
-  list_push(ROOT.diagnostics, Diagnostic(level: level, message: message, src: src, begin: b, end: e))
+  list_push(ROOT.diagnostics, Diagnostic(level: level, message: message, src: src, begin: b, end: e, top_src: ROOT.top_src, top_at: ROOT.top_at, during: ROOT.running))
 )
 error_at (message, src, b, e) => complain("error", message, src, b, e)
+forget_diagnostics (src) => ( kept := list_new(); ROOT.diagnostics for d => { if d.src != src { list_push(kept, d) } }; ROOT.diagnostics = kept )
 error_on (message, node) => complain("error", message, at_src(node), at_begin(node), at_end(node))
 silent (d) => ( ROOT.silent = ROOT.silent + d )
 trying (d) => ( ROOT.trying = ROOT.trying + d )
@@ -2176,7 +2261,7 @@ native_fn (name) => name.native == NIL ? -1 : name.native
 natives_table () => (
   native("rule", 2); native("define", 4); native(".", 0); native("global", 0); native("none", 0); native("declare", 2); native("literal", 1)
   native("unordered", 1); native("forward", 0); native("^", 1); native("inline", 1); native("extend", 2); native("get", 2); native("assign", 2)
-  native("own", 1); native("goto", 2); native("label", 1); native("base", 2); native("theme", 2); native("report", 3); native("**", 1); native("=", 1)
+  native("own", 1); native("goto", 2); native("label", 1); native("base", 2); native("theme", 2); native("report", 3); native("**", 1); native("=", 1); native("bits", 2)
   ROOT.external = fn_value(fn_make(4, 1, global), -1, 0, 0)
   set_name(global(), "external", ROOT.external)
 )
@@ -2255,7 +2340,41 @@ external_call (name, n, a0, a1, a2, a3, frame, src, b, e) => (
   if name == "theme" { theme := scope_of(NIL); inline(y, scope_of(global()), None); return theme }
   if name == "report" { return report(x, y, arg(n, 2, a2), src, b, e) }
   if name == "**" { return program_of(x) }
+  if name == "bits" { return text_bits(x, y, frame, src, b, e) }
   unported(name)
+)
+// `bits text each`: the bits of the text's UTF-8 bytes, the highest first, handed to `each` as global or None until it answers None.
+text_bits (x, each, frame, src, b, e) => (
+  held := quiet_deref(x)
+  t := text_of_node(held == UNDEF ? x : held)
+  k := 0
+  while k < t.length {
+    c := t.chars[k]
+    if c >= 55296 and c < 56320 and k + 1 < t.length {
+      c = 65536 + (c - 55296) * 1024 + t.chars[k + 1] - 56320
+      k = k + 1
+    }
+    if !char_bits(c, each, frame, src, b, e) { return None }
+    k = k + 1
+  }
+  return None
+)
+char_bits (c, each, frame, src, b, e) => (
+  if c < 128 { return byte_bits(c, each, frame, src, b, e) }
+  if c < 2048 { return byte_bits(192 + c / 64, each, frame, src, b, e) and byte_bits(128 + c % 64, each, frame, src, b, e) }
+  if c < 65536 { return byte_bits(224 + c / 4096, each, frame, src, b, e) and byte_bits(128 + c / 64 % 64, each, frame, src, b, e) and byte_bits(128 + c % 64, each, frame, src, b, e) }
+  return byte_bits(240 + c / 262144, each, frame, src, b, e) and byte_bits(128 + c / 4096 % 64, each, frame, src, b, e) and byte_bits(128 + c / 64 % 64, each, frame, src, b, e) and byte_bits(128 + c % 64, each, frame, src, b, e)
+)
+byte_bits (byte, each, frame, src, b, e) => (
+  m := 128
+  while m > 0 {
+    f := deref(each, global)
+    if f == UNDEF or f.fn == -1 { return None }
+    taken := invoke(f.fn, 1, byte / m % 2 == 1 ? global() : None, UNDEF, UNDEF, UNDEF, frame, src, b, e)
+    if deref(taken, None) == None { return None }
+    m = m / 2
+  }
+  return global
 )
 // `report LEVEL variable comment`: the level as written (FATAL, ERROR, WARN, INFO, DEBUG, TRACE), or an error; said where the variable,
 // else the comment, else the report was written.
@@ -2391,7 +2510,7 @@ marked_place (at, scope) => (
 dry_all () => (
   ROOT.bodies for rule => {
     bs, bb, be := span_inner(rule.rule_body_src, rule.rule_body_begin, rule.rule_body_end)
-    dry_from(bs, bb, be + 1, scope_in(rule.closure, bs, bb, be))
+    if shown(bs) { dry_from(bs, bb, be + 1, scope_in(rule.closure, bs, bb, be)) }
   }
   ROOT.bodies = list_new()
 )
@@ -2460,6 +2579,8 @@ read_step (src, pos, limit, frame) => (
   pos = blank_end(src, pos, limit)
   if pos >= limit { ROOT.level = ROOT.level - 1; return limit }
   start := pos
+  ROOT.top_src = src
+  ROOT.top_at = start
   if ROOT.serving { read_at(src, start) }
   value, pos := statement(src, pos, limit, frame, UNDEF) catch e {
     ROOT.level = ROOT.level - 1
@@ -2475,6 +2596,7 @@ read_step (src, pos, limit, frame) => (
   return pos <= start ? start + 1 : pos
 )
 set_serving (on) => ( ROOT.serving = on )
+set_tracing (on) => ( ROOT.tracing = on )
 set_budget (n) => ( ROOT.budget = n )
 set_unplanned () => ( ROOT.unplanned = global )
 rule_key_at (scope, k) => list_at(scope.rules, list_len(scope.rules) - 1 - k).key

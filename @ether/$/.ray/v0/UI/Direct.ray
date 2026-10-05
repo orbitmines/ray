@@ -1,14 +1,6 @@
 Language.Direct := class: Language {
   static extensions = ".direct"
 
-  Pixel := class = at: Geometry.Vector, color: Geometry.Color {
-    onto (raster: Geometry.Raster) => raster.put(at.x, at.y, color)
-  }
-  Blurred := class = area: (x: Number, y: Number)[], radius: Number {
-    onto (raster: Geometry.Raster) => raster.blurred(area, radius)
-  }
-  Op := Pixel | Blurred
-
   Drawing := class = raster: Geometry.Raster, ops: *[]
   Draw := class = shape: Geometry.Shape, outer: Geometry.Transform {
     placed => outer * Geometry.Transform.translate(shape.origin) * shape.shown_transform
@@ -24,7 +16,7 @@ Language.Direct := class: Language {
 
   rules := {
     {screen: UI.Screen} => Drawing(Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px), screen.layers.map(Draw(., screen.offset)))
-    {drawing: Drawing{ops.flatten.every(. is Op)}} => drawing.ops.flatten.for(.onto(drawing.raster)) -- drawing.raster
+    {drawing: Drawing{ops.flatten.every(. is Program)}} => drawing.raster ~~ drawing.ops.flatten
 
     {draw: Draw{shape is UI.Input}} => [
       Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: draw.shape.fill, stroke: draw.shape.stroke, radius: draw.shape.radius, effects: draw.shape.effects), draw.outer),
@@ -35,7 +27,7 @@ Language.Direct := class: Language {
       Stroked(draw.shape.boundary, draw.placed, draw.shape.stroke) if draw.shape.stroke,
       Shown(draw) if draw.shape.content,
       draw.shape.in_place.sort_by(.layer).map(Draw(., draw.inner)) if draw.shape.visible,
-      draw.shape.effects{. is Geometry.Blur}.map(Blurred(draw.inside, .radius as px))
+      draw.shape.effects{. is Geometry.Blur}.map(blur => { .blurred(draw.inside, blur.radius as px) })
     ]
 
     {shown: Shown{draw.shape.content is String}} => {
@@ -55,10 +47,10 @@ Language.Direct := class: Language {
       }).ops).flatten
     }
     {shown: Shown{draw.shape.content is Location && draw.shape.content.language === UI.Image && draw.shape.fill}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
-      Pixel(draw.placed.applied(Geometry.Vector(x, y)), ((draw.shape.fill as Geometry.Color) ?? Geometry.Color(0, 0, 0)).faded(raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y).alpha))
+      draw.placed.applied(Geometry.Vector(x, y)) -- (at => { .put(at.x, at.y, ((draw.shape.fill as Geometry.Color) ?? Geometry.Color(0, 0, 0)).faded(raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y).alpha)) })
     )))
     {shown: Shown{draw.shape.content is Location && draw.shape.content.language === UI.Image}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
-      Pixel(draw.placed.applied(Geometry.Vector(x, y)), raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y))
+      draw.placed.applied(Geometry.Vector(x, y)) -- (at => { .put(at.x, at.y, raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y)) })
     )))
     {shown: Shown{draw.shape.content is Location && draw.shape.content.video_site}} => shown.draw -- (draw => Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: Geometry.Color(17, 20, 24), stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
       Geometry.Box(content: "▶ " + (draw.shape.content.alt ?? draw.shape.content as String), origin: draw.shape.origin + draw.shape.size * (1 / 2) - Geometry.Vector(0, 8px), size: draw.shape.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
@@ -66,10 +58,10 @@ Language.Direct := class: Language {
     {shown: Shown{draw.shape.content is Program}} => shown.draw -- (draw => draw.shape.content().map(Draw(., draw.placed)))
     {shown: Shown} => []
 
-    {painted: Painted{paint is Geometry.Color}} => painted.paint.faded(painted.alpha) -- (color => painted.points.map(Pixel(.at, color)))
-    {painted: Painted{paint is Geometry.Gradient}} => painted.points.map(Pixel(.at, painted.paint.at(.sample.x).faded(painted.alpha)))
+    {painted: Painted{paint is Geometry.Color}} => painted.paint.faded(painted.alpha) -- (color => painted.points.map(point => { .put(point.at.x, point.at.y, color) }))
+    {painted: Painted{paint is Geometry.Gradient}} => painted.points.map(point => { .put(point.at.x, point.at.y, painted.paint.at(point.sample.x).faded(painted.alpha)) })
     {painted: Painted{paint is Geometry.Pattern}} => painted.paint -- (pattern => Compiler.reduced(Drawing(Geometry.Raster(pattern.repeat.x as px, pattern.repeat.y as px), [Draw(pattern.shape, Geometry.Transform())]), rules) -- (tile =>
-      painted.points.map(Pixel(.at, tile.at(.sample.x % pattern.repeat.x, .sample.y % pattern.repeat.y).faded(painted.alpha)))
+      painted.points.map(point => { .put(point.at.x, point.at.y, tile.at(point.sample.x % pattern.repeat.x, point.sample.y % pattern.repeat.y).faded(painted.alpha)) })
     ))
     {painted: Painted} => []
     {outlined: Outlined} => outlined.outline.points.map(outlined.transform.applied(.)) -- (corners => Painted((corners.y.min..<corners.y.max).map(y =>

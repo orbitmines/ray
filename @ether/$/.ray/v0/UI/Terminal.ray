@@ -10,15 +10,18 @@ Language.TUI := class: Language {
   cells (length: Geometry.Vector) => Geometry.Vector(length.x / px_per_cell.x, length.y / px_per_cell.y)
 
   Cells := {
-    {page: Geometry.Shape} => Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y) -- Paint(page, .)
+    {page: Geometry.Shape} => Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y) -- Paint(page, .) -- (grid => page.lifted.for(Paint(., grid)) -- grid)
   }
-  Area := (shape: Geometry.Shape) => (cells(shape.position).y..<cells(shape.position + shape.size).y).map(y => (cells(shape.position).x..<cells(shape.position + shape.size).x).map(x => Geometry.Vector(x, y))).flatten{shape.transform.inverse.applied(. * px_per_cell) -- shape.contains(.)}
+  At := (shape: Geometry.Shape) => cells(shape.origin - Geometry.Vector(0, UI.Viewport.scrolled))
+  Area := (shape: Geometry.Shape) => At(shape) -- (from => (from.y..<from.y + cells(shape.size).y).map(y => (from.x..<from.x + cells(shape.size).x).map(x => Geometry.Vector(x, y))).flatten{
+    shape.contains(shape.transform.inverse.applied(Geometry.Vector((.x - from.x) * px_per_cell.x, (.y - from.y) * px_per_cell.y)))
+  })
   Paint := (shape: Geometry.Shape, grid: Grid) => grid -- shape.match
     Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(column = 0 => {
-      grid.put(cells(shape.position) + Geometry.Vector(column, row), Cell(., foreground: shape.color as Geometry.Color, background: shape.fill as Geometry.Color, bold: shape.font.weight >= 600, italic: shape.font.style == italic))
+      grid.put(At(shape) + Geometry.Vector(column, row), Cell(., foreground: shape.color as Geometry.Color, background: shape.fill as Geometry.Color, bold: shape.font.weight >= 600, italic: shape.font.style == italic))
       column + .columns
     }))
-    Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - cells(shape.position), cells(shape.size))))
+    Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - At(shape), cells(shape.size))))
     Geometry.Canvas => shape.draws{O: Language.Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..<at.y * 4 + 4].map(.[at.x * 2..<at.x * 2 + 2])))))
     UI.Link => Box(shape, grid) -- Area(shape).for(grid.cells[.y][.x] ~~ .link = shape.to)
     UI.Input => Paint(Geometry.Text(shape.match
@@ -27,7 +30,7 @@ Language.TUI := class: Language {
       UI.Select => "‹ ", shape.value as String, " ›"
       UI.Secret => "•" * (shape.value as String).length
       * => (shape.value as String) ?? shape.placeholder
-    , position: shape.position, size: shape.size), grid) -- Border(shape, grid)
+    , origin: shape.origin, size: shape.size), grid) -- Border(shape, grid)
     * => Box(shape, grid)
   Box := (shape: Geometry.Shape, grid: Grid) => {
     Area(shape).for(grid.painted(., shape.fill)) if shape.fill
@@ -37,14 +40,14 @@ Language.TUI := class: Language {
       Geometry.Shadow => Area(shape).map(. + cells(.offset)).for(grid.cells[.y][.x] ~~ .background = (.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5))
       * => None
     )
-    shape.children.sort_by(.layer).for(Paint(., grid)) if shape.visible
+    shape.in_place.sort_by(.layer).for(Paint(., grid)) if shape.visible
     Scrollbar(shape, grid) if shape.overflow == scroll
     Focus(shape, grid) if UI.Focus.current === shape
   }
   Border := (shape: Geometry.Shape, grid: Grid) => {
     corners = shape.radius != [0] ? "╭╮╰╯" : "┌┐└┘"
-    from = cells(shape.position)
-    to = cells(shape.position + shape.size) - Geometry.Vector(1, 1)
+    from = At(shape)
+    to = from + cells(shape.size) - Geometry.Vector(1, 1)
     style = Cell(foreground: shape.stroke.paint as Geometry.Color)
     sides = shape.stroke.sides
     (from.x..to.x).for(x => grid.cells[to.y][x] ~~ .underline = true) if sides == bottom
@@ -54,7 +57,7 @@ Language.TUI := class: Language {
     (from.y + 1..<to.y).for(y => grid.put(Geometry.Vector(to.x, y), style ~~ .glyph = "│")) if sides ==.instance_of (all | right | vertical)
     [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].for((at, i) => grid.put(at, style ~~ .glyph = corners[i])) if sides == all
   }
-  Scrollbar := (shape: Geometry.Shape, grid: Grid) => cells(shape.size).y -- (0..<.).for(y => grid.put(cells(shape.position) + Geometry.Vector(cells(shape.size).x - 1, y), Cell(y == shape.scrolled.y * . / shape.content_height ? "┃" : "│")))
+  Scrollbar := (shape: Geometry.Shape, grid: Grid) => cells(shape.size).y -- (0..<.).for(y => grid.put(At(shape) + Geometry.Vector(cells(shape.size).x - 1, y), Cell(y == shape.scrolled.y * . / shape.content_height ? "┃" : "│")))
   Focus := (shape: Geometry.Shape, grid: Grid) => Area(shape).for(grid.cells[.y][.x] ~~ .underline = true)
   Sample := (paint: Geometry.Paint, at: Geometry.Vector) => paint.match
     Geometry.Color => paint
@@ -136,7 +139,7 @@ Language.TUI := class: Language {
   }
   Mouse := class ("\e[<", button: Decimal, ";", x: Decimal, ";", y: Decimal, state: "M" | "m") => {
     apply => UI.Pointer.pointers = [(mouse, Geometry.Vector(x - 1, y - 1) * px_per_cell, state == "M" ? 1 : 0, Geometry.Vector(), button < 64 && state == "M" ? [button % 4] : [])]
-      -- (UI.Pointer.wheel = Geometry.Vector(y: button == 64 ? -1 : 1)) if button >= 64
+      -- ((UI.Pointer.wheel = Geometry.Vector(y: button == 64 ? -1 : 1)) -- UI.Viewport.scroll(UI.Pointer.wheel.y * 3 * px_per_cell.y)) if button >= 64
       -- (UI.Pointer.released = state == "m")
   }
   Paste := class ("\e[200~", text: *, "\e[201~") => {

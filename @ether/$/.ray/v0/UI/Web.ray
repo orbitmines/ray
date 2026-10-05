@@ -97,7 +97,7 @@ Language.Web := class: Language {
     ])
     {input: UI.TextArea} => HTML.Element("textarea", [("id", input.id), ("placeholder", input.placeholder)])
     {input: UI.Select} => HTML.Element("select", [("id", input.id)], input.options.map(HTML.Element("option", [("value", . as String)], [. as String])))
-    {box: Geometry.Shape} => HTML.Element(box.activate ? "button" : Landmark[box.role] ?? "div", [("id", box.id), ("role", box.role as String), ("aria-label", box.label) if box.label], box.children)
+    {box: Geometry.Shape} => HTML.Element(box.activate ? "button" : Landmark[box.role] ?? "div", [("id", box.id), ("role", box.role as String), ("aria-label", box.label) if box.label, ("popover", "manual") if box.position.kind == anchored], box.children)
   }
   InputType = { UI.TextField: "text", UI.Secret: "password", UI.NumberField: "number", UI.DateField: "datetime-local", UI.ColorField: "color", UI.FileField: "file", UI.Checkbox: "checkbox", UI.Slider: "range" }
   Landmark = { UI.Role.table: "table", UI.Role.list: "ul", UI.Role.region: "section" }
@@ -106,7 +106,7 @@ Language.Web := class: Language {
     HTML.Element("title", children: [UI.Navigation.title]),
     HTML.Element("meta", [("name", "description"), ("content", UI.Navigation.description)]),
     UI.Navigation.tags.map(Meta(.name, .content)),
-    Meta("theme-color", Paint(UI.Navigation.theme)) if UI.Navigation.theme,
+    Meta("theme-color", Paint(UI.Navigation.theme) as String) if UI.Navigation.theme,
     HTML.Element("link", [("rel", "canonical"), ("href", UI.Navigation.canonical as String)]) if UI.Navigation.canonical,
     HTML.Element("link", [("rel", "icon"), ("href", UI.Navigation.icon as String)]) if UI.Navigation.icon,
     HTML.Element("link", [("rel", "apple-touch-icon"), ("href", UI.Navigation.apple_icon as String)]) if UI.Navigation.apple_icon,
@@ -137,9 +137,15 @@ Language.Web := class: Language {
     {page: Geometry.Shape} => CSS.Sheet([
       CSS.Rule("*", [("box-sizing", "border-box"), ("margin", "0")]),
       CSS.Rule("*", [("animation", "none"), ("transition", "none")], within: "@media (prefers-reduced-motion:reduce)"),
-      page.expand.map(Rules(.)).flatten
+      CSS.Rule("html.locked", [("overflow", "hidden")]),
+      page.expand.map(Rules(.)).flatten,
+      page.expand{.position.kind == anchored}.map(shape => Anchor(shape, page) -- (anchor => [
+        CSS.Rule("#" + anchor.id, [("anchor-name", "--" + anchor.id)]),
+        CSS.Rule("#" + shape.id, [("position", "fixed"), ("inset", "auto"), ("margin", "0"), ("position-anchor", "--" + anchor.id), ("position-area", shape.position.side as String)])
+      ])).flatten
     ])
   }
+  Anchor := (shape: Geometry.Shape, page: Geometry.Shape) => shape.position.anchor ?? shape.parent_in(page)
   Rules := (shape: Geometry.Shape) => [
     CSS.Rule("#" + shape.id, [
       shape.flow.match
@@ -147,18 +153,29 @@ Language.Web := class: Language {
         grid => ("display", "grid"), ("grid-template-columns", "repeat(", shape.constraints.columns.last ?? 1, ",1fr)")
         layered => ("display", "grid"), ("grid-template-areas", "\"layer\"")
         vertical => ("display", "flex"), ("flex-direction", "column")
-      ("gap", shape.gap.y as px, "px ", shape.gap.x as px, "px"),
-      shape.constraints{.dimension == "x"}.map(.match
-        {share: Geometry.Interpolated} => ("width", "clamp(", .share.from.share * 100, "%,", Clamp(.share), ",", .share.to.share * 100, "%)")
-        {share: Number} => ("width", .share * 100, "%")
-        {most} => ("max-width", .most as px, "px")
-        {least} => ("min-width", .least as px, "px")
-        {aspect} => ("aspect-ratio", .aspect)
-        {align: center} => ("margin-inline", "auto")
-        {align: end} => ("margin-inline-start", "auto")
-        {align: between} => ("justify-content", "space-between")
-      ),
-      shape.spacing.map((.from == border ? "padding" : "margin") + Sides[.sides], .amount.y as px, "px ", .amount.x as px, "px"),
+      ("gap", Measure(shape.gap.y), " ", Measure(shape.gap.x)),
+      shape.constraints{.dimension == "x"}.map(constraint => [
+        ("width", constraint.share * 100, "%") if constraint.share ==.instance_of Number,
+        ("width", Stops(constraint.share).first.share * 100, "%") if Responsive(constraint),
+        ("max-width", Measure(constraint.most)) if constraint.most != None,
+        ("min-width", Measure(constraint.least)) if constraint.least != None,
+        ("aspect-ratio", constraint.aspect) if constraint.aspect,
+        constraint.align.match
+          center => ("margin-inline", "auto")
+          end => ("margin-inline-start", "auto")
+          between => ("justify-content", "space-between")
+          * => ()
+      ]).flatten,
+      shape.constraints{.dimension == "y"}.map(constraint => [
+        ("max-height", Measure(constraint.most)) if constraint.most != None,
+        ("min-height", Measure(constraint.least)) if constraint.least != None,
+        ("align-items", "center") if constraint.align == middle
+      ]).flatten,
+      ("container-type", "inline-size") if shape.children.some(.constraints.some(Responsive(.))),
+      [("padding", shape.padding), ("margin", shape.margin)].map((name, edges) => [("top", edges.top), ("right", edges.right), ("bottom", edges.bottom), ("left", edges.left)]{.1 != 0}.map((name + "-" + .0, Measure(.1)))).flatten,
+      ("position", shape.position.kind as String) if shape.position.kind ==.instance_of (sticky | fixed | absolute),
+      ("position", "relative") if shape.position.kind == flow && shape.children.some(.position.kind == absolute),
+      [("top", shape.position.top), ("right", shape.position.right), ("bottom", shape.position.bottom), ("left", shape.position.left)]{.1 != None}.map((.0, Measure(.1))) if shape.position.kind != anchored,
       ("background", Paint(shape.fill)) if shape.fill,
       ("border" + Sides[shape.stroke.sides], shape.stroke.width as px, "px ", shape.stroke.dash.empty ? "solid" : "dashed", " ", Paint(shape.stroke.paint)) if shape.stroke,
       ("border-radius", shape.radius.map(. as px, "px").join(" ")) if shape.radius != [0],
@@ -178,6 +195,10 @@ Language.Web := class: Language {
       ("cursor", "pointer") if shape.activate
     ]),
     CSS.Rule("#" + shape.id + ":focus-visible", [("outline", "2px solid currentColor")]) if shape.focusable,
+    shape.constraints{Responsive(.)}.map(constraint => Stops(constraint.share) -- (stops => stops.zip([stops.rest, None]).map((at, next) => CSS.Rule("#" + shape.id,
+      [("width", constraint.share ==.instance_of Geometry.Interpolated && next ? Chord(at, next) : (at.share * 100, "%"))],
+      within: "@container (min-width:" + Measure(at.width) as String + ")"
+    )))).flatten,
     shape.animations.map(animation => CSS.Keyframes(shape.id + "-" + animation.property, [(0, [(animation.property, animation.from as String)]), (1, [(animation.property, animation.to as String)])]))
   ]
   Sides = { all: "", top: "-top", bottom: "-bottom", left: "-left", right: "-right", horizontal: "-inline", vertical: "-block" }
@@ -185,7 +206,13 @@ Language.Web := class: Language {
     Geometry.Color => "rgba(", paint.red, ",", paint.green, ",", paint.blue, ",", paint.alpha, ")"
     Geometry.Gradient => paint.kind as String, "-gradient(", (paint.angle, "turn,") if paint.kind == linear, paint.stops.map(Paint(.color), " ", .at * 100, "%").join(","), ")"
     Geometry.Pattern => "url(#", paint.shape.id, ")"
-  Clamp := (interpolated: Geometry.Interpolated) => interpolated.from.share * 100, "% + (100vw - ", interpolated.from.width as px, "px) * ", (interpolated.to.share - interpolated.from.share) * 100 / (interpolated.to.width - interpolated.from.width) as px
+  Responsive := (constraint: Geometry.Constraint) => constraint.share ==.instance_of (Geometry.Interpolated | Geometry.Steps | Geometry.Breakpoint[])
+  Stops := (share) => share ==.instance_of Geometry.Breakpoint[] ? (share as Geometry.Steps).sorted : share.sorted
+  Chord := (from: Geometry.Breakpoint, to: Geometry.Breakpoint) => "calc(", from.share * (from.width as px), "px + (100cqw - ", from.width as px, "px) * ", (to.share * (to.width as px) - from.share * (from.width as px)) / ((to.width - from.width) as px), ")"
+  Measure := (length: Geometry.Length) => length.match
+    Number => length, "px"
+    {quantities{count > 1}} => "calc(", length.quantities.map(.quantity, .unit.symbol).join(" + "), ")"
+    * => length.amount, length.unit.symbol
 
   JS.level := {
     {page: Geometry.Shape} => JS.Module([
@@ -194,7 +221,12 @@ Language.Web := class: Language {
       page.expand.dynamics.flatten.map(JS.Effect(reads: .reads, body: [.compiled{O: JS.expressions}])),
       page.expand{.focusable}.map(shape => JS.Listen(Element(shape), "click", [JS.Call(("ray", "activate"), [shape.id])])),
       page.expand{==.instance_of UI.Input}.map(input => JS.Listen(Element(input), "input", [JS.Call(("ray", "set"), [input.id, ("event", "target.value")])])),
-      page.expand{==.instance_of Geometry.Canvas}.map(canvas => JS.Effect(reads: canvas.draws.reads, body: [JS.Call(("ray", "draw"), [canvas.id, canvas.draws{O: Language.Direct.level}()])]))
+      page.expand{==.instance_of Geometry.Canvas}.map(canvas => JS.Effect(reads: canvas.draws.reads, body: [JS.Call(("ray", "draw"), [canvas.id, canvas.draws{O: Language.Direct.level}()])])),
+      page.expand{==.instance_of UI.Popover && .trigger != always}.map(popover => Anchor(popover, page) -- (anchor => [
+        ["pointerenter", "focusin"].map(event => JS.Listen(Element(anchor), event, [JS.Call((Element(popover), "showPopover"))])),
+        ["pointerleave", "focusout"].map(event => JS.Listen(Element(anchor), event, [JS.Call((Element(popover), "hidePopover"))]))
+      ])).flatten,
+      page.expand{.position.kind == anchored && .visible && (!=.instance_of UI.Popover || .trigger == always)}.map(JS.Call((Element(.), "showPopover")))
     ])
   }
   Element := (shape: Geometry.Shape) => JS.Call(("document", "getElementById"), [shape.id])
@@ -227,6 +259,7 @@ Language.Web := class: Language {
     JS.Listen(("window", "matchMedia(\"(prefers-reduced-motion:reduce)\")"), "change", [JS.Call(("ray", "set"), ["UI.Viewport.preferences.reduced_motion", ("event", "matches")])]),
     JS.Effect(["UI.Navigation.history"], [JS.Call(("history", "pushState"), [None, "", JS.Call(("ray", "get"), ["UI.Navigation.at"])])]),
     JS.Effect(["UI.Navigation.title"], [JS.Assign(("document", "title"), JS.Call(("ray", "get"), ["UI.Navigation.title"]))]),
+    JS.Effect(["UI.Viewport.locking"], [JS.Call(("document.documentElement.classList", "toggle"), ["locked", JS.Call(("ray", "get"), ["UI.Viewport.locking"])])]),
     JS.Effect(["UI.Platform.notifications"], [JS.Call("new Notification", [JS.Call(("ray", "get"), ["UI.Platform.notifications.last.title"])])]),
     JS.Effect(["UI.Platform.fullscreen"], [JS.Call(("document.documentElement", "requestFullscreen"))]),
     JS.Effect(["UI.Platform.printing"], [JS.Call(("window", "print"))]),

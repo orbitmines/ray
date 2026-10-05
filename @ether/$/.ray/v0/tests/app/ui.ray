@@ -106,3 +106,58 @@ unless Language.Web.JSON.Writer("</script>") as String == "\"\\u003c/script>\"" 
 with UI.Navigation.title = "Ray" {
   unless Language.TUI.ANSI().Title("Ray") { INFO@mark `UI99 the terminal title does not follow the page title` }
 }
+
+solver := Geometry.Solver(available: Geometry.Vector(1000px, 800px))
+tall := (height) => Geometry.Constraint("y", least: height, most: height)
+fixed_width := Geometry.Box(constraints: [Geometry.Constraint("x", least: 48px, most: 48px), tall(10px)])
+solver.solve(Geometry.Box(children: [fixed_width]))
+unless fixed_width.size.x == 48px { INFO@mark `UI100 a fixed width is not kept` }
+lifted_up := Geometry.Box(constraints: [tall(20px)], spacing: [Geometry.Spacing(Geometry.Vector(0, -10px), from: shape, sides: top)])
+solver.solve(Geometry.Box(children: [Geometry.Box(constraints: [tall(20px)]), lifted_up]))
+unless lifted_up.origin.y == 10px { INFO@mark `UI101 a negative margin does not pull a shape up` }
+padded_child := Geometry.Box(constraints: [tall(10px)])
+solver.solve(Geometry.Box(spacing: [Geometry.Spacing(Geometry.Vector(5px, 5px))], children: [padded_child]))
+unless padded_child.origin == Geometry.Vector(5px, 5px) { INFO@mark `UI102 padding does not move what it holds` }
+pinned := Geometry.Box(position: Geometry.Position.absolute(top: 6px, left: 6px), constraints: [tall(10px)])
+after_pinned := Geometry.Box(constraints: [tall(10px)])
+solver.solve(Geometry.Box(children: [pinned, after_pinned]))
+unless pinned.origin == Geometry.Vector(6px, 6px) { INFO@mark `UI103 an absolute shape is not placed by its insets` }
+unless after_pinned.origin.y == 0 { INFO@mark `UI104 an absolute shape takes space in the flow` }
+fixed_bar := Geometry.Box(position: Geometry.Position.fixed(top: 0, left: 0), constraints: [tall(10px)])
+Geometry.Solver(available: Geometry.Vector(1000px, 800px), scrolled: 100px).solve(Geometry.Box(constraints: [tall(3000px)], children: [Geometry.Box(constraints: [tall(500px)]), fixed_bar]))
+unless fixed_bar.origin.y == 100px { INFO@mark `UI105 a fixed shape scrolls with the page` }
+sticky_bar := Geometry.Box(position: Geometry.Position.sticky(top: 0), constraints: [tall(10px)])
+Geometry.Solver(available: Geometry.Vector(1000px, 800px), scrolled: 300px).solve(Geometry.Box(children: [Geometry.Box(constraints: [tall(1000px)], children: [sticky_bar])]))
+unless sticky_bar.origin.y == 300px { INFO@mark `UI106 a sticky shape does not stay at the top while its parent is in view` }
+anchor := Geometry.Box(constraints: [tall(20px)])
+tip := UI.Popover(anchor: anchor, constraints: [tall(10px)])
+solver.solve(Geometry.Box(children: [anchor, tip]))
+unless tip.origin.y == 20px { INFO@mark `UI107 a popover is not placed below its anchor` }
+if tip.visible { INFO@mark `UI108 a popover shows before its anchor is hovered or focused` }
+
+unless Geometry.Steps([(9/12).xs, (6/12).md]).at(700px) == 9/12 && Geometry.Steps([(9/12).xs, (6/12).md]).at(800px) == 6/12 { INFO@mark `UI109 breakpoints written as a list do not jump` }
+unless ((9/12).xs -> (6/12).md).at(384px) == 5/8 { INFO@mark `UI110 -> does not interpolate between breakpoints` }
+unless ((12/12).xs -> (10/12).sm -> (8/12).md).at(576px) == 10/12 { INFO@mark `UI111 a chain of -> does not pass through its middle breakpoint` }
+unless solver.length(Geometry.Box(constraints: [Geometry.Constraint("x", share: [(12/12).xs, (6/12).md])]), 800px) == 400px { INFO@mark `UI112 a breakpoint list is not a width share` }
+stepped_rules := Language.Web.Rules(Geometry.Box(constraints: [Geometry.Constraint("x", share: Geometry.Steps([(12/12).xs, (6/12).md]))]))
+unless stepped_rules.some(.within ~= (*, "@container (min-width:768px)", *)) { INFO@mark `UI113 a stepped width has no container rule at its breakpoint` }
+unless Language.Web.Rules(Geometry.Box(position: Geometry.Position.sticky())).first.declarations.contains(("position", "sticky")) { INFO@mark `UI114 sticky is not written as CSS` }
+unless Program(code: { tip }){O: Language.Web.HTML.level}().body.children.first.attributes.contains(("popover", "manual")) { INFO@mark `UI115 a popover is not an HTML popover` }
+
+red_bar := Geometry.Box(position: Geometry.Position.fixed(top: 0, left: 0), fill: Geometry.Color(255, 0, 0), constraints: [tall(16px), Geometry.Constraint("x", least: 16px, most: 16px)])
+scrolled_page := Geometry.Box(constraints: [tall(2000px)], children: [Geometry.Box(constraints: [tall(1000px)]), red_bar])
+with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  with UI.Viewport.scrolled = 320px {
+    Geometry.Solver(available: UI.Viewport.size, scrolled: UI.Viewport.scrolled).solve(scrolled_page)
+    unless Program(code: { scrolled_page }){O: Language.TUI.Cells}().cells[0][0].background == Geometry.Color(255, 0, 0) { INFO@mark `UI116 a fixed shape leaves the top row of a scrolled terminal` }
+    unless Program(code: { scrolled_page }){O: Language.Direct}().at(0, 0) == Geometry.Color(255, 0, 0) { INFO@mark `UI117 a fixed shape leaves the top of a scrolled raster` }
+  }
+}
+drawer := UI.Drawer(open: true)
+with UI.scene = Geometry.Box(children: [drawer]) {
+  unless UI.Viewport.locking { INFO@mark `UI118 an open drawer does not lock page scroll` }
+  UI.Viewport.scroll(100px)
+  unless UI.Viewport.scrolled == 0px { INFO@mark `UI119 a locked page scrolls` }
+}
+UI.Overlay(closes: drawer).activate
+if drawer.open { INFO@mark `UI120 activating a drawer's overlay does not close it` }

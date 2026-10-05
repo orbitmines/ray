@@ -8,6 +8,7 @@ UI := class {
     {location: Location{.extension ==.instance_of Video.extensions}} => Geometry.Video(location)
     {location: Location{.extension ==.instance_of Audio.extensions}} => Geometry.Audio(location)
     {location: Location} => Link(to: location, window: location.window, children: [Geometry.Text(location as String)])
+    {drawer: Drawer} => Geometry.Box(layer: drawer.layer, children: drawer.shown)
     {shape: Geometry.Shape} => shape
     {chosen: Choice} => chosen as Input
     {superposed: |} => UI.choosing ? superposed.random : Geometry.Box(flow: inline, children: superposed.components)
@@ -120,6 +121,10 @@ UI := class {
   Viewport := class {
     size: Geometry.Vector = Geometry.Vector(1240px, 800px)
     scale: Number = 1
+    scrolled: Geometry.Length = 0px
+    locked: boolean = false
+    locking => locked || (scene?.expand{==.instance_of Drawer && .open}.nonempty ?? false)
+    scroll (by: Geometry.Length) => (scrolled = (scrolled + by) min ((scene?.content_height ?? size.y) - size.y) max 0px) unless locking
     preferences: (reduced_motion: boolean, dark: boolean, contrast: more | less | normal, focused: boolean) = (false, false, normal, true)
   }
 
@@ -191,6 +196,35 @@ UI := class {
   }
   Notification := class = title: String, body: String
 
+  Popover := class: Geometry.Box = anchor: Geometry.Shape?, side: Geometry.Side = bottom, trigger: hover | focus | always = hover {
+    layer = 20
+    position = Geometry.Position.anchored(anchor, side)
+    shown => trigger.match
+      always => true
+      focus => anchor?.interaction.focused || anchor?.interaction.selected
+      * => anchor?.interaction.hovered || anchor?.interaction.focused || interaction.hovered
+    visible => shown
+  }
+  Overlay := class: Geometry.Box = closes: *?, shade: Geometry.Paint = Geometry.Color(0, 0, 0, 0.5) {
+    position = Geometry.Position.inset(fixed)
+    layer = 19
+    fill = shade
+    activate => closes?.close
+  }
+  Drawer := class: Geometry.Box = open: boolean = false, side: left | right | top | bottom = left, extent: Geometry.Length = 75vw {
+    layer = 20
+    panel => Geometry.Box(position: side.match
+        left => Geometry.Position.fixed(top: 0, bottom: 0, left: 0)
+        right => Geometry.Position.fixed(top: 0, bottom: 0, right: 0)
+        top => Geometry.Position.fixed(top: 0, left: 0, right: 0)
+        bottom => Geometry.Position.fixed(bottom: 0, left: 0, right: 0)
+      , layer: layer, fill: fill, overflow: scroll, children: children,
+      constraints: [Geometry.Constraint(side ==.instance_of (left | right) ? "x" : "y", least: extent, most: extent)])
+    shown => open ? [Overlay(closes: this), panel] : []
+    close => open = false
+    toggle => open = !open
+  }
+
   Role := enum heading | link | button | input | image | list | table | region | text
   Geometry.Shape &+= {
     interaction => Interactive(this)
@@ -224,7 +258,7 @@ UI := class {
   scene: Geometry.Shape?
   Runtime := class = page: Program, renderer: Language, target: *, running: boolean = false {
     static current: Runtime?
-    solved => page{O: Scene}() -- Geometry.Solver(available: Viewport.size).solve(.) -- (scene = .)
+    solved => page{O: Scene}() -- Geometry.Solver(available: Viewport.size, scrolled: Viewport.scrolled).solve(.) -- (scene = .)
     frame => solved{O: renderer.level}()
     run => (running = true) -- (Runtime.current = this) -- target.start
       -- ((target.write(frame) -- target.read) while running)

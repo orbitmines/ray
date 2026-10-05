@@ -1,11 +1,12 @@
 Language.Direct := class: Language {
   static extensions = ".direct"
   level := {
-    {page: Geometry.Shape} => Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px) -- Rasterise(page, ., Geometry.Transform())
+    {page: Geometry.Shape} => Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px) -- Rasterise(page, ., Scrolled()) -- (raster => page.lifted.for(Rasterise(., raster, Scrolled())) -- raster)
   }
+  Scrolled := () => Geometry.Transform.translate(Geometry.Vector(0, -UI.Viewport.scrolled))
 
   Rasterise := (shape: Geometry.Shape, raster: Geometry.Raster, outer: Geometry.Transform) => raster -- {
-    placed = outer * Geometry.Transform.translate(shape.position) * shape.transform
+    placed = outer * Geometry.Transform.translate(shape.origin) * shape.transform
     shape.match
       Geometry.Text => shape.lines(shape.size.x).zip(0..).for((line, row) => #line.reduce(pen = 0 =>
         Font(shape.font).glyph(.) -- Filled(.outline, raster, placed * Geometry.Transform.translate(Geometry.Vector(pen, row * shape.font.size * shape.font.line_height)) * Geometry.Transform.scale(Geometry.Vector(shape.font.size / .units, shape.font.size / .units)), shape.color ?? Geometry.Color(0, 0, 0)) -- pen + .advance * shape.font.size / .units
@@ -16,7 +17,7 @@ Language.Direct := class: Language {
         inside = (0..<shape.size.y as px).map(y => (0..<shape.size.x as px){shape.contains(Geometry.Vector(., y))}.map(x => (x, y))).flatten
         inside.for((x, y) => placed.applied(Geometry.Vector(x, y)) -- raster.put(.x, .y, Fill(shape.fill, x, y) ~~ .alpha *= Opacity(shape.effects))) if shape.fill
         Stroked(Outline(shape), raster, placed, shape.stroke) if shape.stroke
-        shape.children.sort_by(.layer).for(Rasterise(., raster, placed)) if shape.visible
+        shape.in_place.sort_by(.layer).for(Rasterise(., raster, placed * Geometry.Transform.translate(shape.origin * -1))) if shape.visible
         shape.effects{==.instance_of Geometry.Blur}.for(raster.blurred(inside, .radius as px))
       }
   }

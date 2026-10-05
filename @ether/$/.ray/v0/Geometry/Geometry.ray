@@ -64,6 +64,7 @@ Geometry := class {
       lower => text.lower_case
       title => text.title_case
       * => text
+    intrinsic (width: Length) => font.size * font.line_height * lines(width).count
     lines (width: Length) => wrap == none ? shown.lines : shown.lines.map(.words.reduce(acc = [""] => acc.last.width(font) + .width(font) <= width ? (acc[..<-1], acc.last + " " + .) : (acc, .))).flatten
   }
 
@@ -78,27 +79,45 @@ Geometry := class {
   }
   Canvas := class: Shape = draws: Program
 
-  Shape := class: Ray = position: Vector = Vector(), size: Vector = Vector(), transform: Transform = Transform(), children: Shape[] = [],
+  Shape := class: Ray = origin: Vector = Vector(), size: Vector = Vector(), position: Position = Position(), transform: Transform = Transform(), children: Shape[] = [],
     fill: Paint?, stroke: Stroke?, radius: Length[] = [0], effects: Effect[] = [], blend: Blend = normal,
     spacing: Spacing[] = [], constraints: Constraint[] = [], flow: Flow = vertical, gap: Vector = Vector(),
-    overflow: visible | clip | scroll = visible, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
+    overflow: visible | clip | scroll = visible, scrollbar: shown | hidden = shown, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
     animations: Animation[] = [], dynamics: Dynamic[] = [] {
     static made = 0
     id: String = "s" + ((Shape.made += 1) as String)
     expand => [this], children.map(.expand).flatten(1)
     parent_in (scene: Shape) => scene.expand{.children.some(. === this)}.first
-    content_height => children.map(.position.y + .outer.y).max ?? size.y
-    compounds + (component: Spacing | Constraint | Effect) => component.match
+    content_height => (children.map(.origin.y + .size.y + .margin.bottom).max ?? origin.y + size.y) - origin.y
+    compounds + (component: Spacing | Constraint | Effect | Field) => component.match
       Spacing => spacing.push component
       Constraint => constraints.push component
       Effect => effects.push component
+      Field => component.applied(this)
     -- this
     holding (child: Shape) => children.push child -- this
-    outer => size + spacing{.from == border}.amount.reduce(acc = Vector() => acc + . + .)
-    at (point: Vector) => visible && contains(transform.inverse.applied(point - position))
-      ? [children.sort_by(-.layer).map(.at(point - position)).flatten, this]
-      : []
+    padding => spacing{.from == border} as Edges
+    margin => spacing{.from == shape} as Edges
+    outer => size + margin.total
+    in_place => children{.position.kind ==.instance_of (flow | sticky | absolute)}
+    lifted => expand{.position.kind ==.instance_of (fixed | anchored) && .visible}.sort_by(.layer)
+    moved (by: Vector) => (origin = origin + by) -- children.for(.moved(by)) -- this
+    at (point: Vector) => visible ? [children.sort_by(-.layer).map(.at(point)).flatten, this if contains(transform.inverse.applied(point - origin))] : []
     contains (point: Vector) => 0 <= point.x <= size.x && 0 <= point.y <= size.y
+    intrinsic (width: Length) => 0
+  }
+  Position := class = kind: flow | sticky | fixed | absolute | anchored = flow, top: Length?, right: Length?, bottom: Length?, left: Length?, anchor: Shape?, side: Side = bottom {
+    static sticky (top: Length? = 0, bottom: Length?) => Position(sticky, top: top, bottom: bottom)
+    static fixed (top: Length?, right: Length?, bottom: Length?, left: Length?) => Position(fixed, top, right, bottom, left)
+    static absolute (top: Length?, right: Length?, bottom: Length?, left: Length?) => Position(absolute, top, right, bottom, left)
+    static anchored (to: Shape, side: Side = bottom) => Position(anchored, anchor: to, side: side)
+    static inset (kind: fixed | absolute, length: Length = 0) => Position(kind, length, length, length, length)
+    flowing => kind ==.instance_of (flow | sticky)
+  }
+  Edges := class = top: Length = 0, right: Length = 0, bottom: Length = 0, left: Length = 0 {
+    static (spacings: Spacing[]) as (=== Edges) => Edges(spacings.top.sum ?? 0, spacings.right.sum ?? 0, spacings.bottom.sum ?? 0, spacings.left.sum ?? 0)
+    total => Vector(left + right, top + bottom)
+    start => Vector(left, top)
   }
   Box := class: Shape
   Ball := class: Shape {
@@ -133,50 +152,102 @@ Geometry := class {
 
   Spacing := class = amount: Vector = Vector(), from: From = border, sides: Side = all {
     static From := enum border | shape
+    top => sides ==.instance_of (all | top | vertical) ? amount.y : 0
+    bottom => sides ==.instance_of (all | bottom | vertical) ? amount.y : 0
+    left => sides ==.instance_of (all | left | horizontal) ? amount.x : 0
+    right => sides ==.instance_of (all | right | horizontal) ? amount.x : 0
   }
-  Constraint := class = dimension: "x" | "y" | "z", least: Length?, most: Length?, share: (Number | Interpolated)?, align: Align?, aspect: Number?, columns: Number?, wrap: boolean = false {
-    admits (length: Length) => (!least || least <= length) && (!most || length <= most)
+  Constraint := class = dimension: "x" | "y" | "z", least: Length?, most: Length?, share: (Number | Interpolated | Steps | Breakpoint[])?, align: Align?, aspect: Number?, columns: Number?, wrap: boolean = false {
+    admits (length: Length) => (least == None || least <= length) && (most == None || length <= most)
   }
   Breakpoint := class = width: Length, share: Number {
-    -> (other: Breakpoint) => Interpolated(from: this, to: other)
+    -> (other: Breakpoint) => Interpolated([this, other])
   }
-  Interpolated := class = from: Breakpoint, to: Breakpoint {
-    at (width: Length) => width < from.width ? from.share
-      : to.width < width ? to.share
-      : from.share + (to.share - from.share) * (width - from.width) / (to.width - from.width)
+  Interpolated := class = stops: Breakpoint[] {
+    -> (other: Breakpoint) => Interpolated([stops, other].flatten)
+    sorted => stops.sort_by(.width)
+    at (width: Length) => sorted -- (width <= .first.width ? .first.share
+      : .last.width <= width ? .last.share
+      : .zip(.rest){.0.width <= width <= .1.width}.first -- (.0.share + (.1.share - .0.share) * (width - .0.width) / (.1.width - .0.width)))
+  }
+  Steps := class = stops: Breakpoint[] {
+    static (stops: Breakpoint[]) as (=== Steps) => Steps(stops)
+    sorted => stops.sort_by(.width)
+    at (width: Length) => sorted{.width <= width}.last?.share ?? sorted.first.share
   }
 
   Relation := enum against | next_to | above | below | inside
   Placed := class = item: Shape, relation: Relation, other: Shape
   related (item, relation, other) => Placed(item, relation, other)
 
-  Solver := class = available: Vector {
+  Solver := class = available: Vector, scrolled: Length = 0 {
+    resolved (length: Length?, against: Length) => length == None ? None : length.unit.symbol.match
+      "%" => against * length.amount / 100
+      "vw" => available.x * length.amount / 100
+      "vh" => available.y * length.amount / 100
+      "em" | "rem" => length.amount * 16px
+      * => length
+    fraction (share, width: Length) => share.match
+      Interpolated | Steps => share.at(width)
+      Breakpoint[] => (share as Steps).at(width)
+      Breakpoint => share.share
+      * => share
     length (shape: Shape, width: Length) => shape.constraints{.dimension == "x"}.reduce(acc = width => (
-      .share ? (.share ==.instance_of Interpolated ? .share.at(width) : .share) * width : acc
-    ) max (.least ?? 0) min (.most ?? ∞))
+      .share ? fraction(.share, width) * width : acc
+    ) max (resolved(.least, width) ?? 0) min (resolved(.most, width) ?? ∞))
+    height (shape: Shape, content: Length) => shape.constraints{.dimension == "y"}.reduce(acc = content => acc max (resolved(.least, available.y) ?? 0) min (resolved(.most, available.y) ?? ∞))
 
-    solve (shape: Shape) => place(shape, Vector(), available.x)
-    place (shape: Shape, origin: Vector, width: Length) => shape -- {
-      own = length(shape, width)
-      size = Vector(own, shape.constraints.aspect.last ? own / shape.constraints.aspect.last : size.y)
-      position = origin
+    solve (shape: Shape) => place(shape, Vector(), available.x) -- (scene => scene.expand{.position.kind == anchored}.for(positioned(., .parent_in(scene))) -- stuck(scene))
+    place (shape: Shape, from: Vector, width: Length) => shape -- {
+      own = length(shape, width - margin.left - margin.right)
+      origin = from + margin.start
+      inside = origin + padding.start
+      room = own - padding.left - padding.right
+      flowing = children{.position.flowing}
       flow.match
-        grid => children.chunk(constraints.columns.last ?? 1).reduce(acc = origin => (
-          .map((child, i) => place(child, Vector(origin.x + i * (own / .count + gap.x), acc.y), own / .count - gap.x)),
-          Vector(origin.x, acc.y + .size.y.max + gap.y)
+        grid => flowing.chunk(constraints.columns.last ?? 1).reduce(acc = inside => (
+          .map((child, i) => place(child, Vector(inside.x + i * (room / .count + gap.x), acc.y), room / .count - gap.x)),
+          Vector(inside.x, acc.y + .outer.y.max + gap.y)
         ).last)
-        layered => children.for(place(., origin, own))
-        * => children.reduce(acc = origin => {
-          child_width = length(., own)
+        layered => flowing.for(place(., inside, room))
+        * => flowing.reduce(acc = (at: inside, row: 0) => {
+          child_width = length(., room)
           offset = .constraints.align.last.match
-            center => (own - child_width) / 2
-            end => own - child_width
+            center => (room - child_width) / 2
+            end => room - child_width
             * => 0
-          flow == inline && (!constraints.wrap.last || acc.x + child_width <= origin.x + own)
-            ? place(., Vector(acc.x + offset, acc.y), child_width) -- Vector(acc.x + child_width + gap.x, acc.y)
-            : place(., Vector(origin.x + offset, acc.y), child_width) -- Vector(origin.x, acc.y + .size.y + gap.y)
+          continues = flow == inline && (!constraints.wrap.last || acc.at.x + child_width <= inside.x + room)
+          y = continues ? acc.at.y : acc.at.y + acc.row + (acc.row > 0 ? gap.y : 0)
+          x = continues ? acc.at.x : inside.x
+          place(., Vector(x + offset, y), room) -- (at: Vector(x + .outer.x + gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
         })
+      size = Vector(own, constraints.aspect.last ? own / constraints.aspect.last
+        : height(shape, (flowing.map(.origin.y + .size.y + .margin.bottom).max ?? inside.y + intrinsic(room)) - origin.y + padding.bottom))
+      children{.position.kind ==.instance_of (fixed | absolute)}.for(positioned(., shape))
     }
+    positioned (shape: Shape, parent: Shape) => shape -- {
+      frame = position.kind.match
+        fixed => (at: Vector(0, scrolled), size: available)
+        anchored => (position.anchor ?? parent) -- (at: .origin, size: .size)
+        * => (at: parent.origin, size: parent.size)
+      width = position.left != None && position.right != None ? frame.size.x - resolved(position.left, frame.size.x) - resolved(position.right, frame.size.x) : frame.size.x
+      place(shape, frame.at, width)
+      size = Vector(size.x, frame.size.y - resolved(position.top, frame.size.y) - resolved(position.bottom, frame.size.y)) if position.top != None && position.bottom != None
+      x = position.kind == anchored ? position.side.match
+          Side.right => frame.size.x
+          Side.left => -size.x
+          * => 0
+        : position.left != None ? resolved(position.left, frame.size.x) : position.right != None ? frame.size.x - resolved(position.right, frame.size.x) - size.x : 0
+      y = position.kind == anchored ? position.side.match
+          Side.top => -size.y
+          Side.bottom => frame.size.y
+          * => 0
+        : position.top != None ? resolved(position.top, frame.size.y) : position.bottom != None ? frame.size.y - resolved(position.bottom, frame.size.y) - size.y : 0
+      moved(Vector(x, y))
+    }
+    stuck (scene: Shape) => scene.expand{.position.kind == sticky}.for(shape => shape.parent_in(scene) -- (parent =>
+      shape.moved(Vector(0, (shape.origin.y max (scrolled + resolved(shape.position.top ?? 0, available.y)) min (parent.origin.y + parent.size.y - shape.size.y)) - shape.origin.y)) if parent
+    )) -- scene
   }
 
   Animation<T> := class = from: T, to: T, duration: Time, easing: Easing = ease, delay: Time = 0, repeat: Number | ∞ = 1, started: Time = Time.now {
@@ -225,3 +296,4 @@ Unit(name: "rem")
 Unit(name: "viewport width", symbol: "vw")
 Unit(name: "viewport height", symbol: "vh")
 Unit(name: "cell")
+Unit(name: "percent", symbol: "%")

@@ -1,5 +1,4 @@
 Compiler := class {
-
   none := {
   }
 
@@ -31,20 +30,12 @@ Compiler := class {
   }
 
   logic := {
-    {a}.not.not => (a as boolean)
-    {a}.and({a}) => a
-    {a}.or({a}) => a
+    !!{a} => a as boolean
+    {a} && {a} => a
+    {a} || {a} => a
   }
 
-  levels => (
-    known ^keyword := chain None
-    known &= Compiler.none
-    known &= Compiler.default
-    known &= Compiler.folding
-    known &= Compiler.memoised
-    known &= Compiler.logic
-    known
-  )
+  levels => [none, default, folding, memoised, logic]
 }
 
 Debug := class {
@@ -52,6 +43,6 @@ Debug := class {
   }
 }
 
-Program.components.hierarchy &= class {
+Program &+= {
   O := Compiler.none
 }

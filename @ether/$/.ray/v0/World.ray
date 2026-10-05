@@ -146,7 +146,7 @@ History := class = repository: *?, commits: Commit[] = [], from: History? {
   fork => Branch(repository, from: this)
   squash (who) => History(repository, from: from).commit(who, commits.what)
   cherry_pick (change: Commit): static => this ~~ commits.push Commit(change.who, change.what, inverse: change.inverse)
-  from_here (change: Commit) => commits[..commits.index_of(change) + 1].reduce(History(repository)) (kept, each) => kept.cherry_pick(each)
+  from_here (change: Commit) => commits[..commits.index_of(change)].reduce(History(repository)) (kept, each) => kept.cherry_pick(each)
   revert (change: Commit) => change.inverse ? commit(change.who, change.inverse) : Quest(name: "revert", goal: change)
 
   merge (other: History) => other.commits.flat_map(theirs => {

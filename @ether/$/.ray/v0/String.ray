@@ -77,7 +77,7 @@ String := class: Char[] {
   pascal_case | pascalcase | PascalCase => words.title_case as String
 
   plural => ends_with("s") ? this : this + "s"
-  singular => ends_with("s") ? this[..-1] : this
+  singular => ends_with("s") ? this[..<-1] : this
 
   mirrored => <-#.mirrored as String
   compounds * (count: Number) => count == 0 ? "" : this, this * (count - 1)
@@ -98,7 +98,7 @@ String := class: Char[] {
   common_indentation => lines{!.trimmed.empty}.map(.indentation).min ?? 0
   dedented => lines.map(.trimmed.empty ? "" : .[common_indentation..]).join(\n)
   literal_dedented => lines.count == 1 || !lines.first.trimmed.empty ? this
-    : (lines[1..] -- (.last.trimmed.empty ? .[..-1] : .)).join(\n).dedented
+    : (lines[1..] -- (.last.trimmed.empty ? .[..<-1] : .)).join(\n).dedented
 
   slice (from: Number, to: Number) => this[from..<to]
   replace (old: String, new: String) => split(old).join(new)
@@ -110,7 +110,7 @@ String := class: Char[] {
   compounds + (other: String) => this, other
   bytes => #.map(.octets).flatten
   interpolated (reading: Program) => (opening = index_of("{")) == None ? this
-    : (closing = closing_of(opening + 1)) -- this[..opening], reading(this[opening + 1..<closing].as(String)), this[closing + 1..].interpolated(reading)
+    : (closing = closing_of(opening + 1)) -- this[..<opening], reading(this[opening + 1..<closing].as(String)), this[closing + 1..].interpolated(reading)
   closing_of (at: Number, depth: Number = 1) => this[at] == "}" ? (depth == 1 ? at : closing_of(at + 1, depth - 1))
     : this[at] == "{" ? closing_of(at + 1, depth + 1) : closing_of(at + 1, depth)
   find_all (pattern: String) => (this ~= pattern)#.index

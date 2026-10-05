@@ -3,7 +3,7 @@ IO := class {
   permitted = false
 
   inside (path) => {
-    parts = path.split("/"){!= "." && !.empty}.reduce([]) (kept, part) => part == ".." ? kept[..-1] : (kept, part)
+    parts = path.split("/"){!= "." && !.empty}.reduce([]) (kept, part) => part == ".." ? kept[..<-1] : (kept, part)
     root + "/" + parts.join("/")
   }
   read (path) => (external io inside(path) None) as String

@@ -50,7 +50,7 @@ Julian := class: Calendar {
   days_in (month: Month) => [31, is_leap_year ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][Month#.index_of(month)]
   days_in_year => is_leap_year ? 366 : 365
   weeks_in_year => days_in_year / 7
-  days_before (month: Month) => Month#[..Month#.index_of(month)].map(days_in).sum
+  days_before (month: Month) => Month#[..<Month#.index_of(month)].map(days_in).sum
   days_before_year => 365 * (year - 1) + (year - 1) / 4
   weekday_of (day_of_year: Number) => Weekday#[(days_before_year + day_of_year - 1) % 7]
 }

@@ -80,7 +80,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
 
   contains | includes <operator: (x: Vertex): (b: Vertex): boolean = ==>(x: Vertex) => some(operator(.)(x))
   partition (predicate) => [this[{predicate}]], [this[{!predicate(.)}]]
-  batch | chunk (size: Number) => empty ? [] : [this[..size]], this[size..].chunk(size)
+  batch | chunk (size: Number) => empty ? [] : [this[..<size]], this[size..].chunk(size)
   concatenated => reduce(acc = [] => acc, .)
   flatten => map(. ==.instance_of Iterable && !(. ==.instance_of String) ? .flatten : [.]).concatenated
   flatten (levels: Number) => levels == 0 ? this : map(. ==.instance_of Iterable && !(. ==.instance_of String) ? .flatten(levels - 1) : [.]).concatenated
@@ -95,7 +95,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   join (separator) => reduce((acc) => acc, separator, .)
   random => this[Random.below(count)]
   fill (x) => all = x
-  take (count: Number) => this[..count]
+  take (count: Number) => this[..<count]
   find (predicate) => this[{predicate}].first
   index_of (x, at = 0) => empty ? None : first == x ? at : rest.index_of(x, at + 1)
   find_all (predicate) => this[{predicate}]
@@ -115,16 +115,19 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   ± | +- | -+ (at: Integer) => this[at] | this[-at]
   [at: Integer] => at == 0 ? entry : at > 0 ? rest[at - 1] : reverse[-at - 1]
   [range: Range] => range.map(this[.])
-  [{from}..] ^punctuation => sliced(from, count)
+  [{from}..] ^punctuation => sliced(from, count - 1)
   [..{to}] ^punctuation => sliced(0, to)
-  [{from}..<{to}] ^punctuation => sliced(from, to)
-  [{from}..{to}] ^punctuation => sliced(from, to + 1)
-  sliced (from: Integer, to: Integer) => ((from < 0 ? count + from : from)..<(to < 0 ? count + to : to)).map(this[.])
-  [{from}..] = {value} ^punctuation => assigned_over(from, count, value)
+  [..<{to}] ^punctuation => sliced(0, to - 1)
+  [{from}..{to}] ^punctuation => sliced(from, to)
+  [{from}..<{to}] ^punctuation => sliced(from, to - 1)
+  at (index: Integer) => index < 0 ? count + index : index
+  sliced (from: Integer, to: Integer) => (at(from)..at(to)).map(this[.])
+  [{from}..] = {value} ^punctuation => assigned_over(from, count - 1, value)
   [..{to}] = {value} ^punctuation => assigned_over(0, to, value)
-  [{from}..<{to}] = {value} ^punctuation => assigned_over(from, to, value)
-  [{from}..{to}] = {value} ^punctuation => assigned_over(from, to + 1, value)
-  assigned_over (from: Integer, to: Integer, value) => ((from < 0 ? count + from : from)..<(to < 0 ? count + to : to))
+  [..<{to}] = {value} ^punctuation => assigned_over(0, to - 1, value)
+  [{from}..{to}] = {value} ^punctuation => assigned_over(from, to, value)
+  [{from}..<{to}] = {value} ^punctuation => assigned_over(from, to - 1, value)
+  assigned_over (from: Integer, to: Integer, value) => (at(from)..at(to))
     -- .zip(value ==.instance_of Iterable && value.count == .count && .count > 1 ? value : [value] * .count)
     -- .for((at, written) => this[at] = written)
     -- this
@@ -365,7 +368,7 @@ Loop := class: Path = around: Iterable, at: * {
 
   unrolled => around
   instances (times: Number) => around * times
-  unrolled_mod => around[at.index..], around[..at.index]
+  unrolled_mod => around[at.index..], around[..<at.index]
   disallow_loops => around
 }
 

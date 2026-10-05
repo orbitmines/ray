@@ -49,9 +49,9 @@ unless "cats".plural == "cats" { INFO@mark `S53 the plural of cats is not cats` 
 
 unless "abc".mirrored == "cba" { INFO@mark `S54 abc reversed is not cba` }
 unless "a".mirrored == "a" { INFO@mark `S55 one character reversed is not itself` }
-unless "abc"[..2] == "ab" { INFO@mark `S56 the first two of abc are not ab` }
+unless "abc"[..<2] == "ab" { INFO@mark `S56 the first two of abc are not ab` }
 unless "abc"[1..] == "bc" { INFO@mark `S57 the last two of abc are not bc` }
-unless "abc"[1..1].empty { INFO@mark `S58 a slice of nothing is not empty` }
+unless "abc"[1..<1].empty { INFO@mark `S58 a slice of nothing is not empty` }
 
 unless "abc".index_of("bc") == 1 { INFO@mark `S59 bc does not sit one along in abc` }
 unless "abc".index_of("a") == 0 { INFO@mark `S60 a does not sit at the start of abc` }
@@ -118,7 +118,7 @@ if "é"[0].is_ascii { INFO@mark `S147 é is one byte` }
 
 unless "abc".length == 3 { INFO@mark `S104 abc is not three long` }
 unless "abc"[1] == "b"[0] { INFO@mark `S105 the second of abc is not b` }
-unless "abcde"[1..4] == "bcd" { INFO@mark `S106 abcde from one to four is not bcd` }
+unless "abcde"[1..<4] == "bcd" { INFO@mark `S106 abcde from one to four is not bcd` }
 if "abc".empty { INFO@mark `S107 abc is empty` }
 unless "".empty { INFO@mark `S108 nothing written is not empty` }
 unless "abc" != "abd" { INFO@mark `S109 two different texts are the same` }

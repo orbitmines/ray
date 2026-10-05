@@ -112,7 +112,7 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
     convert (x: Decimal.Real) => Decimal.Real, ToUnit
       if exponent == 0 { x }
       elsif exponent > 0 { x.integer, x.fraction.0 ?? 0, ".", x.fraction[1..] }
-      else { x.integer[..-1], ".", x.integer[-1] ?? 0, x.fraction }
+      else { x.integer[..<-1], ".", x.integer[-1] ?? 0, x.fraction }
   }
 }
 

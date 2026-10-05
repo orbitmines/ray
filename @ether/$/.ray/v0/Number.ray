@@ -115,11 +115,11 @@ dynamically Number.Bases.for name => {
     static ^ (width: Number) => static{.integer.length == width}
     String => this as String
 
-    static lowered (digits: Base[]) => (digits.last as Decimal).is_zero ? lowered(digits[..-1]), Char.digit(radix - 1) : digits[..-1], Char.digit((digits.last as Decimal) - 1)
+    static lowered (digits: Base[]) => (digits.last as Decimal).is_zero ? lowered(digits[..<-1]), Char.digit(radix - 1) : digits[..<-1], Char.digit((digits.last as Decimal) - 1)
     next => integer.every((. as Decimal).is_zero) ? None : static(integer: lowered(integer))
 
     << (places: Number) => static(integer: integer, ["0"] * places)
-    >> (places: Number) => places >= integer.length ? static(integer: ["0"]) : static(integer: integer[..-places])
+    >> (places: Number) => places >= integer.length ? static(integer: ["0"]) : static(integer: integer[..<-places])
 
     as Number => integer.map(as Decimal) as radix
     as String => integer as String

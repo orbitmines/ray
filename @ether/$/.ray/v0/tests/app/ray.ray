@@ -227,7 +227,7 @@ unless root_place.depth == 0 { INFO@mark `IT53 what holds everything is deeper t
 unless root_place.holds(inner_place) { INFO@mark `IT60 what holds does not hold what it holds` }
 
 // An orbit comes back to its first, and has no end
-unless [1, 2].orbit[..5] == [1, 2, 1, 2, 1] { INFO@mark `IT54 five steps round two are not one, two, one, two, one` }
+unless [1, 2].orbit[..<5] == [1, 2, 1, 2, 1] { INFO@mark `IT54 five steps round two are not one, two, one, two, one` }
 unless [1, 2].orbit[3] == 2 { INFO@mark `IT56 the fourth step round two is not the second` }
 if [1, 2].orbit.bounded { INFO@mark `IT57 an orbit is bounded` }
 if [1, 2].orbit.acyclic { INFO@mark `IT58 an orbit does not come back around` }
@@ -281,9 +281,10 @@ unless (0 ->)[5] == 5 { INFO@mark `AR7 x -> alone does not count on by one` }
 
 // Open ranges and slices (R4.1, L§1.6)
 letters := ["a", "b", "c", "d"]
-unless letters[..2] == ["a", "b"] { INFO@mark `SL1 ..2 does not take the first two` }
+unless letters[..<2] == ["a", "b"] { INFO@mark `SL1 ..<2 does not take the first two` }
+unless letters[..2] == ["a", "b", "c"] { INFO@mark `SL7 ..2 does not include its end` }
 unless letters[1..] == ["b", "c", "d"] { INFO@mark `SL2 1.. does not take from the second on` }
-unless letters[..-1] == ["a", "b", "c"] { INFO@mark `SL3 ..-1 does not leave out the last` }
+unless letters[..<-1] == ["a", "b", "c"] { INFO@mark `SL3 ..<-1 does not leave out the last` }
 unless letters[1..<3] == ["b", "c"] { INFO@mark `SL4 1..<3 does not take the second and third` }
 unless letters[1..2] == ["b", "c"] { INFO@mark `SL5 1..2 does not take both ends` }
 unless letters[-2..] == ["c", "d"] { INFO@mark `SL6 a negative start does not count from the end` }
@@ -291,7 +292,7 @@ zeros := [1, 1, 1, 1]
 zeros[2..] = 0
 unless zeros == [1, 1, 0, 0] { INFO@mark `SL7 assigning a slice does not put the value at each place` }
 spread_over := [0, 0, 0]
-spread_over[..2] = [7, 8]
+spread_over[..<2] = [7, 8]
 unless spread_over == [7, 8, 0] { INFO@mark `SL8 assigning as many as the places does not spread them` }
 unless (5..)[2] == 7 { INFO@mark `OR1 5.. does not go on from five` }
 unless (..5).previous == 4 { INFO@mark `OR2 ..5 does not come down to five` }

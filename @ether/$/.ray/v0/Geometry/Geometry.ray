@@ -18,7 +18,7 @@ Geometry := class {
     static rotate (turn: Number, around: Vector = Vector(z: 1)) => Transform(rotation(turn, around))
     static skew (by: Vector) => Transform([[1, by.x, 0, 0], [by.y, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
     compounds * (other: Transform) => Transform(matrix.map(row => columns(other.matrix).map(column => row.zip(column).map(*).sum)))
-    applied (point: Vector) => Vector(matrix[..3].map(row => row.zip([point.dimensions, 1]).map(*).sum))
+    applied (point: Vector) => Vector(matrix[..<3].map(row => row.zip([point.dimensions, 1]).map(*).sum))
     inverse => Transform(inverted(matrix))
     transposed => columns(matrix)
 
@@ -38,7 +38,7 @@ Geometry := class {
   }
 
   Color := class = red: Number{0 <= . <= 255}, green: Number{0 <= . <= 255}, blue: Number{0 <= . <= 255}, alpha: Probability = 1 {
-    static ("#", hex: Hexadecimal{length == 6 | 8}) as Color => Color(hex[..2] as 16, hex[2..4] as 16, hex[4..6] as 16, (hex[6..8] as 16 ?? 255) / 255)
+    static ("#", hex: Hexadecimal{length == 6 | 8}) as Color => Color(hex[..<2] as 16, hex[2..<4] as 16, hex[4..<6] as 16, (hex[6..<8] as 16 ?? 255) / 255)
     luminance => (red * 299 + green * 587 + blue * 114) / 1000
     over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
     mix (other: Color, by: Probability) => Color(red + (other.red - red) * by, green + (other.green - green) * by, blue + (other.blue - blue) * by, alpha + (other.alpha - alpha) * by)
@@ -64,7 +64,7 @@ Geometry := class {
       lower => text.lower_case
       title => text.title_case
       * => text
-    lines (width: Length) => wrap == none ? shown.lines : shown.lines.map(.words.reduce(acc = [""] => acc.last.width(font) + .width(font) <= width ? (acc[..-1], acc.last + " " + .) : (acc, .))).flatten
+    lines (width: Length) => wrap == none ? shown.lines : shown.lines.map(.words.reduce(acc = [""] => acc.last.width(font) + .width(font) <= width ? (acc[..<-1], acc.last + " " + .) : (acc, .))).flatten
   }
 
   Image := class: Shape = source: Location, alt: String = "", fit: contain | cover | fill | none = contain

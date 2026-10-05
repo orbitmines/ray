@@ -166,8 +166,8 @@ unless 0.entry.is_initial { INFO@mark `NL7 the line does not start at zero` }
 if 3.entry.is_initial { INFO@mark `NL8 the line starts at three` }
 if 3.entry.is_terminal { INFO@mark `NL9 the line ends` }
 unless 3.entry.previous == 2 { INFO@mark `NL10 before three is not two` }
-unless (5 -> +1)[..3].count == 3 { INFO@mark `NL11 three steps along the line are not three` }
-unless (5 -> +1)[..3].last == 7 { INFO@mark `NL12 the third step from five is not seven` }
+unless (5 -> +1)[..<3].count == 3 { INFO@mark `NL11 three steps along the line are not three` }
+unless (5 -> +1)[..<3].last == 7 { INFO@mark `NL12 the third step from five is not seven` }
 unless (5 -> +1).some(== 8) { INFO@mark `NL13 some did not reach eight` }
 
 // Number literals keep their value (N1.4, N1.12, A5)

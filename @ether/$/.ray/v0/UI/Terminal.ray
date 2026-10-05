@@ -19,7 +19,7 @@ Language.TUI := class: Language {
       column + .columns
     }))
     Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - cells(shape.position), cells(shape.size))))
-    Geometry.Canvas => shape.draws{O: Language.Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..at.y * 4 + 4].map(.[at.x * 2..at.x * 2 + 2])))))
+    Geometry.Canvas => shape.draws{O: Language.Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..<at.y * 4 + 4].map(.[at.x * 2..<at.x * 2 + 2])))))
     UI.Link => Box(shape, grid) -- Area(shape).for(grid.cells[.y][.x] ~~ .link = shape.to)
     UI.Input => Paint(Geometry.Text(shape.match
       UI.Checkbox => shape.value ? "[x]" : "[ ]"

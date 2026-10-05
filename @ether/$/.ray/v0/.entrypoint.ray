@@ -1938,30 +1938,30 @@ Diagnostic := class {
   )
 }
 
-FATAL{`@`}{type ^error}{ }{comment ^comment} ^fatal => (
+raise_fatal := {
   report FATAL comment comment
   &caller.return(Diagnostic(message: comment, type: type, fatal: true, trace: &caller.trace))
-)
-ERROR{`@`}{type ^error}{ }{comment ^comment} ^error => (
+}
+raise_error := {
   report ERROR comment comment
   raised := Diagnostic(message: comment, type: type, trace: &caller.trace)
   &caller.filed &= raised
   raised
-)
+}
+FATAL{`@` ^punctuation}{type ^error}{ }{comment ^comment} ^fatal => inline raise_fatal
+ERROR{`@` ^punctuation}{type ^error}{ }{comment ^comment} ^error => inline raise_error
 FATAL{ }{comment ^comment} ^fatal => (
-  report FATAL comment comment
-  &caller.return(Diagnostic(message: comment, fatal: true, trace: &caller.trace))
+  type := None
+  inline raise_fatal
 )
 ERROR{ }{comment ^comment} ^error => (
-  report ERROR comment comment
-  raised := Diagnostic(message: comment, trace: &caller.trace)
-  &caller.filed &= raised
-  raised
+  type := None
+  inline raise_error
 )
- WARN{`@`}{var}{ }{comment ^comment} ^warn => report WARN var comment
- INFO{`@`}{var}{ }{comment ^comment} ^info => report INFO var comment
-DEBUG{`@`}{var}{ }{comment ^comment} ^debug => report DEBUG var comment
-TRACE{`@`}{var}{ }{comment ^comment} ^trace => report TRACE var comment
+ WARN{`@` ^punctuation}{var}{ }{comment ^comment} ^warn => report WARN var comment
+ INFO{`@` ^punctuation}{var}{ }{comment ^comment} ^info => report INFO var comment
+DEBUG{`@` ^punctuation}{var}{ }{comment ^comment} ^debug => report DEBUG var comment
+TRACE{`@` ^punctuation}{var}{ }{comment ^comment} ^trace => report TRACE var comment
 
 TODO{ }{comment ^comment} ^debug => DEBUG@. comment 
 

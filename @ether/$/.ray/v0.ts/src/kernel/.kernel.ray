@@ -16,7 +16,7 @@ boot () => (
   settle()
   ROOT.level = 0; ROOT.epoch = 0; ROOT.find_epoch = 0; ROOT.missing_id = 0; ROOT.missing_epoch = 0; ROOT.serving = None; ROOT.tracing = None; ROOT.top_src = -1; ROOT.top_at = -1
   ROOT.recent = make(64); ROOT.recent_at = 0; ROOT.walker = make(Reach)
-  ROOT.budget = 300000; ROOT.fuel = ROOT.budget; ROOT.shape_version = 0; ROOT.stating = -1; ROOT.stating_src = -1; ROOT.unplanned = None
+  ROOT.budget = 1000000; ROOT.fuel = ROOT.budget; ROOT.shape_version = 0; ROOT.stating = -1; ROOT.stating_src = -1; ROOT.unplanned = None
 )
 global () => ROOT.global
 base () => ROOT.base == UNDEF ? -1 : ROOT.base
@@ -597,6 +597,7 @@ better (rule, end, reach, spelled, best, best_end, best_reach, best_spelled) => 
 // ---------------------------------------------------------------- statements: read one after another; a jump lands on its label
 // `read` takes the span [begin, end]. What reads nothing answers UNDEF; a step that ends the statement answers BREAK.
 read (src, begin, end, frame) => (
+  ROOT.fuel = ROOT.fuel - 1
   if ROOT.level > 0 and (ROOT.fuel < 0 or heavy()) { exhausted(src, begin, end) }
   ROOT.level = ROOT.level + 1
   value := reading(src, begin, end + 1, frame) always { ROOT.level = ROOT.level - 1 }

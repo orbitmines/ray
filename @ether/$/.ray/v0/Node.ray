@@ -53,9 +53,15 @@ Possibilities := class = values: Iterable {
   .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : Possibilities(values: values.map(external get . property))
 }
 Possibilities.components.hierarchy &= Iterable
+Possibilities &+= {
+  continuous => count is ∞ && !values.first?.next
+  measure (within: Possibilities = this) => continuous ? values.last - values.first
+    : count is ∞ ? (1 -> +1).map(n => values{. ∈ within.values[..<n]}.count / n).last
+    : count
+}
 
 {share: Number{0 < . < 1}} {counted: *{#.count != 1}{!(. is Unit)}} => share * counted#.count -- (whole => whole is Integer ? counted{#.count == whole}
-  : counted.continuous ? counted{#.measure == share * counted#.measure}
+  : counted#.count is ∞ ? counted{#.measure(counted#) == share * counted#.measure}
   : ERROR@Type `a share of a discrete structure is not a whole number of its possibilities`)
 {count: Number | Range} {counted: *{#.count != 1}{!(. is Unit)}} => counted{#.count == count}
 a | an {counted: *{#.count != 1}{!(. is Unit)}} => 1 counted

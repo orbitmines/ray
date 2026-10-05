@@ -87,6 +87,8 @@ unless "B" is 0.5 ("A" | "B") { INFO@mark `HS10 half of two possibilities is not
 unless (choose 1 ("A" | "B")) is ("A" | "B") && (choose 1 ("A" | "B"))#.count == 1 { INFO@mark `HS11 choosing a counted type does not resolve to one of its possibilities` }
 unless (33% ("A" | "B" | "C")) is Diagnostic { INFO@mark `HS12 a share that is not a whole number of a discrete structure's possibilities is not a type error` }
 unless 2 seconds is Quantity { INFO@mark `HS13 a count before a unit is read as a count, not a quantity` }
+unless (2 | 4 | 6) is 50% Decimal { INFO@mark `HS14 a share of an infinite structure is not taken by its density` }
+unless (Device().choose(Decimal)) is Diagnostic { INFO@mark `HS15 the computer chose uniformly among infinitely many possibilities` }
 
 // `&+` and `|+` superpose components; `+` lets the right one override (T2.1, A1)
 unless (true &+ "A").next == false & "B" { INFO@mark `SP1 &+ does not answer with both components` }

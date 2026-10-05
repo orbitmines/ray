@@ -95,7 +95,7 @@ Device := class {
   printing = false
   opened: Location?
 
-  choose (s) => s#.random
+  choose (s) => s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : s#.random
 }
 
 Keyboard := class: Location {

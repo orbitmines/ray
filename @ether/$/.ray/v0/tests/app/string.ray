@@ -250,7 +250,7 @@ unless "-"[0] is \W { INFO@mark `SE14 a dash is not a non-word escape` }
 greeted := "Ada"
 unless "Hello {greeted}!" == "Hello Ada!" { INFO@mark `SI1 a name in braces is not read into the string` }
 unless "{1 + 2}" == "3" { INFO@mark `SI2 an expression in braces is not read into the string` }
-unless "a \{b}".count == 6 { INFO@mark `SI3 an escaped brace is read as an expression` }
+unless "a \{b}".count == 5 { INFO@mark `SI3 an escaped brace is read as an expression` }
 unless @ray`1 + 2` == 3 { INFO@mark `TL1 a literal tagged ray is not read as Ray` }
 unless "goto x" ~= ⊢"goto " { INFO@mark `PM1 ⊢ does not hold a pattern to the start` }
 if "a goto" ~= ⊢"goto" { INFO@mark `PM2 ⊢ reads a pattern away from the start` }

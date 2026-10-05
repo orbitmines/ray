@@ -22,7 +22,7 @@ Node &+= {
     -- this ==.instance_of Running ? results.last : this
   right-to-left pending => await this
 
-  right-to-left never => Never -- ERROR@Never `happened, and was said never to` if this
+  right-to-left never => Never -- ERROR `happened, and was said never to` if this
 
   chosen_within (width) => components.random
   right-to-left choose => chosen_within(1)
@@ -39,11 +39,11 @@ Node &+= {
   $ (handler: Program) ^error => recoverable ? handler.entered(diagnostics.last, None) : this
   $? ^error => recoverable ? None : this
   $? (fallback) ^error => $? ?? fallback
-  $! ^error => erred ? FATAL@Escalated `an error escalated to fatal` : this
+  $! ^error => erred ? FATAL `an error escalated to fatal` : this
   $?! ^error => erred ? None : this
   $?! (handler: Program) ^error => erred ? handler.entered(diagnostics.last, None) : this
-  {\n}${kind} {handled} ^error => recoverable && diagnostics.last.kind == kind ? handled : this
-  {\n}${kind} | ${other} {handled} ^error => recoverable && (diagnostics.last.kind == kind || diagnostics.last.kind == other) ? handled : this
+  {\n}${function} {handled} ^error => recoverable && diagnostics.last.origin == function ? handled : this
+  {\n}${function} | ${other} {handled} ^error => recoverable && (diagnostics.last.origin == function || diagnostics.last.origin == other) ? handled : this
 }
 
 !{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)

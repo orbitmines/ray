@@ -30,7 +30,7 @@ Dynamic := class = program: Program {
   .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : external get program() property
   as (=== boolean) => program() as boolean
 }
-dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR@Assertion `assertion failed`) -- .empty
+dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR `assertion failed`) -- .empty
 
 Never := Node{false}
 never return ^keyword => Never

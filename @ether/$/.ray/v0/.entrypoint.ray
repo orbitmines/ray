@@ -101,7 +101,7 @@ class {block} => (
     this.components.hierarchy &= static
     this.instance = global
     inline block
-    if static.is_abstract { ERROR@Abstract `constructs a class that leaves a method unwritten` }
+    if static.is_abstract { ERROR `constructs a class that leaves a method unwritten` }
     if global.Store { Store.constructed(this) }
     this
   )
@@ -548,12 +548,12 @@ Node := base class {
       unless type.instance {
         if this {
           if this.instance { type.verify(this) }
-          elsif this.written_body { unless ((this === type) || this.subtype_of(type)) { ERROR@TypeMismatch `is not of the type it is declared as` } }
+          elsif this.written_body { unless ((this === type) || this.subtype_of(type)) { ERROR `is not of the type it is declared as` } }
           elsif (this.instance_of(type)) {
             if type.repeating { external assign this this.instance_of(type) }
             type.verify(this)
           }
-          else { ERROR@TypeMismatch `is not of the type it is declared as` }
+          else { ERROR `is not of the type it is declared as` }
         }
       }
     } elsif (None.instance_of(type)) { external declare this None }
@@ -771,7 +771,7 @@ Node := base class {
 
         verify (candidate) => (
           this.narrows.verify(candidate)
-          unless (candidate.satisfies(this.constraint)) { ERROR@Unsatisfied `does not satisfy a constraint of its type` }
+          unless (candidate.satisfies(this.constraint)) { ERROR `does not satisfy a constraint of its type` }
 
           candidate
         )
@@ -1707,7 +1707,7 @@ Modifier.spellings &= `static`
 dynamically ^keyword (x) => (inline x)
 
 assert ^keyword (condition) => (
-  unless condition { ERROR@Assertion `assertion failed` }
+  unless condition { ERROR `assertion failed` }
 
   condition
 )
@@ -1922,12 +1922,11 @@ inline DARK
 
 Diagnostic := class {
   message: Node
-  kind: Node?
   fatal: Node?
   cause: Node?
   trace: Node?
 
-  Kind := enum Abstract | TypeMismatch | Unsatisfied | Assertion | Direction | Sublanguage | Effect | Duplicate | Comparison | UnitMismatch | Never | Escalated | Transaction
+  origin => trace.head.value
 
   causes => (
     all := chain None
@@ -1937,14 +1936,14 @@ Diagnostic := class {
   )
 }
 
-FATAL{`@`}{literal kind ^error}{ }{comment ^comment} ^fatal => (
-  report FATAL kind comment
-  raised := Diagnostic(kind: kind, message: comment, fatal: true, trace: &caller.trace)
+FATAL{ }{comment ^comment} ^fatal => (
+  report FATAL comment comment
+  raised := Diagnostic(message: comment, fatal: true, trace: &caller.trace)
   &caller.return(raised)
 )
-ERROR{`@`}{literal kind ^error}{ }{comment ^comment} ^error => (
-  report ERROR kind comment
-  raised := Diagnostic(kind: kind, message: comment, trace: &caller.trace)
+ERROR{ }{comment ^comment} ^error => (
+  report ERROR comment comment
+  raised := Diagnostic(message: comment, trace: &caller.trace)
   &caller.filed &= raised
   raised
 )
@@ -1989,7 +1988,7 @@ false := boolean.false
 {base} [x: right-to-left] {middle_operand} [y: right-to-left] {top} => base[x] (middle_operand[y] top)
 
 {left} [x: left-to-right] {middle} [y: right-to-left] {right} => (
-  ERROR@Direction `mixes directions around one operand; use parentheses`
+  ERROR `mixes directions around one operand; use parentheses`
   None
 )
 

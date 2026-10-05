@@ -439,4 +439,4 @@ What the library is written against but cannot provide itself; the engine has to
 - **Labelled class sections** — `X~label` enters after a label; on default construction the labelled section must be skipped (UUID.v1's `generate\`).
 - **Rule priority for typed grants** — `{who}{{filter}}.read` must win over a plain narrowing.
 - **Deferred checks** — `transaction { … }` checks types and asserts only at its end.
-- **Filed diagnostics follow the answer** — `ERROR@Kind` files a diagnostic on the frame (`&caller.filed`); the value the frame answers must carry them. `FATAL@Kind` answers the diagnostic itself (`&caller.return`). The diagnostic carries the call trace (`&caller.trace`).
+- **Filed diagnostics follow the answer** — `ERROR` files a diagnostic on the frame (`&caller.filed`); the value the frame answers must carry them. `FATAL` answers the diagnostic itself (`&caller.return`). The diagnostic carries the call trace (`&caller.trace`).

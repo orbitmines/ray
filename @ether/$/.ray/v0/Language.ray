@@ -36,7 +36,7 @@ Language := class = extensions: String | String[], location: Location[] = [], le
 
   static Sublanguage := class: Language = excluded: Effects.Source[] = [], terminating: boolean = true {
     admits (program: Program) => !Effects.of(program).some(excluded.contains(.)) && (!terminating || program ==.instance_of Terminating)
-    read (text) => of.read(text) -- admits(.) ? . : ERROR@Sublanguage `this file is written in a sublanguage that does not permit what it does`
+    read (text) => of.read(text) -- admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`
   }
 }
 

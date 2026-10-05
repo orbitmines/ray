@@ -268,5 +268,5 @@ Answers from 2026-09-30.
 - **Covered elsewhere:** P8.1 (standing instruction: optimizations are rewrite rules as levels).
 
 ### Answers 2026-10-05 (errors)
-- `ERROR@Kind` / `FATAL@Kind` with a message: what follows `@` is the error's kind, from the enum `Diagnostic.Kind` (so it can be autocorrected); the diagnostic points at the ERROR line itself and carries the call trace. A non-fatal error is attached to the value the enclosing function answers; a fatal one is that value. At the top level the statement's value takes it. `ERROR[k]` is gone; `$Kind` on the next line handles one kind.
+- `ERROR` / `FATAL` with a message, nothing else: no kind is kept — where an error came from is the function that raised it (its trace). The diagnostic points at the ERROR line itself and carries the call trace. A non-fatal error is attached to the value the enclosing function answers; a fatal one is that value. At the top level the statement's value takes it. `$name` on the line after a call handles the errors raised by the function `name`.
 - The `$` forms are methods painted `^error`; `x $ return 9` needs no form of its own (the fallback is read lazily in the caller's scope).

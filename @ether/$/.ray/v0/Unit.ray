@@ -23,13 +23,13 @@ Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Uni
   chainable == (other: Quantity) => in(finer(other)) == other.in(finer(other))
   chainable < (other: Quantity) => in(finer(other)) < other.in(finer(other))
   chainable > (other: Quantity) => other < this
-  chainable < (other: Number) => ERROR@Comparison `a quantity does not compare with a plain number`
-  chainable > (other: Number) => ERROR@Comparison `a quantity does not compare with a plain number`
+  chainable < (other: Number) => ERROR `a quantity does not compare with a plain number`
+  chainable > (other: Number) => ERROR `a quantity does not compare with a plain number`
   compounds + (other: Quantity) => Quantity(quantities: [(in(finer(other)) + other.in(finer(other)), finer(other))])
   compounds - (other: Quantity) => Quantity(quantities: [(in(finer(other)) - other.in(finer(other)), finer(other))])
   compounds * (times: Number) => Quantity(quantities: quantities.map((quantity, unit) => (quantity * times, unit)))
   compounds * (per: Quantity) => unit ==.instance_of Unit.Rate ? Quantity(quantities: [(amount * per.in(unit.denominator), unit.numerator)])
-    : ERROR@UnitMismatch `a quantity is multiplied by another only as a rate by what it is per`
+    : ERROR `a quantity is multiplied by another only as a rate by what it is per`
   ± | +- (uncertainty: Quantity) => this - uncertainty | this + uncertainty
 
   as (=== String) => quantities.map((quantity, unit) => (quantity as String) + " " + (unit as String)).join(" ")

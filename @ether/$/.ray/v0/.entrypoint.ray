@@ -226,16 +226,28 @@ do{ }{block}{ }while{ }{cond} ^class => (
 loop{ }{block} ^class => while true block
 
 Program := class {
-  ({arguments}) => (
-    goto run if (.parameters.not)
-    names := .parameters
-    (inline names) := arguments
-   run\
-    body := .code
-    inline body
-  )
+  ({arguments}) => .entered(arguments, arguments)
 
   { }{expr} => this(expr)
+
+  entered (element, given) => (
+    closure_code ^keyword := .code
+    closure_parameters ^keyword := .parameters
+    entering ^keyword := chain None
+    entering.target = element
+    entered_value ^keyword := None
+    if (closure_parameters.not) {
+      external define entering.target `closure_entered` { inline closure_code } None
+      entered_value = entering.target.closure_entered
+    } else {
+      external define entering.target `closure_applied{arguments}` {
+        (inline closure_parameters) := arguments
+        inline closure_code
+      } None
+      entered_value = entering.target.closure_applied(given)
+    }
+    entered_value
+  )
 }
 
 Modifier := class {
@@ -643,14 +655,7 @@ Node := base class {
 
   structure => None
 
-  satisfies (predicate) => (
-    holding ^keyword := chain None
-    holding.target = this
-    external define holding.target `constrained` {
-      inline predicate
-    } None
-    holding.target.constrained
-  )
+  satisfies (predicate) => Program(code: (external ** predicate)).entered(this, None)
 
   verify (candidate) => candidate
 
@@ -692,14 +697,7 @@ Node := base class {
   )
 
   ~~{x} ^punctuation => (
-    closure ^keyword := external ** x
-    entering ^keyword := chain None
-    entering.target = this
-    external define entering.target `closure_entered` {
-      inline closure
-    } None
-    entering.target.closure_entered
-
+    Program(code: (external ** x)).entered(this, None)
     this
   )
 

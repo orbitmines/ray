@@ -448,3 +448,7 @@ String.components.hierarchy &= class {
 Number.components.hierarchy &= class {
   spelled_padded (radix: Number, width: Number) => .spelled_in(radix).padded(width)
 }
+
+Parameters := String{.every { it.value != U+007B }}
+
+({parameters: Parameters}) => {block} => Program(code: (external ** block), parameters: (external ** parameters))

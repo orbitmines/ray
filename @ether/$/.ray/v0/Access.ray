@@ -156,6 +156,10 @@ Run := class: Ray {
   }
 }
 
+Run.current = Run(actor: None)
+
+&@ ^keyword => Run.current
+
 Effects := class: Ray {
   Source := enum io | os | random | time | network
 

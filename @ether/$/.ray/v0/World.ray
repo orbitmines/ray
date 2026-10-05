@@ -60,7 +60,7 @@ World := class: Location + Nameable {
   allocate (name: reservable_names, holder) => reserve(name) ~~ .holder = holder
   allocated (name: String) => reserved(name)?.holder
 
-  + (dynamic: Dynamics): static => this ~~ dynamics.push dynamic
+  compounds + (dynamic: Dynamics): static => this ~~ dynamics.push dynamic
   tick: static => this ~~ dynamics#.step(this)
 }
 Region := World
@@ -121,7 +121,7 @@ History := class = repository: *?, commits: Commit[] = [], from: History? {
     staged => visibility == Accessor.Permission.private
     publish: static => this ~~ .visibility = Accessor.Permission.public
   }
-  static Branch := class: History
+  static Branch := class: Program & History
   static Assignment := class = value: *, history: History?, previous: Commit?
 
   count => commits.count
@@ -297,7 +297,7 @@ Avatar := class: Character {
   unlock (skill: Skill): static => this ~~ skills.push skill
   visit (location: Location): static => this ~~ traversed.push location
   copied => Avatar(character, platform)
-  + (other: Avatar): static => this ~~ (
+  compounds + (other: Avatar): static => this ~~ (
     .skills = skills, other.skills{!skills.contains(.)}
     .traversed = traversed, other.traversed
   )

@@ -268,5 +268,5 @@ Answers from 2026-09-30.
 - **Covered elsewhere:** P8.1 (standing instruction: optimizations are rewrite rules as levels).
 
 ### Answers 2026-10-05 (errors)
-- `ERROR` / `FATAL` with a message, nothing else: no kind is kept — where an error came from is the function that raised it (its trace). The diagnostic points at the ERROR line itself and carries the call trace. A non-fatal error is attached to the value the enclosing function answers; a fatal one is that value. At the top level the statement's value takes it. `$name` on the line after a call handles the errors raised by the function `name`.
+- `ERROR@Type` / `FATAL@Type` with a message: what follows `@` is the error's type (any value or class, no enum), caught by `$Type` on the line after the call. `ERROR` / `FATAL` with only a message is fine too; its type is then the function that raised it (its trace), caught by `$function`. The diagnostic points at the ERROR line itself and carries the call trace. A non-fatal error is attached to the value the enclosing function answers; a fatal one is that value. At the top level the statement's value takes it.
 - The `$` forms are methods painted `^error`; `x $ return 9` needs no form of its own (the fallback is read lazily in the caller's scope).

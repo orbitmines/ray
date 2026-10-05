@@ -1922,11 +1922,13 @@ inline DARK
 
 Diagnostic := class {
   message: Node
+  type: Node?
   fatal: Node?
   cause: Node?
   trace: Node?
 
   origin => trace.head.value
+  caught_by (catching) => if type { (type === catching) || type.instance_of(catching) } else { origin === catching }
 
   causes => (
     all := chain None
@@ -1936,10 +1938,19 @@ Diagnostic := class {
   )
 }
 
+FATAL{`@`}{type ^error}{ }{comment ^comment} ^fatal => (
+  report FATAL comment comment
+  &caller.return(Diagnostic(message: comment, type: type, fatal: true, trace: &caller.trace))
+)
+ERROR{`@`}{type ^error}{ }{comment ^comment} ^error => (
+  report ERROR comment comment
+  raised := Diagnostic(message: comment, type: type, trace: &caller.trace)
+  &caller.filed &= raised
+  raised
+)
 FATAL{ }{comment ^comment} ^fatal => (
   report FATAL comment comment
-  raised := Diagnostic(message: comment, fatal: true, trace: &caller.trace)
-  &caller.return(raised)
+  &caller.return(Diagnostic(message: comment, fatal: true, trace: &caller.trace))
 )
 ERROR{ }{comment ^comment} ^error => (
   report ERROR comment comment

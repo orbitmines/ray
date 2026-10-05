@@ -238,3 +238,13 @@ unless (missing_file()
   $missing_file 8) == 8 { INFO@mark `ER17 a handler for errors from one function did not take them` }
 unless (missing_file()
   $stopping 8) == 7 { INFO@mark `ER18 a handler for another function's errors took them` }
+NotFound := class
+looking := () => {
+  ERROR@NotFound `no such page`
+  3
+}
+unless (looking()
+  $NotFound 4) == 4 { INFO@mark `ER19 an error of a type is not caught by that type` }
+unless (looking()
+  $missing_file 4) == 3 { INFO@mark `ER20 an error of a type was caught by another function's handler` }
+unless looking().diagnostics.last.type === NotFound { INFO@mark `ER21 an error does not keep the type written after @` }

@@ -42,8 +42,8 @@ Node &+= {
   $! ^error => erred ? FATAL `an error escalated to fatal` : this
   $?! ^error => erred ? None : this
   $?! (handler: Program) ^error => erred ? handler.entered(diagnostics.last, None) : this
-  {\n}${function} {handled} ^error => recoverable && diagnostics.last.origin == function ? handled : this
-  {\n}${function} | ${other} {handled} ^error => recoverable && (diagnostics.last.origin == function || diagnostics.last.origin == other) ? handled : this
+  {\n}${caught} {handled} ^error => recoverable && diagnostics.last.caught_by(caught) ? handled : this
+  {\n}${caught} | ${other} {handled} ^error => recoverable && (diagnostics.last.caught_by(caught) || diagnostics.last.caught_by(other)) ? handled : this
 }
 
 !{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)

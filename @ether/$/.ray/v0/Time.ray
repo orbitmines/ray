@@ -34,6 +34,9 @@ Calendar := class {
 
 Weekday := enum Monday | Tuesday | Wednesday | Thursday | Friday | Saturday | Sunday
 Month := enum January | February | March | April | May | June | July | August | September | October | November | December
+Month &+= {
+  days_in (year: Julian) => year.days_in(this)
+}
 
 Julian := class: Calendar {
   static year = Calendar.Segment(day -> 365 | 366 if is_leap_year)
@@ -46,10 +49,18 @@ Julian := class: Calendar {
   static minute = Calendar.Segment(60 seconds | 61 seconds if LeapSeconds.at(this))
 
   is_leap_year => year % 4 == 0
+
+  days_in (month: Month) => [31, is_leap_year ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][Month#.index_of(month)]
+  days_in_year => is_leap_year ? 366 : 365
+  weeks_in_year => days_in_year / 7
+  days_before (month: Month) => Month#[..Month#.index_of(month)].map(days_in).sum
+  days_before_year => 365 * (year - 1) + (year - 1) / 4
+  weekday_of (day_of_year: Number) => Weekday#[(days_before_year + day_of_year - 1) % 7]
 }
 
 Gregorian := class: Julian {
   is_leap_year => year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+  days_before_year => 365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400
 
   // The reform: the day after 1582-10-04 Julian is 1582-10-15 Gregorian.
   equivalence "1582-10-04" as Julian -> "1582-10-15"
@@ -57,6 +68,7 @@ Gregorian := class: Julian {
 
 UTC := class: Gregorian (offset: Quantity.Temporal = 0) {
   equivalence 0 -> offset
+  static leap_seconds => false
 }
 GMT := UTC
 
@@ -73,19 +85,38 @@ Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
 
   as (:== calendar) => this
 
+  chainable == (other: Time) => since_calendar_epoch in second == other.since_calendar_epoch in second
+  chainable < (other: Time) => since_calendar_epoch in second < other.since_calendar_epoch in second
+  // A time with an unknown date, like `12:00`, compares on the parts it knows: the time of day (N4.3).
+  time_of_day: Quantity.Temporal => ((since_calendar_epoch in second) % (Quantity(quantities: [(1, day)]) in second)) seconds
+  chainable == (other: Quantity.Temporal) => time_of_day == other
+  chainable < (other: Quantity.Temporal) => time_of_day < other
+  chainable > (other: Quantity.Temporal) => other < time_of_day
+
   // `Time.YEAR`, `Time.MONTH` are context values: `with Time.MONTH = February` (N4.4).
   calendar.segments.for segment => dynamically Time.`segment.name.upper_case` = since_calendar_epoch.`segment.name`
   calendar.segments.for segment => `segment.name` => segment.is_recurring ? recur(epoch) : since_calendar_epoch as segment
 
-  round (unit: Unit.Temporal) => (this as unit).round as Time
+  round (unit: Unit.Temporal) => Time(calendar, epoch: epoch) = (((this as unit).amount.round unit) as finer(Quantity(quantities: [(1, unit)])))
 
-  // `now` is a distribution around the clock's reading; a correction narrows it, and times read since jump with it (N4.8, N4.10).
-  static now: Time = nondeterministic (external time) ns ± (external time).resolution
+  // `now` is a distribution around the clock's reading, read again every time; a correction narrows it, and times read since jump with it (N4.1, N4.8, N4.10).
+  uncertainty: Quantity.Temporal?
+  corrected (by: Quantity.Temporal, within: Quantity.Temporal) => Time(calendar, epoch: epoch, uncertainty: within) = this + by
+  static now => nondeterministic (external time) ns ± (external time).resolution
   dynamically {
     .calendar.segments.for segment => `segment.name.upper_case` = `segment.name`
   } = now
 }
-{ now } = Time
+now => Time.now
+Quantity.Temporal &+= {
+  chainable == (other: Time) => this == other.time_of_day
+  chainable < (other: Time) => this < other.time_of_day
+  chainable > (other: Time) => other.time_of_day < this
+}
+
+// `1 month` is as many days as the month in context has, January when only the year is set, else 30 (N4.4).
+Unit(name: "month" ("s" + plural: true)?, symbol: "mo")
+  .convert (x: Number) => x * (Time.YEAR || Time.MONTH ? (Time.MONTH ?? January).days_in(Gregorian(year: Time.YEAR ?? 1)) : 30), day
 
 // ISO 8601 (https://en.wikipedia.org/wiki/ISO_8601)
 ISO_8601 := class: Time{calendar ==.instance_of UTC.static} (
@@ -124,6 +155,17 @@ ISO_8601 := class: Time{calendar ==.instance_of UTC.static} (
 ) => {
   calendar += offset_operator offset_hours:offset_minutes
   long => month, " ", day_of_month, ", ", year
+
+  in_year => Gregorian(year: year)
+  day_of_year ?= month ? in_year.days_before(month) + day_of_month
+    : weekday ? week_of_year * 7 + Weekday#.index_of(weekday) + 1 - (Weekday#.index_of(in_year.weekday_of(4)) + 4)
+    : day_of_year
+  date_known => date != ?
+  of_day: Quantity.Temporal => (hour_of_day ?? 0) hours + (minute_of_hour ?? 0) minutes + (second_of_minute ?? 0) seconds
+  as Time => Time(calendar) = (in_year.days_before_year + day_of_year - 1) days + of_day
+  as_time => this as Time
+  chainable == (other: ISO_8601) => date_known && other.date_known ? as_time == other.as_time : of_day == other.of_day
+  chainable < (other: ISO_8601) => date_known && other.date_known ? as_time < other.as_time : of_day < other.of_day
 
   dynamically assert semicolons if offset
   dynamically assert date | time

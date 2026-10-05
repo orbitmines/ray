@@ -75,13 +75,14 @@ Unicode := class {
     (110111₂, U2: Binary¹⁰) if prefix
   )[] {
     static CodeUnit = Binary¹⁶
-    as (:== CodePoint[]) => sequence.map(.U0 + 1, .U1, .U0)
+    as (:== CodePoint[]) => sequence.map(.prefix ? (.U0 + 1) * 2 ^ 16 + .U1 * 2 ^ 10 + .U2 : .U0 * 2 ^ 12 + .U1)
   }
 
   static UTF-32 := class: TF = Binary³²{⊢(0[]¹¹)}[] {
     static CodeUnit = Binary³²
+    as (:== CodePoint[]) => map(as Number)
   }
 }
 
 // https://www.unicode.org/versions/latest/core-spec/appendix-a/#G7083
-U+{codepoint: Unicode.CodePoint.String}: Unicode.Scalar => codepoint
+U+{codepoint: Hexadecimal.String}: Char => Hexadecimal(integer: codepoint) as Char

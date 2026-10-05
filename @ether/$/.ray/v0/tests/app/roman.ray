@@ -34,20 +34,23 @@ unless Roman.Value["C"] == 100 { INFO@mark `RO33 C is not a hundred` }
 unless Roman.Value["D"] == 500 { INFO@mark `RO34 D is not five hundred` }
 unless Roman.Value["M"] == 1000 { INFO@mark `RO35 M is not a thousand` }
 
+unless ("IV" as Roman).canonical == "IV" { INFO@mark `RO64 IV moved when normalized` }
+unless ("IIII" as Roman).canonical == "IV" { INFO@mark `RO67 an additive numeral does not normalize to the standard one` }
+
 unless "V̅" as Roman.Vinculum as Decimal == 5000 { INFO@mark `RO60 an overlined V is not five thousand` }
 unless "CCIↃↃ" as Roman.Apostrophus as Decimal == 10000 { INFO@mark `RO71 CCIↃↃ is not ten thousand` }
 
-unless Roman.Fraction.uncia as Decimal == 1/12 { INFO@mark `RO28 the uncia is not one twelfth` }
-unless Roman.Fraction.sextans as Decimal == 2/12 { INFO@mark `RO40 the sextans is not two twelfths` }
-unless Roman.Fraction.quadrans as Decimal == 3/12 { INFO@mark `RO41 the quadrans is not three twelfths` }
-unless Roman.Fraction.triens as Decimal == 4/12 { INFO@mark `RO42 the triens is not four twelfths` }
-unless Roman.Fraction.quincunx as Decimal == 5/12 { INFO@mark `RO43 the quincunx is not five twelfths` }
-unless Roman.Fraction.semis as Decimal == 6/12 { INFO@mark `RO27 the semis is not six twelfths` }
-unless Roman.Fraction.septunx as Decimal == 7/12 { INFO@mark `RO44 the septunx is not seven twelfths` }
-unless Roman.Fraction.bes as Decimal == 8/12 { INFO@mark `RO45 the bes is not eight twelfths` }
-unless Roman.Fraction.dodrans as Decimal == 9/12 { INFO@mark `RO46 the dodrans is not nine twelfths` }
-unless Roman.Fraction.dextans as Decimal == 10/12 { INFO@mark `RO47 the dextans is not ten twelfths` }
-unless Roman.Fraction.deunx as Decimal == 11/12 { INFO@mark `RO48 the deunx is not eleven twelfths` }
+unless Roman.Fraction.uncia as Decimal == 1.0 * 1 / 12 { INFO@mark `RO28 the uncia is not one twelfth` }
+unless Roman.Fraction.sextans as Decimal == 1.0 * 2 / 12 { INFO@mark `RO40 the sextans is not two twelfths` }
+unless Roman.Fraction.quadrans as Decimal == 1.0 * 3 / 12 { INFO@mark `RO41 the quadrans is not three twelfths` }
+unless Roman.Fraction.triens as Decimal == 1.0 * 4 / 12 { INFO@mark `RO42 the triens is not four twelfths` }
+unless Roman.Fraction.quincunx as Decimal == 1.0 * 5 / 12 { INFO@mark `RO43 the quincunx is not five twelfths` }
+unless Roman.Fraction.semis as Decimal == 1.0 * 6 / 12 { INFO@mark `RO27 the semis is not six twelfths` }
+unless Roman.Fraction.septunx as Decimal == 1.0 * 7 / 12 { INFO@mark `RO44 the septunx is not seven twelfths` }
+unless Roman.Fraction.bes as Decimal == 1.0 * 8 / 12 { INFO@mark `RO45 the bes is not eight twelfths` }
+unless Roman.Fraction.dodrans as Decimal == 1.0 * 9 / 12 { INFO@mark `RO46 the dodrans is not nine twelfths` }
+unless Roman.Fraction.dextans as Decimal == 1.0 * 10 / 12 { INFO@mark `RO47 the dextans is not ten twelfths` }
+unless Roman.Fraction.deunx as Decimal == 1.0 * 11 / 12 { INFO@mark `RO48 the deunx is not eleven twelfths` }
 
 unless "IIII" as Roman as Decimal == 4 { INFO@mark `RO61 IIII is not read as four` }
 unless "IIII" as Roman as Decimal as Roman == "IV" { INFO@mark `RO63 IIII does not normalize to IV` }
@@ -60,5 +63,6 @@ unless Roman.normalizer == Roman.Normalizer.Subtractive { INFO@mark `RO65 the no
   unless 4 as Roman == "IIII" { INFO@mark `RO68 four is not written IIII once the normalizer is additive` }
   unless 9 as Roman == "VIIII" { INFO@mark `RO11 nine is not written VIIII the additive way` }
   unless 3 as Roman == "III" { INFO@mark `RO24 three is written the same either way` }
+  unless ("IV" as Roman).canonical == "IIII" { INFO@mark `RO69 the canonical form does not follow the normalizer` }
 )
 unless 4 as Roman == "IV" { INFO@mark `RO70 four is not written IV outside the additive normalizer` }

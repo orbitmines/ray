@@ -1,13 +1,13 @@
 // The core of every rendering is geometry: shapes in a space, constrained until one layout is left (F-B6, F-B8).
 Point := Ray
-Path | Curve | Line := Array.Unbounded
+Curve | Line := Array{unbounded}
 
 Geometry := class {
   // A position or a size in any number of dimensions; lengths are Unit.ray quantities (F-B5).
   Vector := class = x: Length = 0, y: Length = 0, z: Length = 0 {
-    + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)
-    - (other: Vector) => Vector(x - other.x, y - other.y, z - other.z)
-    * (factor: Number) => Vector(x * factor, y * factor, z * factor)
+    compounds + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)
+    compounds - (other: Vector) => Vector(x - other.x, y - other.y, z - other.z)
+    compounds * (factor: Number) => Vector(x * factor, y * factor, z * factor)
     length => √(x ^ 2 + y ^ 2 + z ^ 2)
     dimensions => [x, y, z]
   }
@@ -20,9 +20,24 @@ Geometry := class {
     static scale (by: Vector) => Transform([[by.x, 0, 0, 0], [0, by.y, 0, 0], [0, 0, by.z, 0], [0, 0, 0, 1]])
     static rotate (turn: Number, around: Vector = Vector(z: 1)) => Transform(rotation(turn, around))
     static skew (by: Vector) => Transform([[1, by.x, 0, 0], [by.y, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
-    * (other: Transform) => Transform(matrix.map(row => other.matrix.zip_columns.map(column => row.zip(column).map(*).sum)))
+    compounds * (other: Transform) => Transform(matrix.map(row => columns(other.matrix).map(column => row.zip(column).map(*).sum)))
     applied (point: Vector) => Vector(matrix[..3].map(row => row.zip([point.dimensions, 1]).map(*).sum))
-    inverse => Transform(matrix.inverse)
+    inverse => Transform(inverted(matrix))
+    transposed => columns(matrix)
+
+    static columns (m: Number[][]) => (0..<m.first.count).map(j => m.map(.[j]))
+    static without (m: Number[][], i: Number, j: Number) => (0..<m.count){!= i}.map(r => (0..<m.count){!= j}.map(c => m[r][c]))
+    static determinant (m: Number[][]) => m.count == 1 ? m[0][0] : (0..<m.count).map(j => (j.even ? 1 : -1) * m[0][j] * determinant(without(m, 0, j))).sum
+    static inverted (m: Number[][]) => (0..<m.count).map(i => (0..<m.count).map(j => ((i + j).even ? 1 : -1) * determinant(without(m, j, i)) / determinant(m)))
+    static rotation (turn: Number, around: Vector) => (cos(turn), sin(turn), 1 - cos(turn)) -- ((c, s, t) => [
+      [t * around.x * around.x + c, t * around.x * around.y - s * around.z, t * around.x * around.z + s * around.y, 0],
+      [t * around.x * around.y + s * around.z, t * around.y * around.y + c, t * around.y * around.z - s * around.x, 0],
+      [t * around.x * around.z - s * around.y, t * around.y * around.z + s * around.x, t * around.z * around.z + c, 0],
+      [0, 0, 0, 1]
+    ])
+    static τ = 6.283185307179586
+    static cos (turn: Number) => (0..10).map(k => (k.even ? 1 : -1) * (τ * turn) ^ (2 * k) / (2 * k)!).sum
+    static sin (turn: Number) => (0..10).map(k => (k.even ? 1 : -1) * (τ * turn) ^ (2 * k + 1) / (2 * k + 1)!).sum
   }
 
   Color := class = red: Number{0 <= . <= 255}, green: Number{0 <= . <= 255}, blue: Number{0 <= . <= 255}, alpha: Probability = 1 {
@@ -79,9 +94,15 @@ Geometry := class {
   Shape := class: Ray = position: Vector = Vector(), size: Vector = Vector(), transform: Transform = Transform(), children: Shape[] = [],
     fill: Paint?, stroke: Stroke?, radius: Length[] = [0], effects: Effect[] = [], blend: Blend = normal,
     spacing: Spacing[] = [], constraints: Constraint[] = [], flow: Flow = vertical, gap: Vector = Vector(),
-    overflow: visible | clip | scroll = visible, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true {
+    overflow: visible | clip | scroll = visible, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
+    animations: Animation[] = [], dynamics: Dynamic[] = [] {
+    static made = 0
+    id: String = "s" + ((Shape.made += 1) as String)
+    expand => [this], children.map(.expand).flatten(1)
+    parent_in (scene: Shape) => scene.expand{.children.some(. === this)}.first
+    content_height => children.map(.position.y + .outer.y).max ?? size.y
     // Spacing is a component: a ball with padding is still a ball (F-B8b).
-    + (component: Spacing | Constraint | Effect) => component.match
+    compounds + (component: Spacing | Constraint | Effect) => component.match
       Spacing => spacing.push component
       Constraint => constraints.push component
       Effect => effects.push component
@@ -182,6 +203,8 @@ Geometry := class {
     at (time: Time) => from + (to - from) * easing((time - started - delay) / duration min 1 max 0)
     value => dynamically at(Time.now)
   }
+  // What re-runs when what it reads changes: a `dynamically` of the page, as the web level writes it (F-D6).
+  Dynamic := class = reads: String[], compiled: Program
   Easing := (progress: Probability): Probability
   linear: Easing = (t) => t
   ease: Easing = (t) => t * t * (3 - 2 * t)
@@ -191,11 +214,11 @@ Geometry := class {
 
 // Alignment words keep their block (F-B9): `center { … }` is `{ … }.center`.
 Node &+= {
-  right-to-left center => Geometry.Box(constraints: [Geometry.Constraint("x", align: center)], children: [this])
-  right-to-left right => Geometry.Box(constraints: [Geometry.Constraint("x", align: end)], children: [this])
-  right-to-left left => Geometry.Box(constraints: [Geometry.Constraint("x", align: start)], children: [this])
-  right-to-left between => Geometry.Box(constraints: [Geometry.Constraint("x", align: between)], children: [this])
-  right-to-left middle => Geometry.Box(constraints: [Geometry.Constraint("y", align: middle)], children: [this])
+  right-to-left center ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: center)], children: [this])
+  right-to-left right ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: end)], children: [this])
+  right-to-left left ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: start)], children: [this])
+  right-to-left between ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: between)], children: [this])
+  right-to-left middle ^keyword => Geometry.Box(constraints: [Geometry.Constraint("y", align: middle)], children: [this])
 }
 
 // The spacing shorthands: p/m with a side, from the border or from the shape (F-B8c). These stay grammar: `px 5` is padding, `5.px` is the unit.
@@ -206,11 +229,11 @@ Node &+= {
 
 // Breakpoints: `md 6/12` is `(6/12).md`.
 Number &+= {
-  right-to-left xs => Geometry.Breakpoint(0px, this)
-  right-to-left sm => Geometry.Breakpoint(576px, this)
-  right-to-left md => Geometry.Breakpoint(768px, this)
-  right-to-left lg => Geometry.Breakpoint(992px, this)
-  right-to-left xl => Geometry.Breakpoint(1200px, this)
+  right-to-left xs ^keyword => Geometry.Breakpoint(0px, this)
+  right-to-left sm ^keyword => Geometry.Breakpoint(576px, this)
+  right-to-left md ^keyword => Geometry.Breakpoint(768px, this)
+  right-to-left lg ^keyword => Geometry.Breakpoint(992px, this)
+  right-to-left xl ^keyword => Geometry.Breakpoint(1200px, this)
 }
 
 // The units a rendering is measured in; each platform level says what they are in its target (F-B5).

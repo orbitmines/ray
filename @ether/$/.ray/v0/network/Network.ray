@@ -1,9 +1,19 @@
 Network &+= {
   static Port = Decimal{< 2^16}
 
-  static Protocol &+= {
+  static DomainName := class (text: (Char.Letter | Char.Digit | "-" | ".")[]) => {
+    valid => 0 < text.count < 2^8
+  }
+
+  static Proxy := class = character: Character {
+    static through (character: Character) => Proxy(character)
+  }
+
+  static Protocol := class {
     name: String
     port: Port
+
+    static handshake (offered) => offered
 
     static ether = Protocol("ether", @ether.address.port)
     static https = Protocol("https", 443)
@@ -38,7 +48,7 @@ Network &+= {
     static Equivalence := class = name: String, host: String
     equivalences: Equivalence[] = []
 
-    equate (name: String, host: String) => equivalences.push(Equivalence(name.fold_case, host)).host
+    equate (name: String, host: String) => equivalences.push(Equivalence(name.fold_case, host)) -- host
     resolved (name: String) => DomainName(equivalences{.name == name.fold_case}.last?.host ?? name)
   }
 
@@ -46,7 +56,7 @@ Network &+= {
     static Record := class = name: String, address: *, key: *, when: Time = Time.now
     history: Record[] = []
 
-    record (name: String, address, key) => history.push(Record(name, address, key)).address
+    record (name: String, address, key) => history.push(Record(name, address, key)) -- address
     trusted (name: String, address, key) => (history{.name == name}.last?.key ?? key) == key
   }
 
@@ -111,3 +121,9 @@ Instance &+= {
 }
 
 {address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => Instance(location: address, address)
+
+HTTP := class {
+  static Method := enum get | post | put | delete
+
+  get (url) => IO.read(url)
+}

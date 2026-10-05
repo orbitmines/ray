@@ -30,9 +30,9 @@ Store := class: Location = name: String, parent: Store?, children: Store[] = [],
   static keep (instance) => routed(instance).put(instance)
   static constructed (instance) => instance -- keep(.) if materialised.some(instance ==.instance_of .)
 
-  static of (type) => materialised.contains(type) || materialised.push(type) -- View(type)
-
   static View := class = type: *, at: Store? {
+    materialised.contains(type) || materialised.push(type)
+
     stores => stores_of(type){!at || . === at}
     all => stores.all.flatten{==.instance_of type}
     matching (filter) => all{filter}

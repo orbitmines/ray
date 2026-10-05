@@ -1,6 +1,7 @@
 // The TUI is a Compiler level like the web (F-D2, F-D10): the scene becomes a grid of cells, the grid becomes bytes for one terminal,
 // and the bytes coming back become the same device variables the browser writes (F-D9: everything on the one byte stream).
-TUI := class {
+Language.TUI := class: Language {
+  static extensions = ".tui"
   // A cell is the terminal's pixel: one glyph with its style. A px is a fraction of a cell (F-B5).
   Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, bold: boolean = false, italic: boolean = false, underline: boolean = false, strike: boolean = false, dim: boolean = false, link: Location?
   Grid := class = width: Number, height: Number, cells: Cell[][] = (0..<height).map((0..<width).map(Cell())) {
@@ -28,7 +29,7 @@ TUI := class {
     // An image is sampled into coloured characters (F-C1); a terminal that shows pixels gets them through its own level.
     Geometry.Image => Area(shape).for(at => grid.put(at, Picture(shape.source).sampled(at - cells(shape.position), cells(shape.size))))
     // Drawing on a cell grid: braille dots give 2×4 points per cell.
-    Geometry.Canvas => shape.draws{O: Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..at.y * 4 + 4].map(.[at.x * 2..at.x * 2 + 2])))))
+    Geometry.Canvas => shape.draws{O: Language.Direct.level}().rows -- Area(shape).for(at => grid.put(at, Cell(Braille(.[at.y * 4..at.y * 4 + 4].map(.[at.x * 2..at.x * 2 + 2])))))
     // OSC 8 hyperlinks: the cells carry where they go.
     UI.Link => Box(shape, grid) -- Area(shape).for(grid.cells[.y][.x] ~~ .link = shape.to)
     UI.Input => Paint(Geometry.Text(shape.match
@@ -88,8 +89,16 @@ TUI := class {
     Color := (color: Geometry.Color, layer: Number) => layer, ";2;", color.red, ";", color.green, ";", color.blue
     Hyperlink := (cell: Cell) => cell.link ? ("\e]8;;", cell.link as String, "\e\\") : "\e]8;;\e\\"
   }
-  level := Cells + {
-    {grid: Grid} => ANSI().write(grid)
+  level := Cells
+
+  // Where the TUI's frames go: the terminal in raw mode, cleared once and then written by what changed (F-D10).
+  Target := class = ansi: ANSI = ANSI() {
+    start => Terminal.raw_mode -- Terminal.clear
+    stop => Terminal.restore
+    write (grid: Grid) => ansi.write(grid)
+    read => Language.TUI.read
+    // OSC 52: the terminal puts it on the system clipboard.
+    copy (text: String) => Terminal.emit("\e]52;c;", Base64.encoded(text.bytes), "\a")
   }
 
   // Terminal kinds: what differs is a level (F-P1). Colours are quantised, graphics and keyboards upgraded where the terminal can.
@@ -102,18 +111,25 @@ TUI := class {
   }
   // Pixels where the terminal draws them: kitty graphics and sixel.
   Kitty := {
-    {image: Geometry.Image} => Terminal.emit("\e_Ga=T,f=100;", IO.read(image.source) as Base64, "\e\\")
+    {image: Geometry.Image} => Terminal.emit("\e_Ga=T,f=100;", Base64.encoded(IO.File(image.source as String).bytes), "\e\\")
   }
   Sixel := {
-    {image: Geometry.Image} => Terminal.emit("\eP0;0;0q", (IO.read(image.source) as Geometry.Raster) as Sixel.Encoding, "\e\\")
+    {image: Geometry.Image} => Terminal.emit("\eP0;0;0q", SixelEncoded(IO.read(image.source) as Geometry.Raster), "\e\\")
   }
+  // Six rows a band; per colour of the palette, one character per column with a bit for each row that colour covers.
+  SixelEncoded := (raster: Geometry.Raster) => raster.pixels.unique.enumerate -- (palette => (
+    palette.map("#", .index, ";2;", .value.red * 100 / 255, ";", .value.green * 100 / 255, ";", .value.blue * 100 / 255),
+    (0..<(raster.height + 5) / 6).map(band => palette.map(
+      "#", .index, (0..<raster.width).map(x => ((0..<6).map(row => raster.at(x, band * 6 + row) == .value ? 2 ^ row : 0).sum + 63) as Char), "$"
+    ), "-")
+  ))
   // The TUI inside a browser: the same cells written to a DOM grid (Platforms: "the TUI can also run in the browser").
   Browser := {
-    {grid: Grid} => Web.DOM().write(Web.HTML.Element("pre", children: grid.cells.map(.map(.glyph) as String).join(\n)))
+    {grid: Grid} => Language.Web.DOM().write(Language.Web.HTML.Element("pre", children: grid.cells.map(.map(.glyph) as String).join(\n)))
   }
 
   // Bytes from the terminal become device variables (F-D10b): keys with modifiers, SGR mouse, paste, focus, resize.
-  read => (Terminal.read ?? "") ~= (events: Event[]) -- .events.for(.apply)
+  static read => (Terminal.read ?? "") ~= (events: Event[]) -- .events.for(.apply)
   Event := Key | Mouse | Paste | FocusChange | Resize
   Key := class ("\e[", (modifiers: "1;", modifier: Decimal)?, code: "A" | "B" | "C" | "D" | "H" | "F" | "Z") | ("\eO", code: "P" | "Q" | "R" | "S") | (code: Char) => {
     name => code.match
@@ -127,10 +143,15 @@ TUI := class {
       * => Keyboard.key(code)
     shift => modifier && (modifier - 1) % 2 == 1
     control => modifier && (modifier - 1) / 4 % 2 == 1
+    // Arrows move the selection, with control skip to the next group, with shift expand it; Tab moves focus; Enter activates; F2 toggles; q quits (F-D10b).
     apply => Keyboard.press(name, shift, control) -- {
+      UI.Selection.move(name) if name ==.instance_of Keyboard.Direction && !shift && !control
+      UI.Selection.skip(name) if name ==.instance_of Keyboard.Direction && control
+      UI.Selection.expand(name) if name ==.instance_of Keyboard.Direction && shift
       UI.Focus.current = UI.Focus.next(UI.scene) if name == Keyboard.tab && !shift
       UI.Focus.current = UI.Focus.previous(UI.scene) if name == Keyboard.tab && shift
-      UI.Focus.current.activate if name == Keyboard.enter
+      (UI.Focus.current ?? UI.Selection.current)?.activate if name == Keyboard.enter
+      UI.Runtime.current?.stop if code == "q"
     }
   }
   Mouse := class ("\e[<", button: Decimal, ";", x: Decimal, ";", y: Decimal, state: "M" | "m") => {
@@ -155,5 +176,8 @@ Terminal := class {
   read => external io `stdin` None
   size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)
   raw_mode => emit("\e[?1049h", "\e[?25l", "\e[?1000h", "\e[?1006h", "\e[?2004h", "\e[?1004h")
+  clear => emit("\e[2J", "\e[H")
   restore => emit("\e[?1004l", "\e[?2004l", "\e[?1006l", "\e[?1000l", "\e[?25h", "\e[?1049l")
 }
+
+Language.register(Language.TUI)

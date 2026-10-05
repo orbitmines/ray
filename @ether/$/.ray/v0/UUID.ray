@@ -37,13 +37,15 @@ UUID := class: Hexadecimal³² ~~ .[7 | +4 | +4 | +4].push_after("-") {
     // Choosing a v1 generates one; choosing among unique ones is the runtime's to guarantee (X5.2).
     chosen_within (width) => ~generate()
 
+    static last_time = 0
     generate\
-      time = Time.now(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor
+      time = (Time.now(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor) max (last_time + 1)
+      last_time = time
       version = 1
       variant = 10₂
       (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random
       // No MAC address: a random one with the multicast bit set (https://datatracker.ietf.org/doc/html/rfc4122#section-4.5)
-      node = @me.instance#.mac_address | Hexadecimal¹².random ~~ .[1] |= 1
+      node = @me?.instance?.mac_address ?? (Hexadecimal¹².random ~~ .[1] |= 1)
   }
 
   static v3 := class: UUID {

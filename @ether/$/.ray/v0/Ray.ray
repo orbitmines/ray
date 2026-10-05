@@ -3,10 +3,10 @@
 <--> (): Ray => (<-) &+ (->)
 
 Ordered<T = static> := class {
-  < (b: T) => TODO
-  > (b: T) => b < this
-  <= (b: T) => this == b || this < b
-  >= (b: T) => this == b || this > b
+  chainable < (b: T) => TODO
+  chainable > (b: T) => b < this
+  chainable <= (b: T) => this == b || this < b
+  chainable >= (b: T) => this == b || this > b
   min (b: T) => this <= b ? this : b
   max (b: T) => this >= b ? this : b
 }
@@ -36,8 +36,11 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
     terminal: Boundary => (all{is_terminal}⊣){⊙.is_terminal}
   }
 
-  first => all{is_first}
-  last => all{is_last}
+  first => entry
+  last => rest.empty ? first : rest.last
+  static From := class: Iterable = at: Ray {
+    entry => at
+  }
 
   for <traverse: Traverser = Traverser.default>(yield: (x: Vertex): *) => traverse<.yield: yield<local: &caller, break: return>>(entry) if entry
 
@@ -61,11 +64,13 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   // `.min(.count)`, `.max(.stamp)`: along a key when given a function of the entry; `2.min(5)` stays Ordered's (R3.10).
   min (key: Program | Section) => reduce((acc) => key(acc) <= key(.) ? acc : .)
   max (key: Program | Section) => reduce((acc) => key(acc) >= key(.) ? acc : .)
+  min_by (key) => min(key)
+  max_by (key) => max(key)
   count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
-  length => paths.length
+  length => paths.map(.count).max
   paths: Path{.bounded: bounded} => [this]
 
-  rest => entry?.next ?? []
+  rest => entry?.next ? From(at: entry.next) : []
   map (mapping: (x: Vertex): *) => empty ? [] : mapping(first), rest.map(mapping)
   // A filter on map maps only what it selects: `[1, 2, 3].map{choose 1}(*10)` multiplies one chosen element (Almanac).
   map {selection} (mapping: (x: Vertex): *) => (selected = this[{selection}]) -- map(x => selected.contains(x) ? mapping(x) : x)
@@ -79,19 +84,24 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   contains | includes <operator: (x: Vertex): (b: Vertex): boolean = ==>(x: Vertex) => some(operator(.)(x))
   partition (predicate) => [this[{predicate}]], [this[{!predicate(.)}]]
   batch | chunk (size: Number) => empty ? [] : [this[..size]], this[size..].chunk(size)
-  flatten => reduce(acc = [] => acc, .)
-  flatten (levels: Number) => levels == 0 ? this : map(. ==.instance_of Iterable ? .flatten(levels - 1) : [.]).flatten
+  concatenated => reduce(acc = [] => acc, .)
+  flatten => map(. ==.instance_of Iterable && !(. ==.instance_of String) ? .flatten : [.]).concatenated
+  flatten (levels: Number) => levels == 0 ? this : map(. ==.instance_of Iterable && !(. ==.instance_of String) ? .flatten(levels - 1) : [.]).concatenated
+  union (other: Iterable) => this, other[{!this.contains(.)}]
   intersection (other: Iterable) => this[{other.contains(.)}]
   disjoint (other: Iterable) => intersection(other).empty
   xor | symmetric_difference (other: Iterable) => this[{!other.contains(.)}], other[{!this.contains(.)}]
   split (delimiter) => this ~= (*, delimiter)[] -- #.join(*)
   enumerate => map((x) => (index: x.index, value: x))
   zip (other: Iterable) => empty || other.empty ? [] : [(first, other.first)], rest.zip(other.rest)
+  // Every pair of an element here and one there: the product of two collections (R4.3).
+  pairs (other: Iterable) => map(a => other.map(b => (a, b))).flatten(1)
   join (separator) => reduce((acc) => acc, separator, .)
   random => this[Random.below(count)]
   fill (x) => all = x
   take (count: Number) => this[..count]
   find (predicate) => this[{predicate}].first
+  index_of (x, at = 0) => empty ? None : first == x ? at : rest.index_of(x, at + 1)
   find_all (predicate) => this[{predicate}]
   shuffled => empty ? [] : (picked = random), this[{!== picked}].shuffled
   squeeze => this[{. != .previous}]
@@ -103,8 +113,8 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   orbit | loop => Loop(around: this, at: first)
 
   // `Binary₈[]₄`: compose the structure `count` times.
-  * (count: Number) => count == 0 ? [] : this, this * (count - 1)
-  ^ (count: Number) => this{.count == .count ? .count * count : count}
+  compounds * (count: Number) => count == 0 ? [] : this, this * (count - 1)
+  ^ (count: Number) => count == 0 ? [[]] : pairs(this ^ (count - 1)).map((x, xs) => [x], xs)
 
   + (at: Integer) => this[at]
   - (at: Integer) => this[-at]
@@ -132,7 +142,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   // `x: String[] = "String", Object, "String", Object`
   as (: Iterable<R: ?>) => this[{==.instance_of R}]
 
-  == (other: Iterable) => orderless || other.orderless
+  chainable == (other: Iterable) => orderless || other.orderless
     ? count == other.count && every(other.contains(.))
     : empty ? other.empty : other.nonempty && first == other.first && rest == other.rest
 }
@@ -147,13 +157,18 @@ Ray := class: Iterable & Ordered {
   is_last => is_terminal
   is_boundary => is_initial || is_terminal
 
-  entry => this
+  entry => first
   first => is_initial ? this : previous.first
   last => is_terminal ? this : next.last
   index => is_initial ? 0 : previous.index + 1
   count => is_terminal ? 1 : next.count + 1
 
   .. (last: Ray) => this === last ? [this] : next ? this, next..last : None
+  to (other: Ray) => reachable.some(. === other)
+
+  same_vertex (other: Ray) => value || other.value ? value == other.value : same_text((external where this), (external where other))
+  matches (other: Ray) => same_vertex(other) && (is_terminal ? other.is_terminal : other.next && next.matches(other.next))
+  chainable == (other: Ray) => first.matches(other.first)
 
   expand => first..last
   // The whole context except this value: the complement with the context as the universal set (R3.7).
@@ -166,7 +181,7 @@ Ray := class: Iterable & Ordered {
   path_to | between (target, trail = []) => this === target ? [[trail, this]]
     : continuations{!trail.contains(.)}.map(.path_to(target, [trail, this])).flatten(1)
     -- . ?? Quest(name: "find a path", goal: target)
-  shortest_path_to (target) => path_to(target).min(.count)
+  shortest_path_to (target) => path_to(target) -- . ==.instance_of Quest ? . : .min_by(.count)
 
   complement (selection) => reachable{!selection.contains(.)}
 
@@ -222,14 +237,27 @@ Traverser := class: <yield: (x: Ray): None>(entry: Ray): None {
   static default = DepthFirst
 
   static DepthFirst: Traverser = (entry: Ray) => {
-    yield entry
-    entry.next?.for<DepthFirst>(yield)
+    seen = []
+    pending = [entry]
+    while pending.nonempty {
+      at = pending.pop_back
+      unless seen.some(. === at) {
+        seen.push(at)
+        yield at
+        at.continuations.reverse.for(pending.push(.))
+      }
+    }
   }
   static BreadthFirst: Traverser = (entry: Ray) => {
-    level = [entry]
-    while level.nonempty {
-      level.for yield
-      level = level.map(.next){!= None}
+    seen = []
+    pending = [entry]
+    while pending.nonempty {
+      at = pending.pop_front
+      unless seen.some(. === at) {
+        seen.push(at)
+        yield at
+        at.continuations.for(pending.push(.))
+      }
     }
   }
 }
@@ -256,17 +284,17 @@ Graph := class: Structure {
   static Simple := class: Graph = vertices: *[] = [], edges: Edge[] = [] {
     static Edge := class = from: *, to: *
 
-    vertex (value) => vertices.contains(value) ? value : vertices.push(value)
+    vertex (value) => (vertices.push(value) unless vertices.contains(value)) -- value
     connect (from, to) => { vertex(from); vertex(to); edges.push Edge(from, to) } -- this
     connected (from, to) => edges.some(.from == from && .to == to)
     outgoing (vertex) => edges{.from == vertex}.to
 
     // Products and unions (R4.3)
     cartesian (other: Simple) => Simple(
-      vertices: vertices * other.vertices,
-      edges: (edges * other.vertices).map((e, v) => Edge((e.from, v), (e.to, v))), (vertices * other.edges).map((v, e) => Edge((v, e.from), (v, e.to)))
+      vertices: vertices.pairs(other.vertices),
+      edges: edges.pairs(other.vertices).map((e, v) => Edge((e.from, v), (e.to, v))), vertices.pairs(other.edges).map((v, e) => Edge((v, e.from), (v, e.to)))
     )
-    tensor (other: Simple) => Simple(vertices: vertices * other.vertices, edges: (edges * other.edges).map((a, b) => Edge((a.from, b.from), (a.to, b.to))))
+    tensor (other: Simple) => Simple(vertices: vertices.pairs(other.vertices), edges: edges.pairs(other.edges).map((a, b) => Edge((a.from, b.from), (a.to, b.to))))
     union (other: Simple) => Simple(vertices: (vertices, other.vertices).unique, edges: (edges, other.edges).unique)
     disjoint_union (other: Simple) => Simple(
       vertices: vertices.map((0, .)), other.vertices.map((1, .)),
@@ -282,10 +310,9 @@ Graph := class: Structure {
       added => right.vertices{!interface.vertices.contains(.)}
 
       applies (host: Simple) => left.vertices.every(host.vertices.contains(.))
-        && (single_pushout || !deleted.some(host.dangling(., host.vertices{!deleted.contains(.)}, left.vertices)))
-      apply (host: Simple) => applies(host)
-        ? deleted.reduce(acc = host => acc.without(.)) -- added.for(.vertex) -- right.edges{!.connected(.from, .to)}.for(.connect(.from, .to))
-        : Quest(name: "rewrite", goal: host)
+        && (single_pushout || !deleted.some(host.dangling(., host.vertices{!deleted.contains(.)}.union(left.vertices))))
+      apply (host: Simple) => applies(host) ? rewritten(deleted.reduce(acc = host => acc.without(.))) : Quest(name: "rewrite", goal: host)
+      rewritten (graph: Simple) => graph -- added.for(graph.vertex(.)) -- right.edges{!graph.connected(.from, .to)}.for(graph.connect(.from, .to)) -- graph
     }
   }
 }
@@ -301,25 +328,46 @@ Path := class: Structure{consistent & connected} {
   length => acyclic ? count : ∞
 }
 Array := class: Path{acyclic} {
-  push_back | push (x) => this, x
-  push_front (x) => x, this
-  pop_front => remove(first)
-  pop_back => remove(last)
-  remove (x) => this[{!= x}]
-  push_after (at, x) => this[..at.index + 1], x, this[at.index + 1..]
-  push_before (at, x) => this[..at.index], x, this[at.index..]
+  push_back | push (x) => (this &= x) -- this
+  push_front (x) => {
+    added = link x None
+    added.next = head
+    if head { head.previous = added } else { tail = added }
+    head = added
+  } -- this
+  link_of (x, at = head) => !at ? None : at.value == x ? at : link_of(x, at.next)
+  unlink (held) => {
+    if held.previous { held.previous.next = held.next } else { head = held.next }
+    if held.next { held.next.previous = held.previous } else { tail = held.previous }
+  } -- held.value
+  pop_front => head ? unlink(head) : None
+  pop_back => tail ? unlink(tail) : None
+  remove (x) => (unlink(link_of(x)) if link_of(x)) -- this
+  push_after (at, x) => {
+    held = link_of(at)
+    added = link x held
+    added.next = held.next
+    if held.next { held.next.previous = added } else { tail = added }
+    held.next = added
+  } -- this
+  push_before (at, x) => link_of(at)?.previous ? push_after(link_of(at).previous.value, x) : push_front(x)
   move_after (x, target) => remove(x).push_after(target, x)
   move_before (x, target) => remove(x).push_before(target, x)
 }
+Chain.components.hierarchy &= Array
+Link.components.hierarchy &= Ray
+
 Set := class: Structure {
   orderless => true
   normalizer = .unordered.unique
+  add (x) => (push(x) unless contains(x)) -- this
 }
 
 Hierarchy := class: Ray {
   parent | previous : static? <- hierarchy -> children | next : static?
 
   holds (child) => children.some(== child || .holds(child))
+  add (child) => children.push(child) -- child.parent = this -- child
   depth => parent ? parent.depth + 1 : 0
 }
 

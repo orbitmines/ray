@@ -29,7 +29,7 @@ made_first := choose UUID.v1{unique}
 made_second := choose UUID.v1{unique}
 unless made_first.version == 1 { INFO@mark `UU30 a generated version 1 identifier is not version 1` }
 if made_first == made_second { INFO@mark `UU31 two version 1 identifiers made one after the other are the same` }
-unless made_first.time <= made_second.time { INFO@mark `UU32 the later identifier is earlier` }
+unless made_first.time < made_second.time { INFO@mark `UU32 the later identifier is not later` }
 unless made_first.variant as UUID.Variant == UUID.Variant.RFC_4122 { INFO@mark `UU33 a generated identifier is not of the RFC 4122 variant` }
 unless UUID.Namespace.DNS.version == 1 { INFO@mark `UU34 the DNS namespace is not a version 1 identifier` }
 unless UUID.Namespace.DNS as String == "6ba7b810-9dad-11d1-80b4-00c04fd430c8" { INFO@mark `UU35 the DNS namespace does not write as itself` }

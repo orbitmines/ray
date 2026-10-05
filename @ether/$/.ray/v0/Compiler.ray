@@ -43,9 +43,9 @@ Debug := class {
   }
 }
 
-// A level is the rules in scope (P8.1). Levels compose by putting both in scope: `Web.HTML + Web.CSS + Web.JS` (F-D7).
+// A level is the rules in scope (P8.1). Levels compose by putting both in scope: `Language.Web.HTML + Language.Web.CSS + Language.Web.JS`; a renderer is a Language whose level this is (`page{O: Language.Web}`) (F-D7).
 // What a level produces is a value; it becomes text only where it is written to a location, in that location's language (X1.7).
 Program &+= {
   O | optimizations := Compiler.none
-  + (other: Program) => Program(code: (code, other.code))
+  compounds + (other: Program) => Program(code: (code, other.code))
 }

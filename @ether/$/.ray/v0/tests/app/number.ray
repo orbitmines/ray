@@ -51,6 +51,8 @@ unless -3 < -2 { INFO@mark `N51 minus three is not less than minus two` }
 unless -3 < 2 { INFO@mark `N52 minus three is not less than two` }
 if 2 < -3 { INFO@mark `N53 two is less than minus three` }
 unless -3 - 5 == -8 { INFO@mark `N54 minus three less five is not minus eight` }
+unless ((3 as Signed) - (5 as Signed)).negative { INFO@mark `N54b three less five, signed, is not negative` }
+unless 7 / 0 == 0 { INFO@mark `N54c dividing by zero does not stop at zero` }
 unless -3 + -2 == -5 { INFO@mark `N118 minus three and minus two is not minus five` }
 if -3 + -2 < -5 { INFO@mark `N119 minus three and minus two is below minus five` }
 unless -2 * -3 == 6 { INFO@mark `N121 minus two times minus three is not six` }

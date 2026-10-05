@@ -3,8 +3,8 @@ Version := class ("%", number: Decimal, ("'", revision: Decimal)?) => {
   latest => !revision
   breaks_freely => number == 0
 
-  == (other: Version) => number == other.number && revision == other.revision
-  < (other: Version) => number < other.number || number == other.number && revision? < other.revision ?? ∞
+  chainable == (other: Version) => number == other.number && revision == other.revision
+  chainable < (other: Version) => number < other.number || number == other.number && revision? < other.revision ?? ∞
 
   next => %(number + 1)
   previous => %(number - 1)
@@ -29,7 +29,7 @@ Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => 
   static declared: Migration[] = []
   (static.declared ??= []).push this
 
-  backward: Migration => Migration(from: to, to: from, body: body.reverse ?? Quest(name: "derive the inverse of a migration", goal: this))
+  backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? Quest(name: "derive the inverse of a migration", goal: this))
 
   static path (from: Version, to: Version): Migration[]? => from < to
     ? declared.chain(.from == from, .to == to, step => step.to == .from)
@@ -41,7 +41,7 @@ Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => 
 
 // Hybrid logical clocks: a wall time, a logical count, and the node that stamped it.
 Stamp := class = wall: Decimal, logical: Decimal = 0, node: * {
-  < (other: Stamp) => (wall, logical, node as String) < (other.wall, other.logical, other.node as String)
+  chainable < (other: Stamp) => (wall, logical, node as String) < (other.wall, other.logical, other.node as String)
   as (:== String) => wall, ".", logical, "@", node
 }
 
@@ -66,7 +66,7 @@ HybridClock := class = node: *, wall: Decimal = 0, logical: Decimal = 0 {
 
 // The first milestone of version control: operations over definitions, HLC-stamped; a rename keeps identity (L§9.2).
 Definition := class = id: UUID = choose UUID.v1{unique}, name: String, holder: *? {
-  == (other: Definition) => id == other.id
+  chainable == (other: Definition) => id == other.id
 }
 
 Operation := class = kind: Kind, definition: Definition, stamp: Stamp, who: *, before: *?, after: *? {

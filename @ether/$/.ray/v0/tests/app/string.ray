@@ -138,15 +138,15 @@ unless "Ab".foldcase == "ab" { INFO@mark `S120 foldcase is not fold_case` }
 unless "ab cd".camelCase == "abCd" { INFO@mark `S121 camelCase is not camel_case` }
 unless "ab cd".PascalCase == "AbCd" { INFO@mark `S122 PascalCase is not pascal_case` }
 unless "ab cd".snakecase == "ab_cd" { INFO@mark `S123 snakecase is not snake_case` }
-unless "ab".^ == "AB" { INFO@mark `SC1 ^ is not upper_case` }
-unless "AB".v == "ab" { INFO@mark `SC2 v is not lower_case` }
-unless "a"[0].^ == "A"[0] { INFO@mark `SC3 a character's ^ is not its upper_case` }
-unless "A"[0].v == "a"[0] { INFO@mark `SC4 a character's v is not its lower_case` }
+unless "AB".is_upper { INFO@mark `SC1 AB is not upper case` }
+unless "ab".is_lower { INFO@mark `SC2 ab is not lower case` }
+if "a"[0].is_upper { INFO@mark `SC3 the character a is upper case` }
+if "1"[0].is_lower { INFO@mark `SC4 the character 1 is lower case` }
 unless "ß".fold_case == "ss" { INFO@mark `SC5 ß does not fold to ss` }
 unless "Straße".fold_case == "strasse" { INFO@mark `SC6 Straße does not fold to strasse` }
 unless "AbC".ignore_case == "aBc" { INFO@mark `SC7 ignoring case, AbC is not aBc` }
 if "AbC" == "aBc" { INFO@mark `SC8 minding case, AbC is aBc` }
-unless "é".^ == "É" { INFO@mark `SC9 é in upper case is not É` }
+unless "é".upper_case == "É" { INFO@mark `SC9 é in upper case is not É` }
 
 unless "a-b+c".split(Char.Symbol).length == 3 { INFO@mark `S124 a-b+c cut at its symbols is other than three pieces` }
 unless "ab cd".words.length == 2 { INFO@mark `S125 ab cd is other than two words` }
@@ -231,7 +231,10 @@ unless doubled_gap.lines[-1] == "a" { INFO@mark `SM11 the line after the blank l
 unless "a\tb".length == 3 { INFO@mark `SE1 a tab escape is not one character` }
 unless "a\tb"[1] == U+0009 { INFO@mark `SE2 a tab escape is not a tab` }
 unless "\x41" == "A" { INFO@mark `SE3 a hexadecimal escape is not its character` }
-unless "é"[0] == U+00E9 { INFO@mark `SE4 a four-digit escape is not its character` }
+unless "\u00E9"[0] == U+00E9 { INFO@mark `SE4 a four-digit escape is not its character` }
+unless "\u{E9}"[0] == U+00E9 { INFO@mark `SE15 an escape of two digits in braces is not its character` }
+unless "\q".length == 2 { INFO@mark `SE16 an unknown escape is not kept as written` }
+unless U+0041 == "A" as Char { INFO@mark `SE17 U+0041 is not the character A` }
 unless "a\\b".length == 3 { INFO@mark `SE5 an escaped backslash is not one character` }
 unless "\U01F600"[0] == U+1F600 { INFO@mark `SE6 a six-digit escape is not its character` }
 unless "\""[0] == U+0022 { INFO@mark `SE7 an escaped quote is not a quote` }

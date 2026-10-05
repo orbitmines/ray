@@ -1,6 +1,8 @@
-// A page is a program like any other (F-D1). Rendering it is choosing a Compiler level: `page{O: Web.level}`, `page{O: TUI.level}`, `page{O: Direct.level}` (F-D2).
+// A page is a program like any other (F-D1). Rendering it is choosing a Compiler level, and a renderer is a Language whose level that is: `page{O: Language.Web}`, `page{O: Language.TUI}`, `page{O: Language.Direct}` (F-D2).
 // Every level starts from the scene: the program reduced to Geometry's shapes, with the variables its interactions change.
 UI := class {
+  choosing: boolean = false
+
   // The first level: any value reduces to shapes. A value with a rendering of its own uses it; a location renders
   // as what its extension reads to; anything else renders its fields as a table; a superposition shows all, or one when choosing (F-D4, F-C1b, F-C3).
   Scene := {
@@ -11,8 +13,8 @@ UI := class {
     {location: Location{.extension ==.instance_of Audio.extensions}} => Geometry.Audio(location)
     {location: Location} => Link(to: location, children: [Geometry.Text(location as String)])
     {shape: Geometry.Shape} => shape
-    {choosing: Choice} => Input.of(choosing)
-    {superposed: |} => choosing ? superposed.random : Geometry.Box(flow: inline, children: superposed.components)
+    {chosen: Choice} => chosen as Input
+    {superposed: |} => UI.choosing ? superposed.random : Geometry.Box(flow: inline, children: superposed.components)
     {lines: \n} => Geometry.Box(flow: vertical, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, constraints: [Geometry.Constraint("x", columns: 2)], children: value.fields.map(.name, .value).flatten)
@@ -40,7 +42,7 @@ UI := class {
 
   // Inputs are values chosen by the user: the type of what is chosen picks the input (F-D4 `choose`).
   Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", disabled: boolean = false {
-    static of (choosing: Choice) => choosing.type.match
+    static (choosing: Choice) as Input => choosing.type.match
       String{secret} => Secret(choosing)
       String{multiline} => TextArea(choosing)
       String => TextField(choosing)
@@ -52,6 +54,7 @@ UI := class {
       Location => FileField(choosing)
       * => Select(choosing, options: choosing.type#)
     typed (text: String) => (value = value, text) -- this
+    set (text: String) => (value = text) -- this
     erased => (value = value[..-1]) -- this
   }
   TextField := class: Input
@@ -70,7 +73,7 @@ UI := class {
   }
   // A form is any value whose fields are chosen; submitting it is activating it.
   Form := class: Geometry.Box = value: * {
-    inputs => value.fields{.value ==.instance_of Choice}.map(Input.of(.value))
+    inputs => value.fields{.value ==.instance_of Choice}.map(.value as Input)
     submitted => dynamically inputs.every(.value) && Keyboard.enter.pulsed
   }
 
@@ -89,18 +92,35 @@ UI := class {
     next (scene: Geometry.Shape) => scene.expand{.focusable} -- .[(.index_of(current) + 1) % .count]
     previous (scene: Geometry.Shape) => scene.expand{.focusable} -- .[(.index_of(current) - 1) % .count]
   }
+  // Moving through the scene with the keyboard (F-D10b): arrows move, control skips to the next group, shift expands.
   Selection := class {
     shapes: Geometry.Shape[] = []
     expanded: Geometry.Shape[] = []
     text: String => shapes{==.instance_of Geometry.Text}.text.join("")
+    current => shapes.last ?? scene
+
+    static moved (shape: Geometry.Shape, direction: Keyboard.Direction) => {
+      parent = shape.parent_in(scene)
+      siblings = parent?.children ?? [shape]
+      at = siblings.index_of(shape)
+      direction.match
+        Keyboard.Direction.down => shape.children.first ?? shape
+        Keyboard.Direction.up => parent ?? shape
+        Keyboard.Direction.right => siblings[at + 1] ?? shape
+        Keyboard.Direction.left => at > 0 ? siblings[at - 1] : shape
+    }
+    move (direction: Keyboard.Direction) => shapes = [moved(current, direction)]
+    skip (direction: Keyboard.Direction) => shapes = [moved(moved(current, Keyboard.Direction.up), direction)]
+    expand (direction: Keyboard.Direction) => expanded.push(current) -- shapes.push(moved(current, direction))
   }
   Drag := class {
     current: (shape: Geometry.Shape, from: Geometry.Vector)?
     dropped: Location[] = []
   }
+  // Copying writes the platform's clipboard through the running target (Web: navigator.clipboard, TUI: OSC 52).
   Clipboard := class {
     content: String | Location[] = ""
-    copy (value) => content = value
+    copy (value) => (content = value) -- Runtime.current?.target.copy(value as String) -- value
   }
   Composition := class { text: String = "" }
   Gamepad := class { pads: (buttons: boolean[], axes: Number[])[] = [] }
@@ -112,7 +132,7 @@ UI := class {
   Viewport := class {
     size: Geometry.Vector = Geometry.Vector(1240px, 800px)
     scale: Number = 1
-    preferences: (reduced_motion: boolean, dark: boolean, contrast: more | less | normal) = (false, false, normal)
+    preferences: (reduced_motion: boolean, dark: boolean, contrast: more | less | normal, focused: boolean) = (false, false, normal, true)
   }
 
   // Navigation: where the user is, and how they got there (F-A3, F-A4, F-A7).
@@ -120,7 +140,7 @@ UI := class {
     history: Location[] = []
     at: Location => history.last ?? "/"
     go (to: Location) => history.push to
-    back => history.pop_back
+    back => history.pop_back -- at
     title: String = ""
     icon: Location?
     description: String = ""
@@ -131,7 +151,7 @@ UI := class {
     static Chooser := class = options: *[] {
       preferred => options.first
     }
-    static of (value) => Site(index: value) -- value.fields{.value.location}.for(.route(.value.location as String, .value))
+    static (value) as Site => Site(index: value) ~~ value.fields{.value.location}.for(field => .route(field.value.location as String, field.value))
     route (path: String, field) => routes.push Route(path, field) -- this
     at (path: String) => path == "/" || path.empty ? index
       : routes{path ~= ⊢.path}.last -- (rest = path[.path.length..]) -- rest.empty ? .field : .field.sections ? section(.field, rest) : select(.field, rest)
@@ -145,6 +165,8 @@ UI := class {
   Capability := enum storage | network | notifications | fullscreen | clipboard | share | vibration | wake_lock | camera | microphone | geolocation | print | speech
   Platform := class {
     capabilities: Capability[] = []
+    // A phone or a tablet: the web level reads it from the user agent and touch-only pointers, the terminal leaves it false.
+    handheld: boolean = false
     can (capability: Capability) => capabilities.contains(capability)
     notifications: Notification[] = []
     notify (title: String, body: String = "") => notifications.push Notification(title, body) if can(notifications)
@@ -175,7 +197,7 @@ UI := class {
   // Styles are highlighting: `^italic` on text is the same style the editor shows (F-C2).
   // A style is a partial shape, a name with the fields it sets; styling is adding it, and the later style overrides (T2.1 `+`).
   Theme := class {
-    styles: (name: String, *)[] = [
+    static styles: (name: String, *)[] = [
       ("italic", font: Geometry.Font(style: italic)),
       ("bold", font: Geometry.Font(weight: 700)),
       ("muted", color: Geometry.Color(128, 128, 128)),
@@ -184,15 +206,19 @@ UI := class {
       ("h2", font: Geometry.Font(size: 1.5em, weight: 700)),
       ("h3", font: Geometry.Font(size: 1.17em, weight: 700))
     ]
-    [name: String] => styles{.name == name}.last - name ?? ()
+    static [name: String] => styles{.name == name}.last - name ?? ()
   }
 
-  // Running a page: the level's runtime reads the devices, re-solves what changed and writes the frame, until it stops (F-D10).
+  // Running a page: the renderer's target reads the devices, the scene is re-solved and the frame written, until it stops (F-D10).
+  // A target is where a renderer's frames go and its input comes from: `Language.Web.DOM()`, `Language.TUI.Target()`.
   scene: Geometry.Shape?
-  Runtime := class = page: Program, level: Program, running: boolean = false {
+  Runtime := class = page: Program, renderer: Language, target: *, running: boolean = false {
+    static current: Runtime?
     solved => page{O: Scene}() -- Geometry.Solver(available: Viewport.size).solve(.) -- (scene = .)
-    frame => solved{O: level}()
-    run => (running = true) -- ((level.write(frame) -- level.read()) while running) -- this
+    frame => solved{O: renderer.level}()
+    run => (running = true) -- (Runtime.current = this) -- target.start
+      -- ((target.write(frame) -- target.read) while running)
+      -- target.stop -- this
     stop => running = false
   }
 }

@@ -1,6 +1,7 @@
 // Direct rendering: the scene rasterised into pixels by Ray itself, with no browser or terminal in between.
-// The same level draws a Canvas everywhere (Web.JS hands its pixels to the canvas; the TUI samples them into braille).
-Direct := class {
+// The same level draws a Canvas everywhere (Language.Web.JS hands its pixels to the canvas; the TUI samples them into braille).
+Language.Direct := class: Language {
+  static extensions = ".direct"
   level := {
     {page: Geometry.Shape} => Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px) -- Rasterise(page, ., Geometry.Transform())
   }
@@ -44,10 +45,10 @@ Direct := class {
   // Fonts are read from their files like any other format (F-C1b): glyph outlines, advances, units per em.
   Font := class = font: Geometry.Font {
     file => font.family.map(Fonts.located(.)).first
-    glyph (character: Char) => (IO.read(file) as OpenType)[character]
+    glyph (character: Char) => (IO.host(file.path) as OpenType)[character]
   }
   Fonts := class {
-    located (family: String) => (["/usr/share/fonts", "/System/Library/Fonts", "C:/Windows/Fonts"].map(IO.listing(.)).flatten{.name.fold_case ~= family.fold_case}.first)
+    located (family: String) => ["/usr/share/fonts", "/System/Library/Fonts", "C:/Windows/Fonts"].map(IO.listing(.)).flatten{.name.fold_case ~= family.fold_case}.first
   }
   OpenType := class = glyphs: (character: Char, outline: Geometry.Outline, advance: Number)[], units: Number {
     [character: Char] => glyphs{.character == character}.first ~~ .units = units
@@ -59,3 +60,4 @@ Direct := class {
   }
 }
 
+Language.register(Language.Direct)

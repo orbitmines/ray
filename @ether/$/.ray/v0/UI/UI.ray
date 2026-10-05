@@ -353,9 +353,29 @@ UI := class {
     highlighted (language: Language | String, palette: String = "default") => Painted(this, (language ==.instance_of String ? Language.named("." + language) : language).painted(this), palette)
   }
 
+  Watch := class = watched: Dynamic, action: Program, becoming: *?, last: *?, seen: Number = Runtime.frames {
+    static all: Watch[] = []
+    key => action.code
+    start => Watch.all{.key == key && .seen >= Runtime.frames - 1}.first -- (kept => kept
+      ? (kept.watched = watched) -- (kept.action = action) -- (kept.seen = Runtime.frames) -- kept
+      : (last = watched.program()) -- Watch.all.push this -- this)
+    changed => watched.program() -- (now => (now != last) -- (different => (last = now) -- different && (becoming == None || now == becoming)))
+    fired => action() if changed
+  }
+  Timer := class = due: Time, action: Program, fired: boolean = false, seen: Number = Runtime.frames {
+    static all: Timer[] = []
+    key => action.code
+    start => Timer.all{.key == key && .seen >= Runtime.frames - 1}.first -- (kept => kept
+      ? (kept.action = action) -- (kept.seen = Runtime.frames) -- kept
+      : Timer.all.push this -- this)
+    ready => !fired && Time.now >= due
+    fire => ((fired = true) -- action()) if ready
+  }
+
   scene: Geometry.Shape?
   Runtime := class = page: Program, renderer: Language, target: *, running: boolean = false {
     static current: Runtime?
+    static frames: Number = 0
     solved => page{O: Scene}() -- Theme.applied(.) -- Geometry.Solver(available: Viewport.size, scrolled: Viewport.scrolled).solve(.) -- transitioned(scene, .) -- (scene = .)
     transitioned (before: Geometry.Shape?, after: Geometry.Shape) => (before?.expand ?? []).zip(after.expand){.1.transition && .0.shown_transform != .1.transform}.for((was, now) =>
       now.animations.push Geometry.Animation(from: was.shown_transform, to: now.transform, duration: now.transition.duration, easing: now.transition.easing, property: "transform")
@@ -365,7 +385,8 @@ UI := class {
       -- ((target.write(frame) -- target.read -- tick) while running)
       -- target.stop -- this
     stop => running = false
-    tick => Viewport.step
+    tick => Viewport.step -- Watch.all.for(.fired) -- Timer.all.for(.fire)
+      -- (Runtime.frames += 1) -- (Watch.all = Watch.all{.seen >= Runtime.frames - 1}) -- (Timer.all = Timer.all{.seen >= Runtime.frames - 1 && !.fired})
   }
 }
 
@@ -373,3 +394,13 @@ UI := class {
   `word` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side))
   `word.replace("p", "m")` {amount: Number | Geometry.Length} ^keyword => UI.Theme.scaled(amount) -- (length => Geometry.Spacing(amount: Geometry.Vector(side == vertical ? 0 : length, side == horizontal ? 0 : length), sides: side, from: shape))
 }
+
+Program &+= {
+  after (delay: Quantity.Temporal) => UI.Timer(Time.now + delay, this).start
+  when (watched: Program, becoming: * = None) => UI.Watch(dynamically watched(), this, becoming).start
+}
+when {value} changes {{action}} ^keyword => Program(code: external ** action).when(Program(code: external ** value))
+{action} when {value} changes ^keyword => Program(code: external ** action).when(Program(code: external ** value))
+{action} when {value} becomes {target} ^keyword => Program(code: external ** action).when(Program(code: external ** value), target)
+after {delay: Quantity.Temporal} {{action}} ^keyword => Program(code: external ** action).after(delay)
+{action} after {delay: Quantity.Temporal} ^keyword => Program(code: external ** action).after(delay)

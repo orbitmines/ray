@@ -264,3 +264,28 @@ with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   unless Program(code: { selected_text }){O: Language.TUI.Cells}().cells[0][1].reverse { INFO@mark `UI172 selected text is not shown reversed in the terminal` }
 }
 unless Language.Web.Devices.some(==.instance_of Language.Web.JS.Effect && .reads.contains("UI.Selection.range")) { INFO@mark `UI173 the web does not select a range` }
+
+watched_value := 1
+fired_count := 0
+watch := Program(code: { fired_count = fired_count + 1 }).when(Program(code: { watched_value }))
+watch.fired
+unless fired_count == 0 { INFO@mark `UI174 when … changes fires before anything changed` }
+watched_value = 2
+watch.fired
+unless fired_count == 1 { INFO@mark `UI175 when … changes does not fire on a change` }
+watch.fired
+unless fired_count == 1 { INFO@mark `UI176 when … changes fires twice for one change` }
+became_count := 0
+becoming := Program(code: { became_count = became_count + 1 }).when(Program(code: { watched_value }), 3)
+watched_value = 4
+becoming.fired
+watched_value = 3
+becoming.fired
+unless became_count == 1 { INFO@mark `UI177 when … becomes fires on another value` }
+timer_fired := false
+timer := Program(code: { timer_fired = true }).after(0 s)
+timer.fire
+unless timer_fired { INFO@mark `UI178 after fires late` }
+if Program(code: { timer_fired = false }).after(1 h).ready { INFO@mark `UI179 after fires early` }
+unless Program(code: { fired_count = 0 }).after(6 s) === Program(code: { fired_count = 0 }).after(6 s) { INFO@mark `UI180 a timer asked for again in the same frame restarts` }
+unless ({ timer_fired = true } after 6 s) ==.instance_of UI.Timer { INFO@mark `UI181 x after 6 s is not a timer` }

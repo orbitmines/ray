@@ -255,6 +255,8 @@ Language.Web := class: Language {
       page.expand.map(shape => shape.dynamics.map(dynamic => JS.Effect(reads: dynamic.reads, body: [
         dynamic.target == "class" ? JS.Assign((Element(shape), "className"), dynamic.compiled{O: JS.expressions}) : dynamic.compiled{O: JS.expressions}
       ]))).flatten,
+      UI.Watch.all.map(watch => JS.Call(("ray", "subscribe"), [watch.watched.program.reads, JS.Function(None, [], [watch.action{O: JS.expressions}])])),
+      UI.Timer.all{!.fired}.map(timer => JS.Call("setTimeout", [JS.Function(None, [], [timer.action{O: JS.expressions}]), (timer.due - Time.now) as ms])),
       page.expand{==.instance_of UI.TextArea && .language}.map(area => JS.Listen(JS.Call(("document", "getElementById"), [area.id + "-text"]), "input", [JS.Assign((JS.Call(("document", "getElementById"), [area.id + "-paint"]), "textContent"), ("event", "target.value"))])),
       page.expand{.focusable}.map(shape => JS.Listen(Element(shape), "click", [JS.Call(("ray", "activate"), [shape.id])])),
       page.expand{==.instance_of UI.Input}.map(input => JS.Listen(Element(input), "input", [JS.Call(("ray", "set"), [input.id, ("event", "target.value")])])),

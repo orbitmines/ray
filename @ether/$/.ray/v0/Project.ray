@@ -6,11 +6,14 @@ Project := class: Location {
 
     project: Project? => Program(code: ("@", location)){O: {
       @ether/$/{language: Written} => Language.project(language)
-      @ether/{bundled_path: Written} => Language.ray.bundled(bundled_path) ?? Network.fetch(@ether, bundled_path, version) as Project
-      @{scheme: Char.Word[]}://{remainder: Written} => Network.fetch((scheme + "://" + remainder) as Location, "", version) as Project
-      @{local_path: Written} => IO.read(local_path) as Project
+      @ether/{bundled_path: Written} => Project.known(Language.ray.bundled(bundled_path) ?? Network.fetch(@ether, bundled_path, version) as Project)
+      @{scheme: Char.Word[]}://{remainder: Written} => Project.known(Network.fetch((scheme + "://" + remainder) as Location, "", version) as Project)
+      @{local_path: Written} => Project.known(IO.read(local_path) as Project)
     }}() ?? alternatives.map(.project).first(. != None)
   }
+
+  static all: Project[] = []
+  static known (found: Project?) => found && (all{. == found}.first ?? (all.push found -- found))
 
   name: String?
   version: *?
@@ -22,6 +25,7 @@ Project := class: Location {
   readings: Program = {
     {name: String} => Language.for_file(name)
   }
+  loading = false
   loaded = false
 
   shadowing => (parent, dependencies.project)#
@@ -29,7 +33,7 @@ Project := class: Location {
   language_of (name: String) => Compiler.reduced(name, readings)
   installed => dependencies.map(.project)
   sources => IO.listing(this)**{!.directory && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !(.parent / ".project.ray").exists)}
-  load: static => loaded ? this : this ~~ installed#.load ~~ sources.for(Language.ray.read(.content)) ~~ .loaded = true
+  load: static => loaded || loading ? this : this ~~ (.loading = true) ~~ installed#.load ~~ sources.for(Language.ray.read(.content)) ~~ (.loaded = true) ~~ .loading = false
 }
 
 Layout := class = root: Location = @./.ether/external/@ {

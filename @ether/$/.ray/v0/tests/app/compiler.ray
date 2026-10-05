@@ -33,7 +33,7 @@ unless 5 + none_at_all == 5 { INFO@mark `CO18 five and a name holding nothing is
 // A level is which rules are in scope while a program is read back
 unless Compiler.none { INFO@mark `CO19 there is no level that reads a program as it is written` }
 unless Compiler.default { INFO@mark `CO20 there is no default level` }
-unless Compiler.levels.count == 4 { INFO@mark `CO32 there are other than four levels` }
+unless Compiler.levels.count == 10 { INFO@mark `CO32 there are other than ten levels` }
 Optimized := Program{O: Compiler.default}
 unless Optimized { INFO@mark `CO21 a program read with a level is nothing` }
 unless Optimized.O == Compiler.default { INFO@mark `CO22 it does not say which rules it is read with` }
@@ -41,3 +41,10 @@ unless Optimized.optimizations { INFO@mark `CO23 O is not what the optimizations
 plain := Program(code: { 5 })
 unless plain.O == Compiler.none { INFO@mark `CO24 a program does not read as written unless told otherwise` }
 unless plain() == 5 { INFO@mark `CO25 a program read as it is written does not answer it` }
+
+// A pure application is remembered by its arguments; the level is removable
+unless Compiler.memoised { INFO@mark `CO33 there is no memoising level` }
+unless Compiler.levels.contains(Compiler.memoised) { INFO@mark `CO34 the memoising level is not one of the levels` }
+twice := (x) => x * 2
+unless Program(code: { twice(4) + twice(4) }){O: Compiler.memoised}() == 16 { INFO@mark `CO35 a remembered application does not answer what it answered` }
+unless twice.results.count == 1 { INFO@mark `CO36 a pure application with the same arguments is not remembered once` }

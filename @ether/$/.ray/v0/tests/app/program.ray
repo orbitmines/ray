@@ -134,3 +134,9 @@ unless followed == 6 { INFO@mark `DY2 dynamically does not read again what it de
 
 // `print(x)` answers x (Almanac §0.3)
 unless print(3) == 3 { INFO@mark `PT1 print does not answer what it printed` }
+
+// A project and a language it bundles may depend on each other; each is loaded once
+ui_project := Project.known(Language.ray.bundled("UI")).load
+unless ui_project.loaded && !ui_project.loading { INFO@mark `PJ1 a project bundling a language that depends back on it does not finish loading` }
+unless Language.project("web").loaded { INFO@mark `PJ2 a language in a mutual dependency is not loaded` }
+unless Language.project("web").installed.some(=== ui_project) { INFO@mark `PJ3 a mutual dependency loads a second copy of the project it comes back to` }

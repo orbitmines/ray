@@ -206,7 +206,7 @@ Geometry := class {
       : space.discrete ? Shape(space: space, rank: rank - 1, cells: cells.∂) : box(size),
     flow: block | inline | grid | layered = block, gap: Vector = Vector(), columns: Number = 1, wrap: boolean = false,
     align: (start | center | end | between | around | stretch | middle | justify)? = parent?.align,
-    fill: Paint?, color: Paint? = parent?.color, font: Font = parent ? (parent.font ~~ .size = parent.font_size) : Font.base, stroke: Stroke?, radius: Length[] = [0px],
+    fill: Paint?, color: Paint? = parent?.color, font: Font = parent ? (parent.font ~~ .size = parent.font_size) : Font.base, stroke: Stroke?, radius: (Length | Number)[] = [0px],
     effects: Effect[] = [], blend: normal | multiply | screen | overlay | darken | lighten | difference = normal,
     overflow: visible | clip | scroll = visible, scrollbar: shown | hidden = shown, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
     cursor: default | pointer | text | grab | grabbing | move | wait | none = default, touch: auto | none | pan_x | pan_y = auto,
@@ -258,9 +258,10 @@ Geometry := class {
     narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? writes.for(.entered(this, None)) -- this : reachable.filter(narrowing.entered(., None)))
     {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
 
-    measured (along: "width" | "height", room: Length, content: Length = room) => this.`along` -- (given =>
-      given is Stops ? given.at(room) * room : given is Number ? given * room : given ?? content
-    ) -- (length => fields[along].type -- (length max (.least ?? length) min (.most ?? length)))
+    share (of: (Length | Number | Stops)?, room: Length) => of is Stops ? of.at(room) * room : of is Number ? of * room : of
+    radii => radius.map(. is Number ? size * . : Vector(., .))
+    measured (along: "width" | "height", room: Length, content: Length = room) => (share(this.`along`, room) ?? content) -- (length =>
+      fields[along].type -- (length max (share(.least, room) ?? length) min (share(.most, room) ?? length)))
     solve => arranged -- (solved = true) -- this
     laid (room: Length) => with Font.inherited = em {
       size = Vector(measured("width", room - margin.left - margin.right), size.y)
@@ -338,10 +339,10 @@ Geometry := class {
   Settings := {
     {a} & {b} => (a, b)
     {a}, {b} => (a, b)
-    {literal path} == {value} => { `path` = value }
-    {literal path}: {value} => { `path` = value }
-    {literal path} <= {most} => { `path`: `path`.type{<= most} }
-    {literal path} >= {least} => { `path`: `path`.type{>= least} }
+    {literal path} == {value} => value -- (written => { `path` = written })
+    {literal path}: {value} => value -- (written => { `path` = written })
+    {literal path} <= {most} => most -- (written => { `path`: `path`.type{<= written} })
+    {literal path} >= {least} => least -- (written => { `path`: `path`.type{>= written} })
   }
   Easing := (progress: Probability): Probability
   linear: Easing = (t) => t

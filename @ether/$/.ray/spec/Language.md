@@ -345,6 +345,8 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided (2026-10-06):** every language from outside Ray lives in its own project under `v0/$/`, and nothing in the core depends on one.
   - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs (`@ether/$/zlib`).
   - Its claims are in its own `tests/` project.
+  - Every language stays at `v0/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/UI` lists `$/web`, `$/tui`, `$/html`, `$/css`, `$/js`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. Loading the part loads them.
+  - A language may depend on other languages and on the project that bundles it. Loading tolerates a mutual dependency: a project is marked as loading before its dependencies load, so a cycle stops where it comes back, and every project in it ends up loaded once.
   - A project that uses a language either declares it in its `.project.ray` or reaches it through `$.name`.
   - The core reaches them only through `$.name`, lazily. Examples: in an optimisation level that picks a format (`StoreOptimizations` answers `$.sqlite`), in the enforcement of a permission (`as $.posix`), or in a store route (`$.git`).
   - Renderers are compile targets too. The web renderer is `$/web` on `$/html`, `$/css`, `$/js` and `$/json`. The terminal renderer is `$/tui` on `$/ansi`, `$/sixel` and `$/kitty`. `Language.Direct`, Ray's own raster drawing, stays in the core UI, and its fonts are `$/opentype`.

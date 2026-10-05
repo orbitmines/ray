@@ -14,17 +14,17 @@ Nameable := class {
 Location := class: Hierarchy (
   (scheme: Char.Word[], "://", host: Char{!= ":" && != "/" && != "?" && != "#"}[], (":", port: Decimal)?)?,
   path: Char{!= "?" && != "#"}[],
-  ("?", query: Query)?,
+  ("?", query: Query{pairs.nonempty} = Query())?,
   ("#", fragment: Char[])?
 ) => {
   static Query := class ((pairs: (name: Encoded, ("=", value: Encoded)?)[]).join("&")) {
     static Encoded := class: String ((Char.Letter | Char.Digit | "-" | "_" | "." | "~" | ("+" as " ") | ("%", Hexadecimal²)[]{length > 0} as Unicode.UTF-8)[])
     merged (changes) => Query(pairs: [pairs{!changes.fields.name.contains(.name)}, changes.fields{.value != None}.map((name: .name, value: .value as String))].flatten)
-    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name}.last?.value ?? ""
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : pairs{.name == name && .value?.nonempty}.last?.value
   }
 
   segments => path.split("/"){.nonempty}
-  with (changes) => Location(scheme, host, port, path, query: (query ?? Query()).merged(changes), fragment)
+  with (changes) => Location(scheme, host, port, path, query: query.merged(changes), fragment)
 
   + (suffix) => ((this as String) + (suffix as String)) as Location
   / (segment: String) => this + "/" + segment
@@ -38,7 +38,7 @@ Location := class: Hierarchy (
   [name: String] => fields{.name == name}.last?.value ?? (shadowing ?? parent ?? (World.ether unless this === World.ether))?[name]
 }
 
-Written := (Char{!= " " && != "(" && != ")" && != "," && != \n} | ("(", Written, ")"))[]
+Written := (Char{!= " " && != "(" && != ")" && != "," && != "{" && != "}" && != \n} | ("(", Written, ")"))[]
 @{scheme: Char.Word[]}://{rest: Written} ^string => (scheme + "://" + rest) as Location
 @"{text: (!"\"")[]}" ^string => text as Location
 @{start: ("." | "..")?}/{path: Written} ^string => (start + "/" + path) as Location
@@ -61,8 +61,10 @@ Node &+= {
 History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   static Commit := class: Ray = who: *, value: *, id: UUID = UUID.v4(), when: Time = Time.now, stamp: Stamp?, visibility: Accessor.Permission = Accessor.Permission.private, message: String? {
     previous: Commit?
+    line: History?
 
     parents => previous#
+    next => line?.since(None){.parents.first === this}.first
     ancestry => (previous#.map(.ancestry).flatten, this).unique(===)
     merged => parents.count > 1
     staged => visibility == Accessor.Permission.private
@@ -88,11 +90,17 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   find (label) => since(None).find(.id == label)
   at (commit) => History(repository, head: commit is Commit ? commit : find(commit))
 
-  commit (who, value, id: UUID = UUID.v4(), when: Time = Time.now, message: String? = None): static => this ~~ .head = Commit(who, value, id, when, stamp: clock.now, message, previous: head)
+  commit (who, value, id: UUID = UUID.v4(), when: Time = Time.now, message: String? = None): static => this ~~ .head = Commit(who, value, id, when, stamp: clock.now, message, previous: head, line: this)
   published => commits{!.staged}
   publish: static => this ~~ commits#.publish
 
   ordered => since(None).sort_by(.stamp)
+  stretches (start: Program, end: Program) => ordered.reduce(acc = (closed: [], open: None) => acc.open
+    ? (end.entered(., None) ? (closed: [acc.closed, [[acc.open, [.]].flatten(1)]].flatten(1), open: None) : (closed: acc.closed, open: [acc.open, [.]].flatten(1)))
+    : start.entered(., None) ? (closed: acc.closed, open: [.]) : acc
+  ) -- [.closed, [.open] if .open].flatten(1)
+  {this}{from {literal start} to {literal end}} ^punctuation => stretches(Program(code: external ** start), Program(code: external ** end))
+  {this}{from {literal start}} ^punctuation => Program(code: external ** start) -- (holds => stretches(holds, Program(code: { !holds.entered(this, None) })))
   value => ordered.reduce(held = None => .applied(held))
   pinned (label, as_of: Stamp? = None) => since(None).find(c => c.operations.some(.substitutes == label && (as_of === None || .stamp < as_of)))?.id ?? label
   checkout (label, as_of: Stamp? = None) => at(pinned(label, as_of)).value

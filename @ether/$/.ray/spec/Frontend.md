@@ -137,7 +137,8 @@ entry stays as the record of the question, and this section overrides it.
   `Mouse.position`); `dynamically` re-evaluates what depends on them. The default code has no
   callbacks.
 - **F-D4.** A value with no rendering of its own renders its fields as a table/tree. A
-  superposition maps (shows all) by default; in a `choose` context, one is picked.
+  superposition always renders through `@me.choose` (W9) (Decided 2026-10-06; it no longer shows all
+  its values by default). To show all values, write them as a list, e.g. `xs#.map(…)`.
 - **F-A2.** Fields are canonical: a website can be built out of any class.
   `profiles: Profile$ @ /profiles/`, where `@` only specifies its Location. That Location is
   the path, and it overrides the default URL conversion.
@@ -251,4 +252,6 @@ entry stays as the record of the question, and this section overrides it.
 - The terminal renderer, `Language.TUI`, is the project `$/tui`. It writes through `$/ansi` (the escape sequences, the xterm 256-colour and Windows Terminal levels, `Terminal`), and draws images through `$/sixel` and `$/kitty`.
 - `Language.Direct`, Ray's own raster drawing, stays in the core UI. The formats it reads are outside: fonts through `$.opentype`, images through `$.png` (with `$/zlib` and `$/deflate` under it).
 - The core UI names none of them. A frontend picks its renderer by `$.web` / `$.tui`, or by depending on the project.
+- `v0/UI` bundles them: its `.project.ray` lists `$/web`, `$/tui`, `$/html`, `$/css`, `$/js`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`, which stay at `v0/$/<name>`. Depending on `@ether/UI` loads every renderer; `$/web` and `$/tui` depend back on `@ether/UI`, and that cycle loads once.
+- A share (`50%`, the Number 0.5) in a length field is that share of the parent's available size on that axis, bounds included (`{width <= 50%}`); Solving resolves it and the web writes it as a CSS percentage. A share radius is that share of the shape's own size (`radius: [50%]` is a circle).
 

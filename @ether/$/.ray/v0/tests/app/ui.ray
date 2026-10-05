@@ -278,3 +278,23 @@ with Time.now = animated.stops.last.at {
 unless Geometry.Space.of(Graph.Simple().connect(1, 2)).projection.erred { INFO@mark `UI261 a graph is embedded before embedding is implemented` }
 unless Compiler.reduced(Geometry.Vector(1px, 2px).map(. * 2), Compiler.specialised) == Geometry.Vector(2px, 4px) { INFO@mark `UI262 specialising a known plane changes what a vector maps to` }
 unless Geometry.Transform.rotate((1 / 4) turn).count == 3 { INFO@mark `UI263 a plane's transform is not three by three` }
+
+// A share in a length is a share of the parent; a theme style narrows; a location literal takes a narrowing
+halved := Geometry.Box(size: Geometry.Vector(1000px, 800px), children: [Geometry.Box(){width <= 50%}]).solve
+unless halved.children.first.size.x == 500px { INFO@mark `UI264 a share bound is not a share of the parent's width` }
+unless Geometry.Box(size: Geometry.Vector(10px, 20px), radius: [50%]).radii.first == Geometry.Vector(5px, 10px) { INFO@mark `UI265 a share radius is not half the shape's size` }
+with UI.Theme.styles = [("tall", {height >= 30px})] {
+  unless Geometry.Box().styled("tall").fields["height"].type.least == 30px { INFO@mark `UI266 a theme style does not carry its bound` }
+}
+unless Choice(type: String{search}, value: "ray").shown == "ray" { INFO@mark `UI267 a search field is not a text field in the terminal` }
+unless (@https://youtu.be/abc?si=xyz&t=1m5s).embedded as String == "https://www.youtube.com/embed/abc?si=xyz&start=65" { INFO@mark `UI268 an embedding drops the query` }
+unless (@https://www.youtube.com/watch?v=abc&t=30).embedded as String == "https://www.youtube.com/embed/abc?start=30" { INFO@mark `UI269 a watch link's time is not where the embed starts` }
+unless Program(code: { Choice(type: String) ^muted }){O: UI.Scene}().styles.contains("muted") { INFO@mark `UI270 a styled choice is not a styled box holding it` }
+unless (@./logo.png{alt: "logo"}).alt == "logo" { INFO@mark `UI271 a narrowing after a location literal is not a narrowing` }
+unless @./logo.png{alt: "logo"} as String == "./logo.png" { INFO@mark `UI272 a narrowing is read into the location's path` }
+alt_of := (name: String) => @./logo.png{alt: name}
+unless alt_of("written").alt == "written" { INFO@mark `UI273 a name in a narrowing is read against the location instead of where it is written` }
+unless (@https://orbitmines.com/archive?search=).query.search == None { INFO@mark `UI274 an empty query parameter is not None` }
+unless (@https://orbitmines.com/archive?page=2).query.search == None { INFO@mark `UI275 a missing query parameter is not None` }
+unless ((@https://orbitmines.com/archive).query.search ?? "all") == "all" { INFO@mark `UI276 a location without a query has no parameter to default` }
+unless (@https://orbitmines.com/archive).with(search: None) as String == "https://orbitmines.com/archive" { INFO@mark `UI277 an empty query is written` }

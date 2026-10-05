@@ -47,9 +47,7 @@ Language.Web := class: Language {
       {audio: Geometry.Shape{content is Location && content.language === Language.Audio}} => @html <audio {Named(audio)} src={audio.content as String} controls />
       {frame: Geometry.Shape{content is Location && content.video_site}} => @html <iframe {Named(frame)} src={frame.content.embedded as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
       {canvas: Geometry.Shape{content is Program}} => @html <canvas {Named(canvas)} width={canvas.size.x as px} height={canvas.size.y as px} />
-      {ball: Geometry.Ball} => @html <svg {Named(ball)} viewBox="0 0 {ball.size.x as px} {ball.size.y as px}">
-        <ellipse cx="50%" cy="50%" rx="50%" ry="50%" />
-      </svg>
+      {ball: Geometry.Ball} => @html <span {Named(ball)} {Described(ball)} role="presentation" />
       {polygon: Geometry.Polygon{!rectangular}} => @html <svg {Named(polygon)} viewBox="0 0 {polygon.size.x as px} {polygon.size.y as px}">
         <polygon points={polygon.boundary.points.map(.x as px, ",", .y as px).join(" ")} />
       </svg>
@@ -95,6 +93,7 @@ Language.Web := class: Language {
 
     kinds := {
       {chosen: Choice{type is String{secret}}} => "password"
+      {chosen: Choice{type is String{search}}} => "search"
       {chosen: Choice{type is boolean}} => "checkbox"
       {chosen: Choice{type is Number{least, most}}} => "range"
       {chosen: Choice{type is Number}} => "number"
@@ -129,6 +128,7 @@ Language.Web := class: Language {
     Chord := class = from: Geometry.Stop, to: Geometry.Stop
     Paint := class = value: Geometry.Paint
     Measure := class = length: Geometry.Length
+    Share := class = amount: Number
     Typeface := class = shape: Geometry.Shape
     Timing := class = easing: Geometry.Easing
     Mask := class = shape: Geometry.Shape
@@ -145,6 +145,7 @@ Language.Web := class: Language {
       {measure: Measure{length is Number}} => measure.length, "px"
       {measure: Measure{length.quantities.count > 1}} => "calc(", measure.length.quantities.map(.quantity, .unit.symbol).join(" + "), ")"
       {measure: Measure} => measure.length.amount, measure.length.unit.symbol
+      {share: Share} => share.amount * 100, "%"
     }
 
     rules := values + {
@@ -177,7 +178,7 @@ Language.Web := class: Language {
           {Positioned(shape)}
           background: {Paint(shape.fill) if shape.fill};
           {Bordered(shape)}
-          border-radius: {shape.radius.map(Measure(.)).join(" ") if shape.radius != [0px]};
+          border-radius: {shape.radius.map(. is Number ? Share(.) : Measure(.)).join(" ") if shape.radius != [0px]};
           transform: {Transformed(shape.transform) if shape.transform != Geometry.Transform.identity};
           overflow: {shape.overflow == scroll ? "auto" : shape.overflow as String};
           z-index: {shape.layer if shape.layer != 0};
@@ -211,8 +212,8 @@ Language.Web := class: Language {
         {along}: {(given * 100, "%") if given is Number};
         {along}: {(given.sorted.first.value * 100, "%") if given is Geometry.Stops};
         {along}: {Measure(given) if given is Geometry.Length};
-        max-{along}: {Measure(bounds.most) if bounds.most != None};
-        min-{along}: {Measure(bounds.least) if bounds.least != None};
+        max-{along}: {(bounds.most is Number ? Share(bounds.most) : Measure(bounds.most)) if bounds.most != None};
+        min-{along}: {(bounds.least is Number ? Share(bounds.least) : Measure(bounds.least)) if bounds.least != None};
       })
       {aligned: Aligned{shape.align == center}} => @css { align-items: center; text-align: center; }
       {aligned: Aligned{shape.align == end}} => @css { align-items: flex-end; text-align: end; }
@@ -250,6 +251,7 @@ Language.Web := class: Language {
         letter-spacing: {Measure(font.tracking) if font.tracking != inherited.tracking};
       })
 
+      {specific: Specific{shape is Geometry.Ball}} => @css { display: inline-block; border-radius: 50%; }
       {specific: Specific{shape.content is Location && shape.content.language === Language.Image && shape.fill}} => specific.shape -- (image => @css {
         object-fit: {image.content.fit as String}; display: inline-block; mask: {Mask(image)}; -webkit-mask: {Mask(image)};
       })
@@ -459,8 +461,8 @@ Language.Web := class: Language {
       {pointer: Pointer{kind == "pointerdown"}} => pointer.pointed.to(pointer.position, pressing: [0], time: pointer.time)
       {pointer: Pointer{kind == "pointermove"}} => pointer.pointed.to(pointer.position, time: pointer.time)
       {pointer: Pointer} => pointer.pointed.to(pointer.position, pressing: [], time: pointer.time)
-      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- Keyboard.press(keystroke.key, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
-      {keystroke: Keystroke} => Keyboard.release(keystroke.key)
+      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- @me/device/keyboard[keystroke.key].press((Keyboard.Modifier.shift if .contains("shift")) | (Keyboard.Modifier.control if .contains("control")) | (Keyboard.Modifier.alt if .contains("alt")) | (Keyboard.Modifier.meta if .contains("meta")))
+      {keystroke: Keystroke} => @me/device/keyboard[keystroke.key].pressed = false
       {size: Size{shape}} => size.shape.size = Geometry.Vector(size.width * 1px, size.height * 1px)
       {size: Size} => None
     }

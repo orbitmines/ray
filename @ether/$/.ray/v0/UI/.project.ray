@@ -1,1 +1,11 @@
 @ether/Geometry
+@ether/$/web
+@ether/$/tui
+@ether/$/html
+@ether/$/css
+@ether/$/js
+@ether/$/ansi
+@ether/$/sixel
+@ether/$/kitty
+@ether/$/opentype
+@ether/$/png

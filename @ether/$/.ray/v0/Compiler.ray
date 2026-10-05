@@ -49,6 +49,10 @@ Compiler := class {
     {a} || {a} => a
   }
 
+  memoised := {
+    {f: Pure}({arguments}) => f.remembered(arguments)
+  }
+
   formats := {
     ({kept: Language{fidelity == Language.Fidelity.lossless}} | {other: Language}).read({source}) => kept.read(source)
     {history: History{location && stored.some(.fidelity == Language.Fidelity.snapshot)}}.checkout({label}) => history.pinned(label) -- (pinned =>
@@ -75,7 +79,7 @@ Compiler := class {
 
   stored := formats + per_object + cached + delta
 
-  levels => [none, default, folding, logic, formats, per_object, cached, delta, stored]
+  levels => [none, default, folding, logic, memoised, formats, per_object, cached, delta, stored]
 
   static reduced (value, level) => Program(code: { value }){O: level}()
 }
@@ -83,4 +87,6 @@ Compiler := class {
 Program &+= {
   O | optimizations := Compiler.none
   compounds + (other: Program) => Program(code: (code, other.code))
+  results: (arguments: *, value: *)[] = []
+  remembered (arguments) => (results{.arguments == arguments}.first ?? (results.push (arguments: arguments, value: this(arguments)) -- results.last)).value
 }

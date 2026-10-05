@@ -87,3 +87,16 @@ unless logo_html.tag == "img" && logo_html.attributes.contains(("src", "./logo.p
 unless Program(code: { @./clip.mp4 }).rendered(Language.Web.Markup.level).body.children.first.tag == "video" { INFO@mark `UI228 a video location is not a video element` }
 unless Program(code: { @./song.mp3 }).rendered(Language.Web.Markup.level).body.children.first.tag == "audio" { INFO@mark `UI229 an audio location is not an audio element` }
 unless Program(code: { "Ray" @ (@https://orbitmines.com) }).rendered(Language.Web.Markup.level).body.children.first.tag == "a" { INFO@mark `UI231 a value placed at a location is not an a on the web` }
+
+bounded := Geometry.Box(){width <= 50%, height >= 30px}
+unless css_rules(bounded).first.declarations.contains(("max-width", 50, "%")) { INFO@mark `UI278 a share bound is not a CSS percentage` }
+unless css_rules(bounded).first.declarations.contains(("min-height", 30, "px")) { INFO@mark `UI279 a length bound is not a CSS length` }
+unless css_rules(Geometry.Box(radius: [50%])).first.declarations.some(.0 == "border-radius" && .[1..].join("") == "50%") { INFO@mark `UI280 a share radius is not border-radius: 50%` }
+unless chosen_input(Choice(type: String{search})).attributes.contains(("type", "search")) { INFO@mark `UI281 a search field is not a search input` }
+dot := Geometry.Ball(size: Geometry.Vector(8px, 8px), fill: red)
+unless Program(code: { dot }).rendered(Language.Web.Markup.level).body.children.first.tag == "span" { INFO@mark `UI282 a ball is drawn as an svg box` }
+unless css_rules(dot).first.declarations.contains(("border-radius", "50%")) && css_rules(dot).first.declarations.some(.0 == "background") { INFO@mark `UI283 a ball is not a filled dot` }
+Language.Web.DOM.dispatched("window keydown q")
+unless @me/device/keyboard["q"].pressed { INFO@mark `UI284 a key pressed on the web is not pressed on the device keyboard` }
+Language.Web.DOM.dispatched("window keyup q")
+if @me/device/keyboard["q"].pressed { INFO@mark `UI285 a key released on the web stays pressed` }

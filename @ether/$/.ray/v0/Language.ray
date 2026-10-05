@@ -8,7 +8,7 @@ Language := class: Ray = extensions: String, location: Location[] = [], level: C
 
   static projects: Project[] = []
   static project (name: String) => projects{.name == name}.first
-    ?? ray.bundled("$/" + name) -- (found => found ~~ (.name = name) ~~ projects.push(.) ~~ .load if found)
+    ?? Project.known(ray.bundled("$/" + name)) -- (found => found ~~ (.name = name) ~~ projects.push(.) ~~ .load if found)
   static found (name: String) => name.lower_case -- (lowered => lowered == "ray" ? ray
     : (project(lowered) ? Language#{.names("." + lowered)}.last : named("." + lowered)) ?? Quest(name: "a language by that name", goal: lowered))
 

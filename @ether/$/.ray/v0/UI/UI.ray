@@ -6,11 +6,12 @@ UI := class {
   pointer: Pointer?
 
   Scene := {
+    {superposed: |} => Compiler.reduced(@me.choose(superposed), Scene)
     {text: String} => Geometry.Box(content: text, location: text.location)
-    {styled: String | Geometry.Shape ^{{literal expression}}} => Compiler.reduced(styled, Scene).styled_by(Program(code: external ** expression))
+    {styled: String | Geometry.Shape | Choice ^{{literal expression}}} => Compiler.reduced(styled, Scene).styled_by(Program(code: external ** expression))
     {styled: String ^{style}} => Compiler.reduced(styled.marked(style), Scene)
-    {styled: Geometry.Shape ^{style}} => styled.styled(style)
-    {{literal narrowing}} {narrowed: String | Geometry.Shape} => Compiler.reduced(narrowed, Scene).narrowed(Program(code: external ** narrowing))
+    {styled: Geometry.Shape | Choice ^{style}} => Compiler.reduced(styled, Scene).styled(style)
+    {{literal narrowing}} {narrowed: String | Geometry.Shape | Choice} => Compiler.reduced(narrowed, Scene).narrowed(Program(code: external ** narrowing))
     {location: Location{.media || .video_site}} => location.placed(Geometry.Box(content: location))
     {location: Location} => location.placed(Geometry.Box(content: location as String, location: location))
     {placed: Placed} => Compiler.reduced(placed.value, Scene) ~~ .location = placed.location
@@ -19,7 +20,6 @@ UI := class {
       ~~ (.width = drawer.extent if drawer.side is Geometry.horizontal) ~~ (.height = drawer.extent if drawer.side is Geometry.vertical)])
     {shape: Geometry.Shape} => shape
     {chosen: Choice} => Geometry.Box(content: chosen)
-    {superposed: |} => Compiler.reduced(@me.choose(superposed), Scene)
     {lines: \n} => Geometry.Box(flow: block, children: lines.components)
     {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
     {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
@@ -105,7 +105,16 @@ UI := class {
       @https://www.youtube.com/watch?v={id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
       @https://www.youtube.com/embed/{id: VideoId}{rest: Rest} => @https://www.youtube.com/embed/{id}
     }
-    embedded => Compiler.reduced(this, Embedding)
+    static Offset := class ((hours: Decimal, "h")?, (minutes: Decimal, "m")?, (seconds: Decimal, "s"?)?) => {
+      total => (hours ?? 0) * 3600 + (minutes ?? 0) * 60 + (seconds ?? 0)
+    }
+    static Embedded := {
+      {pair: (name: "t", value: *)} => (name: "start", value: (pair.value ~= (at: Offset)).at.total as String)
+      {pair: (name: "v", value: *)} => None
+      {pair} => pair
+    }
+    embedded => Compiler.reduced(this, Embedding) -- (embed => embed === this ? this
+      : Location(embed.scheme, embed.host, embed.port, embed.path, query: Location.Query(pairs: query.pairs.map(Compiler.reduced(., Embedded)).compact), fragment: fragment))
     video_site => embedded !== this
     placed (shape: Geometry.Shape) => components.for(.entered(shape, None)) -- ((shape.aspect = 16 / 9) if video_site) -- shape
     narrowed (narrowing: Program) => copied -- (copy => [narrowing{O: Geometry.Settings}()].flatten.for(write => write.writes.every(copy.declaring(.)) ? write.entered(copy, None) : (copy.components ,= write)) -- copy)
@@ -146,7 +155,8 @@ UI := class {
     face => content -- (chosen => Geometry.Box(content: chosen.shown, origin: at + padding.start, size: size - padding.total, font: font,
       color: chosen.empty ? chosen.placeholder_color ?? Theme["muted"].color : color, white_space: chosen.type is String{multiline} ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap, palette: palette))
     label => content is Location ? content.alt ?? content.name : children{.content is String}.content.join(" ")
-    styled (name: String) => (styles ,= name) -- Theme[name] -- (style => font -- (was => (this += style) -- (font = style.font ?? was))) -- this
+    styled (name: String) => (styles ,= name) -- Theme[name] -- (style => font -- (was => (this += style{!(. is Program)}) -- (font = style.font ?? was))
+      -- style{. is Program}.for(narrowed(.))) -- this
     styled_by (expression: Program) => styled(expression() as String) -- (styles = Dynamic(expression)) -- this
     themed => styles -- (own => (styles = []) -- Compiler.reduced(this, Theme.kinds) -- (styles.nonempty ? own.for(styled(.)) : (styles = own)))
       -- ((content.whole_marks{!styles.contains(.style)}.style.for(styled(.))) if content is String) -- children.for(.themed) -- this

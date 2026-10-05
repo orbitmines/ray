@@ -94,3 +94,14 @@ unless Compiler.levels.contains(Compiler.stored) { INFO@mark `VC39 storage is no
 unless History.Written(history: vh).caches.first.content as String ~= ⊢(vh.head.id as String + "\\ ") { INFO@mark `VC40 the cache does not hold the value at the head` }
 unless History.edit("abcdef", "abXdef") == ". edited(3, 4, \"X\")" { INFO@mark `VC41 a small change is not written as an edit` }
 unless "abcdef".edited(3, 4, "X") == "abXdef" { INFO@mark `VC42 an edit does not produce the changed value` }
+
+// A stretch runs from where its start holds to the commit where its end holds; the last may not have ended yet.
+vs := History()
+[1, 5, 6, 2, 7].for(vs.commit(ada, .))
+stretched := vs{from value > 4 to value <= 4}
+unless stretched.count == 2 { INFO@mark `VC44 a history is not read as its stretches` }
+unless stretched.first.value == [5, 6, 2] { INFO@mark `VC45 a stretch does not end with the commit that ends it` }
+unless stretched.last.value == [7] { INFO@mark `VC46 an unfinished last stretch is left out` }
+unless vs{from value > 4}.first.value == [5, 6, 2] { INFO@mark `VC47 a stretch with no end does not end where its start stops holding` }
+unless vs.since(None){.value == 5}.first.next.value == 6 { INFO@mark `VC48 a commit's next is not the one after it on its line` }
+unless vs.head.next == None { INFO@mark `VC49 the head has a next` }

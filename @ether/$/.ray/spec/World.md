@@ -225,3 +225,13 @@ Answers from 2026-10-06.
   `$/fossil`, `$/pijul` or `$/subversion`, and is reached as `$.git` and so on (L§9.1, L§9.2).
 - **W3.16** `Ray.history` is `Node.history`. A node's history is a `History`; its stored `.%` form is the Ray
   language reading and writing it.
+
+Decided 2026-10-06 (history queries).
+
+- **W3.17** `history{from p to q}` is the list of stretches of a history, in order. A stretch opens at a commit
+  where `p` holds while no stretch is open, and closes at, and includes, the first later commit where `q` holds.
+  `p` and `q` are read against each commit (its fields, then its value's). A stretch whose `q` has not happened
+  yet runs to the head and is the last one: it is unfinished, and it is included. `history{from p}` is
+  `history{from p to !p}`: a stretch lasts while `p` holds and includes the commit where it stops holding.
+- **W3.18** A commit's `.next` is the following commit on the same line (the one whose first parent it is),
+  `None` at the head. `.previous` is the other direction.

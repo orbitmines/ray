@@ -1,195 +1,86 @@
 Point := Ray
+Path | Curve | Line := Array.Unbounded
 
-Geometry := class {
-  Vector := class {
-    x: 0
-    y: 0
-    z: 0
-
-    compounds + (other) => Geometry.Vector(x: .x + other.x, y: .y + other.y, z: .z + other.z)
-    compounds - (other) => Geometry.Vector(x: .x - other.x, y: .y - other.y, z: .z - other.z)
+Geometry := namespace {
+  Vector := class = x: Number = 0, y: Number = 0, z: Number = 0 {
+    + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)
+    - (other: Vector) => Vector(x - other.x, y - other.y, z - other.z)
   }
 
-  Shape := class: Ray {
-    position: Geometry.Vector()
-    size: Geometry.Vector()
-    spacing: (chain None)
-    constraints: (chain None)
-    children: (chain None)
-    flow: Geometry.Flow.vertical
-
-    compounds + (component) => (
-      if (component.instance_of(Geometry.Spacing)) { .spacing &= component } else { .constraints &= component }
-      this
-    )
-    holding (child) => (
-      .children &= child
-      this
-    )
-    outer => (
-      grown ^keyword := .size
-      .spacing for {
-        if (it.value.from == Geometry.Spacing.From.border) { grown = grown + it.value.amount + it.value.amount }
-      }
-      grown
-    )
-    narrowed (constraint) => .compounds_constraint(constraint)
-    compounds_constraint (constraint) => (
-      .constraints &= constraint
-      this
-    )
+  // Padding is a hierarchical object around a shape: a ball with padding is still a ball.
+  Shape := class: Ray = position: Vector = Vector(), size: Vector = Vector(), spacing: Spacing[] = [], constraints: Constraint[] = [], children: Shape[] = [], flow: Flow = vertical {
+    + (component: Spacing | Constraint) => (component ==.instance_of Spacing ? spacing : constraints).push component -- this
+    holding (child: Shape) => children.push child -- this
+    outer => size + spacing{.from == border}.amount.reduce(acc = Vector() => acc + . + .)
   }
-
-  Box := class: Geometry.Shape { }
-  Ball := class: Geometry.Shape {
-    radius => .size.x / 2
+  Box := class: Shape
+  Ball := class: Shape {
+    radius => size.x / 2
   }
-
-  Loop := class: Ray {
-    points: (chain None)
-
-    closed => .points.nonempty
+  Circle := class: Ball = centre: Point {
+    outline (count: Number) => (0..<count).map(Polar(centre, radius, turn: ., of: count)).loop
   }
-
-  Circle := class: Geometry.Ball {
-    centre: Node
-
-    outline (count: Number) => (
-      made := Geometry.Loop()
-      at ^keyword := 0
-      while (at < count) {
-        made.points &= Geometry.Polar(centre: .centre, radius: .radius, turn: at, of: count)
-        at = at.succ
-      }
-      made
-    )
-  }
-
-  Polar := class {
-    centre: Node
-    radius: Node
-    turn: Node
-    of: Node
-  }
+  Polar := class = centre: Point, radius: Number, turn: Number, of: Number
 
   Flow := enum vertical | inline
-
-  Spacing := class {
-    From := enum border | shape
-    amount: Geometry.Vector()
-    from: Geometry.Spacing.From.border
-    sides: Geometry.Side.all
-  }
   Side := enum all | top | bottom | left | right | horizontal | vertical
-
-  Constraint := class {
-    dimension: Node
-    least: None
-    most: None
-    share: None
-    align: None
-
-    admits (length) => (
-      fits ^keyword := true
-      unless (.least === None) { if (length < .least) { fits = false } }
-      unless (.most === None) { if (.most < length) { fits = false } }
-      fits
-    )
-  }
   Align := enum start | center | end | between | middle
-
-  Breakpoint := class {
-    width: Node
-    share: Node
-
-    -> (other) => Geometry.Interpolated(from: this, to: other)
-  }
-  Interpolated := class {
-    from: Node
-    to: Node
-
-    at (width) => if (width < .from.width) { .from.share } elsif (.to.width < width) { .to.share } else {
-      .from.share + (((.to.share - .from.share) * (width - .from.width)) / (.to.width - .from.width))
-    }
-  }
-
   Relation := enum against | next_to | above | below | inside
-  related (item, relation, other) => Geometry.Placed(item: item, relation: relation, other: other)
-  Placed := class {
-    item: Node
-    relation: Node
-    other: Node
+
+  Spacing := class = amount: Vector = Vector(), from: From = border, sides: Side = all {
+    static From := enum border | shape
+  }
+  Constraint := class = dimension: String, least: Number?, most: Number?, share: (Number | Interpolated)?, align: Align? {
+    admits (length: Number) => (!least || least <= length) && (!most || length <= most)
   }
 
-  Solver := class {
-    available: Node
+  // `md 6 -> lg 4`: a share interpolated between breakpoints.
+  Breakpoint := class = width: Number, share: Number {
+    -> (other: Breakpoint) => Interpolated(from: this, to: other)
+  }
+  Interpolated := class = from: Breakpoint, to: Breakpoint {
+    at (width: Number) => width < from.width ? from.share
+      : to.width < width ? to.share
+      : from.share + (to.share - from.share) * (width - from.width) / (to.width - from.width)
+  }
 
-    length (shape, width) => (
-      chosen ^keyword := None
-      shape.constraints for {
-        held := it.value
-        if (held.dimension == `x`) {
-          unless (held.share === None) {
-            if (held.share.instance_of(Geometry.Interpolated)) { chosen = held.share.at(width) * width } else { chosen = held.share * width }
-          }
-          unless (held.most === None) { unless (chosen === None) { if (held.most < chosen) { chosen = held.most } } }
-          unless (held.least === None) { unless (chosen === None) { if (chosen < held.least) { chosen = held.least } } }
-        }
-      }
-      if (chosen === None) { width } else { chosen }
-    )
+  Placed := class = item: Shape, relation: Relation, other: Shape
+  related (item, relation, other) => Placed(item, relation, other)
 
-    solve (shape) => .place(shape, Geometry.Vector(), .available)
-    place (shape, origin, width) => (
-      own := .length(shape, width)
-      shape.size = Geometry.Vector(x: own, y: shape.size.y)
-      shape.position = origin
-      cursor ^keyword := origin
-      line ^keyword := 0
-      shape.children for {
-        child := it.value
-        child_width := .length(child, own)
-        offset ^keyword := 0
-        child.constraints for {
-          if (it.value.align == Geometry.Align.center) { offset = (own - child_width) / 2 }
-          if (it.value.align == Geometry.Align.end) { offset = own - child_width }
-        }
-        if (shape.flow == Geometry.Flow.inline) {
-          .place(child, Geometry.Vector(x: cursor.x + offset, y: cursor.y), child_width)
-          cursor = Geometry.Vector(x: cursor.x + child_width, y: cursor.y)
-        } else {
-          .place(child, Geometry.Vector(x: origin.x + offset, y: cursor.y), child_width)
-          cursor = Geometry.Vector(x: origin.x, y: cursor.y + child.size.y)
-        }
-      }
-      shape
-    )
+  Solver := class = available: Number {
+    length (shape: Shape, width: Number) => shape.constraints{.dimension == "x"}.reduce(acc = width => (
+      .share ? (.share ==.instance_of Interpolated ? .share.at(width) : .share) * width : acc
+    ) max (.least ?? 0) min (.most ?? ∞))
+
+    solve (shape: Shape) => place(shape, Vector(), available)
+    place (shape: Shape, origin: Vector, width: Number) => shape -- {
+      own = length(shape, width)
+      size = Vector(own, size.y)
+      position = origin
+      children.reduce(acc = origin => {
+        child_width = length(., own)
+        offset = .constraints.align.last == center ? (own - child_width) / 2 : .constraints.align.last == end ? own - child_width : 0
+        flow == inline
+          ? place(., Vector(acc.x + offset, acc.y), child_width) -- Vector(acc.x + child_width, acc.y)
+          : place(., Vector(origin.x + offset, acc.y), child_width) -- Vector(origin.x, acc.y + .size.y)
+      })
+    }
   }
 }
 
-center ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.center)).holding(inline block)
-right ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.end)).holding(inline block)
-left ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.start)).holding(inline block)
-between ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `x`, align: Geometry.Align.between)).holding(inline block)
+// Alignment words keep their block.
+[center: Align.center, right: Align.end, left: Align.start, between: Align.between].for (word, align) => {
+  `word` ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: "x", align)).holding(inline block)
+}
+middle ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: "y", align: Align.middle)).holding(inline block)
 
-px {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.horizontal)
-py {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.vertical)
-pt {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.top)
-pb {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.bottom)
-mt {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.top, from: Geometry.Spacing.From.shape)
-mb {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.bottom, from: Geometry.Spacing.From.shape)
-middle ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: `y`, align: Geometry.Align.middle)).holding(inline block)
+// The spacing shorthands: p/m with a side, from the border or from the shape.
+[p: all, px: horizontal, py: vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => {
+  `word` {amount: Number} ^keyword => Geometry.Spacing(amount: Vector(amount if side != vertical, amount if side != horizontal), sides: side)
+  `word.replace("p", "m")` {amount: Number} ^keyword => Geometry.Spacing(amount: Vector(amount if side != vertical, amount if side != horizontal), sides: side, from: shape)
+}
 
-p {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount, y: amount), sides: Geometry.Side.all)
-pl {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.left)
-pr {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.right)
-mx {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.horizontal, from: Geometry.Spacing.From.shape)
-my {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(y: amount), sides: Geometry.Side.vertical, from: Geometry.Spacing.From.shape)
-ml {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.left, from: Geometry.Spacing.From.shape)
-mr {amount: Number} ^keyword => Geometry.Spacing(amount: Geometry.Vector(x: amount), sides: Geometry.Side.right, from: Geometry.Spacing.From.shape)
-
-xs {share} ^keyword => Geometry.Breakpoint(width: 0, share: share)
-sm {share} ^keyword => Geometry.Breakpoint(width: 576, share: share)
-md {share} ^keyword => Geometry.Breakpoint(width: 768, share: share)
-lg {share} ^keyword => Geometry.Breakpoint(width: 992, share: share)
-xl {share} ^keyword => Geometry.Breakpoint(width: 1200, share: share)
+// Breakpoints
+[xs: 0, sm: 576, md: 768, lg: 992, xl: 1200].for (word, width) => {
+  `word` {share} ^keyword => Geometry.Breakpoint(width, share)
+}

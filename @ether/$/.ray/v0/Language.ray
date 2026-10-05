@@ -9,8 +9,9 @@ Language := class = extensions: String | String[], location: Location[] = [], le
     : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣)?.last) ?? ray
   static ray => named(".ray")
   static fragment_of (extension: String) => named("." + extension)?.fragment
+  static block_of (extension: String) => fragment_of(extension) -- (fragment => fragment && ("{", Char.Blank, parts: (Char.Blank[], part: fragment | Hole)[], Char.Blank[], "}"))
 
-  static Hole := class ("{", code: Code, "}") => {
+  static Hole := class ("{", code: Code{nonempty && !(first is Char.Blank)}, "}") => {
     built (reading: Program) => reading(code)
   }
   static Code = (!("{" | "}") | ("{", Code, "}"))[]

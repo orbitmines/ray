@@ -15,55 +15,60 @@ Language.Direct := class: Language {
     inner => placed * Geometry.Transform.translate(shape.origin * -1)
     area => (0..<shape.size.y as px).map(y => (0..<shape.size.x as px).map(x => (x, y))).flatten
     inside => area{shape.contains(Geometry.Vector(.0, .1))}
-    opacity => shape.effects{==.instance_of Geometry.Opacity}.amount.product ?? 1
+    opacity => shape.effects{. is Geometry.Opacity}.amount.product ?? 1
   }
   Painted := class = points: (at: Geometry.Vector, sample: Geometry.Vector)[], paint: Geometry.Paint?, alpha: Probability = 1
   Outlined := class = outline: Geometry.Outline, transform: Geometry.Transform, paint: Geometry.Paint?
   Stroked := class = outline: Geometry.Outline, transform: Geometry.Transform, stroke: Geometry.Stroke
+  Shown := class = draw: Draw
 
   rules := {
     {screen: UI.Screen} => Drawing(Geometry.Raster(UI.Viewport.size.x as px, UI.Viewport.size.y as px), screen.layers.map(Draw(., screen.offset)))
-    {drawing: Drawing{ops.flatten.every(==.instance_of Op)}} => drawing.ops.flatten.for(.onto(drawing.raster)) -- drawing.raster
+    {drawing: Drawing{ops.flatten.every(. is Op)}} => drawing.ops.flatten.for(.onto(drawing.raster)) -- drawing.raster
 
-    {draw: Draw{shape ==.instance_of Geometry.Text}} => {
+    {draw: Draw{shape is UI.Input}} => [
+      Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: draw.shape.fill, stroke: draw.shape.stroke, radius: draw.shape.radius, effects: draw.shape.effects), draw.outer),
+      Draw(draw.shape.face, draw.outer)
+    ]
+    {draw: Draw} => [
+      Painted(draw.inside.map((x, y) => (at: draw.placed.applied(Geometry.Vector(x, y)), sample: Geometry.Vector(x, y))), draw.shape.fill, draw.opacity) if draw.shape.fill && !(draw.shape.content is Location),
+      Stroked(draw.shape.boundary, draw.placed, draw.shape.stroke) if draw.shape.stroke,
+      Shown(draw) if draw.shape.content,
+      draw.shape.in_place.sort_by(.layer).map(Draw(., draw.inner)) if draw.shape.visible,
+      draw.shape.effects{. is Geometry.Blur}.map(Blurred(draw.inside, .radius as px))
+    ]
+
+    {shown: Shown{draw.shape.content is String}} => {
+      draw = shown.draw
       text = draw.shape
       lines = text.lines(text.size.x)
       starts = text.starts(text.size.x)
       (0..<lines.count).map(row => (0..<lines[row].length).reduce(placed = (pen: 0, ops: []) => {
-        run = text.run_at(starts[row] + .)
-        face = run?.font ?? text.font
-        height = face.size * face.line_height
-        glyph = Font(face).glyph(lines[row][.])
-        (pen: placed.pen + glyph.advance * face.size / glyph.units, ops: [placed.ops,
-          Draw(Geometry.Box(origin: Geometry.Vector(placed.pen, row * height), size: Geometry.Vector(face.size * 0.6, height), fill: Geometry.Color(51, 144, 255, 0.4)), draw.placed) if UI.Selection.selects(text, starts[row] + .),
-          Outlined(glyph.outline, draw.placed * Geometry.Transform.translate(Geometry.Vector(placed.pen, row * height)) * Geometry.Transform.scale(Geometry.Vector(face.size / glyph.units, face.size / glyph.units)), run?.color ?? text.color ?? Geometry.Color(0, 0, 0))
+        look = UI.Theme.face(text, starts[row] + .)
+        typeface = look.font
+        height = typeface.size * typeface.line_height
+        glyph = Font(typeface).glyph(lines[row][.])
+        (pen: placed.pen + glyph.advance * typeface.size / glyph.units, ops: [placed.ops,
+          Draw(Geometry.Box(origin: Geometry.Vector(placed.pen, row * height), size: Geometry.Vector(typeface.size * 0.6, height), fill: Geometry.Color(51, 144, 255, 0.4)), draw.placed) if UI.Selection.selects(text, starts[row] + .),
+          Outlined(glyph.outline, draw.placed * Geometry.Transform.translate(Geometry.Vector(placed.pen, row * height)) * Geometry.Transform.scale(Geometry.Vector(typeface.size / glyph.units, typeface.size / glyph.units)), look.color ?? Geometry.Color(0, 0, 0))
         ].flatten)
       }).ops).flatten
     }
-    {draw: Draw{shape ==.instance_of UI.Input}} => [
-      Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: draw.shape.fill, stroke: draw.shape.stroke, radius: draw.shape.radius, effects: draw.shape.effects), draw.outer),
-      Draw(draw.shape.face, draw.outer)
-    ]
-    {draw: Draw{shape ==.instance_of Geometry.Image && shape.fill}} => (IO.read(draw.shape.source) as Geometry.Raster) -- (source => draw.area.map((x, y) =>
-      Pixel(draw.placed.applied(Geometry.Vector(x, y)), ((draw.shape.fill as Geometry.Color) ?? Geometry.Color(0, 0, 0)).faded(source.at(x * source.width / draw.shape.size.x, y * source.height / draw.shape.size.y).alpha))
-    ))
-    {draw: Draw{shape ==.instance_of Geometry.Image}} => (IO.read(draw.shape.source) as Geometry.Raster) -- (source => draw.area.map((x, y) =>
-      Pixel(draw.placed.applied(Geometry.Vector(x, y)), source.at(x * source.width / draw.shape.size.x, y * source.height / draw.shape.size.y))
-    ))
-    {draw: Draw{shape ==.instance_of Geometry.Canvas}} => draw.shape.draws().map(Draw(., draw.placed))
-    {draw: Draw{shape ==.instance_of Geometry.Frame}} => Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: Geometry.Color(17, 20, 24), stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
-      Geometry.Text("▶ " + (draw.shape.title.empty ? draw.shape.source as String : draw.shape.title), origin: draw.shape.origin + draw.shape.size * (1 / 2) - Geometry.Vector(0, 8px), size: draw.shape.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
-    ]), draw.outer)
-    {draw: Draw} => [
-      Painted(draw.inside.map((x, y) => (at: draw.placed.applied(Geometry.Vector(x, y)), sample: Geometry.Vector(x, y))), draw.shape.fill, draw.opacity) if draw.shape.fill,
-      Stroked(draw.shape.boundary, draw.placed, draw.shape.stroke) if draw.shape.stroke,
-      draw.shape.in_place.sort_by(.layer).map(Draw(., draw.inner)) if draw.shape.visible,
-      draw.shape.effects{==.instance_of Geometry.Blur}.map(Blurred(draw.inside, .radius as px))
-    ]
+    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === UI.Image && draw.shape.fill}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
+      Pixel(draw.placed.applied(Geometry.Vector(x, y)), ((draw.shape.fill as Geometry.Color) ?? Geometry.Color(0, 0, 0)).faded(raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y).alpha))
+    )))
+    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === UI.Image}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
+      Pixel(draw.placed.applied(Geometry.Vector(x, y)), raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y))
+    )))
+    {shown: Shown{draw.shape.content is Location && draw.shape.content.video_site}} => shown.draw -- (draw => Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: Geometry.Color(17, 20, 24), stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
+      Geometry.Box(content: "▶ " + (draw.shape.content.alt ?? draw.shape.content as String), origin: draw.shape.origin + draw.shape.size * (1 / 2) - Geometry.Vector(0, 8px), size: draw.shape.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
+    ]), draw.outer))
+    {shown: Shown{draw.shape.content is Program}} => shown.draw -- (draw => draw.shape.content().map(Draw(., draw.placed)))
+    {shown: Shown} => []
 
-    {painted: Painted{paint ==.instance_of Geometry.Color}} => painted.paint.faded(painted.alpha) -- (color => painted.points.map(Pixel(.at, color)))
-    {painted: Painted{paint ==.instance_of Geometry.Gradient}} => painted.points.map(Pixel(.at, painted.paint.at(.sample.x).faded(painted.alpha)))
-    {painted: Painted{paint ==.instance_of Geometry.Pattern}} => painted.paint -- (pattern => Compiler.reduced(Drawing(Geometry.Raster(pattern.repeat.x as px, pattern.repeat.y as px), [Draw(pattern.shape, Geometry.Transform())]), rules) -- (tile =>
+    {painted: Painted{paint is Geometry.Color}} => painted.paint.faded(painted.alpha) -- (color => painted.points.map(Pixel(.at, color)))
+    {painted: Painted{paint is Geometry.Gradient}} => painted.points.map(Pixel(.at, painted.paint.at(.sample.x).faded(painted.alpha)))
+    {painted: Painted{paint is Geometry.Pattern}} => painted.paint -- (pattern => Compiler.reduced(Drawing(Geometry.Raster(pattern.repeat.x as px, pattern.repeat.y as px), [Draw(pattern.shape, Geometry.Transform())]), rules) -- (tile =>
       painted.points.map(Pixel(.at, tile.at(.sample.x % pattern.repeat.x, .sample.y % pattern.repeat.y).faded(painted.alpha)))
     ))
     {painted: Painted} => []

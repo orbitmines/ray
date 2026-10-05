@@ -686,6 +686,10 @@ Node := base class {
 
   ** => Program(code: (external ** this))
 
+  &+={ }{{members}} ^punctuation => (
+    this.components.hierarchy &= class { inline members }
+    this
+  )
   &={x} ^punctuation => (
     previous := this.tail
     adding := x

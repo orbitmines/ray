@@ -17,3 +17,10 @@ Encoding := class {
     as (target) => value
   }
 }
+
+// Base64 (https://datatracker.ietf.org/doc/html/rfc4648#section-4): six bits a character, `=` padding to whole groups of three bytes.
+Base64 := class {
+  static alphabet = ("A".."Z", "a".."z", "0".."9", "+", "/") as String
+  static encoded (bytes: Byte[]) => (bytes.map(.digits(2).padded(8)).flatten.chunk(6).map(alphabet[(., [0] * (6 - .count)) as 2]) as String)
+    + "=" * ((3 - bytes.count % 3) % 3)
+}

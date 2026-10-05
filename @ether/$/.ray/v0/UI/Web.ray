@@ -1,9 +1,12 @@
 // The web as Compiler levels over the scene (F-D2, F-D7): HTML for structure, CSS for appearance, JS for what changes.
-// `page{O: Web.level}()` is all three together, a package of files; each is a value until it is written, in its file's language.
-Web := class {
+// `page{O: Language.Web}()` is all three together, a package of files; each is a value until it is written, in its file's language.
+Language.Web := class: Language {
+  static extensions = ".web"
   // HTML, CSS and JS are languages: structures here, text only through their writers (X1.7).
   HTML := class {
     Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | String)[] = [] {
+      static made = 0
+      id: String = attributes{.name == "id"}.first?.value ?? ("e" + ((Element.made += 1) as String))
       void => tag ==.instance_of ("img" | "input" | "br" | "meta" | "link" | "source")
     }
     Document := class = head: Element[], body: Element, language: String = "en"
@@ -164,10 +167,10 @@ Web := class {
     {page: Geometry.Shape} => JS.Module([
       Runtime,
       Devices,
-      page.dynamics.map(JS.Effect(reads: .reads, body: [.compiled{O: JS.expressions}])),
+      page.expand.dynamics.flatten.map(JS.Effect(reads: .reads, body: [.compiled{O: JS.expressions}])),
       page.expand{.focusable}.map(shape => JS.Listen(Element(shape), "click", [JS.Call(("ray", "activate"), [shape.id])])),
       page.expand{==.instance_of UI.Input}.map(input => JS.Listen(Element(input), "input", [JS.Call(("ray", "set"), [input.id, ("event", "target.value")])])),
-      page.expand{==.instance_of Geometry.Canvas}.map(canvas => JS.Effect(reads: canvas.draws.reads, body: [JS.Call(("ray", "draw"), [canvas.id, canvas.draws{O: Direct.level}()])]))
+      page.expand{==.instance_of Geometry.Canvas}.map(canvas => JS.Effect(reads: canvas.draws.reads, body: [JS.Call(("ray", "draw"), [canvas.id, canvas.draws{O: Language.Direct.level}()])]))
     ])
   }
   Element := (shape: Geometry.Shape) => JS.Call(("document", "getElementById"), [shape.id])
@@ -187,6 +190,8 @@ Web := class {
   // The fixed part every page carries: reactive variables, and the devices written by listeners (F-D9b's shim is the development form of this).
   Runtime := JS.Function("effect", ["reads", "body"], [JS.Call(("ray", "subscribe"), ["reads", "body"]), JS.Call("body")])
   Devices := [
+    // Handheld: a phone or tablet user agent, touch-only pointers, or an iPad that reports itself as a Mac.
+    JS.Call(("ray", "set"), ["UI.Platform.handheld", (((("/Android|iPhone|iPad|iPod|Mobile/i", "test(navigator.userAgent)"), "||", ("matchMedia(\"(pointer:coarse)\")", "matches&&!matchMedia(\"(pointer:fine)\").matches")), "||", ("navigator", "maxTouchPoints>1&&/Macintosh/.test(navigator.userAgent)"))]),
     ["pointerdown", "pointermove", "pointerup", "pointercancel"].map(event => JS.Listen("window", event, [JS.Call(("ray", "set"), ["UI.Pointer.pointers", JS.Call(("ray", "pointer"), ["event"])])])),
     JS.Listen("window", "wheel", [JS.Call(("ray", "set"), ["UI.Pointer.wheel", ("event", "deltaY")])]),
     ["keydown", "keyup"].map(event => JS.Listen("window", event, [JS.Call(("ray", "key"), ["event"])])),
@@ -221,16 +226,35 @@ Web := class {
   }
 
   // The development runtime: the interpreter in the browser, reaching the DOM over the byte stream (F-D7b, F-D9b).
+  // What the page listens for comes back as events on the same stream, applied to the scene's shapes by id.
   DOM := class {
     send (message) => external io `dom` (message)
     received => external io `dom` None
     line (parts: String[]) => parts.join(" "), \n
+    listened (element: HTML.Element) => element.tag.match
+      "a" | "button" => ["click"]
+      "input" | "select" | "textarea" => ["input", "focus"]
+      * => []
     mount (element: HTML.Element) => send(line(["create", element.id, element.tag]))
       -- element.attributes.for(send(line(["attribute", element.id, .name, .value.escaped_line])))
+      -- listened(element).for(send(line(["listen", element.id, .])))
       -- element.children.for(. ==.instance_of String ? send(line(["text", element.id, .escaped_line])) : mount(.) -- send(line(["append", element.id, .id])))
     render (page: Program) => send(line(["clear"])) -- mount(page{O: HTML.level}().body) -- send(line(["style", page{O: CSS.level}() as CSS.language]))
-    read => received?.trimmed ~= (id: Decimal, " ", kind: *)
+    event => received?.trimmed ~= (id: Char{!= " "}[], " ", kind: Char{!= " "}[], (" ", value: *)?) -- Event(id: .id, kind: .kind, value: .value) if .
+    static Event := class = id: String, kind: String, value: String? {
+      shape => UI.scene?.expand{.id == id}.first
+      apply => kind.match
+        "click" => shape?.activate
+        "input" => shape?.set(value)
+        "focus" => UI.Focus.current = shape
+        * => None
+    }
+
+    start => send(line(["clear"]))
+    stop => None
     write (frame) => render(frame)
+    read => event?.apply
+    copy (text: String) => send(line(["clipboard", text.escaped_line]))
   }
 
   // Browser differences are levels too, composed onto the web level when targeting one; the default code has none (Platforms, F-P1).
@@ -240,3 +264,4 @@ Web := class {
     {rule: CSS.Rule{declarations.some(.property == "backdrop-filter")}} => rule ~~ .declarations.push ("-webkit-backdrop-filter", rule.declarations{.property == "backdrop-filter"}.first.value)
   }
 }
+Language.register(Language.Web)

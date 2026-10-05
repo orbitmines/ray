@@ -7,6 +7,11 @@ Char := class: Unicode.Scalar {
 
   codepoint => this
   is_ascii => this < 128
+  // UTF-8 (https://www.unicode.org/versions/latest/core-spec/chapter-3/#G27288)
+  octets => this < 128 ? [this]
+    : this < 2048 ? [192 + this / 64, 128 + this % 64]
+    : this < 65536 ? [224 + this / 4096, 128 + this / 64 % 64, 128 + this % 64]
+    : [240 + this / 262144, 128 + this / 4096 % 64, 128 + this / 64 % 64, 128 + this % 64]
 
   upper_case | uppercase => Unicode.UpperCase[this] ?? this
   lower_case | lowercase => Unicode.LowerCase[this] ?? this
@@ -100,7 +105,8 @@ String := class: Char[] {
   as (base: Number.Base) => #.reduce(0) (acc, current) => acc * base + current as Decimal
   as Decimal => this as 10
 
-  + (other: String) => this, other
+  compounds + (other: String) => this, other
+  bytes => #.map(.octets).flatten
   find_all (pattern: String) => (this ~= pattern)#.index
   // `"…".italic` is the same as `"…" ^italic`: styling runs on highlighting (F-C2, F-C2b).
   italic => this ^italic

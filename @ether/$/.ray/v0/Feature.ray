@@ -15,9 +15,12 @@ IO := class {
   platform => os(`platform`)
   architecture => os(`architecture`)
 
+  listing (path) => host(path).lines{!.empty}.map(IO.File(path + "/" + .))
+
   static File := class = path: String {
+    name => path.split("/").last
     content => IO.read(path)
-    bytes => content.collected
+    bytes => content.bytes
   }
 }
 
@@ -46,7 +49,7 @@ Counted := class = count: Number | Range, kind: * {
   choose => (least + Random.below(most - least + 1)).times.map(kind())
 }
 
-Choice := class {
+Choice := class = type: *? {
   chosen: *[] = []
 
   choose (from) => from.random

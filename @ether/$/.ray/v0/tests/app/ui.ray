@@ -13,33 +13,33 @@ unless scene.children.last ==.instance_of UI.Link { INFO@mark `UI3 a location do
 unless scene.flow == vertical { INFO@mark `UI4 lines do not stack` }
 unless Program(code: { "a", "b" }){O: UI.Scene}().flow == inline { INFO@mark `UI5 a comma does not flow inline` }
 
-html := page{O: Web.HTML.level}()
-unless html ==.instance_of Web.HTML.Document { INFO@mark `UI10 HTML is not a document value` }
+html := page{O: Language.Web.HTML.level}()
+unless html ==.instance_of Language.Web.HTML.Document { INFO@mark `UI10 HTML is not a document value` }
 unless html.body.children.first.children.first.tag == "h1" { INFO@mark `UI11 the heading is not an h1` }
 unless html.body.children.first.children.last.tag == "a" { INFO@mark `UI12 the link is not an a` }
-unless html as Web.HTML.language ~= "<!doctype html>" { INFO@mark `UI13 the HTML language does not write a doctype` }
-unless Web.HTML.escaped("<a & b>") == "&lt;a &amp; b&gt;" { INFO@mark `UI14 text is not escaped` }
+unless html as Language.Web.HTML.language ~= "<!doctype html>" { INFO@mark `UI13 the HTML language does not write a doctype` }
+unless Language.Web.HTML.escaped("<a & b>") == "&lt;a &amp; b&gt;" { INFO@mark `UI14 text is not escaped` }
 
-package := page{O: Web.level}()
+package := page{O: Language.Web}()
 unless package.files.path.contains("index.html") && package.files.path.contains("style.css") && package.files.path.contains("app.js") { INFO@mark `UI20 the web package is not the three files` }
-unless package.files{.path == "style.css"}.first.content ==.instance_of Web.CSS.Sheet { INFO@mark `UI21 the stylesheet is not a CSS value` }
-unless package.files{.path == "app.js"}.first.content ==.instance_of Web.JS.Module { INFO@mark `UI22 the script is not a JS value` }
-unless (Web.HTML.level + Web.CSS.level) ==.instance_of Program { INFO@mark `UI23 two levels do not compose into one` }
+unless package.files{.path == "style.css"}.first.content ==.instance_of Language.Web.CSS.Sheet { INFO@mark `UI21 the stylesheet is not a CSS value` }
+unless package.files{.path == "app.js"}.first.content ==.instance_of Language.Web.JS.Module { INFO@mark `UI22 the script is not a JS value` }
+unless (Language.Web.HTML.level + Language.Web.CSS.level) ==.instance_of Program { INFO@mark `UI23 two levels do not compose into one` }
 
 with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
-  grid := page{O: TUI.Cells}()
+  grid := page{O: Language.TUI.Cells}()
   unless grid.width == 80 && grid.height == 24 { INFO@mark `UI30 the terminal grid is not 80 by 24` }
   unless grid.cells[0][0].glyph == "R" { INFO@mark `UI31 the heading's first glyph is not in the first cell` }
   unless grid.cells[0][0].bold { INFO@mark `UI32 a heading is not bold in the terminal` }
   unless grid.cells[1].some(.link) { INFO@mark `UI33 a link's cells do not carry where it goes` }
   unless grid.changes(grid).empty { INFO@mark `UI34 an unchanged frame writes something` }
 }
-unless "\e[1;5A" as TUI.Key .control { INFO@mark `UI35 ctrl+up is not read as control` }
-unless ("\e[<0;3;4M" as TUI.Mouse).x == 3 { INFO@mark `UI36 a mouse report is not read` }
+unless "\e[1;5A" as Language.TUI.Key .control { INFO@mark `UI35 ctrl+up is not read as control` }
+unless ("\e[<0;3;4M" as Language.TUI.Mouse).x == 3 { INFO@mark `UI36 a mouse report is not read` }
 
 dot := Geometry.Box(size: Geometry.Vector(2px, 2px), fill: Geometry.Color(255, 0, 0))
 with UI.Viewport.size = Geometry.Vector(4px, 4px) {
-  raster := Program(code: { dot }){O: Direct.level}()
+  raster := Program(code: { dot }){O: Language.Direct}()
   unless raster.at(0, 0) == Geometry.Color(255, 0, 0) { INFO@mark `UI40 a filled box is not drawn` }
   unless raster.at(3, 3).alpha == 0 { INFO@mark `UI41 outside the box was drawn` }
 }
@@ -51,9 +51,21 @@ unless (Geometry.Transform.translate(Geometry.Vector(1, 2)) * Geometry.Transform
 unless (6/12).md.width == 768px { INFO@mark `UI53 md is not the 768px breakpoint` }
 unless ((6/12).md -> (12/12).xs).at(768px) == 6/12 { INFO@mark `UI54 an interpolated share is not its breakpoint's at the breakpoint` }
 
-unless UI.Input.of(choose boolean) ==.instance_of UI.Checkbox { INFO@mark `UI60 choosing a boolean is not a checkbox` }
-unless UI.Input.of(choose String) ==.instance_of UI.TextField { INFO@mark `UI61 choosing a string is not a text field` }
-unless UI.Input.of(choose Number{0 <= . <= 10}) ==.instance_of UI.Slider { INFO@mark `UI62 choosing a bounded number is not a slider` }
+unless (Choice(type: boolean) as UI.Input) ==.instance_of UI.Checkbox { INFO@mark `UI60 choosing a boolean is not a checkbox` }
+unless (Choice(type: String) as UI.Input) ==.instance_of UI.TextField { INFO@mark `UI61 choosing a string is not a text field` }
+unless (Choice(type: Number{0 <= . <= 10}) as UI.Input) ==.instance_of UI.Slider { INFO@mark `UI62 choosing a bounded number is not a slider` }
 UI.Navigation.go(@https://orbitmines.com/profiles)
 unless UI.Navigation.at == @https://orbitmines.com/profiles { INFO@mark `UI63 navigating does not change where the user is` }
 UI.Navigation.back
+unless UI.Navigation.at != @https://orbitmines.com/profiles { INFO@mark `UI64 going back stays where the user went` }
+
+unless Language.named(".web") == Language.Web { INFO@mark `UI65 the web is not a registered language` }
+unless Language.named(".tui") == Language.TUI { INFO@mark `UI66 the terminal is not a registered language` }
+if UI.Platform.handheld { INFO@mark `UI67 a platform is handheld before any level says so` }
+first_box := Geometry.Box()
+second_box := Geometry.Box()
+if first_box.id == second_box.id { INFO@mark `UI68 two shapes share an id` }
+unless first_box.id == first_box.id { INFO@mark `UI69 a shape's id changes` }
+unless Geometry.Box(children: [first_box]).expand.count == 2 { INFO@mark `UI70 a box holding one shape does not expand to two` }
+unless Base64.encoded("Man".bytes) == "TWFu" { INFO@mark `UI71 Man is not TWFu in Base64` }
+unless Base64.encoded("Ma".bytes) == "TWE=" { INFO@mark `UI72 Ma is not padded to TWE=` }

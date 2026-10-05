@@ -36,7 +36,7 @@ UUID := class: Hexadecimal³² (Hexadecimal⁸, "-", Hexadecimal⁴, "-", Hexade
       version = 1
       variant = 10₂
       (clock_seq_high, clock_seq_low) = Binary{length == 16 - variant.length}.random + stamp.logical
-      node = @me?.instance?.mac_address ?? (Hexadecimal¹².random ~~ .[1] |= 1)
+      node = @me/device/network/mac ?? (Hexadecimal¹².random ~~ .[1] |= 1)
   }
 
   static v3 := class: UUID{version == 3} {

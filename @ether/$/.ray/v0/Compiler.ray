@@ -36,6 +36,8 @@ Compiler := class {
   }
 
   levels => [none, default, folding, memoised, logic]
+
+  static reduced (value, level) => Program(code: { value }){O: level}()
 }
 
 Debug := class {

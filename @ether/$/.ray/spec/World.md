@@ -199,6 +199,7 @@ Answers from 2026-10-05.
   `@some-remote/device/<…>`. IME composition is not a device field but a String with a `^composing` mark.
 - **W9** `choose` always resolves through `@me.choose`; only who `@me` is differs. A player gets a chooser (a
   `Choice` over the possibilities); the computer itself picks (weighted at random). Forms: `choose boolean`,
-  `choose 50% boolean` (the first possibility weighted 50%, the rest sharing the remainder), `choose 1 Number`.
+  `choose 50% boolean` (the first possibility weighted 50%, the rest sharing the remainder). `choose 1 Number`
+  needs no form of its own: `1 Number` is already a counted type (through `#.count`), chosen like any type.
   Rendering a superposition goes the same way. The computer's `choose` is defined once, on its device; an
   instance flattens its device into itself.

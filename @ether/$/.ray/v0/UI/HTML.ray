@@ -1,9 +1,10 @@
-Language.Web := class: Language {
-  static extensions = ".web"
+// The web renderer: a scene written as HTML, a document with its CSS stylesheet and JS script
+UI.HTML := class {
   static space = Geometry.Space.plane
   Geometry.Shape &+= {
     dom => id.segments.join("-")
   }
+
   Markup := class {
     Page := class = shape: Geometry.Shape
     Head := class = page: *
@@ -20,17 +21,18 @@ Language.Web := class: Language {
     tags (page) => [[(name: "og:title", content: page.title), (name: "og:description", content: page.description), (name: "og:image", content: page.image as String) if page.image]{!(page.meta ?? []).name.contains(.name)}, page.meta ?? []].flatten(1){.content != None}
 
     rules := Style.values + {
-      {page: Markup.Page} => HTML.Document(head: [Head(UI.page)], body: @html <body {Named(page.shape)}>{page.shape.children}</body>)
+      {page: Markup.Page} => $.html.Document(head: [Head(UI.page)], body: @html <body {Named(page.shape)}>{page.shape.children}</body>)
       {head: Head} => head.page -- (page => @html {
         <title>{page.title ?? ""}</title>
         <meta name="description" content={page.description ?? ""} />
         {tags(page).map(Meta(.name, .content))}
         {Meta("theme-color", Style.Paint(page.theme)) if page.theme}
         {[("canonical", page.canonical), ("icon", page.icon), ("apple-touch-icon", page.apple_icon), ("manifest", page.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
-        {(page.structured ?? []).map(entry => @html <script type="application/ld+json">{HTML.Raw(JSON.write(JSON.Linked(entry, context: "https://schema.org")))}</script>)}
+        {(page.structured ?? []).map(entry => $.html.Element("script", [("type", "application/ld+json")], [$.html.Raw($.json.write(JSON.Linked(entry, context: "https://schema.org")))]))}
         <link rel="stylesheet" href="style.css" />
         <script src="app.js" defer />
       })
+      // The Open Graph protocol (https://ogp.me/#metadata)
       {meta: Meta{name ~= ("og:" | "article:" | "fb:", *)}} => @html <meta property={meta.name} content={meta.content} />
       {meta: Meta} => @html <meta name={meta.name} content={meta.content} />
 
@@ -54,6 +56,7 @@ Language.Web := class: Language {
       {outlined: Geometry.Shape{!rectangular && boundary is Geometry.Curve}} => @html <svg {Named(outlined)} viewBox="0 0 {outlined.size.x as px} {outlined.size.y as px}">
         <path d="{outlined.boundary.segments.map(Path(.))}{" Z" if outlined.boundary.segments is Loop}" />
       </svg>
+      // SVG path data (https://www.w3.org/TR/SVG2/paths.html#PathData)
       {path: Path{segment is Geometry.Quadratic}} => path.segment -- (" Q", .control.x, " ", .control.y, " ", .to.x, " ", .to.y)
       {path: Path{segment is Geometry.Cubic}} => path.segment -- (" C", .first.x, " ", .first.y, " ", .second.x, " ", .second.y, " ", .to.x, " ", .to.y)
       {path: Path{segment is Geometry.Arc}} => path.segment -- (" A", .radius.x, " ", .radius.y, " ", .rotation.in(degree), " ", .large ? 1 : 0, " ", .sweep ? 1 : 0, " ", .to.x, " ", .to.y)
@@ -74,14 +77,15 @@ Language.Web := class: Language {
       {box: Geometry.Shape} => @html <section {Named(box)} {Described(box)}>{box.children}</section>
 
       {named: Named} => [("id", named.shape.dom), ("class", named.shape.styles.join(" ")) if named.shape.styles.nonempty]
+      // WAI-ARIA aria-label (https://www.w3.org/TR/wai-aria-1.2/#aria-label), the popover attribute (https://html.spec.whatwg.org/multipage/popover.html)
       {described: Described} => [("aria-label", described.shape.label) if described.shape.label, ("popover", "manual") if described.shape.position.kind == anchored]
       {entry: Entry} => entry.chosen -- (chosen => [("placeholder", chosen.placeholder), ("disabled", "") if chosen.disabled,
         ("min", chosen.type.least as String) if chosen.type is Number{least, most}, ("max", chosen.type.most as String) if chosen.type is Number{least, most}])
       {inner: Inner{shape.content is String}} => [Spans(inner.shape), inner.shape.children]
       {inner: Inner} => inner.shape.children
-      {spans: Spans{shape.content.partial_marks.empty}} => HTML.Text(spans.shape.content)
+      {spans: Spans{shape.content.partial_marks.empty}} => $.html.Text(spans.shape.content)
       {spans: Spans} => spans.shape.content.pieces.map(Span(.text, .from, spans.shape))
-      {span: Span} => span.shape.content.partial_marks{.from <= span.from < .to}.style -- (styles => styles.empty ? HTML.Text(span.text)
+      {span: Span} => span.shape.content.partial_marks{.from <= span.from < .to}.style -- (styles => styles.empty ? $.html.Text(span.text)
         : @html <span class={styles.join(" ")} style={Inline(UI.Theme.face(span.shape, span.from), span.shape)}>{span.text}</span>)
       {inline: Inline} => inline.face -- (face => [
         ("color:", Style.Paint(face.color), ";") if face.color && face.color != inline.shape.color,
@@ -91,6 +95,7 @@ Language.Web := class: Language {
       ])
     }
 
+    // The input element's type attribute (https://html.spec.whatwg.org/multipage/input.html#attr-input-type)
     kinds := {
       {chosen: Choice{type is String{secret}}} => "password"
       {chosen: Choice{type is String{search}}} => "search"
@@ -103,9 +108,7 @@ Language.Web := class: Language {
       {chosen: Choice} => "text"
     }
 
-    level := Geometry.Preparing(1px) + {
-      {root: Geometry.Shape{solved}} => Page(root)
-    } + rules
+    level := paged(Page) + rules
   }
 
   Style := class {
@@ -134,14 +137,17 @@ Language.Web := class: Language {
     Mask := class = shape: Geometry.Shape
     Transformed := class = matrix: Geometry.Transform
 
+    // white-space (https://www.w3.org/TR/css-text-3/#white-space-property), text-transform (https://www.w3.org/TR/css-text-3/#text-transform-property)
     WhiteSpace = [(Geometry.WhiteSpace.normal, "normal"), (Geometry.WhiteSpace.nowrap, "nowrap"), (Geometry.WhiteSpace.pre, "pre"), (Geometry.WhiteSpace.pre_wrap, "pre-wrap"), (Geometry.WhiteSpace.pre_line, "pre-line")]
     Cases = [(.upper_case, "uppercase"), (.lower_case, "lowercase"), (.title_case, "capitalize")]
 
     values := {
+      // <color> (https://www.w3.org/TR/css-color-4/#color-syntax), <gradient> (https://www.w3.org/TR/css-images-3/#gradients)
       {paint: Paint{value === currentColor}} => "currentColor"
       {paint: Paint{value is Geometry.Color}} => "rgba(", paint.value.red, ",", paint.value.green, ",", paint.value.blue, ",", paint.value.alpha, ")"
       {paint: Paint{value is Geometry.Gradient}} => paint.value -- (gradient => (gradient.kind == straight ? "linear" : gradient.kind as String), "-gradient(", (gradient.angle.in(turn), "turn,") if gradient.kind == straight, gradient.sorted.map(("," if .index > 0), Paint(.value), " ", .at * 100, "%"), ")")
       {paint: Paint{value is Geometry.Pattern}} => "url(#", paint.value.shape.dom, ")"
+      // <length> and calc() (https://www.w3.org/TR/css-values-4/#lengths, https://www.w3.org/TR/css-values-4/#calc-func)
       {measure: Measure{length is Number}} => measure.length, "px"
       {measure: Measure{length.quantities.count > 1}} => "calc(", measure.length.quantities.map(.quantity, .unit.symbol).join(" + "), ")"
       {measure: Measure} => measure.length.amount, measure.length.unit.symbol
@@ -149,7 +155,7 @@ Language.Web := class: Language {
     }
 
     rules := values + {
-      {page: Style.Page} => CSS.Sheet(@css {
+      {page: Style.Page} => $.css.Sheet(@css {
         * { box-sizing: border-box; margin: 0; }
         body { font-family: sans-serif; line-height: 1.2; }
         .painted { display: grid; }
@@ -160,6 +166,7 @@ Language.Web := class: Language {
         {page.shape.reachable.map(Styles(.))}
         {page.shape.reachable{.position.kind == anchored}.map(Anchoring(.))}
       })
+      // CSS Anchor Positioning (https://www.w3.org/TR/css-anchor-position-1/)
       {anchoring: Anchoring} => (anchoring.shape.position.anchor ?? anchoring.shape.parent) -- (anchor => @css {
         #{anchor.dom} { anchor-name: --{anchor.dom}; }
         #{anchoring.shape.dom} { position: fixed; inset: auto; margin: 0; position-anchor: --{anchor.dom}; position-area: {anchoring.shape.position.side as String}; }
@@ -203,6 +210,7 @@ Language.Web := class: Language {
         Responsive(shape) if shape.width is Geometry.Stops
       ])
 
+      // Flexible box layout (https://www.w3.org/TR/css-flexbox-1/), grid layout (https://www.w3.org/TR/css-grid-2/)
       {layout: Layout{shape.flow == inline}} => @css { display: flex; flex-wrap: {layout.shape.wrap ? "wrap" : "nowrap"}; }
       {layout: Layout{shape.flow == grid}} => @css { display: grid; grid-template-columns: repeat({layout.shape.columns},1fr); }
       {layout: Layout{shape.flow == layered}} => @css { display: grid; grid-template-areas: "layer"; }
@@ -215,6 +223,7 @@ Language.Web := class: Language {
         max-{along}: {(bounds.most is Number ? Share(bounds.most) : Measure(bounds.most)) if bounds.most != None};
         min-{along}: {(bounds.least is Number ? Share(bounds.least) : Measure(bounds.least)) if bounds.least != None};
       })
+      // Box alignment (https://www.w3.org/TR/css-align-3/)
       {aligned: Aligned{shape.align == center}} => @css { align-items: center; text-align: center; }
       {aligned: Aligned{shape.align == end}} => @css { align-items: flex-end; text-align: end; }
       {aligned: Aligned{shape.align == between}} => @css { justify-content: space-between; }
@@ -230,6 +239,7 @@ Language.Web := class: Language {
         ("border" + side, Measure(stroke.width), " ", stroke.dash.empty ? "solid" : "dashed", " ", Paint(stroke.paint))))
       {bordered: Bordered} => []
 
+      // Positioned layout (https://www.w3.org/TR/css-position-3/)
       {positioned: Positioned{shape.position.kind == anchored}} => []
       {positioned: Positioned} => positioned.shape -- (shape => @css {
         position: {(shape.position.kind as String) if shape.position.kind is (sticky | fixed | absolute)};
@@ -237,11 +247,13 @@ Language.Web := class: Language {
         {[("top", shape.inset.top), ("right", shape.inset.right), ("bottom", shape.inset.bottom), ("left", shape.inset.left)]{.1 != None}.map((.0, Measure(.1)))}
       })
 
+      // box-shadow (https://www.w3.org/TR/css-backgrounds-3/#box-shadow), filter functions (https://www.w3.org/TR/filter-effects-1/#filter-functions)
       {effected: Effected{effect is Geometry.Shadow}} => effected.effect -- (shadow => ("inset " if shadow.inset), Measure(shadow.offset.x), " ", Measure(shadow.offset.y), " ", Measure(shadow.blur), " ", Measure(shadow.spread), " ", Paint(shadow.color))
       {effected: Effected{effect is Geometry.Blur}} => "blur(", Measure(effected.effect.radius), ")"
       {effected: Effected{effect is Geometry.Filter{kind == hue}}} => "hue-rotate(", effected.effect.amount, "turn)"
       {effected: Effected{effect is Geometry.Filter}} => effected.effect.kind as String, "(", effected.effect.amount, ")"
 
+      // Fonts (https://www.w3.org/TR/css-fonts-4/)
       {typeface: Typeface} => (typeface.shape.font, typeface.shape.parent?.font ?? Geometry.Font.base) -- ((font, inherited) => @css {
         font-family: {font.family.join(",") if font.family != inherited.family};
         font-size: {Measure(font.size) if font.size != inherited.size};
@@ -252,6 +264,7 @@ Language.Web := class: Language {
       })
 
       {specific: Specific{shape is Geometry.Ball}} => @css { display: inline-block; border-radius: 50%; }
+      // CSS Masking (https://www.w3.org/TR/css-masking-1/)
       {specific: Specific{shape.content is Location && shape.content.language === Language.Image && shape.fill}} => specific.shape -- (image => @css {
         object-fit: {image.content.fit as String}; display: inline-block; mask: {Mask(image)}; -webkit-mask: {Mask(image)};
       })
@@ -266,6 +279,7 @@ Language.Web := class: Language {
       {switchable: Switchable} => []
       {styling: Styling} => Compiler.reduced(Styles(Geometry.Box()), rules).first.declarations -- (plain => Compiler.reduced(Styles(Geometry.Box().styled(styling.name)), rules).first.declarations{!plain.contains(.)})
 
+      // Container queries (https://www.w3.org/TR/css-contain-3/#container-queries)
       {responsive: Responsive} => responsive.shape.width -- (stops => stops.sorted -- (sorted => sorted.zip([sorted.rest, None]).map((at, next) => @css @container (min-width:{Compiler.reduced(Measure(at.at), values) as String}) {
         #{responsive.shape.dom} { width: {Step(stops, at, next)}; }
       })))
@@ -273,6 +287,7 @@ Language.Web := class: Language {
       {step: Step} => step.at.value * 100, "%"
       {chord: Chord} => "calc(", chord.from.value * (chord.from.at as px), "px + (100cqw - ", chord.from.at as px, "px) * ", (chord.to.value * (chord.to.at as px) - chord.from.value * (chord.from.at as px)) / ((chord.to.at - chord.from.at) as px), ")"
 
+      // <easing-function> (https://www.w3.org/TR/css-easing-1/)
       {timing: Timing{easing === Geometry.linear}} => "linear"
       {timing: Timing{easing === Geometry.ease_in}} => "ease-in"
       {timing: Timing{easing === Geometry.ease_out}} => "ease-out"
@@ -281,13 +296,12 @@ Language.Web := class: Language {
 
       {mask: Mask{shape.content.fit == fill}} => "url(\"", mask.shape.content as String, "\") center/100% 100% no-repeat"
       {mask: Mask} => "url(\"", mask.shape.content as String, "\") center/", mask.shape.content.fit as String, " no-repeat"
+      // Transform functions (https://www.w3.org/TR/css-transforms-1/#transform-functions, https://www.w3.org/TR/css-transforms-2/#funcdef-matrix3d)
       {transformed: Transformed{matrix.count == 3}} => transformed.matrix -- ("matrix(", [.[0][0], .[1][0], .[0][1], .[1][1], .[0][2], .[1][2]].join(","), ")")
       {transformed: Transformed} => "matrix3d(", transformed.matrix.transposed.flatten.join(","), ")"
     }
 
-    level := Geometry.Preparing(1px) + {
-      {root: Geometry.Shape{solved}} => Page(root)
-    } + rules
+    level := paged(Page) + rules
   }
 
   Script := class {
@@ -315,7 +329,7 @@ Language.Web := class: Language {
     }
 
     rules := {
-      {page: Script.Page} => JS.Module([
+      {page: Script.Page} => $.js.Module([
         Prelude(),
         Devices(),
         page.shape.reachable.map(shape => shape.fields{.value is Dynamic}.map(Updated(shape, .name, .value))),
@@ -328,6 +342,7 @@ Language.Web := class: Language {
         page.shape.reachable.map(Scrolling(.))
       ])
       {prelude: Prelude} => @js function effect(reads, body) { ray.subscribe(reads, body); body() }
+      // UI Events (https://www.w3.org/TR/uievents/), Pointer Events (https://www.w3.org/TR/pointerevents3/), the History API (https://html.spec.whatwg.org/multipage/nav-history-apis.html)
       {devices: Devices} => @js {
         ray.set("@me/device/handheld", /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer:coarse)").matches && !matchMedia("(pointer:fine)").matches || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
         {["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel"].map(name => @js window.addEventListener({name}, (event) => ray.point(event)))}
@@ -392,11 +407,12 @@ Language.Web := class: Language {
       {scrolling: Scrolling} => []
     }
 
-    level := Geometry.Preparing(1px) + {
-      {root: Geometry.Shape{solved}} => Page(root)
-    } + rules
+    level := paged(Page) + rules
   }
 
+  paged (page) => Geometry.Preparing(1px) + {
+    {root: Geometry.Shape{solved}} => page(root)
+  }
 
   Package := class = files: (path: String, content: *)[] {
     write (to: Location) => files.for(IO.write(to / .path, .content))
@@ -419,23 +435,24 @@ Language.Web := class: Language {
     received => external io `dom` None
     line (parts: String[]) => parts.join(" "), \n
 
-    Mount := class = node: HTML.Element | HTML.Text | HTML.Raw | HTML.Comment, parent: String?
-    Listening := class = element: HTML.Element
+    static made = 0
+    Mount := class = node: $.html.Element | $.html.Text | $.html.Raw | $.html.Comment, parent: String?, id: String = (node is $.html.Element ? node.id : None) ?? ("e" + ((DOM.made += 1) as String))
+    Listening := class = mount: Mount
     protocol := {
-      {mount: Mount{node is HTML.Element}} => mount.node -- (element => [
-        line(["create", element.id, element.tag]),
-        element.attributes.map(line(["attribute", element.id, .name, (.value as String).escaped_line])),
-        Listening(element),
-        element.children.map(Mount(., element.id)),
-        line(["append", mount.parent, element.id]) if mount.parent
+      {mount: Mount{node is $.html.Element}} => mount.node -- (element => [
+        line(["create", mount.id, element.tag]),
+        element.attributes.map(line(["attribute", mount.id, .name, (.value as String).escaped_line])),
+        Listening(mount),
+        element.children.map(Mount(., mount.id)),
+        line(["append", mount.parent, mount.id]) if mount.parent
       ])
-      {mount: Mount{node is HTML.Comment}} => []
+      {mount: Mount{node is $.html.Comment}} => []
       {mount: Mount} => line(["text", mount.parent, mount.node.text.escaped_line])
-      {listening: Listening{element.tag is ("a" | "button")}} => [line(["listen", listening.element.id, "click"])]
-      {listening: Listening{element.tag is ("input" | "select" | "textarea")}} => [line(["listen", listening.element.id, "input"]), line(["listen", listening.element.id, "focus"])]
+      {listening: Listening{mount.node.tag is ("a" | "button")}} => [line(["listen", listening.mount.id, "click"])]
+      {listening: Listening{mount.node.tag is ("input" | "select" | "textarea")}} => [line(["listen", listening.mount.id, "input"]), line(["listen", listening.mount.id, "focus"])]
       {listening: Listening} => []
     }
-    mounted (element: HTML.Element) => Compiler.reduced(Mount(element), protocol) as String
+    mounted (element: $.html.Element) => Compiler.reduced(Mount(element), protocol) as String
 
     Id = Char{!= " "}[]
     Event := class = id: String {
@@ -468,10 +485,10 @@ Language.Web := class: Language {
     }
     static dispatched (line: String?) => line?.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
 
-    render (page: Program) => write(page.rendered(Language.Web.level))
+    render (page: Program) => write(page.rendered(UI.HTML.level))
     start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
     stop => None
-    write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as CSS])) if package.sheet)
+    write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as $.css])) if package.sheet)
       -- send(line(["lock", UI.locked as String]))
       -- send(line(["scroll", "window", (UI.scene.scrolled.y as px) as String, (UI.scene.transition != None) as String]))
     read => dispatched(received)
@@ -482,6 +499,7 @@ Language.Web := class: Language {
   Chromium := { }
   Firefox := { }
   Safari := {
-    {rule: CSS.Rule{declarations.some(.0 == "backdrop-filter") && !declarations.some(.0 == "-webkit-backdrop-filter")}} => CSS.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)
+    // backdrop-filter, which Safari reads only prefixed (https://www.w3.org/TR/filter-effects-2/#BackdropFilterProperty)
+    {rule: $.css.Rule{declarations.some(.0 == "backdrop-filter") && !declarations.some(.0 == "-webkit-backdrop-filter")}} => $.css.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)
   }
 }

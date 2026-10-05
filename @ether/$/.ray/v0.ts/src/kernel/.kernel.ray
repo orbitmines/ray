@@ -4,7 +4,7 @@
 // flags; None and global are no and yes; UNDEF is nothing.
 
 // ---------------------------------------------------------------- the root
-Root := { global, blank, none_side, global_side, undef_side, spellings, base, made, order, declared, silent, refused, trying, depth, running, claiming, forced, naming, diagnostics, definitions, missing, written_keys, external, rules_version, brackets_version, brackets_changes, brackets_list, brackets_firsts, unsure, level, epoch, walker, find_epoch, missing_id, missing_epoch, no_more, fuel, budget, chosen_caps, recent, recent_at, serving, bodies, shape_version, stating, stating_src, unplanned, tracing, top_src, top_at }
+Root := { global, blank, none_side, global_side, undef_side, spellings, base, made, order, declared, silent, refused, trying, depth, running, claiming, forced, naming, diagnostics, definitions, missing, written_keys, external, rules_version, brackets_version, brackets_changes, brackets_list, brackets_firsts, unsure, level, epoch, walker, find_epoch, missing_id, missing_epoch, no_more, fuel, budget, chosen_caps, recent, recent_at, serving, bodies, shape_version, stating, stating_src, unplanned, tracing, top_src, top_at, overing }
 
 boot () => (
   ROOT.spellings = make(Name); ROOT.spellings.length = 0
@@ -14,7 +14,7 @@ boot () => (
   ROOT.base = UNDEF; ROOT.made = UNDEF; ROOT.order = 0; ROOT.rules_version = 0; ROOT.brackets_version = -1; ROOT.brackets_changes = 0; ROOT.brackets_list = NIL; ROOT.declared = 0
   ROOT.forced = list_new(); ROOT.diagnostics = list_new(); ROOT.definitions = list_new(); ROOT.written_keys = list_new(); ROOT.bodies = list_new()
   settle()
-  ROOT.claiming = None; ROOT.running = None
+  ROOT.claiming = None; ROOT.running = None; ROOT.overing = None
   ROOT.level = 0; ROOT.epoch = 0; ROOT.find_epoch = 0; ROOT.missing_id = 0; ROOT.missing_epoch = 0; ROOT.serving = None; ROOT.tracing = None; ROOT.top_src = -1; ROOT.top_at = -1
   ROOT.recent = make(64); ROOT.recent_at = 0; ROOT.walker = make(Reach)
   ROOT.budget = 1000000; ROOT.fuel = ROOT.budget; ROOT.shape_version = 0; ROOT.stating = -1; ROOT.stating_src = -1; ROOT.unplanned = None
@@ -269,7 +269,7 @@ matching (rule, caps, src, pos, limit, frame, receiving, receiver) => (
       if piece.tight and !(p > 0 and pieces[p - 1].kind == 0 and lit_ends_line(pieces[p - 1].text)) { from = i }
       if p == 0 and receiving and !rule.defines and opener(lit) { from = i }
       followed := p + 1 < n and pieces[p + 1].kind == 2 and pieces[p + 1].tight and pieces[p + 1].typed
-      if !spelled(src, from, lit, piece.tight and p > 0 and from == i, followed, limit) { return -1, 0 }
+      if !spelled(src, from, lit, (piece.tight and p > 0 and from == i) or (p == 0 and receiving and from == pos), followed, limit) { return -1, 0 }
       reach = reach + lit.length
       if opener(lit) { opened = opened + 1 } elsif opened > 0 and closer(lit) { opened = opened - 1 }
       i = from + lit.length
@@ -283,6 +283,7 @@ matching (rule, caps, src, pos, limit, frame, receiving, receiver) => (
       if i < 0 { return -1, 0 }
     } elsif p == 0 and receiving and !rule_implicit(rule) {
       if 1 < n and pieces[1].tight and space(src, i) { return -1, 0 }
+      if piece.typed and !receiver_holds(rule, p, receiver) { return -1, 0 }
     } else {
       i = capturing(rule, caps, p, src, i, limit, frame, receiving, opened)
       if i < 0 { return -1, 0 }
@@ -374,15 +375,48 @@ trailing_end (src, j, limit, frame, rule) => (
   spellings := looser(frame, rule)
   from := j
   while j < limit and !newline(src, j) {
+    over := -1
     spellings for spelling => {
-      if j > from and spelled(src, j, spelling, None, None, limit) and (space(src, j - 1) or space(src, j + spelling.length)) {
-        while j > 0 and space(src, j - 1) { j = j - 1 }
-        return j
+      if over < 0 and j > from and spelled(src, j, spelling, None, None, limit) and (space(src, j - 1) or space(src, j + spelling.length)) {
+        over = spelled_over(src, from, j, limit, frame)
+        if over <= j {
+          while j > 0 and space(src, j - 1) { j = j - 1 }
+          return j
+        }
       }
     }
-    j = skip(src, j, limit, None)
+    if over > j and newline(src, over - 1) {
+      // what read past the operator ended the line: so does the capture
+      j = over - 1
+      while j > from and space(src, j - 1) { j = j - 1 }
+      return j
+    }
+    j = over > j ? over : skip(src, j, limit, None)
   }
   return j
+)
+// Where a rule that defines nothing, read from `from`, ends when it reads past j: a looser operator it spells there is its own (the
+// defined reading wins, G2.4: `class (header) => { … }` overrides the `=>` that defines a rule).
+spelled_over (src, from, j, limit, frame) => (
+  at := ROOT.overing
+  while at != None and at != NIL { if at.src == src and at.at == from { return -1 }; at = at.next }
+  overing := Claim(src: src, at: from, next: ROOT.overing)
+  ROOT.overing = overing
+  found, end, reach := best_in(src, from, limit, frame, None, None, 0, frame, 1 + 512, -1, -1, -1, -1) always { ROOT.overing = overing.next }
+  return found != None and end > j and !captured_at(found, src, from, limit, frame, None, None, j) ? end : -1
+)
+// Whether j is inside one of the captures of rule read at pos (or outside what it reads): not one of its own literals.
+captured_at (rule, src, pos, limit, frame, receiving, receiver, j) => (
+  e, r, caps := match(rule, src, pos, limit, frame, receiving, receiver)
+  if e <= j { return global }
+  p := 0
+  while p < rule_count(rule) { if cap_begin(caps, p) != -1 and cap_begin(caps, p) <= j and j < cap_stop(caps, p) { return global }; p = p + 1 }
+  return None
+)
+// Where a definition read at pos splits its pattern from its body.
+split_of (rule, src, pos, limit, frame) => (
+  e, r, caps := match(rule, src, pos, limit, frame, None, None)
+  return e < 0 or cap_begin(caps, 0) == -1 ? -1 : spaces(src, cap_stop(caps, 0), limit)
 )
 // Whether a looser operator is spelled between from and to (outside brackets): a capture in the middle of a rule stops at one.
 looser_within (src, from, to, frame, rule) => (
@@ -390,10 +424,15 @@ looser_within (src, from, to, frame, rule) => (
   if list_len(spellings) == 0 { return None }
   j := from
   while j < to {
+    over := -1
     spellings for spelling => {
-      if j > from and spelled(src, j, spelling, None, None, to) and (space(src, j - 1) or space(src, j + spelling.length)) { return global }
+      if over < 0 and j > from and spelled(src, j, spelling, None, None, to) and (space(src, j - 1) or space(src, j + spelling.length)) {
+        over = spelled_over(src, from, j, to, frame)
+        if over <= j { return global }
+      }
     }
-    j = skip(src, j, to, None)
+    if over > j and newline(src, over - 1) { return None }
+    j = over > j ? over : skip(src, j, to, None)
   }
   return None
 )
@@ -456,7 +495,7 @@ claim (src, j, limit) => (
 
 // ---------------------------------------------------------------- candidates: every rule in reach, the best reading wins
 // A search walks one or two segments; a segment is a walk (0: the scopes in reach of a frame, 1: the rules on a value and on the base),
-// a root and filter bits: 1 heads, 2 afters, 4 leading, 8 mine, 16 owned, 32 home, 64 own, 128 label, 256 split.
+// a root and filter bits: 1 heads, 2 afters, 4 leading, 8 mine, 16 owned, 32 home, 64 own, 128 label, 256 split, 512 defines nothing.
 Choice := class { src, pos, after, limit, frame, receiving, receiver, filter, target, best: None, end, reach, spelled, mine: None, mine_end, mine_reach, mine_spelled, caps, mine_caps }
 // What a search chose is kept per position, keyed by the shapes of the scopes with rules it reaches (in the order it reaches
 // them: where their rules were written), the filters and how much was declared. The rule chosen is kept as which scope reached
@@ -503,7 +542,7 @@ reach_mix (walk, at, seen, r) => (
   reach_mix(walk, parent(at), seen, r)
 )
 best_in (src, pos, limit, frame, receiving, receiver, w1, r1, f1, w2, r2, f2, target) => (
-  flags := f1 * 512 + f2 + (w1 + 1) * 262144 + (w2 + 1) * 1048576 + (receiving ? 4194304 : 0)
+  flags := f1 * 1024 + f2 + (w1 + 1) * 1048576 + (w2 + 1) * 4194304 + (receiving ? 16777216 : 0)
   one := reach(w1, r1, target, -1, -1)
   a := one.h
   b := one.g
@@ -595,6 +634,7 @@ admits (rule, filter, target) => (
   if has(filter, 16) and !((rule_p0(rule) != 1 and !rule_implicit(rule)) or (has(filter, 32) and home == target)) { return None }
   if has(filter, 64) and !(!leading and !(rule_p0(rule) == 0 and opener(rule.pieces[0].text))) { return None }
   if has(filter, 128) and rule.native != "label" { return None }
+  if has(filter, 512) and rule.defines { return None }
   return !has(filter, 8) or (!rule_based(rule) and home != global())
 )
 better (rule, end, reach, spelled, best, best_end, best_reach, best_spelled) => (
@@ -694,6 +734,16 @@ stopped (src, start, limit) => (
   settle()
   end := statement_end(src, start, limit)
   error_at("Reading this took too long; it was stopped here.", src, start, max(start, end - 1))
+  return max(end, start + 1)
+)
+// Where the next top-level statement after the one at start begins.
+next_statement (src, start, limit) => ( start = blank_end(src, start, limit); return max(statement_end(src, start, limit), start + 1) )
+// A top-level statement the reader itself failed on: said where it was, and reading goes on after it.
+failed_at (src, start, limit) => (
+  settle()
+  start = blank_end(src, start, limit)
+  end := statement_end(src, start, limit)
+  error_at("The reader failed reading this.", src, start, max(start, end - 1))
   return max(end, start + 1)
 )
 // ---------------------------------------------------------------- plans: what a statement was read as, run again without reading it
@@ -801,7 +851,21 @@ first_step (src, pos, limit, frame) => (
   start := spaces(src, pos, limit)
   if start >= limit or newline(src, start) { return BREAK, start }
   found, found_end, found_reach := best_in(src, start, limit, frame, None, None, 0, frame, 1, -1, -1, -1, -1)
+  if found != None and found.defines {
+    // A rule that defines nothing, reading as far, whose own literal is the `=>` the definition splits at, overrides it.
+    other, other_end, other_reach := best_in(src, start, limit, frame, None, None, 0, frame, 1 + 512, -1, -1, -1, -1)
+    if other != None and other_end >= found_end {
+      k := split_of(found, src, start, limit, frame)
+      if k >= 0 and !captured_at(other, src, start, limit, frame, None, None, k) { found = other; found_end = other_end; found_reach = other_reach }
+    }
+  }
   name := token(src, start, limit)
+  if name > start + 1 and !word(src, start) and lookup_quietly(frame, place_of(frame, src, start, name), None) == UNDEF {
+    // An operator run no one defined, starting with one that is (`*?`): the defined one is the name, the rest reads after it.
+    k := name - 1
+    while k > start and lookup_quietly(frame, place_of(frame, src, start, k), None) == UNDEF { k = k - 1 }
+    if k > start { name = k }
+  }
   named := None
   named_end := 0
   named_reach := 0
@@ -830,6 +894,8 @@ first_step (src, pos, limit, frame) => (
   named_to := named != None ? named_end : name
   if own != None and !shadowed and (own_end > max(reached, named_to) or (found != None and found == own and own_end == found_end and own_end > named_to)) { return fire(own, src, start, own_end, limit, frame, global, self), own_end }
   if found != None and found.defines and named != None and !named.defines and named_end >= found_end and named_reach > found_reach and lookup_quietly(frame, place, None) != UNDEF { return place, name }
+  // A rule on the name read as far as the definition did: it spelled the `=>` the definition would split at (see spelled_over).
+  if found != None and found.defines and named != None and !named.defines and named_end >= found_end and overridden(found, named, src, start, name, limit, frame, place) { return place, name }
   asks := place != UNDEF and found != None and found_end >= name and !(named != None and (rule_leading(named) or named.defines))
   unbound := asks and lookup_quietly(frame, place, None) == UNDEF
   if found != None and (unbound or name <= start or found_end > named_to or (named == None and found_end >= name) or (named != None and found_end == named_end and found_reach > named_reach) or (named != None and found.defines and !named.defines and found_end >= named_end)) {
@@ -840,6 +906,20 @@ first_step (src, pos, limit, frame) => (
   paint_place(place)
   if found == None and own == None and head <= name { plan_name(src, start, name, limit, frame, self) }
   return place, name
+)
+// Whether the `=>` a definition read from start splits at is held by the name's reading: inside one of its captures, spelled there by a
+// rule that defines nothing (spelled_over).
+overridden (found, named, src, start, name, limit, frame, place) => (
+  k := split_of(found, src, start, limit, frame)
+  if k < 0 { return None }
+  e, r, held := match(named, src, name, limit, frame, global, place)
+  if e < 0 { return None }
+  p := 0
+  while p < rule_count(named) {
+    if cap_begin(held, p) != -1 and cap_begin(held, p) < k and k < cap_stop(held, p) { return spelled_over(src, cap_begin(held, p), k, limit, frame) > k }
+    p = p + 1
+  }
+  return None
 )
 // The best rule on what a name is bound to, read while trying (an unbound name is not reported).
 best_named (place, frame, src, pos, limit) => (
@@ -1294,6 +1374,8 @@ program_of (node) => (
       word := code_word(target)
       held := word == -1 ? UNDEF : lookup(code_frame(target), word, -1, 0, 0)
       if held != UNDEF and (is_program(held) or is_code(held) or is_place(held)) { target = held; goto next }
+      // A literal capture: the text as written is the program.
+      if held != UNDEF and is_text(held) and at_src(held) >= 0 { program := code(at_src(held), at_begin(held), at_end(held), code_frame(target)); program.program = global; return program }
       s, b, e := span_inner(at_src(target), at_begin(target), at_end(target))
       program := code(s, b, e, code_frame(target))
       program.program = global
@@ -1449,10 +1531,41 @@ holds (rule, p, src, b, e) => (
     goto charged
   }
   ROOT.fuel = outer - (allowed - ROOT.fuel)
+  // A type read while some of its names are missing does not hold yet (it is checked again once they are declared).
+  if list_len(missing) > 0 { value = UNDEF }
   charged\
   if kept == NIL { kept = Held(src: piece.content_src, begin: piece.content_begin, next: text.held); text.held = kept }
   kept.declared = ROOT.declared; kept.value = value; kept.missing = missing
   return value
+)
+// A typed leading capture matched on a receiver: its content read with the receiver bound to its name.
+receiver_holds (rule, p, receiver) => (
+  piece := rule.pieces[p]
+  if piece.checking or receiver == UNDEF { return None }
+  outer := ROOT.fuel
+  allowed := outer < 5000 ? outer : 5000
+  ROOT.fuel = allowed
+  piece.checking = global
+  m0 := ROOT.missing
+  m0_id := ROOT.missing_id
+  outer_m, outer_id := missing_open()
+  scope := scope_in(piece_within(piece), piece.content_src, piece.content_begin, piece.content_end)
+  set_name(scope, piece.name, receiver)
+  value, refused, mark := quiet_read(piece.content_src, piece.content_begin, piece.content_end, scope) catch err {
+    piece.checking = None
+    ROOT.fuel = outer - (allowed - ROOT.fuel)
+    if !is_exhausted(err) or allowed < 5000 { missing_close(outer_m, outer_id); rethrow(err) }
+    forget(err)
+    ROOT.missing = m0
+    ROOT.missing_id = m0_id
+    return None
+  }
+  piece.checking = None
+  ROOT.fuel = outer - (allowed - ROOT.fuel)
+  missing := missing_close(outer_m, outer_id)
+  depends(missing)
+  ROOT.refused = mark
+  return !refused and value != UNDEF and silently(value, global) != None and list_len(missing) == 0
 )
 holds_read (rule, p, src, b, e) => (
   piece := rule.pieces[p]
@@ -2262,7 +2375,7 @@ choose_rules (c, index) => (
 )
 
 // After a read that failed outside the language (a runtime error): reading starts afresh.
-recover () => ( settle(); ROOT.level = 0 )
+recover () => ( settle(); ROOT.level = 0; ROOT.overing = None )
 rules_of (node) => node.rules
 
 // The brackets in reach of the global scope, kept until its rules change; their first characters are marked (32) in the classes.

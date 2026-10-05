@@ -3,29 +3,46 @@ HTML := class: Language {
   static extensions = ".html"
 
   Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | Text | Raw | Comment)[] = [] {
-    static made = 0
-    id: String = attributes{.name == "id"}.first?.value ?? ("e" + ((Element.made += 1) as String))
-    void => tag is ("img" | "input" | "br" | "meta" | "link" | "source")
+    id => attributes{.name == "id"}.last?.value
+    void => tag is Void
   }
   Text := class = text: String
   Raw := class = text: String
   Comment := class = text: String
   Document := class = head: Element[], body: Element, language: String = "en"
 
+  // Void elements (https://html.spec.whatwg.org/multipage/syntax.html#void-elements)
+  Void = "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta" | "source" | "track" | "wbr"
+  // Raw text elements (https://html.spec.whatwg.org/multipage/syntax.html#raw-text-elements)
+  RawText = "script" | "style"
+  // Escaping a string (https://html.spec.whatwg.org/multipage/parsing.html#escapingString)
   Escapes = { "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }
   escaped (text: String) => #text.map(Escapes[.] ?? .) as String
 
+  // Tag and attribute names (https://html.spec.whatwg.org/multipage/syntax.html#syntax-tag-name)
   Name = (Char.Letter, (Char.Word | "-" | ":" | ".")[])
+  // Named character references (https://html.spec.whatwg.org/multipage/named-characters.html)
   Entities = { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
   Child := class = value: *
   Attributes := class = value: *
 
   syntax := Compiler.default + {
+    // The DOCTYPE (https://html.spec.whatwg.org/multipage/syntax.html#the-doctype)
+    <!{doctype: "doctype" | "DOCTYPE"} html><html lang="{language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">{head}</head>{body}</html> => Document(Child(head), body, language)
+    <!{doctype: "doctype" | "DOCTYPE"} html><html lang="{language}"><head>{head}</head>{body}</html> => Document(Child(head), body, language)
+    // Comments (https://html.spec.whatwg.org/multipage/syntax.html#comments)
     <!--{literal text}--> => Comment(text)
+    // Elements (https://html.spec.whatwg.org/multipage/syntax.html#elements-2)
+    <{tag: RawText}{attributes}>{literal text}</{tag}> => Element(tag, Attributes(attributes), [Raw(text) if !text.empty])
     <{tag: Name}{attributes}/> => Element(tag, Attributes(attributes))
+    <{tag: Void}{attributes}> => Element(tag, Attributes(attributes))
     <{tag: Name}{attributes}>{children}</{tag}> => Element(tag, Attributes(attributes), Child(children))
+    // Attributes (https://html.spec.whatwg.org/multipage/syntax.html#attributes-2)
     {name: Name}="{value}" => (name, value)
     {name: Name}={value} => value === None || value == false ? None : value == true ? (name, "") : (name, value)
+    // Character references (https://html.spec.whatwg.org/multipage/syntax.html#character-references)
+    &#x{code: Hexadecimal}; => code as Char
+    &#{code: Decimal}; => code as Char
     &{name: Char.Letter[]}; => Entities[name] ?? ("&" + name + ";")
     {child: Child{value === None}} => []
     {child: Child{value is String{trimmed.empty && contains(\n)}}} => []

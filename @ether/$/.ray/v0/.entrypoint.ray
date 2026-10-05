@@ -90,6 +90,9 @@ class {block} ^keyword => (
   static.requirements_known = None
   static.heads_read = None
   static.heads_known = None
+  static.header = None
+  static.positional_names = None
+  static.partial_names = None
   written_as => static.written_body**
   super => (
     parent := static.components.hierarchy.tail.value
@@ -109,11 +112,14 @@ class {block} ^keyword => (
 
   construct (args) => (
     static := this
-    goto positional if static.header_names
+    goto positional if static.header
     goto named
    positional\
-    goto named if (named_arguments(args))
-    (inline (external ** static.header_names.join(`, `))) := (inline args)
+    goto named if (external before (external ** args) `:`)
+    goto spread if (external first (external ** args))
+    goto named
+   spread\
+    (inline (external ** first_names(positional_of(static), header_items((external ** args), `,`).count).join(`, `))) := (inline args)
     goto entered
    named\
     inline args
@@ -852,8 +858,35 @@ Node := base class {
 
   {this}<{literal partial}> ^punctuation => (
     narrowed := this
-
-    class: narrowed { inline partial }
+    made := class { }
+    made.header = narrowed.header
+    made.partial_names = narrowed.partial_names
+    remaining := narrowed.partial_names
+    if remaining { remaining = remaining.head }
+    rest := external ** partial
+    while rest {
+      item := external before rest `,`
+      unless item { item = rest }
+      rest = external after rest `,`
+      named := external before item `:`
+      given := external after item `:`
+      unless named {
+        given = item
+        if remaining {
+          named = remaining.value
+          remaining = remaining.next
+        }
+      }
+      if named {
+        held := inline given
+        external extend made {
+          (inline named) := held
+        }
+      }
+    }
+    made.components.hierarchy &= narrowed
+    external extend made narrowed
+    made
   )
 
   ** => Program(code: (external ** this))
@@ -1628,6 +1661,60 @@ argument_name (item) => (
   }
   given
 )
+positional_of (type) => (
+  unless type.positional_names { type.positional_names = header_names(type.header) }
+  type.positional_names
+)
+first_names (names, k) => (
+  taken := chain None
+  names for { if (taken.count < k) { taken &= it.value } }
+  taken
+)
+// The partial parameters written in `<…>` (`T`, `T = default`, `T: Type = default`): their names, and each declared in `into`
+// as its default (Node when it has none).
+partial_names (written) => (
+  names := chain None
+  rest := written
+  while rest {
+    item := external before rest `,`
+    unless item { item = rest }
+    rest = external after rest `,`
+    head := external before item `=`
+    unless head { head = item }
+    named := external before head `:`
+    unless named { named = head }
+    names &= named
+  }
+  names
+)
+declare_partials (written, into) => (
+  rest := written
+  while rest {
+    item := external before rest `,`
+    unless item { item = rest }
+    rest = external after rest `,`
+    head := external before item `=`
+    given := external after item `=`
+    unless head { head = item }
+    named := external before head `:`
+    unless named { named = head }
+    held := Node
+    if given { held = inline given }
+    external extend into {
+      (inline named) := held
+    }
+  }
+  into
+)
+{literal name}<{literal partial}> := {defined} ^punctuation => (
+  declare_partials((external ** partial), external .)
+  made := defined
+  defaults := class { }
+  declare_partials((external ** partial), defaults)
+  made.components.hierarchy &= defaults
+  made.partial_names = partial_names(external ** partial)
+  external declare name made
+)
 named_arguments (args) => (
   found := false
   header_items((external ** args), `,`) for { if (argument_name(it.value)) { found = true } }
@@ -1740,7 +1827,7 @@ class:{ }{parent} = {header}{\n} ^keyword => (
   made.header = external ** header
   made
 )
-class:{ }{parent} ({header}) => {`{`}{members?}{`}`} ^keyword => (
+class:{ }{parent} ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
   made := class {
     inline header
     inline members

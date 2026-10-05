@@ -1,26 +1,44 @@
 // OpenType specification (https://learn.microsoft.com/en-us/typography/opentype/spec/)
+// The table directory (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
 OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Char⁴, checksum: U32, offset: U32, size: U32)[]{length == count}, *) {
   static language = Language(".otf" | ".ttf" | ".opentype", level: { {font: OpenType} => font })
   static Glyph := class = outlines: Geometry.Curve[], advance: Number, units: Number
+  // Data types (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#data-types)
   static U8 = Binary⁸
   static U16 = Binary¹⁶
   static U32 = Binary³²
+  static I8 := class: Binary⁸ {
+    signed => this < 2 ^ 7 ? this : this - 2 ^ 8
+  }
   static I16 := class: Binary¹⁶ {
     signed => this < 2 ^ 15 ? this : this - 2 ^ 16
   }
+  static F2Dot14 := class: I16 {
+    value => signed / 2 ^ 14
+  }
 
+  // head (https://learn.microsoft.com/en-us/typography/opentype/spec/head)
   static Head := class = (U32, U32, U32, U32{== 0x5F0F3CF5}, U16, units: U16, Binary⁶⁴, Binary⁶⁴, I16, I16, I16, I16, U16, U16, I16, long_offsets: U16, I16)
+  // hhea (https://learn.microsoft.com/en-us/typography/opentype/spec/hhea)
   static Hhea := class = (U32, ascender: I16, I16, I16, U16, I16, I16, I16, I16, I16, I16, I16, I16, I16, I16, I16, metrics: U16)
+  // hmtx (https://learn.microsoft.com/en-us/typography/opentype/spec/hmtx)
   static Metrics<count> := class = (advances: (advance: U16, bearing: I16)[]{length == count}, *) {
     [glyph: Number] => advances[[glyph, advances.count - 1].min].advance
   }
+  // cmap (https://learn.microsoft.com/en-us/typography/opentype/spec/cmap)
   static Cmap := class = (U16, count: U16, encodings: (platform: U16, encoding: U16, offset: U32)[]{length == count}, *)
+  // Format 4, segment mapping to delta values
   static Format4 := class = (U16{== 4}, U16, U16, doubled: U16, U16, U16, U16, ends: U16[]{length == doubled / 2}, U16, starts: U16[]{length == doubled / 2}, deltas: U16[]{length == doubled / 2}, ranges: U16[]{length == doubled / 2}, glyphs: U16[]) {
     [code: Number] => (0..<ends.count){starts[.] <= code <= ends[.]}.first -- (segment => segment == None ? 0
       : ranges[segment] == 0 ? (code + deltas[segment]) % 2 ^ 16
       : glyphs[ranges[segment] / 2 + code - starts[segment] + segment - ends.count] -- (. == 0 ? 0 : (. + deltas[segment]) % 2 ^ 16))
   }
+  // Format 12, segmented coverage
+  static Format12 := class = (U16{== 12}, U16, U32, U32, count: U32, groups: (first: U32, last: U32, glyph: U32)[]{length == count}) {
+    [code: Number] => groups{.first <= code <= .last}.first -- (. ? .glyph + code - .first : 0)
+  }
 
+  // glyf, simple glyph descriptions (https://learn.microsoft.com/en-us/typography/opentype/spec/glyf#simple-glyph-description)
   static Flag := class = (Binary², y_same: Binary¹, x_same: Binary¹, repeats: Binary¹, y_short: Binary¹, x_short: Binary¹, on_curve: Binary¹)
   static Coordinate<short, same> := class = ((magnitude: U8) if short, (value: I16) if !(short || same)) {
     delta => short ? (same ? magnitude : -magnitude) : same ? 0 : value.signed
@@ -43,13 +61,29 @@ OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Cha
   ) {
     flags => runs.map([.flag] * (1 + (.times ?? 0))).flatten
     absolute (deltas: Number[]) => deltas.reduce(acc = [] => [acc, (acc.last ?? 0) + .].flatten)
-    outlines (ascender: Number) => absolute(xs.delta) -- (across => absolute(ys.delta) -- (up =>
-      flags.enumerate.map(Point(Geometry.Vector(across[.index], ascender - up[.index]), .value.on_curve == 1)))) -- (points =>
-      [-1, ends].flatten.zip(ends).map((from, to) => outline(points[(from + 1)..to])))
-    outline (points: Point[]) => (points.some(.on)
-      ? points.index_of(points{.on}.first) -- (start => [points[start..], points[..start]].flatten)
-      : Point((points.first.at + points.last.at) * (1 / 2), true) -- (start => [start, points, start].flatten)
-    ) -- (ring => Geometry.Curve([ring.first.at, Compiler.reduced(ring.zip(ring.rest).map(Step(.0, .1)), contoured)].flatten.loop))
+    contoured (font: OpenType) => absolute(xs.delta) -- (across => absolute(ys.delta) -- (up =>
+      flags.enumerate.map(Point(Geometry.Vector(across[.index], up[.index]), .value.on_curve == 1)))) -- (points =>
+      [-1, ends].flatten.zip(ends).map((from, to) => points[(from + 1)..to]))
+  }
+  // glyf, composite glyph descriptions (https://learn.microsoft.com/en-us/typography/opentype/spec/glyf#composite-glyph-description)
+  static ComponentFlag := class = (Binary³, unscaled: Binary¹, scaled_offset: Binary¹, overlap: Binary¹, metrics: Binary¹, instructions: Binary¹,
+    two_by_two: Binary¹, xy_scale: Binary¹, more: Binary¹, Binary¹, scale: Binary¹, round: Binary¹, xy_values: Binary¹, words: Binary¹)
+  static Component := class = (
+    flag: ComponentFlag, glyph: U16,
+    ((first: I16, second: I16) if flag.words == 1), ((first: I8, second: I8) if flag.words == 0),
+    ((scale: F2Dot14) if flag.scale == 1), ((x_scale: F2Dot14, y_scale: F2Dot14) if flag.xy_scale == 1),
+    ((xx: F2Dot14, xy: F2Dot14, yx: F2Dot14, yy: F2Dot14) if flag.two_by_two == 1)
+  ) {
+    linear => flag.two_by_two == 1 ? [[xx.value, yx.value], [xy.value, yy.value]]
+      : flag.xy_scale == 1 ? [[x_scale.value, 0], [0, y_scale.value]]
+      : flag.scale == 1 ? [[scale.value, 0], [0, scale.value]]
+      : [[1, 0], [0, 1]]
+    transformed (point: Point, by: Geometry.Vector) => Point(Geometry.Vector(linear[0][0] * point.at.x + linear[0][1] * point.at.y, linear[1][0] * point.at.x + linear[1][1] * point.at.y) + by, point.on)
+    placed (font: OpenType, before: Point[]) => font.contours(glyph) -- (contours => contours.map(.map(transformed(., Geometry.Vector()))) -- (scaled =>
+      (flag.xy_values == 1 ? Geometry.Vector(first.signed, second.signed) : before[first].at - scaled.flatten[second].at) -- (by => scaled.map(.map(Point(.at + by, .on))))))
+  }
+  static Composite := class = (contours: U16{>= 2 ^ 15}, I16, I16, I16, I16, components: Component[]{.[..<-1].every(.flag.more == 1) && .last.flag.more == 0}, *) {
+    contoured (font: OpenType) => components.reduce(placed = [] => [placed, .placed(font, placed.flatten)].flatten(1))
   }
 
   bits => this as Binary
@@ -57,8 +91,15 @@ OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Cha
   head => table("head") as Head
   hhea => table("hhea") as Hhea
   hmtx => table("hmtx") as Metrics<hhea.metrics>
-  cmap => table("cmap") -- (data => (data as Cmap).encodings{.platform == 3 && .encoding == 1 || .platform == 0}.map(data[.offset * 8..] as Format4){!= None}.first)
+  cmap => table("cmap") -- (data => (data as Cmap).encodings{.platform == 3 && .encoding is (1 | 10) || .platform == 0}.map(data[.offset * 8..] as (Format12 | Format4)){!= None}
+    -- (.{. is Format12}.first ?? .first))
+  // loca (https://learn.microsoft.com/en-us/typography/opentype/spec/loca)
   located (glyph: Number) => head.long_offsets == 1 ? (table("loca") as U32[])[glyph] : (table("loca") as U16[])[glyph] * 2
-  outlines (glyph: Number) => (table("glyf")[located(glyph) * 8 ..< located(glyph + 1) * 8] as Simple)?.outlines(hhea.ascender.signed) ?? []
+  contours (glyph: Number) => located(glyph) == located(glyph + 1) ? [] : (table("glyf")[located(glyph) * 8 ..< located(glyph + 1) * 8] as (Simple | Composite))?.contoured(this) ?? []
+  outline (points: Point[]) => (points.some(.on)
+    ? points.index_of(points{.on}.first) -- (start => [points[start..], points[..start]].flatten)
+    : Point((points.first.at + points.last.at) * (1 / 2), true) -- (start => [start, points, start].flatten)
+  ) -- (ring => Geometry.Curve([ring.first.at, Compiler.reduced(ring.zip(ring.rest).map(Step(.0, .1)), contoured)].flatten.loop))
+  outlines (glyph: Number) => hhea.ascender.signed -- (ascender => contours(glyph).map(.map(Point(Geometry.Vector(.at.x, ascender - .at.y), .on))).map(outline(.)))
   [character: Char] => cmap[character as Number] -- (glyph => Glyph(outlines(glyph), hmtx[glyph], head.units))
 }

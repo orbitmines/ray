@@ -32,3 +32,9 @@ unless [@html { <br /> }, 2].count == 2 { INFO@mark `UI221 an html block does no
 unless (@html { }).empty { INFO@mark `UI222 an empty block is not empty` }
 unless (commented as HTML) == "<p><!-- note -->a</p>" { INFO@mark `UI236 an html comment is not written into the html` }
 unless HTML.escaped("<a & b>") == "&lt;a &amp; b&gt;" { INFO@mark `UI14 text is not escaped` }
+unless ((@html <br>) as HTML) == "<br>" && HTML.read("<p>a<br>b</p>").children.count == 3 { INFO@mark `UI286 a void element written without a slash is not read back` }
+written_document := HTML.Document(head: [@html <title>Ray</title>], body: @html <body><p>{who}</p></body>)
+unless (HTML.read(written_document as HTML) as HTML) == (written_document as HTML) { INFO@mark `UI287 a written document does not read back as the same document` }
+unless (@html <p>&#65;&#x42;&amp;</p>).children.map(.text).join("") == "AB&" { INFO@mark `UI288 a numeric character reference is not its character` }
+unless HTML.read("<script>if (a) { f() }</script>").children.first is HTML.Raw { INFO@mark `UI289 the text of a script is not kept raw` }
+unless Language.named(".html") == HTML && $.html === HTML { INFO@mark `UI65 html is not a registered language` }

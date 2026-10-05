@@ -65,6 +65,8 @@ Number := class: Ray {
   right-to-left √ => root_of(2)
   right-to-left ∛ => root_of(3)
   right-to-left ∜ => root_of(4)
+  arctan_inverse (scale: Number, j: Number = 0) => scale / this ^ (4 * j + 1) -- (term => term == 0 ? 0
+    : term / (4 * j + 1) - scale / this ^ (4 * j + 3) / (4 * j + 3) + arctan_inverse(scale, j + 1))
 
   chosen_within (width: Number) => Random.number(width)
 
@@ -205,7 +207,9 @@ Matrix &+= {
   inverse => (0..<count).map(i => (0..<count).map(j => ((i + j).even ? 1 : -1) * minor(j, i).determinant / determinant))
 }
 
-τ := 6.283185307179586
+machin (scale: Number) => 16 * 5.arctan_inverse(scale) - 4 * 239.arctan_inverse(scale)
+π := Decimal.Real(integer: 3, fraction: (1 -> +1).map(place => machin(10 ^ (place + 10)) / 10 ^ 10 % 10))
+τ := Decimal.Real(integer: 6, fraction: (1 -> +1).map(place => 2 * machin(10 ^ (place + 10)) / 10 ^ 10 % 10))
 Unit(name: "turn" ("s" + plural: true)?)
 Unit(name: "radian" ("s" + plural: true)?, symbol: "rad").multiple 1 / τ, turn
 Unit(name: "degree" ("s" + plural: true)?, symbol: "deg" | "°").multiple 1 / 360, turn

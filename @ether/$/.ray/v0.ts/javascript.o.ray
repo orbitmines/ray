@@ -16,6 +16,9 @@ Compiler.javascript := {
   {a} >= {b} => javascript ({a} >= {b})
   {a} == {b} => javascript ({a} === {b})
   {a} != {b} => javascript ({a} !== {b})
+  π => javascript Math.PI
+  τ => javascript (2 * Math.PI)
+  {real: Decimal.Real{fraction.unbounded}} => javascript {real.integer}.{real.fraction[..<17].join("")}
 }
 
 javascript {literal code} ^keyword => external javascript code

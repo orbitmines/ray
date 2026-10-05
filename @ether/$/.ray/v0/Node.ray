@@ -85,6 +85,7 @@ Superposed := Node{.superposed}
 
 Section := class = operator: String, operand: Node? {
   continues => true
+  admits (candidate) => this(candidate)
   (subject, other?) => operand != None ? (external get subject operator)(operand)
     : other != None ? (external get subject operator)(other)
     : (external get subject operator)
@@ -107,13 +108,10 @@ Operator := "!" | "&&" | "||" | "!&&" | "!||" | "x||" | "x!||" | "+" | "-" | "/"
 ||{operand} ^operator => Section("||", operand)
 
 Node &+= {
-  .match{\n}{arms} ^punctuation => matched(external ** arms)
-  matched (arms) => Program(code: arms).written.map(.code ~= (pattern: *, " => ", value: *)){
-    .pattern == "*" || this.answers_arm(Program(code: external ** .pattern).entered(this, None))
-  }.first -- . ? Program(code: external ** .value).entered(this, None) : None
-  answers_arm (arm) => arm is Section ? arm(this)
-    : arm is Anchored ? this ~= arm
-    : this is arm || this == arm
+  .match{\n}{arms} ^punctuation => Compiler.reduced(this, Program(code: external ** arms) as Compiler)
+}
+Program &+= {
+  as (=== Compiler) => Program(code: external ** written.map(.code ~= (pattern: *, " => ", value: *) -- "{subject_of_arm: ", .pattern, "} => ", .value).join(\n))
 }
 
 Node &+= {
@@ -161,6 +159,7 @@ Node &+= {
   ⊣ => Anchored(pattern: this, at_end: true)
 }
 Anchored := class = pattern: Node, at_start: boolean = false, at_end: boolean = false {
+  admits (candidate) => candidate ~= this
   ⊣ => Anchored(pattern, at_start, at_end: true)
 }
 read_within (text, pattern) => (

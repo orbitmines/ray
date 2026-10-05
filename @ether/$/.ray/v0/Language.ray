@@ -1,25 +1,31 @@
-Language := class = extensions: String | String[], location: Location[] = [], level: Compiler?, reader: Function?, writer: Function?, of: Language?, version: Version?, versions: Language[] = [], implementations: Implementation[] = [], targets: Language[] = [] {
+Language := class = extensions: String | String[], location: Location[] = [], level: Compiler?, written: Compiler?, of: Language?, version: Version?, versions: Language[] = [], implementations: Implementation[] = [], targets: Language[] = [] {
   static known: Language[] = []
   static register (language: Language) => known.push language -- language
   static named (extension: String) => known{.names(extension)}.first
-  static over (outer: Language, base: Language) => Language(outer.extensions, location: outer.location, level: outer.level, reader: outer.reader, writer: outer.writer, of: base, version: outer.version)
+  static over (outer: Language, base: Language) => Language(outer.extensions, location: outer.location, level: base.level + outer.level, written: base.written + outer.written, of: base, version: outer.version)
 
   static for_file (file_name: String) => file_name ~= (*, ".", inner: Char.Word[], ".ray") ⊣
     ? (named("." + inner) ? over(named("." + inner), ray) : ray)
     : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣)?.last) ?? ray
   static ray => named(".ray")
 
-  static ray_written (value) => value === None ? "None"
-    : value is String ? "\"" + value + "\""
-    : value is Number ? value as 10 as String
-    : value is Iterable ? "[" + value.map(ray_written).join(", ") + "]"
-    : "(" + value.fields.map(.name + ": " + ray_written(.value)).join(", ") + ")"
+  static Writing := class = value: *
+  static unwrapped := {
+    {writing: Writing} => writing.value
+  }
+  static ray_written := {
+    {writing: Writing{value === None}} => "None"
+    {writing: Writing{value is String}} => "\"", writing.value.escaped_line, "\""
+    {writing: Writing{value is Number}} => writing.value as 10 as String
+    {writing: Writing{value is Iterable}} => "[", writing.value.map((", " if .index > 0), Writing(.)), "]"
+    {writing: Writing} => "(", writing.value.fields.map((", " if .index > 0), .name, ": ", Writing(.value)), ")"
+  }
 
   names (extension: String) => extensions == extension
   bundled (path: String) => location.map(. / path){IO.read(. / ".project.ray")}.first as Project
 
-  read (text) => reader?((of?.read(text)) ?? text) ?? Quest(name: "a reader for the language", goal: this)
-  write (value) => writer ? (of?.write(writer(value)) ?? writer(value)) : Quest(name: "a writer for the language", goal: this)
+  read (text) => level ? Compiler.reduced(text, level) : Quest(name: "a reader for the language", goal: this)
+  write (value) => written ? Compiler.reduced(Writing(value), unwrapped + written) as String : Quest(name: "a writer for the language", goal: this)
 
   target (language: Language) => targets.push language -- this
   targeting (language: Language) => targets.contains(language)
@@ -30,8 +36,8 @@ Language := class = extensions: String | String[], location: Location[] = [], le
 
   static Implementation := class = language: Language, written_in: Language, location: Location {
     source => IO.read(location)
-    reader => written_in.read(source)
-    setup => language.implement(this) -- language.reader ??= reader -- language
+    level => written_in.read(source)
+    setup => language.implement(this) -- language.level ??= level -- language
   }
 
   static Sublanguage := class: Language = excluded: Effects.Source[] = [], terminating: boolean = true {
@@ -43,7 +49,7 @@ Language := class = extensions: String | String[], location: Location[] = [], le
 Library := class: Language
 Tool := class = location: Location[] = []
 
-Language.register(Language(".ray", level: Compiler.default, writer: Language.ray_written))
+Language.register(Language(".ray", level: Compiler.default, written: Language.ray_written))
 Language.cfg = Language.register(Language.Sublanguage(extensions: ".cfg", of: Language.ray, excluded: [io, os, random, time, network] as Effects.Source[]))
 Language.regex = Language.register(Language(".regex"))
 

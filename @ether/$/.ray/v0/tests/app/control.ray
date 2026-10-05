@@ -196,3 +196,14 @@ halving := Program(code: { 1 })
 unless doubling⁻¹ === halving { INFO@mark `IV1 the declared inverse is not the inverse` }
 unless halving⁻¹ === doubling { INFO@mark `IV2 the inverse of the inverse is not the function` }
 unless doubling.reversible { INFO@mark `IV3 a function with an inverse is not reversible` }
+
+// `--` continues on everything before it on the line; `~~` too, answering that line (A-C5)
+unless (1, 2 -- .map(+1)) == (2, 3) { INFO@mark `DD1 -- does not continue on the whole line before it` }
+unless (5 -- . + 1) == 6 { INFO@mark `DD2 -- does not give what it continues with as .` }
+unless (5 -- . + 1 if . > 3) == 6 { INFO@mark `DD3 -- with a condition that holds does not continue` }
+unless (5 -- . + 1 if . > 9) == 5 { INFO@mark `DD4 -- with a condition that fails does not keep what is before it` }
+continued := 5
+  -- . * 2
+  -- . + 1 if . > 100
+unless continued == 10 { INFO@mark `DD5 -- on the next line does not continue the line above` }
+unless (1, 2 ~~ .map(+1)) == (1, 2) { INFO@mark `DD6 ~~ does not answer the whole line before it` }

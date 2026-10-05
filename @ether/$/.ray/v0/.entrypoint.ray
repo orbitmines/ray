@@ -80,11 +80,21 @@ class {block} => (
     view
   )
   ({args}) => .construct(args)
+  static.reading_statics = global
   inline block
+  static.reading_statics = None
 
   construct (args) => (
     static := this
+    goto positional if static.header_names
+    goto named
+   positional\
+    goto named if (named_arguments(args))
+    (inline (external ** static.header_names.join(`, `))) := (inline args)
+    goto entered
+   named\
     inline args
+   entered\
     this := external .
     this.components = chain None
     this.components.hierarchy = chain this
@@ -328,6 +338,22 @@ Modifier.spellings &= `left-to-right`
 
 Node := base class {
 
+  // `--` continues on what the line before it is, `~~` likewise but answers that line; declared first, so both take the whole line (A-C5).
+  continued_by (call) => Program(code: call).entered(this, None)
+  continued_if (call, condition) => Program(code: condition).entered(this, None) ? .continued_by(call) : this
+  --{call} ^punctuation => .continued_by(external ** call)
+  --{call} if {condition} ^punctuation => .continued_if((external ** call), (external ** condition))
+  {\n}--{call} ^punctuation => .continued_by(external ** call)
+  {\n}--{call} if {condition} ^punctuation => .continued_if((external ** call), (external ** condition))
+  ~~{x} ^punctuation => (
+    .continued_by(external ** x)
+    this
+  )
+  {\n}~~{x} ^punctuation => (
+    .continued_by(external ** x)
+    this
+  )
+
   , => this
 
   ; ^punctuation (x) => x
@@ -358,7 +384,6 @@ Node := base class {
     listed &= this
     listed &= other
   )
-  --{call} ^punctuation => call(this)
 
   ={x} ^punctuation => (
     external assign this x
@@ -578,6 +603,10 @@ Node := base class {
     if this.codepoint { among = type.superposes }
     if this {
       if (type.repeating || type.listing) { found = read_whole(this, type) }
+      elsif (type.pattern && !this.instance) {
+        read := read_whole(this, type.pattern)
+        if read { found = type.built_from(read) }
+      }
       elsif among {
         alternative := type.components.head
         while (alternative && found.not) {
@@ -650,6 +679,14 @@ Node := base class {
 
   structure => None
 
+  built_from (reading) => (
+    made := this()
+    reading for {
+      if it.value.named { made[it.value.name] = it.value.value }
+    }
+    made
+  )
+
   satisfies (predicate) => Program(code: (external ** predicate)).entered(this, None)
 
   verify (candidate) => candidate
@@ -694,11 +731,6 @@ Node := base class {
     narrowed := this
 
     class: narrowed { inline partial }
-  )
-
-  ~~{x} ^punctuation => (
-    Program(code: (external ** x)).entered(this, None)
-    this
   )
 
   ** => Program(code: (external ** this))
@@ -1293,6 +1325,205 @@ matcher_of (pattern) => ((text, captured) => (
   }
   read
 ))
+
+// A class written with its pattern: `class = a: T, b: U = d { … }`, `class (pattern) => { … }`, `class: Parent (pattern) => { … }`; the named parts are its fields, taken by position or by name (A7, T3.10, T3.15b).
+header_items (written, separator) => (
+  items := chain None
+  piece := chain None
+  depth := 0
+  quoted := false
+  opening := code_points(`([{`)
+  closing := code_points(`)]}`)
+  quote := code_points(`"`).head.value
+  apart := code_points(separator).head.value
+  code_points(written) for {
+    point := it.value
+    if (point == quote) { quoted = !quoted }
+    unless quoted {
+      if (opening.contains(point)) { depth = depth.succ }
+      if (closing.contains(point)) { depth = depth.pred }
+    }
+    if (depth.is_zero && !quoted && (point == apart)) {
+      items &= piece.as(String).trimmed
+      piece = chain None
+    } else { piece &= point }
+  }
+  if piece.head { items &= piece.as(String).trimmed }
+  items
+)
+header_word (item) => (
+  word := chain None
+  ended := false
+  code_points(item) for {
+    unless ended { if (it.value.word) { word &= it.value } else { ended = true } }
+  }
+  (word.head && !word.head.value.digit) ? word.as(String) : None
+)
+header_field (item) => (
+  named := header_word(item)
+  field := None
+  if named {
+    rest := item.slice(named.count, item.count).trimmed
+    if (rest.empty || rest.starts_with(`:`) || rest.starts_with(`?:`) || rest.starts_with(`=`) || rest.starts_with(`|`)) { field = named }
+  }
+  field
+)
+argument_name (item) => (
+  named := header_word(item)
+  given := None
+  if named {
+    rest := item.slice(named.count, item.count)
+    if (rest.starts_with(`:`) && !rest.starts_with(`::`)) { given = named }
+  }
+  given
+)
+named_arguments (args) => (
+  found := false
+  header_items((external ** args), `,`) for { if (argument_name(it.value)) { found = true } }
+  found
+)
+header_names (header) => (
+  names := chain None
+  alternatives := header_items(header, `|`)
+  alternatives for {
+    alternative := it.value
+    header_items(alternative, `,`) for {
+      item := it.value
+      named := header_field(item)
+      if named { unless (names.contains(named)) { names &= named } }
+      elsif (item.starts_with(`(`) && (header_items(item, `|`).count == 1)) {
+        header_names(item.slice(1, item.count.pred)) for { unless (names.contains(it.value)) { names &= it.value } }
+      }
+    }
+  }
+  names
+)
+header_type (header) => (
+  read := None
+  alternatives := header_items(header, `|`)
+  if (alternatives.count > 1) {
+    alternatives for {
+      one := header_type(it.value)
+      if read { read = read | one } else { read = one }
+    }
+  } else {
+    header_items(header, `,`) for {
+      item := it.value
+      named := header_field(item)
+      one := None
+      if named {
+        typed := header_items(item.slice(named.count, item.count).trimmed, `=`).head.value
+        if (typed.starts_with(`?:`)) { typed = typed.slice(2, typed.count).trimmed + `?` }
+        elsif (typed.starts_with(`:`)) { typed = typed.slice(1, typed.count).trimmed }
+        else { typed = `*` }
+        one = Capture(name: named, type: inline (external ** typed))
+      } elsif (item.starts_with(`(`)) { one = header_type(item.slice(1, item.count.pred)) }
+      else { one = inline (external ** item) }
+      if read { read = read, one } else { read = [one] }
+    }
+  }
+  read
+)
+header_statements (header) => (
+  statements := chain None
+  header_items(header, `,`) for { if (header_field(it.value)) { statements &= it.value } }
+  statements.join(`
+`)
+)
+written_class (parent, header, members) => (
+  fields_written := header_statements(header)
+  made := class {
+    inline (external ** fields_written)
+    inline members
+  }
+  made.written_body = external ** (fields_written + `
+` + code_points(members).as(String))
+  if parent { made.components.hierarchy &= parent }
+  made.header_names = header_names(header)
+  made.pattern = header_type(header)
+  made.positions = made.pattern
+  made
+)
+
+class = {header}{ }{`{`}{members?}{`}`} ^keyword => written_class(None, (external ** header), (external ** members))
+class = {header}{\n} ^keyword => written_class(None, (external ** header), None)
+class ({header}) => {`{`}{members?}{`}`} ^keyword => written_class(None, (external ** header), (external ** members))
+class ({header}){ }{`{`}{members?}{`}`} ^keyword => written_class(None, (external ** header), (external ** members))
+class ({header}) => {single}{\n} ^keyword => written_class(None, (external ** header), (external ** single))
+class:{ }{parent} = {header}{ }{`{`}{members?}{`}`} ^keyword => written_class(parent, (external ** header), (external ** members))
+class:{ }{parent} = {header}{\n} ^keyword => written_class(parent, (external ** header), None)
+class:{ }{parent} ({header}) => {`{`}{members?}{`}`} ^keyword => written_class(parent, (external ** header), (external ** members))
+class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => written_class(parent, (external ** header), (external ** members))
+
+// `static` puts a member on the class, read once when the class is, and shared by its instances (L§2.2, A7).
+static{ }{literal name ^property} := {value} ^keyword => (
+  goto shared if static.reading_statics
+  goto done
+ shared\
+  external declare name value
+ done\
+  static
+)
+static{ }{literal name ^property} = {value} ^keyword => (
+  goto shared if static.reading_statics
+  goto done
+ shared\
+  external declare name value
+ done\
+  static
+)
+static{ }{literal name ^property}: {type} = {value} ^keyword => (
+  goto shared if static.reading_statics
+  goto done
+ shared\
+  external declare name value
+  name: type
+ done\
+  static
+)
+static{ }{literal name ^property}: {type}{\n} ^keyword => (
+  goto shared if static.reading_statics
+  goto done
+ shared\
+  name: type
+ done\
+  static
+)
+static{ }{head} ({parameters ^parameter}) => {block} ^keyword => (
+  goto shared if static.reading_statics
+  goto done
+ shared\
+  method_parameters := external ** parameters
+  method_written := external ** block
+  external define head `{arguments}` {
+    (inline method_parameters) := arguments
+    inline method_written
+  } parameters
+ done\
+  static
+)
+static{ }{head} => {block} ^keyword => (
+  goto shared if static.reading_statics
+  goto done
+ shared\
+  external rule head block
+ done\
+  static
+)
+static ({parameters ^parameter}) => {block} ^keyword => (
+  goto shared if static.reading_statics
+  goto done
+ shared\
+  method_parameters := external ** parameters
+  method_written := external ** block
+  external define static `{arguments}` {
+    (inline method_parameters) := arguments
+    inline method_written
+  } parameters
+ done\
+  static
+)
+Modifier.spellings &= `static`
 
 {condition} ? {yes} : {no} ^punctuation => (
   chosen := no

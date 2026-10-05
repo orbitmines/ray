@@ -104,3 +104,41 @@ misfit: Ranged = (4, "+", 9)
 unless misfit[1] == "+" { INFO@mark `TY40 positions that do not fit a structure are taken as a structure` }
 spanned: Ranged = 3-8
 unless spanned.width == 5 { INFO@mark `TY41 text given to a structure is not read by it` }
+
+// Class headers: fields written inline, a class read by its pattern, `static` (A7, T3.10, T3.15b)
+Pair := class = left: Number, right: Number = 7 {
+  total => left + right
+}
+unless Pair(1, 2).left == 1 { INFO@mark `HD1 a header field is not taken by position` }
+unless Pair(1, 2).right == 2 { INFO@mark `HD2 the second header field is not taken by position` }
+unless Pair(right: 3, left: 4).total == 7 { INFO@mark `HD3 header fields are not taken by name` }
+unless Pair(1).right == 7 { INFO@mark `HD4 a header default is not used when not given` }
+Bare := class = only: Number
+unless Bare(3).only == 3 { INFO@mark `HD6 a header without a body has no field` }
+Tagged := class ("#", tag: Decimal) => {
+  doubled => tag * 2
+}
+unless Tagged(tag: 4).doubled == 8 { INFO@mark `HD7 a class read by its pattern has no named part as a field` }
+tagged_of{ }{written: Tagged} => written
+unless (tagged_of #21).tag == 21 { INFO@mark `HD8 a class written as a pattern does not read its text` }
+Sub := class: Pair (": ", first: Number) => {
+  head => first
+}
+unless Sub(first: 2).head == 2 { INFO@mark `HD9 class: Parent (pattern) has no field from its pattern` }
+unless Sub(first: 2).instance_of(Pair) { INFO@mark `HD10 class: Parent (pattern) is not built on Parent` }
+Count := class {
+  static made := 0
+  static zero => 0
+  static Inner := class { }
+  tally => made
+}
+first_count := Count()
+second_count := Count()
+Count.made = 2
+unless first_count.tally == 2 { INFO@mark `HD11 a static is not shared by the instances` }
+unless second_count.tally == 2 { INFO@mark `HD12 a static is per instance` }
+unless Count.zero == 0 { INFO@mark `HD13 a static method is not on the class` }
+unless Count.Inner { INFO@mark `HD14 a static class is not on the class` }
+Both := class: Pair &+ Tagged { }
+unless Both(left: 1, right: 2, tag: 3).total == 3 { INFO@mark `HD15 class: A &+ B is not built on A` }
+unless Both(left: 1, right: 2, tag: 3).doubled == 6 { INFO@mark `HD16 class: A &+ B is not built on B` }

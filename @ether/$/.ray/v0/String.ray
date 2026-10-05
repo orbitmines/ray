@@ -5,27 +5,22 @@ Char := class: Unicode.Scalar {
   static Word: Char = Letter | Digit | "_"
   static Symbol: Char = Unicode.GeneralCategory.(Punctuation | Symbol)
 
-  // Scripts are narrowings from the tables (X3.5).
-  static Latin = Char{.script == "Latin"}
-  static Arabic = Char{.script == "Arabic"}
-  static Greek = Char{.script == "Greek"}
-  static Cyrillic = Char{.script == "Cyrillic"}
-  static Han = Char{.script == "Han"}
-
   is_ascii => this < 128
 
   upper_case | uppercase | ^ => Unicode.UpperCase[this] ?? this
   lower_case | lowercase | v => Unicode.LowerCase[this] ?? this
+  mirrored => Unicode.BidiMirroring[this]?.value ?? this
   swap_case | swapcase => this ==.instance_of Unicode.Lowercase ? upper_case : lower_case
-  fold_case | foldcase => Unicode.CaseFolding[this] ?? this
+  fold_case | foldcase => Unicode.CaseFolding[this]?.value ?? this
 
   as Decimal => this ==.instance_of Digit ? this - "0" : this.lower_case - "a" + 10
-  static (digit: Decimal) as Char => digit < 10 ? "0" + digit : "a" + digit - 10
+  static digit (value: Decimal): Char => value < 10 ? "0" + value : "a" + value - 10
+  static (codepoint: Unicode.Scalar) as Char => codepoint
 
-  east_asian_width => Unicode.EastAsianWidth[this] ?? "N"
+  east_asian_width => Unicode.EastAsianWidth[this]?.value ?? "N"
   columns => east_asian_width ==.instance_of ("W" | "F") ? 2 : 1
-  script => Unicode.Scripts[this] ?? "Unknown"
-  block => Unicode.Blocks[this] ?? "No_Block"
+  script => Unicode.Scripts[this]?.value ?? "Unknown"
+  block => Unicode.Blocks[this]?.value ?? "No_Block"
 }
 
 \0 = U+0000
@@ -64,10 +59,11 @@ String := class: Char[] {
   camel_case | camelcase | camelCase => words[0].lower_case, words[1..].title_case
   pascal_case | pascalcase | PascalCase => words.title_case as String
 
-  plural => this ~= "s" -- !. ? this + "s" : this
-  singular => this ~= "s" -- . ? this[..-1] : this
+  plural => ends_with("s") ? this : this + "s"
+  singular => ends_with("s") ? this[..-1] : this
 
-  mirrored => <-this
+  mirrored => <-#.mirrored as String
+  * (count: Number) => count == 0 ? "" : this, this * (count - 1)
 
   trimmed => this{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}
   trimmed (characters: Char[]) => this{!(⊢ characters[] | characters[] ⊣)}

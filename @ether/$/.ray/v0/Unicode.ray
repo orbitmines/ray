@@ -5,7 +5,7 @@ Unicode := namespace %17 {
   // A table is read by a class pattern: comments and blank lines between its rows (X3.1).
   static Table<Row> := class = (("#", *) | (row: Row, (" "[], "#", *)?) | "")[].join("\n") {
     rows => this.row{!= None}
-    [codepoint: Scalar] => rows{codepoint in .range}.first?.value
+    [codepoint: Scalar] => rows{.range.in(codepoint)}.first
   }
   static Range := class = (from: Scalar, ("..", to: Scalar)?) {
     in (codepoint: Scalar) => from <= codepoint <= to ?? from
@@ -15,36 +15,37 @@ Unicode := namespace %17 {
   static Scalar := class: CodePoint {
     dynamically assert this < 0x110000 && !(0xD800 <= this <= 0xDFFF)
 
-    category => GeneralCategory{name == general_category}
+    category => GeneralCategory.rows{Data[this].general_category ~= ⊢.short_name}.first
   }
 
-  static Blocks = UCD/"Blocks.txt" as Table<(range: Range, "; ", name: *)>
-  static Scripts = UCD/"Scripts.txt" as Table<(range: Range, " "[], "; ", name: *)>
-  static EastAsianWidth = UCD/"EastAsianWidth.txt" as Table<(range: Range, " "[], "; ", name: *)>
+  static Blocks = UCD/"Blocks.txt" as Table<(range: Range, "; ", value: *)>
+  static Scripts = UCD/"Scripts.txt" as Table<(range: Range, " "[], "; ", value: *)>
+  static EastAsianWidth = UCD/"EastAsianWidth.txt" as Table<(range: Range, " "[], "; ", value: *)>
   // `ß` folds to `ss` (X1.3)
-  static CaseFolding = UCD/"CaseFolding.txt" as Table<(range: Range, "; ", status: "C" | "F", "; ", value: Scalar[].join(" "), ";")>
+  static CaseFolding = UCD/"CaseFolding.txt" as Table<(range: Range, "; ", status: "C" | "F" | "S" | "T", "; ", value: Scalar[].join(" "), ";")>
   static BidiMirroring = UCD/"BidiMirroring.txt" as Table<(range: Range, "; ", value: Scalar)>
 
   static Data = UCD/"UnicodeData.txt" as Table<(
-    value: Scalar, ";", name: *, ";", general_category: *, ";", canonical_combining_class: *, ";",
+    range: Range, ";", name: *, ";", general_category: *, ";", canonical_combining_class: *, ";",
     bidi_class: *, ";", decomposition_mapping: *, ";", decimal_digit_value: *, ";", digit_value: *, ";",
     numeric_value: *, ";", bidi_mirrored: "Y" | "N", ";", unicode1_name: *, ";", ISO_10646_comment: *, ";",
     upper_case: Scalar?, ";", lower_case: Scalar?, ";", title_case: Scalar?
   )>
-  static UpperCase = Data.rows.map(.value: .upper_case){.upper_case}
-  static LowerCase = Data.rows.map(.value: .lower_case){.lower_case}
+  static UpperCase = Data.rows{.upper_case}.map(.range.from: .upper_case)
+  static LowerCase = Data.rows{.lower_case}.map(.range.from: .lower_case)
   static Lowercase = Scalar{Data[.].general_category == "Ll"}
 
   // `Char.Latin`, `Char.Arabic` (X3.5)
-  Scripts.rows.name.unique.for script => static Char.`script` = Char{.script == script}
+  Scripts.rows.value.unique.for script => static Char.`script` = Char{.script == script}
 
-  static GeneralCategory := class = UCD/"PropertyValueAliases.txt" as Table<("gc", " "[], "; ", short_name: *, " "[], "; ", name: *)> {
-    rows.for category => static `category.name` = Scalar{Data[.].general_category ==.starts_with category.short_name}
+  static GeneralCategory := class = UCD/"PropertyValueAliases.txt" as Table<("gc", " "[], "; ", short_name: Char.Word[], " "[], "; ", name: Char.Word[], (" "[], ";", *)?)> {
+    // `LC` is the cased letters, Lu | Ll | Lt; every other short name prefixes the categories it holds.
+    rows.for category => static `category.name` = Scalar{Data[.].general_category ~= ⊢(category.short_name == "LC" ? "Lu" | "Ll" | "Lt" : category.short_name)}
   }
 
   // A transformation format: code units of one width (https://www.unicode.org/versions/latest/core-spec/chapter-3/#G25549)
-  static TF | TransformationFormat := class: CodeUnit[]{length == 32 / CodeUnit.length} {
-    static CodeUnit := class: Binary{length == (static.name ~= Decimal.String⊣)}
+  static TF | TransformationFormat := class: CodeUnit[]{length == 1..(32 / CodeUnit.length)} {
+    static CodeUnit: Binary
     as (:== CodePoint[]): CodePoint[]
   }
 
@@ -63,6 +64,7 @@ Unicode := namespace %17 {
     (10₂, U2: Binary⁶) if prefix ⊢111₂,
     (10₂, U3: Binary⁶) if prefix ⊢1111₂
   )[] {
+    static CodeUnit = Binary⁸
     as (:== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
   }
 
@@ -73,10 +75,13 @@ Unicode := namespace %17 {
     U1: Binary{length == 12 - prefix.length},
     (110111₂, U2: Binary¹⁰) if prefix
   )[] {
+    static CodeUnit = Binary¹⁶
     as (:== CodePoint[]) => sequence.map(.U0 + 1, .U1, .U0)
   }
 
-  static UTF-32 := class: TF = CodeUnit{⊢(0[]⁸)}[]
+  static UTF-32 := class: TF = Binary³²{⊢(0[]¹¹)}[] {
+    static CodeUnit = Binary³²
+  }
 }
 
 // https://www.unicode.org/versions/latest/core-spec/appendix-a/#G7083

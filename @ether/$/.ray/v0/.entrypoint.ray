@@ -32,6 +32,12 @@ None := external none
   ^(style)(style)
   ^(style)(external rule pattern body)
 )
+{pattern} => {body} ^punctuation => external rule pattern body
+{pattern} ^{literal style} => {body} ^punctuation => (
+  ^(style)(style)
+  ^(style)(external rule pattern body)
+)
+{name} := {value} ^punctuation => external declare name value
 `{literal string ^string}` ^string.punctuation => string
 "{literal string ^string}" ^string.punctuation => string
 \n => `
@@ -73,7 +79,7 @@ link {value} {previous} ^keyword => (
   entry
 )
 
-class {block} => (
+class {block} ^keyword => (
   static := external .
   static.instance = None
   static.components = chain None
@@ -125,7 +131,7 @@ class {block} => (
   static
 )
 
-base class {body} => (
+base class {body} ^keyword => (
   static := external .
   static.instance = None
   static.components = chain None

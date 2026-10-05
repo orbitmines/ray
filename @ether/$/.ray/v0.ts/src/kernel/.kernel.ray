@@ -664,7 +664,7 @@ read_on (src, pos, limit, frame, begin, mark, last) => (
       return last
     }
     start := pos
-    if ROOT.serving { read_at(src, start) }
+    if paints(src) { read_at(src, start) }
     value, pos := planned_statement(src, pos, limit, frame) catch e {
       if ROOT.level == 1 and is_exhausted(e) {
         forget(e)

@@ -19,15 +19,18 @@ unless Month#.count == 12 { INFO@mark `TI12 a year has other than twelve months`
 unless Weekday#.first == Monday { INFO@mark `TI28 a week does not begin on monday` }
 unless Weekday#.last == Sunday { INFO@mark `TI29 a week does not end on sunday` }
 if Monday == Tuesday { INFO@mark `TI30 two weekdays are the same day` }
-with (Time.YEAR = 2024) {
+(
+  with Time.YEAR = 2024
   unless 1 month as days == 31 days { INFO@mark `TI26 january in a leap year is not thirty-one days` }
-  with (Time.MONTH = February) {
+  (
+    with Time.MONTH = February
     unless 1 month as days == 29 days { INFO@mark `TI23 february in a leap year is other than twenty-nine days` }
-  }
-}
-with (Time.YEAR = 2023, Time.MONTH = February) {
+  )
+)
+(
+  with { Time.YEAR = 2023, Time.MONTH = February }
   unless 1 month as days == 28 days { INFO@mark `TI24 february in a plain year is other than twenty-eight days` }
-}
+)
 
 unless "2024-01-01" as ISO_8601 .day_of_year == 1 { INFO@mark `TI42 the first of january is not the first day of the year` }
 unless "2024-02-01" as ISO_8601 .day_of_year == 32 { INFO@mark `TI43 the first of february is not the thirty-second day` }

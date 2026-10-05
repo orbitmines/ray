@@ -73,7 +73,7 @@ Time := class: Quantity.Temporal (calendar: Calendar? = UTC) {
 
   as (:== calendar) => this
 
-  // `Time.YEAR`, `Time.MONTH` are context values: `with (Time.MONTH = February) { 1.months }` (N4.4).
+  // `Time.YEAR`, `Time.MONTH` are context values: `with Time.MONTH = February` (N4.4).
   calendar.segments.for segment => dynamically Time.`segment.name.upper_case` = since_calendar_epoch.`segment.name`
   calendar.segments.for segment => `segment.name` => segment.is_recurring ? recur(epoch) : since_calendar_epoch as segment
 

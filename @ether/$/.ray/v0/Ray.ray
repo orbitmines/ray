@@ -195,7 +195,7 @@ Edge := class: Ray {
   is_terminal => x.terminal == None
 }
 
-// `with (Traverser.default = BreadthFirst)`
+// `with Traverser.default = BreadthFirst`
 Traverser := class: <yield: (x: Ray): None>(entry: Ray): None {
   static default = DepthFirst
 

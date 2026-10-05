@@ -33,19 +33,12 @@ Program &+= {
     -- .{is_terminal}.first.results.last
   right-to-left defer => Running(program: this) -- Running.deferred.push(.)
 
-  // `with (X = v) { … }` restores X after the block; `with (X = v)` until the context is left (L§6.3).
   targets => code ~= ((target: (!" = ")[], " = ", (!(", " | \n))[]), (", " | \n)?)[] -- .target
-  right-to-left with (settings: Program) => {
-    previous = settings.targets.map(&caller[.])
-    settings()
-    result = this()
-    settings.targets.zip(previous).for((target, held) => &caller[target] = held)
-    result
-  }
-  right-to-left assume (settings: Program) => with (settings) this
 }
 
-with | assume (settings: Program) => {
+// `with X = v` sets X until the context it is written in is left (L§6.3); `with { Time.YEAR = 2023, Time.MONTH = February }` sets several.
+// It takes one value: in `with X = Y { … }` the block belongs to Y (`X = (Y { … })`, extending Y), not to `with`.
+right-to-left with | assume (settings: Program) => {
   previous = settings.targets.map(&caller[.])
   settings()
   defer { settings.targets.zip(previous).for((target, held) => &caller[target] = held) }

@@ -178,9 +178,15 @@ unless asserted { INFO@mark `DY1 a dynamic assert of holding conditions fails` }
 
 // A setting changed for a block is back once the block is left
 Setting := class { static level = 1 }
-unless (with (Setting.level = 2) { Setting.level }) == 2 { INFO@mark `WI1 a setting is not seen inside the block it is given for` }
+unless (
+  with Setting.level = 2
+  Setting.level
+) == 2 { INFO@mark `WI1 a setting is not seen in the context it is set in` }
 unless Setting.level == 1 { INFO@mark `WI2 a setting outlived its block` }
-unless (assume (Setting.level = 3) { Setting.level }) == 3 { INFO@mark `WI3 assume is not with` }
+unless (
+  assume Setting.level = 3
+  Setting.level
+) == 3 { INFO@mark `WI3 assume is not with` }
 
 if Never.admits(5) { INFO@mark `NV1 something is of the type that never returns` }
 

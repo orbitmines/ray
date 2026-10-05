@@ -54,9 +54,9 @@ Language.TUI := class: Language {
 
   rules := {
     {screen: UI.Screen} => Painting(Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y), screen.layers.map(Paint(., screen.scrolled)))
-    {painting: Painting{writes.flatten.every(==.instance_of Write)}} => painting.writes.flatten.for(.onto(painting.grid)) -- painting.grid
+    {painting: Painting{writes.flatten.every(. is Write)}} => painting.writes.flatten.for(.onto(painting.grid)) -- painting.grid
 
-    {paint: Paint{shape ==.instance_of Geometry.Text}} => {
+    {paint: Paint{shape is Geometry.Text}} => {
       text = paint.shape
       lines = text.lines(text.size.x)
       starts = text.starts(text.size.x)
@@ -68,16 +68,16 @@ Language.TUI := class: Language {
           bold: face.weight >= 600, italic: face.style == italic, reverse: UI.Selection.selects(text, starts[row] + .)))].flatten)
       }).puts).flatten
     }
-    {paint: Paint{shape ==.instance_of Geometry.Image && shape.fill}} => paint.area.map(Put(., Picture(paint.shape.source).tinted(. - paint.at, paint.size, paint.shape.fill as Geometry.Color)))
-    {paint: Paint{shape ==.instance_of Geometry.Image}} => paint.area.map(Put(., Picture(paint.shape.source).sampled(. - paint.at, paint.size)))
-    {paint: Paint{shape ==.instance_of Geometry.Canvas}} => paint.shape.draws.rendered(Language.Direct.level).rows -- (rows => paint.area.map(at => (at - paint.at) -- (dot =>
+    {paint: Paint{shape is Geometry.Image && shape.fill}} => paint.area.map(Put(., Picture(paint.shape.source).tinted(. - paint.at, paint.size, paint.shape.fill as Geometry.Color)))
+    {paint: Paint{shape is Geometry.Image}} => paint.area.map(Put(., Picture(paint.shape.source).sampled(. - paint.at, paint.size)))
+    {paint: Paint{shape is Geometry.Canvas}} => paint.shape.draws.rendered(Language.Direct.level).rows -- (rows => paint.area.map(at => (at - paint.at) -- (dot =>
       Put(at, Cell(braille(rows[dot.y * 4..<dot.y * 4 + 4].map(.[dot.x * 2..<dot.x * 2 + 2].map(.alpha > 0)))))
     )))
-    {paint: Paint{shape ==.instance_of Geometry.Frame}} => paint.inside(UI.Link(to: paint.shape.source, window: new, origin: paint.shape.origin, size: paint.shape.size, stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
+    {paint: Paint{shape is Geometry.Frame}} => paint.inside(UI.Link(to: paint.shape.source, window: new, origin: paint.shape.origin, size: paint.shape.size, stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
       Geometry.Text("▶ " + (paint.shape.title.empty ? paint.shape.source as String : paint.shape.title), origin: paint.shape.origin + px_per_cell, size: paint.shape.size - px_per_cell * 2)
     ]))
-    {paint: Paint{shape ==.instance_of UI.Link}} => [Boxed(paint), paint.area.map(Linked(., paint.shape.to))]
-    {paint: Paint{shape ==.instance_of UI.Input}} => [Boxed(paint), paint.inside(paint.shape.face), Selected(paint)]
+    {paint: Paint{shape is UI.Link}} => [Boxed(paint), paint.area.map(Linked(., paint.shape.to))]
+    {paint: Paint{shape is UI.Input}} => [Boxed(paint), paint.inside(paint.shape.face), Selected(paint)]
     {paint: Paint} => Boxed(paint)
 
     {boxed: Boxed} => boxed.paint -- (paint => [
@@ -88,11 +88,11 @@ Language.TUI := class: Language {
       Scrollbar(paint) if paint.shape.overflow == scroll,
       paint.area.map(Underlined(.)) if UI.Focus.current === paint.shape
     ])
-    {filled: Filled{paint.shape.fill ==.instance_of Geometry.Color}} => filled.paint.area.map(Background(., filled.paint.shape.fill))
-    {filled: Filled{paint.shape.fill ==.instance_of Geometry.Gradient}} => filled.paint.area.map(Background(., filled.paint.shape.fill.at(.x / UI.Viewport.size.x * px_per_cell.x)))
+    {filled: Filled{paint.shape.fill is Geometry.Color}} => filled.paint.area.map(Background(., filled.paint.shape.fill))
+    {filled: Filled{paint.shape.fill is Geometry.Gradient}} => filled.paint.area.map(Background(., filled.paint.shape.fill.at(.x / UI.Viewport.size.x * px_per_cell.x)))
     {filled: Filled} => []
-    {shade: Shade{effect ==.instance_of Geometry.Opacity}} => shade.paint.area.map(Faded(., shade.effect.amount))
-    {shade: Shade{effect ==.instance_of Geometry.Shadow}} => shade.paint.area.map(Shaded(. + cells(shade.effect.offset)))
+    {shade: Shade{effect is Geometry.Opacity}} => shade.paint.area.map(Faded(., shade.effect.amount))
+    {shade: Shade{effect is Geometry.Shadow}} => shade.paint.area.map(Shaded(. + cells(shade.effect.offset)))
     {shade: Shade} => []
     {border: Border} => {
       paint = border.paint
@@ -103,10 +103,10 @@ Language.TUI := class: Language {
       sides = paint.shape.stroke.sides
       [
         (from.x..to.x).map(Underlined(Geometry.Vector(., to.y))) if sides == bottom,
-        (from.x + 1..<to.x).map(Put(Geometry.Vector(., from.y), Cell("─", foreground: ink))) if sides ==.instance_of (all | top | horizontal),
-        (from.x + 1..<to.x).map(Put(Geometry.Vector(., to.y), Cell("─", foreground: ink))) if sides ==.instance_of (all | horizontal),
-        (from.y + 1..<to.y).map(Put(Geometry.Vector(from.x, .), Cell("│", foreground: ink))) if sides ==.instance_of (all | left | vertical),
-        (from.y + 1..<to.y).map(Put(Geometry.Vector(to.x, .), Cell("│", foreground: ink))) if sides ==.instance_of (all | right | vertical),
+        (from.x + 1..<to.x).map(Put(Geometry.Vector(., from.y), Cell("─", foreground: ink))) if sides is (all | top | horizontal),
+        (from.x + 1..<to.x).map(Put(Geometry.Vector(., to.y), Cell("─", foreground: ink))) if sides is (all | horizontal),
+        (from.y + 1..<to.y).map(Put(Geometry.Vector(from.x, .), Cell("│", foreground: ink))) if sides is (all | left | vertical),
+        (from.y + 1..<to.y).map(Put(Geometry.Vector(to.x, .), Cell("│", foreground: ink))) if sides is (all | right | vertical),
         [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].map((at, i) => Put(at, Cell(corners[i], foreground: ink))) if sides == all
       ]
     }
@@ -178,10 +178,10 @@ Language.TUI := class: Language {
     {start: ANSI.Start} => Terminal.entering, "\e[?9001h", Terminal.clearing
   }
   Kitty := {
-    {paint: Paint{shape ==.instance_of Geometry.Image}} => Graphic(paint.at, ("\e_Ga=T,f=100;", Base64.encoded(IO.File(paint.shape.source as String).bytes), "\e\\"))
+    {paint: Paint{shape is Geometry.Image}} => Graphic(paint.at, ("\e_Ga=T,f=100;", Base64.encoded(IO.File(paint.shape.source as String).bytes), "\e\\"))
   }
   Sixel := {
-    {paint: Paint{shape ==.instance_of Geometry.Image}} => Graphic(paint.at, ("\eP0;0;0q", sixel(IO.read(paint.shape.source) as Geometry.Raster), "\e\\"))
+    {paint: Paint{shape is Geometry.Image}} => Graphic(paint.at, ("\eP0;0;0q", sixel(IO.read(paint.shape.source) as Geometry.Raster), "\e\\"))
   }
   static sixel (raster: Geometry.Raster) => raster.pixels.unique.enumerate -- (palette => (
     palette.map("#", .index, ";2;", .value.red * 100 / 255, ";", .value.green * 100 / 255, ";", .value.blue * 100 / 255),
@@ -198,7 +198,7 @@ Language.TUI := class: Language {
   static read => (Terminal.read ?? "") ~= (events: Event[]) -- .events.for(.apply)
   Event := Key | Mouse | Paste | FocusChange | Resize
   Key := class ("\e[", (modifiers: "1;", modifier: Decimal)?, code: "A" | "B" | "C" | "D" | "H" | "F" | "Z") | ("\eO", code: "P" | "Q" | "R" | "S") | ("\e[", page: "5" | "6", "~") | ("\e", alt: Char) | (code: Char) => {
-    lettered => code && (code as Number) < 27 && !(code ==.instance_of ("\r" | "\t"))
+    lettered => code && (code as Number) < 27 && !(code is ("\r" | "\t"))
     static Named = { "A": Keyboard.Direction.up, "w": Keyboard.Direction.up, "B": Keyboard.Direction.down, "s": Keyboard.Direction.down, "C": Keyboard.Direction.right, "d": Keyboard.Direction.right,
       "D": Keyboard.Direction.left, "a": Keyboard.Direction.left, "Q": Keyboard.f2, "\r": Keyboard.enter, "\t": Keyboard.tab, "Z": Keyboard.tab }
     name => page ? Keyboard.named(page == "5" ? "PageUp" : "PageDown") : alt ? Keyboard.named(alt as String) : lettered ? Keyboard.named(((code as Number) + 96) as Char as String) : Named[code] ?? Keyboard.key(code)
@@ -206,9 +206,9 @@ Language.TUI := class: Language {
     control => modifier && (modifier - 1) / 4 % 2 == 1 || lettered
     apply => UI.Keyboard.press(name, shift, control, alt != None) -- {
       UI.Viewport.scroll((page == "5" ? -1 : 1) * UI.Viewport.size.y) if page
-      UI.Selection.move(name) if name ==.instance_of Keyboard.Direction && !shift && !control
-      UI.Selection.skip(name) if name ==.instance_of Keyboard.Direction && control
-      UI.Selection.expand(name) if name ==.instance_of Keyboard.Direction && shift
+      UI.Selection.move(name) if name is Keyboard.Direction && !shift && !control
+      UI.Selection.skip(name) if name is Keyboard.Direction && control
+      UI.Selection.expand(name) if name is Keyboard.Direction && shift
       UI.Focus.current = UI.Focus.next(UI.scene) if name == Keyboard.tab && !shift
       UI.Focus.current = UI.Focus.previous(UI.scene) if name == Keyboard.tab && shift
       (UI.Focus.current ?? UI.Selection.current)?.activate if name == Keyboard.enter

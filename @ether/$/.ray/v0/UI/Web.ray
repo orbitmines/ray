@@ -4,7 +4,7 @@ Language.Web := class: Language {
     Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | Text | Raw)[] = [] {
       static made = 0
       id: String = attributes{.name == "id"}.first?.value ?? ("e" + ((Element.made += 1) as String))
-      void => tag ==.instance_of ("img" | "input" | "br" | "meta" | "link" | "source")
+      void => tag is ("img" | "input" | "br" | "meta" | "link" | "source")
     }
     Text := class = text: String
     Raw := class = text: String
@@ -51,10 +51,10 @@ Language.Web := class: Language {
     }
     Fragment := Tag | Comment
     child (value) => value == None ? []
-      : value ==.instance_of String ? [Text(value)]
-      : value ==.instance_of Number ? [Text(value as String)]
-      : value ==.instance_of (Element | Text | Raw) ? [value]
-      : value ==.instance_of Iterable ? value.map(child).flatten(1)
+      : value is String ? [Text(value)]
+      : value is Number ? [Text(value as String)]
+      : value is (Element | Text | Raw) ? [value]
+      : value is Iterable ? value.map(child).flatten(1)
       : [value]
 
     rules := CSS.values + {
@@ -96,9 +96,9 @@ Language.Web := class: Language {
       {outline: Geometry.Outline} => @html <svg {Named(outline)} viewBox="0 0 {outline.size.x as px} {outline.size.y as px}">
         <path d="M{outline.from.x as px} {outline.from.y as px}{outline.segments.map(Path(.))}{" Z" if outline.closed}" />
       </svg>
-      {path: Path{segment ==.instance_of Geometry.Quadratic}} => path.segment -- (" Q", .control.x, " ", .control.y, " ", .to.x, " ", .to.y)
-      {path: Path{segment ==.instance_of Geometry.Cubic}} => path.segment -- (" C", .first.x, " ", .first.y, " ", .second.x, " ", .second.y, " ", .to.x, " ", .to.y)
-      {path: Path{segment ==.instance_of Geometry.Arc}} => path.segment -- (" A", .radius.x, " ", .radius.y, " ", .rotation, " ", .large ? 1 : 0, " ", .sweep ? 1 : 0, " ", .to.x, " ", .to.y)
+      {path: Path{segment is Geometry.Quadratic}} => path.segment -- (" Q", .control.x, " ", .control.y, " ", .to.x, " ", .to.y)
+      {path: Path{segment is Geometry.Cubic}} => path.segment -- (" C", .first.x, " ", .first.y, " ", .second.x, " ", .second.y, " ", .to.x, " ", .to.y)
+      {path: Path{segment is Geometry.Arc}} => path.segment -- (" A", .radius.x, " ", .radius.y, " ", .rotation, " ", .large ? 1 : 0, " ", .sweep ? 1 : 0, " ", .to.x, " ", .to.y)
       {path: Path} => " L", path.segment.x, " ", path.segment.y
 
       {form: UI.Form} => @html <form {Named(form)}>{form.inputs}</form>
@@ -185,7 +185,7 @@ Language.Web := class: Language {
       built (reading: Program) => None
     }
     Declaration := class (Char.Blank[], property: Property, Char.Blank[], ":", Char.Blank[], value: (Language.Hole | Language.Escape | (!(";" | "{" | "}" | \\))[]{length > 0})[], ";"?) => {
-      valued (reading: Program) => Language.composed(value.enumerate.map(.index == value.count - 1 && .value ==.instance_of String ? .value.trimmed_end : .value){!(. ==.instance_of String && .empty)}, reading)
+      valued (reading: Program) => Language.composed(value.enumerate.map(.index == value.count - 1 && .value is String ? .value.trimmed_end : .value){!(. is String && .empty)}, reading)
       built (reading: Program) => valued(reading) -- (. == None ? None : (Language.joined(property, reading), .))
     }
     Declarations := class (Char.Blank[], "{", items: (Declaration | Language.Splice | Comment)[], Char.Blank[], "}") => {
@@ -195,7 +195,7 @@ Language.Web := class: Language {
       built (reading: Program) => Rule(Language.joined(selector, reading).trimmed, block.built(reading))
     }
     Within := class (Char.Blank[], "@", prelude: Prelude, "{", rules: (Ruleset | Comment)[], Char.Blank[], "}") => {
-      dynamically assert !(prelude.first ==.instance_of String && prelude.first.starts_with("keyframes"))
+      dynamically assert !(prelude.first is String && prelude.first.starts_with("keyframes"))
       built (reading: Program) => ("@" + Language.joined(prelude, reading).trimmed) -- (within => rules.map(.built(reading)){!= None}.map(Rule(.selector, .declarations, within: within)))
         -- (.count == 1 ? .first : .)
     }
@@ -209,11 +209,11 @@ Language.Web := class: Language {
     Fragment := Keyframed | Within | Ruleset | Declarations
 
     values := {
-      {paint: Paint{value ==.instance_of Geometry.Inherited}} => "currentColor"
-      {paint: Paint{value ==.instance_of Geometry.Color}} => "rgba(", paint.value.red, ",", paint.value.green, ",", paint.value.blue, ",", paint.value.alpha, ")"
-      {paint: Paint{value ==.instance_of Geometry.Gradient}} => paint.value.kind as String, "-gradient(", (paint.value.angle, "turn,") if paint.value.kind == linear, paint.value.stops.map(("," if .index > 0), Paint(.color), " ", .at * 100, "%"), ")"
-      {paint: Paint{value ==.instance_of Geometry.Pattern}} => "url(#", paint.value.shape.id, ")"
-      {measure: Measure{length ==.instance_of Number}} => measure.length, "px"
+      {paint: Paint{value is Geometry.Inherited}} => "currentColor"
+      {paint: Paint{value is Geometry.Color}} => "rgba(", paint.value.red, ",", paint.value.green, ",", paint.value.blue, ",", paint.value.alpha, ")"
+      {paint: Paint{value is Geometry.Gradient}} => paint.value.kind as String, "-gradient(", (paint.value.angle, "turn,") if paint.value.kind == linear, paint.value.stops.map(("," if .index > 0), Paint(.color), " ", .at * 100, "%"), ")"
+      {paint: Paint{value is Geometry.Pattern}} => "url(#", paint.value.shape.id, ")"
+      {measure: Measure{length is Number}} => measure.length, "px"
       {measure: Measure{length.quantities.count > 1}} => "calc(", measure.length.quantities.map(.quantity, .unit.symbol).join(" + "), ")"
       {measure: Measure} => measure.length.amount, measure.length.unit.symbol
     }
@@ -276,7 +276,7 @@ Language.Web := class: Language {
       {layout: Layout} => @css { display: flex; flex-direction: column; }
 
       {width: Width} => width.constraint -- (constraint => @css {
-        width: {(constraint.share * 100, "%") if constraint.share ==.instance_of Number};
+        width: {(constraint.share * 100, "%") if constraint.share is Number};
         width: {(constraint.stops.first.share * 100, "%") if constraint.responsive};
         max-width: {Measure(constraint.most) if constraint.most != None};
         min-width: {Measure(constraint.least) if constraint.least != None};
@@ -297,15 +297,15 @@ Language.Web := class: Language {
 
       {positioned: Positioned{shape.position.kind == anchored}} => []
       {positioned: Positioned} => positioned.shape -- (shape => @css {
-        position: {(shape.position.kind as String) if shape.position.kind ==.instance_of (sticky | fixed | absolute)};
+        position: {(shape.position.kind as String) if shape.position.kind is (sticky | fixed | absolute)};
         position: {"relative" if shape.position.kind == flow && shape.children.some(.position.kind == absolute)};
         {[("top", shape.position.top), ("right", shape.position.right), ("bottom", shape.position.bottom), ("left", shape.position.left)]{.1 != None}.map((.0, Measure(.1)))}
       })
 
-      {effected: Effected{effect ==.instance_of Geometry.Opacity}} => @css { opacity: {effected.effect.amount}; }
-      {effected: Effected{effect ==.instance_of Geometry.Shadow}} => effected.effect -- (shadow => @css { box-shadow: {"inset " if shadow.inset}{shadow.offset.x as px}px {shadow.offset.y as px}px {shadow.blur as px}px {shadow.spread as px}px {Paint(shadow.color)}; })
-      {effected: Effected{effect ==.instance_of Geometry.Blur}} => @css { filter: blur({effected.effect.radius as px}px); }
-      {effected: Effected{effect ==.instance_of Geometry.Filter}} => @css { filter: {effected.effect.kind as String}({effected.effect.amount}); }
+      {effected: Effected{effect is Geometry.Opacity}} => @css { opacity: {effected.effect.amount}; }
+      {effected: Effected{effect is Geometry.Shadow}} => effected.effect -- (shadow => @css { box-shadow: {"inset " if shadow.inset}{shadow.offset.x as px}px {shadow.offset.y as px}px {shadow.blur as px}px {shadow.spread as px}px {Paint(shadow.color)}; })
+      {effected: Effected{effect is Geometry.Blur}} => @css { filter: blur({effected.effect.radius as px}px); }
+      {effected: Effected{effect is Geometry.Filter}} => @css { filter: {effected.effect.kind as String}({effected.effect.amount}); }
       {effected: Effected} => []
 
       {typeface: Typeface} => typeface.font -- (font => @css {
@@ -318,17 +318,17 @@ Language.Web := class: Language {
         letter-spacing: {Measure(font.tracking) if font.tracking != 0};
       })
 
-      {specific: Specific{shape ==.instance_of Geometry.Text}} => specific.shape -- (text => @css {
+      {specific: Specific{shape is Geometry.Text}} => specific.shape -- (text => @css {
         text-align: {text.align as String}; text-overflow: {text.overflow as String}; white-space: {WhiteSpace[text.white_space]}; overflow-wrap: {"anywhere" if text.wrap == anywhere};
       })
-      {specific: Specific{shape ==.instance_of Geometry.Image && shape.fill}} => specific.shape -- (image => @css {
+      {specific: Specific{shape is Geometry.Image && shape.fill}} => specific.shape -- (image => @css {
         object-fit: {image.fit as String}; display: inline-block; mask: {Mask(image)}; -webkit-mask: {Mask(image)};
       })
-      {specific: Specific{shape ==.instance_of Geometry.Image}} => @css { object-fit: {specific.shape.fit as String}; }
-      {specific: Specific{shape ==.instance_of Geometry.Frame}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
+      {specific: Specific{shape is Geometry.Image}} => @css { object-fit: {specific.shape.fit as String}; }
+      {specific: Specific{shape is Geometry.Frame}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
       {specific: Specific} => []
 
-      {placeholder: Placeholder{shape ==.instance_of UI.Input && shape.placeholder_color}} => @css #{placeholder.shape.id}::placeholder { color: {Paint(placeholder.shape.placeholder_color)}; }
+      {placeholder: Placeholder{shape is UI.Input && shape.placeholder_color}} => @css #{placeholder.shape.id}::placeholder { color: {Paint(placeholder.shape.placeholder_color)}; }
       {placeholder: Placeholder} => []
 
       {switchable: Switchable{shape.dynamics.some(.target == "class")}} => UI.Theme.styles.map(style => @css #{switchable.shape.id}.{style.name} { {Styling(style.name)} })
@@ -338,7 +338,7 @@ Language.Web := class: Language {
       {responsive: Responsive} => responsive.constraint.stops -- (stops => stops.zip([stops.rest, None]).map((at, next) => @css @container (min-width:{Compiler.reduced(Measure(at.width), values) as String}) {
         #{responsive.shape.id} { width: {Step(responsive.constraint, at, next)}; }
       }))
-      {step: Step{constraint.share ==.instance_of Geometry.Interpolated && next}} => Chord(step.at, step.next)
+      {step: Step{constraint.share is Geometry.Interpolated && next}} => Chord(step.at, step.next)
       {step: Step} => step.at.share * 100, "%"
       {chord: Chord} => "calc(", chord.from.share * (chord.from.width as px), "px + (100cqw - ", chord.from.width as px, "px) * ", (chord.to.share * (chord.to.width as px) - chord.from.share * (chord.from.width as px)) / ((chord.to.width - chord.from.width) as px), ")"
 
@@ -374,17 +374,17 @@ Language.Web := class: Language {
 
     written := {
       {linked: Linked{value == None}} => Value(None)
-      {linked: Linked{value ==.instance_of (String | Number | boolean | Location)}} => Value(linked.value)
-      {linked: Linked{value ==.instance_of Iterable}} => Value(linked.value.map(Linked(.)))
+      {linked: Linked{value is (String | Number | boolean | Location)}} => Value(linked.value)
+      {linked: Linked{value is Iterable}} => Value(linked.value.map(Linked(.)))
       {linked: Linked} => Value(Object([("@context", linked.context) if linked.context, linked.value.fields{.value != None}.map((name: .name == "type" ? "@type" : .name, value: Linked(.value)))].flatten))
-      {json: Value{value ==.instance_of Linked}} => json.value
+      {json: Value{value is Linked}} => json.value
       {json: Value{value == None}} => "null"
-      {json: Value{value ==.instance_of boolean}} => json.value ? "true" : "false"
-      {json: Value{value ==.instance_of Number}} => json.value as String
-      {json: Value{value ==.instance_of String}} => "\"", escaped(json.value), "\""
-      {json: Value{value ==.instance_of Location}} => Value(json.value as String)
-      {json: Value{value ==.instance_of Object}} => "{", json.value.entries{.value != None}.map(("," if .index > 0), Value(.name), ":", Value(.value)), "}"
-      {json: Value{value ==.instance_of Iterable}} => "[", json.value.map(("," if .index > 0), Value(.)), "]"
+      {json: Value{value is boolean}} => json.value ? "true" : "false"
+      {json: Value{value is Number}} => json.value as String
+      {json: Value{value is String}} => "\"", escaped(json.value), "\""
+      {json: Value{value is Location}} => Value(json.value as String)
+      {json: Value{value is Object}} => "{", json.value.entries{.value != None}.map(("," if .index > 0), Value(.name), ":", Value(.value)), "}"
+      {json: Value{value is Iterable}} => "[", json.value.map(("," if .index > 0), Value(.)), "]"
       {json: Value} => Value(Object(json.value.fields.map((name: .name, value: .value))))
     }
     write (value) => Compiler.reduced(Value(value), written) as String
@@ -399,7 +399,7 @@ Language.Web := class: Language {
     Listen := class = target: Expression, event: String, body: Statement[]
     Call := class = function: Expression, arguments: Expression[] = []
     Function := class = name: String?, parameters: String[], body: Statement[] {
-      statements => body.count == 1 && body.first ==.instance_of Return ? [body.first.value] : body
+      statements => body.count == 1 && body.first is Return ? [body.first.value] : body
     }
     Return := class = value: Expression
     If := class = condition: Expression, then: Statement[], otherwise: Statement[] = []
@@ -415,20 +415,20 @@ Language.Web := class: Language {
     Expression := String | Number | Call | Function | Raw | Member | Operation | Ternary | Prefix | Record | Listing | Literal | ById
     Built := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | Member | Operation | Ternary | Prefix | Record | Listing | Literal | ById
 
-    spliced (value) => value ==.instance_of Built ? value : Literal(value)
+    spliced (value) => value is Built ? value : Literal(value)
     Precedence = { "??": 1, "||": 1, "&&": 2, "===": 3, "!==": 3, "==": 3, "!=": 3, "<": 4, ">": 4, "<=": 4, ">=": 4, "+": 5, "-": 5, "*": 6, "/": 6, "%": 6 }
     folded (operands, operators) => operators.empty ? operands.first
       : operators.map(Precedence[.]).min -- (lowest => operators.enumerate{Precedence[.value] == lowest}.last.index)
         -- (at => Operation(folded(operands[..at], operators[..<at]), operators[at], folded(operands[at + 1..], operators[at + 1..])))
-    called (callee, arguments) => callee ==.instance_of Member && callee.member == "addEventListener" && arguments.count == 2 && arguments.first ==.instance_of Literal && arguments.last ==.instance_of Function
+    called (callee, arguments) => callee is Member && callee.member == "addEventListener" && arguments.count == 2 && arguments.first is Literal && arguments.last is Function
         ? Listen(callee.object, arguments.first.value, arguments.last.statements)
-      : callee == "effect" && arguments.count == 2 && arguments.first ==.instance_of Literal && arguments.last ==.instance_of Function
+      : callee == "effect" && arguments.count == 2 && arguments.first is Literal && arguments.last is Function
         ? Effect(arguments.first.value, arguments.last.statements)
-      : callee ==.instance_of Member && callee.object == "document" && callee.member == "getElementById" && arguments.count == 1 && arguments.first ==.instance_of Literal
+      : callee is Member && callee.object == "document" && callee.member == "getElementById" && arguments.count == 1 && arguments.first is Literal
         ? ById(arguments.first.value)
       : Call(callee, arguments)
-    statements (part, reading: Program) => part ==.instance_of Block ? part.built(reading)
-      : part ==.instance_of Language.Hole ? [spliced(part.built(reading))]
+    statements (part, reading: Program) => part is Block ? part.built(reading)
+      : part is Language.Hole ? [spliced(part.built(reading))]
       : [part.built(reading)]
 
     Identifier = (Char.Letter | "_" | "$", (Char.Word | "$")[])
@@ -456,10 +456,10 @@ Language.Web := class: Language {
       built (reading: Program) => inner.built(reading)
     }
     Item := class (Char.Blank[], spread: "..."?, value: Term, Char.Blank[], ","?) => {
-      built (reading: Program) => value.built(reading) -- (spread && . ==.instance_of Literal && .value ==.instance_of Iterable && !(.value ==.instance_of String) ? .value.map(spliced) : [.])
+      built (reading: Program) => value.built(reading) -- (spread && . is Literal && .value is Iterable && !(.value is String) ? .value.map(spliced) : [.])
     }
     Listed := class ("[", items: Item[], Char.Blank[], "]") => {
-      built (reading: Program) => items.map(.built(reading)).flatten(1) -- (.every(==.instance_of Literal) ? Literal(.map(.value)) : Listing(.))
+      built (reading: Program) => items.map(.built(reading)).flatten(1) -- (.every(. is Literal) ? Literal(.map(.value)) : Listing(.))
     }
     Keyed := class (Char.Blank[], name: Identifier, Char.Blank[], ":", Char.Blank[], value: Term, Char.Blank[], ","?) => {
       built (reading: Program) => (name: name, value: value.built(reading))
@@ -469,19 +469,19 @@ Language.Web := class: Language {
     }
     Arrow := class ((("(", parameters: (!")")[], ")") | parameter: Identifier), Char.Blank[], "=>", Char.Blank[], body: Block | Term) => {
       named => parameter ? [parameter] : parameters.split(",").map(.trimmed){!.empty}
-      built (reading: Program) => Function(None, named, body ==.instance_of Block ? body.built(reading) : [Return(body.built(reading))])
+      built (reading: Program) => Function(None, named, body is Block ? body.built(reading) : [Return(body.built(reading))])
     }
     Atom := Arrow | Paren | Listed | Recorded | Quote | Numeral | Pattern | Constant | Language.Hole | Named
 
     Dotted := class (".", member: Identifier | Language.Hole) => {
-      applied (object, reading: Program) => Member(object, member ==.instance_of Language.Hole ? member.built(reading) : member)
+      applied (object, reading: Program) => Member(object, member is Language.Hole ? member.built(reading) : member)
     }
     Arguments := class ("(", items: Item[], Char.Blank[], ")") => {
       applied (object, reading: Program) => called(object, items.map(.built(reading)).flatten(1))
     }
     Prefixing := class (operator: "!" | "-" | "new " | "typeof ", Char.Blank[]) => { }
     Unit := class (prefixes: Prefixing[], atom: Atom, accesses: (Dotted | Arguments)[]) => {
-      start (reading: Program) => atom ==.instance_of Language.Hole && accesses.empty ? spliced(atom.built(reading)) : atom.built(reading)
+      start (reading: Program) => atom is Language.Hole && accesses.empty ? spliced(atom.built(reading)) : atom.built(reading)
       accessed (reading: Program) => accesses.reduce(start(reading)) (acc, current) => current.applied(acc, reading)
       prefixed (operators, operand) => operators.empty ? operand : Prefix(operators.first.operator, prefixed(operators[1..], operand))
       built (reading: Program) => prefixed(prefixes, accessed(reading))
@@ -509,8 +509,8 @@ Language.Web := class: Language {
     }
     Sentence := Declared | Returned | Branch | Defined | Language.Hole | Term
     Line := class (Char.Blank[], sentence: Sentence, (" " | \t)[], ";"?) => {
-      built (reading: Program) => sentence ==.instance_of Language.Hole
-        ? sentence.built(reading) -- (. ==.instance_of Iterable && !(. ==.instance_of String) ? .map(spliced) : [spliced(.)])
+      built (reading: Program) => sentence is Language.Hole
+        ? sentence.built(reading) -- (. is Iterable && !(. is String) ? .map(spliced) : [spliced(.)])
         : [sentence.built(reading)]
     }
     Block := class ("{", lines: Line[], Char.Blank[], "}") => {
@@ -605,13 +605,13 @@ Language.Web := class: Language {
       ]
       {updated: Updated{dynamic.target == "class"}} => @js effect({updated.dynamic.reads}, () => document.getElementById({updated.shape.id}).className = {updated.dynamic.compiled{O: expressions}()})
       {updated: Updated} => @js effect({updated.dynamic.reads}, () => { {updated.dynamic.compiled{O: expressions}()} })
-      {mirrored: Mirrored{shape ==.instance_of UI.TextArea && shape.language}} => @js document.getElementById("{mirrored.shape.id}-text").addEventListener("input", (event) => document.getElementById("{mirrored.shape.id}-paint").textContent = event.target.value)
+      {mirrored: Mirrored{shape is UI.TextArea && shape.language}} => @js document.getElementById("{mirrored.shape.id}-text").addEventListener("input", (event) => document.getElementById("{mirrored.shape.id}-paint").textContent = event.target.value)
       {mirrored: Mirrored} => []
-      {typed: Typed{shape ==.instance_of UI.Input}} => @js document.getElementById({typed.shape.id}).addEventListener("input", (event) => ray.set({typed.shape.id}, event.target.value))
+      {typed: Typed{shape is UI.Input}} => @js document.getElementById({typed.shape.id}).addEventListener("input", (event) => ray.set({typed.shape.id}, event.target.value))
       {typed: Typed} => []
-      {drawing: Drawing{shape ==.instance_of Geometry.Canvas}} => @js effect({drawing.shape.draws.reads}, () => ray.draw({drawing.shape.id}, {drawing.shape.draws.rendered(Language.Direct.level)}))
+      {drawing: Drawing{shape is Geometry.Canvas}} => @js effect({drawing.shape.draws.reads}, () => ray.draw({drawing.shape.id}, {drawing.shape.draws.rendered(Language.Direct.level)}))
       {drawing: Drawing} => []
-      {popping: Popping{shape ==.instance_of UI.Popover && shape.trigger != always}} => popping.shape.anchor_in(popping.scene).id -- (anchor => [
+      {popping: Popping{shape is UI.Popover && shape.trigger != always}} => popping.shape.anchor_in(popping.scene).id -- (anchor => [
         ["pointerenter", "focusin"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({popping.shape.id}).showPopover())),
         ["pointerleave", "focusout"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({popping.shape.id}).hidePopover()))
       ])
@@ -656,7 +656,7 @@ Language.Web := class: Language {
       (path: "index.html", content: HTML.Page(solved.shape)),
       (path: "style.css", content: CSS.Page(solved.shape)),
       (path: "app.js", content: JS.Page(solved.shape)),
-      solved.shape.expand{==.instance_of (Geometry.Image | Geometry.Video | Geometry.Audio)}.map((path: .source.name, content: .source)),
+      solved.shape.expand{. is (Geometry.Image | Geometry.Video | Geometry.Audio)}.map((path: .source.name, content: .source)),
       [UI.Navigation.icon, UI.Navigation.apple_icon, UI.Navigation.manifest]{!= None}.map((path: .name, content: .))
     ].flatten)
   }
@@ -670,7 +670,7 @@ Language.Web := class: Language {
     Mount := class = node: HTML.Element | HTML.Text | HTML.Raw, parent: String?
     Listening := class = element: HTML.Element
     protocol := {
-      {mount: Mount{node ==.instance_of HTML.Element}} => mount.node -- (element => [
+      {mount: Mount{node is HTML.Element}} => mount.node -- (element => [
         line(["create", element.id, element.tag]),
         element.attributes.map(line(["attribute", element.id, .name, (.value as String).escaped_line])),
         Listening(element),
@@ -678,8 +678,8 @@ Language.Web := class: Language {
         line(["append", mount.parent, element.id]) if mount.parent
       ])
       {mount: Mount} => line(["text", mount.parent, mount.node.text.escaped_line])
-      {listening: Listening{element.tag ==.instance_of ("a" | "button")}} => [line(["listen", listening.element.id, "click"])]
-      {listening: Listening{element.tag ==.instance_of ("input" | "select" | "textarea")}} => [line(["listen", listening.element.id, "input"]), line(["listen", listening.element.id, "focus"])]
+      {listening: Listening{element.tag is ("a" | "button")}} => [line(["listen", listening.element.id, "click"])]
+      {listening: Listening{element.tag is ("input" | "select" | "textarea")}} => [line(["listen", listening.element.id, "input"]), line(["listen", listening.element.id, "focus"])]
       {listening: Listening} => []
     }
     mounted (element: HTML.Element) => Compiler.reduced(Mount(element), protocol) as String
@@ -697,7 +697,7 @@ Language.Web := class: Language {
       {event: Event{kind == "scroll"}} => UI.Viewport.scrolled = (event.value as Decimal) * 1px
       {event: Event{kind == "pointerdown"}} => UI.Pointer.down(event.at.position, time: event.at.time)
       {event: Event{kind == "pointermove"}} => UI.Pointer.moved(event.at.position, event.at.time)
-      {event: Event{kind ==.instance_of ("pointerup" | "pointercancel")}} => UI.Pointer.up(event.at.position, event.at.time)
+      {event: Event{kind is ("pointerup" | "pointercancel")}} => UI.Pointer.up(event.at.position, event.at.time)
       {event: Event{kind == "keydown"}} => event.value.split(" ") -- UI.Keyboard.press(.first, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
       {event: Event{kind == "keyup"}} => UI.Keyboard.release(event.value.split(" ").first)
       {event: Event{kind == "size"}} => event.shape && (event.value ~= (width: Decimal, " ", height: Decimal)) -- (event.shape.size = Geometry.Vector(.width * 1px, .height * 1px))

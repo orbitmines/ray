@@ -9,7 +9,7 @@ Geometry := class {
     length => √(x ^ 2 + y ^ 2 + z ^ 2)
     dimensions => [x, y, z]
   }
-  Length := Quantity{unit ==.instance_of (px | pt | em | rem | % | vw | vh | cell | m)}
+  Length := Quantity{unit is (px | pt | em | rem | % | vw | vh | cell | m)}
 
   Transform := class = matrix: Number[][] = identity {
     static identity = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
@@ -67,9 +67,9 @@ Geometry := class {
   }
   Text := class: Shape = text: String, font: Font = Font(), align: start | center | end | justify = start, wrap: normal | none | anywhere = normal, white_space: normal | nowrap | pre | pre_wrap | pre_line = pre_line, overflow: clip | ellipsis = clip, direction: left-to-right | right-to-left = left-to-right, runs: Run[] = [] {
     static Run := class = from: Number, to: Number, color: Paint?, fill: Paint?, font: Font?
-    kept_spaces => white_space ==.instance_of (pre | pre_wrap)
-    kept_lines => white_space ==.instance_of (pre | pre_wrap | pre_line)
-    wraps => wrap != none && white_space ==.instance_of (normal | pre_wrap | pre_line)
+    kept_spaces => white_space is (pre | pre_wrap)
+    kept_lines => white_space is (pre | pre_wrap | pre_line)
+    wraps => wrap != none && white_space is (normal | pre_wrap | pre_line)
     collapsed => (kept_lines ? text.lines : [text.lines.join(" ")]).map(kept_spaces ? . : .words.join(" "))
     shown => collapsed.map(line => font.case.match
       upper => line.upper_case
@@ -122,10 +122,10 @@ Geometry := class {
     outer => size + margin.total
     narrowed (narrowing: Program) => narrowing{O: Narrowing}().for(this + .) -- this
     {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
-    texts => expand{==.instance_of Text}
+    texts => expand{. is Text}
     shown_transform => animations{.property == "transform"}.last?.value ?? transform
-    in_place => children{.position.kind ==.instance_of (flow | sticky | absolute)}
-    lifted => expand{.position.kind ==.instance_of (fixed | anchored) && .visible}.sort_by(.layer)
+    in_place => children{.position.kind is (flow | sticky | absolute)}
+    lifted => expand{.position.kind is (fixed | anchored) && .visible}.sort_by(.layer)
     moved (by: Vector) => (origin = origin + by) -- children.for(.moved(by)) -- this
     at (point: Vector) => visible ? [children.sort_by(-.layer).map(.at(point)).flatten, this if contains(transform.inverse.applied(point - origin))] : []
     contains (point: Vector) => 0 <= point.x <= size.x && 0 <= point.y <= size.y
@@ -139,7 +139,7 @@ Geometry := class {
     static absolute (top: Length?, right: Length?, bottom: Length?, left: Length?) => Position(absolute, top, right, bottom, left)
     static anchored (to: Shape, side: Side = bottom) => Position(anchored, anchor: to, side: side)
     static inset (kind: fixed | absolute, length: Length = 0) => Position(kind, length, length, length, length)
-    flowing => kind ==.instance_of (flow | sticky)
+    flowing => kind is (flow | sticky)
   }
   Edges := class = top: Length = 0px, right: Length = 0px, bottom: Length = 0px, left: Length = 0px {
     static (spacings: Spacing[]) as (=== Edges) => Edges(spacings.top.sum ?? 0px, spacings.right.sum ?? 0px, spacings.bottom.sum ?? 0px, spacings.left.sum ?? 0px)
@@ -181,12 +181,12 @@ Geometry := class {
 
   Spacing := class = amount: Vector = Vector(), from: From = border, sides: Side = all {
     static From := enum border | shape
-    top => sides ==.instance_of (all | top | vertical) ? Pixels(amount.y) : 0px
-    bottom => sides ==.instance_of (all | bottom | vertical) ? Pixels(amount.y) : 0px
-    left => sides ==.instance_of (all | left | horizontal) ? Pixels(amount.x) : 0px
-    right => sides ==.instance_of (all | right | horizontal) ? Pixels(amount.x) : 0px
+    top => sides is (all | top | vertical) ? Pixels(amount.y) : 0px
+    bottom => sides is (all | bottom | vertical) ? Pixels(amount.y) : 0px
+    left => sides is (all | left | horizontal) ? Pixels(amount.x) : 0px
+    right => sides is (all | right | horizontal) ? Pixels(amount.x) : 0px
   }
-  Pixels := (length: Length | Number) => length ==.instance_of Number ? length * 1px
+  Pixels := (length: Length | Number) => length is Number ? length * 1px
     : length.quantities.map((quantity, unit) => unit.symbol.match
       "em" | "rem" => quantity * 16px
       "pt" => quantity * 4 / 3 * 1px
@@ -194,8 +194,8 @@ Geometry := class {
     ).sum
   Constraint := class = dimension: "x" | "y" | "z", least: Length?, most: Length?, share: (Number | Interpolated | Steps | Breakpoint[])?, align: Align?, aspect: Number?, columns: Number?, wrap: boolean = false {
     admits (length: Length) => (least == None || least <= length) && (most == None || length <= most)
-    responsive => share ==.instance_of (Interpolated | Steps | Breakpoint[])
-    stops => share ==.instance_of Breakpoint[] ? (share as Steps).sorted : share.sorted
+    responsive => share is (Interpolated | Steps | Breakpoint[])
+    stops => share is Breakpoint[] ? (share as Steps).sorted : share.sorted
   }
   Breakpoint := class = width: Length, share: Number {
     -> (other: Breakpoint) => Interpolated([this, other])
@@ -235,8 +235,8 @@ Geometry := class {
 
     cascade (shape: Shape, above: (font: Font?, color: Paint?) = (None, None)) => shape -- {
       font = above.font && font ? above.font.merged(font) : font ?? above.font
-      color = color ==.instance_of Inherited || color == None ? above.color : color
-      fill = fill ==.instance_of Inherited ? above.color ?? fill : fill
+      color = color is Inherited || color == None ? above.color : color
+      fill = fill is Inherited ? above.color ?? fill : fill
       children.for(cascade(., (font, color)))
     }
     solve (shape: Shape) => place(cascade(shape), Vector(), available.x) -- (scene => scene.expand{.position.kind == anchored}.for(positioned(., .parent_in(scene))) -- stuck(scene))
@@ -265,7 +265,7 @@ Geometry := class {
         })
       size = Vector(own, constraints.aspect.last ? own / constraints.aspect.last
         : height(shape, (flowing.map(.origin.y + .size.y + .margin.bottom).max ?? inside.y + intrinsic(room)) - origin.y + padding.bottom))
-      children{.position.kind ==.instance_of (fixed | absolute)}.for(positioned(., shape))
+      children{.position.kind is (fixed | absolute)}.for(positioned(., shape))
     }
     positioned (shape: Shape, parent: Shape) => shape -- {
       frame = position.kind.match

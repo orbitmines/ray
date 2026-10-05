@@ -10,9 +10,9 @@ UI := class {
     {styled: Geometry.Shape ^{style}} => styled.styled(style)
     {{literal narrowing}} {narrowed: Geometry.Shape} => narrowed.narrowed(Program(code: external ** narrowing))
     {{literal narrowing}} {narrowed: String} => Geometry.Text(narrowed).narrowed(Program(code: external ** narrowing))
-    {location: Location{.extension ==.instance_of Image.extensions}} => Geometry.Image(location, alt: location.name)
-    {location: Location{.extension ==.instance_of Video.extensions}} => Geometry.Video(location)
-    {location: Location{.extension ==.instance_of Audio.extensions}} => Geometry.Audio(location)
+    {location: Location{.extension is Image.extensions}} => Geometry.Image(location, alt: location.name)
+    {location: Location{.extension is Video.extensions}} => Geometry.Video(location)
+    {location: Location{.extension is Audio.extensions}} => Geometry.Audio(location)
     {location: Location} => Link(to: location, window: location.window, children: [Geometry.Text(location as String)])
     {drawer: Drawer} => Geometry.Box(layer: drawer.layer, children: drawer.shown)
     {shape: Geometry.Shape} => shape
@@ -114,7 +114,7 @@ UI := class {
     text_shown => "‹ ", value as String, " ›"
   }
   Form := class: Geometry.Box = value: * {
-    inputs => value.fields{.value ==.instance_of Choice}.map(.value as Input)
+    inputs => value.fields{.value is Choice}.map(.value as Input)
     submitted => dynamically inputs.every(.value) && Keyboard.enter.pulsed
   }
 
@@ -171,10 +171,10 @@ UI := class {
     shapes: Geometry.Shape[] = []
     expanded: Geometry.Shape[] = []
     range: (shape: Geometry.Shape, from: Number, to: Number)?
-    text: String => range ? Content(range.shape)[range.from..<range.to] : shapes{==.instance_of Geometry.Text}.text.join("")
+    text: String => range ? Content(range.shape)[range.from..<range.to] : shapes{. is Geometry.Text}.text.join("")
     current => shapes.last ?? scene
-    static Content := (shape: Geometry.Shape) => shape ==.instance_of Input ? (shape.empty ? "" : shape.value as String) : shape.texts.text.join("")
-    static shaped (target) => target ==.instance_of Geometry.Shape ? target : scene?.expand{==.instance_of Input && .chosen === target}.first
+    static Content := (shape: Geometry.Shape) => shape is Input ? (shape.empty ? "" : shape.value as String) : shape.texts.text.join("")
+    static shaped (target) => target is Geometry.Shape ? target : scene?.expand{. is Input && .chosen === target}.first
     whole (target) => shaped(target) -- (shape => (range = (shape, 0, Content(shape).length)) -- (shapes = [shape])) if shaped(target)
     selects (shape: Geometry.Shape, index: Number) => range && range.shape === shape && range.from <= index < range.to
 
@@ -212,7 +212,7 @@ UI := class {
     scale: Number = 1
     scrolled: Geometry.Length = 0px
     locked: boolean = false
-    locking => locked || (scene?.expand{==.instance_of Drawer && .open}.nonempty ?? false)
+    locking => locked || (scene?.expand{. is Drawer && .open}.nonempty ?? false)
     scroll (by: Geometry.Length) => (scrolled = (scrolled + by) min ((scene?.content_height ?? size.y) - size.y) max 0px) unless locking
     motion: Geometry.Animation?
     revealing: (shape: Geometry.Shape, align: start | center | end, smooth: boolean, offset: Geometry.Length, within: Geometry.Shape?)?
@@ -233,7 +233,7 @@ UI := class {
   Navigation := class {
     history: Location[] = []
     at: Location => history.last ?? Location(written: "/")
-    go (to: Location | String) => history.push (to ==.instance_of String ? Location(written: to) : to)
+    go (to: Location | String) => history.push (to is String ? Location(written: to) : to)
     back => history.pop_back -- at
     title: String = ""
     description: String = ""
@@ -249,7 +249,7 @@ UI := class {
     tags => [defaults{!meta.name.contains(.name)}, meta].flatten{.content != None}
   }
   Query := class = text: String = "" {
-    static encoded (text: String) => #text.map(. ==.instance_of (Char.Letter | Char.Digit) || "-_.~".contains(.) ? . : .bytes.map("%" + (. as 16 as String).upper_case).join("")) as String
+    static encoded (text: String) => #text.map(. is (Char.Letter | Char.Digit) || "-_.~".contains(.) ? . : .bytes.map("%" + (. as 16 as String).upper_case).join("")) as String
     static decoded (text: String) => text.replace("+", " ").split("%") -- (.first, .rest.map(((.[..<2] as 16) as Char) + .[2..])).join("")
     static written (pairs: (name: String, value: String)[]) => pairs.map(encoded(.name) + "=" + encoded(.value)).join("&")
     pairs => text.split("&"){.nonempty}.map(. ~= (name: (!"=")[], ("=", value: *)?) -- (name: decoded(.name), value: decoded(.value ?? "")))
@@ -321,7 +321,7 @@ UI := class {
         top => Geometry.Position.fixed(top: 0, left: 0, right: 0)
         bottom => Geometry.Position.fixed(bottom: 0, left: 0, right: 0)
       , layer: layer, fill: fill, overflow: scroll, children: children,
-      constraints: [Geometry.Constraint(side ==.instance_of (left | right) ? "x" : "y", least: extent, most: extent)])
+      constraints: [Geometry.Constraint(side is (left | right) ? "x" : "y", least: extent, most: extent)])
     shown => open ? [Overlay(closes: this), panel] : []
     close => open = false
     toggle => open = !open
@@ -330,10 +330,10 @@ UI := class {
   Role := enum heading | link | button | input | image | list | table | region | text
   Geometry.Shape &+= {
     interaction => Interactive(this)
-    focusable => this ==.instance_of Link || this ==.instance_of Input || activate
+    focusable => this is Link || this is Input || activate
     activate => None
     role => Role.region
-    label => this ==.instance_of Geometry.Image ? alt : children{==.instance_of Geometry.Text}.text.join(" ")
+    label => this is Geometry.Image ? alt : children{. is Geometry.Text}.text.join(" ")
     styled (name: String) => (styles.push name) -- Theme[name].fields{.name != "name"}.for(field => field.name.match
       "font" => font = font ? font.merged(field.value) : field.value
       "spacing" | "constraints" | "effects" => field.value.for(component => this + component)
@@ -358,10 +358,10 @@ UI := class {
 
   Theme := class {
     static spacing: Geometry.Length = 0.125rem
-    static scaled (amount: Number | Geometry.Length) => amount ==.instance_of Number ? spacing * amount : amount
+    static scaled (amount: Number | Geometry.Length) => amount is Number ? spacing * amount : amount
     static kinds: (kind: *, style: String)[] = []
     static default (kind, style: String) => kinds.push (kind, style) -- kind
-    static applied (scene: Geometry.Shape) => scene.expand.for(shape => kinds{shape ==.instance_of .kind}.for(shape.restyled(.style))) -- scene
+    static applied (scene: Geometry.Shape) => scene.expand.for(shape => kinds{shape is .kind}.for(shape.restyled(.style))) -- scene
     static palettes: (name: String, colors: (style: String, color: Geometry.Color)[])[] = [("default", [
       ("keyword", "#6C6783" as Geometry.Color), ("comment", "#6C6783" as Geometry.Color), ("string", "#FFCC99" as Geometry.Color), ("number", "#FFCC99" as Geometry.Color),
       ("class", "#9A86FD" as Geometry.Color), ("type", "#9A86FD" as Geometry.Color), ("variable", "#C4B9FE" as Geometry.Color), ("property", "#C4B9FE" as Geometry.Color),
@@ -381,7 +381,7 @@ UI := class {
     static [name: String] => styles{.name == name}.last - name ?? ()
   }
   String &+= {
-    highlighted (language: Language | String, palette: String = "default") => Painted(this, (language ==.instance_of String ? Language.named("." + language) : language).painted(this), palette)
+    highlighted (language: Language | String, palette: String = "default") => Painted(this, (language is String ? Language.named("." + language) : language).painted(this), palette)
   }
 
   Watch := class = watched: Dynamic, action: Program, becoming: *?, last: *?, seen: Number = Runtime.frames {

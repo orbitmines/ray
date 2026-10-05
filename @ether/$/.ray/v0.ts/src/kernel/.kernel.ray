@@ -78,6 +78,7 @@ token (src, j, limit) => (
   while j < limit and has(CLASSES[src.chars[j]], 8) { j = j + 1 }
   return j
 )
+spaced (src, b, e) => ( while b <= e { if space(src, b) { return global }; b = b + 1 }; return None )
 trimmed_begin (src, b, e) => ( while b <= e and space(src, b) { b = b + 1 }; return b )
 trimmed_end (src, b, e) => ( while e >= b and space(src, e) { e = e - 1 }; return e )
 starts (src, j, lit) => (
@@ -307,6 +308,7 @@ capturing (rule, caps, p, src, i, limit, frame, receiving, opened) => (
   } elsif next == 0 {
     end = p == 0 ? last(src, from, pieces[p + 1].text, limit, raw, inside) : first(src, from, pieces[p + 1].text, limit, raw, inside)
     if end > from and p > 0 and receiving and !raw and !inside and looser_within(src, from, end, frame, rule) { end = -1 }
+    if end > from and p > 0 and raw and !inside and !exact and pieces[p + 1].tight and trimmed_end(src, from, end - 1) >= from and spaced(src, from, trimmed_end(src, from, end - 1)) { end = -1 }
   } elsif raw {
     end = receiving or next >= 0 ? token_end(src, from, limit) : from
     if !(receiving or next >= 0) { while end < limit and !space(src, end) { end = end + 1 } }

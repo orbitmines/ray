@@ -8,7 +8,7 @@ Everything written after 2026-10-04 ~21:00 is unverified. Whether the library st
 - **B3 Method order of an extended value.** `rules_made` is depth-first over `with`, so a value made by `chain` and then extended with String finds Chain's ancestors (Ray) before String. Overloads are worked around by preferring typed ones (d5c83fb). The fix is a linearisation where every class comes before its ancestors, but two attempts (extend first, reverse-postorder) broke enum member counts.
 - **B4 (fixed in 61eb170)** An empty block in a branch. `if c { } else { … }` / `unless c { }` files `Unresolved result @.entrypoint.ray` (`result := inline (external ** block)` of nothing).
 - **B5 (fixed for narrowings in 61eb170: `satisfies` defines the block as a method on the candidate)** `{p}` blocks and `.`. In `x{.letter}`, `satisfies` runs the block in its writing frame, so `.` is the caller's `this`, not the candidate (string.ray S40, A-C1).
-- **B6 (fixed in 61eb170: a re-run define on its own scope takes the new closure)** Closure methods defined per target. `~~` defines `closure_entered` on its target, and `define` dedupes by head and site, so a second `~~` on the same value with another block reuses the first closure.
+- **B6 (fixed in 61eb170: a re-run define on its own scope takes the new closure; since a88d331 every closure goes through `Program.entered`, one define site for `~~`, `satisfies`, reduce and calls)** Closure methods defined per target. `~~` defines `closure_entered` on its target, and `define` dedupes by head and site, so a second `~~` on the same value with another block reuses the first closure.
 - **B7 (fixed in a9885cd: `as_character` adds Char to the hierarchy; `classes` caches only on the value itself)** Characters are not `instance_of(Char)`. `U+0061.instance_of(Char)` is false; String and Number are fine.
 - **B8 Precedence takes `.` as an operator.** `{a} [x] {b} [y] {c}` can match Number's `.{fraction}` as `[x]`.
 - **B9 A function returning a local returns a reference into its finished frame.**
@@ -24,10 +24,10 @@ Everything written after 2026-10-04 ~21:00 is unverified. Whether the library st
 - **B20 main at 1fecf3d runs out of 8 GB on honesty.ray with the whole library**; b395897 (before that merge) is clean.
 - **B12 Regex recursion** exhausts 8 GB on a two-character pattern (X2.2).
 
-- **B21 An anonymous function `(x) => x + 1` is not a value.** `{pattern} => {body}` reads `(x)` as a rule head instead; it collides with `({expr}) => expr` and a class's `({args})`. The user: it should just work.
+- **B21 (written, unverified, in a88d331: String.ray's `({parameters: Parameters}) => {block}` makes a `Program`; `Parameters` is a String with no `{`, so rule heads like `({expr})` still fall to `{pattern} => {body}`)** An anonymous function `(x) => x + 1` is not a value.** `{pattern} => {body}` reads `(x)` as a rule head instead; it collides with `({expr}) => expr` and a class's `({args})`. The user: it should just work. Open: which of the two rules wins on `(x) => …` is the engine's choice; while booting, before `Parameters` resolves, the typed capture may pass everything (B14); calling the value `f(5)` needs B19.
 
 - **B22 Longer filtered rules beat a value's own operator in general** (agent B's 1dd1bdd). Per the user this is what `chainable` is for: only rules over `chainable` operators should read past a value's own method. Narrow it, language-side through the modifier rather than in the engine.
-- **B23 `&@` is not readable yet.** Access.ray's `Run` has `chain`/`first`/`last`; the `&@` spelling (the run's call chain, `&@.last` the actor, `&@.first` the origin) needs the `&` context prefix (U4) to reach it.
+- **B23 (written, unverified, in a88d331: `&@ => Run.current`, `Run.current = Run(actor: None)` in Access.ray; nothing yet pushes a hop when a run originates elsewhere)** `&@` is not readable yet. Access.ray's `Run` has `chain`/`first`/`last`; the `&@` spelling (the run's call chain, `&@.last` the actor, `&@.first` the origin) needs the `&` context prefix (U4) to reach it.
 
 ## Memory and time
 - **M1 string.ray** runs out of the 8 GB heap around line 104 when run whole; every chunk passes on its own (except S40). The heap grows across the file.

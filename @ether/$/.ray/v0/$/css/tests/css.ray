@@ -22,3 +22,5 @@ sheet_block := @css {
 }
 unless sheet_block.count == 2 && sheet_block.last.selector == "#Ray" { INFO@mark `UI218 a css block of rules is not its rules` }
 unless ((@css p { /* note */ display: grid; }) as CSS) == "p{/* note */display:grid;}" { INFO@mark `UI237 a css comment is not written into the css` }
+unless (CSS.read(css_rule as CSS) as CSS) == (css_rule as CSS) { INFO@mark `UI290 a written css rule does not read back as the same rule` }
+unless (@css @font-face { font-family: Ray; }).selector == "@font-face" { INFO@mark `UI291 an at-rule of declarations is not a rule` }

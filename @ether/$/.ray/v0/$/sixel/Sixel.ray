@@ -1,13 +1,51 @@
 // Sixel graphics, VT330/VT340 Programmer Reference Manual chapter 14 (https://vt100.net/docs/vt3xx-gp/chapter14.html)
-Sixel := class: Language {
-  static extensions = ".sixel" | ".six"
-  written := {
-    {writing: Language.Writing{value is Geometry.Raster}} => "\eP0;0;0q", encoded(writing.value), "\e\\"
+Sixel := class (
+  "\eP", aspect: Decimal = 0, ";", background: Decimal = 0, ";", grid: Decimal = 0, "q",
+  ("\"", pan: Decimal, ";", pad: Decimal, (";", width: Decimal, ";", height: Decimal)?)?,
+  commands: Command[],
+  "\e\\"
+) {
+  // Sixel data characters, ? to ~, six vertical dots each (14.2.1)
+  static Six = Char{"?" <= . <= "~"}
+  // Colour introducer, defining a colour in RGB percentages (Pu 2) or HLS (Pu 1) (14.3.5)
+  static Introduced := class ("#", number: Decimal, ";", system: "1" | "2", ";", x: Decimal, ";", y: Decimal, ";", z: Decimal) {
+    color => system == "2" ? Geometry.Color(x * 255 / 100, y * 255 / 100, z * 255 / 100) : hls(x, y, z)
   }
-  static encoded (raster: Geometry.Raster) => raster.flatten.unique.enumerate -- (palette => (
-    palette.map("#", .index, ";2;", .value.red * 100 / 255, ";", .value.green * 100 / 255, ";", .value.blue * 100 / 255),
-    (0..<(raster.height + 5) / 6).map(band => palette.map(
-      "#", .index, (0..<raster.width).map(x => ((0..<6).map(row => raster.at(x, band * 6 + row) == .value ? 2 ^ row : 0).sum + 63) as Char), "$"
-    ), "-")
-  ))
+  // Colour introducer, selecting a defined colour (14.3.5)
+  static Selected := class ("#", number: Decimal)
+  // Graphics repeat introducer (14.3.1)
+  static Repeat := class ("!", count: Decimal, six: Six)
+  // Graphics carriage return $ and new line - (14.3.3, 14.3.4)
+  static Command := Introduced | Selected | Repeat | Six | "$" | "-"
+
+  // HLS with DEC's hue, 0 degrees at blue (14.3.5)
+  static hls (hue: Number, lightness: Number, saturation: Number) => ((hue + 240) % 360, lightness / 100, saturation / 100) -- ((h, l, s) =>
+    [0, 8, 4].map(n => (n + h / 30) % 12 -- (k => (l - s * (l min (1 - l)) * ((k - 3) min (9 - k) min 1 max -1)) * 255)) -- Geometry.Color(.0, .1, .2))
+
+  static Pen := class = x: Number = 0, band: Number = 0, number: Number = 0, dots: (x: Number, band: Number, number: Number, six: Char)[] = []
+  static Step := class = pen: Pen, command: *
+  static drawn := {
+    {step: Step{command == "$"}} => step.pen ~~ .x = 0
+    {step: Step{command == "-"}} => step.pen ~~ (.x = 0) ~~ (.band += 1)
+    {step: Step{command is (Introduced | Selected)}} => step.pen ~~ .number = step.command.number
+    {step: Step} => step.pen ~~ (.dots = [step.pen.dots, [(x: step.pen.x, band: step.pen.band, number: step.pen.number, six: step.command)]].flatten(1)) ~~ (.x += 1)
+  }
+  expanded => commands.map(. is Repeat ? [.six] * .count : [.]).flatten
+  color (number: Number) => commands{. is Introduced && .number == number}.last?.color ?? Geometry.Color(0, 0, 0)
+  raster => expanded.reduce(pen = Pen() => Compiler.reduced(Step(pen, .), drawn)).dots -- (dots =>
+    Geometry.Raster.blank(width ?? (dots.x.max + 1), height ?? 6 * (dots.band.max + 1))
+      ~~ dots.map(dot => (0..<6){((dot.six - "?") / 2 ^ .).floor % 2 == 1}.map(row => { .put(dot.x, dot.band * 6 + row, color(dot.number)) })).flatten)
+
+  static (raster: Geometry.Raster) as (=== Sixel) => raster.flatten.unique.enumerate -- (palette => Sixel(width: raster.width, height: raster.height, pan: 1, pad: 1, commands: [
+    palette.map(Introduced(.index, "2", ((.value.red * 100 / 255) + 1 / 2).floor, ((.value.green * 100 / 255) + 1 / 2).floor, ((.value.blue * 100 / 255) + 1 / 2).floor)),
+    (0..<((raster.height + 5) / 6).floor).map(band => [palette.map(entry => [
+      Selected(entry.index),
+      (0..<raster.width).map(x => ((0..<6).map(row => raster.at(x, band * 6 + row) == entry.value ? 2 ^ row : 0).sum + 63) as Char),
+      "$"
+    ]), "-"])
+  ].flatten))
+
+  static language = Language(".sixel" | ".six", of: Language.Image,
+    level: { {sixel: Sixel} => sixel.raster },
+    written: { {writing: Language.Writing{value is Geometry.Raster}} => writing.value as Sixel })
 }

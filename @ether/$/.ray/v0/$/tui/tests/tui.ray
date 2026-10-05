@@ -14,8 +14,8 @@ with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   unless grid.cells[1].some(.link) { INFO@mark `UI33 a link's cells do not carry where it goes` }
   unless grid.changes(grid).empty { INFO@mark `UI34 an unchanged frame writes something` }
 }
-unless "\e[1;5A" as Language.TUI.Key .control { INFO@mark `UI35 ctrl+up is not read as control` }
-unless ("\e[<0;3;4M" as Language.TUI.Mouse).x == 3 { INFO@mark `UI36 a mouse report is not read` }
+unless "\e[1;5A" as ANSI.Key .control { INFO@mark `UI35 ctrl+up is not read as control` }
+unless ("\e[<0;3;4M" as ANSI.Mouse).x == 3 { INFO@mark `UI36 a mouse report is not read` }
 unless Language.named(".tui") == Language.TUI { INFO@mark `UI66 the terminal is not a registered language` }
 with UI.page = (title: "Ray") {
   unless Language.TUI.Target().framed(Language.TUI.Grid(1, 1)).title == "Ray" { INFO@mark `UI99 the terminal title does not follow the page title` }
@@ -39,11 +39,11 @@ with UI.Theme.palettes = [("red", red)] {
 }
 
 keyboard := @me/device/keyboard
-unless ("\t" as Language.TUI.Key).name === keyboard["Tab"] && ("\r" as Language.TUI.Key).name === keyboard["Enter"] { INFO@mark `UI165 a key the UI names is not Feature's key` }
-control_f := (6 as Char as String) as Language.TUI.Key
+unless ("\t" as ANSI.Key).name === keyboard["Tab"] && ("\r" as ANSI.Key).name === keyboard["Enter"] { INFO@mark `UI165 a key the UI names is not Feature's key` }
+control_f := (6 as Char as String) as ANSI.Key
 unless control_f.control && control_f.name.name == "f" { INFO@mark `UI166 ctrl+f in the terminal is not f with control` }
-unless ("\ef" as Language.TUI.Key).alt == "f" { INFO@mark `UI167 alt+f in the terminal is not read` }
-unless ("\e[<0;3;4M" as Language.TUI.Mouse).position == Geometry.Vector(16px, 48px) { INFO@mark `UI170 a mouse report is not a position on the page` }
+unless ("\ef" as ANSI.Key).alt == "f" { INFO@mark `UI167 alt+f in the terminal is not read` }
+unless ("\e[<0;3;4M" as ANSI.Mouse).position == Geometry.Vector(16px, 48px) { INFO@mark `UI170 a mouse report is not a position on the page` }
 selected_text := Geometry.Box(content: "ab", size: Geometry.Vector(16px, 16px))
 selected_text.select
 with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {

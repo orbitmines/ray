@@ -1,0 +1,19 @@
+// ANSI escape sequences written inline, read into their values, and written back.
+
+mark ^keyword := external global
+
+who := "Ray"
+moved := @ansi \e[2;3H
+unless moved.first is ANSI.Move && moved.first.at == Geometry.Vector(2, 1) { INFO@mark `UI293 a cursor position written inline is not a move to that cell` }
+ansi_block := @ansi {
+  \e]0;{who}\a
+  \e[0;1;38;2;255;0;0mR
+}
+unless ansi_block.first is ANSI.Title && ansi_block.first.text == "Ray" { INFO@mark `UI294 a hole in an ansi block is not spliced into its sequence` }
+styled := ansi_block{. is ANSI.Style}.first.cell("R")
+unless styled.bold && styled.foreground == Geometry.Color(255, 0, 0) { INFO@mark `UI295 an SGR sequence is not read into a cell's style` }
+red_cell := ANSI.Cell("x", foreground: Geometry.Color(255, 0, 0), italic: true)
+unless (red_cell as ANSI.Style as String) == "\e[0;3;38;2;255;0;0m" { INFO@mark `UI296 a cell's style is not written as one SGR sequence` }
+unless ((red_cell as ANSI.Style as String) as ANSI.Style).cell("x") == red_cell { INFO@mark `UI297 a written style does not read back as the same cell` }
+unless (Compiler.reduced(red_cell as ANSI.Style, ANSI.XTerm256) as String) == "\e[0;3;38;5;196m" { INFO@mark `UI298 the 256-colour level does not write an indexed colour` }
+unless (ANSI.write(ANSI.Stop()) as String) ~= ⊢ "\e[?1004l" { INFO@mark `UI299 stopping does not undo the modes starting set, last first` }

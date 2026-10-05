@@ -248,10 +248,10 @@ entry stays as the record of the question, and this section overrides it.
 - Authors are written `@name`. `@ether` is the Ether organization (they are the same thing). Names are reserved and mapped ignoring case.
 
 ## Decided 2026-10-06 (renderers are languages from outside)
-- The web renderer, `Language.Web`, is the project `$/web`. It renders a page into `HTML`, `CSS` and `JS` values (`Language.Web.Markup`, `Language.Web.Style`, `Language.Web.Script`), and those languages are their own projects, `$/html`, `$/css` and `$/js`, with `$/json` for structured data.
-- The terminal renderer, `Language.TUI`, is the project `$/tui`. It writes through `$/ansi` (the escape sequences, the xterm 256-colour and Windows Terminal levels, `Terminal`), and draws images through `$/sixel` and `$/kitty`.
+- The web renderer is the HTML language itself, the project `$/html` (2026-10-06: `$/` folders are named after languages, and "web" is not one). Rendering for the web is writing Ray UI values as HTML: `$.html.level` renders a scene into a document with its stylesheet and script (`HTML.Markup`, `HTML.Style`, `HTML.Script`, packaged as `HTML.Package`), and the DOM protocol is `HTML.DOM`. The stylesheet and script are values of `$/css` and `$/js`, with `$/json` for structured data.
+- The terminal renderer, `Language.TUI`, is the project `$/tui`. It writes through `$/ansi` (the escape sequences in both directions, the keys and mouse reports it reads included, the xterm 256-colour and Windows Terminal levels, `Terminal`), and draws images through `$/sixel` and `$/kitty`.
 - `Language.Direct`, Ray's own raster drawing, stays in the core UI. The formats it reads are outside: fonts through `$.opentype`, images through `$.png` (with `$/zlib` and `$/deflate` under it).
-- The core UI names none of them. A frontend picks its renderer by `$.web` / `$.tui`, or by depending on the project.
-- `v0/UI` bundles them: its `.project.ray` lists `$/web`, `$/tui`, `$/html`, `$/css`, `$/js`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`, which stay at `v0/$/<name>`. Depending on `@ether/UI` loads every renderer; `$/web` and `$/tui` depend back on `@ether/UI`, and that cycle loads once.
+- The core UI names none of them. A frontend picks its renderer by `$.html` / `$.tui`, or by depending on the project.
+- `v0/UI` bundles them: its `.project.ray` lists `$/tui`, `$/html`, `$/css`, `$/js`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`, which stay at `v0/$/<name>`. Depending on `@ether/UI` loads every renderer; `$/html` and `$/tui` depend back on `@ether/UI`, and that cycle loads once.
 - A share (`50%`, the Number 0.5) in a length field is that share of the parent's available size on that axis, bounds included (`{width <= 50%}`); Solving resolves it and the web writes it as a CSS percentage. A share radius is that share of the shape's own size (`radius: [50%]` is a circle).
 

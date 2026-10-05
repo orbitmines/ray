@@ -4,50 +4,102 @@ ANSI := class: Language {
   Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, bold: boolean = false, italic: boolean = false, underline: boolean = false, strike: boolean = false, dim: boolean = false, reverse: boolean = false, link: Location?
   Graphic := class = at: Geometry.Vector, bytes: *
   Frame := class = changes: (at: Geometry.Vector, cell: Cell)[], title: String?, graphics: Graphic[] = []
-  Title := class = text: String
-  Move := class = at: Geometry.Vector
-  Style := class = cell: Cell
-  Color := class = color: Geometry.Color, layer: Number
-  Hyperlink := class = cell: Cell
-  Start := class
-  Stop := class
-  Copy := class = text: String
-  written := {
-    {start: ANSI.Start} => Terminal.entering, Terminal.clearing
-    {stop: ANSI.Stop} => Terminal.restoring
-    {copy: ANSI.Copy} => "\e]52;c;", copy.text.bytes as Base64 as String, "\a"
-    {frame: ANSI.Frame} => [
-      Title(frame.title) if frame.title,
-      frame.changes.map((at, cell) => [Move(at), Style(cell), Hyperlink(cell), cell.glyph]),
-      frame.graphics.map([Move(.at), .bytes]),
-      "\e[0m"
-    ]
-    {title: ANSI.Title} => "\e]0;", title.text, "\a"
-    {move: ANSI.Move} => "\e[", move.at.y + 1, ";", move.at.x + 1, "H"
-    {style: ANSI.Style} => style.cell -- (cell => "\e[0", (";1" if cell.bold), (";2" if cell.dim), (";3" if cell.italic), (";4" if cell.underline), (";9" if cell.strike), (";7" if cell.reverse),
-      (";", Color(cell.foreground, 38)) if cell.foreground, (";", Color(cell.background, 48)) if cell.background, "m")
-    {color: ANSI.Color} => color.layer, ";2;", color.color.red, ";", color.color.green, ";", color.color.blue
-    {link: ANSI.Hyperlink{cell.link}} => "\e]8;;", link.cell.link as String, "\e\\"
-    {link: ANSI.Hyperlink} => "\e]8;;\e\\"
+
+  // CUP, Cursor Position (ECMA-48 8.3.21)
+  Move := class ("\e[", (row: Decimal, ";", column: Decimal)?, "H") {
+    at => Geometry.Vector((column ?? 1) - 1, (row ?? 1) - 1)
+  }
+  // ED, Erase in Display (ECMA-48 8.3.39)
+  Erase := class ("\e[", part: Decimal = 0, "J")
+  // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
+  Mode := class ("\e[?", number: Decimal, state: "h" | "l") {
+    flipped => Mode(number, state == "h" ? "l" : "h")
+  }
+  Start := class = modes: Mode[] = [Mode(1049, "h"), Mode(25, "l"), Mode(1000, "h"), Mode(1002, "h"), Mode(1006, "h"), Mode(2004, "h"), Mode(1004, "h")]
+  Stop := class = start: Start = Start()
+
+  // SGR, Select Graphic Rendition (ECMA-48 8.3.117): 1 bold, 2 faint, 3 italic, 4 underlined, 7 negative, 9 crossed-out
+  Attribute := class (code: "1" | "2" | "3" | "4" | "7" | "9")
+  // SGR 38 and 48, direct colour (";2;r;g;b") or an indexed one (";5;n") (ITU-T T.416 13.1.8; xterm, "Character Attributes")
+  Colored := class (layer: "38" | "48", ((";2;", red: Decimal, ";", green: Decimal, ";", blue: Decimal) | (";5;", index: Decimal))) {
+    color => index == None ? Geometry.Color(red, green, blue) : Palette[index]
+  }
+  Style := class ("\e[0", parameters: (";", parameter: Attribute | Colored)[], "m") {
+    codes => parameters.parameter{. is Attribute}.code
+    colored (layer: String) => parameters.parameter{. is Colored && .layer == layer}.last?.color
+    cell (glyph: Char = " ") => Cell(glyph, foreground: colored("38"), background: colored("48"),
+      bold: codes.contains("1"), dim: codes.contains("2"), italic: codes.contains("3"), underline: codes.contains("4"), reverse: codes.contains("7"), strike: codes.contains("9"))
+    static (cell: Cell) as (=== Style) => Style(parameters: [
+      [("1", cell.bold), ("2", cell.dim), ("3", cell.italic), ("4", cell.underline), ("9", cell.strike), ("7", cell.reverse)]{.1}.map(Attribute(.0)),
+      [("38", cell.foreground), ("48", cell.background)]{.1}.map(Colored(.0, red: .1.red, green: .1.green, blue: .1.blue))
+    ].flatten.map((parameter: .)))
+  }
+  // The xterm 256-colour palette: the 16 system colours, a 6x6x6 cube and 24 greys (xterm 256colres.pl)
+  static Levels = [0, 95, 135, 175, 215, 255]
+  static Palette = [
+    [(0, 0, 0), (205, 0, 0), (0, 205, 0), (205, 205, 0), (0, 0, 238), (205, 0, 205), (0, 205, 205), (229, 229, 229),
+      (127, 127, 127), (255, 0, 0), (0, 255, 0), (255, 255, 0), (92, 92, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255)].map(Geometry.Color(.0, .1, .2)),
+    (0..<216).map(Geometry.Color(Levels[(. / 36).floor], Levels[(. / 6).floor % 6], Levels[. % 6])),
+    (0..<24).map(8 + 10 * . -- Geometry.Color(., ., .))
+  ].flatten
+
+  // OSC 0, the window title (xterm, "Operating System Commands")
+  Title := class ("\e]0;", text: (!"\a" && !"\e")[], ("\a" | "\e\\"))
+  // OSC 8, hyperlinks (https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda)
+  Hyperlink := class ("\e]8;", parameters: (!";")[] = "", ";", target: (!"\e" && !"\a")[], ("\e\\" | "\a")) {
+    link => target.empty ? None : target as Location
+  }
+  // OSC 52, the clipboard (xterm, "Manipulate Selection Data")
+  Copy := class ("\e]52;", selection: Char.Letter[] = "c", ";", encoded: Base64, ("\a" | "\e\\")) {
+    text => encoded.bytes as String
+    static (text: String) as (=== Copy) => Copy(encoded: text.bytes as Base64)
   }
 
+  // Input: PC-style function keys and modifiers, SGR mouse reports (1006), bracketed paste (2004) and focus events (1004) (xterm, "PC-Style Function Keys", "Mouse Tracking")
+  Key := class ("\e[", (modifiers: "1;", modifier: Decimal)?, code: "A" | "B" | "C" | "D" | "H" | "F" | "Z") | ("\eO", code: "P" | "Q" | "R" | "S") | ("\e[", page: "5" | "6", "~") | ("\e", alt: Char) | (code: Char) => {
+    lettered => code && (code as Number) < 27 && !(code is ("\r" | "\t"))
+    shift => modifier && (modifier - 1) % 2 == 1
+    control => modifier && (modifier - 1) / 4 % 2 == 1 || lettered
+  }
+  Mouse := class ("\e[<", button: Decimal, ";", x: Decimal, ";", y: Decimal, state: "M" | "m") => {
+    cell => Geometry.Vector(x - 1, y - 1)
+  }
+  Paste := class ("\e[200~", text: *, "\e[201~")
+  FocusChange := class ("\e[", state: "I" | "O")
+
+  Sequence := Move | Erase | Mode | Style | Title | Hyperlink | Copy
+  Input := Key | Mouse | Paste | FocusChange
+
+  level := {
+    {text: String} => (text ~= (pieces: (Sequence | Char)[])).pieces
+  }
+  written := {
+    {start: Start} => start.modes, Erase(2), Move()
+    {stop: Stop} => <-stop.start.modes.map(.flipped)
+    {frame: Frame} => [
+      Title(frame.title) if frame.title,
+      frame.changes.map((at, cell) => [Move(row: at.y + 1, column: at.x + 1), cell as Style, Hyperlink(target: cell.link ? cell.link as String : ""), cell.glyph]),
+      frame.graphics.map([Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
+      Style()
+    ]
+  }
+
+  // Terminals without direct colour: the nearest entry of the xterm colour cube
   XTerm256 := {
-    {color: ANSI.Color} => color.layer, ";5;", 16 + 36 * (color.color.red * 5 / 255) + 6 * (color.color.green * 5 / 255) + color.color.blue * 5 / 255
+    {colored: Colored{index == None}} => Colored(colored.layer, index: 16 + 36 * (colored.red * 5 / 255).floor + 6 * (colored.green * 5 / 255).floor + (colored.blue * 5 / 255).floor)
   }
   TrueColor := { }
+  // Windows Terminal's win32-input-mode, DECSET 9001 (https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md)
   WindowsTerminal := {
-    {start: ANSI.Start} => Terminal.entering, "\e[?9001h", Terminal.clearing
+    {start: Start{!modes.contains(Mode(9001, "h"))}} => Start([start.modes, [Mode(9001, "h")]].flatten)
   }
 }
 
 Terminal := class {
-  static entering = "\e[?1049h\e[?25l\e[?1000h\e[?1002h\e[?1006h\e[?2004h\e[?1004h"
-  static clearing = "\e[2J\e[H"
-  static restoring = "\e[?1004l\e[?2004l\e[?1006l\e[?1002l\e[?1000l\e[?25h\e[?1049l"
   emit (bytes) => external io `stdout` (bytes)
   read => external io `stdin` None
   size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)
-  raw_mode => emit(entering)
-  clear => emit(clearing)
-  restore => emit(restoring)
+  raw_mode => emit(ANSI.write(ANSI.Start().modes))
+  clear => emit(ANSI.write([ANSI.Erase(2), ANSI.Move()]))
+  restore => emit(ANSI.write(ANSI.Stop()))
 }

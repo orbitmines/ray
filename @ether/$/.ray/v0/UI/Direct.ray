@@ -81,6 +81,6 @@ Language.Direct := class: Language {
   Display := class = target: Location, title: String = "" {
     write (raster: Geometry.Raster) => (title = UI.page?.title ?? "") -- IO.write(target, raster)
     open (to: Location) => OS.launch(to)
-    read => $.web.DOM.dispatched(external io `window` None)
+    read => $.html.DOM.dispatched(external io `window` None)
   }
 }

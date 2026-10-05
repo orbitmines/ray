@@ -21,3 +21,5 @@ js_commented := @js {
   f()
 }
 unless (JS.Module(js_commented) as JS) == "/* note*/;f();" { INFO@mark `UI238 a js comment is not written into the js` }
+anonymous := @js function (a) { return a }
+unless anonymous is JS.Function && anonymous.name == None && (JS.read(anonymous as JS) as JS) == (anonymous as JS) { INFO@mark `UI292 a written anonymous function does not read back` }

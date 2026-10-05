@@ -26,7 +26,7 @@ unless package.files{.path == "style.css"}.first.content is Language.Web.CSS.She
 unless package.files{.path == "app.js"}.first.content is Language.Web.JS.Module { INFO@mark `UI22 the script is not a JS value` }
 unless (Language.Web.HTML.level + Language.Web.CSS.level) is Program { INFO@mark `UI23 two levels do not compose into one` }
 
-with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   grid := page.rendered(Language.TUI.Cells)
   unless grid.width == 80 && grid.height == 24 { INFO@mark `UI30 the terminal grid is not 80 by 24` }
   unless grid.cells[0][0].glyph == "R" { INFO@mark `UI31 the heading's first glyph is not in the first cell` }
@@ -38,7 +38,7 @@ unless "\e[1;5A" as Language.TUI.Key .control { INFO@mark `UI35 ctrl+up is not r
 unless ("\e[<0;3;4M" as Language.TUI.Mouse).x == 3 { INFO@mark `UI36 a mouse report is not read` }
 
 dot := Geometry.Box(size: Geometry.Vector(2px, 2px), fill: Geometry.Color(255, 0, 0))
-with UI.Viewport.size = Geometry.Vector(4px, 4px) {
+with UI.scene.size = Geometry.Vector(4px, 4px) {
   raster := Compiler.reduced(Geometry.Solved(dot), Language.Direct.rules)
   unless raster.at(0, 0) == Geometry.Color(255, 0, 0) { INFO@mark `UI40 a filled box is not drawn` }
   unless raster.at(3, 3).alpha == 0 { INFO@mark `UI41 outside the box was drawn` }
@@ -55,14 +55,14 @@ chosen_input := (choice) => Program(code: { choice }).rendered(Language.Web.HTML
 unless chosen_input(Choice(type: boolean)).attributes.contains(("type", "checkbox")) { INFO@mark `UI60 choosing a boolean is not a checkbox` }
 unless chosen_input(Choice(type: String)).attributes.contains(("type", "text")) { INFO@mark `UI61 choosing a string is not a text field` }
 unless chosen_input(Choice(type: Number{0 <= . <= 10})).attributes.contains(("type", "range")) { INFO@mark `UI62 choosing a bounded number is not a slider` }
-UI.Navigation.go(@https://orbitmines.com/profiles)
-unless UI.Navigation.at == @https://orbitmines.com/profiles { INFO@mark `UI63 navigating does not change where the user is` }
-UI.Navigation.back
-unless UI.Navigation.at != @https://orbitmines.com/profiles { INFO@mark `UI64 going back stays where the user went` }
+UI.at = @https://orbitmines.com/profiles
+unless UI.at == @https://orbitmines.com/profiles { INFO@mark `UI63 navigating does not change where the user is` }
+UI.back
+unless UI.at != @https://orbitmines.com/profiles { INFO@mark `UI64 going back stays where the user went` }
 
 unless Language.named(".web") == Language.Web { INFO@mark `UI65 the web is not a registered language` }
 unless Language.named(".tui") == Language.TUI { INFO@mark `UI66 the terminal is not a registered language` }
-if UI.Platform.handheld { INFO@mark `UI67 a platform is handheld before any level says so` }
+if @me/device/handheld { INFO@mark `UI67 a platform is handheld before any level says so` }
 first_box := Geometry.Box()
 second_box := Geometry.Box()
 if first_box.id == second_box.id { INFO@mark `UI68 two shapes share an id` }
@@ -78,8 +78,8 @@ away_html := Program(code: { away }).rendered(Language.Web.HTML.level)
 unless away_html.body.children.first.attributes{.name == "target"}.first?.value == "_blank" { INFO@mark `UI82 a link to a new window has no target=_blank` }
 unless away_html.body.children.first.attributes{.name == "rel"}.first?.value == "noopener noreferrer" { INFO@mark `UI83 a link to a new window does not drop the opener` }
 Geometry.Box(location: away).activate
-unless UI.Platform.opened.last == away { INFO@mark `UI84 activating a new-window link does not open it` }
-if UI.Navigation.at == away { INFO@mark `UI85 activating a new-window link navigates the page itself` }
+unless @me/device/opened == away { INFO@mark `UI84 activating a new-window link does not open it` }
+if UI.at == away { INFO@mark `UI85 activating a new-window link navigates the page itself` }
 
 searched := @https://orbitmines.com/archive?search=ray&page=2
 unless searched.query.search == "ray" && searched.query.page == "2" { INFO@mark `UI86 a query parameter is not read` }
@@ -89,22 +89,21 @@ if searched.with(search: None).query.search { INFO@mark `UI89 with None does not
 unless (@https://orbitmines.com/archive?q=a%20b).query.q == "a b" { INFO@mark `UI90 a query parameter is not decoded` }
 unless (@https://orbitmines.com/archive/on-orbits).segments.last == "on-orbits" { INFO@mark `UI91 a location's last segment is not its name` }
 
-with UI.Navigation.meta = [("og:type", "article"), ("twitter:card", "summary"), ("citation_author", "Shawki, Fadi"), ("citation_author", "Other")] {
-  with UI.Navigation.structured = [(type: "Article", headline: "Ray", author: [(type: "Person", name: "Fadi")])] {
-    with UI.Navigation.manifest = @./manifest.json {
-      head := Compiler.reduced(Language.Web.HTML.Head(), Language.Web.HTML.rules)
-      unless head.some(.tag == "meta" && .attributes.contains(("property", "og:type"))) { INFO@mark `UI92 og:* is not written as a property` }
-      unless head.some(.tag == "meta" && .attributes.contains(("name", "twitter:card"))) { INFO@mark `UI93 twitter:* is not written as a name` }
-      unless head{.tag == "meta" && .attributes.contains(("name", "citation_author"))}.count == 2 { INFO@mark `UI94 repeated citation_* entries are not all written` }
-      ld := head{.tag == "script" && .attributes.contains(("type", "application/ld+json"))}.first
-      unless ld && ld.children.first.text ~= (*, "\"@type\":\"Article\"", *) { INFO@mark `UI95 a structured entry is not JSON-LD with its @type` }
-      unless ld && ld.children.first.text ~= (*, "\"@context\":\"https://schema.org\"", *) { INFO@mark `UI96 JSON-LD has no schema.org context` }
-      unless head.some(.tag == "link" && .attributes.contains(("rel", "manifest"))) { INFO@mark `UI97 the manifest is not linked` }
-    }
-  }
-}
+article := (
+  meta: [(name: "og:type", content: "article"), (name: "twitter:card", content: "summary"), (name: "citation_author", content: "Shawki, Fadi"), (name: "citation_author", content: "Other")],
+  structured: [(type: "Article", headline: "Ray", author: [(type: "Person", name: "Fadi")])],
+  manifest: @./manifest.json
+)
+head := Compiler.reduced(Language.Web.HTML.Head(article), Language.Web.HTML.rules)
+unless head.some(.tag == "meta" && .attributes.contains(("property", "og:type"))) { INFO@mark `UI92 og:* is not written as a property` }
+unless head.some(.tag == "meta" && .attributes.contains(("name", "twitter:card"))) { INFO@mark `UI93 twitter:* is not written as a name` }
+unless head{.tag == "meta" && .attributes.contains(("name", "citation_author"))}.count == 2 { INFO@mark `UI94 repeated citation_* entries are not all written` }
+ld := head{.tag == "script" && .attributes.contains(("type", "application/ld+json"))}.first
+unless ld && ld.children.first.text ~= (*, "\"@type\":\"Article\"", *) { INFO@mark `UI95 a structured entry is not JSON-LD with its @type` }
+unless ld && ld.children.first.text ~= (*, "\"@context\":\"https://schema.org\"", *) { INFO@mark `UI96 JSON-LD has no schema.org context` }
+unless head.some(.tag == "link" && .attributes.contains(("rel", "manifest"))) { INFO@mark `UI97 the manifest is not linked` }
 unless Language.Web.JSON.write("</script>") == "\"\\u003c/script>\"" { INFO@mark `UI98 JSON text can close the script it is in` }
-with UI.Navigation.title = "Ray" {
+with UI.page = (title: "Ray") {
   unless Language.TUI.Target().framed(Language.TUI.Grid(1, 1)).title == "Ray" { INFO@mark `UI99 the terminal title does not follow the page title` }
 }
 
@@ -131,7 +130,7 @@ sticky_bar := Geometry.Box(position: Geometry.Position.sticky(top: 0), constrain
 Geometry.Solver(available: Geometry.Vector(1000px, 800px), scrolled: 300px).solve(Geometry.Box(children: [Geometry.Box(constraints: [tall(1000px)], children: [sticky_bar])]))
 unless sticky_bar.origin.y == 300px { INFO@mark `UI106 a sticky shape does not stay at the top while its parent is in view` }
 anchor := Geometry.Box(constraints: [tall(20px)])
-tip := UI.Popover(anchor: anchor, constraints: [tall(10px)])
+tip := UI.Popover(position: Geometry.Position.anchored(anchor), constraints: [tall(10px)])
 solver.solve(Geometry.Box(children: [anchor, tip]))
 unless tip.origin.y == 20px { INFO@mark `UI107 a popover is not placed below its anchor` }
 if tip.visible { INFO@mark `UI108 a popover shows before its anchor is hovered or focused` }
@@ -148,18 +147,18 @@ unless Program(code: { tip }).rendered(Language.Web.HTML.level).body.children.fi
 
 red_bar := Geometry.Box(position: Geometry.Position.fixed(top: 0, left: 0), fill: Geometry.Color(255, 0, 0), constraints: [tall(16px), Geometry.Constraint("x", least: 16px, most: 16px)])
 scrolled_page := Geometry.Box(constraints: [tall(2000px)], children: [Geometry.Box(constraints: [tall(1000px)]), red_bar])
-with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
-  with UI.Viewport.scrolled = 320px {
-    Geometry.Solver(available: UI.Viewport.size, scrolled: UI.Viewport.scrolled).solve(scrolled_page)
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  with UI.scene.scrolled = Geometry.Vector(0, 320px) {
+    Geometry.Solver(available: UI.scene.size, scrolled: UI.scene.scrolled.y).solve(scrolled_page)
     unless Program(code: { scrolled_page }).rendered(Language.TUI.Cells).cells[0][0].background == Geometry.Color(255, 0, 0) { INFO@mark `UI116 a fixed shape leaves the top row of a scrolled terminal` }
     unless Program(code: { scrolled_page }).rendered(Language.Direct.level).at(0, 0) == Geometry.Color(255, 0, 0) { INFO@mark `UI117 a fixed shape leaves the top of a scrolled raster` }
   }
 }
 drawer := UI.Drawer(open: true)
 with UI.scene = Geometry.Box(children: [drawer]) {
-  unless UI.Viewport.locking { INFO@mark `UI118 an open drawer does not lock page scroll` }
-  UI.Viewport.scroll(100px)
-  unless UI.Viewport.scrolled == 0px { INFO@mark `UI119 a locked page scrolls` }
+  unless UI.locked { INFO@mark `UI118 an open drawer does not lock page scroll` }
+  UI.scene.scroll(100px)
+  unless UI.scene.scrolled.y == 0px { INFO@mark `UI119 a locked page scrolls` }
 }
 UI.Overlay(closes: drawer).activate
 if drawer.open { INFO@mark `UI120 activating a drawer's overlay does not close it` }
@@ -190,7 +189,8 @@ unless dynamic_style.styles.contains("muted") { INFO@mark `UI136 a dynamic style
 unless dynamic_style.dynamics.some(.target == "class") { INFO@mark `UI137 a dynamic style is not kept for the levels to recompute` }
 unless css_rules(dynamic_style).some(.selector == "#" + dynamic_style.id + ".muted") { INFO@mark `UI138 the web level has no rule for a style a dynamic style can switch to` }
 styled_link := Geometry.Box(location: @/x)
-with UI.Theme.kinds = [(Geometry.Shape{location}, "muted")] {
+muting := { {x: Geometry.Shape{location}} => x ^muted }
+with UI.Theme.kinds = muting {
   Geometry.Box(children: [styled_link]).themed
   unless styled_link.styles.contains("muted") && styled_link.color == UI.Theme["muted"].color { INFO@mark `UI139 a kind's default style is not applied` }
 }
@@ -202,16 +202,16 @@ unless code_area.face.content.marks.nonempty && code_area.face.content == "x := 
 unless Program(code: { code_area }).rendered(Language.Web.HTML.level).body.children.first.children.first.tag == "pre" { INFO@mark `UI143 a painted text area has no painted layer under it` }
 red := Geometry.Color(255, 0, 0)
 runs_text := Geometry.Box(content: "ab".marked("red", 0, 1), size: Geometry.Vector(16px, 16px))
-with UI.Theme.palettes = [("default", [("red", red)])] {
-  with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+with UI.Theme.palettes = [("red", red)] {
+  with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
     runs_grid := Program(code: { runs_text }).rendered(Language.TUI.Cells)
     unless runs_grid.cells[0][0].foreground == red && runs_grid.cells[0][1].foreground != red { INFO@mark `UI144 a painted run does not colour its cells only` }
   }
   runs_html := Compiler.reduced(Language.Web.HTML.Spans(runs_text), Language.Web.HTML.rules)
   unless runs_html.first.tag == "span" && runs_html.first.attributes.contains(("class", "red")) { INFO@mark `UI145 a painted run is not a span on the web` }
 }
-unless UI.Theme.painted("default", "keyword") == "#6C6783" as Geometry.Color { INFO@mark `UI146 a highlighting style has no colour in the default palette` }
-unless UI.Theme.painted("default", "muted") == UI.Theme["muted"].color { INFO@mark `UI147 a page style is not a highlighting style` }
+unless UI.Theme.painted("keyword") == "#6C6783" as Geometry.Color { INFO@mark `UI146 a highlighting style has no colour in the default palette` }
+unless UI.Theme.painted("muted") == UI.Theme["muted"].color { INFO@mark `UI147 a page style is not a highlighting style` }
 
 unless currentColor is Geometry.Inherited { INFO@mark `UI148 currentColor is not an inherited paint` }
 icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
@@ -223,20 +223,20 @@ solver.solve(Geometry.Box(color: red, children: [tinted_icon]))
 unless tinted_icon.fill == red { INFO@mark `UI152 an icon filled with currentColor does not take the colour around it` }
 
 revealed := Geometry.Box(origin: Geometry.Vector(0, 1000px), size: Geometry.Vector(100px, 100px))
-with UI.Viewport.size = Geometry.Vector(1000px, 800px) {
-  UI.Viewport.reveal(revealed)
-  unless UI.Viewport.scrolled == 1000px { INFO@mark `UI153 revealing a shape does not scroll to it` }
-  UI.Viewport.reveal(revealed, align: center)
-  unless UI.Viewport.scrolled == 650px { INFO@mark `UI154 revealing a shape in the centre does not centre it` }
-  UI.Viewport.reveal(revealed, offset: -100px)
-  unless UI.Viewport.scrolled == 900px { INFO@mark `UI155 a reveal's offset is not kept` }
-  UI.Viewport.reveal(revealed, smooth: true)
-  unless UI.Viewport.motion?.to == 1000px { INFO@mark `UI156 a smooth reveal does not move towards the shape` }
-  UI.Viewport.scrolled = 120px
-  unless UI.Viewport.scrolled == 120px { INFO@mark `UI157 the page scroll cannot be set` }
+with UI.scene.size = Geometry.Vector(1000px, 800px) {
+  UI.scene.reveal(revealed)
+  unless UI.scene.scrolled.y == 1000px { INFO@mark `UI153 revealing a shape does not scroll to it` }
+  UI.scene.reveal(revealed, align: center)
+  unless UI.scene.scrolled.y == 650px { INFO@mark `UI154 revealing a shape in the centre does not centre it` }
+  UI.scene.reveal(revealed, offset: -100px)
+  unless UI.scene.scrolled.y == 900px { INFO@mark `UI155 a reveal's offset is not kept` }
+  UI.scene.reveal(revealed, smooth: true)
+  unless UI.scene.scrolling?.to.y == 1000px { INFO@mark `UI156 a smooth reveal does not move towards the shape` }
+  UI.scene.scrolled = Geometry.Vector(0, 120px)
+  unless UI.scene.scrolled.y == 120px { INFO@mark `UI157 the page scroll cannot be set` }
 }
 scroller := Geometry.Box(origin: Geometry.Vector(0, 0px), size: Geometry.Vector(100px, 200px), overflow: scroll)
-UI.Viewport.reveal(revealed, within: scroller)
+scroller.reveal(revealed)
 unless scroller.scrolled.y == 1000px { INFO@mark `UI158 revealing within a container does not scroll the container` }
 unless revealed.size.y == 100px { INFO@mark `UI159 a shape's height cannot be measured` }
 scrolled_child := Geometry.Box(constraints: [tall(10px)])
@@ -255,21 +255,21 @@ control_f := (6 as Char as String) as Language.TUI.Key
 unless control_f.control && control_f.name.name == "f" { INFO@mark `UI166 ctrl+f in the terminal is not f with control` }
 unless ("\ef" as Language.TUI.Key).alt == "f" { INFO@mark `UI167 alt+f in the terminal is not read` }
 swipe_start := Time.now
-UI.Pointer.down(Geometry.Vector(200px, 0px), time: swipe_start)
-UI.Pointer.moved(Geometry.Vector(180px, 0px), swipe_start + 10 ms)
-unless UI.Pointer.velocity.x == -2px { INFO@mark `UI168 pointer velocity is not distance over time` }
-UI.Pointer.up(Geometry.Vector(100px, 0px), swipe_start + 300 ms)
-unless UI.Pointer.swipe.distance.x == -100px && UI.Pointer.swipe.duration == 300 ms { INFO@mark `UI169 a press, move and release is not a swipe` }
+UI.pointed().to(Geometry.Vector(200px, 0px), pressing: [0], time: swipe_start)
+UI.pointed().to(Geometry.Vector(180px, 0px), time: swipe_start + 10 ms)
+unless UI.pointer.velocity.x == -2px { INFO@mark `UI168 pointer velocity is not distance over time` }
+UI.pointed().to(Geometry.Vector(100px, 0px), pressing: [], time: swipe_start + 300 ms)
+unless UI.pointer.swipe.distance.x == -100px && UI.pointer.swipe.duration == 300 ms { INFO@mark `UI169 a press, move and release is not a swipe` }
 unless ("\e[<0;3;4M" as Language.TUI.Mouse).position == Geometry.Vector(16px, 48px) { INFO@mark `UI170 a mouse report is not a position on the page` }
 selected_field := Geometry.Box(content: Choice(type: String, value: "hello"))
-UI.Selection.whole(selected_field)
-unless UI.Selection.range.to == 5 && UI.Selection.text == "hello" { INFO@mark `UI171 selecting a field whole does not select its text` }
+selected_field.select
+unless selected_field.text.marks{.style == "selected"}.last.to == 5 && selected_field.text.marked_text("selected") == "hello" { INFO@mark `UI171 selecting a field whole does not select its text` }
 selected_text := Geometry.Box(content: "ab", size: Geometry.Vector(16px, 16px))
-UI.Selection.whole(selected_text)
-with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+selected_text.select
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   unless Program(code: { selected_text }).rendered(Language.TUI.Cells).cells[0][1].reverse { INFO@mark `UI172 selected text is not shown reversed in the terminal` }
 }
-unless web_devices.some(. is Language.Web.JS.Effect && .reads.contains("UI.Selection.range")) { INFO@mark `UI173 the web does not select a range` }
+unless web_devices.some(. is Language.Web.JS.Effect && .reads.contains("UI.selection")) { INFO@mark `UI173 the web does not select a range` }
 
 watched_value := 1
 fired_count := 0
@@ -302,19 +302,19 @@ unless video.content === watched && video.content.embedded == "https://www.youtu
 unless Program(code: { video }).rendered(Language.Web.HTML.level).body.children.first.tag == "iframe" { INFO@mark `UI183 an embedded frame is not an iframe on the web` }
 solver.solve(Geometry.Box(children: [video]))
 unless video.size.y == video.size.x * 9 / 16 { INFO@mark `UI184 an embedded video is not 16:9` }
-with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
-  Geometry.Solver(available: UI.Viewport.size).solve(Geometry.Box(children: [video]))
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  Geometry.Solver(available: UI.scene.size).solve(Geometry.Box(children: [video]))
   unless Program(code: { video }).rendered(Language.TUI.Cells).cells[1].some(.link == video.content) { INFO@mark `UI185 an embedded frame is not a link in the terminal` }
 }
-with UI.Viewport.size = Geometry.Vector(64px, 36px) {
-  Geometry.Solver(available: UI.Viewport.size).solve(Geometry.Box(children: [video]))
+with UI.scene.size = Geometry.Vector(64px, 36px) {
+  Geometry.Solver(available: UI.scene.size).solve(Geometry.Box(children: [video]))
   unless Program(code: { video }).rendered(Language.Direct.level).at(1, 1).alpha > 0 { INFO@mark `UI186 an embedded frame leaves no placeholder in a raster` }
 }
 
-site := UI.Site(index: "home", routes: [("/@", [(name: "fadi"), (name: "ether")])])
-unless site.at("/@nobody") == "home" { INFO@mark `UI187 a path nothing matches is not the index` }
+site := UI.Site(index: (home: "home", fadi: (name: "fadi") @ @/@fadi, ether: (name: "ether") @ @/@ether))
+unless site.at("/@nobody") === site.index { INFO@mark `UI187 a path nothing matches is not the index` }
 unless site.at("/@fadi").name == "fadi" { INFO@mark `UI188 a path matching one value is not that value` }
-unless (UI.Site(index: None).route("/x/", [(name: "a"), (name: "a")])).at("/x/a") is Choice { INFO@mark `UI189 two matches are not a chooser` }
+unless UI.Site(index: (first: (name: "a") @ @/x/a, second: (name: "a") @ @/x/a)).at("/x/a")#.count == 2 { INFO@mark `UI189 two matches are not a chooser` }
 
 who := "Ray"
 by_hand := Language.Web.HTML.Element("p", [("class", "note")], [Language.Web.HTML.Text("hi")])
@@ -406,7 +406,7 @@ unless heading.content == "Ray" && heading.content.marks.some(.style == "h1") { 
 highlighted := "x := 1".highlighted(".ray")
 unless highlighted == "x := 1" && highlighted.partial_marks.nonempty { INFO@mark `UI233 a highlighted string is not the same string with marks` }
 italic_text := Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px))
-with UI.Viewport.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
   italic_grid := Program(code: { italic_text }).rendered(Language.TUI.Cells)
   unless italic_grid.cells[0][1].italic && !italic_grid.cells[0][0].italic { INFO@mark `UI234 a style on part of a string is not on its cells only` }
 }

@@ -25,6 +25,8 @@ Written := (Char{!= " " && != "(" && != ")" && != "," && != \n} | ("(", Written,
 @./{path: Written} ^string => Location(written: "./" + path)
 @../{path: Written} ^string => Location(written: "../" + path)
 @/{path: Written} ^string => Location(written: "/" + path)
+@me ^string => &caller as Character ?? Instance.local
+@me/{path: Written} ^string => path.split("/" | ".").reduce(acc = @me => acc.`.`)
 @{name: Char.Word[]}/{path: Written} ^string => Location(written: name + "/" + path)
 
 World := class: Location + Nameable {
@@ -225,7 +227,10 @@ Reference := class {
 }
 
 Instance := class: Location {
+  static local = Instance(location: "localhost")
+
   location: *
+  device: Device = Device()
   status: Status = Status.online
   key: *?
   registry: Character[] = []
@@ -286,6 +291,7 @@ Character := class: Entity + Nameable {
   profile: *?
 
   full_name => first_name ? first_name + " " + last_name : name
+  device => (presence ?? Instance.local).device
   status_now => presence?.status ?? status
   also (status: Status): static => this ~~ statuses.push status
   is (status: Status) => this.status == status || statuses.contains(status)

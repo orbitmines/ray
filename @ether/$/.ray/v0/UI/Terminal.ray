@@ -7,7 +7,6 @@ Language.TUI := class: Language {
     cell (at: Geometry.Vector) => inside(at) ? cells[at.y][at.x] : Cell()
     background (at: Geometry.Vector, color: Geometry.Color?) => put(at, cell(at) ~~ .background = color)
     underlined (at: Geometry.Vector) => put(at, cell(at) ~~ .underline = true)
-    reversed (at: Geometry.Vector) => put(at, cell(at) ~~ .reverse = true)
     linked (at: Geometry.Vector, to: Location) => put(at, cell(at) ~~ .link = to)
     faded (at: Geometry.Vector, amount: Probability) => cell(at) -- (cell => put(at, cell ~~ .foreground = cell.foreground?.mix(cell.background, 1 - amount)))
     shaded (at: Geometry.Vector) => cell(at) -- (cell => put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
@@ -33,14 +32,13 @@ Language.TUI := class: Language {
   Border := class = paint: Paint
   Shade := class = paint: Paint, effect: Geometry.Effect
   Scrollbar := class = paint: Paint
-  Selected := class = paint: Paint
   Shown := class = paint: Paint
 
   rules := {
-    {solved: Geometry.Solved} => Painting(Grid(UI.Viewport.size.x / px_per_cell.x, UI.Viewport.size.y / px_per_cell.y), [solved.shape, solved.shape.lifted].flatten.map(Paint(., solved.scrolled)))
+    {solved: Geometry.Solved} => Painting(Grid(UI.scene.size.x / px_per_cell.x, UI.scene.size.y / px_per_cell.y), [solved.shape, solved.shape.lifted].flatten.map(Paint(., solved.scrolled)))
     {painting: Painting{writes.flatten.every(. is Program)}} => painting.grid ~~ painting.writes.flatten
 
-    {paint: Paint{shape.content is Choice}} => [Boxed(paint), paint.inside(paint.shape.face), Selected(paint)]
+    {paint: Paint{shape.content is Choice}} => [Boxed(paint), paint.inside(paint.shape.face)]
     {paint: Paint} => Boxed(paint)
 
     {boxed: Boxed} => boxed.paint -- (paint => [
@@ -50,7 +48,7 @@ Language.TUI := class: Language {
       Shown(paint) if paint.shape.content,
       paint.shape.in_place.sort_by(.layer).map(paint.inside(.)) if paint.shape.visible,
       Scrollbar(paint) if paint.shape.overflow == scroll,
-      paint.area.map(at => { .underlined(at) }) if UI.Focus.current === paint.shape,
+      paint.area.map(at => { .underlined(at) }) if paint.shape.focused,
       paint.area.map(at => { .linked(at, paint.shape.location) }) if paint.shape.location
     ])
     {shown: Shown{paint.shape.content is String}} => {
@@ -63,7 +61,7 @@ Language.TUI := class: Language {
         at = paint.at + Geometry.Vector(placed.column, row)
         written = Cell(lines[row][.],
           foreground: look.color as Geometry.Color, background: look.fill as Geometry.Color,
-          bold: look.font.weight >= 600, italic: look.font.style == italic, reverse: UI.Selection.selects(text, starts[row] + .))
+          bold: look.font.weight >= 600, italic: look.font.style == italic, reverse: look.styles.contains("selected"))
         (column: placed.column + lines[row][.].columns, writes: [placed.writes, { .put(at, written) }].flatten)
       }).writes).flatten
     }
@@ -78,7 +76,7 @@ Language.TUI := class: Language {
     {shown: Shown} => []
     {filled: Filled{paint.shape.content is Location}} => []
     {filled: Filled{paint.shape.fill is Geometry.Color}} => filled.paint.area.map(at => { .background(at, filled.paint.shape.fill) })
-    {filled: Filled{paint.shape.fill is Geometry.Gradient}} => filled.paint.area.map(at => { .background(at, filled.paint.shape.fill.at(at.x / UI.Viewport.size.x * px_per_cell.x)) })
+    {filled: Filled{paint.shape.fill is Geometry.Gradient}} => filled.paint.area.map(at => { .background(at, filled.paint.shape.fill.at(at.x / UI.scene.size.x * px_per_cell.x)) })
     {filled: Filled} => []
     {shade: Shade{effect is Geometry.Opacity}} => shade.paint.area.map(at => { .faded(at, shade.effect.amount) })
     {shade: Shade{effect is Geometry.Shadow}} => shade.paint.area.map(at => { .shaded(at + cells(shade.effect.offset)) })
@@ -102,10 +100,6 @@ Language.TUI := class: Language {
     {scrollbar: Scrollbar} => scrollbar.paint -- (paint => (0..<paint.size.y).map(y =>
       { .put(paint.at + Geometry.Vector(paint.size.x - 1, y), Cell(y == paint.shape.scrolled.y * paint.size.y / paint.shape.content_height ? "┃" : "│")) }
     ))
-    {selected: Selected{UI.Selection.range?.shape === paint.shape}} => selected.paint.inside(selected.paint.shape.face).at -- (from =>
-      (UI.Selection.range.from..<UI.Selection.range.to).map(offset => { .reversed(Geometry.Vector(from.x + offset, from.y)) })
-    )
-    {selected: Selected} => []
   }
   Cells := Geometry.Solving + rules
   level := Cells
@@ -149,11 +143,11 @@ Language.TUI := class: Language {
   Target := class = written: Compiler = ANSI.written, previous: Grid?, title: String? {
     start => Terminal.emit(Compiler.reduced(ANSI.Start(), written) as String)
     stop => Terminal.emit(Compiler.reduced(ANSI.Stop(), written) as String)
-    framed (grid: Grid) => ANSI.Frame(grid.changes(previous), UI.Navigation.title if UI.Navigation.title != title, grid.graphics{!(previous?.graphics.contains(.) ?? false)})
-    write (grid: Grid) => Terminal.emit(Compiler.reduced(framed(grid), written) as String) -- (previous = grid) -- (title = UI.Navigation.title)
+    framed (grid: Grid) => ANSI.Frame(grid.changes(previous), UI.page?.title if UI.page?.title != title, grid.graphics{!(previous?.graphics.contains(.) ?? false)})
+    write (grid: Grid) => Terminal.emit(Compiler.reduced(framed(grid), written) as String) -- (previous = grid) -- (title = UI.page?.title)
     read => Language.TUI.read
     copy (text: String) => Terminal.emit(Compiler.reduced(ANSI.Copy(text), written) as String)
-    open (to: Location) => UI.Platform.launch(to)
+    open (to: Location) => OS.launch(to)
   }
 
   XTerm256 := {
@@ -212,22 +206,22 @@ Language.TUI := class: Language {
 
   applied := {
     {key: Key} => Keyboard.press(key.name, key.shift, key.control, key.alt != None) -- Pressed(key)
-    {pressed: Pressed{key.page}} => UI.Viewport.scroll((pressed.key.page == "5" ? -1 : 1) * UI.Viewport.size.y)
-    {pressed: Pressed{key.name is Keyboard.Direction && key.control}} => UI.Selection.skip(pressed.key.name)
-    {pressed: Pressed{key.name is Keyboard.Direction && key.shift}} => UI.Selection.expand(pressed.key.name)
-    {pressed: Pressed{key.name is Keyboard.Direction}} => UI.Selection.move(pressed.key.name)
-    {pressed: Pressed{key.name == Keyboard.tab && key.shift}} => UI.Focus.current = UI.Focus.next(UI.scene, -1)
-    {pressed: Pressed{key.name == Keyboard.tab}} => UI.Focus.current = UI.Focus.next(UI.scene)
-    {pressed: Pressed{key.name == Keyboard.enter}} => (UI.Focus.current ?? UI.Selection.current)?.activate
-    {pressed: Pressed{key.code == "q"}} => UI.Runtime.current?.stop
+    {pressed: Pressed{key.page}} => UI.scene.scroll((pressed.key.page == "5" ? -1 : 1) * UI.scene.size.y)
+    {pressed: Pressed{key.name is Keyboard.Direction && key.control}} => UI.skip(pressed.key.name)
+    {pressed: Pressed{key.name is Keyboard.Direction && key.shift}} => UI.expand(pressed.key.name)
+    {pressed: Pressed{key.name is Keyboard.Direction}} => UI.move(pressed.key.name)
+    {pressed: Pressed{key.name == Keyboard.tab && key.shift}} => UI.tab(previous)
+    {pressed: Pressed{key.name == Keyboard.tab}} => UI.tab(next)
+    {pressed: Pressed{key.name == Keyboard.enter}} => (UI.focus.first ?? UI.current)?.activate
+    {pressed: Pressed{key.code == "q"}} => UI.running = false
     {pressed: Pressed} => None
-    {mouse: Mouse{button >= 64}} => (UI.Pointer.wheel = Geometry.Vector(y: mouse.button == 64 ? -1 : 1)) -- UI.Viewport.scroll(UI.Pointer.wheel.y * 3 * px_per_cell.y)
-    {mouse: Mouse{state == "m"}} => UI.Pointer.up(mouse.position)
-    {mouse: Mouse{button >= 32}} => UI.Pointer.moved(mouse.position)
-    {mouse: Mouse} => UI.Pointer.down(mouse.position)
-    {paste: Paste} => (UI.Clipboard.content = paste.text) -- UI.Focus.current?.content.typed(paste.text)
-    {focus: FocusChange} => UI.Viewport.preferences ~~ .focused = focus.state == "I"
-    {resize: Resize} => UI.Viewport.size = Geometry.Vector(Terminal.size.x * px_per_cell.x, Terminal.size.y * px_per_cell.y)
+    {mouse: Mouse{button >= 64}} => (UI.pointed().wheel = Geometry.Vector(y: mouse.button == 64 ? -1 : 1)) -- UI.scene.scroll(UI.pointed().wheel.y * 3 * px_per_cell.y)
+    {mouse: Mouse{state == "m"}} => UI.pointed().to(mouse.position, pressing: [])
+    {mouse: Mouse{button >= 32}} => UI.pointed().to(mouse.position)
+    {mouse: Mouse} => UI.pointed().to(mouse.position, pressing: [mouse.button])
+    {paste: Paste} => (@me/device/clipboard = paste.text) -- UI.focus.content.typed(paste.text)
+    {focus: FocusChange} => @me/device/preferences.focused = focus.state == "I"
+    {resize: Resize} => UI.scene.size = Geometry.Vector(Terminal.size.x * px_per_cell.x, Terminal.size.y * px_per_cell.y)
   }
 }
 

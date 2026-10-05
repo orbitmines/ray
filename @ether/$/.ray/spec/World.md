@@ -187,3 +187,13 @@ Answers from 2026-09-30.
 - **W6.9** An OS is a platform Language level (`Language.linux`, …), composed with the target; per-OS code
   lives there, not in the default code.
 - **W6.11** Chat later.
+
+Answers from 2026-10-05.
+
+- **W8** Devices are locations under `@me/device/<…>`: the clipboard (`@me/device/clipboard`; copy writes it,
+  paste reads it), pads, orientation, motion, geolocation, the preferences (reduced motion, dark, contrast,
+  focused), capabilities, notifications, fullscreen, printing and opening a location elsewhere are typed reads
+  and writes there, backed by the platform. `@me` is from the computer's perspective: without a character on
+  the chain it is the machine. In a session that runs as the user, `@me` is the player, and `@me/device` is
+  answered by the computer's `@me`, its answer flattened into the player's. A remote device is
+  `@some-remote/device/<…>`. IME composition is not a device field but a String with a `^composing` mark.

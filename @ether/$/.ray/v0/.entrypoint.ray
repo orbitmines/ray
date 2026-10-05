@@ -846,8 +846,8 @@ Node := base class {
     this
   )
   &={x} ^punctuation => (
-    previous := this.tail
     adding := x
+    previous := this.tail
     added := link adding previous
     goto more if previous
     this.head = added
@@ -2054,7 +2054,6 @@ boolean := enum false (holds: None) | true (holds: global) {
   next => .not
   previous => .not
 
-  & (b) => .and(b)
   && (b) => .and(b)
   || (b) => .or(b)
   !&& (b) => .nand(b)

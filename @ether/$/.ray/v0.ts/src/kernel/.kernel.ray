@@ -1085,7 +1085,7 @@ seek (scope, lexical, deep, name, wsrc, wb, we, seen, strict) => (
     shown := sees_shown(at, wsrc, wb, we)
     if shown {
       sees_of(at) for other => {
-        found = own(other, name)
+        found = other == global() ? UNDEF : own(other, name)
         if found != UNDEF and !(strict and given(other, name)) and !found_marked(other, seen) { return found, other }
       }
     }

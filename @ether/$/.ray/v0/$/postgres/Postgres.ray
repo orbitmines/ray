@@ -1,0 +1,10 @@
+// psql, the PostgreSQL interactive terminal (https://www.postgresql.org/docs/current/app-psql.html)
+Postgres := class: Language {
+  static extensions = ".postgres" | ".pgsql"
+  written := SQL.written
+
+  answered (store: Store, query: String) => Process(command: "psql", arguments: [store.at as String, "-At", "-c", "SELECT coalesce(json_agg(t), '[]') FROM (" + query + ") t"])
+  sending (store: Store) => Process(command: "psql", arguments: [store.at as String, "-q", "-v", "ON_ERROR_STOP=1"])
+  selected (store: Store, type) => SQL.rows(answered(store, SQL.selection(type)).stdout, type)
+  sent (store: Store, text: String) => sending(store) ~~ (.input = text) -- .stdout
+}

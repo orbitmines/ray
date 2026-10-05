@@ -1,0 +1,7 @@
+// Kitty's terminal graphics protocol (https://sw.kovidgoyal.net/kitty/graphics-protocol/)
+Kitty := class: Language {
+  static extensions = ".kitty"
+  written := {
+    {writing: Language.Writing} => "\e_Ga=T,f=100;", writing.value as Base64 as String, "\e\\"
+  }
+}

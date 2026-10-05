@@ -1,0 +1,82 @@
+// The WebSocket protocol (https://www.rfc-editor.org/rfc/rfc6455)
+WebSocket := class: Language {
+  static extensions = ".ws" | ".websocket"
+
+  // Opcodes (https://www.rfc-editor.org/rfc/rfc6455#section-5.2, https://www.rfc-editor.org/rfc/rfc6455#section-11.8)
+  static Opcode := enum continuation | text | binary | x3 | x4 | x5 | x6 | x7 | close | ping | pong {
+    // Control frames have the high bit of the opcode set (https://www.rfc-editor.org/rfc/rfc6455#section-5.5)
+    control => index >= 8
+  }
+
+  // Base framing protocol (https://www.rfc-editor.org/rfc/rfc6455#section-5.2)
+  static Frame := class (
+    fin: Binary¹ as boolean = true,
+    rsv: Binary³ = 0,
+    opcode: Binary⁴ as Opcode,
+    masked: Binary¹ as boolean = false,
+    // Payload length in the minimal number of bytes (https://www.rfc-editor.org/rfc/rfc6455#section-5.2)
+    short: Binary⁷ = payload.count < 126 ? payload.count : payload.count < 2 ^ 16 ? 126 : 127,
+    (medium: Binary¹⁶ = payload.count) if short == 126,
+    (long: Binary⁶⁴{⊢0} = payload.count) if short == 127,
+    (key: Byte⁴ = Byte⁴.random) if masked,
+    data: Byte[]{length == size} = masked ? masking(payload) : payload
+  ) {
+    size => short == 127 ? long : short == 126 ? medium : short
+    // Client-to-server masking (https://www.rfc-editor.org/rfc/rfc6455#section-5.3)
+    masking (bytes: Byte[]) => bytes.enumerate.map(.value ~x|| key[.index % 4])
+    payload = masked ? masking(data) : data
+
+    // Control frames are not fragmented and carry at most 125 bytes (https://www.rfc-editor.org/rfc/rfc6455#section-5.5)
+    dynamically assert fin && payload.count <= 125 if opcode.control
+  }
+
+  static Message := class = data: String | Byte[] {
+    text => data is String
+  }
+  // Closing (https://www.rfc-editor.org/rfc/rfc6455#section-5.5.1), status codes (https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1)
+  static Close := class = code: Binary¹⁶ = 1000, reason: String = ""
+  static Ping := class = data: Byte[] = []
+  static Pong := class = data: Byte[] = []
+
+  // Fragmentation: a message is its first frame and its continuations (https://www.rfc-editor.org/rfc/rfc6455#section-5.4)
+  static Stream := class (frames: Frame[]) {
+    fragmented => frames{!.opcode.control}.reduce(acc = [] => .opcode == Opcode.continuation ? [acc[..<acc.count - 1], [[acc.last, .].flatten(1)]].flatten(1) : [acc, [[.]]].flatten(1))
+    messages => fragmented.map(fragments => fragments.first.opcode == Opcode.text
+      ? Message(fragments.payload.flatten as Unicode.UTF-8 as String)
+      : Message(fragments.payload.flatten))
+    controls => frames{.opcode.control}.map(frame => frame.opcode == Opcode.close ? Close(code: frame.payload[..<2] as Binary¹⁶, reason: frame.payload[2..] as Unicode.UTF-8 as String)
+      : frame.opcode == Opcode.ping ? Ping(frame.payload) : Pong(frame.payload))
+  }
+
+  static Side := enum client | server
+  static Writing := class = value: *, from: Side = Side.client
+  static Framing := {
+    {writing: Writing{value is Message && value.text}} => Frame(opcode: Opcode.text, masked: writing.from == Side.client, payload: writing.value.data as Unicode.UTF-8 as Byte[])
+    {writing: Writing{value is Message}} => Frame(opcode: Opcode.binary, masked: writing.from == Side.client, payload: writing.value.data)
+    {writing: Writing{value is Close}} => Frame(opcode: Opcode.close, masked: writing.from == Side.client, payload: (writing.value.code as Byte[], writing.value.reason as Unicode.UTF-8 as Byte[]))
+    {writing: Writing{value is Ping}} => Frame(opcode: Opcode.ping, masked: writing.from == Side.client, payload: writing.value.data)
+    {writing: Writing{value is Pong}} => Frame(opcode: Opcode.pong, masked: writing.from == Side.client, payload: writing.value.data)
+  }
+
+  level := {
+    {stream: Stream} => stream.messages
+  }
+  written := {
+    {writing: Language.Writing{value is (Message | Close | Ping | Pong)}} => Compiler.reduced(Writing(writing.value), Framing)
+  }
+
+  // Opening handshake (https://www.rfc-editor.org/rfc/rfc6455#section-4.1)
+  static GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+  static opening (target: Location, key: Byte[] = Byte¹⁶.random) => HTTP.Request(target: target, fields: HTTP.Fields(entries: [
+    (name: "Upgrade", value: "websocket"), (name: "Connection", value: "Upgrade"),
+    (name: "Sec-WebSocket-Key", value: key as Base64 as String), (name: "Sec-WebSocket-Version", value: "13")
+  ]))
+  // Sec-WebSocket-Accept is the base64 SHA-1 of the key and the GUID (https://www.rfc-editor.org/rfc/rfc6455#section-4.2.2)
+  static accept (key: String) => ((key + GUID) as SHA1 as Byte[]) as Base64 as String
+  static accepting (request: HTTP.Request) => HTTP.Response(status: HTTP.Status(101), fields: HTTP.Fields(entries: [
+    (name: "Upgrade", value: "websocket"), (name: "Connection", value: "Upgrade"),
+    (name: "Sec-WebSocket-Accept", value: accept(request.fields["Sec-WebSocket-Key"]))
+  ]))
+  static opened (request: HTTP.Request, response: HTTP.Response) => response.status.code == 101
+    && response.fields["Upgrade"]?.fold_case == "websocket" && response.fields["Sec-WebSocket-Accept"] == accept(request.fields["Sec-WebSocket-Key"])
+}

@@ -1,0 +1,36 @@
+// Access control lists, long text form (https://man7.org/linux/man-pages/man5/acl.5.html)
+ACL := class: Language {
+  static extensions = ".acl"
+
+  static Entry := class (tag: "user" | "group" | "mask" | "other", ":", qualifier: (!":" && !\n)[], ":", read: "r" | "-", write: "w" | "-", execute: "x" | "-") {
+    triad => POSIX.Triad(read == "r", write == "w", execute == "x")
+    static (given: (tag: String, qualifier: String, triad: POSIX.Triad)) as (=== Entry) => Entry(given.tag, given.qualifier,
+      read: given.triad.read ? "r" : "-", write: given.triad.write ? "w" : "-", execute: given.triad.execute ? "x" : "-")
+  }
+  static Wire := class ((("#", (!\n)[]) | entry: Entry)[].join(\n), \n?) {
+    entries => this.entry{!= None}
+    unnamed (tag: String) => entries{.tag == tag && .qualifier.empty}.first?.triad ?? POSIX.Triad()
+    // Named entries and the group class are limited by the mask (https://man7.org/linux/man-pages/man5/acl.5.html)
+    mask => entries{.tag == "mask"}.first?.triad
+  }
+
+  level := {
+    {wire: Wire} => [
+      Compiler.reduced(POSIX.Mode(user: wire.unnamed("user"), group: wire.unnamed("group"), other: wire.unnamed("other")), POSIX.level),
+      wire.entries{.tag is ("user" | "group") && .qualifier.nonempty}.map(entry => Access(who: Character(name: entry.qualifier), method: [
+        Access.Reading if entry.triad.read && (wire.mask?.read ?? true),
+        `=` if entry.triad.write && (wire.mask?.write ?? true),
+        `()` if entry.triad.execute && (wire.mask?.execute ?? true)
+      ].compact))
+    ].flatten
+  }
+  written := {
+    {writing: Language.Writing{value is Access[]}} => writing.value -- (accessors => POSIX.mode(accessors{.who is Accessor.Permission}) -- (mode => Wire(entry: [
+      (tag: "user", qualifier: "", triad: mode.user) as Entry,
+      accessors{.who is Character}.map((tag: "user", qualifier: .who.name, triad: . as POSIX.Triad) as Entry),
+      (tag: "group", qualifier: "", triad: mode.group) as Entry,
+      (tag: "mask", qualifier: "", triad: Access(method: accessors{.who is Character}.method.flatten) as POSIX.Triad) as Entry if accessors.some(.who is Character),
+      (tag: "other", qualifier: "", triad: mode.other) as Entry
+    ].flatten)))
+  }
+}

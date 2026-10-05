@@ -1,0 +1,24 @@
+// CSS fragments written inline, and the CSS language writing them.
+
+mark ^keyword := external global
+
+who := "Ray"
+css_rule := @css #{who} { gap: {2}px {3}px; display: grid; }
+unless css_rule is CSS.Rule && css_rule.selector == "#Ray" { INFO@mark `UI200 a css fragment is not a rule with its selector` }
+unless css_rule.declarations.contains(("display", "grid")) && css_rule.declarations.contains(("gap", 2, "px ", 3, "px")) { INFO@mark `UI201 css declarations are not read with their holes` }
+unless (@css p { color: {None}; display: grid; }).declarations.count == 1 { INFO@mark `UI202 a declaration whose value is None is not left out` }
+unless (@css @media print { p { display: none; } }).within == "@media print" { INFO@mark `UI203 a css at-rule does not hold its rule` }
+unless (@css @keyframes spin { from { opacity: 0; } to { opacity: 1; } }).frames.last.at == 1 { INFO@mark `UI204 css keyframes are not read` }
+unless [@css p { display: grid; }, 3].count == 2 { INFO@mark `UI205 a css fragment does not stop where its grammar stops` }
+unless (@css/style.css) is Location { INFO@mark `UI213 @name/path is not a location when the name is a language` }
+css_block := @css {
+  display: grid;
+  gap: {2}px;
+}
+unless css_block.count == 2 && css_block.contains(("display", "grid")) && css_block.contains(("gap", 2, "px")) { INFO@mark `UI217 a css block is not its declarations` }
+sheet_block := @css {
+  p { display: grid; }
+  #{who} { gap: 1px; }
+}
+unless sheet_block.count == 2 && sheet_block.last.selector == "#Ray" { INFO@mark `UI218 a css block of rules is not its rules` }
+unless ((@css p { /* note */ display: grid; }) as CSS) == "p{/* note */display:grid;}" { INFO@mark `UI237 a css comment is not written into the css` }

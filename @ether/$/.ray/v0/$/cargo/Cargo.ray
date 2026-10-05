@@ -1,0 +1,10 @@
+// The manifest format (https://doc.rust-lang.org/cargo/reference/manifest.html)
+Cargo := Package("Cargo.toml" | ".cargo", ecosystem: "cargo", versioned: SemVer, ranges: Requirement, kinds: ["dependencies", "dev-dependencies", "build-dependencies"], bare: "^", native: true,
+  level: TOML.level + {
+    {manifest: Document{package}} => Project(name: manifest.package.name, version: manifest.package.version as SemVer, description: manifest.package.description, manager: Cargo,
+      dependencies: [manifest, (manifest.target?.entries ?? []).value].flatten.map(table => Cargo.kinds.map(kind => (table[kind]?.entries ?? []).map(Cargo.depending(.name, .value, kind)))).flatten)
+  },
+  written: { {writing: Language.Writing{value is Project}} => writing.value -- (project => Language.Writing(Document(entries: [(name: "package", value: Document(entries: Cargo.described(project))),
+    Cargo.kinds.filter(kind => project.dependencies.some(.kind == kind)).map(kind => (name: kind, value: Cargo.required(project, kind)))].flatten))) } + TOML.written,
+  available: name => (("https://crates.io/api/v1/crates/" + name) as Location).content -- (text => (text as JSON).value.versions{!.yanked}.num),
+  fetched: (name, version, into) => Process(command: "cargo", arguments: ["install", "--root", into.sandboxed, name, "--version", "=" + version]))

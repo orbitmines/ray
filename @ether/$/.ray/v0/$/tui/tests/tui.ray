@@ -1,0 +1,65 @@
+// A page rendered to the terminal, and the terminal's input read back.
+
+mark ^keyword := external global
+
+page := Program(code: {
+  "Ray" ^h1
+  @https://orbitmines.com
+})
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  grid := page.rendered(Language.TUI.Cells)
+  unless grid.width == 80 && grid.height == 24 { INFO@mark `UI30 the terminal grid is not 80 by 24` }
+  unless grid.cells[0][0].glyph == "R" { INFO@mark `UI31 the heading's first glyph is not in the first cell` }
+  unless grid.cells[0][0].bold { INFO@mark `UI32 a heading is not bold in the terminal` }
+  unless grid.cells[1].some(.link) { INFO@mark `UI33 a link's cells do not carry where it goes` }
+  unless grid.changes(grid).empty { INFO@mark `UI34 an unchanged frame writes something` }
+}
+unless "\e[1;5A" as Language.TUI.Key .control { INFO@mark `UI35 ctrl+up is not read as control` }
+unless ("\e[<0;3;4M" as Language.TUI.Mouse).x == 3 { INFO@mark `UI36 a mouse report is not read` }
+unless Language.named(".tui") == Language.TUI { INFO@mark `UI66 the terminal is not a registered language` }
+with UI.page = (title: "Ray") {
+  unless Language.TUI.Target().framed(Language.TUI.Grid(1, 1)).title == "Ray" { INFO@mark `UI99 the terminal title does not follow the page title` }
+}
+
+red_bar := Geometry.Box(position: Geometry.Fixed(), inset: Geometry.Edges(0px, None, None, 0px), fill: Geometry.Color(255, 0, 0), width: 16px, height: 16px)
+scrolled_page := Geometry.Box(height: 2000px, children: [Geometry.Box(height: 1000px), red_bar])
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  with UI.scene.scrolled = Geometry.Vector(0, 320px) {
+    unless Program(code: { scrolled_page }).rendered(Language.TUI.Cells).cells[0][0].background == Geometry.Color(255, 0, 0) { INFO@mark `UI116 a fixed shape leaves the top row of a scrolled terminal` }
+  }
+}
+
+red := Geometry.Color(255, 0, 0)
+runs_text := Geometry.Box(content: "ab".marked("red", 0, 1), size: Geometry.Vector(16px, 16px))
+with UI.Theme.palettes = [("red", red)] {
+  with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+    runs_grid := Program(code: { runs_text }).rendered(Language.TUI.Cells)
+    unless runs_grid.cells[0][0].foreground == red && runs_grid.cells[0][1].foreground != red { INFO@mark `UI144 a painted run does not colour its cells only` }
+  }
+}
+
+keyboard := @me/device/keyboard
+unless ("\t" as Language.TUI.Key).name === keyboard["Tab"] && ("\r" as Language.TUI.Key).name === keyboard["Enter"] { INFO@mark `UI165 a key the UI names is not Feature's key` }
+control_f := (6 as Char as String) as Language.TUI.Key
+unless control_f.control && control_f.name.name == "f" { INFO@mark `UI166 ctrl+f in the terminal is not f with control` }
+unless ("\ef" as Language.TUI.Key).alt == "f" { INFO@mark `UI167 alt+f in the terminal is not read` }
+unless ("\e[<0;3;4M" as Language.TUI.Mouse).position == Geometry.Vector(16px, 48px) { INFO@mark `UI170 a mouse report is not a position on the page` }
+selected_text := Geometry.Box(content: "ab", size: Geometry.Vector(16px, 16px))
+selected_text.select
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  unless Program(code: { selected_text }).rendered(Language.TUI.Cells).cells[0][1].reverse { INFO@mark `UI172 selected text is not shown reversed in the terminal` }
+}
+
+solved := (children, scrolled: Geometry.Length = 0px) => Geometry.Box(size: Geometry.Vector(1000px, 800px), scrolled: Geometry.Vector(0px, scrolled), children: children).solve
+watched := (@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}
+video := Program(code: { watched }){O: UI.Scene}()
+solved([video])
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  unless Program(code: { video }).rendered(Language.TUI.Cells).cells[1].some(.link == video.content) { INFO@mark `UI185 an embedded frame is not a link in the terminal` }
+}
+
+italic_text := Geometry.Box(content: "ab".marked("italic", 1, 2), size: Geometry.Vector(16px, 16px))
+with UI.scene.size = Geometry.Vector(80 * 8px, 24 * 16px) {
+  italic_grid := Program(code: { italic_text }).rendered(Language.TUI.Cells)
+  unless italic_grid.cells[0][1].italic && !italic_grid.cells[0][0].italic { INFO@mark `UI234 a style on part of a string is not on its cells only` }
+}

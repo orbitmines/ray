@@ -1,0 +1,9 @@
+// Permission levels written as a browser's Permissions-Policy, and read back.
+
+mark ^keyword := external global
+
+camera := Grant(Access(who: Accessor.Permission.localhost), target: Device.Capability.camera)
+unless Browser.named(camera) == "camera" { INFO@mark `AC21 the camera is not the browser's camera permission` }
+unless Browser.named(Grant(Access(who: Accessor.Permission.localhost, method: `=`), target: Device.Capability.clipboard)) == "clipboard-write" { INFO@mark `AC22 writing the clipboard is not clipboard-write` }
+unless [Grant(Access(who: Accessor.Permission.public), target: Device.Capability.geolocation), camera] as Browser == "geolocation=*, camera=(self)" { INFO@mark `AC23 levels are not written as a Permissions-Policy` }
+unless Browser.read("geolocation=*").first.access.who == Accessor.Permission.public { INFO@mark `AC24 * does not read back as public` }

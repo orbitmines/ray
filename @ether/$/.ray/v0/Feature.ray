@@ -27,11 +27,11 @@ FileSystem := class: Language {
   }
   static Browser := class: FileSystem {
     key (location: Location) => "ray:" + location.normalised
-    read (location: Location) => Process(command: "localStorage.getItem(" + JSON.language.write(key(location)) + ")").stdout
+    read (location: Location) => Process(command: "localStorage.getItem(" + $.json.write(key(location)) + ")").stdout
     write (location: Location, content) => Process(command: content === None
-      ? "localStorage.removeItem(" + JSON.language.write(key(location)) + ")"
-      : "localStorage.setItem(" + JSON.language.write(key(location)) + ", " + JSON.language.write(content as String) + ")").stdout
-    listing (location: Location) => (Process(command: "JSON.stringify(Object.keys(localStorage).filter(key => key.startsWith(" + JSON.language.write(key(location) + "/") + ")))").stdout as JSON).value
+      ? "localStorage.removeItem(" + $.json.write(key(location)) + ")"
+      : "localStorage.setItem(" + $.json.write(key(location)) + ", " + $.json.write(content as String) + ")").stdout
+    listing (location: Location) => $.json.read(Process(command: "JSON.stringify(Object.keys(localStorage).filter(key => key.startsWith(" + $.json.write(key(location) + "/") + ")))").stdout)
       .map(.after(key(location) + "/").before("/")).unique.map(location / .)
   }
   static Remote := class: FileSystem {

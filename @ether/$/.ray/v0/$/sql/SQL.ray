@@ -1,0 +1,17 @@
+SQL := class: Language {
+  static extensions = ".sql"
+  static identifier (text: String) => "\"" + text.replace("\"", "\"\"") + "\""
+  static quoted (text: String) => "'" + text.replace("'", "''") + "'"
+  static literal (value) => value === None ? "NULL" : value is Number ? value as 10 as String : value is Byte[] ? "X'" + (value as Hexadecimal) + "'" : quoted(value as String)
+
+  written := {
+    {writing: Language.Writing{value is Iterable}} => writing.value.map(.type).unique.map(type => writing.value{.type == type}.first -- (row =>
+      "CREATE TABLE IF NOT EXISTS ", identifier(type), " (id TEXT PRIMARY KEY", row.fields.map(", ", identifier(.name), " TEXT"), ");", \n)), writing.value.map(Language.Writing(.))
+    {writing: Language.Writing{value is Store.Row}} => writing.value -- (row =>
+      "INSERT INTO ", identifier(row.type), " (id", row.fields.map(", ", identifier(.name)), ") VALUES (", quoted(row.id), row.fields.map(", ", quoted(.value)), ")",
+      " ON CONFLICT (id) DO UPDATE SET ", row.fields.map(("," if .index > 0), identifier(.name), " = excluded.", identifier(.name)), ";", \n)
+  }
+  static selection (type) => "SELECT * FROM " + identifier(type.name)
+  static rows (text: String, type) => (text as JSON).value.map(entry =>
+    Store.Row(type: type.name, id: entry.id as String, fields: entry.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)
+}

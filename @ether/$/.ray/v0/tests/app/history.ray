@@ -1,4 +1,4 @@
-// Version control: one history that every backend reads into and writes out of.
+// Version control: one history that every language reads into and writes out of; Ray's own is the .% form.
 
 mark ^keyword := external global
 
@@ -19,15 +19,15 @@ unless vh.head.previous.stamp < vh.head.stamp { INFO@mark `VC5 a later commit is
 unless (@ada { @me }) == ada { INFO@mark `VC6 a block run as a character does not run as it` }
 
 // `.%`: a line per commit, the program that produces the next version.
-vl := Ray.history.line(vh.head, above: vh.head.previous)
+vl := History.line(vh.head, above: vh.head.previous)
 unless vl ~= ⊢(vh.head.id as String + "\\ ") { INFO@mark `VC7 a line does not begin with its label` }
 unless vl ~= " @ada { " { INFO@mark `VC8 a line does not run as who made the commit` }
 unless vl ~= ". named \"welcome\"" { INFO@mark `VC9 a rename is not written as naming the value` }
-vt := Ray.history.write(vh)
+vt := Language.ray.write(vh)
 vf := vt.at(vh.id as String + ".ray").content as String
 unless vf.lines{.nonempty}.count == 2 { INFO@mark `VC10 two commits are other than two lines` }
 unless vt.at("index.ray").content as String ~= ("welcome: ", vd.id as String) { INFO@mark `VC11 the index does not map the name to the definition` }
-vb := History().read(vf as Ray.history.File)
+vb := History().read(vf as History.File)
 unless vb.head.id == vh.head.id { INFO@mark `VC12 a history read back has other labels` }
 unless vb.count == 2 { INFO@mark `VC13 a history read back has other than its two commits` }
 unless vb.name_of(vb.definitions.first) == "welcome" { INFO@mark `VC14 a history read back forgot the rename` }
@@ -42,34 +42,20 @@ vp := Program(code: {
 })
 unless (vp as History).count == 2 { INFO@mark `VC16 a labelled program is not a history of its labels` }
 
-// Backends: what each keeps.
-unless Ray.history.fidelity == Backend.Fidelity.lossless { INFO@mark `VC17 the .% history is not lossless` }
-unless Pijul.fidelity == Backend.Fidelity.lossless { INFO@mark `VC18 pijul's changes are not lossless` }
-unless Git.fidelity == Backend.Fidelity.snapshot { INFO@mark `VC19 git does not keep snapshots` }
-unless Mercurial.fidelity == Backend.Fidelity.snapshot { INFO@mark `VC20 mercurial does not keep snapshots` }
-unless Fossil.fidelity == Backend.Fidelity.snapshot { INFO@mark `VC21 fossil does not keep snapshots` }
-unless Subversion.fidelity == Backend.Fidelity.snapshot { INFO@mark `VC22 subversion does not keep snapshots` }
-unless Git is Language { INFO@mark `VC23 a backend is not a language` }
-
-// Git: a tree per commit, and the operations kept in notes.
-vg := Git.write(vh)
-unless vg.at("HEAD").content as String == "ref: refs/heads/main\n" { INFO@mark `VC24 git's HEAD does not name the branch` }
-unless vg.at(Git.noted_at) { INFO@mark `VC25 git keeps no notes of the operations` }
-vgh := Git.read(Git.written_to(vh, @./history-test))
-unless vgh.head.id == vh.head.id { INFO@mark `VC26 a history written as git and read back has other labels` }
-unless vgh.name_of(vgh.definitions.first) == "welcome" { INFO@mark `VC27 a history written as git and read back forgot the rename` }
-unless Git.Object("blob", "hello\n" as Byte[]).id == "ce013625030ba8dba906f756967f9e9ca394464a" { INFO@mark `VC28 a git blob is not named by the hash git gives it` }
+// What the Ray language keeps.
+unless Language.ray.fidelity == Language.Fidelity.lossless { INFO@mark `VC17 the .% history is not lossless` }
+unless $.ray === Language.ray { INFO@mark `VC43 $.ray is not the Ray language` }
 
 // A foreign snapshot: operations inferred from successive trees.
 text := "x := 1\ny := 2\nz := 3" as Byte[]
-vs1 := Backend.Revision(id: 1, tree: Backend.Entry.of([(path: "a.ray", content: text)]), who: "someone", when: Time.now)
-vs2 := Backend.Revision(id: 2, parents: [1], tree: Backend.Entry.of([(path: "b.ray", content: text)]), who: "someone", when: Time.now)
-vi := Backend.history_of([vs1, vs2])
+vs1 := History.Revision(id: 1, tree: Language.Entry.of([(path: "a.ray", content: text)]), who: "someone", when: Time.now)
+vs2 := History.Revision(id: 2, parents: [1], tree: Language.Entry.of([(path: "b.ray", content: text)]), who: "someone", when: Time.now)
+vi := History.read_revisions([vs1, vs2])
 unless vi.head.operations.first.kind == Operation.Kind.rename { INFO@mark `VC29 a moved file is not read as a rename` }
 unless vi.definitions.count == 1 { INFO@mark `VC30 a rename made a second definition` }
-vt1 := Backend.Revision(id: 1, tree: Backend.Entry.of([(path: "a.ray", content: text), (path: "c.ray", content: text)]), who: "someone", when: Time.now)
-vt2 := Backend.Revision(id: 2, parents: [1], tree: Backend.Entry.of([(path: "b.ray", content: text)]), who: "someone", when: Time.now)
-unless Backend.history_of([vt1, vt2]).head.operations{.definition is Quest}.nonempty { INFO@mark `VC31 a rename two files could have made is not a quest` }
+vt1 := History.Revision(id: 1, tree: Language.Entry.of([(path: "a.ray", content: text), (path: "c.ray", content: text)]), who: "someone", when: Time.now)
+vt2 := History.Revision(id: 2, parents: [1], tree: Language.Entry.of([(path: "b.ray", content: text)]), who: "someone", when: Time.now)
+unless History.read_revisions([vt1, vt2]).head.operations{.definition is Quest}.nonempty { INFO@mark `VC31 a rename two files could have made is not a quest` }
 
 // Merging: concurrent changes to one definition are a quest; to two are not.
 vm := History(repository: Repository())
@@ -105,6 +91,6 @@ unless vglobal.head.parents.count == 2 { INFO@mark `VC38 the global history does
 
 // Storage choices are optimisation levels.
 unless Compiler.levels.contains(Compiler.stored) { INFO@mark `VC39 storage is not a compiler level` }
-unless Ray.history.Project(history: vh).caches.first.content as String ~= ⊢(vh.head.id as String + "\\ ") { INFO@mark `VC40 the cache does not hold the value at the head` }
-unless Ray.history.edit("abcdef", "abXdef") == ". edited(3, 4, \"X\")" { INFO@mark `VC41 a small change is not written as an edit` }
+unless History.Written(history: vh).caches.first.content as String ~= ⊢(vh.head.id as String + "\\ ") { INFO@mark `VC40 the cache does not hold the value at the head` }
+unless History.edit("abcdef", "abXdef") == ". edited(3, 4, \"X\")" { INFO@mark `VC41 a small change is not written as an edit` }
 unless "abcdef".edited(3, 4, "X") == "abXdef" { INFO@mark `VC42 an edit does not produce the changed value` }

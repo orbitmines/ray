@@ -1,0 +1,10 @@
+// Permission levels written as an access control list, and read back.
+
+mark ^keyword := external global
+
+alice := Character(name: "alice")
+shared := [Accessor(Accessor.Permission.private).read, Accessor(Accessor.Permission.private).write, Access(who: alice, method: Access.Reading)]
+acl := shared as ACL
+unless acl ~= (*, "user:alice:r--", *) { INFO@mark `AC18 a character's read is not a named ACL entry` }
+unless acl ~= (*, "mask::r--", *) { INFO@mark `AC19 an ACL with a named entry has no mask` }
+if ACL.read("user::rw-\nuser:alice:rwx\ngroup::---\nmask::r--\nother::---"){.who is Character}.first.writes { INFO@mark `AC20 the mask does not limit a named entry` }

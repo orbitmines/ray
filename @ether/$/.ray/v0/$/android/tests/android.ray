@@ -1,0 +1,6 @@
+// Permission levels written as Android manifest permissions.
+
+mark ^keyword := external global
+
+camera := Grant(Access(who: Accessor.Permission.localhost), target: Device.Capability.camera)
+unless [camera] as Android ~= (*, "android.permission.CAMERA", *) { INFO@mark `AC25 the camera is not Android's CAMERA permission` }

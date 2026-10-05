@@ -1,0 +1,21 @@
+// Git: a tree per commit, and the operations kept in notes.
+
+mark ^keyword := external global
+
+ada := Instance.local.login(Character(name: "ada"))
+vh := History(repository: Repository())
+vd := Definition(name: "greet")
+vh.operate(ada, Operation.Kind.define, vd, "hello")
+vh.operate(ada, Operation.Kind.rename, vd, "welcome")
+
+unless Git.fidelity == Language.Fidelity.snapshot { INFO@mark `VC19 git does not keep snapshots` }
+unless Git is Language { INFO@mark `VC23 a backend is not a language` }
+unless $.git === Git { INFO@mark `VC44 $.git is not the git language` }
+
+vg := Git.write(vh)
+unless vg.at("HEAD").content as String == "ref: refs/heads/main\n" { INFO@mark `VC24 git's HEAD does not name the branch` }
+unless vg.at(Git.noted_at) { INFO@mark `VC25 git keeps no notes of the operations` }
+vgh := Git.read(Git.written_to(vh, @./history-test))
+unless vgh.head.id == vh.head.id { INFO@mark `VC26 a history written as git and read back has other labels` }
+unless vgh.name_of(vgh.definitions.first) == "welcome" { INFO@mark `VC27 a history written as git and read back forgot the rename` }
+unless Git.Object("blob", "hello\n" as Byte[]).id == "ce013625030ba8dba906f756967f9e9ca394464a" { INFO@mark `VC28 a git blob is not named by the hash git gives it` }

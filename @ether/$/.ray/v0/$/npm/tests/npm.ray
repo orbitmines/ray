@@ -1,0 +1,10 @@
+// package.json read into a project and written back.
+
+mark ^keyword := external global
+
+npm_project := $.npm.read("{\"name\": \"app\", \"version\": \"1.0.0\", \"dependencies\": {\"left-pad\": \"^1.3.0\"}, \"devDependencies\": {\"tap\": \"16\"}}")
+unless npm_project.name == "app" { INFO@mark `PK14 package.json does not name its project` }
+unless npm_project.dependencies.count == 2 { INFO@mark `PK15 package.json does not depend on two` }
+unless npm_project.dependencies.first.location == "npm/left-pad" { INFO@mark `PK16 an npm dependency is not under npm` }
+unless npm_project.dependencies.last.kind == "devDependencies" { INFO@mark `PK17 a development dependency forgot its kind` }
+unless $.npm.read(npm_project.manifest).dependencies.count == 2 { INFO@mark `PK18 a written package.json does not read back` }

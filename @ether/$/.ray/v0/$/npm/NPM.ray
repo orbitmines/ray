@@ -1,0 +1,10 @@
+// package.json (https://docs.npmjs.com/cli/v10/configuring-npm/package-json)
+NPM := Package("package.json" | ".npm", ecosystem: "npm", versioned: SemVer, ranges: Requirement, kinds: ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"],
+  level: JSON.level + {
+    {manifest: Document{name || dependencies}} => Project(name: manifest.name, version: manifest.version as SemVer, description: manifest.description, manager: NPM,
+      dependencies: NPM.kinds.map(kind => (manifest[kind]?.entries ?? []).map(NPM.depending(.name, .value, kind))).flatten)
+  },
+  written: { {writing: Language.Writing{value is Project}} => writing.value -- (project => Language.Writing(Document(entries: [NPM.described(project),
+    NPM.kinds.filter(kind => project.dependencies.some(.kind == kind)).map(kind => (name: kind, value: NPM.required(project, kind)))].flatten))) } + JSON.written,
+  available: name => Process(command: "npm", arguments: ["view", name, "versions", "--json"]).stdout -- (text => (text as JSON).value -- (. is String ? [.] : .)),
+  fetched: (name, version, into) => Process(command: "npm", arguments: ["install", "--prefix", into.sandboxed, "--no-save", name + "@" + version]))

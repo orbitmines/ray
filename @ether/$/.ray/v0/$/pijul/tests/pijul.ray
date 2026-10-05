@@ -1,0 +1,5 @@
+// Pijul: changes, kept whole.
+
+mark ^keyword := external global
+
+unless Pijul.fidelity == Language.Fidelity.lossless { INFO@mark `VC18 pijul's changes are not lossless` }

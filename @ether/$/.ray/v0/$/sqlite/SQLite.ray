@@ -1,0 +1,24 @@
+// SQLite's command-line shell (https://sqlite.org/cli.html) and database file format (https://www.sqlite.org/fileformat2.html)
+SQLite := class: Language {
+  static extensions = ".sqlite" | ".sqlite3" | ".db"
+  written := SQL.written
+
+  answered (store: Store, query: String) => Process(command: "sqlite3", arguments: ["-json", store.at.sandboxed, query])
+  sending (store: Store) => Process(command: "sqlite3", arguments: [store.at.sandboxed])
+  selected (store: Store, type) => SQL.rows(answered(store, SQL.selection(type)).stdout, type)
+  sent (store: Store, text: String) => sending(store) ~~ (.input = text) -- .stdout
+
+  static queried (at: Location, query: String) => (Process(command: "sqlite3", arguments: ["-json", at.sandboxed, query]).stdout as JSON).value
+  Database := class = tables: * {
+    .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : tables[name]
+    script => tables.fields.map(table => table.value.first -- (row => row ? [
+      ("CREATE TABLE ", SQL.identifier(table.name), " (", row.fields.map(SQL.identifier(.name)).join(", "), ");", \n),
+      table.value.map(each => ("INSERT INTO ", SQL.identifier(table.name), " VALUES (", each.fields.map(SQL.literal(.value)).join(", "), ");", \n))
+    ] : [])).flatten.join("")
+    as (=== Byte[]) => @"instance/sqlite/written.db" -- (at => at.remove -- Process(command: "sqlite3", arguments: [at.sandboxed], input: script).succeeded -- at.bytes)
+  }
+
+  level := {
+    {at: Location} => Database(tables: queried(at, "SELECT name FROM sqlite_master WHERE type = 'table'").map(table => (table.name, queried(at, "SELECT * FROM " + SQL.identifier(table.name))))#)
+  }
+}

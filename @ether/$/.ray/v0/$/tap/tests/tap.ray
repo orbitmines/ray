@@ -1,0 +1,16 @@
+// A run of claims written and read as TAP.
+
+mark ^keyword := external global
+
+run := Report(name: "suite", claims: [
+  Report.Claim(id: "A1", message: "one holds"),
+  Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{from == (4, 1)})
+])
+tap := run as TAP
+unless tap ~= ⊢"TAP version 14\n1..2\n" { INFO@mark `RT2 TAP does not start with its version and plan` }
+unless tap ~= (*, "\nok 1 - A1 one holds\n", *) { INFO@mark `RT3 a holding claim is not ok` }
+unless tap ~= (*, "\nnot ok 2 - A2 two \\# fails\n", *) { INFO@mark `RT4 a failing claim is not "not ok" with # escaped` }
+unless tap ~= (*, "  ---\n  message: \"two # fails\"\n", *) { INFO@mark `RT5 a failing claim has no YAML diagnostic` }
+read_tap := TAP.read(tap)
+unless read_tap.claims.count == 2 { INFO@mark `RT6 TAP does not read back its claims` }
+unless read_tap.failures.first.id == "A2" && read_tap.failures.first.message == "two # fails" { INFO@mark `RT7 a failing claim does not read back unescaped` }

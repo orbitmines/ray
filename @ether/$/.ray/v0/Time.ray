@@ -167,30 +167,8 @@ LeapSeconds := class = (@/usr/share/zoneinfo/leap-seconds.list as Unicode.Table<
   at (minute: Time) => this.contains(minute.round(minute) + 1 minute)
 }
 
-// Time Zone Information Format (https://datatracker.ietf.org/doc/html/rfc8536)
-TZif := class = (
-  v1: Block<Binary³²>,
-  (v2: Block<Binary⁶⁴>, "\n", footer: (!"\n")[], "\n") if v1.version != 0₂
-) {
-  static Block<Moment> := class = (
-    "TZif",
-    version: Byte,
-    Byte[]{length == 15},
-    universal_count: Binary³², standard_count: Binary³², leap_count: Binary³²,
-    transition_count: Binary³², type_count: Binary³², abbreviation_count: Binary³²,
-    transitions: Moment[]{length == transition_count},
-    transition_types: Byte[]{length == transition_count},
-    types: (offset: Binary³², daylight: Byte, abbreviation_index: Byte)[]{length == type_count},
-    abbreviations: Byte[]{length == abbreviation_count},
-    leaps: (occurrence: Moment, correction: Binary³²)[]{length == leap_count},
-    standard: Byte[]{length == standard_count},
-    universal: Byte[]{length == universal_count}
-  )
-  data => v2 ?? v1
-}
-
 TimeZone := class (name: String) {
-  data: TZif => (@/usr/share/zoneinfo/{name}).bytes as TZif
+  data => $.tzif.read((@/usr/share/zoneinfo/{name}).bytes)
 }
 
 Planet := class {

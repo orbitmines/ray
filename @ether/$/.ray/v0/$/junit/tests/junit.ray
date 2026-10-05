@@ -1,0 +1,15 @@
+// A run of claims written and read as JUnit XML.
+
+mark ^keyword := external global
+
+run := Report(name: "suite", claims: [
+  Report.Claim(id: "A1", message: "one holds"),
+  Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{from == (4, 1)})
+])
+junit := run as JUnit
+unless junit ~= ⊢"<?xml version=\"1.0\" encoding=\"UTF-8\"?>" { INFO@mark `RT8 JUnit has no XML declaration` }
+unless junit ~= (*, "<testsuites name=\"suite\" tests=\"2\" failures=\"1\">", *) { INFO@mark `RT9 JUnit does not count tests and failures` }
+unless junit ~= (*, "<testcase name=\"A1 one holds\" classname=\"suite\"/>", *) { INFO@mark `RT10 a holding claim is not an empty testcase` }
+unless junit ~= (*, "<failure message=\"two # fails\" type=\"A2\">two # fails</failure>", *) { INFO@mark `RT11 a failing claim has no failure` }
+unless JUnit.read(junit).first.failures.first.id == "A2" { INFO@mark `RT12 JUnit does not read back its failures` }
+unless Report(claims: [Report.Claim(id: "A3", message: "a < b & c")]) as JUnit ~= (*, "name=\"A3 a &lt; b &amp; c\"", *) { INFO@mark `RT13 JUnit attributes are not escaped` }

@@ -1,0 +1,52 @@
+// HTML Living Standard (https://html.spec.whatwg.org/multipage/)
+HTML := class: Language {
+  static extensions = ".html"
+
+  Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | Text | Raw | Comment)[] = [] {
+    static made = 0
+    id: String = attributes{.name == "id"}.first?.value ?? ("e" + ((Element.made += 1) as String))
+    void => tag is ("img" | "input" | "br" | "meta" | "link" | "source")
+  }
+  Text := class = text: String
+  Raw := class = text: String
+  Comment := class = text: String
+  Document := class = head: Element[], body: Element, language: String = "en"
+
+  Escapes = { "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }
+  escaped (text: String) => #text.map(Escapes[.] ?? .) as String
+
+  Name = (Char.Letter, (Char.Word | "-" | ":" | ".")[])
+  Entities = { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
+  Child := class = value: *
+  Attributes := class = value: *
+
+  syntax := Compiler.default + {
+    <!--{literal text}--> => Comment(text)
+    <{tag: Name}{attributes}/> => Element(tag, Attributes(attributes))
+    <{tag: Name}{attributes}>{children}</{tag}> => Element(tag, Attributes(attributes), Child(children))
+    {name: Name}="{value}" => (name, value)
+    {name: Name}={value} => value === None || value == false ? None : value == true ? (name, "") : (name, value)
+    &{name: Char.Letter[]}; => Entities[name] ?? ("&" + name + ";")
+    {child: Child{value === None}} => []
+    {child: Child{value is String{trimmed.empty && contains(\n)}}} => []
+    {child: Child{value is String}} => [Text(child.value)]
+    {child: Child{value is Number}} => [Text(child.value as String)]
+    {child: Child{value is (Element | Text | Raw | Comment)}} => [child.value]
+    {child: Child{value is Iterable}} => Compiler.reduced(child.value.map(Child(.)), syntax).flatten(1)
+    {child: Child} => [child.value]
+    {attributes: Attributes{value === None}} => []
+    {attributes: Attributes{value is String}} => [(attributes.value, "")]
+    {attributes: Attributes{value is Iterable && !(value.first is String)}} => Compiler.reduced(attributes.value.map(Attributes(.)), syntax).flatten(1)
+    {attributes: Attributes} => [attributes.value]
+  }
+
+  written := {
+    {document: Document} => "<!doctype html><html lang=\"", document.language, "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">", document.head, "</head>", document.body, "</html>"
+    {element: Element{void}} => "<", element.tag, element.attributes.map(" ", .name, "=\"", escaped(.value as String), "\""), ">"
+    {element: Element} => "<", element.tag, element.attributes.map(" ", .name, "=\"", escaped(.value as String), "\""), ">", element.children, "</", element.tag, ">"
+    {text: Text} => escaped(text.text)
+    {raw: Raw} => raw.text
+    {comment: Comment} => "<!--", comment.text, "-->"
+  }
+  level := syntax
+}

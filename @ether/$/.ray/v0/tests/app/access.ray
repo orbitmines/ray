@@ -1,28 +1,5 @@
-// Permission levels written as what each platform enforces, and read back.
+// What a capability nobody granted answers; each platform's own form is its language in $/.
 
 mark ^keyword := external global
 
-opened := [Accessor(Accessor.Permission.public).read, Accessor(Accessor.Permission.private).write, Accessor(Accessor.Permission.private).execute]
-unless opened as POSIX == "744" { INFO@mark `AC11 public read and private write and execute are not mode 744` }
-unless POSIX.mode(opened).group.read { INFO@mark `AC12 what the public reads the group cannot` }
-if POSIX.mode(opened).other.write { INFO@mark `AC13 others may write what only its owner may` }
-unless POSIX.read("750"){.reads}.first.who == Accessor.Permission.protected { INFO@mark `AC14 a group read bit does not read back as protected` }
-unless POSIX.read("750"){.writes}.first.who == Accessor.Permission.private { INFO@mark `AC15 an owner write bit does not read back as private` }
-unless ("-rwsr-xr-x" as POSIX.Symbolic).mode.setuid { INFO@mark `AC16 s in the owner's execute place is not setuid` }
-everyone := POSIX.Triad(true, true, true)
-unless POSIX.Mode(sticky: true, user: everyone, group: everyone, other: everyone) as POSIX.Symbolic as String == "-rwxrwxrwt" { INFO@mark `AC17 a sticky mode is not written with t` }
-
-alice := Character(name: "alice")
-shared := [Accessor(Accessor.Permission.private).read, Accessor(Accessor.Permission.private).write, Access(who: alice, method: Access.Reading)]
-acl := shared as ACL
-unless acl ~= (*, "user:alice:r--", *) { INFO@mark `AC18 a character's read is not a named ACL entry` }
-unless acl ~= (*, "mask::r--", *) { INFO@mark `AC19 an ACL with a named entry has no mask` }
-if ACL.read("user::rw-\nuser:alice:rwx\ngroup::---\nmask::r--\nother::---"){.who is Character}.first.writes { INFO@mark `AC20 the mask does not limit a named entry` }
-
-camera := Grant(Access(who: Accessor.Permission.localhost), target: Device.Capability.camera)
-unless Browser.named(camera) == "camera" { INFO@mark `AC21 the camera is not the browser's camera permission` }
-unless Browser.named(Grant(Access(who: Accessor.Permission.localhost, method: `=`), target: Device.Capability.clipboard)) == "clipboard-write" { INFO@mark `AC22 writing the clipboard is not clipboard-write` }
-unless [Grant(Access(who: Accessor.Permission.public), target: Device.Capability.geolocation), camera] as Browser == "geolocation=*, camera=(self)" { INFO@mark `AC23 levels are not written as a Permissions-Policy` }
-unless Browser.read("geolocation=*").first.access.who == Accessor.Permission.public { INFO@mark `AC24 * does not read back as public` }
-unless [camera] as Android ~= (*, "android.permission.CAMERA", *) { INFO@mark `AC25 the camera is not Android's CAMERA permission` }
-unless Device().permission(Device.Capability.camera) == Browser.State.prompt { INFO@mark `AC26 a capability nobody granted is not asked for` }
+unless Device().permission(Device.Capability.camera) == Grant.State.prompt { INFO@mark `AC26 a capability nobody granted is not asked for` }

@@ -62,7 +62,7 @@ Network &+= {
 Location &+= {
   static canonical := Location{!port || port != protocol?.port}
   protocol => Network.Protocol#{as String == scheme}.first
-  resolved => Network.Hosts.resolved(host) -- (. == host ? Network.DNS.resolve(host) ?? . : .)
+  resolved => Network.Hosts.resolved(host) -- (. == host ? $.dns.resolve(host) ?? . : .)
 }
 
 Device &+= {

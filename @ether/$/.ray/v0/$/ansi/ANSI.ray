@@ -1,0 +1,53 @@
+// ECMA-48, Control Functions for Coded Character Sets (https://ecma-international.org/publications-and-standards/standards/ecma-48/), and xterm's control sequences (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
+ANSI := class: Language {
+  static extensions = ".ansi"
+  Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, bold: boolean = false, italic: boolean = false, underline: boolean = false, strike: boolean = false, dim: boolean = false, reverse: boolean = false, link: Location?
+  Graphic := class = at: Geometry.Vector, bytes: *
+  Frame := class = changes: (at: Geometry.Vector, cell: Cell)[], title: String?, graphics: Graphic[] = []
+  Title := class = text: String
+  Move := class = at: Geometry.Vector
+  Style := class = cell: Cell
+  Color := class = color: Geometry.Color, layer: Number
+  Hyperlink := class = cell: Cell
+  Start := class
+  Stop := class
+  Copy := class = text: String
+  written := {
+    {start: ANSI.Start} => Terminal.entering, Terminal.clearing
+    {stop: ANSI.Stop} => Terminal.restoring
+    {copy: ANSI.Copy} => "\e]52;c;", copy.text.bytes as Base64 as String, "\a"
+    {frame: ANSI.Frame} => [
+      Title(frame.title) if frame.title,
+      frame.changes.map((at, cell) => [Move(at), Style(cell), Hyperlink(cell), cell.glyph]),
+      frame.graphics.map([Move(.at), .bytes]),
+      "\e[0m"
+    ]
+    {title: ANSI.Title} => "\e]0;", title.text, "\a"
+    {move: ANSI.Move} => "\e[", move.at.y + 1, ";", move.at.x + 1, "H"
+    {style: ANSI.Style} => style.cell -- (cell => "\e[0", (";1" if cell.bold), (";2" if cell.dim), (";3" if cell.italic), (";4" if cell.underline), (";9" if cell.strike), (";7" if cell.reverse),
+      (";", Color(cell.foreground, 38)) if cell.foreground, (";", Color(cell.background, 48)) if cell.background, "m")
+    {color: ANSI.Color} => color.layer, ";2;", color.color.red, ";", color.color.green, ";", color.color.blue
+    {link: ANSI.Hyperlink{cell.link}} => "\e]8;;", link.cell.link as String, "\e\\"
+    {link: ANSI.Hyperlink} => "\e]8;;\e\\"
+  }
+
+  XTerm256 := {
+    {color: ANSI.Color} => color.layer, ";5;", 16 + 36 * (color.color.red * 5 / 255) + 6 * (color.color.green * 5 / 255) + color.color.blue * 5 / 255
+  }
+  TrueColor := { }
+  WindowsTerminal := {
+    {start: ANSI.Start} => Terminal.entering, "\e[?9001h", Terminal.clearing
+  }
+}
+
+Terminal := class {
+  static entering = "\e[?1049h\e[?25l\e[?1000h\e[?1002h\e[?1006h\e[?2004h\e[?1004h"
+  static clearing = "\e[2J\e[H"
+  static restoring = "\e[?1004l\e[?2004l\e[?1006l\e[?1002l\e[?1000l\e[?25h\e[?1049l"
+  emit (bytes) => external io `stdout` (bytes)
+  read => external io `stdin` None
+  size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)
+  raw_mode => emit(entering)
+  clear => emit(clearing)
+  restore => emit(restoring)
+}

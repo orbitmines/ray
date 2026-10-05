@@ -1,0 +1,8 @@
+// SQLite: rows written as upserts.
+
+mark ^keyword := external global
+
+Kept := class = key: *, size: Number
+small := Kept(key: 1, size: 2)
+unless SQLite.write([small as Store.Row]) ~= (*, "ON CONFLICT (id) DO UPDATE", *) { INFO@mark `DB13 a row is not written as an upsert` }
+unless $.sqlite === SQLite { INFO@mark `DB22 $.sqlite is not SQLite` }

@@ -148,6 +148,19 @@ UI := class {
     locked: boolean = false
     locking => locked || (scene?.expand{==.instance_of Drawer && .open}.nonempty ?? false)
     scroll (by: Geometry.Length) => (scrolled = (scrolled + by) min ((scene?.content_height ?? size.y) - size.y) max 0px) unless locking
+    motion: Geometry.Animation?
+    revealing: (shape: Geometry.Shape, align: start | center | end, smooth: boolean, offset: Geometry.Length, within: Geometry.Shape?)?
+    height (shape: Geometry.Shape) => shape.size.y
+    measured (shape: Geometry.Shape) => shape.size
+    target (shape: Geometry.Shape, align: start | center | end, offset: Geometry.Length, frame: (origin: Geometry.Vector, size: Geometry.Vector)) => (shape.origin.y - frame.origin.y + offset - align.match
+        center => (frame.size.y - shape.size.y) / 2
+        end => frame.size.y - shape.size.y
+        * => 0px
+      ) max 0px
+    reveal (shape: Geometry.Shape?, align: start | center | end = start, smooth: boolean = false, offset: Geometry.Length = 0px, within: Geometry.Shape? = None) => shape && (revealing = (shape, align, smooth, offset, within)) -- (within
+      ? within.scrolled = Geometry.Vector(0, within.scrolled.y + target(shape, align, offset, (within.origin, within.size)))
+      : target(shape, align, offset, (Geometry.Vector(0, 0px), size)) -- (to => smooth && !preferences.reduced_motion ? (motion = Geometry.Animation(from: scrolled, to: to, duration: 300 ms, easing: Geometry.ease_out, property: "scroll")) : (scrolled = to)))
+    step => motion && (scrolled = motion.at(Time.now)) -- ((motion = None) if Time.now >= motion.started + motion.duration)
     preferences: (reduced_motion: boolean, dark: boolean, contrast: more | less | normal, focused: boolean) = (false, false, normal, true)
   }
 
@@ -309,9 +322,10 @@ UI := class {
     ) -- after
     frame => solved{O: renderer.level}()
     run => (running = true) -- (Runtime.current = this) -- target.start
-      -- ((target.write(frame) -- target.read) while running)
+      -- ((target.write(frame) -- target.read -- tick) while running)
       -- target.stop -- this
     stop => running = false
+    tick => Viewport.step
   }
 }
 

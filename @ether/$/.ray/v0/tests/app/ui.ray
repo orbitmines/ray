@@ -216,3 +216,25 @@ unless Language.Web.Paint(currentColor) == "currentColor" { INFO@mark `UI151 cur
 tinted_icon := Geometry.Image(@./icons/link.svg, fill: currentColor)
 solver.solve(Geometry.Box(color: red, children: [tinted_icon]))
 unless tinted_icon.fill == red { INFO@mark `UI152 an icon filled with currentColor does not take the colour around it` }
+
+revealed := Geometry.Box(origin: Geometry.Vector(0, 1000px), size: Geometry.Vector(100px, 100px))
+with UI.Viewport.size = Geometry.Vector(1000px, 800px) {
+  UI.Viewport.reveal(revealed)
+  unless UI.Viewport.scrolled == 1000px { INFO@mark `UI153 revealing a shape does not scroll to it` }
+  UI.Viewport.reveal(revealed, align: center)
+  unless UI.Viewport.scrolled == 650px { INFO@mark `UI154 revealing a shape in the centre does not centre it` }
+  UI.Viewport.reveal(revealed, offset: -100px)
+  unless UI.Viewport.scrolled == 900px { INFO@mark `UI155 a reveal's offset is not kept` }
+  UI.Viewport.reveal(revealed, smooth: true)
+  unless UI.Viewport.motion?.to == 1000px { INFO@mark `UI156 a smooth reveal does not move towards the shape` }
+  UI.Viewport.scrolled = 120px
+  unless UI.Viewport.scrolled == 120px { INFO@mark `UI157 the page scroll cannot be set` }
+}
+scroller := Geometry.Box(origin: Geometry.Vector(0, 0px), size: Geometry.Vector(100px, 200px), overflow: scroll)
+UI.Viewport.reveal(revealed, within: scroller)
+unless scroller.scrolled.y == 1000px { INFO@mark `UI158 revealing within a container does not scroll the container` }
+unless UI.Viewport.height(revealed) == 100px { INFO@mark `UI159 a shape's height cannot be measured` }
+scrolled_child := Geometry.Box(constraints: [tall(10px)])
+solver.solve(Geometry.Box(scrolled: Geometry.Vector(0, 50px), overflow: scroll, children: [scrolled_child]))
+unless scrolled_child.origin.y == -50px { INFO@mark `UI160 a scrolled container does not move what it holds` }
+unless Language.Web.Devices.some(==.instance_of Language.Web.JS.Listen && .event == "scroll") { INFO@mark `UI161 the web does not report the page scroll` }

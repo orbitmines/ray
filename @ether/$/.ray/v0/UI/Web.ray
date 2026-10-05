@@ -53,7 +53,7 @@ Language.Web := class: Language {
   }
   JS := class {
     Module := class = statements: Statement[] = []
-    Statement := Let | Assign | Effect | Listen | Call | Function | Return | If
+    Statement := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw
     Let := class = name: String, value: Expression
     Assign := class = target: Expression, value: Expression
     Effect := class = reads: String[], body: Statement[]
@@ -62,7 +62,8 @@ Language.Web := class: Language {
     Function := class = name: String?, parameters: String[], body: Statement[]
     Return := class = value: Expression
     If := class = condition: Expression, then: Statement[], otherwise: Statement[] = []
-    Expression := String | Number | boolean | Call | Function | (object: Expression, member: String) | (left: Expression, operator: String, right: Expression)
+    Raw := class = code: String
+    Expression := String | Number | boolean | Call | Function | Raw | (object: Expression, member: String) | (left: Expression, operator: String, right: Expression)
     language = Language.register(Language(".js", writer: Writer))
     Writer := (node) => node.match
       Module => node.statements.map(Writer, ";")
@@ -73,6 +74,7 @@ Language.Web := class: Language {
       Call => Writer(node.function), "(", node.arguments.map(Writer).join(","), ")"
       Function => "function ", node.name ?? "", "(", node.parameters.join(","), "){", node.body.map(Writer, ";"), "}"
       Return => "return ", Writer(node.value)
+      Raw => node.code
       If => "if(", Writer(node.condition), "){", node.then.map(Writer, ";"), "}else{", node.otherwise.map(Writer, ";"), "}"
       String => "\"", node.escaped_line, "\""
       (object, member) => Writer(node.object), ".", node.member
@@ -294,6 +296,9 @@ Language.Web := class: Language {
     JS.Listen(("window", "matchMedia(\"(prefers-reduced-motion:reduce)\")"), "change", [JS.Call(("ray", "set"), ["UI.Viewport.preferences.reduced_motion", ("event", "matches")])]),
     JS.Effect(["UI.Navigation.history"], [JS.Call(("history", "pushState"), [None, "", JS.Call(("ray", "get"), ["UI.Navigation.at"])])]),
     JS.Effect(["UI.Navigation.title"], [JS.Assign(("document", "title"), JS.Call(("ray", "get"), ["UI.Navigation.title"]))]),
+    JS.Listen("window", "scroll", [JS.Call(("ray", "set"), ["UI.Viewport.scrolled", ("window", "scrollY")])]),
+    JS.Effect(["UI.Viewport.scrolled"], [JS.Raw("const y=ray.get(\"UI.Viewport.scrolled\");if(Math.abs(scrollY-y)>1)scrollTo(0,y)")]),
+    JS.Effect(["UI.Viewport.revealing"], [JS.Raw("const r=ray.get(\"UI.Viewport.revealing\");const e=r&&document.getElementById(r.shape.id);if(e){if(r.within||!r.offset)e.scrollIntoView({block:r.align,behavior:r.smooth?\"smooth\":\"auto\"});else scrollTo({top:e.getBoundingClientRect().top+scrollY+r.offset,behavior:r.smooth?\"smooth\":\"auto\"})}")]),
     JS.Effect(["UI.Viewport.locking"], [JS.Call(("document.documentElement.classList", "toggle"), ["locked", JS.Call(("ray", "get"), ["UI.Viewport.locking"])])]),
     JS.Effect(["UI.Platform.notifications"], [JS.Call("new Notification", [JS.Call(("ray", "get"), ["UI.Platform.notifications.last.title"])])]),
     JS.Effect(["UI.Platform.fullscreen"], [JS.Call(("document.documentElement", "requestFullscreen"))]),
@@ -334,12 +339,16 @@ Language.Web := class: Language {
         "click" => shape?.activate
         "input" => shape?.set(value)
         "focus" => UI.Focus.current = shape
+        "scroll" => UI.Viewport.scrolled = (value as Decimal) * 1px
+        "size" => shape && (value ~= (width: Decimal, " ", height: Decimal)) -- (shape.size = Geometry.Vector(.width * 1px, .height * 1px))
         * => None
     }
 
     start => send(line(["clear"]))
     stop => None
     write (frame) => render(frame)
+      -- send(line(["lock", UI.Viewport.locking as String]))
+      -- UI.Viewport.revealing && send(line(["reveal", UI.Viewport.revealing.shape.id, UI.Viewport.revealing.align as String, UI.Viewport.revealing.smooth as String])) -- (UI.Viewport.revealing = None)
     read => event?.apply
     copy (text: String) => send(line(["clipboard", text.escaped_line]))
     open (to: Location) => send(line(["open", (to as String).escaped_line]))

@@ -231,7 +231,7 @@ Geometry := class {
     place (shape: Shape, from: Vector, width: Length) => shape -- {
       own = length(shape, width - margin.left - margin.right)
       origin = from + margin.start
-      inside = origin + padding.start
+      inside = origin + padding.start - Vector(0, shape.scrolled.y)
       room = own - padding.left - padding.right
       flowing = children{.position.flowing}
       flow.match

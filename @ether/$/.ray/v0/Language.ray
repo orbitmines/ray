@@ -51,5 +51,5 @@ Regex := class (pattern: String) => {
   compiled => language.read(pattern)
   matches (text: String) => text ~= compiled
   find (text: String) => (text ~= compiled)?.index
-  ignoring_case => Regex(pattern.fold_case) ~ ignore_case
+  ignoring_case => Regex(pattern.fold_case)
 }

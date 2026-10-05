@@ -42,11 +42,11 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   (static.# ??= []).push this
 
   // `name`; `var: Decimal, ns = 10 ns`
-  caller[name] = this if name
+  &caller[name] = this if name
 
   reexport => {
-    caller[name] = this
-    defined_globally = true if caller == global
+    &caller[name] = this
+    defined_globally = true if &caller == global
   }
 
   static None = Unit(global.None)
@@ -56,7 +56,7 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   as (:== Quantity) => 1, this
   as (other: ==.instance_of Unit) => this as Quantity as other
 
-  protected defined_globally = caller == global
+  protected defined_globally = &caller == global
   // At least one unambiguous name; an ambiguous one (`8m`) superposes, `8 meter | 8 minute`, and is resolved by use (N2.4).
   dynamically assert this as String? != None
   as (:== String?) => name

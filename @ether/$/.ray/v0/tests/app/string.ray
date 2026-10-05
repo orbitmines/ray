@@ -242,3 +242,15 @@ unless "7"[0].instance_of(\d) { INFO@mark `SE11 7 is not a digit escape` }
 unless "a"[0].instance_of(\D) { INFO@mark `SE12 a is not a non-digit escape` }
 unless "_"[0].instance_of(\w) { INFO@mark `SE13 an underscore is not a word escape` }
 unless "-"[0].instance_of(\W) { INFO@mark `SE14 a dash is not a non-word escape` }
+
+// Interpolation, language-tagged literals and patterns (L§10.1, P7.1, U9)
+greeted := "Ada"
+unless "Hello {greeted}!" == "Hello Ada!" { INFO@mark `SI1 a name in braces is not read into the string` }
+unless "{1 + 2}" == "3" { INFO@mark `SI2 an expression in braces is not read into the string` }
+unless "a \{b}".count == 6 { INFO@mark `SI3 an escaped brace is read as an expression` }
+unless ray`1 + 2` == 3 { INFO@mark `TL1 a literal tagged ray is not read as Ray` }
+unless "goto x" ~= ⊢"goto " { INFO@mark `PM1 ⊢ does not hold a pattern to the start` }
+if "a goto" ~= ⊢"goto" { INFO@mark `PM2 ⊢ reads a pattern away from the start` }
+unless "x\" ~= "\" ⊣ { INFO@mark `PM3 ⊣ does not hold a pattern to the end` }
+unless ("abcabc" ~= "ca").index == 2 { INFO@mark `PM4 a reading does not say where it starts` }
+unless "abc" !~= "z" { INFO@mark `PM5 !~= does not hold when nothing is read` }

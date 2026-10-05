@@ -1,5 +1,5 @@
 // A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
-UUID := class: Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-") {
+UUID := class: Hexadecimal³² ~~ .[7 | +4 | +4 | +4].push_after("-") {
   version: Hexadecimal¹ => this[12]
 
   dynamically
@@ -16,7 +16,7 @@ UUID := class: Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-") {
     110₂ => Variant.RESERVED_MICROSOFT
     111₂ => Variant.RESERVED_FUTURE
 
-  static v1 := class: UUID ~ (
+  static v1 := class: UUID (
     (
       time_low: Hexadecimal⁸,
       time_mid: Hexadecimal⁴,

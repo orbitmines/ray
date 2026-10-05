@@ -4,7 +4,7 @@
 
 Calendar := class {
   static Segment := class {
-    static ~(convert: base ... -> last): Calendar.Segment => caller.global.Unit ~ convert
+    static (convert: base ... -> last): Calendar.Segment => &caller.global.Unit(convert)
 
     static EPOCH: (period: #, elapsed: Node{0 <= . < period}?)? | Number = 0
 
@@ -36,14 +36,14 @@ Weekday := enum Monday | Tuesday | Wednesday | Thursday | Friday | Saturday | Su
 Month := enum January | February | March | April | May | June | July | August | September | October | November | December
 
 Julian := class: Calendar {
-  static year = Calendar.Segment ~ (day -> 365 | 366 if is_leap_year)
-  static month = Calendar.Segment ~ Month#[
+  static year = Calendar.Segment(day -> 365 | 366 if is_leap_year)
+  static month = Calendar.Segment(Month#[
     31, 28 | 29 if year.is_leap_year, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-  ] days
-  static week = Calendar.Segment ~ Weekday#.length days
-  static day = Calendar.Segment ~ 24 hours
-  static hour = Calendar.Segment ~ 60 minutes
-  static minute = Calendar.Segment ~ 60 seconds | 61 seconds if LeapSeconds.at(this)
+  ] days)
+  static week = Calendar.Segment(Weekday#.length days)
+  static day = Calendar.Segment(24 hours)
+  static hour = Calendar.Segment(60 minutes)
+  static minute = Calendar.Segment(60 seconds | 61 seconds if LeapSeconds.at(this))
 
   is_leap_year => year % 4 == 0
 }

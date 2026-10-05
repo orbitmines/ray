@@ -39,9 +39,17 @@ Char := class: Unicode.Scalar {
 \W = !\w
 \\ = "\"
 \" = "\""
+\{ = Escaped(character: "{")
+Escaped := class = character: Char {
+  as String => character
+}
 
-// `"…"` with the escapes above read inside it (L§10.1).
-"{literal: (\{escape} | !"\"")[]}": String => literal
+// `"…"` with the escapes above read inside it; `{expr}` in it is read where the literal is written, `\{` is a brace (L§10.1, Almanac §0.3, §7.1).
+"{literal: (\{escape} | !"\"")[]}": String => literal.interpolated((code) => (inline (external ** code)) as String)
+
+// `` ray`…` ``, `` js`…` ``: a literal read by the language whose extension is written before it (P7.1).
+LanguageName := String{Language.named("." + .) != None}
+{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
 
 String := class: Char[] {
   () => &caller[this]()
@@ -50,7 +58,7 @@ String := class: Char[] {
   lower_case | lowercase | v => #.lower_case
   swap_case | swapcase => #.swap_case
   // Full folding: `ß` folds to `ss` (X1.3).
-  ignore_case | ignorecase => this ~ fold_case
+  ignore_case | ignorecase => this++ ~~ .normalizer = (text) => text.fold_case
   fold_case | foldcase => #.fold_case as String
   title_case | titlecase => words.map(.[0].upper_case, .[1..].lower_case).join(" ")
 
@@ -65,8 +73,8 @@ String := class: Char[] {
   mirrored => <-#.mirrored as String
   * (count: Number) => count == 0 ? "" : this, this * (count - 1)
 
-  trimmed => this{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}
-  trimmed (characters: Char[]) => this{!(⊢ characters[] | characters[] ⊣)}
+  trimmed => this[{!(⊢ Char.Blank[] | Char.Blank[] ⊣)}]
+  trimmed (characters: Char[]) => this[{!(⊢ characters[] | characters[] ⊣)}]
   before (other: String) => this ~= (before: *, other, *) -- .before ?? this
   after (other: String) => this ~= (*, other, after: *) -- .after ?? ""
 
@@ -85,6 +93,10 @@ String := class: Char[] {
   as Decimal => this as 10
 
   + (other: String) => this, other
+  interpolated (reading: Program) => (opening = index_of("{")) == None ? this
+    : (closing = closing_of(opening + 1)) -- this[..opening], reading(this[opening + 1..<closing].as(String)), this[closing + 1..].interpolated(reading)
+  closing_of (at: Number, depth: Number = 1) => this[at] == "}" ? (depth == 1 ? at : closing_of(at + 1, depth - 1))
+    : this[at] == "{" ? closing_of(at + 1, depth + 1) : closing_of(at + 1, depth)
   find_all (pattern: String) => (this ~= pattern)#.index
   // `"…".italic` is the same as `"…" ^italic`: styling runs on highlighting (F-C2, F-C2b).
   italic => this ^italic

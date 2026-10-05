@@ -5,7 +5,7 @@ mark ^keyword := external global
 failing := Diagnostic(message: "no")
 unless failing.severity == Diagnostic.Severity.error { INFO@mark `DG1 an error is not of error severity` }
 unless Diagnostic(message: "stop", fatal: true).severity == Diagnostic.Severity.fatal { INFO@mark `DG2 a fatal error is not of fatal severity` }
-placed := Diagnostic(message: "no", at: Span(file: @/a.ray, from: Position(line: 3, column: 5), to: Position(line: 3, column: 8)))
+placed := Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)})
 lsp := [placed] as LSP
 unless lsp ~= ⊢"Content-Length: " { INFO@mark `DG3 an LSP message has no Content-Length header` }
 unless lsp ~= (*, "\"method\":\"textDocument/publishDiagnostics\"", *) { INFO@mark `DG4 diagnostics are not published as textDocument/publishDiagnostics` }
@@ -23,7 +23,7 @@ unless [Diagnostic(message: "outer", cause: placed)] as LSP ~= (*, "\"relatedInf
 
 run := Report(name: "suite", claims: [
   Report.Claim(id: "A1", message: "one holds"),
-  Report.Claim(id: "A2", message: "two # fails", passed: false, at: Span(file: @/t.ray, from: Position(line: 4)))
+  Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{from == (4, 1)})
 ])
 unless !run.passed && run.failures.count == 1 { INFO@mark `RT1 a run with a failing claim passed` }
 tap := run as TAP

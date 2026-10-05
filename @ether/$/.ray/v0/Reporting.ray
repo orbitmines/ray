@@ -1,11 +1,14 @@
-Position := class = line: Decimal = 1, column: Decimal = 1
-Span := class = file: Location?, from: Position = Position(), to: Position = from
+Location &+= {
+  from: (line: Decimal, column: Decimal)?
+  to: (line: Decimal, column: Decimal)? = from
+  file => this ~~ (.from = None) ~~ (.to = None)
+}
 
 Diagnostic &+= {
   static Severity := enum trace | debug | info | warn | error | fatal
 
   severity: Severity = fatal ? Severity.fatal : Severity.error
-  at: Span? = origin ? Span(file: origin.location, from: origin.start, to: origin.end) : None
+  at: Location? = origin ? origin.location{from == (origin.start.line, origin.start.column), to == (origin.end.line, origin.end.column)} : None
   code => type && type !== * ? type.name : None
   related => causes[1..]
 }
@@ -25,8 +28,8 @@ LSP &+= {
   // DiagnosticSeverity (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticSeverity)
   Severities = { fatal: 1, error: 1, warn: 2, info: 3, debug: 4, trace: 4 }
   // Positions are zero-based; columns count code points under the utf-32 position encoding (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#positionEncodingKind)
-  position (at: Position) => (line: at.line - 1, character: at.column - 1)
-  range (span: Span?) => (start: position(span?.from ?? Position()), end: position(span?.to ?? Position()))
+  position (at: (line: Decimal, column: Decimal)?) => (line: (at?.line ?? 1) - 1, character: (at?.column ?? 1) - 1)
+  range (at: Location?) => (start: position(at?.from), end: position(at?.to))
 
   Published := class = file: Location?, diagnostics: Diagnostic[]
   written := {
@@ -56,8 +59,8 @@ SARIF := class: Language {
   // result.level (https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html#_Toc34317648)
   static Levels = { fatal: "error", error: "error", warn: "warning", info: "note", debug: "none", trace: "none" }
   // physicalLocation and region, one-based lines and columns (https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html#_Toc34317685)
-  static location (span: Span?) => span ? (physicalLocation: (artifactLocation: (uri: span.file as String),
-    region: (startLine: span.from.line, startColumn: span.from.column, endLine: span.to.line, endColumn: span.to.column))) : None
+  static location (at: Location?) => at ? (physicalLocation: (artifactLocation: (uri: at.file as String),
+    region: (startLine: at.from?.line ?? 1, startColumn: at.from?.column ?? 1, endLine: at.to?.line ?? 1, endColumn: at.to?.column ?? 1))) : None
 
   written := {
     {writing: Language.Writing{value is Diagnostic}} => Language.Writing([writing.value])
@@ -83,7 +86,7 @@ SARIF := class: Language {
 }
 
 Report := class = name: String = "ray", claims: Claim[] = [] {
-  static Claim := class = id: String, message: String, passed = true, at: Span?, duration: Quantity.Temporal?
+  static Claim := class = id: String, message: String, passed = true, at: Location?, duration: Quantity.Temporal?
 
   passed => claims.every(.passed)
   failures => claims{!.passed}
@@ -92,7 +95,7 @@ Report := class = name: String = "ray", claims: Claim[] = [] {
   static (file: Location) as (=== Report) => file.content as String -- (text => Program(code: text)().reports -- (reports => Report(name: file as String,
     claims: text.split(\n).enumerate.map(line => (line.value ~= (*, Written, *)) -- (found => Claim(found.id, found.message,
       passed: !reports.some(.level == INFO && .comment ~= ⊢(found.id + " ")),
-      at: Span(file, from: Position(line: line.index + 1))) if found)).compact)))
+      at: file{from == (line.index + 1, 1)}) if found)).compact)))
 }
 
 // Test Anything Protocol version 14 (https://testanything.org/tap-version-14-specification.html)
@@ -113,7 +116,7 @@ TAP := class: Language {
   level := {
     {wire: Wire} => Report(name: wire.name ?? "ray", claims: wire.points.map(point => (point.description as String ~= (id: Char.Word[], " ", message: *)) -- (named => Report.Claim(named.id, named.message,
       passed: !point.failed,
-      at: point.yaml ? Span(file: point.yaml.lines{.name == "file"}.first?.value as Location, from: Position(line: point.yaml.lines{.name == "line"}.first?.value as Decimal ?? 1)) : None))))
+      at: point.yaml ? (point.yaml.lines{.name == "file"}.first?.value as Location){from == (point.yaml.lines{.name == "line"}.first?.value as Decimal ?? 1, 1)} : None))))
   }
   written := {
     {writing: Language.Writing{value is Report}} => Wire(name: writing.value.name, points: writing.value.claims.enumerate.map(claim => Point(
@@ -132,14 +135,14 @@ JUnit := class: Language {
   static attribute (name: String, value) => (name: name, value: value as String as XML.Escaped) if value != None
   static testcase (claim: Report.Claim, suite: String) => XML.Element(name: "testcase", attributes: [
     attribute("name", claim.id + " " + claim.message), attribute("classname", suite),
-    attribute("file", claim.at?.file as String if claim.at), attribute("line", claim.at?.from.line), attribute("time", claim.duration / 1 seconds if claim.duration)
+    attribute("file", claim.at?.file as String if claim.at), attribute("line", claim.at?.from?.line), attribute("time", claim.duration / 1 seconds if claim.duration)
   ].compact, children: claim.passed ? [] : [XML.Element(name: "failure", attributes: [attribute("message", claim.message), attribute("type", claim.id)], children: [XML.Text(claim.message as XML.Escaped)])])
 
   level := {
     {document: XML.Document{root.name == "testsuites"}} => document.root.children{. is XML.Element}.map(Compiler.reduced(., level)).flatten
     {suite: XML.Element{name == "testsuite"}} => Report(name: suite["name"] ?? "ray", claims: suite.children{. is XML.Element && .name == "testcase"}.map(case => (case["name"] ~= (id: Char.Word[], " ", message: *)) -- (named => Report.Claim(named.id, named.message,
       passed: !case.children.some(. is XML.Element && .name is ("failure" | "error")),
-      at: case["file"] ? Span(file: case["file"] as Location, from: Position(line: case["line"] as Decimal ?? 1)) : None,
+      at: case["file"] ? (case["file"] as Location){from == (case["line"] as Decimal ?? 1, 1)} : None,
       duration: case["time"] ? (case["time"] as Decimal) seconds : None))))
   }
   written := {

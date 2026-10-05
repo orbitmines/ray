@@ -2,7 +2,7 @@
 Point := Ray
 Path | Curve | Line := Array.Unbounded
 
-Geometry := namespace {
+Geometry := class {
   // A position or a size in any number of dimensions; lengths are Unit.ray quantities (F-B5).
   Vector := class = x: Length = 0, y: Length = 0, z: Length = 0 {
     + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)

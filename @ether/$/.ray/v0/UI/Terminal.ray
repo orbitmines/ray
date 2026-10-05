@@ -1,6 +1,6 @@
 // The TUI is a Compiler level like the web (F-D2, F-D10): the scene becomes a grid of cells, the grid becomes bytes for one terminal,
 // and the bytes coming back become the same device variables the browser writes (F-D9: everything on the one byte stream).
-TUI := namespace {
+TUI := class {
   // A cell is the terminal's pixel: one glyph with its style. A px is a fraction of a cell (F-B5).
   Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, bold: boolean = false, italic: boolean = false, underline: boolean = false, strike: boolean = false, dim: boolean = false, link: Location?
   Grid := class = width: Number, height: Number, cells: Cell[][] = (0..<height).map((0..<width).map(Cell())) {
@@ -145,7 +145,7 @@ TUI := namespace {
 }
 
 // The terminal itself: one byte stream (F-D9). Raw mode, the alternate screen, mouse and paste reporting are bytes written to it.
-Terminal := namespace {
+Terminal := class {
   emit (bytes) => external io `stdout` (bytes)
   read => external io `stdin` None
   size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)

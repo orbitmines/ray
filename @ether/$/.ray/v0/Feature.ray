@@ -1,4 +1,4 @@
-IO := namespace {
+IO := class {
   root = "instance"
   permitted = false
 
@@ -21,7 +21,7 @@ IO := namespace {
   }
 }
 
-Random := namespace {
+Random := class {
   secure => Random
   seeded (seed: Number) => Seeded(state: seed)
 
@@ -46,7 +46,7 @@ Counted := class = count: Number | Range, kind: * {
   choose => (least + Random.below(most - least + 1)).times.map(kind())
 }
 
-Choice := namespace {
+Choice := class {
   chosen: *[] = []
 
   choose (from) => from.random
@@ -130,7 +130,7 @@ Transaction := class = forwards: *?, backwards: *?, applied = false, history: Hi
   mark_applied: static => this ~~ .applied = true
 }
 
-Network := namespace {
+Network := class {
   static DomainName := class (text: (Char.Letter | Char.Digit | "-" | ".")[]) => {
     valid => 0 < text.count < 2^8
   }
@@ -145,13 +145,13 @@ Network := namespace {
   }
 }
 
-HTTP := namespace {
+HTTP := class {
   static Method := enum get | post | put | delete
 
   get (url) => IO.read(url)
 }
 
-OS := namespace {
+OS := class {
   static Name := enum linux | macos | windows | ether | unknown
 
   name => { "linux": Name.linux, "darwin": Name.macos, "win32": Name.windows }[IO.platform] ?? Name.unknown

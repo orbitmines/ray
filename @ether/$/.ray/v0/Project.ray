@@ -38,7 +38,7 @@ Project := class: Location = name: String, parent: Project?, children: Location[
 }
 
 // The external layout: `.ether/external/@name/$/@location/%/version` (L6.2)
-Layout := namespace {
+Layout := class {
   root = ".ether/external/@"
   checked_out (name: String) => root, "/@", name
   path (name: String, locations: String[], version: String) => checked_out(name), "/$", locations.map("/@", .), "/%/", version

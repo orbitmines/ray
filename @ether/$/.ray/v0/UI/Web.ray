@@ -1,8 +1,8 @@
 // The web as Compiler levels over the scene (F-D2, F-D7): HTML for structure, CSS for appearance, JS for what changes.
 // `page{O: Web.level}()` is all three together, a package of files; each is a value until it is written, in its file's language.
-Web := namespace {
+Web := class {
   // HTML, CSS and JS are languages: structures here, text only through their writers (X1.7).
-  HTML := namespace {
+  HTML := class {
     Element := class = tag: String, attributes: (name: String, value: String)[] = [], children: (Element | String)[] = [] {
       void => tag ==.instance_of ("img" | "input" | "br" | "meta" | "link" | "source")
     }
@@ -20,7 +20,7 @@ Web := namespace {
       Document => "<!doctype html><html lang=\"", node.language, "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">", node.head.map(Writer), "</head>", Writer(node.body), "</html>"
       Element => "<", node.tag, node.attributes.map(" ", .name, "=\"", escaped(.value), "\""), ">", (node.children.map(Writer), "</", node.tag, ">") unless node.void
   }
-  CSS := namespace {
+  CSS := class {
     Rule := class = selector: String, declarations: (property: String, value: String)[], within: String?
     Keyframes := class = name: String, frames: (at: Probability, declarations: (property: String, value: String)[])[]
     Sheet := class = rules: (Rule | Keyframes)[] = []
@@ -30,7 +30,7 @@ Web := namespace {
       Rule => (node.within, "{") if node.within, node.selector, "{", node.declarations.map(.property, ":", .value, ";"), "}", "}" if node.within
       Keyframes => "@keyframes ", node.name, "{", node.frames.map(.at * 100, "%{", .declarations.map(.property, ":", .value, ";"), "}"), "}"
   }
-  JS := namespace {
+  JS := class {
     // Enough of JavaScript to say what a page does: variables, effects that re-run when what they read changes, listeners the level writes.
     Module := class = statements: Statement[] = []
     Statement := Let | Assign | Effect | Listen | Call | Function | Return | If
@@ -82,7 +82,7 @@ Web := namespace {
   }
   InputType = { UI.TextField: "text", UI.Secret: "password", UI.NumberField: "number", UI.DateField: "datetime-local", UI.ColorField: "color", UI.FileField: "file", UI.Checkbox: "checkbox", UI.Slider: "range" }
   Landmark = { UI.Role.table: "table", UI.Role.list: "ul", UI.Role.region: "section" }
-  Heading := namespace { level (text: Geometry.Text) => text.font.size >= 2em ? 1 : text.font.size >= 1.5em ? 2 : 3 }
+  Heading := class { level (text: Geometry.Text) => text.font.size >= 2em ? 1 : text.font.size >= 1.5em ? 2 : 3 }
   Head := () => [
     HTML.Element("title", children: [UI.Navigation.title]),
     HTML.Element("meta", [("name", "description"), ("content", UI.Navigation.description)]),

@@ -1,4 +1,4 @@
-Encoding := namespace {
+Encoding := class {
   Algorithm := enum sha1 | sha256 | sha512 | sha3 | md5 | blowfish | blake3 | base64 | gzip
 
   // `Encrypted<T>` is readable only at a location holding its key (X4.2, X4.3).

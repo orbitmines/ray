@@ -32,7 +32,7 @@ Accessor := class = level: Permission, method: *?, any = true {
   }
 }
 
-Visibility := namespace {
+Visibility := class {
   policy = Accessor.Permission.local
 
   default_privacy_policy => policy
@@ -97,7 +97,7 @@ Run := class = actor: Character?, origin: Character[] = [], settings: Settings? 
 
 &@ ^keyword => Run.current
 
-Effects := namespace {
+Effects := class {
   static Source := enum io | os | random | time | network
 
   source_of (called) => called.is_external ? {

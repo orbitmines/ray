@@ -27,7 +27,7 @@ Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Uni
 }
 
 Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural {
-  static Normalizers := namespace {
+  static Normalizers := class {
     modulus (order: Quantity) => Quantity.Normalizer = (x) => {
       result: Quantity?
       order.quantities.unit.for unit => {

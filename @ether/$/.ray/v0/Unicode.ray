@@ -1,5 +1,6 @@
 // Unicode is versioned from the start (X3.2); a pinned version is fetched once and kept under @ether (X3.3, X3.7).
-Unicode := namespace %17 {
+Unicode := class {
+  static version = %17
   static UCD = @"https://www.unicode.org"/Public/%version/ucd
 
   // A table is read by a class pattern: comments and blank lines between its rows (X3.1).

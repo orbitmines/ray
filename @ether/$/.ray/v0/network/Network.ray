@@ -30,11 +30,11 @@ Network &+= {
     as (:== String) => protocol.name + "://" + host.text + ":" + port as String + "/" + path
   }
 
-  static Socket := namespace {
+  static Socket := class {
     static Address := class (("[", host: IPv6, "]") | host: IPv4 | host: DomainName, ":", port: Port) => { }
   }
 
-  static Hosts := namespace {
+  static Hosts := class {
     static Equivalence := class = name: String, host: String
     equivalences: Equivalence[] = []
 
@@ -42,7 +42,7 @@ Network &+= {
     resolved (name: String) => DomainName(equivalences{.name == name.fold_case}.last?.host ?? name)
   }
 
-  static DNS := namespace {
+  static DNS := class {
     static Record := class = name: String, address: *, key: *, when: Time = Time.now
     history: Record[] = []
 
@@ -54,7 +54,7 @@ Network &+= {
     carries (traffic, character: Character) => everything || (who ? who == character : block.contains(traffic))
   }
 
-  static Handshake := namespace {
+  static Handshake := class {
     version => 0
     offer (versions) => versions{== version}.last ?? Quest(name: "agree on a version", goal: versions)
   }

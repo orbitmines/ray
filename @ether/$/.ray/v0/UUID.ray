@@ -61,7 +61,7 @@ UUID := class: Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-") {
     dynamically assert version == 5
   }
 
-  static Namespace := namespace {
+  static Namespace := class {
     DNS: UUID = 6ba7b810-9dad-11d1-80b4-00c04fd430c8
     URL: UUID = 6ba7b811-9dad-11d1-80b4-00c04fd430c8
     OID: UUID = 6ba7b812-9dad-11d1-80b4-00c04fd430c8

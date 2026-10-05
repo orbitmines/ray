@@ -64,7 +64,7 @@ sync{ }{block} ^class => (
 race{ }{block} ^class => (
   every_branch ^keyword := Program(code: external ** block).concurrently
   while (every_branch.every { it.value.holds }) { every_branch.map { it.value.stepped } }
-  winner ^keyword := every_branch.find { it.value.is_terminal }
+  winner ^keyword := every_branch.filter { it.value.is_terminal }.head
   every_branch.filter { it.value.holds }.map { it.value.cancel }
   winner.value.results.last
 )
@@ -73,7 +73,7 @@ rush{ }{block} ^class => (
   every_branch ^keyword := Program(code: external ** block).concurrently
   while (every_branch.every { it.value.holds }) { every_branch.map { it.value.stepped } }
   every_branch.filter { it.value.holds }.map { Running.branches &= it.value }
-  every_branch.find { it.value.is_terminal }.value.results.last
+  every_branch.filter { it.value.is_terminal }.head.value.results.last
 )
 
 defer{ }{block} ^class => (

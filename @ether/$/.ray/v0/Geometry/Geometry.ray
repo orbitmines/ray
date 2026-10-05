@@ -9,23 +9,71 @@ Node &+= {
 
 Geometry := class {
   Length := Quantity{unit is (px | pt | em | rem | vw | vh | cell | m)}
-  Vector := Elementwise{every(. is Length)}{length <= 3} + (x: Length = 0, y: Length = 0, z: Length = 0) + {
-    to => this
-    norm => √(x ^ 2 + y ^ 2 + z ^ 2)
+
+  Metric := (a: Vector, b: Vector): Length
+  euclidean: Metric = (a, b) => √(Space.current.between(a, b).map(. ^ 2).sum)
+  graph: Metric = (a, b) => Place(a).shortest_path_to(Place(b)).count - 1
+
+  Axis := class: Ray = continuous: boolean = true, loop: boolean = false, extent: Length? {
+    coordinate => continuous ? Number : Integer
+    holds (at: Length) => loop || extent == None || 0 <= at < extent
+    wrapped (at: Length) => loop && extent != None ? at % extent : at
+    between (difference: Length) => loop && extent != None ? (difference % extent) -- (. min (extent - .)) : difference
+    positions => continuous ? coordinate{holds(.)} : 0..<extent
+  }
+  Space := class = axes: Axis[], metric: Metric = euclidean, projection: Projection?, vertices: Graph? {
+    static plane = Space([Axis(), Axis()])
+    static current: Space = plane
+    static grid (extent: Vector, loop: boolean = false) => Space(extent.map(Axis(continuous: false, loop: loop, extent: .)), graph)
+    static of (structure: Graph) => Space([], graph, Projection.embedding(structure), structure)
+    dimension => axes.count
+    discrete => vertices != None || !axes.some(.continuous)
+    sides => Side{axis < dimension}
+    holds (at) => vertices ? vertices.vertices.contains(at) : axes.zip(at).every(.0.holds(.1))
+    wrapped (at: Vector) => Vector(axes.zip(at).map(.0.wrapped(.1)))
+    between (a: Vector, b: Vector) => Vector(axes.zip(b - a).map(.0.between(.1)))
+    neighbours (at) => vertices ? vertices.outgoing(at) : sides#.map(wrapped(at + .vector(dimension))){holds(.)}
+    positions => vertices ? vertices.vertices : axes.map(.positions).reduce(acc = [[]] => acc.pairs(.).map([.0, [.1]].flatten)).map(Vector(.))
+  }
+  Place := class: Ray = at: *, space: Space = Space.current {
+    continuations => space.neighbours(at).map(Place(., space))
+    == (other) => at == (other is Place ? other.at : other)
   }
 
-  Transform := Matrix{count == 4 && every(.count == 4)} + {
-    static identity = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
-    static translate (by: Vector) => [[1, 0, 0, by.x], [0, 1, 0, by.y], [0, 0, 1, by.z], [0, 0, 0, 1]]
-    static scale (by: Vector) => [[by.x, 0, 0, 0], [0, by.y, 0, 0], [0, 0, by.z, 0], [0, 0, 0, 1]]
-    static skew (by: Vector) => [[1, by.x, 0, 0], [by.y, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
-    static rotate (angle: Angle, around: Vector = Vector(z: 1)) => (angle.cos, angle.sin, 1 - angle.cos) -- ((c, s, t) => [
+  Vector := Elementwise{every(. is Length)}{length == Space.current.dimension} + {
+    static (x: Length = 0, y: Length = 0, z: Length = 0, ...rest: Length[]) as (=== Vector) => [x, y, z, rest].flatten -- (given => (0..<Space.current.dimension).map(given[.] ?? 0))
+    x => this[0] ?? 0
+    y => this[1] ?? 0
+    z => this[2] ?? 0
+    to => this
+    norm => Space.current.metric(map(0), this)
+    distance (other: Vector) => Space.current.metric(this, other)
+  }
+
+  Transform := Matrix{count == Space.current.dimension + 1}{every(.count == Space.current.dimension + 1)} + {
+    static n => Space.current.dimension
+    static identity => (0..n).map(i => (0..n).map(j => i == j ? 1 : 0))
+    static translate (by: Vector) => (0..n).map(i => (0..n).map(j => i == j ? 1 : j == n ? by[i] : 0))
+    static scale (by: Number | Vector) => (by is Number ? Vector((0..<n).map(by)) : by) -- (factors => (0..n).map(i => (0..n).map(j => i != j ? 0 : i == n ? 1 : factors[i])))
+    static skew (by: Vector) => (0..n).map(i => (0..n).map(j => i == j ? 1 : (i, j) == (0, 1) ? by.x : (i, j) == (1, 0) ? by.y : 0))
+    static rotate (angle: Angle, plane: (Integer, Integer) = (0, 1)) => (angle.cos, angle.sin) -- ((c, s) => plane -- ((p, q) => (0..n).map(i => (0..n).map(j =>
+      (i, j) == (p, p) || (i, j) == (q, q) ? c : (i, j) == (p, q) ? -s : (i, j) == (q, p) ? s : i == j ? 1 : 0))))
+    static rotate (angle: Angle, around: Vector{Space.current.dimension == 3}) => (angle.cos, angle.sin, 1 - angle.cos) -- ((c, s, t) => [
       [t * around.x * around.x + c, t * around.x * around.y - s * around.z, t * around.x * around.z + s * around.y, 0],
       [t * around.x * around.y + s * around.z, t * around.y * around.y + c, t * around.y * around.z - s * around.x, 0],
       [t * around.x * around.z - s * around.y, t * around.y * around.z + s * around.x, t * around.z * around.z + c, 0],
       [0, 0, 0, 1]
     ])
-    applied (point: Vector) => this[..<3].map(row => row.zip([point.x, point.y, point.z, 1]).map(*).sum)
+    linear => this[..<n].map(.[..<n])
+    scaling => linear.determinant -- ((. max -.) ^ (1 / n))
+    applied (point: Vector) => Vector(this[..<n].map(row => row.zip([point, [1]].flatten).map(*).sum))
+  }
+  Projection := class = matrix: Matrix, depth_axis: Integer = 2 {
+    static orthographic (n: Integer = Space.current.dimension) => Projection((0..2).map(i => (0..n).map(j => i < 2 ? (i == j ? 1 : 0) : j == n ? 1 : 0)))
+    static perspective (distance: Length, n: Integer = Space.current.dimension) => Projection((0..2).map(i => (0..n).map(j => i < 2 ? (i == j ? 1 : 0) : j == n ? 1 : j == 2 ? 1 / distance : 0)))
+    static embedding (structure: Graph) => ERROR@Type `a graph embedding (force or tree layout) is not implemented yet`
+    applied (point: Vector) => matrix.map(row => row.zip([point, [1]].flatten).map(*).sum) -- (h => with Space.current = Space.plane { Vector(h[0] / h[2], h[1] / h[2]) })
+    depth (point: Vector) => point[depth_axis] ?? 0
   }
 
   Color := class: Elementwise ("#", red: Hexadecimal², green: Hexadecimal², blue: Hexadecimal², (alpha: Probability = 1) = (Hexadecimal² / 255)?) {
@@ -45,6 +93,10 @@ Geometry := class {
       : .zip(.rest){.0.at <= position <= .1.at}.first -- .0.value.mix(.1.value, easing((position - .0.at) / (.1.at - .0.at))))
   }
   Steps := Stops{easing == step}
+  Animated<V> := class: Stops<Time, V> {
+    value => at(Time.now)
+    .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : external get value property
+  }
   Gradient := class: Stops<Probability, Color> = kind: straight | radial | conic = straight, angle: Angle = 0 turn
   Pattern := class = shape: Shape, repeat: Vector
   Stroke := class = paint: Paint, width: Length = 1px, sides: Side = all, dash: Length[] = [], cap: butt | round | square = butt, join: miter | round | bevel = miter
@@ -70,22 +122,36 @@ Geometry := class {
     static blank (width: Number, height: Number) => (0..<height).map((0..<width).map(Color(0, 0, 0, 0)))
     width => first?.count ?? 0
     height => count
+    space => Space.grid(Vector(width, height))
     at (x: Number, y: Number) => this[y][x]
-    put (x: Number, y: Number, color: Color) => (this[y][x] = at(x, y).over(color)) if 0 <= x < width && 0 <= y < height
+    put (x: Number, y: Number, color: Color) => (this[y][x] = at(x, y).over(color)) if space.holds(Vector(x, y))
     blurred (area: Vector[], radius: Number) => [Vector(1, 0), Vector(0, 1)].reduce(acc = this => . -- (along => acc.enumerate.map(row => row.value.enumerate.map(pixel =>
       area.contains(Vector(pixel.index, row.index))
         ? (-radius..radius).map(acc.at(pixel.index + . * along.x, row.index + . * along.y) ?? pixel.value).reduce(+) * (1 / (2 * radius + 1))
         : pixel.value))))
   }
 
-  Side := top (toward: Vector(0, -1)) | right (toward: Vector(1, 0)) | bottom (toward: Vector(0, 1)) | left (toward: Vector(-1, 0))
+  Side := class = axis: Integer{. >= 0}, toward: -1 | +1 {
+    opposite => Side(axis, -toward)
+    ordinal => 2 * axis + (toward + 1) / 2
+    label => [["left", "right"], ["top", "bottom"], ["front", "back"]][axis]?[ordinal % 2]
+    vector (dimension: Integer = Space.current.dimension) => Vector((0..<dimension).map(. == axis ? toward : 0))
+    as (=== String) => label ?? (axis as String) + (toward > 0 ? "+" : "-")
+  }
+  left := Side(0, -1)
+  right := Side(0, +1)
+  top := Side(1, -1)
+  bottom := Side(1, +1)
+  front := Side(2, -1)
+  back := Side(2, +1)
   horizontal := left | right
   vertical := top | bottom
-  all := Side#
-  Edges := class = top: Length? = 0px, right: Length? = 0px, bottom: Length? = 0px, left: Length? = 0px {
-    static (length: Length) as (=== Edges) => Edges(length, length, length, length)
-    total => Vector(left + right, top + bottom)
-    start => Vector(left, top)
+  all := Side{axis < Space.current.dimension}#
+  Edges := class = top: Length? = 0px, right: Length? = 0px, bottom: Length? = 0px, left: Length? = 0px, front: Length? = 0px, back: Length? = 0px, beyond: Length?[] = [] {
+    static (length: Length?) as (=== Edges) => Edges(length, length, length, length, length, length, (6..<2 * Space.current.dimension).map(length))
+    [side: Side] => side.label ? this.`side.label` : beyond[side.ordinal - 6]
+    total => Vector((0..<Space.current.dimension).map(axis => (this[Side(axis, -1)] ?? 0px) + (this[Side(axis, +1)] ?? 0px)))
+    start => Vector((0..<Space.current.dimension).map(this[Side(., -1)] ?? 0px))
   }
   Position := class = kind: flow | sticky | fixed | absolute | anchored = flow, anchor: Shape?, side: Side = bottom
   Flowing := Position{kind is (flow | sticky)}
@@ -100,27 +166,44 @@ Geometry := class {
   Arc := class = radius: Vector, rotation: Angle = 0 turn, large: boolean = false, sweep: boolean = false, to: Vector {
     unit => (Transform.rotate(rotation) * Transform.scale(radius)).inverse
     centre (a: Vector, b: Vector) => (b - a) * (1 / 2) -- (half => a + half + Vector(-half.y, half.x) * √((1 / half.norm ^ 2 - 1) max 0) * (large == sweep ? -1 : 1))
-    bent (a: Vector, b: Vector, centre: Vector, radius: Number) => (1..16).map(t => a.mix(b, t / 16) -- (centre + (. - centre) * (radius / (. - centre).norm)))
-    points (from: Vector) => (unit.applied(from), unit.applied(to)) -- ((a, b) => ((b - a).norm / 2 max 1, centre(a, b), a.mix(b, 1 / 2)) -- ((r, c, mid) =>
-      (large ? (c + (c - mid) * (r / (c - mid).norm)) -- (far => [bent(a, far, c, r), bent(far, b, c, r)].flatten) : bent(a, b, c, r)).map(unit.inverse.applied(.))))
+    bent (a: Vector, b: Vector, centre: Vector, radius: Number) => (1..16).map(t => a.mix(b, t / 16) -- (centre + (. - centre) * (radius / centre.distance(.))))
+    points (from: Vector) => (unit.applied(from), unit.applied(to)) -- ((a, b) => (a.distance(b) / 2 max 1, centre(a, b), a.mix(b, 1 / 2)) -- ((r, c, mid) =>
+      (large ? (c + (c - mid) * (r / mid.distance(c))) -- (far => [bent(a, far, c, r), bent(far, b, c, r)].flatten) : bent(a, b, c, r)).map(unit.inverse.applied(.))))
   }
   Bezier := (points: Vector[], t: Number) => points.count == 1 ? points.first : Bezier(points.zip(points.rest).map((a, b) => a.mix(b, t)), t)
-  Outline := Segment[] + {
-    points => map(.match
-      Quadratic => (1..16).map(t => Bezier([.previous.to, .control, .to], t / 16))
-      Cubic => (1..16).map(t => Bezier([.previous.to, .first, .second, .to], t / 16))
-      Arc => .points(.previous.to)
-      * => [.to]
-    ).flatten
-    edges => points -- .zip([.rest, (.first if this is Loop)].flatten)
-    contains (point: Vector) => points -- .zip([.rest, .first].flatten){(.0.y > point.y) != (.1.y > point.y) && point.x < .0.x + (point.y - .0.y) * (.1.x - .0.x) / (.1.y - .0.y)}.count.odd
+
+  Facet := class = corners: Vector[], orientation: -1 | +1 = +1 {
+    crossing (point: Vector) => corners.map(.[1..]) -- (low => low.rest.map(. - low.first).transposed) -- (span => span.determinant == 0 ? 0
+      : ((span.inverse * [point[1..] - corners.first[1..]].transposed).flatten -- [1 - .sum, .].flatten) -- (λ =>
+        λ.first > 0 && λ.rest.every(. >= 0) && λ.zip(corners).map(.0 * .1.x).sum > point.x ? orientation * (span.determinant > 0 ? 1 : -1) : 0))
   }
-  rectangle (size: Vector) => [Vector(), Vector(size.x, 0), size, Vector(0, size.y)].loop
-  ellipse (size: Vector) => size * (1 / 2) -- (r => [Vector(size.x, r.y), Arc(r, to: Vector(0, r.y)), Arc(r, to: Vector(size.x, r.y))].loop)
+  Cell := class: Hierarchy = at: *, along: Integer[] = [], coefficient: Integer = 1 {
+    rank => along.count
+    key => (at, along)
+    children | ∂ => along.enumerate.map(axis => [
+      Cell(at, along{!= axis.value}, coefficient * (axis.index.even ? -1 : 1)),
+      Cell(at + Side(axis.value, +1).vector, along{!= axis.value}, coefficient * (axis.index.even ? 1 : -1))
+    ]).flatten
+  }
+  Chain := (Cell | Edge)[] + {
+    rank => first?.rank ?? 1
+    ∂ => map(.∂).flatten.reduced
+    reduced => [this{. is Edge}, this{. is Cell}.map(.key).unique.map(key => this{. is Cell && .key == key}.map(.coefficient).sum -- (Cell(key.0, key.1, .))){.coefficient != 0}].flatten
+  }
+  orderings (axes: Integer[]) => axes.empty ? [[]] : axes.map(axis => orderings(axes{!= axis}).map([axis, .].flatten)).flatten(1)
+  simplices (from: Vector, size: Vector, axes: Integer[]) => orderings(axes).map(order => order.reduce(acc = [from] => [acc, [acc.last + Side(., +1).vector * size[.]]].flatten))
+
+  rectangle (size: Vector) => Curve([Vector(), Vector(size.x, 0), size, Vector(0, size.y)].loop)
+  ellipse (size: Vector) => size * (1 / 2) -- (r => Curve([Vector(size.x, r.y), Arc(r, to: Vector(0, r.y)), Arc(r, to: Vector(size.x, r.y))].loop))
+  triangle (size: Vector) => Curve([Vector(size.x / 2, 0), size, Vector(0, size.y)].loop)
+  box (size: Vector) => Space.current.dimension -- (n => n == 2 ? rectangle(size) : Shape(rank: n - 1, children: all#.map(side =>
+    Mesh(simplices(Vector((0..<n).map(. == side.axis && side.toward > 0 ? size[.] : 0)), size, (0..<n){!= side.axis}).map(Facet(.)), rank: n - 1))))
 
   Shape := class: Hierarchy = origin: Vector = Vector(), size: Vector = Vector(), width: (Length | Number | Stops)?, height: (Length | Number | Stops)?, aspect: Number?,
-    position: Position = Position(), inset: Edges = Edges(None, None, None, None), padding: Edges = Edges(), margin: Edges = Edges(),
-    transform: Transform = Transform.identity, boundary: Outline = rectangle(size),
+    position: Position = Position(), inset: Edges = Edges(None, None, None, None, None, None), padding: Edges = Edges(), margin: Edges = Edges(),
+    transform: Transform = Transform.identity,
+    boundary: Shape = space.vertices ? Shape(space: space, rank: 1, cells: space.vertices.edges{cells.at.contains(.from) != cells.at.contains(.to)})
+      : space.discrete ? Shape(space: space, rank: rank - 1, cells: cells.∂) : box(size),
     flow: block | inline | grid | layered = block, gap: Vector = Vector(), columns: Number = 1, wrap: boolean = false,
     align: (start | center | end | between | around | stretch | middle | justify)? = parent?.align,
     fill: Paint?, color: Paint? = parent?.color, font: Font = parent ? (parent.font ~~ .size = parent.font_size) : Font.base, stroke: Stroke?, radius: Length[] = [0px],
@@ -129,14 +212,16 @@ Geometry := class {
     cursor: default | pointer | text | grab | grabbing | move | wait | none = default, touch: auto | none | pan_x | pan_y = auto,
     transition: Transition?, styles: String[] | Dynamic = [], content: * = None, location: Location?, palette: *? = parent?.palette,
     white_space: WhiteSpace = parent?.white_space ?? WhiteSpace.pre_line, case: Section? = parent?.case,
-    truncate: (clip | ellipsis)? = parent?.truncate, direction: (left-to-right | right-to-left)? = parent?.direction, solved: boolean = false {
+    truncate: (clip | ellipsis)? = parent?.truncate, direction: (left-to-right | right-to-left)? = parent?.direction, solved: boolean = false,
+    space: Space = parent?.space ?? Space.current, rank: Integer = space.dimension,
+    cells: Chain = space.discrete ? space.positions.filter(p => (0..<space.dimension).every(origin[.] <= p[.] < origin[.] + size[.])).map(Cell(., 0..<space.dimension)) : [] {
     id: Location => parent ? parent.id / (parent.children.enumerate{.value === this}.first.index as String) : @scene
     root => parent?.root ?? this
     em => parent?.font_size ?? Font.base.size
     font_size => with Font.inherited = em { font.size as px }
     at: Vector => position.kind.match
       fixed => origin
-      anchored => (position.anchor ?? parent) -- (.at + .size * position.side.toward.map(. max 0) + size * position.side.toward.map(. min 0))
+      anchored => (position.anchor ?? parent) -- (.at + .size * position.side.vector(space.dimension).map(. max 0) + size * position.side.vector(space.dimension).map(. min 0))
       sticky => (parent.at + origin - parent.scrolled) -- Vector(.x, .y max (inset.top ?? 0px) min (parent.at.y + parent.size.y - size.y))
       * => parent ? parent.at + origin - parent.scrolled : origin
     outer => size + margin.total
@@ -144,10 +229,25 @@ Geometry := class {
     texts => reachable{.content is String}
     in_place => children{.position.kind is (flow | sticky | absolute)}
     lifted => reachable{.position.kind is (fixed | anchored) && .visible}.sort_by(.layer)
-    rectangular => boundary == rectangle(size)
-    contains (point: Vector) => boundary.contains(transform.inverse.applied(point))
+    rectangular => boundary == box(size)
+    scale => transform.scaling * (parent?.scale ?? 1)
+    facets => children.map(.facets).flatten
+    edges => children.map(.edges).flatten(1)
+    winding (point: Vector) => facets.map(.crossing(point)).sum
+    contains (point: Vector) => transform.inverse.applied(point) -- (p => space.vertices ? cells.some(.at == p)
+      : space.discrete ? cells.some(cell => (0..<space.dimension).every(cell.at[.] <= p[.] < cell.at[.] + 1))
+      : rectangular ? (0..<space.dimension).every(0 <= p[.] < size[.])
+      : boundary.winding(p) != 0)
+    dimension => ERROR@Type `fractal dimension is not implemented yet`
     painted (paint: Paint?) => paint is Section ? paint(this) : paint
-    displayed (name: String) => transition ? this.`name`.history.last -- (.previous?.value.mix(.value, transition.easing(((Time.now - .when) / transition.duration) min 1)) ?? .value) : this.`name`
+    displayed (name: String) => this.`name` is Animated ? this.`name`.value
+      : transition ? this.`name`.history.last -- (.previous?.value.mix(.value, transition.easing(((Time.now - .when) / transition.duration) min 1)) ?? .value) : this.`name`
+    projected (by: Projection) => with Space.current = space {
+      reachable.map(shape => shape.boundary.facets.map(facet => facet.corners.map(. + shape.at) -- (corners =>
+        (depth: corners.map(by.depth(.)).sum / corners.count, corners: corners.map(by.applied(.)), shape: shape)))).flatten(1)
+    } -- (faces => with Space.current = Space.plane {
+      Box(space: Space.plane, size: by.applied(size), solved: true, children: faces.sort_by(-.depth).map(Polygon(boundary: Curve(.corners.loop), fill: .shape.fill, stroke: .shape.stroke)))
+    })
 
     lines (width: Length = ∞) => (content as String) -- (text => (white_space.lines ? text.split(\n) : [text]).map(paragraph =>
       white_space.wraps ? (paragraph ~= (line: ((!Char.Blank)[]{length > 0}, Char.Blank[])[]{.width(font) <= width})[]).line : [paragraph]
@@ -196,11 +296,43 @@ Geometry := class {
   }
   Box := Shape
   Ball := Shape{boundary == ellipse(size)}
-  Polygon := Shape{boundary is Vector[]}
+  Curve := class: Shape = segments: Segment[], rank: Integer = 1,
+    boundary: Shape = segments is Loop ? Shape(rank: 0) : Shape(rank: 0, cells: [Cell(points.first, [], -1), Cell(points.last, [], 1)]) {
+    points => segments.map(.match
+      Quadratic => (1..16).map(t => Bezier([.previous.to, .control, .to], t / 16))
+      Cubic => (1..16).map(t => Bezier([.previous.to, .first, .second, .to], t / 16))
+      Arc => .points(.previous.to)
+      * => [.to]
+    ).flatten
+    edges => points -- .zip([.rest, (.first if segments is Loop)].flatten)
+    facets => edges.map(Facet([.0, .1]))
+  }
+  Mesh := class: Shape = facets: Facet[]
+  Polygon := Shape{boundary is Curve{segments.every(. is Vector)}}
+
+  Fractal := class: Shape = copies: Transform[] = [], initiator: Shape = box(size) {
+    children => copies.map(copy => this ~~ (.transform = copy) ~~ (.origin = Vector()) ~~ (.parent = this))
+    extent => size.map(. max -.).max * scale
+    contains (point: Vector) => transform.inverse.applied(point) -- (p => initiator.winding(p) != 0 && children.some(.contains(p)))
+    approximated (resolution: Length) => extent < resolution
+      ? Shape(origin: origin, size: size, transform: transform, boundary: initiator, fill: fill, stroke: stroke)
+      : Shape(origin: origin, size: size, transform: transform, children: children.map(.approximated(resolution)))
+  }
+  Sierpinski := Fractal{initiator == triangle(size), copies == [Vector(1 / 4, 0), Vector(0, 1 / 2), Vector(1 / 2, 1 / 2)].map(Transform.translate(. * size) * Transform.scale(1 / 2))}
+  Koch := Fractal{rank == 1, initiator == Curve([Vector(), Vector(size.x, 0)]),
+    copies == [(Vector(), 0 turn), (Vector(1 / 3, 0), (-1 / 6) turn), (Vector(1 / 2, -(√3) / 6), (1 / 6) turn), (Vector(2 / 3, 0), 0 turn)].map((at, angle) =>
+      Transform.translate(at * size.x) * Transform.rotate(angle) * Transform.scale(1 / 3))}
 
   Solving := {
     {shape: Shape{!parent && !solved}} => shape.solve
   }
+  Projecting := {
+    {scene: Shape{!parent && solved && space.dimension > 2}} => scene.projected(scene.space.projection ?? Projection.orthographic(scene.space.dimension))
+  }
+  Approximating := (resolution: Length) => {
+    {fractal: Fractal} => fractal.approximated(resolution)
+  }
+  Preparing := (resolution: Length) => Solving + Projecting + Approximating(resolution)
 
   Transition := class = duration: Quantity.Temporal, easing: Easing = ease
   Settings := {
@@ -218,6 +350,12 @@ Geometry := class {
   ease_out: Easing = (t) => t * (2 - t)
   step: Easing = (t) => t < 1 ? 0 : 1
 }
+
+Edge &+= {
+  ∂ => [Geometry.Cell(from, [], -1), Geometry.Cell(to, [], 1)]
+}
+
+{from} -> {to} over {during: Quantity.Temporal[]} ^keyword => Time.now -- (start => Geometry.Animated([Geometry.Stop(start + during.first, from), Geometry.Stop(start + during.last, to)], Geometry.linear))
 
 currentColor := .color
 

@@ -1,5 +1,6 @@
 Language.Web := class: Language {
   static extensions = ".web"
+  static space = Geometry.Space.plane
   Geometry.Shape &+= {
     dom => id.segments.join("-")
   }
@@ -89,8 +90,8 @@ Language.Web := class: Language {
       {polygon: Geometry.Polygon{!rectangular}} => @html <svg {Named(polygon)} viewBox="0 0 {polygon.size.x as px} {polygon.size.y as px}">
         <polygon points={polygon.boundary.points.map(.x as px, ",", .y as px).join(" ")} />
       </svg>
-      {outlined: Geometry.Shape{!rectangular}} => @html <svg {Named(outlined)} viewBox="0 0 {outlined.size.x as px} {outlined.size.y as px}">
-        <path d="{outlined.boundary.map(Path(.))}{" Z" if outlined.boundary is Loop}" />
+      {outlined: Geometry.Shape{!rectangular && boundary is Geometry.Curve}} => @html <svg {Named(outlined)} viewBox="0 0 {outlined.size.x as px} {outlined.size.y as px}">
+        <path d="{outlined.boundary.segments.map(Path(.))}{" Z" if outlined.boundary.segments is Loop}" />
       </svg>
       {path: Path{segment is Geometry.Quadratic}} => path.segment -- (" Q", .control.x, " ", .control.y, " ", .to.x, " ", .to.y)
       {path: Path{segment is Geometry.Cubic}} => path.segment -- (" C", .first.x, " ", .first.y, " ", .second.x, " ", .second.y, " ", .to.x, " ", .to.y)
@@ -150,7 +151,7 @@ Language.Web := class: Language {
     }
     language = Language(".html", level: syntax, written: written)
 
-    level := Geometry.Solving + {
+    level := Geometry.Preparing(1px) + {
       {root: Geometry.Shape{solved}} => Page(root)
     } + rules
   }
@@ -183,6 +184,7 @@ Language.Web := class: Language {
     Typeface := class = shape: Geometry.Shape
     Timing := class = easing: Geometry.Easing
     Mask := class = shape: Geometry.Shape
+    Transformed := class = matrix: Geometry.Transform
 
     WhiteSpace = [(Geometry.WhiteSpace.normal, "normal"), (Geometry.WhiteSpace.nowrap, "nowrap"), (Geometry.WhiteSpace.pre, "pre"), (Geometry.WhiteSpace.pre_wrap, "pre-wrap"), (Geometry.WhiteSpace.pre_line, "pre-line")]
     Cases = [(.upper_case, "uppercase"), (.lower_case, "lowercase"), (.title_case, "capitalize")]
@@ -240,7 +242,7 @@ Language.Web := class: Language {
           background: {Paint(shape.fill) if shape.fill};
           {Bordered(shape)}
           border-radius: {shape.radius.map(Measure(.)).join(" ") if shape.radius != [0px]};
-          transform: {("matrix3d(", shape.transform.transposed.flatten.join(","), ")") if shape.transform != Geometry.Transform.identity};
+          transform: {Transformed(shape.transform) if shape.transform != Geometry.Transform.identity};
           overflow: {shape.overflow == scroll ? "auto" : shape.overflow as String};
           z-index: {shape.layer if shape.layer != 0};
           mix-blend-mode: {(shape.blend as String) if shape.blend != normal};
@@ -341,6 +343,8 @@ Language.Web := class: Language {
 
       {mask: Mask{shape.content.fit == fill}} => "url(\"", mask.shape.content as String, "\") center/100% 100% no-repeat"
       {mask: Mask} => "url(\"", mask.shape.content as String, "\") center/", mask.shape.content.fit as String, " no-repeat"
+      {transformed: Transformed{matrix.count == 3}} => transformed.matrix -- ("matrix(", [.[0][0], .[1][0], .[0][1], .[1][1], .[0][2], .[1][2]].join(","), ")")
+      {transformed: Transformed} => "matrix3d(", transformed.matrix.transposed.flatten.join(","), ")"
     }
 
     written := {
@@ -352,7 +356,7 @@ Language.Web := class: Language {
     }
     language = Language(".css", level: syntax, written: written)
 
-    level := Geometry.Solving + {
+    level := Geometry.Preparing(1px) + {
       {root: Geometry.Shape{solved}} => Page(root)
     } + rules
   }
@@ -588,7 +592,7 @@ Language.Web := class: Language {
     }
     language = Language(".js", level: syntax, written: written)
 
-    level := Geometry.Solving + {
+    level := Geometry.Preparing(1px) + {
       {root: Geometry.Shape{solved}} => Page(root)
     } + rules
   }
@@ -607,7 +611,7 @@ Language.Web := class: Language {
       [UI.page?.icon, UI.page?.apple_icon, UI.page?.manifest]{!= None}.map((path: .name, content: .))
     ].flatten)
   }
-  level := Geometry.Solving + packaged + HTML.rules + CSS.rules + JS.rules
+  level := Geometry.Preparing(1px) + packaged + HTML.rules + CSS.rules + JS.rules
 
   DOM := class {
     send (message) => external io `dom` (message)

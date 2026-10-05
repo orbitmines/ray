@@ -415,3 +415,37 @@ with @me = Character(name: "player") {
 with @me = Instance.local {
   if Program(code: { "a" | "b" }){O: UI.Scene}().content is Choice { INFO@mark `UI240 the computer asks someone to choose instead of picking` }
 }
+
+unless Geometry.left.vector(2) == Geometry.Vector(-1, 0) && Geometry.bottom.vector(2) == Geometry.Vector(0, 1) { INFO@mark `UI241 a side is not its axis and direction` }
+unless Geometry.all.count == 4 && Geometry.horizontal#.count == 2 { INFO@mark `UI242 a plane does not have four sides` }
+unless Geometry.Edges(1px, 2px, 3px, 4px)[Geometry.left] == 4px && Geometry.Edges(1px, 2px, 3px, 4px).total == Geometry.Vector(6px, 4px) { INFO@mark `UI243 edges are not read by side` }
+unless (Geometry.Edges() ~~ .(Geometry.horizontal) = 5px).total == Geometry.Vector(10px, 0px) { INFO@mark `UI244 a superposed side does not set both edges` }
+with Geometry.Space.current = Geometry.Space([Geometry.Axis(), Geometry.Axis(), Geometry.Axis()]) {
+  unless Geometry.all.count == 6 && Geometry.Transform.identity.count == 4 { INFO@mark `UI245 a third axis does not add two sides and a row` }
+  unless Geometry.Projection.orthographic().applied(Geometry.Vector(1, 2, 3)) == Geometry.Vector(1, 2) { INFO@mark `UI246 an orthographic projection does not drop depth` }
+  unless Geometry.Box(size: Geometry.Vector(2, 2, 2)).contains(Geometry.Vector(1, 1, 1)) { INFO@mark `UI247 a box in three dimensions does not contain its centre` }
+}
+unless Geometry.euclidean(Geometry.Vector(0, 0), Geometry.Vector(3, 4)) == 5 { INFO@mark `UI248 the plane's distance is not euclidean` }
+with Geometry.Space.current = Geometry.Space.grid(Geometry.Vector(2, 2)) {
+  unless Geometry.graph(Geometry.Vector(0, 0), Geometry.Vector(1, 1)) == 2 { INFO@mark `UI249 a grid's distance is not the steps between cells` }
+  square := Geometry.Cell(Geometry.Vector(0, 0), [0, 1])
+  unless square.∂.count == 4 { INFO@mark `UI250 a square's boundary is not four edges` }
+  unless [square].∂.∂.empty { INFO@mark `UI251 the boundary of a boundary is not nothing` }
+  unless [square, Geometry.Cell(Geometry.Vector(1, 0), [0, 1])].∂.count == 6 { INFO@mark `UI252 the edge two squares share is on their boundary` }
+  unless Geometry.Box(origin: Geometry.Vector(0, 0), size: Geometry.Vector(2, 1)).contains(Geometry.Vector(1, 0)) { INFO@mark `UI253 a region of cells does not contain its cell` }
+}
+with Geometry.Space.current = Geometry.Space.grid(Geometry.Vector(10, 10), loop: true) {
+  unless Geometry.euclidean(Geometry.Vector(1, 0), Geometry.Vector(9, 0)) == 2 { INFO@mark `UI254 a looping axis does not wrap around` }
+}
+unless Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(5, 6)) { INFO@mark `UI255 a triangle does not wind around its centre` }
+if Geometry.Polygon(boundary: Geometry.triangle(Geometry.Vector(10, 10)), size: Geometry.Vector(10, 10)).contains(Geometry.Vector(1, 1)) { INFO@mark `UI256 a triangle winds around a point outside it` }
+unless Geometry.Sierpinski(size: Geometry.Vector(2px, 2px)).dimension.erred { INFO@mark `UI257 a fractal's dimension is measured before it is implemented` }
+unless Compiler.reduced(Geometry.Sierpinski(size: Geometry.Vector(2px, 2px)), Geometry.Approximating(4px)).children.empty { INFO@mark `UI258 a copy smaller than the resolution is divided` }
+unless Compiler.reduced(Geometry.Sierpinski(size: Geometry.Vector(16px, 16px)), Geometry.Approximating(4px)).children.count == 3 { INFO@mark `UI259 a fractal larger than the resolution is not its copies` }
+animated := Geometry.Vector(0px, 0px) -> Geometry.Vector(100px, 0px) over (0 s .. 0.3 s)
+with Time.now = animated.stops.last.at {
+  unless animated.value == Geometry.Vector(100px, 0px) { INFO@mark `UI260 a value over a time is not where it ends when it ends` }
+}
+unless Geometry.Space.of(Graph.Simple().connect(1, 2)).projection.erred { INFO@mark `UI261 a graph is embedded before embedding is implemented` }
+unless Compiler.reduced(Geometry.Vector(1px, 2px).map(. * 2), Compiler.specialised) == Geometry.Vector(2px, 4px) { INFO@mark `UI262 specialising a known plane changes what a vector maps to` }
+unless Geometry.Transform.rotate((1 / 4) turn).count == 3 { INFO@mark `UI263 a plane's transform is not three by three` }

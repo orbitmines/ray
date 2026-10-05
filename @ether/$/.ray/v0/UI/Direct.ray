@@ -1,17 +1,18 @@
 Language.Direct := class: Language {
   static extensions = ".direct"
+  static space (size: Geometry.Vector) => Geometry.Space.grid(Geometry.Vector(size.x as px, size.y as px))
 
   Drawing := class = raster: Geometry.Raster, ops: *[]
   Draw := class = shape: Geometry.Shape, outer: Geometry.Transform = Geometry.Transform.identity {
     placed => outer * Geometry.Transform.translate(shape.at) * shape.displayed("transform")
     inner => placed * Geometry.Transform.translate(shape.at * -1)
-    area => (0..<shape.size.y as px).map(y => (0..<shape.size.x as px).map(x => Geometry.Vector(x, y))).flatten
-    inside => area{shape.boundary.contains(.)}
+    area => space(shape.size).positions
+    inside => shape.rectangular ? area : area{shape.boundary.winding(.) != 0}
     opacity => shape.effects{. is Geometry.Filter && .kind == opacity}.amount.product ?? 1
   }
   Painted := class = points: (at: Geometry.Vector, sample: Geometry.Vector)[], paint: Geometry.Paint?, alpha: Probability = 1
-  Outlined := class = outlines: Geometry.Outline[], transform: Geometry.Transform, paint: Geometry.Paint?
-  Stroked := class = outline: Geometry.Outline, transform: Geometry.Transform, width: Geometry.Length, paint: Geometry.Paint?
+  Outlined := class = outlines: Geometry.Curve[], transform: Geometry.Transform, paint: Geometry.Paint?
+  Stroked := class = outline: Geometry.Shape, transform: Geometry.Transform, width: Geometry.Length, paint: Geometry.Paint?
   Shown := class = draw: Draw
 
   rules := {
@@ -64,10 +65,10 @@ Language.Direct := class: Language {
       edges{(.0.y <= y) != (.1.y <= y)}.map(.0.x + (y - .0.y) * (.1.x - .0.x) / (.1.y - .0.y)).sort.chunk(2).map((a, b) => (a..<b).map(x => (at: Geometry.Vector(x, y), sample: Geometry.Vector(x, y))))
     ).flatten, outlined.paint)))
     {stroked: Stroked} => Painted(stroked.outline.edges.map((a, b) => (stroked.transform.applied(a), stroked.transform.applied(b))).map((a, b) =>
-      (0..<(b - a).norm as px).map(step => a.mix(b, step / (b - a).norm) -- (point => (-(stroked.width / 2)..stroked.width / 2).map(w => (at: Geometry.Vector(point.x + w, point.y), sample: point))))
+      (0..<a.distance(b) as px).map(step => a.mix(b, step / a.distance(b)) -- (point => (-(stroked.width / 2)..stroked.width / 2).map(w => (at: Geometry.Vector(point.x + w, point.y), sample: point))))
     ).flatten, stroked.paint)
   }
-  level := Geometry.Solving + rules
+  level := Geometry.Preparing(1px) + rules
 
   Font := class = font: Geometry.Font {
     file => font.family.map(Fonts.located(.)).first
@@ -76,7 +77,7 @@ Language.Direct := class: Language {
   Fonts := class {
     located (family: String) => ["/usr/share/fonts", "/System/Library/Fonts", "C:/Windows/Fonts"].map(IO.listing(.)).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
   }
-  Glyph := class = outlines: Geometry.Outline[], advance: Number, units: Number
+  Glyph := class = outlines: Geometry.Curve[], advance: Number, units: Number
 
   OpenType := class = (version: U32, count: U16, U16, U16, U16, records: (tag: Char⁴, checksum: U32, offset: U32, size: U32)[]{length == count}, *) {
     static language = Language(".otf" | ".ttf", level: { {font: OpenType} => font })
@@ -127,7 +128,7 @@ Language.Direct := class: Language {
       outline (points: Point[]) => (points.some(.on)
         ? points.index_of(points{.on}.first) -- (start => [points[start..], points[..start]].flatten)
         : Point((points.first.at + points.last.at) * (1 / 2), true) -- (start => [start, points, start].flatten)
-      ) -- (ring => [ring.first.at, Compiler.reduced(ring.zip(ring.rest).map(Step(.0, .1)), contoured)].flatten.loop)
+      ) -- (ring => Geometry.Curve([ring.first.at, Compiler.reduced(ring.zip(ring.rest).map(Step(.0, .1)), contoured)].flatten.loop))
     }
 
     bits => this as Binary

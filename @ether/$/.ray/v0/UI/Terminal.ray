@@ -2,7 +2,8 @@ Language.TUI := class: Language {
   static extensions = ".tui"
   Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, bold: boolean = false, italic: boolean = false, underline: boolean = false, strike: boolean = false, dim: boolean = false, reverse: boolean = false, link: Location?
   Grid := class = width: Number, height: Number, cells: Cell[][] = (0..<height).map((0..<width).map(Cell())), graphics: Graphic[] = [] {
-    inside (at: Geometry.Vector) => 0 <= at.x < width && 0 <= at.y < height
+    space => Geometry.Space.grid(Geometry.Vector(width, height))
+    inside (at: Geometry.Vector) => space.holds(at)
     put (at: Geometry.Vector, cell: Cell) => cells[at.y][at.x] = cell if inside(at)
     cell (at: Geometry.Vector) => inside(at) ? cells[at.y][at.x] : Cell()
     background (at: Geometry.Vector, color: Geometry.Color?) => put(at, cell(at) ~~ .background = color)
@@ -15,6 +16,7 @@ Language.TUI := class: Language {
   }
   static px_per_cell = Geometry.Vector(8px, 16px)
   static cells (length: Geometry.Vector) => Geometry.Vector(length.x / px_per_cell.x, length.y / px_per_cell.y)
+  static space (length: Geometry.Vector) => Geometry.Space.grid(cells(length))
 
   Graphic := class = at: Geometry.Vector, bytes: *
 
@@ -22,9 +24,7 @@ Language.TUI := class: Language {
   Paint := class = shape: Geometry.Shape {
     at => cells(shape.at)
     size => cells(shape.size)
-    area => (at.y..<at.y + size.y).map(y => (at.x..<at.x + size.x).map(x => Geometry.Vector(x, y))).flatten{
-      shape.contains((. - at) * px_per_cell)
-    }
+    area => Geometry.Space.grid(size).positions.map(. + at){shape.contains((. - at) * px_per_cell)}
     inside (child: Geometry.Shape) => Paint(child)
   }
   Boxed := class = paint: Paint
@@ -87,19 +87,19 @@ Language.TUI := class: Language {
       ink = paint.shape.painted(paint.shape.stroke.paint) as Geometry.Color
       sides = paint.shape.stroke.sides#
       [
-        (from.x..to.x).map(x => { .underlined(Geometry.Vector(x, to.y)) }) if sides == [bottom],
-        (from.x + 1..<to.x).map(x => { .put(Geometry.Vector(x, from.y), Cell("─", foreground: ink)) }) if sides.contains(top),
-        (from.x + 1..<to.x).map(x => { .put(Geometry.Vector(x, to.y), Cell("─", foreground: ink)) }) if sides.contains(bottom) && sides != [bottom],
-        (from.y + 1..<to.y).map(y => { .put(Geometry.Vector(from.x, y), Cell("│", foreground: ink)) }) if sides.contains(left),
-        (from.y + 1..<to.y).map(y => { .put(Geometry.Vector(to.x, y), Cell("│", foreground: ink)) }) if sides.contains(right),
-        [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].map((at, i) => { .put(at, Cell(corners[i], foreground: ink)) }) if sides.count == 4
+        (from.x..to.x).map(x => { .underlined(Geometry.Vector(x, to.y)) }) if sides == [Geometry.bottom],
+        (from.x + 1..<to.x).map(x => { .put(Geometry.Vector(x, from.y), Cell("─", foreground: ink)) }) if sides.contains(Geometry.top),
+        (from.x + 1..<to.x).map(x => { .put(Geometry.Vector(x, to.y), Cell("─", foreground: ink)) }) if sides.contains(Geometry.bottom) && sides != [Geometry.bottom],
+        (from.y + 1..<to.y).map(y => { .put(Geometry.Vector(from.x, y), Cell("│", foreground: ink)) }) if sides.contains(Geometry.left),
+        (from.y + 1..<to.y).map(y => { .put(Geometry.Vector(to.x, y), Cell("│", foreground: ink)) }) if sides.contains(Geometry.right),
+        [(from, 0), (Geometry.Vector(to.x, from.y), 1), (Geometry.Vector(from.x, to.y), 2), (to, 3)].map((at, i) => { .put(at, Cell(corners[i], foreground: ink)) }) if sides.count == Geometry.all#.count
       ]
     }
     {scrollbar: Scrollbar} => scrollbar.paint -- (paint => (0..<paint.size.y).map(y =>
       { .put(paint.at + Geometry.Vector(paint.size.x - 1, y), Cell(y == paint.shape.scrolled.y * paint.size.y / paint.shape.content_height ? "┃" : "│")) }
     ))
   }
-  Cells := Geometry.Solving + rules
+  Cells := Geometry.Preparing(px_per_cell.x min px_per_cell.y) + rules
   level := Cells
 
   static braille (dots: boolean[][]) => (0x2800 + [[0, 3], [1, 4], [2, 5], [6, 7]].zip(dots).map((bits, row) => row.zip(bits).map((on, bit) => on ? 2 ^ bit : 0).sum).sum) as Char
@@ -192,10 +192,10 @@ Language.TUI := class: Language {
     {key: Key{page == "6"}} => @me/device/keyboard/PageDown
     {key: Key{alt}} => @me/device/keyboard[key.alt as String]
     {key: Key{lettered}} => @me/device/keyboard[((key.code as Number) + 96) as Char as String]
-    {key: Key{code is ("A" | "w")}} => top
-    {key: Key{code is ("B" | "s")}} => bottom
-    {key: Key{code is ("C" | "d")}} => right
-    {key: Key{code is ("D" | "a")}} => left
+    {key: Key{code is ("A" | "w")}} => Geometry.top
+    {key: Key{code is ("B" | "s")}} => Geometry.bottom
+    {key: Key{code is ("C" | "d")}} => Geometry.right
+    {key: Key{code is ("D" | "a")}} => Geometry.left
     {key: Key{code == "Q"}} => @me/device/keyboard/F2
     {key: Key{code == "\r"}} => @me/device/keyboard/Enter
     {key: Key{code is ("\t" | "Z")}} => @me/device/keyboard/Tab

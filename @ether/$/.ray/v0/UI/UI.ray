@@ -15,8 +15,8 @@ UI := class {
     {location: Location} => location.placed(Geometry.Box(content: location as String, location: location))
     {placed: Placed} => Compiler.reduced(placed.value, Scene) ~~ .location = placed.location
     {drawer: Drawer} => Geometry.Box(children: [Overlay(closes: drawer){visible == drawer.open}, drawer ~~ (.position = Geometry.Fixed())
-      ~~ (.inset = Geometry.Edges((0px unless drawer.side == bottom), (0px unless drawer.side == left), (0px unless drawer.side == top), (0px unless drawer.side == right)))
-      ~~ (.width = drawer.extent if drawer.side is (left | right)) ~~ (.height = drawer.extent if drawer.side is (top | bottom))])
+      ~~ (.inset = Geometry.Edges((0px unless drawer.side == Geometry.bottom), (0px unless drawer.side == Geometry.left), (0px unless drawer.side == Geometry.top), (0px unless drawer.side == Geometry.right)))
+      ~~ (.width = drawer.extent if drawer.side is Geometry.horizontal) ~~ (.height = drawer.extent if drawer.side is Geometry.vertical)])
     {shape: Geometry.Shape} => shape
     {chosen: Choice} => Geometry.Box(content: chosen)
     {superposed: |} => Compiler.reduced(@me.choose(superposed), Scene)
@@ -72,13 +72,13 @@ UI := class {
   selection: Geometry.Shape{selected}[] => scene{selected}
   current => selection.last ?? scene
   step (from: Geometry.Shape, direction: Geometry.Side) => (direction.match
-      bottom => from.children.first
-      top => from.parent
-      right => from.parent?.children{=== from}.next
-      left => from.parent?.children{=== from}.previous
+      Geometry.bottom => from.children.first
+      Geometry.top => from.parent
+      Geometry.right => from.parent?.children{=== from}.next
+      Geometry.left => from.parent?.children{=== from}.previous
     ) ?? from
   move (direction: Geometry.Side) => selection = step(current, direction)
-  skip (direction: Geometry.Side) => selection = step(step(current, top), direction)
+  skip (direction: Geometry.Side) => selection = step(step(current, Geometry.top), direction)
   expand (direction: Geometry.Side) => selection |= step(current, direction)
 
   locked => scene{. is Drawer && open}.nonempty
@@ -119,7 +119,7 @@ UI := class {
 
   Popover := Geometry.Box{position.kind == anchored, layer == 20, visible == (position.anchor.hovered | position.anchor.focused | hovered)}
   Overlay := Geometry.Box{closes: None, position.kind == fixed, inset == 0px, layer == 19, fill: Geometry.Color(0, 0, 0, 0.5)}
-  Drawer := Geometry.Box{open: false, side: left, extent: 75vw, layer == 20, overflow == scroll, visible == open, transition == Geometry.Transition(0.3 s)}
+  Drawer := Geometry.Box{open: false, side: Geometry.left, extent: 75vw, layer == 20, overflow == scroll, visible == open, transition == Geometry.Transition(0.3 s)}
 
   Geometry.Shape &+= {
     focused: boolean = false
@@ -199,7 +199,7 @@ UI := class {
   }
 }
 
-[p: Geometry.all, px: Geometry.horizontal, py: Geometry.vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => [(word, "padding"), (word.replace("p", "m"), "margin")].for (shorthand, edges) => {
+[p: Geometry.all, px: Geometry.horizontal, py: Geometry.vertical, pt: Geometry.top, pb: Geometry.bottom, pl: Geometry.left, pr: Geometry.right].for (word, side) => [(word, "padding"), (word.replace("p", "m"), "margin")].for (shorthand, edges) => {
   `shorthand` {amount: Number | Geometry.Length} ^keyword => (`edges`: Geometry.Edges() ~~ .(side) = UI.Theme.scaled(amount))
 }
 

@@ -21,7 +21,7 @@ if open_to_none as one { INFO@mark `EN22 a value held under nothing comes back a
 held_there := Encoding.Encrypted(value: 5, key: 7)
 unless held_there as Instance(location: None, key: 7) == 5 { INFO@mark `EN30 a value does not open at an instance holding its key` }
 if held_there as Instance(location: None, key: 8) { INFO@mark `EN31 a value opens at an instance holding another key` }
-unless held_there.opened(Instance(location: None)).instance_of(Quest) { INFO@mark `EN32 a value opened without its key does not ask to find it` }
+unless held_there.opened(Instance(location: None)) is Quest { INFO@mark `EN32 a value opened without its key does not ask to find it` }
 unless held_there as Character(name: "k", key: 7) == 5 { INFO@mark `EN33 a value does not open for a character holding its key` }
 unless held_there.opened(Instance(location: None, key: 7)) == 5 { INFO@mark `EN34 a value opened with its key is not what was put in` }
 

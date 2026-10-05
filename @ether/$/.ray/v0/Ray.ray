@@ -28,7 +28,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   undirected => all.every(.initial === .terminal)
   unidirectional => all.every(!.previous)
 
-  compact => this[{!=.instance_of None}]
+  compact => this[{!(. is None)}]
 
   static boundary := class {
     () => boundary.initial | boundary.terminal
@@ -82,8 +82,8 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   partition (predicate) => [this[{predicate}]], [this[{!predicate(.)}]]
   batch | chunk (size: Number) => empty ? [] : [this[..<size]], this[size..].chunk(size)
   concatenated => reduce(acc = [] => acc, .)
-  flatten => map(. ==.instance_of Iterable && !(. ==.instance_of String) ? .flatten : [.]).concatenated
-  flatten (levels: Number) => levels == 0 ? this : map(. ==.instance_of Iterable && !(. ==.instance_of String) ? .flatten(levels - 1) : [.]).concatenated
+  flatten => map(. is Iterable && !(. is String) ? .flatten : [.]).concatenated
+  flatten (levels: Number) => levels == 0 ? this : map(. is Iterable && !(. is String) ? .flatten(levels - 1) : [.]).concatenated
   union (other: Iterable) => this, other[{!this.contains(.)}]
   intersection (other: Iterable) => this[{other.contains(.)}]
   disjoint (other: Iterable) => intersection(other).empty
@@ -128,12 +128,12 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   [{from}..{to}] = {value} ^punctuation => assigned_over(from, to, value)
   [{from}..<{to}] = {value} ^punctuation => assigned_over(from, to - 1, value)
   assigned_over (from: Integer, to: Integer, value) => (at(from)..at(to))
-    -- .zip(value ==.instance_of Iterable && value.count == .count && .count > 1 ? value : [value] * .count)
+    -- .zip(value is Iterable && value.count == .count && .count > 1 ? value : [value] * .count)
     -- .for((at, written) => this[at] = written)
     -- this
   [{{literal selection}}] ^punctuation => Filtered(from: entry, keeps: { inline selection })
 
-  as (: Iterable<R: ?>) => this[{==.instance_of R}]
+  as (: Iterable<R: ?>) => this[{. is R}]
 
   chainable == (other: Iterable) => orderless || other.orderless
     ? count == other.count && every(other.contains(.))
@@ -172,7 +172,7 @@ Ray := class: Iterable & Ordered {
   path_to | between (target, trail = []) => this === target ? [[trail, this]]
     : continuations{!trail.contains(.)}.map(.path_to(target, [trail, this])).flatten(1)
     -- . ?? Quest(name: "find a path", goal: target)
-  shortest_path_to (target) => path_to(target) -- . ==.instance_of Quest ? . : .min_by(.count)
+  shortest_path_to (target) => path_to(target) -- . is Quest ? . : .min_by(.count)
 
   complement (selection) => reachable{!selection.contains(.)}
 
@@ -374,15 +374,15 @@ Loop := class: Path = around: Iterable, at: * {
 
 Node &+= {
   -> (step = 1) => Stepped(at: this, forward: step)
-  right-to-left <- (base) => base ==.instance_of Stepped ? Stepped(at: base.at, forward: base.forward, backward: this) : Stepped(at: base, backward: this)
+  right-to-left <- (base) => base is Stepped ? Stepped(at: base.at, forward: base.forward, backward: this) : Stepped(at: base, backward: this)
 }
 Stepped := class: Ray = at: *, forward: *?, backward: *?, behind: Stepped?, ahead: Stepped? {
-  static stepped (step, from) => step ==.instance_of Number ? from + step : step(from)
+  static stepped (step, from) => step is Number ? from + step : step(from)
   value => at
   next => ahead ?? (forward ? Stepped(at: stepped(forward, at), forward, backward, behind: this) : None)
   previous => behind ?? (backward ? Stepped(at: stepped(backward, at), forward, backward, ahead: this) : None)
   bounded => false
-  == (other) => at == (other ==.instance_of Stepped ? other.at : other)
+  == (other) => at == (other is Stepped ? other.at : other)
 }
 
 Filtered := class: Ray = from: Ray?, keeps: * {
@@ -391,7 +391,7 @@ Filtered := class: Ray = from: Ray?, keeps: * {
   value => from.value ?? from
   next => from?.next ? Filtered(from: from.next, keeps).found : None
   previous => None
-  == (other) => value == (other ==.instance_of Filtered ? other.value : other)
+  == (other) => value == (other is Filtered ? other.value : other)
 }
 
 ...{of} ^punctuation => Spread(of: of)

@@ -151,12 +151,12 @@ dynamically Number.Bases.for name => {
       floor => integer
       round => fraction.nonempty && (fraction.first as Decimal) * 2 >= radix ? integer + 1 : integer
       compounds + (other: Real) => written(scaled * radix ^ other.places + other.scaled * radix ^ places, places + other.places)
-      compounds * (other: Number | Real) => other ==.instance_of Real ? written(scaled * other.scaled, places + other.places) : written(scaled * other, places)
+      compounds * (other: Number | Real) => other is Real ? written(scaled * other.scaled, places + other.places) : written(scaled * other, places)
       compounds / (other: Number) => Real(integer: scaled / other / radix ^ places, fraction: (1 -> +1).map(place => scaled * radix ^ place / other % radix)[places..])
       chainable == (other: Real) => scaled * radix ^ other.places == other.scaled * radix ^ places
       chainable < (other: Real) => scaled * radix ^ other.places < other.scaled * radix ^ places
 
-      rational => fraction ==.instance_of (static | static[]{length == ∞})
+      rational => fraction is (static | static[]{length == ∞})
       irrational => !rational
     }
   }

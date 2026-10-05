@@ -3,21 +3,21 @@
 
 mark ^keyword := external global
 
-unless 10.instance_of(Unicode.Scalar) { INFO@mark `UN3 ten is not a scalar` }
-unless "a"[0].instance_of(Unicode.Scalar) { INFO@mark `UN1 a is not a scalar` }
-unless "0061".instance_of(Unicode.CodePoint) { INFO@mark `UN2 0061 is not a code point` }
-if "1234567".instance_of(Unicode.CodePoint) { INFO@mark `UN4 seven hexadecimal digits are a code point` }
+unless 10 is Unicode.Scalar { INFO@mark `UN3 ten is not a scalar` }
+unless "a"[0] is Unicode.Scalar { INFO@mark `UN1 a is not a scalar` }
+unless "0061" is Unicode.CodePoint { INFO@mark `UN2 0061 is not a code point` }
+if "1234567" is Unicode.CodePoint { INFO@mark `UN4 seven hexadecimal digits are a code point` }
 
-unless "1"[0].instance_of(Unicode.GeneralCategory.Number) { INFO@mark `UN6 a digit is not a number` }
-unless "1"[0].instance_of(Unicode.GeneralCategory.Decimal_Number) { INFO@mark `UN5 a digit is not a decimal number` }
-unless " "[0].instance_of(Unicode.GeneralCategory.Separator) { INFO@mark `UN7 a space does not separate` }
-unless " "[0].instance_of(Unicode.GeneralCategory.Space_Separator) { INFO@mark `UN8 a space is not a space separator` }
-unless "a"[0].instance_of(Unicode.GeneralCategory.Letter) { INFO@mark `UN9 a letter is not a letter` }
-if "a"[0].instance_of(Unicode.GeneralCategory.Number) { INFO@mark `UN10 a letter is a number` }
-if "1"[0].instance_of(Unicode.GeneralCategory.Letter) { INFO@mark `UN26 a digit is a letter` }
-if " "[0].instance_of(Unicode.GeneralCategory.Letter) { INFO@mark `UN27 a space is a letter` }
-unless "a"[0].instance_of(Unicode.Lowercase) { INFO@mark `UN11 a is not lowercase` }
-if "A"[0].instance_of(Unicode.Lowercase) { INFO@mark `UN12 A is lowercase` }
+unless "1"[0] is Unicode.GeneralCategory.Number { INFO@mark `UN6 a digit is not a number` }
+unless "1"[0] is Unicode.GeneralCategory.Decimal_Number { INFO@mark `UN5 a digit is not a decimal number` }
+unless " "[0] is Unicode.GeneralCategory.Separator { INFO@mark `UN7 a space does not separate` }
+unless " "[0] is Unicode.GeneralCategory.Space_Separator { INFO@mark `UN8 a space is not a space separator` }
+unless "a"[0] is Unicode.GeneralCategory.Letter { INFO@mark `UN9 a letter is not a letter` }
+if "a"[0] is Unicode.GeneralCategory.Number { INFO@mark `UN10 a letter is a number` }
+if "1"[0] is Unicode.GeneralCategory.Letter { INFO@mark `UN26 a digit is a letter` }
+if " "[0] is Unicode.GeneralCategory.Letter { INFO@mark `UN27 a space is a letter` }
+unless "a"[0] is Unicode.Lowercase { INFO@mark `UN11 a is not lowercase` }
+if "A"[0] is Unicode.Lowercase { INFO@mark `UN12 A is lowercase` }
 
 unless "é" as Unicode.UTF-8 as String == "é" { INFO@mark `UN13 é does not come back from UTF-8` }
 unless "\n" as Unicode.UTF-32 as String == "\n" { INFO@mark `UN14 a newline does not come back from UTF-32` }
@@ -50,12 +50,12 @@ unless U+4E00.east_asian_width == "W" { INFO@mark `UN51 a Han character is not w
 unless U+0061.east_asian_width == "Na" { INFO@mark `UN52 a is not narrow` }
 unless U+0061.script == "Latin" { INFO@mark `UN43 a is not Latin` }
 unless U+0627.script == "Arabic" { INFO@mark `UN44 alef is not Arabic` }
-unless U+0061.instance_of(Char.Latin) { INFO@mark `UN45 a is not a Latin character` }
-if U+0627.instance_of(Char.Latin) { INFO@mark `UN46 alef is a Latin character` }
-unless U+0627.instance_of(Char.Arabic) { INFO@mark `UN53 alef is not an Arabic character` }
-unless U+03B1.instance_of(Char.Greek) { INFO@mark `UN54 alpha is not a Greek character` }
-unless U+0430.instance_of(Char.Cyrillic) { INFO@mark `UN55 a Cyrillic a is not Cyrillic` }
-unless U+4E00.instance_of(Char.Han) { INFO@mark `UN56 a Han character is not Han` }
+unless U+0061 is Char.Latin { INFO@mark `UN45 a is not a Latin character` }
+if U+0627 is Char.Latin { INFO@mark `UN46 alef is a Latin character` }
+unless U+0627 is Char.Arabic { INFO@mark `UN53 alef is not an Arabic character` }
+unless U+03B1 is Char.Greek { INFO@mark `UN54 alpha is not a Greek character` }
+unless U+0430 is Char.Cyrillic { INFO@mark `UN55 a Cyrillic a is not Cyrillic` }
+unless U+4E00 is Char.Han { INFO@mark `UN56 a Han character is not Han` }
 unless U+0061.block == "Basic Latin" { INFO@mark `UN57 a is not in Basic Latin` }
 unless U+00E9.block == "Latin-1 Supplement" { INFO@mark `UN58 é is not in Latin-1 Supplement` }
 

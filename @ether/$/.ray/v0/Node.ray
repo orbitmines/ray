@@ -3,7 +3,7 @@ Node &+= {
   & (other) => class {
     conjoined => this.conjoined, other
     holds => conjoined.every(.)
-    admits (candidate) => conjoined.every(candidate ==.instance_of .)
+    admits (candidate) => conjoined.every(candidate is .)
     contains (x) => conjoined.contains(x)
   }
 
@@ -18,8 +18,8 @@ Node &+= {
   reversible => inverse
   inverted_by (backward) => (inverse = backward) -- backward.inverse = this -- this
 
-  right-to-left await => Running.until(() => this && (this !=.instance_of Running || is_terminal))
-    -- this ==.instance_of Running ? results.last : this
+  right-to-left await => Running.until(() => this && (!(this is Running) || is_terminal))
+    -- this is Running ? results.last : this
   right-to-left pending => await this
 
   right-to-left never => Never -- ERROR `happened, and was said never to` if this
@@ -111,9 +111,9 @@ Node &+= {
   matched (arms) => Program(code: arms).written.map(.code ~= (pattern: *, " => ", value: *)){
     .pattern == "*" || this.answers_arm(Program(code: external ** .pattern).entered(this, None))
   }.first -- . ? Program(code: external ** .value).entered(this, None) : None
-  answers_arm (arm) => arm ==.instance_of Section ? arm(this)
-    : arm ==.instance_of Anchored ? this ~= arm
-    : this ==.instance_of arm || this == arm
+  answers_arm (arm) => arm is Section ? arm(this)
+    : arm is Anchored ? this ~= arm
+    : this is arm || this == arm
 }
 
 Node &+= {
@@ -122,7 +122,7 @@ Node &+= {
 
 Node &+= {
   entries => written_body ? Program(code: written_body).written{.is_label} : []
-  entry_at (label) => label ==.instance_of Number ? entries[label - 1] : entries{.code == label + "\"}.first
+  entry_at (label) => label is Number ? entries[label - 1] : entries{.code == label + "\"}.first
   ~default => this
   ~{literal label ^label} ^punctuation => Entry(of: this, at: entry_at(label))
   ~"{label}" ^punctuation => Entry(of: this, at: entry_at(label))
@@ -172,9 +172,9 @@ read_within (text, pattern) => (
       alternative = alternative.next
     }
   } else {
-    at_start := pattern ==.instance_of Anchored && pattern.at_start
-    at_end := pattern ==.instance_of Anchored && pattern.at_end
-    wanted := pattern ==.instance_of Anchored ? pattern.pattern : pattern
+    at_start := pattern is Anchored && pattern.at_start
+    at_end := pattern is Anchored && pattern.at_end
+    wanted := pattern is Anchored ? pattern.pattern : pattern
     start := text_bits(text).head
     index := 0
     searching := global
@@ -211,7 +211,7 @@ Node &+= {
 ∃{ }{name}: {type} {predicate} ^keyword => type#.some(Program(code: external ** predicate, parameters: external ** name))
 ∄{ }{name}: {type} {predicate} ^keyword => !type#.some(Program(code: external ** predicate, parameters: external ** name))
 Node &+= {
-  ∈ (type) => .instance_of(type) || (type.contains && type.contains(this))
+  ∈ (type) => . is type || (type.contains && type.contains(this))
   ∉ (type) => !(this ∈ type)
   ∋ (element) => element ∈ this
   ∌ (element) => element ∉ this
@@ -220,7 +220,7 @@ Node &+= {
 print (x) => IO.output(x as String) -- x
 
 Origin := class = method: Node, arguments: Node {
-  == (other) => other === method || (other ==.instance_of Origin && other.method === method && other.arguments == arguments)
+  == (other) => other === method || (other is Origin && other.method === method && other.arguments == arguments)
 }
 {f}({a}) | {g}({b}) ^punctuation => (f(a)++ ~~ .origin = Origin(f, a)) | (g(b)++ ~~ .origin = Origin(g, b))
 {f}({a}) | {rest} ^punctuation => (f(a)++ ~~ .origin = Origin(f, a)) | rest

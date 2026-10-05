@@ -43,8 +43,8 @@ if always.written.first.is_conditional { INFO@mark `PG23 a jump without a condit
 if jumping.target_of(always.written.first) { INFO@mark `PG24 a jump lands on a label it does not name` }
 if jumping.jumps_backward { INFO@mark `PG30 a jump forward is read as a jump back` }
 unless looping.jumps_backward { INFO@mark `PG31 a jump back to a label above is not read as one` }
-unless jumping.instance_of(Terminating) { INFO@mark `PG32 a program that only jumps forward does not terminate` }
-if looping.instance_of(Terminating) { INFO@mark `PG33 a program that jumps back terminates` }
+unless jumping is Terminating { INFO@mark `PG32 a program that only jumps forward does not terminate` }
+if looping is Terminating { INFO@mark `PG33 a program that jumps back terminates` }
 unless Program(code: { x := 1 }).declares("x") { INFO@mark `PG34 a program declaring x does not say so` }
 
 // As what it does: a jump is an edge to where it lands

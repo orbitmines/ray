@@ -24,13 +24,13 @@ Language := class = extensions: String | String[], location: Location[] = [], le
   static Line := class (code: (!\n)[]{length > 0}) => {
     built (reading: Program) => reading(code)
   }
-  static composed (parts, reading: Program) => parts.map(. ==.instance_of String ? . : .built(reading)) -- (.empty ? "" : .count == 1 ? .first : .reduce(,))
-  static joined (parts, reading: Program) => parts.map(. ==.instance_of String ? . : (.built(reading) as String)).join("")
+  static composed (parts, reading: Program) => parts.map(. is String ? . : .built(reading)) -- (.empty ? "" : .count == 1 ? .first : .reduce(,))
+  static joined (parts, reading: Program) => parts.map(. is String ? . : (.built(reading) as String)).join("")
 
   static ray_written (value) => value === None ? "None"
-    : value ==.instance_of String ? "\"" + value + "\""
-    : value ==.instance_of Number ? value as 10 as String
-    : value ==.instance_of Iterable ? "[" + value.map(ray_written).join(", ") + "]"
+    : value is String ? "\"" + value + "\""
+    : value is Number ? value as 10 as String
+    : value is Iterable ? "[" + value.map(ray_written).join(", ") + "]"
     : "(" + value.fields.map(.name + ": " + ray_written(.value)).join(", ") + ")"
 
   names (extension: String) => extensions == extension
@@ -53,7 +53,7 @@ Language := class = extensions: String | String[], location: Location[] = [], le
   }
 
   static Sublanguage := class: Language = excluded: Effects.Source[] = [], terminating: boolean = true {
-    admits (program: Program) => !Effects.of(program).some(excluded.contains(.)) && (!terminating || program ==.instance_of Terminating)
+    admits (program: Program) => !Effects.of(program).some(excluded.contains(.)) && (!terminating || program is Terminating)
     read (text) => of.read(text) -- admits(.) ? . : ERROR `this file is written in a sublanguage that does not permit what it does`
   }
 }

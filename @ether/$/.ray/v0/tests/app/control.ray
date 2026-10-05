@@ -161,7 +161,7 @@ unless (fatal_one $ 5).erred { INFO@mark `ER6 a default caught a fatal error` }
 unless fatal_one $?! === None { INFO@mark `ER7 the catch-all did not catch a fatal error` }
 unless (failing $ Diagnostic(message: "wrapped")).diagnostics.last.cause === failing.diagnostics.last { INFO@mark `ER8 a wrapped error forgot its cause` }
 unless failing.diagnosed(fatal_one.diagnostics.last).diagnostics.count == 2 { INFO@mark `ER9 a value given a second diagnostic does not keep both` }
-unless failing ==.instance_of Number { INFO@mark `ER10 a value that erred is no longer of its type` }
+unless failing is Number { INFO@mark `ER10 a value that erred is no longer of its type` }
 unless failing == 0 { INFO@mark `ER11 a value that erred is not equal to itself without the error` }
 if (0).erred { INFO@mark `ER12 a value nobody filed a diagnostic on erred` }
 returning := () => {
@@ -233,7 +233,7 @@ stopping := () => {
   FATAL `cannot go on`
   7
 }
-unless stopping() ==.instance_of Diagnostic { INFO@mark `ER16 a fatal error is not what the function answers` }
+unless stopping() is Diagnostic { INFO@mark `ER16 a fatal error is not what the function answers` }
 unless (missing_file()
   $missing_file 8) == 8 { INFO@mark `ER17 a handler for errors from one function did not take them` }
 unless (missing_file()

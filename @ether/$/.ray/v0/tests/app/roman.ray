@@ -20,11 +20,11 @@ unless 7 as Roman as Decimal == 7 { INFO@mark `RO12 seven does not come back fro
 unless "Ⅻ" as Roman as Decimal == 12 { INFO@mark `RO19 the precomposed twelve is not twelve` }
 unless "MCMXCIV" as Roman as Decimal == 1994 { INFO@mark `RO22 MCMXCIV is not 1994` }
 
-unless "XIV".instance_of(Roman) { INFO@mark `RO20 XIV is not written with roman digits` }
-if "XQV".instance_of(Roman) { INFO@mark `RO21 XQV is written with roman digits` }
+unless "XIV" is Roman { INFO@mark `RO20 XIV is not written with roman digits` }
+if "XQV" is Roman { INFO@mark `RO21 XQV is written with roman digits` }
 
-unless "XIV".instance_of(Roman.Standard) { INFO@mark `RO37 fourteen is not a standard numeral` }
-if "".instance_of(Roman.Standard) { INFO@mark `RO39 a numeral with nothing written is standard` }
+unless "XIV" is Roman.Standard { INFO@mark `RO37 fourteen is not a standard numeral` }
+if "" is Roman.Standard { INFO@mark `RO39 a numeral with nothing written is standard` }
 
 unless Roman.Value["I"] == 1 { INFO@mark `RO29 I is not one` }
 unless Roman.Value["V"] == 5 { INFO@mark `RO30 V is not five` }

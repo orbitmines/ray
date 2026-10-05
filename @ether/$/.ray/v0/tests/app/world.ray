@@ -48,7 +48,7 @@ realm := World(name: "realm")
 held := realm.holds(Location(host: None))
 unless held.parent === realm { INFO@mark `WL1 a place a world holds does not have the world as its parent` }
 unless realm.children.first === held { INFO@mark `WL2 a world does not hold the place it took` }
-unless realm.instance_of(Location) { INFO@mark `WL3 a world is not a location` }
+unless realm is Location { INFO@mark `WL3 a world is not a location` }
 
 unless wg == wg { INFO@mark `WO12 a world is not itself` }
 if wg == World(name: "other") { INFO@mark `WO13 two worlds are the same world` }

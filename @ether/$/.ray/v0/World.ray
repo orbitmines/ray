@@ -16,7 +16,7 @@ Location := class: Hierarchy {
   { }/{segment: Written} ^string => Location(written: written + "/" + segment)
   { }{value} => Location(written: written + (value as String)) if written ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣
   { }.{piece: Written} ^string => Location(written: written + "." + piece)
-  == (other) => written == (other ==.instance_of Location ? other.written : other)
+  == (other) => written == (other is Location ? other.written : other)
 }
 
 Written := (Char{!= " " && != "(" && != ")" && != "," && != \n} | ("(", Written, ")"))[]
@@ -42,7 +42,7 @@ World := class: Location + Nameable {
   post (quest: Quest) => quests.push quest -- quest
   population => characters.count
 
-  within_worlds: World[] => (worlds, children{==.instance_of World}).flat_map((., .within_worlds))
+  within_worlds: World[] => (worlds, children{. is World}).flat_map((., .within_worlds))
   within_characters: Character[] => characters, within_worlds.flat_map(.characters)
 
   shadowing: World?
@@ -57,13 +57,13 @@ World := class: Location + Nameable {
   }
 
   class{>.instance_of Nameable}#.for class => {
-    `class.name.plural`: class[] => (this, within_worlds){class == Character || class == World ? .`class.name.plural` : .children{==.instance_of class}}.flatten
-      -- .unique(.name.ignore_case if .name ==.instance_of String)
+    `class.name.plural`: class[] => (this, within_worlds){class == Character || class == World ? .`class.name.plural` : .children{. is class}}.flatten
+      -- .unique(.name.ignore_case if .name is String)
     {class.PREFIX}{name: reservable_names} => this[class.name.plural]{.name.ignore_case == name.ignore_case}.first
       ?? (shadowing ?? World.ether)[class.PREFIX, name] if class.PREFIX
   }
   class{>.instance_of Character}#.for class => {
-    `class.name.plural`: class[] => characters{==.instance_of class}
+    `class.name.plural`: class[] => characters{. is class}
   }
 
   static Reservation := class = name: reservable_names, issuer: World, holder: *?
@@ -94,7 +94,7 @@ Quest := class: Nameable {
   path: *[] = []
   solved_by: Character?
 
-  reached (value) => verifier ? verifier(value) : value ==.instance_of goal
+  reached (value) => verifier ? verifier(value) : value is goal
   attempt (value, character: Character): static => {
     path.push value
     return this unless reached(value)
@@ -104,8 +104,8 @@ Quest := class: Nameable {
   }
 
   step (description): static => this ~~ steps.push description
-  refined => steps.every(==.instance_of Quest)
-  progress => steps{==.instance_of Quest && .completed}.count
+  refined => steps.every(. is Quest)
+  progress => steps{. is Quest && .completed}.count
   difficulty => steps.count
 
   complete: static => this ~~ .done = true
@@ -175,7 +175,7 @@ History := class = repository: *?, commits: Commit[] = [], from: History? {
   remove (who, definition) => operate(who, Operation.Kind.remove, definition, code_of(definition), None)
   undo (operation: Operation) => commit(operation.who, operation.inverse)
 
-  operations: Operation[] => commits.what{==.instance_of Operation}
+  operations: Operation[] => commits.what{. is Operation}
   operations_on (definition: Definition) => operations{.definition == definition}
   ordered => operations.sorted(.stamp)
 

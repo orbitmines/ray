@@ -7,12 +7,12 @@ Calendar := class {
 
     static EPOCH: (period: #, elapsed: Node{0 <= . < period}?)? | Number = 1
 
-    is_recurring => this ==.instance_of Ray && this.length#.some(== ∞)
+    is_recurring => this is Ray && this.length#.some(== ∞)
 
-    dynamically assert #.every(==.instance_of Quantity.Temporal)
+    dynamically assert #.every(. is Quantity.Temporal)
   }
 
-  static segments = static*{==.instance_of Segment}
+  static segments = static*{. is Segment}
   protected static TimeDefinition = Time{(-> .epoch).every(.calendar == calendar)}
   static equivalence (from: TimeDefinition) -> (to: TimeDefinition{calendar == this}) => {
     within_same_calendar_system = from.calendar.static == to.calendar.static
@@ -109,7 +109,7 @@ Quantity.Temporal &+= {
 Unit(name: "month" ("s" + plural: true)?, symbol: "mo")
   .convert (x: Number) => x * (Time.YEAR || Time.MONTH ? (Time.MONTH ?? January).days_in(Gregorian(year: Time.YEAR ?? 1)) : 30), day
 
-ISO_8601 := class: Time{calendar ==.instance_of UTC.static} (
+ISO_8601 := class: Time{calendar is UTC.static} (
   date: (
     year: Decimal,
     semicolons: "-"?,

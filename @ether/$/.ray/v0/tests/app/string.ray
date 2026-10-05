@@ -28,15 +28,15 @@ unless "ab cd".pascal_case == "AbCd" { INFO@mark `W10 pascal_case failed` }
 unless "cat".plural == "cats" { INFO@mark `W11 plural failed` }
 unless ("a" as Unicode.UTF-16 as Binary).length == 16 { INFO@mark `W12 UTF16 of a is not sixteen bits` }
 unless "\n" as Unicode.UTF-32 as String == "\n" { INFO@mark `W13 UTF32 round trip failed` }
-unless "a"[0].instance_of(Unicode.GeneralCategory.Letter) { INFO@mark `W14 a is not a letter` }
+unless "a"[0] is Unicode.GeneralCategory.Letter { INFO@mark `W14 a is not a letter` }
 unless "ab" ~= "b" { INFO@mark `W15 the pattern b did not match ab` }
-unless 10.instance_of(Unicode.Scalar) { INFO@mark `W17 ten is not a scalar` }
+unless 10 is Unicode.Scalar { INFO@mark `W17 ten is not a scalar` }
 
-unless "ab1"{.instance_of(Char.Letter)}.length == 2 { INFO@mark `S40 selecting letters did not keep two` }
+unless "ab1"{. is Char.Letter}.length == 2 { INFO@mark `S40 selecting letters did not keep two` }
 unless "abc".length == 3 { INFO@mark `S41 a string of three does not count three` }
 unless "f"[0] as Decimal == 15 { INFO@mark `S42 f is not the digit fifteen` }
-unless "1a".instance_of(Hexadecimal.String) { INFO@mark `S44 1a does not spell a hexadecimal number` }
-if "1a".instance_of(Decimal.String) { INFO@mark `S45 1a spells a decimal number` }
+unless "1a" is Hexadecimal.String { INFO@mark `S44 1a does not spell a hexadecimal number` }
+if "1a" is Decimal.String { INFO@mark `S45 1a spells a decimal number` }
 unless "a-b".split(U+002D).length == 2 { INFO@mark `S47 splitting on a dash does not give two parts` }
 
 unless "ab cd".camel_case == "abCd" { INFO@mark `S48 camel_case is not the first word lower and the rest capitalised` }
@@ -82,12 +82,12 @@ unless "ff" as 16 as 16 as String == "ff" { INFO@mark `SN4 ff does not come back
 unless "ab".lines.length == 1 { INFO@mark `S70 a text without a newline is other than one line` }
 unless "a\nb".lines.length == 2 { INFO@mark `ST1 a newline does not separate two lines` }
 
-unless "8"[0].instance_of(Char.Digit) { INFO@mark `S71 8 is not a digit` }
-unless "9"[0].instance_of(Char.Digit) { INFO@mark `S72 9 is not a digit` }
-unless "0"[0].instance_of(Char.Digit) { INFO@mark `S73 0 is not a digit` }
-if ":"[0].instance_of(Char.Digit) { INFO@mark `S74 a colon is a digit` }
-if "a"[0].instance_of(Char.Digit) { INFO@mark `S75 a is a digit` }
-unless "89".instance_of(Decimal.String) { INFO@mark `S77 89 does not spell a number in ten` }
+unless "8"[0] is Char.Digit { INFO@mark `S71 8 is not a digit` }
+unless "9"[0] is Char.Digit { INFO@mark `S72 9 is not a digit` }
+unless "0"[0] is Char.Digit { INFO@mark `S73 0 is not a digit` }
+if ":"[0] is Char.Digit { INFO@mark `S74 a colon is a digit` }
+if "a"[0] is Char.Digit { INFO@mark `S75 a is a digit` }
+unless "89" is Decimal.String { INFO@mark `S77 89 does not spell a number in ten` }
 unless "89" as Decimal == 89 { INFO@mark `S78 89 is not eighty-nine` }
 unless "9"[0] as Decimal == 9 { INFO@mark `S79 9 is not worth nine` }
 
@@ -99,20 +99,20 @@ unless "a"[0].swap_case == "A"[0] { INFO@mark `S84 a swapped is not A` }
 unless "A"[0].swap_case == "a"[0] { INFO@mark `S85 A swapped is not a` }
 unless "7"[0].swap_case == "7"[0] { INFO@mark `S86 a digit swapped is not itself` }
 
-unless "q"[0].instance_of(Char.Letter) { INFO@mark `S87 q is not a letter` }
-unless "Q"[0].instance_of(Char.Letter) { INFO@mark `S88 Q is not a letter` }
-if "7"[0].instance_of(Char.Letter) { INFO@mark `S89 a digit is a letter` }
-if "_"[0].instance_of(Char.Letter) { INFO@mark `S90 an underscore is a letter` }
-unless "_"[0].instance_of(Char.Word) { INFO@mark `S93 an underscore is not a word character` }
-unless "7"[0].instance_of(Char.Word) { INFO@mark `S94 a digit is not a word character` }
-unless "q"[0].instance_of(Char.Word) { INFO@mark `S95 a letter is not a word character` }
-if " "[0].instance_of(Char.Word) { INFO@mark `S96 a space is a word character` }
-unless " "[0].instance_of(Char.Blank) { INFO@mark `S97 a space is not blank` }
-if "a"[0].instance_of(Char.Blank) { INFO@mark `S98 a is blank` }
-unless "\n"[0].instance_of(Char.Blank) { INFO@mark `S99 a newline is not blank` }
-unless "\t"[0].instance_of(Char.Blank) { INFO@mark `S100 a tab is not blank` }
-unless "-"[0].instance_of(Char.Symbol) { INFO@mark `S101 a dash is not a symbol` }
-if "a"[0].instance_of(Char.Symbol) { INFO@mark `S102 a is a symbol` }
+unless "q"[0] is Char.Letter { INFO@mark `S87 q is not a letter` }
+unless "Q"[0] is Char.Letter { INFO@mark `S88 Q is not a letter` }
+if "7"[0] is Char.Letter { INFO@mark `S89 a digit is a letter` }
+if "_"[0] is Char.Letter { INFO@mark `S90 an underscore is a letter` }
+unless "_"[0] is Char.Word { INFO@mark `S93 an underscore is not a word character` }
+unless "7"[0] is Char.Word { INFO@mark `S94 a digit is not a word character` }
+unless "q"[0] is Char.Word { INFO@mark `S95 a letter is not a word character` }
+if " "[0] is Char.Word { INFO@mark `S96 a space is a word character` }
+unless " "[0] is Char.Blank { INFO@mark `S97 a space is not blank` }
+if "a"[0] is Char.Blank { INFO@mark `S98 a is blank` }
+unless "\n"[0] is Char.Blank { INFO@mark `S99 a newline is not blank` }
+unless "\t"[0] is Char.Blank { INFO@mark `S100 a tab is not blank` }
+unless "-"[0] is Char.Symbol { INFO@mark `S101 a dash is not a symbol` }
+if "a"[0] is Char.Symbol { INFO@mark `S102 a is a symbol` }
 unless "a"[0].is_ascii { INFO@mark `S103 a is not one byte` }
 if "é"[0].is_ascii { INFO@mark `S147 é is one byte` }
 
@@ -124,10 +124,10 @@ unless "".empty { INFO@mark `S108 nothing written is not empty` }
 unless "abc" != "abd" { INFO@mark `S109 two different texts are the same` }
 if "abc" != "abc" { INFO@mark `S110 a text is not itself` }
 
-unless "abc".every(.instance_of(Char.Letter)) { INFO@mark `S111 abc is not all letters` }
-if "ab3".every(.instance_of(Char.Letter)) { INFO@mark `S112 ab3 is all letters` }
-unless "ab3".some(.instance_of(Char.Digit)) { INFO@mark `S113 ab3 holds no digit` }
-if "abc".some(.instance_of(Char.Digit)) { INFO@mark `S114 abc holds a digit` }
+unless "abc".every(. is Char.Letter) { INFO@mark `S111 abc is not all letters` }
+if "ab3".every(. is Char.Letter) { INFO@mark `S112 ab3 is all letters` }
+unless "ab3".some(. is Char.Digit) { INFO@mark `S113 ab3 holds no digit` }
+if "abc".some(. is Char.Digit) { INFO@mark `S114 abc holds a digit` }
 unless "abc".map(.upper_case) as String == "ABC" { INFO@mark `S115 abc made upper is not ABC` }
 
 unless "Ab".lowercase == "ab" { INFO@mark `S116 lowercase is not lower_case` }
@@ -167,8 +167,8 @@ unless 12 as String == "12" { INFO@mark `S142 twelve does not spell 12` }
 unless 0 as String == "0" { INFO@mark `S143 nothing does not spell 0` }
 
 unless "\0"[0] == 0 { INFO@mark `S144 the null character is not nothing` }
-unless "\r"[0] == 13 { INFO@mark `S145 the carriage return is not thirteen` }
-unless "a"[0].instance_of(Unicode.Scalar) { INFO@mark `S146 a is not a scalar` }
+unless "\r"[0] == 13 { INFO@mark `S145 the carriage return . is not thirteen` }
+unless "a"[0] is Unicode.Scalar { INFO@mark `S146 a is not a scalar` }
 
 unless "AB cd".words.lower_case.join(" ") == "ab cd" { INFO@mark `S152 the words lowered are not ab cd` }
 unless "AB cd".title_case == "Ab Cd" { INFO@mark `S153 the words titled are not Ab Cd` }
@@ -239,12 +239,12 @@ unless "a\\b".length == 3 { INFO@mark `SE5 an escaped backslash is not one chara
 unless "\U01F600"[0] == U+1F600 { INFO@mark `SE6 a six-digit escape is not its character` }
 unless "\""[0] == U+0022 { INFO@mark `SE7 an escaped quote is not a quote` }
 unless "\n"[0] == U+000A { INFO@mark `SE8 a newline escape is not a newline` }
-unless " "[0].instance_of(\s) { INFO@mark `SE9 a space is not a space escape` }
-if "a"[0].instance_of(\s) { INFO@mark `SE10 a is a space escape` }
-unless "7"[0].instance_of(\d) { INFO@mark `SE11 7 is not a digit escape` }
-unless "a"[0].instance_of(\D) { INFO@mark `SE12 a is not a non-digit escape` }
-unless "_"[0].instance_of(\w) { INFO@mark `SE13 an underscore is not a word escape` }
-unless "-"[0].instance_of(\W) { INFO@mark `SE14 a dash is not a non-word escape` }
+unless " "[0] is \s { INFO@mark `SE9 a space is not a space escape` }
+if "a"[0] is \s { INFO@mark `SE10 a is a space escape` }
+unless "7"[0] is \d { INFO@mark `SE11 7 is not a digit escape` }
+unless "a"[0] is \D { INFO@mark `SE12 a is not a non-digit escape` }
+unless "_"[0] is \w { INFO@mark `SE13 an underscore is not a word escape` }
+unless "-"[0] is \W { INFO@mark `SE14 a dash is not a non-word escape` }
 
 // Interpolation, language-tagged literals and patterns (L§10.1, P7.1, U9)
 greeted := "Ada"

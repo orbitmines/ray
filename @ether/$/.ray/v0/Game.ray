@@ -1,7 +1,7 @@
 Skill := class = name: String, quests: *, solved: Solution[] = [], baseline = 0 {
   static Solution := class = quest: Quest, when: Time = Time.now, used = false
 
-  covers (quest: Quest) => quest ==.instance_of quests
+  covers (quest: Quest) => quest is quests
   solve (quest: Quest): static => this ~~ solved.push Solution(quest)
   recent (within: Quantity.Temporal) => solved{Time.now - .when < within}
   proficiency (within: Quantity.Temporal) => {

@@ -13,7 +13,7 @@ Access := class = who: *?, method: *?, filter: Program? {
 
 Accessor := class = level: Permission, method: *?, any = true {
   static Permission := enum private (at: @private) | confidential | protected | public (at: @public) | local (at: @local) | localhost (at: @localhost) | managed (at: @private.managed) {
-    reaches (who) => this == public || (this == confidential ? Visibility.policy.reaches(who) : at && who ==.instance_of at)
+    reaches (who) => this == public || (this == confidential ? Visibility.policy.reaches(who) : at && who is at)
   }
 
   static default_policy => Accessor(Visibility.default_privacy_policy)
@@ -57,7 +57,7 @@ Visibility := class {
 }
 
 Grant := class = access: Access, target: *, uses: Number = 0 {
-  covers (who: Character, method, target) => (access.who == who || who ==.instance_of access.who) && access.allows_method(method) && this.target === target
+  covers (who: Character, method, target) => (access.who == who || who is access.who) && access.allows_method(method) && this.target === target
     && (!access.filter || access.filter.entered(this, None))
 }
 

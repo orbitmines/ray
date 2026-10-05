@@ -67,8 +67,8 @@ IP := class: Location &+ (-1 <- . -> +1) {
     }
 
     as (=== String) => this
-      -- .embed_ipv4 if ==.instance_of "::ffff:0.0.0.0/96"
-      -- .embed_ipv4 if ==.instance_of "64:ff9b::/96"
+      -- .embed_ipv4 if . is "::ffff:0.0.0.0/96"
+      -- .embed_ipv4 if . is "64:ff9b::/96"
       .compress_zeros
       .lowercase
   }

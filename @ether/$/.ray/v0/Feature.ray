@@ -45,8 +45,8 @@ Random := class {
 }
 
 Counted := class = count: Number | Range, kind: * {
-  least => count ==.instance_of Number ? count : count.first
-  most => count ==.instance_of Number ? count : count.last
+  least => count is Number ? count : count.first
+  most => count is Number ? count : count.last
   choose => (least + Random.below(most - least + 1)).times.map(kind())
 }
 
@@ -172,7 +172,7 @@ Keyboard := class = keys: Key[] = [] {
   static tab = Key(name: "Tab", code: 9)
   static escape = Key(name: "Escape", code: 27)
   static held: Key[] = [f2, enter, tab, escape]
-  static named (name) => name ==.instance_of Key ? name : held{.name == name}.first ?? (Key(name) ~~ held.push(.))
+  static named (name) => name is Key ? name : held{.name == name}.first ?? (Key(name) ~~ held.push(.))
   static key (code: Number) => held{.code == code}.first ?? (Key(name: code as Char as String, code) ~~ held.push(.))
   static press (name, shift = false, control = false) => named(name) ~~ (.shift = shift) ~~ (.control = control) -- .press
 }

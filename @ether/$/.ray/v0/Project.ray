@@ -21,7 +21,7 @@ Project := class: Location = name: String, parent: Project?, children: Location[
     : definitions.push Definition(name, value) -- value
   defined_here (name: String) => definitions{.name == name}.last
 
-  nearest (name: String) => defined_here(name) ?? children{==.instance_of Project}.defined_here(name).first ?? parent?.nearest(name)
+  nearest (name: String) => defined_here(name) ?? children{. is Project}.defined_here(name).first ?? parent?.nearest(name)
   lookup (name: String) => (nearest(name) ?? dependencies.project.nearest(name).first)?.value ?? World.ether.lookup(name)
 
   write_against (version: Version) => (written_against = version) -- this

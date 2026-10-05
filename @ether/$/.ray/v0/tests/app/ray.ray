@@ -179,11 +179,11 @@ unless threes.find(. > 1) == 2 { INFO@mark `IT64 the first past one is not two` 
 unless [1, 1, 2].squeeze == [1, 2] { INFO@mark `IT65 a repeat next to itself is not squeezed out` }
 unless threes.enumerate.last.index == 2 { INFO@mark `IT66 the last of three is not numbered two` }
 
-unless threes.instance_of(Path) { INFO@mark `IT27 a list is not a path` }
-unless threes.instance_of(Array) { INFO@mark `IT28 a list is not an array` }
-unless threes.instance_of(Iterable) { INFO@mark `IT29 a list is not iterable` }
-unless threes.first.instance_of(Ray) { INFO@mark `IT30 an element is not a ray` }
-unless 1.instance_of(Ray) { INFO@mark `IT33 a number is not a ray` }
+unless threes is Path { INFO@mark `IT27 a list is not a path` }
+unless threes is Array { INFO@mark `IT28 a list is not an array` }
+unless threes is Iterable { INFO@mark `IT29 a list is not iterable` }
+unless threes.first is Ray { INFO@mark `IT30 an element is not a ray` }
+unless 1 is Ray { INFO@mark `IT33 a number is not a ray` }
 
 // Ends gained and lost, and order
 ends := [2].push_back(3).push_front(1)
@@ -302,7 +302,7 @@ unless [1, 5, 20][{< 10}] == [1, 5] { INFO@mark `OR3 xs[{p}] does not keep the e
 first, ...middle, last := "A", "B", "C", "D"
 unless middle == ("B", "C") { INFO@mark `SD1 ...middle does not take what is between` }
 unless last == "D" { INFO@mark `SD2 the name after a spread does not take the last` }
-unless ("A", "A") ==.instance_of ...String { INFO@mark `SD3 ...T is not T[]` }
+unless ("A", "A") is ...String { INFO@mark `SD3 ...T is not T[]` }
 Clock := class {
   now => 12
   zone => 1

@@ -18,14 +18,14 @@ Char := class: Unicode.Scalar {
   is_lower => upper_case != this
   mirrored => Unicode.BidiMirroring[this]?.value ?? this
   swap_case | swapcase => is_lower ? upper_case : lower_case
-  fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status ==.instance_of ("C" | "F")}.first?.value ?? this
+  fold_case | foldcase => Unicode.CaseFolding.rows{.range.in(this) && .status is ("C" | "F")}.first?.value ?? this
 
-  as (=== Decimal) => this ==.instance_of Digit ? this - "0" : this.lower_case - "a" + 10
+  as (=== Decimal) => this is Digit ? this - "0" : this.lower_case - "a" + 10
   static digit (value: Decimal): Char => value < 10 ? "0" + value : "a" + value - 10
   static (codepoint: Unicode.Scalar) as (=== Char) => codepoint
 
   east_asian_width => Unicode.EastAsianWidth[this]?.value ?? "N"
-  columns => east_asian_width ==.instance_of ("W" | "F") ? 2 : 1
+  columns => east_asian_width is ("W" | "F") ? 2 : 1
   script => Unicode.Scripts[this]?.value ?? "Unknown"
   block => Unicode.Blocks[this]?.value ?? "No_Block"
 }

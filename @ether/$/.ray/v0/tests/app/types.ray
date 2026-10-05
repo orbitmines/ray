@@ -4,22 +4,22 @@ mark ^keyword := external global
 
 TA := class { }
 TB := class: TA { }
-unless TA().instance_of(TA) { INFO@mark `TY1 an instance is not an instance of its class` }
-unless TA().instance_of(TB) { INFO@mark `TY2 an instance is not one of a class that requires nothing` }
-unless TB().instance_of(TB) { INFO@mark `TY3 an instance is not an instance of its own class` }
-unless TB().instance_of(TA) { INFO@mark `TY4 an instance is not an instance of what its class is built on` }
-unless 5.instance_of(Number) { INFO@mark `TY5 five is not a Number` }
-unless 5.instance_of(TA) { INFO@mark `TY6 five is not one of a class that requires nothing` }
+unless TA() is TA { INFO@mark `TY1 an instance is not an instance of its class` }
+unless TA() is TB { INFO@mark `TY2 an instance is not one of a class that requires nothing` }
+unless TB() is TB { INFO@mark `TY3 an instance is not an instance of its own class` }
+unless TB() is TA { INFO@mark `TY4 an instance is not an instance of what its class is built on` }
+unless 5 is Number { INFO@mark `TY5 five is not a Number` }
+unless 5 is TA { INFO@mark `TY6 five is not one of a class that requires nothing` }
 
 // A class requires the fields it writes with their type
 Needs := class { amount: Number }
 Gives := class { amount => 1 }
 Lacks := class { other => 1 }
-unless Gives().instance_of(Needs) { INFO@mark `TY60 what gives every required name is not one` }
-if Lacks().instance_of(Needs) { INFO@mark `TY61 what lacks a required name is one` }
-if 5.instance_of(Needs) { INFO@mark `TY62 a number gives a name it does not have` }
-unless 1.instance_of(Array) { INFO@mark `TY63 a number is not an array` }
-if Lacks().instance_of(Array) { INFO@mark `TY64 what is entered nowhere is an array` }
+unless Gives() is Needs { INFO@mark `TY60 what gives every required name is not one` }
+if Lacks() is Needs { INFO@mark `TY61 what lacks a required name is one` }
+if 5 is Needs { INFO@mark `TY62 a number gives a name it does not have` }
+unless 1 is Array { INFO@mark `TY63 a number is not an array` }
+if Lacks() is Array { INFO@mark `TY64 what is entered nowhere is an array` }
 
 unless external where TA { INFO@mark `TY7 a class is written nowhere` }
 if (external where TA) == (external where TB) { INFO@mark `TY8 two classes are written in one place` }
@@ -45,17 +45,17 @@ unless Child(named: "q").named == "q" { INFO@mark `TY14 the parent's field canno
 Small := Number{. < 5}
 Tiny := Small{. < 2}
 Even := Number{. % 2 == 0}
-unless 3.instance_of(Small) { INFO@mark `TY16 three is not one of the small` }
-if 7.instance_of(Small) { INFO@mark `TY17 seven is one of the small` }
-unless 3.instance_of(Number) { INFO@mark `TY18 three is not a number` }
-unless 1.instance_of(Tiny) { INFO@mark `TY19 one is not tiny` }
-if 3.instance_of(Tiny) { INFO@mark `TY20 three is tiny` }
-if 7.instance_of(Tiny) { INFO@mark `TY25 seven is tiny` }
+unless 3 is Small { INFO@mark `TY16 three is not one of the small` }
+if 7 is Small { INFO@mark `TY17 seven is one of the small` }
+unless 3 is Number { INFO@mark `TY18 three is not a number` }
+unless 1 is Tiny { INFO@mark `TY19 one is not tiny` }
+if 3 is Tiny { INFO@mark `TY20 three is tiny` }
+if 7 is Tiny { INFO@mark `TY25 seven is tiny` }
 unless Tiny.admits(1) { INFO@mark `TY26 the tiny do not admit one` }
 if Tiny.admits(3) { INFO@mark `TY27 the tiny admit three` }
-unless 4.instance_of(Small & Even) { INFO@mark `TY65 four is not both small and even` }
-if 3.instance_of(Small & Even) { INFO@mark `TY66 three is both small and even` }
-if 6.instance_of(Small & Even) { INFO@mark `TY67 six is both small and even` }
+unless 4 is Small & Even { INFO@mark `TY65 four is not both small and even` }
+if 3 is Small & Even { INFO@mark `TY66 three is both small and even` }
+if 6 is Small & Even { INFO@mark `TY67 six is both small and even` }
 unless (1 & 2).contains(2) { INFO@mark `TY68 what holds both does not hold the second` }
 unless (1 & 2 & 3).conjoined.count == 3 { INFO@mark `TY69 three held at once are not three` }
 
@@ -75,10 +75,10 @@ unless once.says == 1 { INFO@mark `TY31 building on a class changed what it says
 
 // `Type?` is the type or nothing
 Either := Parent?
-unless Child().instance_of(Either) { INFO@mark `TY21 a child is not one of its parent or nothing` }
-unless Parent().instance_of(Either) { INFO@mark `TY22 a parent is not one of itself or nothing` }
-unless None.instance_of(Either) { INFO@mark `TY23 nothing is not one of a thing or nothing` }
-if None.instance_of(Parent) { INFO@mark `TY24 nothing is one of a thing` }
+unless Child() is Either { INFO@mark `TY21 a child is not one of its parent or nothing` }
+unless Parent() is Either { INFO@mark `TY22 a parent is not one of itself or nothing` }
+unless None is Either { INFO@mark `TY23 nothing is not one of a thing or nothing` }
+if None is Parent { INFO@mark `TY24 nothing is one of a thing` }
 
 // A class written as a structure: each named position a field of that type
 Pointed := class = whole: Number, ".", part: Number {
@@ -125,7 +125,7 @@ Sub := class: Pair (": ", first: Number) => {
   head => first
 }
 unless Sub(first: 2).head == 2 { INFO@mark `HD9 class: Parent (pattern) has no field from its pattern` }
-unless Sub(first: 2).instance_of(Pair) { INFO@mark `HD10 class: Parent (pattern) is not built on Parent` }
+unless Sub(first: 2) is Pair { INFO@mark `HD10 class: Parent (pattern) is not built on Parent` }
 Count := class {
   static made := 0
   static zero => 0

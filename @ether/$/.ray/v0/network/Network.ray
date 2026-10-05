@@ -114,7 +114,7 @@ Instance &+= {
   address: (Network.URL | Network.Socket.Address | IP | Network.DomainName)?
 
   seen_from (other: Instance) => other === this ? @localhost : address
-  local => address ==.instance_of @localnetwork
+  local => address is @localnetwork
   canonical: static => Instance(location, address: address as String as address.static)
   mac_address: Binary⁴⁸ => (external os `mac_address`) ?? (Binary⁴⁸.random ~~ .[7] = 1)
 }

@@ -30,8 +30,8 @@ unless summed_rounds == 3 { INFO@mark `N30 times does not hand its round` }
 unless Hexadecimal.radix == 16 { INFO@mark `N20 hexadecimal radix is not sixteen` }
 unless 0x1F == 31 { INFO@mark `N43 0x1F is not thirty-one` }
 unless 0b101 == 5 { INFO@mark `N44 0b101 is not five` }
-if "4a".instance_of(Decimal.String) { INFO@mark `N45 4a is read as a decimal number` }
-unless "4a".instance_of(Hexadecimal.String) { INFO@mark `N46 4a is not read as a hexadecimal number` }
+if "4a" is Decimal.String { INFO@mark `N45 4a is read as a decimal number` }
+unless "4a" is Hexadecimal.String { INFO@mark `N46 4a is not read as a hexadecimal number` }
 unless 007 == 7 { INFO@mark `N136 007 is not seven` }
 unless 00 == 0 { INFO@mark `N137 00 is not zero` }
 unless 0x00ff == 0xff { INFO@mark `N138 0x00ff is not 0xff` }
@@ -107,8 +107,8 @@ unless 0b0110 ~&& 0b1010 == 0b0010 { INFO@mark `N147 bitwise and of 0110 and 101
 unless 0b0110 ~|| 0b1010 == 0b1110 { INFO@mark `N148 bitwise or of 0110 and 1010 is not 1110` }
 unless 0b0110 ~x|| 0b1010 == 0b1100 { INFO@mark `N149 bitwise xor of 0110 and 1010 is not 1100` }
 
-unless 5.instance_of(Number) { INFO@mark `N86 five is not a natural number` }
-if 2.instance_of(Probability) { INFO@mark `N150 two is a probability` }
+unless 5 is Number { INFO@mark `N86 five is not a natural number` }
+if 2 is Probability { INFO@mark `N150 two is a probability` }
 
 // A number stands for a bit
 if 0 { INFO@mark `N92 zero is set` }

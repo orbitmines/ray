@@ -28,7 +28,7 @@ Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Uni
   compounds + (other: Quantity) => Quantity(quantities: [(in(finer(other)) + other.in(finer(other)), finer(other))])
   compounds - (other: Quantity) => Quantity(quantities: [(in(finer(other)) - other.in(finer(other)), finer(other))])
   compounds * (times: Number) => Quantity(quantities: quantities.map((quantity, unit) => (quantity * times, unit)))
-  compounds * (per: Quantity) => unit ==.instance_of Unit.Rate ? Quantity(quantities: [(amount * per.in(unit.denominator), unit.numerator)])
+  compounds * (per: Quantity) => unit is Unit.Rate ? Quantity(quantities: [(amount * per.in(unit.denominator), unit.numerator)])
     : ERROR `a quantity is multiplied by another only as a rate by what it is per`
   ± | +- (uncertainty: Quantity) => this - uncertainty | this + uncertainty
 
@@ -70,7 +70,7 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   static Temporal => second
 
   as (=== Quantity) => 1, this
-  as (other: ==.instance_of Unit) => this as Quantity as other
+  as (other: . is Unit) => this as Quantity as other
 
   protected defined_globally = &caller == global
   dynamically assert this as String? != None

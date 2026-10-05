@@ -17,7 +17,7 @@ if uu == UUID.v4() { INFO@mark `UU14 two draws are the same uuid` }
 spelled_out := "00000000-0000-4000-8000-000000000000"
 read_back := spelled_out as UUID
 unless read_back.length == 32 { INFO@mark `UU15 what is read back has other than 32 digits` }
-unless read_back.instance_of(UUID.v4) { INFO@mark `UU16 what is read back is not of the version it was written with` }
+unless read_back is UUID.v4 { INFO@mark `UU16 what is read back is not of the version it was written with` }
 unless read_back.variant as UUID.Variant == UUID.Variant.RFC_4122 { INFO@mark `UU17 what is read back is not of the variant it was written with` }
 unless read_back as String == spelled_out { INFO@mark `UU13 a uuid written down does not read back as itself` }
 

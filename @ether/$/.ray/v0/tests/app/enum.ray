@@ -18,7 +18,7 @@ unless Colour.red { INFO@mark `EM1 the member an enum is written with is not the
 unless Colour.blue { INFO@mark `EM2 the last member is not there` }
 unless Colour.red == Colour.red { INFO@mark `EM4 a member is not itself` }
 if Colour.red == Colour.blue { INFO@mark `EM5 two members of one enum are the same` }
-unless Colour.red.instance_of(Colour) { INFO@mark `EM6 a member is not one of its enum` }
+unless Colour.red is Colour { INFO@mark `EM6 a member is not one of its enum` }
 unless Colour#.count == 3 { INFO@mark `EM7 an enum of three has other than three members` }
 unless Colour# == [Colour.red, Colour.green, Colour.blue] { INFO@mark `EM14 an enum's members are not its three, in order` }
 unless Colour.red.next == Colour.green { INFO@mark `EM25 the member after red is not green` }
@@ -27,8 +27,8 @@ unless Shape.circle.radius { INFO@mark `EM8 a member does not carry its field` }
 unless Shape.square.side { INFO@mark `EM9 the second member does not carry its field` }
 if Shape.point.radius { INFO@mark `EM10 a member carries another's field` }
 unless Shape.point { INFO@mark `EM11 a member without fields is not there` }
-if Shape.circle.instance_of(Colour) { INFO@mark `EM15 a member is one of another enum` }
-unless Shape.circle.instance_of(Shape) { INFO@mark `EM16 a member is not one of its own enum` }
+if Shape.circle is Colour { INFO@mark `EM15 a member is one of another enum` }
+unless Shape.circle is Shape { INFO@mark `EM16 a member is not one of its own enum` }
 
 unless Modifier.this { INFO@mark `EM12 a member named this is not there` }
 

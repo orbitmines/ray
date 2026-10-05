@@ -16,7 +16,7 @@ Store := class: Location = name: String, parent: Store?, children: Store[] = [],
   matching (filter) => all{filter}
 
   static Route := class = type: *, filter: *?, store: Store {
-    takes (instance) => instance ==.instance_of type && (!filter || filter(instance))
+    takes (instance) => instance is type && (!filter || filter(instance))
   }
   static routes: Route[] = []
   static materialised: *[] = []
@@ -27,13 +27,13 @@ Store := class: Location = name: String, parent: Store?, children: Store[] = [],
   static stores_of (type) => (routes{.type === type}.store, default).unique
 
   static keep (instance) => routed(instance).put(instance)
-  static constructed (instance) => instance -- keep(.) if materialised.some(instance ==.instance_of .)
+  static constructed (instance) => instance -- keep(.) if materialised.some(instance is .)
 
   static View := class = type: *, at: Store? {
     materialised.contains(type) || materialised.push(type)
 
     stores => stores_of(type){!at || . === at}
-    all => stores.all.flatten{==.instance_of type}
+    all => stores.all.flatten{. is type}
     matching (filter) => all{filter}
     located (store) => View(type, at: store)
     count => all.count

@@ -55,12 +55,38 @@ unless five + 3 seconds == eight { INFO@mark `TI51 five seconds on plus three is
 unless (Time(calendar: Julian, epoch: five) = 2 seconds).since_calendar_epoch == 7 seconds { INFO@mark `TI55 two seconds after five is not seven since the start` }
 unless (Time(epoch: "2000-01-01") = "2025-01-01").years == 25 { INFO@mark `TI84 twenty-five years after 2000 are not 25 years` }
 unless (Time(calendar: Julian) = 120 seconds).round(minute) == 2 minutes { INFO@mark `TI85 two minutes rounded to minutes moved` }
+eighty := (Time(calendar: Julian, epoch: five) = 80 seconds).round(minute)
+unless eighty == (Time(calendar: Julian, epoch: five) = 60 seconds) { INFO@mark `TRO1 eighty seconds do not round down to a minute` }
+unless (Time(calendar: Julian) = 95 seconds).round(minute) == (Time(calendar: Julian) = 120 seconds) { INFO@mark `TRO2 ninety-five seconds do not round up to two minutes` }
+unless eighty.calendar == Julian { INFO@mark `TRO3 rounding lost the calendar` }
+unless eighty.unit == second { INFO@mark `TRO4 rounding changed the unit it counts in` }
+unless (Time(calendar: Julian) = 120 seconds).round(minute) == (Time(calendar: Julian) = 120 seconds) { INFO@mark `TRO5 a whole multiple moved when rounded` }
+unless (Time(calendar: Julian) = 90 seconds).round(minute) == (Time(calendar: Julian) = 120 seconds) { INFO@mark `TRO6 half a minute does not round up` }
+unless eighty.epoch == five { INFO@mark `TRO7 rounding lost the epoch` }
+finer := (Time(calendar: Julian) = 2 minutes).round(second)
+unless finer.unit == second { INFO@mark `TRO8 rounding to a finer unit did not convert to it` }
+unless finer == (Time(calendar: Julian) = 120 seconds) { INFO@mark `TRO9 two minutes rounded to seconds are not 120 seconds` }
 
 unless "1582-10-04" as Julian + 1 day as Gregorian == "1582-10-15" as Gregorian { INFO@mark `TI52 the day after the last Julian day is not the first Gregorian one` }
 unless UTC().offset == 0 { INFO@mark `TI19 UTC is at some offset` }
 unless GMT == UTC { INFO@mark `TI40 GMT is not UTC` }
+if UTC.leap_seconds { INFO@mark `TI41 UTC counts leap seconds` }
+if GMT.leap_seconds { INFO@mark `TI78 the zone without leap seconds has them` }
+unless Julian.week.is_recurring { INFO@mark `TI57 the weekdays do not recur` }
+if Julian.hour.is_recurring { INFO@mark `TI58 an hour of sixty minutes recurs` }
 unless (UTC(offset: 3 seconds) = 0) - (UTC() = 0) == 3 seconds { INFO@mark `TI79 three seconds past the agreed point is not three seconds past the other` }
 
 unless Time.now <= Time.now { INFO@mark `TI86 the clock went back` }
+unless now <= Time.now { INFO@mark `TI89 now read bare is after the clock read again` }
+noon := "2024-02-07T12:00:00Z" as ISO_8601 as Time
+unless 9:00 <= noon <= 17:00 { INFO@mark `TI90 noon on any day is not between 9:00 and 17:00` }
+if 13:00 <= noon { INFO@mark `TI91 noon is after 13:00` }
+unless Gregorian(year: 2023).days_in_year == 365 { INFO@mark `TI73 an ordinary year is not three hundred and sixty-five days` }
+unless Gregorian(year: 2024).days_in_year == 366 { INFO@mark `TI74 a leap year is not a day longer` }
+unless Gregorian(year: 2023).weeks_in_year == 52 { INFO@mark `TI75 a year is not fifty-two weeks` }
+unless February.days_in(Gregorian(year: 2024)) == 29 { INFO@mark `TI92 February 2024 does not have twenty-nine days` }
+unless Gregorian(year: 2024).weekday_of(1) == Monday { INFO@mark `TI93 the first of January 2024 is not a Monday` }
+unless ("2024-02-07" as ISO_8601) < ("2024-02-08" as ISO_8601) { INFO@mark `TI94 a date is not before the day after it` }
+unless (Time.now.corrected(1 second, within: 1 ns)).uncertainty == 1 ns { INFO@mark `TI95 a corrected time does not keep how certain the correction is` }
 unless Mars.days == sol { INFO@mark `TI87 a day on Mars is not a sol` }
 unless 1 sol == 88775 seconds { INFO@mark `TI88 a sol is not 88775 seconds` }

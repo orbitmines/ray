@@ -98,6 +98,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   fill (x) => all = x
   take (count: Number) => this[..count]
   find (predicate) => this{predicate}.first
+  index_of (x, at = 0) => empty ? None : first == x ? at : rest.index_of(x, at + 1)
   find_all (predicate) => this{predicate}
   shuffled => empty ? [] : (picked = random), this{!== picked}.shuffled
   squeeze => this{. != .previous}

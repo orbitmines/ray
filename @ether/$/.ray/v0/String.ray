@@ -106,7 +106,7 @@ String := class: Char[] {
   replace (old: String, new: String) => split(old).join(new)
   escaped_line => #.map(Compiler.reduced(., Escape⁻¹)) as String
 
-  as (base: Number.Base) => Number.Bases.map(name => global[name]){.radix == base}.first(integer: this) as Number
+  as (base: Number.Base) => Number.numeral(base)(integer: this)
   as (=== Decimal) => Decimal(integer: this)
 
   compounds + (other: String) => this, other

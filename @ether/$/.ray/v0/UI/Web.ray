@@ -136,7 +136,7 @@ Language.Web := class: Language {
       {raw: Raw} => raw.text
       {comment: Comment} => "<!--", comment.text, "-->"
     }
-    language = Language.register(Language(".html", level: syntax, writer: (node) => Compiler.reduced(node, written) as String))
+    language = Language.register(Language(".html", level: syntax, written: written))
 
     level := UI.Rendering + {
       {solved: Geometry.Solved} => Page(solved.shape)
@@ -339,7 +339,7 @@ Language.Web := class: Language {
       {keyframes: Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations.map(. is Comment ? . : (.0, ":", .[1..], ";")), "}"), "}"
       {comment: Comment} => "/*", comment.text, "*/"
     }
-    language = Language.register(Language(".css", level: syntax, writer: (node) => Compiler.reduced(node, written) as String))
+    language = Language.register(Language(".css", level: syntax, written: written))
 
     level := UI.Rendering + {
       {solved: Geometry.Solved} => Page(solved.shape)
@@ -579,7 +579,7 @@ Language.Web := class: Language {
       {literal: Literal} => JSON.Value(literal.value)
       {found: ById} => "document.getElementById(", JSON.Value(found.id), ")"
     }
-    language = Language.register(Language(".js", level: syntax, writer: (node) => Compiler.reduced(node, written) as String))
+    language = Language.register(Language(".js", level: syntax, written: written))
 
     level := UI.Rendering + {
       {solved: Geometry.Solved} => Page(solved.shape)

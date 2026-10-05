@@ -7,10 +7,7 @@ Char := class: Unicode.Scalar {
 
   codepoint => this
   is_ascii => this < 128
-  octets => this < 128 ? [this]
-    : this < 2048 ? [192 + this / 64, 128 + this % 64]
-    : this < 65536 ? [224 + this / 4096, 128 + this / 64 % 64, 128 + this % 64]
-    : [240 + this / 262144, 128 + this / 4096 % 64, 128 + this / 64 % 64, 128 + this % 64]
+  bytes => ([this] as String).bytes
 
   upper_case | uppercase => Unicode.UpperCase[this] ?? this
   lower_case | lowercase => Unicode.LowerCase[this] ?? this
@@ -30,10 +27,17 @@ Char := class: Unicode.Scalar {
   block => Unicode.Blocks[this]?.value ?? "No_Block"
 }
 
-\0 = U+0000
-\t = U+0009
-\n = U+000A
-\r = U+000D
+Escape := {
+  \0 => U+0000
+  \t => U+0009
+  \n => U+000A
+  \r => U+000D
+  \\ => "\"
+  \" => "\""
+  \{ => "{"
+}
+dynamically Escape.for spelling => global[spelling] := Compiler.reduced(spelling, Escape)
+
 \s = Unicode.GeneralCategory.Space_Separator | \t
 \S = !\s
 \R = Unicode.GeneralCategory.Line_Separator
@@ -47,14 +51,10 @@ Char := class: Unicode.Scalar {
 \D = !\d
 \w = Char.Word
 \W = !\w
-\\ = "\"
-\" = "\""
-\{ = Escaped(character: "{")
-Escaped := class = character: Char {
-  as (=== String) => character
-}
 
-"{literal: (\{escape} | !"\"")[]}": String => literal.literal_dedented.interpolated((code) => (inline (external ** code)) as String)
+Balanced := (Char{!= "{" && != "}" && != "\""} | ("{", Balanced, "}"))[]
+Interpolation := class = ("{", code: Balanced, "}")
+"{literal: (\{escape} | Interpolation | Char{!= "\""})[]}": String => literal.map(. is Interpolation ? (inline (external ** .code)) as String : .).join("").literal_dedented
 
 LanguageName := String{Language.named("." + .) != None}
 @{extension: LanguageName}`{literal code ^string}` ^string.punctuation => Language.named("." + extension).read(code)
@@ -104,17 +104,13 @@ String := class: Char[] {
 
   slice (from: Number, to: Number) => this[from..<to]
   replace (old: String, new: String) => split(old).join(new)
-  escaped_line => #.map(. == \\ ? "\\\\" : . == \" ? "\\\"" : . == \n ? "\\n" : .) as String
+  escaped_line => #.map(Compiler.reduced(., Escape⁻¹)) as String
 
-  as (base: Number.Base) => #.reduce(0) (acc, current) => acc * base + current as Decimal
-  as (=== Decimal) => this as 10
+  as (base: Number.Base) => Number.Bases.map(name => global[name]){.radix == base}.first(integer: this) as Number
+  as (=== Decimal) => Decimal(integer: this)
 
   compounds + (other: String) => this, other
-  bytes => #.map(.octets).flatten
-  interpolated (reading: Program) => (opening = index_of("{")) == None ? this
-    : (closing = closing_of(opening + 1)) -- this[..<opening], reading(this[opening + 1..<closing].as(String)), this[closing + 1..].interpolated(reading)
-  closing_of (at: Number, depth: Number = 1) => this[at] == "}" ? (depth == 1 ? at : closing_of(at + 1, depth - 1))
-    : this[at] == "{" ? closing_of(at + 1, depth + 1) : closing_of(at + 1, depth)
+  bytes => (this as Unicode.UTF-8).bytes
   find_all (pattern: String) => (this ~= pattern)#.index
   italic => this ^italic
   bold => this ^bold

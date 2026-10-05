@@ -44,34 +44,38 @@ Unicode := class {
 
   static TF | TransformationFormat := class: CodeUnit[]{length == 1..(32 / CodeUnit.length)} {
     static CodeUnit: Binary
-    as (=== CodePoint[]): CodePoint[]
+    static Decoding := {
+      {unit: UTF-16.Unit{prefix}} => unit.U0 + 1, unit.U1, unit.U2
+      {unit} => unit.U0, unit.U1, unit.U2, unit.U3
+    }
+    as (=== CodePoint[]) => sequence.map(Compiler.reduced(., Decoding))
     bytes => endianness == LE ? <-(this as Byte[]) : this as Byte[]
   }
 
-  static UTF-8 := class: TF = sequence: (
-    prefix: 1[]{length == 0..4},
-    U0: Binary{length == 8 - prefix.length}{⊢0},
-    (10₂, U1: Binary⁶) if prefix ⊢11₂,
-    (10₂, U2: Binary⁶) if prefix ⊢111₂,
-    (10₂, U3: Binary⁶) if prefix ⊢1111₂
-  )[] {
+  static UTF-8 := class: TF = sequence: Unit[] {
     static CodeUnit = Binary⁸
-    as (=== CodePoint[]) => sequence.map(.U0, .U1, .U2, .U3)
+    static Unit := class = (
+      prefix: 1[]{length == 0..4},
+      U0: Binary{length == 8 - prefix.length}{⊢0},
+      (10₂, U1: Binary⁶) if prefix ⊢11₂,
+      (10₂, U2: Binary⁶) if prefix ⊢111₂,
+      (10₂, U3: Binary⁶) if prefix ⊢1111₂
+    )
   }
 
-  static UTF-16 := class: TF = sequence: (
-    prefix: 110110₂?,
-    U0: Binary⁴,
-    U1: Binary{length == 12 - prefix.length},
-    (110111₂, U2: Binary¹⁰) if prefix
-  )[] {
+  static UTF-16 := class: TF = sequence: Unit[] {
     static CodeUnit = Binary¹⁶
-    as (=== CodePoint[]) => sequence.map(.prefix ? (.U0 + 1) * 2 ^ 16 + .U1 * 2 ^ 10 + .U2 : .U0 * 2 ^ 12 + .U1)
+    static Unit := class = (
+      prefix: 110110₂?,
+      U0: Binary⁴,
+      U1: Binary{length == 12 - prefix.length},
+      (110111₂, U2: Binary¹⁰) if prefix
+    )
   }
 
-  static UTF-32 := class: TF = Binary³²{⊢(0[]¹¹)}[] {
+  static UTF-32 := class: TF = sequence: Unit[] {
     static CodeUnit = Binary³²
-    as (=== CodePoint[]) => map(as Number)
+    static Unit := class = (0[]¹¹, U0: Binary²¹)
   }
 }
 

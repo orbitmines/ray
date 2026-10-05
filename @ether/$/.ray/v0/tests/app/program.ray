@@ -52,3 +52,85 @@ unless jumping.flow.first.jumps_to == landed { INFO@mark `PG25 a jump's edge doe
 unless jumping.flow.first.falls_through { INFO@mark `PG27 a conditional jump does not go on below it` }
 unless jumping.flow[1].falls_through { INFO@mark `PG28 a value does not go on below it` }
 if always.flow.first.falls_through { INFO@mark `PG29 a jump without a condition goes on below it` }
+
+// Operator sections are values (A1, A2)
+unless [1, 2].map(+1) == [2, 3] { INFO@mark `OP1 +1 is not a function adding one` }
+unless [1, 2].map(*10) == [10, 20] { INFO@mark `OP2 *10 is not a function multiplying by ten` }
+unless [true, false].map(!) == [false, true] { INFO@mark `OP3 ! alone is not the negation` }
+unless [1, 2, 3].reduce((*)) == 6 { INFO@mark `OP4 (*) is not multiplication as a value` }
+unless [1, 5, 20]{< 10}.count == 2 { INFO@mark `OP5 a section in a narrowing is not applied to each` }
+
+// `x.match` with one arm per line (A7)
+described (x) => x.match
+  Number => "number"
+  "A" => "letter"
+  * => "other"
+unless described(5) == "number" { INFO@mark `MA1 a type arm does not match its instance` }
+unless described("A") == "letter" { INFO@mark `MA2 a literal arm does not match itself` }
+unless described(true) == "other" { INFO@mark `MA3 the * arm does not take what nothing else does` }
+graded (x) => x.match
+  < 10 => "low"
+  * => "high"
+unless graded(3) == "low" { INFO@mark `MA4 a section arm is not asked of the value` }
+
+// `.( … )` reads among the members of what is before it (A8)
+Grouped := class {
+  first => 1
+  second => 2
+}
+unless Grouped.(first + second) == 3 { INFO@mark `GP1 .( ) does not read the members of what is before it` }
+
+// Labels in a class body are entries (L§4.2)
+Entered := class {
+  steps := 0
+ later\
+  steps = 7
+}
+unless Entered~later().steps == 7 { INFO@mark `EP1 ~label does not enter the class at that label` }
+unless Entered~default == Entered { INFO@mark `EP2 ~default is not the class itself` }
+
+// `recur` re-enters the method; `break` and `continue` in a loop (P2.4, P2.1)
+countdown (n) => (
+  return n if n == 0
+  recur(n - 1)
+)
+unless countdown(5) == 0 { INFO@mark `RC1 recur(args) does not re-enter the method` }
+stopped := 0
+while true {
+  stopped = stopped + 1
+  break if stopped == 3
+}
+unless stopped == 3 { INFO@mark `RC2 break does not leave the loop` }
+skipped := 0
+counted := 0
+while counted < 5 {
+  counted = counted + 1
+  continue if counted == 2
+  skipped = skipped + 1
+}
+unless skipped == 4 { INFO@mark `RC3 continue does not go on with the next round` }
+
+// `?` is unknown; `?=` sets only what has no value (T1.6)
+unknown := ?
+unless unknown#.count != 1 { INFO@mark `QM1 ? is one value` }
+given := None
+given ?= 4
+given ?= 5
+unless given == 4 { INFO@mark `QM2 ?= does not set only what has no value` }
+
+// `is`, quantifiers and membership (A5, R1.1)
+unless ("A", "A", "A") is "A"[] { INFO@mark `IS1 is does not ask instance_of` }
+unless ∀ x ∈ [2, 4]: x % 2 == 0 { INFO@mark `IS2 ∀ does not hold of every element` }
+unless ∃ x ∈ [1, 4]: x == 4 { INFO@mark `IS3 ∃ does not find the element` }
+unless 3 ∈ [1, 2, 3] { INFO@mark `IS4 ∈ does not find a member` }
+if 5 ∈ [1, 2, 3] { INFO@mark `IS5 ∈ finds what is not there` }
+unless [1, 2] ∋ 2 { INFO@mark `IS6 ∋ does not find a member` }
+
+// `dynamically x` reads x again each time (P5.1)
+moving := 1
+followed := dynamically moving + 1
+moving = 5
+unless followed == 6 { INFO@mark `DY2 dynamically does not read again what it depends on` }
+
+// `print(x)` answers x (Almanac §0.3)
+unless print(3) == 3 { INFO@mark `PT1 print does not answer what it printed` }

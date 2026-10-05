@@ -37,11 +37,6 @@ UI := namespace {
     dragged => Drag.current?.shape === shape
     activated => focused && Keyboard.enter.pulsed || hovered && Pointer.released
   }
-  Geometry.Shape &+= {
-    interaction => Interactive(this)
-    focusable => this ==.instance_of Link || this ==.instance_of Input || activate
-    activate => None
-  }
 
   // Inputs are values chosen by the user: the type of what is chosen picks the input (F-D4 `choose`).
   Input := class: Geometry.Box = chosen: Choice, value: *, placeholder: String = "", disabled: boolean = false {
@@ -160,7 +155,11 @@ UI := namespace {
 
   // Accessibility: roles follow from structure, labels from what is shown (F-D3).
   Role := enum heading | link | button | input | image | list | table | region | text
+  // What the UI adds to every shape: how it is interacted with, and what it is to assistive technology.
   Geometry.Shape &+= {
+    interaction => Interactive(this)
+    focusable => this ==.instance_of Link || this ==.instance_of Input || activate
+    activate => None
     role => this.match
       Link => Role.link
       Input => Role.input

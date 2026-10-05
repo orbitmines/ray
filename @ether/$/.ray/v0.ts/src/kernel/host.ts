@@ -282,7 +282,10 @@ export class Reader {
   }
   // A whole source, a top-level statement at a time.
   read_all(src: number, end: number) {
-    for (let pos = 0; pos < end;) { try { pos = this.safely(() => this.step(src, pos, end)) ?? end; } catch { this.kernel('recover'); pos = end; } }
+    for (let pos = 0; pos < end;) {
+      try { const at = pos; pos = this.safely(() => this.step(src, at, end)) ?? (this.kernel('next_statement', src, I(at), I(end)) >> 3); }
+      catch (e) { this.kernel('recover'); if (process.env.KERRORS) console.error(e); pos = this.kernel('failed_at', src, I(pos), I(end)) >> 3; }
+    }
   }
   // A source read once more where the first reading left something unresolved (the entrypoint always: what it defines late is
   // used early), what it said before forgotten.

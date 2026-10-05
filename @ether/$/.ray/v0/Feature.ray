@@ -216,6 +216,16 @@ Choice := class {
 
 Choice.chosen = chain None
 
+Node.components.hierarchy &= class {
+  chosen_within (width) => .components.random
+}
+Number.components.hierarchy &= class {
+  chosen_within (width: Number) => Random.number(width)
+}
+
+choose{ }{kind} ^keyword => kind.chosen_within(1)
+choose{ }{count: Number}{ }{kind} ^keyword => count.times.map { kind.chosen_within(1) }
+
 Distribution := class {
   outcomes: (chain None)
   optional: false

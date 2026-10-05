@@ -48,15 +48,7 @@ World := class: Nameable {
 
   issue (name: String) => (.reservations &= World.Reservation(name: name, issuer: this)).tail.value
 
-  reserved (name: String) => (
-    holder ^keyword := None
-    walker ^keyword := .reservations.head
-    while (walker) {
-      if (walker.value.name == name) { holder = walker.value }
-      walker = walker.next
-    }
-    holder
-  )
+  reserved (name: String) => .reservations.filter { it.value.name.fold_case == name.fold_case }.head.value
   Reservation := class: Ray {
     name: String
     issuer: Node

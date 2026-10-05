@@ -395,3 +395,20 @@ Review fixes: SJ4 used `("a",)` (now `.words`), `Time.round` rounded the wrong w
   `as (other: Unit)`); the `.as_string` calls are renamed.
 - **W2.6:** Node gets a language-side `&`: holds both at once (Almanac A1). boolean keeps its own `&`.
 - **N1.14:** `3 !` with a space is allowed too: it is ordinary method application.
+
+## 5. Written 2026-10-05 (write-only, not run)
+
+- `v0/Control.ray`: `Running` (P1.8 selection: waiting/intermediate/final, `.next` on a copy, `.expand`, `.&` as the results so far);
+  `branch`, `sync`, `race`, `rush`, `defer`, `await`, `pending` (P4.1/P4.2; each statement of the block is a branch, stepped
+  cooperatively); `Error` values and the `$` forms (P6.1); `dynamically x = …` as a parameterless rule (P5.1/P5.3) and
+  `dynamically assert { … }` collecting every failure (P5.6); `with`/`assume` around a block and until left (L§6.3); `Never`,
+  `never …`, `never return` (L§4.1).
+- `v0/Node.ray`: `&` holds both / a type of both (A1, L§3.1, T4.3, W2.6), `.properties` (T8.5), inverses `⁻¹`, `^-1`, `!` and
+  `! f g` (L§4.5).
+- `.entrypoint.ray`: `()` on a narrowed type chooses (W6.3), `/* … */` comments (L§5.5), constructing an abstract class is an
+  error (T3.4). `Feature.ray`: `choose T`, `choose n T` (A9). `Collections.ray`: `n.times` (A4). `World.ray`: reserved names
+  ignore case.
+- Not stubs: `name => TODO` is the abstract-member convention that `required_heads`/`is_abstract` read (ep `todo_bits`), so
+  Modifier's `kind`, `chains`, `compounds`, `reads_*`, `Ordered.<`, `Iterable.entry` and `Render.Level.written` stay as written.
+- Still needing the engine: `defer` and the unscoped `with` need a frame-exit hook to run/restore; `x**` answering a selection at
+  the producing step (provenance); T1.2 None propagation; a label answering true while its branch runs (P2.7).

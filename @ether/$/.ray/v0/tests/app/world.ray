@@ -80,6 +80,7 @@ unless (wg.reserved("alice")) { INFO@mark `RS8 a taken name does not read as tak
 if (wg.reserved("carol")) { INFO@mark `RS9 an untaken name reads as taken` }
 // A name is taken within a world and nowhere else.
 if (World(name: "elsewhere").reserved("alice")) { INFO@mark `RS10 a name reserved in one world is taken in another` }
+unless (wg.reserved("ALICE")) { INFO@mark `RS11 a reserved name is free again in other letter case` }
 
 // A history keeps what was committed, in the order it was committed.
 repo := Repository(world: wg)

@@ -134,3 +134,11 @@ unless (same_text((misfit.head.next.value), (`+`))) { INFO@mark `TY40 positions 
 // And what is written for it as text is read by that structure.
 spanned: Ranged = 3-8
 unless (spanned.width == 5) { INFO@mark `TY41 text given to a structure is not read by it` }
+
+// Both at once: a value is of `A & B` when it is of each.
+Even := Number{(. % 2) == 0}
+unless (4.instance_of(Small & Even)) { INFO@mark `TY65 four is not both small and even` }
+if (3.instance_of(Small & Even)) { INFO@mark `TY66 three is both small and even` }
+if (6.instance_of(Small & Even)) { INFO@mark `TY67 six is both small and even` }
+unless ((1 & 2).contains(2)) { INFO@mark `TY68 what holds both does not hold the second` }
+unless ((1 & 2 & 3).conjoined.count == 3) { INFO@mark `TY69 three held at once are not three` }

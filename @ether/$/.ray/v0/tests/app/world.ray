@@ -201,10 +201,10 @@ guild := Organization(name: "guild")
 unless guild.members.empty { INFO@mark `WP21 an organization nobody joined has members` }
 unless guild.status == Status.offline { INFO@mark `WP22 an organization is not offline to begin with` }
 
-sited := Reference(title: "t", subtitle: "s", year: "2025", link: "https://a.b", pointer: "p")
+sited := Reference(title: "t", subtitle: "s", year: "2025", link: @https://a.b, pointer: "p")
 unless sited.subtitle == "s" { INFO@mark `WR1 a reference forgot its subtitle` }
 unless sited.year == "2025" { INFO@mark `WR2 a reference forgot its year` }
-unless sited.link == "https://a.b" { INFO@mark `WR3 a reference forgot its link` }
+unless sited.link == @https://a.b { INFO@mark `WR3 a reference forgot its link` }
 unless sited.pointer == "p" { INFO@mark `WR4 a reference forgot its pointer` }
 unless Reference(title: "t").authors.empty { INFO@mark `WR5 a new reference already has authors` }
 unless Reference(title: "t").organizations.empty { INFO@mark `WR6 a new reference already has organizations` }
@@ -239,3 +239,8 @@ unless @"a location with spaces" as String == "a location with spaces" { INFO@ma
 unless @./lib/logo.png as String == "./lib/logo.png" { INFO@mark `LC3 @./path is not a relative location` }
 unless @ether/UI as String == "ether/UI" { INFO@mark `LC4 @name/path is not a location under that name` }
 unless (@./lib / "logo.png") == @./lib/logo.png { INFO@mark `LC5 / does not go into a location` }
+
+release := 17
+unless (@https://www.unicode.org/Public/ release /ucd) as String == "https://www.unicode.org/Public/17/ucd" { INFO@mark `LC6 a value between the parts of a location is not written into it` }
+unless (@https://www.unicode.org/ucd/UnicodeData.txt) as String ~= "UnicodeData.txt" ⊣ { INFO@mark `LC7 a dot in a path is not part of the path` }
+unless (@https://www.unicode.org/ucd)/UnicodeData.txt as String == "https://www.unicode.org/ucd/UnicodeData.txt" { INFO@mark `LC8 a path written after a location does not continue it` }

@@ -12,6 +12,9 @@ Location := class: Hierarchy {
   written: String?
   as (=== String) => written
   / (path: String) => Location(written: written + "/" + path)
+  /{segment: Written} ^string => Location(written: written + "/" + segment)
+  { }/{segment: Written} ^string => Location(written: written + "/" + segment)
+  { }{value} => Location(written: written + (value as String)) if written ~= "/" ⊣
   == (other) => written == (other ==.instance_of Location ? other.written : other)
 }
 

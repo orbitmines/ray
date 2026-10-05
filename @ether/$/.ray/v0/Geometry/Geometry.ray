@@ -94,7 +94,7 @@ Geometry := class {
   Canvas := class: Shape = draws: Program
   Frame := class: Shape = source: Location, title: String = "", allow: String[] = ["fullscreen", "picture-in-picture", "encrypted-media"] {
     video => (source as String ~= (*, ("youtube.com/watch?v=" | "youtu.be/" | "youtube.com/embed/"), id: (!"&" && !"?")[], *))?.id
-    embedded => video ? Location(written: "https://www.youtube.com/embed/" + video) : source
+    embedded => video ? @https://www.youtube.com/embed/ video : source
     intrinsic (width: Length) => width * 9 / 16
   }
 

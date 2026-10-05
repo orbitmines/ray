@@ -2,74 +2,70 @@ Language.Direct := class: Language {
   static extensions = ".direct"
 
   Drawing := class = raster: Geometry.Raster, ops: *[]
-  Draw := class = shape: Geometry.Shape, outer: Geometry.Transform {
-    placed => outer * Geometry.Transform.translate(shape.origin) * shape.shown_transform
-    inner => placed * Geometry.Transform.translate(shape.origin * -1)
-    area => (0..<shape.size.y as px).map(y => (0..<shape.size.x as px).map(x => (x, y))).flatten
-    inside => area{shape.contains(Geometry.Vector(.0, .1))}
-    opacity => shape.effects{. is Geometry.Opacity}.amount.product ?? 1
+  Draw := class = shape: Geometry.Shape, outer: Geometry.Transform = Geometry.Transform.identity {
+    placed => outer * Geometry.Transform.translate(shape.at) * shape.displayed("transform")
+    inner => placed * Geometry.Transform.translate(shape.at * -1)
+    area => (0..<shape.size.y as px).map(y => (0..<shape.size.x as px).map(x => Geometry.Vector(x, y))).flatten
+    inside => area{shape.boundary.contains(.)}
+    opacity => shape.effects{. is Geometry.Filter && .kind == opacity}.amount.product ?? 1
   }
   Painted := class = points: (at: Geometry.Vector, sample: Geometry.Vector)[], paint: Geometry.Paint?, alpha: Probability = 1
   Outlined := class = outlines: Geometry.Outline[], transform: Geometry.Transform, paint: Geometry.Paint?
-  Stroked := class = outline: Geometry.Outline, transform: Geometry.Transform, stroke: Geometry.Stroke
+  Stroked := class = outline: Geometry.Outline, transform: Geometry.Transform, width: Geometry.Length, paint: Geometry.Paint?
   Shown := class = draw: Draw
 
   rules := {
-    {solved: Geometry.Solved} => Drawing(Geometry.Raster(UI.scene.size.x as px, UI.scene.size.y as px), [solved.shape, solved.shape.lifted].flatten.map(Draw(., Geometry.Transform.translate(Geometry.Vector(0, -solved.scrolled)))))
+    {root: Geometry.Shape{solved}} => Drawing(Geometry.Raster.blank(root.size.x as px, root.size.y as px), [Draw(root), root.lifted.map(Draw(.))].flatten)
     {drawing: Drawing{ops.flatten.every(. is Program)}} => drawing.raster ~~ drawing.ops.flatten
 
     {draw: Draw{shape.content is Choice}} => [
-      Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: draw.shape.fill, stroke: draw.shape.stroke, radius: draw.shape.radius, effects: draw.shape.effects), draw.outer),
+      Draw(Geometry.Box(origin: draw.shape.at, size: draw.shape.size, fill: draw.shape.painted(draw.shape.fill), stroke: draw.shape.stroke, radius: draw.shape.radius, effects: draw.shape.effects), draw.outer),
       Draw(draw.shape.face, draw.outer)
     ]
     {draw: Draw} => [
-      Painted(draw.inside.map((x, y) => (at: draw.placed.applied(Geometry.Vector(x, y)), sample: Geometry.Vector(x, y))), draw.shape.fill, draw.opacity) if draw.shape.fill && !(draw.shape.content is Location),
-      Stroked(draw.shape.boundary, draw.placed, draw.shape.stroke) if draw.shape.stroke,
+      Painted(draw.inside.map(point => (at: draw.placed.applied(point), sample: point)), draw.shape.painted(draw.shape.fill), draw.opacity) if draw.shape.fill && !(draw.shape.content is Location),
+      Stroked(draw.shape.boundary, draw.placed, draw.shape.stroke.width, draw.shape.painted(draw.shape.stroke.paint)) if draw.shape.stroke,
       Shown(draw) if draw.shape.content,
       draw.shape.in_place.sort_by(.layer).map(Draw(., draw.inner)) if draw.shape.visible,
-      draw.shape.effects{. is Geometry.Blur}.map(blur => { .blurred(draw.inside, blur.radius as px) })
+      draw.shape.effects{. is Geometry.Blur}.map(blur => { .blurred(draw.inside.map(draw.placed.applied(.)), blur.radius as px) })
     ]
 
-    {shown: Shown{draw.shape.content is String}} => {
-      draw = shown.draw
-      text = draw.shape
-      lines = text.lines(text.size.x)
-      starts = text.starts(text.size.x)
-      (0..<lines.count).map(row => (0..<lines[row].length).reduce(placed = (pen: 0, ops: []) => {
-        look = UI.Theme.face(text, starts[row] + .)
-        typeface = look.font
-        height = typeface.size * typeface.line_height
-        glyph = Font(typeface).glyph(lines[row][.])
-        (pen: placed.pen + glyph.advance * typeface.size / glyph.units, ops: [placed.ops,
-          Draw(Geometry.Box(origin: Geometry.Vector(placed.pen, row * height), size: Geometry.Vector(typeface.size * 0.6, height), fill: look.fill), draw.placed) if look.styles.contains("selected"),
-          Outlined(glyph.outlines, draw.placed * Geometry.Transform.translate(Geometry.Vector(placed.pen, row * height)) * Geometry.Transform.scale(Geometry.Vector(typeface.size / glyph.units, typeface.size / glyph.units)), look.color ?? Geometry.Color(0, 0, 0))
+    {shown: Shown{draw.shape.content is String}} => shown.draw -- (draw => draw.shape -- (text => with Geometry.Font.inherited = text.em {
+      text.lines(text.size.x).enumerate.map(row => row.value.reduce(placed = (pen: 0px, ops: []) => {
+        look = UI.Theme.face(text, .index)
+        size = look.font.size as px
+        height = size * look.font.line_height
+        glyph = Font(look.font).glyph(text.case ? text.case(.) : .)
+        (pen: placed.pen + glyph.advance * size / glyph.units, ops: [placed.ops,
+          Draw(Geometry.Box(origin: Geometry.Vector(placed.pen, row.index * height), size: Geometry.Vector(size * 0.6, height), fill: look.fill), draw.placed) if look.styles.contains("selected"),
+          Outlined(glyph.outlines, draw.placed * Geometry.Transform.translate(Geometry.Vector(placed.pen, row.index * height)) * Geometry.Transform.scale(Geometry.Vector(size / glyph.units, size / glyph.units)), text.painted(look.color) ?? Geometry.Color(0, 0, 0))
         ].flatten)
       }).ops).flatten
-    }
-    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === Language.Image && draw.shape.fill}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
-      draw.placed.applied(Geometry.Vector(x, y)) -- (at => { .put(at.x, at.y, ((draw.shape.fill as Geometry.Color) ?? Geometry.Color(0, 0, 0)).faded(raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y).alpha)) })
+    }))
+    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === Language.Image && draw.shape.fill}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map(point =>
+      draw.placed.applied(point) -- (at => { .put(at.x, at.y, ((draw.shape.painted(draw.shape.fill) as Geometry.Color) ?? Geometry.Color(0, 0, 0)) ~~ .alpha *= raster.at(point.x * raster.width / draw.shape.size.x, point.y * raster.height / draw.shape.size.y).alpha) })
     )))
-    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === Language.Image}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map((x, y) =>
-      draw.placed.applied(Geometry.Vector(x, y)) -- (at => { .put(at.x, at.y, raster.at(x * raster.width / draw.shape.size.x, y * raster.height / draw.shape.size.y)) })
+    {shown: Shown{draw.shape.content is Location && draw.shape.content.language === Language.Image}} => shown.draw -- (draw => draw.shape.content.pixels -- (raster => draw.area.map(point =>
+      draw.placed.applied(point) -- (at => { .put(at.x, at.y, raster.at(point.x * raster.width / draw.shape.size.x, point.y * raster.height / draw.shape.size.y)) })
     )))
-    {shown: Shown{draw.shape.content is Location && draw.shape.content.video_site}} => shown.draw -- (draw => Draw(Geometry.Box(origin: draw.shape.origin, size: draw.shape.size, fill: Geometry.Color(17, 20, 24), stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
-      Geometry.Box(content: "▶ " + (draw.shape.content.alt ?? draw.shape.content as String), origin: draw.shape.origin + draw.shape.size * (1 / 2) - Geometry.Vector(0, 8px), size: draw.shape.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
+    {shown: Shown{draw.shape.content is Location && draw.shape.content.video_site}} => shown.draw -- (draw => Draw(Geometry.Box(origin: draw.shape.at, size: draw.shape.size, fill: Geometry.Color(17, 20, 24), stroke: Geometry.Stroke(Geometry.Color(128, 128, 128)), children: [
+      Geometry.Box(content: "▶ " + (draw.shape.content.alt ?? draw.shape.content as String), origin: draw.shape.size * (1 / 4) + Geometry.Vector(0, draw.shape.size.y / 4 - 8px), size: draw.shape.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
     ]), draw.outer))
     {shown: Shown{draw.shape.content is Program}} => shown.draw -- (draw => draw.shape.content().map(Draw(., draw.placed)))
     {shown: Shown} => []
 
-    {painted: Painted{paint is Geometry.Color}} => painted.paint.faded(painted.alpha) -- (color => painted.points.map(point => { .put(point.at.x, point.at.y, color) }))
-    {painted: Painted{paint is Geometry.Gradient}} => painted.points.map(point => { .put(point.at.x, point.at.y, painted.paint.at(point.sample.x).faded(painted.alpha)) })
-    {painted: Painted{paint is Geometry.Pattern}} => painted.paint -- (pattern => Compiler.reduced(Drawing(Geometry.Raster(pattern.repeat.x as px, pattern.repeat.y as px), [Draw(pattern.shape, Geometry.Transform())]), rules) -- (tile =>
-      painted.points.map(point => { .put(point.at.x, point.at.y, tile.at(point.sample.x % pattern.repeat.x, point.sample.y % pattern.repeat.y).faded(painted.alpha)) })
+    {painted: Painted{paint is Geometry.Color}} => (painted.paint ~~ .alpha *= painted.alpha) -- (color => painted.points.map(point => { .put(point.at.x, point.at.y, color) }))
+    {painted: Painted{paint is Geometry.Gradient}} => painted.points.map(point => { .put(point.at.x, point.at.y, painted.paint.at(point.sample.x) ~~ .alpha *= painted.alpha) })
+    {painted: Painted{paint is Geometry.Pattern}} => painted.paint -- (pattern => Compiler.reduced(Drawing(Geometry.Raster.blank(pattern.repeat.x as px, pattern.repeat.y as px), [Draw(pattern.shape)]), rules) -- (tile =>
+      painted.points.map(point => { .put(point.at.x, point.at.y, tile.at(point.sample.x % pattern.repeat.x, point.sample.y % pattern.repeat.y) ~~ .alpha *= painted.alpha) })
     ))
     {painted: Painted} => []
-    {outlined: Outlined} => outlined.outlines.map(.points.map(outlined.transform.applied(.))) -- (contours => contours.map(corners => corners.zip([corners.rest, corners.first])).flatten(1) -- (edges => Painted((contours.flatten.y.min..<contours.flatten.y.max).map(y =>
+    {outlined: Outlined} => outlined.outlines.map(.edges.map((a, b) => (outlined.transform.applied(a), outlined.transform.applied(b)))).flatten(1) -- (edges => edges.map(.0.y) -- (ys => Painted((ys.min..<ys.max).map(y =>
       edges{(.0.y <= y) != (.1.y <= y)}.map(.0.x + (y - .0.y) * (.1.x - .0.x) / (.1.y - .0.y)).sort.chunk(2).map((a, b) => (a..<b).map(x => (at: Geometry.Vector(x, y), sample: Geometry.Vector(x, y))))
     ).flatten, outlined.paint)))
-    {stroked: Stroked} => stroked.outline.points.map(stroked.transform.applied(.)) -- (corners => Painted(corners.zip(corners.rest).map((a, b) =>
-      (0..<(b - a).length as px).map(step => a + (b - a) * (step / (b - a).length) -- (point => (-(stroked.stroke.width / 2)..stroked.stroke.width / 2).map(w => (at: Geometry.Vector(point.x + w, point.y), sample: point))))
-    ).flatten, stroked.stroke.paint))
+    {stroked: Stroked} => Painted(stroked.outline.edges.map((a, b) => (stroked.transform.applied(a), stroked.transform.applied(b))).map((a, b) =>
+      (0..<(b - a).norm as px).map(step => a.mix(b, step / (b - a).norm) -- (point => (-(stroked.width / 2)..stroked.width / 2).map(w => (at: Geometry.Vector(point.x + w, point.y), sample: point))))
+    ).flatten, stroked.paint)
   }
   level := Geometry.Solving + rules
 
@@ -78,7 +74,7 @@ Language.Direct := class: Language {
     glyph (character: Char) => (IO.host(file.path) as OpenType)[character]
   }
   Fonts := class {
-    located (family: String) => ["/usr/share/fonts", "/System/Library/Fonts", "C:/Windows/Fonts"].map(IO.listing(.)).flatten{.name.fold_case ~= family.fold_case}.first
+    located (family: String) => ["/usr/share/fonts", "/System/Library/Fonts", "C:/Windows/Fonts"].map(IO.listing(.)).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
   }
   Glyph := class = outlines: Geometry.Outline[], advance: Number, units: Number
 
@@ -131,7 +127,7 @@ Language.Direct := class: Language {
       outline (points: Point[]) => (points.some(.on)
         ? points.index_of(points{.on}.first) -- (start => [points[start..], points[..start]].flatten)
         : Point((points.first.at + points.last.at) * (1 / 2), true) -- (start => [start, points, start].flatten)
-      ) -- (ring => Geometry.Outline(ring.first.at, Compiler.reduced(ring.zip(ring.rest).map(Step(.0, .1)), contoured).flatten, closed: true))
+      ) -- (ring => [ring.first.at, Compiler.reduced(ring.zip(ring.rest).map(Step(.0, .1)), contoured)].flatten.loop)
     }
 
     bits => this as Binary

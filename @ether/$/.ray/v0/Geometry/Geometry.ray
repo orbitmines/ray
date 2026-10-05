@@ -1,370 +1,243 @@
-Point := Ray
-Curve | Line := Array{unbounded}
+Elementwise := (Number | Quantity | Elementwise)[] + {
+  compounds + (other: Elementwise) => zip(other).map(+)
+  compounds - (other: Elementwise) => zip(other).map(-)
+  compounds * (factor: Number | Elementwise) => factor is Number ? map(. * factor) : zip(factor).map(*)
+}
+Node &+= {
+  mix (other, t: Probability) => this + (other - this) * t
+}
 
 Geometry := class {
-  Vector := class = x: Length = 0, y: Length = 0, z: Length = 0 {
-    compounds + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)
-    compounds - (other: Vector) => Vector(x - other.x, y - other.y, z - other.z)
-    compounds * (factor: Number) => Vector(x * factor, y * factor, z * factor)
-    length => √(x ^ 2 + y ^ 2 + z ^ 2)
-    dimensions => [x, y, z]
+  Length := Quantity{unit is (px | pt | em | rem | vw | vh | cell | m)}
+  Vector := Elementwise{every(. is Length)}{length <= 3} + (x: Length = 0, y: Length = 0, z: Length = 0) + {
+    to => this
+    norm => √(x ^ 2 + y ^ 2 + z ^ 2)
   }
-  Length := Quantity{unit is (px | pt | em | rem | % | vw | vh | cell | m)}
 
-  Transform := class = matrix: Number[][] = identity {
+  Transform := Matrix{count == 4 && every(.count == 4)} + {
     static identity = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
-    static translate (by: Vector) => Transform([[1, 0, 0, by.x], [0, 1, 0, by.y], [0, 0, 1, by.z], [0, 0, 0, 1]])
-    static scale (by: Vector) => Transform([[by.x, 0, 0, 0], [0, by.y, 0, 0], [0, 0, by.z, 0], [0, 0, 0, 1]])
-    static rotate (turn: Number, around: Vector = Vector(z: 1)) => Transform(rotation(turn, around))
-    static skew (by: Vector) => Transform([[1, by.x, 0, 0], [by.y, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
-    compounds * (other: Transform) => Transform(matrix.map(row => columns(other.matrix).map(column => row.zip(column).map(*).sum)))
-    compounds * (factor: Number) => Transform(matrix.map(row => row.map(. * factor)))
-    compounds + (other: Transform) => Transform(matrix.zip(other.matrix).map((a, b) => a.zip(b).map(+)))
-    compounds - (other: Transform) => Transform(matrix.zip(other.matrix).map((a, b) => a.zip(b).map(-)))
-    applied (point: Vector) => Vector(matrix[..<3].map(row => row.zip([point.dimensions, 1]).map(*).sum))
-    inverse => Transform(inverted(matrix))
-    transposed => columns(matrix)
-
-    static columns (m: Number[][]) => (0..<m.first.count).map(j => m.map(.[j]))
-    static without (m: Number[][], i: Number, j: Number) => (0..<m.count){!= i}.map(r => (0..<m.count){!= j}.map(c => m[r][c]))
-    static determinant (m: Number[][]) => m.count == 1 ? m[0][0] : (0..<m.count).map(j => (j.even ? 1 : -1) * m[0][j] * determinant(without(m, 0, j))).sum
-    static inverted (m: Number[][]) => (0..<m.count).map(i => (0..<m.count).map(j => ((i + j).even ? 1 : -1) * determinant(without(m, j, i)) / determinant(m)))
-    static rotation (turn: Number, around: Vector) => (cos(turn), sin(turn), 1 - cos(turn)) -- ((c, s, t) => [
+    static translate (by: Vector) => [[1, 0, 0, by.x], [0, 1, 0, by.y], [0, 0, 1, by.z], [0, 0, 0, 1]]
+    static scale (by: Vector) => [[by.x, 0, 0, 0], [0, by.y, 0, 0], [0, 0, by.z, 0], [0, 0, 0, 1]]
+    static skew (by: Vector) => [[1, by.x, 0, 0], [by.y, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    static rotate (angle: Angle, around: Vector = Vector(z: 1)) => (angle.cos, angle.sin, 1 - angle.cos) -- ((c, s, t) => [
       [t * around.x * around.x + c, t * around.x * around.y - s * around.z, t * around.x * around.z + s * around.y, 0],
       [t * around.x * around.y + s * around.z, t * around.y * around.y + c, t * around.y * around.z - s * around.x, 0],
       [t * around.x * around.z - s * around.y, t * around.y * around.z + s * around.x, t * around.z * around.z + c, 0],
       [0, 0, 0, 1]
     ])
-    static τ = 6.283185307179586
-    static cos (turn: Number) => (0..10).map(k => (k.even ? 1 : -1) * (τ * turn) ^ (2 * k) / (2 * k)!).sum
-    static sin (turn: Number) => (0..10).map(k => (k.even ? 1 : -1) * (τ * turn) ^ (2 * k + 1) / (2 * k + 1)!).sum
+    applied (point: Vector) => this[..<3].map(row => row.zip([point.x, point.y, point.z, 1]).map(*).sum)
   }
 
-  Color := class ("#", red: Hexadecimal², green: Hexadecimal², blue: Hexadecimal², (alpha: Probability = 1) = (Hexadecimal² / 255)?) {
+  Color := class: Elementwise ("#", red: Hexadecimal², green: Hexadecimal², blue: Hexadecimal², (alpha: Probability = 1) = (Hexadecimal² / 255)?) {
     luminance => (red * 299 + green * 587 + blue * 114) / 1000
     over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
-    mix (other: Color, by: Probability) => Color(red + (other.red - red) * by, green + (other.green - green) * by, blue + (other.blue - blue) * by, alpha + (other.alpha - alpha) * by)
-    faded (by: Probability) => Color(red, green, blue, alpha * by)
   }
-  Paint := Color | Gradient | Pattern | Inherited
-  Inherited := class
-  Gradient := class = stops: (at: Probability, color: Color)[], kind: linear | radial | conic = linear, angle: Number = 0 {
-    at (position: Probability) => stops.zip(stops.rest){.0.at <= position <= .1.at}.first -- .0.color.mix(.1.color, (position - .0.at) / (.1.at - .0.at))
+  Paint := Color | Gradient | Pattern | Section
+  Stop<K = Length, V = Number> := class = at: K, value: V {
+    -> (other: Stop) => Stops([this, other])
   }
+  Stops<K = Length, V = Number> := class = stops: Stop<K, V>[], easing: Easing = linear {
+    static (stops: Stop[]) as (=== Stops) => Stops(stops, step)
+    -> (other: Stop) => Stops([stops, [other]].flatten(1), easing)
+    sorted => stops.sort_by(.at)
+    at (position: K) => sorted -- (position <= .first.at ? .first.value
+      : .last.at <= position ? .last.value
+      : .zip(.rest){.0.at <= position <= .1.at}.first -- .0.value.mix(.1.value, easing((position - .0.at) / (.1.at - .0.at))))
+  }
+  Steps := Stops{easing == step}
+  Gradient := class: Stops<Probability, Color> = kind: straight | radial | conic = straight, angle: Angle = 0 turn
   Pattern := class = shape: Shape, repeat: Vector
   Stroke := class = paint: Paint, width: Length = 1px, sides: Side = all, dash: Length[] = [], cap: butt | round | square = butt, join: miter | round | bevel = miter
 
-  Effect := Opacity | Shadow | Blur | Blend | Filter
-  Opacity := class = amount: Probability
-  Shadow := class = offset: Vector, blur: Length = 0, spread: Length = 0, color: Color, inset: boolean = false
+  Effect := Shadow | Blur | Filter
+  Shadow := class = offset: Vector, blur: Length = 0px, spread: Length = 0px, color: Color, inset: boolean = false
   Blur := class = radius: Length
-  Blend := enum normal | multiply | screen | overlay | darken | lighten | difference
-  Filter := class = kind: brightness | contrast | grayscale | invert | saturate | sepia | hue, amount: Number
+  Filter := class = kind: brightness | contrast | grayscale | invert | opacity | saturate | sepia | hue, amount: Number
 
-  Font := class = family: String[] = ["sans-serif"], size: Length = 1em, weight: Number{100 <= . <= 900} = 400, style: normal | italic = normal, line_height: Number = 1.2, case: none | upper | lower | title = none, tracking: Length = 0, features: String[] = [] {
-    merged (other: Font) => Font(Font().fields.map(field => other.`field.name` != field.value ? other.`field.name` : this.`field.name`))
+  Font := class = family: String[]?, size: Length?, weight: Number{100 <= . <= 900}?, style: (normal | italic)?, line_height: Number?, tracking: Length?, features: String[]? {
+    static base = Font(["sans-serif"], 16px, 400, normal, 1.2, 0px, [])
+    static inherited: Length = 16px
+    ?? (other: Font?) => Font(fields.map(field => field.value ?? other?.`field.name`))
   }
-  Raster := class = width: Number, height: Number, pixels: Color[] = [Color(0, 0, 0, 0)] * (width * height) {
-    at (x: Number, y: Number) => pixels[y * width + x]
-    put (x: Number, y: Number, color: Color) => pixels[y * width + x] = pixels[y * width + x].over(color) if 0 <= x < width && 0 <= y < height
-    rows => pixels.chunk(width)
-    blurred (area: (x: Number, y: Number)[], radius: Number) => area.for((x, y) => put(x, y, (-radius..radius).map(dx => at(x + dx, y)).reduce((acc) => acc.mix(., 1 / (2 * radius + 1)))))
+  WhiteSpace := class = spaces: boolean = false, lines: boolean = false, wraps: boolean | anywhere = true {
+    static normal := WhiteSpace{!spaces && !lines && wraps}
+    static nowrap := WhiteSpace{!spaces && !lines && !wraps}
+    static pre := WhiteSpace{spaces && lines && !wraps}
+    static pre_wrap := WhiteSpace{spaces && lines && wraps}
+    static pre_line := WhiteSpace{!spaces && lines && wraps}
+  }
+  Raster := Color[][] + {
+    static blank (width: Number, height: Number) => (0..<height).map((0..<width).map(Color(0, 0, 0, 0)))
+    width => first?.count ?? 0
+    height => count
+    at (x: Number, y: Number) => this[y][x]
+    put (x: Number, y: Number, color: Color) => (this[y][x] = at(x, y).over(color)) if 0 <= x < width && 0 <= y < height
+    blurred (area: Vector[], radius: Number) => [Vector(1, 0), Vector(0, 1)].reduce(acc = this => . -- (along => acc.enumerate.map(row => row.value.enumerate.map(pixel =>
+      area.contains(Vector(pixel.index, row.index))
+        ? (-radius..radius).map(acc.at(pixel.index + . * along.x, row.index + . * along.y) ?? pixel.value).reduce(+) * (1 / (2 * radius + 1))
+        : pixel.value))))
   }
 
-  Shape := class: Ray = origin: Vector = Vector(), size: Vector = Vector(), position: Position = Position(), transform: Transform = Transform(), children: Shape[] = [],
-    fill: Paint?, color: Paint?, font: Font?, stroke: Stroke?, radius: Length[] = [0], effects: Effect[] = [], blend: Blend = normal,
-    spacing: Spacing[] = [], constraints: Constraint[] = [], flow: Flow = vertical, gap: Vector = Vector(),
-    overflow: visible | clip | scroll = visible, scrollbar: shown | hidden = shown, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
-    cursor: default | pointer | text | grab | grabbing | move | wait | none = default, touch: auto | none | pan_x | pan_y = auto,
-    transition: Transition?, animations: Animation[] = [], dynamics: Dynamic[] = [], styles: String[] = [],
-    content: * = None, location: Location?, palette: *?,
-    align: (start | center | end | justify)?, wrap: (normal | none | anywhere)?, white_space: (normal | nowrap | pre | pre_wrap | pre_line)?,
-    truncate: (clip | ellipsis)?, direction: (left-to-right | right-to-left)? {
-    static made = 0
-    id: String = "s" + ((Shape.made += 1) as String)
-    expand => [this], children.map(.expand).flatten(1)
-    parent_in (scene: Shape) => scene.expand{.children.some(. === this)}.first
-    content_height => (children.map(.origin.y + .size.y + .margin.bottom).max ?? origin.y + size.y) - origin.y
-    compounds + (component: Spacing | Constraint | Effect | Field) => component.match
-      Spacing => spacing.push component
-      Constraint => constraints.push component
-      Effect => effects.push component
-      Field => component.applied(this)
-    -- this
-    holding (child: Shape) => children.push child -- this
-    padding => spacing{.from == border} as Edges
-    margin => spacing{.from == shape} as Edges
-    outer => size + margin.total
-    narrowed (narrowing: Program) => narrowing{O: Narrowing}().for(this + .) -- this
-    {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
-    texts => expand{.content is String}
-    typeface => font ?? Font()
-    kept_spaces => (white_space ?? pre_line) is (pre | pre_wrap)
-    kept_lines => (white_space ?? pre_line) is (pre | pre_wrap | pre_line)
-    wraps => wrap != none && (white_space ?? pre_line) is (normal | pre_wrap | pre_line)
-    collapsed => content is String ? (kept_lines ? content.lines : [content.lines.join(" ")]).map(kept_spaces ? . : .words.join(" ")) : []
-    shown_lines => collapsed.map(line => typeface.case.match
-      upper => line.upper_case
-      lower => line.lower_case
-      title => line.title_case
-      * => line)
-    lines (width: Length) => wraps ? shown_lines.map(.words.reduce(acc = [""] => acc.last.width(typeface) + .width(typeface) <= width ? (acc[..<-1], acc.last + " " + .) : (acc, .))).flatten : shown_lines
-    starts (width: Length) => lines(width).reduce(acc = [0] => [acc, acc.last + .length + 1].flatten)
-    shown_transform => animations{.property == "transform"}.last?.value ?? transform
-    in_place => children{.position.kind is (flow | sticky | absolute)}
-    lifted => expand{.position.kind is (fixed | anchored) && .visible}.sort_by(.layer)
-    moved (by: Vector) => (origin = origin + by) -- children.for(.moved(by)) -- this
-    at (point: Vector) => visible ? [children.sort_by(-.layer).map(.at(point)).flatten, this if covers(point)] : []
-    covers (point: Vector) => contains(transform.inverse.applied(point - origin))
-    contains (point: Vector) => 0 <= point.x <= size.x && 0 <= point.y <= size.y
-    intrinsic (width: Length) => content is String ? typeface.size * typeface.line_height * lines(width).count : 0
-    anchor_in (scene: Shape) => position.anchor ?? parent_in(scene)
-    boundary => Outline(from: Vector(), segments: [Vector(size.x, 0), size, Vector(0, size.y)], closed: true)
-  }
-  Position := class = kind: flow | sticky | fixed | absolute | anchored = flow, top: Length?, right: Length?, bottom: Length?, left: Length?, anchor: Shape?, side: Side = bottom {
-    static sticky (top: Length? = 0, bottom: Length?) => Position(sticky, top: top, bottom: bottom)
-    static fixed (top: Length?, right: Length?, bottom: Length?, left: Length?) => Position(fixed, top, right, bottom, left)
-    static absolute (top: Length?, right: Length?, bottom: Length?, left: Length?) => Position(absolute, top, right, bottom, left)
-    static anchored (to: Shape, side: Side = bottom) => Position(anchored, anchor: to, side: side)
-    static inset (kind: fixed | absolute, length: Length = 0) => Position(kind, length, length, length, length)
-    flowing => kind is (flow | sticky)
-  }
-  Edges := class = top: Length = 0px, right: Length = 0px, bottom: Length = 0px, left: Length = 0px {
-    static (spacings: Spacing[]) as (=== Edges) => Edges(spacings.top.sum ?? 0px, spacings.right.sum ?? 0px, spacings.bottom.sum ?? 0px, spacings.left.sum ?? 0px)
+  Side := top (toward: Vector(0, -1)) | right (toward: Vector(1, 0)) | bottom (toward: Vector(0, 1)) | left (toward: Vector(-1, 0))
+  horizontal := left | right
+  vertical := top | bottom
+  all := Side#
+  Edges := class = top: Length? = 0px, right: Length? = 0px, bottom: Length? = 0px, left: Length? = 0px {
+    static (length: Length) as (=== Edges) => Edges(length, length, length, length)
     total => Vector(left + right, top + bottom)
     start => Vector(left, top)
   }
-  Box := class: Shape
-  Ball := class: Shape {
-    radius => size.x / 2
-    contains (point: Vector) => (point - size * (1 / 2)).length <= radius
-  }
-  Polygon := class: Shape = points: Vector[] {
-    boundary => Outline(from: points.first, segments: points.rest, closed: true)
-    contains (point: Vector) => points.zip([points.rest, points.first]).filter((a, b) => (a.y > point.y) != (b.y > point.y) && point.x < a.x + (point.y - a.y) * (b.x - a.x) / (b.y - a.y)).count.odd
-  }
-  Circle := class: Ball = centre: Point {
-    outline (count: Number) => (0..<count).map(Polar(centre, radius, turn: ., of: count)).loop
-  }
-  Polar := class = centre: Point, radius: Number, turn: Number, of: Number
-  Segment := Line | Quadratic | Cubic | Arc
+  Position := class = kind: flow | sticky | fixed | absolute | anchored = flow, anchor: Shape?, side: Side = bottom
+  Flowing := Position{kind is (flow | sticky)}
+  Sticky := Position{kind == sticky}
+  Fixed := Position{kind == fixed}
+  Absolute := Position{kind == absolute}
+  Anchored := Position{kind == anchored}
+
+  Segment := Vector | Quadratic | Cubic | Arc
   Quadratic := class = control: Vector, to: Vector
   Cubic := class = first: Vector, second: Vector, to: Vector
-  Arc := class = radius: Vector, rotation: Number, large: boolean, sweep: boolean, to: Vector
-  Outline := class: Shape = from: Vector, segments: Segment[], closed: boolean = false {
-    points => [from, segments.map(.match
-      Quadratic => (1..16).map(t => Bezier([.previous, .control, .to], t / 16))
-      Cubic => (1..16).map(t => Bezier([.previous, .first, .second, .to], t / 16))
-      Arc => (1..16).map(t => .previous + (.to - .previous) * (t / 16))
-      * => [.]
-    ).flatten]
-    contains (point: Vector) => Polygon(points: points).contains(point)
-    boundary => this
+  Arc := class = radius: Vector, rotation: Angle = 0 turn, large: boolean = false, sweep: boolean = false, to: Vector {
+    unit => (Transform.rotate(rotation) * Transform.scale(radius)).inverse
+    centre (a: Vector, b: Vector) => (b - a) * (1 / 2) -- (half => a + half + Vector(-half.y, half.x) * √((1 / half.norm ^ 2 - 1) max 0) * (large == sweep ? -1 : 1))
+    bent (a: Vector, b: Vector, centre: Vector, radius: Number) => (1..16).map(t => a.mix(b, t / 16) -- (centre + (. - centre) * (radius / (. - centre).norm)))
+    points (from: Vector) => (unit.applied(from), unit.applied(to)) -- ((a, b) => ((b - a).norm / 2 max 1, centre(a, b), a.mix(b, 1 / 2)) -- ((r, c, mid) =>
+      (large ? (c + (c - mid) * (r / (c - mid).norm)) -- (far => [bent(a, far, c, r), bent(far, b, c, r)].flatten) : bent(a, b, c, r)).map(unit.inverse.applied(.))))
   }
-  Bezier := (points: Vector[], t: Number) => points.count == 1 ? points.first : Bezier(points.zip(points.rest).map((a, b) => a + (b - a) * t), t)
+  Bezier := (points: Vector[], t: Number) => points.count == 1 ? points.first : Bezier(points.zip(points.rest).map((a, b) => a.mix(b, t)), t)
+  Outline := Segment[] + {
+    points => map(.match
+      Quadratic => (1..16).map(t => Bezier([.previous.to, .control, .to], t / 16))
+      Cubic => (1..16).map(t => Bezier([.previous.to, .first, .second, .to], t / 16))
+      Arc => .points(.previous.to)
+      * => [.to]
+    ).flatten
+    edges => points -- .zip([.rest, (.first if this is Loop)].flatten)
+    contains (point: Vector) => points -- .zip([.rest, .first].flatten){(.0.y > point.y) != (.1.y > point.y) && point.x < .0.x + (point.y - .0.y) * (.1.x - .0.x) / (.1.y - .0.y)}.count.odd
+  }
+  rectangle (size: Vector) => [Vector(), Vector(size.x, 0), size, Vector(0, size.y)].loop
+  ellipse (size: Vector) => size * (1 / 2) -- (r => [Vector(size.x, r.y), Arc(r, to: Vector(0, r.y)), Arc(r, to: Vector(size.x, r.y))].loop)
 
-  Flow := enum vertical | inline | grid | layered
-  Side := enum all | top | bottom | left | right | horizontal | vertical
-  Align := enum start | center | end | between | around | stretch | middle
+  Shape := class: Hierarchy = origin: Vector = Vector(), size: Vector = Vector(), width: (Length | Number | Stops)?, height: (Length | Number | Stops)?, aspect: Number?,
+    position: Position = Position(), inset: Edges = Edges(None, None, None, None), padding: Edges = Edges(), margin: Edges = Edges(),
+    transform: Transform = Transform.identity, boundary: Outline = rectangle(size),
+    flow: block | inline | grid | layered = block, gap: Vector = Vector(), columns: Number = 1, wrap: boolean = false,
+    align: (start | center | end | between | around | stretch | middle | justify)? = parent?.align,
+    fill: Paint?, color: Paint? = parent?.color, font: Font = parent ? (parent.font ~~ .size = parent.font_size) : Font.base, stroke: Stroke?, radius: Length[] = [0px],
+    effects: Effect[] = [], blend: normal | multiply | screen | overlay | darken | lighten | difference = normal,
+    overflow: visible | clip | scroll = visible, scrollbar: shown | hidden = shown, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true,
+    cursor: default | pointer | text | grab | grabbing | move | wait | none = default, touch: auto | none | pan_x | pan_y = auto,
+    transition: Transition?, styles: String[] | Dynamic = [], content: * = None, location: Location?, palette: *? = parent?.palette,
+    white_space: WhiteSpace = parent?.white_space ?? WhiteSpace.pre_line, case: Section? = parent?.case,
+    truncate: (clip | ellipsis)? = parent?.truncate, direction: (left-to-right | right-to-left)? = parent?.direction, solved: boolean = false {
+    id: Location => parent ? parent.id / (parent.children.enumerate{.value === this}.first.index as String) : @scene
+    root => parent?.root ?? this
+    em => parent?.font_size ?? Font.base.size
+    font_size => with Font.inherited = em { font.size as px }
+    at: Vector => position.kind.match
+      fixed => origin
+      anchored => (position.anchor ?? parent) -- (.at + .size * position.side.toward.map(. max 0) + size * position.side.toward.map(. min 0))
+      sticky => (parent.at + origin - parent.scrolled) -- Vector(.x, .y max (inset.top ?? 0px) min (parent.at.y + parent.size.y - size.y))
+      * => parent ? parent.at + origin - parent.scrolled : origin
+    outer => size + margin.total
+    content_height => children.map(.origin.y + .size.y + .margin.bottom).max ?? size.y
+    texts => reachable{.content is String}
+    in_place => children{.position.kind is (flow | sticky | absolute)}
+    lifted => reachable{.position.kind is (fixed | anchored) && .visible}.sort_by(.layer)
+    rectangular => boundary == rectangle(size)
+    contains (point: Vector) => boundary.contains(transform.inverse.applied(point))
+    painted (paint: Paint?) => paint is Section ? paint(this) : paint
+    displayed (name: String) => transition ? this.`name`.history.last -- (.previous?.value.mix(.value, transition.easing(((Time.now - .when) / transition.duration) min 1)) ?? .value) : this.`name`
 
-  Spacing := class = amount: Vector = Vector(), from: From = border, sides: Side = all {
-    static From := enum border | shape
-    top => sides is (all | top | vertical) ? Pixels(amount.y) : 0px
-    bottom => sides is (all | bottom | vertical) ? Pixels(amount.y) : 0px
-    left => sides is (all | left | horizontal) ? Pixels(amount.x) : 0px
-    right => sides is (all | right | horizontal) ? Pixels(amount.x) : 0px
-  }
-  Pixels := (length: Length | Number) => length is Number ? length * 1px : length as px
-  Constraint := class = dimension: "x" | "y" | "z", least: Length?, most: Length?, share: (Number | Interpolated | Steps | Breakpoint[])?, align: Align?, aspect: Number?, columns: Number?, wrap: boolean = false {
-    admits (length: Length) => (least == None || least <= length) && (most == None || length <= most)
-    responsive => share is (Interpolated | Steps | Breakpoint[])
-    stops => share is Breakpoint[] ? (share as Steps).sorted : share.sorted
-  }
-  Breakpoint := class = width: Length, share: Number {
-    -> (other: Breakpoint) => Interpolated([this, other])
-  }
-  Interpolated := class = stops: Breakpoint[] {
-    -> (other: Breakpoint) => Interpolated([stops, other].flatten)
-    sorted => stops.sort_by(.width)
-    at (width: Length) => sorted -- (width <= .first.width ? .first.share
-      : .last.width <= width ? .last.share
-      : .zip(.rest){.0.width <= width <= .1.width}.first -- (.0.share + (.1.share - .0.share) * (width - .0.width) / (.1.width - .0.width)))
-  }
-  Steps := class = stops: Breakpoint[] {
-    static (stops: Breakpoint[]) as (=== Steps) => Steps(stops)
-    sorted => stops.sort_by(.width)
-    at (width: Length) => sorted{.width <= width}.last?.share ?? sorted.first.share
-  }
+    lines (width: Length = ∞) => (content as String) -- (text => (white_space.lines ? text.split(\n) : [text]).map(paragraph =>
+      white_space.wraps ? (paragraph ~= (line: ((!Char.Blank)[]{length > 0}, Char.Blank[])[]{.width(font) <= width})[]).line : [paragraph]
+    ).flatten.map(white_space.spaces ? . : .{!(. is Char.Blank && .previous is Char.Blank)}))
+    intrinsic (width: Length) => content is String ? font.size * font.line_height * lines(width).count : 0px
 
-  Relation := enum against | next_to | above | below | inside
-  Placed := class = item: Shape, relation: Relation, other: Shape
-  related (item, relation, other) => Placed(item, relation, other)
+    compounds + (effect: Effect) => (effects ,= effect) -- this
+    narrowed (narrowing: Program) => [narrowing{O: Settings}()].flatten -- (writes => writes.every(. is Program) ? writes.for(.entered(this, None)) -- this : reachable.filter(narrowing.entered(., None)))
+    {this}{{literal narrowing}} ^punctuation => narrowed(Program(code: external ** narrowing))
 
-  Solver := class = available: Vector, scrolled: Length = 0 {
-    resolved (length: Length?, against: Length) => length == None ? None : Compiler.reduced(Relative(length, against, available), Solving)
-    fraction (share, width: Length) => share.match
-      Interpolated | Steps => share.at(width)
-      Breakpoint[] => (share as Steps).at(width)
-      Breakpoint => share.share
-      * => share
-    length (shape: Shape, width: Length) => shape.constraints{.dimension == "x"}.reduce(acc = width => (
-      .share ? fraction(.share, width) * width : acc
-    ) max (resolved(.least, width) ?? 0) min (resolved(.most, width) ?? ∞))
-    height (shape: Shape, content: Length) => shape.constraints{.dimension == "y"}.reduce(acc = content => acc max (resolved(.least, available.y) ?? 0) min (resolved(.most, available.y) ?? ∞))
-
-    cascade (shape: Shape, above: Shape? = None) => shape -- {
-      font = above?.font && font ? above.font.merged(font) : font ?? above?.font
-      color = color is Inherited || color == None ? above?.color : color
-      fill = fill is Inherited ? above?.color ?? fill : fill
-      palette = palette ?? above?.palette
-      align = align ?? above?.align
-      wrap = wrap ?? above?.wrap
-      white_space = white_space ?? above?.white_space
-      truncate = truncate ?? above?.truncate
-      direction = direction ?? above?.direction
-      children.for(cascade(., shape))
-    }
-    solve (shape: Shape) => place(cascade(shape), Vector(), available.x) -- (scene => scene.expand{.position.kind == anchored}.for(positioned(., .parent_in(scene))) -- stuck(scene))
-    place (shape: Shape, from: Vector, width: Length) => shape -- {
-      own = length(shape, width - margin.left - margin.right)
-      origin = from + margin.start
-      inside = origin + padding.start - Vector(0, shape.scrolled.y)
-      room = own - padding.left - padding.right
-      flowing = children{.position.flowing}
-      flow.match
-        grid => flowing.chunk(constraints.columns.last ?? 1).reduce(acc = inside => (
-          .map((child, i) => place(child, Vector(inside.x + i * (room / .count + gap.x), acc.y), room / .count - gap.x)),
-          Vector(inside.x, acc.y + .outer.y.max + gap.y)
-        ).last)
-        layered => flowing.for(place(., inside, room))
-        * => flowing.reduce(acc = (at: inside, row: 0) => {
-          child_width = length(., room)
-          offset = .constraints.align.last.match
-            center => (room - child_width) / 2
-            end => room - child_width
-            * => 0
-          continues = flow == inline && (!constraints.wrap.last || acc.at.x + child_width <= inside.x + room)
-          y = continues ? acc.at.y : acc.at.y + acc.row + (acc.row > 0 ? gap.y : 0)
-          x = continues ? acc.at.x : inside.x
-          place(., Vector(x + offset, y), room) -- (at: Vector(x + .outer.x + gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
-        })
-      size = Vector(own, constraints.aspect.last ? own / constraints.aspect.last
-        : height(shape, (flowing.map(.origin.y + .size.y + .margin.bottom).max ?? inside.y + intrinsic(room)) - origin.y + padding.bottom))
-      children{.position.kind is (fixed | absolute)}.for(positioned(., shape))
-    }
-    positioned (shape: Shape, parent: Shape) => shape -- {
-      frame = position.kind.match
-        fixed => (at: Vector(0, scrolled), size: available)
-        anchored => (position.anchor ?? parent) -- (at: .origin, size: .size)
-        * => (at: parent.origin, size: parent.size)
-      width = position.left != None && position.right != None ? frame.size.x - resolved(position.left, frame.size.x) - resolved(position.right, frame.size.x) : frame.size.x
-      place(shape, frame.at, width)
-      size = Vector(size.x, frame.size.y - resolved(position.top, frame.size.y) - resolved(position.bottom, frame.size.y)) if position.top != None && position.bottom != None
-      x = position.kind == anchored ? position.side.match
-          Side.right => frame.size.x
-          Side.left => -size.x
-          * => 0
-        : position.left != None ? resolved(position.left, frame.size.x) : position.right != None ? frame.size.x - resolved(position.right, frame.size.x) - size.x : 0
-      y = position.kind == anchored ? position.side.match
-          Side.top => -size.y
-          Side.bottom => frame.size.y
-          * => 0
-        : position.top != None ? resolved(position.top, frame.size.y) : position.bottom != None ? frame.size.y - resolved(position.bottom, frame.size.y) - size.y : 0
-      moved(Vector(x, y))
-    }
-    stuck (scene: Shape) => scene.expand{.position.kind == sticky}.for(shape => shape.parent_in(scene) -- (parent =>
-      shape.moved(Vector(0, (shape.origin.y max (scrolled + resolved(shape.position.top ?? 0, available.y)) min (parent.origin.y + parent.size.y - shape.size.y)) - shape.origin.y)) if parent
-    )) -- scene
+    measured (along: "width" | "height", room: Length, content: Length = room) => this.`along` -- (given =>
+      given is Stops ? given.at(room) * room : given is Number ? given * room : given ?? content
+    ) -- (length => fields[along].type -- (length max (.least ?? length) min (.most ?? length)))
+    solve => arranged -- (solved = true) -- this
+    laid (room: Length) => with Font.inherited = em {
+      size = Vector(measured("width", room - margin.left - margin.right), size.y)
+      arranged
+    } -- this
+    arranged => with Font.inherited = em {
+      inner = size.x - padding.left - padding.right
+      flowing = children{.position is Flowing}
+      bottom = flow.match
+        grid => flowing.chunk(columns).reduce(acc = padding.top => .enumerate.for(cell =>
+            cell.value.laid(inner / columns - gap.x) -- (cell.value.origin = Vector(padding.left + cell.index * (inner / columns + gap.x), acc) + cell.value.margin.start)
+          ) -- acc + .map(.outer.y).max + gap.y)
+        layered => flowing.for(.laid(inner) -- (.origin = padding.start + .margin.start)) -- padding.top + flowing.map(.outer.y).max
+        * => flowing.reduce(acc = (at: padding.start, row: 0px) => {
+          .laid(inner)
+          continues = flow == inline && (!wrap || acc.at.x + .outer.x <= padding.left + inner)
+          y = continues ? acc.at.y : acc.at.y + acc.row + (acc.row > 0px ? gap.y : 0px)
+          x = continues ? acc.at.x : padding.left + align.match
+            center => (inner - .outer.x) / 2
+            end => inner - .outer.x
+            * => 0px
+          .origin = Vector(x, y) + .margin.start
+          (at: Vector(x + .outer.x + gap.x, y), row: continues ? acc.row max .outer.y : .outer.y)
+        }) -- (.at.y + .row)
+      (size = Vector(size.x, aspect ? size.x / aspect : measured("height", parent.size.y, (flowing.empty ? padding.top + intrinsic(inner) : bottom) + padding.bottom))) if parent
+      children{!(.position is Flowing)}.for(.positioned)
+    } -- this
+    positioned => (position.kind == fixed ? root.size : parent.size) -- (frame => {
+      laid(inset.left != None && inset.right != None ? frame.x - inset.left - inset.right : frame.x)
+      (size = Vector(size.x, frame.y - inset.top - inset.bottom)) if inset.top != None && inset.bottom != None
+      origin = Vector(inset.left ?? (inset.right != None ? frame.x - inset.right - size.x : 0px), inset.top ?? (inset.bottom != None ? frame.y - inset.bottom - size.y : 0px))
+    }) -- this
   }
+  Box := Shape
+  Ball := Shape{boundary == ellipse(size)}
+  Polygon := Shape{boundary is Vector[]}
 
-  Unsolved := class = shape: Shape, available: Vector, scrolled: Length = 0
-  Solved := class = shape: Shape, scrolled: Length = 0
-  Relative := class = length: Length, against: Length, available: Vector
   Solving := {
-    {unsolved: Unsolved} => Solved(Solver(available: unsolved.available, scrolled: unsolved.scrolled).solve(unsolved.shape), unsolved.scrolled)
-    {relative: Relative{length.unit == %}} => relative.against * relative.length.amount / 100
-    {relative: Relative{length.unit == vw}} => relative.available.x * relative.length.amount / 100
-    {relative: Relative{length.unit == vh}} => relative.available.y * relative.length.amount / 100
-    {relative: Relative} => Pixels(relative.length)
+    {shape: Shape{!parent && !solved}} => shape.solve
   }
 
   Transition := class = duration: Quantity.Temporal, easing: Easing = ease
-  Animation<T> := class = from: T, to: T, duration: Time, easing: Easing = ease, delay: Time = 0, repeat: Number | ∞ = 1, started: Time = Time.now, property: String = "transform" {
-    at (time: Time) => from + (to - from) * easing((time - started - delay) / duration min 1 max 0)
-    value => dynamically at(Time.now)
-  }
-  Dynamic := class = reads: String[], compiled: Program, target: String?
-  Field := class = applied: (target) => *
   Settings := {
     {a} & {b} => (a, b)
     {a}, {b} => (a, b)
-    {literal name} == {value} => Field(target => target.`name` = value)
-    {literal name}: {value} => Field(target => target.`name` = value)
-  }
-  Narrowing := Settings + {
-    width == {share: Number{0 <= . <= 1} | Interpolated | Steps | Breakpoint[]} => Constraint("x", share: share)
-    width == {length: Length?} => Constraint("x", least: length, most: length)
-    width <= {length: Length} => Constraint("x", most: length)
-    width >= {length: Length} => Constraint("x", least: length)
-    height == {length: Length?} => Constraint("y", least: length, most: length)
-    height <= {length: Length} => Constraint("y", most: length)
-    height >= {length: Length} => Constraint("y", least: length)
-    min_height == {length: Length?} => Constraint("y", least: length)
-    max_width == {length: Length?} => Constraint("x", most: length)
-    aspect == {ratio: Number} => Constraint("x", aspect: ratio)
-    gap == {length: Length} => Field(shape => shape.gap = Vector(length, length))
-    padding == {length: Length} => Spacing(Vector(length, length))
-    padding == ({y: Length}, {x: Length}) => Spacing(Vector(x, y))
-    margin == {length: Length} => Spacing(Vector(length, length), from: shape)
-    margin_block == {length: Length} => Spacing(Vector(0, length), from: shape, sides: vertical)
-    margin_inline == {length: Length} => Spacing(Vector(length, 0), from: shape, sides: horizontal)
-    radius == {length: Length} => Field(shape => shape.radius = [length])
-    font_size == {size: Length} => Field(shape => shape.font = (shape.font ?? Font()) ~~ .size = size)
-    font_weight == {weight: Number} => Field(shape => shape.font = (shape.font ?? Font()) ~~ .weight = weight)
-    white_space == {mode: normal | nowrap | pre | pre_wrap | pre_line} => Field(shape => shape.white_space = mode)
-    wrap == {mode: normal | none | anywhere} => Field(shape => shape.wrap = mode)
-    align == {side: start | center | end | justify} => Field(shape => shape.align = side)
-    transform == translate({offset}) => Field(shape => shape.transform = Transform.translate(Vector(offset.x ?? 0, offset.y ?? 0)))
-    transform == scale({factor: Number}) => Field(shape => shape.transform = Transform.scale(Vector(factor, factor, 1)))
-    animated == {duration: Quantity.Temporal} {easing: Easing} => Field(shape => shape.transition = Transition(duration, easing))
-    animated == {duration: Quantity.Temporal?} => Field(shape => shape.transition = duration ? Transition(duration) : None)
-    position == {kind: flow | sticky | fixed | absolute | anchored} => Field(shape => shape.position.kind = kind)
-    top == {length: Length} => Field(shape => shape.position.top = length)
-    right == {length: Length} => Field(shape => shape.position.right = length)
-    bottom == {length: Length} => Field(shape => shape.position.bottom = length)
-    left == {length: Length} => Field(shape => shape.position.left = length)
-    inset == {length: Length} => Field(shape => shape.position ~~ (.top = length) ~~ (.right = length) ~~ (.bottom = length) ~~ (.left = length) -- (shape.position = .))
+    {literal path} == {value} => { `path` = value }
+    {literal path}: {value} => { `path` = value }
+    {literal path} <= {most} => { `path`: `path`.type{<= most} }
+    {literal path} >= {least} => { `path`: `path`.type{>= least} }
   }
   Easing := (progress: Probability): Probability
   linear: Easing = (t) => t
   ease: Easing = (t) => t * t * (3 - 2 * t)
   ease_in: Easing = (t) => t * t
   ease_out: Easing = (t) => t * (2 - t)
+  step: Easing = (t) => t < 1 ? 0 : 1
 }
 
-currentColor := Geometry.Inherited()
+currentColor := .color
 
 Node &+= {
-  right-to-left center ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: center)], children: [this])
-  right-to-left right ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: end)], children: [this])
-  right-to-left left ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: start)], children: [this])
-  right-to-left between ^keyword => Geometry.Box(constraints: [Geometry.Constraint("x", align: between)], children: [this])
-  right-to-left middle ^keyword => Geometry.Box(constraints: [Geometry.Constraint("y", align: middle)], children: [this])
+  right-to-left {align: start | center | end | between | middle} ^keyword => Geometry.Box(align: align, children: [this])
 }
 
-Number &+= {
-  right-to-left xs ^keyword => Geometry.Breakpoint(0px, this)
-  right-to-left sm ^keyword => Geometry.Breakpoint(576px, this)
-  right-to-left md ^keyword => Geometry.Breakpoint(768px, this)
-  right-to-left lg ^keyword => Geometry.Breakpoint(992px, this)
-  right-to-left xl ^keyword => Geometry.Breakpoint(1200px, this)
+[xs: 0px, sm: 576px, md: 768px, lg: 992px, xl: 1200px].for (word, width) => {
+  Number &+= {
+    right-to-left `word` ^keyword => Geometry.Stop(width, this)
+  }
+}
+
+String &+= {
+  width (font: Geometry.Font) => map(.columns).sum * font.size / 2
 }
 
 Unit(name: "pixel", symbol: "px")
 Unit(name: "point", symbol: "pt").multiple 4 / 3, px
-Unit(name: "em").multiple 16, px
+Unit(name: "em")
+  .convert (x: Number) => x * (Geometry.Font.inherited as px), px
 Unit(name: "rem").multiple 16, px
-Unit(name: "viewport width", symbol: "vw")
-Unit(name: "viewport height", symbol: "vh")
 Unit(name: "cell")
-Unit(name: "percent", symbol: "%")

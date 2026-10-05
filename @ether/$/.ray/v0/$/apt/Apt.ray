@@ -1,0 +1,15 @@
+// Binary and source package control files (https://www.debian.org/doc/debian-policy/ch-controlfields.html)
+Apt := Package("control" | ".apt", ecosystem: "apt", kinds: Debian.kinds, native: true, versioned: Debian.Version,
+  level: {
+    {text: String} => text as Debian.Control
+    {control: Debian.Control} => control.paragraphs -- (all => all.first -- (head => Project(name: head["Package"] ?? head["Source"], version: head["Version"] as Debian.Version, description: head["Description"], manager: Apt,
+      dependencies: all.map(paragraph => Debian.kinds.map(kind => paragraph[kind] ? (paragraph[kind] as Debian.Relations).dependencies(kind) : [])).flatten)))
+  },
+  written: { {writing: Language.Writing{value is Project}} => writing.value -- (project =>
+    "Package: ", project.name, \n, ("Version: ", project.version as String, \n) if project.version,
+    Debian.kinds.filter(kind => project.dependencies.some(.kind == kind)).map(kind => kind, ": ", project.dependencies{.kind == kind}.map(dependency =>
+      [dependency, dependency.alternatives].flatten.map(.name, (" (", .version.operator, " ", .version.version.text, ")") if .version?.operator).join(" | ")).join(", "), \n),
+    ("Description: ", project.description.lines.first, project.description.lines.rest.map(\n, " ", .trimmed.empty ? "." : .), \n) if project.description) },
+  available: name => Process(command: "apt-cache", arguments: ["madison", name]).stdout.lines{.nonempty}.map(.split("|")[1].trimmed),
+  fetched: (name, version, into) => Process(command: "sh", arguments: ["-c", "mkdir -p " + Shell.quoted(into.sandboxed) + " && cd " + Shell.quoted(into.sandboxed)
+    + " && apt-get download " + Shell.quoted(name + "=" + version) + " && dpkg-deb -x " + Shell.quoted(name) + "_*.deb . && rm -f ./*.deb"]))

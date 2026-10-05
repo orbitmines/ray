@@ -245,3 +245,10 @@ entry stays as the record of the question, and this section overrides it.
 - `.index` is available by default (the position); `- Ray` excludes the Ray, so `.index` is the entry's own index (see the Almanac).
 - `Reference~simple(…)` is right for alternative renderings.
 - Authors are written `@name`. `@ether` is the Ether organization (they are the same thing). Names are reserved and mapped ignoring case.
+
+## Decided 2026-10-06 (renderers are languages from outside)
+- The web renderer, `Language.Web`, is the project `$/web`. It renders a page into `HTML`, `CSS` and `JS` values (`Language.Web.Markup`, `Language.Web.Style`, `Language.Web.Script`), and those languages are their own projects, `$/html`, `$/css` and `$/js`, with `$/json` for structured data.
+- The terminal renderer, `Language.TUI`, is the project `$/tui`. It writes through `$/ansi` (the escape sequences, the xterm 256-colour and Windows Terminal levels, `Terminal`), and draws images through `$/sixel` and `$/kitty`.
+- `Language.Direct`, Ray's own raster drawing, stays in the core UI. The formats it reads are outside: fonts through `$.opentype`, images through `$.png` (with `$/zlib` and `$/deflate` under it).
+- The core UI names none of them. A frontend picks its renderer by `$.web` / `$.tui`, or by depending on the project.
+

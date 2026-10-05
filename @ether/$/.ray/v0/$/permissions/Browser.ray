@@ -1,0 +1,24 @@
+// Permissions (https://w3c.github.io/permissions/) and Permissions Policy (https://w3c.github.io/webappsec-permissions-policy/)
+Browser := class: Language {
+  static extensions = ".permissions"
+
+  // Powerful feature names (https://w3c.github.io/permissions-registry/)
+  static Names = { storage: "persistent-storage", notifications: "notifications", camera: "camera", microphone: "microphone", geolocation: "geolocation", wake_lock: "screen-wake-lock" }
+  static named (grant: Grant) => grant.target == Device.Capability.clipboard ? (grant.access.writes ? "clipboard-write" : "clipboard-read") : Names[grant.target.name]
+  static capability (name: String) => name ~= ⊢"clipboard-" ? Device.Capability.clipboard : Device.Capability#{Names[.name] == name}.first
+
+  // Permissions-Policy header: a feature and its allowlist (https://w3c.github.io/webappsec-permissions-policy/#structured-header-serialization)
+  static Policy := class ((entries: (feature: HTTP.Token, "=", allowlist: "*" | ("(", origins: ("self" | ("\"", (!"\"")[], "\""))[].join(" "), ")")))[].join(", ")) {
+    static allowed (level: Accessor.Permission) => level.resolved == Accessor.Permission.public ? "*"
+      : level.resolved is (Accessor.Permission.protected | Accessor.Permission.managed) ? "(self " + level.at.map("\"" + . as String + "\"").join(" ") + ")"
+      : "(self)"
+  }
+
+  level := {
+    {policy: Policy} => policy.entries.map(entry => Grant(Access(who: entry.allowlist == "*" ? Accessor.Permission.public : entry.origins.count > 1 ? Accessor.Permission.protected : Accessor.Permission.localhost,
+      method: entry.feature == "clipboard-write" ? `=` : Access.Reading), target: capability(entry.feature)))
+  }
+  written := {
+    {writing: Language.Writing{value is Grant[]}} => Policy(entries: writing.value.map((feature: named(.), allowlist: Policy.allowed(.access.who))))
+  }
+}

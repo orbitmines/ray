@@ -1,0 +1,2 @@
+// Bincode's wire format (https://github.com/bincode-org/bincode/blob/trunk/docs/spec.md)
+Bincode := Language(".bincode")

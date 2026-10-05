@@ -50,30 +50,30 @@ Compiler := class {
   }
 
   formats := {
-    ({kept: Backend{fidelity == Backend.Fidelity.lossless}} | {other: Backend}).read({source}) => kept.read(source)
-    {history: History{location && stored.some(.fidelity == Backend.Fidelity.snapshot)}}.checkout({label}) => history.pinned(label) -- (pinned =>
-      history.stored.find(.fidelity == Backend.Fidelity.snapshot).tree_at(history.location, pinned) -- (tree => tree
-        ? history.at(pinned).definitions.map(d => (d.id, Backend.read_file(tree.at(d.path_in(history.at(pinned))))))#
+    ({kept: Language{fidelity == Language.Fidelity.lossless}} | {other: Language}).read({source}) => kept.read(source)
+    {history: History{location && stored.some(.fidelity == Language.Fidelity.snapshot)}}.checkout({label}) => history.pinned(label) -- (pinned =>
+      history.stored.find(.fidelity == Language.Fidelity.snapshot).tree_at(history.location, pinned) -- (tree => tree
+        ? history.at(pinned).definitions.map(d => (d.id, History.read_file(tree.at(d.path_in(history.at(pinned))))))#
         : history.at(pinned).value))
   }
 
   per_object := {
-    {project: Ray.history.Project{file.content.count > 2^20 && history.definitions.count > 1}}.stored_file => project.referenced
-    {project: Ray.history.Project{file.content.count > 2^20 && history.definitions.count > 1}}.object_files => project.objects
+    {written: History.Written{file.content.count > 2^20 && history.definitions.count > 1}}.stored_file => written.referenced
+    {written: History.Written{file.content.count > 2^20 && history.definitions.count > 1}}.object_files => written.objects
   }
 
   cached := {
-    {project: Ray.history.Project}.cache_files => project.caches
+    {written: History.Written}.cache_files => written.caches
     {history: History{cache}}.checkout({label}) => history.pinned(label) -- (pinned => history.cache.nearest(history, pinned) -- (hit => hit
       ? history.at(pinned).ordered{c => !hit.ancestry.some(=== c)}.reduce(held = history.cache[hit.id] => .applied(held))
       : history.at(pinned).value))
   }
 
   delta := {
-    {body: Ray.history.Body{operation.kind == Operation.Kind.change && operation.before != None && Ray.history.edit(operation.before, operation.after).count < Language.ray.write(operation.after).count}} => Ray.history.edit(body.operation.before, body.operation.after)
+    {body: History.Body{operation.kind == Operation.Kind.change && operation.before != None && History.edit(operation.before, operation.after).count < Language.ray.write(operation.after).count}} => History.edit(body.operation.before, body.operation.after)
   }
 
-  stored := formats + per_object + cached + delta + Git.packed + Mercurial.deltas + Fossil.deltas + Pijul.stored
+  stored := formats + per_object + cached + delta
 
   levels => [none, default, folding, logic, formats, per_object, cached, delta, stored]
 

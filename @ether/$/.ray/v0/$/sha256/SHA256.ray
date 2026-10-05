@@ -1,0 +1,4 @@
+// Secure Hash Standard, SHA-256 (https://csrc.nist.gov/pubs/fips/180-4/upd1/final)
+SHA256 := class: Encoding.Digest {
+  static extensions = ".sha256"
+}

@@ -1,0 +1,6 @@
+// Zstandard Compression and the 'application/zstd' Media Type (https://www.rfc-editor.org/rfc/rfc8878)
+Zstd := class (magic: Binary³²{== 0xFD2FB528}, frames: Byte[]) {
+  bytes: Byte[] => language.read(this)
+
+  static language = Language(".zst" | ".zstd")
+}

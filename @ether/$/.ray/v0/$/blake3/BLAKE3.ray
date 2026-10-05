@@ -1,0 +1,4 @@
+// BLAKE3 (https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/blake3.pdf)
+BLAKE3 := class: Encoding.Digest {
+  static extensions = ".blake3"
+}

@@ -1,0 +1,5 @@
+// SQL text.
+
+mark ^keyword := external global
+
+unless SQL.quoted("it's") == "'it''s'" { INFO@mark `DB14 a quote in SQL text is not doubled` }

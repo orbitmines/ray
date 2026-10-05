@@ -1,0 +1,34 @@
+// HTML fragments written inline, and the HTML language writing them.
+
+mark ^keyword := external global
+
+who := "Ray"
+by_hand := HTML.Element("p", [("class", "note")], [HTML.Text("hi")])
+inline_p := @html <p class="note">hi</p>
+unless (inline_p as HTML) == (by_hand as HTML) { INFO@mark `UI190 an inline html fragment is not the element built by hand` }
+unless inline_p is HTML.Element && inline_p.tag == "p" { INFO@mark `UI191 an inline html fragment is not an element` }
+holed := @html <p id={who}>{who}</p>
+unless holed.id == "Ray" && holed.children.first.text == "Ray" { INFO@mark `UI192 a hole does not splice its value` }
+unless (@html <p id="x-{who}" />).id == "x-Ray" { INFO@mark `UI193 a hole inside a quoted attribute is not spliced into the text` }
+unless (@html <ul>{["a", "b", "c"].map(item => @html <li>{item}</li>)}</ul>).children.count == 3 { INFO@mark `UI194 a list hole does not splice children` }
+unless (@html <p>a \{b}</p>).children.first.text == "a {b}" { INFO@mark `UI195 a backslashed brace is not a literal brace` }
+unless (@html <input disabled={true} />).attributes.contains(("disabled", "")) { INFO@mark `UI196 a true attribute is not present` }
+unless (@html <input disabled={false} />).attributes.empty { INFO@mark `UI197 a false attribute is present` }
+commented := @html <p><!-- note -->a</p>
+unless commented.children.count == 2 && commented.children.first is HTML.Comment && commented.children.first.text == " note " { INFO@mark `UI198 an html comment is not kept as a child` }
+extent := [@html <br />, 2]
+unless extent.count == 2 && extent.first.tag == "br" && extent.last == 2 { INFO@mark `UI199 an html fragment does not stop where its grammar stops` }
+
+unless ((@html { <p class="note">hi</p> }) as HTML) == (by_hand as HTML) { INFO@mark `UI214 an html block holding one element is not that element` }
+html_block := @html {
+  <p>{who}</p>
+  <!-- note -->
+  {["a", "b"].map(item => @html <li>{item}</li>)}
+  <br />
+}
+unless html_block.count == 4 && html_block.first.children.first.text == "Ray" && html_block[1] is HTML.Comment && html_block.last.tag == "br" { INFO@mark `UI215 an html block over several lines is not its elements, comments and holes in order` }
+unless html_block[2].count == 2 && html_block[2].first.tag == "li" { INFO@mark `UI216 a hole on its own line in an html block is not its value` }
+unless [@html { <br /> }, 2].count == 2 { INFO@mark `UI221 an html block does not stop at its closing brace` }
+unless (@html { }).empty { INFO@mark `UI222 an empty block is not empty` }
+unless (commented as HTML) == "<p><!-- note -->a</p>" { INFO@mark `UI236 an html comment is not written into the html` }
+unless HTML.escaped("<a & b>") == "&lt;a &amp; b&gt;" { INFO@mark `UI14 text is not escaped` }

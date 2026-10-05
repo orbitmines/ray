@@ -1,0 +1,4 @@
+// The MD5 Message-Digest Algorithm (https://www.rfc-editor.org/rfc/rfc1321)
+MD5 := class: Encoding.Digest {
+  static extensions = ".md5"
+}

@@ -1,0 +1,485 @@
+Language.Web := class: Language {
+  static extensions = ".web"
+  static space = Geometry.Space.plane
+  Geometry.Shape &+= {
+    dom => id.segments.join("-")
+  }
+  Markup := class {
+    Page := class = shape: Geometry.Shape
+    Head := class = page: *
+    Meta := class = name: String, content: *
+    Named := class = shape: Geometry.Shape
+    Described := class = shape: Geometry.Shape
+    Entry := class = chosen: Choice
+    Inner := class = shape: Geometry.Shape
+    Spans := class = shape: Geometry.Shape
+    Span := class = text: String, from: Number, shape: Geometry.Shape
+    Inline := class = face: *, shape: Geometry.Shape
+    Path := class = segment: *
+
+    tags (page) => [[(name: "og:title", content: page.title), (name: "og:description", content: page.description), (name: "og:image", content: page.image as String) if page.image]{!(page.meta ?? []).name.contains(.name)}, page.meta ?? []].flatten(1){.content != None}
+
+    rules := Style.values + {
+      {page: Markup.Page} => HTML.Document(head: [Head(UI.page)], body: @html <body {Named(page.shape)}>{page.shape.children}</body>)
+      {head: Head} => head.page -- (page => @html {
+        <title>{page.title ?? ""}</title>
+        <meta name="description" content={page.description ?? ""} />
+        {tags(page).map(Meta(.name, .content))}
+        {Meta("theme-color", Style.Paint(page.theme)) if page.theme}
+        {[("canonical", page.canonical), ("icon", page.icon), ("apple-touch-icon", page.apple_icon), ("manifest", page.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
+        {(page.structured ?? []).map(entry => @html <script type="application/ld+json">{HTML.Raw(JSON.write(JSON.Linked(entry, context: "https://schema.org")))}</script>)}
+        <link rel="stylesheet" href="style.css" />
+        <script src="app.js" defer />
+      })
+      {meta: Meta{name ~= ("og:" | "article:" | "fb:", *)}} => @html <meta property={meta.name} content={meta.content} />
+      {meta: Meta} => @html <meta name={meta.name} content={meta.content} />
+
+      {link: Geometry.Shape{content is Placed}} => Compiler.reduced(link ~~ (.location = link.content.location) ~~ (.content = link.content.value), rules)
+      {link: Geometry.Shape{location}} => @html <a {Named(link)} href={link.location as String} target={"_blank" if link.location.window == new} rel={"noopener noreferrer" if link.location.window == new}>{Inner(link)}</a>
+      {text: Geometry.Shape{content is String && font.weight >= 600 && font.size >= 2em}} => @html <h1 {Named(text)}>{Spans(text)}</h1>
+      {text: Geometry.Shape{content is String && font.weight >= 600 && font.size >= 1.5em}} => @html <h2 {Named(text)}>{Spans(text)}</h2>
+      {text: Geometry.Shape{content is String && font.weight >= 600}} => @html <h3 {Named(text)}>{Spans(text)}</h3>
+      {text: Geometry.Shape{content is String && !white_space.wraps}} => @html <span {Named(text)} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{Spans(text)}</span>
+      {text: Geometry.Shape{content is String}} => @html <p {Named(text)} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{Spans(text)}</p>
+      {image: Geometry.Shape{content is Location && content.language === Language.Image && fill}} => @html <span {Named(image)} role="img" aria-label={image.label} />
+      {image: Geometry.Shape{content is Location && content.language === Language.Image}} => @html <img {Named(image)} src={image.content as String} alt={image.label} loading="lazy" />
+      {video: Geometry.Shape{content is Location && content.language === Language.Video}} => @html <video {Named(video)} src={video.content as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
+      {audio: Geometry.Shape{content is Location && content.language === Language.Audio}} => @html <audio {Named(audio)} src={audio.content as String} controls />
+      {frame: Geometry.Shape{content is Location && content.video_site}} => @html <iframe {Named(frame)} src={frame.content.embedded as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
+      {canvas: Geometry.Shape{content is Program}} => @html <canvas {Named(canvas)} width={canvas.size.x as px} height={canvas.size.y as px} />
+      {ball: Geometry.Ball} => @html <svg {Named(ball)} viewBox="0 0 {ball.size.x as px} {ball.size.y as px}">
+        <ellipse cx="50%" cy="50%" rx="50%" ry="50%" />
+      </svg>
+      {polygon: Geometry.Polygon{!rectangular}} => @html <svg {Named(polygon)} viewBox="0 0 {polygon.size.x as px} {polygon.size.y as px}">
+        <polygon points={polygon.boundary.points.map(.x as px, ",", .y as px).join(" ")} />
+      </svg>
+      {outlined: Geometry.Shape{!rectangular && boundary is Geometry.Curve}} => @html <svg {Named(outlined)} viewBox="0 0 {outlined.size.x as px} {outlined.size.y as px}">
+        <path d="{outlined.boundary.segments.map(Path(.))}{" Z" if outlined.boundary.segments is Loop}" />
+      </svg>
+      {path: Path{segment is Geometry.Quadratic}} => path.segment -- (" Q", .control.x, " ", .control.y, " ", .to.x, " ", .to.y)
+      {path: Path{segment is Geometry.Cubic}} => path.segment -- (" C", .first.x, " ", .first.y, " ", .second.x, " ", .second.y, " ", .to.x, " ", .to.y)
+      {path: Path{segment is Geometry.Arc}} => path.segment -- (" A", .radius.x, " ", .radius.y, " ", .rotation.in(degree), " ", .large ? 1 : 0, " ", .sweep ? 1 : 0, " ", .to.x, " ", .to.y)
+      {path: Path{segment.index == 0}} => "M", path.segment.x, " ", path.segment.y
+      {path: Path} => " L", path.segment.x, " ", path.segment.y
+
+      {form: Geometry.Shape{children.some(.content is Choice)}} => @html <form {Named(form)}>{form.children}</form>
+      {field: Geometry.Shape{content is Choice{type is String{multiline} && language}}} => @html <div id={field.dom} class={["painted", field.styles].flatten.join(" ")}>
+        <pre id="{field.dom}-paint" aria-hidden="true">{Spans(field.face)}</pre>
+        <textarea id="{field.dom}-text" placeholder={field.content.placeholder} spellcheck="false">{field.content.empty ? "" : field.content.value as String}</textarea>
+      </div>
+      {field: Geometry.Shape{content is Choice{type is String{multiline}}}} => @html <textarea {Named(field)} {Entry(field.content)}>{field.content.empty ? "" : field.content.value as String}</textarea>
+      {field: Geometry.Shape{content is Choice{listed}}} => @html <select {Named(field)}>{field.content.options.map(@html <option value={. as String}>{. as String}</option>)}</select>
+      {field: Geometry.Shape{content is Choice}} => @html <input {Named(field)} type={Compiler.reduced(field.content, kinds)} {Entry(field.content)} />
+
+      {box: Geometry.Shape{activate}} => @html <button {Named(box)} {Described(box)}>{box.children}</button>
+      {box: Geometry.Shape{flow == grid}} => @html <table {Named(box)} {Described(box)}>{box.children}</table>
+      {box: Geometry.Shape} => @html <section {Named(box)} {Described(box)}>{box.children}</section>
+
+      {named: Named} => [("id", named.shape.dom), ("class", named.shape.styles.join(" ")) if named.shape.styles.nonempty]
+      {described: Described} => [("aria-label", described.shape.label) if described.shape.label, ("popover", "manual") if described.shape.position.kind == anchored]
+      {entry: Entry} => entry.chosen -- (chosen => [("placeholder", chosen.placeholder), ("disabled", "") if chosen.disabled,
+        ("min", chosen.type.least as String) if chosen.type is Number{least, most}, ("max", chosen.type.most as String) if chosen.type is Number{least, most}])
+      {inner: Inner{shape.content is String}} => [Spans(inner.shape), inner.shape.children]
+      {inner: Inner} => inner.shape.children
+      {spans: Spans{shape.content.partial_marks.empty}} => HTML.Text(spans.shape.content)
+      {spans: Spans} => spans.shape.content.pieces.map(Span(.text, .from, spans.shape))
+      {span: Span} => span.shape.content.partial_marks{.from <= span.from < .to}.style -- (styles => styles.empty ? HTML.Text(span.text)
+        : @html <span class={styles.join(" ")} style={Inline(UI.Theme.face(span.shape, span.from), span.shape)}>{span.text}</span>)
+      {inline: Inline} => inline.face -- (face => [
+        ("color:", Style.Paint(face.color), ";") if face.color && face.color != inline.shape.color,
+        ("background:", Style.Paint(face.fill), ";") if face.fill && face.fill != inline.shape.fill,
+        ("font-weight:", face.font.weight, ";") if face.font.weight != inline.shape.font.weight,
+        ("font-style:", face.font.style as String, ";") if face.font.style != inline.shape.font.style
+      ])
+    }
+
+    kinds := {
+      {chosen: Choice{type is String{secret}}} => "password"
+      {chosen: Choice{type is boolean}} => "checkbox"
+      {chosen: Choice{type is Number{least, most}}} => "range"
+      {chosen: Choice{type is Number}} => "number"
+      {chosen: Choice{type is Time}} => "datetime-local"
+      {chosen: Choice{type is Geometry.Color}} => "color"
+      {chosen: Choice{type is Location}} => "file"
+      {chosen: Choice} => "text"
+    }
+
+    level := Geometry.Preparing(1px) + {
+      {root: Geometry.Shape{solved}} => Page(root)
+    } + rules
+  }
+
+  Style := class {
+    Page := class = shape: Geometry.Shape
+    Styles := class = shape: Geometry.Shape
+    Anchoring := class = shape: Geometry.Shape
+    Layout := class = shape: Geometry.Shape
+    Sized := class = shape: Geometry.Shape, along: "width" | "height"
+    Aligned := class = shape: Geometry.Shape
+    Spaced := class = name: String, edges: Geometry.Edges
+    Bordered := class = shape: Geometry.Shape
+    Positioned := class = shape: Geometry.Shape
+    Effected := class = effect: Geometry.Effect
+    Specific := class = shape: Geometry.Shape
+    Placeholder := class = shape: Geometry.Shape
+    Switchable := class = shape: Geometry.Shape
+    Styling := class = name: String
+    Responsive := class = shape: Geometry.Shape
+    Step := class = stops: Geometry.Stops, at: Geometry.Stop, next: Geometry.Stop?
+    Chord := class = from: Geometry.Stop, to: Geometry.Stop
+    Paint := class = value: Geometry.Paint
+    Measure := class = length: Geometry.Length
+    Typeface := class = shape: Geometry.Shape
+    Timing := class = easing: Geometry.Easing
+    Mask := class = shape: Geometry.Shape
+    Transformed := class = matrix: Geometry.Transform
+
+    WhiteSpace = [(Geometry.WhiteSpace.normal, "normal"), (Geometry.WhiteSpace.nowrap, "nowrap"), (Geometry.WhiteSpace.pre, "pre"), (Geometry.WhiteSpace.pre_wrap, "pre-wrap"), (Geometry.WhiteSpace.pre_line, "pre-line")]
+    Cases = [(.upper_case, "uppercase"), (.lower_case, "lowercase"), (.title_case, "capitalize")]
+
+    values := {
+      {paint: Paint{value === currentColor}} => "currentColor"
+      {paint: Paint{value is Geometry.Color}} => "rgba(", paint.value.red, ",", paint.value.green, ",", paint.value.blue, ",", paint.value.alpha, ")"
+      {paint: Paint{value is Geometry.Gradient}} => paint.value -- (gradient => (gradient.kind == straight ? "linear" : gradient.kind as String), "-gradient(", (gradient.angle.in(turn), "turn,") if gradient.kind == straight, gradient.sorted.map(("," if .index > 0), Paint(.value), " ", .at * 100, "%"), ")")
+      {paint: Paint{value is Geometry.Pattern}} => "url(#", paint.value.shape.dom, ")"
+      {measure: Measure{length is Number}} => measure.length, "px"
+      {measure: Measure{length.quantities.count > 1}} => "calc(", measure.length.quantities.map(.quantity, .unit.symbol).join(" + "), ")"
+      {measure: Measure} => measure.length.amount, measure.length.unit.symbol
+    }
+
+    rules := values + {
+      {page: Style.Page} => CSS.Sheet(@css {
+        * { box-sizing: border-box; margin: 0; }
+        body { font-family: sans-serif; line-height: 1.2; }
+        .painted { display: grid; }
+        .painted>pre,.painted>textarea { grid-area: 1/1; margin: 0; padding: 0; border: none; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; }
+        .painted>textarea { color: transparent; caret-color: currentColor; background: transparent; resize: none; outline: none; }
+        @media (prefers-reduced-motion:reduce) { * { animation: none; transition: none; } }
+        html.locked { overflow: hidden; }
+        {page.shape.reachable.map(Styles(.))}
+        {page.shape.reachable{.position.kind == anchored}.map(Anchoring(.))}
+      })
+      {anchoring: Anchoring} => (anchoring.shape.position.anchor ?? anchoring.shape.parent) -- (anchor => @css {
+        #{anchor.dom} { anchor-name: --{anchor.dom}; }
+        #{anchoring.shape.dom} { position: fixed; inset: auto; margin: 0; position-anchor: --{anchor.dom}; position-area: {anchoring.shape.position.side as String}; }
+      })
+      {styles: Styles} => styles.shape -- (shape => [
+        @css #{shape.dom} {
+          {Layout(shape)}
+          gap: {Measure(shape.gap.y)} {Measure(shape.gap.x)};
+          {Sized(shape, "width")}
+          {Sized(shape, "height")}
+          aspect-ratio: {shape.aspect if shape.aspect};
+          container-type: {"inline-size" if shape.children.some(.width is Geometry.Stops)};
+          {Aligned(shape)}
+          {Spaced("padding", shape.padding)}
+          {Spaced("margin", shape.margin)}
+          {Positioned(shape)}
+          background: {Paint(shape.fill) if shape.fill};
+          {Bordered(shape)}
+          border-radius: {shape.radius.map(Measure(.)).join(" ") if shape.radius != [0px]};
+          transform: {Transformed(shape.transform) if shape.transform != Geometry.Transform.identity};
+          overflow: {shape.overflow == scroll ? "auto" : shape.overflow as String};
+          z-index: {shape.layer if shape.layer != 0};
+          mix-blend-mode: {(shape.blend as String) if shape.blend != normal};
+          filter: {shape.effects{. is (Geometry.Blur | Geometry.Filter)}.map(Effected(.)) -- (.join(" ") if .nonempty)};
+          box-shadow: {shape.effects{. is Geometry.Shadow}.map(Effected(.)) -- (.join(",") if .nonempty)};
+          color: {Paint(shape.color) if shape.color && shape.color != shape.parent?.color};
+          {Typeface(shape)}
+          text-transform: {Cases{.0 == shape.case}.first?.1 if shape.case != shape.parent?.case};
+          text-overflow: {(shape.truncate as String) if shape.truncate};
+          white-space: {WhiteSpace{shape.white_space is .0}.first?.1 if shape.content is String || shape.white_space != shape.parent?.white_space};
+          overflow-wrap: {"anywhere" if shape.white_space.wraps == anywhere};
+          {Specific(shape)}
+          transition: {("all ", shape.transition.duration.in(ms), "ms ", Timing(shape.transition.easing)) if shape.transition};
+          cursor: {(shape.cursor != default ? shape.cursor as String : "pointer") if shape.cursor != default || shape.activate};
+          touch-action: {(shape.touch as String).replace("_", "-") if shape.touch != auto};
+          scrollbar-width: {"none" if shape.scrollbar == hidden};
+        },
+        Placeholder(shape),
+        Switchable(shape),
+        @css #{shape.dom}:focus-visible { outline: 2px solid currentColor; } if shape.focusable,
+        Responsive(shape) if shape.width is Geometry.Stops
+      ])
+
+      {layout: Layout{shape.flow == inline}} => @css { display: flex; flex-wrap: {layout.shape.wrap ? "wrap" : "nowrap"}; }
+      {layout: Layout{shape.flow == grid}} => @css { display: grid; grid-template-columns: repeat({layout.shape.columns},1fr); }
+      {layout: Layout{shape.flow == layered}} => @css { display: grid; grid-template-areas: "layer"; }
+      {layout: Layout} => @css { display: flex; flex-direction: column; }
+
+      {sized: Sized} => (sized.shape.`sized.along`, sized.shape.fields[sized.along].type, sized.along) -- ((given, bounds, along) => @css {
+        {along}: {(given * 100, "%") if given is Number};
+        {along}: {(given.sorted.first.value * 100, "%") if given is Geometry.Stops};
+        {along}: {Measure(given) if given is Geometry.Length};
+        max-{along}: {Measure(bounds.most) if bounds.most != None};
+        min-{along}: {Measure(bounds.least) if bounds.least != None};
+      })
+      {aligned: Aligned{shape.align == center}} => @css { align-items: center; text-align: center; }
+      {aligned: Aligned{shape.align == end}} => @css { align-items: flex-end; text-align: end; }
+      {aligned: Aligned{shape.align == between}} => @css { justify-content: space-between; }
+      {aligned: Aligned{shape.align == around}} => @css { justify-content: space-around; }
+      {aligned: Aligned{shape.align == stretch}} => @css { align-items: stretch; }
+      {aligned: Aligned{shape.align == justify}} => @css { text-align: justify; }
+      {aligned: Aligned{shape.align == middle && shape.flow == inline}} => @css { align-items: center; }
+      {aligned: Aligned{shape.align == middle}} => @css { justify-content: center; }
+      {aligned: Aligned} => []
+
+      {spaced: Spaced} => [("top", spaced.edges.top), ("right", spaced.edges.right), ("bottom", spaced.edges.bottom), ("left", spaced.edges.left)]{.1 != None && .1 != 0px}.map((spaced.name + "-" + .0, Measure(.1)))
+      {bordered: Bordered{shape.stroke}} => bordered.shape.stroke -- (stroke => (stroke.sides == Geometry.all ? [""] : stroke.sides#.map("-" + (. as String))).map(side =>
+        ("border" + side, Measure(stroke.width), " ", stroke.dash.empty ? "solid" : "dashed", " ", Paint(stroke.paint))))
+      {bordered: Bordered} => []
+
+      {positioned: Positioned{shape.position.kind == anchored}} => []
+      {positioned: Positioned} => positioned.shape -- (shape => @css {
+        position: {(shape.position.kind as String) if shape.position.kind is (sticky | fixed | absolute)};
+        position: {"relative" if shape.position.kind == flow && shape.children.some(.position.kind == absolute)};
+        {[("top", shape.inset.top), ("right", shape.inset.right), ("bottom", shape.inset.bottom), ("left", shape.inset.left)]{.1 != None}.map((.0, Measure(.1)))}
+      })
+
+      {effected: Effected{effect is Geometry.Shadow}} => effected.effect -- (shadow => ("inset " if shadow.inset), Measure(shadow.offset.x), " ", Measure(shadow.offset.y), " ", Measure(shadow.blur), " ", Measure(shadow.spread), " ", Paint(shadow.color))
+      {effected: Effected{effect is Geometry.Blur}} => "blur(", Measure(effected.effect.radius), ")"
+      {effected: Effected{effect is Geometry.Filter{kind == hue}}} => "hue-rotate(", effected.effect.amount, "turn)"
+      {effected: Effected{effect is Geometry.Filter}} => effected.effect.kind as String, "(", effected.effect.amount, ")"
+
+      {typeface: Typeface} => (typeface.shape.font, typeface.shape.parent?.font ?? Geometry.Font.base) -- ((font, inherited) => @css {
+        font-family: {font.family.join(",") if font.family != inherited.family};
+        font-size: {Measure(font.size) if font.size != inherited.size};
+        font-weight: {font.weight if font.weight != inherited.weight};
+        font-style: {(font.style as String) if font.style != inherited.style};
+        line-height: {font.line_height if font.line_height != inherited.line_height};
+        letter-spacing: {Measure(font.tracking) if font.tracking != inherited.tracking};
+      })
+
+      {specific: Specific{shape.content is Location && shape.content.language === Language.Image && shape.fill}} => specific.shape -- (image => @css {
+        object-fit: {image.content.fit as String}; display: inline-block; mask: {Mask(image)}; -webkit-mask: {Mask(image)};
+      })
+      {specific: Specific{shape.content is Location && shape.content.language === Language.Image}} => @css { object-fit: {specific.shape.content.fit as String}; }
+      {specific: Specific{shape.content is Location && shape.content.video_site}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
+      {specific: Specific} => []
+
+      {placeholder: Placeholder{shape.content is Choice && shape.content.placeholder_color}} => @css #{placeholder.shape.dom}::placeholder { color: {Paint(placeholder.shape.content.placeholder_color)}; }
+      {placeholder: Placeholder} => []
+
+      {switchable: Switchable{shape.styles is Dynamic}} => UI.Theme.styles.map(style => @css #{switchable.shape.dom}.{style.name} { {Styling(style.name)} })
+      {switchable: Switchable} => []
+      {styling: Styling} => Compiler.reduced(Styles(Geometry.Box()), rules).first.declarations -- (plain => Compiler.reduced(Styles(Geometry.Box().styled(styling.name)), rules).first.declarations{!plain.contains(.)})
+
+      {responsive: Responsive} => responsive.shape.width -- (stops => stops.sorted -- (sorted => sorted.zip([sorted.rest, None]).map((at, next) => @css @container (min-width:{Compiler.reduced(Measure(at.at), values) as String}) {
+        #{responsive.shape.dom} { width: {Step(stops, at, next)}; }
+      })))
+      {step: Step{!(stops is Geometry.Steps) && next}} => Chord(step.at, step.next)
+      {step: Step} => step.at.value * 100, "%"
+      {chord: Chord} => "calc(", chord.from.value * (chord.from.at as px), "px + (100cqw - ", chord.from.at as px, "px) * ", (chord.to.value * (chord.to.at as px) - chord.from.value * (chord.from.at as px)) / ((chord.to.at - chord.from.at) as px), ")"
+
+      {timing: Timing{easing === Geometry.linear}} => "linear"
+      {timing: Timing{easing === Geometry.ease_in}} => "ease-in"
+      {timing: Timing{easing === Geometry.ease_out}} => "ease-out"
+      {timing: Timing{easing === Geometry.step}} => "step-end"
+      {timing: Timing} => "ease"
+
+      {mask: Mask{shape.content.fit == fill}} => "url(\"", mask.shape.content as String, "\") center/100% 100% no-repeat"
+      {mask: Mask} => "url(\"", mask.shape.content as String, "\") center/", mask.shape.content.fit as String, " no-repeat"
+      {transformed: Transformed{matrix.count == 3}} => transformed.matrix -- ("matrix(", [.[0][0], .[1][0], .[0][1], .[1][1], .[0][2], .[1][2]].join(","), ")")
+      {transformed: Transformed} => "matrix3d(", transformed.matrix.transposed.flatten.join(","), ")"
+    }
+
+    level := Geometry.Preparing(1px) + {
+      {root: Geometry.Shape{solved}} => Page(root)
+    } + rules
+  }
+
+  Script := class {
+    Page := class = shape: Geometry.Shape
+    Prelude := class
+    Devices := class
+    Updated := class = shape: Geometry.Shape, name: String, dynamic: Dynamic
+    Mirrored := class = shape: Geometry.Shape
+    Typed := class = shape: Geometry.Shape
+    Drawing := class = shape: Geometry.Shape
+    Popping := class = shape: Geometry.Shape
+    Scrolling := class = shape: Geometry.Shape
+
+    expressions := {
+      {a} + {b} => @js {a} + {b}
+      {a} - {b} => @js {a} - {b}
+      {a} * {b} => @js {a} * {b}
+      {a} / {b} => @js {a} / {b}
+      {a} == {b} => @js {a} === {b}
+      {a} < {b} => @js {a} < {b}
+      {a} && {b} => @js {a} && {b}
+      {a} || {b} => @js {a} || {b}
+      {name} = {value} => @js ray.{name} = {value}
+      {f}({arguments}) => @js {f}(...{arguments})
+    }
+
+    rules := {
+      {page: Script.Page} => JS.Module([
+        Prelude(),
+        Devices(),
+        page.shape.reachable.map(shape => shape.fields{.value is Dynamic}.map(Updated(shape, .name, .value))),
+        UI.Watch.all.map(watch => @js ray.subscribe({watch.watched.reads}, () => { {watch.action{O: expressions}()} })),
+        page.shape.reachable.map(Mirrored(.)),
+        page.shape.reachable{.focusable}.map(shape => @js document.getElementById({shape.dom}).addEventListener("click", (event) => ray.activate({shape.dom}))),
+        page.shape.reachable.map(Typed(.)),
+        page.shape.reachable.map(Drawing(.)),
+        page.shape.reachable.map(Popping(.)),
+        page.shape.reachable.map(Scrolling(.))
+      ])
+      {prelude: Prelude} => @js function effect(reads, body) { ray.subscribe(reads, body); body() }
+      {devices: Devices} => @js {
+        ray.set("@me/device/handheld", /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || matchMedia("(pointer:coarse)").matches && !matchMedia("(pointer:fine)").matches || navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))
+        {["pointerdown", "pointermove", "pointerup", "pointercancel", "wheel"].map(name => @js window.addEventListener({name}, (event) => ray.point(event)))}
+        {["keydown", "keyup"].map(name => @js window.addEventListener({name}, (event) => ray.key(event)))}
+        window.addEventListener("focusin", (event) => ray.set("UI.focus", event.target.id))
+        window.addEventListener("resize", (event) => ray.set("UI.scene.size", ray.size()))
+        window.addEventListener("popstate", (event) => ray.set("UI.at", location.pathname))
+        window.addEventListener("paste", (event) => ray.set("@me/device/clipboard", event.clipboardData.getData("text")))
+        window.addEventListener("dragstart", (event) => ray.set(event.target.id + ".dragged", true))
+        window.addEventListener("dragend", (event) => ray.set(event.target.id + ".dragged", false))
+        window.addEventListener("drop", (event) => ray.set(event.target.id + ".dropped", event.dataTransfer.files))
+        window.addEventListener("compositionupdate", (event) => ray.call("UI.focus.content.composed", event.data))
+        window.addEventListener("deviceorientation", (event) => ray.set("@me/device/orientation", ray.orientation(event)))
+        window.addEventListener("devicemotion", (event) => ray.set("@me/device/motion", ray.motion(event)))
+        window.addEventListener("gamepadconnected", (event) => ray.poll_gamepads())
+        window.matchMedia("(prefers-reduced-motion:reduce)").addEventListener("change", (event) => ray.set("@me/device/preferences.reduced_motion", event.matches))
+        window.matchMedia("(prefers-color-scheme:dark)").addEventListener("change", (event) => ray.set("@me/device/preferences.dark", event.matches))
+        effect(["UI.at"], () => history.pushState(null, "", ray.get("UI.at")))
+        effect(["UI.page.title"], () => document.title = ray.get("UI.page.title"))
+        window.addEventListener("scroll", (event) => ray.set("UI.scene.scrolled.y", window.scrollY))
+        effect(["UI.scene.scrolled"], () => {
+          const y = ray.get("UI.scene.scrolled.y")
+          if (Math.abs(scrollY - y) > 1) scrollTo(\{top: y, behavior: ray.get("UI.scene.transition") ? "smooth" : "auto"})
+        })
+        effect(["UI.selection"], () => ray.get("UI.selection").forEach((s) => {
+          const r = s.text.marks.find((m) => m.style === "selected")
+          const e = r && (document.getElementById(s.id + "-text") || document.getElementById(s.id))
+          if (e) {
+            if (e.setSelectionRange) {
+              e.focus()
+              e.setSelectionRange(r.from, r.to)
+            } else {
+              const g = document.createRange()
+              g.selectNodeContents(e)
+              getSelection().removeAllRanges()
+              getSelection().addRange(g)
+            }
+          }
+        }))
+        effect(["UI.locked"], () => document.documentElement.classList.toggle("locked", ray.get("UI.locked")))
+        effect(["@me/device/notification"], () => new Notification(ray.get("@me/device/notification.title"), \{body: ray.get("@me/device/notification.body")}))
+        effect(["@me/device/fullscreen"], () => document.documentElement.requestFullscreen())
+        effect(["@me/device/printing"], () => window.print())
+        effect(["@me/device/clipboard"], () => navigator.clipboard.writeText(ray.get("@me/device/clipboard")))
+        effect(["@me/device/opened"], () => open(ray.get("@me/device/opened"), "_blank", "noopener"))
+      }
+      {updated: Updated{name == "styles"}} => @js effect({updated.dynamic.program.reads}, () => document.getElementById({updated.shape.dom}).className = {updated.dynamic.program{O: expressions}()})
+      {updated: Updated} => @js effect({updated.dynamic.program.reads}, () => ray.set({updated.shape.dom + "." + updated.name}, {updated.dynamic.program{O: expressions}()}))
+      {mirrored: Mirrored{shape.content is Choice && shape.content.language}} => @js document.getElementById("{mirrored.shape.dom}-text").addEventListener("input", (event) => document.getElementById("{mirrored.shape.dom}-paint").textContent = event.target.value)
+      {mirrored: Mirrored} => []
+      {typed: Typed{shape.content is Choice}} => @js document.getElementById({typed.shape.dom}).addEventListener("input", (event) => ray.set({typed.shape.dom}, event.target.value))
+      {typed: Typed} => []
+      {drawing: Drawing{shape.content is Program}} => @js effect({drawing.shape.content.reads}, () => ray.draw({drawing.shape.dom}, {drawing.shape.content.rendered(Language.Direct.level)}))
+      {drawing: Drawing} => []
+      {popping: Popping{shape is UI.Popover}} => (popping.shape.position.anchor ?? popping.shape.parent).dom -- (anchor => [
+        ["pointerenter", "focusin"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({popping.shape.dom}).showPopover())),
+        ["pointerleave", "focusout"].map(name => @js document.getElementById({anchor}).addEventListener({name}, (event) => document.getElementById({popping.shape.dom}).hidePopover()))
+      ])
+      {popping: Popping{shape.position.kind == anchored && shape.visible}} => @js document.getElementById({popping.shape.dom}).showPopover()
+      {popping: Popping} => []
+      {scrolling: Scrolling{shape.overflow == scroll}} => scrolling.shape.dom -- (id => @js effect([{id + ".scrolled"}], () => document.getElementById({id}).scrollTo(\{top: ray.get({id + ".scrolled.y"}), behavior: ray.get({id + ".transition"}) ? "smooth" : "auto"})))
+      {scrolling: Scrolling} => []
+    }
+
+    level := Geometry.Preparing(1px) + {
+      {root: Geometry.Shape{solved}} => Page(root)
+    } + rules
+  }
+
+
+  Package := class = files: (path: String, content: *)[] {
+    write (to: Location) => files.for(IO.write(to / .path, .content))
+    document => files{.path == "index.html"}.first?.content
+    sheet => files{.path == "style.css"}.first?.content
+  }
+  packaged := {
+    {root: Geometry.Shape{solved}} => Package([
+      (path: "index.html", content: Markup.Page(root)),
+      (path: "style.css", content: Style.Page(root)),
+      (path: "app.js", content: Script.Page(root)),
+      root.reachable{.content is Location && .content.media}.map((path: .content.name, content: .content)),
+      [UI.page?.icon, UI.page?.apple_icon, UI.page?.manifest]{!= None}.map((path: .name, content: .))
+    ].flatten)
+  }
+  level := Geometry.Preparing(1px) + packaged + Markup.rules + Style.rules + Script.rules
+
+  DOM := class {
+    send (message) => external io `dom` (message)
+    received => external io `dom` None
+    line (parts: String[]) => parts.join(" "), \n
+
+    Mount := class = node: HTML.Element | HTML.Text | HTML.Raw | HTML.Comment, parent: String?
+    Listening := class = element: HTML.Element
+    protocol := {
+      {mount: Mount{node is HTML.Element}} => mount.node -- (element => [
+        line(["create", element.id, element.tag]),
+        element.attributes.map(line(["attribute", element.id, .name, (.value as String).escaped_line])),
+        Listening(element),
+        element.children.map(Mount(., element.id)),
+        line(["append", mount.parent, element.id]) if mount.parent
+      ])
+      {mount: Mount{node is HTML.Comment}} => []
+      {mount: Mount} => line(["text", mount.parent, mount.node.text.escaped_line])
+      {listening: Listening{element.tag is ("a" | "button")}} => [line(["listen", listening.element.id, "click"])]
+      {listening: Listening{element.tag is ("input" | "select" | "textarea")}} => [line(["listen", listening.element.id, "input"]), line(["listen", listening.element.id, "focus"])]
+      {listening: Listening} => []
+    }
+    mounted (element: HTML.Element) => Compiler.reduced(Mount(element), protocol) as String
+
+    Id = Char{!= " "}[]
+    Event := class = id: String {
+      shape => UI.scene.reachable{.dom == id}.first
+    }
+    Click := class: Event (id: Id, " click")
+    Input := class: Event (id: Id, " input ", value: *)
+    Focus := class: Event (id: Id, " focus")
+    Scroll := class: Event (id: Id, " scroll ", y: Decimal)
+    Pointer := class: Event (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?, (" ", device: "mouse" | "pen" | "touch", " ", number: Decimal)?) => {
+      pointed => UI.pointed(device ?? "mouse", number ?? 0)
+      position => Geometry.Vector(x * 1px, y * 1px)
+      time => stamp ? stamp * 1 ms : Time.now
+    }
+    Keystroke := class: Event (id: Id, " ", kind: "keydown" | "keyup", " ", key: Id, modifiers: (" ", held: "shift" | "control" | "alt" | "meta")[])
+    Size := class: Event (id: Id, " size ", width: Decimal, " ", height: Decimal)
+    Inbound := Click | Input | Focus | Scroll | Pointer | Keystroke | Size
+    applied := {
+      {click: Click} => click.shape?.activate
+      {input: Input} => input.shape?.content.set(input.value)
+      {focus: Focus} => UI.focus = focus.shape
+      {scroll: Scroll} => UI.scene.scrolled = Geometry.Vector(0, scroll.y * 1px)
+      {pointer: Pointer{kind == "pointerdown"}} => pointer.pointed.to(pointer.position, pressing: [0], time: pointer.time)
+      {pointer: Pointer{kind == "pointermove"}} => pointer.pointed.to(pointer.position, time: pointer.time)
+      {pointer: Pointer} => pointer.pointed.to(pointer.position, pressing: [], time: pointer.time)
+      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- Keyboard.press(keystroke.key, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
+      {keystroke: Keystroke} => Keyboard.release(keystroke.key)
+      {size: Size{shape}} => size.shape.size = Geometry.Vector(size.width * 1px, size.height * 1px)
+      {size: Size} => None
+    }
+    static dispatched (line: String?) => line?.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
+
+    render (page: Program) => write(page.rendered(Language.Web.level))
+    start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
+    stop => None
+    write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as CSS])) if package.sheet)
+      -- send(line(["lock", UI.locked as String]))
+      -- send(line(["scroll", "window", (UI.scene.scrolled.y as px) as String, (UI.scene.transition != None) as String]))
+    read => dispatched(received)
+    copy (text: String) => send(line(["clipboard", text.escaped_line]))
+    open (to: Location) => send(line(["open", (to as String).escaped_line]))
+  }
+
+  Chromium := { }
+  Firefox := { }
+  Safari := {
+    {rule: CSS.Rule{declarations.some(.0 == "backdrop-filter") && !declarations.some(.0 == "-webkit-backdrop-filter")}} => CSS.Rule(rule.selector, [rule.declarations, [("-webkit-backdrop-filter", rule.declarations{.0 == "backdrop-filter"}.first.[1..])]].flatten(1), rule.within)
+  }
+}

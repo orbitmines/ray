@@ -1,13 +1,14 @@
 Encoding := class {
-  Algorithm := enum sha1 | sha256 | sha512 | sha3 | md5 | blowfish | blake3 | base64 | gzip {
-    extensions => "." + name
-    read (encoded) => this is Digest ? ERROR `a digest is written and never read back` : encoded.value
-    write (value) => this is Digest ? Hash(value, algorithm: this) : Packed(value, algorithm: this)
+  Digest := class: Language {
+    read (encoded) => ERROR `a digest is written and never read back`
+    write (value) => Hash(value, algorithm: this)
   }
-  Algorithm.components.hierarchy &= Language
-  Digest := Algorithm{. is (sha1 | sha256 | sha512 | sha3 | md5 | blake3)}
+  Packing := class: Language {
+    read (encoded) => encoded.value
+    write (value) => Packed(value, algorithm: this)
+  }
 
-  Packed := class = value: *, algorithm: Algorithm {
+  Packed := class = value: *, algorithm: Packing {
     as (target) => algorithm.read(this)
   }
 
@@ -18,12 +19,9 @@ Encoding := class {
   Encrypted<T> := class = value: T, key: Key? {
     opened (holder) => key && holder?.key == key ? value : Quest(name: "find the key", goal: this)
   }
-}
-Gzip := Encoding.Algorithm.gzip
 
-Base64 := class = (sextets: (Binary⁶ as Alphabet)[], "="[]{length == (4 - sextets.count % 4) % 4}) {
-  static Alphabet = ("A".."Z", "a".."z", "0".."9", "+", "/") as String
-
-  bytes: Byte[] => sextets.map(.integer).flatten.chunk(8){.count == 8}.map(Binary(integer: .))
-  static (bytes: Byte[]) as (=== Base64) => Base64(sextets: bytes.map(.integer).flatten.chunk(6).map(Binary(integer: (., ["0"] * (6 - .count)))))
+  static common (a: Byte[], b: Byte[]) => a.empty || b.empty || a.first != b.first ? 0 : 1 + common(a.rest, b.rest)
+  static runs (source: Byte[], target: Byte[]) => target.empty ? [] : (0..<source.count).map(at => (from: at, count: common(source[at..], target))).max_by(.count) -- (best =>
+    best && best.count >= 4 ? [(from: best.from, count: best.count)], runs(source, target[best.count..]) : runs(source, target[1..]) -- (rest =>
+      rest.first?.bytes ? [(bytes: (target[..0], rest.first.bytes).flatten)], rest.rest : [(bytes: target[..0])], rest))
 }

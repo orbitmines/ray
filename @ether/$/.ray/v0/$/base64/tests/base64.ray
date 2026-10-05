@@ -1,0 +1,6 @@
+// Bytes written as Base64.
+
+mark ^keyword := external global
+
+unless "Man".bytes as Base64 as String == "TWFu" { INFO@mark `UI71 Man is not TWFu in Base64` }
+unless "Ma".bytes as Base64 as String == "TWE=" { INFO@mark `UI72 Ma is not padded to TWE=` }

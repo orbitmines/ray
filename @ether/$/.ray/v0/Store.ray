@@ -1,25 +1,27 @@
-Store := class: Hierarchy = at: Location = @local, format: Backend? {
-  static Route := class = type: *, store: Store {
+Store := class: Hierarchy = at: Location = @local, format: Format? {
+  static Route := class = type: *, places: Program {
+    resolved: Store[]?
+    stores => resolved ??= places()#.map(Store.stored(.))
     takes (instance) => instance is type
   }
   static routes: Route[] = []
   static materialised: *?
   static default = Store()
 
-  static stored (place) => place is Store ? place : Store(at: place)
-  static route (type, places) => places#.map(routes.push Route(type, store: stored(.))) -- places
-  static rerouted (type, places) => (routes = routes{.type !== type}) -- route(type, places)
-  static routed (instance) => routes{.takes(instance)}.store.unique -- (.empty ? [default] : .)
+  static stored (place) => place is Store ? place : place is Language ? Store(format: Format(language: place)) : Store(at: place)
+  static route (type, places: Program) => routes.push Route(type, places) -- places
+  static rerouted (type, places: Program) => (routes = routes{.type !== type}) -- route(type, places)
+  static routed (instance) => routes{.takes(instance)}.stores.flatten.unique -- (.empty ? [default] : .)
   static keep (instance) => routed(instance).map(.kept(instance)) -- instance
   static constructed (instance) => instance -- keep(.) if instance is materialised
 
-  static View (type) => (materialised |= type) -- (routes{.type === type || type is .type}.store, default).unique.map(.instances(type)).flatten.unique{is type}
+  static View (type) => (materialised |= type) -- (routes{.type === type || type is .type}.stores.flatten, default).unique.map(.instances(type)).flatten.unique{is type}
   static as_of (instance, field: String, when: Time) => (external get instance field).history.commits{.when <= when}.last?.value
   static conflicts (type, key: Program) => View(type) -- (all => all.map(key).unique.map(k => all{key(.) == k}){.count > 1}.map(Quest(name: "resolve the duplicates", goal: .)))
 
-  backend: Backend? => format ?? Compiler.reduced(this, StoreOptimizations)
-  instances (type) => (children{is type}, backend?.read(this, type) ?? []).flatten.unique
-  kept (instance): static => this ~~ add(instance) ~~ backend?.kept(this, instance)
+  kept_in: Format? => format ?? Compiler.reduced(this, StoreOptimizations)
+  instances (type) => (children{is type}, kept_in?.read(this, type) ?? []).flatten.unique
+  kept (instance): static => this ~~ add(instance) ~~ kept_in?.kept(this, instance)
 
   static Row := class = type: String, id: String, fields: (name: String, value: String)[] {
     static (instance) as (=== Row) => Row(type: instance.static.name, id: (instance.key ?? (instance.key = UUID.v4())) as String,
@@ -27,18 +29,20 @@ Store := class: Hierarchy = at: Location = @local, format: Backend? {
     instance => Language.ray.read((type, "(key: ", Language.ray.write(id), fields.map(", ", .name, ": ", .value), ")") as String)
   }
 
-  static Backend := class = language: Language, file = true {
-    read (store: Store, type) => (file ? language.read(store.at.content) : language.read(store, type)){is type}
-    kept (store: Store, instance) => file ? store.at.write(language.write(store.children)) : language.sent(store, language.write([instance as Row]))
+  static Format := class = language: Language, file = true, versioned = false {
+    read (store: Store, type) => (versioned ? language.read(store.at)?.value : file ? language.read(store.at.content) : language.selected(store, type)){is type}
+    kept (store: Store, instance) => versioned ? store.history.appended(store.at, language)
+      : file ? store.at.write(language.write(store.children))
+      : language.sent(store, language.write([instance as Row]))
   }
 
-  static memory: Backend? = None
-  static native = Backend(language: Ray.history)
-  static rows = Backend(language: Language.ray)
-  static columnar = Backend(language: Columns.language)
-  static keyed = Backend(language: KeyValue.language)
-  static sqlite = Backend(language: SQL.sqlite, file: false)
-  static postgres = Backend(language: SQL.postgres, file: false)
+  static memory: Format? = None
+  static native = Format(language: Language.ray, versioned: true)
+  static rows = Format(language: Language.ray)
+  static columnar = Format(language: Columns.language)
+  static keyed = Format(language: KeyValue.language)
+  static sqlite => Format(language: $.sqlite, file: false)
+  static postgres => Format(language: $.postgres, file: false)
 
   static Column := class = name: String, values: *[] {
     distinct => values.unique.count
@@ -81,8 +85,8 @@ Store := class: Hierarchy = at: Location = @local, format: Backend? {
   }
 }
 
-{type}$ = {places} ^keyword => Store.rerouted(type, places)
-{type}$ |= {places} ^keyword => Store.route(type, places)
+{type}$ = {literal places} ^keyword => Store.rerouted(type, Program(code: external ** places))
+{type}$ |= {literal places} ^keyword => Store.route(type, Program(code: external ** places))
 
 StoreOptimizations := {
   {store: Store{at === @local || at.path ~= ⊢"memory"}} => Store.memory
@@ -129,31 +133,4 @@ KeyValue := class (entries: (key: (type: (!"/" && !\t)[], "/", id: (!"/" && !\t)
   static language = Language(".kv",
     level: { {text: String} => (text as KeyValue).rows.map(.instance) },
     written: { {writing: Language.Writing} => writing.value.map(. as Store.Row).map(row => row.fields.map(row.type, "/", row.id, "/", .name, \t, .value.replace(\n, "\\n"), \n)) })
-}
-
-SQL := class {
-  static identifier (text: String) => "\"" + text.replace("\"", "\"\"") + "\""
-  static quoted (text: String) => "'" + text.replace("'", "''") + "'"
-
-  static written := {
-    {writing: Language.Writing{value is Iterable}} => writing.value.map(.type).unique.map(type => writing.value{.type == type}.first -- (row =>
-      "CREATE TABLE IF NOT EXISTS ", identifier(type), " (id TEXT PRIMARY KEY", row.fields.map(", ", identifier(.name), " TEXT"), ");", \n)), writing.value.map(Language.Writing(.))
-    {writing: Language.Writing{value is Store.Row}} => writing.value -- (row =>
-      "INSERT INTO ", identifier(row.type), " (id", row.fields.map(", ", identifier(.name)), ") VALUES (", quoted(row.id), row.fields.map(", ", quoted(.value)), ")",
-      " ON CONFLICT (id) DO UPDATE SET ", row.fields.map(("," if .index > 0), identifier(.name), " = excluded.", identifier(.name)), ";", \n)
-  }
-  static selection (type) => "SELECT * FROM " + identifier(type.name)
-
-  static Dialect := class: Language = answered: (store: Store, query: String) => Process, sending: (store: Store) => Process {
-    read (store: Store, type) => answered(store, selection(type)).stdout -- (text => (text as JSON).value.map(entry =>
-      Store.Row(type: type.name, id: entry.id as String, fields: entry.fields{.name != "id"}.map((name: .name, value: .value as String))).instance))
-    sent (store: Store, text: String) => sending(store) ~~ (.input = text) -- .stdout
-  }
-
-  static sqlite = Dialect(".sqlite" | ".sqlite3" | ".db", written: written,
-    answered: (store, query) => Process(command: "sqlite3", arguments: ["-json", store.at.sandboxed, query]),
-    sending: store => Process(command: "sqlite3", arguments: [store.at.sandboxed]))
-  static postgres = Dialect(".sql", written: written,
-    answered: (store, query) => Process(command: "psql", arguments: [store.at as String, "-At", "-c", "SELECT coalesce(json_agg(t), '[]') FROM (" + query + ") t"]),
-    sending: store => Process(command: "psql", arguments: [store.at as String, "-q", "-v", "ON_ERROR_STOP=1"]))
 }

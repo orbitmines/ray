@@ -1,0 +1,11 @@
+// ZLIB Compressed Data Format Specification version 3.3 (https://www.rfc-editor.org/rfc/rfc1950)
+Zlib := class (method: Byte, flags: Byte, deflated: Byte[], adler: Binary³²) {
+  inflated: Byte[] => Deflate.read(deflated)
+
+  // ADLER-32 (https://www.rfc-editor.org/rfc/rfc1950#section-8.2)
+  static adler32 (bytes: Byte[]) => bytes.reduce(held = (a: 1, b: 0) => ((held.a + .) % 65521) -- (a => (a: a, b: (held.b + a) % 65521))) -- (.b * 65536 + .a)
+
+  static language = Language(".zlib",
+    level: { {zlib: Zlib} => zlib.inflated },
+    written: { {writing: Language.Writing} => (writing.value as Byte[]) -- (bytes => Zlib(method: 0x78, flags: 0x9C, deflated: Deflate.write(bytes) as Byte[], adler: adler32(bytes))) })
+}

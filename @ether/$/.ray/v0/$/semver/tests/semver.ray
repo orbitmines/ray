@@ -1,0 +1,15 @@
+// Versions and the ranges written against them.
+
+mark ^keyword := external global
+
+unless "1.2.3" as SemVer < "1.10.0" as SemVer { INFO@mark `PK1 versions are not ordered by number` }
+unless "1.0.0-alpha" as SemVer < "1.0.0" as SemVer { INFO@mark `PK2 a pre-release is not before its release` }
+unless Requirement.parsed("^1.2.3", "=").admits("1.9.0") { INFO@mark `PK3 a caret range leaves out a minor release` }
+if Requirement.parsed("^1.2.3", "=").admits("2.0.0") { INFO@mark `PK4 a caret range admits a breaking release` }
+if Requirement.parsed("^0.2.3", "=").admits("0.3.0") { INFO@mark `PK5 a caret range on zero admits the next minor` }
+unless Requirement.parsed("~1.2", "=").admits("1.2.9") { INFO@mark `PK6 a tilde range leaves out a patch` }
+unless Requirement.parsed(">=1, <2 || 3.x", "=").admits("3.4.0") { INFO@mark `PK7 an alternative range is not admitted` }
+unless Requirement.parsed("1.2", "^").admits("1.5.0") { INFO@mark `PK8 a bare Cargo requirement is not a caret` }
+if Requirement.parsed("1.2", "=").admits("1.5.0") { INFO@mark `PK9 a bare npm requirement admits another minor` }
+unless Requirement.parsed("~=2.2", "==").admits("2.9") { INFO@mark `PK10 a compatible release leaves out a minor` }
+if Requirement.parsed("~=1.4.5", "==").admits("1.5.0") { INFO@mark `PK11 a compatible release admits the next minor` }

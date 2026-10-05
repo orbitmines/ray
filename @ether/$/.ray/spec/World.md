@@ -208,7 +208,7 @@ Answers from 2026-10-06.
 
 - **W3.10** There is one history API, `History`. Git and every other backend read into it and write out of it (L§9.2).
   W3.2's "frontend with an inverse" is a backend Language, with a `level` (read) and a `written` (write).
-- **W3.11** The backends are Git, Mercurial, Fossil, Pijul and Subversion, plus our own `Ray.history` (`.%`).
+- **W3.11** The backends are Git, Mercurial, Fossil, Pijul and Subversion, plus Ray itself (`$.ray`, the `.%` form).
   Each says whether it is `lossless` or `snapshot`. A snapshot backend keeps the operations beside its commits, so
   our own repositories read back exactly. Foreign ones are read by diffing trees, and a rename that cannot be decided
   is a quest.
@@ -221,3 +221,7 @@ Answers from 2026-10-06.
   fix; what was written before it replays as recorded.
 - **W2.8b** `@character { … }` runs a block as that character when the character is here (L§8.2). It is how a
   `.%` line says who made the commit.
+- **W3.15** There is no `Backend` class: each backend is a plain `Language`, in its own project `$/git`, `$/mercurial`,
+  `$/fossil`, `$/pijul` or `$/subversion`, and is reached as `$.git` and so on (L§9.1, L§9.2).
+- **W3.16** `Ray.history` is `Node.history`. A node's history is a `History`; its stored `.%` form is the Ray
+  language reading and writing it.

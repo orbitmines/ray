@@ -336,6 +336,22 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - For example, the store may sit under the current user, with many instances kept like a database.
   - Several databases: `ClassA{filter}$ = DB` sends the instances that pass the filter (for example those located inside `@user`) to that store. Stores are routed this way.
   - A `persistent` value is kept in its class's `$`.
+- **Decided (2026-10-06):** `$.name` answers the language called `name`, loading it when it is not loaded.
+  - `$.ray` is Ray itself (`Language.ray`).
+  - Any other name is the project `v0/$/<name>`: the folder is the language's name in lowercase (`$/git`, `$/json`, `$/html`).
+  - The first `$.name` reads that project and its dependencies, once. It answers the language in it whose extensions include `.name`.
+  - Without such a project, `$.name` answers a loaded language with that extension, or a `Quest`.
+- **Decided (2026-10-06):** every language from outside Ray lives in its own project under `v0/$/`, and nothing in the core depends on one.
+  - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs (`@ether/$/zlib`).
+  - Its claims are in its own `tests/` project.
+  - A project that uses a language either declares it in its `.project.ray` or reaches it through `$.name`.
+  - The core reaches them only through `$.name`, lazily. Examples: in an optimisation level that picks a format (`StoreOptimizations` answers `$.sqlite`), in the enforcement of a permission (`as $.posix`), or in a store route (`$.git`).
+  - Renderers are compile targets too. The web renderer is `$/web` on `$/html`, `$/css`, `$/js` and `$/json`. The terminal renderer is `$/tui` on `$/ansi`, `$/sixel` and `$/kitty`. `Language.Direct`, Ray's own raster drawing, stays in the core UI, and its fonts are `$/opentype`.
+  - The core keeps only what it needs to work:
+    - UTF-8 and the Unicode tables, because a String is characters;
+    - ISO 8601, because a Time is written and read as one;
+    - the base-N digits, because a Number is written in them;
+    - Ray's own storage formats (`.%`, `.columns`, `.kv`), because they are Ray.
 
 ### 9.2 Version control — *IDE:412–420, 633–641, 732*
 > Hybrid logical clocks / CRDTs; your fork always accessible, can always push; apply a change to all stable versions (respecting their own changes); flag a change as the one that works; group changes; test my changes against the latest instead of merging the latest into mine; label functions inline in `.ray.txt` for non-Ether editors; notify when a monkey-patched function starts being used by a library, or when a renamed parameter breaks a partial call.
@@ -350,15 +366,28 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
   - A commit's value is an `Operation(kind, definition, stamp, who, before, after)`, a group of them, or a plain value.
   - A `Definition`'s UUID keeps its identity across renames.
   - A history's value is its ancestry folded in stamp order.
-- **Decided (2026-10-06):** a backend is a Language (`Backend: Language`). Its `level` reads into a `History`, and its `written` writes one out.
-  - The backends are Git, Mercurial, Fossil, Pijul, Subversion, and our own `Ray.history` (`.%`).
+- **Decided (2026-10-06):** a backend is a Language. Its `level` reads into a `History`, and its `written` writes one out.
+  - The backends are `$.git`, `$.mercurial`, `$.fossil`, `$.pijul`, `$.subversion`, and Ray itself (`$.ray`, the `.%` form).
   - Git is just one compile target:
-    - cloning is `Git.read(@https://…)`;
-    - pushing is `history as Git` (or `Git.push(history, remote)`);
-    - converting is reading as one backend and writing as another (`Mercurial.write(Git.read(@./repo))`).
-  - Routing uses §9.1's syntax: `History{location ∈ @me}$ = Ray.history | Git`. A superposition stores in each of them.
+    - cloning is `$.git.read(@https://…)`;
+    - pushing is `history as $.git` (or `Git.push(history, remote)`);
+    - converting is reading as one language and writing as another (`$.mercurial.write($.git.read(@./repo))`).
+  - Routing uses §9.1's syntax: `History{location ∈ @me}$ = $.ray | $.git`. A superposition stores in each of them.
+- **Decided (2026-10-06):** there is no `Backend` class. A backend is a plain `Language`; what was generic moved to where it belongs.
+  - `Language` has `fidelity` (`Language.Fidelity`), `stored` (the language's own storage level), `Language.Entry` (a tree of files, for a language that writes more than one), `written_to`, `converted` and `tree_at`.
+  - `Language.write` answers text, or an `Entry` when the language writes files.
+  - `History` has what is about histories: `History.Revision`, `History.revisions`, `History.read_revisions` (inferring operations from successive trees), the rename `similarity` and its `similar` threshold, and `History.read_file`.
+  - `Encoding.common` and `Encoding.runs` are the shared byte diff the deltas use.
+  - The other families get the same treatment:
+    - `SQL.Dialect` is gone: `$.sqlite` and `$.postgres` are plain languages over `$.sql`.
+    - `Jobs.Browser` folded into `Jobs` (`evaluated`).
+    - `FileSystem`, `Package` and `Jobs` stay subclasses of `Language`, because each adds operations a language does not have: listing and removing for a file system, resolving, fetching and installing for a package manager, and job control for a runner.
+    - `Encoding.Digest` and `Encoding.Packing` stay subclasses, because they change what reading and writing mean: a digest is one-way, and a packing keeps what it packed.
+- **Decided (2026-10-06):** `Ray.history` is `Node.history`. There is no separate `Ray.history`.
+  - A node's `history` is its `History`. The `.%` form is the Ray language reading and writing a History (`Language.ray.write(history)`, `Language.ray.read(@x.%)`).
+  - The `.%` grammar and writer are statics of `History`: `History.Line`, `History.File`, `History.Index`, `History.Cache`, `History.Written`, `History.line` and `History.edit`.
 - **Decided (2026-10-06):** each backend declares its fidelity, `lossless | snapshot`.
-  - `Ray.history` and Pijul are lossless; Git, Mercurial, Fossil and Subversion are snapshot backends.
+  - Ray (`.%`) and Pijul are lossless; Git, Mercurial, Fossil and Subversion are snapshot backends.
   - Writing to a snapshot backend:
     - A commit's operations become one tree. Each definition is a `.ray` file written by the Ray writer, and the tree is a Hierarchy.
     - Parents become the commit's `previous`, the author is `who`, and the date is `when`.
@@ -394,7 +423,7 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
     - The project's lines then become pins, `.[d] = d%[C]`.
   - `cached` writes `<id>.ray.txt` with `label\ value`, every 64th commit and at the head. A checkout starts from the nearest cached ancestor.
   - `delta` writes a change as `. edited(from, to, "text")` when that is shorter.
-  - The backends' own levels: `Git.packed` (packs with offset deltas), `Mercurial.deltas`, `Fossil.deltas`, `Pijul.stored` (the zstd change file).
+  - Each backend's own level is its `stored`, which its reads and writes add: `$.git.stored` (packs with offset deltas), `$.mercurial.stored` and `$.fossil.stored` (deltas), `$.pijul.stored` (the zstd change file). `Compiler.stored` names none of them.
 - **Decided (2026-10-06):** distribution.
   - Stamps give one global order.
   - The STD's and the players' histories are separate commit Rays. `History.global(histories)` joins them under one commit, ordered by stamp.

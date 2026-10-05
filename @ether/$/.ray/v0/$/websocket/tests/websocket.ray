@@ -1,0 +1,23 @@
+// WebSocket frames and messages are values; the wire format reads them and writes them.
+
+mark ^keyword := external global
+
+hello := WebSocket.Frame(opcode: WebSocket.Opcode.text, payload: "Hello" as Byte[])
+unless hello as Byte[] == [0x81, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f] { INFO@mark `WS1 an unmasked text frame is not written as in RFC 6455 section 5.7` }
+unless ([0x81, 0x85, 0x37, 0xfa, 0x21, 0x3d, 0x7f, 0x9f, 0x4d, 0x51, 0x58] as WebSocket.Frame).payload as String == "Hello" { INFO@mark `WS2 a masked frame does not unmask` }
+unless WebSocket.accept("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGJXdfdmW3w4M=" { INFO@mark `WS3 the accept key is not the one in RFC 6455 section 1.3` }
+long := WebSocket.Frame(opcode: WebSocket.Opcode.binary, payload: [0] * 256)
+unless long.short == 126 && long.medium == 256 { INFO@mark `WS4 a 256 byte payload does not take the 16 bit length` }
+pieces := WebSocket.Stream(frames: [
+  WebSocket.Frame(fin: false, opcode: WebSocket.Opcode.text, payload: "Hel" as Byte[]),
+  WebSocket.Frame(opcode: WebSocket.Opcode.ping),
+  WebSocket.Frame(opcode: WebSocket.Opcode.continuation, payload: "lo" as Byte[])
+])
+unless pieces.messages.first.data == "Hello" { INFO@mark `WS5 fragments are not joined into one message` }
+unless pieces.controls.count == 1 { INFO@mark `WS6 a control frame between fragments is lost` }
+unless Compiler.reduced(WebSocket.Writing(WebSocket.Message("hi")), WebSocket.Framing).masked { INFO@mark `WS7 a client's frame is not masked` }
+if Compiler.reduced(WebSocket.Writing(WebSocket.Message("hi"), from: WebSocket.Side.server), WebSocket.Framing).masked { INFO@mark `WS8 a server's frame is masked` }
+opening := WebSocket.opening(@wss://example.com/chat)
+unless opening.fields["Upgrade"] == "websocket" && opening.fields["Sec-WebSocket-Version"] == "13" { INFO@mark `WS9 the opening request does not ask to upgrade` }
+unless WebSocket.opened(opening, WebSocket.accepting(opening)) { INFO@mark `WS10 an accepted opening is not open` }
+unless WebSocket.Opcode.close.control && !WebSocket.Opcode.text.control { INFO@mark `WS11 close is not a control frame or text is` }

@@ -1,0 +1,11 @@
+// Diagnostics written as a SARIF log.
+
+mark ^keyword := external global
+
+placed := Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)})
+warned := Diagnostic(message: "careful", severity: Diagnostic.Severity.warn)
+sarif := [placed] as SARIF
+unless sarif ~= (*, "\"version\":\"2.1.0\"", *) { INFO@mark `DG8 SARIF is not version 2.1.0` }
+unless sarif ~= (*, "\"level\":\"error\"", *) { INFO@mark `DG9 an error is not a SARIF error` }
+unless sarif ~= (*, "\"startLine\":3,\"startColumn\":5", *) { INFO@mark `DG10 a SARIF region is not one-based` }
+unless [warned] as SARIF ~= (*, "\"level\":\"warning\"", *) { INFO@mark `DG11 a warning is not a SARIF warning` }

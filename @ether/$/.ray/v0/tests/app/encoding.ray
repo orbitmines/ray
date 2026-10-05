@@ -2,7 +2,6 @@
 
 mark ^keyword := external global
 
-Algorithm := Encoding.Algorithm
 one := Instance(location: None, key: 1)
 two := Instance(location: None, key: 2)
 three := Instance(location: None, key: 3)
@@ -25,24 +24,23 @@ unless held_there.opened(Instance(location: None)) is Quest { INFO@mark `EN32 a 
 unless held_there.opened(Character(name: "k", key: 7)) == 5 { INFO@mark `EN33 a value does not open for a character holding its key` }
 unless held_there.opened(Instance(location: None, key: 7)) == 5 { INFO@mark `EN34 a value opened with its key is not what was put in` }
 
-held := 5 as Gzip
+held := 5 as $.gzip
 unless held as Number == 5 { INFO@mark `EN3 what is compressed does not come back` }
-unless held.algorithm == Algorithm.gzip { INFO@mark `EN4 it forgot how it was compressed` }
-if held.algorithm == Algorithm.sha1 { INFO@mark `EN13 it is packed every way at once` }
-anywhere := 4 as Algorithm.base64
+unless held.algorithm === $.gzip { INFO@mark `EN4 it forgot how it was compressed` }
+if held.algorithm === $.sha1 { INFO@mark `EN13 it is packed every way at once` }
+anywhere := 4 as $.base64
 unless anywhere as one == 4 { INFO@mark `EN23 a packed value does not come back at a target` }
 unless anywhere as Number == 4 { INFO@mark `EN24 a packed value does not come back at nothing` }
-nested := Encoding.Encrypted(value: 5 as Gzip, key: 1)
+nested := Encoding.Encrypted(value: 5 as $.gzip, key: 1)
 unless nested.opened(one) as Number == 5 { INFO@mark `EN15 what is packed inside what is locked does not come back` }
 unless nested.opened(two) is Quest { INFO@mark `EN16 what is locked around a packed value opens with the wrong key` }
 
-sha := Encoding.Hash(value: 5, algorithm: Algorithm.sha256)
-unless sha == Encoding.Hash(value: 5, algorithm: Algorithm.sha256) { INFO@mark `EN5 two like digests are not the same` }
-if sha == Encoding.Hash(value: 5, algorithm: Algorithm.md5) { INFO@mark `EN6 digests of different algorithms are the same` }
-if sha == Encoding.Hash(value: 4, algorithm: Algorithm.sha256) { INFO@mark `EN7 digests of different values are the same` }
+sha := Encoding.Hash(value: 5, algorithm: $.sha256)
+unless sha == Encoding.Hash(value: 5, algorithm: $.sha256) { INFO@mark `EN5 two like digests are not the same` }
+if sha == Encoding.Hash(value: 5, algorithm: $.md5) { INFO@mark `EN6 digests of different algorithms are the same` }
+if sha == Encoding.Hash(value: 4, algorithm: $.sha256) { INFO@mark `EN7 digests of different values are the same` }
 unless sha.value == 5 { INFO@mark `EN17 a digest forgot what it was made of` }
-unless sha.algorithm == Algorithm.sha256 { INFO@mark `EN18 a digest forgot how` }
+unless sha.algorithm === $.sha256 { INFO@mark `EN18 a digest forgot how` }
 
-unless Algorithm#.count == 9 { INFO@mark `EN14 there are other than nine algorithms` }
-if Algorithm.md5 == Algorithm.sha1 { INFO@mark `EN19 two algorithms are the same` }
-unless Algorithm.md5 == Algorithm.md5 { INFO@mark `EN20 an algorithm is not itself` }
+if $.md5 === $.sha1 { INFO@mark `EN19 two algorithms are the same` }
+unless $.md5 === $.md5 { INFO@mark `EN20 an algorithm is not itself` }

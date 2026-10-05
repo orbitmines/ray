@@ -1,5 +1,4 @@
-// Where instances are kept, how what is kept is written, which files say what a
-// project needs, and what a command answers.
+// Where instances are kept, and how what is kept is written.
 
 mark ^keyword := external global
 
@@ -9,21 +8,19 @@ memory_store := Store(at: @"memory/kept")
 Kept$ = memory_store
 small := Kept(key: 1, size: 2).persistent
 large := Kept(key: 2, size: 9).persistent
-unless memory_store.backend == None { INFO@mark `DB1 a store in memory is given a format` }
+unless memory_store.kept_in == None { INFO@mark `DB1 a store in memory is given a format` }
 unless Kept$.count == 2 { INFO@mark `DB2 what was kept is not two` }
 unless Kept{size > 5}$.count == 1 { INFO@mark `DB3 a narrowed view is not one` }
 unless Kept{size > 5}$.first == large { INFO@mark `DB4 a narrowed view answers the other one` }
 unless Store.routed(small).contains(memory_store) { INFO@mark `DB5 an instance is not routed where its type was sent` }
 Kept$ |= Store(at: @"memory/copy")
 unless Store.routed(small).count == 2 { INFO@mark `DB6 a type sent to two stores is routed to other than two` }
-unless Store(at: @./kept.sqlite).backend == Store.sqlite { INFO@mark `DB7 a .sqlite location is not kept in SQLite` }
-unless Store(at: @"postgres://db/kept").backend == Store.postgres { INFO@mark `DB8 a postgres location is not kept in Postgres` }
-unless Store(at: @./kept.kv).backend == Store.keyed { INFO@mark `DB9 a .kv location is not kept as keys` }
-unless Store(at: @"kept.%").backend == Store.native { INFO@mark `DB10 a .% location is not kept natively` }
+unless Store(at: @./kept.sqlite).kept_in.language === $.sqlite { INFO@mark `DB7 a .sqlite location is not kept in SQLite` }
+unless Store(at: @"postgres://db/kept").kept_in.language === $.postgres { INFO@mark `DB8 a postgres location is not kept in Postgres` }
+unless Store(at: @./kept.kv).kept_in == Store.keyed { INFO@mark `DB9 a .kv location is not kept as keys` }
+unless Store(at: @"kept.%").kept_in == Store.native { INFO@mark `DB10 a .% location is not kept natively` }
 unless (small as Store.Row).type == "Kept" { INFO@mark `DB11 a row forgot its type` }
 unless (small as Store.Row).instance.size == 2 { INFO@mark `DB12 a row read back is another instance` }
-unless SQL.sqlite.write([small as Store.Row]) ~= (*, "ON CONFLICT (id) DO UPDATE", *) { INFO@mark `DB13 a row is not written as an upsert` }
-unless SQL.quoted("it's") == "'it''s'" { INFO@mark `DB14 a quote in SQL text is not doubled` }
 
 // Column encodings: chosen by what the column holds, and read back the same.
 repeated := Store.Column(name: "a", values: [1, 1, 1, 1, 2, 2, 2, 2])
@@ -37,67 +34,4 @@ unless words.encoded is Store.Dictionary { INFO@mark `DB19 a column of few words
 unless words.encoded.values == words.values { INFO@mark `DB20 a dictionary reads back as other words` }
 unless Store.ALP(exponent: 1, integers: [15, 25]).values == [1.5, 2.5] { INFO@mark `DB21 scaled integers do not read back as decimals` }
 
-// JSON and TOML: read into a document and written back.
-json := "{\"name\": \"x\", \"list\": [1, true, null], \"inner\": {\"a\": \"b\\n\"}}" as JSON
-unless json.value.name == "x" { INFO@mark `JN1 a JSON member is not read` }
-unless json.value.list.count == 3 { INFO@mark `JN2 a JSON array is not three` }
-unless json.value.list[1] == true { INFO@mark `JN3 JSON true is not true` }
-unless json.value.inner.a == "b" + \n { INFO@mark `JN4 a JSON escape is not read` }
-unless JSON.language.write([1, "a"]) == "[1, \"a\"]" { INFO@mark `JN5 a list is not written as JSON` }
-unless (JSON.language.write(json.value) as JSON).value.inner.a == json.value.inner.a { INFO@mark `JN6 written JSON does not read back` }
-
-toml := "name = \"y\"\n[package]\nversion = \"1.2.3\"\n[[bin]]\nname = \"a\"\n[[bin]]\nname = \"b\"\n[dependencies]\nserde = { version = \"1\", features = [\"derive\"] }" as TOML
-unless toml.value.name == "y" { INFO@mark `TO1 a TOML key is not read` }
-unless toml.value.package.version == "1.2.3" { INFO@mark `TO2 a TOML table is not read` }
-unless toml.value.bin.count == 2 { INFO@mark `TO3 an array of tables is not two` }
-unless toml.value.bin.last.name == "b" { INFO@mark `TO4 a key under an array table lands elsewhere` }
-unless toml.value.dependencies.serde.features.first == "derive" { INFO@mark `TO5 an inline table is not read` }
-unless (TOML.language.write(toml.value) as TOML).value.package.version == "1.2.3" { INFO@mark `TO6 written TOML does not read back` }
-
-// Versions and the ranges written against them.
-unless "1.2.3" as SemVer < "1.10.0" as SemVer { INFO@mark `PK1 versions are not ordered by number` }
-unless "1.0.0-alpha" as SemVer < "1.0.0" as SemVer { INFO@mark `PK2 a pre-release is not before its release` }
-unless Requirement.parsed("^1.2.3", "=").admits("1.9.0") { INFO@mark `PK3 a caret range leaves out a minor release` }
-if Requirement.parsed("^1.2.3", "=").admits("2.0.0") { INFO@mark `PK4 a caret range admits a breaking release` }
-if Requirement.parsed("^0.2.3", "=").admits("0.3.0") { INFO@mark `PK5 a caret range on zero admits the next minor` }
-unless Requirement.parsed("~1.2", "=").admits("1.2.9") { INFO@mark `PK6 a tilde range leaves out a patch` }
-unless Requirement.parsed(">=1, <2 || 3.x", "=").admits("3.4.0") { INFO@mark `PK7 an alternative range is not admitted` }
-unless Requirement.parsed("1.2", "^").admits("1.5.0") { INFO@mark `PK8 a bare Cargo requirement is not a caret` }
-if Requirement.parsed("1.2", "=").admits("1.5.0") { INFO@mark `PK9 a bare npm requirement admits another minor` }
-unless Requirement.parsed("~=2.2", "==").admits("2.9") { INFO@mark `PK10 a compatible release leaves out a minor` }
-if Requirement.parsed("~=1.4.5", "==").admits("1.5.0") { INFO@mark `PK11 a compatible release admits the next minor` }
-unless "2.0-1" as Debian.Version < "1:1.0-1" as Debian.Version { INFO@mark `PK12 an epoch does not outrank the version` }
-unless "1.0~rc1-1" as Debian.Version < "1.0-1" as Debian.Version { INFO@mark `PK13 a tilde does not sort before the release` }
-
-// Manifests read into a project and written back.
-npm_project := Package.npm.read("{\"name\": \"app\", \"version\": \"1.0.0\", \"dependencies\": {\"left-pad\": \"^1.3.0\"}, \"devDependencies\": {\"tap\": \"16\"}}")
-unless npm_project.name == "app" { INFO@mark `PK14 package.json does not name its project` }
-unless npm_project.dependencies.count == 2 { INFO@mark `PK15 package.json does not depend on two` }
-unless npm_project.dependencies.first.location == "npm/left-pad" { INFO@mark `PK16 an npm dependency is not under npm` }
-unless npm_project.dependencies.last.kind == "devDependencies" { INFO@mark `PK17 a development dependency forgot its kind` }
-unless Package.npm.read(npm_project.manifest).dependencies.count == 2 { INFO@mark `PK18 a written package.json does not read back` }
-cargo_project := Package.cargo.read("[package]\nname = \"tool\"\nversion = \"0.1.0\"\n[dependencies]\nserde = \"1.0\"\nlocal = { path = \"../local\" }")
-unless cargo_project.name == "tool" { INFO@mark `PK19 Cargo.toml does not name its package` }
-unless cargo_project.dependencies.first.version.bare == "^" { INFO@mark `PK20 a Cargo requirement is not read as a caret` }
-unless cargo_project.dependencies.last.location == "../local" { INFO@mark `PK21 a path dependency is not a location` }
-python_project := Package.pip.read("[project]\nname = \"lib\"\nversion = \"2.0\"\ndependencies = [\"requests>=2.31\", \"tomli; python_version < '1.0'\"]")
-unless python_project.dependencies.count == 1 { INFO@mark `PK22 a dependency whose marker fails is kept` }
-unless python_project.dependencies.first.location == "pip/requests" { INFO@mark `PK23 a pip dependency is not under pip` }
-unless Package.requirements.read("# pinned\nflask==3.0.0\n-r other.txt\n").dependencies.count == 1 { INFO@mark `PK24 requirements.txt is not one dependency` }
-apt_project := Package.apt.read("Package: tool\nVersion: 1.0-1\nDepends: libc6 (>= 2.34), libfoo | libbar\nDescription: a tool\n more")
-unless apt_project.dependencies.count == 2 { INFO@mark `PK25 a control file does not depend on two` }
-unless apt_project.dependencies.last.alternatives.count == 1 { INFO@mark `PK26 an alternative dependency is not kept` }
-unless apt_project.dependencies.first.version.admits("2.36-1") { INFO@mark `PK27 a relation leaves out a later version` }
-unless Project().language_of("Cargo.toml") == Package.cargo { INFO@mark `PK28 Cargo.toml is not read as Cargo` }
 unless Layout().path("clang", ["windows", "x86-64"], "0.16.0") as String ~= "@clang/$/@windows/@x86-64/%/0.16.0" ⊣ { INFO@mark `PK29 an install is not under the decided layout` }
-
-// Commands: written as shell, read from shell.
-unless Shell.quoted("plain-word") == "plain-word" { INFO@mark `PC1 a plain word is quoted` }
-unless Shell.quoted("it's here") == "'it'\\''s here'" { INFO@mark `PC2 a quote is not escaped for the shell` }
-unless Process(command: "echo", arguments: ["a b"]).script == "echo 'a b'" { INFO@mark `PC3 a command is not written as shell` }
-read_command := @sh`FOO=1 ls -la "my dir"`
-unless read_command.command == "ls" { INFO@mark `PC4 a shell command is not read` }
-unless read_command.arguments.last == "my dir" { INFO@mark `PC5 a double-quoted argument is not one word` }
-unless read_command.environment.first.name == "FOO" { INFO@mark `PC6 an assignment before a command is not its environment` }
-unless @sh`ls | wc -l`.piped.command == "ls" { INFO@mark `PC7 a pipeline is not read as one process into another` }
-unless Process(command: "a").into(Process(command: "b")).script == "a | b" { INFO@mark `PC8 a pipe is not written as shell` }

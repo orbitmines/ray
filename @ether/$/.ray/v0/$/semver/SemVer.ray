@@ -1,0 +1,46 @@
+// Semantic Versioning 2.0.0 (https://semver.org/spec/v2.0.0.html), with the partial and wildcard forms ranges are written with
+SemVer := class (major: Part, (".", minor: Part)?, (".", patch: Part)?, (("-" | "." | ""), pre: (Char.Letter, (Char.Word | ".")[]))?, ("+", build: (Char.Word | "." | "-")[])?) => {
+  static Part := Decimal | "x" | "X" | "*"
+  static number (part) => part is Decimal ? part : None
+
+  filled => (number(major) ?? 0, number(minor) ?? 0, number(patch) ?? 0)
+  chainable == (other: SemVer) => filled == other.filled && pre == other.pre
+  chainable < (other: SemVer) => filled < other.filled || filled == other.filled && pre != None && (other.pre == None || pre < other.pre)
+  matched (version: SemVer) => [major, minor, patch].zip(version.filled).every((part, actual) => number(part) == None || number(part) == actual)
+
+  caret => number(major) != 0 || number(minor) == None ? SemVer(major: number(major) + 1, minor: 0, patch: 0)
+    : number(minor) != 0 || number(patch) == None ? SemVer(major: 0, minor: number(minor) + 1, patch: 0)
+    : SemVer(major: 0, minor: 0, patch: number(patch) + 1)
+  tilde => number(minor) == None ? SemVer(major: number(major) + 1, minor: 0, patch: 0) : SemVer(major: number(major), minor: number(minor) + 1, patch: 0)
+  // Compatible release, PEP 440 (https://peps.python.org/pep-0440/#compatible-release)
+  compatible => number(patch) == None ? SemVer(major: number(major) + 1, minor: 0, patch: 0) : SemVer(major: number(major), minor: number(minor) + 1, patch: 0)
+  lowest => SemVer(major: filled.0, minor: filled.1, patch: filled.2, pre)
+  static language = Language(".semver", level: { {text: String} => text as SemVer })
+}
+
+// npm ranges (https://github.com/npm/node-semver#ranges), Cargo requirements (https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html), PEP 440 specifiers (https://peps.python.org/pep-0440/#version-specifiers)
+Requirement := class ((alternatives: (Hyphen | Set)[]).join((" "[], "||", " "[]))) => {
+  bare = "="
+
+  static Comparator := class (operator: ("===" | "==" | "!=" | "~=" | ">=" | "<=" | ">" | "<" | "^" | "~" | "=")?, " "[], version: SemVer) => {
+    admits (v: SemVer, bare: String) => (operator ?? bare) -- (op =>
+      op == "^" ? !(v < version.lowest) && v < version.caret
+      : op == "~" ? !(v < version.lowest) && v < version.tilde
+      : op == "~=" ? !(v < version.lowest) && v < version.compatible
+      : op == ">=" ? !(v < version.lowest)
+      : op == ">" ? version.lowest < v && !version.matched(v)
+      : op == "<=" ? !(version.lowest < v) || version.matched(v)
+      : op == "<" ? v < version.lowest
+      : op == "!=" ? !version.matched(v)
+      : version.matched(v))
+  }
+  static Set := class ((comparators: Comparator[]).join(((" "[], ",", " "[]) | " "[]{length > 0}))) => {
+    admits (v: SemVer, bare: String) => comparators.every(.admits(v, bare))
+  }
+  static Hyphen := class (low: SemVer, " - ", high: SemVer) => {
+    admits (v: SemVer, bare: String) => !(v < low.lowest) && (!(high.lowest < v) || high.matched(v))
+  }
+
+  admits (version) => (version as SemVer) -- (v => alternatives.some(.admits(v, bare)))
+  static parsed (text: String, bare: String) => (text.trimmed.empty || text.trimmed == "latest" ? "*" : text.trimmed) as Requirement ~~ (.bare = bare)
+}

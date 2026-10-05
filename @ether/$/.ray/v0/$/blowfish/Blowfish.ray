@@ -1,0 +1,4 @@
+// Blowfish (https://www.schneier.com/academic/archives/1994/09/description_of_a_new.html)
+Blowfish := class: Encoding.Packing {
+  static extensions = ".blowfish"
+}

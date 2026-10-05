@@ -1,0 +1,15 @@
+// Diagnostics written as LSP's publishDiagnostics.
+
+mark ^keyword := external global
+
+placed := Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)})
+warned := Diagnostic(message: "careful", severity: Diagnostic.Severity.warn)
+lsp := [placed] as LSP
+unless lsp ~= ⊢"Content-Length: " { INFO@mark `DG3 an LSP message has no Content-Length header` }
+unless lsp ~= (*, "\"method\":\"textDocument/publishDiagnostics\"", *) { INFO@mark `DG4 diagnostics are not published as textDocument/publishDiagnostics` }
+unless lsp ~= (*, "\"range\":{\"start\":{\"line\":2,\"character\":4},\"end\":{\"line\":2,\"character\":7}}", *) { INFO@mark `DG5 an LSP range is not zero-based` }
+unless lsp ~= (*, "\"severity\":1", *) { INFO@mark `DG6 an error is not LSP severity 1` }
+unless (lsp as LSP.Wire).size == (lsp as LSP.Wire).content.count { INFO@mark `DG7 Content-Length is not the length of the content` }
+unless [warned] as LSP ~= (*, "\"severity\":2", *) { INFO@mark `DG12 a warning is not LSP severity 2` }
+unless [Diagnostic(message: "outer", cause: placed)] as LSP ~= (*, "\"relatedInformation\"", *) { INFO@mark `DG13 a cause is not written as related information` }
+unless $.lsp === LSP { INFO@mark `DG14 $.lsp is not LSP` }

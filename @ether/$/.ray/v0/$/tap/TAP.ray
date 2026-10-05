@@ -1,0 +1,29 @@
+// Test Anything Protocol version 14 (https://testanything.org/tap-version-14-specification.html)
+TAP := class: Language {
+  static extensions = ".tap"
+
+  // Description: "#" and "\" are escaped with "\" (https://testanything.org/tap-version-14-specification.html#escaping)
+  static Description := class: String (((!"#" && !"\\" && !\n) | ("\\", "#" | "\\"))[]) {
+    static (text: String) as (=== Description) => #text.map(. is ("#" | "\\") ? "\\" + . : .) as String
+  }
+  // YAML diagnostics, indented two spaces between "---" and "..." (https://testanything.org/tap-version-14-specification.html#yaml-diagnostics)
+  static YAML := class ("  ---", \n, lines: ("  ", (name: Char.Word[], ": ", value: (!\n)[]), \n)[], "  ...", \n)
+  // Test points (https://testanything.org/tap-version-14-specification.html#test-points)
+  static Point := class ((failed: "not ")?, "ok ", number: Decimal, " - ", description: Description, \n, (yaml: YAML) if failed)
+  // Version, plan and test points (https://testanything.org/tap-version-14-specification.html#version, https://testanything.org/tap-version-14-specification.html#plan)
+  static Wire := class ("TAP version 14", \n, "1..", plan: Decimal = points.count, \n, points: Point[]{length == plan}, ("# ", name: (!\n)[], \n)?)
+
+  level := {
+    {wire: Wire} => Report(name: wire.name ?? "ray", claims: wire.points.map(point => (point.description as String ~= (id: Char.Word[], " ", message: *)) -- (named => Report.Claim(named.id, named.message,
+      passed: !point.failed,
+      at: point.yaml ? (point.yaml.lines{.name == "file"}.first?.value as Location){from == (point.yaml.lines{.name == "line"}.first?.value as Decimal ?? 1, 1)} : None))))
+  }
+  written := {
+    {writing: Language.Writing{value is Report}} => Wire(name: writing.value.name, points: writing.value.claims.enumerate.map(claim => Point(
+      failed: "not " if !claim.value.passed,
+      number: claim.index + 1,
+      description: (claim.value.id + " " + claim.value.message) as Description,
+      yaml: YAML(lines: [(name: "message", value: JSON.write(claim.value.message)), (name: "file", value: JSON.write(claim.value.at?.file as String)) if claim.value.at, (name: "line", value: (claim.value.at.from?.line ?? 1) as String) if claim.value.at]) if !claim.value.passed
+    )))
+  }
+}

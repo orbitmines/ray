@@ -1,0 +1,10 @@
+// Debian versions, and control files read into a project.
+
+mark ^keyword := external global
+
+unless "2.0-1" as Debian.Version < "1:1.0-1" as Debian.Version { INFO@mark `PK12 an epoch does not outrank the version` }
+unless "1.0~rc1-1" as Debian.Version < "1.0-1" as Debian.Version { INFO@mark `PK13 a tilde does not sort before the release` }
+apt_project := $.apt.read("Package: tool\nVersion: 1.0-1\nDepends: libc6 (>= 2.34), libfoo | libbar\nDescription: a tool\n more")
+unless apt_project.dependencies.count == 2 { INFO@mark `PK25 a control file does not depend on two` }
+unless apt_project.dependencies.last.alternatives.count == 1 { INFO@mark `PK26 an alternative dependency is not kept` }
+unless apt_project.dependencies.first.version.admits("2.36-1") { INFO@mark `PK27 a relation leaves out a later version` }

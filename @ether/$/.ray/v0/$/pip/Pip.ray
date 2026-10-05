@@ -1,0 +1,47 @@
+Pip := class {
+  // Dependency specifiers, PEP 508 (https://peps.python.org/pep-0508/)
+  static Blank := (" " | \t)[]
+  static Specifier := class (name: ((Char.Letter | Char.Digit), (Char.Word | "-" | ".")[]), Blank, ("[", Blank, (extras: (Char.Word | "-" | ".")[]).join((Blank, ",", Blank)), Blank, "]")?, Blank,
+    (("(", Blank, requirement: (!")")[], ")") | ("@", Blank, url: (!" " && !";")[]) | requirement: (!";" && !"#" && !\n)[])?, Blank, (";", Blank, marker: Marker)?) => {
+    canonical => name.lower_case.replace("_", "-").replace(".", "-")
+    applies => !marker || marker.holds
+    dependency (kind: String) => url ? Project.Dependency(location: url, kind)
+      : Project.Dependency(location: "pip/" + canonical, version: (requirement as Requirement if requirement?.trimmed.nonempty), kind)
+  }
+
+  static Operand := class ((variable: (Char.Letter | "_", (Char.Word | ".")[])) | ("\"", text: (!"\"")[], "\"") | ("'", text: (!"'")[], "'")) => {
+    value => text ?? environment[variable] ?? ""
+  }
+  static Clause := class (("(", Blank, inner: Marker, Blank, ")") | (left: Operand, Blank, operator: "===" | "==" | "!=" | "~=" | ">=" | "<=" | "<" | ">" | "not in" | "in", Blank, right: Operand)) => {
+    holds => inner ? inner.holds
+      : operator == "in" ? right.value ~= left.value
+      : operator == "not in" ? !(right.value ~= left.value)
+      : (left.value as SemVer && right.value as SemVer) ? Requirement.parsed(operator + right.value, "==").admits(left.value)
+      : operator == "==" || operator == "===" ? left.value == right.value
+      : operator == "!=" ? left.value != right.value
+      : operator == "<" ? left.value < right.value
+      : operator == ">" ? right.value < left.value
+      : operator == "<=" ? !(right.value < left.value)
+      : !(left.value < right.value)
+  }
+  static Marker := class ((disjuncts: (conjuncts: Clause[].join((Blank, "and", Blank)))[]).join((Blank, "or", Blank))) => {
+    holds => disjuncts.some(.conjuncts.every(.holds))
+  }
+
+  static python (code: String) => Process(command: "python3", arguments: ["-c", code]).stdout.trimmed
+  static environment => Document(entries: [
+    (name: "os_name", value: OS().name == windows ? "nt" : "posix"),
+    (name: "sys_platform", value: OS().platform),
+    (name: "platform_system", value: { "linux": "Linux", "darwin": "Darwin", "win32": "Windows" }[OS().platform] ?? ""),
+    (name: "platform_machine", value: OS().architecture),
+    (name: "implementation_name", value: "cpython"),
+    (name: "python_version", value: python("import sys;print('%d.%d'%sys.version_info[:2])")),
+    (name: "python_full_version", value: python("import platform;print(platform.python_version())")),
+    (name: "extra", value: "")
+  ])
+
+  // Requirements file format (https://pip.pypa.io/en/stable/reference/requirements-file-format/)
+  static Requirements := class ((lines: (Blank, (option: ("-", (!\n)[])) | specifier: Specifier)?, Blank, ("#", (!\n)[])?)[]).join(\n)) => {
+    specifiers => lines.specifier.compact{.applies}
+  }
+}

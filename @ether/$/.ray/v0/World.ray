@@ -96,7 +96,7 @@ History := class: Iterable = repository: *?, base: Commit?, head: Commit? {
   value => ordered.reduce(held = None => .applied(held))
   pinned (label, as_of: Stamp? = None) => since(None).find(c => c.operations.some(.substitutes == label && (as_of === None || .stamp < as_of)))?.id ?? label
   checkout (label, as_of: Stamp? = None) => at(pinned(label, as_of)).value
-  tree => value -- (held => Backend.Entry.of(definitions{held[.id] != None}.map(d => (path: d.path_in(this), content: d.language.write(held[d.id]) as Byte[]))))
+  tree => value -- (held => Language.Entry.of(definitions{held[.id] != None}.map(d => (path: d.path_in(this), content: d.language.write(held[d.id]) as Byte[]))))
 
   fork => History(repository, base: head, head)
   drop: static => reset(base)

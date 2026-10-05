@@ -2,7 +2,7 @@ Process := class = command: String | Program, arguments: String[] = [], environm
   job: Job?
 
   runner => Compiler.reduced(this, ProcessOptimizations)
-  script => Shell.language.write(this)
+  script => $.sh.write(this)
   stdin => command is Program ? command.code as String : input
   started: static => this ~~ (.job ??= runner.submitted(this))
   finished => started.job.await
@@ -31,8 +31,8 @@ Job := class = id: String, runner: Jobs {
   remove => runner.removed(this)
 }
 
-Jobs := class: Language = name: String {
-  submitted (process: Process) => Job(id: (external os `job` (name, process.script, process.stdin ?? "")) as String, runner: this)
+Jobs := class: Language = name: String, evaluated = false {
+  submitted (process: Process) => Job(id: (evaluated ? external os `evaluate` (process.command as String) : external os `job` (name, process.script, process.stdin ?? "")) as String, runner: this)
   state (job: Job) => (external os `job_state` (name, job.id)) as Job.State
   attached (job: Job) => (external os `job_attach` (name, job.id)) as String
   stopped (job: Job) => external os `job_stop` (name, job.id)
@@ -42,10 +42,7 @@ Jobs := class: Language = name: String {
   static daemon = Jobs(".jobs", name: "daemon")
   static direct = Jobs(".spawn", name: "direct")
   static running => (external os `daemon`) as boolean
-  static Browser := class: Jobs {
-    submitted (process: Process) => Job(id: (external os `evaluate` (process.command as String)) as String, runner: this)
-  }
-  static browser = Browser(".js", name: "browser")
+  static browser = Jobs(".browser", name: "browser", evaluated: true)
   static remote (instance: Instance) => Jobs(".remote", name: instance.address as String)
 }
 
@@ -54,54 +51,6 @@ ProcessOptimizations := {
   {process: Process{OS().name == ether}} => Jobs.browser
   {process: Process{Jobs.running}} => Jobs.daemon
   {process: Process} => Jobs.direct
-}
-
-// Shell Command Language, POSIX.1-2024 XCU chapter 2 (https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html)
-Shell := class (Blank, steps: (pipeline: Pipeline, (Blank, connective: "&&" | "||" | ";" | "&" | \n, Blank)?)[], Blank) => {
-  static Blank := (" " | \t | ("\\", \n))[]
-  static Special := " " | \t | \n | "'" | "\"" | "\\" | "|" | "&" | ";" | "<" | ">" | "(" | ")" | "$" | "`"
-  static Safe := Char.Word | "-" | "." | "/" | ":" | "=" | "@" | "%" | "+" | "," | "^"
-
-  static Escaped := class ("\\", character: Char)
-  static Single := class ("'", text: (!"'")[], "'") => {
-    value => text as String
-  }
-  static Double := class ("\"", characters: (Escaped | Expansion | Char{!= "\"" && != "\\" && != "$"})[], "\"") => {
-    value => characters.map(. is Escaped ? .character : . is Expansion ? .value : .).join("") as String
-  }
-  static Expansion := class ("$", (name: (Char.Letter | "_", Char.Word[])) | ("{", name: (!"}")[], "}")) => {
-    value => (external os `environment` (name as String)) as String ?? ""
-  }
-  static Bare := class (characters: (Escaped | Char{!Special})[]{length > 0}) => {
-    value => characters.map(. is Escaped ? .character : .).join("") as String
-  }
-  static Word := class (parts: (Single | Double | Expansion | Bare)[]{length > 0}) => {
-    value => parts.map(.value).join("") as String
-  }
-  static Assignment := class (name: (Char.Letter | "_", Char.Word[]), "=", value: Word?)
-  static Redirect := class (descriptor: Char.Digit?, operator: ">>" | ">&" | ">" | "<", Blank, target: Word)
-  static Command := class ((assignments: Assignment[]).join(Blank), Blank, (items: (Redirect | Word)[]).join(Blank)) => {
-    words => items{is Word}.map(.value)
-    process => Process(command: words.first, arguments: words.rest, environment: assignments.map((name: .name as String, value: .value?.value ?? "")))
-  }
-  static Pipeline := class ((commands: Command[]).join((Blank, "|", Blank))) => {
-    process => commands.map(.process).reduce(held => held.into(.))
-  }
-
-  simple => steps.count == 1 && !steps.first.connective && steps.first.pipeline.commands.every(.items.every(. is Word))
-  process => simple ? steps.first.pipeline.process : Process(command: "sh", arguments: ["-c", written])
-  written: String
-
-  static quoted (word: String) => word.nonempty && word ~= ⊢ Safe[] ⊣ ? word : "'" + word.replace("'", "'\\''") + "'"
-  static written := {
-    {writing: Language.Writing{value is Process{piped}}} => writing.value -- (held => Language.Writing(held.piped), " | ", Language.Writing(Process(held.command, held.arguments, held.environment, held.directory)))
-    {writing: Language.Writing{value is Process{directory}}} => writing.value -- (held => "cd ", quoted(held.directory.sandboxed), " && ", Language.Writing(Process(held.command, held.arguments, held.environment)))
-    {writing: Language.Writing{value is Process{command is Program}}} => writing.value -- (held => Language.Writing(Process(command: "ray", arguments: ["/dev/stdin", held.arguments].flatten, environment: held.environment)))
-    {writing: Language.Writing{value is Process}} => writing.value.environment.map(.name, "=", quoted(.value), " "), quoted(writing.value.command), writing.value.arguments.map(" ", quoted(.))
-    {writing: Language.Writing{value is String}} => quoted(writing.value)
-  }
-  static level := { {text: String} => (text as Shell) ~~ (.written = text) -- .process }
-  static language = Language(".sh" | ".bash", level: level, written: written)
 }
 
 Program &+= {

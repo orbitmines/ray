@@ -1,0 +1,107 @@
+// ECMAScript Language Specification (https://tc39.es/ecma262/)
+JS := class: Language {
+  static extensions = ".js"
+
+  Module := class = statements: Statement[] = []
+  Statement := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | Comment | String
+  Let := class = name: String, value: Expression
+  Assign := class = target: Expression, value: Expression
+  Effect := class = reads: Expression, body: Statement[]
+  Listen := class = target: Expression, event: String, body: Statement[]
+  Call := class = function: Expression, arguments: Expression[] = []
+  Function := class = name: String?, parameters: String[], body: Statement[]
+  Return := class = value: Expression
+  If := class = condition: Expression, then: Statement[], otherwise: Statement[] = []
+  Raw := class = code: String
+  Comment := class = text: String
+  Member := class = object: Expression, member: String
+  Operation := class = left: Expression, operator: String, right: Expression
+  Ternary := class = condition: Expression, then: Expression, otherwise: Expression
+  Prefix := class = operator: String, operand: Expression
+  Record := class = entries: (name: String, value: Expression)[]
+  Listing := class = elements: Expression[]
+  Literal := class = value: *
+  ById := class = id: String
+  Expression := String | Number | Call | Function | Raw | Member | Operation | Ternary | Prefix | Record | Listing | Literal | ById
+  Built := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | Comment | Member | Operation | Ternary | Prefix | Record | Listing | Literal | ById
+
+  Spliced := class = value: *
+  Statements := class = value: *
+  named (parameters: String) => parameters.split(",").map(.trimmed){!.empty}
+
+  Identifier = (Char.Letter | "_" | "$", (Char.Word | "$")[])
+
+  syntax := Compiler.default + {
+    //{literal text: (!\n)[]} => Comment(text)
+    /*{literal text}*/ => Comment(text)
+    {`{`}{lines}{`}`} => Statements(lines)
+    {binding: "const" | "let" | "var"} {name: Identifier} = {value} => Let(name, Spliced(value))
+    return {value} => Return(Spliced(value))
+    if ({condition}) {then} else {otherwise} => If(Spliced(condition), Statements(then), Statements(otherwise))
+    if ({condition}) {then} => If(Spliced(condition), Statements(then))
+    function {name: Identifier}({parameters: Parameters}) {body} => Function(name, named(parameters), Statements(body))
+    ({parameters: Parameters}) => {body} => Function(None, named(parameters), body is Iterable && !(body is (String | Built)) ? Statements(body) : [Return(Spliced(body))])
+    {target} = {value} => Assign(Spliced(target), Spliced(value))
+    {condition} ? {then} : {otherwise} => Ternary(Spliced(condition), Spliced(then), Spliced(otherwise))
+    {left} ?? {right} => Operation(Spliced(left), "??", Spliced(right))
+    {left} || {right} => Operation(Spliced(left), "||", Spliced(right))
+    {left} && {right} => Operation(Spliced(left), "&&", Spliced(right))
+    {left} === {right} => Operation(Spliced(left), "===", Spliced(right))
+    {left} !== {right} => Operation(Spliced(left), "!==", Spliced(right))
+    {left} == {right} => Operation(Spliced(left), "==", Spliced(right))
+    {left} != {right} => Operation(Spliced(left), "!=", Spliced(right))
+    {left} <= {right} => Operation(Spliced(left), "<=", Spliced(right))
+    {left} >= {right} => Operation(Spliced(left), ">=", Spliced(right))
+    {left} < {right} => Operation(Spliced(left), "<", Spliced(right))
+    {left} > {right} => Operation(Spliced(left), ">", Spliced(right))
+    {left} + {right} => Operation(Spliced(left), "+", Spliced(right))
+    {left} - {right} => Operation(Spliced(left), "-", Spliced(right))
+    {left} * {right} => Operation(Spliced(left), "*", Spliced(right))
+    {left} / {right} => Operation(Spliced(left), "/", Spliced(right))
+    {left} % {right} => Operation(Spliced(left), "%", Spliced(right))
+    !{operand} => Prefix("!", Spliced(operand))
+    -{operand} => Prefix("-", Spliced(operand))
+    new {operand} => Prefix("new ", Spliced(operand))
+    typeof {operand} => Prefix("typeof ", Spliced(operand))
+    {target}.addEventListener({event: String}, ({p: Parameters}) => {body}) => Listen(Spliced(target), event, Statements(body))
+    effect({reads}, () => {body}) => Effect(Spliced(reads), Statements(body))
+    document.getElementById({id: String}) => ById(id)
+    {function}(...{arguments}) => Call(Spliced(function), arguments.map(Spliced(.)))
+    {function}({arguments: *[]}) => Call(Spliced(function), arguments.map(Spliced(.)))
+    {object}.{member} => Member(Spliced(object), member is Raw ? member.code : member)
+    [{elements: *[]}] => Compiler.reduced(elements.map(Spliced(.)), syntax) -- (.every(. is Literal) ? Literal(.map(.value)) : Listing(.))
+    \{{entries: *[]}{`}`} => Record(entries)
+    {name: Identifier}: {value} => (name: name, value: Spliced(value))
+    /{literal pattern}/{flags: Char.Letter[]} => Raw("/" + pattern + "/" + flags)
+    {spliced: Spliced{value is Built}} => spliced.value
+    {spliced: Spliced} => Literal(spliced.value)
+    {listed: Statements{value === None}} => []
+    {listed: Statements{value is Iterable && !(value is (String | Built))}} => Compiler.reduced(listed.value.map(Statements(.)), syntax).flatten(1)
+    {listed: Statements} => [Spliced(listed.value)]
+    null => Literal(None)
+    {name: Identifier} => Raw(name)
+  }
+
+  written := JSON.written + {
+    {module: Module} => module.statements.map(., ";")
+    {binding: Let} => "let ", binding.name, "=", binding.value
+    {assign: Assign} => assign.target, "=", assign.value
+    {effect: Effect} => "effect(", effect.reads, ",()=>{", effect.body.map(., ";"), "})"
+    {listen: Listen} => listen.target, ".addEventListener(", Language.Writing(listen.event), ",(event)=>{", listen.body.map(., ";"), "})"
+    {call: Call} => call.function, "(", call.arguments.map(("," if .index > 0), .), ")"
+    {defined: Function} => "function ", defined.name ?? "", "(", defined.parameters.join(","), "){", defined.body.map(., ";"), "}"
+    {returned: Return} => "return ", returned.value
+    {branch: If} => "if(", branch.condition, "){", branch.then.map(., ";"), "}else{", branch.otherwise.map(., ";"), "}"
+    {raw: Raw} => raw.code
+    {comment: Comment} => "/*", comment.text, "*/"
+    {member: Member} => member.object, ".", member.member
+    {operation: Operation} => "(", operation.left, operation.operator, operation.right, ")"
+    {choice: Ternary} => "(", choice.condition, "?", choice.then, ":", choice.otherwise, ")"
+    {prefixed: Prefix} => "(", prefixed.operator, prefixed.operand, ")"
+    {record: Record} => "{", record.entries.map(("," if .index > 0), .name, ":", .value), "}"
+    {listing: Listing} => "[", listing.elements.map(("," if .index > 0), .), "]"
+    {literal: Literal} => Language.Writing(literal.value)
+    {found: ById} => "document.getElementById(", Language.Writing(found.id), ")"
+  }
+  level := syntax
+}

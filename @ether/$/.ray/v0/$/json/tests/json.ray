@@ -1,0 +1,12 @@
+// JSON: read into a document and written back.
+
+mark ^keyword := external global
+
+json := "{\"name\": \"x\", \"list\": [1, true, null], \"inner\": {\"a\": \"b\\n\"}}" as JSON
+unless json.value.name == "x" { INFO@mark `JN1 a JSON member is not read` }
+unless json.value.list.count == 3 { INFO@mark `JN2 a JSON array is not three` }
+unless json.value.list[1] == true { INFO@mark `JN3 JSON true is not true` }
+unless json.value.inner.a == "b" + \n { INFO@mark `JN4 a JSON escape is not read` }
+unless $.json.write([1, "a"]) == "[1, \"a\"]" { INFO@mark `JN5 a list is not written as JSON` }
+unless ($.json.write(json.value) as JSON).value.inner.a == json.value.inner.a { INFO@mark `JN6 written JSON does not read back` }
+unless $.json === JSON.language { INFO@mark `JN7 $.json is not the JSON language` }

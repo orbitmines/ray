@@ -1,44 +1,14 @@
-// A diagnostic and a run of claims are values; LSP, SARIF, TAP and JUnit are how they are written.
+// A diagnostic and a run of claims are values; $/lsp, $/sarif, $/tap and $/junit write them.
 
 mark ^keyword := external global
 
 failing := Diagnostic(message: "no")
 unless failing.severity == Diagnostic.Severity.error { INFO@mark `DG1 an error is not of error severity` }
 unless Diagnostic(message: "stop", fatal: true).severity == Diagnostic.Severity.fatal { INFO@mark `DG2 a fatal error is not of fatal severity` }
-placed := Diagnostic(message: "no", at: @/a.ray{from == (3, 5), to == (3, 8)})
-lsp := [placed] as LSP
-unless lsp ~= ⊢"Content-Length: " { INFO@mark `DG3 an LSP message has no Content-Length header` }
-unless lsp ~= (*, "\"method\":\"textDocument/publishDiagnostics\"", *) { INFO@mark `DG4 diagnostics are not published as textDocument/publishDiagnostics` }
-unless lsp ~= (*, "\"range\":{\"start\":{\"line\":2,\"character\":4},\"end\":{\"line\":2,\"character\":7}}", *) { INFO@mark `DG5 an LSP range is not zero-based` }
-unless lsp ~= (*, "\"severity\":1", *) { INFO@mark `DG6 an error is not LSP severity 1` }
-unless (lsp as LSP.Wire).size == (lsp as LSP.Wire).content.count { INFO@mark `DG7 Content-Length is not the length of the content` }
-sarif := [placed] as SARIF
-unless sarif ~= (*, "\"version\":\"2.1.0\"", *) { INFO@mark `DG8 SARIF is not version 2.1.0` }
-unless sarif ~= (*, "\"level\":\"error\"", *) { INFO@mark `DG9 an error is not a SARIF error` }
-unless sarif ~= (*, "\"startLine\":3,\"startColumn\":5", *) { INFO@mark `DG10 a SARIF region is not one-based` }
-warned := Diagnostic(message: "careful", severity: Diagnostic.Severity.warn)
-unless [warned] as SARIF ~= (*, "\"level\":\"warning\"", *) { INFO@mark `DG11 a warning is not a SARIF warning` }
-unless [warned] as LSP ~= (*, "\"severity\":2", *) { INFO@mark `DG12 a warning is not LSP severity 2` }
-unless [Diagnostic(message: "outer", cause: placed)] as LSP ~= (*, "\"relatedInformation\"", *) { INFO@mark `DG13 a cause is not written as related information` }
 
 run := Report(name: "suite", claims: [
   Report.Claim(id: "A1", message: "one holds"),
   Report.Claim(id: "A2", message: "two # fails", passed: false, at: @/t.ray{from == (4, 1)})
 ])
 unless !run.passed && run.failures.count == 1 { INFO@mark `RT1 a run with a failing claim passed` }
-tap := run as TAP
-unless tap ~= ⊢"TAP version 14\n1..2\n" { INFO@mark `RT2 TAP does not start with its version and plan` }
-unless tap ~= (*, "\nok 1 - A1 one holds\n", *) { INFO@mark `RT3 a holding claim is not ok` }
-unless tap ~= (*, "\nnot ok 2 - A2 two \\# fails\n", *) { INFO@mark `RT4 a failing claim is not "not ok" with # escaped` }
-unless tap ~= (*, "  ---\n  message: \"two # fails\"\n", *) { INFO@mark `RT5 a failing claim has no YAML diagnostic` }
-read_tap := TAP.read(tap)
-unless read_tap.claims.count == 2 { INFO@mark `RT6 TAP does not read back its claims` }
-unless read_tap.failures.first.id == "A2" && read_tap.failures.first.message == "two # fails" { INFO@mark `RT7 a failing claim does not read back unescaped` }
-junit := run as JUnit
-unless junit ~= ⊢"<?xml version=\"1.0\" encoding=\"UTF-8\"?>" { INFO@mark `RT8 JUnit has no XML declaration` }
-unless junit ~= (*, "<testsuites name=\"suite\" tests=\"2\" failures=\"1\">", *) { INFO@mark `RT9 JUnit does not count tests and failures` }
-unless junit ~= (*, "<testcase name=\"A1 one holds\" classname=\"suite\"/>", *) { INFO@mark `RT10 a holding claim is not an empty testcase` }
-unless junit ~= (*, "<failure message=\"two # fails\" type=\"A2\">two # fails</failure>", *) { INFO@mark `RT11 a failing claim has no failure` }
-unless JUnit.read(junit).first.failures.first.id == "A2" { INFO@mark `RT12 JUnit does not read back its failures` }
-unless Report(claims: [Report.Claim(id: "A3", message: "a < b & c")]) as JUnit ~= (*, "name=\"A3 a &lt; b &amp; c\"", *) { INFO@mark `RT13 JUnit attributes are not escaped` }
 unless Report(claims: [Report.Claim(id: "A4", message: "fine")]).passed { INFO@mark `RT14 a run of holding claims did not pass` }

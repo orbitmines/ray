@@ -1,0 +1,46 @@
+// File mode bits (https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/sys_stat.h.html)
+POSIX := class: Language {
+  static extensions = ".mode" | ".posix"
+
+  static Who := enum user | group | other
+  static Triad := class (read: Binary¹ as boolean = false, write: Binary¹ as boolean = false, execute: Binary¹ as boolean = false) {
+    static (access: Access) as (=== Triad) => Triad(access.reads, access.writes, access.executes)
+  }
+  static Mode := class (setuid: Binary¹ as boolean = false, setgid: Binary¹ as boolean = false, sticky: Binary¹ as boolean = false, user: Triad = Triad(), group: Triad = Triad(), other: Triad = Triad())
+  // Absolute octal mode operand (https://pubs.opengroup.org/onlinepubs/9799919799/utilities/chmod.html)
+  static Absolute := class (digits: Octal{< 8 ^ 4}) {
+    mode => digits as Binary¹² as Mode
+    static (mode: Mode) as (=== Absolute) => Absolute(digits: mode as Binary¹² as Octal)
+  }
+  // File mode string of ls -l (https://pubs.opengroup.org/onlinepubs/9799919799/utilities/ls.html)
+  static Symbolic := class (
+    type: "-" | "d" | "l" | "b" | "c" | "p" | "s" = "-",
+    ur: "r" | "-", uw: "w" | "-", ux: "x" | "-" | "s" | "S",
+    gr: "r" | "-", gw: "w" | "-", gx: "x" | "-" | "s" | "S",
+    or: "r" | "-", ow: "w" | "-", ox: "x" | "-" | "t" | "T"
+  ) {
+    mode => Mode(setuid: ux is ("s" | "S"), setgid: gx is ("s" | "S"), sticky: ox is ("t" | "T"),
+      user: Triad(ur == "r", uw == "w", ux is ("x" | "s")), group: Triad(gr == "r", gw == "w", gx is ("x" | "s")), other: Triad(or == "r", ow == "w", ox is ("x" | "t")))
+    static (mode: Mode) as (=== Symbolic) => Symbolic(
+      ur: mode.user.read ? "r" : "-", uw: mode.user.write ? "w" : "-", ux: mode.setuid ? (mode.user.execute ? "s" : "S") : mode.user.execute ? "x" : "-",
+      gr: mode.group.read ? "r" : "-", gw: mode.group.write ? "w" : "-", gx: mode.setgid ? (mode.group.execute ? "s" : "S") : mode.group.execute ? "x" : "-",
+      or: mode.other.read ? "r" : "-", ow: mode.other.write ? "w" : "-", ox: mode.sticky ? (mode.other.execute ? "t" : "T") : mode.other.execute ? "x" : "-")
+  }
+
+  static reaching (level: Accessor.Permission) => level.resolved -- (. == Accessor.Permission.public ? Who.(user, group, other)
+    : . is (Accessor.Permission.protected | Accessor.Permission.managed) ? Who.(user, group) : [Who.user])
+  static widest (mode: Mode, bit) => mode.other.`bit` ? Accessor.Permission.public
+    : mode.group.`bit` ? Accessor.Permission.protected
+    : mode.user.`bit` ? Accessor.Permission.private : None
+  static triad (accessors: Access[], who: Who) => accessors{reaching(.who) ∋ who} -- (given => Triad(given.some(.reads), given.some(.writes), given.some(.executes)))
+  static mode (accessors: Access[]) => Mode(user: triad(accessors, Who.user), group: triad(accessors, Who.group), other: triad(accessors, Who.other))
+
+  level := {
+    {absolute: Absolute} => absolute.mode
+    {symbolic: Symbolic} => symbolic.mode
+    {mode: Mode} => [Accessor(widest(mode, "read")).read, Accessor(widest(mode, "write")).write, Accessor(widest(mode, "execute")).execute]{.who}
+  }
+  written := {
+    {writing: Language.Writing{value is Access[]}} => mode(writing.value) as Absolute
+  }
+}

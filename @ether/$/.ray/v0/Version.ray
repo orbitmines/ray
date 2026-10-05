@@ -85,96 +85,7 @@ Operation := class = kind: Kind, definition: Definition, stamp: Stamp, who: *, b
   applied (held) => kind == Kind.rename ? held : kind == Kind.remove ? None : body ? held -- body : after
 }
 
-Backend := class: Language {
-  static Fidelity := enum lossless | snapshot
-  static fidelity: Fidelity = Fidelity.snapshot
-  static similar: Probability = 50%
-
-  static Entry := class: Hierarchy = name: String = "", content: Byte[]?, mode: Mode = Mode.file {
-    static Mode := enum file | executable | link | directory | module
-
-    directory => content === None
-    path => (parent?.path, name){!= None && .nonempty}.join("/")
-    files => directory ? children.map(.files).flatten : [this]
-    child (named: String) => children.find(c => c.name == named)
-    at (path: String) => path.split("/"){.nonempty}.reduce(held = this => held?.child(.))
-    placed (path: String, bytes: Byte[], kind: Mode = Mode.file): static => path.split("/"){.nonempty} -- (segments =>
-      (child(segments.first) ?? add(Entry(name: segments.first))) -- (next => segments.count == 1 ? next ~~ (.content = bytes) ~~ (.mode = kind) : next.placed(segments.rest.join("/"), bytes, kind)))
-      -- this
-
-    static of (files: (path: String, content: Byte[], mode: Mode?)[]) => files.reduce(root = Entry() => root.placed(.path, .content, .mode ?? Mode.file))
-  }
-
-  static Revision := class = id: *, tree: Entry, parents: *[] = [], who: *, when: Time, message: String = "", recorded: String?, renames: (from: String, to: String)[] = []
-
-  static similarity (a: Byte[], b: Byte[]) => (a as String).lines -- (left => (b as String).lines -- (right =>
-    left.count + right.count == 0 ? 1 : 2 * left{right.contains(.)}.count / (left.count + right.count)))
-
-  static renamed_from (file: Entry, gone: Entry[], hinted: (from: String, to: String)[]) =>
-    gone.find(.path == hinted.find(.to == file.path)?.from)
-    ?? gone{similarity(.content, file.content) >= similar} -- (close => close{similarity(.content, file.content) == close.map(similarity(.content, file.content)).max} -- (best =>
-      best.count > 1 ? Quest(name: "rename", goal: (to: file, from: best)) : best.first))
-
-  static read_file (file: Entry) => Language.for_file(file.name).read(file.content as String)
-
-  static identity (file: Entry, before: Entry, held, gone: Entry[], hints) => (held[file.path] if before.at(file.path))
-    ?? (renamed_from(file, gone, hints) -- (from => from is Quest ? from : held[from?.path]))
-    ?? Definition(name: file.name, holder: file.parent.path, language: Language.for_file(file.name))
-
-  static inferred (before: Entry, after: Entry, held, defined, made) => (
-    after.files.map(file => defined.find(.path == file.path).definition -- (definition => before.files.find(held[.path] == definition) -- (old => old === None
-      ? [made(Operation.Kind.define, definition, None, read_file(file))]
-      : [made(Operation.Kind.rename, definition, old.name, file.name) if old.path != file.path,
-         made(Operation.Kind.change, definition, read_file(old), read_file(file)) if old.content != file.content]))).flatten,
-    before.files{!defined.definition.contains(held[.path])}.map(made(Operation.Kind.remove, held[.path], read_file(.), None))
-  ).flatten(1)
-
-  static Reading := class = history: History = History(), commits = {}, trees = {}, known = {} {
-    read (revision: Revision): static => {
-      parent = revision.parents.first
-      before = parent ? trees[parent] : Entry()
-      held = parent ? known[parent] : {}
-      gone = before.files{!revision.tree.at(.path)}
-      defined = revision.tree.files.map(file => (path: file.path, definition: identity(file, before, held, gone, revision.renames)))
-      stamp = history.received(Stamp.at(revision.when, node: revision.who))
-      made = (kind, definition, old, new) => Operation(kind, definition, stamp, revision.who, before: old, after: new)
-      previous = revision.parents.map(commits[.])#
-      commits[revision.id] = revision.recorded
-        ? Ray.history.commit(revision.recorded as Ray.history.Line, previous)
-        : History.Commit(who: revision.who, value: inferred(before, revision.tree, held, defined, made), when: revision.when, stamp, message: revision.message, previous)
-      trees[revision.id] = revision.tree
-      known[revision.id] = defined.map((.path, .definition))
-      history.head = commits[revision.id]
-      this
-    }
-  }
-
-  static revisions (history: History) => history.since(None).map(commit => Revision(
-    id: commit.id, parents: commit.parents.id, who: commit.who, when: commit.when,
-    message: commit.message ?? commit.operations.map(.summary).join(\n),
-    tree: history.at(commit).tree,
-    recorded: Ray.history.line(commit),
-    renames: commit.operations{.kind == Operation.Kind.rename}.map(o => (from: o.definition.path_in(history.at(commit.parents.first)), to: o.definition.path_in(history.at(commit))))))
-  static reading (revisions: Revision[]) => revisions.reduce(reading = Reading() => reading.read(.))
-  static history_of (revisions: Revision[]) => reading(revisions).history
-
-  static common (a: Byte[], b: Byte[]) => a.empty || b.empty || a.first != b.first ? 0 : 1 + common(a.rest, b.rest)
-  static runs (source: Byte[], target: Byte[]) => target.empty ? [] : (0..<source.count).map(at => (from: at, count: common(source[at..], target))).max_by(.count) -- (best =>
-    best && best.count >= 4 ? [(from: best.from, count: best.count)], runs(source, target[best.count..]) : runs(source, target[1..]) -- (rest =>
-      rest.first?.bytes ? [(bytes: (target[..0], rest.first.bytes).flatten)], rest.rest : [(bytes: target[..0])], rest))
-
-  read (source) => Compiler.reduced(source, level + Compiler.stored)
-  write (history: History) => Compiler.reduced(Language.Writing(history), written + Compiler.stored)
-  written_to (history: History, location: Location) => write(history).files.for(location / .path = .content) -- location
-  append (location: Location, history: History) => written_to(History(repository: history.repository, base: history.head?.previous, head: history.head), location)
-  converted (location, from: Backend) => write(from.read(location))
-  tree_at (location: Location, label) => read(location).at(label).tree
-}
-
-Ray.history := class: Backend {
-  static extensions = ".%"
-  static fidelity = Backend.Fidelity.lossless
-
+History &+= {
   static Line := class (
     label: UUID | Char.Word[], "\\",
     (" ", parents: (UUID, (" & ", UUID)[]))?,
@@ -202,7 +113,7 @@ Ray.history := class: Backend {
   }
 
   static edit (before, after) => (Language.ray.write(before) as Byte[]) -- (old => (Language.ray.write(after) as Byte[]) -- (new =>
-    Backend.common(old, new) -- (prefix => Backend.common(old[prefix..].reverse, new[prefix..].reverse) -- (suffix =>
+    Encoding.common(old, new) -- (prefix => Encoding.common(old[prefix..].reverse, new[prefix..].reverse) -- (suffix =>
       (". edited(", prefix, ", ", old.count - suffix, ", ", Language.ray.write(new[prefix..<new.count - suffix] as String), ")") as String))))
 
   static written_body (commit: History.Commit, object: Definition? = None) => object
@@ -220,7 +131,7 @@ Ray.history := class: Backend {
     " { ", written_body(commit, object), " }", \n
   ) as String
 
-  static operations (line: Line, object: Definition?, first: boolean) => object
+  static operations_of (line: Line, object: Definition?, first: boolean) => object
     ? [line.body ~= (⊢". named ", name: String) ⊣ -- (renamed => line.body as String == "None"
         ? Operation(Operation.Kind.remove, object, line.stamp, line.who)
         : renamed ? Operation(Operation.Kind.rename, object, line.stamp, line.who, after: renamed.name)
@@ -228,11 +139,11 @@ Ray.history := class: Backend {
     : line.body.written{.code ~= ⊢".["}.map(statement => statement.code ~= (⊢".[", object: UUID, "] ", (":= (" as defines | ("= .[", UUID, "] -- (") | "= "), body: Program, ")"?) ⊣ -- (part =>
         Definition(id: part.object, name: part.object as String) -- (object => part.defines
           ? [Operation(Operation.Kind.define, object, line.stamp, line.who, body: part.body)]
-          : operations(Line(label: line.label, stamp: line.stamp, who: line.who, body: part.body), object, false)))).flatten
+          : operations_of(Line(label: line.label, stamp: line.stamp, who: line.who, body: part.body), object, false)))).flatten
 
-  static commit (line: Line, previous: History.Commit?, object: Definition? = None, first = false) => History.Commit(
+  static committed (line: Line, previous: History.Commit?, object: Definition? = None, first = false) => History.Commit(
     who: line.who ? Character.local(line.who) ?? line.who : &caller,
-    value: operations(line, object, first) -- (found => found.empty ? line.body : found),
+    value: operations_of(line, object, first) -- (found => found.empty ? line.body : found),
     id: line.label, when: line.stamp?.when ?? Time.now, stamp: line.stamp, previous)
 
   static Directory := class = location: Location {
@@ -242,16 +153,10 @@ Ray.history := class: Backend {
     caches => IO.listing(location){.name ~= ".ray.txt" ⊣}.map(.content as Cache) -- (found => Cache(values: found.values.flatten))
   }
 
-  static level := {
-    {at: Location{segments.last == ".%"}} => Directory(location: at)
-    {directory: Directory} => directory.files.map(.content as File).reduce(held = History() => held.read(.)) ~~ .cache = directory.caches
-    {program: Program{written.some(.is_label)}} => (program.code as String) as File -- History().read(.)
-  }
-
-  static Project := class = history: History {
+  static Written := class = history: History {
     commits => history.since(None)
     above (commit, among) => among[commit.index - 1] if commit.index > 0
-    file => (path: history.id as String + ".ray", content: commits.map(line(., above: above(., commits))).join("") as Byte[])
+    file => (path: history.id as String + ".ray", content: commits.map(History.line(., above: above(., commits))).join("") as Byte[])
     index => (path: "index.ray", content: history.definitions.map(history.name_of(.), ": ", .id, \n).join("") as Byte[])
     stored_file => file
     object_files => []
@@ -259,38 +164,99 @@ Ray.history := class: Backend {
     files => [[stored_file, index], object_files, cache_files].flatten(1)
 
     objects => history.definitions.map(definition => commits{.operations.some(.definition == definition)} -- (touching => (path: definition.id as String + ".ray",
-      content: touching.map(commit => line(History.Commit(who: commit.who, value: commit.operations{.definition == definition}, id: commit.id, when: commit.when, stamp: commit.stamp, previous: above(commit, touching)), above: above(commit, touching), object: definition)).join("") as Byte[])))
-    referenced => (path: file.path, content: commits.map(commit => line(History.Commit(who: commit.who, value: commit.operations.map(Pin(.definition, commit.id)), id: commit.id, when: commit.when, stamp: commit.stamp, previous: commit.previous), above: above(commit, commits))).join("") as Byte[])
+      content: touching.map(commit => History.line(History.Commit(who: commit.who, value: commit.operations{.definition == definition}, id: commit.id, when: commit.when, stamp: commit.stamp, previous: above(commit, touching)), above: above(commit, touching), object: definition)).join("") as Byte[])))
+    referenced => (path: file.path, content: commits.map(commit => History.line(History.Commit(who: commit.who, value: commit.operations.map(Pin(.definition, commit.id)), id: commit.id, when: commit.when, stamp: commit.stamp, previous: commit.previous), above: above(commit, commits))).join("") as Byte[])
     caches => [(path: history.id as String + ".ray.txt", content: commits{.index % 64 == 63 || . === history.head}.map(commit => (commit.id, "\\ ", Language.ray.write(history.at(commit).value), \n)).join("") as Byte[])]
   }
 
-  static written := {
-    {writing: Language.Writing{value is History}} => Project(history: writing.value)
-    {project: Project} => Backend.Entry.of(project.files)
+  static level := {
+    {at: Location{segments.last == ".%"}} => Directory(location: at)
+    {directory: Directory} => directory.files.map(.content as File).reduce(held = History() => held.read(.)) ~~ .cache = directory.caches
   }
 
-  append (location: Location, history: History) => history.head -- (commit => {
-    location / (history.id as String + ".ray") += line(commit, above: history.written_last)
-    commit.operations{.kind != Operation.Kind.change}.for(location / "index.ray" += (.kind == Operation.Kind.remove ? .definition.name : .after ?? .definition.name) + ": " + (.kind == Operation.Kind.remove ? "None" : .definition.id as String) + \n)
-    history.written_last = commit
-    location
-  })
-}
+  static written := {
+    {writing: Language.Writing{value is History}} => Written(history: writing.value)
+    {written: Written} => Language.Entry.of(written.files)
+  }
 
-History &+= {
-  read (file: Ray.history.File): static => file.lines.reduce(held = this => held.commit_line(.))
-  commit_line (line: Ray.history.Line): static => this ~~ .head = Ray.history.commit(line,
+  static similar: Probability = 50%
+
+  static Revision := class = id: *, tree: Language.Entry, parents: *[] = [], who: *, when: Time, message: String = "", recorded: String?, renames: (from: String, to: String)[] = []
+
+  static similarity (a: Byte[], b: Byte[]) => (a as String).lines -- (left => (b as String).lines -- (right =>
+    left.count + right.count == 0 ? 1 : 2 * left{right.contains(.)}.count / (left.count + right.count)))
+
+  static renamed_from (file: Language.Entry, gone: Language.Entry[], hinted: (from: String, to: String)[]) =>
+    gone.find(.path == hinted.find(.to == file.path)?.from)
+    ?? gone{similarity(.content, file.content) >= similar} -- (close => close{similarity(.content, file.content) == close.map(similarity(.content, file.content)).max} -- (best =>
+      best.count > 1 ? Quest(name: "rename", goal: (to: file, from: best)) : best.first))
+
+  static read_file (file: Language.Entry) => Language.for_file(file.name).read(file.content as String)
+
+  static identity (file: Language.Entry, before: Language.Entry, held, gone: Language.Entry[], hints) => (held[file.path] if before.at(file.path))
+    ?? (renamed_from(file, gone, hints) -- (from => from is Quest ? from : held[from?.path]))
+    ?? Definition(name: file.name, holder: file.parent.path, language: Language.for_file(file.name))
+
+  static inferred (before: Language.Entry, after: Language.Entry, held, defined, made) => (
+    after.files.map(file => defined.find(.path == file.path).definition -- (definition => before.files.find(held[.path] == definition) -- (old => old === None
+      ? [made(Operation.Kind.define, definition, None, read_file(file))]
+      : [made(Operation.Kind.rename, definition, old.name, file.name) if old.path != file.path,
+         made(Operation.Kind.change, definition, read_file(old), read_file(file)) if old.content != file.content]))).flatten,
+    before.files{!defined.definition.contains(held[.path])}.map(made(Operation.Kind.remove, held[.path], read_file(.), None))
+  ).flatten(1)
+
+  static Reading := class = history: History = History(), commits = {}, trees = {}, known = {} {
+    read (revision: Revision): static => {
+      parent = revision.parents.first
+      before = parent ? trees[parent] : Language.Entry()
+      held = parent ? known[parent] : {}
+      gone = before.files{!revision.tree.at(.path)}
+      defined = revision.tree.files.map(file => (path: file.path, definition: identity(file, before, held, gone, revision.renames)))
+      stamp = history.received(Stamp.at(revision.when, node: revision.who))
+      made = (kind, definition, old, new) => Operation(kind, definition, stamp, revision.who, before: old, after: new)
+      previous = revision.parents.map(commits[.])#
+      commits[revision.id] = revision.recorded
+        ? History.committed(revision.recorded as Line, previous)
+        : History.Commit(who: revision.who, value: inferred(before, revision.tree, held, defined, made), when: revision.when, stamp, message: revision.message, previous)
+      trees[revision.id] = revision.tree
+      known[revision.id] = defined.map((.path, .definition))
+      history.head = commits[revision.id]
+      this
+    }
+  }
+
+  static revisions (history: History) => history.since(None).map(commit => Revision(
+    id: commit.id, parents: commit.parents.id, who: commit.who, when: commit.when,
+    message: commit.message ?? commit.operations.map(.summary).join(\n),
+    tree: history.at(commit).tree,
+    recorded: History.line(commit),
+    renames: commit.operations{.kind == Operation.Kind.rename}.map(o => (from: o.definition.path_in(history.at(commit.parents.first)), to: o.definition.path_in(history.at(commit))))))
+  static reading (revisions: Revision[]) => revisions.reduce(reading = Reading() => reading.read(.))
+  static read_revisions (revisions: Revision[]) => reading(revisions).history
+
+  read (file: History.File): static => file.lines.reduce(held = this => held.commit_line(.))
+  commit_line (line: History.Line): static => this ~~ .head = History.committed(line,
     previous: line.parents ? line.parents#.map(find(.))# : head)
 
-  cache: Ray.history.Cache?
-  stored => Store.routed(this)#{. is Backend}
-  lossless => stored.find(.fidelity == Backend.Fidelity.lossless)
+  cache: History.Cache?
+  stored => Store.routed(this).map(.kept_in?.language).compact
+  lossless => stored.find(.fidelity == Language.Fidelity.lossless)
+
+  append (location: Location) => head -- (commit => {
+    location / (id as String + ".ray") += History.line(commit, above: written_last)
+    commit.operations{.kind != Operation.Kind.change}.for(location / "index.ray" += (.kind == Operation.Kind.remove ? .definition.name : .after ?? .definition.name) + ": " + (.kind == Operation.Kind.remove ? "None" : .definition.id as String) + \n)
+    written_last = commit
+    location
+  })
+  appended (location: Location, language: Language = Language.ray) => language === Language.ray
+    ? append(location)
+    : language.written_to(History(repository, base: head?.previous, head), location)
 }
 
-History{location ∈ @me}$ = Ray.history | Git
+History{location ∈ @me}$ = $.ray | $.git
 
 Program &+= {
-  as (=== History) => Ray.history.read(this)
+  as (=== History) => History().read((code as String) as History.File)
 }
 
 Node &+= {

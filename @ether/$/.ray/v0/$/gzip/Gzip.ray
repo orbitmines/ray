@@ -1,0 +1,4 @@
+// GZIP file format specification version 4.3 (https://www.rfc-editor.org/rfc/rfc1952)
+Gzip := class: Encoding.Packing {
+  static extensions = ".gzip" | ".gz"
+}

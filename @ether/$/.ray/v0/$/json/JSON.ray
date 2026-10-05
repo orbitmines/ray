@@ -1,0 +1,43 @@
+// ECMA-404, The JSON Data Interchange Syntax (https://ecma-international.org/publications-and-standards/standards/ecma-404/)
+JSON := class (Blank, root: Value, Blank) => {
+  static Blank := (" " | \t | \n | \r)[]
+  static Value := Object | Array | Text | Numeral | Literal
+  static Object := class ("{", Blank, (members: (Blank, name: Text, Blank, ":", Blank, value: Value, Blank)[]).join(","), Blank, "}") => {
+    value => Document(entries: members.map((name: .name.value, value: .value.value)))
+  }
+  static Array := class ("[", Blank, (elements: (Blank, element: Value, Blank)[]).join(","), Blank, "]") => {
+    value => elements.map(.element.value)
+  }
+  static Escaped := class ("\\", (character: "\"" | "\\" | "/") | (control: "b" | "f" | "n" | "r" | "t") | ("u", unit: Hexadecimal⁴)) => {
+    value => character ?? (unit ? unit as Char : { "b": \b, "f": \f, "n": \n, "r": \r, "t": \t }[control])
+  }
+  static Text := class ("\"", characters: (Escaped | Char{!= "\"" && != "\\" && . >= \x20})[], "\"") => {
+    value => characters.map(. is Escaped ? .value : .).join("") as String
+  }
+  static Numeral := class (written: ("-"?, ("0" | (Char.Digit{!= "0"}, Char.Digit[])), (".", Char.Digit[]{length > 0})?, (("e" | "E"), ("+" | "-")?, Char.Digit[]{length > 0})?)) => {
+    value => written as Number
+  }
+  static Literal := class (word: "true" | "false" | "null") => {
+    value => { "true": true, "false": false, "null": None }[word]
+  }
+  value => root.value
+
+  static escaped (text: String) => #text.map({ "\"": "\\\"", "\\": "\\\\", "<": "\\u003c", \n: "\\n", \r: "\\r", \t: "\\t" }[.] ?? .) as String
+  // JSON-LD (https://www.w3.org/TR/json-ld11/)
+  static Linked := class = value: *, context: String?
+  static written := {
+    {writing: Language.Writing{value === None}} => "null"
+    {writing: Language.Writing{value is boolean}} => writing.value ? "true" : "false"
+    {writing: Language.Writing{value is Number}} => writing.value as 10 as String
+    {writing: Language.Writing{value is String | Location | Version}} => "\"", escaped(writing.value as String), "\""
+    {writing: Language.Writing{value is Linked}} => writing.value -- (linked => Language.Writing(
+      linked.value === None || linked.value is (String | Number | boolean | Location) ? linked.value
+      : linked.value is Iterable ? linked.value.map(Linked(.))
+      : Document(entries: [(name: "@context", value: linked.context) if linked.context, linked.value.fields{.value != None}.map((name: .name == "type" ? "@type" : .name, value: Linked(.value)))].flatten)))
+    {writing: Language.Writing{value is Iterable}} => "[", writing.value.map((", " if .index > 0), Language.Writing(.)), "]"
+    {writing: Language.Writing} => "{", writing.value.fields.map((", " if .index > 0), Language.Writing(.name), ": ", Language.Writing(.value)), "}"
+  }
+  static level := { {text: String} => (text as JSON).value }
+  static write (value) => Compiler.reduced(Language.Writing(value), written) as String
+  static language = Language(".json", level: level, written: written)
+}

@@ -1,0 +1,30 @@
+// CSS Snapshot (https://www.w3.org/TR/css-2023/)
+CSS := class: Language {
+  static extensions = ".css"
+
+  Rule := class = selector: String, declarations: ((property: String, value: String) | Comment)[], within: String?
+  Keyframes := class = name: String, frames: (at: Probability, declarations: ((property: String, value: String) | Comment)[])[]
+  Comment := class = text: String
+  Sheet := class = rules: (Rule | Keyframes | Comment)[] = []
+
+  syntax := Compiler.default + {
+    /*{literal text}*/ => Comment(text)
+    {property}:{value}; => (property as String, value) if value != None
+    {selector}{`{`}{declarations: *[]}{`}`} => Rule((selector as String).trimmed, declarations{!= None})
+    @keyframes {name}{`{`}{frames: *[]}{`}`} => Keyframes((name as String).trimmed, frames)
+    from{`{`}{declarations: *[]}{`}`} => (at: 0, declarations: declarations{!= None})
+    to{`{`}{declarations: *[]}{`}`} => (at: 1, declarations: declarations{!= None})
+    {percent: Decimal}%{`{`}{declarations: *[]}{`}`} => (at: percent / 100, declarations: declarations{!= None})
+    @{prelude}{`{`}{rules: *[]}{`}`} => rules{!= None}.map(. is Rule ? Rule(.selector, .declarations, within: "@" + (prelude as String).trimmed) : .)
+      -- (.count == 1 ? .first : .)
+  }
+
+  written := {
+    {sheet: Sheet} => sheet.rules
+    {rule: Rule{within}} => rule.within, "{", Rule(rule.selector, rule.declarations), "}"
+    {rule: Rule} => rule.selector, "{", rule.declarations.map(. is Comment ? . : (.0, ":", .[1..], ";")), "}"
+    {keyframes: Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations.map(. is Comment ? . : (.0, ":", .[1..], ";")), "}"), "}"
+    {comment: Comment} => "/*", comment.text, "*/"
+  }
+  level := syntax
+}

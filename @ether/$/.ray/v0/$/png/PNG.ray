@@ -1,0 +1,43 @@
+// Portable Network Graphics (PNG) Specification, Third Edition (https://www.w3.org/TR/png-3/)
+PNG := class (
+  137, 80, 78, 71, 13, 10, 26, 10,
+  header: Chunk{type == "IHDR"},
+  chunks: Chunk{type != "IEND"}[],
+  Chunk{type == "IEND"}
+) {
+  static Chunk := class (size: Binary³², type: Char⁴, data: Byte[]{length == size}, crc: Binary³²)
+  static Header := class (width: Binary³², height: Binary³², depth: Byte, color: Byte, compression: Byte{. == 0}, filter: Byte{. == 0}, interlace: Byte{. == 0})
+  static Scanline := class (filter: Byte, bytes: Byte[])
+  static Prediction := class = filter: Byte, left: Byte = 0, up: Byte = 0, corner: Byte = 0
+  static Predicting := {
+    {prediction: Prediction{filter == 0}} => 0
+    {prediction: Prediction{filter == 1}} => prediction.left
+    {prediction: Prediction{filter == 2}} => prediction.up
+    {prediction: Prediction{filter == 3}} => (prediction.left + prediction.up) / 2 -- .floor
+    {prediction: Prediction{filter == 4}} => (prediction.left + prediction.up - prediction.corner) -- (estimate => [prediction.left, prediction.up, prediction.corner].min_by(guess => (estimate - guess) max (guess - estimate)))
+  }
+  static Pixel := class = png: PNG, samples: Number[] {
+    channels => samples.map(. * 255 / (2 ^ png.ihdr.depth - 1))
+  }
+  static Coloring := {
+    {pixel: Pixel{png.ihdr.color == 0}} => pixel.channels -- Geometry.Color(.0, .0, .0)
+    {pixel: Pixel{png.ihdr.color == 2}} => pixel.channels -- Geometry.Color(.0, .1, .2)
+    {pixel: Pixel{png.ihdr.color == 3}} => pixel.png.palette[pixel.samples.0] ~~ .alpha = (pixel.png.transparency[pixel.samples.0] ?? 255) / 255
+    {pixel: Pixel{png.ihdr.color == 4}} => pixel.channels -- Geometry.Color(.0, .0, .0, .1 / 255)
+    {pixel: Pixel{png.ihdr.color == 6}} => pixel.channels -- Geometry.Color(.0, .1, .2, .3 / 255)
+  }
+  ihdr => header.data as Header
+  channels => [1, 0, 3, 1, 2, 0, 4][ihdr.color]
+  stride => (ihdr.depth * channels + 7) / 8 -- .floor
+  span => (ihdr.width * ihdr.depth * channels + 7) / 8 -- .floor
+  palette => chunks{.type == "PLTE"}.first?.data.chunk(3).map(Geometry.Color(.0, .1, .2)) ?? []
+  transparency => chunks{.type == "tRNS"}.first?.data ?? []
+  scanlines => (chunks{.type == "IDAT"}.data.flatten as Zlib).inflated.chunk(span + 1).map(. as Scanline)
+  unfiltered (line: Scanline, above: Byte[]) => line.bytes.enumerate.reduce(acc = [] => [acc, (.value + Compiler.reduced(Prediction(line.filter,
+    .index >= stride ? acc[.index - stride] : 0, above[.index] ?? 0, .index >= stride ? above[.index - stride] ?? 0 : 0), Predicting)) % 256].flatten)
+  rows => scanlines.reduce(acc = [] => [acc, [unfiltered(., acc.last ?? [])]].flatten(1))
+  raster => Geometry.Raster(ihdr.width, ihdr.height, rows.map(row => (row as Binary{length == ihdr.depth}[])[..<ihdr.width * channels].chunk(channels)
+    .map(Compiler.reduced(Pixel(this, .), Coloring))).flatten)
+
+  static language = Language(".png", of: Language.Image, level: { {png: PNG} => png.raster })
+}

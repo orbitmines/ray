@@ -1,0 +1,4 @@
+// SHA-3 Standard, SHA3-256 (https://csrc.nist.gov/pubs/fips/202/final)
+SHA3 := class: Encoding.Digest {
+  static extensions = ".sha3"
+}

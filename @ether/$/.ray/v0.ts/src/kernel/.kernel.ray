@@ -299,11 +299,13 @@ capturing (rule, caps, p, src, i, limit, frame, receiving, opened) => (
   exact := raw and piece.exact and next == 0
   from := exact ? i : spaces(src, i, limit)
   inside := rule_enclosed(rule) or opened > 0
-  if p > 0 and raw and next == 1 and p + 2 < rule_count(rule) and pieces[p + 2].kind == 0 {
+  if p > 0 and next == 1 and p + 2 < rule_count(rule) and pieces[p + 2].kind == 0 {
     end := first(src, from, pieces[p + 2].text, limit, raw, inside)
+    while end > from and space(src, end - 1) { end = end - 1 }
+    if end > from and receiving and !raw and !inside and looser_within(src, from, end, frame, rule) { end = -1 }
   } elsif next == 0 {
     end = p == 0 ? last(src, from, pieces[p + 1].text, limit, raw, inside) : first(src, from, pieces[p + 1].text, limit, raw, inside)
-    if end > from and p > 0 and !raw and !inside and looser_within(src, from, end, frame, rule) { end = -1 }
+    if end > from and p > 0 and receiving and !raw and !inside and looser_within(src, from, end, frame, rule) { end = -1 }
   } elsif raw {
     end = receiving or next >= 0 ? token_end(src, from, limit) : from
     if !(receiving or next >= 0) { while end < limit and !space(src, end) { end = end + 1 } }

@@ -106,12 +106,13 @@ export async function start(io?: { input: NodeJS.ReadableStream; output: NodeJS.
 
 // The worker: one statement at a time, a document asked for before the library, a newer text of a document in place of the older.
 // The entrypoint is the language: a text of it is read by a reader of its own.
+const trace = (line: string) => { if (process.env.KLSP_TRACE) fs.appendFileSync(process.env.KLSP_TRACE, `${new Date().toISOString().slice(14, 23)} ${line}`); };
 async function read_in_worker() {
-  const library_reader = await reader(), { Reader } = await import('./host.ts');
+  const library_reader = await reader(), { Reader, reading_order } = await import('./host.ts');
   const fresh = (): typeof library_reader => { const r = new Reader(); r.active = new Set<number>(); r.serve(true); return r; };
   const port = parentPort!;
   const docs = new Map<string, Check>(), asked: string[] = [];
-  const library: string[] = [];
+  const library: string[] = [], read_files: { src: number; text: string }[] = [];
   let reading: { check?: Check; r: Awaited<ReturnType<typeof reader>>; src: number; pos: number; text: string; before?: ReturnType<Awaited<ReturnType<typeof reader>>['snapshot']> } | undefined, parked: typeof reading, busy = false;
   const done = (x: NonNullable<typeof reading>) => { if (x.before !== undefined) x.r.restore(x.before); else x.r.drop(x.src); };
   const work = (): void => {
@@ -131,7 +132,7 @@ async function read_in_worker() {
           reading = { check, r, src, pos: 0, text: check.text, before };
         } else {
           const file = library.shift();
-          if (process.env.KLSP_TRACE) process.stderr.write(`worker: library ${file}\n`);
+          if (process.env.KLSP_TRACE) trace(`worker: library ${file}\n`);
           if (file === undefined) { busy = false; return; }
           const text = fs.readFileSync(file, 'utf8');
           reading = { r: library_reader, src: library_reader.source(file, text), pos: 0, text };
@@ -141,16 +142,22 @@ async function read_in_worker() {
       r.serve(reading.check !== undefined);
       const at = reading.pos, t0 = performance.now();
       try { reading.pos = r.safely(() => r.step(src, reading!.pos, text.length)) ?? text.length; } catch { r.kernel('recover'); reading.pos = text.length; }
-      if (process.env.KLSP_TRACE && performance.now() - t0 > Number(process.env.KLSP_TRACE_MS ?? 200)) process.stderr.write(`worker: ${Math.round(performance.now() - t0)} ms at ${path.basename(reading?.check?.file ?? '')}${reading?.check ? '' : 'library'} ${at} ${JSON.stringify(text.slice(at, at + 50))}\n`);
+      if (process.env.KLSP_TRACE && performance.now() - t0 > Number(process.env.KLSP_TRACE_MS ?? 200)) trace(`worker: ${Math.round(performance.now() - t0)} ms at ${path.basename(reading?.check?.file ?? '')}${reading?.check ? '' : 'library'} ${at} ${JSON.stringify(text.slice(at, at + 50))}\n`);
       if (reading.pos < text.length) continue;
       if (reading.check !== undefined && r !== library_reader) r.settle(src, text.length, true);
-      if (reading.check === undefined && library.length === 0) for (const uri of docs.keys()) if (!asked.includes(uri)) asked.push(uri);
+      if (reading.check === undefined) {
+        read_files.push(reading);
+        if (library.length === 0) {
+          for (const file of read_files) { const t0 = performance.now(); const again = library_reader.settle(file.src, file.text.length); trace(`worker: settled ${file.src} again=${again} ${Math.round(performance.now() - t0)} ms\n`); }
+          for (const uri of docs.keys()) if (!asked.includes(uri)) asked.push(uri);
+        }
+      }
       const check = reading.check, finished = reading;
       reading = undefined;
       if (check === undefined) continue;
       const d0 = performance.now();
       try { r.safely(() => r.dry(src)); } catch { r.kernel('recover'); }
-      if (process.env.KLSP_TRACE) process.stderr.write(`worker: checked ${path.basename(check.file)} v${check.version}, dry ${Math.round(performance.now() - d0)} ms\n`);
+      if (process.env.KLSP_TRACE) trace(`worker: checked ${path.basename(check.file)} v${check.version}, dry ${Math.round(performance.now() - d0)} ms\n`);
       port.postMessage({ uri: check.uri, version: check.version, paints: r.painted(src), diagnostics: r.diagnostics_of(src).map((d: any) => ({ level: d.level, message: d.message, begin: d.at.begin, end: d.at.end })) } satisfies Checked);
       done(finished);
     }
@@ -159,7 +166,7 @@ async function read_in_worker() {
   const kick = () => { if (!busy) { busy = true; setImmediate(work); } };
   port.on('message', (m: Check | { close: string } | { library: true }) => {
     if ('close' in m) { docs.delete(m.close); return; }
-    if ('library' in m) { library.push(...fs.readdirSync(LIBRARY).filter(f => f.endsWith('.ray') && !f.startsWith('.')).sort().map(f => path.join(LIBRARY, f))); kick(); return; }
+    if ('library' in m) { const files = fs.readdirSync(LIBRARY).filter(f => f.endsWith('.ray') && !f.startsWith('.')).map(f => path.join(LIBRARY, f)); library.push(...reading_order(files.map(f => ({ path: f, text: fs.readFileSync(f, 'utf8') })))); kick(); return; }
     docs.set(m.uri, m);
     if (!asked.includes(m.uri)) asked.push(m.uri);
     kick();

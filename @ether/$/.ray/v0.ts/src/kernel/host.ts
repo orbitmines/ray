@@ -348,3 +348,21 @@ export class Reader {
     });
   }
 }
+
+// The order a library is read in: a file after the files defining the names it uses at the top level, and among files that are
+// ready, those writing more syntax (rules spelled with something other than a name first) earlier; a cycle is broken at the file
+// waiting on the fewest others.
+export function reading_order(files: { path: string; text: string }[]): string[] {
+  const defines = (text: string) => new Set([...text.matchAll(/^([A-Za-z_][\w-]*)(?:\s*<[^>\n]*>)?\s*(?:\^[\w.]+\s*)?:=/gm)].map(m => m[1]));
+  const syntax = (text: string) => text.split('\n').filter(line => /^[^A-Za-z\s/].*=>|^[A-Za-z_]+ \{[a-z]/.test(line)).length;
+  const info = files.map(f => ({ path: f.path, defines: defines(f.text), uses: new Set(f.text.match(/[A-Za-z_][\w]*/g) ?? []), syntax: syntax(f.text) }));
+  const needs = new Map(info.map(f => [f.path, new Set(info.filter(g => g !== f && [...g.defines].some(name => f.uses.has(name) && !f.defines.has(name))).map(g => g.path))]));
+  const order: string[] = [], left = new Set(info.map(f => f.path));
+  while (left.size > 0) {
+    const waiting = (path: string) => [...needs.get(path)!].filter(p => left.has(p)).length;
+    const next = [...left].map(path => info.find(f => f.path === path)!).sort((a, b) => waiting(a.path) - waiting(b.path) || b.syntax - a.syntax || (a.path < b.path ? -1 : 1))[0];
+    order.push(next.path);
+    left.delete(next.path);
+  }
+  return order;
+}

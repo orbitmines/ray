@@ -20,6 +20,7 @@ None := external none
 ^{ }{literal color ^ color} => ^(color)
 {pattern} ^{literal style} => {body} => ^(style)(external rule pattern body)
 `{literal string ^string}` ^string.punctuation => string
+"{literal string ^string}" ^string.punctuation => string
 \n => `
 `
 //{comment?} ^comment => None
@@ -280,10 +281,33 @@ Modifier := class {
     definition
   )
 }
-chainable ^keyword := class: Modifier { chains => TODO }
-compounds ^keyword := class: Modifier { compounds => TODO }
-right-to-left ^keyword := class: Modifier { reads_right_to_left => TODO }
-left-to-right ^keyword := class: Modifier { reads_left_to_right => TODO }
+chainable ^keyword := class: Modifier {
+  chains => TODO
+}
+compounds ^keyword := class: Modifier {
+  compounds => TODO
+}
+right-to-left ^keyword := class: Modifier {
+  reads_right_to_left => TODO
+}
+left-to-right ^keyword := class: Modifier {
+  reads_left_to_right => TODO
+}
+right-to-left {head} | {alias} ({parameters ^parameter}) => {block} => (
+  method_parameters := external ** parameters
+  method_written := external ** block
+  external define alias `{arguments}` {
+   recur\
+    (inline method_parameters) := arguments
+    inline method_written
+  } parameters
+  defined := external define head `{arguments}` {
+   recur\
+    (inline method_parameters) := arguments
+    inline method_written
+  } parameters
+  right-to-left.modify(defined)
+)
 chainable {head} ({parameters ^parameter}) => {block} => (
   method_parameters := external ** parameters
   method_written := external ** block
@@ -323,21 +347,6 @@ left-to-right {head} ({parameters ^parameter}) => {block} => (
     inline method_written
   } parameters
   left-to-right.modify(defined)
-)
-right-to-left {head} | {alias} ({parameters ^parameter}) => {block} => (
-  method_parameters := external ** parameters
-  method_written := external ** block
-  external define alias `{arguments}` {
-   recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-  defined := external define head `{arguments}` {
-   recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
-  right-to-left.modify(defined)
 )
 right-to-left {head} => {body} => right-to-left.modify(external rule head body)
 right-to-left {head} | {alias} => {body} => (
@@ -393,29 +402,6 @@ Node := base class {
     } parameters
   )
 
-  , ^punctuation (other) => (
-    listed := chain None
-    goto branching if other.superposes
-    external extend listed Listed
-    listed &= this
-    goto continued if other.continues
-    listed &= other
-    goto done
-   continued\
-    listed &= other(this)
-    goto done
-   branching\
-    first := this
-    listed = other.each((one) => first, one)
-   done\
-    listed
-  )
-
-  ={x} ^punctuation => (
-    external assign this x
-
-    this
-  )
   :={x} ^punctuation => (
     goto existing if external own this
     external declare this x
@@ -433,7 +419,11 @@ Node := base class {
     external declare value x.head
    next\
     goto declared if (name.not)
+    goto valued if external own name.value
+    goto named
+   valued\
     goto spreading if name.value.spreads
+   named\
     external declare name.value value.value
     name = name.next
     value = value.next
@@ -462,6 +452,38 @@ Node := base class {
     name = name.next
     goto next
    declared\
+    this
+  )
+
+  ,{other} ^punctuation => (
+    listed := chain None
+    goto held if external own other
+    external extend listed Listed
+    listed &= this
+    entry := other
+    listed &= entry
+    goto done
+   held\
+    goto branching if other.superposes
+    external extend listed Listed
+    listed &= this
+    goto continued if other.continues
+   appended\
+    listed &= other
+    goto done
+   continued\
+    listed &= other(this)
+    goto done
+   branching\
+    first := this
+    listed = other.each((one) => first, one)
+   done\
+    listed
+  )
+
+  ={x} ^punctuation => (
+    external assign this x
+
     this
   )
 
@@ -543,6 +565,12 @@ Node := base class {
   xor (b) => .or(b).and(.nand(b))
   xnor (b) => .xor(b).not
 
+  :{type} = {value} ^punctuation => (
+    goto given if external own this
+    external declare this value
+   given\
+    this
+  )
   :{type} ^punctuation => (
     if (external own this) {
       unless type.instance {
@@ -866,6 +894,7 @@ Node := base class {
 }
 
 Node.DEFINE_METHOD = `&=`
+* := Node
 
 external extend None {
   as (=== boolean) => false
@@ -893,12 +922,28 @@ Chain := class {
 }
 Listed := class {
   listing => global
-  , ^punctuation (other) => (
+  ,{other} ^punctuation => (
     joined := chain None
+    goto held if external own other
+    external extend joined Listed
+    walker := .head
+    while walker {
+      joined &= walker.value
+      walker = walker.next
+    }
+    entry := other
+    joined &= entry
+    goto done
+   held\
     goto branching if other.superposes
     external extend joined Listed
-    extended_by(joined, this.head)
+    walker = .head
+    while walker {
+      joined &= walker.value
+      walker = walker.next
+    }
     goto continued if other.continues
+   appended\
     joined &= other
     goto done
    continued\
@@ -1602,68 +1647,105 @@ header_statements (header) => (
   statements.join(`
 `)
 )
-written_class (parent, header, members) => (
-  fields_written := header_statements(header)
+
+class = {header}{ }{`{`}{members?}{`}`} ^keyword => (
   made := class {
-    inline (external ** fields_written)
+    inline header
     inline members
   }
-  made.written_body = external ** (fields_written + `
-` + code_points(members).as(String))
-  if parent { made.components.hierarchy &= parent }
-  made.header_names = header_names(header)
-  made.pattern = header_type(header)
-  made.positions = made.pattern
+  made.header = external ** header
+  made
+)
+class = {header}{\n} ^keyword => (
+  made := class {
+    inline header
+  }
+  made.header = external ** header
+  made
+)
+class ({header}) {`=>`} {`{`}{members?}{`}`} ^keyword => (
+  made := class {
+    inline header
+    inline members
+  }
+  made.header = external ** header
+  made
+)
+class ({header}){ }{`{`}{members?}{`}`} ^keyword => (
+  made := class {
+    inline header
+    inline members
+  }
+  made.header = external ** header
+  made
+)
+class ({header}) {`=>`} {single}{\n} ^keyword => (
+  made := class {
+    inline header
+    inline single
+  }
+  made.header = external ** header
+  made
+)
+class:{ }{parent} = {header}{ }{`{`}{members?}{`}`} ^keyword => (
+  made := class {
+    inline header
+    inline members
+  }
+  made.components.hierarchy &= parent
+  made.header = external ** header
+  made
+)
+class:{ }{parent} = {header}{\n} ^keyword => (
+  made := class {
+    inline header
+  }
+  made.components.hierarchy &= parent
+  made.header = external ** header
+  made
+)
+class:{ }{parent} ({header}) => {`{`}{members?}{`}`} ^keyword => (
+  made := class {
+    inline header
+    inline members
+  }
+  made.components.hierarchy &= parent
+  made.header = external ** header
+  made
+)
+class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => (
+  made := class {
+    inline header
+    inline members
+  }
+  made.components.hierarchy &= parent
+  made.header = external ** header
   made
 )
 
-class = {header}{ }{`{`}{members?}{`}`} ^keyword => written_class(None, (external ** header), (external ** members))
-class = {header}{\n} ^keyword => written_class(None, (external ** header), None)
-class ({header}) => {`{`}{members?}{`}`} ^keyword => written_class(None, (external ** header), (external ** members))
-class ({header}){ }{`{`}{members?}{`}`} ^keyword => written_class(None, (external ** header), (external ** members))
-class ({header}) => {single}{\n} ^keyword => written_class(None, (external ** header), (external ** single))
-class:{ }{parent} = {header}{ }{`{`}{members?}{`}`} ^keyword => written_class(parent, (external ** header), (external ** members))
-class:{ }{parent} = {header}{\n} ^keyword => written_class(parent, (external ** header), None)
-class:{ }{parent} ({header}) => {`{`}{members?}{`}`} ^keyword => written_class(parent, (external ** header), (external ** members))
-class:{ }{parent} ({header}){ }{`{`}{members?}{`}`} ^keyword => written_class(parent, (external ** header), (external ** members))
-
+static ({parameters ^parameter}) {`=>`} {block} ^keyword => (
+  method_parameters := external ** parameters
+  method_written := external ** block
+  external define this `{arguments}` {
+   recur\
+    (inline method_parameters) := arguments
+    inline method_written
+  } parameters
+)
 static{ }{literal name ^property} := {value} ^keyword => (
-  goto shared if static.reading_statics
-  goto done
- shared\
   external declare name value
- done\
-  static
 )
 static{ }{literal name ^property} = {value} ^keyword => (
-  goto shared if static.reading_statics
-  goto done
- shared\
   external declare name value
- done\
-  static
 )
 static{ }{literal name ^property}: {type} = {value} ^keyword => (
-  goto shared if static.reading_statics
-  goto done
- shared\
   external declare name value
   name: type
- done\
-  static
 )
 static{ }{literal name ^property}: {type}{\n} ^keyword => (
-  goto shared if static.reading_statics
-  goto done
- shared\
   name: type
- done\
-  static
 )
 static{ }{head} ({parameters ^parameter}) => {block} ^keyword => (
-  goto shared if static.reading_statics
-  goto done
- shared\
   method_parameters := external ** parameters
   method_written := external ** block
   external define head `{arguments}` {
@@ -1671,30 +1753,9 @@ static{ }{head} ({parameters ^parameter}) => {block} ^keyword => (
     (inline method_parameters) := arguments
     inline method_written
   } parameters
- done\
-  static
 )
 static{ }{head} => {block} ^keyword => (
-  goto shared if static.reading_statics
-  goto done
- shared\
   external rule head block
- done\
-  static
-)
-static ({parameters ^parameter}) => {block} ^keyword => (
-  goto shared if static.reading_statics
-  goto done
- shared\
-  method_parameters := external ** parameters
-  method_written := external ** block
-  external define static `{arguments}` {
-   recur\
-    (inline method_parameters) := arguments
-    inline method_written
-  } parameters
- done\
-  static
 )
 Modifier.spellings &= `static`
 
@@ -1948,12 +2009,13 @@ ERROR{`@` ^punctuation}{type ^error}{ }{comment ^comment} ^error => (
   &caller.filed &= raised
   raised
 )
-FATAL{ }{comment ^comment} ^fatal => FATAL@* comment
-ERROR{ }{comment ^comment} ^error => ERROR@* comment
  WARN{`@` ^punctuation}{var}{ }{comment ^comment} ^warn => report WARN var comment
  INFO{`@` ^punctuation}{var}{ }{comment ^comment} ^info => report INFO var comment
 DEBUG{`@` ^punctuation}{var}{ }{comment ^comment} ^debug => report DEBUG var comment
 TRACE{`@` ^punctuation}{var}{ }{comment ^comment} ^trace => report TRACE var comment
+
+FATAL{ }{comment ^comment} ^fatal => FATAL@* comment
+ERROR{ }{comment ^comment} ^error => ERROR@* comment
  WARN{ }{comment ^comment} ^warn => WARN@* comment
  INFO{ }{comment ^comment} ^info => INFO@* comment
 DEBUG{ }{comment ^comment} ^debug => DEBUG@* comment

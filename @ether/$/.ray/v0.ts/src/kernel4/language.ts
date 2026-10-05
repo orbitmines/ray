@@ -5,7 +5,7 @@ export const ALIASES = ['ray', 'orbitmines'] as const;
 export const ROOT = ['@ether', '$', '.ray']
 export const version:
   [major: number, releaseDate: string, index: number] =
-  [0, '2027-01-01', 3];
+  [0, '2027-01-01', 4];
 
 export const config = {
   daemon: {

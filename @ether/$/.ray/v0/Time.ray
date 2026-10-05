@@ -116,7 +116,8 @@ ISO_8601 := class: Time{calendar is UTC.static} (
     (
       month = Month#[1 - month_of_year: Decimal{length == 2}{1 <= . <= Month#.count}],
       semicolons: "-"?,
-      day_of_month: Decimal{length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month}
+      day_of_month: Decimal{length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month},
+      day_of_year = in_year.days_before(month) + day_of_month
     ) | (
       day_of_year: Decimal{1 <= . <= (year as days ~= (days_in_year: *) days).days_in_year}
     ) | (
@@ -125,7 +126,8 @@ ISO_8601 := class: Time{calendar is UTC.static} (
       (
         "-",
         weekday: Weekday#[1 - day_of_week: Decimal{1 <= . <= Weekday#.count}]
-      )?
+      )?,
+      day_of_year = week_of_year * 7 + Weekday#.index_of(weekday ?? Monday) + 1 - (Weekday#.index_of(in_year.weekday_of(4)) + 4)
     )
   )?,
   time: (
@@ -144,12 +146,10 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   )?
 ) => {
   calendar += offset_operator offset_hours:offset_minutes
-  long => month, " ", day_of_month, ", ", year
+  static Long := class: ISO_8601 (month: Month, " ", day_of_month: Decimal, ", ", year: Decimal)
+  long: String => this as Long as String
 
   in_year => Gregorian(year: year)
-  day_of_year ?= month ? in_year.days_before(month) + day_of_month
-    : weekday ? week_of_year * 7 + Weekday#.index_of(weekday) + 1 - (Weekday#.index_of(in_year.weekday_of(4)) + 4)
-    : day_of_year
   date_known => date != ?
   of_day: Quantity.Temporal => (hour_of_day ?? 0) hours + (minute_of_hour ?? 0) minutes + (second_of_minute ?? 0) seconds
   as (=== Time) => Time(calendar) = (in_year.days_before_year + day_of_year - 1) days + of_day
@@ -162,14 +162,36 @@ ISO_8601 := class: Time{calendar is UTC.static} (
   date ?= ?
 }
 
-LeapSeconds := class = IO.read("/usr/share/zoneinfo/leap-seconds.list").lines{!.empty && !.starts_with("#")}
-  .map(.split("\t").0 as Decimal seconds as Time(epoch: "1900-01-01"))
+LeapSeconds := class = (IO.read("/usr/share/zoneinfo/leap-seconds.list") as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
+  .map(.seconds seconds as Time(epoch: "1900-01-01"))
 {
   at (minute: Time) => this.contains(minute.round(minute) + 1 minute)
 }
 
+// Time Zone Information Format (https://datatracker.ietf.org/doc/html/rfc8536)
+TZif := class = (
+  v1: Block<Binary³²>,
+  (v2: Block<Binary⁶⁴>, "\n", footer: (!"\n")[], "\n") if v1.version != 0₂
+) {
+  static Block<Moment> := class = (
+    "TZif",
+    version: Byte,
+    Byte[]{length == 15},
+    universal_count: Binary³², standard_count: Binary³², leap_count: Binary³²,
+    transition_count: Binary³², type_count: Binary³², abbreviation_count: Binary³²,
+    transitions: Moment[]{length == transition_count},
+    transition_types: Byte[]{length == transition_count},
+    types: (offset: Binary³², daylight: Byte, abbreviation_index: Byte)[]{length == type_count},
+    abbreviations: Byte[]{length == abbreviation_count},
+    leaps: (occurrence: Moment, correction: Binary³²)[]{length == leap_count},
+    standard: Byte[]{length == standard_count},
+    universal: Byte[]{length == universal_count}
+  )
+  data => v2 ?? v1
+}
+
 TimeZone := class (name: String) {
-  data => IO.read("/usr/share/zoneinfo/" + name)
+  data: TZif => IO.File("/usr/share/zoneinfo/" + name).bytes as TZif
 }
 
 Planet := class {

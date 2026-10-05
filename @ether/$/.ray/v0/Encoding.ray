@@ -12,12 +12,15 @@ Encoding := class {
     chainable == (other: Hash) => algorithm == other.algorithm && value == other.value
   }
   Compressed := class = value: *, algorithm: Algorithm {
+    packed => algorithm == Algorithm.base64 ? Base64.encoded((value as String).bytes) : value
     as (target) => value
+    static unpacked (text: String) => Compressed(value: (text as Base64).bytes as String, algorithm: Algorithm.base64)
   }
 }
 
-Base64 := class {
-  static alphabet = ("A".."Z", "a".."z", "0".."9", "+", "/") as String
-  static encoded (bytes: Byte[]) => (bytes.map(.digits(2).padded(8)).flatten.chunk(6).map(alphabet[(., [0] * (6 - .count)) as 2]) as String)
-    + "=" * ((3 - bytes.count % 3) % 3)
+Base64 := class = (sextets: (Binary⁶ as Alphabet)[], "="[]{length == (4 - sextets.count % 4) % 4}) {
+  static Alphabet = ("A".."Z", "a".."z", "0".."9", "+", "/") as String
+
+  bytes: Byte[] => sextets.map(.integer).flatten.chunk(8){.count == 8}.map(Binary(integer: .))
+  static encoded (bytes: Byte[]) => Base64(sextets: bytes.map(.integer).flatten.chunk(6).map(Binary(integer: (., ["0"] * (6 - .count))))) as String
 }

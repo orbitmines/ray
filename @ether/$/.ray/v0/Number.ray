@@ -58,7 +58,7 @@ Number := class: Ray {
   times (block) => times.for block
 
   digits (base: Number) => this < base ? [this] : (this / base).digits(base), this % base
-  static (digits: Number[]) as (base: Number) => digits.reduce(0) (acc, current) => acc * base + current
+  static (digits: Number[]) as (base: Base) => digits.map(. * base ^ (digits.count - 1 - .index)).sum
 
   root (degree: Number) => (0..this){. ^ degree <= this}.last
   root_of (degree: Number) => root(degree) ^ degree == this ? root(degree)
@@ -75,7 +75,7 @@ Number := class: Ray {
   }
   ~! (width: Number) => digits(2).padded(width).map(!) as 2
 
-  as (base: Number.Base) as (=== String) => digits(base).map(Char.digit) as String
+  as (base: Base) as (=== String) => numeral(base)(integer: digits(base).map(numeral(base).digit)) as String
   as (=== String) => this as 10 as String
 
   static Bases = {
@@ -94,8 +94,11 @@ Number := class: Ray {
     Tetradecimal: Digit = Decimal | ("a" | "A")..("d" | "D")
     Pentadecimal: Digit = Decimal | ("a" | "A")..("e" | "E")
     Hexadecimal: Digit = Decimal | ("a" | "A")..("f" | "F")
+    Superscript: Digit = "⁰" | "¹" | "²" | "³" | "⁴" | "⁵" | "⁶" | "⁷" | "⁸" | "⁹"
+    Subscript: Digit = "₀" | "₁" | "₂" | "₃" | "₄" | "₅" | "₆" | "₇" | "₈" | "₉"
   }
   static Base := static{2 <= .}
+  static numeral (base: Base) => Bases.keys.map(global[.]){.radix == base}.first
 }
 
 zero := Number()
@@ -115,13 +118,15 @@ dynamically Number.Bases.for name => {
     static ^ (width: Number) => static{.integer.length == width}
     String => this as String
 
-    static lowered (digits: Base[]) => (digits.last as Decimal).is_zero ? lowered(digits[..<-1]), Char.digit(radix - 1) : digits[..<-1], Char.digit((digits.last as Decimal) - 1)
-    next => integer.every((. as Decimal).is_zero) ? None : static(integer: lowered(integer))
+    static digit (value: Number) => Base#[value]
+    static value_of (written: Base) => Base#.index_of(written.lowercase)
+    next => integer.match
+      digit(0)[] => None
+      (rest: Base[], last: Base{!= digit(0)}, zeros: digit(0)[]) => static(integer: rest, digit(value_of(last) - 1), [digit(radix - 1)] * zeros.length)
 
-    << (places: Number) => static(integer: integer, ["0"] * places)
-    >> (places: Number) => places >= integer.length ? static(integer: ["0"]) : static(integer: integer[..<-places])
+    << (places: Number) => static(integer: integer, [digit(0)] * places)
+    >> (places: Number) => places >= integer.length ? static(integer: [digit(0)]) : static(integer: integer[..<-places])
 
-    as (=== Number) => integer.map(as Decimal) as radix
     as (=== String) => integer as String
 
     {fraction: static.String} (): Real => integer, ".", fraction
@@ -145,7 +150,7 @@ dynamically Number.Bases.for name => {
       static Signed := class = sign: "-"?, real: Real
 
       places => fraction.length
-      scaled => (integer, fraction) as radix
+      scaled => static(integer: (integer.integer, fraction.integer))
       static written (counted: Number, places: Number) => Real(integer: counted / radix ^ places, fraction: (counted % radix ^ places).digits(radix).padded(places))
       as (=== Number) => integer if fraction.every(== 0)
       floor => integer
@@ -177,14 +182,9 @@ dynamically Number.Bases.for name => {
 {amount: Decimal}%,{rest} ^number => Decimal.Real(integer: amount, fraction: []) / 100, rest
 {amount: Decimal}% {of} ^number => (Decimal.Real(integer: amount, fraction: []) / 100) of
 
-superscripts := "⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"
-subscripts := "₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"
-Superscript := "⁰" | "¹" | "²" | "³" | "⁴" | "⁵" | "⁶" | "⁷" | "⁸" | "⁹"
-Subscript := "₀" | "₁" | "₂" | "₃" | "₄" | "₅" | "₆" | "₇" | "₈" | "₉"
-written_small (digits, among) => digits.reduce(acc = 0 => acc * 10 + among.index_of(.))
-{digits: Decimal.String}{radix: Subscript[]} ^number => digits as written_small(radix, subscripts)
-{base}{power: Superscript[]} ^number => base ^ written_small(power, superscripts)
-{type}{length: Subscript[]} ^number => type ^ written_small(length, subscripts)
+{digits: Decimal.String}{radix: Subscript.String} ^number => Number.numeral(Subscript(integer: radix))(integer: digits)
+{base}{power: Superscript.String} ^number => base ^ Superscript(integer: power)
+{type}{length: Subscript.String} ^number => type ^ Subscript(integer: length)
 
 {digits: Decimal.String} => Decimal(integer: digits)
 -{number: Decimal} => Decimal.Signed(sign: "-", integer: number)

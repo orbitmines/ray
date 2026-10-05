@@ -51,7 +51,7 @@ right-to-left with | assume (settings: Program) => {
 
 Terminating := Program{terminating}
 
-Keyed := class = key: *, value: * {
+Keyed := class = key: *, ":", " "[], (*, " = ")?, value: * {
   as (=== String) => value as String
 }
 
@@ -78,12 +78,8 @@ Program &+= {
     external extend found Listed
     walker := .items.head
     while walker {
-      item := walker.value
-      written_key := external before item `:`
-      written_value := external after item `:`
-      typed_value := external after written_value ` = `
-      if typed_value { written_value = typed_value }
-      found &= Keyed(key: written_key, value: inline written_value)
+      pair := walker.value as Keyed
+      found &= Keyed(key: pair.key, value: inline pair.value)
       walker = walker.next
     }
     found

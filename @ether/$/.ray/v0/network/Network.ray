@@ -3,6 +3,7 @@ Network &+= {
 
   static DomainName := class (text: (Char.Letter | Char.Digit | "-" | ".")[]) => {
     valid => 0 < text.count < 2^8
+    static canonical := DomainName{text == text.fold_case}
   }
 
   static Proxy := class = character: Character {
@@ -36,8 +37,7 @@ Network &+= {
     host => Hosts.resolved(host_written)
     port => port_written ?? protocol?.port
 
-    static parse (text: String) => text as URL
-    as (=== String) => protocol.name + "://" + host.text + ":" + port as String + "/" + path
+    static canonical := URL{!port_written || port_written != protocol?.port}
   }
 
   static Socket := class {
@@ -115,7 +115,7 @@ Instance &+= {
 
   seen_from (other: Instance) => other === this ? @localhost : address
   local => address is @localnetwork
-  canonical: static => Instance(location, address: address as String as address.static)
+  canonical: static => Instance(location, address: address.static.canonical ? address as address.static.canonical : address)
   mac_address: Binary⁴⁸ => (external os `mac_address`) ?? (Binary⁴⁸.random ~~ .[7] = 1)
 }
 

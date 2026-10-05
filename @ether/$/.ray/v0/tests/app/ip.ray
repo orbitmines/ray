@@ -21,8 +21,8 @@ unless "1:0:0:2:0:0:0:3" as IPv6 as String == "1:0:0:2::3" { INFO@mark `IP12 the
 unless "1:0:0:2:0:0:3:4" as IPv6 as String == "1::2:0:0:3:4" { INFO@mark `IP13 of two equal runs of zeros the first is not written ::` }
 unless "1:0:2:3:4:5:6:7" as IPv6 as String == "1:0:2:3:4:5:6:7" { INFO@mark `IP14 a single zero field is written ::` }
 unless "1.0.0.0" as IPv4 as String == "1.0.0.0" { INFO@mark `IP15 an address ending in zeros is written with a prefix` }
-unless wide.compress_zeros.number_of_compressed_segments == 6 { INFO@mark `IP8 the run of zeros is not six long` }
-unless wide.compress_zeros.left == 1 { INFO@mark `IP9 the run of zeros does not start after one` }
+unless (wide as IPv6.canonical).number_of_compressed_segments == 6 { INFO@mark `IP8 the run of zeros is not six long` }
+unless (wide as IPv6.canonical).left == 1 { INFO@mark `IP9 the run of zeros does not start after one` }
 unless wide as String == "1::2" { INFO@mark `IP10 the zeros are not written as ::` }
 
 written := "1.2.3.4" as IP

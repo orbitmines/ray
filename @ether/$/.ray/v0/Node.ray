@@ -33,18 +33,17 @@ Node &+= {
   as (=== boolean) => !erred
   recoverable => erred && !diagnostics.some(.fatal)
 
-  $ => instance ? this : Store.View(type: this)
-  $ (fallback) => recoverable ? fallback : this
-  $ (raised: Diagnostic) => recoverable ? diagnosed(raised ~~ .cause = diagnostics.last) : this
-  $ (handler: Program) => recoverable ? handler.entered(diagnostics.last, None) : this
-  $ return {fallback} ^punctuation => recoverable ? &caller.return(fallback) : this
-  $? => recoverable ? None : this
-  $? (fallback) => $? ?? fallback
-  $! => erred ? FATAL@this `an error escalated to fatal` : this
-  $?! => erred ? None : this
-  $?! (handler: Program) => erred ? handler.entered(diagnostics.last, None) : this
-  {\n}${kind} {handled} ^punctuation => recoverable && diagnostics.last.kind ==.instance_of kind ? handled : this
-  {\n}${kind} | ${other} {handled} ^punctuation => recoverable && diagnostics.last.kind ==.instance_of (kind | other) ? handled : this
+  $ ^error => instance ? this : Store.View(type: this)
+  $ (fallback) ^error => recoverable ? fallback : this
+  $ (raised: Diagnostic) ^error => recoverable ? diagnosed(raised ~~ .cause = diagnostics.last) : this
+  $ (handler: Program) ^error => recoverable ? handler.entered(diagnostics.last, None) : this
+  $? ^error => recoverable ? None : this
+  $? (fallback) ^error => $? ?? fallback
+  $! ^error => erred ? FATAL@this `an error escalated to fatal` : this
+  $?! ^error => erred ? None : this
+  $?! (handler: Program) ^error => erred ? handler.entered(diagnostics.last, None) : this
+  {\n}${kind} {handled} ^error => recoverable && diagnostics.last.kind ==.instance_of kind ? handled : this
+  {\n}${kind} | ${other} {handled} ^error => recoverable && diagnostics.last.kind ==.instance_of (kind | other) ? handled : this
 }
 
 !{ }{forward}{ }{backward} ^keyword => forward.inverted_by(backward)

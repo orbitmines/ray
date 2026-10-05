@@ -1,0 +1,47 @@
+Program &+= {
+  // A program read back as its text: what it jumps to, which heads it requires, and where a spelling is declared.
+  is_jump => code ~= ⊢"goto "
+  is_label => code ~= "\" ⊣
+  jump => code ~= (⊢"goto ", name: Char.Word[], (" ", condition: *)?)
+  is_conditional => is_jump && jump.condition
+  target_of (jump: Program) => written{.is_label && .code == jump.jump.name + "\"}.first
+
+  flow => written.map(step => (step, jumps_to: step.is_jump ? target_of(step) : None, falls_through: !step.is_jump || step.is_conditional))
+  jumps_backward => written.some(step => step.is_jump && written.index_of(target_of(step)) <= written.index_of(step))
+  terminating => !jumps_backward
+
+  head => code ~= (⊢ head: (!(" " | "(" | ":" | "?"))[], ending: (" " | "(" | ":" | "?")?)
+  required_heads => written{(.head.ending == ":" && .head.head ~= ⊢Char.Word) || .code ~= (.head.head, " => TODO")}.head.head
+  declares (head: String) => written.some(.code ~= ⊢(head, " " | "(" | ":"))
+  precedence (spelled: String) => written.index_of(written{.code ~= ⊢((Modifier.spellings, " ")?, spelled, " ")}.first)
+
+  running => Running(program: this)
+  & => running.&
+  expand => written
+  concurrently => written.map(. ==.instance_of Running ? . : Running(program: .))
+
+  // Each statement of the block is a branch, as if written in `branch { }`; writing it explicitly is allowed (P4.1, P4.2).
+  right-to-left branch => Running(program: this) -- Running.branches.push(.)
+  right-to-left sync => concurrently -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
+  right-to-left race => concurrently
+    -- (.map(.stepped) while .every(.holds))
+    -- .{holds}.map(.cancel)
+    -- .{is_terminal}.first.results.last
+  right-to-left rush => concurrently
+    -- (.map(.stepped) while .every(.holds))
+    -- Running.branches.push(.{holds})
+    -- .{is_terminal}.first.results.last
+  right-to-left defer => Running(program: this) -- Running.deferred.push(.)
+
+  targets => code ~= ((target: (!" = ")[], " = ", (!(", " | \n))[]), (", " | \n)?)[] -- .target
+}
+
+// `with X = v` sets X until the context it is written in is left (L§6.3); `with { Time.YEAR = 2023, Time.MONTH = February }` sets several.
+// It takes one value: in `with X = Y { … }` the block belongs to Y (`X = (Y { … })`, extending Y), not to `with`.
+right-to-left with | assume (settings: Program) => {
+  previous = settings.targets.map(&caller[.])
+  settings()
+  defer { settings.targets.zip(previous).for((target, held) => &caller[target] = held) }
+}
+
+Terminating := Program{terminating}

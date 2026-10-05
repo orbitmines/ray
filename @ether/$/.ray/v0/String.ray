@@ -85,22 +85,17 @@ String := class: Char[] {
   as Decimal => this as 10
 
   + (other: String) => this, other
+  find_all (pattern: String) => (this ~= pattern)#.index
+  // `"…".italic` is the same as `"…" ^italic`: styling runs on highlighting (F-C2, F-C2b).
+  italic => this ^italic
+  bold => this ^bold
+  trim (characters: String) => trimmed(characters)
 }
 
 // `String[] as String` joins without a separator, `.join(sep)` with one (X1.5).
 String[] &+= {
   as (=== String) => this.reduce(,)
   join (separator: String) => this.reduce (acc, current) => acc, separator, current
-}
-
-// Every value prints in the language of the file it is written in (X1.6, X1.7).
-* &+= {
-  as (:== String) => $.ext.print(this)
-}
-
-Number &+= {
-  as (base: Number.Base) as String => digits(base).map(Char.digit) as String
-  as String => this as 10 as String
 }
 
 // Precedence is the order rules are declared in, deduced from where they are written (G1.2).

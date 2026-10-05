@@ -91,6 +91,8 @@ Answers from 2026-09-30.
 - **X6.1** `Test.ray` is renamed to `IP.ray`.
 - **X5.2** Uniqueness is a constraint on choose: `choose{unique} UUID.v1`. How it is guaranteed is up to
   the runtime.
+  **Superseded 2026-10-05:** `choose` takes one value and has no filter; the constraint is on the type: `choose UUID.v1{unique}`.
+  Filters belong to methods that take them (`[1, 2, 3].map{choose 1}(*10)`); `choose 3 boolean` is `choose (3 boolean)`.
 - **X5.3** A secondary implementation can be an entry point `~name` (only `~default` reads text), a `|`
   alternative on the method (as the boolean operators were drafted, U1), or an optimization. Several
   ways are fine; pick what fits the case.

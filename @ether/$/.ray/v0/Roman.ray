@@ -22,7 +22,7 @@ Roman := class: Digit+ (
     "ↆ": 50     // U+2186 ROMAN NUMERAL FIFTY EARLY FORM
   }
 
-  // Additive — historical notation without subtractive pairs (IIII instead of IV): read always, written with `with Roman.normalizer = Additive`.
+  // Additive — historical notation without subtractive pairs (IIII instead of IV): read always, written with `with Roman.normalizer = Additive)`.
   static Normalizer := enum Subtractive | Additive
   static normalizer: Normalizer = Subtractive
 

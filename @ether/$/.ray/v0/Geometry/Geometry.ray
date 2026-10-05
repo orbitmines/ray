@@ -1,86 +1,216 @@
+// The core of every rendering is geometry: shapes in a space, constrained until one layout is left (F-B6, F-B8).
 Point := Ray
 Path | Curve | Line := Array.Unbounded
 
 Geometry := namespace {
-  Vector := class = x: Number = 0, y: Number = 0, z: Number = 0 {
+  // A position or a size in any number of dimensions; lengths are Unit.ray quantities (F-B5).
+  Vector := class = x: Length = 0, y: Length = 0, z: Length = 0 {
     + (other: Vector) => Vector(x + other.x, y + other.y, z + other.z)
     - (other: Vector) => Vector(x - other.x, y - other.y, z - other.z)
+    * (factor: Number) => Vector(x * factor, y * factor, z * factor)
+    length => √(x ^ 2 + y ^ 2 + z ^ 2)
+    dimensions => [x, y, z]
+  }
+  Length := Quantity{unit ==.instance_of (px | pt | em | rem | % | vw | vh | cell | m)}
+
+  // Affine transforms compose; a shape's place is its transform applied to its parent's.
+  Transform := class = matrix: Number[][] = identity {
+    static identity = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    static translate (by: Vector) => Transform([[1, 0, 0, by.x], [0, 1, 0, by.y], [0, 0, 1, by.z], [0, 0, 0, 1]])
+    static scale (by: Vector) => Transform([[by.x, 0, 0, 0], [0, by.y, 0, 0], [0, 0, by.z, 0], [0, 0, 0, 1]])
+    static rotate (turn: Number, around: Vector = Vector(z: 1)) => Transform(rotation(turn, around))
+    static skew (by: Vector) => Transform([[1, by.x, 0, 0], [by.y, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+    * (other: Transform) => Transform(matrix.map(row => other.matrix.zip_columns.map(column => row.zip(column).map(*).sum)))
+    applied (point: Vector) => Vector(matrix[..3].map(row => row.zip([point.dimensions, 1]).map(*).sum))
+    inverse => Transform(matrix.inverse)
   }
 
-  // Padding is a hierarchical object around a shape: a ball with padding is still a ball.
-  Shape := class: Ray = position: Vector = Vector(), size: Vector = Vector(), spacing: Spacing[] = [], constraints: Constraint[] = [], children: Shape[] = [], flow: Flow = vertical {
-    + (component: Spacing | Constraint) => (component ==.instance_of Spacing ? spacing : constraints).push component -- this
+  Color := class = red: Number{0 <= . <= 255}, green: Number{0 <= . <= 255}, blue: Number{0 <= . <= 255}, alpha: Probability = 1 {
+    static ("#", hex: Hexadecimal{length == 6 | 8}) as Color => Color(hex[..2] as 16, hex[2..4] as 16, hex[4..6] as 16, (hex[6..8] as 16 ?? 255) / 255)
+    luminance => (red * 299 + green * 587 + blue * 114) / 1000
+    // Compositing: `over` is the colour of this with another drawn on top of it.
+    over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
+    mix (other: Color, by: Probability) => Color(red + (other.red - red) * by, green + (other.green - green) * by, blue + (other.blue - blue) * by, alpha + (other.alpha - alpha) * by)
+  }
+  // What fills a shape: a colour, a gradient, an image, or another shape repeated.
+  Paint := Color | Gradient | Pattern
+  Gradient := class = stops: (at: Probability, color: Color)[], kind: linear | radial | conic = linear, angle: Number = 0 {
+    at (position: Probability) => stops.zip(stops.rest){.0.at <= position <= .1.at}.first -- .0.color.mix(.1.color, (position - .0.at) / (.1.at - .0.at))
+  }
+  Pattern := class = shape: Shape, repeat: Vector
+  Stroke := class = paint: Paint, width: Length = 1px, dash: Length[] = [], cap: butt | round | square = butt, join: miter | round | bevel = miter
+
+  // Effects on a shape and what it holds.
+  Effect := Opacity | Shadow | Blur | Blend | Filter
+  Opacity := class = amount: Probability
+  Shadow := class = offset: Vector, blur: Length = 0, spread: Length = 0, color: Color, inset: boolean = false
+  Blur := class = radius: Length
+  Blend := enum normal | multiply | screen | overlay | darken | lighten | difference
+  Filter := class = kind: brightness | contrast | grayscale | invert | saturate | sepia | hue, amount: Number
+
+  // Text is a shape: runs of glyphs in a font, laid out in lines.
+  Font := class = family: String[] = ["sans-serif"], size: Length = 1em, weight: Number{100 <= . <= 900} = 400, style: normal | italic = normal, line_height: Number = 1.2, features: String[] = []
+  Text := class: Shape = text: String, font: Font = Font(), align: start | center | end | justify = start, wrap: normal | none | anywhere = normal, overflow: clip | ellipsis = clip, direction: left-to-right | right-to-left = left-to-right {
+    lines (width: Length) => wrap == none ? text.lines : text.lines.map(.words.reduce(acc = [""] => acc.last.width(font) + .width(font) <= width ? (acc[..-1], acc.last + " " + .) : (acc, .))).flatten
+  }
+
+  // Media are shapes too: their content comes from a location.
+  Image := class: Shape = source: Location, alt: String = "", fit: contain | cover | fill | none = contain
+  Video := class: Shape = source: Location, playing: boolean = false, muted: boolean = false, looping: boolean = false, at: Time = 0, controls: boolean = true
+  Audio := class: Shape = source: Location, playing: boolean = false, volume: Probability = 1, at: Time = 0
+  // Pixels: what a decoded image is, and what direct rendering produces.
+  Raster := class = width: Number, height: Number, pixels: Color[] = [Color(0, 0, 0, 0)] * (width * height) {
+    at (x: Number, y: Number) => pixels[y * width + x]
+    put (x: Number, y: Number, color: Color) => pixels[y * width + x] = pixels[y * width + x].over(color) if 0 <= x < width && 0 <= y < height
+    rows => pixels.chunk(width)
+    blurred (area: (x: Number, y: Number)[], radius: Number) => area.for((x, y) => put(x, y, (-radius..radius).map(dx => at(x + dx, y)).reduce((acc) => acc.mix(., 1 / (2 * radius + 1)))))
+  }
+  // A canvas is a shape drawn by a program: what it draws is shapes again.
+  Canvas := class: Shape = draws: Program
+
+  // Every shape: a place, a size, what it holds, how it is painted, how it flows its children, what it clips.
+  Shape := class: Ray = position: Vector = Vector(), size: Vector = Vector(), transform: Transform = Transform(), children: Shape[] = [],
+    fill: Paint?, stroke: Stroke?, radius: Length[] = [0], effects: Effect[] = [], blend: Blend = normal,
+    spacing: Spacing[] = [], constraints: Constraint[] = [], flow: Flow = vertical, gap: Vector = Vector(),
+    overflow: visible | clip | scroll = visible, scrolled: Vector = Vector(), layer: Number = 0, visible: boolean = true {
+    // Spacing is a component: a ball with padding is still a ball (F-B8b).
+    + (component: Spacing | Constraint | Effect) => component.match
+      Spacing => spacing.push component
+      Constraint => constraints.push component
+      Effect => effects.push component
+    -- this
     holding (child: Shape) => children.push child -- this
     outer => size + spacing{.from == border}.amount.reduce(acc = Vector() => acc + . + .)
+    // Hit testing: the shapes under a point, topmost first.
+    at (point: Vector) => visible && contains(transform.inverse.applied(point - position))
+      ? [children.sort_by(-.layer).map(.at(point - position)).flatten, this]
+      : []
+    contains (point: Vector) => 0 <= point.x <= size.x && 0 <= point.y <= size.y
   }
   Box := class: Shape
   Ball := class: Shape {
     radius => size.x / 2
+    contains (point: Vector) => (point - size * (1 / 2)).length <= radius
+  }
+  Polygon := class: Shape = points: Vector[] {
+    contains (point: Vector) => points.zip([points.rest, points.first]).filter((a, b) => (a.y > point.y) != (b.y > point.y) && point.x < a.x + (point.y - a.y) * (b.x - a.x) / (b.y - a.y)).count.odd
   }
   Circle := class: Ball = centre: Point {
     outline (count: Number) => (0..<count).map(Polar(centre, radius, turn: ., of: count)).loop
   }
   Polar := class = centre: Point, radius: Number, turn: Number, of: Number
+  // Paths: lines, curves and arcs between points.
+  Segment := Line | Quadratic | Cubic | Arc
+  Quadratic := class = control: Vector, to: Vector
+  Cubic := class = first: Vector, second: Vector, to: Vector
+  Arc := class = radius: Vector, rotation: Number, large: boolean, sweep: boolean, to: Vector
+  Outline := class: Shape = from: Vector, segments: Segment[], closed: boolean = false {
+    // Curves flattened into lines: what filling, stroking and hit testing walk.
+    points => [from, segments.map(.match
+      Quadratic => (1..16).map(t => Bezier([.previous, .control, .to], t / 16))
+      Cubic => (1..16).map(t => Bezier([.previous, .first, .second, .to], t / 16))
+      Arc => (1..16).map(t => .previous + (.to - .previous) * (t / 16))
+      * => [.]
+    ).flatten]
+    contains (point: Vector) => Polygon(points: points).contains(point)
+  }
+  Bezier := (points: Vector[], t: Number) => points.count == 1 ? points.first : Bezier(points.zip(points.rest).map((a, b) => a + (b - a) * t), t)
 
-  Flow := enum vertical | inline
+  Flow := enum vertical | inline | grid | layered
   Side := enum all | top | bottom | left | right | horizontal | vertical
-  Align := enum start | center | end | between | middle
-  Relation := enum against | next_to | above | below | inside
+  Align := enum start | center | end | between | around | stretch | middle
 
   Spacing := class = amount: Vector = Vector(), from: From = border, sides: Side = all {
     static From := enum border | shape
   }
-  Constraint := class = dimension: String, least: Number?, most: Number?, share: (Number | Interpolated)?, align: Align? {
-    admits (length: Number) => (!least || least <= length) && (!most || length <= most)
+  // Everything is a narrowing on the shape; the solver finds the one layout that satisfies them (F-B6, F-B6b).
+  Constraint := class = dimension: "x" | "y" | "z", least: Length?, most: Length?, share: (Number | Interpolated)?, align: Align?, aspect: Number?, columns: Number?, wrap: boolean = false {
+    admits (length: Length) => (!least || least <= length) && (!most || length <= most)
   }
-
-  // `md 6 -> lg 4`: a share interpolated between breakpoints.
-  Breakpoint := class = width: Number, share: Number {
+  // `md 6 -> lg 4`: a share interpolated between breakpoints (F-B4).
+  Breakpoint := class = width: Length, share: Number {
     -> (other: Breakpoint) => Interpolated(from: this, to: other)
   }
   Interpolated := class = from: Breakpoint, to: Breakpoint {
-    at (width: Number) => width < from.width ? from.share
+    at (width: Length) => width < from.width ? from.share
       : to.width < width ? to.share
       : from.share + (to.share - from.share) * (width - from.width) / (to.width - from.width)
   }
 
+  Relation := enum against | next_to | above | below | inside
   Placed := class = item: Shape, relation: Relation, other: Shape
   related (item, relation, other) => Placed(item, relation, other)
 
-  Solver := class = available: Number {
-    length (shape: Shape, width: Number) => shape.constraints{.dimension == "x"}.reduce(acc = width => (
+  Solver := class = available: Vector {
+    length (shape: Shape, width: Length) => shape.constraints{.dimension == "x"}.reduce(acc = width => (
       .share ? (.share ==.instance_of Interpolated ? .share.at(width) : .share) * width : acc
     ) max (.least ?? 0) min (.most ?? ∞))
 
-    solve (shape: Shape) => place(shape, Vector(), available)
-    place (shape: Shape, origin: Vector, width: Number) => shape -- {
+    solve (shape: Shape) => place(shape, Vector(), available.x)
+    place (shape: Shape, origin: Vector, width: Length) => shape -- {
       own = length(shape, width)
-      size = Vector(own, size.y)
+      size = Vector(own, shape.constraints.aspect.last ? own / shape.constraints.aspect.last : size.y)
       position = origin
-      children.reduce(acc = origin => {
-        child_width = length(., own)
-        offset = .constraints.align.last == center ? (own - child_width) / 2 : .constraints.align.last == end ? own - child_width : 0
-        flow == inline
-          ? place(., Vector(acc.x + offset, acc.y), child_width) -- Vector(acc.x + child_width, acc.y)
-          : place(., Vector(origin.x + offset, acc.y), child_width) -- Vector(origin.x, acc.y + .size.y)
-      })
+      flow.match
+        grid => children.chunk(constraints.columns.last ?? 1).reduce(acc = origin => (
+          .map((child, i) => place(child, Vector(origin.x + i * (own / .count + gap.x), acc.y), own / .count - gap.x)),
+          Vector(origin.x, acc.y + .size.y.max + gap.y)
+        ).last)
+        layered => children.for(place(., origin, own))
+        * => children.reduce(acc = origin => {
+          child_width = length(., own)
+          offset = .constraints.align.last.match
+            center => (own - child_width) / 2
+            end => own - child_width
+            * => 0
+          flow == inline && (!constraints.wrap.last || acc.x + child_width <= origin.x + own)
+            ? place(., Vector(acc.x + offset, acc.y), child_width) -- Vector(acc.x + child_width + gap.x, acc.y)
+            : place(., Vector(origin.x + offset, acc.y), child_width) -- Vector(origin.x, acc.y + .size.y + gap.y)
+        })
     }
   }
+
+  // Anything that changes over time: a property moving between values with an easing (F-D6).
+  Animation<T> := class = from: T, to: T, duration: Time, easing: Easing = ease, delay: Time = 0, repeat: Number | ∞ = 1, started: Time = Time.now {
+    at (time: Time) => from + (to - from) * easing((time - started - delay) / duration min 1 max 0)
+    value => dynamically at(Time.now)
+  }
+  Easing := (progress: Probability): Probability
+  linear: Easing = (t) => t
+  ease: Easing = (t) => t * t * (3 - 2 * t)
+  ease_in: Easing = (t) => t * t
+  ease_out: Easing = (t) => t * (2 - t)
 }
 
-// Alignment words keep their block.
-[center: Align.center, right: Align.end, left: Align.start, between: Align.between].for (word, align) => {
-  `word` ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: "x", align)).holding(inline block)
+// Alignment words keep their block (F-B9): `center { … }` is `{ … }.center`.
+Node &+= {
+  right-to-left center => Geometry.Box(constraints: [Geometry.Constraint("x", align: center)], children: [this])
+  right-to-left right => Geometry.Box(constraints: [Geometry.Constraint("x", align: end)], children: [this])
+  right-to-left left => Geometry.Box(constraints: [Geometry.Constraint("x", align: start)], children: [this])
+  right-to-left between => Geometry.Box(constraints: [Geometry.Constraint("x", align: between)], children: [this])
+  right-to-left middle => Geometry.Box(constraints: [Geometry.Constraint("y", align: middle)], children: [this])
 }
-middle ^keyword {block} => (Geometry.Box() + Geometry.Constraint(dimension: "y", align: Align.middle)).holding(inline block)
 
-// The spacing shorthands: p/m with a side, from the border or from the shape.
+// The spacing shorthands: p/m with a side, from the border or from the shape (F-B8c). These stay grammar: `px 5` is padding, `5.px` is the unit.
 [p: all, px: horizontal, py: vertical, pt: top, pb: bottom, pl: left, pr: right].for (word, side) => {
   `word` {amount: Number} ^keyword => Geometry.Spacing(amount: Vector(amount if side != vertical, amount if side != horizontal), sides: side)
   `word.replace("p", "m")` {amount: Number} ^keyword => Geometry.Spacing(amount: Vector(amount if side != vertical, amount if side != horizontal), sides: side, from: shape)
 }
 
-// Breakpoints
-[xs: 0, sm: 576, md: 768, lg: 992, xl: 1200].for (word, width) => {
-  `word` {share} ^keyword => Geometry.Breakpoint(width, share)
+// Breakpoints: `md 6/12` is `(6/12).md`.
+Number &+= {
+  right-to-left xs => Geometry.Breakpoint(0px, this)
+  right-to-left sm => Geometry.Breakpoint(576px, this)
+  right-to-left md => Geometry.Breakpoint(768px, this)
+  right-to-left lg => Geometry.Breakpoint(992px, this)
+  right-to-left xl => Geometry.Breakpoint(1200px, this)
 }
+
+// The units a rendering is measured in; each platform level says what they are in its target (F-B5).
+Unit(name: "pixel", symbol: "px")
+Unit(name: "point", symbol: "pt").multiple 4 / 3, px
+Unit(name: "em")
+Unit(name: "rem")
+Unit(name: "viewport width", symbol: "vw")
+Unit(name: "viewport height", symbol: "vh")
+Unit(name: "cell")

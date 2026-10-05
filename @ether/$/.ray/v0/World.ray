@@ -149,6 +149,31 @@ History := class = repository: *?, commits: Commit[] = [], from: History? {
   generics: String[] = []
   remember_generic (name: String): static => this ~~ generics.push name
   appears (name: String) => INFO@name `a variable is named like a generic type used silently before` if generics.contains(name)
+
+  static clocks: HybridClock[] = []
+  clock => History.clocks{node === repository}.first ?? (History.clocks.push HybridClock(node: repository))
+
+  operate (who, kind, definition, before, after) => Operation(kind, definition, clock.now, who, before, after) -- commit(who, .)
+  define (who, definition, code) => operate(who, Operation.Kind.define, definition, None, code)
+  change (who, definition, code) => operate(who, Operation.Kind.change, definition, code_of(definition), code)
+  rename (who, definition, name: String) => operate(who, Operation.Kind.rename, definition, name_of(definition), name)
+  remove (who, definition) => operate(who, Operation.Kind.remove, definition, code_of(definition), None)
+  undo (operation: Operation) => commit(operation.who, operation.inverse)
+
+  operations: Operation[] => commits.what{==.instance_of Operation}
+  operations_on (definition: Definition) => operations{.definition == definition}
+  ordered => operations.sorted(.stamp)
+
+  latest_of (definition: Definition, kinds: Operation.Kind[]) => operations_on(definition){kinds.contains(.kind)}.max(.stamp)
+  code_of (definition: Definition) => latest_of(definition, [define, change, remove])?.after
+  name_of (definition: Definition) => latest_of(definition, [rename])?.after ?? definition.name
+  definitions => operations.definition.unique
+  named (name: String) => definitions{name_of(.) == name}.last
+
+  received (stamp: Stamp) => clock.receive(stamp)
+  view (filter) => History(repository, commits: commits{filter(.)}, from: this)
+
+  as Git => Git(commits: commits.map(commit => Git.Commit(id: commit.id, author: commit.who, date: commit.when, message: commit.what.definition?.name ?? commit.what as String, change: commit.what)))
 }
 
 Repository := class = world: World, histories: History[] = []
@@ -254,6 +279,11 @@ Character := class: Entity + Nameable {
 
   choose (kind) => Quest(name: "choose", goal: kind, solved_by: this)
   embody (avatar: Avatar) => avatars.push avatar
+
+  read => Access(this)
+  write => on(`=`)
+  execute => on(`()`)
+  on (method) => Access(this, method)
 }
 
 Avatar := class: Character {
@@ -261,6 +291,17 @@ Avatar := class: Character {
   platform: Platform?
   location: *?
   handle: String?
+  skills: Skill[] = []
+  traversed: Location[] = []
+
+  unlock (skill: Skill): static => this ~~ skills.push skill
+  visit (location: Location): static => this ~~ traversed.push location
+  copied => Avatar(character, platform)
+  + (other: Avatar): static => this ~~ (
+    .skills = skills, other.skills{!skills.contains(.)}
+    .traversed = traversed, other.traversed
+  )
+  rewarded (solution: Skill.Solution) => solution.used
 }
 
 Player := class: Character

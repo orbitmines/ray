@@ -65,52 +65,22 @@ HybridClock := class = node: *, wall: Decimal = 0, logical: Decimal = 0 {
 }
 
 // The first milestone of version control: operations over definitions, HLC-stamped; a rename keeps identity (L§9.2).
-Definition := class = id: UUID = choose{unique} UUID.v1~generate(), name: String, holder: *? {
+Definition := class = id: UUID = choose UUID.v1{unique}, name: String, holder: *? {
   == (other: Definition) => id == other.id
 }
 
 Operation := class = kind: Kind, definition: Definition, stamp: Stamp, who: *, before: *?, after: *? {
-  static Kind := enum define | change | rename | remove
-
-  inverse => Operation(kind.inverse, definition, stamp, who, before: after, after: before)
-  Kind &+= {
+  static Kind := enum define | change | rename | remove {
     inverse => this == define ? remove : this == remove ? define : this
   }
+
+  inverse => Operation(kind.inverse, definition, stamp, who, before: after, after: before)
   matches (current) => !before || before == current
-}
-
-History &+= {
-  static clocks: HybridClock[] = []
-  clock => History.clocks{node === repository}.first ?? (History.clocks.push HybridClock(node: repository))
-
-  operate (who, kind, definition, before, after) => Operation(kind, definition, clock.now, who, before, after) -- commit(who, .)
-  define (who, definition, code) => operate(who, Operation.Kind.define, definition, None, code)
-  change (who, definition, code) => operate(who, Operation.Kind.change, definition, code_of(definition), code)
-  rename (who, definition, name: String) => operate(who, Operation.Kind.rename, definition, name_of(definition), name)
-  remove (who, definition) => operate(who, Operation.Kind.remove, definition, code_of(definition), None)
-  undo (operation: Operation) => commit(operation.who, operation.inverse)
-
-  operations: Operation[] => commits.what{==.instance_of Operation}
-  operations_on (definition: Definition) => operations{.definition == definition}
-  ordered => operations.sorted(.stamp)
-
-  latest_of (definition: Definition, kinds: Operation.Kind[]) => operations_on(definition){kinds.contains(.kind)}.max(.stamp)
-  code_of (definition: Definition) => latest_of(definition, [define, change, remove])?.after
-  name_of (definition: Definition) => latest_of(definition, [rename])?.after ?? definition.name
-  definitions => operations.definition.unique
-  named (name: String) => definitions{name_of(.) == name}.last
-
-  received (stamp: Stamp) => clock.receive(stamp)
-  view (filter) => History(repository, commits: commits{filter(.)}, from: this)
-
-  as Git => Git(commits: commits.map(commit => Git.Commit(id: commit.id, author: commit.who, date: commit.when, message: commit.what.definition?.name ?? commit.what as String, change: commit.what)))
 }
 
 Git := class = commits: Commit[] {
   static Commit := class = id: *, author: *, date: *, message: String, change: * {
     as (:== String) => "commit ", id, "\nAuthor: ", author, "\nDate: ", date, "\n\n    ", message, "\n\n"
-  }
-  Commit &+= {
     parent => <-
   }
 

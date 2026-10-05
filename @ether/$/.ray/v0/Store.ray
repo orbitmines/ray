@@ -41,5 +41,3 @@ Store := class: Location = name: String, parent: Store?, children: Store[] = [],
     entry => all.entry
   }
 }
-
-persistent (value) => Store.keep(value)

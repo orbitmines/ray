@@ -19,6 +19,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   empty => count == 0
   nonempty => !empty
   unbounded => !bounded
+  ∞ => unbounded
   orderless => false
 
   connected => all.every(a => all.every(b => a.to(b)))
@@ -45,15 +46,16 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   filter (predicate: (x: Vertex): boolean) => this{predicate}
 
   // `reduce((acc) => …)` seeds with the first element, `reduce(acc = 0 => …)` with what it is given; `.` is the element (R2.4).
-  .reduce(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => rest.reduced(first, Program(code: (external ** step), parameters: (external ** accumulator)))
+  reduce (step: Program) => rest.reduced(first, step)
   .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => reduced(initial, Program(code: (external ** step), parameters: (external ** accumulator)))
   .reduce({literal operator ^operator}) ^punctuation => .reduce((acc) => acc[operator] .)
   reduce_right | fold_right | foldr => reverse.reduce
   reduced (seed, step: Program) => empty ? seed : rest.reduced(step.entered(first, seed), step)
 
   all => reduce(|)
-  sum => reduce(total = 0 => total + .)
-  product => reduce(total = 1 => total * .)
+  right-to-left Σ | sum => reduce(total = 0 => total + .)
+  right-to-left ∑ => sum
+  right-to-left ∏ | product => reduce(total = 1 => total * .)
   min => reduce((acc) => acc < . ? acc : .)
   max => reduce((acc) => acc > . ? acc : .)
   count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
@@ -62,6 +64,8 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
 
   rest => entry?.next ?? []
   map (mapping: (x: Vertex): *) => empty ? [] : mapping(first), rest.map(mapping)
+  // A filter on map maps only what it selects: `[1, 2, 3].map{choose 1}(*10)` multiplies one chosen element (Almanac).
+  map {selection} (mapping: (x: Vertex): *) => (selected = this{selection}) -- map(x => selected.contains(x) ? mapping(x) : x)
   reverse => empty ? [] : rest.reverse, first
   sort => empty ? [] : rest{< first}.sort, first, rest{>= first}.sort
   sorted (key) => sort_by(key)
@@ -83,6 +87,17 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   join (separator) => reduce((acc) => acc, separator, .)
   random => this[Random.below(count)]
   fill (x) => all = x
+  take (count: Number) => this[..count]
+  find (predicate) => this{predicate}.first
+  find_all (predicate) => this{predicate}
+  shuffled => empty ? [] : (picked = random), this{!== picked}.shuffled
+  squeeze => this{. != .previous}
+  padded (width: Number, with = 0) => [with] * (width - length), this
+
+  // `0..2..1` goes on from where the last range ended.
+  .. (next: Number) => this, (last..next)[1..]
+
+  orbit | loop => Loop(around: this, at: first)
 
   // `Binary₈[]₄`: compose the structure `count` times.
   * (count: Number) => count == 0 ? [] : this, this * (count - 1)
@@ -123,6 +138,34 @@ Ray := class: Iterable & Ordered {
   expand => first..last
   // The whole context except this value: the complement with the context as the universal set (R3.7).
   complement => expand{!== this}
+
+  continuations => [next]{!= None}
+  reachable => this, continuations.map(.reachable).flatten -- .unique
+
+  // All paths, or a quest when there is none (R3.4).
+  path_to | between (target, trail = []) => this === target ? [[trail, this]]
+    : continuations{!trail.contains(.)}.map(.path_to(target, [trail, this])).flatten(1)
+    -- . ?? Quest(name: "find a path", goal: target)
+  shortest_path_to (target) => path_to(target).min(.count)
+
+  complement (selection) => reachable{!selection.contains(.)}
+
+  // Removing a vertex: preserving joins its neighbours, severing leaves them apart (R3.1, R3.11).
+  remove_preserving => {
+    previous?.next = next
+    next?.previous = previous
+    next, previous = None
+  } -- this
+  sever => {
+    previous?.next = None
+    next?.previous = None
+    next, previous = None
+  } -- this
+  move_after (other) => remove_preserving -- {
+    (next, previous) = (other.next, other)
+    other.next?.previous = this
+    other.next = this
+  }
 }
 
 Boundary := class: Ray {
@@ -189,6 +232,42 @@ Hypergraph := class: Structure {
 }
 Graph := class: Structure {
   HyperContinuations = true
+
+  static Simple := class: Graph = vertices: *[] = [], edges: Edge[] = [] {
+    static Edge := class = from: *, to: *
+
+    vertex (value) => vertices.contains(value) ? value : vertices.push(value)
+    connect (from, to) => { vertex(from); vertex(to); edges.push Edge(from, to) } -- this
+    connected (from, to) => edges.some(.from == from && .to == to)
+    outgoing (vertex) => edges{.from == vertex}.to
+
+    // Products and unions (R4.3)
+    cartesian (other: Simple) => Simple(
+      vertices: vertices * other.vertices,
+      edges: (edges * other.vertices).map((e, v) => Edge((e.from, v), (e.to, v))), (vertices * other.edges).map((v, e) => Edge((v, e.from), (v, e.to)))
+    )
+    tensor (other: Simple) => Simple(vertices: vertices * other.vertices, edges: (edges * other.edges).map((a, b) => Edge((a.from, b.from), (a.to, b.to))))
+    union (other: Simple) => Simple(vertices: (vertices, other.vertices).unique, edges: (edges, other.edges).unique)
+    disjoint_union (other: Simple) => Simple(
+      vertices: vertices.map((0, .)), other.vertices.map((1, .)),
+      edges: edges.map(Edge((0, .from), (0, .to))), other.edges.map(Edge((1, .from), (1, .to)))
+    )
+
+    without (vertex) => Simple(vertices: vertices{!= vertex}, edges: edges{.from != vertex && .to != vertex})
+    dangling (vertex, kept) => edges.some((.from == vertex || .to == vertex) && !(kept.contains(.from) && kept.contains(.to)))
+
+    // Double- and single-pushout rewriting (R3.11)
+    static Rule := class = left: Simple, interface: Simple, right: Simple, single_pushout: boolean = false {
+      deleted => left.vertices{!interface.vertices.contains(.)}
+      added => right.vertices{!interface.vertices.contains(.)}
+
+      applies (host: Simple) => left.vertices.every(host.vertices.contains(.))
+        && (single_pushout || !deleted.some(host.dangling(., host.vertices{!deleted.contains(.)}, left.vertices)))
+      apply (host: Simple) => applies(host)
+        ? deleted.reduce(acc = host => acc.without(.)) -- added.for(.vertex) -- right.edges{!.connected(.from, .to)}.for(.connect(.from, .to))
+        : Quest(name: "rewrite", goal: host)
+    }
+  }
 }
 Forest := class: Structure{acyclic & consistent} {
   Vertex = Ray{terminal: Vertex.Boundary, initial: 1 Vertex.Boundary}
@@ -201,7 +280,17 @@ Path := class: Structure{consistent & connected} {
   paths => this
   length => acyclic ? count : ∞
 }
-Array := class: Path{acyclic}
+Array := class: Path{acyclic} {
+  push_back | push (x) => this, x
+  push_front (x) => x, this
+  pop_front => remove(first)
+  pop_back => remove(last)
+  remove (x) => this{!= x}
+  push_after (at, x) => this[..at.index + 1], x, this[at.index + 1..]
+  push_before (at, x) => this[..at.index], x, this[at.index..]
+  move_after (x, target) => remove(x).push_after(target, x)
+  move_before (x, target) => remove(x).push_before(target, x)
+}
 Set := class: Structure {
   orderless => true
   normalizer = .unordered.unique
@@ -215,11 +304,7 @@ Hierarchy := class: Ray {
 }
 
 // A loop goes around what it is made of: `Array.unbounded.orbit` (R5.1).
-Loop := Array.Unbounded.orbit
-Iterable &+= {
-  orbit | loop => Loop(around: this, at: first)
-}
-Loop &+= {
+Loop := class: Path = around: Iterable, at: * {
   next => Loop(around, at: at.next ?? around.first)
   previous => Loop(around, at: at.previous ?? around.last)
   is_initial => false
@@ -231,16 +316,4 @@ Loop &+= {
   instances (times: Number) => around * times
   unrolled_mod => around[at.index..], around[..at.index]
   disallow_loops => around
-}
-
-Array &+= {
-  push_back | push (x) => this, x
-  push_front (x) => x, this
-  pop_front => remove(first)
-  pop_back => remove(last)
-  remove (x) => this{!= x}
-  push_after (at, x) => this[..at.index + 1], x, this[at.index + 1..]
-  push_before (at, x) => this[..at.index], x, this[at.index..]
-  move_after (x, target) => remove(x).push_after(target, x)
-  move_before (x, target) => remove(x).push_before(target, x)
 }

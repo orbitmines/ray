@@ -22,6 +22,8 @@ Quantity<Base = Number> := class = quantities: (quantity: Base, unit: Unit = Uni
 
   // Rates: `GB/s`, `1 / m`, `2/10m` (N2.3)
   / (unit: Unit) => quantities.quantity, quantities.unit / unit
+
+  static Temporal = Quantity{unit == Unit.Temporal}
 }
 
 Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol && !plural {
@@ -48,6 +50,7 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   }
 
   static None = Unit(global.None)
+  static Temporal => second
 
   // `year as ns`
   as (:== Quantity) => 1, this

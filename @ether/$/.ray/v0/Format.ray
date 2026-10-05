@@ -36,16 +36,23 @@ JSON := class (Blank, root: Value, Blank) => {
   }
   value => root.value
 
-  static escaped (text: String) => #text.map({ "\"": "\\\"", "\\": "\\\\", \n: "\\n", \r: "\\r", \t: "\\t" }[.] ?? .) as String
+  static escaped (text: String) => #text.map({ "\"": "\\\"", "\\": "\\\\", "<": "\\u003c", \n: "\\n", \r: "\\r", \t: "\\t" }[.] ?? .) as String
+  // JSON-LD (https://www.w3.org/TR/json-ld11/)
+  static Linked := class = value: *, context: String?
   static written := {
     {writing: Language.Writing{value === None}} => "null"
     {writing: Language.Writing{value is boolean}} => writing.value ? "true" : "false"
     {writing: Language.Writing{value is Number}} => writing.value as 10 as String
     {writing: Language.Writing{value is String | Location | Version}} => "\"", escaped(writing.value as String), "\""
+    {writing: Language.Writing{value is Linked}} => writing.value -- (linked => Language.Writing(
+      linked.value === None || linked.value is (String | Number | boolean | Location) ? linked.value
+      : linked.value is Iterable ? linked.value.map(Linked(.))
+      : Document(entries: [(name: "@context", value: linked.context) if linked.context, linked.value.fields{.value != None}.map((name: .name == "type" ? "@type" : .name, value: Linked(.value)))].flatten)))
     {writing: Language.Writing{value is Iterable}} => "[", writing.value.map((", " if .index > 0), Language.Writing(.)), "]"
     {writing: Language.Writing} => "{", writing.value.fields.map((", " if .index > 0), Language.Writing(.name), ": ", Language.Writing(.value)), "}"
   }
   static level := { {text: String} => (text as JSON).value }
+  static write (value) => Compiler.reduced(Language.Writing(value), written) as String
   static language = Language(".json", level: level, written: written)
 }
 

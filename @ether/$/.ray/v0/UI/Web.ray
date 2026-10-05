@@ -361,32 +361,6 @@ Language.Web := class: Language {
     } + rules
   }
 
-  JSON := class {
-    Object := class = entries: (name: String, value: *)[]
-    Value := class = value: *
-    Linked := class = value: *, context: String?
-
-    Escapes = { "\"": "\\\"", "\\": "\\\\", "<": "\\u003c", \n: "\\n" }
-    escaped (text: String) => #text.map(Escapes[.] ?? .) as String
-
-    written := {
-      {linked: Linked{value == None}} => Value(None)
-      {linked: Linked{value is (String | Number | boolean | Location)}} => Value(linked.value)
-      {linked: Linked{value is Iterable}} => Value(linked.value.map(Linked(.)))
-      {linked: Linked} => Value(Object([("@context", linked.context) if linked.context, linked.value.fields{.value != None}.map((name: .name == "type" ? "@type" : .name, value: Linked(.value)))].flatten))
-      {json: Value{value is Linked}} => json.value
-      {json: Value{value == None}} => "null"
-      {json: Value{value is boolean}} => json.value ? "true" : "false"
-      {json: Value{value is Number}} => json.value as String
-      {json: Value{value is String}} => "\"", escaped(json.value), "\""
-      {json: Value{value is Location}} => Value(json.value as String)
-      {json: Value{value is Object}} => "{", json.value.entries{.value != None}.map(("," if .index > 0), Value(.name), ":", Value(.value)), "}"
-      {json: Value{value is Iterable}} => "[", json.value.map(("," if .index > 0), Value(.)), "]"
-      {json: Value} => Value(Object(json.value.fields.map((name: .name, value: .value))))
-    }
-    write (value) => Compiler.reduced(Value(value), written) as String
-  }
-
   JS := class {
     Module := class = statements: Statement[] = []
     Statement := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | Comment | String
@@ -574,7 +548,7 @@ Language.Web := class: Language {
       {binding: Let} => "let ", binding.name, "=", binding.value
       {assign: Assign} => assign.target, "=", assign.value
       {effect: Effect} => "effect(", effect.reads, ",()=>{", effect.body.map(., ";"), "})"
-      {listen: Listen} => listen.target, ".addEventListener(", JSON.Value(listen.event), ",(event)=>{", listen.body.map(., ";"), "})"
+      {listen: Listen} => listen.target, ".addEventListener(", Language.Writing(listen.event), ",(event)=>{", listen.body.map(., ";"), "})"
       {call: Call} => call.function, "(", call.arguments.map(("," if .index > 0), .), ")"
       {defined: Function} => "function ", defined.name ?? "", "(", defined.parameters.join(","), "){", defined.body.map(., ";"), "}"
       {returned: Return} => "return ", returned.value
@@ -587,8 +561,8 @@ Language.Web := class: Language {
       {prefixed: Prefix} => "(", prefixed.operator, prefixed.operand, ")"
       {record: Record} => "{", record.entries.map(("," if .index > 0), .name, ":", .value), "}"
       {listing: Listing} => "[", listing.elements.map(("," if .index > 0), .), "]"
-      {literal: Literal} => JSON.Value(literal.value)
-      {found: ById} => "document.getElementById(", JSON.Value(found.id), ")"
+      {literal: Literal} => Language.Writing(literal.value)
+      {found: ById} => "document.getElementById(", Language.Writing(found.id), ")"
     }
     language = Language(".js", level: syntax, written: written)
 

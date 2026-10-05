@@ -103,7 +103,7 @@ ld := head{.tag == "script" && .attributes.contains(("type", "application/ld+jso
 unless ld && ld.children.first.text ~= (*, "\"@type\":\"Article\"", *) { INFO@mark `UI95 a structured entry is not JSON-LD with its @type` }
 unless ld && ld.children.first.text ~= (*, "\"@context\":\"https://schema.org\"", *) { INFO@mark `UI96 JSON-LD has no schema.org context` }
 unless head.some(.tag == "link" && .attributes.contains(("rel", "manifest"))) { INFO@mark `UI97 the manifest is not linked` }
-unless Language.Web.JSON.write("</script>") == "\"\\u003c/script>\"" { INFO@mark `UI98 JSON text can close the script it is in` }
+unless JSON.write("</script>") == "\"\\u003c/script>\"" { INFO@mark `UI98 JSON text can close the script it is in` }
 with UI.page = (title: "Ray") {
   unless Language.TUI.Target().framed(Language.TUI.Grid(1, 1)).title == "Ray" { INFO@mark `UI99 the terminal title does not follow the page title` }
 }

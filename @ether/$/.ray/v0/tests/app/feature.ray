@@ -155,4 +155,4 @@ unless choose boolean ==.instance_of boolean { INFO@mark `CN3 what is chosen fro
 unless (choose 3 boolean).count == 3 { INFO@mark `CN4 choosing three booleans does not choose three` }
 unless (3 boolean).count == 3 { INFO@mark `CN5 three called on boolean is not three of it` }
 unless Number{choose 5}.count == 5 { INFO@mark `CN6 a narrowing by a choice of five is not five` }
-unless [1, 2, 3].map{choose 1}(*10){!=.instance_of [1, 2, 3]}.count == 1 { INFO@mark `CN7 a filtered map changes other than the one it chose` }
+unless [1, 2, 3].map{choose 1}(*10).zip([1, 2, 3]).filter((a, b) => a != b).count == 1 { INFO@mark `CN7 a filtered map changes other than the one it chose` }

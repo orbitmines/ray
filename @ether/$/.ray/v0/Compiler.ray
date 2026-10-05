@@ -44,5 +44,5 @@ Debug := class {
 }
 
 Program &+= {
-  O := Compiler.none
+  O | optimizations := Compiler.none
 }

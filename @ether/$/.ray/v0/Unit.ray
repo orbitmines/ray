@@ -39,7 +39,7 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
 
   (static.# ??= []).push this
 
-  // `name`; `var: Decimal.Positive, ns = 10 ns`
+  // `name`; `var: Decimal, ns = 10 ns`
   caller[name] = this if name
 
   reexport => {
@@ -61,9 +61,9 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
 
   protected unit = this
   // `1m`, `1 m`
-  global.`digits: Decimal.Positive.String, " "?, name: unit as String`: Quantity => digits, unit
+  global.`digits: Decimal.String, " "?, name: unit as String`: Quantity => digits, unit
   // `1.5m`, `1.5 m`
-  Decimal.Real.Positive &+= {
+  Decimal.Real &+= {
     `" "?, name: unit as String`: Quantity => this, unit
   }
   // `25.years`, `(30).days` (N2.1b)
@@ -90,10 +90,10 @@ Unit := class = name + symbol: boolean? + plural: boolean? + singular: !symbol &
   multiple (multiple: Number, ToUnit: Unit) => convert (x: Number) => x * multiple, ToUnit
 
   magnitude (exponent: Number, ToUnit: Unit, Base: Decimal) => {
-    convert (x: Decimal.Positive) => Decimal.Positive, ToUnit
+    convert (x: Decimal) => Decimal, ToUnit
       dynamically assert exponent >= 0 | x % 10^-exponent == 0
       x << exponent
-    convert (x: Decimal.Real.Positive) => Decimal.Real.Positive, ToUnit
+    convert (x: Decimal.Real) => Decimal.Real, ToUnit
       if exponent == 0 { x }
       elsif exponent > 0 { x.integer, x.fraction.0 ?? 0, ".", x.fraction[1..] }
       else { x.integer[..-1], ".", x.integer[-1] ?? 0, x.fraction }

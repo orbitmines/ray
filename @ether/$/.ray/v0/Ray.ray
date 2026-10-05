@@ -70,7 +70,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   unordered => choose Iterable{.every(this.contains(.)) && .count == count}
 
   contains | includes <operator: (x: Vertex): (b: Vertex): boolean = ==>(x: Vertex) => some(operator(.)(x))
-  partition (predicate) => this{predicate}, this{!predicate(.)}
+  partition (predicate) => [this{predicate}], [this{!predicate(.)}]
   batch | chunk (size: Number) => empty ? [] : [this[..size]], this[size..].chunk(size)
   flatten => reduce(acc = [] => acc, .)
   flatten (levels: Number) => levels == 0 ? this : map(. ==.instance_of Iterable ? .flatten(levels - 1) : [.]).flatten
@@ -79,7 +79,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   xor | symmetric_difference (other: Iterable) => this{!other.contains(.)}, other{!this.contains(.)}
   split (delimiter) => this ~= (*, delimiter)[] -- #.join(*)
   enumerate => map((x) => (index: x.index, value: x))
-  zip (other: Iterable) => empty || other.empty ? [] : (first, other.first), rest.zip(other.rest)
+  zip (other: Iterable) => empty || other.empty ? [] : [(first, other.first)], rest.zip(other.rest)
   join (separator) => reduce((acc) => acc, separator, .)
   random => this[Random.below(count)]
   fill (x) => all = x
@@ -134,9 +134,13 @@ Boundary := class: Ray {
 
   static Initial := class: Boundary {
     ⊙ = Edge(x.terminal: this)
+    is_initial => !∙.previous
+    is_terminal => false
   }
   static Terminal := class: Boundary {
     ⊙ = Edge(x.initial: this)
+    is_initial => false
+    is_terminal => !∙.next
   }
 }
 
@@ -176,8 +180,8 @@ Structure := class: Iterable<Ray{
       initial & terminal : (1 unless HyperEdges) Vertex.Boundary
     }
   }
-  internal static HyperContinuations: boolean
-  internal static HyperEdges: boolean = false
+  static HyperContinuations: boolean
+  static HyperEdges: boolean = false
 }
 
 Hypergraph := class: Structure {
@@ -232,8 +236,8 @@ Loop &+= {
 Array &+= {
   push_back | push (x) => this, x
   push_front (x) => x, this
-  pop_front => first.remove
-  pop_back => last.remove
+  pop_front => remove(first)
+  pop_back => remove(last)
   remove (x) => this{!= x}
   push_after (at, x) => this[..at.index + 1], x, this[at.index + 1..]
   push_before (at, x) => this[..at.index], x, this[at.index..]

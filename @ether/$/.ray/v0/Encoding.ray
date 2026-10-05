@@ -3,10 +3,11 @@ Encoding := namespace {
 
   // `Encrypted<T>` is readable only at a location holding its key (X4.2, X4.3).
   Encrypted<T> := class = value: T, key: Key? {
-    holds_key (location: Location?) => key && location?.key == key
-    as (location: Location) => value if holds_key(location)
-    opened (location: Location) => holds_key(location) ? value : Quest(name: "find the key", goal: this)
-    read_off (location: Location) => Encrypted(value, key: location.key) if holds_key(location)
+    // Held at a location, an instance or a character: whatever carries the key.
+    holds_key (holder) => key && holder?.key == key
+    as (holder) => value if holds_key(holder)
+    opened (holder) => holds_key(holder) ? value : Quest(name: "find the key", goal: this)
+    read_off (holder) => Encrypted(value, key: holder.key) if holds_key(holder)
   }
 
   Hash := class = value: *, algorithm: Algorithm

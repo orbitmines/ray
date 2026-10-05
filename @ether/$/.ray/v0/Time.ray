@@ -6,12 +6,12 @@ Quantity &+= {
 }
 
 // `12:00`
-Decimal.Positive &+= {
-  : (mm: Decimal.Positive{length == 2}) => this hours mm minutes
+Decimal &+= {
+  : (mm: Decimal{length == 2}) => this hours mm minutes
 }
 // `12:00:00`
 `(* hours)? * minutes` &+= {
-  : (ss: Decimal.Positive{length == 2}) => this ss seconds
+  : (ss: Decimal{length == 2}) => this ss seconds
 }
 
 Calendar := class {
@@ -105,32 +105,32 @@ ISO_8601 := class: Time{calendar ==.instance_of UTC.static} (
     year: Decimal,
     semicolons: "-"?,
     (
-      month = Month#[1 - month_of_year: Decimal.Positive{length == 2}{1 <= . <= Month#.count}],
+      month = Month#[1 - month_of_year: Decimal{length == 2}{1 <= . <= Month#.count}],
       semicolons: "-"?,
-      day_of_month: Decimal.Positive{length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month}
+      day_of_month: Decimal{length == 2}{1 <= . <= (month ~= (days_in_month: *) days).days_in_month}
     ) | (
-      day_of_year: Decimal.Positive{1 <= . <= (year as days ~= (days_in_year: *) days).days_in_year}
+      day_of_year: Decimal{1 <= . <= (year as days ~= (days_in_year: *) days).days_in_year}
     ) | (
       "W",
-      week_of_year: Decimal.Positive{1 <= . <= (year as weeks ~= (weeks_in_year: *) weeks).weeks_in_year},
+      week_of_year: Decimal{1 <= . <= (year as weeks ~= (weeks_in_year: *) weeks).weeks_in_year},
       (
         "-",
-        weekday: Weekday#[1 - day_of_week: Decimal.Positive{1 <= . <= Weekday#.count}]
+        weekday: Weekday#[1 - day_of_week: Decimal{1 <= . <= Weekday#.count}]
       )?
     )
   )?,
   time: (
     "T" if date || !semicolons,
-    hour_of_day: Decimal.Positive{length == 2}{< calendar.day.hours},
+    hour_of_day: Decimal{length == 2}{< calendar.day.hours},
     semicolons: ":"?,
-    minute_of_hour: Decimal.Positive{length == 2}{< calendar.hour.minutes},
+    minute_of_hour: Decimal{length == 2}{< calendar.hour.minutes},
     semicolons: ":"?,
-    second_of_minute: Decimal.Positive{length == 2}{< calendar.minute.seconds},
+    second_of_minute: Decimal{length == 2}{< calendar.minute.seconds},
     "Z" | offset: (
       offset_operator: "+" | "-",
-      offset_hours: Decimal.Positive,
+      offset_hours: Decimal,
       ":",
-      offset_minutes: Decimal.Positive
+      offset_minutes: Decimal
     )
   )?
 ) => {

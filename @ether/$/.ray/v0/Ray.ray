@@ -64,6 +64,8 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
 
   rest => entry?.next ?? []
   map (mapping: (x: Vertex): *) => empty ? [] : mapping(first), rest.map(mapping)
+  // A filter on map maps only what it selects: `[1, 2, 3].map{choose 1}(*10)` multiplies one chosen element (Almanac).
+  map {selection} (mapping: (x: Vertex): *) => (selected = this{selection}) -- map(x => selected.contains(x) ? mapping(x) : x)
   reverse => empty ? [] : rest.reverse, first
   sort => empty ? [] : rest{< first}.sort, first, rest{>= first}.sort
   sorted (key) => sort_by(key)

@@ -26,8 +26,8 @@ Node &+= {
   right-to-left never => Never -- ERROR@this `happened, and was said never to` if this
 
   chosen_within (width) => components.random
+  // `choose` takes one value and has no filter: `choose 3 boolean` chooses `3 boolean`, `Number{choose 5}` narrows by a choice.
   right-to-left choose => chosen_within(1)
-  right-to-left choose (count: Number) => count.times.map(chosen_within(1))
 
   right-to-left persistent => Store.keep(this)
 

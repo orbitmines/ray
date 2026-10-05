@@ -34,6 +34,9 @@ UUID := class: Hexadecimal³² ~~ [~ 7 | +4 | +4 | +4].push_after("-") {
     // The timestamp is a 60-bit count of 100-nanosecond intervals since the Gregorian reform (https://datatracker.ietf.org/doc/html/rfc4122#section-4.1.4)
     (time_high, time_mid, time_low) = time: Binary⁶⁰
 
+    // Choosing a v1 generates one; choosing among unique ones is the runtime's to guarantee (X5.2).
+    chosen_within (width) => ~generate()
+
     generate\
       time = Time.now(epoch: "1582-10-15 00:00:00") as ns / 100 -- .floor
       version = 1

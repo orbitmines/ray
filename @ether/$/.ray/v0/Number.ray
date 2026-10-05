@@ -1,6 +1,8 @@
 // A number is a ray: zero has no next, and every other number is the next of the one before.
 Number := class: Ray {
   succ => Number(next: this)
+  // `3 boolean`: a number called on a value is that many of it.
+  { }{value} ^punctuation => [value] * this
   pred => next
   is_zero => next === None
   nonzero => !is_zero

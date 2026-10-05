@@ -65,7 +65,7 @@ HybridClock := class = node: *, wall: Decimal = 0, logical: Decimal = 0 {
 }
 
 // The first milestone of version control: operations over definitions, HLC-stamped; a rename keeps identity (L§9.2).
-Definition := class = id: UUID = choose{unique} UUID.v1~generate(), name: String, holder: *? {
+Definition := class = id: UUID = choose UUID.v1{unique}, name: String, holder: *? {
   == (other: Definition) => id == other.id
 }
 

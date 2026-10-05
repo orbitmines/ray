@@ -25,8 +25,8 @@ unless UUID.v1 { INFO@mark `UU21 the version built from a time is not there` }
 unless UUID.v3 { INFO@mark `UU22 the version built from a namespace and a name is not there` }
 unless UUID.v5 { INFO@mark `UU23 the other version built that way is not there` }
 
-made_first := choose{unique} UUID.v1~generate()
-made_second := choose{unique} UUID.v1~generate()
+made_first := choose UUID.v1{unique}
+made_second := choose UUID.v1{unique}
 unless made_first.version == 1 { INFO@mark `UU30 a generated version 1 identifier is not version 1` }
 if made_first == made_second { INFO@mark `UU31 two version 1 identifiers made one after the other are the same` }
 unless made_first.time <= made_second.time { INFO@mark `UU32 the later identifier is earlier` }

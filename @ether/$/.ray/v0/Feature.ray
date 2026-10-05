@@ -1,17 +1,81 @@
 Location &+= {
   normalised => segments{!= "."}.reduce(kept = [] => . == ".." ? kept[..<-1] : (kept, .)).join("/")
   sandboxed => "instance/" + normalised
-  content => (external io sandboxed None) as String
-  bytes => content.bytes
+  system: FileSystem => Compiler.reduced(this, FileOptimizations)
+  content => system.read(this) as String
+  bytes => (system.read(this) ?? []) as Byte[]
+  listing => system.listing(this)
+  exists => system.exists(this)
+  write (content): static => this ~~ system.write(., content)
+  remove: static => this ~~ system.removed(.)
+  origin => Location(scheme, host, port, path: "")
+  .content = {value} ^punctuation => write(value)
+}
+
+FileSystem := class: Language {
+  read (location: Location) => Quest(name: "a reader for the location", goal: location)
+  write (location: Location, content) => Quest(name: "a writer for the location", goal: location)
+  listing (location: Location) => []
+  exists (location: Location) => read(location) != None
+  removed (location: Location) => write(location, None)
+
+  static Posix := class: FileSystem {
+    read (location: Location) => external io location.sandboxed None
+    write (location: Location, content) => external io location.sandboxed content
+    listing (location: Location) => IO.host(location as String).lines{.nonempty}.map(location / .)
+    removed (location: Location) => external os `remove` location.sandboxed
+  }
+  static Browser := class: FileSystem {
+    key (location: Location) => "ray:" + location.normalised
+    read (location: Location) => Process(command: "localStorage.getItem(" + JSON.language.write(key(location)) + ")").stdout
+    write (location: Location, content) => Process(command: content === None
+      ? "localStorage.removeItem(" + JSON.language.write(key(location)) + ")"
+      : "localStorage.setItem(" + JSON.language.write(key(location)) + ", " + JSON.language.write(content as String) + ")").stdout
+    listing (location: Location) => (Process(command: "JSON.stringify(Object.keys(localStorage).filter(key => key.startsWith(" + JSON.language.write(key(location) + "/") + ")))").stdout as JSON).value
+      .map(.after(key(location) + "/").before("/")).unique.map(location / .)
+  }
+  static Remote := class: FileSystem {
+    remotely (location: Location) => Network.Remote(character: @me, location: location.scheme ? location.origin : @remote)
+    inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
+    read (location: Location) => location.scheme ~= ⊢"http"
+      ? Process(command: "curl", arguments: ["-fsSL", location as String]) -- (.succeeded ? .stdout : None)
+      : remotely(location).run({ inner(location).content })
+    write (location: Location, content) => location.scheme ~= ⊢"http"
+      ? Process(command: "curl", arguments: content === None ? ["-fsS", "-X", "DELETE", location as String] : ["-fsS", "-X", "PUT", "--data-binary", "@-", location as String], input: content as String).succeeded
+      : remotely(location).run({ inner(location).write(content) })
+    listing (location: Location) => location.scheme ~= ⊢"http"
+      ? (Process(command: "curl", arguments: ["-fsS", "-X", "PROPFIND", "-H", "Depth: 1", location as String]).stdout ~= (*, "<D:href>", href: (!"<")[], "</D:href>")[]).href[1..].map(. as Location)
+      : remotely(location).run({ inner(location).listing })
+  }
+  static Device := class: FileSystem {
+    on (location: Disk) => Instance#{.device === location.device}.first -- (. && . !== Instance.local ? Remote() : Posix())
+    read (location: Location) => on(location).read(location.local)
+    write (location: Location, content) => on(location).write(location.local, content)
+    listing (location: Location) => on(location).listing(location.local)
+  }
+}
+
+Disk := class: Location = device: Device {
+  local => Instance#{.device === device}.first -- (. && . !== Instance.local ? (.address as String + path) as Location : (path as Location))
+  / (segment: String) => Disk(device, path: (path as String) + "/" + segment)
+  .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : this / name
+}
+
+FileOptimizations := {
+  {location: Disk} => FileSystem.Device()
+  {location: Location{scheme && scheme != "file"}} => FileSystem.Remote()
+  {location: Location{segments.first == "remote"}} => FileSystem.Remote()
+  {location: Location{OS().name == ether}} => FileSystem.Browser()
+  {location: Location} => FileSystem.Posix()
 }
 
 IO := class {
   read (location) => (location as Location).content
-  write (location, content) => external io (location as Location).sandboxed content
+  write (location, content) => (location as Location).write(content)
   output (text: String) => external io `/dev/stdout` text
   host (location) => Run.current.ask(`size`, location) -- (. == true ? (external io location None) as String : .)
   field (name: String) => (name + (".ray" | "/" | ""))#.map(read(.)).first(.nonempty) ?? ""
-  listing (location) => host(location).lines{.nonempty}.map((location as Location) / .)
+  listing (location) => (location as Location).listing
 }
 
 Random := class {
@@ -75,6 +139,7 @@ OS := class {
   name: linux | macos | windows | ether | unknown => { "linux": linux, "darwin": macos, "win32": windows }[platform] ?? unknown
 
   static launch (location: Location) => external os `open` (location as String)
+  static run (command: String, arguments: String[] = []) => Process(command, arguments)
 }
 
 Device := class {
@@ -94,6 +159,8 @@ Device := class {
   fullscreen = false
   printing = false
   opened: Location?
+  memory: Store = Store(at: @"memory")
+  disk => Disk(device: this, path: "")
 
   choose (s) => s#.count is ∞ && !s#.some(.weight) ? ERROR@Type `no uniform choice exists over infinitely many possibilities; give them weights` : s#.random
 }

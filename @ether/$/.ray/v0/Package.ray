@@ -1,0 +1,218 @@
+// Semantic Versioning 2.0.0 (https://semver.org/spec/v2.0.0.html), with the partial and wildcard forms ranges are written with
+SemVer := class (major: Part, (".", minor: Part)?, (".", patch: Part)?, (("-" | "." | ""), pre: (Char.Letter, (Char.Word | ".")[]))?, ("+", build: (Char.Word | "." | "-")[])?) => {
+  static Part := Decimal | "x" | "X" | "*"
+  static number (part) => part is Decimal ? part : None
+
+  filled => (number(major) ?? 0, number(minor) ?? 0, number(patch) ?? 0)
+  chainable == (other: SemVer) => filled == other.filled && pre == other.pre
+  chainable < (other: SemVer) => filled < other.filled || filled == other.filled && pre != None && (other.pre == None || pre < other.pre)
+  matched (version: SemVer) => [major, minor, patch].zip(version.filled).every((part, actual) => number(part) == None || number(part) == actual)
+
+  caret => number(major) != 0 || number(minor) == None ? SemVer(major: number(major) + 1, minor: 0, patch: 0)
+    : number(minor) != 0 || number(patch) == None ? SemVer(major: 0, minor: number(minor) + 1, patch: 0)
+    : SemVer(major: 0, minor: 0, patch: number(patch) + 1)
+  tilde => number(minor) == None ? SemVer(major: number(major) + 1, minor: 0, patch: 0) : SemVer(major: number(major), minor: number(minor) + 1, patch: 0)
+  // Compatible release, PEP 440 (https://peps.python.org/pep-0440/#compatible-release)
+  compatible => number(patch) == None ? SemVer(major: number(major) + 1, minor: 0, patch: 0) : SemVer(major: number(major), minor: number(minor) + 1, patch: 0)
+  lowest => SemVer(major: filled.0, minor: filled.1, patch: filled.2, pre)
+}
+
+// npm ranges (https://github.com/npm/node-semver#ranges), Cargo requirements (https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html), PEP 440 specifiers (https://peps.python.org/pep-0440/#version-specifiers)
+Requirement := class ((alternatives: (Hyphen | Set)[]).join((" "[], "||", " "[]))) => {
+  bare = "="
+
+  static Comparator := class (operator: ("===" | "==" | "!=" | "~=" | ">=" | "<=" | ">" | "<" | "^" | "~" | "=")?, " "[], version: SemVer) => {
+    admits (v: SemVer, bare: String) => (operator ?? bare) -- (op =>
+      op == "^" ? !(v < version.lowest) && v < version.caret
+      : op == "~" ? !(v < version.lowest) && v < version.tilde
+      : op == "~=" ? !(v < version.lowest) && v < version.compatible
+      : op == ">=" ? !(v < version.lowest)
+      : op == ">" ? version.lowest < v && !version.matched(v)
+      : op == "<=" ? !(version.lowest < v) || version.matched(v)
+      : op == "<" ? v < version.lowest
+      : op == "!=" ? !version.matched(v)
+      : version.matched(v))
+  }
+  static Set := class ((comparators: Comparator[]).join(((" "[], ",", " "[]) | " "[]{length > 0}))) => {
+    admits (v: SemVer, bare: String) => comparators.every(.admits(v, bare))
+  }
+  static Hyphen := class (low: SemVer, " - ", high: SemVer) => {
+    admits (v: SemVer, bare: String) => !(v < low.lowest) && (!(high.lowest < v) || high.matched(v))
+  }
+
+  admits (version) => (version as SemVer) -- (v => alternatives.some(.admits(v, bare)))
+  static parsed (text: String, bare: String) => (text.trimmed.empty || text.trimmed == "latest" ? "*" : text.trimmed) as Requirement ~~ (.bare = bare)
+}
+
+Debian := class {
+  // Debian Policy 5.6.12, Version (https://www.debian.org/doc/debian-policy/ch-controlfields.html#version)
+  static Version := class (text: (!" " && !")" && !"," && !\n)[]) => {
+    epoch => text ~= ":" ? text.before(":") as Number : 0
+    rest => text ~= ":" ? text.after(":") : text
+    upstream => rest ~= "-" ? rest.split("-")[..<-1].join("-") as String : rest
+    revision => rest ~= "-" ? rest.split("-").last as String : "0"
+
+    static weight (c) => c == "~" ? -1 : c is Char.Letter ? c as Number : c as Number + 256
+    static lexically (a: String, b: String) => a.empty && b.empty ? 0 : ((a.empty ? 0 : weight(a.first)) - (b.empty ? 0 : weight(b.first))) -- (d => d != 0 ? d : lexically(a.rest, b.rest))
+    static compared (a: String, b: String) => a.empty && b.empty ? 0 : (a ~= ⊢ (lexical: (!Char.Digit)[], numeral: Char.Digit[], remaining: *)) -- (x => (b ~= ⊢ (lexical: (!Char.Digit)[], numeral: Char.Digit[], remaining: *)) -- (y =>
+      lexically(x.lexical, y.lexical) -- (l => l != 0 ? l : ((x.numeral as Number ?? 0) - (y.numeral as Number ?? 0)) -- (n => n != 0 ? n : compared(x.remaining, y.remaining)))))
+    ordered (other: Version) => epoch != other.epoch ? epoch - other.epoch : compared(upstream, other.upstream) -- (u => u != 0 ? u : compared(revision, other.revision))
+
+    chainable == (other: Version) => ordered(other) == 0
+    chainable < (other: Version) => ordered(other) < 0
+  }
+
+  // Debian Policy 7.1, Syntax of relationship fields (https://www.debian.org/doc/debian-policy/ch-relationships.html)
+  static Relation := class (name: (Char.Word | "-" | "." | "+")[], (":", qualifier: Char.Word[])?, " "[], ("(", " "[], operator: "<<" | "<=" | "=" | ">=" | ">>" | "<" | ">", " "[], version: Version, " "[], ")")?, " "[], ("[", architectures: (!"]")[], "]")?, " "[], ("<", profiles: (!">")[], ">")?) => {
+    admits (v) => (v as Version) -- (v =>
+      !operator ? true
+      : operator == ">>" ? version < v
+      : operator == "<<" ? v < version
+      : operator == "=" ? v == version
+      : operator is (">=" | ">") ? !(v < version)
+      : !(version < v))
+    dependency (kind: String) => Project.Dependency(location: "apt/" + name, version: (this if operator), kind)
+  }
+  static Relations := class ((alternatives: (choices: Relation[].join((" "[], "|", " "[])))[]).join((" "[], ",", (" " | \n)[]))) => {
+    dependencies (kind: String) => alternatives.map(alternative => alternative.choices.first.dependency(kind) ~~ (.alternatives = alternative.choices.rest.map(.dependency(kind))))
+  }
+
+  // Debian Policy 5.1, Syntax of control files (https://www.debian.org/doc/debian-policy/ch-controlfields.html#syntax-of-control-files)
+  static Field := class (name: (!":" && !\n && !" " && !"#")[], ":", " "[], value: (!\n)[], continuation: (\n, " " | \t, line: (!\n)[])[]) => {
+    text => (value, continuation.map(\n, .line.trimmed == "." ? "" : .line.trimmed)) as String
+  }
+  static Paragraph := class ((fields: (Field | ("#", (!\n)[]))[]).join(\n)) => {
+    [name: String] => fields{is Field && .name.fold_case == name.fold_case}.last?.text
+  }
+  static Control := class ((paragraphs: Paragraph[]).join(\n[]{length > 1}), \n[]) => { }
+
+  static kinds = ["Pre-Depends", "Depends", "Recommends", "Suggests", "Build-Depends", "Build-Depends-Indep"]
+}
+
+Pip := class {
+  // Dependency specifiers, PEP 508 (https://peps.python.org/pep-0508/)
+  static Blank := (" " | \t)[]
+  static Specifier := class (name: ((Char.Letter | Char.Digit), (Char.Word | "-" | ".")[]), Blank, ("[", Blank, (extras: (Char.Word | "-" | ".")[]).join((Blank, ",", Blank)), Blank, "]")?, Blank,
+    (("(", Blank, requirement: (!")")[], ")") | ("@", Blank, url: (!" " && !";")[]) | requirement: (!";" && !"#" && !\n)[])?, Blank, (";", Blank, marker: Marker)?) => {
+    canonical => name.lower_case.replace("_", "-").replace(".", "-")
+    applies => !marker || marker.holds
+    dependency (kind: String) => url ? Project.Dependency(location: url, kind)
+      : Project.Dependency(location: "pip/" + canonical, version: (requirement as Requirement if requirement?.trimmed.nonempty), kind)
+  }
+
+  static Operand := class ((variable: (Char.Letter | "_", (Char.Word | ".")[])) | ("\"", text: (!"\"")[], "\"") | ("'", text: (!"'")[], "'")) => {
+    value => text ?? environment[variable] ?? ""
+  }
+  static Clause := class (("(", Blank, inner: Marker, Blank, ")") | (left: Operand, Blank, operator: "===" | "==" | "!=" | "~=" | ">=" | "<=" | "<" | ">" | "not in" | "in", Blank, right: Operand)) => {
+    holds => inner ? inner.holds
+      : operator == "in" ? right.value ~= left.value
+      : operator == "not in" ? !(right.value ~= left.value)
+      : (left.value as SemVer && right.value as SemVer) ? Requirement.parsed(operator + right.value, "==").admits(left.value)
+      : operator == "==" || operator == "===" ? left.value == right.value
+      : operator == "!=" ? left.value != right.value
+      : operator == "<" ? left.value < right.value
+      : operator == ">" ? right.value < left.value
+      : operator == "<=" ? !(right.value < left.value)
+      : !(left.value < right.value)
+  }
+  static Marker := class ((disjuncts: (conjuncts: Clause[].join((Blank, "and", Blank)))[]).join((Blank, "or", Blank))) => {
+    holds => disjuncts.some(.conjuncts.every(.holds))
+  }
+
+  static python (code: String) => Process(command: "python3", arguments: ["-c", code]).stdout.trimmed
+  static environment => Document(entries: [
+    (name: "os_name", value: OS().name == windows ? "nt" : "posix"),
+    (name: "sys_platform", value: OS().platform),
+    (name: "platform_system", value: { "linux": "Linux", "darwin": "Darwin", "win32": "Windows" }[OS().platform] ?? ""),
+    (name: "platform_machine", value: OS().architecture),
+    (name: "implementation_name", value: "cpython"),
+    (name: "python_version", value: python("import sys;print('%d.%d'%sys.version_info[:2])")),
+    (name: "python_full_version", value: python("import platform;print(platform.python_version())")),
+    (name: "extra", value: "")
+  ])
+
+  // Requirements file format (https://pip.pypa.io/en/stable/reference/requirements-file-format/)
+  static Requirements := class ((lines: (Blank, (option: ("-", (!\n)[])) | specifier: Specifier)?, Blank, ("#", (!\n)[])?)[]).join(\n)) => {
+    specifiers => lines.specifier.compact{.applies}
+  }
+}
+
+Package := class: Language = ecosystem: String, kinds: String[] = ["dependencies"], bare: String = "=", native = false, versioned = SemVer,
+  available: (name: String) => String[], fetched: (name: String, version: String, into: Location) => Process {
+  static Ecosystem := String{Package#.ecosystem ∋ .}
+
+  locations => [ecosystem, (OS().name as String, OS().architecture) if native].flatten
+  resolved (name: String, requirement) => available(name).map(. as versioned).compact{!requirement || requirement.admits(.)}.max
+  location (name: String, version) => Layout().path(name, locations, version)
+  installed (name: String, requirement) => resolved(name, requirement) -- (version => !version
+    ? Quest(name: "a version that satisfies the requirement", goal: (name: name, requirement: requirement))
+    : location(name, version) -- (into => into.exists || fetched(name, version as String, into).succeeded
+      ? Project(path: into.path, name: name, version: version, manager: this)
+      : Quest(name: "install the package", goal: (name: name, version: version, into: into))))
+
+  depending (name: String, spec, kind: String, bare: String = this.bare) => spec is Document
+    ? (spec.path ? Project.Dependency(location: spec.path, kind) : spec.git ? Project.Dependency(location: spec.git, kind) : depending(spec.package ?? name, spec.version ?? "*", kind, bare))
+    : spec ~= ⊢("file:" | "link:") ? Project.Dependency(location: spec.after(":"), kind)
+    : spec ~= "://" || spec ~= ⊢("git+" | "github:") ? Project.Dependency(location: spec, kind)
+    : Project.Dependency(location: ecosystem + "/" + name, version: Requirement.parsed(spec as String, bare), kind)
+  required (project: Project, kind: String) => Document(entries: project.dependencies{.kind == kind}.map((name: .name, value: .version ? .version as String : "*")))
+  described (project: Project) => [(name: "name", value: project.name), (name: "version", value: project.version as String) if project.version, (name: "description", value: project.description) if project.description]
+
+  // package.json (https://docs.npmjs.com/cli/v10/configuring-npm/package-json)
+  static npm = Package("package.json", ecosystem: "npm", kinds: ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"],
+    level: JSON.level + {
+      {manifest: Document{name || dependencies}} => Project(name: manifest.name, version: manifest.version as SemVer, description: manifest.description, manager: Package.npm,
+        dependencies: Package.npm.kinds.map(kind => (manifest[kind]?.entries ?? []).map(Package.npm.depending(.name, .value, kind))).flatten)
+    },
+    written: { {writing: Language.Writing{value is Project}} => writing.value -- (project => Language.Writing(Document(entries: [Package.npm.described(project),
+      Package.npm.kinds.filter(kind => project.dependencies.some(.kind == kind)).map(kind => (name: kind, value: Package.npm.required(project, kind)))].flatten))) } + JSON.written,
+    available: name => Process(command: "npm", arguments: ["view", name, "versions", "--json"]).stdout -- (text => (text as JSON).value -- (. is String ? [.] : .)),
+    fetched: (name, version, into) => Process(command: "npm", arguments: ["install", "--prefix", into.sandboxed, "--no-save", name + "@" + version]))
+
+  // The manifest format (https://doc.rust-lang.org/cargo/reference/manifest.html)
+  static cargo = Package("Cargo.toml", ecosystem: "cargo", kinds: ["dependencies", "dev-dependencies", "build-dependencies"], bare: "^", native: true,
+    level: TOML.level + {
+      {manifest: Document{package}} => Project(name: manifest.package.name, version: manifest.package.version as SemVer, description: manifest.package.description, manager: Package.cargo,
+        dependencies: [manifest, (manifest.target?.entries ?? []).value].flatten.map(table => Package.cargo.kinds.map(kind => (table[kind]?.entries ?? []).map(Package.cargo.depending(.name, .value, kind)))).flatten)
+    },
+    written: { {writing: Language.Writing{value is Project}} => writing.value -- (project => Language.Writing(Document(entries: [(name: "package", value: Document(entries: Package.cargo.described(project))),
+      Package.cargo.kinds.filter(kind => project.dependencies.some(.kind == kind)).map(kind => (name: kind, value: Package.cargo.required(project, kind)))].flatten))) } + TOML.written,
+    available: name => (("https://crates.io/api/v1/crates/" + name) as Location).content -- (text => (text as JSON).value.versions{!.yanked}.num),
+    fetched: (name, version, into) => Process(command: "cargo", arguments: ["install", "--root", into.sandboxed, name, "--version", "=" + version]))
+
+  // pyproject.toml, PEP 621 (https://packaging.python.org/en/latest/specifications/pyproject-toml/) and Poetry's table (https://python-poetry.org/docs/pyproject/)
+  static pip = Package("pyproject.toml", ecosystem: "pip", kinds: ["dependencies"], bare: "==",
+    level: TOML.level + {
+      {manifest: Document{project}} => Project(name: manifest.project.name, version: manifest.project.version as SemVer, description: manifest.project.description, manager: Package.pip,
+        dependencies: [(manifest.project.dependencies ?? []).map(. as Pip.Specifier){.applies}.map(.dependency("dependencies")),
+          (manifest.project["optional-dependencies"]?.entries ?? []).map(group => group.value.map((. as Pip.Specifier).dependency(group.name)))].flatten.compact)
+      {manifest: Document{tool?.poetry}} => manifest.tool.poetry -- (poetry => Project(name: poetry.name, version: poetry.version as SemVer, description: poetry.description, manager: Package.pip,
+        dependencies: (poetry.dependencies?.entries ?? []){.name != "python"}.map(Package.pip.depending(.name, .value, "dependencies", "^"))))
+    },
+    written: { {writing: Language.Writing{value is Project}} => writing.value -- (project => Language.Writing(Document(entries: [(name: "project", value: Document(entries: [Package.pip.described(project),
+      (name: "dependencies", value: project.dependencies{.kind == "dependencies"}.map(.name + (.version ? .version as String : "")))].flatten)),
+      (name: "optional-dependencies", value: Document(entries: project.dependencies{.kind != "dependencies"}.map(.kind).unique.map(kind => (name: kind, value: project.dependencies{.kind == kind}.map(.name + (.version ? .version as String : "")))))) if project.dependencies.some(.kind != "dependencies")]))) } + TOML.written,
+    available: name => (("https://pypi.org/pypi/" + name + "/json") as Location).content -- (text => (text as JSON).value.releases.names),
+    fetched: (name, version, into) => Process(command: "python3", arguments: ["-m", "pip", "install", "--target", into.sandboxed, name + "==" + version]))
+
+  static requirements = Package("requirements.txt", ecosystem: "pip", bare: "==",
+    level: { {text: String} => Project(manager: Package.requirements, dependencies: (text as Pip.Requirements).specifiers.map(.dependency("dependencies"))) },
+    written: { {writing: Language.Writing{value is Project}} => writing.value.dependencies.map(.name, (.version ? .version as String : ""), \n) },
+    available: Package.pip.available, fetched: Package.pip.fetched)
+
+  // Binary and source package control files (https://www.debian.org/doc/debian-policy/ch-controlfields.html)
+  static apt = Package("control", ecosystem: "apt", kinds: Debian.kinds, native: true, versioned: Debian.Version,
+    level: {
+      {text: String} => text as Debian.Control
+      {control: Debian.Control} => control.paragraphs -- (all => all.first -- (head => Project(name: head["Package"] ?? head["Source"], version: head["Version"] as Debian.Version, description: head["Description"], manager: Package.apt,
+        dependencies: all.map(paragraph => Debian.kinds.map(kind => paragraph[kind] ? (paragraph[kind] as Debian.Relations).dependencies(kind) : [])).flatten)))
+    },
+    written: { {writing: Language.Writing{value is Project}} => writing.value -- (project =>
+      "Package: ", project.name, \n, ("Version: ", project.version as String, \n) if project.version,
+      Debian.kinds.filter(kind => project.dependencies.some(.kind == kind)).map(kind => kind, ": ", project.dependencies{.kind == kind}.map(dependency =>
+        [dependency, dependency.alternatives].flatten.map(.name, (" (", .version.operator, " ", .version.version.text, ")") if .version?.operator).join(" | ")).join(", "), \n),
+      ("Description: ", project.description.lines.first, project.description.lines.rest.map(\n, " ", .trimmed.empty ? "." : .), \n) if project.description) },
+    available: name => Process(command: "apt-cache", arguments: ["madison", name]).stdout.lines{.nonempty}.map(.split("|")[1].trimmed),
+    fetched: (name, version, into) => Process(command: "sh", arguments: ["-c", "mkdir -p " + Shell.quoted(into.sandboxed) + " && cd " + Shell.quoted(into.sandboxed)
+      + " && apt-get download " + Shell.quoted(name + "=" + version) + " && dpkg-deb -x " + Shell.quoted(name) + "_*.deb . && rm -f ./*.deb"]))
+}

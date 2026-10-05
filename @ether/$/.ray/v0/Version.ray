@@ -29,7 +29,7 @@ Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => 
   static declared: Migration[] = []
   (static.declared ??= []).push this
 
-  backward: Migration => Migration(from: to, to: from, body: body.reverse ?? Quest(name: "derive the inverse of a migration", goal: this))
+  backward: Migration => Migration(from: to, to: from, body: body⁻¹ ?? Quest(name: "derive the inverse of a migration", goal: this))
 
   static path (from: Version, to: Version): Migration[]? => from < to
     ? declared.chain(.from == from, .to == to, step => step.to == .from)

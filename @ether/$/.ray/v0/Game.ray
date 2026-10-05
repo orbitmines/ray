@@ -11,20 +11,6 @@ Skill := class = name: String, quests: *, solved: Solution[] = [], baseline = 0 
   settle: static => this ~~ .baseline = solved.count
 }
 
-Avatar &+= {
-  skills: Skill[] = []
-  traversed: Location[] = []
-
-  unlock (skill: Skill): static => this ~~ skills.push skill
-  visit (location: Location): static => this ~~ traversed.push location
-  copied => Avatar(character, platform)
-  + (other: Avatar): static => this ~~ (
-    .skills = skills, other.skills{!skills.contains(.)}
-    .traversed = traversed, other.traversed
-  )
-  rewarded (solution: Skill.Solution) => solution.used
-}
-
 Mana := class = resource: *, capacity: *, held: Spell? {
   static measured (resource) => Mana(resource, capacity: IO.os(resource))
 

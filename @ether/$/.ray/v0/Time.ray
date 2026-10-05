@@ -1,18 +1,6 @@
-Unit &+= {
-  static Temporal = second
-}
-Quantity &+= {
-  static Temporal = Quantity{unit == Unit.Temporal}
-}
-
-// `12:00`
-Decimal &+= {
-  : (mm: Decimal{length == 2}) => this hours mm minutes
-}
-// `12:00:00`
-`(* hours)? * minutes` &+= {
-  : (ss: Decimal{length == 2}) => this ss seconds
-}
+// `12:00`, `12:00:00`
+{hh: Decimal.String}:{mm: Decimal.String{length == 2}}: Quantity.Temporal => hh hours mm minutes
+{hh_mm: Quantity.Temporal{.quantities.last.unit == minute}}:{ss: Decimal.String{length == 2}}: Quantity.Temporal => hh_mm ss seconds
 
 Calendar := class {
   static Segment := class {

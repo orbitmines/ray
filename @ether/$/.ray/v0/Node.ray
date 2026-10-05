@@ -10,6 +10,9 @@ Node &+= {
 
   properties => fields
 
+  // Every value prints in the language of the file it is written in (X1.6, X1.7).
+  as (:== String) => $.ext.print(this)
+
   // `f⁻¹`, `f^-1`, `f!`; `! forward backward` declares two as each other's inverse (L§4.5).
   inverse: Node?
   ⁻¹ | ^-1 | ! => inverse

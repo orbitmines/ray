@@ -19,6 +19,7 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   empty => count == 0
   nonempty => !empty
   unbounded => !bounded
+  ∞ => unbounded
   orderless => false
 
   connected => all.every(a => all.every(b => a.to(b)))
@@ -89,6 +90,12 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   find_all (predicate) => this{predicate}
   shuffled => empty ? [] : (picked = random), this{!== picked}.shuffled
   squeeze => this{. != .previous}
+  padded (width: Number, with = 0) => [with] * (width - length), this
+
+  // `0..2..1` goes on from where the last range ended.
+  .. (next: Number) => this, (last..next)[1..]
+
+  orbit | loop => Loop(around: this, at: first)
 
   // `Binary₈[]₄`: compose the structure `count` times.
   * (count: Number) => count == 0 ? [] : this, this * (count - 1)
@@ -271,7 +278,17 @@ Path := class: Structure{consistent & connected} {
   paths => this
   length => acyclic ? count : ∞
 }
-Array := class: Path{acyclic}
+Array := class: Path{acyclic} {
+  push_back | push (x) => this, x
+  push_front (x) => x, this
+  pop_front => remove(first)
+  pop_back => remove(last)
+  remove (x) => this{!= x}
+  push_after (at, x) => this[..at.index + 1], x, this[at.index + 1..]
+  push_before (at, x) => this[..at.index], x, this[at.index..]
+  move_after (x, target) => remove(x).push_after(target, x)
+  move_before (x, target) => remove(x).push_before(target, x)
+}
 Set := class: Structure {
   orderless => true
   normalizer = .unordered.unique
@@ -285,11 +302,7 @@ Hierarchy := class: Ray {
 }
 
 // A loop goes around what it is made of: `Array.unbounded.orbit` (R5.1).
-Loop := Array.Unbounded.orbit
-Iterable &+= {
-  orbit | loop => Loop(around: this, at: first)
-}
-Loop &+= {
+Loop := class: Path = around: Iterable, at: * {
   next => Loop(around, at: at.next ?? around.first)
   previous => Loop(around, at: at.previous ?? around.last)
   is_initial => false
@@ -301,16 +314,4 @@ Loop &+= {
   instances (times: Number) => around * times
   unrolled_mod => around[at.index..], around[..at.index]
   disallow_loops => around
-}
-
-Array &+= {
-  push_back | push (x) => this, x
-  push_front (x) => x, this
-  pop_front => remove(first)
-  pop_back => remove(last)
-  remove (x) => this{!= x}
-  push_after (at, x) => this[..at.index + 1], x, this[at.index + 1..]
-  push_before (at, x) => this[..at.index], x, this[at.index..]
-  move_after (x, target) => remove(x).push_after(target, x)
-  move_before (x, target) => remove(x).push_before(target, x)
 }

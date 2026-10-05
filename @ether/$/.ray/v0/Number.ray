@@ -65,14 +65,10 @@ Number := class: Ray {
     `"~" + operator` (other: Number) => bits(other).map((a, b) => a operator b) as 2
   }
   ~! (width: Number) => digits(2).padded(width).map(!) as 2
-}
 
-zero := Number()
-0 := zero
+  as (base: Number.Base) as String => digits(base).map(Char.digit) as String
+  as String => this as 10 as String
 
-Probability := Number{0 <= . <= 1}
-
-Number &+= {
   static Bases = {
     Binary: Digit = "0" | "1"
     Ternary: Digit = "0".."2"
@@ -90,8 +86,13 @@ Number &+= {
     Pentadecimal: Digit = Decimal | ("a" | "A")..("e" | "E")
     Hexadecimal: Digit = Decimal | ("a" | "A")..("f" | "F")
   }
-  static Base := Number{2 <= .}
+  static Base := static{2 <= .}
 }
+
+zero := Number()
+0 := zero
+
+Probability := Number{0 <= . <= 1}
 
 Digit := class: String
 
@@ -157,34 +158,3 @@ Decimal &+= {
 u{width: Decimal} => Binary{length == width}
 i{width: Decimal} => Binary{length == width}.Signed
 USize = u8 | u16 | u32 | u64
-
-boolean &+= {
-  as Binary => this ? 1₂ : 0₂
-}
-
-Iterable &+= {
-  ∞ => unbounded
-  // `0..2..1` goes on from where the last range ended.
-  .. (next: Number) => this, (last..next)[1..]
-  padded (width: Number, with = 0) => [with] * (width - length), this
-}
-
-// A program read back as its text: what it jumps to, which heads it requires, and where a spelling is declared.
-Program &+= {
-  is_jump => code ~= ⊢"goto "
-  is_label => code ~= "\" ⊣
-  jump => code ~= (⊢"goto ", name: Char.Word[], (" ", condition: *)?)
-  is_conditional => is_jump && jump.condition
-  target_of (jump: Program) => written{.is_label && .code == jump.jump.name + "\"}.first
-
-  flow => written.map(step => (step, jumps_to: step.is_jump ? target_of(step) : None, falls_through: !step.is_jump || step.is_conditional))
-  jumps_backward => written.some(step => step.is_jump && written.index_of(target_of(step)) <= written.index_of(step))
-  terminating => !jumps_backward
-
-  head => code ~= (⊢ head: (!(" " | "(" | ":" | "?"))[], ending: (" " | "(" | ":" | "?")?)
-  required_heads => written{(.head.ending == ":" && .head.head ~= ⊢Char.Word) || .code ~= (.head.head, " => TODO")}.head.head
-  declares (head: String) => written.some(.code ~= ⊢(head, " " | "(" | ":"))
-  precedence (spelled: String) => written.index_of(written{.code ~= ⊢((Modifier.spellings, " ")?, spelled, " ")}.first)
-}
-
-Terminating := Program{terminating}

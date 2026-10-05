@@ -1,4 +1,20 @@
 Program &+= {
+  // A program read back as its text: what it jumps to, which heads it requires, and where a spelling is declared.
+  is_jump => code ~= ⊢"goto "
+  is_label => code ~= "\" ⊣
+  jump => code ~= (⊢"goto ", name: Char.Word[], (" ", condition: *)?)
+  is_conditional => is_jump && jump.condition
+  target_of (jump: Program) => written{.is_label && .code == jump.jump.name + "\"}.first
+
+  flow => written.map(step => (step, jumps_to: step.is_jump ? target_of(step) : None, falls_through: !step.is_jump || step.is_conditional))
+  jumps_backward => written.some(step => step.is_jump && written.index_of(target_of(step)) <= written.index_of(step))
+  terminating => !jumps_backward
+
+  head => code ~= (⊢ head: (!(" " | "(" | ":" | "?"))[], ending: (" " | "(" | ":" | "?")?)
+  required_heads => written{(.head.ending == ":" && .head.head ~= ⊢Char.Word) || .code ~= (.head.head, " => TODO")}.head.head
+  declares (head: String) => written.some(.code ~= ⊢(head, " " | "(" | ":"))
+  precedence (spelled: String) => written.index_of(written{.code ~= ⊢((Modifier.spellings, " ")?, spelled, " ")}.first)
+
   running => Running(program: this)
   & => running.&
   expand => written
@@ -34,3 +50,5 @@ with | assume (settings: Program) => {
   settings()
   defer { settings.targets.zip(previous).for((target, held) => &caller[target] = held) }
 }
+
+Terminating := Program{terminating}

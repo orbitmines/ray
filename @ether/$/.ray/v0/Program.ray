@@ -33,11 +33,6 @@ Program &+= {
     -- .{is_terminal}.first.results.last
   right-to-left defer => Running(program: this) -- Running.deferred.push(.)
 
-  // A method is narrowed like a type, as `<…>` gives it arguments: `choose{unique} UUID.v1` answers only what satisfies `{unique}`.
-  // A choice that does not satisfy it is chosen again; anything else that does not is an error (X5.2).
-  narrowing: Program?
-  answered (arguments) => entered(context, arguments)
-    -- !narrowing || .satisfies(narrowing) ? . : nondeterministic ? answered(arguments) : ERROR@. `does not satisfy the narrowing of its method`
   targets => code ~= ((target: (!" = ")[], " = ", (!(", " | \n))[]), (", " | \n)?)[] -- .target
 }
 

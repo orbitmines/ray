@@ -229,11 +229,9 @@ do{ }{block}{ }while{ }{cond} ^class => (
 loop{ }{block} ^class => while true block
 
 Program := class {
-  ({arguments}) => if .instance { .answered(arguments) } else { .construct(arguments) }
+  ({arguments}) => if .instance { .entered(.context, arguments) } else { .construct(arguments) }
 
   { }{expr} => this(expr)
-
-  answered (arguments) => .entered(.context, arguments)
 
   entered (element, given) => (
     closure_code := .code
@@ -662,10 +660,7 @@ Node := base class {
     narrowed := this
     closure := { inline narrowing }
     selected := None
-    if (narrowed.instance_of(Program)) {
-      selected = Program(code: narrowed.code, parameters: narrowed.parameters, context: narrowed.context)
-      selected.narrowing = closure
-    } elsif (narrowed.instance) {
+    if (narrowed.instance) {
       selected = chain None
       narrowed for {
         held := it.value

@@ -10,3 +10,11 @@ unless json.value.inner.a == "b" + \n { INFO@mark `JN4 a JSON escape is not read
 unless $.json.write([1, "a"]) == "[1, \"a\"]" { INFO@mark `JN5 a list is not written as JSON` }
 unless ($.json.write(json.value) as JSON).value.inner.a == json.value.inner.a { INFO@mark `JN6 written JSON does not read back` }
 unless $.json === JSON.language { INFO@mark `JN7 $.json is not the JSON language` }
+
+who := "Ray"
+inline_json := @json {"name": {who}, "tags": ["a", {who}], "none": null}
+unless inline_json.name == "Ray" && inline_json.tags.last == "Ray" && inline_json.none === None { INFO@mark `JN8 a single-line json fragment is not its document with the holes' values` }
+json_block := @json {
+  {"name": {who}, "list": [1, true, null], "inner": {"a": {who}}}
+}
+unless json_block.name == "Ray" && json_block.list.count == 3 && json_block.inner.a == "Ray" && ($.json.write(json_block) as JSON).value.inner.a == "Ray" { INFO@mark `JN9 a json block is not its document with the holes' values` }

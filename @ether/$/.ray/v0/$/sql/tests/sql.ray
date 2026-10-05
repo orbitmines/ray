@@ -3,3 +3,15 @@
 mark ^keyword := external global
 
 unless SQL.quoted("it's") == "'it''s'" { INFO@mark `DB14 a quote in SQL text is not doubled` }
+
+id := 7
+who := "Ray"
+selected := @sql SELECT * FROM t WHERE id = {id}
+unless selected is SQL.Select && selected.from == "t" && selected.where.right.value == 7 && (selected as SQL) == "SELECT * FROM t WHERE (id = 7)" { INFO@mark `DB23 a single-line sql fragment is not its statement with the hole's value` }
+sql_block := @sql {
+  -- people, named by a hole
+  CREATE TABLE IF NOT EXISTS people (id TEXT PRIMARY KEY, name TEXT)
+  INSERT INTO people (id, name) VALUES ('1', {who})
+  SELECT name FROM people WHERE name = {who}
+}
+unless sql_block.count == 4 && sql_block.first is SQL.Comment && sql_block[2].values.first.last.value == "Ray" && sql_block.last.where.right.value == "Ray" { INFO@mark `DB24 an sql block is not its comment and statements in order, with the holes' values` }

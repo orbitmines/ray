@@ -1,5 +1,6 @@
 // The Base 32 Encoding (https://www.rfc-editor.org/rfc/rfc4648#section-6)
-Base32 := class = (quintets: (Binary⁵ as Alphabet)[], "="[]{length == (8 - quintets.count % 8) % 8}) {
+Base32 := class (quintets: (Binary⁵ as Alphabet)[], "="[]{length == (8 - quintets.count % 8) % 8}) {
+  // Table 3: The Base 32 Alphabet
   static Alphabet = ("A".."Z", "2".."7") as String
 
   bytes: Byte[] => quintets.map(.integer).flatten.chunk(8){.count == 8}.map(Binary(integer: .))

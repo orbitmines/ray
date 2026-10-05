@@ -18,18 +18,20 @@ Git := class: Language {
     id: Id => hashed(framed)
     path => "objects/" + id[..1] + "/" + id[2..]
     loose: Byte[] => framed as Zlib as Byte[]
+    static (entry: Language.Entry) as (=== Object) => entry.directory ? Object("tree", entry.children as Tree as Byte[]) : Object("blob", entry.content)
   }
   Loose := class (kind: Char.Letter[], " ", size: Decimal, "\x00", content: Byte[]{count == size}) {
     object => Object(kind, content)
   }
 
   Tree := class (entries: (mode: ("0".."7")[], " ", name: (!"\x00")[], "\x00", id: Byte²⁰)[]) {
-    static of (children: Language.Entry[], ids) => Tree(entries: children.sort_by(.directory ? .name + "/" : .name).map(child => (mode: modes[child.directory ? Language.Entry.Mode.directory : child.mode], name: child.name, id: ids(child) as Byte²⁰)))
+    // Tree entries sort as if a directory's name ended in /
+    static (children: Language.Entry[]) as (=== Tree) => Tree(entries: children.sort_by(.directory ? .name + "/" : .name).map(child => (mode: modes[child.directory ? Language.Entry.Mode.directory : child.mode], name: child.name, id: (child as Object).id as Byte²⁰)))
   }
 
   Signature := class (name: (!"<")[], " <", email: (!">")[], "> ", seconds: Decimal, " ", zone: (("+" | "-"), Decimal.Digit⁴)) {
     when: Time => (seconds seconds) as Time
-    static of (who, when: Time) => Signature(name: who?.full_name ?? who as String, email: who?.email ?? (who?.name ?? "someone") + "@ether", seconds: (when as s).floor, zone: "+0000")
+    static (signed: (who: *, when: Time)) as (=== Signature) => Signature(name: signed.who?.full_name ?? signed.who as String, email: signed.who?.email ?? (signed.who?.name ?? "someone") + "@ether", seconds: (signed.when as s).floor, zone: "+0000")
   }
 
   Commit := class (
@@ -71,7 +73,7 @@ Git := class: Language {
       delta && delta.size < object.content.count
         ? Entry(type: types.offset_delta, size: delta.size, base_entry: base, data: delta as Byte[] as Zlib)
         : Entry(type: types[object.kind], size: object.content.count, data: object.content as Zlib))
-    static of (objects: Object[]) => objects.sort_by(o => (o.kind, o.content.count)) -- (sorted => Pack(version: 2, count: sorted.count,
+    static (objects: Object[]) as (=== Pack) => objects.sort_by(o => (o.kind, o.content.count)) -- (sorted => Pack(version: 2, count: sorted.count,
       entries: sorted.reduce(made = [] => made, [entry(., previous: sorted[.index - 1] if .index > 0, base: made.last)])))
 
     object_at (offset: Number, store) => entries.find(.at == offset).object(this, store)
@@ -102,20 +104,20 @@ Git := class: Language {
     pack: Byte²⁰, checksum: Byte²⁰
   ) {
     offset_of (id: Id) => ids.index_of(id as Byte²⁰) -- (at => at === None ? None : offsets[at] -- (.large == 1 ? larger[.offset] : .offset))
-    static of (pack: Pack) => pack.entries.sort_by(.object(pack, None).id) -- (sorted => Index(version: 2,
+    static (pack: Pack) as (=== Index) => pack.entries.sort_by(.object(pack, None).id) -- (sorted => Index(version: 2,
       fanout: (0..255).map(byte => sorted{.object(pack, None).id[..1] as Hexadecimal <= byte}.count),
       ids: sorted.map(.object(pack, None).id as Byte²⁰), crcs: sorted.map(.crc32),
       offsets: sorted.map((large: 0, offset: .at)), larger: [], pack: pack.checksum))
   }
 
   Line := class (((length: Hexadecimal⁴{!= "0000" && != "0001" && != "0002"}), payload: Byte[]{count == length - 4}) | flush: "0000" | delimiter: "0001" | end: "0002") {
-    static of (text: String) => Line(length: text.count + 4, payload: text as Byte[])
+    static (text: String) as (=== Line) => Line(length: text.count + 4, payload: text as Byte[])
   }
   Advertised := class (Line("# service=", service: Char[], \n), Line.flush, references: Line(id: Id, " ", name: (!"\x00" && !\n)[], ("\x00", capabilities: (!\n)[])?, \n?)[], Line.flush)
 
   Store := class = root: Location?, fetched: Pack[] = [], given: (String, Id)[] = [] {
     loose (id: Id) => root ? (root / ("objects/" + id[..1] + "/" + id[2..])).bytes -- (bytes => bytes.nonempty ? ((bytes as Zlib).inflated as Loose).object : None) : None
-    packs => fetched.map(pack => (index: Index.of(pack), pack)), (root ? IO.listing(root / "objects/pack"){.name ~= ".idx" ⊣}.map(index => (index: index.bytes as Index, pack: ((index as String)[..<-4] + ".pack") as Location -- (.bytes as Pack))) : [])
+    packs => fetched.map(pack => (index: pack as Index, pack)), (root ? IO.listing(root / "objects/pack"){.name ~= ".idx" ⊣}.map(index => (index: index.bytes as Index, pack: ((index as String)[..<-4] + ".pack") as Location -- (.bytes as Pack))) : [])
     packed (id: Id) => packs.find(.index.offset_of(id) != None) -- (found => found?.pack.object_at(found.index.offset_of(id), this))
     object (id: Id) => loose(id) ?? packed(id)
 
@@ -143,25 +145,23 @@ Git := class: Language {
   Remote := class = location: Location {
     advertised (service: String) => ((location / "info/refs").with(service: service).content as Advertised).references
     fetched => advertised("git-upload-pack") -- (offered => ((location / "git-upload-pack") = (
-      offered.map(Line.of("want " + .id + \n)), Line.flush, Line.of("done\n")
+      offered.map(("want " + .id + \n) as Line), Line.flush, "done\n" as Line
     )) as Pack -- (pack => Store(fetched: [pack], given: offered.map((.name, .id)))))
     pushed (written: Written, old: Id?) => (location / "git-receive-pack") = (
-      Line.of((old ?? "0" * 40) + " " + written.head.id + " refs/heads/" + written.branch + "\x00report-status\n"), Line.flush, Pack.of(written.objects)
+      ((old ?? "0" * 40) + " " + written.head.id + " refs/heads/" + written.branch + "\x00report-status\n") as Line, Line.flush, written.objects as Pack
     )
   }
 
   Written := class = history: History, revisions: History.Revision[] {
     branch => history.name ?? "main"
-    blobs (entry: Language.Entry): Object[] => entry.directory
-      ? (entry.children.map(blobs).flatten, Object("tree", Tree.of(entry.children, child => blobs(child).last.id) as Byte[]))
-      : [Object("blob", entry.content)]
+    objects_in (tree: Language.Entry): Object[] => [tree, tree**].flatten.map(. as Object)
     commits => revisions.reduce(made = {} => made, {(.id): Object("commit", Commit(
-      tree: blobs(.tree).last.id, parents: .parents.map(made[.].id),
-      author: Signature.of(.who, .when), committer: Signature.of(.who, .when), headers: [], message: .message) as Byte[])})
+      tree: (.tree as Object).id, parents: .parents.map(made[.].id),
+      author: (who: .who, when: .when) as Signature, committer: (who: .who, when: .when) as Signature, headers: [], message: .message) as Byte[])})
     head => commits[revisions.last.id]
     notes => revisions{.recorded}.map(revision => (path: commits[revision.id].id, content: revision.recorded as Byte[])) -- (noted =>
-      Language.Entry.of(noted) -- (tree => [blobs(tree), Object("commit", Commit(tree: blobs(tree).last.id, parents: [], author: Signature.of(history.head?.who, Time.now), committer: Signature.of(history.head?.who, Time.now), headers: [], message: "Notes added by Ray") as Byte[])].flatten))
-    objects => (revisions.map(blobs(.tree)).flatten, commits.values, notes).flatten.unique(.id)
+      Language.Entry.of(noted) -- (tree => (who: history.head?.who, when: Time.now) as Signature -- (signed => [objects_in(tree), Object("commit", Commit(tree: (tree as Object).id, parents: [], author: signed, committer: signed, headers: [], message: "Notes added by Ray") as Byte[])].flatten)))
+    objects => (revisions.map(objects_in(.tree)).flatten, commits.values, notes).flatten.unique(.id)
     object_files => objects.map((path: .path, content: .loose))
     files => object_files, [
       (path: "HEAD", content: ("ref: refs/heads/" + branch + \n) as Byte[]),
@@ -182,9 +182,9 @@ Git := class: Language {
   }
 
   static stored := {
-    {written: Written}.object_files => Pack.of(written.objects) -- (pack => [
+    {written: Written}.object_files => written.objects as Pack -- (pack => [
       (path: "objects/pack/pack-" + pack.id + ".pack", content: pack as Byte[]),
-      (path: "objects/pack/pack-" + pack.id + ".idx", content: Index.of(pack) as Byte[])
+      (path: "objects/pack/pack-" + pack.id + ".idx", content: pack as Index as Byte[])
     ])
   }
 

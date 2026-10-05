@@ -10,7 +10,7 @@ Fossil := class: Language {
   Escaped := class: String (((!" " && !\n && !"\\") | ("\\s" as " ") | ("\\n" as \n) | ("\\\\" as "\\"))[])
   Date := class (year: Decimal⁴, "-", month: Decimal², "-", day: Decimal², "T", hour: Decimal², ":", minute: Decimal², ":", second: Decimal², (".", fraction: Decimal³)?) {
     when: Time => (year + "-" + month + "-" + day + "T" + hour + ":" + minute + ":" + second) as Time
-    static of (time: Time) => Date(year: time.year, month: time.month, day: time.day, hour: time.hour, minute: time.minute, second: time.second, fraction: time.millisecond)
+    static (time: Time) as (=== Date) => Date(year: time.year, month: time.month, day: time.day, hour: time.hour, minute: time.minute, second: time.second, fraction: time.millisecond)
   }
 
   Manifest := class (
@@ -48,7 +48,7 @@ Fossil := class: Language {
 
   Stored := class (size: Binary³², deflated: Byte[]) {
     bytes => deflated as Zlib -- .inflated
-    static of (bytes: Byte[]) => Stored(size: bytes.count, deflated: bytes as Zlib as Byte[])
+    static (bytes: Byte[]) as (=== Stored) => Stored(size: bytes.count, deflated: bytes as Zlib as Byte[])
   }
 
   Store := class = root: Location {
@@ -75,7 +75,7 @@ Fossil := class: Language {
   Written := class = history: History, revisions: History.Revision[] {
     manifest (revision: History.Revision, parents: Hash[]) => (
       "C ", revision.message as Escaped, \n,
-      "D ", Date.of(revision.when), \n,
+      "D ", revision.when as Date, \n,
       revision.tree.files.sort_by(.path).map(file => ("F ", file.path as Escaped, " ", hashed(file.content), (" " + Manifest.permissions[file.mode]) if Manifest.permissions[file.mode],
         (" " + (revision.renames.find(.to == file.path).from as Escaped)) if revision.renames.some(.to == file.path), \n)),
       ("P ", parents.join(" "), \n) if parents.nonempty,
@@ -83,11 +83,11 @@ Fossil := class: Language {
       "U ", (revision.who?.name ?? revision.who as String) as Escaped, \n
     ) as String -- (text => text + "Z " + digest(text) + \n)
     manifests => revisions.reduce(made = {} => made, {(.id): manifest(., .parents.map(parent => hashed(made[parent] as Byte[])))})
-    notes => revisions{.recorded}.map(revision => ("D ", Date.of(revision.when), \n, "T +ray ", hashed(manifests[revision.id] as Byte[]), " ", revision.recorded as Escaped, \n, "U ", (revision.who?.name ?? revision.who as String) as Escaped, \n) as String -- (text => text + "Z " + digest(text) + \n))
+    notes => revisions{.recorded}.map(revision => ("D ", revision.when as Date, \n, "T +ray ", hashed(manifests[revision.id] as Byte[]), " ", revision.recorded as Escaped, \n, "U ", (revision.who?.name ?? revision.who as String) as Escaped, \n) as String -- (text => text + "Z " + digest(text) + \n))
     artifacts => (revisions.tree.files.content, manifests.values.map(. as Byte[]), notes.map(. as Byte[])).flatten.unique(hashed(.))
     bases: (Byte[]?)[] => artifacts.map(None)
-    stored (artifact: Byte[], base: Byte[]?) => Stored.of(base ? Delta.between(base, artifact) as Byte[] : artifact) as Byte[]
-    database => SQLite.Database(tables: {
+    stored (artifact: Byte[], base: Byte[]?) => (base ? Delta.between(base, artifact) as Byte[] : artifact) as Stored as Byte[]
+    database => SQL.Database(tables: {
       blob: artifacts.map(artifact => (rid: artifact.index + 1, rcvid: 1, size: artifact.count, uuid: hashed(artifact), content: stored(artifact, bases[artifact.index]))),
       delta: bases.map(base => (rid: base.index + 1, srcid: artifacts.index_of(base) + 1) if base)#
     })

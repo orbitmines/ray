@@ -1,22 +1,40 @@
 // Time Zone Information Format (https://datatracker.ietf.org/doc/html/rfc8536)
-TZif := class = (
+TZif := class (
   v1: Block<Binary³²>,
-  (v2: Block<Binary⁶⁴>, "\n", footer: (!"\n")[], "\n") if v1.version != 0₂
+  (v2: Block<Binary⁶⁴>, \n, footer: Rule?, \n) if v1.version != 0₂
 ) {
-  static Block<Moment> := class = (
+  // 3.1 TZif Header and 3.2 TZif Data Block
+  static Block<Moment> := class (
     "TZif",
     version: Byte,
     Byte[]{length == 15},
     universal_count: Binary³², standard_count: Binary³², leap_count: Binary³²,
     transition_count: Binary³², type_count: Binary³², abbreviation_count: Binary³²,
-    transitions: Moment[]{length == transition_count},
+    transitions: Moment.Signed[]{length == transition_count},
     transition_types: Byte[]{length == transition_count},
-    types: (offset: Binary³², daylight: Byte, abbreviation_index: Byte)[]{length == type_count},
+    types: Type[]{length == type_count},
     abbreviations: Byte[]{length == abbreviation_count},
-    leaps: (occurrence: Moment, correction: Binary³²)[]{length == leap_count},
+    leaps: (occurrence: Moment.Signed, correction: Binary³².Signed)[]{length == leap_count},
     standard: Byte[]{length == standard_count},
     universal: Byte[]{length == universal_count}
-  )
+  ) {
+    type_at (seconds: Integer) => transitions{<= seconds}.count -- (passed => passed == 0 ? types{.daylight == 0}.first ?? types.first : types[transition_types[passed - 1]])
+    named (type: Type) => abbreviations[type.abbreviation_index..] -- (.before([0]) as String)
+    after_last (seconds: Integer) => transitions.nonempty && seconds > transitions.last
+  }
+  // 3.2: a local time type, its offset from UT in seconds
+  static Type := class (offset: Binary³².Signed, daylight: Byte{<= 1}, abbreviation_index: Byte)
+
+  // 3.3 TZif Footer: a TZ string (POSIX.1-2024 XBD 8.3, extended by RFC 8536 3.3.1)
+  static Rule := class (standard: Abbreviation, offset: Offset, (daylight: Abbreviation, saving: Offset?, (",", start: Change, ",", end: Change))?)
+  static Abbreviation := Char.Letter[]{length >= 3} | ("<", (Char.Word | "+" | "-")[]{length >= 3}, ">")
+  static Offset := class (sign: ("+" | "-")?, hours: Decimal, (":", minutes: Decimal²)?, (":", seconds: Decimal²)?) {
+    seconds_west => (sign == "-" ? -1 : 1) * (hours * 3600 + (minutes ?? 0) * 60 + (seconds ?? 0))
+  }
+  static Change := class ((("J", julian: Decimal) | day: Decimal | ("M", month: Decimal, ".", week: Decimal, ".", weekday: Decimal)), ("/", time: Offset)?)
+
   data => v2 ?? v1
-  static language = Language(".tzif", level: { {zone: TZif} => zone })
+  at (time: Time) => (time as s).floor -- (seconds => data.type_at(seconds) -- (type => (offset: type.offset seconds, daylight: type.daylight == 1, abbreviation: data.named(type), rule: footer if data.after_last(seconds))))
+
+  static language = Language(".tzif", level: { {zone: TZif} => zone }, written: { {writing: Language.Writing{value is TZif}} => writing.value as Byte[] })
 }

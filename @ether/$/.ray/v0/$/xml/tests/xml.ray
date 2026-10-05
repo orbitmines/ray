@@ -1,0 +1,13 @@
+// XML fragments written inline, and the XML language writing them.
+
+mark ^keyword := external global
+
+who := "Ray"
+note := @xml <note to={who} from="a &amp; b" />
+unless note is XML.Element && note["to"] == "Ray" && (note as XML) == "<note to=\"Ray\" from=\"a &amp; b\"/>" { INFO@mark `XM1 a single-line xml fragment is not its element with the hole's value` }
+xml_block := @xml {
+  <to>{who}</to>
+  <!-- note -->
+  <body>a &lt; b</body>
+}
+unless xml_block.count == 3 && xml_block.first.text == "Ray" && xml_block[1] is XML.Comment && xml_block[1].text == " note " && (xml_block.last as XML) == "<body>a &lt; b</body>" { INFO@mark `XM2 an xml block is not its elements and comment in order, with the hole's value` }

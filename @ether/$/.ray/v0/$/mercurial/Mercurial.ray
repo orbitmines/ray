@@ -11,7 +11,7 @@ Mercurial := class: Language {
 
   Chunk := class (("x", zlib: Byte[]) | ("u", plain: Byte[]) | ("\x00", raw: Byte[]) | raw: Byte[]) {
     bytes => zlib ? (("x", zlib) as Byte[] as Zlib).inflated : plain ?? raw
-    static of (bytes: Byte[]) => (bytes as Zlib as Byte[]) -- (packed => packed.count < bytes.count ? (packed as Chunk) : Chunk(plain: bytes))
+    static (bytes: Byte[]) as (=== Chunk) => (bytes as Zlib as Byte[]) -- (packed => packed.count < bytes.count ? (packed as Chunk) : Chunk(plain: bytes))
   }
 
   Delta := class (hunks: (start: Binary³², end: Binary³², length: Binary³², data: Byte[]{count == length})[]) {
@@ -21,6 +21,7 @@ Mercurial := class: Language {
   }
 
   Revlog := class (entries: Entry[]) {
+    static Texts := (text: Byte[], first: Number?, second: Number?, link: Number)[]
     static Entry := class (
       offset: Binary⁴⁸, flags: Binary¹⁶,
       compressed: Binary³², length: Binary³²,
@@ -37,9 +38,9 @@ Mercurial := class: Language {
     text (index: Number): Byte[] => entries[index] -- (entry => entry.base == index ? entry.chunk.bytes : Delta(entry.chunk.bytes).applied(text(entry.base)))
     parents (index: Number) => [entries[index].first, entries[index].second]{!= none_revision}
 
-    static of (texts: (text: Byte[], first: Number?, second: Number?, link: Number)[]) => full(texts)
-    static full (texts: (text: Byte[], first: Number?, second: Number?, link: Number)[]) => Revlog(entries: texts.reduce(made = [] => made, [
-      ((made.map(.node))[.first] ?? null) -- (p1 => ((made.map(.node))[.second] ?? null) -- (p2 => Chunk.of(.text) as Byte[] -- (data => Entry(
+    static (texts: Texts) as (=== Revlog) => full(texts)
+    static full (texts: Texts) => Revlog(entries: texts.reduce(made = [] => made, [
+      ((made.map(.node))[.first] ?? null) -- (p1 => ((made.map(.node))[.second] ?? null) -- (p2 => .text as Chunk as Byte[] -- (data => Entry(
         offset: made.empty ? version : made.map(.compressed).sum, flags: 0,
         compressed: data.count, length: .text.count,
         base: made.count, link: .link, first: .first ?? none_revision, second: .second ?? none_revision,
@@ -70,17 +71,16 @@ Mercurial := class: Language {
     from => meta.find(.key == "copy")?.value
   }
 
-  // fncache + dotencode (https://www.mercurial-scm.org/wiki/fncacheRepoFormat)
-  encoded (path: String) => path.map(c => c ~= ("A".."Z") ? "_" + c.lower_case
-    : c == "_" ? "__"
-    : c ~= ("\\" | ":" | "*" | "?" | "\"" | "<" | ">" | "|") || c.code < 32 || c.code > 126 ? "~" + (c.code as Hexadecimal²).lower_case
-    : c).join("") -- (. ~= ⊢"." ? "~2e" + .[1..] : .)
+  // fncache + dotencode (https://www.mercurial-scm.org/wiki/fncacheRepoFormat): a store path, read back as the tracked path
+  Encoded := class: String ((("~2e" as ".") | Unit)?, Unit[]) {
+    static Unit := (("_", letter: "a".."z") as letter.upper_case) | ("__" as "_") | (("~", code: Hexadecimal²) as code as Char) | Char{!("A".."Z") && != "_" && != "~" && !("\\" | ":" | "*" | "?" | "\"" | "<" | ">" | "|") && 32 <= . <= 126}
+  }
 
   Store := class = root: Location {
     log (name: String) => (root / ("store/" + name)).bytes as Revlog
     changelog => log("00changelog.i")
     manifests => log("00manifest.i")
-    file (path: String) => log("data/" + encoded(path) + ".i")
+    file (path: String) => log("data/" + (path as Encoded) + ".i")
     bookmarks => (root / "bookmarks").content.lines{.nonempty}.map(line => line ~= (node: Hexadecimal⁴⁰, " ", name: (!\n)[]))
 
     tree (manifest: Manifest) => Language.Entry.of(manifest.lines.map(line => (path: line.path,
@@ -100,25 +100,25 @@ Mercurial := class: Language {
     paths => revisions.tree.files.path.unique
     changed (revision: History.Revision) => revision.tree.files{file => revisions.find(.id == revision.parents.first)?.tree.at(file.path)?.content != file.content}.path
     filelog (path: String) => revisions{.tree.at(path)}{revision => revision.parents.empty || revisions.find(.id == revision.parents.first)?.tree.at(path)?.content != revision.tree.at(path).content}.map(revision => (revision, content: revision.tree.at(path).content)) -- (versions =>
-      Revlog.of(versions.map(version => (
+      (versions.map(version => (
         text: revision.renames.find(.to == path) -- (renamed => renamed ? (("\x01\ncopy: " + renamed.from + "\ncopyrev: " + "0" * 40 + "\n\x01\n") as Byte[], version.content) : version.content),
-        first: version.index > 0 ? version.index - 1 : None, second: None, link: revisions.index_of(version.revision)))))
+        first: version.index > 0 ? version.index - 1 : None, second: None, link: revisions.index_of(version.revision))) as Revlog))
     manifest (revision: History.Revision) => revision.tree.files.sort_by(.path).map(file => (file.path, "\x00", filelog(file.path).entries{.link <= revisions.index_of(revision)}.last.node as Hexadecimal⁴⁰, Manifest.flags[file.mode] ?? "", \n)).join("")
-    manifests => Revlog.of(revisions.map(revision => (text: manifest(revision) as Byte[], first: revisions.index_of(revisions.find(.id == revision.parents.first)), second: revisions.index_of(revisions.find(.id == revision.parents[1])), link: revisions.index_of(revision))))
-    changelog => Revlog.of(revisions.map(revision => (text: (
+    manifests => revisions.map(revision => (text: manifest(revision) as Byte[], first: revisions.index_of(revisions.find(.id == revision.parents.first)), second: revisions.index_of(revisions.find(.id == revision.parents[1])), link: revisions.index_of(revision))) as Revlog
+    changelog => revisions.map(revision => (text: (
       manifests.entries[revisions.index_of(revision)].node as Hexadecimal⁴⁰, \n,
       (revision.who?.full_name ?? revision.who as String) + " <" + (revision.who?.email ?? "") + ">", \n,
       (revision.when as s).floor as String, " 0",
       [("branch:" + (history.name as Escaped)) if history.name && history.name != "default", ("ray:" + (revision.recorded as Escaped)) if revision.recorded] -- (extras => (" " + extras.join("\x00")) if extras.nonempty), \n,
       changed(revision).map(., \n),
       \n, revision.message
-    ) as Byte[], first: revisions.index_of(revisions.find(.id == revision.parents.first)), second: revisions.index_of(revisions.find(.id == revision.parents[1])), link: revisions.index_of(revision))))
+    ) as Byte[], first: revisions.index_of(revisions.find(.id == revision.parents.first)), second: revisions.index_of(revisions.find(.id == revision.parents[1])), link: revisions.index_of(revision))) as Revlog
     files => [
       (path: "requires", content: requirements.map(. + \n).join("") as Byte[]),
       (path: "store/00changelog.i", content: changelog as Byte[]),
       (path: "store/00manifest.i", content: manifests as Byte[]),
       (path: "store/fncache", content: paths.map("data/" + . + ".i" + \n).join("") as Byte[]),
-      paths.map(path => (path: "store/data/" + encoded(path) + ".i", content: filelog(path) as Byte[]))
+      paths.map(path => (path: "store/data/" + (path as Encoded) + ".i", content: filelog(path) as Byte[]))
     ].flatten(1)
   }
 
@@ -133,8 +133,8 @@ Mercurial := class: Language {
   }
 
   static stored := {
-    Revlog.of({texts}) => Revlog.full(texts) -- (log => log ~~ .entries = log.entries.map(entry => entry.index == 0 ? entry
-      : Chunk.of(Delta.between(texts[entry.index - 1].text, texts[entry.index].text) as Byte[]) as Byte[] -- (delta => delta.count < entry.compressed
+    {texts: Revlog.Texts} as Revlog => Revlog.full(texts) -- (log => log ~~ .entries = log.entries.map(entry => entry.index == 0 ? entry
+      : Delta.between(texts[entry.index - 1].text, texts[entry.index].text) as Byte[] as Chunk as Byte[] -- (delta => delta.count < entry.compressed
         ? entry ~~ (.base = entry.index - 1) ~~ (.data = delta) ~~ (.compressed = delta.count)
         : entry)))
   }

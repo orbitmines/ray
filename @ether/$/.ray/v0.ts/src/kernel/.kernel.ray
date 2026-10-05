@@ -821,6 +821,7 @@ first_step (src, pos, limit, frame) => (
   reached := found != None ? found_end : start
   named_to := named != None ? named_end : name
   if own != None and !shadowed and (own_end > max(reached, named_to) or (found != None and found == own and own_end == found_end and own_end > named_to)) { return fire(own, src, start, own_end, limit, frame, global, self), own_end }
+  if found != None and found.defines and named != None and !named.defines and named_end >= found_end and named_reach > found_reach and lookup_quietly(frame, place, None) != UNDEF { return place, name }
   asks := place != UNDEF and found != None and found_end >= name and !(named != None and (rule_leading(named) or named.defines))
   unbound := asks and lookup_quietly(frame, place, None) == UNDEF
   if found != None and (unbound or name <= start or found_end > named_to or (named == None and found_end >= name) or (named != None and found_end == named_end and found_reach > named_reach) or (named != None and found.defines and !named.defines and found_end >= named_end)) {

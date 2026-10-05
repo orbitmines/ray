@@ -107,12 +107,4 @@ Program &+= {
     }
     found
   )
-  for (body) => (
-    walker := .keys.head
-    while walker {
-      body(walker.value)
-      walker = walker.next
-    }
-    this
-  )
 }

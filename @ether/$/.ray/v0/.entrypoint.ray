@@ -884,6 +884,13 @@ Node := base class {
 
   . => this
   .{literal property ^property} ^punctuation => external get this property
+  .{literal method ^function} {parameter ^parameter} => {body} ^punctuation => (
+    closure := Program()
+    closure.code = external ** body
+    closure.parameters = external ** parameter
+    closure.context = this
+    (external get this method)(closure)
+  )
 
   [{property}] ^punctuation => external get this property
   [] => (
@@ -1884,8 +1891,11 @@ Program.components.hierarchy &= class {
   count => .written.count
   empty => .count.is_zero
   for (body) => (
-    statements := .written
-    statements for body
+    walker := .keys.head
+    while walker {
+      body(walker.value)
+      walker = walker.next
+    }
     this
   )
 

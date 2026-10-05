@@ -80,14 +80,10 @@ Distribution := class = outcomes: Outcome[] = [], optional = false {
   weighted (weight: Number, value): static => this ~~ outcomes.push Outcome(weight, value)
   total => outcomes.weight.sum
 
-  realised => {
-    drawn = Random.below(1000000) * total / 1000000
-    outcomes.reduce(0) (reached, outcome) => {
-      return outcome.value if drawn < reached + outcome.weight
-      reached + outcome.weight
-    }
-    None
-  }
+  realised => drawn_from(outcomes, Random.below(1000000) * total / 1000000)
+  static drawn_from (left: Outcome[], drawn: Number) => left.empty ? None
+    : drawn < left.first.weight ? left.first.value
+    : drawn_from(left.rest, drawn - left.first.weight)
   realised_many (fraction) => outcomes{Random.below(1000000) < fraction * 1000000}.value
 }
 
@@ -131,27 +127,8 @@ Transaction := class = forwards: *?, backwards: *?, applied = false, history: Hi
 }
 
 Network := class {
-  static DomainName := class (text: (Char.Letter | Char.Digit | "-" | ".")[]) => {
-    valid => 0 < text.count < 2^8
-  }
-
-  static Proxy := class = character: Character {
-    static through (character: Character) => Proxy(character)
-  }
-
-  static Protocol := class {
-    static version => UUID.Namespace.DNS
-    static handshake (offered) => offered
-  }
-
   // What another instance serves at a path, at a version when one is asked for; kept locally once fetched (X3.3).
-  static fetch (from: Location, path: String, version: Version?) => IO.read(from / path, version) ?? HTTP.get(from / path + (("%", version.number) if version))
-}
-
-HTTP := class {
-  static Method := enum get | post | put | delete
-
-  get (url) => IO.read(url)
+  static fetch (from: Location, path: String, version: Version?) => IO.read(from / path, version) ?? IO.read(from / path + (("%", version.number) if version))
 }
 
 OS := class {
@@ -161,13 +138,16 @@ OS := class {
 }
 
 Keyboard := class = keys: Key[] = [] {
-  static Key := class = name: * {
+  static Direction := enum up | down | left | right
+
+  static Key := class = name: *, code: Number?, shift = false, control = false {
     pressed = false
     toggled = false
     presses = 0
     pressed_at: Time[] = []
 
-    pulsed (max, delay) => pressed_at.nonempty && (pressed_at.count == 1 || Time.now - pressed_at.first >= delay)
+    pulsed (max: Number = 0, delay: Quantity.Temporal = 500 ms) => pressed && pressed_at.nonempty && (max == 0 || presses <= max)
+      && (pressed_at.count == 1 || Time.now - pressed_at.last >= delay)
 
     press: static => this ~~ (
       pressed_at.push Time.now
@@ -183,6 +163,15 @@ Keyboard := class = keys: Key[] = [] {
   }
 
   add (key: Key): static => this ~~ keys.push key
+
+  static f2 = Key(name: "F2")
+  static enter = Key(name: "Enter", code: 13)
+  static tab = Key(name: "Tab", code: 9)
+  static escape = Key(name: "Escape", code: 27)
+  static held: Key[] = [f2, enter, tab, escape]
+  static named (name) => name ==.instance_of Key ? name : held{.name == name}.first ?? (Key(name) ~~ held.push(.))
+  static key (code: Number) => held{.code == code}.first ?? (Key(name: code as Char as String, code) ~~ held.push(.))
+  static press (name, shift = false, control = false) => named(name) ~~ (.shift = shift) ~~ (.control = control) -- .press
 }
 
 Chat := class = messages: Message[] = [] {

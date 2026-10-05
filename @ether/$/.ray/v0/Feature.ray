@@ -31,7 +31,7 @@ Random := class {
 
   bit => (external random) ? 1 : 0
   bits (count: Number) => count.times.map(bit)
-  number (width: Number) => bits(width).reduce(0) (total, drawn) => total * 2 + drawn
+  number (width: Number) => Binary(integer: bits(width).map(Binary.digit))
   below (limit: Number) => {
     drawn = number((limit as Binary).length)
     drawn < limit ? drawn : below(limit)
@@ -40,7 +40,7 @@ Random := class {
   static Seeded := class = state: Number {
     next => state = (state * 1664525 + 1013904223) % 2^32
     bit => next / 2^31 == 1 ? 1 : 0
-    number (width: Number) => width.times.map(bit).reduce(0) (total, drawn) => total * 2 + drawn
+    number (width: Number) => Binary(integer: width.times.map(bit).map(Binary.digit))
   }
 }
 

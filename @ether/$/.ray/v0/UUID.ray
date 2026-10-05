@@ -1,5 +1,5 @@
 // A Universally Unique IDentifier (UUID) (https://datatracker.ietf.org/doc/html/rfc4122)
-UUID := class: Hexadecimal³² ~~ .[7 | +4 | +4 | +4].push_after("-") {
+UUID := class: Hexadecimal³² (Hexadecimal⁸, "-", Hexadecimal⁴, "-", Hexadecimal⁴, "-", Hexadecimal⁴, "-", Hexadecimal¹²) {
   version: Hexadecimal¹ => this[12]
 
   dynamically
@@ -18,17 +18,17 @@ UUID := class: Hexadecimal³² ~~ .[7 | +4 | +4 | +4].push_after("-") {
 
   static v1 := class: UUID (
     (
-      time_low: Hexadecimal⁸,
-      time_mid: Hexadecimal⁴,
+      time_low: Hexadecimal⁸, "-",
+      time_mid: Hexadecimal⁴, "-",
       (version: Hexadecimal¹, time_high: Hexadecimal³) = time_high_and_version: Hexadecimal⁴
-    ),
+    ), "-",
     (
       (
         variant,
         clock_seq_high: Binary{length == 8 - variant.length}
       ) = clock_seq_high_and_reserved: Hexadecimal²,
       clock_seq_low: Hexadecimal²,
-    ),
+    ), "-",
     node: Hexadecimal¹²
   ) {
     (time_high, time_mid, time_low) = time: Binary⁶⁰

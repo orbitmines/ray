@@ -35,9 +35,8 @@ Migration := class (from: Version, " -> ", to: Version, " ", body: Function) => 
     ?? Quest(name: "migrate", goal: (value: old, from: from, to: to))
 }
 
-Stamp := class = wall: Decimal, logical: Decimal = 0, node: * {
+Stamp := class = wall: Decimal, ".", logical: Decimal = 0, "@", node: * {
   chainable < (other: Stamp) => (wall, logical, node as String) < (other.wall, other.logical, other.node as String)
-  as (=== String) => wall, ".", logical, "@", node
 }
 
 HybridClock := class = node: *, wall: Decimal = 0, logical: Decimal = 0 {
@@ -73,8 +72,8 @@ Operation := class = kind: Kind, definition: Definition, stamp: Stamp, who: *, b
 }
 
 Git := class = commits: Commit[] {
-  static Commit := class = id: *, author: *, date: *, message: String, change: * {
-    as (=== String) => "commit ", id, "\nAuthor: ", author, "\nDate: ", date, "\n\n    ", message, "\n\n"
+  static Commit := class = "commit ", id: *, "\nAuthor: ", author: *, "\nDate: ", date: *, "\n\n    ", message: String, "\n\n" {
+    change: *
     parent => <-
   }
 

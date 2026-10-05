@@ -1,9 +1,9 @@
 // Roman Numeral notation (https://en.wikipedia.org/wiki/Roman_numerals)
 Roman := class: Digit+ (
   thousands: "M"[],
-  hundreds: "CM" | "CD" | ("D"?, "C"[]{length <= 4}),
-  tens: "XC" | "XL" | ("L"?, "X"[]{length <= 4}),
-  ones: "IX" | "IV" | ("V"?, "I"[]{length <= 4}) | "Ⅰ".."Ⅻ" | "ⅰ".."ⅻ"
+  hundreds: Place<"C", "D", "M">,
+  tens: Place<"X", "L", "C">,
+  ones: Place<"I", "V", "X"> | Precomposed
 ) => {
   ignore_case
 
@@ -22,35 +22,40 @@ Roman := class: Digit+ (
     "ↆ": 50     // U+2186 ROMAN NUMERAL FIFTY EARLY FORM
   }
 
-  static Normalizer := enum Subtractive | Additive
-  static normalizer: Normalizer = Subtractive
+  static Place<one, five, ten> := class = (one, ten) | (one, five) | (five?, one[]{length <= 4}) {
+    as (=== Decimal) => .match
+      (one, ten) => 9
+      (one, five) => 4
+      (fives: five?, ones: one[]) => (fives ? 5 : 0) + ones.length
+    subtractive => !(this ~= (five?, one[]{length == 4}))
+    additive => !(this ~= (one, five | ten))
+  }
+  static Precomposed = "Ⅰ".."Ⅻ" | "ⅰ".."ⅻ"
 
-  as (=== Decimal) => #.reduce(0) (acc, current, i) => i < length - 1 && Value[current] < Value[this[i + 1]] ? acc - Value[current] : acc + Value[current]
+  as (=== Decimal) => thousands.length * 1000 + (hundreds as Decimal) * 100 + (tens as Decimal) * 10 + (Value[ones] ?? ones as Decimal)
   canonical => (this as Decimal) as Roman
 
   Standard := Roman{1 <= as Decimal <= 3999}
 
+  static Normalizer := enum Subtractive (pattern: Standard{(hundreds, tens, ones).every(.subtractive)})
+    | Additive (pattern: Standard{(hundreds, tens, ones).every(.additive)})
+  static normalizer: Normalizer = Subtractive
+
   // Vinculum — combining overline multiplies by 1000 (https://en.wikipedia.org/wiki/Roman_numerals#Large_numbers)
-  static Vinculum := class: Roman {
-    static "̅"  // U+0305 COMBINING OVERLINE
-    static Value = Roman.Value
-      &+ Roman.Value.map(key &+ "̅", value * 1000)
-      &+ {
-        // Apostrophus Unicode (U+2180–U+2188)
-        "ↀ": 1000, "ↁ": 5000, "ↂ": 10000, "ↇ": 50000, "ↈ": 100000
-      }
+  static Vinculum := class: Roman (high: Lined<"̅">?, low: Roman) {
+    static Lined<mark> := class = (digit: Roman.Digit, mark)[] {
+      as (=== Decimal) => digit as String as Roman as Decimal
+    }
+    as (=== Decimal) => (high as Decimal ?? 0) * 1000 + (low as Decimal)
 
     // Double overline multiplies by 1,000,000
-    static Double := class: Vinculum {
-      static "̿"  // U+033F COMBINING DOUBLE OVERLINE
-      static Value = Vinculum.Value
-        &+ Roman.Value.map(key &+ "̿", value * 1000000)
+    static Double := class: Vinculum (highest: Lined<"̿">?, high: Lined<"̅">?, low: Roman) {
+      as (=== Decimal) => (highest as Decimal ?? 0) * 1000000 + (super as Decimal)
     }
   }
 
   // Apostrophus — composed CIↃ sequences (https://en.wikipedia.org/wiki/Roman_numerals#Apostrophus)
-  static Apostrophus := class: Roman {
-    static "Ↄ" | "ↄ"  // U+2183/U+2184 REVERSED C
+  static Apostrophus := class: Roman (pieces: Piece[], low: Roman) {
     static Value = Roman.Value &+ {
       "ↀ": 1000,    // U+2180 — CIↃ
       "ↁ": 5000,    // U+2181 — IↃↃ
@@ -58,15 +63,14 @@ Roman := class: Digit+ (
       "ↇ": 50000,   // U+2187 — IↃↃↃ
       "ↈ": 100000   // U+2188 — CCCIↃↃↃ
     }
-    "C", "I", "Ↄ" = 1000
-    "I", "Ↄ", "Ↄ" = 5000
-    "C", "C", "I", "Ↄ", "Ↄ" = 10000
-    "I", "Ↄ", "Ↄ", "Ↄ" = 50000
-    "C", "C", "C", "I", "Ↄ", "Ↄ", "Ↄ" = 100000
+    static Piece := class = (closed: "C"[], "I", reversed: ("Ↄ" | "ↄ")[]{closed.empty ? length >= 2 : length == closed.length}) | precomposed: "ↀ" | "ↁ" | "ↂ" | "ↇ" | "ↈ" {
+      as (=== Decimal) => precomposed ? Value[precomposed] : closed.empty ? 5 * 10 ^ (reversed.length + 1) : 10 ^ (closed.length + 2)
+    }
+    as (=== Decimal) => pieces.map(as Decimal).sum + (low as Decimal)
   }
 
   // Fraction — Roman base-12 uncia system (https://en.wikipedia.org/wiki/Roman_numerals#Fractions)
-  static Fraction := class (semis: "S"?, unciae: "·"[]{length <= 5} | Dot) | sub_uncia: on Value => {
+  static Fraction := class (semis: "S"?, unciae: ("·"[]{length <= 5} | Dot)) | sub_uncia: on Value => {
     static Digit: Char = on Value
     static Dot = "·" | "∶" | "∴" | "∷" | "⁙"  // U+00B7, U+2236, U+2234, U+2237, U+2059
     static Value = {
@@ -83,7 +87,7 @@ Roman := class: Digit+ (
       "𐆕": 1.0 * 1 / 1728   // U+10195 ROMAN SILIQUA SIGN
     }
 
-    as (=== Decimal) => #.reduce(0.0) (acc, current) => acc + Value[current]
+    as (=== Decimal) => (semis, unciae, sub_uncia).flatten{!= None}.map(Value[.]).sum
 
     // Named fractions (twelfths of an as)
     uncia    | 𐆑 = "·"           // 1/12
@@ -101,4 +105,9 @@ Roman := class: Digit+ (
 }
 
 {roman: Roman}: Roman => roman
-(number: Decimal) as (=== Roman) => Roman.Standard{as Decimal == number}# -- Roman.normalizer == Additive ? .max_by(.length) : .min_by(.length)
+(number: Decimal) as (=== Roman) => Roman.normalizer.pattern(
+  thousands: ["M"] * (number / 1000),
+  hundreds: number / 100 % 10,
+  tens: number / 10 % 10,
+  ones: number % 10
+)

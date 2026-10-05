@@ -1,17 +1,10 @@
 Project := class: Location = name: String, parent: Project?, children: Location[] = [], host: *?, dependencies: Dependency[] = [], written_against: Version?, carried: *[] = [], readings: Reading[] = [], overrides: *[] = [], definitions: Definition[] = [] {
-  static Form := enum ether | relative | upward | absolute | user | remote
-
   static Dependency := class ("@", location: (!" ")[], (" ", version: Version)?) => {
-    form: Form => location ~= ⊢"ether/" ? ether
-      : location ~= ⊢"./" ? relative
-      : location ~= ⊢"../" ? upward
-      : location ~= ⊢"/" ? absolute
-      : location ~= "://" ? remote
-      : user
-    project: Project? => form.match
-      ether => Language.ray.bundled(location["ether/".length..]) ?? Network.fetch(@ether, location["ether/".length..], version) as Project
-      remote => Network.fetch(location as Location, "", version) as Project
-      * => IO.read(location) as Project
+    project: Project? => Program(code: ("@", location)){O: {
+      @ether/{bundled_path: Written} => Language.ray.bundled(bundled_path) ?? Network.fetch(@ether, bundled_path, version) as Project
+      @{scheme: Char.Word[]}://{remainder: Written} => Network.fetch(Location(written: scheme + "://" + remainder), "", version) as Project
+      @{local_path: Written} => IO.read(local_path) as Project
+    }}()
   }
   depend (line: String) => dependencies.push(line as Dependency) -- this
 

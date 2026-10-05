@@ -266,3 +266,7 @@ Answers from 2026-09-30.
 - **P8.17** Resource accounting is a whole section of its own, done **last**: resource and memory
   management, which the language doesn't have yet but will. (Also listed in `Plan.md`.)
 - **Covered elsewhere:** P8.1 (standing instruction: optimizations are rewrite rules as levels).
+
+### Answers 2026-10-05 (errors)
+- `ERROR@Kind` / `FATAL@Kind` with a message: what follows `@` is the error's kind, from the enum `Diagnostic.Kind` (so it can be autocorrected); the diagnostic points at the ERROR line itself and carries the call trace. A non-fatal error is attached to the value the enclosing function answers; a fatal one is that value. At the top level the statement's value takes it. `ERROR[k]` is gone; `$Kind` on the next line handles one kind.
+- The `$` forms are methods painted `^error`; `x $ return 9` needs no form of its own (the fallback is read lazily in the caller's scope).

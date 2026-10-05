@@ -2030,7 +2030,7 @@ rule_implicit (rule) => rule.home != UNDEF and rule.home != global() and rule_le
 rule_opens (rule) => rule_p0(rule) == 0 and rule.pieces[0].text.length > 0 and !first_word_is(rule.pieces[0].text)
 rule_enclosed (rule) => rule_count(rule) >= 3 and rule_opens(rule) and rule.pieces[rule_count(rule) - 1].kind == 0
 // The operator a rule `op {x}` spells, or -1.
-rule_operator (rule) => rule_count(rule) == 2 and rule_opens(rule) and rule.pieces[1].kind == 2 ? rule.pieces[0].text : -1
+rule_operator (rule) => rule_count(rule) == 2 and rule_opens(rule) and rule.pieces[1].kind == 2 and !rule.pieces[1].optional ? rule.pieces[0].text : -1
 // What a rule's head starts with, read plainly or on a receiver (-1: anything).
 rule_head (rule, receiving) => (
   if rule_p0(rule) == 0 { return rule.pieces[0].text }

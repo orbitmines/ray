@@ -155,7 +155,7 @@ if ^keyword := class {
     branch ^variable
   )
 
-  elsif{ }{cond}{ }{block} ^class => (
+  elsif{ }{cond}{ }{taken_block} ^class => (
     branch ^keyword := external .
     inline this
     taken := .taken
@@ -167,7 +167,7 @@ if ^keyword := class {
    enter\
     taken = global
     result := None
-    external declare result (inline (external ** block))
+    external declare result (inline (external ** taken_block))
     answer = result
     goto composes if (external own result)
     goto skip
@@ -178,13 +178,13 @@ if ^keyword := class {
     branch ^variable
   )
 
-  {\n}elsif{ }{cond}{ }{block} ^class => this elsif cond block
-  {\n}else{ }{block} ^class => this else block
+  {\n}elsif{ }{cond}{ }{taken_block} ^class => this elsif cond taken_block
+  {\n}else{ }{taken_block} ^class => this else taken_block
 
-  else{ }{block} ^class => (
+  else{ }{taken_block} ^class => (
     chosen ^keyword := .answer
     goto done if .taken
-    chosen = inline (external ** block)
+    chosen = inline (external ** taken_block)
    done\
 
     chosen
@@ -193,7 +193,7 @@ if ^keyword := class {
   as (=== boolean) => (.answer as boolean)
 }
 
-unless{ }{cond}{ }{block} ^class => (
+unless{ }{cond}{ }{taken_block} ^class => (
   branch ^keyword := external .
   inline if
   taken := None
@@ -202,7 +202,7 @@ unless{ }{cond}{ }{block} ^class => (
   goto skip if (cond as boolean).holds
   taken = global
   result := None
-  external declare result (inline (external ** block))
+  external declare result (inline (external ** taken_block))
   answer = result
   goto composes if (external own result)
   goto skip
@@ -214,15 +214,15 @@ unless{ }{cond}{ }{block} ^class => (
 )
 
 while ^keyword := class {
-  { }{cond}{ }{block} ^class => (
+  { }{cond}{ }{loop_block} ^class => (
     looping ^keyword := external .
     inline static
-    written_block := external ** block
+    written_block := external ** loop_block
 
    loop_continue\
-    goto more if (cond as boolean).holds
+    goto loop_body if (cond as boolean).holds
     goto loop_break
-   more\
+   loop_body\
     inline written_block
     goto loop_continue
    loop_break\
@@ -230,21 +230,21 @@ while ^keyword := class {
     looping ^variable
   )
 
-  { }{block}{ }while{ }{cond} ^class => (
-    written_block := external ** block
+  { }{loop_block}{ }while{ }{cond} ^class => (
+    written_block := external ** loop_block
     inline written_block
 
-    this cond block
+    this cond loop_block
   )
 }
 
-do{ }{block}{ }while{ }{cond} ^class => (
-  first_round := external ** block
+do{ }{loop_block}{ }while{ }{cond} ^class => (
+  first_round := external ** loop_block
   inline first_round
-  while cond block
+  while cond loop_block
 )
 
-loop{ }{block} ^class => while true block
+loop{ }{loop_block} ^class => while true loop_block
 break ^keyword => goto loop_break
 recur({given}) ^keyword => (
   arguments = given
@@ -377,6 +377,8 @@ Modifier.spellings &= `right-to-left`
 Modifier.spellings &= `left-to-right`
 
 Node := base class {
+  //{comment?} ^comment => this
+  /*{comment?}*/ ^comment => this
 
   continued_by (call) => Program(code: call).entered(this, None)
   continued_if (call, condition) => Program(code: condition).entered(this, None) ? .continued_by(call) : this

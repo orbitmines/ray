@@ -11,11 +11,13 @@ Node &+= {
   properties => fields
 
   // Every value prints in the language of the file it is written in (X1.6, X1.7).
-  as (:== String) => Language.for_file(&caller.location.name).write(this)
+  as (:== String) => (Language.for_file(&caller.location.name) ?? Language.ray).write(this)
 
-  // `f⁻¹`, `f^-1`, `f!`; `! forward backward` declares two as each other's inverse (L§4.5).
+  chainable != (other) => !(this == other)
+
+  // `f⁻¹`, `f^-1`; `! forward backward` declares two as each other's inverse (L§4.5).
   inverse: Node?
-  ⁻¹ | ^-1 | ! => inverse
+  ⁻¹ | ^-1 => inverse
   reversible => inverse
   inverted_by (backward) => (inverse = backward) -- backward.inverse = this -- this
 
@@ -34,9 +36,10 @@ Node &+= {
   // A value carries the diagnostics filed on it; `$` reads them (P6.1).
   // `diagnostics` and `diagnosed` are the entrypoint's: ERROR@ files on the value itself, from boot on.
   erred => diagnostics?.nonempty ?? false
+  as (=== boolean) => !erred
   recoverable => erred && !diagnostics.some(.fatal)
 
-  $ => instance ? this : Store.of(this)
+  $ => instance ? this : Store.View(type: this)
   $ (fallback) => recoverable ? fallback : this
   $ (raised: Diagnostic) => recoverable ? diagnosed(raised ~~ .cause = diagnostics.last) : this
   $ (handler: Program) => recoverable ? handler.entered(diagnostics.last, None) : this

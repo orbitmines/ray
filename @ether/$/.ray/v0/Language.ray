@@ -3,13 +3,20 @@ Language := class = extensions: String | String[], location: Location[] = [], le
   static known: Language[] = []
   static register (language: Language) => known.push language -- language
   static named (extension: String) => known{.names(extension)}.first
-  static over (outer: Language, base: Language) => outer -- .of = base
+  static over (outer: Language, base: Language) => Language(outer.extensions, location: outer.location, level: outer.level, reader: outer.reader, writer: outer.writer, of: base, version: outer.version)
 
   // The language a file is written in, by its extension (`$.ext` names one, P7.1); `as String` prints in it (X1.7).
   static for_file (file_name: String) => file_name ~= (*, ".", inner: Char.Word[], ".ray") ⊣
-    ? over(named("." + inner), ray)
-    : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣).last)
+    ? (named("." + inner) ? over(named("." + inner), ray) : ray)
+    : named("." + (file_name ~= (*, ".", last: Char.Word[]) ⊣)?.last) ?? ray
   static ray => named(".ray")
+
+  // A value printed in Ray: literals as written, lists in brackets, anything else by its fields (X1.6).
+  static ray_written (value) => value === None ? "None"
+    : value ==.instance_of String ? "\"" + value + "\""
+    : value ==.instance_of Number ? value as 10 as String
+    : value ==.instance_of Iterable ? "[" + value.map(ray_written).join(", ") + "]"
+    : "(" + value.fields.map(.name + ": " + ray_written(.value)).join(", ") + ")"
 
   names (extension: String) => extensions == extension
   // The projects a language ships with: its own .ray files, `@ether/UI` for Ray (P8.8).
@@ -42,7 +49,7 @@ Language := class = extensions: String | String[], location: Location[] = [], le
 Library := class: Language
 Tool := class = location: Location[] = []
 
-Language.register(Language(".ray", level: Compiler.default))
+Language.register(Language(".ray", level: Compiler.default, writer: Language.ray_written))
 Language.cfg = Language.register(Language.Sublanguage(extensions: ".cfg", of: Language.ray, excluded: [io, os, random, time, network] as Effects.Source[]))
 Language.regex = Language.register(Language(".regex"))
 

@@ -92,6 +92,7 @@ class {block} => (
     this.instance = global
     inline block
     if static.is_abstract { ERROR@this `constructs a class that leaves a method unwritten` }
+    if global.Store { Store.constructed(this) }
     this
   )
 

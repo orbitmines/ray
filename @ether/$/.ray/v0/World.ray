@@ -225,7 +225,7 @@ Instance := class: Location + Entity {
 
   host_for (character: Character) => character ~~ (hosted |= .) ~~ .presence = this
   mirror (value, depth = 1) => Mirror(value, location: this, depth)
-  choose (s) => s#.random
+  .{literal name ^property} ^punctuation => .declaring(name) ? external get this name : external get device name
 
   static Deletion := class: Quest (character: Character, due: Time) {
     name = "delete"

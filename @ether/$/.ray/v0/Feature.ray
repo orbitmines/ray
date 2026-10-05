@@ -33,6 +33,7 @@ Random := class {
   }
 }
 
+choose {type} ^keyword => @me.choose(type)
 Choice := class = type: *?, value: *?
 
 Proof := class = proposition: *, argument: * {

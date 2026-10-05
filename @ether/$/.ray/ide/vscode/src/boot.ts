@@ -86,7 +86,7 @@ function repoBoot(repoRoot: string): Boot {
     command: process.execPath,
     args: [...nodeImportTsxArgs(tsxDir, entry), ...(daemon ? ['--lsp'] : [])],
     transport: TransportKind.stdio,
-    options: { cwd: repoRoot, env: repoEnv },
+    options: { cwd: workspaceRoot() ?? repoRoot, env: repoEnv },
   };
   return {
     mode: 'repo',
@@ -130,6 +130,7 @@ function installedBoot(): Boot | null {
     command: bin,
     args: ['--lsp'],
     transport: TransportKind.stdio,
+    options: { cwd: workspaceRoot() },
   };
   return {
     mode: 'installed',
@@ -165,7 +166,7 @@ function bundledBoot(extensionPath: string): Boot {
     command: runtime.command,
     args: [entry, '--lsp'],
     transport: TransportKind.stdio,
-    options: { cwd: path.dirname(entry), env },
+    options: { cwd: workspaceRoot() ?? path.dirname(entry), env },
   };
   return {
     mode: 'bundled',

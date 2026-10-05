@@ -1,188 +1,89 @@
-Running := class {
-  program: Program
-  at: None
-  started: false
-  results: (chain None)
+// A program selected at a step: waiting, intermediate or final (P1.8).
+Running := class = program: Program, at: Program?, started: boolean = false, results: *[] = [] {
+  static branches: Running[] = []
+  static deferred: Running[] = []
 
-  & => .results
-  steps => .program.written
-  expand => .steps
-  is_initial => .started.not
-  is_terminal => .started.and(.at === None)
-  holds => .is_terminal.not
+  & => results
+  steps | expand => program.written
+  is_initial | waiting => !started
+  is_terminal | final => started && !at
+  intermediate => started && !is_terminal
+  holds => !is_terminal
 
-  waiting => .is_initial
-  intermediate => .started.and(.holds)
-  final => .is_terminal
+  stepped => {
+    at = started ? at.next : steps.first
+    started = true
+    results.push at() if at
+  } -- this
+  next => Running(program, at, started, results: [results]).stepped
+  finished => (stepped while holds) -- this
+  cancel => (at, started = None, true) -- this
 
-  stepped => (
-    .at = if .started { .at.next } else { .steps.head }
-    .started = true
-    if .at { .results &= .at.value() }
-    this
-  )
-  next => Running(program: .program, at: .at, started: .started, results: .results.map { it.value }).stepped
-  finished => (
-    while .holds { .stepped }
-    this
-  )
-  cancel => (
-    .at = None
-    .started = true
-    this
-  )
-
-  round => Running.branches.filter { it.value.holds }.map { it.value.stepped }
-  until (condition) => (
-    while ((condition()).not.and(Running.branches.some { it.value.holds })) { Running.round }
-    this
-  )
+  static round => branches{holds}.map(.stepped)
+  static until (condition) => (round while !condition() && branches.some(.holds)) -- this
 }
 
-Running.branches = chain None
-Running.deferred = chain None
-
-Program.components.hierarchy &= class {
+Program &+= {
   running => Running(program: this)
-  & => .running.&
-  expand => .written
-  concurrently => .written.map { Running(program: it.value) }
+  & => running.&
+  expand => written
+  concurrently => written.map(Running(program: .))
 }
 
-branch{ }{block} ^class => (
-  started ^keyword := Running(program: Program(code: external ** block))
-  Running.branches &= started
-  started
-)
-
-sync{ }{block} ^class => (
-  every_branch ^keyword := Program(code: external ** block).concurrently
-  while (every_branch.some { it.value.holds }) { every_branch.filter { it.value.holds }.map { it.value.stepped } }
-  every_branch.map { it.value.results.last }
-)
-
-race{ }{block} ^class => (
-  every_branch ^keyword := Program(code: external ** block).concurrently
-  while (every_branch.every { it.value.holds }) { every_branch.map { it.value.stepped } }
-  winner ^keyword := every_branch.filter { it.value.is_terminal }.head
-  every_branch.filter { it.value.holds }.map { it.value.cancel }
-  winner.value.results.last
-)
-
-rush{ }{block} ^class => (
-  every_branch ^keyword := Program(code: external ** block).concurrently
-  while (every_branch.every { it.value.holds }) { every_branch.map { it.value.stepped } }
-  every_branch.filter { it.value.holds }.map { Running.branches &= it.value }
-  every_branch.filter { it.value.is_terminal }.head.value.results.last
-)
-
-defer{ }{block} ^class => (
-  deferred ^keyword := Running(program: Program(code: external ** block))
-  Running.deferred &= deferred
-  deferred
-)
-
-await{ }{awaited} ^class => (
-  Running.until({ (awaited === None).not.and(awaited.instance_of(Running).not.or(awaited.is_terminal)) })
-  if (awaited.instance_of(Running)) { awaited.results.last } else { awaited }
-)
-
+// Each statement of the block is a branch, stepped in turn (P4.1, P4.2).
+branch{ }{block} ^class => Running(program: Program(code: external ** block)) -- Running.branches.push(.)
+sync{ }{block} ^class => Program(code: external ** block).concurrently -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
+race{ }{block} ^class => Program(code: external ** block).concurrently
+  -- (.map(.stepped) while .every(.holds))
+  -- .{holds}.map(.cancel)
+  -- .{is_terminal}.first.results.last
+rush{ }{block} ^class => Program(code: external ** block).concurrently
+  -- (.map(.stepped) while .every(.holds))
+  -- Running.branches.push(.{holds})
+  -- .{is_terminal}.first.results.last
+defer{ }{block} ^class => Running(program: Program(code: external ** block)) -- Running.deferred.push(.)
+await{ }{awaited} ^class => Running.until(() => awaited && (awaited !=.instance_of Running || awaited.is_terminal))
+  -- awaited ==.instance_of Running ? awaited.results.last : awaited
 pending{ }{name} ^keyword => await name
 
-Error := class {
-  kind: None
-  message: None
-  fatal: false
-  cause: None
-
+// An error is a value a call answers; `$` tests for it (P6.1).
+Error := class = kind: *?, message: String?, fatal: boolean = false, cause: Error? {
   as (=== boolean) => false
-  & (other) => Error(kind: .kind, message: .message, fatal: .fatal.or(other.fatal), cause: other)
-  causes => if (.cause === None) { [this] } else { [this], .cause.causes }
+  & (other: Error) => Error(kind, message, fatal: fatal || other.fatal, cause: other)
+  causes => this, cause?.causes ?? []
 }
-
-Node.components.hierarchy &= class {
-  erred => .instance_of(Error)
-  recoverable => .erred.and(.fatal.not)
+Node &+= {
+  erred => this ==.instance_of Error
+  recoverable => erred && !fatal
 }
 
 {call} $ ^punctuation => call
-{call} $ {fallback} ^punctuation => (
-  answered ^keyword := call
-  if answered.recoverable { fallback } else { answered }
-)
-{call} $ return {fallback} ^punctuation => (
-  answered ^keyword := call
-  if answered.recoverable { return fallback }
-  answered
-)
-{call} $ {{handler}} ^punctuation => (
-  answered ^keyword := call
-  if answered.recoverable { answered.satisfies({ inline handler }) } else { answered }
-)
-{call} $ ERROR[{kind}] {message} ^punctuation => (
-  answered ^keyword := call
-  if answered.recoverable { Error(kind: kind, message: message, cause: answered) } else { answered }
-)
-{call} $? ^punctuation => (
-  answered ^keyword := call
-  if answered.recoverable { None } else { answered }
-)
+{call} $ {fallback} ^punctuation => call.recoverable ? fallback : call
+{call} $ return {fallback} ^punctuation => call.recoverable ? return fallback : call
+{call} $ {{handler}} ^punctuation => call.recoverable ? call.satisfies({ inline handler }) : call
+{call} $ ERROR[{kind}] {message} ^punctuation => call.recoverable ? Error(kind, message, cause: call) : call
+{call} $? ^punctuation => call.recoverable ? None : call
 {call} $? {fallback} ^punctuation => (call $?) ?? fallback
-{call} $! ^punctuation => (
-  answered ^keyword := call
-  if answered.erred { FATAL@answered `an error escalated to fatal` }
-  answered
-)
-{call} $?! ^punctuation => (
-  answered ^keyword := call
-  if answered.erred { None } else { answered }
-)
-{call} $?! {{handler}} ^punctuation => (
-  answered ^keyword := call
-  if answered.erred { answered.satisfies({ inline handler }) } else { answered }
-)
-{call}{\n}${kind} {handled} ^punctuation => (
-  answered ^keyword := call
-  if (answered.recoverable.and(answered.kind.instance_of(kind))) { handled } else { answered }
-)
-{call}{\n}${kind} | ${other} {handled} ^punctuation => (
-  answered ^keyword := call
-  if (answered.recoverable.and(answered.kind.instance_of(kind | other))) { handled } else { answered }
-)
+{call} $! ^punctuation => call -- FATAL@. `an error escalated to fatal` if .erred
+{call} $?! ^punctuation => call.erred ? None : call
+{call} $?! {{handler}} ^punctuation => call.erred ? call.satisfies({ inline handler }) : call
+{call}{\n}${kind} {handled} ^punctuation => call.recoverable && call.kind ==.instance_of kind ? handled : call
+{call}{\n}${kind} | ${other} {handled} ^punctuation => call.recoverable && call.kind ==.instance_of (kind | other) ? handled : call
 
+// `dynamically x = …` re-evaluates when what it depends on changes (P5.1, P5.3).
 dynamically {name} = {value} ^keyword => external rule name value
 dynamically {name} := {value} ^keyword => external rule name value
+// Every failing condition is reported together (P5.6).
+dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR@. `assertion failed`) -- .empty
 
-dynamically assert {conditions} ^keyword => (
-  failing ^keyword := Program(code: external ** conditions).written.filter { (it.value()).not }
-  failing.map {
-    failed := it.value
-    ERROR@failed `assertion failed`
-  }
-  failing.empty
-)
-
-with{ }{target} = {value} {{body}} ^keyword => (
-  previous ^keyword := target
-  target = value
-  answered ^keyword := inline (external ** body)
-  target = previous
-  answered
-)
-with{ }{target} = {value} ^keyword => (
-  previous ^keyword := target
-  defer { target = previous }
-  target = value
-)
+// `with X = v { … }` restores X after the block; `with X = v` until the context is left (L§6.3).
+with{ }{target} = {value} {{body}} ^keyword => (previous = target) -- (target = value) -- (inline (external ** body)) -- (target = previous)
+with{ }{target} = {value} ^keyword => (previous = target) -- defer { target = previous } -- (target = value)
 with{ }{{settings}} ^keyword => inline (external ** settings)
 assume{ }{target} = {value} {{body}} ^keyword => with target = value { inline body }
 assume{ }{target} = {value} ^keyword => with target = value
 
-Never := class {
-  admits (candidate) => None
-}
+// `never …` (L§4.1)
+Never := Node{false}
 never return ^keyword => Never
-never{ }{condition} ^keyword => (
-  if condition { ERROR@condition `happened, and was said never to` }
-  Never
-)
+never{ }{condition} ^keyword => Never -- ERROR@condition `happened, and was said never to` if condition

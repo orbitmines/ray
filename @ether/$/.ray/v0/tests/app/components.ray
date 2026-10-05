@@ -80,6 +80,11 @@ unless 5#.count == 1 { INFO@mark `HS3 a single value has other than one possible
 unless (1 | 2)#.contains((1 | 2)#.random) { INFO@mark `HS4 a random possible value is not one of them` }
 unless (1 | 2)#.succ.contains(3) { INFO@mark `HS5 a member asked of the possible values is not asked of each` }
 unless #(1 | 2) == (1 | 2)# { INFO@mark `HS6 #x is not x#` }
+unless "A" is 1 ("A" | "B") { INFO@mark `HS7 one of two possibilities is not a counted type of one` }
+if ("A" | "B") is 1 ("A" | "B") { INFO@mark `HS8 both possibilities are a counted type of one` }
+unless ("A" | "B") is 50% ("A" | "B" | "C" | "D") { INFO@mark `HS9 two of four possibilities are not half of them` }
+unless "B" is 0.5 ("A" | "B") { INFO@mark `HS10 half of two possibilities is not one` }
+unless (choose 1 ("A" | "B")) is ("A" | "B") && (choose 1 ("A" | "B"))#.count == 1 { INFO@mark `HS11 choosing a counted type does not resolve to one of its possibilities` }
 
 // `&+` and `|+` superpose components; `+` lets the right one override (T2.1, A1)
 unless (true &+ "A").next == false & "B" { INFO@mark `SP1 &+ does not answer with both components` }

@@ -53,6 +53,10 @@ Possibilities := class = values: Iterable {
   .{literal property ^property} ^punctuation => .declaring(property) ? external get this property : Possibilities(values: values.map(external get . property))
 }
 Possibilities.components.hierarchy &= Iterable
+
+{share: Number{0 < . < 1}} {counted: *{#.count != 1}} => counted{#.count == share * counted#.count}
+{count: Number | Range} {counted: *{#.count != 1}} => counted{#.count == count}
+a | an {counted: *{#.count != 1}} => 1 counted
 Node &+= {
   # => Possibilities(values: superposes ? components : conjoined.count > 1 ? conjoined : (!instance && components.head) ? components : [this])
   origin: Node?

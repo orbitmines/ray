@@ -7,19 +7,17 @@ import type { ServerOptions } from 'vscode-languageclient/node';
 import { TransportKind } from 'vscode-languageclient/node';
 
 /**
- * The three ways we can get a Ray language server running, in priority order:
+ * The ways we can get a Ray language server running, in priority order. Both go through the daemon:
  *
- *   1. `repo`     — VS Code is open inside the orbitmines/ray repo (or a fork:
- *                   anything that ships its own `@ether/$/.ray` definitions and
- *                   `@ether/.ts/src/lsp/index.ts`). Boot the server
- *                   from those workspace sources so the in-tree language
- *                   definition is what powers the editor.
- *   2. `installed`— The host has a `ray` executable on PATH whose `--version`
- *                   parses under Ether's version scheme. Use it.
- *   3. `bundled`  — Fall back to the language bundled with the extension itself:
- *                   its daemon, kernel and library under `server/`.
+ *   1. `installed`— The host has a `ray` executable on PATH whose `--version` parses under Ether's version scheme and
+ *                   whose `--help` lists `--lsp`. Use it.
+ *   2. `bundled`  — Fall back to the language bundled with the extension itself: its daemon, kernel and library under
+ *                   `server/`.
+ *
+ * When the workspace holds a language definition (a `!language` project, e.g. `@ether/$/.ray/v0` in a checkout of
+ * orbitmines/ray), its directory is given to `--lsp`, and the daemon reads that language instead of its own.
  */
-export type BootMode = 'repo' | 'installed' | 'bundled';
+export type BootMode = 'installed' | 'bundled';
 
 export interface Boot {
   mode: BootMode;
@@ -27,21 +25,18 @@ export interface Boot {
   server: ServerOptions;
 }
 
-const RAY_REPO_MARKER = path.join('@ether', '$', '.ray');
-const RAY_LSP_ENTRY   = path.join('@ether', '$', '.ray', 'v0.ts', 'src', 'lsp', 'index.ts');
-const RAY_DAEMON_ENTRY = path.join('@ether', '$', '.ray', 'v0.ts', 'src', 'language.ts');
+const LANGUAGE_DIRECTORY = path.join('@ether', '$', '.ray', 'v0');
 
-/**
- * Walk up from `start` looking for the marker that identifies a checkout of
- * orbitmines/ray (or a fork). The marker is the language-definition directory
- * itself — present in every fork that hasn't ripped out the language.
- */
-function findRayRepoRoot(start: string): string | null {
+function isLanguage(dir: string): boolean {
+  try { return fs.readFileSync(path.join(dir, '.project.ray'), 'utf-8').split('\n')[0].includes('!language'); } catch { return false; }
+}
+
+/** The language definition the workspace holds: the workspace itself, or `@ether/$/.ray/v0` in it or above it. */
+function findLanguage(start: string): string | null {
+  if (isLanguage(start)) return start;
   let dir = start;
   while (true) {
-    if (fs.existsSync(path.join(dir, RAY_REPO_MARKER)) && fs.existsSync(path.join(dir, RAY_LSP_ENTRY))) {
-      return dir;
-    }
+    if (isLanguage(path.join(dir, LANGUAGE_DIRECTORY))) return path.join(dir, LANGUAGE_DIRECTORY);
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -55,53 +50,12 @@ function workspaceRoot(): string | undefined {
 }
 
 /**
- * Spawn pattern for tsx 4.x: `node --import <file:///.../tsx/dist/loader.mjs>
- * <entry>` is the documented way to run a `.ts` entrypoint with tsx's loader
- * hooks. Going through cli.mjs as a script (`node tsx/dist/cli.mjs <entry>`)
- * fails in Node 22+ with `ERR_UNKNOWN_FILE_EXTENSION` because the loader
- * doesn't propagate to the child. Passing the absolute loader URL avoids
- * relying on the spawned process's cwd resolving `tsx` from node_modules.
- */
-function nodeImportTsxArgs(tsxDir: string, entry: string): string[] {
-  const loader = path.join(tsxDir, 'dist', 'loader.mjs');
-  // --import takes a module URL/specifier; absolute paths must be file://.
-  return ['--import', `file://${loader}`, entry];
-}
-
-/** Resolve `tsx` and the workspace's LSP entry; throws if either is missing. */
-function repoBoot(repoRoot: string): Boot {
-  const tsxPkg = require.resolve('tsx/package.json', { paths: [path.join(repoRoot, '@ether', '$', '.ray', 'v0.ts'), repoRoot] });
-  const tsxDir = path.dirname(tsxPkg);
-  const daemon = workspace.getConfiguration('ether').get<string>('server', 'daemon') === 'daemon' && fs.existsSync(path.join(repoRoot, RAY_DAEMON_ENTRY));
-  const entry  = path.join(repoRoot, daemon ? RAY_DAEMON_ENTRY : RAY_LSP_ENTRY);
-
-  if (!fs.existsSync(tsxDir)) throw new Error(`tsx not found near ${repoRoot} — run \`npm install\` in @ether/$/.ray/v0.ts.`);
-  if (!fs.existsSync(entry))  throw new Error(`Language server entry not found at ${entry}.`);
-
-  // In repo mode the LSP source is being actively edited — point tsx's
-  // disk cache at /dev/null so a cached compile from minutes ago can't
-  // shadow today's source after a window reload.
-  const repoEnv = { ...process.env, TSX_CACHE_DIRECTORY: '/dev/null' };
-  const run = {
-    command: process.execPath,
-    args: [...nodeImportTsxArgs(tsxDir, entry), ...(daemon ? ['--lsp'] : [])],
-    transport: TransportKind.stdio,
-    options: { cwd: workspaceRoot() ?? repoRoot, env: repoEnv },
-  };
-  return {
-    mode: 'repo',
-    description: daemon ? `repo (${repoRoot}), served by its daemon` : `repo (${repoRoot})`,
-    server: { run, debug: { ...run, options: { ...run.options, env: { ...repoEnv, DEBUG: '1' } } } },
-  };
-}
-
-/**
  * If `ray` is on PATH and its `--version` parses under any registered scheme,
  * return a boot config that spawns `ray --lsp`. The ray executable bundles the
  * language server; `--lsp` is the option that flips it into LSP mode over
  * stdio. It is only used when its `--help` lists `--lsp`.
  */
-function installedBoot(): Boot | null {
+function installedBoot(language: string | null): Boot | null {
   let bin: string;
   try {
     bin = cp.execFileSync(process.platform === 'win32' ? 'where' : 'which', ['ray'], {
@@ -128,13 +82,13 @@ function installedBoot(): Boot | null {
 
   const run = {
     command: bin,
-    args: ['--lsp'],
+    args: ['--lsp', ...(language ? [language] : [])],
     transport: TransportKind.stdio,
     options: { cwd: workspaceRoot() },
   };
   return {
     mode: 'installed',
-    description: `installed ray ${version} (${bin})`,
+    description: `installed ray ${version} (${bin})${language ? `, reading the language in ${language}` : ''}`,
     server: { run, debug: run },
   };
 }
@@ -155,7 +109,7 @@ function nodeRuntime(): { command: string, env: NodeJS.ProcessEnv } {
  * Last-resort: the language shipped inside the extension — the daemon bundled as `server/language.mjs`, its
  * kernel (`server/.kernel.ray`) and the library (`server/v0`), given to it as RAY_LIBRARY.
  */
-function bundledBoot(extensionPath: string): Boot {
+function bundledBoot(extensionPath: string, language: string | null): Boot {
   const entry = path.join(extensionPath, 'server', 'language.mjs');
   const library = path.join(extensionPath, 'server', 'v0');
   if (!fs.existsSync(entry)) throw new Error(`Bundled Ray daemon not found at ${entry}`);
@@ -164,13 +118,13 @@ function bundledBoot(extensionPath: string): Boot {
   const env = { ...process.env, ...runtime.env, RAY_LIBRARY: library };
   const run = {
     command: runtime.command,
-    args: [entry, '--lsp'],
+    args: [entry, '--lsp', ...(language ? [language] : [])],
     transport: TransportKind.stdio,
     options: { cwd: workspaceRoot() ?? path.dirname(entry), env },
   };
   return {
     mode: 'bundled',
-    description: `bundled language (${path.join(extensionPath, 'server')}), served by its daemon`,
+    description: `bundled language (${path.join(extensionPath, 'server')}), served by its daemon${language ? `, reading the language in ${language}` : ''}`,
     server: { run, debug: { ...run, options: { ...run.options, env: { ...env, DEBUG: '1' } } } },
   };
 }
@@ -181,11 +135,6 @@ function bundledBoot(extensionPath: string): Boot {
  */
 export function resolveBoot(extensionPath: string): Boot {
   const ws = workspaceRoot();
-  if (ws) {
-    const repoRoot = findRayRepoRoot(ws);
-    if (repoRoot) return repoBoot(repoRoot);
-  }
-  const installed = installedBoot();
-  if (installed) return installed;
-  return bundledBoot(extensionPath);
+  const language = ws ? findLanguage(ws) : null;
+  return installedBoot(language) ?? bundledBoot(extensionPath, language);
 }

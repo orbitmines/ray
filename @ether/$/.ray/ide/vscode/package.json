@@ -43,19 +43,6 @@
     "configuration": {
       "title": "Ether.ray",
       "properties": {
-        "ether.server": {
-          "type": "string",
-          "enum": [
-            "daemon",
-            "process"
-          ],
-          "default": "daemon",
-          "enumDescriptions": [
-            "Through the daemon (`src/language.ts --lsp`): one warm process shared by every editor and by CLI runs.",
-            "A language server process of its own per window (src/lsp/index.ts)."
-          ],
-          "description": "How the language server is run in a checkout of orbitmines/ray."
-        },
         "ether.trace.server": {
           "type": "string",
           "enum": [

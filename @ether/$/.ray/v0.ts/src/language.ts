@@ -38,7 +38,7 @@ const cli: CLI.Spec = {
   rm:       { value: true, optional: true, description: 'Remove a finished job and its output (all finished jobs without an id).' },
   // TODO --ephemeral: the client's command line is still visible to the same user in `ps` while it runs; the daemon's (and its workers') memory can be swapped to disk (no mlock/VirtualLock);
   //      ephemeral jobs of a daemon that was replaced by a newer build can't be listed or stopped any more (its socket is gone); environment variables are never persisted, which a future `continue` would need to revisit.
-  lsp:      { description: 'Serve the language server (LSP) over stdio, through the daemon.' },
+  lsp:      { description: 'Serve the language server (LSP) over stdio, through the daemon; for a project, which when it is a !language project is the language read.' },
   ephemeral: {           description:`Keep nothing on disk: the output is only streamed, and the job's record is removed when it ends.` },
 };
 
@@ -48,7 +48,7 @@ export async function main([args, kwargs]: CLI.Args = CLI.args()) {
 
   const socket = typeof kwargs.daemon === 'string' ? kwargs.daemon : env.nodejs ? env.socket : '';
   const detached = kwargs.daemon !== undefined && args.length > 0;
-  if (kwargs.lsp) { const code = await Daemon.lsp(socket); process.stdout.write('', () => process.exit(code)); return; }
+  if (kwargs.lsp) { const code = await Daemon.lsp(socket, args[0]); process.stdout.write('', () => process.exit(code)); return; }
   if (kwargs.list) { process.stdout.write(await Daemon.list(socket)); return; }
   if (kwargs.attach && !detached) { process.exitCode = await Daemon.attach(Daemon.job(kwargs.attach, args), socket); return; }
   if (kwargs.stop) {
@@ -146,7 +146,7 @@ async function daemon(socket: string) {
       painter = env.thread({ paint: true });
       painter.on('error', () => {}).on('exit', () => { painter = undefined; });
     }
-    const worker = env.thread({ lsp: true });
+    const worker = env.thread({ lsp: true }, request.project && Daemon.language(request.project) ? { RAY_LIBRARY: request.project } : {});
     const job = jobs.session({
       kind: 'run', argv: [[], { lsp: true }], command: request.command ?? [NAME.toLowerCase(), '--lsp'], cwd: request.cwd ?? '', variables: {},
       build: request.build, detached: false, attach: false, ephemeral: false,
@@ -718,10 +718,14 @@ export class Disk implements Store {
 
 export namespace Daemon {
   export type Run = { kind: 'run'; argv: CLI.Args; command: string[]; cwd: string; variables: Record<string, string | undefined>; build: string; detached: boolean; attach: boolean; ephemeral: boolean };
-  export type Request = Run | { kind: 'ephemeral' } | { kind: 'stop'; job: number } | { kind: 'lsp'; build: string; command?: string[]; cwd?: string };
+  export type Request = Run | { kind: 'ephemeral' } | { kind: 'stop'; job: number } | { kind: 'lsp'; build: string; command?: string[]; cwd?: string; project?: string };
   export enum Frame { REQUEST, OUT, ERR, EXIT, STALE, ACCEPTED, LSP }
 
-  export async function lsp(socket: string): Promise<number> {
+  export function language(directory: string): boolean {
+    try { return env.fs.readFileSync(env.path.join(directory, '.project.ray'), 'utf8').split('\n')[0].includes('!language'); } catch { return false; }
+  }
+
+  export async function lsp(socket: string, project?: string): Promise<number> {
     for (let attempt = 0; attempt < 2; attempt++) {
       const connection = await start(socket).catch((): undefined => undefined);
       if (connection === undefined) break;
@@ -737,7 +741,7 @@ export namespace Daemon {
           if (type === Frame.ERR) process.stderr.write(payload);
           if (type === Frame.EXIT) { process.stdin.destroy(); connection.end(); resolve(Number(payload.toString())); }
         }));
-        write(connection, Frame.REQUEST, JSON.stringify({ kind: 'lsp', build: env.build, command: [env.command.toLowerCase(), ...process.argv.slice(2)], cwd: process.cwd() } satisfies Request));
+        write(connection, Frame.REQUEST, JSON.stringify({ kind: 'lsp', build: env.build, command: [env.command.toLowerCase(), ...process.argv.slice(2)], cwd: process.cwd(), project: project === undefined ? undefined : env.path.resolve(project) } satisfies Request));
       });
       if (exit !== undefined) return exit;
     }
@@ -1163,10 +1167,11 @@ export class env {
   static get child_process(): typeof import('child_process') { return env._child_process ??= env.import('child_process', env._child_process); }
   static get worker_threads(): typeof import('worker_threads') { return env._worker_threads ??= env.import('worker_threads', env._worker_threads); }
 
-  static thread(data: object = {}): import('worker_threads').Worker {
+  static thread(data: object = {}, variables: Record<string, string> = {}): import('worker_threads').Worker {
     const file = env.url.fileURLToPath(import.meta.url), typescript = (globalThis as any).Deno === undefined && /\.[cm]?ts$/.test(file);
     return new env.worker_threads.Worker(file, {
       workerData: { daemon: NAME, ...data },
+      env: { ...process.env, ...variables },
       execArgv: typescript ? [...process.execArgv.filter(flag => !flag.startsWith('--stack-size')), '--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : undefined,
       resourceLimits: { stackSizeMb: 256 },
     });

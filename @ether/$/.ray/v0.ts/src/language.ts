@@ -21,6 +21,7 @@ export const config = {
     share: 0.1,
     segment: 64 * 1024 ** 2,
     memory: 64 * 1024 ** 2,
+    lsp: 64 * 1024 ** 2,
   },
   frame: 64 * 1024,
 };
@@ -138,7 +139,7 @@ async function daemon(socket: string) {
   });
 
   let painter: import('worker_threads').Worker | undefined;
-  const lsp = (connection: import('net').Socket, send: Jobs.Send) => {
+  const lsp = (connection: import('net').Socket, send: Jobs.Send, request: Extract<Daemon.Request, { kind: 'lsp' }>) => {
     sessions++;
     clearTimeout(timer);
     if (painter === undefined && process.env.RAY_LSP === 'engine') {
@@ -146,14 +147,19 @@ async function daemon(socket: string) {
       painter.on('error', () => {}).on('exit', () => { painter = undefined; });
     }
     const worker = env.thread({ lsp: true });
+    const job = jobs.session({
+      kind: 'run', argv: [[], { lsp: true }], command: request.command ?? [NAME.toLowerCase(), '--lsp'], cwd: request.cwd ?? '', variables: {},
+      build: request.build, detached: false, attach: false, ephemeral: false,
+    }, () => worker.terminate(), config.jobs.lsp);
     let asked: number | undefined;
     worker.on('message', (message: Uint8Array | { exit: number }) => {
-      if (message instanceof Uint8Array) send(Daemon.Frame.LSP, message);
+      if (message instanceof Uint8Array) { send(Daemon.Frame.LSP, message); job.output(Daemon.Frame.OUT, message); }
       else { asked = message.exit; worker.terminate(); }
     });
-    worker.on('error', error => { send(Daemon.Frame.ERR, `${error.stack ?? error}\n`); });
+    worker.on('error', error => { const text = `${error.stack ?? error}\n`; send(Daemon.Frame.ERR, text); job.output(Daemon.Frame.ERR, text); });
     worker.on('exit', code => {
       sessions--;
+      job.finish(asked ?? code);
       send(Daemon.Frame.EXIT, String(asked ?? code)).then(() => connection.end());
       if (!jobs.active && sessions === 0) { timer = setTimeout(retire, config.daemon.idle); settle(); }
     });
@@ -175,7 +181,7 @@ async function daemon(socket: string) {
       const request: Daemon.Request = JSON.parse(payload.toString());
       if (request.kind === 'lsp') {
         if (retired || request.build !== build) { send(Daemon.Frame.STALE); return retire(); }
-        session = lsp(connection, send);
+        session = lsp(connection, send, request);
         return;
       }
       if (request.kind === 'ephemeral') {
@@ -219,18 +225,29 @@ export class Jobs {
   private live(): Daemon.Meta[] { return [...this.jobs.values()].filter(job => !job.meta.ephemeral).map(job => job.meta); }
 
   submit(request: Daemon.Run, options: { owner?: Jobs.Send; viewer?: Jobs.Send } = {}): Daemon.Meta {
-    const meta: Daemon.Meta = {
-      id: this.host.store.next(), command: request.command, cwd: request.cwd, daemon: this.host.pid, created: Date.now(),
-      steps: 0, memory: 0, written: 0, size: 0, first: 1, last: 1, ephemeral: request.ephemeral || undefined,
-    };
-    const store = this.store(meta);
-    store.save(meta);
-    const job: Jobs.Job = { meta, request, project: new Project(request.cwd, request.variables), log: store.log(meta), owner: options.owner, viewers: new Set(options.viewer ? [options.viewer] : []) };
-    this.jobs.set(meta.id, job);
+    const job = this.job(request, options);
     this.waiting.push(job);
     this.events.busy?.();
     this.schedule();
-    return meta;
+    return job.meta;
+  }
+
+  session(request: Daemon.Run, halt: () => void, limit?: number): { meta: Daemon.Meta; output(type: Daemon.Frame, data: string | Uint8Array): Promise<void>; finish(exit: number): void } {
+    const job = this.job(request, { halt, limit });
+    this.events.busy?.();
+    return { meta: job.meta, output: (type, data) => this.output(job, type, data), finish: exit => this.finish(job, exit) };
+  }
+
+  private job(request: Daemon.Run, options: { owner?: Jobs.Send; viewer?: Jobs.Send; halt?: () => void; limit?: number }): Jobs.Job {
+    const meta: Daemon.Meta = {
+      id: this.host.store.next(), command: request.command, cwd: request.cwd, daemon: this.host.pid, created: Date.now(), began: options.halt ? Date.now() : undefined,
+      steps: 0, memory: 0, written: 0, size: 0, first: 1, last: 1, ephemeral: request.ephemeral || undefined, limit: options.limit,
+    };
+    const store = this.store(meta);
+    store.save(meta);
+    const job: Jobs.Job = { meta, request, project: new Project(request.cwd, request.variables), log: store.log(meta), owner: options.owner, viewers: new Set(options.viewer ? [options.viewer] : []), halt: options.halt };
+    this.jobs.set(meta.id, job);
+    return job;
   }
 
   run(argv: CLI.Args, io: IO, options: Partial<Daemon.Run> = {}): Promise<number> {
@@ -248,7 +265,8 @@ export class Jobs {
 
   stop(id: number): boolean {
     const job = this.jobs.get(id);
-    job?.project.stop();
+    if (job?.halt) job.halt();
+    else job?.project.stop();
     return job !== undefined;
   }
 
@@ -351,7 +369,7 @@ export class Jobs {
 
 export namespace Jobs {
   export type Send = (type: Daemon.Frame, payload?: string | Uint8Array) => Promise<void>;
-  export type Job = { meta: Daemon.Meta; request: Daemon.Run; project: Project; log: Log; thread?: Thread; owner?: Send; viewers: Set<Send> };
+  export type Job = { meta: Daemon.Meta; request: Daemon.Run; project: Project; log: Log; thread?: Thread; owner?: Send; viewers: Set<Send>; halt?: () => void };
 
   const encoder = new TextEncoder(), decoder = new TextDecoder();
   export function bytes(data: string | Uint8Array): Uint8Array { return typeof data === 'string' ? encoder.encode(data) : data; }
@@ -672,6 +690,11 @@ export class Disk implements Store {
             fd = open();
             bytes = 0;
             rotated = true;
+            while (meta.limit !== undefined && meta.first < meta.last && meta.size >= meta.limit) {
+              const file = this.segment(meta.id, meta.first);
+              try { meta.size -= env.fs.statSync(file).size; env.fs.unlinkSync(file); } catch {}
+              meta.first++;
+            }
           }
           const frame = Buffer.concat([Daemon.header(type, piece.length), piece]);
           env.fs.writeSync(fd, frame);
@@ -695,7 +718,7 @@ export class Disk implements Store {
 
 export namespace Daemon {
   export type Run = { kind: 'run'; argv: CLI.Args; command: string[]; cwd: string; variables: Record<string, string | undefined>; build: string; detached: boolean; attach: boolean; ephemeral: boolean };
-  export type Request = Run | { kind: 'ephemeral' } | { kind: 'stop'; job: number } | { kind: 'lsp'; build: string };
+  export type Request = Run | { kind: 'ephemeral' } | { kind: 'stop'; job: number } | { kind: 'lsp'; build: string; command?: string[]; cwd?: string };
   export enum Frame { REQUEST, OUT, ERR, EXIT, STALE, ACCEPTED, LSP }
 
   export async function lsp(socket: string): Promise<number> {
@@ -714,7 +737,7 @@ export namespace Daemon {
           if (type === Frame.ERR) process.stderr.write(payload);
           if (type === Frame.EXIT) { process.stdin.destroy(); connection.end(); resolve(Number(payload.toString())); }
         }));
-        write(connection, Frame.REQUEST, JSON.stringify({ kind: 'lsp', build: env.build } satisfies Request));
+        write(connection, Frame.REQUEST, JSON.stringify({ kind: 'lsp', build: env.build, command: [env.command.toLowerCase(), ...process.argv.slice(2)], cwd: process.cwd() } satisfies Request));
       });
       if (exit !== undefined) return exit;
     }
@@ -723,7 +746,7 @@ export namespace Daemon {
   }
   export type Message = { job: number; type: Frame.OUT | Frame.ERR; data: string | Uint8Array; ack: number } | { job: number; exit: number };
   export type Meta = {
-    id: number; command: string[]; cwd: string; daemon: number; created: number; began?: number; ended?: number; exit?: number; stopped?: boolean; lost?: boolean; ephemeral?: boolean;
+    id: number; command: string[]; cwd: string; daemon: number; created: number; began?: number; ended?: number; exit?: number; stopped?: boolean; lost?: boolean; ephemeral?: boolean; limit?: number;
     steps: number; memory: number; written: number; size: number; first: number; last: number;
   };
   export type State = 'queued' | 'running' | 'stopping' | 'stopped' | 'done' | 'lost';

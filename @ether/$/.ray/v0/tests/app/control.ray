@@ -180,3 +180,22 @@ unless ((failing $ ERROR[2] `wrapped`).cause === failing) { INFO@mark `ER8 a wra
 
 unless (dynamically assert { true
   1 == 1 }) { INFO@mark `DY1 a dynamic assert of holding conditions fails` }
+
+// A setting changed for a block is back once the block is left.
+Setting := class { level: 1 }
+inside ^keyword := with Setting.level = 2 { Setting.level }
+unless (inside == 2) { INFO@mark `WI1 a setting is not seen inside the block it is given for` }
+unless (Setting.level == 1) { INFO@mark `WI2 a setting outlived its block` }
+unless ((assume Setting.level = 3 { Setting.level }) == 3) { INFO@mark `WI3 assume is not with` }
+
+unless (Never.admits(5).not) { INFO@mark `NV1 something is of the type that never returns` }
+
+// A function and its inverse.
+doubling ^keyword := Program(code: { 2 })
+halving ^keyword := Program(code: { 1 })
+! doubling halving
+unless (doubling⁻¹ === halving) { INFO@mark `IV1 the declared inverse is not the inverse` }
+unless (halving⁻¹ === doubling) { INFO@mark `IV2 the inverse of the inverse is not the function` }
+unless (doubling.reversible) { INFO@mark `IV3 a function with an inverse is not reversible` }
+
+unless (3.times.count == 3) { INFO@mark `TM1 three times is not three` }

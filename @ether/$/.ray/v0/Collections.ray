@@ -92,3 +92,7 @@ String.components.hierarchy &= class {
 Time.Date.components.hierarchy &= class {
   long => .month.as(String).title_case + (" " + (.day.as(String) + (", " + .year.as(String))))
 }
+
+Number.components.hierarchy &= class {
+  times => 0..<this
+}

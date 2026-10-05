@@ -161,3 +161,28 @@ dynamically assert {conditions} ^keyword => (
   }
   failing.empty
 )
+
+with{ }{target} = {value} {{body}} ^keyword => (
+  previous ^keyword := target
+  target = value
+  answered ^keyword := inline (external ** body)
+  target = previous
+  answered
+)
+with{ }{target} = {value} ^keyword => (
+  previous ^keyword := target
+  defer { target = previous }
+  target = value
+)
+with{ }{{settings}} ^keyword => inline (external ** settings)
+assume{ }{target} = {value} {{body}} ^keyword => with target = value { inline body }
+assume{ }{target} = {value} ^keyword => with target = value
+
+Never := class {
+  admits (candidate) => None
+}
+never return ^keyword => Never
+never{ }{condition} ^keyword => (
+  if condition { ERROR@condition `happened, and was said never to` }
+  Never
+)

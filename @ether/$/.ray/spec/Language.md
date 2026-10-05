@@ -345,11 +345,11 @@ Sources: `private-journal/public/archive/projects/Project - IDE - The Ether (202
 - **Decided (2026-10-06):** every language from outside Ray lives in its own project under `v0/$/`, and nothing in the core depends on one.
   - Each project has its own `.project.ray`, which lists the other `$/…` projects it needs as `@zlib` (Decided 2026-10-06: `@X`, not `@ether/$/X`; `@X` resolves to the project in `v0/$/X` for now, and will later map to the repository named X).
   - Its claims are in its own `tests/` project.
-  - Every language stays at `v0/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/UI` lists `$/tui`, `$/html`, `$/css`, `$/js`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. Loading the part loads them.
+  - Every language stays at `v0/$/<name>`. A part of the library bundles the languages that belong to it by listing them in its `.project.ray`: `v0/UI` lists `$/html`, `$/css`, `$/js`, `$/json`, `$/ansi`, `$/sixel`, `$/kitty`, `$/opentype` and `$/png`; `v0/network` lists `$/http`, `$/dns`, `$/websocket` and `$/hpack`. Loading the part loads them.
   - A language may depend on other languages and on the project that bundles it. Loading tolerates a mutual dependency: a project is marked as loading before its dependencies load, so a cycle stops where it comes back, and every project in it ends up loaded once.
   - A project that uses a language either declares it in its `.project.ray` or reaches it through `$.name`.
   - The core reaches them only through `$.name`, lazily. Examples: in an optimisation level that picks a format (`StoreOptimizations` answers `$.sqlite`), in the enforcement of a permission (`as $.posix`), or in a store route (`$.git`).
-  - Renderers are compile targets too. The web renderer is `$/html` itself, on `$/css`, `$/js` and `$/json`. The terminal renderer is `$/tui` on `$/ansi`, `$/sixel` and `$/kitty`. `Language.Direct`, Ray's own raster drawing, stays in the core UI, and its fonts are `$/opentype`.
+  - A `$/<name>` project holds only the outside language: its syntax, levels, API values and tests. What is specific to Ray stays in the Ray library. The renderers are Ray's, so they are in `v0/UI`: `UI.HTML` writes `$.html`, `$.css`, `$.js` and `$.json`, and `UI.TUI` writes `$.ansi`, `$.sixel` and `$.kitty`. `Language.Direct`, Ray's own raster drawing, stays in the core UI, and its fonts are `$/opentype`.
   - The core keeps only what it needs to work:
     - UTF-8 and the Unicode tables, because a String is characters;
     - ISO 8601, because a Time is written and read as one;

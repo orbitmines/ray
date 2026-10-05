@@ -1,4 +1,4 @@
-// A page rendered as HTML: a document with its CSS and JS values in one package.
+// A page rendered by UI.HTML: an HTML document with its CSS and JS values in one package.
 
 mark ^keyword := external global
 
@@ -6,26 +6,25 @@ page := Program(code: {
   "Ray" ^h1
   @https://orbitmines.com
 })
-rendered_page := page.rendered(HTML.Markup.level)
+rendered_page := page.rendered(UI.HTML.Markup.level)
 unless rendered_page is HTML.Document { INFO@mark `UI10 HTML is not a document value` }
 unless rendered_page.body.children.first.children.first.tag == "h1" { INFO@mark `UI11 the heading is not an h1` }
 unless rendered_page.body.children.first.children.last.tag == "a" { INFO@mark `UI12 the link is not an a` }
 unless rendered_page as HTML ~= "<!doctype html>" { INFO@mark `UI13 the HTML language does not write a doctype` }
 
-package := page.rendered(HTML.level)
+package := page.rendered(UI.HTML.level)
 unless package.files.path.contains("index.html") && package.files.path.contains("style.css") && package.files.path.contains("app.js") { INFO@mark `UI20 the web package is not the three files` }
 unless package.files{.path == "style.css"}.first.content is CSS.Sheet { INFO@mark `UI21 the stylesheet is not a CSS value` }
 unless package.files{.path == "app.js"}.first.content is JS.Module { INFO@mark `UI22 the script is not a JS value` }
-unless (HTML.Markup.level + HTML.Style.level) is Program { INFO@mark `UI23 two levels do not compose into one` }
+unless (UI.HTML.Markup.level + UI.HTML.Style.level) is Program { INFO@mark `UI23 two levels do not compose into one` }
 
-chosen_input := (choice) => Program(code: { choice }).rendered(HTML.Markup.level).body.children.first
+chosen_input := (choice) => Program(code: { choice }).rendered(UI.HTML.Markup.level).body.children.first
 unless chosen_input(Choice(type: boolean)).attributes.contains(("type", "checkbox")) { INFO@mark `UI60 choosing a boolean is not a checkbox` }
 unless chosen_input(Choice(type: String)).attributes.contains(("type", "text")) { INFO@mark `UI61 choosing a string is not a text field` }
 unless chosen_input(Choice(type: Number{0 <= . <= 10})).attributes.contains(("type", "range")) { INFO@mark `UI62 choosing a bounded number is not a slider` }
-unless Language.named(".html") == HTML && $.html === HTML { INFO@mark `UI65 html is not a registered language` }
 
 away := @https://orbitmines.com{window == new}
-away_html := Program(code: { away }).rendered(HTML.Markup.level)
+away_html := Program(code: { away }).rendered(UI.HTML.Markup.level)
 unless away_html.body.children.first.attributes{.name == "target"}.first?.value == "_blank" { INFO@mark `UI82 a link to a new window has no target=_blank` }
 unless away_html.body.children.first.attributes{.name == "rel"}.first?.value == "noopener noreferrer" { INFO@mark `UI83 a link to a new window does not drop the opener` }
 
@@ -34,7 +33,7 @@ article := (
   structured: [(type: "Article", headline: "Ray", author: [(type: "Person", name: "Fadi")])],
   manifest: @./manifest.json
 )
-head := Compiler.reduced(HTML.Markup.Head(article), HTML.Markup.rules)
+head := Compiler.reduced(UI.HTML.Markup.Head(article), UI.HTML.Markup.rules)
 unless head.some(.tag == "meta" && .attributes.contains(("property", "og:type"))) { INFO@mark `UI92 og:* is not written as a property` }
 unless head.some(.tag == "meta" && .attributes.contains(("name", "twitter:card"))) { INFO@mark `UI93 twitter:* is not written as a name` }
 unless head{.tag == "meta" && .attributes.contains(("name", "citation_author"))}.count == 2 { INFO@mark `UI94 repeated citation_* entries are not all written` }
@@ -48,11 +47,11 @@ solved := (children, scrolled: Geometry.Length = 0px) => Geometry.Box(size: Geom
 anchor := Geometry.Box(height: 20px)
 tip := UI.Popover(position: Geometry.Anchored(anchor: anchor), height: 10px)
 solved([anchor, tip])
-css_rules := (shape) => Compiler.reduced(HTML.Style.Styles(shape), HTML.Style.rules)
+css_rules := (shape) => Compiler.reduced(UI.HTML.Style.Styles(shape), UI.HTML.Style.rules)
 stepped_rules := css_rules(Geometry.Box(width: Geometry.Steps([(12/12).xs, (6/12).md])))
 unless stepped_rules.some(.within ~= (*, "@container (min-width:768px)", *)) { INFO@mark `UI113 a stepped width has no container rule at its breakpoint` }
 unless css_rules(Geometry.Box(position: Geometry.Sticky())).first.declarations.contains(("position", "sticky")) { INFO@mark `UI114 sticky is not written as CSS` }
-unless Program(code: { tip }).rendered(HTML.Markup.level).body.children.first.attributes.contains(("popover", "manual")) { INFO@mark `UI115 a popover is not an HTML popover` }
+unless Program(code: { tip }).rendered(UI.HTML.Markup.level).body.children.first.attributes.contains(("popover", "manual")) { INFO@mark `UI115 a popover is not an HTML popover` }
 unless css_rules(Geometry.Box() &+ (pt 5) &+ (pt 5)).first.declarations.contains(("padding-top", (20px).amount, "px")) { INFO@mark `UI125 two spacings on one side are not added in CSS` }
 
 dynamic_style := Program(code: { "x" ^{1 < 2 ? "muted" : "none"} }){O: UI.Scene}()
@@ -60,33 +59,33 @@ unless css_rules(dynamic_style).some(.selector == "#" + dynamic_style.dom + ".mu
 search_field := Geometry.Box(content: Choice(type: String, value: "", placeholder: "Search", placeholder_color: Geometry.Color(1, 2, 3)))
 unless css_rules(search_field).some(.selector == "#" + search_field.dom + "::placeholder") { INFO@mark `UI141 the placeholder colour is not CSS` }
 code_area := Geometry.Box(content: Choice(type: String{multiline}, value: "x := 1", language: ".ray"))
-unless Program(code: { code_area }).rendered(HTML.Markup.level).body.children.first.children.first.tag == "pre" { INFO@mark `UI143 a painted text area has no painted layer under it` }
+unless Program(code: { code_area }).rendered(UI.HTML.Markup.level).body.children.first.children.first.tag == "pre" { INFO@mark `UI143 a painted text area has no painted layer under it` }
 red := Geometry.Color(255, 0, 0)
 runs_text := Geometry.Box(content: "ab".marked("red", 0, 1), size: Geometry.Vector(16px, 16px))
 with UI.Theme.palettes = [("red", red)] {
-  runs_html := Compiler.reduced(HTML.Markup.Spans(runs_text), HTML.Markup.rules)
+  runs_html := Compiler.reduced(UI.HTML.Markup.Spans(runs_text), UI.HTML.Markup.rules)
   unless runs_html.first.tag == "span" && runs_html.first.attributes.contains(("class", "red")) { INFO@mark `UI145 a painted run is not a span on the web` }
 }
 
 icon := Geometry.Box(content: @./icons/link.svg, fill: currentColor)
-unless Program(code: { icon }).rendered(HTML.Markup.level).body.children.first.tag == "span" { INFO@mark `UI149 a filled SVG is not a masked element on the web` }
+unless Program(code: { icon }).rendered(UI.HTML.Markup.level).body.children.first.tag == "span" { INFO@mark `UI149 a filled SVG is not a masked element on the web` }
 unless css_rules(icon).first.declarations.some(.0 == "mask") { INFO@mark `UI150 a filled SVG has no mask` }
-unless Compiler.reduced(HTML.Style.Paint(currentColor), HTML.Style.values) == "currentColor" { INFO@mark `UI151 currentColor is not written as currentColor` }
+unless Compiler.reduced(UI.HTML.Style.Paint(currentColor), UI.HTML.Style.values) == "currentColor" { INFO@mark `UI151 currentColor is not written as currentColor` }
 
-web_devices := Compiler.reduced(HTML.Script.Devices(), HTML.Script.rules)
+web_devices := Compiler.reduced(UI.HTML.Script.Devices(), UI.HTML.Script.rules)
 unless web_devices.some(. is JS.Listen && .event == "scroll") { INFO@mark `UI161 the web does not report the page scroll` }
 unless web_devices.some(. is JS.Effect && .reads.contains("UI.selection")) { INFO@mark `UI173 the web does not select a range` }
 
 watched := (@https://www.youtube.com/watch?v=O6v_gzlI1kY){alt: "OrbitMines"}
 video := Program(code: { watched }){O: UI.Scene}()
-unless Program(code: { video }).rendered(HTML.Markup.level).body.children.first.tag == "iframe" { INFO@mark `UI183 an embedded frame is not an iframe on the web` }
+unless Program(code: { video }).rendered(UI.HTML.Markup.level).body.children.first.tag == "iframe" { INFO@mark `UI183 an embedded frame is not an iframe on the web` }
 
 logo := (@./logo.png){alt: "logo", width <= 400px}
-logo_html := Program(code: { logo }).rendered(HTML.Markup.level).body.children.first
+logo_html := Program(code: { logo }).rendered(UI.HTML.Markup.level).body.children.first
 unless logo_html.tag == "img" && logo_html.attributes.contains(("src", "./logo.png")) && logo_html.attributes.contains(("alt", "logo")) { INFO@mark `UI226 an image location is not an img with its alt` }
-unless Program(code: { @./clip.mp4 }).rendered(HTML.Markup.level).body.children.first.tag == "video" { INFO@mark `UI228 a video location is not a video element` }
-unless Program(code: { @./song.mp3 }).rendered(HTML.Markup.level).body.children.first.tag == "audio" { INFO@mark `UI229 an audio location is not an audio element` }
-unless Program(code: { "Ray" @ (@https://orbitmines.com) }).rendered(HTML.Markup.level).body.children.first.tag == "a" { INFO@mark `UI231 a value placed at a location is not an a on the web` }
+unless Program(code: { @./clip.mp4 }).rendered(UI.HTML.Markup.level).body.children.first.tag == "video" { INFO@mark `UI228 a video location is not a video element` }
+unless Program(code: { @./song.mp3 }).rendered(UI.HTML.Markup.level).body.children.first.tag == "audio" { INFO@mark `UI229 an audio location is not an audio element` }
+unless Program(code: { "Ray" @ (@https://orbitmines.com) }).rendered(UI.HTML.Markup.level).body.children.first.tag == "a" { INFO@mark `UI231 a value placed at a location is not an a on the web` }
 
 bounded := Geometry.Box(){width <= 50%, height >= 30px}
 unless css_rules(bounded).first.declarations.contains(("max-width", 50, "%")) { INFO@mark `UI278 a share bound is not a CSS percentage` }
@@ -94,9 +93,9 @@ unless css_rules(bounded).first.declarations.contains(("min-height", 30, "px")) 
 unless css_rules(Geometry.Box(radius: [50%])).first.declarations.some(.0 == "border-radius" && .[1..].join("") == "50%") { INFO@mark `UI280 a share radius is not border-radius: 50%` }
 unless chosen_input(Choice(type: String{search})).attributes.contains(("type", "search")) { INFO@mark `UI281 a search field is not a search input` }
 dot := Geometry.Ball(size: Geometry.Vector(8px, 8px), fill: red)
-unless Program(code: { dot }).rendered(HTML.Markup.level).body.children.first.tag == "span" { INFO@mark `UI282 a ball is drawn as an svg box` }
+unless Program(code: { dot }).rendered(UI.HTML.Markup.level).body.children.first.tag == "span" { INFO@mark `UI282 a ball is drawn as an svg box` }
 unless css_rules(dot).first.declarations.contains(("border-radius", "50%")) && css_rules(dot).first.declarations.some(.0 == "background") { INFO@mark `UI283 a ball is not a filled dot` }
-HTML.DOM.dispatched("window keydown q")
+UI.HTML.DOM.dispatched("window keydown q")
 unless @me/device/keyboard["q"].pressed { INFO@mark `UI284 a key pressed on the web is not pressed on the device keyboard` }
-HTML.DOM.dispatched("window keyup q")
+UI.HTML.DOM.dispatched("window keyup q")
 if @me/device/keyboard["q"].pressed { INFO@mark `UI285 a key released on the web stays pressed` }

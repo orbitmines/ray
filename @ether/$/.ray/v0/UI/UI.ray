@@ -221,8 +221,8 @@ Unit(name: "viewport height", symbol: "vh")
 Program &+= {
   drawn (before: Geometry.Shape = UI.scene) => (UI.page = this()) -- Geometry.Box(size: before.size, scrolled: before.scrolled, overflow: scroll, transition: before.transition, children: [this{O: UI.Scene}().themed])
   rendered (level) => Compiler.reduced(drawn(), level)
-  frame (renderer: Language) => (UI.scene = Compiler.reduced(drawn(), Geometry.Solving)) -- Compiler.reduced(UI.scene, renderer.level)
-  run (renderer: Language, target) => (UI.running = true) -- target.start
+  frame (renderer) => (UI.scene = Compiler.reduced(drawn(), Geometry.Solving)) -- Compiler.reduced(UI.scene, renderer.level)
+  run (renderer, target) => (UI.running = true) -- target.start
     -- ({ target.copy(@me/device/clipboard) } when @me/device/clipboard changes)
     -- ({ target.open(@me/device/opened) } when @me/device/opened changes)
     -- ((target.write(frame(renderer)) -- target.read -- UI.Watch.all.for(.fired)) while UI.running)

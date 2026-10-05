@@ -1,6 +1,6 @@
-Language.TUI := class: Language {
-  static extensions = ".tui"
-  Grid := class = width: Number, height: Number, cells: ANSI.Cell[][] = (0..<height).map((0..<width).map(ANSI.Cell())), graphics: ANSI.Graphic[] = [], title: String? = UI.page?.title {
+// The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences
+UI.TUI := class {
+  Grid := class = width: Number, height: Number, cells: ANSI.Cell[][] = (0..<height).map((0..<width).map(ANSI.Cell())), graphics: Graphic[] = [], title: String? = UI.page?.title {
     space => Geometry.Space.grid(Geometry.Vector(width, height))
     inside (at: Geometry.Vector) => space.holds(at)
     put (at: Geometry.Vector, cell: ANSI.Cell) => cells[at.y][at.x] = cell if inside(at)
@@ -10,9 +10,9 @@ Language.TUI := class: Language {
     linked (at: Geometry.Vector, to: Location) => put(at, cell(at) ~~ .link = to)
     faded (at: Geometry.Vector, amount: Probability) => cell(at) -- (cell => put(at, cell ~~ .foreground = cell.foreground?.mix(cell.background, 1 - amount)))
     shaded (at: Geometry.Vector) => cell(at) -- (cell => put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
-    graphic (at: Geometry.Vector, bytes) => graphics.push ANSI.Graphic(at, bytes)
+    graphic (at: Geometry.Vector, bytes) => graphics.push Graphic(at, bytes)
     changes (previous: Grid?) => (0..<height).map(y => (0..<width){!previous || cells[y][.] != previous.cells[y][.]}.map(x => (Geometry.Vector(x, y), cells[y][x]))).flatten
-    framed (previous: Grid?) => ANSI.Frame(changes(previous), title if title != previous?.title, graphics{!(previous?.graphics.contains(.) ?? false)})
+    framed (previous: Grid?) => Frame(changes(previous), title if title != previous?.title, graphics{!(previous?.graphics.contains(.) ?? false)})
   }
   static px_per_cell = Geometry.Vector(8px, 16px)
   static cells (length: Geometry.Vector) => Geometry.Vector(length.x / px_per_cell.x, length.y / px_per_cell.y)
@@ -98,13 +98,24 @@ Language.TUI := class: Language {
   static sampled (image: Location, at: Geometry.Vector, of: Geometry.Vector) => pixel(image, at, of) -- ANSI.Cell(ramp[.luminance * (ramp.length - 1) / 255], foreground: .)
   static tinted (image: Location, at: Geometry.Vector, of: Geometry.Vector, ink: Geometry.Color?) => pixel(image, at, of) -- ANSI.Cell(ramp[.alpha * (ramp.length - 1)], foreground: ink)
 
+  Graphic := class = at: Geometry.Vector, bytes: *
+  Frame := class = changes: (at: Geometry.Vector, cell: ANSI.Cell)[], title: String?, graphics: Graphic[] = []
+  framing := {
+    {frame: Frame} => [
+      ANSI.Title(frame.title) if frame.title,
+      frame.changes.map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: cell.link ? cell.link as String : ""), cell.glyph]),
+      frame.graphics.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
+      ANSI.Style()
+    ]
+  }
+
   Target := class = written: Compiler = ANSI.written, shown: Grid? {
-    emitted (value) => Terminal.emit(Compiler.reduced(value, written) as String)
+    emitted (value) => Terminal.emit(Compiler.reduced(value, framing + written) as String)
     start => emitted(ANSI.Start())
     stop => emitted(ANSI.Stop())
     framed (grid: Grid) => grid.framed(shown)
     write (grid: Grid) => emitted(framed(grid)) -- (shown = grid)
-    read => Language.TUI.read
+    read => UI.TUI.read
     copy (text: String) => emitted(text as ANSI.Copy)
     open (to: Location) => OS.launch(to)
   }
@@ -116,13 +127,13 @@ Language.TUI := class: Language {
     {shown: Shown{paint.shape.content is Location && paint.shape.content.language === Language.Image}} => { .graphic(shown.paint.at, shown.paint.shape.content.pixels as $.sixel) }
   }
   Browser := {
-    {grid: Grid} => $.html.Package([(path: "index.html", content: $.html.Document(head: [], body: $.html.Element("body", [], [$.html.Element("pre", [], [$.html.Text(grid.cells.map(.map(.glyph) as String).join(\n))])])))])
+    {grid: Grid} => UI.HTML.Package([(path: "index.html", content: $.html.Document(head: [], body: $.html.Element("body", [], [$.html.Element("pre", [], [$.html.Text(grid.cells.map(.map(.glyph) as String).join(\n))])])))])
   }
 
   static read => (Terminal.read ?? "") ~= (events: Event[]) -- .events.for(Compiler.reduced(., applied))
   Event := ANSI.Input | Resize
   ANSI.Key &+= {
-    name => Compiler.reduced(this, Language.TUI.named)
+    name => Compiler.reduced(this, UI.TUI.named)
   }
   ANSI.Mouse &+= {
     position => Geometry.Vector(cell.x * px_per_cell.x, cell.y * px_per_cell.y)
@@ -165,4 +176,13 @@ Language.TUI := class: Language {
     {focus: ANSI.FocusChange} => @me/device/preferences.focused = focus.state == "I"
     {resize: Resize} => UI.scene.size = Geometry.Vector(Terminal.size.x * px_per_cell.x, Terminal.size.y * px_per_cell.y)
   }
+}
+
+Terminal := class {
+  emit (bytes) => external io `stdout` (bytes)
+  read => external io `stdin` None
+  size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)
+  raw_mode => emit(ANSI.write(ANSI.Start().modes))
+  clear => emit(ANSI.write([ANSI.Erase(2), ANSI.Move()]))
+  restore => emit(ANSI.write(ANSI.Stop()))
 }

@@ -434,7 +434,7 @@ ID prefixes (`GE1…`, `UI1…`). Keep the layouts tiny. Never run the whole sit
 
 What the library is written against but cannot provide itself; the engine has to:
 - **Frames know their caller** — `&caller` (and its `return`/`break`/`continue`), `&entrypoint` (which program is the one being run), `&next` (P2.1, P2.3, U4, F-A1). `&name` today only reads the current frame.
-- **A Language used as a level** — `page{O: $.html}` means that Language's level of rules (F-D2); nothing converts a Language into its level yet.
+- **A Language used as a level** — `page{O: Language.Web}` means that Language's level of rules (F-D2); nothing converts a Language into its level yet.
 - **Per-location values** (T7.1) — needed for `origin` on every value a call answers, not only on calls written directly in a `|`.
 - **Labelled class sections** — `X~label` enters after a label; on default construction the labelled section must be skipped (UUID.v1's `generate\`).
 - **Rule priority for typed grants** — `{who}{{filter}}.read` must win over a plain narrowing.

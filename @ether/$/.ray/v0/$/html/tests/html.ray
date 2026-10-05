@@ -37,3 +37,4 @@ written_document := HTML.Document(head: [@html <title>Ray</title>], body: @html 
 unless (HTML.read(written_document as HTML) as HTML) == (written_document as HTML) { INFO@mark `UI287 a written document does not read back as the same document` }
 unless (@html <p>&#65;&#x42;&amp;</p>).children.map(.text).join("") == "AB&" { INFO@mark `UI288 a numeric character reference is not its character` }
 unless HTML.read("<script>if (a) { f() }</script>").children.first is HTML.Raw { INFO@mark `UI289 the text of a script is not kept raw` }
+unless Language.named(".html") == HTML && $.html === HTML { INFO@mark `UI65 html is not a registered language` }

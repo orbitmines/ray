@@ -2,8 +2,6 @@
 ANSI := class: Language {
   static extensions = ".ansi"
   Cell := class = glyph: Char = " ", foreground: Geometry.Color?, background: Geometry.Color?, bold: boolean = false, italic: boolean = false, underline: boolean = false, strike: boolean = false, dim: boolean = false, reverse: boolean = false, link: Location?
-  Graphic := class = at: Geometry.Vector, bytes: *
-  Frame := class = changes: (at: Geometry.Vector, cell: Cell)[], title: String?, graphics: Graphic[] = []
 
   // CUP, Cursor Position (ECMA-48 8.3.21)
   Move := class ("\e[", (row: Decimal, ";", column: Decimal)?, "H") {
@@ -76,12 +74,6 @@ ANSI := class: Language {
   written := {
     {start: Start} => start.modes, Erase(2), Move()
     {stop: Stop} => <-stop.start.modes.map(.flipped)
-    {frame: Frame} => [
-      Title(frame.title) if frame.title,
-      frame.changes.map((at, cell) => [Move(row: at.y + 1, column: at.x + 1), cell as Style, Hyperlink(target: cell.link ? cell.link as String : ""), cell.glyph]),
-      frame.graphics.map([Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
-      Style()
-    ]
   }
 
   // Terminals without direct colour: the nearest entry of the xterm colour cube
@@ -93,13 +85,4 @@ ANSI := class: Language {
   WindowsTerminal := {
     {start: Start{!modes.contains(Mode(9001, "h"))}} => Start([start.modes, [Mode(9001, "h")]].flatten)
   }
-}
-
-Terminal := class {
-  emit (bytes) => external io `stdout` (bytes)
-  read => external io `stdin` None
-  size => Geometry.Vector((external os `COLUMNS`) as Decimal, (external os `LINES`) as Decimal)
-  raw_mode => emit(ANSI.write(ANSI.Start().modes))
-  clear => emit(ANSI.write([ANSI.Erase(2), ANSI.Move()]))
-  restore => emit(ANSI.write(ANSI.Stop()))
 }

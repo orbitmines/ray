@@ -20,9 +20,7 @@ LSP &+= {
 
   Published := class = file: Location?, diagnostics: Diagnostic[]
 
-  syntax := Compiler.default + {
-    // JSON's null (https://www.rfc-editor.org/rfc/rfc8259#section-3)
-    null => None
+  syntax := JSON.syntax + {
     // textDocument/publishDiagnostics (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
     {message: *{.["method"] == "textDocument/publishDiagnostics"}} => message["params"] -- (params => params["diagnostics"].map(diagnostic =>
       // Diagnostic and DiagnosticRelatedInformation (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnostic)

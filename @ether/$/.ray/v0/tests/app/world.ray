@@ -244,3 +244,6 @@ release := 17
 unless (@https://www.unicode.org/Public/ release /ucd) as String == "https://www.unicode.org/Public/17/ucd" { INFO@mark `LC6 a value between the parts of a location is not written into it` }
 unless (@https://www.unicode.org/ucd/UnicodeData.txt) as String ~= "UnicodeData.txt" ⊣ { INFO@mark `LC7 a dot in a path is not part of the path` }
 unless (@https://www.unicode.org/ucd)/UnicodeData.txt as String == "https://www.unicode.org/ucd/UnicodeData.txt" { INFO@mark `LC8 a path written after a location does not continue it` }
+unless (@https://en.wikipedia.org/wiki/Dune_(novel)) as String == "https://en.wikipedia.org/wiki/Dune_(novel)" { INFO@mark `LC9 a location loses the parentheses in its path` }
+icon_name := "tick"
+unless (@./icons/ icon_name .svg) as String == "./icons/tick.svg" { INFO@mark `LC10 a location does not go on with an extension after a value` }

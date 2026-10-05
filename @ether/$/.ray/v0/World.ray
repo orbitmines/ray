@@ -14,11 +14,12 @@ Location := class: Hierarchy {
   / (path: String) => Location(written: written + "/" + path)
   /{segment: Written} ^string => Location(written: written + "/" + segment)
   { }/{segment: Written} ^string => Location(written: written + "/" + segment)
-  { }{value} => Location(written: written + (value as String)) if written ~= "/" ⊣
+  { }{value} => Location(written: written + (value as String)) if written ~= ("/" | "@" | "=" | "?" | "&" | "#") ⊣
+  { }.{piece: Written} ^string => Location(written: written + "." + piece)
   == (other) => written == (other ==.instance_of Location ? other.written : other)
 }
 
-Written := Char{!= " " && != ")" && != "," && != \n}[]
+Written := (Char{!= " " && != "(" && != ")" && != "," && != \n} | ("(", Written, ")"))[]
 @{scheme: Char.Word[]}://{rest: Written} ^string => Location(written: scheme + "://" + rest)
 @"{text: (!"\"")[]}" ^string => Location(written: text)
 @./{path: Written} ^string => Location(written: "./" + path)

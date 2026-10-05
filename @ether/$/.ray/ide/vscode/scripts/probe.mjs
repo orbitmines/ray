@@ -1,6 +1,10 @@
 import { spawn } from 'child_process';
+import { mkdtempSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 const dir = process.argv[2];
-const child = spawn('node', [dir + '/server/lsp.mjs', '--stdio'], { env: { ...process.env, RAY_LIBRARY: dir + '/server/v0' }, cwd: dir + '/server' });
+const runtime = process.env.PROBE_RUNTIME_DIR ?? mkdtempSync(join(tmpdir(), 'ether-probe-'));
+const child = spawn('node', [dir + '/server/language.mjs', '--lsp'], { env: { ...process.env, RAY_LIBRARY: dir + '/server/v0', XDG_RUNTIME_DIR: runtime }, cwd: dir + '/server' });
 const send = (m) => { const b = JSON.stringify(m); child.stdin.write(`Content-Length: ${Buffer.byteLength(b)}\r\n\r\n${b}`); };
 let out = '';
 child.stdout.on('data', d => { out += d; if (out.includes('"capabilities"')) { console.log('INITIALIZE OK:', out.slice(out.indexOf('{'), out.indexOf('{') + 200)); child.kill(); process.exit(0); } });

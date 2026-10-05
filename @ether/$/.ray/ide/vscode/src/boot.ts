@@ -17,7 +17,7 @@ import { TransportKind } from 'vscode-languageclient/node';
  *   2. `installed`— The host has a `ray` executable on PATH whose `--version`
  *                   parses under Ether's version scheme. Use it.
  *   3. `bundled`  — Fall back to the language bundled with the extension itself:
- *                   its server, kernel and library under `server/`.
+ *                   its daemon, kernel and library under `server/`.
  */
 export type BootMode = 'repo' | 'installed' | 'bundled';
 
@@ -151,25 +151,25 @@ function nodeRuntime(): { command: string, env: NodeJS.ProcessEnv } {
 }
 
 /**
- * Last-resort: the language shipped inside the extension — the language server bundled as `server/lsp.mjs`, its
+ * Last-resort: the language shipped inside the extension — the daemon bundled as `server/language.mjs`, its
  * kernel (`server/.kernel.ray`) and the library (`server/v0`), given to it as RAY_LIBRARY.
  */
 function bundledBoot(extensionPath: string): Boot {
-  const entry = path.join(extensionPath, 'server', 'lsp.mjs');
+  const entry = path.join(extensionPath, 'server', 'language.mjs');
   const library = path.join(extensionPath, 'server', 'v0');
-  if (!fs.existsSync(entry)) throw new Error(`Bundled Ray language server not found at ${entry}`);
+  if (!fs.existsSync(entry)) throw new Error(`Bundled Ray daemon not found at ${entry}`);
 
   const runtime = nodeRuntime();
   const env = { ...process.env, ...runtime.env, RAY_LIBRARY: library };
   const run = {
     command: runtime.command,
-    args: [entry, '--stdio'],
+    args: [entry, '--lsp'],
     transport: TransportKind.stdio,
     options: { cwd: path.dirname(entry), env },
   };
   return {
     mode: 'bundled',
-    description: `bundled language (${path.join(extensionPath, 'server')})`,
+    description: `bundled language (${path.join(extensionPath, 'server')}), served by its daemon`,
     server: { run, debug: { ...run, options: { ...run.options, env: { ...env, DEBUG: '1' } } } },
   };
 }

@@ -223,7 +223,7 @@ jobs:
           npm version --no-git-tag-version --allow-same-version "${VERSION%%-*}"
           mkdir -p "$GITHUB_WORKSPACE/vsix"
           npx --yes @vscode/vsce package --no-dependencies --baseContentUrl https://github.com/orbitmines/ray/blob/main --baseImagesUrl https://raw.githubusercontent.com/orbitmines/ray/main --out "$GITHUB_WORKSPACE/vsix/ether-ray-${VERSION}.vsix"
-      - name: the bundled language answers on its own (server/lsp.mjs with server/v0, outside the repository)
+      - name: the bundled language answers on its own through its own daemon (server/language.mjs --lsp with server/v0, outside the repository)
         run: |
           probe="$RUNNER_TEMP/probe" && mkdir -p "$probe"
           cp -r "@ether/\$/.ray/ide/vscode/server" "$probe/"

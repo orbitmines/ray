@@ -12,9 +12,11 @@ rmSync(server, { recursive: true, force: true });
 mkdirSync(server, { recursive: true });
 
 await build({
-  entryPoints: [join(implementation, 'src', 'kernel', 'lsp.ts')],
-  outfile: join(server, 'lsp.mjs'),
+  entryPoints: { language: join(implementation, 'src', 'kernel4', 'language.ts'), lsp: join(implementation, 'src', 'kernel', 'lsp.ts') },
+  outdir: server,
+  outExtension: { '.js': '.mjs' },
   bundle: true,
+  splitting: true,
   format: 'esm',
   platform: 'node',
   target: 'node22',

@@ -80,7 +80,10 @@ class {block} => (
     external extend view instance
     view
   )
-  ({args}) => .construct(args)
+  ({args}) => (
+    given := external ** args
+    .construct(given)
+  )
   static.reading_statics = global
   inline block
   static.reading_statics = None
@@ -102,7 +105,6 @@ class {block} => (
     this.components.hierarchy &= static
     this.instance = global
     inline block
-    if static.is_abstract { ERROR `constructs a class that leaves a method unwritten` }
     if global.Store { Store.constructed(this) }
     this
   )
@@ -594,7 +596,7 @@ Node := base class {
   )
 
   subtype_of (other) => (
-    found := None
+    found := other === Node
     held := this.classes.head
     while (held && found.not) {
       if (held.value === other) { found = global }

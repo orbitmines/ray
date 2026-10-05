@@ -2264,7 +2264,7 @@ native_fn (name) => name.native == NIL ? -1 : name.native
 natives_table () => (
   native("rule", 2); native("define", 4); native(".", 0); native("global", 0); native("none", 0); native("declare", 2); native("literal", 1)
   native("unordered", 1); native("forward", 0); native("^", 1); native("inline", 1); native("extend", 2); native("get", 2); native("assign", 2)
-  native("own", 1); native("goto", 2); native("label", 1); native("base", 2); native("theme", 2); native("report", 3); native("**", 1); native("=", 1); native("bits", 2)
+  native("own", 1); native("goto", 2); native("label", 1); native("base", 2); native("theme", 2); native("report", 3); native("**", 1); native("=", 1); native("bits", 2); native("first", 1); native("rest", 1)
   ROOT.external = fn_value(fn_make(4, 1, global), -1, 0, 0)
   set_name(global(), "external", ROOT.external)
 )
@@ -2344,7 +2344,30 @@ external_call (name, n, a0, a1, a2, a3, frame, src, b, e) => (
   if name == "report" { return report(x, y, arg(n, 2, a2), src, b, e) }
   if name == "**" { return program_of(x) }
   if name == "bits" { return text_bits(x, y, frame, src, b, e) }
+  if name == "first" { return program_part(x, global) }
+  if name == "rest" { return program_part(x, None) }
   unported(name)
+)
+// `first program`, `rest program`: a program's first statement, and the statements after it (None when there are none).
+program_part (x, first) => (
+  held := deref(x, None)
+  if held == UNDEF or !is_code(held) { return None }
+  s, b, e := span_inner(at_src(held), at_begin(held), at_end(held))
+  j := blank_end(s, b, e + 1)
+  if j > e { return None }
+  end := statement_end(s, j, e + 1)
+  if first {
+    last := end - 1
+    while last > j and space(s, last) { last = last - 1 }
+    part := code(s, j, last, code_frame(held))
+    part.program = global
+    return part
+  }
+  k := blank_end(s, end, e + 1)
+  if k > e { return None }
+  rest := code(s, k, e, code_frame(held))
+  rest.program = global
+  return rest
 )
 // `bits text each`: the bits of the text's UTF-8 bytes, the highest first, handed to `each` as global or None until it answers None.
 text_bits (x, each, frame, src, b, e) => (

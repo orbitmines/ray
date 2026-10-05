@@ -468,3 +468,7 @@ Paths are relative to `@ether/`; `ep` = `v0/.entrypoint.ray`. Each line gives wh
 - **G3.11.** There is no `accepts` and no `alike`. A rule for one operator writes it in the pattern (`{a} - {b} => …`); kinds of operators are what modifiers such as `chainable` say about methods.
 - **`&@`.** The call chain of a run (whose origin chain L§8 keeps): `&@.last` is who runs it now, `&@.first` who started it.
 - **Which reading wins.** A longer rule over operators wins over a value's own operator method only where the operators are `chainable`: that is what `chainable` is for. It is not a general rule.
+
+### Answers 2026-10-05
+- A conversion method's head is written `as (=== String) => …`; `as String =>` and `as (:== String)` are not used.
+- Slices include their end, like ranges: `xs[..2]` is the first three; `xs[..<2]` excludes the end (the first two), as the drafts write it.

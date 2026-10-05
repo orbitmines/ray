@@ -2636,7 +2636,16 @@ marked_place (at, scope) => (
 dry_all () => (
   ROOT.bodies for rule => {
     bs, bb, be := span_inner(rule.rule_body_src, rule.rule_body_begin, rule.rule_body_end)
-    if shown(bs) { dry_from(bs, bb, be + 1, scope_in(rule.closure, bs, bb, be)) }
+    if shown(bs) {
+      scope := scope_in(rule.closure, bs, bb, be)
+      k := 0
+      while k < rule_count(rule) {
+        piece := rule.pieces[k]
+        if piece.kind == 2 and piece.name != -1 { set_name(scope, piece.name, value(PLACE, rule.closure, piece.name, 0)) }
+        k = k + 1
+      }
+      dry_from(bs, bb, be + 1, scope)
+    }
   }
   ROOT.bodies = list_new()
 )

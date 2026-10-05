@@ -10,8 +10,14 @@
 {name} := {value} => external declare name value
 literal := external literal
 ^ := external ^
-{target} ^{literal style}{ } => ^(style)(target)
-^{literal style}{ } => ^(style)
+{target} ^{literal style}{ } => (
+  ^(style)(style)
+  ^(style)(target)
+)
+^{literal style}{ } => (
+  ^(style)(style)
+  ^(style)
+)
 global ^keyword := external global
 unordered ^keyword := external unordered
 inline ^keyword := external inline
@@ -22,7 +28,10 @@ forward := external forward
 None := external none
 
 ^{ }{literal color ^ color} => ^(color)
-{pattern} ^{literal style} => {body} => ^(style)(external rule pattern body)
+{pattern} ^{literal style} => {body} => (
+  ^(style)(style)
+  ^(style)(external rule pattern body)
+)
 `{literal string ^string}` ^string.punctuation => string
 "{literal string ^string}" ^string.punctuation => string
 \n => `
@@ -132,7 +141,7 @@ base class {body} => (
   static
 )
 
-if ^keyword := class {
+if ^class := class {
   { }{cond}{ }{yes} ^class => (
     branch ^keyword := external .
     inline static
@@ -213,7 +222,7 @@ unless{ }{cond}{ }{taken_block} ^class => (
   branch ^variable
 )
 
-while ^keyword := class {
+while ^class := class {
   { }{cond}{ }{loop_block} ^class => (
     looping ^keyword := external .
     inline static

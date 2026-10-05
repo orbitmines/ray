@@ -123,7 +123,7 @@ TAP := class: Language {
       failed: "not " if !claim.value.passed,
       number: claim.index + 1,
       description: (claim.value.id + " " + claim.value.message) as Description,
-      yaml: YAML(lines: [(name: "message", value: JSON.write(claim.value.message)), (name: "file", value: JSON.write(claim.value.at?.file as String)) if claim.value.at, (name: "line", value: claim.value.at.from.line as String) if claim.value.at]) if !claim.value.passed
+      yaml: YAML(lines: [(name: "message", value: JSON.write(claim.value.message)), (name: "file", value: JSON.write(claim.value.at?.file as String)) if claim.value.at, (name: "line", value: (claim.value.at.from?.line ?? 1) as String) if claim.value.at]) if !claim.value.passed
     )))
   }
 }

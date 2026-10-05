@@ -1,241 +1,169 @@
 mark ^keyword := external global
 
-unless (0.is_zero) { INFO@mark `N1 zero is not zero` }
+unless 0.is_zero { INFO@mark `N1 zero is not zero` }
+if 1.is_zero { INFO@mark `N2 one reports zero` }
+unless 1 + 2 == 3 { INFO@mark `N3 1 + 2 is not 3` }
+unless 3 - 1 == 2 { INFO@mark `N4 3 - 1 is not 2` }
+unless 1 - 3 == 0 { INFO@mark `N5 1 - 3 does not floor at zero` }
+unless 2 * 3 == 6 { INFO@mark `N6 2 * 3 is not 6` }
+unless 1 < 2 { INFO@mark `N7 1 < 2 is false` }
+if 2 < 1 { INFO@mark `N8 2 < 1 is true` }
+unless 6 / 2 == 3 { INFO@mark `N9 6 / 2 is not 3` }
+unless 7 % 3 == 1 { INFO@mark `N10 7 % 3 is not 1` }
+unless 4.even { INFO@mark `N11 4 is not even` }
+unless 5.odd { INFO@mark `N12 5 is not odd` }
+if 3.even { INFO@mark `NN1 3 is even` }
+unless 2.max(5) == 5 { INFO@mark `N13 max failed` }
+unless 42 == 4 * 10 + 2 { INFO@mark `N40 42 is not forty-two` }
+unless 3 + 4 == 7 { INFO@mark `N41 3 + 4 is not seven` }
+unless 7.succ == 8 { INFO@mark `N42 7.succ is not eight` }
+unless 3 != 4 { INFO@mark `N141 3 != 4 is not read as not-equal` }
+if 3 != 3 { INFO@mark `N142 3 != 3 is read as not-equal and holds` }
 
-if (1.is_zero) { INFO@mark `N2 one reports zero` }
+rounds := 0
+3.times { rounds += 1 }
+unless rounds == 3 { INFO@mark `NN2 times did not run three times` }
+summed_rounds := 0
+3.times (n) => { summed_rounds += n }
+unless summed_rounds == 3 { INFO@mark `N30 times does not hand its round` }
 
-unless ((1 + 2) == 3) { INFO@mark `N3 1 + 2 is not 3` }
+unless Hexadecimal.radix == 16 { INFO@mark `N20 hexadecimal radix is not sixteen` }
+unless 0x1F == 31 { INFO@mark `N43 0x1F is not thirty-one` }
+unless 0b101 == 5 { INFO@mark `N44 0b101 is not five` }
+if "4a".instance_of(Decimal.String) { INFO@mark `N45 4a is read as a decimal number` }
+unless "4a".instance_of(Hexadecimal.String) { INFO@mark `N46 4a is not read as a hexadecimal number` }
+unless 007 == 7 { INFO@mark `N136 007 is not seven` }
+unless 00 == 0 { INFO@mark `N137 00 is not zero` }
+unless 0x00ff == 0xff { INFO@mark `N138 0x00ff is not 0xff` }
 
-unless ((3 - 1) == 2) { INFO@mark `N4 3 - 1 is not 2` }
+// Signed numbers
+unless (-2).negative { INFO@mark `N21 negation is not negative` }
+unless (-5).negative { INFO@mark `N47 minus five is not negative` }
+unless !(5 as Decimal.Signed).negative { INFO@mark `N116 five as an integer is negative` }
+if 5.negative { INFO@mark `N88 five is negative` }
+if 5.sign { INFO@mark `N32 a natural number has a sign` }
+unless -2 + 5 == 3 { INFO@mark `N22 -2 + 5 is not 3` }
+unless -2 * -2 == 4 { INFO@mark `N23 -2 * -2 is not 4` }
+unless -2 < 1 { INFO@mark `N24 -2 < 1 is false` }
+unless -5 + 5 == 0 { INFO@mark `N49 minus five and five do not make nothing` }
+unless (-2 * 3).negative { INFO@mark `N50 minus two times three is not negative` }
+unless -3 < -2 { INFO@mark `N51 minus three is not less than minus two` }
+unless -3 < 2 { INFO@mark `N52 minus three is not less than two` }
+if 2 < -3 { INFO@mark `N53 two is less than minus three` }
+unless -3 - 5 == -8 { INFO@mark `N54 minus three less five is not minus eight` }
+unless -3 + -2 == -5 { INFO@mark `N118 minus three and minus two is not minus five` }
+if -3 + -2 < -5 { INFO@mark `N119 minus three and minus two is below minus five` }
+unless -2 * -3 == 6 { INFO@mark `N121 minus two times minus three is not six` }
+unless -2 * 3 == -6 { INFO@mark `N122 minus two times three is not minus six` }
+unless -(-2) == 2 { INFO@mark `N123 minus minus two is not two` }
+unless 3 + -5 == -2 { INFO@mark `N124 three and minus five is not minus two` }
 
-unless ((1 - 3) == 0) { INFO@mark `N5 1 - 3 does not floor at zero` }
+// What two numbers have in common
+unless 6.gcd(4) == 2 { INFO@mark `N55 the greatest common divisor of six and four is not two` }
+unless 4.gcd(6) == 2 { INFO@mark `N56 asking the other way round answers otherwise` }
+unless 5.gcd(3) == 1 { INFO@mark `N57 five and three share more than one` }
+unless 2.lcm(3) == 6 { INFO@mark `N58 the least common multiple of two and three is not six` }
+unless 2.coprime(3) { INFO@mark `N59 two and three are not coprime` }
+if 2.coprime(4) { INFO@mark `N60 two and four are coprime` }
+unless 2.divides(6) { INFO@mark `N61 two does not divide six` }
+if 4.divides(6) { INFO@mark `N62 four divides six` }
+unless 1.divides(5) { INFO@mark `N63 one does not divide five` }
 
-unless ((2 * 3) == 6) { INFO@mark `N6 2 * 3 is not 6` }
+unless 6.half == 3 { INFO@mark `N64 half of six is not three` }
+unless 7.half == 3 { INFO@mark `N65 half of seven is not three` }
+unless 0.half.is_zero { INFO@mark `N66 half of nothing is not nothing` }
+unless 2.min(5) == 2 { INFO@mark `N67 the smaller of two and five is not two` }
+unless 5.min(2) == 2 { INFO@mark `N68 asking the smaller the other way round answers otherwise` }
+unless 3.squared == 9 { INFO@mark `N69 three by itself is not nine` }
+unless 1.squared == 1 { INFO@mark `N70 one by itself is not one` }
+unless 2.min(3) * 2 + 1 == 5 { INFO@mark `N125 the smaller of two and three, doubled and one, is not five` }
 
-unless (1 < 2) { INFO@mark `N7 1 < 2 is false` }
+unless 2 ^ 3 == 8 { INFO@mark `N71 two raised to three is not eight` }
+unless 5 ^ 1 == 5 { INFO@mark `N72 five raised to one is not five` }
+unless 5 ^ 0 == 1 { INFO@mark `N73 five raised to nothing is not one` }
+unless 2 ^ 3 ^ 2 == 512 { INFO@mark `N143 raising does not group to the right` }
+unless 3! == 6 { INFO@mark `N74 three factorial is not six` }
+unless 1! == 1 { INFO@mark `N75 one factorial is not one` }
+unless 0! == 1 { INFO@mark `N76 nothing factorial is not one` }
+unless 10.root(2) == 3 { INFO@mark `N144 the whole square root of ten is not three` }
+unless √9 == 3 { INFO@mark `N145 the square root of nine is not three` }
 
-if (2 < 1) { INFO@mark `N8 2 < 1 is true` }
+// Digits in a base
+unless 6.digits(10).count == 1 { INFO@mark `N77 six is spelled with other than one digit in ten` }
+unless 6.digits(2).count == 3 { INFO@mark `N78 six is spelled with other than three digits in two` }
+unless 1.digits(2).count == 1 { INFO@mark `N79 one is spelled with other than one digit in two` }
+unless 6.digits(2) == [1, 1, 0] { INFO@mark `N146 six in two is not 1, 1, 0` }
+unless [1, 2, 3] as 10 == 123 { INFO@mark `N84 one, two and three in ten do not spell a hundred and twenty-three` }
+unless [1, 2, 3] as 2 == 11 { INFO@mark `N85 one, two and three in two do not spell eleven` }
 
-unless ((6 / 2) == 3) { INFO@mark `N9 6 / 2 is not 3` }
+unless [1, 2, 3].sum == 6 { INFO@mark `N80 one, two and three do not add to six` }
+unless [1, 2, 3].product == 6 { INFO@mark `N81 one, two and three do not multiply to six` }
+unless [5].sum == 5 { INFO@mark `N82 one thing does not add to itself` }
+unless [5].product == 5 { INFO@mark `N83 one thing does not multiply to itself` }
 
-unless ((7 % 3) == 1) { INFO@mark `N10 7 % 3 is not 1` }
+unless 0b0110 ~&& 0b1010 == 0b0010 { INFO@mark `N147 bitwise and of 0110 and 1010 is not 0010` }
+unless 0b0110 ~|| 0b1010 == 0b1110 { INFO@mark `N148 bitwise or of 0110 and 1010 is not 1110` }
+unless 0b0110 ~x|| 0b1010 == 0b1100 { INFO@mark `N149 bitwise xor of 0110 and 1010 is not 1100` }
 
-unless (4.even) { INFO@mark `N11 4 is not even` }
+unless 5.instance_of(Number) { INFO@mark `N86 five is not a natural number` }
+if 2.instance_of(Probability) { INFO@mark `N150 two is a probability` }
 
-unless (5.odd) { INFO@mark `N12 5 is not odd` }
+// A number stands for a bit
+if 0 { INFO@mark `N92 zero is set` }
+unless 1 { INFO@mark `N93 one is not set` }
+unless 5 { INFO@mark `N94 five is not set` }
+unless 1 && true { INFO@mark `N95 one and true is not true` }
+if 0 && true { INFO@mark `N96 zero and true is true` }
+unless 0 || true { INFO@mark `N97 zero or true is not true` }
+if 0 || false { INFO@mark `N98 zero or false is true` }
+unless 0 !&& true { INFO@mark `N99 zero nand true is not true` }
+if 1 !&& true { INFO@mark `N100 one nand true is true` }
+unless 0 !|| false { INFO@mark `N101 zero nor false is not true` }
+if 1 !|| false { INFO@mark `N102 one nor false is true` }
+unless 1 x|| false { INFO@mark `N103 one xor false is not true` }
+if 1 x|| true { INFO@mark `N104 one xor true is true` }
+unless 1 x!|| true { INFO@mark `N105 one xnor true is not true` }
+if 1 x!|| false { INFO@mark `N106 one xnor false is true` }
 
-unless ((2.max(5)) == 5) { INFO@mark `N13 max failed` }
+if 0.nonzero { INFO@mark `N107 zero is other than zero` }
+unless 3.nonzero { INFO@mark `N108 three is zero` }
+unless 3.pred == 2 { INFO@mark `N109 what comes before three is not two` }
+unless 3.pred.succ == 3 { INFO@mark `N110 stepping back and forward does not come back` }
+unless 5.holds { INFO@mark `N111 five holds nothing` }
 
-// `pow` and `factorial` are asserted below, for small numbers: a number is a
-// walk, so what they answer has to be walked too.
+unless 100% == 1 { INFO@mark `N112 a hundred hundredths is not one` }
+unless 200% == 2 { INFO@mark `N113 two hundred hundredths is not two` }
 
-if (3.even) { INFO@mark `NN1 3 is even` }
-
-counter ^keyword := 0
-3 times { counter = counter.succ }
-unless (counter == 3) { INFO@mark `NN2 times did not run three times` }
-
-unless (Hexadecimal.radix == 16) { INFO@mark `N20 hexadecimal radix is not sixteen` }
-
-minus_two := 2.as_integer.negated
-unless (minus_two.negative) { INFO@mark `N21 negation is not negative` }
-
-unless ((minus_two + 5.as_integer) == 3.as_integer) { INFO@mark `N22 -2 + 5 is not 3` }
-
-unless ((minus_two * minus_two) == 4.as_integer) { INFO@mark `N23 -2 * -2 is not 4` }
-
-unless (minus_two < 1.as_integer) { INFO@mark `N24 -2 < 1 is false` }
-
-rounds_seen ^keyword := 0
-3 times { rounds_seen = rounds_seen + it }
-unless (rounds_seen == 3) { INFO@mark `N30 times does not hand its round as it` }
-unless 5.positive { INFO@mark `N31 a natural number is not positive` }
-if (5.sign) { INFO@mark `N32 a natural number has a sign` }
-unless (5.negated.negative) { INFO@mark `N33 a negated natural number is not negative` }
-unless (5.abs == 5) { INFO@mark `N34 a natural number is not its own absolute value` }
-unless (42 == ((four * ten) + two)) { INFO@mark `N40 42 is not forty-two` }
-unless ((3 + 4) == seven) { INFO@mark `N41 3 + 4 is not seven` }
-unless (7.succ == eight) { INFO@mark `N42 7.succ is not eight` }
-unless (0x1F == 31) { INFO@mark `N43 0x1F is not thirty-one` }
-unless (0b101 == 5) { INFO@mark `N44 0b101 is not five` }
-if (`4a`.instance_of(Decimal.String)) { INFO@mark `N45 4a is read as a decimal number` }
-unless (`4a`.instance_of(Hexadecimal.String)) { INFO@mark `N46 4a is not read as a hexadecimal number` }
-
-// Signed numbers: what a sign does to size, order and arithmetic.
-unless (5.signed.negated.negative) { INFO@mark `N47 minus five is not negative` }
-unless (5.signed.negated.abs == 5.signed) { INFO@mark `N48 the size of minus five is not five` }
-unless ((5.signed.negated + 5.signed).is_zero) { INFO@mark `N49 minus five and five do not make nothing` }
-unless ((2.signed.negated * 3.signed).negative) { INFO@mark `N50 minus two times three is not negative` }
-unless (3.signed.negated < 2.signed.negated) { INFO@mark `N51 minus three is not less than minus two` }
-unless (2.signed < 3.signed) { INFO@mark `N52 two is not less than three` }
-if (3.signed < 2.signed) { INFO@mark `N53 three is less than two` }
-unless ((3.signed - 5.signed).negative) { INFO@mark `N54 three less five is not negative` }
-
-// What two numbers have in common, and what they make together.
-unless ((6.gcd(4)) == 2) { INFO@mark `N55 the greatest common divisor of six and four is not two` }
-unless ((4.gcd(6)) == 2) { INFO@mark `N56 asking the other way round answers otherwise` }
-unless ((5.gcd(3)) == 1) { INFO@mark `N57 five and three share more than one` }
-unless ((2.lcm(3)) == 6) { INFO@mark `N58 the least common multiple of two and three is not six` }
-unless (2.coprime(3)) { INFO@mark `N59 two and three are not coprime` }
-if (2.coprime(4)) { INFO@mark `N60 two and four are coprime` }
-unless (2.divides(6)) { INFO@mark `N61 two does not divide six` }
-if (4.divides(6)) { INFO@mark `N62 four divides six` }
-unless (1.divides(5)) { INFO@mark `N63 one does not divide five` }
-
-// Halving, the smaller of two, and a number multiplied by itself.
-unless (6.half == 3) { INFO@mark `N64 half of six is not three` }
-unless (7.half == 3) { INFO@mark `N65 half of seven is not three` }
-unless (0.half.is_zero) { INFO@mark `N66 half of nothing is not nothing` }
-unless ((2.min(5)) == 2) { INFO@mark `N67 the smaller of two and five is not two` }
-unless ((5.min(2)) == 2) { INFO@mark `N68 asking the smaller the other way round answers otherwise` }
-unless (3.squared == 9) { INFO@mark `N69 three by itself is not nine` }
-unless (1.squared == 1) { INFO@mark `N70 one by itself is not one` }
-
-// Raising and the product of everything below.
-unless ((2.pow(3)) == 8) { INFO@mark `N71 two raised to three is not eight` }
-unless ((5.pow(1)) == 5) { INFO@mark `N72 five raised to one is not five` }
-unless ((5.pow(0)) == 1) { INFO@mark `N73 five raised to nothing is not one` }
-unless (3.factorial == 6) { INFO@mark `N74 three factorial is not six` }
-unless (1.factorial == 1) { INFO@mark `N75 one factorial is not one` }
-unless (0.factorial == 1) { INFO@mark `N76 nothing factorial is not one` }
-
-// The digits a number is spelled with, in a base.
-unless (6.digits_in(10).count == 1) { INFO@mark `N77 six is spelled with other than one digit in ten` }
-unless (6.digits_in(2).count == 3) { INFO@mark `N78 six is spelled with other than three digits in two` }
-unless (1.digits_in(2).count == 1) { INFO@mark `N79 one is spelled with other than one digit in two` }
-
-// What a chain of numbers adds to, and what it multiplies to.
-counted ^keyword := chain None
-counted &= 1
-counted &= 2
-counted &= 3
-unless (counted.sum == 6) { INFO@mark `N80 one, two and three do not add to six` }
-unless (counted.product == 6) { INFO@mark `N81 one, two and three do not multiply to six` }
-only_one ^keyword := chain None
-only_one &= 5
-unless (only_one.sum == 5) { INFO@mark `N82 one thing does not add to itself` }
-unless (only_one.product == 5) { INFO@mark `N83 one thing does not multiply to itself` }
-
-// The digits a number is spelled with, read back as the number.
-unless (Number.from_digits(10, counted) == 123) { INFO@mark `N84 one, two and three in ten do not spell a hundred and twenty-three` }
-unless (Number.from_digits(2, counted) == 11) { INFO@mark `N85 one, two and three in two do not spell eleven` }
-
-// What a number says about itself.
-unless (5.is_natural) { INFO@mark `N86 five is not a natural number` }
-unless (5.positive) { INFO@mark `N87 five is not positive` }
-if (5.negative) { INFO@mark `N88 five is negative` }
-unless (5.abs == 5) { INFO@mark `N89 the size of five is not five` }
-if (5.sign) { INFO@mark `N90 a natural number has a sign` }
-
-// A block read once for each of them, told which round it is on.
-rounds_run ^keyword := 0
-rounds_seen ^keyword := 0
-3.rounds({ rounds_run = rounds_run.succ }, 0)
-unless (rounds_run == 3) { INFO@mark `N91 three rounds are not three` }
-
-// A number stands for a bit: zero is clear, everything else set, and the
-// logic of booleans reads through that.
-if (0.set) { INFO@mark `N92 zero is set` }
-unless (1.set) { INFO@mark `N93 one is not set` }
-unless (5.set) { INFO@mark `N94 five is not set` }
-unless (1.and(true)) { INFO@mark `N95 one and true is not true` }
-if (0.and(true)) { INFO@mark `N96 zero and true is true` }
-unless (0.or(true)) { INFO@mark `N97 zero or true is not true` }
-if (0.or(false)) { INFO@mark `N98 zero or false is true` }
-unless (0.nand(true)) { INFO@mark `N99 zero nand true is not true` }
-if (1.nand(true)) { INFO@mark `N100 one nand true is true` }
-unless (0.nor(false)) { INFO@mark `N101 zero nor false is not true` }
-if (1.nor(false)) { INFO@mark `N102 one nor false is true` }
-unless (1.xor(false)) { INFO@mark `N103 one xor false is not true` }
-if (1.xor(true)) { INFO@mark `N104 one xor true is true` }
-unless (1.xnor(true)) { INFO@mark `N105 one xnor true is not true` }
-if (1.xnor(false)) { INFO@mark `N106 one xnor false is true` }
-
-// What a number holds and what comes before it.
-if (0.nonzero) { INFO@mark `N107 zero is other than zero` }
-unless (3.nonzero) { INFO@mark `N108 three is zero` }
-unless (3.pred == 2) { INFO@mark `N109 what comes before three is not two` }
-unless (3.pred.succ == 3) { INFO@mark `N110 stepping back and forward does not come back` }
-unless (5.holds) { INFO@mark `N111 five holds nothing` }
-
-// A hundredth part. Fifty of them are half of one, which is zero among the
-// naturals — a hundred of them is one.
-unless (100.percent == 1) { INFO@mark `N112 a hundred hundredths is not one` }
-unless ((2 * 100).percent == 2) { INFO@mark `N113 two hundred hundredths is not two` }
-
-// Every real spelled here is a ratio of two numbers; none is not. It is the
-// real that says so, not the natural number it is written with.
-spelled_real := Number.Real(integer: 5, fraction: 0)
-unless (spelled_real.rational) { INFO@mark `N114 a real is not rational` }
-if (spelled_real.irrational) { INFO@mark `N115 a real is irrational` }
-
-// The signed integer a natural number is, and the one below zero it negates
-// into.
-unless (5.signed.negative.not) { INFO@mark `N116 five as an integer is negative` }
-unless (5.negated.negative) { INFO@mark `N117 five negated is not negative` }
-
-// A signed number groups like a natural one: its comparisons are written
-// before its arithmetic, and what it answers is bound, not a branch.
-unless (3.signed + 2.signed == 5.signed) { INFO@mark `N118 three and two signed is not five` }
-if (3.signed + 2.signed < 5.signed) { INFO@mark `N119 three and two signed is below five` }
-unless (2.negated + 5.signed == 3.signed) { INFO@mark `N120 minus two and five is not three` }
-unless ((2.negated * 3.negated) == 6.signed) { INFO@mark `N121 minus two times minus three is not six` }
-unless ((2.negated * 3.signed) == 6.negated) { INFO@mark `N122 minus two times three is not minus six` }
-unless (2.negated.negated == 2.signed) { INFO@mark `N123 minus minus two is not two` }
-unless ((3.signed + 5.negated) == 2.negated) { INFO@mark `N124 three and minus five is not minus two` }
-unless ((2.min(3) * 2 + 1) == 5) { INFO@mark `N125 the smaller of two and three, doubled and one, is not five` }
-
-// A real is written with a point: the digits after it are kept as written, so
-// two reals written differently are two different things.
-one_and_a_half ^keyword := 1.5
-unless (one_and_a_half.integer == 1) { INFO@mark `N126 1.5 does not start at one` }
-unless (one_and_a_half.numerator == 15) { INFO@mark `N127 1.5 is not fifteen tenths` }
-unless (1.05.places == 2) { INFO@mark `N128 1.05 does not keep its leading zero` }
-unless (one_and_a_half == 1.5) { INFO@mark `N129 1.5 is not 1.5` }
-if (one_and_a_half == 1.50) { INFO@mark `N130 1.5 is written as 1.50` }
-unless ((one_and_a_half * 4) == 6.0) { INFO@mark `N131 1.5 times four is not 6.0` }
-unless ((2.5 / 2) == 1.2) { INFO@mark `N132 2.5 halved is not 1.2 to one place` }
+// Reals keep the digits after the point as written
+unless 5.0.rational { INFO@mark `N114 a real is not rational` }
+if 5.0.irrational { INFO@mark `N115 a real is irrational` }
+unless 1.5.integer == 1 { INFO@mark `N126 1.5 does not start at one` }
+unless 1.5.fraction == 5 { INFO@mark `N127 1.5 does not keep five after its point` }
+unless 1.05.places == 2 { INFO@mark `N128 1.05 does not keep its leading zero` }
+unless 1.5 == 1.5 { INFO@mark `N129 1.5 is not 1.5` }
+if 1.5 == 1.50 { INFO@mark `N130 1.5 is written as 1.50` }
+unless 1.5 * 4 == 6.0 { INFO@mark `N131 1.5 times four is not 6.0` }
+unless 2.5 / 2 == 1.2 { INFO@mark `N132 2.5 halved is not 1.2 to one place` }
 
 compounded := 1
 compounded += 2
-unless (compounded == 3) { INFO@mark `N133 += does not add` }
+unless compounded == 3 { INFO@mark `N133 += does not add` }
 compounded -= 1
-unless (compounded == 2) { INFO@mark `N134 -= does not subtract` }
+unless compounded == 2 { INFO@mark `N134 -= does not subtract` }
 compounded *= 3
-unless (compounded == (3 + 3)) { INFO@mark `N135 *= does not multiply` }
+unless compounded == 6 { INFO@mark `N135 *= does not multiply` }
 
-// A number is iterable by the number line it is on: entered at its own place,
-// each step the number after it, with no end, so what walks it stops it.
-first_square_past (limit: Number) => (
-  3 for { if ((it.value * it.value) > limit) { return it.value } }
-)
-unless (first_square_past(10) == 4) { INFO@mark `NL1 the first square past ten is not four squared` }
-unless (first_square_past(30) == 6) { INFO@mark `NL2 the first square past thirty is not six squared` }
-unless ((2.at(3).value) == 5) { INFO@mark `NL3 three along from two is not five` }
+// The number line a number is on
+unless (3 -> +1){. squared > 10}.first == 4 { INFO@mark `NL1 the first square past ten is not four squared` }
+unless (3 -> +1){. squared > 30}.first == 6 { INFO@mark `NL2 the first square past thirty is not six squared` }
+unless (2 -> +1)[3] == 5 { INFO@mark `NL3 three along from two is not five` }
 if 1.bounded { INFO@mark `NL4 a number is bounded` }
 unless 1.unbounded { INFO@mark `NL5 a number is not unbounded` }
-unless (4.entry.value == 4) { INFO@mark `NL6 a number is not entered at its own place` }
-unless (0.entry.is_initial) { INFO@mark `NL7 the line does not start at zero` }
-if (3.entry.is_initial) { INFO@mark `NL8 the line starts at three` }
-if (3.entry.is_terminal) { INFO@mark `NL9 the line ends` }
-unless (3.entry.previous.value == 2) { INFO@mark `NL10 before three is not two` }
-collect_three (from: Number) => (
-  steps ^keyword := chain None
-  from for {
-    steps &= it.value
-    if (steps.count == 3) { return steps }
-  }
-)
-three_on ^keyword := collect_three(5)
-unless (three_on.count == 3) { INFO@mark `NL11 three steps along the line are not three` }
-unless (three_on.tail.value == 7) { INFO@mark `NL12 the third step from five is not seven` }
-unless (5 some { it.value == 8 }) { INFO@mark `NL13 some did not reach eight` }
-
-unless (007 == 7) { INFO@mark `N136 007 is not seven` }
-unless (00 == 0) { INFO@mark `N137 00 is not zero` }
-unless (0x00ff == 0xff) { INFO@mark `N138 0x00ff is not 0xff` }
-
-unless (3! == 6) { INFO@mark `N139 3! is not six` }
-unless (0! == 1) { INFO@mark `N140 0! is not one` }
-unless (3 != 4) { INFO@mark `N141 3 != 4 is not read as not-equal` }
-if (3 != 3) { INFO@mark `N142 3 != 3 is read as not-equal and holds` }
+unless 4.entry == 4 { INFO@mark `NL6 a number is not entered at its own place` }
+unless 0.entry.is_initial { INFO@mark `NL7 the line does not start at zero` }
+if 3.entry.is_initial { INFO@mark `NL8 the line starts at three` }
+if 3.entry.is_terminal { INFO@mark `NL9 the line ends` }
+unless 3.entry.previous == 2 { INFO@mark `NL10 before three is not two` }
+unless (5 -> +1)[..3].count == 3 { INFO@mark `NL11 three steps along the line are not three` }
+unless (5 -> +1)[..3].last == 7 { INFO@mark `NL12 the third step from five is not seven` }
+unless (5 -> +1).some(== 8) { INFO@mark `NL13 some did not reach eight` }

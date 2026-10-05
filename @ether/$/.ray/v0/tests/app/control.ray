@@ -148,3 +148,35 @@ unless (there == 2) { INFO@mark `CF19 the second of two assignments on one line 
 declared ^keyword := 0
 declared := 3 ; declared = declared.succ
 unless (declared == 4) { INFO@mark `CF20 a declaration and an assignment on one line did not both run` }
+
+// A program run as a selection: where it is says whether it is waiting,
+// intermediate or final, and stepping a copy leaves the original where it was.
+counting ^keyword := Program(code: { 1
+  2 }).running
+unless (counting.waiting) { INFO@mark `RU1 a program nobody stepped is not waiting` }
+unless (counting.next.intermediate) { INFO@mark `RU2 one step in is not intermediate` }
+unless (counting.waiting) { INFO@mark `RU3 stepping a copy moved the original` }
+unless (counting.finished.final) { INFO@mark `RU4 a program run to its end is not final` }
+
+// Each statement of a sync, race or rush is a branch.
+unless (sync { 1
+  2 }.count == 2) { INFO@mark `CR1 sync does not answer every branch` }
+unless ((race { 1
+  2 }) == 1) { INFO@mark `CR2 race is not won by the first to finish` }
+waited ^keyword := branch { 3 }
+unless ((await waited) == 3) { INFO@mark `CR3 awaiting a branch does not answer what it did` }
+
+// An error is a value a call answers; what follows the `$` decides what is made of it.
+failing ^keyword := Error(kind: 1, message: "no")
+unless ((failing $ 5) == 5) { INFO@mark `ER1 a default does not stand in for an error` }
+unless ((7 $ 5) == 7) { INFO@mark `ER2 a default replaced what did not fail` }
+unless ((failing $?) === None) { INFO@mark `ER3 an optional error is not None` }
+unless ((failing $? 6) == 6) { INFO@mark `ER4 an optional error does not fall back` }
+unless ((failing $ { .message }) == "no") { INFO@mark `ER5 the handler does not see the error as its receiver` }
+fatal_one ^keyword := Error(kind: 1, message: "stop", fatal: true)
+unless ((fatal_one $ 5).erred) { INFO@mark `ER6 a default caught a fatal error` }
+unless ((fatal_one $?!) === None) { INFO@mark `ER7 the catch-all did not catch a fatal error` }
+unless ((failing $ ERROR[2] `wrapped`).cause === failing) { INFO@mark `ER8 a wrapped error forgot its cause` }
+
+unless (dynamically assert { true
+  1 == 1 }) { INFO@mark `DY1 a dynamic assert of holding conditions fails` }

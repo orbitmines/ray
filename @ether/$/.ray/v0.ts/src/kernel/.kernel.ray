@@ -14,6 +14,7 @@ boot () => (
   ROOT.base = UNDEF; ROOT.made = UNDEF; ROOT.order = 0; ROOT.rules_version = 0; ROOT.brackets_version = -1; ROOT.brackets_changes = 0; ROOT.brackets_list = NIL; ROOT.declared = 0
   ROOT.forced = list_new(); ROOT.diagnostics = list_new(); ROOT.definitions = list_new(); ROOT.written_keys = list_new(); ROOT.bodies = list_new()
   settle()
+  ROOT.claiming = None; ROOT.running = None
   ROOT.level = 0; ROOT.epoch = 0; ROOT.find_epoch = 0; ROOT.missing_id = 0; ROOT.missing_epoch = 0; ROOT.serving = None; ROOT.tracing = None; ROOT.top_src = -1; ROOT.top_at = -1
   ROOT.recent = make(64); ROOT.recent_at = 0; ROOT.walker = make(Reach)
   ROOT.budget = 1000000; ROOT.fuel = ROOT.budget; ROOT.shape_version = 0; ROOT.stating = -1; ROOT.stating_src = -1; ROOT.unplanned = None
@@ -340,7 +341,10 @@ first (src, from, lit, limit, raw, inside) => (
   while j < limit {
     if spelled(src, j, lit, None, None, limit) { return j }
     if newline(src, j) and !inside and !(lit.length > 0 and lit.chars[0] == '\n') { return -1 }
-    j = skip(src, j, limit, raw)
+    if inside and !raw and (src.chars[j] == ')' or src.chars[j] == ']' or src.chars[j] == '}') { return -1 }
+    k := skip(src, j, limit, raw)
+    if inside and !raw and k == j + 1 and opening(src.chars[j]) { k = max(k, group_end(src, j, limit)) }
+    j = k
   }
   return -1
 )
@@ -426,12 +430,14 @@ claim (src, j, limit) => (
   if src.claims == NIL { src.claims = make(src.length * 3) }
   cache := src.claims
   k := j * 3
-  if cache[k] == ROOT.rules_version {
+  if cache[k] == ROOT.brackets_changes + 1 {
     if cache[k + 1] > j and limit >= cache[k + 1] { return cache[k + 1] }
     if cache[k + 1] == j and limit <= cache[k + 2] { return j }
   }
   at := ROOT.claiming
-  while at != None { if at.src == src and at.at == j { return j }; at = at.next }
+  while at != None and at != NIL { if at.src == src and at.at == j { return j }; at = at.next }
+  ROOT.fuel = ROOT.fuel - 1
+  if ROOT.level > 0 and ROOT.fuel < 0 { exhausted(src, j, limit) }
   claiming := Claim(src: src, at: j, next: ROOT.claiming)
   ROOT.claiming = claiming
   end := j
@@ -442,7 +448,7 @@ claim (src, j, limit) => (
     }
   }
   ROOT.claiming = claiming.next
-  cache[k] = ROOT.rules_version; cache[k + 1] = end; cache[k + 2] = limit
+  cache[k] = ROOT.brackets_changes + 1; cache[k + 1] = end; cache[k + 2] = limit
   return end
 )
 

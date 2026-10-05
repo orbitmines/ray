@@ -28,24 +28,27 @@ Language.Web := class: Language {
 
     Name = (Char.Letter, (Char.Word | "-" | ":" | ".")[])
     Entities = { "lt": "<", "gt": ">", "amp": "&", "quot": "\"", "apos": "'", "nbsp": U+00A0 }
-    child (value) => value === None ? []
-      : value is String ? (value.trimmed.empty && value.contains(\n) ? [] : [Text(value)])
-      : value is Number ? [Text(value as String)]
-      : value is (Element | Text | Raw | Comment) ? [value]
-      : value is Iterable ? value.map(child).flatten(1)
-      : [value]
-    attributed (value) => value === None ? []
-      : value is String ? [(value, "")]
-      : value is Iterable && !(value.first is String) ? value.map(attributed).flatten(1)
-      : [value]
+    Child := class = value: *
+    Attributes := class = value: *
 
     syntax := Compiler.default + {
       <!--{literal text}--> => Comment(text)
-      <{tag: Name}{attributes}/> => Element(tag, attributed(attributes))
-      <{tag: Name}{attributes}>{children}</{tag}> => Element(tag, attributed(attributes), child(children))
+      <{tag: Name}{attributes}/> => Element(tag, Attributes(attributes))
+      <{tag: Name}{attributes}>{children}</{tag}> => Element(tag, Attributes(attributes), Child(children))
       {name: Name}="{value}" => (name, value)
       {name: Name}={value} => value === None || value == false ? None : value == true ? (name, "") : (name, value)
       &{name: Char.Letter[]}; => Entities[name] ?? ("&" + name + ";")
+      {child: Child{value === None}} => []
+      {child: Child{value is String{trimmed.empty && contains(\n)}}} => []
+      {child: Child{value is String}} => [Text(child.value)]
+      {child: Child{value is Number}} => [Text(child.value as String)]
+      {child: Child{value is (Element | Text | Raw | Comment)}} => [child.value]
+      {child: Child{value is Iterable}} => Compiler.reduced(child.value.map(Child(.)), syntax).flatten(1)
+      {child: Child} => [child.value]
+      {attributes: Attributes{value === None}} => []
+      {attributes: Attributes{value is String}} => [(attributes.value, "")]
+      {attributes: Attributes{value is Iterable && !(value.first is String)}} => Compiler.reduced(attributes.value.map(Attributes(.)), syntax).flatten(1)
+      {attributes: Attributes} => [attributes.value]
     }
 
     rules := CSS.values + {
@@ -377,12 +380,10 @@ Language.Web := class: Language {
     Statement := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | Comment | String
     Let := class = name: String, value: Expression
     Assign := class = target: Expression, value: Expression
-    Effect := class = reads: String[], body: Statement[]
+    Effect := class = reads: Expression, body: Statement[]
     Listen := class = target: Expression, event: String, body: Statement[]
     Call := class = function: Expression, arguments: Expression[] = []
-    Function := class = name: String?, parameters: String[], body: Statement[] {
-      statements => body.count == 1 && body.first is Return ? [body.first.value] : body
-    }
+    Function := class = name: String?, parameters: String[], body: Statement[]
     Return := class = value: Expression
     If := class = condition: Expression, then: Statement[], otherwise: Statement[] = []
     Raw := class = code: String
@@ -398,60 +399,59 @@ Language.Web := class: Language {
     Expression := String | Number | Call | Function | Raw | Member | Operation | Ternary | Prefix | Record | Listing | Literal | ById
     Built := Let | Assign | Effect | Listen | Call | Function | Return | If | Raw | Comment | Member | Operation | Ternary | Prefix | Record | Listing | Literal | ById
 
-    spliced (value) => value is Built ? value : Literal(value)
-    statements (value) => value === None ? []
-      : value is Iterable && !(value is (String | Built)) ? value.map(statements).flatten(1)
-      : [spliced(value)]
+    Spliced := class = value: *
+    Statements := class = value: *
     named (parameters: String) => parameters.split(",").map(.trimmed){!.empty}
-    called (callee, arguments) => callee is Member && callee.member == "addEventListener" && arguments.count == 2 && arguments.first is Literal && arguments.last is Function
-        ? Listen(callee.object, arguments.first.value, arguments.last.statements)
-      : callee is Raw && callee.code == "effect" && arguments.count == 2 && arguments.first is Literal && arguments.last is Function
-        ? Effect(arguments.first.value, arguments.last.statements)
-      : callee is Member && callee.object is Raw && callee.object.code == "document" && callee.member == "getElementById" && arguments.count == 1 && arguments.first is Literal
-        ? ById(arguments.first.value)
-      : Call(callee, arguments)
 
     Identifier = (Char.Letter | "_" | "$", (Char.Word | "$")[])
 
     syntax := Compiler.default + {
       //{literal text: (!\n)[]} => Comment(text)
       /*{literal text}*/ => Comment(text)
-      {`{`}{lines}{`}`} => statements(lines)
-      {binding: "const" | "let" | "var"} {name: Identifier} = {value} => Let(name, spliced(value))
-      return {value} => Return(spliced(value))
-      if ({condition}) {then} else {otherwise} => If(spliced(condition), statements(then), statements(otherwise))
-      if ({condition}) {then} => If(spliced(condition), statements(then))
-      function {name: Identifier}({parameters: Parameters}) {body} => Function(name, named(parameters), statements(body))
-      ({parameters: Parameters}) => {body} => Function(None, named(parameters), body is Iterable && !(body is (String | Built)) ? statements(body) : [Return(spliced(body))])
-      {target} = {value} => Assign(spliced(target), spliced(value))
-      {condition} ? {then} : {otherwise} => Ternary(spliced(condition), spliced(then), spliced(otherwise))
-      {left} ?? {right} => Operation(spliced(left), "??", spliced(right))
-      {left} || {right} => Operation(spliced(left), "||", spliced(right))
-      {left} && {right} => Operation(spliced(left), "&&", spliced(right))
-      {left} === {right} => Operation(spliced(left), "===", spliced(right))
-      {left} !== {right} => Operation(spliced(left), "!==", spliced(right))
-      {left} == {right} => Operation(spliced(left), "==", spliced(right))
-      {left} != {right} => Operation(spliced(left), "!=", spliced(right))
-      {left} <= {right} => Operation(spliced(left), "<=", spliced(right))
-      {left} >= {right} => Operation(spliced(left), ">=", spliced(right))
-      {left} < {right} => Operation(spliced(left), "<", spliced(right))
-      {left} > {right} => Operation(spliced(left), ">", spliced(right))
-      {left} + {right} => Operation(spliced(left), "+", spliced(right))
-      {left} - {right} => Operation(spliced(left), "-", spliced(right))
-      {left} * {right} => Operation(spliced(left), "*", spliced(right))
-      {left} / {right} => Operation(spliced(left), "/", spliced(right))
-      {left} % {right} => Operation(spliced(left), "%", spliced(right))
-      !{operand} => Prefix("!", spliced(operand))
-      -{operand} => Prefix("-", spliced(operand))
-      new {operand} => Prefix("new ", spliced(operand))
-      typeof {operand} => Prefix("typeof ", spliced(operand))
-      {function}(...{arguments}) => called(spliced(function), arguments.map(spliced))
-      {function}({arguments: *[]}) => called(spliced(function), arguments.map(spliced))
-      {object}.{member} => Member(spliced(object), member is Raw ? member.code : member)
-      [{elements: *[]}] => elements.map(spliced) -- (.every(. is Literal) ? Literal(.map(.value)) : Listing(.))
+      {`{`}{lines}{`}`} => Statements(lines)
+      {binding: "const" | "let" | "var"} {name: Identifier} = {value} => Let(name, Spliced(value))
+      return {value} => Return(Spliced(value))
+      if ({condition}) {then} else {otherwise} => If(Spliced(condition), Statements(then), Statements(otherwise))
+      if ({condition}) {then} => If(Spliced(condition), Statements(then))
+      function {name: Identifier}({parameters: Parameters}) {body} => Function(name, named(parameters), Statements(body))
+      ({parameters: Parameters}) => {body} => Function(None, named(parameters), body is Iterable && !(body is (String | Built)) ? Statements(body) : [Return(Spliced(body))])
+      {target} = {value} => Assign(Spliced(target), Spliced(value))
+      {condition} ? {then} : {otherwise} => Ternary(Spliced(condition), Spliced(then), Spliced(otherwise))
+      {left} ?? {right} => Operation(Spliced(left), "??", Spliced(right))
+      {left} || {right} => Operation(Spliced(left), "||", Spliced(right))
+      {left} && {right} => Operation(Spliced(left), "&&", Spliced(right))
+      {left} === {right} => Operation(Spliced(left), "===", Spliced(right))
+      {left} !== {right} => Operation(Spliced(left), "!==", Spliced(right))
+      {left} == {right} => Operation(Spliced(left), "==", Spliced(right))
+      {left} != {right} => Operation(Spliced(left), "!=", Spliced(right))
+      {left} <= {right} => Operation(Spliced(left), "<=", Spliced(right))
+      {left} >= {right} => Operation(Spliced(left), ">=", Spliced(right))
+      {left} < {right} => Operation(Spliced(left), "<", Spliced(right))
+      {left} > {right} => Operation(Spliced(left), ">", Spliced(right))
+      {left} + {right} => Operation(Spliced(left), "+", Spliced(right))
+      {left} - {right} => Operation(Spliced(left), "-", Spliced(right))
+      {left} * {right} => Operation(Spliced(left), "*", Spliced(right))
+      {left} / {right} => Operation(Spliced(left), "/", Spliced(right))
+      {left} % {right} => Operation(Spliced(left), "%", Spliced(right))
+      !{operand} => Prefix("!", Spliced(operand))
+      -{operand} => Prefix("-", Spliced(operand))
+      new {operand} => Prefix("new ", Spliced(operand))
+      typeof {operand} => Prefix("typeof ", Spliced(operand))
+      {target}.addEventListener({event: String}, ({p: Parameters}) => {body}) => Listen(Spliced(target), event, Statements(body))
+      effect({reads}, () => {body}) => Effect(Spliced(reads), Statements(body))
+      document.getElementById({id: String}) => ById(id)
+      {function}(...{arguments}) => Call(Spliced(function), arguments.map(Spliced(.)))
+      {function}({arguments: *[]}) => Call(Spliced(function), arguments.map(Spliced(.)))
+      {object}.{member} => Member(Spliced(object), member is Raw ? member.code : member)
+      [{elements: *[]}] => Compiler.reduced(elements.map(Spliced(.)), syntax) -- (.every(. is Literal) ? Literal(.map(.value)) : Listing(.))
       \{{entries: *[]}{`}`} => Record(entries)
-      {name: Identifier}: {value} => (name: name, value: spliced(value))
+      {name: Identifier}: {value} => (name: name, value: Spliced(value))
       /{literal pattern}/{flags: Char.Letter[]} => Raw("/" + pattern + "/" + flags)
+      {spliced: Spliced{value is Built}} => spliced.value
+      {spliced: Spliced} => Literal(spliced.value)
+      {listed: Statements{value === None}} => []
+      {listed: Statements{value is Iterable && !(value is (String | Built))}} => Compiler.reduced(listed.value.map(Statements(.)), syntax).flatten(1)
+      {listed: Statements} => [Spliced(listed.value)]
       null => Literal(None)
       {name: Identifier} => Raw(name)
     }
@@ -562,7 +562,7 @@ Language.Web := class: Language {
       {module: Module} => module.statements.map(., ";")
       {binding: Let} => "let ", binding.name, "=", binding.value
       {assign: Assign} => assign.target, "=", assign.value
-      {effect: Effect} => "effect(", JSON.Value(effect.reads), ",()=>{", effect.body.map(., ";"), "})"
+      {effect: Effect} => "effect(", effect.reads, ",()=>{", effect.body.map(., ";"), "})"
       {listen: Listen} => listen.target, ".addEventListener(", JSON.Value(listen.event), ",(event)=>{", listen.body.map(., ";"), "})"
       {call: Call} => call.function, "(", call.arguments.map(("," if .index > 0), .), ")"
       {defined: Function} => "function ", defined.name ?? "", "(", defined.parameters.join(","), "){", defined.body.map(., ";"), "}"
@@ -625,26 +625,35 @@ Language.Web := class: Language {
     }
     mounted (element: HTML.Element) => Compiler.reduced(Mount(element), protocol) as String
 
-    static Event := class = id: String, kind: String, value: String? {
-      static parsed (line: String?) => line?.trimmed ~= (id: Char{!= " "}[], " ", kind: Char{!= " "}[], (" ", value: *)?) -- Event(id: .id, kind: .kind, value: .value) if .
-      at => value ~= (x: Decimal, " ", y: Decimal, (" ", time: Decimal)?) -- (position: Geometry.Vector(.x * 1px, .y * 1px), time: .time ? .time * 1 ms : Time.now)
+    Id = Char{!= " "}[]
+    Event := class = id: String {
       shape => UI.scene?.expand{.id == id}.first
-      apply => Compiler.reduced(this, DOM.applied)
     }
+    Click := class: Event (id: Id, " click")
+    Input := class: Event (id: Id, " input ", value: *)
+    Focus := class: Event (id: Id, " focus")
+    Scroll := class: Event (id: Id, " scroll ", y: Decimal)
+    Pointer := class: Event (id: Id, " ", kind: "pointerdown" | "pointermove" | "pointerup" | "pointercancel", " ", x: Decimal, " ", y: Decimal, (" ", stamp: Decimal)?) => {
+      position => Geometry.Vector(x * 1px, y * 1px)
+      time => stamp ? stamp * 1 ms : Time.now
+    }
+    Keystroke := class: Event (id: Id, " ", kind: "keydown" | "keyup", " ", key: Id, modifiers: (" ", held: "shift" | "control" | "alt" | "meta")[])
+    Size := class: Event (id: Id, " size ", width: Decimal, " ", height: Decimal)
+    Inbound := Click | Input | Focus | Scroll | Pointer | Keystroke | Size
     applied := {
-      {event: Event{kind == "click"}} => event.shape?.activate
-      {event: Event{kind == "input"}} => event.shape?.set(event.value)
-      {event: Event{kind == "focus"}} => UI.Focus.current = event.shape
-      {event: Event{kind == "scroll"}} => UI.Viewport.scrolled = (event.value as Decimal) * 1px
-      {event: Event{kind == "pointerdown"}} => UI.Pointer.down(event.at.position, time: event.at.time)
-      {event: Event{kind == "pointermove"}} => UI.Pointer.moved(event.at.position, event.at.time)
-      {event: Event{kind is ("pointerup" | "pointercancel")}} => UI.Pointer.up(event.at.position, event.at.time)
-      {event: Event{kind == "keydown"}} => event.value.split(" ") -- UI.Keyboard.press(.first, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
-      {event: Event{kind == "keyup"}} => UI.Keyboard.release(event.value.split(" ").first)
-      {event: Event{kind == "size"}} => event.shape && (event.value ~= (width: Decimal, " ", height: Decimal)) -- (event.shape.size = Geometry.Vector(.width * 1px, .height * 1px))
-      {event: Event} => None
+      {click: Click} => click.shape?.activate
+      {input: Input} => input.shape?.set(input.value)
+      {focus: Focus} => UI.Focus.current = focus.shape
+      {scroll: Scroll} => UI.Viewport.scrolled = scroll.y * 1px
+      {pointer: Pointer{kind == "pointerdown"}} => UI.Pointer.down(pointer.position, time: pointer.time)
+      {pointer: Pointer{kind == "pointermove"}} => UI.Pointer.moved(pointer.position, pointer.time)
+      {pointer: Pointer} => UI.Pointer.up(pointer.position, pointer.time)
+      {keystroke: Keystroke{kind == "keydown"}} => keystroke.modifiers.held -- UI.Keyboard.press(keystroke.key, shift: .contains("shift"), control: .contains("control"), alt: .contains("alt"), meta: .contains("meta"))
+      {keystroke: Keystroke} => UI.Keyboard.release(keystroke.key)
+      {size: Size{shape}} => size.shape.size = Geometry.Vector(size.width * 1px, size.height * 1px)
+      {size: Size} => None
     }
-    event => Event.parsed(received)
+    static dispatched (line: String?) => line?.trimmed ~= (event: Inbound) -- Compiler.reduced(.event, applied) if .
 
     render (page: Program) => write(page.rendered(Language.Web.level))
     start => send(line(["clear"])) -- ["pointerdown", "pointermove", "pointerup", "pointercancel", "keydown", "keyup", "scroll"].for(send(line(["listen", "window", .])))
@@ -652,7 +661,7 @@ Language.Web := class: Language {
     write (package: Package) => send(line(["clear"])) -- send(mounted(package.document.body)) -- (send(line(["style", package.sheet as CSS.language])) if package.sheet)
       -- send(line(["lock", UI.Viewport.locking as String]))
       -- UI.Viewport.revealing && send(line(["reveal", UI.Viewport.revealing.shape.id, UI.Viewport.revealing.align as String, UI.Viewport.revealing.smooth as String])) -- (UI.Viewport.revealing = None)
-    read => event?.apply
+    read => dispatched(received)
     copy (text: String) => send(line(["clipboard", text.escaped_line]))
     open (to: Location) => send(line(["open", (to as String).escaped_line]))
   }

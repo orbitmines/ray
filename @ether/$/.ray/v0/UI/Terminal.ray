@@ -176,46 +176,58 @@ Language.TUI := class: Language {
     ), "-")
   ))
   Browser := {
-    {grid: Grid} => Language.Web.Package([(path: "index.html", content: Language.Web.HTML.Document(head: [], body: Language.Web.HTML.Element("body", children: [
-      Language.Web.HTML.Element("pre", children: [Language.Web.HTML.Text(grid.cells.map(.map(.glyph) as String).join(\n))])
-    ])))])
+    {grid: Grid} => Language.Web.Package([(path: "index.html", content: Language.Web.HTML.Document(head: [], body: @html <body><pre>{grid.cells.map(.map(.glyph) as String).join(\n)}</pre></body>))])
   }
 
-  static read => (Terminal.read ?? "") ~= (events: Event[]) -- .events.for(.apply)
+  static read => (Terminal.read ?? "") ~= (events: Event[]) -- .events.for(Compiler.reduced(., applied))
   Event := Key | Mouse | Paste | FocusChange | Resize
   Key := class ("\e[", (modifiers: "1;", modifier: Decimal)?, code: "A" | "B" | "C" | "D" | "H" | "F" | "Z") | ("\eO", code: "P" | "Q" | "R" | "S") | ("\e[", page: "5" | "6", "~") | ("\e", alt: Char) | (code: Char) => {
     lettered => code && (code as Number) < 27 && !(code is ("\r" | "\t"))
-    static Named = { "A": Keyboard.Direction.up, "w": Keyboard.Direction.up, "B": Keyboard.Direction.down, "s": Keyboard.Direction.down, "C": Keyboard.Direction.right, "d": Keyboard.Direction.right,
-      "D": Keyboard.Direction.left, "a": Keyboard.Direction.left, "Q": Keyboard.f2, "\r": Keyboard.enter, "\t": Keyboard.tab, "Z": Keyboard.tab }
-    name => page ? Keyboard.named(page == "5" ? "PageUp" : "PageDown") : alt ? Keyboard.named(alt as String) : lettered ? Keyboard.named(((code as Number) + 96) as Char as String) : Named[code] ?? Keyboard.key(code)
+    name => Compiler.reduced(this, named)
     shift => modifier && (modifier - 1) % 2 == 1
     control => modifier && (modifier - 1) / 4 % 2 == 1 || lettered
-    apply => UI.Keyboard.press(name, shift, control, alt != None) -- {
-      UI.Viewport.scroll((page == "5" ? -1 : 1) * UI.Viewport.size.y) if page
-      UI.Selection.move(name) if name is Keyboard.Direction && !shift && !control
-      UI.Selection.skip(name) if name is Keyboard.Direction && control
-      UI.Selection.expand(name) if name is Keyboard.Direction && shift
-      UI.Focus.current = UI.Focus.next(UI.scene) if name == Keyboard.tab && !shift
-      UI.Focus.current = UI.Focus.previous(UI.scene) if name == Keyboard.tab && shift
-      (UI.Focus.current ?? UI.Selection.current)?.activate if name == Keyboard.enter
-      UI.Runtime.current?.stop if code == "q"
-    }
   }
   Mouse := class ("\e[<", button: Decimal, ";", x: Decimal, ";", y: Decimal, state: "M" | "m") => {
     position => Geometry.Vector((x - 1) * px_per_cell.x, (y - 1) * px_per_cell.y)
-    apply => button >= 64 ? (UI.Pointer.wheel = Geometry.Vector(y: button == 64 ? -1 : 1)) -- UI.Viewport.scroll(UI.Pointer.wheel.y * 3 * px_per_cell.y)
-      : state == "m" ? UI.Pointer.up(position)
-      : button >= 32 ? UI.Pointer.moved(position)
-      : UI.Pointer.down(position)
   }
-  Paste := class ("\e[200~", text: *, "\e[201~") => {
-    apply => UI.Clipboard.content = text -- UI.Focus.current?.typed(text)
+  Paste := class ("\e[200~", text: *, "\e[201~")
+  FocusChange := class ("\e[", state: "I" | "O")
+  Resize := class
+  Pressed := class = key: Key
+
+  named := {
+    {key: Key{page == "5"}} => Keyboard.named("PageUp")
+    {key: Key{page == "6"}} => Keyboard.named("PageDown")
+    {key: Key{alt}} => Keyboard.named(key.alt as String)
+    {key: Key{lettered}} => Keyboard.named(((key.code as Number) + 96) as Char as String)
+    {key: Key{code is ("A" | "w")}} => Keyboard.Direction.up
+    {key: Key{code is ("B" | "s")}} => Keyboard.Direction.down
+    {key: Key{code is ("C" | "d")}} => Keyboard.Direction.right
+    {key: Key{code is ("D" | "a")}} => Keyboard.Direction.left
+    {key: Key{code == "Q"}} => Keyboard.f2
+    {key: Key{code == "\r"}} => Keyboard.enter
+    {key: Key{code is ("\t" | "Z")}} => Keyboard.tab
+    {key: Key} => Keyboard.key(key.code)
   }
-  FocusChange := class ("\e[", state: "I" | "O") => {
-    apply => UI.Viewport.preferences ~~ .focused = state == "I"
-  }
-  Resize := class => {
-    apply => UI.Viewport.size = Geometry.Vector(Terminal.size.x * px_per_cell.x, Terminal.size.y * px_per_cell.y)
+
+  applied := {
+    {key: Key} => UI.Keyboard.press(key.name, key.shift, key.control, key.alt != None) -- Pressed(key)
+    {pressed: Pressed{key.page}} => UI.Viewport.scroll((pressed.key.page == "5" ? -1 : 1) * UI.Viewport.size.y)
+    {pressed: Pressed{key.name is Keyboard.Direction && key.control}} => UI.Selection.skip(pressed.key.name)
+    {pressed: Pressed{key.name is Keyboard.Direction && key.shift}} => UI.Selection.expand(pressed.key.name)
+    {pressed: Pressed{key.name is Keyboard.Direction}} => UI.Selection.move(pressed.key.name)
+    {pressed: Pressed{key.name == Keyboard.tab && key.shift}} => UI.Focus.current = UI.Focus.previous(UI.scene)
+    {pressed: Pressed{key.name == Keyboard.tab}} => UI.Focus.current = UI.Focus.next(UI.scene)
+    {pressed: Pressed{key.name == Keyboard.enter}} => (UI.Focus.current ?? UI.Selection.current)?.activate
+    {pressed: Pressed{key.code == "q"}} => UI.Runtime.current?.stop
+    {pressed: Pressed} => None
+    {mouse: Mouse{button >= 64}} => (UI.Pointer.wheel = Geometry.Vector(y: mouse.button == 64 ? -1 : 1)) -- UI.Viewport.scroll(UI.Pointer.wheel.y * 3 * px_per_cell.y)
+    {mouse: Mouse{state == "m"}} => UI.Pointer.up(mouse.position)
+    {mouse: Mouse{button >= 32}} => UI.Pointer.moved(mouse.position)
+    {mouse: Mouse} => UI.Pointer.down(mouse.position)
+    {paste: Paste} => (UI.Clipboard.content = paste.text) -- UI.Focus.current?.typed(paste.text)
+    {focus: FocusChange} => UI.Viewport.preferences ~~ .focused = focus.state == "I"
+    {resize: Resize} => UI.Viewport.size = Geometry.Vector(Terminal.size.x * px_per_cell.x, Terminal.size.y * px_per_cell.y)
   }
 }
 

@@ -152,4 +152,4 @@ chosen_above := Number{. > 5}()
 unless chosen_above > 5 { INFO@mark `CN1 a value chosen from a narrowing does not satisfy it` }
 unless boolean{. == true}() == true { INFO@mark `CN2 the only member a narrowing admits is not the one chosen` }
 unless choose boolean ==.instance_of boolean { INFO@mark `CN3 what is chosen from a type is not of it` }
-unless (choose 3 boolean).count == 3 { INFO@mark `CN4 choosing three does not choose three` }
+unless (choose (3) boolean).count == 3 { INFO@mark `CN4 choosing three does not choose three` }

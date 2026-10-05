@@ -55,7 +55,7 @@ unless Roman.normalizer == Roman.Normalizer.Subtractive { INFO@mark `RO65 the no
 1..20 for (n) => {
   unless n as Roman as Decimal == n { INFO@mark `RO66 a number does not come back from its roman form` }
 }
-with Roman.normalizer = Additive {
+with (Roman.normalizer = Additive) {
   unless 4 as Roman == "IIII" { INFO@mark `RO68 four is not written IIII once the normalizer is additive` }
   unless 9 as Roman == "VIIII" { INFO@mark `RO11 nine is not written VIIII the additive way` }
   unless 3 as Roman == "III" { INFO@mark `RO24 three is written the same either way` }

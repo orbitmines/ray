@@ -23,43 +23,12 @@ Running := class = program: Program, at: Program?, started: boolean = false, res
   static until (condition) => (round while !condition() && branches.some(.holds)) -- this
 }
 
-Program &+= {
-  running => Running(program: this)
-  & => running.&
-  expand => written
-  concurrently => written.map(. ==.instance_of Running ? . : Running(program: .))
-}
-
-// Each statement of the block is a branch, as if written in `branch { }`; writing it explicitly is allowed (P4.1, P4.2).
-branch{ }{block} ^class => Running(program: Program(code: external ** block)) -- Running.branches.push(.)
-sync{ }{block} ^class => Program(code: external ** block).concurrently -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
-race{ }{block} ^class => Program(code: external ** block).concurrently
-  -- (.map(.stepped) while .every(.holds))
-  -- .{holds}.map(.cancel)
-  -- .{is_terminal}.first.results.last
-rush{ }{block} ^class => Program(code: external ** block).concurrently
-  -- (.map(.stepped) while .every(.holds))
-  -- Running.branches.push(.{holds})
-  -- .{is_terminal}.first.results.last
-defer{ }{block} ^class => Running(program: Program(code: external ** block)) -- Running.deferred.push(.)
-await{ }{awaited} ^class => Running.until(() => awaited && (awaited !=.instance_of Running || awaited.is_terminal))
-  -- awaited ==.instance_of Running ? awaited.results.last : awaited
-pending{ }{name} ^keyword => await name
-
 // `dynamically x = …` re-evaluates when what it depends on changes (P5.1, P5.3).
 dynamically {name} = {value} ^keyword => external rule name value
 dynamically {name} := {value} ^keyword => external rule name value
 // Every failing condition is reported together (P5.6).
 dynamically assert {conditions} ^keyword => Program(code: external ** conditions).written{!.()} -- .for(ERROR@. `assertion failed`) -- .empty
 
-// `with X = v { … }` restores X after the block; `with X = v` until the context is left (L§6.3).
-with{ }{target} = {value} {{body}} ^keyword => (previous = target) -- (target = value) -- (inline (external ** body)) -- (target = previous)
-with{ }{target} = {value} ^keyword => (previous = target) -- defer { target = previous } -- (target = value)
-with{ }{{settings}} ^keyword => inline (external ** settings)
-assume{ }{target} = {value} {{body}} ^keyword => with target = value { inline body }
-assume{ }{target} = {value} ^keyword => with target = value
-
 // `never …` (L§4.1)
 Never := Node{false}
 never return ^keyword => Never
-never{ }{condition} ^keyword => Never -- ERROR@condition `happened, and was said never to` if condition

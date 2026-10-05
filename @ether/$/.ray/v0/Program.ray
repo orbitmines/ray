@@ -1,0 +1,36 @@
+Program &+= {
+  running => Running(program: this)
+  & => running.&
+  expand => written
+  concurrently => written.map(. ==.instance_of Running ? . : Running(program: .))
+
+  // Each statement of the block is a branch, as if written in `branch { }`; writing it explicitly is allowed (P4.1, P4.2).
+  right-to-left branch => Running(program: this) -- Running.branches.push(.)
+  right-to-left sync => concurrently -- (.{holds}.map(.stepped) while .some(.holds)) -- .results.last
+  right-to-left race => concurrently
+    -- (.map(.stepped) while .every(.holds))
+    -- .{holds}.map(.cancel)
+    -- .{is_terminal}.first.results.last
+  right-to-left rush => concurrently
+    -- (.map(.stepped) while .every(.holds))
+    -- Running.branches.push(.{holds})
+    -- .{is_terminal}.first.results.last
+  right-to-left defer => Running(program: this) -- Running.deferred.push(.)
+
+  // `with (X = v) { … }` restores X after the block; `with (X = v)` until the context is left (L§6.3).
+  targets => code ~= ((target: (!" = ")[], " = ", (!(", " | \n))[]), (", " | \n)?)[] -- .target
+  right-to-left with (settings: Program) => {
+    previous = settings.targets.map(&caller[.])
+    settings()
+    result = this()
+    settings.targets.zip(previous).for((target, held) => &caller[target] = held)
+    result
+  }
+  right-to-left assume (settings: Program) => with (settings) this
+}
+
+with | assume (settings: Program) => {
+  previous = settings.targets.map(&caller[.])
+  settings()
+  defer { settings.targets.zip(previous).for((target, held) => &caller[target] = held) }
+}

@@ -45,15 +45,16 @@ Iterable<Vertex: Ray = Ray> := class: Ordered {
   filter (predicate: (x: Vertex): boolean) => this{predicate}
 
   // `reduce((acc) => …)` seeds with the first element, `reduce(acc = 0 => …)` with what it is given; `.` is the element (R2.4).
-  .reduce(({accumulator ^parameter}){ }{`=>`}{ }{step}) ^punctuation => rest.reduced(first, Program(code: (external ** step), parameters: (external ** accumulator)))
+  reduce (step: Program) => rest.reduced(first, step)
   .reduce({accumulator ^parameter}{ }{`=`}{ }{initial}{ }{`=>`}{ }{step}) ^punctuation => reduced(initial, Program(code: (external ** step), parameters: (external ** accumulator)))
   .reduce({literal operator ^operator}) ^punctuation => .reduce((acc) => acc[operator] .)
   reduce_right | fold_right | foldr => reverse.reduce
   reduced (seed, step: Program) => empty ? seed : rest.reduced(step.entered(first, seed), step)
 
   all => reduce(|)
-  sum => reduce(total = 0 => total + .)
-  product => reduce(total = 1 => total * .)
+  right-to-left Σ | sum => reduce(total = 0 => total + .)
+  right-to-left ∑ => sum
+  right-to-left ∏ | product => reduce(total = 1 => total * .)
   min => reduce((acc) => acc < . ? acc : .)
   max => reduce((acc) => acc > . ? acc : .)
   count => ∃length trivially == ∞ ? ∞ : reduce(acc = 0 => acc + 1)
@@ -187,7 +188,7 @@ Edge := class: Ray {
   is_terminal => x.terminal == None
 }
 
-// `with Traverser.default = BreadthFirst`
+// `with (Traverser.default = BreadthFirst)`
 Traverser := class: <yield: (x: Ray): None>(entry: Ray): None {
   static default = DepthFirst
 

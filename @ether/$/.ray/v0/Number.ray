@@ -53,6 +53,11 @@ Number := class: Ray {
   // Irrationals are generators: the digits of a root are computed on demand (N1.4).
   root_of (degree: Number) => root(degree) ^ degree == this ? root(degree)
     : Real(integer: root(degree), fraction: (1 -> +1).map(place => (this * 10 ^ (degree * place)).root(degree) % 10))
+  right-to-left √ => root_of(2)
+  right-to-left ∛ => root_of(3)
+  right-to-left ∜ => root_of(4)
+
+  chosen_within (width: Number) => Random.number(width)
 
   // Bitwise operations on bit strings and binary numbers alike (N1.11).
   bits (other: Number) => digits(2).length max other.digits(2).length -- digits(2).padded(.).zip(other.digits(2).padded(.))
@@ -156,12 +161,6 @@ USize = u8 | u16 | u32 | u64
 boolean &+= {
   as Binary => this ? 1₂ : 0₂
 }
-
-√{radicand: Number} => radicand.root_of(2)
-∛{radicand: Number} => radicand.root_of(3)
-∜{radicand: Number} => radicand.root_of(4)
-∑ | Σ {summed: Iterable} => summed.sum
-∏ {multiplied: Iterable} => multiplied.product
 
 Iterable &+= {
   ∞ => unbounded

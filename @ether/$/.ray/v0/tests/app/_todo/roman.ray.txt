@@ -3,7 +3,7 @@ mark ^keyword := external global
 unless "XIV" as Roman as Decimal == 14 { INFO@mark `RM1 XIV is not 14` }
 unless "xiv" as Roman as Decimal == 14 { INFO@mark `RM2 xiv is not 14` }
 unless 19 as Roman == "XIX" { INFO@mark `RM3 19 is not XIX` }
-with Roman.normalizer = Additive {
+with (Roman.normalizer = Additive) {
   unless 4 as Roman == "IIII" { INFO@mark `RM4 additive 4 is not IIII` }
 }
 unless "XIV".instance_of(Roman.Standard) { INFO@mark `RM5 XIV is not standard` }

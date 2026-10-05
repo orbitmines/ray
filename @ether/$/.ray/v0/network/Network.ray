@@ -24,6 +24,11 @@ Network &+= {
     }
   }
 
+  static Names := class {
+    record (name: String, address, key): static => this ~~ (this[name] = (address: address, key: key))
+    trusted (name: String, key) => (this[name].history.first?.key ?? key) == key
+  }
+
   static Hosts := class {
     static equivalences => @/etc/hosts.content as Unicode.Table<(address: (!" " && !"\t")[], (" " | "\t")[], names: (!" " && !"\t")[].join((" " | "\t")[]))>
     static resolved (name: String) => DomainName(equivalences.rows{.names.fold_case ∋ name.fold_case}.last?.address ?? name)
@@ -63,6 +68,7 @@ Location &+= {
   static canonical := Location{!port || port != protocol?.port}
   protocol => Network.Protocol#{as String == scheme}.first
   resolved => Network.Hosts.resolved(host) -- (. == host ? $.dns.resolve(host) ?? . : .)
+  socket => Network.Socket.Address(host: host, port: port ?? protocol?.port)
 }
 
 Device &+= {

@@ -5,6 +5,8 @@ POSIX := class: Language {
   static Who := enum user | group | other
   static Triad := class (read: Binary¹ as boolean = false, write: Binary¹ as boolean = false, execute: Binary¹ as boolean = false) {
     static (access: Access) as (=== Triad) => Triad(access.reads, access.writes, access.executes)
+    compounds | (other: Triad) => Triad(read || other.read, write || other.write, execute || other.execute)
+    compounds - (other: Triad) => Triad(read && !other.read, write && !other.write, execute && !other.execute)
   }
   static Mode := class (setuid: Binary¹ as boolean = false, setgid: Binary¹ as boolean = false, sticky: Binary¹ as boolean = false, user: Triad = Triad(), group: Triad = Triad(), other: Triad = Triad())
   // Absolute octal mode operand (https://pubs.opengroup.org/onlinepubs/9799919799/utilities/chmod.html)
@@ -26,6 +28,22 @@ POSIX := class: Language {
       gr: mode.group.read ? "r" : "-", gw: mode.group.write ? "w" : "-", gx: mode.setgid ? (mode.group.execute ? "s" : "S") : mode.group.execute ? "x" : "-",
       or: mode.other.read ? "r" : "-", ow: mode.other.write ? "w" : "-", ox: mode.sticky ? (mode.other.execute ? "t" : "T") : mode.other.execute ? "x" : "-")
   }
+  // Symbolic mode operand: clauses of who, then +, - or = with permissions or another class's copy, applied left to right (https://pubs.opengroup.org/onlinepubs/9799919799/utilities/chmod.html)
+  static Clauses := class ((clauses: (who: ("u" | "g" | "o" | "a")[], actions: (op: "+" | "-" | "=", (perms: ("r" | "w" | "x" | "X" | "s" | "t")[]) | (copy: "u" | "g" | "o"))[]{length > 0}))[].join(",")) {
+    // An empty who is all of them, the file mode creation mask aside (https://pubs.opengroup.org/onlinepubs/9799919799/utilities/chmod.html)
+    static targets (who) => who.empty || who ∋ "a" ? Who# : who.map(w => Who#{.name == fields[w]}.first)
+    static fields = { u: "user", g: "group", o: "other" }
+    static granted (mode: Mode, action) => action.copy ? mode.`fields[action.copy]`
+      : Triad(action.perms ∋ "r", action.perms ∋ "w", action.perms ∋ "x" || (action.perms ∋ "X" && (mode.user | mode.group | mode.other).execute))
+    static set (mode: Mode, field: String, op, given: Triad) => mode ~~ (.`field` = op == "=" ? given : op == "+" ? mode.`field` | given : mode.`field` - given)
+    static acted (mode: Mode, who, action) => granted(mode, action) -- (given => targets(who).reduce(held = mode => set(held, .name, action.op, given)))
+      -- (changed => action.perms ? changed
+        ~~ (.setuid = action.perms ∋ "s" && targets(who) ∋ Who.user ? action.op != "-" : changed.setuid)
+        ~~ (.setgid = action.perms ∋ "s" && targets(who) ∋ Who.group ? action.op != "-" : changed.setgid)
+        ~~ (.sticky = action.perms ∋ "t" && targets(who) ∋ Who.other ? action.op != "-" : changed.sticky) : changed)
+    static clause (mode: Mode, clause) => clause.actions.reduce(held = mode => acted(held, clause.who, .))
+    applied (mode: Mode = Mode()) => clauses.reduce(held = mode => clause(held, .))
+  }
 
   static reaching (level: Accessor.Permission) => level.resolved -- (. == Accessor.Permission.public ? Who.(user, group, other)
     : . is (Accessor.Permission.protected | Accessor.Permission.managed) ? Who.(user, group) : [Who.user])
@@ -35,11 +53,13 @@ POSIX := class: Language {
   static triad (accessors: Access[], who: Who) => accessors{reaching(.who) ∋ who} -- (given => Triad(given.some(.reads), given.some(.writes), given.some(.executes)))
   static mode (accessors: Access[]) => Mode(user: triad(accessors, Who.user), group: triad(accessors, Who.group), other: triad(accessors, Who.other))
 
-  level := {
+  syntax := Compiler.default + {
     {absolute: Absolute} => absolute.mode
     {symbolic: Symbolic} => symbolic.mode
+    {clauses: Clauses} => clauses.applied()
     {mode: Mode} => [Accessor(widest(mode, "read")).read, Accessor(widest(mode, "write")).write, Accessor(widest(mode, "execute")).execute]{.who}
   }
+  level := syntax
   written := {
     {writing: Language.Writing{value is Access[]}} => mode(writing.value) as Absolute
   }

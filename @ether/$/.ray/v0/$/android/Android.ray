@@ -3,11 +3,19 @@ Android := class: Language {
   static extensions = ".manifest" | ".android"
 
   static Names = { network: "INTERNET", notifications: "POST_NOTIFICATIONS", camera: "CAMERA", microphone: "RECORD_AUDIO", geolocation: "ACCESS_FINE_LOCATION", vibration: "VIBRATE", wake_lock: "WAKE_LOCK" }
-  // <uses-permission> (https://developer.android.com/guide/topics/manifest/uses-permission-element)
-  level := {
-    {element: XML.Element{name == "uses-permission"}} => Grant(Access(who: Accessor.Permission.localhost), target: Device.Capability#{"android.permission." + Names[.name] == element["android:name"]}.first)
+  static named (capability: Device.Capability) => "android.permission." + Names[capability.name]
+
+  syntax := XML.syntax + {
+    // <manifest> and the permissions it asks for (https://developer.android.com/guide/topics/manifest/manifest-element)
+    {document: XML.Document{root.name == "manifest"}} => Compiler.reduced(document.root, syntax)
+    {manifest: XML.Element{name == "manifest"}} => manifest.children{. is XML.Element && .name == "uses-permission"}.map(Compiler.reduced(., syntax))
+    // <uses-permission> (https://developer.android.com/guide/topics/manifest/uses-permission-element)
+    {element: XML.Element{name == "uses-permission"}} => Grant(Access(who: Accessor.Permission.localhost), target: Device.Capability#{named(.) == element["android:name"]}.first)
   }
+  level := syntax
   written := {
-    {writing: Language.Writing{value is Grant[]}} => writing.value.map(grant => XML.Element(name: "uses-permission", attributes: [(name: "android:name", value: "android.permission." + Names[grant.target.name])]))
+    {writing: Language.Writing{value is Grant[]}} => XML.Document(root: XML.Element(name: "manifest",
+      attributes: [(name: "xmlns:android", value: "http://schemas.android.com/apk/res/android")],
+      children: writing.value.map(grant => XML.Element(name: "uses-permission", attributes: [(name: "android:name", value: named(grant.target))]))))
   }
 }

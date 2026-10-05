@@ -11,3 +11,10 @@ unless POSIX.read("750"){.writes}.first.who == Accessor.Permission.private { INF
 unless ("-rwsr-xr-x" as POSIX.Symbolic).mode.setuid { INFO@mark `AC16 s in the owner's execute place is not setuid` }
 everyone := POSIX.Triad(true, true, true)
 unless POSIX.Mode(sticky: true, user: everyone, group: everyone, other: everyone) as POSIX.Symbolic as String == "-rwxrwxrwt" { INFO@mark `AC17 a sticky mode is not written with t` }
+unless (@posix 750){.writes}.first.who == Accessor.Permission.private { INFO@mark `AC29 an octal mode written inline does not read as its levels` }
+readers := "rx"
+posix_block := @posix {
+  u=rwx,g={readers},o=
+}
+unless posix_block as POSIX == "750" { INFO@mark `AC30 a symbolic mode block with a hole is not mode 750` }
+unless (@posix u=rw,go=r){.reads}.first.who == Accessor.Permission.public { INFO@mark `AC31 a read for go in a symbolic mode is not public` }

@@ -20,3 +20,14 @@ unless Network.DNS.Type.AAAA.code == 28 { INFO@mark `DN12 AAAA is not type 28` }
 large := Network.DNS.Message(questions: (1..40).map(Network.DNS.Question(name: Network.DomainName(text: "a-name-long-enough-to-matter.example.com") as Network.DNS.Name)))
 unless Compiler.reduced(Network.DNS.Lookup(large), Network.DNS.Optimizations).transport == Network.DNS.Transport.tcp { INFO@mark `DN13 a message over 512 bytes is not sent over TCP` }
 unless Compiler.reduced(Network.DNS.Lookup(question, server: @https://dns.example/dns-query), Network.DNS.Optimizations).transport == Network.DNS.Transport.https { INFO@mark `DN14 an https resolver is not asked over HTTPS` }
+unless (@dns example.com. 300 IN A 93.184.215.14).data as String == "93.184.215.14" { INFO@mark `DN15 a zone-file line written inline is not an A record` }
+address := "93.184.215.14" as IPv4
+zone := @dns {
+  $ORIGIN example.com.
+  $TTL 300
+  ; the apex
+  @ IN A {address}
+  www IN CNAME example.com.
+}
+unless zone.count == 3 && zone[0] is Network.DNS.Comment && zone[1].data as String == "93.184.215.14" && zone[1].ttl == 300 && Network.DNS.text(zone[2].name) == "www.example.com" { INFO@mark `DN16 a zone block does not read its comment, its hole, $ORIGIN and $TTL` }
+unless (zone as Network.DNS) ~= (*, "; the apex\nexample.com. 300 IN A 93.184.215.14\n", *) { INFO@mark `DN17 records are not written back as zone-file lines with their comment` }

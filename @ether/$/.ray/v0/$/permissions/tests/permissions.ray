@@ -7,3 +7,10 @@ unless Browser.named(camera) == "camera" { INFO@mark `AC21 the camera is not the
 unless Browser.named(Grant(Access(who: Accessor.Permission.localhost, method: `=`), target: Device.Capability.clipboard)) == "clipboard-write" { INFO@mark `AC22 writing the clipboard is not clipboard-write` }
 unless [Grant(Access(who: Accessor.Permission.public), target: Device.Capability.geolocation), camera] as Browser == "geolocation=*, camera=(self)" { INFO@mark `AC23 levels are not written as a Permissions-Policy` }
 unless Browser.read("geolocation=*").first.access.who == Accessor.Permission.public { INFO@mark `AC24 * does not read back as public` }
+unless (@permissions camera=(self)).first.target == Device.Capability.camera { INFO@mark `AC35 a Permissions-Policy member written inline is not a grant of its feature` }
+everyone := Accessor.Permission.public
+policy_block := @permissions {
+  geolocation={everyone},
+  camera=(self)
+}
+unless policy_block.count == 2 && policy_block.first.access.who == Accessor.Permission.public && policy_block.last.access.who == Accessor.Permission.localhost { INFO@mark `AC36 a Permissions-Policy block does not read its members and its hole` }

@@ -8,6 +8,23 @@ SARIF := class: Language {
   static location (at: Location?) => at ? (physicalLocation: (artifactLocation: (uri: at.file as String),
     region: (startLine: at.from?.line ?? 1, startColumn: at.from?.column ?? 1, endLine: at.to?.line ?? 1, endColumn: at.to?.column ?? 1))) : None
 
+  // A physicalLocation's region, one-based (https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html#_Toc34317685)
+  static located (physical) => physical["region"] -- (region => (physical["artifactLocation"]["uri"] as Location){
+    from == (region["startLine"] ?? 1, region["startColumn"] ?? 1), to == (region["endLine"] ?? region["startLine"] ?? 1, region["endColumn"] ?? region["startColumn"] ?? 1)})
+  static severity (level: String) => Diagnostic.Severity#{Levels[.name] == level}.last
+
+  syntax := Compiler.default + {
+    // JSON's null (https://www.rfc-editor.org/rfc/rfc8259#section-3)
+    null => None
+    // sarifLog: the results of each run (https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html#_Toc34317478)
+    {sarif: *{.["version"] == "2.1.0" && .["runs"] != None}} => sarif["runs"].map(.["results"].map(Compiler.reduced(., syntax))).flatten
+    // result: its message, level, locations and relatedLocations (https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html#_Toc34317638)
+    {result: *{.["message"]?["text"] != None && .["version"] == None}} =>
+      <-(result["relatedLocations"] ?? []).reduce(cause = None => Diagnostic(message: .["message"]?["text"] ?? "", at: located(.["physicalLocation"]), cause: cause)) -- (cause =>
+        Diagnostic(message: result["message"]["text"], severity: severity(result["level"] ?? "warning"), at: (result["locations"] ?? []).first -- (. ? located(.["physicalLocation"]) : None), cause: cause))
+    {text: String} => Compiler.reduced((text as JSON).value, syntax)
+  }
+  level := syntax
   written := {
     {writing: Language.Writing{value is Diagnostic}} => Language.Writing([writing.value])
     // sarifLog (https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html#_Toc34317478)

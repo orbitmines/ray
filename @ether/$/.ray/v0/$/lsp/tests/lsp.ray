@@ -13,3 +13,13 @@ unless (lsp as LSP.Wire).size == (lsp as LSP.Wire).content.count { INFO@mark `DG
 unless [warned] as LSP ~= (*, "\"severity\":2", *) { INFO@mark `DG12 a warning is not LSP severity 2` }
 unless [Diagnostic(message: "outer", cause: placed)] as LSP ~= (*, "\"relatedInformation\"", *) { INFO@mark `DG13 a cause is not written as related information` }
 unless $.lsp === LSP { INFO@mark `DG14 $.lsp is not LSP` }
+inline_lsp := @lsp {"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": {"uri": "file:///a.ray", "diagnostics": [{"range": {"start": {"line": 2, "character": 4}, "end": {"line": 2, "character": 7}}, "severity": 2, "message": "careful"}]}}
+unless inline_lsp.first.severity == Diagnostic.Severity.warn && inline_lsp.first.at.from == (3, 5) { INFO@mark `DG15 a publishDiagnostics message written inline does not read as a one-based warning` }
+said := "no"
+lsp_block := @lsp {
+  {"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics", "params": {"uri": "file:///a.ray", "diagnostics": [
+    {"range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}}, "severity": 1, "message": {said}, "relatedInformation": null}
+  ]}}
+}
+unless lsp_block.first.message == "no" && lsp_block.first.severity == Diagnostic.Severity.error { INFO@mark `DG16 a publishDiagnostics block does not read its hole and its null` }
+unless LSP.read([placed] as LSP).first.message == "no" { INFO@mark `DG17 written diagnostics do not read back` }

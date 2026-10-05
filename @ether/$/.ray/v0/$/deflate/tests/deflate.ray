@@ -1,0 +1,14 @@
+// DEFLATE streams read and written (https://www.rfc-editor.org/rfc/rfc1951).
+
+mark ^keyword := external global
+
+unless Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort_by(.symbol).bits == [0b010, 0b011, 0b100, 0b101, 0b110, 0b00, 0b1110, 0b1111] { INFO@mark `DF1 the code lengths of section 3.2.2's example do not give its codes` }
+unless Deflate.fixed_literals.bits(0) == 0b00110000 && Deflate.fixed_literals.bits(144) == 0b110010000 && Deflate.fixed_literals.bits(256) == 0b0000000 { INFO@mark `DF2 the fixed literal codes are not those of section 3.2.6` }
+unless Deflate.read([0x01, 0x05, 0x00, 0xfa, 0xff, "hello".bytes].flatten) as String == "hello" { INFO@mark `DF3 a stored block does not read its bytes` }
+unless Deflate.read([0x03, 0x00]).empty { INFO@mark `DF4 an empty fixed block is not empty` }
+unless Deflate.read([0x4b, 0x04, 0x00]) as String == "a" { INFO@mark `DF5 a literal with the fixed codes is not read` }
+unless Deflate.read([0x4b, 0x84, 0x03, 0x00]) as String == "aaaaaaaaaa" { INFO@mark `DF6 a back-reference overlapping what it writes is not copied` }
+repeated := ("ray " * 64).bytes
+unless Deflate.read(Deflate.write(repeated)) == repeated { INFO@mark `DF7 written bytes do not read back` }
+unless (Deflate.write(repeated) as Byte[]).count < repeated.count { INFO@mark `DF8 repeated bytes are not written shorter` }
+unless $.zlib.read([0x78, 0x9c, 0x4b, 0x04, 0x00, 0x00, 0x62, 0x00, 0x62]) as String == "a" { INFO@mark `DF9 a zlib stream does not inflate and check its Adler-32` }

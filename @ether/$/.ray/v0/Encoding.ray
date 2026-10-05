@@ -13,6 +13,7 @@ Encoding := class {
   }
 
   Hash := class = value: *, algorithm: Digest {
+    bytes: Byte[] => Compiler.reduced(Language.Writing(value, language: algorithm), algorithm.written)
     chainable == (other: Hash) => algorithm == other.algorithm && value == other.value
   }
 

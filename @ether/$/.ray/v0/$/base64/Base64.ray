@@ -5,7 +5,7 @@ Base64 := class = (sextets: (Binary⁶ as Alphabet)[], "="[]{length == (4 - sext
   bytes: Byte[] => sextets.map(.integer).flatten.chunk(8){.count == 8}.map(Binary(integer: .))
   static (bytes: Byte[]) as (=== Base64) => Base64(sextets: bytes.map(.integer).flatten.chunk(6).map(Binary(integer: (., ["0"] * (6 - .count)))))
 
-  static language := class: Encoding.Packing {
-    static extensions = ".base64"
-  }
+  static language = Language(".base64",
+    level: { {text: String} => (text as Base64).bytes },
+    written: { {writing: Language.Writing} => writing.value as Byte[] as Base64 })
 }

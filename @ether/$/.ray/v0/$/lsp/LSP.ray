@@ -11,11 +11,26 @@ LSP &+= {
   )
   // DiagnosticSeverity (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticSeverity)
   Severities = { fatal: 1, error: 1, warn: 2, info: 3, debug: 4, trace: 4 }
+  severity (code: Decimal) => Diagnostic.Severity#{Severities[.name] == code}.last
   // Positions are zero-based; columns count code points under the utf-32 position encoding (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#positionEncodingKind)
   position (at: (line: Decimal, column: Decimal)?) => (line: (at?.line ?? 1) - 1, character: (at?.column ?? 1) - 1)
   range (at: Location?) => (start: position(at?.from), end: position(at?.to))
+  // Location (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#location)
+  located (uri: String, range) => (uri as Location){from == (range["start"]["line"] + 1, range["start"]["character"] + 1), to == (range["end"]["line"] + 1, range["end"]["character"] + 1)}
 
   Published := class = file: Location?, diagnostics: Diagnostic[]
+
+  syntax := Compiler.default + {
+    // JSON's null (https://www.rfc-editor.org/rfc/rfc8259#section-3)
+    null => None
+    // textDocument/publishDiagnostics (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_publishDiagnostics)
+    {message: *{.["method"] == "textDocument/publishDiagnostics"}} => message["params"] -- (params => params["diagnostics"].map(diagnostic =>
+      // Diagnostic and DiagnosticRelatedInformation (https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnostic)
+      <-(diagnostic["relatedInformation"] ?? []).reduce(cause = None => Diagnostic(message: .["message"], at: located(.["location"]["uri"], .["location"]["range"]), cause: cause)) -- (cause =>
+        Diagnostic(message: diagnostic["message"], severity: severity(diagnostic["severity"] ?? 1), at: located(params["uri"], diagnostic["range"]), cause: cause))))
+    {wire: Wire} => Compiler.reduced((wire.content as Unicode.UTF-8 as String as JSON).value, syntax)
+  }
+  level := syntax
   written := {
     {writing: Language.Writing{value is Diagnostic}} => Published(writing.value.at?.file, [writing.value])
     {writing: Language.Writing{value is Diagnostic[]}} => writing.value.map(.at?.file).unique.map(file => Published(file, writing.value{.at?.file == file}))

@@ -7,17 +7,26 @@ Browser := class: Language {
   static named (grant: Grant) => grant.target == Device.Capability.clipboard ? (grant.access.writes ? "clipboard-write" : "clipboard-read") : Names[grant.target.name]
   static capability (name: String) => name ~= ⊢"clipboard-" ? Device.Capability.clipboard : Device.Capability#{Names[.name] == name}.first
 
-  // Permissions-Policy header: a feature and its allowlist (https://w3c.github.io/webappsec-permissions-policy/#structured-header-serialization)
-  static Policy := class ((entries: (feature: HTTP.Token, "=", allowlist: "*" | ("(", origins: ("self" | ("\"", (!"\"")[], "\""))[].join(" "), ")")))[].join(", ")) {
+  // Permissions-Policy header: a structured dictionary of features and their allowlists (https://w3c.github.io/webappsec-permissions-policy/#structured-header-serialization, https://www.rfc-editor.org/rfc/rfc8941#section-3.2)
+  static Policy := class ((entries: (feature: HTTP.Token, "=", allowlist: "*" | ("(", origins: ("self" | ("\"", (!"\"")[], "\""))[].join(" "), ")")))[].join(", " | ",")) {
     static allowed (level: Accessor.Permission) => level.resolved == Accessor.Permission.public ? "*"
       : level.resolved is (Accessor.Permission.protected | Accessor.Permission.managed) ? "(self " + level.at.map("\"" + . as String + "\"").join(" ") + ")"
       : "(self)"
+    // An allowlist of * is every origin, of more than self some, of self alone this one (https://w3c.github.io/webappsec-permissions-policy/#allowlists)
+    static level (allowlist) => allowlist is Accessor.Permission ? allowlist
+      : allowlist == "*" ? Accessor.Permission.public
+      : (allowlist as String ~= ("(", origins: ("self" | ("\"", (!"\"")[], "\""))[].join(" "), ")")).origins.count > 1 ? Accessor.Permission.protected
+      : Accessor.Permission.localhost
+    static granted (feature: String, allowlist) => Grant(Access(who: level(allowlist), method: feature == "clipboard-write" ? `=` : Access.Reading), target: capability(feature))
   }
 
-  level := {
-    {policy: Policy} => policy.entries.map(entry => Grant(Access(who: entry.allowlist == "*" ? Accessor.Permission.public : entry.origins.count > 1 ? Accessor.Permission.protected : Accessor.Permission.localhost,
-      method: entry.feature == "clipboard-write" ? `=` : Access.Reading), target: capability(entry.feature)))
+  syntax := Compiler.default + {
+    // A dictionary member, feature=allowlist (https://www.rfc-editor.org/rfc/rfc8941#section-3.2)
+    {feature: HTTP.Token}={allowlist}{","?} => [Policy.granted(feature as String, allowlist)]
+    {lines: \n{components.every(. is Grant[])}} => lines.components.flatten
+    {policy: Policy} => policy.entries.map(Policy.granted(.feature, .allowlist))
   }
+  level := syntax
   written := {
     {writing: Language.Writing{value is Grant[]}} => Policy(entries: writing.value.map((feature: named(.), allowlist: Policy.allowed(.access.who))))
   }

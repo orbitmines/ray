@@ -22,3 +22,13 @@ unless HTTP.Status(200).reason == "OK" { INFO@mark `HT12 200 has no reason phras
 unless HTTP.v1_1.read("HTTP/1.1 204 No Content\r\n\r\n").body.empty { INFO@mark `HT13 a 204 response is read with a body` }
 unless Compiler.reduced(HTTP.Exchange(posted), HTTP.Optimizations).format === HTTP.v1_1 { INFO@mark `HT14 a plain http exchange left HTTP/1.1` }
 unless HTTP.Response(status: HTTP.Status(200), body: "ok" as Byte[]) as HTTP.v1_1 == "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok" { INFO@mark `HT15 a response is not written as its status line` }
+unless (@http GET /a HTTP/1.1).method == HTTP.Method.get { INFO@mark `HT16 a request line written inline is not a GET request` }
+host := "example.com"
+inline_post := @http {
+  POST /a HTTP/1.1
+  Host: {host}
+  Content-Type: text/plain
+
+  hi
+}
+unless inline_post.method == HTTP.Method.post && inline_post.target.host == "example.com" && inline_post.fields["content-type"] == "text/plain" && inline_post.text == "hi" { INFO@mark `HT17 a request block does not read its fields, its Host hole and its body` }

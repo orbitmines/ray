@@ -7,6 +7,7 @@ HTTP := class {
     safe => this is (get | head | options | trace)
     // Idempotent methods (https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2)
     idempotent => safe || this is (put | delete)
+    static (token: String) as (=== Method) => Method#{.written == token}.first
   }
 
   static Status := class = code: Decimal{100 <= . <= 599}, reason: String = Reasons[code] ?? "" {
@@ -20,7 +21,7 @@ HTTP := class {
       500: "Internal Server Error", 501: "Not Implemented", 502: "Bad Gateway", 503: "Service Unavailable" }
   }
 
-  static Fields := class = entries: (name: String, value: String)[] = [] {
+  static Fields := class: Document {
     // Field names are case-insensitive; repeated lines combine with ", " (https://www.rfc-editor.org/rfc/rfc9110#section-5.3)
     [name: String] => entries{.name.fold_case == name.fold_case}.value -- (.nonempty ? .join(", ") : None)
     has (name: String) => entries.some(.name.fold_case == name.fold_case)
@@ -52,6 +53,10 @@ HTTP := class {
 
     ok => status.kind == Status.Kind.successful
   }
+
+  // The target URI is rebuilt from origin-form and Host (https://www.rfc-editor.org/rfc/rfc9112#section-3.3)
+  static located (target, host: String?) => target is Location ? target
+    : target ~= ⊢"/" && host ? ("http://" + host + target) as Location : target as Location
 
   // tchar (https://www.rfc-editor.org/rfc/rfc9110#section-5.6.2)
   static Token = (Char.Letter | Char.Digit | "!" | "#" | "$" | "%" | "&" | "'" | "*" | "+" | "-" | "." | "^" | "_" | "`" | "|" | "~")[]{length > 0}
@@ -93,8 +98,7 @@ HTTP := class {
       bytes => body is Chunked ? body.bytes : body ?? []
 
       value => code ? Response(status: Status(code, reason), fields, body: bytes)
-        // The target URI is rebuilt from origin-form and Host (https://www.rfc-editor.org/rfc/rfc9112#section-3.3)
-        : Request(method: Method#{.written == method}.first, target: target ~= ⊢"/" ? ("http://" + fields["Host"] + target) as Location : target as Location, fields, body: bytes)
+        : Request(method: method as Method, target: located(target, fields["Host"]), fields, body: bytes)
 
       static (request: Request) as (=== Wire) => request.framed -- (framed => Wire(method: request.method.written, target: request.target.origin_form, version: "HTTP/1.1",
         lines: framed.entries, body: Wire(lines: framed.entries).chunked ? request.body as Chunked : request.body))
@@ -117,9 +121,23 @@ HTTP := class {
       static (bytes: Byte[]) as (=== Chunked) => Chunked(chunks: bytes.chunk(2 ^ 14).map((size: .count as Hexadecimal, data: .)), trailers: [])
     }
 
-    level := {
+    // Messages written inline: a line ends in a newline as well as CRLF (https://www.rfc-editor.org/rfc/rfc9112#section-2.2)
+    syntax := Compiler.default + {
+      // request-line (https://www.rfc-editor.org/rfc/rfc9112#section-3)
+      {method: Token} {target} {version: Wire.Name} => Request(method: method as Method, target: located(target, None))
+      // status-line (https://www.rfc-editor.org/rfc/rfc9112#section-4)
+      {version: Wire.Name} {code: Decimal{length == 3}} {reason} => Response(status: Status(code, reason as String))
+      // field-line (https://www.rfc-editor.org/rfc/rfc9112#section-5)
+      {name: Token}:{value} => (name: name as String, value: (value as String).trimmed)
+      // The start line, field lines, an empty line, then the body (https://www.rfc-editor.org/rfc/rfc9112#section-2.1)
+      {message: \n{components.first is (Request | Response)}} => message.components -- (lines => lines[1..].split(None) -- (sections =>
+        Fields(entries: sections.first) -- (fields => lines.first
+          ~~ (.fields = fields)
+          ~~ (.body = sections[1..].flatten.map(. as String).join(\n) as Byte[])
+          ~~ (.target = located(.target.origin_form, fields["Host"]) if . is Request))))
       {wire: Wire} => wire.value
     }
+    level := syntax
     written := {
       {writing: Language.Writing{value is (Request | Response)}} => writing.value as Wire
     }
@@ -135,21 +153,33 @@ HTTP := class {
     static Frame := class (size: Binary²⁴ = payload.count, type: Byte as Type, flags: Byte = 0, Binary¹{== 0}, stream: Binary³¹, payload: Byte[]{length == size}) {
       // Frame definitions (https://www.rfc-editor.org/rfc/rfc9113#section-6)
       static Type := enum data | headers | priority | rst_stream | settings | push_promise | ping | goaway | window_update | continuation
-      // END_STREAM and END_HEADERS (https://www.rfc-editor.org/rfc/rfc9113#section-6.2)
+      // END_STREAM, END_HEADERS, PADDED and PRIORITY (https://www.rfc-editor.org/rfc/rfc9113#section-6.1, https://www.rfc-editor.org/rfc/rfc9113#section-6.2)
       ends_stream => (flags ~&& 0x1) != 0
       ends_headers => (flags ~&& 0x4) != 0
+      padded => (flags ~&& 0x8) != 0
+      prioritised => type == Type.headers && (flags ~&& 0x20) != 0
+      // What a DATA or HEADERS frame carries, without its Pad Length, priority fields and Padding (https://www.rfc-editor.org/rfc/rfc9113#section-6.1, https://www.rfc-editor.org/rfc/rfc9113#section-6.2)
+      fragment => payload[(padded ? 1 : 0) + (prioritised ? 5 : 0)..<payload.count - (padded ? payload[0] : 0)]
     }
 
     static Wire := class (preface?, frames: Frame[]) {
-      streams => frames{.stream > 0}.map(.stream).unique.map(id => frames{.stream == id})
+      streams => frames{.stream > 0}.stream.unique
+      // A field block is a HEADERS frame and the CONTINUATION frames after it (https://www.rfc-editor.org/rfc/rfc9113#section-4.3)
+      blocks => frames{.type is (Frame.Type.headers | Frame.Type.continuation)}.reduce(acc = [] => .type == Frame.Type.continuation
+        ? [acc[..<acc.count - 1], [[acc.last, .].flatten(1)]].flatten(1) : [acc, [[.]]].flatten(1))
+      // One decoding context per connection, field blocks in the order they arrive (https://www.rfc-editor.org/rfc/rfc9113#section-4.3)
+      decoded => HPACK.Connection(blocks.map(.fragment.flatten as HPACK.Block)).fields
       // Pseudo-header fields (https://www.rfc-editor.org/rfc/rfc9113#section-8.3)
-      message (stream: Frame[]) => HPACK.read(stream{.type is (Frame.Type.headers | Frame.Type.continuation)}.payload.flatten) -- (fields => fields[":status"]
-        ? Response(status: Status(fields[":status"] as Decimal), fields: Fields(entries: fields{!(.name ~= ⊢":")}), body: stream{.type == Frame.Type.data}.payload.flatten)
-        : Request(method: Method#{.written == fields[":method"]}.first, target: (fields[":scheme"] + "://" + fields[":authority"] + fields[":path"]) as Location,
-            fields: Fields(entries: fields{!(.name ~= ⊢":")}), body: stream{.type == Frame.Type.data}.payload.flatten))
+      message (stream: Number) => Document(entries: blocks.enumerate{.value.first.stream == stream}.map(decoded[.index]).flatten(1)) -- (fields =>
+        Fields(entries: fields.entries{!(.name ~= ⊢":")}) -- (plain => frames{.stream == stream && .type == Frame.Type.data}.fragment.flatten -- (body => fields[":status"]
+          ? Response(status: Status(fields[":status"] as Decimal), fields: plain, body: body)
+          : Request(method: fields[":method"] as Method, target: (fields[":scheme"] + "://" + fields[":authority"] + fields[":path"]) as Location, fields: plain, body: body))))
+      // Connection-specific fields are not sent (https://www.rfc-editor.org/rfc/rfc9113#section-8.2.2)
       static (request: Request) as (=== Wire) => Wire(frames: [
-        Frame(type: Frame.Type.headers, flags: 4 + (request.body.empty ? 1 : 0), stream: 1, payload: HPACK.write([(":method", request.method.written), (":scheme", request.target.scheme),
-          (":authority", request.target.host), (":path", request.target.origin_form), request.fields.entries{!(.name.fold_case is ("host" | "connection" | "transfer-encoding"))}].flatten)),
+        Frame(type: Frame.Type.headers, flags: 4 + (request.body.empty ? 1 : 0), stream: 1, payload: HPACK.write([
+          (name: ":method", value: request.method.written), (name: ":scheme", value: request.target.scheme),
+          (name: ":authority", value: request.target.host), (name: ":path", value: request.target.origin_form),
+          request.fields.entries{!(.name.fold_case is ("host" | "connection" | "transfer-encoding"))}.map((name: .name.lower_case, value: .value))].flatten(1))),
         Frame(type: Frame.Type.data, flags: 1, stream: 1, payload: request.body) if request.body.nonempty
       ])
     }
@@ -177,6 +207,6 @@ HTTP := class {
 Location &+= {
   // origin-form (https://www.rfc-editor.org/rfc/rfc9112#section-3.2.1)
   origin_form => (path.nonempty ? path : "/") + (query ? "?" + query as String : "")
-  socket => Network.Socket.Address(host: host, port: port ?? protocol?.port)
+  // Application-Layer Protocol Negotiation (https://www.rfc-editor.org/rfc/rfc7301)
   offers (name: String) => external network `alpn` (this as String) ∋ name
 }

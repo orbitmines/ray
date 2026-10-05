@@ -8,3 +8,15 @@ acl := shared as ACL
 unless acl ~= (*, "user:alice:r--", *) { INFO@mark `AC18 a character's read is not a named ACL entry` }
 unless acl ~= (*, "mask::r--", *) { INFO@mark `AC19 an ACL with a named entry has no mask` }
 if ACL.read("user::rw-\nuser:alice:rwx\ngroup::---\nmask::r--\nother::---"){.who is Character}.first.writes { INFO@mark `AC20 the mask does not limit a named entry` }
+unless (@acl user:alice:r--).first.who.name == "alice" { INFO@mark `AC32 a named entry written inline is not its character's access` }
+reader := "alice"
+acl_block := @acl {
+  # file: shared
+  user::rw-
+  user:{reader}:r--
+  group::---
+  mask::r--
+  other::---
+}
+unless acl_block.first is ACL.Comment && acl_block{.who is Character}.first.who.name == "alice" { INFO@mark `AC33 an ACL block does not read its comment and its hole` }
+unless (acl_block as ACL) ~= ⊢"# file: shared\n" { INFO@mark `AC34 an ACL comment is not written back` }

@@ -1,2 +1,107 @@
 // HPACK: Field compression for HTTP/2 (https://www.rfc-editor.org/rfc/rfc7541)
-HPACK := Language(".hpack")
+HPACK := class: Language {
+  static extensions = ".hpack"
+
+  // Static table (https://www.rfc-editor.org/rfc/rfc7541#appendix-A)
+  static Static = [
+    (":authority", ""), (":method", "GET"), (":method", "POST"), (":path", "/"), (":path", "/index.html"), (":scheme", "http"), (":scheme", "https"),
+    (":status", "200"), (":status", "204"), (":status", "206"), (":status", "304"), (":status", "400"), (":status", "404"), (":status", "500"),
+    ("accept-charset", ""), ("accept-encoding", "gzip, deflate"), ("accept-language", ""), ("accept-ranges", ""), ("accept", ""),
+    ("access-control-allow-origin", ""), ("age", ""), ("allow", ""), ("authorization", ""), ("cache-control", ""), ("content-disposition", ""),
+    ("content-encoding", ""), ("content-language", ""), ("content-length", ""), ("content-location", ""), ("content-range", ""), ("content-type", ""),
+    ("cookie", ""), ("date", ""), ("etag", ""), ("expect", ""), ("expires", ""), ("from", ""), ("host", ""), ("if-match", ""), ("if-modified-since", ""),
+    ("if-none-match", ""), ("if-range", ""), ("if-unmodified-since", ""), ("last-modified", ""), ("link", ""), ("location", ""), ("max-forwards", ""),
+    ("proxy-authenticate", ""), ("proxy-authorization", ""), ("range", ""), ("referer", ""), ("refresh", ""), ("retry-after", ""), ("server", ""),
+    ("set-cookie", ""), ("strict-transport-security", ""), ("transfer-encoding", ""), ("user-agent", ""), ("vary", ""), ("via", ""), ("www-authenticate", "")
+  ].map((name: .0, value: .1))
+
+  // Integer representation: an N-bit prefix, continued in 7-bit groups least significant first (https://www.rfc-editor.org/rfc/rfc7541#section-5.1)
+  static Integer := class<prefix: Number> (
+    (small: Binary{length == prefix && . < 2 ^ prefix - 1})
+    | (Binary{length == prefix && . == 2 ^ prefix - 1}, groups: (Binary¹{== 1}, group: Binary⁷)[], Binary¹{== 0}, last: Binary⁷)
+  ) {
+    value => small ?? 2 ^ prefix - 1 + [groups.group, last].flatten.enumerate.map(.value * 128 ^ .index).sum
+    as (=== Decimal) => value
+    static (value: Decimal) as (=== Integer) => value < 2 ^ prefix - 1 ? Integer<prefix>(small: value)
+      : <-((value - 2 ^ prefix + 1).digits(128)) -- (digits => Integer<prefix>(groups: digits[..<-1].map((group: .)), last: digits.last))
+  }
+
+  // Huffman code: canonical, so given by each symbol's code length; symbol 256 is EOS (https://www.rfc-editor.org/rfc/rfc7541#appendix-B)
+  static Lengths = [
+    (5, "012aceiost"), (6, " %-./3456789=A_bdfghlmnpru"), (7, ":BCDEFGHIJKLMNOPQRSTUVWYjkqvwxyz"), (8, "&*,;XZ"), (10, "!\"()?"), (11, "'+|"), (12, "#>"),
+    (13, [0, 36, 64, 91, 93, 126]), (14, "^}"), (15, "<`{"), (19, [92, 195, 208]),
+    (20, [128, 130, 131, 162, 184, 194, 224, 226]),
+    (21, [153, 161, 167, 172, 176, 177, 179, 209, 216, 217, 227, 229, 230]),
+    (22, [129, 132, 133, 134, 136, 146, 154, 156, 160, 163, 164, 169, 170, 173, 178, 181, 185, 186, 187, 189, 190, 196, 198, 228, 232, 233]),
+    (23, [1, 135, 137, 138, 139, 140, 141, 143, 147, 149, 150, 151, 152, 155, 157, 158, 165, 166, 168, 174, 175, 180, 182, 183, 188, 191, 197, 231, 239]),
+    (24, [9, 142, 144, 145, 148, 159, 171, 206, 215, 225, 236, 237]),
+    (25, [199, 207, 234, 235]),
+    (26, [192, 193, 200, 201, 202, 205, 210, 213, 218, 219, 238, 240, 242, 243, 255]),
+    (27, [203, 204, 211, 212, 214, 221, 222, 223, 241, 244, 245, 246, 247, 248, 250, 251, 252, 253, 254]),
+    (28, [2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 127, 220, 249]),
+    (30, [10, 13, 22, 256])
+  ]
+  static code = $.deflate.Huffman((0..256).map(symbol => Lengths{(.1 is String ? .1.bytes : .1) ∋ symbol}.first.0))
+
+  // Huffman-coded octets: codes most significant bit first, padded to the octet with the high bits of EOS (https://www.rfc-editor.org/rfc/rfc7541#section-5.2)
+  static Coded := class (symbols: code.Symbol{< 256}[], padding: Binary{length < 8 && every(. == 1)} = [1] * ((8 - symbols.map(code.bits(.).length).sum % 8) % 8)) {
+    text => symbols as Byte[] as String
+    static (text: String) as (=== Coded) => Coded(symbols: text as Byte[])
+  }
+
+  // String literal: H, the length, then the octets, Huffman coded when H is set (https://www.rfc-editor.org/rfc/rfc7541#section-5.2)
+  static Text := class (huffman: Binary¹ as boolean = false, size: Integer<7> = octets.count as Integer<7>, octets: Byte[]{length == size.value}) {
+    value => huffman ? (octets as Coded).text : octets as String
+    static (text: String) as (=== Text) => Text(octets: text as Byte[])
+  }
+
+  // Field representations (https://www.rfc-editor.org/rfc/rfc7541#section-6)
+  static Representation := class (
+    // Indexed field (https://www.rfc-editor.org/rfc/rfc7541#section-6.1)
+    (Binary¹{== 1}, index: Integer<7>{value > 0})
+    // Literal with incremental indexing, without indexing, never indexed (https://www.rfc-editor.org/rfc/rfc7541#section-6.2)
+    | (((kind: 01₂, at: Integer<6>) | (kind: 0000₂, at: Integer<4>) | (kind: 0001₂, at: Integer<4>)), (name: Text) if at.value == 0, value: Text)
+    // Dynamic table size update (https://www.rfc-editor.org/rfc/rfc7541#section-6.3)
+    | (001₂, size: Integer<5>)
+  ) {
+    inserting => kind == 01₂
+    field (table: Table) => index ? table[index.value] : (name: name?.value ?? table[at.value].name, value: value.value)
+    static (field: (name: String, value: String)) as (=== Representation) => Representation(kind: 0000₂, at: 0 as Integer<4>, name: field.name as Text, value: field.value as Text)
+  }
+
+  // The dynamic table: newest first after the static entries, each costing its octets plus 32, the oldest evicted to fit (https://www.rfc-editor.org/rfc/rfc7541#section-2.3, https://www.rfc-editor.org/rfc/rfc7541#section-4)
+  static Table := class = entries: (name: String, value: String)[] = [], limit: Number = 4096 {
+    size => entries.map(.name.bytes.count + .value.bytes.count + 32).sum
+    fitted => size <= limit ? this : Table(entries[..<-1], limit).fitted
+    inserted (entry: (name: String, value: String)) => Table([[entry], entries].flatten(1), limit).fitted
+    resized (limit: Number) => Table(entries, limit).fitted
+    [index: Number] => [Static, entries].flatten(1)[index - 1]
+  }
+
+  // A field block: its representations in order, each seeing the table left by those before it (https://www.rfc-editor.org/rfc/rfc7541#section-3.2)
+  static Block := class (representations: Representation[]) {
+    decoded (table: Table = Table()) => representations.reduce(held = (table: table, fields: []) => .field(held.table) -- (field =>
+      .size ? (table: held.table.resized(.size.value), fields: held.fields)
+      : (table: .inserting ? held.table.inserted(field) : held.table, fields: [held.fields, field])))
+  }
+  // The blocks of one connection share its dynamic table, in the order they are decoded (https://www.rfc-editor.org/rfc/rfc7541#section-2.2)
+  static Connection := class = blocks: Block[] {
+    fields => blocks.reduce(held = (table: Table(), fields: []) => .decoded(held.table) -- (decoded => (table: decoded.table, fields: [held.fields, [decoded.fields]].flatten(1)))).fields
+  }
+
+  // The encoder's choices: an index for what the static table holds, and Huffman coding when it is shorter (https://www.rfc-editor.org/rfc/rfc7541#section-7.1)
+  static Optimizations := {
+    {r: Representation{kind == 0000₂ && name && Static ∋ (name: name.value, value: value.value)}} =>
+      Representation(index: (Static.index_of((name: r.name.value, value: r.value.value)) + 1) as Integer<7>)
+    {r: Representation{kind == 0000₂ && name && Static.name ∋ name.value}} =>
+      Representation(kind: r.kind, at: (Static.name.index_of(r.name.value) + 1) as Integer<4>, value: r.value)
+    {text: Text{!huffman && (value as Coded as Byte[]).count < octets.count}} => Text(huffman: true, octets: text.value as Coded as Byte[])
+  }
+
+  level := {
+    {block: Block} => Document(entries: block.decoded().fields)
+  }
+  written := Optimizations + {
+    {writing: Language.Writing} => Block(representations: writing.value.map(. as Representation))
+  }
+}

@@ -112,14 +112,66 @@ Network &+= {
     static query (name: String, type: Type = Type.A) => Message(questions: [Question(name: DomainName(text: name) as Name, type)])
     static resolve (name: String, type: Type = Type.A) => Compiler.reduced(Lookup(query(name, type)), Optimizations).answer.addresses.first
 
-    level := {
-      {message: Message} => message
+    // Zone files: the master file format (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+    static Comment := class = text: String
+    static Origin := class = name: String
+    static Lifetime := class = ttl: Decimal
+    static Line := class = owner: String?, ttl: Decimal?, within: Classes?, type: Type, data: * {
+      // Names are relative to $ORIGIN unless they end in "."; "@" is the origin; a blank owner is the one above; a missing TTL the last given (https://www.rfc-editor.org/rfc/rfc1035#section-5.1, https://www.rfc-editor.org/rfc/rfc2308#section-4)
+      record (above: *[]) => above{. is Origin}.last?.name -- (origin => Record(
+        name: absolute(owner ?? above{. is Line && .owner}.last?.owner ?? "@", origin) as Name,
+        type: type,
+        within: within ?? Classes.IN,
+        ttl: ttl ?? above{. is Lifetime}.last?.ttl ?? above{. is Line && .ttl}.last?.ttl ?? 3600,
+        data: Compiler.reduced(Presented(type, data, origin), Presentation)))
     }
-    written := {
-      {writing: Language.Writing{value is Message}} => writing.value
+    static absolute (name: String, origin: String?) => DomainName(text: name == "@" ? origin?.trimmed(".") ?? "" : name ~= "." ⊣ ? name[..<-1] : origin ? name + "." + origin.trimmed(".") : name)
+    static text (name: Name) => name.labels.text.map(. as String).join(".")
+
+    // RDATA in its text form (https://www.rfc-editor.org/rfc/rfc1035#section-3.3, https://www.rfc-editor.org/rfc/rfc1035#section-3.4.1), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.4), SRV (https://www.rfc-editor.org/rfc/rfc2782)
+    static Presented := class = type: Type, text: *, origin: String?
+    static Blank = (" " | "\t")[]{length > 0}
+    static Presentation := {
+      {presented: Presented{!(text is String)}} => presented.text
+      {presented: Presented{type == Type.A}} => presented.text as IPv4
+      {presented: Presented{type == Type.AAAA}} => presented.text as IPv6
+      {presented: Presented{type is (Type.NS | Type.CNAME | Type.PTR)}} => absolute(presented.text, presented.origin)
+      {presented: Presented{type == Type.MX}} => (presented.text ~= (preference: Decimal, Blank, exchange: *)) -- (preference: .preference, exchange: absolute(.exchange, presented.origin) as Name)
+      // <character-string>: quoted, or a run without blanks (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+      {presented: Presented{type == Type.TXT}} => (presented.text ~= (strings: (("\"", text: (!"\"")[], "\"") | text: (!" " && !"\t")[]{length > 0})[].join(Blank))).strings.text.map(. as String)
+      {presented: Presented{type == Type.SOA}} => (presented.text ~= (primary: *, Blank, mailbox: *, Blank, serial: Decimal, Blank, refresh: Decimal, Blank, retry: Decimal, Blank, expire: Decimal, Blank, minimum: Decimal)) -- (found =>
+        (primary: absolute(found.primary, presented.origin) as Name, mailbox: absolute(found.mailbox, presented.origin) as Name, serial: found.serial, refresh: found.refresh, retry: found.retry, expire: found.expire, minimum: found.minimum))
+      {presented: Presented{type == Type.SRV}} => (presented.text ~= (priority: Decimal, Blank, weight: Decimal, Blank, port: Decimal, Blank, target: *)) -- (found =>
+        (priority: found.priority, weight: found.weight, port: found.port, target: absolute(found.target, presented.origin) as Name))
+    }
+    static Presenting := {
+      {record: Record{data is IP}} => record.data as String
+      {record: Record{type is (Type.NS | Type.CNAME | Type.PTR)}} => text(record.data as Name) + "."
+      {record: Record{type == Type.MX}} => record.data.preference as String + " " + text(record.data.exchange as Name) + "."
+      {record: Record{type == Type.TXT}} => record.data.map("\"" + . + "\"").join(" ")
+      {record: Record{type == Type.SOA}} => record.data -- (soa => [text(soa.primary as Name) + ".", text(soa.mailbox as Name) + ".", soa.serial, soa.refresh, soa.retry, soa.expire, soa.minimum].map(. as String).join(" "))
+      {record: Record{type == Type.SRV}} => record.data -- (srv => [srv.priority, srv.weight, srv.port, text(srv.target as Name) + "."].map(. as String).join(" "))
     }
 
-    record (name: String, address, key): static => this ~~ (this[name] = (address: address, key: key))
-    trusted (name: String, key) => (this[name].history.first?.key ?? key) == key
+    syntax := Compiler.default + {
+      // Comments run from ";" to the end of the line (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+      ;{literal text} => Comment(text)
+      // $ORIGIN (https://www.rfc-editor.org/rfc/rfc1035#section-5.1) and $TTL (https://www.rfc-editor.org/rfc/rfc2308#section-4)
+      $ORIGIN {name} => Origin(name as String)
+      $TTL {ttl: Decimal} => Lifetime(ttl)
+      // <domain-name> [<TTL>] [<class>] <type> <RDATA>, the TTL and class in either order (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+      {owner?} {ttl?: Decimal} {within?: Classes} {type: Type} {data} => Line(owner as String, ttl, within, type, data)
+      {owner?} {within: Classes} {ttl: Decimal} {type: Type} {data} => Line(owner as String, ttl, within, type, data)
+      {line: Line} => line.record([])
+      {zone: \n} => zone.components -- (lines => lines.enumerate.map(line => line.value is Line ? line.value.record(lines[..<line.index]) : line.value){!(. is (Origin | Lifetime))})
+      {message: Message} => message
+    }
+    level := syntax
+    written := {
+      {writing: Language.Writing{value is Message}} => writing.value
+      // Records written in the master file format, one to a line (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+      {writing: Language.Writing{value is (Record | Comment)[]}} => writing.value.map(line => (line is Comment ? (";", line.text)
+        : (text(line.name), ". ", line.ttl as String, " ", line.within.name, " ", line.type.name, " ", Compiler.reduced(line, Presenting))), \n)
+    }
   }
 }

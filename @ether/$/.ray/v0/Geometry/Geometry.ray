@@ -45,6 +45,7 @@ Geometry := class {
     luminance => (red * 299 + green * 587 + blue * 114) / 1000
     over (top: Color) => mix(top ~~ .alpha = 1, top.alpha) ~~ .alpha = alpha + top.alpha * (1 - alpha)
     mix (other: Color, by: Probability) => Color(red + (other.red - red) * by, green + (other.green - green) * by, blue + (other.blue - blue) * by, alpha + (other.alpha - alpha) * by)
+    faded (by: Probability) => Color(red, green, blue, alpha * by)
   }
   Paint := Color | Gradient | Pattern | Inherited
   Inherited := class
@@ -129,6 +130,8 @@ Geometry := class {
     at (point: Vector) => visible ? [children.sort_by(-.layer).map(.at(point)).flatten, this if contains(transform.inverse.applied(point - origin))] : []
     contains (point: Vector) => 0 <= point.x <= size.x && 0 <= point.y <= size.y
     intrinsic (width: Length) => 0
+    anchor_in (scene: Shape) => position.anchor ?? parent_in(scene)
+    boundary => Outline(from: Vector(), segments: [Vector(size.x, 0), size, Vector(0, size.y)], closed: true)
   }
   Position := class = kind: flow | sticky | fixed | absolute | anchored = flow, top: Length?, right: Length?, bottom: Length?, left: Length?, anchor: Shape?, side: Side = bottom {
     static sticky (top: Length? = 0, bottom: Length?) => Position(sticky, top: top, bottom: bottom)
@@ -149,6 +152,7 @@ Geometry := class {
     contains (point: Vector) => (point - size * (1 / 2)).length <= radius
   }
   Polygon := class: Shape = points: Vector[] {
+    boundary => Outline(from: points.first, segments: points.rest, closed: true)
     contains (point: Vector) => points.zip([points.rest, points.first]).filter((a, b) => (a.y > point.y) != (b.y > point.y) && point.x < a.x + (point.y - a.y) * (b.x - a.x) / (b.y - a.y)).count.odd
   }
   Circle := class: Ball = centre: Point {
@@ -167,6 +171,7 @@ Geometry := class {
       * => [.]
     ).flatten]
     contains (point: Vector) => Polygon(points: points).contains(point)
+    boundary => this
   }
   Bezier := (points: Vector[], t: Number) => points.count == 1 ? points.first : Bezier(points.zip(points.rest).map((a, b) => a + (b - a) * t), t)
 
@@ -189,6 +194,8 @@ Geometry := class {
     ).sum
   Constraint := class = dimension: "x" | "y" | "z", least: Length?, most: Length?, share: (Number | Interpolated | Steps | Breakpoint[])?, align: Align?, aspect: Number?, columns: Number?, wrap: boolean = false {
     admits (length: Length) => (least == None || least <= length) && (most == None || length <= most)
+    responsive => share ==.instance_of (Interpolated | Steps | Breakpoint[])
+    stops => share ==.instance_of Breakpoint[] ? (share as Steps).sorted : share.sorted
   }
   Breakpoint := class = width: Length, share: Number {
     -> (other: Breakpoint) => Interpolated([this, other])
@@ -283,6 +290,12 @@ Geometry := class {
     stuck (scene: Shape) => scene.expand{.position.kind == sticky}.for(shape => shape.parent_in(scene) -- (parent =>
       shape.moved(Vector(0, (shape.origin.y max (scrolled + resolved(shape.position.top ?? 0, available.y)) min (parent.origin.y + parent.size.y - shape.size.y)) - shape.origin.y)) if parent
     )) -- scene
+  }
+
+  Unsolved := class = shape: Shape, available: Vector, scrolled: Length = 0
+  Solved := class = shape: Shape, scrolled: Length = 0
+  Solving := {
+    {unsolved: Unsolved} => Solved(Solver(available: unsolved.available, scrolled: unsolved.scrolled).solve(unsolved.shape), unsolved.scrolled)
   }
 
   Transition := class = duration: Quantity.Temporal, easing: Easing = ease

@@ -740,29 +740,33 @@ external extend None {
   != (other) => (other === None).not
 }
 
+!{x} ^punctuation => (x).not
+
 class:{ }{header}{`{`}{members?}{`}`} ^keyword => (
-  made ^keyword := class { inline members }
+  made := class { inline members }
   made.written_body = external ** members
   made.components.hierarchy &= header
   made
 )
 
+extended_by (onto, walker) => (
+  while walker {
+    onto &= walker.value
+    walker = walker.next
+  }
+  onto
+)
+
 Chain := class {
   entry => .head
 }
-
 Listed := class {
   listing => global
   , ^punctuation (other) => (
-    joined ^keyword := chain None
+    joined := chain None
     external extend joined Listed
-    walker ^keyword := .head
-    while (walker) {
-      joined &= walker.value
-      walker = walker.next
-    }
+    extended_by(joined, this.head)
     joined &= other
-    joined
   )
 }
 Link := class { }
@@ -775,16 +779,32 @@ Field := class {
   name: Node
   value: Node
 }
+Chosen := class {
+  among: Node
+  value: Node
+  previous => .among.previous
+  next => .among.next
+}
+Capture := class {
+  name: Node
+  type: Node
+  capturing => true
+}
+Captured := class {
+  name: Node
+  value: Node
+  named => true
+}
 Call := class {
   statement: Node
   is_external => .statement.written_with(`external`)
   external_name => (
-    named ^keyword := chain None
-    space ^keyword := code_points(`x y`).head.next.value
-    skipped ^keyword := 9
-    ended ^keyword := false
+    named := chain None
+    space := code_points(`x y`).head.next.value
+    skipped := 9
+    ended := false
     code_points(.statement.code) for {
-      if skipped.nonzero { skipped = skipped.pred } elsif ended.not {
+      if skipped.nonzero { skipped = skipped.pred } elsif !ended {
         if (it.value == space) { ended = true } else { named &= it.value }
       }
     }
@@ -792,14 +812,9 @@ Call := class {
   )
   ** => .statement
 }
-Chosen := class {
-  among: Node
-  value: Node
-  previous => .among.previous
-  next => .among.next
-}
+
 text_bits (text) => (
-  held ^keyword := chain None
+  held := chain None
   take (bit) => (
     held &= bit
     global
@@ -807,9 +822,10 @@ text_bits (text) => (
   external bits text take
   held
 )
+bits_onto (held, text) => extended_by(held, text_bits(text).head)
 prefix_of (at, spelling) => (
-  prefix ^keyword := None
-  matching ^keyword := global
+  prefix := None
+  matching := global
   compare (bit) => (
     unless at { matching = None }
     if matching {
@@ -823,41 +839,41 @@ prefix_of (at, spelling) => (
   prefix
 )
 same_text (first_text, second_text) => (
-  same ^keyword := false
-  if ((first_text).and(second_text)) {
-    matched ^keyword := prefix_of(text_bits(first_text).head, second_text)
+  same := false
+  if (first_text && second_text) {
+    matched := prefix_of(text_bits(first_text).head, second_text)
     if matched { unless matched.rest { same = true } }
   }
   same
 )
 outnumbers (first_reading, other) => (
-  mine ^keyword := chain None
-  theirs ^keyword := chain None
+  mine := chain None
+  theirs := chain None
   if first_reading.head { mine = first_reading } else { mine &= first_reading }
   if other.head { theirs = other } else { theirs &= other }
-  a ^keyword := mine.head
-  b ^keyword := theirs.head
-  while ((a).and(b)) {
+  a := mine.head
+  b := theirs.head
+  while (a && b) {
     a = a.next
     b = b.next
   }
   a
 )
 read_whole (text, type) => (
-  whole ^keyword := None
+  whole := None
   if type.repeating {
-    tree ^keyword := None
+    tree := None
     if type.repeats.superposes { tree = spelled_tree_of(type.repeats) }
     if (tree) {
-      ends ^keyword := spelled_ends(text, tree)
+      ends := spelled_ends(text, tree)
       if (ends) {
         if type.repeats.spelled_unique { whole = spelled_reading(ends) } else { whole = read_repeated(text_bits(text).head, type.repeats) }
       }
     } else { whole = read_repeated(text_bits(text).head, type.repeats) }
   } else {
-    candidate ^keyword := readings_of(text_bits(text).head, type).head
+    candidate := readings_of(text_bits(text).head, type).head
     while candidate {
-      reading ^keyword := candidate.value
+      reading := candidate.value
       unless reading.rest {
         if whole {
           if (outnumbers(reading.value, whole)) { whole = reading.value }
@@ -868,8 +884,9 @@ read_whole (text, type) => (
   }
   whole
 )
+
 spelled_node ^keyword => (
-  node ^keyword := external .
+  node := external .
   ends := None
   path := None
   zero := None
@@ -880,11 +897,11 @@ spelled_tree_of (type) => (
   unless type.spelled_tree_known {
     type.spelled_tree = None
     type.spelled_unique = global
-    root ^keyword := spelled_node
-    plain ^keyword := global
+    root := spelled_node
+    plain := global
     insert (kind, path) => (
-      at ^keyword := root
-      bit ^keyword := text_bits(kind).head
+      at := root
+      bit := text_bits(kind).head
       while bit {
         if at.ends { type.spelled_unique = None }
         if bit.value {
@@ -897,31 +914,22 @@ spelled_tree_of (type) => (
         bit = bit.next
       }
       unless (at === root) {
-        if at.ends { type.spelled_unique = None }
-        if at.zero { type.spelled_unique = None }
-        if at.one { type.spelled_unique = None }
+        if (at.ends || at.zero || at.one) { type.spelled_unique = None }
         at.ends = global
         at.path = path
       }
     )
     gather (kind, path) => (
       if kind.superposes {
-        alternative ^keyword := kind.components.head
+        alternative := kind.components.head
         while alternative {
-          deeper ^keyword := chain None
-          step ^keyword := path.head
-          while step {
-            deeper &= step.value
-            step = step.next
-          }
+          deeper := chain None
+          extended_by(deeper, path.head)
           deeper &= alternative
           gather(alternative.value, deeper)
           alternative = alternative.next
         }
-      } elsif kind.repeating { plain = None }
-      elsif kind.listing { plain = None }
-      elsif kind.capturing { plain = None }
-      elsif kind.written_body { plain = None }
+      } elsif (kind.repeating || kind.listing || kind.capturing || kind.written_body) { plain = None }
       else { insert(kind, path) }
     )
     gather(type, chain None)
@@ -930,36 +938,67 @@ spelled_tree_of (type) => (
   }
   type.spelled_tree
 )
-head_stops ^keyword := ` ` | `(` | `:` | `?`
-not_word_starts ^keyword := `{` | `[` | `^` | `@`
+spelled_ends (text, root) => (
+  active := chain None
+  active &= root
+  ended := chain None
+  completed := None
+  step (bit) => (
+    reached := chain None
+    done := None
+    at := active.head
+    while at {
+      next_node := None
+      if bit { next_node = at.value.one } else { next_node = at.value.zero }
+      if next_node {
+        reached &= next_node
+        if next_node.ends {
+          done = global
+          ended &= next_node
+        }
+      }
+      at = at.next
+    }
+    if done { reached &= root }
+    completed = done
+    active = reached
+    reached.head
+  )
+  external bits text step
+  unless active.head { completed = None }
+  unless completed { ended = None }
+  ended
+)
+spelled_reading (ends) => (
+  whole := chain None
+  ended := ends.head
+  while ended {
+    step := ended.value.path.tail
+    chosen := step.value.value
+    while step {
+      chosen = Chosen(among: step.value, value: chosen)
+      step = step.previous
+    }
+    whole &= chosen
+    ended = ended.next
+  }
+  whole
+)
+
+head_stops := ` ` | `(` | `:` | `?`
+not_word_starts := `{` | `[` | `^` | `@`
 heads_root ^keyword => (
   unless global.heads_trie { global.heads_trie = spelled_node }
   global.heads_trie
 )
-bits_onto (held, text) => (
-  part ^keyword := text_bits(text).head
-  while part {
-    held &= part.value
-    part = part.next
-  }
-  held
-)
-todo_held ^keyword := chain None
+todo_held := chain None
 todo_bits ^keyword => (
   unless todo_held.head { bits_onto(bits_onto(bits_onto(todo_held, `=`), `>`), ` TODO`) }
   todo_held
 )
-byte_steps ^keyword := chain None
-byte_steps &= global
-byte_steps &= global
-byte_steps &= global
-byte_steps &= global
-byte_steps &= global
-byte_steps &= global
-byte_steps &= global
-byte_steps &= global
+byte_steps := text_bits(` `)
 written_head ^keyword => (
-  node ^keyword := external .
+  node := external .
   spelled := None
   stop := None
   is_required := None
@@ -967,22 +1006,22 @@ written_head ^keyword => (
   node
 )
 head_of (statement) => (
-  read ^keyword := written_head
-  stops ^keyword := spelled_tree_of(head_stops)
-  starts ^keyword := spelled_tree_of(not_word_starts)
-  head_at ^keyword := heads_root
-  byte_from ^keyword := heads_root
-  stop_at ^keyword := stops
-  start_at ^keyword := starts
-  first_bit ^keyword := None
-  second_bit ^keyword := None
-  bits_seen ^keyword := None
-  second_seen ^keyword := None
-  word_start ^keyword := None
-  first_done ^keyword := None
-  step_at ^keyword := byte_steps.head
-  todo_at ^keyword := None
-  reading ^keyword := global
+  read := written_head
+  stops := spelled_tree_of(head_stops)
+  starts := spelled_tree_of(not_word_starts)
+  head_at := heads_root
+  byte_from := heads_root
+  stop_at := stops
+  start_at := starts
+  first_bit := None
+  second_bit := None
+  bits_seen := None
+  second_seen := None
+  word_start := None
+  first_done := None
+  step_at := byte_steps.head
+  todo_at := None
+  reading := global
   take (bit) => (
     going := global
     if reading {
@@ -1017,7 +1056,7 @@ head_of (statement) => (
         } else {
           unless first_done {
             first_done = global
-            if first_bit { word_start = global } elsif second_bit { word_start = global }
+            if (first_bit || second_bit) { word_start = global }
             if start_at { if start_at.ends { word_start = None } }
             start_at = None
             unless word_start {
@@ -1043,82 +1082,33 @@ head_of (statement) => (
   read.spelled = byte_from
   if read.stop {
     unless (read.stop === head_stops.components.tail) { read.is_declared = global }
-    if (read.stop === head_stops.components.head.next.next) { if word_start { read.is_required = global } }
+    if ((read.stop === head_stops.components.head.next.next) && word_start) { read.is_required = global }
   }
   read
 )
-spelled_ends (text, root) => (
-  active ^keyword := chain None
-  active &= root
-  ended ^keyword := chain None
-  completed ^keyword := None
-  step (bit) => (
-    reached ^keyword := chain None
-    done ^keyword := None
-    at ^keyword := active.head
-    while at {
-      next_node ^keyword := None
-      if bit { next_node = at.value.one } else { next_node = at.value.zero }
-      if next_node {
-        reached &= next_node
-        if next_node.ends {
-          done = global
-          ended &= next_node
-        }
-      }
-      at = at.next
-    }
-    if done { reached &= root }
-    completed = done
-    active = reached
-    reached.head
-  )
-  external bits text step
-  unless active.head { completed = None }
-  unless completed { ended = None }
-  ended
-)
-spelled_reading (ends) => (
-  whole ^keyword := chain None
-  ended ^keyword := ends.head
-  while ended {
-    step ^keyword := ended.value.path.tail
-    chosen ^keyword := step.value.value
-    while step {
-      chosen = Chosen(among: step.value, value: chosen)
-      step = step.previous
-    }
-    whole &= chosen
-    ended = ended.next
-  }
-  whole
-)
+
 read_repeated (start, element) => (
-  whole ^keyword := None
-  layer ^keyword := chain None
+  whole := None
+  layer := chain None
   layer &= Reading(rest: start, value: chain None)
   while layer.head {
-    reached ^keyword := chain None
-    state ^keyword := layer.head
+    reached := chain None
+    state := layer.head
     while state {
-      reading ^keyword := state.value
-      steps ^keyword := readings_of(reading.rest, element).head
+      reading := state.value
+      steps := readings_of(reading.rest, element).head
       while steps {
-        step ^keyword := steps.value
+        step := steps.value
         unless (step.rest === reading.rest) {
-          seen ^keyword := None
-          known ^keyword := reached.head
-          while known {
+          seen := None
+          known := reached.head
+          while (known && !seen) {
             if (known.value.rest === step.rest) { seen = global }
             known = known.next
           }
           unless seen {
-            more ^keyword := chain None
-            part ^keyword := reading.value.head
-            while part {
-              more &= part.value
-              part = part.next
-            }
+            more := chain None
+            extended_by(more, reading.value.head)
             more &= step.value
             reached &= Reading(rest: step.rest, value: more)
             unless step.rest { whole = more }
@@ -1133,24 +1123,20 @@ read_repeated (start, element) => (
   whole
 )
 readings_of (rest, type) => (
-  found ^keyword := chain None
+  found := chain None
   if type.repeating {
-    firsts ^keyword := readings_of(rest, type.repeats).head
+    firsts := readings_of(rest, type.repeats).head
     while firsts {
-      first ^keyword := firsts.value
-      single ^keyword := chain None
+      first := firsts.value
+      single := chain None
       single &= first.value
       found &= Reading(rest: first.rest, value: single)
       unless (first.rest === rest) {
-        others ^keyword := readings_of(first.rest, type).head
+        others := readings_of(first.rest, type).head
         while others {
-          more ^keyword := chain None
+          more := chain None
           more &= first.value
-          part ^keyword := others.value.value.head
-          while part {
-            more &= part.value
-            part = part.next
-          }
+          extended_by(more, others.value.value.head)
           found &= Reading(rest: others.value.rest, value: more)
           others = others.next
         }
@@ -1158,23 +1144,19 @@ readings_of (rest, type) => (
       firsts = firsts.next
     }
   } elsif type.listing {
-    reached ^keyword := chain None
-    listed_from ^keyword := rest
+    reached := chain None
+    listed_from := rest
     reached &= Reading(rest: listed_from, value: chain None)
-    item ^keyword := type.head
+    item := type.head
     while item {
-      further ^keyword := chain None
-      so_far_at ^keyword := reached.head
+      further := chain None
+      so_far_at := reached.head
       while so_far_at {
-        so_far ^keyword := so_far_at.value
-        nexts ^keyword := readings_of(so_far.rest, item.value).head
+        so_far := so_far_at.value
+        nexts := readings_of(so_far.rest, item.value).head
         while nexts {
-          parts ^keyword := chain None
-          part ^keyword := so_far.value.head
-          while part {
-            parts &= part.value
-            part = part.next
-          }
+          parts := chain None
+          extended_by(parts, so_far.value.head)
           parts &= nexts.value.value
           further &= Reading(rest: nexts.value.rest, value: parts)
           nexts = nexts.next
@@ -1186,9 +1168,9 @@ readings_of (rest, type) => (
     }
     found = reached
   } elsif type.superposes {
-    alternative ^keyword := type.components.head
+    alternative := type.components.head
     while alternative {
-      alternatives ^keyword := readings_of(rest, alternative.value).head
+      alternatives := readings_of(rest, alternative.value).head
       while alternatives {
         found &= Reading(rest: alternatives.value.rest, value: Chosen(among: alternative, value: alternatives.value.value))
         alternatives = alternatives.next
@@ -1196,83 +1178,69 @@ readings_of (rest, type) => (
       alternative = alternative.next
     }
   } elsif type.capturing {
-    captures ^keyword := readings_of(rest, type.type).head
+    captures := readings_of(rest, type.type).head
     while captures {
       found &= Reading(rest: captures.value.rest, value: Captured(name: type.name, value: captures.value.value))
       captures = captures.next
     }
   } elsif type.written_body {
-    piece ^keyword := chain None
-    at ^keyword := rest
+    piece := chain None
+    at := rest
     while at {
       piece &= at.value
       at = at.next
-      copied ^keyword := chain None
-      bit_at ^keyword := piece.head
-      while bit_at {
-        copied &= bit_at.value
-        bit_at = bit_at.next
-      }
+      copied := chain None
+      extended_by(copied, piece.head)
       if (copied.instance_of(type)) { found &= Reading(rest: at, value: copied) }
     }
   } else {
-    matched ^keyword := prefix_of(rest, type)
+    matched := prefix_of(rest, type)
     if matched { found &= matched }
   }
   found
 )
 
-Capture := class {
-  name: Node
-  type: Node
-  capturing => true
-}
-Captured := class {
-  name: Node
-  value: Node
-  named => true
-}
 capture_of (content) => (
-  colon ^keyword := content.index_of(`:`)
-  named ^keyword := content
-  typed ^keyword := None
+  colon := content.index_of(`:`)
+  named := content
+  typed := None
   if colon {
     named = content.slice(0, colon)
     typed = content.slice(colon.succ, content.count)
   }
-  name ^keyword := None
+  name := None
   named.split(` `) for {
-    word ^keyword := it.value
-    unless ((word.empty).or(word.starts_with(`^`)).or(same_text(word, `literal`))) { name = word }
+    word := it.value
+    unless (word.empty || word.starts_with(`^`) || same_text(word, `literal`)) { name = word }
   }
   if (name.ends_with(`?`)) { name = name.slice(0, name.count.pred) }
-  type ^keyword := Node
+  type := Node
   if typed {
-    written ^keyword := None
-    styled ^keyword := false
+    written := None
+    styled := false
     typed.split(` `) for {
-      word ^keyword := it.value
+      word := it.value
       if (word.starts_with(`^`)) { styled = true }
-      unless ((styled).or(word.empty)) { if written { written = written + ` ` + word } else { written = word } }
+      unless (styled || word.empty) { if written { written = written + ` ` + word } else { written = word } }
     }
     if written { type = inline (external ** written) }
   }
   Capture(name: name, type: type)
 )
 pattern_of (head) => (
-  pattern ^keyword := None
+  pattern := None
   head for {
-    part ^keyword := it.value
-    item ^keyword := part.value
+    part := it.value
+    item := part.value
     if part.among.previous { item = capture_of(part.value.head.next.value) }
     if pattern { pattern = pattern, item } else { pattern = [item] }
   }
   pattern
 )
 matcher_of (pattern) => ((text, captured) => (
-  read ^keyword := None
-  reading ^keyword := None
-  start ^keyword := text_bits(text).head
+  read := None
+  reading := None
+  start := text_bits(text).head
   readings_of(start, pattern) for {
     if reading {
       if (outnumbers(it.value.value, reading.value)) { reading = it.value }
@@ -1283,13 +1251,10 @@ matcher_of (pattern) => ((text, captured) => (
       if it.value.named { captured[it.value.name] = it.value.value }
     }
     read = chain None
-    walker ^keyword := start
-    until_rest ^keyword := global
-    while ((walker).and(until_rest)) {
-      if (walker === reading.rest) { until_rest = None } else {
-        read &= walker.value
-        walker = walker.next
-      }
+    walker := start
+    while (walker && !(walker === reading.rest)) {
+      read &= walker.value
+      walker = walker.next
     }
   }
   read

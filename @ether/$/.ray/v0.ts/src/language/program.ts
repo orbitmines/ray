@@ -23,7 +23,8 @@ export function source(location: string, value: string): Text.Source {
 export function lsp(diagnostics: Diagnostics) {
   const program = new Program(diagnostics)
     .serve()
-    .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }));
+    .add(env.directory(`@ether/$/${EXTENSION}/v0`, { recursively: true, filter: x => x.endsWith(EXTENSION) }))
+    .interpreting(optimizations());
   program.eager = src => program.active.has(src.location);
   return program;
 }

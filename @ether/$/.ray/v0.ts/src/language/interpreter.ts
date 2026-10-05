@@ -253,7 +253,7 @@ export class Interpreter {
     const global = this.GLOBAL.own(name);
     if (global !== undefined) return global;
     for (const made of this.GLOBAL.with ?? []) { const held = this.seek(made, false, false, name, at, seen); if (held !== undefined) return held; }
-    if (this.pending.length > 0 && this.pending.some(src => src.name === `${name}.ray`) && this.load(name)) return this.GLOBAL.own(name);
+    if (this.pending.length > 0 && this.pending_named(name) && this.load(name)) return this.GLOBAL.own(name);
     if (this.naming !== undefined && (this.naming.name === undefined || this.naming.names !== undefined) && frame === this.naming.scope && (this.naming.names === undefined ? this.trying === 0 : Interpreter.word.test(name[0]))) { const first = this.naming.names?.length === 0 ? this.naming.first : undefined; this.naming.name ??= name; this.naming.names?.push(name); return frame.set(name, first ?? this.naming.hole); }
   }
   static same_name(one: Node, other: Node | undefined): boolean {
@@ -573,12 +573,17 @@ export class Interpreter {
     if (graph === undefined) by.set(span, graph = new Map());
     return graph;
   }
-  read(cursor: Text.Node, frame: Node): Node | undefined { return this.read_on(cursor, frame, cursor.cursor, this.forced.length, undefined); }
+  private reads_open = 0;
+  read(cursor: Text.Node, frame: Node): Node | undefined {
+    if (this.reads_open === 0) this.forced.length = 0;
+    this.reads_open++;
+    try { return this.read_on(cursor, frame, cursor.cursor, this.forced.length, undefined); } finally { this.reads_open--; }
+  }
   // Reading on from where the cursor is, in a span that began at `begin`: what a compiled body hands back to when it cannot go on.
   read_on(cursor: Text.Node, frame: Node, begin: number, mark: number, last: Node | undefined): Node | undefined {
     const painting = this.painting(cursor.source);
     const graph = painting ? undefined : this.graph_of(cursor.cursor === begin ? cursor : this.spanned(cursor, begin));
-    const unit = painting ? undefined : this.unit_of(cursor.cursor === begin ? cursor : this.spanned(cursor, begin));
+    const unit = this.unit_of(cursor.cursor === begin ? cursor : this.spanned(cursor, begin));
     while (true) {
       this.blank(cursor);
       if (cursor.done()) { if (this.running.length === 0) this.forced.length = Math.min(this.forced.length, mark); return last; }
@@ -1382,7 +1387,8 @@ export class Interpreter {
     const cursor = this.cursor_of(span);
     if (this.painting(span.source) || !Interpreter.reducing || ++rule.applications < 4) return this.read(cursor, local);
     const body = rule.reduced ??= reduce(this, span, this.unit_of(cursor), this.graph_of(cursor));
-    return run(this, body, cursor, local);
+    this.reads_open++;
+    try { return run(this, body, cursor, local); } finally { this.reads_open--; }
   }
   unforce(mark: number) { for (let k = mark; k < this.forced.length; k++) this.forced[k].value = undefined; this.forced.length = Math.min(this.forced.length, mark); }
   // Where an application stands in written code: the call site of each rule whose body it is inside.
@@ -2128,10 +2134,12 @@ export class Interpreter {
   }
   // A name nothing has written yet is looked for in the files not read so far, in their order.
   pending: Text.Source[] = [];
+  pending_named(name: string): boolean { const file = `${name}.ray`; return this.pending.some(src => src.name === file); }
   done = new Set<Text.Source>();
   load(name: string): boolean {
     const eager = this.program?.eager !== undefined;
-    const named = this.pending.some(src => src.name === `${name}.ray`);
+    const named = this.pending_named(name);
+    if (eager && !named) return false;
     const reading = this.reading;
     const written = new RegExp(`(^|[^\\p{L}\\p{N}_])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}\\p{N}_])`, 'u');
     if (!named && [reading, ...this.in_progress.values()].some(at => at !== undefined && written.test(at.source.value.slice(at.end + 1)))) return false;

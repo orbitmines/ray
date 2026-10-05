@@ -141,7 +141,7 @@ async function daemon(socket: string) {
   const lsp = (connection: import('net').Socket, send: Jobs.Send) => {
     sessions++;
     clearTimeout(timer);
-    if (painter === undefined) {
+    if (painter === undefined && process.env.RAY_LSP !== 'kernel') {
       painter = env.thread({ paint: true });
       painter.on('error', () => {}).on('exit', () => { painter = undefined; });
     }
@@ -1144,7 +1144,8 @@ export class env {
     const file = env.url.fileURLToPath(import.meta.url), typescript = (globalThis as any).Deno === undefined && /\.[cm]?ts$/.test(file);
     return new env.worker_threads.Worker(file, {
       workerData: { daemon: NAME, ...data },
-      execArgv: typescript ? [...process.execArgv, '--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : undefined,
+      execArgv: typescript ? [...process.execArgv.filter(flag => !flag.startsWith('--stack-size')), '--experimental-transform-types', '--disable-warning=ExperimentalWarning'] : undefined,
+      resourceLimits: { stackSizeMb: 256 },
     });
   }
 
@@ -1319,6 +1320,7 @@ export namespace Lsp {
     const input = new stream.PassThrough();
     parent.on('message', (chunk: Uint8Array) => input.write(Buffer.from(chunk)));
     const output = new stream.Writable({ write(chunk, _, done) { parent.postMessage(chunk); done(); } });
+    if (process.env.RAY_LSP === 'kernel') { const kernel = await import('../kernel/lsp.ts'); await kernel.start({ input, output }); return; }
     const [{ Ray }, { Diagnostics }, { start }] = await Promise.all([import('../language.ts'), import('../language/diagnostics.ts'), import('../lsp/server.ts')]);
     await start(Ray.lsp(new Diagnostics()), { input, output }, { paint: false });
   }

@@ -13,11 +13,17 @@ export class Graph {
   top = 1;
   free = 0;
   arity: Uint8Array;
+  // Per slot: how many children a wide node has (0 for a node of three), and the free wide nodes by how many slots they take.
+  width: Int32Array;
+  wfree = new Map<number, number>();
+  // Words handed out since the last collection.
+  made = 0;
 
   constructor(arity: Uint8Array, capacity = 1024) {
     this.arity = arity;
     this.heap = new Int32Array(capacity * 4);
     this.watched = new Uint8Array(capacity * 4);
+    this.width = new Int32Array(capacity);
   }
 
   private grow(words: number) {
@@ -25,15 +31,18 @@ export class Graph {
     while (size < words) size *= 2;
     const h = new Int32Array(size); h.set(this.heap); this.heap = h;
     const w = new Uint8Array(size); w.set(this.watched); this.watched = w;
+    const d = new Int32Array(size >> 2); d.set(this.width); this.width = d;
   }
 
   make(tag: number, a = 0, b = 0, c = 0): number {
     let id = this.free;
+    this.made += 4;
     if (id !== 0) this.free = this.heap[id * 4 + 1];
     else {
       id = this.top++;
       if (id * 4 + 4 > this.heap.length) this.grow(id * 4 + 4);
     }
+    this.width[id] = 0;
     const h = this.heap, p = id * 4;
     h[p] = tag; h[p + 1] = a; h[p + 2] = b; h[p + 3] = c;
     return node(id);
@@ -41,11 +50,46 @@ export class Graph {
 
   // A node of n children laid out over consecutive slots: child k is at the same place as in a node of three.
   wide(tag: number, n: number): number {
-    const id = this.top, slots = (n + 4) >> 2;
-    this.top += slots;
-    if (this.top * 4 > this.heap.length) this.grow(this.top * 4);
+    const slots = (n + 4) >> 2, reused = this.wfree.get(slots);
+    this.made += slots * 4;
+    let id: number;
+    if (reused !== undefined && reused !== 0) {
+      id = reused;
+      this.wfree.set(slots, this.heap[id * 4 + 1]);
+      this.heap.fill(0, id * 4, id * 4 + slots * 4);
+    } else {
+      id = this.top;
+      this.top += slots;
+      if (this.top * 4 > this.heap.length) this.grow(this.top * 4);
+    }
     this.heap[id * 4] = tag;
+    this.width[id] = n === 0 ? -1 : n;
     return node(id);
+  }
+
+  // Everything below `fence` stays, with what it reaches from there and from `roots`; the rest above it is freed in place.
+  sweep(roots: number[], fence: number) {
+    const h = this.heap, width = this.width, top = this.top, marked = new Uint8Array(top), todo: number[] = [];
+    const reach = (e: number) => { const k = e & 7; if (k !== NODE && k !== 2) return; const id = e >> 3; if (id > 0 && id < top && !marked[id]) { marked[id] = 1; todo.push(id); } };
+    for (let id = 1; id < fence; id += width[id] > 0 ? (width[id] + 4) >> 2 : 1) if (h[id * 4] !== FREE) { marked[id] = 1; todo.push(id); }
+    for (const e of roots) reach(e);
+    while (todo.length > 0) {
+      const id = todo.pop()!, n = width[id] > 0 ? width[id] : width[id] < 0 ? 0 : 3;
+      for (let k = 1; k <= n; k++) reach(h[id * 4 + k]);
+    }
+    let freed = 0;
+    for (let id = fence; id < top;) {
+      const w = width[id], slots = w > 0 ? (w + 4) >> 2 : 1;
+      if (!marked[id] && h[id * 4] !== FREE) {
+        h[id * 4] = FREE;
+        if (w !== 0) { h[id * 4 + 1] = this.wfree.get(slots) ?? 0; this.wfree.set(slots, id); }
+        else { h[id * 4 + 1] = this.free; this.free = id; }
+        freed += slots;
+      }
+      id += slots;
+    }
+    this.made = 0;
+    return freed;
   }
 
   release(e: number) { const id = e >> 3; this.heap[id * 4] = FREE; this.heap[id * 4 + 1] = this.free; this.free = id; }

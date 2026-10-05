@@ -89,6 +89,15 @@ export const forms = new Map<Native, (a: string[]) => string>([
   [memory.load, ([p, k]) => `(M.Q.on ? M.Q.rd(${p}, ${k} >> 3) : M.graph.heap[(${p} >> 3) * 4 + 1 + (${k} >> 3)])`],
   [memory.store, ([p, k, v]) => `(M.Q.st(${p}, ${k} >> 3, ${v}), ${N})`],
 ]);
+// The same, for a machine that learns nothing: memory read and written in place.
+export const plain = new Map<Native, (a: string[]) => string>([
+  ...forms,
+  [graph.node_tag, ([e]) => `((${e} & 7) === 0 && ${e} !== 0 && M.graph.heap[(${e} >> 3) * 4] !== ${RECORD} ? (M.graph.heap[(${e} >> 3) * 4] << 3) | 1 : -7)`],
+  [graph.node_child, ([e, i]) => `M.graph.heap[(${e} >> 3) * 4 + 1 + (${i} >> 3)]`],
+  [graph.node_set, ([e, i, v]) => `(M.graph.heap[(${e} >> 3) * 4 + 1 + (${i} >> 3)] = ${v}, ${N})`],
+  [memory.load, ([p, k]) => `M.graph.heap[(${p} >> 3) * 4 + 1 + (${k} >> 3)]`],
+  [memory.store, ([p, k, v]) => `(M.graph.heap[(${p} >> 3) * 4 + 1 + (${k} >> 3)] = ${v}, ${N})`],
+]);
 
 export function arities(natives: Native[]): Uint8Array {
   const a = new Uint8Array(NATIVE + natives.length);

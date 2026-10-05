@@ -13,7 +13,13 @@ export namespace Global {
     abstract reload(): Promise<void>
 
     get dir() { return this.location.slice(0, this.location.lastIndexOf('/')); }
-    get name() { return this.location?.slice(this.location.lastIndexOf('/') + 1) ?? ''; }
+    private named?: [string, string]
+    get name() {
+      const location = this.location;
+      if (location === undefined) return '';
+      if (this.named?.[0] !== location) this.named = [location, location.slice(location.lastIndexOf('/') + 1)];
+      return this.named[1];
+    }
     get is_dot_project() { return this.location?.endsWith(`/.project${EXTENSION}`) ?? false; }
     get is_entrypoint() { return this.location?.endsWith(`.entrypoint${EXTENSION}`) ?? false; }
   }
